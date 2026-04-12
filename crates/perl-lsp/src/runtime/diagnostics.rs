@@ -330,11 +330,10 @@ impl LspServer {
                     crate::error::ParseError::LexerError { message } => (0, message.clone()),
                     _ => (0, e.to_string()),
                 };
-                let message =
-                    match perl_lsp_diagnostics::build_parse_error_hint(e, &base_message) {
-                        Some(hint) => format!("{base_message}\nSuggestion: {hint}"),
-                        None => base_message,
-                    };
+                let message = match perl_lsp_diagnostics::build_parse_error_hint(e, &base_message) {
+                    Some(hint) => format!("{base_message}\nSuggestion: {hint}"),
+                    None => base_message,
+                };
                 let (line, character) = pos16(location);
                 json!({
                     "range": {
@@ -1183,6 +1182,7 @@ fn builtin_violation_to_diagnostic(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
     use std::io::Write;
     use std::sync::Arc as StdArc;
     use std::time::Duration;
@@ -1266,6 +1266,72 @@ mod tests {
         assert!(
             text.contains("publishDiagnostics"),
             "pre-advanced generation must not suppress publish (guard must not false-positive); got: {text:?}"
+        );
+    }
+
+    /// Positive case: `publish_parse_errors_fast` must immediately emit a
+    /// `textDocument/publishDiagnostics` notification when the document has
+    /// parse errors and the client uses push diagnostics.
+    #[test]
+    fn fast_path_emits_notification_for_documents_with_parse_errors() {
+        let (server, buf) = make_server_with_capture();
+        let uri = "file:///fast_path_parse_err_test.pl";
+        // Open a document with a deliberate syntax error.
+        server
+            .test_handle_did_open(Some(json!({
+                "textDocument": {
+                    "uri": uri,
+                    "languageId": "perl",
+                    "version": 1,
+                    "text": "sub { SYNTAX ERROR HERE }\n"
+                }
+            })))
+            .unwrap();
+
+        server.publish_parse_errors_fast(uri);
+        // Drop server to flush the writer thread, then inspect the buffer.
+        drop(server);
+
+        let bytes = buf.lock().clone();
+        let text = String::from_utf8(bytes).unwrap_or_default();
+        assert!(
+            text.contains("publishDiagnostics"),
+            "fast path must emit publishDiagnostics when parse errors exist; got: {text:?}"
+        );
+    }
+
+    /// Guard: `publish_parse_errors_fast` with a pull-diagnostic client must NOT
+    /// emit any notification (pull clients handle diagnostics on demand).
+    #[test]
+    fn fast_path_silent_for_pull_diagnostic_clients() {
+        let (server, buf) = make_server_with_capture();
+        let uri = "file:///fast_path_pull_diags_test.pl";
+        // Simulate a client that supports pull diagnostics by setting the flag.
+        server.client_supports_pull_diags.store(true, Ordering::Relaxed);
+        server
+            .test_handle_did_open(Some(json!({
+                "textDocument": {
+                    "uri": uri,
+                    "languageId": "perl",
+                    "version": 1,
+                    // Intentional syntax error — fast path would fire if not guarded.
+                    "text": "sub { SYNTAX ERROR }\n"
+                }
+            })))
+            .unwrap();
+
+        // Record buffer length before the fast-path call.
+        let len_before = buf.lock().len();
+        server.publish_parse_errors_fast(uri);
+        drop(server);
+        let len_after = buf.lock().len();
+
+        assert_eq!(
+            len_before,
+            len_after,
+            "fast path must not emit any bytes for pull-diagnostic clients; \
+             buffer grew by {} bytes",
+            len_after.saturating_sub(len_before)
         );
     }
 
