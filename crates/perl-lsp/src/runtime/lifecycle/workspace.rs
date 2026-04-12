@@ -3,13 +3,81 @@
 //! Handles workspace folders and root URI/path management.
 
 use super::super::*;
+use perl_dap_platform::{PerlInterpreterResult, find_perl_interpreter};
 use perl_lsp_config::WorkspaceConfig;
+use std::sync::Once;
+
+/// Fires at most once per LSP session, when Perl is not found anywhere.
+static PERL_NOT_FOUND_WARNED: Once = Once::new();
 
 impl LspServer {
     /// Set the root path from the root URI during initialization
     pub(crate) fn set_root_uri(&self, root_uri: &str) {
         let root_path = super::super::source_path_from_uri(root_uri);
         *self.root_path.lock() = root_path;
+    }
+
+    /// Detect the Perl interpreter and surface an actionable message if not found.
+    ///
+    /// Called once during `handle_initialize`. Reads `perl-lsp.perl.path` from the
+    /// workspace config (if set), then falls back to full OS-aware detection. Emits:
+    ///
+    /// - `window/logMessage` (Info) if Perl was found via an OS fallback path so the
+    ///   user knows which interpreter will be used.
+    /// - `window/showMessage` (Error) **once per session** if no Perl interpreter is found
+    ///   anywhere, with actionable remediation text.
+    /// - `window/showMessage` (Error) **once per session** if `perl-lsp.perl.path` is set
+    ///   but the configured path does not exist.
+    ///
+    /// Does not alter any server state. Tracing fallback is preserved alongside user messages.
+    pub(crate) fn check_perl_interpreter(&self) {
+        let configured_path = self.workspace_config.lock().perl_path.clone();
+        let result = find_perl_interpreter(configured_path.as_deref());
+
+        match result {
+            PerlInterpreterResult::ConfiguredPath(ref path) => {
+                tracing::debug!(path = %path.display(), "Perl interpreter: using configured path");
+            }
+            PerlInterpreterResult::FoundOnPath(ref path) => {
+                tracing::debug!(path = %path.display(), "Perl interpreter: found on PATH");
+            }
+            PerlInterpreterResult::FoundViaFallback { ref path, ref label } => {
+                let msg = format!(
+                    "perl-lsp: Perl not found on PATH; using {label} at {}. \
+                     Add Perl to PATH or set `perl-lsp.perl.path` to suppress this message.",
+                    path.display()
+                );
+                tracing::info!(path = %path.display(), label = %label, "Perl interpreter found via fallback");
+                if let Err(e) = self.log_message(MessageType::Info, &msg) {
+                    tracing::warn!(error = %e, "Failed to send logMessage for perl fallback");
+                }
+            }
+            PerlInterpreterResult::NotFound { ref searched } => {
+                tracing::warn!(searched = ?searched, "Perl interpreter not found");
+                PERL_NOT_FOUND_WARNED.call_once(|| {
+                    let searched_str = searched.join(", ");
+                    let msg = if configured_path.as_deref().is_some_and(|p| !p.is_empty()) {
+                        format!(
+                            "perl-lsp: The configured Perl interpreter was not found. \
+                             Searched: {searched_str}. \
+                             Check `perl-lsp.perl.path` in your settings and reload the window \
+                             (Ctrl+Shift+P \u{2192} Developer: Reload Window)."
+                        )
+                    } else {
+                        format!(
+                            "perl-lsp: Perl interpreter not found on PATH. \
+                             Searched: {searched_str}. \
+                             Install Perl (https://strawberryperl.com on Windows, \
+                             `brew install perl` on macOS, or your system package manager) \
+                             and reload the window, or set `perl-lsp.perl.path` in settings."
+                        )
+                    };
+                    if let Err(e) = self.show_message(MessageType::Error, &msg) {
+                        tracing::warn!(error = %e, "Failed to send showMessage for perl not found");
+                    }
+                });
+            }
+        }
     }
 
     /// Load `.perl-lsp.toml` from each workspace folder and compute per-folder effective config.
@@ -85,6 +153,45 @@ impl LspServer {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn check_perl_interpreter_does_not_panic() {
+        let server = LspServer::new();
+        // Should complete without panicking regardless of Perl install state
+        server.check_perl_interpreter();
+    }
+
+    #[test]
+    fn check_perl_interpreter_broken_config_path_does_not_panic() {
+        let server = LspServer::new();
+        // Set a broken perl path in the workspace config
+        server.workspace_config.lock().perl_path =
+            Some("/nonexistent/path/to/perl/that/does/not/exist".to_string());
+        // Should not panic — message will fail to send silently (stdout in test mode)
+        server.check_perl_interpreter();
+    }
+
+    #[test]
+    fn check_perl_interpreter_valid_config_path_does_not_panic() {
+        use std::fs;
+        let tempdir = tempfile::tempdir().expect("tempdir");
+        #[cfg(windows)]
+        let fake_perl = tempdir.path().join("perl.exe");
+        #[cfg(not(windows))]
+        let fake_perl = tempdir.path().join("perl");
+        fs::write(&fake_perl, "").expect("write fake perl");
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mut perms = fs::metadata(&fake_perl).expect("metadata").permissions();
+            perms.set_mode(0o755);
+            fs::set_permissions(&fake_perl, perms).expect("chmod");
+        }
+        let server = LspServer::new();
+        server.workspace_config.lock().perl_path = Some(fake_perl.to_string_lossy().to_string());
+        // Should not panic
+        server.check_perl_interpreter();
+    }
 
     #[test]
     fn load_and_apply_project_config_handles_empty_workspace_folders() {

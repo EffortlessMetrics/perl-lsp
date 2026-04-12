@@ -227,6 +227,10 @@ impl LspServer {
         // Load .perl-lsp.toml from workspace root (base layer; LSP config overrides later)
         self.load_and_apply_project_config();
 
+        // Detect Perl interpreter and surface an actionable error if not found.
+        // Runs after config load so that perl-lsp.perl.path is already applied.
+        self.check_perl_interpreter();
+
         // Construct the AI inline-completion backend if enabled in config
         self.refresh_ai_backend();
 
