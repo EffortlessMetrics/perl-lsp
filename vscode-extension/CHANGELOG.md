@@ -2,6 +2,52 @@
 
 All notable changes to the Perl Language Server extension will be documented in this file.
 
+## [0.12.4] - 2026-04-12
+
+### Added
+- **DAP debugger launch scorecard**: the debug adapter now tracks cold-launch
+  success rate and P50/P95 latency across a suite of fixture programs; results
+  surface in the new `status/dap.md` page. (#4237)
+- **Inherited and role method navigation**: `Go to Definition`, hover, and
+  workspace completion now traverse Moo/Moose `with 'Role'` and
+  `extends`/`use parent` chains. AUTOLOAD-backed method calls also resolve.
+  (#4077, #4091)
+- **Phase-scoped pragma diagnostics** (`PL502`, `PL503`): flags `use strict` /
+  `use warnings` placed inside phase blocks (`BEGIN`, `END`, etc.) where they
+  have block scope rather than file scope, with quick-fixes that move them to
+  file scope. (#4131)
+- **`workspace/configuration` live reload**: server re-fetches per-folder
+  configuration from the client on `workspace/didChangeConfiguration`, merging
+  returned overlays over `.perl-lsp.toml` without a restart. (#4093)
+- **`workspace/willDeleteFiles` warnings**: deleting a file that is referenced
+  by other files in the workspace now surfaces a `Warning` diagnostic before
+  the delete completes. (#4056)
+- **Run Test at Cursor**: new command palette entry runs the nearest test
+  subroutine or subtest under the cursor without navigating to a test lens.
+  (#4025)
+- **`yath` test runner preference**: the VS Code test runner uses `yath` when
+  present on PATH, falling back to `prove` and `perl`. (#4031)
+
+### Fixed
+- **Rename operations are faster on large files**: the internal scope traversal
+  was O(n×d) per rename; replaced with a single-pass BFS so renames on deeply
+  nested files no longer stall. (#4240)
+- **Windows: Run Tests / Run File no longer fail** with extended-length path
+  errors — the `\\?\` prefix injected by `Path::canonicalize` is stripped
+  before spawning `perl`, `prove`, or `yath`. (#4089)
+- **`use if` / `use unless` conditional pragmas** no longer produce false
+  missing-strict/warnings diagnostics. (#4050)
+- **Eval- and sub-scoped pragmas** no longer suppress file-level PL100/PL101
+  missing strict/warnings diagnostics. (#4052)
+- **Non-`file://` workspace roots** (`vscode-remote://`, virtual schemes) are
+  now tolerated — the server keeps them as LSP strings and skips non-filesystem
+  folders during indexing without crashing. (#4059)
+
+### Changed
+- **Pre-push hook speed**: the hook now runs the fast Tier A (`pr-fast`) check
+  instead of the full `ci-gate`, making pre-push validation ~3× faster for
+  routine pushes. (#4088, #4110)
+
 ## [0.12.3] - 2026-04-09
 
 The 0.12.3 release line. Aligned with the workspace `v0.12.3` cut and consolidates
