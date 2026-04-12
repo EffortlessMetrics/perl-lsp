@@ -76,6 +76,30 @@ pub fn create_builtin_signatures() -> &'static HashMap<&'static str, BuiltinSign
         );
 
         signatures.insert(
+            "XSLoader::load",
+            BuiltinSignature {
+                signatures: vec!["XSLoader::load MODULE, VERSION"],
+                documentation: "Loads an XS extension for a module",
+            },
+        );
+
+        signatures.insert(
+            "DynaLoader::bootstrap",
+            BuiltinSignature {
+                signatures: vec!["DynaLoader::bootstrap MODULE, VERSION"],
+                documentation: "Bootstraps an XS extension via DynaLoader",
+            },
+        );
+
+        signatures.insert(
+            "bootstrap",
+            BuiltinSignature {
+                signatures: vec!["bootstrap MODULE, VERSION"],
+                documentation: "Bootstraps an XS extension via DynaLoader",
+            },
+        );
+
+        signatures.insert(
             "sysopen",
             BuiltinSignature {
                 signatures: vec![
@@ -830,7 +854,7 @@ pub fn create_builtin_signatures() -> &'static HashMap<&'static str, BuiltinSign
             "die",
             BuiltinSignature {
                 signatures: vec!["die LIST", "die"],
-                documentation: "Raises an exception. Prefer Carp::croak in modules. Exception lands in $@ after eval.",
+                documentation: "Raises an exception. Prefer Carp::croak in modules. Exception lands in $@ after eval",
             },
         );
 
@@ -838,7 +862,7 @@ pub fn create_builtin_signatures() -> &'static HashMap<&'static str, BuiltinSign
             "warn",
             BuiltinSignature {
                 signatures: vec!["warn LIST", "warn"],
-                documentation: "Prints warning to STDERR. Prefer Carp::carp in modules.",
+                documentation: "Prints warning to STDERR. Prefer Carp::carp in modules",
             },
         );
 

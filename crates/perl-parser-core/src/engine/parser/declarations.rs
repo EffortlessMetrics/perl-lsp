@@ -64,17 +64,48 @@ impl<'a> Parser<'a> {
     /// CPAN code (e.g. Moose `:ro`, Catalyst `:Private`).
     const BUILTIN_SUB_ATTRIBUTES: &'static [&'static str] = &["lvalue", "method", "prototype", "const"];
 
+    /// Built-in class-level attributes defined by Perl 5.38+ `use feature 'class'`.
+    ///
+    /// These are valid on `class` declarations (not subroutines) and must not be
+    /// warned about when parsing class headers.  `:isa(Parent)` declares inheritance;
+    /// `:does(Role)` is reserved for future Perl versions.
+    const BUILTIN_CLASS_ATTRIBUTES: &'static [&'static str] = &["isa", "does"];
+
     /// Return `true` if `name` is a known built-in subroutine attribute.
     fn is_builtin_sub_attribute(name: &str) -> bool {
         Self::BUILTIN_SUB_ATTRIBUTES.contains(&name)
     }
 
+    /// Return `true` if `Attribute::Handlers` has been enabled in this file.
+    fn has_attribute_handlers_support(&self) -> bool {
+        self.attribute_handlers_enabled
+    }
+
+    /// Register a custom attribute handler for later `:MyAttr` uses.
+    fn register_custom_attribute_handler(&mut self, handler: &str) {
+        if self.has_attribute_handlers_support() {
+            self.custom_attribute_handlers.insert(handler.to_string());
+        }
+    }
+
+    /// Return `true` if `name` was registered as a custom Attribute::Handlers attribute.
+    fn is_custom_attribute_handler(&self, name: &str) -> bool {
+        self.has_attribute_handlers_support() && self.custom_attribute_handlers.contains(name)
+    }
+
     /// Parse declaration attributes like `:lvalue` or `:prototype($)`.
+    ///
+    /// `extra_known` lists additional attribute names that should not trigger the
+    /// "unknown subroutine attribute" warning — used by `parse_class` to whitelist
+    /// class-level attributes such as `:isa(Parent)`.
     ///
     /// Unknown attributes produce a soft warning pushed to `self.errors` but
     /// parsing continues — custom attributes are legal in Perl via the
     /// `attributes` module or framework hooks.
-    fn parse_declaration_attributes(&mut self) -> ParseResult<Vec<String>> {
+    fn parse_declaration_attributes_with_extras(
+        &mut self,
+        extra_known: &[&str],
+    ) -> ParseResult<Vec<String>> {
         let mut attributes = Vec::new();
 
         while self.peek_kind() == Some(TokenKind::Colon) {
@@ -122,10 +153,15 @@ impl<'a> Parser<'a> {
                     }
                 }
 
-                // Warn (but do not error) if the attribute is not a known built-in.
+                // Warn (but do not error) if the attribute is not a known built-in
+                // and not an extra-known context-specific attribute.
                 // Custom attributes are valid when `attributes` or a framework hook is
                 // in scope, so a warning is the correct diagnostic level.
-                if !Self::is_builtin_sub_attribute(&base_name) {
+                let is_known = Self::is_builtin_sub_attribute(&base_name)
+                    || extra_known.contains(&base_name.as_str())
+                    || self.is_custom_attribute_handler(&base_name)
+                    || (self.has_attribute_handlers_support() && base_name == "ATTR");
+                if !is_known {
                     self.errors.push(ParseError::syntax(
                         format!(
                             "unknown subroutine attribute ':{base_name}'; \
@@ -145,6 +181,13 @@ impl<'a> Parser<'a> {
         }
 
         Ok(attributes)
+    }
+
+    /// Parse declaration attributes like `:lvalue` or `:prototype($)`.
+    ///
+    /// Convenience wrapper for the common subroutine/method case (no extra-known attributes).
+    fn parse_declaration_attributes(&mut self) -> ParseResult<Vec<String>> {
+        self.parse_declaration_attributes_with_extras(&[])
     }
 
     /// Parse subroutine definition
@@ -182,32 +225,47 @@ impl<'a> Parser<'a> {
             (None, None)
         };
 
-        // Parse optional attributes first (they come before signature in modern Perl)
-        let attributes = self.parse_declaration_attributes()?;
+        // Parse optional attributes before the prototype/signature.
+        // Perl allows both `sub foo :lvalue ($)` and `sub foo ($) :lvalue`,
+        // so we collect attributes on both sides and merge them.
+        let mut attributes = self.parse_declaration_attributes()?;
 
-        // Parse optional prototype or signature after attributes
+        if let Some(handler_name) = name.as_deref() {
+            if attributes.iter().any(|attr| attr.starts_with("ATTR(") || attr == "ATTR") {
+                self.register_custom_attribute_handler(handler_name);
+            }
+        }
+
+        // Parse optional prototype or signature after leading attributes.
         let (prototype, signature) = if self.peek_kind() == Some(TokenKind::LeftParen) {
             // Look ahead to determine if this is a prototype or signature
             if self.is_likely_prototype()? {
                 // Parse as prototype
+                let proto_start = self.current_position();
                 let proto_content = self.parse_prototype()?;
                 let proto_node = Node::new(
                     NodeKind::Prototype { content: proto_content },
-                    SourceLocation { start: self.current_position(), end: self.current_position() },
+                    SourceLocation { start: proto_start, end: self.previous_position() },
                 );
                 (Some(Box::new(proto_node)), None)
             } else {
                 // Parse as signature
+                let sig_start = self.current_position();
                 let params = self.parse_signature()?;
                 let sig_node = Node::new(
                     NodeKind::Signature { parameters: params },
-                    SourceLocation { start: self.current_position(), end: self.current_position() },
+                    SourceLocation { start: sig_start, end: self.previous_position() },
                 );
                 (None, Some(Box::new(sig_node)))
             }
         } else {
             (None, None)
         };
+
+        // Parse optional trailing attributes after the prototype/signature.
+        if self.peek_kind() == Some(TokenKind::Colon) {
+            attributes.extend(self.parse_declaration_attributes()?);
+        }
 
         // Check for forward declaration: sub foo; or sub foo(@); or sub foo :method;
         // Forward declarations have no block body — they end with a semicolon
@@ -237,16 +295,47 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse class declaration (Perl 5.38+)
+    ///
+    /// Handles the full syntax: `class Name :isa(Parent) :isa(Parent2) { ... }`
+    /// Multiple `:isa(...)` attributes may appear; each contributes a parent class.
     fn parse_class(&mut self) -> ParseResult<Node> {
         let start = self.current_position();
         self.tokens.next()?; // consume 'class'
 
         let (name, _) = self.parse_qualified_name(false)?;
 
-        let body = self.parse_block()?;
+        // Parse class-level attributes (e.g. `:isa(Parent)`).
+        // Pass BUILTIN_CLASS_ATTRIBUTES so `:isa` and `:does` don't produce
+        // "unknown subroutine attribute" warnings.
+        let attributes =
+            self.parse_declaration_attributes_with_extras(Self::BUILTIN_CLASS_ATTRIBUTES)?;
+
+        // Extract parent class names from `:isa(Parent)` attributes.
+        // `parse_declaration_attributes` stores `:isa(Parent)` as "isa(Parent)".
+        let parents: Vec<String> = attributes
+            .iter()
+            .filter_map(|attr| {
+                let trimmed = attr.trim();
+                if let Some(inner) = trimmed.strip_prefix("isa(") {
+                    // inner is "Parent)" — drop trailing ')'
+                    inner.strip_suffix(')').map(|s| s.trim().to_string())
+                } else {
+                    None
+                }
+            })
+            .filter(|s| !s.is_empty())
+            .collect();
+
+        self.in_class_body += 1;
+        let body = self.parse_block();
+        self.in_class_body -= 1;
+        let body = body?;
 
         let end = self.previous_position();
-        Ok(Node::new(NodeKind::Class { name, body: Box::new(body) }, SourceLocation { start, end }))
+        Ok(Node::new(
+            NodeKind::Class { name, parents, body: Box::new(body) },
+            SourceLocation { start, end },
+        ))
     }
 
     /// Parse method declaration (Perl 5.38+)
@@ -261,10 +350,11 @@ impl<'a> Parser<'a> {
 
         // Parse optional signature
         let signature = if self.peek_kind() == Some(TokenKind::LeftParen) {
+            let sig_start = self.current_position();
             let params = self.parse_signature()?;
             Some(Box::new(Node::new(
                 NodeKind::Signature { parameters: params },
-                SourceLocation { start: self.current_position(), end: self.current_position() },
+                SourceLocation { start: sig_start, end: self.previous_position() },
             )))
         } else {
             None
@@ -275,6 +365,25 @@ impl<'a> Parser<'a> {
         let end = self.previous_position();
         Ok(Node::new(
             NodeKind::Method { name, signature, attributes, body: Box::new(body) },
+            SourceLocation { start, end },
+        ))
+    }
+
+    /// Parse an Object::Pad `ADJUST` block as a method-like class body node.
+    fn parse_adjust_block(&mut self) -> ParseResult<Node> {
+        let start = self.current_position();
+        self.tokens.next()?; // consume 'ADJUST'
+
+        let body = self.parse_block()?;
+
+        let end = self.previous_position();
+        Ok(Node::new(
+            NodeKind::Method {
+                name: "ADJUST".to_string(),
+                signature: None,
+                attributes: Vec::new(),
+                body: Box::new(body),
+            },
             SourceLocation { start, end },
         ))
     }
@@ -403,8 +512,7 @@ impl<'a> Parser<'a> {
                     if let Ok(dot_token) = self.tokens.peek() {
                         if dot_token.text.as_ref() == "." {
                             self.consume_token()?; // consume dot
-                            if self.peek_kind() != /* ~ changed by cargo-mutants ~ */ Some(TokenKind::Number)
-                            {
+                            if self.peek_kind() == Some(TokenKind::Number) {
                                 let num = self.consume_token()?;
                                 version.push('.');
                                 version.push_str(&num.text);
@@ -460,6 +568,10 @@ impl<'a> Parser<'a> {
         if self.peek_kind() == Some(TokenKind::Number) {
             module.push(' ');
             module.push_str(&self.consume_token()?.text);
+        }
+
+        if module.split_whitespace().next() == Some("Attribute::Handlers") {
+            self.attribute_handlers_enabled = true;
         }
 
         // `use if CONDITION, MODULE [, ARGS]` and `use unless ...` are special:

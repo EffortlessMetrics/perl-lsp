@@ -174,6 +174,40 @@ pub fn run_hook_tests() -> Result<()> {
     );
     assert_regex(&output, &ts_re, "subagent-stop includes ts timestamp", &mut pass, &mut fail);
 
+    let temp_ops = temp_root.join("subagent-stop-plan-review");
+    fs::create_dir_all(&temp_ops).context("Failed to create temporary OPS_DIR")?;
+
+    let no_issue_payload = r#"{"subagent_name":"plan-reviewer","subagent_type":"plan-reviewer","cwd":"/repo/worktrees/agent-a071b609","session_id":"abc124"}"#;
+    let no_issue_out =
+        run_script(&subagent_stop, Some(no_issue_payload), Some(temp_ops.as_path()), None)?;
+    assert_exit_code(
+        3,
+        "plan-reviewer without explicit issue context fails loud",
+        no_issue_out.status.code().unwrap_or(-1),
+        &mut pass,
+        &mut fail,
+    );
+
+    let output = read_file(temp_ops.join("swarm-metrics.jsonl"), "plan-reviewer metrics file")?;
+    assert_contains(
+        &output,
+        r#""event":"subagent_stop""#,
+        "plan-reviewer failure still writes subagent_stop event",
+        &mut pass,
+        &mut fail,
+    );
+
+    let agent_name_payload = r#"{"subagent_name":"plan-review-4044","subagent_type":"plan-reviewer","session_id":"abc125"}"#;
+    let agent_name_out =
+        run_script(&subagent_stop, Some(agent_name_payload), Some(temp_ops.as_path()), None)?;
+    assert_not_exit_code(
+        3,
+        "canonical plan-review-NNN agent name satisfies issue context fallback",
+        agent_name_out.status.code().unwrap_or(-1),
+        &mut pass,
+        &mut fail,
+    );
+
     let temp_ops = temp_root.join("task-completed-write");
     fs::create_dir_all(&temp_ops).context("Failed to create temporary OPS_DIR")?;
     let sample_payload_tc = r#"{"session_id":"abc123","cwd":"/repo/worktrees/agent-xyz"}"#;
@@ -269,7 +303,6 @@ pub fn run_hook_tests() -> Result<()> {
         &mut pass,
         &mut fail,
     );
-
     if pass > 0 || fail > 0 {
         println!("\n=== Results: {} passed, {} failed ===", pass, fail);
     }
@@ -586,6 +619,16 @@ fn assert_exit_code(expected: i32, desc: &str, actual: i32, pass: &mut u32, fail
         *pass += 1;
     } else {
         eprintln!("  FAIL: {desc} - expected exit {expected}, got {actual}");
+        *fail += 1;
+    }
+}
+
+fn assert_not_exit_code(unexpected: i32, desc: &str, actual: i32, pass: &mut u32, fail: &mut u32) {
+    if actual != unexpected {
+        println!("  PASS: {desc} (exit {actual})");
+        *pass += 1;
+    } else {
+        eprintln!("  FAIL: {desc} - unexpected exit {unexpected}");
         *fail += 1;
     }
 }

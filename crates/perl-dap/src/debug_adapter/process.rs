@@ -2,6 +2,44 @@
 
 use super::*;
 
+/// Try to detect the Perl interpreter available on the system and return a human-readable
+/// summary string.
+///
+/// Uses `resolve_perl_path_with_toolchain()` to find Perl (checks perlbrew, plenv, then PATH),
+/// then runs `perl -e 'print $]'` to get the version number.  Returns a string describing what
+/// was found, or a "not found" / install-hint message suitable for inclusion in error messages.
+fn detect_perl_info() -> String {
+    match crate::platform::resolve_perl_path_with_toolchain() {
+        Ok(perl_path) => {
+            let version_output =
+                Command::new(&perl_path).arg("-e").arg("print $]").output().ok().and_then(|out| {
+                    if out.status.success() { String::from_utf8(out.stdout).ok() } else { None }
+                });
+
+            match version_output {
+                Some(v) if !v.trim().is_empty() => {
+                    format!("Found Perl at {} (version {})", perl_path.display(), v.trim())
+                }
+                _ => format!("Found Perl at {}", perl_path.display()),
+            }
+        }
+        Err(_) => {
+            #[cfg(windows)]
+            {
+                "Perl was not found on PATH. Install Perl from https://strawberryperl.com \
+                 or set a custom path."
+                    .to_string()
+            }
+            #[cfg(not(windows))]
+            {
+                "Perl was not found on PATH. Install Perl via your package manager \
+                 (e.g. `apt install perl` or `brew install perl`) or set a custom path."
+                    .to_string()
+            }
+        }
+    }
+}
+
 impl DebugAdapter {
     /// Handle initialize request
     pub(super) fn handle_initialize(
@@ -163,19 +201,24 @@ impl DebugAdapter {
                         message: None,
                     }
                 }
-                Err(e) => DapMessage::Response {
-                    seq,
-                    request_seq,
-                    success: false,
-                    command: "launch".to_string(),
-                    body: None,
-                    message: Some(format!(
-                        "Cannot start Perl debugger: {}. \
-                         Check that 'perl' is on your PATH and that the file exists. \
-                         You can set a custom interpreter path in your launch.json.",
-                        e
-                    )),
-                },
+                Err(e) => {
+                    let perl_info = detect_perl_info();
+                    DapMessage::Response {
+                        seq,
+                        request_seq,
+                        success: false,
+                        command: "launch".to_string(),
+                        body: None,
+                        message: Some(format!(
+                            "Cannot start Perl debugger: {}. \
+                             {perl_info}. \
+                             To use a specific Perl interpreter, set the `perl-lsp.perl.path` \
+                             extension setting or add a `perl` field to your launch.json \
+                             (e.g. {{\"perl\": \"/path/to/perl\"}}).",
+                            e
+                        )),
+                    }
+                }
             }
         } else {
             DapMessage::Response {
@@ -256,6 +299,12 @@ impl DebugAdapter {
             })?;
         }
 
+        // Pre-launch syntax check: run `perl -c <script>` before spawning the
+        // debugger.  This catches syntax errors early and surfaces a clear,
+        // actionable message to the user instead of a generic "Cannot start
+        // Perl debugger" failure after `perl -d` exits immediately.
+        Self::check_syntax(program, &env_overrides)?;
+
         let mut cmd = Command::new("perl");
         cmd.arg("-d");
 
@@ -315,6 +364,91 @@ impl DebugAdapter {
             }
             Err(e) => Err(e.to_string()),
         }
+    }
+
+    /// Run `perl -c <script>` and return `Ok(())` if the syntax is valid,
+    /// or `Err(message)` with a user-friendly error describing the problem.
+    ///
+    /// `perl -c` exits with status 0 when the script compiles successfully
+    /// (printing "syntax OK" to stderr).  Any non-zero exit indicates a
+    /// syntax or dependency failure; the error detail is on stderr.
+    ///
+    /// If `perl` cannot be found or spawned, the check is silently skipped
+    /// and `Ok(())` is returned so that the subsequent `perl -d` launch
+    /// produces the correct "perl not on PATH" error to the user.
+    pub(super) fn check_syntax(
+        program: &str,
+        env_overrides: &HashMap<String, String>,
+    ) -> Result<(), String> {
+        let output = match Command::new("perl")
+            .arg("-c")
+            .arg("--")
+            .arg(program)
+            .envs(env_overrides)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .output()
+        {
+            Ok(out) => out,
+            Err(e) => {
+                // `perl` not found or could not be spawned — skip the check
+                // and let the real launch produce the "perl not on PATH" error.
+                tracing::warn!("perl -c could not be run (will try perl -d anyway): {}", e);
+                return Ok(());
+            }
+        };
+
+        if output.status.success() {
+            return Ok(());
+        }
+
+        // Combine stdout + stderr (perl writes errors to stderr; stdout is
+        // normally empty for -c, but merge both for robustness).
+        let raw_stderr = String::from_utf8_lossy(&output.stderr);
+        let raw_stdout = String::from_utf8_lossy(&output.stdout);
+        let combined = if raw_stderr.is_empty() { raw_stdout } else { raw_stderr };
+
+        // Strip the "syntax OK" confirmation line that sometimes appears even
+        // on partial failures, and drop blank lines.
+        let error_lines: Vec<&str> = combined
+            .lines()
+            .filter(|l| {
+                let trimmed = l.trim();
+                !trimmed.eq_ignore_ascii_case("syntax ok") && !trimmed.is_empty()
+            })
+            .collect();
+
+        let detail = if error_lines.is_empty() {
+            combined.trim().to_string()
+        } else {
+            error_lines.join("\n")
+        };
+
+        if let Some(module_name) = Self::missing_module_name(&detail) {
+            return Err(Self::format_missing_module_error(&module_name));
+        }
+
+        Err(format!(
+            "Syntax error in '{}' — fix the error below before debugging:\n{}",
+            program, detail
+        ))
+    }
+
+    fn missing_module_name(detail: &str) -> Option<String> {
+        detail.lines().find_map(|line| {
+            let trimmed = line.trim();
+            let rest = trimmed.strip_prefix("Can't locate ")?;
+            let module_path = rest.split(" in @INC").next()?.trim_end_matches('.');
+            let module_name = module_path_to_name(module_path);
+            (!module_name.is_empty()).then_some(module_name)
+        })
+    }
+
+    fn format_missing_module_error(module_name: &str) -> String {
+        format!(
+            "Module {module_name} not found. Install with: cpan {module_name}. \
+             View on MetaCPAN: https://metacpan.org/pod/{module_name}"
+        )
     }
 
     /// Start thread to read debugger output with enhanced error recovery
@@ -565,18 +699,19 @@ impl DebugAdapter {
                                         should_emit_stopped = true;
                                         let resume_mode = s.last_resume_mode.clone();
 
-                                        let breakpoint_outcome =
-                                            if matches!(resume_mode, ResumeMode::Continue)
-                                                && !current_file.is_empty()
-                                                && current_line > 0
-                                            {
-                                                breakpoints.register_breakpoint_hit(
-                                                    &current_file,
-                                                    i64::from(current_line),
-                                                )
-                                            } else {
-                                                BreakpointHitOutcome::default()
-                                            };
+                                        let breakpoint_outcome = if matches!(
+                                            resume_mode,
+                                            ResumeMode::Continue | ResumeMode::RunToBreakpoint
+                                        ) && !current_file.is_empty()
+                                            && current_line > 0
+                                        {
+                                            breakpoints.register_breakpoint_hit(
+                                                &current_file,
+                                                i64::from(current_line),
+                                            )
+                                        } else {
+                                            BreakpointHitOutcome::default()
+                                        };
 
                                         if exception_match || warning_match {
                                             stop_reason = "exception".to_string();
@@ -595,6 +730,21 @@ impl DebugAdapter {
                                                 s.last_resume_mode = ResumeMode::Continue;
                                                 should_auto_continue = true;
                                             }
+                                        } else if matches!(resume_mode, ResumeMode::RunToBreakpoint)
+                                        {
+                                            // Not at a user breakpoint while in RunToBreakpoint
+                                            // mode.  The `c` command sent by configurationDone is
+                                            // already driving the debugger toward the first
+                                            // breakpoint; the context line we just saw is the
+                                            // implicit first-line stop that appeared BEFORE that
+                                            // `c` was processed.  Do NOT send another `c` here —
+                                            // that would queue a second continue that runs past
+                                            // the eventual breakpoint, breaking subsequent steps.
+                                            // Simply keep state=Running and suppress the stopped
+                                            // event so the client never sees this implicit stop.
+                                            s.state = DebugState::Running;
+                                            // Keep RunToBreakpoint until we actually hit one.
+                                            should_auto_continue = true;
                                         } else {
                                             s.state = DebugState::Stopped;
                                         }
@@ -800,7 +950,12 @@ impl DebugAdapter {
                     *guard = Some(pid);
                 }
 
+                let stop_on_entry =
+                    args.get("stopOnEntry").and_then(|s| s.as_bool()).unwrap_or(false);
                 let thread_id = Self::i64_to_i32_saturating(i64::from(pid));
+
+                // Always emit the "attach" stopped event to signal the client that the
+                // debugger is connected and paused.
                 self.send_event(
                     "stopped",
                     Some(json!({
@@ -810,7 +965,25 @@ impl DebugAdapter {
                     })),
                 );
 
-                tracing::info!(pid, "Attach request: Process ID attachment (signal-control mode)");
+                // When stopOnEntry is requested, emit an additional "entry" stopped event
+                // so the IDE pauses at the first available program location.
+                if stop_on_entry {
+                    self.send_event(
+                        "stopped",
+                        Some(json!({
+                            "reason": "entry",
+                            "threadId": thread_id,
+                            "allThreadsStopped": true,
+                            "description": "Paused on entry"
+                        })),
+                    );
+                }
+
+                tracing::info!(
+                    pid,
+                    stop_on_entry,
+                    "Attach request: Process ID attachment (signal-control mode)"
+                );
 
                 DapMessage::Response {
                     seq,
@@ -844,6 +1017,8 @@ impl DebugAdapter {
                 }
                 let port = raw_port as u16;
                 let timeout = args.get("timeout").and_then(|t| t.as_u64()).map(|t| t as u32);
+                let stop_on_entry =
+                    args.get("stopOnEntry").and_then(|s| s.as_bool()).unwrap_or(false);
 
                 // Validate arguments.
                 if host.trim().is_empty() {
@@ -1021,6 +1196,23 @@ impl DebugAdapter {
                                 }
                             }
                         });
+
+                        // When stopOnEntry is requested, emit a stopped event so the IDE
+                        // pauses at the first available program location after the TCP
+                        // attach handshake completes.
+                        if stop_on_entry {
+                            self.send_event(
+                                "stopped",
+                                Some(json!({
+                                    "reason": "entry",
+                                    "threadId": 1,
+                                    "allThreadsStopped": true,
+                                    "description": "Paused on entry"
+                                })),
+                            );
+                        }
+
+                        tracing::info!(host, port, stop_on_entry, "TCP attach successful");
 
                         DapMessage::Response {
                             seq,
@@ -1231,13 +1423,33 @@ impl DebugAdapter {
 
     /// Handle configurationDone request
     pub(super) fn handle_configuration_done(&self, seq: i64, request_seq: i64) -> DapMessage {
-        // Send initial command to get the debugger started
+        // Determine whether stopOnEntry was requested in the launch args.
+        let stop_on_entry =
+            lock_or_recover(&self.last_launch_args, "debug_adapter.last_launch_args")
+                .as_ref()
+                .and_then(|a| a.get("stopOnEntry"))
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
+
         if let Some(ref mut session) = *lock_or_recover(&self.session, "debug_adapter.session")
             && let Some(stdin) = session.process.stdin.as_mut()
         {
-            // Send initial 'l' command to list current location
-            let _ = stdin.write_all(b"l\n");
-            let _ = stdin.flush();
+            if stop_on_entry {
+                // The entry stopped event was already emitted during launch.
+                // List the current source location so the IDE can display it.
+                let _ = stdin.write_all(b"l\n");
+                let _ = stdin.flush();
+            } else {
+                // stopOnEntry is false: perl -d always stops at the first
+                // executable line.  Run to the first user-set breakpoint.
+                // ResumeMode::RunToBreakpoint signals the output reader to
+                // silently skip non-breakpoint stops (the implicit first-line
+                // stop) and auto-continue until a user breakpoint is hit.
+                session.state = DebugState::Running;
+                session.last_resume_mode = ResumeMode::RunToBreakpoint;
+                let _ = stdin.write_all(b"c\n");
+                let _ = stdin.flush();
+            }
         }
 
         DapMessage::Response {
@@ -1454,5 +1666,46 @@ impl DebugAdapter {
 
         self.clear_active_session_state();
         self.handle_launch(seq, request_seq, Some(launch_args))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::DebugAdapter;
+
+    #[test]
+    fn missing_module_name_parses_standard_module_path() {
+        let detail = "Can't locate Some/Missing/Module.pm in @INC (you may need to install the Some::Missing::Module module)";
+
+        let module = DebugAdapter::missing_module_name(detail);
+
+        assert_eq!(module.as_deref(), Some("Some::Missing::Module"));
+    }
+
+    #[test]
+    fn missing_module_name_parses_optional_dependency_path() {
+        let detail = "Can't locate Optional/Dep.pm in @INC (you may need to install the Optional::Dep module)";
+
+        let module = DebugAdapter::missing_module_name(detail);
+
+        assert_eq!(module.as_deref(), Some("Optional::Dep"));
+    }
+
+    #[test]
+    fn missing_module_name_parses_nested_module_path_with_spaces() {
+        let detail = "Can't locate Tied/Hash/With/Spaces.pm in @INC (you may need to install the Tied::Hash::With::Spaces module)";
+
+        let module = DebugAdapter::missing_module_name(detail);
+
+        assert_eq!(module.as_deref(), Some("Tied::Hash::With::Spaces"));
+    }
+
+    #[test]
+    fn missing_module_error_includes_install_hint_and_metacpan_link() {
+        let message = DebugAdapter::format_missing_module_error("Some::Missing::Module");
+
+        assert!(message.contains("Module Some::Missing::Module not found"));
+        assert!(message.contains("cpan Some::Missing::Module"));
+        assert!(message.contains("metacpan.org/pod/Some::Missing::Module"));
     }
 }

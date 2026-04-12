@@ -128,6 +128,24 @@ fn numeric_comparison_with_undef_code_exists() -> Result<(), Box<dyn std::error:
     Ok(())
 }
 
+#[test]
+fn duplicate_hash_key_code_exists() -> Result<(), Box<dyn std::error::Error>> {
+    let code = DiagnosticCode::DuplicateHashKey;
+    assert_eq!(code.as_str(), "PL408", "DuplicateHashKey should have code PL408");
+    assert_eq!(
+        code.severity(),
+        perl_diagnostics_codes::DiagnosticSeverity::Warning,
+        "DuplicateHashKey should have Warning severity"
+    );
+    assert!(code.context_hint().is_some(), "DuplicateHashKey should have a context hint");
+    assert_eq!(
+        DiagnosticCode::parse_code("PL408"),
+        Some(DiagnosticCode::DuplicateHashKey),
+        "parse_code('PL408') should return DuplicateHashKey"
+    );
+    Ok(())
+}
+
 // ---------------------------------------------------------------------------
 // Deprecated syntax codes (PL5xx range)
 // ---------------------------------------------------------------------------
@@ -154,6 +172,42 @@ fn deprecated_array_base_code_exists() -> Result<(), Box<dyn std::error::Error>>
     Ok(())
 }
 
+#[test]
+fn phase_scoped_strict_pragma_code_exists() -> Result<(), Box<dyn std::error::Error>> {
+    let code = DiagnosticCode::PhaseScopedStrictPragma;
+    assert_eq!(code.as_str(), "PL502", "PhaseScopedStrictPragma should have code PL502");
+    assert_eq!(
+        code.severity(),
+        perl_diagnostics_codes::DiagnosticSeverity::Warning,
+        "PhaseScopedStrictPragma should have Warning severity"
+    );
+    assert!(code.context_hint().is_some(), "PhaseScopedStrictPragma should have a context hint");
+    assert_eq!(
+        DiagnosticCode::parse_code("PL502"),
+        Some(DiagnosticCode::PhaseScopedStrictPragma),
+        "parse_code('PL502') should return PhaseScopedStrictPragma"
+    );
+    Ok(())
+}
+
+#[test]
+fn phase_scoped_warnings_pragma_code_exists() -> Result<(), Box<dyn std::error::Error>> {
+    let code = DiagnosticCode::PhaseScopedWarningsPragma;
+    assert_eq!(code.as_str(), "PL503", "PhaseScopedWarningsPragma should have code PL503");
+    assert_eq!(
+        code.severity(),
+        perl_diagnostics_codes::DiagnosticSeverity::Warning,
+        "PhaseScopedWarningsPragma should have Warning severity"
+    );
+    assert!(code.context_hint().is_some(), "PhaseScopedWarningsPragma should have a context hint");
+    assert_eq!(
+        DiagnosticCode::parse_code("PL503"),
+        Some(DiagnosticCode::PhaseScopedWarningsPragma),
+        "parse_code('PL503') should return PhaseScopedWarningsPragma"
+    );
+    Ok(())
+}
+
 // ---------------------------------------------------------------------------
 // Security diagnostic codes (PL6xx range)
 // ---------------------------------------------------------------------------
@@ -176,6 +230,24 @@ fn security_backtick_exec_code_exists() -> Result<(), Box<dyn std::error::Error>
         code.as_str().starts_with("PL"),
         "SecurityBacktickExec should have a PL code, got: {}",
         code.as_str()
+    );
+    Ok(())
+}
+
+#[test]
+fn security_signal_handler_code_exists() -> Result<(), Box<dyn std::error::Error>> {
+    let code = DiagnosticCode::SecuritySignalHandler;
+    assert_eq!(code.as_str(), "PL602", "SecuritySignalHandler should have code PL602");
+    assert_eq!(
+        code.severity(),
+        perl_diagnostics_codes::DiagnosticSeverity::Warning,
+        "SecuritySignalHandler should have Warning severity"
+    );
+    assert!(code.context_hint().is_some(), "SecuritySignalHandler should have a context hint");
+    assert_eq!(
+        DiagnosticCode::parse_code("PL602"),
+        Some(DiagnosticCode::SecuritySignalHandler),
+        "parse_code('PL602') should return SecuritySignalHandler"
     );
     Ok(())
 }

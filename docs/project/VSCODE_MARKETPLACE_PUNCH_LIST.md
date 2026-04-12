@@ -221,7 +221,7 @@ Alternative if you want to capture VSCodium users:
 
 **Keywords hard cap is 5, not a soft suggestion.** The marketplace [documentation](https://code.visualstudio.com/api/references/extension-manifest) states: "Keywords to make it easier to find the extension. These are included with other extension Tags on the Marketplace. Limit to 5." The current 10-keyword list means the last 5 entries (`refactoring`, `code-completion`, `diagnostics`, `vscodium`, `open-vsx`) are silently dropped.
 
-**Shields.io badges work in README.** The four badges at the top of README.md use shields.io and will render correctly on both VS Marketplace (which uses `"markdown": "github"` rendering, already set) and Open VSX. They will show "not found" until the extension is actually published; that is expected and resolves automatically.
+**Do not use Shields for VS Marketplace install counts.** Shields deprecated the live `visual-studio-marketplace` badge route; the repo now uses manually maintained static badges (`img.shields.io/badge/...`) for VS Marketplace install counts in both `README.md` and `vscode-extension/README.md`. Update the count and last-checked date from publisher metrics after each release. Other Shields badges (crates.io, Open VSX, etc.) remain fine.
 
 **`"markdown": "github"` is already set** in package.json. This tells the marketplace to render README.md with GitHub-Flavored Markdown, which enables tables, checkboxes, and fenced code blocks. No action needed.
 

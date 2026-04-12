@@ -41,7 +41,7 @@ include_paths = ["lib", "local/lib/perl5"]
 [diagnostics]
 # Uncomment to enable perlcritic (requires perlcritic installed)
 # perlcritic = true
-# perlcritic_severity = 3  # 1 = most severe, 5 = everything
+# perlcritic_severity = 3  # 1 = least severe (reports more), 5 = most severe (reports less)
 
 [features]
 # Inlay hints show parameter names and types inline while you code
@@ -82,7 +82,7 @@ Priority 3 (highest): didChangeConfiguration — live editor settings
 | `[perl]` | `version` | string | none | Perl version hint, e.g. `"5.38"`. Reserved; not yet used. |
 | `[perl]` | `include_paths` | string[] | `[]` | Extra module paths. Empty = keep built-in defaults. |
 | `[diagnostics]` | `perlcritic` | bool | false | Enable perlcritic linting (opt-in). |
-| `[diagnostics]` | `perlcritic_severity` | int 1-5 | 3 | Minimum severity to report. 1 = strictest, 5 = everything. |
+| `[diagnostics]` | `perlcritic_severity` | int 1-5 | 3 | Minimum severity to report. 1 = least severe (reports everything), 5 = most severe (reports only strictest). |
 | `[features]` | `inlay_hints` | bool | true | Enable/disable all inlay hints globally. |
 
 ### LSP workspace settings (all editors, under `perl.*`)
@@ -274,7 +274,7 @@ which perlcritic   # verify
 ```toml
 [diagnostics]
 perlcritic = true
-perlcritic_severity = 3   # 1 = most severe, 5 = everything
+perlcritic_severity = 3   # 1 = least severe (reports more), 5 = most severe (reports less)
 ```
 
 **Enable via editor settings** (personal preference):
@@ -551,7 +551,7 @@ perllsp --features-json --feature-profile production | python3 -m json.tool
 
 1. Confirm `perlcritic` is installed: `which perlcritic && perlcritic --version`
 2. Confirm `perlcritic = true` is set (it is opt-in and defaults to false).
-3. Check the severity — at severity 1, only the most severe violations appear. Try severity 5 to confirm it is working.
+3. Check the severity — at severity 1, perlcritic reports the broadest set. Try severity 5 to restrict to only the most severe violations.
 
 ### Inlay hints are missing
 

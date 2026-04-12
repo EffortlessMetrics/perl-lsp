@@ -53,6 +53,20 @@ impl DispatchSemantics {
     }
 }
 
+/// How a `use` statement spells its import list.
+///
+/// This is syntactic only: it distinguishes the default import form from an
+/// explicitly empty list and from an explicit parenthesized import list.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ImportListForm {
+    /// `use Module;`
+    Default,
+    /// `use Module ();`
+    Empty,
+    /// `use Module (...)`
+    Explicit,
+}
+
 /// Distinguishes the two syntactic forms of `require`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RequireForm {
@@ -108,6 +122,27 @@ pub struct ModuleImportHead<'a> {
     /// For `require`, whether the argument was a quoted file path or a bare module name.
     /// Always `None` for `use` forms.
     require_form: Option<RequireForm>,
+    /// For `use` statements, how the import list is spelled.
+    pub import_list: Option<ImportListForm>,
+}
+
+/// Resolve a known export tag to its symbol list for a specific module.
+///
+/// The `tag` argument can be passed with or without a leading `:`.
+/// Returns `None` when the module/tag pair is not in the built-in catalog.
+#[must_use]
+pub fn resolve_known_export_tag(module: &str, tag: &str) -> Option<&'static [&'static str]> {
+    let normalized_tag = tag.strip_prefix(':').unwrap_or(tag);
+    match (module, normalized_tag) {
+        ("POSIX", "sys_wait_h") => Some(&["WIFEXITED", "WEXITSTATUS", "WIFSIGNALED", "WTERMSIG"]),
+        ("POSIX", "fcntl_h") => Some(&["F_GETFL", "F_SETFL", "F_SETFD", "F_GETFD"]),
+        ("POSIX", "termios_h") => Some(&["TCSANOW", "TCSADRAIN", "TCSAFLUSH", "B9600"]),
+        ("File::Find", "find") => Some(&["find", "finddepth"]),
+        ("Fcntl", "seek") => Some(&["SEEK_SET", "SEEK_CUR", "SEEK_END"]),
+        ("Fcntl", "lock") => Some(&["LOCK_SH", "LOCK_EX", "LOCK_NB", "LOCK_UN"]),
+        ("Encode", "fallback") => Some(&["FB_DEFAULT", "FB_CROAK", "FB_QUIET", "FB_WARN"]),
+        _ => None,
+    }
 }
 
 impl<'a> ModuleImportHead<'a> {
@@ -147,7 +182,21 @@ pub fn parse_module_import_head(line: &str) -> Option<ModuleImportHead<'_>> {
             "base" => ModuleImportKind::UseBase,
             _ => ModuleImportKind::Use,
         };
-        return Some(ModuleImportHead { kind, token, token_start, token_end, require_form: None });
+
+        let import_list = match kind {
+            ModuleImportKind::Use => Some(classify_use_import_list(&line[token_end..])),
+            ModuleImportKind::UseParent | ModuleImportKind::UseBase => None,
+            ModuleImportKind::Require => None,
+        };
+
+        return Some(ModuleImportHead {
+            kind,
+            token,
+            token_start,
+            token_end,
+            require_form: None,
+            import_list,
+        });
     }
 
     if let Some(result) = parse_require_head(line) {
@@ -192,6 +241,7 @@ fn parse_require_head(line: &str) -> Option<ModuleImportHead<'_>> {
             token_start,
             token_end,
             require_form: Some(RequireForm::FilePath),
+            import_list: None,
         });
     }
 
@@ -206,7 +256,28 @@ fn parse_require_head(line: &str) -> Option<ModuleImportHead<'_>> {
         token_start,
         token_end,
         require_form: Some(RequireForm::ModuleName),
+        import_list: None,
     })
+}
+
+fn classify_use_import_list(rest: &str) -> ImportListForm {
+    let trimmed = rest.trim_start();
+
+    if trimmed.is_empty() || trimmed.starts_with(';') {
+        return ImportListForm::Default;
+    }
+
+    if let Some(after_open) = trimmed.strip_prefix('(')
+        && let Some(close_idx) = after_open.find(')')
+        && after_open[..close_idx].trim().is_empty()
+    {
+        let after_close = after_open[close_idx + 1..].trim_start();
+        if after_close.is_empty() || after_close.starts_with(';') || after_close.starts_with('#') {
+            return ImportListForm::Empty;
+        }
+    }
+
+    ImportListForm::Explicit
 }
 
 fn parse_statement_head<'a>(line: &'a str, keyword: &str) -> Option<(&'a str, usize, usize)> {
@@ -260,7 +331,7 @@ fn is_token_delimiter(ch: char) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{ModuleImportKind, parse_module_import_head};
+    use super::{ModuleImportKind, parse_module_import_head, resolve_known_export_tag};
 
     #[test]
     fn parses_use_statement_head() {
@@ -316,5 +387,14 @@ mod tests {
     fn rejects_missing_tokens() {
         assert!(parse_module_import_head("use ;").is_none());
         assert!(parse_module_import_head("require").is_none());
+    }
+
+    #[test]
+    fn resolves_known_export_tags() {
+        let seek = resolve_known_export_tag("Fcntl", ":seek");
+        assert_eq!(seek, Some(&["SEEK_SET", "SEEK_CUR", "SEEK_END"][..]));
+
+        let find = resolve_known_export_tag("File::Find", "find");
+        assert_eq!(find, Some(&["find", "finddepth"][..]));
     }
 }

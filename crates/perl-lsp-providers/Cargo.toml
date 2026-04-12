@@ -42,9 +42,6 @@ rustc-hash = "2.1.2"
 serde_json.workspace = true
 lsp-types = { workspace = true, optional = true }
 
-# Unix-only dependency for signal handling in debug adapter
-[target.'cfg(unix)'.dependencies]
-nix = { version = "0.31.1", features = ["signal"] }
 
 [features]
 default = ["lsp-compat"]

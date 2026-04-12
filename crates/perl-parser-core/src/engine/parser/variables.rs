@@ -662,7 +662,70 @@ impl<'a> Parser<'a> {
         }
 
         self.expect(TokenKind::RightParen)?; // consume )
+        self.validate_signature_ordering(&params);
         Ok(params)
+    }
+
+    /// Validate ordering rules for a collected list of signature parameters.
+    ///
+    /// Emits diagnostics (without aborting the parse) for:
+    /// - A slurpy (`@` or `%`) parameter that is not the last parameter.
+    /// - Both an `@` and a `%` slurpy parameter present in the same signature.
+    /// - A mandatory parameter appearing after an optional parameter.
+    fn validate_signature_ordering(&mut self, params: &[Node]) {
+        let mut seen_slurpy_at = false; // saw @array slurpy
+        let mut seen_slurpy_pct = false; // saw %hash slurpy
+        let mut seen_optional = false;
+
+        for (idx, param) in params.iter().enumerate() {
+            let is_last = idx == params.len() - 1;
+
+            match &param.kind {
+                NodeKind::SlurpyParameter { variable } => {
+                    let sigil = match &variable.kind {
+                        NodeKind::Variable { sigil, .. } => sigil.as_str(),
+                        _ => "",
+                    };
+
+                    if sigil == "@" {
+                        if seen_slurpy_pct {
+                            self.errors.push(ParseError::syntax(
+                                "Signature cannot have both @ and % slurpy parameters",
+                                param.location.start,
+                            ));
+                        }
+                        seen_slurpy_at = true;
+                    } else if sigil == "%" {
+                        if seen_slurpy_at {
+                            self.errors.push(ParseError::syntax(
+                                "Signature cannot have both @ and % slurpy parameters",
+                                param.location.start,
+                            ));
+                        }
+                        seen_slurpy_pct = true;
+                    }
+
+                    if !is_last {
+                        self.errors.push(ParseError::syntax(
+                            "Slurpy parameter must be the last parameter in the signature",
+                            param.location.start,
+                        ));
+                    }
+                }
+                NodeKind::OptionalParameter { .. } => {
+                    seen_optional = true;
+                }
+                NodeKind::MandatoryParameter { .. } => {
+                    if seen_optional {
+                        self.errors.push(ParseError::syntax(
+                            "Mandatory parameter cannot follow an optional parameter in signature",
+                            param.location.start,
+                        ));
+                    }
+                }
+                _ => {}
+            }
+        }
     }
 
     /// Parse a single signature parameter
@@ -785,12 +848,63 @@ impl<'a> Parser<'a> {
                     TokenKind::RightParen => true,
                     // Colon indicates named parameter (:$foo), so it's a signature
                     TokenKind::Colon => false,
-                    // Identifiers usually mean signature, but could be a special case
+                    // Identifiers: The lexer produces a single Identifier token that
+                    // may include the leading sigil (e.g., `$x` → Identifier("$x")).
+                    // Signature parameters always start with a sigil followed by a name
+                    // (e.g., `$x`, `@arr`). Pure prototype characters produce either
+                    // bare sigil tokens (ScalarSigil/ArraySigil handled above) or an
+                    // Identifier token whose text contains only valid prototype chars
+                    // (`_`, `$`, `@`, `%`, `*`, `&`).
+                    //
+                    // A bare alphabetic identifier with no leading sigil (e.g., `XYZ`, `a`)
+                    // cannot be a signature parameter — treat it as a prototype candidate
+                    // so that `parse_prototype` can validate and warn on the invalid chars.
                     TokenKind::Identifier => {
-                        // Check if it's a sigil-only identifier like "$" or "@"
-                        // or the special underscore prototype
-                        &*token.text == "_"
-                            || token.text.chars().all(|c| matches!(c, '$' | '@' | '%' | '*' | '&'))
+                        let text = &*token.text;
+                        // `_` is a valid prototype character (default $_)
+                        if text == "_" {
+                            return Ok(true);
+                        }
+                        // A sigil-prefixed identifier: check if ALL chars are valid
+                        // prototype chars.  If not (e.g., `$x`), it's a signature param.
+                        let all_proto_chars = text.chars().all(is_valid_prototype_char);
+                        if all_proto_chars {
+                            // Looks like prototype-only chars → prototype
+                            return Ok(true);
+                        }
+                        // Text begins with a sigil followed by a real identifier name →
+                        // it's a signature parameter (e.g., `$x`).
+                        let starts_with_sigil = text
+                            .chars()
+                            .next()
+                            .is_some_and(|c| matches!(c, '$' | '@' | '%' | '*' | '&'));
+                        if starts_with_sigil {
+                            // `$x`, `@arr`, etc. → signature
+                            return Ok(false);
+                        }
+                        if let Ok(third) = self.tokens.peek_third() {
+                            let third_starts_signature = match third.kind {
+                                TokenKind::Identifier => third
+                                    .text
+                                    .chars()
+                                    .next()
+                                    .is_some_and(|c| matches!(c, '$' | '@' | '%' | '*' | '&')),
+                                TokenKind::ScalarSigil
+                                | TokenKind::ArraySigil
+                                | TokenKind::HashSigil
+                                | TokenKind::SubSigil
+                                | TokenKind::GlobSigil => true,
+                                _ => false,
+                            };
+
+                            if third_starts_signature {
+                                // `Type $x`, `Role @rest`, etc. are typed signatures.
+                                return Ok(false);
+                            }
+                        }
+                        // Bare alphabetic identifier with no sigil (e.g., `XYZ`, `foo`) →
+                        // treat as prototype candidate; invalid chars will be warned about.
+                        true
                     }
                     // Anything else suggests a signature
                     _ => false,
@@ -802,11 +916,12 @@ impl<'a> Parser<'a> {
 
     /// Parse old-style prototype
     fn parse_prototype(&mut self) -> ParseResult<String> {
+        let open_paren_pos = self.current_position();
         self.expect(TokenKind::LeftParen)?; // consume (
         let mut prototype = String::new();
 
         while !self.tokens.is_eof() {
-            let token = self.tokens.next()?;
+            let token = self.consume_token()?;
 
             match token.kind {
                 TokenKind::RightParen => {
@@ -832,8 +947,40 @@ impl<'a> Parser<'a> {
             }
         }
 
+        // Validate every character in the collected prototype string.
+        // Perl only allows: $ @ % & * \ ; + _ and ASCII space.
+        // Anything else triggers Perl's "Illegal character in prototype" warning.
+        // We emit a SyntaxError diagnostic (collected as a warning by the LSP layer
+        // via DiagnosticCode::InvalidPrototype / PL302) but do NOT abort parsing —
+        // the prototype string is preserved so the caller still gets a Subroutine node.
+        let invalid_chars: String = prototype
+            .chars()
+            .filter(|c| !is_valid_prototype_char(*c))
+            .collect::<std::collections::BTreeSet<char>>()
+            .into_iter()
+            .collect();
+
+        if !invalid_chars.is_empty() {
+            self.errors.push(ParseError::SyntaxError {
+                message: format!(
+                    "Invalid prototype character(s) '{}' — valid characters are: \
+                    $, @, %, &, *, \\, ;, +, _ (see perlsub)",
+                    invalid_chars
+                ),
+                location: open_paren_pos,
+            });
+        }
+
         Ok(prototype)
     }
+}
+
+/// Return `true` if `c` is a character that Perl permits in old-style prototypes.
+///
+/// Valid characters (from perlsub):
+/// `$` `@` `%` `&` `*` `\` `;` `+` `_` and ASCII space.
+fn is_valid_prototype_char(c: char) -> bool {
+    matches!(c, '$' | '@' | '%' | '&' | '*' | '\\' | ';' | '+' | '_' | ' ')
 }
 
 #[cfg(test)]
@@ -885,6 +1032,25 @@ mod prototype_heuristic_tests {
 
         if let NodeKind::Subroutine { signature, .. } = &node.kind {
             assert!(signature.is_some(), "sub foo($x, $y) should have a signature");
+        }
+    }
+
+    #[test]
+    fn typed_signature_with_type_constraint() {
+        let node = parse_sub("sub foo(Type $x) {}");
+        assert!(node.is_some(), "expected parsed subroutine for `sub foo(Type $x) {{}}`");
+        let Some(node) = node else {
+            return;
+        };
+        assert!(
+            matches!(&node.kind, NodeKind::Subroutine { .. }),
+            "expected Subroutine node, got {}",
+            node.kind.kind_name()
+        );
+
+        if let NodeKind::Subroutine { signature, prototype, .. } = &node.kind {
+            assert!(signature.is_some(), "typed signature should keep a signature");
+            assert!(prototype.is_none(), "typed signature should not become a prototype");
         }
     }
 

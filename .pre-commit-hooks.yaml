@@ -1,0 +1,37 @@
+-   id: perl-lsp-fmt
+    name: perl-lsp fmt
+    description: Check Rust formatting for the perl-lsp workspace.
+    entry: cargo
+    args: [fmt, --all, --check]
+    language: system
+    pass_filenames: false
+    files: ^(Cargo\.(toml|lock)$|crates/|docs/|\.github/|hooks/|\.ci/|README\.md$|CONTRIBUTING\.md$|features\.toml$)
+
+-   id: perl-lsp-clippy
+    name: perl-lsp clippy
+    description: Run clippy across the perl-lsp workspace.
+    entry: cargo
+    args:
+      [
+        clippy,
+        --workspace,
+        --all-targets,
+        --locked,
+        --,
+        -D,
+        warnings,
+        -A,
+        missing_docs,
+      ]
+    language: system
+    pass_filenames: false
+    files: ^(Cargo\.(toml|lock)$|crates/|docs/|\.github/|hooks/|\.ci/|README\.md$|CONTRIBUTING\.md$|features\.toml$)
+
+-   id: perl-lsp-test
+    name: perl-lsp test
+    description: Run the perl-lsp workspace test suite.
+    entry: cargo
+    args: [test, --workspace, --locked]
+    language: system
+    pass_filenames: false
+    files: ^(Cargo\.(toml|lock)$|crates/|docs/|\.github/|hooks/|\.ci/|README\.md$|CONTRIBUTING\.md$|features\.toml$)

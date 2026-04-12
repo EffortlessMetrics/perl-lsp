@@ -184,6 +184,7 @@ fn attach_config_round_trip() -> Result<(), Box<dyn std::error::Error>> {
         host: "192.168.1.100".to_string(),
         port: 9229,
         timeout_ms: Some(15000),
+        stop_on_entry: None,
     };
 
     let json = serde_json::to_string(&config)?;
@@ -197,8 +198,12 @@ fn attach_config_round_trip() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn attach_config_round_trip_no_timeout() -> Result<(), Box<dyn std::error::Error>> {
-    let config =
-        AttachConfiguration { host: "localhost".to_string(), port: 13603, timeout_ms: None };
+    let config = AttachConfiguration {
+        host: "localhost".to_string(),
+        port: 13603,
+        timeout_ms: None,
+        stop_on_entry: None,
+    };
 
     let json = serde_json::to_string(&config)?;
     assert!(!json.contains("timeoutMs"), "None timeoutMs should be omitted: {json}");
@@ -226,6 +231,7 @@ fn attach_config_validation_boundary_timeout() {
         host: "localhost".to_string(),
         port: 13603,
         timeout_ms: Some(300_000),
+        stop_on_entry: None,
     };
     assert!(config.validate().is_ok(), "Max timeout should be valid");
 
@@ -234,6 +240,7 @@ fn attach_config_validation_boundary_timeout() {
         host: "localhost".to_string(),
         port: 13603,
         timeout_ms: Some(300_001),
+        stop_on_entry: None,
     };
     assert!(config.validate().is_err(), "Over-max timeout should fail");
 }
@@ -241,20 +248,33 @@ fn attach_config_validation_boundary_timeout() {
 #[test]
 fn attach_config_validation_port_boundaries() {
     // Port 1 is valid
-    let config = AttachConfiguration { host: "localhost".to_string(), port: 1, timeout_ms: None };
+    let config = AttachConfiguration {
+        host: "localhost".to_string(),
+        port: 1,
+        timeout_ms: None,
+        stop_on_entry: None,
+    };
     assert!(config.validate().is_ok(), "Port 1 should be valid");
 
     // Port 65535 is valid (max u16)
-    let config =
-        AttachConfiguration { host: "localhost".to_string(), port: 65535, timeout_ms: None };
+    let config = AttachConfiguration {
+        host: "localhost".to_string(),
+        port: 65535,
+        timeout_ms: None,
+        stop_on_entry: None,
+    };
     assert!(config.validate().is_ok(), "Port 65535 should be valid");
 }
 
 #[test]
 fn attach_config_validation_timeout_1ms() {
     // Timeout of 1ms is the minimum valid timeout
-    let config =
-        AttachConfiguration { host: "localhost".to_string(), port: 13603, timeout_ms: Some(1) };
+    let config = AttachConfiguration {
+        host: "localhost".to_string(),
+        port: 13603,
+        timeout_ms: Some(1),
+        stop_on_entry: None,
+    };
     assert!(config.validate().is_ok(), "1ms timeout should be valid");
 }
 

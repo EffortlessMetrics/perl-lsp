@@ -104,9 +104,9 @@ Fails non-zero (skip this PR) if any of:
 
 Source: draft/label race hit 5 PRs in the 2026-04-08 session (issues #3321, feedback_pr_draft_label_race.md, feedback_validate_title_issue_ref.md).
 
-## §2 — Two-pass review is mandatory
+## §2 — Two-pass review is mandatory for non-docs PRs
 
-Every PR needs both reviewer (haiku, standards) and reviewer-deep (sonnet, correctness). Two-pass review caught 4 real bugs at 12-16x ROI. Never merge on `merge-ready` alone — verify `reviewed-deep` label is also present.
+Every non-docs PR needs both reviewer (haiku, standards) and reviewer-deep (sonnet, correctness). Two-pass review caught 4 real bugs at 12-16x ROI. Docs-only PRs are the exception: they may merge with `merge-ready` alone if the pre-merge guard classifies every changed file as docs-only.
 
 ## §3 — Merge in batches of 3
 

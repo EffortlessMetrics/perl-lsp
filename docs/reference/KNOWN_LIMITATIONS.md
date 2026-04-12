@@ -1,4 +1,9 @@
-# Tree-sitter Perl Parsers - Known Limitations
+# Perl Parser - Known Limitations (v3 Native, v2 Legacy, v1 Archived)
+
+> **Note**: The current default parser is **v3 (Native)** — a pure Rust recursive-descent parser
+> with no tree-sitter dependency. v1 is the original C/tree-sitter implementation (archived,
+> benchmarking only). v2 is Pest-based (legacy, kept out of the default gate). See
+> [PURE_RUST_PARSER.md](../explanation/PURE_RUST_PARSER.md) for v2 historical context.
 
 This document provides a comprehensive list of parsing limitations across all three parser implementations.
 

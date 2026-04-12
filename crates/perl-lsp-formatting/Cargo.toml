@@ -19,6 +19,7 @@ doctest = false
 [dependencies]
 perl-lsp-tooling = { workspace = true }
 perl-lsp-formatting-types = { workspace = true }
+perl-lsp-perltidy = { workspace = true }
 thiserror.workspace = true
 
 [dev-dependencies]

@@ -113,8 +113,12 @@ fn test_attach_configuration_json() -> Result<()> {
     assert_eq!(config.port, 13603);
 
     // Verify custom configuration
-    let custom_config =
-        AttachConfiguration { host: "127.0.0.1".to_string(), port: 9000, timeout_ms: Some(5000) };
+    let custom_config = AttachConfiguration {
+        host: "127.0.0.1".to_string(),
+        port: 9000,
+        timeout_ms: Some(5000),
+        stop_on_entry: None,
+    };
     assert_eq!(custom_config.host, "127.0.0.1");
     assert_eq!(custom_config.port, 9000);
 
@@ -141,8 +145,12 @@ async fn test_attach_configuration_tcp() -> Result<()> {
     use perl_dap::AttachConfiguration;
 
     // Create attach configuration
-    let config =
-        AttachConfiguration { host: "localhost".to_string(), port: 13603, timeout_ms: Some(5000) };
+    let config = AttachConfiguration {
+        host: "localhost".to_string(),
+        port: 13603,
+        timeout_ms: Some(5000),
+        stop_on_entry: None,
+    };
 
     // Verify configuration is valid
     assert_eq!(config.host, "localhost");
@@ -366,6 +374,7 @@ fn test_attach_configuration_roundtrip() -> Result<()> {
         host: "192.168.1.100".to_string(),
         port: 9000,
         timeout_ms: Some(5000),
+        stop_on_entry: None,
     };
 
     // Serialize to JSON

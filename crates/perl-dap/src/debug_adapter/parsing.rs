@@ -5,7 +5,12 @@ use super::*;
 impl DebugAdapter {
     /// Normalize debugger output lines for deterministic parsing by:
     /// - removing ANSI escape sequences
-    /// - stripping debugger prompt prefixes (e.g. `DB<1>`)
+    /// - stripping all debugger prompt prefixes (e.g. `DB<1>`, `DB<2>`)
+    ///
+    /// A single output line from `perl -d` may contain multiple consecutive
+    /// prompt tokens when the debugger processes several commands between stops
+    /// (e.g. `  DB<1>   DB<2> main::(/path/file.pl:5):`).  All prompts must
+    /// be stripped so that the context pattern can match the tail of the line.
     pub(super) fn normalize_debugger_output_line(line: &str) -> String {
         let mut normalized = if let Some(re) = ansi_escape_re() {
             re.replace_all(line, "").into_owned()
@@ -13,7 +18,8 @@ impl DebugAdapter {
             line.to_string()
         };
 
-        if let Some(prompt_start) = normalized.find("DB<")
+        // Strip all occurrences of DB<N> prompt tokens from the line.
+        while let Some(prompt_start) = normalized.find("DB<")
             && let Some(prompt_end) = normalized[prompt_start..].find('>')
         {
             let content_start = prompt_start + prompt_end + 1;
@@ -759,5 +765,52 @@ DB<1>"#;
         assert_eq!(filtered[0].name, "main::user_func");
         assert_eq!(filtered[1].name, "Foo::process");
         assert_eq!(filtered[2].name, "main::start");
+    }
+
+    // ── normalize_debugger_output_line unit tests ──────────────────────────────
+
+    #[test]
+    pub(super) fn test_normalize_strips_single_db_prompt() {
+        // Single prompt: "DB<1> main::(/path/file.pl:5):" -> "main::(/path/file.pl:5):"
+        let result = DebugAdapter::normalize_debugger_output_line("DB<1> main::(/path/file.pl:5):");
+        assert_eq!(result, "main::(/path/file.pl:5):");
+    }
+
+    #[test]
+    pub(super) fn test_normalize_strips_multiple_db_prompts() {
+        // Multiple prompts on one line — the while-let fix handles these.
+        let result = DebugAdapter::normalize_debugger_output_line(
+            "  DB<1>   DB<2> main::(/path/file.pl:5):",
+        );
+        assert_eq!(result, "main::(/path/file.pl:5):");
+    }
+
+    #[test]
+    pub(super) fn test_normalize_strips_high_prompt_number() {
+        // Prompt number > 99 — ensures '>' search is not length-limited.
+        let result = DebugAdapter::normalize_debugger_output_line("DB<100> $x = 42");
+        assert_eq!(result, "$x = 42");
+    }
+
+    #[test]
+    pub(super) fn test_normalize_no_prompt_passthrough() {
+        // Lines without a prompt must pass through unchanged (modulo trim).
+        let result = DebugAdapter::normalize_debugger_output_line("  main::(/path/file.pl:5):");
+        assert_eq!(result, "main::(/path/file.pl:5):");
+    }
+
+    #[test]
+    pub(super) fn test_normalize_unclosed_prompt_passthrough() {
+        // Malformed "DB<" without closing '>' must not loop forever and must not panic.
+        let result = DebugAdapter::normalize_debugger_output_line("DB<incomplete");
+        // The loop exits because find('>') returns None; the fragment remains.
+        assert_eq!(result, "DB<incomplete");
+    }
+
+    #[test]
+    pub(super) fn test_normalize_three_prompts_in_sequence() {
+        // Three consecutive prompts — verifies loop handles arbitrary depth.
+        let result = DebugAdapter::normalize_debugger_output_line("DB<1> DB<2> DB<3> my $x = 10;");
+        assert_eq!(result, "my $x = 10;");
     }
 }

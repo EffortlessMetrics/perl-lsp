@@ -155,6 +155,27 @@ mod moose_class_model_navigation_tests {
         Ok(())
     }
 
+    /// Goto-definition on method modifier targets should jump to the underlying method.
+    #[test]
+    fn test_moo_method_modifier_goto_definition_jumps_to_target_method() -> TestResult {
+        let code = include_str!("fixtures/frameworks/moo_method_modifiers.pl");
+        let uri = "file:///moo_modifiers.pl";
+
+        for target_line in [8_usize, 13, 18] {
+            let resp = goto_def(code, uri, "save", target_line)?;
+            let (def_uri, def_line, _) = semantic::first_location(&resp).ok_or(
+                "Expected goto-definition to find the underlying method for a method modifier",
+            )?;
+
+            assert_eq!(def_uri, uri, "Definition should be in the same file");
+            assert_eq!(
+                def_line, 3,
+                "Method modifier on line {target_line} should jump to the underlying method declaration on line 3"
+            );
+        }
+        Ok(())
+    }
+
     // ── hover: $self->accessor shows dedicated attribute accessor card ────
 
     /// Hovering `$self->name` on a Moose `ro` attribute must show a dedicated
@@ -245,6 +266,38 @@ mod moose_class_model_navigation_tests {
             content.contains("Num"),
             "Hover content for 'total' should contain isa type 'Num', got: {content}"
         );
+        Ok(())
+    }
+
+    /// Hovering an accessor with Moo/Moose metadata must surface the key fields
+    /// from the attribute model in the hover markdown.
+    #[test]
+    fn test_moose_accessor_hover_surfaces_full_attribute_metadata() -> TestResult {
+        let code = "package Widget;\nuse Moose;\nhas 'status' => (is => 'rw', isa => 'Str', required => 1, predicate => 1, builder => 1, clearer => 1);\nsub render { my ($self) = @_; print $self->status; }\n";
+        let uri = "file:///widget_metadata.pl";
+
+        let resp = hover_at(code, uri, "status", 3)?;
+        let content = semantic::hover_content(&resp)
+            .ok_or("Expected hover content for Moose accessor 'status'")?;
+
+        assert!(
+            content.contains("Moo/Moose Attribute Accessor"),
+            "Hover for Moose accessor should show the dedicated accessor card, got: {content}"
+        );
+        for expected in [
+            "**Attribute**: `status`",
+            "**Type**: `Str`",
+            "**Access**: read-write",
+            "**Required**: yes",
+            "**Predicate**: `has_status`",
+            "**Builder**: `_build_status`",
+            "**Clearer**: `clear_status`",
+        ] {
+            assert!(
+                content.contains(expected),
+                "Hover for Moose accessor should include `{expected}`, got: {content}"
+            );
+        }
         Ok(())
     }
 

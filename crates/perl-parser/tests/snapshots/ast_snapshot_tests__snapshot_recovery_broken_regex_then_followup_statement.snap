@@ -1,0 +1,5 @@
+---
+source: crates/perl-parser/tests/ast_snapshot_tests.rs
+expression: "parse_sexp(\"if ($text =~ /abc) { print 1; }\\nmy $ok = 1;\")"
+---
+(source_file (ERROR "expected \'{\', found end of input at position 43"))

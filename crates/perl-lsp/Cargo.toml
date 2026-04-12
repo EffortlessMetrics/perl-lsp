@@ -44,6 +44,7 @@ perl-lsp-feature-governance = { workspace = true }
 perl-lsp-tooling = { workspace = true }
 perl-subprocess-runtime = { workspace = true }
 perl-lsp-config = { workspace = true }
+perl-dap-platform = { workspace = true }
 perl-lsp-protocol = { workspace = true }
 perl-lsp-transport = { workspace = true }
 perl-lsp-code-actions = { workspace = true }
@@ -85,12 +86,14 @@ perl-module-path = { workspace = true }
 perl-qualified-name = { workspace = true }
 perl-module-reference = { workspace = true }
 perl-module-rename = { workspace = true }
+perl-module-import = { workspace = true }
 perl-pod = { workspace = true }
 perl-module-resolution = { workspace = true }
 perl-source-file = { workspace = true }
 perl-workspace-discovery = { workspace = true }
 perl-workspace-folder = { workspace = true }
 perl-workspace-ignore = { workspace = true }
+perl-workspace-index = { workspace = true }
 perl-keywords = { workspace = true }
 lsp-types.workspace = true
 serde = { workspace = true }
@@ -158,6 +161,7 @@ which = "8.0.2"
 parking_lot.workspace = true
 criterion.workspace = true
 perl-ast-utils = { workspace = true }
+perl-corpus = { workspace = true }
 
 [package.metadata.binstall]
 pkg-url = "{ repo }/releases/download/v{ version }/perl-lsp-{ version }-{ target }{ archive-suffix }"

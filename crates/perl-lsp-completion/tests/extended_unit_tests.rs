@@ -1238,6 +1238,31 @@ fn arrow_completion_from_variable_assignment() {
 }
 
 #[test]
+fn arrow_completion_from_multiline_object_assignment() {
+    let index = Arc::new(WorkspaceIndex::new());
+
+    let uri = must(Url::parse("file:///workspace/lib/Cache.pm"));
+    must(index.index_file(
+        uri,
+        "package Cache;\nsub new { }\nsub get { }\nsub set { }\n1;\n".to_string(),
+    ));
+
+    let code = "my $cache =\n    Cache->new();\n$cache->";
+    let provider = parse_provider_with_index(code, index);
+    let items = provider.get_completions(code, code.len());
+
+    assert!(
+        has_label(&items, "get"),
+        "should suggest `get` from Cache via multiline object assignment inference, got: {:?}",
+        items.iter().map(|i| &i.label).collect::<Vec<_>>()
+    );
+    assert!(
+        has_label(&items, "set"),
+        "should suggest `set` from Cache via multiline object assignment inference"
+    );
+}
+
+#[test]
 fn arrow_completion_does_not_duplicate_local_methods() {
     let index = Arc::new(WorkspaceIndex::new());
 

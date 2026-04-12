@@ -140,6 +140,48 @@ sub calculate {
 }
 
 #[test]
+fn test_document_symbols_plack_builder_chain() -> TestResult {
+    let server = setup_server();
+
+    let content = r#"
+use Plack::Builder;
+
+builder {
+    enable 'Static';
+    mount '/api' => $api_app;
+};
+"#;
+
+    open_document(&server, "file:///plack.psgi", content);
+
+    let request = JsonRpcRequest {
+        _jsonrpc: "2.0".to_string(),
+        method: "textDocument/documentSymbol".to_string(),
+        params: Some(json!({
+            "textDocument": {
+                "uri": "file:///plack.psgi"
+            }
+        })),
+        id: Some(json!(2)),
+    };
+
+    let response = server.handle_request(request).ok_or("No response from server")?;
+    let result = response.result.ok_or("Missing result")?;
+    let symbols = result.as_array().ok_or("Result is not an array")?;
+
+    assert!(
+        symbols.iter().any(|s| s["name"].as_str() == Some("Plack::Middleware::Static")),
+        "document symbols should expose the synthesized Plack middleware entry: {symbols:?}"
+    );
+    assert!(
+        symbols.iter().any(|s| s["name"].as_str() == Some("/api")),
+        "document symbols should expose the synthesized mount entry: {symbols:?}"
+    );
+
+    Ok(())
+}
+
+#[test]
 fn test_document_symbols_nested() -> TestResult {
     let server = setup_server();
 
@@ -655,6 +697,111 @@ fn test_pod_section_unicode_heading() -> TestResult {
         .ok_or("CJK heading not found")?;
     let end_char = cjk_sym["range"]["end"]["character"].as_u64().ok_or("no end char")?;
     assert!(end_char > 0, "end character must be > 0 for multi-byte heading");
+
+    Ok(())
+}
+
+// ---- Phase block tests (issue #3464) ----
+
+#[test]
+fn test_begin_block_appears_in_document_symbols() -> TestResult {
+    let server = setup_server();
+    let content = "package MyModule;\n\nBEGIN {\n    require Config;\n}\n\nsub hello { }\n\n1;\n";
+    open_document(&server, "file:///test_begin.pm", content);
+    let request = JsonRpcRequest {
+        _jsonrpc: "2.0".to_string(),
+        method: "textDocument/documentSymbol".to_string(),
+        params: Some(json!({ "textDocument": { "uri": "file:///test_begin.pm" } })),
+        id: Some(json!(20)),
+    };
+    let response = server.handle_request(request).ok_or("No response")?;
+    let result = response.result.ok_or("Missing result")?;
+    let symbols = result.as_array().ok_or("Not an array")?;
+
+    assert!(
+        symbols.iter().any(|s| s["name"] == "BEGIN"),
+        "BEGIN block must appear in document symbols; got: {:?}",
+        symbols.iter().map(|s| s["name"].as_str().unwrap_or("?")).collect::<Vec<_>>()
+    );
+
+    let begin_sym = symbols.iter().find(|s| s["name"] == "BEGIN").ok_or("BEGIN not found")?;
+    // Phase blocks map to Function (12) kind
+    assert_eq!(begin_sym["kind"], 12, "BEGIN block should have Function (12) kind");
+
+    Ok(())
+}
+
+#[test]
+fn test_end_block_appears_in_document_symbols() -> TestResult {
+    let server = setup_server();
+    let content = "package MyModule;\n\nEND {\n    cleanup();\n}\n\nsub cleanup { }\n\n1;\n";
+    open_document(&server, "file:///test_end.pm", content);
+    let request = JsonRpcRequest {
+        _jsonrpc: "2.0".to_string(),
+        method: "textDocument/documentSymbol".to_string(),
+        params: Some(json!({ "textDocument": { "uri": "file:///test_end.pm" } })),
+        id: Some(json!(21)),
+    };
+    let response = server.handle_request(request).ok_or("No response")?;
+    let result = response.result.ok_or("Missing result")?;
+    let symbols = result.as_array().ok_or("Not an array")?;
+
+    assert!(
+        symbols.iter().any(|s| s["name"] == "END"),
+        "END block must appear in document symbols; got: {:?}",
+        symbols.iter().map(|s| s["name"].as_str().unwrap_or("?")).collect::<Vec<_>>()
+    );
+
+    Ok(())
+}
+
+#[test]
+fn test_all_phase_blocks_appear_in_document_symbols() -> TestResult {
+    let server = setup_server();
+    let content = "BEGIN { require Config; }\nEND { cleanup(); }\nCHECK { verify(); }\nINIT { initialize(); }\nUNITCHECK { unit_check(); }\n\nsub cleanup { }\nsub verify { }\nsub initialize { }\nsub unit_check { }\n";
+    open_document(&server, "file:///test_phases.pm", content);
+    let request = JsonRpcRequest {
+        _jsonrpc: "2.0".to_string(),
+        method: "textDocument/documentSymbol".to_string(),
+        params: Some(json!({ "textDocument": { "uri": "file:///test_phases.pm" } })),
+        id: Some(json!(22)),
+    };
+    let response = server.handle_request(request).ok_or("No response")?;
+    let result = response.result.ok_or("Missing result")?;
+    let symbols = result.as_array().ok_or("Not an array")?;
+
+    for phase in &["BEGIN", "END", "CHECK", "INIT", "UNITCHECK"] {
+        assert!(
+            symbols.iter().any(|s| s["name"].as_str() == Some(phase)),
+            "{} block must appear in document symbols; got: {:?}",
+            phase,
+            symbols.iter().map(|s| s["name"].as_str().unwrap_or("?")).collect::<Vec<_>>()
+        );
+        let sym = symbols.iter().find(|s| s["name"].as_str() == Some(phase)).ok_or(*phase)?;
+        assert_eq!(sym["kind"], 12, "{} must have Function (12) kind", phase);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_multiple_begin_blocks_all_appear() -> TestResult {
+    // Multiple BEGIN blocks are common in Perl modules
+    let server = setup_server();
+    let content = "BEGIN { require 1; }\nBEGIN { require 2; }\n\nsub main_logic { }\n";
+    open_document(&server, "file:///test_multi_begin.pm", content);
+    let request = JsonRpcRequest {
+        _jsonrpc: "2.0".to_string(),
+        method: "textDocument/documentSymbol".to_string(),
+        params: Some(json!({ "textDocument": { "uri": "file:///test_multi_begin.pm" } })),
+        id: Some(json!(23)),
+    };
+    let response = server.handle_request(request).ok_or("No response")?;
+    let result = response.result.ok_or("Missing result")?;
+    let symbols = result.as_array().ok_or("Not an array")?;
+
+    let begin_count = symbols.iter().filter(|s| s["name"].as_str() == Some("BEGIN")).count();
+    assert!(begin_count >= 1, "At least one BEGIN block must appear; got {}", begin_count);
 
     Ok(())
 }

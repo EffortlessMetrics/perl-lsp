@@ -918,7 +918,7 @@ mod tests {
             "class Point { }",
             "method new { }",
             "try { } catch ($e) { }",
-            // "defer { }", // defer is not yet supported by the lexer
+            "defer { }",
             "my $x :shared = 42;",
         ];
 

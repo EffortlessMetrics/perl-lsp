@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "fixture": "inc_findbin_relative",
+  "resolution_mode": "findbin_relative",
+  "assertions": [
+    {
+      "kind": "resolves",
+      "module": "FindBinModule",
+      "expected_suffix": "lib/FindBinModule.pm",
+      "use_line": 4,
+      "use_col": 4,
+      "consumers": ["diagnostic_no_pl701", "goto_definition", "hover"],
+      "rationale": "FindBin-relative use lib '$FindBin::Bin/lib' resolves FindBinModule (file in workspace root, lib/ beside it) via all three consumers"
+    }
+  ]
+}

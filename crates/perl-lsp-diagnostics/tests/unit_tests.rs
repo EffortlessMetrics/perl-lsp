@@ -275,6 +275,47 @@ fn provider_syntax_error() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[test]
+fn provider_invalid_prototype_maps_to_pl302_warning() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = Arc::new(program(vec![]));
+    let source = "sub foo (XYZ) {}";
+    let errors = vec![ParseError::SyntaxError {
+        location: 8,
+        message: "Invalid prototype character(s) 'X'".to_string(),
+    }];
+    let provider = DiagnosticsProvider::new(&ast, source.to_string());
+    let diagnostics = provider.get_diagnostics(&ast, &errors, source, None);
+
+    let prototype_diags: Vec<_> =
+        diagnostics.iter().filter(|d| d.code.as_deref() == Some("PL302")).collect();
+    assert!(!prototype_diags.is_empty(), "expected PL302 diagnostic, got: {:?}", diagnostics);
+
+    let first = &prototype_diags[0];
+    assert_eq!(first.severity, DiagnosticSeverity::Warning);
+    assert_eq!(first.range.0, 8);
+    Ok(())
+}
+
+#[test]
+fn provider_unknown_subroutine_attribute_stays_warning() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = Arc::new(program(vec![]));
+    let source = "sub foo :wat {}";
+    let errors = vec![ParseError::SyntaxError {
+        location: 8,
+        message: "unknown subroutine attribute ':wat'".to_string(),
+    }];
+    let provider = DiagnosticsProvider::new(&ast, source.to_string());
+    let diagnostics = provider.get_diagnostics(&ast, &errors, source, None);
+
+    let attr_diags: Vec<_> =
+        diagnostics.iter().filter(|d| d.message.contains("unknown subroutine attribute")).collect();
+    assert!(!attr_diags.is_empty(), "expected attribute diagnostic, got: {:?}", diagnostics);
+
+    let first = attr_diags[0];
+    assert_eq!(first.severity, DiagnosticSeverity::Warning);
+    Ok(())
+}
+
+#[test]
 fn provider_unexpected_eof_error() -> Result<(), Box<dyn std::error::Error>> {
     let ast = Arc::new(program(vec![]));
     let source = "my $x = ";

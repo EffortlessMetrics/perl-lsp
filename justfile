@@ -103,6 +103,7 @@ nightly: merge-gate
     echo "  NIGHTLY GATE (comprehensive validation)"
     echo "=============================================="
     START=$(date +%s)
+    just _timed "ci-workspace-multiroot" "just ci-workspace-multiroot" && \
     just _timed "mutation-subset" "just mutation-subset" && \
     just _timed "fuzz-bounded" "just fuzz-bounded" && \
     just _timed "benchmarks" "just benchmarks"
@@ -187,10 +188,11 @@ lsp-smoke:
     @echo "LSP smoke tests passed"
 
 # Security audit (non-blocking, warns on issues)
+# Temporary ignore for rand unsoundness advisory tracked in #4149.
 security-audit:
     @echo "Running security audit..."
     @if command -v cargo-audit >/dev/null 2>&1; then \
-        cargo audit 2>&1 || echo "Audit warnings (non-blocking)"; \
+        cargo audit --ignore RUSTSEC-2026-0097 2>&1 || echo "Audit warnings (non-blocking)"; \
     else \
         echo "SKIP: cargo-audit not installed (run: cargo install cargo-audit)"; \
     fi
@@ -304,6 +306,7 @@ fuzz-bounded:
     @cargo +nightly fuzz run lsp_cancellation_registry -- -max_total_time=60 || echo "  LSP cancellation registry fuzzing complete"
     @cargo +nightly fuzz run lsp_navigation -- -max_total_time=60 || echo "  LSP navigation fuzzing complete"
     @cargo +nightly fuzz run parser_integration -- -max_total_time=60 || echo "  Parser integration fuzzing complete"
+    @cargo +nightly fuzz run quote_operators -- -max_total_time=60 || echo "  Quote operators fuzzing complete"
     @cargo +nightly fuzz run substitution_parsing -- -max_total_time=60 || echo "  Substitution fuzzing complete"
     @cargo +nightly fuzz run unicode_positions -- -max_total_time=60 || echo "  Unicode positions fuzzing complete"
     @echo "✅ Fuzz testing complete"
@@ -315,9 +318,9 @@ benchmarks: bench
 # CI Aliases and Convenience Targets
 # ============================================================================
 
-# Canonical local gate via Nix (recommended for pre-push)
+# Canonical local merge gate via Nix (use before merge, not as the push hook)
 ci-local:
-    @echo "Running ci-gate via Nix shell..."
+    @echo "Running merge gate via Nix shell..."
     @if command -v nix >/dev/null 2>&1; then \
         nix develop -c just ci-gate; \
     else \
@@ -545,8 +548,19 @@ doctor:
     # Check 5: pre-push hook installed
     # ------------------------------------------------------------------
     hook_path="$main_git_dir/hooks/pre-push"
+    expected_hook="$main_root/hooks/pre-push"
     if [ -f "$hook_path" ] && [ -x "$hook_path" ]; then
-        echo "✅ pre-push hook installed"
+        if [ -f "$expected_hook" ] && diff -q \
+            <(awk '{ sub(/\r$/, ""); lines[NR]=$0 } END { last=NR; while (last > 0 && lines[last] == "") last--; for (i = 1; i <= last; i++) print lines[i] }' "$hook_path") \
+            <(awk '{ sub(/\r$/, ""); lines[NR]=$0 } END { last=NR; while (last > 0 && lines[last] == "") last--; for (i = 1; i <= last; i++) print lines[i] }' "$expected_hook") >/dev/null; then
+            echo "✅ pre-push hook installed and current"
+        elif [ -f "$expected_hook" ]; then
+            echo "⚠️  pre-push hook installed but stale: $hook_path"
+            echo "   Fix: cargo xtask ci-hygiene install-githooks   # refresh from hooks/pre-push"
+            issues=$((issues + 1))
+        else
+            echo "✅ pre-push hook installed"
+        fi
     elif [ -f "$hook_path" ]; then
         echo "⚠️  pre-push hook present but not executable: $hook_path"
         echo "   Fix: chmod +x \"$hook_path\""
@@ -719,13 +733,14 @@ ci-workflow-audit:
     @cargo xtask ci-audit-workflows
 
 # Fast merge gate (~2-5 min) - REQUIRED for all merges
-# This is the canonical pre-push check (same as merge-gate with legacy checks)
+# The pre-push hook runs `just pr-fast`; this is the broader local merge gate.
 ci-gate:
     @echo "Running fast merge gate..."
     just ci-workflow-audit && \
     just ci-check-no-nested-lock && \
     just ci-format && \
     just ci-docs-check && \
+    just status-check && \
     just ci-clippy-gate && \
     just ci-unwrap-panic-ratchet && \
     just ci-unsafe-ratchet && \
@@ -777,6 +792,7 @@ ci-full:
     @just ci-test-lsp
     @just ci-lsp-microcrates
     @just ci-lsp-bdd
+    @just ux-tests
     @just ci-docs
     @echo "✅ Full CI passed!"
 
@@ -901,21 +917,38 @@ ci-lsp-smoke-e2e:
     @echo "✅ LSP smoke E2E passed"
 
 # UX regression test harness — systematic first-5-minutes scenario testing.
-# Runs all 9 base scenarios (scenarios 01-09, excluding the large-file integration-test tier).
-# For the full large-file tier: just ux-tests-full
+# Runs all default `perl-lsp-ux-tests` scenarios (currently 17 scenario files).
+# `ux-tests-full` adds the integration-only 10k-line large-file coverage.
 ux-tests:
     @echo "Running UX regression test harness (base scenarios)..."
+    @env -u RUSTC_WRAPPER CARGO_BUILD_JOBS=1 \
+        cargo build -p perl-lsp-rs --bin perl-lsp
     @env -u RUSTC_WRAPPER RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 \
+        PERL_LSP_BIN={{justfile_directory()}}/target/debug/perl-lsp \
         cargo test -p perl-lsp-ux-tests -- --test-threads=1
     @echo "UX tests passed"
 
-# UX regression test harness — full suite including large-file scenario.
-# Slower (~5-10 min).  Run before releases or after large LSP changes.
+# UX regression test harness — full suite including the integration-only
+# 10k-line large-file scenario. Slower (~5-10 min). Run before releases or
+# after large LSP changes.
 ux-tests-full:
     @echo "Running UX regression test harness (full, including large-file)..."
+    @env -u RUSTC_WRAPPER CARGO_BUILD_JOBS=1 \
+        cargo build -p perl-lsp-rs --bin perl-lsp
     @env -u RUSTC_WRAPPER RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 \
+        PERL_LSP_BIN={{justfile_directory()}}/target/debug/perl-lsp \
         cargo test -p perl-lsp-ux-tests --features integration-test -- --test-threads=1
     @echo "UX tests (full) passed"
+
+# @INC consumer-consistency conformance harness.
+# Verifies that goto-definition, hover, and PL701 diagnostic agree on module resolution
+# across 5 resolution modes: relative includePaths, lexical use lib, no lib cancellation,
+# FindBin-relative, and system @INC (PERL5LIB).
+metrics-inc-conformance:
+    @echo "Running @INC consumer-consistency conformance harness..."
+    @env -u RUSTC_WRAPPER RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 \
+        cargo test -p perl-lsp-ux-tests --test ux_scenario_14_inc_conformance -- --test-threads=1 --nocapture
+    @echo "@INC conformance harness passed"
 
 # LSP BDD workflow tests (serialized to prevent WSL resource exhaustion)
 ci-lsp-bdd:
@@ -955,6 +988,28 @@ ci-semantic-frameworks:
     @env -u RUSTC_WRAPPER RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 \
         cargo test -p perl-lsp-rs --test moo_semantics_e2e -- --test-threads=1
     @echo "✅ Framework semantic tests passed"
+
+# Multi-root workspace integration tests (timing-sensitive, nightly only)
+# Requires PERL_LSP_WORKSPACE=1 and features workspace,expose_lsp_test_api.
+# These tests use 15-second adaptive timeouts — proven stable before blocking merges.
+ci-workspace-multiroot:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "=============================================="
+    echo "  Multi-Root Workspace Integration Tests"
+    echo "=============================================="
+    START=$(date +%s)
+    env -u RUSTC_WRAPPER RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 \
+        PERL_LSP_WORKSPACE=1 \
+        cargo test -p perl-lsp-rs \
+            --features workspace,expose_lsp_test_api \
+            --test multi_root_workspace_tests \
+            -- --test-threads=1
+    END=$(date +%s)
+    echo ""
+    echo "=============================================="
+    echo "  Multi-root tests PASSED (total: $((END - START))s)"
+    echo "=============================================="
 
 # DAP smoke receipt (launch/breakpoint/step/stack/evaluate/disconnect)
 ci-dap-smoke-e2e:
@@ -1134,6 +1189,15 @@ corpus-audit-check:
 corpus-audit-fresh:
     @echo "🔍 Running corpus audit (fresh mode)..."
     @cd xtask && cargo run --no-default-features -- corpus-audit --fresh
+
+# ============================================================================
+# Diagnostics Metrics Commands
+# ============================================================================
+
+# Run gold corpus diagnostics test suite (precision/recall validation)
+metrics-diagnostics:
+    @echo "📊 Running diagnostics gold suite..."
+    @cargo test -p perl-lsp-diagnostics --test diagnostics_gold_suite -- --nocapture
 
 # ============================================================================
 # Parser Feature Coverage Commands (Issue #180)
@@ -1788,6 +1852,7 @@ fuzz-regression duration='30':
     @just fuzz heredoc_parsing {{duration}} || true
     @just fuzz lsp_cancellation_registry {{duration}} || true
     @just fuzz parser_integration {{duration}} || true
+    @just fuzz quote_operators {{duration}} || true
     @just fuzz substitution_parsing {{duration}} || true
     @just fuzz lsp_navigation {{duration}} || true
     @just fuzz unicode_positions {{duration}} || true
@@ -2037,6 +2102,13 @@ publish-release VERSION *ARGS="":
 publish-new-crates:
     bash scripts/publish-new-crates-manually.sh
 
+# Check that the hand-maintained publish allowlist ([workspace.metadata.publish.allow])
+# matches the set of crates that cargo metadata considers publishable.
+# Run this after adding a new crate to catch drift before pushing.
+publish-allowlist-check:
+    cargo metadata --format-version=1 --no-deps \
+      | python3 scripts/publish-topo.py --check-drift
+
 # Dry-run publish gate: package every allowlisted crate in topological order.
 # Mirrors the dev-dep strip and packaging steps from publish-crates.yml.
 # Runs automatically in CI on every PR that touches Cargo.toml.
@@ -2260,6 +2332,24 @@ cpan-corpus-check:
 # Auto-add newly-clean CPAN modules to known-clean manifest
 cpan-corpus-ratchet:
     cargo run -p xtask -- cpan-corpus ratchet
+
+# ============================================================================
+# Scorecard Metrics Ratchet
+# ============================================================================
+
+# Check scorecard floor metrics for a single subsystem (soft gate: warn, not block)
+ci-metrics-ratchet-check subsystem:
+    @echo "Checking scorecard floor metrics for {{subsystem}}..."
+    cargo run -p xtask -- metrics ratchet-check {{subsystem}}
+    @echo "Scorecard ratchet passed for {{subsystem}}"
+
+# Check all committed scorecard baselines (parser + engineering_health).
+# Soft gate: run after ci-gate, warns on violation, does not block PR in v1.
+ci-metrics-ratchet:
+    @echo "Checking scorecard floor metrics..."
+    cargo run -p xtask -- metrics ratchet-check parser
+    cargo run -p xtask -- metrics ratchet-check engineering_health
+    @echo "Scorecard ratchet passed"
 
 # Tier C: full suite (nightly, all integration tests)
 lsp-tier-c:

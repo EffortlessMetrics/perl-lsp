@@ -201,7 +201,7 @@ pub fn capabilities_for(build: BuildFlags) -> ServerCapabilities {
                     ],
                 },
                 range: Some(true),
-                full: Some(SemanticTokensFullOptions::Bool(true)),
+                full: Some(SemanticTokensFullOptions::Delta { delta: Some(true) }),
             }));
     }
 
@@ -294,8 +294,17 @@ pub fn capabilities_for(build: BuildFlags) -> ServerCapabilities {
         caps.call_hierarchy_provider = Some(CallHierarchyServerCapability::Simple(true));
     }
 
-    // Placeholder for type hierarchy: always add to JSON in capabilities_json
-    // Type hierarchy not directly supported in current lsp-types
+    // Type hierarchy via experimental: lsp-types 0.97 lacks a `type_hierarchy_provider`
+    // field on `ServerCapabilities`. We advertise it via `experimental` so that
+    // `capabilities_for()` users and `feature_ids_from_caps` can detect the capability.
+    // The `handle_initialize` response also injects it at the top-level for clients.
+    if build.type_hierarchy {
+        let mut experimental = caps.experimental.take().unwrap_or_else(|| serde_json::json!({}));
+        if let Some(obj) = experimental.as_object_mut() {
+            obj.insert("typeHierarchyProvider".to_string(), serde_json::json!(true));
+        }
+        caps.experimental = Some(experimental);
+    }
 
     caps
 }
@@ -371,15 +380,13 @@ mod tests {
     /// lacks the corresponding `ServerCapabilities` field.
     ///
     /// - `inline_completion`: advertised via `experimental` JSON, no typed field
-    /// - `type_hierarchy`: injected in `capabilities_json()`, not in struct
     /// - `notebook_cell_execution`: sub-feature of notebook sync, no own field
     /// - `ranges_formatting`: injected in `capabilities_json()` (LSP 3.18, not in lsp-types 0.97)
-    const KNOWN_STRUCTURAL_GAPS: &[&str] = &[
-        "lsp.inline_completion",
-        "lsp.notebook_cell_execution",
-        "lsp.ranges_formatting",
-        "lsp.type_hierarchy",
-    ];
+    ///
+    /// Note: `type_hierarchy` was previously a gap but is now advertised via
+    /// `experimental` in `capabilities_for()` and detected by `feature_ids_from_caps`.
+    const KNOWN_STRUCTURAL_GAPS: &[&str] =
+        &["lsp.inline_completion", "lsp.notebook_cell_execution", "lsp.ranges_formatting"];
 
     /// Guard: feature IDs from BuildFlags must match feature IDs extracted
     /// from the ServerCapabilities that `capabilities_for()` actually builds.

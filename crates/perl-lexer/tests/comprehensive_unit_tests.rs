@@ -513,6 +513,17 @@ fn perl_keywords_recognized() -> R {
     Ok(())
 }
 
+#[test]
+fn defer_block_is_tokenized_as_keyword() -> R {
+    let tok = first_token("defer { }").ok_or("no token")?;
+    assert!(
+        matches!(&tok.token_type, TokenType::Keyword(k) if k.as_ref() == "defer"),
+        "expected 'defer' to tokenize as a keyword, got {:?}",
+        tok.token_type
+    );
+    Ok(())
+}
+
 // ===========================================================================
 // 9. Variable / sigil parsing
 // ===========================================================================
@@ -657,6 +668,67 @@ fn double_quoted_string() -> R {
         "got {:?}",
         tok.token_type
     );
+    Ok(())
+}
+
+#[test]
+fn interpolated_string_preserves_complex_tails() -> R {
+    let cases = [
+        (r#""${expr}""#, vec![StringPart::Expression(Arc::from("${expr}"))]),
+        (
+            r#""$arr[0]""#,
+            vec![StringPart::Variable(Arc::from("$arr")), StringPart::ArraySlice(Arc::from("[0]"))],
+        ),
+        (
+            r#""$hash{key}""#,
+            vec![
+                StringPart::Variable(Arc::from("$hash")),
+                StringPart::Expression(Arc::from("{key}")),
+            ],
+        ),
+        (
+            r#""$var->[0]""#,
+            vec![
+                StringPart::Variable(Arc::from("$var")),
+                StringPart::MethodCall(Arc::from("->[0]")),
+            ],
+        ),
+        (
+            r#""$obj->{key}""#,
+            vec![
+                StringPart::Variable(Arc::from("$obj")),
+                StringPart::MethodCall(Arc::from("->{key}")),
+            ],
+        ),
+    ];
+
+    for (input, expected_parts) in cases {
+        let tok = first_token(input).ok_or_else(|| format!("no token for {input:?}"))?;
+        assert!(
+            matches!(
+                &tok.token_type,
+                TokenType::InterpolatedString(parts) if parts == &expected_parts
+            ),
+            "expected interpolated string token for {input:?}, got {:?}",
+            tok.token_type
+        );
+    }
+
+    let simple = first_token(r#""hello $x world""#).ok_or("no token")?;
+    assert!(
+        matches!(
+            &simple.token_type,
+            TokenType::InterpolatedString(parts) if parts
+                == &vec![
+                    StringPart::Literal(Arc::from("hello ")),
+                    StringPart::Variable(Arc::from("$x")),
+                    StringPart::Literal(Arc::from(" world")),
+                ]
+        ),
+        "expected interpolated string token, got {:?}",
+        simple.token_type
+    );
+
     Ok(())
 }
 

@@ -44,6 +44,25 @@ fn has_symbol(table: &SymbolTable, name: &str, kind: SymbolKind) -> bool {
     table.symbols.get(name).is_some_and(|syms| syms.iter().any(|s| s.kind == kind))
 }
 
+fn has_symbol_with_declaration(
+    table: &SymbolTable,
+    name: &str,
+    kind: SymbolKind,
+    declaration: &str,
+    source: &str,
+    expected_text: &str,
+) -> bool {
+    table.symbols.get(name).is_some_and(|symbols| {
+        symbols.iter().any(|symbol| {
+            symbol.kind == kind
+                && symbol.declaration.as_deref() == Some(declaration)
+                && source
+                    .get(symbol.location.start..symbol.location.end)
+                    .is_some_and(|text| text == expected_text)
+        })
+    })
+}
+
 fn has_issue(issues: &[ScopeIssue], kind: IssueKind, var_name: &str) -> bool {
     issues.iter().any(|i| i.kind == kind && i.variable_name.contains(var_name))
 }
@@ -177,6 +196,166 @@ print $client;
 }
 
 #[test]
+fn scope_open_my_filehandle_remains_declared_for_readline() -> Result<(), Box<dyn std::error::Error>>
+{
+    let code = r#"
+use strict;
+use warnings;
+
+open my $fh, '<', 'file.txt' or die $!;
+print <$fh>;
+close $fh;
+"#;
+
+    let issues = scope_issues_strict(code);
+    assert!(
+        !issues.iter().any(|i| {
+            matches!(
+                i.kind,
+                IssueKind::UndeclaredVariable
+                    | IssueKind::UninitializedVariable
+                    | IssueKind::UnusedVariable
+            ) && i.variable_name == "$fh"
+        }),
+        "open my $fh should keep $fh declared/initialized through readline + close: {:?}",
+        issues
+    );
+
+    Ok(())
+}
+
+#[test]
+fn scope_phase_blocks_keep_lexicals_inside_their_block() -> Result<(), Box<dyn std::error::Error>> {
+    for phase in ["BEGIN", "CHECK", "INIT", "UNITCHECK", "END"] {
+        let code = format!(
+            r#"
+use strict;
+{phase} {{
+    my $phase_local = 1;
+    print $phase_local;
+}}
+print $phase_local;
+"#
+        );
+
+        let issues = scope_issues_strict(&code);
+        assert!(
+            issues.iter().any(|i| {
+                i.kind == IssueKind::UndeclaredVariable
+                    && i.variable_name == "$phase_local"
+                    && i.line == 7
+            }),
+            "{phase} block lexical should not leak into outer scope at line 7: {:?}",
+            issues
+        );
+        assert!(
+            !issues.iter().any(|i| i.kind == IssueKind::UndeclaredVariable
+                && i.variable_name == "$phase_local"
+                && i.line == 5),
+            "{phase} block lexical should stay valid inside its own block: {:?}",
+            issues
+        );
+    }
+
+    Ok(())
+}
+
+#[test]
+fn scope_phase_blocks_do_not_share_lexicals() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict;
+BEGIN {
+    my $phase_local = 1;
+    print $phase_local;
+}
+CHECK {
+    print $phase_local;
+}
+"#;
+
+    let issues = scope_issues_strict(code);
+    assert!(
+        !issues.iter().any(|i| {
+            i.kind == IssueKind::UndeclaredVariable
+                && i.variable_name == "$phase_local"
+                && i.line == 5
+        }),
+        "lexical should be valid inside its own phase block: {:?}",
+        issues
+    );
+    assert!(
+        issues.iter().any(|i| {
+            i.kind == IssueKind::UndeclaredVariable
+                && i.variable_name == "$phase_local"
+                && i.line == 8
+        }),
+        "lexicals declared in one phase block should not be visible in sibling phase blocks at line 8: {:?}",
+        issues
+    );
+    Ok(())
+}
+
+#[test]
+fn scope_scalar_arrayref_deref_counts_as_use() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict;
+my $arrayref = [];
+push @$arrayref, 'item';
+"#;
+
+    let issues = scope_issues_strict(code);
+    assert!(
+        !issues
+            .iter()
+            .any(|issue| issue.kind == IssueKind::UnusedVariable
+                && issue.variable_name == "$arrayref"),
+        "scalar arrayref dereference should mark $arrayref as used: {:?}",
+        issues
+    );
+    Ok(())
+}
+
+#[test]
+fn scope_scalar_hashref_deref_counts_as_use() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict;
+my $hashref = {};
+keys %$hashref;
+"#;
+
+    let issues = scope_issues_strict(code);
+    assert!(
+        !issues
+            .iter()
+            .any(|issue| issue.kind == IssueKind::UnusedVariable
+                && issue.variable_name == "$hashref"),
+        "scalar hashref dereference should mark $hashref as used: {:?}",
+        issues
+    );
+    Ok(())
+}
+
+#[test]
+fn scope_scalar_scalarref_deref_counts_as_use() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict;
+my $target = 1;
+my $ref = \$target;
+$$ref = 3;
+"#;
+
+    let issues = scope_issues_strict(code);
+    assert!(
+        !issues
+            .iter()
+            .any(|issue| issue.kind == IssueKind::UnusedVariable && issue.variable_name == "$ref"),
+        "scalar dereference should mark $ref as used: {:?}",
+        issues
+    );
+    Ok(())
+}
+
+#[test]
 fn scope_try_catch_binds_catch_variable() -> Result<(), Box<dyn std::error::Error>> {
     let code = r#"
 use strict;
@@ -287,6 +466,33 @@ try {
         "$e",
         "unused catch-variable range should target the catch parameter"
     );
+    Ok(())
+}
+
+#[test]
+fn symbol_try_catch_variable_is_resolvable_inside_catch_scope()
+-> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict;
+use feature 'try';
+try {
+    die "boom";
+} catch ($err) {
+    print $err;
+}
+"#;
+
+    let table = parse_and_extract(code);
+    let refs = table.references.get("err").ok_or("expected catch variable reference")?;
+    let usage = refs
+        .iter()
+        .find(|reference| &code[reference.location.start..reference.location.end] == "$err")
+        .ok_or("expected usage reference for $err inside catch block")?;
+    let defs = table.find_symbol("err", usage.scope_id, SymbolKind::scalar());
+    let def = defs.first().ok_or("expected catch variable definition in symbol table")?;
+
+    assert_eq!(def.declaration.as_deref(), Some("my"));
+    assert_eq!(&code[def.location.start..def.location.end], "$err");
     Ok(())
 }
 
@@ -476,6 +682,140 @@ sub modify_it {
 "#;
     let table = parse_and_extract(code);
     assert!(has_symbol(&table, "global_val", SymbolKind::scalar()));
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// 3b. local with builtin special variables — issue #3502
+// ---------------------------------------------------------------------------
+
+#[test]
+fn local_input_record_sep_no_false_unused() -> Result<(), Box<dyn std::error::Error>> {
+    // `local $/` (slurp mode) must not produce a false UnusedVariable diagnostic.
+    let code = "use strict;\nlocal $/ = undef;\n";
+    let issues = scope_issues_strict(code);
+    let false_pos: Vec<_> = issues
+        .iter()
+        .filter(|i| {
+            (i.kind == IssueKind::UnusedVariable || i.kind == IssueKind::UndeclaredVariable)
+                && i.variable_name == "$/"
+        })
+        .collect();
+    assert!(
+        false_pos.is_empty(),
+        "local $/ should produce no false UnusedVariable or UndeclaredVariable; got: {:?}",
+        false_pos
+    );
+    Ok(())
+}
+
+#[test]
+fn local_output_field_sep_no_false_unused() -> Result<(), Box<dyn std::error::Error>> {
+    // `local $,` (output field separator) must not produce a false UnusedVariable diagnostic.
+    let code = "use strict;\nlocal $, = \", \";\nprint \"a\", \"b\";\n";
+    let issues = scope_issues_strict(code);
+    let false_pos: Vec<_> = issues
+        .iter()
+        .filter(|i| {
+            (i.kind == IssueKind::UnusedVariable || i.kind == IssueKind::UndeclaredVariable)
+                && i.variable_name == "$,"
+        })
+        .collect();
+    assert!(
+        false_pos.is_empty(),
+        "local $, should produce no false diagnostics; got: {:?}",
+        false_pos
+    );
+    Ok(())
+}
+
+#[test]
+fn local_output_record_sep_no_false_unused() -> Result<(), Box<dyn std::error::Error>> {
+    // `local $\` (output record separator) must not produce false diagnostics.
+    let code = "use strict;\nlocal $\\ = \"\\n\";\nprint \"hello\";\n";
+    let issues = scope_issues_strict(code);
+    let false_pos: Vec<_> = issues
+        .iter()
+        .filter(|i| {
+            (i.kind == IssueKind::UnusedVariable || i.kind == IssueKind::UndeclaredVariable)
+                && i.variable_name == "$\\"
+        })
+        .collect();
+    assert!(
+        false_pos.is_empty(),
+        "local $\\ should produce no false diagnostics; got: {:?}",
+        false_pos
+    );
+    Ok(())
+}
+
+#[test]
+fn local_list_sep_no_false_unused() -> Result<(), Box<dyn std::error::Error>> {
+    // `local $"` (list separator) must not produce false diagnostics.
+    let code = "use strict;\nlocal $\" = \"-\";\nmy @arr = (1, 2);\nprint \"@arr\";\n";
+    let issues = scope_issues_strict(code);
+    let false_pos: Vec<_> = issues
+        .iter()
+        .filter(|i| {
+            (i.kind == IssueKind::UnusedVariable || i.kind == IssueKind::UndeclaredVariable)
+                && i.variable_name == "$\""
+        })
+        .collect();
+    assert!(
+        false_pos.is_empty(),
+        "local $\" should produce no false diagnostics; got: {:?}",
+        false_pos
+    );
+    Ok(())
+}
+
+#[test]
+fn local_special_var_in_block_no_false_unused() -> Result<(), Box<dyn std::error::Error>> {
+    // `local $/` without an initializer in a block must not produce false diagnostics.
+    let code = "use strict;\n{\n    local $/;\n    my $data = <STDIN>;\n    print $data;\n}\n";
+    let issues = scope_issues_strict(code);
+    let false_pos: Vec<_> = issues
+        .iter()
+        .filter(|i| {
+            (i.kind == IssueKind::UnusedVariable || i.kind == IssueKind::UndeclaredVariable)
+                && i.variable_name == "$/"
+        })
+        .collect();
+    assert!(
+        false_pos.is_empty(),
+        "local $/ (no initializer) should produce no false diagnostics; got: {:?}",
+        false_pos
+    );
+    Ok(())
+}
+
+#[test]
+fn local_special_var_in_sub_no_false_unused() -> Result<(), Box<dyn std::error::Error>> {
+    // `local $/` inside a subroutine must not produce false diagnostics.
+    let code = r#"use strict;
+use warnings;
+sub slurp {
+    my ($file) = @_;
+    open(my $fh, '<', $file) or die $!;
+    local $/ = undef;
+    my $content = <$fh>;
+    close($fh);
+    return $content;
+}
+"#;
+    let issues = scope_issues_strict(code);
+    let false_pos: Vec<_> = issues
+        .iter()
+        .filter(|i| {
+            (i.kind == IssueKind::UnusedVariable || i.kind == IssueKind::UndeclaredVariable)
+                && i.variable_name == "$/"
+        })
+        .collect();
+    assert!(
+        false_pos.is_empty(),
+        "local $/ inside sub should produce no false diagnostics; got: {:?}",
+        false_pos
+    );
     Ok(())
 }
 
@@ -1056,6 +1396,98 @@ $arr[0];
     Ok(())
 }
 
+/// Regression test for issue #3338: push @$arrayref does not mark my $arrayref as used.
+///
+/// Verifies that the exact reproducer from the issue report no longer produces a
+/// false "unused variable" diagnostic. Covers string-literal arguments (the original
+/// report), numeric arguments, and both non-strict and strict-mode variants.
+#[test]
+fn issue_3338_push_arrayref_deref_not_unused() -> Result<(), Box<dyn std::error::Error>> {
+    // Exact reproducer from issue #3338 — string literal argument
+    let code = r#"
+my $arrayref;
+push @$arrayref, 'item';
+"#;
+    let issues = scope_issues(code);
+    let unused = issues
+        .iter()
+        .filter(|i| i.kind == IssueKind::UnusedVariable && i.variable_name.contains("arrayref"))
+        .count();
+    assert_eq!(
+        unused,
+        0,
+        "issue #3338: $arrayref used via push @$arrayref should not be unused; issues: {:?}",
+        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+/// Regression test for issue #3338 under strict mode: push @$arrayref should not
+/// produce UnusedVariable or UndeclaredVariable for a declared scalar ref.
+#[test]
+fn issue_3338_push_arrayref_deref_strict_mode() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict;
+my $arrayref = [];
+push @$arrayref, 'item';
+push @$arrayref, 'second';
+"#;
+    let issues = scope_issues_strict(code);
+    let unused = issues
+        .iter()
+        .filter(|i| i.kind == IssueKind::UnusedVariable && i.variable_name.contains("arrayref"))
+        .count();
+    assert_eq!(
+        unused,
+        0,
+        "issue #3338: $arrayref declared and used via push @$arrayref should not be unused under strict; issues: {:?}",
+        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+    let undeclared = issues
+        .iter()
+        .filter(|i| i.kind == IssueKind::UndeclaredVariable && i.variable_name.contains("arrayref"))
+        .count();
+    assert_eq!(
+        undeclared,
+        0,
+        "issue #3338: declared $arrayref should not be reported as undeclared under strict; issues: {:?}",
+        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+/// Regression test for issue #3338: all three primary dereference sigil forms
+/// (`@$ref`, `%$ref`, `$$ref`) should mark the underlying scalar declaration used.
+#[test]
+fn issue_3338_all_deref_sigil_forms_mark_base_used() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict;
+my $aref = [1, 2, 3];
+my $href = {a => 1};
+my $sref = \"hello";
+
+my @items = @$aref;
+my %copy  = %$href;
+my $val   = $$sref;
+"#;
+    let issues = scope_issues_strict(code);
+
+    for var in &["aref", "href", "sref"] {
+        let unused = issues
+            .iter()
+            .filter(|i| i.kind == IssueKind::UnusedVariable && i.variable_name.contains(var))
+            .count();
+        assert_eq!(
+            unused,
+            0,
+            "issue #3338: ${} used via deref should not be unused; issues: {:?}",
+            var,
+            issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+        );
+    }
+    Ok(())
+}
+
 #[test]
 fn unused_variable_used_via_coderef_and_glob_dereference_forms()
 -> Result<(), Box<dyn std::error::Error>> {
@@ -1118,6 +1550,60 @@ $obj->$method();
         issues
     );
 
+    Ok(())
+}
+
+#[test]
+fn subscript_access_marks_array_parent_used() -> Result<(), Box<dyn std::error::Error>> {
+    // $arr[0] passed to a function should mark @arr as used — no unused-variable diagnostic.
+    let code = r#"
+my @arr = (1, 2, 3);
+print $arr[0];
+"#;
+    let issues = scope_issues(code);
+    let unused_arr = issues
+        .iter()
+        .filter(|i| i.kind == IssueKind::UnusedVariable && i.variable_name.contains("arr"))
+        .count();
+    assert_eq!(unused_arr, 0, "@arr should not be flagged as unused when accessed via $arr[0]");
+    Ok(())
+}
+
+#[test]
+fn subscript_access_marks_hash_parent_used() -> Result<(), Box<dyn std::error::Error>> {
+    // $hash{key} passed to a function should mark %hash as used — no unused-variable diagnostic.
+    let code = r#"
+my %hash = (a => 1);
+print $hash{a};
+"#;
+    let issues = scope_issues(code);
+    let unused_hash = issues
+        .iter()
+        .filter(|i| i.kind == IssueKind::UnusedVariable && i.variable_name.contains("hash"))
+        .count();
+    assert_eq!(
+        unused_hash, 0,
+        "%hash should not be flagged as unused when accessed via $hash{{a}}"
+    );
+    Ok(())
+}
+
+#[test]
+fn subscript_access_does_not_suppress_truly_unused() -> Result<(), Box<dyn std::error::Error>> {
+    // A %hash or @array that is truly never accessed should still be flagged as unused.
+    let code = r#"
+my %unused_hash = (a => 1);
+my @unused_arr = (1, 2, 3);
+"#;
+    let issues = scope_issues(code);
+    let unused_hash = issues
+        .iter()
+        .any(|i| i.kind == IssueKind::UnusedVariable && i.variable_name.contains("unused_hash"));
+    let unused_arr = issues
+        .iter()
+        .any(|i| i.kind == IssueKind::UnusedVariable && i.variable_name.contains("unused_arr"));
+    assert!(unused_hash, "%unused_hash with no subscripts should still be flagged as unused");
+    assert!(unused_arr, "@unused_arr with no subscripts should still be flagged as unused");
     Ok(())
 }
 
@@ -1299,6 +1785,9 @@ fn strict_subs_only_checks_barewords() -> Result<(), Box<dyn std::error::Error>>
 use strict 'subs';
 print $unknown_var;
 print FOO;
+print PL_sv_yes;
+print PL_sv_no;
+print PL_sv_undef;
 "#;
     let issues = scope_issues_strict(code);
 
@@ -1312,6 +1801,14 @@ print FOO;
             .any(|i| { matches!(i.kind, IssueKind::UnquotedBareword) && i.variable_name == "FOO" }),
         "strict 'subs' should flag barewords"
     );
+    for internal in ["PL_sv_yes", "PL_sv_no", "PL_sv_undef"] {
+        assert!(
+            !issues.iter().any(|i| {
+                matches!(i.kind, IssueKind::UnquotedBareword) && i.variable_name == internal
+            }),
+            "strict 'subs' should not flag internal special constant {internal}"
+        );
+    }
     Ok(())
 }
 
@@ -1333,6 +1830,183 @@ print FOO;
             .iter()
             .any(|i| { matches!(i.kind, IssueKind::UnquotedBareword) && i.variable_name == "FOO" }),
         "use v5.40 should enable strict subs"
+    );
+    Ok(())
+}
+
+#[test]
+fn version_pragma_does_not_import_builtin_short_names() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use v5.40;
+print floor;
+"#;
+    let issues = scope_issues_strict(code);
+
+    assert!(
+        issues.iter().any(|i| {
+            matches!(i.kind, IssueKind::UnquotedBareword) && i.variable_name == "floor"
+        }),
+        "use v5.40 should not lexically import builtin short names"
+    );
+    Ok(())
+}
+
+#[test]
+fn builtin_pragma_imports_are_lexical_only() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict;
+use builtin 'true';
+print floor;
+print true;
+"#;
+    let issues = scope_issues_strict(code);
+
+    assert!(
+        issues.iter().any(|i| {
+            matches!(i.kind, IssueKind::UnquotedBareword) && i.variable_name == "floor"
+        }),
+        "importing `true` must not suppress unrelated builtin names"
+    );
+    assert!(
+        !issues.iter().any(|i| {
+            matches!(i.kind, IssueKind::UnquotedBareword) && i.variable_name == "true"
+        }),
+        "lexically imported builtin short name `true` should be allowed"
+    );
+    Ok(())
+}
+
+#[test]
+fn builtin_pragma_imports_allow_the_imported_name() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict;
+use builtin 'floor';
+print floor;
+"#;
+    let issues = scope_issues_strict(code);
+
+    assert!(
+        !issues.iter().any(|i| {
+            matches!(i.kind, IssueKind::UnquotedBareword) && i.variable_name == "floor"
+        }),
+        "lexically imported builtin short name `floor` should not be flagged"
+    );
+    Ok(())
+}
+
+#[test]
+fn v5_36_auto_strict_flags_undeclared_variable_in_signature_sub()
+-> Result<(), Box<dyn std::error::Error>> {
+    // use v5.36 enables strict automatically via feature bundle.
+    // An undeclared variable $z inside a signature sub should be flagged
+    // even without an explicit 'use strict'.
+    let code = r#"
+use v5.36;
+sub foo ($x) { $z = 1; }
+"#;
+    let issues = scope_issues_strict(code);
+
+    assert!(
+        has_issue(&issues, IssueKind::UndeclaredVariable, "z"),
+        "use v5.36 auto-enables strict: $z inside a signature sub should be flagged as undeclared"
+    );
+    // The parameter $x should NOT be flagged as undeclared.
+    assert!(
+        !has_issue(&issues, IssueKind::UndeclaredVariable, "x"),
+        "signature parameter $x should not be flagged as undeclared"
+    );
+    Ok(())
+}
+
+#[test]
+fn feature_signatures_auto_strict_flags_undeclared_variable_in_signature_sub()
+-> Result<(), Box<dyn std::error::Error>> {
+    // `use feature 'signatures'` should enable strict semantics automatically.
+    // An undeclared variable $z inside a signature sub should be flagged even
+    // without explicit `use strict`.
+    let code = r#"
+use feature 'signatures';
+sub foo ($x) { $z = 1; }
+"#;
+    let issues = scope_issues_strict(code);
+
+    assert!(
+        has_issue(&issues, IssueKind::UndeclaredVariable, "z"),
+        "use feature 'signatures' should auto-enable strict: $z should be flagged as undeclared"
+    );
+    assert!(
+        !has_issue(&issues, IssueKind::UndeclaredVariable, "x"),
+        "signature parameter $x should not be flagged as undeclared"
+    );
+    Ok(())
+}
+
+#[test]
+fn signature_parameters_are_registered_as_symbols() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+sub add ($x, $y = 1, @rest) {
+    return $x + $y + scalar @rest;
+}
+
+package Demo;
+method greet ($self, $name) {
+    return $name;
+}
+
+sub annotate (:$tag) {
+    return $tag;
+}
+"#;
+
+    let table = parse_and_extract(code);
+
+    assert!(
+        has_symbol_with_declaration(&table, "x", SymbolKind::scalar(), "my", code, "$x"),
+        "signature parameter $x should be recorded as a lexical symbol"
+    );
+    assert!(
+        has_symbol_with_declaration(&table, "y", SymbolKind::scalar(), "my", code, "$y"),
+        "optional signature parameter $y should be recorded as a lexical symbol"
+    );
+    assert!(
+        has_symbol_with_declaration(&table, "rest", SymbolKind::array(), "my", code, "@rest"),
+        "slurpy signature parameter @rest should be recorded as an array symbol"
+    );
+    assert!(
+        has_symbol_with_declaration(&table, "self", SymbolKind::scalar(), "my", code, "$self"),
+        "method signature parameter $self should be recorded as a lexical symbol"
+    );
+    assert!(
+        has_symbol_with_declaration(&table, "name", SymbolKind::scalar(), "my", code, "$name"),
+        "method signature parameter $name should be recorded as a lexical symbol"
+    );
+    assert!(
+        has_symbol_with_declaration(&table, "tag", SymbolKind::scalar(), "my", code, "$tag"),
+        "named signature parameter $tag should be recorded as a lexical symbol"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn v5_36_enables_strict_vars_and_subs() -> Result<(), Box<dyn std::error::Error>> {
+    // use v5.36 enables both strict vars (undeclared vars) and strict subs (barewords).
+    let code = r#"
+use v5.36;
+print $unknown_var;
+print FOO;
+"#;
+    let issues = scope_issues_strict(code);
+
+    assert!(
+        has_issue(&issues, IssueKind::UndeclaredVariable, "unknown_var"),
+        "use v5.36 should enable strict vars — $unknown_var should be flagged"
+    );
+    assert!(
+        issues
+            .iter()
+            .any(|i| { matches!(i.kind, IssueKind::UnquotedBareword) && i.variable_name == "FOO" }),
+        "use v5.36 should enable strict subs — bareword FOO should be flagged"
     );
     Ok(())
 }
@@ -1741,7 +2415,285 @@ fn edge_scope_issue_range_within_source() -> Result<(), Box<dyn std::error::Erro
 }
 
 // ===========================================================================
-// 17. Position-aware builtin declaration handling (read/sysread/recv at pos 1)
+// 17. Package statement scope analysis (#3356)
+// ===========================================================================
+
+#[test]
+fn package_stmt_our_no_false_redeclaration() -> Result<(), Box<dyn std::error::Error>> {
+    // `our` variables with the same name in different packages declared via the
+    // statement form (`package Foo;`) must NOT trigger VariableRedeclaration.
+    // Before fix: both `our $VAR` declarations share the same root scope and the
+    // second triggers a false VariableRedeclaration because the Package node had
+    // no handler and the scope was never reset between packages.
+    let code = r#"
+use strict;
+package Alpha;
+our $VAR = 1;
+
+package Beta;
+our $VAR = 2;
+
+print $Alpha::VAR;
+print $Beta::VAR;
+"#;
+    let issues = scope_issues_strict(code);
+    let redecl: Vec<_> = issues
+        .iter()
+        .filter(|i| i.kind == IssueKind::VariableRedeclaration && i.variable_name.contains("VAR"))
+        .collect();
+    assert!(
+        redecl.is_empty(),
+        "our $VAR in different packages must not trigger VariableRedeclaration; got: {:?}",
+        redecl
+    );
+    Ok(())
+}
+
+#[test]
+fn package_block_creates_scope_boundary() -> Result<(), Box<dyn std::error::Error>> {
+    // `package Foo { ... }` block form should create a scoped boundary.
+    // `our` variables inside the block belong to that package scope and should
+    // not leak out or conflict with same-named variables in the outer package.
+    let code = r#"
+use strict;
+package Alpha;
+our $VAR = 1;
+
+package Beta {
+    our $VAR = 2;
+}
+"#;
+    let issues = scope_issues_strict(code);
+    let redecl: Vec<_> = issues
+        .iter()
+        .filter(|i| i.kind == IssueKind::VariableRedeclaration && i.variable_name.contains("VAR"))
+        .collect();
+    assert!(
+        redecl.is_empty(),
+        "our $VAR in package block must not conflict with outer package our $VAR; got: {:?}",
+        redecl
+    );
+    let shadow: Vec<_> = issues
+        .iter()
+        .filter(|i| i.kind == IssueKind::VariableShadowing && i.variable_name.contains("VAR"))
+        .collect();
+    assert!(
+        shadow.is_empty(),
+        "our $VAR in package block must not produce VariableShadowing; got: {:?}",
+        shadow
+    );
+    Ok(())
+}
+
+#[test]
+fn package_block_inner_vars_not_visible_outside() -> Result<(), Box<dyn std::error::Error>> {
+    // Variables declared with `my` inside a `package Foo { }` block must not
+    // be visible after the block ends.
+    let code = r#"
+use strict;
+my $outer = 1;
+package Inner {
+    my $private = 2;
+    print $private;
+}
+print $outer;
+print $private;
+"#;
+    let issues = scope_issues_strict(code);
+    assert!(
+        has_issue(&issues, IssueKind::UndeclaredVariable, "private"),
+        "my variable inside package block must not be visible outside it; issues: {:?}",
+        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+    let outer_undecl = issues
+        .iter()
+        .filter(|i| i.kind == IssueKind::UndeclaredVariable && i.variable_name.contains("outer"))
+        .count();
+    assert_eq!(outer_undecl, 0, "$outer should still be accessible after package block");
+    Ok(())
+}
+
+#[test]
+fn package_stmt_does_not_break_my_variable_tracking() -> Result<(), Box<dyn std::error::Error>> {
+    // A `package` statement must not disrupt tracking of `my` variables already
+    // declared in the file-level scope before the package statement.
+    let code = r#"
+my $top = 1;
+package Foo;
+print $top;
+"#;
+    let issues = scope_issues(code);
+    let top_unused = issues
+        .iter()
+        .filter(|i| i.kind == IssueKind::UnusedVariable && i.variable_name.contains("top"))
+        .count();
+    assert_eq!(
+        top_unused, 0,
+        "$top declared before package should be accessible after package statement"
+    );
+    Ok(())
+}
+
+#[test]
+fn package_block_my_var_not_leaked_strict() -> Result<(), Box<dyn std::error::Error>> {
+    // With strict mode, accessing a `my` variable declared inside a `package`
+    // block from outside the block must be an UndeclaredVariable error.
+    let code = r#"
+use strict;
+package Scoped {
+    my $inner_var = 42;
+    print $inner_var;
+}
+print $inner_var;
+"#;
+    let issues = scope_issues_strict(code);
+    assert!(
+        has_issue(&issues, IssueKind::UndeclaredVariable, "inner_var"),
+        "my var inside package block must not escape to outer scope; issues: {:?}",
+        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+#[test]
+fn package_our_bare_usage_not_undeclared_strict() -> Result<(), Box<dyn std::error::Error>> {
+    // Regression guard: `our $VAR` should remain accessible as bare `$VAR`
+    // in the same package under strict mode. This ensures the Package handler
+    // does not accidentally break the lookup path for `our` declarations.
+    let code = r#"
+use strict;
+our $GLOBAL = 42;
+print $GLOBAL;
+"#;
+    let issues = scope_issues_strict(code);
+    let undecl: Vec<_> = issues
+        .iter()
+        .filter(|i| i.kind == IssueKind::UndeclaredVariable && i.variable_name.contains("GLOBAL"))
+        .collect();
+    assert!(
+        undecl.is_empty(),
+        "our $GLOBAL should be accessible as bare $GLOBAL in strict mode; got: {:?}",
+        undecl
+    );
+    Ok(())
+}
+
+#[test]
+fn package_our_from_other_package_not_visible_as_bare_name()
+-> Result<(), Box<dyn std::error::Error>> {
+    // Bare `$VAR` in a later package must not resolve against an `our $VAR`
+    // declared in an earlier package. Package switches change which package
+    // global a bare name refers to under `strict 'vars'`.
+    let code = r#"
+use strict;
+package Alpha;
+our $VAR = 1;
+
+package Beta;
+print $VAR;
+"#;
+    let issues = scope_issues_strict(code);
+
+    assert!(
+        has_issue(&issues, IssueKind::UndeclaredVariable, "VAR"),
+        "bare $VAR in package Beta must not resolve to Alpha::VAR; issues: {:?}",
+        issues
+    );
+    Ok(())
+}
+
+#[test]
+fn package_our_same_package_redeclaration_is_silent() -> Result<(), Box<dyn std::error::Error>> {
+    // `our $x; our $x;` in the SAME package is redundant but valid Perl — the
+    // second declaration is a no-op that re-imports the same package global.
+    // Must NOT emit VariableRedeclaration.
+    let code = r#"
+use strict;
+package Foo;
+our $x = 1;
+our $x = 2;
+print $x;
+"#;
+    let issues = scope_issues_strict(code);
+    let redecl: Vec<_> = issues
+        .iter()
+        .filter(|i| i.kind == IssueKind::VariableRedeclaration && i.variable_name.contains('x'))
+        .collect();
+    assert!(
+        redecl.is_empty(),
+        "our $x redeclared in same package must not emit VariableRedeclaration; got: {:?}",
+        redecl
+    );
+    Ok(())
+}
+
+#[test]
+fn package_nested_block_scope_save_restore() -> Result<(), Box<dyn std::error::Error>> {
+    // Nested `package Outer { package Inner { } }` must correctly save and restore
+    // the outer package name when the inner block exits. Variables declared with
+    // `my` in the inner block must not escape to the outer block or file scope.
+    let code = r#"
+use strict;
+package Outer {
+    my $outer_var = 1;
+    package Inner {
+        my $inner_var = 2;
+        print $inner_var;
+    }
+    print $outer_var;
+    print $inner_var;
+}
+print $outer_var;
+"#;
+    let issues = scope_issues_strict(code);
+    assert!(
+        has_issue(&issues, IssueKind::UndeclaredVariable, "inner_var"),
+        "my var inside nested package block must not escape; issues: {:?}",
+        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+    let outer_at_file_scope = issues
+        .iter()
+        .filter(|i| {
+            i.kind == IssueKind::UndeclaredVariable && i.variable_name.contains("outer_var")
+        })
+        .count();
+    assert!(
+        outer_at_file_scope > 0,
+        "my var inside package Outer block must not escape to file scope; issues: {:?}",
+        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+#[test]
+fn package_block_our_no_false_shadowing() -> Result<(), Box<dyn std::error::Error>> {
+    // Regression: `our $VAR` inside a package block must NOT produce VariableShadowing
+    // even if an outer scope also declares `our $VAR` with the same bare name.
+    // These are different package globals (Foo::VAR vs Bar::VAR) and the inner `our`
+    // does NOT lexically shadow the outer one.
+    let code = r#"
+use strict;
+our $VAR = 1;
+
+package Inner {
+    our $VAR = 2;
+}
+"#;
+    let issues = scope_issues_strict(code);
+    let shadow: Vec<_> = issues
+        .iter()
+        .filter(|i| i.kind == IssueKind::VariableShadowing && i.variable_name.contains("VAR"))
+        .collect();
+    assert!(
+        shadow.is_empty(),
+        "our $VAR in package block must not produce VariableShadowing for outer our $VAR; got: {:?}",
+        shadow
+    );
+    Ok(())
+}
+
+// ===========================================================================
+// 18. Position-aware builtin declaration handling (read/sysread/recv at pos 1)
 // ===========================================================================
 
 #[test]
@@ -1830,25 +2782,88 @@ print $data;
 }
 
 #[test]
-fn read_position_zero_not_treated_as_declaration() -> Result<(), Box<dyn std::error::Error>> {
-    // Position 0 in `read` is an existing filehandle, NOT a declaration target.
-    // Passing a bare (non-declaration) variable at position 0 should not affect its
-    // declaration status — it must have been declared separately.
+fn open_my_filehandle_with_readline_not_flagged() -> Result<(), Box<dyn std::error::Error>> {
+    // Regression for #3446: `open my $fh, ...` declares `$fh` and later `<$fh>`
+    // reads must not be reported as undeclared/uninitialized.
     let code = r#"
 use strict;
-my $fh = \*STDIN;
-my $buffer;
-read $fh, $buffer, 1024;
+use warnings;
+
+open my $fh, '<', 'file.txt' or die $!;
+print <$fh>;
+close $fh;
+"#;
+    let issues = scope_issues_strict(code);
+    assert!(
+        !issues.iter().any(|i| {
+            matches!(
+                i.kind,
+                IssueKind::UndeclaredVariable
+                    | IssueKind::UninitializedVariable
+                    | IssueKind::UnusedVariable
+            ) && i.variable_name == "$fh"
+        }),
+        "open my $fh / <$fh> should not be flagged; issues: {:?}",
+        issues
+    );
+    Ok(())
+}
+
+#[test]
+fn read_position_zero_not_treated_as_declaration() -> Result<(), Box<dyn std::error::Error>> {
+    // Position 0 in `read` is an existing filehandle, NOT a declaration target.
+    // An undeclared handle at position 0 should still be flagged, while the
+    // position-1 buffer should be treated as the declaration/initialization target.
+    let code = r#"
+use strict;
+read $undeclared_fh, my $buffer, 1024;
 print $buffer;
 "#;
     let issues = scope_issues_strict(code);
-    // $fh was declared with `my` — should not be flagged at all
+    assert!(
+        issues.iter().any(|i| {
+            i.variable_name.contains("undeclared_fh")
+                && matches!(i.kind, IssueKind::UndeclaredVariable)
+        }),
+        "undeclared read handle should still be flagged (issues: {:?})",
+        issues
+    );
     assert!(
         !issues.iter().any(|i| {
-            i.variable_name.contains("fh")
+            i.variable_name.contains("buffer")
                 && matches!(i.kind, IssueKind::UndeclaredVariable | IssueKind::UnusedVariable)
         }),
-        "existing $fh should not be flagged (issues: {:?})",
+        "read buffer declaration should not be flagged (issues: {:?})",
+        issues
+    );
+    Ok(())
+}
+
+#[test]
+fn read_position_zero_declaration_not_consumed() -> Result<(), Box<dyn std::error::Error>> {
+    // Position 0 for `read` must not be treated as a declaration-capable output slot.
+    // If a declaration appears there, it should still be analyzed like a normal lexical
+    // declaration (and therefore may be reported as unused/uninitialized).
+    let code = r#"
+use strict;
+read my $fh, my $buffer, 1024;
+print $buffer;
+"#;
+    let issues = scope_issues_strict(code);
+    assert!(
+        issues.iter().any(|i| {
+            i.variable_name == "$fh"
+                && matches!(i.kind, IssueKind::UnusedVariable | IssueKind::UninitializedVariable)
+        }),
+        "read position-0 declaration should not be auto-consumed (issues: {:?})",
+        issues
+    );
+    assert!(
+        !issues.iter().any(|i| {
+            i.variable_name == "$buffer"
+                && matches!(i.kind, IssueKind::UndeclaredVariable | IssueKind::UnusedVariable)
+        }),
+        "read position-1 buffer declaration should still be consumed (issues: {:?})",
         issues
     );
     Ok(())
@@ -1879,5 +2894,738 @@ print $b;
             issues
         );
     }
+    Ok(())
+}
+
+#[test]
+fn socketpair_non_handle_positions_not_consumed() -> Result<(), Box<dyn std::error::Error>> {
+    // `socketpair` only consumes declaration-capable handles at positions 0 and 1.
+    // Declarations in later positions must remain ordinary lexicals.
+    let code = r#"
+use strict;
+socketpair my $a, my $b, my $domain, 1, 0;
+print $a;
+print $b;
+"#;
+    let issues = scope_issues_strict(code);
+    assert!(
+        issues.iter().any(|i| {
+            i.variable_name == "$domain"
+                && matches!(i.kind, IssueKind::UnusedVariable | IssueKind::UninitializedVariable)
+        }),
+        "socketpair position-2 declaration should not be auto-consumed (issues: {:?})",
+        issues
+    );
+    Ok(())
+}
+
+// ===========================================================================
+// Builtin globals — regex position arrays @- and @+ (#3354)
+// ===========================================================================
+
+#[test]
+fn builtin_at_minus_no_undeclared_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict;
+use warnings;
+if ("hello" =~ /ell/) {
+    my $start = $-[0];
+    my @starts = @-;
+    print $start, "\n";
+    print @starts, "\n";
+}
+"#;
+    let issues = scope_issues_strict(code);
+    assert!(
+        !has_issue(&issues, IssueKind::UndeclaredVariable, "-"),
+        "@- should be a recognized builtin; got issues: {:?}",
+        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+#[test]
+fn builtin_at_plus_no_undeclared_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict;
+use warnings;
+if ("hello" =~ /ell/) {
+    my $end = $+[0];
+    my @ends = @+;
+    print $end, "\n";
+    print @ends, "\n";
+}
+"#;
+    let issues = scope_issues_strict(code);
+    assert!(
+        !has_issue(&issues, IssueKind::UndeclaredVariable, "+"),
+        "@+ should be a recognized builtin; got issues: {:?}",
+        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+// ===========================================================================
+// Builtin globals — ${^MATCH}, ${^PREMATCH}, ${^POSTMATCH} (#3351)
+// ===========================================================================
+
+#[test]
+fn builtin_caret_match_no_undeclared_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict;
+use warnings;
+if ("hello world" =~ /world/p) {
+    print ${^MATCH}, "\n";
+}
+"#;
+    let issues = scope_issues_strict(code);
+    assert!(
+        !has_issue(&issues, IssueKind::UndeclaredVariable, "^MATCH"),
+        "{{^MATCH}} should be a recognized builtin; got issues: {:?}",
+        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+#[test]
+fn builtin_caret_prematch_no_undeclared_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict;
+use warnings;
+if ("hello world" =~ /world/p) {
+    print ${^PREMATCH}, "\n";
+}
+"#;
+    let issues = scope_issues_strict(code);
+    assert!(
+        !has_issue(&issues, IssueKind::UndeclaredVariable, "^PREMATCH"),
+        "{{^PREMATCH}} should be a recognized builtin; got issues: {:?}",
+        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+#[test]
+fn builtin_caret_postmatch_no_undeclared_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict;
+use warnings;
+if ("hello world" =~ /world/p) {
+    print ${^POSTMATCH}, "\n";
+}
+"#;
+    let issues = scope_issues_strict(code);
+    assert!(
+        !has_issue(&issues, IssueKind::UndeclaredVariable, "^POSTMATCH"),
+        "{{^POSTMATCH}} should be a recognized builtin; got issues: {:?}",
+        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+// ===========================================================================
+// Topic variable $_ in map/grep block contexts (#3457)
+// ===========================================================================
+
+#[test]
+fn topic_var_in_map_block_no_undeclared_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+    // $_ is the implicit topic variable set by map; it must never be flagged
+    // as undeclared under `use strict`.
+    let code = r#"
+use strict;
+use warnings;
+my @nums = (1, 2, 3);
+my @doubled = map { $_ * 2 } @nums;
+"#;
+    let issues = scope_issues_strict(code);
+    assert!(
+        !has_issue(&issues, IssueKind::UndeclaredVariable, "_"),
+        "$_ in map block should not be flagged as undeclared; issues: {:?}",
+        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+#[test]
+fn topic_var_in_grep_block_no_undeclared_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+    // $_ is the implicit topic variable set by grep; it must never be flagged
+    // as undeclared under `use strict`.
+    let code = r#"
+use strict;
+use warnings;
+my @nums = (1, 2, 3);
+my @evens = grep { $_ % 2 == 0 } @nums;
+"#;
+    let issues = scope_issues_strict(code);
+    assert!(
+        !has_issue(&issues, IssueKind::UndeclaredVariable, "_"),
+        "$_ in grep block should not be flagged as undeclared; issues: {:?}",
+        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+#[test]
+fn topic_var_chained_map_grep_no_undeclared_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+    // $_ used across both map and grep in the same file should produce zero
+    // UndeclaredVariable diagnostics.
+    let code = r#"
+use strict;
+use warnings;
+my @nums = (1, 2, 3);
+my @doubled = map { $_ * 2 } @nums;
+my @evens = grep { $_ % 2 == 0 } @nums;
+"#;
+    let issues = scope_issues_strict(code);
+    let undeclared: Vec<_> =
+        issues.iter().filter(|i| i.kind == IssueKind::UndeclaredVariable).collect();
+    assert!(
+        undeclared.is_empty(),
+        "no UndeclaredVariable diagnostics expected for $_ in map/grep contexts; got: {:?}",
+        undeclared.iter().map(|i| &i.variable_name).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+// ===========================================================================
+// 18. $a and $b Sort Variable Recognition
+// ===========================================================================
+
+#[test]
+fn sort_a_b_no_diagnostic_in_sort_block() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict;
+my @numbers = (3, 1, 4, 1, 5);
+my @sorted = sort { $a <=> $b } @numbers;
+print @sorted;
+"#;
+    let issues = scope_issues_strict(code);
+    assert!(
+        !has_issue(&issues, IssueKind::UndeclaredVariable, "a"),
+        "$a in sort block must not be flagged as undeclared under strict; issues: {:?}",
+        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+    assert!(
+        !has_issue(&issues, IssueKind::UndeclaredVariable, "b"),
+        "$b in sort block must not be flagged as undeclared under strict; issues: {:?}",
+        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+    assert!(
+        !has_issue(&issues, IssueKind::UnusedVariable, "a"),
+        "$a in sort block must not be flagged as unused; issues: {:?}",
+        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+    assert!(
+        !has_issue(&issues, IssueKind::UnusedVariable, "b"),
+        "$b in sort block must not be flagged as unused; issues: {:?}",
+        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+#[test]
+fn sort_a_b_no_diagnostic_with_string_comparator() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict;
+my @words = qw(banana apple cherry);
+my @strings = sort { lc($a) cmp lc($b) } @words;
+print @strings;
+"#;
+    let issues = scope_issues_strict(code);
+    assert!(
+        !has_issue(&issues, IssueKind::UndeclaredVariable, "a"),
+        "$a in string-cmp sort block must not be undeclared; issues: {:?}",
+        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+    assert!(
+        !has_issue(&issues, IssueKind::UndeclaredVariable, "b"),
+        "$b in string-cmp sort block must not be undeclared; issues: {:?}",
+        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+#[test]
+fn sort_a_b_in_named_sub_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict;
+sub by_length { length($a) <=> length($b) }
+my @words = qw(foo barbaz hi);
+my @by_len = sort by_length @words;
+print @by_len;
+"#;
+    let issues = scope_issues_strict(code);
+    assert!(
+        !has_issue(&issues, IssueKind::UndeclaredVariable, "a"),
+        "$a in named sort sub must not be flagged as undeclared; issues: {:?}",
+        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+    assert!(
+        !has_issue(&issues, IssueKind::UndeclaredVariable, "b"),
+        "$b in named sort sub must not be flagged as undeclared; issues: {:?}",
+        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+#[test]
+fn sort_a_b_no_diagnostic_without_strict() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+my @numbers = (5, 2, 8, 1);
+my @sorted = sort { $a <=> $b } @numbers;
+print @sorted;
+"#;
+    let issues = scope_issues(code);
+    assert!(
+        !has_issue(&issues, IssueKind::UnusedVariable, "a"),
+        "$a in sort block must not be flagged as unused (no strict); issues: {:?}",
+        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+    assert!(
+        !has_issue(&issues, IssueKind::UnusedVariable, "b"),
+        "$b in sort block must not be flagged as unused (no strict); issues: {:?}",
+        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+#[test]
+fn user_variable_named_a_outside_sort_is_not_undeclared() -> Result<(), Box<dyn std::error::Error>>
+{
+    let code = r#"
+my $a = 42;
+"#;
+    let issues = scope_issues(code);
+    let undeclared = has_issue(&issues, IssueKind::UndeclaredVariable, "a");
+    assert!(!undeclared, "a lexically declared $a must never be flagged as undeclared");
+    Ok(())
+}
+
+// ===========================================================================
+// Phase block (BEGIN/END/CHECK/INIT/UNITCHECK) symbol extraction (#3464)
+// ===========================================================================
+
+#[test]
+fn phase_block_begin_extracted_as_symbol() -> Result<(), Box<dyn std::error::Error>> {
+    let code = "BEGIN { require Config; }";
+    let table = parse_and_extract(code);
+    assert!(
+        has_symbol(&table, "BEGIN", SymbolKind::Subroutine),
+        "BEGIN block must appear in symbol table as Subroutine; symbols: {:?}",
+        table.symbols.keys().collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+#[test]
+fn phase_block_end_extracted_as_symbol() -> Result<(), Box<dyn std::error::Error>> {
+    let code = "END { cleanup(); }";
+    let table = parse_and_extract(code);
+    assert!(
+        has_symbol(&table, "END", SymbolKind::Subroutine),
+        "END block must appear in symbol table; symbols: {:?}",
+        table.symbols.keys().collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+#[test]
+fn phase_block_all_five_extracted() -> Result<(), Box<dyn std::error::Error>> {
+    let code = "BEGIN { 1; }\nEND { 1; }\nCHECK { 1; }\nINIT { 1; }\nUNITCHECK { 1; }\n";
+    let table = parse_and_extract(code);
+    for phase in &["BEGIN", "END", "CHECK", "INIT", "UNITCHECK"] {
+        assert!(
+            has_symbol(&table, phase, SymbolKind::Subroutine),
+            "{} must appear in symbol table; symbols: {:?}",
+            phase,
+            table.symbols.keys().collect::<Vec<_>>()
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn phase_block_symbol_location_within_source() -> Result<(), Box<dyn std::error::Error>> {
+    let code = "BEGIN { my $x = 1; }";
+    let table = parse_and_extract(code);
+    let syms = table.symbols.get("BEGIN").ok_or("BEGIN not found")?;
+    let sym = syms.first().ok_or("no symbols for BEGIN")?;
+    assert!(sym.location.start <= code.len(), "start offset must be within source");
+    assert!(sym.location.end <= code.len(), "end offset must be within source");
+    assert!(sym.location.start < sym.location.end, "start must be before end");
+    Ok(())
+}
+
+#[test]
+fn phase_block_symbol_in_global_scope() -> Result<(), Box<dyn std::error::Error>> {
+    let code = "BEGIN { my $x = 42; }";
+    let table = parse_and_extract(code);
+    let begin_syms = table.symbols.get("BEGIN").ok_or("BEGIN not found")?;
+    let begin_sym = begin_syms.first().ok_or("no BEGIN symbol")?;
+    assert_eq!(begin_sym.scope_id, 0, "BEGIN symbol must be in global scope");
+    Ok(())
+}
+
+#[test]
+fn phase_block_local_lexical_does_not_leak_outside() -> Result<(), Box<dyn std::error::Error>> {
+    for phase in ["BEGIN", "CHECK", "INIT", "UNITCHECK", "END"] {
+        let code = format!(
+            r#"
+use strict;
+{phase} {{
+    my $inner = 1;
+}}
+print $inner;
+"#
+        );
+        let issues = scope_issues_strict(&code);
+        assert!(
+            has_issue(&issues, IssueKind::UndeclaredVariable, "inner"),
+            "{} block lexical must not leak to outer scope; issues: {:?}",
+            phase,
+            issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn phase_block_local_lexical_does_not_leak_to_sibling_phase()
+-> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict;
+BEGIN {
+    my $inner = 1;
+}
+CHECK {
+    print $inner;
+}
+"#;
+    let issues = scope_issues_strict(code);
+    assert!(
+        has_issue(&issues, IssueKind::UndeclaredVariable, "inner"),
+        "BEGIN lexical must not leak into sibling phaser; issues: {:?}",
+        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+// ===========================================================================
+// AUTOLOAD special variable coverage (#3462)
+// ===========================================================================
+
+#[test]
+fn autoload_special_variable_is_not_undeclared_under_strict()
+-> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict;
+use warnings;
+
+package MyClass;
+
+sub AUTOLOAD {
+    our $AUTOLOAD;
+    my $method = $AUTOLOAD;
+    return $method;
+}
+
+package main;
+MyClass->some_method();
+"#;
+    let issues = scope_issues_strict(code);
+    assert!(
+        !has_issue(&issues, IssueKind::UndeclaredVariable, "$AUTOLOAD"),
+        "$AUTOLOAD in AUTOLOAD context must not be flagged as undeclared; issues: {:?}",
+        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+// ---- Issue #3503: variables in print comma-separated args must be marked used ----
+
+#[test]
+fn scope_many_variables_in_print_comma_args() -> Result<(), Box<dyn std::error::Error>> {
+    // Regression test for #3503: print $a, $b, $c, $d, $e — all five variables
+    // should be considered used. $a and $b are Perl sort globals; locally declared
+    // `my $a`/`my $b` must NOT be skipped by the is_builtin_global guard.
+    let code = r#"
+my $a = 1;
+my $b = 2;
+my $c = 3;
+my $d = 4;
+my $e = 5;
+print $a, $b, $c, $d, $e;
+"#;
+    let issues = scope_issues(code);
+    let unused = count_issues(&issues, IssueKind::UnusedVariable);
+    assert_eq!(
+        unused,
+        0,
+        "all variables used in print comma-separated args should not be unused; issues: {:?}",
+        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+#[test]
+fn print_comma_args_strict_no_false_unused() -> Result<(), Box<dyn std::error::Error>> {
+    // Under `use strict`, variables used in print comma list must not be reported unused.
+    let code = r#"
+use strict;
+my $name = "world";
+my $greeting = "hello";
+print $greeting, " ", $name, "\n";
+"#;
+    let issues = scope_issues_strict(code);
+    assert!(
+        !has_issue(&issues, IssueKind::UnusedVariable, "name"),
+        "$name used in print comma list must not be flagged as unused; issues: {:?}",
+        issues
+    );
+    assert!(
+        !has_issue(&issues, IssueKind::UnusedVariable, "greeting"),
+        "$greeting used in print comma list must not be flagged as unused; issues: {:?}",
+        issues
+    );
+    Ok(())
+}
+
+#[test]
+fn say_comma_args_no_false_unused() -> Result<(), Box<dyn std::error::Error>> {
+    // say with comma-separated args must also mark all variables as used.
+    let code = r#"
+my $x = "foo";
+my $y = "bar";
+say $x, " ", $y;
+"#;
+    let issues = scope_issues(code);
+    assert!(
+        !has_issue(&issues, IssueKind::UnusedVariable, "x"),
+        "$x used in say comma list must not be flagged as unused; issues: {:?}",
+        issues
+    );
+    assert!(
+        !has_issue(&issues, IssueKind::UnusedVariable, "y"),
+        "$y used in say comma list must not be flagged as unused; issues: {:?}",
+        issues
+    );
+    Ok(())
+}
+
+// ===========================================================================
+// Try/catch variable binding — extended coverage (#3541)
+// ===========================================================================
+
+/// The issue example uses $err, not $e.  Both must be handled identically.
+#[test]
+fn scope_try_catch_err_variable_is_bound() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict;
+use feature 'try';
+try {
+    die "error";
+} catch ($err) {
+    print $err;
+}
+"#;
+    let issues = scope_issues_strict(code);
+    assert!(
+        !issues
+            .iter()
+            .any(|i| i.kind == IssueKind::UndeclaredVariable && i.variable_name == "$err"),
+        "catch variable $err must not be reported as undeclared: {:?}",
+        issues
+    );
+    assert!(
+        !issues.iter().any(|i| i.kind == IssueKind::UnusedVariable && i.variable_name == "$err"),
+        "used catch variable $err must not be reported as unused: {:?}",
+        issues
+    );
+    Ok(())
+}
+
+/// use v5.34 enables try/catch without an explicit use feature 'try'.
+/// The scope analyzer must bind the catch variable in both cases.
+#[test]
+fn scope_try_catch_v534_pragma_binds_variable() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict;
+use v5.34;
+try {
+    die "error";
+} catch ($err) {
+    print $err;
+}
+"#;
+    let issues = scope_issues_strict(code);
+    assert!(
+        !issues
+            .iter()
+            .any(|i| i.kind == IssueKind::UndeclaredVariable && i.variable_name == "$err"),
+        "catch variable must be bound when enabled via use v5.34: {:?}",
+        issues
+    );
+    Ok(())
+}
+
+/// Multiple catch blocks must each bind their own variable independently.
+#[test]
+fn scope_try_multiple_catch_blocks_each_bind_variable() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict;
+use feature 'try';
+try {
+    die "error";
+} catch ($first_err) {
+    print $first_err;
+} catch ($second_err) {
+    print $second_err;
+}
+"#;
+    let issues = scope_issues_strict(code);
+    assert!(
+        !issues
+            .iter()
+            .any(|i| i.kind == IssueKind::UndeclaredVariable && i.variable_name == "$first_err"),
+        "first catch variable must not be undeclared: {:?}",
+        issues
+    );
+    assert!(
+        !issues
+            .iter()
+            .any(|i| i.kind == IssueKind::UndeclaredVariable && i.variable_name == "$second_err"),
+        "second catch variable must not be undeclared: {:?}",
+        issues
+    );
+    Ok(())
+}
+
+/// Each catch block's variable must be invisible in the other's block.
+#[test]
+fn scope_try_catch_variables_do_not_cross_contaminate() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict;
+use feature 'try';
+try {
+    die "error";
+} catch ($first_err) {
+    print $first_err;
+} catch ($second_err) {
+    print $first_err;
+}
+"#;
+    let issues = scope_issues_strict(code);
+    assert!(
+        has_issue(&issues, IssueKind::UndeclaredVariable, "$first_err"),
+        "$first_err used in second catch block should be undeclared: {:?}",
+        issues
+    );
+    Ok(())
+}
+
+/// Bare catch (no variable) must not crash and must not emit any diagnostic.
+#[test]
+fn scope_try_bare_catch_no_variable_no_crash() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict;
+use feature 'try';
+try {
+    die "error";
+} catch {
+    print "caught";
+}
+"#;
+    // Must not panic; must not produce any undeclared-variable issue
+    let issues = scope_issues_strict(code);
+    assert!(
+        !issues.iter().any(|i| i.kind == IssueKind::UndeclaredVariable),
+        "bare catch should not produce undeclared diagnostics: {:?}",
+        issues
+    );
+    Ok(())
+}
+
+/// The finally block must run in the outer scope, not the catch scope.
+/// Variables declared inside a catch must not bleed into finally.
+#[test]
+fn scope_try_catch_variable_not_visible_in_finally() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict;
+use feature 'try';
+try {
+    die "error";
+} catch ($e) {
+    print $e;
+} finally {
+    print $e;
+}
+"#;
+    let issues = scope_issues_strict(code);
+    assert!(
+        has_issue(&issues, IssueKind::UndeclaredVariable, "$e"),
+        "catch variable $e must not be visible in finally block: {:?}",
+        issues
+    );
+    Ok(())
+}
+
+/// Nested try/catch: the inner catch variable must be visible only within the
+/// inner catch block, and the outer catch variable within its own block.
+#[test]
+fn scope_nested_try_catch_inner_shadows_outer() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict;
+use feature 'try';
+try {
+    try {
+        die "inner";
+    } catch ($inner) {
+        print $inner;
+    }
+} catch ($outer) {
+    print $outer;
+}
+"#;
+    let issues = scope_issues_strict(code);
+    assert!(
+        !issues
+            .iter()
+            .any(|i| i.kind == IssueKind::UndeclaredVariable && i.variable_name == "$inner"),
+        "inner catch variable must be declared in inner catch scope: {:?}",
+        issues
+    );
+    assert!(
+        !issues
+            .iter()
+            .any(|i| i.kind == IssueKind::UndeclaredVariable && i.variable_name == "$outer"),
+        "outer catch variable must be declared in outer catch scope: {:?}",
+        issues
+    );
+    Ok(())
+}
+
+/// The catch variable range must point into the source at the catch parameter,
+/// not at an arbitrary offset, so that LSP diagnostics display correctly.
+#[test]
+fn scope_try_catch_variable_range_points_to_parameter() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict;
+use feature 'try';
+try {
+    die "boom";
+} catch ($exception) {
+    print "handled";
+}
+"#;
+    let issues = scope_issues_strict(code);
+    let unused = issues
+        .iter()
+        .find(|i| i.kind == IssueKind::UnusedVariable && i.variable_name == "$exception")
+        .ok_or("expected unused catch-variable diagnostic for $exception")?;
+    assert_eq!(
+        &code[unused.range.0..unused.range.1],
+        "$exception",
+        "the diagnostic range must span exactly the catch parameter text"
+    );
     Ok(())
 }

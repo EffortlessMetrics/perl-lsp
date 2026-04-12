@@ -5,6 +5,8 @@ import { BinaryDownloader } from './downloader';
 
 const SERVER_DEBUG_TEST_COMMAND = 'perl.debugTest';
 export const VSCODE_DEBUG_TEST_COMMAND = 'perl-lsp.debugTest';
+const DEBUGGING_GUIDE_URL =
+    'https://github.com/EffortlessMetrics/perl-lsp/blob/master/docs/tutorials/DAP_USER_GUIDE.md';
 
 export interface DebugTestLaunchTarget {
     label: string;
@@ -356,21 +358,24 @@ export class PerlDebugAdapterDescriptorFactory implements vscode.DebugAdapterDes
     constructor(private readonly context: vscode.ExtensionContext) {}
 
     createDebugAdapterDescriptor(
-        session: vscode.DebugSession,
-        executable: vscode.DebugAdapterExecutable | undefined
+        _session: vscode.DebugSession,
+        _executable: vscode.DebugAdapterExecutable | undefined
     ): vscode.ProviderResult<vscode.DebugAdapterDescriptor> {
         // Try to find perl-dap in PATH or use bundled version
         const dapPath = this.findDebugAdapter();
 
         if (!dapPath) {
             vscode.window.showErrorMessage(
-                'Perl Debug Adapter (perl-dap) not found. ' +
+                'Perl Debug Adapter (perl-dap) not found. Debugging requires perl-dap. ' +
                 'Use "Perl LSP: Reinstall" from the Command Palette to re-download it, ' +
-                'or install it manually with: cargo install perl-dap',
-                'Reinstall'
+                'or install it manually with: cargo install perl-dap.',
+                'Reinstall',
+                'Open Debugging Guide'
             ).then(sel => {
                 if (sel === 'Reinstall') {
                     void vscode.commands.executeCommand('perl-lsp.reinstall');
+                } else if (sel === 'Open Debugging Guide') {
+                    void vscode.env.openExternal(vscode.Uri.parse(DEBUGGING_GUIDE_URL));
                 }
             });
             return undefined;
@@ -463,9 +468,9 @@ export class PerlDebugAdapterDescriptorFactory implements vscode.DebugAdapterDes
 
 export class PerlDebugConfigurationProvider implements vscode.DebugConfigurationProvider {
     resolveDebugConfiguration(
-        folder: vscode.WorkspaceFolder | undefined,
+        _folder: vscode.WorkspaceFolder | undefined,
         config: vscode.DebugConfiguration,
-        token?: vscode.CancellationToken
+        _token?: vscode.CancellationToken
     ): vscode.ProviderResult<vscode.DebugConfiguration> {
         // If launch.json is missing or empty
         if (!config.type && !config.request && !config.name) {
@@ -501,8 +506,8 @@ export class PerlDebugConfigurationProvider implements vscode.DebugConfiguration
     }
 
     provideDebugConfigurations(
-        folder: vscode.WorkspaceFolder | undefined,
-        token?: vscode.CancellationToken
+        _folder: vscode.WorkspaceFolder | undefined,
+        _token?: vscode.CancellationToken
     ): vscode.ProviderResult<vscode.DebugConfiguration[]> {
         return [
             {

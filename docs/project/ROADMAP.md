@@ -8,7 +8,7 @@
 
 ## Current Framing
 
-- Workspace version line: `v0.12.3`
+- Workspace version line: `v0.12.4`
 - Latest published GitHub/editor release: `v0.12.3` (GitHub Releases, VS Code Marketplace, and Open VSX public line, shipped 2026-04-09)
 - crates.io published line: `v0.12.2` (registry line, shipped 2026-04-07)
 - Active work: finish the `v0.13.0` public alpha announcement pass (demo assets, distribution-truth cleanup, post-release docs/automation cleanup) while keeping the shipped `v0.12.3` line stable across GitHub Releases and the editor marketplaces
@@ -109,6 +109,7 @@ Released 2026-03-30. Cleanup completed 2026-04-02.
 - Test coverage gaps and broken integration tests
 - VSCode extension lint/quality audit (eslint v10 landed in #3179)
 - AI inline completion (#3018) shipped in the live 0.12.x line — feature wired end-to-end via #3157–#3168, awaiting E2E user validation
+- Coroutine support issue #3539 is re-scoped: defer hypothetical core syntax, split upstream-tracking from CPAN-library IDE support planning
 
 ### Next (v0.13.0 — public alpha announcement)
 
@@ -172,13 +173,13 @@ The LSP compliance table is auto-generated from `features.toml`.
 <!-- BEGIN: COMPLIANCE_TABLE -->
 | Area | Implemented | Total | Coverage |
 |------|-------------|-------|----------|
-| debug | 10 | 10 | 100% |
+| debug | 24 | 24 | 100% |
 | notebook | 2 | 2 | 100% |
 | protocol | 9 | 9 | 100% |
-| text_document | 46 | 46 | 100% |
+| text_document | 49 | 49 | 100% |
 | window | 9 | 9 | 100% |
 | workspace | 26 | 26 | 100% |
-| **Overall** | **102** | **102** | **100%** |
+| **Overall** | **119** | **119** | **100%** |
 <!-- END: COMPLIANCE_TABLE -->
 
 For live capability posture, run `just status-check` or read [CURRENT_STATUS.md](CURRENT_STATUS.md).

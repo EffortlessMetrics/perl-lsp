@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "fixture": "completion_method_arrow",
+  "assertions": [
+    {
+      "kind": "completion_non_empty",
+      "line": 24,
+      "character": 18,
+      "rationale": "completion after -> on known object must return items (char 18 = 's' in speak)"
+    },
+    {
+      "kind": "completion_present",
+      "line": 24,
+      "character": 18,
+      "expected_label": "speak",
+      "rationale": "speak method must appear in completion list after ->"
+    }
+  ]
+}

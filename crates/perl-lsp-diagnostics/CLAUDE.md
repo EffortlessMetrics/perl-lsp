@@ -8,7 +8,7 @@ This file provides guidance to Claude Code when working with code in this reposi
 
 **Purpose**: Converts parse errors, scope analysis issues, and lint findings into structured diagnostics consumed by the LSP server.
 
-**Version**: workspace (currently 0.12.2)
+**Version**: workspace (currently 0.12.3)
 
 ## Commands
 

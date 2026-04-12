@@ -65,6 +65,14 @@ just status-check
 
 Run `just status-update` and `just status-check` when you change capability docs, generated status sections, or other docs that depend on computed project metrics.
 
+### Verification Ladder
+
+Prefer cheap, orthogonal passes over one broad gate:
+
+1. Check recent merged/open PRs and issues for the area before scoping new work.
+2. Use the narrowest truth-check first for claims: targeted repro/test for behavior, history/doc verification for attribution or status claims.
+3. Escalate to `just pr-fast` or `nix develop -c just ci-gate` only after the narrow pass is green.
+
 ## PR Hygiene
 
 - Use isolated worktrees and focused branches for agent-driven PR work.

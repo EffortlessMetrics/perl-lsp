@@ -83,8 +83,33 @@ jobs:
               pull_number: prNumber,
             });
             const prLabels = pr.data.labels.map(l => l.name);
+            const changedFiles = await github.paginate(github.rest.pulls.listFiles, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: prNumber,
+              per_page: 100,
+            }, response => response.data.map(file => file.filename));
+            const isDocsOnlyPath = (filename) =>
+              filename.startsWith('docs/') || /\.(md|mdx|txt|rst|adoc)$/i.test(filename);
+            const docsOnly = changedFiles.length > 0 && changedFiles.every(isDocsOnlyPath);
 
             if (!prLabels.includes('reviewed-deep')) {
+              if (docsOnly) {
+                // Docs-only PRs can take the reviewer fast-track path.
+                // Do not manufacture a misleading needs-deep-review label.
+                if (prLabels.includes('needs-deep-review')) {
+                  try {
+                    await github.rest.issues.removeLabel({
+                      owner: context.repo.owner,
+                      repo: context.repo.repo,
+                      issue_number: prNumber,
+                      name: 'needs-deep-review',
+                    });
+                  } catch (e) { /* label might not exist */ }
+                }
+                return;
+              }
+
               // Flag for deep review - do not merge without reviewer-deep sign-off
               if (!prLabels.includes('needs-deep-review')) {
                 await github.rest.issues.addLabels({

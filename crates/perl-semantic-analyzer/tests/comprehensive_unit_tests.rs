@@ -110,8 +110,8 @@ fn symbol_extraction_method_preserves_attributes() -> Result<(), Box<dyn std::er
         table.symbols.get("size").ok_or("expected method symbol `size` to be extracted")?;
     let method = methods
         .iter()
-        .find(|symbol| symbol.kind == SymbolKind::Subroutine)
-        .ok_or("expected subroutine symbol for method `size`")?;
+        .find(|symbol| symbol.kind == SymbolKind::Method)
+        .ok_or("expected method symbol for method `size`")?;
 
     assert!(method.attributes.contains(&"method".to_string()));
     assert!(method.attributes.contains(&"lvalue".to_string()));
@@ -163,6 +163,71 @@ fn symbol_extraction_constant() -> Result<(), Box<dyn std::error::Error>> {
     // The parser should at least produce something from this pragma
     // (may index "constant" as an Import or not index "PI" at all)
     let _ = table;
+    Ok(())
+}
+
+#[test]
+fn symbol_extraction_const_fast_scalar_is_constant() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use Const::Fast;
+const my $PI => 3.14159;
+"#;
+    let table = parse_and_extract(code);
+    assert!(has_symbol(&table, "PI", SymbolKind::Constant));
+    Ok(())
+}
+
+#[test]
+fn symbol_extraction_const_fast_array_is_constant() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use Const::Fast;
+const my @ARRAY => (1, 2, 3);
+"#;
+    let table = parse_and_extract(code);
+    assert!(has_symbol(&table, "ARRAY", SymbolKind::Constant));
+    Ok(())
+}
+
+#[test]
+fn symbol_extraction_readonly_scalar_is_constant() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use Readonly;
+Readonly my $PI => 3.14159;
+"#;
+    let table = parse_and_extract(code);
+    assert!(has_symbol(&table, "PI", SymbolKind::Constant));
+    Ok(())
+}
+
+#[test]
+fn symbol_extraction_readonly_array_is_constant() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use Readonly;
+Readonly my @ARRAY => (1, 2, 3);
+"#;
+    let table = parse_and_extract(code);
+    assert!(has_symbol(&table, "ARRAY", SymbolKind::Constant));
+    Ok(())
+}
+
+#[test]
+fn symbol_extraction_readonly_our_uses_package_qualified_name()
+-> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+package My::Pkg;
+use Readonly;
+Readonly our $PACKAGE_CONSTANT => 'foo';
+"#;
+    let table = parse_and_extract(code);
+    let symbols = table.symbols.get("PACKAGE_CONSTANT").ok_or("PACKAGE_CONSTANT not found")?;
+    assert!(
+        symbols.iter().any(|symbol| {
+            symbol.kind == SymbolKind::Constant
+                && symbol.qualified_name == "My::Pkg::PACKAGE_CONSTANT"
+        }),
+        "expected package-qualified Readonly constant symbol, got: {:?}",
+        symbols.iter().map(|symbol| &symbol.qualified_name).collect::<Vec<_>>()
+    );
     Ok(())
 }
 

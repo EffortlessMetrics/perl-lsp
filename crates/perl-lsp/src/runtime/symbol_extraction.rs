@@ -62,6 +62,7 @@ impl LspServer {
                         ),
                         container_name: container
                             .map(|s| normalize_package_separator(s).into_owned()),
+                        workspace_folder_uri: None,
                     });
 
                     // Recurse into body with this subroutine as container
@@ -91,6 +92,7 @@ impl LspServer {
                         ),
                     ),
                     container_name: container.map(|s| normalize_package_separator(s).into_owned()),
+                    workspace_folder_uri: None,
                 });
 
                 // Recurse into block with this package as container
@@ -106,7 +108,7 @@ impl LspServer {
             }
 
             // Perl 5.38+ native class declaration
-            NodeKind::Class { name, body } => {
+            NodeKind::Class { name, body, .. } => {
                 let (start_line, start_char) = byte_to_line_col(source, node.location.start);
                 let (end_line, end_char) = byte_to_line_col(source, node.location.end);
 
@@ -121,6 +123,7 @@ impl LspServer {
                         ),
                     ),
                     container_name: container.map(|s| normalize_package_separator(s).into_owned()),
+                    workspace_folder_uri: None,
                 });
 
                 // Recurse into body with this class as container
@@ -143,6 +146,7 @@ impl LspServer {
                         ),
                     ),
                     container_name: container.map(|s| normalize_package_separator(s).into_owned()),
+                    workspace_folder_uri: None,
                 });
 
                 // Recurse into body with this method as container
@@ -231,7 +235,7 @@ impl LspServer {
             }
 
             // Perl 5.38+ native class declaration
-            NodeKind::Class { name, body } => {
+            NodeKind::Class { name, body, .. } => {
                 if name.to_lowercase().contains(&query_lower) {
                     let (start_line, start_char) = byte_to_line_col(source, node.location.start);
                     let (end_line, end_char) = byte_to_line_col(source, node.location.end);

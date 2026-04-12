@@ -14,7 +14,7 @@ scanner (`scanner.c`) from `c-src/` via the `cc` crate and expose a
 tree-sitter `Language` for compatibility testing and benchmarking against
 the native Rust parser.
 
-**Version**: tracks the workspace (currently `0.12.2`).
+**Version**: tracks the workspace (currently `0.12.3`).
 
 This crate is a workspace member and is published to crates.io. It
 requires only a C compiler at build time — no `libclang` / `bindgen`

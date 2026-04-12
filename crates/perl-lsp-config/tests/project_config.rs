@@ -197,6 +197,8 @@ fn project_config_applies_include_paths_to_workspace_config() -> TestResult {
     project.perl = perl_lsp_config::ProjectPerlConfig {
         include_paths: vec!["lib".to_string(), "local/lib/perl5".to_string()],
         version: None,
+        use_perl5lib: None,
+        perl5lib_precedence: None,
     };
     project.apply_to_workspace_config(&mut config);
     assert_eq!(config.include_paths, vec!["lib", "local/lib/perl5"]);
@@ -213,6 +215,8 @@ fn project_config_empty_include_paths_leaves_workspace_defaults() -> TestResult 
     project.perl = perl_lsp_config::ProjectPerlConfig {
         include_paths: vec![], // explicitly empty
         version: None,
+        use_perl5lib: None,
+        perl5lib_precedence: None,
     };
     project.apply_to_workspace_config(&mut config);
     assert_eq!(
@@ -273,4 +277,226 @@ fn project_config_severity_negative_returns_err() -> TestResult {
     let result = load_project_config(dir.path());
     assert!(result.is_err(), "negative severity must be a parse error, got: {:?}", result);
     Ok(())
+}
+
+// ── parse_perl5lib ────────────────────────────────────────────────────────────
+
+#[test]
+fn parse_perl5lib_empty_string_returns_empty() {
+    let result = perl_lsp_config::WorkspaceConfig::parse_perl5lib("");
+    assert!(result.is_empty(), "empty string produces no paths");
+}
+
+#[test]
+fn parse_perl5lib_single_path() {
+    let result = perl_lsp_config::WorkspaceConfig::parse_perl5lib("/usr/lib/perl5");
+    assert_eq!(result, vec!["/usr/lib/perl5"]);
+}
+
+#[test]
+fn parse_perl5lib_multiple_paths() {
+    #[cfg(windows)]
+    let value = "/a/lib;/b/lib";
+    #[cfg(not(windows))]
+    let value = "/a/lib:/b/lib";
+
+    let result = perl_lsp_config::WorkspaceConfig::parse_perl5lib(value);
+    assert_eq!(result, vec!["/a/lib", "/b/lib"]);
+}
+
+#[test]
+fn parse_perl5lib_drops_empty_components() {
+    // Leading/trailing/consecutive separators produce empty components — they must be dropped.
+    #[cfg(windows)]
+    let value = ";/a/lib;;/b/lib;";
+    #[cfg(not(windows))]
+    let value = ":/a/lib::/b/lib:";
+
+    let result = perl_lsp_config::WorkspaceConfig::parse_perl5lib(value);
+    assert_eq!(result, vec!["/a/lib", "/b/lib"]);
+}
+
+// ── effective_include_paths ───────────────────────────────────────────────────
+
+#[test]
+fn effective_include_paths_no_perl5lib_returns_include_paths() {
+    let config = WorkspaceConfig::default();
+    let result = config.effective_include_paths(&[]);
+    assert_eq!(result, config.include_paths, "no PERL5LIB paths returns include_paths unchanged");
+}
+
+#[test]
+fn effective_include_paths_prepend_puts_perl5lib_first() {
+    use perl_lsp_config::Perl5LibPrecedence;
+    let mut config = WorkspaceConfig::default();
+    config.perl5lib_precedence = Perl5LibPrecedence::Prepend;
+    let p5l = vec!["/p5l/lib".to_string()];
+    let result = config.effective_include_paths(&p5l);
+    assert_eq!(result.first().map(String::as_str), Some("/p5l/lib"));
+    assert!(result.contains(&"lib".to_string()));
+}
+
+#[test]
+fn effective_include_paths_append_puts_perl5lib_last() {
+    use perl_lsp_config::Perl5LibPrecedence;
+    let mut config = WorkspaceConfig::default();
+    config.perl5lib_precedence = Perl5LibPrecedence::Append;
+    let p5l = vec!["/p5l/lib".to_string()];
+    let result = config.effective_include_paths(&p5l);
+    assert_eq!(result.last().map(String::as_str), Some("/p5l/lib"));
+    assert_eq!(result.first().map(String::as_str), Some("lib"));
+}
+
+#[test]
+fn effective_include_paths_disabled_ignores_perl5lib() {
+    let mut config = WorkspaceConfig::default();
+    config.use_perl5lib = false;
+    let p5l = vec!["/p5l/lib".to_string()];
+    let result = config.effective_include_paths(&p5l);
+    assert_eq!(result, config.include_paths, "use_perl5lib=false ignores PERL5LIB paths");
+    assert!(!result.contains(&"/p5l/lib".to_string()));
+}
+
+// ── TOML [perl] section ───────────────────────────────────────────────────────
+
+#[test]
+fn project_config_use_perl5lib_defaults_to_none() -> TestResult {
+    let dir = write_toml("[perl]\ninclude_paths = [\"lib\"]\n")?;
+    let cfg = load_project_config(dir.path())?.ok_or("expected Some")?;
+    assert!(cfg.perl.use_perl5lib.is_none(), "use_perl5lib absent in TOML must be None");
+    Ok(())
+}
+
+#[test]
+fn project_config_use_perl5lib_false_parsed() -> TestResult {
+    let dir = write_toml("[perl]\nuse_perl5lib = false\n")?;
+    let cfg = load_project_config(dir.path())?.ok_or("expected Some")?;
+    assert_eq!(cfg.perl.use_perl5lib, Some(false));
+    Ok(())
+}
+
+#[test]
+fn project_config_perl5lib_precedence_append_parsed() -> TestResult {
+    use perl_lsp_config::Perl5LibPrecedence;
+    let dir = write_toml("[perl]\nperl5lib_precedence = \"append\"\n")?;
+    let cfg = load_project_config(dir.path())?.ok_or("expected Some")?;
+    assert_eq!(cfg.perl.perl5lib_precedence, Some(Perl5LibPrecedence::Append));
+    Ok(())
+}
+
+// ── apply_to_workspace_config propagates new fields ──────────────────────────
+
+#[test]
+fn project_config_applies_use_perl5lib_false_to_workspace_config() -> TestResult {
+    let mut config = WorkspaceConfig::default();
+    assert!(config.use_perl5lib, "use_perl5lib is true by default");
+
+    let mut project = ProjectConfig::default();
+    project.perl = perl_lsp_config::ProjectPerlConfig {
+        include_paths: vec![],
+        version: None,
+        use_perl5lib: Some(false),
+        perl5lib_precedence: None,
+    };
+    project.apply_to_workspace_config(&mut config);
+    assert!(!config.use_perl5lib, "apply_to_workspace_config must propagate use_perl5lib=false");
+    Ok(())
+}
+
+// ── WorkspaceConfig::update_from_value — PERL5LIB fields ─────────────────────
+
+#[test]
+fn workspace_config_update_from_value_sets_use_perl5lib_false() {
+    let mut config = WorkspaceConfig::default();
+    assert!(config.use_perl5lib, "use_perl5lib is true by default");
+    config.update_from_value(&serde_json::json!({
+        "workspace": { "usePerl5lib": false }
+    }));
+    assert!(!config.use_perl5lib, "update_from_value must set use_perl5lib=false");
+}
+
+#[test]
+fn workspace_config_update_from_value_sets_use_perl5lib_true() {
+    let mut config = WorkspaceConfig::default();
+    config.use_perl5lib = false;
+    config.update_from_value(&serde_json::json!({
+        "workspace": { "usePerl5lib": true }
+    }));
+    assert!(config.use_perl5lib, "update_from_value must set use_perl5lib=true");
+}
+
+#[test]
+fn workspace_config_update_from_value_sets_perl5lib_precedence_append() {
+    use perl_lsp_config::Perl5LibPrecedence;
+    let mut config = WorkspaceConfig::default();
+    assert_eq!(config.perl5lib_precedence, Perl5LibPrecedence::Prepend);
+    config.update_from_value(&serde_json::json!({
+        "workspace": { "perl5libPrecedence": "append" }
+    }));
+    assert_eq!(
+        config.perl5lib_precedence,
+        Perl5LibPrecedence::Append,
+        "update_from_value must set perl5lib_precedence to Append"
+    );
+}
+
+#[test]
+fn workspace_config_update_from_value_sets_perl5lib_precedence_prepend() {
+    use perl_lsp_config::Perl5LibPrecedence;
+    let mut config = WorkspaceConfig::default();
+    config.perl5lib_precedence = Perl5LibPrecedence::Append;
+    config.update_from_value(&serde_json::json!({
+        "workspace": { "perl5libPrecedence": "prepend" }
+    }));
+    assert_eq!(
+        config.perl5lib_precedence,
+        Perl5LibPrecedence::Prepend,
+        "update_from_value must set perl5lib_precedence to Prepend"
+    );
+}
+
+#[test]
+fn workspace_config_update_from_value_unknown_precedence_leaves_current_value() {
+    use perl_lsp_config::Perl5LibPrecedence;
+    let mut config = WorkspaceConfig::default();
+    // Set to Append first, then send an unknown value — must leave Append intact.
+    config.perl5lib_precedence = Perl5LibPrecedence::Append;
+    config.update_from_value(&serde_json::json!({
+        "workspace": { "perl5libPrecedence": "replace" }
+    }));
+    assert_eq!(
+        config.perl5lib_precedence,
+        Perl5LibPrecedence::Append,
+        "unknown perl5libPrecedence value must NOT reset to Prepend"
+    );
+}
+
+#[test]
+fn effective_include_paths_prepend_preserves_full_order() {
+    use perl_lsp_config::Perl5LibPrecedence;
+    let mut config = WorkspaceConfig::default();
+    config.perl5lib_precedence = Perl5LibPrecedence::Prepend;
+    config.include_paths = vec!["lib".to_string(), "local/lib/perl5".to_string()];
+    let p5l = vec!["/ext/a".to_string(), "/ext/b".to_string()];
+    let result = config.effective_include_paths(&p5l);
+    assert_eq!(
+        result,
+        vec!["/ext/a", "/ext/b", "lib", "local/lib/perl5"],
+        "Prepend: PERL5LIB paths first (in order), then include_paths (in order)"
+    );
+}
+
+#[test]
+fn effective_include_paths_append_preserves_full_order() {
+    use perl_lsp_config::Perl5LibPrecedence;
+    let mut config = WorkspaceConfig::default();
+    config.perl5lib_precedence = Perl5LibPrecedence::Append;
+    config.include_paths = vec!["lib".to_string(), "local/lib/perl5".to_string()];
+    let p5l = vec!["/ext/a".to_string(), "/ext/b".to_string()];
+    let result = config.effective_include_paths(&p5l);
+    assert_eq!(
+        result,
+        vec!["lib", "local/lib/perl5", "/ext/a", "/ext/b"],
+        "Append: include_paths first (in order), then PERL5LIB paths (in order)"
+    );
 }

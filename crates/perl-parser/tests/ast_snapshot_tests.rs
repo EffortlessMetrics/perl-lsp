@@ -133,6 +133,26 @@ fn snapshot_ast_qw_list_assignment() {
     assert_snapshot!(parse_sexp("my @days = qw(Mon Tue Wed Thu Fri);"));
 }
 
+#[test]
+fn snapshot_ast_map_grep_and_sort_pipeline() {
+    // Common CPAN list pipeline pattern that mixes block forms and implicit $_.
+    assert_snapshot!(parse_sexp(
+        "my @result = sort { $a cmp $b } map { lc $_ } grep { /foo/ } @items;",
+    ));
+}
+
+#[test]
+fn snapshot_ast_eval_with_localized_error_variable() {
+    // Exception handling shape is very common and is sensitive to sigils and blocks.
+    assert_snapshot!(parse_sexp("eval { risky_call() }; if ($@) { warn $@; }",));
+}
+
+#[test]
+fn snapshot_ast_state_variable_and_default_operator() {
+    // `state` and defined-or are both widely used in modern Perl modules.
+    assert_snapshot!(parse_sexp("state $counter = 0; $counter //= 1;"));
+}
+
 // ---------------------------------------------------------------------------
 // 2. Error recovery AST snapshots (malformed input)
 // ---------------------------------------------------------------------------
@@ -188,6 +208,18 @@ fn snapshot_recovery_statement_after_error() {
     assert_snapshot!(parse_sexp("my $x = ;\nmy $y = 10;"));
 }
 
+#[test]
+fn snapshot_recovery_unclosed_quote_then_valid_statement() {
+    // Ensure recovery can resynchronize after unterminated string literals.
+    assert_snapshot!(parse_sexp("my $x = \"oops;\nmy $y = 1;"));
+}
+
+#[test]
+fn snapshot_recovery_broken_regex_then_followup_statement() {
+    // Broken regex delimiters should not prevent parsing later statements.
+    assert_snapshot!(parse_sexp("if ($text =~ /abc) { print 1; }\nmy $ok = 1;"));
+}
+
 // ---------------------------------------------------------------------------
 // 3. Error message format snapshots
 // ---------------------------------------------------------------------------
@@ -210,6 +242,16 @@ fn snapshot_errors_multiple_statements_errors() {
 #[test]
 fn snapshot_errors_truncated_hash() {
     assert_snapshot!(parse_errors("my %h = (a =>"));
+}
+
+#[test]
+fn snapshot_errors_unterminated_string_and_followup() {
+    assert_snapshot!(parse_errors("my $x = \"oops;\nmy $y = 1;"));
+}
+
+#[test]
+fn snapshot_errors_broken_regex_delimiter() {
+    assert_snapshot!(parse_errors("if ($text =~ /abc) { print 1; }\nmy $ok = 1;"));
 }
 
 // ---------------------------------------------------------------------------

@@ -315,11 +315,11 @@ fn gitignore_negation_pattern_re_includes_file_level() -> TestResult {
 }
 
 // ============================================================
-// Perl file extension filtering (.pl, .pm, .t, .psgi)
+// Perl file extension filtering (.pl, .pm, .t, .psgi, .xs, .i, .ep, .tt, .tt2)
 // ============================================================
 
 #[test]
-fn extension_filtering_accepts_all_four_perl_extensions() -> TestResult {
+fn extension_filtering_accepts_all_nine_perl_extensions() -> TestResult {
     let tmp = TempDir::new()?;
     let root = tmp.path();
 
@@ -327,6 +327,11 @@ fn extension_filtering_accepts_all_four_perl_extensions() -> TestResult {
     create_file(root, "Module.pm")?;
     create_file(root, "test.t")?;
     create_file(root, "app.psgi")?;
+    create_file(root, "native.xs")?;
+    create_file(root, "interface.i")?;
+    create_file(root, "templates/page.html.ep")?;
+    create_file(root, "templates/page.tt")?;
+    create_file(root, "templates/layout.tt2")?;
 
     let result = discover_perl_files(root);
 
@@ -336,11 +341,16 @@ fn extension_filtering_accepts_all_four_perl_extensions() -> TestResult {
         .filter_map(|p| p.extension().and_then(|e| e.to_str()).map(String::from))
         .collect();
 
-    assert_eq!(extensions.len(), 4);
+    assert_eq!(extensions.len(), 9);
     assert!(extensions.contains("pl"));
     assert!(extensions.contains("pm"));
     assert!(extensions.contains("t"));
     assert!(extensions.contains("psgi"));
+    assert!(extensions.contains("xs"));
+    assert!(extensions.contains("i"));
+    assert!(extensions.contains("ep"));
+    assert!(extensions.contains("tt"));
+    assert!(extensions.contains("tt2"));
 
     Ok(())
 }

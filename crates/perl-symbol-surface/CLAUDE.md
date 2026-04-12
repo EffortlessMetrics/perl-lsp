@@ -8,7 +8,7 @@ This file provides guidance to Claude Code when working with code in this crate.
 
 **Purpose**: Derive stable, reusable symbol-bearing views from the AST so that every IDE feature uses the same extraction logic rather than each implementing its own AST pattern-match.
 
-**Version**: workspace (currently 0.12.2)
+**Version**: workspace (currently 0.12.3)
 
 ## Commands
 
@@ -75,6 +75,7 @@ The walker tracks the innermost `package` declaration in statement order:
 | `full_span` | `(usize, usize)` | Byte range of the full declaration node |
 | `anchor_span` | `Option<(usize, usize)>` | Byte range of the name token; `None` when AST lacks `name_span` |
 | `container` | `Option<String>` | Enclosing package name; `None` at top level |
+| `declarator` | `Option<String>` | Variable scope keyword: `"my"`, `"our"`, `"local"`, `"state"`; `None` for non-variable declarations. `"our"` means package-scoped (cross-file visible). |
 
 ### Future Phases
 

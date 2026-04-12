@@ -982,12 +982,11 @@ fn from_regex_error_creates_syntax_error() {
     let regex_err =
         perl_regex::RegexError::Syntax { message: "unterminated group".into(), offset: 5 };
     let parse_err: ParseError = regex_err.into();
-    if let ParseError::SyntaxError { message, location } = &parse_err {
-        assert!(message.contains("unterminated group"), "got: {message}");
-        assert_eq!(*location, 5);
-    } else {
-        panic!("Expected SyntaxError, got: {parse_err:?}");
-    }
+    assert!(matches!(
+        parse_err,
+        ParseError::SyntaxError { ref message, location }
+            if message.contains("unterminated group") && location == 5
+    ));
 }
 
 #[test]

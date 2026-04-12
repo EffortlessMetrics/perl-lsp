@@ -1,7 +1,8 @@
-//! Expression safety validation
+//! Expression safety validation for debugger evaluate policy.
 //!
-//! This module provides the core validation logic for detecting dangerous
-//! operations in Perl expressions during debug evaluation.
+//! This module provides policy validation logic for detecting dangerous
+//! operations in Perl expressions during debug evaluation. It does not sandbox
+//! the interpreter.
 
 use crate::patterns::{ASSIGNMENT_OPERATORS, DANGEROUS_OPS_RE, REGEX_MUTATION_RE};
 
@@ -46,10 +47,11 @@ pub enum ValidationError {
 /// Result type for expression validation
 pub type ValidationResult = Result<(), ValidationError>;
 
-/// Safe expression evaluator
+/// Safe expression evaluator for policy validation.
 ///
 /// Validates that expressions are safe for evaluation during debugging,
-/// blocking operations that could mutate state or have side effects.
+/// blocking operations that could mutate state or have side effects when the
+/// caller has not opted into `allowSideEffects`.
 #[derive(Debug, Clone, Default)]
 pub struct SafeEvaluator {
     // Future: could add configuration options here

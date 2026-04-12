@@ -5,7 +5,9 @@
 
 use super::super::*;
 use crate::convert::{WirePosition, WireRange};
-use crate::features::formatting::{CodeFormatter, FormattingError, FormattingOptions};
+use crate::features::formatting::{
+    CodeFormatter, FormattingError, FormattingOptions, PerlTidyConfig,
+};
 use crate::protocol::{invalid_params, req_position, req_range, req_uri};
 
 /// Build a `JsonRpcError` from a `FormattingError`, populating the `data` field
@@ -19,6 +21,27 @@ fn formatting_error_to_rpc(context: &str, e: FormattingError) -> JsonRpcError {
         data: Some(json!({
             "error_kind": error_kind,
         })),
+    }
+}
+
+impl LspServer {
+    /// Build a `PerlTidyConfig` from the current server configuration.
+    fn build_perltidy_config(&self) -> PerlTidyConfig {
+        let config = self.config.lock();
+        PerlTidyConfig {
+            maximum_line_length: config.perltidy_maximum_line_length,
+            indent_columns: config.perltidy_indent_columns,
+            tabs: config.perltidy_tabs,
+            opening_brace_on_new_line: config.perltidy_opening_brace_on_new_line,
+            cuddled_else: config.perltidy_cuddled_else,
+            space_after_keyword: config.perltidy_space_after_keyword,
+            add_trailing_commas: config.perltidy_add_trailing_commas,
+            vertical_alignment: config.perltidy_vertical_alignment,
+            block_comment_indentation: config.perltidy_block_comment_indentation,
+            profile: config.perltidy_profile.clone(),
+            extra_args: config.perltidy_extra_args.clone(),
+            timeout_secs: config.perltidy_timeout_secs,
+        }
     }
 }
 
@@ -81,7 +104,8 @@ impl LspServer {
 
             let documents = self.documents_guard();
             if let Some(doc) = self.get_document(&documents, uri) {
-                let formatter = CodeFormatter::new();
+                let config = self.build_perltidy_config();
+                let formatter = CodeFormatter::with_config(config);
                 match formatter.format_document(&doc.text, &options) {
                     Ok(edits) => {
                         let lsp_edits: Vec<Value> = edits
@@ -142,7 +166,8 @@ impl LspServer {
 
             let documents = self.documents_guard();
             if let Some(doc) = self.get_document(&documents, uri) {
-                let formatter = CodeFormatter::new();
+                let config = self.build_perltidy_config();
+                let formatter = CodeFormatter::with_config(config);
                 match formatter.format_range(&doc.text, &range, &options) {
                     Ok(edits) => {
                         let lsp_edits: Vec<Value> = edits
@@ -207,7 +232,8 @@ impl LspServer {
 
             let documents = self.documents_guard();
             if let Some(doc) = self.get_document(&documents, uri) {
-                let formatter = CodeFormatter::new();
+                let config = self.build_perltidy_config();
+                let formatter = CodeFormatter::with_config(config);
                 let mut all_edits = Vec::new();
 
                 // Process each range

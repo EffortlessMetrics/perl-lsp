@@ -659,6 +659,62 @@ mod method_modifier_hover_tests {
         Ok(())
     }
 
+    /// Hovering over the method name inside `override 'render' => sub { ... }`
+    /// should identify the override modifier and avoid the generic Subroutine label.
+    #[test]
+    fn hover_on_override_modifier_mentions_override() -> Result<(), Box<dyn std::error::Error>> {
+        let code =
+            "package MyApp::User;\nuse Moose;\nsub render { }\noverride 'render' => sub { };\n";
+        let uri = "file:///moo_modifiers_override.pl";
+
+        let server = TestServerBuilder::new().build();
+        server.open_document(uri, code);
+
+        let (line, col) = find_pos(code, "render", 3)?;
+        let response = server.get_hover(uri, line, col);
+
+        let content =
+            hover_content(&response).ok_or("expected hover content on override modifier")?;
+
+        assert!(
+            content.contains("override") || content.contains("modifier"),
+            "override modifier hover should name the modifier, got: {content}"
+        );
+        assert!(
+            !content.contains("**Subroutine**"),
+            "hover should not show generic Subroutine label for an override modifier, got: {content}"
+        );
+        Ok(())
+    }
+
+    /// Hovering over the method name inside `augment 'render' => sub { ... }`
+    /// should identify the augment modifier and avoid the generic Subroutine label.
+    #[test]
+    fn hover_on_augment_modifier_mentions_augment() -> Result<(), Box<dyn std::error::Error>> {
+        let code =
+            "package MyApp::User;\nuse Moose;\nsub render { }\naugment 'render' => sub { };\n";
+        let uri = "file:///moo_modifiers_augment.pl";
+
+        let server = TestServerBuilder::new().build();
+        server.open_document(uri, code);
+
+        let (line, col) = find_pos(code, "render", 3)?;
+        let response = server.get_hover(uri, line, col);
+
+        let content =
+            hover_content(&response).ok_or("expected hover content on augment modifier")?;
+
+        assert!(
+            content.contains("augment") || content.contains("modifier"),
+            "augment modifier hover should name the modifier, got: {content}"
+        );
+        assert!(
+            !content.contains("**Subroutine**"),
+            "hover should not show generic Subroutine label for an augment modifier, got: {content}"
+        );
+        Ok(())
+    }
+
     /// `use Mouse;` packages should get modifier symbols just like `use Moo;`.
     /// This verifies that Mouse is recognized in symbol.rs framework detection.
     /// Without the fix, Mouse is not in `update_framework_context`, so `is_moo`
@@ -735,6 +791,49 @@ mod module_hover_tests {
             content.contains("Module.pm") && content.contains("Go to module"),
             "hover should show resolved path for found module, got: {content}"
         );
+        Ok(())
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn hover_on_use_statement_honors_absolute_perl5lib_outside_workspace()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let original_perl5lib = std::env::var_os("PERL5LIB");
+
+        let temp = tempfile::tempdir()?;
+        let workspace = temp.path().join("workspace");
+        let external_lib = temp.path().join("external").join("lib");
+        let module_dir = external_lib.join("External");
+        fs::create_dir_all(&module_dir)?;
+        fs::write(module_dir.join("Tool.pm"), "package External::Tool; 1;")?;
+
+        unsafe {
+            std::env::set_var("PERL5LIB", &external_lib);
+        }
+
+        let workspace_path = workspace.to_str().ok_or("non-UTF-8 workspace path")?;
+        let server = TestServerBuilder::new().with_workspace(workspace_path).build();
+
+        let code = "use External::Tool;\nmy $x = 1;\n";
+        let uri = "file:///test.pl";
+        server.open_document(uri, code);
+
+        let response = server.get_hover(uri, 0, 5);
+        let content = hover_content(&response).ok_or("expected hover content for use statement")?;
+
+        assert!(
+            content.contains("External::Tool"),
+            "hover should show module name, got: {content}"
+        );
+        assert!(
+            content.contains("Tool.pm") && content.contains("Go to module"),
+            "hover should show resolved path for PERL5LIB module, got: {content}"
+        );
+
+        match original_perl5lib {
+            Some(value) => unsafe { std::env::set_var("PERL5LIB", value) },
+            None => unsafe { std::env::remove_var("PERL5LIB") },
+        }
         Ok(())
     }
 

@@ -171,6 +171,29 @@ fn test_remove_file_url() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[test]
+fn test_remove_file_clears_references() -> Result<(), Box<dyn std::error::Error>> {
+    let index = WorkspaceIndex::new();
+    let uri = file_url("/refs.pl")?;
+    let code = "package Refs;\nsub keep_me { 1 }\nkeep_me();\nRefs::keep_me();\n";
+    index.index_file(uri.clone(), code.to_string())?;
+
+    assert!(!index.find_references("Refs::keep_me").is_empty());
+    assert!(!index.find_references("keep_me").is_empty());
+
+    index.remove_file(&uri.to_string());
+
+    assert!(
+        index.find_references("Refs::keep_me").is_empty(),
+        "qualified references should be removed after file deletion"
+    );
+    assert!(
+        index.find_references("keep_me").is_empty(),
+        "bare references should be removed after file deletion"
+    );
+    Ok(())
+}
+
+#[test]
 fn test_clear_index() -> Result<(), Box<dyn std::error::Error>> {
     let index = WorkspaceIndex::new();
     let uri = file_url("/c.pl")?;
@@ -1152,6 +1175,35 @@ fn test_index_coordinator_enforce_limits_file_count() {
 fn test_index_coordinator_check_limits_none_when_ok() {
     let coord = IndexCoordinator::new();
     assert!(coord.check_limits().is_none());
+}
+
+#[test]
+fn test_index_coordinator_check_limits_prefers_file_count_over_symbol_count()
+-> Result<(), Box<dyn std::error::Error>> {
+    use perl_workspace_index::workspace::workspace_index::{
+        DegradationReason as IxDegradationReason, IndexPerformanceCaps,
+        ResourceKind as IxResourceKind,
+    };
+
+    let limits = IndexResourceLimits {
+        max_files: 1,
+        max_total_symbols: 1,
+        ..IndexResourceLimits::default()
+    };
+    let coord = IndexCoordinator::with_limits_and_caps(limits, IndexPerformanceCaps::default());
+    coord.transition_to_ready(0, 0);
+
+    for i in 0..2 {
+        let uri = Url::parse(&format!("file:///limit_priority_{}.pl", i))?;
+        coord.index().index_file(uri, format!("sub f{} {{ 1 }}", i))?;
+    }
+
+    let reason = coord.check_limits().expect("limits should be exceeded");
+    assert!(matches!(
+        reason,
+        IxDegradationReason::ResourceLimit { kind: IxResourceKind::MaxFiles }
+    ));
+    Ok(())
 }
 
 #[test]

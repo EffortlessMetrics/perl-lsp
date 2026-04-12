@@ -77,6 +77,7 @@
 //!     host: "localhost".to_string(),
 //!     port: 13603,
 //!     timeout_ms: Some(5000),
+//!     stop_on_entry: None,
 //! };
 //!
 //! config.validate()?;

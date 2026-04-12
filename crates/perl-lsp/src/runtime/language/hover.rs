@@ -16,8 +16,41 @@ enum HoverExtracted {
     /// A `use Module` was found; module name needs resolution without lock.
     /// Carries (module_name, doc_text, doc_uri) for use lib / FindBin wiring.
     UseModule(String, String, String),
+    /// Cursor is on a `->method()` call where the method belongs to an inherited or
+    /// role-composed ancestor class. Carries (receiver_pkg, method_name, doc_uri).
+    /// Phase 2 resolves the hover using the workspace index BFS (same logic as
+    /// `inherited_method_definition_location` in navigation.rs).
+    InheritedMethod(String, String, String),
+    /// Cursor is on a package-name token (contains `::`) that was not handled by an
+    /// earlier semantic or `use` path. Carries (package_name, doc_text, doc_uri).
+    /// Phase 2 resolves it via `build_module_hover` (same as `UseModule`).
+    PossiblePackage(String, String, String),
     /// Nothing hoverable at this position.
     None,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::LspServer;
+
+    #[test]
+    fn test_internal_pl_sv_yes_hover_from_sigiled_token() {
+        let text = "print $PL_sv_yes;\n";
+        let offset = text.find('$').expect("sigil should exist");
+
+        assert_eq!(
+            LspServer::extract_special_variable(text, offset).as_deref(),
+            Some("$PL_sv_yes")
+        );
+
+        let hover = LspServer::get_special_variable_hover("$PL_sv_yes")
+            .expect("hover should exist for $PL_sv_yes");
+        let value = hover["contents"]["value"].as_str().expect("markdown hover text");
+        assert!(
+            value.contains("true scalar"),
+            "hover should describe the shared true scalar: {value}"
+        );
+    }
 }
 
 impl LspServer {
@@ -61,11 +94,17 @@ impl LspServer {
 
                         // Check for `use Module` at this offset first
                         if let Some(module_name) = Self::find_use_module_at_offset(ast, offset) {
-                            HoverExtracted::UseModule(
-                                module_name,
-                                doc.text.clone(),
-                                uri.to_string(),
-                            )
+                            // If the module is a known pragma, return pragma docs immediately
+                            // without doing module file resolution.
+                            if let Some(pragma_hover) = Self::build_pragma_hover(&module_name) {
+                                HoverExtracted::Complete(pragma_hover)
+                            } else {
+                                HoverExtracted::UseModule(
+                                    module_name,
+                                    doc.text.clone(),
+                                    uri.to_string(),
+                                )
+                            }
                         } else if let Some(module_name) =
                             Self::find_with_module_at_offset(ast, offset)
                         {
@@ -79,7 +118,8 @@ impl LspServer {
                             self.extract_symbol_hover(uri, ast, &doc.text, offset)
                         }
                     } else {
-                        HoverExtracted::None
+                        let offset = self.pos16_to_offset(doc, line, character);
+                        Self::extract_token_hover(uri, &doc.text, offset)
                     }
                 } else {
                     HoverExtracted::None
@@ -93,6 +133,22 @@ impl LspServer {
                 HoverExtracted::UseModule(module_name, doc_text, doc_uri) => {
                     return Ok(Some(self.build_module_hover(&module_name, &doc_text, &doc_uri)));
                 }
+                HoverExtracted::PossiblePackage(pkg_name, doc_text, doc_uri) => {
+                    // Package names with `::` always get module hover (file path + MetaCPAN link).
+                    // For unresolved names this still shows the MetaCPAN link which is more
+                    // useful than the bare-token fallback.
+                    return Ok(Some(self.build_module_hover(&pkg_name, &doc_text, &doc_uri)));
+                }
+                #[cfg(feature = "workspace")]
+                HoverExtracted::InheritedMethod(receiver_pkg, method_name, doc_uri) => {
+                    if let Some(hover_value) =
+                        self.build_inherited_method_hover(&receiver_pkg, &method_name, &doc_uri)
+                    {
+                        return Ok(Some(hover_value));
+                    }
+                }
+                #[cfg(not(feature = "workspace"))]
+                HoverExtracted::InheritedMethod(..) => {}
                 HoverExtracted::None => {}
             }
         }
@@ -111,29 +167,55 @@ impl LspServer {
         text: &str,
         offset: usize,
     ) -> HoverExtracted {
+        if let Some(xs_hover) = Self::extract_xs_api_hover(uri, text, offset) {
+            return HoverExtracted::Complete(xs_hover);
+        }
+
         let analyzer = self.get_or_build_analyzer(uri, text, ast);
+
+        if let Some(symbol_info) =
+            analyzer.symbol_at(crate::SourceLocation { start: offset, end: offset })
+            && let Some(modifier_kind) =
+                symbol_info.attributes.iter().find_map(|a| a.strip_prefix("modifier="))
+        {
+            let method_name = &symbol_info.name;
+            let kind_label = match modifier_kind {
+                "before" => "runs **before** the method — use for preconditions and logging",
+                "after" => "runs **after** the method — use for postconditions and cleanup",
+                "around" => {
+                    "wraps the method — receives `$orig` as first arg, must call `$orig->($self, @_)`"
+                }
+                "override" => "overrides the parent method — use to replace inherited behavior",
+                "augment" => "extends the parent method — call `inner()` to invoke the next layer",
+                _ => "modifies the method",
+            };
+            let doc = symbol_info.documentation.as_deref().unwrap_or("");
+            return HoverExtracted::Complete(json!({
+                "contents": {
+                    "kind": "markdown",
+                    "value": format!(
+                        "**Method Modifier (`{modifier_kind}`)**\n\n`{method_name}` — {kind_label}\n\n{doc}"
+                    ),
+                },
+            }));
+        }
 
         if let Some(symbol_info) = analyzer.find_definition(offset) {
             // Detect Moo/Moose attribute accessors (declaration == "has") early and
-            // render a dedicated card that shows the isa type and accessor mode clearly,
+            // render a dedicated card that shows the attribute metadata clearly,
             // instead of the generic "Subroutine" label which is misleading for accessors.
             if symbol_info.declaration.as_deref() == Some("has") {
                 let accessor_name = &symbol_info.name;
-                let doc = symbol_info
-                    .documentation
-                    .as_deref()
-                    .unwrap_or("Generated accessor from Moo/Moose `has`");
+                let doc = Self::format_moo_accessor_hover(accessor_name, &symbol_info.attributes);
                 return HoverExtracted::Complete(json!({
                     "contents": {
                         "kind": "markdown",
-                        "value": format!(
-                            "**Moo/Moose Attribute Accessor**\n\n`{accessor_name}` — {doc}"
-                        ),
+                        "value": doc,
                     },
                 }));
             }
 
-            // Detect method modifier symbols (before/after/around) early and render
+            // Detect method modifier symbols (before/after/around/override/augment) early and render
             // a dedicated card instead of the generic "Subroutine" label.
             if let Some(modifier_kind) =
                 symbol_info.attributes.iter().find_map(|a| a.strip_prefix("modifier="))
@@ -144,6 +226,10 @@ impl LspServer {
                     "after" => "runs **after** the method — use for postconditions and cleanup",
                     "around" => {
                         "wraps the method — receives `$orig` as first arg, must call `$orig->($self, @_)`"
+                    }
+                    "override" => "overrides the parent method — use to replace inherited behavior",
+                    "augment" => {
+                        "extends the parent method — call `inner()` to invoke the next layer"
                     }
                     _ => "modifies the method",
                 };
@@ -219,6 +305,17 @@ impl LspServer {
                 .map(|d| format!("\n**Declaration**: `{}`", d))
                 .unwrap_or_default();
 
+            // For variables, show declaration line and scope context.
+            let (decl_line_info, scope_context_info) = if symbol_info.kind.is_variable() {
+                let decl_offset = symbol_info.location.start;
+                let (line_0based, _col) = byte_to_line_col(text, decl_offset);
+                let decl_line = format!("\n**Declared at**: line {}", line_0based + 1);
+                let scope_ctx = Self::build_variable_scope_context(&analyzer, symbol_info);
+                (decl_line, scope_ctx)
+            } else {
+                (String::new(), String::new())
+            };
+
             // Check if this variable is tied — scan AST for a matching Tie node.
             let tied_info = if symbol_info.kind.is_variable() {
                 let sigil = symbol_info.kind.sigil().unwrap_or("");
@@ -264,10 +361,12 @@ impl LspServer {
             return HoverExtracted::Complete(json!({
                 "contents": {
                     "kind": "markdown",
-                    "value": format!("**{}**\n\n`{}`{}{}{}{}{}{}",
+                    "value": format!("**{}**\n\n`{}`{}{}{}{}{}{}{}{}",
                         kind_str,
                         display_name,
                         decl_info,
+                        decl_line_info,
+                        scope_context_info,
                         type_info,
                         tied_info,
                         attrs_info,
@@ -278,6 +377,68 @@ impl LspServer {
             }));
         }
 
+        // Inherited method hover: cursor is on a `->method()` call but find_definition
+        // found nothing in the current file.  Try the in-file class model first
+        // (resolve_inherited_method_hover handles same-file parent/role chains), then
+        // emit InheritedMethod for Phase 2 (workspace index BFS).
+        #[cfg(feature = "workspace")]
+        {
+            if let Some(raw_receiver) = Self::extract_arrow_receiver(text, offset) {
+                // Extract the method name token at the cursor
+                let method_name = Self::get_token_at_position_static(text, offset);
+                if !method_name.is_empty() && !method_name.starts_with(['$', '@', '%']) {
+                    // Resolve receiver to a package name.
+                    // `$self`, `$this`, `$class` map to current_package; bare identifiers
+                    // starting with uppercase are treated as package names.
+                    let bare_receiver =
+                        raw_receiver.trim_start_matches(['$', '@', '%']).to_string();
+                    let receiver_pkg = if bare_receiver == "self"
+                        || bare_receiver == "this"
+                        || bare_receiver == "class"
+                    {
+                        crate::declaration::current_package_at(ast, offset).to_string()
+                    } else if bare_receiver.starts_with(|c: char| c.is_uppercase()) {
+                        bare_receiver
+                    } else {
+                        // Variable receiver whose type we cannot statically resolve here.
+                        // Phase 2 will not be called; fall through to token hover.
+                        String::new()
+                    };
+
+                    if !receiver_pkg.is_empty() {
+                        // Try in-file ancestors first (no workspace lock needed)
+                        if let Some(hover_info) =
+                            analyzer.resolve_inherited_method_hover(&receiver_pkg, &method_name)
+                        {
+                            let details = hover_info.details.join("\n");
+                            return HoverExtracted::Complete(json!({
+                                "contents": {
+                                    "kind": "markdown",
+                                    "value": format!(
+                                        "**Method**\n\n`{}`\n\n{}",
+                                        hover_info.signature,
+                                        details
+                                    ),
+                                },
+                            }));
+                        }
+
+                        // No in-file ancestor found — defer to Phase 2 workspace BFS
+                        return HoverExtracted::InheritedMethod(
+                            receiver_pkg,
+                            method_name,
+                            uri.to_string(),
+                        );
+                    }
+                }
+            }
+        }
+
+        Self::extract_token_hover(uri, text, offset)
+    }
+
+    /// Extract hover information from the token fallback path.
+    fn extract_token_hover(uri: &str, text: &str, offset: usize) -> HoverExtracted {
         // Check if the cursor is inside a regex literal and provide explanation.
         if let Some(regex_hover) = Self::extract_regex_hover(text, offset) {
             return HoverExtracted::Complete(regex_hover);
@@ -291,8 +452,30 @@ impl LspServer {
             }
         }
 
-        // Fall back to simple token display, with builtin docs
-        let hover_text = self.get_token_at_position(text, offset);
+        // Handle file test operators (`-e`, `-f`, `-M`, etc.) before the
+        // general token fallback, because the token scanner does not include
+        // the leading `-`.
+        if let Some(op) = Self::extract_file_test_operator(text, offset) {
+            if let Some(op_doc) = crate::semantic::get_operator_documentation(&op) {
+                return HoverExtracted::Complete(json!({
+                    "contents": {
+                        "kind": "markdown",
+                        "value": format!(
+                            "**File Test Operator**\n\n```\n{}\n```\n\n{}",
+                            op_doc.signature,
+                            op_doc.description
+                        ),
+                    },
+                }));
+            }
+        }
+
+        // Fall back to simple token display, with builtin docs.
+        let hover_text = {
+            // The normal tokenizer only captures `[$@%]` + alphanumeric/underscore,
+            // so it misses punctuation variables handled above.
+            Self::get_token_at_position_static(text, offset)
+        };
 
         if !hover_text.is_empty() {
             // Check for special variable hover (handles $_, @_, @ISA, %ENV, etc.)
@@ -312,6 +495,10 @@ impl LspServer {
                         ),
                     },
                 }));
+            }
+
+            if let Some(xs_hover) = Self::extract_xs_api_hover(uri, text, offset) {
+                return HoverExtracted::Complete(xs_hover);
             }
 
             // Check Test::More/Test2 function hover when source imports a test framework
@@ -352,6 +539,18 @@ impl LspServer {
                 }
             }
 
+            // Before the bare-token fallback, check if the cursor is on a package name
+            // (an identifier that spans `::` separators, e.g. `File::Path`, `DBI`).
+            // Defer resolution to Phase 2 via `build_module_hover` so no workspace lock
+            // is held here.
+            if let Some(pkg_name) = Self::get_package_name_at_position(text, offset) {
+                return HoverExtracted::PossiblePackage(
+                    pkg_name,
+                    text.to_string(),
+                    uri.to_string(),
+                );
+            }
+
             return HoverExtracted::Complete(json!({
                 "contents": {
                     "kind": "markdown",
@@ -361,6 +560,260 @@ impl LspServer {
         }
 
         HoverExtracted::None
+    }
+
+    /// Build a scope context string for a variable hover card.
+    ///
+    /// Finds the innermost subroutine whose byte span contains the variable's
+    /// declaration offset, and returns a formatted string like
+    /// `\n**Scope**: lexical in subroutine `foo`` or `\n**Scope**: file scope`.
+    fn build_variable_scope_context(
+        analyzer: &crate::semantic::SemanticAnalyzer,
+        symbol: &crate::symbol::Symbol,
+    ) -> String {
+        let decl_offset = symbol.location.start;
+        let table = analyzer.symbol_table();
+
+        // Find the innermost (smallest span) subroutine that contains decl_offset.
+        let mut best_sub_name: Option<String> = None;
+        let mut best_span = usize::MAX;
+
+        for syms in table.symbols.values() {
+            for sym in syms {
+                if sym.kind == crate::symbol::SymbolKind::Subroutine
+                    && sym.location.start < decl_offset
+                    && sym.location.end > decl_offset
+                {
+                    let span = sym.location.end - sym.location.start;
+                    if span < best_span {
+                        best_sub_name = Some(sym.name.clone());
+                        best_span = span;
+                    }
+                }
+            }
+        }
+
+        if let Some(sub_name) = best_sub_name {
+            format!("\n**Scope**: lexical in subroutine `{sub_name}`")
+        } else {
+            "\n**Scope**: file scope".to_string()
+        }
+    }
+
+    fn format_moo_accessor_hover(name: &str, attributes: &[String]) -> String {
+        let isa = Self::moo_attribute_value(attributes, "isa");
+        let access = Self::moo_attribute_value(attributes, "is").map(Self::describe_access_mode);
+        let required = Self::moo_attribute_value(attributes, "required").map(Self::describe_truthy);
+        let predicate = Self::moo_accessor_method_name(name, attributes, "predicate", "has_");
+        let builder = Self::moo_accessor_method_name(name, attributes, "builder", "_build_");
+        let clearer = Self::moo_accessor_method_name(name, attributes, "clearer", "clear_");
+        let reader = Self::moo_attribute_value(attributes, "reader");
+        let writer = Self::moo_attribute_value(attributes, "writer");
+        let accessor = Self::moo_attribute_value(attributes, "accessor");
+        let lazy = Self::moo_attribute_value(attributes, "lazy").map(Self::describe_truthy);
+        let default = Self::moo_attribute_value(attributes, "default");
+
+        let mut lines = vec!["**Moo/Moose Attribute Accessor**".to_string(), String::new()];
+        lines.push(format!("**Attribute**: `{name}`"));
+
+        if let Some(isa) = isa {
+            lines.push(format!("**Type**: `{isa}`"));
+        }
+        if let Some(access) = access {
+            lines.push(format!("**Access**: {access}"));
+        }
+        if let Some(required) = required {
+            lines.push(format!("**Required**: {required}"));
+        }
+        if let Some(predicate) = predicate {
+            lines.push(format!("**Predicate**: `{predicate}`"));
+        }
+        if let Some(builder) = builder {
+            lines.push(format!("**Builder**: `{builder}`"));
+        }
+        if let Some(clearer) = clearer {
+            lines.push(format!("**Clearer**: `{clearer}`"));
+        }
+        if let Some(reader) = reader {
+            lines.push(format!("**Reader**: `{reader}`"));
+        }
+        if let Some(writer) = writer {
+            lines.push(format!("**Writer**: `{writer}`"));
+        }
+        if let Some(accessor) = accessor {
+            lines.push(format!("**Accessor**: `{accessor}`"));
+        }
+        if let Some(lazy) = lazy {
+            lines.push(format!("**Lazy**: {lazy}"));
+        }
+        if let Some(default) = default {
+            lines.push(format!("**Default**: `{default}`"));
+        }
+
+        let extras: Vec<String> = attributes
+            .iter()
+            .filter_map(|attr| {
+                let (key, _) = attr.split_once('=')?;
+                if matches!(
+                    key,
+                    "isa"
+                        | "is"
+                        | "required"
+                        | "predicate"
+                        | "builder"
+                        | "clearer"
+                        | "reader"
+                        | "writer"
+                        | "accessor"
+                        | "lazy"
+                        | "default"
+                ) {
+                    None
+                } else {
+                    Some(attr.clone())
+                }
+            })
+            .collect();
+        if !extras.is_empty() {
+            lines.push(format!("**Options**: {}", extras.join(", ")));
+        }
+
+        lines.join("\n")
+    }
+
+    fn moo_attribute_value<'a>(attributes: &'a [String], key: &str) -> Option<&'a str> {
+        attributes.iter().find_map(|attr| {
+            let (attr_key, value) = attr.split_once('=')?;
+            if attr_key == key { Some(value) } else { None }
+        })
+    }
+
+    fn describe_access_mode(value: &str) -> String {
+        match value {
+            "ro" => "read-only".to_string(),
+            "rw" => "read-write".to_string(),
+            "rwp" => "read-write private".to_string(),
+            "lazy" => "lazy".to_string(),
+            other => other.to_string(),
+        }
+    }
+
+    fn describe_truthy(value: &str) -> String {
+        match value.trim().to_ascii_lowercase().as_str() {
+            "1" | "true" | "yes" => "yes".to_string(),
+            "0" | "false" | "no" => "no".to_string(),
+            other => other.to_string(),
+        }
+    }
+
+    fn moo_accessor_method_name(
+        name: &str,
+        attributes: &[String],
+        key: &str,
+        default_prefix: &str,
+    ) -> Option<String> {
+        let value = Self::moo_attribute_value(attributes, key)?;
+        if Self::is_truthy(value) {
+            Some(format!("{default_prefix}{name}"))
+        } else {
+            Some(value.to_string())
+        }
+    }
+
+    fn is_truthy(value: &str) -> bool {
+        matches!(value.trim().to_ascii_lowercase().as_str(), "1" | "true" | "yes")
+    }
+
+    /// Get a token using the same simple fallback as rename, without requiring `&self`.
+    fn get_token_at_position_static(content: &str, offset: usize) -> String {
+        let chars: Vec<char> = content.chars().collect();
+        if offset >= chars.len() {
+            return String::new();
+        }
+
+        let mut start = offset;
+        while start > 0
+            && (chars[start - 1].is_alphanumeric()
+                || chars[start - 1] == '_'
+                || chars[start - 1] == '$'
+                || chars[start - 1] == '@'
+                || chars[start - 1] == '%')
+        {
+            start -= 1;
+        }
+
+        let mut end = offset;
+        while end < chars.len() && (chars[end].is_alphanumeric() || chars[end] == '_') {
+            end += 1;
+        }
+
+        chars[start..end].iter().collect()
+    }
+
+    /// Extract a package name at `offset`, spanning `::` separators.
+    ///
+    /// Returns `Some(name)` only when the extracted token contains `::`,
+    /// indicating it is a qualified package name (e.g. `File::Path`, `Foo::Bar::Baz`).
+    /// Returns `None` for bare single-component identifiers to avoid misidentifying
+    /// function names or variables.
+    fn get_package_name_at_position(text: &str, offset: usize) -> Option<String> {
+        let bytes = text.as_bytes();
+        let len = bytes.len();
+        if offset >= len {
+            return None;
+        }
+
+        // Scan left over alphanumeric, underscore, and `::` sequences.
+        let mut start = offset;
+        while start > 0 {
+            let prev = start - 1;
+            if bytes[prev].is_ascii_alphanumeric() || bytes[prev] == b'_' {
+                start -= 1;
+            } else if prev >= 1 && bytes[prev] == b':' && bytes[prev - 1] == b':' {
+                start -= 2;
+            } else {
+                break;
+            }
+        }
+
+        // Scan right over alphanumeric, underscore, and `::` sequences.
+        let mut end = offset;
+        while end < len {
+            if bytes[end].is_ascii_alphanumeric() || bytes[end] == b'_' {
+                end += 1;
+            } else if end + 1 < len && bytes[end] == b':' && bytes[end + 1] == b':' {
+                end += 2;
+            } else {
+                break;
+            }
+        }
+
+        // Trim any trailing `::` (e.g. cursor right after the separator).
+        let candidate = text[start..end].trim_end_matches(':');
+        if candidate.contains("::") { Some(candidate.to_string()) } else { None }
+    }
+
+    fn extract_xs_api_hover(uri: &str, text: &str, offset: usize) -> Option<Value> {
+        if !crate::completion::is_xs_source(text, Some(uri)) {
+            return None;
+        }
+
+        let token = Self::get_token_at_position_static(text, offset);
+        if token.is_empty() {
+            return None;
+        }
+
+        let bare = token.trim_start_matches(['$', '@', '%']);
+        let (sig, desc) = crate::completion::get_xs_api_documentation(bare)?;
+        Some(json!({
+            "contents": {
+                "kind": "markdown",
+                "value": format!(
+                    "**XS / Perl C API**\n\n```c\n{}\n```\n\n{}",
+                    sig, desc
+                ),
+            },
+        }))
     }
 
     /// Extract the receiver token immediately before `->` at `offset`.
@@ -565,6 +1018,139 @@ impl LspServer {
         }
     }
 
+    /// Build a hover response for an inherited or role-composed method call.
+    ///
+    /// Called in Phase 2 (outside document lock) when Phase 1 detected a `->method()`
+    /// call but the method was not found in the current file's class models. Performs
+    /// a BFS over the workspace index following the same parent/role chains as
+    /// `inherited_method_definition_location` in navigation.rs.
+    ///
+    /// Returns `None` when no ancestor defines the method (hover falls through to token
+    /// display).
+    #[cfg(feature = "workspace")]
+    fn build_inherited_method_hover(
+        &self,
+        receiver_pkg: &str,
+        method_name: &str,
+        _doc_uri: &str,
+    ) -> Option<Value> {
+        use std::collections::{HashMap, HashSet, VecDeque};
+
+        let coord = self.coordinator()?;
+        let workspace_index = coord.index();
+
+        let mut visited = HashSet::from([receiver_pkg.to_string()]);
+        let mut queue = VecDeque::new();
+        let mut related_package_cache: HashMap<String, Vec<String>> = HashMap::new();
+
+        let build_package_hover = |package_name: &str| -> Option<Value> {
+            let members = workspace_index.get_package_members(package_name);
+            if members.iter().any(|symbol| symbol.name == method_name) {
+                let detail = if package_name == receiver_pkg {
+                    format!("Defined in `{package_name}`")
+                } else {
+                    format!("Inherited from `{package_name}`")
+                };
+                return Some(json!({
+                    "contents": {
+                        "kind": "markdown",
+                        "value": format!(
+                            "**Method**\n\n`sub {}::{}`\n\n{}",
+                            package_name, method_name, detail
+                        ),
+                    },
+                }));
+            }
+
+            if members.iter().any(|symbol| symbol.name == "AUTOLOAD") {
+                let detail = if package_name == receiver_pkg {
+                    format!("Resolved via `AUTOLOAD` in `{package_name}`")
+                } else {
+                    format!("Resolved via inherited `AUTOLOAD` in `{package_name}`")
+                };
+                return Some(json!({
+                    "contents": {
+                        "kind": "markdown",
+                        "value": format!(
+                            "**Method**\n\n`sub {}::AUTOLOAD`\n\n{}\n\nRequested method: `{}`",
+                            package_name, detail, method_name
+                        ),
+                    },
+                }));
+            }
+
+            None
+        };
+
+        if let Some(hover) = build_package_hover(receiver_pkg) {
+            return Some(hover);
+        }
+
+        // Inner closure: enqueue parent and role packages not yet visited.
+        // Mirrors the logic in `inherited_method_definition_location` (navigation.rs)
+        // but also includes model.roles so that composed roles are traversed.
+        let mut enqueue_related =
+            |package_name: &str, queue: &mut VecDeque<String>, visited: &HashSet<String>| {
+                let related = related_package_cache
+                    .entry(package_name.to_string())
+                    .or_insert_with(|| {
+                        use crate::semantic::SemanticAnalyzer;
+                        let Some(package_location) = workspace_index.find_definition(package_name)
+                        else {
+                            return Vec::new();
+                        };
+                        let Some(text) = super::navigation::workspace_document_text(
+                            workspace_index,
+                            &package_location.uri,
+                        ) else {
+                            return Vec::new();
+                        };
+
+                        let mut parser = crate::Parser::new(&text);
+                        let Ok(ast) = parser.parse() else {
+                            return Vec::new();
+                        };
+
+                        SemanticAnalyzer::analyze_with_source(&ast, &text)
+                            .class_models
+                            .into_iter()
+                            .find(|model| model.name == package_name)
+                            .map(|model| {
+                                model
+                                    .parents
+                                    .iter()
+                                    .chain(model.roles.iter())
+                                    .cloned()
+                                    .collect::<Vec<_>>()
+                            })
+                            .unwrap_or_default()
+                    })
+                    .clone();
+
+                for pkg in related {
+                    if !visited.contains(&pkg) {
+                        queue.push_back(pkg);
+                    }
+                }
+            };
+
+        enqueue_related(receiver_pkg, &mut queue, &visited);
+
+        while let Some(package_name) = queue.pop_front() {
+            if !visited.insert(package_name.clone()) {
+                continue;
+            }
+
+            if let Some(hover) = build_package_hover(&package_name) {
+                return Some(hover);
+            }
+
+            enqueue_related(&package_name, &mut queue, &visited);
+        }
+
+        None
+    }
+
     /// Build a hover response for a `use Module` statement.
     ///
     /// Tries URI-based resolution first, then filesystem-based resolution.
@@ -619,10 +1205,11 @@ impl LspServer {
         }
 
         // Not found — show search paths and MetaCPAN link
-        let include_paths = {
-            let config = self.workspace_config.lock();
-            config.include_paths.join(", ")
-        };
+        let include_paths = self
+            .config_for_doc(doc_uri)
+            .unwrap_or_else(|| self.workspace_config.lock().clone())
+            .include_paths
+            .join(", ");
 
         json!({
             "contents": {
@@ -633,6 +1220,31 @@ impl LspServer {
                 ),
             },
         })
+    }
+
+    /// Build a hover response for a known Perl pragma (e.g. `strict`, `warnings`).
+    ///
+    /// Returns `Some(Value)` when `module_name` is a recognized pragma with inline
+    /// documentation, or `None` when it should fall through to regular module resolution.
+    fn build_pragma_hover(module_name: &str) -> Option<Value> {
+        let doc = crate::semantic::get_pragma_documentation(module_name)?;
+
+        let version_line =
+            doc.version_required.map(|v| format!("\n\n**Requires**: Perl {v}")).unwrap_or_default();
+
+        let perldoc_link =
+            format!("[perldoc {module_name}](https://perldoc.perl.org/{module_name})");
+
+        Some(json!({
+            "contents": {
+                "kind": "markdown",
+                "value": format!(
+                    "**Pragma: `{module_name}`**\n\n_{summary}_\n\n{description}{version_line}\n\n{perldoc_link}",
+                    summary = doc.summary,
+                    description = doc.description,
+                ),
+            },
+        }))
     }
 
     /// Extract POD documentation from a module file and format it for hover display.
@@ -1496,6 +2108,15 @@ impl LspServer {
             }
         }
 
+        // Internal Perl values used by XS/C code, e.g. $PL_sv_yes.
+        if sigil == '$' && bytes[next_pos..].starts_with(b"PL_sv_") {
+            let mut end = next_pos + "PL_sv_".len();
+            while end < len && (bytes[end].is_ascii_alphanumeric() || bytes[end] == b'_') {
+                end += 1;
+            }
+            return Some(text[sigil_pos..end].to_string());
+        }
+
         // Single punctuation character after $ (e.g. $!, $?, $/, $\, $$, $;, etc.)
         if sigil == '$' && !next_ch.is_ascii_alphanumeric() && next_ch != b'_' {
             let punct = next_ch as char;
@@ -1510,12 +2131,70 @@ impl LspServer {
         None
     }
 
+    /// Extract a file test operator at the given byte offset.
+    ///
+    /// Recognizes operators like `-e`, `-f`, and `-M` when the cursor is on
+    /// either the `-` or the operator letter.
+    fn extract_file_test_operator(text: &str, offset: usize) -> Option<String> {
+        let bytes = text.as_bytes();
+        if bytes.is_empty() || offset >= bytes.len() {
+            return None;
+        }
+
+        for start in [offset, offset.saturating_sub(1)] {
+            if bytes.get(start) != Some(&b'-') {
+                continue;
+            }
+
+            if let Some(op_char) = bytes.get(start + 1) {
+                let op = format!("-{}", *op_char as char);
+                if crate::semantic::SemanticAnalyzer::is_file_test_operator(&op) {
+                    return Some(op);
+                }
+            }
+        }
+
+        None
+    }
+
     /// Return educational hover documentation for Perl special variables.
     ///
-    /// Covers the 20 most common special variables that every Perl developer
-    /// encounters.  Returns a JSON hover response with markdown content, or
-    /// `None` if the variable is not in the known set.
+    /// Covers the common special variables every Perl developer encounters,
+    /// plus a few internal `PL_sv_*` constants used by XS/C code. Returns a
+    /// JSON hover response with markdown content, or `None` if the variable is
+    /// not in the known set.
+    fn get_internal_special_variable_hover(name: &str) -> Option<Value> {
+        let (heading, description) = match name {
+            "$PL_sv_yes" | "PL_sv_yes" => (
+                "Internal Special Variable",
+                "The canonical true scalar used by Perl internals and XS/C code. It is an immutable shared value, so extensions can return or compare against it without allocating a fresh true scalar.",
+            ),
+            "$PL_sv_no" | "PL_sv_no" => (
+                "Internal Special Variable",
+                "The canonical false scalar used by Perl internals and XS/C code. It is an immutable shared value representing Perl's shared false value.",
+            ),
+            "$PL_sv_undef" | "PL_sv_undef" => (
+                "Internal Special Variable",
+                "The canonical undefined scalar used by Perl internals and XS/C code. It represents Perl's shared `undef` value.",
+            ),
+            _ => return None,
+        };
+
+        Some(json!({
+            "contents": {
+                "kind": "markdown",
+                "value": format!(
+                    "**`{name}` \u{2014} {heading}**\n\n{description}\n\n```perl\n# XS/C internals typically treat this as a shared value\n```"
+                ),
+            },
+        }))
+    }
+
     fn get_special_variable_hover(name: &str) -> Option<Value> {
+        if let Some(hover) = Self::get_internal_special_variable_hover(name) {
+            return Some(hover);
+        }
+
         // Handle $1-$9 capture group variables with dynamic content.
         if let Some(digit) = name
             .strip_prefix('$')
@@ -1729,6 +2408,18 @@ impl LspServer {
                  Set to `1` to enable autoflush (useful for real-time progress output \
                  or when writing to pipes).\n\n\
                  ```perl\n$| = 1;  # enable autoflush on STDOUT\nprint \"Progress: 50%\\n\";\n```"
+            }
+            "__FILE__" => {
+                "**`__FILE__`** \u{2014} Compile-time constant: the current source file name"
+            }
+            "__LINE__" => "**`__LINE__`** \u{2014} Compile-time constant: the current line number",
+            "__PACKAGE__" => {
+                "**`__PACKAGE__`** \u{2014} Compile-time constant: the current package name \
+                 (`\"main\"` at top level; `undef` inside `package BLOCK` with no name)"
+            }
+            "__SUB__" => {
+                "**`__SUB__`** \u{2014} Compile-time constant: a reference to the current \
+                 subroutine (Perl 5.16+, requires `use feature 'current_sub'`)"
             }
             _ => return None,
         };

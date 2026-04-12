@@ -1,13 +1,14 @@
 //! Boundary and mutation-killing tests for perl-lsp-input-validation.
 //!
 //! Complements the inline happy-path tests in lib.rs by targeting:
-//! - Exact boundary values (MAX_FILE_SIZE, MAX_PATH_LENGTH, line length 100_000)
+//! - Exact boundary values (max_file_size_bytes from perl-lsp-limits, MAX_PATH_LENGTH, line length 100_000)
 //! - Every disallowed condition in validate_file_content and validate_lsp_request
 //! - All suspicious patterns in the content filter
 //! - sanitize_string: exactly which characters are kept vs removed
 //! - validate_file_path: extension filtering
 
 use perl_lsp_input_validation::{sanitize_string, validate_file_content, validate_lsp_request};
+use perl_lsp_limits::max_file_size_bytes;
 use std::path::Path;
 
 // ---------------------------------------------------------------------------
@@ -16,9 +17,9 @@ use std::path::Path;
 
 #[test]
 fn validate_file_content_at_exactly_max_size_is_ok() -> anyhow::Result<()> {
-    // 10 * 1024 * 1024 bytes exactly must pass (> not >=).
+    // max_file_size_bytes() bytes exactly must pass (> not >=).
     // Use many short lines to avoid triggering the per-line length check.
-    let max = 10 * 1024 * 1024;
+    let max = max_file_size_bytes();
     // Each "x\n" = 2 bytes; max / 2 lines avoids the 100_000 char line check
     let line = "x\n";
     let lines = max / line.len();
@@ -30,7 +31,7 @@ fn validate_file_content_at_exactly_max_size_is_ok() -> anyhow::Result<()> {
 
 #[test]
 fn validate_file_content_one_byte_over_max_errors() {
-    let max = 10 * 1024 * 1024;
+    let max = max_file_size_bytes();
     // Use short lines spread across many rows so only the total size limit is hit
     let line = "x\n"; // 2 bytes each
     let lines = (max / line.len()) + 1;
@@ -38,7 +39,7 @@ fn validate_file_content_one_byte_over_max_errors() {
     // content.len() > max here
     assert!(content.len() > max);
     let result = validate_file_content(&content, Path::new("test.pl"));
-    assert!(result.is_err(), "content over MAX_FILE_SIZE must be rejected");
+    assert!(result.is_err(), "content over max_file_size_bytes must be rejected");
 }
 
 // ---------------------------------------------------------------------------

@@ -52,7 +52,7 @@ The tradeoff is maintenance cost. A generated parser gets correctness guarantees
 
 ## What perl-lsp Does
 
-perl-lsp is a Language Server Protocol implementation for Perl, written in Rust. It implements 102 LSP and DAP features, all at GA maturity.
+perl-lsp is a Language Server Protocol implementation for Perl, written in Rust. Every capability catalogued in `features.toml` — 116 entries spanning LSP, DAP, and perl-lsp extensions — has a wired-up implementation at GA maturity. That number is capability enumeration, not a claim about per-capability correctness, edge-case completeness, or subjective UX quality. Some capabilities are sharper than others, and we are transparent about which ones are still rough.
 
 The parser does not call Perl. It is a hand-written recursive descent parser in Rust with a stateful lexer that handles Perl's context-sensitive grammar entirely in static analysis. A single native binary handles parsing, semantic analysis, and all LSP features.
 
@@ -70,7 +70,7 @@ Compare this to PerlNavigator: go to definition, completion, diagnostics, some n
 
 The codebase enforces a zero-panic policy in production code: no `unwrap()`, no `expect()`, no `panic!()`. The parser returns `Result` types throughout, with structured error recovery that produces partial ASTs rather than crashes. An LSP server that panics on malformed input is useless — recovering gracefully and continuing to provide completions for the rest of the file is the only acceptable behavior.
 
-The CPAN corpus currently sits at 95.3% clean parses across 9,372 real files from the CPAN top-1000 distributions. That number has been rising continuously — it was 50% a few months ago. More on how we got here below.
+The CPAN corpus currently sits at 95.3% clean parses across 9,372 real files from the CPAN top-1000 distributions. That is a file-level clean parse rate — the share of files the parser processes without recording errors — not a measure of semantic AST fidelity, cross-file analysis, or any LSP-level correctness. It is a floor that says the parser does not choke on most real Perl, not a ceiling on what the LSP does with it. That number has been rising continuously — it was 50% a few months ago. More on how we got here below.
 
 ---
 
@@ -120,7 +120,9 @@ Every PR runs the full corpus in CI. The baseline is ratcheted: the number of cl
 
 Starting at 50% clean parses, we identified the top error buckets — families of related parse failures with common root causes. The largest bucket (`unexpected_token_in_expr`) decomposed into ten subcategories when examined carefully. Each subcategory drove a targeted fix. Each fix was validated against the CPAN corpus before merge.
 
-Four months ago, recursive descent on Perl was a research question. Now 95.3% of the top-1000 CPAN distributions parse without errors (8,931/9,372). The remaining 4.7% breaks down as: roughly 1-2% source-filtered code that is fundamentally incompatible with static analysis, 1-2% complex runtime-dependent constructs, and 1-2% genuinely fixable parser gaps we have not reached yet.
+Four months ago, recursive descent on Perl was a research question. Now 8,931 of 9,372 files from the CPAN top-1000 corpus — 95.3% — produce a clean AST with no recorded parse errors. The remaining 4.7% breaks down as: roughly 1-2% source-filtered code that is fundamentally incompatible with static analysis, 1-2% complex runtime-dependent constructs, and 1-2% genuinely fixable parser gaps we have not reached yet.
+
+"Clean parse" here means exactly one thing: the parser read the file end to end without recording an error. It does not mean the resulting AST is semantically perfect, and it does not mean every downstream LSP feature behaves correctly on that file. It means the foundation is solid enough that the rest of the stack has something to work with.
 
 The corpus is not a metric we report. It is a gate that every change must pass.
 
@@ -128,7 +130,7 @@ The corpus is not a metric we report. It is a gate that every change must pass.
 
 ## What's Next
 
-v0.13.0 ships with 95.3% corpus coverage, meeting the milestone target. The remaining fixable buckets are harder — complex expression nesting, postfix operator chains, ternary operator edge cases in deeply nested contexts — but they are bounded and well-characterized. v0.14.0 targets 98% or higher.
+v0.13.0 ships with a 95.3% file-level clean parse rate on the CPAN top-1000 corpus, meeting the milestone target. The remaining fixable buckets are harder — complex expression nesting, postfix operator chains, ternary operator edge cases in deeply nested contexts — but they are bounded and well-characterized. v0.14.0 targets 98% or higher on the same file-level metric.
 
 Beyond corpus coverage, three feature areas are in active development:
 
@@ -154,4 +156,4 @@ Perl has a 35-year track record of doing what it was designed to do well. The la
 
 ---
 
-*Feature count (102 total: 87 LSP + 10 DAP + 5 extension) verified against `features.toml`. Corpus rate (95.3%, 8931/9372) reflects the ratcheted CI baseline as of April 2026. Install counts sourced from the VSCode Marketplace. All competitive analysis sourced from `docs/articles/COMPETITIVE_ANALYSIS.md`.*
+*What the numbers measure. The 116 capability count (87 LSP + 24 DAP + 5 perl-lsp extensions) is verified against `features.toml` and means every catalogued capability has a wired-up implementation. The earlier 102 figure circulated briefly as a draft number until PR #4107's DAP catalog audit surfaced 14 uncatalogued handlers already implemented in `dispatch.rs`. The count does not measure per-capability correctness, edge-case completeness, or subjective UX quality. The 95.3% figure (8,931/9,372) is a file-level clean parse rate on the CPAN top-1000 corpus, reflecting the ratcheted CI baseline as of April 2026 — the share of files the parser processes without recording errors, not a measure of semantic AST fidelity, cross-file analysis, or any LSP-level correctness. End-to-end LSP correctness is not currently captured by any single automated metric; it is tracked through targeted test suites per capability. Install counts sourced from the VSCode Marketplace. All competitive analysis sourced from `docs/articles/COMPETITIVE_ANALYSIS.md`.*

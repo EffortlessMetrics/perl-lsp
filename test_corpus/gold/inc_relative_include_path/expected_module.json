@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "fixture": "inc_relative_include_path",
+  "resolution_mode": "relative_include_path",
+  "assertions": [
+    {
+      "kind": "resolves",
+      "module": "GreetModule",
+      "expected_suffix": "lib/GreetModule.pm",
+      "use_line": 2,
+      "use_col": 4,
+      "consumers": ["diagnostic_no_pl701", "goto_definition", "hover"],
+      "rationale": "workspace-relative includePath=['lib'] resolves GreetModule via all three consumers"
+    }
+  ]
+}

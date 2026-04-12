@@ -14,6 +14,7 @@
 use super::super::*;
 use crate::protocol::{invalid_params, req_position, req_uri};
 use crate::state::{code_lens_cap, code_lens_resolve_deadline, inlay_hints_cap};
+use perl_module_import::resolve_known_export_tag;
 use perl_source_file::is_perl_source_uri;
 use std::borrow::Cow;
 use std::sync::OnceLock;
@@ -1128,6 +1129,132 @@ impl LspServer {
     fn find_import_source(&self, ast: &crate::ast::Node, symbol_name: &str) -> Option<String> {
         use perl_parser::ast::NodeKind;
 
+        fn require_module_name(node: &crate::ast::Node) -> Option<String> {
+            let args = match &node.kind {
+                NodeKind::FunctionCall { name, args } if name == "require" => args,
+                _ => return None,
+            };
+            let arg = args.first()?;
+            match &arg.kind {
+                NodeKind::Identifier { name } => Some(name.clone()),
+                NodeKind::String { value, .. } => {
+                    let cleaned = value.trim_matches('\'').trim_matches('"').trim();
+                    Some(cleaned.trim_end_matches(".pm").replace('/', "::"))
+                }
+                _ => None,
+            }
+        }
+
+        fn module_runtime_alias(expr: &crate::ast::Node) -> Option<(String, String)> {
+            let (alias_name, call_node) = match &expr.kind {
+                NodeKind::Assignment { lhs, rhs, op } if op == "=" => {
+                    let NodeKind::Variable { name, .. } = &lhs.kind else {
+                        return None;
+                    };
+                    (name.as_str(), rhs.as_ref())
+                }
+                NodeKind::VariableDeclaration { variable, initializer: Some(rhs), .. } => {
+                    let NodeKind::Variable { name, .. } = &variable.kind else {
+                        return None;
+                    };
+                    (name.as_str(), rhs.as_ref())
+                }
+                _ => return None,
+            };
+            let NodeKind::FunctionCall { name, args } = &call_node.kind else {
+                return None;
+            };
+            if !matches!(
+                name.as_str(),
+                "use_module"
+                    | "require_module"
+                    | "Module::Runtime::use_module"
+                    | "Module::Runtime::require_module"
+            ) {
+                return None;
+            }
+            let first = args.first()?;
+            let NodeKind::String { value, .. } = &first.kind else {
+                return None;
+            };
+            let module = value.trim_matches('\'').trim_matches('"').trim();
+            if module.is_empty() {
+                return None;
+            }
+            Some((alias_name.to_string(), module.to_string()))
+        }
+
+        fn arg_matches_symbol(module: &str, arg: &crate::ast::Node, symbol: &str) -> bool {
+            match &arg.kind {
+                NodeKind::String { value, .. } => {
+                    let bare = value.trim_matches('\'').trim_matches('"').trim();
+                    bare == symbol
+                        || (bare.starts_with(':')
+                            && resolve_known_export_tag(module, bare)
+                                .is_some_and(|expanded| expanded.contains(&symbol)))
+                }
+                NodeKind::Identifier { name } => {
+                    if name == symbol {
+                        return true;
+                    }
+                    if name.starts_with("qw") {
+                        let content = name
+                            .trim_start_matches("qw")
+                            .trim_start_matches(|c: char| "([{/<|!".contains(c))
+                            .trim_end_matches(|c: char| ")]}/|!>".contains(c));
+                        return content.split_whitespace().any(|word| {
+                            word == symbol
+                                || (word.starts_with(':')
+                                    && resolve_known_export_tag(module, word)
+                                        .is_some_and(|expanded| expanded.contains(&symbol)))
+                        });
+                    }
+                    false
+                }
+                NodeKind::ArrayLiteral { elements } => {
+                    elements.iter().any(|el| arg_matches_symbol(module, el, symbol))
+                }
+                _ => false,
+            }
+        }
+
+        fn import_call_exports(
+            expr: &crate::ast::Node,
+            module: &str,
+            symbol: &str,
+            aliases: &std::collections::HashMap<String, String>,
+        ) -> bool {
+            let NodeKind::MethodCall { object, method, args } = &expr.kind else {
+                return false;
+            };
+            if method != "import" {
+                return false;
+            }
+            let object_name = match &object.kind {
+                NodeKind::Identifier { name } => Some(name.as_str()),
+                NodeKind::Variable { name, .. } => aliases.get(name).map(String::as_str),
+                _ => return false,
+            };
+            let Some(object_name) = object_name else {
+                return false;
+            };
+            if object_name != module {
+                return false;
+            }
+            if args.is_empty() {
+                return true;
+            }
+            args.iter().any(|arg| arg_matches_symbol(module, arg, symbol))
+        }
+
+        fn inner_expr(node: &crate::ast::Node) -> &crate::ast::Node {
+            if let NodeKind::ExpressionStatement { expression } = &node.kind {
+                expression.as_ref()
+            } else {
+                node
+            }
+        }
+
         fn find(node: &crate::ast::Node, name: &str) -> Option<String> {
             match &node.kind {
                 NodeKind::Use { module, args, .. } => {
@@ -1141,13 +1268,48 @@ impl LspServer {
                                 .trim_start_matches("qw")
                                 .trim_start_matches(|c: char| "([{/<|!".contains(c))
                                 .trim_end_matches(|c: char| ")]}/|!>".contains(c));
-                            if content.split_whitespace().any(|w| w == name) {
-                                return Some(module.clone());
+                            for word in content.split_whitespace() {
+                                if word == name {
+                                    return Some(module.clone());
+                                }
+                                if word.starts_with(':')
+                                    && let Some(expanded) = resolve_known_export_tag(module, word)
+                                    && expanded.contains(&name)
+                                {
+                                    return Some(module.clone());
+                                }
                             }
+                        } else if arg.starts_with(':')
+                            && let Some(expanded) = resolve_known_export_tag(module, arg)
+                            && expanded.contains(&name)
+                        {
+                            return Some(module.clone());
                         }
                     }
                 }
                 NodeKind::Program { statements } | NodeKind::Block { statements } => {
+                    let mut required_modules: Vec<String> = statements
+                        .iter()
+                        .filter_map(|stmt| require_module_name(inner_expr(stmt)))
+                        .collect();
+                    let mut aliases: std::collections::HashMap<String, String> =
+                        std::collections::HashMap::new();
+                    for stmt in statements {
+                        if let Some((alias, module)) = module_runtime_alias(inner_expr(stmt)) {
+                            aliases.insert(alias, module.clone());
+                            if !required_modules.contains(&module) {
+                                required_modules.push(module);
+                            }
+                        }
+                    }
+                    for stmt in statements {
+                        let expr = inner_expr(stmt);
+                        for module in &required_modules {
+                            if import_call_exports(expr, module, name, &aliases) {
+                                return Some(module.clone());
+                            }
+                        }
+                    }
                     for stmt in statements {
                         if let Some(src) = find(stmt, name) {
                             return Some(src);
@@ -1450,8 +1612,8 @@ impl LspServer {
             // Add workspace folders (deduplicate against already added paths)
             {
                 let folders = self.workspace_folders.lock();
-                for uri in folders.iter() {
-                    if let Ok(parsed) = url::Url::parse(uri) {
+                for folder in folders.iter() {
+                    if let Ok(parsed) = url::Url::parse(&folder.uri) {
                         if let Ok(path) = parsed.to_file_path() {
                             if !workspace_roots.contains(&path) {
                                 workspace_roots.push(path);
@@ -1548,11 +1710,17 @@ impl LspServer {
                             data: Some(json!({"file": file_path})),
                         })?;
 
+                    // Strip \\?\ extended-length prefix so perl.exe can accept the path.
+                    // resolve_debug_file_path calls canonicalize() which on Windows returns
+                    // paths with the \\?\ prefix that external programs cannot handle.
+                    let ext_resolved =
+                        crate::execute_command::normalize_path_for_external_command(&resolved);
+
                     // Launch perl -d as a detached child process
                     match std::process::Command::new("perl")
                         .arg("-d")
                         .arg("--")
-                        .arg(&resolved)
+                        .arg(&ext_resolved)
                         .stdin(std::process::Stdio::null())
                         .stdout(std::process::Stdio::null())
                         .stderr(std::process::Stdio::null())
@@ -1676,8 +1844,8 @@ impl LspServer {
 
         {
             let folders = self.workspace_folders.lock();
-            for uri in folders.iter() {
-                if let Ok(parsed) = url::Url::parse(uri) {
+            for folder in folders.iter() {
+                if let Ok(parsed) = url::Url::parse(&folder.uri) {
                     if !results.contains(&parsed) {
                         results.push(parsed);
                     }
@@ -1827,6 +1995,63 @@ mod tests {
             caps.inlay_hint_resolve_support.is_none(),
             "inlay_hint_resolve_support must remain None when client sends no resolveSupport"
         );
+    }
+
+    #[test]
+    fn find_import_source_supports_require_manual_import() -> Result<(), Box<dyn std::error::Error>>
+    {
+        use crate::Parser;
+        let server =
+            LspServer::with_io(Box::new(Cursor::new(Vec::<u8>::new())), Box::new(Vec::<u8>::new()));
+        let source = "require List::Util;\nList::Util->import('sum');\nmy $x = sum();\n";
+        let mut parser = Parser::new(source);
+        let ast = parser.parse()?;
+
+        let source_module = server.find_import_source(&ast, "sum");
+        assert_eq!(
+            source_module.as_deref(),
+            Some("List::Util"),
+            "sum should resolve through require+manual import"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn find_import_source_supports_require_default_import() -> Result<(), Box<dyn std::error::Error>>
+    {
+        use crate::Parser;
+        let server =
+            LspServer::with_io(Box::new(Cursor::new(Vec::<u8>::new())), Box::new(Vec::<u8>::new()));
+        let source = "require List::Util;\nList::Util->import();\nmy $x = sum();\n";
+        let mut parser = Parser::new(source);
+        let ast = parser.parse()?;
+
+        let source_module = server.find_import_source(&ast, "sum");
+        assert_eq!(
+            source_module.as_deref(),
+            Some("List::Util"),
+            "sum should resolve through require+default import (best-effort)"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn find_import_source_supports_module_runtime_alias() -> Result<(), Box<dyn std::error::Error>>
+    {
+        use crate::Parser;
+        let server =
+            LspServer::with_io(Box::new(Cursor::new(Vec::<u8>::new())), Box::new(Vec::<u8>::new()));
+        let source = "my $mod = use_module('Foo::Bar');\n$mod->import('baz');\nbaz();\n";
+        let mut parser = Parser::new(source);
+        let ast = parser.parse()?;
+
+        let source_module = server.find_import_source(&ast, "baz");
+        assert_eq!(
+            source_module.as_deref(),
+            Some("Foo::Bar"),
+            "baz should resolve through use_module+import alias"
+        );
+        Ok(())
     }
 
     #[test]

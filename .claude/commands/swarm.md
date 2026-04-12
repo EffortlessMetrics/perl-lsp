@@ -106,6 +106,9 @@ For issues labeled `needs-plan-review` or `research-verified`:
 ```
 Agent(subagent_type: "plan-reviewer", prompt: "Review issue #NNN. Follow your todo list.", name: "plan-review-NNN")
 ```
+Keep the `plan-review-NNN` naming shape stable. The stop hook uses that
+canonical agent name as a fallback issue binding when `ISSUE_NUMBER` or
+`issue_number` are not provided explicitly.
 
 ### Building (implement)
 For issues labeled `builder-ready`:
@@ -152,7 +155,7 @@ Labels are the authoritative state of every issue and PR. Agents write labels; t
 | `merge-ready` | reviewer (/pr-ready) | ops agent | Ready for merge pickup |
 | `structural-blocker` | any agent | orchestrator | Blocks parallel work |
 | `needs-deep-review` | reviewer (/reviewer-decide) | orchestrator | Standards review done, awaiting deep correctness review |
-| `reviewed-deep` | reviewer-deep (/reviewer-deep-decide) | pr-ready, ops | Deep correctness review complete |
+| `reviewed-deep` | reviewer-deep (/reviewer-deep-decide) | pr-ready, ops | Deep correctness review complete — required for non-docs PRs |
 | `follow-up-recommended` | wisdom or reviewer | orchestrator | Related follow-up issue needed |
 | `already-fixed` | plan-reviewer or scout | orchestrator | Close without build |
 

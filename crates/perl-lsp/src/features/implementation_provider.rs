@@ -227,21 +227,6 @@ impl ImplementationProvider {
         );
     }
 
-    /// Find packages that inherit from base_package in AST (legacy, returns LocationLink only)
-    #[cfg_attr(not(test), allow(dead_code))]
-    fn find_inheriting_packages(
-        &self,
-        node: &Node,
-        base_package: &str,
-        uri: &str,
-        source: &str,
-        results: &mut Vec<LocationLink>,
-    ) {
-        let mut named_results = Vec::new();
-        self.find_inheriting_packages_named(node, base_package, uri, source, &mut named_results);
-        results.extend(named_results.into_iter().map(|(_, link)| link));
-    }
-
     fn find_inheriting_packages_recursive(
         &self,
         node: &Node,

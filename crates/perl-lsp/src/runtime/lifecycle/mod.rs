@@ -47,7 +47,7 @@
 //! 4. Exit code 0 if shutdown was received, 1 otherwise
 
 mod capabilities;
-mod module_resolution;
+pub mod module_resolution;
 mod tools;
 mod watchers;
 mod workspace;
@@ -60,6 +60,12 @@ impl LspServer {
     ///
     /// Also transitions the index coordinator to Ready state if there are no
     /// workspace folders to scan (i.e., ready for single-file operation).
+    ///
+    /// When workspace folders exist but the index has not yet accumulated any
+    /// symbols (Building state), emits a `window/logMessage` so the user can
+    /// see in the Output panel that indexing is underway.  This explains why
+    /// workspace-wide features (go-to-definition, workspace/symbol, rename)
+    /// are temporarily degraded.
     pub(super) fn send_index_ready_notification(&self) -> io::Result<()> {
         #[cfg(feature = "workspace")]
         let (has_symbols, file_count, symbol_count) = {
@@ -92,13 +98,24 @@ impl LspServer {
                     "Index coordinator transitioned to Ready"
                 );
             } else {
-                // Workspace folders exist but no symbols indexed yet
+                // Workspace folders exist but no symbols indexed yet.
                 // Stay in Building state - files will be indexed as they're opened
-                // or when file watcher events are received
+                // or when file watcher events are received.
                 tracing::debug!(
                     workspace_folders = folders.len(),
                     "Index coordinator remaining in Building state, awaiting files"
                 );
+
+                // Notify the user so they understand why workspace features are
+                // temporarily degraded.  window/logMessage (Info=3) is non-intrusive
+                // — it appears in the Output panel without a popup dialog.
+                // Sent exactly once per Building transition (no per-file spam).
+                let msg = "Perl Language Server: Indexing workspace files. \
+                           Go-to-definition, completion, and workspace search will be \
+                           available when indexing completes.";
+                if let Err(e) = self.log_message(super::window::MessageType::Info, msg) {
+                    tracing::warn!(error = %e, "Failed to send index building log message");
+                }
             }
         }
 

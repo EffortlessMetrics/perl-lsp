@@ -1,0 +1,74 @@
+---
+source: crates/perl-lsp/tests/lsp_pull_diagnostics_snapshot_test.rs
+expression: report
+---
+items:
+  - code: PL102
+    data:
+      category: StrictWarnings
+      code: PL102
+      fixable: true
+      tags:
+        - Unnecessary
+    message: "Variable '$x' is declared but never used -- prefix with '_' or remove it\nSuggestion: Prefix as '_x'"
+    range:
+      end:
+        character: 5
+        line: 4
+      start:
+        character: 3
+        line: 4
+    relatedInformation:
+      - location:
+          range:
+            end:
+              character: 5
+              line: 4
+            start:
+              character: 3
+              line: 4
+          uri: "file:///snapshot-full.pl"
+        message: "💡 Remove the unused variable or prefix with '_' to indicate it's intentionally unused"
+    severity: 2
+    source: perl-lsp
+    tags:
+      - 1
+  - code: PL103
+    data:
+      category: StrictWarnings
+      code: PL103
+      fixable: true
+      tags: []
+    message: "Variable '$y' is used but not declared -- add 'my $y' to declare it in this scope\nSuggestion: Add 'my $y;' before this line"
+    range:
+      end:
+        character: 8
+        line: 5
+      start:
+        character: 6
+        line: 5
+    relatedInformation:
+      - location:
+          range:
+            end:
+              character: 8
+              line: 5
+            start:
+              character: 6
+              line: 5
+          uri: "file:///snapshot-full.pl"
+        message: "💡 Declare the variable with 'my', 'our', 'local', or 'state'"
+      - location:
+          range:
+            end:
+              character: 8
+              line: 5
+            start:
+              character: 6
+              line: 5
+          uri: "file:///snapshot-full.pl"
+        message: "ℹ️ Under 'use strict', all variables must be declared before use. Use 'my' for lexical scope or 'our' for package variables."
+    severity: 1
+    source: perl-lsp
+kind: full
+resultId: "<stable-result-id>"

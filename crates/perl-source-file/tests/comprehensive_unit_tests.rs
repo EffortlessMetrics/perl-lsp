@@ -11,16 +11,16 @@ use perl_source_file::{
 // ---------------------------------------------------------------------------
 
 #[test]
-fn extensions_constant_has_exactly_four_entries() -> Result<(), String> {
-    if PERL_SOURCE_EXTENSIONS.len() != 4 {
-        return Err(format!("expected 4 extensions, got {}", PERL_SOURCE_EXTENSIONS.len()));
+fn extensions_constant_has_exactly_nine_entries() -> Result<(), String> {
+    if PERL_SOURCE_EXTENSIONS.len() != 9 {
+        return Err(format!("expected 9 extensions, got {}", PERL_SOURCE_EXTENSIONS.len()));
     }
     Ok(())
 }
 
 #[test]
 fn extensions_constant_contains_expected_values() -> Result<(), String> {
-    let expected = ["pl", "pm", "t", "psgi"];
+    let expected = ["pl", "pm", "t", "psgi", "cgi", "ep", "tt", "tt2", "mason"];
     if PERL_SOURCE_EXTENSIONS != expected {
         return Err(format!("expected {expected:?}, got {:?}", PERL_SOURCE_EXTENSIONS));
     }

@@ -518,6 +518,7 @@ fn clone_preserves_all_fields() -> Result<(), Box<dyn std::error::Error>> {
         completion_deadline: Duration::from_millis(500),
         return_partial_on_timeout: true,
         include_open_docs_when_degraded: false,
+        memory_budget: perl_lsp_limits::MemoryBudget::default(),
     };
 
     let cloned = original.clone();

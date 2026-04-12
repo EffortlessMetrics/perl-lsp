@@ -609,6 +609,24 @@ fn test_version_pragma_suppresses_missing_strict_warnings() -> Result<(), Box<dy
     Ok(())
 }
 
+#[test]
+fn test_v5_36_suppresses_missing_strict_warnings() -> Result<(), Box<dyn std::error::Error>> {
+    // use v5.36 enables both strict and warnings via the Perl feature bundle.
+    // Neither PL100 (missing-strict) nor PL101 (missing-warnings) should fire.
+    let source = "use v5.36;\nmy $x = 1;\n";
+    let diags = diagnostics_for(source);
+    let lint_diags: Vec<_> = diags
+        .iter()
+        .filter(|d| matches!(d.code.as_deref(), Some("PL100") | Some("PL101")))
+        .collect();
+
+    assert!(
+        lint_diags.is_empty(),
+        "use v5.36 should suppress missing strict/warnings diagnostics: {lint_diags:?}"
+    );
+    Ok(())
+}
+
 // =========================================================================
 // 6. Suggestion field populated for actionable diagnostics
 // =========================================================================

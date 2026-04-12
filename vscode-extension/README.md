@@ -1,13 +1,15 @@
 # Perl Language Server
 
-[![Visual Studio Marketplace](https://img.shields.io/visual-studio-marketplace/v/EffortlessMetrics.perl-lsp-rs?label=VS%20Marketplace)](https://marketplace.visualstudio.com/items?itemName=EffortlessMetrics.perl-lsp-rs)
-[![Visual Studio Marketplace Downloads](https://img.shields.io/visual-studio-marketplace/d/EffortlessMetrics.perl-lsp-rs)](https://marketplace.visualstudio.com/items?itemName=EffortlessMetrics.perl-lsp-rs)
+[![Visual Studio Marketplace](https://img.shields.io/badge/VS%20Marketplace-live%20listing-0078D4)](https://marketplace.visualstudio.com/items?itemName=EffortlessMetrics.perl-lsp-rs)
+[![VS Marketplace Installs (manual)](https://img.shields.io/badge/VS%20Marketplace-180%20installs-0078D4)](https://marketplace.visualstudio.com/items?itemName=EffortlessMetrics.perl-lsp-rs)
 [![Open VSX Version](https://img.shields.io/open-vsx/v/EffortlessMetrics/perl-lsp-rs?label=Open%20VSX)](https://open-vsx.org/extension/EffortlessMetrics/perl-lsp-rs)
 [![Open VSX Downloads](https://img.shields.io/open-vsx/dt/EffortlessMetrics/perl-lsp-rs?label=Open%20VSX%20downloads)](https://open-vsx.org/extension/EffortlessMetrics/perl-lsp-rs)
 
+> VS Marketplace installs are manually maintained (last checked: 2026-04-12) because Shields deprecated Visual Studio Marketplace badge support.
+
 A fast, native Perl 5 language server extension. Written in Rust for speed and reliability. No runtime dependencies -- just install and code.
 
-> **0.12.2 Public Alpha** -- This extension is under active development. Please [report issues](https://github.com/EffortlessMetrics/perl-lsp/issues/new/choose) if you encounter problems.
+> **0.12.3 Public Alpha** -- This extension is under active development. Every feature listed below is wired up and exercised by tests, but as an alpha you will find edge cases where behavior is incomplete or wrong. Please [report issues](https://github.com/EffortlessMetrics/perl-lsp/issues/new/choose) if you encounter problems. For what the project's headline numbers mean (and do not mean), see the [status overview](https://github.com/EffortlessMetrics/perl-lsp/blob/master/docs/project/status/index.md).
 
 ## Features
 
@@ -46,21 +48,32 @@ A fast, native Perl 5 language server extension. Written in Rust for speed and r
 - **Variable Inspection** -- View variables, watch expressions, and call stack
 - **Attach to Process** -- Debug running Perl processes by PID or TCP
 
+Debugging is optional and uses `perl-dap` as a separate adapter. See the
+[debugging guide](../docs/tutorials/DAP_USER_GUIDE.md) for setup steps and
+the required launch configuration.
+
 ### Test Explorer
 - **Test Discovery** -- Automatic discovery of `.t` test files
 - **Run Tests** -- Run individual tests or entire files from the Testing panel (`Shift+Alt+T`)
 - **TAP Support** -- Native Test Anything Protocol result parsing
 
-### Walkthrough Previews
+### Extension Coexistence
 
-These storyboard SVGs are preview assets for the walkthrough flow. They are not
-the final recorded GIFs.
+If VS Code warns that other Perl extensions are installed, keep one provider
+for navigation, diagnostics, and formatting where possible. Perl Navigator,
+Perl::Critic, and PerlTidy can overlap with perl-lsp features. If you see
+duplicate hover, completion, or formatting results, disable the competing
+feature in one extension and keep the other as the source of truth.
 
-- [Install, auto-download, and health check storyboard](media/walkthrough/install-health.svg)
-- [Go to definition and find references storyboard](media/walkthrough/find-references.svg)
-- [Extract variable code action storyboard](media/walkthrough/extract-variable.svg)
+### Walkthrough Media
 
-See [media/walkthrough/README.md](media/walkthrough/README.md) for the capture plan, recommended render inputs, and GIF size checks.
+The extension includes a "Get Started" walkthrough in VS Code. Walkthrough
+media assets and recording notes live in:
+
+- [media/walkthrough/README.md](media/walkthrough/README.md)
+- [media/walkthrough/install-health.svg](media/walkthrough/install-health.svg)
+- [media/walkthrough/find-references.svg](media/walkthrough/find-references.svg)
+- [media/walkthrough/extract-variable.svg](media/walkthrough/extract-variable.svg)
 
 ## Installation
 
@@ -136,6 +149,8 @@ For environments without internet access, set `perl-lsp.downloadBaseUrl` to an i
 
 ## Keyboard Shortcuts
 
+Use `Ctrl+Shift+P` (Command Palette) and search "Perl" to see all available commands.
+
 | Action | Shortcut |
 |--------|----------|
 | Organize Imports | `Shift+Alt+O` |
@@ -161,6 +176,7 @@ For environments without internet access, set `perl-lsp.downloadBaseUrl` to an i
 - Smart match operator (`~~`)
 - Indirect object syntax
 - Built-in function signatures with parameter documentation
+- XS interface files (`.xs`) and SWIG interface files (`.i`) are associated with Perl for bundled syntax highlighting, including common SWIG directives and embedded C/C++ blocks
 
 ## Commands
 
@@ -206,11 +222,24 @@ The `perllsp` binary works with any editor that supports the Language Server Pro
 - Set `perl-lsp.enableDiagnostics` to `false` to disable
 - File an issue if you see false positives
 
+## Known Issues
+
+- Variable/watch rendering in debugger sessions is still evolving; complex Perl
+  structures may appear with placeholder values in some scenarios.
+- The `Format Document` shortcut (`Shift+Alt+F`) is provided by VS Code's
+  built-in formatter binding. perl-lsp participates through the registered
+  formatting provider when `perl-lsp.enableFormatting` is enabled.
+- On first activation, environments with strict proxies or blocked outbound
+  traffic may fail auto-download. Use `perl-lsp.serverPath` or
+  `perl-lsp.downloadBaseUrl` for managed/internal deployment.
+
 ## Resources
 
 - [Source Code](https://github.com/EffortlessMetrics/perl-lsp)
 - [Issue Tracker](https://github.com/EffortlessMetrics/perl-lsp/issues/new/choose)
 - [Changelog](https://github.com/EffortlessMetrics/perl-lsp/blob/master/vscode-extension/CHANGELOG.md)
+- [Open VSX Registry](https://open-vsx.org/extension/EffortlessMetrics/perl-lsp-rs) — alternative marketplace for VSCodium and other open-source VS Code derivatives
+- [Sponsor this project](https://github.com/EffortlessMetrics/perl-lsp) — support continued development
 
 ## License
 

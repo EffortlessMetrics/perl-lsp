@@ -72,6 +72,13 @@ impl LspServer {
                     .and_then(|b| b.as_bool())
                     .unwrap_or(false);
 
+                caps.workspace_configuration_support = params
+                    .get("capabilities")
+                    .and_then(|c| c.get("workspace"))
+                    .and_then(|w| w.get("configuration"))
+                    .and_then(|b| b.as_bool())
+                    .unwrap_or(false);
+
                 // Check if client supports snippet syntax in completion items
                 caps.snippet_support = params
                     .get("capabilities")
@@ -186,13 +193,23 @@ impl LspServer {
                 let mut folders = self.workspace_folders.lock();
                 for uri in extract_workspace_folder_uris(workspace_folders) {
                     tracing::debug!(uri, "Initialized with workspace folder");
-                    folders.push(uri);
+                    let mut folder =
+                        super::super::workspace_folder::WorkspaceFolderState::new(uri.clone());
+                    if let Some(path) = super::super::source_path_from_uri(&uri) {
+                        folder = folder.with_path(path);
+                    }
+                    folders.push(folder);
                 }
             } else if let Some(root_uri) = params.get("rootUri").and_then(|u| u.as_str()) {
                 // Fallback to rootUri if workspaceFolders is not provided
                 let mut folders = self.workspace_folders.lock();
                 tracing::debug!(root_uri, "Initialized with root URI");
-                folders.push(root_uri.to_string());
+                let mut folder =
+                    super::super::workspace_folder::WorkspaceFolderState::new(root_uri.to_string());
+                if let Some(path) = super::super::source_path_from_uri(root_uri) {
+                    folder = folder.with_path(path);
+                }
+                folders.push(folder);
                 // Also set the root path for module resolution
                 self.set_root_uri(root_uri);
             } else if let Some(root_path) = params.get("rootPath").and_then(|p| p.as_str()) {
@@ -200,13 +217,19 @@ impl LspServer {
                 tracing::debug!(root_path, "Initialized with legacy rootPath");
                 let root_uri = root_path_to_file_uri(root_path);
                 let mut folders = self.workspace_folders.lock();
-                folders.push(root_uri.clone());
+                folders.push(super::super::workspace_folder::WorkspaceFolderState::new(
+                    root_uri.clone(),
+                ));
                 self.set_root_uri(&root_uri);
             }
         }
 
         // Load .perl-lsp.toml from workspace root (base layer; LSP config overrides later)
         self.load_and_apply_project_config();
+
+        // Detect Perl interpreter and surface an actionable error if not found.
+        // Runs after config load so that perl-lsp.perl.path is already applied.
+        self.check_perl_interpreter();
 
         // Construct the AI inline-completion backend if enabled in config
         self.refresh_ai_backend();
@@ -381,7 +404,9 @@ pub(crate) fn apply_disabled_feature_id(
 #[cfg(test)]
 mod tests {
     use super::apply_disabled_feature_id;
+    use crate::LspServer;
     use crate::protocol::capabilities::BuildFlags;
+    use serde_json::json;
 
     #[test]
     fn apply_disabled_feature_id_zeros_correct_field() {
@@ -440,5 +465,21 @@ mod tests {
                  apply_disabled_feature_id — add one to keep the two in sync"
             );
         }
+    }
+
+    #[test]
+    fn initialize_parses_workspace_configuration_capability() {
+        let server = LspServer::new();
+        let params = json!({
+            "capabilities": {
+                "workspace": {
+                    "configuration": true
+                }
+            }
+        });
+
+        let _ = server.handle_initialize(Some(params));
+
+        assert!(server.client_capabilities.lock().workspace_configuration_support);
     }
 }

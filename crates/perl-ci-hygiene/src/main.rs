@@ -270,6 +270,7 @@ fn is_excluded_test_path(path: &Path) -> bool {
         value == OsStr::new("tests")
             || value == OsStr::new("benches")
             || value == OsStr::new("examples")
+            || value == OsStr::new("bin")
     }) {
         return true;
     }
@@ -476,12 +477,14 @@ fn command_status_strict(
 }
 
 fn command_exists(command: &str) -> bool {
-    Command::new("sh")
-        .arg("-c")
-        .arg(format!("command -v {command} >/dev/null 2>&1"))
-        .status()
-        .map(|status| status.success())
-        .unwrap_or(false)
+    // Replaces `sh -c "command -v ..."` which is Unix-only.
+    // On Windows, also probe for .exe / .cmd / .bat extensions.
+    #[cfg(windows)]
+    let suffixes: &[&str] = &[".exe", ".cmd", ".bat", ""];
+    #[cfg(not(windows))]
+    let suffixes: &[&str] = &[""];
+    env::split_paths(&env::var_os("PATH").unwrap_or_default())
+        .any(|dir| suffixes.iter().any(|ext| dir.join(format!("{command}{ext}")).exists()))
 }
 
 fn command_output_lines(output: &str) -> Vec<String> {
@@ -506,6 +509,8 @@ fn read_json_value(path: &Path) -> Result<Value> {
     Ok(value)
 }
 
+// Used only in the #[cfg(not(windows))] preflight block.
+#[cfg_attr(windows, allow(dead_code))]
 fn read_usize_from_path(path: &Path) -> Result<usize> {
     let raw = fs::read_to_string(path).with_context(|| format!("reading {:?}", path))?;
     raw.trim()
@@ -513,6 +518,8 @@ fn read_usize_from_path(path: &Path) -> Result<usize> {
         .map_err(|err| color_eyre::eyre::eyre!("invalid usize in {}: {err}", path.display()))
 }
 
+// Used only in the #[cfg(not(windows))] preflight block.
+#[cfg_attr(windows, allow(dead_code))]
 fn read_usize_from_tokens(path: &Path, idx: usize) -> Result<usize> {
     let raw = fs::read_to_string(path).with_context(|| format!("reading {:?}", path))?;
     let tokens: Vec<&str> = raw.split_whitespace().collect();
@@ -525,14 +532,16 @@ fn read_usize_from_tokens(path: &Path, idx: usize) -> Result<usize> {
         .map_err(|err| color_eyre::eyre::eyre!("invalid usize in {}: {err}", path.display()))
 }
 
+// On Windows, the concurrency-cap variables are set but not mutated
+// (no /proc-based auto-degradation on Windows). Allow unused_mut for
+// cross-platform compatibility.
+#[cfg_attr(windows, allow(unused_mut))]
 fn cmd_preflight(_repo_root: &Path) -> Result<i32> {
-    let pids_used =
-        command_with_output(Path::new("/"), "ps", &["-e", "--no-headers"], &[])?.lines().count();
-    let pid_max = read_usize_from_path(Path::new("/proc/sys/kernel/pid_max"))?;
-    let files_used = read_usize_from_tokens(Path::new("/proc/sys/fs/file-nr"), 1)?;
-    let files_max = read_usize_from_path(Path::new("/proc/sys/fs/file-max"))?;
-
-    println!("PIDs: {pids_used} / {pid_max} | Open files: {files_used} / {files_max}");
+    #[cfg(windows)]
+    println!(
+        "note: preflight system metrics not available on Windows; \
+         skipping /proc checks — see scripts/preflight.sh for Linux-only usage"
+    );
 
     let uv_threadpool_size = env::var("UV_THREADPOOL_SIZE").unwrap_or_else(|_| "4".to_string());
     let mut pw_workers = env::var("PW_WORKERS").unwrap_or_else(|_| "2".to_string());
@@ -555,24 +564,37 @@ fn cmd_preflight(_repo_root: &Path) -> Result<i32> {
         env::set_var("NUMEXPR_NUM_THREADS", &numexpr_num_threads);
     }
 
-    if pids_used > (pid_max * 85 / 100) {
-        pw_workers = "1".into();
-        rust_test_threads = "1".into();
-        omp_num_threads = "1".into();
-        openblas_num_threads = "1".into();
-        mkl_num_threads = "1".into();
-        numexpr_num_threads = "1".into();
+    // Auto-degrade concurrency when the system is under heavy load.
+    // This block reads /proc data; it is Linux-only.
+    #[cfg(not(windows))]
+    {
+        let pids_used = command_with_output(Path::new("/"), "ps", &["-e", "--no-headers"], &[])?
+            .lines()
+            .count();
+        let pid_max = read_usize_from_path(Path::new("/proc/sys/kernel/pid_max"))?;
+        let files_used = read_usize_from_tokens(Path::new("/proc/sys/fs/file-nr"), 1)?;
+        let files_max = read_usize_from_path(Path::new("/proc/sys/fs/file-max"))?;
+        println!("PIDs: {pids_used} / {pid_max} | Open files: {files_used} / {files_max}");
 
-        // SAFETY: This is a single-threaded CLI tool; no other threads are reading env vars.
-        unsafe {
-            env::set_var("PW_WORKERS", &pw_workers);
-            env::set_var("RUST_TEST_THREADS", &rust_test_threads);
-            env::set_var("OMP_NUM_THREADS", &omp_num_threads);
-            env::set_var("OPENBLAS_NUM_THREADS", &openblas_num_threads);
-            env::set_var("MKL_NUM_THREADS", &mkl_num_threads);
-            env::set_var("NUMEXPR_NUM_THREADS", &numexpr_num_threads);
+        if pids_used > (pid_max * 85 / 100) {
+            pw_workers = "1".into();
+            rust_test_threads = "1".into();
+            omp_num_threads = "1".into();
+            openblas_num_threads = "1".into();
+            mkl_num_threads = "1".into();
+            numexpr_num_threads = "1".into();
+
+            // SAFETY: This is a single-threaded CLI tool; no other threads are reading env vars.
+            unsafe {
+                env::set_var("PW_WORKERS", &pw_workers);
+                env::set_var("RUST_TEST_THREADS", &rust_test_threads);
+                env::set_var("OMP_NUM_THREADS", &omp_num_threads);
+                env::set_var("OPENBLAS_NUM_THREADS", &openblas_num_threads);
+                env::set_var("MKL_NUM_THREADS", &mkl_num_threads);
+                env::set_var("NUMEXPR_NUM_THREADS", &numexpr_num_threads);
+            }
+            println!("System hot → auto‑degraded workers (PW=1, RUST=1, *BLAS=1)");
         }
-        println!("System hot → auto‑degraded workers (PW=1, RUST=1, *BLAS=1)");
     }
 
     Ok(0)
@@ -603,41 +625,65 @@ fn cmd_e2e_gate(repo_root: &Path, cargo_args: &[String]) -> Result<i32> {
         vec!["test".to_string(), "--".to_string(), format!("--test-threads={rust_test_threads}")];
     args.extend_from_slice(cargo_args);
     let refs: Vec<&str> = args.iter().map(String::as_str).collect();
-    let lock_file = "/tmp/e2e-suite.lock";
 
-    if !command_exists("flock") {
-        println!("warning: flock not found; running E2E tests without external lock");
-        return command_status_strict(
+    // flock is a Linux/macOS utility and does not exist on Windows.
+    // Skip the lock entirely and run the tests directly on Windows.
+    #[cfg(windows)]
+    {
+        println!("note: flock not available on Windows; running E2E tests without lock");
+        command_status_strict(
             repo_root,
             "cargo",
             &refs,
             &[("RUST_TEST_THREADS", rust_test_threads.as_str())],
         )
-        .map(|_| 0);
+        .map(|_| 0)
     }
 
-    if command_status(repo_root, "flock", &["-n", lock_file, "true"], &[])? == 0 {
-        println!("E2E slot ready");
-        let direct_args =
+    #[cfg(not(windows))]
+    {
+        let lock_file_path = std::env::temp_dir().join("e2e-suite.lock");
+        let lock_file_str = lock_file_path
+            .to_str()
+            .ok_or_else(|| color_eyre::eyre::eyre!("temp dir path is not valid UTF-8"))?
+            .to_owned();
+        let lock_file = lock_file_str.as_str();
+
+        if !command_exists("flock") {
+            println!("warning: flock not found; running E2E tests without external lock");
+            return command_status_strict(
+                repo_root,
+                "cargo",
+                &refs,
+                &[("RUST_TEST_THREADS", rust_test_threads.as_str())],
+            )
+            .map(|_| 0);
+        }
+
+        if command_status(repo_root, "flock", &["-n", lock_file, "true"], &[])? == 0 {
+            println!("E2E slot ready");
+            let direct_args =
+                std::iter::once(lock_file).chain(refs.iter().copied()).collect::<Vec<_>>();
+            command_status_strict(
+                repo_root,
+                "flock",
+                &direct_args,
+                &[("RUST_TEST_THREADS", rust_test_threads.as_str())],
+            )?;
+            return Ok(0);
+        }
+
+        println!("E2E slot busy → waiting...");
+        let blocking_args =
             std::iter::once(lock_file).chain(refs.iter().copied()).collect::<Vec<_>>();
         command_status_strict(
             repo_root,
             "flock",
-            &direct_args,
+            &blocking_args,
             &[("RUST_TEST_THREADS", rust_test_threads.as_str())],
         )?;
-        return Ok(0);
+        Ok(0)
     }
-
-    println!("E2E slot busy → waiting...");
-    let blocking_args = std::iter::once(lock_file).chain(refs.iter().copied()).collect::<Vec<_>>();
-    command_status_strict(
-        repo_root,
-        "flock",
-        &blocking_args,
-        &[("RUST_TEST_THREADS", rust_test_threads.as_str())],
-    )?;
-    Ok(0)
 }
 
 fn cmd_test_e2e_capped(repo_root: &Path, cargo_args: &[String]) -> Result<i32> {
@@ -1466,17 +1512,28 @@ fn cmd_test_with_override(repo_root: &Path) -> Result<i32> {
 
 fn cmd_simple_lsp_test(repo_root: &Path) -> Result<i32> {
     println!("Testing Perl LSP server...");
-    let shell_script = r#"cat <<'EOF' | cargo run -p perl-parser --bin perl-lsp 2>&1 | head -20
+    #[cfg(windows)]
+    {
+        let _ = repo_root;
+        println!(
+            "note: simple-lsp-test uses a POSIX shell pipeline and is not supported on Windows"
+        );
+        Ok(0)
+    }
+    #[cfg(not(windows))]
+    {
+        let shell_script = r#"cat <<'EOF' | cargo run -p perl-parser --bin perl-lsp 2>&1 | head -20
 Content-Length: 205
 
 {"jsonrpc":"2.0","id":1,"method":"initialize","params":{"processId":123,"rootUri":"file:///tmp","capabilities":{},"initializationOptions":{},"trace":"off","workspaceFolders":null}}
 EOF
 "#;
-    let output = command_with_output(repo_root, "sh", &["-c", shell_script], &[])?;
-    for line in output.lines().take(20) {
-        println!("{line}");
+        let output = command_with_output(repo_root, "sh", &["-c", shell_script], &[])?;
+        for line in output.lines().take(20) {
+            println!("{line}");
+        }
+        Ok(0)
     }
-    Ok(0)
 }
 
 fn cmd_check_version_sync(repo_root: &Path) -> Result<i32> {
@@ -1814,6 +1871,20 @@ if [ "$(git config --get core.bare 2>/dev/null || true)" = "true" ]; then
     fi
 fi
 
+# --- Self-heal stale hook installation (issue #4220) ---
+# When hooks/pre-push is updated in master, .git/hooks/pre-push is only
+# updated when install-githooks is re-run. Auto-copy when drift is detected.
+# Note: exec "$0" "$@" does NOT work here — git stdin is already consumed
+# before the hook executes. Copy and continue; the fresh hook takes effect
+# on the next push.
+REPO_ROOT_FOR_HOOK="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+if [ -n "$REPO_ROOT_FOR_HOOK" ] && [ -f "$REPO_ROOT_FOR_HOOK/hooks/pre-push" ]; then
+    if ! diff -q "$0" "$REPO_ROOT_FOR_HOOK/hooks/pre-push" >/dev/null 2>&1; then
+        echo "pre-push hook updated from hooks/pre-push (was stale — takes effect next push)"
+        cp "$REPO_ROOT_FOR_HOOK/hooks/pre-push" "$0" && chmod +x "$0" || true
+    fi
+fi
+
 # stdin provides: <local ref> <local sha> <remote ref> <remote sha>
 # Git sends all-zero SHA for deletions. Read all refs into an array first
 # so stdin is available for both the delete-check and the test-file scan.
@@ -1841,12 +1912,17 @@ fi
 # A push is doc-only if every changed file matches one of:
 #   *.md, *.txt, LICENSE*, CHANGELOG*, docs/**, .github/ISSUE_TEMPLATE/**,
 #   or */LICENSE* (crate-subdir license files, e.g. crates/*/LICENSE-APACHE)
-# Doc-only pushes run a lighter gate (fmt check only) instead of the full
-# ci-gate, since the test suite is pointless for prose-only changes.
+# Doc-only pushes skip code gates entirely instead of running the full
+# ci-gate, since the test suite and workspace-wide rustfmt check are
+# pointless for prose-only changes and can fail spuriously on Windows (#4047).
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 DOC_ONLY=true
 TEST_FILES_CHANGED=false
 HAS_DIFFABLE_REF=false
+# Track unique crate names for the single-crate tier.
+# We use a newline-separated string rather than an array for POSIX compat.
+SINGLE_CRATE_NAMES=""
+SINGLE_CRATE_ALL_UNDER_CRATES=true
 for line in "${PUSH_REFS[@]+"${PUSH_REFS[@]}"}"; do
     read -r _local_ref local_sha _remote_ref remote_sha <<< "$line"
     # For new branches, compare against merge-base with origin/master
@@ -1864,6 +1940,23 @@ for line in "${PUSH_REFS[@]+"${PUSH_REFS[@]}"}"; do
                 ;;
             *)
                 DOC_ONLY=false
+                # Track whether this code file lives under crates/<name>/
+                case "$changed" in
+                    crates/*/*)
+                        # Extract the crate directory name: crates/<name>/...
+                        crate_name="${changed#crates/}"
+                        crate_name="${crate_name%%/*}"
+                        # Append to list if not already present
+                        if ! printf '%s\n' "$SINGLE_CRATE_NAMES" | grep -qxF "$crate_name" 2>/dev/null; then
+                            SINGLE_CRATE_NAMES="${SINGLE_CRATE_NAMES}${crate_name}
+"
+                        fi
+                        ;;
+                    *)
+                        # File is outside crates/ — can't be single-crate
+                        SINGLE_CRATE_ALL_UNDER_CRATES=false
+                        ;;
+                esac
                 ;;
         esac
     done <<< "$CHANGED_FILES"
@@ -1879,21 +1972,45 @@ if [ "$HAS_DIFFABLE_REF" != true ]; then
 fi
 
 if [ "$DOC_ONLY" = true ]; then
-    echo "📝 Doc-only push — running lighter gate (fmt check only)"
+    echo "📝 Doc-only push — skipping code gates"
     echo "   (Skip with: git push --no-verify)"
-    if command -v cargo &>/dev/null; then
-        if ! cargo fmt --all -- --check; then
-            echo ""
-            echo "❌ cargo fmt --check failed even on a doc-only push."
-            echo "   Run: cargo fmt --all"
-            exit 1
-        fi
-    fi
     echo "✅ Doc-only fast-path gate passed"
     exit 0
 fi
 
-echo "Running local gate before push: nix develop -c just ci-gate"
+# --- Single-crate proportional gate ---
+# If every code change is under a single crates/<name>/ directory, run a
+# targeted cargo fmt/clippy/test -p <name> instead of the full workspace gate.
+# Falls back to the full gate if classification is ambiguous.
+SINGLE_CRATE_COUNT="$(printf '%s' "$SINGLE_CRATE_NAMES" | grep -c . 2>/dev/null || echo 0)"
+if [ "$SINGLE_CRATE_ALL_UNDER_CRATES" = true ] && [ "$SINGLE_CRATE_COUNT" = "1" ]; then
+    SINGLE_CRATE_NAME="$(printf '%s' "$SINGLE_CRATE_NAMES" | tr -d '[:space:]')"
+    echo "Single-crate push (${SINGLE_CRATE_NAME}) — running targeted gate"
+    echo "   (Skip with: git push --no-verify)"
+    echo ""
+    run_single_crate_gate() {
+        cargo fmt -p "$SINGLE_CRATE_NAME" -- --check && \
+        cargo clippy -p "$SINGLE_CRATE_NAME" -- -D warnings && \
+        cargo test -p "$SINGLE_CRATE_NAME"
+    }
+    GATE_LOG="$(mktemp -t perl-lsp-prepush.XXXXXX.log 2>/dev/null || mktemp)"
+    trap 'rm -f "$GATE_LOG"' EXIT
+    set +e
+    run_single_crate_gate 2>&1 | tee "$GATE_LOG"
+    GATE_STATUS=${PIPESTATUS[0]}
+    set -e
+    if [ "$GATE_STATUS" -ne 0 ]; then
+        echo ""
+        echo "❌ Single-crate gate failed (exit $GATE_STATUS)"
+        echo "   See bypass policy at the top of .git/hooks/pre-push for when"
+        echo "   --no-verify is appropriate."
+        exit "$GATE_STATUS"
+    fi
+    echo "✅ Single-crate gate passed"
+    exit 0
+fi
+
+echo "Running local fast gate before push: nix develop -c just pr-fast"
 echo "   (Skip with: git push --no-verify)"
 echo ""
 
@@ -1920,9 +2037,9 @@ trap 'rm -f "$GATE_LOG"' EXIT
 
 run_gate() {
     if command -v nix &>/dev/null && [ -f flake.nix ]; then
-        nix develop -c just ci-gate
+        nix develop -c just pr-fast
     elif command -v just &>/dev/null; then
-        just ci-gate
+        just pr-fast
     else
         echo "⚠️  Neither 'nix develop' nor 'just' available, skipping pre-push gate"
         echo "   Install just: cargo install just"
@@ -1937,7 +2054,7 @@ set -e
 
 if [ "$GATE_STATUS" -ne 0 ]; then
     echo ""
-    echo "❌ ci-gate failed (exit $GATE_STATUS) — checking for known issues..."
+    echo "❌ pr-fast failed (exit $GATE_STATUS) — checking for known issues..."
     HINTED=false
     if grep -q 'ci-parser-features-check' "$GATE_LOG" 2>/dev/null && \
        grep -qE 'os error 5|Access is denied' "$GATE_LOG" 2>/dev/null; then
@@ -1953,6 +2070,14 @@ if [ "$GATE_STATUS" -ne 0 ]; then
     fi
     if grep -qE 'clippy::|warning: .*-> .*\.rs' "$GATE_LOG" 2>/dev/null; then
         echo "   • Clippy warnings — look for the error above and fix the warnings"
+        HINTED=true
+    fi
+    if grep -qE 'os error 206|filename.*too long|ERROR_FILENAME_EXCED' "$GATE_LOG" 2>/dev/null; then
+        echo "   • Windows MAX_PATH (os error 206) — paths exceed 260 chars"
+        echo "     Fix A: Enable long paths (requires admin terminal):"
+        echo "       reg add HKLM\SYSTEM\CurrentControlSet\Control\FileSystem /v LongPathsEnabled /t REG_DWORD /d 1 /f"
+        echo "     Fix B: bash scripts/install-githooks.sh  (stale hook may be the cause)"
+        echo "     See: docs/contributing/FIRST_PR.md"
         HINTED=true
     fi
     if [ "$HINTED" = false ]; then
@@ -1996,7 +2121,7 @@ fi
 
     println!("✅ Installed pre-commit and pre-push hooks");
     println!("   The pre-commit hook blocks known placeholder git identities");
-    println!("   The pre-push hook runs 'nix develop -c just ci-gate' before each push");
+    println!("   The pre-push hook runs 'nix develop -c just pr-fast' before each push");
     println!("   Skip with: git commit --no-verify / git push --no-verify");
     Ok(0)
 }
@@ -2963,6 +3088,7 @@ fn cmd_check_unwraps_prod(repo_root: &Path) -> Result<i32> {
     let mut panic_offenders = Vec::new();
 
     for path in walk_rust_source_files_for_ci_checks(repo_root)? {
+        let rel = display_path(repo_root, &path);
         let lines = read_lines(&path)?;
         let test_start = first_cfg_test_line_number(&path).unwrap_or(usize::MAX);
         for (index, line) in lines.iter().enumerate() {
@@ -2976,12 +3102,13 @@ fn cmd_check_unwraps_prod(repo_root: &Path) -> Result<i32> {
                     || line.contains("s.expect(")
                     || line.contains("self.context.expect("))
             {
-                unwrap_offenders
-                    .push(format!("{}:{line_no}:{line}", display_path(repo_root, &path)));
+                unwrap_offenders.push(format!("{rel}:{line_no}:{line}"));
             }
-            if panic_re.is_match(line) && !comment_re.is_match(line) {
-                panic_offenders
-                    .push(format!("{}:{line_no}:{line}", display_path(repo_root, &path)));
+            if panic_re.is_match(line)
+                && !comment_re.is_match(line)
+                && !is_allowlisted_prod_panic_hit(&rel, line)
+            {
+                panic_offenders.push(format!("{rel}:{line_no}:{line}"));
             }
         }
     }
@@ -3021,6 +3148,11 @@ fn cmd_check_unwraps_prod(repo_root: &Path) -> Result<i32> {
         return Ok(1);
     }
     Ok(0)
+}
+
+fn is_allowlisted_prod_panic_hit(rel_path: &str, line: &str) -> bool {
+    normalize_path_for_match(rel_path) == "crates/perl-heredoc-anti-patterns/src/lib.rs"
+        && line.contains("regex failed to compile")
 }
 
 fn cmd_quick_check(repo_root: &Path) -> Result<i32> {
@@ -4033,6 +4165,13 @@ mod tests {
     }
 
     #[test]
+    fn excluded_test_paths_skip_bin_directories() {
+        assert!(is_excluded_test_path(Path::new(
+            "crates/perl-workspace-index/src/bin/workspace_memory_profile.rs"
+        )));
+    }
+
+    #[test]
     fn allowlisted_exit_hit_matches_windows_and_unix_paths() {
         assert!(is_allowlisted_exit_hit(
             r"crates\perl-parser\src\bin\perl-parse.rs:127:std::process::exit(0);"
@@ -4043,6 +4182,50 @@ mod tests {
         assert!(!is_allowlisted_exit_hit(
             r#"crates\perl-ci-hygiene\src\main.rs:3196:println!("std::process::exit")"#
         ));
+    }
+
+    #[test]
+    fn allowlisted_prod_panic_hit_matches_heredoc_regex_initializers() {
+        assert!(is_allowlisted_prod_panic_hit(
+            "crates/perl-heredoc-anti-patterns/src/lib.rs",
+            r#"        Err(_) => unreachable!("FORMAT_PATTERN regex failed to compile"),"#
+        ));
+        assert!(is_allowlisted_prod_panic_hit(
+            r"crates\perl-heredoc-anti-patterns\src\lib.rs",
+            r#"        Err(_) => unreachable!("FORMAT_PATTERN regex failed to compile"),"#
+        ));
+        assert!(!is_allowlisted_prod_panic_hit(
+            "crates/perl-lsp-diagnostics/src/lints/ffi_checklib.rs",
+            r#"                        _ => unreachable!(),"#
+        ));
+    }
+
+    // Regression guard for issue #4245: is_allowlisted_prod_panic_hit() must pass
+    // all 7 unreachable!() calls in perl-heredoc-anti-patterns/src/lib.rs under
+    // both forward-slash and backslash path separators (Windows vs Unix).
+    #[test]
+    fn allowlisted_prod_panic_hit_all_seven_patterns_both_separators() {
+        let all_seven = [
+            r#"        Err(_) => unreachable!("FORMAT_PATTERN regex failed to compile"),"#,
+            r#"        Err(_) => unreachable!("BEGIN_BLOCK_PATTERN regex failed to compile"),"#,
+            r#"        Err(_) => unreachable!("DYNAMIC_DELIMITER_PATTERN regex failed to compile"),"#,
+            r#"        Err(_) => unreachable!("SOURCE_FILTER_PATTERN regex failed to compile"),"#,
+            r#"        Err(_) => unreachable!("REGEX_HEREDOC_PATTERN regex failed to compile"),"#,
+            r#"        Err(_) => unreachable!("EVAL_HEREDOC_PATTERN regex failed to compile"),"#,
+            r#"    Err(_) => unreachable!("TIE_PATTERN regex failed to compile"),"#,
+        ];
+        let forward = "crates/perl-heredoc-anti-patterns/src/lib.rs";
+        let backward = r"crates\perl-heredoc-anti-patterns\src\lib.rs";
+        for line in &all_seven {
+            assert!(
+                is_allowlisted_prod_panic_hit(forward, line),
+                "forward-slash path must allowlist: {line}"
+            );
+            assert!(
+                is_allowlisted_prod_panic_hit(backward, line),
+                "backslash path must allowlist: {line}"
+            );
+        }
     }
 
     #[test]
@@ -4083,7 +4266,7 @@ mod tests {
     }
 
     #[test]
-    fn pre_push_hook_skips_ci_gate_on_delete_only_push() {
+    fn pre_push_hook_skips_gate_on_delete_only_push() {
         let hook = pre_push_hook_script();
         // The hook must detect when all refs have a zero local SHA (deletion).
         assert!(
@@ -4098,10 +4281,10 @@ mod tests {
             hook.contains("Branch deletion"),
             "hook must print a message when skipping due to deletion"
         );
-        // Normal pushes (non-zero SHA) must still run the gate.
+        // Normal pushes (non-zero SHA) must still run the fast push gate.
         assert!(
-            hook.contains("just ci-gate"),
-            "hook must still invoke the CI gate for normal pushes"
+            hook.contains("just pr-fast"),
+            "hook must invoke the fast PR gate for normal pushes"
         );
     }
 
@@ -4158,6 +4341,12 @@ mod tests {
             after_doc.contains("exit 0"),
             "doc-only branch must exit 0 without invoking the full gate"
         );
+        let exit_idx = after_doc.find("exit 0").expect("doc-only branch must exit");
+        let doc_branch = &after_doc[..exit_idx];
+        assert!(
+            !doc_branch.contains("cargo fmt --all -- --check"),
+            "doc-only branch must not run workspace-wide rustfmt checks before exiting"
+        );
     }
 
     #[test]
@@ -4174,6 +4363,71 @@ mod tests {
     }
 
     #[test]
+    fn checked_in_pre_push_hook_matches_generated_hook() {
+        let checked_in = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/../../hooks/pre-push"))
+            .replace("\r\n", "\n");
+        let generated = pre_push_hook_script().replace("\r\n", "\n");
+
+        assert_eq!(
+            checked_in, generated,
+            "checked-in hooks/pre-push must stay in sync with the generated ci-hygiene hook"
+        );
+    }
+
+    #[test]
+    fn pre_push_hook_has_single_crate_tier() {
+        let hook = pre_push_hook_script();
+        // When all changed files are under crates/<name>/, run a targeted
+        // cargo fmt/clippy/test -p <name> instead of the workspace-wide
+        // just pr-fast.  This is the single-crate proportional tier.
+        assert!(
+            hook.contains("SINGLE_CRATE") || hook.contains("single_crate"),
+            "hook must detect single-crate diffs"
+        );
+        assert!(
+            hook.contains("cargo test -p"),
+            "hook must run targeted 'cargo test -p <crate>' for single-crate pushes"
+        );
+        assert!(
+            hook.contains("cargo clippy -p") || hook.contains("cargo clippy --package"),
+            "hook must run targeted clippy for single-crate pushes"
+        );
+        assert!(
+            hook.contains("cargo fmt -p") || hook.contains("cargo fmt --package"),
+            "hook must run targeted fmt for single-crate pushes"
+        );
+        // The single-crate path must announce itself so the contributor knows
+        // why the gate is faster than usual.
+        assert!(
+            hook.contains("Single-crate") || hook.contains("single-crate"),
+            "hook must announce when it picks the single-crate fast path"
+        );
+        // The single-crate path must exit before reaching just pr-fast
+        let single_idx = hook
+            .find("Single-crate")
+            .or_else(|| hook.find("single-crate"))
+            .expect("single-crate message must exist");
+        let after_single = &hook[single_idx..];
+        assert!(
+            after_single.contains("exit 0"),
+            "single-crate branch must exit 0 without invoking just pr-fast"
+        );
+    }
+
+    #[test]
+    fn pre_push_hook_single_crate_tier_falls_back_on_cross_crate() {
+        let hook = pre_push_hook_script();
+        // When files span multiple crates, we must NOT run the single-crate
+        // path — it must fall through to the full just pr-fast gate.
+        // The safest way to verify this is: the hook must still invoke
+        // just pr-fast for the cross-crate (default) case.
+        assert!(
+            hook.contains("just pr-fast"),
+            "hook must still invoke just pr-fast for cross-crate pushes"
+        );
+    }
+
+    #[test]
     fn pre_push_hook_explains_known_failure_modes() {
         let hook = pre_push_hook_script();
         // When the gate fails, the hook should hint at known issues so
@@ -4183,5 +4437,51 @@ mod tests {
             hook.contains("cargo xtask fmt") || hook.contains("cargo fmt"),
             "hook must suggest the fmt fix command on fmt failures"
         );
+    }
+
+    #[test]
+    fn pre_push_hook_has_stale_hook_self_heal() {
+        let hook = pre_push_hook_script();
+        // Issue #4220 — when hooks/pre-push is updated in master, the installed
+        // .git/hooks/pre-push is only updated when install-githooks is re-run.
+        // The hook must detect its own staleness and auto-copy the fresh version.
+        assert!(
+            hook.contains("REPO_ROOT_FOR_HOOK") && hook.contains("hooks/pre-push"),
+            "hook must self-heal stale installation (issue #4220)"
+        );
+    }
+
+    #[test]
+    fn pre_push_hook_has_os_error_206_hint() {
+        let hook = pre_push_hook_script();
+        // Issue #4220 — Windows MAX_PATH (os error 206) hint must appear in the
+        // gate-failure handler so contributors know how to fix it.
+        assert!(
+            hook.contains("os error 206") || hook.contains("LongPathsEnabled"),
+            "hook must hint at Windows MAX_PATH fix (issue #4220)"
+        );
+    }
+
+    #[test]
+    fn command_exists_finds_cargo() {
+        // cargo is always present in the test environment
+        assert!(command_exists("cargo"), "cargo should be found via PATH");
+    }
+
+    #[test]
+    fn command_exists_rejects_nonexistent() {
+        assert!(
+            !command_exists("__xyzzy_not_a_real_command_99__"),
+            "non-existent command must not be found"
+        );
+    }
+
+    #[test]
+    fn e2e_lock_file_path_is_portable() {
+        let lock = std::env::temp_dir().join("e2e-suite.lock");
+        let lock_str = lock.to_str().expect("temp dir must be valid UTF-8 in CI");
+        // On Linux CI this will be /tmp/e2e-suite.lock (acceptable)
+        // On Windows this will be C:\Users\...\AppData\Local\Temp\e2e-suite.lock
+        assert!(!lock_str.is_empty(), "lock file path must be non-empty");
     }
 }

@@ -104,16 +104,22 @@ mod sort;
 pub(crate) mod test_more;
 mod variables;
 mod workspace;
+mod xs_api;
 
 // Re-export public types
 pub use self::context::CompletionContext;
 pub use self::items::{CompletionItem, CompletionItemKind};
 pub use self::methods::get_dbi_method_documentation;
 pub use self::test_more::get_test_more_documentation;
+pub use self::xs_api::{add_xs_api_completions_for_prefix, get_xs_api_documentation, is_xs_source};
 
+use perl_module_import::resolve_known_export_tag;
 use perl_parser_core::ast::Node;
 use perl_parser_core::ast::NodeKind;
+use perl_semantic_analyzer::class_model::{ClassModel, ClassModelBuilder, Framework};
+use perl_semantic_analyzer::semantic::{BuiltinDoc, get_moose_type_documentation};
 use perl_semantic_analyzer::symbol::{SymbolExtractor, SymbolKind, SymbolTable};
+use perl_semantic_analyzer::type_inference::TypeInferenceEngine;
 use perl_workspace_index::workspace_index::WorkspaceIndex;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -126,9 +132,42 @@ use std::sync::Arc;
 /// - Entry with non-empty set: `use Module qw(a b)` — only those symbols are imported.
 type ImportMap = HashMap<String, HashSet<String>>;
 
+const MOOSE_TYPE_CANDIDATES: &[&str] = &[
+    "Any",
+    "Item",
+    "Undef",
+    "Defined",
+    "Value",
+    "Bool",
+    "Str",
+    "Num",
+    "Int",
+    "ClassName",
+    "RoleName",
+    "Ref",
+    "ScalarRef",
+    "ArrayRef",
+    "HashRef",
+    "CodeRef",
+    "RegexpRef",
+    "GlobRef",
+    "FileHandle",
+    "Object",
+    "Maybe",
+    "InstanceOf",
+    "ConsumerOf",
+    "HasMethods",
+    "Dict",
+    "Tuple",
+    "Map",
+    "Enum",
+];
+
 /// Completion provider
 pub struct CompletionProvider {
     symbol_table: SymbolTable,
+    class_models: Vec<ClassModel>,
+    type_engine: Option<TypeInferenceEngine>,
     workspace_index: Option<Arc<WorkspaceIndex>>,
     import_map: ImportMap,
 }
@@ -211,9 +250,15 @@ impl CompletionProvider {
         workspace_index: Option<Arc<WorkspaceIndex>>,
     ) -> Self {
         let symbol_table = SymbolExtractor::new_with_source(source).extract(ast);
+        let class_models = ClassModelBuilder::new().build(ast);
+        let type_engine = workspace_index.as_ref().map(|_| {
+            let mut type_engine = TypeInferenceEngine::new();
+            let _ = type_engine.infer(ast);
+            type_engine
+        });
         let import_map = Self::extract_import_map(ast);
 
-        CompletionProvider { symbol_table, workspace_index, import_map }
+        CompletionProvider { symbol_table, class_models, type_engine, workspace_index, import_map }
     }
 
     /// Walk the top-level AST and build an `ImportMap` from `use` statements.
@@ -222,6 +267,168 @@ impl CompletionProvider {
     /// `strict`, `warnings`, `feature`, `constant`, `utf8`, `lib`, `parent`, `base`).
     fn extract_import_map(ast: &Node) -> ImportMap {
         let mut map: ImportMap = HashMap::new();
+
+        fn collect_import_symbols(
+            module: &str,
+            arg: &str,
+            symbols: &mut HashSet<String>,
+        ) -> (bool, bool) {
+            let trimmed = arg.trim();
+            if trimmed.is_empty() {
+                return (false, false);
+            }
+            if matches!(trimmed, "=>" | "," | "(" | ")" | "[" | "]" | "{" | "}") {
+                return (false, false);
+            }
+
+            let mut content = trimmed;
+            if let Some(inner) = content.strip_prefix('[').and_then(|s| s.strip_suffix(']')) {
+                content = inner.trim();
+            }
+
+            if content.starts_with("qw") {
+                content = content
+                    .trim_start_matches("qw")
+                    .trim_start_matches(|c: char| "([{/<|!".contains(c))
+                    .trim_end_matches(|c: char| ")]}/|!>".contains(c))
+                    .trim();
+
+                let mut unresolved_tag = false;
+                for word in content.split_whitespace() {
+                    if word.is_empty() {
+                        continue;
+                    }
+                    if word.starts_with(':') {
+                        if let Some(expanded) = resolve_known_export_tag(module, word) {
+                            symbols.extend(expanded.iter().map(|name| (*name).to_string()));
+                        } else {
+                            unresolved_tag = true;
+                        }
+                    } else {
+                        symbols.insert(word.to_string());
+                    }
+                }
+                return (!content.is_empty(), unresolved_tag);
+            }
+
+            let cleaned = content.trim_matches(|c: char| c == '\'' || c == '"');
+            if cleaned.is_empty() {
+                return (false, false);
+            }
+
+            let mut unresolved_tag = false;
+            for word in cleaned.split_whitespace() {
+                if word.is_empty() {
+                    continue;
+                }
+                if word.starts_with(':') {
+                    if let Some(expanded) = resolve_known_export_tag(module, word) {
+                        symbols.extend(expanded.iter().map(|name| (*name).to_string()));
+                    } else {
+                        unresolved_tag = true;
+                    }
+                } else {
+                    symbols.insert(word.to_string());
+                }
+            }
+            (true, unresolved_tag)
+        }
+
+        fn collect_node_import_symbols(
+            module: &str,
+            arg: &Node,
+            symbols: &mut HashSet<String>,
+        ) -> (bool, bool) {
+            match &arg.kind {
+                NodeKind::String { value, .. } => collect_import_symbols(
+                    module,
+                    value.trim_matches('\'').trim_matches('"'),
+                    symbols,
+                ),
+                NodeKind::Identifier { name } => collect_import_symbols(module, name, symbols),
+                NodeKind::ArrayLiteral { elements } => {
+                    let mut has_symbols = false;
+                    let mut has_unresolved_tag = false;
+                    for element in elements {
+                        let (element_has_symbols, element_unresolved_tag) =
+                            collect_node_import_symbols(module, element, symbols);
+                        if element_has_symbols {
+                            has_symbols = true;
+                        }
+                        if element_unresolved_tag {
+                            has_unresolved_tag = true;
+                        }
+                    }
+                    (has_symbols, has_unresolved_tag)
+                }
+                _ => (false, false),
+            }
+        }
+
+        fn require_module_name(expr: &Node) -> Option<String> {
+            let NodeKind::FunctionCall { name, args } = &expr.kind else {
+                return None;
+            };
+            if name != "require" {
+                return None;
+            }
+            let first = args.first()?;
+            match &first.kind {
+                NodeKind::Identifier { name } => Some(name.clone()),
+                NodeKind::String { value, .. } => {
+                    let cleaned = value.trim_matches('\'').trim_matches('"').trim();
+                    Some(cleaned.trim_end_matches(".pm").replace('/', "::"))
+                }
+                _ => None,
+            }
+        }
+
+        fn module_runtime_alias(expr: &Node) -> Option<(String, String)> {
+            let (alias_name, call_node) = match &expr.kind {
+                NodeKind::Assignment { lhs, rhs, op } if op == "=" => {
+                    let NodeKind::Variable { name, .. } = &lhs.kind else {
+                        return None;
+                    };
+                    (name.as_str(), rhs.as_ref())
+                }
+                NodeKind::VariableDeclaration { variable, initializer: Some(rhs), .. } => {
+                    let NodeKind::Variable { name, .. } = &variable.kind else {
+                        return None;
+                    };
+                    (name.as_str(), rhs.as_ref())
+                }
+                _ => return None,
+            };
+            let NodeKind::FunctionCall { name, args } = &call_node.kind else {
+                return None;
+            };
+            if !matches!(
+                name.as_str(),
+                "use_module"
+                    | "require_module"
+                    | "Module::Runtime::use_module"
+                    | "Module::Runtime::require_module"
+            ) {
+                return None;
+            }
+            let first = args.first()?;
+            let NodeKind::String { value, .. } = &first.kind else {
+                return None;
+            };
+            let module = value.trim_matches('\'').trim_matches('"').trim();
+            if module.is_empty() {
+                return None;
+            }
+            Some((alias_name.to_string(), module.to_string()))
+        }
+
+        fn inner_expr(node: &Node) -> &Node {
+            if let NodeKind::ExpressionStatement { expression } = &node.kind {
+                expression.as_ref()
+            } else {
+                node
+            }
+        }
 
         fn collect(node: &Node, map: &mut ImportMap) {
             match &node.kind {
@@ -239,6 +446,7 @@ impl CompletionProvider {
 
                     let mut symbols: HashSet<String> = HashSet::new();
                     let mut has_symbol_args = false;
+                    let mut has_unresolved_tag = false;
 
                     for arg in args {
                         // Skip version numbers (e.g. "1.50" in `use List::Util 1.50 qw(sum)`)
@@ -250,30 +458,18 @@ impl CompletionProvider {
                         if arg.starts_with('-') {
                             continue;
                         }
-                        // Skip hash-ref style args
-                        if arg.starts_with('{') {
-                            continue;
+                        let (has_symbols_in_arg, unresolved_tag) =
+                            collect_import_symbols(module, arg, &mut symbols);
+                        if has_symbols_in_arg {
+                            has_symbol_args = true;
                         }
+                        if unresolved_tag {
+                            has_unresolved_tag = true;
+                        }
+                    }
 
-                        if arg.starts_with("qw") {
-                            let content = arg
-                                .trim_start_matches("qw")
-                                .trim_start_matches(|c: char| "([{/<|!".contains(c))
-                                .trim_end_matches(|c: char| ")]}/|!>".contains(c));
-                            for word in content.split_whitespace() {
-                                if !word.is_empty() {
-                                    symbols.insert(word.to_string());
-                                    has_symbol_args = true;
-                                }
-                            }
-                        } else {
-                            // Bare string arg (possibly quoted): 'func' or "func"
-                            let cleaned = arg.trim_matches(|c: char| c == '\'' || c == '"');
-                            if !cleaned.is_empty() {
-                                symbols.insert(cleaned.to_string());
-                                has_symbol_args = true;
-                            }
-                        }
+                    if has_unresolved_tag {
+                        return;
                     }
 
                     if has_symbol_args {
@@ -284,6 +480,72 @@ impl CompletionProvider {
                     }
                 }
                 NodeKind::Program { statements } | NodeKind::Block { statements } => {
+                    let mut required_modules: Vec<String> = statements
+                        .iter()
+                        .filter_map(|stmt| require_module_name(inner_expr(stmt)))
+                        .collect();
+                    let mut aliases: HashMap<String, String> = HashMap::new();
+                    for stmt in statements {
+                        if let Some((alias, module)) = module_runtime_alias(inner_expr(stmt)) {
+                            aliases.insert(alias, module.clone());
+                            if !required_modules.contains(&module) {
+                                required_modules.push(module);
+                            }
+                        }
+                    }
+
+                    for stmt in statements {
+                        let expr = inner_expr(stmt);
+                        let NodeKind::MethodCall { object, method, args } = &expr.kind else {
+                            continue;
+                        };
+                        if method != "import" {
+                            continue;
+                        }
+                        let object_name = match &object.kind {
+                            NodeKind::Identifier { name } => Some(name.as_str()),
+                            NodeKind::Variable { name, .. } => {
+                                aliases.get(name).map(String::as_str)
+                            }
+                            _ => None,
+                        };
+                        let Some(object_name) = object_name else {
+                            continue;
+                        };
+                        if !required_modules.iter().any(|module| module == object_name) {
+                            continue;
+                        }
+
+                        // `Module->import()` with no args means default exports
+                        // (equivalent to `use Module;` — import all of @EXPORT).
+                        // We represent this by NOT adding an entry to the map,
+                        // which means the module stays in the "import all" tier.
+                        if args.is_empty() {
+                            continue;
+                        }
+
+                        let mut imported_symbols: HashSet<String> = HashSet::new();
+                        let mut has_symbols = false;
+                        let mut has_unresolved_tag = false;
+                        for arg in args {
+                            let (arg_has_symbols, arg_unresolved_tag) = collect_node_import_symbols(
+                                object_name,
+                                arg,
+                                &mut imported_symbols,
+                            );
+                            if arg_has_symbols {
+                                has_symbols = true;
+                            }
+                            if arg_unresolved_tag {
+                                has_unresolved_tag = true;
+                            }
+                        }
+                        if has_unresolved_tag || !has_symbols {
+                            continue;
+                        }
+                        map.entry(object_name.to_string()).or_default().extend(imported_symbols);
+                    }
+
                     for stmt in statements {
                         collect(stmt, map);
                     }
@@ -513,8 +775,12 @@ impl CompletionProvider {
                 &context,
                 &self.workspace_index,
             );
+        } else if self.is_has_type_value_context(source, position) {
+            self.add_has_type_completions(&mut completions, &context);
         } else if self.is_has_options_key_context(source, position) {
             self.add_has_option_completions(&mut completions, &context);
+        } else if let Some(package_name) = self.object_pad_constructor_package(source, position) {
+            self.add_object_pad_constructor_completions(&mut completions, &context, &package_name);
         } else if (context.trigger_character == Some('>') || context.trigger_character == Some('-'))
             && context.prefix.ends_with("->")
             && context.prefix.len() > 2
@@ -528,6 +794,7 @@ impl CompletionProvider {
                 &mut completions,
                 &context,
                 source,
+                self.type_engine.as_ref(),
                 &self.workspace_index,
             );
         } else if context.prefix.starts_with('$') && context.prefix.contains("::") {
@@ -665,6 +932,7 @@ impl CompletionProvider {
             }
 
             let builtins = builtins::create_builtins();
+            xs_api::add_xs_api_completions(&mut completions, &context, source, filepath);
             if context.prefix.is_empty() || self.could_be_function(&context.prefix, &builtins) {
                 builtins::add_builtin_completions(&mut completions, &context, &builtins);
                 if is_cancelled() {
@@ -1058,6 +1326,215 @@ impl CompletionProvider {
             .all(|ch| ch.is_ascii_alphanumeric() || ch == '_' || ch.is_ascii_whitespace())
     }
 
+    /// Check whether the cursor is inside the value position of a Moo/Moose `isa => ...`
+    /// attribute inside a `has(...)` declaration.
+    fn is_has_type_value_context(&self, source: &str, position: usize) -> bool {
+        self.has_option_value_prefix(source, position, "isa").is_some()
+    }
+
+    /// Return the current value prefix for a `has(...)` option if the cursor is in that
+    /// option's value position.
+    fn has_option_value_prefix(
+        &self,
+        source: &str,
+        position: usize,
+        option_name: &str,
+    ) -> Option<String> {
+        if position > source.len() {
+            return None;
+        }
+
+        let prefix = &source[..position];
+        let statement_start = prefix.rfind(';').map(|idx| idx + 1).unwrap_or(0);
+        let statement = &prefix[statement_start..];
+
+        let has_idx = Self::find_keyword(statement, "has")?;
+        let after_has = &statement[has_idx + 3..];
+
+        let arrow_idx = after_has.find("=>")?;
+        let after_arrow = &after_has[arrow_idx + 2..];
+
+        let open_idx = after_arrow.find('(')?;
+        let options_text = &after_arrow[open_idx + 1..];
+
+        // Must still be inside the `(` ... `)` option list.
+        let mut paren_depth = 1i32;
+        for ch in options_text.chars() {
+            if ch == '(' {
+                paren_depth += 1;
+            } else if ch == ')' {
+                paren_depth -= 1;
+                if paren_depth <= 0 {
+                    return None;
+                }
+            }
+        }
+
+        // Find the current top-level option segment (after last comma).
+        let mut depth = 1i32;
+        let mut segment_start = 0usize;
+        for (idx, ch) in options_text.char_indices() {
+            if ch == '(' {
+                depth += 1;
+            } else if ch == ')' {
+                depth -= 1;
+            } else if ch == ',' && depth == 1 {
+                segment_start = idx + 1;
+            }
+        }
+
+        let segment = options_text[segment_start..].trim_start();
+        let option_prefix = segment.strip_prefix(option_name)?;
+        let option_prefix = option_prefix.trim_start().strip_prefix("=>")?;
+
+        Some(option_prefix.trim_start().to_string())
+    }
+
+    fn object_pad_constructor_package(&self, source: &str, position: usize) -> Option<String> {
+        if position > source.len() {
+            return None;
+        }
+
+        let prefix = &source[..position];
+        let statement_start = prefix.rfind(';').map(|idx| idx + 1).unwrap_or(0);
+        let statement = &prefix[statement_start..];
+        let mut search_end = statement.len();
+
+        while let Some(new_idx) = statement[..search_end].rfind("->new") {
+            let mut open_paren_idx = new_idx + "->new".len();
+            while open_paren_idx < statement.len()
+                && statement.as_bytes()[open_paren_idx].is_ascii_whitespace()
+            {
+                open_paren_idx += 1;
+            }
+
+            if open_paren_idx >= statement.len() || statement.as_bytes()[open_paren_idx] != b'(' {
+                search_end = new_idx;
+                continue;
+            }
+
+            let receiver = statement[..new_idx].trim_end();
+            let receiver_start = receiver
+                .rfind(|c: char| !c.is_ascii_alphanumeric() && c != '_' && c != ':' && c != '\'')
+                .map(|idx| idx + 1)
+                .unwrap_or(0);
+            let package_name = receiver[receiver_start..].trim();
+            if package_name.is_empty()
+                || package_name.starts_with('$')
+                || package_name.starts_with('@')
+                || package_name.starts_with('%')
+            {
+                search_end = new_idx;
+                continue;
+            }
+
+            let args_text = &statement[open_paren_idx + 1..];
+            let mut paren_depth = 1i32;
+            let mut brace_depth = 0i32;
+            let mut bracket_depth = 0i32;
+            let mut segment_start = 0usize;
+
+            for (idx, ch) in args_text.char_indices() {
+                match ch {
+                    '(' => paren_depth += 1,
+                    ')' => {
+                        paren_depth -= 1;
+                        if paren_depth <= 0 {
+                            return None;
+                        }
+                    }
+                    '{' => brace_depth += 1,
+                    '}' => brace_depth -= 1,
+                    '[' => bracket_depth += 1,
+                    ']' => bracket_depth -= 1,
+                    ',' if paren_depth == 1 && brace_depth == 0 && bracket_depth == 0 => {
+                        segment_start = idx + 1;
+                    }
+                    _ => {}
+                }
+            }
+
+            let segment = args_text[segment_start..].trim_start();
+            if segment.is_empty() {
+                return Some(package_name.to_string());
+            }
+            if segment.contains("=>") {
+                return None;
+            }
+            if segment.chars().all(|ch| {
+                ch.is_ascii_alphanumeric() || ch == '_' || ch == ':' || ch.is_ascii_whitespace()
+            }) {
+                return Some(package_name.to_string());
+            }
+            return None;
+        }
+
+        None
+    }
+
+    /// Add completions for Moo/Moose type constraint values inside `isa => ...`.
+    fn add_has_type_completions(
+        &self,
+        completions: &mut Vec<CompletionItem>,
+        context: &CompletionContext,
+    ) {
+        let prefix = context.prefix.trim();
+        let mut seen: HashSet<String> = completions.iter().map(|item| item.label.clone()).collect();
+
+        let mut push_completion =
+            |label: &str, detail: String, documentation: String, kind: CompletionItemKind| {
+                if !seen.insert(label.to_string()) {
+                    return;
+                }
+
+                completions.push(CompletionItem {
+                    label: label.to_string(),
+                    kind,
+                    detail: Some(detail),
+                    documentation: Some(documentation),
+                    insert_text: Some(label.to_string()),
+                    sort_text: Some(format!("0_{label}")),
+                    filter_text: Some(label.to_string()),
+                    additional_edits: vec![],
+                    text_edit_range: Some((context.prefix_start, context.position)),
+                    commit_characters: None,
+                });
+            };
+
+        for type_name in MOOSE_TYPE_CANDIDATES {
+            if !prefix.is_empty() && !type_name.starts_with(prefix) {
+                continue;
+            }
+
+            if let Some(doc) = get_moose_type_documentation(type_name) {
+                push_completion(
+                    type_name,
+                    "Built-in Moose type".to_string(),
+                    Self::format_type_documentation(&doc),
+                    CompletionItemKind::Module,
+                );
+            }
+        }
+
+        for (module_name, symbols) in &self.import_map {
+            for symbol in symbols {
+                if !Self::looks_like_type_name(symbol) {
+                    continue;
+                }
+                if !prefix.is_empty() && !symbol.starts_with(prefix) {
+                    continue;
+                }
+
+                push_completion(
+                    symbol,
+                    format!("Imported type from {module_name}"),
+                    format!("Imported from `{module_name}`."),
+                    CompletionItemKind::Module,
+                );
+            }
+        }
+    }
+
     /// Find a keyword in source text using ASCII identifier boundaries.
     fn find_keyword(text: &str, keyword: &str) -> Option<usize> {
         let mut start = 0usize;
@@ -1075,6 +1552,16 @@ impl CompletionProvider {
             start = idx + keyword.len();
         }
         None
+    }
+
+    /// Convert Moose type documentation into a concise completion tooltip.
+    fn format_type_documentation(doc: &BuiltinDoc) -> String {
+        format!("{}\n\n{}", doc.signature, doc.description)
+    }
+
+    /// Return `true` when the label looks like a type name rather than a function.
+    fn looks_like_type_name(label: &str) -> bool {
+        label.chars().next().is_some_and(|c| c.is_ascii_uppercase()) || label.contains("::")
     }
 
     /// Add common Moo/Moose `has` option-key completions.
@@ -1114,6 +1601,41 @@ impl CompletionProvider {
                     commit_characters: None,
                 });
             }
+        }
+    }
+
+    fn add_object_pad_constructor_completions(
+        &self,
+        completions: &mut Vec<CompletionItem>,
+        context: &CompletionContext,
+        package_name: &str,
+    ) {
+        let prefix = context.prefix.trim();
+        let Some(model) =
+            self.class_models.iter().rev().find(|model| {
+                model.name == package_name && model.framework == Framework::ObjectPad
+            })
+        else {
+            return;
+        };
+
+        for field_name in model.object_pad_param_field_names() {
+            if !prefix.is_empty() && !field_name.starts_with(prefix) {
+                continue;
+            }
+
+            completions.push(CompletionItem {
+                label: field_name.to_string(),
+                kind: CompletionItemKind::Property,
+                detail: Some("Object::Pad constructor parameter".to_string()),
+                documentation: Some(format!("`:param` field for `{package_name}->new(...)`.")),
+                insert_text: Some(format!("{field_name} => ")),
+                sort_text: Some(format!("0_{field_name}")),
+                filter_text: Some(field_name.to_string()),
+                additional_edits: vec![],
+                text_edit_range: Some((context.prefix_start, context.position)),
+                commit_characters: None,
+            });
         }
     }
 
@@ -1675,6 +2197,164 @@ has 'name' => (re
         assert!(
             completions.iter().any(|item| item.label == "reader"),
             "expected `reader` option completion inside has(...) context"
+        );
+    }
+
+    #[test]
+    fn test_object_pad_constructor_param_completion() {
+        let code = r#"
+use Object::Pad;
+
+class Point {
+    field $x :param = 0;
+    field $y :param = 0;
+    field $cache = 1;
+}
+
+Point->new(
+"#;
+
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let provider = CompletionProvider::new_with_index_and_source(&ast, code, None);
+
+        let completions = provider.get_completions(code, code.len());
+
+        assert!(
+            completions.iter().any(|item| item.label == "x"),
+            "expected `x` constructor completion inside Point->new(...)"
+        );
+        assert!(
+            completions.iter().any(|item| item.label == "y"),
+            "expected `y` constructor completion inside Point->new(...)"
+        );
+        assert!(
+            !completions.iter().any(|item| item.label == "cache"),
+            "non-:param fields should not appear in constructor completion"
+        );
+
+        let x_item = must_some(completions.iter().find(|item| item.label == "x"));
+        assert_eq!(x_item.insert_text.as_deref(), Some("x => "));
+    }
+
+    #[test]
+    fn test_object_pad_constructor_param_completion_honors_prefix_and_value_context() {
+        let prefix_code = r#"
+use Object::Pad;
+
+class Point {
+    field $name :param;
+    field $native_name :param;
+    field $age :param;
+}
+
+Point->new(na"#;
+
+        let mut parser = Parser::new(prefix_code);
+        let ast = must(parser.parse());
+        let provider = CompletionProvider::new_with_index_and_source(&ast, prefix_code, None);
+        let completions = provider.get_completions(prefix_code, prefix_code.len());
+        let constructor_labels: Vec<&str> = completions
+            .iter()
+            .filter(|item| item.detail.as_deref() == Some("Object::Pad constructor parameter"))
+            .map(|item| item.label.as_str())
+            .collect();
+
+        assert!(constructor_labels.contains(&"name"), "expected `name` to match prefix `na`");
+        assert!(
+            constructor_labels.contains(&"native_name"),
+            "expected `native_name` to remain available when matching prefix"
+        );
+        assert!(
+            !constructor_labels.contains(&"age"),
+            "non-matching constructor params should be filtered by prefix"
+        );
+
+        let value_code = r#"
+use Object::Pad;
+
+class Point {
+    field $name :param;
+    field $native_name :param;
+}
+
+Point->new(name => "#;
+
+        let mut parser = Parser::new(value_code);
+        let ast = must(parser.parse());
+        let provider = CompletionProvider::new_with_index_and_source(&ast, value_code, None);
+        let value_completions = provider.get_completions(value_code, value_code.len());
+        let value_constructor_labels: Vec<&str> = value_completions
+            .iter()
+            .filter(|item| item.detail.as_deref() == Some("Object::Pad constructor parameter"))
+            .map(|item| item.label.as_str())
+            .collect();
+
+        assert!(
+            !value_constructor_labels.contains(&"name"),
+            "constructor key completions should not appear in value position"
+        );
+        assert!(
+            !value_constructor_labels.contains(&"native_name"),
+            "constructor key completions should not appear after `=>`"
+        );
+    }
+
+    #[test]
+    fn test_object_pad_constructor_param_completion_supports_lowercase_class_names() {
+        let code = r#"
+use Object::Pad;
+
+class point {
+    field $name :param;
+    field $native_name :param;
+}
+
+point->new(na"#;
+
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let provider = CompletionProvider::new_with_index_and_source(&ast, code, None);
+        let completions = provider.get_completions(code, code.len());
+        let constructor_labels: Vec<&str> = completions
+            .iter()
+            .filter(|item| item.detail.as_deref() == Some("Object::Pad constructor parameter"))
+            .map(|item| item.label.as_str())
+            .collect();
+
+        assert!(constructor_labels.contains(&"name"));
+        assert!(constructor_labels.contains(&"native_name"));
+    }
+
+    #[test]
+    fn test_moo_isa_type_completion_includes_builtins_and_imports() {
+        let code = r#"
+use MyApp::Types qw(UserID PositiveInt);
+use Moose;
+
+has 'id' => (
+    is => 'ro',
+    isa => 
+"#;
+
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let provider = CompletionProvider::new_with_index_and_source(&ast, code, None);
+
+        let completions = provider.get_completions(code, code.len());
+
+        assert!(
+            completions.iter().any(|item| item.label == "Str"),
+            "expected built-in Moose type `Str` in isa completion, got: {:?}",
+            completions.iter().map(|item| &item.label).collect::<Vec<_>>()
+        );
+        assert!(
+            completions.iter().any(|item| item.label == "ArrayRef"),
+            "expected built-in Moose type `ArrayRef` in isa completion"
+        );
+        assert!(
+            completions.iter().any(|item| item.label == "UserID"),
+            "expected imported custom type `UserID` in isa completion"
         );
     }
 

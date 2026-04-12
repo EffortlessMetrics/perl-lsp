@@ -753,9 +753,9 @@ fn test_end_to_end_cancellation_response_time_ac12() -> Result<(), Box<dyn std::
         println!("  Maximum: {}ms", max.as_millis());
 
         // Provider-specific analysis
-        let mut provider_stats = HashMap::new();
+        let mut provider_stats: HashMap<String, Vec<Duration>> = HashMap::new();
         for (provider, duration) in response_time_measurements {
-            provider_stats.entry(provider).or_insert_with(Vec::new).push(duration);
+            provider_stats.entry(provider).or_default().push(duration);
         }
 
         for (provider, durations) in provider_stats {

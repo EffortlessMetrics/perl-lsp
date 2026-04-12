@@ -8,10 +8,10 @@ in each scenario — not just "didn't crash" but "returned a useful response."
 ## Quick Start
 
 ```bash
-# Run all base scenarios (scenarios 01–09, excluding large-file):
+# Run all default UX scenarios (currently 17 scenario files):
 just ux-tests
 
-# Run full suite including large-file scenario:
+# Run full suite including the integration-only 10k-line large-file scenario:
 just ux-tests-full
 
 # Run with verbose server stderr output:
@@ -21,7 +21,11 @@ UX_TEST_ECHO_STDERR=1 just ux-tests
 cargo test -p perl-lsp-ux-tests --test ux_scenario_01_simple_file
 ```
 
-## V1 Scenarios
+`just ux-tests` and `just ux-tests-full` build `target/debug/perl-lsp` first and
+export `PERL_LSP_BIN` automatically. Direct `cargo test` invocations still need
+either a prebuilt binary or an explicit `PERL_LSP_BIN=/path/to/perl-lsp`.
+
+## Current Scenarios
 
 | # | Scenario | What it tests |
 |---|----------|---------------|
@@ -34,6 +38,34 @@ cargo test -p perl-lsp-ux-tests --test ux_scenario_01_simple_file
 | 07 | Multi-file workspace | Multiple modules + cross-file definition |
 | 08 | Shebang detection | Files without `.pl` extension but `languageId=perl` |
 | 09 | BOM and encoding | UTF-8 BOM, `use utf8`, Unicode in comments |
+| 10 | Go-to-definition | Request succeeds end-to-end and returns location-or-empty without crashing |
+| 11 | Hover | Request succeeds end-to-end and returns useful structure-or-empty without crashing |
+| 12 | Strict diagnostics | `publishDiagnostics` arrives and the payload shape stays valid |
+| 13 | Document symbols | Parsable files return structured document symbols |
+| 14 | `@INC` conformance | PL701, hover, and goto-definition stay consistent across 5 module-resolution modes |
+| 15 | Workspace symbols | `workspace/symbol` finds same-named symbols across workspace folders and carries `workspaceFolderUri` |
+| 16 | Folder removal | removing a workspace folder evicts its symbols from `workspace/symbol` results |
+| 17 | Deleted file churn | a `didChangeWatchedFiles` Deleted event removes stale symbols and definition targets |
+
+`just ux-tests` runs every default scenario above. `just ux-tests-full` adds the
+feature-gated 10k-line large-file case from Scenario 06.
+
+## Workflow Scorecard Contract
+
+The UX harness is also the fixture source for the planned `editor_ux`
+scorecard:
+
+- `docs/project/metrics/WORKFLOW_SCORECARDS.md` describes the workflow layer and
+  the top-line/current-component rows it owns.
+- `.ci/schemas/editor-ux.schema.json` defines the measured scorecard shape.
+- `crates/perl-lsp-ux-tests/fixtures/editor_ux_fixture_matrix.json` maps each
+  workflow fixture to the rows it can actually back today and the owning
+  subsystem.
+- `crates/perl-lsp-ux-tests/tests/editor_ux_fixture_matrix.rs` prevents the
+  matrix from drifting away from the executable scenario files.
+
+This keeps the workflow scorecard grounded in real harness coverage instead of a
+manually curated checklist.
 
 ## How to Add a New Scenario
 

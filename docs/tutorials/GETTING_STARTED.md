@@ -133,7 +133,7 @@ lspconfig.perl_lsp.setup({
 
 ```elisp
 (add-to-list 'eglot-server-programs
-             '((cperl-mode perl-mode) . ("perllsp" "--stdio")))
+             '((perl-mode cperl-mode) . ("perllsp" "--stdio")))
 ```
 
 Then run `M-x eglot` in a Perl buffer.

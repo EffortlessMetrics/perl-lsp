@@ -15,7 +15,7 @@
 //! - Cancellation behaviour
 //! - Edge cases: empty input, boundary positions, unicode
 
-use perl_lsp_completion::{CompletionItem, CompletionProvider};
+use perl_lsp_completion::{CompletionItem, CompletionItemKind, CompletionProvider};
 use perl_parser_core::Parser;
 use perl_tdd_support::{must, must_some};
 use perl_workspace_index::workspace_index::WorkspaceIndex;
@@ -61,6 +61,10 @@ fn has_label(items: &[CompletionItem], label: &str) -> bool {
 
 fn labels(items: &[CompletionItem]) -> Vec<String> {
     items.iter().map(|i| i.label.clone()).collect()
+}
+
+fn find_item<'a>(items: &'a [CompletionItem], label: &str) -> Option<&'a CompletionItem> {
+    items.iter().find(|item| item.label == label)
 }
 
 // ===========================================================================
@@ -382,7 +386,7 @@ fn moo_accessor_completion_includes_type_documentation() {
 package Config;
 use Moo;
 
-has 'timeout' => (is => 'rw', isa => 'Int');
+has 'timeout' => (is => 'rw', isa => 'Int', required => 1, predicate => 1, builder => 1, clearer => 1);
 
 sub check {
     my $self = shift;
@@ -392,11 +396,36 @@ sub check {
     let pos = must_some(code.find("$self->")) + "$self->".len();
     let items = completions(code, pos);
 
-    let timeout_item = must_some(items.iter().find(|c| c.label == "timeout"));
+    let timeout_item = must_some(find_item(&items, "timeout"));
     let doc = must_some(timeout_item.documentation.as_deref());
     assert!(
         doc.contains("Int"),
         "accessor documentation should include the isa type, got: {:?}",
+        doc
+    );
+    assert!(
+        doc.contains("read-write"),
+        "accessor documentation should include access mode, got: {:?}",
+        doc
+    );
+    assert!(
+        doc.contains("Required"),
+        "accessor documentation should include required metadata, got: {:?}",
+        doc
+    );
+    assert!(
+        doc.contains("Predicate") && doc.contains("has_timeout"),
+        "accessor documentation should include predicate metadata, got: {:?}",
+        doc
+    );
+    assert!(
+        doc.contains("Builder") && doc.contains("_build_timeout"),
+        "accessor documentation should include builder metadata, got: {:?}",
+        doc
+    );
+    assert!(
+        doc.contains("Clearer") && doc.contains("clear_timeout"),
+        "accessor documentation should include clearer metadata, got: {:?}",
         doc
     );
 }
@@ -496,5 +525,75 @@ fn special_variables_appear_for_dollar_prefix() {
         has_label(&items, "$_"),
         "should suggest special variable $_, got: {:?}",
         labels(&items)
+    );
+}
+
+// ===========================================================================
+// Completion polish quick wins (#4263, #4267, #4269)
+// ===========================================================================
+
+/// #4263 — Module ranking tiers: common modules rank above workspace packages.
+///
+/// When both `strict` (tier-0) and `ZzzWorkspaceOnly` (tier-9/default) are
+/// indexed, `strict` must have a sort_text that lexicographically precedes
+/// `ZzzWorkspaceOnly`'s sort_text so it floats to the top of the list.
+#[test]
+fn use_module_strict_ranks_before_workspace_package() {
+    let index = Arc::new(WorkspaceIndex::new());
+    // Index strict as a workspace package (simulate CPAN-style workspace)
+    let strict_uri = must(Url::parse("file:///lib/strict.pm"));
+    must(index.index_file(strict_uri, "package strict;\n1;".to_string()));
+    // Index a lexicographically-earlier but tier-9 module
+    let zzz_uri = must(Url::parse("file:///lib/ZzzWorkspaceOnly.pm"));
+    must(index.index_file(zzz_uri, "package ZzzWorkspaceOnly;\n1;".to_string()));
+
+    let code = "use ";
+    let items = completions_with_index(code, code.len(), index);
+
+    let strict_item = must_some(find_item(&items, "strict"));
+    let zzz_item = must_some(find_item(&items, "ZzzWorkspaceOnly"));
+
+    let strict_sort = strict_item.sort_text.as_deref().unwrap_or(&strict_item.label);
+    let zzz_sort = zzz_item.sort_text.as_deref().unwrap_or(&zzz_item.label);
+
+    assert!(
+        strict_sort < zzz_sort,
+        "strict (tier-0) sort_text '{strict_sort}' must be < ZzzWorkspaceOnly (default tier) sort_text '{zzz_sort}'"
+    );
+}
+
+/// #4267 — String context noise: no keyword completions inside a die-string.
+///
+/// Inside `die "Error in file ` the cursor is in a non-interpolation position;
+/// keyword and builtin completions must be suppressed.
+/// (The string context filter exists but this test pins the die-string case.)
+#[test]
+fn no_keyword_completions_inside_die_string() {
+    // Cursor at end: inside a double-quoted string after non-sigil text
+    let code = r#"die "Error in file fo"#;
+    let items = completions_at_end(code);
+
+    assert!(
+        !items.iter().any(|i| i.kind == CompletionItemKind::Keyword),
+        "no Keyword completions inside a die string; got: {:?}",
+        items.iter().map(|i| (&i.label, &i.kind)).collect::<Vec<_>>()
+    );
+}
+
+/// #4269 — `open` snippet must include `or die` error handling.
+///
+/// The idiomatic Perl pattern requires error handling; the snippet should
+/// expand to include it rather than the bare three-arg form.
+#[test]
+fn open_builtin_snippet_includes_or_die() {
+    let code = "ope";
+    let items = completions_at_end(code);
+
+    let open_item = must_some(find_item(&items, "open"));
+    let insert_text = open_item.insert_text.as_deref().unwrap_or("");
+
+    assert!(
+        insert_text.contains("or die"),
+        "open snippet must contain 'or die' for idiomatic error handling; got: {insert_text:?}"
     );
 }

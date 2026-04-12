@@ -1,0 +1,99 @@
+def escapeXml(String text) {
+    return text
+        .replace('&', '&amp;')
+        .replace('<', '&lt;')
+        .replace('>', '&gt;')
+        .replace('"', '&quot;')
+        .replace("'", '&apos;')
+}
+
+def writeStageReport(String name, boolean success, String message = '') {
+    def reportDir = 'target/jenkins-reports'
+    sh "mkdir -p '${reportDir}'"
+    def escaped = escapeXml(message)
+    def failureBlock = success ? '' : "    <failure message=\"${escaped}\"><![CDATA[${message}]]></failure>\n"
+    def xml = """<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="perl-lsp:${name}" tests="1" failures="${success ? 0 : 1}" errors="0" skipped="0">
+  <testcase classname="perl-lsp" name="${name}">
+${failureBlock}  </testcase>
+</testsuite>
+"""
+    writeFile file: "${reportDir}/${name}.xml", text: xml
+}
+
+def runGate(String name, String command) {
+    def logDir = 'target/jenkins-logs'
+    def reportDir = 'target/jenkins-reports'
+    sh "mkdir -p '${logDir}' '${reportDir}'"
+
+    def logFile = "${logDir}/${name}.log"
+    try {
+        sh """#!/usr/bin/env bash
+set -euo pipefail
+${command} 2>&1 | tee '${logFile}'
+"""
+        writeStageReport(name, true)
+    } catch (err) {
+        writeStageReport(name, false, err.toString())
+        throw err
+    }
+}
+
+pipeline {
+    agent {
+        docker {
+            image 'rust:1.92-bookworm'
+            args '-u root:root'
+            reuseNode true
+        }
+    }
+    options {
+        timestamps()
+        disableConcurrentBuilds()
+    }
+    environment {
+        CARGO_HOME = "${WORKSPACE}/.cargo"
+        CARGO_TARGET_DIR = "${WORKSPACE}/target"
+        RUST_BACKTRACE = '1'
+    }
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+                sh 'rustc --version'
+                sh 'cargo --version'
+            }
+        }
+        stage('Fast Gates') {
+            parallel {
+                stage('Format') {
+                    steps {
+                        script {
+                            runGate('format', 'cargo fmt --all --check')
+                        }
+                    }
+                }
+                stage('Clippy') {
+                    steps {
+                        script {
+                            runGate('clippy', 'cargo clippy -p perl-parser -p perl-lexer --locked -- -D warnings -A missing_docs')
+                        }
+                    }
+                }
+                stage('Tests') {
+                    steps {
+                        script {
+                            runGate('tests', 'cargo test -p perl-parser -p perl-lexer --lib --locked')
+                        }
+                    }
+                }
+            }
+        }
+    }
+    post {
+        always {
+            junit allowEmptyResults: true, testResults: 'target/jenkins-reports/*.xml'
+            archiveArtifacts artifacts: 'target/jenkins-logs/**/*.log, target/jenkins-reports/*.xml', allowEmptyArchive: true
+        }
+    }
+}

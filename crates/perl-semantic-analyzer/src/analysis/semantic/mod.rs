@@ -24,18 +24,19 @@ mod tokens;
 
 // Public re-exports — downstream consumers see exactly the same surface.
 pub use builtins::{
-    BuiltinDoc, ExceptionContext, get_attribute_documentation, get_builtin_documentation,
-    get_exception_context, get_moose_type_documentation, is_exception_function,
+    BuiltinDoc, ExceptionContext, PragmaDoc, get_attribute_documentation,
+    get_builtin_documentation, get_exception_context, get_moose_type_documentation,
+    get_operator_documentation, get_pragma_documentation, is_exception_function,
 };
 pub use hover::HoverInfo;
 pub use model::SemanticModel;
 pub use tokens::{SemanticToken, SemanticTokenModifier, SemanticTokenType};
 
 use crate::SourceLocation;
-use crate::analysis::class_model::{ClassModel, ClassModelBuilder};
+use crate::analysis::class_model::{ClassModel, ClassModelBuilder, MethodResolutionOrder};
 use crate::ast::Node;
-use crate::symbol::{Symbol, SymbolExtractor, SymbolTable};
-use std::collections::HashMap;
+use crate::symbol::{Symbol, SymbolExtractor, SymbolTable, is_universal_method};
+use std::collections::{HashMap, HashSet};
 
 #[derive(Debug)]
 /// Semantic analyzer providing comprehensive IDE features for Perl code.
@@ -198,7 +199,7 @@ impl SemanticAnalyzer {
                 if reference.location.start <= position && reference.location.end >= position {
                     let symbols = self.resolve_reference_to_symbols(reference);
                     if let Some(first_symbol) = symbols.first() {
-                        return Some(first_symbol);
+                        return Some(self.resolve_definition_target(first_symbol));
                     }
                 }
             }
@@ -206,6 +207,37 @@ impl SemanticAnalyzer {
 
         // If no reference found, check if we're on a definition itself
         self.symbol_at(SourceLocation { start: position, end: position })
+            .map(|symbol| self.resolve_definition_target(symbol))
+    }
+
+    /// Redirect method modifier definitions to the underlying method they modify.
+    ///
+    /// Method modifiers (`before`, `after`, `around`, `override`, `augment`) are modeled as synthetic
+    /// subroutine symbols so hover/navigation can describe them, but go-to-definition
+    /// should land on the real method declaration when it exists.
+    fn resolve_definition_target<'a>(&'a self, symbol: &'a Symbol) -> &'a Symbol {
+        if let Some(target) = self.resolve_method_modifier_target(symbol) { target } else { symbol }
+    }
+
+    /// If `symbol` is a method modifier target, find the underlying method symbol.
+    fn resolve_method_modifier_target<'a>(&'a self, symbol: &'a Symbol) -> Option<&'a Symbol> {
+        if !matches!(
+            symbol.declaration.as_deref(),
+            Some("before" | "after" | "around" | "override" | "augment")
+        ) {
+            return None;
+        }
+
+        self.symbol_table
+            .find_symbol(&symbol.name, symbol.scope_id, crate::symbol::SymbolKind::Subroutine)
+            .into_iter()
+            .find(|candidate| {
+                candidate.location != symbol.location
+                    && !matches!(
+                        candidate.declaration.as_deref(),
+                        Some("before" | "after" | "around" | "override" | "augment")
+                    )
+            })
     }
 
     /// Check if an operator is a file test operator.
@@ -237,64 +269,305 @@ impl SemanticAnalyzer {
         receiver_class: &str,
         method_name: &str,
     ) -> Option<HoverInfo> {
-        let mut visited: Vec<String> = Vec::new();
-        let mut queue: Vec<String> = vec![receiver_class.to_string()];
+        self.resolve_inherited_method_hover_ordered(receiver_class, method_name)
+    }
 
-        while !queue.is_empty() {
-            let current = queue.remove(0);
-            if visited.contains(&current) {
-                continue;
+    /// Resolve the source location of a method inherited from the current class.
+    ///
+    /// This skips the receiver class itself and searches its ancestors in the
+    /// package's configured method-resolution order.
+    pub fn resolve_inherited_method_location(
+        &self,
+        receiver_class: &str,
+        method_name: &str,
+    ) -> Option<SourceLocation> {
+        let models_by_name: HashMap<&str, &ClassModel> =
+            self.class_models.iter().map(|model| (model.name.as_str(), model)).collect();
+
+        let receiver_model = models_by_name.get(receiver_class).copied()?;
+        let ancestor_order = match receiver_model.mro {
+            MethodResolutionOrder::Dfs => self.dfs_ancestor_order(receiver_class, &models_by_name),
+            MethodResolutionOrder::C3 => self.c3_ancestor_order(receiver_class, &models_by_name),
+        };
+
+        for ancestor in ancestor_order {
+            if let Some(model) = models_by_name.get(ancestor.as_str()).copied()
+                && let Some(location) = self.method_location_in_model(model, method_name)
+            {
+                return Some(location);
             }
-            visited.push(current.clone());
+        }
 
-            // Check class model first (has method list + parent chain)
-            if let Some(model) = self.class_models.iter().find(|m| m.name == current) {
-                if model.methods.iter().any(|m| m.name == method_name) {
-                    let is_direct = current == receiver_class;
-                    let details = if is_direct {
-                        vec![format!("Defined in {}", current)]
-                    } else {
-                        vec![format!("Inherited from {}", current)]
-                    };
-                    return Some(HoverInfo {
-                        signature: format!("sub {}::{}", current, method_name),
-                        documentation: None,
-                        details,
-                    });
+        if is_universal_method(method_name) {
+            return self
+                .symbol_table
+                .symbols
+                .get(method_name)
+                .and_then(|symbols| {
+                    symbols.iter().find(|symbol| {
+                        symbol.kind == crate::symbol::SymbolKind::Subroutine
+                            && symbol.qualified_name == format!("UNIVERSAL::{method_name}")
+                    })
+                })
+                .map(|symbol| symbol.location);
+        }
+
+        None
+    }
+
+    fn resolve_inherited_method_hover_ordered(
+        &self,
+        receiver_class: &str,
+        method_name: &str,
+    ) -> Option<HoverInfo> {
+        let models_by_name: HashMap<&str, &ClassModel> =
+            self.class_models.iter().map(|model| (model.name.as_str(), model)).collect();
+
+        let Some(receiver_model) = models_by_name.get(receiver_class).copied() else {
+            return self.resolve_plain_package_method_hover(receiver_class, method_name);
+        };
+
+        if let Some(hover) =
+            self.hover_for_model_method(receiver_model, receiver_class, method_name)
+        {
+            return Some(hover);
+        }
+
+        let ancestor_order = match receiver_model.mro {
+            MethodResolutionOrder::Dfs => self.dfs_ancestor_order(receiver_class, &models_by_name),
+            MethodResolutionOrder::C3 => self.c3_ancestor_order(receiver_class, &models_by_name),
+        };
+
+        for ancestor in ancestor_order {
+            if let Some(model) = models_by_name.get(ancestor.as_str()).copied() {
+                if let Some(hover) = self.hover_for_model_method(model, receiver_class, method_name)
+                {
+                    return Some(hover);
                 }
-                for parent in &model.parents {
-                    if !visited.contains(parent) {
-                        queue.push(parent.clone());
-                    }
-                }
+            } else if let Some(hover) =
+                self.resolve_plain_package_method_hover(&ancestor, method_name)
+            {
+                return Some(hover);
+            }
+        }
+
+        if is_universal_method(method_name) {
+            return Some(HoverInfo {
+                signature: format!("sub UNIVERSAL::{method_name}"),
+                documentation: None,
+                details: vec!["Defined in UNIVERSAL".to_string()],
+            });
+        }
+
+        None
+    }
+
+    fn hover_for_model_method(
+        &self,
+        model: &ClassModel,
+        receiver_class: &str,
+        method_name: &str,
+    ) -> Option<HoverInfo> {
+        if model.methods.iter().any(|m| m.name == method_name) {
+            let is_direct = model.name == receiver_class;
+            let details = if is_direct {
+                vec![format!("Defined in {}", model.name)]
             } else {
-                // Plain package not in class_models — check the symbol table
-                // for a sub with qualified_name == "PackageName::method_name"
-                let qualified = format!("{}::{}", current, method_name);
-                let found_in_table =
-                    self.symbol_table.symbols.get(method_name).is_some_and(|syms| {
-                        syms.iter().any(|s| {
-                            matches!(s.kind, crate::symbol::SymbolKind::Subroutine)
-                                && s.qualified_name == qualified
-                        })
-                    }) || self.symbol_table.symbols.contains_key(&qualified);
+                vec![format!("Inherited from {}", model.name)]
+            };
+            return Some(HoverInfo {
+                signature: format!("sub {}::{}", model.name, method_name),
+                documentation: None,
+                details,
+            });
+        }
+        if model.methods.iter().any(|m| m.name == "AUTOLOAD") {
+            let is_direct = model.name == receiver_class;
+            let details = if is_direct {
+                vec![
+                    format!("Resolved via AUTOLOAD in {}", model.name),
+                    format!("Requested method: {method_name}"),
+                ]
+            } else {
+                vec![
+                    format!("Resolved via inherited AUTOLOAD from {}", model.name),
+                    format!("Requested method: {method_name}"),
+                ]
+            };
+            return Some(HoverInfo {
+                signature: format!("sub {}::AUTOLOAD", model.name),
+                documentation: None,
+                details,
+            });
+        }
+        None
+    }
 
-                if found_in_table {
-                    let is_direct = current == receiver_class;
-                    let details = if is_direct {
-                        vec![format!("Defined in {}", current)]
-                    } else {
-                        vec![format!("Inherited from {}", current)]
-                    };
-                    return Some(HoverInfo {
-                        signature: format!("sub {}::{}", current, method_name),
-                        documentation: None,
-                        details,
-                    });
+    fn method_location_in_model(
+        &self,
+        model: &ClassModel,
+        method_name: &str,
+    ) -> Option<SourceLocation> {
+        model
+            .methods
+            .iter()
+            .find(|method| method.name == method_name)
+            .or_else(|| model.methods.iter().find(|method| method.name == "AUTOLOAD"))
+            .map(|method| method.location)
+    }
+
+    fn resolve_plain_package_method_hover(
+        &self,
+        package_name: &str,
+        method_name: &str,
+    ) -> Option<HoverInfo> {
+        let qualified = format!("{}::{}", package_name, method_name);
+        let found_in_table = self.symbol_table.symbols.get(method_name).is_some_and(|syms| {
+            syms.iter().any(|s| {
+                matches!(s.kind, crate::symbol::SymbolKind::Subroutine)
+                    && s.qualified_name == qualified
+            })
+        }) || self.symbol_table.symbols.contains_key(&qualified);
+
+        if found_in_table {
+            return Some(HoverInfo {
+                signature: format!("sub {}::{}", package_name, method_name),
+                documentation: None,
+                details: vec![format!("Inherited from {}", package_name)],
+            });
+        }
+
+        let qualified_autoload = format!("{}::AUTOLOAD", package_name);
+        let autoload_in_table = self.symbol_table.symbols.get("AUTOLOAD").is_some_and(|syms| {
+            syms.iter().any(|s| {
+                matches!(s.kind, crate::symbol::SymbolKind::Subroutine)
+                    && s.qualified_name == qualified_autoload
+            })
+        }) || self.symbol_table.symbols.contains_key(&qualified_autoload);
+
+        if autoload_in_table {
+            return Some(HoverInfo {
+                signature: format!("sub {}::AUTOLOAD", package_name),
+                documentation: None,
+                details: vec![
+                    format!("Resolved via AUTOLOAD in {}", package_name),
+                    format!("Requested method: {}", method_name),
+                ],
+            });
+        }
+
+        if is_universal_method(method_name) {
+            return Some(HoverInfo {
+                signature: format!("sub UNIVERSAL::{method_name}"),
+                documentation: None,
+                details: vec!["Defined in UNIVERSAL".to_string()],
+            });
+        }
+
+        None
+    }
+
+    fn dfs_ancestor_order(
+        &self,
+        package: &str,
+        models_by_name: &HashMap<&str, &ClassModel>,
+    ) -> Vec<String> {
+        fn walk(
+            package: &str,
+            models_by_name: &HashMap<&str, &ClassModel>,
+            seen: &mut HashSet<String>,
+            out: &mut Vec<String>,
+        ) {
+            let Some(model) = models_by_name.get(package).copied() else {
+                return;
+            };
+
+            for parent in &model.parents {
+                if seen.insert(parent.clone()) {
+                    out.push(parent.clone());
+                    walk(parent, models_by_name, seen, out);
                 }
             }
         }
-        None
+
+        let mut seen = HashSet::from([package.to_string()]);
+        let mut out = Vec::new();
+        walk(package, models_by_name, &mut seen, &mut out);
+        out
+    }
+
+    fn c3_ancestor_order(
+        &self,
+        package: &str,
+        models_by_name: &HashMap<&str, &ClassModel>,
+    ) -> Vec<String> {
+        fn linearize(
+            package: &str,
+            models_by_name: &HashMap<&str, &ClassModel>,
+            visited: &mut HashSet<String>,
+        ) -> Vec<String> {
+            if !visited.insert(package.to_string()) {
+                return vec![];
+            }
+
+            let Some(model) = models_by_name.get(package).copied() else {
+                return vec![package.to_string()];
+            };
+
+            let parents = model.parents.clone();
+            if parents.is_empty() {
+                return vec![package.to_string()];
+            }
+
+            let mut parent_mros: Vec<Vec<String>> = parents
+                .iter()
+                .map(|parent| linearize(parent, models_by_name, &mut visited.clone()))
+                .collect();
+            parent_mros.push(parents.clone());
+
+            let mut result = vec![package.to_string()];
+            loop {
+                parent_mros.retain(|list| !list.is_empty());
+                if parent_mros.is_empty() {
+                    break;
+                }
+
+                let chosen = parent_mros.iter().find_map(|list| {
+                    let candidate = list.first()?;
+                    let in_tail = parent_mros
+                        .iter()
+                        .any(|other| other.iter().skip(1).any(|name| name == candidate));
+                    if in_tail { None } else { Some(candidate.clone()) }
+                });
+
+                match chosen {
+                    Some(name) => {
+                        if !result.contains(&name) {
+                            result.push(name.clone());
+                        }
+                        for list in &mut parent_mros {
+                            if list.first().is_some_and(|head| head == &name) {
+                                list.remove(0);
+                            }
+                        }
+                    }
+                    None => {
+                        for list in parent_mros {
+                            if let Some(head) = list.first()
+                                && !result.contains(head)
+                            {
+                                result.push(head.clone());
+                            }
+                        }
+                        break;
+                    }
+                }
+            }
+
+            result
+        }
+
+        linearize(package, models_by_name, &mut HashSet::new()).into_iter().skip(1).collect()
     }
 }
 
@@ -421,6 +694,71 @@ Foo::bar();
 
         let hover = analyzer.hover_at(def.location).ok_or("hover not found")?;
         assert!(hover.documentation.as_ref().ok_or("doc not found")?.contains("bar sub"));
+        Ok(())
+    }
+
+    #[test]
+    fn test_universal_method_hover_fallback() -> Result<(), Box<dyn std::error::Error>> {
+        let code = r#"
+package UNIVERSAL;
+sub can { 1 }
+sub isa { 1 }
+
+package Foo;
+sub new { bless {}, shift }
+"#;
+
+        let mut parser = Parser::new(code);
+        let ast = parser.parse()?;
+        let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
+
+        let hover = analyzer
+            .resolve_inherited_method_hover("Foo", "can")
+            .ok_or("expected UNIVERSAL hover fallback")?;
+
+        assert!(
+            hover.signature.contains("UNIVERSAL::can"),
+            "expected UNIVERSAL hover signature, got: {}",
+            hover.signature
+        );
+        assert!(
+            hover.details.iter().any(|detail| detail.contains("UNIVERSAL")),
+            "expected UNIVERSAL hover details, got: {:?}",
+            hover.details
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_autoload_hover_fallback() -> Result<(), Box<dyn std::error::Error>> {
+        let code = r#"
+package Foo;
+sub AUTOLOAD { 1 }
+"#;
+
+        let mut parser = Parser::new(code);
+        let ast = parser.parse()?;
+        let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
+
+        let hover = analyzer
+            .resolve_inherited_method_hover("Foo", "dynamic_method")
+            .ok_or("expected AUTOLOAD hover fallback")?;
+
+        assert!(
+            hover.signature.contains("Foo::AUTOLOAD"),
+            "expected AUTOLOAD hover signature, got: {}",
+            hover.signature
+        );
+        assert!(
+            hover.details.iter().any(|detail| detail.contains("AUTOLOAD")),
+            "expected AUTOLOAD hover details, got: {:?}",
+            hover.details
+        );
+        assert!(
+            hover.details.iter().any(|detail| detail.contains("dynamic_method")),
+            "expected requested method detail, got: {:?}",
+            hover.details
+        );
         Ok(())
     }
 
@@ -1378,6 +1716,44 @@ my %config = (key => "value");
             "native method should have SymbolKind::Method, got {:?}",
             sym.kind
         );
+        Ok(())
+    }
+
+    #[test]
+    fn test_find_definition_redirects_method_modifier_to_target_method()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let code =
+            include_str!("../../../../perl-lsp/tests/fixtures/frameworks/moo_method_modifiers.pl");
+        let mut parser = Parser::new(code);
+        let ast = parser.parse()?;
+
+        let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
+
+        // The method definition is line 3; the modifier targets are on lines 8, 13, and 18.
+        for target_line in [8, 13, 18] {
+            let line = code.lines().nth(target_line).ok_or("missing modifier line")?;
+            let col = line.find("save").ok_or("modifier target not found")?;
+            let mut offset = 0;
+            for line in code.lines().take(target_line) {
+                offset += line.len() + 1;
+            }
+            offset += col;
+
+            let sym = analyzer
+                .find_definition(offset)
+                .ok_or("no symbol found at method modifier target")?;
+            assert_eq!(sym.name, "save", "modifier target should resolve to save");
+            let method_start = code.find("sub save").ok_or("method declaration not found")?;
+            assert_eq!(
+                sym.location.start, method_start,
+                "modifier target should resolve to the underlying method declaration"
+            );
+            assert_eq!(
+                sym.declaration, None,
+                "definition should land on the real method, not the synthetic modifier"
+            );
+        }
+
         Ok(())
     }
 }

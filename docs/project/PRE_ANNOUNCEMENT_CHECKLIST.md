@@ -143,7 +143,7 @@ Each item requires a human to verify and record sign-off date + initials.
 
 - [ ] **LSP feature gap: all P0 blockers addressed** — advertised features in `features.toml` are working.
   - Verify: Spot-check 5 advertised features end-to-end in a real editor.
-  - Reference: `features.toml` (102 features as of 2026-04-07).
+  - Reference: `features.toml` (116 features as of 2026-04-11, corrected from 102 in PR #4107 after a DAP catalog audit).
   - Current status: ⚠ — AI inline completion (#3018) shipped in v0.12.2 but awaits E2E user validation. Mark ✓ only after human spot-check.
   - Sign-off: _______________ Date: _______________
 
@@ -155,7 +155,7 @@ Each item requires a human to verify and record sign-off date + initials.
 
 - [ ] **`features.toml` accuracy** — every feature with `status = "ga"` or `status = "preview"` is present and working.
   - Verify: Cross-check `features.toml` against `just ci-gate` output. Spot-test at least 3 features manually.
-  - Current status: ✓ — `features.toml` is the canonical catalog; 102 features tracked and consistent with `docs/project/status/lsp.md`.
+  - Current status: ✓ — `features.toml` is the canonical catalog; 116 features tracked and consistent with `docs/project/status/lsp.md` (87 LSP + 24 DAP + 5 extension; DAP corrected in PR #4107).
   - Sign-off: _______________ Date: _______________
 
 </details>

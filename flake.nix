@@ -39,6 +39,11 @@
           just              # Command runner (justfile)
           cargo-nextest     # Fast test runner (used in CI)
           cargo-audit       # Security vulnerability scanner
+          cargo-llvm-cov    # Coverage reports (llvm-cov)
+          cargo-machete     # Unused dependency detection
+          cargo-semver-checks  # SemVer compliance checks
+          git-cliff         # Changelog generation
+          bacon             # Background cargo watcher
           gh                # GitHub CLI for PR operations
           jq                # JSON processing for scripts
           (python3.withPackages (ps: [ ps.pyyaml ]))  # Used by CI scripts
@@ -197,7 +202,7 @@
 
           perl-lsp = pkgs.rustPlatform.buildRustPackage {
             pname = "perl-lsp";
-            version = "0.9.1";  # Keep in sync with CLAUDE.md
+            version = "0.12.3";  # Keep in sync with CLAUDE.md
             src = self;
             cargoLock.lockFile = ./Cargo.lock;
 

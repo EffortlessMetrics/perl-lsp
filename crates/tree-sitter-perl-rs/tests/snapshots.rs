@@ -73,3 +73,30 @@ fn snapshot_complex_regex() {
     let sexp = tree.root_node().to_sexp();
     insta::assert_snapshot!("complex_regex", sexp);
 }
+
+#[test]
+fn snapshot_control_flow_with_postfix_condition() {
+    let mut parser = Parser::new();
+    let src = "my $x = 3;\nprint \"odd\\n\" if $x % 2;\n";
+    let tree = must_some(parser.parse(src));
+    let sexp = tree.root_node().to_sexp();
+    insta::assert_snapshot!("control_flow_with_postfix_condition", sexp);
+}
+
+#[test]
+fn snapshot_data_structure_dereference() {
+    let mut parser = Parser::new();
+    let src = "my $name = $user->{profile}->{name} // 'unknown';";
+    let tree = must_some(parser.parse(src));
+    let sexp = tree.root_node().to_sexp();
+    insta::assert_snapshot!("data_structure_dereference", sexp);
+}
+
+#[test]
+fn snapshot_for_loop_with_lexical_iterator() {
+    let mut parser = Parser::new();
+    let src = "for my $item (@items) { print $item, \"\\n\"; }";
+    let tree = must_some(parser.parse(src));
+    let sexp = tree.root_node().to_sexp();
+    insta::assert_snapshot!("for_loop_with_lexical_iterator", sexp);
+}

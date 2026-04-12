@@ -166,11 +166,15 @@ fn whole_document_multiple_lines_trailing_newline() {
 
 #[test]
 fn whole_document_unicode_content() {
-    // Each emoji is multiple bytes but .len() counts bytes
+    // LSP positions use UTF-16 code units, not byte lengths.
+    // "héllo": é (U+00E9) is 2 UTF-8 bytes but 1 UTF-16 code unit.
+    // "wörld": ö (U+00F6) is 2 UTF-8 bytes but 1 UTF-16 code unit.
+    // Both lines: 5 chars, 5 UTF-16 units, 6 bytes.
     let content = "héllo\nwörld";
     let range = FormatRange::whole_document(content);
     assert_eq!(range.end.line, 1);
-    assert_eq!(range.end.character, "wörld".len() as u32);
+    // "wörld" = 5 UTF-16 code units (ö is BMP, counts as 1 unit)
+    assert_eq!(range.end.character, 5);
 }
 
 #[test]

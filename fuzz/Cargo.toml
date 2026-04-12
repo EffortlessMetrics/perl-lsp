@@ -47,6 +47,13 @@ doc = false
 bench = false
 
 [[bin]]
+name = "utf16_roundtrip"
+path = "fuzz_targets/utf16_roundtrip.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
 name = "lsp_navigation"
 path = "fuzz_targets/lsp_navigation.rs"
 test = false
@@ -56,6 +63,14 @@ bench = false
 [[bin]]
 name = "heredoc_parsing"
 path = "fuzz_targets/heredoc_parsing.rs"
+test = false
+doc = false
+bench = false
+
+
+[[bin]]
+name = "quote_operators"
+path = "fuzz_targets/quote_operators.rs"
 test = false
 doc = false
 bench = false

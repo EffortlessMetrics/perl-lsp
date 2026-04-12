@@ -210,7 +210,8 @@ fn first_paragraph(text: &str) -> String {
     result
 }
 
-/// Strip POD inline formatting codes: `B<bold>`, `I<italic>`, `C<code>`, `L<link>`.
+/// Strip POD inline formatting codes: `B<bold>`, `I<italic>`, `C<code>`, `L<link>`,
+/// and decode common `E<>` entities.
 ///
 /// Handles simple (non-nested) formatting codes. Nested codes like `B<I<text>>`
 /// are handled by stripping outer codes first.
@@ -246,12 +247,10 @@ fn strip_pod_formatting(text: &str) -> String {
             let inner = &chars[start..i];
             let inner_str: String = inner.iter().collect();
 
-            // For L<> links, extract display text
-            let display = if code_char == 'L' {
-                extract_link_display(&inner_str)
-            } else {
-                // Recursively strip formatting from inner content
-                strip_pod_formatting(&inner_str)
+            let display = match code_char {
+                'L' => extract_link_display(&inner_str),
+                'E' => decode_pod_entity(&inner_str),
+                _ => strip_pod_formatting(&inner_str),
             };
 
             result.push_str(&display);
@@ -267,23 +266,53 @@ fn strip_pod_formatting(text: &str) -> String {
     result
 }
 
-/// Extract display text from a POD L<> link.
+/// Percent-encode characters that are invalid in a markdown link URL.
 ///
-/// Handles common forms:
-/// - `L<Module::Name>` -> `Module::Name`
-/// - `L<text|Module::Name>` -> `text`
-/// - `L<text|Module::Name/section>` -> `text`
-/// - `L<Module::Name/section>` -> `Module::Name`
+/// Encodes spaces (most common in POD section names like `L<Module/"Section Name">`)
+/// and other characters that would break the markdown `[text](url)` parser.
+fn encode_pod_link_target(target: &str) -> String {
+    target.replace(' ', "%20")
+}
+
+/// Extract a markdown link from a POD `L<>` formatting code.
+///
+/// Returns `[display](perl-module://target)` so LSP clients (VS Code) render
+/// the link as clickable in hover tooltips.  Spaces in section names are
+/// percent-encoded so the URL is well-formed.
+///
+/// Handles all standard POD link forms:
+/// - `L<Module::Name>` → `[Module::Name](perl-module://Module::Name)`
+/// - `L<text|Module::Name>` → `[text](perl-module://Module::Name)`
+/// - `L<Module::Name/section>` → `[Module::Name](perl-module://Module::Name/section)`
+/// - `L<text|Module::Name/section>` → `[text](perl-module://Module::Name/section)`
 fn extract_link_display(link: &str) -> String {
-    // L<text|target> -> show text
+    // L<text|target> — explicit display text before the pipe
     if let Some(pipe_pos) = link.find('|') {
-        return strip_pod_formatting(&link[..pipe_pos]);
+        let display = strip_pod_formatting(&link[..pipe_pos]);
+        let target = encode_pod_link_target(link[pipe_pos + 1..].trim());
+        return format!("[{display}](perl-module://{target})");
     }
-    // L<Module/section> -> show Module
+    // L<Module/section> — module + section, display is just the module part
     if let Some(slash_pos) = link.find('/') {
-        return strip_pod_formatting(&link[..slash_pos]);
+        let module = strip_pod_formatting(&link[..slash_pos]);
+        let target = encode_pod_link_target(link.trim());
+        return format!("[{module}](perl-module://{target})");
     }
-    strip_pod_formatting(link)
+    // L<Module::Name> — simple module reference
+    let display = strip_pod_formatting(link);
+    let target = encode_pod_link_target(link.trim());
+    format!("[{display}](perl-module://{target})")
+}
+
+fn decode_pod_entity(entity: &str) -> String {
+    match entity {
+        "lt" => "<".to_string(),
+        "gt" => ">".to_string(),
+        "amp" => "&".to_string(),
+        "quot" => "\"".to_string(),
+        "apos" => "'".to_string(),
+        _ => entity.to_string(),
+    }
 }
 
 fn is_pod_format_code(c: char) -> bool {

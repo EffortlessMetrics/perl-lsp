@@ -302,6 +302,10 @@ impl LspServer {
             "workspace/didChangeConfiguration" => {
                 self.handle_did_change_configuration_dispatch(request.params)
             }
+            "$/perl-lsp/clientResponse" => {
+                self.handle_client_response(request.params);
+                Ok(None)
+            }
             "window/workDoneProgress/cancel" => {
                 self.handle_progress_cancel_dispatch(request.params)
             }

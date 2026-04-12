@@ -4,6 +4,18 @@ pub use perl_lsp_formatting_types::{
     FormatPosition, FormatRange, FormatTextEdit, FormattedDocument, FormattingOptions,
 };
 
+/// Re-export PerlTidyConfig from perl-lsp-perltidy for convenience.
+pub use perl_lsp_perltidy::PerlTidyConfig;
+
+/// Count the number of UTF-16 code units in `s`.
+///
+/// LSP positions use UTF-16 code units (see Language Server Protocol spec §3.1).
+/// Characters in the Basic Multilingual Plane (U+0000–U+FFFF) count as 1 unit;
+/// supplementary-plane characters (U+10000 and above) count as 2 units.
+fn utf16_len(s: &str) -> usize {
+    s.chars().map(|c| if c as u32 >= 0x10000 { 2 } else { 1 }).sum()
+}
+
 /// Formatting error.
 #[derive(Debug, thiserror::Error)]
 pub enum FormattingError {
@@ -46,17 +58,25 @@ pub struct FormattingProvider<R> {
     runtime: R,
     /// Optional custom perltidy path.
     perltidy_path: Option<String>,
+    /// Optional perltidy configuration.
+    perltidy_config: Option<PerlTidyConfig>,
 }
 
 impl<R> FormattingProvider<R> {
     /// Create a new formatting provider with the given runtime.
     pub fn new(runtime: R) -> Self {
-        Self { runtime, perltidy_path: None }
+        Self { runtime, perltidy_path: None, perltidy_config: None }
     }
 
     /// Set a custom perltidy path.
     pub fn with_perltidy_path(mut self, path: String) -> Self {
         self.perltidy_path = Some(path);
+        self
+    }
+
+    /// Set perltidy configuration.
+    pub fn with_perltidy_config(mut self, config: PerlTidyConfig) -> Self {
+        self.perltidy_config = Some(config);
         self
     }
 }
@@ -110,7 +130,7 @@ impl<R: perl_lsp_tooling::SubprocessRuntime> FormattingProvider<R> {
         }
 
         let start_char = 0;
-        let end_char = lines[end_line].len() as u32;
+        let end_char = utf16_len(lines[end_line]) as u32;
 
         Ok(FormattedDocument {
             text: content.to_string(),
@@ -131,12 +151,48 @@ impl<R: perl_lsp_tooling::SubprocessRuntime> FormattingProvider<R> {
     ) -> Result<String, FormattingError> {
         let mut args = vec!["-st".to_string(), "-se".to_string()];
 
-        if options.insert_spaces {
-            args.push(format!("-et={}", options.tab_size));
-            args.push(format!("-i={}", options.tab_size));
+        // If we have a perltidy config, use it to generate args
+        if let Some(ref config) = self.perltidy_config {
+            // Use config's to_args() but merge with LSP options for tab size/indent
+            let mut config_args = config.to_args();
+
+            // If profile is set, use only the profile (perltidy will read everything from there)
+            if config.profile.is_some() {
+                args.extend(config_args);
+            } else {
+                // Merge LSP options with config options
+                // LSP options take precedence for indent-related settings
+
+                // Remove any conflicting args from config_args that LSP options will override
+                config_args.retain(|arg| {
+                    !arg.starts_with("-i=")
+                        && !arg.starts_with("--indent-columns=")
+                        && !arg.starts_with("-et")
+                        && !arg.starts_with("-dt")
+                        && !arg.starts_with("--tabs")
+                        && !arg.starts_with("--notabs")
+                });
+
+                args.extend(config_args);
+
+                // Apply LSP formatting options for indentation
+                if options.insert_spaces {
+                    args.push(format!("-et={}", options.tab_size));
+                    args.push(format!("-i={}", options.tab_size));
+                } else {
+                    args.push("-dt".to_string());
+                    args.push(format!("-i={}", options.tab_size));
+                }
+            }
         } else {
-            args.push("-dt".to_string());
-            args.push(format!("-i={}", options.tab_size));
+            // Fallback to LSP options only
+            if options.insert_spaces {
+                args.push(format!("-et={}", options.tab_size));
+                args.push(format!("-i={}", options.tab_size));
+            } else {
+                args.push("-dt".to_string());
+                args.push(format!("-i={}", options.tab_size));
+            }
         }
 
         let perltidy_cmd = self.perltidy_path.as_deref().unwrap_or("perltidy");

@@ -35,6 +35,11 @@ use perl_symbol_types::{SymbolKind, VarKind};
 ///   `class`).
 /// - `container` — unqualified name of the enclosing package, `None` at
 ///   the top level
+/// - `declarator` — the scope keyword used to declare variables (`"my"`,
+///   `"our"`, `"local"`, `"state"`), or `None` for non-variable declarations
+///   such as subroutines, packages, and constants.  `"our"` variables are
+///   package-scoped and visible across files; `"my"` variables are
+///   lexically-scoped and file-local.
 #[derive(Debug, Clone, PartialEq)]
 pub struct SymbolDecl {
     /// Symbol classification.
@@ -49,6 +54,14 @@ pub struct SymbolDecl {
     pub anchor_span: Option<(usize, usize)>,
     /// Enclosing package name, if the declaration is inside a `package`.
     pub container: Option<String>,
+    /// Scope declarator for variable declarations: `"my"`, `"our"`, `"local"`,
+    /// or `"state"`.  `None` for non-variable declarations (subroutines,
+    /// packages, constants, classes).
+    ///
+    /// `"our"` variables are package-scoped and reachable from other files in
+    /// the same package.  `"my"` variables are lexically-scoped and invisible
+    /// outside their enclosing block.
+    pub declarator: Option<String>,
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────
@@ -80,7 +93,11 @@ pub struct SymbolDecl {
 /// subsequent top-level statements.
 pub fn extract_symbol_decls(root: &Node, current_package: Option<&str>) -> Vec<SymbolDecl> {
     let mut out = Vec::new();
-    let mut ctx = WalkCtx { current_package: current_package.map(str::to_owned) };
+    let mut ctx = WalkCtx {
+        current_package: current_package.map(str::to_owned),
+        const_fast_enabled: false,
+        readonly_enabled: false,
+    };
     walk(root, &mut ctx, &mut out);
     out
 }
@@ -89,6 +106,8 @@ pub fn extract_symbol_decls(root: &Node, current_package: Option<&str>) -> Vec<S
 
 struct WalkCtx {
     current_package: Option<String>,
+    const_fast_enabled: bool,
+    readonly_enabled: bool,
 }
 
 impl WalkCtx {
@@ -114,6 +133,7 @@ fn walk(node: &Node, ctx: &mut WalkCtx, out: &mut Vec<SymbolDecl>) {
                 full_span: (node.location.start, node.location.end),
                 anchor_span: anchor,
                 container,
+                declarator: None,
             });
 
             // If the package has a block, descend with package context scoped
@@ -131,7 +151,7 @@ fn walk(node: &Node, ctx: &mut WalkCtx, out: &mut Vec<SymbolDecl>) {
         }
 
         // ── Class ──────────────────────────────────────────────────────────
-        NodeKind::Class { name, body } => {
+        NodeKind::Class { name, body, .. } => {
             let container = ctx.current_package.clone();
             out.push(SymbolDecl {
                 kind: SymbolKind::Class,
@@ -140,6 +160,7 @@ fn walk(node: &Node, ctx: &mut WalkCtx, out: &mut Vec<SymbolDecl>) {
                 full_span: (node.location.start, node.location.end),
                 anchor_span: None, // Class has no name_span in current AST
                 container,
+                declarator: None,
             });
 
             // Walk class body with the class name as the package context.
@@ -160,6 +181,7 @@ fn walk(node: &Node, ctx: &mut WalkCtx, out: &mut Vec<SymbolDecl>) {
                 full_span: (node.location.start, node.location.end),
                 anchor_span: anchor,
                 container,
+                declarator: None,
             });
             // Walk the body — may contain nested subs or closures.
             walk(body, ctx, out);
@@ -181,13 +203,14 @@ fn walk(node: &Node, ctx: &mut WalkCtx, out: &mut Vec<SymbolDecl>) {
                 full_span: (node.location.start, node.location.end),
                 anchor_span: None, // Method has no name_span in current AST
                 container,
+                declarator: None,
             });
             walk(body, ctx, out);
         }
 
         // ── Variable declarations ──────────────────────────────────────────
-        NodeKind::VariableDeclaration { variable, initializer, .. } => {
-            if let Some(decl) = variable_decl_from_node(variable, node, ctx) {
+        NodeKind::VariableDeclaration { declarator, variable, initializer, .. } => {
+            if let Some(decl) = variable_decl_from_node(variable, node, ctx, declarator) {
                 out.push(decl);
             }
             // Walk initializer for nested declarations (e.g. `my $x = sub { }`)
@@ -196,9 +219,9 @@ fn walk(node: &Node, ctx: &mut WalkCtx, out: &mut Vec<SymbolDecl>) {
             }
         }
 
-        NodeKind::VariableListDeclaration { variables, initializer, .. } => {
+        NodeKind::VariableListDeclaration { declarator, variables, initializer, .. } => {
             for var in variables {
-                if let Some(decl) = variable_decl_from_node(var, node, ctx) {
+                if let Some(decl) = variable_decl_from_node(var, node, ctx, declarator) {
                     out.push(decl);
                 }
             }
@@ -209,22 +232,37 @@ fn walk(node: &Node, ctx: &mut WalkCtx, out: &mut Vec<SymbolDecl>) {
 
         // ── use constant NAME => value ─────────────────────────────────────
         NodeKind::Use { module, args, .. } if module == "constant" => {
-            // `args` layout: [NAME, value, ...] or [NAME1, val1, NAME2, val2, ...]
-            // The first arg is the constant name (or a hash-ref style with
-            // multiple names — for MVP we take just the first string arg).
-            if let Some(const_name) = args.first() {
-                // Skip if it looks like a reference marker or is empty.
-                if !const_name.is_empty() && !const_name.starts_with('{') {
-                    let container = ctx.current_package.clone();
-                    out.push(SymbolDecl {
-                        kind: SymbolKind::Constant,
-                        name: const_name.clone(),
-                        qualified_name: ctx.qualify(const_name),
-                        full_span: (node.location.start, node.location.end),
-                        anchor_span: None, // No precise span available from Use node
-                        container,
-                    });
-                }
+            for const_name in constant_names_from_use_args(args) {
+                let container = ctx.current_package.clone();
+                out.push(SymbolDecl {
+                    kind: SymbolKind::Constant,
+                    name: const_name.clone(),
+                    qualified_name: ctx.qualify(&const_name),
+                    full_span: (node.location.start, node.location.end),
+                    anchor_span: None, // No precise span available from Use node
+                    container,
+                    declarator: None,
+                });
+            }
+        }
+
+        NodeKind::Use { module, .. } if module == "Const::Fast" => {
+            ctx.const_fast_enabled = true;
+        }
+
+        NodeKind::Use { module, .. } if module == "Readonly" => {
+            ctx.readonly_enabled = true;
+        }
+
+        NodeKind::FunctionCall { name, args } if ctx.const_fast_enabled && name == "const" => {
+            for arg in args {
+                push_const_fast_decl(arg, node, ctx, out);
+            }
+        }
+
+        NodeKind::FunctionCall { name, args } if ctx.readonly_enabled && name == "Readonly" => {
+            for arg in args {
+                push_readonly_decl(arg, node, ctx, out);
             }
         }
 
@@ -242,6 +280,153 @@ fn walk(node: &Node, ctx: &mut WalkCtx, out: &mut Vec<SymbolDecl>) {
     }
 }
 
+fn constant_names_from_use_args(args: &[String]) -> Vec<String> {
+    let mut names = Vec::new();
+    let mut brace_depth = 0usize;
+    let mut fallback_name: Option<String> = None;
+
+    for (idx, arg) in args.iter().enumerate() {
+        match arg.as_str() {
+            "{" => {
+                brace_depth += 1;
+                continue;
+            }
+            "}" => {
+                brace_depth = brace_depth.saturating_sub(1);
+                continue;
+            }
+            "+" | "," => continue,
+            _ => {}
+        }
+
+        if let Some(qw_names) = qw_names(arg) {
+            for name in qw_names {
+                push_unique(&mut names, name);
+            }
+            continue;
+        }
+
+        if is_constant_name_candidate(arg) {
+            if brace_depth == 1 && args.get(idx + 1).is_some_and(|next| next == "=>") {
+                push_unique(&mut names, arg.clone());
+                continue;
+            }
+
+            if brace_depth == 0 && fallback_name.is_none() {
+                fallback_name = Some(arg.clone());
+            }
+        }
+    }
+
+    if names.is_empty() {
+        if let Some(name) = fallback_name {
+            names.push(name);
+        }
+    }
+
+    names
+}
+
+fn qw_names(arg: &str) -> Option<Vec<String>> {
+    let content = arg.strip_prefix("qw").and_then(|rest| {
+        rest.strip_prefix('(')
+            .and_then(|s| s.strip_suffix(')'))
+            .or_else(|| rest.strip_prefix('[').and_then(|s| s.strip_suffix(']')))
+            .or_else(|| rest.strip_prefix('{').and_then(|s| s.strip_suffix('}')))
+            .or_else(|| rest.strip_prefix('<').and_then(|s| s.strip_suffix('>')))
+    });
+
+    content.map(|text| {
+        text.split_whitespace().filter(|name| !name.is_empty()).map(str::to_owned).collect()
+    })
+}
+
+fn is_constant_name_candidate(arg: &str) -> bool {
+    !arg.is_empty()
+        && arg != "=>"
+        && !arg.starts_with('{')
+        && !arg.starts_with('}')
+        && !arg.starts_with('-')
+        && !arg.starts_with('$')
+        && !arg.starts_with('@')
+        && !arg.starts_with('%')
+}
+
+fn push_unique(names: &mut Vec<String>, name: String) {
+    if !names.iter().any(|existing| existing == &name) {
+        names.push(name);
+    }
+}
+
+fn push_const_fast_decl(arg: &Node, call_node: &Node, ctx: &WalkCtx, out: &mut Vec<SymbolDecl>) {
+    match &arg.kind {
+        NodeKind::VariableDeclaration { variable, .. } => {
+            if let Some(decl) = constant_wrapper_decl_from_node(variable, call_node, ctx, "const") {
+                out.push(decl);
+            }
+        }
+        NodeKind::VariableListDeclaration { variables, .. } => {
+            for variable in variables {
+                if let Some(decl) =
+                    constant_wrapper_decl_from_node(variable, call_node, ctx, "const")
+                {
+                    out.push(decl);
+                }
+            }
+        }
+        _ => {}
+    }
+}
+
+fn push_readonly_decl(arg: &Node, call_node: &Node, ctx: &WalkCtx, out: &mut Vec<SymbolDecl>) {
+    match &arg.kind {
+        NodeKind::VariableDeclaration { variable, .. } => {
+            if let Some(decl) =
+                constant_wrapper_decl_from_node(variable, call_node, ctx, "Readonly")
+            {
+                out.push(decl);
+            }
+        }
+        NodeKind::VariableListDeclaration { variables, .. } => {
+            for variable in variables {
+                if let Some(decl) =
+                    constant_wrapper_decl_from_node(variable, call_node, ctx, "Readonly")
+                {
+                    out.push(decl);
+                }
+            }
+        }
+        _ => {}
+    }
+}
+
+fn constant_wrapper_decl_from_node(
+    var_node: &Node,
+    call_node: &Node,
+    ctx: &WalkCtx,
+    declarator: &str,
+) -> Option<SymbolDecl> {
+    match &var_node.kind {
+        NodeKind::Variable { name, .. } => {
+            let anchor_span = Some((var_node.location.start, var_node.location.end));
+            let container = ctx.current_package.clone();
+            Some(SymbolDecl {
+                kind: SymbolKind::Constant,
+                name: name.clone(),
+                qualified_name: ctx.qualify(name),
+                full_span: (call_node.location.start, call_node.location.end),
+                anchor_span,
+                container,
+                declarator: Some(declarator.to_string()),
+            })
+        }
+        NodeKind::VariableWithAttributes { variable, .. } => {
+            constant_wrapper_decl_from_node(variable, call_node, ctx, declarator)
+        }
+        _ => None,
+    }
+}
+
 /// Walk a slice of statement nodes linearly, so that `package Foo;` updates
 /// the context before processing subsequent siblings.
 fn walk_statements(statements: &[Node], ctx: &mut WalkCtx, out: &mut Vec<SymbolDecl>) {
@@ -252,9 +437,18 @@ fn walk_statements(statements: &[Node], ctx: &mut WalkCtx, out: &mut Vec<SymbolD
 
 /// Extract a `SymbolDecl` from a `Variable` node inside a `VariableDeclaration`.
 ///
+/// `declarator` is the scope keyword (`"my"`, `"our"`, `"local"`, `"state"`)
+/// from the enclosing declaration node; it is stored on the returned `SymbolDecl`
+/// so consumers can distinguish package-scoped (`our`) from lexical (`my`) symbols.
+///
 /// Returns `None` for non-`Variable` children (e.g. `VariableWithAttributes`
 /// wrapping — in that case the caller should unwrap further).
-fn variable_decl_from_node(var_node: &Node, decl_node: &Node, ctx: &WalkCtx) -> Option<SymbolDecl> {
+fn variable_decl_from_node(
+    var_node: &Node,
+    decl_node: &Node,
+    ctx: &WalkCtx,
+    declarator: &str,
+) -> Option<SymbolDecl> {
     match &var_node.kind {
         NodeKind::Variable { sigil, name } => {
             let kind = sigil_to_symbol_kind(sigil);
@@ -267,10 +461,11 @@ fn variable_decl_from_node(var_node: &Node, decl_node: &Node, ctx: &WalkCtx) -> 
                 full_span: (decl_node.location.start, decl_node.location.end),
                 anchor_span,
                 container,
+                declarator: Some(declarator.to_owned()),
             })
         }
         NodeKind::VariableWithAttributes { variable, .. } => {
-            variable_decl_from_node(variable, decl_node, ctx)
+            variable_decl_from_node(variable, decl_node, ctx, declarator)
         }
         _ => None,
     }
@@ -282,5 +477,60 @@ fn sigil_to_symbol_kind(sigil: &str) -> SymbolKind {
         "@" => SymbolKind::Variable(VarKind::Array),
         "%" => SymbolKind::Variable(VarKind::Hash),
         _ => SymbolKind::Variable(VarKind::Scalar),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{constant_names_from_use_args, is_constant_name_candidate, qw_names};
+
+    #[test]
+    fn constant_names_extract_hash_style_pairs() {
+        let args = vec![
+            "{".to_string(),
+            "FOO".to_string(),
+            "=>".to_string(),
+            "1".to_string(),
+            ",".to_string(),
+            "BAR".to_string(),
+            "=>".to_string(),
+            "2".to_string(),
+            "}".to_string(),
+        ];
+
+        assert_eq!(constant_names_from_use_args(&args), vec!["FOO".to_string(), "BAR".to_string()]);
+    }
+
+    #[test]
+    fn constant_names_falls_back_to_first_top_level_candidate() {
+        let args = vec!["ANSWER".to_string(), "=>".to_string(), "42".to_string()];
+
+        assert_eq!(constant_names_from_use_args(&args), vec!["ANSWER".to_string()]);
+    }
+
+    #[test]
+    fn constant_names_supports_qw_and_deduplicates_entries() {
+        let args = vec!["qw(ONE TWO ONE)".to_string()];
+
+        assert_eq!(constant_names_from_use_args(&args), vec!["ONE".to_string(), "TWO".to_string()]);
+    }
+
+    #[test]
+    fn qw_names_support_multiple_delimiters() {
+        assert_eq!(qw_names("qw(one two)"), Some(vec!["one".to_string(), "two".to_string()]));
+        assert_eq!(qw_names("qw[one two]"), Some(vec!["one".to_string(), "two".to_string()]));
+        assert_eq!(qw_names("qw{one two}"), Some(vec!["one".to_string(), "two".to_string()]));
+        assert_eq!(qw_names("qw<one two>"), Some(vec!["one".to_string(), "two".to_string()]));
+    }
+
+    #[test]
+    fn constant_name_candidate_rejects_non_names() {
+        assert!(is_constant_name_candidate("VALID_NAME"));
+        assert!(!is_constant_name_candidate(""));
+        assert!(!is_constant_name_candidate("=>"));
+        assert!(!is_constant_name_candidate("$scalar"));
+        assert!(!is_constant_name_candidate("@array"));
+        assert!(!is_constant_name_candidate("%hash"));
+        assert!(!is_constant_name_candidate("-flag"));
     }
 }

@@ -891,7 +891,60 @@ fn capabilities_json_adds_type_hierarchy_beyond_struct() -> Result<(), Box<dyn s
     );
     assert!(
         from_struct.get("typeHierarchyProvider").is_none(),
-        "struct serialization should not have typeHierarchyProvider"
+        "struct serialization should not have typeHierarchyProvider at top-level \
+         (it is in experimental instead)"
+    );
+    Ok(())
+}
+
+/// Verify that `capabilities_for()` advertises `typeHierarchyProvider` via the
+/// `experimental` field when `type_hierarchy` is enabled.
+///
+/// This ensures clients that inspect `ServerCapabilities.experimental` can discover
+/// the type hierarchy capability even though lsp-types 0.97 lacks a typed field for it.
+#[test]
+fn type_hierarchy_advertised_in_experimental_when_enabled() -> Result<(), Box<dyn std::error::Error>>
+{
+    let flags = BuildFlags { type_hierarchy: true, ..BuildFlags::default() };
+    let caps = capabilities_for(flags);
+    let v = serde_json::to_value(&caps)?;
+    let type_hierarchy_in_experimental = v.pointer("/experimental/typeHierarchyProvider").is_some();
+    assert!(
+        type_hierarchy_in_experimental,
+        "capabilities_for() must advertise typeHierarchyProvider in experimental when \
+         type_hierarchy is enabled; got experimental={:?}",
+        v.get("experimental")
+    );
+    Ok(())
+}
+
+/// Verify that `typeHierarchyProvider` is absent from `experimental` when disabled.
+#[test]
+fn type_hierarchy_absent_from_experimental_when_disabled() -> Result<(), Box<dyn std::error::Error>>
+{
+    let flags = BuildFlags { type_hierarchy: false, ..BuildFlags::default() };
+    let caps = capabilities_for(flags);
+    let v = serde_json::to_value(&caps)?;
+    let type_hierarchy_in_experimental = v.pointer("/experimental/typeHierarchyProvider").is_some();
+    assert!(
+        !type_hierarchy_in_experimental,
+        "capabilities_for() must not advertise typeHierarchyProvider in experimental when \
+         type_hierarchy is disabled"
+    );
+    Ok(())
+}
+
+/// Verify that `type_hierarchy` is no longer a structural gap: `capabilities_for()`
+/// now advertises it via `experimental`, making it detectable by `feature_ids_from_caps`.
+#[test]
+fn type_hierarchy_is_not_a_structural_gap() -> Result<(), Box<dyn std::error::Error>> {
+    let flags = BuildFlags { type_hierarchy: true, ..BuildFlags::default() };
+    let caps = capabilities_for(flags);
+    let v = serde_json::to_value(&caps)?;
+    // The experimental field must be present and contain typeHierarchyProvider
+    assert!(
+        v.pointer("/experimental/typeHierarchyProvider").is_some(),
+        "type_hierarchy must be detectable via experimental — it is no longer a structural gap"
     );
     Ok(())
 }

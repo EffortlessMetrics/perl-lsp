@@ -71,8 +71,9 @@ impl LspServer {
 
             // Get diagnostics from the document
             let diag_provider = DiagnosticsProvider::new(ast, doc.text.clone());
-            let diagnostics =
+            let mut diagnostics =
                 diag_provider.get_diagnostics(ast, &doc.parse_errors, &doc.text, None);
+            diagnostics.extend(self.context_diagnostics_for_code_actions(&params, doc));
 
             // Get code actions from both providers
             let mut code_actions: Vec<Value> = Vec::new();
@@ -107,10 +108,11 @@ impl LspServer {
                                 "end": {"line": end_line, "character": end_char},
                             },
                             "severity": match violation.severity {
-                                crate::perl_critic::Severity::Brutal |
-                                crate::perl_critic::Severity::Cruel => 1, // Error
+                                crate::perl_critic::Severity::Gentle => 1, // Error
+                                crate::perl_critic::Severity::Stern |
                                 crate::perl_critic::Severity::Harsh => 2, // Warning
-                                _ => 3, // Information
+                                crate::perl_critic::Severity::Cruel => 3, // Information
+                                crate::perl_critic::Severity::Brutal => 4, // Hint
                             },
                             "code": violation.policy.clone(),
                             "source": "Perl::Critic",
@@ -547,6 +549,52 @@ impl LspServer {
         } else {
             Ok(None)
         }
+    }
+}
+
+impl LspServer {
+    fn context_diagnostics_for_code_actions(
+        &self,
+        params: &Value,
+        doc: &crate::runtime::DocumentState,
+    ) -> Vec<crate::features::diagnostics::Diagnostic> {
+        params
+            .get("context")
+            .and_then(|ctx| ctx.get("diagnostics"))
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .filter_map(|diag| {
+                let range = diag.get("range")?;
+                let start_line = range.get("start")?.get("line")?.as_u64()? as u32;
+                let start_char = range.get("start")?.get("character")?.as_u64()? as u32;
+                let end_line = range.get("end")?.get("line")?.as_u64()? as u32;
+                let end_char = range.get("end")?.get("character")?.as_u64()? as u32;
+                let code = diag.get("code").and_then(Value::as_str)?.to_string();
+                let message = diag.get("message").and_then(Value::as_str)?.to_string();
+
+                let severity = match diag.get("severity").and_then(Value::as_u64) {
+                    Some(1) => crate::features::diagnostics::DiagnosticSeverity::Error,
+                    Some(2) => crate::features::diagnostics::DiagnosticSeverity::Warning,
+                    Some(3) => crate::features::diagnostics::DiagnosticSeverity::Information,
+                    Some(4) => crate::features::diagnostics::DiagnosticSeverity::Hint,
+                    _ => crate::features::diagnostics::DiagnosticSeverity::Warning,
+                };
+
+                Some(crate::features::diagnostics::Diagnostic {
+                    range: (
+                        self.pos16_to_offset(doc, start_line, start_char),
+                        self.pos16_to_offset(doc, end_line, end_char),
+                    ),
+                    severity,
+                    code: Some(code),
+                    message,
+                    suggestion: None,
+                    related_information: Vec::new(),
+                    tags: Vec::new(),
+                })
+            })
+            .collect()
     }
 }
 

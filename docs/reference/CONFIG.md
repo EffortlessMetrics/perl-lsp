@@ -88,7 +88,7 @@ your-project/
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `perlcritic` | `boolean` | (unset) | Enable perlcritic diagnostics. When unset, the server default (`false`) applies. Requires `perlcritic` installed on the system. |
-| `perlcritic_severity` | `integer` (1–5) | (unset) | Minimum severity to report. 1 = most severe (gentle), 5 = everything (brutal). Must be in the range 1–5; values outside this range are a parse error. |
+| `perlcritic_severity` | `integer` (1–5) | (unset) | Minimum severity to report. Perl::Critic uses `1 = least severe` and `5 = most severe`, so `1` reports everything while `5` reports only the most severe violations. Must be in the range 1–5; values outside this range are a parse error. |
 
 #### `[features]` — LSP Feature Toggles
 
@@ -120,7 +120,7 @@ include_paths = ["lib", "local/lib/perl5"]
 # Enable perlcritic linting (opt-in; requires perlcritic installed)
 perlcritic = false
 
-# Minimum severity to report: 1 (most severe) to 5 (everything)
+# Minimum severity to report: 1 (everything) to 5 (most severe only)
 perlcritic_severity = 3
 
 [features]
@@ -182,7 +182,30 @@ the workspace root. Absolute entries are honored as provided only when they
 still stay inside the workspace boundary. These paths are searched by
 `perl-lsp` and are not appended to Perl's runtime `@INC`.
 
-Use `useSystemInc` to opt in to system `@INC` lookup.
+When `perlPath` is unset, the server will try perlbrew/plenv-managed
+interpreters before falling back to `perl` on `PATH` for the system `@INC`
+probe. Use `useSystemInc` to opt in to that system `@INC` lookup.
+
+#### `perl.workspace.perlPath`
+
+| Property | Value |
+|---|---|
+| Type | `string` |
+| Default | auto-detected |
+| Key | `perlPath` |
+
+Path to the Perl interpreter used for system `@INC` probing. When set, this
+value overrides auto-detection and `PATH` lookup.
+
+#### `perl.workspace.perlArgs`
+
+| Property | Value |
+|---|---|
+| Type | `string[]` |
+| Default | `[]` |
+| Key | `perlArgs` |
+
+Extra arguments passed to the Perl interpreter when probing startup `@INC`.
 
 ```json
 {
@@ -369,8 +392,9 @@ Controls optional Perl::Critic static analysis integration.
 | Default | `false` |
 
 **Opt-in.** When `true`, the server runs `perlcritic` on open documents and
-merges violations into the diagnostic stream. Silently skipped if `perlcritic`
-is not installed on the system.
+merges violations into the diagnostic stream. If `perlcritic` is missing,
+profile resolution fails, or the command execution fails, the server emits a
+workspace warning instead of silently skipping.
 
 #### `perl.perlcritic.severity`
 
@@ -379,9 +403,9 @@ is not installed on the system.
 | Type | `integer` (1–5) |
 | Default | `3` |
 
-Minimum severity level to report. `1` = most severe (Brutal), `5` = everything
-(Gentle). Values are clamped to the valid range. Equivalent to
-`perlcritic --severity N`.
+Minimum severity level to report. Perl::Critic uses `1` for least severe
+violations and `5` for most severe violations. Values are clamped to the
+valid range. Equivalent to `perlcritic --severity N`.
 
 #### `perl.perlcritic.profile`
 

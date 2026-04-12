@@ -134,43 +134,69 @@ impl UxClient {
         };
 
         // ── LSP handshake ─────────────────────────────────────────────────────
-        client.handshake(&workspace.root_uri, config.timeout)?;
+        client.handshake(workspace, config, config.timeout)?;
 
         Ok(client)
     }
 
-    fn handshake(&self, root_uri: &str, timeout: Duration) -> Result<()> {
-        let init_resp = self.request(
-            "initialize",
-            json!({
-                "processId": null,
-                "rootUri": root_uri,
-                "capabilities": {
-                    "general": {
-                        "positionEncodings": ["utf-16"]
+    fn handshake(
+        &self,
+        workspace: &FakeWorkspace,
+        config: &ScenarioConfig,
+        timeout: Duration,
+    ) -> Result<()> {
+        let workspace_folders = config
+            .workspace_folders
+            .iter()
+            .map(|(relative_path, name)| {
+                Ok(json!({
+                    "uri": workspace.dir_uri(relative_path)?,
+                    "name": name,
+                }))
+            })
+            .collect::<Result<Vec<Value>>>()?;
+
+        let root_uri = if workspace_folders.is_empty() {
+            Value::String(workspace.root_uri.clone())
+        } else {
+            Value::Null
+        };
+
+        let mut params = json!({
+            "processId": null,
+            "rootUri": root_uri,
+            "capabilities": {
+                "general": {
+                    "positionEncodings": ["utf-16"]
+                },
+                "textDocument": {
+                    "hover": {
+                        "contentFormat": ["markdown", "plaintext"]
                     },
-                    "textDocument": {
-                        "hover": {
-                            "contentFormat": ["markdown", "plaintext"]
-                        },
-                        "completion": {
-                            "completionItem": {
-                                "snippetSupport": true
-                            }
-                        },
-                        "formatting": {},
-                        "definition": {},
-                        "publishDiagnostics": {
-                            "relatedInformation": true
+                    "completion": {
+                        "completionItem": {
+                            "snippetSupport": true
                         }
                     },
-                    "window": {
-                        "showMessage": {}
+                    "formatting": {},
+                    "definition": {},
+                    "publishDiagnostics": {
+                        "relatedInformation": true
                     }
+                },
+                "workspace": {
+                    "workspaceFolders": true
+                },
+                "window": {
+                    "showMessage": {}
                 }
-            }),
-            timeout,
-        )?;
+            }
+        });
+        if !workspace_folders.is_empty() {
+            params["workspaceFolders"] = Value::Array(workspace_folders);
+        }
+
+        let init_resp = self.request("initialize", params, timeout)?;
 
         if let Some(err) = init_resp.get("error") {
             return Err(anyhow!("LSP initialize returned error: {}", err));

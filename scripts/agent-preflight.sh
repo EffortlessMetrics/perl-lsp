@@ -140,6 +140,21 @@ else
     STASH_OK=true
 fi
 
+# ── Check 7: pre-push hook is current (Windows MAX_PATH guard) ──────────────
+# Warning-only — a stale hook does not block agent work, only push.
+
+REPO_ROOT_AGENT="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+INSTALLED_HOOK="$(git rev-parse --git-common-dir 2>/dev/null)/hooks/pre-push"
+CHECKED_IN_HOOK="$REPO_ROOT_AGENT/hooks/pre-push"
+if [ -f "$INSTALLED_HOOK" ] && [ -f "$CHECKED_IN_HOOK" ]; then
+    if ! diff -q "$INSTALLED_HOOK" "$CHECKED_IN_HOOK" >/dev/null 2>&1; then
+        printf 'WARN pre-push hook is stale (Windows os error 206 risk)\n'
+        printf '     Fix: cargo xtask ci-hygiene install-githooks\n'
+    else
+        ok "pre-push hook is current"
+    fi
+fi
+
 # ── Summary ───────────────────────────────────────────────────────────────────
 
 echo ""

@@ -14,6 +14,7 @@ use std::sync::Arc;
 
 use perl_lsp_diagnostics::{Diagnostic, DiagnosticSeverity, DiagnosticTag, DiagnosticsProvider};
 use perl_parser::Parser;
+use tempfile::tempdir;
 
 fn diagnostics_for(source: &str) -> Vec<Diagnostic> {
     let output = Parser::new(source).parse_with_recovery();
@@ -169,63 +170,151 @@ fn lint_pipeline_moose_suppresses_pl100_pl101() {
 }
 
 // =========================================================================
-// 7. use strict inside BEGIN block suppresses missing-strict (issue #2360)
+// 7. use strict inside BEGIN block remains block-scoped (issue #4100)
 // =========================================================================
 
 #[test]
-fn lint_pipeline_strict_inside_begin_suppresses_pl100() {
-    // use strict declared inside BEGIN { } must still suppress the missing-strict advisory.
-    // This tests the walker.rs PhaseBlock recursion fix.
+fn lint_pipeline_strict_inside_begin_emits_pl100() {
+    // BEGIN blocks execute early, but pragma scope is still lexical to the block body.
+    // The file still lacks top-level strict, so PL100 must fire.
     let source = "BEGIN { use strict; }\nuse warnings;\nmy $x = 42;\nprint $x;\n";
     let diags = diagnostics_for(source);
     let missing_strict: Vec<_> =
         diags.iter().filter(|d| d.code.as_deref() == Some("PL100")).collect();
     assert!(
-        missing_strict.is_empty(),
-        "use strict inside BEGIN should suppress PL100, got {} missing-strict diags",
+        !missing_strict.is_empty(),
+        "use strict inside BEGIN must not suppress PL100, got {} missing-strict diags",
         missing_strict.len()
     );
 }
 
 // =========================================================================
-// 8. use warnings inside END block suppresses missing-warnings (issue #2360)
+// 8. use warnings inside END block remains block-scoped (issue #4100)
 // =========================================================================
 
 #[test]
-fn lint_pipeline_warnings_inside_end_suppresses_pl101() {
-    // use warnings declared inside END { } must still suppress PL101.
-    // All 5 phase keyword bodies are walked by the PhaseBlock fix.
+fn lint_pipeline_warnings_inside_end_emits_pl101() {
+    // END blocks do not make warnings file-wide; PL101 must still fire.
     let source = "use strict;\nEND { use warnings; }\nmy $x = 42;\nprint $x;\n";
     let diags = diagnostics_for(source);
     let missing_warnings: Vec<_> =
         diags.iter().filter(|d| d.code.as_deref() == Some("PL101")).collect();
     assert!(
-        missing_warnings.is_empty(),
-        "use warnings inside END should suppress PL101, got {} missing-warnings diags",
+        !missing_warnings.is_empty(),
+        "use warnings inside END must not suppress PL101, got {} missing-warnings diags",
         missing_warnings.len()
     );
 }
 
+#[test]
+fn lint_pipeline_strict_inside_begin_emits_pl502() {
+    let source = "BEGIN { use strict; }\nuse warnings;\nmy $x = 42;\nprint $x;\n";
+    let diags = diagnostics_for(source);
+    let phase_scoped: Vec<_> =
+        diags.iter().filter(|d| d.code.as_deref() == Some("PL502")).collect();
+    assert!(
+        !phase_scoped.is_empty(),
+        "use strict inside BEGIN should emit PL502, got codes: {:?}",
+        diags.iter().map(|d| d.code.as_deref().unwrap_or("none")).collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn lint_pipeline_warnings_inside_end_emits_pl503() {
+    let source = "use strict;\nEND { use warnings; }\nmy $x = 42;\nprint $x;\n";
+    let diags = diagnostics_for(source);
+    let phase_scoped: Vec<_> =
+        diags.iter().filter(|d| d.code.as_deref() == Some("PL503")).collect();
+    assert!(
+        !phase_scoped.is_empty(),
+        "use warnings inside END should emit PL503, got codes: {:?}",
+        diags.iter().map(|d| d.code.as_deref().unwrap_or("none")).collect::<Vec<_>>()
+    );
+}
+
 // =========================================================================
-// 9. use strict inside non-BEGIN phase block (INIT) suppresses PL100 (#2360)
+// 9. conditional `use if` pragmas conservatively suppress missing-pragmas
 // =========================================================================
 
 #[test]
-fn lint_pipeline_strict_inside_init_suppresses_pl100() {
-    // All phase block keywords (not just BEGIN) must be recursed into.
-    let source = "INIT { use strict; }\nuse warnings;\nmy $x = 42;\nprint $x;\n";
+fn lint_pipeline_use_if_strict_suppresses_pl100() {
+    let source = "use if $^O eq 'MSWin32', 'strict';\nuse warnings;\nmy $x = 42;\nprint $x;\n";
     let diags = diagnostics_for(source);
     let missing_strict: Vec<_> =
         diags.iter().filter(|d| d.code.as_deref() == Some("PL100")).collect();
     assert!(
         missing_strict.is_empty(),
-        "use strict inside INIT should suppress PL100, got {} missing-strict diags",
+        "conditional use-if strict should conservatively suppress PL100, got {} missing-strict diags",
+        missing_strict.len()
+    );
+}
+
+#[test]
+fn lint_pipeline_use_if_warnings_suppresses_pl101() {
+    let source = "use strict;\nuse if $^O eq 'MSWin32', 'warnings';\nmy $x = 42;\nprint $x;\n";
+    let diags = diagnostics_for(source);
+    let missing_warnings: Vec<_> =
+        diags.iter().filter(|d| d.code.as_deref() == Some("PL101")).collect();
+    assert!(
+        missing_warnings.is_empty(),
+        "conditional use-if warnings should conservatively suppress PL101, got {} missing-warnings diags",
+        missing_warnings.len()
+    );
+}
+
+#[test]
+fn lint_pipeline_use_if_nonpragma_version_condition_still_emits_missing_pragmas() {
+    let source = "use if $] >= 5.036, 'Some::Module';\nmy $x = 42;\nprint $x;\n";
+    let diags = diagnostics_for(source);
+
+    let missing_strict: Vec<_> =
+        diags.iter().filter(|d| d.code.as_deref() == Some("PL100")).collect();
+    let missing_warnings: Vec<_> =
+        diags.iter().filter(|d| d.code.as_deref() == Some("PL101")).collect();
+
+    assert!(!missing_strict.is_empty(), "non-pragma conditional use-if should not suppress PL100");
+    assert!(
+        !missing_warnings.is_empty(),
+        "non-pragma conditional use-if should not suppress PL101"
+    );
+}
+
+// =========================================================================
+// 10. use strict inside non-BEGIN phase block (INIT) remains block-scoped (#4100)
+// =========================================================================
+
+#[test]
+fn lint_pipeline_strict_inside_init_emits_pl100() {
+    // Other phase blocks are lexical too; INIT-scoped strict must not suppress PL100.
+    let source = "INIT { use strict; }\nuse warnings;\nmy $x = 42;\nprint $x;\n";
+    let diags = diagnostics_for(source);
+    let missing_strict: Vec<_> =
+        diags.iter().filter(|d| d.code.as_deref() == Some("PL100")).collect();
+    assert!(
+        !missing_strict.is_empty(),
+        "use strict inside INIT must not suppress PL100, got {} missing-strict diags",
+        missing_strict.len()
+    );
+}
+
+// 11. signatures feature suppresses missing-strict
+// =========================================================================
+
+#[test]
+fn lint_pipeline_feature_signatures_suppresses_pl100() {
+    let source = "use feature 'signatures';\nmy $x = 42;\nprint $x;\n";
+    let diags = diagnostics_for(source);
+    let missing_strict: Vec<_> =
+        diags.iter().filter(|d| d.code.as_deref() == Some("PL100")).collect();
+    assert!(
+        missing_strict.is_empty(),
+        "use feature 'signatures' should suppress PL100, got {} missing-strict diags",
         missing_strict.len()
     );
 }
 
 // =========================================================================
-// 10. Security lint: string eval fires through the full pipeline (#2693)
+// 12. Security lint: string eval fires through the full pipeline (#2693)
 // =========================================================================
 
 #[test]
@@ -252,7 +341,63 @@ fn lint_pipeline_string_eval_emits_pl600() {
 }
 
 // =========================================================================
-// 11. Unused imports lint fires through the full pipeline (#2694)
+// 13. Eval error flow lint fires through the full pipeline (#3380)
+// =========================================================================
+
+#[test]
+fn lint_pipeline_eval_error_flow_emits_pl407() {
+    let source = "use v5.40;\neval { risky() };\nmy $marker = 1;\nif ($@) { warn $@; }\n";
+    let diags = diagnostics_for(source);
+
+    let flow: Vec<_> = diags.iter().filter(|d| d.code.as_deref() == Some("PL407")).collect();
+
+    assert!(
+        !flow.is_empty(),
+        "Expected eval-error-flow (PL407) diagnostic from get_diagnostics(), \
+         got {} total diags with codes: {:?}",
+        diags.len(),
+        diags.iter().map(|d| d.code.as_deref().unwrap_or("none")).collect::<Vec<_>>()
+    );
+    assert_eq!(flow[0].severity, DiagnosticSeverity::Warning);
+}
+
+// =========================================================================
+// 14. Security lint: global SIG handlers fire through the full pipeline
+// =========================================================================
+
+#[test]
+fn lint_pipeline_global_sig_handler_emits_pl602() {
+    let source = "use strict;\nuse warnings;\n$main::SIG{'__WARN__'} = sub { warn \"caught\" };\n";
+    let diags = diagnostics_for(source);
+
+    let signal: Vec<_> = diags.iter().filter(|d| d.code.as_deref() == Some("PL602")).collect();
+
+    assert!(
+        !signal.is_empty(),
+        "Expected security-signal-handler (PL602) diagnostic from get_diagnostics(), \
+         got {} total diags with codes: {:?}",
+        diags.len(),
+        diags.iter().map(|d| d.code.as_deref().unwrap_or("none")).collect::<Vec<_>>()
+    );
+    assert_eq!(signal[0].severity, DiagnosticSeverity::Warning);
+    assert!(signal[0].suggestion.is_some(), "security-signal-handler should carry a suggestion");
+}
+
+#[test]
+fn lint_pipeline_lexical_sig_shadow_does_not_emit_pl602() {
+    let source =
+        "use strict;\nuse warnings;\nmy %SIG;\n$SIG{__WARN__} = sub { warn \"caught\" };\n";
+    let diags = diagnostics_for(source);
+
+    assert!(
+        diags.iter().all(|d| d.code.as_deref() != Some("PL602")),
+        "lexical %SIG shadow should not emit PL602 from get_diagnostics(), got {:?}",
+        diags.iter().map(|d| d.code.as_deref().unwrap_or("none")).collect::<Vec<_>>()
+    );
+}
+
+// =========================================================================
+// 15. Unused imports lint fires through the full pipeline (#2694)
 // =========================================================================
 
 #[test]
@@ -282,7 +427,7 @@ fn lint_pipeline_unused_import_emits_pl700() {
 }
 
 // =========================================================================
-// 12. Used import does NOT fire PL700 (#2694)
+// 16. Used import does NOT fire PL700 (#2694)
 // =========================================================================
 
 #[test]
@@ -302,7 +447,7 @@ fn lint_pipeline_used_import_no_pl700() {
 }
 
 // =========================================================================
-// 13. Dedup removes duplicate diagnostics (#2696)
+// 17. Dedup removes duplicate diagnostics (#2696)
 // =========================================================================
 
 #[test]
@@ -325,4 +470,24 @@ fn lint_pipeline_dedup_removes_exact_duplicates() {
             );
         }
     }
+}
+
+// =========================================================================
+// 18. FFI::CheckLib hints surface through the full pipeline
+// =========================================================================
+
+#[test]
+fn lint_pipeline_ffi_checklib_missing_library_emits_hint() {
+    let tempdir = tempdir().unwrap();
+    let source = format!(
+        "use FFI::CheckLib;\nfind_lib(lib => 'ffi_checklib_pipeline_missing_3574', libpath => '{}');\n",
+        tempdir.path().display()
+    );
+    let diags = diagnostics_for(&source);
+
+    assert!(
+        diags.iter().any(|d| d.message.contains("ffi_checklib_pipeline_missing_3574")),
+        "Expected an FFI::CheckLib missing-library diagnostic, got: {:?}",
+        diags.iter().map(|d| d.message.as_str()).collect::<Vec<_>>()
+    );
 }

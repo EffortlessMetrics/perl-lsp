@@ -21,7 +21,176 @@
 //! let results = my_query().take(limits.references_result_cap);
 //! ```
 
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
+
+/// Memory budget configuration for OOM protection.
+///
+/// Thresholds are approximate: the server tracks explicitly allocated memory
+/// rather than querying the OS. Actual RSS is typically 1.5–3x higher.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MemoryBudget {
+    /// Byte count at which the server enters warning mode (default: 512 MB).
+    pub warning_threshold_bytes: usize,
+    /// Byte count at which the server enters critical mode (default: 1 GB).
+    pub critical_threshold_bytes: usize,
+    /// Maximum total bytes in the AST cache (default: 128 MB).
+    pub ast_cache_max_bytes: usize,
+}
+
+impl Default for MemoryBudget {
+    fn default() -> Self {
+        Self {
+            warning_threshold_bytes: 512 * 1024 * 1024,
+            critical_threshold_bytes: 1024 * 1024 * 1024,
+            ast_cache_max_bytes: 128 * 1024 * 1024,
+        }
+    }
+}
+
+impl MemoryBudget {
+    /// Budget for resource-constrained environments (low-RAM containers).
+    pub fn constrained() -> Self {
+        Self {
+            warning_threshold_bytes: 128 * 1024 * 1024,
+            critical_threshold_bytes: 256 * 1024 * 1024,
+            ast_cache_max_bytes: 32 * 1024 * 1024,
+        }
+    }
+
+    /// Budget for large workspaces on developer machines with ample RAM.
+    pub fn large_workspace() -> Self {
+        Self {
+            warning_threshold_bytes: 2 * 1024 * 1024 * 1024,
+            critical_threshold_bytes: 4 * 1024 * 1024 * 1024,
+            ast_cache_max_bytes: 512 * 1024 * 1024,
+        }
+    }
+}
+
+/// Current memory pressure level for gating degradation behaviors.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum MemoryPressure {
+    /// Memory usage is within normal bounds. No action needed.
+    Normal,
+    /// Memory usage has exceeded the warning threshold.
+    Warning,
+    /// Memory usage has exceeded the critical threshold.
+    Critical,
+}
+
+impl MemoryPressure {
+    /// Returns `true` if the server should degrade non-essential work.
+    ///
+    /// ```
+    /// use perl_lsp_limits::{MemoryBudget, MemoryMonitor, MemoryPressure};
+    ///
+    /// let monitor = MemoryMonitor::new(MemoryBudget::default());
+    /// if monitor.pressure().should_degrade() {
+    ///     // skip non-essential indexing
+    /// }
+    /// ```
+    #[inline]
+    pub fn should_degrade(self) -> bool {
+        self >= MemoryPressure::Warning
+    }
+
+    /// Returns `true` if the server is in critical memory state.
+    #[inline]
+    pub fn is_critical(self) -> bool {
+        self == MemoryPressure::Critical
+    }
+}
+
+/// Lightweight approximate memory tracker. Thread-safe via lock-free atomics.
+///
+/// ```
+/// use perl_lsp_limits::{MemoryBudget, MemoryMonitor};
+///
+/// let monitor = MemoryMonitor::new(MemoryBudget::default());
+/// monitor.record_alloc(1024 * 1024);
+/// if let Some(msg) = monitor.pressure_log_message() {
+///     eprintln!("{}", msg);
+/// }
+/// monitor.record_free(1024 * 1024);
+/// ```
+pub struct MemoryMonitor {
+    tracked: AtomicUsize,
+    budget: MemoryBudget,
+}
+
+impl MemoryMonitor {
+    /// Create a new monitor with the given budget.
+    pub fn new(budget: MemoryBudget) -> Self {
+        Self { tracked: AtomicUsize::new(0), budget }
+    }
+
+    /// Record that `bytes` have been allocated.
+    #[inline]
+    pub fn record_alloc(&self, bytes: usize) {
+        self.tracked.fetch_add(bytes, Ordering::Relaxed);
+    }
+
+    /// Record that `bytes` have been freed. Saturates at zero (no underflow).
+    #[inline]
+    pub fn record_free(&self, bytes: usize) {
+        let mut current = self.tracked.load(Ordering::Relaxed);
+        loop {
+            let new_val = current.saturating_sub(bytes);
+            match self.tracked.compare_exchange_weak(
+                current,
+                new_val,
+                Ordering::Relaxed,
+                Ordering::Relaxed,
+            ) {
+                Ok(_) => break,
+                Err(actual) => current = actual,
+            }
+        }
+    }
+
+    /// Return the current count of tracked bytes.
+    #[inline]
+    pub fn tracked_bytes(&self) -> usize {
+        self.tracked.load(Ordering::Relaxed)
+    }
+
+    /// Return the current memory pressure level.
+    pub fn pressure(&self) -> MemoryPressure {
+        let bytes = self.tracked_bytes();
+        if bytes >= self.budget.critical_threshold_bytes {
+            MemoryPressure::Critical
+        } else if bytes >= self.budget.warning_threshold_bytes {
+            MemoryPressure::Warning
+        } else {
+            MemoryPressure::Normal
+        }
+    }
+
+    /// Returns `true` if `proposed_bytes` is within the AST cache memory limit.
+    #[inline]
+    pub fn ast_cache_has_budget(&self, proposed_bytes: usize) -> bool {
+        proposed_bytes <= self.budget.ast_cache_max_bytes
+    }
+
+    /// Return a log message for the current pressure, or `None` when normal.
+    pub fn pressure_log_message(&self) -> Option<String> {
+        let bytes = self.tracked_bytes();
+        match self.pressure() {
+            MemoryPressure::Normal => None,
+            MemoryPressure::Warning => Some(format!(
+                "Memory warning: tracked usage {:.1} MB exceeds warning threshold {:.1} MB",
+                bytes as f64 / (1024.0 * 1024.0),
+                self.budget.warning_threshold_bytes as f64 / (1024.0 * 1024.0),
+            )),
+            MemoryPressure::Critical => Some(format!(
+                "Memory critical: tracked usage {:.1} MB exceeds critical threshold {:.1} MB",
+                bytes as f64 / (1024.0 * 1024.0),
+                self.budget.critical_threshold_bytes as f64 / (1024.0 * 1024.0),
+            )),
+        }
+    }
+}
 
 /// Central configuration for all LSP operation limits
 ///
@@ -121,6 +290,14 @@ pub struct LspLimits {
 
     /// Whether to include open documents when index is degraded (default: true)
     pub include_open_docs_when_degraded: bool,
+
+    // =========================================================================
+    // Memory Budget
+    // =========================================================================
+    /// Memory thresholds for OOM protection and degradation mode.
+    ///
+    /// See [`MemoryBudget`] for field documentation and tuning guidance.
+    pub memory_budget: MemoryBudget,
 }
 
 impl Default for LspLimits {
@@ -160,6 +337,9 @@ impl Default for LspLimits {
             // Degradation behavior
             return_partial_on_timeout: true,
             include_open_docs_when_degraded: true,
+
+            // Memory budget
+            memory_budget: MemoryBudget::default(),
         }
     }
 }
@@ -171,6 +351,7 @@ impl LspLimits {
             max_indexed_files: 50_000,
             max_total_symbols: 2_000_000,
             workspace_scan_deadline: Duration::from_secs(120),
+            memory_budget: MemoryBudget::large_workspace(),
             ..Default::default()
         }
     }
@@ -183,6 +364,7 @@ impl LspLimits {
             max_total_symbols: 100_000,
             workspace_scan_deadline: Duration::from_secs(15),
             reference_search_deadline: Duration::from_secs(1),
+            memory_budget: MemoryBudget::constrained(),
             ..Default::default()
         }
     }
@@ -227,6 +409,17 @@ impl LspLimits {
             }
             if let Some(v) = limits.get("referenceSearchDeadlineMs").and_then(|v| v.as_u64()) {
                 self.reference_search_deadline = Duration::from_millis(v);
+            }
+
+            // Memory budget
+            if let Some(v) = limits.get("memoryWarningThresholdBytes").and_then(|v| v.as_u64()) {
+                self.memory_budget.warning_threshold_bytes = v as usize;
+            }
+            if let Some(v) = limits.get("memoryCriticalThresholdBytes").and_then(|v| v.as_u64()) {
+                self.memory_budget.critical_threshold_bytes = v as usize;
+            }
+            if let Some(v) = limits.get("astCacheMaxMemoryBytes").and_then(|v| v.as_u64()) {
+                self.memory_budget.ast_cache_max_bytes = v as usize;
             }
         }
     }
@@ -315,6 +508,27 @@ pub fn diagnostics_per_file_cap() -> usize {
 #[inline]
 pub fn max_file_size_bytes() -> usize {
     LSP_LIMITS.read().map(|l| l.max_file_size_bytes).unwrap_or(1_024 * 1_024)
+}
+
+/// Get current memory warning threshold in bytes
+#[inline]
+pub fn memory_warning_threshold_bytes() -> usize {
+    LSP_LIMITS.read().map(|l| l.memory_budget.warning_threshold_bytes).unwrap_or(512 * 1024 * 1024)
+}
+
+/// Get current memory critical threshold in bytes
+#[inline]
+pub fn memory_critical_threshold_bytes() -> usize {
+    LSP_LIMITS
+        .read()
+        .map(|l| l.memory_budget.critical_threshold_bytes)
+        .unwrap_or(1024 * 1024 * 1024)
+}
+
+/// Get current AST cache maximum memory in bytes
+#[inline]
+pub fn ast_cache_max_memory_bytes() -> usize {
+    LSP_LIMITS.read().map(|l| l.memory_budget.ast_cache_max_bytes).unwrap_or(128 * 1024 * 1024)
 }
 
 #[cfg(test)]

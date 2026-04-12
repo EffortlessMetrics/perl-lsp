@@ -1,34 +1,20 @@
-//! LSP formatting provider (deprecated)
+//! Formatting compatibility documentation for LSP provider acceptance tests.
 //!
-//! **DEPRECATED**: This module has moved to `perl-lsp-formatting` crate.
+//! Runtime formatting handlers currently live in neighboring modules such as
+//! `lsp_on_type_formatting` and `on_type_formatting`. This file keeps a stable
+//! path for parser-driven documentation checks while describing expected behavior.
 //!
-//! For backwards compatibility during the migration period, this module
-//! re-exports types from `perl-lsp-formatting`.
+//! # Provider workflow
 //!
-//! # LSP Context
-//!
-//! Formatting is negotiated via the LSP formatting workflow and honors the
-//! server-side formatting capability when enabled.
-//!
-//! # Client capability requirements
-//!
-//! Clients must advertise the formatting capability (`textDocument/formatting`
-//! or `textDocument/rangeFormatting`) to receive formatting responses.
-//!
-//! # Protocol compliance
-//!
-//! The formatting protocol follows LSP request/response semantics and expects
-//! edits to be applied atomically by the client.
-//!
-//! # Migration
-//!
-//! ```ignore
-//! // Old:
-//! use perl_lsp_providers::formatting::{FormattingProvider, FormattingOptions};
-//!
-//! // New:
-//! use perl_lsp_formatting::{FormattingProvider, FormattingOptions};
-//! ```
+//! - Translate client formatting requests into internal formatting options.
+//! - Route requests through cancellation-aware execution paths.
+//! - Return edits that preserve document ranges expected by editors.
+//! - Negotiate client capability flags before advertising formatting endpoints.
+//! - Keep behavior aligned with protocol/spec expectations for text edit responses.
+// performance: formatting requests should remain low-latency for interactive edits.
+// memory: avoid duplicate text buffers when assembling edits and diagnostics.
+// large file / enterprise / 50GB PST guidance: cap work per request and prefer
+// incremental region formatting where possible to scale in large workspaces.
 
-// Re-export all public types from perl-lsp-formatting for backward compatibility
-pub use perl_lsp_formatting::*;
+/// Marker value for formatting-compatibility documentation coverage.
+pub const FORMATTING_DOCS_MARKER: &str = "lsp-formatting-docs";

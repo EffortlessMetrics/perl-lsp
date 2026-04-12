@@ -658,6 +658,35 @@ __PACKAGE__->meta->make_immutable;
         names
     );
 
+    let package = symbols
+        .iter()
+        .find(|s| s.get("name").and_then(|n| n.as_str()) == Some("Animal"))
+        .ok_or("Animal package symbol not found")?;
+    let children =
+        package["children"].as_array().ok_or("Animal package symbol should have children")?;
+    let child_names: Vec<&str> =
+        children.iter().filter_map(|s| s.get("name").and_then(|n| n.as_str())).collect();
+    assert!(
+        child_names.first() == Some(&"name") && child_names.get(1) == Some(&"sound"),
+        "attribute symbols should lead the Animal outline children, found: {:?}",
+        child_names
+    );
+    assert!(
+        !child_names.iter().any(|name| *name == "Animal"),
+        "package self symbol should not appear as a child, found: {:?}",
+        child_names
+    );
+    assert!(
+        children.iter().any(|s| s.get("name").and_then(|n| n.as_str()) == Some("name")
+            && s.get("kind").and_then(|k| k.as_i64()) == Some(7)),
+        "name attribute should appear as a Property symbol"
+    );
+    assert!(
+        children.iter().any(|s| s.get("name").and_then(|n| n.as_str()) == Some("sound")
+            && s.get("kind").and_then(|k| k.as_i64()) == Some(7)),
+        "sound attribute should appear as a Property symbol"
+    );
+
     // Should find subroutines
     assert!(
         names.iter().any(|n| n.contains("speak")),

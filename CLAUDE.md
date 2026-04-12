@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-**Latest Release**: 0.12.3 | **Metrics**: [status/index.md](docs/project/status/index.md) | **API Stability**: [STABILITY.md](docs/reference/STABILITY.md)
+**Latest Release**: 0.12.4 | **Metrics**: [status/index.md](docs/project/status/index.md) | **API Stability**: [STABILITY.md](docs/reference/STABILITY.md)
 
 ## Orchestration Model
 
@@ -43,10 +43,10 @@ Labels are the authoritative state for every issue and PR. The orchestrator read
 | `builder-ready` | plan-reviewer (/plan-review-improve) | Ready for builder pickup |
 | `in-build` | builder (/builder-read-spec) | Builder claimed this issue |
 | `in-review` | reviewer (/reviewer-read-handoff) | PR actively in review — set at review start |
-| `merge-ready` | reviewer (/pr-ready) | Ready for ops merge |
+| `merge-ready` | reviewer (/pr-ready) | Ready for ops merge; docs-only PRs may reach this without `reviewed-deep` |
 | `structural-blocker` | any agent | Architecture issue; blocks parallel work |
 | `needs-deep-review` | reviewer (/reviewer-decide) | Standards review done, awaiting deep correctness review |
-| `reviewed-deep` | reviewer-deep (/reviewer-deep-decide) | Deep correctness review complete — required before merge |
+| `reviewed-deep` | reviewer-deep (/reviewer-deep-decide) | Deep correctness review complete — required before merge for non-docs PRs |
 | `follow-up-recommended` | wisdom or reviewer | Related follow-up issue needed |
 | `already-fixed` | plan-reviewer or scout | Close without build |
 
@@ -77,7 +77,8 @@ Note: `needs-accuracy-scout` and `accuracy-reviewed` are reserved for the accura
 
 ```bash
 just doctor                           # Workspace health check (run before any agent-spawning session)
-nix develop -c just ci-gate           # Canonical local gate (REQUIRED before push)
+just pr-fast                          # Canonical fast push guard
+nix develop -c just ci-gate           # Canonical local merge gate (before merge)
 cargo build -p perl-lsp-rs --release     # Build LSP server
 cargo test --workspace --lib          # Run all tests
 ```
@@ -168,8 +169,8 @@ just cpan-corpus-ratchet              # Auto-add clean modules to manifest
 
 | Tier | Command | Time | When |
 |------|---------|------|------|
-| **A (PR-fast)** | `just pr-fast` | ~1-2 min | Quick iteration |
-| **B (Merge gate)** | `just ci-gate` | ~3-5 min | Before pushing (required) |
+| **A (PR-fast)** | `just pr-fast` | ~1-2 min | Quick iteration and pre-push hook |
+| **B (Merge gate)** | `just ci-gate` | ~3-5 min | Before merge |
 | **C (Nightly)** | `just ci-full` | ~15-30 min | Mutation, fuzzing, benchmarks |
 
 ## Parser Versions
@@ -228,6 +229,8 @@ Invoke `/coding-standards` for full detail.
   - Use `?`, `.ok_or_else()`, pattern matching, `Result`/`Option` instead
   - `std::process::exit()` only in `bin/` and `lifecycle.rs`
   - Exception: `#[allow(clippy::expect_used)]` in `crates/perl-lsp/src/util/uri.rs`
+  - Exception: `bin/` targets may use `#[allow(clippy::expect_used)]` for profiling / CLI entry points, including `crates/perl-workspace-index/src/bin/workspace_memory_profile.rs`
+  - Exception: static `LazyLock<Regex>` initializers may use `unreachable!()`/`expect()` for known-good patterns, including `crates/perl-heredoc-anti-patterns/src/lib.rs`
   - Tests: `Result<()>` returns or `perl_tdd_support::must`/`must_some`
 - **Prefer**: `.first()` over `.get(0)`, `.push(char)` over `.push_str("x")`, `or_default()` over `or_insert_with(Vec::new)`
 - **Avoid**: unnecessary `.clone()` on Copy types
@@ -240,7 +243,7 @@ Invoke `/coding-standards` for full detail.
 
 ## Contributing
 
-Run `nix develop -c just ci-gate` before pushing. See [CONTRIBUTING.md](CONTRIBUTING.md).
+Run `just pr-fast` while iterating and `nix develop -c just ci-gate` before merge. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Continuous Swarm Development
 

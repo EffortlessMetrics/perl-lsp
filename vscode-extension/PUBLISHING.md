@@ -126,6 +126,9 @@ vsce publish 0.5.1  # Specific version
 
 2. **Update Documentation**
    - Update main README.md with marketplace link
+   - Refresh the manually maintained VS Marketplace installs badge count/date in:
+     - `/README.md`
+     - `/vscode-extension/README.md`
    - Add installation instructions
    - Update CHANGELOG.md
 

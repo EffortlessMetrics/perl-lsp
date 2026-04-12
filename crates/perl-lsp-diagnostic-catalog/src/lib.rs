@@ -123,6 +123,12 @@ pub fn implicit_return() -> DiagnosticMeta {
     diagnostic_meta(DiagnosticCode::ImplicitReturn)
 }
 
+/// Eval / try error-flow diagnostic (PL407).
+#[must_use]
+pub fn eval_error_flow() -> DiagnosticMeta {
+    diagnostic_meta(DiagnosticCode::EvalErrorFlow)
+}
+
 /// Perl::Critic severity-5 violation diagnostic (PC005).
 #[must_use]
 pub fn critic_severity_5() -> DiagnosticMeta {
@@ -161,7 +167,7 @@ pub fn from_message(msg: &str) -> Option<DiagnosticMeta> {
 
 #[cfg(test)]
 mod tests {
-    use super::{from_message, parse_error};
+    use super::{eval_error_flow, from_message, parse_error};
 
     #[test]
     fn parse_error_includes_stable_code_and_docs_url() {
@@ -178,6 +184,16 @@ mod tests {
         let meta = super::critic_severity_1();
         assert_eq!(meta.code, "PC001");
         assert!(meta.desc.is_none());
+    }
+
+    #[test]
+    fn eval_error_flow_has_stable_code_and_docs_url() {
+        let meta = eval_error_flow();
+        assert_eq!(meta.code, "PL407");
+        assert_eq!(
+            meta.desc,
+            Some(serde_json::json!({ "href": "https://docs.perl-lsp.org/errors/PL407" }))
+        );
     }
 
     #[test]

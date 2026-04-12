@@ -7,15 +7,15 @@ use lsp_types;
 /// Severity levels for Perl::Critic violations
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Severity {
-    /// Cosmetic issues (severity 5)
+    /// Most severe issues (severity 5)
     Gentle = 5,
-    /// Minor issues (severity 4)
+    /// Severe issues (severity 4)
     Stern = 4,
     /// Important issues (severity 3)
     Harsh = 3,
-    /// Serious issues (severity 2)
+    /// Less severe issues (severity 2)
     Cruel = 2,
-    /// Critical issues (severity 1)
+    /// Least severe issues (severity 1)
     Brutal = 1,
 }
 
@@ -38,9 +38,10 @@ impl Severity {
     #[cfg(feature = "lsp-compat")]
     pub fn to_diagnostic_severity(self) -> lsp_types::DiagnosticSeverity {
         match self {
-            Self::Brutal | Self::Cruel => lsp_types::DiagnosticSeverity::ERROR,
-            Self::Harsh => lsp_types::DiagnosticSeverity::WARNING,
-            Self::Stern | Self::Gentle => lsp_types::DiagnosticSeverity::INFORMATION,
+            Self::Gentle => lsp_types::DiagnosticSeverity::ERROR,
+            Self::Stern | Self::Harsh => lsp_types::DiagnosticSeverity::WARNING,
+            Self::Cruel => lsp_types::DiagnosticSeverity::INFORMATION,
+            Self::Brutal => lsp_types::DiagnosticSeverity::HINT,
         }
     }
 

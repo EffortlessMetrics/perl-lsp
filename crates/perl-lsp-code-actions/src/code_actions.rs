@@ -134,6 +134,20 @@ impl CodeActionsProvider {
                     c if c == DiagnosticCode::MissingWarnings.as_str() => {
                         actions.extend(quick_fixes::add_use_warnings());
                     }
+                    // PL502: Phase-scoped use strict misconception
+                    c if c == DiagnosticCode::PhaseScopedStrictPragma.as_str() => {
+                        actions.extend(quick_fixes::move_use_strict_to_file_scope(
+                            &self.source,
+                            &qf_diag,
+                        ));
+                    }
+                    // PL503: Phase-scoped use warnings misconception
+                    c if c == DiagnosticCode::PhaseScopedWarningsPragma.as_str() => {
+                        actions.extend(quick_fixes::move_use_warnings_to_file_scope(
+                            &self.source,
+                            &qf_diag,
+                        ));
+                    }
                     // PL500: Deprecated defined()
                     c if c == DiagnosticCode::DeprecatedDefined.as_str() => {
                         actions.extend(quick_fixes::fix_deprecated_defined(&self.source, &qf_diag));
@@ -169,9 +183,55 @@ impl CodeActionsProvider {
                     c if c == DiagnosticCode::BarewordFilehandle.as_str() => {
                         actions.extend(quick_fixes::fix_bareword_filehandle(&qf_diag));
                     }
+                    // Perl::Critic policy alias for bareword filehandle.
+                    "InputOutput::ProhibitBarewordFileHandles" => {
+                        actions.extend(quick_fixes::fix_bareword_filehandle(&qf_diag));
+                    }
                     // PL401: Two-arg open
                     c if c == DiagnosticCode::TwoArgOpen.as_str() => {
                         actions.extend(quick_fixes::fix_two_arg_open(&qf_diag));
+                    }
+                    // Perl::Critic policy aliases for two-arg open.
+                    "InputOutput::RequireBriefOpen" | "InputOutput::RequireThreeArgOpen" => {
+                        actions.extend(quick_fixes::fix_two_arg_open(&qf_diag));
+                    }
+                    // Perl::Critic policies for missing strict/warnings.
+                    "TestingAndDebugging::RequireUseStrict" => {
+                        actions.extend(quick_fixes::add_use_strict());
+                    }
+                    "TestingAndDebugging::RequireUseWarnings" => {
+                        actions.extend(quick_fixes::add_use_warnings());
+                    }
+                    // Perl::Critic policy alias for unused variables.
+                    "Variables::ProhibitUnusedVariables" => {
+                        actions.extend(quick_fixes::fix_unused_variable(&self.source, &qf_diag));
+                    }
+                    // PL200: Missing package declaration
+                    c if c == DiagnosticCode::MissingPackageDeclaration.as_str() => {
+                        actions.extend(quick_fixes::fix_missing_package_declaration(&self.source));
+                    }
+                    // PL105: Variable redeclaration (duplicate my)
+                    c if c == DiagnosticCode::VariableRedeclaration.as_str() => {
+                        actions.extend(quick_fixes::fix_variable_redeclaration(
+                            &self.source,
+                            &qf_diag,
+                        ));
+                    }
+                    // PL111: Misspelled pragma
+                    c if c == DiagnosticCode::MisspelledPragma.as_str() => {
+                        actions.extend(quick_fixes::fix_misspelled_pragma(&self.source, &qf_diag));
+                    }
+                    // PL406: Unreachable code
+                    c if c == DiagnosticCode::UnreachableCode.as_str() => {
+                        actions.extend(quick_fixes::fix_unreachable_code(&self.source, &qf_diag));
+                    }
+                    // PL300: Duplicate subroutine
+                    c if c == DiagnosticCode::DuplicateSubroutine.as_str() => {
+                        actions.extend(quick_fixes::fix_duplicate_subroutine(&qf_diag));
+                    }
+                    // PL301: Missing return statement
+                    c if c == DiagnosticCode::MissingReturn.as_str() => {
+                        actions.extend(quick_fixes::fix_missing_return(&self.source, &qf_diag));
                     }
                     _ => {}
                 }
@@ -212,6 +272,17 @@ mod tests {
             tags: Vec::new(),
             suggestion: None,
         }
+    }
+
+    fn apply_action(source: &str, action: &CodeAction) -> String {
+        let mut edits = action.edit.changes.clone();
+        edits.sort_by(|a, b| b.location.start.cmp(&a.location.start));
+
+        let mut output = source.to_string();
+        for edit in edits {
+            output.replace_range(edit.location.start..edit.location.end, &edit.new_text);
+        }
+        output
     }
 
     #[test]
@@ -378,5 +449,132 @@ mod tests {
             actions.iter().filter(|a| a.title.contains("portable shebang")).collect();
 
         assert!(shebang_actions.is_empty(), "Non-perl shebang should not be flagged");
+    }
+
+    #[test]
+    fn test_perlcritic_policy_aliases_produce_quick_fixes() {
+        let source = "open FH, $path;\n";
+        let mut parser = Parser::new(source);
+        let ast = must(parser.parse());
+        let diagnostics = vec![
+            Diagnostic {
+                range: (0, 4),
+                severity: DiagnosticSeverity::Warning,
+                code: Some("InputOutput::ProhibitBarewordFileHandles".to_string()),
+                message: "Bareword filehandle 'FH'".to_string(),
+                suggestion: None,
+                related_information: Vec::new(),
+                tags: Vec::new(),
+            },
+            Diagnostic {
+                range: (0, 4),
+                severity: DiagnosticSeverity::Warning,
+                code: Some("InputOutput::RequireThreeArgOpen".to_string()),
+                message: "Use 3-arg open".to_string(),
+                suggestion: None,
+                related_information: Vec::new(),
+                tags: Vec::new(),
+            },
+        ];
+
+        let provider = CodeActionsProvider::new(source.to_string());
+        let actions = provider.get_code_actions(&ast, (0, source.len()), &diagnostics);
+        assert!(actions.iter().any(|a| a.title.contains("bareword filehandle")));
+        assert!(actions.iter().any(|a| a.title.contains("three-argument open() for safety")));
+    }
+
+    #[test]
+    fn test_perlcritic_policy_aliases_for_strict_warnings_and_unused_variable() {
+        let source = "print $unused;\n";
+        let mut parser = Parser::new(source);
+        let ast = must(parser.parse());
+        let diagnostics = vec![
+            Diagnostic {
+                range: (0, source.len()),
+                severity: DiagnosticSeverity::Warning,
+                code: Some("TestingAndDebugging::RequireUseStrict".to_string()),
+                message: "Code does not use strict".to_string(),
+                suggestion: None,
+                related_information: Vec::new(),
+                tags: Vec::new(),
+            },
+            Diagnostic {
+                range: (0, source.len()),
+                severity: DiagnosticSeverity::Warning,
+                code: Some("TestingAndDebugging::RequireUseWarnings".to_string()),
+                message: "Code does not use warnings".to_string(),
+                suggestion: None,
+                related_information: Vec::new(),
+                tags: Vec::new(),
+            },
+            Diagnostic {
+                range: (6, 13),
+                severity: DiagnosticSeverity::Warning,
+                code: Some("Variables::ProhibitUnusedVariables".to_string()),
+                message: "Unused variable '$unused'".to_string(),
+                suggestion: None,
+                related_information: Vec::new(),
+                tags: Vec::new(),
+            },
+        ];
+
+        let provider = CodeActionsProvider::new(source.to_string());
+        let actions = provider.get_code_actions(&ast, (0, source.len()), &diagnostics);
+
+        assert!(actions.iter().any(|a| a.title == "Add 'use strict'"));
+        assert!(actions.iter().any(|a| a.title == "Add 'use warnings'"));
+        assert!(actions.iter().any(|a| a.title.contains("Remove unused variable")));
+    }
+
+    #[test]
+    fn test_phase_scoped_strict_quick_fix_moves_pragma_to_file_scope() {
+        let source = "BEGIN { use strict; }\nmy $x = 1;\n";
+        let mut parser = Parser::new(source);
+        let ast = must(parser.parse());
+        let start = source.find("use strict;").unwrap();
+        let end = start + "use strict;".len();
+        let diagnostics = vec![make_diagnostic(
+            start,
+            end,
+            "PL502",
+            "`use strict` inside a BEGIN block does not enable strict for the rest of the file",
+        )];
+
+        let provider = CodeActionsProvider::new(source.to_string());
+        let actions = provider.get_code_actions(&ast, (0, source.len()), &diagnostics);
+        let action = actions
+            .iter()
+            .find(|action| action.title == "Move 'use strict' to file scope")
+            .expect("phase-scoped strict quick fix");
+
+        let rewritten = apply_action(source, action);
+        assert!(rewritten.starts_with("use strict;\nBEGIN { "));
+        assert!(rewritten.contains("BEGIN {  }"));
+    }
+
+    #[test]
+    fn test_phase_scoped_warnings_quick_fix_preserves_shebang() {
+        let source = "#!/usr/bin/perl\nBEGIN { use warnings; }\nprint 1;\n";
+        let mut parser = Parser::new(source);
+        let ast = must(parser.parse());
+        let start = source.find("use warnings;").unwrap();
+        let end = start + "use warnings;".len();
+        let diagnostics = vec![make_diagnostic(
+            start,
+            end,
+            "PL503",
+            "`use warnings` inside a BEGIN block does not enable warnings for the rest of the file",
+        )];
+
+        let provider = CodeActionsProvider::new(source.to_string());
+        let actions = provider.get_code_actions(&ast, (0, source.len()), &diagnostics);
+        let action = actions
+            .iter()
+            .find(|action| action.title == "Move 'use warnings' to file scope")
+            .expect("phase-scoped warnings quick fix");
+
+        let rewritten = apply_action(source, action);
+        assert!(rewritten.starts_with("#!/usr/bin/perl\nuse warnings;\n"));
+        assert!(rewritten.contains("BEGIN {  }"));
     }
 }

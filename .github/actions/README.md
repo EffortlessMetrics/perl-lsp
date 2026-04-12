@@ -4,6 +4,34 @@ This directory contains reusable composite actions for perl-lsp CI workflows.
 
 ## Composite Actions
 
+### `setup-perl-lsp/`
+
+Installs `perllsp` for downstream GitHub Actions workflows.
+
+**Usage:**
+```yaml
+- uses: EffortlessMetrics/perl-lsp/.github/actions/setup-perl-lsp@master
+  with:
+    version: '0.12.3'
+    cache: true
+    build-from-source: false
+```
+
+**Inputs:**
+| Input | Default | Description |
+|-------|---------|-------------|
+| `version` | `latest` | Release tag or version to install |
+| `cache` | `true` | Cache the installed binary directory |
+| `install-dir` | `''` | Custom install directory |
+| `build-from-source` | `false` | Build `perllsp` from source instead of downloading a release |
+
+**Outputs:**
+| Output | Description |
+|--------|-------------|
+| `version` | Resolved version without the `v` prefix |
+| `install-dir` | Directory containing the installed binary |
+| `binary-path` | Full path to the installed `perllsp` binary |
+
 ### `setup-rust/`
 
 Sets up Rust toolchain with caching optimized for perl-lsp.

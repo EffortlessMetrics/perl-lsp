@@ -533,6 +533,16 @@ impl SemanticAnalyzer {
                 self.analyze_node(block, scope_id);
             }
 
+            NodeKind::Defer { block } => {
+                // defer { } blocks run on scope exit; analyze the block for symbol resolution
+                self.semantic_tokens.push(SemanticToken {
+                    location: node.location,
+                    token_type: SemanticTokenType::Keyword,
+                    modifiers: vec![],
+                });
+                self.analyze_node(block, scope_id);
+            }
+
             NodeKind::VariableWithAttributes { variable, attributes } => {
                 // Handle attributed variables: my $x :shared = 42;
                 // Analyze the base variable node
@@ -731,7 +741,7 @@ impl SemanticAnalyzer {
                 }
             }
 
-            NodeKind::Class { name, body } => {
+            NodeKind::Class { name, body, .. } => {
                 self.semantic_tokens.push(SemanticToken {
                     location: SourceLocation {
                         start: node.location.start,

@@ -21,6 +21,7 @@ mod completion;
 mod formatting;
 mod hierarchy;
 mod hover;
+mod mason;
 mod misc;
 mod navigation;
 mod references;

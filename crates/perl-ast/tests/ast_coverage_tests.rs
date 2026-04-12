@@ -1082,7 +1082,11 @@ fn sexp_format() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn sexp_class() -> Result<(), Box<dyn std::error::Error>> {
     let node = Node::new(
-        NodeKind::Class { name: "Point".to_string(), body: Box::new(block(vec![])) },
+        NodeKind::Class {
+            name: "Point".to_string(),
+            parents: vec![],
+            body: Box::new(block(vec![])),
+        },
         loc(0, 20),
     );
     let sexp = node.to_sexp();
@@ -1475,6 +1479,7 @@ fn all_kind_names_contains_every_variant() -> Result<(), Box<dyn std::error::Err
         NodeKind::Block { statements: vec![] },
         NodeKind::Eval { block: Box::new(num("1")) },
         NodeKind::Do { block: Box::new(num("1")) },
+        NodeKind::Defer { block: Box::new(num("1")) },
         NodeKind::Try { body: Box::new(block(vec![])), catch_blocks: vec![], finally_block: None },
         NodeKind::If {
             condition: Box::new(num("1")),
@@ -1589,7 +1594,7 @@ fn all_kind_names_contains_every_variant() -> Result<(), Box<dyn std::error::Err
             block: Box::new(block(vec![])),
         },
         NodeKind::DataSection { marker: "__DATA__".to_string(), body: None },
-        NodeKind::Class { name: "C".to_string(), body: Box::new(block(vec![])) },
+        NodeKind::Class { name: "C".to_string(), parents: vec![], body: Box::new(block(vec![])) },
         NodeKind::Format { name: "F".to_string(), body: "b".to_string() },
         NodeKind::Identifier { name: "id".to_string() },
         NodeKind::Error { message: "e".to_string(), expected: vec![], found: None, partial: None },

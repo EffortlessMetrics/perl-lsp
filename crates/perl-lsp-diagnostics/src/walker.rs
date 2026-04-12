@@ -74,7 +74,7 @@ where
         NodeKind::PhaseBlock { block, .. } => {
             walk_node(block, func);
         }
-        NodeKind::Eval { block } => {
+        NodeKind::Eval { block } | NodeKind::Defer { block } => {
             walk_node(block, func);
         }
         NodeKind::Class { body, .. } => {
@@ -128,6 +128,17 @@ where
         }
         NodeKind::LabeledStatement { statement, .. } => {
             walk_node(statement, func);
+        }
+        NodeKind::HashLiteral { pairs } => {
+            for (key, value) in pairs {
+                walk_node(key, func);
+                walk_node(value, func);
+            }
+        }
+        NodeKind::ArrayLiteral { elements } => {
+            for elem in elements {
+                walk_node(elem, func);
+            }
         }
         _ => {} // Other nodes don't have children or are handled differently
     }

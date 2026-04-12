@@ -1,11 +1,71 @@
 use crate::perl_critic::{BuiltInAnalyzer, CriticAnalyzer, CriticConfig};
 use serde_json::{Value, json};
+#[cfg(windows)]
+use std::ffi::OsString;
+#[cfg(windows)]
+use std::os::windows::ffi::{OsStrExt, OsStringExt};
+#[cfg(windows)]
+use std::path::{Component, Prefix};
 use std::path::{Path, PathBuf};
 use std::process::Command;
+
+/// Strip the Windows extended-length path prefix (`\\?\`) before passing a path
+/// to an external command such as `perl`, `prove`, or `yath`.
+///
+/// On Windows, `Path::canonicalize` returns paths prefixed with `\\?\`, which is
+/// understood by Win32 APIs but not by external programs (e.g. `perl.exe`).  This
+/// helper strips that prefix so the resulting path is usable as a command-line
+/// argument.  On non-Windows platforms the function is a no-op identity.
+///
+/// Two prefix forms are handled:
+/// - `\\?\C:\...`         (local drive) → `C:\...`
+/// - `\\?\UNC\server\...` (network UNC) → `\\server\...`
+///
+/// The UNC form requires special treatment: stripping `\\?\` alone would leave
+/// `UNC\server\...` which is not a valid path.  Instead we replace `\\?\UNC\`
+/// with `\\` so the result is a conventional UNC path (`\\server\share\...`).
+#[cfg(windows)]
+pub(crate) fn normalize_path_for_external_command(path: &Path) -> PathBuf {
+    let mut components = path.components();
+    let Some(Component::Prefix(prefix_component)) = components.next() else {
+        return path.to_path_buf();
+    };
+
+    match prefix_component.kind() {
+        Prefix::VerbatimDisk(drive) => {
+            let mut normalized = PathBuf::from(format!("{}:", char::from(drive)));
+            normalized.push(components.as_path());
+            normalized
+        }
+        Prefix::VerbatimUNC(server, share) => {
+            let mut wide = vec![b'\\' as u16, b'\\' as u16];
+            wide.extend(server.encode_wide());
+            wide.push(b'\\' as u16);
+            wide.extend(share.encode_wide());
+
+            let mut normalized = PathBuf::from(OsString::from_wide(&wide));
+            normalized.push(components.as_path());
+            normalized
+        }
+        _ => path.to_path_buf(),
+    }
+}
+
+#[cfg(not(windows))]
+pub(crate) fn normalize_path_for_external_command(path: &Path) -> PathBuf {
+    path.to_path_buf()
+}
 
 /// Execute command provider implementing the LSP executeCommand method.
 pub struct ExecuteCommandProvider {
     workspace_roots: Vec<PathBuf>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum TestRunner {
+    Yath,
+    Prove,
+    Perl,
 }
 
 impl Default for ExecuteCommandProvider {
@@ -76,43 +136,99 @@ impl ExecuteCommandProvider {
     pub(crate) fn run_tests(&self, file_path: &Path) -> Result<Value, String> {
         let file_path_str = file_path.to_string_lossy();
         let is_test_file = self.is_test_file(&file_path_str);
-        if is_test_file && self.command_exists("prove") {
-            let mut prove_cmd = Command::new("prove");
-            prove_cmd.arg("-v").arg("--").arg(file_path.as_os_str());
-            match crate::util::run_command_with_timeout(prove_cmd, 30) {
-                Ok(result) => {
-                    return Ok(
-                        self.format_command_result(result, Some(("command", "prove".into())))
-                    );
-                }
-                Err(error) => {
-                    let mut perl_cmd = Command::new("perl");
-                    perl_cmd.arg("--").arg(file_path.as_os_str());
-                    match crate::util::run_command_with_timeout(perl_cmd, 30) {
-                        Ok(result) => {
-                            return Ok(self
-                                .format_command_result(result, Some(("command", "perl".into()))));
-                        }
-                        Err(fallback_error) => {
-                            return Ok(self.format_command_launch_failure(
-                                "prove",
-                                format!(
-                                    "Failed to run prove: {error}; perl fallback also failed: {fallback_error}"
-                                ),
-                            ));
+        let runner = select_test_runner(
+            is_test_file,
+            self.command_exists("yath"),
+            self.command_exists("prove"),
+        );
+        let ext_path = normalize_path_for_external_command(file_path);
+
+        match runner {
+            TestRunner::Yath => {
+                let mut yath_cmd = Command::new("yath");
+                yath_cmd.arg("-v").arg("--").arg(ext_path.as_os_str());
+                match crate::util::run_command_with_timeout(yath_cmd, 30) {
+                    Ok(result) => {
+                        Ok(self.format_command_result(result, Some(("command", "yath".into()))))
+                    }
+                    Err(error) => {
+                        if self.command_exists("prove") {
+                            let mut prove_cmd = Command::new("prove");
+                            prove_cmd.arg("-v").arg("--").arg(ext_path.as_os_str());
+                            match crate::util::run_command_with_timeout(prove_cmd, 30) {
+                                Ok(result) => Ok(self.format_command_result(
+                                    result,
+                                    Some(("command", "prove".into())),
+                                )),
+                                Err(fallback_error) => {
+                                    let mut perl_cmd = Command::new("perl");
+                                    perl_cmd.arg("--").arg(ext_path.as_os_str());
+                                    match crate::util::run_command_with_timeout(perl_cmd, 30) {
+                                        Ok(result) => Ok(self.format_command_result(
+                                            result,
+                                            Some(("command", "perl".into())),
+                                        )),
+                                        Err(perl_error) => Ok(self.format_command_launch_failure(
+                                            "yath",
+                                            format!(
+                                                "Failed to run yath: {error}; prove fallback also failed: {fallback_error}; perl fallback also failed: {perl_error}"
+                                            ),
+                                        )),
+                                    }
+                                }
+                            }
+                        } else {
+                            let mut perl_cmd = Command::new("perl");
+                            perl_cmd.arg("--").arg(ext_path.as_os_str());
+                            match crate::util::run_command_with_timeout(perl_cmd, 30) {
+                                Ok(result) => Ok(self
+                                    .format_command_result(result, Some(("command", "perl".into())))),
+                                Err(perl_error) => Ok(self.format_command_launch_failure(
+                                    "yath",
+                                    format!(
+                                        "Failed to run yath: {error}; perl fallback also failed: {perl_error}"
+                                    ),
+                                )),
+                            }
                         }
                     }
                 }
             }
-        }
-
-        let mut perl_cmd = Command::new("perl");
-        perl_cmd.arg("--").arg(file_path.as_os_str());
-        match crate::util::run_command_with_timeout(perl_cmd, 30) {
-            Ok(result) => Ok(self.format_command_result(result, Some(("command", "perl".into())))),
-            Err(error) => {
-                Ok(self
-                    .format_command_launch_failure("perl", format!("Failed to run perl: {error}")))
+            TestRunner::Prove => {
+                let mut prove_cmd = Command::new("prove");
+                prove_cmd.arg("-v").arg("--").arg(ext_path.as_os_str());
+                match crate::util::run_command_with_timeout(prove_cmd, 30) {
+                    Ok(result) => {
+                        Ok(self.format_command_result(result, Some(("command", "prove".into()))))
+                    }
+                    Err(error) => {
+                        let mut perl_cmd = Command::new("perl");
+                        perl_cmd.arg("--").arg(ext_path.as_os_str());
+                        match crate::util::run_command_with_timeout(perl_cmd, 30) {
+                            Ok(result) => Ok(self
+                                .format_command_result(result, Some(("command", "perl".into())))),
+                            Err(fallback_error) => Ok(self.format_command_launch_failure(
+                                "prove",
+                                format!(
+                                    "Failed to run prove: {error}; perl fallback also failed: {fallback_error}"
+                                ),
+                            )),
+                        }
+                    }
+                }
+            }
+            TestRunner::Perl => {
+                let mut perl_cmd = Command::new("perl");
+                perl_cmd.arg("--").arg(ext_path.as_os_str());
+                match crate::util::run_command_with_timeout(perl_cmd, 30) {
+                    Ok(result) => {
+                        Ok(self.format_command_result(result, Some(("command", "perl".into()))))
+                    }
+                    Err(error) => Ok(self.format_command_launch_failure(
+                        "perl",
+                        format!("Failed to run perl: {error}"),
+                    )),
+                }
             }
         }
     }
@@ -128,9 +244,10 @@ impl ExecuteCommandProvider {
                 die "Subroutine $sub not found";
             }
         "#;
+        let ext_path = normalize_path_for_external_command(file_path);
 
         let mut perl_cmd = Command::new("perl");
-        perl_cmd.arg("-e").arg(perl_code).arg("--").arg(file_path.as_os_str()).arg(sub_name);
+        perl_cmd.arg("-e").arg(perl_code).arg("--").arg(ext_path.as_os_str()).arg(sub_name);
         match crate::util::run_command_with_timeout(perl_cmd, 30) {
             Ok(result) => {
                 Ok(self.format_command_result(result, Some(("subroutine", sub_name.into()))))
@@ -143,8 +260,9 @@ impl ExecuteCommandProvider {
     }
 
     pub(crate) fn run_file(&self, file_path: &Path) -> Result<Value, String> {
+        let ext_path = normalize_path_for_external_command(file_path);
         let mut perl_cmd = Command::new("perl");
-        perl_cmd.arg("--").arg(file_path.as_os_str());
+        perl_cmd.arg("--").arg(ext_path.as_os_str());
         match crate::util::run_command_with_timeout(perl_cmd, 30) {
             Ok(result) => Ok(self.format_command_result(result, None)),
             Err(error) => {
@@ -798,6 +916,22 @@ impl ExecuteCommandProvider {
     }
 }
 
+pub(crate) fn select_test_runner(
+    is_test_file: bool,
+    yath_available: bool,
+    prove_available: bool,
+) -> TestRunner {
+    if !is_test_file {
+        TestRunner::Perl
+    } else if yath_available {
+        TestRunner::Yath
+    } else if prove_available {
+        TestRunner::Prove
+    } else {
+        TestRunner::Perl
+    }
+}
+
 /// Check whether a command exists in the current PATH.
 pub fn command_exists(command: &str) -> bool {
     let cmd = if cfg!(windows) {
@@ -830,4 +964,86 @@ pub fn get_supported_commands() -> Vec<String> {
         "perl.goToTest".to_string(),
         "perl.goToImplementation".to_string(),
     ]
+}
+
+#[cfg(test)]
+mod normalize_path_tests {
+    use super::normalize_path_for_external_command;
+    use std::path::{Path, PathBuf};
+
+    /// On Windows the `\\?\` extended-length prefix must be stripped so that
+    /// external commands (perl.exe, prove, yath) can accept the path.
+    #[test]
+    #[cfg(target_os = "windows")]
+    fn strips_extended_length_prefix_on_windows() {
+        let prefixed = Path::new(r"\\?\C:\Users\test\file.pl");
+        let result = normalize_path_for_external_command(prefixed);
+        assert_eq!(
+            result,
+            PathBuf::from(r"C:\Users\test\file.pl"),
+            "Extended-length prefix should be stripped: got {:?}",
+            result
+        );
+    }
+
+    /// On Windows, paths without the prefix are returned unchanged.
+    #[test]
+    #[cfg(target_os = "windows")]
+    fn passthrough_plain_windows_path() {
+        let plain = Path::new(r"C:\Users\test\file.pl");
+        let result = normalize_path_for_external_command(plain);
+        assert_eq!(result, PathBuf::from(r"C:\Users\test\file.pl"));
+    }
+
+    /// On non-Windows, the helper is a pass-through identity — paths are
+    /// returned exactly as given regardless of content.
+    #[test]
+    #[cfg(not(target_os = "windows"))]
+    fn passthrough_on_non_windows() {
+        let path = Path::new("/tmp/test_valid.pl");
+        let result = normalize_path_for_external_command(path);
+        assert_eq!(result, PathBuf::from("/tmp/test_valid.pl"));
+    }
+
+    /// Verify the helper handles a synthetic Windows extended-length prefix
+    /// as a string: even on non-Windows the conditional compilation means the
+    /// prefix is left untouched (since there is no `\\?\` on Unix paths).
+    /// This test documents the cross-platform contract.
+    #[test]
+    #[cfg(not(target_os = "windows"))]
+    fn no_stripping_on_non_windows_even_for_unc_like_string() {
+        // On Linux/macOS this is just a literal path string — no stripping.
+        let path = Path::new(r"\\?\C:\foo\bar");
+        let result = normalize_path_for_external_command(path);
+        assert_eq!(result, PathBuf::from(r"\\?\C:\foo\bar"));
+    }
+
+    /// On Windows, the UNC extended-length form `\\?\UNC\server\share\...` must
+    /// become `\\server\share\...` — NOT `UNC\server\share\...`.
+    ///
+    /// `Path::canonicalize` on Windows returns `\\?\UNC\...` for network paths.
+    /// Simply stripping `\\?\` would leave `UNC\server\share\...` which perl.exe
+    /// cannot resolve.  The correct result is a plain UNC path `\\server\share\...`.
+    #[test]
+    #[cfg(target_os = "windows")]
+    fn strips_extended_length_unc_prefix_on_windows() {
+        let prefixed = Path::new(r"\\?\UNC\fileserver\share\project\test.pl");
+        let result = normalize_path_for_external_command(prefixed);
+        assert_eq!(
+            result,
+            PathBuf::from(r"\\fileserver\share\project\test.pl"),
+            "UNC extended-length prefix should become plain UNC path: got {:?}",
+            result
+        );
+    }
+
+    /// On non-Windows, a UNC extended-length string is also left untouched —
+    /// the conditional compilation means the entire stripping block is absent.
+    #[test]
+    #[cfg(not(target_os = "windows"))]
+    fn no_stripping_on_non_windows_even_for_unc_extended_string() {
+        let path = Path::new(r"\\?\UNC\fileserver\share\project\test.pl");
+        let result = normalize_path_for_external_command(path);
+        assert_eq!(result, PathBuf::from(r"\\?\UNC\fileserver\share\project\test.pl"));
+    }
 }

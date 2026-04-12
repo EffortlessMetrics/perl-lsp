@@ -114,11 +114,11 @@ fn test_pl100_data_fields_correct() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-// Test 3: non-fixable diagnostic has fixable: false
+// Test 3: PL105 fixable flag reflects quick-fix availability
 #[test]
-fn test_non_fixable_diagnostic_has_fixable_false() -> Result<(), Box<dyn std::error::Error>> {
-    let uri = "file:///test_non_fixable.pl";
-    // PL105 (VariableRedeclaration) has no quick-fix
+fn test_pl105_has_fixable_true_after_adding_quick_fix() -> Result<(), Box<dyn std::error::Error>> {
+    let uri = "file:///test_pl105_fixable.pl";
+    // PL105 (VariableRedeclaration) now has a quick-fix: remove duplicate 'my' (#3469)
     let content = "use strict; use warnings; my $x = 1; my $x = 2;\n";
     let server = open_document(uri, content);
     let items = get_diagnostics(&server, uri)?;
@@ -132,15 +132,14 @@ fn test_non_fixable_diagnostic_has_fixable_false() -> Result<(), Box<dyn std::er
         }
     }
 
-    // PL105 (VariableRedeclaration) MUST fire and MUST have fixable: false.
-    // Using ok_or to enforce the requirement — a soft if-let would make this
-    // test vacuous (passes even if the serialization is broken).
+    // PL105 (VariableRedeclaration) MUST fire and now has fixable: true since the
+    // "remove duplicate my" quick-fix was added in issue #3469.
     let diag = items
         .iter()
         .find(|d| d["code"].as_str() == Some("PL105"))
         .ok_or("Expected PL105 (VariableRedeclaration) to fire for double-declare input")?;
     let data = &diag["data"];
-    assert_eq!(data["fixable"], false, "PL105 has no quick-fix; fixable must be false");
+    assert_eq!(data["fixable"], true, "PL105 now has a quick-fix (remove duplicate 'my')");
 
     Ok(())
 }
@@ -219,7 +218,98 @@ fn test_workspace_diagnostic_data_populated() -> Result<(), Box<dyn std::error::
     Ok(())
 }
 
-// Test 6: relatedInformation forwarded when present in internal diagnostic
+// Test 6: messageMarkup populated when client advertises markupMessageSupport (LSP 3.18)
+#[test]
+fn test_markup_message_support_populates_message_markup() -> Result<(), Box<dyn std::error::Error>>
+{
+    let uri = "file:///test_markup_message.pl";
+    // Missing 'use strict' triggers PL100 — a coded diagnostic that exercises
+    // the messageMarkup path in the with-code branch of handle_document_diagnostic.
+    let content = "print 'hello';\n";
+
+    // Initialize with markupMessageSupport: true so the server populates messageMarkup
+    let server = LspServer::new();
+    let _ = server.handle_request(JsonRpcRequest {
+        _jsonrpc: "2.0".into(),
+        id: Some(json!(1)),
+        method: "initialize".into(),
+        params: Some(json!({
+            "processId": 1,
+            "capabilities": {
+                "textDocument": {
+                    "diagnostic": {
+                        "markupMessageSupport": true
+                    }
+                }
+            }
+        })),
+    });
+    let _ = server.handle_request(JsonRpcRequest {
+        _jsonrpc: "2.0".into(),
+        id: None,
+        method: "initialized".into(),
+        params: Some(json!({})),
+    });
+    let _ = server.handle_request(JsonRpcRequest {
+        _jsonrpc: "2.0".into(),
+        id: None,
+        method: "textDocument/didOpen".into(),
+        params: Some(json!({
+            "textDocument": {
+                "uri": uri,
+                "languageId": "perl",
+                "version": 1,
+                "text": content
+            }
+        })),
+    });
+
+    let items = get_diagnostics(&server, uri)?;
+
+    // PL100 (MissingStrict) must fire and carry messageMarkup in its data object
+    let pl100 = items
+        .iter()
+        .find(|d| d["code"].as_str() == Some("PL100"))
+        .ok_or("Expected PL100 (MissingStrict) diagnostic — markupMessageSupport test requires a coded diagnostic")?;
+
+    let data = &pl100["data"];
+    assert!(
+        data.is_object(),
+        "data must be an object when markupMessageSupport is set, got: {}",
+        data
+    );
+
+    let markup = &data["messageMarkup"];
+    assert!(
+        markup.is_object(),
+        "data.messageMarkup must be present when client sends markupMessageSupport: true, got: {}",
+        markup
+    );
+    assert_eq!(markup["kind"], "markdown", "messageMarkup.kind must be 'markdown'");
+    let value = markup["value"].as_str().ok_or("messageMarkup.value must be a string")?;
+    assert!(
+        value.contains("PL100"),
+        "messageMarkup.value must include the diagnostic code; got: {:?}",
+        value
+    );
+
+    // The same path must NOT set messageMarkup when the client omits the capability
+    let server_no_markup = open_document("file:///test_no_markup.pl", content);
+    let items_no_markup = get_diagnostics(&server_no_markup, "file:///test_no_markup.pl")?;
+    let pl100_no_markup = items_no_markup
+        .iter()
+        .find(|d| d["code"].as_str() == Some("PL100"))
+        .ok_or("Expected PL100 in the no-markupMessageSupport server too")?;
+    assert!(
+        pl100_no_markup["data"]["messageMarkup"].is_null(),
+        "messageMarkup must be absent when client does not advertise markupMessageSupport; got: {}",
+        pl100_no_markup["data"]["messageMarkup"]
+    );
+
+    Ok(())
+}
+
+// Test 7: relatedInformation forwarded when present in internal diagnostic
 #[test]
 fn test_related_information_forwarded() -> Result<(), Box<dyn std::error::Error>> {
     let uri = "file:///test_related_info.pl";

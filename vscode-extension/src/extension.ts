@@ -2,13 +2,8 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
 import { execFile } from 'child_process';
-import {
-    LanguageClient,
-    LanguageClientOptions,
-    ServerOptions,
-    TransportKind,
-    Trace
-} from 'vscode-languageclient/node';
+import { LanguageClient, TransportKind, Trace } from 'vscode-languageclient/node';
+import type { LanguageClientOptions, ServerOptions } from 'vscode-languageclient/node';
 import { PerlTestAdapter } from './testAdapter';
 import { activateDebugger, rewriteDebugTestLensCommand } from './debugAdapter';
 import { BinaryDownloader } from './downloader';
@@ -18,8 +13,15 @@ import { generateBoilerplate } from './fileCreation';
 import { handleFormattingError } from './formattingErrors';
 import { HealthWidget, ClientState } from './healthWidget';
 import { registerPodPreview } from './podPreview';
+import { registerGherkinProviders } from './gherkinProviders';
+import { registerGherkinStepDefinitionSupport } from './gherkinStepDefinitions';
+import { selectTestCommandAtPosition } from './runTestAtCursor';
 import { StreamingCompletionController } from './streamingCompletion';
-import { classifyStartupError, selectBestDiagnosis, StartupErrorKind } from './startupDiagnosis';
+import {
+    classifyStartupError,
+    formatStartupFailureDialog,
+    StartupErrorKind,
+} from './startupDiagnosis';
 import type { StartupErrorDiagnosis } from './startupDiagnosis';
 
 let client: LanguageClient | undefined;
@@ -30,26 +32,279 @@ let statusBarItem: vscode.StatusBarItem | undefined;
 let healthWidget: HealthWidget | undefined;
 let streamingController: StreamingCompletionController | undefined;
 let stateChangeDisposable: vscode.Disposable | undefined;
+const COEXISTENCE_GUIDE_URL =
+    'https://github.com/EffortlessMetrics/perl-lsp/blob/master/vscode-extension/README.md#extension-coexistence';
 /**
- * Cached diagnostic message from the last startup failure.
- * Set by `initializeLanguageClient` when the LSP fails to start; read by
- * command handlers that need to surface a "server not running" message so
- * they can report the specific root cause rather than a generic "restart" message.
+ * Cached startup diagnosis from the last server failure.
+ *
+ * Set when the LSP fails to start (`initializeLanguageClient`) or when the
+ * server stops unexpectedly mid-session (`bindClientState`). Read by
+ * `serverNotRunningMessage()` so every "server not running" surface shows the
+ * specific root cause (e.g. "glibc mismatch") instead of a generic hint.
+ *
+ * Cleared to `undefined` when the server starts successfully so a stale
+ * failure from a previous session is not shown after a successful restart.
  */
-let lastStartupDiagnostic: string | undefined;
+let lastStartupDiagnosis: StartupErrorDiagnosis | undefined;
 
 /**
  * Return the best available "server not running" message to show the user.
  *
- * When a startup failure has been diagnosed (i.e. `lastStartupDiagnostic` is
- * set), that specific message is returned so the user can see the root cause
- * (e.g. "Perl interpreter not found" rather than a generic restart prompt).
- * Falls back to a brief actionable message for the case where the server was
- * never started in this session.
+ * When a startup failure has been diagnosed (`lastStartupDiagnosis` is set),
+ * formats and returns the specific root cause so the user sees an actionable
+ * message (e.g. "glibc mismatch — install from source") instead of a generic
+ * restart prompt.
+ *
+ * Exported so unit tests can verify the message without a full extension host.
  */
-function serverNotRunningMessage(): string {
-    return lastStartupDiagnostic ??
-        'Perl Language Server is not running. Run the Health Check (Command Palette: "Perl: Run Health Check") to diagnose the issue.';
+export function serverNotRunningMessage(): string {
+    if (lastStartupDiagnosis) {
+        return formatStartupFailureDialog(lastStartupDiagnosis, undefined);
+    }
+    return 'Perl Language Server is not running. Run the Health Check (Command Palette: "Perl: Run Health Check") to diagnose the issue.';
+}
+
+/**
+ * Test helper — inject a cached diagnosis without going through the full
+ * startup path.  Only exported for use in unit tests.
+ * @internal
+ */
+export function _setLastStartupDiagnosisForTest(diagnosis: StartupErrorDiagnosis | undefined): void {
+    lastStartupDiagnosis = diagnosis;
+}
+
+type PerlCriticSettings = {
+    enabled: boolean;
+    severity: number;
+    profile: string;
+    theme: string;
+};
+
+function getPerlCriticSettings(documentUri?: vscode.Uri): PerlCriticSettings {
+    const config = vscode.workspace.getConfiguration('perl-lsp', documentUri);
+    return {
+        enabled: config.get<boolean>('perlcritic.enabled', false),
+        severity: config.get<number>('perlcritic.severity', 3),
+        profile: config.get<string>('perlcritic.profile', ''),
+        theme: config.get<string>('perlcritic.theme', ''),
+    };
+}
+
+type PerlCriticSyncSettings = {
+    enabled?: boolean;
+    severity?: number;
+    profile?: string;
+};
+
+function inspectPerlCriticOverride(
+    config: vscode.WorkspaceConfiguration,
+    key: string
+): { globalValue?: unknown; workspaceValue?: unknown; workspaceFolderValue?: unknown } | undefined {
+    return config.inspect(key) as {
+        globalValue?: unknown;
+        workspaceValue?: unknown;
+        workspaceFolderValue?: unknown;
+    } | undefined;
+}
+
+function getPerlCriticSyncSettings(
+    documentUri?: vscode.Uri,
+    severityOverride?: number
+): PerlCriticSyncSettings {
+    const config = vscode.workspace.getConfiguration('perl-lsp', documentUri);
+    const settings: PerlCriticSyncSettings = {};
+
+    const enabled = inspectPerlCriticOverride(config, 'perlcritic.enabled');
+    if (enabled?.globalValue !== undefined ||
+        enabled?.workspaceValue !== undefined ||
+        enabled?.workspaceFolderValue !== undefined) {
+        settings.enabled = config.get<boolean>('perlcritic.enabled', false);
+    }
+
+    const severity = inspectPerlCriticOverride(config, 'perlcritic.severity');
+    if (severityOverride !== undefined) {
+        settings.severity = severityOverride;
+    } else if (severity?.globalValue !== undefined ||
+        severity?.workspaceValue !== undefined ||
+        severity?.workspaceFolderValue !== undefined) {
+        settings.severity = config.get<number>('perlcritic.severity', 3);
+    }
+
+    const profile = inspectPerlCriticOverride(config, 'perlcritic.profile');
+    if (profile?.globalValue !== undefined ||
+        profile?.workspaceValue !== undefined ||
+        profile?.workspaceFolderValue !== undefined) {
+        settings.profile = config.get<string>('perlcritic.profile', '');
+    }
+
+    return settings;
+}
+
+function buildPerlCriticConfiguration(settings: PerlCriticSyncSettings): Record<string, unknown> | undefined {
+    if (
+        settings.enabled === undefined &&
+        settings.severity === undefined &&
+        settings.profile === undefined
+    ) {
+        return undefined;
+    }
+
+    return {
+        settings: {
+            perl: {
+                perlcritic: settings,
+            },
+        },
+    };
+}
+
+function hasExplicitPerlCriticOverrides(documentUri?: vscode.Uri): boolean {
+    const config = vscode.workspace.getConfiguration('perl-lsp', documentUri);
+    return ['perlcritic.enabled', 'perlcritic.severity', 'perlcritic.profile'].some(key => {
+        const value = config.inspect(key) as {
+            globalValue?: unknown;
+            workspaceValue?: unknown;
+            workspaceFolderValue?: unknown;
+        } | undefined;
+        return Boolean(
+            value &&
+            (value.globalValue !== undefined ||
+                value.workspaceValue !== undefined ||
+                value.workspaceFolderValue !== undefined)
+        );
+    });
+}
+
+export async function syncPerlCriticConfiguration(
+    activeClient: Pick<LanguageClient, 'sendNotification'> | undefined = client,
+    documentUri?: vscode.Uri
+): Promise<void> {
+    if (!activeClient) {
+        return;
+    }
+
+    const payload = buildPerlCriticConfiguration(getPerlCriticSyncSettings(documentUri));
+    if (payload) {
+        activeClient.sendNotification('workspace/didChangeConfiguration', payload);
+    }
+}
+
+export async function runPerlCriticOnActiveFile(
+    activeClient: Pick<LanguageClient, 'sendRequest' | 'sendNotification'> | undefined = client
+): Promise<void> {
+    const channel = outputChannel ?? vscode.window.createOutputChannel('Perl Language Server');
+    const editor = vscode.window.activeTextEditor;
+    if (!editor || editor.document.languageId !== 'perl') {
+        vscode.window.showErrorMessage('No active Perl file to run PerlCritic on');
+        return;
+    }
+
+    if (editor.document.isDirty) {
+        await editor.document.save();
+    }
+
+    if (!activeClient) {
+        vscode.window.showWarningMessage(serverNotRunningMessage());
+        return;
+    }
+
+    if (hasExplicitPerlCriticOverrides(editor.document.uri)) {
+        await syncPerlCriticConfiguration(activeClient, editor.document.uri);
+    }
+
+    let result: unknown;
+    try {
+        result = await activeClient.sendRequest('workspace/executeCommand', {
+            command: 'perl.runCritic',
+            arguments: [editor.document.uri.toString()],
+        });
+    } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error);
+        vscode.window.showErrorMessage(`Failed to run PerlCritic: ${message}`);
+        return;
+    }
+
+    const response = (result && typeof result === 'object') ? result as Record<string, unknown> : {};
+    const status = typeof response.status === 'string' ? response.status : 'unknown';
+    const violationCount = typeof response.violationCount === 'number'
+        ? response.violationCount
+        : Array.isArray(response.violations)
+            ? response.violations.length
+            : 0;
+    const analyzerUsed = typeof response.analyzerUsed === 'string' ? response.analyzerUsed : 'unknown';
+    const fileName = path.basename(editor.document.uri.fsPath);
+
+    channel.appendLine(
+        `[perlcritic] ${fileName}: status=${status} violations=${violationCount} analyzer=${analyzerUsed}`
+    );
+
+    if (status === 'error' || typeof response.error === 'string') {
+        const message = typeof response.error === 'string'
+            ? response.error
+            : 'PerlCritic returned an error';
+        vscode.window.showErrorMessage(message, 'Show Output').then(selection => {
+            if (selection === 'Show Output') {
+                channel.show();
+            }
+        });
+        return;
+    }
+
+    if (violationCount > 0) {
+        vscode.window.showWarningMessage(
+            `PerlCritic found ${violationCount} issue${violationCount === 1 ? '' : 's'} in ${fileName}.`,
+            'Show Output'
+        ).then(selection => {
+            if (selection === 'Show Output') {
+                channel.show();
+            }
+        });
+        return;
+    }
+
+    vscode.window.showInformationMessage(
+        `PerlCritic passed for ${fileName} using ${analyzerUsed}.`,
+        'Show Output'
+    ).then(selection => {
+        if (selection === 'Show Output') {
+            channel.show();
+        }
+    });
+}
+
+export async function setPerlCriticSeverity(
+    activeClient: Pick<LanguageClient, 'sendNotification'> | undefined = client
+): Promise<void> {
+    const resourceUri = vscode.window.activeTextEditor?.document.uri;
+    const selection = await vscode.window.showQuickPick(
+        [
+            { label: '1', description: 'Very permissive' },
+            { label: '2', description: 'Permissive' },
+            { label: '3', description: 'Balanced default' },
+            { label: '4', description: 'Strict' },
+            { label: '5', description: 'Very strict' },
+        ],
+        {
+            placeHolder: 'Choose a PerlCritic severity level',
+        }
+    );
+
+    if (!selection) {
+        return;
+    }
+
+    const severity = Number(selection.label);
+    const config = vscode.workspace.getConfiguration('perl-lsp', resourceUri);
+    const target = vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length > 0
+        ? vscode.ConfigurationTarget.Workspace
+        : vscode.ConfigurationTarget.Global;
+    await config.update('perlcritic.severity', severity, target);
+    const payload = buildPerlCriticConfiguration(getPerlCriticSyncSettings(resourceUri, severity));
+    if (activeClient && payload) {
+        activeClient.sendNotification('workspace/didChangeConfiguration', payload);
+    }
+
+    vscode.window.showInformationMessage(`PerlCritic severity set to ${severity}.`);
 }
 
 export async function activate(context: vscode.ExtensionContext) {
@@ -115,6 +370,14 @@ export async function activate(context: vscode.ExtensionContext) {
         } else {
             vscode.window.showWarningMessage('Test adapter is not available. It might still be initializing.');
         }
+    });
+
+    const runPerlCriticCommand = vscode.commands.registerCommand('perl-lsp.runPerlCritic', async () => {
+        await runPerlCriticOnActiveFile();
+    });
+
+    const setPerlCriticSeverityCommand = vscode.commands.registerCommand('perl-lsp.setPerlCriticSeverity', async () => {
+        await setPerlCriticSeverity();
     });
     
     const showVersionCommand = vscode.commands.registerCommand('perl-lsp.showVersion', async () => {
@@ -185,6 +448,18 @@ export async function activate(context: vscode.ExtensionContext) {
                 disabled: !isTestFile
             },
             {
+                label: '$(checklist) Run PerlCritic',
+                detail: isPerl ? 'Run PerlCritic on the active file' : 'Run PerlCritic on the active file (Only available for Perl files)',
+                command: 'perl-lsp.runPerlCritic',
+                disabled: !isPerl
+            },
+            {
+                label: '$(symbol-numeric) Set PerlCritic Severity',
+                detail: isPerl ? 'Choose a PerlCritic severity level' : 'Choose a PerlCritic severity level (Only available for Perl files)',
+                command: 'perl-lsp.setPerlCriticSeverity',
+                disabled: !isPerl
+            },
+            {
                 label: '$(list-flat) Format Document',
                 description: 'Shift+Alt+F',
                 detail: isPerl ? 'Format using perltidy' : 'Format using perltidy (Only available for Perl files)',
@@ -252,6 +527,38 @@ export async function activate(context: vscode.ExtensionContext) {
 
     const runCurrentTestCommand = vscode.commands.registerCommand('perl-lsp.runCurrentTest', async () => {
         await runCurrentTestWithProve();
+    });
+
+    const runTestAtCursorCommand = vscode.commands.registerCommand('perl-lsp.runTestAtCursor', async () => {
+        const editor = vscode.window.activeTextEditor;
+        if (!editor || editor.document.languageId !== 'perl') {
+            vscode.window.showErrorMessage('Run Test at Cursor requires an active Perl file');
+            return;
+        }
+
+        if (editor.document.isDirty) {
+            await editor.document.save();
+        }
+
+        if (!client) {
+            vscode.window.showWarningMessage(serverNotRunningMessage());
+            return;
+        }
+
+        const lenses = await client.sendRequest<Array<{
+            range?: { start: { line: number; character: number }; end: { line: number; character: number } };
+            command?: { command: string; arguments?: unknown[] };
+        }> | null>('textDocument/codeLens', {
+            textDocument: { uri: editor.document.uri.toString() },
+        });
+
+        const command = selectTestCommandAtPosition(lenses ?? [], editor.selection.active);
+        if (!command) {
+            vscode.window.showWarningMessage('No runnable test was found at the cursor position');
+            return;
+        }
+
+        await vscode.commands.executeCommand(command.command, ...(command.arguments ?? []));
     });
 
     const runAllTestsCommand = vscode.commands.registerCommand('perl-lsp.runAllTests', async () => {
@@ -514,6 +821,18 @@ export async function activate(context: vscode.ExtensionContext) {
             refreshStreamingController(client);
         }
 
+        if (event.affectsConfiguration('perl-lsp.includePaths')) {
+            await validateIncludePaths(context);
+        }
+
+        if (
+            event.affectsConfiguration('perl-lsp.perlcritic.enabled') ||
+            event.affectsConfiguration('perl-lsp.perlcritic.severity') ||
+            event.affectsConfiguration('perl-lsp.perlcritic.profile')
+        ) {
+            await syncPerlCriticConfiguration(client);
+        }
+
         if (requiresClientRefresh(event)) {
             await promptForClientRefresh(context);
         }
@@ -559,8 +878,11 @@ export async function activate(context: vscode.ExtensionContext) {
         restartCommand,
         organizeImportsCommand,
         runTestsCommand,
+        runPerlCriticCommand,
+        setPerlCriticSeverityCommand,
         checkSyntaxCommand,
         runCurrentTestCommand,
+        runTestAtCursorCommand,
         runAllTestsCommand,
         formatDocumentCommand,
         showIncPathsCommand,
@@ -581,12 +903,16 @@ export async function activate(context: vscode.ExtensionContext) {
         configurationWatcher,
         fileCreationWatcher,
         arrowCompletionWatcher,
+        ...registerGherkinProviders(),
+        ...registerGherkinStepDefinitionSupport(),
         ...registerPodPreview(context),
     );
 
     // Initialize debug adapter
     activateDebugger(context);
     await initializeLanguageClient(context);
+    await validateIncludePaths(context);
+    await warnAboutPerlExtensionConflicts(context);
 
     // Background update check — fire-and-forget after startup completes.
     // Runs at most once per updateCheckInterval hours; no-ops when serverPath
@@ -732,7 +1058,7 @@ async function initializeLanguageClient(context: vscode.ExtensionContext): Promi
         // Probe the binary to get an actionable OS-level diagnosis (#3280).
         // If the probe result is Unknown (binary gave no useful output), fall
         // back to the health check (#3312) which can detect missing Perl etc.
-        // lastStartupDiagnostic is updated so that serverNotRunningMessage() in
+        // lastStartupDiagnosis is updated so that serverNotRunningMessage() in
         // command handlers surfaces the specific root cause rather than a generic prompt.
         const probeResult = currentServerPath
             ? await probeStartupFailure(currentServerPath)
@@ -742,10 +1068,12 @@ async function initializeLanguageClient(context: vscode.ExtensionContext): Promi
             const onboarding = new OnboardingManager(context, outputChannel);
             healthMsg = await onboarding.runStartupDiagnostics(currentServerPath ?? null);
         }
-        const diagnosis = selectBestDiagnosis(probeResult, healthMsg);
-        lastStartupDiagnostic = `${diagnosis.hint} Suggestion: ${diagnosis.remediation}`;
-        const dialogMessage =
-            `Perl Language Server failed to start.\n\n${diagnosis.hint}\n\nSuggestion: ${diagnosis.remediation}`;
+        // Cache the structured diagnosis so serverNotRunningMessage() can format
+        // it; when healthMsg overrides the hint, wrap it as a synthetic diagnosis.
+        lastStartupDiagnosis = healthMsg && probeResult.kind === StartupErrorKind.Unknown
+            ? { kind: StartupErrorKind.Unknown, hint: healthMsg, remediation: probeResult.remediation }
+            : probeResult;
+        const dialogMessage = formatStartupFailureDialog(probeResult, healthMsg);
 
         const choice = await vscode.window.showErrorMessage(
             dialogMessage,
@@ -776,9 +1104,9 @@ async function initializeLanguageClient(context: vscode.ExtensionContext): Promi
     // Initialize streaming inline completion controller (config-gated)
     refreshStreamingController(client);
 
-    // Clear any stale startup diagnostic — the server started successfully so
+    // Clear any stale startup diagnosis — the server started successfully so
     // the root cause (e.g. missing Perl) no longer applies.
-    lastStartupDiagnostic = undefined;
+    lastStartupDiagnosis = undefined;
     outputChannel.appendLine('Perl Language Server started successfully');
     return true;
 }
@@ -1175,6 +1503,149 @@ async function runCheckSyntax(): Promise<void> {
     });
 }
 
+/**
+ * Validate configured include paths for each workspace folder and warn once
+ * per workspace when a path does not exist.
+ */
+export async function validateIncludePaths(context: vscode.ExtensionContext): Promise<void> {
+    const workspaceFolders = vscode.workspace.workspaceFolders;
+    if (!workspaceFolders || workspaceFolders.length === 0) {
+        return;
+    }
+
+    for (const folder of workspaceFolders) {
+        const cacheKey = `perl-lsp.includePathsWarning.${encodeURIComponent(folder.uri.toString())}`;
+        const config = vscode.workspace.getConfiguration('perl-lsp', folder.uri);
+        const includePaths: string[] = config.get('includePaths', ['lib', 'local/lib/perl5']);
+        const missingPaths = includePaths.filter(includePath => {
+            const resolved = path.resolve(folder.uri.fsPath, includePath);
+            return !fs.existsSync(resolved);
+        });
+
+        if (missingPaths.length === 0) {
+            await context.globalState.update(cacheKey, undefined);
+            continue;
+        }
+
+        const missingSignature = missingPaths.join('\n');
+        const warnedSignature = context.globalState.get<string | undefined>(cacheKey);
+        if (warnedSignature === missingSignature) {
+            continue;
+        }
+
+        const firstMissing = missingPaths[0];
+        const relativeNote = path.isAbsolute(firstMissing)
+            ? 'absolute path'
+            : 'relative to the workspace';
+        const suffix =
+            missingPaths.length > 1
+                ? ` ${missingPaths.length} include paths are missing.`
+                : '';
+
+        const choice = await vscode.window.showWarningMessage(
+            `Perl LSP: include path "${firstMissing}" (${relativeNote}) does not exist.${suffix}`,
+            'Open Settings'
+        );
+
+        if (choice === 'Open Settings') {
+            void vscode.commands.executeCommand(
+                'workbench.action.openSettings',
+                '@ext:EffortlessMetrics.perl-lsp-rs perl-lsp.includePaths'
+            );
+        }
+
+        await context.globalState.update(cacheKey, missingSignature);
+    }
+}
+
+type ExtensionPackage = {
+    publisher?: string;
+    name?: string;
+    version?: string;
+    displayName?: string;
+    description?: string;
+    keywords?: string[];
+    contributes?: {
+        languages?: Array<{ id?: string }>;
+    };
+};
+
+type InstalledExtension = {
+    id?: string;
+    packageJSON?: ExtensionPackage;
+};
+
+function isPerlLanguageExtension(extension: InstalledExtension): boolean {
+    const packageJSON = extension.packageJSON;
+    if (!packageJSON) {
+        return false;
+    }
+
+    if ((packageJSON.contributes?.languages ?? []).some(language => language.id === 'perl')) {
+        return true;
+    }
+
+    const haystack = [
+        extension.id,
+        packageJSON.publisher && packageJSON.name
+            ? `${packageJSON.publisher}.${packageJSON.name}`
+            : undefined,
+        packageJSON.displayName,
+        packageJSON.name,
+        packageJSON.description,
+        ...(packageJSON.keywords ?? []),
+    ]
+        .filter((value): value is string => typeof value === 'string' && value.length > 0)
+        .join(' ')
+        .toLowerCase();
+
+    return /\bperl(?:\b|[-:]|navigator|critic|tidy|lsp)/i.test(haystack);
+}
+
+/**
+ * Warn once per major version when conflicting Perl extensions are installed.
+ */
+export async function warnAboutPerlExtensionConflicts(
+    context: vscode.ExtensionContext
+): Promise<void> {
+    const packageJSON = context.extension.packageJSON as ExtensionPackage;
+    const currentMajor = String(packageJSON.version ?? '0').split('.')[0] ?? '0';
+    const warnedMajor = context.globalState.get<string>('perl-lsp.conflictWarningMajorVersion');
+    if (warnedMajor === currentMajor) {
+        return;
+    }
+
+    const selfId = `${packageJSON.publisher ?? 'EffortlessMetrics'}.${packageJSON.name ?? 'perl-lsp-rs'}`;
+    const conflicts = (vscode.extensions.all as unknown as InstalledExtension[]).filter(extension => {
+        if (!extension || extension.id === selfId) {
+            return false;
+        }
+        return isPerlLanguageExtension(extension);
+    });
+
+    if (conflicts.length === 0) {
+        return;
+    }
+
+    const names = conflicts
+        .map(extension => extension.packageJSON?.displayName ?? extension.id ?? 'unknown extension')
+        .slice(0, 3);
+    const label = names.length === 1
+        ? names[0]
+        : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+    const extra = conflicts.length > names.length ? ` (+${conflicts.length - names.length} more)` : '';
+    const choice = await vscode.window.showWarningMessage(
+        `Perl LSP detected ${conflicts.length} other Perl extension${conflicts.length === 1 ? '' : 's'}: ${label}${extra}. These can conflict with completion, hover, diagnostics, or formatting. See the coexistence guide for details.`,
+        'Open Coexistence Guide'
+    );
+
+    if (choice === 'Open Coexistence Guide') {
+        await vscode.env.openExternal(vscode.Uri.parse(COEXISTENCE_GUIDE_URL));
+    }
+
+    await context.globalState.update('perl-lsp.conflictWarningMajorVersion', currentMajor);
+}
+
 async function runProveTask(name: string, args: string[], cwd?: string): Promise<void> {
     const scope = cwd
         ? vscode.workspace.getWorkspaceFolder(vscode.Uri.file(cwd)) ?? vscode.TaskScope.Global
@@ -1377,6 +1848,25 @@ function bindClientState(languageClient: LanguageClient) {
         // vscode-languageclient State values match ClientState numeric values:
         // Stopped = 1, Running = 2, Starting = 3
         healthWidget?.onStateChange(event.newState as unknown as ClientState);
+
+        // When the server stops unexpectedly after a successful start (mid-session
+        // crash), capture a generic diagnosis so serverNotRunningMessage() returns
+        // an actionable hint instead of the stale "not running" fallback.
+        // We can't run probeStartupFailure here (async) so we set a generic
+        // "server stopped" diagnosis; the user can run Health Check for details.
+        //
+        // Note: event.newState / oldState are vscode-languageclient's `State` enum
+        // which shares numeric values with ClientState (Stopped=1, Running=2) but
+        // is a distinct nominal type, so we cast to number for comparison.
+        const newStateNum = event.newState as unknown as number;
+        const oldStateNum = event.oldState as unknown as number;
+        if (newStateNum === ClientState.Stopped && oldStateNum === ClientState.Running) {
+            lastStartupDiagnosis = {
+                kind: StartupErrorKind.Unknown,
+                hint: 'The Perl Language Server stopped unexpectedly. Check the Output panel for details.',
+                remediation: 'Try restarting the server (Command Palette: "Perl: Restart Server") or run the Health Check.',
+            };
+        }
     });
 }
 

@@ -5,7 +5,7 @@ This file provides guidance to Claude Code when working with code in this reposi
 ## Crate Overview
 
 - **Crate**: `perl-parser-pest`
-- **Version**: workspace (currently 0.12.2)
+- **Version**: workspace (currently 0.12.3)
 - **Tier**: 7 (Legacy/testing)
 - **Purpose**: Legacy Pest-based Perl parser (v2) -- maintained as a learning tool, compatibility reference, and benchmark baseline. NOT in the default CI gate.
 

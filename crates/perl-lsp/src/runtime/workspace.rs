@@ -13,9 +13,9 @@ use super::*;
 use crate::runtime::routing::{IndexAccessMode, route_index_access};
 use crate::state::workspace_symbol_cap;
 use perl_module_path::file_path_to_module_name;
-use perl_module_rename::plan_module_rename_edits;
+use perl_module_rename::{apply_module_rename_edits, plan_module_rename_edits};
 #[cfg(feature = "workspace")]
-use perl_parser::workspace_index::{DegradationReason, EarlyExitReason, ResourceKind};
+use perl_parser::workspace_index::{DegradationReason, EarlyExitReason, ResourceKind, SymbolKind};
 #[cfg(feature = "workspace")]
 use perl_source_file::{is_perl_source_path, is_perl_source_uri};
 use perl_workspace_folder::extract_workspace_folder_change;
@@ -24,10 +24,13 @@ use perl_workspace_ignore::is_skipped_dir_name;
 #[cfg(feature = "workspace")]
 use std::path::Path;
 use std::sync::Arc;
+use std::time::Duration;
 #[cfg(feature = "workspace")]
 use std::time::Instant;
 #[cfg(feature = "workspace")]
 use url::Url;
+
+const WORKSPACE_CONFIGURATION_REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 // Note: WalkDir logic has been extracted to super::file_discovery.
 // These helper functions are retained for potential future use by
 // other workspace operations (e.g., file watcher filtering).
@@ -128,6 +131,24 @@ fn send_progress_end(outbound: &super::outbound::OutboundSender, message: &str) 
     }
 }
 
+/// Returns `true` when an I/O error represents a permission-denied condition.
+///
+/// Covers both the portable `ErrorKind::PermissionDenied` and the Windows
+/// `ERROR_ACCESS_DENIED` code (os error 5), which may surface as
+/// `ErrorKind::Uncategorized` on older Rust toolchains.
+#[cfg(feature = "workspace")]
+fn is_permission_denied_error(e: &std::io::Error) -> bool {
+    if e.kind() == std::io::ErrorKind::PermissionDenied {
+        return true;
+    }
+    // Windows ERROR_ACCESS_DENIED = os error 5
+    #[cfg(windows)]
+    if e.raw_os_error() == Some(5) {
+        return true;
+    }
+    false
+}
+
 /// RAII guard that clears the `indexing_in_progress` flag on drop.
 ///
 /// Ensures the flag is always cleared, even if the indexing thread panics.
@@ -142,11 +163,130 @@ impl Drop for IndexingGuard {
 }
 
 impl LspServer {
+    /// Request `workspace/configuration` for each workspace folder (if supported).
+    pub(crate) fn request_workspace_configuration_for_folders(&self) {
+        if !self.client_capabilities.lock().workspace_configuration_support {
+            tracing::debug!("Client does not support workspace/configuration; using local config");
+            return;
+        }
+
+        let now = std::time::Instant::now();
+        self.pending_workspace_configuration_requests.lock().retain(|request_id, pending| {
+            let still_fresh = now.saturating_duration_since(pending.created_at)
+                <= WORKSPACE_CONFIGURATION_REQUEST_TIMEOUT;
+            if !still_fresh {
+                tracing::warn!(
+                    request_id = *request_id,
+                    "Dropping stale workspace/configuration request"
+                );
+            }
+            still_fresh
+        });
+
+        let folder_uris: Vec<String> =
+            self.workspace_folders.lock().iter().map(|folder| folder.uri.clone()).collect();
+        if folder_uris.is_empty() {
+            return;
+        }
+
+        let mut items: Vec<Value> = vec![json!({ "section": "perl" })];
+        items.extend(folder_uris.iter().map(|uri| json!({ "scopeUri": uri, "section": "perl" })));
+        let request_id = self.next_request_id.fetch_add(1, Ordering::Relaxed);
+
+        if let Err(error) = self.outbound.send_request(
+            request_id,
+            "workspace/configuration",
+            json!({ "items": items }),
+        ) {
+            tracing::warn!(%error, "Failed to send workspace/configuration request");
+            return;
+        }
+
+        self.pending_workspace_configuration_requests.lock().insert(
+            request_id,
+            PendingWorkspaceConfigurationRequest {
+                folder_uris,
+                includes_global_item: true,
+                created_at: now,
+            },
+        );
+    }
+
+    /// Apply a `workspace/configuration` response for a previously sent request.
+    pub(crate) fn handle_client_response(&self, params: Option<Value>) {
+        let Some(params) = params else {
+            return;
+        };
+        let Some(id) = params.get("id").and_then(|value| value.as_i64()) else {
+            return;
+        };
+
+        let maybe_pending = self.pending_workspace_configuration_requests.lock().remove(&id);
+        let Some(pending) = maybe_pending else {
+            return;
+        };
+        let response_age = std::time::Instant::now().saturating_duration_since(pending.created_at);
+        if response_age > WORKSPACE_CONFIGURATION_REQUEST_TIMEOUT {
+            tracing::warn!(
+                request_id = id,
+                age_ms = response_age.as_millis(),
+                "Ignoring stale workspace/configuration response"
+            );
+            return;
+        }
+
+        if params.get("error").is_some() {
+            tracing::debug!(
+                request_id = id,
+                "workspace/configuration request failed; keeping TOML/default config"
+            );
+            return;
+        }
+
+        let Some(results) = params.get("result").and_then(Value::as_array) else {
+            tracing::warn!(
+                request_id = id,
+                "workspace/configuration response was not an array; keeping TOML/default config"
+            );
+            return;
+        };
+        let global_settings = if pending.includes_global_item { results.first() } else { None };
+        let folder_results_start = usize::from(pending.includes_global_item);
+
+        let mut folders = self.workspace_folders.lock();
+        for (idx, folder_uri) in pending.folder_uris.iter().enumerate() {
+            let Some(folder) = folders.iter_mut().find(|folder| &folder.uri == folder_uri) else {
+                continue;
+            };
+
+            let mut effective_config = perl_lsp_config::WorkspaceConfig::default();
+            if let Some(project_config) = &folder.project_config {
+                project_config.apply_to_workspace_config(&mut effective_config);
+            }
+
+            if let Some(global_settings) = global_settings {
+                effective_config.update_from_value(global_settings);
+            }
+            if let Some(perl_settings) = results.get(folder_results_start + idx) {
+                effective_config.update_from_value(perl_settings);
+            } else {
+                tracing::warn!(
+                    request_id = id,
+                    folder_uri = %folder_uri,
+                    "workspace/configuration response missing folder item; using TOML/default config for folder"
+                );
+            }
+
+            folder.effective_workspace_config = effective_config;
+        }
+    }
+
     /// Handle workspace/symbol request (v2 implementation with lifecycle-aware dispatch)
     ///
     /// Uses routing helper for state-aware behavior:
     /// - **Ready state**: Full workspace index search with cooperative yielding
-    /// - **Building/Degraded state**: Open document search only (partial results)
+    /// - **Building/Degraded state**: Query partial index first; fall through to open-doc
+    ///   search only when the partial index is also empty (Gap 2 fix, issue #4152)
     pub(super) fn handle_workspace_symbols_v2(
         &self,
         params: Option<Value>,
@@ -191,7 +331,35 @@ impl LspServer {
                     // If index is empty, fall through to open-doc search
                 }
                 IndexAccessMode::Partial(reason) => {
-                    tracing::debug!(reason, "Workspace symbol: using open-doc fallback");
+                    // Building/Degraded: still query the partial index so users get
+                    // results from files already scanned.  Fall through to the
+                    // open-doc path only when the partial index is also empty.
+                    tracing::debug!(reason, "Workspace symbol: querying partial index");
+                    if let Some(coordinator) = self.coordinator() {
+                        let symbols = coordinator.index().search_symbols(query);
+                        let lsp_symbols: Vec<LspWorkspaceSymbol> = symbols
+                            .iter()
+                            .take(cap)
+                            .enumerate()
+                            .map(|(i, sym)| {
+                                if i & 0x3f == 0 {
+                                    std::thread::yield_now();
+                                }
+                                sym.into()
+                            })
+                            .collect();
+                        if !lsp_symbols.is_empty() {
+                            tracing::debug!(
+                                count = lsp_symbols.len(),
+                                "Workspace symbol: returned results from partial index"
+                            );
+                            return Ok(Some(json!(lsp_symbols)));
+                        }
+                    }
+                    tracing::debug!(
+                        reason,
+                        "Workspace symbol: partial index empty, falling back to open-docs"
+                    );
                 }
                 IndexAccessMode::None => {
                     tracing::debug!(
@@ -480,6 +648,37 @@ impl LspServer {
                                 "perl.testRunner.testCommand" => json!(config.test_runner_command),
                                 "perl.testRunner.testArgs" => json!(config.test_runner_args),
                                 "perl.testRunner.testTimeout" => json!(config.test_runner_timeout),
+                                "perl.formatting.enabled" => json!(config.perltidy_enabled),
+                                "perl.formatting.profile" => json!(config.perltidy_profile),
+                                "perl.formatting.maximumLineLength" => {
+                                    json!(config.perltidy_maximum_line_length)
+                                }
+                                "perl.formatting.indentColumns" => {
+                                    json!(config.perltidy_indent_columns)
+                                }
+                                "perl.formatting.tabs" => json!(config.perltidy_tabs),
+                                "perl.formatting.openingBraceOnNewLine" => {
+                                    json!(config.perltidy_opening_brace_on_new_line)
+                                }
+                                "perl.formatting.cuddledElse" => {
+                                    json!(config.perltidy_cuddled_else)
+                                }
+                                "perl.formatting.spaceAfterKeyword" => {
+                                    json!(config.perltidy_space_after_keyword)
+                                }
+                                "perl.formatting.addTrailingCommas" => {
+                                    json!(config.perltidy_add_trailing_commas)
+                                }
+                                "perl.formatting.verticalAlignment" => {
+                                    json!(config.perltidy_vertical_alignment)
+                                }
+                                "perl.formatting.blockCommentIndentation" => {
+                                    json!(config.perltidy_block_comment_indentation)
+                                }
+                                "perl.formatting.extraArgs" => json!(config.perltidy_extra_args),
+                                "perl.formatting.timeoutSecs" => {
+                                    json!(config.perltidy_timeout_secs)
+                                }
                                 _ => json!(null),
                             }
                         };
@@ -546,6 +745,7 @@ impl LspServer {
                     #[cfg(not(target_arch = "wasm32"))]
                     if critic_config_changed {
                         *self.critic_analyzer.lock() = None;
+                        self.critic_workspace_warnings_sent.lock().clear();
                     }
 
                     // Update workspace config (include paths, @INC)
@@ -553,6 +753,23 @@ impl LspServer {
                         let mut workspace_config = self.workspace_config.lock();
                         workspace_config.update_from_value(perl);
                         tracing::debug!("Updated workspace config from perl settings");
+                    }
+
+                    // Apply global client settings to each folder's effective config immediately.
+                    // The async workspace/configuration pull that follows will refine per-folder
+                    // settings once the client responds, but we update now so the window between
+                    // didChangeConfiguration arrival and the pull response doesn't leave folders
+                    // with stale settings.
+                    {
+                        let mut folders = self.workspace_folders.lock();
+                        for folder in folders.iter_mut() {
+                            let mut effective_config = perl_lsp_config::WorkspaceConfig::default();
+                            if let Some(project_config) = &folder.project_config {
+                                project_config.apply_to_workspace_config(&mut effective_config);
+                            }
+                            effective_config.update_from_value(perl);
+                            folder.effective_workspace_config = effective_config;
+                        }
                     }
 
                     // Refresh AI backend when config changes (constructs or clears provider)
@@ -565,6 +782,10 @@ impl LspServer {
                 }
             }
         }
+
+        // Invalidate client-provided workspace/configuration values and re-fetch.
+        self.pending_workspace_configuration_requests.lock().clear();
+        self.request_workspace_configuration_for_folders();
     }
 
     /// Handle workspace/didChangeWatchedFiles notification
@@ -740,6 +961,10 @@ impl LspServer {
                 let mut workspace_edit = json!({
                     "changes": {}
                 });
+                let mut planned_workspace_texts: std::collections::BTreeMap<
+                    String,
+                    (String, String),
+                > = std::collections::BTreeMap::new();
 
                 for file in files {
                     let Some(old_uri) = file["oldUri"].as_str() else {
@@ -756,6 +981,20 @@ impl LspServer {
                     let new_module = path_to_module_name(new_uri);
 
                     if !old_module.is_empty() && !new_module.is_empty() {
+                        if !planned_workspace_texts.contains_key(old_uri) {
+                            if let Some(text) = self.read_workspace_text(old_uri) {
+                                planned_workspace_texts
+                                    .insert(old_uri.to_string(), (text.clone(), text));
+                            }
+                        }
+                        if let Some((_, current_text)) = planned_workspace_texts.get_mut(old_uri) {
+                            let planned =
+                                plan_module_rename_edits(current_text, &old_module, &new_module);
+                            if !planned.is_empty() {
+                                *current_text = apply_module_rename_edits(current_text, &planned);
+                            }
+                        }
+
                         // Find all files that reference the old module
                         // Note: Query operation - use coordinator.index() for consistency
                         #[cfg(feature = "workspace")]
@@ -769,32 +1008,25 @@ impl LspServer {
                         let dependents = Vec::<String>::new();
 
                         for dependent_uri in dependents {
-                            // Get the document content
-                            let documents = self.documents.lock();
-                            if let Some(doc) = documents.get(&dependent_uri) {
-                                let planned =
-                                    plan_module_rename_edits(&doc.text, &old_module, &new_module);
-                                let edits: Vec<Value> = planned
-                                    .into_iter()
-                                    .map(|edit| {
-                                        json!({
-                                            "range": {
-                                                "start": {
-                                                    "line": edit.line,
-                                                    "character": edit.start_character,
-                                                },
-                                                "end": {
-                                                    "line": edit.line,
-                                                    "character": edit.end_character,
-                                                }
-                                            },
-                                            "newText": edit.new_text
-                                        })
-                                    })
-                                    .collect();
+                            if !planned_workspace_texts.contains_key(&dependent_uri) {
+                                let Some(text) = self.read_workspace_text(&dependent_uri) else {
+                                    continue;
+                                };
+                                planned_workspace_texts
+                                    .insert(dependent_uri.clone(), (text.clone(), text));
+                            }
 
-                                if !edits.is_empty() {
-                                    workspace_edit["changes"][dependent_uri] = json!(edits);
+                            if let Some((_, current_text)) =
+                                planned_workspace_texts.get_mut(&dependent_uri)
+                            {
+                                let planned = plan_module_rename_edits(
+                                    current_text,
+                                    &old_module,
+                                    &new_module,
+                                );
+                                if !planned.is_empty() {
+                                    *current_text =
+                                        apply_module_rename_edits(current_text, &planned);
                                 }
                             }
                         }
@@ -831,11 +1063,11 @@ impl LspServer {
                     // qualified function calls). These are known gaps tracked in
                     // docs/reference/KNOWN_LIMITATIONS.md.
                     if !old_module.is_empty() {
+                        #[cfg(feature = "workspace")]
                         let updated_uris: std::collections::HashSet<&str> =
-                            workspace_edit["changes"]
-                                .as_object()
-                                .map(|m| m.keys().map(|k| k.as_str()).collect())
-                                .unwrap_or_default();
+                            planned_workspace_texts.keys().map(String::as_str).collect();
+                        #[cfg(not(feature = "workspace"))]
+                        let updated_uris = std::collections::HashSet::<&str>::new();
                         // Build a word-boundary pattern so "Base" does not match "Database".
                         // Perl module names consist of \w and ::, so we check that any match
                         // of old_module in the document text is not immediately preceded or
@@ -870,6 +1102,15 @@ impl LspServer {
                             }
                         }
                     }
+                }
+
+                #[cfg(feature = "workspace")]
+                for (uri, (original_text, current_text)) in planned_workspace_texts {
+                    self.append_workspace_edits(
+                        &mut workspace_edit,
+                        &uri,
+                        build_module_rename_workspace_edits(&original_text, &current_text),
+                    );
                 }
 
                 return Ok(Some(workspace_edit));
@@ -928,12 +1169,80 @@ impl LspServer {
     ) -> Result<Option<Value>, JsonRpcError> {
         if let Some(params) = params {
             if let Some(files) = params["files"].as_array() {
-                for file in files {
-                    let Some(uri) = file["uri"].as_str() else {
-                        continue;
+                #[cfg(feature = "workspace")]
+                if let Some(coordinator) = self.coordinator() {
+                    let idx = coordinator.index();
+                    let open_documents: Vec<(String, String)> = {
+                        let documents = self.documents.lock();
+                        documents.iter().map(|(uri, doc)| (uri.clone(), doc.text.clone())).collect()
                     };
+                    let deleting_uris: std::collections::HashSet<String> = files
+                        .iter()
+                        .filter_map(|file| {
+                            file["uri"].as_str().map(|uri| self.normalize_uri_key(uri))
+                        })
+                        .collect();
+                    let mut unsafe_deletes: Vec<(String, usize, Vec<String>)> = Vec::new();
 
-                    tracing::debug!(uri, "File will be deleted");
+                    for file in files {
+                        let Some(uri) = file["uri"].as_str() else {
+                            continue;
+                        };
+
+                        tracing::debug!(uri, "File will be deleted");
+                        let mut dependents: std::collections::BTreeSet<String> =
+                            collect_cross_file_delete_dependents(idx, uri, &deleting_uris);
+                        dependents.extend(collect_open_document_delete_dependents(
+                            idx,
+                            uri,
+                            &deleting_uris,
+                            &open_documents,
+                        ));
+                        dependents.extend(collect_symbol_reference_delete_dependents(
+                            idx,
+                            uri,
+                            &deleting_uris,
+                        ));
+                        let dependents: Vec<String> = dependents.into_iter().collect();
+
+                        if !dependents.is_empty() {
+                            let examples: Vec<String> =
+                                dependents.iter().take(3).map(|uri| short_uri(uri)).collect();
+                            tracing::warn!(
+                                uri,
+                                dependent_file_count = dependents.len(),
+                                "Safe delete detected dependent workspace files"
+                            );
+                            unsafe_deletes.push((short_uri(uri), dependents.len(), examples));
+                        }
+                    }
+
+                    if !unsafe_deletes.is_empty() {
+                        let msg = if unsafe_deletes.len() == 1 {
+                            let (uri, dependent_count, examples) = &unsafe_deletes[0];
+                            let example_suffix = if examples.is_empty() {
+                                String::new()
+                            } else {
+                                format!(" Example dependents: {}.", examples.join(", "))
+                            };
+                            format!(
+                                "Safe delete warning: '{}' has {} dependent workspace file(s). \
+                                 Delete may break callers.{}",
+                                uri, dependent_count, example_suffix
+                            )
+                        } else {
+                            format!(
+                                "Safe delete warning: {} files have dependent workspace files. \
+                                 Delete may break callers.",
+                                unsafe_deletes.len()
+                            )
+                        };
+                        if let Err(e) =
+                            self.show_message(crate::runtime::window::MessageType::Warning, &msg)
+                        {
+                            tracing::debug!("Failed to send safe-delete warning: {}", e);
+                        }
+                    }
                 }
             }
         }
@@ -1122,15 +1431,25 @@ impl LspServer {
                     let mut workspace_folders = self.workspace_folders.lock();
                     for uri in &change.added {
                         tracing::debug!(uri, "Added workspace folder");
-                        workspace_folders.push(uri.to_string());
+                        let mut folder_state =
+                            super::workspace_folder::WorkspaceFolderState::new(uri.clone());
+
+                        // Resolve the folder path
+                        if let Some(path) = super::source_path_from_uri(uri) {
+                            folder_state = folder_state.with_path(path);
+                        }
+
+                        workspace_folders.push(folder_state);
                     }
                 }
 
                 if !change.removed.is_empty() {
                     let mut workspace_folders = self.workspace_folders.lock();
+                    let removed_uris: std::collections::HashSet<String> =
+                        change.removed.iter().cloned().collect();
+
                     for uri in &change.removed {
                         tracing::debug!(uri, "Removed workspace folder");
-                        workspace_folders.retain(|f| f.as_str() != uri);
 
                         // Also remove documents from the removed workspace
                         let mut documents = self.documents.lock();
@@ -1143,6 +1462,25 @@ impl LspServer {
                         for doc_uri in docs_to_remove {
                             tracing::debug!(uri = %doc_uri, "Removing document from removed workspace");
                             documents.remove(&doc_uri);
+                        }
+                    }
+
+                    // Retain only folders that are not in the removed list
+                    workspace_folders.retain(|f| !removed_uris.contains(&f.uri));
+                }
+
+                // Load config for all folders after changes
+                self.load_and_apply_project_config();
+
+                // Update workspace index with new folder list
+                #[cfg(feature = "workspace")]
+                {
+                    if let Some(coordinator) = self.coordinator() {
+                        coordinator.index().set_workspace_folders(self.workspace_folder_uris());
+
+                        // Remove files from removed folders
+                        for removed_uri in &change.removed {
+                            coordinator.index().remove_folder(removed_uri);
                         }
                     }
                 }
@@ -1183,6 +1521,11 @@ impl LspServer {
         let Some(coordinator) = self.coordinator().map(Arc::clone) else {
             return;
         };
+
+        // Ensure workspace folders are set in the index before indexing starts
+        let workspace_folder_uris = self.workspace_folder_uris();
+        coordinator.index().set_workspace_folders(workspace_folder_uris.clone());
+
         let workspace_folders = self.workspace_folders.lock().clone();
         if workspace_folders.is_empty() {
             return;
@@ -1195,6 +1538,7 @@ impl LspServer {
         // Generate a request ID for the workDoneProgress/create call. Atomically
         // increment so it doesn't collide with IDs from other server-to-client requests.
         let progress_create_id = self.next_request_id.fetch_add(1, Ordering::SeqCst);
+        let permission_denied_shown = Arc::clone(&self.permission_denied_shown);
 
         std::thread::spawn(move || {
             let _guard = indexing_guard; // moved into closure, drops when closure exits
@@ -1210,8 +1554,14 @@ impl LspServer {
             let mut files: Vec<std::path::PathBuf> = Vec::new();
             let mut early_exit: Option<(EarlyExitReason, u64, usize, usize)> = None;
 
-            'scan: for folder_uri in workspace_folders {
-                let Some(root) = uri_to_fs_path(&folder_uri) else {
+            'scan: for folder_state in workspace_folders {
+                let Some(root) =
+                    folder_state.path.clone().or_else(|| uri_to_fs_path(&folder_state.uri))
+                else {
+                    tracing::debug!(
+                        uri = %folder_state.uri,
+                        "Skipping non-filesystem workspace folder during indexing scan"
+                    );
                     continue;
                 };
 
@@ -1260,8 +1610,64 @@ impl LspServer {
                     break;
                 }
 
-                let Ok(content) = std::fs::read_to_string(&path) else {
-                    continue;
+                let content = match std::fs::read_to_string(&path) {
+                    Ok(c) => c,
+                    Err(e) => {
+                        if is_permission_denied_error(&e) {
+                            // ONE-TIME window/showMessage (AtomicBool guard)
+                            if permission_denied_shown
+                                .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+                                .is_ok()
+                            {
+                                let msg = "Perl LSP: some workspace files could not be read \
+                                           due to permission denied. Features for those files \
+                                           will be unavailable. Check file permissions.";
+                                if let Err(send_err) = outbound.send_notification(
+                                    "window/showMessage",
+                                    json!({ "type": 2, "message": msg }),
+                                ) {
+                                    tracing::warn!(
+                                        error = %send_err,
+                                        "Failed to send permission-denied showMessage"
+                                    );
+                                }
+                            }
+                            // Per-file diagnostic (always fires for each affected file)
+                            if let Ok(url) = Url::from_file_path(&path) {
+                                let uri_str = url.as_str();
+                                if let Err(send_err) = outbound.send_notification(
+                                    "textDocument/publishDiagnostics",
+                                    json!({
+                                        "uri": uri_str,
+                                        "diagnostics": [{
+                                            "range": {
+                                                "start": { "line": 0, "character": 0 },
+                                                "end":   { "line": 0, "character": 0 }
+                                            },
+                                            "severity": 1,
+                                            "source": "perl-lsp",
+                                            "message": format!(
+                                                "File cannot be read: permission denied ({})",
+                                                path.display()
+                                            )
+                                        }]
+                                    }),
+                                ) {
+                                    tracing::warn!(
+                                        error = %send_err,
+                                        "Failed to send permission-denied diagnostic"
+                                    );
+                                }
+                            }
+                        } else {
+                            tracing::debug!(
+                                "Skipping unreadable file during indexing ({}): {}",
+                                path.display(),
+                                e
+                            );
+                        }
+                        continue;
+                    }
                 };
                 let Ok(url) = Url::from_file_path(&path) else {
                     continue;
@@ -1420,6 +1826,188 @@ impl LspServer {
 
         Ok(Some(json!({"applied": false, "failureReason": "Invalid parameters"})))
     }
+}
+
+impl LspServer {
+    #[cfg(feature = "workspace")]
+    fn append_workspace_edits(&self, workspace_edit: &mut Value, uri: &str, mut edits: Vec<Value>) {
+        if edits.is_empty() {
+            return;
+        }
+        if let Some(existing) = workspace_edit["changes"][uri].as_array_mut() {
+            existing.append(&mut edits);
+        } else {
+            workspace_edit["changes"][uri] = Value::Array(edits);
+        }
+    }
+
+    #[cfg(feature = "workspace")]
+    fn read_workspace_text(&self, uri: &str) -> Option<String> {
+        if let Some(doc) = self.documents.lock().get(uri) {
+            return Some(doc.text.clone());
+        }
+
+        if let Some(coordinator) = self.coordinator() {
+            if let Some(doc) = coordinator.index().document_store().get(uri) {
+                return Some(doc.text.clone());
+            }
+        }
+
+        uri_to_fs_path(uri).and_then(|path| std::fs::read_to_string(path).ok())
+    }
+}
+
+#[cfg(feature = "workspace")]
+fn build_module_rename_workspace_edits(original: &str, updated: &str) -> Vec<Value> {
+    let original_lines: Vec<&str> = original.split('\n').collect();
+    let updated_lines: Vec<&str> = updated.split('\n').collect();
+
+    debug_assert_eq!(
+        original_lines.len(),
+        updated_lines.len(),
+        "module rename planning should not change line counts"
+    );
+
+    original_lines
+        .iter()
+        .zip(updated_lines.iter())
+        .enumerate()
+        .filter_map(|(line, (old_line, new_line))| {
+            if old_line == new_line {
+                return None;
+            }
+
+            Some(json!({
+                "range": {
+                    "start": {
+                        "line": line,
+                        "character": 0,
+                    },
+                    "end": {
+                        "line": line,
+                        "character": old_line.len(),
+                    }
+                },
+                "newText": new_line
+            }))
+        })
+        .collect()
+}
+
+#[cfg(feature = "workspace")]
+fn collect_delete_target_module_names(
+    index: &perl_parser::workspace_index::WorkspaceIndex,
+    uri: &str,
+) -> std::collections::BTreeSet<String> {
+    let mut module_names = std::collections::BTreeSet::new();
+    let path_module_name = path_to_module_name(uri);
+    if !path_module_name.is_empty() {
+        module_names.insert(path_module_name);
+    }
+
+    for symbol in index.file_symbols(uri) {
+        if matches!(symbol.kind, SymbolKind::Package | SymbolKind::Class | SymbolKind::Role) {
+            if let Some(module_name) = symbol
+                .qualified_name
+                .clone()
+                .or_else(|| (!symbol.name.is_empty()).then_some(symbol.name.clone()))
+            {
+                module_names.insert(module_name);
+            }
+        }
+    }
+
+    module_names
+}
+
+#[cfg(feature = "workspace")]
+fn collect_cross_file_delete_dependents(
+    index: &perl_parser::workspace_index::WorkspaceIndex,
+    uri: &str,
+    deleting_uris: &std::collections::HashSet<String>,
+) -> std::collections::BTreeSet<String> {
+    let normalized_uri = perl_parser::workspace_index::uri_key(uri);
+    let module_names = collect_delete_target_module_names(index, uri);
+    let mut dependents = std::collections::BTreeSet::new();
+    for module_name in module_names {
+        for dependent_uri in index.find_dependents(&module_name) {
+            if dependent_uri != normalized_uri && !deleting_uris.contains(&dependent_uri) {
+                dependents.insert(dependent_uri);
+            }
+        }
+    }
+
+    dependents
+}
+
+#[cfg(feature = "workspace")]
+fn collect_open_document_delete_dependents(
+    index: &perl_parser::workspace_index::WorkspaceIndex,
+    uri: &str,
+    deleting_uris: &std::collections::HashSet<String>,
+    open_documents: &[(String, String)],
+) -> std::collections::BTreeSet<String> {
+    let normalized_uri = perl_parser::workspace_index::uri_key(uri);
+    let module_names = collect_delete_target_module_names(index, uri);
+    let mut dependents = std::collections::BTreeSet::new();
+
+    for (doc_uri, text) in open_documents {
+        let normalized_doc_uri = perl_parser::workspace_index::uri_key(doc_uri);
+        if normalized_doc_uri == normalized_uri || deleting_uris.contains(&normalized_doc_uri) {
+            continue;
+        }
+
+        if module_names.iter().any(|module_name| {
+            !plan_module_rename_edits(text, module_name, "__PerlLspDeleteProbe__").is_empty()
+        }) {
+            dependents.insert(normalized_doc_uri);
+        }
+    }
+
+    dependents
+}
+
+#[cfg(feature = "workspace")]
+fn collect_symbol_reference_delete_dependents(
+    index: &perl_parser::workspace_index::WorkspaceIndex,
+    uri: &str,
+    deleting_uris: &std::collections::HashSet<String>,
+) -> std::collections::BTreeSet<String> {
+    let normalized_uri = perl_parser::workspace_index::uri_key(uri);
+    let mut dependents = std::collections::BTreeSet::new();
+
+    for symbol in index.file_symbols(uri) {
+        let mut names = std::collections::BTreeSet::new();
+        if !symbol.name.is_empty() {
+            names.insert(symbol.name.clone());
+        }
+        if let Some(qualified_name) = symbol.qualified_name {
+            if !qualified_name.is_empty() {
+                names.insert(qualified_name);
+            }
+        }
+
+        for symbol_name in names {
+            for reference in index.find_references(&symbol_name) {
+                let reference_uri = perl_parser::workspace_index::uri_key(&reference.uri);
+                if reference_uri != normalized_uri && !deleting_uris.contains(&reference_uri) {
+                    dependents.insert(reference_uri);
+                }
+            }
+        }
+    }
+
+    dependents
+}
+
+fn short_uri(uri: &str) -> String {
+    Url::parse(uri)
+        .ok()
+        .and_then(|parsed| {
+            parsed.path_segments().and_then(|mut s| s.next_back().map(str::to_owned))
+        })
+        .filter(|tail| !tail.is_empty())
+        .unwrap_or_else(|| uri.to_string())
 }
 
 /// Return `true` if `module_name` appears in `text` as a whole-identifier token.

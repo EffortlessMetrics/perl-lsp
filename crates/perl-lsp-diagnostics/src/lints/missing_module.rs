@@ -167,6 +167,10 @@ pub const CORE_MODULES: &[&str] = &[
 /// * `source` — Source text (used for context; not searched directly here)
 /// * `resolver` — Callback: `fn(module_name: &str) -> bool`. Return `true` if
 ///   the module is found (workspace or configured include paths).
+/// * `search_paths` — The `@INC` paths that were searched. Included in the
+///   diagnostic message so the user knows where perl-lsp looked. Pass `&[]`
+///   when the paths are not available. If more than 10 entries are provided,
+///   only the first 10 are shown followed by "... and N more".
 /// * `diagnostics` — Output vector; new diagnostics are pushed here
 ///
 /// # Skipped inputs
@@ -178,6 +182,7 @@ pub fn check_missing_modules<F>(
     node: &Node,
     _source: &str,
     resolver: F,
+    search_paths: &[String],
     diagnostics: &mut Vec<Diagnostic>,
 ) where
     F: Fn(&str) -> bool,
@@ -216,17 +221,38 @@ pub fn check_missing_modules<F>(
             continue;
         }
 
+        let message = if search_paths.is_empty() {
+            format!("Module '{}' not found in workspace or configured include paths", module_str)
+        } else {
+            const MAX_SHOWN: usize = 10;
+            let shown = search_paths.len().min(MAX_SHOWN);
+            let path_list = search_paths[..shown].join(", ");
+            if search_paths.len() > MAX_SHOWN {
+                let remaining = search_paths.len() - MAX_SHOWN;
+                format!(
+                    "Module '{}' not found. Searched @INC: {}, ... and {} more. \
+                     Add to lib path or install the module.",
+                    module_str, path_list, remaining
+                )
+            } else {
+                format!(
+                    "Module '{}' not found. Searched @INC: {}. \
+                     Add to lib path or install the module.",
+                    module_str, path_list
+                )
+            }
+        };
         diagnostics.push(Diagnostic {
             range: (*start, *end),
             severity: DiagnosticSeverity::Warning,
             code: Some(DiagnosticCode::ModuleNotFound.as_str().to_string()),
-            message: format!(
-                "Module '{}' not found in workspace or configured include paths",
-                module_str
-            ),
+            message,
             related_information: vec![],
             tags: vec![],
-            suggestion: Some(format!("Install with: cpanm {} or add to cpanfile", module_str)),
+            suggestion: Some(format!(
+                "Install with: cpanm {} or add to .perl-lsp.toml: include_paths",
+                module_str
+            )),
         });
     }
 }
@@ -252,7 +278,7 @@ mod tests {
         let source = "use Missing::Module;\n";
         let ast = must(Parser::new(source).parse());
         let mut diags = vec![];
-        check_missing_modules(&ast, source, resolver_never_finds, &mut diags);
+        check_missing_modules(&ast, source, resolver_never_finds, &[], &mut diags);
         assert_eq!(diags.len(), 1);
         assert_eq!(diags[0].code.as_deref(), Some("PL701"));
         assert!(diags[0].message.contains("Missing::Module"));
@@ -263,7 +289,7 @@ mod tests {
         let source = "use Foo::Bar;\n";
         let ast = must(Parser::new(source).parse());
         let mut diags = vec![];
-        check_missing_modules(&ast, source, resolver_finds_foo, &mut diags);
+        check_missing_modules(&ast, source, resolver_finds_foo, &[], &mut diags);
         assert!(diags.is_empty());
     }
 
@@ -272,7 +298,7 @@ mod tests {
         for source in &["use 5.010;\n", "use v5.38;\n"] {
             let ast = must(Parser::new(source).parse());
             let mut diags = vec![];
-            check_missing_modules(&ast, source, resolver_never_finds, &mut diags);
+            check_missing_modules(&ast, source, resolver_never_finds, &[], &mut diags);
             assert!(diags.is_empty(), "version-only use should not be flagged: {}", source);
         }
     }
@@ -285,7 +311,7 @@ mod tests {
             let source = format!("use {};\n", module);
             let ast = must(Parser::new(&source).parse());
             let mut diags = vec![];
-            check_missing_modules(&ast, &source, resolver_never_finds, &mut diags);
+            check_missing_modules(&ast, &source, resolver_never_finds, &[], &mut diags);
             assert!(diags.is_empty(), "core module {} should not be flagged", module);
         }
     }
@@ -297,7 +323,7 @@ mod tests {
         let ast = must(Parser::new(source).parse());
         let mut diags = vec![];
         // resolver_finds_foo only returns true for "Foo::Bar" (bare, no version)
-        check_missing_modules(&ast, source, resolver_finds_foo, &mut diags);
+        check_missing_modules(&ast, source, resolver_finds_foo, &[], &mut diags);
         assert!(diags.is_empty(), "versioned use should strip version before resolver lookup");
     }
 
@@ -306,7 +332,7 @@ mod tests {
         let source = "use Missing::Mod;\n";
         let ast = must(Parser::new(source).parse());
         let mut diags = vec![];
-        check_missing_modules(&ast, source, resolver_never_finds, &mut diags);
+        check_missing_modules(&ast, source, resolver_never_finds, &[], &mut diags);
         assert_eq!(diags.len(), 1);
         let (start, end) = diags[0].range;
         assert!(start < end, "range start must be before end");
@@ -318,7 +344,7 @@ mod tests {
         let source = "use Anything::AtAll;\n";
         let ast = must(Parser::new(source).parse());
         let mut diags = vec![];
-        check_missing_modules(&ast, source, resolver_always_finds, &mut diags);
+        check_missing_modules(&ast, source, resolver_always_finds, &[], &mut diags);
         assert!(diags.is_empty());
     }
 
@@ -327,7 +353,7 @@ mod tests {
         let source = "use Missing::One;\nuse Missing::Two;\n";
         let ast = must(Parser::new(source).parse());
         let mut diags = vec![];
-        check_missing_modules(&ast, source, resolver_never_finds, &mut diags);
+        check_missing_modules(&ast, source, resolver_never_finds, &[], &mut diags);
         assert_eq!(diags.len(), 2);
         assert!(diags.iter().all(|d| d.code.as_deref() == Some("PL701")));
     }
@@ -337,7 +363,7 @@ mod tests {
         let source = "use Foo::Bar;\nuse Missing::One;\n";
         let ast = must(Parser::new(source).parse());
         let mut diags = vec![];
-        check_missing_modules(&ast, source, resolver_finds_foo, &mut diags);
+        check_missing_modules(&ast, source, resolver_finds_foo, &[], &mut diags);
         assert_eq!(diags.len(), 1);
         assert!(diags[0].message.contains("Missing::One"));
     }
@@ -347,7 +373,7 @@ mod tests {
         let source = "use Missing::Module;\n";
         let ast = must(Parser::new(source).parse());
         let mut diags = vec![];
-        check_missing_modules(&ast, source, resolver_never_finds, &mut diags);
+        check_missing_modules(&ast, source, resolver_never_finds, &[], &mut diags);
         assert_eq!(diags.len(), 1);
         assert_eq!(diags[0].severity, DiagnosticSeverity::Warning);
     }
@@ -363,7 +389,7 @@ mod tests {
         let source = "use if $^O eq 'MSWin32', 'Win32';\n";
         let ast = must(Parser::new(source).parse());
         let mut diags = vec![];
-        check_missing_modules(&ast, source, resolver_never_finds, &mut diags);
+        check_missing_modules(&ast, source, resolver_never_finds, &[], &mut diags);
         assert!(
             diags.is_empty(),
             "`use if` conditional form must not emit PL701 (got {} diagnostics)",
@@ -379,7 +405,7 @@ mod tests {
         let source = "use List::MoreUtils qw(any all);\n";
         let ast = must(Parser::new(source).parse());
         let mut diags = vec![];
-        check_missing_modules(&ast, source, resolver_never_finds, &mut diags);
+        check_missing_modules(&ast, source, resolver_never_finds, &[], &mut diags);
         assert_eq!(
             diags.len(),
             1,
@@ -404,6 +430,7 @@ mod tests {
                 call_count.set(call_count.get() + 1);
                 false
             },
+            &[],
             &mut diags,
         );
         assert_eq!(diags.len(), 5, "five distinct missing modules should each emit PL701");
@@ -430,7 +457,7 @@ mod tests {
             SourceLocation { start: 0, end: 4 },
         );
         let mut diags = vec![];
-        check_missing_modules(&program, "", resolver_never_finds, &mut diags);
+        check_missing_modules(&program, "", resolver_never_finds, &[], &mut diags);
         assert!(
             diags.is_empty(),
             "empty module name from error-recovery must not emit PL701 (got {} diagnostics)",
@@ -444,12 +471,91 @@ mod tests {
         let source = "use Some::Package;\n";
         let ast = must(Parser::new(source).parse());
         let mut diags = vec![];
-        check_missing_modules(&ast, source, resolver_never_finds, &mut diags);
+        check_missing_modules(&ast, source, resolver_never_finds, &[], &mut diags);
         assert_eq!(diags.len(), 1);
         let suggestion = diags[0].suggestion.as_deref().unwrap_or("");
         assert!(
             suggestion.contains("Some::Package"),
             "suggestion should mention the module name; got: {suggestion:?}"
+        );
+    }
+
+    // --- @INC context tests (PL701 enhancement) ---
+
+    /// When search_paths are provided, the diagnostic message must include them
+    /// so the user can see where perl-lsp looked for the module.
+    #[test]
+    fn pl701_message_includes_search_paths_when_provided() {
+        let source = "use My::Missing::Mod;\n";
+        let ast = must(Parser::new(source).parse());
+        let mut diags = vec![];
+        let paths = vec!["/usr/lib/perl5".to_string(), "/home/user/perl/lib".to_string()];
+        check_missing_modules(&ast, source, resolver_never_finds, &paths, &mut diags);
+        assert_eq!(diags.len(), 1);
+        let msg = &diags[0].message;
+        assert!(
+            msg.contains("/usr/lib/perl5"),
+            "message should contain first search path; got: {msg:?}"
+        );
+        assert!(
+            msg.contains("/home/user/perl/lib"),
+            "message should contain second search path; got: {msg:?}"
+        );
+    }
+
+    /// When search_paths is empty, the diagnostic should fall back gracefully
+    /// (no crash, still emits PL701 with the module name).
+    #[test]
+    fn pl701_message_with_empty_search_paths_still_emits_diagnostic() {
+        let source = "use My::Missing::Mod;\n";
+        let ast = must(Parser::new(source).parse());
+        let mut diags = vec![];
+        check_missing_modules(&ast, source, resolver_never_finds, &[], &mut diags);
+        assert_eq!(diags.len(), 1, "should still emit PL701 with empty search paths");
+        assert_eq!(diags[0].code.as_deref(), Some("PL701"));
+        assert!(diags[0].message.contains("My::Missing::Mod"));
+    }
+
+    /// When @INC list is very long (>10 entries), the message should truncate
+    /// with "... and N more" rather than dumping all paths.
+    #[test]
+    fn pl701_message_truncates_long_inc_list() {
+        let source = "use My::Missing::Mod;\n";
+        let ast = must(Parser::new(source).parse());
+        let mut diags = vec![];
+        let paths: Vec<String> = (1..=15).map(|i| format!("/path/dir{}", i)).collect();
+        check_missing_modules(&ast, source, resolver_never_finds, &paths, &mut diags);
+        assert_eq!(diags.len(), 1);
+        let msg = &diags[0].message;
+        assert!(
+            msg.contains("and") && msg.contains("more"),
+            "long @INC list should be truncated with '... and N more'; got: {msg:?}"
+        );
+        // Should NOT dump all 15 paths
+        assert!(
+            !msg.contains("/path/dir15"),
+            "path beyond truncation limit should not appear in message; got: {msg:?}"
+        );
+    }
+
+    /// The suggestion field should mention the module name and a config path hint
+    /// so the user knows both how to install and how to configure @INC.
+    #[test]
+    fn pl701_suggestion_mentions_module_and_config_hint() {
+        let source = "use My::Package;\n";
+        let ast = must(Parser::new(source).parse());
+        let mut diags = vec![];
+        let paths = vec!["/usr/lib/perl5".to_string()];
+        check_missing_modules(&ast, source, resolver_never_finds, &paths, &mut diags);
+        assert_eq!(diags.len(), 1);
+        let suggestion = diags[0].suggestion.as_deref().unwrap_or("");
+        assert!(
+            suggestion.contains("My::Package"),
+            "suggestion should mention the module name; got: {suggestion:?}"
+        );
+        assert!(
+            suggestion.contains(".perl-lsp.toml") || suggestion.contains("include_paths"),
+            "suggestion should mention config path hint; got: {suggestion:?}"
         );
     }
 
@@ -463,7 +569,7 @@ mod tests {
         let output = Parser::new(source).parse_with_recovery();
         let ast = output.ast;
         let mut diags = vec![];
-        check_missing_modules(&ast, source, resolver_never_finds, &mut diags);
+        check_missing_modules(&ast, source, resolver_never_finds, &[], &mut diags);
         // Must not panic; if the Use node was recovered, we get PL701.
         // If recovery omitted it entirely we get 0. Either is acceptable — but not a panic.
         let pl701_count = diags.iter().filter(|d| d.code.as_deref() == Some("PL701")).count();

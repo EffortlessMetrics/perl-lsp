@@ -98,6 +98,32 @@ describe('language-configuration.json', () => {
   });
 });
 
+describe('gherkin-language-configuration.json', () => {
+  let langConfig: any;
+
+  beforeAll(() => {
+    langConfig = readJson('gherkin-language-configuration.json');
+  });
+
+  test('has line comment set to #', () => {
+    expect(langConfig.comments.lineComment).toBe('#');
+  });
+
+  test('defines .feature editing bracket pairs', () => {
+    const brackets: [string, string][] = langConfig.brackets;
+    const pairs = brackets.map(([o, c]) => `${o}${c}`);
+    expect(pairs).toContain('{}');
+    expect(pairs).toContain('[]');
+    expect(pairs).toContain('()');
+  });
+
+  test('has quote auto-closing pairs', () => {
+    const opens = (langConfig.autoClosingPairs as any[]).map((p: any) => p.open);
+    expect(opens).toContain('"');
+    expect(opens).toContain("'");
+  });
+});
+
 // ---------------------------------------------------------------------------
 // package.json contributes
 // ---------------------------------------------------------------------------
@@ -116,14 +142,40 @@ describe('package.json contributes', () => {
       expect(perl).toBeDefined();
     });
 
+    test('registers gherkin language for feature files', () => {
+      const langs = pkg.contributes.languages;
+      const gherkin = langs.find((l: any) => l.id === 'gherkin');
+      expect(gherkin).toBeDefined();
+      expect(gherkin.aliases).toContain('Gherkin');
+      expect(gherkin.aliases).toContain('Cucumber');
+      expect(gherkin.extensions).toContain('.feature');
+      expect(gherkin.configuration).toBe('./gherkin-language-configuration.json');
+    });
+
     test('perl language has expected file extensions', () => {
       const perl = pkg.contributes.languages.find((l: any) => l.id === 'perl');
       const exts: string[] = perl.extensions;
       expect(exts).toContain('.pl');
       expect(exts).toContain('.pm');
+      expect(exts).toContain('.xs');
+      expect(exts).toContain('.xsi');
       expect(exts).toContain('.t');
       expect(exts).toContain('.pod');
       expect(exts).toContain('.psgi');
+      expect(exts).toContain('.mason');
+      expect(exts).toContain('.mas');
+      expect(exts).toContain('.tt');
+      expect(exts).toContain('.tt2');
+      expect(exts).toContain('.ep');
+      expect(exts).not.toContain('.m');
+      expect(exts).toContain('.xs');
+      expect(exts).toContain('.i');
+    });
+
+    test('perl language keeps XS interface files associated with perl', () => {
+      const perl = pkg.contributes.languages.find((l: any) => l.id === 'perl');
+      const exts: string[] = perl.extensions;
+      expect(exts.filter((ext: string) => ext === '.xs' || ext === '.i')).toHaveLength(2);
     });
 
     test('perl language has shebang first-line detection', () => {
@@ -144,6 +196,10 @@ describe('package.json contributes', () => {
   describe('activation events', () => {
     test('activates on perl language', () => {
       expect(pkg.activationEvents).toContain('onLanguage:perl');
+    });
+
+    test('activates on gherkin language', () => {
+      expect(pkg.activationEvents).toContain('onLanguage:gherkin');
     });
 
     test('activates on restart command', () => {
@@ -245,6 +301,10 @@ describe('package.json contributes', () => {
       expect(keys).toContain('perl-lsp.formatOnSave');
       expect(keys).toContain('perl-lsp.enableRefactoring');
       expect(keys).toContain('perl-lsp.enableTestIntegration');
+      expect(keys).toContain('perl-lsp.perlcritic.enabled');
+      expect(keys).toContain('perl-lsp.perlcritic.severity');
+      expect(keys).toContain('perl-lsp.perlcritic.profile');
+      expect(keys).toContain('perl-lsp.perlcritic.theme');
     });
 
     test('Advanced group contains featureProfile, trace.server, channel, downloadBaseUrl', () => {
@@ -366,6 +426,36 @@ describe('package.json contributes', () => {
       expect(includePaths.default).toContain('local/lib/perl5');
     });
 
+    test('defines perlcritic.enabled with default false', () => {
+      const setting = properties['perl-lsp.perlcritic.enabled'];
+      expect(setting).toBeDefined();
+      expect(setting.type).toBe('boolean');
+      expect(setting.default).toBe(false);
+    });
+
+    test('defines perlcritic.severity as a 1-5 picker with default 3', () => {
+      const setting = properties['perl-lsp.perlcritic.severity'];
+      expect(setting).toBeDefined();
+      expect(setting.type).toBe('number');
+      expect(setting.enum).toEqual([1, 2, 3, 4, 5]);
+      expect(setting.enumDescriptions).toHaveLength(5);
+      expect(setting.default).toBe(3);
+    });
+
+    test('defines perlcritic.profile as a string setting', () => {
+      const setting = properties['perl-lsp.perlcritic.profile'];
+      expect(setting).toBeDefined();
+      expect(setting.type).toBe('string');
+      expect(setting.default).toBe('');
+    });
+
+    test('defines perlcritic.theme as a string setting', () => {
+      const setting = properties['perl-lsp.perlcritic.theme'];
+      expect(setting).toBeDefined();
+      expect(setting.type).toBe('string');
+      expect(setting.default).toBe('');
+    });
+
     test('includePaths markdownDescription mentions module-not-found guidance', () => {
       const desc: string = properties['perl-lsp.includePaths'].markdownDescription;
       // Must mention the "Can't locate" symptom so users know what to search for
@@ -420,7 +510,7 @@ describe('package.json contributes', () => {
     test('resource-scoped settings use scope resource', () => {
       // Per-file/workspace settings should be resource-scoped so they can be
       // overridden in workspace and folder settings.
-      const resourceScoped = ['perl-lsp.includePaths', 'perl-lsp.enableDiagnostics', 'perl-lsp.enableSemanticTokens', 'perl-lsp.enableFormatting', 'perl-lsp.formatOnSave', 'perl-lsp.perltidyConfig', 'perl-lsp.enableRefactoring', 'perl-lsp.enableTestIntegration', 'perl-lsp.autoPopulateNewFiles'];
+      const resourceScoped = ['perl-lsp.includePaths', 'perl-lsp.enableDiagnostics', 'perl-lsp.enableSemanticTokens', 'perl-lsp.enableFormatting', 'perl-lsp.formatOnSave', 'perl-lsp.perltidyConfig', 'perl-lsp.perlcritic.enabled', 'perl-lsp.perlcritic.severity', 'perl-lsp.perlcritic.profile', 'perl-lsp.perlcritic.theme', 'perl-lsp.enableRefactoring', 'perl-lsp.enableTestIntegration', 'perl-lsp.autoPopulateNewFiles'];
       for (const key of resourceScoped) {
         expect(properties[key]?.scope).toBe('resource');
       }
@@ -591,11 +681,89 @@ describe('package.json contributes', () => {
       expect(perl.scopeName).toBe('source.perl');
     });
 
+    test('registers source.gherkin scope', () => {
+      const grammars = pkg.contributes.grammars;
+      const gherkin = grammars.find((g: any) => g.language === 'gherkin');
+      expect(gherkin).toBeDefined();
+      expect(gherkin.scopeName).toBe('source.gherkin');
+    });
+
     test('grammar file exists', () => {
       const grammars = pkg.contributes.grammars;
       const perl = grammars.find((g: any) => g.language === 'perl');
       const grammarPath = path.join(EXT_ROOT, perl.path);
       expect(fs.existsSync(grammarPath)).toBe(true);
+    });
+
+    test('gherkin grammar file exists', () => {
+      const grammars = pkg.contributes.grammars;
+      const gherkin = grammars.find((g: any) => g.language === 'gherkin');
+      const grammarPath = path.join(EXT_ROOT, gherkin.path);
+      expect(fs.existsSync(grammarPath)).toBe(true);
+    });
+
+    test('grammar includes common XS directives', () => {
+      const grammar = readJson('syntaxes/perl.tmLanguage.json');
+      const keywordPattern = grammar.repository.keywords.patterns
+        .map((entry: any) => entry.match)
+        .find((match: string) =>
+          typeof match === 'string' &&
+          match.includes('MODULE') &&
+          match.includes('PACKAGE') &&
+          match.includes('PPCODE') &&
+          match.includes('INPUT') &&
+          match.includes('OUTPUT')
+        );
+
+      expect(keywordPattern).toBeDefined();
+    });
+
+    test('grammar includes common SWIG directives', () => {
+      const grammar = readJson('syntaxes/perl.tmLanguage.json');
+      const swigPattern = grammar.repository.swig.patterns.find(
+        (entry: any) => entry.name === 'keyword.other.perl.swig'
+      );
+
+      expect(swigPattern).toBeDefined();
+      expect(swigPattern.match).toContain('module|include|inline|header|wrapper|init|perlcode|perl5');
+    });
+
+    test('grammar maps SWIG embedded blocks to C and Perl languages', () => {
+      const pkg = readJson('package.json');
+      const grammar = pkg.contributes.grammars.find((g: any) => g.language === 'perl');
+      expect(grammar.embeddedLanguages['meta.embedded.block.c.perl']).toBe('c');
+      expect(grammar.embeddedLanguages['meta.embedded.block.perl.perl']).toBe('perl');
+    });
+
+    test('gherkin grammar highlights core keywords and step lines', () => {
+      const grammar = readJson('syntaxes/gherkin.tmLanguage.json');
+      const headerPattern = grammar.repository.headers.patterns
+        .map((entry: any) => entry.match)
+        .find((match: string) =>
+          typeof match === 'string' &&
+          match.includes('Scenario') &&
+          match.includes('Outline')
+        );
+      const stepPattern = grammar.repository.steps.patterns
+        .map((entry: any) => entry.match)
+        .find((match: string) =>
+          typeof match === 'string' &&
+          match.includes('Given') &&
+          match.includes('When') &&
+          match.includes('Then')
+        );
+
+      expect(headerPattern).toBeDefined();
+      expect(stepPattern).toBeDefined();
+    });
+
+    test('gherkin grammar highlights tags and tables', () => {
+      const grammar = readJson('syntaxes/gherkin.tmLanguage.json');
+      const tagPattern = grammar.repository.tags.patterns[0]?.match;
+      const tablePattern = grammar.repository.tables.patterns[0]?.match;
+
+      expect(tagPattern).toContain('@');
+      expect(tablePattern).toContain('\\|');
     });
   });
 });

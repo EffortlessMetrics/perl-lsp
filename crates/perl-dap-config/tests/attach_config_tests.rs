@@ -25,6 +25,7 @@ fn test_attach_config_custom_port() -> Result<(), Box<dyn std::error::Error>> {
         host: "192.168.1.100".to_string(),
         port: 9000,
         timeout_ms: Some(10000),
+        stop_on_entry: None,
     };
 
     let json = serde_json::to_string(&config)?;
@@ -36,8 +37,12 @@ fn test_attach_config_custom_port() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn test_attach_config_validation_valid() {
     // Test: valid attach configuration
-    let config =
-        AttachConfiguration { host: "localhost".to_string(), port: 13603, timeout_ms: Some(5000) };
+    let config = AttachConfiguration {
+        host: "localhost".to_string(),
+        port: 13603,
+        timeout_ms: Some(5000),
+        stop_on_entry: None,
+    };
 
     assert!(config.validate().is_ok(), "Valid config should pass validation");
 }
@@ -45,7 +50,12 @@ fn test_attach_config_validation_valid() {
 #[test]
 fn test_attach_config_validation_empty_host() -> Result<(), Box<dyn std::error::Error>> {
     // Test: empty host fails validation
-    let config = AttachConfiguration { host: "".to_string(), port: 13603, timeout_ms: Some(5000) };
+    let config = AttachConfiguration {
+        host: "".to_string(),
+        port: 13603,
+        timeout_ms: Some(5000),
+        stop_on_entry: None,
+    };
 
     let result = config.validate();
     assert!(result.is_err(), "Empty host should fail validation");
@@ -56,8 +66,12 @@ fn test_attach_config_validation_empty_host() -> Result<(), Box<dyn std::error::
 #[test]
 fn test_attach_config_validation_whitespace_host() {
     // Test: whitespace-only host fails validation
-    let config =
-        AttachConfiguration { host: "   ".to_string(), port: 13603, timeout_ms: Some(5000) };
+    let config = AttachConfiguration {
+        host: "   ".to_string(),
+        port: 13603,
+        timeout_ms: Some(5000),
+        stop_on_entry: None,
+    };
 
     let result = config.validate();
     assert!(result.is_err(), "Whitespace host should fail validation");
@@ -66,8 +80,12 @@ fn test_attach_config_validation_whitespace_host() {
 #[test]
 fn test_attach_config_validation_zero_port() -> Result<(), Box<dyn std::error::Error>> {
     // Test: port 0 is invalid
-    let config =
-        AttachConfiguration { host: "localhost".to_string(), port: 0, timeout_ms: Some(5000) };
+    let config = AttachConfiguration {
+        host: "localhost".to_string(),
+        port: 0,
+        timeout_ms: Some(5000),
+        stop_on_entry: None,
+    };
 
     let result = config.validate();
     assert!(result.is_err(), "Port 0 should fail validation");
@@ -78,8 +96,12 @@ fn test_attach_config_validation_zero_port() -> Result<(), Box<dyn std::error::E
 #[test]
 fn test_attach_config_validation_zero_timeout() -> Result<(), Box<dyn std::error::Error>> {
     // Test: zero timeout fails validation
-    let config =
-        AttachConfiguration { host: "localhost".to_string(), port: 13603, timeout_ms: Some(0) };
+    let config = AttachConfiguration {
+        host: "localhost".to_string(),
+        port: 13603,
+        timeout_ms: Some(0),
+        stop_on_entry: None,
+    };
 
     let result = config.validate();
     assert!(result.is_err(), "Zero timeout should fail validation");
@@ -94,6 +116,7 @@ fn test_attach_config_validation_excessive_timeout() {
         host: "localhost".to_string(),
         port: 13603,
         timeout_ms: Some(400_000), // 400 seconds
+        stop_on_entry: None,
     };
 
     let result = config.validate();
@@ -103,8 +126,12 @@ fn test_attach_config_validation_excessive_timeout() {
 #[test]
 fn test_attach_config_validation_no_timeout() {
     // Test: no timeout specified is valid
-    let config =
-        AttachConfiguration { host: "localhost".to_string(), port: 13603, timeout_ms: None };
+    let config = AttachConfiguration {
+        host: "localhost".to_string(),
+        port: 13603,
+        timeout_ms: None,
+        stop_on_entry: None,
+    };
 
     assert!(config.validate().is_ok(), "Config without timeout should be valid");
 }

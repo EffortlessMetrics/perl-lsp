@@ -4,9 +4,15 @@
 //! This microcrate isolates configuration parsing and defaults from the main
 //! server crate so they can evolve independently and be reused by tooling.
 
-use std::path::PathBuf;
+#[cfg(not(target_arch = "wasm32"))]
+use perl_dap_platform::resolve_perl_path_with_toolchain;
+use std::path::{Path, PathBuf};
 #[cfg(not(target_arch = "wasm32"))]
 use std::process::Command;
+
+mod native_build_hints;
+
+pub use native_build_hints::{NativeBuildHints, detect_native_build_hints};
 
 /// Server configuration
 ///
@@ -41,12 +47,15 @@ pub struct ServerConfig {
     ///
     /// When enabled, the server will run `perlcritic` on open documents and
     /// merge violations into the diagnostic stream. Requires `perlcritic` to
-    /// be installed on the system; silently skipped if not available.
+    /// be installed on the system; missing binary/profile/runtime failures are
+    /// surfaced as workspace warnings.
     pub perlcritic_enabled: bool,
 
-    /// Minimum severity level to report (1-5, where 1 = most severe).
+    /// Minimum Perl::Critic severity level to report (1-5, where 5 = most severe).
     ///
-    /// Violations below this threshold are suppressed. Default is 3 (Harsh).
+    /// `perlcritic --severity N` reports violations at or above `N`.
+    /// With this scale, `1` reports everything while `5` reports only the
+    /// highest-severity violations. Default is 3 (Harsh).
     /// Equivalent to `perlcritic --severity`.
     pub perlcritic_severity: u8,
 
@@ -55,6 +64,48 @@ pub struct ServerConfig {
     /// When `Some`, passes `--profile=<path>` to perlcritic. When `None`,
     /// the auto-discovery logic looks for `.perlcriticrc` in the workspace root.
     pub perlcritic_profile: Option<String>,
+
+    /// Whether perltidy formatting is enabled.
+    pub perltidy_enabled: bool,
+
+    /// Path to a `.perltidyrc` profile file.
+    ///
+    /// When `Some`, passes `--profile=<path>` to perltidy. When `None`,
+    /// perltidy uses its default behavior or auto-discovers a profile.
+    pub perltidy_profile: Option<String>,
+
+    /// Maximum line length for perltidy.
+    pub perltidy_maximum_line_length: Option<u32>,
+
+    /// Indent size in spaces for perltidy.
+    pub perltidy_indent_columns: Option<u32>,
+
+    /// Use tabs instead of spaces for perltidy.
+    pub perltidy_tabs: Option<bool>,
+
+    /// Opening brace on new line for perltidy.
+    pub perltidy_opening_brace_on_new_line: Option<bool>,
+
+    /// Cuddled else style for perltidy.
+    pub perltidy_cuddled_else: Option<bool>,
+
+    /// Space after keyword for perltidy.
+    pub perltidy_space_after_keyword: Option<bool>,
+
+    /// Add trailing commas for perltidy.
+    pub perltidy_add_trailing_commas: Option<bool>,
+
+    /// Vertical alignment for perltidy.
+    pub perltidy_vertical_alignment: Option<bool>,
+
+    /// Block comment indentation for perltidy.
+    pub perltidy_block_comment_indentation: Option<u32>,
+
+    /// Extra perltidy arguments.
+    pub perltidy_extra_args: Vec<String>,
+
+    /// Timeout in seconds for perltidy.
+    pub perltidy_timeout_secs: u64,
 
     /// AI-powered inline completion configuration.
     pub ai_completion: AiCompletionConfig,
@@ -140,6 +191,19 @@ impl Default for ServerConfig {
             perlcritic_enabled: false,
             perlcritic_severity: 3,
             perlcritic_profile: None,
+            perltidy_enabled: true,
+            perltidy_profile: None,
+            perltidy_maximum_line_length: Some(80),
+            perltidy_indent_columns: Some(4),
+            perltidy_tabs: Some(false),
+            perltidy_opening_brace_on_new_line: Some(false),
+            perltidy_cuddled_else: Some(true),
+            perltidy_space_after_keyword: Some(true),
+            perltidy_add_trailing_commas: Some(false),
+            perltidy_vertical_alignment: Some(true),
+            perltidy_block_comment_indentation: Some(0),
+            perltidy_extra_args: Vec::new(),
+            perltidy_timeout_secs: 10,
             ai_completion: AiCompletionConfig::default(),
         }
     }
@@ -196,7 +260,53 @@ impl ServerConfig {
                 self.perlcritic_severity = severity.clamp(1, 5) as u8;
             }
             if let Some(profile) = critic.get("profile").and_then(|v| v.as_str()) {
-                self.perlcritic_profile = Some(profile.to_string());
+                let profile = profile.trim();
+                self.perlcritic_profile = (!profile.is_empty()).then(|| profile.to_string());
+            }
+        }
+
+        if let Some(formatting) = settings.get("formatting") {
+            if let Some(enabled) = formatting.get("enabled").and_then(|v| v.as_bool()) {
+                self.perltidy_enabled = enabled;
+            }
+            if let Some(profile) = formatting.get("profile").and_then(|v| v.as_str()) {
+                let profile = profile.trim();
+                self.perltidy_profile = (!profile.is_empty()).then(|| profile.to_string());
+            }
+            if let Some(len) = formatting.get("maximumLineLength").and_then(|v| v.as_u64()) {
+                self.perltidy_maximum_line_length = Some(len as u32);
+            }
+            if let Some(indent) = formatting.get("indentColumns").and_then(|v| v.as_u64()) {
+                self.perltidy_indent_columns = Some(indent as u32);
+            }
+            if let Some(tabs) = formatting.get("tabs").and_then(|v| v.as_bool()) {
+                self.perltidy_tabs = Some(tabs);
+            }
+            if let Some(brace) = formatting.get("openingBraceOnNewLine").and_then(|v| v.as_bool()) {
+                self.perltidy_opening_brace_on_new_line = Some(brace);
+            }
+            if let Some(cuddle) = formatting.get("cuddledElse").and_then(|v| v.as_bool()) {
+                self.perltidy_cuddled_else = Some(cuddle);
+            }
+            if let Some(space) = formatting.get("spaceAfterKeyword").and_then(|v| v.as_bool()) {
+                self.perltidy_space_after_keyword = Some(space);
+            }
+            if let Some(comma) = formatting.get("addTrailingCommas").and_then(|v| v.as_bool()) {
+                self.perltidy_add_trailing_commas = Some(comma);
+            }
+            if let Some(align) = formatting.get("verticalAlignment").and_then(|v| v.as_bool()) {
+                self.perltidy_vertical_alignment = Some(align);
+            }
+            if let Some(block) = formatting.get("blockCommentIndentation").and_then(|v| v.as_u64())
+            {
+                self.perltidy_block_comment_indentation = Some(block as u32);
+            }
+            if let Some(args) = formatting.get("extraArgs").and_then(|v| v.as_array()) {
+                self.perltidy_extra_args =
+                    args.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect();
+            }
+            if let Some(timeout) = formatting.get("timeoutSecs").and_then(|v| v.as_u64()) {
+                self.perltidy_timeout_secs = timeout;
             }
         }
 
@@ -243,6 +353,21 @@ impl ServerConfig {
     }
 }
 
+/// Controls whether PERL5LIB paths are prepended or appended to `include_paths`.
+///
+/// `Prepend` (the default) mirrors Perl's own behaviour: paths earlier in the
+/// search order shadow later ones, so PERL5LIB paths take priority over any
+/// project-level `include_paths`.
+#[derive(Debug, Clone, PartialEq, Eq, Default, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Perl5LibPrecedence {
+    /// PERL5LIB entries are placed *before* `include_paths` (default).
+    #[default]
+    Prepend,
+    /// PERL5LIB entries are placed *after* `include_paths`.
+    Append,
+}
+
 /// Workspace configuration for module resolution
 ///
 /// Controls how the LSP server resolves module imports and finds
@@ -251,8 +376,8 @@ impl ServerConfig {
 pub struct WorkspaceConfig {
     /// Workspace-root-relative include paths for module resolution.
     ///
-    /// Absolute entries are accepted syntactically, but still must resolve
-    /// inside the workspace boundary.
+    /// Relative entries are resolved against the workspace root. Absolute
+    /// entries are honored literally as external include roots.
     /// Default: `["lib", ".", "local/lib/perl5"]`
     pub include_paths: Vec<String>,
 
@@ -263,9 +388,31 @@ pub struct WorkspaceConfig {
     /// Cached system @INC paths (populated lazily when use_system_inc is true)
     system_inc_cache: Option<Vec<PathBuf>>,
 
+    /// Perl interpreter used for startup `@INC` probing.
+    ///
+    /// When unset, falls back to `perl` on `PATH`.
+    pub perl_path: Option<String>,
+
+    /// Extra arguments passed to the Perl interpreter for startup `@INC` probing.
+    pub perl_args: Vec<String>,
+
+    /// Native build hints derived from workspace-root `Makefile.PL` / `Build.PL`.
+    ///
+    /// These are cached once at workspace initialization and kept separate from
+    /// Perl module search paths.
+    pub native_build_hints: NativeBuildHints,
+
     /// Resolution timeout in milliseconds
     /// Default: 50ms
     pub resolution_timeout_ms: u64,
+
+    /// Whether the `PERL5LIB` environment variable is read and merged into
+    /// the module search path.  Default: `true`.
+    pub use_perl5lib: bool,
+
+    /// Controls whether PERL5LIB entries come before or after `include_paths`.
+    /// Default: `Prepend` (mirrors Perl's own search order).
+    pub perl5lib_precedence: Perl5LibPrecedence,
 }
 
 impl Default for WorkspaceConfig {
@@ -274,12 +421,61 @@ impl Default for WorkspaceConfig {
             include_paths: vec!["lib".to_string(), ".".to_string(), "local/lib/perl5".to_string()],
             use_system_inc: false,
             system_inc_cache: None,
+            perl_path: None,
+            perl_args: Vec::new(),
+            native_build_hints: NativeBuildHints::default(),
             resolution_timeout_ms: 50,
+            use_perl5lib: true,
+            perl5lib_precedence: Perl5LibPrecedence::Prepend,
         }
     }
 }
 
 impl WorkspaceConfig {
+    /// Parse a `PERL5LIB` environment variable value into a list of paths.
+    ///
+    /// Uses `:` as the separator on Unix and `;` on Windows, matching Perl's
+    /// own behaviour.  Empty components (produced by leading, trailing, or
+    /// consecutive separators) are silently dropped.
+    pub fn parse_perl5lib(value: &str) -> Vec<String> {
+        #[cfg(windows)]
+        const SEP: char = ';';
+        #[cfg(not(windows))]
+        const SEP: char = ':';
+        value.split(SEP).filter(|s| !s.is_empty()).map(|s| s.to_string()).collect()
+    }
+
+    /// Return the effective module-search-path, merging `PERL5LIB` paths with
+    /// `self.include_paths` according to `self.perl5lib_precedence`.
+    ///
+    /// If `self.use_perl5lib` is `false`, or `perl5lib_paths` is empty, the
+    /// returned list is identical to `self.include_paths`.
+    pub fn effective_include_paths(&self, perl5lib_paths: &[String]) -> Vec<String> {
+        if !self.use_perl5lib || perl5lib_paths.is_empty() {
+            return self.include_paths.clone();
+        }
+        match self.perl5lib_precedence {
+            Perl5LibPrecedence::Prepend => {
+                let mut result = perl5lib_paths.to_vec();
+                result.extend_from_slice(&self.include_paths);
+                result
+            }
+            Perl5LibPrecedence::Append => {
+                let mut result = self.include_paths.clone();
+                result.extend_from_slice(perl5lib_paths);
+                result
+            }
+        }
+    }
+
+    /// Refresh workspace-native build hints from the selected workspace root.
+    ///
+    /// This is a workspace-initialization cache step only; it does not mutate
+    /// module-resolution include paths.
+    pub fn refresh_native_build_hints(&mut self, workspace_root: &Path) {
+        self.native_build_hints = detect_native_build_hints(workspace_root);
+    }
+
     /// Update workspace configuration from LSP settings.
     pub fn update_from_value(&mut self, settings: &serde_json::Value) {
         if let Some(workspace) = settings.get("workspace") {
@@ -293,8 +489,35 @@ impl WorkspaceConfig {
                 }
                 self.use_system_inc = use_inc;
             }
+            if let Some(perl_path) = workspace.get("perlPath").and_then(|v| v.as_str()) {
+                let next = Some(perl_path.to_string());
+                if next != self.perl_path {
+                    self.system_inc_cache = None;
+                }
+                self.perl_path = next;
+            }
+            if let Some(perl_args) = workspace.get("perlArgs").and_then(|v| v.as_array()) {
+                let next: Vec<String> =
+                    perl_args.iter().filter_map(|v| v.as_str().map(str::to_string)).collect();
+                if next != self.perl_args {
+                    self.system_inc_cache = None;
+                }
+                self.perl_args = next;
+            }
             if let Some(timeout) = workspace.get("resolutionTimeout").and_then(|v| v.as_u64()) {
                 self.resolution_timeout_ms = timeout;
+            }
+            if let Some(use_p5l) = workspace.get("usePerl5lib").and_then(|v| v.as_bool()) {
+                self.use_perl5lib = use_p5l;
+            }
+            if let Some(prec) = workspace.get("perl5libPrecedence").and_then(|v| v.as_str()) {
+                // Only update on recognised values; leave the current setting unchanged for
+                // unknown strings so a typo does not silently reset an explicitly-set Append.
+                match prec {
+                    "append" => self.perl5lib_precedence = Perl5LibPrecedence::Append,
+                    "prepend" => self.perl5lib_precedence = Perl5LibPrecedence::Prepend,
+                    _ => {} // unknown value — leave current setting intact
+                }
             }
         }
     }
@@ -306,15 +529,25 @@ impl WorkspaceConfig {
         }
 
         if self.system_inc_cache.is_none() {
-            self.system_inc_cache = Some(Self::fetch_perl_inc());
+            self.system_inc_cache =
+                Some(Self::fetch_perl_inc(self.perl_path.as_deref(), &self.perl_args));
         }
 
         self.system_inc_cache.as_deref().unwrap_or(&[])
     }
 
     #[cfg(not(target_arch = "wasm32"))]
-    fn fetch_perl_inc() -> Vec<PathBuf> {
-        let output = Command::new("perl").args(["-e", "print join(\"\\n\", @INC)"]).output();
+    fn fetch_perl_inc(perl_path: Option<&str>, perl_args: &[String]) -> Vec<PathBuf> {
+        let perl_path = match perl_path.filter(|path| !path.is_empty()) {
+            Some(path) => PathBuf::from(path),
+            None => match resolve_perl_path_with_toolchain() {
+                Ok(path) => path,
+                Err(_) => return Vec::new(),
+            },
+        };
+        let mut command = Command::new(perl_path);
+        command.args(perl_args);
+        let output = command.args(["-e", "print join(\"\\n\", @INC)"]).output();
 
         match output {
             Ok(out) if out.status.success() => String::from_utf8_lossy(&out.stdout)
@@ -327,7 +560,7 @@ impl WorkspaceConfig {
     }
 
     #[cfg(target_arch = "wasm32")]
-    fn fetch_perl_inc() -> Vec<PathBuf> {
+    fn fetch_perl_inc(_: Option<&str>, _: &[String]) -> Vec<PathBuf> {
         Vec::new()
     }
 }
@@ -340,8 +573,6 @@ impl WorkspaceConfig {
 /// LSP `initializationOptions` / `didChangeConfiguration` always win over this file.
 ///
 /// Unknown TOML keys are silently ignored for forward compatibility.
-///
-/// `[formatting]` is reserved for future perltidy configuration (not yet wired).
 #[non_exhaustive]
 #[derive(Debug, Clone, Default, serde::Deserialize)]
 #[serde(default)]
@@ -354,6 +585,8 @@ pub struct ProjectConfig {
     pub features: ProjectFeaturesConfig,
     /// `[ai_completion]` section: AI completion settings.
     pub ai_completion: ProjectAiCompletionConfig,
+    /// `[formatting]` section: perltidy configuration.
+    pub formatting: ProjectFormattingConfig,
 }
 
 /// `[perl]` section of `.perl-lsp.toml`.
@@ -363,12 +596,17 @@ pub struct ProjectPerlConfig {
     /// Additional include paths for module resolution.
     ///
     /// Relative entries are resolved against the workspace root. Absolute
-    /// entries are accepted syntactically, but still must resolve inside the
-    /// workspace boundary.
+    /// entries are honored literally as external include roots.
     pub include_paths: Vec<String>,
     /// Perl version string (e.g. "5.38") — parsed but not yet wired to diagnostics.
     /// Reserved for future use; ignored in this implementation.
     pub version: Option<String>,
+    /// Whether to read `PERL5LIB` from the environment and include it in the
+    /// module search path.  Unset means "leave the server default unchanged".
+    pub use_perl5lib: Option<bool>,
+    /// Whether PERL5LIB paths come before or after `include_paths`.
+    /// Unset means "leave the server default unchanged".
+    pub perl5lib_precedence: Option<Perl5LibPrecedence>,
 }
 
 /// `[diagnostics]` section of `.perl-lsp.toml`.
@@ -403,6 +641,38 @@ pub struct ProjectAiCompletionConfig {
     pub model: Option<String>,
     /// Environment variable name for API key.
     pub api_key_env: Option<String>,
+}
+
+/// `[formatting]` section of `.perl-lsp.toml`.
+#[derive(Debug, Clone, Default, serde::Deserialize)]
+#[serde(default)]
+pub struct ProjectFormattingConfig {
+    /// Whether perltidy formatting is enabled.
+    pub enabled: Option<bool>,
+    /// Path to a `.perltidyrc` profile file.
+    pub perltidy_profile: Option<String>,
+    /// Maximum line length.
+    pub perltidy_maximum_line_length: Option<u32>,
+    /// Indent size in spaces.
+    pub perltidy_indent_columns: Option<u32>,
+    /// Use tabs instead of spaces.
+    pub perltidy_tabs: Option<bool>,
+    /// Opening brace on new line.
+    pub perltidy_opening_brace_on_new_line: Option<bool>,
+    /// Cuddled else style.
+    pub perltidy_cuddled_else: Option<bool>,
+    /// Space after keyword.
+    pub perltidy_space_after_keyword: Option<bool>,
+    /// Add trailing commas.
+    pub perltidy_add_trailing_commas: Option<bool>,
+    /// Vertical alignment.
+    pub perltidy_vertical_alignment: Option<bool>,
+    /// Block comment indentation.
+    pub perltidy_block_comment_indentation: Option<u32>,
+    /// Extra perltidy arguments.
+    pub perltidy_extra_args: Vec<String>,
+    /// Timeout in seconds.
+    pub perltidy_timeout_secs: Option<u64>,
 }
 
 /// Load project config from `<workspace_root>/.perl-lsp.toml`.
@@ -456,6 +726,47 @@ impl ProjectConfig {
         if let Some(ref key_env) = self.ai_completion.api_key_env {
             config.ai_completion.api_key_env = key_env.clone();
         }
+
+        // Apply formatting configuration
+        if let Some(enabled) = self.formatting.enabled {
+            config.perltidy_enabled = enabled;
+        }
+        if let Some(ref profile) = self.formatting.perltidy_profile {
+            config.perltidy_profile = Some(profile.clone());
+        }
+        if let Some(len) = self.formatting.perltidy_maximum_line_length {
+            config.perltidy_maximum_line_length = Some(len);
+        }
+        if let Some(indent) = self.formatting.perltidy_indent_columns {
+            config.perltidy_indent_columns = Some(indent);
+        }
+        if let Some(tabs) = self.formatting.perltidy_tabs {
+            config.perltidy_tabs = Some(tabs);
+        }
+        if let Some(brace) = self.formatting.perltidy_opening_brace_on_new_line {
+            config.perltidy_opening_brace_on_new_line = Some(brace);
+        }
+        if let Some(cuddle) = self.formatting.perltidy_cuddled_else {
+            config.perltidy_cuddled_else = Some(cuddle);
+        }
+        if let Some(space) = self.formatting.perltidy_space_after_keyword {
+            config.perltidy_space_after_keyword = Some(space);
+        }
+        if let Some(comma) = self.formatting.perltidy_add_trailing_commas {
+            config.perltidy_add_trailing_commas = Some(comma);
+        }
+        if let Some(align) = self.formatting.perltidy_vertical_alignment {
+            config.perltidy_vertical_alignment = Some(align);
+        }
+        if let Some(block) = self.formatting.perltidy_block_comment_indentation {
+            config.perltidy_block_comment_indentation = Some(block);
+        }
+        if !self.formatting.perltidy_extra_args.is_empty() {
+            config.perltidy_extra_args = self.formatting.perltidy_extra_args.clone();
+        }
+        if let Some(timeout) = self.formatting.perltidy_timeout_secs {
+            config.perltidy_timeout_secs = timeout;
+        }
     }
 
     /// Apply project config to `WorkspaceConfig` as the base layer.
@@ -465,6 +776,12 @@ impl ProjectConfig {
     pub fn apply_to_workspace_config(&self, config: &mut WorkspaceConfig) {
         if !self.perl.include_paths.is_empty() {
             config.include_paths = self.perl.include_paths.clone();
+        }
+        if let Some(use_p5l) = self.perl.use_perl5lib {
+            config.use_perl5lib = use_p5l;
+        }
+        if let Some(ref prec) = self.perl.perl5lib_precedence {
+            config.perl5lib_precedence = prec.clone();
         }
     }
 }
@@ -609,6 +926,14 @@ mod tests {
     }
 
     #[test]
+    fn server_config_perlcritic_empty_profile_clears_to_none() {
+        let mut config = ServerConfig::default();
+        config.update_from_value(&json!({ "perlcritic": { "profile": "/path/to/.perlcriticrc" } }));
+        config.update_from_value(&json!({ "perlcritic": { "profile": "" } }));
+        assert!(config.perlcritic_profile.is_none());
+    }
+
+    #[test]
     fn server_config_perlcritic_all_fields_together() {
         let mut config = ServerConfig::default();
         config.update_from_value(&json!({
@@ -639,6 +964,8 @@ mod tests {
         let config = WorkspaceConfig::default();
         assert_eq!(config.include_paths, vec!["lib", ".", "local/lib/perl5"]);
         assert!(!config.use_system_inc);
+        assert!(config.perl_path.is_none());
+        assert!(config.perl_args.is_empty());
         assert_eq!(config.resolution_timeout_ms, 50);
     }
 
@@ -660,6 +987,19 @@ mod tests {
             "workspace": { "resolutionTimeout": 100 }
         }));
         assert_eq!(config.resolution_timeout_ms, 100);
+    }
+
+    #[test]
+    fn workspace_config_updates_perl_probe_settings() {
+        let mut config = WorkspaceConfig::default();
+        config.update_from_value(&json!({
+            "workspace": {
+                "perlPath": "/opt/custom/perl",
+                "perlArgs": ["-I", "/tmp/custom/lib"]
+            }
+        }));
+        assert_eq!(config.perl_path.as_deref(), Some("/opt/custom/perl"));
+        assert_eq!(config.perl_args, vec!["-I", "/tmp/custom/lib"]);
     }
 
     #[test]

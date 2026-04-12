@@ -14,7 +14,7 @@ keywords = ["perl", "builtins", "parser", "lsp", "signatures"]
 categories = ["development-tools", "text-processing"]
 
 [dependencies]
-perl-builtins-phf = { path = "../perl-builtins-phf", version = "0.12.3" }
+perl-builtins-phf = { path = "../perl-builtins-phf", version = "0.12.4" }
 
 [dev-dependencies]
 perl-tdd-support = { path = "../perl-tdd-support" }

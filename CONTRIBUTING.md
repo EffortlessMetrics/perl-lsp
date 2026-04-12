@@ -103,9 +103,9 @@ just doctor     # Deeper workspace health check — finds drift, stale files, co
 just pr-fast    # Fastest checks: fmt + clippy + tests (~1-2 min). Run this often.
 ```
 
-### 4. Run the canonical pre-push gate
+### 4. Run the canonical merge gate
 
-This is required before opening a PR. It runs the same checks CI runs:
+This is the explicit full validation step before merge. It runs the same checks CI runs:
 
 ```bash
 nix develop -c just ci-gate   # Recommended: reproducible env (~3-5 min)
@@ -113,11 +113,14 @@ nix develop -c just ci-gate   # Recommended: reproducible env (~3-5 min)
 just ci-gate
 ```
 
-The pre-push git hook runs this automatically if you installed it:
+If you install the pre-push git hook, it runs the faster Tier A gate automatically on push:
 
 ```bash
 bash scripts/install-githooks.sh
 ```
+
+That hook runs `nix develop -c just pr-fast` (or `just pr-fast` without Nix).
+It is a quick push guard, not the full merge gate.
 
 ### 5. Expand for larger changes or release prep
 
@@ -159,6 +162,18 @@ This runs in ~5-10 minutes (packaging only, no uploading).
 just status-update
 just status-check
 ```
+
+If your change introduces or modifies public APIs, also run the documentation
+coverage workflow so CI catches missing rustdoc before review:
+
+```bash
+just docs-check
+just docs-report
+```
+
+See [docs/reference/MISSING_DOCUMENTATION_GUIDE.md](docs/reference/MISSING_DOCUMENTATION_GUIDE.md)
+for remediation workflow and [docs/reference/API_DOCUMENTATION_STANDARDS.md](docs/reference/API_DOCUMENTATION_STANDARDS.md)
+for required rustdoc structure.
 
 ### 7. Open a Pull Request
 
@@ -203,6 +218,14 @@ You will see pipeline labels added to your PR:
 | `merge-ready` | Approved and ready for merge |
 
 The CI merge gate only runs on `merge-ready` PRs. This keeps the queue clean — do not worry if CI looks quiet on your draft.
+
+#### External-claim verification
+
+If a PR's description or commit message cites an external specification (Perl language semantics, LSP protocol spec, DAP protocol spec) or a third-party crate API, the review process **must** include running the claimed behavior against the reference implementation, not just reading the documentation. For Perl claims, a short `perl -e` snippet against the runtime is authoritative. For LSP/DAP claims, the published spec text is authoritative. For crate APIs, the current `docs.rs` entry is authoritative.
+
+This rule exists because on 2026-04-11, [PR #4090](https://github.com/EffortlessMetrics/perl-lsp/pull/4090) was approved by multiple reviewers on the basis of a false claim about Perl phase-block pragma semantics that every reviewer had independently assumed was true. The false claim was caught only by a research-verifier agent running `perl -e 'BEGIN { use strict; } $x = 1'` and observing the script succeeds — proving `use strict` inside `BEGIN { }` stays lexically scoped to the block and is **not** active at file scope. The resulting revert is tracked in [#4100](https://github.com/EffortlessMetrics/perl-lsp/issues/4100) and the correct positive-direction lint in [#4101](https://github.com/EffortlessMetrics/perl-lsp/issues/4101). See also related process context in [#4062](https://github.com/EffortlessMetrics/perl-lsp/issues/4062).
+
+For code review automation: the `research-verifier` agent should be invoked on any PR whose body references `perlmod`, `perlop`, `LSP 3.`, `DAP`, or a `docs.rs` URL. The `reviewer-deep` agent's definition at `.claude/agents/reviewer-deep.md` will be updated separately to reference this rule (tracked as a follow-up).
 
 For more detail on the CI structure see [docs/project/CI.md](docs/project/CI.md) and [docs/project/CI_TEST_LANES.md](docs/project/CI_TEST_LANES.md).
 
@@ -403,6 +426,7 @@ Use the right channel for the fastest response:
 > See [#2169](https://github.com/EffortlessMetrics/perl-lsp/issues/2169) for the tracking issue.
 
 - **Docs**: See `docs/` for detailed guides -- start with [COMMANDS_REFERENCE.md](docs/reference/COMMANDS_REFERENCE.md)
+- **Verification policy**: See [VERIFICATION_LADDER.md](docs/contributing/VERIFICATION_LADDER.md) for claim verification requirements
 
 ## Code of Conduct
 

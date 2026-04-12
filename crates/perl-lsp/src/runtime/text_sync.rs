@@ -13,6 +13,7 @@ use crate::protocol::invalid_params;
 use crate::state::DegradationTier;
 #[cfg(feature = "workspace")]
 use perl_parser::workspace_index::{IndexPhase, IndexState};
+use perl_source_file::is_binary_content;
 
 impl LspServer {
     /// Handle textDocument/didOpen notification.
@@ -95,9 +96,9 @@ impl LspServer {
                 return Ok(());
             }
 
-            // Binary content guard: skip parsing for files containing null bytes
-            // (binary files that arrive via didOpen as valid UTF-8 strings)
-            if text.contains('\0') {
+            // Binary content guard: skip parsing for binary files.
+            // Detection is centralized in `perl_source_file::is_binary_content`.
+            if is_binary_content(text) {
                 tracing::warn!(
                     "Skipping parse for {} (binary content detected: null bytes present)",
                     uri
@@ -558,8 +559,9 @@ impl LspServer {
                     return Ok(());
                 }
 
-                // Binary content guard: skip parsing for files containing null bytes
-                if text.contains('\0') {
+                // Binary content guard: skip parsing for binary files.
+                // Detection is centralized in `perl_source_file::is_binary_content`.
+                if is_binary_content(&text) {
                     tracing::warn!(
                         "Skipping parse for {} (binary content detected via didChange)",
                         uri
@@ -842,7 +844,11 @@ impl LspServer {
                                 }
                             }
 
-                            // Send diagnostics (debounced); coordinator completion is async.
+                            // Fast path: immediately publish parse-error diagnostics so
+                            // syntax errors appear before the slow debounce fires.
+                            // The debounced full publish replaces this notification.
+                            self.publish_parse_errors_fast(uri);
+                            // Send full diagnostics (debounced); coordinator completion is async.
                             self.publish_diagnostics_debounced(uri);
                             return Ok(());
                         }
@@ -855,7 +861,9 @@ impl LspServer {
                     coordinator.notify_parse_complete(uri);
                 }
 
-                // Send diagnostics (use original URI for client notification)
+                // Fast path: immediately publish parse-error diagnostics.
+                self.publish_parse_errors_fast(uri);
+                // Send full diagnostics (use original URI for client notification)
                 // Debounced: coalesces rapid typing into a single publication
                 self.publish_diagnostics_debounced(uri);
             }
@@ -964,6 +972,7 @@ impl LspServer {
                         &doc.parse_errors,
                         &doc.text,
                         None,
+                        &[],
                         source_path.as_deref(),
                     );
 

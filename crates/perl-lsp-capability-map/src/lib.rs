@@ -87,7 +87,11 @@ pub fn feature_ids_from_caps(c: &ServerCapabilities) -> Vec<&'static str> {
     if c.moniker_provider.is_some() {
         v.push(LSP_MONIKER);
     }
-    // Note: type_hierarchy_provider doesn't exist in lsp-types 0.97
+    // lsp-types 0.97 lacks a `type_hierarchy_provider` field; detect it via
+    // the `experimental` object where `capabilities_for()` advertises it.
+    if c.experimental.as_ref().and_then(|e| e.get("typeHierarchyProvider")).is_some() {
+        v.push(LSP_TYPE_HIERARCHY);
+    }
     if c.inline_value_provider.is_some() {
         v.push(LSP_INLINE_VALUE);
     }
@@ -486,5 +490,31 @@ mod tests {
     fn caps_from_notebook_sync_has_selector() {
         let caps = caps_from_feature_ids(&[LSP_NOTEBOOK_DOCUMENT_SYNC]);
         assert!(caps.notebook_document_sync.is_some());
+    }
+
+    /// Verify that `feature_ids_from_caps` can detect `lsp.type_hierarchy` when
+    /// advertised via the `experimental` field (lsp-types 0.97 gap workaround).
+    #[test]
+    fn feature_ids_from_caps_detects_type_hierarchy_via_experimental() {
+        let mut caps = ServerCapabilities::default();
+        caps.experimental = Some(serde_json::json!({ "typeHierarchyProvider": true }));
+        let ids = feature_ids_from_caps(&caps);
+        assert!(
+            ids.contains(&LSP_TYPE_HIERARCHY),
+            "feature_ids_from_caps must detect lsp.type_hierarchy via experimental field; \
+             got ids={ids:?}"
+        );
+    }
+
+    /// Verify that `feature_ids_from_caps` does not report `lsp.type_hierarchy` when
+    /// the experimental field is absent.
+    #[test]
+    fn feature_ids_from_caps_no_type_hierarchy_when_experimental_absent() {
+        let caps = ServerCapabilities::default();
+        let ids = feature_ids_from_caps(&caps);
+        assert!(
+            !ids.contains(&LSP_TYPE_HIERARCHY),
+            "feature_ids_from_caps must not report lsp.type_hierarchy when not advertised"
+        );
     }
 }

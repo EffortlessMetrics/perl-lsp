@@ -2,4 +2,4 @@
 source: crates/perl-parser/tests/ast_snapshot_tests.rs
 expression: "parse_sexp(\"my $x = ;\")"
 ---
-(source_file (ERROR "expected expression, found \';\' at position 8"))
+(source_file (my_declaration (variable $ x)(missing_expression)))

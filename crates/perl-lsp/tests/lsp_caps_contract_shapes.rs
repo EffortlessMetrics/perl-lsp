@@ -182,7 +182,10 @@ fn test_capability_shapes_lsp_318_contract() -> Result<(), Box<dyn std::error::E
         assert!(caps_json["semanticTokensProvider"]["legend"].is_object());
         assert!(caps_json["semanticTokensProvider"]["legend"]["tokenTypes"].is_array());
         assert!(caps_json["semanticTokensProvider"]["legend"]["tokenModifiers"].is_array());
-        assert!(caps_json["semanticTokensProvider"]["full"].is_boolean());
+        assert!(
+            caps_json["semanticTokensProvider"]["full"].is_boolean()
+                || caps_json["semanticTokensProvider"]["full"].is_object()
+        );
         assert!(caps_json["semanticTokensProvider"]["range"].is_boolean());
     }
 

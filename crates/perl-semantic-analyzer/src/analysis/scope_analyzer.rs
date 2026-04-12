@@ -52,7 +52,7 @@
 use crate::ast::{Node, NodeKind};
 use crate::pragma_tracker::{PragmaState, PragmaTracker};
 use rustc_hash::FxHashMap;
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::ops::Range;
 use std::rc::Rc;
 
@@ -67,6 +67,8 @@ pub enum IssueKind {
     UnusedParameter,
     UnquotedBareword,
     UninitializedVariable,
+    /// Capture variable (`$1`, `$2`, etc.) used with no preceding regex match in scope.
+    CaptureVarWithoutRegexMatch,
 }
 
 #[derive(Debug, Clone)]
@@ -126,17 +128,31 @@ struct Scope {
     // Outer key: sigil index, Inner key: name
     variables: RefCell<[Option<FxHashMap<String, Rc<Variable>>>; 6]>,
     parent: Option<Rc<Scope>>,
+    /// Whether a regex match operation (`=~`, `m//`, `s///`) has been seen in this scope.
+    has_regex_match: Cell<bool>,
 }
 
 impl Scope {
     fn new() -> Self {
         let vars = std::array::from_fn(|_| None);
-        Self { variables: RefCell::new(vars), parent: None }
+        Self { variables: RefCell::new(vars), parent: None, has_regex_match: Cell::new(false) }
     }
 
     fn with_parent(parent: Rc<Scope>) -> Self {
         let vars = std::array::from_fn(|_| None);
-        Self { variables: RefCell::new(vars), parent: Some(parent) }
+        Self {
+            variables: RefCell::new(vars),
+            parent: Some(parent),
+            has_regex_match: Cell::new(false),
+        }
+    }
+
+    /// Returns true if this scope or any ancestor scope has seen a regex match operation.
+    fn regex_match_in_scope(&self) -> bool {
+        if self.has_regex_match.get() {
+            return true;
+        }
+        if let Some(ref parent) = self.parent { parent.regex_match_in_scope() } else { false }
     }
 
     fn declare_variable_parts(
@@ -342,11 +358,18 @@ struct AnalysisContext<'a> {
     code: &'a str,
     pragma_map: &'a [(Range<usize>, PragmaState)],
     line_starts: RefCell<Option<Vec<usize>>>,
+    /// Current package name, updated as `package` statements are traversed.
+    current_package: RefCell<String>,
 }
 
 impl<'a> AnalysisContext<'a> {
     fn new(code: &'a str, pragma_map: &'a [(Range<usize>, PragmaState)]) -> Self {
-        Self { code, pragma_map, line_starts: RefCell::new(None) }
+        Self {
+            code,
+            pragma_map,
+            line_starts: RefCell::new(None),
+            current_package: RefCell::new("main".to_string()),
+        }
     }
 
     fn get_line(&self, offset: usize) -> usize {
@@ -426,6 +449,103 @@ impl ScopeAnalyzer {
         Self
     }
 
+    fn package_variable_name(&self, name: &str, context: &AnalysisContext<'_>) -> Option<String> {
+        if name.is_empty() || name.contains("::") {
+            return None;
+        }
+
+        let current_package = context.current_package.borrow();
+        Some(format!("{}::{}", current_package.as_str(), name))
+    }
+
+    fn declare_variable_parts_in_context(
+        &self,
+        scope: &Rc<Scope>,
+        sigil: &str,
+        name: &str,
+        offset: usize,
+        is_our: bool,
+        is_initialized: bool,
+        context: &AnalysisContext<'_>,
+    ) -> Option<IssueKind> {
+        if is_our && let Some(qualified_name) = self.package_variable_name(name, context) {
+            return scope.declare_variable_parts(
+                sigil,
+                &qualified_name,
+                offset,
+                is_our,
+                is_initialized,
+            );
+        }
+
+        scope.declare_variable_parts(sigil, name, offset, is_our, is_initialized)
+    }
+
+    fn has_variable_parts_in_context(
+        &self,
+        scope: &Rc<Scope>,
+        sigil: &str,
+        name: &str,
+        context: &AnalysisContext<'_>,
+    ) -> bool {
+        if scope.has_variable_parts(sigil, name) {
+            return true;
+        }
+
+        self.package_variable_name(name, context)
+            .is_some_and(|qualified_name| scope.has_variable_parts(sigil, &qualified_name))
+    }
+
+    fn use_variable_parts_in_context(
+        &self,
+        scope: &Rc<Scope>,
+        sigil: &str,
+        name: &str,
+        context: &AnalysisContext<'_>,
+    ) -> (bool, bool) {
+        let (found, initialized) = scope.use_variable_parts(sigil, name);
+        if found {
+            return (found, initialized);
+        }
+
+        self.package_variable_name(name, context).map_or((false, false), |qualified_name| {
+            scope.use_variable_parts(sigil, &qualified_name)
+        })
+    }
+
+    fn initialize_variable_parts_in_context(
+        &self,
+        scope: &Rc<Scope>,
+        sigil: &str,
+        name: &str,
+        context: &AnalysisContext<'_>,
+    ) {
+        if scope.has_variable_parts(sigil, name) {
+            scope.initialize_variable_parts(sigil, name);
+            return;
+        }
+
+        if let Some(qualified_name) = self.package_variable_name(name, context) {
+            scope.initialize_variable_parts(sigil, &qualified_name);
+        }
+    }
+
+    fn initialize_and_use_variable_parts_in_context(
+        &self,
+        scope: &Rc<Scope>,
+        sigil: &str,
+        name: &str,
+        context: &AnalysisContext<'_>,
+    ) -> bool {
+        if scope.initialize_and_use_variable_parts(sigil, name) {
+            return true;
+        }
+
+        self.package_variable_name(name, context).is_some_and(|qualified_name| {
+            scope.initialize_and_use_variable_parts(sigil, &qualified_name)
+        })
+    }
+
     pub fn analyze(
         &self,
         ast: &Node,
@@ -458,8 +578,8 @@ impl ScopeAnalyzer {
     ) {
         // Get effective pragma state at this node's location
         let pragma_state = PragmaTracker::state_for_offset(context.pragma_map, node.location.start);
-        let strict_vars_mode = pragma_state.strict_vars;
-        let strict_subs_mode = pragma_state.strict_subs;
+        let strict_vars_mode = pragma_state.strict_vars || pragma_state.signatures_strict;
+        let strict_subs_mode = pragma_state.strict_subs || pragma_state.signatures_strict;
         match &node.kind {
             NodeKind::VariableDeclaration { declarator, variable, initializer, .. } => {
                 let extracted = self.extract_variable_name(variable);
@@ -467,6 +587,25 @@ impl ScopeAnalyzer {
 
                 let is_our = declarator == "our";
                 let is_initialized = initializer.is_some();
+
+                // `local` of a builtin special variable (e.g. `local $/`, `local $,`) temporarily
+                // modifies the global; it does not create a new lexical binding.  Declaring it in
+                // the lexical scope would cause a spurious UnusedVariable diagnostic because all
+                // later uses of `$/` etc. are recognised by is_builtin_global and never counted as
+                // uses of the scope entry.  Skip the declaration entirely and only analyse any
+                // initialiser expression that may be present.
+                if declarator == "local" && is_builtin_global(sigil, var_name_part) {
+                    // For `local $special = expr`, the parser embeds the assignment inside
+                    // `variable` as an Assignment node rather than in `initializer`.  Walk the
+                    // variable node's children to pick up any RHS expressions.
+                    if let Some(init) = initializer {
+                        self.analyze_node(init, scope, ancestors, issues, context);
+                    }
+                    if let NodeKind::Assignment { rhs, .. } = &variable.kind {
+                        self.analyze_node(rhs, scope, ancestors, issues, context);
+                    }
+                    return;
+                }
 
                 // If checking initializer first (e.g. my $x = $x), we need to analyze initializer in
                 // current scope BEFORE declaring the variable (standard Perl behavior)
@@ -476,56 +615,21 @@ impl ScopeAnalyzer {
                     self.analyze_node(init, scope, ancestors, issues, context);
                 }
 
-                if let Some(issue_kind) = scope.declare_variable_parts(
+                if let Some(issue_kind) = self.declare_variable_parts_in_context(
+                    scope,
                     sigil,
                     var_name_part,
                     variable.location.start,
                     is_our,
                     is_initialized,
+                    context,
                 ) {
-                    let line = context.get_line(variable.location.start);
-                    // Optimization: Only allocate full name string when we actually have an issue to report
-                    let full_name = extracted.as_string();
-                    // Build description first (borrows full_name), then move full_name into struct
-                    let description = match issue_kind {
-                        IssueKind::VariableShadowing => {
-                            format!("Variable '{}' shadows a variable in outer scope", full_name)
-                        }
-                        IssueKind::VariableRedeclaration => {
-                            format!("Variable '{}' is already declared in this scope", full_name)
-                        }
-                        _ => String::new(),
-                    };
-                    issues.push(ScopeIssue {
-                        kind: issue_kind,
-                        variable_name: full_name,
-                        line,
-                        range: (variable.location.start, variable.location.end),
-                        description,
-                    });
-                }
-            }
-
-            NodeKind::VariableListDeclaration { declarator, variables, initializer, .. } => {
-                let is_our = declarator == "our";
-                let is_initialized = initializer.is_some();
-
-                // Analyze initializer first
-                if let Some(init) = initializer {
-                    self.analyze_node(init, scope, ancestors, issues, context);
-                }
-
-                for variable in variables {
-                    let extracted = self.extract_variable_name(variable);
-                    let (sigil, var_name_part) = extracted.parts();
-
-                    if let Some(issue_kind) = scope.declare_variable_parts(
-                        sigil,
-                        var_name_part,
-                        variable.location.start,
-                        is_our,
-                        is_initialized,
-                    ) {
+                    // `our` re-declares a package global — valid Perl idiom when switching
+                    // packages (`package Foo; our $x; package Bar; our $x;`).  Never report
+                    // VariableRedeclaration for `our` declarations.
+                    if is_our && issue_kind == IssueKind::VariableRedeclaration {
+                        // Silently accept: different-package re-use of the same bare name.
+                    } else {
                         let line = context.get_line(variable.location.start);
                         // Optimization: Only allocate full name string when we actually have an issue to report
                         let full_name = extracted.as_string();
@@ -556,6 +660,63 @@ impl ScopeAnalyzer {
                 }
             }
 
+            NodeKind::VariableListDeclaration { declarator, variables, initializer, .. } => {
+                let is_our = declarator == "our";
+                let is_initialized = initializer.is_some();
+
+                // Analyze initializer first
+                if let Some(init) = initializer {
+                    self.analyze_node(init, scope, ancestors, issues, context);
+                }
+
+                for variable in variables {
+                    let extracted = self.extract_variable_name(variable);
+                    let (sigil, var_name_part) = extracted.parts();
+
+                    if let Some(issue_kind) = self.declare_variable_parts_in_context(
+                        scope,
+                        sigil,
+                        var_name_part,
+                        variable.location.start,
+                        is_our,
+                        is_initialized,
+                        context,
+                    ) {
+                        // `our` redeclaration is always valid — see VariableDeclaration handler.
+                        if is_our && issue_kind == IssueKind::VariableRedeclaration {
+                            // Silently accept.
+                        } else {
+                            let line = context.get_line(variable.location.start);
+                            // Optimization: Only allocate full name string when we actually have an issue to report
+                            let full_name = extracted.as_string();
+                            // Build description first (borrows full_name), then move full_name into struct
+                            let description = match issue_kind {
+                                IssueKind::VariableShadowing => {
+                                    format!(
+                                        "Variable '{}' shadows a variable in outer scope",
+                                        full_name
+                                    )
+                                }
+                                IssueKind::VariableRedeclaration => {
+                                    format!(
+                                        "Variable '{}' is already declared in this scope",
+                                        full_name
+                                    )
+                                }
+                                _ => String::new(),
+                            };
+                            issues.push(ScopeIssue {
+                                kind: issue_kind,
+                                variable_name: full_name,
+                                line,
+                                range: (variable.location.start, variable.location.end),
+                                description,
+                            });
+                        }
+                    }
+                }
+            }
+
             NodeKind::Use { module, args, .. } => {
                 // Handle 'use vars' pragma for global variable declarations
                 if module == "vars" {
@@ -568,12 +729,14 @@ impl ScopeAnalyzer {
                                     let (sigil, name) = split_variable_name(var_name);
                                     if !sigil.is_empty() {
                                         // Declare these variables as globals in the current scope
-                                        scope.declare_variable_parts(
+                                        self.declare_variable_parts_in_context(
+                                            scope,
                                             sigil,
                                             name,
                                             node.location.start,
                                             true,
                                             true,
+                                            context,
                                         ); // true = is_our (global), true = initialized (assumed)
                                     }
                                 }
@@ -584,12 +747,14 @@ impl ScopeAnalyzer {
                             if !var_name.is_empty() {
                                 let (sigil, name) = split_variable_name(var_name);
                                 if !sigil.is_empty() {
-                                    scope.declare_variable_parts(
+                                    self.declare_variable_parts_in_context(
+                                        scope,
                                         sigil,
                                         name,
                                         node.location.start,
                                         true,
                                         true,
+                                        context,
                                     );
                                 }
                             }
@@ -598,9 +763,29 @@ impl ScopeAnalyzer {
                 }
             }
             NodeKind::Variable { sigil, name } => {
-                // Skip built-in global variables
-                // Optimization: Check built-ins first to avoid string scan for "::" on common globals
-                if is_builtin_global(sigil, name) {
+                // Capture variables ($1, $2, ...) are built-in globals but require a preceding
+                // regex match in scope to be meaningful. Check before the general builtin skip.
+                if sigil == "$" && is_capture_variable(name) {
+                    if !scope.regex_match_in_scope() {
+                        let full_name = format!("{}{}", sigil, name);
+                        issues.push(ScopeIssue {
+                            kind: IssueKind::CaptureVarWithoutRegexMatch,
+                            variable_name: full_name.clone(),
+                            line: context.get_line(node.location.start),
+                            range: (node.location.start, node.location.end),
+                            description: format!(
+                                "Capture variable '{}' used without a preceding regex match in scope",
+                                full_name
+                            ),
+                        });
+                    }
+                    return;
+                }
+
+                // Skip built-in global variables — but only when no lexical declaration shadows
+                // them.  Variables like $a and $b are sort globals, but `my ($a, $b) = @_`
+                // creates a lexical shadow that must be tracked as used.
+                if is_builtin_global(sigil, name) && !scope.has_variable_parts(sigil, name) {
                     return;
                 }
 
@@ -616,7 +801,7 @@ impl ScopeAnalyzer {
                     .resolve_variable_use_target(node, ancestors, context)
                     .unwrap_or((sigil, name));
                 let (variable_used, is_initialized) =
-                    scope.use_variable_parts(lookup_sigil, lookup_name);
+                    self.use_variable_parts_in_context(scope, lookup_sigil, lookup_name, context);
 
                 // Variable not found - check if we should report it
                 if !variable_used {
@@ -629,6 +814,20 @@ impl ScopeAnalyzer {
             }
             NodeKind::Typeglob { name } => {
                 let (sigil, var_name) = split_variable_name(name);
+                if !sigil.is_empty() && !var_name.is_empty() && !var_name.contains("::") {
+                    self.record_variable_use(
+                        scope,
+                        strict_vars_mode,
+                        context,
+                        issues,
+                        node,
+                        sigil,
+                        var_name,
+                    );
+                }
+            }
+            NodeKind::Readline { filehandle: Some(filehandle) } => {
+                let (sigil, var_name) = split_variable_name(filehandle);
                 if !sigil.is_empty() && !var_name.is_empty() && !var_name.contains("::") {
                     self.record_variable_use(
                         scope,
@@ -658,11 +857,23 @@ impl ScopeAnalyzer {
                 // Some builtins consume declaration-capable filehandle arguments directly,
                 // e.g. `open my $fh, ...` or `pipe my $r, my $w;`. Those declarations should
                 // count as used and initialized by the builtin itself.
+                //
+                // Builtins that default to $_ when called with zero arguments implicitly
+                // read (and in some cases modify) $_. Mark it as used so that any lexically-
+                // scoped `my $_` in scope is not reported as unused or uninitialized.
+                if args.is_empty() && is_topic_defaulting_builtin(name) {
+                    if is_topic_modifying_builtin(name) {
+                        let _ = scope.initialize_and_use_variable_parts("$", "_");
+                    } else {
+                        let _ = scope.use_variable_parts("$", "_");
+                    }
+                }
                 ancestors.push(node);
-                for arg in args {
+                let declaration_arg_positions = builtin_declaration_arg_positions(name);
+                for (arg_index, arg) in args.iter().enumerate() {
                     self.analyze_node(arg, scope, ancestors, issues, context);
-                    if is_declaration_capable_builtin(name) {
-                        self.mark_builtin_declaration_arg_consumed(arg, scope);
+                    if declaration_arg_positions.contains(&arg_index) {
+                        self.mark_builtin_declaration_arg_consumed(arg, scope, context);
                     }
                 }
                 ancestors.pop();
@@ -698,12 +909,12 @@ impl ScopeAnalyzer {
                     || value.starts_with("qq")
                     || value.starts_with("qx")
                 {
-                    self.mark_interpolated_variables_used(value, scope);
+                    self.mark_interpolated_variables_used(value, scope, context);
                 }
             }
             NodeKind::Heredoc { content, interpolated, .. } => {
                 if *interpolated {
-                    self.mark_interpolated_variables_used(content, scope);
+                    self.mark_interpolated_variables_used(content, scope, context);
                 }
             }
             NodeKind::Assignment { lhs, rhs, op: _ } => {
@@ -715,7 +926,9 @@ impl ScopeAnalyzer {
                 // (mark_initialized + analyze_node both perform lookups)
                 if let NodeKind::Variable { sigil, name } = &lhs.kind {
                     if !name.contains("::") && !is_builtin_global(sigil, name) {
-                        if scope.initialize_and_use_variable_parts(sigil, name) {
+                        if self.initialize_and_use_variable_parts_in_context(
+                            scope, sigil, name, context,
+                        ) {
                             return;
                         }
                     }
@@ -724,7 +937,7 @@ impl ScopeAnalyzer {
                 // Then analyze LHS
                 // We need to recursively mark variables as initialized in the LHS structure
                 // This handles scalars ($x = 1) and lists (($x, $y) = (1, 2))
-                self.mark_initialized(lhs, scope);
+                self.mark_initialized(lhs, scope, context);
 
                 // Recurse into LHS to trigger UndeclaredVariable checks
                 // Note: 'use_variable' marks as used, which is technically correct for assignment too (write usage)
@@ -742,10 +955,10 @@ impl ScopeAnalyzer {
                 if let NodeKind::VariableDeclaration { .. } = variable.kind {
                     // Must analyze declaration FIRST to declare it, then mark initialized
                     self.analyze_node(variable, scope, ancestors, issues, context);
-                    self.mark_initialized(variable, scope);
+                    self.mark_initialized(variable, scope, context);
                 } else {
                     // For existing variables, mark initialized then analyze (usage)
-                    self.mark_initialized(variable, scope);
+                    self.mark_initialized(variable, scope, context);
                     self.analyze_node(variable, scope, ancestors, issues, context);
                 }
 
@@ -764,6 +977,7 @@ impl ScopeAnalyzer {
                 if strict_subs_mode
                     && !self.is_in_hash_key_context(node, ancestors, 1)
                     && !is_known_function(name)
+                    && !pragma_state.has_builtin_import(name)
                     && !self.is_in_hash_key_context(node, ancestors, 10)
                 {
                     issues.push(ScopeIssue {
@@ -804,6 +1018,14 @@ impl ScopeAnalyzer {
                 self.collect_unused_variables(&block_scope, issues, context);
             }
 
+            NodeKind::PhaseBlock { block, .. } => {
+                let phase_scope = Rc::new(Scope::with_parent(scope.clone()));
+                ancestors.push(node);
+                self.analyze_node(block, &phase_scope, ancestors, issues, context);
+                ancestors.pop();
+                self.collect_unused_variables(&phase_scope, issues, context);
+            }
+
             NodeKind::For { init, condition, update, body, .. } => {
                 let loop_scope = Rc::new(Scope::with_parent(scope.clone()));
 
@@ -830,8 +1052,10 @@ impl ScopeAnalyzer {
 
                 ancestors.push(node);
 
-                // Declare the loop variable
+                // Declare the loop variable and immediately mark it initialized — the list
+                // provides its value at runtime so there is no uninitialized window.
                 self.analyze_node(variable, &loop_scope, ancestors, issues, context);
+                self.mark_initialized(variable, &loop_scope, context);
                 self.analyze_node(list, &loop_scope, ancestors, issues, context);
                 self.analyze_node(body, &loop_scope, ancestors, issues, context);
                 if let Some(cb) = continue_block {
@@ -881,7 +1105,7 @@ impl ScopeAnalyzer {
                         }
 
                         // Check if parameter shadows a global or parent scope variable
-                        if scope.has_variable_parts(sigil, name) {
+                        if self.has_variable_parts_in_context(scope, sigil, name, context) {
                             issues.push(ScopeIssue {
                                 kind: IssueKind::ParameterShadowsGlobal,
                                 variable_name: full_name.clone(),
@@ -895,12 +1119,14 @@ impl ScopeAnalyzer {
                         }
 
                         // Declare the parameter in subroutine scope
-                        sub_scope.declare_variable_parts(
+                        self.declare_variable_parts_in_context(
+                            &sub_scope,
                             sigil,
                             name,
                             param.location.start,
                             false,
                             true,
+                            context,
                         ); // Parameters are initialized
                         // Don't mark parameters as automatically used yet - track their actual usage
                     }
@@ -1015,6 +1241,51 @@ impl ScopeAnalyzer {
 
                 ancestors.pop();
             }
+            NodeKind::Package { name, block, .. } => {
+                // Track the active package so that `our` variable declarations can be
+                // correctly namespaced.  Two packages that each declare `our $VAR` are
+                // declaring *different* package-global variables (`Alpha::VAR` vs
+                // `Beta::VAR`) and must not be reported as redeclarations.
+                if let Some(block_node) = block {
+                    // Block form: `package Foo { ... }` — scope is limited to the block.
+                    // Save the previous package name and restore it after the block.
+                    let saved_package = context.current_package.borrow().clone();
+                    *context.current_package.borrow_mut() = name.clone();
+
+                    let pkg_scope = Rc::new(Scope::with_parent(scope.clone()));
+                    ancestors.push(node);
+                    self.analyze_node(block_node, &pkg_scope, ancestors, issues, context);
+                    ancestors.pop();
+                    self.collect_unused_variables(&pkg_scope, issues, context);
+
+                    *context.current_package.borrow_mut() = saved_package;
+                } else {
+                    // Statement form: `package Foo;` — affects the rest of the file.
+                    // No scope boundary is created; the current scope continues.
+                    *context.current_package.borrow_mut() = name.clone();
+                }
+            }
+
+            // Regex match operations set capture variables ($1, $2, ...) in the current scope.
+            NodeKind::Match { expr, .. } => {
+                scope.has_regex_match.set(true);
+                ancestors.push(node);
+                self.analyze_node(expr, scope, ancestors, issues, context);
+                ancestors.pop();
+            }
+
+            NodeKind::Substitution { expr, .. } => {
+                scope.has_regex_match.set(true);
+                ancestors.push(node);
+                self.analyze_node(expr, scope, ancestors, issues, context);
+                ancestors.pop();
+            }
+
+            // Standalone regex (m// matching against $_) also sets capture variables.
+            NodeKind::Regex { .. } => {
+                scope.has_regex_match.set(true);
+            }
+
             _ => {
                 // Recursively analyze children
                 ancestors.push(node);
@@ -1043,6 +1314,20 @@ impl ScopeAnalyzer {
             return None;
         };
 
+        // Explicit scalar-reference dereference forms should count as uses of the
+        // underlying scalar lexical (`$ref`) rather than a container lexical of the
+        // same bare name. This covers compact and braced syntaxes such as:
+        // - `@$ref`, `%$ref`, `$$ref`
+        // - `@{$ref}`, `%{$ref}`, `${$ref}`
+        if (sigil == "@" || sigil == "%" || sigil == "$")
+            && context
+                .code
+                .get(node.location.start..node.location.end)
+                .is_some_and(is_explicit_scalar_reference_deref)
+        {
+            return Some(("$", normalize_scalar_deref_base_name(name)));
+        }
+
         if (sigil == "@" || sigil == "%" || sigil == "$") && name.starts_with('$') && name.len() > 1
         {
             return Some(("$", &name[1..]));
@@ -1064,6 +1349,25 @@ impl ScopeAnalyzer {
                 }
                 "{}" => return Some(("%", name)),
                 _ => {}
+            }
+        }
+
+        // When the parser interprets `print $arr[0]` as indirect-object syntax, it produces
+        // `IndirectCall { object: Variable($, "arr"), args: [ArrayLiteral([0])] }`.
+        // Similarly, `print $hash{a}` produces
+        // `IndirectCall { object: Variable($, "hash"), args: [Block([a])] }`.
+        // Bridge the sigil so that `@arr` / `%hash` are marked as used, not `$arr` / `$hash`.
+        if sigil == "$"
+            && let Some(parent) = ancestors.last()
+            && let NodeKind::IndirectCall { object, args, .. } = &parent.kind
+            && std::ptr::eq(object.as_ref(), node)
+        {
+            if let Some(first_arg) = args.first() {
+                match &first_arg.kind {
+                    NodeKind::ArrayLiteral { .. } => return Some(("@", name)),
+                    NodeKind::Block { .. } => return Some(("%", name)),
+                    _ => {}
+                }
             }
         }
 
@@ -1149,7 +1453,8 @@ impl ScopeAnalyzer {
         sigil: &str,
         name: &str,
     ) {
-        let (variable_used, is_initialized) = scope.use_variable_parts(sigil, name);
+        let (variable_used, is_initialized) =
+            self.use_variable_parts_in_context(scope, sigil, name, context);
         if !variable_used {
             if strict_vars_mode {
                 self.push_undeclared_variable_issue(issues, context, node, sigil, name);
@@ -1197,18 +1502,18 @@ impl ScopeAnalyzer {
 
     /// Marks variables as initialized when they appear on the left-hand side of an assignment.
     /// Handles scalar variables, list assignments like `($x, $y) = ...`, and nested structures.
-    fn mark_initialized(&self, node: &Node, scope: &Rc<Scope>) {
+    fn mark_initialized(&self, node: &Node, scope: &Rc<Scope>, context: &AnalysisContext<'_>) {
         match &node.kind {
             NodeKind::Variable { sigil, name } => {
                 if !name.contains("::") {
-                    scope.initialize_variable_parts(sigil, name);
+                    self.initialize_variable_parts_in_context(scope, sigil, name, context);
                 }
             }
             // For all other node types (parens, lists, etc.), recurse into children
             // to find any nested variables that should be marked as initialized
             _ => {
                 for child in node.children() {
-                    self.mark_initialized(child, scope);
+                    self.mark_initialized(child, scope, context);
                 }
             }
         }
@@ -1233,28 +1538,39 @@ impl ScopeAnalyzer {
         }
     }
 
-    fn mark_builtin_declaration_arg_consumed(&self, node: &Node, scope: &Rc<Scope>) {
+    fn mark_builtin_declaration_arg_consumed(
+        &self,
+        node: &Node,
+        scope: &Rc<Scope>,
+        context: &AnalysisContext<'_>,
+    ) {
         match &node.kind {
             NodeKind::VariableDeclaration { variable, .. } => {
                 let extracted = self.extract_variable_name(variable);
                 let (sigil, name) = extracted.parts();
                 if !sigil.is_empty() && !name.is_empty() && !name.contains("::") {
-                    let _ = scope.initialize_and_use_variable_parts(sigil, name);
+                    let _ = self
+                        .initialize_and_use_variable_parts_in_context(scope, sigil, name, context);
                 }
             }
             NodeKind::VariableListDeclaration { variables, .. } => {
                 for variable in variables {
-                    self.mark_builtin_declaration_arg_consumed(variable, scope);
+                    self.mark_builtin_declaration_arg_consumed(variable, scope, context);
                 }
             }
             NodeKind::VariableWithAttributes { variable, .. } => {
-                self.mark_builtin_declaration_arg_consumed(variable, scope);
+                self.mark_builtin_declaration_arg_consumed(variable, scope, context);
             }
             _ => {}
         }
     }
 
-    fn mark_interpolated_variables_used(&self, content: &str, scope: &Rc<Scope>) {
+    fn mark_interpolated_variables_used(
+        &self,
+        content: &str,
+        scope: &Rc<Scope>,
+        context: &AnalysisContext<'_>,
+    ) {
         let bytes = content.as_bytes();
         let mut index = 0;
 
@@ -1297,7 +1613,7 @@ impl ScopeAnalyzer {
 
             if let Some(name) = content.get(start..end) {
                 if !name.contains("::") {
-                    let _ = scope.use_variable_parts(sigil, name);
+                    let _ = self.use_variable_parts_in_context(scope, sigil, name, context);
                 }
             }
 
@@ -1495,9 +1811,25 @@ impl ScopeAnalyzer {
                 IssueKind::UninitializedVariable => {
                     format!("Initialize '{}' before use", issue.variable_name)
                 }
+                IssueKind::CaptureVarWithoutRegexMatch => {
+                    format!(
+                        "Perform a regex match (=~ /.../) before using capture variable '{}'",
+                        issue.variable_name
+                    )
+                }
             })
             .collect()
     }
+}
+
+/// Returns true if `name` (without sigil) is a numbered capture variable.
+///
+/// Capture variables are `$1`, `$2`, ..., `$9`, `$10`, `$11`, etc.
+/// `$0` is the program name and is NOT a capture variable.
+#[inline]
+fn is_capture_variable(name: &str) -> bool {
+    // Must be non-empty, all digits, and not "0" (which is $0 = program name)
+    !name.is_empty() && name != "0" && name.as_bytes().iter().all(|c| c.is_ascii_digit())
 }
 
 /// Check if a variable is a built-in Perl global variable
@@ -1540,14 +1872,34 @@ fn is_builtin_global(sigil: &str, name: &str) -> bool {
             "EVAL_ERROR" | "ERRNO" | "EXTENDED_OS_ERROR" | "CHILD_ERROR" |
             "PROCESS_ID" | "PROGRAM_NAME" |
             // Perl version variables
-            "PERL_VERSION" | "OLD_PERL_VERSION" => true,
+            "PERL_VERSION" | "OLD_PERL_VERSION" |
+            // Perl internal special values (perlguts/perlapi) — used in XS and introspection code
+            "PL_sv_yes" | "PL_sv_no" | "PL_sv_undef" => true,
             _ => {
                 // Check patterns
-                // $^[A-Z] variables
-                if name.starts_with('^') && name.len() == 2 {
-                    // Optimization: access byte directly since we know len is 2 and it's ASCII range
-                    let second = name.as_bytes()[1];
-                    if second.is_ascii_uppercase() {
+                // $^X (single-char) control variables — lexer produces name `^X`.
+                // ${^NAME} (multi-char) control variables — lexer produces name `{^NAME}`.
+                // Both should be treated as built-ins.
+                //
+                // Form 1: `^` followed by one or more ASCII uppercase letters or underscores.
+                //   Examples: `^A`, `^W`, `^MATCH`, `^PREMATCH`, `^POSTMATCH`.
+                // Form 2: `{^NAME}` — same but wrapped in braces by the lexer.
+                //   Examples: `{^MATCH}`, `{^PREMATCH}`, `{^POSTMATCH}`.
+                let caret_name = if let Some(inner) = name
+                    .strip_prefix('{')
+                    .and_then(|s| s.strip_suffix('}'))
+                {
+                    inner
+                } else {
+                    name
+                };
+                if let Some(rest) = caret_name.strip_prefix('^') {
+                    if !rest.is_empty()
+                        && rest
+                            .as_bytes()
+                            .iter()
+                            .all(|c| c.is_ascii_uppercase() || *c == b'_')
+                    {
                         return true;
                     }
                 }
@@ -1562,7 +1914,7 @@ fn is_builtin_global(sigil: &str, name: &str) -> bool {
                 false
             }
         },
-        b'@' => matches!(name, "_" | "+" | "INC" | "ARGV" | "EXPORT" | "EXPORT_OK" | "ISA"),
+        b'@' => matches!(name, "_" | "+" | "-" | "INC" | "ARGV" | "EXPORT" | "EXPORT_OK" | "ISA"),
         b'%' => matches!(name, "_" | "+" | "ENV" | "INC" | "SIG" | "EXPORT_TAGS"),
         _ => false,
     }
@@ -1572,6 +1924,9 @@ fn is_builtin_global(sigil: &str, name: &str) -> bool {
 fn is_known_function(name: &str) -> bool {
     if name.is_empty() {
         return false;
+    }
+    if matches!(name, "PL_sv_yes" | "PL_sv_no" | "PL_sv_undef") {
+        return true;
     }
     // Optimization: All known functions are lowercase or start with non-uppercase chars
     if name.as_bytes()[0].is_ascii_uppercase() {
@@ -1620,8 +1975,9 @@ fn is_known_function(name: &str) -> bool {
 /// used avoids false diagnostics after the call.
 ///
 /// Position semantics:
-/// - Position 0: `open`, `opendir`, `sysopen`, `socket`, `accept`, `socketpair`
-/// - Position 1: `read`, `sysread`, `recv`, `socketpair` (second handle)
+/// - Position 0: `open`, `opendir`, `sysopen`, `socket`, `accept`, `dbmopen`
+/// - Position 1: `read`, `sysread`, `recv`, `shmread`
+/// - Positions 0 and 1: `pipe`, `socketpair`
 fn builtin_declaration_arg_positions(name: &str) -> &'static [usize] {
     match name {
         // Position 0: the first argument is the new handle/socket
@@ -1636,8 +1992,56 @@ fn builtin_declaration_arg_positions(name: &str) -> &'static [usize] {
     }
 }
 
-fn is_declaration_capable_builtin(name: &str) -> bool {
-    !builtin_declaration_arg_positions(name).is_empty()
+/// Builtins that operate on `$_` by default when called with zero arguments.
+///
+/// When any of these is invoked as a bare call (no args), Perl implicitly reads
+/// (and in some cases modifies) `$_`. Marking `$_` as used at call sites prevents
+/// false "unused" or "uninitialized" diagnostics for lexically-scoped `my $_`.
+fn is_topic_defaulting_builtin(name: &str) -> bool {
+    matches!(
+        name,
+        "chomp"
+            | "chop"
+            | "chr"
+            | "hex"
+            | "lc"
+            | "lcfirst"
+            | "length"
+            | "oct"
+            | "ord"
+            | "uc"
+            | "ucfirst"
+            | "abs"
+            | "int"
+            | "log"
+            | "sqrt"
+            | "cos"
+            | "sin"
+            | "exp"
+            | "print"
+            | "say"
+    )
+}
+
+/// Topic-defaulting builtins that also modify `$_` when called without args.
+fn is_topic_modifying_builtin(name: &str) -> bool {
+    matches!(name, "chomp" | "chop")
+}
+
+fn is_explicit_scalar_reference_deref(source: &str) -> bool {
+    source.starts_with("@$")
+        || source.starts_with("%$")
+        || source.starts_with("$$")
+        || source.starts_with("@{$")
+        || source.starts_with("%{$")
+        || source.starts_with("${$")
+}
+
+fn normalize_scalar_deref_base_name(name: &str) -> &str {
+    let unwrapped =
+        name.strip_prefix('{').and_then(|inner| inner.strip_suffix('}')).unwrap_or(name);
+
+    unwrapped.strip_prefix('$').unwrap_or(unwrapped)
 }
 
 /// Check if an identifier is a known filehandle

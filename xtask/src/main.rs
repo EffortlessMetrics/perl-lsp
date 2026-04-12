@@ -10,8 +10,10 @@ use std::path::PathBuf;
 mod tasks;
 mod types;
 mod utils;
+use tasks::check_test_wiring;
 use tasks::dead_code::{DeadCodeConfig, DeadCodeMode};
 use tasks::gates::{GateTier, OutputFormat};
+use tasks::metrics;
 use tasks::targeted_checks::CheckMode;
 use tasks::unwired_scan::UnwiredScanConfig;
 use tasks::*;
@@ -869,6 +871,15 @@ enum Commands {
         lsp_crate: String,
     },
 
+    /// Check that test-bearing Rust files are reachable from their module tree.
+    CheckTestWiring,
+
+    /// Emit per-subsystem engineering-health metrics.
+    Metrics {
+        #[command(subcommand)]
+        command: MetricsCommand,
+    },
+
     /// Validate memory profiling functionality
     ValidateMemoryProfiler,
 
@@ -1107,6 +1118,62 @@ enum FeaturesCommand {
 
     /// Generate compliance report
     Report,
+}
+
+#[derive(Subcommand)]
+enum MetricsCommand {
+    /// Emit parser phase timings and benchmark summary.
+    ParserStats {
+        /// Path to benchmark JSON (default: most recent in benchmarks/results/)
+        #[arg(long)]
+        input: Option<PathBuf>,
+        /// Write output to .ci/metrics/parser.json
+        #[arg(long)]
+        json: bool,
+    },
+    /// LSP editor-intelligence scorecard — fixture inventory and pass rates.
+    LspStats {
+        /// Write output to .ci/metrics/editor_intelligence.json
+        #[arg(long)]
+        json: bool,
+    },
+    /// [stub] Workspace index memory and timing statistics.
+    WorkspaceStats,
+    /// [stub] Diagnostics accuracy and latency statistics.
+    DiagnosticsStats,
+    /// [stub] Hierarchical memory breakdown across LSP subsystems.
+    Memory,
+    /// [stub] Release-health dashboard.
+    ReleaseHealth {
+        /// Number of days of history to analyze
+        #[arg(long, default_value_t = 30)]
+        days: u64,
+        /// Write output to .ci/metrics/release-health.json
+        #[arg(long)]
+        json: bool,
+    },
+    /// Check scorecard floor metrics against the committed baseline.
+    ///
+    /// Loads `.ci/metrics/baselines/<subsystem>.json` and compares against the
+    /// current metric receipt.  Exits nonzero on any floor breach.
+    RatchetCheck {
+        /// Subsystem name (e.g. "parser", "engineering_health").
+        subsystem: String,
+        /// Path to current-metrics JSON (default: target/receipts/metrics/<subsystem>.json).
+        #[arg(long)]
+        current: Option<PathBuf>,
+        /// Record this run in target/metrics/stable_wins/<subsystem>.json.
+        #[arg(long)]
+        record: bool,
+    },
+    /// Show which improvement metrics are stable enough to raise the floor baseline.
+    PromoteBaseline {
+        /// Subsystem name.
+        subsystem: String,
+        /// Minimum fractional improvement required (default: 1%).
+        #[arg(long, default_value_t = 0.01)]
+        delta_pct: f64,
+    },
 }
 
 #[derive(ValueEnum, Clone)]
@@ -1392,6 +1459,25 @@ fn main() -> Result<()> {
         Commands::UnwiredScan { json, check, lsp_crate } => {
             unwired_scan::run(UnwiredScanConfig { lsp_crate, json, check })
         }
+        Commands::CheckTestWiring => check_test_wiring::run(),
+        Commands::Metrics { command } => match command {
+            MetricsCommand::ParserStats { input, json } => metrics::parser_stats::run(input, json),
+            MetricsCommand::LspStats { json } => metrics::lsp_stats::run_with_json(json),
+            MetricsCommand::WorkspaceStats => metrics::workspace_stats::run(),
+            MetricsCommand::DiagnosticsStats => metrics::diagnostics_stats::run(),
+            MetricsCommand::Memory => metrics::memory::run(),
+            MetricsCommand::ReleaseHealth { days, json } => {
+                metrics::release_health::run(days, json)
+            }
+            MetricsCommand::RatchetCheck { subsystem, current, record } => {
+                let root = utils::project_root()?;
+                metrics::ratchet::run_ratchet_check(&root, &subsystem, current, record)
+            }
+            MetricsCommand::PromoteBaseline { subsystem, delta_pct } => {
+                let root = utils::project_root()?;
+                metrics::ratchet::run_promote_baseline(&root, &subsystem, delta_pct)
+            }
+        },
         Commands::ValidateMemoryProfiler => compare::validate_memory_profiling(),
         Commands::E2eValidate { workspace_size, report, skip_workspace, skip_bench, verbose } => {
             e2e_validate::run(e2e_validate::E2eConfig {

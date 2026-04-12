@@ -5,7 +5,11 @@
 //! - Edge cases: empty PATH, missing perl, multiple perls, unusual locations
 //! - Path normalization boundary conditions
 
-use perl_dap_platform::{normalize_path, resolve_perl_path, setup_environment};
+#[cfg(not(windows))]
+use perl_dap_platform::{detect_perlbrew_perl, detect_plenv_perl};
+use perl_dap_platform::{
+    normalize_path, resolve_perl_path, resolve_perl_path_with_toolchain, setup_environment,
+};
 use std::path::PathBuf;
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
@@ -295,5 +299,184 @@ fn setup_environment_with_many_paths() -> TestResult {
 
     let parts: Vec<&str> = perl5lib.split(sep).collect();
     assert_eq!(parts.len(), 50, "all 50 paths should be in PERL5LIB");
+    Ok(())
+}
+
+// ===========================================================================
+// 5. perlbrew / plenv detection
+// ===========================================================================
+
+/// Create a fake perl binary that is executable (Unix only).
+#[cfg(not(windows))]
+fn make_fake_perl(dir: &std::path::Path, name: &str) -> TestResult {
+    let bin = dir.join(name);
+    std::fs::write(&bin, b"#!/bin/sh\necho perl")?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = std::fs::metadata(&bin)?.permissions();
+        perms.set_mode(0o755);
+        std::fs::set_permissions(&bin, perms)?;
+    }
+    Ok(())
+}
+
+#[cfg(not(windows))]
+#[test]
+fn detect_perlbrew_perl_env_var_points_to_valid_binary() -> TestResult {
+    let tmp = tempfile::tempdir()?;
+    let bin_dir = tmp.path().join("perls").join("perl-5.38.0").join("bin");
+    std::fs::create_dir_all(&bin_dir)?;
+    make_fake_perl(&bin_dir, "perl")?;
+    // Safety: test runs single-threaded
+    unsafe {
+        std::env::set_var("PERLBREW_ROOT", tmp.path().to_str().unwrap());
+        std::env::set_var("PERLBREW_PERL", "perl-5.38.0");
+    }
+    let result = detect_perlbrew_perl();
+    unsafe {
+        std::env::remove_var("PERLBREW_PERL");
+        std::env::remove_var("PERLBREW_ROOT");
+    }
+    let path = result.expect("should detect perl from perlbrew env vars");
+    assert!(path.ends_with("perl"), "should point to perl binary, got: {path:?}");
+    assert!(path.exists(), "detected perlbrew perl should exist on disk");
+    Ok(())
+}
+
+#[cfg(not(windows))]
+#[test]
+fn detect_perlbrew_perl_env_set_but_binary_missing_returns_none() -> TestResult {
+    let tmp = tempfile::tempdir()?;
+    // Safety: test runs single-threaded
+    unsafe {
+        std::env::set_var("PERLBREW_ROOT", tmp.path().to_str().unwrap());
+        std::env::set_var("PERLBREW_PERL", "perl-nonexistent-9.99.0");
+    }
+    let result = detect_perlbrew_perl();
+    unsafe {
+        std::env::remove_var("PERLBREW_PERL");
+        std::env::remove_var("PERLBREW_ROOT");
+    }
+    assert!(result.is_none(), "None when PERLBREW_PERL points to nonexistent binary");
+    Ok(())
+}
+
+#[cfg(not(windows))]
+#[test]
+fn detect_plenv_perl_env_var_points_to_valid_binary() -> TestResult {
+    let tmp = tempfile::tempdir()?;
+    let bin_dir = tmp.path().join("versions").join("5.38.0").join("bin");
+    std::fs::create_dir_all(&bin_dir)?;
+    make_fake_perl(&bin_dir, "perl")?;
+    // Safety: test runs single-threaded
+    unsafe {
+        std::env::set_var("PLENV_ROOT", tmp.path().to_str().unwrap());
+        std::env::set_var("PLENV_VERSION", "5.38.0");
+    }
+    let result = detect_plenv_perl();
+    unsafe {
+        std::env::remove_var("PLENV_VERSION");
+        std::env::remove_var("PLENV_ROOT");
+    }
+    let path = result.expect("should detect perl from plenv env vars");
+    assert!(path.ends_with("perl"), "should point to perl binary, got: {path:?}");
+    assert!(path.exists(), "detected plenv perl should exist on disk");
+    Ok(())
+}
+
+#[cfg(not(windows))]
+#[test]
+fn detect_plenv_perl_env_set_but_binary_missing_returns_none() -> TestResult {
+    let tmp = tempfile::tempdir()?;
+    // Safety: test runs single-threaded
+    unsafe {
+        std::env::set_var("PLENV_ROOT", tmp.path().to_str().unwrap());
+        std::env::set_var("PLENV_VERSION", "9.99.0");
+    }
+    let result = detect_plenv_perl();
+    unsafe {
+        std::env::remove_var("PLENV_VERSION");
+        std::env::remove_var("PLENV_ROOT");
+    }
+    assert!(result.is_none(), "None when PLENV_VERSION points to nonexistent binary");
+    Ok(())
+}
+
+#[cfg(not(windows))]
+#[test]
+fn resolve_perl_path_with_toolchain_prefers_perlbrew_over_path() -> TestResult {
+    let tmp = tempfile::tempdir()?;
+    let bin_dir = tmp.path().join("perls").join("perl-5.38.0").join("bin");
+    std::fs::create_dir_all(&bin_dir)?;
+    make_fake_perl(&bin_dir, "perl")?;
+    // Safety: test runs single-threaded
+    unsafe {
+        std::env::set_var("PERLBREW_ROOT", tmp.path().to_str().unwrap());
+        std::env::set_var("PERLBREW_PERL", "perl-5.38.0");
+    }
+    let result = resolve_perl_path_with_toolchain();
+    unsafe {
+        std::env::remove_var("PERLBREW_PERL");
+        std::env::remove_var("PERLBREW_ROOT");
+    }
+    let path = result.expect("should succeed with perlbrew perl");
+    assert!(
+        path.to_string_lossy().contains("perl-5.38.0"),
+        "should use perlbrew perl, got: {path:?}"
+    );
+    Ok(())
+}
+
+#[cfg(not(windows))]
+#[test]
+fn resolve_perl_path_with_toolchain_prefers_plenv_over_path() -> TestResult {
+    // Ensure perlbrew vars are absent so plenv is tried
+    // Safety: test runs single-threaded
+    unsafe {
+        std::env::remove_var("PERLBREW_PERL");
+        std::env::remove_var("PERLBREW_ROOT");
+    }
+    let tmp = tempfile::tempdir()?;
+    let bin_dir = tmp.path().join("versions").join("5.36.0").join("bin");
+    std::fs::create_dir_all(&bin_dir)?;
+    make_fake_perl(&bin_dir, "perl")?;
+    unsafe {
+        std::env::set_var("PLENV_ROOT", tmp.path().to_str().unwrap());
+        std::env::set_var("PLENV_VERSION", "5.36.0");
+    }
+    let result = resolve_perl_path_with_toolchain();
+    unsafe {
+        std::env::remove_var("PLENV_VERSION");
+        std::env::remove_var("PLENV_ROOT");
+    }
+    let path = result.expect("should succeed with plenv perl");
+    assert!(path.to_string_lossy().contains("5.36.0"), "should use plenv perl, got: {path:?}");
+    Ok(())
+}
+
+#[test]
+fn resolve_perl_path_with_toolchain_falls_back_to_path() -> TestResult {
+    // Clear toolchain env vars so PATH fallback is exercised
+    // Safety: test runs single-threaded
+    unsafe {
+        std::env::remove_var("PERLBREW_PERL");
+        std::env::remove_var("PERLBREW_ROOT");
+        std::env::remove_var("PLENV_VERSION");
+        std::env::remove_var("PLENV_ROOT");
+    }
+    let result = resolve_perl_path_with_toolchain();
+    match result {
+        Ok(path) => {
+            assert!(path.is_absolute(), "fallback PATH perl should be absolute");
+        }
+        Err(e) => {
+            let msg = format!("{e}");
+            assert!(
+                msg.contains("perl") || msg.contains("PATH"),
+                "error should mention perl/PATH: {msg}"
+            );
+        }
+    }
     Ok(())
 }

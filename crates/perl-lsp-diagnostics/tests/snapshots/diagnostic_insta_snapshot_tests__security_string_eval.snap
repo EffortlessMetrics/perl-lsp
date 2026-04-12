@@ -1,0 +1,5 @@
+---
+source: crates/perl-lsp-diagnostics/tests/diagnostic_insta_snapshot_tests.rs
+expression: snapshot
+---
+PL600 | Warning | (39, 64) | String eval is a security risk. Consider eval { } for exception handling. | Use eval { } for exception handling, or consider safer alternatives like Try::Tiny

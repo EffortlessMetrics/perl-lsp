@@ -42,6 +42,7 @@ impl LspServer {
             client_supports_pull_diags: Arc::new(AtomicBool::new(false)),
             workspace_config: Arc::new(Mutex::new(WorkspaceConfig::default())),
             next_request_id: Arc::new(AtomicI64::new(1)),
+            pending_workspace_configuration_requests: Arc::new(Mutex::new(HashMap::new())),
             progress_tokens: Arc::new(Mutex::new(HashSet::new())),
             progress_token_to_request: Arc::new(Mutex::new(HashMap::new())),
             refresh_controller: refresh::RefreshController::new(),
@@ -54,15 +55,20 @@ impl LspServer {
             pod_cache: Arc::new(Mutex::new(HashMap::new())),
             pending_index_task_count: Arc::new(std::sync::atomic::AtomicUsize::new(0)),
             parse_cancel_flags: Arc::new(Mutex::new(HashMap::new())),
+            pull_diagnostics_orchestrator: super::diagnostics::PullDiagnosticsOrchestrator::new(),
             semantic_analyzer_cache: Arc::new(Mutex::new(HashMap::new())),
             #[cfg(feature = "workspace")]
             indexing_in_progress: Arc::new(AtomicBool::new(false)),
+            #[cfg(feature = "workspace")]
+            permission_denied_shown: Arc::new(AtomicBool::new(false)),
             #[cfg(not(target_arch = "wasm32"))]
             critic_analyzer: Mutex::new(None),
             #[cfg(not(target_arch = "wasm32"))]
             critic_runtime_override: Mutex::new(None),
             #[cfg(not(target_arch = "wasm32"))]
             skip_perlcritic_command_check: AtomicBool::new(false),
+            #[cfg(not(target_arch = "wasm32"))]
+            critic_workspace_warnings_sent: Mutex::new(HashSet::new()),
             ai_inline_backend: Mutex::new(None),
         }
     }
@@ -145,6 +151,7 @@ impl LspServer {
             client_supports_pull_diags: Arc::new(AtomicBool::new(false)),
             workspace_config: Arc::new(Mutex::new(WorkspaceConfig::default())),
             next_request_id: Arc::new(AtomicI64::new(1)),
+            pending_workspace_configuration_requests: Arc::new(Mutex::new(HashMap::new())),
             progress_tokens: Arc::new(Mutex::new(HashSet::new())),
             progress_token_to_request: Arc::new(Mutex::new(HashMap::new())),
             refresh_controller: refresh::RefreshController::new(),
@@ -157,15 +164,20 @@ impl LspServer {
             pod_cache: Arc::new(Mutex::new(HashMap::new())),
             pending_index_task_count: Arc::new(std::sync::atomic::AtomicUsize::new(0)),
             parse_cancel_flags: Arc::new(Mutex::new(HashMap::new())),
+            pull_diagnostics_orchestrator: super::diagnostics::PullDiagnosticsOrchestrator::new(),
             semantic_analyzer_cache: Arc::new(Mutex::new(HashMap::new())),
             #[cfg(feature = "workspace")]
             indexing_in_progress: Arc::new(AtomicBool::new(false)),
+            #[cfg(feature = "workspace")]
+            permission_denied_shown: Arc::new(AtomicBool::new(false)),
             #[cfg(not(target_arch = "wasm32"))]
             critic_analyzer: Mutex::new(None),
             #[cfg(not(target_arch = "wasm32"))]
             critic_runtime_override: Mutex::new(None),
             #[cfg(not(target_arch = "wasm32"))]
             skip_perlcritic_command_check: AtomicBool::new(false),
+            #[cfg(not(target_arch = "wasm32"))]
+            critic_workspace_warnings_sent: Mutex::new(HashSet::new()),
             ai_inline_backend: Mutex::new(None),
         }
     }
@@ -211,6 +223,7 @@ impl LspServer {
             client_supports_pull_diags: Arc::new(AtomicBool::new(false)),
             workspace_config: Arc::new(Mutex::new(WorkspaceConfig::default())),
             next_request_id: Arc::new(AtomicI64::new(1)),
+            pending_workspace_configuration_requests: Arc::new(Mutex::new(HashMap::new())),
             progress_tokens: Arc::new(Mutex::new(HashSet::new())),
             progress_token_to_request: Arc::new(Mutex::new(HashMap::new())),
             refresh_controller: refresh::RefreshController::new(),
@@ -223,15 +236,20 @@ impl LspServer {
             pod_cache: Arc::new(Mutex::new(HashMap::new())),
             pending_index_task_count: Arc::new(std::sync::atomic::AtomicUsize::new(0)),
             parse_cancel_flags: Arc::new(Mutex::new(HashMap::new())),
+            pull_diagnostics_orchestrator: super::diagnostics::PullDiagnosticsOrchestrator::new(),
             semantic_analyzer_cache: Arc::new(Mutex::new(HashMap::new())),
             #[cfg(feature = "workspace")]
             indexing_in_progress: Arc::new(AtomicBool::new(false)),
+            #[cfg(feature = "workspace")]
+            permission_denied_shown: Arc::new(AtomicBool::new(false)),
             #[cfg(not(target_arch = "wasm32"))]
             critic_analyzer: Mutex::new(None),
             #[cfg(not(target_arch = "wasm32"))]
             critic_runtime_override: Mutex::new(None),
             #[cfg(not(target_arch = "wasm32"))]
             skip_perlcritic_command_check: AtomicBool::new(false),
+            #[cfg(not(target_arch = "wasm32"))]
+            critic_workspace_warnings_sent: Mutex::new(HashSet::new()),
             ai_inline_backend: Mutex::new(None),
         }
     }

@@ -3,6 +3,8 @@
 use perl_content_length_framing::ContentLengthFramer;
 pub use perl_content_length_framing::frame;
 use perl_lsp_protocol::{JsonRpcRequest, JsonRpcResponse};
+use serde_json::{Value, json};
+use std::borrow::Cow;
 use std::io::{self, BufRead, Read, Write};
 
 const LOG_PREVIEW_MAX_BYTES: usize = 160;
@@ -16,6 +18,50 @@ fn body_preview(body: &[u8]) -> String {
     }
 
     preview.replace(['\r', '\n'], "\\n")
+}
+
+fn decode_request_text_lossy(body: &[u8]) -> Cow<'_, str> {
+    let text = String::from_utf8_lossy(body);
+
+    if matches!(text, Cow::Owned(_)) {
+        tracing::warn!(
+            payload_bytes = body.len(),
+            preview = %body_preview(body),
+            "invalid UTF-8 in incoming JSON-RPC body; replaced invalid bytes with U+FFFD"
+        );
+    }
+
+    text
+}
+
+const CLIENT_RESPONSE_METHOD: &str = "$/perl-lsp/clientResponse";
+
+fn parse_request_body(body: &[u8]) -> Result<JsonRpcRequest, serde_json::Error> {
+    let text = decode_request_text_lossy(body);
+    let value: Value = serde_json::from_str(text.as_ref())?;
+
+    // Standard JSON-RPC request/notification
+    if value.get("method").is_some() {
+        return serde_json::from_value(value);
+    }
+
+    // JSON-RPC response to a server-initiated request.
+    // Convert to an internal pseudo-notification so the runtime can route it.
+    if let Some(id) = value.get("id") {
+        let params = json!({
+            "id": id,
+            "result": value.get("result").cloned().unwrap_or(Value::Null),
+            "error": value.get("error").cloned(),
+        });
+        return Ok(JsonRpcRequest {
+            _jsonrpc: "2.0".to_string(),
+            id: None,
+            method: CLIENT_RESPONSE_METHOD.to_string(),
+            params: Some(params),
+        });
+    }
+
+    serde_json::from_value(value)
 }
 
 /// Stateful reader for `Content-Length` framed JSON-RPC requests.
@@ -49,7 +95,7 @@ impl ContentLengthMessageReader {
 
         loop {
             match self.framer.try_next() {
-                Ok(Some(body)) => match serde_json::from_slice::<JsonRpcRequest>(&body) {
+                Ok(Some(body)) => match parse_request_body(&body) {
                     Ok(request) => return Ok(Some(request)),
                     Err(error) => {
                         tracing::warn!(
@@ -125,7 +171,7 @@ pub fn read_message(reader: &mut dyn BufRead) -> io::Result<Option<JsonRpcReques
         return Err(error);
     }
 
-    match serde_json::from_slice::<JsonRpcRequest>(&body) {
+    match parse_request_body(&body) {
         Ok(request) => Ok(Some(request)),
         Err(error) => {
             tracing::warn!(
@@ -188,6 +234,13 @@ mod tests {
 
     fn framed_request(id: u64, method: &str) -> Vec<u8> {
         let body = format!(r#"{{"jsonrpc":"2.0","id":{id},"method":"{method}","params":{{}}}}"#);
+        let mut frame = format!("Content-Length: {}\r\n\r\n", body.len()).into_bytes();
+        frame.extend_from_slice(body.as_bytes());
+        frame
+    }
+
+    fn framed_response(id: u64, result: &str) -> Vec<u8> {
+        let body = format!(r#"{{"jsonrpc":"2.0","id":{id},"result":{result}}}"#);
         let mut frame = format!("Content-Length: {}\r\n\r\n", body.len()).into_bytes();
         frame.extend_from_slice(body.as_bytes());
         frame
@@ -258,6 +311,44 @@ mod tests {
         frame.extend_from_slice(body);
         let mut reader = BufReader::new(Cursor::new(frame));
         assert!(read_message(&mut reader)?.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn read_message_replaces_invalid_utf8_in_json_strings() -> io::Result<()> {
+        let mut body = br#"{"jsonrpc":"2.0","id":1,"method":"test","params":{"text":"abc"#.to_vec();
+        body.push(0xFF);
+        body.extend_from_slice(br#""}}"#);
+
+        let mut frame = format!("Content-Length: {}\r\n\r\n", body.len()).into_bytes();
+        frame.extend_from_slice(&body);
+        let mut reader = BufReader::new(Cursor::new(frame));
+
+        let req = read_message(&mut reader)?
+            .ok_or_else(|| io::Error::new(io::ErrorKind::UnexpectedEof, "expected request"))?;
+        let params = req
+            .params
+            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "expected params"))?;
+        assert_eq!(params["text"], "abc\u{FFFD}");
+        Ok(())
+    }
+
+    #[test]
+    fn read_next_converts_client_response_to_internal_notification() -> io::Result<()> {
+        let payload = framed_response(7, "{}");
+        let mut cursor = Cursor::new(payload);
+        let mut reader = ContentLengthMessageReader::new();
+
+        let request = reader.read_next(&mut cursor)?.ok_or_else(|| {
+            io::Error::new(io::ErrorKind::UnexpectedEof, "expected response conversion")
+        })?;
+
+        assert_eq!(request.method, "$/perl-lsp/clientResponse");
+        let params = request
+            .params
+            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "expected params"))?;
+        assert_eq!(params["id"], 7);
+        assert_eq!(params["result"], serde_json::json!({}));
         Ok(())
     }
 
@@ -445,6 +536,27 @@ mod tests {
             .filter_map(|_| reader.read_next(&mut cursor).ok().flatten().map(|r| r.method))
             .collect();
         assert_eq!(methods, vec!["a", "b", "c"]);
+        Ok(())
+    }
+
+    #[test]
+    fn stateful_reader_replaces_invalid_utf8_in_json_strings() -> io::Result<()> {
+        let mut body = br#"{"jsonrpc":"2.0","id":9,"method":"test","params":{"text":"abc"#.to_vec();
+        body.push(0xFF);
+        body.extend_from_slice(br#""}}"#);
+
+        let mut payload = format!("Content-Length: {}\r\n\r\n", body.len()).into_bytes();
+        payload.extend_from_slice(&body);
+
+        let mut cursor = Cursor::new(payload);
+        let mut reader = ContentLengthMessageReader::new();
+        let req = reader
+            .read_next(&mut cursor)?
+            .ok_or_else(|| io::Error::new(io::ErrorKind::UnexpectedEof, "expected request"))?;
+        let params = req
+            .params
+            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "expected params"))?;
+        assert_eq!(params["text"], "abc\u{FFFD}");
         Ok(())
     }
 

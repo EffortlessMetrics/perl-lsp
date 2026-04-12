@@ -5,7 +5,7 @@ This file provides guidance to Claude Code when working with code in this crate.
 ## Crate Overview
 
 - **Crate**: `perl-lsp-providers`
-- **Version**: workspace (currently 0.12.2)
+- **Version**: workspace (currently 0.12.3)
 - **Tier**: 4 (three-level dependencies)
 - **Purpose**: Central aggregation crate that re-exports all LSP feature provider microcrates and provides IDE integration shims for the `perl-lsp` server.
 

@@ -107,19 +107,14 @@ impl LspServer {
                             self.offset_to_pos16(doc, symbol.location.start);
                         let (end_line, end_char) = self.offset_to_pos16(doc, symbol.location.end);
 
-                        // Map symbol kind to LSP SymbolKind
-                        let symbol_kind = symbol_kind_to_lsp(symbol.kind);
-
-                        // Create display name with sigil if applicable
-                        let display_name = if let Some(sigil) = symbol.kind.sigil() {
-                            format!("{}{}", sigil, symbol.name)
-                        } else {
-                            symbol.name.clone()
-                        };
+                        let symbol_kind = document_symbol_kind(symbol);
+                        let display_name = document_symbol_name(symbol);
+                        let detail = document_symbol_detail(symbol);
 
                         // Find child symbols for this scope (if it's a package or subroutine)
                         let mut children = Vec::new();
                         if symbol.kind == crate::symbol::SymbolKind::Package
+                            || symbol.kind == crate::symbol::SymbolKind::Class
                             || symbol.kind == crate::symbol::SymbolKind::Subroutine
                         {
                             // Find scope ID for this symbol
@@ -133,29 +128,36 @@ impl LspServer {
                                             let (child_end_line, child_end_char) =
                                                 self.offset_to_pos16(doc, child.location.end);
 
-                                            let child_kind = symbol_kind_to_lsp(child.kind);
+                                            let child_kind = document_symbol_kind(child);
+                                            let child_display_name = document_symbol_name(child);
+                                            let child_detail = document_symbol_detail(child);
 
-                                            let child_display_name =
-                                                if let Some(sigil) = child.kind.sigil() {
-                                                    format!("{}{}", sigil, child.name)
-                                                } else {
-                                                    child.name.clone()
-                                                };
+                                            if child.location == symbol.location
+                                                && child.kind == symbol.kind
+                                                && child.name == symbol.name
+                                            {
+                                                continue;
+                                            }
 
-                                            children.push(json!({
-                                                "name": child_display_name,
-                                                "detail": child.declaration.as_deref().unwrap_or(""),
-                                                "kind": child_kind,
-                                                "range": {
-                                                    "start": { "line": child_start_line, "character": child_start_char },
-                                                    "end": { "line": child_end_line, "character": child_end_char }
-                                                },
-                                                "selectionRange": {
-                                                    "start": { "line": child_start_line, "character": child_start_char },
-                                                    "end": { "line": child_end_line, "character": child_end_char }
-                                                },
-                                                "children": []
-                                            }));
+                                            children.push((
+                                                document_symbol_priority(child),
+                                                child.location.start,
+                                                child.location.end,
+                                                json!({
+                                                    "name": child_display_name,
+                                                    "detail": child_detail,
+                                                    "kind": child_kind,
+                                                    "range": {
+                                                        "start": { "line": child_start_line, "character": child_start_char },
+                                                        "end": { "line": child_end_line, "character": child_end_char }
+                                                    },
+                                                    "selectionRange": {
+                                                        "start": { "line": child_start_line, "character": child_start_char },
+                                                        "end": { "line": child_end_line, "character": child_end_char }
+                                                    },
+                                                    "children": []
+                                                }),
+                                            ));
                                         }
                                     }
                                     break;
@@ -163,9 +165,13 @@ impl LspServer {
                             }
                         }
 
+                        children.sort_by_key(|(priority, start, end, _)| (*priority, *start, *end));
+                        let children: Vec<Value> =
+                            children.into_iter().map(|(_, _, _, child)| child).collect();
+
                         let symbol_info = json!({
                             "name": display_name,
-                            "detail": symbol.declaration.as_deref().unwrap_or(""),
+                            "detail": detail,
                             "kind": symbol_kind,
                             "range": {
                                 "start": { "line": start_line, "character": start_char },
@@ -394,6 +400,63 @@ impl LspServer {
 #[inline]
 fn symbol_kind_to_lsp(kind: crate::symbol::SymbolKind) -> u32 {
     kind.to_lsp_kind_document_symbol()
+}
+
+fn document_symbol_kind(symbol: &crate::symbol::Symbol) -> u32 {
+    if symbol.declaration.as_deref() == Some("has")
+        && symbol.kind == crate::symbol::SymbolKind::scalar()
+    {
+        7
+    } else {
+        symbol_kind_to_lsp(symbol.kind)
+    }
+}
+
+fn document_symbol_name(symbol: &crate::symbol::Symbol) -> String {
+    if symbol.declaration.as_deref() == Some("has") {
+        symbol.name.clone()
+    } else if let Some(sigil) = symbol.kind.sigil() {
+        format!("{}{}", sigil, symbol.name)
+    } else {
+        symbol.name.clone()
+    }
+}
+
+fn document_symbol_detail(symbol: &crate::symbol::Symbol) -> String {
+    if symbol.declaration.as_deref() == Some("has")
+        && symbol.kind == crate::symbol::SymbolKind::scalar()
+    {
+        if !symbol.attributes.is_empty() {
+            symbol.attributes.join(", ")
+        } else {
+            symbol.documentation.clone().unwrap_or_default()
+        }
+    } else if symbol.declaration.as_deref() == Some("has") {
+        symbol.documentation.clone().unwrap_or_default()
+    } else {
+        symbol.declaration.as_deref().unwrap_or("").to_string()
+    }
+}
+
+fn document_symbol_priority(symbol: &crate::symbol::Symbol) -> u8 {
+    if symbol.declaration.as_deref() == Some("has")
+        && symbol.kind == crate::symbol::SymbolKind::scalar()
+    {
+        0
+    } else if symbol.declaration.as_deref() == Some("has") {
+        2
+    } else if matches!(
+        symbol.kind,
+        crate::symbol::SymbolKind::Package
+            | crate::symbol::SymbolKind::Class
+            | crate::symbol::SymbolKind::Role
+    ) {
+        1
+    } else if symbol.kind.is_callable() {
+        3
+    } else {
+        4
+    }
 }
 
 /// Helper function to convert offset to line number

@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "fixture": "hover_imported_func",
+  "assertions": [
+    {
+      "kind": "hover_non_null",
+      "line": 3,
+      "character": 12,
+      "rationale": "hover on 'croak' inside qw(...) import list must return content"
+    },
+    {
+      "kind": "hover_contains",
+      "line": 3,
+      "character": 12,
+      "needle": "Carp",
+      "rationale": "hover on imported name in use Carp qw(croak) returns module-level Carp hover (current server behavior)"
+    }
+  ]
+}

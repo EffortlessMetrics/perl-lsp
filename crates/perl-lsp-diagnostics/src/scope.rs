@@ -29,6 +29,7 @@ pub fn scope_issues_to_diagnostics(issues: Vec<ScopeIssue>) -> Vec<Diagnostic> {
             | IssueKind::ParameterShadowsGlobal
             | IssueKind::UnusedParameter
             | IssueKind::UninitializedVariable => DiagnosticSeverity::Warning,
+            IssueKind::CaptureVarWithoutRegexMatch => DiagnosticSeverity::Information,
         };
 
         let code = match issue.kind {
@@ -41,6 +42,7 @@ pub fn scope_issues_to_diagnostics(issues: Vec<ScopeIssue>) -> Vec<Diagnostic> {
             IssueKind::UnusedParameter => DiagnosticCode::UnusedParameter,
             IssueKind::UnquotedBareword => DiagnosticCode::UnquotedBareword,
             IssueKind::UninitializedVariable => DiagnosticCode::UninitializedVariable,
+            IssueKind::CaptureVarWithoutRegexMatch => DiagnosticCode::CaptureVarWithoutRegexMatch,
         };
 
         // Build helpful related information based on issue type
@@ -113,6 +115,16 @@ pub fn scope_issues_to_diagnostics(issues: Vec<ScopeIssue>) -> Vec<Diagnostic> {
                 RelatedInformation {
                     location: issue.range,
                     message: "ℹ️ Under 'use strict', barewords are not allowed unless they're subroutine calls or hash keys.".to_string(),
+                }
+            ],
+            IssueKind::CaptureVarWithoutRegexMatch => vec![
+                RelatedInformation {
+                    location: issue.range,
+                    message: "💡 Perform a regex match before using this capture variable: if ($str =~ /(...)/){ ... }".to_string(),
+                },
+                RelatedInformation {
+                    location: issue.range,
+                    message: "ℹ️ Capture variables ($1, $2, etc.) hold the last successful match and may be undef if no match has occurred.".to_string(),
                 }
             ],
         };
