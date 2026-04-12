@@ -766,4 +766,51 @@ DB<1>"#;
         assert_eq!(filtered[1].name, "Foo::process");
         assert_eq!(filtered[2].name, "main::start");
     }
+
+    // ── normalize_debugger_output_line unit tests ──────────────────────────────
+
+    #[test]
+    pub(super) fn test_normalize_strips_single_db_prompt() {
+        // Single prompt: "DB<1> main::(/path/file.pl:5):" -> "main::(/path/file.pl:5):"
+        let result = DebugAdapter::normalize_debugger_output_line("DB<1> main::(/path/file.pl:5):");
+        assert_eq!(result, "main::(/path/file.pl:5):");
+    }
+
+    #[test]
+    pub(super) fn test_normalize_strips_multiple_db_prompts() {
+        // Multiple prompts on one line — the while-let fix handles these.
+        let result = DebugAdapter::normalize_debugger_output_line(
+            "  DB<1>   DB<2> main::(/path/file.pl:5):",
+        );
+        assert_eq!(result, "main::(/path/file.pl:5):");
+    }
+
+    #[test]
+    pub(super) fn test_normalize_strips_high_prompt_number() {
+        // Prompt number > 99 — ensures '>' search is not length-limited.
+        let result = DebugAdapter::normalize_debugger_output_line("DB<100> $x = 42");
+        assert_eq!(result, "$x = 42");
+    }
+
+    #[test]
+    pub(super) fn test_normalize_no_prompt_passthrough() {
+        // Lines without a prompt must pass through unchanged (modulo trim).
+        let result = DebugAdapter::normalize_debugger_output_line("  main::(/path/file.pl:5):");
+        assert_eq!(result, "main::(/path/file.pl:5):");
+    }
+
+    #[test]
+    pub(super) fn test_normalize_unclosed_prompt_passthrough() {
+        // Malformed "DB<" without closing '>' must not loop forever and must not panic.
+        let result = DebugAdapter::normalize_debugger_output_line("DB<incomplete");
+        // The loop exits because find('>') returns None; the fragment remains.
+        assert_eq!(result, "DB<incomplete");
+    }
+
+    #[test]
+    pub(super) fn test_normalize_three_prompts_in_sequence() {
+        // Three consecutive prompts — verifies loop handles arbitrary depth.
+        let result = DebugAdapter::normalize_debugger_output_line("DB<1> DB<2> DB<3> my $x = 10;");
+        assert_eq!(result, "my $x = 10;");
+    }
 }

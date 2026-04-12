@@ -12,9 +12,6 @@
 //! - WorkspaceConfig: cache cleared on use_system_inc → false transition
 
 use perl_lsp_config::{ServerConfig, WorkspaceConfig};
-use std::io::Write as _;
-
-type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 // ---------------------------------------------------------------------------
 // ServerConfig defaults
@@ -223,9 +220,12 @@ mod perl_interpreter_detection_tests {
     use super::*;
     use std::ffi::OsString;
     use std::fs;
+    use std::io::Write as _;
     use std::os::unix::fs::PermissionsExt;
     use std::path::{Path, PathBuf};
     use std::sync::{Mutex, MutexGuard, OnceLock};
+
+    type TestResult = Result<(), Box<dyn std::error::Error>>;
 
     static ENV_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 
