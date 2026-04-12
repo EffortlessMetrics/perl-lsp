@@ -16,6 +16,7 @@
   <a href="LICENSE-MIT"><img src="https://img.shields.io/badge/license-MIT%2FApache--2.0-blue.svg" alt="License" /></a>
   <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/rust-1.92%2B-orange.svg" alt="Rust" /></a>
   <a href="https://crates.io/crates/perl-lsp"><img src="https://img.shields.io/crates/d/perl-lsp.svg" alt="Downloads" /></a>
+  <a href="https://open-vsx.org/extension/effortlessmetrics/perl-lsp-rs"><img src="https://img.shields.io/open-vsx/v/effortlessmetrics/perl-lsp-rs" alt="Open VSX" /></a>
 </p>
 
 ---
