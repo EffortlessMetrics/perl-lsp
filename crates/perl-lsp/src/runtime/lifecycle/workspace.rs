@@ -3,7 +3,7 @@
 //! Handles workspace folders and root URI/path management.
 
 use super::super::*;
-use perl_dap_platform::{PerlInterpreterResult, find_perl_interpreter};
+use perl_dap_platform::{find_perl_interpreter, PerlInterpreterResult};
 use perl_lsp_config::WorkspaceConfig;
 use std::sync::Once;
 
@@ -262,21 +262,17 @@ include_paths = ["other_lib"]
 
         let folder1_state = folders.iter().find(|f| f.uri == uri1).unwrap();
         assert!(folder1_state.project_config.is_some());
-        assert!(
-            folder1_state
-                .effective_workspace_config
-                .include_paths
-                .contains(&"custom_lib".to_string())
-        );
+        assert!(folder1_state
+            .effective_workspace_config
+            .include_paths
+            .contains(&"custom_lib".to_string()));
 
         let folder2_state = folders.iter().find(|f| f.uri == uri2).unwrap();
         assert!(folder2_state.project_config.is_some());
-        assert!(
-            folder2_state
-                .effective_workspace_config
-                .include_paths
-                .contains(&"other_lib".to_string())
-        );
+        assert!(folder2_state
+            .effective_workspace_config
+            .include_paths
+            .contains(&"other_lib".to_string()));
     }
 
     #[test]
@@ -352,12 +348,14 @@ include_paths = ["other_lib"]
         let folder1_state = folders.iter().find(|f| f.uri == uri1).expect("missing folder1");
         let folder2_state = folders.iter().find(|f| f.uri == uri2).expect("missing folder2");
 
-        assert!(
-            folder1_state.effective_workspace_config.include_paths.contains(&"api_lib".to_string())
-        );
-        assert!(
-            folder2_state.effective_workspace_config.include_paths.contains(&"ui_lib".to_string())
-        );
+        assert!(folder1_state
+            .effective_workspace_config
+            .include_paths
+            .contains(&"api_lib".to_string()));
+        assert!(folder2_state
+            .effective_workspace_config
+            .include_paths
+            .contains(&"ui_lib".to_string()));
         assert!(folder1_state.effective_workspace_config.use_system_inc);
         assert!(folder2_state.effective_workspace_config.use_system_inc);
     }
@@ -390,8 +388,59 @@ include_paths = ["other_lib"]
 
         let folders = server.workspace_folders.lock();
         let folder_state = folders.iter().find(|f| f.uri == uri).expect("missing folder");
-        assert!(
-            !folder_state.effective_workspace_config.include_paths.contains(&"oops".to_string())
+        assert!(!folder_state
+            .effective_workspace_config
+            .include_paths
+            .contains(&"oops".to_string()));
+    }
+
+    #[test]
+    fn did_change_configuration_updates_folder_effective_configs() {
+        let server = LspServer::new();
+        let temp = tempfile::tempdir().expect("failed to create temp dir");
+        let folder1 = temp.path().join("folder1");
+        let folder2 = temp.path().join("folder2");
+        std::fs::create_dir_all(&folder1).expect("failed to create folder1");
+        std::fs::create_dir_all(&folder2).expect("failed to create folder2");
+
+        let uri1 =
+            url::Url::from_directory_path(&folder1).expect("failed to create uri1").to_string();
+        let uri2 =
+            url::Url::from_directory_path(&folder2).expect("failed to create uri2").to_string();
+
+        server.workspace_folders.lock().push(
+            crate::runtime::workspace_folder::WorkspaceFolderState::new(uri1)
+                .with_path(folder1.clone()),
         );
+        server.workspace_folders.lock().push(
+            crate::runtime::workspace_folder::WorkspaceFolderState::new(uri2)
+                .with_path(folder2.clone()),
+        );
+
+        server.handle_did_change_configuration(Some(serde_json::json!({
+            "settings": {
+                "perl": {
+                    "workspace": {
+                        "includePaths": ["client_lib"],
+                        "useSystemInc": true
+                    }
+                }
+            }
+        })));
+
+        let folders = server.workspace_folders.lock();
+        assert_eq!(folders.len(), 2);
+        for folder in folders.iter() {
+            assert!(
+                folder.effective_workspace_config.include_paths.contains(&"client_lib".to_string()),
+                "folder {} missing client_lib in effective include_paths",
+                folder.uri
+            );
+            assert!(
+                folder.effective_workspace_config.use_system_inc,
+                "folder {} should have use_system_inc=true from didChangeConfiguration",
+                folder.uri
+            );
+        }
     }
 }
