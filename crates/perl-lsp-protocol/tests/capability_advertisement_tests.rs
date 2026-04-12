@@ -662,15 +662,12 @@ fn capabilities_serialization_roundtrip_preserves_structure()
 // ============================================================================
 
 #[test]
-fn production_profile_excludes_formatting() {
+fn production_profile_includes_formatting() {
     let caps = capabilities_for(BuildFlags::production());
+    assert!(caps.document_formatting_provider.is_some(), "production should include formatting");
     assert!(
-        caps.document_formatting_provider.is_none(),
-        "production should not have formatting (depends on perltidy)"
-    );
-    assert!(
-        caps.document_range_formatting_provider.is_none(),
-        "production should not have range formatting"
+        caps.document_range_formatting_provider.is_some(),
+        "production should include range formatting"
     );
 }
 

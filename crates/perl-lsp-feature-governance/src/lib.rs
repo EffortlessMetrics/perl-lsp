@@ -283,13 +283,10 @@ mod tests {
     }
 
     #[test]
-    fn facade_feature_flag_evaluation_production_disables_formatting() {
+    fn facade_feature_flag_evaluation_production_enables_formatting() {
         let flags = flags_for_profile(FeatureProfile::Production);
-        assert!(!flags.formatting, "production profile should disable formatting without perltidy");
-        assert!(
-            !flags.range_formatting,
-            "production profile should disable range_formatting without perltidy"
-        );
+        assert!(flags.formatting, "production profile should enable formatting");
+        assert!(flags.range_formatting, "production profile should enable range_formatting");
     }
 
     #[test]
@@ -337,10 +334,17 @@ mod tests {
     }
 
     #[test]
-    fn facade_build_profile_gating_runtime_without_perltidy_preserves_base() {
-        let base = flags_for_profile(FeatureProfile::Production);
+    fn facade_build_profile_gating_runtime_without_perltidy_disables_formatting() {
         let runtime = flags_for_runtime(FeatureProfile::Production, false);
-        assert_eq!(base, runtime, "runtime without perltidy should match base build flags");
+        assert!(!runtime.formatting, "runtime without perltidy should disable formatting");
+        assert!(
+            !runtime.range_formatting,
+            "runtime without perltidy should disable range_formatting"
+        );
+        // Non-formatting flags should still match production
+        let base = flags_for_profile(FeatureProfile::Production);
+        assert_eq!(base.completion, runtime.completion);
+        assert_eq!(base.hover, runtime.hover);
     }
 
     // ── Feature ID lookup and validation ────────────────────────────
@@ -420,30 +424,30 @@ mod tests {
     }
 
     #[test]
-    fn facade_production_vs_all_differ_on_formatting() {
+    fn facade_production_and_all_match_on_formatting() {
         let prod_flags = flags_for_profile(FeatureProfile::Production);
         let all_flags = flags_for_profile(FeatureProfile::All);
-        assert!(!prod_flags.formatting, "production should disable formatting");
+        assert!(prod_flags.formatting, "production should enable formatting");
         assert!(all_flags.formatting, "all should enable formatting");
     }
 
     #[test]
     fn facade_runtime_perltidy_only_affects_formatting_flags() {
-        let base = flags_for_profile(FeatureProfile::Production);
         let with_perltidy = flags_for_runtime(FeatureProfile::Production, true);
-        // Formatting flags should differ
-        assert!(!base.formatting);
+        let without_perltidy = flags_for_runtime(FeatureProfile::Production, false);
+        // Formatting flags should differ based on perltidy availability
         assert!(with_perltidy.formatting);
-        assert!(!base.range_formatting);
+        assert!(!without_perltidy.formatting);
         assert!(with_perltidy.range_formatting);
+        assert!(!without_perltidy.range_formatting);
         // Non-formatting flags should be identical
-        assert_eq!(base.completion, with_perltidy.completion);
-        assert_eq!(base.hover, with_perltidy.hover);
-        assert_eq!(base.definition, with_perltidy.definition);
-        assert_eq!(base.references, with_perltidy.references);
-        assert_eq!(base.rename, with_perltidy.rename);
-        assert_eq!(base.code_actions, with_perltidy.code_actions);
-        assert_eq!(base.semantic_tokens, with_perltidy.semantic_tokens);
+        assert_eq!(with_perltidy.completion, without_perltidy.completion);
+        assert_eq!(with_perltidy.hover, without_perltidy.hover);
+        assert_eq!(with_perltidy.definition, without_perltidy.definition);
+        assert_eq!(with_perltidy.references, without_perltidy.references);
+        assert_eq!(with_perltidy.rename, without_perltidy.rename);
+        assert_eq!(with_perltidy.code_actions, without_perltidy.code_actions);
+        assert_eq!(with_perltidy.semantic_tokens, without_perltidy.semantic_tokens);
     }
 
     #[test]
@@ -455,8 +459,8 @@ mod tests {
         assert!(ga_adv.completion);
         assert!(prod_adv.completion);
         assert!(all_adv.completion);
-        // Only all should advertise formatting (without perltidy)
-        assert!(!prod_adv.formatting);
+        // Production and all both advertise formatting
+        assert!(prod_adv.formatting);
         assert!(all_adv.formatting);
     }
 

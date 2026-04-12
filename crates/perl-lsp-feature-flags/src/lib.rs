@@ -320,8 +320,8 @@ impl BuildFlags {
             moniker: true,
             document_color: true,
             source_organize_imports: true,
-            formatting: false,
-            range_formatting: false,
+            formatting: true,
+            range_formatting: true,
             folding_range: true,
             signature_help: true,
             document_highlight: true,
@@ -453,7 +453,7 @@ mod tests {
     fn production_has_expected_profile_shape() {
         let production = BuildFlags::production();
         assert!(production.completion);
-        assert!(!production.formatting);
+        assert!(production.formatting);
         assert_eq!(
             production,
             BuildFlags {
@@ -486,8 +486,8 @@ mod tests {
                 moniker: true,
                 document_color: true,
                 source_organize_imports: true,
-                formatting: false,
-                range_formatting: false,
+                formatting: true,
+                range_formatting: true,
                 folding_range: true,
                 signature_help: true,
                 document_highlight: true,
@@ -653,12 +653,12 @@ mod tests {
     // ── Production vs all diff ──────────────────────────────────────
 
     #[test]
-    fn production_and_all_differ_on_formatting() {
+    fn production_and_all_match_on_formatting() {
         let prod = BuildFlags::production();
         let all = BuildFlags::all();
-        assert!(!prod.formatting);
+        assert!(prod.formatting);
         assert!(all.formatting);
-        assert!(!prod.range_formatting);
+        assert!(prod.range_formatting);
         assert!(all.range_formatting);
     }
 

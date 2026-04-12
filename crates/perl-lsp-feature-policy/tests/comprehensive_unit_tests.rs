@@ -258,13 +258,15 @@ fn runtime_flags_with_perltidy_enables_formatting() {
 }
 
 #[test]
-fn runtime_flags_without_perltidy_preserves_base() {
+fn runtime_flags_without_perltidy_disables_formatting() {
     for &profile in FeatureProfile::all() {
-        let base = profile.build_flags();
         let runtime = profile.runtime_flags(false);
-        // Without perltidy the formatting flags should match the base profile.
-        assert_eq!(base.formatting, runtime.formatting);
-        assert_eq!(base.range_formatting, runtime.range_formatting);
+        // Without perltidy, formatting is always disabled regardless of base profile.
+        assert!(!runtime.formatting, "formatting should be off without perltidy for {profile:?}");
+        assert!(
+            !runtime.range_formatting,
+            "range_formatting should be off without perltidy for {profile:?}"
+        );
     }
 }
 
@@ -287,11 +289,13 @@ fn runtime_advertised_features_with_perltidy_enables_formatting() {
 }
 
 #[test]
-fn runtime_advertised_features_without_perltidy_matches_base() {
+fn runtime_advertised_features_without_perltidy_disables_formatting() {
     for &profile in FeatureProfile::all() {
-        let base = profile.advertised_features();
         let runtime = profile.runtime_advertised_features(false);
-        assert_eq!(base.formatting, runtime.formatting);
+        assert!(
+            !runtime.formatting,
+            "without perltidy, runtime should not advertise formatting for {profile:?}"
+        );
     }
 }
 
