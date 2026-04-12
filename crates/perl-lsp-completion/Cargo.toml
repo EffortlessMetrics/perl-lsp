@@ -19,6 +19,7 @@ doctest = false
 [dependencies]
 perl-lsp-completion-item = { workspace = true }
 perl-lsp-file-completion = { workspace = true }
+perl-module-path = { workspace = true }
 perl-parser-core = { workspace = true }
 perl-semantic-analyzer = { workspace = true }
 perl-workspace-index = { workspace = true }

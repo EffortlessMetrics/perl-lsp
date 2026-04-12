@@ -187,6 +187,33 @@ impl WorkspaceConfig {
         }
     }
 
+    /// Parse PERL5LIB environment variable into a list of paths.
+    ///
+    /// PERL5LIB uses the same path separator as Perl's @INC:
+    /// - Colon (`:`) on Unix
+    /// - Semicolon (`;`) on Windows
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use perl_lsp_config::WorkspaceConfig;
+    ///
+    /// let paths = WorkspaceConfig::parse_perl5lib("/custom/lib:/other/lib");
+    /// assert_eq!(paths, vec!["/custom/lib", "/other/lib"]);
+    /// ```
+    pub fn parse_perl5lib(perl5lib: &str) -> Vec<String> {
+        #[cfg(target_os = "windows")]
+        const SEP: char = ';';
+        #[cfg(not(target_os = "windows"))]
+        const SEP: char = ':';
+
+        perl5lib
+            .split(SEP)
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_string())
+            .collect()
+    }
+
     /// Get system @INC paths (lazily populated).
     pub fn get_system_inc(&mut self) -> &[PathBuf] {
         if !self.use_system_inc {

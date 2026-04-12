@@ -329,11 +329,44 @@ impl LspServer {
                         _ => None,
                     };
 
+                    // Get include paths from workspace config for @INC scanning
                     #[cfg(feature = "workspace")]
-                    let provider = CompletionProvider::new_with_index_and_source(
+                    let (include_paths, workspace_root) = {
+                        let mut config = self.workspace_config.lock();
+                        let perl5lib_paths = std::env::var("PERL5LIB")
+                            .map(|v| perl_lsp_config::WorkspaceConfig::parse_perl5lib(&v))
+                            .unwrap_or_default();
+                        let mut effective_paths = config.include_paths.clone();
+                        // Prepend PERL5LIB paths
+                        for p in perl5lib_paths.iter().rev() {
+                            if !effective_paths.contains(p) {
+                                effective_paths.insert(0, p.clone());
+                            }
+                        }
+                        // Add system @INC if enabled
+                        if config.use_system_inc {
+                            let system_paths: Vec<String> = config
+                                .get_system_inc()
+                                .iter()
+                                .map(|p| p.to_string_lossy().to_string())
+                                .collect();
+                            for p in system_paths {
+                                if !effective_paths.contains(&p) {
+                                    effective_paths.push(p);
+                                }
+                            }
+                        }
+                        let root = self.root_path.lock().clone();
+                        (effective_paths, root)
+                    };
+
+                    #[cfg(feature = "workspace")]
+                    let provider = CompletionProvider::new_with_config(
                         ast,
                         &doc.text,
                         workspace_idx,
+                        include_paths,
+                        workspace_root,
                     );
 
                     #[cfg(not(feature = "workspace"))]
@@ -569,11 +602,44 @@ impl LspServer {
                         _ => None,
                     };
 
+                    // Get include paths from workspace config for @INC scanning
                     #[cfg(feature = "workspace")]
-                    let provider = CompletionProvider::new_with_index_and_source(
+                    let (include_paths, workspace_root) = {
+                        let mut config = self.workspace_config.lock();
+                        let perl5lib_paths = std::env::var("PERL5LIB")
+                            .map(|v| perl_lsp_config::WorkspaceConfig::parse_perl5lib(&v))
+                            .unwrap_or_default();
+                        let mut effective_paths = config.include_paths.clone();
+                        // Prepend PERL5LIB paths
+                        for p in perl5lib_paths.iter().rev() {
+                            if !effective_paths.contains(p) {
+                                effective_paths.insert(0, p.clone());
+                            }
+                        }
+                        // Add system @INC if enabled
+                        if config.use_system_inc {
+                            let system_paths: Vec<String> = config
+                                .get_system_inc()
+                                .iter()
+                                .map(|p| p.to_string_lossy().to_string())
+                                .collect();
+                            for p in system_paths {
+                                if !effective_paths.contains(&p) {
+                                    effective_paths.push(p);
+                                }
+                            }
+                        }
+                        let root = self.root_path.lock().clone();
+                        (effective_paths, root)
+                    };
+
+                    #[cfg(feature = "workspace")]
+                    let provider = CompletionProvider::new_with_config(
                         ast,
                         &doc.text,
                         workspace_idx,
+                        include_paths,
+                        workspace_root,
                     );
                     #[cfg(not(feature = "workspace"))]
                     let provider =

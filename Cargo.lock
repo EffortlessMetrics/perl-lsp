@@ -1985,6 +1985,7 @@ dependencies = [
  "perl-keywords",
  "perl-lsp-completion-item",
  "perl-lsp-file-completion",
+ "perl-module-path",
  "perl-parser-core",
  "perl-semantic-analyzer",
  "perl-tdd-support",

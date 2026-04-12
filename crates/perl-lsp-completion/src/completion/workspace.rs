@@ -9,9 +9,210 @@ use super::{
     context::CompletionContext,
     items::{CompletionItem, CompletionItemKind},
 };
+use perl_module_path::file_path_to_module_name;
 use perl_workspace_index::workspace_index::{SymbolKind as WsSymbolKind, VarKind, WorkspaceIndex};
 use std::collections::{HashMap, HashSet};
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::sync::Mutex;
+use std::time::{Duration, Instant};
+
+// Performance limits for @INC scanning
+const MAX_INC_DIRS: usize = 50;
+const MAX_MODULES_PER_DIR: usize = 1000;
+const MAX_TOTAL_MODULES: usize = 5000;
+const SCAN_TIMEOUT_MS: u64 = 100;
+const CACHE_TTL_SECONDS: u64 = 30;
+
+/// Cache entry for scanned @INC modules
+struct IncModuleCache {
+    modules: Vec<(String, PathBuf)>,
+    last_scan: Instant,
+    include_paths_hash: u64,
+}
+
+/// Global cache for @INC module scanning
+static INC_CACHE: Mutex<Option<IncModuleCache>> = Mutex::new(None);
+
+/// Compute a simple hash for include paths to detect config changes
+fn hash_include_paths(paths: &[String]) -> u64 {
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
+    let mut hasher = DefaultHasher::new();
+    paths.hash(&mut hasher);
+    hasher.finish()
+}
+
+/// Scan @INC directories for available modules matching the prefix
+///
+/// This function scans the configured include paths for .pm files and converts
+/// them to module names (e.g., `lib/Foo/Bar.pm` → `Foo::Bar`).
+///
+/// Performance characteristics:
+/// - Uses TTL-based caching (30s) to avoid repeated filesystem scans
+/// - Respects limits: max 50 dirs, 1000 modules/dir, 5000 total
+/// - 100ms timeout for scanning
+pub fn scan_inc_for_modules(
+    include_paths: &[String],
+    workspace_root: &Path,
+    prefix: &str,
+    seen: &HashSet<String>,
+) -> Vec<(String, PathBuf)> {
+    // Check cache first
+    let paths_hash = hash_include_paths(include_paths);
+    {
+        let cache = INC_CACHE.lock().unwrap();
+        if let Some(ref cached) = *cache {
+            if cached.include_paths_hash == paths_hash
+                && cached.last_scan.elapsed() < Duration::from_secs(CACHE_TTL_SECONDS)
+            {
+                // Filter cached results by prefix and deduplicate against seen
+                return cached
+                    .modules
+                    .iter()
+                    .filter(|(name, _)| name.starts_with(prefix) && !seen.contains(name))
+                    .cloned()
+                    .collect();
+            }
+        }
+    }
+
+    // Scan filesystem
+    let start_time = Instant::now();
+    let timeout = Duration::from_millis(SCAN_TIMEOUT_MS);
+    let mut modules: Vec<(String, PathBuf)> = Vec::new();
+    let mut visited_dirs: HashSet<PathBuf> = HashSet::new();
+
+    for inc_path in include_paths.iter().take(MAX_INC_DIRS) {
+        // Check timeout
+        if start_time.elapsed() > timeout {
+            break;
+        }
+
+        let full_path = if Path::new(inc_path).is_absolute() {
+            PathBuf::from(inc_path)
+        } else {
+            workspace_root.join(inc_path)
+        };
+
+        if !full_path.exists() || !full_path.is_dir() {
+            continue;
+        }
+
+        // Prevent duplicate scanning
+        if !visited_dirs.insert(full_path.clone()) {
+            continue;
+        }
+
+        // Scan this directory
+        scan_dir_for_modules(
+            &full_path,
+            prefix,
+            seen,
+            &mut modules,
+            workspace_root,
+            0,
+            &start_time,
+            timeout,
+        );
+
+        // Check total module limit
+        if modules.len() >= MAX_TOTAL_MODULES {
+            modules.truncate(MAX_TOTAL_MODULES);
+            break;
+        }
+    }
+
+    // Update cache with all found modules (not filtered by prefix)
+    // This allows cache hits even when prefix changes
+    let all_modules: Vec<(String, PathBuf)> = modules.clone();
+    let mut cache = INC_CACHE.lock().unwrap();
+    *cache = Some(IncModuleCache {
+        modules: all_modules,
+        last_scan: Instant::now(),
+        include_paths_hash: paths_hash,
+    });
+
+    modules
+}
+
+/// Recursively scan a directory for .pm files
+fn scan_dir_for_modules(
+    dir: &Path,
+    prefix: &str,
+    seen: &HashSet<String>,
+    results: &mut Vec<(String, PathBuf)>,
+    workspace_root: &Path,
+    depth: usize,
+    start_time: &Instant,
+    timeout: Duration,
+) {
+    const MAX_DEPTH: usize = 10;
+
+    // Check depth limit
+    if depth > MAX_DEPTH {
+        return;
+    }
+
+    // Check timeout
+    if start_time.elapsed() > timeout {
+        return;
+    }
+
+    // Check per-directory module limit
+    let current_count = results.len();
+
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+
+    for entry in entries.flatten() {
+        // Check timeout periodically
+        if results.len() % 100 == 0 && start_time.elapsed() > timeout {
+            return;
+        }
+
+        // Check total module limit
+        if results.len() >= MAX_TOTAL_MODULES {
+            return;
+        }
+
+        // Check per-directory limit
+        if results.len() - current_count >= MAX_MODULES_PER_DIR {
+            return;
+        }
+
+        let path = entry.path();
+
+        if path.is_dir() {
+            // Skip hidden directories and common non-module directories
+            let name = path.file_name().and_then(|n| n.to_str());
+            if name.map(|n| n.starts_with('.')).unwrap_or(true) {
+                continue;
+            }
+            if name == Some("blib") || name == Some("_build") || name == Some("local") {
+                continue;
+            }
+            scan_dir_for_modules(&path, prefix, seen, results, workspace_root, depth + 1, start_time, timeout);
+        } else if path.extension().map(|e| e == "pm").unwrap_or(false) {
+            // Convert path to module name
+            let path_str = path.to_string_lossy();
+            let module_name = file_path_to_module_name(&path_str);
+
+            // Skip if already seen (from workspace index)
+            if seen.contains(&module_name) {
+                continue;
+            }
+
+            // Check prefix match (case-insensitive for better UX)
+            if !prefix.is_empty() && !module_name.to_lowercase().starts_with(&prefix.to_lowercase()) {
+                continue;
+            }
+
+            results.push((module_name, path.clone()));
+        }
+    }
+}
 
 /// Add workspace symbol completions for functions and variables
 ///
@@ -192,61 +393,95 @@ pub fn add_workspace_symbol_completions(
 /// Add module name completions for `use` and `require` statements.
 ///
 /// When the cursor is after `use ` or `require `, suggests package names from the
-/// workspace index. This enables discovering available modules as you type.
+/// workspace index and from @INC paths. This enables discovering available modules
+/// as you type, including modules not yet indexed but available in the library path.
 ///
 /// For example, typing `use My` will suggest `MyApp`, `MyApp::Config`, etc.
+/// Also suggests modules from @INC like `DBI`, `Carp`, etc.
+///
+/// # Arguments
+///
+/// * `completions` - The completion list to append to
+/// * `context` - The completion context including prefix and position
+/// * `workspace_index` - The workspace symbol index (optional)
+/// * `include_paths` - @INC directories to scan for additional modules
+/// * `workspace_root` - The workspace root path for resolving relative include paths
 pub fn add_use_module_completions(
     completions: &mut Vec<CompletionItem>,
     context: &CompletionContext,
     workspace_index: &Option<Arc<WorkspaceIndex>>,
+    include_paths: &[String],
+    workspace_root: Option<&Path>,
 ) {
-    let Some(index) = workspace_index else {
-        return;
-    };
-
-    if !index.has_symbols() {
-        return;
-    }
-
     let mut seen: HashSet<String> = HashSet::new();
 
-    // Search for package symbols matching the prefix
-    let all_symbols = if context.prefix.is_empty() {
-        index.all_symbols()
-    } else {
-        index.find_symbols(&context.prefix)
-    };
+    // 1. First, add modules from workspace index (higher priority)
+    if let Some(index) = workspace_index {
+        if index.has_symbols() {
+            // Search for package symbols matching the prefix
+            let all_symbols = if context.prefix.is_empty() {
+                index.all_symbols()
+            } else {
+                index.find_symbols(&context.prefix)
+            };
 
-    for symbol in all_symbols {
-        if symbol.kind != WsSymbolKind::Package {
-            continue;
+            for symbol in all_symbols {
+                if symbol.kind != WsSymbolKind::Package {
+                    continue;
+                }
+
+                // Match against the module name prefix
+                if !context.prefix.is_empty() && !symbol.name.starts_with(&context.prefix) {
+                    continue;
+                }
+
+                if !seen.insert(symbol.name.clone()) {
+                    continue;
+                }
+
+                let name = &symbol.name;
+                completions.push(CompletionItem {
+                    label: name.clone(),
+                    kind: CompletionItemKind::Module,
+                    detail: Some("module (workspace)".to_string()),
+                    documentation: symbol
+                        .documentation
+                        .clone()
+                        .or_else(|| Some(format!("Package `{name}`"))),
+                    insert_text: Some(name.clone()),
+                    sort_text: Some(format!("1_{name}")), // High priority in use context
+                    filter_text: Some(name.clone()),
+                    additional_edits: vec![],
+                    text_edit_range: Some((context.prefix_start, context.position)),
+                    commit_characters: None,
+                });
+            }
         }
+    }
 
-        // Match against the module name prefix
-        if !context.prefix.is_empty() && !symbol.name.starts_with(&context.prefix) {
-            continue;
+    // 2. Scan @INC for additional modules not in the workspace index
+    if let Some(root) = workspace_root {
+        let inc_modules = scan_inc_for_modules(include_paths, root, &context.prefix, &seen);
+
+        for (module_name, path) in inc_modules {
+            // Skip if already added from workspace index
+            if !seen.insert(module_name.clone()) {
+                continue;
+            }
+
+            completions.push(CompletionItem {
+                label: module_name.clone(),
+                kind: CompletionItemKind::Module,
+                detail: Some("module (from @INC)".to_string()),
+                documentation: Some(format!("Module at `{}`", path.display())),
+                insert_text: Some(module_name.clone()),
+                sort_text: Some(format!("2_{module_name}")), // After workspace modules
+                filter_text: Some(module_name.clone()),
+                additional_edits: vec![],
+                text_edit_range: Some((context.prefix_start, context.position)),
+                commit_characters: None,
+            });
         }
-
-        if !seen.insert(symbol.name.clone()) {
-            continue;
-        }
-
-        let name = &symbol.name;
-        completions.push(CompletionItem {
-            label: name.clone(),
-            kind: CompletionItemKind::Module,
-            detail: Some("module".to_string()),
-            documentation: symbol
-                .documentation
-                .clone()
-                .or_else(|| Some(format!("Package `{name}`"))),
-            insert_text: Some(name.clone()),
-            sort_text: Some(format!("1_{name}")), // High priority in use context
-            filter_text: Some(name.clone()),
-            additional_edits: vec![],
-            text_edit_range: Some((context.prefix_start, context.position)),
-            commit_characters: None,
-        });
     }
 }
 

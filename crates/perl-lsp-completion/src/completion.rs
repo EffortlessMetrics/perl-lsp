@@ -131,6 +131,10 @@ pub struct CompletionProvider {
     symbol_table: SymbolTable,
     workspace_index: Option<Arc<WorkspaceIndex>>,
     import_map: ImportMap,
+    /// Include paths for @INC scanning (e.g., ["lib", ".", "local/lib/perl5"])
+    include_paths: Vec<String>,
+    /// Workspace root for resolving relative include paths
+    workspace_root: Option<std::path::PathBuf>,
 }
 
 impl CompletionProvider {
@@ -162,6 +166,63 @@ impl CompletionProvider {
     /// Arguments: `ast`, `workspace_index`.
     pub fn new_with_index(ast: &Node, workspace_index: Option<Arc<WorkspaceIndex>>) -> Self {
         Self::new_with_index_and_source(ast, "", workspace_index)
+    }
+
+    /// Create a new completion provider with full configuration including @INC paths.
+    ///
+    /// This constructor allows passing include paths for module completion from @INC,
+    /// enabling suggestions for modules like `DBI`, `Carp`, etc. that are available
+    /// in the Perl library path but not indexed in the workspace.
+    ///
+    /// # Arguments
+    ///
+    /// * `ast` - Parsed AST from Perl script content
+    /// * `source` - Original source code for position-based context analysis
+    /// * `workspace_index` - Optional workspace-wide symbol index
+    /// * `include_paths` - @INC directories to scan (e.g., `["lib", ".", "/usr/local/share/perl/5.34"]`)
+    /// * `workspace_root` - Workspace root path for resolving relative include paths
+    ///
+    /// # Returns
+    ///
+    /// A configured completion provider with @INC scanning enabled.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,ignore
+    /// use perl_parser_core::Parser;
+    /// use perl_lsp_completion::CompletionProvider;
+    ///
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let mut parser = Parser::new("use DBI;");
+    /// let ast = parser.parse()?;
+    /// let provider = CompletionProvider::new_with_config(
+    ///     &ast,
+    ///     "use DBI;",
+    ///     None,
+    ///     vec!["lib".to_string(), "/usr/local/share/perl/5.34".to_string()],
+    ///     Some(std::path::PathBuf::from("/workspace")),
+    /// );
+    /// // Provider will suggest DBI from @INC
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn new_with_config(
+        ast: &Node,
+        source: &str,
+        workspace_index: Option<Arc<WorkspaceIndex>>,
+        include_paths: Vec<String>,
+        workspace_root: Option<std::path::PathBuf>,
+    ) -> Self {
+        let symbol_table = SymbolExtractor::new_with_source(source).extract(ast);
+        let import_map = Self::extract_import_map(ast);
+
+        CompletionProvider {
+            symbol_table,
+            workspace_index,
+            import_map,
+            include_paths,
+            workspace_root,
+        }
     }
 
     /// Create a new completion provider from parsed AST and source with workspace integration
@@ -210,10 +271,7 @@ impl CompletionProvider {
         source: &str,
         workspace_index: Option<Arc<WorkspaceIndex>>,
     ) -> Self {
-        let symbol_table = SymbolExtractor::new_with_source(source).extract(ast);
-        let import_map = Self::extract_import_map(ast);
-
-        CompletionProvider { symbol_table, workspace_index, import_map }
+        Self::new_with_config(ast, source, workspace_index, Vec::new(), None)
     }
 
     /// Walk the top-level AST and build an `ImportMap` from `use` statements.
@@ -512,6 +570,8 @@ impl CompletionProvider {
                 &mut completions,
                 &context,
                 &self.workspace_index,
+                &self.include_paths,
+                self.workspace_root.as_deref(),
             );
         } else if self.is_has_options_key_context(source, position) {
             self.add_has_option_completions(&mut completions, &context);
