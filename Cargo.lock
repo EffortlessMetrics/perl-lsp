@@ -2272,6 +2272,7 @@ dependencies = [
  "perl-workspace-discovery",
  "perl-workspace-folder",
  "perl-workspace-ignore",
+ "perl-workspace-index",
  "predicates",
  "proptest",
  "regex",
