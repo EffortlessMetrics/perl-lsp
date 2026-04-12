@@ -539,8 +539,9 @@ fn read_usize_from_tokens(path: &Path, idx: usize) -> Result<usize> {
 fn cmd_preflight(_repo_root: &Path) -> Result<i32> {
     #[cfg(target_os = "linux")]
     {
-        let pids_used =
-            command_with_output(Path::new("/"), "ps", &["-e", "--no-headers"], &[])?.lines().count();
+        let pids_used = command_with_output(Path::new("/"), "ps", &["-e", "--no-headers"], &[])?
+            .lines()
+            .count();
         let pid_max = read_usize_from_path(Path::new("/proc/sys/kernel/pid_max"))?;
         let files_used = read_usize_from_tokens(Path::new("/proc/sys/fs/file-nr"), 1)?;
         let files_max = read_usize_from_path(Path::new("/proc/sys/fs/file-max"))?;
@@ -554,8 +555,7 @@ fn cmd_preflight(_repo_root: &Path) -> Result<i32> {
         let mut omp_num_threads = env::var("OMP_NUM_THREADS").unwrap_or_else(|_| "1".to_string());
         let mut openblas_num_threads =
             env::var("OPENBLAS_NUM_THREADS").unwrap_or_else(|_| "1".to_string());
-        let mut mkl_num_threads =
-            env::var("MKL_NUM_THREADS").unwrap_or_else(|_| "1".to_string());
+        let mut mkl_num_threads = env::var("MKL_NUM_THREADS").unwrap_or_else(|_| "1".to_string());
         let mut numexpr_num_threads =
             env::var("NUMEXPR_NUM_THREADS").unwrap_or_else(|_| "1".to_string());
 
@@ -668,7 +668,9 @@ fn cmd_e2e_gate(repo_root: &Path, cargo_args: &[String]) -> Result<i32> {
     {
         // flock is not available on Windows; run without external lock
         let _ = lock_path;
-        println!("warning: flock not available on this OS; running E2E tests without external lock");
+        println!(
+            "warning: flock not available on this OS; running E2E tests without external lock"
+        );
         command_status_strict(
             repo_root,
             "cargo",
