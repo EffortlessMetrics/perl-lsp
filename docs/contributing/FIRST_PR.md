@@ -35,6 +35,14 @@ just doctor
 
 Rust toolchain is pinned in `rust-toolchain.toml` (MSRV 1.92). `rustup` picks it up automatically.
 
+**Windows users:** Enable long path support before building (one-time, requires admin terminal):
+
+```
+reg add HKLM\SYSTEM\CurrentControlSet\Control\FileSystem /v LongPathsEnabled /t REG_DWORD /d 1 /f
+```
+
+Without this, `cargo fmt` may fail with "os error 206" from deep worktree paths. Start a new terminal after setting the key.
+
 Install the pre-push hook so the fast gate runs before every push:
 
 ```bash
@@ -153,7 +161,7 @@ If the reviewer pushes a fix directly to your branch, that is normal. Check and 
 |------|---------|
 | Build LSP server | `cargo build -p perl-lsp-rs --release` |
 | Run all tests | `cargo test --workspace --lib` |
-| Format | `cargo fmt --all` |
+| Format | `cargo xtask fmt` |
 | Lint | `cargo clippy --workspace` |
 | Full merge gate | `just ci-gate` |
 | Environment check | `just doctor` |
