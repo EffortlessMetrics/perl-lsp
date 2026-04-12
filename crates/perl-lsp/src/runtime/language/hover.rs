@@ -21,6 +21,10 @@ enum HoverExtracted {
     /// Phase 2 resolves the hover using the workspace index BFS (same logic as
     /// `inherited_method_definition_location` in navigation.rs).
     InheritedMethod(String, String, String),
+    /// Cursor is on a package-name token (contains `::`) that was not handled by an
+    /// earlier semantic or `use` path. Carries (package_name, doc_text, doc_uri).
+    /// Phase 2 resolves it via `build_module_hover` (same as `UseModule`).
+    PossiblePackage(String, String, String),
     /// Nothing hoverable at this position.
     None,
 }
@@ -128,6 +132,12 @@ impl LspServer {
                 HoverExtracted::Complete(value) => return Ok(Some(value)),
                 HoverExtracted::UseModule(module_name, doc_text, doc_uri) => {
                     return Ok(Some(self.build_module_hover(&module_name, &doc_text, &doc_uri)));
+                }
+                HoverExtracted::PossiblePackage(pkg_name, doc_text, doc_uri) => {
+                    // Package names with `::` always get module hover (file path + MetaCPAN link).
+                    // For unresolved names this still shows the MetaCPAN link which is more
+                    // useful than the bare-token fallback.
+                    return Ok(Some(self.build_module_hover(&pkg_name, &doc_text, &doc_uri)));
                 }
                 #[cfg(feature = "workspace")]
                 HoverExtracted::InheritedMethod(receiver_pkg, method_name, doc_uri) => {
@@ -529,6 +539,18 @@ impl LspServer {
                 }
             }
 
+            // Before the bare-token fallback, check if the cursor is on a package name
+            // (an identifier that spans `::` separators, e.g. `File::Path`, `DBI`).
+            // Defer resolution to Phase 2 via `build_module_hover` so no workspace lock
+            // is held here.
+            if let Some(pkg_name) = Self::get_package_name_at_position(text, offset) {
+                return HoverExtracted::PossiblePackage(
+                    pkg_name,
+                    text.to_string(),
+                    uri.to_string(),
+                );
+            }
+
             return HoverExtracted::Complete(json!({
                 "contents": {
                     "kind": "markdown",
@@ -726,6 +748,49 @@ impl LspServer {
         }
 
         chars[start..end].iter().collect()
+    }
+
+    /// Extract a package name at `offset`, spanning `::` separators.
+    ///
+    /// Returns `Some(name)` only when the extracted token contains `::`,
+    /// indicating it is a qualified package name (e.g. `File::Path`, `Foo::Bar::Baz`).
+    /// Returns `None` for bare single-component identifiers to avoid misidentifying
+    /// function names or variables.
+    fn get_package_name_at_position(text: &str, offset: usize) -> Option<String> {
+        let bytes = text.as_bytes();
+        let len = bytes.len();
+        if offset >= len {
+            return None;
+        }
+
+        // Scan left over alphanumeric, underscore, and `::` sequences.
+        let mut start = offset;
+        while start > 0 {
+            let prev = start - 1;
+            if bytes[prev].is_ascii_alphanumeric() || bytes[prev] == b'_' {
+                start -= 1;
+            } else if prev >= 1 && bytes[prev] == b':' && bytes[prev - 1] == b':' {
+                start -= 2;
+            } else {
+                break;
+            }
+        }
+
+        // Scan right over alphanumeric, underscore, and `::` sequences.
+        let mut end = offset;
+        while end < len {
+            if bytes[end].is_ascii_alphanumeric() || bytes[end] == b'_' {
+                end += 1;
+            } else if end + 1 < len && bytes[end] == b':' && bytes[end + 1] == b':' {
+                end += 2;
+            } else {
+                break;
+            }
+        }
+
+        // Trim any trailing `::` (e.g. cursor right after the separator).
+        let candidate = text[start..end].trim_end_matches(':');
+        if candidate.contains("::") { Some(candidate.to_string()) } else { None }
     }
 
     fn extract_xs_api_hover(uri: &str, text: &str, offset: usize) -> Option<Value> {
