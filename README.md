@@ -12,9 +12,11 @@
   <a href="https://github.com/EffortlessMetrics/perl-lsp/releases"><img src="https://img.shields.io/github/v/release/EffortlessMetrics/perl-lsp?display_name=tag" alt="GitHub release" /></a>
   <a href="LICENSE-MIT"><img src="https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg" alt="License: MIT OR Apache-2.0" /></a>
   <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/MSRV-1.92-blue" alt="MSRV" /></a>
-  <a href="https://marketplace.visualstudio.com/items?itemName=EffortlessMetrics.perl-lsp-rs"><img src="https://img.shields.io/visual-studio-marketplace/i/EffortlessMetrics.perl-lsp-rs" alt="VSCode Marketplace Installs" /></a>
+  <a href="https://marketplace.visualstudio.com/items?itemName=EffortlessMetrics.perl-lsp-rs"><img src="https://img.shields.io/badge/VS%20Marketplace-180%20installs-0078D4" alt="VSCode Marketplace Installs (manual)" /></a>
   <a href="https://open-vsx.org/extension/EffortlessMetrics/perl-lsp-rs"><img src="https://img.shields.io/open-vsx/dt/EffortlessMetrics/perl-lsp-rs" alt="Open VSX Downloads" /></a>
 </p>
+
+<p align="center"><sub>VS Marketplace installs badge is manually maintained (last checked: 2026-04-12) because Shields deprecated the Visual Studio Marketplace integration.</sub></p>
 
 ---
 
