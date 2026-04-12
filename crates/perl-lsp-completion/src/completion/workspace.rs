@@ -192,6 +192,44 @@ pub fn add_workspace_symbol_completions(
     }
 }
 
+/// Ultra-common Perl pragmas and core modules that should surface first in `use` completions.
+///
+/// Tier 0: always-used pragmas and critical infrastructure modules.
+const COMMON_MODULES_TIER_0: &[&str] = &[
+    "strict",
+    "warnings",
+    "Carp",
+    "Exporter",
+    "File::Path",
+    "File::Spec",
+    "List::Util",
+    "Scalar::Util",
+    "Data::Dumper",
+    "JSON",
+    "POSIX",
+    "Getopt::Long",
+];
+
+/// Common CPAN modules that are frequently used but less universal than tier-0.
+///
+/// Tier 1: widely-used libraries (DB, OOP, testing, filesystem).
+const COMMON_MODULES_TIER_1: &[&str] =
+    &["DBI", "Moo", "Moose", "Try::Tiny", "Path::Tiny", "Test::More", "Test::Exception"];
+
+/// Returns the sort-text tier prefix for a module name.
+///
+/// Returns `"0"` for tier-0 (ultra-common), `"1"` for tier-1 (common), and `"9"` for
+/// all other modules so they sort after the well-known ones.
+fn module_sort_tier(name: &str) -> &'static str {
+    if COMMON_MODULES_TIER_0.contains(&name) {
+        "0"
+    } else if COMMON_MODULES_TIER_1.contains(&name) {
+        "1"
+    } else {
+        "9"
+    }
+}
+
 /// Add module name completions for `use` and `require` statements.
 ///
 /// When the cursor is after `use ` or `require `, suggests package names from the
@@ -244,7 +282,7 @@ pub fn add_use_module_completions(
                 .clone()
                 .or_else(|| Some(format!("Package `{name}`"))),
             insert_text: Some(name.clone()),
-            sort_text: Some(format!("1_{name}")), // High priority in use context
+            sort_text: Some(format!("1{}_{name}", module_sort_tier(name))),
             filter_text: Some(name.clone()),
             additional_edits: vec![],
             text_edit_range: Some((context.prefix_start, context.position)),

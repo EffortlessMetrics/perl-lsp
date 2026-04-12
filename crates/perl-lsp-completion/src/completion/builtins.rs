@@ -265,9 +265,11 @@ fn builtin_info(name: &'static str) -> (&'static str, &'static str, Option<&'sta
             Some("Format a string according to FORMAT, returning the result instead of printing."),
         ),
         "open" => (
-            "open(my $fh, '<', )",
+            "open(my $fh, '${1:<}', ${2:\\$file}) or die \"Cannot open ${2:\\$file}: $!\";",
             "open FILEHANDLE, MODE, FILENAME",
-            Some("Open a file or pipe. Three-arg form is preferred: open(my $fh, '<', $file)."),
+            Some(
+                "Open a file or pipe. Three-arg form with idiomatic error handling: open(my $fh, '<', $file) or die ...",
+            ),
         ),
         "close" => (
             "close ",
