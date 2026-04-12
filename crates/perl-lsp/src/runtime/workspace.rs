@@ -884,6 +884,20 @@ impl LspServer {
                     let new_module = path_to_module_name(new_uri);
 
                     if !old_module.is_empty() && !new_module.is_empty() {
+                        if !planned_workspace_texts.contains_key(old_uri) {
+                            if let Some(text) = self.read_workspace_text(old_uri) {
+                                planned_workspace_texts
+                                    .insert(old_uri.to_string(), (text.clone(), text));
+                            }
+                        }
+                        if let Some((_, current_text)) = planned_workspace_texts.get_mut(old_uri) {
+                            let planned =
+                                plan_module_rename_edits(current_text, &old_module, &new_module);
+                            if !planned.is_empty() {
+                                *current_text = apply_module_rename_edits(current_text, &planned);
+                            }
+                        }
+
                         // Find all files that reference the old module
                         // Note: Query operation - use coordinator.index() for consistency
                         #[cfg(feature = "workspace")]
