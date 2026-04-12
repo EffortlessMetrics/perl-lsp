@@ -268,10 +268,10 @@ fn all_feature_ids_count_matches_all_flags() -> Result<(), Box<dyn std::error::E
 // ---------------------------------------------------------------------------
 
 #[test]
-fn production_disables_formatting_and_range_formatting() -> Result<(), Box<dyn std::error::Error>> {
+fn production_enables_formatting_and_range_formatting() -> Result<(), Box<dyn std::error::Error>> {
     let p = BuildFlags::production();
-    assert!(!p.formatting);
-    assert!(!p.range_formatting);
+    assert!(p.formatting);
+    assert!(p.range_formatting);
     Ok(())
 }
 
@@ -295,21 +295,21 @@ fn production_enables_core_capabilities() -> Result<(), Box<dyn std::error::Erro
 }
 
 #[test]
-fn production_advertised_features_reflect_formatting_off() -> Result<(), Box<dyn std::error::Error>>
+fn production_advertised_features_reflect_formatting_on() -> Result<(), Box<dyn std::error::Error>>
 {
     let af = BuildFlags::production().to_advertised_features();
-    assert!(!af.formatting);
-    assert!(!af.range_formatting);
+    assert!(af.formatting);
+    assert!(af.range_formatting);
     assert!(af.completion);
     assert!(af.hover);
     Ok(())
 }
 
 #[test]
-fn production_feature_ids_exclude_formatting() -> Result<(), Box<dyn std::error::Error>> {
+fn production_feature_ids_include_formatting() -> Result<(), Box<dyn std::error::Error>> {
     let ids = BuildFlags::production().to_feature_ids();
-    assert!(!ids.contains(&LSP_FORMATTING));
-    assert!(!ids.contains(&LSP_RANGE_FORMATTING));
+    assert!(ids.contains(&LSP_FORMATTING));
+    assert!(ids.contains(&LSP_RANGE_FORMATTING));
     assert!(ids.contains(&LSP_COMPLETION));
     assert!(ids.contains(&LSP_HOVER));
     Ok(())
@@ -395,10 +395,10 @@ fn production_and_ga_lock_differ() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[test]
-fn all_differs_from_production() -> Result<(), Box<dyn std::error::Error>> {
+fn all_matches_production() -> Result<(), Box<dyn std::error::Error>> {
     let all = BuildFlags::all();
     let prod = BuildFlags::production();
-    assert_ne!(all, prod);
+    assert_eq!(all, prod);
     Ok(())
 }
 
@@ -954,14 +954,14 @@ fn feature_id_strings_use_lsp_dot_prefix() -> Result<(), Box<dyn std::error::Err
 // ---------------------------------------------------------------------------
 
 #[test]
-fn ga_lock_has_more_feature_ids_than_production() -> Result<(), Box<dyn std::error::Error>> {
+fn ga_lock_has_fewer_feature_ids_than_production() -> Result<(), Box<dyn std::error::Error>> {
     let ga_count = BuildFlags::ga_lock().to_feature_ids().len();
     let prod_count = BuildFlags::production().to_feature_ids().len();
-    // ga_lock enables formatting+range_formatting but disables inline_values
-    // net: +2 - 1 = +1 more than production
+    // ga_lock and production both have formatting+range_formatting enabled
+    // ga_lock disables inline_values, so production has 1 more feature
     assert!(
-        ga_count > prod_count,
-        "ga_lock ({ga_count}) should have more feature ids than production ({prod_count})",
+        ga_count < prod_count,
+        "ga_lock ({ga_count}) should have fewer feature ids than production ({prod_count})",
     );
     Ok(())
 }

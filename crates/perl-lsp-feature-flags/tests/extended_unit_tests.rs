@@ -323,8 +323,8 @@ fn build_flags_production_profile() -> Result<(), Box<dyn std::error::Error>> {
     assert!(bf.completion);
     assert!(bf.hover);
     assert!(bf.definition);
-    assert!(!bf.formatting);
-    assert!(!bf.range_formatting);
+    assert!(bf.formatting);
+    assert!(bf.range_formatting);
     assert!(bf.signature_help);
     Ok(())
 }
@@ -341,12 +341,12 @@ fn build_flags_ga_lock_profile() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[test]
-fn build_flags_production_and_all_differ_on_formatting() -> Result<(), Box<dyn std::error::Error>> {
+fn build_flags_production_and_all_match_on_formatting() -> Result<(), Box<dyn std::error::Error>> {
     let prod = BuildFlags::production();
     let all = BuildFlags::all();
-    assert!(!prod.formatting);
+    assert!(prod.formatting);
     assert!(all.formatting);
-    assert!(!prod.range_formatting);
+    assert!(prod.range_formatting);
     assert!(all.range_formatting);
     Ok(())
 }
@@ -422,8 +422,8 @@ fn build_flags_production_to_advertised_features() -> Result<(), Box<dyn std::er
     assert!(af.completion);
     assert!(af.hover);
     assert!(af.definition);
-    assert!(!af.formatting);
-    assert!(!af.range_formatting);
+    assert!(af.formatting);
+    assert!(af.range_formatting);
     Ok(())
 }
 
@@ -534,12 +534,12 @@ fn build_flags_feature_ids_are_deduplicated() -> Result<(), Box<dyn std::error::
 }
 
 #[test]
-fn build_flags_production_to_feature_ids_excludes_formatting()
+fn build_flags_production_to_feature_ids_includes_formatting()
 -> Result<(), Box<dyn std::error::Error>> {
     let bf = BuildFlags::production();
     let ids = bf.to_feature_ids();
-    assert!(!ids.contains(&LSP_FORMATTING));
-    assert!(!ids.contains(&LSP_RANGE_FORMATTING));
+    assert!(ids.contains(&LSP_FORMATTING));
+    assert!(ids.contains(&LSP_RANGE_FORMATTING));
     Ok(())
 }
 
