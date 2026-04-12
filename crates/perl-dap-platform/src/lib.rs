@@ -56,6 +56,7 @@ fn windows_perl_rank(path: &std::path::Path) -> u8 {
 /// On Windows, returns all matches sorted by [`windows_perl_rank`] so the caller
 /// can pick the best one. On non-Windows, returns candidates in PATH order (no ranking).
 fn find_all_perl_on_path(path_env: &str) -> Vec<PathBuf> {
+    #[allow(unused_mut)]
     let mut found: Vec<PathBuf> = path_env
         .split(PATH_SEPARATOR)
         .map(|dir| PathBuf::from(dir).join(PERL_EXECUTABLE))
@@ -523,13 +524,10 @@ mod tests {
     }
 
     #[test]
-    fn home_dir_fallback_is_not_slash_tmp() {
-        // When both HOME and USERPROFILE are absent, home_dir() must NOT return
-        // PathBuf::from("/tmp") because /tmp does not exist on Windows.
-        // It should return std::env::temp_dir() instead.
-        //
-        // We test the fallback by temporarily unsetting both env vars.
-        // This is safe because home_dir() is a pure function with no side effects.
+    fn home_dir_fallback_uses_temp_dir() {
+        // When both HOME and USERPROFILE are absent, home_dir() must return
+        // std::env::temp_dir() — not a hardcoded PathBuf::from("/tmp") which
+        // does not exist on Windows.
         let original_home = std::env::var("HOME").ok();
         let original_userprofile = std::env::var("USERPROFILE").ok();
 
@@ -540,6 +538,7 @@ mod tests {
         }
 
         let result = home_dir();
+        let expected = std::env::temp_dir();
 
         // Restore env vars.
         unsafe {
@@ -551,14 +550,11 @@ mod tests {
             }
         }
 
-        // The fallback must NOT be the literal "/tmp".
-        assert_ne!(
-            result,
-            std::path::PathBuf::from("/tmp"),
-            "home_dir() fallback must not return /tmp (broken on Windows): got {:?}",
-            result
+        // The fallback must match std::env::temp_dir(), not a hardcoded path.
+        assert_eq!(
+            result, expected,
+            "home_dir() fallback should be std::env::temp_dir(), got {result:?}"
         );
-        // The fallback must be non-empty.
         assert!(!result.as_os_str().is_empty(), "home_dir() must return a non-empty path");
     }
 }
