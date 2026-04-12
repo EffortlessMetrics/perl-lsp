@@ -241,18 +241,20 @@ impl<'a> Parser<'a> {
             // Look ahead to determine if this is a prototype or signature
             if self.is_likely_prototype()? {
                 // Parse as prototype
+                let proto_start = self.current_position();
                 let proto_content = self.parse_prototype()?;
                 let proto_node = Node::new(
                     NodeKind::Prototype { content: proto_content },
-                    SourceLocation { start: self.current_position(), end: self.current_position() },
+                    SourceLocation { start: proto_start, end: self.previous_position() },
                 );
                 (Some(Box::new(proto_node)), None)
             } else {
                 // Parse as signature
+                let sig_start = self.current_position();
                 let params = self.parse_signature()?;
                 let sig_node = Node::new(
                     NodeKind::Signature { parameters: params },
-                    SourceLocation { start: self.current_position(), end: self.current_position() },
+                    SourceLocation { start: sig_start, end: self.previous_position() },
                 );
                 (None, Some(Box::new(sig_node)))
             }
@@ -348,10 +350,11 @@ impl<'a> Parser<'a> {
 
         // Parse optional signature
         let signature = if self.peek_kind() == Some(TokenKind::LeftParen) {
+            let sig_start = self.current_position();
             let params = self.parse_signature()?;
             Some(Box::new(Node::new(
                 NodeKind::Signature { parameters: params },
-                SourceLocation { start: self.current_position(), end: self.current_position() },
+                SourceLocation { start: sig_start, end: self.previous_position() },
             )))
         } else {
             None
