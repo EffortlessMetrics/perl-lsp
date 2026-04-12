@@ -128,6 +128,24 @@ fn send_progress_end(outbound: &super::outbound::OutboundSender, message: &str) 
     }
 }
 
+/// Returns `true` when an I/O error represents a permission-denied condition.
+///
+/// Covers both the portable `ErrorKind::PermissionDenied` and the Windows
+/// `ERROR_ACCESS_DENIED` code (os error 5), which may surface as
+/// `ErrorKind::Uncategorized` on older Rust toolchains.
+#[cfg(feature = "workspace")]
+fn is_permission_denied_error(e: &std::io::Error) -> bool {
+    if e.kind() == std::io::ErrorKind::PermissionDenied {
+        return true;
+    }
+    // Windows ERROR_ACCESS_DENIED = os error 5
+    #[cfg(windows)]
+    if e.raw_os_error() == Some(5) {
+        return true;
+    }
+    false
+}
+
 /// RAII guard that clears the `indexing_in_progress` flag on drop.
 ///
 /// Ensures the flag is always cleared, even if the indexing thread panics.
@@ -1404,6 +1422,7 @@ impl LspServer {
         // Generate a request ID for the workDoneProgress/create call. Atomically
         // increment so it doesn't collide with IDs from other server-to-client requests.
         let progress_create_id = self.next_request_id.fetch_add(1, Ordering::SeqCst);
+        let permission_denied_shown = Arc::clone(&self.permission_denied_shown);
 
         std::thread::spawn(move || {
             let _guard = indexing_guard; // moved into closure, drops when closure exits
@@ -1475,8 +1494,64 @@ impl LspServer {
                     break;
                 }
 
-                let Ok(content) = std::fs::read_to_string(&path) else {
-                    continue;
+                let content = match std::fs::read_to_string(&path) {
+                    Ok(c) => c,
+                    Err(e) => {
+                        if is_permission_denied_error(&e) {
+                            // ONE-TIME window/showMessage (AtomicBool guard)
+                            if permission_denied_shown
+                                .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+                                .is_ok()
+                            {
+                                let msg = "Perl LSP: some workspace files could not be read \
+                                           due to permission denied. Features for those files \
+                                           will be unavailable. Check file permissions.";
+                                if let Err(send_err) = outbound.send_notification(
+                                    "window/showMessage",
+                                    json!({ "type": 2, "message": msg }),
+                                ) {
+                                    tracing::warn!(
+                                        error = %send_err,
+                                        "Failed to send permission-denied showMessage"
+                                    );
+                                }
+                            }
+                            // Per-file diagnostic (always fires for each affected file)
+                            if let Ok(url) = Url::from_file_path(&path) {
+                                let uri_str = url.as_str();
+                                if let Err(send_err) = outbound.send_notification(
+                                    "textDocument/publishDiagnostics",
+                                    json!({
+                                        "uri": uri_str,
+                                        "diagnostics": [{
+                                            "range": {
+                                                "start": { "line": 0, "character": 0 },
+                                                "end":   { "line": 0, "character": 0 }
+                                            },
+                                            "severity": 1,
+                                            "source": "perl-lsp",
+                                            "message": format!(
+                                                "File cannot be read: permission denied ({})",
+                                                path.display()
+                                            )
+                                        }]
+                                    }),
+                                ) {
+                                    tracing::warn!(
+                                        error = %send_err,
+                                        "Failed to send permission-denied diagnostic"
+                                    );
+                                }
+                            }
+                        } else {
+                            tracing::debug!(
+                                "Skipping unreadable file during indexing ({}): {}",
+                                path.display(),
+                                e
+                            );
+                        }
+                        continue;
+                    }
                 };
                 let Ok(url) = Url::from_file_path(&path) else {
                     continue;
