@@ -1231,11 +1231,12 @@ impl LspServer {
                 return false;
             }
             let object_name = match &object.kind {
-                NodeKind::Identifier { name } => name.as_str(),
-                NodeKind::Variable { name, .. } => {
-                    aliases.get(name).map(String::as_str).unwrap_or("")
-                }
+                NodeKind::Identifier { name } => Some(name.as_str()),
+                NodeKind::Variable { name, .. } => aliases.get(name).map(String::as_str),
                 _ => return false,
+            };
+            let Some(object_name) = object_name else {
+                return false;
             };
             if object_name != module {
                 return false;
@@ -1994,6 +1995,63 @@ mod tests {
             caps.inlay_hint_resolve_support.is_none(),
             "inlay_hint_resolve_support must remain None when client sends no resolveSupport"
         );
+    }
+
+    #[test]
+    fn find_import_source_supports_require_manual_import() -> Result<(), Box<dyn std::error::Error>>
+    {
+        use crate::Parser;
+        let server =
+            LspServer::with_io(Box::new(Cursor::new(Vec::<u8>::new())), Box::new(Vec::<u8>::new()));
+        let source = "require List::Util;\nList::Util->import('sum');\nmy $x = sum();\n";
+        let mut parser = Parser::new(source);
+        let ast = parser.parse()?;
+
+        let source_module = server.find_import_source(&ast, "sum");
+        assert_eq!(
+            source_module.as_deref(),
+            Some("List::Util"),
+            "sum should resolve through require+manual import"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn find_import_source_supports_require_default_import() -> Result<(), Box<dyn std::error::Error>>
+    {
+        use crate::Parser;
+        let server =
+            LspServer::with_io(Box::new(Cursor::new(Vec::<u8>::new())), Box::new(Vec::<u8>::new()));
+        let source = "require List::Util;\nList::Util->import();\nmy $x = sum();\n";
+        let mut parser = Parser::new(source);
+        let ast = parser.parse()?;
+
+        let source_module = server.find_import_source(&ast, "sum");
+        assert_eq!(
+            source_module.as_deref(),
+            Some("List::Util"),
+            "sum should resolve through require+default import (best-effort)"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn find_import_source_supports_module_runtime_alias() -> Result<(), Box<dyn std::error::Error>>
+    {
+        use crate::Parser;
+        let server =
+            LspServer::with_io(Box::new(Cursor::new(Vec::<u8>::new())), Box::new(Vec::<u8>::new()));
+        let source = "my $mod = use_module('Foo::Bar');\n$mod->import('baz');\nbaz();\n";
+        let mut parser = Parser::new(source);
+        let ast = parser.parse()?;
+
+        let source_module = server.find_import_source(&ast, "baz");
+        assert_eq!(
+            source_module.as_deref(),
+            Some("Foo::Bar"),
+            "baz should resolve through use_module+import alias"
+        );
+        Ok(())
     }
 
     #[test]

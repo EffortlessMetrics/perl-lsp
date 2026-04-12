@@ -1391,18 +1391,22 @@ pub fn symbol_at_cursor(ast: &Node, offset: usize, current_pkg: &str) -> Option<
             }
             // The object must be the same module name.
             let obj_name = match &object.kind {
-                NodeKind::Identifier { name } => name.as_str(),
-                NodeKind::Variable { name, .. } => {
-                    aliases.get(name).map(String::as_str).unwrap_or("")
-                }
+                NodeKind::Identifier { name } => Some(name.as_str()),
+                NodeKind::Variable { name, .. } => aliases.get(name).map(String::as_str),
                 _ => return false,
+            };
+            let Some(obj_name) = obj_name else {
+                return false;
             };
             if obj_name != expected_module {
                 return false;
             }
             if args.is_empty() {
-                // import() with no args means default exports.
-                return true;
+                // `Module->import()` default import set is module-specific and may
+                // come from `@EXPORT` in another file.  We do not currently have
+                // a workspace export table in this lookup path, so stay
+                // conservative and do not claim symbol ownership here.
+                return false;
             }
             // Walk the argument list looking for the symbol.
             for arg in args {

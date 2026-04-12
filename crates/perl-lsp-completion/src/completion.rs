@@ -503,17 +503,27 @@ impl CompletionProvider {
                             continue;
                         }
                         let object_name = match &object.kind {
-                            NodeKind::Identifier { name } => name.as_str(),
+                            NodeKind::Identifier { name } => Some(name.as_str()),
                             NodeKind::Variable { name, .. } => {
-                                aliases.get(name).map(String::as_str).unwrap_or("")
+                                aliases.get(name).map(String::as_str)
                             }
-                            _ => "",
+                            _ => None,
                         };
-                        if object_name.is_empty()
-                            || !required_modules.iter().any(|module| module == object_name)
-                        {
+                        let Some(object_name) = object_name else {
+                            continue;
+                        };
+                        if !required_modules.iter().any(|module| module == object_name) {
                             continue;
                         }
+
+                        // `Module->import()` with no args means default exports
+                        // (equivalent to `use Module;` — import all of @EXPORT).
+                        // We represent this by NOT adding an entry to the map,
+                        // which means the module stays in the "import all" tier.
+                        if args.is_empty() {
+                            continue;
+                        }
+
                         let mut imported_symbols: HashSet<String> = HashSet::new();
                         let mut has_symbols = false;
                         let mut has_unresolved_tag = false;
