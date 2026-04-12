@@ -153,7 +153,10 @@ fn scorecard_incremental_reindex_removes_old_symbol() -> Result<(), Box<dyn std:
 fn scorecard_incremental_reindex_latency_within_slo() -> Result<(), Box<dyn std::error::Error>> {
     let index = WorkspaceIndex::new();
 
-    // Take 20 samples to get a stable P95 measurement
+    // Take 20 samples. With n=20, `(20 * 0.95) as usize = 19`, which selects
+    // the maximum value — this is intentionally conservative: for a small smoke
+    // sample the SLO assertion "every single reindex fits in 100ms" is strictly
+    // stronger than a true P95 and appropriate for a unit-scale test.
     let mut latencies_ms = Vec::with_capacity(20);
 
     for i in 0..20u32 {
@@ -174,6 +177,7 @@ fn scorecard_incremental_reindex_latency_within_slo() -> Result<(), Box<dyn std:
     }
 
     latencies_ms.sort_unstable();
+    // With n=20 this resolves to index 19 (the maximum); see comment above.
     let p95_idx = (latencies_ms.len() as f64 * 0.95) as usize;
     let p95_ms = latencies_ms[p95_idx.min(latencies_ms.len() - 1)];
 
