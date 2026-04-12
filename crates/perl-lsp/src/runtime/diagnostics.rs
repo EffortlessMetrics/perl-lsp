@@ -270,6 +270,104 @@ impl LspServer {
         }
     }
 
+    /// Publish parse-error diagnostics immediately (fast path, ~10ms).
+    ///
+    /// Called on `didChange` before the full debounced diagnostic cycle so that
+    /// syntax errors are visible to the user as soon as parsing completes, without
+    /// waiting for the 250ms debounce that gates the slower scope-analysis and
+    /// perlcritic passes.
+    ///
+    /// Only emits a notification when:
+    /// - The client uses push diagnostics (no pull-diagnostic capability), AND
+    /// - The document has at least one parse error to report.
+    ///
+    /// The slow path (`publish_diagnostics`) will follow and replace this
+    /// notification with the full diagnostic set — LSP publishDiagnostics is
+    /// replace-mode, so the client never sees a partial accumulation.
+    pub(crate) fn publish_parse_errors_fast(&self, uri: &str) {
+        // Fast path is only meaningful for push-diagnostic clients.
+        // Pull-diagnostic clients request diagnostics on-demand.
+        if self.client_supports_pull_diags.load(Ordering::Relaxed) {
+            return;
+        }
+
+        let normalized_uri = self.normalize_uri_key(uri);
+        let snapshot = {
+            let documents = self.documents.lock();
+            documents.get(&normalized_uri).or_else(|| documents.get(uri)).map(|doc| {
+                (
+                    doc.parse_errors.clone(),
+                    doc.version,
+                    doc.line_starts.clone(),
+                    doc.rope.clone(),
+                    doc.text.clone(),
+                )
+            })
+            // lock is released here
+        };
+        let Some((parse_errors, version, line_starts, rope, text)) = snapshot else { return };
+
+        // Nothing to fast-publish when there are no parse errors.
+        if parse_errors.is_empty() {
+            return;
+        }
+
+        let pos16 = |offset: usize| line_starts.offset_to_position_rope(&rope, offset);
+
+        let lsp_diagnostics: Vec<Value> = parse_errors
+            .iter()
+            .map(|e| {
+                let (location, base_message) = match e {
+                    crate::error::ParseError::UnexpectedToken { location, expected, found } => {
+                        (*location, format!("Expected {}, found {}", expected, found))
+                    }
+                    crate::error::ParseError::SyntaxError { location, message } => {
+                        (*location, message.clone())
+                    }
+                    crate::error::ParseError::UnexpectedEof => {
+                        (text.len(), "Unexpected end of input".to_string())
+                    }
+                    crate::error::ParseError::LexerError { message } => (0, message.clone()),
+                    _ => (0, e.to_string()),
+                };
+                let message =
+                    match perl_lsp_diagnostics::build_parse_error_hint(e, &base_message) {
+                        Some(hint) => format!("{base_message}\nSuggestion: {hint}"),
+                        None => base_message,
+                    };
+                let (line, character) = pos16(location);
+                json!({
+                    "range": {
+                        "start": {"line": line, "character": character},
+                        "end": {"line": line, "character": character + 1},
+                    },
+                    "severity": 1,
+                    "code": DiagnosticCode::ParseError.as_str(),
+                    "source": "perl-parser",
+                    "message": message,
+                })
+            })
+            .collect();
+
+        tracing::debug!(
+            count = lsp_diagnostics.len(),
+            uri = %normalized_uri,
+            version,
+            "Publishing fast parse-error diagnostics"
+        );
+
+        if let Err(e) = self.notify(
+            "textDocument/publishDiagnostics",
+            json!({
+                "uri": uri,
+                "version": version,
+                "diagnostics": lsp_diagnostics
+            }),
+        ) {
+            tracing::error!(uri, error = %e, "Failed to publish fast parse-error diagnostics");
+        }
+    }
+
     /// Handle textDocument/diagnostic request (pull diagnostics - LSP 3.17)
     ///
     /// Computes diagnostics for a single document using the pull-based model

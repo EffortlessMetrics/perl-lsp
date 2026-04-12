@@ -844,7 +844,11 @@ impl LspServer {
                                 }
                             }
 
-                            // Send diagnostics (debounced); coordinator completion is async.
+                            // Fast path: immediately publish parse-error diagnostics so
+                            // syntax errors appear before the slow debounce fires.
+                            // The debounced full publish replaces this notification.
+                            self.publish_parse_errors_fast(uri);
+                            // Send full diagnostics (debounced); coordinator completion is async.
                             self.publish_diagnostics_debounced(uri);
                             return Ok(());
                         }
@@ -857,7 +861,9 @@ impl LspServer {
                     coordinator.notify_parse_complete(uri);
                 }
 
-                // Send diagnostics (use original URI for client notification)
+                // Fast path: immediately publish parse-error diagnostics.
+                self.publish_parse_errors_fast(uri);
+                // Send full diagnostics (use original URI for client notification)
                 // Debounced: coalesces rapid typing into a single publication
                 self.publish_diagnostics_debounced(uri);
             }
