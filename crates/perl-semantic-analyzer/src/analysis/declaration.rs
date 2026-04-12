@@ -1361,7 +1361,8 @@ pub fn symbol_at_cursor(ast: &Node, offset: usize, current_pkg: &str) -> Option<
                 NodeKind::Identifier { name } => Some(name.clone()),
                 NodeKind::String { value, .. } => {
                     // "Foo/Bar.pm" -> "Foo::Bar"
-                    let module = value.trim_end_matches(".pm").replace('/', "::");
+                    let cleaned = value.trim_matches('\'').trim_matches('"').trim();
+                    let module = cleaned.trim_end_matches(".pm").replace('/', "::");
                     Some(module)
                 }
                 _ => None,
@@ -1375,7 +1376,12 @@ pub fn symbol_at_cursor(ast: &Node, offset: usize, current_pkg: &str) -> Option<
         /// - qw list as ArrayLit:   `->import(qw(foo bar))` → ArrayLiteral
         /// - Identifier nodes:      `->import(foo)` (unusual but legal)
         /// - String value trimming: quoted strings like `"'foo'"` from qw
-        fn import_call_exports(method_node: &Node, expected_module: &str, symbol: &str) -> bool {
+        fn import_call_exports(
+            method_node: &Node,
+            expected_module: &str,
+            symbol: &str,
+            aliases: &std::collections::HashMap<String, String>,
+        ) -> bool {
             let (object, method, args) = match &method_node.kind {
                 NodeKind::MethodCall { object, method, args } => (object, method, args),
                 _ => return false,
@@ -1386,14 +1392,21 @@ pub fn symbol_at_cursor(ast: &Node, offset: usize, current_pkg: &str) -> Option<
             // The object must be the same module name.
             let obj_name = match &object.kind {
                 NodeKind::Identifier { name } => name.as_str(),
+                NodeKind::Variable { name, .. } => {
+                    aliases.get(name).map(String::as_str).unwrap_or("")
+                }
                 _ => return false,
             };
             if obj_name != expected_module {
                 return false;
             }
+            if args.is_empty() {
+                // import() with no args means default exports.
+                return true;
+            }
             // Walk the argument list looking for the symbol.
             for arg in args {
-                if arg_node_matches_symbol(arg, symbol) {
+                if arg_node_matches_symbol(arg, expected_module, symbol) {
                     return true;
                 }
             }
@@ -1404,13 +1417,13 @@ pub fn symbol_at_cursor(ast: &Node, offset: usize, current_pkg: &str) -> Option<
         /// Handles: String literals, Identifiers (including raw "qw(...)"),
         /// and ArrayLiteral (the AST form produced by `qw(...)` in expression
         /// context).
-        fn arg_node_matches_symbol(arg: &Node, symbol: &str) -> bool {
+        fn arg_node_matches_symbol(arg: &Node, module: &str, symbol: &str) -> bool {
             match &arg.kind {
                 NodeKind::String { value, .. } => {
                     // Strip surrounding single/double quotes that some code
                     // paths leave in the value (e.g. qw in quotes.rs).
                     let bare = value.trim_matches('\'').trim_matches('"');
-                    bare == symbol
+                    bare == symbol || tag_imports_symbol(module, bare, symbol)
                 }
                 NodeKind::Identifier { name } => {
                     if name == symbol {
@@ -1423,16 +1436,58 @@ pub fn symbol_at_cursor(ast: &Node, offset: usize, current_pkg: &str) -> Option<
                             .trim_start_matches("qw")
                             .trim_start_matches(|c: char| "([{/<|!".contains(c))
                             .trim_end_matches(|c: char| ")]}/|!>".contains(c));
-                        return content.split_whitespace().any(|tok| tok == symbol);
+                        return content
+                            .split_whitespace()
+                            .any(|tok| tok == symbol || tag_imports_symbol(module, tok, symbol));
                     }
                     false
                 }
                 NodeKind::ArrayLiteral { elements } => {
                     // qw(...) in expression context → ArrayLiteral of String nodes
-                    elements.iter().any(|el| arg_node_matches_symbol(el, symbol))
+                    elements.iter().any(|el| arg_node_matches_symbol(el, module, symbol))
                 }
                 _ => false,
             }
+        }
+
+        fn module_runtime_alias(expr: &Node) -> Option<(String, String)> {
+            let (alias_name, call_node) = match &expr.kind {
+                NodeKind::Assignment { lhs, rhs, op } if op == "=" => {
+                    let NodeKind::Variable { name, .. } = &lhs.kind else {
+                        return None;
+                    };
+                    (name.as_str(), rhs.as_ref())
+                }
+                NodeKind::VariableDeclaration { variable, initializer: Some(rhs), .. } => {
+                    let NodeKind::Variable { name, .. } = &variable.kind else {
+                        return None;
+                    };
+                    (name.as_str(), rhs.as_ref())
+                }
+                _ => return None,
+            };
+
+            let NodeKind::FunctionCall { name, args } = &call_node.kind else {
+                return None;
+            };
+            if !matches!(
+                name.as_str(),
+                "use_module"
+                    | "require_module"
+                    | "Module::Runtime::use_module"
+                    | "Module::Runtime::require_module"
+            ) {
+                return None;
+            }
+            let first = args.first()?;
+            let NodeKind::String { value, .. } = &first.kind else {
+                return None;
+            };
+            let module = value.trim_matches('\'').trim_matches('"').trim();
+            if module.is_empty() {
+                return None;
+            }
+            Some((alias_name.to_string(), module.to_string()))
         }
 
         /// Unwrap an ExpressionStatement to its inner expression, or return
@@ -1452,8 +1507,18 @@ pub fn symbol_at_cursor(ast: &Node, offset: usize, current_pkg: &str) -> Option<
         /// statement list after (or even before) the require.
         fn scan_statements_for_require_import(stmts: &[Node], symbol: &str) -> Option<String> {
             // Collect all `require Module` names present in this block.
-            let required_modules: Vec<String> =
+            let mut required_modules: Vec<String> =
                 stmts.iter().filter_map(|s| require_module_name(inner_expr(s))).collect();
+            let mut aliases: std::collections::HashMap<String, String> =
+                std::collections::HashMap::new();
+            for stmt in stmts {
+                if let Some((alias, module)) = module_runtime_alias(inner_expr(stmt)) {
+                    aliases.insert(alias, module.clone());
+                    if !required_modules.contains(&module) {
+                        required_modules.push(module);
+                    }
+                }
+            }
 
             if required_modules.is_empty() {
                 return None;
@@ -1464,7 +1529,7 @@ pub fn symbol_at_cursor(ast: &Node, offset: usize, current_pkg: &str) -> Option<
             for stmt in stmts {
                 let expr = inner_expr(stmt);
                 for module in &required_modules {
-                    if import_call_exports(expr, module, symbol) {
+                    if import_call_exports(expr, module, symbol, &aliases) {
                         return Some(module.clone());
                     }
                 }

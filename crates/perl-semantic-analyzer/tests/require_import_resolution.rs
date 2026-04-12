@@ -89,3 +89,45 @@ load_data();
         "load_data() should NOT resolve to My::Loader without explicit import call"
     );
 }
+
+#[test]
+fn require_import_default_list_resolves_pkg() {
+    let code = r#"require My::Loader;
+My::Loader->import();
+load_data();
+"#;
+    let pkg = parse_and_symbol_at(code, "load_data()");
+    assert_eq!(
+        pkg.as_deref(),
+        Some("My::Loader"),
+        "default import() should resolve symbol to My::Loader, got: {pkg:?}"
+    );
+}
+
+#[test]
+fn require_file_path_then_import_resolves_pkg() {
+    let code = r#"require 'My/Loader.pm';
+My::Loader->import('load_data');
+load_data();
+"#;
+    let pkg = parse_and_symbol_at(code, "load_data()");
+    assert_eq!(
+        pkg.as_deref(),
+        Some("My::Loader"),
+        "file path require should normalize to My::Loader, got: {pkg:?}"
+    );
+}
+
+#[test]
+fn module_runtime_alias_then_import_resolves_pkg() {
+    let code = r#"my $loader = use_module('My::Loader');
+$loader->import('load_data');
+load_data();
+"#;
+    let pkg = parse_and_symbol_at(code, "load_data()");
+    assert_eq!(
+        pkg.as_deref(),
+        Some("My::Loader"),
+        "$loader->import() should resolve back to static use_module target, got: {pkg:?}"
+    );
+}
