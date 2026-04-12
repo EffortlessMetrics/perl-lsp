@@ -18,10 +18,10 @@ use crate::state::DocumentState;
 use crate::util::uri::parse_uri;
 use perl_diagnostics_codes::DiagnosticCode;
 use perl_lsp_diagnostics::{parse_error_code, parse_error_severity};
-use perl_parser::Parser;
 use perl_parser::error::ParseError;
 use perl_parser::position::offset_to_utf16_line_col;
 use perl_parser::util::code_slice;
+use perl_parser::Parser;
 
 // Import core diagnostics types from perl-lsp-providers (via parent module re-export)
 use super::{
@@ -531,8 +531,8 @@ mod tests {
     }
 
     #[test]
-    fn diagnostic_data_fixable_true_for_variable_redeclaration()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn diagnostic_data_fixable_true_for_variable_redeclaration(
+    ) -> Result<(), Box<dyn std::error::Error>> {
         // PL105 (VariableRedeclaration) offers a quick-fix that removes the duplicate `my`,
         // so the enriched diagnostic data must advertise it as fixable.
         let provider = PullDiagnosticsProvider::new();
@@ -577,8 +577,8 @@ mod tests {
     }
 
     #[test]
-    fn invalid_prototype_syntax_error_maps_to_pl302_warning()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn invalid_prototype_syntax_error_maps_to_pl302_warning(
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let provider = PullDiagnosticsProvider::new();
         let uri: Uri = "file:///test.pl".parse()?;
         let diagnostic = provider.parse_error_to_diagnostic(
@@ -612,8 +612,8 @@ mod tests {
     }
 
     #[test]
-    fn unknown_subroutine_attribute_syntax_error_stays_warning()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn unknown_subroutine_attribute_syntax_error_stays_warning(
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let provider = PullDiagnosticsProvider::new();
         let uri: Uri = "file:///test.pl".parse()?;
         let diagnostic = provider.parse_error_to_diagnostic(
