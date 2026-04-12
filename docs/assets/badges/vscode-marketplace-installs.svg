@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="210" height="20" role="img" aria-label="VS Marketplace installs: 180">
+  <title>VS Marketplace installs: 180 (last checked 2026-04-12)</title>
+  <linearGradient id="a" x2="0" y2="100%">
+    <stop offset="0" stop-color="#bbb" stop-opacity=".1"/>
+    <stop offset="1" stop-opacity=".1"/>
+  </linearGradient>
+  <rect rx="3" width="140" height="20" fill="#555"/>
+  <rect rx="3" x="140" width="70" height="20" fill="#007acc"/>
+  <path fill="#007acc" d="M140 0h4v20h-4z"/>
+  <rect rx="3" width="210" height="20" fill="url(#a)"/>
+  <g fill="#fff" text-anchor="middle" font-family="Verdana,Geneva,DejaVu Sans,sans-serif" text-rendering="geometricPrecision" font-size="11">
+    <text x="70" y="15" fill="#010101" fill-opacity=".3">VS Marketplace installs</text>
+    <text x="70" y="14">VS Marketplace installs</text>
+    <text x="175" y="15" fill="#010101" fill-opacity=".3">180</text>
+    <text x="175" y="14">180</text>
+  </g>
+</svg>
