@@ -852,10 +852,7 @@ fn hover_compile_time_constant_file() -> TestResult {
     assert!(!result.is_null(), "__FILE__ hover should not be null");
     let value =
         result.get("contents").and_then(|c| c.get("value")).and_then(|v| v.as_str()).unwrap_or("");
-    assert!(
-        value.contains("__FILE__"),
-        "__FILE__ hover must mention __FILE__, got: {value}"
-    );
+    assert!(value.contains("__FILE__"), "__FILE__ hover must mention __FILE__, got: {value}");
     assert!(
         value.contains("file name") || value.contains("source file"),
         "__FILE__ hover must describe file name, got: {value}"
@@ -888,10 +885,7 @@ fn hover_compile_time_constant_line() -> TestResult {
     assert!(!result.is_null(), "__LINE__ hover should not be null");
     let value =
         result.get("contents").and_then(|c| c.get("value")).and_then(|v| v.as_str()).unwrap_or("");
-    assert!(
-        value.contains("__LINE__"),
-        "__LINE__ hover must mention __LINE__, got: {value}"
-    );
+    assert!(value.contains("__LINE__"), "__LINE__ hover must mention __LINE__, got: {value}");
     assert!(
         value.contains("line number"),
         "__LINE__ hover must describe line number, got: {value}"
@@ -965,10 +959,7 @@ fn hover_compile_time_constant_sub() -> TestResult {
     assert!(!result.is_null(), "__SUB__ hover should not be null");
     let value =
         result.get("contents").and_then(|c| c.get("value")).and_then(|v| v.as_str()).unwrap_or("");
-    assert!(
-        value.contains("__SUB__"),
-        "__SUB__ hover must mention __SUB__, got: {value}"
-    );
+    assert!(value.contains("__SUB__"), "__SUB__ hover must mention __SUB__, got: {value}");
     assert!(
         value.contains("subroutine") || value.contains("current_sub"),
         "__SUB__ hover must describe current subroutine, got: {value}"

@@ -2347,9 +2347,7 @@ impl LspServer {
             "__FILE__" => {
                 "**`__FILE__`** \u{2014} Compile-time constant: the current source file name"
             }
-            "__LINE__" => {
-                "**`__LINE__`** \u{2014} Compile-time constant: the current line number"
-            }
+            "__LINE__" => "**`__LINE__`** \u{2014} Compile-time constant: the current line number",
             "__PACKAGE__" => {
                 "**`__PACKAGE__`** \u{2014} Compile-time constant: the current package name \
                  (empty string if outside any package)"
