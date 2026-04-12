@@ -650,17 +650,35 @@ impl LspServer {
                                 "perl.testRunner.testTimeout" => json!(config.test_runner_timeout),
                                 "perl.formatting.enabled" => json!(config.perltidy_enabled),
                                 "perl.formatting.profile" => json!(config.perltidy_profile),
-                                "perl.formatting.maximumLineLength" => json!(config.perltidy_maximum_line_length),
-                                "perl.formatting.indentColumns" => json!(config.perltidy_indent_columns),
+                                "perl.formatting.maximumLineLength" => {
+                                    json!(config.perltidy_maximum_line_length)
+                                }
+                                "perl.formatting.indentColumns" => {
+                                    json!(config.perltidy_indent_columns)
+                                }
                                 "perl.formatting.tabs" => json!(config.perltidy_tabs),
-                                "perl.formatting.openingBraceOnNewLine" => json!(config.perltidy_opening_brace_on_new_line),
-                                "perl.formatting.cuddledElse" => json!(config.perltidy_cuddled_else),
-                                "perl.formatting.spaceAfterKeyword" => json!(config.perltidy_space_after_keyword),
-                                "perl.formatting.addTrailingCommas" => json!(config.perltidy_add_trailing_commas),
-                                "perl.formatting.verticalAlignment" => json!(config.perltidy_vertical_alignment),
-                                "perl.formatting.blockCommentIndentation" => json!(config.perltidy_block_comment_indentation),
+                                "perl.formatting.openingBraceOnNewLine" => {
+                                    json!(config.perltidy_opening_brace_on_new_line)
+                                }
+                                "perl.formatting.cuddledElse" => {
+                                    json!(config.perltidy_cuddled_else)
+                                }
+                                "perl.formatting.spaceAfterKeyword" => {
+                                    json!(config.perltidy_space_after_keyword)
+                                }
+                                "perl.formatting.addTrailingCommas" => {
+                                    json!(config.perltidy_add_trailing_commas)
+                                }
+                                "perl.formatting.verticalAlignment" => {
+                                    json!(config.perltidy_vertical_alignment)
+                                }
+                                "perl.formatting.blockCommentIndentation" => {
+                                    json!(config.perltidy_block_comment_indentation)
+                                }
                                 "perl.formatting.extraArgs" => json!(config.perltidy_extra_args),
-                                "perl.formatting.timeoutSecs" => json!(config.perltidy_timeout_secs),
+                                "perl.formatting.timeoutSecs" => {
+                                    json!(config.perltidy_timeout_secs)
+                                }
                                 _ => json!(null),
                             }
                         };

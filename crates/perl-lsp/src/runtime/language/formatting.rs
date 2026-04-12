@@ -5,7 +5,9 @@
 
 use super::super::*;
 use crate::convert::{WirePosition, WireRange};
-use crate::features::formatting::{CodeFormatter, FormattingError, FormattingOptions, PerlTidyConfig};
+use crate::features::formatting::{
+    CodeFormatter, FormattingError, FormattingOptions, PerlTidyConfig,
+};
 use crate::protocol::{invalid_params, req_position, req_range, req_uri};
 
 /// Build a `JsonRpcError` from a `FormattingError`, populating the `data` field

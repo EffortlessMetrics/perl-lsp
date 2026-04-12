@@ -155,26 +155,26 @@ impl<R: perl_lsp_tooling::SubprocessRuntime> FormattingProvider<R> {
         if let Some(ref config) = self.perltidy_config {
             // Use config's to_args() but merge with LSP options for tab size/indent
             let mut config_args = config.to_args();
-            
+
             // If profile is set, use only the profile (perltidy will read everything from there)
             if config.profile.is_some() {
                 args.extend(config_args);
             } else {
                 // Merge LSP options with config options
                 // LSP options take precedence for indent-related settings
-                
+
                 // Remove any conflicting args from config_args that LSP options will override
                 config_args.retain(|arg| {
-                    !arg.starts_with("-i=") && 
-                    !arg.starts_with("--indent-columns=") &&
-                    !arg.starts_with("-et") &&
-                    !arg.starts_with("-dt") &&
-                    !arg.starts_with("--tabs") &&
-                    !arg.starts_with("--notabs")
+                    !arg.starts_with("-i=")
+                        && !arg.starts_with("--indent-columns=")
+                        && !arg.starts_with("-et")
+                        && !arg.starts_with("-dt")
+                        && !arg.starts_with("--tabs")
+                        && !arg.starts_with("--notabs")
                 });
-                
+
                 args.extend(config_args);
-                
+
                 // Apply LSP formatting options for indentation
                 if options.insert_spaces {
                     args.push(format!("-et={}", options.tab_size));

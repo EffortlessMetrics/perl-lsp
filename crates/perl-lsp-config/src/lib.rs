@@ -297,7 +297,8 @@ impl ServerConfig {
             if let Some(align) = formatting.get("verticalAlignment").and_then(|v| v.as_bool()) {
                 self.perltidy_vertical_alignment = Some(align);
             }
-            if let Some(block) = formatting.get("blockCommentIndentation").and_then(|v| v.as_u64()) {
+            if let Some(block) = formatting.get("blockCommentIndentation").and_then(|v| v.as_u64())
+            {
                 self.perltidy_block_comment_indentation = Some(block as u32);
             }
             if let Some(args) = formatting.get("extraArgs").and_then(|v| v.as_array()) {
