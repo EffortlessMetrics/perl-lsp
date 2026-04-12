@@ -1391,6 +1391,12 @@ pub fn symbol_at_cursor(ast: &Node, offset: usize, current_pkg: &str) -> Option<
             if obj_name != expected_module {
                 return false;
             }
+            if args.is_empty() {
+                // `Module->import()` requests the module default export set.
+                // Without a global export table we conservatively treat this
+                // as a potential import source for declaration lookup.
+                return true;
+            }
             // Walk the argument list looking for the symbol.
             for arg in args {
                 if arg_node_matches_symbol(arg, symbol) {

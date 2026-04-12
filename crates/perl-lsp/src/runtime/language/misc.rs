@@ -1129,6 +1129,60 @@ impl LspServer {
     fn find_import_source(&self, ast: &crate::ast::Node, symbol_name: &str) -> Option<String> {
         use perl_parser::ast::NodeKind;
 
+        fn normalize_require_module(arg: &crate::ast::Node) -> Option<String> {
+            match &arg.kind {
+                NodeKind::Identifier { name } => Some(name.clone()),
+                NodeKind::String { value, .. } => {
+                    let normalized = value
+                        .trim_matches('\'')
+                        .trim_matches('"')
+                        .trim_end_matches(".pm")
+                        .replace('/', "::");
+                    if normalized.is_empty() { None } else { Some(normalized) }
+                }
+                _ => None,
+            }
+        }
+
+        fn arg_matches_symbol(module: &str, arg: &crate::ast::Node, symbol: &str) -> bool {
+            match &arg.kind {
+                NodeKind::String { value, .. } => {
+                    let cleaned = value.trim_matches('\'').trim_matches('"');
+                    cleaned == symbol
+                }
+                NodeKind::Identifier { name } => {
+                    if name == symbol {
+                        return true;
+                    }
+                    if name.starts_with("qw") {
+                        let content = name
+                            .trim_start_matches("qw")
+                            .trim_start_matches(|c: char| "([{/<|!".contains(c))
+                            .trim_end_matches(|c: char| ")]}/|!>".contains(c));
+                        return content.split_whitespace().any(|w| {
+                            w == symbol
+                                || (w.starts_with(':')
+                                    && resolve_known_export_tag(module, w)
+                                        .is_some_and(|expanded| expanded.contains(&symbol)))
+                        });
+                    }
+                    false
+                }
+                NodeKind::ArrayLiteral { elements } => {
+                    elements.iter().any(|el| arg_matches_symbol(module, el, symbol))
+                }
+                _ => false,
+            }
+        }
+
+        fn inner_expr(node: &crate::ast::Node) -> &crate::ast::Node {
+            if let NodeKind::ExpressionStatement { expression } = &node.kind {
+                expression.as_ref()
+            } else {
+                node
+            }
+        }
+
         fn find(node: &crate::ast::Node, name: &str) -> Option<String> {
             match &node.kind {
                 NodeKind::Use { module, args, .. } => {
@@ -1162,6 +1216,41 @@ impl LspServer {
                     }
                 }
                 NodeKind::Program { statements } | NodeKind::Block { statements } => {
+                    let required_modules: Vec<String> = statements
+                        .iter()
+                        .filter_map(|stmt| {
+                            let expr = inner_expr(stmt);
+                            if let NodeKind::FunctionCall { name, args } = &expr.kind {
+                                if name == "require" {
+                                    return args.first().and_then(normalize_require_module);
+                                }
+                            }
+                            None
+                        })
+                        .collect();
+
+                    for stmt in statements {
+                        let expr = inner_expr(stmt);
+                        if let NodeKind::MethodCall { object, method, args } = &expr.kind {
+                            if method != "import" {
+                                continue;
+                            }
+                            let NodeKind::Identifier { name: obj_name } = &object.kind else {
+                                continue;
+                            };
+                            if !required_modules.iter().any(|module| module == obj_name) {
+                                continue;
+                            }
+                            if args.is_empty() {
+                                return Some(obj_name.clone());
+                            }
+                            for arg in args {
+                                if arg_matches_symbol(obj_name, arg, name) {
+                                    return Some(obj_name.clone());
+                                }
+                            }
+                        }
+                    }
                     for stmt in statements {
                         if let Some(src) = find(stmt, name) {
                             return Some(src);
@@ -1713,6 +1802,7 @@ impl LspServer {
 mod tests {
     use super::normalize_document_link_file_path;
     use crate::LspServer;
+    use crate::Parser;
     use crate::state::ClientCapabilities;
     use serde_json::json;
     use std::collections::HashSet;
@@ -1862,5 +1952,41 @@ mod tests {
             normalize_document_link_file_path(r"\\server\share\Thing.pm"),
             "//server/share/Thing.pm"
         );
+    }
+
+    #[test]
+    fn find_import_source_supports_require_manual_import() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let server =
+            LspServer::with_io(Box::new(Cursor::new(Vec::<u8>::new())), Box::new(Vec::<u8>::new()));
+        let source = "require List::Util;\nList::Util->import('sum');\nmy $x = sum();\n";
+        let mut parser = Parser::new(source);
+        let ast = parser.parse()?;
+
+        let source_module = server.find_import_source(&ast, "sum");
+        assert_eq!(
+            source_module.as_deref(),
+            Some("List::Util"),
+            "sum should resolve through require+manual import"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn find_import_source_supports_require_default_import() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let server =
+            LspServer::with_io(Box::new(Cursor::new(Vec::<u8>::new())), Box::new(Vec::<u8>::new()));
+        let source = "require List::Util;\nList::Util->import();\nmy $x = sum();\n";
+        let mut parser = Parser::new(source);
+        let ast = parser.parse()?;
+
+        let source_module = server.find_import_source(&ast, "sum");
+        assert_eq!(
+            source_module.as_deref(),
+            Some("List::Util"),
+            "sum should resolve through require+default import"
+        );
+        Ok(())
     }
 }

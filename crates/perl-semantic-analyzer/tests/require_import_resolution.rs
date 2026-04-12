@@ -89,3 +89,17 @@ load_data();
         "load_data() should NOT resolve to My::Loader without explicit import call"
     );
 }
+
+#[test]
+fn require_import_default_list_resolves_pkg() {
+    let code = r#"require My::Loader;
+My::Loader->import();
+load_data();
+"#;
+    let pkg = parse_and_symbol_at(code, "load_data()");
+    assert_eq!(
+        pkg.as_deref(),
+        Some("My::Loader"),
+        "load_data() should resolve to My::Loader via require+default import, got: {pkg:?}"
+    );
+}

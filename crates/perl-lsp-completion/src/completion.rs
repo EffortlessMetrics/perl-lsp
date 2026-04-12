@@ -335,6 +335,93 @@ impl CompletionProvider {
         }
 
         fn collect(node: &Node, map: &mut ImportMap) {
+            fn inner_expr(node: &Node) -> &Node {
+                if let NodeKind::ExpressionStatement { expression } = &node.kind {
+                    expression.as_ref()
+                } else {
+                    node
+                }
+            }
+
+            fn normalize_require_module(arg: &Node) -> Option<String> {
+                match &arg.kind {
+                    NodeKind::Identifier { name } => Some(name.clone()),
+                    NodeKind::String { value, .. } => {
+                        let normalized = value
+                            .trim_matches('\'')
+                            .trim_matches('"')
+                            .trim_end_matches(".pm")
+                            .replace('/', "::");
+                        if normalized.is_empty() { None } else { Some(normalized) }
+                    }
+                    _ => None,
+                }
+            }
+
+            fn collect_method_import_symbols(
+                module: &str,
+                args: &[Node],
+                symbols: &mut HashSet<String>,
+            ) -> bool {
+                let mut has_any = false;
+                for arg in args {
+                    match &arg.kind {
+                        NodeKind::String { value, .. } => {
+                            let cleaned = value.trim_matches('\'').trim_matches('"');
+                            for token in cleaned.split_whitespace() {
+                                if token.is_empty() {
+                                    continue;
+                                }
+                                if token.starts_with(':') {
+                                    if let Some(expanded) = resolve_known_export_tag(module, token)
+                                    {
+                                        symbols.extend(
+                                            expanded.iter().map(|name| (*name).to_string()),
+                                        );
+                                    }
+                                } else {
+                                    symbols.insert(token.to_string());
+                                }
+                                has_any = true;
+                            }
+                        }
+                        NodeKind::Identifier { name } => {
+                            if name.starts_with("qw") {
+                                let content = name
+                                    .trim_start_matches("qw")
+                                    .trim_start_matches(|c: char| "([{/<|!".contains(c))
+                                    .trim_end_matches(|c: char| ")]}/|!>".contains(c));
+                                for token in content.split_whitespace() {
+                                    if token.is_empty() {
+                                        continue;
+                                    }
+                                    if token.starts_with(':') {
+                                        if let Some(expanded) =
+                                            resolve_known_export_tag(module, token)
+                                        {
+                                            symbols.extend(
+                                                expanded.iter().map(|name| (*name).to_string()),
+                                            );
+                                        }
+                                    } else {
+                                        symbols.insert(token.to_string());
+                                    }
+                                    has_any = true;
+                                }
+                            } else {
+                                symbols.insert(name.clone());
+                                has_any = true;
+                            }
+                        }
+                        NodeKind::ArrayLiteral { elements } => {
+                            has_any |= collect_method_import_symbols(module, elements, symbols);
+                        }
+                        _ => {}
+                    }
+                }
+                has_any
+            }
+
             match &node.kind {
                 NodeKind::Use { module, args, .. } => {
                     // Skip pragmas: only process uppercase-starting module names
@@ -384,6 +471,41 @@ impl CompletionProvider {
                     }
                 }
                 NodeKind::Program { statements } | NodeKind::Block { statements } => {
+                    let required_modules: HashSet<String> = statements
+                        .iter()
+                        .filter_map(|statement| {
+                            let expr = inner_expr(statement);
+                            if let NodeKind::FunctionCall { name, args } = &expr.kind {
+                                if name == "require" {
+                                    return args.first().and_then(normalize_require_module);
+                                }
+                            }
+                            None
+                        })
+                        .collect();
+
+                    if !required_modules.is_empty() {
+                        for statement in statements {
+                            let expr = inner_expr(statement);
+                            if let NodeKind::MethodCall { object, method, args } = &expr.kind {
+                                if method != "import" {
+                                    continue;
+                                }
+                                let NodeKind::Identifier { name: object_name } = &object.kind
+                                else {
+                                    continue;
+                                };
+                                if !required_modules.contains(object_name) {
+                                    continue;
+                                }
+                                let mut symbols = HashSet::new();
+                                if collect_method_import_symbols(object_name, args, &mut symbols) {
+                                    map.entry(object_name.clone()).or_default().extend(symbols);
+                                }
+                            }
+                        }
+                    }
+
                     for stmt in statements {
                         collect(stmt, map);
                     }

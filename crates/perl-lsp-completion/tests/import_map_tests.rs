@@ -310,3 +310,56 @@ fn extract_import_map_supports_mixed_tag_and_symbol_imports() {
         seek_set.sort_text
     );
 }
+
+#[test]
+fn extract_import_map_supports_require_manual_import_list() {
+    let source = "require List::Util;\nList::Util->import('sum', 'min');\nsu";
+    let index = make_list_util_index();
+    let provider = parse_provider_with_index(source, index);
+    let items = provider.get_completions(source, source.len());
+
+    let sum_item = must_some(
+        items.iter().find(|i| i.label == "sum" || i.insert_text.as_deref() == Some("sum")),
+    );
+    assert!(
+        sum_item.sort_text.as_deref().is_some_and(|s| s.starts_with("2_")),
+        "sum should be promoted when imported via require+manual import; got: {:?}",
+        sum_item.sort_text
+    );
+}
+
+#[test]
+fn extract_import_map_supports_require_manual_import_qw() {
+    let source = "require List::Util;\nList::Util->import(qw(sum min));\nmi";
+    let index = make_list_util_index();
+    let provider = parse_provider_with_index(source, index);
+    let items = provider.get_completions(source, source.len());
+
+    let min_item = must_some(
+        items.iter().find(|i| i.label == "min" || i.insert_text.as_deref() == Some("min")),
+    );
+    assert!(
+        min_item.sort_text.as_deref().is_some_and(|s| s.starts_with("2_")),
+        "min should be promoted when imported via require+qw import; got: {:?}",
+        min_item.sort_text
+    );
+}
+
+#[test]
+fn extract_import_map_supports_require_path_manual_tag_import() {
+    let source = "require 'File/Find.pm';\nFile::Find->import(':find');\nfi";
+    let index = make_file_find_index();
+    let provider = parse_provider_with_index(source, index);
+    let items = provider.get_completions(source, source.len());
+
+    let finddepth_item = must_some(
+        items
+            .iter()
+            .find(|i| i.label == "finddepth" || i.insert_text.as_deref() == Some("finddepth")),
+    );
+    assert!(
+        finddepth_item.sort_text.as_deref().is_some_and(|s| s.starts_with("2_")),
+        "finddepth should be promoted when imported via require path + tag; got: {:?}",
+        finddepth_item.sort_text
+    );
+}
