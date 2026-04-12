@@ -134,6 +134,7 @@ impl PullDiagnosticsProvider {
                         &parse_errors,
                         content,
                         None,
+                        &[],
                         source_path.as_deref(),
                     )
                     .into_iter()
@@ -159,6 +160,7 @@ impl PullDiagnosticsProvider {
                     &doc_state.parse_errors,
                     &doc_state.text,
                     None,
+                    &[],
                     source_path.as_deref(),
                 )
                 .into_iter()

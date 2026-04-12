@@ -65,16 +65,22 @@ impl DiagnosticsProvider {
         source: &str,
         module_resolver: Option<&dyn Fn(&str) -> bool>,
     ) -> Vec<Diagnostic> {
-        self.get_diagnostics_with_path(ast, parse_errors, source, module_resolver, None)
+        self.get_diagnostics_with_path(ast, parse_errors, source, module_resolver, &[], None)
     }
 
     /// Generate diagnostics for the given AST with optional source-path context.
+    ///
+    /// `module_search_paths` is the list of `@INC` paths that were searched during
+    /// module resolution. When non-empty, PL701 diagnostics include these paths so
+    /// the user can see where perl-lsp looked. Pass `&[]` when the paths are not
+    /// available.
     pub fn get_diagnostics_with_path(
         &self,
         ast: &std::sync::Arc<Node>,
         parse_errors: &[ParseError],
         source: &str,
         module_resolver: Option<&dyn Fn(&str) -> bool>,
+        module_search_paths: &[String],
         source_path: Option<&Path>,
     ) -> Vec<Diagnostic> {
         let mut diagnostics = Vec::new();
@@ -172,6 +178,7 @@ impl DiagnosticsProvider {
                 ast,
                 source,
                 resolver,
+                module_search_paths,
                 &mut diagnostics,
             );
         }

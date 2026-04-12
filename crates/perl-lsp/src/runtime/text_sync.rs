@@ -966,6 +966,7 @@ impl LspServer {
                         &doc.parse_errors,
                         &doc.text,
                         None,
+                        &[],
                         source_path.as_deref(),
                     );
 
