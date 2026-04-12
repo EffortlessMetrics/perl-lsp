@@ -259,3 +259,186 @@ fn test_e2e_step_over_changes_execution() -> TestResult {
 
     Ok(())
 }
+
+// ─── Test 4: attach workflow with stopOnEntry=false ────────────────────────────
+
+/// Validates the attach workflow:
+/// initialize → attach(pid, stopOnEntry=false) → wait for stopped(reason=attach) →
+/// set breakpoints → disconnect.
+#[test]
+fn test_e2e_attach_workflow_stopped_event() -> TestResult {
+    let timeout = workflow_timeout();
+    let mut session = DapWorkflowSession::new(timeout)?;
+
+    // Use an arbitrary non-zero PID (the adapter doesn't validate it exists)
+    let test_pid = 12345u32;
+
+    // Attach without stopOnEntry — should emit stopped(reason=attach)
+    session.attach(test_pid, false)?;
+
+    // Wait for the attach stopped event
+    let attached = session.wait_stopped()?;
+    assert_eq!(
+        attached.reason, "attach",
+        "stopped reason after attach must be `attach`, got `{}`",
+        attached.reason
+    );
+
+    let _thread_id = attached.thread_id;
+
+    // After attach, we can set breakpoints (the adapter accepts them)
+    let workspace = tempdir()?;
+    let script = workspace.path().join("dummy.pl");
+    write(&script, workflow_script_content())?;
+    let script_str = script.to_str().ok_or("script path is not valid UTF-8")?.to_string();
+
+    let bp_response = session.set_breakpoints(&script_str, &[BP_LINE_2])?;
+    assert!(bp_response.is_some(), "setBreakpoints should succeed after attach");
+
+    session.disconnect()?;
+
+    Ok(())
+}
+
+// ─── Test 5: attach workflow with stopOnEntry=true ──────────────────────────────
+
+/// Validates attach with stopOnEntry=true:
+/// attach(pid, stopOnEntry=true) should emit both "attach" and "entry" stopped events.
+#[test]
+fn test_e2e_attach_workflow_stop_on_entry() -> TestResult {
+    let timeout = workflow_timeout();
+    let mut session = DapWorkflowSession::new(timeout)?;
+
+    let test_pid = 12346u32;
+
+    // Attach with stopOnEntry=true
+    session.attach(test_pid, true)?;
+
+    // Should receive "attach" stopped event first
+    let first_stop = session.wait_stopped()?;
+    assert_eq!(
+        first_stop.reason, "attach",
+        "first stopped event after attach(stopOnEntry=true) must be reason=attach"
+    );
+
+    // Then should receive "entry" stopped event
+    let entry_stop = session.wait_stopped()?;
+    assert_eq!(
+        entry_stop.reason, "entry",
+        "second stopped event after attach(stopOnEntry=true) must be reason=entry"
+    );
+
+    session.disconnect()?;
+
+    Ok(())
+}
+
+// ─── Test 6: step-into advances execution ────────────────────────────────────
+
+/// Validates that `stepIn` (the DAP `stepIn` command) advances execution.
+///
+/// Uses the same proven fixture as the step-over test.  Since the fixture has
+/// no sub calls on BP_LINE_2, `stepIn` degrades to a single-line step like
+/// `next`, but the protocol behaviour is identical: the adapter sends `s` to
+/// `perl -d` and must receive a `stopped(reason=step)` event.
+///
+/// A dedicated subroutine-stepping test would require a fixture where the
+/// initial `c` runs reliably past the sub definition; that can be added in a
+/// follow-up.  This test validates the DAP protocol round-trip.
+#[test]
+fn test_e2e_step_into_subroutine() -> TestResult {
+    if !perl_available() {
+        eprintln!("Skipping test_e2e_step_into_subroutine - perl not available");
+        return Ok(());
+    }
+
+    let workspace = tempdir()?;
+    let script = workspace.path().join("workflow_stepinto.pl");
+    write(&script, workflow_script_content())?;
+
+    let script_str = script.to_str().ok_or("script path is not valid UTF-8")?.to_string();
+
+    let timeout = workflow_timeout();
+    let mut session = DapWorkflowSession::new(timeout)?;
+
+    session.launch(&script_str)?;
+    // BP_LINE_2 (line 5): same rationale as step-over test — configurationDone's `c`
+    // runs from the initial implicit stop at line 4 to the breakpoint at line 5.
+    session.set_breakpoints(&script_str, &[BP_LINE_2])?;
+    session.configuration_done()?;
+
+    let at_breakpoint = session.wait_stopped()?;
+    assert_eq!(at_breakpoint.reason, "breakpoint");
+
+    let thread_id = at_breakpoint.thread_id;
+
+    // stepIn on a non-sub-call line degrades to a single step; the adapter
+    // still sends `s` to perl -d and must receive stopped(reason=step).
+    session.step_into(thread_id)?;
+    let after_step_in = session.wait_stopped()?;
+
+    // After stepIn, reason must be "step"
+    assert_eq!(
+        after_step_in.reason, "step",
+        "stop reason after stepIn must be `step`, got `{}`",
+        after_step_in.reason
+    );
+
+    session.disconnect()?;
+
+    Ok(())
+}
+
+// ─── Test 7: inspect global variables at a stopped frame ──────────────────────
+
+/// Validates that global variables can be inspected:
+/// stop at breakpoint → stackTrace → scopes → scopes_globals_ref → variables → inspect $variable
+#[test]
+fn test_e2e_globals_scope_inspection() -> TestResult {
+    if !perl_available() {
+        eprintln!("Skipping test_e2e_globals_scope_inspection - perl not available");
+        return Ok(());
+    }
+
+    let workspace = tempdir()?;
+    let script = workspace.path().join("workflow_globals.pl");
+
+    // Script with a global variable
+    let content = "use strict;\nuse warnings;\n\nour $global_var = 999;\nmy $x = 10;\nmy $y = $x + 5;\nprint \"$y\\n\";\n";
+    write(&script, content)?;
+
+    let script_str = script.to_str().ok_or("script path is not valid UTF-8")?.to_string();
+
+    let timeout = workflow_timeout();
+    let mut session = DapWorkflowSession::new(timeout)?;
+
+    session.launch(&script_str)?;
+    session.set_breakpoints(&script_str, &[BP_LINE_2])?;
+    session.configuration_done()?;
+
+    let stopped = session.wait_stopped()?;
+    assert_eq!(stopped.reason, "breakpoint");
+
+    let thread_id = stopped.thread_id;
+
+    // Retrieve stack trace and get frame
+    let (frame_id, _, _) = session.stack_trace(thread_id)?;
+
+    // Retrieve globals scope reference
+    let globals_ref = session.scopes_globals_ref(frame_id)?;
+    assert!(globals_ref > 0, "globals scope variablesReference must be positive");
+
+    // Retrieve global variables
+    let globals = session.variables(globals_ref)?;
+    assert!(!globals.is_empty(), "globals scope must contain at least one variable");
+
+    // Verify variable entries have non-empty names
+    for var in &globals {
+        let name = var.get("name").and_then(|v| v.as_str()).unwrap_or("");
+        assert!(!name.is_empty(), "global variable entry must have non-empty name: {var:?}");
+    }
+
+    session.disconnect()?;
+
+    Ok(())
+}
