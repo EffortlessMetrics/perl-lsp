@@ -1815,6 +1815,20 @@ if [ "$(git config --get core.bare 2>/dev/null || true)" = "true" ]; then
     fi
 fi
 
+# --- Self-heal stale hook installation (issue #4220) ---
+# When hooks/pre-push is updated in master, .git/hooks/pre-push is only
+# updated when install-githooks is re-run. Auto-copy when drift is detected.
+# Note: exec "$0" "$@" does NOT work here — git stdin is already consumed
+# before the hook executes. Copy and continue; the fresh hook takes effect
+# on the next push.
+REPO_ROOT_FOR_HOOK="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+if [ -n "$REPO_ROOT_FOR_HOOK" ] && [ -f "$REPO_ROOT_FOR_HOOK/hooks/pre-push" ]; then
+    if ! diff -q "$0" "$REPO_ROOT_FOR_HOOK/hooks/pre-push" >/dev/null 2>&1; then
+        echo "pre-push hook updated from hooks/pre-push (was stale — takes effect next push)"
+        cp "$REPO_ROOT_FOR_HOOK/hooks/pre-push" "$0" && chmod +x "$0" || true
+    fi
+fi
+
 # stdin provides: <local ref> <local sha> <remote ref> <remote sha>
 # Git sends all-zero SHA for deletions. Read all refs into an array first
 # so stdin is available for both the delete-check and the test-file scan.
@@ -2000,6 +2014,14 @@ if [ "$GATE_STATUS" -ne 0 ]; then
     fi
     if grep -qE 'clippy::|warning: .*-> .*\.rs' "$GATE_LOG" 2>/dev/null; then
         echo "   • Clippy warnings — look for the error above and fix the warnings"
+        HINTED=true
+    fi
+    if grep -qE 'os error 206|filename.*too long|ERROR_FILENAME_EXCED' "$GATE_LOG" 2>/dev/null; then
+        echo "   • Windows MAX_PATH (os error 206) — paths exceed 260 chars"
+        echo "     Fix A: Enable long paths (requires admin terminal):"
+        echo "       reg add HKLM\SYSTEM\CurrentControlSet\Control\FileSystem /v LongPathsEnabled /t REG_DWORD /d 1 /f"
+        echo "     Fix B: bash scripts/install-githooks.sh  (stale hook may be the cause)"
+        echo "     See: docs/contributing/FIRST_PR.md"
         HINTED=true
     fi
     if [ "$HINTED" = false ]; then
@@ -4330,6 +4352,29 @@ mod tests {
         assert!(
             hook.contains("cargo xtask fmt") || hook.contains("cargo fmt"),
             "hook must suggest the fmt fix command on fmt failures"
+        );
+    }
+
+    #[test]
+    fn pre_push_hook_has_stale_hook_self_heal() {
+        let hook = pre_push_hook_script();
+        // Issue #4220 — when hooks/pre-push is updated in master, the installed
+        // .git/hooks/pre-push is only updated when install-githooks is re-run.
+        // The hook must detect its own staleness and auto-copy the fresh version.
+        assert!(
+            hook.contains("REPO_ROOT_FOR_HOOK") && hook.contains("hooks/pre-push"),
+            "hook must self-heal stale installation (issue #4220)"
+        );
+    }
+
+    #[test]
+    fn pre_push_hook_has_os_error_206_hint() {
+        let hook = pre_push_hook_script();
+        // Issue #4220 — Windows MAX_PATH (os error 206) hint must appear in the
+        // gate-failure handler so contributors know how to fix it.
+        assert!(
+            hook.contains("os error 206") || hook.contains("LongPathsEnabled"),
+            "hook must hint at Windows MAX_PATH fix (issue #4220)"
         );
     }
 }
