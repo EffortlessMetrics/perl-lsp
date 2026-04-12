@@ -2350,7 +2350,7 @@ impl LspServer {
             "__LINE__" => "**`__LINE__`** \u{2014} Compile-time constant: the current line number",
             "__PACKAGE__" => {
                 "**`__PACKAGE__`** \u{2014} Compile-time constant: the current package name \
-                 (empty string if outside any package)"
+                 (`\"main\"` at top level; `undef` inside `package BLOCK` with no name)"
             }
             "__SUB__" => {
                 "**`__SUB__`** \u{2014} Compile-time constant: a reference to the current \
