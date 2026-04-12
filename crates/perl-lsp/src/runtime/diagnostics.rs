@@ -40,11 +40,7 @@ impl LspServer {
     ///
     /// A markdown-formatted string with the diagnostic information
     fn generate_diagnostic_markdown(&self, code: Option<&str>, message: &str) -> String {
-        if let Some(c) = code {
-            format!("**{}**: {}", c, message)
-        } else {
-            message.to_string()
-        }
+        if let Some(c) = code { format!("**{}**: {}", c, message) } else { message.to_string() }
     }
 
     /// Publish diagnostics for a document (push diagnostics)

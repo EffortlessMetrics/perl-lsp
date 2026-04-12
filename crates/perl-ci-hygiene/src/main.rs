@@ -477,22 +477,14 @@ fn command_status_strict(
 }
 
 fn command_exists(command: &str) -> bool {
-    #[cfg(unix)]
-    {
-        Command::new("sh")
-            .arg("-c")
-            .arg(format!("command -v {command} >/dev/null 2>&1"))
-            .status()
-            .map(|status| status.success())
-            .unwrap_or(false)
-    }
-    #[cfg(not(unix))]
-    {
-        // flock and similar Unix-only tools do not exist on Windows; always return false
-        // so callers fall through to the no-lock path.
-        let _ = command;
-        false
-    }
+    // Replaces `sh -c "command -v ..."` which is Unix-only.
+    // On Windows, also probe for .exe / .cmd / .bat extensions.
+    #[cfg(windows)]
+    let suffixes: &[&str] = &[".exe", ".cmd", ".bat", ""];
+    #[cfg(not(windows))]
+    let suffixes: &[&str] = &[""];
+    env::split_paths(&env::var_os("PATH").unwrap_or_default())
+        .any(|dir| suffixes.iter().any(|ext| dir.join(format!("{command}{ext}")).exists()))
 }
 
 fn command_output_lines(output: &str) -> Vec<String> {
@@ -517,6 +509,8 @@ fn read_json_value(path: &Path) -> Result<Value> {
     Ok(value)
 }
 
+// Used only in the #[cfg(not(windows))] preflight block.
+#[cfg_attr(windows, allow(dead_code))]
 fn read_usize_from_path(path: &Path) -> Result<usize> {
     let raw = fs::read_to_string(path).with_context(|| format!("reading {:?}", path))?;
     raw.trim()
@@ -524,6 +518,8 @@ fn read_usize_from_path(path: &Path) -> Result<usize> {
         .map_err(|err| color_eyre::eyre::eyre!("invalid usize in {}: {err}", path.display()))
 }
 
+// Used only in the #[cfg(not(windows))] preflight block.
+#[cfg_attr(windows, allow(dead_code))]
 fn read_usize_from_tokens(path: &Path, idx: usize) -> Result<usize> {
     let raw = fs::read_to_string(path).with_context(|| format!("reading {:?}", path))?;
     let tokens: Vec<&str> = raw.split_whitespace().collect();
@@ -536,8 +532,41 @@ fn read_usize_from_tokens(path: &Path, idx: usize) -> Result<usize> {
         .map_err(|err| color_eyre::eyre::eyre!("invalid usize in {}: {err}", path.display()))
 }
 
+// On Windows, the concurrency-cap variables are set but not mutated
+// (no /proc-based auto-degradation on Windows). Allow unused_mut for
+// cross-platform compatibility.
+#[cfg_attr(windows, allow(unused_mut))]
 fn cmd_preflight(_repo_root: &Path) -> Result<i32> {
-    #[cfg(target_os = "linux")]
+    #[cfg(windows)]
+    println!(
+        "note: preflight system metrics not available on Windows; \
+         skipping /proc checks — see scripts/preflight.sh for Linux-only usage"
+    );
+
+    let uv_threadpool_size = env::var("UV_THREADPOOL_SIZE").unwrap_or_else(|_| "4".to_string());
+    let mut pw_workers = env::var("PW_WORKERS").unwrap_or_else(|_| "2".to_string());
+    let mut rust_test_threads = env::var("RUST_TEST_THREADS").unwrap_or_else(|_| "2".to_string());
+    let mut omp_num_threads = env::var("OMP_NUM_THREADS").unwrap_or_else(|_| "1".to_string());
+    let mut openblas_num_threads =
+        env::var("OPENBLAS_NUM_THREADS").unwrap_or_else(|_| "1".to_string());
+    let mut mkl_num_threads = env::var("MKL_NUM_THREADS").unwrap_or_else(|_| "1".to_string());
+    let mut numexpr_num_threads =
+        env::var("NUMEXPR_NUM_THREADS").unwrap_or_else(|_| "1".to_string());
+
+    // SAFETY: This is a single-threaded CLI tool; no other threads are reading env vars.
+    unsafe {
+        env::set_var("UV_THREADPOOL_SIZE", &uv_threadpool_size);
+        env::set_var("PW_WORKERS", &pw_workers);
+        env::set_var("RUST_TEST_THREADS", &rust_test_threads);
+        env::set_var("OMP_NUM_THREADS", &omp_num_threads);
+        env::set_var("OPENBLAS_NUM_THREADS", &openblas_num_threads);
+        env::set_var("MKL_NUM_THREADS", &mkl_num_threads);
+        env::set_var("NUMEXPR_NUM_THREADS", &numexpr_num_threads);
+    }
+
+    // Auto-degrade concurrency when the system is under heavy load.
+    // This block reads /proc data; it is Linux-only.
+    #[cfg(not(windows))]
     {
         let pids_used = command_with_output(Path::new("/"), "ps", &["-e", "--no-headers"], &[])?
             .lines()
@@ -545,30 +574,7 @@ fn cmd_preflight(_repo_root: &Path) -> Result<i32> {
         let pid_max = read_usize_from_path(Path::new("/proc/sys/kernel/pid_max"))?;
         let files_used = read_usize_from_tokens(Path::new("/proc/sys/fs/file-nr"), 1)?;
         let files_max = read_usize_from_path(Path::new("/proc/sys/fs/file-max"))?;
-
         println!("PIDs: {pids_used} / {pid_max} | Open files: {files_used} / {files_max}");
-
-        let uv_threadpool_size = env::var("UV_THREADPOOL_SIZE").unwrap_or_else(|_| "4".to_string());
-        let mut pw_workers = env::var("PW_WORKERS").unwrap_or_else(|_| "2".to_string());
-        let mut rust_test_threads =
-            env::var("RUST_TEST_THREADS").unwrap_or_else(|_| "2".to_string());
-        let mut omp_num_threads = env::var("OMP_NUM_THREADS").unwrap_or_else(|_| "1".to_string());
-        let mut openblas_num_threads =
-            env::var("OPENBLAS_NUM_THREADS").unwrap_or_else(|_| "1".to_string());
-        let mut mkl_num_threads = env::var("MKL_NUM_THREADS").unwrap_or_else(|_| "1".to_string());
-        let mut numexpr_num_threads =
-            env::var("NUMEXPR_NUM_THREADS").unwrap_or_else(|_| "1".to_string());
-
-        // SAFETY: This is a single-threaded CLI tool; no other threads are reading env vars.
-        unsafe {
-            env::set_var("UV_THREADPOOL_SIZE", &uv_threadpool_size);
-            env::set_var("PW_WORKERS", &pw_workers);
-            env::set_var("RUST_TEST_THREADS", &rust_test_threads);
-            env::set_var("OMP_NUM_THREADS", &omp_num_threads);
-            env::set_var("OPENBLAS_NUM_THREADS", &openblas_num_threads);
-            env::set_var("MKL_NUM_THREADS", &mkl_num_threads);
-            env::set_var("NUMEXPR_NUM_THREADS", &numexpr_num_threads);
-        }
 
         if pids_used > (pid_max * 85 / 100) {
             pw_workers = "1".into();
@@ -590,8 +596,6 @@ fn cmd_preflight(_repo_root: &Path) -> Result<i32> {
             println!("System hot → auto‑degraded workers (PW=1, RUST=1, *BLAS=1)");
         }
     }
-    #[cfg(not(target_os = "linux"))]
-    println!("preflight: /proc not available on this OS; skipping resource checks");
 
     Ok(0)
 }
@@ -621,12 +625,29 @@ fn cmd_e2e_gate(repo_root: &Path, cargo_args: &[String]) -> Result<i32> {
         vec!["test".to_string(), "--".to_string(), format!("--test-threads={rust_test_threads}")];
     args.extend_from_slice(cargo_args);
     let refs: Vec<&str> = args.iter().map(String::as_str).collect();
-    let lock_path = std::env::temp_dir().join("e2e-suite.lock");
 
-    #[cfg(unix)]
+    // flock is a Linux/macOS utility and does not exist on Windows.
+    // Skip the lock entirely and run the tests directly on Windows.
+    #[cfg(windows)]
     {
-        let lock_file = lock_path.to_string_lossy();
-        let lock_file = lock_file.as_ref();
+        println!("note: flock not available on Windows; running E2E tests without lock");
+        command_status_strict(
+            repo_root,
+            "cargo",
+            &refs,
+            &[("RUST_TEST_THREADS", rust_test_threads.as_str())],
+        )
+        .map(|_| 0)
+    }
+
+    #[cfg(not(windows))]
+    {
+        let lock_file_path = std::env::temp_dir().join("e2e-suite.lock");
+        let lock_file_str = lock_file_path
+            .to_str()
+            .ok_or_else(|| color_eyre::eyre::eyre!("temp dir path is not valid UTF-8"))?
+            .to_owned();
+        let lock_file = lock_file_str.as_str();
 
         if !command_exists("flock") {
             println!("warning: flock not found; running E2E tests without external lock");
@@ -661,23 +682,7 @@ fn cmd_e2e_gate(repo_root: &Path, cargo_args: &[String]) -> Result<i32> {
             &blocking_args,
             &[("RUST_TEST_THREADS", rust_test_threads.as_str())],
         )?;
-        return Ok(0);
-    }
-
-    #[cfg(not(unix))]
-    {
-        // flock is not available on Windows; run without external lock
-        let _ = lock_path;
-        println!(
-            "warning: flock not available on this OS; running E2E tests without external lock"
-        );
-        command_status_strict(
-            repo_root,
-            "cargo",
-            &refs,
-            &[("RUST_TEST_THREADS", rust_test_threads.as_str())],
-        )
-        .map(|_| 0)
+        Ok(0)
     }
 }
 
@@ -1507,7 +1512,15 @@ fn cmd_test_with_override(repo_root: &Path) -> Result<i32> {
 
 fn cmd_simple_lsp_test(repo_root: &Path) -> Result<i32> {
     println!("Testing Perl LSP server...");
-    #[cfg(unix)]
+    #[cfg(windows)]
+    {
+        let _ = repo_root;
+        println!(
+            "note: simple-lsp-test uses a POSIX shell pipeline and is not supported on Windows"
+        );
+        Ok(0)
+    }
+    #[cfg(not(windows))]
     {
         let shell_script = r#"cat <<'EOF' | cargo run -p perl-parser --bin perl-lsp 2>&1 | head -20
 Content-Length: 205
@@ -1519,13 +1532,8 @@ EOF
         for line in output.lines().take(20) {
             println!("{line}");
         }
+        Ok(0)
     }
-    #[cfg(not(unix))]
-    {
-        let _ = repo_root;
-        println!("warning: simple LSP smoke test requires sh; skipping on this OS");
-    }
-    Ok(0)
 }
 
 fn cmd_check_version_sync(repo_root: &Path) -> Result<i32> {
@@ -4424,5 +4432,28 @@ mod tests {
             hook.contains("os error 206") || hook.contains("LongPathsEnabled"),
             "hook must hint at Windows MAX_PATH fix (issue #4220)"
         );
+    }
+
+    #[test]
+    fn command_exists_finds_cargo() {
+        // cargo is always present in the test environment
+        assert!(command_exists("cargo"), "cargo should be found via PATH");
+    }
+
+    #[test]
+    fn command_exists_rejects_nonexistent() {
+        assert!(
+            !command_exists("__xyzzy_not_a_real_command_99__"),
+            "non-existent command must not be found"
+        );
+    }
+
+    #[test]
+    fn e2e_lock_file_path_is_portable() {
+        let lock = std::env::temp_dir().join("e2e-suite.lock");
+        let lock_str = lock.to_str().expect("temp dir must be valid UTF-8 in CI");
+        // On Linux CI this will be /tmp/e2e-suite.lock (acceptable)
+        // On Windows this will be C:\Users\...\AppData\Local\Temp\e2e-suite.lock
+        assert!(!lock_str.is_empty(), "lock file path must be non-empty");
     }
 }
