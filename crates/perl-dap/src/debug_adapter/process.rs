@@ -2,6 +2,44 @@
 
 use super::*;
 
+/// Try to detect the Perl interpreter available on the system and return a human-readable
+/// summary string.
+///
+/// Uses `resolve_perl_path_with_toolchain()` to find Perl (checks perlbrew, plenv, then PATH),
+/// then runs `perl -e 'print $]'` to get the version number.  Returns a string describing what
+/// was found, or a "not found" / install-hint message suitable for inclusion in error messages.
+fn detect_perl_info() -> String {
+    match crate::platform::resolve_perl_path_with_toolchain() {
+        Ok(perl_path) => {
+            let version_output =
+                Command::new(&perl_path).arg("-e").arg("print $]").output().ok().and_then(|out| {
+                    if out.status.success() { String::from_utf8(out.stdout).ok() } else { None }
+                });
+
+            match version_output {
+                Some(v) if !v.trim().is_empty() => {
+                    format!("Found Perl at {} (version {})", perl_path.display(), v.trim())
+                }
+                _ => format!("Found Perl at {}", perl_path.display()),
+            }
+        }
+        Err(_) => {
+            #[cfg(windows)]
+            {
+                "Perl was not found on PATH. Install Perl from https://strawberryperl.com \
+                 or set a custom path."
+                    .to_string()
+            }
+            #[cfg(not(windows))]
+            {
+                "Perl was not found on PATH. Install Perl via your package manager \
+                 (e.g. `apt install perl` or `brew install perl`) or set a custom path."
+                    .to_string()
+            }
+        }
+    }
+}
+
 impl DebugAdapter {
     /// Handle initialize request
     pub(super) fn handle_initialize(
@@ -163,19 +201,24 @@ impl DebugAdapter {
                         message: None,
                     }
                 }
-                Err(e) => DapMessage::Response {
-                    seq,
-                    request_seq,
-                    success: false,
-                    command: "launch".to_string(),
-                    body: None,
-                    message: Some(format!(
-                        "Cannot start Perl debugger: {}. \
-                         Check that 'perl' is on your PATH and that the file exists. \
-                         You can set a custom interpreter path in your launch.json.",
-                        e
-                    )),
-                },
+                Err(e) => {
+                    let perl_info = detect_perl_info();
+                    DapMessage::Response {
+                        seq,
+                        request_seq,
+                        success: false,
+                        command: "launch".to_string(),
+                        body: None,
+                        message: Some(format!(
+                            "Cannot start Perl debugger: {}. \
+                             {perl_info}. \
+                             To use a specific Perl interpreter, set the `perl-lsp.perl.path` \
+                             extension setting or add a `perl` field to your launch.json \
+                             (e.g. {{\"perl\": \"/path/to/perl\"}}).",
+                            e
+                        )),
+                    }
+                }
             }
         } else {
             DapMessage::Response {
