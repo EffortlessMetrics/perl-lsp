@@ -40,6 +40,7 @@ mod helpers;
 mod import_management;
 mod loop_conversion;
 mod postfix;
+mod signature_actions;
 
 use helpers::Helpers;
 
@@ -70,10 +71,70 @@ impl EnhancedCodeActionsProvider {
         // Find all nodes that overlap the range and collect actions
         self.collect_actions_for_range(ast, range, false, &mut actions, &mut extract_var_seen);
 
+        // Signature refactoring: collect add-parameter actions for any subroutine
+        // node whose span overlaps the requested range.
+        self.collect_signature_actions(ast, ast, range, &mut actions);
+
         // Global actions (not node-specific)
         actions.extend(self.get_global_refactorings(ast));
 
         actions
+    }
+
+    /// Walk the AST and emit signature refactoring actions for subroutine nodes
+    /// that overlap `range`.  `ast_root` is always the full program AST so that
+    /// call-site collection can search the entire file.
+    fn collect_signature_actions(
+        &self,
+        node: &Node,
+        ast_root: &Node,
+        range: (usize, usize),
+        actions: &mut Vec<CodeAction>,
+    ) {
+        // Prune subtrees that cannot overlap the range.
+        if node.location.end < range.0 || node.location.start > range.1 {
+            return;
+        }
+
+        if let Some(action) = signature_actions::add_parameter_action(&self.source, node, ast_root)
+        {
+            actions.push(action);
+        }
+
+        // Recurse into children
+        match &node.kind {
+            NodeKind::Program { statements } => {
+                for s in statements {
+                    self.collect_signature_actions(s, ast_root, range, actions);
+                }
+            }
+            NodeKind::Block { statements } => {
+                for s in statements {
+                    self.collect_signature_actions(s, ast_root, range, actions);
+                }
+            }
+            NodeKind::ExpressionStatement { expression } => {
+                self.collect_signature_actions(expression, ast_root, range, actions);
+            }
+            NodeKind::VariableDeclaration { initializer: Some(init), .. } => {
+                self.collect_signature_actions(init, ast_root, range, actions);
+            }
+            NodeKind::Subroutine { body, .. } => {
+                self.collect_signature_actions(body, ast_root, range, actions);
+            }
+            NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
+                self.collect_signature_actions(condition, ast_root, range, actions);
+                self.collect_signature_actions(then_branch, ast_root, range, actions);
+                for (cond, branch) in elsif_branches {
+                    self.collect_signature_actions(cond, ast_root, range, actions);
+                    self.collect_signature_actions(branch, ast_root, range, actions);
+                }
+                if let Some(b) = else_branch {
+                    self.collect_signature_actions(b, ast_root, range, actions);
+                }
+            }
+            _ => {}
+        }
     }
 
     /// Recursively collect actions for all nodes in range.
