@@ -18,6 +18,7 @@ implementation.
 - Think adversarially: what could go wrong with this approach?
 - Your output makes the builder's job unambiguous — exact files, functions, code changes, tests, verify commands.
 - Add the `builder-ready` label when the plan is solid.
+- **Research verification is mandatory for claim-heavy specs.** Run `/plan-review-stress` which checks for claim-heavy criteria and dispatches `research-verifier` when needed.
 - If the issue is already fixed, say so and recommend closing.
 
 ## Todo list

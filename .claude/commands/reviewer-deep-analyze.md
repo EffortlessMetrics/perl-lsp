@@ -42,6 +42,24 @@ Read the diff carefully and verify the logic matches the issue's intent.
    - Vacuous assertion? Rewrite to test actual behavior of the code under test.
    - Regression risk from an uncovered path? Add a test for it.
 
+## Research Verification
+
+Before approving, check whether the PR makes any external claims. A PR is **claim-heavy** if it asserts ANY of the following:
+
+- Perl language semantics (`our`, `my`, `local`, pragma behavior, signature semantics, regex flags)
+- LSP 3.17/3.18 protocol behavior
+- DAP protocol behavior
+- External crate API behavior (tower-lsp, lsp-types, tree-sitter, etc.)
+- “PR #NNNN closed this” or “this is fixed by commit SHA”
+- Standard library function behavior that the fix depends on
+
+**If ANY claim-heavy criterion is met:**
+1. Dispatch the `research-verifier` agent on the original issue before approving.
+2. Wait for the `research-verified` label or a verification comment.
+3. **Fallback — if network is unavailable:** add the `needs-research-verification` label to the PR and block approval. Do not merge blind.
+
+**If no external claims are made:** skip this step — no dispatch needed.
+
 ## Output
 
 Record in your task:
@@ -49,4 +67,5 @@ Record in your task:
 Logic: CORRECT / FIXED <what you changed>
 Tests: GOOD / IMPROVED <what you added>
 Regression risk: LOW / MEDIUM / HIGH (details)
+Research verification: SKIPPED (no external claims) / DISPATCHED / FALLBACK LABEL SET
 ```
