@@ -35,25 +35,42 @@ let stateChangeDisposable: vscode.Disposable | undefined;
 const COEXISTENCE_GUIDE_URL =
     'https://github.com/EffortlessMetrics/perl-lsp/blob/master/vscode-extension/README.md#extension-coexistence';
 /**
- * Cached diagnostic message from the last startup failure.
- * Set by `initializeLanguageClient` when the LSP fails to start; read by
- * command handlers that need to surface a "server not running" message so
- * they can report the specific root cause rather than a generic "restart" message.
+ * Cached startup diagnosis from the last server failure.
+ *
+ * Set when the LSP fails to start (`initializeLanguageClient`) or when the
+ * server stops unexpectedly mid-session (`bindClientState`). Read by
+ * `serverNotRunningMessage()` so every "server not running" surface shows the
+ * specific root cause (e.g. "glibc mismatch") instead of a generic hint.
+ *
+ * Cleared to `undefined` when the server starts successfully so a stale
+ * failure from a previous session is not shown after a successful restart.
  */
-let lastStartupDiagnostic: string | undefined;
+let lastStartupDiagnosis: StartupErrorDiagnosis | undefined;
 
 /**
  * Return the best available "server not running" message to show the user.
  *
- * When a startup failure has been diagnosed (i.e. `lastStartupDiagnostic` is
- * set), that specific message is returned so the user can see the root cause
- * (e.g. "Perl interpreter not found" rather than a generic restart prompt).
- * Falls back to a brief actionable message for the case where the server was
- * never started in this session.
+ * When a startup failure has been diagnosed (`lastStartupDiagnosis` is set),
+ * formats and returns the specific root cause so the user sees an actionable
+ * message (e.g. "glibc mismatch — install from source") instead of a generic
+ * restart prompt.
+ *
+ * Exported so unit tests can verify the message without a full extension host.
  */
-function serverNotRunningMessage(): string {
-    return lastStartupDiagnostic ??
-        'Perl Language Server is not running. Run the Health Check (Command Palette: "Perl: Run Health Check") to diagnose the issue.';
+export function serverNotRunningMessage(): string {
+    if (lastStartupDiagnosis) {
+        return formatStartupFailureDialog(lastStartupDiagnosis, undefined);
+    }
+    return 'Perl Language Server is not running. Run the Health Check (Command Palette: "Perl: Run Health Check") to diagnose the issue.';
+}
+
+/**
+ * Test helper — inject a cached diagnosis without going through the full
+ * startup path.  Only exported for use in unit tests.
+ * @internal
+ */
+export function _setLastStartupDiagnosisForTest(diagnosis: StartupErrorDiagnosis | undefined): void {
+    lastStartupDiagnosis = diagnosis;
 }
 
 type PerlCriticSettings = {
@@ -1041,7 +1058,7 @@ async function initializeLanguageClient(context: vscode.ExtensionContext): Promi
         // Probe the binary to get an actionable OS-level diagnosis (#3280).
         // If the probe result is Unknown (binary gave no useful output), fall
         // back to the health check (#3312) which can detect missing Perl etc.
-        // lastStartupDiagnostic is updated so that serverNotRunningMessage() in
+        // lastStartupDiagnosis is updated so that serverNotRunningMessage() in
         // command handlers surfaces the specific root cause rather than a generic prompt.
         const probeResult = currentServerPath
             ? await probeStartupFailure(currentServerPath)
@@ -1051,8 +1068,12 @@ async function initializeLanguageClient(context: vscode.ExtensionContext): Promi
             const onboarding = new OnboardingManager(context, outputChannel);
             healthMsg = await onboarding.runStartupDiagnostics(currentServerPath ?? null);
         }
+        // Cache the structured diagnosis so serverNotRunningMessage() can format
+        // it; when healthMsg overrides the hint, wrap it as a synthetic diagnosis.
+        lastStartupDiagnosis = healthMsg && probeResult.kind === StartupErrorKind.Unknown
+            ? { kind: StartupErrorKind.Unknown, hint: healthMsg, remediation: probeResult.remediation }
+            : probeResult;
         const dialogMessage = formatStartupFailureDialog(probeResult, healthMsg);
-        lastStartupDiagnostic = dialogMessage;
 
         const choice = await vscode.window.showErrorMessage(
             dialogMessage,
@@ -1083,9 +1104,9 @@ async function initializeLanguageClient(context: vscode.ExtensionContext): Promi
     // Initialize streaming inline completion controller (config-gated)
     refreshStreamingController(client);
 
-    // Clear any stale startup diagnostic — the server started successfully so
+    // Clear any stale startup diagnosis — the server started successfully so
     // the root cause (e.g. missing Perl) no longer applies.
-    lastStartupDiagnostic = undefined;
+    lastStartupDiagnosis = undefined;
     outputChannel.appendLine('Perl Language Server started successfully');
     return true;
 }
@@ -1827,6 +1848,25 @@ function bindClientState(languageClient: LanguageClient) {
         // vscode-languageclient State values match ClientState numeric values:
         // Stopped = 1, Running = 2, Starting = 3
         healthWidget?.onStateChange(event.newState as unknown as ClientState);
+
+        // When the server stops unexpectedly after a successful start (mid-session
+        // crash), capture a generic diagnosis so serverNotRunningMessage() returns
+        // an actionable hint instead of the stale "not running" fallback.
+        // We can't run probeStartupFailure here (async) so we set a generic
+        // "server stopped" diagnosis; the user can run Health Check for details.
+        //
+        // Note: event.newState / oldState are vscode-languageclient's `State` enum
+        // which shares numeric values with ClientState (Stopped=1, Running=2) but
+        // is a distinct nominal type, so we cast to number for comparison.
+        const newStateNum = event.newState as unknown as number;
+        const oldStateNum = event.oldState as unknown as number;
+        if (newStateNum === ClientState.Stopped && oldStateNum === ClientState.Running) {
+            lastStartupDiagnosis = {
+                kind: StartupErrorKind.Unknown,
+                hint: 'The Perl Language Server stopped unexpectedly. Check the Output panel for details.',
+                remediation: 'Try restarting the server (Command Palette: "Perl: Restart Server") or run the Health Check.',
+            };
+        }
     });
 }
 
