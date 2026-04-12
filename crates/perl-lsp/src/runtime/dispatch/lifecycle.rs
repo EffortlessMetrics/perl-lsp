@@ -78,6 +78,10 @@ impl LspServer {
         self.initialized.store(true, Ordering::Release);
         tracing::info!("Server initialized");
 
+        // LSP 3.17: server->client requests must only be sent after initialize
+        // has completed. Pull workspace/configuration now that we're initialized.
+        self.request_workspace_configuration_for_folders();
+
         // Register file watchers for Perl files only if client supports it
         if self.client_capabilities.lock().dynamic_registration_support {
             self.register_file_watchers_async();
