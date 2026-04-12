@@ -1087,17 +1087,31 @@ impl LspServer {
                             &deleting_uris,
                             &open_documents,
                         ));
+                        let (symbol_dependents, symbol_reference_examples) =
+                            collect_symbol_reference_delete_dependents(idx, uri, &deleting_uris);
+                        dependents.extend(symbol_dependents);
                         let dependents: Vec<String> = dependents.into_iter().collect();
 
                         if !dependents.is_empty() {
-                            let examples: Vec<String> =
+                            let mut examples: Vec<String> =
                                 dependents.iter().take(3).map(|uri| short_uri(uri)).collect();
+                            examples.extend(symbol_reference_examples.into_iter().take(2));
+                            let module_delete =
+                                !collect_delete_target_module_names(idx, uri).is_empty();
                             tracing::warn!(
                                 uri,
                                 dependent_file_count = dependents.len(),
                                 "Safe delete detected dependent workspace files"
                             );
-                            unsafe_deletes.push((short_uri(uri), dependents.len(), examples));
+                            unsafe_deletes.push((
+                                if module_delete {
+                                    format!("{} (module)", short_uri(uri))
+                                } else {
+                                    format!("{} (file)", short_uri(uri))
+                                },
+                                dependents.len(),
+                                examples,
+                            ));
                         }
                     }
 
@@ -1849,6 +1863,49 @@ fn collect_open_document_delete_dependents(
     }
 
     dependents
+}
+
+#[cfg(feature = "workspace")]
+fn collect_symbol_reference_delete_dependents(
+    index: &perl_parser::workspace_index::WorkspaceIndex,
+    uri: &str,
+    deleting_uris: &std::collections::HashSet<String>,
+) -> (std::collections::BTreeSet<String>, Vec<String>) {
+    let normalized_uri = perl_parser::workspace_index::uri_key(uri);
+    let mut dependents = std::collections::BTreeSet::new();
+    let mut examples = std::collections::BTreeSet::new();
+
+    for symbol in index.file_symbols(uri) {
+        let mut candidates = std::collections::BTreeSet::new();
+        if let Some(qualified) = symbol.qualified_name {
+            if !qualified.is_empty() {
+                candidates.insert(qualified);
+            }
+        }
+        if !symbol.name.is_empty() {
+            candidates.insert(symbol.name);
+        }
+
+        for candidate in candidates {
+            for location in index.find_references(&candidate) {
+                let ref_uri = perl_parser::workspace_index::uri_key(location.uri.as_str());
+                if ref_uri == normalized_uri || deleting_uris.contains(&ref_uri) {
+                    continue;
+                }
+
+                dependents.insert(ref_uri.clone());
+                if examples.len() < 5 {
+                    examples.insert(format!(
+                        "{}:{}",
+                        short_uri(ref_uri.as_str()),
+                        location.range.start.line + 1
+                    ));
+                }
+            }
+        }
+    }
+
+    (dependents, examples.into_iter().collect())
 }
 
 fn short_uri(uri: &str) -> String {

@@ -929,6 +929,66 @@ fn test_will_delete_files_aggregates_warning_for_multiple_unsafe_deletes()
 }
 
 #[test]
+fn test_will_delete_files_warning_includes_reference_examples()
+-> Result<(), Box<dyn std::error::Error>> {
+    let (server, output) = create_test_server_with_output();
+
+    let init_params = json!({
+        "processId": 1234,
+        "rootUri": "file:///test/workspace",
+        "capabilities": {}
+    });
+    let _ = make_request(&server, "initialize", Some(init_params));
+    send_initialized(&server);
+    output.clear();
+
+    let module_open = json!({
+        "textDocument": {
+            "uri": "file:///test/workspace/lib/Tools.pm",
+            "languageId": "perl",
+            "version": 1,
+            "text": "package Tools;\nsub run { return 1; }\n1;\n"
+        }
+    });
+    let _ = make_request(&server, "textDocument/didOpen", Some(module_open));
+
+    let dependent_open = json!({
+        "textDocument": {
+            "uri": "file:///test/workspace/bin/main.pl",
+            "languageId": "perl",
+            "version": 1,
+            "text": "use Tools;\nprint Tools::run();\n"
+        }
+    });
+    let _ = make_request(&server, "textDocument/didOpen", Some(dependent_open));
+    output.clear();
+
+    let params = json!({
+        "files": [
+            { "uri": "file:///test/workspace/lib/Tools.pm" }
+        ]
+    });
+
+    let _edit = make_request(&server, "workspace/willDeleteFiles", Some(params))?
+        .ok_or("expected workspace edit response")?;
+
+    let message = wait_for_method(&output, "window/showMessage")
+        .ok_or("expected safe-delete warning with reference examples")?;
+    let message_text =
+        message["params"]["message"].as_str().ok_or("expected warning message text")?;
+    assert!(
+        message_text.contains("main.pl"),
+        "expected dependent file mention in warning, got: {message_text}"
+    );
+    assert!(
+        message_text.contains(':'),
+        "expected line-oriented reference example in warning, got: {message_text}"
+    );
+
+    Ok(())
+}
+
+#[test]
 fn test_apply_edit_single_line() -> Result<(), Box<dyn std::error::Error>> {
     let server = create_test_server();
 
