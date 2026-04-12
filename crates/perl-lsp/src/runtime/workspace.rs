@@ -884,6 +884,22 @@ impl LspServer {
                     let new_module = path_to_module_name(new_uri);
 
                     if !old_module.is_empty() && !new_module.is_empty() {
+                        if !planned_workspace_texts.contains_key(old_uri) {
+                            if let Some(text) = self.read_workspace_text(old_uri) {
+                                planned_workspace_texts
+                                    .insert(old_uri.to_string(), (text.clone(), text));
+                            }
+                        }
+                        if let Some((_, current_text)) = planned_workspace_texts.get_mut(old_uri) {
+                            let planned =
+                                plan_module_rename_edits(current_text, &old_module, &new_module);
+                            if !planned.is_empty() {
+                                *current_text = apply_module_rename_edits(current_text, &planned);
+                            }
+                            *current_text =
+                                rewrite_package_declaration(current_text, &old_module, &new_module);
+                        }
+
                         // Find all files that reference the old module
                         // Note: Query operation - use coordinator.index() for consistency
                         #[cfg(feature = "workspace")]
@@ -1899,6 +1915,51 @@ pub(super) fn module_name_appears_in_text(text: &str, module_name: &str) -> bool
         }
     }
     false
+}
+
+#[cfg(feature = "workspace")]
+fn rewrite_package_declaration(text: &str, old_module: &str, new_module: &str) -> String {
+    text.split_inclusive('\n')
+        .map(|line| {
+            if line.trim_start().starts_with("package ") {
+                replace_module_token(line, old_module, new_module)
+            } else {
+                line.to_string()
+            }
+        })
+        .collect()
+}
+
+#[cfg(feature = "workspace")]
+fn replace_module_token(line: &str, old_module: &str, new_module: &str) -> String {
+    if old_module.is_empty() {
+        return line.to_string();
+    }
+
+    let bytes = line.as_bytes();
+    let name_len = old_module.len();
+    let mut start = 0usize;
+    while start + name_len <= bytes.len() {
+        if let Some(pos) = line[start..].find(old_module) {
+            let abs = start + pos;
+            let before_ok = abs == 0 || {
+                let c = bytes[abs - 1] as char;
+                !c.is_alphanumeric() && c != '_' && c != ':'
+            };
+            let after_index = abs + name_len;
+            let after_ok = after_index >= bytes.len() || {
+                let c = bytes[after_index] as char;
+                !c.is_alphanumeric() && c != '_' && c != ':'
+            };
+            if before_ok && after_ok {
+                return format!("{}{}{}", &line[..abs], new_module, &line[after_index..]);
+            }
+            start = abs + 1;
+        } else {
+            break;
+        }
+    }
+    line.to_string()
 }
 
 /// Convert a file path to a Perl module name

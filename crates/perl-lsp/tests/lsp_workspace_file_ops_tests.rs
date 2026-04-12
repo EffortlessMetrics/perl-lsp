@@ -618,6 +618,58 @@ fn test_will_rename_files_returns_module_import_edits() -> Result<(), Box<dyn st
 }
 
 #[test]
+fn test_will_rename_files_updates_renamed_module_package_declaration()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = create_test_server();
+
+    let init_params = json!({
+        "processId": 1234,
+        "rootUri": "file:///test/workspace",
+        "capabilities": {}
+    });
+    let _ = make_request(&server, "initialize", Some(init_params));
+    send_initialized(&server);
+
+    let module_open = json!({
+        "textDocument": {
+            "uri": "file:///test/workspace/lib/Internal/Util.pm",
+            "languageId": "perl",
+            "version": 1,
+            "text": "package Internal::Util;\n1;\n"
+        }
+    });
+    let _ = make_request(&server, "textDocument/didOpen", Some(module_open));
+
+    let params = json!({
+        "files": [
+            {
+                "oldUri": "file:///test/workspace/lib/Internal/Util.pm",
+                "newUri": "file:///test/workspace/lib/Public/Utils.pm"
+            }
+        ]
+    });
+
+    let edit = make_request(&server, "workspace/willRenameFiles", Some(params))?
+        .ok_or("expected workspace edit response")?;
+    let changes =
+        edit.get("changes").and_then(Value::as_object).ok_or("expected changes object")?;
+    let module_changes = changes
+        .get("file:///test/workspace/lib/Internal/Util.pm")
+        .and_then(Value::as_array)
+        .ok_or("expected edits for renamed module file")?;
+    let new_texts: Vec<String> = module_changes
+        .iter()
+        .filter_map(|entry| entry.get("newText").and_then(Value::as_str).map(ToString::to_string))
+        .collect();
+    assert!(
+        new_texts.contains(&"package Public::Utils;".to_string()),
+        "expected package declaration rewrite in renamed file edits: {new_texts:?}"
+    );
+
+    Ok(())
+}
+
+#[test]
 fn test_will_rename_files_coalesces_multi_rename_edits_per_line()
 -> Result<(), Box<dyn std::error::Error>> {
     let server = create_test_server();
