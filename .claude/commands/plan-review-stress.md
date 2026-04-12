@@ -61,4 +61,26 @@ Simpler alternative: NONE / <description>
 Missed edge cases: NONE / <list>
 Test improvements: NONE / <suggestions>
 Research verification: SKIPPED (no external claims) / DISPATCHED / FALLBACK LABEL SET
+Attribution check: SKIPPED (no attribution claims) / VERIFIED / FLAGGED (needs-git-history-check added)
 ```
+
+## Attribution Check
+
+If the issue body or scout's analysis contains ANY of the following phrases:
+- "fixed by PR #NNNN"
+- "already shipped in commit SHA"
+- "this issue is stale / superseded by #NNNN"
+- "closed by #NNNN"
+
+Run the git-history check before proceeding:
+
+```bash
+# Verify the PR actually merged and closed the right issue
+gh pr view <NNNN> --json state,mergedAt,closingIssuesReferences
+# Verify the fix is present in master
+git log --oneline master | grep -i <keyword>
+```
+
+**If claim checks out:** note `Attribution: VERIFIED` in your output.
+**If claim is wrong:** remove or correct the attribution in the plan and issue. Add `needs-git-history-check` label to the issue for ops sweep.
+**If uncertain:** add `needs-git-history-check` label, note it in the plan-review comment, and continue. Do not block on uncertainty — just flag it.
