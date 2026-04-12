@@ -2344,6 +2344,20 @@ impl LspServer {
                  or when writing to pipes).\n\n\
                  ```perl\n$| = 1;  # enable autoflush on STDOUT\nprint \"Progress: 50%\\n\";\n```"
             }
+            "__FILE__" => {
+                "**`__FILE__`** \u{2014} Compile-time constant: the current source file name"
+            }
+            "__LINE__" => {
+                "**`__LINE__`** \u{2014} Compile-time constant: the current line number"
+            }
+            "__PACKAGE__" => {
+                "**`__PACKAGE__`** \u{2014} Compile-time constant: the current package name \
+                 (empty string if outside any package)"
+            }
+            "__SUB__" => {
+                "**`__SUB__`** \u{2014} Compile-time constant: a reference to the current \
+                 subroutine (Perl 5.16+, requires `use feature 'current_sub'`)"
+            }
             _ => return None,
         };
 
