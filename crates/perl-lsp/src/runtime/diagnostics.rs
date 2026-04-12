@@ -47,7 +47,8 @@ impl PullDiagnosticsOrchestrator {
             (cfg.perlcritic_enabled, cfg.perlcritic_severity, cfg.perlcritic_profile.clone())
         };
 
-        let profile = perlcritic_profile.and_then(|p| if p.trim().is_empty() { None } else { Some(p) });
+        let profile =
+            perlcritic_profile.and_then(|p| if p.trim().is_empty() { None } else { Some(p) });
 
         // Get workspace root
         let workspace_root = server.root_path.lock().clone();
@@ -84,7 +85,7 @@ impl PullDiagnosticsOrchestrator {
         doc_text: &str,
         diagnostics: &mut Vec<InternalDiagnostic>,
     ) {
-        use perl_lsp_tooling::perl_critic::{CriticConfig, CriticAnalyzer};
+        use perl_lsp_tooling::perl_critic::{CriticAnalyzer, CriticConfig};
 
         // Check config
         let (enabled, severity, profile) = {
@@ -162,11 +163,8 @@ impl PullDiagnosticsOrchestrator {
                     None
                 });
 
-                let critic_config = CriticConfig {
-                    severity,
-                    profile: resolved_profile,
-                    ..Default::default()
-                };
+                let critic_config =
+                    CriticConfig { severity, profile: resolved_profile, ..Default::default() };
 
                 // Use injected test runtime if present, otherwise OS runtime
                 let analyzer = {
@@ -193,11 +191,19 @@ impl PullDiagnosticsOrchestrator {
                 for v in violations {
                     // Map Perl::Critic severity to LSP severity
                     let internal_severity = match v.severity {
-                        perl_lsp_tooling::perl_critic::Severity::Gentle => InternalDiagnosticSeverity::Error,
-                        perl_lsp_tooling::perl_critic::Severity::Stern |
-                        perl_lsp_tooling::perl_critic::Severity::Harsh => InternalDiagnosticSeverity::Warning,
-                        perl_lsp_tooling::perl_critic::Severity::Cruel => InternalDiagnosticSeverity::Information,
-                        perl_lsp_tooling::perl_critic::Severity::Brutal => InternalDiagnosticSeverity::Hint,
+                        perl_lsp_tooling::perl_critic::Severity::Gentle => {
+                            InternalDiagnosticSeverity::Error
+                        }
+                        perl_lsp_tooling::perl_critic::Severity::Stern
+                        | perl_lsp_tooling::perl_critic::Severity::Harsh => {
+                            InternalDiagnosticSeverity::Warning
+                        }
+                        perl_lsp_tooling::perl_critic::Severity::Cruel => {
+                            InternalDiagnosticSeverity::Information
+                        }
+                        perl_lsp_tooling::perl_critic::Severity::Brutal => {
+                            InternalDiagnosticSeverity::Hint
+                        }
                     };
 
                     // Convert line/column to byte offset
@@ -205,12 +211,14 @@ impl PullDiagnosticsOrchestrator {
                         doc_text,
                         v.range.start.line,
                         v.range.start.column,
-                    ).unwrap_or(0);
+                    )
+                    .unwrap_or(0);
                     let end_byte = crate::util::position_to_offset(
                         doc_text,
                         v.range.end.line,
                         v.range.end.column,
-                    ).unwrap_or(start_byte.saturating_add(1));
+                    )
+                    .unwrap_or(start_byte.saturating_add(1));
 
                     diagnostics.push(InternalDiagnostic {
                         range: (start_byte, end_byte),
@@ -257,11 +265,14 @@ impl PullDiagnosticsOrchestrator {
 
     /// No-op stub for WASM targets.
     #[cfg(target_arch = "wasm32")]
-    fn emit_warning(&self, _server: &LspServer, _key: String, _message: &str) {
-    }
+    fn emit_warning(&self, _server: &LspServer, _key: String, _message: &str) {}
 
     /// Reset the orchestrator state (e.g., on configuration change).
+    ///
+    /// TODO: Wire into `handle_did_change_configuration` so pull-diagnostics
+    /// CriticAnalyzer is also invalidated on config changes.
     #[cfg(not(target_arch = "wasm32"))]
+    #[allow(dead_code)]
     pub fn reset(&self) {
         *self.critic_analyzer.lock() = None;
         self.warnings_sent.lock().clear();
@@ -269,8 +280,7 @@ impl PullDiagnosticsOrchestrator {
 
     /// No-op stub for WASM targets.
     #[cfg(target_arch = "wasm32")]
-    pub fn reset(&self) {
-    }
+    pub fn reset(&self) {}
 }
 
 impl Default for PullDiagnosticsOrchestrator {
@@ -292,24 +302,6 @@ impl LspServer {
                 InternalDiagnosticTag::Deprecated => 2,
             })
             .collect()
-    }
-
-    /// Generate markdown-formatted diagnostic message (LSP 3.18)
-    ///
-    /// Creates a rich markdown representation of a diagnostic that includes
-    /// the error code (if available) and formatted message content. This is
-    /// used when the client supports `textDocument.diagnostic.markupMessageSupport`.
-    ///
-    /// # Arguments
-    ///
-    /// * `code` - Optional diagnostic code (e.g., "PL001", "PC001")
-    /// * `message` - The diagnostic message text
-    ///
-    /// # Returns
-    ///
-    /// A markdown-formatted string with the diagnostic information
-    fn generate_diagnostic_markdown(&self, code: Option<&str>, message: &str) -> String {
-        if let Some(c) = code { format!("**{}**: {}", c, message) } else { message.to_string() }
     }
 
     /// Publish diagnostics for a document (push diagnostics)
@@ -712,7 +704,12 @@ impl LspServer {
                 );
 
                 // Convert report to JSON
-                return Ok(Some(self.document_report_to_json(&report, &doc, uri_str, &perlcritic_diags)));
+                return Ok(Some(self.document_report_to_json(
+                    &report,
+                    &doc,
+                    uri_str,
+                    &perlcritic_diags,
+                )));
             }
         }
 
@@ -795,11 +792,15 @@ impl LspServer {
         });
 
         if let Some(ref tags) = d.tags {
-            diag["tags"] = json!(tags.iter().map(|t| match *t {
-                lsp_types::DiagnosticTag::UNNECESSARY => 1,
-                lsp_types::DiagnosticTag::DEPRECATED => 2,
-                _ => 0,
-            }).collect::<Vec<_>>());
+            diag["tags"] = json!(
+                tags.iter()
+                    .map(|t| match *t {
+                        lsp_types::DiagnosticTag::UNNECESSARY => 1,
+                        lsp_types::DiagnosticTag::DEPRECATED => 2,
+                        _ => 0,
+                    })
+                    .collect::<Vec<_>>()
+            );
         }
 
         if let Some(ref data) = d.data {
@@ -856,20 +857,25 @@ impl LspServer {
 
         if !d.related_information.is_empty() {
             diag["relatedInformation"] = json!(
-                d.related_information.iter().map(|ri| {
-                    let ri_start = doc.line_starts.offset_to_position_rope(&doc.rope, ri.location.0);
-                    let ri_end = doc.line_starts.offset_to_position_rope(&doc.rope, ri.location.1);
-                    json!({
-                        "location": {
-                            "uri": uri,
-                            "range": {
-                                "start": {"line": ri_start.0, "character": ri_start.1},
-                                "end":   {"line": ri_end.0,   "character": ri_end.1},
-                            }
-                        },
-                        "message": ri.message
+                d.related_information
+                    .iter()
+                    .map(|ri| {
+                        let ri_start =
+                            doc.line_starts.offset_to_position_rope(&doc.rope, ri.location.0);
+                        let ri_end =
+                            doc.line_starts.offset_to_position_rope(&doc.rope, ri.location.1);
+                        json!({
+                            "location": {
+                                "uri": uri,
+                                "range": {
+                                    "start": {"line": ri_start.0, "character": ri_start.1},
+                                    "end":   {"line": ri_end.0,   "character": ri_end.1},
+                                }
+                            },
+                            "message": ri.message
+                        })
                     })
-                }).collect::<Vec<_>>()
+                    .collect::<Vec<_>>()
             );
         }
 
@@ -878,11 +884,14 @@ impl LspServer {
                 .map(|dc| format!("{:?}", dc.category()))
                 .unwrap_or_else(|| "Other".to_string());
             let fixable = is_fixable_diagnostic(code_str);
-            let tag_strings: Vec<String> =
-                d.tags.iter().map(|t| match t {
+            let tag_strings: Vec<String> = d
+                .tags
+                .iter()
+                .map(|t| match t {
                     InternalDiagnosticTag::Unnecessary => "Unnecessary".to_string(),
                     InternalDiagnosticTag::Deprecated => "Deprecated".to_string(),
-                }).collect();
+                })
+                .collect();
             diag["data"] = json!({
                 "code": code_str,
                 "category": category,

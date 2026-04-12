@@ -51,7 +51,8 @@ pub struct PullDiagnosticsContext {
     pub markup_message_support: bool,
     /// Optional workspace index for dead code detection
     #[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
-    pub workspace_index: Option<std::sync::Arc<perl_workspace_index::workspace_index::WorkspaceIndex>>,
+    pub workspace_index:
+        Option<std::sync::Arc<perl_workspace_index::workspace_index::WorkspaceIndex>>,
 }
 
 impl PullDiagnosticsContext {
@@ -70,7 +71,7 @@ impl PullDiagnosticsContext {
     }
 
     /// Create a context with perlcritic enabled.
-    #[cfg(any(test, feature = "test-helpers"))]
+    #[cfg(test)]
     pub fn with_perlcritic(severity: i32, profile: Option<String>) -> Self {
         Self {
             perlcritic_enabled: true,
@@ -85,7 +86,7 @@ impl PullDiagnosticsContext {
     }
 
     /// Create a context with workspace index for dead code detection.
-    #[cfg(all(feature = "workspace", not(target_arch = "wasm32"), any(test, feature = "test-helpers")))]
+    #[cfg(all(feature = "workspace", not(target_arch = "wasm32"), test))]
     pub fn with_workspace_index(
         index: std::sync::Arc<perl_workspace_index::workspace_index::WorkspaceIndex>,
     ) -> Self {
@@ -156,7 +157,8 @@ impl PullDiagnosticsProvider {
             return self.build_unchanged_report(result_id);
         }
 
-        let diagnostics = self.collect_diagnostics_for_text_with_context(uri, content, context, doc_state);
+        let diagnostics =
+            self.collect_diagnostics_for_text_with_context(uri, content, context, doc_state);
         self.build_full_report(result_id, diagnostics)
     }
 
@@ -188,7 +190,8 @@ impl PullDiagnosticsProvider {
             let report = if prev_id.as_deref() == Some(&result_id) {
                 self.build_unchanged_report(result_id)
             } else {
-                let diagnostics = self.collect_diagnostics_for_state_with_context(&uri, doc_state, context);
+                let diagnostics =
+                    self.collect_diagnostics_for_state_with_context(&uri, doc_state, context);
                 self.build_full_report(result_id, diagnostics)
             };
 
@@ -214,7 +217,8 @@ impl PullDiagnosticsProvider {
                 let uri = parse_uri(uri_str);
                 let result_id = format!("{:x}", md5::compute(content));
                 // For partial results, we need to parse the content
-                let diagnostics = self.collect_diagnostics_for_text_with_context(&uri, content, context, None);
+                let diagnostics =
+                    self.collect_diagnostics_for_text_with_context(&uri, content, context, None);
                 let report = self.build_full_report(result_id, diagnostics);
 
                 items.push(self.to_workspace_report(uri, None, report));
@@ -224,11 +228,6 @@ impl PullDiagnosticsProvider {
         }
 
         results
-    }
-
-    fn collect_diagnostics_for_text(&self, uri: &Uri, content: &str) -> Vec<LspDiagnostic> {
-        let context = PullDiagnosticsContext::new();
-        self.collect_diagnostics_for_text_with_context(uri, content, &context, None)
     }
 
     fn collect_diagnostics_for_text_with_context(
@@ -261,7 +260,11 @@ impl PullDiagnosticsProvider {
 
                 // Build module resolver using context include_paths
                 let resolver = |module: &str| {
-                    self.resolve_module_with_paths(module, &context.include_paths, source_path.as_deref())
+                    self.resolve_module_with_paths(
+                        module,
+                        &context.include_paths,
+                        source_path.as_deref(),
+                    )
                 };
 
                 let search_paths: Vec<String> = context.include_paths.clone();
@@ -284,7 +287,9 @@ impl PullDiagnosticsProvider {
 
                 diagnostics
             }
-            Err(error) => vec![self.parse_error_to_diagnostic_with_context(uri, content, &error, context)],
+            Err(error) => {
+                vec![self.parse_error_to_diagnostic_with_context(uri, content, &error, context)]
+            }
         }
     }
 
@@ -337,7 +342,9 @@ impl PullDiagnosticsProvider {
             let internal_severity = match lsp_severity {
                 lsp_types::DiagnosticSeverity::ERROR => InternalDiagnosticSeverity::Error,
                 lsp_types::DiagnosticSeverity::WARNING => InternalDiagnosticSeverity::Warning,
-                lsp_types::DiagnosticSeverity::INFORMATION => InternalDiagnosticSeverity::Information,
+                lsp_types::DiagnosticSeverity::INFORMATION => {
+                    InternalDiagnosticSeverity::Information
+                }
                 lsp_types::DiagnosticSeverity::HINT => InternalDiagnosticSeverity::Hint,
                 _ => InternalDiagnosticSeverity::Hint,
             };
@@ -356,15 +363,6 @@ impl PullDiagnosticsProvider {
         }
     }
 
-    fn collect_diagnostics_for_state(
-        &self,
-        uri: &Uri,
-        doc_state: &DocumentState,
-    ) -> Vec<LspDiagnostic> {
-        let context = PullDiagnosticsContext::new();
-        self.collect_diagnostics_for_state_with_context(uri, doc_state, &context)
-    }
-
     fn collect_diagnostics_for_state_with_context(
         &self,
         uri: &Uri,
@@ -378,7 +376,11 @@ impl PullDiagnosticsProvider {
 
             // Build module resolver using context include_paths
             let resolver = |module: &str| {
-                self.resolve_module_with_paths(module, &context.include_paths, source_path.as_deref())
+                self.resolve_module_with_paths(
+                    module,
+                    &context.include_paths,
+                    source_path.as_deref(),
+                )
             };
 
             let search_paths: Vec<String> = context.include_paths.clone();
@@ -411,7 +413,12 @@ impl PullDiagnosticsProvider {
                     );
                     // Convert dead code diagnostics to LSP format
                     for d in dead_code_diags {
-                        diagnostics.push(self.internal_to_lsp_diagnostic(uri, &doc_state.text, d, context));
+                        diagnostics.push(self.internal_to_lsp_diagnostic(
+                            uri,
+                            &doc_state.text,
+                            d,
+                            context,
+                        ));
                     }
                 }
             }
@@ -423,7 +430,14 @@ impl PullDiagnosticsProvider {
             doc_state
                 .parse_errors
                 .iter()
-                .map(|error| self.parse_error_to_diagnostic_with_context(uri, &doc_state.text, error, context))
+                .map(|error| {
+                    self.parse_error_to_diagnostic_with_context(
+                        uri,
+                        &doc_state.text,
+                        error,
+                        context,
+                    )
+                })
                 .collect()
         }
     }
@@ -699,6 +713,7 @@ impl PullDiagnosticsProvider {
         }
     }
 
+    #[cfg(test)]
     fn parse_error_to_diagnostic(
         &self,
         uri: &Uri,

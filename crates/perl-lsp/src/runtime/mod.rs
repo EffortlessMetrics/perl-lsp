@@ -3,8 +3,8 @@
 //! This module provides a complete Language Server Protocol implementation
 //! that can be used with any LSP-compatible editor.
 
-use crate::runtime::workspace_folder::WorkspaceFolderState;
 use crate::runtime::diagnostics::PullDiagnosticsOrchestrator;
+use crate::runtime::workspace_folder::WorkspaceFolderState;
 
 mod client_requests;
 mod constructors;
