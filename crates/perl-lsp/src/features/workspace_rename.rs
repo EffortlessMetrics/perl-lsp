@@ -260,8 +260,15 @@ $var;
             edits.iter().map(|e| &e.uri).collect::<Vec<_>>()
         );
 
-        // If B.pm is indexed and the call site was found, it must also appear
+        // B.pm (the call site) must also be included — this is the core of the cross-folder test.
+        // A soft `if let Some(b) = b_edit` would let the test pass even if cross-folder rename
+        // is broken.  The rename indexes both files, so B.pm must always appear.
         let b_edit = edits.iter().find(|e| e.uri.contains("B.pm"));
+        assert!(
+            b_edit.is_some(),
+            "WorkspaceEdit must include edits for B.pm (call site). Got URIs: {:?}",
+            edits.iter().map(|e| &e.uri).collect::<Vec<_>>()
+        );
         if let Some(b) = b_edit {
             // All edits in B.pm must use the new name
             for edit in &b.edits {
