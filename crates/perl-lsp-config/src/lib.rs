@@ -65,6 +65,48 @@ pub struct ServerConfig {
     /// the auto-discovery logic looks for `.perlcriticrc` in the workspace root.
     pub perlcritic_profile: Option<String>,
 
+    /// Whether perltidy formatting is enabled.
+    pub perltidy_enabled: bool,
+
+    /// Path to a `.perltidyrc` profile file.
+    ///
+    /// When `Some`, passes `--profile=<path>` to perltidy. When `None`,
+    /// perltidy uses its default behavior or auto-discovers a profile.
+    pub perltidy_profile: Option<String>,
+
+    /// Maximum line length for perltidy.
+    pub perltidy_maximum_line_length: Option<u32>,
+
+    /// Indent size in spaces for perltidy.
+    pub perltidy_indent_columns: Option<u32>,
+
+    /// Use tabs instead of spaces for perltidy.
+    pub perltidy_tabs: Option<bool>,
+
+    /// Opening brace on new line for perltidy.
+    pub perltidy_opening_brace_on_new_line: Option<bool>,
+
+    /// Cuddled else style for perltidy.
+    pub perltidy_cuddled_else: Option<bool>,
+
+    /// Space after keyword for perltidy.
+    pub perltidy_space_after_keyword: Option<bool>,
+
+    /// Add trailing commas for perltidy.
+    pub perltidy_add_trailing_commas: Option<bool>,
+
+    /// Vertical alignment for perltidy.
+    pub perltidy_vertical_alignment: Option<bool>,
+
+    /// Block comment indentation for perltidy.
+    pub perltidy_block_comment_indentation: Option<u32>,
+
+    /// Extra perltidy arguments.
+    pub perltidy_extra_args: Vec<String>,
+
+    /// Timeout in seconds for perltidy.
+    pub perltidy_timeout_secs: u64,
+
     /// AI-powered inline completion configuration.
     pub ai_completion: AiCompletionConfig,
 }
@@ -149,6 +191,19 @@ impl Default for ServerConfig {
             perlcritic_enabled: false,
             perlcritic_severity: 3,
             perlcritic_profile: None,
+            perltidy_enabled: true,
+            perltidy_profile: None,
+            perltidy_maximum_line_length: Some(80),
+            perltidy_indent_columns: Some(4),
+            perltidy_tabs: Some(false),
+            perltidy_opening_brace_on_new_line: Some(false),
+            perltidy_cuddled_else: Some(true),
+            perltidy_space_after_keyword: Some(true),
+            perltidy_add_trailing_commas: Some(false),
+            perltidy_vertical_alignment: Some(true),
+            perltidy_block_comment_indentation: Some(0),
+            perltidy_extra_args: Vec::new(),
+            perltidy_timeout_secs: 10,
             ai_completion: AiCompletionConfig::default(),
         }
     }
@@ -207,6 +262,51 @@ impl ServerConfig {
             if let Some(profile) = critic.get("profile").and_then(|v| v.as_str()) {
                 let profile = profile.trim();
                 self.perlcritic_profile = (!profile.is_empty()).then(|| profile.to_string());
+            }
+        }
+
+        if let Some(formatting) = settings.get("formatting") {
+            if let Some(enabled) = formatting.get("enabled").and_then(|v| v.as_bool()) {
+                self.perltidy_enabled = enabled;
+            }
+            if let Some(profile) = formatting.get("profile").and_then(|v| v.as_str()) {
+                let profile = profile.trim();
+                self.perltidy_profile = (!profile.is_empty()).then(|| profile.to_string());
+            }
+            if let Some(len) = formatting.get("maximumLineLength").and_then(|v| v.as_u64()) {
+                self.perltidy_maximum_line_length = Some(len as u32);
+            }
+            if let Some(indent) = formatting.get("indentColumns").and_then(|v| v.as_u64()) {
+                self.perltidy_indent_columns = Some(indent as u32);
+            }
+            if let Some(tabs) = formatting.get("tabs").and_then(|v| v.as_bool()) {
+                self.perltidy_tabs = Some(tabs);
+            }
+            if let Some(brace) = formatting.get("openingBraceOnNewLine").and_then(|v| v.as_bool()) {
+                self.perltidy_opening_brace_on_new_line = Some(brace);
+            }
+            if let Some(cuddle) = formatting.get("cuddledElse").and_then(|v| v.as_bool()) {
+                self.perltidy_cuddled_else = Some(cuddle);
+            }
+            if let Some(space) = formatting.get("spaceAfterKeyword").and_then(|v| v.as_bool()) {
+                self.perltidy_space_after_keyword = Some(space);
+            }
+            if let Some(comma) = formatting.get("addTrailingCommas").and_then(|v| v.as_bool()) {
+                self.perltidy_add_trailing_commas = Some(comma);
+            }
+            if let Some(align) = formatting.get("verticalAlignment").and_then(|v| v.as_bool()) {
+                self.perltidy_vertical_alignment = Some(align);
+            }
+            if let Some(block) = formatting.get("blockCommentIndentation").and_then(|v| v.as_u64())
+            {
+                self.perltidy_block_comment_indentation = Some(block as u32);
+            }
+            if let Some(args) = formatting.get("extraArgs").and_then(|v| v.as_array()) {
+                self.perltidy_extra_args =
+                    args.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect();
+            }
+            if let Some(timeout) = formatting.get("timeoutSecs").and_then(|v| v.as_u64()) {
+                self.perltidy_timeout_secs = timeout;
             }
         }
 
@@ -473,8 +573,6 @@ impl WorkspaceConfig {
 /// LSP `initializationOptions` / `didChangeConfiguration` always win over this file.
 ///
 /// Unknown TOML keys are silently ignored for forward compatibility.
-///
-/// `[formatting]` is reserved for future perltidy configuration (not yet wired).
 #[non_exhaustive]
 #[derive(Debug, Clone, Default, serde::Deserialize)]
 #[serde(default)]
@@ -487,6 +585,8 @@ pub struct ProjectConfig {
     pub features: ProjectFeaturesConfig,
     /// `[ai_completion]` section: AI completion settings.
     pub ai_completion: ProjectAiCompletionConfig,
+    /// `[formatting]` section: perltidy configuration.
+    pub formatting: ProjectFormattingConfig,
 }
 
 /// `[perl]` section of `.perl-lsp.toml`.
@@ -543,6 +643,38 @@ pub struct ProjectAiCompletionConfig {
     pub api_key_env: Option<String>,
 }
 
+/// `[formatting]` section of `.perl-lsp.toml`.
+#[derive(Debug, Clone, Default, serde::Deserialize)]
+#[serde(default)]
+pub struct ProjectFormattingConfig {
+    /// Whether perltidy formatting is enabled.
+    pub enabled: Option<bool>,
+    /// Path to a `.perltidyrc` profile file.
+    pub perltidy_profile: Option<String>,
+    /// Maximum line length.
+    pub perltidy_maximum_line_length: Option<u32>,
+    /// Indent size in spaces.
+    pub perltidy_indent_columns: Option<u32>,
+    /// Use tabs instead of spaces.
+    pub perltidy_tabs: Option<bool>,
+    /// Opening brace on new line.
+    pub perltidy_opening_brace_on_new_line: Option<bool>,
+    /// Cuddled else style.
+    pub perltidy_cuddled_else: Option<bool>,
+    /// Space after keyword.
+    pub perltidy_space_after_keyword: Option<bool>,
+    /// Add trailing commas.
+    pub perltidy_add_trailing_commas: Option<bool>,
+    /// Vertical alignment.
+    pub perltidy_vertical_alignment: Option<bool>,
+    /// Block comment indentation.
+    pub perltidy_block_comment_indentation: Option<u32>,
+    /// Extra perltidy arguments.
+    pub perltidy_extra_args: Vec<String>,
+    /// Timeout in seconds.
+    pub perltidy_timeout_secs: Option<u64>,
+}
+
 /// Load project config from `<workspace_root>/.perl-lsp.toml`.
 ///
 /// Returns `None` if the file does not exist (normal case — most projects won't have one).
@@ -593,6 +725,47 @@ impl ProjectConfig {
         }
         if let Some(ref key_env) = self.ai_completion.api_key_env {
             config.ai_completion.api_key_env = key_env.clone();
+        }
+
+        // Apply formatting configuration
+        if let Some(enabled) = self.formatting.enabled {
+            config.perltidy_enabled = enabled;
+        }
+        if let Some(ref profile) = self.formatting.perltidy_profile {
+            config.perltidy_profile = Some(profile.clone());
+        }
+        if let Some(len) = self.formatting.perltidy_maximum_line_length {
+            config.perltidy_maximum_line_length = Some(len);
+        }
+        if let Some(indent) = self.formatting.perltidy_indent_columns {
+            config.perltidy_indent_columns = Some(indent);
+        }
+        if let Some(tabs) = self.formatting.perltidy_tabs {
+            config.perltidy_tabs = Some(tabs);
+        }
+        if let Some(brace) = self.formatting.perltidy_opening_brace_on_new_line {
+            config.perltidy_opening_brace_on_new_line = Some(brace);
+        }
+        if let Some(cuddle) = self.formatting.perltidy_cuddled_else {
+            config.perltidy_cuddled_else = Some(cuddle);
+        }
+        if let Some(space) = self.formatting.perltidy_space_after_keyword {
+            config.perltidy_space_after_keyword = Some(space);
+        }
+        if let Some(comma) = self.formatting.perltidy_add_trailing_commas {
+            config.perltidy_add_trailing_commas = Some(comma);
+        }
+        if let Some(align) = self.formatting.perltidy_vertical_alignment {
+            config.perltidy_vertical_alignment = Some(align);
+        }
+        if let Some(block) = self.formatting.perltidy_block_comment_indentation {
+            config.perltidy_block_comment_indentation = Some(block);
+        }
+        if !self.formatting.perltidy_extra_args.is_empty() {
+            config.perltidy_extra_args = self.formatting.perltidy_extra_args.clone();
+        }
+        if let Some(timeout) = self.formatting.perltidy_timeout_secs {
+            config.perltidy_timeout_secs = timeout;
         }
     }
 

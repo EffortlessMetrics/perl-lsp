@@ -2035,6 +2035,7 @@ name = "perl-lsp-formatting"
 version = "0.12.4"
 dependencies = [
  "perl-lsp-formatting-types",
+ "perl-lsp-perltidy",
  "perl-lsp-tooling",
  "perl-tdd-support",
  "thiserror",
