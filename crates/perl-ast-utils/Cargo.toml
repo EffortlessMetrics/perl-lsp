@@ -29,7 +29,6 @@ doctest = false
 perl-ast = { workspace = true }
 
 [dev-dependencies]
-perl-tdd-support = { workspace = true }
 perl-ast = { workspace = true }
 
 [package.metadata.docs.rs]
