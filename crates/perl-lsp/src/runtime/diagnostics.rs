@@ -88,13 +88,24 @@ impl LspServer {
                     doc.degradation_tier,
                     doc.line_starts.clone(),
                     doc.rope.clone(),
+                    Arc::clone(&doc.generation),
+                    doc.generation.load(Ordering::SeqCst),
                 )
             })
             // lock is released here
         };
 
-        let Some((ast_opt, text, parse_errors, version, degradation_tier, line_starts, rope)) =
-            snapshot
+        let Some((
+            ast_opt,
+            text,
+            parse_errors,
+            version,
+            degradation_tier,
+            line_starts,
+            rope,
+            generation,
+            gen_at_snapshot,
+        )) = snapshot
         else {
             return;
         };
@@ -219,6 +230,19 @@ impl LspServer {
                 })
                 .collect()
         };
+
+        // Generation-aware staleness guard: if a newer didChange arrived while
+        // diagnostics were being computed, discard this result — the debouncer
+        // will fire again for the latest version.
+        if generation.load(Ordering::SeqCst) != gen_at_snapshot {
+            tracing::debug!(
+                uri = %normalized_uri,
+                gen_at_snapshot,
+                current_gen = generation.load(Ordering::SeqCst),
+                "Skipping stale diagnostic publish (generation advanced during computation)"
+            );
+            return;
+        }
 
         tracing::debug!(
             count = lsp_diagnostics.len(),
@@ -1067,6 +1091,91 @@ fn builtin_violation_to_diagnostic(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::Write;
+    use std::sync::Arc as StdArc;
+    use std::time::Duration;
+
+    /// Shared-buffer writer for capturing outbound LSP notifications in tests.
+    struct SharedVecWriter {
+        inner: StdArc<parking_lot::Mutex<Vec<u8>>>,
+    }
+    impl Write for SharedVecWriter {
+        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+            self.inner.lock().extend_from_slice(buf);
+            Ok(buf.len())
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+    fn make_server_with_capture() -> (LspServer, StdArc<parking_lot::Mutex<Vec<u8>>>) {
+        let buf = StdArc::new(parking_lot::Mutex::new(Vec::<u8>::new()));
+        let writer = SharedVecWriter { inner: StdArc::clone(&buf) };
+        let server =
+            LspServer::with_io(Box::new(std::io::Cursor::new(Vec::<u8>::new())), Box::new(writer));
+        (server, buf)
+    }
+
+    /// Positive case: when no concurrent change arrives during diagnostic computation,
+    /// `publish_diagnostics` MUST send a `textDocument/publishDiagnostics` notification.
+    #[test]
+    fn stable_generation_publishes_diagnostics() {
+        let (server, buf) = make_server_with_capture();
+        let uri = "file:///stable_gen_test.pl";
+        server
+            .test_handle_did_open(Some(json!({
+                "textDocument": {"uri": uri, "languageId": "perl", "version": 1, "text": "my $x = 1;\n"}
+            })))
+            .unwrap();
+
+        // No concurrent change: generation is stable throughout, publish must fire.
+        server.publish_diagnostics(uri);
+        drop(server);
+        std::thread::sleep(Duration::from_millis(50)); // flush outbound writer
+
+        let bytes = buf.lock().clone();
+        let text = String::from_utf8(bytes).unwrap_or_default();
+        assert!(
+            text.contains("publishDiagnostics"),
+            "stable generation must produce a publishDiagnostics notification; got: {text:?}"
+        );
+    }
+
+    /// Guard wire test: advancing the generation counter before `publish_diagnostics`
+    /// is called must not suppress publication — the snapshot captures the CURRENT
+    /// generation, so stable-during-computation is still the common case.
+    /// This confirms the guard does not false-positive.
+    #[test]
+    fn pre_advanced_generation_does_not_suppress_publish() {
+        let (server, buf) = make_server_with_capture();
+        let uri = "file:///pre_advanced_gen_test.pl";
+        server
+            .test_handle_did_open(Some(json!({
+                "textDocument": {"uri": uri, "languageId": "perl", "version": 1, "text": "my $y = 2;\n"}
+            })))
+            .unwrap();
+
+        // Advance generation BEFORE calling publish_diagnostics (simulates a prior
+        // didChange that already completed). The snapshot will read this new value,
+        // computation runs, and the guard check sees the same value → publishes.
+        {
+            let docs = server.documents.lock();
+            if let Some(doc) = docs.get(uri) {
+                doc.generation.fetch_add(1, Ordering::SeqCst);
+            }
+        }
+
+        server.publish_diagnostics(uri);
+        drop(server);
+        std::thread::sleep(Duration::from_millis(50));
+
+        let bytes = buf.lock().clone();
+        let text = String::from_utf8(bytes).unwrap_or_default();
+        assert!(
+            text.contains("publishDiagnostics"),
+            "pre-advanced generation must not suppress publish (guard must not false-positive); got: {text:?}"
+        );
+    }
 
     #[test]
     fn builtin_violation_maps_gentle_to_error() {
