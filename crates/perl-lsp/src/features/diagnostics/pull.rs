@@ -428,12 +428,6 @@ fn is_fixable_diagnostic(code: &str) -> bool {
             | "InputOutput::RequireBriefOpen"
             | "InputOutput::RequireThreeArgOpen"
             | "Variables::ProhibitUnusedVariables"
-            | "Perl::Critic::Policy::TestingAndDebugging::RequireUseStrict"
-            | "Perl::Critic::Policy::TestingAndDebugging::RequireUseWarnings"
-            | "Perl::Critic::Policy::InputOutput::ProhibitBarewordFileHandles"
-            | "Perl::Critic::Policy::InputOutput::RequireBriefOpen"
-            | "Perl::Critic::Policy::InputOutput::RequireThreeArgOpen"
-            | "Perl::Critic::Policy::Variables::ProhibitUnusedVariables"
     ) {
         return true;
     }
@@ -605,10 +599,6 @@ mod tests {
         assert!(is_fixable_diagnostic("TestingAndDebugging::RequireUseWarnings"));
         assert!(is_fixable_diagnostic("InputOutput::RequireThreeArgOpen"));
         assert!(is_fixable_diagnostic("Variables::ProhibitUnusedVariables"));
-        assert!(is_fixable_diagnostic(
-            "Perl::Critic::Policy::TestingAndDebugging::RequireUseStrict"
-        ));
-        assert!(is_fixable_diagnostic("Perl::Critic::Policy::InputOutput::RequireThreeArgOpen"));
     }
 
     #[test]
