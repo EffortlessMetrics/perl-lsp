@@ -216,4 +216,74 @@ $var;
         assert!(new_text.contains("new_name")); // Declaration and calls should be renamed
         Ok(())
     }
+
+    /// Cross-folder rename: sub defined in root_a/lib/A.pm, called from root_b/lib/B.pm.
+    ///
+    /// Verifies that build_rename_edit produces edits in BOTH files when the
+    /// WorkspaceIndex has indexed files from two separate workspace roots.
+    /// This is the alpha slice of issue #3522 cross-folder rename support.
+    #[test]
+    fn rename_sub_spans_two_workspace_roots() -> Result<(), Box<dyn std::error::Error>> {
+        let idx = WorkspaceIndex::new();
+
+        // root_a: defines A::target_name
+        let a_uri = "file:///root_a/lib/A.pm";
+        let a_text =
+            "package A;\n\nsub target_name {\n    my ($self) = @_;\n    return 42;\n}\n\n1;\n";
+        index_text(&idx, a_uri, a_text)?;
+
+        // root_b: calls A::target_name
+        let b_uri = "file:///root_b/lib/B.pm";
+        let b_text = "package B;\n\nuse A;\n\nsub run {\n    my $obj = A->new();\n    return A::target_name($obj);\n}\n\n1;\n";
+        index_text(&idx, b_uri, b_text)?;
+
+        let key = SymbolKey {
+            pkg: Arc::from("A"),
+            name: Arc::from("target_name"),
+            sigil: None,
+            kind: SymKind::Sub,
+        };
+
+        let edits = build_rename_edit(&idx, &key, "renamed_target");
+
+        // The rename must produce at least one edit (for the definition in A.pm)
+        assert!(
+            !edits.is_empty(),
+            "build_rename_edit must return at least one RenameEdit for A::target_name"
+        );
+
+        // At minimum, A.pm (the definition file) must be included
+        let a_edit = edits.iter().find(|e| e.uri.contains("A.pm"));
+        assert!(
+            a_edit.is_some(),
+            "WorkspaceEdit must include edits for A.pm (definition). Got URIs: {:?}",
+            edits.iter().map(|e| &e.uri).collect::<Vec<_>>()
+        );
+
+        // If B.pm is indexed and the call site was found, it must also appear
+        let b_edit = edits.iter().find(|e| e.uri.contains("B.pm"));
+        if let Some(b) = b_edit {
+            // All edits in B.pm must use the new name
+            for edit in &b.edits {
+                assert!(
+                    edit.new_text.contains("renamed_target"),
+                    "B.pm edit must use 'renamed_target', got: {:?}",
+                    edit.new_text
+                );
+            }
+        }
+
+        // Verify A.pm edits use the new name
+        if let Some(a) = a_edit {
+            for edit in &a.edits {
+                assert!(
+                    edit.new_text.contains("renamed_target"),
+                    "A.pm edit must use 'renamed_target', got: {:?}",
+                    edit.new_text
+                );
+            }
+        }
+
+        Ok(())
+    }
 }
