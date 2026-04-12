@@ -1024,6 +1024,74 @@ fn test_folder_aware_ranking() -> TestResult {
 // Gap 2 — #4152
 // =============================================================================
 
+#[test]
+#[cfg(all(feature = "workspace", feature = "expose_lsp_test_api"))]
+#[serial_test::serial]
+fn test_cross_folder_rename_updates_multiple_workspace_roots() -> TestResult {
+    use support::env_guard::EnvGuard;
+
+    // Enable workspace indexing.
+    // SAFETY: Test runs serially and restores process env on drop.
+    let _guard = unsafe { EnvGuard::set("PERL_LSP_WORKSPACE", "1") };
+
+    let ws = TempWorkspace::new()?;
+
+    let folder_a_uri = create_folder_with_config(&ws, "folder-a", &["lib"])?;
+    let folder_b_uri = create_folder_with_config(&ws, "folder-b", &["lib"])?;
+
+    let module_uri = create_module(
+        &ws,
+        "folder-a/lib/Shared.pm",
+        "package Shared;\nsub ping { return 1; }\n1;\n",
+    )?;
+    let consumer_uri =
+        create_script(&ws, "folder-b/consumer.pl", "use Shared;\nmy $x = Shared::ping();\n")?;
+
+    let mut harness = LspHarness::new_raw();
+    harness.notify(
+        "initialize",
+        json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "params": {
+                "processId": std::process::id(),
+                "capabilities": {},
+                "workspaceFolders": [
+                    { "uri": folder_a_uri, "name": "folder-a" },
+                    { "uri": folder_b_uri, "name": "folder-b" }
+                ]
+            }
+        }),
+    );
+    harness.notify("initialized", json!({}));
+
+    std::thread::sleep(indexing_timeout());
+
+    harness.open(&module_uri, "package Shared;\nsub ping { return 1; }\n1;\n")?;
+    harness.open(&consumer_uri, "use Shared;\nmy $x = Shared::ping();\n")?;
+    harness.wait_for_idle(Duration::from_millis(500));
+
+    let rename = harness.request_with_timeout(
+        "textDocument/rename",
+        json!({
+            "textDocument": { "uri": module_uri },
+            "position": { "line": 1, "character": 4 },
+            "newName": "pong"
+        }),
+        request_timeout(),
+    )?;
+
+    let changes =
+        rename["changes"].as_object().ok_or("rename response must include changes map")?;
+    assert!(changes.contains_key(&module_uri), "rename should update defining file in folder-a");
+    assert!(
+        changes.contains_key(&consumer_uri),
+        "rename should update consumer file in folder-b (cross-folder workspace edit)"
+    );
+
+    Ok(())
+}
+
 /// Verify that `workspace/symbol` returns results from the partially-indexed
 /// workspace even when the index coordinator is still in Building state.
 ///
