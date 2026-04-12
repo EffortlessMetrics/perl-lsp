@@ -5,6 +5,15 @@
 
 use crate::runtime::workspace_folder::WorkspaceFolderState;
 
+/// Tracks an in-flight `workspace/configuration` pull request.
+#[derive(Debug, Clone)]
+pub(crate) struct PendingWorkspaceConfigurationRequest {
+    /// Whether the first result entry is the unscoped global `section: perl` item.
+    pub expects_global_item: bool,
+    /// Folder URIs requested with `scopeUri`.
+    pub folder_uris: Vec<String>,
+}
+
 mod client_requests;
 mod constructors;
 pub(crate) mod diagnostic_debounce;
@@ -220,7 +229,8 @@ pub struct LspServer {
     /// Atomic counter for generating unique request IDs
     next_request_id: Arc<AtomicI64>,
     /// Pending workspace/configuration reverse requests keyed by request ID.
-    pending_workspace_configuration_requests: Arc<Mutex<HashMap<i64, Vec<String>>>>,
+    pending_workspace_configuration_requests:
+        Arc<Mutex<HashMap<i64, PendingWorkspaceConfigurationRequest>>>,
     /// Active progress tokens for work done progress tracking
     progress_tokens: Arc<Mutex<HashSet<String>>>,
     /// Maps progress tokens to their originating request IDs for cancellation routing

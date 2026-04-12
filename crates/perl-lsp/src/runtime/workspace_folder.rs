@@ -10,6 +10,7 @@
 use std::path::PathBuf;
 
 use perl_lsp_config::{ProjectConfig, WorkspaceConfig};
+use serde_json::Value;
 
 /// State for a single workspace folder.
 ///
@@ -26,6 +27,10 @@ pub struct WorkspaceFolderState {
     pub name: Option<String>,
     /// Project configuration loaded from `.perl-lsp.toml` in this folder
     pub project_config: Option<ProjectConfig>,
+    /// Client-wide workspace settings from unscoped `workspace/configuration`.
+    pub client_global_settings: Option<Value>,
+    /// Folder-scoped workspace settings from `workspace/configuration(scopeUri=folder)`.
+    pub client_folder_settings: Option<Value>,
     /// Effective workspace configuration for this folder
     ///
     /// This will eventually be computed by merging:
@@ -44,6 +49,8 @@ impl WorkspaceFolderState {
             path: None,
             name: None,
             project_config: None,
+            client_global_settings: None,
+            client_folder_settings: None,
             effective_workspace_config: WorkspaceConfig::default(),
         }
     }
@@ -76,6 +83,22 @@ impl WorkspaceFolderState {
         self
     }
 
+    /// Recompute effective workspace config using precedence:
+    /// defaults < `.perl-lsp.toml` < client-global < client-folder.
+    pub fn recompute_effective_workspace_config(&mut self) {
+        let mut effective = WorkspaceConfig::default();
+        if let Some(project) = &self.project_config {
+            project.apply_to_workspace_config(&mut effective);
+        }
+        if let Some(global_settings) = &self.client_global_settings {
+            effective.update_from_value(global_settings);
+        }
+        if let Some(folder_settings) = &self.client_folder_settings {
+            effective.update_from_value(folder_settings);
+        }
+        self.effective_workspace_config = effective;
+    }
+
     /// Get the URI as a string reference.
     #[must_use]
     pub fn uri(&self) -> &str {
@@ -100,6 +123,8 @@ mod tests {
         assert!(folder.path.is_none());
         assert!(folder.name.is_none());
         assert!(folder.project_config.is_none());
+        assert!(folder.client_global_settings.is_none());
+        assert!(folder.client_folder_settings.is_none());
     }
 
     #[test]
@@ -152,5 +177,33 @@ mod tests {
         assert!(!config.include_paths.is_empty());
         assert_eq!(config.resolution_timeout_ms, 50);
         assert!(!config.use_system_inc);
+    }
+
+    #[test]
+    fn recompute_effective_workspace_config_merges_project_then_client_global() {
+        let mut folder = WorkspaceFolderState::new("file:///test/path".to_string());
+        let mut project = ProjectConfig::default();
+        project.perl.include_paths = vec!["project_lib".to_string()];
+        folder.project_config = Some(project);
+        folder.client_global_settings =
+            Some(serde_json::json!({ "workspace": { "useSystemInc": true } }));
+
+        folder.recompute_effective_workspace_config();
+
+        assert_eq!(folder.effective_workspace_config.include_paths, vec!["project_lib"]);
+        assert!(folder.effective_workspace_config.use_system_inc);
+    }
+
+    #[test]
+    fn recompute_effective_workspace_config_allows_folder_override() {
+        let mut folder = WorkspaceFolderState::new("file:///test/path".to_string());
+        folder.client_global_settings =
+            Some(serde_json::json!({ "workspace": { "includePaths": ["global_lib"] } }));
+        folder.client_folder_settings =
+            Some(serde_json::json!({ "workspace": { "includePaths": ["folder_lib"] } }));
+
+        folder.recompute_effective_workspace_config();
+
+        assert_eq!(folder.effective_workspace_config.include_paths, vec!["folder_lib"]);
     }
 }

@@ -173,8 +173,8 @@ impl LspServer {
             return;
         }
 
-        let items: Vec<Value> =
-            folder_uris.iter().map(|uri| json!({ "scopeUri": uri, "section": "perl" })).collect();
+        let mut items: Vec<Value> = vec![json!({ "section": "perl" })];
+        items.extend(folder_uris.iter().map(|uri| json!({ "scopeUri": uri, "section": "perl" })));
         let request_id = self.next_request_id.fetch_add(1, Ordering::Relaxed);
 
         if let Err(error) = self.outbound.send_request(
@@ -186,7 +186,10 @@ impl LspServer {
             return;
         }
 
-        self.pending_workspace_configuration_requests.lock().insert(request_id, folder_uris);
+        self.pending_workspace_configuration_requests.lock().insert(
+            request_id,
+            PendingWorkspaceConfigurationRequest { expects_global_item: true, folder_uris },
+        );
     }
 
     /// Apply a `workspace/configuration` response for a previously sent request.
@@ -198,8 +201,8 @@ impl LspServer {
             return;
         };
 
-        let maybe_folder_uris = self.pending_workspace_configuration_requests.lock().remove(&id);
-        let Some(folder_uris) = maybe_folder_uris else {
+        let pending = self.pending_workspace_configuration_requests.lock().remove(&id);
+        let Some(pending) = pending else {
             return;
         };
 
@@ -213,22 +216,23 @@ impl LspServer {
 
         let results = params.get("result").and_then(Value::as_array).cloned().unwrap_or_default();
 
+        let global_settings = pending
+            .expects_global_item
+            .then(|| results.first().cloned())
+            .flatten()
+            .filter(|value| !value.is_null());
+
+        let folder_offset = usize::from(pending.expects_global_item);
         let mut folders = self.workspace_folders.lock();
-        for (idx, folder_uri) in folder_uris.iter().enumerate() {
+        for (idx, folder_uri) in pending.folder_uris.iter().enumerate() {
             let Some(folder) = folders.iter_mut().find(|folder| &folder.uri == folder_uri) else {
                 continue;
             };
 
-            let mut effective_config = perl_lsp_config::WorkspaceConfig::default();
-            if let Some(project_config) = &folder.project_config {
-                project_config.apply_to_workspace_config(&mut effective_config);
-            }
-
-            if let Some(perl_settings) = results.get(idx) {
-                effective_config.update_from_value(perl_settings);
-            }
-
-            folder.effective_workspace_config = effective_config;
+            folder.client_global_settings = global_settings.clone();
+            folder.client_folder_settings =
+                results.get(idx + folder_offset).cloned().filter(|value| !value.is_null());
+            folder.recompute_effective_workspace_config();
         }
     }
 
@@ -675,6 +679,15 @@ impl LspServer {
                         tracing::debug!("Updated workspace config from perl settings");
                     }
 
+                    {
+                        let mut folders = self.workspace_folders.lock();
+                        for folder in folders.iter_mut() {
+                            folder.client_global_settings = Some(perl.clone());
+                            folder.client_folder_settings = None;
+                            folder.recompute_effective_workspace_config();
+                        }
+                    }
+
                     // Refresh AI backend when config changes (constructs or clears provider)
                     self.refresh_ai_backend();
 
@@ -688,6 +701,14 @@ impl LspServer {
 
         // Invalidate client-provided workspace/configuration values and re-fetch.
         self.pending_workspace_configuration_requests.lock().clear();
+        {
+            let mut folders = self.workspace_folders.lock();
+            for folder in folders.iter_mut() {
+                folder.client_global_settings = None;
+                folder.client_folder_settings = None;
+                folder.recompute_effective_workspace_config();
+            }
+        }
         self.request_workspace_configuration_for_folders();
     }
 
