@@ -1478,7 +1478,7 @@ checksum = "9b4f627cb1b25917193a259e49bdad08f671f8d9708acfd5fe0a8c1455d87220"
 
 [[package]]
 name = "perl-ast"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "perl-ast-v2",
  "perl-position-tracking",
@@ -1487,21 +1487,21 @@ dependencies = [
 
 [[package]]
 name = "perl-ast-utils"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "perl-ast",
 ]
 
 [[package]]
 name = "perl-ast-v2"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "perl-position-tracking",
 ]
 
 [[package]]
 name = "perl-builtins"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "perl-builtins-phf",
  "perl-tdd-support",
@@ -1509,14 +1509,14 @@ dependencies = [
 
 [[package]]
 name = "perl-builtins-phf"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "phf",
 ]
 
 [[package]]
 name = "perl-ci-hygiene"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "chrono",
  "clap",
@@ -1529,11 +1529,11 @@ dependencies = [
 
 [[package]]
 name = "perl-content-length-framing"
-version = "0.12.3"
+version = "0.12.4"
 
 [[package]]
 name = "perl-corpus"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "anyhow",
  "chrono",
@@ -1551,7 +1551,7 @@ dependencies = [
 
 [[package]]
 name = "perl-dap"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "anyhow",
  "clap",
@@ -1585,7 +1585,7 @@ dependencies = [
 
 [[package]]
 name = "perl-dap-breakpoint"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "perl-parser",
  "perl-tdd-support",
@@ -1595,11 +1595,11 @@ dependencies = [
 
 [[package]]
 name = "perl-dap-command-args"
-version = "0.12.3"
+version = "0.12.4"
 
 [[package]]
 name = "perl-dap-config"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "anyhow",
  "serde",
@@ -1609,7 +1609,7 @@ dependencies = [
 
 [[package]]
 name = "perl-dap-eval"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "once_cell",
  "perl-tdd-support",
@@ -1619,7 +1619,7 @@ dependencies = [
 
 [[package]]
 name = "perl-dap-platform"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "anyhow",
  "perl-dap-command-args",
@@ -1629,7 +1629,7 @@ dependencies = [
 
 [[package]]
 name = "perl-dap-security"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "anyhow",
  "perl-path-security",
@@ -1640,7 +1640,7 @@ dependencies = [
 
 [[package]]
 name = "perl-dap-shell"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "perl-dap-command-args",
  "perl-dap-platform",
@@ -1648,7 +1648,7 @@ dependencies = [
 
 [[package]]
 name = "perl-dap-stack"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "once_cell",
  "perl-tdd-support",
@@ -1660,7 +1660,7 @@ dependencies = [
 
 [[package]]
 name = "perl-dap-types"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "serde",
  "serde_json",
@@ -1668,7 +1668,7 @@ dependencies = [
 
 [[package]]
 name = "perl-dap-value"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "serde",
  "serde_json",
@@ -1676,7 +1676,7 @@ dependencies = [
 
 [[package]]
 name = "perl-dap-variables"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "once_cell",
  "perl-dap-value",
@@ -1689,7 +1689,7 @@ dependencies = [
 
 [[package]]
 name = "perl-dead-code"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "perl-workspace-index",
  "serde",
@@ -1698,14 +1698,14 @@ dependencies = [
 
 [[package]]
 name = "perl-diagnostics-codes"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "perl-edit"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "perl-position-tracking",
  "perl-tdd-support",
@@ -1713,7 +1713,7 @@ dependencies = [
 
 [[package]]
 name = "perl-error"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "perl-ast",
  "perl-ast-v2",
@@ -1726,7 +1726,7 @@ dependencies = [
 
 [[package]]
 name = "perl-feature-catalog"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "perl-tdd-support",
  "serde",
@@ -1737,7 +1737,7 @@ dependencies = [
 
 [[package]]
 name = "perl-heredoc"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "perl-position-tracking",
  "perl-tdd-support",
@@ -1745,14 +1745,14 @@ dependencies = [
 
 [[package]]
 name = "perl-heredoc-anti-patterns"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "regex",
 ]
 
 [[package]]
 name = "perl-incremental-parsing"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "anyhow",
  "lsp-types",
@@ -1768,11 +1768,11 @@ dependencies = [
 
 [[package]]
 name = "perl-keywords"
-version = "0.12.3"
+version = "0.12.4"
 
 [[package]]
 name = "perl-lexer"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "criterion",
  "memchr",
@@ -1786,11 +1786,11 @@ dependencies = [
 
 [[package]]
 name = "perl-line-index"
-version = "0.12.3"
+version = "0.12.4"
 
 [[package]]
 name = "perl-lsp-ai-provider"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "perl-lsp-inline-completion",
  "serde_json",
@@ -1799,7 +1799,7 @@ dependencies = [
 
 [[package]]
 name = "perl-lsp-cancellation"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "proptest",
  "serde_json",
@@ -1807,7 +1807,7 @@ dependencies = [
 
 [[package]]
 name = "perl-lsp-capability-map"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "lsp-types",
  "perl-lsp-feature-ids",
@@ -1816,7 +1816,7 @@ dependencies = [
 
 [[package]]
 name = "perl-lsp-code-actions"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "perl-ast-utils",
  "perl-builtins",
@@ -1831,7 +1831,7 @@ dependencies = [
 
 [[package]]
 name = "perl-lsp-code-lens"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "perl-parser",
  "perl-parser-core",
@@ -1843,7 +1843,7 @@ dependencies = [
 
 [[package]]
 name = "perl-lsp-color-provider"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "once_cell",
  "perl-position-tracking",
@@ -1853,7 +1853,7 @@ dependencies = [
 
 [[package]]
 name = "perl-lsp-completion"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "criterion",
  "perl-keywords",
@@ -1870,14 +1870,14 @@ dependencies = [
 
 [[package]]
 name = "perl-lsp-completion-item"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "perl-parser-core",
 ]
 
 [[package]]
 name = "perl-lsp-config"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "perl-dap-platform",
  "serde",
@@ -1888,14 +1888,14 @@ dependencies = [
 
 [[package]]
 name = "perl-lsp-critic-parser"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "perl-tdd-support",
 ]
 
 [[package]]
 name = "perl-lsp-diagnostic-catalog"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "perl-diagnostics-codes",
  "serde_json",
@@ -1903,11 +1903,11 @@ dependencies = [
 
 [[package]]
 name = "perl-lsp-diagnostic-types"
-version = "0.12.3"
+version = "0.12.4"
 
 [[package]]
 name = "perl-lsp-diagnostics"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "insta",
  "perl-corpus",
@@ -1925,7 +1925,7 @@ dependencies = [
 
 [[package]]
 name = "perl-lsp-document-highlight"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "perl-ast",
  "perl-parser",
@@ -1933,7 +1933,7 @@ dependencies = [
 
 [[package]]
 name = "perl-lsp-document-links"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "perl-module-import",
  "perl-module-path",
@@ -1943,7 +1943,7 @@ dependencies = [
 
 [[package]]
 name = "perl-lsp-feature-contracts"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "lsp-types",
  "perl-feature-catalog",
@@ -1955,7 +1955,7 @@ dependencies = [
 
 [[package]]
 name = "perl-lsp-feature-flags"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "perl-lsp-feature-contracts",
  "perl-lsp-feature-ids",
@@ -1963,7 +1963,7 @@ dependencies = [
 
 [[package]]
 name = "perl-lsp-feature-governance"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "perl-lsp-feature-contracts",
  "perl-lsp-feature-grid",
@@ -1975,7 +1975,7 @@ dependencies = [
 
 [[package]]
 name = "perl-lsp-feature-grid"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "perl-lsp-feature-contracts",
  "perl-lsp-feature-policy",
@@ -1985,11 +1985,11 @@ dependencies = [
 
 [[package]]
 name = "perl-lsp-feature-ids"
-version = "0.12.3"
+version = "0.12.4"
 
 [[package]]
 name = "perl-lsp-feature-policy"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "perl-lsp-feature-contracts",
  "perl-lsp-feature-flags",
@@ -1998,14 +1998,14 @@ dependencies = [
 
 [[package]]
 name = "perl-lsp-feature-profile"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "perl-lsp-feature-contracts",
 ]
 
 [[package]]
 name = "perl-lsp-feature-profile-cli"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "perl-lsp-feature-policy",
  "perl-lsp-feature-profile",
@@ -2014,7 +2014,7 @@ dependencies = [
 
 [[package]]
 name = "perl-lsp-file-completion"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "perl-lsp-completion-item",
  "perl-path-security",
@@ -2024,7 +2024,7 @@ dependencies = [
 
 [[package]]
 name = "perl-lsp-folding"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "perl-lexer",
  "perl-parser-core",
@@ -2032,7 +2032,7 @@ dependencies = [
 
 [[package]]
 name = "perl-lsp-formatting"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "perl-lsp-formatting-types",
  "perl-lsp-tooling",
@@ -2042,7 +2042,7 @@ dependencies = [
 
 [[package]]
 name = "perl-lsp-formatting-types"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "serde",
  "serde_json",
@@ -2050,11 +2050,11 @@ dependencies = [
 
 [[package]]
 name = "perl-lsp-import-management"
-version = "0.12.3"
+version = "0.12.4"
 
 [[package]]
 name = "perl-lsp-inlay-hints"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "perl-builtins",
  "perl-parser-core",
@@ -2065,7 +2065,7 @@ dependencies = [
 
 [[package]]
 name = "perl-lsp-inline-completion"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "lsp-types",
  "perl-position-tracking",
@@ -2074,7 +2074,7 @@ dependencies = [
 
 [[package]]
 name = "perl-lsp-input-validation"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "anyhow",
  "perl-lsp-limits",
@@ -2086,7 +2086,7 @@ dependencies = [
 
 [[package]]
 name = "perl-lsp-launcher"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "clap",
  "perl-lsp-feature-governance",
@@ -2098,14 +2098,14 @@ dependencies = [
 
 [[package]]
 name = "perl-lsp-limits"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "serde_json",
 ]
 
 [[package]]
 name = "perl-lsp-navigation"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "criterion",
  "lsp-types",
@@ -2121,14 +2121,14 @@ dependencies = [
 
 [[package]]
 name = "perl-lsp-on-type-formatting"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "serde_json",
 ]
 
 [[package]]
 name = "perl-lsp-performance"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "moka",
  "perl-parser-core",
@@ -2137,7 +2137,7 @@ dependencies = [
 
 [[package]]
 name = "perl-lsp-perltidy"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "perl-subprocess-runtime",
  "perl-tdd-support",
@@ -2147,7 +2147,7 @@ dependencies = [
 
 [[package]]
 name = "perl-lsp-protocol"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "lsp-types",
  "perl-lsp-feature-contracts",
@@ -2159,7 +2159,7 @@ dependencies = [
 
 [[package]]
 name = "perl-lsp-providers"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "lsp-types",
  "perl-lsp-code-actions",
@@ -2184,7 +2184,7 @@ dependencies = [
 
 [[package]]
 name = "perl-lsp-rename"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "perl-keywords",
  "perl-parser-core",
@@ -2195,7 +2195,7 @@ dependencies = [
 
 [[package]]
 name = "perl-lsp-rs"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -2290,14 +2290,14 @@ dependencies = [
 
 [[package]]
 name = "perl-lsp-selection-range"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "lsp-types",
 ]
 
 [[package]]
 name = "perl-lsp-semantic-tokens"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "perl-lexer",
  "perl-parser-core",
@@ -2308,15 +2308,15 @@ dependencies = [
 
 [[package]]
 name = "perl-lsp-symbol-query"
-version = "0.12.3"
+version = "0.12.4"
 
 [[package]]
 name = "perl-lsp-text-utils"
-version = "0.12.3"
+version = "0.12.4"
 
 [[package]]
 name = "perl-lsp-tooling"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "criterion",
  "lsp-types",
@@ -2332,7 +2332,7 @@ dependencies = [
 
 [[package]]
 name = "perl-lsp-transport"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "perl-content-length-framing",
  "perl-lsp-protocol",
@@ -2342,7 +2342,7 @@ dependencies = [
 
 [[package]]
 name = "perl-lsp-type-hierarchy"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "perl-parser-core",
  "perl-position-tracking",
@@ -2353,14 +2353,14 @@ dependencies = [
 
 [[package]]
 name = "perl-lsp-uri"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "lsp-types",
 ]
 
 [[package]]
 name = "perl-lsp-ux-tests"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "anyhow",
  "serde_json",
@@ -2371,7 +2371,7 @@ dependencies = [
 
 [[package]]
 name = "perl-lsp-workspace-symbols"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "perl-lsp-symbol-query",
  "perl-module-path",
@@ -2386,7 +2386,7 @@ dependencies = [
 
 [[package]]
 name = "perl-module-boundary"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "perl-module-import",
  "perl-module-name",
@@ -2396,7 +2396,7 @@ dependencies = [
 
 [[package]]
 name = "perl-module-import"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "perl-module-path",
  "perl-module-token",
@@ -2405,7 +2405,7 @@ dependencies = [
 
 [[package]]
 name = "perl-module-import-match"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "perl-module-boundary",
  "perl-module-import",
@@ -2416,21 +2416,21 @@ dependencies = [
 
 [[package]]
 name = "perl-module-name"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "proptest",
 ]
 
 [[package]]
 name = "perl-module-path"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "perl-module-name",
 ]
 
 [[package]]
 name = "perl-module-reference"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "perl-module-import",
  "perl-module-name",
@@ -2442,7 +2442,7 @@ dependencies = [
 
 [[package]]
 name = "perl-module-rename"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "perl-module-import-match",
  "perl-module-path",
@@ -2452,7 +2452,7 @@ dependencies = [
 
 [[package]]
 name = "perl-module-resolution"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "perl-module-resolution-path",
  "perl-module-resolution-uri",
@@ -2463,7 +2463,7 @@ dependencies = [
 
 [[package]]
 name = "perl-module-resolution-path"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "perl-module-path",
  "perl-path-security",
@@ -2473,7 +2473,7 @@ dependencies = [
 
 [[package]]
 name = "perl-module-resolution-uri"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "perl-module-path",
  "perl-path-security",
@@ -2486,7 +2486,7 @@ dependencies = [
 
 [[package]]
 name = "perl-module-token"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "perl-module-boundary",
  "perl-module-name",
@@ -2496,14 +2496,14 @@ dependencies = [
 
 [[package]]
 name = "perl-module-token-core"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "proptest",
 ]
 
 [[package]]
 name = "perl-module-token-parser"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "perl-module-reference",
  "perl-module-token-core",
@@ -2512,7 +2512,7 @@ dependencies = [
 
 [[package]]
 name = "perl-parser"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "anyhow",
  "criterion",
@@ -2549,7 +2549,7 @@ dependencies = [
 
 [[package]]
 name = "perl-parser-bench"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "perl-parser",
  "walkdir",
@@ -2557,7 +2557,7 @@ dependencies = [
 
 [[package]]
 name = "perl-parser-core"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "perl-ast",
  "perl-ast-v2",
@@ -2577,7 +2577,7 @@ dependencies = [
 
 [[package]]
 name = "perl-parser-pest"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "perl-tdd-support",
  "pest",
@@ -2590,7 +2590,7 @@ dependencies = [
 
 [[package]]
 name = "perl-path-normalize"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "tempfile",
  "thiserror",
@@ -2598,7 +2598,7 @@ dependencies = [
 
 [[package]]
 name = "perl-path-security"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "perl-path-normalize",
  "tempfile",
@@ -2607,18 +2607,18 @@ dependencies = [
 
 [[package]]
 name = "perl-percentile"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "proptest",
 ]
 
 [[package]]
 name = "perl-pod"
-version = "0.12.3"
+version = "0.12.4"
 
 [[package]]
 name = "perl-position-tracking"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "lsp-types",
  "perl-tdd-support",
@@ -2631,21 +2631,21 @@ dependencies = [
 
 [[package]]
 name = "perl-pragma"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "perl-ast",
 ]
 
 [[package]]
 name = "perl-qualified-name"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "proptest",
 ]
 
 [[package]]
 name = "perl-quote"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "perl-tdd-support",
  "proptest",
@@ -2653,7 +2653,7 @@ dependencies = [
 
 [[package]]
 name = "perl-refactoring"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "perl-module-path",
  "perl-parser-core",
@@ -2669,14 +2669,14 @@ dependencies = [
 
 [[package]]
 name = "perl-regex"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "thiserror",
 ]
 
 [[package]]
 name = "perl-semantic-analyzer"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "perl-parser-core",
  "perl-symbol-types",
@@ -2689,29 +2689,29 @@ dependencies = [
 
 [[package]]
 name = "perl-source-file"
-version = "0.12.3"
+version = "0.12.4"
 
 [[package]]
 name = "perl-subprocess-runtime"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "perl-tdd-support",
 ]
 
 [[package]]
 name = "perl-symbol-cursor"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "perl-tdd-support",
 ]
 
 [[package]]
 name = "perl-symbol-index"
-version = "0.12.3"
+version = "0.12.4"
 
 [[package]]
 name = "perl-symbol-surface"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "perl-ast",
  "perl-symbol-types",
@@ -2719,7 +2719,7 @@ dependencies = [
 
 [[package]]
 name = "perl-symbol-types"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "serde",
  "serde_json",
@@ -2727,7 +2727,7 @@ dependencies = [
 
 [[package]]
 name = "perl-tdd-support"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "lsp-types",
  "perl-parser-core",
@@ -2739,18 +2739,18 @@ dependencies = [
 
 [[package]]
 name = "perl-test-generators"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "proptest",
 ]
 
 [[package]]
 name = "perl-test-must"
-version = "0.12.3"
+version = "0.12.4"
 
 [[package]]
 name = "perl-text-line"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "perl-module-token-parser",
  "perl-tdd-support",
@@ -2759,11 +2759,11 @@ dependencies = [
 
 [[package]]
 name = "perl-token"
-version = "0.12.3"
+version = "0.12.4"
 
 [[package]]
 name = "perl-tokenizer"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "perl-ast-v2",
  "perl-error",
@@ -2775,7 +2775,7 @@ dependencies = [
 
 [[package]]
 name = "perl-uri"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "percent-encoding",
  "perl-tdd-support",
@@ -2786,14 +2786,14 @@ dependencies = [
 
 [[package]]
 name = "perl-uri-classify"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "url",
 ]
 
 [[package]]
 name = "perl-workspace-discovery"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "perl-source-file",
  "perl-workspace-ignore",
@@ -2805,7 +2805,7 @@ dependencies = [
 
 [[package]]
 name = "perl-workspace-folder"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "perl-uri",
  "proptest",
@@ -2816,11 +2816,11 @@ dependencies = [
 
 [[package]]
 name = "perl-workspace-ignore"
-version = "0.12.3"
+version = "0.12.4"
 
 [[package]]
 name = "perl-workspace-index"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "anyhow",
  "criterion",
@@ -2842,7 +2842,7 @@ dependencies = [
 
 [[package]]
 name = "perl-workspace-index-monitoring"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "parking_lot",
  "perl-tdd-support",
@@ -2850,7 +2850,7 @@ dependencies = [
 
 [[package]]
 name = "perl-workspace-index-slo"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "parking_lot",
  "perl-percentile",
@@ -2859,14 +2859,14 @@ dependencies = [
 
 [[package]]
 name = "perl-workspace-index-state-machine"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "parking_lot",
 ]
 
 [[package]]
 name = "perllsp"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "perl-lsp-rs",
 ]
@@ -4066,7 +4066,7 @@ checksum = "009994f150cc0cd50ff54917d5bc8bffe8cad10ca10d81c34da2ec421ae61782"
 
 [[package]]
 name = "tree-sitter-perl-c"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "cc",
  "tree-sitter",
@@ -4074,7 +4074,7 @@ dependencies = [
 
 [[package]]
 name = "tree-sitter-perl-rs"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "insta",
  "perl-ast",
@@ -4751,7 +4751,7 @@ dependencies = [
 
 [[package]]
 name = "xtask"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "anyhow",
  "assert_cmd",

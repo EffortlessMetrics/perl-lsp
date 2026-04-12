@@ -3,7 +3,7 @@
 # Used to generate capabilities, documentation, and compliance reports
 
 [meta]
-version = "0.12.3"
+version = "0.12.4"
 lsp_version = "3.18"
 compliance_percent = 100  # 119 total features (88 LSP + 24 DAP + 7 perl-lsp extensions), 53/53 advertised
 
