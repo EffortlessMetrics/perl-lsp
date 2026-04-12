@@ -124,13 +124,19 @@ use perl_workspace_index::workspace_index::WorkspaceIndex;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
-/// Maps module_name -> Set of explicitly imported symbol names.
-///
-/// Semantics:
-/// - Entry MISSING: `use Module` with no args (import all of `@EXPORT`) — no filtering.
-/// - Entry with EMPTY set: `use Module qw()` (explicit empty qw import) — nothing in namespace.
-/// - Entry with non-empty set: `use Module qw(a b)` — only those symbols are imported.
-type ImportMap = HashMap<String, HashSet<String>>;
+/// Import visibility for a module in the current file.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) enum ImportVisibility {
+    /// All default exports are considered visible (e.g. `use Module;` or `Module->import()`).
+    All,
+    /// No imports are visible (e.g. `use Module qw()`).
+    ExplicitNone,
+    /// Only the listed symbols are visible.
+    Explicit(HashSet<String>),
+}
+
+/// Maps module_name -> import visibility in the current file.
+type ImportMap = HashMap<String, ImportVisibility>;
 
 const MOOSE_TYPE_CANDIDATES: &[&str] = &[
     "Any",
@@ -261,12 +267,46 @@ impl CompletionProvider {
         CompletionProvider { symbol_table, class_models, type_engine, workspace_index, import_map }
     }
 
-    /// Walk the top-level AST and build an `ImportMap` from `use` statements.
+    /// Walk the AST and build an `ImportMap` from `use` and
+    /// `require Module; Module->import(...)` statements.
     ///
     /// Only uppercase-starting module names are included (skips pragmas like
     /// `strict`, `warnings`, `feature`, `constant`, `utf8`, `lib`, `parent`, `base`).
     fn extract_import_map(ast: &Node) -> ImportMap {
         let mut map: ImportMap = HashMap::new();
+
+        fn merge_import_visibility(map: &mut ImportMap, module: &str, next: ImportVisibility) {
+            use std::collections::hash_map::Entry;
+            match map.entry(module.to_string()) {
+                Entry::Vacant(v) => {
+                    v.insert(next);
+                }
+                Entry::Occupied(mut o) => {
+                    let merged = match (o.get().clone(), next) {
+                        (ImportVisibility::All, _) | (_, ImportVisibility::All) => {
+                            ImportVisibility::All
+                        }
+                        (ImportVisibility::ExplicitNone, ImportVisibility::ExplicitNone) => {
+                            ImportVisibility::ExplicitNone
+                        }
+                        (ImportVisibility::ExplicitNone, ImportVisibility::Explicit(right)) => {
+                            ImportVisibility::Explicit(right)
+                        }
+                        (ImportVisibility::Explicit(left), ImportVisibility::ExplicitNone) => {
+                            ImportVisibility::Explicit(left)
+                        }
+                        (
+                            ImportVisibility::Explicit(mut left),
+                            ImportVisibility::Explicit(right),
+                        ) => {
+                            left.extend(right);
+                            ImportVisibility::Explicit(left)
+                        }
+                    };
+                    o.insert(merged);
+                }
+            }
+        }
 
         fn collect_import_symbols(
             module: &str,
@@ -334,6 +374,117 @@ impl CompletionProvider {
             (true, unresolved_tag)
         }
 
+        fn require_module_name(expr: &Node) -> Option<String> {
+            let args = match &expr.kind {
+                NodeKind::FunctionCall { name, args } if name == "require" => args,
+                _ => return None,
+            };
+            let arg = args.first()?;
+            match &arg.kind {
+                NodeKind::Identifier { name } => Some(name.clone()),
+                NodeKind::String { value, .. } => {
+                    Some(value.trim_end_matches(".pm").replace('/', "::"))
+                }
+                _ => None,
+            }
+        }
+
+        fn import_call(expr: &Node) -> Option<(String, &[Node])> {
+            match &expr.kind {
+                NodeKind::MethodCall { object, method, args } if method == "import" => {
+                    let NodeKind::Identifier { name } = &object.kind else {
+                        return None;
+                    };
+                    Some((name.clone(), args.as_slice()))
+                }
+                _ => None,
+            }
+        }
+
+        fn inner_expr(node: &Node) -> &Node {
+            if let NodeKind::ExpressionStatement { expression } = &node.kind {
+                expression.as_ref()
+            } else {
+                node
+            }
+        }
+
+        fn parse_import_args(module: &str, args: &[Node]) -> Option<ImportVisibility> {
+            if args.is_empty() {
+                return Some(ImportVisibility::All);
+            }
+
+            let mut symbols: HashSet<String> = HashSet::new();
+            let mut has_symbol_args = false;
+            let mut has_unresolved_tag = false;
+
+            for arg in args {
+                let token = match &arg.kind {
+                    NodeKind::String { value, .. } => value.clone(),
+                    NodeKind::Identifier { name } => name.clone(),
+                    NodeKind::ArrayLiteral { elements } => {
+                        for element in elements {
+                            let token = match &element.kind {
+                                NodeKind::String { value, .. } => value.as_str(),
+                                NodeKind::Identifier { name } => name.as_str(),
+                                _ => return None,
+                            };
+                            let (found, unresolved) =
+                                collect_import_symbols(module, token, &mut symbols);
+                            if found {
+                                has_symbol_args = true;
+                            }
+                            if unresolved {
+                                has_unresolved_tag = true;
+                            }
+                        }
+                        continue;
+                    }
+                    _ => return None,
+                };
+
+                let (found, unresolved) = collect_import_symbols(module, &token, &mut symbols);
+                if found {
+                    has_symbol_args = true;
+                }
+                if unresolved {
+                    has_unresolved_tag = true;
+                }
+            }
+
+            if has_unresolved_tag {
+                return None;
+            }
+
+            if has_symbol_args {
+                Some(ImportVisibility::Explicit(symbols))
+            } else {
+                Some(ImportVisibility::ExplicitNone)
+            }
+        }
+
+        fn collect_require_imports_from_statements(stmts: &[Node], map: &mut ImportMap) {
+            let required_modules: HashSet<String> =
+                stmts.iter().filter_map(|stmt| require_module_name(inner_expr(stmt))).collect();
+
+            if required_modules.is_empty() {
+                return;
+            }
+
+            for stmt in stmts {
+                let expr = inner_expr(stmt);
+                let Some((module, args)) = import_call(expr) else {
+                    continue;
+                };
+                if !required_modules.contains(&module) {
+                    continue;
+                }
+                if let Some(visibility) = parse_import_args(&module, args) {
+                    merge_import_visibility(map, &module, visibility);
+                }
+            }
+        }
+
         fn collect(node: &Node, map: &mut ImportMap) {
             match &node.kind {
                 NodeKind::Use { module, args, .. } => {
@@ -345,6 +496,7 @@ impl CompletionProvider {
 
                     // `use Module` with no args at all — import all of @EXPORT, no filtering
                     if args.is_empty() {
+                        merge_import_visibility(map, module, ImportVisibility::All);
                         return;
                     }
 
@@ -377,13 +529,14 @@ impl CompletionProvider {
                     }
 
                     if has_symbol_args {
-                        map.entry(module.clone()).or_default().extend(symbols);
+                        merge_import_visibility(map, module, ImportVisibility::Explicit(symbols));
                     } else {
                         // Explicit empty import: `use Module qw()`
-                        map.entry(module.clone()).or_default();
+                        merge_import_visibility(map, module, ImportVisibility::ExplicitNone);
                     }
                 }
                 NodeKind::Program { statements } | NodeKind::Block { statements } => {
+                    collect_require_imports_from_statements(statements, map);
                     for stmt in statements {
                         collect(stmt, map);
                     }
@@ -1354,7 +1507,10 @@ impl CompletionProvider {
             }
         }
 
-        for (module_name, symbols) in &self.import_map {
+        for (module_name, visibility) in &self.import_map {
+            let ImportVisibility::Explicit(symbols) = visibility else {
+                continue;
+            };
             for symbol in symbols {
                 if !Self::looks_like_type_name(symbol) {
                     continue;

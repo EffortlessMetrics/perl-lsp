@@ -5,7 +5,7 @@
 //! completion for `->` expressions, and general cross-file symbol completion.
 
 use super::{
-    auto_import,
+    ImportVisibility, auto_import,
     context::CompletionContext,
     items::{CompletionItem, CompletionItemKind},
 };
@@ -25,7 +25,7 @@ pub fn add_workspace_symbol_completions(
     completions: &mut Vec<CompletionItem>,
     context: &CompletionContext,
     workspace_index: &Option<Arc<WorkspaceIndex>>,
-    import_map: &HashMap<String, HashSet<String>>,
+    import_map: &HashMap<String, ImportVisibility>,
 ) {
     // Only proceed if we have a workspace index
     let Some(index) = workspace_index else {
@@ -62,7 +62,7 @@ pub fn add_workspace_symbol_completions(
 
                 let (sort_prefix, detail) = match import_map.get(module) {
                     None => {
-                        // Module not in import_map: not used or `use Module` (import all).
+                        // Module not in import_map: no known import event for this module.
                         // Rank at tier 4 (after core builtins at tier 3).
                         let det = symbol
                             .container_name
@@ -70,12 +70,18 @@ pub fn add_workspace_symbol_completions(
                             .unwrap_or_else(|| "workspace".to_string());
                         ("4_", det)
                     }
-                    Some(imported_set) if imported_set.is_empty() => {
+                    Some(ImportVisibility::All) => {
+                        let det = format!("imported from {module}");
+                        ("2_", det)
+                    }
+                    Some(ImportVisibility::ExplicitNone) => {
                         // Explicit empty import `use Module qw()` — not in namespace.
                         // Rank at tier 5 (lowest, after all useful completions).
                         ("5_", "not imported".to_string())
                     }
-                    Some(imported_set) if imported_set.contains(&symbol.name) => {
+                    Some(ImportVisibility::Explicit(imported_set))
+                        if imported_set.contains(&symbol.name) =>
+                    {
                         // Symbol is explicitly imported — boost priority to tier 2
                         // (treated like a file-scope symbol).
                         let det = format!("imported from {module}");

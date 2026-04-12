@@ -52,6 +52,21 @@ sub finddepth { }
     index
 }
 
+fn make_my_loader_index() -> Arc<WorkspaceIndex> {
+    let index = Arc::new(WorkspaceIndex::new());
+    let uri = must(Url::parse("file:///workspace/My/Loader.pm"));
+    let code = r#"package My::Loader;
+our @EXPORT = qw(load_data);
+our @EXPORT_OK = qw(process helper);
+sub load_data { }
+sub process { }
+sub helper { }
+1;
+"#;
+    must(index.index_file(uri, code.to_string()));
+    index
+}
+
 // ---------------------------------------------------------------------------
 // Test 1: extract_import_map parses qw correctly
 // ---------------------------------------------------------------------------
@@ -240,6 +255,44 @@ fn workspace_completion_non_imported_stays_normal_priority() {
             max_item.sort_text
         );
     }
+}
+
+#[test]
+fn require_import_explicit_symbols_are_promoted() {
+    let source = "require My::Loader;\nMy::Loader->import('load_data', 'process');\nlo";
+    let index = make_my_loader_index();
+    let provider = parse_provider_with_index(source, index);
+    let items = provider.get_completions(source, source.len());
+
+    let load_item = must_some(
+        items
+            .iter()
+            .find(|i| i.label == "load_data" || i.insert_text.as_deref() == Some("load_data")),
+    );
+    assert!(
+        load_item.sort_text.as_deref().is_some_and(|s| s.starts_with("2_")),
+        "load_data should be promoted for require+manual import; got: {:?}",
+        load_item.sort_text
+    );
+}
+
+#[test]
+fn require_import_default_import_promotes_exports() {
+    let source = "require My::Loader;\nMy::Loader->import();\nlo";
+    let index = make_my_loader_index();
+    let provider = parse_provider_with_index(source, index);
+    let items = provider.get_completions(source, source.len());
+
+    let load_item = must_some(
+        items
+            .iter()
+            .find(|i| i.label == "load_data" || i.insert_text.as_deref() == Some("load_data")),
+    );
+    assert!(
+        load_item.sort_text.as_deref().is_some_and(|s| s.starts_with("2_")),
+        "load_data should be promoted for require+import(); got: {:?}",
+        load_item.sort_text
+    );
 }
 
 // ---------------------------------------------------------------------------
