@@ -921,7 +921,7 @@ impl<'a> Parser<'a> {
         let mut prototype = String::new();
 
         while !self.tokens.is_eof() {
-            let token = self.tokens.next()?;
+            let token = self.consume_token()?;
 
             match token.kind {
                 TokenKind::RightParen => {

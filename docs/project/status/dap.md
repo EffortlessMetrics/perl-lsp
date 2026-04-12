@@ -20,7 +20,7 @@
 <!-- BEGIN: DAP_TEST_COUNTS -->
 | Suite | Count |
 |---|---|
-| Integration tests (`perl-dap`) | 20 test targets |
+| Integration tests (`perl-dap`) | 21 test targets |
 | Scorecard fixtures | 5 |
 <!-- END: DAP_TEST_COUNTS -->
 
