@@ -260,7 +260,7 @@ fn plenv_root() -> PathBuf {
     home_dir().join(".plenv")
 }
 
-/// Return the user home directory, falling back to `/tmp`.
+/// Return the user home directory, falling back to the system temp directory.
 fn home_dir() -> PathBuf {
     if let Ok(home) = env::var("HOME") {
         if !home.is_empty() {
@@ -272,7 +272,7 @@ fn home_dir() -> PathBuf {
             return PathBuf::from(profile);
         }
     }
-    PathBuf::from("/tmp")
+    std::env::temp_dir()
 }
 
 /// Normalize a file path for cross-platform compatibility.

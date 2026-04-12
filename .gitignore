@@ -221,3 +221,8 @@ docs/assets/recordings/*.webm
 
 # Playwright MCP browser session artifacts (page state dumps)
 .playwright-mcp/
+
+# Workspace scorecard xlarge fixture (generated on demand; see scripts/gen-xlarge-workspace.sh)
+# The README.md in that directory is tracked; the generated Perl files are not.
+test_corpus/workspaces/xlarge/lib/
+test_corpus/workspaces/xlarge/bin/

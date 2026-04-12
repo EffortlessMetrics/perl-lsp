@@ -477,12 +477,22 @@ fn command_status_strict(
 }
 
 fn command_exists(command: &str) -> bool {
-    Command::new("sh")
-        .arg("-c")
-        .arg(format!("command -v {command} >/dev/null 2>&1"))
-        .status()
-        .map(|status| status.success())
-        .unwrap_or(false)
+    #[cfg(unix)]
+    {
+        Command::new("sh")
+            .arg("-c")
+            .arg(format!("command -v {command} >/dev/null 2>&1"))
+            .status()
+            .map(|status| status.success())
+            .unwrap_or(false)
+    }
+    #[cfg(not(unix))]
+    {
+        // flock and similar Unix-only tools do not exist on Windows; always return false
+        // so callers fall through to the no-lock path.
+        let _ = command;
+        false
+    }
 }
 
 fn command_output_lines(output: &str) -> Vec<String> {
@@ -527,45 +537,31 @@ fn read_usize_from_tokens(path: &Path, idx: usize) -> Result<usize> {
 }
 
 fn cmd_preflight(_repo_root: &Path) -> Result<i32> {
-    let pids_used =
-        command_with_output(Path::new("/"), "ps", &["-e", "--no-headers"], &[])?.lines().count();
-    let pid_max = read_usize_from_path(Path::new("/proc/sys/kernel/pid_max"))?;
-    let files_used = read_usize_from_tokens(Path::new("/proc/sys/fs/file-nr"), 1)?;
-    let files_max = read_usize_from_path(Path::new("/proc/sys/fs/file-max"))?;
+    #[cfg(target_os = "linux")]
+    {
+        let pids_used =
+            command_with_output(Path::new("/"), "ps", &["-e", "--no-headers"], &[])?.lines().count();
+        let pid_max = read_usize_from_path(Path::new("/proc/sys/kernel/pid_max"))?;
+        let files_used = read_usize_from_tokens(Path::new("/proc/sys/fs/file-nr"), 1)?;
+        let files_max = read_usize_from_path(Path::new("/proc/sys/fs/file-max"))?;
 
-    println!("PIDs: {pids_used} / {pid_max} | Open files: {files_used} / {files_max}");
+        println!("PIDs: {pids_used} / {pid_max} | Open files: {files_used} / {files_max}");
 
-    let uv_threadpool_size = env::var("UV_THREADPOOL_SIZE").unwrap_or_else(|_| "4".to_string());
-    let mut pw_workers = env::var("PW_WORKERS").unwrap_or_else(|_| "2".to_string());
-    let mut rust_test_threads = env::var("RUST_TEST_THREADS").unwrap_or_else(|_| "2".to_string());
-    let mut omp_num_threads = env::var("OMP_NUM_THREADS").unwrap_or_else(|_| "1".to_string());
-    let mut openblas_num_threads =
-        env::var("OPENBLAS_NUM_THREADS").unwrap_or_else(|_| "1".to_string());
-    let mut mkl_num_threads = env::var("MKL_NUM_THREADS").unwrap_or_else(|_| "1".to_string());
-    let mut numexpr_num_threads =
-        env::var("NUMEXPR_NUM_THREADS").unwrap_or_else(|_| "1".to_string());
-
-    // SAFETY: This is a single-threaded CLI tool; no other threads are reading env vars.
-    unsafe {
-        env::set_var("UV_THREADPOOL_SIZE", &uv_threadpool_size);
-        env::set_var("PW_WORKERS", &pw_workers);
-        env::set_var("RUST_TEST_THREADS", &rust_test_threads);
-        env::set_var("OMP_NUM_THREADS", &omp_num_threads);
-        env::set_var("OPENBLAS_NUM_THREADS", &openblas_num_threads);
-        env::set_var("MKL_NUM_THREADS", &mkl_num_threads);
-        env::set_var("NUMEXPR_NUM_THREADS", &numexpr_num_threads);
-    }
-
-    if pids_used > (pid_max * 85 / 100) {
-        pw_workers = "1".into();
-        rust_test_threads = "1".into();
-        omp_num_threads = "1".into();
-        openblas_num_threads = "1".into();
-        mkl_num_threads = "1".into();
-        numexpr_num_threads = "1".into();
+        let uv_threadpool_size = env::var("UV_THREADPOOL_SIZE").unwrap_or_else(|_| "4".to_string());
+        let mut pw_workers = env::var("PW_WORKERS").unwrap_or_else(|_| "2".to_string());
+        let mut rust_test_threads =
+            env::var("RUST_TEST_THREADS").unwrap_or_else(|_| "2".to_string());
+        let mut omp_num_threads = env::var("OMP_NUM_THREADS").unwrap_or_else(|_| "1".to_string());
+        let mut openblas_num_threads =
+            env::var("OPENBLAS_NUM_THREADS").unwrap_or_else(|_| "1".to_string());
+        let mut mkl_num_threads =
+            env::var("MKL_NUM_THREADS").unwrap_or_else(|_| "1".to_string());
+        let mut numexpr_num_threads =
+            env::var("NUMEXPR_NUM_THREADS").unwrap_or_else(|_| "1".to_string());
 
         // SAFETY: This is a single-threaded CLI tool; no other threads are reading env vars.
         unsafe {
+            env::set_var("UV_THREADPOOL_SIZE", &uv_threadpool_size);
             env::set_var("PW_WORKERS", &pw_workers);
             env::set_var("RUST_TEST_THREADS", &rust_test_threads);
             env::set_var("OMP_NUM_THREADS", &omp_num_threads);
@@ -573,8 +569,29 @@ fn cmd_preflight(_repo_root: &Path) -> Result<i32> {
             env::set_var("MKL_NUM_THREADS", &mkl_num_threads);
             env::set_var("NUMEXPR_NUM_THREADS", &numexpr_num_threads);
         }
-        println!("System hot → auto‑degraded workers (PW=1, RUST=1, *BLAS=1)");
+
+        if pids_used > (pid_max * 85 / 100) {
+            pw_workers = "1".into();
+            rust_test_threads = "1".into();
+            omp_num_threads = "1".into();
+            openblas_num_threads = "1".into();
+            mkl_num_threads = "1".into();
+            numexpr_num_threads = "1".into();
+
+            // SAFETY: This is a single-threaded CLI tool; no other threads are reading env vars.
+            unsafe {
+                env::set_var("PW_WORKERS", &pw_workers);
+                env::set_var("RUST_TEST_THREADS", &rust_test_threads);
+                env::set_var("OMP_NUM_THREADS", &omp_num_threads);
+                env::set_var("OPENBLAS_NUM_THREADS", &openblas_num_threads);
+                env::set_var("MKL_NUM_THREADS", &mkl_num_threads);
+                env::set_var("NUMEXPR_NUM_THREADS", &numexpr_num_threads);
+            }
+            println!("System hot → auto‑degraded workers (PW=1, RUST=1, *BLAS=1)");
+        }
     }
+    #[cfg(not(target_os = "linux"))]
+    println!("preflight: /proc not available on this OS; skipping resource checks");
 
     Ok(0)
 }
@@ -604,41 +621,62 @@ fn cmd_e2e_gate(repo_root: &Path, cargo_args: &[String]) -> Result<i32> {
         vec!["test".to_string(), "--".to_string(), format!("--test-threads={rust_test_threads}")];
     args.extend_from_slice(cargo_args);
     let refs: Vec<&str> = args.iter().map(String::as_str).collect();
-    let lock_file = "/tmp/e2e-suite.lock";
+    let lock_path = std::env::temp_dir().join("e2e-suite.lock");
 
-    if !command_exists("flock") {
-        println!("warning: flock not found; running E2E tests without external lock");
-        return command_status_strict(
-            repo_root,
-            "cargo",
-            &refs,
-            &[("RUST_TEST_THREADS", rust_test_threads.as_str())],
-        )
-        .map(|_| 0);
-    }
+    #[cfg(unix)]
+    {
+        let lock_file = lock_path.to_string_lossy();
+        let lock_file = lock_file.as_ref();
 
-    if command_status(repo_root, "flock", &["-n", lock_file, "true"], &[])? == 0 {
-        println!("E2E slot ready");
-        let direct_args =
+        if !command_exists("flock") {
+            println!("warning: flock not found; running E2E tests without external lock");
+            return command_status_strict(
+                repo_root,
+                "cargo",
+                &refs,
+                &[("RUST_TEST_THREADS", rust_test_threads.as_str())],
+            )
+            .map(|_| 0);
+        }
+
+        if command_status(repo_root, "flock", &["-n", lock_file, "true"], &[])? == 0 {
+            println!("E2E slot ready");
+            let direct_args =
+                std::iter::once(lock_file).chain(refs.iter().copied()).collect::<Vec<_>>();
+            command_status_strict(
+                repo_root,
+                "flock",
+                &direct_args,
+                &[("RUST_TEST_THREADS", rust_test_threads.as_str())],
+            )?;
+            return Ok(0);
+        }
+
+        println!("E2E slot busy → waiting...");
+        let blocking_args =
             std::iter::once(lock_file).chain(refs.iter().copied()).collect::<Vec<_>>();
         command_status_strict(
             repo_root,
             "flock",
-            &direct_args,
+            &blocking_args,
             &[("RUST_TEST_THREADS", rust_test_threads.as_str())],
         )?;
         return Ok(0);
     }
 
-    println!("E2E slot busy → waiting...");
-    let blocking_args = std::iter::once(lock_file).chain(refs.iter().copied()).collect::<Vec<_>>();
-    command_status_strict(
-        repo_root,
-        "flock",
-        &blocking_args,
-        &[("RUST_TEST_THREADS", rust_test_threads.as_str())],
-    )?;
-    Ok(0)
+    #[cfg(not(unix))]
+    {
+        // flock is not available on Windows; run without external lock
+        let _ = lock_path;
+        println!("warning: flock not available on this OS; running E2E tests without external lock");
+        command_status_strict(
+            repo_root,
+            "cargo",
+            &refs,
+            &[("RUST_TEST_THREADS", rust_test_threads.as_str())],
+        )
+        .map(|_| 0)
+    }
 }
 
 fn cmd_test_e2e_capped(repo_root: &Path, cargo_args: &[String]) -> Result<i32> {
@@ -1467,15 +1505,23 @@ fn cmd_test_with_override(repo_root: &Path) -> Result<i32> {
 
 fn cmd_simple_lsp_test(repo_root: &Path) -> Result<i32> {
     println!("Testing Perl LSP server...");
-    let shell_script = r#"cat <<'EOF' | cargo run -p perl-parser --bin perl-lsp 2>&1 | head -20
+    #[cfg(unix)]
+    {
+        let shell_script = r#"cat <<'EOF' | cargo run -p perl-parser --bin perl-lsp 2>&1 | head -20
 Content-Length: 205
 
 {"jsonrpc":"2.0","id":1,"method":"initialize","params":{"processId":123,"rootUri":"file:///tmp","capabilities":{},"initializationOptions":{},"trace":"off","workspaceFolders":null}}
 EOF
 "#;
-    let output = command_with_output(repo_root, "sh", &["-c", shell_script], &[])?;
-    for line in output.lines().take(20) {
-        println!("{line}");
+        let output = command_with_output(repo_root, "sh", &["-c", shell_script], &[])?;
+        for line in output.lines().take(20) {
+            println!("{line}");
+        }
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = repo_root;
+        println!("warning: simple LSP smoke test requires sh; skipping on this OS");
     }
     Ok(0)
 }

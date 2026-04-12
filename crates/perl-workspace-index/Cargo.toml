@@ -39,6 +39,7 @@ lsp-types = { workspace = true, optional = true }
 anyhow.workspace = true
 criterion.workspace = true
 tempfile.workspace = true
+walkdir.workspace = true
 perl-tdd-support = { workspace = true }
 
 [features]
