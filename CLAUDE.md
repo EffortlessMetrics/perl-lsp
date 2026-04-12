@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-**Latest Release**: 0.12.3 | **Metrics**: [status/index.md](docs/project/status/index.md) | **API Stability**: [STABILITY.md](docs/reference/STABILITY.md)
+**Latest Release**: 0.12.4 | **Metrics**: [status/index.md](docs/project/status/index.md) | **API Stability**: [STABILITY.md](docs/reference/STABILITY.md)
 
 ## Orchestration Model
 

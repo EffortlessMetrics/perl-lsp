@@ -308,7 +308,7 @@ allow = [
 
 # Workspace-level package metadata
 [workspace.package]
-version = "0.12.3"
+version = "0.12.4"
 edition = "2024"
 rust-version = "1.92"
 authors = ["Steven Zimmerman, CPA <git@effortlesssteven.com>"]
@@ -318,147 +318,147 @@ repository = "https://github.com/EffortlessMetrics/perl-lsp"
 homepage = "https://github.com/EffortlessMetrics/perl-lsp"
 
 [workspace.dependencies]
-perl-ast-v2 = { path = "crates/perl-ast-v2", version = "0.12.3" }
+perl-ast-v2 = { path = "crates/perl-ast-v2", version = "0.12.4" }
 # Tier 1: Leaf crates (no internal dependencies)
-perl-token = { path = "crates/perl-token", version = "0.12.3" }
-perl-quote = { path = "crates/perl-quote", version = "0.12.3" }
-perl-edit = { path = "crates/perl-edit", version = "0.12.3" }
-perl-builtins = { path = "crates/perl-builtins", version = "0.12.3" }
-perl-builtins-phf = { path = "crates/perl-builtins-phf", version = "0.12.3" }
-perl-regex = { path = "crates/perl-regex", version = "0.12.3" }
-perl-pragma = { path = "crates/perl-pragma", version = "0.12.3" }
-perl-lexer = { path = "crates/perl-lexer", version = "0.12.3" }
-perl-ast = { path = "crates/perl-ast", version = "0.12.3" }
-perl-heredoc = { path = "crates/perl-heredoc", version = "0.12.3" }
-perl-heredoc-anti-patterns = { path = "crates/perl-heredoc-anti-patterns", version = "0.12.3" }
-perl-error = { path = "crates/perl-error", version = "0.12.3" }
-perl-tokenizer = { path = "crates/perl-tokenizer", version = "0.12.3" }
-perl-position-tracking = { path = "crates/perl-position-tracking", version = "0.12.3" }
-perl-symbol-types = { path = "crates/perl-symbol-types", version = "0.12.3" }
-perl-symbol-cursor = { path = "crates/perl-symbol-cursor", version = "0.12.3" }
-perl-symbol-index = { path = "crates/perl-symbol-index", version = "0.12.3" }
-perl-module-boundary = { path = "crates/perl-module-boundary", version = "0.12.3" }
-perl-module-token-core = { path = "crates/perl-module-token-core", version = "0.12.3" }
-perl-module-token = { path = "crates/perl-module-token", version = "0.12.3" }
-perl-module-token-parser = { path = "crates/perl-module-token-parser", version = "0.12.3" }
-perl-module-name = { path = "crates/perl-module-name", version = "0.12.3" }
-perl-qualified-name = { path = "crates/perl-qualified-name", version = "0.12.3" }
-perl-module-reference = { path = "crates/perl-module-reference", version = "0.12.3" }
-perl-module-import = { path = "crates/perl-module-import", version = "0.12.3" }
-perl-module-import-match = { path = "crates/perl-module-import-match", version = "0.12.3" }
-perl-module-path = { path = "crates/perl-module-path", version = "0.12.3" }
-perl-module-rename = { path = "crates/perl-module-rename", version = "0.12.3" }
-perl-module-resolution = { path = "crates/perl-module-resolution", version = "0.12.3" }
-perl-module-resolution-path = { path = "crates/perl-module-resolution-path", version = "0.12.3" }
-perl-module-resolution-uri = { path = "crates/perl-module-resolution-uri", version = "0.12.3" }
-perl-workspace-folder = { path = "crates/perl-workspace-folder", version = "0.12.3" }
-perl-workspace-ignore = { path = "crates/perl-workspace-ignore", version = "0.12.3" }
-perl-keywords = { path = "crates/perl-keywords", version = "0.12.3" }
-perl-source-file = { path = "crates/perl-source-file", version = "0.12.3" }
-perl-text-line = { path = "crates/perl-text-line", version = "0.12.3" }
-perl-line-index = { path = "crates/perl-line-index", version = "0.12.3" }
-perl-content-length-framing = { path = "crates/perl-content-length-framing", version = "0.12.3" }
-perl-subprocess-runtime = { path = "crates/perl-subprocess-runtime", version = "0.12.3" }
-perl-lsp-document-highlight = { path = "crates/perl-lsp-document-highlight", version = "0.12.3" }
-perl-lsp-document-links = { path = "crates/perl-lsp-document-links", version = "0.12.3" }
-perl-lsp-performance = { path = "crates/perl-lsp-performance", version = "0.12.3" }
-perl-ast-utils = { path = "crates/perl-ast-utils", version = "0.12.3" }
-perl-symbol-surface = { path = "crates/perl-symbol-surface", version = "0.12.3" }
-perl-lsp-symbol-query = { path = "crates/perl-lsp-symbol-query", version = "0.12.3" }
-perl-lsp-input-validation = { path = "crates/perl-lsp-input-validation", version = "0.12.3" }
-perl-lsp-text-utils = { path = "crates/perl-lsp-text-utils", version = "0.12.3" }
-perl-uri = { path = "crates/perl-uri", version = "0.12.3" }
-perl-uri-classify = { path = "crates/perl-uri-classify", version = "0.12.3" }
-perl-percentile = { path = "crates/perl-percentile", version = "0.12.3" }
-perl-lsp-import-management = { path = "crates/perl-lsp-import-management", version = "0.12.3" }
-perl-lsp-critic-parser = { path = "crates/perl-lsp-critic-parser", version = "0.12.3" }
-perl-lsp-protocol = { path = "crates/perl-lsp-protocol", version = "0.12.3" }
-perl-path-normalize = { path = "crates/perl-path-normalize", version = "0.12.3" }
-perl-path-security = { path = "crates/perl-path-security", version = "0.12.3" }
-perl-pod = { path = "crates/perl-pod", version = "0.12.3" }
-perl-corpus = { path = "crates/perl-corpus", version = "0.12.3" }
-perl-dap = { path = "crates/perl-dap", version = "0.12.3" }
-perl-dead-code = { path = "crates/perl-dead-code", version = "0.12.3" }
-perl-dap-breakpoint = { path = "crates/perl-dap-breakpoint", version = "0.12.3" }
-perl-dap-eval = { path = "crates/perl-dap-eval", version = "0.12.3" }
-perl-dap-config = { path = "crates/perl-dap-config", version = "0.12.3" }
-perl-dap-platform = { path = "crates/perl-dap-platform", version = "0.12.3" }
-perl-dap-value = { path = "crates/perl-dap-value", version = "0.12.3" }
-perl-dap-command-args = { path = "crates/perl-dap-command-args", version = "0.12.3" }
-perl-dap-shell = { path = "crates/perl-dap-shell", version = "0.12.3" }
-perl-dap-types = { path = "crates/perl-dap-types", version = "0.12.3" }
-perl-dap-security = { path = "crates/perl-dap-security", version = "0.12.3" }
-perl-dap-stack = { path = "crates/perl-dap-stack", version = "0.12.3" }
-perl-dap-variables = { path = "crates/perl-dap-variables", version = "0.12.3" }
-perl-feature-catalog = { path = "crates/perl-feature-catalog", version = "0.12.3" }
-perl-lsp-feature-flags = { path = "crates/perl-lsp-feature-flags", version = "0.12.3" }
-perl-lsp-feature-ids = { path = "crates/perl-lsp-feature-ids", version = "0.12.3" }
-perl-lsp-capability-map = { path = "crates/perl-lsp-capability-map", version = "0.12.3" }
+perl-token = { path = "crates/perl-token", version = "0.12.4" }
+perl-quote = { path = "crates/perl-quote", version = "0.12.4" }
+perl-edit = { path = "crates/perl-edit", version = "0.12.4" }
+perl-builtins = { path = "crates/perl-builtins", version = "0.12.4" }
+perl-builtins-phf = { path = "crates/perl-builtins-phf", version = "0.12.4" }
+perl-regex = { path = "crates/perl-regex", version = "0.12.4" }
+perl-pragma = { path = "crates/perl-pragma", version = "0.12.4" }
+perl-lexer = { path = "crates/perl-lexer", version = "0.12.4" }
+perl-ast = { path = "crates/perl-ast", version = "0.12.4" }
+perl-heredoc = { path = "crates/perl-heredoc", version = "0.12.4" }
+perl-heredoc-anti-patterns = { path = "crates/perl-heredoc-anti-patterns", version = "0.12.4" }
+perl-error = { path = "crates/perl-error", version = "0.12.4" }
+perl-tokenizer = { path = "crates/perl-tokenizer", version = "0.12.4" }
+perl-position-tracking = { path = "crates/perl-position-tracking", version = "0.12.4" }
+perl-symbol-types = { path = "crates/perl-symbol-types", version = "0.12.4" }
+perl-symbol-cursor = { path = "crates/perl-symbol-cursor", version = "0.12.4" }
+perl-symbol-index = { path = "crates/perl-symbol-index", version = "0.12.4" }
+perl-module-boundary = { path = "crates/perl-module-boundary", version = "0.12.4" }
+perl-module-token-core = { path = "crates/perl-module-token-core", version = "0.12.4" }
+perl-module-token = { path = "crates/perl-module-token", version = "0.12.4" }
+perl-module-token-parser = { path = "crates/perl-module-token-parser", version = "0.12.4" }
+perl-module-name = { path = "crates/perl-module-name", version = "0.12.4" }
+perl-qualified-name = { path = "crates/perl-qualified-name", version = "0.12.4" }
+perl-module-reference = { path = "crates/perl-module-reference", version = "0.12.4" }
+perl-module-import = { path = "crates/perl-module-import", version = "0.12.4" }
+perl-module-import-match = { path = "crates/perl-module-import-match", version = "0.12.4" }
+perl-module-path = { path = "crates/perl-module-path", version = "0.12.4" }
+perl-module-rename = { path = "crates/perl-module-rename", version = "0.12.4" }
+perl-module-resolution = { path = "crates/perl-module-resolution", version = "0.12.4" }
+perl-module-resolution-path = { path = "crates/perl-module-resolution-path", version = "0.12.4" }
+perl-module-resolution-uri = { path = "crates/perl-module-resolution-uri", version = "0.12.4" }
+perl-workspace-folder = { path = "crates/perl-workspace-folder", version = "0.12.4" }
+perl-workspace-ignore = { path = "crates/perl-workspace-ignore", version = "0.12.4" }
+perl-keywords = { path = "crates/perl-keywords", version = "0.12.4" }
+perl-source-file = { path = "crates/perl-source-file", version = "0.12.4" }
+perl-text-line = { path = "crates/perl-text-line", version = "0.12.4" }
+perl-line-index = { path = "crates/perl-line-index", version = "0.12.4" }
+perl-content-length-framing = { path = "crates/perl-content-length-framing", version = "0.12.4" }
+perl-subprocess-runtime = { path = "crates/perl-subprocess-runtime", version = "0.12.4" }
+perl-lsp-document-highlight = { path = "crates/perl-lsp-document-highlight", version = "0.12.4" }
+perl-lsp-document-links = { path = "crates/perl-lsp-document-links", version = "0.12.4" }
+perl-lsp-performance = { path = "crates/perl-lsp-performance", version = "0.12.4" }
+perl-ast-utils = { path = "crates/perl-ast-utils", version = "0.12.4" }
+perl-symbol-surface = { path = "crates/perl-symbol-surface", version = "0.12.4" }
+perl-lsp-symbol-query = { path = "crates/perl-lsp-symbol-query", version = "0.12.4" }
+perl-lsp-input-validation = { path = "crates/perl-lsp-input-validation", version = "0.12.4" }
+perl-lsp-text-utils = { path = "crates/perl-lsp-text-utils", version = "0.12.4" }
+perl-uri = { path = "crates/perl-uri", version = "0.12.4" }
+perl-uri-classify = { path = "crates/perl-uri-classify", version = "0.12.4" }
+perl-percentile = { path = "crates/perl-percentile", version = "0.12.4" }
+perl-lsp-import-management = { path = "crates/perl-lsp-import-management", version = "0.12.4" }
+perl-lsp-critic-parser = { path = "crates/perl-lsp-critic-parser", version = "0.12.4" }
+perl-lsp-protocol = { path = "crates/perl-lsp-protocol", version = "0.12.4" }
+perl-path-normalize = { path = "crates/perl-path-normalize", version = "0.12.4" }
+perl-path-security = { path = "crates/perl-path-security", version = "0.12.4" }
+perl-pod = { path = "crates/perl-pod", version = "0.12.4" }
+perl-corpus = { path = "crates/perl-corpus", version = "0.12.4" }
+perl-dap = { path = "crates/perl-dap", version = "0.12.4" }
+perl-dead-code = { path = "crates/perl-dead-code", version = "0.12.4" }
+perl-dap-breakpoint = { path = "crates/perl-dap-breakpoint", version = "0.12.4" }
+perl-dap-eval = { path = "crates/perl-dap-eval", version = "0.12.4" }
+perl-dap-config = { path = "crates/perl-dap-config", version = "0.12.4" }
+perl-dap-platform = { path = "crates/perl-dap-platform", version = "0.12.4" }
+perl-dap-value = { path = "crates/perl-dap-value", version = "0.12.4" }
+perl-dap-command-args = { path = "crates/perl-dap-command-args", version = "0.12.4" }
+perl-dap-shell = { path = "crates/perl-dap-shell", version = "0.12.4" }
+perl-dap-types = { path = "crates/perl-dap-types", version = "0.12.4" }
+perl-dap-security = { path = "crates/perl-dap-security", version = "0.12.4" }
+perl-dap-stack = { path = "crates/perl-dap-stack", version = "0.12.4" }
+perl-dap-variables = { path = "crates/perl-dap-variables", version = "0.12.4" }
+perl-feature-catalog = { path = "crates/perl-feature-catalog", version = "0.12.4" }
+perl-lsp-feature-flags = { path = "crates/perl-lsp-feature-flags", version = "0.12.4" }
+perl-lsp-feature-ids = { path = "crates/perl-lsp-feature-ids", version = "0.12.4" }
+perl-lsp-capability-map = { path = "crates/perl-lsp-capability-map", version = "0.12.4" }
 
 # Tier 2: Single-level dependencies
-perl-parser-core = { path = "crates/perl-parser-core", version = "0.12.3" }
-perl-lsp-transport = { path = "crates/perl-lsp-transport", version = "0.12.3" }
-perl-lsp-tooling = { path = "crates/perl-lsp-tooling", version = "0.12.3" }
-perl-lsp-perltidy = { path = "crates/perl-lsp-perltidy", version = "0.12.3" }
-perl-lsp-on-type-formatting = { path = "crates/perl-lsp-on-type-formatting", version = "0.12.3" }
-perl-lsp-formatting-types = { path = "crates/perl-lsp-formatting-types", version = "0.12.3" }
-perl-lsp-formatting = { path = "crates/perl-lsp-formatting", version = "0.12.3" }
-perl-tdd-support = { path = "crates/perl-tdd-support", version = "0.12.3" }
-perl-test-must = { path = "crates/perl-test-must", version = "0.12.3" }
-perl-lsp-diagnostic-types = { path = "crates/perl-lsp-diagnostic-types", version = "0.12.3" }
-perl-lsp-diagnostics = { path = "crates/perl-lsp-diagnostics", version = "0.12.3" }
-perl-lsp-semantic-tokens = { path = "crates/perl-lsp-semantic-tokens", version = "0.12.3" }
-perl-lsp-inlay-hints = { path = "crates/perl-lsp-inlay-hints", version = "0.12.3" }
-perl-lsp-code-lens = { path = "crates/perl-lsp-code-lens", version = "0.12.3" }
-perl-lsp-feature-contracts = { path = "crates/perl-lsp-feature-contracts", version = "0.12.3" }
-perl-lsp-color-provider = { path = "crates/perl-lsp-color-provider", version = "0.12.3" }
-perl-lsp-cancellation = { path = "crates/perl-lsp-cancellation", version = "0.12.3" }
-perl-lsp-limits = { path = "crates/perl-lsp-limits", version = "0.12.3" }
-perl-lsp-uri = { path = "crates/perl-lsp-uri", version = "0.12.3" }
-perl-lsp-config = { path = "crates/perl-lsp-config", version = "0.12.3" }
-perl-lsp-feature-profile = { path = "crates/perl-lsp-feature-profile", version = "0.12.3" }
-perl-lsp-feature-profile-cli = { path = "crates/perl-lsp-feature-profile-cli", version = "0.12.3" }
-perl-lsp-feature-policy = { path = "crates/perl-lsp-feature-policy", version = "0.12.3" }
-perl-lsp-feature-grid = { path = "crates/perl-lsp-feature-grid", version = "0.12.3" }
-perl-lsp-feature-governance = { path = "crates/perl-lsp-feature-governance", version = "0.12.3" }
-perl-lsp-launcher = { path = "crates/perl-lsp-launcher", version = "0.12.3" }
-perl-lsp-diagnostic-catalog = { path = "crates/perl-lsp-diagnostic-catalog", version = "0.12.3" }
-perl-lsp-navigation = { path = "crates/perl-lsp-navigation", version = "0.12.3" }
-perl-lsp-type-hierarchy = { path = "crates/perl-lsp-type-hierarchy", version = "0.12.3" }
-perl-lsp-workspace-symbols = { path = "crates/perl-lsp-workspace-symbols", version = "0.12.3" }
-perl-lsp-rename = { path = "crates/perl-lsp-rename", version = "0.12.3" }
-perl-lsp-completion = { path = "crates/perl-lsp-completion", version = "0.12.3" }
-perl-lsp-file-completion = { path = "crates/perl-lsp-file-completion", version = "0.12.3" }
-perl-lsp-completion-item = { path = "crates/perl-lsp-completion-item", version = "0.12.3" }
-perl-lsp-inline-completion = { path = "crates/perl-lsp-inline-completion", version = "0.12.3" }
-perl-lsp-ai-provider = { path = "crates/perl-lsp-ai-provider", version = "0.12.3" }
-perl-lsp-code-actions = { path = "crates/perl-lsp-code-actions", version = "0.12.3" }
-perl-lsp-folding = { path = "crates/perl-lsp-folding", version = "0.12.3" }
-perl-lsp-selection-range = { path = "crates/perl-lsp-selection-range", version = "0.12.3" }
-perl-diagnostics-codes = { path = "crates/perl-diagnostics-codes", version = "0.12.3" }
+perl-parser-core = { path = "crates/perl-parser-core", version = "0.12.4" }
+perl-lsp-transport = { path = "crates/perl-lsp-transport", version = "0.12.4" }
+perl-lsp-tooling = { path = "crates/perl-lsp-tooling", version = "0.12.4" }
+perl-lsp-perltidy = { path = "crates/perl-lsp-perltidy", version = "0.12.4" }
+perl-lsp-on-type-formatting = { path = "crates/perl-lsp-on-type-formatting", version = "0.12.4" }
+perl-lsp-formatting-types = { path = "crates/perl-lsp-formatting-types", version = "0.12.4" }
+perl-lsp-formatting = { path = "crates/perl-lsp-formatting", version = "0.12.4" }
+perl-tdd-support = { path = "crates/perl-tdd-support", version = "0.12.4" }
+perl-test-must = { path = "crates/perl-test-must", version = "0.12.4" }
+perl-lsp-diagnostic-types = { path = "crates/perl-lsp-diagnostic-types", version = "0.12.4" }
+perl-lsp-diagnostics = { path = "crates/perl-lsp-diagnostics", version = "0.12.4" }
+perl-lsp-semantic-tokens = { path = "crates/perl-lsp-semantic-tokens", version = "0.12.4" }
+perl-lsp-inlay-hints = { path = "crates/perl-lsp-inlay-hints", version = "0.12.4" }
+perl-lsp-code-lens = { path = "crates/perl-lsp-code-lens", version = "0.12.4" }
+perl-lsp-feature-contracts = { path = "crates/perl-lsp-feature-contracts", version = "0.12.4" }
+perl-lsp-color-provider = { path = "crates/perl-lsp-color-provider", version = "0.12.4" }
+perl-lsp-cancellation = { path = "crates/perl-lsp-cancellation", version = "0.12.4" }
+perl-lsp-limits = { path = "crates/perl-lsp-limits", version = "0.12.4" }
+perl-lsp-uri = { path = "crates/perl-lsp-uri", version = "0.12.4" }
+perl-lsp-config = { path = "crates/perl-lsp-config", version = "0.12.4" }
+perl-lsp-feature-profile = { path = "crates/perl-lsp-feature-profile", version = "0.12.4" }
+perl-lsp-feature-profile-cli = { path = "crates/perl-lsp-feature-profile-cli", version = "0.12.4" }
+perl-lsp-feature-policy = { path = "crates/perl-lsp-feature-policy", version = "0.12.4" }
+perl-lsp-feature-grid = { path = "crates/perl-lsp-feature-grid", version = "0.12.4" }
+perl-lsp-feature-governance = { path = "crates/perl-lsp-feature-governance", version = "0.12.4" }
+perl-lsp-launcher = { path = "crates/perl-lsp-launcher", version = "0.12.4" }
+perl-lsp-diagnostic-catalog = { path = "crates/perl-lsp-diagnostic-catalog", version = "0.12.4" }
+perl-lsp-navigation = { path = "crates/perl-lsp-navigation", version = "0.12.4" }
+perl-lsp-type-hierarchy = { path = "crates/perl-lsp-type-hierarchy", version = "0.12.4" }
+perl-lsp-workspace-symbols = { path = "crates/perl-lsp-workspace-symbols", version = "0.12.4" }
+perl-lsp-rename = { path = "crates/perl-lsp-rename", version = "0.12.4" }
+perl-lsp-completion = { path = "crates/perl-lsp-completion", version = "0.12.4" }
+perl-lsp-file-completion = { path = "crates/perl-lsp-file-completion", version = "0.12.4" }
+perl-lsp-completion-item = { path = "crates/perl-lsp-completion-item", version = "0.12.4" }
+perl-lsp-inline-completion = { path = "crates/perl-lsp-inline-completion", version = "0.12.4" }
+perl-lsp-ai-provider = { path = "crates/perl-lsp-ai-provider", version = "0.12.4" }
+perl-lsp-code-actions = { path = "crates/perl-lsp-code-actions", version = "0.12.4" }
+perl-lsp-folding = { path = "crates/perl-lsp-folding", version = "0.12.4" }
+perl-lsp-selection-range = { path = "crates/perl-lsp-selection-range", version = "0.12.4" }
+perl-diagnostics-codes = { path = "crates/perl-diagnostics-codes", version = "0.12.4" }
 # Tier 3: Two-level dependencies
-perl-workspace-index = { path = "crates/perl-workspace-index", version = "0.12.3" }
-perl-workspace-index-monitoring = { path = "crates/perl-workspace-index-monitoring", version = "0.12.3" }
-perl-workspace-index-state-machine = { path = "crates/perl-workspace-index-state-machine", version = "0.12.3" }
-perl-workspace-index-slo = { path = "crates/perl-workspace-index-slo", version = "0.12.3" }
-perl-incremental-parsing = { path = "crates/perl-incremental-parsing", version = "0.12.3" }
-perl-workspace-discovery = { path = "crates/perl-workspace-discovery", version = "0.12.3" }
-perl-refactoring = { path = "crates/perl-refactoring", version = "0.12.3" }
+perl-workspace-index = { path = "crates/perl-workspace-index", version = "0.12.4" }
+perl-workspace-index-monitoring = { path = "crates/perl-workspace-index-monitoring", version = "0.12.4" }
+perl-workspace-index-state-machine = { path = "crates/perl-workspace-index-state-machine", version = "0.12.4" }
+perl-workspace-index-slo = { path = "crates/perl-workspace-index-slo", version = "0.12.4" }
+perl-incremental-parsing = { path = "crates/perl-incremental-parsing", version = "0.12.4" }
+perl-workspace-discovery = { path = "crates/perl-workspace-discovery", version = "0.12.4" }
+perl-refactoring = { path = "crates/perl-refactoring", version = "0.12.4" }
 
 # Tier 4: Three-level dependencies
-perl-semantic-analyzer = { path = "crates/perl-semantic-analyzer", version = "0.12.3" }
-perl-lsp-providers = { path = "crates/perl-lsp-providers", version = "0.12.3", default-features = false }
+perl-semantic-analyzer = { path = "crates/perl-semantic-analyzer", version = "0.12.4" }
+perl-lsp-providers = { path = "crates/perl-lsp-providers", version = "0.12.4", default-features = false }
 
 # Tier 5: Application crates
-perl-parser = { path = "crates/perl-parser", version = "0.12.3" }
-perl-lsp-rs = { path = "crates/perl-lsp", version = "0.12.3" }
+perl-parser = { path = "crates/perl-parser", version = "0.12.4" }
+perl-lsp-rs = { path = "crates/perl-lsp", version = "0.12.4" }
 
 # Legacy/Compatibility crates
-perl-parser-pest = { path = "crates/perl-parser-pest", version = "0.12.3" }
+perl-parser-pest = { path = "crates/perl-parser-pest", version = "0.12.4" }
 
 # External dependencies
-tree-sitter-perl-c = { path = "crates/tree-sitter-perl-c", version = "0.12.3" }
-tree-sitter-perl-rs = { path = "crates/tree-sitter-perl-rs", version = "0.12.3" }
+tree-sitter-perl-c = { path = "crates/tree-sitter-perl-c", version = "0.12.4" }
+tree-sitter-perl-rs = { path = "crates/tree-sitter-perl-rs", version = "0.12.4" }
 tree-sitter = "0.26.8"
 ropey = "1.6.1"
 serde = { version = "1.0.228", features = ["derive"] }

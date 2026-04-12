@@ -16,7 +16,7 @@ include = ["src/**", "Cargo.toml", "README.md", "LICENSE*"]
 
 [dependencies]
 # Perl parser for AST-based validation
-perl-parser = { path = "../perl-parser", version = "0.12.3" }
+perl-parser = { path = "../perl-parser", version = "0.12.4" }
 
 # Rope for position mapping
 ropey = "1.6.1"
