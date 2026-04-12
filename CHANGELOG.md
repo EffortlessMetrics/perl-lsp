@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.12.4] - 2026-04-12
 
 <!-- 2026-04-11 session: 46 PRs merged across navigation, pragma scoping, incremental parsing, workspace refactoring, Windows hardening, and CI hygiene -->
-<!-- 2026-04-12 session: 6 PRs merged — DAP scorecard, rename perf, editor UX receipt, research-verifier policy -->
+<!-- 2026-04-12 session: ~25 PRs merged — DAP scorecard, rename perf, editor UX, diagnostics polish, hover improvements, workspace/config, completion ranking, Windows compat, CI hygiene -->
 
 ### Headlines
 
@@ -406,6 +406,70 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   stale 15 types/7 modifiers to the actual 23 types/13 modifiers, with all token
   types and modifiers listed in index order and Perl-specific extensions called out.
   (#4239)
+
+### Added (2026-04-12 session 2)
+
+- **Compile-time constants hover** — `__FILE__`, `__LINE__`, `__PACKAGE__`, and
+  `__SUB__` now show rich hover documentation with descriptions and caveats
+  (e.g. `__SUB__` in named subs vs anonymous subs). (#4270, #4294)
+
+- **Fast/slow diagnostic split** — parse errors are now published immediately
+  (~440ms sooner) via `publish_parse_errors_fast()`, then replaced by the full
+  diagnostic set on the 250ms debounce. Users see red squiggles while typing
+  without waiting for scope analysis or perlcritic. (#4279, #4305)
+
+- **Generation-aware staleness guard** — if a `didChange` arrives during slow
+  computation (scope analysis, perlcritic, dead-code), the stale diagnostic
+  result is suppressed and the debouncer re-fires for the latest version. (#4295)
+
+- **`require Module; Module->import('sym')` completion** — the two-statement
+  require+import pattern is now recognised for completion ranking alongside
+  `use Module` imports. (#3476, #4296)
+
+- **Module ranking tiers for completion** — completion candidates are ranked
+  by import tier (direct import > workspace > CPAN) with string-context
+  suppression and open-snippet triggers for module paths. (#4263, #4277)
+
+- **`workspace/configuration` folder propagation** — `didChangeConfiguration`
+  now eagerly propagates settings to each folder's `effective_workspace_config`,
+  closing a stale-settings window between notification and async pull response.
+  (#3515, #4289, #4307)
+
+- **Safe-delete widened dependent detection** — `workspace/willDeleteFiles`
+  now detects dependents via both `use` imports and `require` statements,
+  surfacing warnings for a broader set of cross-file references. (#3513, #4293)
+
+- **Package declaration rewrite during module rename** — `workspace/willRenameFiles`
+  now rewrites `package Foo::Bar` declarations inside the renamed file to match
+  the new module path. (#3522, #4291)
+
+### Fixed (2026-04-12 session 2)
+
+- **Package name hover** — hovering a qualified package name like `File::Path`
+  previously showed broken hover text because the tokenizer stopped at `:`.
+  New `get_package_name_at_position` scans across `::` separators to produce
+  correct rich hover with file path, POD, and MetaCPAN link. (#4282, #4306)
+
+- **Signature/Prototype AST byte-span** — `Signature` and `Prototype` nodes
+  now carry the correct byte span from the parser, fixing off-by-one ranges
+  in hover and semantic tokens. (#4243, #4281)
+
+- **Windows compatibility** — `/proc` reads guarded behind `cfg(target_os = "linux")`;
+  hardcoded `/tmp` paths replaced with `std::env::temp_dir()` for cross-platform
+  correctness. (#4229, #4278)
+
+### Tests / Quality (2026-04-12 session 2)
+
+- **Cross-folder rename verification** — integration tests verify rename operations
+  span both workspace roots correctly. (#3522, #4273, #4292)
+
+- **Import visibility regression tests** — unit tests for `require`+`import`
+  symbol resolution patterns. (#3476, #4286)
+
+- **Heredoc `unreachable!` ratchet coverage** — tests cover all 7 heredoc
+  unreachable patterns on both path separators. (#4245, #4274)
+
+- **Unused dev-dependencies removed** from 5 crates. (#4183, #4255)
 
 
 ## [0.12.3] - 2026-04-08
