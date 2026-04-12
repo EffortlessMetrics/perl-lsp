@@ -72,6 +72,21 @@ impl DapWorkflowSession {
         Ok(())
     }
 
+    /// Attach to a running process with optional stopOnEntry.
+    ///
+    /// Callers must call `set_breakpoints` and `configuration_done` before
+    /// `wait_stopped` to follow the DAP ordering requirement (though attach
+    /// emits a stopped event immediately).
+    pub fn attach(&mut self, process_id: u32, stop_on_entry: bool) -> Result<(), String> {
+        let args = json!({
+            "processId": process_id,
+            "stopOnEntry": stop_on_entry
+        });
+        let resp = self.request("attach", Some(args));
+        self.expect_success(&resp, "attach")?;
+        Ok(())
+    }
+
     /// Send `setBreakpoints` for the given `lines` in `source_path`.
     ///
     /// Returns the raw `setBreakpoints` response body.
@@ -144,6 +159,43 @@ impl DapWorkflowSession {
         Ok((frame_id, source_path, frame_line))
     }
 
+    /// Retrieve the `variablesReference` for the `Globals` scope in `frame_id`.
+    pub fn scopes_globals_ref(&mut self, frame_id: i64) -> Result<i64, String> {
+        let args = json!({"frameId": frame_id});
+        let resp = self.request("scopes", Some(args));
+        let body = self.expect_success(&resp, "scopes")?;
+
+        let body = body.ok_or("scopes response had no body")?;
+        let scopes = body
+            .get("scopes")
+            .and_then(Value::as_array)
+            .ok_or("scopes body missing `scopes` array")?;
+
+        // Find the "Globals" scope by presentation hint or name.
+        for scope in scopes {
+            let is_globals = scope
+                .get("presentationHint")
+                .and_then(Value::as_str)
+                .map(|h| h == "globals")
+                .unwrap_or(false)
+                || scope
+                    .get("name")
+                    .and_then(Value::as_str)
+                    .map(|n| n == "Globals")
+                    .unwrap_or(false);
+
+            if is_globals {
+                let vars_ref = scope
+                    .get("variablesReference")
+                    .and_then(Value::as_i64)
+                    .ok_or("Globals scope missing `variablesReference`")?;
+                return Ok(vars_ref);
+            }
+        }
+
+        Err("No Globals scope found in scopes response".to_string())
+    }
+
     /// Retrieve the `variablesReference` for the `Locals` scope in `frame_id`.
     ///
     /// Uses the `frame_id * 10 + 1` encoding from `frames.rs`.
@@ -212,6 +264,14 @@ impl DapWorkflowSession {
         let args = json!({"threadId": thread_id});
         let resp = self.request("next", Some(args));
         self.expect_success(&resp, "next")?;
+        Ok(())
+    }
+
+    /// Send `stepIn` for `thread_id`.
+    pub fn step_into(&mut self, thread_id: i64) -> Result<(), String> {
+        let args = json!({"threadId": thread_id});
+        let resp = self.request("stepIn", Some(args));
+        self.expect_success(&resp, "stepIn")?;
         Ok(())
     }
 
