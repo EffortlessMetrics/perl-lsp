@@ -10,7 +10,7 @@
 
 use super::*;
 #[cfg(feature = "workspace")]
-use crate::runtime::routing::{route_index_access, IndexAccessMode};
+use crate::runtime::routing::{IndexAccessMode, route_index_access};
 use crate::state::workspace_symbol_cap;
 use perl_module_path::file_path_to_module_name;
 use perl_module_rename::{apply_module_rename_edits, plan_module_rename_edits};
