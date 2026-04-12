@@ -82,9 +82,9 @@ impl LspServer {
 
     /// Load `.perl-lsp.toml` from each workspace folder and compute per-folder effective config.
     ///
-    /// Called once during `handle_initialize`, after workspace folders are populated and
-    /// before the server returns capabilities. Subsequent `didChangeConfiguration`
-    /// notifications will override these values (LSP wins over TOML).
+    /// Called during `handle_initialize`, after workspace folders are populated.
+    /// Client-pulled `workspace/configuration` is requested later from the
+    /// `initialized` notification handler (LSP timing requirement).
     ///
     /// On TOML parse error, emits a `window/showMessage` Warning so the user can fix the file.
     /// In single-file mode (no workspace folders), returns early without searching.
@@ -143,10 +143,7 @@ impl LspServer {
             }
         }
 
-        // Pull client-scoped workspace settings (if supported) and merge them
-        // as the highest-precedence layer over TOML-derived folder config.
         drop(folders);
-        self.request_workspace_configuration_for_folders();
     }
 }
 
@@ -330,14 +327,18 @@ include_paths = ["other_lib"]
                 .with_path(folder2.clone()),
         );
 
-        server
-            .pending_workspace_configuration_requests
-            .lock()
-            .insert(11, vec![uri1.clone(), uri2.clone()]);
+        server.pending_workspace_configuration_requests.lock().insert(
+            11,
+            crate::runtime::PendingWorkspaceConfigurationRequest {
+                folder_uris: vec![uri1.clone(), uri2.clone()],
+                includes_global_item: true,
+            },
+        );
 
         server.handle_client_response(Some(serde_json::json!({
             "id": 11,
             "result": [
+                { "workspace": { "includePaths": ["shared_lib"] } },
                 { "workspace": { "includePaths": ["api_lib"] } },
                 { "workspace": { "includePaths": ["ui_lib"] } }
             ]
@@ -351,7 +352,19 @@ include_paths = ["other_lib"]
             folder1_state.effective_workspace_config.include_paths.contains(&"api_lib".to_string())
         );
         assert!(
+            folder1_state
+                .effective_workspace_config
+                .include_paths
+                .contains(&"shared_lib".to_string())
+        );
+        assert!(
             folder2_state.effective_workspace_config.include_paths.contains(&"ui_lib".to_string())
+        );
+        assert!(
+            folder2_state
+                .effective_workspace_config
+                .include_paths
+                .contains(&"shared_lib".to_string())
         );
     }
 }

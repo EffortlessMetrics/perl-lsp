@@ -164,6 +164,15 @@ pub(crate) struct DocumentScanView {
     pub ast: Option<Arc<perl_parser::ast::Node>>,
 }
 
+/// Metadata for an in-flight `workspace/configuration` reverse request.
+#[derive(Debug, Clone)]
+pub(crate) struct PendingWorkspaceConfigurationRequest {
+    /// Workspace folder URIs requested in this batch.
+    pub folder_uris: Vec<String>,
+    /// Whether the request included an unscoped global `section: "perl"` item.
+    pub includes_global_item: bool,
+}
+
 // Note: FQN_RE regex moved to language/navigation.rs
 
 // Note: Error codes and cancelled_response imported from crate::lsp::protocol
@@ -220,7 +229,8 @@ pub struct LspServer {
     /// Atomic counter for generating unique request IDs
     next_request_id: Arc<AtomicI64>,
     /// Pending workspace/configuration reverse requests keyed by request ID.
-    pending_workspace_configuration_requests: Arc<Mutex<HashMap<i64, Vec<String>>>>,
+    pending_workspace_configuration_requests:
+        Arc<Mutex<HashMap<i64, PendingWorkspaceConfigurationRequest>>>,
     /// Active progress tokens for work done progress tracking
     progress_tokens: Arc<Mutex<HashSet<String>>>,
     /// Maps progress tokens to their originating request IDs for cancellation routing

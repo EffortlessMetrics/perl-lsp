@@ -101,6 +101,10 @@ impl LspServer {
             }
         }
 
+        // LSP 3.17: server-initiated requests must wait until initialization
+        // completes, so pull workspace/configuration only after `initialized`.
+        self.request_workspace_configuration_for_folders();
+
         Ok(None)
     }
 }

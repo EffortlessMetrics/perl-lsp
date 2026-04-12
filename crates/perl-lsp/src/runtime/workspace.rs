@@ -162,6 +162,11 @@ impl Drop for IndexingGuard {
 impl LspServer {
     /// Request `workspace/configuration` for each workspace folder (if supported).
     pub(crate) fn request_workspace_configuration_for_folders(&self) {
+        if !self.initialized.load(Ordering::Acquire) {
+            tracing::debug!("Skipping workspace/configuration request before initialized");
+            return;
+        }
+
         if !self.client_capabilities.lock().workspace_configuration_support {
             tracing::debug!("Client does not support workspace/configuration; using local config");
             return;
@@ -173,8 +178,8 @@ impl LspServer {
             return;
         }
 
-        let items: Vec<Value> =
-            folder_uris.iter().map(|uri| json!({ "scopeUri": uri, "section": "perl" })).collect();
+        let mut items: Vec<Value> = vec![json!({ "section": "perl" })];
+        items.extend(folder_uris.iter().map(|uri| json!({ "scopeUri": uri, "section": "perl" })));
         let request_id = self.next_request_id.fetch_add(1, Ordering::Relaxed);
 
         if let Err(error) = self.outbound.send_request(
@@ -186,7 +191,10 @@ impl LspServer {
             return;
         }
 
-        self.pending_workspace_configuration_requests.lock().insert(request_id, folder_uris);
+        self.pending_workspace_configuration_requests.lock().insert(
+            request_id,
+            PendingWorkspaceConfigurationRequest { folder_uris, includes_global_item: true },
+        );
     }
 
     /// Apply a `workspace/configuration` response for a previously sent request.
@@ -198,8 +206,8 @@ impl LspServer {
             return;
         };
 
-        let maybe_folder_uris = self.pending_workspace_configuration_requests.lock().remove(&id);
-        let Some(folder_uris) = maybe_folder_uris else {
+        let maybe_request = self.pending_workspace_configuration_requests.lock().remove(&id);
+        let Some(pending_request) = maybe_request else {
             return;
         };
 
@@ -213,8 +221,14 @@ impl LspServer {
 
         let results = params.get("result").and_then(Value::as_array).cloned().unwrap_or_default();
 
+        let global_settings = pending_request
+            .includes_global_item
+            .then(|| results.first().cloned().unwrap_or(Value::Null))
+            .unwrap_or(Value::Null);
+        let folder_result_offset = usize::from(pending_request.includes_global_item);
+
         let mut folders = self.workspace_folders.lock();
-        for (idx, folder_uri) in folder_uris.iter().enumerate() {
+        for (idx, folder_uri) in pending_request.folder_uris.iter().enumerate() {
             let Some(folder) = folders.iter_mut().find(|folder| &folder.uri == folder_uri) else {
                 continue;
             };
@@ -224,7 +238,11 @@ impl LspServer {
                 project_config.apply_to_workspace_config(&mut effective_config);
             }
 
-            if let Some(perl_settings) = results.get(idx) {
+            if !global_settings.is_null() {
+                effective_config.update_from_value(&global_settings);
+            }
+
+            if let Some(perl_settings) = results.get(idx + folder_result_offset) {
                 effective_config.update_from_value(perl_settings);
             }
 
