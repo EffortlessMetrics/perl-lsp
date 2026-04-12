@@ -76,6 +76,20 @@ beta();
 }
 
 #[test]
+fn require_import_known_tag_resolves_members() {
+    let code = r#"require POSIX;
+POSIX->import(':sys_wait_h');
+my $ok = WIFEXITED($status);
+"#;
+    let pkg = parse_and_symbol_at(code, "WIFEXITED(");
+    assert_eq!(
+        pkg.as_deref(),
+        Some("POSIX"),
+        "WIFEXITED() should resolve to POSIX via require+tag import, got: {pkg:?}"
+    );
+}
+
+#[test]
 fn require_without_import_does_not_leak_symbol() {
     // require alone does NOT make symbols available — only with explicit import call
     let code = r#"require My::Loader;

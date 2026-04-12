@@ -24,6 +24,7 @@ doctest = false
 
 [dependencies]
 perl-parser-core = { workspace = true }
+perl-module-import = { workspace = true }
 perl-workspace-index = { workspace = true }
 perl-symbol-types = { workspace = true }
 regex.workspace = true
@@ -38,4 +39,3 @@ rustdoc-args = ["--cfg", "docsrs"]
 
 [lints]
 workspace = true
-

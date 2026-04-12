@@ -6,6 +6,7 @@
 use crate::ast::{Node, NodeKind};
 use crate::symbol::is_universal_method;
 use crate::workspace_index::{SymKind, SymbolKey};
+use perl_module_import::resolve_known_export_tag;
 use rustc_hash::FxHashMap;
 use std::sync::Arc;
 
@@ -1375,6 +1376,9 @@ pub fn symbol_at_cursor(ast: &Node, offset: usize, current_pkg: &str) -> Option<
         /// - qw list as ArrayLit:   `->import(qw(foo bar))` → ArrayLiteral
         /// - Identifier nodes:      `->import(foo)` (unusual but legal)
         /// - String value trimming: quoted strings like `"'foo'"` from qw
+        ///
+        /// Also handles export tags in any of the above forms, e.g.
+        /// `->import(':sys_wait_h')` and `->import(qw(:sys_wait_h WIFEXITED))`.
         fn import_call_exports(method_node: &Node, expected_module: &str, symbol: &str) -> bool {
             let (object, method, args) = match &method_node.kind {
                 NodeKind::MethodCall { object, method, args } => (object, method, args),
@@ -1391,9 +1395,16 @@ pub fn symbol_at_cursor(ast: &Node, offset: usize, current_pkg: &str) -> Option<
             if obj_name != expected_module {
                 return false;
             }
+            if args.is_empty() {
+                // `Module->import()` default import set is module-specific and may
+                // come from `@EXPORT` in another file. We do not currently have
+                // a workspace export table in this lookup path, so stay
+                // conservative and do not claim symbol ownership here.
+                return false;
+            }
             // Walk the argument list looking for the symbol.
             for arg in args {
-                if arg_node_matches_symbol(arg, symbol) {
+                if arg_node_matches_symbol(arg, expected_module, symbol) {
                     return true;
                 }
             }
@@ -1404,12 +1415,16 @@ pub fn symbol_at_cursor(ast: &Node, offset: usize, current_pkg: &str) -> Option<
         /// Handles: String literals, Identifiers (including raw "qw(...)"),
         /// and ArrayLiteral (the AST form produced by `qw(...)` in expression
         /// context).
-        fn arg_node_matches_symbol(arg: &Node, symbol: &str) -> bool {
+        fn arg_node_matches_symbol(arg: &Node, module: &str, symbol: &str) -> bool {
             match &arg.kind {
                 NodeKind::String { value, .. } => {
                     // Strip surrounding single/double quotes that some code
                     // paths leave in the value (e.g. qw in quotes.rs).
                     let bare = value.trim_matches('\'').trim_matches('"');
+                    if bare.starts_with(':') {
+                        return resolve_known_export_tag(module, bare)
+                            .is_some_and(|expanded| expanded.contains(&symbol));
+                    }
                     bare == symbol
                 }
                 NodeKind::Identifier { name } => {
@@ -1423,15 +1438,62 @@ pub fn symbol_at_cursor(ast: &Node, offset: usize, current_pkg: &str) -> Option<
                             .trim_start_matches("qw")
                             .trim_start_matches(|c: char| "([{/<|!".contains(c))
                             .trim_end_matches(|c: char| ")]}/|!>".contains(c));
-                        return content.split_whitespace().any(|tok| tok == symbol);
+                        return content.split_whitespace().any(|tok| {
+                            tok == symbol
+                                || (tok.starts_with(':')
+                                    && resolve_known_export_tag(module, tok)
+                                        .is_some_and(|expanded| expanded.contains(&symbol)))
+                        });
                     }
                     false
                 }
                 NodeKind::ArrayLiteral { elements } => {
                     // qw(...) in expression context → ArrayLiteral of String nodes
-                    elements.iter().any(|el| arg_node_matches_symbol(el, symbol))
+                    elements.iter().any(|el| arg_node_matches_symbol(el, module, symbol))
                 }
                 _ => false,
+            }
+        }
+
+        fn static_module_runtime_loader(rhs: &Node) -> Option<String> {
+            let (name, args) = match &rhs.kind {
+                NodeKind::FunctionCall { name, args } => (name.as_str(), args),
+                _ => return None,
+            };
+
+            let is_loader = matches!(
+                name,
+                "use_module"
+                    | "require_module"
+                    | "Module::Runtime::use_module"
+                    | "Module::Runtime::require_module"
+            );
+            if !is_loader {
+                return None;
+            }
+
+            let first_arg = args.first()?;
+            match &first_arg.kind {
+                NodeKind::String { value, .. } => {
+                    let bare = value.trim_matches('\'').trim_matches('"').trim();
+                    if bare.is_empty() { None } else { Some(bare.to_string()) }
+                }
+                _ => None,
+            }
+        }
+
+        fn import_receiver_module<'m>(
+            object: &Node,
+            required_modules: &'m [String],
+            runtime_aliases: &'m FxHashMap<String, String>,
+        ) -> Option<&'m str> {
+            match &object.kind {
+                NodeKind::Identifier { name } => required_modules
+                    .iter()
+                    .find(|module| module.as_str() == name.as_str())
+                    .map(String::as_str),
+                NodeKind::Variable { name, .. } => runtime_aliases.get(name).map(String::as_str),
+                _ => None,
             }
         }
 
@@ -1459,14 +1521,47 @@ pub fn symbol_at_cursor(ast: &Node, offset: usize, current_pkg: &str) -> Option<
                 return None;
             }
 
+            let mut runtime_aliases: FxHashMap<String, String> = FxHashMap::default();
+            for stmt in stmts {
+                let expr = inner_expr(stmt);
+                match &expr.kind {
+                    NodeKind::VariableDeclaration { variable, initializer, .. } => {
+                        if let (NodeKind::Variable { name, .. }, Some(rhs)) =
+                            (&variable.kind, initializer.as_deref())
+                        {
+                            if let Some(module) = static_module_runtime_loader(rhs) {
+                                runtime_aliases.insert(name.clone(), module);
+                            }
+                        }
+                    }
+                    NodeKind::Assignment { lhs, rhs, .. } => {
+                        if let NodeKind::Variable { name, .. } = &lhs.kind {
+                            if let Some(module) = static_module_runtime_loader(rhs) {
+                                runtime_aliases.insert(name.clone(), module);
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+
             // Check whether any `Module->import(...)` call in this block
             // exports our symbol, using the set of required modules.
             for stmt in stmts {
                 let expr = inner_expr(stmt);
-                for module in &required_modules {
-                    if import_call_exports(expr, module, symbol) {
-                        return Some(module.clone());
-                    }
+                let NodeKind::MethodCall { object, method, .. } = &expr.kind else {
+                    continue;
+                };
+                if method != "import" {
+                    continue;
+                }
+                let Some(module) =
+                    import_receiver_module(object, &required_modules, &runtime_aliases)
+                else {
+                    continue;
+                };
+                if import_call_exports(expr, module, symbol) {
+                    return Some(module.to_string());
                 }
             }
             None

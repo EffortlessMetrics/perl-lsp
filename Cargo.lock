@@ -2678,6 +2678,7 @@ dependencies = [
 name = "perl-semantic-analyzer"
 version = "0.12.4"
 dependencies = [
+ "perl-module-import",
  "perl-parser-core",
  "perl-symbol-types",
  "perl-tdd-support",
