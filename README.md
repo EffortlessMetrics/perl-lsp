@@ -168,13 +168,28 @@ Live numbers live in [docs/project/status/parser.md](docs/project/status/parser.
 
 ### Known gaps toward solid UX
 
-In-flight structural work for the v0.13.0 alpha. None of these block basic use, but each one is a real rough edge in a realistic workflow:
+The table below is the honest state of v0.13.0 rough edges. None block basic use; all affect realistic workflows.
 
-- **Parser error recovery while typing** — unclosed `sub`/`if`/`while` block recovery landed in PR #4079 and the symbol extractor now descends into partial `Error` nodes via PR #4071, so variables before and after a typo stay visible; the remaining rough edge is broader scope recovery across multi-statement incomplete regions ([#3499](https://github.com/EffortlessMetrics/perl-lsp/issues/3499))
-- **Symbol visibility across imports and inheritance** — inherited and role methods now resolve across `@ISA` / `use parent` / `use base` chains in goto-def, hover, and completion (PR #4077); remaining gaps are import-list bareword resolution for `qw(...)` and tag imports ([#3472](https://github.com/EffortlessMetrics/perl-lsp/issues/3472)), cross-file `use constant` tracking ([#3475](https://github.com/EffortlessMetrics/perl-lsp/issues/3475)), and dynamic `require` / manual `Module->import` analysis ([#3476](https://github.com/EffortlessMetrics/perl-lsp/issues/3476))
-- **Pragma tracker** — `use if CONDITION, PRAGMA` (PR #4050), `use feature 'switch'` and explicit feature bundles (PR #4038), and eval/sub-scoped pragma leakage into file-level PL100/PL101 (PR #4052) all landed this cycle; a false phase-block pragma propagation bug was reverted in PR #4108 (tracked in #4100). Remaining gap: conservatively handling dynamic pragmas smuggled through `eval STRING` ([#3489](https://github.com/EffortlessMetrics/perl-lsp/issues/3489))
-- **Workspace refactoring completeness** — multi-root workspace support shipped in 0.12.x (PR #3984 closed #3513: per-folder config loading, `WorkspaceFolderState`, and cross-folder integration coverage); workspace-wide rename and module-move are roughly 30% done and conditionally in scope for v0.13.0 pending verification ([#3522](https://github.com/EffortlessMetrics/perl-lsp/issues/3522))
-- **Dynamic workspace configuration** — the server-side `workspace/configuration` reverse-request flow is partially implemented; per-folder `.perl-lsp.toml` is the current working mechanism, and fully dynamic per-folder scoping is deferred to v0.14.0 ([#3515](https://github.com/EffortlessMetrics/perl-lsp/issues/3515))
+#### Must land for v0.13.0
+
+- **Workspace-wide rename slice** — multi-root workspace support shipped in 0.12.x (PR #3984: per-folder config loading, `WorkspaceFolderState`, cross-folder integration); workspace-wide rename and module-move are roughly 30% complete, conditionally in scope pending verification ([#3522](https://github.com/EffortlessMetrics/perl-lsp/issues/3522))
+
+#### Nice to land
+
+- **Dynamic require / literal import** — `require Module; Module->import('sym')` with static string names: goto-def on the bareword should resolve to the definition site; `@ISA` / `use parent` / `use base` chains and `use Module qw(...)` list imports already work; this is the remaining slice of the import visibility lane ([#3476](https://github.com/EffortlessMetrics/perl-lsp/issues/3476), tracked by umbrella [#4246](https://github.com/EffortlessMetrics/perl-lsp/issues/4246))
+
+#### Deferred to v0.14.0
+
+- **Dynamic workspace configuration** — per-folder `.perl-lsp.toml` is the supported v0.13 mechanism; fully dynamic per-folder scoping via the `workspace/configuration` reverse-request flow is deferred ([#3515](https://github.com/EffortlessMetrics/perl-lsp/issues/3515))
+
+#### What shipped this cycle (v0.12.x)
+
+These items were rough edges in the previous list and have since landed:
+
+- Parser error recovery: unclosed block recovery (PR #4079), symbol extractor descends into partial `Error` nodes (PR #4071) — [#3499](https://github.com/EffortlessMetrics/perl-lsp/issues/3499) closed
+- Import list bareword resolution for `use Module qw(...)` and tag imports — [#3472](https://github.com/EffortlessMetrics/perl-lsp/issues/3472) closed
+- `use constant` symbols tracked in visible symbol table — [#3475](https://github.com/EffortlessMetrics/perl-lsp/issues/3475) closed
+- Pragma tracker: `use if`, feature bundles, eval/sub-scoped pragma leakage (PRs #4050, #4038, #4052), conservative `eval STRING` handling (PR #4052) — [#3489](https://github.com/EffortlessMetrics/perl-lsp/issues/3489) closed
 
 ## Security
 
