@@ -105,6 +105,7 @@ use std::sync::{
     Arc,
     atomic::{AtomicBool, AtomicI64, AtomicU32, Ordering},
 };
+use std::time::Instant;
 use url::Url;
 
 #[cfg(feature = "workspace")]
@@ -138,6 +139,17 @@ fn workspace_folder_matches_doc_uri(folder: &WorkspaceFolderState, doc_uri: &str
                 || doc_uri.strip_prefix(folder_uri).is_some_and(|suffix| suffix.starts_with('/'))
         }
     }
+}
+
+/// Tracks metadata for a pending `workspace/configuration` reverse request.
+#[derive(Debug, Clone)]
+pub(crate) struct PendingWorkspaceConfigurationRequest {
+    /// Workspace folder URIs requested in this call.
+    pub(crate) folder_uris: Vec<String>,
+    /// Whether the response includes an unscoped global `perl` settings item first.
+    pub(crate) includes_global_item: bool,
+    /// Request creation time used for stale-request cleanup.
+    pub(crate) created_at: Instant,
 }
 
 /// Lightweight view of a document for scan-heavy operations
@@ -220,7 +232,8 @@ pub struct LspServer {
     /// Atomic counter for generating unique request IDs
     next_request_id: Arc<AtomicI64>,
     /// Pending workspace/configuration reverse requests keyed by request ID.
-    pending_workspace_configuration_requests: Arc<Mutex<HashMap<i64, Vec<String>>>>,
+    pending_workspace_configuration_requests:
+        Arc<Mutex<HashMap<i64, PendingWorkspaceConfigurationRequest>>>,
     /// Active progress tokens for work done progress tracking
     progress_tokens: Arc<Mutex<HashSet<String>>>,
     /// Maps progress tokens to their originating request IDs for cancellation routing

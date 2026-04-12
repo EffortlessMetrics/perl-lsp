@@ -330,14 +330,19 @@ include_paths = ["other_lib"]
                 .with_path(folder2.clone()),
         );
 
-        server
-            .pending_workspace_configuration_requests
-            .lock()
-            .insert(11, vec![uri1.clone(), uri2.clone()]);
+        server.pending_workspace_configuration_requests.lock().insert(
+            11,
+            crate::runtime::PendingWorkspaceConfigurationRequest {
+                folder_uris: vec![uri1.clone(), uri2.clone()],
+                includes_global_item: true,
+                created_at: std::time::Instant::now(),
+            },
+        );
 
         server.handle_client_response(Some(serde_json::json!({
             "id": 11,
             "result": [
+                { "workspace": { "useSystemInc": true } },
                 { "workspace": { "includePaths": ["api_lib"] } },
                 { "workspace": { "includePaths": ["ui_lib"] } }
             ]
@@ -352,6 +357,41 @@ include_paths = ["other_lib"]
         );
         assert!(
             folder2_state.effective_workspace_config.include_paths.contains(&"ui_lib".to_string())
+        );
+        assert!(folder1_state.effective_workspace_config.use_system_inc);
+        assert!(folder2_state.effective_workspace_config.use_system_inc);
+    }
+
+    #[test]
+    fn handle_client_response_ignores_non_array_result() {
+        let server = LspServer::new();
+        let temp = tempfile::tempdir().expect("failed to create temp dir");
+        let folder = temp.path().join("folder");
+        std::fs::create_dir_all(&folder).expect("failed to create folder");
+        let uri = url::Url::from_directory_path(&folder).expect("failed to create uri").to_string();
+
+        server.workspace_folders.lock().push(
+            crate::runtime::workspace_folder::WorkspaceFolderState::new(uri.clone())
+                .with_path(folder.clone()),
+        );
+        server.pending_workspace_configuration_requests.lock().insert(
+            99,
+            crate::runtime::PendingWorkspaceConfigurationRequest {
+                folder_uris: vec![uri.clone()],
+                includes_global_item: true,
+                created_at: std::time::Instant::now(),
+            },
+        );
+
+        server.handle_client_response(Some(serde_json::json!({
+            "id": 99,
+            "result": { "workspace": { "includePaths": ["oops"] } }
+        })));
+
+        let folders = server.workspace_folders.lock();
+        let folder_state = folders.iter().find(|f| f.uri == uri).expect("missing folder");
+        assert!(
+            !folder_state.effective_workspace_config.include_paths.contains(&"oops".to_string())
         );
     }
 }

@@ -24,10 +24,13 @@ use perl_workspace_ignore::is_skipped_dir_name;
 #[cfg(feature = "workspace")]
 use std::path::Path;
 use std::sync::Arc;
+use std::time::Duration;
 #[cfg(feature = "workspace")]
 use std::time::Instant;
 #[cfg(feature = "workspace")]
 use url::Url;
+
+const WORKSPACE_CONFIGURATION_REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 // Note: WalkDir logic has been extracted to super::file_discovery.
 // These helper functions are retained for potential future use by
 // other workspace operations (e.g., file watcher filtering).
@@ -167,14 +170,27 @@ impl LspServer {
             return;
         }
 
+        let now = std::time::Instant::now();
+        self.pending_workspace_configuration_requests.lock().retain(|request_id, pending| {
+            let still_fresh = now.saturating_duration_since(pending.created_at)
+                <= WORKSPACE_CONFIGURATION_REQUEST_TIMEOUT;
+            if !still_fresh {
+                tracing::warn!(
+                    request_id = *request_id,
+                    "Dropping stale workspace/configuration request"
+                );
+            }
+            still_fresh
+        });
+
         let folder_uris: Vec<String> =
             self.workspace_folders.lock().iter().map(|folder| folder.uri.clone()).collect();
         if folder_uris.is_empty() {
             return;
         }
 
-        let items: Vec<Value> =
-            folder_uris.iter().map(|uri| json!({ "scopeUri": uri, "section": "perl" })).collect();
+        let mut items: Vec<Value> = vec![json!({ "section": "perl" })];
+        items.extend(folder_uris.iter().map(|uri| json!({ "scopeUri": uri, "section": "perl" })));
         let request_id = self.next_request_id.fetch_add(1, Ordering::Relaxed);
 
         if let Err(error) = self.outbound.send_request(
@@ -186,7 +202,14 @@ impl LspServer {
             return;
         }
 
-        self.pending_workspace_configuration_requests.lock().insert(request_id, folder_uris);
+        self.pending_workspace_configuration_requests.lock().insert(
+            request_id,
+            PendingWorkspaceConfigurationRequest {
+                folder_uris,
+                includes_global_item: true,
+                created_at: now,
+            },
+        );
     }
 
     /// Apply a `workspace/configuration` response for a previously sent request.
@@ -198,10 +221,19 @@ impl LspServer {
             return;
         };
 
-        let maybe_folder_uris = self.pending_workspace_configuration_requests.lock().remove(&id);
-        let Some(folder_uris) = maybe_folder_uris else {
+        let maybe_pending = self.pending_workspace_configuration_requests.lock().remove(&id);
+        let Some(pending) = maybe_pending else {
             return;
         };
+        let response_age = std::time::Instant::now().saturating_duration_since(pending.created_at);
+        if response_age > WORKSPACE_CONFIGURATION_REQUEST_TIMEOUT {
+            tracing::warn!(
+                request_id = id,
+                age_ms = response_age.as_millis(),
+                "Ignoring stale workspace/configuration response"
+            );
+            return;
+        }
 
         if params.get("error").is_some() {
             tracing::debug!(
@@ -211,10 +243,18 @@ impl LspServer {
             return;
         }
 
-        let results = params.get("result").and_then(Value::as_array).cloned().unwrap_or_default();
+        let Some(results) = params.get("result").and_then(Value::as_array) else {
+            tracing::warn!(
+                request_id = id,
+                "workspace/configuration response was not an array; keeping TOML/default config"
+            );
+            return;
+        };
+        let global_settings = if pending.includes_global_item { results.first() } else { None };
+        let folder_results_start = usize::from(pending.includes_global_item);
 
         let mut folders = self.workspace_folders.lock();
-        for (idx, folder_uri) in folder_uris.iter().enumerate() {
+        for (idx, folder_uri) in pending.folder_uris.iter().enumerate() {
             let Some(folder) = folders.iter_mut().find(|folder| &folder.uri == folder_uri) else {
                 continue;
             };
@@ -224,8 +264,17 @@ impl LspServer {
                 project_config.apply_to_workspace_config(&mut effective_config);
             }
 
-            if let Some(perl_settings) = results.get(idx) {
+            if let Some(global_settings) = global_settings {
+                effective_config.update_from_value(global_settings);
+            }
+            if let Some(perl_settings) = results.get(folder_results_start + idx) {
                 effective_config.update_from_value(perl_settings);
+            } else {
+                tracing::warn!(
+                    request_id = id,
+                    folder_uri = %folder_uri,
+                    "workspace/configuration response missing folder item; using TOML/default config for folder"
+                );
             }
 
             folder.effective_workspace_config = effective_config;
