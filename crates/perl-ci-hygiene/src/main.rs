@@ -4192,6 +4192,34 @@ mod tests {
         ));
     }
 
+    // Regression guard for issue #4245: is_allowlisted_prod_panic_hit() must pass
+    // all 7 unreachable!() calls in perl-heredoc-anti-patterns/src/lib.rs under
+    // both forward-slash and backslash path separators (Windows vs Unix).
+    #[test]
+    fn allowlisted_prod_panic_hit_all_seven_patterns_both_separators() {
+        let all_seven = [
+            r#"        Err(_) => unreachable!("FORMAT_PATTERN regex failed to compile"),"#,
+            r#"        Err(_) => unreachable!("BEGIN_BLOCK_PATTERN regex failed to compile"),"#,
+            r#"        Err(_) => unreachable!("DYNAMIC_DELIMITER_PATTERN regex failed to compile"),"#,
+            r#"        Err(_) => unreachable!("SOURCE_FILTER_PATTERN regex failed to compile"),"#,
+            r#"        Err(_) => unreachable!("REGEX_HEREDOC_PATTERN regex failed to compile"),"#,
+            r#"        Err(_) => unreachable!("EVAL_HEREDOC_PATTERN regex failed to compile"),"#,
+            r#"    Err(_) => unreachable!("TIE_PATTERN regex failed to compile"),"#,
+        ];
+        let forward = "crates/perl-heredoc-anti-patterns/src/lib.rs";
+        let backward = r"crates\perl-heredoc-anti-patterns\src\lib.rs";
+        for line in &all_seven {
+            assert!(
+                is_allowlisted_prod_panic_hit(forward, line),
+                "forward-slash path must allowlist: {line}"
+            );
+            assert!(
+                is_allowlisted_prod_panic_hit(backward, line),
+                "backslash path must allowlist: {line}"
+            );
+        }
+    }
+
     #[test]
     fn quick_bench_uses_distinct_binaries_for_c_and_rust() {
         // Regression guard for issue #3204: cmd_quick_bench previously called
