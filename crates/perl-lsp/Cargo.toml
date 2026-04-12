@@ -93,6 +93,7 @@ perl-source-file = { workspace = true }
 perl-workspace-discovery = { workspace = true }
 perl-workspace-folder = { workspace = true }
 perl-workspace-ignore = { workspace = true }
+perl-workspace-index = { workspace = true }
 perl-keywords = { workspace = true }
 lsp-types.workspace = true
 serde = { workspace = true }

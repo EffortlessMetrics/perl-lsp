@@ -3,12 +3,13 @@
 //! This module provides a complete Language Server Protocol implementation
 //! that can be used with any LSP-compatible editor.
 
+use crate::runtime::diagnostics::PullDiagnosticsOrchestrator;
 use crate::runtime::workspace_folder::WorkspaceFolderState;
 
 mod client_requests;
 mod constructors;
 pub(crate) mod diagnostic_debounce;
-mod diagnostics;
+pub(crate) mod diagnostics;
 mod dispatch;
 mod document_access;
 /// File discovery abstraction for workspace scanning
@@ -273,6 +274,8 @@ pub struct LspServer {
     /// setting the old flag to `true` interrupts the in-progress parse
     /// cooperatively (via `Parser::check_cancelled`).
     pub(crate) parse_cancel_flags: Arc<Mutex<HashMap<String, Arc<AtomicBool>>>>,
+    /// Pull diagnostics orchestrator for coordinating diagnostic operations.
+    pub(crate) pull_diagnostics_orchestrator: PullDiagnosticsOrchestrator,
     /// Guard that prevents concurrent workspace indexing scans.
     ///
     /// Set to `true` when `start_workspace_indexing` spawns a background thread,

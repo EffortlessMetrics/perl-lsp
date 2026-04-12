@@ -55,6 +55,7 @@ impl LspServer {
             pod_cache: Arc::new(Mutex::new(HashMap::new())),
             pending_index_task_count: Arc::new(std::sync::atomic::AtomicUsize::new(0)),
             parse_cancel_flags: Arc::new(Mutex::new(HashMap::new())),
+            pull_diagnostics_orchestrator: super::diagnostics::PullDiagnosticsOrchestrator::new(),
             semantic_analyzer_cache: Arc::new(Mutex::new(HashMap::new())),
             #[cfg(feature = "workspace")]
             indexing_in_progress: Arc::new(AtomicBool::new(false)),
@@ -163,6 +164,7 @@ impl LspServer {
             pod_cache: Arc::new(Mutex::new(HashMap::new())),
             pending_index_task_count: Arc::new(std::sync::atomic::AtomicUsize::new(0)),
             parse_cancel_flags: Arc::new(Mutex::new(HashMap::new())),
+            pull_diagnostics_orchestrator: super::diagnostics::PullDiagnosticsOrchestrator::new(),
             semantic_analyzer_cache: Arc::new(Mutex::new(HashMap::new())),
             #[cfg(feature = "workspace")]
             indexing_in_progress: Arc::new(AtomicBool::new(false)),
@@ -234,6 +236,7 @@ impl LspServer {
             pod_cache: Arc::new(Mutex::new(HashMap::new())),
             pending_index_task_count: Arc::new(std::sync::atomic::AtomicUsize::new(0)),
             parse_cancel_flags: Arc::new(Mutex::new(HashMap::new())),
+            pull_diagnostics_orchestrator: super::diagnostics::PullDiagnosticsOrchestrator::new(),
             semantic_analyzer_cache: Arc::new(Mutex::new(HashMap::new())),
             #[cfg(feature = "workspace")]
             indexing_in_progress: Arc::new(AtomicBool::new(false)),

@@ -1,6 +1,7 @@
 //! Pull-based diagnostics support (LSP 3.17).
 
 use std::collections::HashMap;
+use std::path::PathBuf;
 
 use lsp_types::{
     Diagnostic as LspDiagnostic, DiagnosticRelatedInformation,
@@ -29,6 +30,92 @@ use super::{
     DiagnosticTag as InternalDiagnosticTag, DiagnosticsProvider, RelatedInformation,
 };
 
+/// Context for pull diagnostics operations.
+///
+/// Contains all configuration and state needed to compute diagnostics
+/// without direct LspServer dependencies, enabling testability and
+/// clean separation of concerns.
+#[derive(Clone)]
+pub struct PullDiagnosticsContext {
+    /// Whether perlcritic is enabled
+    pub perlcritic_enabled: bool,
+    /// Minimum severity for perlcritic (1-5)
+    pub perlcritic_severity: i32,
+    /// Optional perlcritic profile path
+    pub perlcritic_profile: Option<String>,
+    /// Workspace root for .perlcriticrc discovery
+    pub workspace_root: Option<PathBuf>,
+    /// @INC paths for module resolution
+    pub include_paths: Vec<String>,
+    /// Whether client supports LSP 3.18 markup messages
+    pub markup_message_support: bool,
+    /// Optional workspace index for dead code detection
+    #[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
+    pub workspace_index:
+        Option<std::sync::Arc<perl_workspace_index::workspace_index::WorkspaceIndex>>,
+}
+
+impl PullDiagnosticsContext {
+    /// Create a new empty context with default values.
+    pub fn new() -> Self {
+        Self {
+            perlcritic_enabled: false,
+            perlcritic_severity: 3,
+            perlcritic_profile: None,
+            workspace_root: None,
+            include_paths: Vec::new(),
+            markup_message_support: false,
+            #[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
+            workspace_index: None,
+        }
+    }
+
+    /// Create a context with perlcritic enabled.
+    #[cfg(test)]
+    pub fn with_perlcritic(severity: i32, profile: Option<String>) -> Self {
+        Self {
+            perlcritic_enabled: true,
+            perlcritic_severity: severity,
+            perlcritic_profile: profile,
+            workspace_root: None,
+            include_paths: Vec::new(),
+            markup_message_support: false,
+            #[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
+            workspace_index: None,
+        }
+    }
+
+    /// Create a context with workspace index for dead code detection.
+    #[cfg(all(feature = "workspace", not(target_arch = "wasm32"), test))]
+    pub fn with_workspace_index(
+        index: std::sync::Arc<perl_workspace_index::workspace_index::WorkspaceIndex>,
+    ) -> Self {
+        Self {
+            perlcritic_enabled: false,
+            perlcritic_severity: 3,
+            perlcritic_profile: None,
+            workspace_root: None,
+            include_paths: Vec::new(),
+            markup_message_support: false,
+            workspace_index: Some(index),
+        }
+    }
+}
+
+impl std::fmt::Debug for PullDiagnosticsContext {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PullDiagnosticsContext")
+            .field("perlcritic_enabled", &self.perlcritic_enabled)
+            .field("perlcritic_severity", &self.perlcritic_severity)
+            .field("perlcritic_profile", &self.perlcritic_profile)
+            .field("workspace_root", &self.workspace_root)
+            .field("include_paths", &self.include_paths)
+            .field("markup_message_support", &self.markup_message_support)
+            .field("workspace_index", &"<WorkspaceIndex>")
+            .finish()
+    }
+}
+
 /// Provider for pull-based diagnostics (LSP 3.17).
 pub struct PullDiagnosticsProvider;
 
@@ -45,12 +132,33 @@ impl PullDiagnosticsProvider {
         content: &str,
         previous_result_id: Option<String>,
     ) -> DocumentDiagnosticReport {
+        let context = PullDiagnosticsContext::new();
+        self.get_document_diagnostics_with_context(uri, content, previous_result_id, &context, None)
+    }
+
+    /// Handle textDocument/diagnostic request with full context.
+    ///
+    /// This is the production entry point that includes all diagnostic sources:
+    /// - Parse errors and AST-based diagnostics
+    /// - External perlcritic integration (if enabled in context)
+    /// - Dead code detection (if workspace index available)
+    /// - Built-in Perl::Critic policy analysis
+    /// - @INC-aware module resolution diagnostics
+    pub fn get_document_diagnostics_with_context(
+        &self,
+        uri: &Uri,
+        content: &str,
+        previous_result_id: Option<String>,
+        context: &PullDiagnosticsContext,
+        doc_state: Option<&DocumentState>,
+    ) -> DocumentDiagnosticReport {
         let result_id = format!("{:x}", md5::compute(content));
         if previous_result_id.as_deref() == Some(&result_id) {
             return self.build_unchanged_report(result_id);
         }
 
-        let diagnostics = self.collect_diagnostics_for_text(uri, content);
+        let diagnostics =
+            self.collect_diagnostics_for_text_with_context(uri, content, context, doc_state);
         self.build_full_report(result_id, diagnostics)
     }
 
@@ -59,6 +167,17 @@ impl PullDiagnosticsProvider {
         &self,
         documents: &HashMap<String, DocumentState>,
         previous_result_ids: Vec<(Uri, String)>,
+    ) -> WorkspaceDiagnosticReport {
+        let context = PullDiagnosticsContext::new();
+        self.get_workspace_diagnostics_with_context(documents, previous_result_ids, &context)
+    }
+
+    /// Handle workspace/diagnostic request with full context.
+    pub fn get_workspace_diagnostics_with_context(
+        &self,
+        documents: &HashMap<String, DocumentState>,
+        previous_result_ids: Vec<(Uri, String)>,
+        context: &PullDiagnosticsContext,
     ) -> WorkspaceDiagnosticReport {
         let mut items = Vec::new();
         let prev_ids: HashMap<Uri, String> = previous_result_ids.into_iter().collect();
@@ -71,7 +190,8 @@ impl PullDiagnosticsProvider {
             let report = if prev_id.as_deref() == Some(&result_id) {
                 self.build_unchanged_report(result_id)
             } else {
-                let diagnostics = self.collect_diagnostics_for_state(&uri, doc_state);
+                let diagnostics =
+                    self.collect_diagnostics_for_state_with_context(&uri, doc_state, context);
                 self.build_full_report(result_id, diagnostics)
             };
 
@@ -81,11 +201,12 @@ impl PullDiagnosticsProvider {
         WorkspaceDiagnosticReport { items }
     }
 
-    /// Handle workspace/diagnostic partial result.
-    pub fn get_workspace_diagnostics_partial(
+    /// Handle workspace/diagnostic partial result with context.
+    pub fn get_workspace_diagnostics_partial_with_context(
         &self,
         documents: &[(String, String)],
         batch_size: usize,
+        context: &PullDiagnosticsContext,
     ) -> Vec<WorkspaceDiagnosticReportPartialResult> {
         let mut results = Vec::new();
 
@@ -95,7 +216,9 @@ impl PullDiagnosticsProvider {
             for (uri_str, content) in chunk {
                 let uri = parse_uri(uri_str);
                 let result_id = format!("{:x}", md5::compute(content));
-                let diagnostics = self.collect_diagnostics_for_text(&uri, content);
+                // For partial results, we need to parse the content
+                let diagnostics =
+                    self.collect_diagnostics_for_text_with_context(&uri, content, context, None);
                 let report = self.build_full_report(result_id, diagnostics);
 
                 items.push(self.to_workspace_report(uri, None, report));
@@ -107,7 +230,13 @@ impl PullDiagnosticsProvider {
         results
     }
 
-    fn collect_diagnostics_for_text(&self, uri: &Uri, content: &str) -> Vec<LspDiagnostic> {
+    fn collect_diagnostics_for_text_with_context(
+        &self,
+        uri: &Uri,
+        content: &str,
+        context: &PullDiagnosticsContext,
+        _doc_state: Option<&DocumentState>,
+    ) -> Vec<LspDiagnostic> {
         let code_text = code_slice(content);
         let mut parser = Parser::new(code_text);
 
@@ -128,51 +257,187 @@ impl PullDiagnosticsProvider {
                             tracing::warn!(uri = %uri_str, "pull diagnostics: URI is not a file path");
                         }).ok()
                     });
-                provider
+
+                // Build module resolver using context include_paths
+                let resolver = |module: &str| {
+                    self.resolve_module_with_paths(
+                        module,
+                        &context.include_paths,
+                        source_path.as_deref(),
+                    )
+                };
+
+                let search_paths: Vec<String> = context.include_paths.clone();
+
+                let mut diagnostics = provider
                     .get_diagnostics_with_path(
                         &ast,
                         &parse_errors,
                         content,
-                        None,
-                        &[],
+                        Some(&resolver),
+                        &search_paths,
                         source_path.as_deref(),
                     )
                     .into_iter()
-                    .map(|d| self.to_lsp_diagnostic(uri, content, d))
-                    .collect()
+                    .map(|d| self.to_lsp_diagnostic_with_context(uri, content, d, context))
+                    .collect::<Vec<_>>();
+
+                // Add built-in Perl::Critic policy violations
+                self.add_builtin_critic_diagnostics(uri, &ast, content, &mut diagnostics);
+
+                diagnostics
             }
-            Err(error) => vec![self.parse_error_to_diagnostic(uri, content, &error)],
+            Err(error) => {
+                vec![self.parse_error_to_diagnostic_with_context(uri, content, &error, context)]
+            }
         }
     }
 
-    fn collect_diagnostics_for_state(
+    /// Resolve a module to a path using the provided include paths.
+    fn resolve_module_with_paths(
+        &self,
+        module: &str,
+        include_paths: &[String],
+        source_path: Option<&std::path::Path>,
+    ) -> bool {
+        // Convert module name to path
+        let module_path = module.replace("::", "/") + ".pm";
+
+        // Check include paths
+        for path in include_paths {
+            let full_path = std::path::Path::new(path).join(&module_path);
+            if full_path.exists() {
+                return true;
+            }
+        }
+
+        // Check relative to source file
+        if let Some(source) = source_path {
+            if let Some(parent) = source.parent() {
+                let relative_path = parent.join(&module_path);
+                if relative_path.exists() {
+                    return true;
+                }
+            }
+        }
+
+        false
+    }
+
+    /// Add built-in Perl::Critic policy diagnostics.
+    fn add_builtin_critic_diagnostics(
+        &self,
+        uri: &Uri,
+        ast: &std::sync::Arc<perl_parser::ast::Node>,
+        content: &str,
+        diagnostics: &mut Vec<LspDiagnostic>,
+    ) {
+        use perl_parser::perl_critic::BuiltInAnalyzer;
+
+        let built_in_analyzer = BuiltInAnalyzer::new();
+        let violations = built_in_analyzer.analyze(ast, content);
+
+        for violation in violations {
+            let lsp_severity = violation.severity.to_diagnostic_severity();
+            let internal_severity = match lsp_severity {
+                lsp_types::DiagnosticSeverity::ERROR => InternalDiagnosticSeverity::Error,
+                lsp_types::DiagnosticSeverity::WARNING => InternalDiagnosticSeverity::Warning,
+                lsp_types::DiagnosticSeverity::INFORMATION => {
+                    InternalDiagnosticSeverity::Information
+                }
+                lsp_types::DiagnosticSeverity::HINT => InternalDiagnosticSeverity::Hint,
+                _ => InternalDiagnosticSeverity::Hint,
+            };
+
+            let internal_diag = InternalDiagnostic {
+                range: (violation.range.start.byte, violation.range.end.byte),
+                severity: internal_severity,
+                code: Some(violation.policy.clone()),
+                message: violation.description.clone(),
+                related_information: Vec::new(),
+                tags: Vec::new(),
+                suggestion: None,
+            };
+
+            diagnostics.push(self.to_lsp_diagnostic(uri, content, internal_diag));
+        }
+    }
+
+    fn collect_diagnostics_for_state_with_context(
         &self,
         uri: &Uri,
         doc_state: &DocumentState,
+        context: &PullDiagnosticsContext,
     ) -> Vec<LspDiagnostic> {
         if let Some(ast) = &doc_state.ast {
             let provider = DiagnosticsProvider::new(ast, doc_state.text.clone());
             let source_path =
                 url::Url::parse(&uri.to_string()).ok().and_then(|value| value.to_file_path().ok());
-            provider
+
+            // Build module resolver using context include_paths
+            let resolver = |module: &str| {
+                self.resolve_module_with_paths(
+                    module,
+                    &context.include_paths,
+                    source_path.as_deref(),
+                )
+            };
+
+            let search_paths: Vec<String> = context.include_paths.clone();
+
+            let mut diagnostics = provider
                 .get_diagnostics_with_path(
                     ast,
                     &doc_state.parse_errors,
                     &doc_state.text,
-                    None,
-                    &[],
+                    Some(&resolver),
+                    &search_paths,
                     source_path.as_deref(),
                 )
                 .into_iter()
-                .map(|d| self.to_lsp_diagnostic(uri, &doc_state.text, d))
-                .collect()
+                .map(|d| self.to_lsp_diagnostic_with_context(uri, &doc_state.text, d, context))
+                .collect::<Vec<_>>();
+
+            // Add built-in Perl::Critic policy violations
+            self.add_builtin_critic_diagnostics(uri, ast, &doc_state.text, &mut diagnostics);
+
+            // Add dead code diagnostics from workspace-wide symbol analysis
+            #[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
+            {
+                if let Some(ref workspace_index) = context.workspace_index {
+                    let dead_code_diags = perl_lsp_diagnostics::detect_dead_code(
+                        workspace_index,
+                        &uri.to_string(),
+                        &doc_state.text,
+                        &doc_state.line_starts,
+                    );
+                    // Convert dead code diagnostics to LSP format
+                    for d in dead_code_diags {
+                        diagnostics.push(self.internal_to_lsp_diagnostic(
+                            uri,
+                            &doc_state.text,
+                            d,
+                            context,
+                        ));
+                    }
+                }
+            }
+
+            diagnostics
         } else if doc_state.parse_errors.is_empty() {
             Vec::new()
         } else {
             doc_state
                 .parse_errors
                 .iter()
-                .map(|error| self.parse_error_to_diagnostic(uri, &doc_state.text, error))
+                .map(|error| {
+                    self.parse_error_to_diagnostic_with_context(
+                        uri,
+                        &doc_state.text,
+                        error,
+                        context,
+                    )
+                })
                 .collect()
         }
     }
@@ -292,11 +557,179 @@ impl PullDiagnosticsProvider {
         }
     }
 
+    /// Convert internal diagnostic to LSP diagnostic with context support.
+    fn to_lsp_diagnostic_with_context(
+        &self,
+        uri: &Uri,
+        text: &str,
+        diagnostic: InternalDiagnostic,
+        context: &PullDiagnosticsContext,
+    ) -> LspDiagnostic {
+        let range = lsp_range_from_offsets(text, diagnostic.range.0, diagnostic.range.1);
+        let severity = Some(to_lsp_severity(diagnostic.severity));
+        let code = diagnostic.code.map(NumberOrString::String);
+        let code_for_source = code.clone();
+        let related_information =
+            to_lsp_related_information(uri, text, &diagnostic.related_information);
+
+        // Collect tag strings before diagnostic is partially moved by the suggestion match
+        let tag_strings: Vec<String> = diagnostic
+            .tags
+            .iter()
+            .map(|t| match t {
+                InternalDiagnosticTag::Unnecessary => "Unnecessary".to_string(),
+                InternalDiagnosticTag::Deprecated => "Deprecated".to_string(),
+            })
+            .collect();
+        let tags = to_lsp_tags(&diagnostic.tags);
+
+        // Append the suggestion to the message when present so users see it inline
+        let message = match diagnostic.suggestion {
+            Some(ref suggestion) => format!("{}\nSuggestion: {}", diagnostic.message, suggestion),
+            None => diagnostic.message.clone(),
+        };
+
+        let data = code.as_ref().and_then(|c| {
+            if let NumberOrString::String(code_str) = c {
+                let category = DiagnosticCode::parse_code(code_str)
+                    .map(|dc| format!("{:?}", dc.category()))
+                    .unwrap_or_else(|| {
+                        // Check if it's a perlcritic policy
+                        if code_str.contains("::") {
+                            "PerlCritic".to_string()
+                        } else {
+                            "Other".to_string()
+                        }
+                    });
+                let fixable = is_fixable_diagnostic(code_str);
+                let data_obj = DiagnosticData {
+                    code: code_str.clone(),
+                    category,
+                    fixable,
+                    tags: tag_strings.clone(),
+                };
+
+                // Add LSP 3.18 markup message support if enabled
+                if context.markup_message_support {
+                    let markdown = format!("**{}**: {}", code_str, diagnostic.message);
+                    return serde_json::to_value(data_obj).ok().map(|mut v| {
+                        v["messageMarkup"] = serde_json::json!({
+                            "kind": "markdown",
+                            "value": markdown
+                        });
+                        v
+                    });
+                }
+
+                serde_json::to_value(data_obj).ok()
+            } else {
+                None
+            }
+        });
+
+        LspDiagnostic {
+            range,
+            severity,
+            code,
+            code_description: None,
+            source: diagnostic_source(code_for_source.as_ref()),
+            message,
+            related_information,
+            tags,
+            data,
+        }
+    }
+
+    /// Convert internal diagnostic from perl-lsp-diagnostics crate to LSP diagnostic.
+    fn internal_to_lsp_diagnostic(
+        &self,
+        _uri: &Uri,
+        text: &str,
+        diagnostic: perl_lsp_diagnostics::Diagnostic,
+        context: &PullDiagnosticsContext,
+    ) -> LspDiagnostic {
+        let range = lsp_range_from_offsets(text, diagnostic.range.0, diagnostic.range.1);
+        let severity = Some(to_lsp_severity(diagnostic.severity));
+        let code = diagnostic.code.map(NumberOrString::String);
+        let code_for_source = code.clone();
+        let tags = to_lsp_tags(&diagnostic.tags);
+
+        // Collect tag strings
+        let tag_strings: Vec<String> = diagnostic
+            .tags
+            .iter()
+            .map(|t| match t {
+                perl_lsp_diagnostics::DiagnosticTag::Unnecessary => "Unnecessary".to_string(),
+                perl_lsp_diagnostics::DiagnosticTag::Deprecated => "Deprecated".to_string(),
+            })
+            .collect();
+
+        let message = match diagnostic.suggestion {
+            Some(ref suggestion) => format!("{}\nSuggestion: {}", diagnostic.message, suggestion),
+            None => diagnostic.message.clone(),
+        };
+
+        let data = code.as_ref().and_then(|c| {
+            if let NumberOrString::String(code_str) = c {
+                let category = DiagnosticCode::parse_code(code_str)
+                    .map(|dc| format!("{:?}", dc.category()))
+                    .unwrap_or_else(|| "Other".to_string());
+                let fixable = is_fixable_diagnostic(code_str);
+                let data_obj = DiagnosticData {
+                    code: code_str.clone(),
+                    category,
+                    fixable,
+                    tags: tag_strings.clone(),
+                };
+
+                // Add LSP 3.18 markup message support if enabled
+                if context.markup_message_support {
+                    let markdown = format!("**{}**: {}", code_str, diagnostic.message);
+                    return serde_json::to_value(data_obj).ok().map(|mut v| {
+                        v["messageMarkup"] = serde_json::json!({
+                            "kind": "markdown",
+                            "value": markdown
+                        });
+                        v
+                    });
+                }
+
+                serde_json::to_value(data_obj).ok()
+            } else {
+                None
+            }
+        });
+
+        LspDiagnostic {
+            range,
+            severity,
+            code,
+            code_description: None,
+            source: diagnostic_source(code_for_source.as_ref()),
+            message,
+            related_information: None,
+            tags,
+            data,
+        }
+    }
+
+    #[cfg(test)]
     fn parse_error_to_diagnostic(
         &self,
         uri: &Uri,
         text: &str,
         error: &ParseError,
+    ) -> LspDiagnostic {
+        let context = PullDiagnosticsContext::new();
+        self.parse_error_to_diagnostic_with_context(uri, text, error, &context)
+    }
+
+    fn parse_error_to_diagnostic_with_context(
+        &self,
+        uri: &Uri,
+        text: &str,
+        error: &ParseError,
+        context: &PullDiagnosticsContext,
     ) -> LspDiagnostic {
         let (offset, base_message) = match error {
             ParseError::UnexpectedToken { location, expected, found } => {
@@ -321,16 +754,27 @@ impl PullDiagnosticsProvider {
 
         let code = parse_error_code(error);
         let code_str = code.as_str();
-        let data = serde_json::to_value(DiagnosticData {
+
+        let data_obj = DiagnosticData {
             code: code_str.to_string(),
             category: format!("{:?}", code.category()),
             fixable: is_fixable_diagnostic(code_str),
             tags: vec![],
-        })
-        .map_err(|e| {
-            tracing::warn!(error = %e, "pull diagnostics: failed to serialize diagnostic data");
-        })
-        .ok();
+        };
+
+        // Add LSP 3.18 markup message support if enabled
+        let data = if context.markup_message_support {
+            let markdown = format!("**{}**: {}", code_str, message);
+            serde_json::to_value(data_obj).ok().map(|mut v| {
+                v["messageMarkup"] = serde_json::json!({
+                    "kind": "markdown",
+                    "value": markdown
+                });
+                v
+            })
+        } else {
+            serde_json::to_value(data_obj).ok()
+        };
 
         LspDiagnostic {
             range,
@@ -458,6 +902,21 @@ fn is_fixable_diagnostic(code: &str) -> bool {
                 | DiagnosticCode::MissingReturn
         )
     )
+}
+
+/// Determine the diagnostic source based on the code.
+fn diagnostic_source(code: Option<&NumberOrString>) -> Option<String> {
+    match code {
+        Some(NumberOrString::String(code_str)) => {
+            // Perl::Critic policies contain "::" and are not in our DiagnosticCode enum
+            if code_str.contains("::") && DiagnosticCode::parse_code(code_str).is_none() {
+                Some("perlcritic".to_string())
+            } else {
+                Some("perl-lsp".to_string())
+            }
+        }
+        _ => Some("perl-lsp".to_string()),
+    }
 }
 
 #[cfg(test)]
