@@ -22,14 +22,13 @@ fn given_parent_and_base_statements_when_module_is_renamed_then_all_references_a
 }
 
 #[test]
-fn given_non_import_lines_when_module_is_renamed_then_source_is_unchanged() {
+fn given_package_and_string_literal_when_module_is_renamed_then_only_package_is_rewritten() {
     let source = "package My::Module;\nmy $s = 'My::Module';\n";
 
     let edits = plan_module_rename_edits(source, "My::Module", "My::Renamed");
     let rewritten = apply_module_rename_edits(source, &edits);
 
-    assert!(edits.is_empty());
-    assert_eq!(rewritten, source);
+    assert_eq!(rewritten, "package My::Renamed;\nmy $s = 'My::Module';\n");
 }
 
 #[test]

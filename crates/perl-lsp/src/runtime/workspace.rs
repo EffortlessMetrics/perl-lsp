@@ -884,6 +884,21 @@ impl LspServer {
                     let new_module = path_to_module_name(new_uri);
 
                     if !old_module.is_empty() && !new_module.is_empty() {
+                        if !planned_workspace_texts.contains_key(old_uri) {
+                            if let Some(text) = self.read_workspace_text(old_uri) {
+                                planned_workspace_texts
+                                    .insert(old_uri.to_string(), (text.clone(), text));
+                            }
+                        }
+
+                        if let Some((_, current_text)) = planned_workspace_texts.get_mut(old_uri) {
+                            let planned =
+                                plan_module_rename_edits(current_text, &old_module, &new_module);
+                            if !planned.is_empty() {
+                                *current_text = apply_module_rename_edits(current_text, &planned);
+                            }
+                        }
+
                         // Find all files that reference the old module
                         // Note: Query operation - use coordinator.index() for consistency
                         #[cfg(feature = "workspace")]
@@ -1817,6 +1832,34 @@ fn collect_cross_file_delete_dependents(
         for dependent_uri in index.find_dependents(&module_name) {
             if dependent_uri != normalized_uri && !deleting_uris.contains(&dependent_uri) {
                 dependents.insert(dependent_uri);
+            }
+        }
+    }
+
+    for symbol in index.file_symbols(uri) {
+        let is_cross_file_symbol = matches!(
+            symbol.kind,
+            SymbolKind::Subroutine | SymbolKind::Method | SymbolKind::Constant
+        );
+        if !is_cross_file_symbol {
+            continue;
+        }
+
+        let mut symbol_names = std::collections::BTreeSet::new();
+        if !symbol.name.is_empty() {
+            symbol_names.insert(symbol.name.clone());
+        }
+        if let Some(qualified_name) = symbol.qualified_name.as_ref() {
+            if !qualified_name.is_empty() {
+                symbol_names.insert(qualified_name.clone());
+            }
+        }
+
+        for symbol_name in symbol_names {
+            for location in index.find_references(&symbol_name) {
+                if location.uri != normalized_uri && !deleting_uris.contains(&location.uri) {
+                    dependents.insert(location.uri);
+                }
             }
         }
     }

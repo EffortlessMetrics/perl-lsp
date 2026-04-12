@@ -29,6 +29,7 @@ pub struct ModuleLineEdit {
 /// Supported import forms:
 /// - `use Module::Name;`
 /// - `require Module::Name;`
+/// - `package Module::Name;`
 /// - `use parent 'Module::Name';`
 /// - `use parent "Module::Name";`
 /// - `use parent qw(Module::Name Other);`
@@ -81,6 +82,18 @@ pub fn plan_module_rename_edits(
                 }
             }
 
+            // Check package declarations in moved module files.
+            {
+                let current_line = rewritten.as_deref().unwrap_or(line);
+                if line_references_package_declaration(current_line, old_variant) {
+                    let (candidate, changed) =
+                        replace_module_token(current_line, old_variant, new_variant);
+                    if changed {
+                        rewritten = Some(candidate);
+                    }
+                }
+            }
+
             // Check @ISA assignments: module name appears standalone in the line
             // (e.g. `@ISA = ('Foo::Bar')`, `our @ISA = qw(Foo::Bar)`)
             {
@@ -119,6 +132,21 @@ pub fn plan_module_rename_edits(
     }
 
     edits
+}
+
+/// Return `true` when `line` contains a `package` declaration that references
+/// `module_name` as a standalone token.
+#[must_use]
+pub fn line_references_package_declaration(line: &str, module_name: &str) -> bool {
+    if line.is_empty() || module_name.is_empty() {
+        return false;
+    }
+    let trimmed = line.trim_start();
+    if !trimmed.starts_with("package ") {
+        return false;
+    }
+
+    perl_module_token::contains_module_token(trimmed, module_name)
 }
 
 /// Return `true` when `line` contains an `@ISA` assignment that references
@@ -280,7 +308,8 @@ pub fn apply_module_rename_edits(source: &str, edits: &[ModuleLineEdit]) -> Stri
 mod tests {
     use super::{
         ModuleLineEdit, apply_module_rename_edits, line_references_isa_assignment,
-        line_references_qualified_call, plan_module_rename_edits, replace_module_name_prefix,
+        line_references_package_declaration, line_references_qualified_call,
+        plan_module_rename_edits, replace_module_name_prefix,
     };
     use perl_module_token::{module_variant_pairs, replace_module_token};
 
@@ -385,6 +414,19 @@ mod tests {
             "Expected rewrite of use parent 'MyBase' to 'RenamedBase', got: {:?}",
             rewritten
         );
+    }
+
+    #[test]
+    fn package_declaration_detected() {
+        assert!(line_references_package_declaration("package Foo::Bar;", "Foo::Bar"));
+    }
+
+    #[test]
+    fn package_declaration_rewritten() {
+        let source = "package Foo::Bar;\n1;\n";
+        let edits = plan_module_rename_edits(source, "Foo::Bar", "Renamed::Pkg");
+        let rewritten = apply_module_rename_edits(source, &edits);
+        assert_eq!(rewritten, "package Renamed::Pkg;\n1;\n");
     }
 
     // ── @ISA assignment detection ─────────────────────────────────────────────

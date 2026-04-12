@@ -1196,12 +1196,11 @@ fn test_will_rename_files_pure_parent_only() -> Result<(), Box<dyn std::error::E
     Ok(())
 }
 
-/// Regression test: renaming a module whose own file is open must NOT appear in
-/// `changes` (the package file itself does not need a `use` line rewrite).
-/// Previously the warning-detection code could false-positive on `package OldModule;`
-/// inside the old file because it was not excluded from the unhandled-documents scan.
+/// Regression test: renaming a module rewrites the renamed file's package declaration
+/// in the same workspace edit so moved modules keep package and path aligned.
 #[test]
-fn test_will_rename_files_old_uri_not_in_changes() -> Result<(), Box<dyn std::error::Error>> {
+fn test_will_rename_files_rewrites_renamed_package_file() -> Result<(), Box<dyn std::error::Error>>
+{
     let server = create_test_server();
 
     let init_params = json!({
@@ -1235,11 +1234,75 @@ fn test_will_rename_files_old_uri_not_in_changes() -> Result<(), Box<dyn std::er
     let changes =
         edit.get("changes").and_then(Value::as_object).ok_or("expected changes object")?;
 
-    // Solo.pm itself should NOT be in the changes map — it contains `package Solo;`
-    // but that line is not a `use Solo;` import that needs rewriting.
+    let solo_changes = changes
+        .get("file:///test/workspace/lib/Solo.pm")
+        .and_then(Value::as_array)
+        .ok_or("expected edits for renamed package file")?;
+
+    let new_texts: Vec<String> = solo_changes
+        .iter()
+        .filter_map(|entry| entry.get("newText").and_then(Value::as_str).map(ToString::to_string))
+        .collect();
+
     assert!(
-        !changes.contains_key("file:///test/workspace/lib/Solo.pm"),
-        "the renamed file itself should not appear as a change target: {changes:?}"
+        new_texts.contains(&"package Renamed;".to_string()),
+        "expected package declaration rewrite in renamed file edits: {new_texts:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn test_will_delete_files_warns_for_cross_file_subroutine_usage()
+-> Result<(), Box<dyn std::error::Error>> {
+    let (server, output) = create_test_server_with_output();
+
+    let init_params = json!({
+        "processId": 1234,
+        "rootUri": "file:///test/workspace",
+        "capabilities": {}
+    });
+    let _ = make_request(&server, "initialize", Some(init_params));
+    send_initialized(&server);
+    output.clear();
+
+    let module_open = json!({
+        "textDocument": {
+            "uri": "file:///test/workspace/lib/My/Math.pm",
+            "languageId": "perl",
+            "version": 1,
+            "text": "package My::Math;\nsub add { return $_[0] + $_[1]; }\n1;\n"
+        }
+    });
+    let _ = make_request(&server, "textDocument/didOpen", Some(module_open));
+
+    let dependent_open = json!({
+        "textDocument": {
+            "uri": "file:///test/workspace/main.pl",
+            "languageId": "perl",
+            "version": 1,
+            "text": "use My::Math;\nprint My::Math::add(2, 3);\n"
+        }
+    });
+    let _ = make_request(&server, "textDocument/didOpen", Some(dependent_open));
+    output.clear();
+
+    let params = json!({
+        "files": [
+            { "uri": "file:///test/workspace/lib/My/Math.pm" }
+        ]
+    });
+
+    let edit = make_request(&server, "workspace/willDeleteFiles", Some(params))?
+        .ok_or("expected workspace edit response")?;
+    assert!(edit.is_object());
+
+    let message = wait_for_method(&output, "window/showMessage")
+        .ok_or("expected safe-delete warning notification")?;
+    let message_text =
+        message["params"]["message"].as_str().ok_or("expected warning message text")?;
+    assert!(
+        message_text.contains("My/Math.pm") || message_text.contains("Math.pm"),
+        "expected warning message mentioning deleted file, got: {message_text}"
     );
     Ok(())
 }
