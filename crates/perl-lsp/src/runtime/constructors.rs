@@ -58,6 +58,8 @@ impl LspServer {
             semantic_analyzer_cache: Arc::new(Mutex::new(HashMap::new())),
             #[cfg(feature = "workspace")]
             indexing_in_progress: Arc::new(AtomicBool::new(false)),
+            #[cfg(feature = "workspace")]
+            permission_denied_shown: Arc::new(AtomicBool::new(false)),
             #[cfg(not(target_arch = "wasm32"))]
             critic_analyzer: Mutex::new(None),
             #[cfg(not(target_arch = "wasm32"))]
@@ -164,6 +166,8 @@ impl LspServer {
             semantic_analyzer_cache: Arc::new(Mutex::new(HashMap::new())),
             #[cfg(feature = "workspace")]
             indexing_in_progress: Arc::new(AtomicBool::new(false)),
+            #[cfg(feature = "workspace")]
+            permission_denied_shown: Arc::new(AtomicBool::new(false)),
             #[cfg(not(target_arch = "wasm32"))]
             critic_analyzer: Mutex::new(None),
             #[cfg(not(target_arch = "wasm32"))]
@@ -233,6 +237,8 @@ impl LspServer {
             semantic_analyzer_cache: Arc::new(Mutex::new(HashMap::new())),
             #[cfg(feature = "workspace")]
             indexing_in_progress: Arc::new(AtomicBool::new(false)),
+            #[cfg(feature = "workspace")]
+            permission_denied_shown: Arc::new(AtomicBool::new(false)),
             #[cfg(not(target_arch = "wasm32"))]
             critic_analyzer: Mutex::new(None),
             #[cfg(not(target_arch = "wasm32"))]

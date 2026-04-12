@@ -267,6 +267,14 @@ pub struct LspServer {
     /// exit paths including panics).
     #[cfg(feature = "workspace")]
     indexing_in_progress: Arc<AtomicBool>,
+    /// One-time guard for the `window/showMessage` permission-denied warning.
+    ///
+    /// Set to `true` after the first permission-denied file is encountered during
+    /// workspace indexing so the user is not spammed when multiple files are
+    /// unreadable.  The per-file `textDocument/publishDiagnostics` is NOT gated
+    /// by this flag — it repeats for every affected file.
+    #[cfg(feature = "workspace")]
+    permission_denied_shown: Arc<AtomicBool>,
     /// Shared Perl::Critic analyzer for the diagnostic pipeline.
     ///
     /// Lazily initialized on first use and reused across diagnostic cycles so
