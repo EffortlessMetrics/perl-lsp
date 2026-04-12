@@ -1072,10 +1072,7 @@ fn count_perl_files(dir: &Path) -> usize {
         .filter_map(|e| e.ok())
         .filter(|e| {
             e.file_type().is_file()
-                && e.path()
-                    .extension()
-                    .map(|ext| ext == "pl" || ext == "pm")
-                    .unwrap_or(false)
+                && e.path().extension().map(|ext| ext == "pl" || ext == "pm").unwrap_or(false)
         })
         .count()
 }
@@ -1110,10 +1107,9 @@ fn generate_workspace_status(root: &Path, original: &str) -> Result<String> {
         .to_string();
 
     // Multi-root row (8 tests from PR #4137)
-    let multiroot_row =
-        "| **Multi-root integration tests** | 8 / 8 tests | 8 / 8 | \
+    let multiroot_row = "| **Multi-root integration tests** | 8 / 8 tests | 8 / 8 | \
          `just ci-workspace-multiroot` (nightly gate) |"
-            .to_string();
+        .to_string();
 
     // Fixture table — xlarge count is "~10 000 (generated)" since it is not committed.
     let fixtures_table = format!(
@@ -1703,10 +1699,7 @@ mod tests {
             );
         }
         // Key content checks
-        assert!(
-            result.contains("perl-workspace-index-slo"),
-            "SLO table must reference slo crate"
-        );
+        assert!(result.contains("perl-workspace-index-slo"), "SLO table must reference slo crate");
         assert!(result.contains("small"), "fixtures table must list small workspace");
         assert!(result.contains("xlarge"), "fixtures table must list xlarge workspace");
         Ok(())
