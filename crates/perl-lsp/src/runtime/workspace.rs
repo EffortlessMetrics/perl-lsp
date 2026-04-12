@@ -1087,6 +1087,11 @@ impl LspServer {
                             &deleting_uris,
                             &open_documents,
                         ));
+                        dependents.extend(collect_symbol_reference_delete_dependents(
+                            idx,
+                            uri,
+                            &deleting_uris,
+                        ));
                         let dependents: Vec<String> = dependents.into_iter().collect();
 
                         if !dependents.is_empty() {
@@ -1845,6 +1850,39 @@ fn collect_open_document_delete_dependents(
             !plan_module_rename_edits(text, module_name, "__PerlLspDeleteProbe__").is_empty()
         }) {
             dependents.insert(normalized_doc_uri);
+        }
+    }
+
+    dependents
+}
+
+#[cfg(feature = "workspace")]
+fn collect_symbol_reference_delete_dependents(
+    index: &perl_parser::workspace_index::WorkspaceIndex,
+    uri: &str,
+    deleting_uris: &std::collections::HashSet<String>,
+) -> std::collections::BTreeSet<String> {
+    let normalized_uri = perl_parser::workspace_index::uri_key(uri);
+    let mut dependents = std::collections::BTreeSet::new();
+
+    for symbol in index.file_symbols(uri) {
+        let mut names = std::collections::BTreeSet::new();
+        if !symbol.name.is_empty() {
+            names.insert(symbol.name.clone());
+        }
+        if let Some(qualified_name) = symbol.qualified_name {
+            if !qualified_name.is_empty() {
+                names.insert(qualified_name);
+            }
+        }
+
+        for symbol_name in names {
+            for reference in index.find_references(&symbol_name) {
+                let reference_uri = perl_parser::workspace_index::uri_key(&reference.uri);
+                if reference_uri != normalized_uri && !deleting_uris.contains(&reference_uri) {
+                    dependents.insert(reference_uri);
+                }
+            }
         }
     }
 
