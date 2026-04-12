@@ -173,8 +173,11 @@ impl LspServer {
             return;
         }
 
-        let items: Vec<Value> =
-            folder_uris.iter().map(|uri| json!({ "scopeUri": uri, "section": "perl" })).collect();
+        // Request a global `perl` section first, followed by per-folder scoped items.
+        // The response array order must match this request order.
+        let mut items: Vec<Value> = Vec::with_capacity(folder_uris.len() + 1);
+        items.push(json!({ "section": "perl" }));
+        items.extend(folder_uris.iter().map(|uri| json!({ "scopeUri": uri, "section": "perl" })));
         let request_id = self.next_request_id.fetch_add(1, Ordering::Relaxed);
 
         if let Err(error) = self.outbound.send_request(
@@ -212,6 +215,7 @@ impl LspServer {
         }
 
         let results = params.get("result").and_then(Value::as_array).cloned().unwrap_or_default();
+        let global_perl_settings = results.first();
 
         let mut folders = self.workspace_folders.lock();
         for (idx, folder_uri) in folder_uris.iter().enumerate() {
@@ -224,7 +228,11 @@ impl LspServer {
                 project_config.apply_to_workspace_config(&mut effective_config);
             }
 
-            if let Some(perl_settings) = results.get(idx) {
+            if let Some(perl_settings) = global_perl_settings {
+                effective_config.update_from_value(perl_settings);
+            }
+
+            if let Some(perl_settings) = results.get(idx + 1) {
                 effective_config.update_from_value(perl_settings);
             }
 
@@ -673,6 +681,20 @@ impl LspServer {
                         let mut workspace_config = self.workspace_config.lock();
                         workspace_config.update_from_value(perl);
                         tracing::debug!("Updated workspace config from perl settings");
+                    }
+
+                    // Apply global client settings as the highest-precedence
+                    // layer for each folder until a scoped pull-config value arrives.
+                    {
+                        let mut folders = self.workspace_folders.lock();
+                        for folder in folders.iter_mut() {
+                            let mut effective_config = WorkspaceConfig::default();
+                            if let Some(project_config) = &folder.project_config {
+                                project_config.apply_to_workspace_config(&mut effective_config);
+                            }
+                            effective_config.update_from_value(perl);
+                            folder.effective_workspace_config = effective_config;
+                        }
                     }
 
                     // Refresh AI backend when config changes (constructs or clears provider)
