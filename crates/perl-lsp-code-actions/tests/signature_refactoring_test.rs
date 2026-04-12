@@ -312,14 +312,21 @@ fn add_parameter_qualified_call_sites_are_updated() {
         .find(|a| a.title == "Add parameter to signature")
         .expect("Expected add-parameter action");
 
-    // At minimum the bare call foo(1) must appear in edits (signature + 1 call = 2 edits)
-    assert!(
-        action.edit.changes.len() >= 2,
-        "Expected at least 2 edits (sig + bare call), got {}",
-        action.edit.changes.len()
+    // Expected edits: signature + foo(1) + main::foo(2) = 3 total
+    assert_eq!(
+        action.edit.changes.len(),
+        3,
+        "Expected exactly 3 edits (sig + 2 call sites), got {}: {:?}",
+        action.edit.changes.len(),
+        action.edit.changes.iter().map(|e| (&e.location, &e.new_text)).collect::<Vec<_>>()
     );
     let result = apply_edits(source, action);
     assert!(result.contains("foo(1, {})"), "bare call not updated in:\n{}", result);
+    assert!(
+        result.contains("main::foo(2, {})"),
+        "qualified call main::foo(2) not updated in:\n{}",
+        result
+    );
 }
 
 #[test]
