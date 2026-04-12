@@ -160,8 +160,47 @@ impl Drop for IndexingGuard {
 }
 
 impl LspServer {
+    pub(crate) fn build_effective_workspace_config(
+        &self,
+        folder: &WorkspaceFolderState,
+        client_global: Option<&Value>,
+        client_folder: Option<&Value>,
+    ) -> perl_lsp_config::WorkspaceConfig {
+        // Merge precedence:
+        // 1) built-in defaults (WorkspaceConfig::default)
+        // 2) static server/runtime config (self.workspace_config)
+        // 3) .perl-lsp.toml
+        // 4) client global workspace/configuration
+        // 5) client folder-scoped workspace/configuration
+        let mut effective = self.workspace_config.lock().clone();
+        if let Some(project_config) = &folder.project_config {
+            project_config.apply_to_workspace_config(&mut effective);
+        }
+        if let Some(value) = client_global {
+            effective.update_from_value(value);
+        }
+        if let Some(value) = client_folder {
+            effective.update_from_value(value);
+        }
+        effective
+    }
+
+    fn clear_client_overrides_and_recompute_effective(&self) {
+        let mut folders = self.workspace_folders.lock();
+        for folder in folders.iter_mut() {
+            folder.effective_workspace_config =
+                self.build_effective_workspace_config(folder, None, None);
+        }
+    }
+
     /// Request `workspace/configuration` for each workspace folder (if supported).
     pub(crate) fn request_workspace_configuration_for_folders(&self) {
+        if !self.initialized.load(Ordering::Acquire) {
+            tracing::debug!(
+                "Skipping workspace/configuration request until initialization is complete"
+            );
+            return;
+        }
         if !self.client_capabilities.lock().workspace_configuration_support {
             tracing::debug!("Client does not support workspace/configuration; using local config");
             return;
@@ -173,8 +212,10 @@ impl LspServer {
             return;
         }
 
-        let items: Vec<Value> =
-            folder_uris.iter().map(|uri| json!({ "scopeUri": uri, "section": "perl" })).collect();
+        let mut items: Vec<Value> = Vec::with_capacity(folder_uris.len() + 1);
+        // Global section first, then per-folder scoped section(s).
+        items.push(json!({ "section": "perl" }));
+        items.extend(folder_uris.iter().map(|uri| json!({ "scopeUri": uri, "section": "perl" })));
         let request_id = self.next_request_id.fetch_add(1, Ordering::Relaxed);
 
         if let Err(error) = self.outbound.send_request(
@@ -186,7 +227,10 @@ impl LspServer {
             return;
         }
 
-        self.pending_workspace_configuration_requests.lock().insert(request_id, folder_uris);
+        self.pending_workspace_configuration_requests.lock().insert(
+            request_id,
+            PendingWorkspaceConfigurationRequest { includes_global: true, folder_uris },
+        );
     }
 
     /// Apply a `workspace/configuration` response for a previously sent request.
@@ -198,8 +242,8 @@ impl LspServer {
             return;
         };
 
-        let maybe_folder_uris = self.pending_workspace_configuration_requests.lock().remove(&id);
-        let Some(folder_uris) = maybe_folder_uris else {
+        let maybe_request = self.pending_workspace_configuration_requests.lock().remove(&id);
+        let Some(request_ctx) = maybe_request else {
             return;
         };
 
@@ -213,22 +257,17 @@ impl LspServer {
 
         let results = params.get("result").and_then(Value::as_array).cloned().unwrap_or_default();
 
+        let global_offset = usize::from(request_ctx.includes_global);
+        let global_settings = if request_ctx.includes_global { results.first() } else { None };
+
         let mut folders = self.workspace_folders.lock();
-        for (idx, folder_uri) in folder_uris.iter().enumerate() {
+        for (idx, folder_uri) in request_ctx.folder_uris.iter().enumerate() {
             let Some(folder) = folders.iter_mut().find(|folder| &folder.uri == folder_uri) else {
                 continue;
             };
-
-            let mut effective_config = perl_lsp_config::WorkspaceConfig::default();
-            if let Some(project_config) = &folder.project_config {
-                project_config.apply_to_workspace_config(&mut effective_config);
-            }
-
-            if let Some(perl_settings) = results.get(idx) {
-                effective_config.update_from_value(perl_settings);
-            }
-
-            folder.effective_workspace_config = effective_config;
+            let folder_settings = results.get(idx + global_offset);
+            folder.effective_workspace_config =
+                self.build_effective_workspace_config(folder, global_settings, folder_settings);
         }
     }
 
@@ -686,8 +725,9 @@ impl LspServer {
             }
         }
 
-        // Invalidate client-provided workspace/configuration values and re-fetch.
+        // Invalidate client-provided workspace/configuration values first, then re-fetch.
         self.pending_workspace_configuration_requests.lock().clear();
+        self.clear_client_overrides_and_recompute_effective();
         self.request_workspace_configuration_for_folders();
     }
 

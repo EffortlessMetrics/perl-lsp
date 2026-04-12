@@ -4,7 +4,6 @@
 
 use super::super::*;
 use perl_dap_platform::{PerlInterpreterResult, find_perl_interpreter};
-use perl_lsp_config::WorkspaceConfig;
 use std::sync::Once;
 
 /// Fires at most once per LSP session, when Perl is not found anywhere.
@@ -116,10 +115,8 @@ impl LspServer {
                             project_config.apply_to_server_config(&mut config);
                         }
 
-                        // Compute effective workspace config for this folder
-                        let mut effective_config = WorkspaceConfig::default();
-                        project_config.apply_to_workspace_config(&mut effective_config);
-                        folder.effective_workspace_config = effective_config;
+                        folder.effective_workspace_config =
+                            self.build_effective_workspace_config(folder, None, None);
                     }
                     Err(msg) => {
                         let user_msg = format!(
@@ -140,6 +137,11 @@ impl LspServer {
                         }
                     }
                 }
+            }
+
+            if folder.project_config.is_none() {
+                folder.effective_workspace_config =
+                    self.build_effective_workspace_config(folder, None, None);
             }
         }
 
@@ -330,14 +332,18 @@ include_paths = ["other_lib"]
                 .with_path(folder2.clone()),
         );
 
-        server
-            .pending_workspace_configuration_requests
-            .lock()
-            .insert(11, vec![uri1.clone(), uri2.clone()]);
+        server.pending_workspace_configuration_requests.lock().insert(
+            11,
+            crate::runtime::PendingWorkspaceConfigurationRequest {
+                includes_global: true,
+                folder_uris: vec![uri1.clone(), uri2.clone()],
+            },
+        );
 
         server.handle_client_response(Some(serde_json::json!({
             "id": 11,
             "result": [
+                { "workspace": { "includePaths": ["global_lib"] } },
                 { "workspace": { "includePaths": ["api_lib"] } },
                 { "workspace": { "includePaths": ["ui_lib"] } }
             ]

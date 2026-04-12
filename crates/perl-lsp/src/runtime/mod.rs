@@ -164,6 +164,14 @@ pub(crate) struct DocumentScanView {
     pub ast: Option<Arc<perl_parser::ast::Node>>,
 }
 
+#[derive(Debug, Clone)]
+pub(crate) struct PendingWorkspaceConfigurationRequest {
+    /// Global (unscoped) `section: "perl"` item, if requested.
+    pub(crate) includes_global: bool,
+    /// Folder URIs in request order for scoped items.
+    pub(crate) folder_uris: Vec<String>,
+}
+
 // Note: FQN_RE regex moved to language/navigation.rs
 
 // Note: Error codes and cancelled_response imported from crate::lsp::protocol
@@ -220,7 +228,8 @@ pub struct LspServer {
     /// Atomic counter for generating unique request IDs
     next_request_id: Arc<AtomicI64>,
     /// Pending workspace/configuration reverse requests keyed by request ID.
-    pending_workspace_configuration_requests: Arc<Mutex<HashMap<i64, Vec<String>>>>,
+    pending_workspace_configuration_requests:
+        Arc<Mutex<HashMap<i64, PendingWorkspaceConfigurationRequest>>>,
     /// Active progress tokens for work done progress tracking
     progress_tokens: Arc<Mutex<HashSet<String>>>,
     /// Maps progress tokens to their originating request IDs for cancellation routing
@@ -344,6 +353,20 @@ unsafe impl Sync for LspServer {}
 
 #[allow(dead_code)]
 impl LspServer {
+    fn best_folder_for_doc_uri<'a>(
+        folders: &'a [WorkspaceFolderState],
+        doc_uri: &str,
+    ) -> Option<&'a WorkspaceFolderState> {
+        folders
+            .iter()
+            .filter(|folder| workspace_folder_matches_doc_uri(folder, doc_uri))
+            .max_by_key(|folder| {
+                workspace_folder_path(folder)
+                    .map(|path| path.as_os_str().len())
+                    .unwrap_or_else(|| folder.uri.len())
+            })
+    }
+
     /// Active feature profile for this server instance.
     pub(crate) const fn feature_profile(&self) -> FeatureProfile {
         self.feature_profile
@@ -435,15 +458,12 @@ impl LspServer {
 
     /// Find the workspace folder containing a document URI.
     ///
-    /// Returns the first workspace folder whose URI is a prefix of the document URI.
+    /// Returns the most specific workspace folder that contains the document URI.
     /// Returns `None` if no workspace folder contains the document.
     #[must_use]
     pub fn folder_for_doc_uri(&self, doc_uri: &str) -> Option<WorkspaceFolderState> {
-        self.workspace_folders
-            .lock()
-            .iter()
-            .find(|folder| workspace_folder_matches_doc_uri(folder, doc_uri))
-            .cloned()
+        let folders = self.workspace_folders.lock();
+        Self::best_folder_for_doc_uri(&folders, doc_uri).cloned()
     }
 
     /// Get the effective workspace config for a document's folder.
@@ -452,10 +472,8 @@ impl LspServer {
     /// the document, or `None` if the document is not in any workspace folder.
     #[must_use]
     pub fn config_for_doc(&self, doc_uri: &str) -> Option<perl_lsp_config::WorkspaceConfig> {
-        self.workspace_folders
-            .lock()
-            .iter()
-            .find(|folder| workspace_folder_matches_doc_uri(folder, doc_uri))
+        let folders = self.workspace_folders.lock();
+        Self::best_folder_for_doc_uri(&folders, doc_uri)
             .map(|folder| folder.effective_workspace_config.clone())
     }
 
@@ -470,9 +488,7 @@ impl LspServer {
         let folders = self.workspace_folders.lock();
 
         // Add current folder's include paths first
-        if let Some(current_folder) =
-            folders.iter().find(|folder| workspace_folder_matches_doc_uri(folder, doc_uri))
-        {
+        if let Some(current_folder) = Self::best_folder_for_doc_uri(&folders, doc_uri) {
             for include_path in &current_folder.effective_workspace_config.include_paths {
                 // Resolve relative paths against the folder path
                 let resolved = if let Some(folder_path) = workspace_folder_path(current_folder) {
@@ -526,9 +542,7 @@ impl LspServer {
     #[must_use]
     pub fn search_scopes_for_doc(&self, doc_uri: &str) -> Vec<WorkspaceFolderState> {
         let folders = self.workspace_folders.lock();
-        if let Some(current_folder) =
-            folders.iter().find(|folder| workspace_folder_matches_doc_uri(folder, doc_uri))
-        {
+        if let Some(current_folder) = Self::best_folder_for_doc_uri(&folders, doc_uri) {
             let mut scopes = vec![current_folder.clone()];
             for folder in folders.iter() {
                 if folder.uri != current_folder.uri {
@@ -839,6 +853,24 @@ mod tests {
             &folder,
             "vscode-remote://ssh-remote+dev/workspace-other/lib/Foo.pm"
         ));
+    }
+
+    #[test]
+    fn folder_for_doc_uri_prefers_most_specific_workspace_folder() {
+        let server = LspServer::new();
+        server
+            .workspace_folders
+            .lock()
+            .push(WorkspaceFolderState::new("file:///workspace/project".to_string()));
+        server
+            .workspace_folders
+            .lock()
+            .push(WorkspaceFolderState::new("file:///workspace/project/backend".to_string()));
+
+        let folder = server
+            .folder_for_doc_uri("file:///workspace/project/backend/lib/App.pm")
+            .expect("expected folder");
+        assert_eq!(folder.uri, "file:///workspace/project/backend");
     }
 
     #[test]
