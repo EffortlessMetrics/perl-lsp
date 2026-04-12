@@ -173,8 +173,11 @@ impl LspServer {
             return;
         }
 
-        let items: Vec<Value> =
-            folder_uris.iter().map(|uri| json!({ "scopeUri": uri, "section": "perl" })).collect();
+        // Request order is significant: response items map positionally.
+        // We request a global `perl` section first, followed by one item per
+        // workspace folder (scoped by URI).
+        let mut items: Vec<Value> = vec![json!({ "section": "perl" })];
+        items.extend(folder_uris.iter().map(|uri| json!({ "scopeUri": uri, "section": "perl" })));
         let request_id = self.next_request_id.fetch_add(1, Ordering::Relaxed);
 
         if let Err(error) = self.outbound.send_request(
@@ -186,7 +189,10 @@ impl LspServer {
             return;
         }
 
-        self.pending_workspace_configuration_requests.lock().insert(request_id, folder_uris);
+        self.pending_workspace_configuration_requests.lock().insert(
+            request_id,
+            PendingWorkspaceConfigurationRequest { folder_uris, includes_global_item: true },
+        );
     }
 
     /// Apply a `workspace/configuration` response for a previously sent request.
@@ -199,7 +205,7 @@ impl LspServer {
         };
 
         let maybe_folder_uris = self.pending_workspace_configuration_requests.lock().remove(&id);
-        let Some(folder_uris) = maybe_folder_uris else {
+        let Some(request_meta) = maybe_folder_uris else {
             return;
         };
 
@@ -211,10 +217,25 @@ impl LspServer {
             return;
         }
 
-        let results = params.get("result").and_then(Value::as_array).cloned().unwrap_or_default();
+        let Some(results) = params.get("result").and_then(Value::as_array) else {
+            tracing::warn!(
+                request_id = id,
+                "workspace/configuration response missing array result; keeping TOML/default config"
+            );
+            return;
+        };
+
+        let mut next_index = 0usize;
+        let global_settings = if request_meta.includes_global_item {
+            let settings = results.first().cloned();
+            next_index = 1;
+            settings
+        } else {
+            None
+        };
 
         let mut folders = self.workspace_folders.lock();
-        for (idx, folder_uri) in folder_uris.iter().enumerate() {
+        for (idx, folder_uri) in request_meta.folder_uris.iter().enumerate() {
             let Some(folder) = folders.iter_mut().find(|folder| &folder.uri == folder_uri) else {
                 continue;
             };
@@ -224,7 +245,11 @@ impl LspServer {
                 project_config.apply_to_workspace_config(&mut effective_config);
             }
 
-            if let Some(perl_settings) = results.get(idx) {
+            if let Some(global_settings) = &global_settings {
+                effective_config.update_from_value(global_settings);
+            }
+
+            if let Some(perl_settings) = results.get(next_index + idx) {
                 effective_config.update_from_value(perl_settings);
             }
 
