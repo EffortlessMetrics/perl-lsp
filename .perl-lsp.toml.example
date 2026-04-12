@@ -58,9 +58,48 @@
 # inlay_hints = true
 
 # ── [formatting] ─────────────────────────────────────────────────────────────
-# Reserved for future perltidy configuration. Not yet active.
-# Keys in this section are silently ignored.
+# Perltidy formatting configuration. All keys are optional.
+#
+# When `perltidy_profile` is set, it takes precedence and all other options
+# are ignored (perltidy reads everything from the profile file).
 
-# [formatting]
-# perltidy = true
+[formatting]
+# Enable perltidy formatting (default: true).
+# enabled = true
+
+# Path to a `.perltidyrc` profile file (optional).
+# When set, passes --profile=<path> to perltidy.
 # perltidy_profile = ".perltidyrc"
+
+# Maximum line length (default: 80).
+# perltidy_maximum_line_length = 80
+
+# Indent size in spaces (default: 4).
+# perltidy_indent_columns = 4
+
+# Use tabs instead of spaces (default: false).
+# perltidy_tabs = false
+
+# Opening brace on new line (default: false).
+# perltidy_opening_brace_on_new_line = false
+
+# Cuddled else style (default: true).
+# perltidy_cuddled_else = true
+
+# Space after keyword (default: true).
+# perltidy_space_after_keyword = true
+
+# Add trailing commas (default: false).
+# perltidy_add_trailing_commas = false
+
+# Vertical alignment (default: true).
+# perltidy_vertical_alignment = true
+
+# Block comment indentation (default: 0).
+# perltidy_block_comment_indentation = 0
+
+# Extra perltidy arguments (default: []).
+# perltidy_extra_args = ["--no-check-syntax"]
+
+# Timeout in seconds (default: 10).
+# perltidy_timeout_secs = 10

@@ -19,13 +19,14 @@ doctest = false
 [dependencies]
 perl-lsp-tooling = { workspace = true }
 perl-lsp-formatting-types = { workspace = true }
+perl-lsp-perltidy = { workspace = true }
 thiserror.workspace = true
 
 [dev-dependencies]
 perl-tdd-support = { workspace = true }
 
 [package.metadata.docs.rs]
-rustdoc-args = ["--cfg", "docsrs"]
+rustdoc-args = ["----cfg", "docsrs"]
 
 [lints]
 workspace = true

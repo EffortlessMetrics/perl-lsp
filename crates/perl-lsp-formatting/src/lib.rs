@@ -11,11 +11,12 @@
 //! ## Usage
 //!
 //! ```rust,ignore
-//! use perl_lsp_formatting::FormattingProvider;
+//! use perl_lsp_formatting::{FormattingProvider, PerlTidyConfig};
 //! use perl_lsp_tooling::OsSubprocessRuntime;
 //!
 //! let runtime = OsSubprocessRuntime::new();
-//! let provider = FormattingProvider::new(runtime);
+//! let config = PerlTidyConfig::default();
+//! let provider = FormattingProvider::new(runtime).with_perltidy_config(config);
 //! let formatted = provider.format_document(source, &options)?;
 //! ```
 
@@ -28,5 +29,5 @@ mod formatting;
 
 pub use formatting::{
     FormatPosition, FormatRange, FormatTextEdit, FormattedDocument, FormattingError,
-    FormattingOptions, FormattingProvider,
+    FormattingOptions, FormattingProvider, PerlTidyConfig,
 };

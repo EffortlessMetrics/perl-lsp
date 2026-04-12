@@ -6,7 +6,7 @@
 use crate::convert::WireRange;
 pub use perl_lsp_formatting::{
     FormatPosition, FormatRange, FormatTextEdit, FormattedDocument, FormattingError,
-    FormattingOptions, FormattingProvider,
+    FormattingOptions, FormattingProvider, PerlTidyConfig,
 };
 use perl_lsp_tooling::OsSubprocessRuntime;
 
@@ -22,6 +22,15 @@ impl CodeFormatter {
     /// Create a new code formatter with the default OS subprocess runtime
     pub fn new() -> Self {
         Self { inner: FormattingProvider::new(OsSubprocessRuntime::with_timeout(10)) }
+    }
+
+    /// Create a new code formatter with perltidy configuration
+    pub fn with_config(config: PerlTidyConfig) -> Self {
+        let timeout = config.timeout_secs;
+        Self {
+            inner: FormattingProvider::new(OsSubprocessRuntime::with_timeout(timeout))
+                .with_perltidy_config(config),
+        }
     }
 
     /// Format an entire document, returning just the edits for backwards compatibility
