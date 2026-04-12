@@ -724,6 +724,23 @@ impl LspServer {
                         tracing::debug!("Updated workspace config from perl settings");
                     }
 
+                    // Apply global client settings to each folder's effective config immediately.
+                    // The async workspace/configuration pull that follows will refine per-folder
+                    // settings once the client responds, but we update now so the window between
+                    // didChangeConfiguration arrival and the pull response doesn't leave folders
+                    // with stale settings.
+                    {
+                        let mut folders = self.workspace_folders.lock();
+                        for folder in folders.iter_mut() {
+                            let mut effective_config = perl_lsp_config::WorkspaceConfig::default();
+                            if let Some(project_config) = &folder.project_config {
+                                project_config.apply_to_workspace_config(&mut effective_config);
+                            }
+                            effective_config.update_from_value(perl);
+                            folder.effective_workspace_config = effective_config;
+                        }
+                    }
+
                     // Refresh AI backend when config changes (constructs or clears provider)
                     self.refresh_ai_backend();
 

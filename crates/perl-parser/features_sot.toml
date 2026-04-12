@@ -5,7 +5,7 @@
 [meta]
 version = "0.12.3"
 lsp_version = "3.18"
-compliance_percent = 100  # 118 total features (87 LSP + 24 DAP + 7 perl-lsp extensions), 53/53 advertised
+compliance_percent = 100  # 119 total features (88 LSP + 24 DAP + 7 perl-lsp extensions), 53/53 advertised
 
 # Text Document Features
 
@@ -1091,6 +1091,16 @@ tests = ["crates/perl-lsp/tests/lsp_window_tests.rs"]
 description = "Server telemetry events (telemetry/event)"
 
 # LSP 3.18 Additions
+
+[[feature]]
+id = "lsp.diagnostic.markup_message_support"
+spec = "LSP 3.18"
+area = "text_document"
+maturity = "ga"
+advertised = true
+counts_in_coverage = false
+tests = ["crates/perl-lsp/tests/lsp_diagnostic_enrichment_test.rs"]
+description = "Markdown-formatted diagnostic messages (textDocument.diagnostic.markupMessageSupport) — server includes messageMarkup in diagnostic data when client opts in"
 
 [[feature]]
 id = "lsp.text_document_content"
