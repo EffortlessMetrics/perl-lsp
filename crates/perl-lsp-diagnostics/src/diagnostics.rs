@@ -237,6 +237,18 @@ fn build_enhanced_message(expected: &str, found: &str, found_display: &str) -> S
 /// Each suggestion is designed to be actionable: the user should be able to read
 /// the suggestion and know exactly what to change.
 fn build_parse_error_suggestion(error: &ParseError) -> Option<String> {
+    build_parse_error_hint(error, "")
+}
+
+/// Build an actionable hint for a parse error.
+///
+/// This is the shared implementation used by both the AST-present and fallback diagnostic
+/// paths. `base_message` is the human-readable error text already derived from the error
+/// variant; it is used for pattern-matching on `SyntaxError` cases where the variant's
+/// `message` field may differ from what was already formatted for display.
+///
+/// Returns `None` when no targeted hint is available for this error pattern.
+pub fn build_parse_error_hint(error: &ParseError, base_message: &str) -> Option<String> {
     match error {
         ParseError::UnexpectedToken { expected, found, .. } => {
             // Missing semicolon: parser expected ';' or found something when ';' was expected
@@ -277,6 +289,19 @@ fn build_parse_error_suggestion(error: &ParseError) -> Option<String> {
                     "Expected a variable like `$foo`, `@bar`, or `%hash` after the declaration keyword".to_string(),
                 );
             }
+            // Comma expected between list elements
+            if expected.contains(',') || expected.to_lowercase().contains("comma") {
+                return Some(
+                    "Expected `,` between list elements -- check for a missing comma".to_string(),
+                );
+            }
+            // Unexpected token that looks like a lexer failure (e.g. from an unclosed string)
+            if found.contains("unknown token") {
+                return Some(
+                    "Check for an unclosed string, regex, or heredoc near this position"
+                        .to_string(),
+                );
+            }
             None
         }
         ParseError::UnexpectedEof => Some(
@@ -287,14 +312,23 @@ fn build_parse_error_suggestion(error: &ParseError) -> Option<String> {
             Some(format!("Add a matching closing '{delimiter}'"))
         }
         ParseError::SyntaxError { message, .. } => {
-            // Provide targeted suggestions for known syntax error patterns
+            // Provide targeted suggestions for known syntax error patterns.
+            // Check both the stored message and the pre-formatted base_message.
             let msg_lower = message.to_lowercase();
+            let base_lower = base_message.to_lowercase();
             if msg_lower.contains("semicolon") || msg_lower.contains("missing ;") {
                 Some("Add a ';' at the end of the statement".to_string())
-            } else if msg_lower.contains("heredoc") {
+            } else if msg_lower.contains("heredoc") || base_lower.contains("heredoc") {
                 Some(
                     "Check that the heredoc terminator appears on its own line with no extra whitespace"
                         .to_string(),
+                )
+            } else if msg_lower.contains("unclosed")
+                || (msg_lower.contains("block") && msg_lower.contains("expected"))
+                || msg_lower.contains("missing '}'")
+            {
+                Some(
+                    "Unclosed `{` -- check for a missing `}` to close the block".to_string(),
                 )
             } else {
                 None
