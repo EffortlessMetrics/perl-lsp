@@ -8,6 +8,7 @@
  */
 
 import * as fs from 'fs';
+import * as path from 'path';
 import { execFile } from 'child_process';
 import * as vscode from 'vscode';
 
@@ -209,45 +210,117 @@ export class OnboardingManager {
     const label = 'perlcritic';
     const perlcriticConfig = vscode.workspace.getConfiguration('perl-lsp').get<any>('perlcritic', {});
     const enabled = Boolean(perlcriticConfig?.enabled);
-    const profile = typeof perlcriticConfig?.profile === 'string' ? perlcriticConfig.profile.trim() : '';
+    const severity = Number.isFinite(Number(perlcriticConfig?.severity))
+      ? Number(perlcriticConfig?.severity)
+      : 5;
+    const rawProfile =
+      typeof perlcriticConfig?.profile === 'string' ? perlcriticConfig.profile.trim() : '';
+    const configuredProfile = rawProfile.length > 0 ? path.resolve(rawProfile) : null;
+    const walkupProfile = configuredProfile ? null : this.findWalkupPerlcriticProfile();
 
     if (!enabled) {
       return {
         label,
         ok: true,
         status: HealthCheckStatus.Ok,
-        detail: 'Perl::Critic is disabled',
+        detail: 'disabled (perl-lsp.perlcritic.enabled=false)',
       };
     }
 
-    if (profile && !fs.existsSync(profile)) {
-      return {
-        label,
-        ok: false,
-        status: HealthCheckStatus.Warning,
-        detail: `Configured perlcritic profile was not found: ${profile}`,
-      };
-    }
-
-    try {
-      await this._execCheck('perlcritic', ['--version']);
-      return {
-        label,
-        ok: true,
-        status: HealthCheckStatus.Ok,
-        detail: 'perlcritic found',
-      };
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
+    if (configuredProfile && !fs.existsSync(configuredProfile)) {
       return {
         label,
         ok: false,
         status: HealthCheckStatus.Warning,
         detail:
-          `Perl::Critic is enabled but perlcritic was not found on PATH. (${msg}) ` +
-          'Install via: cpanm Perl::Critic',
+          `enabled, severity=${severity}, profile=invalid (${configuredProfile})` +
+          '; update perl-lsp.perlcritic.profile',
       };
     }
+
+    try {
+      await this._execCheck('perlcritic', ['--version']);
+      const perlcriticPath = await this.resolveCommandPath('perlcritic');
+      const profileDetails = configuredProfile
+        ? `profile=configured (${configuredProfile})`
+        : walkupProfile
+          ? `profile=walk-up (${walkupProfile})`
+          : 'profile=default (none configured/found)';
+      const pathDetails = perlcriticPath
+        ? `binary=found (${perlcriticPath})`
+        : 'binary=found (path resolution unavailable)';
+      return {
+        label,
+        ok: true,
+        status: HealthCheckStatus.Ok,
+        detail: `enabled, severity=${severity}, ${pathDetails}, ${profileDetails}`,
+      };
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      const profileDetails = configuredProfile
+        ? `profile=configured (${configuredProfile})`
+        : walkupProfile
+          ? `profile=walk-up (${walkupProfile})`
+          : 'profile=default (none configured/found)';
+      return {
+        label,
+        ok: false,
+        status: HealthCheckStatus.Warning,
+        detail:
+          `enabled, severity=${severity}, binary=missing, ${profileDetails}. ` +
+          `perlcritic not found on PATH (${msg}). Install via: cpanm Perl::Critic`,
+      };
+    }
+  }
+
+  private async resolveCommandPath(command: string): Promise<string | null> {
+    try {
+      if (process.platform === 'win32') {
+        const { stdout } = await this._execCheck('where.exe', [command]);
+        return selectWindowsCommandCandidate(stdout);
+      }
+      const { stdout } = await this._execCheck('which', [command]);
+      const firstLine = stdout
+        .split(/\r?\n/)
+        .map(line => line.trim())
+        .find(line => line.length > 0);
+      return firstLine ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  private findWalkupPerlcriticProfile(): string | null {
+    const startDirs: string[] = [];
+
+    const activeFile = vscode.window.activeTextEditor?.document?.uri?.fsPath;
+    if (activeFile) {
+      startDirs.push(path.dirname(activeFile));
+    }
+
+    for (const folder of vscode.workspace.workspaceFolders ?? []) {
+      if (folder?.uri?.fsPath) {
+        startDirs.push(folder.uri.fsPath);
+      }
+    }
+
+    for (const startDir of startDirs) {
+      let currentDir = path.resolve(startDir);
+      while (true) {
+        const candidate = path.join(currentDir, '.perlcriticrc');
+        if (fs.existsSync(candidate)) {
+          return candidate;
+        }
+
+        const parentDir = path.dirname(currentDir);
+        if (parentDir === currentDir) {
+          break;
+        }
+        currentDir = parentDir;
+      }
+    }
+
+    return null;
   }
 
   /**
