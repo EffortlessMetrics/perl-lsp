@@ -323,25 +323,23 @@ fn runtime_flags_with_perltidy_comprehensive() {
         assert!(with_tool.formatting);
         assert!(with_tool.range_formatting);
 
-        // Without tool, should match base behavior
-        let base = profile.build_flags();
-        assert_eq!(without_tool.formatting, base.formatting);
-        assert_eq!(without_tool.range_formatting, base.range_formatting);
+        // Without tool, formatting is always disabled
+        assert!(!without_tool.formatting);
+        assert!(!without_tool.range_formatting);
     }
 }
 
 #[test]
-fn runtime_flags_perltidy_true_vs_false_differs_on_formatting() {
+fn runtime_flags_perltidy_true_vs_false_always_differs_on_formatting() {
     for &profile in FeatureProfile::all() {
         let with_perltidy = profile.runtime_flags(true);
         let without_perltidy = profile.runtime_flags(false);
 
-        // If base doesn't have formatting, perltidy should add it
-        let base = profile.build_flags();
-        if !base.formatting {
-            assert!(with_perltidy.formatting);
-            assert!(!without_perltidy.formatting);
-        }
+        // Perltidy availability always gates formatting at runtime
+        assert!(with_perltidy.formatting);
+        assert!(!without_perltidy.formatting);
+        assert!(with_perltidy.range_formatting);
+        assert!(!without_perltidy.range_formatting);
     }
 }
 
@@ -373,9 +371,9 @@ fn runtime_advertised_features_reflects_perltidy() {
         assert!(with_tool.formatting);
         assert!(with_tool.range_formatting);
 
-        let base = profile.advertised_features();
-        assert_eq!(without_tool.formatting, base.formatting);
-        assert_eq!(without_tool.range_formatting, base.range_formatting);
+        // Without perltidy, formatting is always disabled at runtime
+        assert!(!without_tool.formatting);
+        assert!(!without_tool.range_formatting);
     }
 }
 
@@ -869,15 +867,20 @@ fn perltidy_toggle_affects_formatting_only() {
     for &profile in FeatureProfile::all() {
         let with_tool = profile.runtime_flags(true);
         let without_tool = profile.runtime_flags(false);
-        let base = profile.build_flags();
 
         // The only difference should be formatting-related flags
-        let _with_ids = with_tool.to_feature_ids();
+        let with_ids = with_tool.to_feature_ids();
         let without_ids = without_tool.to_feature_ids();
-        let base_ids = base.to_feature_ids();
 
-        // Base match case
-        assert_eq!(without_ids, base_ids);
+        // Non-formatting features should be the same
+        for id in &with_ids {
+            if !id.contains("formatting") {
+                assert!(without_ids.contains(id), "non-formatting id '{id}' should be in both");
+            }
+        }
+        for id in &without_ids {
+            assert!(with_ids.contains(id), "without-tool id '{id}' should be in with-tool set");
+        }
     }
 }
 

@@ -394,10 +394,14 @@ fn flags_for_runtime_enables_formatting_with_perltidy() {
 }
 
 #[test]
-fn flags_for_runtime_without_perltidy_respects_base() {
-    let base = flags_for_profile(FeatureProfile::Production);
+fn flags_for_runtime_without_perltidy_disables_formatting() {
     let runtime = flags_for_runtime(FeatureProfile::Production, false);
-    assert_eq!(base, runtime, "without perltidy, runtime flags equal base flags");
+    assert!(!runtime.formatting, "without perltidy, runtime should disable formatting");
+    assert!(!runtime.range_formatting, "without perltidy, runtime should disable range_formatting");
+    // Other flags should still match production
+    let base = flags_for_profile(FeatureProfile::Production);
+    assert_eq!(base.completion, runtime.completion);
+    assert_eq!(base.hover, runtime.hover);
 }
 
 #[test]

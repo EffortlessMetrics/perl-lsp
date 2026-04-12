@@ -86,10 +86,10 @@ impl FeatureProfile {
     pub fn runtime_flags(self, has_perltidy: bool) -> BuildFlags {
         let mut flags = self.build_flags();
 
-        if has_perltidy {
-            flags.formatting = true;
-            flags.range_formatting = true;
-        }
+        // Perltidy availability gates formatting at runtime regardless of
+        // the compile-time default in the build profile.
+        flags.formatting = has_perltidy;
+        flags.range_formatting = has_perltidy;
 
         flags
     }
@@ -258,10 +258,10 @@ mod tests {
     }
 
     #[test]
-    fn runtime_flags_preserves_disabled_formatting_without_perltidy() {
+    fn runtime_flags_disables_formatting_without_perltidy() {
         let flags = FeatureProfile::Production.runtime_flags(false);
-        assert!(!flags.formatting, "formatting should remain off without perltidy");
-        assert!(!flags.range_formatting, "range_formatting should remain off without perltidy");
+        assert!(!flags.formatting, "formatting should be off without perltidy");
+        assert!(!flags.range_formatting, "range_formatting should be off without perltidy");
     }
 
     // ── flags_for_profile / flags_for_runtime ───────────────────────
@@ -297,7 +297,7 @@ mod tests {
         let adv = FeatureProfile::Production.advertised_features();
         assert!(adv.completion);
         assert!(adv.hover);
-        assert!(!adv.formatting, "production does not advertise formatting without perltidy");
+        assert!(adv.formatting, "production advertises formatting");
     }
 
     #[test]
@@ -389,10 +389,10 @@ mod tests {
     }
 
     #[test]
-    fn production_profile_gates_formatting_out() {
+    fn production_profile_enables_formatting() {
         let flags = FeatureProfile::Production.build_flags();
-        assert!(!flags.formatting, "production must gate out formatting");
-        assert!(!flags.range_formatting, "production must gate out range_formatting");
+        assert!(flags.formatting, "production must enable formatting");
+        assert!(flags.range_formatting, "production must enable range_formatting");
     }
 
     #[test]
@@ -455,15 +455,12 @@ mod tests {
     }
 
     #[test]
-    fn catalog_advertised_ids_ga_lock_includes_formatting_production_does_not() {
+    fn catalog_advertised_ids_both_ga_lock_and_production_include_formatting() {
         let prod_ids = catalog_advertised_feature_ids(FeatureProfile::Production);
         let ga_ids = catalog_advertised_feature_ids(FeatureProfile::GaLock);
-        // GA-lock includes formatting by default, production does not
+        // Both GA-lock and production include formatting
         assert!(ga_ids.contains(&"lsp.formatting"), "ga-lock should include formatting");
-        assert!(
-            !prod_ids.contains(&"lsp.formatting"),
-            "production should not include formatting (requires perltidy)"
-        );
+        assert!(prod_ids.contains(&"lsp.formatting"), "production should include formatting");
     }
 
     // ── Feature enablement/disablement ──────────────────────────────
@@ -486,10 +483,12 @@ mod tests {
     }
 
     #[test]
-    fn runtime_flags_no_perltidy_matches_base_for_production() {
+    fn runtime_flags_no_perltidy_disables_formatting_for_production() {
         let base = FeatureProfile::Production.build_flags();
         let runtime = FeatureProfile::Production.runtime_flags(false);
-        assert_eq!(base, runtime, "runtime(false) should match build_flags for production");
+        assert!(base.formatting, "build_flags should enable formatting");
+        assert!(!runtime.formatting, "runtime(false) should disable formatting");
+        assert!(!runtime.range_formatting, "runtime(false) should disable range_formatting");
     }
 
     #[test]
