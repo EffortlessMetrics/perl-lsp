@@ -884,6 +884,17 @@ impl LspServer {
                     let new_module = path_to_module_name(new_uri);
 
                     if !old_module.is_empty() && !new_module.is_empty() {
+                        if !planned_workspace_texts.contains_key(old_uri) {
+                            if let Some(text) = self.read_workspace_text(old_uri) {
+                                planned_workspace_texts
+                                    .insert(old_uri.to_string(), (text.clone(), text));
+                            }
+                        }
+                        if let Some((_, current_text)) = planned_workspace_texts.get_mut(old_uri) {
+                            *current_text =
+                                rewrite_package_declaration(current_text, &old_module, &new_module);
+                        }
+
                         // Find all files that reference the old module
                         // Note: Query operation - use coordinator.index() for consistency
                         #[cfg(feature = "workspace")]
@@ -1779,6 +1790,45 @@ fn build_module_rename_workspace_edits(original: &str, updated: &str) -> Vec<Val
 }
 
 #[cfg(feature = "workspace")]
+fn rewrite_package_declaration(source: &str, old_module: &str, new_module: &str) -> String {
+    source
+        .split('\n')
+        .map(|line| rewrite_package_declaration_line(line, old_module, new_module))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+#[cfg(feature = "workspace")]
+fn rewrite_package_declaration_line(line: &str, old_module: &str, new_module: &str) -> String {
+    let trimmed = line.trim_start();
+    if trimmed.starts_with('#') || old_module.is_empty() || new_module.is_empty() {
+        return line.to_string();
+    }
+
+    let prefix = "package ";
+    let Some(rest) = trimmed.strip_prefix(prefix) else {
+        return line.to_string();
+    };
+
+    let leading_len = line.len() - trimmed.len();
+    let semicolon_pos = rest.find(';');
+    let declaration = semicolon_pos.map_or(rest, |idx| &rest[..idx]).trim();
+    if declaration != old_module {
+        return line.to_string();
+    }
+
+    let mut rebuilt = String::with_capacity(line.len() + new_module.len());
+    rebuilt.push_str(&line[..leading_len]);
+    rebuilt.push_str(prefix);
+    rebuilt.push_str(new_module);
+    if let Some(idx) = semicolon_pos {
+        rebuilt.push(';');
+        rebuilt.push_str(&rest[idx + 1..]);
+    }
+    rebuilt
+}
+
+#[cfg(feature = "workspace")]
 fn collect_delete_target_module_names(
     index: &perl_parser::workspace_index::WorkspaceIndex,
     uri: &str,
@@ -1918,6 +1968,8 @@ pub(super) fn path_to_module_name(uri: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::module_name_appears_in_text;
+    #[cfg(feature = "workspace")]
+    use super::{rewrite_package_declaration, rewrite_package_declaration_line};
 
     #[test]
     fn test_module_name_appears_exact_match() {
@@ -1957,5 +2009,30 @@ mod tests {
     #[test]
     fn test_module_name_empty_returns_false() {
         assert!(!module_name_appears_in_text("anything", ""));
+    }
+
+    #[cfg(feature = "workspace")]
+    #[test]
+    fn test_rewrite_package_declaration_line_rewrites_exact_package() {
+        assert_eq!(
+            rewrite_package_declaration_line("package Old::Name;", "Old::Name", "New::Name"),
+            "package New::Name;"
+        );
+    }
+
+    #[cfg(feature = "workspace")]
+    #[test]
+    fn test_rewrite_package_declaration_line_preserves_comments() {
+        assert_eq!(
+            rewrite_package_declaration_line("package Old::Name; # keep", "Old::Name", "New::Name",),
+            "package New::Name; # keep"
+        );
+    }
+
+    #[cfg(feature = "workspace")]
+    #[test]
+    fn test_rewrite_package_declaration_preserves_trailing_newline() {
+        let rewritten = rewrite_package_declaration("package Old;\n1;\n", "Old", "New");
+        assert_eq!(rewritten, "package New;\n1;\n");
     }
 }

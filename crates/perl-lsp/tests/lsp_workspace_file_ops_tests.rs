@@ -1196,12 +1196,11 @@ fn test_will_rename_files_pure_parent_only() -> Result<(), Box<dyn std::error::E
     Ok(())
 }
 
-/// Regression test: renaming a module whose own file is open must NOT appear in
-/// `changes` (the package file itself does not need a `use` line rewrite).
-/// Previously the warning-detection code could false-positive on `package OldModule;`
-/// inside the old file because it was not excluded from the unhandled-documents scan.
+/// Regression test: renaming a module file updates the package declaration in the
+/// renamed file itself so move/rename is self-consistent.
 #[test]
-fn test_will_rename_files_old_uri_not_in_changes() -> Result<(), Box<dyn std::error::Error>> {
+fn test_will_rename_files_rewrites_package_declaration_in_renamed_file()
+-> Result<(), Box<dyn std::error::Error>> {
     let server = create_test_server();
 
     let init_params = json!({
@@ -1235,11 +1234,17 @@ fn test_will_rename_files_old_uri_not_in_changes() -> Result<(), Box<dyn std::er
     let changes =
         edit.get("changes").and_then(Value::as_object).ok_or("expected changes object")?;
 
-    // Solo.pm itself should NOT be in the changes map — it contains `package Solo;`
-    // but that line is not a `use Solo;` import that needs rewriting.
+    let self_changes = changes
+        .get("file:///test/workspace/lib/Solo.pm")
+        .and_then(Value::as_array)
+        .ok_or("expected edits for renamed file package declaration")?;
+    let new_texts: Vec<String> = self_changes
+        .iter()
+        .filter_map(|entry| entry.get("newText").and_then(Value::as_str).map(ToString::to_string))
+        .collect();
     assert!(
-        !changes.contains_key("file:///test/workspace/lib/Solo.pm"),
-        "the renamed file itself should not appear as a change target: {changes:?}"
+        new_texts.contains(&"package Renamed;".to_string()),
+        "expected package declaration rewrite in renamed file, got: {new_texts:?}"
     );
     Ok(())
 }
