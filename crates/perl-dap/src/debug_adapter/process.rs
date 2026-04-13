@@ -1752,14 +1752,10 @@ mod tests {
 
         // Create a temporary file so that the file-exists validation in
         // launch_debugger() passes, letting us reach the Perl-spawn error path.
-        let mut tmp = NamedTempFile::new().map_err(|e| format!("could not create temp file: {e}"))?;
-        writeln!(tmp, "# placeholder")
-            .map_err(|e| format!("could not write to temp file: {e}"))?;
-        let tmp_path = tmp
-            .path()
-            .to_str()
-            .ok_or("temp path is not valid UTF-8")?
-            .to_string();
+        let mut tmp =
+            NamedTempFile::new().map_err(|e| format!("could not create temp file: {e}"))?;
+        writeln!(tmp, "# placeholder").map_err(|e| format!("could not write to temp file: {e}"))?;
+        let tmp_path = tmp.path().to_str().ok_or("temp path is not valid UTF-8")?.to_string();
 
         let mut adapter = DebugAdapter::new();
         let response = adapter.handle_launch(
