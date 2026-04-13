@@ -421,3 +421,49 @@ gh workflow run version-bump.yml \
 ```
 
 This creates a `release/vNEW_VERSION` branch with updated `Cargo.toml` and `CHANGELOG.md`, then opens a PR for review.
+
+---
+
+## Release History Updates
+
+Every public release **must** update three surfaces. See [RELEASE_HISTORY.md](RELEASE_HISTORY.md) for the canonical ledger.
+
+### Before publishing
+
+- [ ] Create `docs/releases/vX.Y.Z.md` (use an existing file as template)
+- [ ] Add a new row to `RELEASE_HISTORY.md` for vX.Y.Z (fill what you know; mark unknowns with `—`)
+- [ ] Ensure `CHANGELOG.md` has a `[X.Y.Z]` section with links to:
+  - `docs/releases/vX.Y.Z.md`
+  - GitHub Release URL
+  - Compare range `vPrev...vX.Y.Z`
+
+### After publishing
+
+- [ ] Capture GitHub Release metadata:
+  ```bash
+  gh release view vX.Y.Z --json tagName,publishedAt,url,body,assets,targetCommitish
+  ```
+- [ ] Update `docs/releases/vX.Y.Z.md` front-matter with:
+  - `release_date_utc` (from `publishedAt`)
+  - `tag_commit` (resolve tag to commit SHA)
+  - Actual asset list
+- [ ] Update `RELEASE_HISTORY.md` row with:
+  - Asset count and summary
+  - Channel outcomes (crates.io, VS Code Marketplace, Open VSX, Docker)
+
+### Verification
+
+```bash
+# Release-history surface consistency check
+# 1. Notes file exists
+test -f docs/releases/vX.Y.Z.md
+
+# 2. Ledger row exists
+grep 'X.Y.Z' RELEASE_HISTORY.md
+
+# 3. CHANGELOG section exists
+grep '\[X.Y.Z\]' CHANGELOG.md
+
+# 4. GitHub Release matches
+gh release view vX.Y.Z --json tagName,assets --jq '{tag: .tagName, assets: [.assets[].name]}'
+```

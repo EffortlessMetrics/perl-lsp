@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.12.4] - 2026-04-12
 
+Release notes: [v0.12.4](docs/releases/v0.12.4.md) · [GitHub Release](https://github.com/EffortlessMetrics/perl-lsp/releases/tag/v0.12.4)
+
 <!-- 2026-04-11 session: 46 PRs merged across navigation, pragma scoping, incremental parsing, workspace refactoring, Windows hardening, and CI hygiene -->
 <!-- 2026-04-12 session: ~25 PRs merged — DAP scorecard, rename perf, editor UX, diagnostics polish, hover improvements, workspace/config, completion ranking, Windows compat, CI hygiene -->
 
@@ -472,7 +474,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Unused dev-dependencies removed** from 5 crates. (#4183, #4255)
 
 
-## [0.12.3] - 2026-04-08
+## [0.12.3] - 2026-04-09
+
+Release notes: [v0.12.3](docs/releases/v0.12.3.md) · [GitHub Release](https://github.com/EffortlessMetrics/perl-lsp/releases/tag/v0.12.3)
 
 <!-- Pipeline rehearsal release — validates the full publish + extension + Docker cycle before v0.13.0 public alpha -->
 <!-- Rolls up publish pipeline fixes, UX P0 improvements, and CI hardening from Waves 10/11/12 -->
@@ -766,7 +770,9 @@ v0.12.2 publish run and post-publish testing:
 - **UX test harness framework** (#3297): systematic framework for UX regression
   tests with helpers for LSP, DAP, and extension surface validation.
 
-## [0.12.2] - 2026-04-08
+## [0.12.2] - 2026-04-04
+
+Release notes: [v0.12.2](docs/releases/v0.12.2.md) · [GitHub Release](https://github.com/EffortlessMetrics/perl-lsp/releases/tag/v0.12.2)
 
 `v0.12.2` is the confidence-building release for the 0.12.x series. 89 commits
 across 59 PRs spanning new features, performance, testing, distribution, and
@@ -919,7 +925,9 @@ the remaining 21 (including `tree-sitter-perl-c`, `tree-sitter-perl-rs`,
   (#3284)
 - **test de-flake**: `empty_timer_reports_total` race condition fixed (#3278)
 
-## [0.12.1] - 2026-03-30
+## [0.12.1] - 2026-03-31
+
+Release notes: [v0.12.1](docs/releases/v0.12.1.md) · [GitHub Release](https://github.com/EffortlessMetrics/perl-lsp/releases/tag/v0.12.1)
 
 `v0.12.1` is the fix-forward cut after the initial public alpha release. It does
 not reopen the wider alpha scope; it closes the release-surface regressions that
@@ -943,7 +951,9 @@ aligned.
 - status and roadmap docs now treat `v0.12.0` as the latest published GitHub
   release and `v0.12.1` as the active fix-forward cut
 
-## [0.12.0] - 2026-03-24
+## [0.12.0] - 2026-03-30
+
+Release notes: [v0.12.0](docs/releases/v0.12.0.md) · [GitHub Release](https://github.com/EffortlessMetrics/perl-lsp/releases/tag/v0.12.0)
 
 `v0.12.0` is the initial public alpha for the native Rust Perl 5 toolchain. The
 headline change is not one feature in isolation; it is that the parser, language
@@ -994,6 +1004,8 @@ For the detailed receipts behind this release, see [docs/project/CURRENT_STATUS.
 
 ## [0.11.0] - 2026-03-12
 
+Release notes: [v0.11.0](docs/releases/v0.11.0.md) · [GitHub Release](https://github.com/EffortlessMetrics/perl-lsp/releases/tag/v0.11.0)
+
 This release finalizes the 0.11.0 distribution pipeline across GitHub releases,
 crates.io, and the VS Code extension so the workspace can ship from a single,
 repeatable release flow.
@@ -1026,6 +1038,8 @@ repeatable release flow.
   crates scheduled for publication.
 
 ## [0.10.0] - 2026-02-28
+
+Release notes: [v0.10.0](docs/releases/v0.10.0.md) (internal milestone — no GitHub Release)
 
 A major release campaign spanning 60+ PRs (#845-#911) focused on build reliability,
 security hardening, crates.io publishing readiness, documentation, and code quality.
@@ -1104,6 +1118,8 @@ security hardening, crates.io publishing readiness, documentation, and code qual
 
 ## [0.9.1] - 2026-02-20
 
+Release notes: [v0.9.1](docs/releases/v0.9.1.md) (tag only — no GitHub Release)
+
 ### Added
 - **Initial Public Alpha Release**: Substantially complete feature set for early testing.
 - **Enhanced LSP Features**: 99% coverage of LSP 3.18 methods (alpha-validated).
@@ -1127,6 +1143,8 @@ security hardening, crates.io publishing readiness, documentation, and code qual
 
 ## [0.9.0] - 2026-01-18
 
+Release notes: [v0.9.0](docs/releases/v0.9.0.md) (internal milestone — no tag or GitHub Release)
+
 ### Added
 - **Semantic Analyzer Phase 1**: 12/12 critical node handlers implemented.
 - **LSP textDocument/definition Integration**: Semantic-aware definition resolution.
@@ -1136,6 +1154,8 @@ security hardening, crates.io publishing readiness, documentation, and code qual
 - **LSP Coverage**: Increased to 82% of trackable features.
 
 ## [0.8.8] - 2025-12-01
+
+Release notes: [v0.8.8](docs/releases/v0.8.8.md) (internal milestone — no tag or GitHub Release)
 
 ### Added
 - **Initial Workspace Configuration Support**.
@@ -1162,3 +1182,22 @@ During the alpha phase (pre-v0.15.0):
 - **Current Alpha (0.x.y)**: Active development and bug fixes.
 - **Breaking Changes**: Allowed in minor (0.x) releases.
 - **Security**: Critical patches prioritized for the latest alpha version.
+
+---
+
+## Links
+
+For the full cross-channel release history, see [RELEASE_HISTORY.md](RELEASE_HISTORY.md).
+
+<!-- Compare ranges -->
+[0.12.4]: https://github.com/EffortlessMetrics/perl-lsp/compare/v0.12.3...v0.12.4
+[0.12.3]: https://github.com/EffortlessMetrics/perl-lsp/compare/v0.12.2...v0.12.3
+[0.12.2]: https://github.com/EffortlessMetrics/perl-lsp/compare/v0.12.1...v0.12.2
+[0.12.1]: https://github.com/EffortlessMetrics/perl-lsp/compare/v0.12.0...v0.12.1
+[0.12.0]: https://github.com/EffortlessMetrics/perl-lsp/compare/v0.11.0...v0.12.0
+[0.11.0]: https://github.com/EffortlessMetrics/perl-lsp/compare/v0.8.5...v0.11.0
+[0.10.0]: https://github.com/EffortlessMetrics/perl-lsp/compare/v0.9.1...v0.10.0
+[0.9.1]: https://github.com/EffortlessMetrics/perl-lsp/compare/v0.8.5...v0.9.1
+[0.9.0]: https://github.com/EffortlessMetrics/perl-lsp/compare/v0.8.5...v0.9.0
+[0.8.8]: https://github.com/EffortlessMetrics/perl-lsp/compare/v0.8.5...v0.8.8
+[Unreleased]: https://github.com/EffortlessMetrics/perl-lsp/compare/v0.12.4...HEAD

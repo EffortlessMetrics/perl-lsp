@@ -9,12 +9,12 @@
 ## Current Framing
 
 - Workspace version line: `v0.12.4`
-- Latest published GitHub/editor release: `v0.12.3` (GitHub Releases, VS Code Marketplace, and Open VSX public line, shipped 2026-04-09)
-- crates.io published line: `v0.12.2` (registry line, shipped 2026-04-07)
-- Active work: finish the `v0.13.0` public alpha announcement pass (demo assets, distribution-truth cleanup, post-release docs/automation cleanup) while keeping the shipped `v0.12.3` line stable across GitHub Releases and the editor marketplaces
+- Latest published GitHub/editor release: `v0.12.4` (GitHub Releases and VS Code Marketplace, shipped 2026-04-12)
+- crates.io published line: `v0.12.2` (registry line, published 2026-04-08)
+- Active work: finish the `v0.13.0` public alpha announcement pass (demo assets, distribution-truth cleanup, post-release docs/automation cleanup) while keeping the shipped `v0.12.4` line stable across GitHub Releases and the editor marketplaces
 - Canonical local receipt: `nix develop -c just ci-gate`
 
-Publication discipline: public release truth is intentionally split right now. GitHub Releases and the editor marketplaces are on `v0.12.3`; crates.io remains on `v0.12.2` until the registry window reopens. Milestone sections below can describe the intended `0.12.x` breakdown, but they must not blur that channel split.
+Publication discipline: public release truth is intentionally split right now. GitHub Releases and the editor marketplaces are on `v0.12.4`; crates.io remains on `v0.12.2` until the registry window reopens. See [RELEASE_HISTORY.md](../../RELEASE_HISTORY.md) for the full cross-channel ledger. Milestone sections below can describe the intended `0.12.x` breakdown, but they must not blur that channel split.
 
 ## How To Read This File
 
@@ -53,7 +53,7 @@ Released 2026-03-30. Cleanup completed 2026-04-02.
 - DAP Phase 3 test suite (#435) already complete (20 tests, all AC criteria met)
 - 12 PRs merged + 6 issues discovered already-done
 
-## Prepared Scope: v0.12.4 Diagnostics & Semantics
+## Completed: v0.12.4 Diagnostics & Semantics (shipped 2026-04-12)
 
 - Semantic framework coverage: inheritance, exports (#3077, PR #3098)
 - Cross-platform DAP continue/interrupt signal handling (#3028, PR #3117)
