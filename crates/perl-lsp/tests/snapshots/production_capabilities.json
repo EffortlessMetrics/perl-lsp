@@ -30,6 +30,7 @@
     "interFileDependencies": false,
     "workspaceDiagnostics": true
   },
+  "documentFormattingProvider": true,
   "documentHighlightProvider": true,
   "documentLinkProvider": {
     "resolveProvider": true
@@ -41,6 +42,8 @@
       "\n"
     ]
   },
+  "documentRangeFormattingProvider": true,
+  "documentRangesFormattingProvider": true,
   "documentSymbolProvider": true,
   "executeCommandProvider": {
     "commands": [
