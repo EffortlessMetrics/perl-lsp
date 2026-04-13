@@ -147,7 +147,7 @@ body:
         ```bash
         cargo test -p perl-parser-core -- test_check_as_label --exact
         cargo test -p perl-parser-core -- test_end_as_label --exact
-        cargo fmt --all && cargo clippy -p perl-parser-core --tests
+        cargo xtask fmt && cargo clippy -p perl-parser-core --tests
         ```
       render: markdown
     validations:

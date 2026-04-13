@@ -52,7 +52,7 @@ jobs:
 
       - name: Auto-fix formatting
         run: |
-          cargo fmt --all
+          cargo xtask fmt
           if ! git diff --quiet; then
             git config user.name "github-actions[bot]"
             git config user.email "github-actions[bot]@users.noreply.github.com"

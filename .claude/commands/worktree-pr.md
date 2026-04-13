@@ -22,7 +22,7 @@ git diff HEAD
 
 3. **Validate** — run checks in the worktree:
 ```bash
-cargo fmt --all -- --check
+cargo xtask fmt --check
 cargo clippy --workspace --lib 2>&1 | tail -5
 cargo test --workspace --lib 2>&1 | tail -10
 ```

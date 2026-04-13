@@ -72,11 +72,11 @@ runs:
   steps:
     - name: Check formatting
       id: fmt
-      if: inputs.check-fmt == 'true' && runner.os != 'Windows'
+      if: inputs.check-fmt == 'true'
       shell: bash
       run: |
         echo "::group::Format Check"
-        cargo fmt --all --check
+        cargo xtask fmt --check
         echo "status=$?" >> $GITHUB_OUTPUT
         echo "::endgroup::"
 

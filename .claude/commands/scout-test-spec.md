@@ -34,7 +34,7 @@ fn test_<feature_name>() {
 
 ```bash
 cargo test -p <crate> -- <test_name> --exact
-cargo fmt --all && cargo clippy -p <crate> --tests
+cargo xtask fmt && cargo clippy -p <crate> --tests
 ```
 
 ## Output

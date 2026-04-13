@@ -2065,7 +2065,7 @@ if [ "$GATE_STATUS" -ne 0 ]; then
     fi
     if grep -qE 'cargo (xtask )?fmt.*--check' "$GATE_LOG" 2>/dev/null && \
        grep -qE 'Diff in|rustfmt' "$GATE_LOG" 2>/dev/null; then
-        echo "   • Formatting drift — run \`cargo xtask fmt\` (or \`cargo fmt --all\`) to auto-fix"
+        echo "   • Formatting drift — run \`cargo xtask fmt\` to auto-fix"
         HINTED=true
     fi
     if grep -qE 'clippy::|warning: .*-> .*\.rs' "$GATE_LOG" 2>/dev/null; then
@@ -2073,10 +2073,11 @@ if [ "$GATE_STATUS" -ne 0 ]; then
         HINTED=true
     fi
     if grep -qE 'os error 206|filename.*too long|ERROR_FILENAME_EXCED' "$GATE_LOG" 2>/dev/null; then
-        echo "   • Windows MAX_PATH (os error 206) — paths exceed 260 chars"
-        echo "     Fix A: Enable long paths (requires admin terminal):"
-        echo "       reg add HKLM\SYSTEM\CurrentControlSet\Control\FileSystem /v LongPathsEnabled /t REG_DWORD /d 1 /f"
-        echo "     Fix B: bash scripts/install-githooks.sh  (stale hook may be the cause)"
+        echo "   • Windows CreateProcess command-line length limit (os error 206)"
+        echo "     'cargo fmt --all' passes all 1200+ source files in one command,"
+        echo "     exceeding the ~32K-char CreateProcess limit on Windows."
+        echo "     Fix: bash scripts/install-githooks.sh"
+        echo "     This installs the current hook which uses 'cargo xtask fmt' (per-crate)."
         echo "     See: docs/contributing/FIRST_PR.md"
         HINTED=true
     fi
@@ -2513,8 +2514,8 @@ fn cmd_check_local(repo_root: &Path) -> Result<i32> {
     println!();
 
     println!("{}1. Format check...{}", YELLOW, NC);
-    if command_status_strict(repo_root, "cargo", &["fmt", "--all", "--", "--check"], &[]).is_err() {
-        println!("{}✗ Format check failed - run 'cargo fmt --all' to fix{}", RED, NC);
+    if command_status_strict(repo_root, "cargo", &["xtask", "fmt", "--check"], &[]).is_err() {
+        println!("{}✗ Format check failed - run 'cargo xtask fmt' to fix{}", RED, NC);
         return Ok(1);
     }
     println!();
@@ -4454,11 +4455,11 @@ mod tests {
     #[test]
     fn pre_push_hook_has_os_error_206_hint() {
         let hook = pre_push_hook_script();
-        // Issue #4220 — Windows MAX_PATH (os error 206) hint must appear in the
-        // gate-failure handler so contributors know how to fix it.
+        // Issue #4220 — Windows CreateProcess command-line limit (os error 206)
+        // hint must appear in the gate-failure handler so contributors know how to fix it.
         assert!(
-            hook.contains("os error 206") || hook.contains("LongPathsEnabled"),
-            "hook must hint at Windows MAX_PATH fix (issue #4220)"
+            hook.contains("os error 206") || hook.contains("CreateProcess"),
+            "hook must hint at Windows CreateProcess limit fix (issue #4220)"
         );
     }
 

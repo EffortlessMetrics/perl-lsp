@@ -237,7 +237,7 @@ For full detail and rationale, see [CLAUDE.md](CLAUDE.md#coding-standards).
 
 ### Formatting and Linting
 
-- Run `cargo fmt --all` before every commit — `just ci-gate` will catch this, but the sooner the better
+- Run `cargo xtask fmt` before every commit — `just ci-gate` will catch this, but the sooner the better
 - Fix all `cargo clippy --workspace` warnings — clippy is treated as errors in CI
 - Use [conventional commits](https://www.conventionalcommits.org/): `feat:`, `fix:`, `docs:`, `refactor:`, `test:`, etc.
 - Scope-qualify commit subjects: `feat(lsp): ...`, `fix(dap): ...`, `chore(release): ...`

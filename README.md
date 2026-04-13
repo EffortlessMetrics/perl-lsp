@@ -133,7 +133,7 @@ See [docs/README.md](docs/README.md) for the full crate map and design notes.
 
 ```bash
 cargo test --workspace --lib
-cargo fmt --all
+cargo xtask fmt
 cargo clippy --workspace
 nix develop -c just ci-gate   # required before merge
 ```
