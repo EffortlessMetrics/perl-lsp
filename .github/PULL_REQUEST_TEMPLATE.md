@@ -8,7 +8,7 @@
 <!-- What test was added? Does it fail before the fix and pass after? -->
 
 ## Verification
-- [ ] `cargo fmt --all` — clean
+- [ ] `cargo xtask fmt` — clean
 - [ ] I used a narrow orthogonal pass first (freshness check, truth-check, or targeted repro) before the broader gate.
 - [ ] `cargo clippy -p <crate> --tests` — clean
 - [ ] `cargo test -p <crate>` — pass

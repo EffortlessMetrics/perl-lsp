@@ -37,7 +37,7 @@ context.
 
 ## Verification (per-crate default)
 ```bash
-cargo fmt --all
+cargo xtask fmt
 cargo clippy -p <crate> --tests -- -D warnings
 cargo test -p <crate>
 ```

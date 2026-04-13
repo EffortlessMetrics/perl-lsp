@@ -125,7 +125,7 @@ just ci-lsp-def                       # Semantic definition tests
 ### Lint, Format, Quality
 
 ```bash
-cargo fmt --all                       # Format code
+cargo xtask fmt                       # Format code (per-crate, Windows-safe)
 cargo clippy --workspace              # Lint all crates
 cargo clippy --workspace --lib        # Lint libraries only (faster)
 just dead-code                        # Dead code report

@@ -76,7 +76,7 @@ echo "1. Code Quality Gates"
 echo "--------------------"
 
 # Formatting check
-check_gate "Code Formatting" "cargo fmt --all -- --check" "success"
+check_gate "Code Formatting" "cargo xtask fmt --check" "success"
 
 # Clippy checks
 check_gate "Clippy Linting" "cargo clippy --workspace --locked -- -D warnings" "success"

@@ -90,7 +90,7 @@ fi
 
 echo ""
 echo ">>> fmt check"
-cargo fmt --all -- --check
+cargo xtask fmt --check
 
 echo ""
 # cspell:ignore clippy

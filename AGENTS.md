@@ -90,7 +90,7 @@ Prefer cheap, orthogonal passes over one broad gate:
 
 ## Coding Expectations
 
-- Run `cargo fmt --all` for formatting.
+- Run `cargo xtask fmt` for formatting (per-crate invocation, Windows-safe).
 - Run the narrowest relevant tests first, then the broader gate when the change is ready.
 - `unwrap()`, `expect()`, `panic!()`, `todo!()`, and `unimplemented!()` are banned in production code.
 - In tests, prefer `Result<()>` and helpers such as `perl_tdd_support::must` and `must_some`.

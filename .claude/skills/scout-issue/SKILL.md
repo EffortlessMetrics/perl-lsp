@@ -60,7 +60,7 @@ fn test_<name>() {
 **Verify:**
 \`\`\`bash
 cargo test -p <crate> -- <test_name> --exact
-cargo fmt --all && cargo clippy -p <crate> --tests
+cargo xtask fmt && cargo clippy -p <crate> --tests
 \`\`\`
 
 ## Acceptance Criteria
