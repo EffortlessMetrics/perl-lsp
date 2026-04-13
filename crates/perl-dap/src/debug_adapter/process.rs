@@ -1671,7 +1671,7 @@ impl DebugAdapter {
 
 #[cfg(test)]
 mod tests {
-    use super::DebugAdapter;
+    use super::{DebugAdapter, detect_perl_info};
 
     #[test]
     fn missing_module_name_parses_standard_module_path() {
@@ -1707,5 +1707,80 @@ mod tests {
         assert!(message.contains("Module Some::Missing::Module not found"));
         assert!(message.contains("cpan Some::Missing::Module"));
         assert!(message.contains("metacpan.org/pod/Some::Missing::Module"));
+    }
+
+    /// Verify that `detect_perl_info()` runs without panicking.
+    ///
+    /// On systems with Perl installed this returns a "Found Perl at …" string.
+    /// On systems without Perl it returns a "not found" install-hint string.
+    /// Either outcome is acceptable — the test just proves the helper is safe
+    /// to call in all environments.
+    #[test]
+    fn detect_perl_version_succeeds_when_perl_available() {
+        // Call detect_perl_info() — must not panic regardless of whether Perl
+        // is on PATH.  The returned string must be non-empty.
+        let info = detect_perl_info();
+        assert!(!info.is_empty(), "detect_perl_info should always return a non-empty string");
+    }
+
+    /// Verify that `detect_perl_info()` always mentions "perl" (case-insensitive)
+    /// so that it is suitable for inclusion in user-facing error messages.
+    #[test]
+    fn detect_perl_info_output_mentions_perl() {
+        let info = detect_perl_info();
+        assert!(
+            info.to_lowercase().contains("perl"),
+            "detect_perl_info output should mention 'perl'; got: {info:?}"
+        );
+    }
+
+    /// Verify that a failed launch returns a response whose message mentions Perl.
+    ///
+    /// We construct a temporary file so that the file-exists check passes, then
+    /// rely on the fact that on PATH-less environments `perl -d` will fail and
+    /// the enhanced error path fires, or that the Perl syntax check / spawn of
+    /// `perl -d` on a trivially-empty script eventually surfaces an error whose
+    /// message includes Perl-related text.
+    ///
+    /// The assertion is intentionally broad: the message must contain the word
+    /// "perl" (case-insensitive).  This covers both the success branch
+    /// ("Found Perl at …") and the not-found branch ("Perl was not found …").
+    #[test]
+    fn handle_launch_error_includes_perl_info() -> Result<(), String> {
+        use std::io::Write;
+        use tempfile::NamedTempFile;
+
+        // Create a temporary file so that the file-exists validation in
+        // launch_debugger() passes, letting us reach the Perl-spawn error path.
+        let mut tmp =
+            NamedTempFile::new().map_err(|e| format!("could not create temp file: {e}"))?;
+        writeln!(tmp, "# placeholder").map_err(|e| format!("could not write to temp file: {e}"))?;
+        let tmp_path = tmp.path().to_str().ok_or("temp path is not valid UTF-8")?.to_string();
+
+        let mut adapter = DebugAdapter::new();
+        let response = adapter.handle_launch(
+            1,
+            1,
+            Some(serde_json::json!({
+                "program": tmp_path
+            })),
+        );
+
+        match response {
+            super::DapMessage::Response { success, message, .. } => {
+                // The launch may succeed (Perl on PATH ran the empty script) or fail.
+                // When it fails, the message must mention Perl.
+                if !success {
+                    let msg = message.unwrap_or_default();
+                    assert!(
+                        msg.to_lowercase().contains("perl"),
+                        "launch error message should mention 'perl'; got: {msg:?}"
+                    );
+                }
+                // success == true means Perl is on PATH and launched fine — valid outcome.
+                Ok(())
+            }
+            other => Err(format!("expected Response from handle_launch; got {other:?}")),
+        }
     }
 }
