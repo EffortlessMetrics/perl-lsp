@@ -149,10 +149,23 @@ pub fn resolve_use_lib_paths_from_source(
     workspace_root: &Path,
     file_dir: Option<&Path>,
 ) -> Vec<String> {
+    resolve_use_lib_paths_from_source_at_offset(source, source.len(), workspace_root, file_dir)
+}
+
+/// Resolve effective include paths from lexical `use lib` / `no lib` operations,
+/// considering only source text up to the provided byte offset.
+#[must_use]
+pub fn resolve_use_lib_paths_from_source_at_offset(
+    source: &str,
+    offset: usize,
+    workspace_root: &Path,
+    file_dir: Option<&Path>,
+) -> Vec<String> {
     // Front of this vector is highest-precedence (searched first), matching Perl's
     // `use lib` behavior where later statements prepend to `@INC`.
     let mut resolved = Vec::new();
-    for op in extract_use_lib_operations(source) {
+    let source_prefix = source.get(..offset).unwrap_or(source);
+    for op in extract_use_lib_operations(source_prefix) {
         match op {
             UseLibAction::Add(paths) => {
                 let added = resolve_use_lib_paths(&paths, workspace_root, file_dir);
@@ -527,6 +540,38 @@ mod tests {
         let source = "use lib 'lib';\nuse lib 't/lib';\nno lib 'lib';\n";
         let resolved = resolve_use_lib_paths_from_source(source, Path::new("/project"), None);
         assert_eq!(resolved, vec!["t/lib"]);
+    }
+
+    #[test]
+    fn resolve_use_lib_paths_respects_offset_before_no_lib() {
+        let source = "use lib 'lib';
+no lib 'lib';
+use Target::Module;
+";
+        let cutoff = source.find("no lib").unwrap_or(source.len());
+        let resolved = resolve_use_lib_paths_from_source_at_offset(
+            source,
+            cutoff,
+            Path::new("/project"),
+            None,
+        );
+        assert_eq!(resolved, vec!["lib"]);
+    }
+
+    #[test]
+    fn resolve_use_lib_paths_respects_offset_after_no_lib() {
+        let source = "use lib 'lib';
+no lib 'lib';
+use Target::Module;
+";
+        let cutoff = source.len();
+        let resolved = resolve_use_lib_paths_from_source_at_offset(
+            source,
+            cutoff,
+            Path::new("/project"),
+            None,
+        );
+        assert!(resolved.is_empty());
     }
 
     #[test]

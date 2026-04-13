@@ -42,7 +42,7 @@ either a prebuilt binary or an explicit `PERL_LSP_BIN=/path/to/perl-lsp`.
 | 11 | Hover | Request succeeds end-to-end and returns useful structure-or-empty without crashing |
 | 12 | Strict diagnostics | `publishDiagnostics` arrives and the payload shape stays valid |
 | 13 | Document symbols | Parsable files return structured document symbols |
-| 14 | `@INC` conformance | PL701, hover, and goto-definition stay consistent across 5 module-resolution modes |
+| 14 | `@INC` conformance | PL701, hover, and goto-definition stay consistent across 6 module-resolution modes |
 | 15 | Workspace symbols | `workspace/symbol` finds same-named symbols across workspace folders and carries `workspaceFolderUri` |
 | 16 | Folder removal | removing a workspace folder evicts its symbols from `workspace/symbol` results |
 | 17 | Deleted file churn | a `didChangeWatchedFiles` Deleted event removes stale symbols and definition targets |

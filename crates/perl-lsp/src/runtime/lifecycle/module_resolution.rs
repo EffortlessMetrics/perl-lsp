@@ -6,7 +6,7 @@ use super::super::*;
 use perl_module_resolution::{
     IncRoot, IncRootKind, ModuleUriResolution,
     resolve_module_path as resolve_workspace_module_path, resolve_module_uri_with_effective_inc,
-    use_lib::resolve_use_lib_paths_from_source,
+    use_lib::{resolve_use_lib_paths_from_source, resolve_use_lib_paths_from_source_at_offset},
 };
 use std::path::PathBuf;
 use std::sync::Once;
@@ -320,6 +320,17 @@ impl LspServer {
         doc_text: Option<&str>,
         doc_uri: Option<&str>,
     ) -> Option<String> {
+        self.resolve_module_to_path_with_doc_at_offset(module_name, doc_text, doc_uri, None)
+    }
+
+    /// Resolve a module name to a file path URI with optional position-aware lexical context.
+    pub(crate) fn resolve_module_to_path_with_doc_at_offset(
+        &self,
+        module_name: &str,
+        doc_text: Option<&str>,
+        doc_uri: Option<&str>,
+        doc_offset: Option<usize>,
+    ) -> Option<String> {
         let mut config = workspace_config_for_doc(self, doc_uri);
         let perl5lib_paths = std::env::var("PERL5LIB")
             .map(|v| perl_lsp_config::WorkspaceConfig::parse_perl5lib(&v))
@@ -355,7 +366,16 @@ impl LspServer {
             if file_dir.is_none() && doc_uri.is_some() {
                 tracing::trace!("Module URI resolution failed for doc_uri: {:?}", doc_uri);
             }
-            lexical_paths = resolve_use_lib_paths_from_source(text, &root, file_dir.as_deref());
+            lexical_paths = if let Some(offset) = doc_offset {
+                resolve_use_lib_paths_from_source_at_offset(
+                    text,
+                    offset,
+                    &root,
+                    file_dir.as_deref(),
+                )
+            } else {
+                resolve_use_lib_paths_from_source(text, &root, file_dir.as_deref())
+            };
         }
 
         let open_document_uris: Vec<String> = {
@@ -394,6 +414,7 @@ impl LspServer {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::runtime::workspace_folder::WorkspaceFolderState;
     use std::fs;
 
     // --- workspace root detection warning tests ---
@@ -725,6 +746,68 @@ mod tests {
             resolved, module_file,
             "no lib should remove prior use lib path from lexical overlay"
         );
+        Ok(())
+    }
+
+    #[test]
+    fn test_resolve_module_to_path_with_doc_offset_is_position_aware() -> TestResult {
+        let temp = tempfile::tempdir()?;
+        let workspace = temp.path().join("workspace");
+        let custom_dir = workspace.join("custom");
+        let module_file = custom_dir.join("Overlay").join("Live.pm");
+        fs::create_dir_all(module_file.parent().ok_or("no parent")?)?;
+        fs::write(&module_file, "package Overlay::Live; 1;")?;
+
+        let server = LspServer::new();
+        *server.root_path.lock() = Some(workspace.clone());
+        {
+            let mut folders = server.workspace_folders.lock();
+            folders.push(
+                WorkspaceFolderState::new(format!(
+                    "file://{}",
+                    workspace.to_string_lossy().replace('\\', "/")
+                ))
+                .with_path(workspace.clone())
+                .with_name("workspace".to_string()),
+            );
+        }
+        {
+            let mut config = server.workspace_config.lock();
+            config.include_paths = vec![];
+        }
+
+        let doc_uri = format!("file://{}/main.pl", workspace.to_string_lossy().replace('\\', "/"));
+        let doc_text = "use lib 'custom';
+no lib 'custom';
+use Overlay::Live;
+";
+        let before_no_lib = doc_text.find("no lib").ok_or("missing no lib")?;
+
+        let resolved_before = server
+            .resolve_module_to_path_with_doc_at_offset(
+                "Overlay::Live",
+                Some(doc_text),
+                Some(&doc_uri),
+                Some(before_no_lib),
+            )
+            .ok_or("expected module to resolve before no lib")?;
+        assert!(
+            resolved_before.contains("custom/Overlay/Live.pm")
+                || resolved_before.contains(r"custom\Overlay\Live.pm"),
+            "expected custom overlay path before no lib, got {resolved_before}"
+        );
+
+        let resolved_after = server.resolve_module_to_path_with_doc_at_offset(
+            "Overlay::Live",
+            Some(doc_text),
+            Some(&doc_uri),
+            Some(doc_text.len()),
+        );
+        assert!(
+            resolved_after.is_none(),
+            "expected module to stop resolving after no lib at end-of-doc"
+        );
+
         Ok(())
     }
 

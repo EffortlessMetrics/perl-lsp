@@ -899,7 +899,7 @@ impl LspServer {
 
             // First, extract module reference info while holding the document lock briefly
             // We need to release the lock before calling resolve_module_to_path to avoid deadlock
-            let module_lookup_info: Option<(EarlyDefinitionTarget, String)> = {
+            let module_lookup_info: Option<(EarlyDefinitionTarget, String, usize)> = {
                 let documents = self.documents_guard();
                 if let Some(doc) = self.get_document(&documents, uri) {
                     let offset = self.pos16_to_offset(doc, line, character);
@@ -915,11 +915,15 @@ impl LspServer {
                     if let Some(module_name) =
                         extract_xs_bootstrap_target(&text_around, cursor_in_text, &current_package)
                     {
-                        Some((EarlyDefinitionTarget::XsBootstrap(module_name), doc.text.clone()))
+                        Some((
+                            EarlyDefinitionTarget::XsBootstrap(module_name),
+                            doc.text.clone(),
+                            offset,
+                        ))
                     } else if let Some(module_name) =
                         self.extract_module_reference_extended(&text_around, cursor_in_text)
                     {
-                        Some((EarlyDefinitionTarget::Module(module_name), doc.text.clone()))
+                        Some((EarlyDefinitionTarget::Module(module_name), doc.text.clone(), offset))
                     } else {
                         // Also check if we're on a package name followed by ->
                         let mut package_name_result = None;
@@ -934,6 +938,7 @@ impl LspServer {
                                             package_match.as_str().to_string(),
                                         ),
                                         doc.text.clone(),
+                                        offset,
                                     ));
                                     break;
                                 }
@@ -948,7 +953,7 @@ impl LspServer {
             // Lock is released here
 
             // Now resolve module to path WITHOUT holding the document lock
-            if let Some((lookup_target, doc_text)) = module_lookup_info {
+            if let Some((lookup_target, doc_text, doc_offset)) = module_lookup_info {
                 match lookup_target {
                     EarlyDefinitionTarget::XsBootstrap(module_name) => {
                         if let Some(xs_path) = self.resolve_xs_bootstrap_path_with_uri(
@@ -963,10 +968,11 @@ impl LspServer {
                         }
                     }
                     EarlyDefinitionTarget::Module(module_name) => {
-                        if let Some(module_path) = self.resolve_module_to_path_with_doc(
+                        if let Some(module_path) = self.resolve_module_to_path_with_doc_at_offset(
                             &module_name,
                             Some(&doc_text),
                             Some(uri),
+                            Some(doc_offset),
                         ) {
                             return Ok(Some(json!([{
                                 "uri": module_path,
