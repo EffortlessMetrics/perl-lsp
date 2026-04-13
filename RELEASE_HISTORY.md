@@ -20,10 +20,10 @@ Tag commit timestamps may differ from release dates.
 | [0.12.1] | `v0.12.1` | [yes][gh-0.12.1] | 2026-03-31 | `7e8984b5` | [v0.12.0...v0.12.1] | 10 (+ VSIX) | 0.12.1 (2026-04-01) | [perl-lsp-rs][vsce] | [v0.12.1][n-0.12.1] |
 | [0.12.0] | `v0.12.0` | [yes][gh-0.12.0] | 2026-03-30 | `4c909c2d` | [v0.11.0...v0.12.0] | 10 (+ VSIX) | — | [perl-lsp-rs][vsce] | [v0.12.0][n-0.12.0] |
 | [0.11.0] | `v0.11.0` | [yes][gh-0.11.0] | 2026-03-12 | `d22ac734` | [v0.8.5...v0.11.0] | 11 (+ 2 VSIX) | — | [perl-lsp-rs][vsce] | [v0.11.0][n-0.11.0] |
-| 0.10.0 | — | — | 2026-02-28 (CL) | — | — | — | — | — | — |
+| [0.10.0] | — | — | 2026-02-28 (CL) | — | — | — | — | — | [v0.10.0][n-0.10.0] |
 | [0.9.1] | `v0.9.1` | — | 2026-02-20 (tag) | `c82a1604` | — | — | — | — | [v0.9.1][n-0.9.1] |
-| 0.9.0 | — | — | 2026-01-18 (CL) | — | — | — | — | — | — |
-| 0.8.8 | — | — | 2025-12-01 (CL) | — | — | — | — | — | — |
+| [0.9.0] | — | — | 2026-01-18 (CL) | — | — | — | — | — | [v0.9.0][n-0.9.0] |
+| [0.8.8] | — | — | 2025-12-01 (CL) | — | — | — | — | — | [v0.8.8][n-0.8.8] |
 | [0.8.5] | `v0.8.5` | [yes][gh-0.8.5] | 2025-08-24 | `ae75da03` | [v0.8.3...v0.8.5] | 2 (linux-x64 + checksum) | — | — | [v0.8.5][n-0.8.5] |
 | 0.8.3-rc1 | `v0.8.3-rc1` | — | 2025-08-15 (tag) | `150a22b1` | — | — | — | — | — |
 | [0.8.3] | `v0.8.3` | [yes][gh-0.8.3] | 2025-08-23 | `5331007a` | — | 0 (source-only) | — | — | [v0.8.3][n-0.8.3] |
@@ -61,7 +61,10 @@ Tag commit timestamps may differ from release dates.
 [n-0.12.1]: docs/releases/v0.12.1.md
 [n-0.12.0]: docs/releases/v0.12.0.md
 [n-0.11.0]: docs/releases/v0.11.0.md
+[n-0.10.0]: docs/releases/v0.10.0.md
 [n-0.9.1]: docs/releases/v0.9.1.md
+[n-0.9.0]: docs/releases/v0.9.0.md
+[n-0.8.8]: docs/releases/v0.8.8.md
 [n-0.8.5]: docs/releases/v0.8.5.md
 [n-0.8.3]: docs/releases/v0.8.3.md
 
@@ -72,7 +75,10 @@ Tag commit timestamps may differ from release dates.
 [0.12.1]: docs/releases/v0.12.1.md
 [0.12.0]: docs/releases/v0.12.0.md
 [0.11.0]: docs/releases/v0.11.0.md
+[0.10.0]: docs/releases/v0.10.0.md
 [0.9.1]: docs/releases/v0.9.1.md
+[0.9.0]: docs/releases/v0.9.0.md
+[0.8.8]: docs/releases/v0.8.8.md
 [0.8.5]: docs/releases/v0.8.5.md
 [0.8.3]: docs/releases/v0.8.3.md
 

@@ -474,7 +474,7 @@ Release notes: [v0.12.4](docs/releases/v0.12.4.md) · [GitHub Release](https://g
 - **Unused dev-dependencies removed** from 5 crates. (#4183, #4255)
 
 
-## [0.12.3] - 2026-04-08
+## [0.12.3] - 2026-04-09
 
 Release notes: [v0.12.3](docs/releases/v0.12.3.md) · [GitHub Release](https://github.com/EffortlessMetrics/perl-lsp/releases/tag/v0.12.3)
 
@@ -770,7 +770,7 @@ v0.12.2 publish run and post-publish testing:
 - **UX test harness framework** (#3297): systematic framework for UX regression
   tests with helpers for LSP, DAP, and extension surface validation.
 
-## [0.12.2] - 2026-04-08
+## [0.12.2] - 2026-04-04
 
 Release notes: [v0.12.2](docs/releases/v0.12.2.md) · [GitHub Release](https://github.com/EffortlessMetrics/perl-lsp/releases/tag/v0.12.2)
 
@@ -925,7 +925,7 @@ the remaining 21 (including `tree-sitter-perl-c`, `tree-sitter-perl-rs`,
   (#3284)
 - **test de-flake**: `empty_timer_reports_total` race condition fixed (#3278)
 
-## [0.12.1] - 2026-03-30
+## [0.12.1] - 2026-03-31
 
 Release notes: [v0.12.1](docs/releases/v0.12.1.md) · [GitHub Release](https://github.com/EffortlessMetrics/perl-lsp/releases/tag/v0.12.1)
 
@@ -951,7 +951,7 @@ aligned.
 - status and roadmap docs now treat `v0.12.0` as the latest published GitHub
   release and `v0.12.1` as the active fix-forward cut
 
-## [0.12.0] - 2026-03-24
+## [0.12.0] - 2026-03-30
 
 Release notes: [v0.12.0](docs/releases/v0.12.0.md) · [GitHub Release](https://github.com/EffortlessMetrics/perl-lsp/releases/tag/v0.12.0)
 
@@ -1039,6 +1039,8 @@ repeatable release flow.
 
 ## [0.10.0] - 2026-02-28
 
+Release notes: [v0.10.0](docs/releases/v0.10.0.md) (internal milestone — no GitHub Release)
+
 A major release campaign spanning 60+ PRs (#845-#911) focused on build reliability,
 security hardening, crates.io publishing readiness, documentation, and code quality.
 
@@ -1116,6 +1118,8 @@ security hardening, crates.io publishing readiness, documentation, and code qual
 
 ## [0.9.1] - 2026-02-20
 
+Release notes: [v0.9.1](docs/releases/v0.9.1.md) (tag only — no GitHub Release)
+
 ### Added
 - **Initial Public Alpha Release**: Substantially complete feature set for early testing.
 - **Enhanced LSP Features**: 99% coverage of LSP 3.18 methods (alpha-validated).
@@ -1139,6 +1143,8 @@ security hardening, crates.io publishing readiness, documentation, and code qual
 
 ## [0.9.0] - 2026-01-18
 
+Release notes: [v0.9.0](docs/releases/v0.9.0.md) (internal milestone — no tag or GitHub Release)
+
 ### Added
 - **Semantic Analyzer Phase 1**: 12/12 critical node handlers implemented.
 - **LSP textDocument/definition Integration**: Semantic-aware definition resolution.
@@ -1148,6 +1154,8 @@ security hardening, crates.io publishing readiness, documentation, and code qual
 - **LSP Coverage**: Increased to 82% of trackable features.
 
 ## [0.8.8] - 2025-12-01
+
+Release notes: [v0.8.8](docs/releases/v0.8.8.md) (internal milestone — no tag or GitHub Release)
 
 ### Added
 - **Initial Workspace Configuration Support**.

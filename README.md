@@ -125,6 +125,7 @@ See [docs/README.md](docs/README.md) for the full crate map and design notes.
 | Troubleshooting | [docs/how-to/TROUBLESHOOTING.md](docs/how-to/TROUBLESHOOTING.md) |
 | Current status and metrics | [docs/project/status/index.md](docs/project/status/index.md) |
 | Release roadmap | [docs/project/ROADMAP.md](docs/project/ROADMAP.md) |
+| Release history | [RELEASE_HISTORY.md](RELEASE_HISTORY.md) |
 | Full docs index | [docs/INDEX.md](docs/INDEX.md) |
 
 ## Contributing
