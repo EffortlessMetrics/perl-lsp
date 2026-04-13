@@ -155,7 +155,7 @@ jobs:
 
       - name: Comment on #2093 with flake report
         if: steps.retry_results.outputs.flake_count > 0
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           script: |
             const fs = require('fs');
@@ -193,7 +193,7 @@ jobs:
 
       - name: Create issue for stable failures
         if: steps.retry_results.outputs.stable_failure_count > 0
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           script: |
             const fs = require('fs');
