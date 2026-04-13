@@ -134,7 +134,7 @@ jobs:
 
       - name: Upload smoke test results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: smoke-test-results-v${{ needs.resolve-version.outputs.version }}
           path: /tmp/smoke-output.txt
