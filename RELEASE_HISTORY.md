@@ -50,7 +50,7 @@ Tag commit timestamps may differ from release dates.
 | **Pest parser** | 0.1.0-pest — 0.5.0 | Jul — Aug 2025 | PEG grammar, initial AST |
 | **Native parser + LSP** | 0.7.x — 0.8.x | Aug 2025 | Recursive descent parser, first LSP features, first public releases |
 | **Feature buildout** | 0.9.x — 0.10.0 | Jan — Feb 2026 | Semantic analyzer, DAP, release orchestration |
-| **Announcement prep** | 0.11.0 — 0.12.x | Mar — Apr 2026 | Multi-platform binaries, VS Code Marketplace, crates.io |
+| **Platform availability** | 0.11.0 — 0.12.x | Mar — Apr 2026 | Multi-platform binaries, VS Code Marketplace, crates.io |
 
 ## Links
 
