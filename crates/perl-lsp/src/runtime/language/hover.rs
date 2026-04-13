@@ -14,17 +14,17 @@ enum HoverExtracted {
     /// Hover content fully built (symbol, builtin, or token hover).
     Complete(Value),
     /// A `use Module` was found; module name needs resolution without lock.
-    /// Carries (module_name, doc_text, doc_uri) for use lib / FindBin wiring.
-    UseModule(String, String, String),
+    /// Carries (module_name, doc_text, doc_uri, doc_offset) for use lib / FindBin wiring.
+    UseModule(String, String, String, usize),
     /// Cursor is on a `->method()` call where the method belongs to an inherited or
     /// role-composed ancestor class. Carries (receiver_pkg, method_name, doc_uri).
     /// Phase 2 resolves the hover using the workspace index BFS (same logic as
     /// `inherited_method_definition_location` in navigation.rs).
     InheritedMethod(String, String, String),
     /// Cursor is on a package-name token (contains `::`) that was not handled by an
-    /// earlier semantic or `use` path. Carries (package_name, doc_text, doc_uri).
+    /// earlier semantic or `use` path. Carries (package_name, doc_text, doc_uri, doc_offset).
     /// Phase 2 resolves it via `build_module_hover` (same as `UseModule`).
-    PossiblePackage(String, String, String),
+    PossiblePackage(String, String, String, usize),
     /// Nothing hoverable at this position.
     None,
 }
@@ -103,6 +103,7 @@ impl LspServer {
                                     module_name,
                                     doc.text.clone(),
                                     uri.to_string(),
+                                    offset,
                                 )
                             }
                         } else if let Some(module_name) =
@@ -113,6 +114,7 @@ impl LspServer {
                                 module_name,
                                 doc.text.clone(),
                                 uri.to_string(),
+                                offset,
                             )
                         } else {
                             self.extract_symbol_hover(uri, ast, &doc.text, offset)
@@ -130,14 +132,24 @@ impl LspServer {
             // Phase 2: Resolve module or return pre-built hover
             match extracted {
                 HoverExtracted::Complete(value) => return Ok(Some(value)),
-                HoverExtracted::UseModule(module_name, doc_text, doc_uri) => {
-                    return Ok(Some(self.build_module_hover(&module_name, &doc_text, &doc_uri)));
+                HoverExtracted::UseModule(module_name, doc_text, doc_uri, doc_offset) => {
+                    return Ok(Some(self.build_module_hover(
+                        &module_name,
+                        &doc_text,
+                        &doc_uri,
+                        Some(doc_offset),
+                    )));
                 }
-                HoverExtracted::PossiblePackage(pkg_name, doc_text, doc_uri) => {
+                HoverExtracted::PossiblePackage(pkg_name, doc_text, doc_uri, doc_offset) => {
                     // Package names with `::` always get module hover (file path + MetaCPAN link).
                     // For unresolved names this still shows the MetaCPAN link which is more
                     // useful than the bare-token fallback.
-                    return Ok(Some(self.build_module_hover(&pkg_name, &doc_text, &doc_uri)));
+                    return Ok(Some(self.build_module_hover(
+                        &pkg_name,
+                        &doc_text,
+                        &doc_uri,
+                        Some(doc_offset),
+                    )));
                 }
                 #[cfg(feature = "workspace")]
                 HoverExtracted::InheritedMethod(receiver_pkg, method_name, doc_uri) => {
@@ -548,6 +560,7 @@ impl LspServer {
                     pkg_name,
                     text.to_string(),
                     uri.to_string(),
+                    offset,
                 );
             }
 
@@ -1156,14 +1169,23 @@ impl LspServer {
     /// Tries URI-based resolution first, then filesystem-based resolution.
     /// When a module file is found, extracts POD documentation and includes
     /// it in the hover display. Results are cached per file path.
-    fn build_module_hover(&self, module_name: &str, doc_text: &str, doc_uri: &str) -> Value {
+    fn build_module_hover(
+        &self,
+        module_name: &str,
+        doc_text: &str,
+        doc_uri: &str,
+        doc_offset: Option<usize>,
+    ) -> Value {
         // MetaCPAN link is included in every branch — compute once up front.
         let metacpan_link = format!("[View on MetaCPAN](https://metacpan.org/pod/{module_name})");
 
         // Try URI resolution (handles open docs + workspace folders)
-        if let Some(uri) =
-            self.resolve_module_to_path_with_doc(module_name, Some(doc_text), Some(doc_uri))
-        {
+        if let Some(uri) = self.resolve_module_to_path_with_doc_at_offset(
+            module_name,
+            Some(doc_text),
+            Some(doc_uri),
+            doc_offset,
+        ) {
             let display_path = uri.strip_prefix("file://").unwrap_or(&uri);
             let fs_path = url::Url::parse(&uri).ok().and_then(|u| u.to_file_path().ok());
             let pod_section =
