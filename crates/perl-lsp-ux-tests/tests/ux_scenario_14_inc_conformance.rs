@@ -11,6 +11,7 @@
 //! | Test function | Mode | Expected outcome |
 //! |---|---|---|
 //! | `scenario_14_relative_include_path` | `includePaths: ["lib"]` config | resolves |
+//! | `scenario_14_absolute_include_path` | `includePaths: ["/abs/path/lib"]` config | resolves |
 //! | `scenario_14_use_lib_lexical` | in-source `use lib 'lib'` | resolves |
 //! | `scenario_14_no_lib_cancellation` | `use lib` then `no lib` | NOT resolved |
 //! | `scenario_14_findbin_relative` | `use FindBin; use lib "$FindBin::Bin/lib"` | resolves |
@@ -216,6 +217,85 @@ fn scenario_14_relative_include_path() {
 // =============================================================================
 // Fixture 2: lexical use lib in source
 // =============================================================================
+
+#[test]
+fn scenario_14_absolute_include_path() {
+    if !binary_available() {
+        eprintln!("SKIP scenario_14_absolute_include_path: perl-lsp binary not found");
+        return;
+    }
+
+    let harness = UxHarness::new(
+        ScenarioConfig { timeout: Duration::from_secs(20), ..Default::default() }
+            .with_file("fixture.pl", ABSOLUTE_INCLUDE_SOURCE)
+            .with_file("absolute_lib/AbsoluteModule.pm", ABSOLUTE_INCLUDE_MODULE),
+    )
+    .expect("Failed to create UX harness");
+
+    let absolute_lib = harness.workspace.path("absolute_lib");
+    let absolute_path = absolute_lib.to_string_lossy().to_string();
+    send_include_paths(&harness, &[&absolute_path]);
+
+    harness.open_file("fixture.pl", ABSOLUTE_INCLUDE_SOURCE).expect("didOpen should succeed");
+    std::thread::sleep(Duration::from_millis(500));
+
+    let diags = wait_diagnostics(&harness, "fixture.pl");
+    let pl701_absent = !has_pl701(&diags);
+
+    let defs = harness.definition("fixture.pl", 2, 4).expect("definition must not error");
+    let def_resolves = !defs.is_empty();
+
+    let _hover_result = harness.hover("fixture.pl", 2, 4).expect("hover must not error");
+    let hover_ok = true;
+
+    print_conformance("absolute_include_path", pl701_absent, def_resolves, hover_ok);
+
+    if def_resolves && !pl701_absent {
+        panic!(
+            "Consumer inconsistency (absolute_include_path): goto-def resolved but PL701 fired.\n\
+             goto-def: {:?}\n\
+             diagnostics: {:?}",
+            defs, diags
+        );
+    }
+
+    assert!(
+        def_resolves,
+        "Expected goto-definition to resolve AbsoluteModule via absolute includePaths, got empty result.\n\
+         diagnostics: {:?}",
+        diags
+    );
+    assert!(
+        pl701_absent,
+        "Expected no PL701 for AbsoluteModule when includePaths=['{}'] is configured.\n\
+         diagnostics: {:?}",
+        absolute_path, diags
+    );
+
+    harness.assert_no_crash();
+}
+
+const ABSOLUTE_INCLUDE_SOURCE: &str = "\
+use strict;\n\
+use warnings;\n\
+use AbsoluteModule;\n\
+\n\
+my $msg = AbsoluteModule::hello();\n\
+print \"$msg\\n\";\n\
+";
+
+const ABSOLUTE_INCLUDE_MODULE: &str = "\
+package AbsoluteModule;\n\
+\n\
+use strict;\n\
+use warnings;\n\
+\n\
+sub hello {\n\
+    return \"Hello from absolute include path\";\n\
+}\n\
+\n\
+1;\n\
+";
 
 const USE_LIB_LEXICAL_SOURCE: &str = "\
 use strict;\n\
