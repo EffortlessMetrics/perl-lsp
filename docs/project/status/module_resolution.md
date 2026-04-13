@@ -13,6 +13,7 @@ A `+` means the consumer produced the expected answer (resolved or not-resolved 
 | Resolution Mode | PL701 diagnostic | goto-definition | hover | Notes |
 |---|---|---|---|---|
 | Workspace `includePaths` | + | + | + | Config-driven: `includePaths: ["lib"]` |
+| Absolute `includePaths` root | + | + | + | Config-driven absolute path to `lib` |
 | Lexical `use lib` | + | + | + | In-source pragma extraction |
 | `no lib` cancellation | + | + | + | Position-aware negative case |
 | FindBin-relative | + | + | + | `$FindBin::Bin/lib` pattern |
@@ -32,6 +33,12 @@ Configured via `workspace/didChangeConfiguration`:
 ```
 
 Module lives at `lib/Module.pm` relative to the workspace root.
+
+### Absolute `includePaths` root
+
+Configured via `workspace/didChangeConfiguration` using an absolute filesystem
+path to the workspace-local `lib` directory. This validates that resolution
+does not depend on relative-path normalization only.
 
 ### Lexical `use lib`
 
@@ -67,7 +74,6 @@ environment variable. Requires `usePerl5lib: true` in workspace config.
 
 ## Follow-up Scope (PR 2)
 
-- `inc_absolute_include_path` — absolute path in `includePaths` config
 - `inc_perl5lib_env` — PERL5LIB separate from system @INC flag
 - `inc_nested_use_lib` — `use lib` inside `BEGIN` block
 - `inc_qw_use_lib` — `use lib qw(lib t/lib)` multi-path form

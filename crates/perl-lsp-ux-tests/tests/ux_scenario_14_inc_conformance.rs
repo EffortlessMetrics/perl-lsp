@@ -11,6 +11,7 @@
 //! | Test function | Mode | Expected outcome |
 //! |---|---|---|
 //! | `scenario_14_relative_include_path` | `includePaths: ["lib"]` config | resolves |
+//! | `scenario_14_absolute_include_path` | `includePaths: ["/abs/path/to/lib"]` config | resolves |
 //! | `scenario_14_use_lib_lexical` | in-source `use lib 'lib'` | resolves |
 //! | `scenario_14_no_lib_cancellation` | `use lib` then `no lib` | NOT resolved |
 //! | `scenario_14_findbin_relative` | `use FindBin; use lib "$FindBin::Bin/lib"` | resolves |
@@ -76,6 +77,29 @@ fn send_include_paths(harness: &UxHarness, paths: &[&str]) {
         )
         .expect("didChangeConfiguration should not fail");
     // Allow the server to process the configuration change.
+    std::thread::sleep(Duration::from_millis(200));
+}
+
+/// Configure the server to use `includePaths` via workspace/didChangeConfiguration.
+fn send_include_paths_owned(harness: &UxHarness, paths: Vec<String>) {
+    let paths_json: Vec<serde_json::Value> =
+        paths.into_iter().map(serde_json::Value::String).collect();
+    harness
+        .client
+        .notify(
+            "workspace/didChangeConfiguration",
+            json!({
+                "settings": {
+                    "perl": {
+                        "workspace": {
+                            "includePaths": paths_json,
+                            "useSystemInc": false
+                        }
+                    }
+                }
+            }),
+        )
+        .expect("didChangeConfiguration should not fail");
     std::thread::sleep(Duration::from_millis(200));
 }
 
@@ -202,6 +226,70 @@ fn scenario_14_relative_include_path() {
     );
 
     // Hover result shape check (if non-null).
+    if let Some(hover) = hover_result {
+        assert!(
+            hover.get("contents").is_some(),
+            "Hover result must have 'contents' field: {:?}",
+            hover
+        );
+    }
+
+    harness.assert_no_crash();
+}
+
+#[test]
+fn scenario_14_absolute_include_path() {
+    if !binary_available() {
+        eprintln!("SKIP scenario_14_absolute_include_path: perl-lsp binary not found");
+        return;
+    }
+
+    let harness = UxHarness::new(
+        ScenarioConfig { timeout: Duration::from_secs(20), ..Default::default() }
+            .with_file("fixture.pl", RELATIVE_INCLUDE_SOURCE)
+            .with_file("lib/GreetModule.pm", RELATIVE_INCLUDE_MODULE),
+    )
+    .expect("Failed to create UX harness");
+
+    let abs_lib_path = harness.workspace.path("lib").to_string_lossy().into_owned();
+    send_include_paths_owned(&harness, vec![abs_lib_path]);
+
+    harness.open_file("fixture.pl", RELATIVE_INCLUDE_SOURCE).expect("didOpen should succeed");
+    std::thread::sleep(Duration::from_millis(500));
+
+    let diags = wait_diagnostics(&harness, "fixture.pl");
+    let pl701_absent = !has_pl701(&diags);
+
+    let defs = harness.definition("fixture.pl", 2, 4).expect("definition must not error");
+    let def_resolves = !defs.is_empty();
+
+    let hover_result = harness.hover("fixture.pl", 2, 4).expect("hover must not error");
+    let hover_ok = true;
+
+    print_conformance("absolute_include_path", pl701_absent, def_resolves, hover_ok);
+
+    if def_resolves && !pl701_absent {
+        panic!(
+            "Consumer inconsistency (absolute_include_path): goto-def resolved but PL701 fired.\n\
+             goto-def: {:?}\n\
+             diagnostics: {:?}",
+            defs, diags
+        );
+    }
+
+    assert!(
+        def_resolves,
+        "Expected goto-definition to resolve GreetModule via absolute includePaths.\n\
+         diagnostics: {:?}",
+        diags
+    );
+    assert!(
+        pl701_absent,
+        "Expected no PL701 for GreetModule when absolute includePaths is configured.\n\
+         diagnostics: {:?}",
+        diags
+    );
+
     if let Some(hover) = hover_result {
         assert!(
             hover.get("contents").is_some(),
