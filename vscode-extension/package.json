@@ -983,7 +983,7 @@
     "@types/node": "^20.x",
     "@types/tar": "^7.0.87",
     "@types/vscode": "^1.88.0",
-    "@typescript-eslint/eslint-plugin": "^8.58.0",
+    "@typescript-eslint/eslint-plugin": "^8.58.1",
     "@typescript-eslint/parser": "^8.58.0",
     "@vscode/vsce": "^3.7.1",
     "eslint": "^10.2.0",
