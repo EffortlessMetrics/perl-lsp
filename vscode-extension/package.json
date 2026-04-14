@@ -982,7 +982,7 @@
     "@types/jest": "^30.0.0",
     "@types/node": "^25.x",
     "@types/tar": "^7.0.87",
-    "@types/vscode": "^1.88.0",
+    "@types/vscode": "^1.115.0",
     "@typescript-eslint/eslint-plugin": "^8.58.1",
     "@typescript-eslint/parser": "^8.58.0",
     "@vscode/vsce": "^3.7.1",
