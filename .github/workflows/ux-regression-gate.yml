@@ -280,7 +280,7 @@ jobs:
 
       - name: Set commit status
         if: always()
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           script: |
             const harnessAvailable = '${{ steps.harness_check.outputs.harness_available }}' === 'true';
