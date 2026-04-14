@@ -8,14 +8,23 @@ argument-hint: "[focus] e.g. 'all', 'parser', 'lsp', 'dap', 'tests'"
 Start continuous work on **$ARGUMENTS**. You are the orchestrator.
 You route work through the pipeline. You never write production code.
 
-## Pipeline
+## Pipeline (v2 — sequential, label-gated)
 
 ```
-scout → research-verifier → plan-reviewer → builder → reviewer → reviewer-deep → ops
-                                                ↓ didn't finish?
-                                         builder (with /builder-read-pr)
-                                                ↓ merged?
-                                              wisdom
+ISSUE SIDE (sequential verification):
+  scout → accuracy → research → oppositional → diaboli → architecture → maintainer-issue
+  → plan-reviewer (sonnet)
+  → spec-planner → red-tdd
+
+BUILD: builder (sonnet)
+
+PR SIDE (sequential review):
+  green-tdd → reviewer → maintainer-pr → pr-responder
+  → refactor-planner → green-refactor (sonnet)
+  → reviewer-deep (sonnet)
+  → green-ci → diff-auditor → ops
+
+POST-MERGE: wisdom
 ```
 
 ## Phase 1: Bootstrap
@@ -37,20 +46,43 @@ Check what needs work using label-driven state queries:
 ```bash
 # Pipeline stage queries (label-driven state machine)
 gh issue list --label "builder-ready" --state open      # ready to build (not yet claimed)
+gh issue list --label "needs-plan-review" --state open  # in verification pipeline
+gh issue list --label "builder-ready" --state open      # ready to build
+gh issue list --label "red-tdd-reviewed" --state open   # red tests ready, builder can start
 gh issue list --label "in-build" --state open           # builder assigned (check for stalls)
-gh issue list --label "needs-plan-review" --state open  # need plan review
-gh issue list --label "research-reviewed" --state open  # verified, ready for plan-review
-gh issue list --label "swarm-discovered" --state open   # scout findings awaiting research-verify
-gh issue list --label "structural-blocker" --state open # blocked work (needs architectural decision)
+gh issue list --label "needs-builder-fix" --state open  # green-tdd found bug
+gh issue list --label "structural-blocker" --state open # blocked work
 gh pr list --label "merge-ready"                        # ready to merge
 gh pr list --label "in-review"                          # being reviewed (check for stalls)
 ```
 
-**Routing rules:**
-- `swarm-discovered` → research-verifier
-- `research-reviewed` OR `needs-plan-review` → plan-reviewer
-- `builder-ready` (without `in-build`) → builder
-- `in-build` but PR not found → check for stalled builders, possibly re-route
+**Routing rules (sequential — check in order, spawn the first missing):**
+
+Issue verification chain (all must complete before plan-review):
+- `needs-plan-review` + missing `accuracy-reviewed` → accuracy-scout
+- `needs-plan-review` + missing `research-reviewed` → research-verifier
+- `needs-plan-review` + missing `oppositional-reviewed` → oppositional-planner
+- `needs-plan-review` + missing `diaboli-reviewed` → advocatus-diaboli
+- `needs-plan-review` + missing `architecture-reviewed` → architecture-reviewer
+- `needs-plan-review` + missing `maintainer-issue-reviewed` → maintainer-issue
+- `needs-plan-review` + all six present → plan-reviewer
+
+Build preparation:
+- `builder-ready` + missing `spec-reviewed` → spec-planner
+- `builder-ready` + missing `red-tdd-reviewed` → red-tdd
+- `builder-ready` + both present (without `in-build`) → builder
+
+PR review chain:
+- PR exists + missing `green-tdd-reviewed` → green-tdd
+- PR exists + missing `review-reviewed` → reviewer
+- PR exists + missing `maintainer-pr-reviewed` → maintainer-pr
+- PR exists + missing `pr-responded` → pr-responder
+- PR exists + missing `refactor-planner-reviewed` → refactor-planner
+- PR exists + missing `green-refactor-reviewed` → green-refactor
+- `needs-deep-review` + all above present → reviewer-deep
+- `deep-reviewed` + missing `ci-green` → green-ci
+- `ci-green` + missing `diff-audited` → diff-auditor
+- `diff-audited` + `ci-green` → ops
 - `in-review` → already being reviewed (do not double-assign)
 - `merge-ready` → ops
 - `structural-blocker` → escalate to orchestrator or human decision
@@ -99,10 +131,10 @@ For issues labeled `swarm-discovered` that have external claims to verify:
 ```
 Agent(subagent_type: "research-verifier", prompt: "Verify facts in issue #NNN. Follow your todo list.", name: "research-verify-NNN")
 ```
-Adds `research-reviewed` label when done. Then route to plan-reviewer.
+Adds `research-reviewed` label when done. Then route to the next missing verification agent (oppositional-planner, diaboli, architecture, maintainer-issue) — NOT directly to plan-reviewer.
 
 ### Plan review (refine specs)
-For issues labeled `needs-plan-review` or `research-reviewed`:
+For issues with ALL six verification labels present (`accuracy-reviewed`, `research-reviewed`, `oppositional-reviewed`, `diaboli-reviewed`, `architecture-reviewed`, `maintainer-issue-reviewed`):
 ```
 Agent(subagent_type: "plan-reviewer", prompt: "Review issue #NNN. Follow your todo list.", name: "plan-review-NNN")
 ```
@@ -169,10 +201,8 @@ Labels are the authoritative state of every issue and PR. Agents write labels; t
 
 - **Scale with pipeline leads, not with more direct workers.** At 10+ tasks,
   create a team with pipeline leads instead of tracking 30 agents yourself.
-- **Route by label.** `swarm-discovered` → research-verifier. `research-reviewed` → plan-reviewer.
-  `needs-plan-review` → plan-reviewer. `builder-ready` → builder.
-  `in-review` → already being reviewed. `merge-ready` → ops.
-  `structural-blocker` → escalate, do not route other work that depends on this.
+- **Route by label, sequentially.** Check labels in pipeline order, spawn the first missing agent.
+  See routing rules above. Each agent reads and builds on the previous agent's output.
 - **Check `in-build` before spawning builders.** If an issue already has `in-build`, skip it.
 - **Don't micromanage.** Workers have autonomy within their scope. Pipeline leads
   have autonomy within their pipeline stage. You set direction and monitor.

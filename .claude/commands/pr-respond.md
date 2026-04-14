@@ -49,8 +49,9 @@ cargo clippy -p <crate> --tests -- -D warnings
 cargo test -p <crate>
 ```
 
-### 6. Push and request re-review
+### 6. Push, set label, and request re-review
 ```bash
 git push
+gh pr edit $ARGUMENTS --add-label "pr-responded"
 gh pr edit $ARGUMENTS --add-reviewer <original-reviewer> 2>/dev/null || true
 ```
