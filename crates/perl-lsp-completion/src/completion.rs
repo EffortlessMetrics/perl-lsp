@@ -779,6 +779,18 @@ impl CompletionProvider {
             self.add_has_type_completions(&mut completions, &context);
         } else if self.is_has_options_key_context(source, position) {
             self.add_has_option_completions(&mut completions, &context);
+        } else if !context.in_comment
+            && !context.in_string
+            && !context.in_regex
+            && let Some((varname, key_prefix)) = Self::detect_hash_key_context(source, position)
+        {
+            Self::add_hash_key_completions(
+                &mut completions,
+                &context,
+                source,
+                &varname,
+                &key_prefix,
+            );
         } else if let Some(package_name) = self.object_pad_constructor_package(source, position) {
             self.add_object_pad_constructor_completions(&mut completions, &context, &package_name);
         } else if (context.trigger_character == Some('>') || context.trigger_character == Some('-'))
@@ -1470,6 +1482,248 @@ impl CompletionProvider {
         }
 
         None
+    }
+
+    /// Detect whether the cursor is inside a plain hash subscript `$varname{prefix`.
+    ///
+    /// Returns `Some((varname, key_prefix))` when:
+    /// - The source before `position` contains `$varname{` (with no `->` immediately before `{`)
+    /// - The context is not inside a comment or string literal
+    ///
+    /// Returns `None` for hashref dereferences (`$ref->{...}`), double-sigil derefs
+    /// (`$$ref{...}`), or contexts where hash key completion is not meaningful.
+    fn detect_hash_key_context(source: &str, position: usize) -> Option<(String, String)> {
+        if position == 0 || !source.is_char_boundary(position) {
+            return None;
+        }
+
+        let before = &source[..position];
+
+        // Find the last `{` before the cursor that is not part of a nested structure.
+        // We scan backward to find the most recent unmatched `{`.
+        let brace_pos = {
+            let bytes = before.as_bytes();
+            let mut depth = 0i32;
+            let mut found = None;
+            let mut i = bytes.len();
+            while i > 0 {
+                i -= 1;
+                match bytes[i] {
+                    b'}' => depth += 1,
+                    b'{' => {
+                        if depth == 0 {
+                            found = Some(i);
+                            break;
+                        }
+                        depth -= 1;
+                    }
+                    _ => {}
+                }
+            }
+            found?
+        };
+
+        // Extract typed prefix after the `{` (alphanumeric + `_` chars)
+        let key_prefix = {
+            let after_brace = &before[brace_pos + 1..];
+            // Prefix is the alphanumeric+_ run from after `{` to position
+            let non_ident = after_brace
+                .rfind(|c: char| !c.is_alphanumeric() && c != '_')
+                .map(|p| p + 1)
+                .unwrap_or(0);
+            after_brace[non_ident..].to_string()
+        };
+
+        // The text between the `{` and the start of key_prefix must contain only
+        // word chars and whitespace (no operators, semicolons, etc.) — if it contains
+        // any non-whitespace non-word chars it is not a simple hash subscript.
+        let between = &before[brace_pos + 1..position - key_prefix.len()];
+        if between.chars().any(|c| !c.is_alphanumeric() && c != '_' && !c.is_whitespace()) {
+            return None;
+        }
+
+        // Check for `->` immediately before the `{` (hashref deref — out of scope).
+        if brace_pos >= 2 && &source[brace_pos - 2..brace_pos] == "->" {
+            return None;
+        }
+
+        // Extract the variable name: scan backward from `{` looking for `$word`.
+        let before_brace = before[..brace_pos].trim_end();
+        if before_brace.is_empty() {
+            return None;
+        }
+
+        // Variable name ends right before the `{`, scan back for `$`.
+        let var_end = before_brace.len();
+        let var_name_start = before_brace
+            .rfind(|c: char| !c.is_alphanumeric() && c != '_')
+            .map(|p| p + 1)
+            .unwrap_or(0);
+        let var_name = &before_brace[var_name_start..var_end];
+        if var_name.is_empty() {
+            return None;
+        }
+
+        // Require `$` sigil immediately before the variable name
+        if var_name_start == 0 || before_brace.as_bytes()[var_name_start - 1] != b'$' {
+            return None;
+        }
+
+        Some((var_name.to_string(), key_prefix))
+    }
+
+    /// Scan `source` text for all keys defined in `%varname` hash literals and
+    /// individual `$varname{key}` assignment patterns.
+    ///
+    /// Uses only str operations — no regex crate dependency.
+    fn collect_hash_keys_from_source(source: &str, varname: &str) -> Vec<String> {
+        let mut keys: Vec<String> = Vec::new();
+        let mut seen: HashSet<String> = HashSet::new();
+
+        // Pattern 1: `my %varname = (` / `our %varname = (` / `%varname = (`
+        // Scan for `%varname` followed by `=` and `(`
+        let hash_pat = format!("%{varname}");
+        let mut search_start = 0;
+        while let Some(pos) = source[search_start..].find(hash_pat.as_str()) {
+            let abs_pos = search_start + pos;
+            let after = &source[abs_pos + hash_pat.len()..];
+            let trimmed = after.trim_start();
+            if let Some(rest) = trimmed.strip_prefix('=') {
+                let rest = rest.trim_start();
+                if let Some(inner_start) = rest.find('(') {
+                    let inner = &rest[inner_start + 1..];
+                    // Find matching `)` — walk forward tracking depth
+                    let mut depth = 1i32;
+                    let mut inner_end = inner.len();
+                    for (idx, ch) in inner.char_indices() {
+                        match ch {
+                            '(' => depth += 1,
+                            ')' => {
+                                depth -= 1;
+                                if depth == 0 {
+                                    inner_end = idx;
+                                    break;
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                    let list_text = &inner[..inner_end];
+                    Self::extract_fat_comma_keys(list_text, &mut keys, &mut seen);
+                }
+            }
+            search_start = abs_pos + 1;
+            if search_start >= source.len() {
+                break;
+            }
+        }
+
+        // Pattern 2: `$varname{key} =` individual assignment
+        let scalar_pat = format!("${varname}{{");
+        let mut search_start = 0;
+        while let Some(pos) = source[search_start..].find(scalar_pat.as_str()) {
+            let abs_pos = search_start + pos;
+            let after_brace = &source[abs_pos + scalar_pat.len()..];
+            // Key is alphanumeric+_ up to `}`
+            let key_end = after_brace
+                .find(|c: char| !c.is_alphanumeric() && c != '_')
+                .unwrap_or(after_brace.len());
+            let key = &after_brace[..key_end];
+            if !key.is_empty() && after_brace[key_end..].trim_start().starts_with('}') {
+                // Check that `=` (but not `=>`) follows the `}`
+                let after_close = after_brace[key_end..].trim_start();
+                let after_close = after_close.strip_prefix('}').unwrap_or("").trim_start();
+                if after_close.starts_with('=') && !after_close.starts_with("=>") {
+                    let key_str = key.to_string();
+                    if seen.insert(key_str.clone()) {
+                        keys.push(key_str);
+                    }
+                }
+            }
+            search_start = abs_pos + 1;
+            if search_start >= source.len() {
+                break;
+            }
+        }
+
+        keys
+    }
+
+    /// Extract bare-word and single-quoted keys from a fat-comma list like
+    /// `host => 'localhost', port => 5432`.
+    fn extract_fat_comma_keys(list_text: &str, keys: &mut Vec<String>, seen: &mut HashSet<String>) {
+        // Split by `=>` to find key positions.
+        // Every token immediately before a `=>` is a key.
+        let mut remaining = list_text;
+        while let Some(arrow_pos) = remaining.find("=>") {
+            let key_segment = remaining[..arrow_pos].trim_end();
+            // Find the last token (after the previous `,` or start)
+            let token_start = key_segment.rfind([',', '(', '\n']).map(|p| p + 1).unwrap_or(0);
+            let token = key_segment[token_start..].trim();
+            // Strip single or double quotes
+            let token = token
+                .strip_prefix('\'')
+                .and_then(|t| t.strip_suffix('\''))
+                .or_else(|| token.strip_prefix('"').and_then(|t| t.strip_suffix('"')))
+                .unwrap_or(token);
+            if !token.is_empty() && token.chars().all(|c| c.is_alphanumeric() || c == '_') {
+                let key_str = token.to_string();
+                if seen.insert(key_str.clone()) {
+                    keys.push(key_str);
+                }
+            }
+            // Advance past `=>` and the value. Value ends at the next top-level `,`.
+            let after_arrow = &remaining[arrow_pos + 2..];
+            let value_end = {
+                let mut depth = 0i32;
+                let mut end = after_arrow.len();
+                for (idx, ch) in after_arrow.char_indices() {
+                    match ch {
+                        '(' | '[' | '{' => depth += 1,
+                        ')' | ']' | '}' => depth -= 1,
+                        ',' if depth == 0 => {
+                            end = idx;
+                            break;
+                        }
+                        _ => {}
+                    }
+                }
+                end
+            };
+            remaining = &after_arrow[value_end..];
+            if let Some(stripped) = remaining.strip_prefix(',') {
+                remaining = stripped;
+            }
+        }
+    }
+
+    /// Push hash key completion items for `$varname{key_prefix<cursor>`.
+    fn add_hash_key_completions(
+        completions: &mut Vec<CompletionItem>,
+        context: &CompletionContext,
+        source: &str,
+        varname: &str,
+        key_prefix: &str,
+    ) {
+        let keys = Self::collect_hash_keys_from_source(source, varname);
+        for key in keys {
+            if !key_prefix.is_empty() && !key.starts_with(key_prefix) {
+                continue;
+            }
+            let key_prefix_len = key_prefix.len();
+            completions.push(CompletionItem {
+                label: key.clone(),
+                kind: CompletionItemKind::Property,
+                detail: Some(format!("key of %{varname}")),
+                documentation: None,
+                insert_text: Some(key.clone()),
+                sort_text: Some(format!("0_{key}")),
+                filter_text: Some(key.clone()),
+                additional_edits: vec![],
+                text_edit_range: Some((context.position - key_prefix_len, context.position)),
+                commit_characters: None,
+            });
+        }
     }
 
     /// Add completions for Moo/Moose type constraint values inside `isa => ...`.
@@ -3423,5 +3677,101 @@ sub run {
             completions.iter().map(|c| &c.label).collect::<Vec<_>>()
         );
         Ok(())
+    }
+
+    // ── Hash key completion tests ─────────────────────────────────────────────
+
+    #[test]
+    fn test_hash_key_completion_basic() {
+        // my %config = (host => 'localhost', port => 5432);
+        // $config{ho<cursor>
+        // Expected: "host" suggested, "port" filtered out by prefix
+        let code = "my %config = (host => 'localhost', port => 5432);\n$config{ho";
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let provider = CompletionProvider::new(&ast);
+        let completions = provider.get_completions(code, code.len());
+        assert!(
+            completions.iter().any(|c| c.label == "host"),
+            "expected 'host' in hash key completions for prefix 'ho'; got: {:?}",
+            completions.iter().map(|c| &c.label).collect::<Vec<_>>()
+        );
+        assert!(
+            !completions.iter().any(|c| c.label == "port"),
+            "expected 'port' filtered out by prefix 'ho'; got: {:?}",
+            completions.iter().map(|c| &c.label).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn test_hash_key_completion_empty_prefix() {
+        // $config{<cursor> -- all keys returned
+        let code = "my %config = (host => 'localhost', port => 5432);\n$config{";
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let provider = CompletionProvider::new(&ast);
+        let completions = provider.get_completions(code, code.len());
+        assert!(
+            completions.iter().any(|c| c.label == "host"),
+            "expected 'host' in hash key completions with empty prefix; got: {:?}",
+            completions.iter().map(|c| &c.label).collect::<Vec<_>>()
+        );
+        assert!(
+            completions.iter().any(|c| c.label == "port"),
+            "expected 'port' in hash key completions with empty prefix; got: {:?}",
+            completions.iter().map(|c| &c.label).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn test_hash_key_completion_does_not_fire_for_hashref_deref() {
+        // $ref->{ho<cursor> -- hashref deref, must NOT suggest hash keys
+        let code = "my $ref = {host => 'localhost'};\n$ref->{ho";
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let provider = CompletionProvider::new(&ast);
+        let completions = provider.get_completions(code, code.len());
+        // Must not return a Property-kinded "host" completion (hash key detection
+        // must bail when `->` precedes the `{`)
+        assert!(
+            !completions
+                .iter()
+                .any(|c| c.label == "host" && c.kind == CompletionItemKind::Property),
+            "hashref deref `$ref->{{ho` must not produce Property-kinded 'host' completion; got: {:?}",
+            completions.iter().map(|c| (&c.label, &c.kind)).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn test_hash_key_completion_in_comment_no_suggestions() {
+        // # $config{ho<cursor> -- in comment, should not suggest hash keys
+        let code = "my %config = (host => 'localhost');\n# $config{ho";
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let provider = CompletionProvider::new(&ast);
+        let completions = provider.get_completions(code, code.len());
+        assert!(
+            !completions
+                .iter()
+                .any(|c| c.label == "host" && c.kind == CompletionItemKind::Property),
+            "hash key completion must not fire inside a comment; got: {:?}",
+            completions.iter().map(|c| (&c.label, &c.kind)).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn test_hash_key_completion_unknown_variable_returns_empty_for_that_hash() {
+        // $config{<cursor> where %config has no known init -- no leaked keys from %other
+        let code = "my %other = (a => 1);\n$config{";
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let provider = CompletionProvider::new(&ast);
+        let completions = provider.get_completions(code, code.len());
+        // Keys from %other must not appear as completions for $config{}
+        assert!(
+            !completions.iter().any(|c| c.label == "a" && c.kind == CompletionItemKind::Property),
+            "keys from %%other must not leak into %%config completions; got: {:?}",
+            completions.iter().map(|c| (&c.label, &c.kind)).collect::<Vec<_>>()
+        );
     }
 }
