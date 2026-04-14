@@ -597,3 +597,57 @@ fn open_builtin_snippet_includes_or_die() {
         "open snippet must contain 'or die' for idiomatic error handling; got: {insert_text:?}"
     );
 }
+
+// ===========================================================================
+// Method ranking: own-class vs inherited (#4266)
+// ===========================================================================
+
+/// #4266 — Own-class methods must sort before inherited methods after `$obj->`.
+///
+/// When a workspace-indexed class `Dog` inherits from `Animal`, completing
+/// `$dog->` must show `Dog`'s own methods in a higher tier than `Animal`'s
+/// inherited methods — even when the own method name is alphabetically AFTER
+/// the inherited method name, so the tier prefix is the decisive factor.
+///
+/// Test uses `Dog::zoom` (own, z...) vs `Animal::abstract_method` (inherited, a...)
+/// to verify that tier assignment drives sort order, not alphabetical coincidence.
+#[test]
+fn own_class_methods_rank_before_inherited_methods() {
+    // Base class with a method that alphabetically precedes the own-class method
+    let index = Arc::new(WorkspaceIndex::new());
+    let base_uri = must(Url::parse("file:///workspace/Animal.pm"));
+    let base_code = "package Animal;\nsub abstract_method { }\n1;";
+    must(index.index_file(base_uri, base_code.to_string()));
+
+    // Derived class with its own method whose name is alphabetically AFTER
+    // the inherited method — so alphabetical sort alone would put zoom last
+    let derived_uri = must(Url::parse("file:///workspace/Dog.pm"));
+    let derived_code = "package Dog;\nuse parent 'Animal';\nsub zoom { }\n1;";
+    must(index.index_file(derived_uri, derived_code.to_string()));
+
+    let code = "my $dog = Dog->new();\n$dog->";
+    let pos = code.len();
+    let items = completions_with_index(code, pos, index);
+
+    // Both own and inherited methods must appear
+    assert!(has_label(&items, "zoom"), "should include own method zoom; got: {:?}", labels(&items));
+    assert!(
+        has_label(&items, "abstract_method"),
+        "should include inherited method abstract_method; got: {:?}",
+        labels(&items)
+    );
+
+    // Own methods must sort before inherited methods via sort_text tier prefix.
+    // zoom (own, tier-2) must beat abstract_method (inherited, tier-3) even though
+    // 'z' > 'a' alphabetically — the tier prefix must be the decisive factor.
+    let zoom_sort =
+        must_some(items.iter().find(|c| c.label == "zoom").and_then(|c| c.sort_text.as_deref()));
+    let inherited_sort = must_some(
+        items.iter().find(|c| c.label == "abstract_method").and_then(|c| c.sort_text.as_deref()),
+    );
+
+    assert!(
+        zoom_sort < inherited_sort,
+        "own method 'zoom' (sort_text: {zoom_sort:?}) should rank before inherited 'abstract_method' (sort_text: {inherited_sort:?}); tier prefix must be decisive, not alphabetical order"
+    );
+}
