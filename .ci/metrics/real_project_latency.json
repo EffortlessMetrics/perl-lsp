@@ -1,0 +1,113 @@
+{
+  "schema_version": 1,
+  "measured_at": null,
+  "commit": null,
+  "projects": {
+    "mojolicious": {
+      "file_count": null,
+      "metrics": {
+        "cold_start_to_hover": {
+          "p50_ms": null,
+          "p95_ms": null,
+          "p99_ms": null,
+          "samples": null
+        },
+        "first_completion": {
+          "p50_ms": null,
+          "p95_ms": null,
+          "p99_ms": null,
+          "samples": null
+        },
+        "first_goto_definition": {
+          "p50_ms": null,
+          "p95_ms": null,
+          "p99_ms": null,
+          "samples": null
+        },
+        "incremental_reparse": {
+          "p50_ms": null,
+          "p95_ms": null,
+          "p99_ms": null,
+          "samples": null
+        },
+        "workspace_symbol_query": {
+          "p50_ms": null,
+          "p95_ms": null,
+          "p99_ms": null,
+          "samples": null
+        }
+      }
+    },
+    "dancer2": {
+      "file_count": null,
+      "metrics": {
+        "cold_start_to_hover": {
+          "p50_ms": null,
+          "p95_ms": null,
+          "p99_ms": null,
+          "samples": null
+        },
+        "first_completion": {
+          "p50_ms": null,
+          "p95_ms": null,
+          "p99_ms": null,
+          "samples": null
+        },
+        "first_goto_definition": {
+          "p50_ms": null,
+          "p95_ms": null,
+          "p99_ms": null,
+          "samples": null
+        },
+        "incremental_reparse": {
+          "p50_ms": null,
+          "p95_ms": null,
+          "p99_ms": null,
+          "samples": null
+        },
+        "workspace_symbol_query": {
+          "p50_ms": null,
+          "p95_ms": null,
+          "p99_ms": null,
+          "samples": null
+        }
+      }
+    },
+    "catalyst": {
+      "file_count": null,
+      "metrics": {
+        "cold_start_to_hover": {
+          "p50_ms": null,
+          "p95_ms": null,
+          "p99_ms": null,
+          "samples": null
+        },
+        "first_completion": {
+          "p50_ms": null,
+          "p95_ms": null,
+          "p99_ms": null,
+          "samples": null
+        },
+        "first_goto_definition": {
+          "p50_ms": null,
+          "p95_ms": null,
+          "p99_ms": null,
+          "samples": null
+        },
+        "incremental_reparse": {
+          "p50_ms": null,
+          "p95_ms": null,
+          "p99_ms": null,
+          "samples": null
+        },
+        "workspace_symbol_query": {
+          "p50_ms": null,
+          "p95_ms": null,
+          "p99_ms": null,
+          "samples": null
+        }
+      }
+    }
+  },
+  "tolerance_pct": 10
+}
