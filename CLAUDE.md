@@ -14,9 +14,24 @@ Every change flows through this pipeline. Each stage is a cheap pass that catche
 |-------|-------|---------|-------------|
 | **Scout** (haiku) | Broad discovery | Find the problem, file roughly-right spec | N/A — files issues |
 | **Accuracy-scout** (haiku) | Mechanical fact check | Verify file paths, function names, issue status against master | No — corrects facts, not plans |
+| **Research-verifier** (haiku) | External fact check | Verify Perl semantics, LSP spec, crate API claims via web + grep | No — verifies facts, not plans |
+| **Oppositional-planner** (haiku) | Challenge approach | Surface objections, overlooked alternatives, risk flags | No — generates challenges for plan-reviewer |
+| **Advocatus-diaboli** (haiku) | Challenge premise | Should this exist at all? User impact, yak-shaving, scope fit | No — BUILD/DEFER/CLOSE verdict |
+| **Architecture-reviewer** (haiku) | Structural alignment | Verify design fits microcrate layering, dependency direction, type placement | No — flags violations |
+| **Maintainer-issue** (haiku) | Project vision (issue) | Does this align with perl-lsp's goals, roadmap, and user base? | No — ALIGNED/DEFERRED/OUT OF SCOPE |
 | **Plan-review** (sonnet) | Improve the plan | Fill gaps, correct root cause, add edge cases | Yes — complete the spec yourself |
-| **Build** (sonnet) | Execute the spec | TDD: test → implement → verify → PR | Yes — adapt if plan-reviewed; bump back if not |
-| **Review** (haiku/sonnet) | Improve the PR | Push fixes directly to the branch | Yes — always fix forward |
+| **Spec-planner** (haiku) | Implementation roadmap | Create `impl/` branch, write `.spec/` files (checklist, acceptance, context) | No — plans, doesn't implement |
+| **Red-TDD** (haiku) | Write failing tests | Commit red tests to impl branch; define "done" before builder starts | No — tests only, no implementation |
+| **Build** (sonnet) | Make tests green | Check out impl branch (spec + red tests), implement, verify, PR | Yes — adapt if plan-reviewed; bump back if not |
+| **Green-TDD** (haiku) | Harden tests | Add edge case, boundary, regression tests after builder implements | No — tests only, flags bugs for reviewer |
+| **Review** (haiku) | Standards check | Banned patterns, scope, formatting — push fixes directly | Yes — always fix forward |
+| **Maintainer-PR** (haiku) | Project vision (PR) | Does the implementation fit perl-lsp's direction and quality bar? | No — ALIGNED/SCOPE DRIFT/QUALITY GAP |
+| **PR-responder** (haiku) | Address bot comments | Fix CI failures, validate-title, linter warnings, resolve conversations | Yes — fix what's broken |
+| **Refactor-planner** (haiku) | Refactor analysis | Identify simplification, reuse, dead code, type tightness — posts plan for green-refactor | No — analysis only |
+| **Green-refactor** (sonnet) | Refactor while green | Execute refactor plan: simplify, extract helpers, improve naming — tests stay green | Yes — behavior-preserving only |
+| **Review-deep** (sonnet) | Correctness check | Does the logic work? Edge cases? Regressions? | Yes — fix forward, final gate |
+| **Green-CI** (haiku) | CI freshness gate | Verify all checks pass on current HEAD SHA — no stale green | Yes — fixes mechanical CI failures |
+| **Diff-auditor** (haiku) | Final diff check | Verify cumulative diff is coherent, clean, matches spec, no artifacts | No — CLEAN/ARTIFACTS/REGRESSION/DRIFT |
 | **Green** | CI gate | SHA-verified, merge-time fresh check | N/A |
 | **Merge** | Ops | Batch of 3, wait for green, ratchet corpus | N/A |
 | **Wisdom** | Learning | Retrospective, update memory, log patterns | N/A |
@@ -36,28 +51,123 @@ Every change flows through this pipeline. Each stage is a cheap pass that catche
 
 Labels are the authoritative state for every issue and PR. The orchestrator reads them; agents write them.
 
+**Sign-off labels** (`<agent>-reviewed` = agent completed its pass):
+
 | Label | Set by | Means |
 |-------|--------|-------|
-| `needs-plan-review` | scout (/scout-report) | Awaiting plan-reviewer |
-| `plan-reviewed` | plan-reviewer (/plan-review-improve) | Spec verified |
-| `builder-ready` | plan-reviewer (/plan-review-improve) | Ready for builder pickup |
-| `in-build` | builder (/builder-read-spec) | Builder claimed this issue |
-| `in-review` | reviewer (/reviewer-read-handoff) | PR actively in review — set at review start |
-| `merge-ready` | reviewer (/pr-ready) | Ready for ops merge; docs-only PRs may reach this without `reviewed-deep` |
-| `structural-blocker` | any agent | Architecture issue; blocks parallel work |
-| `needs-deep-review` | reviewer (/reviewer-decide) | Standards review done, awaiting deep correctness review |
-| `reviewed-deep` | reviewer-deep (/reviewer-deep-decide) | Deep correctness review complete — required before merge for non-docs PRs |
-| `follow-up-recommended` | wisdom or reviewer | Related follow-up issue needed |
-| `already-fixed` | plan-reviewer or scout | Close without build |
+| `accuracy-reviewed` | accuracy-scout | Mechanical facts verified (file paths, function names) |
+| `research-reviewed` | research-verifier | External claims verified (Perl docs, LSP spec, crate APIs) |
+| `oppositional-reviewed` | oppositional-planner | Approach challenged, alternatives surfaced |
+| `diaboli-reviewed` | advocatus-diaboli | Existence challenged — BUILD/DEFER/CLOSE verdict |
+| `plan-reviewed` | plan-reviewer | Spec refined and approved |
+| `spec-reviewed` | spec-planner | Impl branch created with `.spec/` files |
+| `red-tdd-reviewed` | red-tdd | Failing tests committed on impl branch |
+| `green-tdd-reviewed` | green-tdd | Edge case and regression tests added |
+| `architecture-reviewed` | architecture-reviewer | Design fits microcrate layering and dependency contracts |
+| `maintainer-issue-reviewed` | maintainer-issue | Issue aligns with project goals, roadmap, user base |
+| `green-tdd-reviewed` | green-tdd | Edge case and regression tests added |
+| `review-reviewed` | reviewer | Standards check passed (banned patterns, scope) |
+| `maintainer-pr-reviewed` | maintainer-pr | PR implementation fits project direction and quality bar |
+| `pr-responded` | pr-responder | Bot comments and CI failures addressed |
+| `refactor-planner-reviewed` | refactor-planner | Simplification/reuse plan posted for green-refactor |
+| `green-refactor-reviewed` | green-refactor | Implementation simplified while tests stay green |
+| `deep-reviewed` | reviewer-deep | Correctness check passed — required before merge |
+| `ci-green` | green-ci | All CI checks pass on current HEAD SHA |
+| `diff-audited` | diff-auditor | Cumulative diff is coherent, clean, matches spec — ready for ops |
 
-Labels gate entry, not skip execution. Multiple passes of the same agent are normal. Query examples:
-```bash
-gh issue list --label "builder-ready" --state open   # ready to build
-gh issue list --label "in-build" --state open        # builder assigned
-gh issue list --label "structural-blocker" --state open  # blocked work
+**State labels** (where the issue/PR is now):
+
+| Label | Set by | Means |
+|-------|--------|-------|
+| `builder-ready` | plan-reviewer | Spec finalized — ready for build pipeline |
+| `in-build` | builder | Builder actively working |
+| `in-review` | reviewer | PR in review process |
+| `merge-ready` | pr-ready | All gates passed — ready for ops merge |
+| `already-fixed` | any agent | Close without build |
+
+**Routing labels** (`needs-<action>` = work needed):
+
+| Label | Set by | Means |
+|-------|--------|-------|
+| `needs-plan-review` | scout | Entry to verification pipeline |
+| `needs-deep-review` | reviewer | Standards done, deep review needed |
+| `needs-builder-fix` | green-tdd | Edge case test found bug — route back to builder |
+| `needs-ci-fix` | green-ci | CI check failed or stale — route to pr-responder |
+| `needs-diff-fix` | diff-auditor | Diff has artifacts, regressions, or scope drift — route to pr-responder |
+
+**Meta labels:**
+
+| Label | Purpose |
+|-------|---------|
+| `structural-blocker` | Blocks parallel work |
+| `follow-up-recommended` | Needs follow-up issue |
+| `swarm-discovered` | Found by automated sweep |
+| `size/S`, `size/M`, `size/L` | Effort estimate |
+
+Labels are sign-off receipts. The *presence* of a label means an agent reviewed and approved. The *absence* means the pass hasn't happened yet. The orchestrator routes based on what's missing.
+
+### Label-based routing
+
+**Pre-plan-review verification** (issue has `needs-plan-review`):
+```
+Missing accuracy-reviewed?          → spawn accuracy-scout (first — corrects line numbers for everyone else)
+Missing research-reviewed?          → spawn research-verifier (reads accuracy-corrected facts)
+Missing oppositional-reviewed?      → spawn oppositional-planner (reads verified facts to challenge approach)
+Missing diaboli-reviewed?           → spawn advocatus-diaboli (reads verified + challenged spec to judge existence)
+Missing architecture-reviewed?      → spawn architecture-reviewer (reads verified spec to check structural fit)
+Missing maintainer-issue-reviewed?  → spawn maintainer-issue (reads all above to judge project alignment)
+All six present?                    → spawn plan-reviewer
+```
+These are **sequential** — each layer reads and builds on the previous. The accuracy-scout
+corrects facts, the research-verifier works from corrected facts, the oppositional-planner
+challenges a verified approach, the architecture-reviewer checks structure of a challenged
+spec, the maintainer checks project fit of an architecturally-validated proposal. Running
+them out of order wastes tokens and produces worse results.
+
+**Pre-build preparation** (issue has `builder-ready`):
+```
+Missing spec-reviewed?          → spawn spec-planner
+Missing red-tdd-reviewed?       → spawn red-tdd (after spec-planner)
+Both present?                  → spawn builder
+```
+These are sequential — red-tdd needs the branch from spec-planner.
+
+**Post-build hardening** (issue has `in-build`, PR exists):
+```
+PR created?                        → spawn green-tdd on the PR branch
+green-tdd done?                    → spawn reviewer
+needs-builder-fix set?             → route back to builder first
 ```
 
-Note: `needs-accuracy-scout` and `accuracy-reviewed` are reserved for the accuracy-scout agent (issue #2628).
+**Post-build PR pipeline** (PR exists, sequential):
+```
+Missing green-tdd-reviewed?        → spawn green-tdd (add edge case tests)
+Missing review-reviewed?           → spawn reviewer (standards check, pushes fixes)
+Missing maintainer-pr-reviewed?    → spawn maintainer-pr (project fit check)
+Missing pr-responded?              → spawn pr-responder (address bot comments, CI failures)
+Missing refactor-planner-reviewed?  → spawn refactor-planner (haiku analysis of simplification opportunities)
+Missing green-refactor-reviewed?   → spawn green-refactor (execute refactor plan — sonnet)
+All six present?                   → spawn reviewer-deep (final correctness gate)
+Missing ci-green? (after deep)     → spawn green-ci (verify CI on current HEAD, fix mechanical failures)
+needs-ci-fix set?                  → route back to pr-responder
+Missing diff-audited? (after CI)   → spawn diff-auditor (final coherence check)
+needs-diff-fix set?                → route back to pr-responder
+diff-audited + ci-green present?   → spawn ops (merge)
+```
+Each reads the previous agents' comments. The pr-responder fixes bot comments
+and CI failures. Green-ci is the final mechanical gate — verifies CI is
+genuinely green on the current HEAD SHA, not a stale result from an earlier push.
+
+**Query examples:**
+```bash
+gh issue list --label "needs-plan-review" -l "accuracy-reviewed" -l "research-reviewed" -l "oppositional-reviewed" -l "diaboli-reviewed" --state open  # fully verified, ready for plan-review
+gh issue list --label "builder-ready" --state open   # ready to build
+gh issue list --label "red-tdd-reviewed" --state open # red tests done, builder can start
+gh issue list --label "in-build" --state open        # builder working
+gh issue list --label "needs-builder-fix" --state open  # green-tdd found bug
+gh issue list --label "structural-blocker" --state open  # blocked work
+gh pr list --search "label:merge-ready"              # ready to merge
+```
 
 ### Routing patterns
 

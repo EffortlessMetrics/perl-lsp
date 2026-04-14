@@ -39,7 +39,7 @@ Check what needs work using label-driven state queries:
 gh issue list --label "builder-ready" --state open      # ready to build (not yet claimed)
 gh issue list --label "in-build" --state open           # builder assigned (check for stalls)
 gh issue list --label "needs-plan-review" --state open  # need plan review
-gh issue list --label "research-verified" --state open  # verified, ready for plan-review
+gh issue list --label "research-reviewed" --state open  # verified, ready for plan-review
 gh issue list --label "swarm-discovered" --state open   # scout findings awaiting research-verify
 gh issue list --label "structural-blocker" --state open # blocked work (needs architectural decision)
 gh pr list --label "merge-ready"                        # ready to merge
@@ -48,7 +48,7 @@ gh pr list --label "in-review"                          # being reviewed (check 
 
 **Routing rules:**
 - `swarm-discovered` → research-verifier
-- `research-verified` OR `needs-plan-review` → plan-reviewer
+- `research-reviewed` OR `needs-plan-review` → plan-reviewer
 - `builder-ready` (without `in-build`) → builder
 - `in-build` but PR not found → check for stalled builders, possibly re-route
 - `in-review` → already being reviewed (do not double-assign)
@@ -99,10 +99,10 @@ For issues labeled `swarm-discovered` that have external claims to verify:
 ```
 Agent(subagent_type: "research-verifier", prompt: "Verify facts in issue #NNN. Follow your todo list.", name: "research-verify-NNN")
 ```
-Adds `research-verified` label when done. Then route to plan-reviewer.
+Adds `research-reviewed` label when done. Then route to plan-reviewer.
 
 ### Plan review (refine specs)
-For issues labeled `needs-plan-review` or `research-verified`:
+For issues labeled `needs-plan-review` or `research-reviewed`:
 ```
 Agent(subagent_type: "plan-reviewer", prompt: "Review issue #NNN. Follow your todo list.", name: "plan-review-NNN")
 ```
@@ -155,7 +155,7 @@ Labels are the authoritative state of every issue and PR. Agents write labels; t
 | `merge-ready` | reviewer (/pr-ready) | ops agent | Ready for merge pickup |
 | `structural-blocker` | any agent | orchestrator | Blocks parallel work |
 | `needs-deep-review` | reviewer (/reviewer-decide) | orchestrator | Standards review done, awaiting deep correctness review |
-| `reviewed-deep` | reviewer-deep (/reviewer-deep-decide) | pr-ready, ops | Deep correctness review complete — required for non-docs PRs |
+| `deep-reviewed` | reviewer-deep (/reviewer-deep-decide) | pr-ready, ops | Deep correctness review complete — required for non-docs PRs |
 | `follow-up-recommended` | wisdom or reviewer | orchestrator | Related follow-up issue needed |
 | `already-fixed` | plan-reviewer or scout | orchestrator | Close without build |
 
@@ -169,7 +169,7 @@ Labels are the authoritative state of every issue and PR. Agents write labels; t
 
 - **Scale with pipeline leads, not with more direct workers.** At 10+ tasks,
   create a team with pipeline leads instead of tracking 30 agents yourself.
-- **Route by label.** `swarm-discovered` → research-verifier. `research-verified` → plan-reviewer.
+- **Route by label.** `swarm-discovered` → research-verifier. `research-reviewed` → plan-reviewer.
   `needs-plan-review` → plan-reviewer. `builder-ready` → builder.
   `in-review` → already being reviewed. `merge-ready` → ops.
   `structural-blocker` → escalate, do not route other work that depends on this.

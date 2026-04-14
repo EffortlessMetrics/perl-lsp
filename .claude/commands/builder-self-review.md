@@ -51,7 +51,7 @@ Before publishing, check whether your diff makes any external claims. A PR is **
 
 **If ANY claim-heavy criterion is met:**
 1. Dispatch the `research-verifier` agent on the issue (not the PR) before creating the PR.
-2. Wait for the `research-verified` label or a verification comment.
+2. Wait for the `research-reviewed` label or a verification comment.
 3. **Fallback — if network is unavailable:** add the `needs-research-verification` label to the PR and note it in the PR description. Do not merge blind.
 
 **If no external claims are made:** skip this step — no dispatch needed.
