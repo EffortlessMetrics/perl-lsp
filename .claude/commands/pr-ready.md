@@ -32,13 +32,13 @@ gh pr view $NUMBER --json labels,files
 ```
 
 Policy:
-- If the PR has the `reviewed-deep` label, proceed.
-- If it does not have `reviewed-deep`, it may proceed **only** when every changed file is docs-only (`docs/**` or doc-text files such as `.md`, `.mdx`, `.txt`, `.rst`, `.adoc`).
-- Otherwise: **STOP.** Report: "PR #$NUMBER cannot be marked ready — missing `reviewed-deep` on a non-docs PR. Route to reviewer-deep first."
+- If the PR has the `deep-reviewed` label, proceed.
+- If it does not have `deep-reviewed`, it may proceed **only** when every changed file is docs-only (`docs/**` or doc-text files such as `.md`, `.mdx`, `.txt`, `.rst`, `.adoc`).
+- Otherwise: **STOP.** Report: "PR #$NUMBER cannot be marked ready — missing `deep-reviewed` on a non-docs PR. Route to reviewer-deep first."
 
-Optionally validate receipt freshness when `reviewed-deep` is present to ensure the deep review covers the current HEAD:
+Optionally validate receipt freshness when `deep-reviewed` is present to ensure the deep review covers the current HEAD:
 ```
-/label-receipt-validate pr $NUMBER reviewed-deep
+/label-receipt-validate pr $NUMBER deep-reviewed
 ```
 
 ### 4. Mark ready and signal merge-readiness

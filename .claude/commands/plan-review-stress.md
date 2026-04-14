@@ -47,7 +47,7 @@ Before approving the spec, check whether it makes any external claims. A spec is
 
 **If ANY claim-heavy criterion is met:**
 1. Dispatch the `research-verifier` agent on this issue before marking it builder-ready.
-2. Wait for the `research-verified` label or a verification comment.
+2. Wait for the `research-reviewed` label or a verification comment.
 3. **Fallback — if network is unavailable:** add the `needs-research-verification` label to the issue instead of proceeding blind.
 
 **If no external claims are made:** skip this step — no dispatch needed.

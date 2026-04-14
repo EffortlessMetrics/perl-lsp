@@ -9,7 +9,7 @@ Based on steps 1-3, make a decision.
 
 ## Decision tree
 
-### Docs-only PRs → Fast-track without `reviewed-deep`
+### Docs-only PRs → Fast-track without `deep-reviewed`
 
 If every changed file is documentation-only (`docs/**` or doc-text files such as `.md`, `.mdx`, `.txt`, `.rst`, `.adoc`), do the standards pass, push any doc fixes, and route straight to `/pr-ready`.
 
@@ -25,7 +25,7 @@ Then call:
 /pr-ready <number>
 ```
 
-**Do NOT add `reviewed-deep` yourself.** That label is reserved for the deep reviewer only.
+**Do NOT add `deep-reviewed` yourself.** That label is reserved for the deep reviewer only.
 
 ### Default path → Improve and route to deep review
 
@@ -37,8 +37,9 @@ gh pr checkout <number>
 git push
 ```
 
-After pushing improvements, ALWAYS route to deep review:
+After pushing improvements, set sign-off and route to deep review:
 ```bash
+gh pr edit <number> --add-label "review-reviewed"
 gh pr edit <number> --add-label "needs-deep-review"
 gh pr comment <number> --body "Standards review complete. Improved: <list of changes>. Deep reviewer: focus on <areas of concern>."
 ```
