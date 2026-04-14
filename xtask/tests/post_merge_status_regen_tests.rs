@@ -202,3 +202,96 @@ fn test_stub_current_status_has_no_begin_markers() {
          Remove all <!-- BEGIN: ... --> blocks from CURRENT_STATUS.md."
     );
 }
+
+/// All subsystem status files must contain their expected marker blocks.
+///
+/// This is an integration-level gate: if any marker is missing the xtask
+/// `update-status` command will fail with "Expected 1 match ... got 0".
+#[test]
+fn test_subsystem_files_have_markers() -> Result<(), Box<dyn std::error::Error>> {
+    let root = project_root();
+    let status_dir = root.join("docs/project/status");
+
+    let lsp = fs::read_to_string(status_dir.join("lsp.md"))?;
+    assert!(lsp.contains("<!-- BEGIN: LSP_COVERAGE -->"), "lsp.md missing LSP_COVERAGE block");
+    assert!(
+        lsp.contains("<!-- BEGIN: LSP_METRICS_BULLETS -->"),
+        "lsp.md missing LSP_METRICS_BULLETS block"
+    );
+    assert!(
+        lsp.contains("<!-- BEGIN: COMPLIANCE_TABLE -->"),
+        "lsp.md missing COMPLIANCE_TABLE block"
+    );
+
+    let tests_md = fs::read_to_string(status_dir.join("tests.md"))?;
+    assert!(
+        tests_md.contains("<!-- BEGIN: TESTS_TABLE_ROWS -->"),
+        "tests.md missing TESTS_TABLE_ROWS block"
+    );
+    assert!(
+        tests_md.contains("<!-- BEGIN: TESTS_METRICS_BULLETS -->"),
+        "tests.md missing TESTS_METRICS_BULLETS block"
+    );
+
+    let parser = fs::read_to_string(status_dir.join("parser.md"))?;
+    assert!(
+        parser.contains("<!-- BEGIN: PARSER_TRACKING_TABLE -->"),
+        "parser.md missing PARSER_TRACKING_TABLE block"
+    );
+    assert!(
+        parser.contains("<!-- BEGIN: PARSER_METRICS_BULLETS -->"),
+        "parser.md missing PARSER_METRICS_BULLETS block"
+    );
+    assert!(
+        parser.contains("<!-- BEGIN: PARSER_NODEKIND_ROW -->"),
+        "parser.md missing PARSER_NODEKIND_ROW block"
+    );
+    assert!(
+        parser.contains("<!-- BEGIN: PARSER_RELIABILITY_ROW -->"),
+        "parser.md missing PARSER_RELIABILITY_ROW block"
+    );
+    assert!(
+        parser.contains("<!-- BEGIN: PARSER_STRICT_CLEAN_ROW -->"),
+        "parser.md missing PARSER_STRICT_CLEAN_ROW block"
+    );
+
+    let quality = fs::read_to_string(status_dir.join("quality.md"))?;
+    assert!(
+        quality.contains("<!-- BEGIN: QUALITY_METRICS_BULLETS -->"),
+        "quality.md missing QUALITY_METRICS_BULLETS block"
+    );
+    assert!(
+        quality.contains("<!-- BEGIN: QUALITY_CRATE_TABLE -->"),
+        "quality.md missing QUALITY_CRATE_TABLE block"
+    );
+
+    let dap = fs::read_to_string(status_dir.join("dap.md"))?;
+    assert!(
+        dap.contains("<!-- BEGIN: DAP_TEST_COUNTS -->"),
+        "dap.md missing DAP_TEST_COUNTS block"
+    );
+
+    let workspace_md = fs::read_to_string(status_dir.join("workspace.md"))?;
+    assert!(
+        workspace_md.contains("<!-- BEGIN: WORKSPACE_STALE_RATE -->"),
+        "workspace.md missing WORKSPACE_STALE_RATE block"
+    );
+    assert!(
+        workspace_md.contains("<!-- BEGIN: WORKSPACE_SLO_TABLE -->"),
+        "workspace.md missing WORKSPACE_SLO_TABLE block"
+    );
+    assert!(
+        workspace_md.contains("<!-- BEGIN: WORKSPACE_MULTIROOT -->"),
+        "workspace.md missing WORKSPACE_MULTIROOT block"
+    );
+    assert!(
+        workspace_md.contains("<!-- BEGIN: WORKSPACE_FIXTURES -->"),
+        "workspace.md missing WORKSPACE_FIXTURES block"
+    );
+    assert!(
+        workspace_md.contains("<!-- BEGIN: WORKSPACE_METRICS_BULLETS -->"),
+        "workspace.md missing WORKSPACE_METRICS_BULLETS block"
+    );
+
+    Ok(())
+}
