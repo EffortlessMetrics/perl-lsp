@@ -4536,13 +4536,20 @@ mod tests {
                     let mut tmp_vars: Vec<&str> = Vec::new();
                     for line in contents.lines() {
                         let trimmed = line.trim();
-                        // Detect: let var_name = "/tmp/...";
+                        // Detect: let [mut] var_name[: type] = "/tmp/...";
                         if trimmed.starts_with("let ") && trimmed.contains("= \"/tmp/") {
-                            // Extract variable name between "let " and " ="
+                            // Extract variable name between "let [mut]" and "[: type] ="
                             if let Some(rest) = trimmed.strip_prefix("let ")
-                                && let Some(var) = rest.split('=').next()
+                                && let Some(raw) = rest.split('=').next()
                             {
-                                tmp_vars.push(var.trim());
+                                // Strip optional `mut ` keyword
+                                let raw = raw.trim();
+                                let raw = raw.strip_prefix("mut ").map_or(raw, str::trim);
+                                // Strip optional type annotation (`: &str`, `: String`, …)
+                                let var = raw.split(':').next().map_or(raw, str::trim);
+                                if !var.is_empty() {
+                                    tmp_vars.push(var);
+                                }
                             }
                         }
                         // Detect: fs::write(var_name, ...) where var_name is a known /tmp var.
