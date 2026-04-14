@@ -3,7 +3,6 @@ use super::provider::{ExecuteCommandProvider, TestRunner, select_test_runner};
 use super::test_support::mock_status;
 use serde_json::Value;
 use std::fs;
-use std::path::Path;
 use tempfile::tempdir;
 
 // ============= GO-TO-TEST / GO-TO-IMPLEMENTATION TESTS =============
@@ -747,16 +746,13 @@ fn test_run_critic_file_exists_check() -> Result<(), Box<dyn std::error::Error>>
 fn test_run_builtin_critic_with_valid_file() -> Result<(), Box<dyn std::error::Error>> {
     let provider = ExecuteCommandProvider::new();
 
-    // Create a temporary file with content
+    // Create a temporary file with content using a portable temp directory
+    let tmp = tempdir()?;
     let test_content = "#!/usr/bin/perl\nmy $var = 42;\nprint $var;\n";
-    let temp_file = "/tmp/test_builtin_critic.pl";
-    fs::write(temp_file, test_content)?;
+    let temp_file = tmp.path().join("test_builtin_critic.pl");
+    fs::write(&temp_file, test_content)?;
 
-    let path = Path::new(temp_file);
-    let result = provider.run_builtin_critic(path);
-
-    // Clean up
-    fs::remove_file(temp_file).ok();
+    let result = provider.run_builtin_critic(&temp_file);
 
     assert!(result.is_ok(), "Built-in critic should execute successfully");
     let result_value = result?;
@@ -953,14 +949,12 @@ fn test_run_builtin_critic_arithmetic_mutations() -> Result<(), Box<dyn std::err
     let provider = ExecuteCommandProvider::new();
 
     // Create a test file with content at known line/column positions
+    let tmp = tempdir()?;
     let test_content = "#!/usr/bin/perl\n# Line 2\nmy $var = 42;\nprint $var;\n";
-    let temp_file = "/tmp/test_arithmetic_mutations.pl";
-    fs::write(temp_file, test_content)?;
+    let temp_file = tmp.path().join("test_arithmetic_mutations.pl");
+    fs::write(&temp_file, test_content)?;
 
-    let path = Path::new(temp_file);
-    let result = provider.run_builtin_critic(path);
-
-    fs::remove_file(temp_file).ok();
+    let result = provider.run_builtin_critic(&temp_file);
 
     assert!(result.is_ok(), "Should analyze file successfully");
     let result_value = result?;
@@ -1112,36 +1106,35 @@ fn test_run_critic_file_existence_logic() -> Result<(), Box<dyn std::error::Erro
 fn test_method_return_values_not_defaults() -> Result<(), Box<dyn std::error::Error>> {
     let provider = ExecuteCommandProvider::new();
 
-    // Create a real test file
+    // Create real test files using a portable temp directory
+    let tmp = tempdir()?;
+
     let test_content = "#!/usr/bin/perl\nuse strict;\nprint 'hello';\n";
-    let temp_file = "/tmp/test_return_values.pl";
-    fs::write(temp_file, test_content)?;
+    let temp_file = tmp.path().join("test_return_values.pl");
+    fs::write(&temp_file, test_content)?;
 
     // Test run_file doesn't return Ok(Default::default())
-    let result = provider.run_file(Path::new(temp_file));
+    let result = provider.run_file(&temp_file);
     assert!(result.is_ok(), "run_file should succeed");
     let result_value = result?;
     assert_ne!(result_value, Value::Object(serde_json::Map::new()), "Should not be empty object");
 
     // Test run_tests doesn't return Ok(Default::default())
-    let result = provider.run_tests(Path::new(temp_file));
+    let result = provider.run_tests(&temp_file);
     assert!(result.is_ok(), "run_tests should succeed");
     let result_value = result?;
     assert_ne!(result_value, Value::Object(serde_json::Map::new()), "Should not be empty object");
 
     // Test run_test_sub doesn't return Ok(Default::default())
     let sub_content = "#!/usr/bin/perl\nuse strict;\nsub test_func { print 'test'; }\n";
-    let sub_file = "/tmp/test_sub_return.pl";
-    fs::write(sub_file, sub_content)?;
+    let sub_file = tmp.path().join("test_sub_return.pl");
+    fs::write(&sub_file, sub_content)?;
 
-    let result = provider.run_test_sub(Path::new(sub_file), "test_func");
+    let result = provider.run_test_sub(&sub_file, "test_func");
     assert!(result.is_ok(), "run_test_sub should succeed");
     let result_value = result?;
     assert_ne!(result_value, Value::Object(serde_json::Map::new()), "Should not be empty object");
 
-    // Clean up
-    fs::remove_file(temp_file).ok();
-    fs::remove_file(sub_file).ok();
     Ok(())
 }
 
