@@ -1744,15 +1744,19 @@ fn test_hash_key_completion_single_key() {
 
 #[test]
 fn test_hash_key_completion_quoted_keys() {
-    let code = "my %quoted = ('first_key' => 1, \"second_key\" => 2);\n$quoted{fir";
+    // Use empty prefix to verify both single-quoted and double-quoted keys are extracted;
+    // prefix filtering is tested separately in test_hash_key_completion_prefix_filtering.
+    let code = "my %quoted = ('first_key' => 1, \"second_key\" => 2);\n$quoted{";
     let completions = completions_at_end(code);
     assert!(has_label(&completions, "first_key"), "quoted key 'first_key' should be extracted");
-    assert!(has_label(&completions, "second_key"), "quoted key 'second_key' should be extracted");
+    assert!(has_label(&completions, "second_key"), "double-quoted key 'second_key' should be extracted");
 }
 
 #[test]
 fn test_hash_key_completion_multiline_definition() {
-    let code = "my %config = (\n  host => 'localhost',\n  port => 5432,\n);\n$config{ho";
+    // Use empty prefix to verify all keys are extracted across multiple lines;
+    // prefix filtering is tested separately in test_hash_key_completion_prefix_filtering.
+    let code = "my %config = (\n  host => 'localhost',\n  port => 5432,\n);\n$config{";
     let completions = completions_at_end(code);
     assert!(has_label(&completions, "host"), "multiline hash should extract keys correctly");
     assert!(has_label(&completions, "port"), "multiline hash should extract all keys");
@@ -1767,7 +1771,9 @@ fn test_hash_key_completion_individual_key_assignment() {
 
 #[test]
 fn test_hash_key_completion_mixed_definitions() {
-    let code = "my %data = (color => 'red');\n$data{shade} = 'dark';\n$data{c";
+    // Use empty prefix to verify both fat-comma literal and individual-assignment keys
+    // are collected; both patterns must produce completions without prefix filtering.
+    let code = "my %data = (color => 'red');\n$data{shade} = 'dark';\n$data{";
     let completions = completions_at_end(code);
     assert!(has_label(&completions, "color"), "literal hash keys should be found");
     assert!(has_label(&completions, "shade"), "individual assignment keys should be found");
@@ -1807,6 +1813,21 @@ fn test_hash_key_completion_double_sigil_dereference() {
     assert!(
         !has_key_property,
         "double-sigil deref $$ref{{...}} should not trigger hash key completion"
+    );
+}
+
+#[test]
+fn test_hash_key_completion_double_sigil_same_name_no_false_positive() {
+    // When $$data{ke is written but %data also exists, the double-sigil deref must
+    // NOT suggest keys from %data — $$data is a scalar-ref dereference, not a plain
+    // hash access.  Before the fix this would have returned `key` via %data.
+    let code = "my %data = (key => 'value');\n$$data{ke";
+    let completions = completions_at_end(code);
+    let has_key_property =
+        completions.iter().any(|c| c.label == "key" && c.kind == CompletionItemKind::Property);
+    assert!(
+        !has_key_property,
+        "double-sigil deref $$data{{...}} must not suggest keys from %data even when names match"
     );
 }
 

@@ -1564,8 +1564,14 @@ impl CompletionProvider {
             return None;
         }
 
-        // Require `$` sigil immediately before the variable name
+        // Require `$` sigil immediately before the variable name.
+        // Also reject `$$var{` (double-sigil deref) by ensuring the char before `$`
+        // is not itself a `$` — that would indicate `$$var{key}` which is a scalar-ref
+        // dereference, not a plain hash subscript.
         if var_name_start == 0 || before_brace.as_bytes()[var_name_start - 1] != b'$' {
+            return None;
+        }
+        if var_name_start >= 2 && before_brace.as_bytes()[var_name_start - 2] == b'$' {
             return None;
         }
 
