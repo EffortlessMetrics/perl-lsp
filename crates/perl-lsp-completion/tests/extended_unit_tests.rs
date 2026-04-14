@@ -1739,10 +1739,7 @@ fn builtin_warn_no_duplicate() {
 fn test_hash_key_completion_single_key() {
     let code = "my %map = (single => 'value');\n$map{sin";
     let completions = completions_at_end(code);
-    assert!(
-        has_label(&completions, "single"),
-        "single key hash should complete"
-    );
+    assert!(has_label(&completions, "single"), "single key hash should complete");
 }
 
 #[test]
@@ -1787,20 +1784,17 @@ fn test_hash_key_completion_with_whitespace() {
 fn test_hash_key_completion_nested_access() {
     let code = "my %outer = (key1 => 1);\nmy %inner = (nested => 2);\n$outer{key1}{nest";
     let completions = completions_at_end(code);
-    let has_key1_property = completions.iter()
-        .any(|c| c.label == "key1" && c.kind == CompletionItemKind::Property);
-    assert!(
-        !has_key1_property,
-        "nested hash access should not suggest keys from outer hash"
-    );
+    let has_key1_property =
+        completions.iter().any(|c| c.label == "key1" && c.kind == CompletionItemKind::Property);
+    assert!(!has_key1_property, "nested hash access should not suggest keys from outer hash");
 }
 
 #[test]
 fn test_hash_key_completion_does_not_fire_for_hash_slice() {
     let code = "my %config = (host => 'localhost', port => 5432);\n@config{ho";
     let completions = completions_at_end(code);
-    let has_host_property = completions.iter()
-        .any(|c| c.label == "host" && c.kind == CompletionItemKind::Property);
+    let has_host_property =
+        completions.iter().any(|c| c.label == "host" && c.kind == CompletionItemKind::Property);
     assert!(!has_host_property, "hash slice @config{{...}} should not trigger hash key completion");
 }
 
@@ -1808,18 +1802,30 @@ fn test_hash_key_completion_does_not_fire_for_hash_slice() {
 fn test_hash_key_completion_double_sigil_dereference() {
     let code = "my %data = (key => 'value');\n$$ref{ke";
     let completions = completions_at_end(code);
-    let has_key_property = completions.iter()
-        .any(|c| c.label == "key" && c.kind == CompletionItemKind::Property);
-    assert!(!has_key_property, "double-sigil deref $$ref{{...}} should not trigger hash key completion");
+    let has_key_property =
+        completions.iter().any(|c| c.label == "key" && c.kind == CompletionItemKind::Property);
+    assert!(
+        !has_key_property,
+        "double-sigil deref $$ref{{...}} should not trigger hash key completion"
+    );
 }
 
 #[test]
 fn test_hash_key_completion_prefix_filtering() {
     let code = "my %errors = (invalid_input => 'bad', invalid_format => 'ugly', valid_format => 'good');\n$errors{invalid_";
     let completions = completions_at_end(code);
-    assert!(has_label(&completions, "invalid_input"), "prefix 'invalid_' should match 'invalid_input'");
-    assert!(has_label(&completions, "invalid_format"), "prefix 'invalid_' should match 'invalid_format'");
-    assert!(!has_label(&completions, "valid_format"), "prefix 'invalid_' should NOT match 'valid_format'");
+    assert!(
+        has_label(&completions, "invalid_input"),
+        "prefix 'invalid_' should match 'invalid_input'"
+    );
+    assert!(
+        has_label(&completions, "invalid_format"),
+        "prefix 'invalid_' should match 'invalid_format'"
+    );
+    assert!(
+        !has_label(&completions, "valid_format"),
+        "prefix 'invalid_' should NOT match 'valid_format'"
+    );
 }
 
 #[test]
@@ -1827,14 +1833,18 @@ fn test_hash_key_completion_case_sensitive() {
     let code = "my %config = (Host => 'localhost', host => 'local');\n$config{H";
     let completions = completions_at_end(code);
     assert!(has_label(&completions, "Host"), "uppercase prefix 'H' should match 'Host'");
-    assert!(!has_label(&completions, "host"), "uppercase prefix 'H' should not match lowercase 'host'");
+    assert!(
+        !has_label(&completions, "host"),
+        "uppercase prefix 'H' should not match lowercase 'host'"
+    );
 }
 
 #[test]
 fn test_hash_key_completion_duplicate_keys() {
     let code = "my %dup = (key => 1, key => 2);\n$dup{k";
     let completions = completions_at_end(code);
-    let key_count = completions.iter()
+    let key_count = completions
+        .iter()
         .filter(|c| c.label == "key" && c.kind == CompletionItemKind::Property)
         .count();
     assert_eq!(key_count, 1, "duplicate key should appear only once in completions");
@@ -1844,7 +1854,10 @@ fn test_hash_key_completion_duplicate_keys() {
 fn test_hash_key_completion_numeric_and_underscore_keys() {
     let code = "my %data = (key_1 => 'a', key_2 => 'b', _private => 'c', __init => 'd');\n$data{_";
     let completions = completions_at_end(code);
-    assert!(has_label(&completions, "_private"), "underscore-prefix key '_private' should be found");
+    assert!(
+        has_label(&completions, "_private"),
+        "underscore-prefix key '_private' should be found"
+    );
     assert!(has_label(&completions, "__init"), "double-underscore key '__init' should be found");
     assert!(!has_label(&completions, "key_1"), "prefix '_' should not match 'key_1'");
 }
@@ -1853,9 +1866,8 @@ fn test_hash_key_completion_numeric_and_underscore_keys() {
 fn test_hash_key_completion_empty_hash() {
     let code = "my %empty = ();\n$empty{x";
     let completions = completions_at_end(code);
-    let property_completions: Vec<_> = completions.iter()
-        .filter(|c| c.kind == CompletionItemKind::Property)
-        .collect();
+    let property_completions: Vec<_> =
+        completions.iter().filter(|c| c.kind == CompletionItemKind::Property).collect();
     assert!(property_completions.is_empty(), "empty hash should not suggest any keys");
 }
 
@@ -1863,14 +1875,17 @@ fn test_hash_key_completion_empty_hash() {
 fn test_hash_key_completion_fat_comma_and_string_conversion() {
     let code = "my %config = (bare_word => 1, 'quoted' => 2);\n$config{b";
     let completions = completions_at_end(code);
-    assert!(has_label(&completions, "bare_word"), "bare word left of fat comma should be extracted");
+    assert!(
+        has_label(&completions, "bare_word"),
+        "bare word left of fat comma should be extracted"
+    );
 }
 
 #[test]
 fn test_hash_key_completion_in_string_no_suggestions() {
     let code = "my %config = (host => 'localhost');\nmy $s = \"$config{ho";
     let completions = completions_at_end(code);
-    let has_host_property = completions.iter()
-        .any(|c| c.label == "host" && c.kind == CompletionItemKind::Property);
+    let has_host_property =
+        completions.iter().any(|c| c.label == "host" && c.kind == CompletionItemKind::Property);
     assert!(!has_host_property, "hash key completion must not fire inside a string literal");
 }
