@@ -516,6 +516,11 @@ pub fn add_workspace_method_completions(
             format!("{package_name} method (from {defining_pkg})")
         };
 
+        // Own-class methods rank above inherited: tier 2 for own, tier 3 for inherited.
+        // This ensures $obj->zoom (own) sorts before $obj->abstract_method (inherited)
+        // even when the own method name is alphabetically after the inherited name.
+        let method_tier = if defining_pkg == package_name { "2" } else { "3" };
+
         completions.push(CompletionItem {
             label: symbol.name.clone(),
             kind: CompletionItemKind::Function,
@@ -524,7 +529,7 @@ pub fn add_workspace_method_completions(
                 Some(format!("Method `{}::{}` from workspace index.", defining_pkg, symbol.name))
             }),
             insert_text: Some(format!("{}()", symbol.name)),
-            sort_text: Some(format!("2_{}", symbol.name)), // After local, before generic
+            sort_text: Some(format!("{method_tier}_{}", symbol.name)), // tier 2=own, 3=inherited, after local (tier 1)
             filter_text: Some(symbol.name.clone()),
             additional_edits,
             text_edit_range: Some((context.prefix_start, context.position)),
