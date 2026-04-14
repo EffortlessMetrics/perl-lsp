@@ -1749,7 +1749,10 @@ fn test_hash_key_completion_quoted_keys() {
     let code = "my %quoted = ('first_key' => 1, \"second_key\" => 2);\n$quoted{";
     let completions = completions_at_end(code);
     assert!(has_label(&completions, "first_key"), "quoted key 'first_key' should be extracted");
-    assert!(has_label(&completions, "second_key"), "double-quoted key 'second_key' should be extracted");
+    assert!(
+        has_label(&completions, "second_key"),
+        "double-quoted key 'second_key' should be extracted"
+    );
 }
 
 #[test]
