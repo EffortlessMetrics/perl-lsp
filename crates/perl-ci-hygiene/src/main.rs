@@ -4485,4 +4485,111 @@ mod tests {
         // On Windows this will be C:\Users\...\AppData\Local\Temp\e2e-suite.lock
         assert!(!lock_str.is_empty(), "lock file path must be non-empty");
     }
+
+    /// Regression guard for issue #4229: test files must not write to hardcoded /tmp paths.
+    ///
+    /// Tests that assign a hardcoded `/tmp/...` string to a variable and then call
+    /// `fs::write(variable, ...)` will fail on minimal Windows environments that lack Git
+    /// for Windows (where `/tmp` is mapped). All file-writing tests must use
+    /// `tempfile::tempdir()` or `std::env::temp_dir()` instead.
+    ///
+    /// Detection heuristic: any line matching `let <name> = "/tmp/` where the same
+    /// variable name appears on a later `fs::write(` line in the same file.
+    #[test]
+    fn no_hardcoded_tmp_writes_in_tests() {
+        // Crates whose test files are checked. Extend this list as new crates are added.
+        const CHECKED_CRATES: &[&str] = &[
+            "perl-lsp",
+            "perl-dap",
+            "perl-uri",
+            "perl-workspace-index",
+            "perl-workspace-discovery",
+            "perl-dap-platform",
+        ];
+
+        let workspace_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let mut violations: Vec<String> = Vec::new();
+
+        for crate_name in CHECKED_CRATES {
+            let crate_dir = workspace_root.join("crates").join(crate_name);
+
+            // Scan both src (inline #[test] modules) and tests directories
+            for subdir in &["src", "tests"] {
+                let dir = crate_dir.join(subdir);
+                if !dir.exists() {
+                    continue;
+                }
+
+                for entry in walkdir::WalkDir::new(&dir)
+                    .into_iter()
+                    .flatten()
+                    .filter(|e| e.path().extension().and_then(|s| s.to_str()) == Some("rs"))
+                {
+                    let path = entry.path();
+                    let Ok(contents) = std::fs::read_to_string(path) else {
+                        continue;
+                    };
+
+                    // Look for pattern: let <var_name> = "/tmp/..."; followed by fs::write(<var_name>
+                    // This is the problematic pattern: variable holds a hardcoded /tmp path,
+                    // then that variable is used in a filesystem write.
+                    let mut tmp_vars: Vec<&str> = Vec::new();
+                    for line in contents.lines() {
+                        let trimmed = line.trim();
+                        // Detect: let [mut] var_name[: type] = "/tmp/...";
+                        if trimmed.starts_with("let ") && trimmed.contains("= \"/tmp/") {
+                            // Extract variable name between "let [mut]" and "[: type] ="
+                            if let Some(rest) = trimmed.strip_prefix("let ")
+                                && let Some(raw) = rest.split('=').next()
+                            {
+                                // Strip optional `mut ` keyword
+                                let raw = raw.trim();
+                                let raw = raw.strip_prefix("mut ").map_or(raw, str::trim);
+                                // Strip optional type annotation (`: &str`, `: String`, …)
+                                let var = raw.split(':').next().map_or(raw, str::trim);
+                                if !var.is_empty() {
+                                    tmp_vars.push(var);
+                                }
+                            }
+                        }
+                        // Detect: fs::write(var_name, ...) where var_name is a known /tmp var.
+                        // Require that `var_name` appears as an argument (preceded by `(` or `, `)
+                        // to avoid false positives like `var` matching `file_var`.
+                        if trimmed.contains("fs::write(") || trimmed.contains("fs::write(&") {
+                            for var in &tmp_vars {
+                                // Match `(var` or `(&var` or `, var` but NOT `file_var`
+                                let as_arg1 = format!("({var},");
+                                let as_arg2 = format!("(&{var},");
+                                let as_arg3 = format!("({var})");
+                                if trimmed.contains(&as_arg1)
+                                    || trimmed.contains(&as_arg2)
+                                    || trimmed.contains(&as_arg3)
+                                {
+                                    let rel = path
+                                        .strip_prefix(&workspace_root)
+                                        .unwrap_or(path)
+                                        .to_string_lossy()
+                                        .replace('\\', "/");
+                                    let violation =
+                                        format!("{rel}: `fs::write({var}, ...)` with /tmp path");
+                                    if !violations.contains(&violation) {
+                                        violations.push(violation);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        assert!(
+            violations.is_empty(),
+            "Test files write to hardcoded /tmp paths (issue #4229).\n\
+             Replace `let path = \"/tmp/...\"; fs::write(path, ...)` with\n\
+             `let tmp = tempfile::tempdir()?; let path = tmp.path().join(\"...\");`\n\
+             Violations found in:\n  {}",
+            violations.join("\n  ")
+        );
+    }
 }
