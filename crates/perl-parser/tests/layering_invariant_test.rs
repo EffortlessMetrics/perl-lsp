@@ -194,12 +194,8 @@ fn when_parser_layering_is_correct_then_no_dap_provider_deps_in_tree() {
     let stderr = String::from_utf8_lossy(&output.stderr);
 
     // Collect all DAP-related crate names that should NOT appear in tree
-    let forbidden_crates = vec![
-        "perl-dap",
-        "perl-dap-types",
-        "perl-dap-protocol",
-        "perl-dap-server",
-    ];
+    let forbidden_crates =
+        vec!["perl-dap", "perl-dap-types", "perl-dap-protocol", "perl-dap-server"];
 
     // Check each line of output for any forbidden crate names
     let found_dap_deps: Vec<_> = stdout
@@ -243,9 +239,7 @@ fn when_tooling_module_refactored_then_tooling_rs_removed() {
     // Get the absolute path to the workspace root
     let workspace_root = env!("CARGO_MANIFEST_DIR");
 
-    let tooling_rs_path = Path::new(workspace_root)
-        .join("src")
-        .join("tooling.rs");
+    let tooling_rs_path = Path::new(workspace_root).join("src").join("tooling.rs");
 
     assert!(
         !tooling_rs_path.exists(),
