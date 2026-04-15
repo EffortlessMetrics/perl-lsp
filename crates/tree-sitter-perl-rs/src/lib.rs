@@ -111,6 +111,61 @@ impl Default for Parser {
     }
 }
 
+/// A descriptor for the Perl language as parsed by the native v3 engine.
+///
+/// Provides node kind names and field metadata for Rust-native tooling.
+/// This is NOT a `tree_sitter::Language` — it does not require a C toolchain
+/// and cannot be used with `tree_sitter::Parser::set_language`. For drop-in
+/// tree-sitter compatibility use `tree-sitter-perl-c` instead.
+///
+/// # Example
+///
+/// ```rust
+/// use tree_sitter_perl_rs::language;
+///
+/// let lang = language();
+/// assert!(lang.node_kind_count() > 0);
+/// ```
+#[derive(Debug, Clone, Copy)]
+pub struct PerlLanguage {
+    kind_names: &'static [&'static str],
+}
+
+impl PerlLanguage {
+    /// Returns the number of distinct node kinds in the grammar.
+    pub fn node_kind_count(&self) -> usize {
+        self.kind_names.len()
+    }
+
+    /// Returns all node kind names, in alphabetical order.
+    pub fn node_kind_names(&self) -> &[&'static str] {
+        self.kind_names
+    }
+
+    /// Returns `true` if the given kind name is a named (non-anonymous) node kind.
+    pub fn node_kind_is_named(&self, kind: &str) -> bool {
+        self.kind_names.contains(&kind)
+    }
+}
+
+impl Default for PerlLanguage {
+    fn default() -> Self {
+        LANGUAGE
+    }
+}
+
+/// Returns the [`PerlLanguage`] descriptor for Rust-native tooling.
+///
+/// Note: This is NOT equivalent to `tree_sitter::Language`. See [`PerlLanguage`].
+pub fn language() -> PerlLanguage {
+    LANGUAGE
+}
+
+/// The [`PerlLanguage`] descriptor as a constant.
+pub static LANGUAGE: PerlLanguage = PerlLanguage {
+    kind_names: perl_ast::NodeKind::ALL_KIND_NAMES,
+};
+
 /// The result of a successful parse: an owned syntax tree and the source text.
 ///
 /// Use [`root_node`][Tree::root_node] to begin traversal.
@@ -404,5 +459,44 @@ mod tests {
         let root = tree.root_node();
         // The root Program is not a leaf.
         assert!(!root.is_leaf());
+    }
+
+    // Tests for PerlLanguage descriptor
+
+    #[test]
+    fn test_language_returns_descriptor_with_nonzero_kind_count() {
+        let lang = language();
+        assert!(lang.node_kind_count() > 0, "language should report at least one node kind");
+    }
+
+    #[test]
+    fn test_language_constant_has_nonzero_kind_count() {
+        assert!(LANGUAGE.node_kind_count() > 0, "LANGUAGE should have at least one node kind");
+    }
+
+    #[test]
+    fn test_language_reports_program_as_named_kind() {
+        let lang = language();
+        assert!(lang.node_kind_is_named("Program"), "'Program' should be a named kind");
+    }
+
+    #[test]
+    fn test_language_rejects_unknown_kind() {
+        let lang = language();
+        assert!(!lang.node_kind_is_named("__nonexistent_kind__"), "unknown kind should not be named");
+    }
+
+    #[test]
+    fn test_language_kind_names_contains_program() {
+        let lang = language();
+        let names = lang.node_kind_names();
+        assert!(names.contains(&"Program"), "kind names should include 'Program'");
+    }
+
+    #[test]
+    fn test_language_default_returns_same_as_language() {
+        let lang1 = language();
+        let lang2 = PerlLanguage::default();
+        assert_eq!(lang1.node_kind_count(), lang2.node_kind_count());
     }
 }
