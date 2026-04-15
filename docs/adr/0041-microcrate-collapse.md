@@ -151,7 +151,7 @@ The ~30-crate target reflects "all the legitimate reusable kernels and products,
 ### Negative
 
 - **One-time migration cost**: 14 PRs across several weeks of focused work.
-- **Downstream breakage for direct microcrate dependents**: addressed via `MIGRATION.md` and a major-version bump.
+- **Downstream breakage for direct microcrate dependents**: addressed via [`docs/MIGRATION_v0.14.md`](../MIGRATION_v0.14.md) and a major-version bump.
 - **Snapshot test path drift**: per-wave review and regeneration step.
 - **Loss of crate-level test scoping**: `cargo test -p perl-X` becomes `cargo test -p perl-parser X::` for absorbed crates.
 - **Reduced crate-level incremental granularity**: a change to a former microcrate now rebuilds the whole owning crate. Mitigated by larger crates having less per-change overhead.
