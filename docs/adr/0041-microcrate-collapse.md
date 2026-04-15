@@ -183,7 +183,7 @@ Review this ADR if any of the following become true:
 1. A retired microcrate develops a real external consumer story (in which case promote it back to a published crate per the promotion checklist below).
 2. crates.io itself adds first-class support for unpublished workspace dependencies in published runtime graphs (would relax the central constraint).
 3. Compile-time profiling shows large-crate codegen overhead exceeds the per-crate link overhead we eliminated (would suggest selective re-splitting).
-4. The 31-crate count grows past ~40 through accumulated promotions (would suggest the initial classification was too conservative).
+4. The ~30-crate count grows past ~40 through accumulated promotions (would suggest the initial classification was too conservative).
 
 ## Promotion checklist (for moving a module back to a published crate later)
 
