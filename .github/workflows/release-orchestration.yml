@@ -126,6 +126,21 @@ jobs:
 
           echo "✅ Changelog checked"
 
+      - name: Require curated release notes
+        # The release workflow sources the GitHub Release body from
+        # docs/releases/vX.Y.Z.md. Fail here — before a tag is created — if
+        # the notes file is missing or malformed, so we never publish a tag
+        # that produces a blank release body. See RELEASE.md and issue #4340.
+        run: |
+          VERSION="${{ steps.resolve.outputs.version }}"
+          NOTES_FILE="docs/releases/v${VERSION}.md"
+          if [ ! -f "${NOTES_FILE}" ]; then
+            echo "::error file=${NOTES_FILE}::Missing release notes file ${NOTES_FILE}. Create it before dispatching the release (see RELEASE.md, 'Release History Updates')."
+            exit 1
+          fi
+          bash scripts/extract-release-notes.sh "${VERSION}" > /dev/null
+          echo "✅ Release notes file present and parseable: ${NOTES_FILE}"
+
       - name: Summary
         run: |
           echo "## Release Validation Complete :white_check_mark:" >> "$GITHUB_STEP_SUMMARY"

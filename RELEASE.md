@@ -428,6 +428,14 @@ This creates a `release/vNEW_VERSION` branch with updated `Cargo.toml` and `CHAN
 
 Every public release **must** update three surfaces. See [RELEASE_HISTORY.md](RELEASE_HISTORY.md) for the canonical ledger.
 
+> **The GitHub Release body is sourced from `docs/releases/vX.Y.Z.md`.**
+> The release-orchestration workflow and the build/release workflow both
+> validate the file exists and is parseable (via
+> [`scripts/extract-release-notes.sh`](scripts/extract-release-notes.sh)) before
+> creating a tag or uploading assets. **If this file is missing or malformed,
+> the release will fail fast.** GitHub's auto-generated "What's Changed" PR
+> list is appended below the curated body by `softprops/action-gh-release`.
+
 ### Before publishing
 
 - [ ] Create `docs/releases/vX.Y.Z.md` (use an existing file as template)
@@ -436,6 +444,10 @@ Every public release **must** update three surfaces. See [RELEASE_HISTORY.md](RE
   - `docs/releases/vX.Y.Z.md`
   - GitHub Release URL
   - Compare range `vPrev...vX.Y.Z`
+- [ ] (Optional) Preview what the GitHub Release body will look like:
+  ```bash
+  bash scripts/extract-release-notes.sh X.Y.Z
+  ```
 
 ### After publishing
 
@@ -464,6 +476,16 @@ grep 'X.Y.Z' RELEASE_HISTORY.md
 # 3. CHANGELOG section exists
 grep '\[X.Y.Z\]' CHANGELOG.md
 
-# 4. GitHub Release matches
+# 4. Notes file is extractable (mirrors what the release workflow runs)
+bash scripts/extract-release-notes.sh X.Y.Z > /dev/null
+
+# 5. GitHub Release matches
 gh release view vX.Y.Z --json tagName,assets --jq '{tag: .tagName, assets: [.assets[].name]}'
+
+# 6. GitHub Release body matches the curated notes (strip auto-appended
+#    "## What's Changed" section before comparing)
+EXPECTED=$(bash scripts/extract-release-notes.sh X.Y.Z)
+ACTUAL=$(gh release view vX.Y.Z --json body --jq .body \
+  | awk '/^## What'"'"'s Changed$/{exit} {print}')
+diff <(printf '%s\n' "$EXPECTED") <(printf '%s\n' "$ACTUAL")
 ```

@@ -41,6 +41,9 @@ jobs:
       prerelease: ${{ steps.meta.outputs.prerelease }}
 
     steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
       - name: Resolve and validate tag
         id: meta
         run: |
@@ -77,6 +80,24 @@ jobs:
           echo "Resolved release tag: $TAG"
           echo "Resolved version: $VERSION"
           echo "Resolved prerelease: $PRERELEASE"
+
+      - name: Require curated release notes
+        # Fail fast if docs/releases/vX.Y.Z.md is missing. The notes file is the
+        # single source of truth for the GitHub Release body — releasing without
+        # it would fall back to auto-generated PR lists, which diverges from the
+        # curated narrative we keep in the repo. See RELEASE.md, "Release
+        # History Updates", and issue #4340.
+        run: |
+          VERSION="${{ steps.meta.outputs.version }}"
+          NOTES_FILE="docs/releases/v${VERSION}.md"
+          if [ ! -f "${NOTES_FILE}" ]; then
+            echo "::error file=${NOTES_FILE}::Missing release notes file ${NOTES_FILE}. Create it (see RELEASE.md, 'Release History Updates') and re-run the release workflow."
+            exit 1
+          fi
+          # Confirm the extractor can parse the file — this catches malformed
+          # front-matter before we finish building binaries.
+          bash scripts/extract-release-notes.sh "${VERSION}" > /dev/null
+          echo "✅ Release notes file present and parseable: ${NOTES_FILE}"
 
   build:
     name: Build ${{ matrix.target }}
@@ -242,39 +263,17 @@ jobs:
 
       - name: Generate release notes
         id: release_notes
+        # Source the GitHub Release body from docs/releases/vX.Y.Z.md so the
+        # release surface matches the curated narrative in the repo. The
+        # auto-generated "What's Changed" PR list is still appended below by
+        # softprops/action-gh-release via `generate_release_notes: true`.
+        # See issue #4340 and RELEASE.md ("Release History Updates").
         run: |
           VERSION="${{ needs.release-metadata.outputs.version }}"
-          cat > release_notes.md << EOF
-          ## Perl LSP ${VERSION}
-
-          This release ships the binaries and the docs needed to install, configure, and troubleshoot the current release line.
-
-          ### Install or upgrade
-
-          ```bash
-          cargo install perllsp
-          cargo install perl-dap
-          ```
-
-          ### Read this first
-
-          - [Docs home](https://github.com/${{ github.repository }}/blob/${{ needs.release-metadata.outputs.tag }}/docs/README.md)
-          - [Docs index](https://github.com/${{ github.repository }}/blob/${{ needs.release-metadata.outputs.tag }}/docs/INDEX.md)
-          - [Getting Started](https://github.com/${{ github.repository }}/blob/${{ needs.release-metadata.outputs.tag }}/docs/tutorials/GETTING_STARTED.md)
-          - [Installation Guide](https://github.com/${{ github.repository }}/blob/${{ needs.release-metadata.outputs.tag }}/docs/how-to/INSTALLATION.md)
-          - [Editor Setup](https://github.com/${{ github.repository }}/blob/${{ needs.release-metadata.outputs.tag }}/docs/how-to/EDITOR_SETUP.md)
-          - [Troubleshooting](https://github.com/${{ github.repository }}/blob/${{ needs.release-metadata.outputs.tag }}/docs/how-to/TROUBLESHOOTING.md)
-
-          ### Release assets
-
-          - Platform binaries are attached to this release.
-          - Verify downloads with the consolidated \`SHA256SUMS\` file.
-
-          ### Change log
-
-          See the [CHANGELOG](https://github.com/${{ github.repository }}/blob/${{ needs.release-metadata.outputs.tag }}/CHANGELOG.md) for the full release history.
-          EOF
+          bash scripts/extract-release-notes.sh "${VERSION}" release_notes.md
+          echo "--- release_notes.md ---"
           cat release_notes.md
+          echo "--- end release_notes.md ---"
 
       - name: Create GitHub Release
         if: github.event_name == 'workflow_dispatch'

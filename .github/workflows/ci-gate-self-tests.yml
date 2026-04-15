@@ -16,8 +16,12 @@ on:
     paths:
       - 'scripts/cargo-package-workspace-dry-run.sh'
       - 'scripts/publish-topo.py'
+      - 'scripts/extract-release-notes.sh'
       - 'scripts/tests/test-publish-dry-run-gate.sh'
+      - 'scripts/tests/test-extract-release-notes.sh'
       - '.github/workflows/publish-dry-run.yml'
+      - '.github/workflows/release.yml'
+      - '.github/workflows/release-orchestration.yml'
       - '.github/workflows/ci-gate-self-tests.yml'
   workflow_dispatch: {}
 
@@ -66,4 +70,35 @@ jobs:
             echo "" >> "$GITHUB_STEP_SUMMARY"
             echo "A gate self-test assertion failed — the gate may not be catching errors it claims to catch." >> "$GITHUB_STEP_SUMMARY"
             echo "Check the step output above for which case failed." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+  extract-release-notes-self-test:
+    name: Extract release notes self-test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Run extract-release-notes self-test
+        run: bash scripts/tests/test-extract-release-notes.sh
+
+      - name: Summary
+        if: always()
+        run: |
+          if [ "${{ job.status }}" = "success" ]; then
+            echo "## extract-release-notes self-tests passed" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "The release-notes extractor correctly:" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Strips YAML front-matter and preserves the body" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Returns exit 2 when docs/releases/vX.Y.Z.md is missing" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Returns exit 3 on malformed (unterminated) front-matter" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Writes to stdout or a given outfile interchangeably" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Extracts the latest shipped notes file cleanly" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "## extract-release-notes self-tests FAILED" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "The GitHub Release body would be wrong or the release workflow would false-fail." >> "$GITHUB_STEP_SUMMARY"
+            echo "Check the step output for the failing case." >> "$GITHUB_STEP_SUMMARY"
           fi
