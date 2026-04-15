@@ -49,7 +49,8 @@ pr-fast: _check-tools-basic
     START=$(date +%s)
     just _timed "fmt-check" "just fmt-check" && \
     just _timed "clippy-core" "just clippy-core" && \
-    just _timed "test-core" "just test-core"
+    just _timed "test-core" "just test-core" && \
+    just _timed "publish-closure" "just ci-publish-closure"
     RC=$?
     END=$(date +%s)
     echo ""
@@ -760,7 +761,8 @@ ci-gate:
     just ci-features-invariants && \
     just hook-check && \
     just hook-registry-check && \
-    just hook-tests
+    just hook-tests && \
+    just ci-publish-closure
     # @START=$$(date +%s); \
 
 # Gate runner with receipt output (Issue #210)
@@ -856,6 +858,11 @@ ci-forbid-fatal:
     @echo "🚫 Checking for forbidden fatal constructs..."
     @cargo xtask forbid-fatal-constructs -- --verbose
     @echo "✅ No forbidden fatal constructs"
+
+ci-publish-closure:
+    @echo "🔐 Checking publish-closure transitive deps..."
+    @cargo xtask publish-closure
+    @echo "✅ Publish-closure check passed"
 
 # Core tests (fast, essential)
 ci-test-core:

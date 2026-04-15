@@ -1,8 +1,9 @@
 //! Utility functions for xtask
 
 use std::path::PathBuf;
+use std::process::Command;
 
-use color_eyre::eyre::{Result, eyre};
+use color_eyre::eyre::{Result, bail, eyre};
 
 /// Get the project root directory using CARGO_MANIFEST_DIR.
 /// This is more robust than current_dir() in CI environments.
@@ -13,6 +14,25 @@ pub fn project_root() -> Result<PathBuf> {
         .parent()
         .map(|p| p.to_path_buf())
         .ok_or_else(|| eyre!("xtask should be in a subdirectory - invalid project structure"))
+}
+
+/// Run `cargo metadata --format-version 1` and return the raw JSON bytes.
+///
+/// Set `no_deps = true` to pass `--no-deps` (skips dependency resolution and
+/// omits the `resolve` graph from the output — faster, but the caller will not
+/// receive transitive-dep information).
+///
+/// Returns an error if `cargo metadata` exits non-zero.
+pub fn run_cargo_metadata(no_deps: bool) -> Result<Vec<u8>> {
+    let mut args = vec!["metadata", "--format-version", "1"];
+    if no_deps {
+        args.push("--no-deps");
+    }
+    let output = Command::new("cargo").args(&args).output()?;
+    if !output.status.success() {
+        bail!("cargo metadata failed:\n{}", String::from_utf8_lossy(&output.stderr));
+    }
+    Ok(output.stdout)
 }
 
 /// Build constrained environment variables for resource-limited CI.

@@ -716,6 +716,13 @@ enum Commands {
         token: Option<String>,
     },
 
+    /// Verify transitive normal-dep closure of published crates contains only publishable deps
+    PublishClosure {
+        /// Check only this crate (default: all allowlisted crates)
+        #[arg(long)]
+        crate_name: Option<String>,
+    },
+
     /// Sweep system Perl corpus for parser error rates
     ParserCorpusSweep {
         /// Comma-separated corpus root directories
@@ -1364,6 +1371,7 @@ fn main() -> Result<()> {
         Commands::ForbidFatalConstructs { args } => forbid_fatal_constructs::run(args),
         Commands::CiHygiene { command, args } => ci_hygiene::run(command, args),
         Commands::PublishVscode { yes, token } => publish::publish_vscode(yes, token),
+        Commands::PublishClosure { crate_name } => publish_closure::run(crate_name),
         Commands::SmokeTestRelease { version } => publish::smoke_test_release(version),
         Commands::PublishReceipts { date } => publish_receipts::run(date),
         Commands::ParserCorpusSweep {
