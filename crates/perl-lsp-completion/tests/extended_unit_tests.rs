@@ -1732,6 +1732,81 @@ fn builtin_warn_no_duplicate() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
+// UTF-8 namespace builtin completions (issue #3371)
+// ─────────────────────────────────────────────────────────────────────────
+
+/// After typing `utf8::` the completion list should surface the members of
+/// the core `utf8` namespace (`encode`, `decode`, `is_utf8`, `valid`,
+/// `upgrade`, `downgrade`, and the native<->unicode codepoint converters)
+/// — the functions documented in `perldoc utf8`.
+///
+/// The `utf8::` prefix triggers the package-member path, so completions are
+/// labelled with the bare member name (no `utf8::` prefix on the label).
+#[test]
+fn utf8_namespace_members_complete_after_qualifier() {
+    let code = "utf8::";
+    let items = completions_at_end(code);
+
+    let expected_members = [
+        "encode",
+        "decode",
+        "is_utf8",
+        "valid",
+        "upgrade",
+        "downgrade",
+        "native_to_unicode",
+        "unicode_to_native",
+    ];
+
+    for name in &expected_members {
+        let item = must_some(find_item(&items, name));
+        assert_eq!(
+            item.kind,
+            CompletionItemKind::Function,
+            "utf8::{name} should be a Function completion"
+        );
+        // Detail carries the package name for qualified completions.
+        let detail = must_some(item.detail.as_ref());
+        assert_eq!(detail, "utf8", "utf8::{name} detail should be the package name");
+        // Documentation must mention encoding, UTF-8, Unicode, or code point so
+        // editors display something meaningful on hover.
+        let doc = must_some(item.documentation.as_ref());
+        let doc_lower = doc.to_lowercase();
+        assert!(
+            doc_lower.contains("utf-8")
+                || doc_lower.contains("utf8")
+                || doc_lower.contains("unicode")
+                || doc_lower.contains("code point"),
+            "utf8::{name} documentation should describe UTF-8/Unicode behaviour; got {doc:?}"
+        );
+    }
+}
+
+/// Prefix filtering: typing `utf8::enc` should surface `utf8::encode` via the
+/// qualified-builtin path (not the bare-identifier path), and must not drag
+/// in `utf8::decode` which does not share the prefix.
+#[test]
+fn utf8_namespace_completion_respects_prefix() {
+    let code = "utf8::enc";
+    let items = completions_at_end(code);
+    assert!(
+        has_label(&items, "utf8::encode"),
+        "utf8::enc should complete to utf8::encode; got labels: {:?}",
+        labels(&items)
+    );
+    // utf8::decode starts with "utf8::d" so must not appear here.
+    assert!(!has_label(&items, "utf8::decode"), "utf8::enc prefix should not surface utf8::decode");
+    // The matching item must be a Function completion with UTF-8 docs.
+    let item = must_some(find_item(&items, "utf8::encode"));
+    assert_eq!(item.kind, CompletionItemKind::Function);
+    let doc = must_some(item.documentation.as_ref());
+    assert!(
+        doc.to_lowercase().contains("utf-8") || doc.to_lowercase().contains("unicode"),
+        "utf8::encode documentation should describe UTF-8 behaviour; got {doc:?}"
+    );
+}
+
+// ─────────────────────────────────────────────────────────────────────────
 // Hash key completion edge case tests (issue #4264)
 // ─────────────────────────────────────────────────────────────────────────
 

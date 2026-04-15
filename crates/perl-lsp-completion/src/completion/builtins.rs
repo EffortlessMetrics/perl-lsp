@@ -228,6 +228,15 @@ pub fn create_builtins() -> HashSet<&'static str> {
         "getservent",
         "setservent",
         "endservent",
+        // UTF-8 encoding (perldoc utf8)
+        "utf8::encode",
+        "utf8::decode",
+        "utf8::is_utf8",
+        "utf8::valid",
+        "utf8::upgrade",
+        "utf8::downgrade",
+        "utf8::native_to_unicode",
+        "utf8::unicode_to_native",
     ]
     .into_iter()
     .collect()
@@ -811,6 +820,58 @@ fn builtin_info(name: &'static str) -> (&'static str, &'static str, Option<&'sta
             "getservbyport(, )",
             "getservbyport PORT, PROTO",
             Some("Return service info by port number and protocol."),
+        ),
+        // UTF-8 encoding functions (perldoc utf8). These manipulate the
+        // SvUTF8 flag on scalars in place.
+        "utf8::encode" => (
+            "utf8::encode ",
+            "utf8::encode SCALAR",
+            Some(
+                "Encode SCALAR in place from Unicode to UTF-8 bytes. Clears the UTF-8 flag and returns the number of octets.",
+            ),
+        ),
+        "utf8::decode" => (
+            "utf8::decode ",
+            "utf8::decode SCALAR",
+            Some(
+                "Decode SCALAR in place from UTF-8 bytes to Unicode. Sets the UTF-8 flag on success; returns true/false.",
+            ),
+        ),
+        "utf8::is_utf8" => (
+            "utf8::is_utf8 ",
+            "utf8::is_utf8 SCALAR",
+            Some("Return true if the UTF-8 flag is set on SCALAR."),
+        ),
+        "utf8::valid" => (
+            "utf8::valid ",
+            "utf8::valid SCALAR",
+            Some("Return true if SCALAR holds a syntactically valid UTF-8 byte sequence."),
+        ),
+        "utf8::upgrade" => (
+            "utf8::upgrade ",
+            "utf8::upgrade SCALAR",
+            Some(
+                "Convert SCALAR in place to Perl's internal UTF-8 form. Sets the UTF-8 flag and returns the octet count.",
+            ),
+        ),
+        "utf8::downgrade" => (
+            "utf8::downgrade ",
+            "utf8::downgrade SCALAR, FAIL_OK",
+            Some(
+                "Convert SCALAR in place out of Perl's internal UTF-8 form. Croaks unless FAIL_OK is true and the string fits in a single byte.",
+            ),
+        ),
+        "utf8::native_to_unicode" => (
+            "utf8::native_to_unicode ",
+            "utf8::native_to_unicode CODEPOINT",
+            Some(
+                "Return the Unicode code point corresponding to a native-platform CODEPOINT (no-op on ASCII).",
+            ),
+        ),
+        "utf8::unicode_to_native" => (
+            "utf8::unicode_to_native ",
+            "utf8::unicode_to_native CODEPOINT",
+            Some("Return the native-platform code point for a Unicode CODEPOINT (no-op on ASCII)."),
         ),
         // Fallthrough: minimal doc for all other builtins
         other => (other, "built-in function", Some("Perl built-in function.")),
