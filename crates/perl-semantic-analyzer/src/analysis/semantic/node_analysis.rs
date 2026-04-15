@@ -138,7 +138,9 @@ impl SemanticAnalyzer {
 
                     let hover = HoverInfo {
                         signature: signature_str,
-                        documentation: self.extract_documentation(node.location.start),
+                        documentation: self
+                            .extract_documentation(node.location.start)
+                            .or_else(|| self.extract_pod_in_range(body.location)),
                         details: if attributes.is_empty() {
                             vec![]
                         } else {
@@ -173,7 +175,9 @@ impl SemanticAnalyzer {
 
                     let hover = HoverInfo {
                         signature: signature_str,
-                        documentation: self.extract_documentation(node.location.start),
+                        documentation: self
+                            .extract_documentation(node.location.start)
+                            .or_else(|| self.extract_pod_in_range(body.location)),
                         details,
                     };
 
@@ -205,7 +209,9 @@ impl SemanticAnalyzer {
                 // Add hover info
                 let hover = HoverInfo {
                     signature: format!("method {}", name),
-                    documentation: self.extract_documentation(node.location.start),
+                    documentation: self
+                        .extract_documentation(node.location.start)
+                        .or_else(|| self.extract_pod_in_range(body.location)),
                     details: if attributes.is_empty() {
                         vec![]
                     } else {
@@ -918,9 +924,17 @@ impl SemanticAnalyzer {
         }
         let before = &self.source[..start];
 
-        // Check for POD blocks ending with =cut
+        // Check for POD blocks ending with =cut immediately before `start`.
+        //
+        // The anchor must be true end-of-string (`\z`), not end-of-line: with
+        // multi-line mode `$` matches at every `\n`, which would allow a POD
+        // block buried earlier in the file to "leak" forward and attach to a
+        // later declaration that has no documentation of its own. `\z` makes
+        // the match specifically "POD block followed only by whitespace up to
+        // `start`". Dotall (`(?s)`) is still required so `.*?` can span lines
+        // within the POD block.
         let pod_re = POD_RE
-            .get_or_init(|| Regex::new(r"(?ms)(=[a-zA-Z0-9].*?\n=cut\n?)\s*$"))
+            .get_or_init(|| Regex::new(r"(?s)(=[a-zA-Z0-9].*?\n=cut\n?)\s*\z"))
             .as_ref()
             .ok()?;
         if let Some(caps) = pod_re.captures(before) {
@@ -944,6 +958,70 @@ impl SemanticAnalyzer {
                     .join(" ");
                 return Some(doc);
             }
+        }
+
+        None
+    }
+
+    /// Extract the first POD block inside a source range.
+    ///
+    /// This is the companion to [`extract_documentation`], which only looks
+    /// *before* a position. For subroutine and method bodies we also want to
+    /// pick up POD embedded *inside* the body (issue #3407) — a valid and
+    /// occasional Perl idiom where a sub's documentation lives next to its
+    /// implementation rather than preceding its declaration.
+    ///
+    /// POD blocks in Perl are recognised only when the `=<directive>` line
+    /// starts at column 0 (enforced by `perl-lexer`). The scan therefore
+    /// requires each `=` to follow a newline (or sit at position 0), which
+    /// avoids matching a literal `=pod` that appears inside a string or an
+    /// expression.
+    ///
+    /// Returns the POD text (from the opening directive through `=cut`,
+    /// trimmed) or `None` when the range contains no POD block.
+    pub(super) fn extract_pod_in_range(&self, range: SourceLocation) -> Option<String> {
+        let start = range.start;
+        let end = range.end;
+        if self.source.is_empty() || start >= end || end > self.source.len() {
+            return None;
+        }
+        let bytes = self.source.as_bytes();
+
+        // Scan for a line-starting `=<directive>` within [start, end).
+        let mut i = start;
+        while i < end {
+            let at_line_start = i == 0 || bytes[i - 1] == b'\n';
+            if at_line_start
+                && bytes[i] == b'='
+                && i + 1 < end
+                && bytes[i + 1].is_ascii_alphabetic()
+            {
+                // Confirm this is a POD directive (word-like after `=`). The
+                // lexer also recognises `=for`, `=encoding`, etc., but any
+                // alphabetic directive is treated as POD start.
+                let pod_start = i;
+
+                // Scan forward for a line starting with `=cut` within the range.
+                let mut j = pod_start;
+                while j < end {
+                    let line_start = j == 0 || bytes[j - 1] == b'\n';
+                    if line_start && bytes[j..end.min(bytes.len())].starts_with(b"=cut") {
+                        // Advance j to end of `=cut` line so the returned
+                        // text includes the closing directive.
+                        let mut k = j + 4;
+                        while k < end && bytes[k] != b'\n' {
+                            k += 1;
+                        }
+                        let text = self.source.get(pod_start..k)?.trim().to_string();
+                        return Some(text);
+                    }
+                    j += 1;
+                }
+                // Opening directive found but no `=cut` in range — treat as
+                // no well-formed POD block and stop scanning.
+                return None;
+            }
+            i += 1;
         }
 
         None
