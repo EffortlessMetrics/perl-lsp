@@ -1557,6 +1557,191 @@ sub process {
     }
 
     #[test]
+    fn test_subroutine_with_inline_pod_in_body_hover() -> Result<(), Box<dyn std::error::Error>> {
+        // Inline POD inside a subroutine body (rare but valid Perl) should be
+        // associated with the subroutine for hover documentation. See issue #3407.
+        //
+        // Per perlpod, POD directives must start at column 0 — the block below
+        // temporarily drops out of the sub body for documentation and resumes
+        // with `=cut`, which is a legitimate Perl idiom.
+        let code = r#"sub process_data {
+=pod
+
+Internal documentation for this sub.
+
+=cut
+
+    my $data = shift;
+    return $data * 2;
+}
+"#;
+        let mut parser = Parser::new(code);
+        let ast = parser.parse()?;
+        let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
+
+        let sub_symbols =
+            analyzer.symbol_table().find_symbol("process_data", 0, SymbolKind::Subroutine);
+        assert!(!sub_symbols.is_empty(), "Should find sub process_data");
+
+        let hover = analyzer.hover_at(sub_symbols[0].location);
+        assert!(hover.is_some(), "Should have hover for sub process_data");
+
+        let hover = hover.unwrap();
+        assert!(
+            hover.signature.contains("sub process_data"),
+            "Hover should show sub signature, got: {}",
+            hover.signature
+        );
+        let doc = hover
+            .documentation
+            .as_ref()
+            .ok_or("Sub hover should include documentation from inline POD in body")?;
+        assert!(
+            doc.contains("Internal documentation"),
+            "Sub hover should contain inline POD body text, got: {}",
+            doc
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_subroutine_prefers_preceding_pod_over_inline_pod()
+    -> Result<(), Box<dyn std::error::Error>> {
+        // When POD precedes the sub AND inline POD exists in the body,
+        // the preceding POD takes precedence (it is the idiomatic doc location).
+        let code = r#"=head2 outer
+
+Preceding doc for process_data.
+
+=cut
+
+sub process_data {
+=pod
+
+Inline doc inside body.
+
+=cut
+
+    my $data = shift;
+    return $data;
+}
+"#;
+        let mut parser = Parser::new(code);
+        let ast = parser.parse()?;
+        let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
+
+        let sub_symbols =
+            analyzer.symbol_table().find_symbol("process_data", 0, SymbolKind::Subroutine);
+        assert!(!sub_symbols.is_empty(), "Should find sub process_data");
+
+        let hover = analyzer.hover_at(sub_symbols[0].location).ok_or("hover missing")?;
+        let doc = hover.documentation.as_ref().ok_or("documentation missing")?;
+        assert!(doc.contains("Preceding doc"), "Preceding POD should take precedence, got: {doc}");
+        assert!(
+            !doc.contains("Inline doc"),
+            "Inline body POD should not be used when preceding POD exists, got: {doc}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_method_with_inline_pod_in_body_hover() -> Result<(), Box<dyn std::error::Error>> {
+        // `method` declarations inside a `class` block share the sub-body POD path.
+        let code = r#"class Foo {
+    method bar {
+=pod
+
+Inline doc for method bar.
+
+=cut
+
+        return 1;
+    }
+}
+"#;
+        let mut parser = Parser::new(code);
+        let ast = parser.parse()?;
+        let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
+
+        // Locate the "method bar" hover via the method name position.
+        let bar_pos = code.find("method bar").ok_or("method bar not found")?;
+        let hover = analyzer
+            .hover_info
+            .iter()
+            .find(|(loc, _)| loc.start <= bar_pos && loc.end > bar_pos)
+            .map(|(_, h)| h)
+            .ok_or("hover missing for method bar")?;
+
+        assert!(
+            hover.signature.contains("method bar"),
+            "hover signature should be 'method bar', got: {}",
+            hover.signature
+        );
+        let doc = hover.documentation.as_ref().ok_or("documentation missing")?;
+        assert!(
+            doc.contains("Inline doc for method bar"),
+            "Method hover should contain inline POD body text, got: {doc}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_subroutine_without_any_pod_has_no_documentation()
+    -> Result<(), Box<dyn std::error::Error>> {
+        // No preceding or inline POD — documentation must remain None so that
+        // downstream consumers can distinguish "no doc" from "empty doc".
+        let code = r#"sub plain {
+    return 1;
+}
+"#;
+        let mut parser = Parser::new(code);
+        let ast = parser.parse()?;
+        let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
+
+        let sub_symbols = analyzer.symbol_table().find_symbol("plain", 0, SymbolKind::Subroutine);
+        assert!(!sub_symbols.is_empty(), "Should find sub plain");
+
+        let hover = analyzer.hover_at(sub_symbols[0].location).ok_or("hover missing")?;
+        assert!(
+            hover.documentation.is_none(),
+            "Hover documentation should be None for a sub with no POD, got: {:?}",
+            hover.documentation
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_subroutine_with_head_inline_pod_in_body() -> Result<(), Box<dyn std::error::Error>> {
+        // An =head-style POD block (not =pod) inside a sub body should also be
+        // recognised, matching how the preceding-POD path works.
+        let code = r#"sub calculate {
+=head2 calculate
+
+Performs a calculation.
+
+=cut
+
+    return 42;
+}
+"#;
+        let mut parser = Parser::new(code);
+        let ast = parser.parse()?;
+        let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
+
+        let sub_symbols =
+            analyzer.symbol_table().find_symbol("calculate", 0, SymbolKind::Subroutine);
+        assert!(!sub_symbols.is_empty(), "Should find sub calculate");
+
+        let hover = analyzer.hover_at(sub_symbols[0].location).ok_or("hover missing")?;
+        let doc = hover.documentation.as_ref().ok_or("documentation missing")?;
+        assert!(
+            doc.contains("Performs a calculation"),
+            "Inline =head2 POD body text should be captured, got: {doc}"
+        );
+        Ok(())
+    }
+
+    #[test]
     fn test_variable_hover_shows_declaration_type() -> Result<(), Box<dyn std::error::Error>> {
         let code = r#"my $count = 42;
 my @items = (1, 2, 3);

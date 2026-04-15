@@ -138,7 +138,11 @@ impl SemanticAnalyzer {
 
                     let hover = HoverInfo {
                         signature: signature_str,
-                        documentation: self.extract_documentation(node.location.start),
+                        documentation: self.extract_sub_documentation(
+                            node.location.start,
+                            body.location.start,
+                            body.location.end,
+                        ),
                         details: if attributes.is_empty() {
                             vec![]
                         } else {
@@ -173,7 +177,11 @@ impl SemanticAnalyzer {
 
                     let hover = HoverInfo {
                         signature: signature_str,
-                        documentation: self.extract_documentation(node.location.start),
+                        documentation: self.extract_sub_documentation(
+                            node.location.start,
+                            body.location.start,
+                            body.location.end,
+                        ),
                         details,
                     };
 
@@ -205,7 +213,11 @@ impl SemanticAnalyzer {
                 // Add hover info
                 let hover = HoverInfo {
                     signature: format!("method {}", name),
-                    documentation: self.extract_documentation(node.location.start),
+                    documentation: self.extract_sub_documentation(
+                        node.location.start,
+                        body.location.start,
+                        body.location.end,
+                    ),
                     details: if attributes.is_empty() {
                         vec![]
                     } else {
@@ -947,6 +959,46 @@ impl SemanticAnalyzer {
         }
 
         None
+    }
+
+    /// Extract documentation for a subroutine-like node (sub, method).
+    ///
+    /// First falls back to [`extract_documentation`](Self::extract_documentation)
+    /// which searches for POD or comments immediately preceding the node. If no
+    /// doc is found there, this method also searches *inside* the body for an
+    /// inline POD block — a rare but valid Perl idiom used when code and
+    /// narrative documentation live together.
+    ///
+    /// See issue #3407.
+    pub(super) fn extract_sub_documentation(
+        &self,
+        start: usize,
+        body_start: usize,
+        body_end: usize,
+    ) -> Option<String> {
+        self.extract_documentation(start).or_else(|| self.find_pod_in_range(body_start, body_end))
+    }
+
+    /// Find the first POD block inside `[start, end)` and return its text.
+    ///
+    /// Per perlpod, POD directives must begin at column 0 (line start) with
+    /// `=` followed by an ASCII alphanumeric, and the block ends with a line
+    /// beginning with `=cut`. We require both anchors so indented text that
+    /// merely resembles POD does not produce false positives.
+    pub(super) fn find_pod_in_range(&self, start: usize, end: usize) -> Option<String> {
+        static POD_INLINE_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
+
+        if self.source.is_empty() || end <= start || end > self.source.len() {
+            return None;
+        }
+
+        let slice = &self.source[start..end];
+        let pod_re = POD_INLINE_RE
+            .get_or_init(|| Regex::new(r"(?ms)^(=[a-zA-Z0-9].*?\n=cut\b)"))
+            .as_ref()
+            .ok()?;
+
+        pod_re.captures(slice).and_then(|caps| caps.get(1)).map(|m| m.as_str().trim().to_string())
     }
 
     /// Extract the POD `=head1 NAME` section for a package.
