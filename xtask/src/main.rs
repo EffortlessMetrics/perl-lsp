@@ -551,6 +551,25 @@ enum Commands {
         workflow_timeout: Option<u64>,
     },
 
+    /// Print the curated GitHub Release body for `docs/releases/vX.Y.Z.md`.
+    ///
+    /// Strips YAML front-matter and emits the markdown body to stdout, for the
+    /// Release workflow to pipe into `body_path:`. Missing notes files fail
+    /// loudly — see RELEASE.md "Before publishing" checklist. Issue #4340.
+    ReleaseNotes {
+        /// Release version (with or without a leading `v`; e.g. `0.12.4`).
+        #[arg(value_name = "VERSION", conflicts_with = "file")]
+        version: Option<String>,
+
+        /// Repository root containing `docs/releases/`. Defaults to CWD.
+        #[arg(long, value_name = "DIR", default_value = ".")]
+        root: PathBuf,
+
+        /// Explicit path to a notes file (bypasses version resolution).
+        #[arg(long, value_name = "PATH", conflicts_with = "version")]
+        file: Option<PathBuf>,
+    },
+
     /// Run crates.io launch-preparation checks.
     PrepCratesIoLaunch {
         /// Launch mode: `core` for launch-critical crates, `all` for all publishable crates.
@@ -1301,6 +1320,9 @@ fn main() -> Result<()> {
             no_wait_release,
             workflow_timeout,
         }),
+        Commands::ReleaseNotes { version, root, file } => {
+            tasks::release_notes::run(tasks::release_notes::Args { version, root, file })
+        }
         Commands::PrepCratesIoLaunch { mode } => {
             prep_crates_io_launch::run(matches!(mode, PrepCratesMode::All))
         }

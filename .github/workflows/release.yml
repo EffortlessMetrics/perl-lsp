@@ -245,21 +245,13 @@ jobs:
         run: |
           VERSION="${{ needs.release-metadata.outputs.version }}"
           TAG="${{ needs.release-metadata.outputs.tag }}"
-          NOTES_FILE="docs/releases/${TAG}.md"
 
           # Source the release body from the curated per-release notes file.
           # Issue #4340: GitHub Release bodies used to be a generated template
           # that diverged from the committed docs/releases/vX.Y.Z.md narrative.
-          # Fail loudly if the curated file is missing — RELEASE.md requires it
-          # as a "Before publishing" step, and we'd rather block a bad release
-          # than ship empty notes.
-          if [ ! -f "${NOTES_FILE}" ]; then
-            echo "::error file=${NOTES_FILE}::Curated release notes file not found."
-            echo "::error::Create ${NOTES_FILE} before publishing (see RELEASE.md)."
-            exit 1
-          fi
-
-          bash scripts/release-notes.sh "${VERSION}" > release_notes.md
+          # `cargo xtask release-notes` fails loudly if the curated file is
+          # missing — RELEASE.md requires it as a "Before publishing" step.
+          cargo run --quiet -p xtask -- release-notes "${VERSION}" > release_notes.md
 
           # Append a short asset-verification and changelog footer below the
           # curated narrative. The auto-generated "What's Changed" PR list is

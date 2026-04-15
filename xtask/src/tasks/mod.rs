@@ -56,6 +56,7 @@ pub mod publish;
 pub mod publish_receipts;
 pub mod receipts;
 pub mod release;
+pub mod release_notes;
 pub mod release_turnkey;
 pub mod srp_microcrates;
 pub mod swarm_summary;
