@@ -16,8 +16,11 @@ on:
     paths:
       - 'scripts/cargo-package-workspace-dry-run.sh'
       - 'scripts/publish-topo.py'
+      - 'scripts/release-notes.sh'
       - 'scripts/tests/test-publish-dry-run-gate.sh'
+      - 'scripts/tests/test-release-notes.sh'
       - '.github/workflows/publish-dry-run.yml'
+      - '.github/workflows/release.yml'
       - '.github/workflows/ci-gate-self-tests.yml'
   workflow_dispatch: {}
 
@@ -66,4 +69,34 @@ jobs:
             echo "" >> "$GITHUB_STEP_SUMMARY"
             echo "A gate self-test assertion failed — the gate may not be catching errors it claims to catch." >> "$GITHUB_STEP_SUMMARY"
             echo "Check the step output above for which case failed." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+  release-notes-self-test:
+    name: Release notes extractor self-test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Run release-notes extractor self-test
+        run: bash scripts/tests/test-release-notes.sh
+
+      - name: Summary
+        if: always()
+        run: |
+          if [ "${{ job.status }}" = "success" ]; then
+            echo "## Release notes extractor self-test passed" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "\`scripts/release-notes.sh\` is verified to:" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Strip YAML front-matter from curated \`docs/releases/vX.Y.Z.md\` files" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Fail with a clear diagnostic when the curated file is missing" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Reject unterminated / body-less front-matter rather than emit an empty release body" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Distinguish usage errors (exit 2) from missing-file errors (exit 1)" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "## Release notes extractor self-test FAILED" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "A scenario in \`scripts/tests/test-release-notes.sh\` failed — the release workflow" >> "$GITHUB_STEP_SUMMARY"
+            echo "may publish with stale or empty notes. Check the step output for the failing case." >> "$GITHUB_STEP_SUMMARY"
           fi

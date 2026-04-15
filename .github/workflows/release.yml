@@ -244,37 +244,43 @@ jobs:
         id: release_notes
         run: |
           VERSION="${{ needs.release-metadata.outputs.version }}"
-          cat > release_notes.md << EOF
-          ## Perl LSP ${VERSION}
+          TAG="${{ needs.release-metadata.outputs.tag }}"
+          NOTES_FILE="docs/releases/${TAG}.md"
 
-          This release ships the binaries and the docs needed to install, configure, and troubleshoot the current release line.
+          # Source the release body from the curated per-release notes file.
+          # Issue #4340: GitHub Release bodies used to be a generated template
+          # that diverged from the committed docs/releases/vX.Y.Z.md narrative.
+          # Fail loudly if the curated file is missing — RELEASE.md requires it
+          # as a "Before publishing" step, and we'd rather block a bad release
+          # than ship empty notes.
+          if [ ! -f "${NOTES_FILE}" ]; then
+            echo "::error file=${NOTES_FILE}::Curated release notes file not found."
+            echo "::error::Create ${NOTES_FILE} before publishing (see RELEASE.md)."
+            exit 1
+          fi
 
-          ### Install or upgrade
+          bash scripts/release-notes.sh "${VERSION}" > release_notes.md
 
-          ```bash
-          cargo install perllsp
-          cargo install perl-dap
-          ```
+          # Append a short asset-verification and changelog footer below the
+          # curated narrative. The auto-generated "What's Changed" PR list is
+          # appended by softprops/action-gh-release via generate_release_notes.
+          {
+            echo
+            echo "---"
+            echo
+            echo "### Release assets"
+            echo
+            echo "- Platform binaries are attached to this release."
+            echo "- Verify downloads with the consolidated \`SHA256SUMS\` file."
+            echo
+            echo "### Change log"
+            echo
+            echo "See the [CHANGELOG](https://github.com/${{ github.repository }}/blob/${TAG}/CHANGELOG.md) for the full release history."
+          } >> release_notes.md
 
-          ### Read this first
-
-          - [Docs home](https://github.com/${{ github.repository }}/blob/${{ needs.release-metadata.outputs.tag }}/docs/README.md)
-          - [Docs index](https://github.com/${{ github.repository }}/blob/${{ needs.release-metadata.outputs.tag }}/docs/INDEX.md)
-          - [Getting Started](https://github.com/${{ github.repository }}/blob/${{ needs.release-metadata.outputs.tag }}/docs/tutorials/GETTING_STARTED.md)
-          - [Installation Guide](https://github.com/${{ github.repository }}/blob/${{ needs.release-metadata.outputs.tag }}/docs/how-to/INSTALLATION.md)
-          - [Editor Setup](https://github.com/${{ github.repository }}/blob/${{ needs.release-metadata.outputs.tag }}/docs/how-to/EDITOR_SETUP.md)
-          - [Troubleshooting](https://github.com/${{ github.repository }}/blob/${{ needs.release-metadata.outputs.tag }}/docs/how-to/TROUBLESHOOTING.md)
-
-          ### Release assets
-
-          - Platform binaries are attached to this release.
-          - Verify downloads with the consolidated \`SHA256SUMS\` file.
-
-          ### Change log
-
-          See the [CHANGELOG](https://github.com/${{ github.repository }}/blob/${{ needs.release-metadata.outputs.tag }}/CHANGELOG.md) for the full release history.
-          EOF
+          echo "::group::Resolved release notes"
           cat release_notes.md
+          echo "::endgroup::"
 
       - name: Create GitHub Release
         if: github.event_name == 'workflow_dispatch'

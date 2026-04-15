@@ -430,7 +430,11 @@ Every public release **must** update three surfaces. See [RELEASE_HISTORY.md](RE
 
 ### Before publishing
 
-- [ ] Create `docs/releases/vX.Y.Z.md` (use an existing file as template)
+- [ ] Create `docs/releases/vX.Y.Z.md` (use an existing file as template).
+      The release workflow (`.github/workflows/release.yml`) sources the
+      GitHub Release body directly from this file via
+      `scripts/release-notes.sh` and will refuse to publish if the file is
+      missing (issue #4340).
 - [ ] Add a new row to `RELEASE_HISTORY.md` for vX.Y.Z (fill what you know; mark unknowns with `—`)
 - [ ] Ensure `CHANGELOG.md` has a `[X.Y.Z]` section with links to:
   - `docs/releases/vX.Y.Z.md`
