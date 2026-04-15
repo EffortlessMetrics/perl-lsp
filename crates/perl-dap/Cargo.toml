@@ -58,7 +58,7 @@ perl-dap-command-args = { workspace = true }
 perl-dap-variables = { workspace = true }
 perl-dap-stack = { workspace = true }
 perl-dap-types = { workspace = true }
-perl-module-path = { workspace = true }
+perl-module = { workspace = true }
 perl-dap-security = { workspace = true }
 perl-content-length-framing = { workspace = true }
 perl-keywords = { workspace = true }

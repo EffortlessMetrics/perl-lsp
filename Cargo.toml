@@ -86,20 +86,8 @@ members = [
     "crates/perl-symbol-types",
     "crates/perl-symbol-cursor",
     "crates/perl-symbol-index",
-    "crates/perl-module-boundary",
-    "crates/perl-module-token-core",
-    "crates/perl-module-token",
-    "crates/perl-module-token-parser",
-    "crates/perl-module-name",
+    "crates/perl-module",
     "crates/perl-qualified-name",
-    "crates/perl-module-reference",
-    "crates/perl-module-import",
-    "crates/perl-module-import-match",
-    "crates/perl-module-path",
-    "crates/perl-module-rename",
-    "crates/perl-module-resolution",
-    "crates/perl-module-resolution-path",
-    "crates/perl-module-resolution-uri",
     "crates/perl-text-line",
     "crates/perl-line-index",
     "crates/perl-keywords",
@@ -215,13 +203,8 @@ allow = [
     "perl-lsp-code-lens",
     "perl-lsp-color-provider",
 
-    # Tier 3 — Module resolution chain
-    "perl-module-name",
-    "perl-module-path",
-    "perl-module-token-core",
-    "perl-module-boundary",
-    "perl-module-token",
-    "perl-module-import",
+    # Tier 3 — Module resolution chain (unified facade; absorbs perl-module-* in Wave 1)
+    "perl-module",
 
     # Tier 4 — LSP providers
     "perl-lsp-navigation",
@@ -286,17 +269,10 @@ allow = [
     "perl-lsp-transport",
 
     # Tier 6 — Module resolution higher tiers
-    "perl-module-token-parser",
     "perl-text-line",
     "perl-line-index",
-    "perl-module-reference",
-    "perl-module-import-match",
-    "perl-module-rename",
-    "perl-module-resolution-path",
     "perl-workspace-folder",
     "perl-workspace-ignore",
-    "perl-module-resolution-uri",
-    "perl-module-resolution",
     "perl-source-file",
     "perl-workspace-discovery",
     "perl-diagnostics-codes",
@@ -337,20 +313,8 @@ perl-position-tracking = { path = "crates/perl-position-tracking", version = "0.
 perl-symbol-types = { path = "crates/perl-symbol-types", version = "0.12.4" }
 perl-symbol-cursor = { path = "crates/perl-symbol-cursor", version = "0.12.4" }
 perl-symbol-index = { path = "crates/perl-symbol-index", version = "0.12.4" }
-perl-module-boundary = { path = "crates/perl-module-boundary", version = "0.12.4" }
-perl-module-token-core = { path = "crates/perl-module-token-core", version = "0.12.4" }
-perl-module-token = { path = "crates/perl-module-token", version = "0.12.4" }
-perl-module-token-parser = { path = "crates/perl-module-token-parser", version = "0.12.4" }
-perl-module-name = { path = "crates/perl-module-name", version = "0.12.4" }
+perl-module = { path = 'crates/perl-module', version = "0.12.4" }
 perl-qualified-name = { path = "crates/perl-qualified-name", version = "0.12.4" }
-perl-module-reference = { path = "crates/perl-module-reference", version = "0.12.4" }
-perl-module-import = { path = "crates/perl-module-import", version = "0.12.4" }
-perl-module-import-match = { path = "crates/perl-module-import-match", version = "0.12.4" }
-perl-module-path = { path = "crates/perl-module-path", version = "0.12.4" }
-perl-module-rename = { path = "crates/perl-module-rename", version = "0.12.4" }
-perl-module-resolution = { path = "crates/perl-module-resolution", version = "0.12.4" }
-perl-module-resolution-path = { path = "crates/perl-module-resolution-path", version = "0.12.4" }
-perl-module-resolution-uri = { path = "crates/perl-module-resolution-uri", version = "0.12.4" }
 perl-workspace-folder = { path = "crates/perl-workspace-folder", version = "0.12.4" }
 perl-workspace-ignore = { path = "crates/perl-workspace-ignore", version = "0.12.4" }
 perl-keywords = { path = "crates/perl-keywords", version = "0.12.4" }

@@ -1,4 +1,4 @@
-use perl_module_token_parser::parse_module_token;
+use perl_module::token_parser::parse_module_token;
 use perl_text_line::{
     is_identifier_byte, is_keyword_boundary, line_bounds_at, skip_ascii_whitespace,
 };
@@ -16,7 +16,7 @@ fn integration_with_module_reference_style_scanning_keeps_ranges_stable() {
     let token_start = skip_ascii_whitespace(bytes, use_start + 3);
     let token = parse_module_token(line, token_start);
     assert!(token.is_some(), "module token should be parsed");
-    let token = token.unwrap_or(perl_module_token_parser::ModuleTokenSpan { start: 0, end: 0 });
+    let token = token.unwrap_or(perl_module::token_core::ModuleTokenSpan { start: 0, end: 0 });
     let token_text = &line[token.start..token.end];
 
     assert_eq!(token_text, "Foo::Bar");

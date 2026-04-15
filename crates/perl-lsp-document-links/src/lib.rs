@@ -8,8 +8,8 @@
 #![warn(missing_docs)]
 #![warn(clippy::all)]
 
-use perl_module_import::{ModuleImportKind, parse_module_import_head};
-use perl_module_path::module_name_to_path;
+use perl_module::import::{ModuleImportKind, parse_module_import_head};
+use perl_module::path::module_name_to_path;
 use serde_json::{Value, json};
 use url::Url;
 

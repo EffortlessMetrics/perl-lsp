@@ -113,7 +113,7 @@ pub use self::methods::get_dbi_method_documentation;
 pub use self::test_more::get_test_more_documentation;
 pub use self::xs_api::{add_xs_api_completions_for_prefix, get_xs_api_documentation, is_xs_source};
 
-use perl_module_import::resolve_known_export_tag;
+use perl_module::import::resolve_known_export_tag;
 use perl_parser_core::ast::Node;
 use perl_parser_core::ast::NodeKind;
 use perl_semantic_analyzer::class_model::{ClassModel, ClassModelBuilder, Framework};

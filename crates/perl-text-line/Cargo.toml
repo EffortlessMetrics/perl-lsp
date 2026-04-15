@@ -16,7 +16,7 @@ include = ["src/**", "tests/**", "Cargo.toml", "README.md", "LICENSE*"]
 
 [dev-dependencies]
 proptest.workspace = true
-perl-module-token-parser = { workspace = true }
+perl-module = { workspace = true }
 perl-tdd-support = { workspace = true }
 
 [package.metadata.docs.rs]

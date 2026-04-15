@@ -3,10 +3,12 @@
 //! Handles resolution of Perl module names to file paths.
 
 use super::super::*;
-use perl_module_resolution::{
+use perl_module::resolution::use_lib::{
+    resolve_use_lib_paths_from_source, resolve_use_lib_paths_from_source_at_offset,
+};
+use perl_module::resolution::{
     IncRoot, IncRootKind, ModuleUriResolution,
     resolve_module_path as resolve_workspace_module_path, resolve_module_uri_with_effective_inc,
-    use_lib::{resolve_use_lib_paths_from_source, resolve_use_lib_paths_from_source_at_offset},
 };
 use std::path::PathBuf;
 use std::sync::Once;

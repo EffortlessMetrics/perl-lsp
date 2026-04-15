@@ -1572,7 +1572,7 @@ dependencies = [
  "perl-feature-catalog",
  "perl-keywords",
  "perl-lsp-launcher",
- "perl-module-path",
+ "perl-module",
  "perl-tdd-support",
  "proptest",
  "regex",
@@ -1860,7 +1860,7 @@ dependencies = [
  "perl-keywords",
  "perl-lsp-completion-item",
  "perl-lsp-file-completion",
- "perl-module-import",
+ "perl-module",
  "perl-parser-core",
  "perl-semantic-analyzer",
  "perl-tdd-support",
@@ -1936,8 +1936,7 @@ dependencies = [
 name = "perl-lsp-document-links"
 version = "0.12.4"
 dependencies = [
- "perl-module-import",
- "perl-module-path",
+ "perl-module",
  "serde_json",
  "url",
 ]
@@ -2258,11 +2257,7 @@ dependencies = [
  "perl-lsp-type-hierarchy",
  "perl-lsp-uri",
  "perl-lsp-workspace-symbols",
- "perl-module-import",
- "perl-module-path",
- "perl-module-reference",
- "perl-module-rename",
- "perl-module-resolution",
+ "perl-module",
  "perl-parser",
  "perl-pod",
  "perl-position-tracking",
@@ -2377,7 +2372,7 @@ name = "perl-lsp-workspace-symbols"
 version = "0.12.4"
 dependencies = [
  "perl-lsp-symbol-query",
- "perl-module-path",
+ "perl-module",
  "perl-parser-core",
  "perl-position-tracking",
  "perl-qualified-name",
@@ -2388,129 +2383,16 @@ dependencies = [
 ]
 
 [[package]]
-name = "perl-module-boundary"
+name = "perl-module"
 version = "0.12.4"
 dependencies = [
- "perl-module-import",
- "perl-module-name",
- "perl-module-token-core",
- "proptest",
-]
-
-[[package]]
-name = "perl-module-import"
-version = "0.12.4"
-dependencies = [
- "perl-module-path",
- "perl-module-token",
- "proptest",
-]
-
-[[package]]
-name = "perl-module-import-match"
-version = "0.12.4"
-dependencies = [
- "perl-module-boundary",
- "perl-module-import",
- "perl-module-path",
- "perl-module-token",
- "proptest",
-]
-
-[[package]]
-name = "perl-module-name"
-version = "0.12.4"
-dependencies = [
- "proptest",
-]
-
-[[package]]
-name = "perl-module-path"
-version = "0.12.4"
-dependencies = [
- "perl-module-name",
-]
-
-[[package]]
-name = "perl-module-reference"
-version = "0.12.4"
-dependencies = [
- "perl-module-import",
- "perl-module-name",
- "perl-module-path",
- "perl-module-token-parser",
- "perl-text-line",
- "proptest",
-]
-
-[[package]]
-name = "perl-module-rename"
-version = "0.12.4"
-dependencies = [
- "perl-module-import-match",
- "perl-module-path",
- "perl-module-token",
- "proptest",
-]
-
-[[package]]
-name = "perl-module-resolution"
-version = "0.12.4"
-dependencies = [
- "perl-module-resolution-path",
- "perl-module-resolution-uri",
- "proptest",
- "tempfile",
- "url",
-]
-
-[[package]]
-name = "perl-module-resolution-path"
-version = "0.12.4"
-dependencies = [
- "perl-module-path",
- "perl-path-security",
- "proptest",
- "tempfile",
-]
-
-[[package]]
-name = "perl-module-resolution-uri"
-version = "0.12.4"
-dependencies = [
- "perl-module-path",
  "perl-path-security",
  "perl-tdd-support",
+ "perl-text-line",
  "perl-workspace-folder",
  "proptest",
  "tempfile",
  "url",
-]
-
-[[package]]
-name = "perl-module-token"
-version = "0.12.4"
-dependencies = [
- "perl-module-boundary",
- "perl-module-name",
- "perl-module-path",
- "proptest",
-]
-
-[[package]]
-name = "perl-module-token-core"
-version = "0.12.4"
-dependencies = [
- "proptest",
-]
-
-[[package]]
-name = "perl-module-token-parser"
-version = "0.12.4"
-dependencies = [
- "perl-module-reference",
- "perl-module-token-core",
- "proptest",
 ]
 
 [[package]]
@@ -2651,7 +2533,7 @@ dependencies = [
 name = "perl-refactoring"
 version = "0.12.4"
 dependencies = [
- "perl-module-path",
+ "perl-module",
  "perl-parser-core",
  "perl-qualified-name",
  "perl-tdd-support",
@@ -2748,7 +2630,7 @@ version = "0.12.4"
 name = "perl-text-line"
 version = "0.12.4"
 dependencies = [
- "perl-module-token-parser",
+ "perl-module",
  "perl-tdd-support",
  "proptest",
 ]

@@ -17,8 +17,7 @@ categories = ["development-tools", "text-editors"]
 doctest = false
 
 [dependencies]
-perl-module-import = { workspace = true }
-perl-module-path = { workspace = true }
+perl-module = { workspace = true }
 serde_json.workspace = true
 url.workspace = true
 
