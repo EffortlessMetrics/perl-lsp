@@ -31,6 +31,17 @@ pub enum IncRootKind {
 }
 
 /// A single ordered include root entry used to resolve modules.
+///
+/// # Trust Boundary Note
+///
+/// `IncRoot` carries **path-based resolution metadata only**. It does NOT carry:
+/// - Signature status or verification state
+/// - Trust levels or provenance information
+/// - Distribution integrity fields
+///
+/// The `resolve_module_uri` function returns a plain URI string with no provenance
+/// metadata. Module resolution trusts configured paths without signature verification.
+/// See [ADR-0020](../../docs/adr/0020-module-resolution-trust-boundary.md) for details.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct IncRoot {
     /// Root kind/category.
@@ -119,6 +130,7 @@ pub fn resolve_module_uri_with_effective_inc(
     let start_time = Instant::now();
     let relative_path = module_name_to_path(module_name);
 
+    // Phase 1: open document precedence
     for uri in open_document_uris {
         if uri.ends_with(&relative_path) {
             return ModuleUriResolution::Resolved(uri.clone());
@@ -128,8 +140,17 @@ pub fn resolve_module_uri_with_effective_inc(
     let mut ordered_roots = effective_inc_roots.to_vec();
     ordered_roots.sort_by_key(|r| r.precedence);
 
+    // Helper to check if we've exceeded the timeout budget
+    let check_timeout = |start: Instant, timeout: Duration| -> bool { start.elapsed() > timeout };
+
+    // Helper to convert a path to a resolved URI, returning None if not a file
+    let try_path_to_uri = |path: &Path| -> Option<String> {
+        if path.is_file() { Url::from_file_path(path).ok().map(|u| u.to_string()) } else { None }
+    };
+
+    // Phase 2: workspace-relative roots
     for workspace_folder in workspace_folders {
-        if start_time.elapsed() > timeout {
+        if check_timeout(start_time, timeout) {
             return ModuleUriResolution::TimedOut;
         }
 
@@ -142,21 +163,20 @@ pub fn resolve_module_uri_with_effective_inc(
             ) {
                 continue;
             }
-            if start_time.elapsed() > timeout {
+            if check_timeout(start_time, timeout) {
                 return ModuleUriResolution::TimedOut;
             }
 
-            let full_path = full_path_for_root(inc_root, &workspace_path, &relative_path);
+            let full_path = try_resolve_full_path(inc_root, &workspace_path, &relative_path);
             let Some(full_path) = full_path else { continue };
 
-            if full_path.is_file()
-                && let Ok(url) = Url::from_file_path(&full_path)
-            {
-                return ModuleUriResolution::Resolved(url.to_string());
+            if let Some(uri) = try_path_to_uri(&full_path) {
+                return ModuleUriResolution::Resolved(uri);
             }
         }
     }
 
+    // Phase 3: absolute and interpreter startup roots
     for inc_root in &ordered_roots {
         if !matches!(
             inc_root.kind,
@@ -166,22 +186,24 @@ pub fn resolve_module_uri_with_effective_inc(
         ) {
             continue;
         }
-        if start_time.elapsed() > timeout {
+        if check_timeout(start_time, timeout) {
             return ModuleUriResolution::TimedOut;
         }
 
         let full_path = inc_root.path.join(&relative_path);
-        if full_path.is_file()
-            && let Ok(url) = Url::from_file_path(&full_path)
-        {
-            return ModuleUriResolution::Resolved(url.to_string());
+        if let Some(uri) = try_path_to_uri(&full_path) {
+            return ModuleUriResolution::Resolved(uri);
         }
     }
 
     ModuleUriResolution::NotFound
 }
 
-fn full_path_for_root(
+/// Attempt to resolve the full path for a given include root and relative module path.
+///
+/// Returns `Some(PathBuf)` if the path is valid within the workspace security constraints,
+/// or `None` if the path traversal would escape the workspace boundary.
+fn try_resolve_full_path(
     inc_root: &IncRoot,
     workspace_path: &Path,
     relative_path: &str,

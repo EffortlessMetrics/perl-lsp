@@ -494,11 +494,7 @@ fn path_to_module_name(path: &Path, base_dir: &Path) -> Option<String> {
     // components could appear in the module name after separator replacement.
     let parts: Vec<&str> = module_name.split("::").filter(|s| !s.is_empty() && *s != ".").collect();
 
-    if parts.is_empty() {
-        None
-    } else {
-        Some(parts.join("::"))
-    }
+    if parts.is_empty() { None } else { Some(parts.join("::")) }
 }
 
 /// Stub for wasm32 targets where filesystem scanning is not supported.

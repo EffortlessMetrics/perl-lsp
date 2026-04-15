@@ -2,6 +2,16 @@
 //!
 //! This crate centralizes path-boundary checks used by tooling that accepts
 //! user-provided file paths (for example LSP/DAP requests).
+//!
+//! # Architectural Note
+//!
+//! This crate focuses on **workspace path boundaries only** — traversal prevention,
+//! workspace bounds validation, and path sanitization. It does NOT reason about
+//! module provenance, distribution trust, or signature verification.
+//!
+//! Path-based workspace security and distribution trust verification are separate
+//! concerns handled by different components. See
+//! [ADR-0020](../../docs/adr/0020-module-resolution-trust-boundary.md) for details.
 
 use std::path::{Component, Path, PathBuf};
 

@@ -193,6 +193,36 @@ jq -r '.packages[] | [.name, .versionInfo, .licenseDeclared] | @csv' sbom-spdx.j
 - Absence of vulnerabilities in dependencies
 - Security of the build environment (SLSA Level 3+)
 
+## Non-Goals: Perl Module Signature Verification
+
+### What This Is NOT
+
+This document covers supply chain security for **release artifacts** (the perl-lsp tool itself) and does **not** address runtime module resolution trust boundaries.
+
+The following are explicitly out of scope:
+
+- **Module::Signature SIGNATURE file verification**: Module resolution does not read or verify CPAN distribution SIGNATURE files (per `Module::Signature`). SIGNATURE files in resolved module directories are not consulted or validated.
+
+- **Distribution integrity checking**: Module resolution trusts configured paths without provenance verification. There is no cryptographic verification that a module file matches its published CPAN distribution.
+
+- **`IncRoot` provenance metadata**: The `IncRoot` struct carries only path-based resolution metadata (`kind`, `path`, `precedence`, `source`). It does not carry signature status, trust level, or distribution integrity fields.
+
+- **`perl-path-security` scope**: The `perl-path-security` crate validates workspace path boundaries and traversal prevention. It does not reason about module provenance or distribution trust. Path-based workspace security and distribution trust verification are separate architectural concerns.
+
+### Why Signature Verification Is Out of Scope
+
+CPAN distribution SIGNATURE file verification (per `Module::Signature`) has low adoption in the Perl ecosystem. Implementing signature verification would introduce significant complexity for a feature most users would not use. See [ADR-0020](./0020-module-resolution-trust-boundary.md) for the full decision record.
+
+### For Users Needing Signature Verification
+
+Users who require Perl module signature verification should use external tools such as:
+
+- `CPAN::Shell->verify` (from `Module::Signature`)
+- `CPAN::Fresca` for freshness validation
+- Manual `gpg` verification of SIGNATURE files
+
+These tools operate independently of perl-lsp module resolution and provide distribution-level trust verification that perl-lsp does not attempt.
+
 ## References
 
 - [Supply Chain Security Reference](../reference/SUPPLY_CHAIN_SECURITY.md)

@@ -81,9 +81,9 @@ fn fuzz_path_traversal_attempts_do_not_cause_panics() {
     // The code filters out "." parts but ".." becomes part of the module name.
     // With follow_links(false), actual symlink traversal is prevented.
     let traversal_names = [
-        "foo/../../bar",         // Results in bar (.. filtered as path component, but / separator matters)
-        "a/b/../c/d",           // Results in a::c::d (b is removed by ..)
-        "a/b/c/../../d",        // Results in a::d (b and c removed by .. pairs)
+        "foo/../../bar", // Results in bar (.. filtered as path component, but / separator matters)
+        "a/b/../c/d",    // Results in a::c::d (b is removed by ..)
+        "a/b/c/../../d", // Results in a::d (b and c removed by .. pairs)
     ];
 
     for name in &traversal_names {
@@ -110,11 +110,7 @@ fn fuzz_path_traversal_attempts_do_not_cause_panics() {
 
     // Normal module should appear
     let labels = collect_labels(&items);
-    assert!(
-        labels.contains("Normal::Module"),
-        "Normal::Module should appear, got: {:?}",
-        labels
-    );
+    assert!(labels.contains("Normal::Module"), "Normal::Module should appear, got: {:?}", labels);
 
     // The code doesn't prevent path components like ".." from becoming module names
     // But with follow_links(false), actual symlink traversal outside the include path is prevented
@@ -130,17 +126,17 @@ fn fuzz_mixed_separators_and_dot_components() {
 
     // Create modules with various edge cases in path names
     let edge_case_modules = [
-        "A/B/C/Module.pm",          // Normal nested
-        "A/./B/./C/Module.pm",     // Dot components
-        "A//B//C/Module.pm",       // Double slashes
-        "A///B///C///Module.pm",    // Triple slashes
-        "./A/Module.pm",           // Leading dot
-        "././A/Module.pm",         // Multiple leading dots
-        "A/./B/Module.pm",          // Mixed dot component
-        ".pm",                      // Just extension (weird but possible filename)
-        "Module.pm.pm",             // Double extension
-        "Module..pm",               // Double dot before extension
-        "A/B/Module.pmx",           // Wrong extension (not .pm)
+        "A/B/C/Module.pm",       // Normal nested
+        "A/./B/./C/Module.pm",   // Dot components
+        "A//B//C/Module.pm",     // Double slashes
+        "A///B///C///Module.pm", // Triple slashes
+        "./A/Module.pm",         // Leading dot
+        "././A/Module.pm",       // Multiple leading dots
+        "A/./B/Module.pm",       // Mixed dot component
+        ".pm",                   // Just extension (weird but possible filename)
+        "Module.pm.pm",          // Double extension
+        "Module..pm",            // Double dot before extension
+        "A/B/Module.pmx",        // Wrong extension (not .pm)
     ];
 
     for name in &edge_case_modules {
@@ -162,8 +158,7 @@ fn fuzz_mixed_separators_and_dot_components() {
     );
 
     // Should not panic
-    let items =
-        provider.get_completions_with_path_cancellable(code, position, None, &|| false);
+    let items = provider.get_completions_with_path_cancellable(code, position, None, &|| false);
 
     let labels = collect_labels(&items);
 
@@ -200,7 +195,11 @@ fn fuzz_cancellation_returns_partial_results_without_panic() {
     // Create many modules
     for i in 0..200 {
         let path = format!("Module{}/Sub{}.pm", i % 10, i);
-        let _ = create_temp_module(&include_path, &path, &format!("package Module{}::Sub{}; 1;", i % 10, i));
+        let _ = create_temp_module(
+            &include_path,
+            &path,
+            &format!("package Module{}::Sub{}; 1;", i % 10, i),
+        );
     }
 
     let index = Arc::new(WorkspaceIndex::new());
@@ -221,8 +220,7 @@ fn fuzz_cancellation_returns_partial_results_without_panic() {
     let is_cancelled = || true;
 
     // Should not panic
-    let items =
-        provider.get_completions_with_path_cancellable(code, position, None, &is_cancelled);
+    let items = provider.get_completions_with_path_cancellable(code, position, None, &is_cancelled);
 
     // Results may be empty due to immediate cancellation, but no panic
     // The important thing is we get a valid Vec, not an unwind
@@ -237,7 +235,11 @@ fn fuzz_frequent_cancellation_checks_no_panic() {
     // Create a moderate number of modules
     for i in 0..50 {
         let path = format!("Mod{}/Sub{}.pm", i % 5, i);
-        let _ = create_temp_module(&include_path, &path, &format!("package Mod{}::Sub{}; 1;", i % 5, i));
+        let _ = create_temp_module(
+            &include_path,
+            &path,
+            &format!("package Mod{}::Sub{}; 1;", i % 5, i),
+        );
     }
 
     let index = Arc::new(WorkspaceIndex::new());
@@ -262,8 +264,7 @@ fn fuzz_frequent_cancellation_checks_no_panic() {
     };
 
     // Should not panic regardless of cancellation pattern
-    let items =
-        provider.get_completions_with_path_cancellable(code, position, None, &is_cancelled);
+    let items = provider.get_completions_with_path_cancellable(code, position, None, &is_cancelled);
 
     // We should get some results before cancellation kicks in
     // or empty results if cancelled early - both are valid
@@ -284,13 +285,13 @@ fn fuzz_depth_limit_with_generated_nested_paths() {
     // Create modules at various depths up to and beyond MAX_SCAN_DEPTH (6)
     // WalkDir depth semantics: root=0, A=1, A/B=2, A/B/C=3, A/B/C/D=4, A/B/C/D/E=5, A/B/C/D/E/F=6
     let depth_cases = [
-        ("Depth1.pm", 1),       // depth 1 - should appear
-        ("A/Depth2.pm", 2),     // depth 2 - should appear
-        ("A/B/Depth3.pm", 3),   // depth 3 - should appear
-        ("A/B/C/Depth4.pm", 4), // depth 4 - should appear
-        ("A/B/C/D/Depth5.pm", 5), // depth 5 - should appear
-        ("A/B/C/D/E/Depth6.pm", 6), // depth 6 - should appear
-        ("A/B/C/D/E/F/Depth7.pm", 7), // depth 7 - should NOT appear
+        ("Depth1.pm", 1),               // depth 1 - should appear
+        ("A/Depth2.pm", 2),             // depth 2 - should appear
+        ("A/B/Depth3.pm", 3),           // depth 3 - should appear
+        ("A/B/C/Depth4.pm", 4),         // depth 4 - should appear
+        ("A/B/C/D/Depth5.pm", 5),       // depth 5 - should appear
+        ("A/B/C/D/E/Depth6.pm", 6),     // depth 6 - should appear
+        ("A/B/C/D/E/F/Depth7.pm", 7),   // depth 7 - should NOT appear
         ("A/B/C/D/E/F/G/Depth8.pm", 8), // depth 8 - should NOT appear
     ];
 
@@ -312,8 +313,7 @@ fn fuzz_depth_limit_with_generated_nested_paths() {
         &[],
     );
 
-    let items =
-        provider.get_completions_with_path_cancellable(code, position, None, &|| false);
+    let items = provider.get_completions_with_path_cancellable(code, position, None, &|| false);
 
     let labels = collect_labels(&items);
 
@@ -350,12 +350,12 @@ fn fuzz_special_characters_in_module_names() {
 
     // Create modules with unusual but valid filename characters
     let special_modules = [
-        "Test_underscore.pm",      // Underscore
+        "Test_underscore.pm",       // Underscore
         "Test123/numeric123.pm",    // Numbers
         "UTF8/日本語.pm",           // Unicode (if filesystem supports it)
         "Spaces In Name/Module.pm", // Spaces
-        "CamelCase/Module.pm",     // CamelCase
-        "ALL_CAPS/Module.pm",      // ALL CAPS
+        "CamelCase/Module.pm",      // CamelCase
+        "ALL_CAPS/Module.pm",       // ALL CAPS
     ];
 
     for name in &special_modules {
@@ -377,17 +377,12 @@ fn fuzz_special_characters_in_module_names() {
     );
 
     // Should not panic
-    let items =
-        provider.get_completions_with_path_cancellable(code, position, None, &|| false);
+    let items = provider.get_completions_with_path_cancellable(code, position, None, &|| false);
 
     let labels = collect_labels(&items);
 
     // Basic sanity check - at least some modules should appear
-    assert!(
-        !labels.is_empty(),
-        "some modules should appear for empty prefix, got: {:?}",
-        labels
-    );
+    assert!(!labels.is_empty(), "some modules should appear for empty prefix, got: {:?}", labels);
 
     // Underscore and numeric modules should work
     assert!(
@@ -420,8 +415,7 @@ fn fuzz_empty_include_paths_do_not_cause_panic() {
     );
 
     // Should return empty results without panic
-    let items =
-        provider.get_completions_with_path_cancellable(code, position, None, &|| false);
+    let items = provider.get_completions_with_path_cancellable(code, position, None, &|| false);
 
     assert!(
         items.is_empty(),
@@ -450,15 +444,10 @@ fn fuzz_nonexistent_include_path_does_not_cause_panic() {
     );
 
     // Should not panic even though path doesn't exist
-    let items =
-        provider.get_completions_with_path_cancellable(code, position, None, &|| false);
+    let items = provider.get_completions_with_path_cancellable(code, position, None, &|| false);
 
     // Should just return empty
-    assert!(
-        items.is_empty(),
-        "non-existent path should return no modules, got: {:?}",
-        items.len()
-    );
+    assert!(items.is_empty(), "non-existent path should return no modules, got: {:?}", items.len());
 }
 
 // -----------------------------------------------------------------------------
@@ -489,7 +478,8 @@ fn fuzz_deduplication_with_many_modules_and_paths() {
 
             // Also create nested versions
             let nested_path = format!("Nested/{}.pm", module);
-            let _ = create_temp_module(dir, &nested_path, &format!("package Nested::{}; 1;", module));
+            let _ =
+                create_temp_module(dir, &nested_path, &format!("package Nested::{}; 1;", module));
         }
     }
 
@@ -512,8 +502,7 @@ fn fuzz_deduplication_with_many_modules_and_paths() {
         &[],
     );
 
-    let items =
-        provider.get_completions_with_path_cancellable(code, position, None, &|| false);
+    let items = provider.get_completions_with_path_cancellable(code, position, None, &|| false);
 
     let labels = collect_labels(&items);
 
@@ -570,8 +559,7 @@ fn fuzz_very_long_path_components_do_not_cause_panic() {
 
     // Should not panic with very long path component
     // (WalkDir should handle it, but to_string_lossy might truncate)
-    let items =
-        provider.get_completions_with_path_cancellable(code, position, None, &|| false);
+    let items = provider.get_completions_with_path_cancellable(code, position, None, &|| false);
 
     // Results should be valid - module may or may not appear depending on truncation
     let labels = collect_labels(&items);
@@ -593,13 +581,13 @@ fn fuzz_module_with_special_names() {
 
     // Create modules with edge case names
     let special_names = [
-        ".pm",                      // Just extension
-        "Module/.pm",              // Trailing dot in directory
-        "Module/..pm",             // Similar to extension
-        "/",                       // Just slash
-        "//",                      // Double slash
-        "///",                     // Triple slash
-        "A///B///C.pm",           // Multiple slashes
+        ".pm",          // Just extension
+        "Module/.pm",   // Trailing dot in directory
+        "Module/..pm",  // Similar to extension
+        "/",            // Just slash
+        "//",           // Double slash
+        "///",          // Triple slash
+        "A///B///C.pm", // Multiple slashes
     ];
 
     for name in &special_names {
@@ -621,15 +609,11 @@ fn fuzz_module_with_special_names() {
     );
 
     // Should not panic
-    let items =
-        provider.get_completions_with_path_cancellable(code, position, None, &|| false);
+    let items = provider.get_completions_with_path_cancellable(code, position, None, &|| false);
 
     // All module names should be valid (non-empty after filtering)
     for item in &items {
-        assert!(
-            !item.label.is_empty(),
-            "no completion item should have empty label"
-        );
+        assert!(!item.label.is_empty(), "no completion item should have empty label");
     }
 }
 
@@ -646,7 +630,11 @@ fn fuzz_empty_prefix_with_many_modules_no_timeout() {
     // Create 500 modules
     for i in 0..500 {
         let path = format!("Module{:03}/Sub{:03}.pm", i % 50, i);
-        let _ = create_temp_module(&include_path, &path, &format!("package Module{:03}::Sub{:03}; 1;", i % 50, i));
+        let _ = create_temp_module(
+            &include_path,
+            &path,
+            &format!("package Module{:03}::Sub{:03}; 1;", i % 50, i),
+        );
     }
 
     let index = Arc::new(WorkspaceIndex::new());
@@ -664,8 +652,7 @@ fn fuzz_empty_prefix_with_many_modules_no_timeout() {
     );
 
     let start = std::time::Instant::now();
-    let items =
-        provider.get_completions_with_path_cancellable(code, position, None, &|| false);
+    let items = provider.get_completions_with_path_cancellable(code, position, None, &|| false);
     let elapsed = start.elapsed();
 
     // Should complete within reasonable time (100ms test overhead + 30ms internal budget)
@@ -676,10 +663,7 @@ fn fuzz_empty_prefix_with_many_modules_no_timeout() {
     );
 
     // Should return results
-    assert!(
-        !items.is_empty(),
-        "should return some results for empty prefix with many modules"
-    );
+    assert!(!items.is_empty(), "should return some results for empty prefix with many modules");
 }
 
 // -----------------------------------------------------------------------------
@@ -694,11 +678,11 @@ fn fuzz_unicode_module_names() {
 
     // Create modules with various Unicode characters
     let unicode_modules = [
-        "Ünicode/Module.pm",      // German umlaut
-        "日本語/モジュール.pm",      // Japanese
-        "Ελληνικά/Module.pm",     // Greek
-        "Модуль/Module.pm",       // Cyrillic
-        "emoji/😀Module.pm",     // Emoji (unusual but valid on some filesystems)
+        "Ünicode/Module.pm",    // German umlaut
+        "日本語/モジュール.pm", // Japanese
+        "Ελληνικά/Module.pm",   // Greek
+        "Модуль/Module.pm",     // Cyrillic
+        "emoji/😀Module.pm",    // Emoji (unusual but valid on some filesystems)
     ];
 
     for name in &unicode_modules {
@@ -720,8 +704,7 @@ fn fuzz_unicode_module_names() {
     );
 
     // Should not panic - to_string_lossy handles invalid UTF-8
-    let items =
-        provider.get_completions_with_path_cancellable(code, position, None, &|| false);
+    let items = provider.get_completions_with_path_cancellable(code, position, None, &|| false);
 
     // All completion items should have valid labels
     for item in &items {
