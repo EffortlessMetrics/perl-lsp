@@ -89,15 +89,18 @@
 //! - **[`quote_parser`]**: Specialized parser for quote-like operators
 //! - **[`heredoc_collector`]**: FIFO heredoc collection with indent stripping
 //!
-//! ### IDE Integration (LSP Provider Modules)
+//! ### IDE Integration (LSP Provider Crates)
 //!
-//! - **[`completion`]**: Context-aware completion providers
-//! - **[`diagnostics`]**: Diagnostics generation and formatting
-//! - **[`references`]**: Reference search providers
-//! - **[`rename`]**: Rename providers with validation
-//! - **[`semantic_tokens`]**: Semantic token generation
-//! - **[`type_definition`]**: Type definition providers
-//! - **[`workspace_symbols`]**: Workspace symbol search
+//! LSP provider modules were removed from `perl-parser` as part of #4414 (microcrate
+//! collapse, PR #0). Import directly from the provider crates:
+//!
+//! - `perl_lsp_completion` — context-aware completion providers
+//! - `perl_lsp_diagnostics` — diagnostics generation and formatting
+//! - `perl_lsp_navigation` — references, document links, type definitions, workspace symbols
+//! - `perl_lsp_rename` — rename providers with validation
+//! - `perl_lsp_semantic_tokens` — semantic token generation
+//! - `perl_lsp_inlay_hints` — inlay hint providers
+//! - `perl_lsp_code_actions` — code action providers
 //!
 //! ### Analysis ([`analysis`])
 //!

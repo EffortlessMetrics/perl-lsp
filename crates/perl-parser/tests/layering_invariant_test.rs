@@ -230,24 +230,27 @@ fn when_tooling_module_refactored_then_tooling_rs_removed() {
 /// truly available, not just syntactically present.
 #[test]
 fn when_refactor_tokens_preserved_then_imports_are_valid() {
-    // Verify refactor module functions are still accessible via re-export
-    use perl_parser::import_optimizer;
-    use perl_parser::token_stream;
+    // Verify refactor module functions are still accessible via re-export and work at runtime.
+    use perl_parser::import_optimizer::ImportOptimizer;
+    use perl_parser::token_stream::TokenStream;
 
-    // If these imports compiled, the re-exports are valid.
-    // Verify that public types are accessible from each module.
-
-    // Compile-time verification: the imports above would fail if the re-exports
-    // were missing or broken, so reaching this point proves the refactor preserved them.
+    // ImportOptimizer::new() proves the constructor is accessible via the re-exported path.
+    // If the re-export chain (perl-parser → perl-refactoring) were broken, this would
+    // fail to compile — not just vacuously pass.
+    let optimizer = ImportOptimizer::new();
+    let result = optimizer.analyze_content("use strict;\nuse warnings;\n");
     assert!(
-        !std::any::type_name::<import_optimizer::ImportOptimizer>().is_empty(),
-        "import_optimizer should be accessible"
+        result.is_ok(),
+        "ImportOptimizer::analyze_content should succeed on valid Perl: {:?}",
+        result.err()
     );
 
+    // TokenStream::new() proves the constructor is accessible and produces a usable stream.
+    // The stream over a real Perl snippet should peek successfully (not fail immediately).
+    let mut stream = TokenStream::new("my $x = 42;");
+    let first = stream.peek();
     assert!(
-        !std::any::type_name::<token_stream::TokenStream>().is_empty(),
-        "token_stream should be accessible"
+        first.is_ok(),
+        "TokenStream over 'my $x = 42;' should peek successfully"
     );
-
-    // The refactoring module is also accessible (proven by compiling the full set of re-exports)
 }
