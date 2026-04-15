@@ -1,0 +1,10 @@
+---
+source: crates/perl-lsp-completion/tests/inc_path_snapshot_tests.rs
+expression: items
+---
+- label: Moo
+  kind: Module
+  detail: module (system)
+  insert_text: Moo
+  sort_text: 9_Moo
+  filter_text: Moo

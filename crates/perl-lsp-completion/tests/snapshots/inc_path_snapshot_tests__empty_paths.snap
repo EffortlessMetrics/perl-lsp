@@ -1,0 +1,5 @@
+---
+source: crates/perl-lsp-completion/tests/inc_path_snapshot_tests.rs
+expression: items
+---
+[]

@@ -1,0 +1,10 @@
+---
+source: crates/perl-lsp-completion/tests/inc_path_snapshot_tests.rs
+expression: items
+---
+- label: DBI
+  kind: Module
+  detail: module (include)
+  insert_text: DBI
+  sort_text: 9_DBI
+  filter_text: DBI

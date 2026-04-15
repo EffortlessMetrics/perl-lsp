@@ -1,0 +1,16 @@
+---
+source: crates/perl-lsp-completion/tests/inc_path_snapshot_tests.rs
+expression: items_math
+---
+- label: Math2D
+  kind: Module
+  detail: module (include)
+  insert_text: Math2D
+  sort_text: 9_Math2D
+  filter_text: Math2D
+- label: Math3D
+  kind: Module
+  detail: module (include)
+  insert_text: Math3D
+  sort_text: 9_Math3D
+  filter_text: Math3D

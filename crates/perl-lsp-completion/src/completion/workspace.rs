@@ -14,7 +14,37 @@ use perl_workspace_index::workspace_index::{
     SymbolKind as WsSymbolKind, VarKind, WorkspaceIndex, WorkspaceSymbol,
 };
 use std::collections::{HashMap, HashSet, VecDeque};
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use walkdir::WalkDir;
+
+// -----------------------------------------------------------------------------
+// Module scanning constants
+// -----------------------------------------------------------------------------
+
+/// Maximum directory depth when scanning include paths for `.pm` files.
+///
+/// This limit prevents excessive filesystem traversal when scanning deep
+/// module hierarchies. The depth is relative to the include path root.
+///
+/// Example: With `MAX_SCAN_DEPTH = 5`:
+/// - `/path/Mod.pm` (depth 1) → found
+/// - `/path/Sub/Mod.pm` (depth 2) → found
+/// - `/path/Sub/Deep/Mod.pm` (depth 5) → found
+/// - `/path/Sub/Deep/Too/Mod.pm` (depth 6) → NOT found
+const MAX_SCAN_DEPTH: usize = 5;
+
+/// Maximum number of filesystem entries to scan when traversing include paths.
+///
+/// This is a safety limit to prevent hangs when scanning very large directories.
+/// Once this limit is reached, scanning stops and returns partial results.
+const MAX_SCAN_ENTRIES: usize = 10_000;
+
+/// Time budget (in milliseconds) for scanning include paths during completion.
+///
+/// Scanning is cancelled if it exceeds this budget to keep completion responsive.
+/// The 30ms budget is chosen to be imperceptible to users during typing.
+const SCAN_TIMEOUT_MS: u64 = 30;
 
 /// Add workspace symbol completions for functions and variables
 ///
@@ -233,62 +263,251 @@ fn module_sort_tier(name: &str) -> &'static str {
 /// Add module name completions for `use` and `require` statements.
 ///
 /// When the cursor is after `use ` or `require `, suggests package names from the
-/// workspace index. This enables discovering available modules as you type.
+/// workspace index and from configured include paths. This enables discovering
+/// available modules as you type.
 ///
 /// For example, typing `use My` will suggest `MyApp`, `MyApp::Config`, etc.
+///
+/// # Arguments
+///
+/// * `completions` - Vector to add completion items to
+/// * `context` - Completion context with prefix and position info
+/// * `workspace_index` - Optional workspace index for workspace modules
+/// * `include_paths` - Paths from `.perl-lsp.toml` `includePaths`
+/// * `system_inc_paths` - System @INC paths (when `useSystemInc: true`)
+/// * `is_cancelled` - Cancellation check callback
+#[allow(clippy::collapsible_if)]
 pub fn add_use_module_completions(
     completions: &mut Vec<CompletionItem>,
     context: &CompletionContext,
     workspace_index: &Option<Arc<WorkspaceIndex>>,
+    include_paths: &[PathBuf],
+    system_inc_paths: &[PathBuf],
+    is_cancelled: &dyn Fn() -> bool,
 ) {
-    let Some(index) = workspace_index else {
-        return;
-    };
-
-    if !index.has_symbols() {
-        return;
-    }
-
     let mut seen: HashSet<String> = HashSet::new();
 
-    // Search for package symbols matching the prefix
-    let all_symbols = if context.prefix.is_empty() {
-        index.all_symbols()
+    // First, add workspace modules (they take priority)
+    if let Some(index) = workspace_index {
+        if index.has_symbols() {
+            // Search for package symbols matching the prefix
+            let all_symbols = if context.prefix.is_empty() {
+                index.all_symbols()
+            } else {
+                index.find_symbols(&context.prefix)
+            };
+
+            for symbol in all_symbols {
+                if symbol.kind != WsSymbolKind::Package {
+                    continue;
+                }
+
+                // Match against the module name prefix
+                if !context.prefix.is_empty() && !symbol.name.starts_with(&context.prefix) {
+                    continue;
+                }
+
+                if !seen.insert(symbol.name.clone()) {
+                    continue;
+                }
+
+                let name = &symbol.name;
+                completions.push(CompletionItem {
+                    label: name.clone(),
+                    kind: CompletionItemKind::Module,
+                    detail: Some("module".to_string()),
+                    documentation: symbol
+                        .documentation
+                        .clone()
+                        .or_else(|| Some(format!("Package `{name}`"))),
+                    insert_text: Some(name.clone()),
+                    sort_text: Some(format!("1{}_{name}", module_sort_tier(name))),
+                    filter_text: Some(name.clone()),
+                    additional_edits: vec![],
+                    text_edit_range: Some((context.prefix_start, context.position)),
+                    commit_characters: None,
+                });
+            }
+        }
+    }
+
+    // Check cancellation after workspace scan
+    if is_cancelled() {
+        return;
+    }
+
+    // Scan include paths for external modules (only on non-wasm32 targets)
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        // Scan include paths
+        for include_path in include_paths {
+            if is_cancelled() {
+                return;
+            }
+            scan_modules_in_directory(
+                completions,
+                context,
+                include_path,
+                "(include)",
+                &mut seen,
+                is_cancelled,
+            );
+        }
+
+        // Check cancellation between include_paths and system_inc_paths
+        if is_cancelled() {
+            return;
+        }
+
+        // Scan system @INC paths
+        for system_path in system_inc_paths {
+            if is_cancelled() {
+                return;
+            }
+            scan_modules_in_directory(
+                completions,
+                context,
+                system_path,
+                "(system)",
+                &mut seen,
+                is_cancelled,
+            );
+        }
+    }
+}
+
+/// Scan a directory for `.pm` files and add them as module completions.
+///
+/// # Arguments
+///
+/// * `completions` - Vector to add completion items to
+/// * `context` - Completion context with prefix and position info
+/// * `dir` - Directory to scan
+/// * `detail_suffix` - Suffix for the detail text (e.g., "(include)" or "(system)")
+/// * `seen` - Set of already-seen module names for deduplication
+/// * `is_cancelled` - Cancellation check callback
+#[cfg(not(target_arch = "wasm32"))]
+fn scan_modules_in_directory(
+    completions: &mut Vec<CompletionItem>,
+    context: &CompletionContext,
+    dir: &Path,
+    detail_suffix: &str,
+    seen: &mut HashSet<String>,
+    is_cancelled: &dyn Fn() -> bool,
+) {
+    // Start the timeout timer for performance budget
+    let start_time = std::time::Instant::now();
+    let timeout = std::time::Duration::from_millis(SCAN_TIMEOUT_MS);
+
+    let mut entries_scanned: usize = 0;
+
+    // Use WalkDir with max depth of MAX_SCAN_DEPTH and no symlink following
+    // Don't use filter_entry because it can skip the root directory
+    let walker = WalkDir::new(dir).max_depth(MAX_SCAN_DEPTH).follow_links(false).into_iter();
+
+    for entry in walker.flatten() {
+        // Check cancellation and timeout at each directory entry
+        if is_cancelled() || start_time.elapsed() > timeout {
+            return;
+        }
+
+        // Check max entries limit
+        entries_scanned += 1;
+        if entries_scanned > MAX_SCAN_ENTRIES {
+            return;
+        }
+
+        // Only process files (not directories)
+        let file_type = entry.file_type();
+        if !file_type.is_file() {
+            continue;
+        }
+
+        // Only process .pm files
+        let path = entry.path();
+        if path.extension().is_none_or(|ext| ext != "pm") {
+            continue;
+        }
+
+        // Convert file path to module name
+        // e.g., /path/to/libs/DBI.pm -> DBI
+        // e.g., /path/to/libs/DBD/SQLite.pm -> DBD::SQLite
+        if let Some(module_name) = path_to_module_name(path, dir) {
+            // Skip if already seen
+            if !seen.insert(module_name.clone()) {
+                continue;
+            }
+
+            // Skip if doesn't match prefix
+            if !context.prefix.is_empty() && !module_name.starts_with(&context.prefix) {
+                continue;
+            }
+
+            let detail = format!("module {detail_suffix}");
+            completions.push(CompletionItem {
+                label: module_name.clone(),
+                kind: CompletionItemKind::Module,
+                detail: Some(detail),
+                documentation: Some(format!("Module `{module_name}`")),
+                insert_text: Some(module_name.clone()),
+                sort_text: Some(format!("9_{module_name}")), // External modules sort after workspace
+                filter_text: Some(module_name),
+                additional_edits: vec![],
+                text_edit_range: Some((context.prefix_start, context.position)),
+                commit_characters: None,
+            });
+        }
+    }
+}
+
+/// Convert a file path to a Perl module name.
+///
+/// Strips the base directory and `.pm` extension, then converts path separators
+/// to `::`. For example:
+/// - `/path/to/libs/DBI.pm` with base `/path/to/libs/` -> `DBI`
+/// - `/path/to/libs/DBD/SQLite.pm` with base `/path/to/libs/` -> `DBD::SQLite`
+///
+/// Returns `None` if the path doesn't have a `.pm` extension or is invalid.
+#[cfg(not(target_arch = "wasm32"))]
+fn path_to_module_name(path: &Path, base_dir: &Path) -> Option<String> {
+    // Get the path relative to the base directory
+    let relative = path.strip_prefix(base_dir).ok()?;
+
+    // Convert path to string and replace path separators with ::
+    // Then strip .pm extension if present
+    let path_str = relative.to_string_lossy();
+
+    // Replace / with :: for nested modules
+    let with_separators = path_str.replace('/', "::");
+
+    // Strip .pm extension if it's there
+    let module_name = if with_separators.ends_with(".pm") {
+        with_separators.trim_end_matches(".pm").to_string()
     } else {
-        index.find_symbols(&context.prefix)
+        with_separators
     };
 
-    for symbol in all_symbols {
-        if symbol.kind != WsSymbolKind::Package {
-            continue;
-        }
+    // Filter out empty parts and .
+    let parts: Vec<&str> = module_name.split("::").filter(|s| !s.is_empty() && *s != ".").collect();
 
-        // Match against the module name prefix
-        if !context.prefix.is_empty() && !symbol.name.starts_with(&context.prefix) {
-            continue;
-        }
-
-        if !seen.insert(symbol.name.clone()) {
-            continue;
-        }
-
-        let name = &symbol.name;
-        completions.push(CompletionItem {
-            label: name.clone(),
-            kind: CompletionItemKind::Module,
-            detail: Some("module".to_string()),
-            documentation: symbol
-                .documentation
-                .clone()
-                .or_else(|| Some(format!("Package `{name}`"))),
-            insert_text: Some(name.clone()),
-            sort_text: Some(format!("1{}_{name}", module_sort_tier(name))),
-            filter_text: Some(name.clone()),
-            additional_edits: vec![],
-            text_edit_range: Some((context.prefix_start, context.position)),
-            commit_characters: None,
-        });
+    if parts.is_empty() {
+        None
+    } else {
+        Some(parts.join("::"))
     }
+}
+
+/// Stub for wasm32 targets where filesystem scanning is not supported.
+#[cfg(target_arch = "wasm32")]
+fn scan_modules_in_directory(
+    _completions: &mut Vec<CompletionItem>,
+    _context: &CompletionContext,
+    _dir: &Path,
+    _detail_suffix: &str,
+    _seen: &mut HashSet<String>,
+    _is_cancelled: &dyn Fn() -> bool,
+) {
+    // No-op on wasm32 - filesystem access is not available
 }
 
 /// Add import completions for symbols inside `use Module qw(...)`.

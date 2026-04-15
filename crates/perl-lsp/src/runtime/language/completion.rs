@@ -22,6 +22,7 @@ use perl_keywords::LSP_RUNTIME_COMPLETION_KEYWORDS;
 use perl_parser::type_inference::TypeInferenceEngine;
 use regex::Regex;
 use serde_json::{Value, json};
+use std::path::PathBuf;
 use std::sync::{Arc, OnceLock};
 use std::time::Instant;
 
@@ -572,11 +573,26 @@ impl LspServer {
                     };
 
                     #[cfg(feature = "workspace")]
-                    let provider = CompletionProvider::new_with_index_and_source(
-                        ast,
-                        &doc.text,
-                        workspace_idx,
-                    );
+                    let provider = {
+                        // Get include paths and system @INC from workspace config
+                        let mut config = self.workspace_config.lock();
+                        let include_paths: Vec<PathBuf> =
+                            config.include_paths.iter().map(PathBuf::from).collect();
+                        let system_inc_paths: Vec<PathBuf> = if config.use_system_inc {
+                            config.get_system_inc().to_vec()
+                        } else {
+                            Vec::new()
+                        };
+                        drop(config); // Release lock before creating provider
+
+                        CompletionProvider::new_with_index_and_source_and_include_paths(
+                            ast,
+                            &doc.text,
+                            workspace_idx,
+                            &include_paths,
+                            &system_inc_paths,
+                        )
+                    };
                     #[cfg(not(feature = "workspace"))]
                     let provider =
                         CompletionProvider::new_with_index_and_source(ast, &doc.text, None);

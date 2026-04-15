@@ -1856,6 +1856,7 @@ name = "perl-lsp-completion"
 version = "0.12.4"
 dependencies = [
  "criterion",
+ "insta",
  "perl-keywords",
  "perl-lsp-completion-item",
  "perl-lsp-file-completion",
@@ -1864,8 +1865,11 @@ dependencies = [
  "perl-semantic-analyzer",
  "perl-tdd-support",
  "perl-workspace-index",
+ "serde",
  "serde_json",
+ "tempfile",
  "url",
+ "walkdir",
 ]
 
 [[package]]

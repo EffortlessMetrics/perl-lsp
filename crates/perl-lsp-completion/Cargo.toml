@@ -25,16 +25,20 @@ perl-workspace-index = { workspace = true }
 perl-keywords = { workspace = true }
 perl-module-import = { workspace = true }
 url.workspace = true
+walkdir.workspace = true
 
 [features]
 default = []
 
 [dev-dependencies]
 criterion.workspace = true
+insta = { version = "1.47.2", features = ["yaml"] }
 perl-parser-core = { workspace = true }
 perl-tdd-support = { workspace = true }
 perl-workspace-index = { workspace = true }
+serde.workspace = true
 serde_json.workspace = true
+tempfile.workspace = true
 url.workspace = true
 
 [package.metadata.docs.rs]

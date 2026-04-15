@@ -1,0 +1,22 @@
+---
+source: crates/perl-lsp-completion/tests/inc_path_snapshot_tests.rs
+expression: items
+---
+- label: Apple
+  kind: Module
+  detail: module (include)
+  insert_text: Apple
+  sort_text: 9_Apple
+  filter_text: Apple
+- label: Banana
+  kind: Module
+  detail: module (include)
+  insert_text: Banana
+  sort_text: 9_Banana
+  filter_text: Banana
+- label: Cherry
+  kind: Module
+  detail: module (include)
+  insert_text: Cherry
+  sort_text: 9_Cherry
+  filter_text: Cherry
