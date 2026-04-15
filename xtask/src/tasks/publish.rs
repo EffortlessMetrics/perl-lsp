@@ -1,6 +1,6 @@
 //! Publishing functionality for crates and VSCode extension
 
-use crate::utils::project_root;
+use crate::utils::{project_root, run_cargo_metadata};
 use color_eyre::eyre::{Result, bail, eyre};
 use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
@@ -94,16 +94,8 @@ struct PublishTarget {
 }
 
 fn load_publish_targets() -> Result<Vec<PublishTarget>> {
-    let output =
-        Command::new("cargo").args(["metadata", "--format-version", "1", "--no-deps"]).output()?;
-    if !output.status.success() {
-        bail!(
-            "Failed to load workspace metadata for publish allowlist: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-    }
-
-    let metadata: CargoMetadata = serde_json::from_slice(&output.stdout)?;
+    let bytes = run_cargo_metadata(true)?;
+    let metadata: CargoMetadata = serde_json::from_slice(&bytes)?;
 
     let allowlist = metadata
         .metadata

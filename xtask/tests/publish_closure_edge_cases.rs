@@ -17,69 +17,35 @@ use color_eyre::eyre::Result;
 // Output Format Tests
 // =============================================================================
 
-/// Test that success output contains expected format on default invocation.
+/// Test that success output format is correct for both plural and singular cases.
 ///
-/// Regression guard: Verifies the exact output format is maintained
-/// across iterations. Output should be:
-/// `publish-closure: OK (N crates checked, 0 violations)`
-/// where N is the count of allowlisted crates.
-#[test]
-fn publish_closure_output_format_is_correct() -> Result<()> {
-    let output = Command::cargo_bin("xtask")?.args(["publish-closure"]).output()?;
-
-    assert!(output.status.success(), "Command should succeed");
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("publish-closure: OK"), "Output should contain success marker");
-    assert!(stdout.contains("crates checked"), "Output should mention crates count");
-    assert!(stdout.contains("violations"), "Output should mention violations");
-    Ok(())
-}
-
-/// Test that success output contains the plural "crates" when count > 1.
+/// Regression guard: Verifies the exact output format is maintained:
+/// `publish-closure: OK (N crates checked, 0 violations)` (plural, default)
+/// `publish-closure: OK (1 crate checked, 0 violations)`  (singular, filtered)
 ///
-/// Boundary condition: Verify singular vs plural handling.
-/// Default invocation checks all allowlisted crates (132 as of April 2026).
-/// Output must say "132 crates checked" not "132 crate checked".
+/// Also verifies:
+/// - "0 violations" is always explicitly shown (not omitted when zero)
+/// - Plural "crates" used for multiple crates; singular "crate" for one
 #[test]
-fn publish_closure_output_plural_form_correct() -> Result<()> {
-    let output = Command::cargo_bin("xtask")?.args(["publish-closure"]).output()?;
-
-    assert!(output.status.success());
-    let stdout = String::from_utf8_lossy(&output.stdout);
+fn publish_closure_output_format_and_grammar() -> Result<()> {
+    // Default invocation: plural form, zero violations shown explicitly.
+    let default_out = Command::cargo_bin("xtask")?.args(["publish-closure"]).output()?;
+    assert!(default_out.status.success(), "Default invocation should succeed");
+    let default_stdout = String::from_utf8_lossy(&default_out.stdout);
     assert!(
-        stdout.contains("crates checked"),
-        "Default should check multiple crates and use plural"
+        default_stdout.contains("publish-closure: OK"),
+        "Output should contain success marker"
     );
-    Ok(())
-}
+    assert!(default_stdout.contains("crates checked"), "Multiple crates should use plural form");
+    assert!(default_stdout.contains("0 violations"), "Zero violations must be shown explicitly");
 
-/// Test that single-crate output uses singular form.
-///
-/// Boundary condition: When --crate-name filters to one crate,
-/// output should say "1 crate checked" not "1 crates checked".
-#[test]
-fn publish_closure_output_singular_form_correct() -> Result<()> {
-    let output = Command::cargo_bin("xtask")?
+    // Single-crate invocation: singular form.
+    let single_out = Command::cargo_bin("xtask")?
         .args(["publish-closure", "--crate-name", "perl-token"])
         .output()?;
-
-    assert!(output.status.success());
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("1 crate checked"), "Single crate should use singular form");
-    Ok(())
-}
-
-/// Test that no violations count is always shown.
-///
-/// Regression guard: On master (no violations), output must explicitly
-/// show "0 violations" even though there are zero problems.
-#[test]
-fn publish_closure_zero_violations_explicitly_shown() -> Result<()> {
-    let output = Command::cargo_bin("xtask")?.args(["publish-closure"]).output()?;
-
-    assert!(output.status.success());
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("0 violations"), "Master should have zero violations");
+    assert!(single_out.status.success(), "Single-crate invocation should succeed");
+    let single_stdout = String::from_utf8_lossy(&single_out.stdout);
+    assert!(single_stdout.contains("1 crate checked"), "Single crate should use singular form");
     Ok(())
 }
 
@@ -140,68 +106,31 @@ fn publish_closure_success_has_no_stderr() -> Result<()> {
 // Case Sensitivity and Crate Name Boundary Tests
 // =============================================================================
 
-/// Test that crate names are case-sensitive.
+/// Test that invalid crate names are rejected for all boundary conditions.
 ///
-/// Boundary condition: Verify that 'perl-token' != 'Perl-Token'.
-/// This guards against accidental case-insensitive matching.
+/// Covers:
+/// - Case mismatch: "Perl-Token" != "perl-token" (case-sensitive matching)
+/// - Leading whitespace: " perl-token" is not in the allowlist
+/// - Very long name: 1000-char string fails cleanly without panic
+/// - Special characters: "perl-token@123" is not a valid crate name
+/// - Empty string: "" must not be treated as "check all"
 #[test]
-fn publish_closure_crate_names_are_case_sensitive() -> Result<()> {
-    // Assuming perl-token exists in allowlist (lowercase)
-    Command::cargo_bin("xtask")?
-        .args(["publish-closure", "--crate-name", "Perl-Token"])
-        .assert()
-        .failure();
-    Ok(())
-}
-
-/// Test that crate names with leading spaces are rejected.
-///
-/// Boundary condition: Verify that whitespace is not trimmed.
-/// A crate name " perl-token" (with leading space) is different from "perl-token".
-#[test]
-fn publish_closure_crate_names_whitespace_not_trimmed() -> Result<()> {
-    let output = Command::cargo_bin("xtask")?
-        .args(["publish-closure", "--crate-name", " perl-token"])
-        .output()?;
-
-    assert!(!output.status.success(), "Crate name with leading space should be rejected");
-    Ok(())
-}
-
-/// Test that very long crate names are rejected gracefully.
-///
-/// Boundary condition: An extremely long (but valid UTF-8) name
-/// should not panic or produce strange behavior — just fail cleanly.
-#[test]
-fn publish_closure_very_long_crate_name_rejected() -> Result<()> {
-    let very_long_name = "x".repeat(1000);
-    Command::cargo_bin("xtask")?
-        .args(["publish-closure", "--crate-name", &very_long_name])
-        .assert()
-        .failure();
-    Ok(())
-}
-
-/// Test that crate names with special characters are rejected.
-///
-/// Boundary condition: A crate name with Unicode or symbols
-/// (not matching Rust's identifier rules) should be rejected.
-#[test]
-fn publish_closure_special_char_crate_name_rejected() -> Result<()> {
-    Command::cargo_bin("xtask")?
-        .args(["publish-closure", "--crate-name", "perl-token@123"])
-        .assert()
-        .failure();
-    Ok(())
-}
-
-/// Test that empty crate name is rejected.
-///
-/// Boundary condition: An empty string passed to --crate-name
-/// should be rejected, not treated as "check all".
-#[test]
-fn publish_closure_empty_crate_name_rejected() -> Result<()> {
-    Command::cargo_bin("xtask")?.args(["publish-closure", "--crate-name", ""]).assert().failure();
+fn publish_closure_invalid_crate_names_rejected() -> Result<()> {
+    let long_name = "x".repeat(1000);
+    let cases: &[(&str, &str)] = &[
+        ("Perl-Token", "wrong case"),
+        (" perl-token", "leading whitespace"),
+        (&long_name, "very long name"),
+        ("perl-token@123", "special characters"),
+        ("", "empty string"),
+    ];
+    for (name, description) in cases {
+        let status = Command::cargo_bin("xtask")?
+            .args(["publish-closure", "--crate-name", name])
+            .output()?
+            .status;
+        assert!(!status.success(), "Expected rejection for {description}: {name:?}");
+    }
     Ok(())
 }
 

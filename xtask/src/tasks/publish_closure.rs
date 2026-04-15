@@ -16,6 +16,7 @@
 //!    a `publish = false` workspace member as a violation.
 //! 5. Exit non-zero if any violations were found.
 
+use crate::utils::run_cargo_metadata;
 use color_eyre::eyre::{Result, bail, eyre};
 use serde::Deserialize;
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -175,13 +176,8 @@ pub fn run(crate_filter: Option<String>) -> Result<()> {
 // ---------------------------------------------------------------------------
 
 fn load_metadata() -> Result<FullMetadata> {
-    let output =
-        std::process::Command::new("cargo").args(["metadata", "--format-version", "1"]).output()?;
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        bail!("cargo metadata failed:\n{}", stderr);
-    }
-    let metadata: FullMetadata = serde_json::from_slice(&output.stdout)
+    let bytes = run_cargo_metadata(false)?;
+    let metadata: FullMetadata = serde_json::from_slice(&bytes)
         .map_err(|e| eyre!("Failed to parse cargo metadata JSON: {}", e))?;
     Ok(metadata)
 }
@@ -207,10 +203,7 @@ fn build_normal_dep_graph(resolve: &ResolveGraph) -> HashMap<&str, Vec<&str>> {
 ///
 /// An empty `dep_kinds` list is treated conservatively as a normal dep.
 fn is_normal_dep(dep: &ResolveDep) -> bool {
-    if dep.dep_kinds.is_empty() {
-        return true;
-    }
-    dep.dep_kinds.iter().any(|dk| dk.kind.is_none())
+    dep.dep_kinds.is_empty() || dep.dep_kinds.iter().any(|dk| dk.kind.is_none())
 }
 
 /// BFS from `start_id` following only normal-dep edges.  Returns the names of
