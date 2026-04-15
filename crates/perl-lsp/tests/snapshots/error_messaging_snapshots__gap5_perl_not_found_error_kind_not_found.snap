@@ -1,0 +1,5 @@
+---
+source: crates/perl-lsp/tests/error_messaging_snapshots.rs
+expression: transformed
+---
+"Perl interpreter not found on PATH. Ensure 'perl' is installed and on your system PATH."

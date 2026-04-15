@@ -1,0 +1,5 @@
+---
+source: crates/perl-lsp/tests/error_messaging_snapshots.rs
+expression: transformed
+---
+perl not executable

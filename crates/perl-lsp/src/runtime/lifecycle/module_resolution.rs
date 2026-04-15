@@ -39,6 +39,14 @@ pub struct ResolutionContext {
     pub search_scopes: Vec<ResolutionScope>,
 }
 
+/// Warning message shown when workspace root is not detected.
+///
+/// Shown once per server session via the `root_undetected_shown` flag.
+const ROOT_UNDETECTED_WARNING: &str =
+    "perl-lsp: workspace root not detected — module resolution disabled. \
+     To enable: open the project folder in your editor (File > Open Folder) \
+     rather than individual files. This warning appears once per server session.";
+
 /// Prepend `use lib` paths extracted from `doc_text` to `include_paths`.
 ///
 /// The extra paths are scoped to this resolution pass only and are searched
@@ -173,12 +181,7 @@ impl LspServer {
             Some(r) => r,
             None => {
                 if !self.root_undetected_shown.fetch_or(true, Ordering::SeqCst) {
-                    let _ = self.show_message(
-                        MessageType::Warning,
-                        "perl-lsp: workspace root not detected — module resolution disabled. \
-                         To enable: open the project folder in your editor (File > Open Folder) \
-                         rather than individual files. This warning appears once per server session.",
-                    );
+                    let _ = self.show_message(MessageType::Warning, ROOT_UNDETECTED_WARNING);
                 }
                 return None;
             }
@@ -211,12 +214,7 @@ impl LspServer {
             Some(r) => r,
             None => {
                 if !self.root_undetected_shown.fetch_or(true, Ordering::SeqCst) {
-                    let _ = self.show_message(
-                        MessageType::Warning,
-                        "perl-lsp: workspace root not detected — module resolution disabled. \
-                         To enable: open the project folder in your editor (File > Open Folder) \
-                         rather than individual files. This warning appears once per server session.",
-                    );
+                    let _ = self.show_message(MessageType::Warning, ROOT_UNDETECTED_WARNING);
                 }
                 return None;
             }
@@ -343,12 +341,7 @@ impl LspServer {
             Some(r) => r,
             None => {
                 if !self.root_undetected_shown.fetch_or(true, Ordering::SeqCst) {
-                    let _ = self.show_message(
-                        MessageType::Warning,
-                        "perl-lsp: workspace root not detected — module resolution disabled. \
-                         To enable: open the project folder in your editor (File > Open Folder) \
-                         rather than individual files. This warning appears once per server session.",
-                    );
+                    let _ = self.show_message(MessageType::Warning, ROOT_UNDETECTED_WARNING);
                 }
                 return None;
             }
