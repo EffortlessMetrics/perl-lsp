@@ -58,7 +58,7 @@ The post-collapse published set, grouped by category and listed in approximate d
 | Crate | Role |
 |-------|------|
 | `perl-module` | Module name → file path resolution; absorbs 13 perl-module-* crates |
-| `perl-workspace-index` | Workspace symbol index and discovery; absorbs 7 perl-workspace-* crates |
+| `perl-workspace-index` | Workspace symbol index and discovery; absorbs 6 perl-workspace-* crates |
 | `perl-semantic-analyzer` | Scope analysis, type inference, variable resolution |
 
 ### Tool integrations (1)

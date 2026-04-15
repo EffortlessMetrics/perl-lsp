@@ -141,7 +141,7 @@ Status legend:
 
 | current crate | target owner | final status | wave | risk | notes |
 |---|---|---|---:|---:|---|
-| perl-diagnostics-codes | perl-diagnostic-catalog | module | E | Low | stays publishable as the NEW name |
+| perl-diagnostics-codes | perl-diagnostic-catalog | core-public | E | Low | renamed to `perl-diagnostic-catalog`; this row IS the new published crate |
 | perl-lsp-diagnostic-catalog | perl-diagnostic-catalog | module | E | Low | retired name; content absorbs |
 | perl-lsp-diagnostic-types | perl-diagnostic-catalog | module | E | Low | |
 
