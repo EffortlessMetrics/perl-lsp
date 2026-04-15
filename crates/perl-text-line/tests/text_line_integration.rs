@@ -1,4 +1,4 @@
-use perl_module_token_parser::parse_module_token;
+use perl_module::token_parser::parse_module_token;
 use perl_text_line::{
     is_identifier_byte, is_keyword_boundary, line_bounds_at, skip_ascii_whitespace,
 };

@@ -12,8 +12,8 @@ use super::*;
 #[cfg(feature = "workspace")]
 use crate::runtime::routing::{IndexAccessMode, route_index_access};
 use crate::state::workspace_symbol_cap;
-use perl_module_path::file_path_to_module_name;
-use perl_module_rename::{apply_module_rename_edits, plan_module_rename_edits};
+use perl_module::path::file_path_to_module_name;
+use perl_module::rename::{apply_module_rename_edits, plan_module_rename_edits};
 #[cfg(feature = "workspace")]
 use perl_parser::workspace_index::{DegradationReason, EarlyExitReason, ResourceKind, SymbolKind};
 #[cfg(feature = "workspace")]
@@ -580,7 +580,7 @@ impl LspServer {
                                     perl_qualified_name::container_name(&sym.qualified_name)
                                 {
                                     resolved["containerName"] = json!(
-                                        perl_module_path::normalize_package_separator(container)
+                                        perl_module::path::normalize_package_separator(container)
                                     );
                                 }
 

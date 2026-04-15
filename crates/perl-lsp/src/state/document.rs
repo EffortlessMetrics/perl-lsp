@@ -266,7 +266,7 @@ impl DocumentState {
 
 /// Normalize legacy package separator ' to ::
 pub fn normalize_package_separator(s: &str) -> Cow<'_, str> {
-    perl_module_path::normalize_package_separator(s)
+    perl_module::path::normalize_package_separator(s)
 }
 
 /// Client capabilities received during initialization

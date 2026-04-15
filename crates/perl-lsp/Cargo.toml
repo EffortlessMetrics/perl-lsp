@@ -82,13 +82,9 @@ perl-lsp-perltidy = { workspace = true }
 perl-lsp-document-links = { workspace = true }
 perl-position-tracking = { workspace = true, features = ["lsp-compat"] }
 perl-symbol-cursor = { workspace = true }
-perl-module-path = { workspace = true }
+perl-module = { workspace = true }
 perl-qualified-name = { workspace = true }
-perl-module-reference = { workspace = true }
-perl-module-rename = { workspace = true }
-perl-module-import = { workspace = true }
 perl-pod = { workspace = true }
-perl-module-resolution = { workspace = true }
 perl-source-file = { workspace = true }
 perl-workspace-discovery = { workspace = true }
 perl-workspace-folder = { workspace = true }

@@ -66,7 +66,7 @@
 //! ```
 
 use perl_lsp_symbol_query::{compare_names_by_query, matches_query};
-use perl_module_path::normalize_package_separator;
+use perl_module::path::normalize_package_separator;
 use perl_parser_core::{SourceLocation, ast::Node};
 use perl_position_tracking::{WireLocation, WireRange};
 use perl_qualified_name::container_name;

@@ -43,7 +43,7 @@ use perl_dap_variables::{
     PerlVariableRenderer, RenderedVariable, VariableParser, VariableRenderer,
 };
 use perl_keywords::DAP_COMPLETION_KEYWORDS;
-use perl_module_path::module_path_to_name;
+use perl_module::path::module_path_to_name;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::collections::{HashMap, HashSet, VecDeque};

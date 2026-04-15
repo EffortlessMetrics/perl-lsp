@@ -25,7 +25,7 @@ doctest = false
 [dependencies]
 perl-parser-core = { workspace = true }
 perl-workspace-index = { workspace = true }
-perl-module-path = { workspace = true }
+perl-module = { workspace = true }
 perl-qualified-name = { workspace = true }
 regex.workspace = true
 serde = { workspace = true }
