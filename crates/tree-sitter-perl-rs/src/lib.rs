@@ -231,11 +231,43 @@ impl<'tree> Node<'tree> {
     ///
     /// Note: this returns the v3 internal kind name, not the tree-sitter grammar node
     /// type string. For example, the root node returns `"Program"` rather than
-    /// `"source_file"`. Use [`to_sexp`][Node::to_sexp] for tree-sitter-compatible
+    /// `"source_file"`. Use [`grammar_kind`][Node::grammar_kind] for the canonical
+    /// tree-sitter grammar name, or [`to_sexp`][Node::to_sexp] for tree-sitter-compatible
     /// S-expression output which uses the canonical grammar names.
     pub fn kind(&self) -> &'static str {
         self.inner.kind.kind_name()
     }
+    /// Returns the tree-sitter grammar-canonical node kind name.
+    ///
+    /// Unlike [`kind`][Node::kind], which returns the v3 internal PascalCase name
+    /// (e.g., `"Program"`, `"Subroutine"`), this method returns the lowercase
+    /// grammar name used in S-expressions (e.g., `"source_file"`, `"sub"`).
+    /// This matches the kind strings returned by `tree-sitter-perl-c` and the
+    /// upstream tree-sitter Perl grammar.
+    ///
+    /// For most nodes the grammar name is a simple lowercase mapping. For some
+    /// nodes (e.g., operator-named `Binary`, dynamic `VariableDeclaration`) the
+    /// name depends on runtime data; this method extracts it from `to_sexp()`.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use tree_sitter_perl_rs::Parser;
+    ///
+    /// let mut parser = Parser::new();
+    /// let tree = parser.parse("my $x = 42;").unwrap();
+    /// assert_eq!(tree.root_node().grammar_kind(), "source_file");
+    /// ```
+    pub fn grammar_kind(&self) -> String {
+        // Extract the node type from the leading `(word` in the S-expression.
+        // to_sexp() always starts with `(kind_name` or just `(kind_name)`.
+        let sexp = self.to_sexp();
+        let inner = sexp.trim_start_matches('(');
+        // Take up to the first space or closing paren.
+        let end = inner.find([' ', ')']).unwrap_or(inner.len());
+        inner[..end].to_string()
+    }
+
 
     /// Returns a tree-sitter-compatible S-expression for this node and its subtree.
     ///

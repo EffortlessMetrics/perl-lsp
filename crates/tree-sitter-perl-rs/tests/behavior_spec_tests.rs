@@ -94,3 +94,29 @@ fn when_reusing_one_parser_for_multiple_inputs_then_each_parse_still_returns_a_t
     assert!(first.is_some());
     assert!(second.is_some());
 }
+
+#[test]
+fn when_requesting_grammar_kind_of_root_then_source_file_is_returned() {
+    let tree = parse("my $x = 42;");
+    assert_eq!(tree.root_node().grammar_kind(), "source_file");
+}
+
+#[test]
+fn when_requesting_grammar_kind_of_subroutine_then_sub_is_returned() {
+    let tree = parse("sub greet { 1 }");
+    let root = tree.root_node();
+    // Find the subroutine child
+    let sub_node = root.children()
+        .find(|n| n.kind() == "Subroutine")
+        .expect("should have a subroutine node");
+    assert_eq!(sub_node.grammar_kind(), "sub");
+}
+
+#[test]
+fn when_v3_kind_and_grammar_kind_are_both_available_then_they_differ_for_program() {
+    let tree = parse("1;");
+    let root = tree.root_node();
+    assert_eq!(root.kind(), "Program");
+    assert_eq!(root.grammar_kind(), "source_file");
+    assert_ne!(root.kind(), root.grammar_kind());
+}
