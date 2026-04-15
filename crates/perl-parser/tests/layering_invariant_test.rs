@@ -77,35 +77,6 @@ fn when_parser_layering_is_correct_then_no_lsp_provider_deps_in_tree() {
     );
 }
 
-/// Test: perl-parser imports can be resolved directly from perl-lsp-semantic-tokens.
-///
-/// Validates that the `semantic_tokens` module, which will be re-imported from
-/// `perl_lsp_semantic_tokens` after the refactor, is accessible and its
-/// public API is unchanged.
-///
-/// **Before refactor**: semantic_tokens comes from perl-lsp-semantic-tokens (indirect via re-export)
-/// **After refactor**: semantic_tokens must be imported directly from perl-lsp-semantic-tokens
-#[test]
-fn when_semantic_tokens_refactored_then_legend_function_works() {
-    // After refactor (#4414), semantic_tokens is no longer re-exported from perl_parser.
-    // Import directly from perl_lsp_semantic_tokens.
-    use perl_lsp_semantic_tokens as semantic_tokens;
-
-    let legend = semantic_tokens::legend();
-    assert!(!legend.token_types.is_empty(), "semantic token types should not be empty");
-    assert!(!legend.modifiers.is_empty(), "semantic token modifiers should not be empty");
-
-    // Verify common token types exist
-    assert!(
-        legend.token_types.contains(&"keyword".to_string()),
-        "should contain 'keyword' token type"
-    );
-    assert!(
-        legend.token_types.contains(&"variable".to_string()),
-        "should contain 'variable' token type"
-    );
-}
-
 /// Test: semantic_tokens import alias works after refactoring.
 ///
 /// Validates that the import alias pattern used in ast_snapshot_tests.rs:13
