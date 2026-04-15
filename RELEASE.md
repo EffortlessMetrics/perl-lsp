@@ -430,12 +430,22 @@ Every public release **must** update three surfaces. See [RELEASE_HISTORY.md](RE
 
 ### Before publishing
 
-- [ ] Create `docs/releases/vX.Y.Z.md` (use an existing file as template)
+- [ ] Create `docs/releases/vX.Y.Z.md` (use an existing file as template).
+  **Required** — `release-orchestration.yml` refuses to tag without this file,
+  and `release.yml` uses its body (minus YAML frontmatter) as the GitHub
+  Release body.
 - [ ] Add a new row to `RELEASE_HISTORY.md` for vX.Y.Z (fill what you know; mark unknowns with `—`)
 - [ ] Ensure `CHANGELOG.md` has a `[X.Y.Z]` section with links to:
   - `docs/releases/vX.Y.Z.md`
   - GitHub Release URL
   - Compare range `vPrev...vX.Y.Z`
+- [ ] Preview the extracted release body locally before dispatching the workflow:
+  ```bash
+  cargo xtask release-notes --tag vX.Y.Z
+  ```
+  What the command prints is exactly what will become the GitHub Release
+  body. GitHub then appends its auto-generated "What's Changed" PR list
+  below that body (via `generate_release_notes: true` in `release.yml`).
 
 ### After publishing
 
@@ -464,6 +474,12 @@ grep 'X.Y.Z' RELEASE_HISTORY.md
 # 3. CHANGELOG section exists
 grep '\[X.Y.Z\]' CHANGELOG.md
 
-# 4. GitHub Release matches
+# 4. Curated body parses cleanly (frontmatter strips, body non-empty)
+cargo xtask release-notes --tag vX.Y.Z > /tmp/body.md && test -s /tmp/body.md
+
+# 5. GitHub Release matches
 gh release view vX.Y.Z --json tagName,assets --jq '{tag: .tagName, assets: [.assets[].name]}'
+
+# 6. GitHub Release body starts with the curated content (not a PR dump)
+gh release view vX.Y.Z --json body --jq '.body' | head -1   # should be "# vX.Y.Z"
 ```

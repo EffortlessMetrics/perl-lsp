@@ -500,6 +500,28 @@ enum Commands {
         yes: bool,
     },
 
+    /// Extract the curated release body from `docs/releases/<tag>.md`.
+    ///
+    /// Reads the file, strips its YAML frontmatter, and emits the body to
+    /// stdout (or to `--output` if provided). Used by the `release.yml`
+    /// workflow to drive GitHub Release bodies from the curated per-release
+    /// notes that ship in the repo.
+    ReleaseNotes {
+        /// Release tag (e.g. `v0.12.4`). A bare version like `0.12.4` is
+        /// accepted and normalized to `v0.12.4`.
+        #[arg(long)]
+        tag: String,
+
+        /// Optional output file. When omitted, the body is written to stdout.
+        #[arg(long)]
+        output: Option<PathBuf>,
+
+        /// Override the repository root used to resolve `docs/releases/`.
+        /// Intended as a testing seam; the release workflow never passes this.
+        #[arg(long, hide = true)]
+        root: Option<PathBuf>,
+    },
+
     /// Trigger PR-driven release orchestration workflow
     ReleaseTurnkey {
         /// Release version (preferred: use `--version`; positional is also accepted).
@@ -1274,6 +1296,7 @@ fn main() -> Result<()> {
             parse_rust::run(source, sexp, ast, bench)
         }
         Commands::Release { version, yes } => release::run(version, yes),
+        Commands::ReleaseNotes { tag, output, root } => release_notes::run(tag, output, root),
         Commands::ReleaseTurnkey {
             version,
             positional_version,
