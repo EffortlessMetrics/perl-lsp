@@ -131,11 +131,8 @@ pub fn run(crate_filter: Option<String>) -> Result<()> {
         metadata.packages.iter().map(|pkg| (pkg.name.as_str(), pkg.id.as_str())).collect();
 
     // Build the normal-dep resolve graph: pkg_id -> [normal dep pkg_ids].
-    let resolve_graph: HashMap<&str, Vec<&str>> = metadata
-        .resolve
-        .as_ref()
-        .map(|r| build_normal_dep_graph(r, &id_to_name))
-        .unwrap_or_default();
+    let resolve_graph: HashMap<&str, Vec<&str>> =
+        metadata.resolve.as_ref().map(|r| build_normal_dep_graph(r)).unwrap_or_default();
 
     // Walk each crate and collect violations.
     let mut violations: Vec<(String, String)> = Vec::new();
@@ -191,10 +188,7 @@ fn load_metadata() -> Result<FullMetadata> {
 
 /// Build a map from package ID to the list of *normal* (non-dev, non-build)
 /// dependency package IDs.
-fn build_normal_dep_graph<'a>(
-    resolve: &'a ResolveGraph,
-    _id_to_name: &HashMap<&'a str, &'a str>,
-) -> HashMap<&'a str, Vec<&'a str>> {
+fn build_normal_dep_graph(resolve: &ResolveGraph) -> HashMap<&str, Vec<&str>> {
     let mut graph: HashMap<&str, Vec<&str>> = HashMap::new();
     for node in &resolve.nodes {
         let normal_deps: Vec<&str> =
