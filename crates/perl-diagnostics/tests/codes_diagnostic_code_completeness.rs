@@ -116,6 +116,34 @@ fn duplicate_hash_key_code_exists() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+#[test]
+fn loop_control_undefined_label_code_exists() -> Result<(), Box<dyn std::error::Error>> {
+    let code = DiagnosticCode::LoopControlUndefinedLabel;
+    assert_eq!(code.as_str(), "PL410", "LoopControlUndefinedLabel should have code PL410");
+    assert_eq!(
+        code.severity(),
+        perl_diagnostics::codes::DiagnosticSeverity::Warning,
+        "LoopControlUndefinedLabel should have Warning severity"
+    );
+    assert!(code.context_hint().is_some(), "LoopControlUndefinedLabel should have a context hint");
+    assert_eq!(
+        DiagnosticCode::parse_code("PL410"),
+        Some(DiagnosticCode::LoopControlUndefinedLabel),
+        "parse_code('PL410') should return LoopControlUndefinedLabel"
+    );
+    assert_eq!(
+        code.category(),
+        perl_diagnostics::codes::DiagnosticCategory::BestPractices,
+        "LoopControlUndefinedLabel belongs to the BestPractices (PL4xx) range"
+    );
+    assert_eq!(
+        code.documentation_url(),
+        Some("https://docs.perl-lsp.org/errors/PL410"),
+        "PL410 should advertise a docs URL following the conventional scheme"
+    );
+    Ok(())
+}
+
 // ---------------------------------------------------------------------------
 // Deprecated syntax codes (PL5xx range)
 // ---------------------------------------------------------------------------

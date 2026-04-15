@@ -168,6 +168,8 @@ pub enum DiagnosticCode {
     DuplicateHashKey,
     /// `goto LABEL` references a label that does not exist in this file
     GotoUndefinedLabel,
+    /// `next`/`last`/`redo LABEL` references a label that does not exist in this file
+    LoopControlUndefinedLabel,
 
     // Pragma pitfalls / deprecated syntax (PL500-PL599)
     /// Use of deprecated defined(@array) / defined(%hash)
@@ -270,6 +272,7 @@ impl DiagnosticCode {
             Self::EvalErrorFlow => "PL407",
             Self::DuplicateHashKey => "PL408",
             Self::GotoUndefinedLabel => "PL409",
+            Self::LoopControlUndefinedLabel => "PL410",
             Self::DeprecatedDefined => "PL500",
             Self::DeprecatedArrayBase => "PL501",
             Self::PhaseScopedStrictPragma => "PL502",
@@ -340,6 +343,7 @@ impl DiagnosticCode {
             "PL407" => "https://docs.perl-lsp.org/errors/PL407",
             "PL408" => "https://docs.perl-lsp.org/errors/PL408",
             "PL409" => "https://docs.perl-lsp.org/errors/PL409",
+            "PL410" => "https://docs.perl-lsp.org/errors/PL410",
             "PL500" => "https://docs.perl-lsp.org/errors/PL500",
             "PL501" => "https://docs.perl-lsp.org/errors/PL501",
             "PL502" => "https://docs.perl-lsp.org/errors/PL502",
@@ -400,6 +404,7 @@ impl DiagnosticCode {
             | Self::PrintfFormatMismatch
             | Self::DuplicateHashKey
             | Self::GotoUndefinedLabel
+            | Self::LoopControlUndefinedLabel
             | Self::DeprecatedDefined
             | Self::DeprecatedArrayBase
             | Self::PhaseScopedStrictPragma
@@ -544,6 +549,10 @@ impl DiagnosticCode {
             Self::GotoUndefinedLabel => Some(
                 "This goto target label is not defined in the current file. \
                 Define the label or use a dynamic goto form only when the target is known at runtime.",
+            ),
+            Self::LoopControlUndefinedLabel => Some(
+                "This `next`, `last`, or `redo` references a label that is not defined in the current file. \
+                Add a matching `LABEL:` on an enclosing loop, or remove the label to target the innermost loop.",
             ),
             Self::PrintfFormatMismatch => Some(
                 "The number of format specifiers does not match the number of arguments. \
@@ -747,6 +756,7 @@ impl DiagnosticCode {
             "PL407" => Some(Self::EvalErrorFlow),
             "PL408" => Some(Self::DuplicateHashKey),
             "PL409" => Some(Self::GotoUndefinedLabel),
+            "PL410" => Some(Self::LoopControlUndefinedLabel),
             "PL500" => Some(Self::DeprecatedDefined),
             "PL501" => Some(Self::DeprecatedArrayBase),
             "PL502" => Some(Self::PhaseScopedStrictPragma),
@@ -819,6 +829,7 @@ impl DiagnosticCode {
             | Self::EvalErrorFlow
             | Self::DuplicateHashKey
             | Self::GotoUndefinedLabel
+            | Self::LoopControlUndefinedLabel
             | Self::VersionIncompatFeature => DiagnosticCategory::BestPractices,
 
             Self::DeprecatedDefined | Self::DeprecatedArrayBase => DiagnosticCategory::Deprecated,
