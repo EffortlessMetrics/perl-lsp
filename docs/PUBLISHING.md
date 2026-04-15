@@ -1,3 +1,5 @@
+> **In progress (2026-04-14):** The publishing pipeline is being simplified as part of the microcrate collapse — see [ADR-0041](adr/0041-microcrate-collapse.md), [PUBLISHING_AFTER_COLLAPSE.md](project/PUBLISHING_AFTER_COLLAPSE.md), and [tracking issue #4410](https://github.com/EffortlessMetrics/perl-lsp/issues/4410). This document describes the current 132-crate pipeline; expect dramatic simplification once the collapse lands.
+
 # Publishing Guide
 
 This guide covers crates.io publishing for release alignment during the initial and subsequent release train.
