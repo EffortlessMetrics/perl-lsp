@@ -200,9 +200,75 @@ When promoting, also update these operational artifacts:
 - Add a row to `docs/project/PUBLISHING_AFTER_COLLAPSE.md` in the appropriate category.
 - Verify `cargo xtask published-crate-count` still passes (or raise the ceiling intentionally with a comment).
 
+## Amendments
+
+### Amendment 1 — 2026-04-15: Target count frozen at 30; pilot target corrected; guardrails added
+
+**Source:** Orchestrator refinement following ledger construction in `.spec/microcrate-collapse/ledger.md`.
+
+#### Target count: 30 published (not 31)
+
+The original Decision section listed "~30" informally. After constructing the full per-crate ledger, the precise count is **30 published crates**. The earlier draft that circulated as "~30/31" double-counted `perl-diagnostic-catalog`, which appeared both under the diagnostic surface bullet and as an annotation in the "1 NEW" note. Corrected category breakdown:
+
+| Category | Count | Crates |
+|----------|------:|--------|
+| Products | 4 | perllsp, perl-lsp-rs, perl-dap, perl-parser |
+| Tree-sitter | 2 | tree-sitter-perl-c, tree-sitter-perl-rs |
+| Alternate parser | 1 | perl-parser-pest |
+| Foundation primitives | 5 | perl-lexer, perl-token, perl-line-index, perl-uri, perl-pod |
+| Diagnostic catalog (NEW) | 1 | perl-diagnostic-catalog |
+| Wire protocols | 2 | perl-lsp-protocol, perl-content-length-framing |
+| Semantic kernels | 3 | perl-semantic-analyzer, perl-module, perl-workspace-index |
+| Symbol model | 1 | perl-symbol |
+| Tool integrations | 1 | perl-lsp-perltidy |
+| Test/corpus ecosystem | 4 | perl-corpus, perl-tdd-support, perl-test-must, perl-test-generators |
+| Standalone tooling | 6 | perl-feature-catalog, perl-incremental-parsing, perl-refactoring, perl-dead-code, perl-heredoc-anti-patterns, perl-path-security |
+| **Total** | **30** | |
+
+#### Pilot target: `perl-module` facade (not `perl-module-resolution`)
+
+Wave 1 PILOT absorbs 13 `perl-module-*` crates. The Decision section above named `perl-module-resolution` as the absorption target; that name is retired. The surviving published crate is **`perl-module`** — a better external noun that owns names, imports, references, resolution, rename, and boundary as internal folder families. Facade-first design: the new `perl-module` crate presents a clean `pub use` surface; all 13 absorbed crates become internal `mod` folders.
+
+#### No public `perl-syntax` umbrella crate
+
+An earlier draft discussion proposed a `perl-syntax` umbrella crate. That proposal is rejected. Syntax primitives (AST, quote, heredoc, error) are absorbed into `perl-parser` as a `syntax/` internal folder family. There is no publicly-published `perl-syntax` crate.
+
+#### Wave order locked
+
+The migration wave sequence is fixed as:
+
+```
+1. perl-module-* → perl-module         (PILOT)
+2. perl-workspace-* → perl-workspace-index
+3. lexer satellites → perl-lexer
+4. parser/AST satellites → perl-parser
+5. semantic shards → perl-semantic-analyzer
+E. diagnostic catalog (NEW) → perl-diagnostic-catalog
+F. perl-lsp-feature-* → perl-lsp-rs::features
+G1. LSP providers → perl-lsp-rs::providers
+G2. LSP runtime → perl-lsp-rs::runtime
+G3. LSP governance → perl-lsp-rs
+H. perl-dap-* → perl-dap              (last, after DAP is stable)
+FINAL. Shrink allowlist to 30
+```
+
+Do **not** start with the `perl-lsp-*` forest (waves F/G) before the module/workspace/lexer/parser/semantic trains (waves 1-5) are complete. The LSP forest is the largest and most snapshot-heavy; doing it last reduces rebase pressure.
+
+#### Guardrails added
+
+Two additional CI gates join the three listed in the Decision section:
+
+- **Packaging dry-runs**: `cargo package -p <crate>` and `cargo publish --dry-run -p <crate>` run in CI for each surviving published crate. Catches path-only dep drift before a real publish attempt.
+- **Public API ratchet**: `cargo public-api diff` runs per-published-crate. Fails on unintended public surface expansion between PRs.
+
+#### Migration ledger is authoritative
+
+The per-crate workboard at [`.spec/microcrate-collapse/ledger.md`](../../.spec/microcrate-collapse/ledger.md) is the authoritative source for crate disposition, wave assignment, and progress tracking. It supersedes any comments, draft notes, or memory entries that reference "~30/31" or name `perl-module-resolution` as the Wave 1 target. Agents and humans executing the collapse must read the ledger, not reconstruct from this ADR alone.
+
 ## References
 
 - [Tracking issue #4410: Microcrate collapse to ~30 published crates](https://github.com/EffortlessMetrics/perl-lsp/issues/4410)
+- [Migration ledger](../../.spec/microcrate-collapse/ledger.md) — authoritative per-crate workboard (Amendment 1)
 - [docs/SRP_MICROCRATES.md](../SRP_MICROCRATES.md) — historical record of the microcrate decomposition campaign
 - [docs/PUBLISHING.md](../PUBLISHING.md) — current publishing pipeline; will simplify post-collapse
 - [scripts/publish-topo.py](../../scripts/publish-topo.py) — current topological publish ordering with dev-dep SCC handling
