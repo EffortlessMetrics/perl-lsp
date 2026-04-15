@@ -430,12 +430,25 @@ Every public release **must** update three surfaces. See [RELEASE_HISTORY.md](RE
 
 ### Before publishing
 
-- [ ] Create `docs/releases/vX.Y.Z.md` (use an existing file as template)
+- [ ] Create `docs/releases/vX.Y.Z.md` (use an existing file as template) — **required**; the release workflow sources the GitHub Release body from this file and fails hard if it is missing
 - [ ] Add a new row to `RELEASE_HISTORY.md` for vX.Y.Z (fill what you know; mark unknowns with `—`)
 - [ ] Ensure `CHANGELOG.md` has a `[X.Y.Z]` section with links to:
   - `docs/releases/vX.Y.Z.md`
   - GitHub Release URL
   - Compare range `vPrev...vX.Y.Z`
+
+> **GitHub Release body source.** `release-orchestration.yml` runs
+> `scripts/extract-release-notes.sh <version>` during its `validate` job and
+> aborts before creating the tag if `docs/releases/vX.Y.Z.md` is missing.
+> `release.yml` runs the same extractor to produce the release body, so the
+> published notes match the in-repo notes exactly. The auto-generated
+> "What's Changed" PR list is appended below the curated body by
+> `softprops/action-gh-release`.
+>
+> Preview the body locally before dispatching:
+> ```bash
+> bash scripts/extract-release-notes.sh 0.12.5
+> ```
 
 ### After publishing
 

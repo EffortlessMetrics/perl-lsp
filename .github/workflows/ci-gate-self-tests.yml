@@ -16,8 +16,12 @@ on:
     paths:
       - 'scripts/cargo-package-workspace-dry-run.sh'
       - 'scripts/publish-topo.py'
+      - 'scripts/extract-release-notes.sh'
       - 'scripts/tests/test-publish-dry-run-gate.sh'
+      - 'scripts/tests/test-extract-release-notes.sh'
       - '.github/workflows/publish-dry-run.yml'
+      - '.github/workflows/release.yml'
+      - '.github/workflows/release-orchestration.yml'
       - '.github/workflows/ci-gate-self-tests.yml'
   workflow_dispatch: {}
 
@@ -51,6 +55,9 @@ jobs:
       - name: Run publish dry-run gate self-test
         run: bash scripts/tests/test-publish-dry-run-gate.sh
 
+      - name: Run release-notes extractor self-test
+        run: bash scripts/tests/test-extract-release-notes.sh
+
       - name: Summary
         if: always()
         run: |
@@ -61,6 +68,12 @@ jobs:
             echo "- Invalid TOML (duplicate keys) — cargo metadata rejects it" >> "$GITHUB_STEP_SUMMARY"
             echo "- Nonexistent dependencies — cargo package fails to resolve" >> "$GITHUB_STEP_SUMMARY"
             echo "- Clean manifests — passes without false-failing" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "The release-notes extractor correctly:" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Strips YAML front-matter from docs/releases/vX.Y.Z.md" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Fails hard (exit 2) when the notes file is missing" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Fails hard (exit 3) when the notes file has no body" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Accepts both bare (0.12.4) and tag-prefixed (v0.12.4) versions" >> "$GITHUB_STEP_SUMMARY"
           else
             echo "## CI gate self-tests FAILED" >> "$GITHUB_STEP_SUMMARY"
             echo "" >> "$GITHUB_STEP_SUMMARY"

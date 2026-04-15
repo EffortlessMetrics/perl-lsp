@@ -126,6 +126,19 @@ jobs:
 
           echo "✅ Changelog checked"
 
+      - name: Check curated release notes exist
+        run: |
+          # The release workflow sources its GitHub Release body from
+          # docs/releases/vX.Y.Z.md. Fail here — before we create the tag —
+          # if the curated notes file is missing, so a release can't be
+          # dispatched with a half-finished ledger.
+          VERSION="${{ steps.resolve.outputs.version }}"
+          bash scripts/extract-release-notes.sh "${VERSION}" /tmp/release-notes-preview.md
+          echo "::group::Release body preview (docs/releases/v${VERSION}.md)"
+          cat /tmp/release-notes-preview.md
+          echo "::endgroup::"
+          echo "✅ Release notes present and non-empty"
+
       - name: Summary
         run: |
           echo "## Release Validation Complete :white_check_mark:" >> "$GITHUB_STEP_SUMMARY"

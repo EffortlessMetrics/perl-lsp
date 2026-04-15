@@ -244,37 +244,15 @@ jobs:
         id: release_notes
         run: |
           VERSION="${{ needs.release-metadata.outputs.version }}"
-          cat > release_notes.md << EOF
-          ## Perl LSP ${VERSION}
-
-          This release ships the binaries and the docs needed to install, configure, and troubleshoot the current release line.
-
-          ### Install or upgrade
-
-          ```bash
-          cargo install perllsp
-          cargo install perl-dap
-          ```
-
-          ### Read this first
-
-          - [Docs home](https://github.com/${{ github.repository }}/blob/${{ needs.release-metadata.outputs.tag }}/docs/README.md)
-          - [Docs index](https://github.com/${{ github.repository }}/blob/${{ needs.release-metadata.outputs.tag }}/docs/INDEX.md)
-          - [Getting Started](https://github.com/${{ github.repository }}/blob/${{ needs.release-metadata.outputs.tag }}/docs/tutorials/GETTING_STARTED.md)
-          - [Installation Guide](https://github.com/${{ github.repository }}/blob/${{ needs.release-metadata.outputs.tag }}/docs/how-to/INSTALLATION.md)
-          - [Editor Setup](https://github.com/${{ github.repository }}/blob/${{ needs.release-metadata.outputs.tag }}/docs/how-to/EDITOR_SETUP.md)
-          - [Troubleshooting](https://github.com/${{ github.repository }}/blob/${{ needs.release-metadata.outputs.tag }}/docs/how-to/TROUBLESHOOTING.md)
-
-          ### Release assets
-
-          - Platform binaries are attached to this release.
-          - Verify downloads with the consolidated \`SHA256SUMS\` file.
-
-          ### Change log
-
-          See the [CHANGELOG](https://github.com/${{ github.repository }}/blob/${{ needs.release-metadata.outputs.tag }}/CHANGELOG.md) for the full release history.
-          EOF
+          # Source the GitHub Release body from docs/releases/vX.Y.Z.md so
+          # the published release matches the curated in-repo notes. The
+          # extractor strips the YAML front-matter and fails hard if the
+          # notes file is missing, which is the behaviour we want — a
+          # release without curated notes should not ship.
+          bash scripts/extract-release-notes.sh "${VERSION}" release_notes.md
+          echo "::group::Release body"
           cat release_notes.md
+          echo "::endgroup::"
 
       - name: Create GitHub Release
         if: github.event_name == 'workflow_dispatch'
