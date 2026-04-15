@@ -145,8 +145,15 @@ pub fn run(crate_filter: Option<String>) -> Result<()> {
     let mut violations: Vec<(String, String)> = Vec::new();
     for crate_name in &crates_to_check {
         let Some(&start_id) = name_to_id.get(crate_name.as_str()) else {
-            // Crate is in the allowlist but not found in metadata -- unlikely
-            // but skip gracefully rather than panic.
+            // Crate is in the allowlist but not in metadata packages.
+            // This can happen if a crate was added to [workspace.metadata.publish.allow]
+            // but its workspace member entry was removed or its Cargo.toml path is wrong.
+            // Warn loudly — this likely means the allowlist is stale — but do not fail so
+            // the gate can still report violations for the crates it CAN check.
+            eprintln!(
+                "WARN: publish-closure: '{}' is in the allowlist but not found in workspace packages",
+                crate_name
+            );
             continue;
         };
         let bad =
