@@ -165,6 +165,8 @@ pub enum DiagnosticCode {
     DuplicateHashKey,
     /// `goto LABEL` references a label that does not exist in this file
     GotoUndefinedLabel,
+    /// `next LABEL` / `last LABEL` / `redo LABEL` references a label that does not exist in this file
+    LoopControlUndefinedLabel,
 
     // Pragma pitfalls / deprecated syntax (PL500-PL599)
     /// Use of deprecated defined(@array) / defined(%hash)
@@ -267,6 +269,7 @@ impl DiagnosticCode {
             DiagnosticCode::EvalErrorFlow => "PL407",
             DiagnosticCode::DuplicateHashKey => "PL408",
             DiagnosticCode::GotoUndefinedLabel => "PL409",
+            DiagnosticCode::LoopControlUndefinedLabel => "PL410",
             DiagnosticCode::DeprecatedDefined => "PL500",
             DiagnosticCode::DeprecatedArrayBase => "PL501",
             DiagnosticCode::PhaseScopedStrictPragma => "PL502",
@@ -337,6 +340,7 @@ impl DiagnosticCode {
             "PL407" => "https://docs.perl-lsp.org/errors/PL407",
             "PL408" => "https://docs.perl-lsp.org/errors/PL408",
             "PL409" => "https://docs.perl-lsp.org/errors/PL409",
+            "PL410" => "https://docs.perl-lsp.org/errors/PL410",
             "PL500" => "https://docs.perl-lsp.org/errors/PL500",
             "PL501" => "https://docs.perl-lsp.org/errors/PL501",
             "PL502" => "https://docs.perl-lsp.org/errors/PL502",
@@ -397,6 +401,7 @@ impl DiagnosticCode {
             | DiagnosticCode::PrintfFormatMismatch
             | DiagnosticCode::DuplicateHashKey
             | DiagnosticCode::GotoUndefinedLabel
+            | DiagnosticCode::LoopControlUndefinedLabel
             | DiagnosticCode::DeprecatedDefined
             | DiagnosticCode::DeprecatedArrayBase
             | DiagnosticCode::PhaseScopedStrictPragma
@@ -543,6 +548,10 @@ impl DiagnosticCode {
             DiagnosticCode::GotoUndefinedLabel => Some(
                 "This goto target label is not defined in the current file. \
                 Define the label or use a dynamic goto form only when the target is known at runtime.",
+            ),
+            DiagnosticCode::LoopControlUndefinedLabel => Some(
+                "This loop control label (next/last/redo) is not defined in the current file. \
+                Define the label on an enclosing loop, e.g. `OUTER: while (...) { ... }`.",
             ),
             DiagnosticCode::PrintfFormatMismatch => Some(
                 "The number of format specifiers does not match the number of arguments. \
@@ -746,6 +755,7 @@ impl DiagnosticCode {
             "PL407" => Some(DiagnosticCode::EvalErrorFlow),
             "PL408" => Some(DiagnosticCode::DuplicateHashKey),
             "PL409" => Some(DiagnosticCode::GotoUndefinedLabel),
+            "PL410" => Some(DiagnosticCode::LoopControlUndefinedLabel),
             "PL500" => Some(DiagnosticCode::DeprecatedDefined),
             "PL501" => Some(DiagnosticCode::DeprecatedArrayBase),
             "PL502" => Some(DiagnosticCode::PhaseScopedStrictPragma),
@@ -849,7 +859,8 @@ impl DiagnosticCode {
             | DiagnosticCode::UnreachableCode
             | DiagnosticCode::EvalErrorFlow
             | DiagnosticCode::DuplicateHashKey
-            | DiagnosticCode::GotoUndefinedLabel => DiagnosticCategory::BestPractices,
+            | DiagnosticCode::GotoUndefinedLabel
+            | DiagnosticCode::LoopControlUndefinedLabel => DiagnosticCategory::BestPractices,
 
             DiagnosticCode::DeprecatedDefined | DiagnosticCode::DeprecatedArrayBase => {
                 DiagnosticCategory::Deprecated
@@ -902,6 +913,7 @@ mod tests {
         assert_eq!(DiagnosticCode::CriticSeverity1.as_str(), "PC001");
         assert_eq!(DiagnosticCode::SecuritySignalHandler.as_str(), "PL602");
         assert_eq!(DiagnosticCode::GotoUndefinedLabel.as_str(), "PL409");
+        assert_eq!(DiagnosticCode::LoopControlUndefinedLabel.as_str(), "PL410");
         assert_eq!(DiagnosticCode::PhaseScopedStrictPragma.as_str(), "PL502");
         assert_eq!(DiagnosticCode::PhaseScopedWarningsPragma.as_str(), "PL503");
     }
