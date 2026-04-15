@@ -42,8 +42,7 @@ pub struct ResolutionContext {
 /// Warning message shown when workspace root is not detected.
 ///
 /// Shown once per server session via the `root_undetected_shown` flag.
-const ROOT_UNDETECTED_WARNING: &str =
-    "perl-lsp: workspace root not detected — module resolution disabled. \
+const ROOT_UNDETECTED_WARNING: &str = "perl-lsp: workspace root not detected — module resolution disabled. \
      To enable: open the project folder in your editor (File > Open Folder) \
      rather than individual files. This warning appears once per server session.";
 
