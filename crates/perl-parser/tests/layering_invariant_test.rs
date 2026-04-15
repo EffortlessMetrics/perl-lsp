@@ -249,8 +249,5 @@ fn when_refactor_tokens_preserved_then_imports_are_valid() {
     // The stream over a real Perl snippet should peek successfully (not fail immediately).
     let mut stream = TokenStream::new("my $x = 42;");
     let first = stream.peek();
-    assert!(
-        first.is_ok(),
-        "TokenStream over 'my $x = 42;' should peek successfully"
-    );
+    assert!(first.is_ok(), "TokenStream over 'my $x = 42;' should peek successfully");
 }
