@@ -313,7 +313,7 @@ perl-position-tracking = { path = "crates/perl-position-tracking", version = "0.
 perl-symbol-types = { path = "crates/perl-symbol-types", version = "0.12.4" }
 perl-symbol-cursor = { path = "crates/perl-symbol-cursor", version = "0.12.4" }
 perl-symbol-index = { path = "crates/perl-symbol-index", version = "0.12.4" }
-perl-module = { path = 'crates/perl-module', version = "0.14.0" }
+perl-module = { path = 'crates/perl-module', version = "0.12.4" }
 perl-qualified-name = { path = "crates/perl-qualified-name", version = "0.12.4" }
 perl-workspace-folder = { path = "crates/perl-workspace-folder", version = "0.12.4" }
 perl-workspace-ignore = { path = "crates/perl-workspace-ignore", version = "0.12.4" }

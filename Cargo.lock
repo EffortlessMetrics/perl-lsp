@@ -2384,7 +2384,7 @@ dependencies = [
 
 [[package]]
 name = "perl-module"
-version = "0.14.0"
+version = "0.12.4"
 dependencies = [
  "perl-path-security",
  "perl-tdd-support",
