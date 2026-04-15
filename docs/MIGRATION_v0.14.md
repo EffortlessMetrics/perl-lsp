@@ -18,7 +18,7 @@ This is a deliberate one-time cost to eliminate a permanent operational burden. 
 published under the same names. Their public APIs are not affected by the internal module
 reorganization.
 
-The same applies to the other 27 crates in the published set:
+The same applies to the other 26 crates in the published set:
 
 - `tree-sitter-perl-c`, `tree-sitter-perl-rs`
 - `perl-parser-pest`

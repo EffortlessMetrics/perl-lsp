@@ -101,15 +101,15 @@ The post-collapse published set, grouped by category and listed in approximate d
 Before the collapse, the publish pipeline required:
 
 - **Tarjan SCC for dev-dep cycles** — `scripts/publish-topo.py` identified strongly-connected
-  components in the dev-dependency graph and published them in SCC-merged order. With 31 crates,
+  components in the dev-dependency graph and published them in SCC-merged order. With 30 crates,
   the dep graph is shallow and acyclic; this code becomes dead.
 - **Rate-limit retries** — publishing 132 crates sequentially hit crates.io rate limits.
-  31 crates publishes in under a minute; rate limits are not a concern.
+  30 crates publishes in under a minute; rate limits are not a concern.
 - **Partial-publish recovery** — a failed publish at crate #80 of 132 required careful
-  resume logic. With 31 crates, a full re-run is cheap if anything goes wrong.
+  resume logic. With 30 crates, a full re-run is cheap if anything goes wrong.
 - **Allowlist drift detection** — the allowlist in `[workspace.metadata.publish].allow`
   had to be manually maintained across 132 entries; new crates were silently excluded.
-  31 entries is auditable by hand.
+  30 entries is auditable by hand.
 
 After the collapse, the workflow is:
 
@@ -127,20 +127,20 @@ PR #1 of the collapse series (tracked by [issue #4412](https://github.com/Effort
 |---------|----------------|
 | `cargo xtask publish-closure` | Verifies no `publish = false` crate appears in the runtime/build dependency closure of any published crate |
 | `cargo xtask layer-check` | Enforces dependency direction rules from `xtask/layer-rules.toml` at the import level inside crates |
-| `cargo xtask published-crate-count` | Ratchet — fails if the published crate count exceeds the target ceiling (~31), preventing count creep |
+| `cargo xtask published-crate-count` | Ratchet — fails if the published crate count exceeds the target ceiling (~30), preventing count creep |
 
 ## Comparison: before vs after
 
-| Metric | Before (132 crates) | After (~31 crates) |
+| Metric | Before (132 crates) | After (~30 crates) |
 |--------|--------------------|--------------------|
 | Publish run time | Hours | Minutes |
 | Topo sort complexity | Non-trivial (SCCs) | Trivial (DAG, no cycles) |
-| Allowlist entries | 132 | ~31 |
+| Allowlist entries | 132 | ~30 |
 | Rate-limit handling | Required | Not needed |
 | Per-release version bumps | Workspace-wide cascade | Handful of crates |
-| docs.rs pages | 132 | ~31 |
-| crates.io search results | 132 | ~31 |
-| Semver contracts | 132 | ~31 |
+| docs.rs pages | 132 | ~30 |
+| crates.io search results | 132 | ~30 |
+| Semver contracts | 132 | ~30 |
 
 ## Reference
 

@@ -195,6 +195,11 @@ Only promote when **all** of the following are true:
 4. It has its own tests/fixtures that don't require booting the entire workspace.
 5. You are willing to publish and support it (because crates.io makes it permanent once it's in the published dependency graph).
 
+When promoting, also update these operational artifacts:
+- Add the new crate name to `[workspace.metadata.publish].allow` in `Cargo.toml`.
+- Add a row to `docs/project/PUBLISHING_AFTER_COLLAPSE.md` in the appropriate category.
+- Verify `cargo xtask published-crate-count` still passes (or raise the ceiling intentionally with a comment).
+
 ## References
 
 - [Tracking issue #4410: Microcrate collapse to ~30 published crates](https://github.com/EffortlessMetrics/perl-lsp/issues/4410)
