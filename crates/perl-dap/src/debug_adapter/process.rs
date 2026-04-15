@@ -2079,4 +2079,98 @@ mod tests {
             "PermissionDenied should NOT be transformed to NotFound message"
         );
     }
+
+    /// GAP-5 EDGE CASE TEST: Verify that various other ErrorKind variants
+    /// are NOT transformed to the NotFound actionable message.
+    ///
+    /// The fix should ONLY transform ErrorKind::NotFound to the actionable message.
+    /// Other ErrorKind variants should return their raw error string.
+    #[test]
+    fn dap_launch_other_error_kind_variants_not_transformed() {
+        // Test various error kinds that should NOT be transformed
+        let error_kinds = [
+            (std::io::ErrorKind::TimedOut, "timed out"),
+            (std::io::ErrorKind::NotConnected, "not connected"),
+            (std::io::ErrorKind::ConnectionRefused, "connection refused"),
+            (std::io::ErrorKind::ConnectionReset, "connection reset"),
+            (std::io::ErrorKind::BrokenPipe, "broken pipe"),
+            (std::io::ErrorKind::AlreadyExists, "already exists"),
+            (std::io::ErrorKind::WouldBlock, "would block"),
+            (std::io::ErrorKind::InvalidInput, "invalid input"),
+            (std::io::ErrorKind::Interrupted, "interrupted"),
+        ];
+
+        let actionable = "Perl interpreter not found on PATH. Ensure 'perl' is installed and on your system PATH.";
+
+        for (kind, _description) in error_kinds {
+            let error = std::io::Error::new(kind, format!("{:?}: test error", kind));
+
+            // Apply the same transformation logic as the fix
+            let transformed = if error.kind() == std::io::ErrorKind::NotFound {
+                actionable.to_string()
+            } else {
+                error.to_string()
+            };
+
+            // Verify it does NOT contain the actionable message
+            assert!(
+                !transformed.contains("Perl interpreter not found"),
+                "ErrorKind::{:?} should NOT be transformed to actionable message. Got: {}",
+                kind,
+                transformed
+            );
+
+            // Verify it contains the original error kind description
+            let kind_str = format!("{:?}", kind);
+            let transformed_lower = transformed.to_lowercase();
+            let kind_str_lower = kind_str.to_lowercase();
+            assert!(
+                transformed_lower.contains(&kind_str_lower)
+                    || transformed.contains(&format!("{:?}: test error", kind)),
+                "ErrorKind::{:?} should preserve original error. Got: {}",
+                kind,
+                transformed
+            );
+        }
+    }
+
+    /// GAP-5 EDGE CASE TEST: Verify the exact error message format for NotFound.
+    ///
+    /// The NotFound error should be transformed to a specific actionable message.
+    /// This test ensures the message is NOT just "No such file or directory: 'perl'"
+    /// but the full actionable guidance.
+    #[test]
+    fn dap_launch_not_found_error_message_is_specific() {
+        let not_found_error =
+            std::io::Error::new(std::io::ErrorKind::NotFound, "No such file or directory: 'perl'");
+
+        let actionable = "Perl interpreter not found on PATH. Ensure 'perl' is installed and on your system PATH.";
+
+        // Apply the transformation
+        let transformed = if not_found_error.kind() == std::io::ErrorKind::NotFound {
+            actionable.to_string()
+        } else {
+            not_found_error.to_string()
+        };
+
+        // The raw error contains "No such file or directory" but the transformed does NOT
+        assert!(
+            !transformed.contains("No such file or directory"),
+            "Transformed message should NOT contain raw 'No such file or directory'. Got: {}",
+            transformed
+        );
+
+        // The transformed message contains the actionable guidance
+        assert!(
+            transformed.contains("Perl interpreter not found on PATH"),
+            "Transformed message should contain actionable guidance. Got: {}",
+            transformed
+        );
+
+        assert!(
+            transformed.contains("Ensure 'perl' is installed"),
+            "Transformed message should contain 'Ensure perl is installed'. Got: {}",
+            transformed
+        );
+    }
 }

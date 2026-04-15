@@ -1362,4 +1362,234 @@ use Overlay::Live;
 
         Ok(())
     }
+
+    /// GAP-1 EDGE CASE TEST: Verify that `resolve_module_path_with_uri` also triggers
+    /// the root undetected warning, not just `resolve_module_path`.
+    ///
+    /// There are three code paths that check for root undetected:
+    /// - resolve_module_path (line ~175)
+    /// - resolve_module_path_with_uri (line ~213)
+    /// - resolve_module_to_path (line ~345)
+    ///
+    /// This test ensures the warning is triggered when using the URI variant.
+    #[test]
+    fn root_undetected_with_uri_triggers_show_message() -> Result<(), String> {
+        use std::io::Write;
+
+        struct CapturingWriter {
+            buffer: std::sync::Arc<std::sync::Mutex<Vec<u8>>>,
+        }
+
+        impl Write for CapturingWriter {
+            fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+                self.buffer.lock().unwrap().extend_from_slice(buf);
+                Ok(buf.len())
+            }
+            fn flush(&mut self) -> std::io::Result<()> {
+                Ok(())
+            }
+        }
+
+        let buffer = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let capturing_writer = CapturingWriter { buffer: std::sync::Arc::clone(&buffer) };
+
+        let server = LspServer::with_io(Box::new(std::io::empty()), Box::new(capturing_writer));
+
+        // Use resolve_module_path_with_uri (with a dummy URI) to trigger the warning
+        // Function signature: resolve_module_path_with_uri(&self, module, doc_text, doc_uri)
+        let dummy_uri = Url::parse("file:///tmp/test.pl").unwrap();
+        let result =
+            server.resolve_module_path_with_uri("Some::Module", None, Some(dummy_uri.as_str()));
+        assert!(
+            result.is_none(),
+            "resolve_module_path_with_uri should return None when root undetected"
+        );
+
+        drop(server);
+
+        let messages = buffer.lock().map_err(|e| e.to_string())?;
+        let messages_str = String::from_utf8_lossy(&messages);
+
+        assert!(
+            messages_str.contains("window/showMessage"),
+            "Expected window/showMessage when using resolve_module_path_with_uri with no root. Got: {:?}",
+            messages_str
+        );
+        assert!(
+            messages_str.contains("\"type\":2"),
+            "Expected MessageType::Warning (2) from resolve_module_path_with_uri"
+        );
+
+        Ok(())
+    }
+
+    /// GAP-1 EDGE CASE TEST: Verify that each LspServer instance shows the warning
+    /// independently (instance-level semantics, not process-level).
+    ///
+    /// The fix changes from module-level `Once` (process-global) to instance-level
+    /// `Arc<AtomicBool>` (per-server). This test creates two separate LspServer
+    /// instances and verifies each can show the warning once.
+    #[test]
+    fn root_undetected_two_servers_each_show_warning_once() -> Result<(), String> {
+        use std::io::Write;
+        use std::sync::atomic::Ordering;
+
+        struct CapturingWriter {
+            buffer: std::sync::Arc<std::sync::Mutex<Vec<u8>>>,
+        }
+
+        impl Write for CapturingWriter {
+            fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+                self.buffer.lock().unwrap().extend_from_slice(buf);
+                Ok(buf.len())
+            }
+            fn flush(&mut self) -> std::io::Result<()> {
+                Ok(())
+            }
+        }
+
+        // First server
+        let buffer1 = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let capturing_writer1 = CapturingWriter { buffer: std::sync::Arc::clone(&buffer1) };
+        let server1 = LspServer::with_io(Box::new(std::io::empty()), Box::new(capturing_writer1));
+
+        // Second server
+        let buffer2 = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let capturing_writer2 = CapturingWriter { buffer: std::sync::Arc::clone(&buffer2) };
+        let server2 = LspServer::with_io(Box::new(std::io::empty()), Box::new(capturing_writer2));
+
+        // Both servers should have initially false flags
+        assert!(
+            !server1.root_undetected_shown.load(Ordering::SeqCst),
+            "Server1 flag should be false initially"
+        );
+        assert!(
+            !server2.root_undetected_shown.load(Ordering::SeqCst),
+            "Server2 flag should be false initially"
+        );
+
+        // Trigger warning on server1
+        let _ = server1.resolve_module_path("Server1::Module", None);
+
+        // Server1 flag should now be true
+        assert!(
+            server1.root_undetected_shown.load(Ordering::SeqCst),
+            "Server1 flag should be true after triggering warning"
+        );
+
+        // Server2 flag should still be false (independent instance)
+        assert!(
+            !server2.root_undetected_shown.load(Ordering::SeqCst),
+            "Server2 flag should still be false (independent instance)"
+        );
+
+        // Trigger warning on server2
+        let _ = server2.resolve_module_path("Server2::Module", None);
+
+        // Now server2 flag should also be true
+        assert!(
+            server2.root_undetected_shown.load(Ordering::SeqCst),
+            "Server2 flag should be true after triggering warning"
+        );
+
+        drop(server1);
+        drop(server2);
+
+        // Both buffers should have showMessage notifications
+        let messages1 = buffer1.lock().map_err(|e| e.to_string())?;
+        let messages_str1 = String::from_utf8_lossy(&messages1);
+        assert!(
+            messages_str1.contains("window/showMessage"),
+            "Server1 should have showMessage. Got: {:?}",
+            messages_str1
+        );
+
+        let messages2 = buffer2.lock().map_err(|e| e.to_string())?;
+        let messages_str2 = String::from_utf8_lossy(&messages2);
+        assert!(
+            messages_str2.contains("window/showMessage"),
+            "Server2 should have showMessage. Got: {:?}",
+            messages_str2
+        );
+
+        Ok(())
+    }
+
+    /// GAP-1 EDGE CASE TEST: Verify that subsequent calls after the first do NOT
+    /// re-trigger the warning, even across different module names.
+    ///
+    /// This is a more explicit version of AC3, testing that:
+    /// 1. First call triggers the warning and sets the flag
+    /// 2. Second call (different module) does NOT trigger warning
+    /// 3. Flag remains true after subsequent calls
+    #[test]
+    fn root_undetected_subsequent_calls_do_not_retrigger_warning() -> Result<(), String> {
+        use std::io::Write;
+        use std::sync::atomic::Ordering;
+
+        struct CapturingWriter {
+            buffer: std::sync::Arc<std::sync::Mutex<Vec<u8>>>,
+        }
+
+        impl Write for CapturingWriter {
+            fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+                self.buffer.lock().unwrap().extend_from_slice(buf);
+                Ok(buf.len())
+            }
+            fn flush(&mut self) -> std::io::Result<()> {
+                Ok(())
+            }
+        }
+
+        let buffer = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let capturing_writer = CapturingWriter { buffer: std::sync::Arc::clone(&buffer) };
+
+        let server = LspServer::with_io(Box::new(std::io::empty()), Box::new(capturing_writer));
+
+        // Flag should be false initially
+        assert!(
+            !server.root_undetected_shown.load(Ordering::SeqCst),
+            "Flag should be false initially"
+        );
+
+        // First call - should trigger warning and set flag
+        let result1 = server.resolve_module_path("First::Module", None);
+        assert!(result1.is_none(), "First call should return None when root undetected");
+        assert!(
+            server.root_undetected_shown.load(Ordering::SeqCst),
+            "Flag should be true after first call"
+        );
+
+        // Second call - should NOT trigger warning (flag already true)
+        let result2 = server.resolve_module_path("Second::Module", None);
+        assert!(result2.is_none(), "Second call should return None when root undetected");
+        assert!(
+            server.root_undetected_shown.load(Ordering::SeqCst),
+            "Flag should still be true after second call"
+        );
+
+        // Third call - should still NOT trigger warning
+        let result3 = server.resolve_module_path("Third::Module", None);
+        assert!(result3.is_none(), "Third call should return None when root undetected");
+        assert!(
+            server.root_undetected_shown.load(Ordering::SeqCst),
+            "Flag should still be true after third call"
+        );
+
+        // Verify that only one showMessage was sent by checking buffer content
+        // The buffer should contain exactly one window/showMessage notification
+        drop(server);
+
+        let messages = buffer.lock().map_err(|e| e.to_string())?;
+        let messages_str = String::from_utf8_lossy(&messages);
+        let show_message_count = messages_str.matches("window/showMessage").count();
+
+        assert_eq!(
+            show_message_count, 1,
+            "Expected exactly 1 showMessage (from first call). Got {} occurrences in: {:?}",
+            show_message_count, messages_str
+        );
+
+        Ok(())
+    }
 }
