@@ -51,7 +51,7 @@
 
 use crate::ast::{Node, NodeKind};
 use crate::pragma_tracker::{PragmaState, PragmaTracker};
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::cell::{Cell, RefCell};
 use std::ops::Range;
 use std::rc::Rc;
@@ -69,6 +69,15 @@ pub enum IssueKind {
     UninitializedVariable,
     /// Capture variable (`$1`, `$2`, etc.) used with no preceding regex match in scope.
     CaptureVarWithoutRegexMatch,
+    /// Package-qualified subroutine call (e.g. `Foo::bar()`) whose target sub is
+    /// not defined in the target package.
+    ///
+    /// Reported only under `use strict 'subs'` and only for same-file packages
+    /// that have no inheritance, no `AUTOLOAD`, no typeglob aliasing, and no
+    /// object-framework `use` (`Moo`, `Moose`, `Object::Pad`, `Role::Tiny`,
+    /// etc.). Packages that exhibit any of those dynamic behaviours are treated
+    /// as opaque and are not validated.
+    UndeclaredSubroutine,
 }
 
 #[derive(Debug, Clone)]
@@ -354,21 +363,277 @@ enum ExtractedName<'a> {
     Full(String),
 }
 
+/// A pre-pass index of every subroutine defined in every package in the file,
+/// plus a set of packages that exhibit dynamic dispatch behaviour and should
+/// therefore not be validated for package-qualified calls.
+///
+/// Built once in [`build_package_sub_index`] before scope analysis begins. Used
+/// by the `NodeKind::FunctionCall` handler to decide whether a qualified call
+/// like `Foo::bar()` can be statically verified.
+#[derive(Debug, Default)]
+struct PackageSubIndex {
+    /// Package name -> set of sub names declared in that package.
+    /// A sub declared via `sub Foo::bar { ... }` counts for package `Foo`.
+    subs_by_package: FxHashMap<String, FxHashSet<String>>,
+    /// Packages that the analyzer treats as opaque (do not validate calls into
+    /// them). A package becomes opaque if it shows any of:
+    ///   - an `AUTOLOAD` sub (dynamic dispatch)
+    ///   - `our @ISA = ...` or a `use parent`/`use base` (inheritance)
+    ///   - a `use Moo`/`Moose`/`Mouse`/`Object::Pad`/`Role::Tiny`/... inside it
+    ///   - typeglob aliasing targeting that package (`*Foo::x = ...`)
+    ///   - string eval / `require` of a non-literal (dynamic symbol population)
+    opaque_packages: FxHashSet<String>,
+}
+
+impl PackageSubIndex {
+    fn mark_opaque(&mut self, package: &str) {
+        self.opaque_packages.insert(package.to_string());
+    }
+
+    fn add_sub(&mut self, package: &str, sub_name: &str) {
+        self.subs_by_package.entry(package.to_string()).or_default().insert(sub_name.to_string());
+    }
+
+    fn has_package(&self, package: &str) -> bool {
+        self.subs_by_package.contains_key(package) || self.opaque_packages.contains(package)
+    }
+
+    fn is_opaque(&self, package: &str) -> bool {
+        self.opaque_packages.contains(package)
+    }
+
+    fn has_sub(&self, package: &str, sub_name: &str) -> bool {
+        self.subs_by_package.get(package).is_some_and(|subs| subs.contains(sub_name))
+    }
+}
+
+/// Modules that, when imported, set up inheritance, role-consumption, or
+/// otherwise inject methods at compile time. Presence of any of these inside a
+/// package marks that package as opaque.
+///
+/// Conservative list: better to miss a real typo than to false-positive on a
+/// Moose class. Can be expanded over time as we gain confidence.
+fn is_opaque_framework(module: &str) -> bool {
+    matches!(
+        module,
+        "parent"
+            | "base"
+            | "Moo"
+            | "Moo::Role"
+            | "Moose"
+            | "Moose::Role"
+            | "MooseX::Role::Parameterized"
+            | "Mouse"
+            | "Mouse::Role"
+            | "Object::Pad"
+            | "Role::Tiny"
+            | "Role::Tiny::With"
+            | "Class::Accessor"
+            | "Class::Accessor::Fast"
+            | "Class::XSAccessor"
+            | "Class::Struct"
+            | "Exporter"
+            | "Exporter::Easy"
+            | "Sub::Exporter"
+            | "Sub::Exporter::Progressive"
+            | "Sub::Install"
+            | "Sub::Name"
+            | "namespace::autoclean"
+            | "namespace::clean"
+            | "autouse"
+    )
+}
+
+/// Built-in and pseudo-packages that should never be validated. Calls like
+/// `CORE::print()`, `UNIVERSAL::isa($obj, "Foo")`, `SUPER::new(...)` are
+/// always valid in well-formed Perl.
+fn is_builtin_package(package: &str) -> bool {
+    matches!(
+        package,
+        "CORE"
+            | "CORE::GLOBAL"
+            | "UNIVERSAL"
+            | "SUPER"
+            | "DB"
+            | "Carp"
+            | "File::Spec"
+            | "File::Spec::Functions"
+            | "Scalar::Util"
+            | "List::Util"
+            | "POSIX"
+    )
+}
+
+/// Build the package-sub index from the root AST node in a single pre-pass.
+///
+/// Correctly handles:
+/// - Statement-form `package Foo;` that affects the rest of the file
+/// - Block-form `package Foo { ... }` whose scope is local to the block
+/// - Subs with explicit package prefix like `sub Foo::bar { ... }`
+/// - AUTOLOAD subs (marks host package opaque)
+/// - `our @ISA = ...` (marks host package opaque)
+/// - `use parent`/`use base`/`use Moo`/... (marks host package opaque)
+/// - Typeglob aliases `*Foo::name = ...` (marks target package opaque)
+fn build_package_sub_index(root: &Node) -> PackageSubIndex {
+    let mut index = PackageSubIndex::default();
+    walk_for_sub_index(root, "main", &mut index);
+    index
+}
+
+fn walk_for_sub_index(node: &Node, current_package: &str, index: &mut PackageSubIndex) {
+    match &node.kind {
+        NodeKind::Package { name, block, .. } => {
+            if let Some(block_node) = block {
+                // Block form: `package Foo { ... }` — children walk under `Foo`
+                // but do not leak out to siblings.
+                walk_for_sub_index(block_node, name, index);
+            } else {
+                // Statement form: `package Foo;` — subsequent siblings walk
+                // under `Foo`. Handled by the caller via the Program walker
+                // below; here we do not recurse further because `Package` has
+                // no children in statement form.
+            }
+        }
+        NodeKind::Subroutine { name, body, .. } => {
+            if let Some(sub_name) = name {
+                // `sub Foo::bar { ... }` defines `bar` in package `Foo`
+                // regardless of the surrounding package context.
+                let (target_package, short_name) = match sub_name.rsplit_once("::") {
+                    Some((pkg, short)) => (pkg, short),
+                    None => (current_package, sub_name.as_str()),
+                };
+                index.add_sub(target_package, short_name);
+                if short_name == "AUTOLOAD" {
+                    index.mark_opaque(target_package);
+                }
+            }
+            // Recurse into the body under the same package; nested subs are
+            // rare but supported.
+            walk_for_sub_index(body, current_package, index);
+        }
+        NodeKind::VariableDeclaration { declarator, variable, initializer, .. }
+            if declarator == "our" =>
+        {
+            if variable_is_isa(variable) {
+                index.mark_opaque(current_package);
+            }
+            if let Some(init) = initializer {
+                walk_for_sub_index(init, current_package, index);
+            }
+        }
+        NodeKind::VariableListDeclaration { declarator, variables, initializer, .. }
+            if declarator == "our" =>
+        {
+            if variables.iter().any(variable_is_isa) {
+                index.mark_opaque(current_package);
+            }
+            if let Some(init) = initializer {
+                walk_for_sub_index(init, current_package, index);
+            }
+        }
+        NodeKind::Use { module, .. } => {
+            if is_opaque_framework(module) {
+                index.mark_opaque(current_package);
+            }
+        }
+        NodeKind::Typeglob { name } => {
+            // Standalone typeglob reference usually isn't an alias; only
+            // assignments to typeglobs create aliases. We check that in the
+            // Assignment case below.
+            let _ = name;
+        }
+        NodeKind::Assignment { lhs, rhs, .. } => {
+            if let NodeKind::Typeglob { name } = &lhs.kind {
+                if let Some((pkg, _)) = name.rsplit_once("::") {
+                    index.mark_opaque(pkg);
+                } else {
+                    // `*foo = ...` aliases in the current package
+                    index.mark_opaque(current_package);
+                }
+            }
+            walk_for_sub_index(lhs, current_package, index);
+            walk_for_sub_index(rhs, current_package, index);
+        }
+        NodeKind::Class { name, parents, body } => {
+            // `class Foo :isa(Bar) { ... }` — always opaque because we don't
+            // model class method inheritance here.
+            if !parents.is_empty() {
+                index.mark_opaque(name);
+            }
+            walk_for_sub_index(body, name, index);
+        }
+        NodeKind::Eval { .. } => {
+            // Block eval is safe; string eval can inject subs into the
+            // current package. We mark conservatively — any eval inside a
+            // package marks it opaque.
+            index.mark_opaque(current_package);
+            for child in node.children() {
+                walk_for_sub_index(child, current_package, index);
+            }
+        }
+        NodeKind::Program { .. } => {
+            // The top-level program is walked statement-by-statement so that
+            // statement-form `package Foo;` correctly switches the package
+            // for subsequent siblings.
+            let mut pkg = current_package.to_string();
+            for child in node.children() {
+                if let NodeKind::Package { name, block: None, .. } = &child.kind {
+                    pkg = name.clone();
+                    continue;
+                }
+                walk_for_sub_index(child, &pkg, index);
+            }
+        }
+        NodeKind::Block { statements } => {
+            // A statement-form `package` inside a block only affects the
+            // rest of that block.
+            let mut pkg = current_package.to_string();
+            for stmt in statements {
+                if let NodeKind::Package { name, block: None, .. } = &stmt.kind {
+                    pkg = name.clone();
+                    continue;
+                }
+                walk_for_sub_index(stmt, &pkg, index);
+            }
+        }
+        _ => {
+            for child in node.children() {
+                walk_for_sub_index(child, current_package, index);
+            }
+        }
+    }
+}
+
+fn variable_is_isa(node: &Node) -> bool {
+    matches!(
+        &node.kind,
+        NodeKind::Variable { sigil, name } if sigil == "@" && name == "ISA"
+    )
+}
+
 struct AnalysisContext<'a> {
     code: &'a str,
     pragma_map: &'a [(Range<usize>, PragmaState)],
     line_starts: RefCell<Option<Vec<usize>>>,
     /// Current package name, updated as `package` statements are traversed.
     current_package: RefCell<String>,
+    /// Pre-computed index of package/sub definitions for same-file
+    /// strict-subs validation of qualified calls (`Foo::bar()`).
+    package_sub_index: PackageSubIndex,
 }
 
 impl<'a> AnalysisContext<'a> {
-    fn new(code: &'a str, pragma_map: &'a [(Range<usize>, PragmaState)]) -> Self {
+    fn new(
+        code: &'a str,
+        pragma_map: &'a [(Range<usize>, PragmaState)],
+        package_sub_index: PackageSubIndex,
+    ) -> Self {
         Self {
             code,
             pragma_map,
             line_starts: RefCell::new(None),
             current_package: RefCell::new("main".to_string()),
+            package_sub_index,
         }
     }
 
@@ -558,7 +823,8 @@ impl ScopeAnalyzer {
         // Use a vector as a stack for ancestors to avoid O(N) HashMap allocation
         let mut ancestors: Vec<&Node> = Vec::new();
 
-        let context = AnalysisContext::new(code, pragma_map);
+        let package_sub_index = build_package_sub_index(ast);
+        let context = AnalysisContext::new(code, pragma_map, package_sub_index);
 
         self.analyze_node(ast, &root_scope, &mut ancestors, &mut issues, &context);
 
@@ -851,6 +1117,14 @@ impl ScopeAnalyzer {
                         sigil,
                         var_name,
                     );
+                }
+
+                // Strict-subs validation for package-qualified calls like
+                // `Foo::bar()`. Conservative: only fires when the target
+                // package is defined in the current file and is free of any
+                // dynamic-dispatch markers recorded by the pre-pass.
+                if strict_subs_mode && name.contains("::") {
+                    self.validate_qualified_call(name, context, issues, node);
                 }
 
                 // Handle function arguments, which may contain complex variable patterns.
@@ -1482,6 +1756,62 @@ impl ScopeAnalyzer {
         });
     }
 
+    /// Same-file validator for package-qualified calls under `use strict 'subs'`.
+    ///
+    /// Emits an [`IssueKind::UndeclaredSubroutine`] diagnostic only when:
+    ///  - the qualified name cleanly splits into a `Package::sub` pair,
+    ///  - the target package is not a built-in pseudo-package,
+    ///  - the target package is declared in this file,
+    ///  - the package is not marked opaque by the pre-pass
+    ///    (no `@ISA` / `use parent`/`use base` / `AUTOLOAD` /
+    ///    typeglob aliasing / string eval / object-framework `use`),
+    ///  - and the sub name is not among that package's declared subs.
+    ///
+    /// All other configurations return silently: the check is intentionally
+    /// conservative. Cross-file resolution is left to a later phase that wires
+    /// in the workspace symbol index.
+    fn validate_qualified_call(
+        &self,
+        qualified_name: &str,
+        context: &AnalysisContext<'_>,
+        issues: &mut Vec<ScopeIssue>,
+        node: &Node,
+    ) {
+        let Some((package, sub_name)) = qualified_name.rsplit_once("::") else {
+            return;
+        };
+        if package.is_empty() || sub_name.is_empty() {
+            return;
+        }
+        if is_builtin_package(package) {
+            return;
+        }
+
+        let index = &context.package_sub_index;
+        if !index.has_package(package) {
+            // Package not in this file — don't guess without a workspace index.
+            return;
+        }
+        if index.is_opaque(package) {
+            // Inheritance, AUTOLOAD, roles, typeglob alias, eval — bail out.
+            return;
+        }
+        if index.has_sub(package, sub_name) {
+            return;
+        }
+
+        issues.push(ScopeIssue {
+            kind: IssueKind::UndeclaredSubroutine,
+            variable_name: qualified_name.to_string(),
+            line: context.get_line(node.location.start),
+            range: (node.location.start, node.location.end),
+            description: format!(
+                "Subroutine '{}' is not defined in package '{}'",
+                sub_name, package
+            ),
+        });
+    }
+
     fn push_uninitialized_variable_issue(
         &self,
         issues: &mut Vec<ScopeIssue>,
@@ -1816,6 +2146,9 @@ impl ScopeAnalyzer {
                         "Perform a regex match (=~ /.../) before using capture variable '{}'",
                         issue.variable_name
                     )
+                }
+                IssueKind::UndeclaredSubroutine => {
+                    format!("Check spelling or define the target sub for '{}'", issue.variable_name)
                 }
             })
             .collect()

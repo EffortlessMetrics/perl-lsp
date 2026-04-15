@@ -28,7 +28,8 @@ pub fn scope_issues_to_diagnostics(issues: Vec<ScopeIssue>) -> Vec<Diagnostic> {
             | IssueKind::UnusedVariable
             | IssueKind::ParameterShadowsGlobal
             | IssueKind::UnusedParameter
-            | IssueKind::UninitializedVariable => DiagnosticSeverity::Warning,
+            | IssueKind::UninitializedVariable
+            | IssueKind::UndeclaredSubroutine => DiagnosticSeverity::Warning,
             IssueKind::CaptureVarWithoutRegexMatch => DiagnosticSeverity::Information,
         };
 
@@ -43,6 +44,7 @@ pub fn scope_issues_to_diagnostics(issues: Vec<ScopeIssue>) -> Vec<Diagnostic> {
             IssueKind::UnquotedBareword => DiagnosticCode::UnquotedBareword,
             IssueKind::UninitializedVariable => DiagnosticCode::UninitializedVariable,
             IssueKind::CaptureVarWithoutRegexMatch => DiagnosticCode::CaptureVarWithoutRegexMatch,
+            IssueKind::UndeclaredSubroutine => DiagnosticCode::UndeclaredSubroutine,
         };
 
         // Build helpful related information based on issue type
@@ -125,6 +127,20 @@ pub fn scope_issues_to_diagnostics(issues: Vec<ScopeIssue>) -> Vec<Diagnostic> {
                 RelatedInformation {
                     location: issue.range,
                     message: "ℹ️ Capture variables ($1, $2, etc.) hold the last successful match and may be undef if no match has occurred.".to_string(),
+                }
+            ],
+            IssueKind::UndeclaredSubroutine => vec![
+                RelatedInformation {
+                    location: issue.range,
+                    message:
+                        "💡 Check the spelling of the sub name, or define it with `sub NAME { ... }` in the target package."
+                            .to_string(),
+                },
+                RelatedInformation {
+                    location: issue.range,
+                    message:
+                        "ℹ️ Under `use strict 'subs'`, a package-qualified call must resolve to a known subroutine. This diagnostic fires only when the target package is defined in this file and has no inheritance, AUTOLOAD, or dynamic dispatch markers."
+                            .to_string(),
                 }
             ],
         };
