@@ -614,6 +614,64 @@ mod tests {
 
         Ok(())
     }
+
+    /// Empty edit list must take the `full_reparse` path: `reparsed_bytes`
+    /// equals the full document length, `changed_ranges` spans the whole
+    /// document, and the AST and checkpoints are rebuilt against the same
+    /// source text without mutation.
+    ///
+    /// This contract is what the `bench_warm_reparse` benchmark relies on
+    /// to measure the warm-path reparse cost — if `apply_edits(&mut s, &[])`
+    /// were ever specialised to a no-op, the warm benchmark would silently
+    /// stop measuring the reparse regime.  See issue #4063 (parser scorecard,
+    /// cold / warm / incremental regime separation).
+    #[test]
+    fn test_apply_edits_empty_slice_full_reparses() -> Result<()> {
+        let source = "my $x = 1;\nmy $y = 2;\nsub f { return $x + $y; }\n".to_string();
+        let mut state = IncrementalState::new(source.clone());
+
+        let ast_before = format!("{:?}", state.ast);
+        let tokens_before = state.tokens.len();
+        let source_before = state.source.clone();
+
+        let result = apply_edits(&mut state, &[])?;
+
+        // Warm-path contract: full reparse covers the whole document.
+        assert_eq!(
+            result.reparsed_bytes,
+            source.len(),
+            "empty edit list must reparse the full document ({} bytes)",
+            source.len()
+        );
+        assert_eq!(
+            result.changed_ranges,
+            vec![0..source.len()],
+            "empty edit list must report the whole document as the changed range"
+        );
+
+        // Source text must be untouched.
+        assert_eq!(state.source, source_before, "empty edit list must not modify the source text");
+
+        // AST and tokens must be rebuilt (same structure, same token count).
+        assert_eq!(
+            state.tokens.len(),
+            tokens_before,
+            "token count must match after warm reparse with no edits"
+        );
+        assert_eq!(
+            format!("{:?}", state.ast),
+            ast_before,
+            "AST must be equivalent after warm reparse with no edits"
+        );
+
+        // Checkpoints must be rebuilt (non-empty for a multi-statement doc).
+        assert!(
+            !state.lex_checkpoints.is_empty(),
+            "lex checkpoints must be rebuilt after warm reparse"
+        );
+
+        Ok(())
+    }
 }
 
 /// Full document reparse fallback
