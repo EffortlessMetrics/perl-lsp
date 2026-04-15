@@ -4,7 +4,8 @@
     "codeActionKinds": [
       "quickfix",
       "source.organizeImports",
-      "refactor.extract"
+      "refactor.extract",
+      "source.fixAll"
     ],
     "resolveProvider": true
   },

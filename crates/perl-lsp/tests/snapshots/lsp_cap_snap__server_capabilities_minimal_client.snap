@@ -8,6 +8,7 @@ codeActionProvider:
     - quickfix
     - source.organizeImports
     - refactor.extract
+    - source.fixAll
   resolveProvider: true
 codeLensProvider:
   resolveProvider: true
