@@ -80,14 +80,9 @@ fn when_parser_layering_is_correct_then_no_lsp_provider_deps_in_tree() {
 /// **After refactor**: semantic_tokens must be imported directly from perl-lsp-semantic-tokens
 #[test]
 fn when_semantic_tokens_refactored_then_legend_function_works() {
-    // This test uses a simple compilation check: if the import path is wrong,
-    // the module won't be found and this compilation will fail.
-    // The actual import is done in ast_snapshot_tests.rs:13 which will be
-    // updated to: `use perl_lsp_semantic_tokens as semantic_tokens;`
-    //
-    // For now, this test validates that perl_parser::semantic_tokens exists
-    // and the legend() function is callable.
-    use perl_parser::semantic_tokens;
+    // After refactor (#4414), semantic_tokens is no longer re-exported from perl_parser.
+    // Import directly from perl_lsp_semantic_tokens.
+    use perl_lsp_semantic_tokens as semantic_tokens;
 
     let legend = semantic_tokens::legend();
     assert!(!legend.token_types.is_empty(), "semantic token types should not be empty");

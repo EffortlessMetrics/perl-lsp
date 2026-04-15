@@ -153,7 +153,7 @@ As of **Draft PR 159 (SPEC-149)**, all LSP provider implementations must comply 
 ///
 /// # Examples
 /// ```rust
-/// use perl_parser::completion::CompletionProvider;
+/// use perl_lsp_completion::CompletionProvider;
 /// use lsp_types::CompletionParams;
 ///
 /// let provider = CompletionProvider::new(workspace_index);
@@ -1053,7 +1053,7 @@ for (i, token) in tokens.iter().enumerate() {
 #### Step 3: Convert to LSP Format
 
 ```rust
-use perl_parser::semantic_tokens::encode_semantic_tokens;
+use perl_lsp_semantic_tokens::encode_semantic_tokens;
 
 // Convert to LSP-compliant delta encoding
 let encoded_tokens = encode_semantic_tokens(&tokens);
@@ -1067,7 +1067,7 @@ let lsp_response = serde_json::json!({
 #### Step 4: Advanced Usage - Custom Token Processing
 
 ```rust
-use perl_parser::semantic_tokens_provider::{SemanticTokenType, SemanticTokenModifier};
+use perl_lsp_semantic_tokens::{SemanticTokenType, SemanticTokenModifier};
 
 let tokens = provider.extract(&ast);
 

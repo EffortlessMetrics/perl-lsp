@@ -102,7 +102,7 @@ for edit in edits {
 ### Step 7: Integration with code actions
 ```rust
 // Integrate with LSP code actions system
-use perl_parser::code_actions::{CodeActionsProvider, CodeActionKind};
+use perl_lsp_code_actions::{CodeActionsProvider, CodeActionKind};
 
 let provider = CodeActionsProvider::new(content.to_string());
 let actions = provider.get_code_actions(&ast, (0, content.len()), &diagnostics);

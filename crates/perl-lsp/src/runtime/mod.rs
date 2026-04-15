@@ -41,12 +41,12 @@ pub use crate::protocol::{JsonRpcError, JsonRpcRequest, JsonRpcResponse};
 // Re-export window types for public API
 pub use window::{MessageType, ShowDocumentOptions};
 
+use perl_lsp_tooling::performance::{AstCache, SymbolIndex};
+use perl_lsp_tooling::perl_critic::BuiltInAnalyzer;
 use perl_parser::{
     Parser,
     ast::{Node, NodeKind},
     declaration::ParentMap,
-    performance::{AstCache, SymbolIndex},
-    perl_critic::BuiltInAnalyzer,
     position::LineStartsCache,
     tdd_basic::TestGenerator,
     test_runner::{TestKind, TestRunner},

@@ -10,7 +10,8 @@
 //! Update snapshots with `cargo insta review` after intentional changes.
 
 use insta::assert_snapshot;
-use perl_parser::{Parser, semantic_tokens};
+use perl_lsp_semantic_tokens as semantic_tokens;
+use perl_parser::Parser;
 
 // ---------------------------------------------------------------------------
 // Helper: parse and return sexp from recovery output
