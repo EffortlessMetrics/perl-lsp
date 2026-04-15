@@ -1,4 +1,4 @@
-# ADR-0041: Microcrate Collapse — From 132 Published Crates to ~31
+# ADR-0041: Microcrate Collapse — From 132 Published Crates to ~30
 
 **Status**: Accepted
 **Date**: 2026-04-14
@@ -41,18 +41,18 @@ We had used the first escape only for tooling and test crates, and the second es
 
 ## Decision
 
-**We will collapse the published surface from 132 crates to ~31, converting ~100 product-internal microcrates to subfolder modules inside their owning published crates.** The collapse runs immediately, before the next release ships; the next release will be the first to expose the new 31-crate surface as a clean break (no bridge crates).
+**We will collapse the published surface from 132 crates to ~30, converting ~100 product-internal microcrates to subfolder modules inside their owning published crates.** The collapse runs immediately, before the next release ships; the next release will be the first to expose the new 30-crate surface as a clean break (no bridge crates).
 
 This means:
 
-- **31 published crates** organized as: 4 products + 2 tree-sitter + 1 alternate parser + 5 foundation primitives + 1 diagnostic catalog + 2 wire protocols + 3 semantic kernels + 1 symbol model + 1 tool integration + 4 test/corpus ecosystem + 6 standalone tooling kernels + 1 NEW (`perl-diagnostic-catalog`).
+- **~30 published crates** organized as: 4 products + 2 tree-sitter + 1 alternate parser + 5 foundation primitives + 1 diagnostic catalog (NEW) + 2 wire protocols + 3 semantic kernels + 1 symbol model + 1 tool integration + 4 test/corpus ecosystem + 6 standalone tooling kernels.
 - **4 internal-only crates** (`publish = false`): xtask, perl-ci-hygiene, perl-lsp-ux-tests, perl-parser-bench.
 - **~100 retired microcrates** become folder modules: each former crate gets a directory (`mod.rs` facade, `pub(crate)` default, optional `CLAUDE.md`, preserved tests).
 - **Layer guards via xtask** (`cargo xtask layer-check`) replace the implicit guard that crate boundaries provided. A `xtask/layer-rules.toml` config enforces dependency direction at the import level inside crates.
 - **Publish-closure guard via xtask** (`cargo xtask publish-closure`) prevents `publish = false` crates from re-entering the runtime graph.
 - **Ratchet via xtask** (`cargo xtask published-crate-count`) prevents the published count from creeping back up.
 
-The published 31 are reserved for **durable external problems**:
+The published ~30 are reserved for **durable external problems**:
 
 ```
 Products (4):              perllsp, perl-lsp-rs, perl-dap, perl-parser
@@ -72,11 +72,11 @@ Standalone tooling (6):    perl-feature-catalog, perl-incremental-parsing, perl-
 
 ## Decision Drivers
 
-1. **crates.io fit**: publish runs minutes not hours; topological order trivial at 31 nodes; dev-dep SCC handling becomes dead code; rate-limit retries unnecessary; per-release version bump touches a handful of crates not the workspace.
+1. **crates.io fit**: publish runs minutes not hours; topological order trivial at ~30 nodes; dev-dep SCC handling becomes dead code; rate-limit retries unnecessary; per-release version bump touches a handful of crates not the workspace.
 2. **Architectural honesty**: published crates become a real product surface, not an artifact of internal SRP decomposition. Each published crate represents a durable external problem.
 3. **Compile economics**: larger crates have less per-change link overhead; module-shared codegen units optimize better; incremental rebuilds get less granular but cycle faster on average for typical edit/build cycles.
 4. **Discoverability**: docs.rs and crates.io search become navigable. Downstream users can build a mental model of the project from the crate names without reading internal architecture docs.
-5. **Semver discipline preserved where it matters**: the 31 published crates keep semver contracts. Internal modules are free to refactor without semver cost.
+5. **Semver discipline preserved where it matters**: the ~30 published crates keep semver contracts. Internal modules are free to refactor without semver cost.
 6. **Architectural separation preserved**: subfolder modules with `pub(crate)` + facade discipline + xtask layer guards give the same separation we wanted from microcrates (clear ownership, isolated tests, bounded change scope, agent-friendly boundaries) without permanent public surface.
 
 ## Considered Options
@@ -111,14 +111,14 @@ For each retired microcrate, publish one final version that re-exports from its 
 - Encourages downstream users to keep depending on internal-shaped names that should never have been public.
 - The "we don't really publish those anymore" social contract is unenforceable.
 
-### Option 3: Clean break — collapse to 31 published crates with migration guide
+### Option 3: Clean break — collapse to ~30 published crates with migration guide
 
 Stop publishing retired microcrates. Document a migration table from old crate paths to new module paths. Ship with a major version bump that signals the breaking change.
 
 **Pros**
 - Solves all four failure modes.
 - Eliminates the publish-pipeline complexity and operational debt.
-- Keeps the 31 published crates as a real product surface that documents what the project is for external users.
+- Keeps the ~30 published crates as a real product surface that documents what the project is for external users.
 - Incremental compile economics improve.
 - Migration cost is one-time; ongoing maintenance is permanently cheaper.
 
@@ -131,18 +131,18 @@ Stop publishing retired microcrates. Document a migration table from old crate p
 
 ## Decision Outcome
 
-We choose **Option 3** (clean break to 31 published crates).
+We choose **Option 3** (clean break to ~30 published crates).
 
 The microcrate bet was deliberate and reasonable given what we expected from cargo and crates.io. After operating it at scale, the data is clear: three of the four anticipated benefits did not materialize, and the fourth (agent work) is preserved by subfolder modules with the same discipline. The publish-pipeline pain and public-surface bloat are real costs we no longer need to pay.
 
-The 31-crate target reflects "all the legitimate reusable kernels and products," not "as few as possible." Each published crate solves a durable external problem. Each retired crate was internal plumbing that became publicly visible as a side effect of using crates as the modular boundary.
+The ~30-crate target reflects "all the legitimate reusable kernels and products," not "as few as possible." Each published crate solves a durable external problem. Each retired crate was internal plumbing that became publicly visible as a side effect of using crates as the modular boundary.
 
 ## Consequences
 
 ### Positive
 
-- **Publish runs become trivial**: ~31 crates in topo order, no SCCs, no rate-limit issues at scale.
-- **Public surface tells a true story**: the 31 crates document what the project is for external consumers.
+- **Publish runs become trivial**: ~30 crates in topo order, no SCCs, no rate-limit issues at scale.
+- **Public surface tells a true story**: the ~30 crates document what the project is for external consumers.
 - **Per-release version bumps shrink dramatically**: most releases touch a handful of crates.
 - **Compile economics improve**: less per-crate link overhead, better codegen unit sharing.
 - **Architectural separation preserved**: folder discipline + xtask layer guards do the work crate boundaries did.
@@ -197,7 +197,7 @@ Only promote when **all** of the following are true:
 
 ## References
 
-- [Tracking issue #4410: Microcrate collapse to 31 published crates](https://github.com/EffortlessMetrics/perl-lsp/issues/4410)
+- [Tracking issue #4410: Microcrate collapse to ~30 published crates](https://github.com/EffortlessMetrics/perl-lsp/issues/4410)
 - [docs/SRP_MICROCRATES.md](../SRP_MICROCRATES.md) — historical record of the microcrate decomposition campaign
 - [docs/PUBLISHING.md](../PUBLISHING.md) — current publishing pipeline; will simplify post-collapse
 - [scripts/publish-topo.py](../../scripts/publish-topo.py) — current topological publish ordering with dev-dep SCC handling

@@ -6,7 +6,7 @@ For the current 132-crate pipeline, see [docs/PUBLISHING.md](../PUBLISHING.md).
 
 See [ADR-0041](../adr/0041-microcrate-collapse.md) for the architectural rationale.
 
-## 31 published crates in topological order
+## ~30 published crates in topological order
 
 The post-collapse published set, grouped by category and listed in approximate dependency order
 (leaves first, products last):
