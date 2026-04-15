@@ -425,7 +425,7 @@ pub(crate) mod code_actions_pragmas {
 
 // Engine re-exports for runtime
 pub(crate) mod perl_critic {
-    pub use perl_parser::perl_critic::*;
+    pub use perl_lsp_tooling::perl_critic::*;
 }
 
 pub(crate) mod semantic {

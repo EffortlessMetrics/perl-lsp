@@ -32,14 +32,6 @@ perl-workspace-index = { workspace = true }
 perl-refactoring = { workspace = true }
 perl-incremental-parsing = { workspace = true, optional = true }
 perl-tdd-support = { workspace = true }
-perl-lsp-code-actions = { workspace = true }
-perl-lsp-completion = { workspace = true }
-perl-lsp-diagnostics = { workspace = true }
-perl-lsp-inlay-hints = { workspace = true }
-perl-lsp-navigation = { workspace = true }
-perl-lsp-rename = { workspace = true }
-perl-lsp-semantic-tokens = { workspace = true }
-perl-lsp-tooling = { workspace = true }
 perl-keywords = { workspace = true }
 serde_json.workspace = true
 regex.workspace = true
@@ -105,6 +97,7 @@ tempfile.workspace = true
 proptest.workspace = true
 rstest = "0.26.1"
 perl-corpus = { workspace = true }
+perl-lsp-semantic-tokens = { workspace = true }
 
 [[bench]]
 name = "parser_benchmark"

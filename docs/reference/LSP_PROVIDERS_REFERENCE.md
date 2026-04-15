@@ -40,7 +40,7 @@ Provides clickable links in Perl source code for module imports and file require
 The provider requires workspace root URLs for proper module path resolution:
 
 ```rust
-use perl_parser::document_links::compute_links;
+use perl_lsp_navigation::compute_links;
 use url::Url;
 
 let workspace_roots = vec![
@@ -103,7 +103,7 @@ use base;
 ### Example Usage
 
 ```rust
-use perl_parser::document_links::compute_links;
+use perl_lsp_navigation::compute_links;
 use url::Url;
 
 let source = r#"
@@ -1240,7 +1240,7 @@ Creates a new implementation provider with optional workspace indexing.
 **Examples**:
 
 ```rust
-use perl_parser::implementation_provider::ImplementationProvider;
+use perl_lsp_navigation::ImplementationProvider;
 
 // Without workspace indexing (single-file analysis)
 let provider = ImplementationProvider::new(None);

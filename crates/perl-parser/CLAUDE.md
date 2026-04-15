@@ -2,9 +2,9 @@
 
 ## Crate Overview
 
-- **Tier**: 6 (application/composition crate)
+- **Tier**: 6 (composition crate — pure language-processing; no LSP provider dependencies)
 - **Version**: workspace (currently 0.12.3)
-- **Purpose**: Central hub crate that aggregates and re-exports the core parser, semantic analyzer, workspace indexer, refactoring engine, TDD support, and all LSP provider crates into a single public API surface. Also provides the `perl-parse` CLI binary.
+- **Purpose**: Central hub crate that aggregates and re-exports the core parser, semantic analyzer, workspace indexer, and refactoring engine into a single public API surface. Also provides the `perl-parse` CLI binary.
 
 ## Commands
 
@@ -31,15 +31,6 @@ cargo bench -p perl-parser               # Parser benchmarks
 | `perl-refactoring` | `refactor` (import optimizer, modernize, refactoring engine, workspace refactor) |
 | `perl-tdd-support` | `tdd` (test generator, test runner, TDD workflow) |
 | `perl-incremental-parsing` | `incremental` (feature-gated behind `incremental`) |
-| `perl-lsp-providers` | `ide` module |
-| `perl-lsp-code-actions` | `code_actions` module |
-| `perl-lsp-completion` | `completion` module |
-| `perl-lsp-diagnostics` | `diagnostics` module |
-| `perl-lsp-inlay-hints` | `inlay_hints` module |
-| `perl-lsp-navigation` | `references`, `document_links`, `type_definition`, `type_hierarchy`, `workspace_symbols`, `implementation_provider` modules |
-| `perl-lsp-rename` | `rename` module |
-| `perl-lsp-semantic-tokens` | `semantic_tokens` module |
-| `perl-lsp-tooling` | `tooling` (perltidy, perl_critic, performance) |
 
 ### Key types and modules
 
@@ -66,7 +57,6 @@ src/
   refactor.rs     # Re-export from perl-refactoring
   tdd.rs          # Re-export from perl-tdd-support
   builtins.rs     # Re-export from perl-parser-core::builtins
-  tooling.rs      # Re-export from perl-lsp-tooling (perltidy, critic, perf)
   ide.rs          # Re-export from perl-lsp-providers
   incremental.rs  # Re-export from perl-incremental-parsing (feature-gated)
   bin/perl-parse.rs  # CLI binary (feature: cli)
@@ -106,6 +96,6 @@ let model = analyzer.analyze(&ast);
 
 - This crate is a **composition layer**; almost all logic lives in the upstream microcrates. Edits to parser behaviour belong in `perl-parser-core`, semantic logic in `perl-semantic-analyzer`, etc.
 - `#![deny(unsafe_code)]` and `#![warn(missing_docs)]` are enforced.
-- The LSP server runtime has moved to the `perl-lsp` crate; this crate keeps engine and provider re-exports.
+- The LSP server runtime lives in `perl-lsp`; LSP provider implementations live in `perl-lsp-*` crates. This crate is a pure language-processing composition layer with no LSP provider dependencies.
 - `doctest = false` in `[lib]` — doc examples are validated through dedicated test files, not rustdoc.
 - WASM target excludes `walkdir`, `dead_code_detector`, `workspace_refactor`, and `error_classifier`.

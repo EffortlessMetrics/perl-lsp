@@ -332,7 +332,7 @@ impl PullDiagnosticsProvider {
         content: &str,
         diagnostics: &mut Vec<LspDiagnostic>,
     ) {
-        use perl_parser::perl_critic::BuiltInAnalyzer;
+        use perl_lsp_tooling::perl_critic::BuiltInAnalyzer;
 
         let built_in_analyzer = BuiltInAnalyzer::new();
         let violations = built_in_analyzer.analyze(ast, content);

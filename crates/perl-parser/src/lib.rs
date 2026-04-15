@@ -89,15 +89,18 @@
 //! - **[`quote_parser`]**: Specialized parser for quote-like operators
 //! - **[`heredoc_collector`]**: FIFO heredoc collection with indent stripping
 //!
-//! ### IDE Integration (LSP Provider Modules)
+//! ### IDE Integration (LSP Provider Crates)
 //!
-//! - **[`completion`]**: Context-aware completion providers
-//! - **[`diagnostics`]**: Diagnostics generation and formatting
-//! - **[`references`]**: Reference search providers
-//! - **[`rename`]**: Rename providers with validation
-//! - **[`semantic_tokens`]**: Semantic token generation
-//! - **[`type_definition`]**: Type definition providers
-//! - **[`workspace_symbols`]**: Workspace symbol search
+//! LSP provider modules were removed from `perl-parser` as part of #4414 (microcrate
+//! collapse, PR #0). Import directly from the provider crates:
+//!
+//! - `perl_lsp_completion` — context-aware completion providers
+//! - `perl_lsp_diagnostics` — diagnostics generation and formatting
+//! - `perl_lsp_navigation` — references, document links, type definitions, workspace symbols
+//! - `perl_lsp_rename` — rename providers with validation
+//! - `perl_lsp_semantic_tokens` — semantic token generation
+//! - `perl_lsp_inlay_hints` — inlay hint providers
+//! - `perl_lsp_code_actions` — code action providers
 //!
 //! ### Analysis ([`analysis`])
 //!
@@ -408,8 +411,6 @@ pub mod refactor;
 pub mod tdd;
 /// Token stream, trivia, and token wrapper utilities.
 pub mod tokens;
-/// External tooling integration (perltidy, perlcritic, performance).
-pub mod tooling;
 /// Workspace indexing, document store, and cross-file operations.
 pub mod workspace;
 
@@ -434,67 +435,6 @@ pub use builtins::builtin_signatures_phf;
 #[cfg(not(target_arch = "wasm32"))]
 pub use perl_dead_code as dead_code_detector;
 
-// Re-exports from extracted microcrates
-/// LSP code actions for automated refactoring and fixes.
-pub mod code_actions {
-    pub use perl_lsp_code_actions::*;
-}
-/// Enhanced code actions provider with workspace-aware refactoring.
-pub use perl_lsp_code_actions::EnhancedCodeActionsProvider;
-/// LSP completion for code suggestions.
-pub mod completion {
-    pub use perl_lsp_completion::*;
-}
-/// LSP diagnostics for error reporting.
-pub mod diagnostics {
-    pub use perl_lsp_diagnostics::*;
-}
-/// LSP document links provider for file and URL navigation.
-pub mod document_links {
-    pub use perl_lsp_navigation::*;
-}
-/// LSP implementation provider.
-pub mod implementation_provider {
-    pub use perl_lsp_navigation::*;
-}
-/// LSP inlay hints for inline type and parameter information.
-pub mod inlay_hints {
-    pub use perl_lsp_inlay_hints::*;
-}
-/// LSP inlay hints provider implementation.
-pub mod inlay_hints_provider {
-    pub use perl_lsp_inlay_hints::*;
-}
-/// LSP references provider for symbol usage analysis.
-pub mod references {
-    pub use perl_lsp_navigation::*;
-}
-/// LSP rename for symbol renaming.
-pub mod rename {
-    pub use perl_lsp_rename::*;
-}
-/// LSP semantic tokens provider for syntax highlighting.
-pub mod semantic_tokens {
-    pub use perl_lsp_semantic_tokens::*;
-}
-/// LSP semantic tokens provider implementation.
-pub mod semantic_tokens_provider {
-    pub use perl_lsp_semantic_tokens::*;
-}
-/// LSP type definition provider.
-#[cfg(feature = "lsp-compat")]
-pub mod type_definition {
-    pub use perl_lsp_navigation::*;
-}
-/// LSP type hierarchy provider for inheritance navigation.
-pub mod type_hierarchy {
-    pub use perl_lsp_navigation::*;
-}
-/// LSP workspace symbols provider.
-pub mod workspace_symbols {
-    pub use perl_lsp_navigation::*;
-}
-
 /// Import statement analysis and optimization.
 pub use refactor::import_optimizer;
 /// Code modernization utilities for Perl best practices.
@@ -511,12 +451,6 @@ pub use tokens::token_wrapper;
 pub use tokens::trivia;
 /// Parser that preserves trivia tokens for formatting.
 pub use tokens::trivia_parser;
-/// Performance measurement and caching utilities.
-pub use tooling::performance;
-/// Perl::Critic integration for lint diagnostics.
-pub use tooling::perl_critic;
-/// Perltidy integration for code formatting.
-pub use tooling::perltidy;
 
 #[cfg(feature = "incremental")]
 /// Advanced AST node reuse strategies for incremental parsing.
