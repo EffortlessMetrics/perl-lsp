@@ -41,7 +41,27 @@ fn detect_perl_info() -> String {
 }
 
 impl DebugAdapter {
-    /// Handle initialize request
+    /// Handle `initialize` request from the DAP client.
+    ///
+    /// Returns the debug adapter's capabilities, advertising which DAP features
+    /// are supported based on the feature catalog (e.g., breakpoints, exceptions,
+    /// completions, data breakpoints). The client uses these capabilities to
+    /// configure its UI and feature availability.
+    ///
+    /// # Arguments
+    ///
+    /// * `seq` - Sequence number for the response message
+    /// * `request_seq` - Sequence number of the request being responded to
+    /// * `_arguments` - Optional initialize arguments from the client (currently unused;
+    ///   the adapter uses a fixed capability set derived from the feature catalog)
+    ///
+    /// # Returns
+    ///
+    /// A `DapMessage::Response` containing the server capabilities including:
+    /// - `supportsConfigurationDoneRequest`, `supportsFunctionBreakpoints`, etc. (core features)
+    /// - `supportsCompletionsRequest`, `supportsModulesRequest` (optional features)
+    /// - `supportsExceptionInfoRequest`, `exceptionBreakpointFilters` (exception handling)
+    /// - `supportsDataBreakpoints` (watchpoints)
     pub(super) fn handle_initialize(
         &self,
         seq: i64,
@@ -129,7 +149,30 @@ impl DebugAdapter {
         }
     }
 
-    /// Handle launch request
+    /// Handle `launch` request from the DAP client.
+    ///
+    /// Parses the launch configuration, validates the program path, stores the
+    /// configuration for restart support, and launches the Perl debugger.
+    ///
+    /// # Arguments
+    ///
+    /// * `seq` - Sequence number for the response message
+    /// * `request_seq` - Sequence number of the request being responded to
+    /// * `arguments` - Launch configuration containing:
+    ///   - `program` (required): Path to the Perl script to debug
+    ///   - `args` (optional): Command-line arguments to pass to the script
+    ///   - `cwd` (optional): Working directory for the debugger
+    ///   - `env` (optional): Environment variables to set
+    ///   - `stopOnEntry` (optional): Whether to pause at the first line
+    ///
+    /// # Returns
+    ///
+    /// On success: `DapMessage::Response` with `success: true`. If `stopOnEntry`
+    /// is true, also sends a `stopped` event with reason "entry".
+    ///
+    /// On failure: `DapMessage::Response` with `success: false` and an actionable
+    /// error message that includes `detect_perl_info()` output to help the user
+    /// configure their Perl interpreter.
     pub(super) fn handle_launch(
         &mut self,
         seq: i64,
@@ -236,7 +279,30 @@ impl DebugAdapter {
         }
     }
 
-    /// Launch the Perl debugger
+    /// Launch the Perl debugger and create a debug session.
+    ///
+    /// Validates the program path for security (must be a regular file within the
+    /// workspace root), runs a pre-launch syntax check via `perl -c`, then spawns
+    /// `perl -d` as a child process and sets up the debug session state.
+    ///
+    /// # Arguments
+    ///
+    /// * `program` - Path to the Perl script to debug
+    /// * `args` - Command-line arguments to pass to the script
+    /// * `stop_on_entry` - Whether to pause at the first executable line
+    /// * `env_overrides` - Environment variables to set for the debugger process
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(thread_id)` - The ID of the debugger thread on success
+    /// * `Err(message)` - An actionable error message describing what went wrong:
+    ///   - Empty program path: suggests setting the 'program' field in launch.json
+    ///   - Not a file: suggests the path must point to a Perl script
+    ///   - File not found: includes the OS error detail
+    ///   - Outside workspace: script path validation failure
+    ///   - Syntax error: formatted error output from `perl -c`
+    ///   - Missing module: suggests `cpan Module::Name` with MetaCPAN link
+    ///   - Perl not on PATH: actionable install hint for the platform
     pub(super) fn launch_debugger(
         &mut self,
         program: &str,
@@ -440,6 +506,19 @@ impl DebugAdapter {
         ))
     }
 
+    /// Extract the module name from a "Can't locate" Perl error message.
+    ///
+    /// Parses the error detail text looking for the "Can't locate Module/Path.pm in @INC"
+    /// pattern and converts the file path to a Perl module name (e.g., "Foo/Bar.pm" -> "Foo::Bar").
+    ///
+    /// # Arguments
+    ///
+    /// * `detail` - The error message text from `perl -c` output
+    ///
+    /// # Returns
+    ///
+    /// * `Some(module_name)` - The extracted module name with `::` separators
+    /// * `None` - If the error message doesn't match the expected pattern
     fn missing_module_name(detail: &str) -> Option<String> {
         detail.lines().find_map(|line| {
             let trimmed = line.trim();
@@ -450,6 +529,21 @@ impl DebugAdapter {
         })
     }
 
+    /// Format a user-friendly error message for a missing Perl module.
+    ///
+    /// Generates an actionable error message with installation instructions and
+    /// a link to MetaCPAN for the missing module.
+    ///
+    /// # Arguments
+    ///
+    /// * `module_name` - The name of the missing module (e.g., "Foo::Bar")
+    ///
+    /// # Returns
+    ///
+    /// A formatted string containing:
+    /// - The module name in the error description
+    /// - The `cpan` command to install it
+    /// - A MetaCPAN link for additional information
     fn format_missing_module_error(module_name: &str) -> String {
         format!(
             "Module {module_name} not found. Install with: cpan {module_name}. \
@@ -457,7 +551,24 @@ impl DebugAdapter {
         )
     }
 
-    /// Start thread to read debugger output with enhanced error recovery
+    /// Spawn a background thread to read and process Perl debugger output.
+    ///
+    /// The thread reads from the debugger's stderr (primary) or stdout (fallback),
+    /// parsing context lines, stack frames, error messages, prompts, and exceptions.
+    /// It emits corresponding DAP events (`stopped`, `continued`, `output`) to the client.
+    ///
+    /// # Error Recovery
+    ///
+    /// - If the control stream is unavailable, emits a `terminated` event and exits.
+    /// - If the session lock cannot be acquired, logs a warning and continues.
+    /// - If sending an event fails (client disconnected), stops sending and exits.
+    ///
+    /// # Output Processing
+    ///
+    /// - Strips ANSI escape sequences for clean output display
+    /// - Uses multiple regex patterns to parse context, prompts, errors, and exceptions
+    /// - Maintains a bounded history of recent output for variable/stack parsing
+    /// - Respects `exception_break_on_die` and `exception_break_on_warn` settings
     pub(super) fn start_output_reader(&self) {
         let session = self.session.clone();
         let seq = self.seq.clone();
@@ -1267,7 +1378,11 @@ impl DebugAdapter {
         }
     }
 
-    /// Clear active process session, TCP session, and PID-attach mode state.
+    /// Clear all active debug session state (process, TCP, and PID attach).
+    ///
+    /// This method clears the debug session, terminates any child process,
+    /// disconnects any active TCP session, and clears the PID attach state.
+    /// Use this when shutting down or when switching between debug modes.
     pub(super) fn clear_active_session_state(&self) {
         Self::clear_active_session_state_with_state(
             &self.session,
@@ -1276,6 +1391,16 @@ impl DebugAdapter {
         );
     }
 
+    /// Clear all active debug session state from externally-provided state references.
+    ///
+    /// This static variant allows clearing state when the DebugAdapter reference
+    /// is not available, useful for cleanup in error paths or thread teardown.
+    ///
+    /// # Arguments
+    ///
+    /// * `session` - Mutex-protected optional active debug session
+    /// * `tcp_session` - Mutex-protected optional TCP attach session
+    /// * `attached_pid` - Mutex-protected optional attached process ID
     pub(super) fn clear_active_session_state_with_state(
         session: &Arc<Mutex<Option<DebugSession>>>,
         tcp_session: &Arc<Mutex<Option<TcpAttachSession>>>,
@@ -1307,6 +1432,20 @@ impl DebugAdapter {
         }
     }
 
+    /// Wait for a child process to exit within the specified timeout.
+    ///
+    /// Polls the process status at 25ms intervals until the timeout expires.
+    /// Returns immediately if the process has already exited.
+    ///
+    /// # Arguments
+    ///
+    /// * `process` - The child process to monitor
+    /// * `timeout` - Maximum duration to wait for exit
+    ///
+    /// # Returns
+    ///
+    /// * `true` - Process exited within the timeout
+    /// * `false` - Timeout expired or polling error occurred
     pub(super) fn wait_for_child_exit(process: &mut Child, timeout: Duration) -> bool {
         if let Ok(Some(_)) = process.try_wait() {
             return true;
@@ -1327,6 +1466,20 @@ impl DebugAdapter {
         false
     }
 
+    /// Terminate a child process using the appropriate signal for the platform.
+    ///
+    /// Attempts graceful termination first (SIGTERM on Unix), then escalates to
+    /// forceful termination (SIGKILL on Unix, `kill()` on Windows) if needed.
+    /// Uses `wait_for_child_exit` to confirm the process has exited after each attempt.
+    ///
+    /// # Arguments
+    ///
+    /// * `process` - The child process to terminate
+    ///
+    /// # Returns
+    ///
+    /// * `true` - Process successfully terminated
+    /// * `false` - Process could not be terminated
     pub(super) fn terminate_child_process(process: &mut Child) -> bool {
         if Self::wait_for_child_exit(process, Duration::from_millis(0)) {
             return true;
@@ -1356,7 +1509,16 @@ impl DebugAdapter {
         Self::wait_for_child_exit(process, Duration::from_millis(DEBUG_SESSION_TERMINATE_WAIT_MS))
     }
 
-    /// Handle disconnect request
+    /// Handle `disconnect` request from the DAP client.
+    ///
+    /// Clears all active session state (process, TCP, PID attach) and sends a
+    /// `terminated` event to indicate the debug session has ended.
+    ///
+    /// # Arguments
+    ///
+    /// * `seq` - Sequence number for the response message
+    /// * `request_seq` - Sequence number of the request being responded to
+    /// * `arguments` - Optional disconnect arguments (currently unused)
     pub(super) fn handle_disconnect(
         &mut self,
         seq: i64,
@@ -1381,7 +1543,17 @@ impl DebugAdapter {
         }
     }
 
-    /// Handle terminate request
+    /// Handle `terminate` request from the DAP client.
+    ///
+    /// Terminates the debug session and sends a `terminated` event. Unlike `disconnect`,
+    /// this request supports the `restart` option to allow the client to restart
+    /// the debug session with the same configuration.
+    ///
+    /// # Arguments
+    ///
+    /// * `seq` - Sequence number for the response message
+    /// * `request_seq` - Sequence number of the request being responded to
+    /// * `arguments` - Optional terminate arguments containing a `restart` flag
     pub(super) fn handle_terminate(
         &mut self,
         seq: i64,
@@ -1427,7 +1599,16 @@ impl DebugAdapter {
         }
     }
 
-    /// Handle configurationDone request
+    /// Handle `configurationDone` request from the DAP client.
+    ///
+    /// Called by the client after it has finished configuring the debug session.
+    /// If `stopOnEntry` was requested, displays the current source location.
+    /// Otherwise, continues execution until the first user-set breakpoint is hit.
+    ///
+    /// # Arguments
+    ///
+    /// * `seq` - Sequence number for the response message
+    /// * `request_seq` - Sequence number of the request being responded to
     pub(super) fn handle_configuration_done(&self, seq: i64, request_seq: i64) -> DapMessage {
         // Determine whether stopOnEntry was requested in the launch args.
         let stop_on_entry =
@@ -1468,7 +1649,19 @@ impl DebugAdapter {
         }
     }
 
-    /// Handle threads request
+    /// Handle `threads` request from the DAP client.
+    ///
+    /// Returns a list of all threads in the debug session. The thread list
+    /// depends on the current debug mode:
+    /// - Process mode: Returns the main debugger thread
+    /// - PID attach mode: Returns the attached process as a thread
+    /// - TCP attach mode: Returns a TCP attached thread
+    /// - No active session: Returns an empty list
+    ///
+    /// # Arguments
+    ///
+    /// * `seq` - Sequence number for the response message
+    /// * `request_seq` - Sequence number of the request being responded to
     pub(super) fn handle_threads(&self, seq: i64, request_seq: i64) -> DapMessage {
         let threads = if let Some(ref session) =
             *lock_or_recover(&self.session, "debug_adapter.session")
