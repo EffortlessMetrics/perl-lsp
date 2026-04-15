@@ -27,12 +27,13 @@ use walkdir::WalkDir;
 /// This limit prevents excessive filesystem traversal when scanning deep
 /// module hierarchies. The depth is relative to the include path root.
 ///
-/// Example: With `MAX_SCAN_DEPTH = 5`:
+/// Example: With `MAX_SCAN_DEPTH = 6`:
 /// - `/path/Mod.pm` (depth 1) → found
 /// - `/path/Sub/Mod.pm` (depth 2) → found
 /// - `/path/Sub/Deep/Mod.pm` (depth 5) → found
-/// - `/path/Sub/Deep/Too/Mod.pm` (depth 6) → NOT found
-const MAX_SCAN_DEPTH: usize = 5;
+/// - `/path/Sub/Deep/Too/Mod.pm` (depth 6) → found
+/// - `/path/Sub/Deep/Too/Deep/Mod.pm` (depth 7) → NOT found
+const MAX_SCAN_DEPTH: usize = 6;
 
 /// Maximum number of filesystem entries to scan when traversing include paths.
 ///
@@ -401,8 +402,9 @@ fn scan_modules_in_directory(
 
     let mut entries_scanned: usize = 0;
 
-    // Use WalkDir with max depth of MAX_SCAN_DEPTH and no symlink following
-    // Don't use filter_entry because it can skip the root directory
+    // Use WalkDir with max depth of MAX_SCAN_DEPTH and no symlink following.
+    // follow_links(false) is a security measure to prevent traversing symlinks
+    // that might point outside the intended directory tree.
     let walker = WalkDir::new(dir).max_depth(MAX_SCAN_DEPTH).follow_links(false).into_iter();
 
     for entry in walker.flatten() {
@@ -487,10 +489,16 @@ fn path_to_module_name(path: &Path, base_dir: &Path) -> Option<String> {
         with_separators
     };
 
-    // Filter out empty parts and .
+    // Filter out empty parts and . to handle edge cases from path normalization.
+    // This guards against paths like "./Foo.pm" or "Foo/./Bar.pm" where .
+    // components could appear in the module name after separator replacement.
     let parts: Vec<&str> = module_name.split("::").filter(|s| !s.is_empty() && *s != ".").collect();
 
-    if parts.is_empty() { None } else { Some(parts.join("::")) }
+    if parts.is_empty() {
+        None
+    } else {
+        Some(parts.join("::"))
+    }
 }
 
 /// Stub for wasm32 targets where filesystem scanning is not supported.
