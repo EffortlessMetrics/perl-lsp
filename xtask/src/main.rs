@@ -1195,6 +1195,19 @@ enum MetricsCommand {
         #[arg(long, default_value_t = 0.01)]
         delta_pct: f64,
     },
+    /// Summarize a parser corpus sweep receipt (phase timings, slowest files,
+    /// median error density, first-error buckets).
+    ///
+    /// Reads the JSON written by `cargo xtask parser-corpus-sweep --receipt`
+    /// (or any other path via `--input`) and emits the same human-readable
+    /// report that the sweep prints at end-of-run — useful for analyzing
+    /// historical receipts without re-running the sweep.
+    SweepStats {
+        /// Path to a sweep receipt JSON. Defaults to
+        /// `target/receipts/system-corpus-sweep.json`.
+        #[arg(long)]
+        input: Option<PathBuf>,
+    },
 }
 
 #[derive(ValueEnum, Clone)]
@@ -1500,6 +1513,7 @@ fn main() -> Result<()> {
                 let root = utils::project_root()?;
                 metrics::ratchet::run_promote_baseline(&root, &subsystem, delta_pct)
             }
+            MetricsCommand::SweepStats { input } => metrics::sweep_stats::run(input),
         },
         Commands::ValidateMemoryProfiler => compare::validate_memory_profiling(),
         Commands::E2eValidate { workspace_size, report, skip_workspace, skip_bench, verbose } => {

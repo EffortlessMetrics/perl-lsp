@@ -367,6 +367,9 @@ mod tests {
             files_by_bucket: BTreeMap::new(),
             file_results: vec![],
             elapsed_secs: 1.0,
+            phase_timings: None,
+            median_error_density_per_1k_loc: None,
+            slowest_files: vec![],
         };
         let metrics = ParserMetrics {
             syntax_sections: 611,
