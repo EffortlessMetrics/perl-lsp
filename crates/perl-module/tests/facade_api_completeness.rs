@@ -10,28 +10,42 @@
 
 use perl_module::{
     // resolution module
-    IncRoot, IncRootKind,
+    IncRoot,
+    IncRootKind,
     // import module
-    LoadTiming, ModuleImportKind,
-    // token_core module
-    has_standalone_module_token_boundaries, is_module_identifier_char, is_module_token_char,
-    // boundary module
-    contains_standalone_module_token, find_standalone_module_token_ranges,
+    LoadTiming,
+    ModuleImportKind,
+    // rename module
+    apply_module_rename_edits,
     // token module
-    contains_module_token, extract_module_reference, replace_module_token,
+    contains_module_token,
+    // boundary module
+    contains_standalone_module_token,
+    extract_module_reference,
     // path module
-    file_path_to_module_name, module_name_to_path, module_path_to_name,
+    file_path_to_module_name,
+    find_standalone_module_token_ranges,
+    // token_core module
+    has_standalone_module_token_boundaries,
+    is_module_identifier_char,
+    is_module_token_char,
     // name module
-    legacy_package_separator, module_variant_pairs, normalize_package_separator,
+    legacy_package_separator,
+    line_references_isa_assignment,
     // import_match module
     line_references_module_import,
-    // rename module
-    apply_module_rename_edits, line_references_isa_assignment, line_references_package_declaration,
-    line_references_qualified_call, plan_module_rename_edits,
+    line_references_package_declaration,
+    line_references_qualified_call,
+    module_name_to_path,
+    module_path_to_name,
+    module_variant_pairs,
+    normalize_package_separator,
     // import module
     parse_module_import_head,
     // token_parser module
     parse_module_token,
+    plan_module_rename_edits,
+    replace_module_token,
 };
 
 /// Verify that all items exported via api.rs can be imported and used.

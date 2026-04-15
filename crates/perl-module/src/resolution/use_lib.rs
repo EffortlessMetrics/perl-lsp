@@ -96,10 +96,10 @@ pub fn resolve_use_lib_paths(
             if resolved.strip_prefix(workspace_root).is_err() {
                 continue;
             }
-            if let Some(s) = path_to_relative_string(&resolved, workspace_root) {
-                if !result.contains(&s) {
-                    result.push(s);
-                }
+            if let Some(s) = path_to_relative_string(&resolved, workspace_root)
+                && !result.contains(&s)
+            {
+                result.push(s);
             }
         } else {
             let p = Path::new(path_str);
