@@ -114,7 +114,8 @@ fn publish_closure_invalid_crate_error_message_clear() -> Result<()> {
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
-        stderr.contains(test_crate_name) && (stderr.contains("not found") || stderr.contains("not in")),
+        stderr.contains(test_crate_name)
+            && (stderr.contains("not found") || stderr.contains("not in")),
         "Error message should mention the crate name and indicate it's not in the allowlist. Got: {}",
         stderr
     );
@@ -227,19 +228,21 @@ fn publish_closure_filtering_works_for_multiple_crates() -> Result<()> {
 
 /// Test that filtering a crate twice in one invocation doesn't break.
 ///
-/// Edge case: While not documented, ensure no panic if user somehow
-/// passes --crate-name twice (CLI should accept the last one).
+/// Edge case: Clap rejects duplicate flags, ensuring clean error handling.
 #[test]
-fn publish_closure_multiple_crate_name_flags_uses_last() -> Result<()> {
-    // Most command-line parsers use the last value when a flag repeats.
-    // Ensure we don't panic or produce confusing behavior.
+fn publish_closure_multiple_crate_name_flags_rejected() -> Result<()> {
+    // Clap parser rejects repeated non-repeatable flags with a clear error.
+    // Ensure the command fails gracefully with a helpful message.
     let output = Command::cargo_bin("xtask")?
         .args(["publish-closure", "--crate-name", "perl-token", "--crate-name", "perl-error"])
         .output()?;
 
-    assert!(output.status.success());
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("1 crate checked"), "Should use last --crate-name value");
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("cannot be used multiple times"),
+        "Should reject duplicate --crate-name"
+    );
     Ok(())
 }
 
