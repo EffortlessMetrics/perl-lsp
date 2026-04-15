@@ -41,3 +41,4 @@ perl-ast = { workspace = true }
 [dev-dependencies]
 perl-tdd-support = { workspace = true }
 insta = { version = "1.47.2" }
+perl-position-tracking = { workspace = true }

@@ -3737,6 +3737,7 @@ dependencies = [
  "insta",
  "perl-ast",
  "perl-parser-core",
+ "perl-position-tracking",
  "perl-tdd-support",
 ]
 
