@@ -94,3 +94,6 @@ fn when_reusing_one_parser_for_multiple_inputs_then_each_parse_still_returns_a_t
     assert!(first.is_some());
     assert!(second.is_some());
 }
+
+// ============================================================================
+// Incremental parsing API tests (Tree::edit and Parser::parse_with_old_tree)
