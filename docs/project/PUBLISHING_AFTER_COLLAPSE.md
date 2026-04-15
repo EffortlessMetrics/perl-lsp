@@ -6,7 +6,7 @@ For the current 132-crate pipeline, see [docs/PUBLISHING.md](../PUBLISHING.md).
 
 See [ADR-0041](../adr/0041-microcrate-collapse.md) for the architectural rationale.
 
-## ~30 published crates in topological order
+## 30 published crates in topological order
 
 The post-collapse published set, grouped by category and listed in approximate dependency order
 (leaves first, products last):
@@ -57,8 +57,8 @@ The post-collapse published set, grouped by category and listed in approximate d
 
 | Crate | Role |
 |-------|------|
-| `perl-module-resolution` | Module name → file path resolution; absorbs 13 perl-module-* crates |
-| `perl-workspace-index` | Workspace symbol index and discovery; absorbs 7 perl-workspace-* crates |
+| `perl-module` | Module name → file path resolution; absorbs 13 perl-module-* crates |
+| `perl-workspace-index` | Workspace symbol index and discovery; absorbs 6 perl-workspace-* crates |
 | `perl-semantic-analyzer` | Scope analysis, type inference, variable resolution |
 
 ### Tool integrations (1)
@@ -127,20 +127,20 @@ PR #1 of the collapse series (tracked by [issue #4412](https://github.com/Effort
 |---------|----------------|
 | `cargo xtask publish-closure` | Verifies no `publish = false` crate appears in the runtime/build dependency closure of any published crate |
 | `cargo xtask layer-check` | Enforces dependency direction rules from `xtask/layer-rules.toml` at the import level inside crates |
-| `cargo xtask published-crate-count` | Ratchet — fails if the published crate count exceeds the target ceiling (~30), preventing count creep |
+| `cargo xtask published-crate-count` | Ratchet — fails if the published crate count exceeds the target ceiling (30), preventing count creep |
 
 ## Comparison: before vs after
 
-| Metric | Before (132 crates) | After (~30 crates) |
+| Metric | Before (132 crates) | After (30 crates) |
 |--------|--------------------|--------------------|
 | Publish run time | Hours | Minutes |
 | Topo sort complexity | Non-trivial (SCCs) | Trivial (DAG, no cycles) |
-| Allowlist entries | 132 | ~30 |
+| Allowlist entries | 132 | 30 |
 | Rate-limit handling | Required | Not needed |
 | Per-release version bumps | Workspace-wide cascade | Handful of crates |
-| docs.rs pages | 132 | ~30 |
-| crates.io search results | 132 | ~30 |
-| Semver contracts | 132 | ~30 |
+| docs.rs pages | 132 | 30 |
+| crates.io search results | 132 | 30 |
+| Semver contracts | 132 | 30 |
 
 ## Reference
 
