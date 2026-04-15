@@ -59,7 +59,7 @@ This directory contains Architecture Decision Records (ADRs) for significant des
 | [ADR-0038](0038-session-economics.md) | Accepted | 2026-03-19 | Session Economics | Agent lifecycle cost model and swarm wind-down policy to preserve context budget |
 | [ADR-0039](0039-raw-pointer-parent-map.md) | Accepted | 2026-03-18 | Raw-Pointer Parent Map | Sidecar parent cache using raw pointers for efficient upward AST traversal without tree-sitter API changes |
 | [ADR-0040](0040-generated-feature-catalog-contracts.md) | Accepted | 2026-03-18 | Generated Feature Catalog Contracts | Build-time compilation of `features.toml` into generated Rust contracts via perl-feature-catalog |
-| [ADR-0041](0041-microcrate-collapse.md) | Accepted | 2026-04-14 | Microcrate Collapse | Collapse from 132 published crates to ~31; ~100 internal microcrates become subfolder modules |
+| [ADR-0041](0041-microcrate-collapse.md) | Accepted | 2026-04-14 | Microcrate Collapse | Collapse from 132 published crates to ~30; ~100 internal microcrates become subfolder modules |
 
 ## About ADRs
 
