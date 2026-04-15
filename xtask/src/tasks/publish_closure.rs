@@ -101,7 +101,7 @@ pub fn run(crate_filter: Option<String>) -> Result<()> {
         .ok_or_else(|| eyre!("No [workspace.metadata.publish.allow] found in Cargo.toml"))?;
 
     // Build set of workspace-member package IDs (used to restrict violations
-    // to workspace-local crates only — external registry crates are never flagged).
+    // to workspace-local crates only -- external registry crates are never flagged).
     let workspace_member_ids: HashSet<&str> =
         metadata.workspace_members.iter().map(String::as_str).collect();
 
@@ -132,14 +132,20 @@ pub fn run(crate_filter: Option<String>) -> Result<()> {
         metadata.packages.iter().map(|pkg| (pkg.name.as_str(), pkg.id.as_str())).collect();
 
     // Build the normal-dep resolve graph: pkg_id -> [normal dep pkg_ids].
-    let resolve_graph: HashMap<&str, Vec<&str>> =
-        metadata.resolve.as_ref().map(|r| build_normal_dep_graph(r)).unwrap_or_default();
+    // Guard: if resolve is absent the walk silently reports zero violations (false green).
+    // This should never happen because load_metadata() calls run_cargo_metadata(false)
+    // which does NOT pass --no-deps, but bail explicitly rather than silently succeed.
+    let resolve = metadata
+        .resolve
+        .as_ref()
+        .ok_or_else(|| eyre!("cargo metadata returned no resolve graph (run without --no-deps)"))?;
+    let resolve_graph: HashMap<&str, Vec<&str>> = build_normal_dep_graph(resolve);
 
     // Walk each crate and collect violations.
     let mut violations: Vec<(String, String)> = Vec::new();
     for crate_name in &crates_to_check {
         let Some(&start_id) = name_to_id.get(crate_name.as_str()) else {
-            // Crate is in the allowlist but not found in metadata — unlikely
+            // Crate is in the allowlist but not found in metadata -- unlikely
             // but skip gracefully rather than panic.
             continue;
         };
