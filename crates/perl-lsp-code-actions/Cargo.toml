@@ -18,7 +18,7 @@ doctest = false
 
 [dependencies]
 perl-builtins = { workspace = true }
-perl-diagnostics-codes = { workspace = true }
+perl-diagnostics = { workspace = true }
 perl-parser-core = { workspace = true }
 perl-ast-utils = { workspace = true }
 perl-lsp-text-utils = { workspace = true }

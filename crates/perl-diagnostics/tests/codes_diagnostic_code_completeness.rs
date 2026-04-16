@@ -4,7 +4,7 @@
 //! has a corresponding stable code in `perl-diagnostics-codes`, and that
 //! all code strings follow the expected PL/PC naming convention.
 
-use perl_diagnostics_codes::DiagnosticCode;
+use perl_diagnostics::codes::DiagnosticCode;
 
 // ---------------------------------------------------------------------------
 // Scope diagnostic codes (PL104-PL110)
@@ -134,7 +134,7 @@ fn duplicate_hash_key_code_exists() -> Result<(), Box<dyn std::error::Error>> {
     assert_eq!(code.as_str(), "PL408", "DuplicateHashKey should have code PL408");
     assert_eq!(
         code.severity(),
-        perl_diagnostics_codes::DiagnosticSeverity::Warning,
+        perl_diagnostics::codes::DiagnosticSeverity::Warning,
         "DuplicateHashKey should have Warning severity"
     );
     assert!(code.context_hint().is_some(), "DuplicateHashKey should have a context hint");
@@ -178,7 +178,7 @@ fn phase_scoped_strict_pragma_code_exists() -> Result<(), Box<dyn std::error::Er
     assert_eq!(code.as_str(), "PL502", "PhaseScopedStrictPragma should have code PL502");
     assert_eq!(
         code.severity(),
-        perl_diagnostics_codes::DiagnosticSeverity::Warning,
+        perl_diagnostics::codes::DiagnosticSeverity::Warning,
         "PhaseScopedStrictPragma should have Warning severity"
     );
     assert!(code.context_hint().is_some(), "PhaseScopedStrictPragma should have a context hint");
@@ -196,7 +196,7 @@ fn phase_scoped_warnings_pragma_code_exists() -> Result<(), Box<dyn std::error::
     assert_eq!(code.as_str(), "PL503", "PhaseScopedWarningsPragma should have code PL503");
     assert_eq!(
         code.severity(),
-        perl_diagnostics_codes::DiagnosticSeverity::Warning,
+        perl_diagnostics::codes::DiagnosticSeverity::Warning,
         "PhaseScopedWarningsPragma should have Warning severity"
     );
     assert!(code.context_hint().is_some(), "PhaseScopedWarningsPragma should have a context hint");
@@ -240,7 +240,7 @@ fn security_signal_handler_code_exists() -> Result<(), Box<dyn std::error::Error
     assert_eq!(code.as_str(), "PL602", "SecuritySignalHandler should have code PL602");
     assert_eq!(
         code.severity(),
-        perl_diagnostics_codes::DiagnosticSeverity::Warning,
+        perl_diagnostics::codes::DiagnosticSeverity::Warning,
         "SecuritySignalHandler should have Warning severity"
     );
     assert!(code.context_hint().is_some(), "SecuritySignalHandler should have a context hint");
@@ -273,7 +273,7 @@ fn module_not_found_code_exists() -> Result<(), Box<dyn std::error::Error>> {
     assert_eq!(code.as_str(), "PL701", "ModuleNotFound should have code PL701");
     assert_eq!(
         code.severity(),
-        perl_diagnostics_codes::DiagnosticSeverity::Warning,
+        perl_diagnostics::codes::DiagnosticSeverity::Warning,
         "ModuleNotFound should have Warning severity"
     );
     assert!(code.context_hint().is_some(), "ModuleNotFound should have a context hint");

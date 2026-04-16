@@ -21,11 +21,12 @@
 //! The parser disambiguates: `printf FILEHANDLE FORMAT, LIST` becomes
 //! `IndirectCall { method, object, args }` with format at `args[0]`.
 
-use perl_diagnostics_codes::DiagnosticCode;
+use perl_diagnostics::codes::DiagnosticCode;
 use perl_parser_core::ast::{Node, NodeKind};
 
 use super::super::walker::walk_node;
-use perl_lsp_diagnostic_types::{Diagnostic, DiagnosticSeverity, RelatedInformation};
+use crate::internal_types::{Diagnostic, RelatedInformation};
+use perl_diagnostics::codes::DiagnosticSeverity;
 
 /// Check for printf/sprintf format specifier count mismatches (PL405).
 pub fn check_printf_format(node: &Node, diagnostics: &mut Vec<Diagnostic>) {

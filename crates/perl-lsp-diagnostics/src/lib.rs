@@ -35,6 +35,8 @@ mod diagnostics;
 mod error_nodes;
 /// Heredoc anti-pattern detection
 mod heredoc_antipatterns;
+/// Internal diagnostic types (Diagnostic, RelatedInformation) for this crate's linting machinery.
+mod internal_types;
 /// Lint checks (common mistakes, deprecations, strict warnings, security)
 mod lints;
 /// Parse error to diagnostic conversion
@@ -46,10 +48,9 @@ mod walker;
 
 pub use diagnostics::{DiagnosticsProvider, build_parse_error_hint};
 pub use heredoc_antipatterns::detect_heredoc_antipatterns;
+pub use internal_types::{Diagnostic, DiagnosticTag, RelatedInformation};
 pub use parse_errors::{parse_error_code, parse_error_severity};
-pub use perl_lsp_diagnostic_types::{
-    Diagnostic, DiagnosticSeverity, DiagnosticTag, RelatedInformation,
-};
+pub use perl_diagnostics::codes::DiagnosticSeverity;
 
 // Re-export lint checks from the lints module
 pub use lints::common_mistakes;

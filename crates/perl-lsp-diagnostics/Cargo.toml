@@ -17,8 +17,7 @@ categories = ["development-tools", "text-editors"]
 doctest = false
 
 [dependencies]
-perl-diagnostics-codes = { workspace = true }
-perl-lsp-diagnostic-types = { workspace = true }
+perl-diagnostics = { workspace = true }
 perl-parser-core = { workspace = true }
 perl-semantic-analyzer = { workspace = true }
 perl-workspace-index = { workspace = true }

@@ -30,9 +30,11 @@ use crate::lints::version_compat::check_version_compat;
 use crate::parse_errors::{parse_error_code, parse_error_severity};
 use crate::scope::scope_issues_to_diagnostics;
 
-// Re-export diagnostic types from the shared SRP microcrate.
+// Re-export diagnostic types from local internal types module.
 #[allow(unused_imports)]
-pub use perl_lsp_diagnostic_types::{Diagnostic, DiagnosticSeverity, RelatedInformation};
+pub use crate::internal_types::{Diagnostic, RelatedInformation};
+#[allow(unused_imports)]
+pub use perl_diagnostics::codes::DiagnosticSeverity;
 
 /// Diagnostics provider
 ///

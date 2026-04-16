@@ -1706,13 +1706,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "perl-diagnostics-codes"
-version = "0.12.4"
-dependencies = [
- "serde",
-]
-
-[[package]]
 name = "perl-edit"
 version = "0.12.4"
 dependencies = [
@@ -1829,7 +1822,7 @@ version = "0.12.4"
 dependencies = [
  "perl-ast-utils",
  "perl-builtins",
- "perl-diagnostics-codes",
+ "perl-diagnostics",
  "perl-lsp-diagnostics",
  "perl-lsp-import-management",
  "perl-lsp-rename",
@@ -1903,26 +1896,13 @@ dependencies = [
 ]
 
 [[package]]
-name = "perl-lsp-diagnostic-catalog"
-version = "0.12.4"
-dependencies = [
- "perl-diagnostics-codes",
- "serde_json",
-]
-
-[[package]]
-name = "perl-lsp-diagnostic-types"
-version = "0.12.4"
-
-[[package]]
 name = "perl-lsp-diagnostics"
 version = "0.12.4"
 dependencies = [
  "insta",
  "perl-corpus",
- "perl-diagnostics-codes",
+ "perl-diagnostics",
  "perl-heredoc-anti-patterns",
- "perl-lsp-diagnostic-types",
  "perl-parser",
  "perl-parser-core",
  "perl-pragma",
@@ -2219,7 +2199,7 @@ dependencies = [
  "perl-corpus",
  "perl-dap",
  "perl-dap-platform",
- "perl-diagnostics-codes",
+ "perl-diagnostics",
  "perl-incremental-parsing",
  "perl-keywords",
  "perl-lsp-ai-provider",
@@ -2232,7 +2212,6 @@ dependencies = [
  "perl-lsp-completion-item",
  "perl-lsp-config",
  "perl-lsp-critic-parser",
- "perl-lsp-diagnostic-catalog",
  "perl-lsp-diagnostics",
  "perl-lsp-document-highlight",
  "perl-lsp-document-links",

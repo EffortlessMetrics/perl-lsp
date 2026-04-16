@@ -42,7 +42,6 @@ members = [
     "crates/perl-subprocess-runtime",
     "crates/perl-lsp-formatting",
     "crates/perl-lsp-formatting-types",
-    "crates/perl-lsp-diagnostic-types",
     "crates/perl-lsp-diagnostics",
     "crates/perl-lsp-semantic-tokens",
     "crates/perl-lsp-inlay-hints",
@@ -57,7 +56,6 @@ members = [
     "crates/perl-lsp-feature-policy",
     "crates/perl-lsp-feature-governance",
     "crates/perl-lsp-launcher",
-    "crates/perl-lsp-diagnostic-catalog",
     "crates/perl-lsp-navigation",
     "crates/perl-lsp-type-hierarchy",
     "crates/perl-lsp-document-links",
@@ -82,7 +80,6 @@ members = [
     "crates/perl-lsp-uri",
     "crates/perl-lsp-config",
     "crates/perl-diagnostics",
-    "crates/perl-diagnostics-codes",
     "crates/perl-position-tracking",
     "crates/perl-symbol-types",
     "crates/perl-symbol-cursor",
@@ -188,7 +185,7 @@ allow = [
     # Tier 3 — Analysis and indexing
     "perl-workspace-index",
     "perl-semantic-analyzer",
-    "perl-lsp-diagnostic-types",
+    "perl-diagnostics",
     "perl-lsp-diagnostics",
     "perl-lsp-text-utils",
     "perl-lsp-rename",
@@ -263,7 +260,6 @@ allow = [
     "perl-lsp-feature-grid",
     "perl-lsp-feature-governance",
     "perl-lsp-launcher",
-    "perl-lsp-diagnostic-catalog",
     "perl-lsp-limits",
     "perl-lsp-uri",
     "perl-lsp-config",
@@ -276,7 +272,6 @@ allow = [
     "perl-workspace-ignore",
     "perl-source-file",
     "perl-workspace-discovery",
-    "perl-diagnostics-codes",
 
     # Tier 7 — Top-level application
     "perl-lsp-rs",
@@ -370,7 +365,6 @@ perl-lsp-formatting-types = { path = "crates/perl-lsp-formatting-types", version
 perl-lsp-formatting = { path = "crates/perl-lsp-formatting", version = "0.12.4" }
 perl-tdd-support = { path = "crates/perl-tdd-support", version = "0.12.4" }
 perl-test-must = { path = "crates/perl-test-must", version = "0.12.4" }
-perl-lsp-diagnostic-types = { path = "crates/perl-lsp-diagnostic-types", version = "0.12.4" }
 perl-lsp-diagnostics = { path = "crates/perl-lsp-diagnostics", version = "0.12.4" }
 perl-lsp-semantic-tokens = { path = "crates/perl-lsp-semantic-tokens", version = "0.12.4" }
 perl-lsp-inlay-hints = { path = "crates/perl-lsp-inlay-hints", version = "0.12.4" }
@@ -387,7 +381,6 @@ perl-lsp-feature-policy = { path = "crates/perl-lsp-feature-policy", version = "
 perl-lsp-feature-grid = { path = "crates/perl-lsp-feature-grid", version = "0.12.4" }
 perl-lsp-feature-governance = { path = "crates/perl-lsp-feature-governance", version = "0.12.4" }
 perl-lsp-launcher = { path = "crates/perl-lsp-launcher", version = "0.12.4" }
-perl-lsp-diagnostic-catalog = { path = "crates/perl-lsp-diagnostic-catalog", version = "0.12.4" }
 perl-lsp-navigation = { path = "crates/perl-lsp-navigation", version = "0.12.4" }
 perl-lsp-type-hierarchy = { path = "crates/perl-lsp-type-hierarchy", version = "0.12.4" }
 perl-lsp-workspace-symbols = { path = "crates/perl-lsp-workspace-symbols", version = "0.12.4" }
@@ -401,7 +394,6 @@ perl-lsp-code-actions = { path = "crates/perl-lsp-code-actions", version = "0.12
 perl-lsp-folding = { path = "crates/perl-lsp-folding", version = "0.12.4" }
 perl-lsp-selection-range = { path = "crates/perl-lsp-selection-range", version = "0.12.4" }
 perl-diagnostics = { path = "crates/perl-diagnostics", version = "0.12.4" }
-perl-diagnostics-codes = { path = "crates/perl-diagnostics-codes", version = "0.12.4" }
 # Tier 3: Two-level dependencies
 perl-workspace-index = { path = "crates/perl-workspace-index", version = "0.12.4" }
 perl-workspace-index-monitoring = { path = "crates/perl-workspace-index-monitoring", version = "0.12.4" }

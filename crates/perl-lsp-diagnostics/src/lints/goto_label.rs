@@ -10,8 +10,9 @@
 //! |------|----------|-------------|
 //! | `PL409` | Warning | `goto LABEL` references a label that is not defined in the file |
 
-use perl_diagnostics_codes::DiagnosticCode;
-use perl_lsp_diagnostic_types::{Diagnostic, DiagnosticSeverity, RelatedInformation};
+use crate::internal_types::{Diagnostic, RelatedInformation};
+use perl_diagnostics::codes::DiagnosticCode;
+use perl_diagnostics::codes::DiagnosticSeverity;
 use perl_parser_core::ast::{Node, NodeKind};
 use perl_semantic_analyzer::symbol::{SymbolKind, SymbolTable};
 

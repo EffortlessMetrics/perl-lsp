@@ -3,7 +3,8 @@
 //! This module provides functionality for removing duplicate diagnostics
 //! to avoid reporting the same issue multiple times.
 
-use perl_lsp_diagnostic_types::{Diagnostic, DiagnosticSeverity};
+use crate::internal_types::Diagnostic;
+use perl_diagnostics::codes::DiagnosticSeverity;
 
 /// Byte-distance threshold for cascade suppression.
 ///

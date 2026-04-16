@@ -1,5 +1,5 @@
 use crate::features::diagnostics::Diagnostic;
-use perl_diagnostics_codes::DiagnosticCode;
+use perl_diagnostics::codes::DiagnosticCode;
 
 mod fixes;
 mod source_utils;

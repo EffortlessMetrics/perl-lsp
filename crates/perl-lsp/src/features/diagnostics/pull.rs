@@ -17,7 +17,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::state::DocumentState;
 use crate::util::uri::parse_uri;
-use perl_diagnostics_codes::DiagnosticCode;
+use perl_diagnostics::codes::DiagnosticCode;
 use perl_lsp_diagnostics::{parse_error_code, parse_error_severity};
 use perl_parser::Parser;
 use perl_parser::error::ParseError;

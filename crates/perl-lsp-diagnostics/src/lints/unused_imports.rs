@@ -10,13 +10,12 @@
 //! |------|----------|-------------|
 //! | `unused-import` | Hint | Module appears to be unused |
 
-use perl_diagnostics_codes::DiagnosticCode;
+use perl_diagnostics::codes::DiagnosticCode;
 use perl_parser_core::ast::{Node, NodeKind};
 
 use super::super::walker::walk_node;
-use perl_lsp_diagnostic_types::{
-    Diagnostic, DiagnosticSeverity, DiagnosticTag, RelatedInformation,
-};
+use crate::internal_types::{Diagnostic, DiagnosticTag, RelatedInformation};
+use perl_diagnostics::codes::DiagnosticSeverity;
 
 /// Pragmas that should never be flagged as unused (they operate via side effects).
 const PRAGMA_SKIP_LIST: &[&str] = &[

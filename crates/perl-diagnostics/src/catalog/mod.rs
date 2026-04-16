@@ -1,132 +1,207 @@
 //! Diagnostic metadata catalog.
 //!
-//! Functions to build and work with diagnostic metadata.
+//! Functions to build LSP-facing metadata payloads from stable diagnostic codes.
+//! This module provides a focused mapping from [`crate::codes::DiagnosticCode`]
+//! to LSP-facing metadata.
 
-use std::fmt;
+use crate::codes::DiagnosticCode;
+use serde_json::{Value, json};
 
-/// Diagnostic metadata.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+/// Diagnostic metadata payload used by LSP diagnostics.
 pub struct DiagnosticMeta {
-    /// The diagnostic code as a string.
-    pub code: String,
-    /// The severity level.
-    pub severity: String,
-    /// The message.
-    pub message: String,
+    /// Stable diagnostic code (for example, `"PL001"`).
+    pub code: Value,
+    /// Optional code description object containing a docs URL.
+    pub desc: Option<Value>,
+    /// Optional human-readable context hint explaining what the diagnostic
+    /// means and how to resolve it.  `None` for codes (e.g. Perl::Critic)
+    /// whose per-policy descriptions already serve this purpose.
+    pub hint: Option<&'static str>,
 }
 
-impl fmt::Display for DiagnosticMeta {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}: {}", self.code, self.message)
+impl Default for DiagnosticMeta {
+    fn default() -> Self {
+        Self { code: json!("PL001"), desc: None, hint: None }
     }
 }
 
-/// Build diagnostic metadata from a code.
-pub fn diagnostic_meta(_code: crate::codes::DiagnosticCode) -> DiagnosticMeta {
-    DiagnosticMeta::default()
+impl DiagnosticMeta {
+    fn from_code(code: DiagnosticCode) -> Self {
+        Self {
+            code: json!(code.as_str()),
+            desc: code.documentation_url().map(|url| json!({ "href": url })),
+            hint: code.context_hint(),
+        }
+    }
 }
 
-/// Parse error diagnostic.
-pub fn parse_error(_msg: &str) -> DiagnosticMeta {
-    DiagnosticMeta::default()
+/// Build LSP diagnostic metadata from a stable diagnostic code.
+#[must_use]
+pub fn diagnostic_meta(code: DiagnosticCode) -> DiagnosticMeta {
+    DiagnosticMeta::from_code(code)
 }
 
-/// Syntax error diagnostic.
-pub fn syntax_error(_msg: &str) -> DiagnosticMeta {
-    DiagnosticMeta::default()
+/// General parse error diagnostic (PL001).
+#[must_use]
+pub fn parse_error() -> DiagnosticMeta {
+    diagnostic_meta(DiagnosticCode::ParseError)
 }
 
-/// Unexpected EOF diagnostic.
+/// Syntax error diagnostic (PL002).
+#[must_use]
+pub fn syntax_error() -> DiagnosticMeta {
+    diagnostic_meta(DiagnosticCode::SyntaxError)
+}
+
+/// Unexpected end-of-file diagnostic (PL003).
+#[must_use]
 pub fn unexpected_eof() -> DiagnosticMeta {
-    DiagnosticMeta::default()
+    diagnostic_meta(DiagnosticCode::UnexpectedEof)
 }
 
-/// Missing strict diagnostic.
+/// Missing `use strict` pragma diagnostic (PL100).
+#[must_use]
 pub fn missing_strict() -> DiagnosticMeta {
-    DiagnosticMeta::default()
+    diagnostic_meta(DiagnosticCode::MissingStrict)
 }
 
-/// Missing warnings diagnostic.
+/// Missing `use warnings` pragma diagnostic (PL101).
+#[must_use]
 pub fn missing_warnings() -> DiagnosticMeta {
-    DiagnosticMeta::default()
+    diagnostic_meta(DiagnosticCode::MissingWarnings)
 }
 
-/// Unused variable diagnostic.
-pub fn unused_var(_name: &str) -> DiagnosticMeta {
-    DiagnosticMeta::default()
+/// Unused variable diagnostic (PL102).
+#[must_use]
+pub fn unused_var() -> DiagnosticMeta {
+    diagnostic_meta(DiagnosticCode::UnusedVariable)
 }
 
-/// Undefined variable diagnostic.
-pub fn undefined_var(_name: &str) -> DiagnosticMeta {
-    DiagnosticMeta::default()
+/// Undefined variable diagnostic (PL103).
+#[must_use]
+pub fn undefined_var() -> DiagnosticMeta {
+    diagnostic_meta(DiagnosticCode::UndefinedVariable)
 }
 
-/// Missing package declaration diagnostic.
+/// Missing package declaration diagnostic (PL200).
+#[must_use]
 pub fn missing_package_declaration() -> DiagnosticMeta {
-    DiagnosticMeta::default()
+    diagnostic_meta(DiagnosticCode::MissingPackageDeclaration)
 }
 
-/// Duplicate package diagnostic.
-pub fn duplicate_package(_name: &str) -> DiagnosticMeta {
-    DiagnosticMeta::default()
+/// Duplicate package declaration diagnostic (PL201).
+#[must_use]
+pub fn duplicate_package() -> DiagnosticMeta {
+    diagnostic_meta(DiagnosticCode::DuplicatePackage)
 }
 
-/// Duplicate subroutine diagnostic.
-pub fn duplicate_sub(_name: &str) -> DiagnosticMeta {
-    DiagnosticMeta::default()
+/// Duplicate subroutine definition diagnostic (PL300).
+#[must_use]
+pub fn duplicate_sub() -> DiagnosticMeta {
+    diagnostic_meta(DiagnosticCode::DuplicateSubroutine)
 }
 
-/// Missing return diagnostic.
+/// Missing explicit return statement diagnostic (PL301).
+#[must_use]
 pub fn missing_return() -> DiagnosticMeta {
-    DiagnosticMeta::default()
+    diagnostic_meta(DiagnosticCode::MissingReturn)
 }
 
-/// Bareword filehandle diagnostic.
-pub fn bareword_filehandle(_name: &str) -> DiagnosticMeta {
-    DiagnosticMeta::default()
+/// Bareword filehandle usage diagnostic (PL400).
+#[must_use]
+pub fn bareword_filehandle() -> DiagnosticMeta {
+    diagnostic_meta(DiagnosticCode::BarewordFilehandle)
 }
 
-/// Two-argument open diagnostic.
+/// Two-argument `open()` usage diagnostic (PL401).
+#[must_use]
 pub fn two_arg_open() -> DiagnosticMeta {
-    DiagnosticMeta::default()
+    diagnostic_meta(DiagnosticCode::TwoArgOpen)
 }
 
-/// Implicit return diagnostic.
+/// Implicit return value diagnostic (PL402).
+#[must_use]
 pub fn implicit_return() -> DiagnosticMeta {
-    DiagnosticMeta::default()
+    diagnostic_meta(DiagnosticCode::ImplicitReturn)
 }
 
-/// Eval error flow diagnostic.
+/// Eval / try error-flow diagnostic (PL407).
+#[must_use]
 pub fn eval_error_flow() -> DiagnosticMeta {
-    DiagnosticMeta::default()
+    diagnostic_meta(DiagnosticCode::EvalErrorFlow)
 }
 
-/// Perl::Critic severity 5 diagnostic.
-pub fn critic_severity_5(_rule: &str) -> DiagnosticMeta {
-    DiagnosticMeta::default()
+/// Perl::Critic severity-5 violation diagnostic (PC005).
+#[must_use]
+pub fn critic_severity_5() -> DiagnosticMeta {
+    diagnostic_meta(DiagnosticCode::CriticSeverity5)
 }
 
-/// Perl::Critic severity 4 diagnostic.
-pub fn critic_severity_4(_rule: &str) -> DiagnosticMeta {
-    DiagnosticMeta::default()
+/// Perl::Critic severity-4 violation diagnostic (PC004).
+#[must_use]
+pub fn critic_severity_4() -> DiagnosticMeta {
+    diagnostic_meta(DiagnosticCode::CriticSeverity4)
 }
 
-/// Perl::Critic severity 3 diagnostic.
-pub fn critic_severity_3(_rule: &str) -> DiagnosticMeta {
-    DiagnosticMeta::default()
+/// Perl::Critic severity-3 violation diagnostic (PC003).
+#[must_use]
+pub fn critic_severity_3() -> DiagnosticMeta {
+    diagnostic_meta(DiagnosticCode::CriticSeverity3)
 }
 
-/// Perl::Critic severity 2 diagnostic.
-pub fn critic_severity_2(_rule: &str) -> DiagnosticMeta {
-    DiagnosticMeta::default()
+/// Perl::Critic severity-2 violation diagnostic (PC002).
+#[must_use]
+pub fn critic_severity_2() -> DiagnosticMeta {
+    diagnostic_meta(DiagnosticCode::CriticSeverity2)
 }
 
-/// Perl::Critic severity 1 diagnostic.
-pub fn critic_severity_1(_rule: &str) -> DiagnosticMeta {
-    DiagnosticMeta::default()
+/// Perl::Critic severity-1 violation diagnostic (PC001).
+#[must_use]
+pub fn critic_severity_1() -> DiagnosticMeta {
+    diagnostic_meta(DiagnosticCode::CriticSeverity1)
 }
 
-/// Infer a diagnostic code from a message.
-pub fn from_message(_msg: &str) -> Option<crate::codes::DiagnosticCode> {
-    None
+/// Guess diagnostic metadata from a free-form message.
+#[must_use]
+pub fn from_message(msg: &str) -> Option<DiagnosticMeta> {
+    DiagnosticCode::from_message(msg).map(diagnostic_meta)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{eval_error_flow, from_message, parse_error};
+
+    #[test]
+    fn parse_error_includes_stable_code_and_docs_url() {
+        let meta = parse_error();
+        assert_eq!(meta.code, "PL001");
+        assert_eq!(
+            meta.desc,
+            Some(serde_json::json!({ "href": "https://docs.perl-lsp.org/errors/PL001" }))
+        );
+    }
+
+    #[test]
+    fn critic_codes_have_no_docs_url() {
+        let meta = super::critic_severity_1();
+        assert_eq!(meta.code, "PC001");
+        assert!(meta.desc.is_none());
+    }
+
+    #[test]
+    fn eval_error_flow_has_stable_code_and_docs_url() {
+        let meta = eval_error_flow();
+        assert_eq!(meta.code, "PL407");
+        assert_eq!(
+            meta.desc,
+            Some(serde_json::json!({ "href": "https://docs.perl-lsp.org/errors/PL407" }))
+        );
+    }
+
+    #[test]
+    fn message_inference_is_case_insensitive() {
+        let meta = from_message("Missing USE STRICT pragma");
+        assert!(meta.is_some());
+        assert_eq!(meta.as_ref().map(|m| &m.code), Some(&serde_json::json!("PL100")));
+    }
 }

@@ -6,7 +6,7 @@
 //! - DiagnosticCode
 //! - DiagnosticCategory
 
-use perl_diagnostics_codes::{
+use perl_diagnostics::codes::{
     DiagnosticCategory, DiagnosticCode, DiagnosticSeverity, DiagnosticTag,
 };
 

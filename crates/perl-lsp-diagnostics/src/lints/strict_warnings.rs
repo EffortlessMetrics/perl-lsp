@@ -11,12 +11,13 @@
 //! | `missing-warnings` | Information | `use warnings` pragma not found |
 //! | `misspelled-pragma` | Warning | Pragma name appears misspelled |
 
-use perl_diagnostics_codes::DiagnosticCode;
+use perl_diagnostics::codes::DiagnosticCode;
 use perl_parser_core::ast::{Node, NodeKind};
 use perl_pragma::PragmaTracker;
 
 use super::super::walker::walk_node;
-use perl_lsp_diagnostic_types::{Diagnostic, DiagnosticSeverity, RelatedInformation};
+use crate::internal_types::{Diagnostic, RelatedInformation};
+use perl_diagnostics::codes::DiagnosticSeverity;
 
 /// Known pragma names and their common misspellings.
 ///

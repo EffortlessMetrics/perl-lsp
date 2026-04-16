@@ -6,8 +6,9 @@
 
 use std::collections::{HashMap, HashSet};
 
-use perl_diagnostics_codes::DiagnosticCode;
-use perl_lsp_diagnostic_types::{Diagnostic, DiagnosticSeverity};
+use crate::internal_types::Diagnostic;
+use perl_diagnostics::codes::DiagnosticCode;
+use perl_diagnostics::codes::DiagnosticSeverity;
 use perl_parser_core::ast::Node;
 use perl_semantic_analyzer::{
     class_model::{ClassModel, ClassModelBuilder},

@@ -45,6 +45,7 @@ pub mod highlight;
 pub mod hook_checks;
 pub mod ignored_tests;
 pub mod inject_sha_assets;
+pub mod layer_check;
 pub mod metrics;
 pub mod parse_rust;
 pub mod parser_corpus_sweep;

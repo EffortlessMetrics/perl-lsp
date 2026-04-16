@@ -4,7 +4,7 @@
 //! consumers (LSP providers, formatters) can attach it to error messages
 //! without pulling in `perl-diagnostics-codes` directly.
 
-use perl_lsp_diagnostic_catalog as catalog;
+use perl_diagnostics::catalog;
 
 #[test]
 fn parse_error_meta_has_hint() {

@@ -10,13 +10,12 @@
 //! | `deprecated-defined` | Warning | `defined(@array)` or `defined(%hash)` is deprecated |
 //! | `deprecated-array-base` | Warning | `$[` variable is deprecated since Perl 5.12 |
 
-use perl_diagnostics_codes::DiagnosticCode;
+use perl_diagnostics::codes::DiagnosticCode;
 use perl_parser_core::ast::{Node, NodeKind};
 
 use super::super::walker::walk_node;
-use perl_lsp_diagnostic_types::{
-    Diagnostic, DiagnosticSeverity, DiagnosticTag, RelatedInformation,
-};
+use crate::internal_types::{Diagnostic, DiagnosticTag, RelatedInformation};
+use perl_diagnostics::codes::DiagnosticSeverity;
 
 /// Check for deprecated syntax
 ///
