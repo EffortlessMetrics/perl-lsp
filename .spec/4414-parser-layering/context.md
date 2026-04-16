@@ -33,14 +33,14 @@ This convenience came at the cost of architectural inversion.
 
 1. **Microcrate collapse roadmap** (#4410) requires parser to be a pure leaf crate
 2. **Dependency graph correctness** — application (perl-lsp) should not be imported by foundations (perl-parser)
-3. **Timing decision** — ADR-0041 (PR #4413) specifies v0.14.0 as clean-break release, not v0.13.0
+3. **Timing decision** — ADR-0041 (PR #4413) specifies v0.13.0 as clean-break release, not v0.13.0
 4. **Scope clarity** — parser + analysis layers stay focused on language semantics; LSP features become explicit composition in `perl-lsp`
 
 ## Oppositional Planning Objection and Resolution
 
 **Objection raised**: Why not use a feature flag (`cfg(feature = "lsp-compat")`) to gate the re-exports and maintain backward compatibility?
 
-**Decision**: Rejected. ADR-0041 specifies a v0.14.0 clean break, not an incremental migration. Feature-gated re-exports would:
+**Decision**: Rejected. ADR-0041 specifies a v0.13.0 clean break, not an incremental migration. Feature-gated re-exports would:
 - Complicate the parser crate's public API surface (testing two configs)
 - Defer the architectural fix, making follow-up work harder
 - Create confusion about "the right" import path
@@ -126,7 +126,7 @@ Justification:
 ## Related Documents
 
 - **#4410**: Microcrate collapse roadmap — tracks the full sequence of dependency unwinding
-- **ADR-0041** (PR #4413): Architectural Decision Record — v0.14.0 clean break, rationale for timing, alternatives considered
+- **ADR-0041** (PR #4413): Architectural Decision Record — v0.13.0 clean break, rationale for timing, alternatives considered
 - **CLAUDE.md** (perl-lsp): Crate structure diagram showing current dependencies and planned state
 
 ## Precedent in Codebase

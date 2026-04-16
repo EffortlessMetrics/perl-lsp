@@ -1,10 +1,13 @@
-# Migration Guide — v0.14.0
+# Migration Guide — v0.13.0
 
-This guide is for downstream users of perl-lsp crates who are upgrading to v0.14.0.
+This guide is for downstream users of perl-lsp crates who are upgrading to v0.13.0.
 
-## What's changing in v0.14.0
+> **Note (2026-04-16):** This file was previously named `MIGRATION_v0.14.md`. The target release
+> for the microcrate collapse clean break was corrected to v0.13.0. See ADR-0041 Amendment 2.
 
-v0.14.0 is a **clean break** release. The published crate count drops from 132 to **30**.
+## What's changing in v0.13.0
+
+v0.13.0 is a **clean break** release. The published crate count drops from 132 to **30**.
 Approximately 100 product-internal microcrates stop being published. Their code moves
 into subfolder modules inside the owning published crate. There are no bridge crates
 or re-export shims — old crate names will no longer appear on crates.io after this release.
@@ -25,7 +28,7 @@ The same applies to the other 26 crates in the published set:
 - `perl-lexer`, `perl-token`, `perl-line-index`, `perl-uri`, `perl-pod`
 - `perl-diagnostic-catalog`
 - `perl-lsp-protocol`, `perl-content-length-framing`
-- `perl-semantic-analyzer`, `perl-module`, `perl-workspace-index`
+- `perl-semantic-analyzer`, `perl-module`, `perl-workspace`
 - `perl-symbol`
 - `perl-lsp-perltidy`
 - `perl-corpus`, `perl-tdd-support`, `perl-test-must`, `perl-test-generators`
@@ -70,7 +73,7 @@ artifact and a semver contract. The full analysis is in
 ## Timeline
 
 - The collapse is running now, before the next release ships.
-- v0.14.0 will be the first release with the new 30-crate surface.
+- v0.13.0 will be the first release with the new 30-crate surface.
 - Each wave PR updates this migration table as it lands.
 - There is no extended migration window — old crate names are not re-published as shims.
 

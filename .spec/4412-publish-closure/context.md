@@ -1,7 +1,7 @@
 # Context: publish-closure gate implementation
 
 **Issue**: #4412
-**Parent epic**: #4410 (Microcrate collapse, v0.14.x)
+**Parent epic**: #4410 (Microcrate collapse, v0.13.0)
 **Design document**: PR #4413 (ADR-0041, microcrate collapse design)
 **Scope**: `publish-closure` subcommand ONLY
 
