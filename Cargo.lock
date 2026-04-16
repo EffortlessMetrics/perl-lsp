@@ -1560,132 +1560,23 @@ dependencies = [
  "nix",
  "once_cell",
  "perl-content-length-framing",
- "perl-dap-breakpoint",
- "perl-dap-command-args",
- "perl-dap-config",
- "perl-dap-eval",
- "perl-dap-platform",
- "perl-dap-security",
- "perl-dap-stack",
- "perl-dap-types",
- "perl-dap-variables",
  "perl-feature-catalog",
  "perl-keywords",
  "perl-lsp-launcher",
  "perl-module",
+ "perl-parser",
+ "perl-path-security",
  "perl-tdd-support",
  "proptest",
  "regex",
+ "ropey",
  "serde",
  "serde_json",
  "tempfile",
+ "thiserror",
  "tokio",
  "tracing",
  "winapi",
-]
-
-[[package]]
-name = "perl-dap-breakpoint"
-version = "0.12.4"
-dependencies = [
- "perl-parser",
- "perl-tdd-support",
- "ropey",
- "thiserror",
-]
-
-[[package]]
-name = "perl-dap-command-args"
-version = "0.12.4"
-
-[[package]]
-name = "perl-dap-config"
-version = "0.12.4"
-dependencies = [
- "anyhow",
- "serde",
- "serde_json",
- "tracing",
-]
-
-[[package]]
-name = "perl-dap-eval"
-version = "0.12.4"
-dependencies = [
- "once_cell",
- "perl-tdd-support",
- "regex",
- "thiserror",
-]
-
-[[package]]
-name = "perl-dap-platform"
-version = "0.12.4"
-dependencies = [
- "anyhow",
- "perl-dap-command-args",
- "perl-tdd-support",
- "tempfile",
-]
-
-[[package]]
-name = "perl-dap-security"
-version = "0.12.4"
-dependencies = [
- "anyhow",
- "perl-path-security",
- "perl-tdd-support",
- "tempfile",
- "thiserror",
-]
-
-[[package]]
-name = "perl-dap-shell"
-version = "0.12.4"
-dependencies = [
- "perl-dap-command-args",
- "perl-dap-platform",
-]
-
-[[package]]
-name = "perl-dap-stack"
-version = "0.12.4"
-dependencies = [
- "once_cell",
- "perl-tdd-support",
- "regex",
- "serde",
- "serde_json",
- "thiserror",
-]
-
-[[package]]
-name = "perl-dap-types"
-version = "0.12.4"
-dependencies = [
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "perl-dap-value"
-version = "0.12.4"
-dependencies = [
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "perl-dap-variables"
-version = "0.12.4"
-dependencies = [
- "once_cell",
- "perl-dap-value",
- "perl-tdd-support",
- "regex",
- "serde",
- "serde_json",
- "thiserror",
 ]
 
 [[package]]
@@ -1880,7 +1771,7 @@ dependencies = [
 name = "perl-lsp-config"
 version = "0.12.4"
 dependencies = [
- "perl-dap-platform",
+ "perl-dap",
  "serde",
  "serde_json",
  "tempfile",
@@ -2210,7 +2101,6 @@ dependencies = [
  "perl-content-length-framing",
  "perl-corpus",
  "perl-dap",
- "perl-dap-platform",
  "perl-diagnostics-codes",
  "perl-incremental-parsing",
  "perl-keywords",
