@@ -151,7 +151,7 @@ The ~30-crate target reflects "all the legitimate reusable kernels and products,
 ### Negative
 
 - **One-time migration cost**: 14 PRs across several weeks of focused work.
-- **Downstream breakage for direct microcrate dependents**: addressed via [`docs/MIGRATION_v0.14.md`](../MIGRATION_v0.14.md) and a major-version bump.
+- **Downstream breakage for direct microcrate dependents**: addressed via [`docs/MIGRATION_v0.13.md`](../MIGRATION_v0.13.md) and a major-version bump.
 - **Snapshot test path drift**: per-wave review and regeneration step.
 - **Loss of crate-level test scoping**: `cargo test -p perl-X` becomes `cargo test -p perl-parser X::` for absorbed crates.
 - **Reduced crate-level incremental granularity**: a change to a former microcrate now rebuilds the whole owning crate. Mitigated by larger crates having less per-change overhead.
@@ -161,7 +161,7 @@ The ~30-crate target reflects "all the legitimate reusable kernels and products,
 - **Layer guards** (`cargo xtask layer-check`) enforce dependency direction inside crates, replacing the implicit guard that crate boundaries provided.
 - **Publish-closure guard** (`cargo xtask publish-closure`) prevents `publish = false` crates from re-entering the runtime graph.
 - **Ratchet** (`cargo xtask published-crate-count`) prevents published count creep.
-- **Migration guide** (`docs/MIGRATION_v0.14.md`) maps every retired crate to its new module path.
+- **Migration guide** (`docs/MIGRATION_v0.13.md`) maps every retired crate to its new module path.
 - **Folder discipline preserved**: each former microcrate is a folder with `mod.rs` facade, `pub(crate)` default, preserved tests, optional `CLAUDE.md`. Agents and humans navigating the codebase still see a microcrate-shaped layout.
 - **Wave merge serialization**: same-Cargo.toml waves serialize (parser train: PR #2 → A → B → C → D; LSP train: F → G1 → G2 → G3); cross-train parallelism is allowed (DAP wave H parallel after D).
 
@@ -218,7 +218,7 @@ The original Decision section listed "~30" informally. After constructing the fu
 | Foundation primitives | 5 | perl-lexer, perl-token, perl-line-index, perl-uri, perl-pod |
 | Diagnostic catalog (NEW) | 1 | perl-diagnostic-catalog |
 | Wire protocols | 2 | perl-lsp-protocol, perl-content-length-framing |
-| Semantic kernels | 3 | perl-semantic-analyzer, perl-module, perl-workspace-index |
+| Semantic kernels | 3 | perl-semantic-analyzer, perl-module, perl-workspace (see Amendment 2) |
 | Symbol model | 1 | perl-symbol |
 | Tool integrations | 1 | perl-lsp-perltidy |
 | Test/corpus ecosystem | 4 | perl-corpus, perl-tdd-support, perl-test-must, perl-test-generators |
@@ -239,7 +239,7 @@ The migration wave sequence is fixed as:
 
 ```
 1. perl-module-* → perl-module         (PILOT)
-2. perl-workspace-* → perl-workspace-index
+2. perl-workspace-* → perl-workspace   (perl-workspace-index renamed; see Amendment 2)
 3. lexer satellites → perl-lexer
 4. parser/AST satellites → perl-parser
 5. semantic shards → perl-semantic-analyzer
@@ -265,10 +265,51 @@ Two additional CI gates join the three listed in the Decision section:
 
 The per-crate workboard at [`.spec/microcrate-collapse/ledger.md`](../../.spec/microcrate-collapse/ledger.md) is the authoritative source for crate disposition, wave assignment, and progress tracking. It supersedes any comments, draft notes, or memory entries that reference "~30/31" or name `perl-module-resolution` as the Wave 1 target. Agents and humans executing the collapse must read the ledger, not reconstruct from this ADR alone.
 
+### Amendment 2 — 2026-04-16: Target release is v0.13.0 (not v0.14.x); Wave 2 owner renamed perl-workspace
+
+**Source:** User correction 2026-04-16.
+
+#### Target release: v0.13.0 clean-break (not v0.14.x)
+
+The Decision section and Amendment 1 referenced "v0.14.x" as the release that ships the new
+30-crate surface. This was incorrect. The correct target is **v0.13.0**.
+
+Current workspace version is **0.12.4**. The microcrate collapse ships as **v0.13.0** — a clean
+break that moves directly from the 0.12.x confidence track to the collapsed surface. There is no
+interim pre-collapse v0.13.0 release; v0.13.0 *is* the collapse release.
+
+Any document, spec file, or comment that says "v0.14.x", "v0.14.0", or implies a pre-collapse
+v0.13.0 ship gate is incorrect. The correction is: **v0.13.0 is the clean-break collapse release**.
+
+The migration guide will be published as `docs/MIGRATION_v0.13.md` (not `MIGRATION_v0.14.md`).
+
+#### Wave 2 owner renamed: perl-workspace-index → perl-workspace
+
+Wave 2 (the `perl-workspace-*` collapse) was slotted to absorb 6 satellites into the existing
+`perl-workspace-index` crate. The 6 satellites span two functional families:
+
+- **Enumeration**: `perl-workspace-discovery`, `perl-workspace-folder`, `perl-workspace-ignore`
+- **Observability**: `perl-workspace-index-monitoring`, `perl-workspace-index-slo`, `perl-workspace-index-state-machine`
+
+The absorbed scope is broader than "indexing." The existing `perl-workspace-index` crate will
+be **renamed to `perl-workspace`** during Wave 2 execution. `perl-workspace` is a more accurate
+external noun for a crate that owns workspace enumeration, discovery, and observability alongside
+the index itself.
+
+The Amendment 1 table in this document listed `perl-workspace-index` under "Semantic kernels."
+That entry should now read **`perl-workspace`**:
+
+| Category | Count | Crates |
+|----------|------:|--------|
+| Semantic kernels | 3 | perl-semantic-analyzer, perl-module, **perl-workspace** |
+
+The migration ledger at [`.spec/microcrate-collapse/ledger.md`](../../.spec/microcrate-collapse/ledger.md)
+is the authoritative source and has been updated accordingly.
+
 ## References
 
 - [Tracking issue #4410: Microcrate collapse to ~30 published crates](https://github.com/EffortlessMetrics/perl-lsp/issues/4410)
-- [Migration ledger](../../.spec/microcrate-collapse/ledger.md) — authoritative per-crate workboard (Amendment 1)
+- [Migration ledger](../../.spec/microcrate-collapse/ledger.md) — authoritative per-crate workboard (Amendment 1, updated Amendment 2)
 - [docs/SRP_MICROCRATES.md](../SRP_MICROCRATES.md) — historical record of the microcrate decomposition campaign
 - [docs/PUBLISHING.md](../PUBLISHING.md) — current publishing pipeline; will simplify post-collapse
 - [scripts/publish-topo.py](../../scripts/publish-topo.py) — current topological publish ordering with dev-dep SCC handling

@@ -61,5 +61,5 @@ Each criterion is individually verifiable and must pass before sign-off.
 ## Historical Context
 
 - Tracking issue: #4410 (microcrate collapse roadmap)
-- ADR: ADR-0041 (PR #4413, documents v0.14.0 clean-break decision)
+- ADR: ADR-0041 (PR #4413, documents v0.13.0 clean-break decision)
 - Related: This is the first PR (#0) of the microcrate collapse sequence

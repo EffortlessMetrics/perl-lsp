@@ -58,7 +58,7 @@ The post-collapse published set, grouped by category and listed in approximate d
 | Crate | Role |
 |-------|------|
 | `perl-module` | Module name → file path resolution; absorbs 13 perl-module-* crates |
-| `perl-workspace-index` | Workspace symbol index and discovery; absorbs 6 perl-workspace-* crates |
+| `perl-workspace` | Workspace symbol index, discovery, and observability; absorbs 6 perl-workspace-* crates (renamed from perl-workspace-index during Wave 2) |
 | `perl-semantic-analyzer` | Scope analysis, type inference, variable resolution |
 
 ### Tool integrations (1)
@@ -147,4 +147,4 @@ PR #1 of the collapse series (tracked by [issue #4412](https://github.com/Effort
 - [ADR-0041](../adr/0041-microcrate-collapse.md) — architectural rationale
 - [Tracking issue #4410](https://github.com/EffortlessMetrics/perl-lsp/issues/4410) — collapse wave progress
 - [docs/PUBLISHING.md](../PUBLISHING.md) — current 132-crate pipeline (superseded post-collapse)
-- [docs/MIGRATION_v0.14.md](../MIGRATION_v0.14.md) — migration guide for downstream users
+- [docs/MIGRATION_v0.13.md](../MIGRATION_v0.13.md) — migration guide for downstream users

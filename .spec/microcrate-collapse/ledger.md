@@ -3,7 +3,7 @@
 **Tracking:** #4410
 **ADR:** [docs/adr/0041-microcrate-collapse.md](../../docs/adr/0041-microcrate-collapse.md)
 **Target:** 132 → 30 published crates
-**Last updated:** 2026-04-15
+**Last updated:** 2026-04-16
 
 Workboard for every workspace crate. Columns:
 
@@ -40,7 +40,7 @@ Status legend:
 | perl-parser | perl-parser | core-public | 3-4 | — | parser facade; absorbs syntax + parser-adjacent |
 | perl-lexer | perl-lexer | core-public | 3 | — | tokenizer; absorbs satellites |
 | perl-semantic-analyzer | perl-semantic-analyzer | core-public | 5 | — | absorbs symbol/incremental/refactor |
-| perl-workspace-index | perl-workspace-index | core-public | 2 | — | absorbs 6 perl-workspace-* |
+| perl-workspace-index | perl-workspace | core-public | 2 | — | renamed to perl-workspace during Wave 2; absorbs 6 perl-workspace-* |
 | perl-module | perl-module (NEW name) | core-public | 1 (PILOT) | Med | absorbs 13 perl-module-*; facade not `perl-module-resolution` |
 | perl-pragma | perl-pragma | core-public | 4 | Low | |
 | perl-regex | perl-regex | core-public | 4 | Low | |
@@ -79,16 +79,21 @@ Status legend:
 | perl-module-resolution-path | perl-module | module | 1 | Low | |
 | perl-module-resolution-uri | perl-module | module | 1 | Low | |
 
-## Wave 2 — perl-workspace-* → perl-workspace-index
+## Wave 2 — perl-workspace-* → perl-workspace
+
+Note: `perl-workspace-index` is **renamed to `perl-workspace`** during this wave. The absorbed
+scope (enumeration: discovery, folder, ignore; observability: index-monitoring, index-slo,
+index-state-machine) is broader than "indexing." The rename happens as part of Wave 2 execution,
+not in this ledger PR.
 
 | current crate | target owner | final status | wave | risk | notes |
 |---|---|---|---:|---:|---|
-| perl-workspace-folder | perl-workspace-index | module | 2 | Low | |
-| perl-workspace-ignore | perl-workspace-index | module | 2 | Low | |
-| perl-workspace-discovery | perl-workspace-index | module | 2 | Low | |
-| perl-workspace-index-monitoring | perl-workspace-index | module | 2 | Low | internal monitoring/ |
-| perl-workspace-index-state-machine | perl-workspace-index | module | 2 | Low | |
-| perl-workspace-index-slo | perl-workspace-index | module | 2 | Low | |
+| perl-workspace-folder | perl-workspace | module | 2 | Low | enumeration satellite |
+| perl-workspace-ignore | perl-workspace | module | 2 | Low | enumeration satellite |
+| perl-workspace-discovery | perl-workspace | module | 2 | Low | enumeration satellite |
+| perl-workspace-index-monitoring | perl-workspace | module | 2 | Low | observability satellite |
+| perl-workspace-index-state-machine | perl-workspace | module | 2 | Low | observability satellite |
+| perl-workspace-index-slo | perl-workspace | module | 2 | Low | observability satellite |
 
 ## Wave 3 — lexer satellites → perl-lexer
 
@@ -256,7 +261,7 @@ These were flagged in ADR-0041 as potential standalone published kernels. Re-eva
 |---|---:|---|
 | Shrink `[workspace.metadata.publish].allow` to exactly 30 | F | final PR |
 | Update CLAUDE.md, docs/dependency-tiers.md | F | |
-| Publish `docs/MIGRATION_v0.14.md` with full retired→new import table | F | |
+| Publish `docs/MIGRATION_v0.13.md` with full retired→new import table | F | |
 
 ---
 

@@ -72,7 +72,7 @@ This is the **pilot wave** of ADR-0041 (microcrate collapse). It establishes the
 
 **Alternative rejected:** Keep 0.12.4. Downside: semver lie; consumers won't realize they need code changes.
 
-**Implementation:** Cargo.toml sets version = "0.14.0" (step 0a). MIGRATION_v0.14.md documents the change (builder responsibility, not spec-planner).
+**Implementation:** Cargo.toml sets version = "0.13.0" (step 0a). MIGRATION_v0.13.md documents the change (builder responsibility, not spec-planner).
 
 ---
 

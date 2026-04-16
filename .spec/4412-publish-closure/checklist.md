@@ -578,6 +578,6 @@ Expected: All checks pass (long, ~5-10 min).
 
 ## Related Issues
 
-- Parent: #4410 — Microcrate collapse (v0.14.x)
+- Parent: #4410 — Microcrate collapse (v0.13.0)
 - ADR: PR #4413 (ADR-0041)
 - Design pattern source: `scripts/publish-topo.py` (publish order, not closure)
