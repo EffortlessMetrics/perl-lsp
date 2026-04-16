@@ -1,18 +1,32 @@
 impl<'a> Parser<'a> {
-    /// Parse postfix expression
+    /// Entry point for parsing postfix expressions.
+    ///
+    /// Parses a primary expression first, then applies any postfix operators
+    /// (arrow chains, subscripts, etc.) to form a complete postfix expression.
     fn parse_postfix(&mut self) -> ParseResult<Node> {
         let expr = self.parse_primary()?;
         self.parse_postfix_chain(expr)
     }
 
     /// Apply postfix operators (arrow chains, subscripts, etc.) to an
-    /// already-parsed expression.  Factored out of `parse_postfix` so
-    /// that callers who build an initial node outside the normal
-    /// `parse_primary` path (e.g. typeglobs in `parse_unary`) can still
-    /// participate in postfix chaining.
+    /// already-parsed expression.
+    ///
+    /// This function is factored out of `parse_postfix` so that callers who
+    /// build an initial node outside the normal `parse_primary` path
+    /// (e.g. typeglobs in `parse_unary`) can still participate in postfix chaining.
+    ///
+    /// The loop handles several postfix patterns in order of precedence:
+    /// 1. Hash/array slice without arrow (`@hash{...}`, `%hash{...}`)
+    /// 2. Increment/decrement operators (`++`, `--`)
+    /// 3. Arrow dereference (`->`)
+    /// 4. Array subscript (`[...]`)
+    /// 5. Hash subscript with block handling (`{...}`)
+    /// 6. Function call parentheses (`(...)`)
     pub(crate) fn parse_postfix_chain(&mut self, mut expr: Node) -> ParseResult<Node> {
         let mut postfix_chain_depth = 0usize;
 
+        // Closure to track nesting depth and prevent stack overflow on deeply
+        // nested postfix chains (e.g., `$a->[0]->[1]->[2]->...`).
         let mut record_postfix_layer = || -> ParseResult<()> {
             postfix_chain_depth += 1;
             if postfix_chain_depth > MAX_RECURSION_DEPTH {
@@ -25,6 +39,50 @@ impl<'a> Parser<'a> {
         };
 
         loop {
+            // --------------------------------------------------------------------
+            // Hash/array slice without arrow: @hash{...} or %hash{...}
+            //
+            // In Perl, `@hash{...}` and `%hash{...}` are valid hash/array slice
+            // operations that do NOT require an intervening `->`.
+            //
+            // This must be checked BEFORE the Arrow arm (line 69) because the
+            // Arrow arm's LeftBrace handling (line 295) is only reached when there
+            // is a `->` preceding the `{`. Without this early check, `@hash{...}`
+            // would fall through to the generic hash-element arm at line 428,
+            // which would incorrectly parse `{...}` as a block instead of a subscript.
+            //
+            // The condition checks:
+            // 1. The next token is `{` (not `->`)
+            // 2. The current expression is a variable with `@` or `%` sigil
+            //
+            // Example: `@ops_seen{ map split(/ /), values %ops }` should parse as
+            // a hash slice, not as `@ops_seen` followed by a block.
+            // --------------------------------------------------------------------
+            if self.peek_kind() == Some(TokenKind::LeftBrace) {
+                if let NodeKind::Variable { sigil, .. } = &expr.kind {
+                    if sigil == "@" || sigil == "%" {
+                        // Hash/array slice: @hash{...} or %hash{...}
+                        self.tokens.next()?; // consume {
+                        let key = self.parse_hash_subscript_key()?;
+                        self.expect(TokenKind::RightBrace)?;
+
+                        let start = expr.location.start;
+                        let end = self.previous_position();
+
+                        record_postfix_layer()?;
+                        expr = Node::new(
+                            NodeKind::Binary {
+                                op: "{}".to_string(),
+                                left: Box::new(expr),
+                                right: Box::new(key),
+                            },
+                            SourceLocation { start, end },
+                        );
+                        continue;
+                    }
+                }
+            }
+
             match self.peek_kind() {
                 Some(k) if Self::is_postfix_op(Some(k)) => {
                     let op_token = self.consume_token()?;
