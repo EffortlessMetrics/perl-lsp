@@ -39,7 +39,8 @@ Status legend:
 | perl-dap | perl-dap | core-public | H | — | DAP server; absorbs 11 perl-dap-* |
 | perl-parser | perl-parser | core-public | 3-4 | — | parser facade; absorbs syntax + parser-adjacent |
 | perl-lexer | perl-lexer | core-public | 3 | — | tokenizer; absorbs satellites |
-| perl-semantic-analyzer | perl-semantic-analyzer | core-public | 5 | — | absorbs symbol/incremental/refactor |
+| perl-semantic-analyzer | perl-semantic-analyzer | core-public | 5 | — | absorbs incremental/refactor; symbol crates go to perl-symbol (Wave B) |
+| perl-symbol | perl-symbol (NEW) | core-public | B | — | absorbs 4 perl-symbol-*; own published crate (see Wave B) |
 | perl-workspace-index | perl-workspace | core-public | 2 | — | renamed to perl-workspace during Wave 2; absorbs 6 perl-workspace-* |
 | perl-module | perl-module (NEW name) | core-public | 1 (PILOT) | Med | absorbs 13 perl-module-*; facade not `perl-module-resolution` |
 | perl-pragma | perl-pragma | core-public | 4 | Low | |
@@ -135,12 +136,22 @@ not in this ledger PR.
 
 ## Wave 5 — semantic shards → perl-semantic-analyzer
 
+*(No symbol crates — see Wave B below. The 4 perl-symbol-* crates are NOT absorbed into
+perl-semantic-analyzer; they absorb into the standalone `perl-symbol` published crate instead.)*
+
+## Wave B — perl-symbol-* → perl-symbol (NEW published crate)
+
+`perl-symbol` is its own small published crate (see ADR-0041 "Symbol model (1): perl-symbol").
+Absorbing the 4 satellites into `perl-semantic-analyzer` would invert the dependency layering:
+`perl-workspace-index` and `perl-lsp` both consume symbol types directly and cannot depend on the
+full semantic analyzer just to get them. `perl-symbol` stays as a separate published crate.
+
 | current crate | target owner | final status | wave | risk | notes |
 |---|---|---|---:|---:|---|
-| perl-symbol-types | perl-semantic-analyzer | module | 5 | Low | |
-| perl-symbol-cursor | perl-semantic-analyzer | module | 5 | Low | consumed directly by perl-lsp-rs |
-| perl-symbol-index | perl-semantic-analyzer | module | 5 | Med | |
-| perl-symbol-surface | perl-semantic-analyzer | module | 5 | Low | |
+| perl-symbol-types | perl-symbol | module | B | Low | shared by perl-workspace-index, perl-semantic-analyzer, perl-lsp |
+| perl-symbol-cursor | perl-symbol | module | B | Low | consumed directly by perl-lsp-rs |
+| perl-symbol-index | perl-symbol | module | B | Med | |
+| perl-symbol-surface | perl-symbol | module | B | Low | |
 
 ## Wave E — diagnostic catalog (NEW crate)
 
@@ -276,7 +287,8 @@ These were flagged in ADR-0041 as potential standalone published kernels. Re-eva
 | 2 (perl-workspace-*) | ⏳ queued | — | — |
 | 3 (lexer satellites) | ⏳ queued | — | — |
 | 4 (parser satellites) | ⏳ queued | — | — |
-| 5 (semantic shards) | ⏳ queued | — | — |
+| 5 (semantic shards, no symbol crates) | ⏳ queued | — | — |
+| B (perl-symbol-* → perl-symbol NEW) | ⏳ queued | — | — |
 | E (diagnostic catalog) | ⏳ queued | — | — |
 | F (LSP features) | ⏳ queued | — | — |
 | G1 (LSP providers) | ⏳ queued | — | — |
