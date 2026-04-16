@@ -50,16 +50,13 @@ tracing.workspace = true
 # Command-line argument parsing
 clap = { workspace = true }
 
-perl-dap-breakpoint = { workspace = true }
-perl-dap-eval = { workspace = true }
-perl-dap-config = { workspace = true }
-perl-dap-platform = { workspace = true }
-perl-dap-command-args = { workspace = true }
-perl-dap-variables = { workspace = true }
-perl-dap-stack = { workspace = true }
-perl-dap-types = { workspace = true }
+# Inlined satellite dependencies (Wave H collapse)
+perl-parser = { workspace = true }
+perl-path-security = { workspace = true }
+thiserror.workspace = true
+ropey = "1.6.1"
+
 perl-module = { workspace = true }
-perl-dap-security = { workspace = true }
 perl-content-length-framing = { workspace = true }
 perl-keywords = { workspace = true }
 perl-lsp-launcher = { workspace = true }
@@ -205,6 +202,119 @@ path = "tests/dap_scorecard_harness.rs"
 name = "wave_h_collapse_integration"
 path = "tests/wave_h_collapse_integration.rs"
 # Integration tests for Wave H collapse: module accessibility, use-path updates, external consumers
+
+# Wave H collapsed satellite test files (28 tests from 11 satellites)
+[[test]]
+name = "breakpoint_breakpoint_tests"
+path = "tests/breakpoint_breakpoint_tests.rs"
+
+[[test]]
+name = "breakpoint_edge_case_tests"
+path = "tests/breakpoint_edge_case_tests.rs"
+
+[[test]]
+name = "breakpoint_extended_unit_tests"
+path = "tests/breakpoint_extended_unit_tests.rs"
+
+[[test]]
+name = "eval_extended_unit_tests"
+path = "tests/eval_extended_unit_tests.rs"
+
+[[test]]
+name = "eval_safe_evaluator"
+path = "tests/eval_safe_evaluator.rs"
+
+[[test]]
+name = "eval_timeout_and_exception_tests"
+path = "tests/eval_timeout_and_exception_tests.rs"
+
+[[test]]
+name = "config_attach_config_tests"
+path = "tests/config_attach_config_tests.rs"
+
+[[test]]
+name = "config_launch_config_tests"
+path = "tests/config_launch_config_tests.rs"
+
+[[test]]
+name = "config_serde_edge_case_tests"
+path = "tests/config_serde_edge_case_tests.rs"
+
+[[test]]
+name = "platform_comprehensive_unit_tests"
+path = "tests/platform_comprehensive_unit_tests.rs"
+
+[[test]]
+name = "platform_perl_path_edge_cases"
+path = "tests/platform_perl_path_edge_cases.rs"
+
+[[test]]
+name = "command_args_integration_tests"
+path = "tests/command_args_integration_tests.rs"
+
+[[test]]
+name = "shell_integration_tests"
+path = "tests/shell_integration_tests.rs"
+
+[[test]]
+name = "stack_comprehensive_unit_tests"
+path = "tests/stack_comprehensive_unit_tests.rs"
+
+[[test]]
+name = "stack_extended_unit_tests"
+path = "tests/stack_extended_unit_tests.rs"
+
+[[test]]
+name = "stack_malformed_debugger_output_tests"
+path = "tests/stack_malformed_debugger_output_tests.rs"
+
+[[test]]
+name = "types_edge_case_tests"
+path = "tests/types_edge_case_tests.rs"
+
+[[test]]
+name = "types_shared_types"
+path = "tests/types_shared_types.rs"
+
+[[test]]
+name = "value_integration_tests"
+path = "tests/value_integration_tests.rs"
+
+[[test]]
+name = "value_serde_round_trip_tests"
+path = "tests/value_serde_round_trip_tests.rs"
+
+[[test]]
+name = "security_dap_path_traversal_hardened_tests"
+path = "tests/security_dap_path_traversal_hardened_tests.rs"
+
+[[test]]
+name = "security_dap_security_ac16_tests"
+path = "tests/security_dap_security_ac16_tests.rs"
+
+[[test]]
+name = "security_path_traversal_tests"
+path = "tests/security_path_traversal_tests.rs"
+
+[[test]]
+name = "variables_comprehensive"
+path = "tests/variables_comprehensive.rs"
+
+[[test]]
+name = "variables_dap_deep_structure_truncation"
+path = "tests/variables_dap_deep_structure_truncation.rs"
+
+[[test]]
+name = "variables_deep_truncation"
+path = "tests/variables_deep_truncation.rs"
+
+[[test]]
+name = "variables_extended_unit_tests"
+path = "tests/variables_extended_unit_tests.rs"
+
+[[test]]
+name = "variables_variable_inspection"
+path = "tests/variables_variable_inspection.rs"
 
 [[bench]]
 name = "dap_benchmarks"

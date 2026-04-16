@@ -19,16 +19,16 @@ fn test_all_modules_accessible_from_perl_dap_root() -> Result<()> {
     // Trap 3: These imports will fail to compile until all modules are in lib.rs
     // Once in lib.rs, they will succeed and the test will run
     use perl_dap::breakpoint;
-    use perl_dap::eval;
-    use perl_dap::config;
     use perl_dap::command_args;
+    use perl_dap::config;
+    use perl_dap::eval;
+    use perl_dap::platform;
+    use perl_dap::security;
     use perl_dap::shell;
     use perl_dap::stack;
     use perl_dap::types;
     use perl_dap::value;
     use perl_dap::variables;
-    use perl_dap::platform;
-    use perl_dap::security;
 
     // If we reach here, all modules exist in lib.rs
     Ok(())
@@ -39,19 +39,11 @@ fn test_all_modules_accessible_from_perl_dap_root() -> Result<()> {
 #[test]
 fn test_types_qualified_imports_work() -> Result<()> {
     // Trap 4: This is the exact pattern external consumers will use
-    use perl_dap::types::{StackFrame, Source};
+    use perl_dap::types::{Source, StackFrame};
 
     // Verify the types are accessible
-    assert_ne!(
-        std::any::type_name::<StackFrame>(),
-        "",
-        "StackFrame type must be accessible"
-    );
-    assert_ne!(
-        std::any::type_name::<Source>(),
-        "",
-        "Source type must be accessible"
-    );
+    assert_ne!(std::any::type_name::<StackFrame>(), "", "StackFrame type must be accessible");
+    assert_ne!(std::any::type_name::<Source>(), "", "Source type must be accessible");
     Ok(())
 }
 
@@ -81,11 +73,7 @@ fn test_debug_adapter_uses_internal_modules() -> Result<()> {
     use perl_dap::DebugAdapter;
 
     // If we get here, all satellite references in DebugAdapter have been migrated
-    assert_ne!(
-        std::any::type_name::<DebugAdapter>(),
-        "",
-        "DebugAdapter must be importable"
-    );
+    assert_ne!(std::any::type_name::<DebugAdapter>(), "", "DebugAdapter must be importable");
     Ok(())
 }
 
@@ -96,11 +84,7 @@ fn test_breakpoint_store_uses_internal_modules() -> Result<()> {
     // this will fail to compile
     use perl_dap::BreakpointStore;
 
-    assert_ne!(
-        std::any::type_name::<BreakpointStore>(),
-        "",
-        "BreakpointStore must be importable"
-    );
+    assert_ne!(std::any::type_name::<BreakpointStore>(), "", "BreakpointStore must be importable");
     Ok(())
 }
 
@@ -111,11 +95,7 @@ fn test_dap_config_uses_internal_modules() -> Result<()> {
     // this will fail to compile
     use perl_dap::DapConfig;
 
-    assert_ne!(
-        std::any::type_name::<DapConfig>(),
-        "",
-        "DapConfig must be importable"
-    );
+    assert_ne!(std::any::type_name::<DapConfig>(), "", "DapConfig must be importable");
     Ok(())
 }
 
@@ -126,11 +106,7 @@ fn test_bridge_adapter_uses_internal_modules() -> Result<()> {
     // this will fail to compile
     use perl_dap::BridgeAdapter;
 
-    assert_ne!(
-        std::any::type_name::<BridgeAdapter>(),
-        "",
-        "BridgeAdapter must be importable"
-    );
+    assert_ne!(std::any::type_name::<BridgeAdapter>(), "", "BridgeAdapter must be importable");
     Ok(())
 }
 
@@ -140,7 +116,7 @@ fn test_bridge_adapter_uses_internal_modules() -> Result<()> {
 fn test_platform_folder_conversion() -> Result<()> {
     // Trap 1: Verify platform.rs has been converted to platform/mod.rs
     // This is verified by successfully importing platform functions
-    use perl_dap::platform::{resolve_perl_path, setup_environment, normalize_path};
+    use perl_dap::platform::{normalize_path, resolve_perl_path, setup_environment};
 
     assert_ne!(
         std::any::type_name::<fn(String) -> anyhow::Result<std::path::PathBuf>>(),
@@ -156,7 +132,7 @@ fn test_platform_folder_conversion() -> Result<()> {
 fn test_security_folder_conversion() -> Result<()> {
     // Trap 1: Verify security.rs has been converted to security/mod.rs
     // This is verified by successfully importing security functions
-    use perl_dap::security::{validate_path, validate_expression};
+    use perl_dap::security::{validate_expression, validate_path};
 
     assert_ne!(
         std::any::type_name::<fn(&str) -> anyhow::Result<()>>(),

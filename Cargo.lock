@@ -338,9 +338,9 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "4.6.0"
+version = "4.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b193af5b67834b676abd72466a96c1024e6a6ad978a1f484bd90b85c94041351"
+checksum = "1ddb117e43bbf7dacf0a4190fef4d345b9bad68dfc649cb349e7d17d28428e51"
 dependencies = [
  "clap_builder",
  "clap_derive",
@@ -360,9 +360,9 @@ dependencies = [
 
 [[package]]
 name = "clap_derive"
-version = "4.6.0"
+version = "4.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1110bd8a634a1ab8cb04345d8d878267d57c3cf1b38d91b71af6686408bbca6a"
+checksum = "f2ce8604710f6733aa641a2b3731eaa1e8b3d9973d5e3565da11800813f997a9"
 dependencies = [
  "heck",
  "proc-macro2",
@@ -1560,132 +1560,23 @@ dependencies = [
  "nix",
  "once_cell",
  "perl-content-length-framing",
- "perl-dap-breakpoint",
- "perl-dap-command-args",
- "perl-dap-config",
- "perl-dap-eval",
- "perl-dap-platform",
- "perl-dap-security",
- "perl-dap-stack",
- "perl-dap-types",
- "perl-dap-variables",
  "perl-feature-catalog",
  "perl-keywords",
  "perl-lsp-launcher",
  "perl-module",
+ "perl-parser",
+ "perl-path-security",
  "perl-tdd-support",
  "proptest",
  "regex",
+ "ropey",
  "serde",
  "serde_json",
  "tempfile",
+ "thiserror",
  "tokio",
  "tracing",
  "winapi",
-]
-
-[[package]]
-name = "perl-dap-breakpoint"
-version = "0.12.4"
-dependencies = [
- "perl-parser",
- "perl-tdd-support",
- "ropey",
- "thiserror",
-]
-
-[[package]]
-name = "perl-dap-command-args"
-version = "0.12.4"
-
-[[package]]
-name = "perl-dap-config"
-version = "0.12.4"
-dependencies = [
- "anyhow",
- "serde",
- "serde_json",
- "tracing",
-]
-
-[[package]]
-name = "perl-dap-eval"
-version = "0.12.4"
-dependencies = [
- "once_cell",
- "perl-tdd-support",
- "regex",
- "thiserror",
-]
-
-[[package]]
-name = "perl-dap-platform"
-version = "0.12.4"
-dependencies = [
- "anyhow",
- "perl-dap-command-args",
- "perl-tdd-support",
- "tempfile",
-]
-
-[[package]]
-name = "perl-dap-security"
-version = "0.12.4"
-dependencies = [
- "anyhow",
- "perl-path-security",
- "perl-tdd-support",
- "tempfile",
- "thiserror",
-]
-
-[[package]]
-name = "perl-dap-shell"
-version = "0.12.4"
-dependencies = [
- "perl-dap-command-args",
- "perl-dap-platform",
-]
-
-[[package]]
-name = "perl-dap-stack"
-version = "0.12.4"
-dependencies = [
- "once_cell",
- "perl-tdd-support",
- "regex",
- "serde",
- "serde_json",
- "thiserror",
-]
-
-[[package]]
-name = "perl-dap-types"
-version = "0.12.4"
-dependencies = [
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "perl-dap-value"
-version = "0.12.4"
-dependencies = [
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "perl-dap-variables"
-version = "0.12.4"
-dependencies = [
- "once_cell",
- "perl-dap-value",
- "perl-tdd-support",
- "regex",
- "serde",
- "serde_json",
- "thiserror",
 ]
 
 [[package]]
@@ -1882,7 +1773,7 @@ dependencies = [
 name = "perl-lsp-config"
 version = "0.12.4"
 dependencies = [
- "perl-dap-platform",
+ "perl-dap",
  "serde",
  "serde_json",
  "tempfile",
@@ -2199,7 +2090,6 @@ dependencies = [
  "perl-content-length-framing",
  "perl-corpus",
  "perl-dap",
- "perl-dap-platform",
  "perl-diagnostics",
  "perl-incremental-parsing",
  "perl-keywords",
@@ -3750,9 +3640,9 @@ dependencies = [
 
 [[package]]
 name = "tokio"
-version = "1.52.0"
+version = "1.52.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a91135f59b1cbf38c91e73cf3386fca9bb77915c45ce2771460c9d92f0f3d776"
+checksum = "b67dee974fe86fd92cc45b7a95fdd2f99a36a6d7b0d431a231178d3d670bbcc6"
 dependencies = [
  "bytes",
  "libc",
@@ -4066,9 +3956,9 @@ checksum = "06abde3611657adf66d383f00b093d7faecc7fa57071cce2578660c9f1010821"
 
 [[package]]
 name = "uuid"
-version = "1.23.0"
+version = "1.23.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5ac8b6f42ead25368cf5b098aeb3dc8a1a2c05a3eee8a9a1a68c640edbfc79d9"
+checksum = "ddd74a9687298c6858e9b88ec8935ec45d22e8fd5e6394fa1bd4e99a87789c76"
 dependencies = [
  "getrandom 0.4.2",
  "js-sys",
@@ -4231,9 +4121,9 @@ dependencies = [
 
 [[package]]
 name = "webpki-roots"
-version = "1.0.6"
+version = "1.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "22cfaf3c063993ff62e73cb4311efde4db1efb31ab78a3e5c457939ad5cc0bed"
+checksum = "52f5ee44c96cf55f1b349600768e3ece3a8f26010c05265ab73f945bb1a2eb9d"
 dependencies = [
  "rustls-pki-types",
 ]

@@ -81,7 +81,7 @@ fn launch_error_includes_perl_detection_info() {
 #[test]
 #[cfg(windows)]
 fn launch_error_on_windows_links_strawberry_perl_when_perl_absent() {
-    use perl_dap_platform::resolve_perl_path_with_toolchain;
+    use perl_dap::platform::resolve_perl_path_with_toolchain;
 
     // Only run this assertion when Perl is genuinely not available.
     if resolve_perl_path_with_toolchain().is_err() {

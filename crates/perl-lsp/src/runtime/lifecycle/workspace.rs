@@ -3,7 +3,7 @@
 //! Handles workspace folders and root URI/path management.
 
 use super::super::*;
-use perl_dap_platform::{PerlInterpreterResult, find_perl_interpreter};
+use perl_dap::platform::{PerlInterpreterResult, find_perl_interpreter};
 use perl_lsp_config::WorkspaceConfig;
 use std::sync::Once;
 
