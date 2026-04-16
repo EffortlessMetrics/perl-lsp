@@ -316,6 +316,37 @@ path = "tests/variables_extended_unit_tests.rs"
 name = "variables_variable_inspection"
 path = "tests/variables_variable_inspection.rs"
 
+# Wave H green-TDD edge case and regression tests
+[[test]]
+name = "wave_h_api_stability"
+path = "tests/wave_h_api_stability.rs"
+# Green TDD: verify re-exported symbols from collapsed modules remain stable
+
+[[test]]
+name = "wave_h_external_consumer_integration"
+path = "tests/wave_h_external_consumer_integration.rs"
+# Green TDD: verify external consumers (perl-lsp, perl-lsp-config) can import from new structure
+
+[[test]]
+name = "wave_h_structure_verification"
+path = "tests/wave_h_structure_verification.rs"
+# Green TDD: verify file-to-folder conversion and module structure correctness
+
+[[test]]
+name = "wave_h_workspace_verification"
+path = "tests/wave_h_workspace_verification.rs"
+# Green TDD: verify workspace-level artifacts and build success
+
+[[test]]
+name = "wave_h_platform_edge_cases"
+path = "tests/wave_h_platform_edge_cases.rs"
+# Green TDD: edge cases and boundary conditions for platform module
+
+[[test]]
+name = "wave_h_security_edge_cases"
+path = "tests/wave_h_security_edge_cases.rs"
+# Green TDD: edge cases and boundary conditions for security module
+
 [[bench]]
 name = "dap_benchmarks"
 path = "benches/dap_benchmarks.rs"
