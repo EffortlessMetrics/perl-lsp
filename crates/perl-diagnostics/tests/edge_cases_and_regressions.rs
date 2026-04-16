@@ -10,6 +10,7 @@
 use perl_diagnostics::catalog;
 use perl_diagnostics::codes::{DiagnosticCategory, DiagnosticCode, DiagnosticTag};
 use perl_diagnostics::types::{Diagnostic, DiagnosticSeverity, RelatedInformation};
+use perl_test_must::must_some;
 
 // Edge case: Empty/default Diagnostic struct
 #[test]
@@ -53,7 +54,7 @@ fn edge_case_diagnostic_with_all_fields_populated() {
     assert!(diag.related_information.is_some());
     assert!(diag.tags.is_some());
 
-    let tags = diag.tags.unwrap();
+    let tags = must_some(diag.tags);
     assert_eq!(tags.len(), 1);
     assert_eq!(tags[0], DiagnosticTag::Deprecated);
 }
@@ -212,7 +213,7 @@ fn edge_case_diagnostic_multiple_related_information() {
     let diag =
         Diagnostic { related_information: Some(vec![info1, info2, info3]), ..Default::default() };
 
-    let infos = diag.related_information.unwrap();
+    let infos = must_some(diag.related_information);
     assert_eq!(infos.len(), 3);
     assert_eq!(infos[0].message, "First related");
     assert_eq!(infos[1].message, "Second related");
@@ -231,7 +232,7 @@ fn edge_case_diagnostic_multiple_tags() {
         ..Default::default()
     };
 
-    let tags = diag.tags.unwrap();
+    let tags = must_some(diag.tags);
     assert_eq!(tags.len(), 3);
     assert_eq!(tags[0], DiagnosticTag::Unnecessary);
     assert_eq!(tags[1], DiagnosticTag::Deprecated);
