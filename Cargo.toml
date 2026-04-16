@@ -81,6 +81,7 @@ members = [
     "crates/perl-lsp-limits",
     "crates/perl-lsp-uri",
     "crates/perl-lsp-config",
+    "crates/perl-diagnostics",
     "crates/perl-diagnostics-codes",
     "crates/perl-position-tracking",
     "crates/perl-symbol-types",
@@ -399,6 +400,7 @@ perl-lsp-ai-provider = { path = "crates/perl-lsp-ai-provider", version = "0.12.4
 perl-lsp-code-actions = { path = "crates/perl-lsp-code-actions", version = "0.12.4" }
 perl-lsp-folding = { path = "crates/perl-lsp-folding", version = "0.12.4" }
 perl-lsp-selection-range = { path = "crates/perl-lsp-selection-range", version = "0.12.4" }
+perl-diagnostics = { path = "crates/perl-diagnostics", version = "0.12.4" }
 perl-diagnostics-codes = { path = "crates/perl-diagnostics-codes", version = "0.12.4" }
 # Tier 3: Two-level dependencies
 perl-workspace-index = { path = "crates/perl-workspace-index", version = "0.12.4" }

@@ -1698,6 +1698,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "perl-diagnostics"
+version = "0.12.4"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "perl-diagnostics-codes"
 version = "0.12.4"
 dependencies = [
