@@ -1756,4 +1756,167 @@ my %config = (key => "value");
 
         Ok(())
     }
+
+    // ── Inline POD in subroutine bodies (#3407) ─────────────────────────
+
+    #[test]
+    fn given_pod_inside_sub_body_when_hovering_then_documentation_is_shown()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let code = r#"
+sub process_data {
+
+=head2 process_data
+
+Processes input and returns result.
+
+=cut
+
+    my $data = shift;
+    return $data;
+}
+"#;
+        let mut parser = Parser::new(code);
+        let ast = parser.parse()?;
+        let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
+
+        let sub_symbols =
+            analyzer.symbol_table().find_symbol("process_data", 0, SymbolKind::Subroutine);
+        assert!(!sub_symbols.is_empty(), "Should find sub process_data");
+
+        let hover = analyzer.hover_at(sub_symbols[0].location);
+        assert!(hover.is_some(), "Should have hover info for sub process_data");
+
+        let hover = hover.expect("hover already checked");
+        assert!(hover.documentation.is_some(), "Hover should have documentation from inline POD");
+        let doc = hover.documentation.as_deref().expect("doc already checked");
+        assert!(
+            doc.contains("Processes input and returns result"),
+            "Documentation should contain inline POD text, got: {doc}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn given_pod_before_sub_when_hovering_then_preceding_doc_still_preferred()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let code = r#"
+=head2 compute
+
+Computes the answer.
+
+=cut
+
+sub compute {
+    my $x = shift;
+    return $x * 2;
+}
+"#;
+        let mut parser = Parser::new(code);
+        let ast = parser.parse()?;
+        let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
+
+        let sub_symbols = analyzer.symbol_table().find_symbol("compute", 0, SymbolKind::Subroutine);
+        assert!(!sub_symbols.is_empty(), "Should find sub compute");
+
+        let hover =
+            analyzer.hover_at(sub_symbols[0].location).expect("Should have hover for compute");
+        let doc = hover.documentation.as_deref().expect("Should have documentation");
+        assert!(
+            doc.contains("Computes the answer"),
+            "Preceding POD should be preferred over body search, got: {doc}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn given_pod_block_inside_sub_when_hovering_then_pod_block_is_extracted()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let code = r#"
+sub internal_helper {
+
+=pod
+
+This is internal documentation for the helper.
+
+=cut
+
+    return 42;
+}
+"#;
+        let mut parser = Parser::new(code);
+        let ast = parser.parse()?;
+        let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
+
+        let sub_symbols =
+            analyzer.symbol_table().find_symbol("internal_helper", 0, SymbolKind::Subroutine);
+        assert!(!sub_symbols.is_empty(), "Should find sub internal_helper");
+
+        let hover = analyzer
+            .hover_at(sub_symbols[0].location)
+            .expect("Should have hover for internal_helper");
+        let doc = hover.documentation.as_deref().expect("Should have documentation");
+        assert!(
+            doc.contains("internal documentation for the helper"),
+            "Should extract =pod block from inside body, got: {doc}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn given_no_documentation_when_hovering_then_doc_is_none()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let code = r#"
+sub bare {
+    return 1;
+}
+"#;
+        let mut parser = Parser::new(code);
+        let ast = parser.parse()?;
+        let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
+
+        let sub_symbols = analyzer.symbol_table().find_symbol("bare", 0, SymbolKind::Subroutine);
+        assert!(!sub_symbols.is_empty(), "Should find sub bare");
+
+        let hover = analyzer.hover_at(sub_symbols[0].location).expect("Should have hover for bare");
+        assert!(
+            hover.documentation.is_none(),
+            "Sub with no docs should have None documentation, got: {:?}",
+            hover.documentation
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn given_inline_pod_with_head1_inside_sub_when_hovering_then_extracted()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let code = r#"
+sub transform {
+
+=head1 DESCRIPTION
+
+Transforms the input into the desired output format.
+
+=cut
+
+    my ($input) = @_;
+    return uc($input);
+}
+"#;
+        let mut parser = Parser::new(code);
+        let ast = parser.parse()?;
+        let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
+
+        let sub_symbols =
+            analyzer.symbol_table().find_symbol("transform", 0, SymbolKind::Subroutine);
+        assert!(!sub_symbols.is_empty(), "Should find sub transform");
+
+        let hover =
+            analyzer.hover_at(sub_symbols[0].location).expect("Should have hover for transform");
+        let doc = hover.documentation.as_deref().expect("Should have documentation");
+        assert!(
+            doc.contains("Transforms the input"),
+            "Should extract =head1 block from inside body, got: {doc}"
+        );
+        Ok(())
+    }
 }

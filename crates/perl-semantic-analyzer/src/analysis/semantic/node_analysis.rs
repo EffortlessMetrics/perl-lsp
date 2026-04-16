@@ -138,7 +138,7 @@ impl SemanticAnalyzer {
 
                     let hover = HoverInfo {
                         signature: signature_str,
-                        documentation: self.extract_documentation(node.location.start),
+                        documentation: self.extract_sub_documentation(node.location.start, body),
                         details: if attributes.is_empty() {
                             vec![]
                         } else {
@@ -173,7 +173,7 @@ impl SemanticAnalyzer {
 
                     let hover = HoverInfo {
                         signature: signature_str,
-                        documentation: self.extract_documentation(node.location.start),
+                        documentation: self.extract_sub_documentation(node.location.start, body),
                         details,
                     };
 
@@ -205,7 +205,7 @@ impl SemanticAnalyzer {
                 // Add hover info
                 let hover = HoverInfo {
                     signature: format!("method {}", name),
-                    documentation: self.extract_documentation(node.location.start),
+                    documentation: self.extract_sub_documentation(node.location.start, body),
                     details: if attributes.is_empty() {
                         vec![]
                     } else {
@@ -947,6 +947,70 @@ impl SemanticAnalyzer {
         }
 
         None
+    }
+
+    /// Extract POD documentation from inside a subroutine body.
+    ///
+    /// Perl allows POD blocks anywhere in source, including inside subroutine
+    /// bodies. This method searches within the body's byte range for the first
+    /// POD block (`=pod`/`=head`/etc. through `=cut`) and returns its content.
+    /// Falls back to leading comment blocks inside the body if no POD is found.
+    pub(super) fn extract_body_inline_pod(&self, body: &Node) -> Option<String> {
+        static INLINE_POD_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
+        static BODY_COMMENT_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
+
+        let body_start = body.location.start;
+        let body_end = body.location.end.min(self.source.len());
+        if body_start >= body_end {
+            return None;
+        }
+        let body_text = self.source.get(body_start..body_end)?;
+
+        // Search for the first POD block inside the body
+        let pod_re = INLINE_POD_RE
+            .get_or_init(|| Regex::new(r"(?ms)(=[a-zA-Z][a-zA-Z0-9]*\s.*?\n=cut\n?)"))
+            .as_ref()
+            .ok()?;
+        if let Some(caps) = pod_re.captures(body_text) {
+            if let Some(pod_text) = caps.get(1) {
+                return Some(pod_text.as_str().trim().to_string());
+            }
+        }
+
+        // Fall back to leading comment block at the start of the body
+        let body_comment_re = BODY_COMMENT_RE
+            .get_or_init(|| Regex::new(r"(?m)\A\s*\{?\s*\n((?:\s*#.*\n)+)"))
+            .as_ref()
+            .ok()?;
+        if let Some(caps) = body_comment_re.captures(body_text) {
+            if let Some(comment_match) = caps.get(1) {
+                let doc = comment_match
+                    .as_str()
+                    .lines()
+                    .map(|line| line.trim().trim_start_matches('#').trim())
+                    .filter(|line| !line.is_empty())
+                    .collect::<Vec<_>>()
+                    .join(" ");
+                if !doc.is_empty() {
+                    return Some(doc);
+                }
+            }
+        }
+
+        None
+    }
+
+    /// Extract subroutine documentation, searching both before the `sub`
+    /// keyword and inside the body.
+    ///
+    /// Tries preceding POD/comments first (the common case), then falls back
+    /// to inline POD or leading comments within the body.
+    pub(super) fn extract_sub_documentation(
+        &self,
+        sub_start: usize,
+        body: &Node,
+    ) -> Option<String> {
+        self.extract_documentation(sub_start).or_else(|| self.extract_body_inline_pod(body))
     }
 
     /// Extract the POD `=head1 NAME` section for a package.
