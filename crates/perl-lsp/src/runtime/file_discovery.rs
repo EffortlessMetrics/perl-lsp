@@ -2,4 +2,4 @@
 //!
 //! The implementation lives in the standalone `perl-workspace-discovery` crate.
 
-pub use perl_workspace_discovery::{DiscoveryMethod, DiscoveryResult, discover_perl_files};
+pub use perl_workspace::discovery::{DiscoveryMethod, DiscoveryResult, discover_perl_files};

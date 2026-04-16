@@ -23,7 +23,7 @@ include = [
 doctest = false
 
 [dependencies]
-perl-workspace-index = { workspace = true }
+perl-workspace = { workspace = true }
 serde = { workspace = true }
 
 [dev-dependencies]

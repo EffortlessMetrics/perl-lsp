@@ -50,6 +50,21 @@ pub use perl_parser_core::line_index;
 pub use perl_parser_core::{Node, NodeKind, SourceLocation};
 pub use perl_parser_core::{Parser, ast, position};
 
+/// Unified public API surface.
+pub mod api;
+/// Git-aware workspace file discovery.
+pub mod discovery;
+/// Workspace folder URI/path parsing.
+pub mod folder;
+/// Workspace noise filtering rules.
+pub mod ignore;
+/// Monitoring, limits, and lifecycle instrumentation primitives.
+pub mod monitoring;
+/// Service-level objective tracking for workspace index operations.
+pub mod slo;
+/// Index lifecycle state machine.
+pub mod state_machine;
+
 /// Workspace indexing and refactoring orchestration.
 pub mod workspace;
 

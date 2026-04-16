@@ -10,7 +10,7 @@ use super::{
     items::{CompletionItem, CompletionItemKind},
 };
 use perl_semantic_analyzer::type_inference::{PerlType, TypeInferenceEngine};
-use perl_workspace_index::workspace_index::{
+use perl_workspace::workspace_index::{
     SymbolKind as WsSymbolKind, VarKind, WorkspaceIndex, WorkspaceSymbol,
 };
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -576,7 +576,7 @@ fn collect_all_package_members(index: &WorkspaceIndex, package_name: &str) -> Ve
                 };
 
                 let text = index.document_store().get_text(&pkg_location.uri).or_else(|| {
-                    perl_workspace_index::workspace_index::uri_to_fs_path(&pkg_location.uri)
+                    perl_workspace::workspace_index::uri_to_fs_path(&pkg_location.uri)
                         .and_then(|path| std::fs::read_to_string(path).ok())
                 });
 

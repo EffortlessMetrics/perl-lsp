@@ -201,11 +201,6 @@ name = "dap_scorecard_harness"
 path = "tests/dap_scorecard_harness.rs"
 # AC:4069 DAP launch-success scorecard: 5 fixtures, ≥80% pass rate, p50/p95 latency
 
-[[test]]
-name = "wave_h_collapse_integration"
-path = "tests/wave_h_collapse_integration.rs"
-# #4430: Wave H collapse integration tests for module accessibility, use-paths, workspace cleanup
-
 [[bench]]
 name = "dap_benchmarks"
 path = "benches/dap_benchmarks.rs"

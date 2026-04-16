@@ -120,7 +120,7 @@ use perl_semantic_analyzer::class_model::{ClassModel, ClassModelBuilder, Framewo
 use perl_semantic_analyzer::semantic::{BuiltinDoc, get_moose_type_documentation};
 use perl_semantic_analyzer::symbol::{SymbolExtractor, SymbolKind, SymbolTable};
 use perl_semantic_analyzer::type_inference::TypeInferenceEngine;
-use perl_workspace_index::workspace_index::WorkspaceIndex;
+use perl_workspace::workspace_index::WorkspaceIndex;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
@@ -225,7 +225,7 @@ impl CompletionProvider {
     /// ```rust,ignore
     /// use perl_parser_core::Parser;
     /// use perl_lsp_completion::CompletionProvider;
-    /// use perl_workspace_index::workspace_index::WorkspaceIndex;
+    /// use perl_workspace::workspace_index::WorkspaceIndex;
     /// use std::sync::Arc;
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -2122,7 +2122,7 @@ mod tests {
     use super::*;
     use perl_parser_core::Parser;
     use perl_tdd_support::{must, must_some};
-    use perl_workspace_index::workspace_index::WorkspaceIndex;
+    use perl_workspace::workspace_index::WorkspaceIndex;
     use std::sync::Arc;
     use url::Url;
 

@@ -10,7 +10,7 @@ description = "Perl module resolution, import analysis, and refactoring — unif
 [dependencies]
 url = { workspace = true }
 perl-path-security = { workspace = true }
-perl-workspace-folder = { workspace = true }
+perl-workspace = { workspace = true }
 perl-text-line = { workspace = true }
 
 [dev-dependencies]

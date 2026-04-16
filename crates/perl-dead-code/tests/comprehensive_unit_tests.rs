@@ -6,7 +6,7 @@
 use perl_dead_code::{
     DeadCode, DeadCodeAnalysis, DeadCodeDetector, DeadCodeStats, DeadCodeType, generate_report,
 };
-use perl_workspace_index::workspace_index::WorkspaceIndex;
+use perl_workspace::workspace_index::WorkspaceIndex;
 use std::path::PathBuf;
 
 // ---------------------------------------------------------------------------

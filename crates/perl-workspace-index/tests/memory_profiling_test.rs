@@ -8,8 +8,8 @@
 #![cfg(feature = "memory-profiling")]
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-use perl_workspace_index::workspace::memory::{MemorySnapshot, ScaleReport};
-use perl_workspace_index::workspace_index::WorkspaceIndex;
+use perl_workspace::workspace::memory::{MemorySnapshot, ScaleReport};
+use perl_workspace::workspace_index::WorkspaceIndex;
 use url::Url;
 
 /// Generate a synthetic Perl module with a known number of symbols (5 per module).

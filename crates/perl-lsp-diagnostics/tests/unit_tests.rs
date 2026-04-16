@@ -842,7 +842,7 @@ fn common_mistakes_no_warning_for_string_comparison() -> Result<(), Box<dyn std:
 mod dead_code_tests {
     use super::*;
     use perl_parser_core::position::LineStartsCache;
-    use perl_workspace_index::workspace_index::WorkspaceIndex;
+    use perl_workspace::workspace_index::WorkspaceIndex;
 
     #[test]
     fn dead_code_empty_workspace() -> Result<(), Box<dyn std::error::Error>> {

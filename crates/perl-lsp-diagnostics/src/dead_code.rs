@@ -21,12 +21,12 @@ use perl_diagnostics::codes::DiagnosticSeverity;
 /// Dead code diagnostics for symbols in the specified document
 #[cfg(not(target_arch = "wasm32"))]
 pub fn detect_dead_code(
-    workspace_index: &perl_workspace_index::workspace_index::WorkspaceIndex,
+    workspace_index: &perl_workspace::workspace_index::WorkspaceIndex,
     document_uri: &str,
     source_text: &str,
     line_index: &perl_parser_core::position::LineStartsCache,
 ) -> Vec<Diagnostic> {
-    use perl_workspace_index::workspace_index::SymbolKind;
+    use perl_workspace::workspace_index::SymbolKind;
 
     let unused_symbols = workspace_index.find_unused_symbols();
     let mut diagnostics = Vec::new();

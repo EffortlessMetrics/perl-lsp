@@ -20,7 +20,7 @@
 //! # Usage
 //!
 //! ```rust,ignore
-//! use perl_workspace_index::workspace::cache::{BoundedLruCache, CacheConfig};
+//! use perl_workspace::workspace::cache::{BoundedLruCache, CacheConfig};
 //!
 //! let config = CacheConfig::default();
 //! let cache = BoundedLruCache::new(config);
@@ -160,7 +160,7 @@ where
     /// # Examples
     ///
     /// ```rust
-    /// use perl_workspace_index::workspace::cache::{BoundedLruCache, CacheConfig};
+    /// use perl_workspace::workspace::cache::{BoundedLruCache, CacheConfig};
     ///
     /// let config = CacheConfig {
     ///     max_items: 1000,
@@ -187,7 +187,7 @@ where
     /// # Examples
     ///
     /// ```rust
-    /// use perl_workspace_index::workspace::cache::BoundedLruCache;
+    /// use perl_workspace::workspace::cache::BoundedLruCache;
     ///
     /// let cache: BoundedLruCache<String, String> = BoundedLruCache::default();
     /// ```
@@ -212,7 +212,7 @@ where
     /// # Examples
     ///
     /// ```rust
-    /// use perl_workspace_index::workspace::cache::BoundedLruCache;
+    /// use perl_workspace::workspace::cache::BoundedLruCache;
     ///
     /// let mut cache = BoundedLruCache::default();
     /// cache.insert_with_size("key", "value", 5);
@@ -294,7 +294,7 @@ where
     /// # Examples
     ///
     /// ```rust
-    /// use perl_workspace_index::workspace::cache::BoundedLruCache;
+    /// use perl_workspace::workspace::cache::BoundedLruCache;
     ///
     /// let mut cache = BoundedLruCache::default();
     /// cache.insert("key", "value");
@@ -322,7 +322,7 @@ where
     /// # Examples
     ///
     /// ```rust,ignore
-    /// use perl_workspace_index::workspace::cache::BoundedLruCache;
+    /// use perl_workspace::workspace::cache::BoundedLruCache;
     ///
     /// let mut cache = BoundedLruCache::default();
     /// cache.insert("key", "value");
@@ -412,7 +412,7 @@ where
     /// # Examples
     ///
     /// ```rust,ignore
-    /// use perl_workspace_index::workspace::cache::BoundedLruCache;
+    /// use perl_workspace::workspace::cache::BoundedLruCache;
     ///
     /// let mut cache = BoundedLruCache::default();
     /// cache.insert("key", "value");
@@ -445,7 +445,7 @@ where
     /// # Examples
     ///
     /// ```rust
-    /// use perl_workspace_index::workspace::cache::BoundedLruCache;
+    /// use perl_workspace::workspace::cache::BoundedLruCache;
     ///
     /// let mut cache = BoundedLruCache::default();
     /// cache.insert("key", "value");
@@ -492,7 +492,7 @@ where
     /// # Examples
     ///
     /// ```rust,ignore
-    /// use perl_workspace_index::workspace::cache::BoundedLruCache;
+    /// use perl_workspace::workspace::cache::BoundedLruCache;
     ///
     /// let cache = BoundedLruCache::default();
     /// let stats = cache.stats();

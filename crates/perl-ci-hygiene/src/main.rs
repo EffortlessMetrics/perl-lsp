@@ -4502,8 +4502,7 @@ mod tests {
             "perl-lsp",
             "perl-dap",
             "perl-uri",
-            "perl-workspace-index",
-            "perl-workspace-discovery",
+            "perl-workspace",
             "perl-dap-platform",
         ];
 

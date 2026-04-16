@@ -117,9 +117,13 @@ fn test_workspace_member_count_reduced() {
     let content =
         std::fs::read_to_string(&cargo_toml_path).expect("Failed to read workspace Cargo.toml");
 
-    // Count the number of "crates/" entries in the file.
-    // Each workspace member is listed as "crates/<name>" in the [workspace] section.
-    let member_count = content.matches("\"crates/").count();
+    // Count workspace members by extracting only the members = [...] array.
+    // We find the section between `members = [` and the closing `]` to avoid
+    // counting workspace.dependencies paths (which also contain "crates/").
+    let members_start = content.find("members = [").expect("members array not found");
+    let members_section = &content[members_start
+        ..content[members_start..].find(']').map_or(content.len(), |i| members_start + i)];
+    let member_count = members_section.matches("\"crates/").count();
 
     // Expected: 117 (123 - 6 deleted satellites)
     // We're asserting the count is less than 123 to handle the transition.
@@ -201,13 +205,13 @@ fn test_consumer_imports_no_old_names() {
 
         // Old import patterns that should NOT exist
         let forbidden_imports = vec![
-            "use perl_workspace_index::",
-            "use perl_workspace_discovery::",
-            "use perl_workspace_folder::",
-            "use perl_workspace_ignore::",
-            "use perl_workspace_index_monitoring::",
-            "use perl_workspace_index_slo::",
-            "use perl_workspace_index_state_machine::",
+            "use perl_workspace::",
+            "use perl_workspace::discovery::",
+            "use perl_workspace::folder::",
+            "use perl_workspace::ignore::",
+            "use perl_workspace::monitoring::",
+            "use perl_workspace::slo::",
+            "use perl_workspace::state_machine::",
         ];
 
         for forbidden in forbidden_imports {
@@ -233,9 +237,9 @@ fn test_consumer_imports_no_old_names() {
             std::fs::read_to_string(&perl_parser_lib).expect("Failed to read perl-parser lib.rs");
 
         let forbidden_imports = vec![
-            "use perl_workspace_index::",
-            "use perl_workspace_discovery::",
-            "use perl_workspace_index_monitoring::",
+            "use perl_workspace::",
+            "use perl_workspace::discovery::",
+            "use perl_workspace::monitoring::",
         ];
 
         for forbidden in forbidden_imports {

@@ -6,7 +6,7 @@ use super::{
     context::CompletionContext,
     items::{CompletionItem, CompletionItemKind},
 };
-use perl_workspace_index::workspace_index::{
+use perl_workspace::workspace_index::{
     SymbolKind as WsSymbolKind, WorkspaceIndex, WorkspaceSymbol,
 };
 use std::collections::HashSet;

@@ -60,7 +60,7 @@ pub use perl_parser_core::{Node, NodeKind, SourceLocation};
 pub use perl_parser_core::{
     Parser, ast, edit, error, parser, parser_context, position, pragma_tracker, quote_parser, util,
 };
-pub use perl_workspace_index::workspace_index;
+pub use perl_workspace::workspace_index;
 
 /// Semantic analysis, symbol extraction, and type inference.
 pub mod analysis;

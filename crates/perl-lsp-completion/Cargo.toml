@@ -21,7 +21,7 @@ perl-lsp-completion-item = { workspace = true }
 perl-lsp-file-completion = { workspace = true }
 perl-parser-core = { workspace = true }
 perl-semantic-analyzer = { workspace = true }
-perl-workspace-index = { workspace = true }
+perl-workspace = { workspace = true }
 perl-keywords = { workspace = true }
 perl-module = { workspace = true }
 url.workspace = true
@@ -33,7 +33,7 @@ default = []
 criterion.workspace = true
 perl-parser-core = { workspace = true }
 perl-tdd-support = { workspace = true }
-perl-workspace-index = { workspace = true }
+perl-workspace = { workspace = true }
 serde_json.workspace = true
 url.workspace = true
 

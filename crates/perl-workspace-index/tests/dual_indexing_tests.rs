@@ -10,7 +10,7 @@
 //! - Moose method modifiers (`around`, `before`, `after`)
 //! - Multiple packages in a single file
 
-use perl_workspace_index::workspace::workspace_index::WorkspaceIndex;
+use perl_workspace::workspace::workspace_index::WorkspaceIndex;
 use url::Url;
 
 // ---------------------------------------------------------------------------

@@ -18,9 +18,9 @@ use perl_module::rename::{apply_module_rename_edits, plan_module_rename_edits};
 use perl_parser::workspace_index::{DegradationReason, EarlyExitReason, ResourceKind, SymbolKind};
 #[cfg(feature = "workspace")]
 use perl_source_file::{is_perl_source_path, is_perl_source_uri};
-use perl_workspace_folder::extract_workspace_folder_change;
+use perl_workspace::folder::extract_workspace_folder_change;
 #[cfg(feature = "workspace")]
-use perl_workspace_ignore::is_skipped_dir_name;
+use perl_workspace::ignore::is_skipped_dir_name;
 #[cfg(feature = "workspace")]
 use std::path::Path;
 use std::sync::Arc;

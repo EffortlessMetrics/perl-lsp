@@ -1,6 +1,6 @@
 use perl_lsp_diagnostics::{DiagnosticSeverity, DiagnosticTag, detect_dead_code};
 use perl_parser_core::position::LineStartsCache;
-use perl_workspace_index::workspace_index::WorkspaceIndex;
+use perl_workspace::workspace_index::WorkspaceIndex;
 
 #[test]
 fn test_dead_code_detection() -> Result<(), Box<dyn std::error::Error>> {

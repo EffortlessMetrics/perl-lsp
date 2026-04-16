@@ -1,7 +1,7 @@
 #![allow(clippy::panic, clippy::unwrap_used, clippy::expect_used)]
 use criterion::{BatchSize, Criterion, criterion_group, criterion_main};
 use perl_tdd_support::must;
-use perl_workspace_index::workspace_index::WorkspaceIndex;
+use perl_workspace::workspace_index::WorkspaceIndex;
 use std::fs;
 use std::hint::black_box;
 use tempfile::TempDir;
@@ -543,7 +543,7 @@ fn bench_file_removal_and_reindex(c: &mut Criterion) {
 ///
 /// Validates that state transitions are fast enough for LSP responsiveness (<1ms overhead)
 fn bench_state_transitions(c: &mut Criterion) {
-    use perl_workspace_index::workspace_index::IndexCoordinator;
+    use perl_workspace::workspace_index::IndexCoordinator;
 
     c.bench_function("state transitions", |b| {
         b.iter_batched(
@@ -572,7 +572,7 @@ fn bench_state_transitions(c: &mut Criterion) {
 ///
 /// Validates that state() calls are fast enough for every LSP request (<100ns)
 fn bench_state_query(c: &mut Criterion) {
-    use perl_workspace_index::workspace_index::IndexCoordinator;
+    use perl_workspace::workspace_index::IndexCoordinator;
 
     let coordinator = IndexCoordinator::new();
     coordinator.transition_to_ready(100, 5000);
@@ -589,7 +589,7 @@ fn bench_state_query(c: &mut Criterion) {
 ///
 /// Validates that parse storm detection overhead is minimal (<10μs per notify)
 fn bench_parse_storm_detection(c: &mut Criterion) {
-    use perl_workspace_index::workspace_index::IndexCoordinator;
+    use perl_workspace::workspace_index::IndexCoordinator;
 
     c.bench_function("parse storm detection and recovery", |b| {
         b.iter_batched(
@@ -656,7 +656,7 @@ fn bench_early_exit_optimization(c: &mut Criterion) {
 ///
 /// Validates that limit checking overhead is acceptable (<10μs per check)
 fn bench_resource_limit_enforcement(c: &mut Criterion) {
-    use perl_workspace_index::workspace_index::{IndexCoordinator, IndexResourceLimits};
+    use perl_workspace::workspace_index::{IndexCoordinator, IndexResourceLimits};
 
     c.bench_function("resource limit enforcement", |b| {
         b.iter_batched(

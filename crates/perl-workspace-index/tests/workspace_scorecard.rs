@@ -18,7 +18,7 @@
 //! Related: issue #4068, PR #4137 (CI wiring), SLO spec in
 //! `crates/perl-workspace-index-slo/src/lib.rs`.
 
-use perl_workspace_index::workspace::workspace_index::WorkspaceIndex;
+use perl_workspace::workspace::workspace_index::WorkspaceIndex;
 use std::time::Instant;
 use url::Url;
 use walkdir::WalkDir;

@@ -3,7 +3,7 @@
 //! This module identifies unused code including unreachable code and unused symbols.
 //! Currently a stub implementation to demonstrate the architecture.
 
-use perl_workspace_index::workspace_index::{
+use perl_workspace::workspace_index::{
     SymbolKind, WorkspaceIndex, fs_path_to_uri, uri_to_fs_path,
 };
 use serde::{Deserialize, Serialize};

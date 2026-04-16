@@ -3,7 +3,7 @@
 use criterion::{Criterion, criterion_group, criterion_main};
 use perl_lsp_completion::CompletionProvider;
 use perl_parser_core::Parser;
-use perl_workspace_index::workspace_index::WorkspaceIndex;
+use perl_workspace::workspace_index::WorkspaceIndex;
 use std::hint::black_box;
 use std::sync::Arc;
 

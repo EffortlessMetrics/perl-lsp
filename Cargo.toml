@@ -21,9 +21,6 @@ members = [
     "crates/perl-parser-pest",
     "crates/perl-semantic-analyzer",
     "crates/perl-workspace-index",
-    "crates/perl-workspace-index-monitoring",
-    "crates/perl-workspace-index-state-machine",
-    "crates/perl-workspace-index-slo",
     "crates/perl-refactoring",
     "crates/perl-incremental-parsing",
     "crates/perl-tdd-support",
@@ -97,9 +94,6 @@ members = [
     "crates/perl-path-security",
     "crates/perl-pod",
     "crates/perl-percentile",
-    "crates/perl-workspace-folder",
-    "crates/perl-workspace-ignore",
-    "crates/perl-workspace-discovery",
     "crates/perl-corpus",
     "crates/perl-lsp",
     "crates/perl-lsp-ux-tests",
@@ -178,12 +172,9 @@ allow = [
     "perl-symbol-index",
     "perl-uri-classify",
     "perl-uri",
-    "perl-workspace-index-state-machine",
     "perl-path-normalize",
-    "perl-workspace-index-slo",
-    "perl-workspace-index-monitoring",
     # Tier 3 — Analysis and indexing
-    "perl-workspace-index",
+    "perl-workspace",
     "perl-semantic-analyzer",
     "perl-diagnostics",
     "perl-lsp-diagnostics",
@@ -268,8 +259,6 @@ allow = [
     # Tier 6 — Module resolution higher tiers
     "perl-text-line",
     "perl-line-index",
-    "perl-workspace-folder",
-    "perl-workspace-ignore",
     "perl-source-file",
     "perl-workspace-discovery",
 
@@ -311,8 +300,6 @@ perl-symbol-cursor = { path = "crates/perl-symbol-cursor", version = "0.12.4" }
 perl-symbol-index = { path = "crates/perl-symbol-index", version = "0.12.4" }
 perl-module = { path = 'crates/perl-module', version = "0.12.4" }
 perl-qualified-name = { path = "crates/perl-qualified-name", version = "0.12.4" }
-perl-workspace-folder = { path = "crates/perl-workspace-folder", version = "0.12.4" }
-perl-workspace-ignore = { path = "crates/perl-workspace-ignore", version = "0.12.4" }
 perl-keywords = { path = "crates/perl-keywords", version = "0.12.4" }
 perl-source-file = { path = "crates/perl-source-file", version = "0.12.4" }
 perl-text-line = { path = "crates/perl-text-line", version = "0.12.4" }
@@ -395,12 +382,8 @@ perl-lsp-folding = { path = "crates/perl-lsp-folding", version = "0.12.4" }
 perl-lsp-selection-range = { path = "crates/perl-lsp-selection-range", version = "0.12.4" }
 perl-diagnostics = { path = "crates/perl-diagnostics", version = "0.12.4" }
 # Tier 3: Two-level dependencies
-perl-workspace-index = { path = "crates/perl-workspace-index", version = "0.12.4" }
-perl-workspace-index-monitoring = { path = "crates/perl-workspace-index-monitoring", version = "0.12.4" }
-perl-workspace-index-state-machine = { path = "crates/perl-workspace-index-state-machine", version = "0.12.4" }
-perl-workspace-index-slo = { path = "crates/perl-workspace-index-slo", version = "0.12.4" }
+perl-workspace = { path = "crates/perl-workspace-index", version = "0.12.4" }
 perl-incremental-parsing = { path = "crates/perl-incremental-parsing", version = "0.12.4" }
-perl-workspace-discovery = { path = "crates/perl-workspace-discovery", version = "0.12.4" }
 perl-refactoring = { path = "crates/perl-refactoring", version = "0.12.4" }
 
 # Tier 4: Three-level dependencies
