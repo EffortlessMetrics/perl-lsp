@@ -4,12 +4,13 @@
 //! detected Perl location and `perl-lsp.perl.path` config suggestion.
 
 use perl_dap::{DapMessage, DebugAdapter};
+use perl_tdd_support::must;
 use serde_json::json;
 
 /// Launch with a nonexistent program path should yield an error message
 /// that mentions `perl-lsp.perl.path` verbatim.
 #[test]
-fn launch_error_names_perl_lsp_perl_path_setting() {
+fn launch_error_names_perl_lsp_perl_path_setting() -> Result<(), Box<dyn std::error::Error>> {
     let mut adapter = DebugAdapter::new();
 
     let response = adapter.handle_request(
@@ -33,15 +34,16 @@ fn launch_error_names_perl_lsp_perl_path_setting() {
             // This branch should not happen for a nonexistent path, but be defensive.
         }
         other => {
-            panic!("expected a Response, got: {:?}", other);
+            must(false, format!("expected a Response, got: {:?}", other));
         }
     }
+    Ok(())
 }
 
 /// Launch failure error message must include information about the Perl
 /// interpreter that was found (or indicate none was found).
 #[test]
-fn launch_error_includes_perl_detection_info() {
+fn launch_error_includes_perl_detection_info() -> Result<(), Box<dyn std::error::Error>> {
     let mut adapter = DebugAdapter::new();
 
     let response = adapter.handle_request(
@@ -69,9 +71,10 @@ fn launch_error_includes_perl_detection_info() {
             // Defensive: skip if somehow succeeded (shouldn't happen for nonexistent path).
         }
         other => {
-            panic!("expected a Response, got: {:?}", other);
+            must(false, format!("expected a Response, got: {:?}", other));
         }
     }
+    Ok(())
 }
 
 /// On Windows with no Perl available, the launch error should link to strawberryperl.com.
@@ -80,7 +83,8 @@ fn launch_error_includes_perl_detection_info() {
 /// the "found at" branch fires instead and the link is not needed.
 #[test]
 #[cfg(windows)]
-fn launch_error_on_windows_links_strawberry_perl_when_perl_absent() {
+fn launch_error_on_windows_links_strawberry_perl_when_perl_absent()
+-> Result<(), Box<dyn std::error::Error>> {
     use perl_dap::platform::resolve_perl_path_with_toolchain;
 
     // Only run this assertion when Perl is genuinely not available.
@@ -104,10 +108,11 @@ fn launch_error_on_windows_links_strawberry_perl_when_perl_absent() {
             }
             DapMessage::Response { success: true, .. } => {}
             other => {
-                panic!("expected a Response, got: {:?}", other);
+                must(false, format!("expected a Response, got: {:?}", other));
             }
         }
     }
     // If Perl is found, the test passes vacuously — the "found" branch is tested by
     // the other tests above.
+    Ok(())
 }
