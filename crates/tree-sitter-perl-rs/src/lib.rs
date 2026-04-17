@@ -162,9 +162,7 @@ pub fn language() -> PerlLanguage {
 }
 
 /// The [`PerlLanguage`] descriptor as a constant.
-pub static LANGUAGE: PerlLanguage = PerlLanguage {
-    kind_names: perl_ast::NodeKind::ALL_KIND_NAMES,
-};
+pub static LANGUAGE: PerlLanguage = PerlLanguage { kind_names: perl_ast::NodeKind::ALL_KIND_NAMES };
 
 /// The result of a successful parse: an owned syntax tree and the source text.
 ///
@@ -483,7 +481,10 @@ mod tests {
     #[test]
     fn test_language_rejects_unknown_kind() {
         let lang = language();
-        assert!(!lang.node_kind_is_named("__nonexistent_kind__"), "unknown kind should not be named");
+        assert!(
+            !lang.node_kind_is_named("__nonexistent_kind__"),
+            "unknown kind should not be named"
+        );
     }
 
     #[test]
