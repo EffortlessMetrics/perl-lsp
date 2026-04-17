@@ -89,9 +89,8 @@ fn keywords_lookup_covers_standard_perl_keywords() {
     // Spot-check a spread of canonical keywords — regressions in
     // `const KEYWORDS: &[&str] = &[ ... ]` often drop entries silently.
     for k in [
-        "my", "our", "local", "sub", "use", "package", "if", "unless", "while",
-        "for", "foreach", "return", "undef", "die", "eval", "do", "print",
-        "BEGIN", "END",
+        "my", "our", "local", "sub", "use", "package", "if", "unless", "while", "for", "foreach",
+        "return", "undef", "die", "eval", "do", "print", "BEGIN", "END",
     ] {
         assert!(kw::is_keyword(k), "expected {k:?} to be a keyword");
     }
@@ -117,11 +116,7 @@ fn keywords_inventories_are_non_empty_and_sorted_uniquely() {
         let before = dedup.len();
         dedup.sort();
         dedup.dedup();
-        assert_eq!(
-            dedup.len(),
-            before,
-            "{name} contains duplicates — check module merge"
-        );
+        assert_eq!(dedup.len(), before, "{name} contains duplicates — check module merge");
     }
 }
 
@@ -152,9 +147,9 @@ fn builtins_phf_lookup_matches_known_perl_builtins() {
 
     // Core builtins that must remain classified after absorption.
     for b in [
-        "print", "printf", "say", "length", "substr", "sprintf", "join", "split",
-        "scalar", "keys", "values", "push", "pop", "shift", "unshift", "sort",
-        "reverse", "map", "grep", "defined", "ref", "bless",
+        "print", "printf", "say", "length", "substr", "sprintf", "join", "split", "scalar", "keys",
+        "values", "push", "pop", "shift", "unshift", "sort", "reverse", "map", "grep", "defined",
+        "ref", "bless",
     ] {
         assert!(is_builtin(b), "expected {b:?} to be a builtin");
     }
@@ -183,7 +178,9 @@ fn tokenizer_submodule_paths_exist() {
     // the pre-collapse `perl_tokenizer::*` shape that downstream crates used.
     use perl_lexer::tokenizer::token_wrapper::{PositionTracker, TokenWithPosition};
     #[allow(deprecated)]
-    use perl_lexer::tokenizer::util::{code_slice, find_data_marker_byte, find_data_marker_byte_lexed};
+    use perl_lexer::tokenizer::util::{
+        code_slice, find_data_marker_byte, find_data_marker_byte_lexed,
+    };
 
     let _: Option<TokenWithPosition> = None;
     let _: Option<PositionTracker<'_>> = None;
@@ -314,23 +311,14 @@ fn workspace_root() -> PathBuf {
     // Manifest dir is .../crates/perl-lexer; pop to workspace root.
     p.pop(); // .../crates
     p.pop(); // workspace root
-    assert!(
-        p.join("Cargo.toml").exists(),
-        "expected workspace Cargo.toml at {}",
-        p.display()
-    );
+    assert!(p.join("Cargo.toml").exists(), "expected workspace Cargo.toml at {}", p.display());
     p
 }
 
 #[test]
 fn absorbed_satellite_directories_stay_deleted() {
     let root = workspace_root();
-    for sat in [
-        "perl-keywords",
-        "perl-builtins",
-        "perl-builtins-phf",
-        "perl-tokenizer",
-    ] {
+    for sat in ["perl-keywords", "perl-builtins", "perl-builtins-phf", "perl-tokenizer"] {
         let dir = root.join("crates").join(sat);
         assert!(
             !dir.exists(),
@@ -347,10 +335,7 @@ fn perl_lexer_claude_md_is_preserved() -> std::io::Result<()> {
     // wave accidentally deletes it, this fails.
     let root = workspace_root();
     let claude = root.join("crates").join("perl-lexer").join("CLAUDE.md");
-    assert!(
-        claude.exists(),
-        "crates/perl-lexer/CLAUDE.md must be preserved post-Wave-C"
-    );
+    assert!(claude.exists(), "crates/perl-lexer/CLAUDE.md must be preserved post-Wave-C");
     let contents = std::fs::read_to_string(&claude)?;
     // Light content invariants — don't over-constrain wording.
     assert!(contents.contains("perl-lexer"), "CLAUDE.md mentions crate name");
@@ -382,10 +367,7 @@ fn workspace_has_exactly_97_members_after_wave_c() -> std::io::Result<()> {
         .ok_or_else(|| std::io::Error::other("members list missing closing bracket"))?;
     let members_block = &after_start[..end_off];
 
-    let count = members_block
-        .lines()
-        .filter(|l| l.trim_start().starts_with('"'))
-        .count();
+    let count = members_block.lines().filter(|l| l.trim_start().starts_with('"')).count();
 
     assert_eq!(
         count, 97,
@@ -402,19 +384,11 @@ fn absorbed_satellite_names_are_absent_from_cargo_toml() -> std::io::Result<()> 
     let root = workspace_root();
     let cargo_toml = std::fs::read_to_string(root.join("Cargo.toml"))?;
 
-    for sat in [
-        "perl-keywords",
-        "perl-builtins",
-        "perl-builtins-phf",
-        "perl-tokenizer",
-    ] {
+    for sat in ["perl-keywords", "perl-builtins", "perl-builtins-phf", "perl-tokenizer"] {
         // Guard against accidentally matching `perl-keywords-` or similar
         // longer names by checking exact-quote boundaries used in Cargo.toml.
         let needle_path = format!("\"crates/{sat}\"");
-        assert!(
-            !cargo_toml.contains(&needle_path),
-            "workspace members still lists `{sat}`"
-        );
+        assert!(!cargo_toml.contains(&needle_path), "workspace members still lists `{sat}`");
         let needle_dep = format!("\n{sat} =");
         assert!(
             !cargo_toml.contains(&needle_dep),
@@ -491,8 +465,12 @@ fn token_stream_lives_under_parser_core_not_lexer() {
     // accidental move of `token_stream.rs` back into `perl-lexer` would
     // reintroduce the `perl-error` <-> `perl-lexer` dep cycle.
     let root = workspace_root();
-    let lexer_bad =
-        root.join("crates").join("perl-lexer").join("src").join("tokenizer").join("token_stream.rs");
+    let lexer_bad = root
+        .join("crates")
+        .join("perl-lexer")
+        .join("src")
+        .join("tokenizer")
+        .join("token_stream.rs");
     assert!(
         !lexer_bad.exists(),
         "token_stream.rs must NOT live in perl-lexer (creates cycle via perl-error). Expected at perl-parser-core/src/tokens/."
@@ -504,8 +482,5 @@ fn token_stream_lives_under_parser_core_not_lexer() {
         .join("src")
         .join("tokens")
         .join("token_stream.rs");
-    assert!(
-        core_good.exists(),
-        "token_stream.rs must live at perl-parser-core/src/tokens/"
-    );
+    assert!(core_good.exists(), "token_stream.rs must live at perl-parser-core/src/tokens/");
 }
