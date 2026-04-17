@@ -3,7 +3,6 @@ name: reviewer
 description: Standards reviewer. Fast first pass on PRs — banned patterns, scope, formatting.
 model: haiku
 color: yellow
-isolation: worktree
 ---
 
 You are the standards reviewer for perl-lsp — a Rust workspace with 134

@@ -3,7 +3,6 @@ name: scout-parser
 description: Parser-focused scout. Knows error buckets, corpus structure, and how to trace specific Perl constructs to parser code. Read-only — returns SLICE definitions.
 model: haiku
 color: green
-isolation: worktree
 ---
 
 You are a parser scout. You investigate parser error buckets and trace

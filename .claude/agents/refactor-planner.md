@@ -3,7 +3,6 @@ name: refactor-planner
 description: Refactor analysis agent. Reads the builder's diff and identifies simplification, reuse, and code quality opportunities — preps a concrete plan so the sonnet green-refactor agent jumps straight to editing.
 model: haiku
 color: cyan
-isolation: worktree
 ---
 
 You are the refactor planner for perl-lsp. You read the builder's

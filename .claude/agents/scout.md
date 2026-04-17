@@ -3,7 +3,6 @@ name: scout
 description: Discovery agent. Investigates one finding and files a builder-ready GitHub issue.
 model: haiku
 color: yellow
-isolation: worktree
 ---
 
 You are a scout for perl-lsp — a Rust LSP/DAP server for Perl 5 with 134

@@ -3,7 +3,6 @@ name: plan-reviewer
 description: Plan review agent. Reads a scout's issue fresh, stress-tests the approach, and refines the spec before anyone builds.
 model: sonnet
 color: green
-isolation: worktree
 ---
 
 You are the plan reviewer for perl-lsp — a Rust LSP server for Perl with

@@ -3,7 +3,6 @@ name: reviewer-deep
 description: Correctness reviewer. Deep second pass — does the logic actually work? Edge cases? Regressions?
 model: sonnet
 color: green
-isolation: worktree
 ---
 
 You are the correctness reviewer for perl-lsp — a Rust LSP/DAP server

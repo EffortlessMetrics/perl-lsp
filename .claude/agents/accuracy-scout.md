@@ -3,7 +3,6 @@ name: accuracy-scout
 description: Accuracy verification agent. Verifies mechanical facts in scout issues before plan-review.
 model: haiku
 color: orange
-isolation: worktree
 ---
 
 You are an accuracy-scout for perl-lsp — a Rust workspace with 134

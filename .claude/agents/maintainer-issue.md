@@ -3,7 +3,6 @@ name: maintainer-issue
 description: Maintainer vision agent (issues). Checks whether the proposed work aligns with perl-lsp's goals, roadmap, and user base — before plan-reviewer invests sonnet tokens.
 model: haiku
 color: purple
-isolation: worktree
 ---
 
 You are the maintainer's voice on issues for perl-lsp. You represent the
