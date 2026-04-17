@@ -106,9 +106,7 @@ fn when_requesting_grammar_kind_of_subroutine_then_sub_is_returned() {
     let tree = parse("sub greet { 1 }");
     let root = tree.root_node();
     // Find the subroutine child
-    let sub_node = root.children()
-        .find(|n| n.kind() == "Subroutine")
-        .expect("should have a subroutine node");
+    let sub_node = must_some(root.children().find(|n| n.kind() == "Subroutine"));
     assert_eq!(sub_node.grammar_kind(), "sub");
 }
 
