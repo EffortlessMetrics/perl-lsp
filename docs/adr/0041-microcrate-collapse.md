@@ -352,6 +352,37 @@ layering and matches the same reasoning that kept `perl-symbol` (Amendment 3) an
 
 The 30-crate published target and all other ADR content remain unchanged.
 
+### Amendment 5 — 2026-04-17: Ledger corrected — perl-line-index, perl-uri, perl-pod stay published (Wave D)
+
+**Source:** Same pattern as Amendments 3 and 4 (perl-symbol, perl-token). Ledger/ADR conflict; ADR wins.
+
+The migration ledger at `.spec/microcrate-collapse/ledger.md` previously listed `perl-line-index`,
+`perl-uri`, and `perl-pod` in the Wave 4 parser/AST satellites table as modules absorbing into
+`perl-parser`. This contradicted the Decision section above ("Foundation primitives (5):
+`perl-lexer`, `perl-token`, `perl-line-index`, `perl-uri`, `perl-pod`") and Amendment 1's
+confirmation of those three crates as members of the 5 foundation primitives.
+
+**The correction:** Wave D (the parser/AST collapse) does **not** absorb `perl-line-index`,
+`perl-uri`, or `perl-pod`. They remain separately published foundation primitives per ADR-0041's
+original design. `perl-uri-classify` still folds — but into the retained `perl-uri` crate, not
+into `perl-parser`.
+
+**Rationale for keeping these three as their own published crates:**
+Each is a minimal, durable foundation primitive consumed across multiple products and layers:
+- `perl-line-index` — line/column <-> byte-offset conversion used by parser, semantic analyzer,
+  LSP providers, DAP.
+- `perl-uri` — Perl-aware URI handling used by LSP navigation, workspace discovery, DAP source
+  location resolution. Absorbs `perl-uri-classify` during Wave D.
+- `perl-pod` — POD documentation parsing used by hover, completion, and parser diagnostics.
+
+Folding any of them into `perl-parser` would force every downstream consumer (LSP providers,
+DAP, workspace index) to depend on the full parser implementation just to get the primitive.
+Keeping them as small, focused, published crates preserves clean layering and matches the same
+reasoning that kept `perl-symbol` (Amendment 3), `perl-token` (Amendment 4), and `perl-workspace`
+(Amendment 2) as their own published crates.
+
+The 30-crate published target and all other ADR content remain unchanged.
+
 ## References
 
 - [Tracking issue #4410: Microcrate collapse to ~30 published crates](https://github.com/EffortlessMetrics/perl-lsp/issues/4410)
