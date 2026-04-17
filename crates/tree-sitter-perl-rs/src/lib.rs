@@ -126,7 +126,7 @@ impl Default for Parser {
 /// let lang = language();
 /// assert!(lang.node_kind_count() > 0);
 /// ```
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PerlLanguage {
     kind_names: &'static [&'static str],
 }
@@ -496,8 +496,30 @@ mod tests {
 
     #[test]
     fn test_language_default_returns_same_as_language() {
-        let lang1 = language();
-        let lang2 = PerlLanguage::default();
-        assert_eq!(lang1.node_kind_count(), lang2.node_kind_count());
+        // PartialEq compares the backing slice elements, not just the pointer.
+        // Both language() and PerlLanguage::default() return LANGUAGE so this
+        // also verifies the Default impl wires up the correct constant.
+        assert_eq!(language(), PerlLanguage::default());
+    }
+
+    #[test]
+    fn test_language_kind_names_are_sorted_alphabetically() {
+        // node_kind_names() documents "in alphabetical order"; enforce that contract.
+        let lang = language();
+        let names = lang.node_kind_names();
+        let mut sorted = names.to_vec();
+        sorted.sort_unstable();
+        assert_eq!(
+            names,
+            sorted.as_slice(),
+            "node_kind_names() must be in alphabetical order; \
+             re-sort ALL_KIND_NAMES in perl-ast if a new variant was added out of order"
+        );
+    }
+
+    #[test]
+    fn test_language_is_named_with_empty_string_returns_false() {
+        // Empty string is not a valid kind name and must not be found.
+        assert!(!language().node_kind_is_named(""), "empty kind name must return false");
     }
 }
