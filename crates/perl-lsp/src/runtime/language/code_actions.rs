@@ -98,9 +98,12 @@ impl FixAllRange {
 ///   cannot be applied together without a round-trip.
 /// * Overlapping edits are resolved by "first wins" — the first edit in the
 ///   iteration order keeps its slot, and any later edit whose range overlaps
-///   an already-accepted range is dropped. Same-position insertions from
-///   multiple diagnostics count as overlapping so we never stack two `use
-///   strict;` insertions at the top of the file, for example.
+///   an already-accepted range is dropped. Zero-width insertions (for example
+///   `use strict;\n` and `use warnings;\n` both at position 0) are **never**
+///   considered overlapping via the range check — they are allowed to stack.
+///   Exact-duplicate `(range, newText)` pairs are deduped by a separate hash
+///   set, so two providers that independently suggest the same pragma each
+///   produce only one edit in the aggregate.
 /// * The aggregate is only emitted when at least two distinct edits survive
 ///   conflict resolution — a single quick fix is already the preferred action
 ///   and does not need a wrapper.
@@ -910,6 +913,30 @@ mod tests {
         let unrelated = FixAllRange { start_line: 0, start_char: 0, end_line: 0, end_char: 5 };
         assert!(!insertion.overlaps(&unrelated));
         assert!(!unrelated.overlaps(&insertion));
+    }
+
+    #[test]
+    fn fix_all_range_overlap_detects_multiline_overlap() {
+        // A multi-line replacement (lines 1-3) and an edit on line 2 must conflict.
+        let multiline = FixAllRange { start_line: 1, start_char: 0, end_line: 3, end_char: 0 };
+        let inner = FixAllRange { start_line: 2, start_char: 0, end_line: 2, end_char: 10 };
+        assert!(multiline.overlaps(&inner));
+        assert!(inner.overlaps(&multiline));
+    }
+
+    #[test]
+    fn fix_all_range_overlap_insertion_inside_real_range_allowed() {
+        // Design note: overlaps() returns false when either side is a zero-width
+        // insertion, even if the insertion falls inside a replacement range.
+        // The assumption is that quick fixes operate on original document positions
+        // per the LSP spec ("all text edit ranges refer to positions in the original
+        // document"), so an insertion at (0,5) and a replacement of (0,0)-(0,10) are
+        // independently valid.  This test documents the current behaviour so it is
+        // visible to future maintainers.
+        let replacement = FixAllRange { start_line: 0, start_char: 0, end_line: 0, end_char: 10 };
+        let insertion = FixAllRange { start_line: 0, start_char: 5, end_line: 0, end_char: 5 };
+        assert!(!replacement.overlaps(&insertion));
+        assert!(!insertion.overlaps(&replacement));
     }
 
     #[test]
