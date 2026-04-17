@@ -4498,19 +4498,23 @@ mod tests {
     #[test]
     fn no_hardcoded_tmp_writes_in_tests() {
         // Crates whose test files are checked. Extend this list as new crates are added.
-        const CHECKED_CRATES: &[&str] = &[
-            "perl-lsp",
-            "perl-dap",
-            "perl-uri",
-            "perl-workspace",
-            "perl-dap-platform",
+        // Format: (package-name, directory-name). These may differ when a crate is renamed
+        // but the directory is kept for Windows MAX_PATH safety (e.g. perl-workspace Wave A).
+        const CHECKED_CRATES: &[(&str, &str)] = &[
+            ("perl-lsp", "perl-lsp"),
+            ("perl-dap", "perl-dap"),
+            ("perl-uri", "perl-uri"),
+            // Package name changed perl-workspace-index → perl-workspace (#4426),
+            // but the directory crates/perl-workspace-index/ was not renamed.
+            ("perl-workspace", "perl-workspace-index"),
+            ("perl-dap-platform", "perl-dap-platform"),
         ];
 
         let workspace_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
         let mut violations: Vec<String> = Vec::new();
 
-        for crate_name in CHECKED_CRATES {
-            let crate_dir = workspace_root.join("crates").join(crate_name);
+        for (_crate_name, crate_dir_name) in CHECKED_CRATES {
+            let crate_dir = workspace_root.join("crates").join(crate_dir_name);
 
             // Scan both src (inline #[test] modules) and tests directories
             for subdir in &["src", "tests"] {

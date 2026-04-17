@@ -25,7 +25,7 @@
 //!
 //! ```rust,ignore
 //! use perl_refactoring::workspace_rename::{WorkspaceRename, WorkspaceRenameConfig};
-//! use perl_workspace::WorkspaceIndex;
+//! use perl_workspace::workspace_index::WorkspaceIndex;
 //! use std::path::Path;
 //!
 //! # fn main() -> Result<(), Box<dyn std::error::Error>> {
