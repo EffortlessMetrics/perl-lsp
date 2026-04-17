@@ -827,7 +827,7 @@ fn builtin_info(name: &'static str) -> (&'static str, &'static str, Option<&'sta
             "utf8::encode ",
             "utf8::encode SCALAR",
             Some(
-                "Encode SCALAR in place from Unicode to UTF-8 bytes. Clears the UTF-8 flag and returns the number of octets.",
+                "Encode SCALAR in place from Unicode to UTF-8 bytes. Clears the UTF-8 flag. Returns nothing (void).",
             ),
         ),
         "utf8::decode" => (
@@ -845,7 +845,7 @@ fn builtin_info(name: &'static str) -> (&'static str, &'static str, Option<&'sta
         "utf8::valid" => (
             "utf8::valid ",
             "utf8::valid SCALAR",
-            Some("Return true if SCALAR holds a syntactically valid UTF-8 byte sequence."),
+            Some("Return true if the internal UTF-8 state of SCALAR is consistent (valid UTF-8 with flag on, or raw bytes with flag off)."),
         ),
         "utf8::upgrade" => (
             "utf8::upgrade ",

@@ -1806,6 +1806,39 @@ fn utf8_namespace_completion_respects_prefix() {
     );
 }
 
+/// Typing the bare prefix `utf8` (no colons yet) should surface all eight
+/// `utf8::*` qualified names via the builtin path because every name starts
+/// with the prefix `"utf8"`.  This covers the case where the user has not
+/// yet typed `::` and so no package-member trigger fires.
+#[test]
+fn utf8_bare_prefix_surfaces_qualified_names() {
+    let code = "utf8";
+    let items = completions_at_end(code);
+    // All eight fully-qualified names must appear.
+    for name in &[
+        "utf8::encode",
+        "utf8::decode",
+        "utf8::is_utf8",
+        "utf8::valid",
+        "utf8::upgrade",
+        "utf8::downgrade",
+        "utf8::native_to_unicode",
+        "utf8::unicode_to_native",
+    ] {
+        assert!(
+            has_label(&items, name),
+            "typing 'utf8' should surface {name}; got labels: {:?}",
+            labels(&items)
+        );
+    }
+    // None of the bare names (`encode`, `decode`, …) should appear here —
+    // those only appear via the package-member path when the trigger is `::`.
+    assert!(
+        !has_label(&items, "encode"),
+        "bare 'encode' must not appear when prefix is 'utf8'"
+    );
+}
+
 // ─────────────────────────────────────────────────────────────────────────
 // Hash key completion edge case tests (issue #4264)
 // ─────────────────────────────────────────────────────────────────────────

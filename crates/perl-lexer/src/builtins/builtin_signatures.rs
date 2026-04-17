@@ -1766,7 +1766,7 @@ pub fn create_builtin_signatures() -> &'static HashMap<&'static str, BuiltinSign
                 signatures: vec!["utf8::encode SCALAR"],
                 documentation: concat!(
                     "Converts the internal representation of SCALAR from Unicode to UTF-8 bytes ",
-                    "in-place; clears the UTF-8 flag and returns the number of resulting octets ",
+                    "in-place; clears the UTF-8 flag. Returns nothing (void) ",
                     "(see perldoc utf8)"
                 ),
             },
@@ -1800,8 +1800,9 @@ pub fn create_builtin_signatures() -> &'static HashMap<&'static str, BuiltinSign
             BuiltinSignature {
                 signatures: vec!["utf8::valid SCALAR"],
                 documentation: concat!(
-                    "Returns true if SCALAR holds a syntactically valid UTF-8 byte sequence, ",
-                    "false otherwise; does not modify SCALAR (see perldoc utf8)"
+                    "Returns true if the internal state of SCALAR is consistent: either well-formed ",
+                    "extended UTF-8 with the UTF-8 flag on, or held as raw bytes with the flag off. ",
+                    "Does not modify SCALAR (see perldoc utf8)"
                 ),
             },
         );
