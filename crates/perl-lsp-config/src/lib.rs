@@ -5,7 +5,7 @@
 //! server crate so they can evolve independently and be reused by tooling.
 
 #[cfg(not(target_arch = "wasm32"))]
-use perl_dap_platform::resolve_perl_path_with_toolchain;
+use perl_dap::platform::resolve_perl_path_with_toolchain;
 use std::path::{Path, PathBuf};
 #[cfg(not(target_arch = "wasm32"))]
 use std::process::Command;

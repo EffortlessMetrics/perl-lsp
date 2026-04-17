@@ -14,7 +14,7 @@ keywords = ["perl", "lsp", "config", "language-server", "settings"]
 categories = ["development-tools", "text-editors"]
 
 [dependencies]
-perl-dap-platform = { workspace = true }
+perl-dap = { workspace = true }
 serde_json.workspace = true
 serde = { workspace = true }
 toml = "1.1.2"

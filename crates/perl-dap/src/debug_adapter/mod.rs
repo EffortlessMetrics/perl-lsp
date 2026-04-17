@@ -16,6 +16,8 @@ mod parsing;
 pub(crate) mod safe_eval;
 mod transport;
 
+use crate::breakpoint::{AstBreakpointValidator, BreakpointValidator};
+use crate::eval::SafeEvaluator;
 use crate::feature_catalog::has_feature as catalog_has_feature;
 use crate::inline_values::{collect_inline_values_with_runtime, extract_variable_names};
 use crate::protocol::{
@@ -33,15 +35,11 @@ use crate::protocol::{
     StackTraceArguments, StepInArguments, StepInTarget, StepInTargetsArguments,
     StepInTargetsResponseBody, StepOutArguments, TerminateArguments, VariablesArguments,
 };
+use crate::stack::{PerlStackParser, is_internal_frame_name_and_path};
 use crate::tcp_attach::{DapEvent, TcpAttachConfig, TcpAttachSession};
+use crate::types::{Source, StackFrame, Variable};
+use crate::variables::{PerlVariableRenderer, RenderedVariable, VariableParser, VariableRenderer};
 use perl_content_length_framing::{ContentLengthFramer, frame};
-use perl_dap_breakpoint::{AstBreakpointValidator, BreakpointValidator};
-use perl_dap_eval::SafeEvaluator;
-use perl_dap_stack::{PerlStackParser, is_internal_frame_name_and_path};
-use perl_dap_types::{Source, StackFrame, Variable};
-use perl_dap_variables::{
-    PerlVariableRenderer, RenderedVariable, VariableParser, VariableRenderer,
-};
 use perl_keywords::DAP_COMPLETION_KEYWORDS;
 use perl_module::path::module_path_to_name;
 use serde::{Deserialize, Serialize};

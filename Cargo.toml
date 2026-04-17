@@ -106,17 +106,6 @@ members = [
     "crates/perllsp",
     "crates/perl-dap",
     "crates/perl-dead-code",
-    "crates/perl-dap-breakpoint",
-    "crates/perl-dap-eval",
-    "crates/perl-dap-config",
-    "crates/perl-dap-platform",
-    "crates/perl-dap-command-args",
-    "crates/perl-dap-shell",
-    "crates/perl-dap-stack",
-    "crates/perl-dap-types",
-    "crates/perl-dap-value",
-    "crates/perl-dap-security",
-    "crates/perl-dap-variables",
     "crates/perl-feature-catalog",
     "crates/tree-sitter-perl-c",
     "crates/tree-sitter-perl-rs",
@@ -231,18 +220,7 @@ allow = [
     "perl-parser-pest",
     "perl-corpus",
 
-    # Tier 5 — DAP components
-    "perl-dap-breakpoint",
-    "perl-dap-eval",
-    "perl-dap-config",
-    "perl-dap-command-args",
-    "perl-dap-platform",
-    "perl-dap-shell",
-    "perl-dap-types",
-    "perl-dap-security",
-    "perl-dap-stack",
-    "perl-dap-value",
-    "perl-dap-variables",
+    # Tier 5 — DAP components (Wave H: satellites collapsed into perl-dap)
     "perl-path-security",
     "perl-feature-catalog",
     "perl-dap",
@@ -339,17 +317,6 @@ perl-pod = { path = "crates/perl-pod", version = "0.12.4" }
 perl-corpus = { path = "crates/perl-corpus", version = "0.12.4" }
 perl-dap = { path = "crates/perl-dap", version = "0.12.4" }
 perl-dead-code = { path = "crates/perl-dead-code", version = "0.12.4" }
-perl-dap-breakpoint = { path = "crates/perl-dap-breakpoint", version = "0.12.4" }
-perl-dap-eval = { path = "crates/perl-dap-eval", version = "0.12.4" }
-perl-dap-config = { path = "crates/perl-dap-config", version = "0.12.4" }
-perl-dap-platform = { path = "crates/perl-dap-platform", version = "0.12.4" }
-perl-dap-value = { path = "crates/perl-dap-value", version = "0.12.4" }
-perl-dap-command-args = { path = "crates/perl-dap-command-args", version = "0.12.4" }
-perl-dap-shell = { path = "crates/perl-dap-shell", version = "0.12.4" }
-perl-dap-types = { path = "crates/perl-dap-types", version = "0.12.4" }
-perl-dap-security = { path = "crates/perl-dap-security", version = "0.12.4" }
-perl-dap-stack = { path = "crates/perl-dap-stack", version = "0.12.4" }
-perl-dap-variables = { path = "crates/perl-dap-variables", version = "0.12.4" }
 perl-feature-catalog = { path = "crates/perl-feature-catalog", version = "0.12.4" }
 perl-lsp-feature-flags = { path = "crates/perl-lsp-feature-flags", version = "0.12.4" }
 perl-lsp-feature-ids = { path = "crates/perl-lsp-feature-ids", version = "0.12.4" }

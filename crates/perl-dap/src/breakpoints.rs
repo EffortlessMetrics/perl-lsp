@@ -15,8 +15,8 @@
 //! - [DAP Protocol Schema](../../docs/reference/DAP_PROTOCOL_SCHEMA.md#4-breakpoint-requests)
 //! - [DAP Implementation Spec](../../docs/reference/DAP_IMPLEMENTATION_SPECIFICATION.md#ac7-breakpoint-management)
 
+use crate::breakpoint::{AstBreakpointValidator, BreakpointValidator};
 use crate::protocol::{Breakpoint, SetBreakpointsArguments};
-use perl_dap_breakpoint::{AstBreakpointValidator, BreakpointValidator};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
