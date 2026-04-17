@@ -75,7 +75,11 @@ fn when_multiple_edits_are_recorded_then_tree_remains_usable_for_reparse() {
     let new_source = "my $x = 10; my $y = 20;";
     let mut parser = Parser::new();
     let new_tree = must_some(parser.parse_with_old_tree(new_source, &tree));
-    assert_eq!(new_tree.source(), new_source, "reparse after two edits must reflect updated source");
+    assert_eq!(
+        new_tree.source(),
+        new_source,
+        "reparse after two edits must reflect updated source"
+    );
 }
 
 #[test]
