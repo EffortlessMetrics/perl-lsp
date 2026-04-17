@@ -62,6 +62,21 @@ use std::fs;
 use std::path::Path;
 
 // ---------------------------------------------------------------------------
+// Serde helpers
+// ---------------------------------------------------------------------------
+
+/// Deserialize a YAML field that may be absent, an empty sequence, or an
+/// explicit null (`~`).  All three cases map to `Vec::default()`.
+fn deserialize_null_or_vec<'de, D, T>(deserializer: D) -> std::result::Result<Vec<T>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: serde::Deserialize<'de>,
+{
+    use serde::Deserialize;
+    Option::<Vec<T>>::deserialize(deserializer).map(Option::unwrap_or_default)
+}
+
+// ---------------------------------------------------------------------------
 // Output schema (`.ci/metrics/release-health.json`)
 // ---------------------------------------------------------------------------
 
@@ -101,11 +116,11 @@ struct ReleaseHealthMetrics {
 struct DebtLedger {
     #[serde(default)]
     budgets: DebtBudgets,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_null_or_vec")]
     flaky_tests: Vec<DebtFlakyTest>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_null_or_vec")]
     known_issues: Vec<serde_yaml_ng::Value>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_null_or_vec")]
     technical_debt: Vec<serde_yaml_ng::Value>,
 }
 
@@ -550,6 +565,25 @@ technical_debt:
         )?;
         let m2 = collect_release_health(tmp.path(), 30)?;
         print_table(&m2);
+        Ok(())
+    }
+    #[test]
+    fn collect_tolerates_explicit_null_fields_in_ledger() -> Result<()> {
+        let tmp = TempDir::new()?;
+        // serde_yaml_ng treats YAML null (`~`) on Vec fields with #[serde(default)]
+        // as an empty sequence rather than a deserialization error.  This test
+        // pins that behavior so a crate upgrade cannot silently break it.
+        write_ledger(
+            tmp.path(),
+            "flaky_tests: ~
+known_issues: ~
+technical_debt: ~
+",
+        )?;
+        let m = collect_release_health(tmp.path(), 30)?;
+        assert_eq!(m.flaky_test_count, 0, "null flaky_tests treated as empty");
+        assert_eq!(m.known_issues_count, 0, "null known_issues treated as empty");
+        assert_eq!(m.technical_debt_count, 0, "null technical_debt treated as empty");
         Ok(())
     }
 }
