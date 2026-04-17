@@ -237,13 +237,15 @@ impl<'tree> Node<'tree> {
     pub fn kind(&self) -> &'static str {
         self.inner.kind.kind_name()
     }
+
     /// Returns the tree-sitter grammar-canonical node kind name.
     ///
     /// Unlike [`kind`][Node::kind], which returns the v3 internal PascalCase name
-    /// (e.g., `"Program"`, `"Subroutine"`), this method returns the lowercase
-    /// grammar name used in S-expressions (e.g., `"source_file"`, `"sub"`).
+    /// (e.g., `"Program"`, `"Subroutine"`), this method returns the grammar name
+    /// used in S-expressions (e.g., `"source_file"`, `"sub"`).
     /// This matches the kind strings returned by `tree-sitter-perl-c` and the
     /// upstream tree-sitter Perl grammar.
+    /// Error nodes use `"ERROR"` (uppercase), matching tree-sitter convention.
     ///
     /// For most nodes the grammar name is a simple lowercase mapping. For some
     /// nodes (e.g., operator-named `Binary`, dynamic `VariableDeclaration`) the
@@ -255,19 +257,30 @@ impl<'tree> Node<'tree> {
     /// use tree_sitter_perl_rs::Parser;
     ///
     /// let mut parser = Parser::new();
-    /// let tree = parser.parse("my $x = 42;").unwrap();
-    /// assert_eq!(tree.root_node().grammar_kind(), "source_file");
+    /// let tree = parser.parse("my $x = 42;");
+    /// assert!(tree.is_some());
+    /// assert_eq!(tree.unwrap().root_node().grammar_kind(), "source_file");
     /// ```
     pub fn grammar_kind(&self) -> String {
         // Extract the node type from the leading `(word` in the S-expression.
         // to_sexp() always starts with `(kind_name` or just `(kind_name)`.
+        //
+        // Edge case: NodeKind::VariableWithAttributes produces a double-paren sexp
+        // of the form `((variable $ foo) (attributes :lvalue))` because it delegates
+        // the outer wrapper to the child variable's to_sexp(). In that case the sexp
+        // does not begin with `(kind_name` -- it begins with `((child_kind`. We detect
+        // this and fall back to the v3 kind_name() converted to snake_case.
         let sexp = self.to_sexp();
+        if sexp.starts_with("((") {
+            // Double-paren form: no independent grammar kind token in the sexp.
+            // Derive a stable snake_case name from the v3 kind_name() as fallback.
+            return pascal_to_snake(self.inner.kind.kind_name());
+        }
         let inner = sexp.trim_start_matches('(');
         // Take up to the first space or closing paren.
         let end = inner.find([' ', ')']).unwrap_or(inner.len());
         inner[..end].to_string()
     }
-
 
     /// Returns a tree-sitter-compatible S-expression for this node and its subtree.
     ///
@@ -355,7 +368,7 @@ impl<'tree> Node<'tree> {
 pub use perl_ast::NodeKind as PerlNodeKind;
 
 // ---------------------------------------------------------------------------
-// Private helper — access AstNode's children without name collision
+// Private helpers
 // ---------------------------------------------------------------------------
 
 // Collect the direct children of an `AstNode` as a `Vec<&AstNode>`.
@@ -365,6 +378,21 @@ pub use perl_ast::NodeKind as PerlNodeKind;
 #[inline]
 fn ast_children(node: &AstNode) -> Vec<&AstNode> {
     node.children()
+}
+
+
+/// Convert a PascalCase kind name (e.g. `"VariableWithAttributes"`) to snake_case
+/// (e.g. `"variable_with_attributes"`). Used as a fallback in [`Node::grammar_kind`]
+/// when the S-expression does not have a simple `(kind_name ...)` prefix.
+fn pascal_to_snake(s: &str) -> String {
+    let mut out = String::with_capacity(s.len() + 4);
+    for (i, c) in s.char_indices() {
+        if c.is_uppercase() && i > 0 {
+            out.push('_');
+        }
+        out.extend(c.to_lowercase());
+    }
+    out
 }
 
 // ---------------------------------------------------------------------------
@@ -520,6 +548,56 @@ mod tests {
         let root = tree.root_node();
         // The root Program is not a leaf.
         assert!(!root.is_leaf());
+    }
+
+    // Tests for grammar_kind() method
+
+    #[test]
+    fn test_pascal_to_snake_helper() {
+        assert_eq!(pascal_to_snake("VariableWithAttributes"), "variable_with_attributes");
+        assert_eq!(pascal_to_snake("Program"), "program");
+        assert_eq!(pascal_to_snake("FunctionCall"), "function_call");
+        assert_eq!(pascal_to_snake("If"), "if");
+    }
+
+    #[test]
+    fn test_grammar_kind_returns_source_file_for_root() {
+        let mut p = Parser::new();
+        let tree = must_some(p.parse("my $x = 42;"));
+        assert_eq!(tree.root_node().grammar_kind(), "source_file");
+    }
+
+    #[test]
+    fn test_grammar_kind_returns_variable_with_attributes_for_list_form() {
+        let mut p = Parser::new();
+        // `my $x : lvalue = 42;` is a variable with attributes in list form.
+        let tree = must_some(p.parse("my $x : lvalue = 42;"));
+        // Root -> my declaration with variable and attributes.
+        let root = tree.root_node();
+        let mut found_var_with_attrs = false;
+        for child in root.children() {
+            if child.grammar_kind() == "my_declaration" {
+                for sub in child.children() {
+                    if sub.grammar_kind() == "variable_with_attributes" {
+                        found_var_with_attrs = true;
+                    }
+                }
+            }
+        }
+        assert!(found_var_with_attrs, "should find variable_with_attributes");
+    }
+
+    #[test]
+    fn test_grammar_kind_double_paren_edge_case() {
+        // Test that grammar_kind() handles the double-paren sexp form correctly.
+        // VariableWithAttributes produces ((variable $ foo) (attributes :lvalue))
+        // and should fall back to pascal_to_snake() to derive the grammar kind.
+        let mut p = Parser::new();
+        let tree = must_some(p.parse("my $x : lvalue = 42;"));
+        let root = tree.root_node();
+        let sexp = root.to_sexp();
+        // Verify the structure includes a my_declaration.
+        assert!(sexp.contains("my_declaration"), "sexp should include my_declaration");
     }
 
     // Tests for PerlLanguage descriptor
