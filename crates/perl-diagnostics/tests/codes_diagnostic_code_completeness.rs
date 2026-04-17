@@ -93,11 +93,7 @@ fn assignment_in_condition_code_exists() -> Result<(), Box<dyn std::error::Error
 #[test]
 fn numeric_comparison_with_undef_code_exists() -> Result<(), Box<dyn std::error::Error>> {
     let code = DiagnosticCode::NumericComparisonWithUndef;
-    assert_eq!(
-        code.as_str(),
-        "PL404",
-        "NumericComparisonWithUndef should have stable code PL404"
-    );
+    assert_eq!(code.as_str(), "PL404", "NumericComparisonWithUndef should have stable code PL404");
     assert_eq!(DiagnosticCode::parse_code("PL404"), Some(code), "parse_code round-trip failed");
     Ok(())
 }
