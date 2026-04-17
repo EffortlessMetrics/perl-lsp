@@ -170,6 +170,12 @@ fn timeout_error(timeout_ms: u32) -> Message {
 }
 ```
 
+### Security Limitation
+
+**Important**: Safe evaluation mode provides syntactic validation (admission control) for expressions,
+blocking known dangerous operations. However, it does **not provide interpreter isolation** or OS-level
+sandboxing. It is one layer of defense alongside timeout enforcement.
+
 ## Consequences
 
 ### Positive
