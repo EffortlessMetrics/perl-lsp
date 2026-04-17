@@ -1164,9 +1164,9 @@ enum MetricsCommand {
     DiagnosticsStats,
     /// [stub] Hierarchical memory breakdown across LSP subsystems.
     Memory,
-    /// [stub] Release-health dashboard.
+    /// Release-health dashboard — debt ledger + merge-gate baseline summary.
     ReleaseHealth {
-        /// Number of days of history to analyze
+        /// Number of days of history reported in the receipt window field.
         #[arg(long, default_value_t = 30)]
         days: u64,
         /// Write output to .ci/metrics/release-health.json
