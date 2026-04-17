@@ -20,12 +20,8 @@ use std::path::{Path, PathBuf};
 const PRE_COLLAPSE_MEMBER_COUNT: usize = 200;
 
 /// The 4 satellite crate directory names that must be deleted by the builder.
-const OLD_SATELLITES: &[&str] = &[
-    "perl-symbol-types",
-    "perl-symbol-cursor",
-    "perl-symbol-index",
-    "perl-symbol-surface",
-];
+const OLD_SATELLITES: &[&str] =
+    &["perl-symbol-types", "perl-symbol-cursor", "perl-symbol-index", "perl-symbol-surface"];
 
 /// The 5 consumer crates whose Cargo.toml must reference the new `perl-symbol`
 /// instead of any old satellite name.
@@ -233,9 +229,8 @@ fn test_consumer_cargo_tomls_reference_perl_symbol() {
             // Match Cargo.toml key form: `<old-name> = {` (workspace or path).
             let needle = format!("{old} = {{");
             if content.contains(&needle) {
-                failures.push(format!(
-                    "{consumer}/Cargo.toml still depends on old satellite {old}"
-                ));
+                failures
+                    .push(format!("{consumer}/Cargo.toml still depends on old satellite {old}"));
             }
         }
     }
@@ -258,12 +253,8 @@ fn test_consumer_cargo_tomls_reference_perl_symbol() {
 fn test_consumer_sources_have_no_stale_imports() {
     let root = workspace_root();
 
-    let forbidden_imports = [
-        "perl_symbol_types",
-        "perl_symbol_cursor",
-        "perl_symbol_index",
-        "perl_symbol_surface",
-    ];
+    let forbidden_imports =
+        ["perl_symbol_types", "perl_symbol_cursor", "perl_symbol_index", "perl_symbol_surface"];
 
     let mut offenders = Vec::new();
 
@@ -275,10 +266,8 @@ fn test_consumer_sources_have_no_stale_imports() {
         visit_rs_files(&src_dir, &mut |path, content| {
             for forbidden in forbidden_imports {
                 if content.contains(forbidden) {
-                    offenders.push(format!(
-                        "{} references old module `{forbidden}`",
-                        path.display()
-                    ));
+                    offenders
+                        .push(format!("{} references old module `{forbidden}`", path.display()));
                 }
             }
         });
