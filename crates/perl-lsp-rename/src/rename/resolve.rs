@@ -4,7 +4,7 @@
 
 use perl_parser_core::SourceLocation;
 use perl_semantic_analyzer::symbol::{SymbolKind, SymbolTable};
-use perl_symbol_cursor as cursor;
+use perl_symbol::cursor;
 
 /// Find the symbol at a given position
 pub fn find_symbol_at_position(

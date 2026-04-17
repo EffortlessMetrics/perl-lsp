@@ -79,7 +79,7 @@ perl-lsp-feature-profile-cli = { workspace = true }
 perl-lsp-perltidy = { workspace = true }
 perl-lsp-document-links = { workspace = true }
 perl-position-tracking = { workspace = true, features = ["lsp-compat"] }
-perl-symbol-cursor = { workspace = true }
+perl-symbol = { workspace = true }
 perl-module = { workspace = true }
 perl-qualified-name = { workspace = true }
 perl-pod = { workspace = true }

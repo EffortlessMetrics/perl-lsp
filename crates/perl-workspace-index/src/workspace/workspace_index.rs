@@ -1017,9 +1017,9 @@ fn default_has_body() -> bool {
     true
 }
 
-// Re-export the unified symbol types from perl-symbol-types
+// Re-export the unified symbol types from perl-symbol
 /// Symbol kind enums used during Index/Analyze workflows.
-pub use perl_symbol_types::{SymbolKind, VarKind};
+pub use perl_symbol::{SymbolKind, VarKind};
 
 /// Helper function to convert sigil to VarKind
 fn sigil_to_var_kind(sigil: &str) -> VarKind {
