@@ -9,7 +9,7 @@ const FIXTURE_MATRIX: &str = "crates/perl-lsp-ux-tests/fixtures/editor_ux_fixtur
 const UX_TESTS_DIR: &str = "crates/perl-lsp-ux-tests/tests";
 
 fn workspace_root() -> &'static Path {
-    Path::new(env!("CARGO_MANIFEST_DIR")).parent().and_then(Path::parent).expect("workspace root")
+    Path::new(env!("CARGO_MANIFEST_DIR")).parent().and_then(Path::parent).unwrap()
 }
 
 #[test]

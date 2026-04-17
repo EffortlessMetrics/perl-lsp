@@ -2,7 +2,7 @@
 
 ## Acceptance Criteria Validation Matrix
 
-This document validates that the architectural blueprint in `SPEC-149-missing-docs.manifest.yml` addresses all 12 acceptance criteria from `ISSUE-149.story.md`.
+This document validates that the architectural blueprint addresses all 12 acceptance criteria from ISSUE-149.
 
 ---
 
@@ -255,7 +255,7 @@ This document validates that the architectural blueprint in `SPEC-149-missing-do
 ## Deliverables Validation
 
 ### Required Artifacts
-- ✅ `SPEC-149-missing-docs.manifest.yml`: Comprehensive architectural blueprint
+- ✅ Architectural blueprint (see ISSUE-149 for details)
 - ✅ `schemas/documentation-standards.schema.yml`: Domain schema for patterns
 - ✅ Implementation strategy with 6 phases and clear deliverables
 - ✅ Validation commands and success metrics

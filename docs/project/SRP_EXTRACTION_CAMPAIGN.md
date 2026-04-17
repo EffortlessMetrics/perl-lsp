@@ -16,7 +16,7 @@ lived inside `perl-parser` or were being built inside the nascent
 `perl-lsp` binary crate.
 
 At `v0.8.3` (August 23, 2025) the count was still just **8 crates**.
-Everything changed between `v0.8.3` and `v0.9.1`.
+Everything changed between `v0.8.3` and `v0.9`.
 
 ---
 
@@ -27,9 +27,9 @@ Everything changed between `v0.8.3` and `v0.9.1`.
 | `v0.1.0-pest` (Jul 2022) | 2 | -- | Tree-sitter bindings only |
 | `v0.5.0` (Aug 3, 2025) | 6 | +4 | Parser, lexer, tests, benchmarks |
 | `v0.8.3` (Aug 23, 2025) | 8 | +2 | Corpus crate, Pest parser archive |
-| `v0.9.1` (Feb 20, 2026) | 53 | **+45** | Massive extraction campaign |
-| `v0.10.0` (Feb 28, 2026) | 85 | **+32** | Second wave |
-| HEAD (Mar 11, 2026) | **121** | **+36** | Third wave, still ongoing |
+| `v0.9` (Feb 20, 2026) | 53 | **+45** | Massive extraction campaign |
+| `v0.10` (Feb 28, 2026) | 85 | **+32** | Second wave (historical) |
+| `v0.12.4` (Apr 17, 2026) | **121** | -- | Current release |
 
 The most intense period was **March 5, 2026**, when 93 extraction-related
 commits landed in a single day.  Between `v0.8.3` and the current HEAD,
@@ -85,7 +85,7 @@ The `Cargo.toml` inherits workspace-level metadata:
 ```toml
 [package]
 name = "perl-lsp-folding"
-version = "0.10.0"
+version = "0.12.4"
 edition.workspace = true
 rust-version.workspace = true
 # ... all metadata from workspace
@@ -338,11 +338,10 @@ Key dates in the campaign:
 | Feb 19, 2026 | PR #838: tree-sitter microcrate extraction begins |
 | Feb 22, 2026 | PR #848: 9 feature governance crates in one batch |
 | Feb 28, 2026 | PR #933: xtask SRP reporting tool ships |
-| Feb 28, 2026 | v0.10.0 released at 85 crates |
+| Feb 28, 2026 | v0.10 released at 85 crates (historical) |
 | Mar 2, 2026 | 7 extraction PRs merged in one day |
 | Mar 5, 2026 | **Peak day**: 93 extraction commits, 22 PRs merged |
 | Mar 11, 2026 | Campaign continues; 121 crates reached |
-
 ---
 
 ## Was It Worth It? Trade-offs and Results
@@ -370,7 +369,7 @@ Key dates in the campaign:
   (e.g., `perl-module-resolution` at 8 lines, `perl-lsp-feature-governance`
   at 32 lines), adding organizational overhead without new functionality.
 - **Version lockstep** -- all 121 crates share the same version
-  (`0.10.0`), so a version bump requires updating every `Cargo.toml`.
+  (`0.12.4`), so a version bump requires updating every `Cargo.toml`.
   The `xtask bump-version` command automates this.
 
 ### The Verdict

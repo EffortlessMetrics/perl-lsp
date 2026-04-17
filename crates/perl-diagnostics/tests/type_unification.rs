@@ -139,15 +139,14 @@ fn mixed_severity_assignments_from_both_paths() {
 // Test 12: Mixed tag assignments in same function
 #[test]
 fn mixed_tag_assignments_from_both_paths() {
-    let mut tags: Vec<TypesTag> = vec![];
-
-    // Add from codes path
-    tags.push(CodesTag::Unnecessary);
-    tags.push(CodesTag::Deprecated);
-
-    // Add from types path
-    tags.push(TypesTag::Unnecessary);
-    tags.push(TypesTag::Deprecated);
+    let mut tags: Vec<TypesTag> = vec![
+        // Add from codes path
+        CodesTag::Unnecessary,
+        CodesTag::Deprecated,
+        // Add from types path
+        TypesTag::Unnecessary,
+        TypesTag::Deprecated,
+    ];
 
     assert_eq!(tags.len(), 4);
 }

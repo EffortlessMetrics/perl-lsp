@@ -92,7 +92,7 @@ gh issue list --label "phase:stability"
 gh issue list --milestone "v0.9.0: Semantic-Ready"
 
 # All v0.10.0 issues
-gh issue list --milestone "v0.10.0: Boring Promises"
+gh issue list --milestone "v0.12.x: Boring Promises"
 ```
 
 ---

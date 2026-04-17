@@ -1,4 +1,4 @@
-# Scope Analyzer Reference - v0.8.7
+# Scope Analyzer Reference - v0.12.x
 
 **Reference Documentation**: Comprehensive specifications for the perl-parser scope analyzer
 
@@ -42,7 +42,7 @@ pub fn analyze(
 
 **Performance**: O(n) where n is the number of AST nodes, with optimized traversal algorithms.
 
-### Production-Stable Hash Key Context Detection (v0.8.7)
+### Production-Stable Hash Key Context Detection (v0.12.x)
 
 The production-proven `is_in_hash_key_context()` method provides industry-leading bareword analysis with proven stability and performance optimization.
 
@@ -151,7 +151,7 @@ struct Scope {
 
 ### Pragma Support
 
-#### use vars Pragma (Production-Stable in v0.8.7)
+#### use vars Pragma (Production-Stable in v0.12.x)
 
 The analyzer provides comprehensive support for `use vars` declarations:
 
@@ -282,7 +282,7 @@ Production-grade test coverage includes:
 ### Feature Flags
 
 - **lsp-ga-lock**: Conservative mode for stable releases
-- **Hash Context Detection**: Production-stable and always enabled in v0.8.7+
+- **Hash Context Detection**: Production-stable and always enabled in v0.12.x
 
 ### Customization Points
 
@@ -306,7 +306,7 @@ Production-grade test coverage includes:
 
 ## API Stability
 
-The ScopeAnalyzer API is considered production-stable as of v0.8.7. The hash key context detection represents a major breakthrough in static analysis accuracy for Perl code, now proven in production environments.
+The ScopeAnalyzer API is considered production-stable as of v0.12.x. The hash key context detection represents a major breakthrough in static analysis accuracy for Perl code, now proven in production environments.
 
 **Breaking Changes**: None expected for 0.8.x releases  
 **Deprecations**: None current

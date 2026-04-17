@@ -2,7 +2,7 @@
 
 **MSRV:** 1.92 • **Edition:** 2024 • **Status:** Public alpha
 
-This document describes the stability posture for the current public-alpha line. The current release line is `v0.11.x`; stronger compatibility guarantees are still targeted for the `v0.15.0` stability-contract milestone.
+This document describes the stability posture for the current public-alpha line. The current release line is `v0.12.x`; stronger compatibility guarantees are still targeted for the `v0.15.0` stability-contract milestone.
 
 ## Current Alpha Stance
 

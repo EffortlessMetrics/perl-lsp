@@ -3807,3 +3807,263 @@ Foo::bar();
     );
     Ok(())
 }
+
+// ============================================================================
+// Edge Case Tests — strict 'subs' Package-Qualified Function Calls
+// ============================================================================
+
+/// Edge case: Deeply nested package-qualified call (A::B::C::func).
+/// The identifier part extraction using rsplit("::").next() should correctly
+/// extract "func" and flag it since "func" is not a known builtin.
+#[test]
+fn strict_subs_flags_deeply_nested_qualified_call() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict 'subs';
+A::B::C::func();
+"#;
+    let issues = scope_issues_strict(code);
+
+    assert!(
+        issues.iter().any(|i| {
+            matches!(i.kind, IssueKind::UnquotedBareword) && i.variable_name == "A::B::C::func"
+        }),
+        "strict 'subs' should flag deeply nested qualified call A::B::C::func(); \
+         Actual issues: {:?}",
+        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+/// Edge case: Qualified function call with arguments should still be flagged.
+/// The arguments do not affect bareword validation — only the function name.
+#[test]
+fn strict_subs_flags_qualified_call_with_arguments() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict 'subs';
+Foo::bar($x, @y, %z);
+"#;
+    let issues = scope_issues_strict(code);
+
+    assert!(
+        issues.iter().any(|i| {
+            matches!(i.kind, IssueKind::UnquotedBareword) && i.variable_name == "Foo::bar"
+        }),
+        "strict 'subs' should flag Foo::bar() even with arguments; \
+         Actual issues: {:?}",
+        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+/// Edge case: Multiple qualified calls in sequence — each should be flagged.
+#[test]
+fn strict_subs_flags_multiple_qualified_calls() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict 'subs';
+Foo::bar();
+Baz::qux();
+"#;
+    let issues = scope_issues_strict(code);
+
+    let foo_bar_flagged = issues
+        .iter()
+        .any(|i| matches!(i.kind, IssueKind::UnquotedBareword) && i.variable_name == "Foo::bar");
+    let baz_qux_flagged = issues
+        .iter()
+        .any(|i| matches!(i.kind, IssueKind::UnquotedBareword) && i.variable_name == "Baz::qux");
+
+    assert!(foo_bar_flagged, "Foo::bar() should be flagged; issues: {:?}", issues);
+    assert!(baz_qux_flagged, "Baz::qux() should be flagged; issues: {:?}", issues);
+    Ok(())
+}
+
+/// Edge case: Uppercase identifier in qualified call should be flagged.
+/// is_known_function() fast-paths on uppercase-starting names (returns false),
+/// so Foo::BAR() should be flagged even though BAR looks like a package name.
+#[test]
+fn strict_subs_flags_uppercase_identifier_in_qualified_call()
+-> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict 'subs';
+Foo::BAR();
+"#;
+    let issues = scope_issues_strict(code);
+
+    assert!(
+        issues.iter().any(|i| {
+            matches!(i.kind, IssueKind::UnquotedBareword) && i.variable_name == "Foo::BAR"
+        }),
+        "strict 'subs' should flag Foo::BAR() because uppercase identifiers are not builtins; \
+         Actual issues: {:?}",
+        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+/// Edge case: Qualified call in conditional expression should still be flagged.
+#[test]
+fn strict_subs_flags_qualified_call_in_conditional() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict 'subs';
+if (Foo::bar()) {
+    print "yes";
+}
+"#;
+    let issues = scope_issues_strict(code);
+
+    assert!(
+        issues.iter().any(|i| {
+            matches!(i.kind, IssueKind::UnquotedBareword) && i.variable_name == "Foo::bar"
+        }),
+        "strict 'subs' should flag Foo::bar() in conditional; \
+         Actual issues: {:?}",
+        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+/// Edge case: Qualified call in hash subscript should NOT be flagged.
+/// Hash key context is excluded even for qualified barewords.
+#[test]
+fn strict_subs_excludes_qualified_bareword_in_hash_subscript()
+-> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict 'subs';
+my $x = $h{Foo::bar};
+"#;
+    let issues = scope_issues_strict(code);
+
+    assert!(
+        !issues.iter().any(|i| {
+            matches!(i.kind, IssueKind::UnquotedBareword) && i.variable_name.contains("Foo::bar")
+        }),
+        "strict 'subs' should not flag Foo::bar in hash subscript; \
+         Actual issues: {:?}",
+        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+/// Edge case: Without strict_subs, qualified calls should NOT be flagged.
+/// Uses scope_issues (not scope_issues_strict) because we need an empty
+/// pragma map to ensure strict_subs is NOT enabled.
+#[test]
+fn no_strict_subs_allows_qualified_calls() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+Foo::bar();
+"#;
+    let issues = scope_issues(code);
+
+    assert!(
+        !issues.iter().any(|i| {
+            matches!(i.kind, IssueKind::UnquotedBareword) && i.variable_name.contains("Foo::bar")
+        }),
+        "without strict 'subs', Foo::bar() should not be flagged; \
+         Actual issues: {:?}",
+        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+/// Edge case: Qualified call where identifier is imported via use subs.
+/// The qualified call Foo::foo() should still be flagged even if 'foo' is
+/// imported via use subs, because the identifier check only looks at the
+/// short name, not whether it's valid in the qualified context.
+#[test]
+fn strict_subs_flags_qualified_call_despite_subs_import() -> Result<(), Box<dyn std::error::Error>>
+{
+    let code = r#"
+use strict 'subs';
+use subs 'foo';
+foo();
+Foo::foo();
+"#;
+    let issues = scope_issues_strict(code);
+
+    // foo() should NOT be flagged (imported via use subs)
+    let foo_flagged = issues
+        .iter()
+        .any(|i| matches!(i.kind, IssueKind::UnquotedBareword) && i.variable_name == "foo");
+    // Foo::foo() SHOULD be flagged (qualified name not covered by subs import)
+    let foo_qualified_flagged = issues
+        .iter()
+        .any(|i| matches!(i.kind, IssueKind::UnquotedBareword) && i.variable_name == "Foo::foo");
+
+    assert!(!foo_flagged, "foo() should not be flagged (imported via use subs)");
+    assert!(
+        foo_qualified_flagged,
+        "Foo::foo() should be flagged despite subs import; issues: {:?}",
+        issues
+    );
+    Ok(())
+}
+
+/// Edge case: Qualified call in while loop condition.
+#[test]
+fn strict_subs_flags_qualified_call_in_while() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict 'subs';
+while (Foo::bar()) {
+    last;
+}
+"#;
+    let issues = scope_issues_strict(code);
+
+    assert!(
+        issues.iter().any(|i| {
+            matches!(i.kind, IssueKind::UnquotedBareword) && i.variable_name == "Foo::bar"
+        }),
+        "strict 'subs' should flag Foo::bar() in while condition; \
+         Actual issues: {:?}",
+        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+/// Edge case: Qualified call as argument to another function.
+#[test]
+fn strict_subs_flags_qualified_call_as_argument() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict 'subs';
+print Foo::bar();
+"#;
+    let issues = scope_issues_strict(code);
+
+    assert!(
+        issues.iter().any(|i| {
+            matches!(i.kind, IssueKind::UnquotedBareword) && i.variable_name == "Foo::bar"
+        }),
+        "strict 'subs' should flag Foo::bar() as argument; \
+         Actual issues: {:?}",
+        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+/// Edge case: Qualified call to known builtin function should NOT be flagged.
+/// This is the negative case confirming AC2.
+#[test]
+fn strict_subs_allows_qualified_call_to_builtin() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict 'subs';
+Foo::print("hello");
+Foo::printf("%s", "hello");
+Foo::scalar(@arr);
+"#;
+    let issues = scope_issues_strict(code);
+
+    let print_flagged = issues.iter().any(|i| {
+        matches!(i.kind, IssueKind::UnquotedBareword) && i.variable_name.contains("print")
+    });
+    let printf_flagged = issues.iter().any(|i| {
+        matches!(i.kind, IssueKind::UnquotedBareword) && i.variable_name.contains("printf")
+    });
+    let scalar_flagged = issues.iter().any(|i| {
+        matches!(i.kind, IssueKind::UnquotedBareword) && i.variable_name.contains("scalar")
+    });
+
+    assert!(!print_flagged, "Foo::print() should not be flagged");
+    assert!(!printf_flagged, "Foo::printf() should not be flagged");
+    assert!(!scalar_flagged, "Foo::scalar() should not be flagged");
+    Ok(())
+}

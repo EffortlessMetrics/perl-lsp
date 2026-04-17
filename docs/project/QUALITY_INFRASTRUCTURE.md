@@ -189,7 +189,7 @@ SBOM generation is a release gate: `just sbom-verify` must pass before release.
 Release artifacts include cryptographic attestations via GitHub Attestations (Sigstore-based). Users can verify any artifact:
 
 ```bash
-gh attestation verify perl-lsp-v0.10.0-x86_64-unknown-linux-gnu.tar.gz \
+gh attestation verify perl-lsp-v0.12.4-x86_64-unknown-linux-gnu.tar.gz \
     --owner EffortlessMetrics
 ```
 
@@ -299,4 +299,4 @@ This declarative approach means the quality system is version-controlled, review
 
 ---
 
-*This article describes the quality infrastructure of perl-lsp as of v0.10.0. All metrics are computed, not hand-edited, and can be verified by running `just ci-gate` and `just status-check`.*
+*This article describes the quality infrastructure of perl-lsp as of v0.12.x. All metrics are computed, not hand-edited, and can be verified by running `just ci-gate` and `just status-check`.*

@@ -1,11 +1,11 @@
 # Workspace Refactoring Tutorial (**Diataxis: Tutorial**)
 
-This tutorial provides step-by-step guidance on using the comprehensive workspace refactoring capabilities introduced in v0.8.8. These features enable safe cross-file refactoring operations for Perl codebases.
+This tutorial provides step-by-step guidance on using the comprehensive workspace refactoring capabilities introduced in v0.12.x. These features enable safe cross-file refactoring operations for Perl codebases.
 
 ## Prerequisites
 
 Before starting this tutorial, ensure you have:
-- tree-sitter-perl v0.8.8 or later installed
+- tree-sitter-perl v0.12.x or later installed
 - A Perl workspace with multiple files indexed
 - Basic understanding of Rust and LSP concepts
 
@@ -79,7 +79,7 @@ let refactor = WorkspaceRefactor::new(index);
 - ✅ Indexed multiple Perl files with their content
 - ✅ Initialized the WorkspaceRefactor system
 
-## Step 1.5: Understanding Dual Function Call Indexing (v0.8.8+) (**Diataxis: Tutorial**)
+## Step 1.5: Understanding Dual Function Call Indexing (v0.12.x) (**Diataxis: Tutorial**)
 
 Before diving into refactoring operations, let's understand the enhanced dual indexing strategy that makes comprehensive cross-file navigation possible:
 
@@ -659,7 +659,7 @@ fn apply_file_edit_batch(edits: &[FileEdit]) -> Result<(), Box<dyn std::error::E
 
 ## Conclusion
 
-You've learned how to use the comprehensive workspace refactoring capabilities in tree-sitter-perl v0.8.8:
+You've learned how to use the comprehensive workspace refactoring capabilities in tree-sitter-perl v0.12.x:
 
 ✅ **Symbol Renaming**: Cross-file variable and function renaming with validation  
 ✅ **Module Extraction**: Breaking large files into manageable modules  

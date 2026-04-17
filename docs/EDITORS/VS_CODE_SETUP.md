@@ -560,7 +560,7 @@ Pin to a specific release or use a different download channel:
 ```json
 {
   "perl-lsp.channel": "tag",
-  "perl-lsp.versionTag": "v0.12.0"
+  "perl-lsp.versionTag": "v0.12.4"
 }
 ```
 

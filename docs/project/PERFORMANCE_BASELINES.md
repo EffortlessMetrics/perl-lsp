@@ -1,6 +1,6 @@
-# Performance Baselines (0.12.0)
+# Performance Baselines (0.12.4)
 
-Measured baseline performance numbers for the perl-lsp 0.12.0 public alpha release.
+Measured baseline performance numbers for the perl-lsp 0.12.4 public alpha release.
 All measurements taken with criterion on Linux (x86_64). Exact numbers vary by hardware;
 the relative magnitudes and SLO compliance are what matter.
 

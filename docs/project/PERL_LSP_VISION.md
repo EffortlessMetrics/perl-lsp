@@ -1,7 +1,7 @@
 # The Best Perl LSP: Comprehensive Vision Document
 
 **Research Completed**: 2026-03-19
-**Vision Scope**: v0.12.0 (now) → v1.0.0 (production leadership)
+**Vision Scope**: v0.12.4 (current) → v1.0.0 (production leadership)
 **Benchmark**: rust-analyzer, typescript-language-server, gopls
 
 ---
@@ -306,7 +306,7 @@ What must happen:
 
 ## Section 3: Feature Maturity Scorecard
 
-### Current State (v0.12.0 alpha)
+### Current State (v0.12.x alpha)
 
 | Category | Feature | Status | Maturity | Notes |
 |----------|---------|--------|----------|-------|
@@ -324,7 +324,7 @@ What must happen:
 
 | Milestone | Parser % | Diagnostics | Refactoring | Debugging | Perl Features | Target Release |
 |-----------|----------|-------------|-------------|-----------|--------------|-----------------|
-| **v0.12.0** (now) | 72% CPAN | Syntax only | Rename | Basic DAP | None | Current |
+| **v0.12.4** (current) | 72% CPAN | Syntax only | Rename | Basic DAP | None | Current |
 | **v0.13.0** | 85% CPAN | +Perlcritic, dead code | +Cross-file | +Evaluate | +Perldoc | Q2 2026 |
 | **v0.14.0** | 92% CPAN | +Warnings, strict | +Full refactor | +Locals, watch | +Test runner, CPAN search | Q3 2026 |
 | **v0.15.0** | 97% CPAN | All diagnostics | Full refactoring | Full debugger | Full Perl integration | Q4 2026 |

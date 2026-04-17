@@ -30,9 +30,9 @@ perl-lsp is a comprehensive Perl parsing + LSP/DAP ecosystem:
 **Next (v0.13.x)**
 - Stability statement + packaging stance
 - Benchmark publication with receipts
-- Upgrade notes from v0.8.x → v0.9.x
+- Upgrade notes from previous release → v0.12.x
 
-**Later (post v0.9.x)**
+**Later (post v0.12.x)**
 - DAP preview hardening (runtime variable/evaluate depth + packaging)
 - Full LSP 3.18 compliance
 - Package manager distribution
@@ -58,12 +58,12 @@ See [ROADMAP.md](ROADMAP.md) for milestones and exit criteria.
 
 ### Now (as of 2026-02-16)
 1. 🟡 **Benchmark publication** - commit canonical benchmark outputs under `benchmarks/results/`
-2. 🟡 **v0.9.x packaging stance** - finalize supported platforms and shipping model
-3. 🟡 **Upgrade notes polish** - ensure v0.8.x → v0.9.x path is explicit
+2. 🟡 **v0.12.x packaging stance** - finalize supported platforms and shipping model
+3. 🟡 **Upgrade notes polish** - ensure previous → v0.12.x path is explicit
 4. 📌 **Expanded backlog** - see `docs/TODO.md` + `docs/reference/LSP_MISSING_FEATURES_REPORT.md`
 
 ### Next
-1. **v0.9.x readiness** - stability statement, packaging stance, benchmark receipts, upgrade notes
+1. **v0.12.x readiness** - stability statement, packaging stance, benchmark receipts, upgrade notes
 2. **Merge gates** - #210 after CI pipeline cleanup (#211)
 
 ### Critical Blockers / Constraints
@@ -118,8 +118,8 @@ RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs  # With adaptive threading
 ## 💡 Where to Start Contributing
 
 - Check the active milestone and the `good first issue` / `help wanted` labels
-- Near-term work: benchmark publication + v0.9.x packaging/readiness (see ROADMAP)
-- Larger efforts: v0.9.x milestone and `phase:*` labels
+- Near-term work: benchmark publication + v0.12.x packaging/readiness (see ROADMAP)
+- Larger efforts: v0.12.x milestone and `phase:*` labels
 - See [CONTRIBUTING.md](../CONTRIBUTING.md) for workflow details
 
 ## 📊 Quality Metrics

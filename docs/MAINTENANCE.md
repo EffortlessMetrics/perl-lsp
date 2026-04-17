@@ -2,7 +2,7 @@
 
 > **Status**: Active
 > **Last Updated**: 2026-02-14
-> **Applies To**: perl-parser 0.9.x, perl-lsp 0.9.x, perl-lexer 0.9.x, perl-dap 0.9.x
+> **Applies To**: perl-parser 0.12.x, perl-lsp 0.12.x, perl-lexer 0.12.x, perl-dap 0.12.x
 
 ---
 
@@ -967,7 +967,7 @@ cargo doc --open                # Open documentation in browser
 
 | Date | Version | Changes |
 |------|---------|---------|
-| 2026-02-14 | 1.0 | Initial maintenance plan for v0.9.x release |
+| 2026-02-14 | 1.0 | Initial maintenance plan for v0.9 release |
 
 ---
 

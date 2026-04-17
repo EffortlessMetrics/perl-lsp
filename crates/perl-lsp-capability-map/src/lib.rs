@@ -496,8 +496,10 @@ mod tests {
     /// advertised via the `experimental` field (lsp-types 0.97 gap workaround).
     #[test]
     fn feature_ids_from_caps_detects_type_hierarchy_via_experimental() {
-        let mut caps = ServerCapabilities::default();
-        caps.experimental = Some(serde_json::json!({ "typeHierarchyProvider": true }));
+        let caps = ServerCapabilities {
+            experimental: Some(serde_json::json!({ "typeHierarchyProvider": true })),
+            ..Default::default()
+        };
         let ids = feature_ids_from_caps(&caps);
         assert!(
             ids.contains(&LSP_TYPE_HIERARCHY),
