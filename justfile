@@ -51,7 +51,8 @@ pr-fast: _check-tools-basic
     just _timed "clippy-core" "just clippy-core" && \
     just _timed "test-core" "just test-core" && \
     just _timed "publish-closure" "just ci-publish-closure" && \
-    just _timed "layer-check" "just ci-layer-check"
+    just _timed "layer-check" "just ci-layer-check" && \
+    just _timed "published-crate-count" "just ci-published-crate-count"
     RC=$?
     END=$(date +%s)
     echo ""
@@ -764,7 +765,8 @@ ci-gate:
     just hook-registry-check && \
     just hook-tests && \
     just ci-publish-closure && \
-    just ci-layer-check
+    just ci-layer-check && \
+    just ci-published-crate-count
     # @START=$$(date +%s); \
 
 # Gate runner with receipt output (Issue #210)
@@ -872,6 +874,12 @@ ci-layer-check:
     @echo "🧱 Checking crate layer constraints..."
     @cargo xtask layer-check
     @echo "✅ Layer-check passed"
+
+# Ratchet: published crate count must not increase above baseline (see #4416)
+ci-published-crate-count:
+    @echo "🧮 Checking published-crate count ratchet..."
+    @cargo xtask published-crate-count
+    @echo "✅ Published-crate count ratchet passed"
 
 # Core tests (fast, essential)
 ci-test-core:
