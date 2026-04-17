@@ -1,146 +1,159 @@
-# Specification: Rose::DB::Object IDE Support — work-cb980638
+# Specifications — Sub::Exporter Support
+
+**Work Item**: work-9c61d264
+**Issue**: [GitHub #3413 - Import/Export Gap: Sub::Exporter support missing](https://github.com/EffortlessMetrics/perl-lsp/issues/3413)
 
 ## Feature Description
 
-Add LSP support for Rose::DB::Object, a popular Perl ORM. The feature provides:
-- **Recognition**: Detection of classes inheriting from Rose::DB::Object via `use base qw(Rose::DB::Object)`
-- **Completion**: Method completion for auto-generated column accessors (e.g., `id()`, `name()`, `email()`)
-- **Navigation**: Go-to-definition from column accessor usage to the column definition in `meta->setup(...)`
+Add Sub::Exporter support to the Perl LSP, enabling:
+- **Goto-definition** for symbols imported via Sub::Exporter configurations
+- **Completion** for Sub::Exporter-configured import symbols
+- **Symbol resolution** for group/tag imports (`:default`, `:all`)
 
-## Behavior Specification
+Sub::Exporter is a widely-used Perl module providing sophisticated export configuration via hashref-based APIs. It is used by Moose, Moo, Test::More, Dist::Zilla, Catalyst, and many other critical Perl ecosystem modules.
 
-### Detection
+### Supported Patterns
 
-When the semantic analyzer encounters a `use base qw(... Rose::DB::Object ...)` statement:
-1. The package's `Framework` is set to `Framework::RoseDBObject`
-2. If the file also contains `__PACKAGE__->meta->setup(...)` calls, column information is extracted
-
-### meta->setup Extraction
-
-The analyzer extracts column information from `__PACKAGE__->meta->setup(...)` calls:
-
+#### Pattern 1: Simple exports array
 ```perl
-__PACKAGE__->meta->setup(
-    table => 'users',
-    columns => [qw(id name email status)],
-    primary_key_columns => ['id'],
-);
+use MyModule {
+    exports => [qw(foo bar baz)],
+};
 ```
 
-Extracted information:
-- `table` name (stored for reference)
-- `columns` array values → synthesized accessor names
-- `primary_key_columns` array values (marked as primary keys)
+#### Pattern 2: Groups/tags
+```perl
+use MyModule {
+    exports => [qw(foo bar baz)],
+    groups => {
+        default => [qw(foo bar)],
+        all => [qw(foo bar baz)],
+    },
+};
+```
 
-### Completion Behavior
+#### Pattern 3: Renaming with -as
+```perl
+use Module::WithSubExporter
+    func1 => { -as => 'my_func1' },
+    func2 => { -as => 'other_func' };
+```
 
-When the user types `$obj->` where `$obj` is typed as a Rose::DB::Object subclass:
-1. Standard method completions appear (inherited from Rose::DB::Object)
-2. Column accessor completions appear: `id()`, `name()`, `email()`, `status()`
-3. Each completion item shows documentation: "Column accessor (Rose::DB::Object)"
-4. Synthesized methods are marked with `declaration = "meta->setup"` in the symbol table
+#### Pattern 4: Sub::Exporter -setup invocation
+```perl
+use Sub::Exporter -setup => {
+    exports => [qw(foo bar)],
+    groups => { default => [qw(foo)] },
+};
+```
 
-### Navigation Behavior
-
-| User action | Navigates to |
-|-------------|--------------|
-| Go-to-definition on `id()` (where `id` is a Rose::DB::Object column accessor) | The `meta->setup(...)` call that defines the `id` column |
-| Go-to-definition on `meta->setup` identifier | The `__PACKAGE__->meta->setup(...)` method call |
-| Go-to-definition on column name in `meta->setup(...)` | The column name in the `columns => [...]` array |
-
-### Limitations (Initial Scope)
-
-- Only `qw()` form of `columns => [qw(id name email)]` is extracted
-- Variable references (`columns => $array`) are not resolved
-- Custom accessor names (`accessor => 'custom_name'`) are not supported
-- Relationships (`one_to_many`, `many_to_many`) are not extracted
-- Rose::DB::Object::Manager patterns are not supported
-- Cross-file schema resolution relies on workspace index
+#### Pattern 5: MethodCall import
+```perl
+use MyModule;
+MyModule->import({ exports => [qw(foo bar)] });
+```
 
 ## Acceptance Criteria
 
-### AC1: Framework Detection
+### AC1: Goto Definition for Sub::Exporter Imports
+**Given** a Perl file with `use MyModule { exports => [qw(foo bar)] };`
+**When** the user triggers goto-definition on `foo`
+**Then** the LSP navigates to `foo`'s definition in `MyModule`
 
-**Given** a Perl file containing `package MyApp::User; use base qw(Rose::DB::Object);`
-**When** the semantic analyzer processes the file
-**Then** the package is classified as `Framework::RoseDBObject`
+### AC2: Completion for Sub::Exporter Symbols
+**Given** a Perl file with `use MyModule { exports => [qw(foo bar baz)] };`
+**When** the user types `MyModule->` and triggers completion
+**Then** the completion list includes `foo`, `bar`, `baz` as available methods
 
-### AC2: Column Accessor Completion
+### AC3: Group/Tag Resolution
+**Given** a Perl file with:
+```perl
+use MyModule {
+    exports => [qw(foo bar baz)],
+    groups => { default => [qw(foo bar)] },
+};
+```
+**When** the user triggers goto-definition on a symbol imported via `:default` tag
+**Then** the LSP correctly resolves the symbol
 
-**Given** a Rose::DB::Object subclass with `columns => [qw(id name email)]`
-**When** the user types `$user->` and triggers completion
-**Then** completion items include: `id()`, `name()`, `email()` with documentation "Column accessor (Rose::DB::Object)"
+### AC4: Renaming Support in Completion
+**Given** a Perl file with:
+```perl
+use Module::WithSubExporter
+    func1 => { -as => 'my_func1' };
+```
+**When** the user types `my_func1` and triggers completion elsewhere
+**Then** `my_func1` appears as a available symbol from `Module::WithSubExporter`
 
-### AC3: Navigation to meta->setup
+### AC5: No Regression for Existing Exporter
+**Given** existing Perl code using standard Exporter (`use Foo qw(bar baz)`)
+**When** goto-definition or completion is triggered
+**Then** existing functionality continues to work correctly
 
-**Given** a Rose::DB::Object subclass with `columns => [qw(id name email)]`
-**When** the user performs go-to-definition on `id()` (where `id` is a column accessor)
-**Then** the cursor navigates to the `meta->setup(...)` call that defines the `id` column
+### AC6: Sub::Exporter -setup Detection
+**Given** a module using `use Sub::Exporter -setup => { exports => [...] }`
+**When** another file imports from that module
+**Then** goto-definition and completion work for the exported symbols
 
-### AC4: meta->setup Extraction
+## Non-Goals (Out of Scope)
 
-**Given** `__PACKAGE__->meta->setup(columns => [qw(id name email)])`
-**When** the semantic analyzer processes the file
-**Then** synthesized symbols are created for `id()`, `name()`, and `email()` with `declaration = "meta->setup"`
+The following are explicitly **NOT** in scope for this implementation:
 
-### AC5: Framework Enum Documentation
+1. **Coderef-based exporters** — Sub::Exporter patterns like `exports => [qw(foo), bar => \&build_bar]` require runtime code evaluation to determine exported symbols. Static analysis cannot resolve these.
 
-**When** `Framework::RoseDBObject` is added to the enum
-**Then** the variant doc comment explicitly states it represents "runtime schema conformance" rather than a "method-declaration framework"
+2. **Collector/generator patterns** — Sub::Exporter's collector mechanism for building exports dynamically is not supported.
 
-### AC6: Test Suite
+3. **Sub::Exporter::Composable** — The compositional Sub::Exporter feature is not supported.
 
-**When** `cargo test -p perl-semantic-analyzer` is run
-**Then** all existing tests pass, plus new tests for Rose::DB::Object detection and extraction
+4. **Full group resolution for custom groups** — Only standard groups (`default`, `all`) and their mappings are guaranteed. Arbitrary custom group names may not resolve correctly in v1.
 
-**When** `cargo test -p perl-lsp-completion` is run
-**Then** all existing tests pass, plus new tests for column accessor completion
+5. **CPAN metadata integration** — Using META.json or other CPAN metadata for export lists is not part of this implementation.
 
-## Non-Goals
-
-This specification does NOT include:
-- Relationship navigation (one_to_many, many_to_many)
-- Rose::DB::Object::Manager query pattern completion
-- Type inference for query results
-- SQL completion within `where` clauses
-- Support for `accessor => 'custom_name'` overrides
-- Resolution of variable references in `columns => $array`
+6. **perl-ast breaking changes** — This implementation works within the existing `perl-ast` constraints. A future ADR may address AST representation changes.
 
 ## Dependencies
 
-1. **perl-semantic-analyzer**: Framework enum, detection, extraction, symbol synthesis
-2. **perl-lsp-completion**: Method completion inference
-3. **perl-lsp-navigation**: Go-to-definition support
-4. **perl-workspace-index**: Cross-file parent chain resolution (for completion)
+### Internal Dependencies
 
-## File Changes
+1. **perl-semantic-analyzer** — `find_import_source()` in declaration.rs needs Sub::Exporter pattern detection and symbol extraction
+2. **perl-lsp-completion** — `collect_import_symbols()` needs to handle Sub::Exporter hash configs; `collect_node_import_symbols()` should handle `HashLiteral` nodes
+3. **perl-ast** — Current `NodeKind::Use { args: Vec<String> }` remains unchanged; enhancement via optional `structured_args` field is future work
 
-| File | Change |
-|------|--------|
-| `crates/perl-semantic-analyzer/src/analysis/class_model.rs` | Add `RoseDBObject` variant, detection, extraction |
-| `crates/perl-semantic-analyzer/src/analysis/symbol.rs` | Add framework flags, symbol synthesis |
-| `crates/perl-lsp-completion/src/completion/methods.rs` | Add completion inference |
-| `crates/perl-lsp-navigation/src/` | Add navigation support |
-| `crates/perl-corpus/` | Add test fixtures |
+### External Constraints
 
-## Test Corpus Example
+1. **perl-parser-core** — The LSP uses this native Rust recursive descent parser, NOT tree-sitter
+2. **tree-sitter-perl** — Not on the LSP's critical path; NOT used by this implementation
+3. **v1.0 stability** — Changes must be backward compatible; no breaking API changes
 
-```perl
-# test_corpus/rose_db_object/basic_user.pl
-package MyApp::User;
-use base qw(Rose::DB::Object);
+## Technical Approach
 
-__PACKAGE__->meta->setup(
-    table => 'users',
-    columns => [qw(id name email status)],
-    primary_key_columns => ['id'],
-);
+### Detection Strategy
+Since `args: Vec<String>` loses structural information, detection uses token pattern matching:
+1. Look for args starting with `{` (hash start token)
+2. Check for `exports`, `-setup`, or `-as` keywords in the token stream
+3. If Sub::Exporter pattern detected, mark the module for specialized handling
 
-1;
-```
+### Extraction Strategy
+For detected Sub::Exporter patterns:
+1. Re-parse relevant tokens from the flat `Vec<String>` 
+2. Extract symbol names from `exports => [qw(foo bar)]` patterns
+3. Build export map from `groups => {...}` definitions
+4. Track `-as` renamings for completion display
 
-Expected behaviors:
-- Framework detected as RoseDBObject
-- Symbols created for `id()`, `name()`, `email()`, `status()`
-- Completion on `$user->` includes column accessors
-- Go-to-definition on `id()` navigates to meta->setup call
+### Code Path Strategy
+- `use` statements: Modify `collect_import_symbols()` and `find_import_source()` to detect and handle Sub::Exporter patterns
+- `MethodCall->import(...)`: Extend `collect_node_import_symbols()` to handle `HashLiteral` nodes directly (since structure is preserved in Node)
+
+### Testing Strategy
+1. **Unit tests**: Test detection and extraction functions with various Sub::Exporter patterns
+2. **Integration tests**: Test goto-definition and completion with real Sub::Exporter-using modules
+3. **Regression tests**: Ensure existing Exporter functionality is unaffected
+4. **Edge case tests**: Test invalid/unsupported patterns gracefully degrade
+
+## Verification
+
+1. **Unit tests** for Sub::Exporter detection and symbol extraction
+2. **Integration tests** with Moose, Moo, or Test::More (real-world Sub::Exporter usage)
+3. **Completion tests** verifying symbols appear in completion lists
+4. **Navigation tests** verifying goto-definition works for Sub::Exporter imports
+5. **Regression tests** ensuring existing Exporter tests pass
