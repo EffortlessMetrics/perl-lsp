@@ -1701,6 +1701,7 @@ dependencies = [
 name = "perl-diagnostics"
 version = "0.12.4"
 dependencies = [
+ "perl-test-must",
  "serde",
  "serde_json",
 ]
