@@ -1,0 +1,141 @@
+# Engineering Health Scorecard - Subsystem Mapping
+#
+# Maps workspace crates to StatusSubsystem enum variants.
+# This configuration drives Phase 4's per-subsystem test count aggregation.
+#
+# Subsystem taxonomy (from StatusSubsystem enum):
+#   Parser    - lexer, parser, tokenization, AST, related utilities
+#   Dap       - Debug Adapter Protocol implementation
+#   Lsp       - Language Server Protocol implementation
+#   Workspace - Workspace indexing and discovery
+#   Quality   - Semantic analysis, mutation testing, UX scenarios
+#   Tests     - Test utilities and test infrastructure
+
+crate_to_subsystem:
+  # Parser subsystem
+  perl-ast: Parser
+  perl-ast-utils: Parser
+  perl-ast-v2: Parser
+  perl-content-length-framing: Parser
+  perl-feature-catalog: Parser
+  perl-heredoc: Parser
+  perl-heredoc-anti-patterns: Parser
+  perl-incremental-parsing: Parser
+  perl-keywords: Parser
+  perl-lexer: Parser
+  perl-line-index: Parser
+  perl-parser: Parser
+  perl-parser-bench: Parser
+  perl-parser-core: Parser
+  perl-parser-pest: Parser
+  perl-path-normalize: Parser
+  perl-path-security: Parser
+  perl-percentile: Parser
+  perl-pod: Parser
+  perl-position-tracking: Parser
+  perl-pragma: Parser
+  perl-qualified-name: Parser
+  perl-regex: Parser
+  perl-text-line: Parser
+  perl-token: Parser
+  perl-tokenizer: Parser
+  perl-uri: Parser
+  perl-uri-classify: Parser
+  # DAP subsystem
+  perl-dap: Dap
+  perl-dap-breakpoint: Dap
+  perl-dap-command-args: Dap
+  perl-dap-config: Dap
+  perl-dap-eval: Dap
+  perl-dap-platform: Dap
+  perl-dap-security: Dap
+  perl-dap-shell: Dap
+  perl-dap-stack: Dap
+  perl-dap-types: Dap
+  perl-dap-value: Dap
+  perl-dap-variables: Dap
+  tree-sitter-perl-c: Dap
+  tree-sitter-perl-rs: Dap
+  # LSP subsystem
+  perl-lsp-ai-provider: Lsp
+  perl-lsp-cancellation: Lsp
+  perl-lsp-capability-map: Lsp
+  perl-lsp-code-actions: Lsp
+  perl-lsp-code-lens: Lsp
+  perl-lsp-color-provider: Lsp
+  perl-lsp-completion: Lsp
+  perl-lsp-completion-item: Lsp
+  perl-lsp-config: Lsp
+  perl-lsp-critic-parser: Lsp
+  perl-lsp-diagnostic-catalog: Lsp
+  perl-lsp-diagnostic-types: Lsp
+  perl-lsp-diagnostics: Lsp
+  perl-lsp-document-highlight: Lsp
+  perl-lsp-document-links: Lsp
+  perl-lsp-feature-contracts: Lsp
+  perl-lsp-feature-flags: Lsp
+  perl-lsp-feature-governance: Lsp
+  perl-lsp-feature-grid: Lsp
+  perl-lsp-feature-ids: Lsp
+  perl-lsp-feature-policy: Lsp
+  perl-lsp-feature-profile: Lsp
+  perl-lsp-feature-profile-cli: Lsp
+  perl-lsp-file-completion: Lsp
+  perl-lsp-folding: Lsp
+  perl-lsp-formatting: Lsp
+  perl-lsp-formatting-types: Lsp
+  perl-lsp-import-management: Lsp
+  perl-lsp-inlay-hints: Lsp
+  perl-lsp-inline-completion: Lsp
+  perl-lsp-input-validation: Lsp
+  perl-lsp-launcher: Lsp
+  perl-lsp-limits: Lsp
+  perl-lsp-navigation: Lsp
+  perl-lsp-on-type-formatting: Lsp
+  perl-lsp-performance: Lsp
+  perl-lsp-perltidy: Lsp
+  perl-lsp-protocol: Lsp
+  perl-lsp-providers: Lsp
+  perl-lsp-rename: Lsp
+  perl-lsp-rs: Lsp
+  perl-lsp-selection-range: Lsp
+  perl-lsp-semantic-tokens: Lsp
+  perl-lsp-symbol-query: Lsp
+  perl-lsp-text-utils: Lsp
+  perl-lsp-tooling: Lsp
+  perl-lsp-transport: Lsp
+  perl-lsp-type-hierarchy: Lsp
+  perl-lsp-uri: Lsp
+  perl-lsp-ux-tests: Lsp
+  perl-lsp-workspace-symbols: Lsp
+  perllsp: Lsp
+  # Workspace subsystem
+  perl-workspace-discovery: Workspace
+  perl-workspace-folder: Workspace
+  perl-workspace-ignore: Workspace
+  perl-workspace-index: Workspace
+  perl-workspace-index-monitoring: Workspace
+  perl-workspace-index-slo: Workspace
+  perl-workspace-index-state-machine: Workspace
+  # Quality subsystem
+  perl-builtins: Quality
+  perl-builtins-phf: Quality
+  perl-dead-code: Quality
+  perl-diagnostics-codes: Quality
+  perl-edit: Quality
+  perl-error: Quality
+  perl-module: Quality
+  perl-quote: Quality
+  perl-refactoring: Quality
+  perl-semantic-analyzer: Quality
+  perl-source-file: Quality
+  perl-subprocess-runtime: Quality
+  perl-symbol-cursor: Quality
+  perl-symbol-index: Quality
+  perl-symbol-surface: Quality
+  perl-symbol-types: Quality
+  # Tests subsystem
+  perl-corpus: Tests
+  perl-tdd-support: Tests
+  perl-test-generators: Tests
+  perl-test-must: Tests
