@@ -5,3 +5,4 @@ expression: "&kinds"
 - quickfix
 - source.organizeImports
 - refactor.extract
+- source.fixAll
