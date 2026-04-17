@@ -20,3 +20,33 @@
 |-------|---------------|-------------|
 | — | no data yet | no data yet |
 <!-- END: QUALITY_CRATE_TABLE -->
+
+## Mutation Testing Notes
+
+<!-- BEGIN: QUALITY_MUTATION_NOTES -->
+**Note**: Per-crate mutation scores (killed ÷ total) require per-crate
+`cargo mutants` runs. Currently only mutant **counts** are available from
+the workspace-level `mutants.out/mutants.json`.
+<!-- END: QUALITY_MUTATION_NOTES -->
+
+## Performance by Subsystem
+
+<!-- BEGIN: PERFORMANCE_BY_SUBSYSTEM -->
+| Category | p50 (ms) | p95 (ms) | p99 (ms) |
+|----------|----------|----------|----------|
+| — | no benchmark data yet | — | — |
+<!-- END: PERFORMANCE_BY_SUBSYSTEM -->
+
+## Flaky Tests
+
+<!-- BEGIN: FLAKY_TEST_BULLETS -->
+- **Flaky tests**: 0 quarantined
+<!-- END: FLAKY_TEST_BULLETS -->
+
+## Per-Subsystem Test Counts
+
+<!-- BEGIN: SUBSYSTEM_TEST_BULLETS -->
+| Subsystem | Tests | Ignored |
+|-----------|-------|---------|
+| — | no data yet | — |
+<!-- END: SUBSYSTEM_TEST_BULLETS -->

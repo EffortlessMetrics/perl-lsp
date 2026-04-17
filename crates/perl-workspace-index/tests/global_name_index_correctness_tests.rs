@@ -21,24 +21,19 @@ fn file_url(path: &str) -> Result<Url, Box<dyn std::error::Error>> {
 
 /// Reference implementation of search_symbols using O(n) linear scan.
 /// This is the baseline behavior that the optimized HashMap lookup must match.
-fn baseline_search_symbols(
-    index: &WorkspaceIndex,
-    query: &str,
-) -> Vec<WorkspaceSymbol> {
+fn baseline_search_symbols(index: &WorkspaceIndex, query: &str) -> Vec<WorkspaceSymbol> {
     let query_lower = query.to_lowercase();
-    let files = index.files.read();
+    let all_syms = index.all_symbols();
     let mut results = Vec::new();
-    for file_index in files.values() {
-        for symbol in &file_index.symbols {
-            if symbol.name.to_lowercase().contains(&query_lower)
-                || symbol
-                    .qualified_name
-                    .as_ref()
-                    .map(|qn| qn.to_lowercase().contains(&query_lower))
-                    .unwrap_or(false)
-            {
-                results.push(symbol.clone());
-            }
+    for symbol in all_syms {
+        if symbol.name.to_lowercase().contains(&query_lower)
+            || symbol
+                .qualified_name
+                .as_ref()
+                .map(|qn| qn.to_lowercase().contains(&query_lower))
+                .unwrap_or(false)
+        {
+            results.push(symbol);
         }
     }
     results
@@ -47,10 +42,7 @@ fn baseline_search_symbols(
 /// Deduplicate results by URI, preserving first occurrence order.
 fn deduplicate_by_uri(results: Vec<WorkspaceSymbol>) -> Vec<WorkspaceSymbol> {
     let mut seen = std::collections::HashSet::new();
-    results
-        .into_iter()
-        .filter(|s| seen.insert(s.uri.clone()))
-        .collect()
+    results.into_iter().filter(|s| seen.insert(s.uri.clone())).collect()
 }
 
 // ===========================================================================
@@ -78,9 +70,11 @@ sub divide { return $_[0] / $_[1]; }
     let baseline = deduplicate_by_uri(baseline_search_symbols(&index, "Calc::Arithmetic::add"));
 
     assert_eq!(
-        optimized.len(), baseline.len(),
+        optimized.len(),
+        baseline.len(),
         "search_symbols('Calc::Arithmetic::add'): expected {} results, got {}. Optimized must match baseline O(n) scan.",
-        baseline.len(), optimized.len()
+        baseline.len(),
+        optimized.len()
     );
 
     // Verify each result matches
@@ -110,10 +104,12 @@ sub yourFunction { return 2; }
     let baseline = deduplicate_by_uri(baseline_search_symbols(&index, "myfunction"));
 
     assert_eq!(
-        optimized.len(), baseline.len(),
+        optimized.len(),
+        baseline.len(),
         "search_symbols('myfunction'): expected {} results (case-insensitive), got {}. \
          HashMap lookup must preserve case-insensitive semantics.",
-        baseline.len(), optimized.len()
+        baseline.len(),
+        optimized.len()
     );
 
     // Mixed case query
@@ -121,9 +117,11 @@ sub yourFunction { return 2; }
     let baseline2 = deduplicate_by_uri(baseline_search_symbols(&index, "MyFunction"));
 
     assert_eq!(
-        optimized2.len(), baseline2.len(),
+        optimized2.len(),
+        baseline2.len(),
         "search_symbols('MyFunction'): expected {} results, got {}.",
-        baseline2.len(), optimized2.len()
+        baseline2.len(),
+        optimized2.len()
     );
 
     Ok(())
@@ -149,10 +147,12 @@ sub PROCESS { return 4; }
     let baseline = deduplicate_by_uri(baseline_search_symbols(&index, "process"));
 
     assert_eq!(
-        optimized.len(), baseline.len(),
+        optimized.len(),
+        baseline.len(),
         "search_symbols('process'): expected {} results (substring match), got {}. \
          HashMap optimization must preserve substring semantics, not just prefix matching.",
-        baseline.len(), optimized.len()
+        baseline.len(),
+        optimized.len()
     );
 
     // Verify specific matches
@@ -181,18 +181,22 @@ sub seek { return 2; }
     let by_qualified = index.search_symbols("File::Find::find");
     let baseline_qualified = deduplicate_by_uri(baseline_search_symbols(&index, "File::Find::find"));
     assert_eq!(
-        by_qualified.len(), baseline_qualified.len(),
+        by_qualified.len(),
+        baseline_qualified.len(),
         "search_symbols('File::Find::find'): expected {} results, got {}",
-        baseline_qualified.len(), by_qualified.len()
+        baseline_qualified.len(),
+        by_qualified.len()
     );
 
     // Search by bare name
     let by_bare = index.search_symbols("find");
     let baseline_bare = deduplicate_by_uri(baseline_search_symbols(&index, "find"));
     assert_eq!(
-        by_bare.len(), baseline_bare.len(),
+        by_bare.len(),
+        baseline_bare.len(),
         "search_symbols('find'): expected {} results, got {}",
-        baseline_bare.len(), by_bare.len()
+        baseline_bare.len(),
+        by_bare.len()
     );
 
     Ok(())
@@ -218,18 +222,22 @@ sub x { return 5; }
     let optimized_a = index.search_symbols("a");
     let baseline_a = deduplicate_by_uri(baseline_search_symbols(&index, "a"));
     assert_eq!(
-        optimized_a.len(), baseline_a.len(),
+        optimized_a.len(),
+        baseline_a.len(),
         "search_symbols('a'): expected {} results, got {}. Short query handling must match baseline.",
-        baseline_a.len(), optimized_a.len()
+        baseline_a.len(),
+        optimized_a.len()
     );
 
     // Two character query
     let optimized_ab = index.search_symbols("ab");
     let baseline_ab = deduplicate_by_uri(baseline_search_symbols(&index, "ab"));
     assert_eq!(
-        optimized_ab.len(), baseline_ab.len(),
+        optimized_ab.len(),
+        baseline_ab.len(),
         "search_symbols('ab'): expected {} results, got {}",
-        baseline_ab.len(), optimized_ab.len()
+        baseline_ab.len(),
+        optimized_ab.len()
     );
 
     Ok(())
@@ -257,10 +265,12 @@ fn test_search_symbols_matches_baseline_multiple_files() -> Result<(), Box<dyn s
     let baseline = deduplicate_by_uri(baseline_search_symbols(&index, "helper"));
 
     assert_eq!(
-        optimized.len(), baseline.len(),
+        optimized.len(),
+        baseline.len(),
         "search_symbols('helper') across multiple files: expected {} results, got {}. \
          HashMap index must aggregate symbols from all indexed files.",
-        baseline.len(), optimized.len()
+        baseline.len(),
+        optimized.len()
     );
 
     // Verify we got symbols from both files
@@ -291,9 +301,11 @@ sub target { return 2; }
     let uris: Vec<_> = results.iter().map(|s| s.uri.clone()).collect();
     let unique_uris: std::collections::HashSet<_> = uris.iter().collect();
     assert_eq!(
-        uris.len(), unique_uris.len(),
+        uris.len(),
+        unique_uris.len(),
         "search_symbols should deduplicate by URI. Got: {:?}, Unique: {:?}",
-        uris, unique_uris
+        uris,
+        unique_uris
     );
 
     Ok(())
@@ -345,14 +357,11 @@ fn test_global_name_index_updated_on_reindex_file() -> Result<(), Box<dyn std::e
 package ReIndexMe;
 sub old_function { return 1; }
 "#;
-    index.index_file(uri, code_v1.to_string())?;
+    index.index_file(uri.clone(), code_v1.to_string())?;
 
     // Verify old symbol is found
     let results_old = index.search_symbols("old_function");
-    assert!(
-        !results_old.is_empty(),
-        "Should find old_function after initial indexing"
-    );
+    assert!(!results_old.is_empty(), "Should find old_function after initial indexing");
 
     // Re-index with different content
     let code_v2 = r#"
@@ -402,10 +411,7 @@ sub also_gone { return 2; }
 
     // Verify symbols are found
     let results_before = index.search_symbols("will_be_gone");
-    assert!(
-        !results_before.is_empty(),
-        "Should find 'will_be_gone' before removal"
-    );
+    assert!(!results_before.is_empty(), "Should find 'will_be_gone' before removal");
 
     // Remove the file
     index.remove_file("file:///lib/RemoveMe.pm");
@@ -443,7 +449,8 @@ fn test_global_name_index_handles_shadowing() -> Result<(), Box<dyn std::error::
     // Both should be found
     let results = index.search_symbols("helper");
     assert_eq!(
-        results.len(), 2,
+        results.len(),
+        2,
         "Should find 'helper' from both First.pm and Second.pm. Got {} results.",
         results.len()
     );
@@ -458,7 +465,8 @@ fn test_global_name_index_handles_shadowing() -> Result<(), Box<dyn std::error::
     // Now only Second's helper should be found
     let results_after = index.search_symbols("helper");
     assert_eq!(
-        results_after.len(), 1,
+        results_after.len(),
+        1,
         "After removing First.pm, should only find 1 'helper'. Got {} results.",
         results_after.len()
     );
@@ -484,10 +492,7 @@ fn test_search_symbols_returns_vec_workspace_symbol() -> Result<(), Box<dyn std:
     let results = index.search_symbols("test_sub");
 
     // Verify return type is Vec<WorkspaceSymbol>
-    assert!(
-        results.len() > 0,
-        "search_symbols should return non-empty Vec for existing symbol"
-    );
+    assert!(results.len() > 0, "search_symbols should return non-empty Vec for existing symbol");
 
     // Verify the type has expected fields
     let symbol = &results[0];
@@ -512,10 +517,12 @@ fn test_find_symbols_alias_works() -> Result<(), Box<dyn std::error::Error>> {
     let by_find = index.find_symbols("target_sub");
 
     assert_eq!(
-        by_search.len(), by_find.len(),
+        by_search.len(),
+        by_find.len(),
         "find_symbols (alias) should return same number of results as search_symbols. \
          Got search={}, find={}",
-        by_search.len(), by_find.len()
+        by_search.len(),
+        by_find.len()
     );
 
     Ok(())
