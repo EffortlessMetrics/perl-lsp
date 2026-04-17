@@ -1,0 +1,5 @@
+---
+source: crates/perl-parser-core/tests/snapshot_label_ternary_disambiguation.rs
+expression: sexp
+---
+(source_file (my_declaration (variable % h)(hash ((string "KEY1") (string "'value1'")) ((string "KEY2") (string "'value2'")))))

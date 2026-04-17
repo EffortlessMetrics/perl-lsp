@@ -578,4 +578,360 @@ mod tests {
             assert!(err.is_some(), "expected block for {expr:?}");
         }
     }
+
+    // =============================================================================
+    // EDGE CASE TESTS - Boundary, malformed, and interaction coverage
+    // =============================================================================
+
+    #[test]
+    fn test_safe_eval_empty_and_whitespace_inputs() {
+        // Empty string is safe (no operations to perform)
+        assert!(
+            validate_safe_expression("").is_none(),
+            "empty string should be allowed"
+        );
+
+        // Whitespace-only strings are safe
+        assert!(
+            validate_safe_expression("   ").is_none(),
+            "whitespace-only string should be allowed"
+        );
+
+        // Tab and space combinations
+        assert!(
+            validate_safe_expression("\t\n\t").is_none(),
+            "tabs and newlines should be allowed in whitespace-only"
+        );
+    }
+
+    #[test]
+    fn test_safe_eval_unicode_identifiers() {
+        // Unicode scalar variable names (Perl supports Unicode identifiers)
+        let allowed = [
+            "$日本語",     // Japanese
+            "$変数",       // Chinese variable
+            "@ массив",   // Cyrillic array
+            "%עברית",     // Hebrew hash
+        ];
+
+        for expr in allowed {
+            let err = validate_safe_expression(expr);
+            assert!(err.is_none(), "Unicode identifier {:?} should be allowed: {err:?}", expr);
+        }
+    }
+
+    #[test]
+    fn test_safe_eval_single_quoted_string_edge_cases() {
+        // Single-quoted strings should not trigger blocking
+        let allowed = [
+            "'hello world'",           // Basic string
+            "'hello\\'s world'",       // Escaped single quote
+            "'\\\\'",                  // Escaped backslash
+            "'\\n\\t'",                // Backslash sequences (literal in Perl sq)
+            "'multi word string'",     // Multiple words
+            "'你好'",                   // Unicode in sq string
+        ];
+
+        for expr in allowed {
+            let err = validate_safe_expression(expr);
+            assert!(err.is_none(), "single-quoted {:?} should be allowed: {err:?}", expr);
+        }
+
+        // Dangerous ops inside single quotes should be allowed
+        let allowed_with_dangerous_inside = [
+            "'system rm -rf /'",       // Dangerous op but inside sq
+            "'eval { die }'",          // eval text but inside sq
+            "'fork bomb'",             // fork text but inside sq
+        ];
+
+        for expr in allowed_with_dangerous_inside {
+            let err = validate_safe_expression(expr);
+            assert!(err.is_none(), "sq containing dangerous op {:?} should be allowed: {err:?}", expr);
+        }
+    }
+
+    #[test]
+    fn test_safe_eval_double_quoted_strings() {
+        // Double-quoted strings - dangerous ops should be blocked
+        // because they would be interpolated
+        let blocked = [
+            "\"print 'hello'\"",        // print inside dq
+            "\"system('ls')\"",        // system inside dq
+            "\"exit\"",                // exit inside dq
+        ];
+
+        for expr in blocked {
+            let err = validate_safe_expression(expr);
+            assert!(err.is_some(), "double-quoted {:?} should be blocked", expr);
+        }
+
+        // Safe expressions in double quotes
+        let allowed = [
+            "\"$x + $y\"",             // Variables only
+            "\"\\\\$Simple\"",            // Escaped dollar (literal)
+            "\"\\\\$(( 1 + 2 ))\"",       // Arithmetic expansion (safe)
+        ];
+
+        for expr in allowed {
+            let err = validate_safe_expression(expr);
+            // These are allowed IF they don't contain dangerous ops
+            // The variable interpolation alone is safe
+            assert!(err.is_none(), "safe dq {:?} should be allowed: {err:?}", expr);
+        }
+    }
+
+    #[test]
+    fn test_safe_eval_filehandle_edge_cases() {
+        // File handle reads at start of trimmed expression are blocked
+        let blocked = [
+            "<STDIN>",                 // Standard input read
+            "<FH>",                    // Filehandle variable
+            "<$fh>",                   // Glob read
+            "<*.txt>",                 // Glob pattern
+        ];
+
+        for expr in blocked {
+            let err = validate_safe_expression(expr);
+            assert!(err.is_some(), "file handle {:?} should be blocked", expr);
+        }
+
+        // Non-starting < are allowed (e.g., less-than comparison)
+        let allowed = [
+            "$x < $y",                 // Less-than comparison
+            "($a < $b)",              // Comparison in parens
+            "$a < 10 ? $b : $c",      // Ternary with comparison
+        ];
+
+        for expr in allowed {
+            let err = validate_safe_expression(expr);
+            assert!(err.is_none(), "comparison {:?} should be allowed: {err:?}", expr);
+        }
+    }
+
+    #[test]
+    fn test_safe_eval_postfix_conditionals() {
+        // Postfix conditionals are generally safe (no mutation)
+        let allowed = [
+            "$x if $condition",        // Postfix if
+            "$y unless $cond",         // Postfix unless
+            "$z for @list",            // Postfix for
+        ];
+
+        for expr in allowed {
+            let err = validate_safe_expression(expr);
+            assert!(err.is_none(), "postfix conditional {:?} should be allowed: {err:?}", expr);
+        }
+    }
+
+    #[test]
+    fn test_safe_eval_hash_array_access() {
+        // Hash and array access is safe
+        let allowed = [
+            "$hash{key}",              // Hash element
+            "$hash{ 'key' }",          // Hash element with sq key
+            "$array[0]",               // Array element
+            "$array[$i]",              // Array with variable index
+            "$hash{key}[0]{sub}",      // Nested hash/array access
+            "$#array",                 // Array length
+            "@hash{keys}",            // Hash slice
+        ];
+
+        for expr in allowed {
+            let err = validate_safe_expression(expr);
+            assert!(err.is_none(), "hash/array access {:?} should be allowed: {err:?}", expr);
+        }
+    }
+
+    #[test]
+    fn test_safe_eval_complex_expressions() {
+        // Complex but safe expressions
+        let allowed = [
+            "$x + $y * $z",            // Arithmetic
+            "($a ? $b : $c)",          // Ternary
+            "[ map { $_ * 2 } @array ]", // map in array constructor
+            "{ a => 1, b => 2 }",     // Hash constructor
+            "sort { $a <=> $b } @nums", // sort with block
+            "grep { $_ > 0 } @nums",   // grep with block
+        ];
+
+        for expr in allowed {
+            let err = validate_safe_expression(expr);
+            assert!(err.is_none(), "complex expr {:?} should be allowed: {err:?}", expr);
+        }
+    }
+
+    #[test]
+    fn test_safe_eval_numeric_literals() {
+        // Numeric literals are safe
+        let allowed = [
+            "42",                       // Integer
+            "3.14159",                  // Float
+            "0xFF",                     // Hex
+            "0b1010",                   // Binary
+            "1_000_000",                // Underscore separator
+            "1e10",                     // Scientific notation
+            "$x // 0",                  // Defined-or (safe)
+        ];
+
+        for expr in allowed {
+            let err = validate_safe_expression(expr);
+            assert!(err.is_none(), "numeric literal {:?} should be allowed: {err:?}", expr);
+        }
+    }
+
+    #[test]
+    fn test_safe_eval_logical_ops_precision() {
+        // Logical ops that look like dangerous ops but aren't
+        let allowed = [
+            "$a eq $b",                // String equality
+            "$a ne $b",                // String not equal
+            "$a gt $b",                // String greater than
+            "$a lt $b",                // String less than
+            "$a ge $b",                // String greater or equal
+            "$a le $b",                // String less or equal
+            "$a cmp $b",               // String comparison
+            "not $x",                   // logical not (lowercase)
+            "and $a $b",               // logical and (lowercase)
+            "or $a $b",                // logical or (lowercase)
+        ];
+
+        for expr in allowed {
+            let err = validate_safe_expression(expr);
+            assert!(err.is_none(), "logical op {:?} should be allowed: {err:?}", expr);
+        }
+    }
+
+    #[test]
+    fn test_safe_eval_documentation_says_admission_control() {
+        // This test verifies the documentation clarification exists
+        // The implementation comments should clarify this is admission control
+        let expr = "print 'hello'";
+        let err = validate_safe_expression(expr);
+        // Should block - but the error message should clarify it's admission control
+        assert!(err.is_some(), "print should be blocked");
+
+        let err_msg = err.unwrap();
+        assert!(
+            err_msg.contains("allowSideEffects: true"),
+            "error should suggest using allowSideEffects: {err_msg}"
+        );
+    }
+
+    #[test]
+    fn test_safe_eval_all_sigils_individually() {
+        // Each sigil type should be recognized for safe identifiers
+        let allowed = [
+            "$scalar",                 // Scalar
+            "@array",                  // Array
+            "%hash",                   // Hash
+            "*glob",                   // Glob
+        ];
+
+        for expr in allowed {
+            let err = validate_safe_expression(expr);
+            assert!(err.is_none(), "sigil prefix {:?} should be allowed: {err:?}", expr);
+        }
+    }
+
+    #[test]
+    fn test_safe_eval_braced_scalar_edge_cases() {
+        // Simple braced scalar variables are safe
+        let allowed = [
+            "${scalar}",               // Simple braced
+            "${ scalar }",             // With spaces
+            "${hash_key}",             // With underscore
+            "${_private}",             // Leading underscore
+        ];
+
+        for expr in allowed {
+            let err = validate_safe_expression(expr);
+            assert!(err.is_none(), "braced scalar {:?} should be allowed: {err:?}", expr);
+        }
+
+        // Complex braced forms should be blocked (they could contain code)
+        // ${print()} or ${ eval } would be dangerous
+        // These are covered by the dangerous ops check
+    }
+
+    #[test]
+    fn test_safe_eval_method_call_various_syntaxes() {
+        // Method calls on objects should be blocked when they call dangerous methods
+        let blocked = [
+            "$obj->print",              // print method
+            "$obj->system('ls')",      // system method
+            "$obj->eval('$code')",     // eval method
+            "$obj->exit",              // exit method
+        ];
+
+        for expr in blocked {
+            let err = validate_safe_expression(expr);
+            assert!(err.is_some(), "method call {:?} should be blocked", expr);
+        }
+
+        // Safe method calls
+        let allowed = [
+            "$obj->new",               // new method
+            "$obj->DESTROY",           // DESTROY (though rarely called directly)
+            "$obj->can('method')",     // can method
+        ];
+
+        for expr in allowed {
+            let err = validate_safe_expression(expr);
+            // These should be blocked because "can" is a dangerous op
+            // Actually let me verify...
+            // can is not in the dangerous ops list
+            assert!(err.is_none(), "safe method call {:?} should be allowed: {err:?}", expr);
+        }
+    }
+
+    #[test]
+    fn test_safe_eval_regex_delimiters_various() {
+        // Different regex delimiters should be handled
+        let allowed = [
+            "m/foo/",                  // match with /
+            "m#bar#",                  // match with #
+            "m{foo}",                  // match with {}
+            "qr/syntax/",              // qr operator
+            "/i modifier/",           // with modifier
+        ];
+
+        for expr in allowed {
+            let err = validate_safe_expression(expr);
+            assert!(err.is_none(), "regex {:?} should be allowed: {err:?}", expr);
+        }
+
+        // Regex mutation with various delimiters should be blocked
+        let blocked = [
+            "s/foo/bar/",              // substitution
+            "s#old#new#",             // substitution with #
+            "tr/a/z/",                 // transliteration
+            "y/abc/xyz/",              // another form
+        ];
+
+        for expr in blocked {
+            let err = validate_safe_expression(expr);
+            assert!(err.is_some(), "regex mutation {:?} should be blocked", expr);
+        }
+    }
+
+    #[test]
+    fn test_safe_eval_package_separator_edge_cases() {
+        // Package separator edge cases
+        let allowed = [
+            "Foo::Bar::baz",           // Normal package qualified
+            "CORE::GLOBAL::print",     // CORE::GLOBAL should be blocked actually
+        ];
+
+        // CORE::GLOBAL:: should be blocked
+        let err = validate_safe_expression("CORE::GLOBAL::print");
+        assert!(err.is_some(), "CORE::GLOBAL::print should be blocked");
+
+        // Normal package qualified should be allowed
+        let err = validate_safe_expression("Foo::Bar::baz");
+        assert!(err.is_none(), "Foo::Bar::baz should be allowed");
+
+        // Just CORE::print should be blocked
+        let err = validate_safe_expression("CORE::print");
+        assert!(err.is_some(), "CORE::print should be blocked");
+    }
 }

@@ -292,6 +292,36 @@ fn tokenize_sql_body(
     }
 }
 
+/// Collect semantic tokens for SQL syntax highlighting in standalone `.sql` files.
+///
+/// This function applies SQL keyword highlighting to migration files and other
+/// standalone SQL files. It uses the same `sql_heredoc_keyword` token type
+/// as the SQL heredoc injection feature for visual consistency.
+///
+/// # Arguments
+///
+/// * `text` - The full SQL file content.
+/// * `to_pos16` - Converts byte offsets to UTF-16 positions.
+///
+/// # Returns
+///
+/// Encoded semantic tokens sorted for LSP transmission.
+#[must_use]
+pub fn collect_sql_semantic_tokens(
+    text: &str,
+    to_pos16: &impl Fn(usize) -> (u32, u32),
+) -> Vec<EncodedToken> {
+    let leg = legend();
+    let mut tokens: Vec<(u32, u32, u32, u32, u32)> = Vec::new();
+
+    // Use the same SQL keyword regex and token type as heredoc injection
+    tokenize_sql_body(text, 0, to_pos16, &leg, &mut tokens);
+
+    // Sort and encode
+    let dedup_tokens = remove_overlapping_tokens(tokens);
+    encode_raw_tokens_to_deltas(dedup_tokens)
+}
+
 /// Emit semantic tokens for JSON key matches inside a heredoc body.
 fn tokenize_json_body(
     body: &str,

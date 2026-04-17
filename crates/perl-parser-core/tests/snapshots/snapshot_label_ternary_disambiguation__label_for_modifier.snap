@@ -1,0 +1,5 @@
+---
+source: crates/perl-parser-core/tests/snapshot_label_ternary_disambiguation.rs
+expression: sexp
+---
+(source_file (labeled_statement LABEL (statement_modifier_for (expression_statement (number 1)) (variable @ items))))

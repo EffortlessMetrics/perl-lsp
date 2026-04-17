@@ -1,7 +1,8 @@
 //! Document links provider for Perl LSP protocol compatibility.
 //!
 //! This crate provides document link detection for Perl source files,
-//! identifying `use`, `require` module statements, and file includes.
+//! identifying `use`, `require` module statements, file includes,
+//! and database migration file references (DBIx::Class::DeploymentHandler, sqitch).
 
 #![deny(unsafe_code)]
 #![warn(rust_2018_idioms)]
@@ -90,6 +91,9 @@ pub fn compute_links(uri: &str, text: &str, _roots: &[Url]) -> Vec<Value> {
                 }
             }
         }
+
+        // Scan for migration file references
+        out.extend(scan_line_for_migration_links(uri, i as u32, line));
     }
     out
 }
@@ -157,6 +161,66 @@ fn is_pragma(pkg: &str) -> bool {
             | "threads"
             | "vmsish"
     )
+}
+
+/// Returns `true` if `path` contains a database migration file pattern.
+///
+/// Used to detect references to DBIx::Class::DeploymentHandler or sqitch
+/// migration files in Perl source code.
+fn is_migration_path(path: &str) -> bool {
+    let lower = path.to_lowercase();
+    lower.contains("share/deploy/")
+        || lower.contains("share/upgrade/")
+        || lower.contains("share/revert/")
+        || lower.contains("/deploy/")
+        || lower.contains("/verify/")
+        || lower.contains("/revert/")
+        || lower.contains("sqitch.plan")
+}
+
+/// Scan a line for quoted strings that contain migration file patterns.
+/// Returns a JSON value for each migration file reference found.
+fn scan_line_for_migration_links(
+    uri: &str,
+    line_idx: u32,
+    line: &str,
+) -> Vec<Value> {
+    let mut links = Vec::new();
+
+    // Find all quoted strings in the line
+    let mut search_start = 0;
+    while let Some(quote_pos) = line[search_start..].find('"').or_else(|| line[search_start..].find('\'')) {
+        let quote_char = line[search_start..].chars().nth(quote_pos).unwrap();
+        let absolute_pos = search_start + quote_pos;
+        let after_quote = absolute_pos + 1;
+
+        if let Some(end_pos) = line[after_quote..].find(quote_char) {
+            let string_start = after_quote;
+            let string_end = after_quote + end_pos;
+            let candidate = &line[string_start..string_end];
+
+            if is_migration_path(candidate) {
+                links.push(json!({
+                    "range": {
+                        "start": {"line": line_idx, "character": string_start as u32},
+                        "end":   {"line": line_idx, "character": string_end as u32}
+                    },
+                    "tooltip": format!("Open migration file: {}", candidate),
+                    "data": {
+                        "type": "migration_file",
+                        "path": candidate,
+                        "baseUri": uri
+                    }
+                }));
+            }
+
+            search_start = string_end + 1;
+        } else {
+            break;
+        }
+    }
+
+    links
 }
 
 #[allow(dead_code)]

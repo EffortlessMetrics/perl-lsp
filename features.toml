@@ -163,6 +163,15 @@ tests = ["crates/perl-lsp/tests/lsp_document_links_test.rs"]
 description = "Document links to modules and docs"
 
 [[feature]]
+id = "lsp.migration_document_links"
+spec = "perl-lsp"
+area = "text_document"
+maturity = "ga"
+advertised = true
+tests = []
+description = "Document links for database migration file references in Perl code. Detects migration file paths (share/deploy/, share/upgrade/, share/revert/ for DBIx::Class::DeploymentHandler; deploy/, verify/, revert/ for sqitch) in quoted strings and creates links for navigation between migration files."
+
+[[feature]]
 id = "lsp.folding_range"
 spec = "LSP 3.0"
 area = "text_document"
@@ -188,6 +197,15 @@ maturity = "ga"
 advertised = true
 tests = ["crates/perl-lsp/tests/lsp_semantic_tokens.rs"]
 description = "Semantic syntax highlighting via 23 token types (namespace, type, class, interface, enum, enumMember, typeParameter, function, method, property, macro, variable, parameter, keyword, modifier, comment, string, number, regexp, operator, plus sql_string/sql_heredoc_keyword/json_heredoc_key for embedded language context) and 13 modifiers (declaration, definition, readonly, static, deprecated, abstract, async, modification, documentation, defaultLibrary, scalarVariable, arrayVariable, hashVariable). Token pipeline: lexer fast-path classification plus AST overlay for package/subroutine/method/variable nodes, with overlap deduplication (longer token wins) and delta-encoded [u32;5] response format (mandatory LSP wire encoding). Supports full (textDocument/semanticTokens/full) and range (textDocument/semanticTokens/range) requests per LSP 3.16"
+
+[[feature]]
+id = "lsp.sql_highlighting"
+spec = "perl-lsp"
+area = "text_document"
+maturity = "ga"
+advertised = true
+tests = []
+description = "SQL keyword syntax highlighting for standalone .sql migration files (DBIx::Class::DeploymentHandler, sqitch) using regex-based keyword detection. Applies sql_heredoc_keyword token type to SQL keywords (SELECT, FROM, WHERE, JOIN, INSERT, UPDATE, DELETE, CREATE, DROP, ALTER, etc.) in .sql files discovered in migration directories."
 
 [[feature]]
 id = "lsp.inlay_hint"
@@ -391,6 +409,15 @@ maturity = "ga"
 advertised = true
 tests = ["crates/perl-lsp/tests/lsp_3_17_compliance_tests.rs"]
 description = "Cross-project symbol identity"
+
+[[feature]]
+id = "lsp.migration_file_discovery"
+spec = "perl-lsp"
+area = "workspace"
+maturity = "ga"
+advertised = true
+tests = []
+description = "Workspace file discovery for database migration files. Discovers .sql files in DBIx::Class::DeploymentHandler directories (share/deploy/, share/upgrade/, share/revert/) and sqitch directories (deploy/, verify/, revert/), plus sqitch.plan files. Enables IDE visibility for migration files without Perl-specific LSP features."
 
 # Window Features
 

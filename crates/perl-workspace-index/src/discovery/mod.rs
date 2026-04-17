@@ -72,6 +72,47 @@ pub fn is_perl_discovery_path(path: &Path) -> bool {
         })
 }
 
+/// Returns `true` if `path` is a database migration file used by
+/// DBIx::Class::DeploymentHandler, sqitch, or similar tools.
+///
+/// This is separate from `is_perl_discovery_path()` to keep the Perl source
+/// concept clean. Migration files (.sql in migration directories, sqitch.plan)
+/// are discovered for IDE visibility even though they are not Perl source files.
+///
+/// # Discovery Patterns
+///
+/// ## DBIx::Class::DeploymentHandler
+/// - `share/deploy/**/*.sql`
+/// - `share/upgrade/**/*.sql`
+/// - `share/revert/**/*.sql`
+///
+/// ## sqitch
+/// - `deploy/**/*.sql`
+/// - `verify/**/*.sql`
+/// - `revert/**/*.sql`
+/// - `**/sqitch.plan`
+#[must_use]
+pub fn is_migration_discovery_path(path: &Path) -> bool {
+    // Check for .sql extension
+    let is_sql = path
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("sql"));
+
+    if is_sql {
+        // .sql files are discovered if they're in a migration directory
+        return path.components().any(|c| {
+            let s = c.as_os_str().to_string_lossy().to_lowercase();
+            s == "share" || s == "deploy" || s == "upgrade" || s == "revert" || s == "verify"
+        });
+    }
+
+    // Check for sqitch.plan (case-insensitive)
+    path.file_name()
+        .and_then(|n| n.to_str())
+        .is_some_and(|n| n.eq_ignore_ascii_case("sqitch.plan"))
+}
+
 fn try_git_discovery(root: &Path, start: Instant) -> Result<DiscoveryResult, std::io::Error> {
     let output = std::process::Command::new("git")
         .args(GIT_LS_FILES_ARGS)
@@ -113,7 +154,7 @@ fn parse_git_ls_files_output(root: &Path, stdout: &[u8]) -> (Vec<PathBuf>, usize
         }
 
         let path = root.join(relative_path);
-        if is_perl_discovery_path(&path) {
+        if is_perl_discovery_path(&path) || is_migration_discovery_path(&path) {
             files.push(path);
         } else {
             excluded_count += 1;
@@ -141,7 +182,7 @@ fn walk_discovery(root: &Path, start: Instant) -> DiscoveryResult {
             continue;
         }
 
-        if is_perl_discovery_path(entry.path()) {
+        if is_perl_discovery_path(entry.path()) || is_migration_discovery_path(entry.path()) {
             files.push(entry.path().to_path_buf());
         } else {
             excluded_count += 1;
@@ -180,8 +221,8 @@ fn log_discovery(result: &DiscoveryResult) {
 #[cfg(test)]
 mod tests {
     use super::{
-        DiscoveryMethod, parse_git_ls_files_output, path_contains_skipped_component,
-        should_skip_dir, walk_discovery,
+        is_migration_discovery_path, parse_git_ls_files_output, path_contains_skipped_component,
+        should_skip_dir, walk_discovery, DiscoveryMethod,
     };
     use std::fs;
     use std::path::Path;

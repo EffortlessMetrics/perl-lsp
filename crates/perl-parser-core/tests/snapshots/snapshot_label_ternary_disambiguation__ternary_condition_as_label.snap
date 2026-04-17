@@ -1,0 +1,5 @@
+---
+source: crates/perl-parser-core/tests/snapshot_label_ternary_disambiguation.rs
+expression: sexp
+---
+(source_file (my_declaration (variable $ x)(identifier COND)) (ERROR "expected expression, found \':\' at position 12"))

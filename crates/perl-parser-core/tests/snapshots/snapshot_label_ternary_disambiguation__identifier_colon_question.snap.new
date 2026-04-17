@@ -1,0 +1,6 @@
+---
+source: crates/perl-parser-core/tests/snapshot_label_ternary_disambiguation.rs
+assertion_line: 166
+expression: sexp
+---
+(source_file (identifier FOO) (ERROR "expected expression, found \':\' at position 3"))
