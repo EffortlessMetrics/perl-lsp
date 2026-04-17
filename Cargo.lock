@@ -2013,7 +2013,7 @@ version = "0.12.4"
 dependencies = [
  "moka",
  "perl-parser-core",
- "perl-symbol-index",
+ "perl-symbol",
 ]
 
 [[package]]
@@ -2070,7 +2070,7 @@ dependencies = [
  "perl-keywords",
  "perl-parser-core",
  "perl-semantic-analyzer",
- "perl-symbol-cursor",
+ "perl-symbol",
  "perl-tdd-support",
 ]
 
@@ -2142,7 +2142,7 @@ dependencies = [
  "perl-qualified-name",
  "perl-source-file",
  "perl-subprocess-runtime",
- "perl-symbol-cursor",
+ "perl-symbol",
  "perl-tdd-support",
  "perl-workspace",
  "predicates",
@@ -2432,7 +2432,7 @@ name = "perl-semantic-analyzer"
 version = "0.12.4"
 dependencies = [
  "perl-parser-core",
- "perl-symbol-types",
+ "perl-symbol",
  "perl-tdd-support",
  "perl-workspace",
  "regex",
@@ -2452,28 +2452,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "perl-symbol-cursor"
-version = "0.12.4"
-dependencies = [
- "perl-tdd-support",
-]
-
-[[package]]
-name = "perl-symbol-index"
-version = "0.12.4"
-
-[[package]]
-name = "perl-symbol-surface"
+name = "perl-symbol"
 version = "0.12.4"
 dependencies = [
  "perl-ast",
- "perl-symbol-types",
-]
-
-[[package]]
-name = "perl-symbol-types"
-version = "0.12.4"
-dependencies = [
+ "perl-tdd-support",
  "serde",
  "serde_json",
 ]
@@ -2556,7 +2539,7 @@ dependencies = [
  "perl-percentile",
  "perl-position-tracking",
  "perl-source-file",
- "perl-symbol-types",
+ "perl-symbol",
  "perl-tdd-support",
  "perl-uri",
  "proptest",

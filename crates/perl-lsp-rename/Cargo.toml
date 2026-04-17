@@ -20,7 +20,7 @@ doctest = false
 perl-parser-core = { workspace = true }
 perl-semantic-analyzer = { workspace = true }
 perl-keywords = { workspace = true }
-perl-symbol-cursor = { workspace = true }
+perl-symbol = { workspace = true }
 
 [dev-dependencies]
 perl-tdd-support = { workspace = true }

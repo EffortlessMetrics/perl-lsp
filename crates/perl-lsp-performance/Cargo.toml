@@ -18,7 +18,7 @@ doctest = false
 
 [dependencies]
 perl-parser-core = { workspace = true }
-perl-symbol-index = { workspace = true }
+perl-symbol = { workspace = true }
 moka = { version = "0.12", features = ["sync"] }
 
 [package.metadata.docs.rs]

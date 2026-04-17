@@ -295,7 +295,7 @@ impl WorkspaceSymbolsProvider {
     }
 }
 
-// Symbol kind conversion is handled by perl_symbol_types::SymbolKind::to_lsp_kind()
+// Symbol kind conversion is handled by perl_symbol::SymbolKind::to_lsp_kind()
 // Position conversion is handled by perl_position_tracking via WireRange::from_byte_offsets()
 // which correctly counts UTF-16 code units as required by the LSP protocol.
 

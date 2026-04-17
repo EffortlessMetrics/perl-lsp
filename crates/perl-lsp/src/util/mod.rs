@@ -14,7 +14,7 @@ use perl_module::reference::extract_module_reference_extended as extract_module_
 
 // Re-export engine utilities
 pub use perl_parser::util::{code_slice, find_data_marker_byte_lexed};
-pub use perl_symbol_cursor::{byte_offset_utf16, is_modchar, is_word_boundary, token_under_cursor};
+pub use perl_symbol::cursor::{byte_offset_utf16, is_modchar, is_word_boundary, token_under_cursor};
 
 // =============================================================================
 // Panic-free character accessors (Issue #143)

@@ -11,7 +11,7 @@ use perl_parser_core::Node;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-pub use perl_symbol_index::SymbolIndex;
+pub use perl_symbol::SymbolIndex;
 
 /// Cache for parsed ASTs with TTL.
 ///

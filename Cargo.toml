@@ -67,7 +67,6 @@ members = [
     "crates/perl-lsp-folding",
     "crates/perl-lsp-selection-range",
     "crates/perl-ast-utils",
-    "crates/perl-symbol-surface",
     "crates/perl-lsp-import-management",
     "crates/perl-lsp-text-utils",
     "crates/perl-lsp-color-provider",
@@ -78,9 +77,7 @@ members = [
     "crates/perl-lsp-config",
     "crates/perl-diagnostics",
     "crates/perl-position-tracking",
-    "crates/perl-symbol-types",
-    "crates/perl-symbol-cursor",
-    "crates/perl-symbol-index",
+    "crates/perl-symbol",
     "crates/perl-module",
     "crates/perl-qualified-name",
     "crates/perl-text-line",
@@ -155,10 +152,7 @@ allow = [
     "perl-test-generators",
     "perl-edit",
     "perl-incremental-parsing",
-    "perl-symbol-types",
-    "perl-symbol-surface",
-    "perl-symbol-cursor",
-    "perl-symbol-index",
+    "perl-symbol",
     "perl-uri-classify",
     "perl-uri",
     "perl-path-normalize",
@@ -272,9 +266,7 @@ perl-heredoc-anti-patterns = { path = "crates/perl-heredoc-anti-patterns", versi
 perl-error = { path = "crates/perl-error", version = "0.12.4" }
 perl-tokenizer = { path = "crates/perl-tokenizer", version = "0.12.4" }
 perl-position-tracking = { path = "crates/perl-position-tracking", version = "0.12.4" }
-perl-symbol-types = { path = "crates/perl-symbol-types", version = "0.12.4" }
-perl-symbol-cursor = { path = "crates/perl-symbol-cursor", version = "0.12.4" }
-perl-symbol-index = { path = "crates/perl-symbol-index", version = "0.12.4" }
+perl-symbol = { path = "crates/perl-symbol", version = "0.12.4" }
 perl-module = { path = 'crates/perl-module', version = "0.12.4" }
 perl-qualified-name = { path = "crates/perl-qualified-name", version = "0.12.4" }
 perl-keywords = { path = "crates/perl-keywords", version = "0.12.4" }
@@ -287,7 +279,6 @@ perl-lsp-document-highlight = { path = "crates/perl-lsp-document-highlight", ver
 perl-lsp-document-links = { path = "crates/perl-lsp-document-links", version = "0.12.4" }
 perl-lsp-performance = { path = "crates/perl-lsp-performance", version = "0.12.4" }
 perl-ast-utils = { path = "crates/perl-ast-utils", version = "0.12.4" }
-perl-symbol-surface = { path = "crates/perl-symbol-surface", version = "0.12.4" }
 perl-lsp-symbol-query = { path = "crates/perl-lsp-symbol-query", version = "0.12.4" }
 perl-lsp-input-validation = { path = "crates/perl-lsp-input-validation", version = "0.12.4" }
 perl-lsp-text-utils = { path = "crates/perl-lsp-text-utils", version = "0.12.4" }

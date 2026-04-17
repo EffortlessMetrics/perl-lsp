@@ -32,9 +32,9 @@ use std::sync::OnceLock;
 
 const UNIVERSAL_METHODS: [&str; 4] = ["can", "isa", "DOES", "VERSION"];
 
-// Re-export the unified symbol types from perl-symbol-types
+// Re-export the unified symbol types from perl-symbol
 /// Symbol kind enums used during Index/Analyze workflows.
-pub use perl_symbol_types::{SymbolKind, VarKind};
+pub use perl_symbol::{SymbolKind, VarKind};
 
 #[derive(Debug, Clone)]
 /// A symbol definition in Perl code with comprehensive metadata for Index/Navigate workflows.
