@@ -178,7 +178,7 @@ pub struct SweepReport {
     /// line count (older verbose=false receipts, or empty corpora).
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub median_error_density_per_1k_loc: Option<f64>,
-    /// Top slowest files by parse duration (captured when verbose mode is on).
+    /// Top slowest files by parse duration (always captured, regardless of verbose mode).
     ///
     /// Introduced in schema 1.3.0. Always present when phase timings are
     /// present; empty when no per-file timings were recorded.
