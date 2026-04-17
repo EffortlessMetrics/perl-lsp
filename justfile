@@ -50,7 +50,8 @@ pr-fast: _check-tools-basic
     just _timed "fmt-check" "just fmt-check" && \
     just _timed "clippy-core" "just clippy-core" && \
     just _timed "test-core" "just test-core" && \
-    just _timed "publish-closure" "just ci-publish-closure"
+    just _timed "publish-closure" "just ci-publish-closure" && \
+    just _timed "layer-check" "just ci-layer-check"
     RC=$?
     END=$(date +%s)
     echo ""
@@ -762,7 +763,8 @@ ci-gate:
     just hook-check && \
     just hook-registry-check && \
     just hook-tests && \
-    just ci-publish-closure
+    just ci-publish-closure && \
+    just ci-layer-check
     # @START=$$(date +%s); \
 
 # Gate runner with receipt output (Issue #210)
@@ -863,6 +865,13 @@ ci-publish-closure:
     @echo "🔐 Checking publish-closure transitive deps..."
     @cargo xtask publish-closure
     @echo "✅ Publish-closure check passed"
+
+# Layer-check gate: enforce crate dependency direction constraints
+# Normal (runtime) deps only; dev-deps may cross layers freely.
+ci-layer-check:
+    @echo "🧱 Checking crate layer constraints..."
+    @cargo xtask layer-check
+    @echo "✅ Layer-check passed"
 
 # Core tests (fast, essential)
 ci-test-core:
