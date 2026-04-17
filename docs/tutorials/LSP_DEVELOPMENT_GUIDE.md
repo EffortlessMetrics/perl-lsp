@@ -1,12 +1,12 @@
 # LSP Development Guide
 
-## Source Threading Architecture (v0.8.7+)
+## Source Threading Architecture (v0.12.x)
 
 All LSP providers now support source-aware analysis for enhanced documentation extraction:
 
 ### Provider Constructor Patterns
 ```rust
-// Enhanced constructors with source text and module resolver (v0.8.8)
+// Enhanced constructors with source text and module resolver (v0.12.x)
 CompletionProvider::new_with_index_and_source(ast, source, workspace_index, module_resolver)
 SignatureHelpProvider::new_with_source(ast, source)
 SymbolExtractor::new_with_source(source)
@@ -17,7 +17,7 @@ SignatureHelpProvider::new(ast)  // uses empty source
 SymbolExtractor::new()  // no documentation extraction
 ```
 
-### ModuleResolver Integration (NEW v0.8.8) - (*Diataxis: How-to Guide*)
+### ModuleResolver Integration (v0.12.x) - (*Diataxis: How-to Guide*)
 
 The CompletionProvider now supports pluggable module resolution for enhanced Perl module completion. This allows LSP features to resolve module names to file paths for improved functionality.
 
@@ -69,9 +69,9 @@ let completions = provider.get_completions_with_path(&doc.text, offset, Some(uri
 - **Caching Strategy**: Fast path checks open documents first
 - **Generic Design**: Works with any document representation for flexibility
 
-## Enhanced Cross-File Definition Resolution (v0.8.8+) (*Diataxis: How-to Guide* - Advanced LSP Development)
+## Enhanced Cross-File Definition Resolution (v0.12.x) (*Diataxis: How-to Guide* - Advanced LSP Development)
 
-The v0.8.8+ releases introduce comprehensive Package::subroutine pattern resolution with sophisticated fallback mechanisms for robust cross-file navigation.
+The v0.12.x releases introduce comprehensive Package::subroutine pattern resolution with sophisticated fallback mechanisms for robust cross-file navigation.
 
 ### Implementation Patterns for Package::Subroutine Resolution
 
@@ -312,9 +312,9 @@ sub foo {  # Not documentation
 }
 ```
 
-## Cross-File Reference Handling (*Diataxis: Reference* - Enhanced package-qualified identifier support v0.8.8+)
+## Cross-File Reference Handling (*Diataxis: Reference* - Enhanced package-qualified identifier support v0.12.x)
 
-The v0.8.8+ release includes significant improvements to cross-file reference handling, particularly for package-qualified identifiers and reference deduplication.
+The v0.12.x release includes significant improvements to cross-file reference handling, particularly for package-qualified identifiers and reference deduplication.
 
 ### Enhanced Workspace Indexing
 
@@ -344,12 +344,12 @@ pub fn find_refs(&self, key: &SymbolKey) -> Vec<Location> {
 #### **Package-Qualified Identifier Support**
 The system now correctly handles package-qualified identifiers in cross-file scenarios:
 
-**Before v0.8.8:**
+**Before v0.12.x:**
 - References could include function definitions
 - Duplicate entries from dual indexing
 - Inconsistent handling of package contexts
 
-**After v0.8.8:**
+**After v0.12.x:**
 - Clean separation of references vs definitions
 - Intelligent deduplication across qualified/unqualified names
 - Consistent package context resolution
@@ -430,7 +430,7 @@ When implementing new LSP features, follow this structure:
 
 ## Testing Procedures (*Diataxis: How-to Guide* - Testing procedures)
 
-### Dual-Scanner Corpus Validation (v0.8.8+)
+### Dual-Scanner Corpus Validation (v0.12.x)
 
 For comprehensive LSP development testing, use dual-scanner corpus comparison to validate parser behavior:
 
@@ -1010,7 +1010,7 @@ The enhanced executeCommand and code actions development patterns provide a comp
 
 ## Testing LSP Features
 
-### Test Infrastructure (PR #140) (v0.8.8+)
+### Test Infrastructure (PR #140) (v0.12.x)
 The project includes test infrastructure with significant performance optimizations for test reliability:
 
 **Performance Achievements (PR #140)**:
@@ -1029,7 +1029,7 @@ The project includes test infrastructure with significant performance optimizati
 - **Enhanced Test Harness**: Graceful degradation for CI environments
 - **Optimized Idle Detection**: 1000ms → 200ms cycles (**5x improvement**)
 
-### Performance Testing Configuration (PR #140) (v0.8.8+) (**Diataxis: How-to Guide** - Performance testing)
+### Performance Testing Configuration (PR #140) (v0.12.x) (**Diataxis: How-to Guide** - Performance testing)
 
 The PR #140 enhancements deliver comprehensive performance optimizations:
 
@@ -1061,7 +1061,7 @@ export LSP_TEST_FALLBACKS=1
 # Run all LSP tests in fast mode
 LSP_TEST_FALLBACKS=1 cargo test -p perl-lsp-rs
 
-# Combine threading control with fast mode for optimal CI reliability (v0.8.8+)
+# Combine threading control with fast mode for optimal CI reliability (v0.12.x)
 RUST_TEST_THREADS=2 LSP_TEST_FALLBACKS=1 cargo test -p perl-lsp-rs -- --test-threads=2
 
 # Performance testing with enhanced test harness (PR #140)
@@ -1121,7 +1121,7 @@ let symbol_check = Duration::from_millis(200);  // Single attempt
 - Workspace symbol tests: Often exceed CI limits
 - Test suite runtime: 5-10 minutes
 
-**After Optimization (v0.8.8)**:
+**After Optimization (v0.12.x)**:
 - `test_completion_detail_formatting`: 0.26 seconds (99.5% faster)
 - All tests pass with `LSP_TEST_FALLBACKS=1`: <10 seconds total
 - Test suite runtime: <1 minute in fast mode
@@ -1189,7 +1189,7 @@ cargo test -p perl-lsp-rs --test lsp_full_coverage_user_stories  # 0.32s (was 15
 cargo test -p perl-lsp-rs
 ```
 
-## Enhanced Position Tracking Development (v0.8.7+)
+## Enhanced Position Tracking Development (v0.12.x)
 
 The enhanced position tracking system provides accurate line/column mapping for LSP compliance:
 
@@ -1227,9 +1227,9 @@ impl LineStartsCache {
 }
 ```
 
-## Error Recovery and Fallback Mechanisms (*Diataxis: Explanation* - Enhanced reliability architecture v0.8.8+)
+## Error Recovery and Fallback Mechanisms (*Diataxis: Explanation* - Enhanced reliability architecture v0.12.x)
 
-The LSP server includes comprehensive, production-tested fallback mechanisms that ensure 99.9% feature availability even during parser failures, incomplete code, or AST unavailability. The v0.8.8+ release significantly enhances these systems with intelligent text-based analysis and robust error handling.
+The LSP server includes comprehensive, production-tested fallback mechanisms that ensure 99.9% feature availability even during parser failures, incomplete code, or AST unavailability. The v0.12.x release significantly enhances these systems with intelligent text-based analysis and robust error handling.
 
 ### Three-Tier Reliability Architecture (*Diataxis: Explanation* - Understanding the reliability strategy)
 
@@ -1256,7 +1256,7 @@ The LSP server includes comprehensive, production-tested fallback mechanisms tha
 
 ### Core Fallback Mechanisms (*Diataxis: Reference* - Complete fallback specification)
 
-#### 1. Enhanced Workspace Symbol Fallback (*Diataxis: Reference* - v0.8.8+)
+#### 1. Enhanced Workspace Symbol Fallback (*Diataxis: Reference* - v0.12.x)
 
 **Comprehensive Text-Based Symbol Detection**:
 ```rust
@@ -1307,7 +1307,7 @@ fn extract_text_based_symbols(&self, text: &str, uri: &str, query: &str) -> Vec<
 - ✅ Method vs subroutine differentiation
 - ✅ Namespace-aware symbol resolution
 
-#### 2. Advanced Code Lens Fallback (*Diataxis: Reference* - v0.8.8+)
+#### 2. Advanced Code Lens Fallback (*Diataxis: Reference* - v0.12.x)
 
 **Intelligent Reference Counting with Method Detection**:
 ```rust
@@ -1355,7 +1355,7 @@ fn extract_text_based_code_lenses(&self, text: &str, _uri: &str) -> Vec<Value> {
 - ✅ Detailed reference breakdown in lens titles
 - ✅ Better handling of complex call patterns
 
-#### 3. Robust Document Symbol Fallback (*Diataxis: Reference* - v0.8.8+)
+#### 3. Robust Document Symbol Fallback (*Diataxis: Reference* - v0.12.x)
 
 **Hierarchical Symbol Extraction with Improved Accuracy**:
 ```rust
@@ -1420,7 +1420,7 @@ fn extract_symbols_fallback(&self, content: &str) -> Vec<Value> {
 }
 ```
 
-#### 4. Enhanced Signature Help Fallback (*Diataxis: Reference* - v0.8.8+)
+#### 4. Enhanced Signature Help Fallback (*Diataxis: Reference* - v0.12.x)
 
 **Context-Aware Function Detection**:
 - Enhanced backward scanning for function context
@@ -1429,7 +1429,7 @@ fn extract_symbols_fallback(&self, content: &str) -> Vec<Value> {
 - Support for complex function call patterns
 - Fallback signatures for unknown functions with parameter hints
 
-#### 5. Advanced Folding Range Fallback (*Diataxis: Reference* - v0.8.8+)
+#### 5. Advanced Folding Range Fallback (*Diataxis: Reference* - v0.12.x)
 
 **Multi-Pattern Folding Detection**:
 ```rust
@@ -1479,7 +1479,7 @@ fn extract_folding_fallback(&self, content: &str) -> Vec<Value> {
 }
 ```
 
-#### 6. Production-Stable Enhanced Scope Analysis (*Diataxis: Reference* - v0.8.7+)
+#### 6. Production-Stable Enhanced Scope Analysis (*Diataxis: Reference* - v0.12.x)
 
 **Industry-Leading Variable Resolution with Hash Context Detection**:
 - **Advanced Variable Resolution Patterns**: Hash access (`$hash{key}` → `%hash`), array access (`$array[idx]` → `@array`)  
@@ -1540,7 +1540,7 @@ fn handle_with_test_fallbacks(&self, params: Option<Value>) -> Result<Option<Val
 
 ### Performance Impact and Monitoring (*Diataxis: Reference* - Fallback performance characteristics)
 
-#### Fallback Performance Metrics (v0.8.8+)
+#### Fallback Performance Metrics (v0.12.x)
 
 | Feature Type | AST Success | Text Fallback | Performance Impact | Accuracy |
 |-------------|-------------|---------------|-------------------|----------|

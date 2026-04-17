@@ -1,6 +1,6 @@
 # CI Cost Tracking and Budget Management
 
-*Part of Issue #211: CI Pipeline Cleanup*
+*Part of Issue #211 (closed): CI Pipeline Cleanup*
 
 This guide documents the cost model, budget goals, and optimization strategies for GitHub Actions CI in the perl-lsp project. The goal is to maintain efficient, cost-effective CI while ensuring comprehensive validation.
 
@@ -17,7 +17,7 @@ GitHub Actions is a metered service. Without careful monitoring, CI costs can sp
 - Lack of caching (rebuilding from scratch each time)
 - Testing on expensive runners (macOS costs 10x more than Linux)
 
-**Issue #211 target**: Save $720/year through CI optimization while maintaining quality.
+**Issue #211 (closed) target**: Save $720/year through CI optimization while maintaining quality.
 
 ---
 
@@ -122,7 +122,7 @@ Savings from baseline: $62.16/year (75% reduction)
 
 ## Budget Goals
 
-### Issue #211 Target: $720/year Savings
+### Issue #211 (closed) Target: $720/year Savings
 
 The $720/year target comes from preventing the following CI anti-patterns:
 
@@ -162,7 +162,7 @@ The $720/year target comes from preventing the following CI anti-patterns:
 - **Target** (fully optimized): ~$20-40/year
 - **Delta**: $180-280/year savings (conservative estimate)
 
-The $720/year figure in Issue #211 represents the **ceiling** of what poor CI hygiene could cost, not current spending.
+The $720/year figure in Issue #211 (closed) represents the **ceiling** of what poor CI hygiene could cost, not current spending.
 
 ### Monthly Budget Allocation
 
@@ -561,7 +561,7 @@ Use this checklist when adding new workflows or jobs:
 - **[CI.md](CI.md)** - GitHub Actions architecture
 - **[CI_TEST_LANES.md](CI_TEST_LANES.md)** - Test lane organization
 - **[COMMANDS_REFERENCE.md](../reference/COMMANDS_REFERENCE.md)** - Full command catalog
-- **Issue #211** - CI Pipeline Cleanup (tracking issue)
+- **Issue #211 (closed)** - CI Pipeline Cleanup (tracking issue)
 
 ---
 

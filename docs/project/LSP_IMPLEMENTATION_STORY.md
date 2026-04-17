@@ -1,4 +1,4 @@
-# From Zero to 97 LSP Features: Building a Modern Language Server for Perl in Rust
+# From Zero to 98 LSP Features: Building a Modern Language Server for Perl in Rust
 
 > How the perl-lsp project achieved near-complete Language Server Protocol coverage
 > for one of programming's most syntactically challenging languages.
@@ -17,7 +17,7 @@ delimiters, and the infamous "only perl can parse Perl" reputation have kept
 tooling authors at bay.
 
 The perl-lsp project set out to change that. Built from scratch in Rust, it now
-implements 97 of the 97 trackable features in the LSP 3.18 specification -- 100%
+implements 98 of the 98 trackable features in the LSP 3.18 specification -- 100%
 protocol compliance -- along with a full Debug Adapter Protocol server, a
 recursive descent parser, and a semantic analysis engine. The journey from an
 initial tree-sitter grammar to a production LSP server spanning 121 crates and
@@ -45,7 +45,7 @@ The perl-lsp project tracks every LSP feature in a canonical `features.toml`
 file at the repository root. Each feature entry records its LSP spec version,
 area (text_document, workspace, window, protocol, notebook, debug), maturity
 level, whether it is advertised to clients, and the test files that validate it.
-As of v0.10.0, the catalog contains 97 trackable features, all at GA maturity:
+As of v0.12.x, the catalog contains 98 trackable features, all at GA maturity:
 
 - **53 user-visible features** (the ones that `counts_in_coverage` tracks)
 - **44 protocol plumbing features** (lifecycle, sync, refresh routes,
@@ -56,7 +56,7 @@ As of v0.10.0, the catalog contains 97 trackable features, all at GA maturity:
 The distinction between user-visible and plumbing features is important. A
 language server can claim high coverage by counting `initialize` and `shutdown`
 as features. The perl-lsp project tracks both numbers honestly, reporting 100%
-user-visible coverage (53/53) and 100% protocol compliance (97/97) separately.
+user-visible coverage (53/53) and 100% protocol compliance (98/98) separately.
 
 ---
 
@@ -504,7 +504,7 @@ via `gh attestation verify`.
 
 ## What's Next
 
-The perl-lsp project is in Initial Public Alpha at v0.10.0. The path forward
+The perl-lsp project is in Initial Public Alpha at v0.12.x. The path forward
 includes:
 
 - **v0.11.0**: Complete Moo/Moose/Class::Accessor attribute resolution,
@@ -519,7 +519,7 @@ includes:
   channels beyond the current cargo install and VSCode extension.
 
 The project demonstrates that even the most syntactically challenging languages
-can have first-class IDE support. With 97 LSP features, a full DAP
+can have first-class IDE support. With 98 LSP features, a full DAP
 implementation, a three-generation parser, and a feature governance system that
 mechanically ensures compliance, perl-lsp makes a case that the "only perl can
 parse Perl" era is over.

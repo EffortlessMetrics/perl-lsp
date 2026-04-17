@@ -8,10 +8,10 @@
 
 ## Active Milestones
 
-### v0.10.0: Post-Release Optimization
+### v0.12.x: Post-Release Optimization
 
 **Status**: Active (local; see GitHub milestones for live counts)
-**Goal**: Close out v0.10.0 hardening and documentation cleanup.
+**Goal**: Close out v0.12.x hardening and documentation cleanup.
 
 **Exit Criteria**:
 - See `ROADMAP.md` v0.10.0 section (index state machine, documentation cleanup, test debt)
@@ -21,13 +21,13 @@
 
 ---
 
-### v0.10.0: Boring Promises
+### v0.12.x: Boring Promises
 
-**Status**: Queued (after v0.10.0)
+**Status**: Queued (after v0.12.x)
 **Goal**: Freeze the surfaces you're willing to support.
 
 **Exit Criteria**:
-- v0.10.0 released and stable
+- v0.12.x released and stable
 - Capability snapshot + docs aligned
 - Benchmarks published under benchmarks/results/
 - Upgrade notes exist from v0.8.x → v0.9.x
@@ -37,7 +37,7 @@
 2. Packaging stance (binaries, crates, platforms)
 3. Benchmark publication
 
-**Effort Estimate**: ~40-80 hours after v0.10.0
+**Effort Estimate**: ~40-80 hours after v0.12.x
 
 [View all v0.10.0 issues](https://github.com/EffortlessMetrics/perl-lsp/milestone/2)
 

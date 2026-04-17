@@ -853,6 +853,35 @@ impl ScopeAnalyzer {
                     );
                 }
 
+                // Validate package-qualified function calls under strict_subs.
+                // When a name contains "::", extract the identifier part (final component)
+                // and apply the same bareword validation as unqualified calls.
+                // e.g. Foo::bar() - extract "bar" and check if it is a known builtin.
+                if strict_subs_mode && name.contains("::") {
+                    if let Some(identifier_part) = name.rsplit("::").next() {
+                        if !self.is_in_hash_key_context(node, ancestors, 1)
+                            && !is_known_function(identifier_part)
+                            && !pragma_state.has_builtin_import(identifier_part)
+                            && !self.is_in_hash_key_context(node, ancestors, 10)
+                        {
+                            // Use name.len() instead of node.location.end because the
+                            // FunctionCall node's location includes the parentheses (),
+                            // but we only want the range to cover the bareword name itself.
+                            let name_end = node.location.start + name.len();
+                            issues.push(ScopeIssue {
+                                kind: IssueKind::UnquotedBareword,
+                                variable_name: name.to_string(),
+                                line: context.get_line(node.location.start),
+                                range: (node.location.start, name_end),
+                                description: format!(
+                                    "Bareword '{}' not allowed under 'use strict'",
+                                    name
+                                ),
+                            });
+                        }
+                    }
+                }
+
                 // Handle function arguments, which may contain complex variable patterns.
                 // Some builtins consume declaration-capable filehandle arguments directly,
                 // e.g. `open my $fh, ...` or `pipe my $r, my $w;`. Those declarations should

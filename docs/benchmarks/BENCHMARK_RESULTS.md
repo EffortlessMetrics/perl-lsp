@@ -4,8 +4,8 @@
 
 This document contains the actual benchmark results comparing the Rust implementation against the original C implementation of tree-sitter-perl. Results are updated automatically as benchmarks are run.
 
-**Last Updated**: 2025-09-08
-**Benchmark Version**: v0.8.8
+**Last Updated**: 2026-04-17
+**Benchmark Version**: v0.12.4
 **Rust Version**: 1.92.0
 **C Implementation Version**: 0.9.x
 
@@ -29,7 +29,7 @@ This document contains the actual benchmark results comparing the Rust implement
 | Medium (5KB) | ~35 µs | **~50 µs** |
 | Large (20KB) | ~68 µs | **~150 µs** |
 
-### Incremental Parse Time Benchmarks (v0.8.8+)
+### Incremental Parse Time Benchmarks (v0.12.x)
 
 | Edit Type | Average Update Time | Node Reuse Rate |
 |-----------|---------------------|-----------------|

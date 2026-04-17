@@ -260,7 +260,7 @@ fn generate_import_fix_actions(&self, analysis: &ImportAnalysis) -> Vec<CodeActi
 - **Unknown Modules**: Careful handling of modules not in the known exports database
 - **Complex Usage Patterns**: Detection of module usage beyond simple function calls
 
-### Enhanced Bare Import Handling (v0.8.8+)
+### Enhanced Bare Import Handling (v0.12.x)
 
 Recent improvements address critical regression issues in bare import analysis:
 

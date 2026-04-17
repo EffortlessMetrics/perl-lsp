@@ -1,6 +1,6 @@
 # Project Orientation
 
-> For the documentation hub, see [README.md](README.md). This page provides project orientation for active contributors.
+> For the documentation hub, see [README.md](../README.md). This page provides project orientation for active contributors.
 
 > **SNAPSHOT DISCLAIMER**: Orientation-only. For live status and metrics, see `docs/project/CURRENT_STATUS.md` and GitHub milestones/issues.
 
@@ -8,7 +8,7 @@ Welcome to the perl-lsp project! This guide will get you up to speed quickly.
 
 ## 📍 You Are Here
 
-**Project Status**: v0.10.0 close-out receipts captured; v0.9.x hardening underway
+**Project Status**: v0.12.4 current; v0.12.x stabilization underway
 **Open Issues**: See GitHub milestones/issues for live counts
 
 ## 🎯 5-Minute Orientation
@@ -23,11 +23,11 @@ perl-lsp is a comprehensive Perl parsing + LSP/DAP ecosystem:
 
 ### Current Focus
 
-**Now (post v0.10.0 close-out)**
+**Now (post v0.12.x close-out)**
 - Keep close-out receipts green (`just ci-gate`, targeted state-machine tests, benchmark checks)
 - Publish benchmark outputs under `benchmarks/results/`
 
-**Next (v0.10.0)**
+**Next (v0.13.x)**
 - Stability statement + packaging stance
 - Benchmark publication with receipts
 - Upgrade notes from v0.8.x → v0.9.x

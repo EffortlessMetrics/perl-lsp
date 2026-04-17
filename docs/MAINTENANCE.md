@@ -1,4 +1,4 @@
-# Perl LSP v0.9.x Maintenance Plan
+# Perl LSP v0.12.x Maintenance Plan
 
 > **Status**: Active
 > **Last Updated**: 2026-02-14
@@ -99,7 +99,7 @@ cargo machete
 
 **Frequency**: As needed (typically 1-2 per month)
 
-**Patch Release Criteria** (v0.9.x.Z):
+**Patch Release Criteria** (v0.12.x.Z):
 
 | Category | Criteria | Example |
 |----------|----------|---------|
@@ -201,7 +201,7 @@ cargo machete
 
 #### Compatibility Guarantees
 
-**API Stability** (v0.9.x):
+**API Stability** (v0.12.x):
 - Public APIs remain stable within major version
 - Breaking changes only in major releases (2.0.0)
 - Deprecated APIs supported for at least 2 minor versions
@@ -572,7 +572,7 @@ memory_usage = { warning = 1.25, critical = 1.5 }
 
 ### Version Planning
 
-#### v0.10.0 (Q2 2026)
+#### v0.14.0 (Future)
 
 **Focus**: Enhancements and refinements
 
@@ -658,7 +658,7 @@ memory_usage = { warning = 1.25, critical = 1.5 }
 - Support previous MSRV for 1 year
 
 **Planned Upgrades**:
-- **v0.10.0**: Evaluate Rust 1.90+ MSRV
+- **v0.14.0**: Evaluate Rust 1.90+ MSRV
 - **v1.2.0**: Evaluate Rust 1.92+ MSRV
 - **v2.0.0**: Target latest stable Rust
 
@@ -683,7 +683,7 @@ memory_usage = { warning = 1.25, critical = 1.5 }
 - 100 AST cache entries
 
 **Planned Improvements**:
-- **v0.10.0**: Evaluate incremental indexing improvements
+- **v0.14.0**: Evaluate incremental indexing improvements
 - **v1.2.0**: Implement lazy loading for large workspaces
 - **v2.0.0**: Consider distributed indexing for very large workspaces
 

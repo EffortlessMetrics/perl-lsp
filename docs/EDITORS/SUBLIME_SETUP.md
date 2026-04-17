@@ -91,7 +91,7 @@ perllsp --version
 
 # Quick health check
 perllsp --health
-# Should output: ok 0.10.0
+# Should output: ok v0.12.x
 ```
 
 ---
