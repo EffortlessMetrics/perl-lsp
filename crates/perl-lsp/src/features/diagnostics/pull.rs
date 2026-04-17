@@ -51,8 +51,7 @@ pub struct PullDiagnosticsContext {
     pub markup_message_support: bool,
     /// Optional workspace index for dead code detection
     #[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
-    pub workspace_index:
-        Option<std::sync::Arc<perl_workspace_index::workspace_index::WorkspaceIndex>>,
+    pub workspace_index: Option<std::sync::Arc<perl_workspace::workspace_index::WorkspaceIndex>>,
 }
 
 impl PullDiagnosticsContext {
@@ -88,7 +87,7 @@ impl PullDiagnosticsContext {
     /// Create a context with workspace index for dead code detection.
     #[cfg(all(feature = "workspace", not(target_arch = "wasm32"), test))]
     pub fn with_workspace_index(
-        index: std::sync::Arc<perl_workspace_index::workspace_index::WorkspaceIndex>,
+        index: std::sync::Arc<perl_workspace::workspace_index::WorkspaceIndex>,
     ) -> Self {
         Self {
             perlcritic_enabled: false,

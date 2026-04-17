@@ -5,18 +5,18 @@
 //! ProductionIndexCoordinator, and IndexCoordinator.
 
 use perl_tdd_support::must_some;
-use perl_workspace_index::workspace::cache::{
+use perl_workspace::workspace::cache::{
     BoundedLruCache, CacheConfig, CombinedWorkspaceCacheConfig, EstimateSize,
 };
-use perl_workspace_index::workspace::document_store::DocumentStore;
-use perl_workspace_index::workspace::production_coordinator::{
+use perl_workspace::workspace::document_store::DocumentStore;
+use perl_workspace::workspace::production_coordinator::{
     ProductionCoordinatorConfig, ProductionIndexCoordinator, WorkspaceCacheManager,
 };
-use perl_workspace_index::workspace::state_machine::{
+use perl_workspace::workspace::state_machine::{
     BuildPhase, DegradationReason, IndexState, IndexStateKind, IndexStateMachine,
     InvalidationReason, ResourceKind, TransitionResult,
 };
-use perl_workspace_index::workspace::workspace_index::{
+use perl_workspace::workspace::workspace_index::{
     IndexCoordinator, IndexResourceLimits, SymKind, SymbolKey, WorkspaceIndex,
 };
 use std::sync::Arc;
@@ -384,7 +384,7 @@ fn test_variable_declaration_indexed() -> Result<(), Box<dyn std::error::Error>>
 
 #[test]
 fn test_normalize_var_scalar() {
-    use perl_workspace_index::workspace::workspace_index::normalize_var;
+    use perl_workspace::workspace::workspace_index::normalize_var;
     let (sigil, name) = normalize_var("$foo");
     assert_eq!(sigil, Some('$'));
     assert_eq!(name, "foo");
@@ -392,7 +392,7 @@ fn test_normalize_var_scalar() {
 
 #[test]
 fn test_normalize_var_array() {
-    use perl_workspace_index::workspace::workspace_index::normalize_var;
+    use perl_workspace::workspace::workspace_index::normalize_var;
     let (sigil, name) = normalize_var("@bar");
     assert_eq!(sigil, Some('@'));
     assert_eq!(name, "bar");
@@ -400,7 +400,7 @@ fn test_normalize_var_array() {
 
 #[test]
 fn test_normalize_var_hash() {
-    use perl_workspace_index::workspace::workspace_index::normalize_var;
+    use perl_workspace::workspace::workspace_index::normalize_var;
     let (sigil, name) = normalize_var("%baz");
     assert_eq!(sigil, Some('%'));
     assert_eq!(name, "baz");
@@ -408,7 +408,7 @@ fn test_normalize_var_hash() {
 
 #[test]
 fn test_normalize_var_no_sigil() {
-    use perl_workspace_index::workspace::workspace_index::normalize_var;
+    use perl_workspace::workspace::workspace_index::normalize_var;
     let (sigil, name) = normalize_var("plain");
     assert_eq!(sigil, None);
     assert_eq!(name, "plain");
@@ -416,7 +416,7 @@ fn test_normalize_var_no_sigil() {
 
 #[test]
 fn test_normalize_var_empty() {
-    use perl_workspace_index::workspace::workspace_index::normalize_var;
+    use perl_workspace::workspace::workspace_index::normalize_var;
     let (sigil, name) = normalize_var("");
     assert_eq!(sigil, None);
     assert_eq!(name, "");
@@ -917,7 +917,7 @@ fn test_index_coordinator_starts_building() {
     let coord = IndexCoordinator::new();
     assert!(matches!(
         coord.state().kind(),
-        perl_workspace_index::workspace::workspace_index::IndexStateKind::Building
+        perl_workspace::workspace::workspace_index::IndexStateKind::Building
     ));
 }
 
@@ -927,7 +927,7 @@ fn test_index_coordinator_transition_to_ready() {
     coord.transition_to_ready(5, 50);
     assert!(matches!(
         coord.state().kind(),
-        perl_workspace_index::workspace::workspace_index::IndexStateKind::Ready
+        perl_workspace::workspace::workspace_index::IndexStateKind::Ready
     ));
 }
 
@@ -1036,7 +1036,7 @@ fn test_find_unused_symbols() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn test_slo_reexports() {
-    use perl_workspace_index::workspace::slo::{SloConfig, SloTracker};
+    use perl_workspace::workspace::slo::{SloConfig, SloTracker};
 
     let tracker = SloTracker::new(SloConfig::default());
     assert!(tracker.all_slos_met());
@@ -1117,7 +1117,7 @@ fn test_index_coordinator_notify_parse_complete_decrements() {
 
 #[test]
 fn test_index_coordinator_parse_storm_triggers_degradation() {
-    use perl_workspace_index::workspace::workspace_index::IndexStateKind;
+    use perl_workspace::workspace::workspace_index::IndexStateKind;
 
     let coord = IndexCoordinator::new();
     coord.transition_to_ready(0, 0);
@@ -1132,7 +1132,7 @@ fn test_index_coordinator_parse_storm_triggers_degradation() {
 
 #[test]
 fn test_index_coordinator_recovery_from_parse_storm() {
-    use perl_workspace_index::workspace::workspace_index::IndexStateKind;
+    use perl_workspace::workspace::workspace_index::IndexStateKind;
 
     let coord = IndexCoordinator::new();
     coord.transition_to_ready(0, 0);
@@ -1154,7 +1154,7 @@ fn test_index_coordinator_recovery_from_parse_storm() {
 
 #[test]
 fn test_index_coordinator_enforce_limits_file_count() {
-    use perl_workspace_index::workspace::workspace_index::{IndexPerformanceCaps, IndexStateKind};
+    use perl_workspace::workspace::workspace_index::{IndexPerformanceCaps, IndexStateKind};
 
     let limits = IndexResourceLimits { max_files: 2, ..IndexResourceLimits::default() };
     let coord = IndexCoordinator::with_limits_and_caps(limits, IndexPerformanceCaps::default());
@@ -1180,7 +1180,7 @@ fn test_index_coordinator_check_limits_none_when_ok() {
 #[test]
 fn test_index_coordinator_check_limits_prefers_file_count_over_symbol_count()
 -> Result<(), Box<dyn std::error::Error>> {
-    use perl_workspace_index::workspace::workspace_index::{
+    use perl_workspace::workspace::workspace_index::{
         DegradationReason as IxDegradationReason, IndexPerformanceCaps,
         ResourceKind as IxResourceKind,
     };
@@ -1218,7 +1218,7 @@ fn test_index_coordinator_phase_transitions() {
 
 #[test]
 fn test_index_coordinator_record_early_exit() {
-    use perl_workspace_index::workspace::workspace_index::EarlyExitReason;
+    use perl_workspace::workspace::workspace_index::EarlyExitReason;
 
     let coord = IndexCoordinator::new();
     coord.record_early_exit(EarlyExitReason::InitialTimeBudget, 150, 10, 100);
@@ -1239,7 +1239,7 @@ fn test_index_coordinator_performance_caps_default() {
 
 #[test]
 fn test_index_coordinator_with_limits_and_caps() {
-    use perl_workspace_index::workspace::workspace_index::IndexPerformanceCaps;
+    use perl_workspace::workspace::workspace_index::IndexPerformanceCaps;
 
     let limits = IndexResourceLimits { max_files: 42, ..IndexResourceLimits::default() };
     let caps = IndexPerformanceCaps { initial_scan_budget_ms: 200, incremental_budget_ms: 20 };
@@ -1253,7 +1253,7 @@ fn test_index_coordinator_default_trait() {
     let coord = IndexCoordinator::default();
     assert!(matches!(
         coord.state().kind(),
-        perl_workspace_index::workspace::workspace_index::IndexStateKind::Building
+        perl_workspace::workspace::workspace_index::IndexStateKind::Building
     ));
 }
 
@@ -1971,7 +1971,7 @@ fn test_large_index_many_symbols_per_file() -> Result<(), Box<dyn std::error::Er
 
 #[test]
 fn test_normalize_var_sigil_only() {
-    use perl_workspace_index::workspace::workspace_index::normalize_var;
+    use perl_workspace::workspace::workspace_index::normalize_var;
     let (sigil, name) = normalize_var("$");
     assert_eq!(sigil, Some('$'));
     assert_eq!(name, "");
@@ -1983,21 +1983,21 @@ fn test_normalize_var_sigil_only() {
 
 #[test]
 fn test_cache_stats_hit_rate_zero_total() {
-    use perl_workspace_index::workspace::cache::CacheStats;
+    use perl_workspace::workspace::cache::CacheStats;
     let rate = CacheStats::calculate_hit_rate(0, 0);
     assert!((rate - 0.0).abs() < f64::EPSILON);
 }
 
 #[test]
 fn test_cache_stats_hit_rate_all_hits() {
-    use perl_workspace_index::workspace::cache::CacheStats;
+    use perl_workspace::workspace::cache::CacheStats;
     let rate = CacheStats::calculate_hit_rate(100, 0);
     assert!((rate - 1.0).abs() < f64::EPSILON);
 }
 
 #[test]
 fn test_cache_stats_hit_rate_all_misses() {
-    use perl_workspace_index::workspace::cache::CacheStats;
+    use perl_workspace::workspace::cache::CacheStats;
     let rate = CacheStats::calculate_hit_rate(0, 100);
     assert!((rate - 0.0).abs() < f64::EPSILON);
 }
@@ -2008,7 +2008,7 @@ fn test_cache_stats_hit_rate_all_misses() {
 
 #[test]
 fn test_index_coordinator_degrade_from_building() {
-    use perl_workspace_index::workspace::workspace_index::{
+    use perl_workspace::workspace::workspace_index::{
         DegradationReason as IxDegReason, IndexStateKind as IxStateKind,
     };
 

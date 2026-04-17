@@ -27,7 +27,7 @@
 //! # Usage
 //!
 //! ```rust
-//! use perl_workspace_index::workspace::production_coordinator::ProductionIndexCoordinator;
+//! use perl_workspace::workspace::production_coordinator::ProductionIndexCoordinator;
 //!
 //! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! let coordinator = ProductionIndexCoordinator::default();
@@ -192,7 +192,7 @@ impl ProductionIndexCoordinator {
     /// # Examples
     ///
     /// ```rust
-    /// use perl_workspace_index::workspace::production_coordinator::ProductionIndexCoordinator;
+    /// use perl_workspace::workspace::production_coordinator::ProductionIndexCoordinator;
     ///
     /// let coordinator = ProductionIndexCoordinator::new();
     /// ```
@@ -213,7 +213,7 @@ impl ProductionIndexCoordinator {
     /// # Examples
     ///
     /// ```rust
-    /// use perl_workspace_index::workspace::production_coordinator::{
+    /// use perl_workspace::workspace::production_coordinator::{
     ///     ProductionCoordinatorConfig, ProductionIndexCoordinator,
     /// };
     ///

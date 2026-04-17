@@ -9,7 +9,7 @@
 use perl_refactoring::workspace_rename::{
     Progress, WorkspaceRename, WorkspaceRenameConfig, WorkspaceRenameError,
 };
-use perl_workspace_index::workspace_index::WorkspaceIndex;
+use perl_workspace::workspace_index::WorkspaceIndex;
 use std::sync::mpsc;
 use tempfile::TempDir;
 

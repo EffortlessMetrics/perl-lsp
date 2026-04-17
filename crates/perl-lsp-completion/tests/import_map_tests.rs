@@ -10,7 +10,7 @@
 use perl_lsp_completion::CompletionProvider;
 use perl_parser_core::Parser;
 use perl_tdd_support::{must, must_some};
-use perl_workspace_index::workspace_index::WorkspaceIndex;
+use perl_workspace::workspace_index::WorkspaceIndex;
 use std::sync::Arc;
 use url::Url;
 

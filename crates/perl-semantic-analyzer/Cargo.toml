@@ -24,7 +24,7 @@ doctest = false
 
 [dependencies]
 perl-parser-core = { workspace = true }
-perl-workspace-index = { workspace = true }
+perl-workspace = { workspace = true }
 perl-symbol-types = { workspace = true }
 regex.workspace = true
 rustc-hash = "2.1.2"

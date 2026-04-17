@@ -1583,7 +1583,7 @@ dependencies = [
 name = "perl-dead-code"
 version = "0.12.4"
 dependencies = [
- "perl-workspace-index",
+ "perl-workspace",
  "serde",
  "serde_json",
 ]
@@ -1757,7 +1757,7 @@ dependencies = [
  "perl-parser-core",
  "perl-semantic-analyzer",
  "perl-tdd-support",
- "perl-workspace-index",
+ "perl-workspace",
  "serde_json",
  "url",
 ]
@@ -1800,7 +1800,7 @@ dependencies = [
  "perl-pragma",
  "perl-semantic-analyzer",
  "perl-tdd-support",
- "perl-workspace-index",
+ "perl-workspace",
  "tempfile",
 ]
 
@@ -2144,10 +2144,7 @@ dependencies = [
  "perl-subprocess-runtime",
  "perl-symbol-cursor",
  "perl-tdd-support",
- "perl-workspace-discovery",
- "perl-workspace-folder",
- "perl-workspace-ignore",
- "perl-workspace-index",
+ "perl-workspace",
  "predicates",
  "proptest",
  "regex",
@@ -2267,7 +2264,7 @@ dependencies = [
  "perl-path-security",
  "perl-tdd-support",
  "perl-text-line",
- "perl-workspace-folder",
+ "perl-workspace",
  "proptest",
  "tempfile",
  "url",
@@ -2291,7 +2288,7 @@ dependencies = [
  "perl-refactoring",
  "perl-semantic-analyzer",
  "perl-tdd-support",
- "perl-workspace-index",
+ "perl-workspace",
  "proptest",
  "regex",
  "ropey",
@@ -2415,7 +2412,7 @@ dependencies = [
  "perl-parser-core",
  "perl-qualified-name",
  "perl-tdd-support",
- "perl-workspace-index",
+ "perl-workspace",
  "regex",
  "serde",
  "serial_test",
@@ -2437,7 +2434,7 @@ dependencies = [
  "perl-parser-core",
  "perl-symbol-types",
  "perl-tdd-support",
- "perl-workspace-index",
+ "perl-workspace",
  "regex",
  "rustc-hash",
  "tracing",
@@ -2548,34 +2545,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "perl-workspace-discovery"
-version = "0.12.4"
-dependencies = [
- "perl-source-file",
- "perl-workspace-ignore",
- "proptest",
- "tempfile",
- "tracing",
- "walkdir",
-]
-
-[[package]]
-name = "perl-workspace-folder"
-version = "0.12.4"
-dependencies = [
- "perl-uri",
- "proptest",
- "serde_json",
- "tempfile",
- "url",
-]
-
-[[package]]
-name = "perl-workspace-ignore"
-version = "0.12.4"
-
-[[package]]
-name = "perl-workspace-index"
+name = "perl-workspace"
 version = "0.12.4"
 dependencies = [
  "anyhow",
@@ -2583,41 +2553,19 @@ dependencies = [
  "lsp-types",
  "parking_lot",
  "perl-parser-core",
+ "perl-percentile",
  "perl-position-tracking",
+ "perl-source-file",
  "perl-symbol-types",
  "perl-tdd-support",
  "perl-uri",
- "perl-workspace-index-monitoring",
- "perl-workspace-index-slo",
- "perl-workspace-index-state-machine",
+ "proptest",
  "serde",
+ "serde_json",
  "tempfile",
+ "tracing",
  "url",
  "walkdir",
-]
-
-[[package]]
-name = "perl-workspace-index-monitoring"
-version = "0.12.4"
-dependencies = [
- "parking_lot",
- "perl-tdd-support",
-]
-
-[[package]]
-name = "perl-workspace-index-slo"
-version = "0.12.4"
-dependencies = [
- "parking_lot",
- "perl-percentile",
- "proptest",
-]
-
-[[package]]
-name = "perl-workspace-index-state-machine"
-version = "0.12.4"
-dependencies = [
- "parking_lot",
 ]
 
 [[package]]

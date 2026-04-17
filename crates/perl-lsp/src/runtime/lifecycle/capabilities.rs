@@ -3,7 +3,7 @@
 //! Handles client capability parsing and server capabilities construction.
 
 use super::super::*;
-use perl_workspace_folder::{extract_workspace_folder_uris, root_path_to_file_uri};
+use perl_workspace::folder::{extract_workspace_folder_uris, root_path_to_file_uri};
 use serde_json::{Value, json};
 
 impl LspServer {

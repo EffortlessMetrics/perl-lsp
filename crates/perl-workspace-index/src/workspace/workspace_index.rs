@@ -34,7 +34,7 @@
 //! # Usage Examples
 //!
 //! ```rust
-//! use perl_workspace_index::workspace::workspace_index::WorkspaceIndex;
+//! use perl_workspace::workspace::workspace_index::WorkspaceIndex;
 //! use url::Url;
 //!
 //! # fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -1206,7 +1206,7 @@ impl WorkspaceIndex {
     /// # Examples
     ///
     /// ```rust,ignore
-    /// use perl_workspace_index::workspace::workspace_index::WorkspaceIndex;
+    /// use perl_workspace::workspace::workspace_index::WorkspaceIndex;
     ///
     /// let index = WorkspaceIndex::new();
     /// index.set_workspace_folders(vec![
@@ -1304,7 +1304,7 @@ impl WorkspaceIndex {
     /// # Examples
     ///
     /// ```rust,ignore
-    /// use perl_workspace_index::workspace::workspace_index::WorkspaceIndex;
+    /// use perl_workspace::workspace::workspace_index::WorkspaceIndex;
     ///
     /// let index = WorkspaceIndex::with_capacity(1000, 20);
     /// assert!(!index.has_symbols());
@@ -1335,7 +1335,7 @@ impl WorkspaceIndex {
     /// # Examples
     ///
     /// ```rust,ignore
-    /// use perl_workspace_index::workspace::workspace_index::WorkspaceIndex;
+    /// use perl_workspace::workspace::workspace_index::WorkspaceIndex;
     ///
     /// let index = WorkspaceIndex::new();
     /// index.set_workspace_folders(vec![
@@ -1634,7 +1634,7 @@ impl WorkspaceIndex {
     /// # Examples
     ///
     /// ```rust,ignore
-    /// use perl_workspace_index::workspace::workspace_index::WorkspaceIndex;
+    /// use perl_workspace::workspace::workspace_index::WorkspaceIndex;
     ///
     /// let index = WorkspaceIndex::new();
     /// // Index files from multiple folders...

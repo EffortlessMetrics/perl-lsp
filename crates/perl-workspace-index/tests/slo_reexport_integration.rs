@@ -1,4 +1,4 @@
-use perl_workspace_index::workspace::slo::{OperationResult, OperationType, SloTracker};
+use perl_workspace::workspace::slo::{OperationResult, OperationType, SloTracker};
 
 #[test]
 fn integration_given_workspace_index_reexports_are_used_when_api_is_exercised_then_counts_are_stable()

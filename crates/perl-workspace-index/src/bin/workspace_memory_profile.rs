@@ -38,8 +38,8 @@
 
 #![allow(clippy::panic, clippy::unwrap_used, clippy::expect_used)]
 
-use perl_workspace_index::workspace::memory::{MemorySnapshot, ScaleReport};
-use perl_workspace_index::workspace_index::WorkspaceIndex;
+use perl_workspace::workspace::memory::{MemorySnapshot, ScaleReport};
+use perl_workspace::workspace_index::WorkspaceIndex;
 use std::time::Instant;
 use url::Url;
 

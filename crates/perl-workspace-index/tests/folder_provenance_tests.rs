@@ -3,7 +3,7 @@
 //! These tests verify that folder attribution is correctly stored and queried
 //! for multi-root workspace support.
 
-use perl_workspace_index::workspace::workspace_index::WorkspaceIndex;
+use perl_workspace::workspace::workspace_index::WorkspaceIndex;
 use url::Url;
 
 #[test]

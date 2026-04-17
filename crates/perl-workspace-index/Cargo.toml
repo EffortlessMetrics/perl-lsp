@@ -1,15 +1,15 @@
 [package]
-name = "perl-workspace-index"
+name = "perl-workspace"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 authors.workspace = true
-description = "Workspace indexing and refactoring orchestration for Perl"
+description = "Workspace file discovery, indexing, and observability for Perl"
 readme = "README.md"
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true
-documentation = "https://docs.rs/perl-workspace-index"
+documentation = "https://docs.rs/perl-workspace"
 keywords = ["perl", "workspace", "index", "lsp", "symbol"]
 categories = ["development-tools", "text-editors"]
 include = [
@@ -23,23 +23,25 @@ include = [
 doctest = false
 
 [dependencies]
+parking_lot.workspace = true
 perl-parser-core = { workspace = true }
+perl-percentile = { workspace = true }
 perl-position-tracking = { workspace = true, features = ["lsp-compat"] }
+perl-source-file = { workspace = true }
 perl-symbol-types = { workspace = true }
 perl-uri = { workspace = true }
-perl-workspace-index-monitoring = { workspace = true }
-perl-workspace-index-slo = { workspace = true }
-perl-workspace-index-state-machine = { workspace = true }
-parking_lot.workspace = true
 serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
 url.workspace = true
+walkdir = { workspace = true }
 lsp-types = { workspace = true, optional = true }
 
 [dev-dependencies]
 anyhow.workspace = true
 criterion.workspace = true
+proptest.workspace = true
 tempfile.workspace = true
-walkdir.workspace = true
 perl-tdd-support = { workspace = true }
 
 [features]

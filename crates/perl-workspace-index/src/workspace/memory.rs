@@ -7,8 +7,8 @@
 //! # Usage
 //!
 //! ```rust,ignore
-//! use perl_workspace_index::workspace::memory::MemorySnapshot;
-//! use perl_workspace_index::workspace_index::WorkspaceIndex;
+//! use perl_workspace::workspace::memory::MemorySnapshot;
+//! use perl_workspace::workspace_index::WorkspaceIndex;
 //!
 //! let index = WorkspaceIndex::new();
 //! // ... index files ...
@@ -129,8 +129,8 @@ impl fmt::Display for MemorySnapshot {
 /// # Example
 ///
 /// ```rust,ignore
-/// use perl_workspace_index::workspace::memory::{MemorySnapshot, ScaleReport};
-/// use perl_workspace_index::workspace_index::WorkspaceIndex;
+/// use perl_workspace::workspace::memory::{MemorySnapshot, ScaleReport};
+/// use perl_workspace::workspace_index::WorkspaceIndex;
 ///
 /// let mut report = ScaleReport::new();
 /// for scale in [100, 500, 1000] {

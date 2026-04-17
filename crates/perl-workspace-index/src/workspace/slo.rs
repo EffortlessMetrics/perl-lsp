@@ -1,7 +1,6 @@
 //! Service-level objective tracking for workspace index operations.
 //!
-//! This module was extracted to the `perl-workspace-index-slo` microcrate to keep
-//! workspace orchestration code focused on indexing concerns while retaining the
-//! public path.
+//! Re-exports from the internal `slo` module to preserve existing caller paths
+//! like `perl_workspace::workspace::slo::SloTracker`.
 
-pub use perl_workspace_index_slo::*;
+pub use crate::slo::{OperationResult, OperationType, SloConfig, SloStatistics, SloTracker};

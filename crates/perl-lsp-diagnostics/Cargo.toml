@@ -20,7 +20,7 @@ doctest = false
 perl-diagnostics = { workspace = true }
 perl-parser-core = { workspace = true }
 perl-semantic-analyzer = { workspace = true }
-perl-workspace-index = { workspace = true }
+perl-workspace = { workspace = true }
 perl-pragma = { workspace = true }
 perl-heredoc-anti-patterns = { workspace = true }
 

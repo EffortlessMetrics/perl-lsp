@@ -3,7 +3,7 @@
 //! These tests focus on user-visible outcomes with a Given/When/Then structure.
 
 use perl_dead_code::{DeadCodeDetector, DeadCodeType};
-use perl_workspace_index::workspace_index::WorkspaceIndex;
+use perl_workspace::workspace_index::WorkspaceIndex;
 use std::path::Path;
 
 fn detector_with_single_file(uri: &str, source: &str) -> Result<DeadCodeDetector, String> {
