@@ -39,6 +39,7 @@ Status legend:
 | perl-dap | perl-dap | core-public | H | — | DAP server; absorbs 11 perl-dap-* |
 | perl-parser | perl-parser | core-public | 3-4 | — | parser facade; absorbs syntax + parser-adjacent |
 | perl-lexer | perl-lexer | core-public | 3 | — | tokenizer; absorbs satellites |
+| perl-token | perl-token | core-public | — | — | foundation primitive — stays published per ADR-0041 (see Amendment 4) |
 | perl-semantic-analyzer | perl-semantic-analyzer | core-public | 5 | — | absorbs incremental/refactor; symbol crates go to perl-symbol (Wave B) |
 | perl-symbol | perl-symbol (NEW) | core-public | B | — | absorbs 4 perl-symbol-*; own published crate (see Wave B) |
 | perl-workspace-index | perl-workspace | core-public | 2 | — | renamed to perl-workspace during Wave 2; absorbs 6 perl-workspace-* |
@@ -98,9 +99,12 @@ not in this ledger PR.
 
 ## Wave 3 — lexer satellites → perl-lexer
 
+`perl-token` is **NOT** absorbed. It remains a separately published foundation primitive per
+ADR-0041 ("Foundation primitives (5): perl-lexer, perl-token, perl-line-index, perl-uri, perl-pod").
+Wave 3 collapses only the 4 satellites below into `perl-lexer`. See Amendment 4.
+
 | current crate | target owner | final status | wave | risk | notes |
 |---|---|---|---:|---:|---|
-| perl-token | perl-lexer | module | 3 | Low | foundation primitive — inline into lexer |
 | perl-tokenizer | perl-lexer | module | 3 | Low | |
 | perl-keywords | perl-lexer | module | 3 | Low | |
 | perl-builtins | perl-lexer | module | 3 | Low | |
