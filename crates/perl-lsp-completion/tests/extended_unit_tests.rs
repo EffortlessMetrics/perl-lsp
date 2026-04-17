@@ -1833,10 +1833,7 @@ fn utf8_bare_prefix_surfaces_qualified_names() {
     }
     // None of the bare names (`encode`, `decode`, …) should appear here —
     // those only appear via the package-member path when the trigger is `::`.
-    assert!(
-        !has_label(&items, "encode"),
-        "bare 'encode' must not appear when prefix is 'utf8'"
-    );
+    assert!(!has_label(&items, "encode"), "bare 'encode' must not appear when prefix is 'utf8'");
 }
 
 // ─────────────────────────────────────────────────────────────────────────

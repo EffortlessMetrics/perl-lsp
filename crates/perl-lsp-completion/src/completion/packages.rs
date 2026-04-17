@@ -73,7 +73,10 @@ fn known_core_module_members(package_name: &str) -> &'static [(&'static str, &'s
                 "Decode SCALAR in place from UTF-8 bytes to Unicode; sets the UTF-8 flag on success.",
             ),
             ("is_utf8", "Return true if the UTF-8 flag is set on SCALAR."),
-            ("valid", "Return true if the internal UTF-8 state of SCALAR is consistent (valid UTF-8 with flag on, or raw bytes with flag off)."),
+            (
+                "valid",
+                "Return true if the internal UTF-8 state of SCALAR is consistent (valid UTF-8 with flag on, or raw bytes with flag off).",
+            ),
             (
                 "upgrade",
                 "Convert SCALAR in place to Perl's internal UTF-8 form; sets the UTF-8 flag.",

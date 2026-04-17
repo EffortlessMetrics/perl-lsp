@@ -845,7 +845,9 @@ fn builtin_info(name: &'static str) -> (&'static str, &'static str, Option<&'sta
         "utf8::valid" => (
             "utf8::valid ",
             "utf8::valid SCALAR",
-            Some("Return true if the internal UTF-8 state of SCALAR is consistent (valid UTF-8 with flag on, or raw bytes with flag off)."),
+            Some(
+                "Return true if the internal UTF-8 state of SCALAR is consistent (valid UTF-8 with flag on, or raw bytes with flag off).",
+            ),
         ),
         "utf8::upgrade" => (
             "utf8::upgrade ",
