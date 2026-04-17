@@ -245,8 +245,50 @@ pub fn add_use_module_completions(
         return;
     };
 
-    if !index.has_symbols() {
-        return;
+    // Tier 1: Search workspace index (priority)
+    if let Some(index) = workspace_index {
+        if !index.has_symbols() {
+            // No symbols in workspace, skip to include path scanning
+        } else {
+            // Search for package symbols matching the prefix
+            let all_symbols = if context.prefix.is_empty() {
+                index.all_symbols()
+            } else {
+                index.find_symbols(&context.prefix)
+            };
+
+            for symbol in all_symbols {
+                if symbol.kind != WsSymbolKind::Package {
+                    continue;
+                }
+
+                // Match against the module name prefix
+                if !context.prefix.is_empty() && !symbol.name.starts_with(&context.prefix) {
+                    continue;
+                }
+
+                if !seen.insert(symbol.name.clone()) {
+                    continue;
+                }
+
+                let name = &symbol.name;
+                completions.push(CompletionItem {
+                    label: name.clone(),
+                    kind: CompletionItemKind::Module,
+                    detail: Some("module".to_string()),
+                    documentation: symbol
+                        .documentation
+                        .clone()
+                        .or_else(|| Some(format!("Package `{name}`"))),
+                    insert_text: Some(name.clone()),
+                    sort_text: Some(format!("1{}_{name}", module_sort_tier(name))),
+                    filter_text: Some(name.clone()),
+                    additional_edits: vec![],
+                    text_edit_range: Some((context.prefix_start, context.position)),
+                    commit_characters: None,
+                });
+            }
+        }
     }
 
     let mut seen: HashSet<String> = HashSet::new();
