@@ -328,6 +328,30 @@ This is the same reasoning that kept `perl-workspace` as its own crate (Amendmen
 
 The 30-crate published target and all other ADR content remain unchanged.
 
+### Amendment 4 — 2026-04-17: Ledger corrected — perl-token stays published (Wave C)
+
+**Source:** Same pattern as Amendment 3 (perl-symbol, Wave B). Ledger/ADR conflict; ADR wins.
+
+The migration ledger at `.spec/microcrate-collapse/ledger.md` previously listed `perl-token` in
+the Wave 3 lexer-satellites table as a module absorbing into `perl-lexer`. This contradicted the
+Decision section above ("Foundation primitives (5): `perl-lexer`, `perl-token`, `perl-line-index`,
+`perl-uri`, `perl-pod`") and Amendment 1's confirmation of `perl-token` as one of the 5 foundation
+primitives.
+
+**The correction:** Wave C (the lexer collapse) absorbs only the 4 satellites
+(`perl-tokenizer`, `perl-keywords`, `perl-builtins`, `perl-builtins-phf`) into `perl-lexer`.
+`perl-token` remains a separately published foundation primitive per ADR-0041's original design.
+
+**Rationale for keeping perl-token as its own published crate:**
+`perl-token` is a minimal, durable foundation primitive — the token type is consumed across the
+full analysis stack (lexer, parser, semantic analyzer, LSP, DAP). Folding it into `perl-lexer`
+would force every downstream consumer of the token type to depend on the full lexer implementation
+just to get the type. Keeping `perl-token` as a small, focused, published crate preserves clean
+layering and matches the same reasoning that kept `perl-symbol` (Amendment 3) and `perl-workspace`
+(Amendment 2) as their own published crates.
+
+The 30-crate published target and all other ADR content remain unchanged.
+
 ## References
 
 - [Tracking issue #4410: Microcrate collapse to ~30 published crates](https://github.com/EffortlessMetrics/perl-lsp/issues/4410)
