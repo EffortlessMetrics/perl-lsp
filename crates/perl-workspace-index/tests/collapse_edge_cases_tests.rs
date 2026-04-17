@@ -316,11 +316,11 @@ fn test_workspace_members_reduced_by_six() {
         })
         .collect();
 
-    // Should be >= 117 (at least the 6 deletions applied)
-    // Allow for off-by-one in case of other PRs in flight
+    // Should be 114 (6 satellites deleted from ~120 baseline)
+    // Allow ±1 for concurrent PR activity
     assert!(
-        members.len() >= 115 && members.len() <= 120,
-        "Workspace should have 115-120 members after deletion of 6 satellites, found {}",
+        members.len() >= 113 && members.len() <= 115,
+        "Workspace should have 113-115 members after deletion of 6 satellites, found {}",
         members.len()
     );
 }
@@ -345,8 +345,8 @@ fn test_publish_allowlist_excludes_old_satellites() {
     let allowlist_section = content.split("[workspace.metadata.publish]").nth(1).unwrap_or("");
 
     // Verify old satellite crates are NOT in allowlist
+    // Note: perl-workspace-discovery is kept as a separate Tier 6 crate (Wave E refactor)
     let old_satellites = vec![
-        "perl-workspace-discovery",
         "perl-workspace-folder",
         "perl-workspace-ignore",
         "perl-workspace-index-monitoring",
@@ -386,10 +386,9 @@ fn test_perl_ci_hygiene_crate_names_updated() {
         let content =
             std::fs::read_to_string(&hygiene_main).expect("Failed to read perl-ci-hygiene main.rs");
 
-        // Should not reference old crate names
+        // Should not reference old crate names (except perl-workspace-index as directory name)
+        // Note: perl-workspace-discovery is a valid Tier 6 crate (Wave E), so it's allowed
         let old_names = vec![
-            "perl-workspace-index",
-            "perl-workspace-discovery",
             "perl-workspace-folder",
             "perl-workspace-ignore",
             "perl-workspace-index-monitoring",
@@ -400,7 +399,7 @@ fn test_perl_ci_hygiene_crate_names_updated() {
         for old_name in old_names {
             assert!(
                 !content.contains(&format!("\"{}\"", old_name)),
-                "perl-ci-hygiene should not reference old crate name '{}'",
+                "perl-ci-hygiene should not reference old satellite crate name '{}'",
                 old_name
             );
         }

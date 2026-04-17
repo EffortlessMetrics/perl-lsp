@@ -152,9 +152,9 @@ fn test_publish_allowlist_updated() {
     let content =
         std::fs::read_to_string(&cargo_toml_path).expect("Failed to read workspace Cargo.toml");
 
-    // Verify old crate names are not in the allowlist
+    // Verify old satellite crate names are not in the allowlist
+    // Note: perl-workspace-discovery is a valid Tier 6 crate (Wave E), so it's allowed
     let old_names = vec![
-        "perl-workspace-discovery",
         "perl-workspace-folder",
         "perl-workspace-ignore",
         "perl-workspace-index-monitoring",
