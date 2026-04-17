@@ -115,7 +115,8 @@ fn check_uses_exporter(node: &Node) -> bool {
 
     walk_node(node, &mut |n| {
         if let NodeKind::Use { module, args, .. } = &n.kind {
-            // args may contain "'import'" (with quotes) or "import" (without)
+            // Both quoted ("'import'") and bareword ("import") forms are valid in Perl's
+            // use statement. The Exporter module is only active when 'import' is requested.
             if module == "Exporter" && args.iter().any(|arg| arg == "import" || arg == "'import'") {
                 uses_exporter = true;
             }
@@ -131,12 +132,16 @@ fn is_export_variable(name: &str) -> bool {
 }
 
 /// Collect all subroutine names exported via @EXPORT and @EXPORT_OK
+///
+/// We intentionally do NOT collapse the nested ifs into a single condition because
+/// the outer check (`is_export_variable`) filters out most nodes early, making
+/// the two-level structure more readable and easier to maintain.
 #[allow(clippy::collapsible_if)]
 fn collect_exported_subs(node: &Node) -> HashSet<String> {
     let mut exported = HashSet::new();
 
     walk_node(node, &mut |n| {
-        // Check for our @EXPORT = qw(...) or our @EXPORT_OK = qw(...)
+        // Check for package variable declarations: our @EXPORT = qw(...) or our @EXPORT_OK = qw(...)
         if let NodeKind::VariableListDeclaration { variables, initializer: Some(init), .. } =
             &n.kind
         {
@@ -149,7 +154,7 @@ fn collect_exported_subs(node: &Node) -> HashSet<String> {
             }
         }
 
-        // Also check plain VariableDeclaration (my $x = ...)
+        // Also check single-variable our declarations: our $EXPORT = qw(...)
         if let NodeKind::VariableDeclaration { variable, initializer: Some(init), .. } = &n.kind {
             if let NodeKind::Variable { name, .. } = &variable.kind {
                 if is_export_variable(name) {
