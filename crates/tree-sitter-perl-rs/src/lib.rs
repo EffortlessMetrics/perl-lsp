@@ -380,7 +380,6 @@ fn ast_children(node: &AstNode) -> Vec<&AstNode> {
     node.children()
 }
 
-
 /// Convert a PascalCase kind name (e.g. `"VariableWithAttributes"`) to snake_case
 /// (e.g. `"variable_with_attributes"`). Used as a fallback in [`Node::grammar_kind`]
 /// when the S-expression does not have a simple `(kind_name ...)` prefix.

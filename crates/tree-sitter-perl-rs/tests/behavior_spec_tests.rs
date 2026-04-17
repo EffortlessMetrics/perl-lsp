@@ -139,9 +139,10 @@ fn when_requesting_grammar_kind_of_variable_with_attributes_then_snake_case_fall
         None
     }
     if let Some(gk) = find_var_attrs(root) {
-        assert_ne!(gk, "variable",
-            "grammar_kind() must not return child kind for VariableWithAttributes; got {gk}");
-        assert_eq!(gk, "variable_with_attributes",
-            "expected snake_case fallback; got {gk}");
+        assert_ne!(
+            gk, "variable",
+            "grammar_kind() must not return child kind for VariableWithAttributes; got {gk}"
+        );
+        assert_eq!(gk, "variable_with_attributes", "expected snake_case fallback; got {gk}");
     }
 }
