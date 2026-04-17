@@ -260,7 +260,6 @@ allow = [
     "perl-text-line",
     "perl-line-index",
     "perl-source-file",
-    "perl-workspace-discovery",
 
     # Tier 7 — Top-level application
     "perl-lsp-rs",
