@@ -24,8 +24,9 @@ Breaking changes will follow semver.
 
 - The vendored `c-src/` is a periodic snapshot; it may lag behind upstream by
   one or two grammar releases. File an issue to request a snapshot update.
-- The crate does not expose tree-sitter query helpers — use the
-  `tree-sitter` crate directly with the `language()` return value.
+- The crate exposes tree-sitter query helpers via the [`queries`] module —
+  see [`crate::queries`] for the public API covering injections, highlights,
+  folds, and matchup queries.
 
 ## Planned Work
 

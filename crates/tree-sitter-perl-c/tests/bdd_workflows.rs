@@ -13,7 +13,7 @@ use std::{
 
 use tree_sitter::{Query, QueryCursor, StreamingIterator};
 use tree_sitter_perl_c::{
-    create_parser, get_scanner_config, language, parse_perl_code, parse_perl_file,
+    create_parser, get_scanner_config, language, parse_perl_code, parse_perl_file, queries,
     try_create_parser,
 };
 
@@ -123,7 +123,7 @@ fn bdd_parse_perl_file_reads_from_disk() -> Result<(), Box<dyn Error>> {
 fn bdd_injections_query_matches_inline_cpp_heredoc_content() -> Result<(), Box<dyn Error>> {
     let scenario = Scenario::new("injections query matches inline cpp heredoc content");
     let source = "use Inline CPP => <<'END_CPP';\n#include <string>\nclass Greet {};\nEND_CPP\n";
-    let injections_query = include_str!("../../../tree-sitter-perl/queries/injections.scm");
+    let injections_query = queries::injections_query_str();
 
     scenario.given("an Inline::CPP heredoc snippet");
     scenario.when("the upstream injections query is executed");
@@ -165,7 +165,7 @@ fn bdd_injections_query_matches_inline_cpp_heredoc_content() -> Result<(), Box<d
 fn bdd_injections_query_matches_inline_c_heredoc_content() -> Result<(), Box<dyn Error>> {
     let scenario = Scenario::new("injections query matches inline c heredoc content");
     let source = "use Inline C => <<'END_C';\n#include <math.h>\ndouble calc(double x) { return sqrt(x); }\nEND_C\n";
-    let injections_query = include_str!("../../../tree-sitter-perl/queries/injections.scm");
+    let injections_query = queries::injections_query_str();
 
     scenario.given("an Inline::C heredoc snippet");
     scenario.when("the upstream injections query is executed");

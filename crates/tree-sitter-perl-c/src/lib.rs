@@ -42,6 +42,9 @@
 use std::path::Path;
 use tree_sitter::{Language, Parser};
 
+pub use tree_sitter::QueryError;
+pub mod queries;
+
 /// Returns the tree-sitter [`Language`] for Perl (C grammar).
 ///
 /// Use this to configure a [`tree_sitter::Parser`] or to create query objects
