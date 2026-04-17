@@ -38,6 +38,7 @@ mod extract_subroutine;
 mod extract_variable;
 mod helpers;
 mod import_management;
+mod inline_variable;
 mod loop_conversion;
 mod postfix;
 mod signature_actions;
@@ -45,16 +46,19 @@ mod signature_actions;
 use helpers::Helpers;
 
 /// Enhanced code actions provider with additional refactorings
+use std::cell::RefCell;
+
 pub struct EnhancedCodeActionsProvider {
     source: String,
     lines: Vec<String>,
+    ast_root: RefCell<Option<Node>>,
 }
 
 impl EnhancedCodeActionsProvider {
     /// Create a new enhanced code actions provider
     pub fn new(source: String) -> Self {
         let lines = source.lines().map(|s| s.to_string()).collect();
-        Self { source, lines }
+        Self { source, lines, ast_root: RefCell::new(None) }
     }
 
     /// Get additional refactoring actions
@@ -67,6 +71,9 @@ impl EnhancedCodeActionsProvider {
         // Track (stmt_start, var_name) pairs already emitted to prevent duplicate
         // extract-variable actions when both a parent and child node overlap the range.
         let mut extract_var_seen: HashSet<(usize, String)> = HashSet::new();
+
+        // Store ast_root for use in inline variable action
+        *self.ast_root.borrow_mut() = Some(ast.clone());
 
         // Find all nodes that overlap the range and collect actions
         self.collect_actions_for_range(ast, range, false, &mut actions, &mut extract_var_seen);
@@ -212,6 +219,73 @@ impl EnhancedCodeActionsProvider {
                 &self.source,
                 &helpers,
             ));
+        }
+
+        // Inline variable — only emit when the node is a VariableDeclaration
+        // that overlaps the selection. Uses extract_var_seen to avoid duplicate
+        // inline actions when multiple nodes overlap the range.
+        if let NodeKind::VariableDeclaration { .. } = &node.kind {
+            if node.location.start <= range.1 && node.location.end >= range.0 {
+                if let Some(ast_root) = self.ast_root.borrow().as_ref() {
+                    if let Some(action) =
+                        inline_variable::create_inline_variable_action(&self.source, ast_root, node)
+                    {
+                        // Use the declaration start and variable name as the dedup key
+                        let var_name = action.title.split('\'').nth(1).unwrap_or("").to_string();
+                        let key = (node.location.start, var_name);
+                        if extract_var_seen.insert(key) {
+                            actions.push(action);
+                        }
+                    }
+                }
+            }
+        }
+
+        // Inline variable — also offer for VariableListDeclaration (my ($a, $b) = ...).
+        // For list assignments, we emit one inline action per variable.
+        if let NodeKind::VariableListDeclaration { .. } = &node.kind {
+            if node.location.start <= range.1 && node.location.end >= range.0 {
+                if let Some(ast_root) = self.ast_root.borrow().as_ref() {
+                    let var_key = (node.location.start, String::new());
+                    let _ = var_key; // suppress unused warning
+                    let mut list_actions = Vec::new();
+                    inline_variable::create_list_inline_actions(
+                        &self.source,
+                        ast_root,
+                        node,
+                        &mut Default::default(),
+                        &mut list_actions,
+                    );
+                    for action in list_actions {
+                        let var_name = action.title.split('\'').nth(1).unwrap_or("").to_string();
+                        let key = (node.location.start, var_name);
+                        if extract_var_seen.insert(key) {
+                            actions.push(action);
+                        }
+                    }
+                }
+            }
+        }
+
+        // Inline variable — also offer when cursor is on a Variable USAGE (not declaration).
+        // Find the declaration that this variable refers to and offer inline.
+        if let NodeKind::Variable { name, .. } = &node.kind {
+            if let Some(ast_root) = self.ast_root.borrow().as_ref() {
+                if let Some(decl) = inline_variable::find_declaration_for_variable(ast_root, name) {
+                    if let Some(action) = inline_variable::create_inline_variable_action(
+                        &self.source,
+                        ast_root,
+                        &decl,
+                    ) {
+                        // Use the declaration start and variable name as the dedup key
+                        let var_name = action.title.split('\'').nth(1).unwrap_or("").to_string();
+                        let key = (decl.location.start, var_name);
+                        if extract_var_seen.insert(key) {
+                            actions.push(action);
+                        }
+                    }
+                }
+            }
         }
 
         // Recursively check children, flagging control-flow body blocks
