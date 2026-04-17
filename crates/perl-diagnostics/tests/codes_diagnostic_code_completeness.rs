@@ -13,77 +13,56 @@ use perl_diagnostics::codes::DiagnosticCode;
 #[test]
 fn scope_variable_shadowing_code_exists() -> Result<(), Box<dyn std::error::Error>> {
     let code = DiagnosticCode::VariableShadowing;
-    assert!(
-        code.as_str().starts_with("PL"),
-        "VariableShadowing should have a PL code, got: {}",
-        code.as_str()
-    );
+    assert_eq!(code.as_str(), "PL104", "VariableShadowing should have stable code PL104");
+    assert_eq!(DiagnosticCode::parse_code("PL104"), Some(code), "parse_code round-trip failed");
     Ok(())
 }
 
 #[test]
 fn scope_variable_redeclaration_code_exists() -> Result<(), Box<dyn std::error::Error>> {
     let code = DiagnosticCode::VariableRedeclaration;
-    assert!(
-        code.as_str().starts_with("PL"),
-        "VariableRedeclaration should have a PL code, got: {}",
-        code.as_str()
-    );
+    assert_eq!(code.as_str(), "PL105", "VariableRedeclaration should have stable code PL105");
+    assert_eq!(DiagnosticCode::parse_code("PL105"), Some(code), "parse_code round-trip failed");
     Ok(())
 }
 
 #[test]
 fn scope_duplicate_parameter_code_exists() -> Result<(), Box<dyn std::error::Error>> {
     let code = DiagnosticCode::DuplicateParameter;
-    assert!(
-        code.as_str().starts_with("PL"),
-        "DuplicateParameter should have a PL code, got: {}",
-        code.as_str()
-    );
+    assert_eq!(code.as_str(), "PL106", "DuplicateParameter should have stable code PL106");
+    assert_eq!(DiagnosticCode::parse_code("PL106"), Some(code), "parse_code round-trip failed");
     Ok(())
 }
 
 #[test]
 fn scope_parameter_shadows_global_code_exists() -> Result<(), Box<dyn std::error::Error>> {
     let code = DiagnosticCode::ParameterShadowsGlobal;
-    assert!(
-        code.as_str().starts_with("PL"),
-        "ParameterShadowsGlobal should have a PL code, got: {}",
-        code.as_str()
-    );
+    assert_eq!(code.as_str(), "PL107", "ParameterShadowsGlobal should have stable code PL107");
+    assert_eq!(DiagnosticCode::parse_code("PL107"), Some(code), "parse_code round-trip failed");
     Ok(())
 }
 
 #[test]
 fn scope_unused_parameter_code_exists() -> Result<(), Box<dyn std::error::Error>> {
     let code = DiagnosticCode::UnusedParameter;
-    assert!(
-        code.as_str().starts_with("PL"),
-        "UnusedParameter should have a PL code, got: {}",
-        code.as_str()
-    );
+    assert_eq!(code.as_str(), "PL108", "UnusedParameter should have stable code PL108");
+    assert_eq!(DiagnosticCode::parse_code("PL108"), Some(code), "parse_code round-trip failed");
     Ok(())
 }
 
 #[test]
 fn scope_unquoted_bareword_code_exists() -> Result<(), Box<dyn std::error::Error>> {
     let code = DiagnosticCode::UnquotedBareword;
-    assert!(
-        code.as_str().starts_with("PL"),
-        "UnquotedBareword should have a PL code, got: {}",
-        code.as_str()
-    );
+    assert_eq!(code.as_str(), "PL109", "UnquotedBareword should have stable code PL109");
+    assert_eq!(DiagnosticCode::parse_code("PL109"), Some(code), "parse_code round-trip failed");
     Ok(())
 }
 
 #[test]
 fn scope_uninitialized_variable_code_exists() -> Result<(), Box<dyn std::error::Error>> {
     let code = DiagnosticCode::UninitializedVariable;
-    assert!(
-        code.as_str().starts_with("PL"),
-        "UninitializedVariable should have a PL code, got: {}",
-        code.as_str()
-    );
+    assert_eq!(code.as_str(), "PL110", "UninitializedVariable should have stable code PL110");
+    assert_eq!(DiagnosticCode::parse_code("PL110"), Some(code), "parse_code round-trip failed");
     Ok(())
 }
 
@@ -94,11 +73,8 @@ fn scope_uninitialized_variable_code_exists() -> Result<(), Box<dyn std::error::
 #[test]
 fn misspelled_pragma_code_exists() -> Result<(), Box<dyn std::error::Error>> {
     let code = DiagnosticCode::MisspelledPragma;
-    assert!(
-        code.as_str().starts_with("PL"),
-        "MisspelledPragma should have a PL code, got: {}",
-        code.as_str()
-    );
+    assert_eq!(code.as_str(), "PL111", "MisspelledPragma should have stable code PL111");
+    assert_eq!(DiagnosticCode::parse_code("PL111"), Some(code), "parse_code round-trip failed");
     Ok(())
 }
 
@@ -109,22 +85,20 @@ fn misspelled_pragma_code_exists() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn assignment_in_condition_code_exists() -> Result<(), Box<dyn std::error::Error>> {
     let code = DiagnosticCode::AssignmentInCondition;
-    assert!(
-        code.as_str().starts_with("PL"),
-        "AssignmentInCondition should have a PL code, got: {}",
-        code.as_str()
-    );
+    assert_eq!(code.as_str(), "PL403", "AssignmentInCondition should have stable code PL403");
+    assert_eq!(DiagnosticCode::parse_code("PL403"), Some(code), "parse_code round-trip failed");
     Ok(())
 }
 
 #[test]
 fn numeric_comparison_with_undef_code_exists() -> Result<(), Box<dyn std::error::Error>> {
     let code = DiagnosticCode::NumericComparisonWithUndef;
-    assert!(
-        code.as_str().starts_with("PL"),
-        "NumericComparisonWithUndef should have a PL code, got: {}",
-        code.as_str()
+    assert_eq!(
+        code.as_str(),
+        "PL404",
+        "NumericComparisonWithUndef should have stable code PL404"
     );
+    assert_eq!(DiagnosticCode::parse_code("PL404"), Some(code), "parse_code round-trip failed");
     Ok(())
 }
 
@@ -153,22 +127,16 @@ fn duplicate_hash_key_code_exists() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn deprecated_defined_code_exists() -> Result<(), Box<dyn std::error::Error>> {
     let code = DiagnosticCode::DeprecatedDefined;
-    assert!(
-        code.as_str().starts_with("PL"),
-        "DeprecatedDefined should have a PL code, got: {}",
-        code.as_str()
-    );
+    assert_eq!(code.as_str(), "PL500", "DeprecatedDefined should have stable code PL500");
+    assert_eq!(DiagnosticCode::parse_code("PL500"), Some(code), "parse_code round-trip failed");
     Ok(())
 }
 
 #[test]
 fn deprecated_array_base_code_exists() -> Result<(), Box<dyn std::error::Error>> {
     let code = DiagnosticCode::DeprecatedArrayBase;
-    assert!(
-        code.as_str().starts_with("PL"),
-        "DeprecatedArrayBase should have a PL code, got: {}",
-        code.as_str()
-    );
+    assert_eq!(code.as_str(), "PL501", "DeprecatedArrayBase should have stable code PL501");
+    assert_eq!(DiagnosticCode::parse_code("PL501"), Some(code), "parse_code round-trip failed");
     Ok(())
 }
 
@@ -215,22 +183,16 @@ fn phase_scoped_warnings_pragma_code_exists() -> Result<(), Box<dyn std::error::
 #[test]
 fn security_string_eval_code_exists() -> Result<(), Box<dyn std::error::Error>> {
     let code = DiagnosticCode::SecurityStringEval;
-    assert!(
-        code.as_str().starts_with("PL"),
-        "SecurityStringEval should have a PL code, got: {}",
-        code.as_str()
-    );
+    assert_eq!(code.as_str(), "PL600", "SecurityStringEval should have stable code PL600");
+    assert_eq!(DiagnosticCode::parse_code("PL600"), Some(code), "parse_code round-trip failed");
     Ok(())
 }
 
 #[test]
 fn security_backtick_exec_code_exists() -> Result<(), Box<dyn std::error::Error>> {
     let code = DiagnosticCode::SecurityBacktickExec;
-    assert!(
-        code.as_str().starts_with("PL"),
-        "SecurityBacktickExec should have a PL code, got: {}",
-        code.as_str()
-    );
+    assert_eq!(code.as_str(), "PL601", "SecurityBacktickExec should have stable code PL601");
+    assert_eq!(DiagnosticCode::parse_code("PL601"), Some(code), "parse_code round-trip failed");
     Ok(())
 }
 
@@ -259,11 +221,8 @@ fn security_signal_handler_code_exists() -> Result<(), Box<dyn std::error::Error
 #[test]
 fn unused_import_code_exists() -> Result<(), Box<dyn std::error::Error>> {
     let code = DiagnosticCode::UnusedImport;
-    assert!(
-        code.as_str().starts_with("PL"),
-        "UnusedImport should have a PL code, got: {}",
-        code.as_str()
-    );
+    assert_eq!(code.as_str(), "PL700", "UnusedImport should have stable code PL700");
+    assert_eq!(DiagnosticCode::parse_code("PL700"), Some(code), "parse_code round-trip failed");
     Ok(())
 }
 
@@ -292,77 +251,56 @@ fn module_not_found_code_exists() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn heredoc_in_format_code_exists() -> Result<(), Box<dyn std::error::Error>> {
     let code = DiagnosticCode::HeredocInFormat;
-    assert!(
-        code.as_str().starts_with("PL"),
-        "HeredocInFormat should have a PL code, got: {}",
-        code.as_str()
-    );
+    assert_eq!(code.as_str(), "PL800", "HeredocInFormat should have stable code PL800");
+    assert_eq!(DiagnosticCode::parse_code("PL800"), Some(code), "parse_code round-trip failed");
     Ok(())
 }
 
 #[test]
 fn heredoc_in_begin_code_exists() -> Result<(), Box<dyn std::error::Error>> {
     let code = DiagnosticCode::HeredocInBegin;
-    assert!(
-        code.as_str().starts_with("PL"),
-        "HeredocInBegin should have a PL code, got: {}",
-        code.as_str()
-    );
+    assert_eq!(code.as_str(), "PL801", "HeredocInBegin should have stable code PL801");
+    assert_eq!(DiagnosticCode::parse_code("PL801"), Some(code), "parse_code round-trip failed");
     Ok(())
 }
 
 #[test]
 fn heredoc_dynamic_delimiter_code_exists() -> Result<(), Box<dyn std::error::Error>> {
     let code = DiagnosticCode::HeredocDynamicDelimiter;
-    assert!(
-        code.as_str().starts_with("PL"),
-        "HeredocDynamicDelimiter should have a PL code, got: {}",
-        code.as_str()
-    );
+    assert_eq!(code.as_str(), "PL802", "HeredocDynamicDelimiter should have stable code PL802");
+    assert_eq!(DiagnosticCode::parse_code("PL802"), Some(code), "parse_code round-trip failed");
     Ok(())
 }
 
 #[test]
 fn heredoc_in_source_filter_code_exists() -> Result<(), Box<dyn std::error::Error>> {
     let code = DiagnosticCode::HeredocInSourceFilter;
-    assert!(
-        code.as_str().starts_with("PL"),
-        "HeredocInSourceFilter should have a PL code, got: {}",
-        code.as_str()
-    );
+    assert_eq!(code.as_str(), "PL803", "HeredocInSourceFilter should have stable code PL803");
+    assert_eq!(DiagnosticCode::parse_code("PL803"), Some(code), "parse_code round-trip failed");
     Ok(())
 }
 
 #[test]
 fn heredoc_in_regex_code_code_exists() -> Result<(), Box<dyn std::error::Error>> {
     let code = DiagnosticCode::HeredocInRegexCode;
-    assert!(
-        code.as_str().starts_with("PL"),
-        "HeredocInRegexCode should have a PL code, got: {}",
-        code.as_str()
-    );
+    assert_eq!(code.as_str(), "PL804", "HeredocInRegexCode should have stable code PL804");
+    assert_eq!(DiagnosticCode::parse_code("PL804"), Some(code), "parse_code round-trip failed");
     Ok(())
 }
 
 #[test]
 fn heredoc_in_eval_code_exists() -> Result<(), Box<dyn std::error::Error>> {
     let code = DiagnosticCode::HeredocInEval;
-    assert!(
-        code.as_str().starts_with("PL"),
-        "HeredocInEval should have a PL code, got: {}",
-        code.as_str()
-    );
+    assert_eq!(code.as_str(), "PL805", "HeredocInEval should have stable code PL805");
+    assert_eq!(DiagnosticCode::parse_code("PL805"), Some(code), "parse_code round-trip failed");
     Ok(())
 }
 
 #[test]
 fn heredoc_tied_handle_code_exists() -> Result<(), Box<dyn std::error::Error>> {
     let code = DiagnosticCode::HeredocTiedHandle;
-    assert!(
-        code.as_str().starts_with("PL"),
-        "HeredocTiedHandle should have a PL code, got: {}",
-        code.as_str()
-    );
+    assert_eq!(code.as_str(), "PL806", "HeredocTiedHandle should have stable code PL806");
+    assert_eq!(DiagnosticCode::parse_code("PL806"), Some(code), "parse_code round-trip failed");
     Ok(())
 }
 

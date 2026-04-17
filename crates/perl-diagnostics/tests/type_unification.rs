@@ -178,48 +178,47 @@ fn tag_to_lsp_value_works_from_both_paths() {
     assert_eq!(codes_lsp, 1);
 }
 
-// Test 15: Severity — Display trait available
+// Test 15: Severity — Display trait produces correct LSP-facing strings
 #[test]
 fn severity_display_works() {
-    use std::fmt::Display;
-
-    let error = CodesSeverity::Error;
-    let display_str = format!("{}", error);
-
-    assert!(!display_str.is_empty());
+    // Verify exact display strings match what the LSP diagnostic surface expects.
+    // These strings are used in log messages, tooltips, and diagnostic descriptions.
+    assert_eq!(format!("{}", CodesSeverity::Error), "error");
+    assert_eq!(format!("{}", CodesSeverity::Warning), "warning");
+    assert_eq!(format!("{}", CodesSeverity::Information), "info");
+    assert_eq!(format!("{}", CodesSeverity::Hint), "hint");
+    // Verify via types path — must produce same string (unified type)
+    assert_eq!(format!("{}", TypesSeverity::Error), "error");
 }
 
-// Test 16: Tag — Display trait available
+// Test 16: Tag — Display trait produces correct strings
 #[test]
 fn tag_display_works() {
-    use std::fmt::Display;
-
-    let tag = CodesTag::Unnecessary;
-    let display_str = format!("{}", tag);
-
-    assert!(!display_str.is_empty());
+    // Verify exact display strings match what the LSP tag surface expects.
+    assert_eq!(format!("{}", CodesTag::Unnecessary), "unnecessary");
+    assert_eq!(format!("{}", CodesTag::Deprecated), "deprecated");
+    // Verify via types path — must produce same string (unified type)
+    assert_eq!(format!("{}", TypesTag::Unnecessary), "unnecessary");
 }
 
-// Test 17: Severity — Debug trait available
+// Test 17: Severity — Debug trait produces variant name
 #[test]
 fn severity_debug_works() {
-    use std::fmt::Debug;
-
-    let error = CodesSeverity::Error;
-    let debug_str = format!("{:?}", error);
-
-    assert!(!debug_str.is_empty());
+    // Debug output includes the variant name — useful for error messages.
+    let debug_str = format!("{:?}", CodesSeverity::Error);
+    assert_eq!(debug_str, "Error", "Debug output should be variant name");
+    // Verify via types path — same type, same debug output
+    let types_debug = format!("{:?}", TypesSeverity::Warning);
+    assert_eq!(types_debug, "Warning");
 }
 
-// Test 18: Tag — Debug trait available
+// Test 18: Tag — Debug trait produces variant name
 #[test]
 fn tag_debug_works() {
-    use std::fmt::Debug;
-
-    let tag = CodesTag::Unnecessary;
-    let debug_str = format!("{:?}", tag);
-
-    assert!(!debug_str.is_empty());
+    let debug_str = format!("{:?}", CodesTag::Unnecessary);
+    assert_eq!(debug_str, "Unnecessary", "Debug output should be variant name");
+    let types_debug = format!("{:?}", TypesTag::Deprecated);
+    assert_eq!(types_debug, "Deprecated");
 }
 
 // Test 19: Severity — Hash trait available (Copy types are always Hashable)
