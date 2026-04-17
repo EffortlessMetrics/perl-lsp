@@ -59,6 +59,8 @@ budgets:
 flaky_tests: []
   # Example entry:
   # - name: "lsp::test_completion_timeout"
+  #   failure_count: 3          # Running count of observed failures
+  #   last_failed_at: null      # ISO8601 of most recent failure, null if never failed
   #   added: "2026-01-24"
   #   issue: "#198"
   #   tier: "quarantine"
