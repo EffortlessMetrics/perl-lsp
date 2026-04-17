@@ -111,3 +111,79 @@ fn when_edit_is_applied_then_tree_source_unchanged() {
     // Source should remain unchanged - the edit is just recorded
     assert_eq!(tree.source(), original_source);
 }
+
+#[test]
+fn when_parse_with_old_tree_given_empty_new_source_then_tree_is_returned() {
+    // Deleting the entire file content is a valid LSP edit: new source is empty string.
+    let mut parser = Parser::new();
+    let old_tree = must_some(parser.parse("my $x = 42;"));
+    let new_tree = parser.parse_with_old_tree("", &old_tree);
+    assert!(new_tree.is_some(), "parse_with_old_tree must handle empty new source");
+    let new_tree = must_some(new_tree);
+    assert_eq!(new_tree.source(), "", "tree source must be the empty string");
+    // The root is still a Program node (empty program).
+    assert_eq!(new_tree.root_node().kind(), "Program");
+}
+
+#[test]
+fn when_deletion_edit_is_recorded_then_tree_accepts_it() {
+    // Deletion: remove "42" (bytes 8..10) leaving byte 8..8 (net -2 shift).
+    let mut tree = parse("my $x = 42;");
+    let edit = Edit::new(
+        8,
+        10,
+        8,
+        Position::new(8, 0, 8),
+        Position::new(10, 0, 10),
+        Position::new(8, 0, 8),
+    );
+    tree.edit(&edit); // must not panic for a shrinking (deletion) edit
+}
+
+#[test]
+fn when_insertion_edit_at_point_is_recorded_then_tree_accepts_it() {
+    // Pure insertion: insert "# comment\n" before byte 0 (start_byte == old_end_byte).
+    let mut tree = parse("my $x = 1;");
+    let inserted = "# comment\n";
+    let edit = Edit::new(
+        0,
+        0,
+        inserted.len(),
+        Position::new(0, 0, 0),
+        Position::new(0, 0, 0),
+        Position::new(inserted.len(), 1, 0),
+    );
+    tree.edit(&edit); // zero-width old range is a valid insertion
+}
+
+#[test]
+fn when_reparse_after_edit_then_new_tree_has_correct_ast() {
+    // Full end-to-end: record an edit, re-parse, verify the AST reflects new source —
+    // not just source() but the actual root kind and child structure.
+    let old_source = "my $x = 1;";
+    let new_source = "sub foo { my $x = 1; }";
+
+    let mut parser = Parser::new();
+    let mut old_tree = must_some(parser.parse(old_source));
+
+    // Record an edit that replaces the whole file.
+    let edit = Edit::new(
+        0,
+        old_source.len(),
+        new_source.len(),
+        Position::new(0, 0, 0),
+        Position::new(old_source.len(), 0, old_source.len() as u32),
+        Position::new(new_source.len(), 0, new_source.len() as u32),
+    );
+    old_tree.edit(&edit);
+
+    let new_tree = must_some(parser.parse_with_old_tree(new_source, &old_tree));
+    assert_eq!(new_tree.source(), new_source);
+    // Root must still be a Program node.
+    assert_eq!(new_tree.root_node().kind(), "Program");
+    // The new program has children (the sub declaration).
+    assert!(
+        new_tree.root_node().child_count() >= 1,
+        "new tree must have at least one child for 'sub foo'"
+    );
+}
