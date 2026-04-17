@@ -160,6 +160,29 @@ mod tests {
         );
     }
 
+    /// Synthetic metadata: `perl-diagnostics` has a build-dependency on a
+    /// `perl-lsp-*` crate. Build-deps (used by build scripts) may cross layers
+    /// freely, so the check must pass.
+    #[test]
+    fn kind_filter_skips_build_deps() {
+        let metadata = json!({
+            "packages": [
+                {
+                    "name": "perl-diagnostics",
+                    "dependencies": [
+                        { "name": "perl-lsp-core", "kind": "build" }
+                    ]
+                }
+            ]
+        });
+
+        let result = run_with_metadata(Some(metadata));
+        assert!(
+            result.is_ok(),
+            "build-deps crossing layer boundaries should be allowed; got: {result:?}"
+        );
+    }
+
     /// Synthetic metadata: `perl-diagnostics` has a **normal** dependency on
     /// a `perl-lsp-*` crate. The check must fail.
     #[test]
