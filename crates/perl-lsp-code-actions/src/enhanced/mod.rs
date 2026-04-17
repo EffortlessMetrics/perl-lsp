@@ -38,6 +38,7 @@ mod extract_subroutine;
 mod extract_variable;
 mod helpers;
 mod import_management;
+mod inline_variable;
 mod loop_conversion;
 mod postfix;
 mod signature_actions;
@@ -48,18 +49,19 @@ use helpers::Helpers;
 pub struct EnhancedCodeActionsProvider {
     source: String,
     lines: Vec<String>,
+    ast_root: Option<Node>,
 }
 
 impl EnhancedCodeActionsProvider {
     /// Create a new enhanced code actions provider
     pub fn new(source: String) -> Self {
         let lines = source.lines().map(|s| s.to_string()).collect();
-        Self { source, lines }
+        Self { source, lines, ast_root: None }
     }
 
     /// Get additional refactoring actions
     pub fn get_enhanced_refactoring_actions(
-        &self,
+        &mut self,
         ast: &Node,
         range: (usize, usize),
     ) -> Vec<CodeAction> {
@@ -67,6 +69,9 @@ impl EnhancedCodeActionsProvider {
         // Track (stmt_start, var_name) pairs already emitted to prevent duplicate
         // extract-variable actions when both a parent and child node overlap the range.
         let mut extract_var_seen: HashSet<(usize, String)> = HashSet::new();
+
+        // Store ast_root for use in inline variable action
+        self.ast_root = Some(ast.clone());
 
         // Find all nodes that overlap the range and collect actions
         self.collect_actions_for_range(ast, range, false, &mut actions, &mut extract_var_seen);
@@ -154,6 +159,7 @@ impl EnhancedCodeActionsProvider {
     /// which is critical for responsiveness on large files (>5000 lines).
     fn collect_actions_for_range(
         &self,
+        ast_root: &Node,
         node: &Node,
         range: (usize, usize),
         is_control_body: bool,
@@ -212,6 +218,26 @@ impl EnhancedCodeActionsProvider {
                 &self.source,
                 &helpers,
             ));
+        }
+
+        // Inline variable — only emit when the node is a VariableDeclaration
+        // that overlaps the selection. Uses extract_var_seen to avoid duplicate
+        // inline actions when multiple nodes overlap the range.
+        if let NodeKind::VariableDeclaration { .. } = &node.kind {
+            if node.location.start <= range.1 && node.location.end >= range.0 {
+                if let Some(action) = inline_variable::create_inline_variable_action(
+                    &self.source,
+                    ast,
+                    node,
+                ) {
+                    // Use the declaration start and variable name as the dedup key
+                    let var_name = action.title.split('\'').nth(1).unwrap_or("").to_string();
+                    let key = (node.location.start, var_name);
+                    if extract_var_seen.insert(key) {
+                        actions.push(action);
+                    }
+                }
+            }
         }
 
         // Recursively check children, flagging control-flow body blocks
