@@ -28,7 +28,7 @@ fn pull_diagnostics_unused_variable_emits_pl102() -> Result<(), Box<dyn std::err
     // $used is referenced; $unused is not — should produce PL102 for $unused only.
     let content = "use strict;\nuse warnings;\nsub foo {\n    my $used = 123;\n    my $unused = 456;\n    return $used;\n}\n";
 
-    let items = items_from_report(provider.get_document_diagnostics(&uri, content, None))?;
+    let items = items_from_report(provider.get_document_diagnostics(&uri, content, None, None))?;
 
     let pl102_diags: Vec<_> = items.iter().filter(|d| has_code(d, "PL102")).collect();
     if pl102_diags.is_empty() {
@@ -68,7 +68,7 @@ fn pull_diagnostics_unused_variable_severity_is_warning() -> Result<(), Box<dyn 
     let uri = "file:///test_unused_sev.pl".parse()?;
     let content = "sub bar {\n    my $never_used = 1;\n}\n";
 
-    let items = items_from_report(provider.get_document_diagnostics(&uri, content, None))?;
+    let items = items_from_report(provider.get_document_diagnostics(&uri, content, None, None))?;
 
     let pl102 = items
         .iter()
@@ -90,7 +90,7 @@ fn pull_diagnostics_interpolated_variable_counts_as_used() -> Result<(), Box<dyn
     let uri = "file:///test_interpolated.pl".parse()?;
     let content = "use strict;\nuse warnings;\nmy $msg = 'hello';\nprint \"$msg\\n\";\n";
 
-    let items = items_from_report(provider.get_document_diagnostics(&uri, content, None))?;
+    let items = items_from_report(provider.get_document_diagnostics(&uri, content, None, None))?;
 
     let msg_unused = items.iter().any(|d| has_code(d, "PL102") && d.message.contains("$msg"));
     if msg_unused {
@@ -113,7 +113,7 @@ fn pull_diagnostics_script_uri_suppresses_missing_package_warning()
         .parse()?;
     let content = "use strict;\nuse warnings;\nprint \"ok\\n\";\n";
 
-    let items = items_from_report(provider.get_document_diagnostics(&uri, content, None))?;
+    let items = items_from_report(provider.get_document_diagnostics(&uri, content, None, None))?;
 
     let has_pl200 = items.iter().any(|d| has_code(d, "PL200"));
     if has_pl200 {
@@ -133,7 +133,7 @@ fn pull_diagnostics_shebang_suppresses_missing_package_warning()
     let uri = "file:///smoke_script.txt".parse()?;
     let content = "#!/usr/bin/env perl\nuse strict;\nuse warnings;\nprint \"ok\\n\";\n";
 
-    let items = items_from_report(provider.get_document_diagnostics(&uri, content, None))?;
+    let items = items_from_report(provider.get_document_diagnostics(&uri, content, None, None))?;
 
     let has_pl200 = items.iter().any(|d| has_code(d, "PL200"));
     if has_pl200 {
@@ -154,7 +154,7 @@ fn pull_diagnostics_underscore_prefix_suppresses_unused_warning()
     // _intentionally_unused should NOT produce PL102 (underscore prefix = intentionally unused)
     let content = "sub baz {\n    my $_intentionally_unused = 1;\n    return 42;\n}\n";
 
-    let items = items_from_report(provider.get_document_diagnostics(&uri, content, None))?;
+    let items = items_from_report(provider.get_document_diagnostics(&uri, content, None, None))?;
 
     let pl102_for_underscore =
         items.iter().find(|d| has_code(d, "PL102") && d.message.contains("_intentionally_unused"));
@@ -175,7 +175,7 @@ fn pull_diagnostics_full_then_unchanged() -> Result<(), Box<dyn std::error::Erro
     let uri = "file:///test.pl".parse()?;
     let content = "my $x = ;";
 
-    let first = provider.get_document_diagnostics(&uri, content, None);
+    let first = provider.get_document_diagnostics(&uri, content, None, None);
     let result_id = match &first {
         DocumentDiagnosticReport::Full(full) => {
             let report = &full.full_document_diagnostic_report;
@@ -191,7 +191,7 @@ fn pull_diagnostics_full_then_unchanged() -> Result<(), Box<dyn std::error::Erro
         }
     };
 
-    let second = provider.get_document_diagnostics(&uri, content, Some(result_id));
+    let second = provider.get_document_diagnostics(&uri, content, Some(result_id), None);
     assert!(
         matches!(second, DocumentDiagnosticReport::Unchanged(_)),
         "expected unchanged diagnostics report on identical content"
@@ -216,7 +216,7 @@ fn parse_error_diagnostics_for(
 ) -> Result<Vec<lsp_types::Diagnostic>, Box<dyn std::error::Error>> {
     let provider = PullDiagnosticsProvider::new();
     let uri: Uri = "file:///hint_test.pl".parse()?;
-    let all = items_from_report(provider.get_document_diagnostics(&uri, content, None))?;
+    let all = items_from_report(provider.get_document_diagnostics(&uri, content, None, None))?;
     Ok(all
         .into_iter()
         .filter(|d| {
@@ -303,5 +303,90 @@ fn parse_error_fallback_missing_comma_includes_hint() -> Result<(), Box<dyn std:
         "Missing comma parse error should include a hint, got: {:?}",
         first.message
     );
+    Ok(())
+}
+// =========================================================================
+// PL701 @INC path inclusion tests (#4259 follow-up)
+//
+// Verifies that PullDiagnosticsProvider::get_document_diagnostics accepts
+// an optional include_paths parameter and that PL701 diagnostics include
+// the searched @INC paths in their message when provided.
+// =========================================================================
+
+#[test]
+fn pl701_pull_diagnostics_includes_inc_paths() -> Result<(), Box<dyn std::error::Error>> {
+    let provider = PullDiagnosticsProvider::new();
+    let uri = "file:///test_missing_module.pl".parse()?;
+    // Use a non-core module that will definitely not be found
+    let content = "use Missing::Module::That::Does::Not::Exist;\n";
+
+    // Provide specific include paths that should appear in the PL701 message
+    let include_paths = Some(vec!["/test/path1".to_string(), "/test/path2".to_string()]);
+
+    let items =
+        items_from_report(provider.get_document_diagnostics(&uri, content, None, include_paths))?;
+
+    // Find the PL701 diagnostic
+    let pl701 = items
+        .iter()
+        .find(|d| has_code(d, "PL701"))
+        .ok_or("Expected at least one PL701 (missing module) diagnostic")?;
+
+    // Verify the message includes the searched paths
+    let message = &pl701.message;
+    if !message.contains("/test/path1") {
+        return Err(format!(
+            "PL701 message should include '/test/path1' from include_paths, got: {}",
+            message
+        )
+        .into());
+    }
+    if !message.contains("/test/path2") {
+        return Err(format!(
+            "PL701 message should include '/test/path2' from include_paths, got: {}",
+            message
+        )
+        .into());
+    }
+    // Should NOT have the fallback message about "workspace or configured include paths"
+    if message.contains("workspace or configured include paths") {
+        return Err(format!(
+            "PL701 message should show searched @INC paths, not fallback message. Got: {}",
+            message
+        )
+        .into());
+    }
+
+    Ok(())
+}
+
+#[test]
+fn pl701_pull_diagnostics_empty_inc_paths_shows_fallback_message()
+-> Result<(), Box<dyn std::error::Error>> {
+    let provider = PullDiagnosticsProvider::new();
+    let uri = "file:///test_missing_module.pl".parse()?;
+    let content = "use Missing::Module::That::Does::Not::Exist;\n";
+
+    // Pass None for include_paths - should use fallback message
+    let items = items_from_report(provider.get_document_diagnostics(
+        &uri, content, None, None, // No include paths provided
+    ))?;
+
+    // Find the PL701 diagnostic
+    let pl701 = items
+        .iter()
+        .find(|d| has_code(d, "PL701"))
+        .ok_or("Expected at least one PL701 (missing module) diagnostic")?;
+
+    // With empty include_paths, should show the fallback message
+    let message = &pl701.message;
+    if !message.contains("workspace or configured include paths") {
+        return Err(format!(
+            "PL701 message with no include_paths should show fallback message, got: {}",
+            message
+        )
+        .into());
+    }
+
     Ok(())
 }
