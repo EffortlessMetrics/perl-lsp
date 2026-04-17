@@ -3629,3 +3629,181 @@ try {
     );
     Ok(())
 }
+
+// ============================================================================
+// strict 'subs' — Package-Qualified Function Call Validation
+// https://github.com/perl-lsp/perl-lsp/issues/23431b76
+// ============================================================================
+
+/// AC1: Foo::bar() MUST be flagged as bareword under strict_subs when bar is
+/// not a known builtin. This is the primary regression test for the qualified
+/// bareword validation gap.
+///
+/// Currently FAILS because FunctionCall handler does not validate qualified names.
+#[test]
+fn strict_subs_flags_qualified_bareword_function_call() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict 'subs';
+Foo::bar();
+"#;
+    let issues = scope_issues_strict(code);
+
+    assert!(
+        issues.iter().any(|i| {
+            matches!(i.kind, IssueKind::UnquotedBareword) && i.variable_name == "Foo::bar"
+        }),
+        "strict 'subs' should flag qualified bareword function calls like Foo::bar(); \
+         variable_name='Foo::bar' expected in UnquotedBareword issue. \
+         Actual issues: {:?}",
+        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+/// AC2: Foo::print() MUST NOT be flagged under strict_subs, because `print`
+/// is a known builtin. This is consistent with `print()` not being flagged.
+///
+/// Currently PASSES (no issue is raised because print is a builtin).
+#[test]
+fn strict_subs_allows_qualified_builtin_function_call() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict 'subs';
+Foo::print();
+"#;
+    let issues = scope_issues_strict(code);
+
+    assert!(
+        !issues.iter().any(|i| {
+            matches!(i.kind, IssueKind::UnquotedBareword) && i.variable_name.contains("print")
+        }),
+        "strict 'subs' should not flag qualified calls to builtins like Foo::print(); \
+         Actual issues: {:?}",
+        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+/// AC3: Existing bareword behavior for bare Identifiers MUST be unchanged —
+/// `print FOO` (where FOO is an Identifier, not a FunctionCall) MUST still be
+/// flagged under strict_subs. The existing test `strict_subs_only_checks_barewords`
+/// covers this case and PASSES.
+///
+/// AC3b: Qualified calls to builtins MUST NOT be flagged — Bar::print() MUST
+/// NOT be flagged because `print` is a known builtin.
+///
+/// Currently PASSES (no issue is raised for qualified names at all).
+#[test]
+fn strict_subs_qualified_builtin_unqualified_builtin_consistency()
+-> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict 'subs';
+Bar::print();
+"#;
+    let issues = scope_issues_strict(code);
+
+    assert!(
+        !issues.iter().any(|i| {
+            matches!(i.kind, IssueKind::UnquotedBareword) && i.variable_name.contains("print")
+        }),
+        "strict 'subs' should not flag Bar::print() because print is a builtin. \
+         Actual issues: {:?}",
+        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+/// AC4: Hash key context MUST be excluded — Foo::bar in hash key context MUST
+/// NOT be flagged even if bar is not a builtin.
+///
+/// Currently PASSES (qualified names are not flagged at all).
+#[test]
+fn strict_subs_excludes_qualified_bareword_in_hash_key() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict 'subs';
+my %h = (Foo::bar => 1);
+"#;
+    let issues = scope_issues_strict(code);
+
+    assert!(
+        !issues.iter().any(|i| {
+            matches!(i.kind, IssueKind::UnquotedBareword) && i.variable_name.contains("Foo::bar")
+        }),
+        "strict 'subs' should not flag barewords in hash key context like Foo::bar => 1; \
+         Actual issues: {:?}",
+        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+/// AC5: Method calls MUST NOT be affected — $obj->method() is a different
+/// node type and MUST NOT be flagged under strict_subs.
+///
+/// Currently PASSES (method calls are handled separately).
+#[test]
+fn strict_subs_method_calls_not_affected() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict 'subs';
+my $obj = Some::Class->new();
+$obj->method();
+"#;
+    let issues = scope_issues_strict(code);
+
+    assert!(
+        !issues.iter().any(|i| {
+            matches!(i.kind, IssueKind::UnquotedBareword) && i.variable_name.contains("method")
+        }),
+        "strict 'subs' should not flag method calls like $obj->method(); \
+         Actual issues: {:?}",
+        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+/// AC6: Package-qualified variables MUST NOT be affected — $Foo::bar is a
+/// variable (different node type from function calls) and MUST NOT be flagged
+/// under strict_subs.
+///
+/// Currently PASSES (variables are handled separately from function calls).
+#[test]
+fn strict_subs_package_qualified_variables_not_affected() -> Result<(), Box<dyn std::error::Error>>
+{
+    let code = r#"
+use strict 'subs';
+print $Foo::bar;
+"#;
+    let issues = scope_issues_strict(code);
+
+    assert!(
+        !issues.iter().any(|i| {
+            matches!(i.kind, IssueKind::UnquotedBareword) && i.variable_name.contains("Foo::bar")
+        }),
+        "strict 'subs' should not flag package-qualified variables like $Foo::bar; \
+         Actual issues: {:?}",
+        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+/// Verify the diagnostic range for a qualified bareword points to the full
+/// qualified name (Foo::bar), not just the identifier part (bar).
+#[test]
+fn strict_subs_qualified_bareword_range_spans_full_name() -> Result<(), Box<dyn std::error::Error>>
+{
+    let code = r#"
+use strict 'subs';
+Foo::bar();
+"#;
+    let issues = scope_issues_strict(code);
+
+    let bareword_issue = issues
+        .iter()
+        .find(|i| matches!(i.kind, IssueKind::UnquotedBareword) && i.variable_name == "Foo::bar")
+        .ok_or("expected UnquotedBareword issue for Foo::bar")?;
+
+    assert_eq!(
+        &code[bareword_issue.range.0..bareword_issue.range.1],
+        "Foo::bar",
+        "the diagnostic range must span exactly 'Foo::bar', not just 'bar'"
+    );
+    Ok(())
+}
