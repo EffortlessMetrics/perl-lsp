@@ -20,6 +20,7 @@ use crate::lints::goto_label::check_goto_labels;
 use crate::lints::package_subroutine::{
     check_duplicate_package, check_duplicate_subroutine, check_missing_package_declaration,
 };
+use crate::lints::pod_coverage::check_pod_coverage;
 use crate::lints::printf_format::check_printf_format;
 use crate::lints::role_conflicts::check_role_conflicts;
 use crate::lints::security::check_security;
@@ -150,6 +151,9 @@ impl DiagnosticsProvider {
         check_missing_package_declaration(ast, source, source_path, &mut diagnostics);
         check_duplicate_package(ast, &mut diagnostics);
         check_duplicate_subroutine(ast, &mut diagnostics);
+
+        // POD coverage lint for exported subroutines (PL304)
+        check_pod_coverage(ast, source, &mut diagnostics);
 
         // Moo/Moose role conflict diagnostics (same-file only)
         check_role_conflicts(ast, &symbol_table, &mut diagnostics);

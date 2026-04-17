@@ -146,6 +146,8 @@ pub mod goto_label;
 pub mod missing_module;
 /// Package and subroutine diagnostics (PL200, PL201, PL300, PL303)
 pub mod package_subroutine;
+/// POD coverage lint for exported subroutines (PL304)
+pub mod pod_coverage;
 /// printf/sprintf format specifier arity validation (PL405)
 pub mod printf_format;
 /// Same-file Moo/Moose role conflict detection (PL303)

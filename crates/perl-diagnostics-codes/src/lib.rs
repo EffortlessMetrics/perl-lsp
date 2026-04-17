@@ -143,6 +143,11 @@ pub enum DiagnosticCode {
     /// spaces in old-style prototypes.  Any other character triggers Perl's
     /// "Illegal character in prototype" warning.
     InvalidPrototype,
+    /// Exported subroutine without POD documentation
+    ///
+    /// Subroutines listed in `@EXPORT` or `@EXPORT_OK` should have corresponding
+    /// `=head2 subroutine_name` POD documentation so that their public API is documented.
+    ExportedSubroutineWithoutPodDocs,
 
     // Best practices (PL400-PL499)
     /// Bareword filehandle usage
@@ -257,6 +262,7 @@ impl DiagnosticCode {
             DiagnosticCode::MissingReturn => "PL301",
             DiagnosticCode::InvalidPrototype => "PL302",
             DiagnosticCode::RoleConflict => "PL303",
+            DiagnosticCode::ExportedSubroutineWithoutPodDocs => "PL304",
             DiagnosticCode::BarewordFilehandle => "PL400",
             DiagnosticCode::TwoArgOpen => "PL401",
             DiagnosticCode::ImplicitReturn => "PL402",
@@ -327,6 +333,7 @@ impl DiagnosticCode {
             "PL301" => "https://docs.perl-lsp.org/errors/PL301",
             "PL302" => "https://docs.perl-lsp.org/errors/PL302",
             "PL303" => "https://docs.perl-lsp.org/errors/PL303",
+            "PL304" => "https://docs.perl-lsp.org/errors/PL304",
             "PL400" => "https://docs.perl-lsp.org/errors/PL400",
             "PL401" => "https://docs.perl-lsp.org/errors/PL401",
             "PL402" => "https://docs.perl-lsp.org/errors/PL402",
@@ -389,6 +396,7 @@ impl DiagnosticCode {
             | DiagnosticCode::MissingReturn
             | DiagnosticCode::InvalidPrototype
             | DiagnosticCode::RoleConflict
+            | DiagnosticCode::ExportedSubroutineWithoutPodDocs
             | DiagnosticCode::BarewordFilehandle
             | DiagnosticCode::TwoArgOpen
             | DiagnosticCode::ImplicitReturn
@@ -507,6 +515,11 @@ impl DiagnosticCode {
                 "The prototype contains a character that Perl does not recognise. \
                 Valid prototype characters are: $, @, %, &, *, \\, ;, +, _ and spaces. \
                 See perlsub for the full prototype syntax.",
+            ),
+            DiagnosticCode::ExportedSubroutineWithoutPodDocs => Some(
+                "This subroutine is exported as part of the module's public API but has no \
+                corresponding `=head2` POD documentation. Add a `=head2 subroutine_name` section \
+                to document the subroutine's purpose and interface.",
             ),
             DiagnosticCode::BarewordFilehandle => Some(
                 "Bareword filehandles (e.g., `open FH, ...`) are global and unsafe. \
@@ -736,6 +749,7 @@ impl DiagnosticCode {
             "PL301" => Some(DiagnosticCode::MissingReturn),
             "PL302" => Some(DiagnosticCode::InvalidPrototype),
             "PL303" => Some(DiagnosticCode::RoleConflict),
+            "PL304" => Some(DiagnosticCode::ExportedSubroutineWithoutPodDocs),
             "PL400" => Some(DiagnosticCode::BarewordFilehandle),
             "PL401" => Some(DiagnosticCode::TwoArgOpen),
             "PL402" => Some(DiagnosticCode::ImplicitReturn),
@@ -839,6 +853,7 @@ impl DiagnosticCode {
             | DiagnosticCode::MissingReturn
             | DiagnosticCode::InvalidPrototype => DiagnosticCategory::Subroutine,
             DiagnosticCode::RoleConflict => DiagnosticCategory::Subroutine,
+            DiagnosticCode::ExportedSubroutineWithoutPodDocs => DiagnosticCategory::Subroutine,
 
             DiagnosticCode::BarewordFilehandle
             | DiagnosticCode::TwoArgOpen
