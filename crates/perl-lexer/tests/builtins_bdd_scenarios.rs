@@ -81,6 +81,114 @@ fn scenario_file_test_operator_metadata_is_available() -> Result<(), String> {
 }
 
 #[test]
+fn scenario_utf8_encode_decode_signatures_are_available() -> Result<(), String> {
+    // Given a user writes utf8::encode($str) or utf8::decode($str) — core Perl
+    // functions for explicit UTF-8 encoding control (perldoc utf8).
+    let signatures = create_builtin_signatures();
+
+    // When the builtin metadata for each function is resolved.
+    let encode = must_some(signatures.get("utf8::encode"));
+    let decode = must_some(signatures.get("utf8::decode"));
+
+    // Then both functions are recognized as builtins with documentation
+    // covering their effect on the scalar's encoding state.
+    if !is_builtin("utf8::encode") {
+        return Err("utf8::encode should be recognized as builtin".into());
+    }
+    if !is_builtin("utf8::decode") {
+        return Err("utf8::decode should be recognized as builtin".into());
+    }
+    if encode.signatures != vec!["utf8::encode SCALAR"] {
+        return Err(format!("utf8::encode signature mismatch: {:?}", encode.signatures));
+    }
+    if decode.signatures != vec!["utf8::decode SCALAR"] {
+        return Err(format!("utf8::decode signature mismatch: {:?}", decode.signatures));
+    }
+    if !encode.documentation.contains("UTF-8") {
+        return Err("utf8::encode documentation should mention UTF-8".into());
+    }
+    if !decode.documentation.contains("UTF-8") {
+        return Err("utf8::decode documentation should mention UTF-8".into());
+    }
+
+    // And parameter names are exposed via the PHF fast path.
+    if get_param_names("utf8::encode") != ["SCALAR"] {
+        return Err("utf8::encode should take one SCALAR parameter".into());
+    }
+    if get_param_names("utf8::decode") != ["SCALAR"] {
+        return Err("utf8::decode should take one SCALAR parameter".into());
+    }
+    Ok(())
+}
+
+#[test]
+fn scenario_utf8_downgrade_exposes_multi_variant_signature() -> Result<(), String> {
+    // utf8::downgrade can be called with an optional FAIL_OK second argument;
+    // both call shapes should be discoverable via signature help.
+    let signatures = create_builtin_signatures();
+    let downgrade = must_some(signatures.get("utf8::downgrade"));
+
+    if downgrade.signatures.len() < 2 {
+        return Err(format!(
+            "utf8::downgrade should expose both one- and two-arg forms, got {:?}",
+            downgrade.signatures
+        ));
+    }
+    if !downgrade.signatures.iter().any(|s| s.contains("FAIL_OK")) {
+        return Err("utf8::downgrade should advertise FAIL_OK form".into());
+    }
+    if get_param_names("utf8::downgrade") != ["SCALAR", "FAIL_OK"] {
+        return Err("utf8::downgrade should take SCALAR plus optional FAIL_OK".into());
+    }
+
+    // The full-signature PHF map should also contain both variants so that
+    // signature help surfaces them both.
+    let full = *must_some(BUILTIN_FULL_SIGS.get("utf8::downgrade"));
+    if full.len() != 2 {
+        return Err(format!(
+            "utf8::downgrade should have 2 full signature variants, got {:?}",
+            full
+        ));
+    }
+    Ok(())
+}
+
+#[test]
+fn scenario_utf8_namespace_functions_all_registered() -> Result<(), String> {
+    // The perldoc utf8 surface that perl-lsp supports: encode, decode,
+    // is_utf8, valid, upgrade, downgrade, and the native/unicode converters.
+    let signatures = create_builtin_signatures();
+    let utf8_fns = [
+        "utf8::encode",
+        "utf8::decode",
+        "utf8::is_utf8",
+        "utf8::valid",
+        "utf8::upgrade",
+        "utf8::downgrade",
+        "utf8::native_to_unicode",
+        "utf8::unicode_to_native",
+    ];
+    for name in &utf8_fns {
+        if !signatures.contains_key(name) {
+            return Err(format!("signatures map missing {name}"));
+        }
+        if !is_builtin(name) {
+            return Err(format!("PHF is_builtin missing {name}"));
+        }
+        let full = *must_some(BUILTIN_FULL_SIGS.get(name));
+        if full.is_empty() {
+            return Err(format!("full signatures missing for {name}"));
+        }
+        // Every full signature variant starts with the function name so that
+        // signature help renders qualified call syntax.
+        if !full.iter().all(|s| s.starts_with(name)) {
+            return Err(format!("full signatures for {name} should start with the name: {full:?}"));
+        }
+    }
+    Ok(())
+}
+
+#[test]
 fn scenario_signature_store_is_singleton_backed() -> Result<(), String> {
     // Given two independent requests for builtin metadata.
     let first = create_builtin_signatures();

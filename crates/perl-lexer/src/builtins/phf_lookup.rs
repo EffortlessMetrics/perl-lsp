@@ -280,6 +280,16 @@ pub static BUILTIN_SIGS: phf::Map<&'static str, &'static [&'static str]> = phf_m
     "vec" => &["EXPR", "OFFSET", "BITS"],
     "lock" => &["THING"],
     "prototype" => &["FUNCTION"],
+
+    // ===== UTF-8 Encoding Functions =====
+    "utf8::encode" => &["SCALAR"],
+    "utf8::decode" => &["SCALAR"],
+    "utf8::is_utf8" => &["SCALAR"],
+    "utf8::valid" => &["SCALAR"],
+    "utf8::upgrade" => &["SCALAR"],
+    "utf8::downgrade" => &["SCALAR", "FAIL_OK"],
+    "utf8::native_to_unicode" => &["CODEPOINT"],
+    "utf8::unicode_to_native" => &["CODEPOINT"],
 };
 
 /// Full signatures for documentation (used by signature help)
@@ -337,6 +347,16 @@ pub static BUILTIN_FULL_SIGS: phf::Map<&'static str, &'static [&'static str]> = 
     "closedir" => &["closedir DIRHANDLE"],
     "system" => &["system PROGRAM, LIST", "system PROGRAM"],
     "exec" => &["exec PROGRAM, LIST", "exec PROGRAM"],
+
+    // ===== UTF-8 Encoding Functions =====
+    "utf8::encode" => &["utf8::encode SCALAR"],
+    "utf8::decode" => &["utf8::decode SCALAR"],
+    "utf8::is_utf8" => &["utf8::is_utf8 SCALAR"],
+    "utf8::valid" => &["utf8::valid SCALAR"],
+    "utf8::upgrade" => &["utf8::upgrade SCALAR"],
+    "utf8::downgrade" => &["utf8::downgrade SCALAR, FAIL_OK", "utf8::downgrade SCALAR"],
+    "utf8::native_to_unicode" => &["utf8::native_to_unicode CODEPOINT"],
+    "utf8::unicode_to_native" => &["utf8::unicode_to_native CODEPOINT"],
 };
 
 /// Get parameter names for a builtin function
@@ -468,5 +488,94 @@ mod tests {
                 name
             );
         }
+    }
+
+    #[test]
+    fn utf8_namespace_functions_are_builtins() {
+        // utf8::encode/decode and friends are core Perl functions from the
+        // `utf8::` namespace. They must be recognised as builtins so that
+        // completion, hover, and signature help can surface documentation
+        // for them. See GitHub issue #3371.
+        let utf8_fns = [
+            "utf8::encode",
+            "utf8::decode",
+            "utf8::is_utf8",
+            "utf8::valid",
+            "utf8::upgrade",
+            "utf8::downgrade",
+            "utf8::native_to_unicode",
+            "utf8::unicode_to_native",
+        ];
+        for name in &utf8_fns {
+            assert!(is_builtin(name), "is_builtin should recognise '{}'", name);
+            assert!(
+                !get_param_names(name).is_empty(),
+                "get_param_names should return params for '{}'",
+                name
+            );
+        }
+    }
+
+    #[test]
+    fn utf8_encode_decode_take_scalar_parameter() {
+        // utf8::encode/decode mutate a single scalar in place.
+        assert_eq!(get_param_names("utf8::encode"), ["SCALAR"]);
+        assert_eq!(get_param_names("utf8::decode"), ["SCALAR"]);
+        assert_eq!(get_param_names("utf8::is_utf8"), ["SCALAR"]);
+        assert_eq!(get_param_names("utf8::valid"), ["SCALAR"]);
+        assert_eq!(get_param_names("utf8::upgrade"), ["SCALAR"]);
+    }
+
+    #[test]
+    fn utf8_downgrade_has_optional_fail_ok_parameter() {
+        // utf8::downgrade accepts an optional FAIL_OK second argument that
+        // changes whether bad input croaks or returns a false value.
+        assert_eq!(get_param_names("utf8::downgrade"), ["SCALAR", "FAIL_OK"]);
+    }
+
+    #[test]
+    fn utf8_codepoint_converters_take_codepoint() {
+        // The native/unicode converters take a code point number, not a scalar.
+        assert_eq!(get_param_names("utf8::native_to_unicode"), ["CODEPOINT"]);
+        assert_eq!(get_param_names("utf8::unicode_to_native"), ["CODEPOINT"]);
+    }
+
+    #[test]
+    fn utf8_full_sigs_are_populated() {
+        // Full signatures drive signature help and the multi-variant form
+        // shown for utf8::downgrade.
+        let expected = [
+            ("utf8::encode", 1),
+            ("utf8::decode", 1),
+            ("utf8::is_utf8", 1),
+            ("utf8::valid", 1),
+            ("utf8::upgrade", 1),
+            ("utf8::downgrade", 2),
+            ("utf8::native_to_unicode", 1),
+            ("utf8::unicode_to_native", 1),
+        ];
+        for (name, expected_len) in &expected {
+            let sigs = BUILTIN_FULL_SIGS.get(name).copied().unwrap_or(&[]);
+            assert_eq!(
+                sigs.len(),
+                *expected_len,
+                "'{}' should have {} signature variant(s)",
+                name,
+                expected_len
+            );
+            assert!(
+                sigs.iter().all(|s| s.starts_with(name)),
+                "'{}' full signatures should start with the function name",
+                name
+            );
+        }
+    }
+
+    #[test]
+    fn utf8_downgrade_signatures_cover_both_forms() {
+        // Two-argument and one-argument forms must both be present.
+        let sigs = BUILTIN_FULL_SIGS.get("utf8::downgrade").copied().unwrap_or(&[]);
+        assert!(sigs.iter().any(|s| s.contains("FAIL_OK")), "two-arg form missing: {:?}", sigs);
+        assert!(sigs.contains(&"utf8::downgrade SCALAR"), "one-arg form missing: {:?}", sigs);
     }
 }

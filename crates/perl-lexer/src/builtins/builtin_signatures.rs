@@ -1757,6 +1757,105 @@ pub fn create_builtin_signatures() -> &'static HashMap<&'static str, BuiltinSign
             },
         );
 
+        // ===== UTF-8 Encoding Functions =====
+        // Core utf8:: namespace functions for explicit encoding control. These
+        // manipulate the SvUTF8 flag on scalars and are documented in perldoc utf8.
+        signatures.insert(
+            "utf8::encode",
+            BuiltinSignature {
+                signatures: vec!["utf8::encode SCALAR"],
+                documentation: concat!(
+                    "Converts the internal representation of SCALAR from Unicode to UTF-8 bytes ",
+                    "in-place; clears the UTF-8 flag. Returns nothing (void) ",
+                    "(see perldoc utf8)"
+                ),
+            },
+        );
+
+        signatures.insert(
+            "utf8::decode",
+            BuiltinSignature {
+                signatures: vec!["utf8::decode SCALAR"],
+                documentation: concat!(
+                    "Attempts to convert SCALAR in-place from UTF-8 bytes to Unicode; sets the ",
+                    "UTF-8 flag and returns true on success, or leaves SCALAR unchanged and ",
+                    "returns false on malformed input (see perldoc utf8)"
+                ),
+            },
+        );
+
+        signatures.insert(
+            "utf8::is_utf8",
+            BuiltinSignature {
+                signatures: vec!["utf8::is_utf8 SCALAR"],
+                documentation: concat!(
+                    "Returns true if the UTF-8 flag is set on SCALAR; an internal ",
+                    "representation detail, rarely needed in application code (see perldoc utf8)"
+                ),
+            },
+        );
+
+        signatures.insert(
+            "utf8::valid",
+            BuiltinSignature {
+                signatures: vec!["utf8::valid SCALAR"],
+                documentation: concat!(
+                    "Returns true if the internal state of SCALAR is consistent: either well-formed ",
+                    "extended UTF-8 with the UTF-8 flag on, or held as raw bytes with the flag off. ",
+                    "Does not modify SCALAR (see perldoc utf8)"
+                ),
+            },
+        );
+
+        signatures.insert(
+            "utf8::upgrade",
+            BuiltinSignature {
+                signatures: vec!["utf8::upgrade SCALAR"],
+                documentation: concat!(
+                    "Converts SCALAR in-place to Perl's internal UTF-8 representation preserving ",
+                    "the abstract character sequence; sets the UTF-8 flag and returns the octet ",
+                    "count (see perldoc utf8)"
+                ),
+            },
+        );
+
+        signatures.insert(
+            "utf8::downgrade",
+            BuiltinSignature {
+                signatures: vec!["utf8::downgrade SCALAR, FAIL_OK", "utf8::downgrade SCALAR"],
+                documentation: concat!(
+                    "Attempts to convert SCALAR in-place out of Perl's internal UTF-8 encoding; ",
+                    "clears the UTF-8 flag. Fails if any character is above U+00FF; croaks ",
+                    "unless FAIL_OK is true, in which case a false value is returned ",
+                    "(see perldoc utf8)"
+                ),
+            },
+        );
+
+        signatures.insert(
+            "utf8::native_to_unicode",
+            BuiltinSignature {
+                signatures: vec!["utf8::native_to_unicode CODEPOINT"],
+                documentation: concat!(
+                    "Returns the Unicode code point corresponding to CODEPOINT given in the ",
+                    "platform's native character set; a no-op on ASCII platforms, relevant on ",
+                    "EBCDIC (see perldoc utf8)"
+                ),
+            },
+        );
+
+        signatures.insert(
+            "utf8::unicode_to_native",
+            BuiltinSignature {
+                signatures: vec!["utf8::unicode_to_native CODEPOINT"],
+                documentation: concat!(
+                    "Returns the native code point corresponding to Unicode CODEPOINT on the ",
+                    "current platform; a no-op on ASCII platforms, relevant on EBCDIC ",
+                    "(see perldoc utf8)"
+                ),
+            },
+        );
+
         signatures
     })
 }

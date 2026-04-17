@@ -61,6 +61,39 @@ fn known_core_module_members(package_name: &str) -> &'static [(&'static str, &'s
             ("usleep", "Sleep for a number of microseconds."),
             ("gettimeofday", "Return the current time as seconds and microseconds."),
         ],
+        // utf8:: is a core namespace for explicit UTF-8 encoding control on
+        // scalars (perldoc utf8). See GitHub issue #3371.
+        "utf8" => &[
+            (
+                "encode",
+                "Encode SCALAR in place from Unicode to UTF-8 bytes; clears the UTF-8 flag.",
+            ),
+            (
+                "decode",
+                "Decode SCALAR in place from UTF-8 bytes to Unicode; sets the UTF-8 flag on success.",
+            ),
+            ("is_utf8", "Return true if the UTF-8 flag is set on SCALAR."),
+            (
+                "valid",
+                "Return true if the internal UTF-8 state of SCALAR is consistent (valid UTF-8 with flag on, or raw bytes with flag off).",
+            ),
+            (
+                "upgrade",
+                "Convert SCALAR in place to Perl's internal UTF-8 form; sets the UTF-8 flag.",
+            ),
+            (
+                "downgrade",
+                "Convert SCALAR in place out of Perl's internal UTF-8 form; croaks unless FAIL_OK is true.",
+            ),
+            (
+                "native_to_unicode",
+                "Return the Unicode code point corresponding to a native-platform code point.",
+            ),
+            (
+                "unicode_to_native",
+                "Return the native-platform code point for a Unicode code point.",
+            ),
+        ],
         _ => &[],
     }
 }
