@@ -133,10 +133,7 @@ mod tests {
     #[test]
     fn run_passes_on_clean_workspace() {
         let result = run_with_metadata(None);
-        assert!(
-            result.is_ok(),
-            "layer-check should pass on the real workspace; got: {result:?}"
-        );
+        assert!(result.is_ok(), "layer-check should pass on the real workspace; got: {result:?}");
     }
 
     /// Synthetic metadata: `perl-diagnostics` has a dev-dependency on a
