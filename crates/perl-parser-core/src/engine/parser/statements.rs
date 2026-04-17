@@ -1027,6 +1027,26 @@ impl<'a> Parser<'a> {
     }
 
     /// Check if we're at the start of a labeled statement (LABEL: ...)
+    ///
+    /// This function determines whether an `Identifier Colon` sequence starts
+    /// a label statement. We use 3-token lookahead to disambiguate label colons
+    /// from ternary/hash-constructor colons:
+    ///
+    /// - `Identifier Colon ?` — ternary condition, not a label (e.g., `$x ? $y : $z`)
+    /// - `Identifier Colon :` — chained ternary else-part, not a label
+    /// - `Identifier Colon ;` — invalid (orphan semicolon after colon)
+    /// - `Identifier Colon ,` — expression continuation in list, not a label
+    /// - `Identifier Colon =>` — hash key-value, not a label
+    /// - `Identifier Colon )` — closing paren, not a label
+    /// - `Identifier Colon ]` — closing bracket, not a label
+    /// - `Identifier Colon }` — orphan closing brace, not a label
+    /// - `Identifier Colon EOF` — end of input, not a label
+    ///
+    /// Valid label patterns have a 3rd token that CAN start a statement:
+    /// - `Identifier Colon {` — block start (e.g., `LABEL: { ... }`)
+    /// - `Identifier Colon (` — parenthesized expression
+    /// - `Identifier Colon Keyword` — if, while, for, my, print, etc.
+    /// - `Identifier Colon Identifier` — print, return, etc.
     fn is_label_start(&mut self) -> bool {
         // We need an identifier followed by a colon
         if self.peek_kind() != Some(TokenKind::Identifier) {
@@ -1036,6 +1056,26 @@ impl<'a> Parser<'a> {
         // Check if the second token is a colon
         if let Ok(second_token) = self.tokens.peek_second() {
             if second_token.kind == TokenKind::Colon {
+                // Check the 3rd token (token after the colon)
+                // If it can't start a statement, this is not a label
+                if let Ok(third_token) = self.tokens.peek_third() {
+                    match third_token.kind {
+                        // These tokens cannot start a statement,
+                        // so this is not a label
+                        TokenKind::Question      // ternary `?` operator
+                        | TokenKind::Colon       // chained ternary else-part
+                        | TokenKind::Semicolon  // immediate statement end
+                        | TokenKind::Comma      // expression continuation
+                        | TokenKind::FatArrow   // hash key-value context
+                        | TokenKind::RightParen // closing paren
+                        | TokenKind::RightBracket // closing bracket
+                        | TokenKind::RightBrace // orphan closing brace
+                        | TokenKind::Eof => return false, // end of input
+                        // Other tokens (keywords, identifiers, operators,
+                        // left delimiters) can start a statement
+                        _ => {}
+                    }
+                }
                 // Qualified identifiers use `::` which tokenizes as
                 // DoubleColon, so `Identifier Colon` (single colon) is
                 // unambiguously a label — even for uppercase names like
