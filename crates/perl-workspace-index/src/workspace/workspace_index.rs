@@ -1117,6 +1117,16 @@ pub struct WorkspaceIndex {
     /// Aggregated from per-file `FileIndex::references` during `index_file()`.
     /// Provides O(1) lookup for `find_references()` instead of iterating all files.
     global_references: Arc<RwLock<HashMap<String, Vec<Location>>>>,
+    /// Global name index for fast symbol search (HashMap-based inverted index).
+    ///
+    /// Maps lowercase symbol names (both bare names and qualified names) to the
+    /// actual `WorkspaceSymbol` objects. This enables O(1) bounded lookup instead
+    /// of O(n) linear scan over all files and symbols.
+    ///
+    /// Each symbol contributes TWO entries (deduplicated by URI):
+    /// 1. `symbol.name.to_lowercase()` → `symbol`
+    /// 2. `symbol.qualified_name.to_lowercase()` → `symbol` (if present)
+    global_name_index: Arc<RwLock<HashMap<String, Vec<WorkspaceSymbol>>>>,
     /// Document store for in-memory text
     document_store: DocumentStore,
     /// Workspace folder URIs for multi-root workspace support
@@ -1140,6 +1150,106 @@ impl WorkspaceIndex {
                 }
                 symbols.insert(symbol.name.clone(), symbol.uri.clone());
             }
+        }
+    }
+
+    /// Rebuild the global name index from scratch.
+    ///
+    /// This clears the existing index and re-indexes all symbols from all files.
+    /// Used after batch operations where incremental updates are impractical.
+    fn rebuild_global_name_index(
+        files: &HashMap<String, FileIndex>,
+        global_name_index: &mut HashMap<String, Vec<WorkspaceSymbol>>,
+    ) {
+        global_name_index.clear();
+
+        for file_index in files.values() {
+            for symbol in &file_index.symbols {
+                Self::index_symbol_into_global_index(symbol, global_name_index);
+            }
+        }
+    }
+
+    /// Insert a single symbol into the global name index.
+    ///
+    /// Each symbol is indexed under BOTH its bare name and qualified name (if present),
+    /// with lowercase keys for case-insensitive lookup. The symbol is appended to the
+    /// Vec for that name, allowing multiple symbols with the same name from different files.
+    ///
+    /// Deduplication by URI is done at search time, not at index time, to keep
+    /// index updates simple and atomic.
+    fn index_symbol_into_global_index(
+        symbol: &WorkspaceSymbol,
+        global_index: &mut HashMap<String, Vec<WorkspaceSymbol>>,
+    ) {
+        // Index under bare name (lowercase for case-insensitive lookup)
+        let bare_name_lower = symbol.name.to_lowercase();
+        global_index.entry(bare_name_lower).or_default().push(symbol.clone());
+
+        // Index under qualified name if present (lowercase for case-insensitive lookup)
+        if let Some(ref qname) = symbol.qualified_name {
+            let qname_lower = qname.to_lowercase();
+            // Only add if different from bare name to avoid duplicate entries for the same symbol
+            if qname_lower != symbol.name.to_lowercase() {
+                global_index.entry(qname_lower).or_default().push(symbol.clone());
+            }
+        }
+    }
+
+    /// Remove a single symbol from the global name index.
+    ///
+    /// Removes the symbol from both its bare name and qualified name entries.
+    /// Uses URI matching to identify the correct symbol to remove when multiple
+    /// symbols with the same name exist from different files.
+    fn remove_symbol_from_global_index(
+        symbol: &WorkspaceSymbol,
+        uri: &str,
+        global_index: &mut HashMap<String, Vec<WorkspaceSymbol>>,
+    ) {
+        // Remove from bare name entry
+        let bare_name_lower = symbol.name.to_lowercase();
+        if let Some(entry) = global_index.get_mut(&bare_name_lower) {
+            entry.retain(|s| s.uri != uri);
+            if entry.is_empty() {
+                global_index.remove(&bare_name_lower);
+            }
+        }
+
+        // Remove from qualified name entry if present
+        if let Some(ref qname) = symbol.qualified_name {
+            let qname_lower = qname.to_lowercase();
+            if let Some(entry) = global_index.get_mut(&qname_lower) {
+                entry.retain(|s| s.uri != uri);
+                if entry.is_empty() {
+                    global_index.remove(&qname_lower);
+                }
+            }
+        }
+    }
+
+    /// Incrementally remove one file's symbols from the global name index.
+    ///
+    /// Removes all symbols from the given file index from the global name index.
+    /// This is the global_name_index equivalent of `incremental_remove_symbols`.
+    fn incremental_remove_from_global_name_index(
+        global_name_index: &mut HashMap<String, Vec<WorkspaceSymbol>>,
+        file_index: &FileIndex,
+    ) {
+        for symbol in &file_index.symbols {
+            Self::remove_symbol_from_global_index(symbol, &symbol.uri, global_name_index);
+        }
+    }
+
+    /// Incrementally add one file's symbols to the global name index.
+    ///
+    /// Adds all symbols from the given file index to the global name index.
+    /// This is the global_name_index equivalent of `incremental_add_symbols`.
+    fn incremental_add_to_global_name_index(
+        global_name_index: &mut HashMap<String, Vec<WorkspaceSymbol>>,
+        file_index: &FileIndex,
+    ) {
+        for symbol in &file_index.symbols {
+            Self::index_symbol_into_global_index(symbol, global_name_index);
         }
     }
 
@@ -1280,6 +1390,7 @@ impl WorkspaceIndex {
             files: Arc::new(RwLock::new(HashMap::new())),
             symbols: Arc::new(RwLock::new(HashMap::new())),
             global_references: Arc::new(RwLock::new(HashMap::new())),
+            global_name_index: Arc::new(RwLock::new(HashMap::new())),
             document_store: DocumentStore::new(),
             workspace_folders: Arc::new(RwLock::new(Vec::new())),
         }
@@ -1314,10 +1425,13 @@ impl WorkspaceIndex {
         let sym_cap =
             estimated_files.saturating_mul(avg_symbols_per_file).saturating_mul(2).min(1_000_000);
         let ref_cap = (sym_cap / 4).min(1_000_000);
+        // global_name_index stores Vec<WorkspaceSymbol> per name, same capacity as sym_cap
+        let name_index_cap = sym_cap;
         Self {
             files: Arc::new(RwLock::new(HashMap::with_capacity(estimated_files))),
             symbols: Arc::new(RwLock::new(HashMap::with_capacity(sym_cap))),
             global_references: Arc::new(RwLock::new(HashMap::with_capacity(ref_cap))),
+            global_name_index: Arc::new(RwLock::new(HashMap::with_capacity(name_index_cap))),
             document_store: DocumentStore::new(),
             workspace_folders: Arc::new(RwLock::new(Vec::new())),
         }
@@ -1474,11 +1588,21 @@ impl WorkspaceIndex {
                 let mut symbols = self.symbols.write();
                 Self::incremental_remove_symbols(&files, &mut symbols, old_index);
                 drop(symbols);
+                // Also remove from global name index
+                let mut global_name_index = self.global_name_index.write();
+                Self::incremental_remove_from_global_name_index(&mut global_name_index, old_index);
             }
             files.insert(key.clone(), file_index);
             let mut symbols = self.symbols.write();
             if let Some(new_index) = files.get(&key) {
                 Self::incremental_add_symbols(&mut symbols, new_index);
+            }
+            drop(symbols);
+
+            // Add new symbols to global name index
+            if let Some(new_index) = files.get(&key) {
+                let mut global_name_index = self.global_name_index.write();
+                Self::incremental_add_to_global_name_index(&mut global_name_index, new_index);
             }
 
             if let Some(file_index) = files.get(&key) {
@@ -1538,6 +1662,11 @@ impl WorkspaceIndex {
             if let Some(indexed_uri) = file_index.symbols.first().map(|s| s.uri.as_str()) {
                 symbols.retain(|_, v| v.as_str() != indexed_uri);
             }
+            drop(symbols);
+
+            // Remove symbols from global name index
+            let mut global_name_index = self.global_name_index.write();
+            Self::incremental_remove_from_global_name_index(&mut global_name_index, &file_index);
 
             // Remove from global reference index
             let mut global_refs = self.global_references.write();
@@ -1787,6 +1916,7 @@ impl WorkspaceIndex {
             let mut files = self.files.write();
             let mut symbols = self.symbols.write();
             let mut global_refs = self.global_references.write();
+            let mut global_name_index = self.global_name_index.write();
 
             // Pre-allocate capacity for the incoming batch to avoid rehashing.
             // Each symbol is indexed under both its qualified name and bare name.
@@ -1815,8 +1945,9 @@ impl WorkspaceIndex {
                 }
             }
 
-            // Single rebuild at the end
+            // Single rebuild at the end for both caches
             Self::rebuild_symbol_cache(&files, &mut symbols);
+            Self::rebuild_global_name_index(&files, &mut global_name_index);
         }
 
         errors
@@ -2171,21 +2302,41 @@ impl WorkspaceIndex {
     /// ```
     pub fn search_symbols(&self, query: &str) -> Vec<WorkspaceSymbol> {
         let query_lower = query.to_lowercase();
-        let files = self.files.read();
-        let mut results = Vec::new();
-        for file_index in files.values() {
-            for symbol in &file_index.symbols {
-                if symbol.name.to_lowercase().contains(&query_lower)
+        let global_name_index = self.global_name_index.read();
+
+        // Phase 1: Collect candidate symbols from global_name_index
+        // Iterate over keys that contain the query (prefix or substring match on key)
+        // This bounds iteration to symbols whose names contain the query,
+        // rather than iterating over ALL files and ALL symbols.
+        let mut candidates: Vec<WorkspaceSymbol> = Vec::new();
+
+        for key in global_name_index.keys() {
+            if key.contains(&query_lower) {
+                if let Some(symbols) = global_name_index.get(key) {
+                    candidates.extend(symbols.iter().cloned());
+                }
+            }
+        }
+
+        // Phase 2: Filter candidates with substring semantics
+        // This ensures case-insensitive contains matching on both name and qualified_name
+        let mut results: Vec<WorkspaceSymbol> = candidates
+            .into_iter()
+            .filter(|symbol| {
+                symbol.name.to_lowercase().contains(&query_lower)
                     || symbol
                         .qualified_name
                         .as_ref()
                         .map(|qn| qn.to_lowercase().contains(&query_lower))
                         .unwrap_or(false)
-                {
-                    results.push(symbol.clone());
-                }
-            }
-        }
+            })
+            .collect();
+
+        // Phase 3: Deduplicate by URI
+        // Use a HashSet to track seen URIs and keep only the first occurrence
+        let mut seen_uris: HashSet<String> = HashSet::new();
+        results.retain(|symbol| seen_uris.insert(symbol.uri.clone()));
+
         results
     }
 
