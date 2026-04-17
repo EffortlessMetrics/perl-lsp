@@ -9,7 +9,7 @@ use crate::features::diagnostics::{
     Diagnostic as InternalDiagnostic, DiagnosticTag as InternalDiagnosticTag,
     PullDiagnosticsContext,
 };
-use perl_diagnostics_codes::DiagnosticCode;
+use perl_diagnostics::codes::DiagnosticCode;
 
 /// Orchestrator for pull diagnostics operations.
 ///

@@ -1,6 +1,7 @@
 //! Dead code detection using workspace-wide symbol analysis
 
-use perl_lsp_diagnostic_types::{Diagnostic, DiagnosticSeverity, DiagnosticTag};
+use crate::internal_types::{Diagnostic, DiagnosticTag};
+use perl_diagnostics::codes::DiagnosticSeverity;
 
 /// Detect dead code using workspace-wide symbol analysis
 ///

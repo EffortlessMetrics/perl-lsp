@@ -43,8 +43,9 @@
 //! | `die` inside `or`  | No (right operand of Binary, not a direct statement) |
 //! | `die` inside `eval { }` | No (caught by eval) |
 
-use perl_diagnostics_codes::DiagnosticCode;
-use perl_lsp_diagnostic_types::{Diagnostic, DiagnosticSeverity, DiagnosticTag};
+use crate::internal_types::{Diagnostic, DiagnosticTag};
+use perl_diagnostics::codes::DiagnosticCode;
+use perl_diagnostics::codes::DiagnosticSeverity;
 use perl_parser_core::ast::{Node, NodeKind};
 
 /// Entry point for unreachable code detection.

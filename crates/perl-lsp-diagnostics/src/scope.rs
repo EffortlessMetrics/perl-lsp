@@ -3,12 +3,11 @@
 //! This module provides functionality for converting scope analyzer issues
 //! into diagnostic messages with pragma-aware severity mapping.
 
-use perl_diagnostics_codes::DiagnosticCode;
+use perl_diagnostics::codes::DiagnosticCode;
 use perl_semantic_analyzer::scope_analyzer::{IssueKind, ScopeIssue};
 
-use perl_lsp_diagnostic_types::{
-    Diagnostic, DiagnosticSeverity, DiagnosticTag, RelatedInformation,
-};
+use crate::internal_types::{Diagnostic, DiagnosticTag, RelatedInformation};
+use perl_diagnostics::codes::DiagnosticSeverity;
 
 /// Convert scope analyzer issues to diagnostics
 ///

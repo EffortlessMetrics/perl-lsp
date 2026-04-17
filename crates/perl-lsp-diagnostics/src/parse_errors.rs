@@ -8,10 +8,11 @@
 //! |------|----------|-------------|
 //! | `syntax-error` | Error | Generic syntax error from the parser |
 
-use perl_diagnostics_codes::DiagnosticCode;
+use perl_diagnostics::codes::DiagnosticCode;
 use perl_parser_core::error::ParseError;
 
-use perl_lsp_diagnostic_types::{Diagnostic, DiagnosticSeverity};
+use crate::internal_types::Diagnostic;
+use perl_diagnostics::codes::DiagnosticSeverity;
 
 /// Derive the canonical diagnostic code for a parser error.
 pub fn parse_error_code(error: &ParseError) -> DiagnosticCode {

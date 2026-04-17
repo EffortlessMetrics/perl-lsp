@@ -3,12 +3,13 @@
 //! This module provides functionality for checking ERROR nodes in the AST
 //! and classifying them into appropriate diagnostic messages.
 
-use perl_diagnostics_codes::DiagnosticCode;
+use perl_diagnostics::codes::DiagnosticCode;
 use perl_parser_core::ast::{Node, NodeKind};
 use perl_parser_core::error_classifier::ErrorClassifier;
 
 use super::walker::walk_node;
-use perl_lsp_diagnostic_types::{Diagnostic, DiagnosticSeverity, RelatedInformation};
+use crate::internal_types::{Diagnostic, RelatedInformation};
+use perl_diagnostics::codes::DiagnosticSeverity;
 
 /// Check for ERROR nodes in the AST and classify them
 ///

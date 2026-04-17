@@ -72,7 +72,7 @@ use crate::types::QuickFixDiagnostic;
 
 pub use crate::types::{CodeAction, CodeActionKind};
 
-use perl_diagnostics_codes::DiagnosticCode;
+use perl_diagnostics::codes::DiagnosticCode;
 use perl_lsp_diagnostics::Diagnostic;
 use perl_parser_core::Node;
 

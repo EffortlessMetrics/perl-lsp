@@ -859,6 +859,12 @@ enum Commands {
         output: Option<PathBuf>,
     },
 
+    /// Enforce crate layer-dependency constraints (leaf crates must not depend on higher layers).
+    ///
+    /// Current rules:
+    ///   - perl-diagnostics must NOT depend on any perl-lsp-* crate.
+    LayerCheck,
+
     /// Scan for built-but-not-wired crates: those with tests but zero import by perl-lsp
     ///
     /// Finds crates that have `#[test]` annotations but are not listed as direct
@@ -1525,6 +1531,7 @@ fn main() -> Result<()> {
             swarm_summary::run(swarm_summary::SwarmSummaryConfig { ops_dir, since, limit, format })
         }
         Commands::PopulateBook => populate_book::run(),
+        Commands::LayerCheck => layer_check::run(),
         Commands::ValidateWorkspaceExclusions => validate_workspace_exclusions::run(),
         Commands::BuildTimingReceipt { clean, incremental, tests, output, baseline } => {
             build_timing::run_receipt(clean, incremental, tests, output, baseline)

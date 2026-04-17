@@ -14,7 +14,8 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use perl_lsp_diagnostic_types::{Diagnostic, DiagnosticSeverity};
+use crate::internal_types::Diagnostic;
+use perl_diagnostics::codes::DiagnosticSeverity;
 use perl_parser_core::ast::{Node, NodeKind};
 
 use super::super::walker::walk_node;

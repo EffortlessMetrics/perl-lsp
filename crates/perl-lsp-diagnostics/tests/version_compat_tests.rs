@@ -378,7 +378,7 @@ fn test_given_when_warns_on_v5_38() -> Result<(), Box<dyn std::error::Error>> {
     let diag = must_some(diagnostics.iter().find(|d| d.code.as_deref() == Some("PL900")));
     assert_eq!(
         diag.severity,
-        perl_lsp_diagnostic_types::DiagnosticSeverity::Warning,
+        perl_diagnostics::codes::DiagnosticSeverity::Warning,
         "Expected warning severity for deprecated given/when on v5.38, got: {:?}",
         diag
     );
@@ -403,7 +403,7 @@ fn test_default_warns_on_v5_38() -> Result<(), Box<dyn std::error::Error>> {
     let diag = must_some(diagnostics.iter().find(|d| d.code.as_deref() == Some("PL900")));
     assert_eq!(
         diag.severity,
-        perl_lsp_diagnostic_types::DiagnosticSeverity::Warning,
+        perl_diagnostics::codes::DiagnosticSeverity::Warning,
         "Expected warning severity for deprecated default on v5.38, got: {:?}",
         diag
     );
@@ -445,7 +445,7 @@ fn test_given_when_errors_on_v5_42() -> Result<(), Box<dyn std::error::Error>> {
     let diag = must_some(diagnostics.iter().find(|d| d.code.as_deref() == Some("PL900")));
     assert_eq!(
         diag.severity,
-        perl_lsp_diagnostic_types::DiagnosticSeverity::Error,
+        perl_diagnostics::codes::DiagnosticSeverity::Error,
         "Expected error severity for removed given/when on v5.42, got: {:?}",
         diag
     );
@@ -472,7 +472,7 @@ fn test_default_errors_on_v5_42() -> Result<(), Box<dyn std::error::Error>> {
     let diag = must_some(diagnostics.iter().find(|d| d.code.as_deref() == Some("PL900")));
     assert_eq!(
         diag.severity,
-        perl_lsp_diagnostic_types::DiagnosticSeverity::Error,
+        perl_diagnostics::codes::DiagnosticSeverity::Error,
         "Expected error severity for removed default on v5.42, got: {:?}",
         diag
     );

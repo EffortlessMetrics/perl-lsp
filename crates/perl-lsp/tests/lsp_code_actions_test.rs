@@ -1,4 +1,4 @@
-use perl_diagnostics_codes::DiagnosticCode;
+use perl_diagnostics::codes::DiagnosticCode;
 use perl_lsp::features::code_actions_provider::{
     CodeActionKind as CodeActionKindV2, CodeActionsProvider as CodeActionsProviderV2,
 };

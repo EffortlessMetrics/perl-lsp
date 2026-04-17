@@ -1,6 +1,6 @@
-//! Stable diagnostic codes and severity levels for Perl LSP.
+//! Diagnostic codes, severity levels, tags, and categories.
 //!
-//! This crate provides the canonical definitions of diagnostic codes used
+//! This module contains the canonical definitions of all diagnostic codes used
 //! throughout the Perl LSP ecosystem. These codes are stable and can be
 //! referenced in documentation and error messages.
 //!
@@ -13,28 +13,24 @@
 //! | PL200-PL299 | Package/module            |
 //! | PL300-PL399 | Subroutine                |
 //! | PL400-PL499 | Best practices            |
+//! | PL500-PL599 | Deprecated syntax         |
+//! | PL600-PL699 | Security                  |
+//! | PL700-PL799 | Import                    |
+//! | PL800-PL899 | Heredoc anti-patterns     |
+//! | PL900-PL999 | Version compatibility     |
 //! | PC001-PC005 | Perl::Critic violations   |
-//!
-//! # Example
-//!
-//! ```
-//! use perl_diagnostics_codes::{DiagnosticCode, DiagnosticSeverity};
-//!
-//! let code = DiagnosticCode::ParseError;
-//! assert_eq!(code.as_str(), "PL001");
-//! assert_eq!(code.severity(), DiagnosticSeverity::Error);
-//! ```
 
 use std::fmt;
 
 /// Severity level of a diagnostic.
 ///
 /// Maps to LSP DiagnosticSeverity values (1=Error, 2=Warning, 3=Info, 4=Hint).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(u8)]
 pub enum DiagnosticSeverity {
     /// Critical error that prevents parsing/execution.
+    #[default]
     Error = 1,
     /// Non-critical issue that should be addressed.
     Warning = 2,
@@ -54,30 +50,36 @@ impl DiagnosticSeverity {
 impl fmt::Display for DiagnosticSeverity {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            DiagnosticSeverity::Error => write!(f, "error"),
-            DiagnosticSeverity::Warning => write!(f, "warning"),
-            DiagnosticSeverity::Information => write!(f, "info"),
-            DiagnosticSeverity::Hint => write!(f, "hint"),
+            Self::Error => write!(f, "error"),
+            Self::Warning => write!(f, "warning"),
+            Self::Information => write!(f, "info"),
+            Self::Hint => write!(f, "hint"),
         }
     }
 }
 
 /// Diagnostic tags for additional classification.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum DiagnosticTag {
     /// Code that can be safely removed (unused variables, imports).
-    Unnecessary,
+    Unnecessary = 1,
     /// Code using deprecated features.
-    Deprecated,
+    Deprecated = 2,
 }
 
 impl DiagnosticTag {
     /// Get the LSP numeric value for this tag.
     pub fn to_lsp_value(self) -> u8 {
+        self as u8
+    }
+}
+
+impl fmt::Display for DiagnosticTag {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            DiagnosticTag::Unnecessary => 1,
-            DiagnosticTag::Deprecated => 2,
+            Self::Unnecessary => write!(f, "unnecessary"),
+            Self::Deprecated => write!(f, "deprecated"),
         }
     }
 }
@@ -85,11 +87,12 @@ impl DiagnosticTag {
 /// Stable diagnostic codes for Perl LSP.
 ///
 /// Each code has a fixed string representation and associated metadata.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum DiagnosticCode {
     // Parser diagnostics (PL001-PL099)
     /// General parse error
+    #[default]
     ParseError,
     /// Syntax error
     SyntaxError,
@@ -135,14 +138,14 @@ pub enum DiagnosticCode {
     DuplicateSubroutine,
     /// Missing explicit return statement
     MissingReturn,
-    /// Same-file Moo/Moose roles provide conflicting methods
-    RoleConflict,
     /// Invalid character(s) in a subroutine prototype
     ///
     /// Perl only allows `$`, `@`, `%`, `&`, `*`, `\`, `;`, `+`, `_`, and
     /// spaces in old-style prototypes.  Any other character triggers Perl's
     /// "Illegal character in prototype" warning.
     InvalidPrototype,
+    /// Same-file Moo/Moose roles provide conflicting methods
+    RoleConflict,
 
     // Best practices (PL400-PL499)
     /// Bareword filehandle usage
@@ -235,64 +238,64 @@ impl DiagnosticCode {
     /// Get the string representation of this code.
     pub fn as_str(&self) -> &'static str {
         match self {
-            DiagnosticCode::ParseError => "PL001",
-            DiagnosticCode::SyntaxError => "PL002",
-            DiagnosticCode::UnexpectedEof => "PL003",
-            DiagnosticCode::MissingStrict => "PL100",
-            DiagnosticCode::MissingWarnings => "PL101",
-            DiagnosticCode::UnusedVariable => "PL102",
-            DiagnosticCode::UndefinedVariable => "PL103",
-            DiagnosticCode::VariableShadowing => "PL104",
-            DiagnosticCode::VariableRedeclaration => "PL105",
-            DiagnosticCode::DuplicateParameter => "PL106",
-            DiagnosticCode::ParameterShadowsGlobal => "PL107",
-            DiagnosticCode::UnusedParameter => "PL108",
-            DiagnosticCode::UnquotedBareword => "PL109",
-            DiagnosticCode::UninitializedVariable => "PL110",
-            DiagnosticCode::MisspelledPragma => "PL111",
-            DiagnosticCode::CaptureVarWithoutRegexMatch => "PL112",
-            DiagnosticCode::MissingPackageDeclaration => "PL200",
-            DiagnosticCode::DuplicatePackage => "PL201",
-            DiagnosticCode::DuplicateSubroutine => "PL300",
-            DiagnosticCode::MissingReturn => "PL301",
-            DiagnosticCode::InvalidPrototype => "PL302",
-            DiagnosticCode::RoleConflict => "PL303",
-            DiagnosticCode::BarewordFilehandle => "PL400",
-            DiagnosticCode::TwoArgOpen => "PL401",
-            DiagnosticCode::ImplicitReturn => "PL402",
-            DiagnosticCode::AssignmentInCondition => "PL403",
-            DiagnosticCode::NumericComparisonWithUndef => "PL404",
-            DiagnosticCode::PrintfFormatMismatch => "PL405",
-            DiagnosticCode::UnreachableCode => "PL406",
-            DiagnosticCode::EvalErrorFlow => "PL407",
-            DiagnosticCode::DuplicateHashKey => "PL408",
-            DiagnosticCode::GotoUndefinedLabel => "PL409",
-            DiagnosticCode::DeprecatedDefined => "PL500",
-            DiagnosticCode::DeprecatedArrayBase => "PL501",
-            DiagnosticCode::PhaseScopedStrictPragma => "PL502",
-            DiagnosticCode::PhaseScopedWarningsPragma => "PL503",
-            DiagnosticCode::SecurityStringEval => "PL600",
-            DiagnosticCode::SecurityBacktickExec => "PL601",
-            DiagnosticCode::SecuritySignalHandler => "PL602",
-            DiagnosticCode::SecuritySystemCall => "PL603",
-            DiagnosticCode::SecurityExecCall => "PL604",
-            DiagnosticCode::SecurityPipeOpen => "PL605",
-            DiagnosticCode::SecurityReadpipe => "PL606",
-            DiagnosticCode::UnusedImport => "PL700",
-            DiagnosticCode::ModuleNotFound => "PL701",
-            DiagnosticCode::HeredocInFormat => "PL800",
-            DiagnosticCode::HeredocInBegin => "PL801",
-            DiagnosticCode::HeredocDynamicDelimiter => "PL802",
-            DiagnosticCode::HeredocInSourceFilter => "PL803",
-            DiagnosticCode::HeredocInRegexCode => "PL804",
-            DiagnosticCode::HeredocInEval => "PL805",
-            DiagnosticCode::HeredocTiedHandle => "PL806",
-            DiagnosticCode::VersionIncompatFeature => "PL900",
-            DiagnosticCode::CriticSeverity1 => "PC001",
-            DiagnosticCode::CriticSeverity2 => "PC002",
-            DiagnosticCode::CriticSeverity3 => "PC003",
-            DiagnosticCode::CriticSeverity4 => "PC004",
-            DiagnosticCode::CriticSeverity5 => "PC005",
+            Self::ParseError => "PL001",
+            Self::SyntaxError => "PL002",
+            Self::UnexpectedEof => "PL003",
+            Self::MissingStrict => "PL100",
+            Self::MissingWarnings => "PL101",
+            Self::UnusedVariable => "PL102",
+            Self::UndefinedVariable => "PL103",
+            Self::VariableShadowing => "PL104",
+            Self::VariableRedeclaration => "PL105",
+            Self::DuplicateParameter => "PL106",
+            Self::ParameterShadowsGlobal => "PL107",
+            Self::UnusedParameter => "PL108",
+            Self::UnquotedBareword => "PL109",
+            Self::UninitializedVariable => "PL110",
+            Self::MisspelledPragma => "PL111",
+            Self::CaptureVarWithoutRegexMatch => "PL112",
+            Self::MissingPackageDeclaration => "PL200",
+            Self::DuplicatePackage => "PL201",
+            Self::DuplicateSubroutine => "PL300",
+            Self::MissingReturn => "PL301",
+            Self::InvalidPrototype => "PL302",
+            Self::RoleConflict => "PL303",
+            Self::BarewordFilehandle => "PL400",
+            Self::TwoArgOpen => "PL401",
+            Self::ImplicitReturn => "PL402",
+            Self::AssignmentInCondition => "PL403",
+            Self::NumericComparisonWithUndef => "PL404",
+            Self::PrintfFormatMismatch => "PL405",
+            Self::UnreachableCode => "PL406",
+            Self::EvalErrorFlow => "PL407",
+            Self::DuplicateHashKey => "PL408",
+            Self::GotoUndefinedLabel => "PL409",
+            Self::DeprecatedDefined => "PL500",
+            Self::DeprecatedArrayBase => "PL501",
+            Self::PhaseScopedStrictPragma => "PL502",
+            Self::PhaseScopedWarningsPragma => "PL503",
+            Self::SecurityStringEval => "PL600",
+            Self::SecurityBacktickExec => "PL601",
+            Self::SecuritySignalHandler => "PL602",
+            Self::SecuritySystemCall => "PL603",
+            Self::SecurityExecCall => "PL604",
+            Self::SecurityPipeOpen => "PL605",
+            Self::SecurityReadpipe => "PL606",
+            Self::UnusedImport => "PL700",
+            Self::ModuleNotFound => "PL701",
+            Self::HeredocInFormat => "PL800",
+            Self::HeredocInBegin => "PL801",
+            Self::HeredocDynamicDelimiter => "PL802",
+            Self::HeredocInSourceFilter => "PL803",
+            Self::HeredocInRegexCode => "PL804",
+            Self::HeredocInEval => "PL805",
+            Self::HeredocTiedHandle => "PL806",
+            Self::VersionIncompatFeature => "PL900",
+            Self::CriticSeverity1 => "PC001",
+            Self::CriticSeverity2 => "PC002",
+            Self::CriticSeverity3 => "PC003",
+            Self::CriticSeverity4 => "PC004",
+            Self::CriticSeverity5 => "PC005",
         }
     }
 
@@ -366,83 +369,81 @@ impl DiagnosticCode {
     pub fn severity(&self) -> DiagnosticSeverity {
         match self {
             // Errors
-            DiagnosticCode::ParseError
-            | DiagnosticCode::SyntaxError
-            | DiagnosticCode::UnexpectedEof
-            | DiagnosticCode::UndefinedVariable
-            | DiagnosticCode::VariableRedeclaration
-            | DiagnosticCode::DuplicateParameter
-            | DiagnosticCode::UnquotedBareword => DiagnosticSeverity::Error,
+            Self::ParseError
+            | Self::SyntaxError
+            | Self::UnexpectedEof
+            | Self::UndefinedVariable
+            | Self::VariableRedeclaration
+            | Self::DuplicateParameter
+            | Self::UnquotedBareword => DiagnosticSeverity::Error,
 
             // Warnings
-            DiagnosticCode::MissingStrict
-            | DiagnosticCode::MissingWarnings
-            | DiagnosticCode::UnusedVariable
-            | DiagnosticCode::VariableShadowing
-            | DiagnosticCode::ParameterShadowsGlobal
-            | DiagnosticCode::UnusedParameter
-            | DiagnosticCode::UninitializedVariable
-            | DiagnosticCode::MisspelledPragma
-            | DiagnosticCode::MissingPackageDeclaration
-            | DiagnosticCode::DuplicatePackage
-            | DiagnosticCode::DuplicateSubroutine
-            | DiagnosticCode::MissingReturn
-            | DiagnosticCode::InvalidPrototype
-            | DiagnosticCode::RoleConflict
-            | DiagnosticCode::BarewordFilehandle
-            | DiagnosticCode::TwoArgOpen
-            | DiagnosticCode::ImplicitReturn
-            | DiagnosticCode::AssignmentInCondition
-            | DiagnosticCode::NumericComparisonWithUndef
-            | DiagnosticCode::PrintfFormatMismatch
-            | DiagnosticCode::DuplicateHashKey
-            | DiagnosticCode::GotoUndefinedLabel
-            | DiagnosticCode::DeprecatedDefined
-            | DiagnosticCode::DeprecatedArrayBase
-            | DiagnosticCode::PhaseScopedStrictPragma
-            | DiagnosticCode::PhaseScopedWarningsPragma
-            | DiagnosticCode::SecurityStringEval
-            | DiagnosticCode::SecurityBacktickExec
-            | DiagnosticCode::SecuritySignalHandler
-            | DiagnosticCode::SecuritySystemCall
-            | DiagnosticCode::SecurityExecCall
-            | DiagnosticCode::SecurityPipeOpen
-            | DiagnosticCode::SecurityReadpipe
-            | DiagnosticCode::ModuleNotFound
-            | DiagnosticCode::VersionIncompatFeature
-            | DiagnosticCode::EvalErrorFlow
-            | DiagnosticCode::CriticSeverity1
-            | DiagnosticCode::CriticSeverity2 => DiagnosticSeverity::Warning,
+            Self::MissingStrict
+            | Self::MissingWarnings
+            | Self::UnusedVariable
+            | Self::VariableShadowing
+            | Self::ParameterShadowsGlobal
+            | Self::UnusedParameter
+            | Self::UninitializedVariable
+            | Self::MisspelledPragma
+            | Self::MissingPackageDeclaration
+            | Self::DuplicatePackage
+            | Self::DuplicateSubroutine
+            | Self::MissingReturn
+            | Self::InvalidPrototype
+            | Self::RoleConflict
+            | Self::BarewordFilehandle
+            | Self::TwoArgOpen
+            | Self::ImplicitReturn
+            | Self::AssignmentInCondition
+            | Self::NumericComparisonWithUndef
+            | Self::PrintfFormatMismatch
+            | Self::DuplicateHashKey
+            | Self::GotoUndefinedLabel
+            | Self::DeprecatedDefined
+            | Self::DeprecatedArrayBase
+            | Self::PhaseScopedStrictPragma
+            | Self::PhaseScopedWarningsPragma
+            | Self::SecurityStringEval
+            | Self::SecurityBacktickExec
+            | Self::SecuritySignalHandler
+            | Self::SecuritySystemCall
+            | Self::SecurityExecCall
+            | Self::SecurityPipeOpen
+            | Self::SecurityReadpipe
+            | Self::ModuleNotFound
+            | Self::VersionIncompatFeature
+            | Self::EvalErrorFlow
+            | Self::CriticSeverity1
+            | Self::CriticSeverity2 => DiagnosticSeverity::Warning,
 
             // Information
-            DiagnosticCode::CaptureVarWithoutRegexMatch
-            | DiagnosticCode::HeredocInFormat
-            | DiagnosticCode::HeredocInBegin
-            | DiagnosticCode::HeredocDynamicDelimiter
-            | DiagnosticCode::HeredocInSourceFilter
-            | DiagnosticCode::HeredocInRegexCode
-            | DiagnosticCode::HeredocInEval
-            | DiagnosticCode::HeredocTiedHandle => DiagnosticSeverity::Information,
+            Self::CaptureVarWithoutRegexMatch
+            | Self::HeredocInFormat
+            | Self::HeredocInBegin
+            | Self::HeredocDynamicDelimiter
+            | Self::HeredocInSourceFilter
+            | Self::HeredocInRegexCode
+            | Self::HeredocInEval
+            | Self::HeredocTiedHandle => DiagnosticSeverity::Information,
 
             // Hints
-            DiagnosticCode::UnusedImport
-            | DiagnosticCode::UnreachableCode
-            | DiagnosticCode::CriticSeverity3
-            | DiagnosticCode::CriticSeverity4
-            | DiagnosticCode::CriticSeverity5 => DiagnosticSeverity::Hint,
+            Self::UnusedImport
+            | Self::UnreachableCode
+            | Self::CriticSeverity3
+            | Self::CriticSeverity4
+            | Self::CriticSeverity5 => DiagnosticSeverity::Hint,
         }
     }
 
     /// Get any diagnostic tags associated with this code.
     pub fn tags(&self) -> &'static [DiagnosticTag] {
         match self {
-            DiagnosticCode::UnusedVariable
-            | DiagnosticCode::UnusedParameter
-            | DiagnosticCode::UnusedImport
-            | DiagnosticCode::UnreachableCode => &[DiagnosticTag::Unnecessary],
-            DiagnosticCode::DeprecatedDefined | DiagnosticCode::DeprecatedArrayBase => {
-                &[DiagnosticTag::Deprecated]
-            }
+            Self::UnusedVariable
+            | Self::UnusedParameter
+            | Self::UnusedImport
+            | Self::UnreachableCode => &[DiagnosticTag::Unnecessary],
+            Self::DeprecatedDefined | Self::DeprecatedArrayBase => &[DiagnosticTag::Deprecated],
             _ => &[],
         }
     }
@@ -455,324 +456,396 @@ impl DiagnosticCode {
     /// purpose.
     pub fn context_hint(&self) -> Option<&'static str> {
         match self {
-            DiagnosticCode::ParseError => Some(
+            Self::ParseError => Some(
                 "The parser could not understand this code. \
                 Check for missing semicolons, unmatched brackets, or incorrect syntax.",
             ),
-            DiagnosticCode::SyntaxError => Some(
+            Self::SyntaxError => Some(
                 "Perl syntax error. Check for typos, missing operators, \
                 or unbalanced parentheses near this location.",
             ),
-            DiagnosticCode::UnexpectedEof => Some(
+            Self::UnexpectedEof => Some(
                 "The file ended unexpectedly. Check for unclosed blocks `{}`, \
                 heredocs, or multi-line strings.",
             ),
-            DiagnosticCode::MissingStrict => Some(
+            Self::MissingStrict => Some(
                 "Add `use strict;` at the top of your file. \
                 Strict mode catches common variable mistakes at compile time.",
             ),
-            DiagnosticCode::MissingWarnings => Some(
+            Self::MissingWarnings => Some(
                 "Add `use warnings;` at the top of your file. \
                 Warnings highlight many common programming mistakes.",
             ),
-            DiagnosticCode::UnusedVariable => Some(
+            Self::UnusedVariable => Some(
                 "This variable is declared but never used. \
                 Remove it, or prefix with `_` (e.g., `$_unused`) to suppress.",
             ),
-            DiagnosticCode::UndefinedVariable => Some(
+            Self::UndefinedVariable => Some(
                 "This variable was not declared with `my`, `our`, or `local`. \
                 Add `use strict;` and declare all variables before use.",
             ),
-            DiagnosticCode::MissingPackageDeclaration => Some(
+            Self::MissingPackageDeclaration => Some(
                 "This file has no `package` declaration. \
                 Add `package MyModule;` at the top for module files.",
             ),
-            DiagnosticCode::DuplicatePackage => Some(
+            Self::DuplicatePackage => Some(
                 "This package name is declared more than once in the same file. \
                 Each package should appear once, or split into separate files.",
             ),
-            DiagnosticCode::DuplicateSubroutine => Some(
+            Self::DuplicateSubroutine => Some(
                 "A subroutine with this name is defined more than once. \
                 The later definition silently replaces the earlier one.",
             ),
-            DiagnosticCode::MissingReturn => Some(
+            Self::MissingReturn => Some(
                 "This subroutine has no explicit `return` statement. \
                 Add `return $value;` to make the return value clear.",
             ),
-            DiagnosticCode::RoleConflict => Some(
+            Self::RoleConflict => Some(
                 "Two or more consumed Moo/Moose roles provide the same method. \
                 Define the method in the class or remove one of the conflicting roles.",
             ),
-            DiagnosticCode::InvalidPrototype => Some(
+            Self::InvalidPrototype => Some(
                 "The prototype contains a character that Perl does not recognise. \
                 Valid prototype characters are: $, @, %, &, *, \\, ;, +, _ and spaces. \
                 See perlsub for the full prototype syntax.",
             ),
-            DiagnosticCode::BarewordFilehandle => Some(
+            Self::BarewordFilehandle => Some(
                 "Bareword filehandles (e.g., `open FH, ...`) are global and unsafe. \
                 Use a lexical filehandle instead: `open my $fh, '<', $file or die $!;`",
             ),
-            DiagnosticCode::TwoArgOpen => Some(
+            Self::TwoArgOpen => Some(
                 "Two-argument `open()` is vulnerable to injection. \
                 Use three-argument form: `open my $fh, '<', $filename or die $!;`",
             ),
-            DiagnosticCode::ImplicitReturn => Some(
+            Self::ImplicitReturn => Some(
                 "The return value of this expression is used implicitly. \
                 Make it explicit with `return` or assign it to a variable.",
             ),
-            DiagnosticCode::AssignmentInCondition => Some(
+            Self::AssignmentInCondition => Some(
                 "This looks like an assignment `=` inside a condition where \
                 a comparison `==` or `eq` was likely intended.",
             ),
-            DiagnosticCode::NumericComparisonWithUndef => Some(
+            Self::NumericComparisonWithUndef => Some(
                 "Comparing a potentially undefined value with a numeric operator \
                 produces a warning at runtime. Check for definedness first with `defined()`.",
             ),
-            DiagnosticCode::EvalErrorFlow => Some(
+            Self::EvalErrorFlow => Some(
                 "Read `$@` or `$EVAL_ERROR` immediately after an `eval` or `try` \
                 block; intervening statements can clobber the exception state.",
             ),
-            DiagnosticCode::UnreachableCode => Some(
+            Self::UnreachableCode => Some(
                 "This statement cannot be executed because a preceding statement \
                 unconditionally exits (return, die, exit, croak). Remove or relocate it.",
             ),
-            DiagnosticCode::DuplicateHashKey => Some(
+            Self::DuplicateHashKey => Some(
                 "This hash key appears more than once in the same literal. \
                 Only the last value will be used; the earlier assignment is silently discarded.",
             ),
-            DiagnosticCode::GotoUndefinedLabel => Some(
+            Self::GotoUndefinedLabel => Some(
                 "This goto target label is not defined in the current file. \
                 Define the label or use a dynamic goto form only when the target is known at runtime.",
             ),
-            DiagnosticCode::PrintfFormatMismatch => Some(
+            Self::PrintfFormatMismatch => Some(
                 "The number of format specifiers does not match the number of arguments. \
                 Each %s/%d/%f/etc. consumes one argument (except %% which consumes none).",
             ),
-            DiagnosticCode::VariableShadowing => Some(
+            Self::VariableShadowing => Some(
                 "This variable shadows an outer variable with the same name. \
                 Rename it to avoid confusion, or use the outer variable directly.",
             ),
-            DiagnosticCode::VariableRedeclaration => Some(
+            Self::VariableRedeclaration => Some(
                 "This variable is declared again in the same scope. \
                 Remove the duplicate `my` declaration and reuse the existing variable.",
             ),
-            DiagnosticCode::DuplicateParameter => Some(
+            Self::DuplicateParameter => Some(
                 "This subroutine signature has a duplicate parameter name. \
                 Each parameter must have a unique name.",
             ),
-            DiagnosticCode::ParameterShadowsGlobal => Some(
+            Self::ParameterShadowsGlobal => Some(
                 "This subroutine parameter shadows a global (`our`) variable. \
                 Rename the parameter to avoid confusion with the global.",
             ),
-            DiagnosticCode::UnusedParameter => Some(
+            Self::UnusedParameter => Some(
                 "This subroutine parameter is declared but never used. \
                 Remove it or prefix with `_` (e.g., `$_unused`) to suppress.",
             ),
-            DiagnosticCode::UnquotedBareword => Some(
+            Self::UnquotedBareword => Some(
                 "This bareword is used where a quoted string is expected. \
                 Under `use strict`, barewords are not allowed. Quote it: `'word'`.",
             ),
-            DiagnosticCode::UninitializedVariable => Some(
+            Self::UninitializedVariable => Some(
                 "This variable is used before being assigned a value. \
                 Initialize it before use to avoid `Use of uninitialized value` warnings.",
             ),
-            DiagnosticCode::MisspelledPragma => Some(
+            Self::MisspelledPragma => Some(
                 "This pragma name appears to be misspelled. \
                 Check the spelling and ensure the module is installed.",
             ),
-            DiagnosticCode::CaptureVarWithoutRegexMatch => Some(
+            Self::CaptureVarWithoutRegexMatch => Some(
                 "Capture variables ($1, $2, etc.) are only meaningful after a successful regex match. \
                 Perform a regex match with =~ /.../ before using $1 or $2.",
             ),
-            DiagnosticCode::DeprecatedDefined => Some(
+            Self::DeprecatedDefined => Some(
                 "`defined(@array)` and `defined(%hash)` are deprecated since Perl 5.6. \
                 Use `@array` or `%hash` directly in boolean context instead.",
             ),
-            DiagnosticCode::DeprecatedArrayBase => Some(
+            Self::DeprecatedArrayBase => Some(
                 "The `$[` variable is deprecated. Array indices always start at 0 \
                 in modern Perl. Remove any assignment to `$[`.",
             ),
-            DiagnosticCode::PhaseScopedStrictPragma => Some(
+            Self::PhaseScopedStrictPragma => Some(
                 "`use strict` inside a phase block only applies inside that block. \
                 Move `use strict;` to file scope for file-wide strict enforcement.",
             ),
-            DiagnosticCode::PhaseScopedWarningsPragma => Some(
+            Self::PhaseScopedWarningsPragma => Some(
                 "`use warnings` inside a phase block only applies inside that block. \
                 Move `use warnings;` to file scope for file-wide warnings coverage.",
             ),
-            DiagnosticCode::SecurityStringEval => Some(
+            Self::SecurityStringEval => Some(
                 "String `eval` executes arbitrary code and is a security risk. \
                 Use block eval `eval { ... }` or safer alternatives.",
             ),
-            DiagnosticCode::SecurityBacktickExec => Some(
+            Self::SecurityBacktickExec => Some(
                 "Backticks/`qx()` execute shell commands and can be exploited. \
                 Use `system()` with a list form or IPC::Run for safer execution.",
             ),
-            DiagnosticCode::SecuritySignalHandler => Some(
+            Self::SecuritySignalHandler => Some(
                 "Assigning to $SIG{__DIE__} or $SIG{__WARN__} globally changes exception \
                 and warning handling for the whole process. Use `local` to scope the handler.",
             ),
-            DiagnosticCode::SecuritySystemCall => Some(
+            Self::SecuritySystemCall => Some(
                 "`system()` executes a shell command. If the arguments include user input, \
                 use the list form `system($cmd, @args)` to avoid shell injection.",
             ),
-            DiagnosticCode::SecurityExecCall => Some(
+            Self::SecurityExecCall => Some(
                 "`exec()` replaces the current process with a shell command. If arguments \
                 include user input, use the list form `exec($cmd, @args)` to avoid shell injection.",
             ),
-            DiagnosticCode::SecurityPipeOpen => Some(
+            Self::SecurityPipeOpen => Some(
                 "Pipe-open executes a shell command. Pass a list to `open` for safe argument \
                 handling: `open(my $fh, '-|', $cmd, @args)` instead of `open(my $fh, \"|$cmd\")`.",
             ),
-            DiagnosticCode::SecurityReadpipe => Some(
+            Self::SecurityReadpipe => Some(
                 "`readpipe()` executes a shell command (equivalent to backticks/qx//). \
                 Use `open(my $fh, '-|', $cmd, @args)` or IPC::Run for safer command execution.",
             ),
-            DiagnosticCode::UnusedImport => Some(
+            Self::UnusedImport => Some(
                 "This module is imported but none of its exports appear to be used. \
                 Remove the `use` statement to reduce unnecessary dependencies.",
             ),
-            DiagnosticCode::ModuleNotFound => Some(
+            Self::ModuleNotFound => Some(
                 "This module was not found in the workspace or configured include paths. \
                 Install it with cpanm or add it to cpanfile.",
             ),
-            DiagnosticCode::HeredocInFormat => Some(
+            Self::HeredocInFormat => Some(
                 "Heredocs inside `format` blocks can cause subtle parsing issues. \
                 Extract the heredoc content into a variable before the format.",
             ),
-            DiagnosticCode::HeredocInBegin => Some(
+            Self::HeredocInBegin => Some(
                 "Heredocs inside `BEGIN` blocks may behave unexpectedly due to \
                 compile-time execution. Move the heredoc outside the BEGIN block.",
             ),
-            DiagnosticCode::HeredocDynamicDelimiter => Some(
+            Self::HeredocDynamicDelimiter => Some(
                 "The heredoc delimiter contains a variable, making it dynamic. \
                 Use a static delimiter string to avoid surprising behavior.",
             ),
-            DiagnosticCode::HeredocInSourceFilter => Some(
+            Self::HeredocInSourceFilter => Some(
                 "Heredocs inside source-filtered code may be mangled by the filter. \
                 Avoid combining heredocs with source filters.",
             ),
-            DiagnosticCode::HeredocInRegexCode => Some(
+            Self::HeredocInRegexCode => Some(
                 "Heredocs inside regex code blocks `(?{ ... })` can cause parsing failures. \
                 Move the heredoc content outside the regex.",
             ),
-            DiagnosticCode::HeredocInEval => Some(
+            Self::HeredocInEval => Some(
                 "Heredocs inside string `eval` are fragile and error-prone. \
                 Use a variable or block eval instead.",
             ),
-            DiagnosticCode::HeredocTiedHandle => Some(
+            Self::HeredocTiedHandle => Some(
                 "Heredocs written to tied filehandles may not behave as expected. \
                 The tie interface may not handle multi-line heredoc output correctly.",
             ),
-            DiagnosticCode::VersionIncompatFeature => Some(
+            Self::VersionIncompatFeature => Some(
                 "This Perl feature requires a newer Perl version than declared. \
                 Update 'use vN.NN' or 'use feature' to enable it.",
             ),
             // Perl::Critic codes carry per-policy descriptions; no generic hint needed.
-            DiagnosticCode::CriticSeverity1
-            | DiagnosticCode::CriticSeverity2
-            | DiagnosticCode::CriticSeverity3
-            | DiagnosticCode::CriticSeverity4
-            | DiagnosticCode::CriticSeverity5 => None,
+            Self::CriticSeverity1
+            | Self::CriticSeverity2
+            | Self::CriticSeverity3
+            | Self::CriticSeverity4
+            | Self::CriticSeverity5 => None,
         }
     }
 
     /// Try to infer a diagnostic code from a message.
-    pub fn from_message(msg: &str) -> Option<DiagnosticCode> {
+    pub fn from_message(msg: &str) -> Option<Self> {
         let msg_lower = msg.to_lowercase();
         if msg_lower.contains("inside a begin block does not enable strict")
             || msg_lower.contains("inside a phase block does not enable strict")
         {
-            Some(DiagnosticCode::PhaseScopedStrictPragma)
+            Some(Self::PhaseScopedStrictPragma)
         } else if msg_lower.contains("inside a begin block does not enable warnings")
             || msg_lower.contains("inside a phase block does not enable warnings")
         {
-            Some(DiagnosticCode::PhaseScopedWarningsPragma)
+            Some(Self::PhaseScopedWarningsPragma)
         } else if msg_lower.contains("use strict") {
-            Some(DiagnosticCode::MissingStrict)
+            Some(Self::MissingStrict)
         } else if msg_lower.contains("use warnings") {
-            Some(DiagnosticCode::MissingWarnings)
+            Some(Self::MissingWarnings)
         } else if msg_lower.contains("unused variable") || msg_lower.contains("never used") {
-            Some(DiagnosticCode::UnusedVariable)
+            Some(Self::UnusedVariable)
         } else if msg_lower.contains("undefined") || msg_lower.contains("not declared") {
-            Some(DiagnosticCode::UndefinedVariable)
+            Some(Self::UndefinedVariable)
         } else if msg_lower.contains("bareword filehandle") {
-            Some(DiagnosticCode::BarewordFilehandle)
+            Some(Self::BarewordFilehandle)
         } else if msg_lower.contains("two-argument") || msg_lower.contains("2-arg") {
-            Some(DiagnosticCode::TwoArgOpen)
+            Some(Self::TwoArgOpen)
         } else if msg_lower.contains("invalid prototype character")
             || msg_lower.contains("illegal character in prototype")
         {
-            Some(DiagnosticCode::InvalidPrototype)
+            Some(Self::InvalidPrototype)
         } else if msg_lower.contains("parse error") || msg_lower.contains("syntax error") {
-            Some(DiagnosticCode::ParseError)
+            Some(Self::ParseError)
         } else {
             None
         }
     }
 
     /// Try to parse a code string into a DiagnosticCode.
-    pub fn parse_code(code: &str) -> Option<DiagnosticCode> {
+    pub fn parse_code(code: &str) -> Option<Self> {
         match code {
-            "PL001" => Some(DiagnosticCode::ParseError),
-            "PL002" => Some(DiagnosticCode::SyntaxError),
-            "PL003" => Some(DiagnosticCode::UnexpectedEof),
-            "PL100" => Some(DiagnosticCode::MissingStrict),
-            "PL101" => Some(DiagnosticCode::MissingWarnings),
-            "PL102" => Some(DiagnosticCode::UnusedVariable),
-            "PL103" => Some(DiagnosticCode::UndefinedVariable),
-            "PL104" => Some(DiagnosticCode::VariableShadowing),
-            "PL105" => Some(DiagnosticCode::VariableRedeclaration),
-            "PL106" => Some(DiagnosticCode::DuplicateParameter),
-            "PL107" => Some(DiagnosticCode::ParameterShadowsGlobal),
-            "PL108" => Some(DiagnosticCode::UnusedParameter),
-            "PL109" => Some(DiagnosticCode::UnquotedBareword),
-            "PL110" => Some(DiagnosticCode::UninitializedVariable),
-            "PL111" => Some(DiagnosticCode::MisspelledPragma),
-            "PL112" => Some(DiagnosticCode::CaptureVarWithoutRegexMatch),
-            "PL200" => Some(DiagnosticCode::MissingPackageDeclaration),
-            "PL201" => Some(DiagnosticCode::DuplicatePackage),
-            "PL300" => Some(DiagnosticCode::DuplicateSubroutine),
-            "PL301" => Some(DiagnosticCode::MissingReturn),
-            "PL302" => Some(DiagnosticCode::InvalidPrototype),
-            "PL303" => Some(DiagnosticCode::RoleConflict),
-            "PL400" => Some(DiagnosticCode::BarewordFilehandle),
-            "PL401" => Some(DiagnosticCode::TwoArgOpen),
-            "PL402" => Some(DiagnosticCode::ImplicitReturn),
-            "PL403" => Some(DiagnosticCode::AssignmentInCondition),
-            "PL404" => Some(DiagnosticCode::NumericComparisonWithUndef),
-            "PL405" => Some(DiagnosticCode::PrintfFormatMismatch),
-            "PL406" => Some(DiagnosticCode::UnreachableCode),
-            "PL407" => Some(DiagnosticCode::EvalErrorFlow),
-            "PL408" => Some(DiagnosticCode::DuplicateHashKey),
-            "PL409" => Some(DiagnosticCode::GotoUndefinedLabel),
-            "PL500" => Some(DiagnosticCode::DeprecatedDefined),
-            "PL501" => Some(DiagnosticCode::DeprecatedArrayBase),
-            "PL502" => Some(DiagnosticCode::PhaseScopedStrictPragma),
-            "PL503" => Some(DiagnosticCode::PhaseScopedWarningsPragma),
-            "PL600" => Some(DiagnosticCode::SecurityStringEval),
-            "PL601" => Some(DiagnosticCode::SecurityBacktickExec),
-            "PL602" => Some(DiagnosticCode::SecuritySignalHandler),
-            "PL603" => Some(DiagnosticCode::SecuritySystemCall),
-            "PL604" => Some(DiagnosticCode::SecurityExecCall),
-            "PL605" => Some(DiagnosticCode::SecurityPipeOpen),
-            "PL606" => Some(DiagnosticCode::SecurityReadpipe),
-            "PL700" => Some(DiagnosticCode::UnusedImport),
-            "PL701" => Some(DiagnosticCode::ModuleNotFound),
-            "PL800" => Some(DiagnosticCode::HeredocInFormat),
-            "PL801" => Some(DiagnosticCode::HeredocInBegin),
-            "PL802" => Some(DiagnosticCode::HeredocDynamicDelimiter),
-            "PL803" => Some(DiagnosticCode::HeredocInSourceFilter),
-            "PL804" => Some(DiagnosticCode::HeredocInRegexCode),
-            "PL805" => Some(DiagnosticCode::HeredocInEval),
-            "PL806" => Some(DiagnosticCode::HeredocTiedHandle),
-            "PL900" => Some(DiagnosticCode::VersionIncompatFeature),
-            "PC001" => Some(DiagnosticCode::CriticSeverity1),
-            "PC002" => Some(DiagnosticCode::CriticSeverity2),
-            "PC003" => Some(DiagnosticCode::CriticSeverity3),
-            "PC004" => Some(DiagnosticCode::CriticSeverity4),
-            "PC005" => Some(DiagnosticCode::CriticSeverity5),
+            "PL001" => Some(Self::ParseError),
+            "PL002" => Some(Self::SyntaxError),
+            "PL003" => Some(Self::UnexpectedEof),
+            "PL100" => Some(Self::MissingStrict),
+            "PL101" => Some(Self::MissingWarnings),
+            "PL102" => Some(Self::UnusedVariable),
+            "PL103" => Some(Self::UndefinedVariable),
+            "PL104" => Some(Self::VariableShadowing),
+            "PL105" => Some(Self::VariableRedeclaration),
+            "PL106" => Some(Self::DuplicateParameter),
+            "PL107" => Some(Self::ParameterShadowsGlobal),
+            "PL108" => Some(Self::UnusedParameter),
+            "PL109" => Some(Self::UnquotedBareword),
+            "PL110" => Some(Self::UninitializedVariable),
+            "PL111" => Some(Self::MisspelledPragma),
+            "PL112" => Some(Self::CaptureVarWithoutRegexMatch),
+            "PL200" => Some(Self::MissingPackageDeclaration),
+            "PL201" => Some(Self::DuplicatePackage),
+            "PL300" => Some(Self::DuplicateSubroutine),
+            "PL301" => Some(Self::MissingReturn),
+            "PL302" => Some(Self::InvalidPrototype),
+            "PL303" => Some(Self::RoleConflict),
+            "PL400" => Some(Self::BarewordFilehandle),
+            "PL401" => Some(Self::TwoArgOpen),
+            "PL402" => Some(Self::ImplicitReturn),
+            "PL403" => Some(Self::AssignmentInCondition),
+            "PL404" => Some(Self::NumericComparisonWithUndef),
+            "PL405" => Some(Self::PrintfFormatMismatch),
+            "PL406" => Some(Self::UnreachableCode),
+            "PL407" => Some(Self::EvalErrorFlow),
+            "PL408" => Some(Self::DuplicateHashKey),
+            "PL409" => Some(Self::GotoUndefinedLabel),
+            "PL500" => Some(Self::DeprecatedDefined),
+            "PL501" => Some(Self::DeprecatedArrayBase),
+            "PL502" => Some(Self::PhaseScopedStrictPragma),
+            "PL503" => Some(Self::PhaseScopedWarningsPragma),
+            "PL600" => Some(Self::SecurityStringEval),
+            "PL601" => Some(Self::SecurityBacktickExec),
+            "PL602" => Some(Self::SecuritySignalHandler),
+            "PL603" => Some(Self::SecuritySystemCall),
+            "PL604" => Some(Self::SecurityExecCall),
+            "PL605" => Some(Self::SecurityPipeOpen),
+            "PL606" => Some(Self::SecurityReadpipe),
+            "PL700" => Some(Self::UnusedImport),
+            "PL701" => Some(Self::ModuleNotFound),
+            "PL800" => Some(Self::HeredocInFormat),
+            "PL801" => Some(Self::HeredocInBegin),
+            "PL802" => Some(Self::HeredocDynamicDelimiter),
+            "PL803" => Some(Self::HeredocInSourceFilter),
+            "PL804" => Some(Self::HeredocInRegexCode),
+            "PL805" => Some(Self::HeredocInEval),
+            "PL806" => Some(Self::HeredocTiedHandle),
+            "PL900" => Some(Self::VersionIncompatFeature),
+            "PC001" => Some(Self::CriticSeverity1),
+            "PC002" => Some(Self::CriticSeverity2),
+            "PC003" => Some(Self::CriticSeverity3),
+            "PC004" => Some(Self::CriticSeverity4),
+            "PC005" => Some(Self::CriticSeverity5),
             _ => None,
+        }
+    }
+
+    /// Get the category of this diagnostic code.
+    pub fn category(&self) -> DiagnosticCategory {
+        match self {
+            Self::ParseError | Self::SyntaxError | Self::UnexpectedEof => {
+                DiagnosticCategory::Parser
+            }
+
+            Self::MissingStrict
+            | Self::MissingWarnings
+            | Self::UnusedVariable
+            | Self::UndefinedVariable
+            | Self::VariableShadowing
+            | Self::VariableRedeclaration
+            | Self::DuplicateParameter
+            | Self::ParameterShadowsGlobal
+            | Self::UnusedParameter
+            | Self::UnquotedBareword
+            | Self::UninitializedVariable
+            | Self::MisspelledPragma
+            | Self::CaptureVarWithoutRegexMatch
+            | Self::PhaseScopedStrictPragma
+            | Self::PhaseScopedWarningsPragma => DiagnosticCategory::StrictWarnings,
+
+            Self::MissingPackageDeclaration | Self::DuplicatePackage => {
+                DiagnosticCategory::PackageModule
+            }
+
+            Self::DuplicateSubroutine
+            | Self::MissingReturn
+            | Self::InvalidPrototype
+            | Self::RoleConflict => DiagnosticCategory::Subroutine,
+
+            Self::BarewordFilehandle
+            | Self::TwoArgOpen
+            | Self::ImplicitReturn
+            | Self::AssignmentInCondition
+            | Self::NumericComparisonWithUndef
+            | Self::PrintfFormatMismatch
+            | Self::UnreachableCode
+            | Self::EvalErrorFlow
+            | Self::DuplicateHashKey
+            | Self::GotoUndefinedLabel
+            | Self::VersionIncompatFeature => DiagnosticCategory::BestPractices,
+
+            Self::DeprecatedDefined | Self::DeprecatedArrayBase => DiagnosticCategory::Deprecated,
+
+            Self::SecurityStringEval
+            | Self::SecurityBacktickExec
+            | Self::SecuritySignalHandler
+            | Self::SecuritySystemCall
+            | Self::SecurityExecCall
+            | Self::SecurityPipeOpen
+            | Self::SecurityReadpipe => DiagnosticCategory::Security,
+
+            Self::UnusedImport | Self::ModuleNotFound => DiagnosticCategory::Import,
+
+            Self::HeredocInFormat
+            | Self::HeredocInBegin
+            | Self::HeredocDynamicDelimiter
+            | Self::HeredocInSourceFilter
+            | Self::HeredocInRegexCode
+            | Self::HeredocInEval
+            | Self::HeredocTiedHandle => DiagnosticCategory::Heredoc,
+
+            Self::CriticSeverity1
+            | Self::CriticSeverity2
+            | Self::CriticSeverity3
+            | Self::CriticSeverity4
+            | Self::CriticSeverity5 => DiagnosticCategory::PerlCritic,
         }
     }
 }
@@ -809,160 +882,19 @@ pub enum DiagnosticCategory {
     PerlCritic,
 }
 
-impl DiagnosticCode {
-    /// Get the category of this diagnostic code.
-    pub fn category(&self) -> DiagnosticCategory {
+impl fmt::Display for DiagnosticCategory {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            DiagnosticCode::ParseError
-            | DiagnosticCode::SyntaxError
-            | DiagnosticCode::UnexpectedEof => DiagnosticCategory::Parser,
-
-            DiagnosticCode::MissingStrict
-            | DiagnosticCode::MissingWarnings
-            | DiagnosticCode::UnusedVariable
-            | DiagnosticCode::UndefinedVariable
-            | DiagnosticCode::VariableShadowing
-            | DiagnosticCode::VariableRedeclaration
-            | DiagnosticCode::DuplicateParameter
-            | DiagnosticCode::ParameterShadowsGlobal
-            | DiagnosticCode::UnusedParameter
-            | DiagnosticCode::UnquotedBareword
-            | DiagnosticCode::UninitializedVariable
-            | DiagnosticCode::MisspelledPragma
-            | DiagnosticCode::CaptureVarWithoutRegexMatch => DiagnosticCategory::StrictWarnings,
-
-            DiagnosticCode::MissingPackageDeclaration | DiagnosticCode::DuplicatePackage => {
-                DiagnosticCategory::PackageModule
-            }
-
-            DiagnosticCode::DuplicateSubroutine
-            | DiagnosticCode::MissingReturn
-            | DiagnosticCode::InvalidPrototype => DiagnosticCategory::Subroutine,
-            DiagnosticCode::RoleConflict => DiagnosticCategory::Subroutine,
-
-            DiagnosticCode::BarewordFilehandle
-            | DiagnosticCode::TwoArgOpen
-            | DiagnosticCode::ImplicitReturn
-            | DiagnosticCode::AssignmentInCondition
-            | DiagnosticCode::NumericComparisonWithUndef
-            | DiagnosticCode::PrintfFormatMismatch
-            | DiagnosticCode::UnreachableCode
-            | DiagnosticCode::EvalErrorFlow
-            | DiagnosticCode::DuplicateHashKey
-            | DiagnosticCode::GotoUndefinedLabel => DiagnosticCategory::BestPractices,
-
-            DiagnosticCode::DeprecatedDefined | DiagnosticCode::DeprecatedArrayBase => {
-                DiagnosticCategory::Deprecated
-            }
-
-            DiagnosticCode::PhaseScopedStrictPragma | DiagnosticCode::PhaseScopedWarningsPragma => {
-                DiagnosticCategory::StrictWarnings
-            }
-
-            DiagnosticCode::SecurityStringEval
-            | DiagnosticCode::SecurityBacktickExec
-            | DiagnosticCode::SecuritySignalHandler
-            | DiagnosticCode::SecuritySystemCall
-            | DiagnosticCode::SecurityExecCall
-            | DiagnosticCode::SecurityPipeOpen
-            | DiagnosticCode::SecurityReadpipe => DiagnosticCategory::Security,
-
-            DiagnosticCode::UnusedImport | DiagnosticCode::ModuleNotFound => {
-                DiagnosticCategory::Import
-            }
-
-            DiagnosticCode::HeredocInFormat
-            | DiagnosticCode::HeredocInBegin
-            | DiagnosticCode::HeredocDynamicDelimiter
-            | DiagnosticCode::HeredocInSourceFilter
-            | DiagnosticCode::HeredocInRegexCode
-            | DiagnosticCode::HeredocInEval
-            | DiagnosticCode::HeredocTiedHandle => DiagnosticCategory::Heredoc,
-
-            DiagnosticCode::VersionIncompatFeature => DiagnosticCategory::BestPractices,
-
-            DiagnosticCode::CriticSeverity1
-            | DiagnosticCode::CriticSeverity2
-            | DiagnosticCode::CriticSeverity3
-            | DiagnosticCode::CriticSeverity4
-            | DiagnosticCode::CriticSeverity5 => DiagnosticCategory::PerlCritic,
+            Self::Parser => write!(f, "Parser"),
+            Self::StrictWarnings => write!(f, "Strict/Warnings"),
+            Self::PackageModule => write!(f, "Package/Module"),
+            Self::Subroutine => write!(f, "Subroutine"),
+            Self::BestPractices => write!(f, "Best Practices"),
+            Self::Deprecated => write!(f, "Deprecated"),
+            Self::Security => write!(f, "Security"),
+            Self::Import => write!(f, "Import"),
+            Self::Heredoc => write!(f, "Heredoc"),
+            Self::PerlCritic => write!(f, "Perl::Critic"),
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_code_strings() {
-        assert_eq!(DiagnosticCode::ParseError.as_str(), "PL001");
-        assert_eq!(DiagnosticCode::MissingStrict.as_str(), "PL100");
-        assert_eq!(DiagnosticCode::EvalErrorFlow.as_str(), "PL407");
-        assert_eq!(DiagnosticCode::CriticSeverity1.as_str(), "PC001");
-        assert_eq!(DiagnosticCode::SecuritySignalHandler.as_str(), "PL602");
-        assert_eq!(DiagnosticCode::GotoUndefinedLabel.as_str(), "PL409");
-        assert_eq!(DiagnosticCode::PhaseScopedStrictPragma.as_str(), "PL502");
-        assert_eq!(DiagnosticCode::PhaseScopedWarningsPragma.as_str(), "PL503");
-    }
-
-    #[test]
-    fn test_severity() {
-        assert_eq!(DiagnosticCode::ParseError.severity(), DiagnosticSeverity::Error);
-        assert_eq!(DiagnosticCode::UnusedVariable.severity(), DiagnosticSeverity::Warning);
-        assert_eq!(DiagnosticCode::EvalErrorFlow.severity(), DiagnosticSeverity::Warning);
-        assert_eq!(DiagnosticCode::CriticSeverity5.severity(), DiagnosticSeverity::Hint);
-        assert_eq!(DiagnosticCode::PhaseScopedStrictPragma.severity(), DiagnosticSeverity::Warning);
-    }
-
-    #[test]
-    fn test_from_message() {
-        assert_eq!(
-            DiagnosticCode::from_message("Missing 'use strict' pragma"),
-            Some(DiagnosticCode::MissingStrict)
-        );
-        assert_eq!(
-            DiagnosticCode::from_message(
-                "`use strict` inside a BEGIN block does not enable strict for the rest of the file"
-            ),
-            Some(DiagnosticCode::PhaseScopedStrictPragma)
-        );
-        assert_eq!(
-            DiagnosticCode::from_message("Unused variable $foo"),
-            Some(DiagnosticCode::UnusedVariable)
-        );
-    }
-
-    #[test]
-    fn test_from_str() {
-        assert_eq!(DiagnosticCode::parse_code("PL001"), Some(DiagnosticCode::ParseError));
-        assert_eq!(
-            DiagnosticCode::parse_code("PL602"),
-            Some(DiagnosticCode::SecuritySignalHandler)
-        );
-        assert_eq!(
-            DiagnosticCode::parse_code("PL503"),
-            Some(DiagnosticCode::PhaseScopedWarningsPragma)
-        );
-        assert_eq!(DiagnosticCode::parse_code("INVALID"), None);
-    }
-
-    #[test]
-    fn test_category() {
-        assert_eq!(DiagnosticCode::ParseError.category(), DiagnosticCategory::Parser);
-        assert_eq!(DiagnosticCode::MissingStrict.category(), DiagnosticCategory::StrictWarnings);
-        assert_eq!(DiagnosticCode::SecuritySignalHandler.category(), DiagnosticCategory::Security);
-        assert_eq!(DiagnosticCode::EvalErrorFlow.category(), DiagnosticCategory::BestPractices);
-        assert_eq!(DiagnosticCode::CriticSeverity1.category(), DiagnosticCategory::PerlCritic);
-        assert_eq!(
-            DiagnosticCode::PhaseScopedStrictPragma.category(),
-            DiagnosticCategory::StrictWarnings
-        );
-    }
-
-    #[test]
-    fn test_tags() {
-        assert!(DiagnosticCode::UnusedVariable.tags().contains(&DiagnosticTag::Unnecessary));
-        assert!(DiagnosticCode::ParseError.tags().is_empty());
     }
 }

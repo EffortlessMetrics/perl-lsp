@@ -4,7 +4,7 @@
 //! These tests verify: correct stable code string, presence/absence of docs URL,
 //! and that `from_message` correctly round-trips known keywords.
 
-use perl_lsp_diagnostic_catalog as catalog;
+use perl_diagnostics::catalog;
 
 // ---------------------------------------------------------------------------
 // Parse / syntax errors (PL001–PL003)
@@ -200,14 +200,14 @@ fn from_message_returns_parse_error_meta_for_parse_keyword() {
 
 #[test]
 fn diagnostic_meta_directly_wraps_provided_code() {
-    use perl_diagnostics_codes::DiagnosticCode;
+    use perl_diagnostics::codes::DiagnosticCode;
     let meta = catalog::diagnostic_meta(DiagnosticCode::ParseError);
     assert_eq!(meta.code, "PL001");
 }
 
 #[test]
 fn all_pl_codes_have_docs_url_all_pc_codes_do_not() {
-    use perl_diagnostics_codes::DiagnosticCode;
+    use perl_diagnostics::codes::DiagnosticCode;
 
     // PL codes should have docs URLs
     for code in [

@@ -4,7 +4,7 @@
 //! disable diagnostics thinking the LSP is broken. Each code should return
 //! an actionable hint string.
 
-use perl_diagnostics_codes::DiagnosticCode;
+use perl_diagnostics::codes::DiagnosticCode;
 
 // ---------------------------------------------------------------------------
 // Parser codes — hints required (PL001-PL003)

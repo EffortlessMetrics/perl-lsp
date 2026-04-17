@@ -6,8 +6,9 @@
 //! - nested blocks are analyzed independently
 //! - no attempt is made to model interprocedural dataflow
 
-use perl_diagnostics_codes::DiagnosticCode;
-use perl_lsp_diagnostic_types::{Diagnostic, DiagnosticSeverity, RelatedInformation};
+use crate::internal_types::{Diagnostic, RelatedInformation};
+use perl_diagnostics::codes::DiagnosticCode;
+use perl_diagnostics::codes::DiagnosticSeverity;
 use perl_parser_core::ast::{Node, NodeKind};
 
 /// Warn on stale or context-free reads of `$@` / `$EVAL_ERROR`.

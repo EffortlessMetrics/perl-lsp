@@ -17,10 +17,11 @@
 //! | `PL605` | Warning | Pipe-open executes shell commands |
 //! | `PL606` | Warning | `readpipe()` executes shell commands (equivalent to qx//) |
 
-use perl_diagnostics_codes::DiagnosticCode;
+use perl_diagnostics::codes::DiagnosticCode;
 use perl_parser_core::ast::{Node, NodeKind};
 
-use perl_lsp_diagnostic_types::{Diagnostic, DiagnosticSeverity, RelatedInformation};
+use crate::internal_types::{Diagnostic, RelatedInformation};
+use perl_diagnostics::codes::DiagnosticSeverity;
 
 /// Check for security anti-patterns
 ///

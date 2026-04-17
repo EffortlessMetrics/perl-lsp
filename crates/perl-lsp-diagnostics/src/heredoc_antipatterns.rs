@@ -1,8 +1,9 @@
 //! Heredoc anti-pattern detection diagnostics
 
-use perl_diagnostics_codes::DiagnosticCode;
+use crate::internal_types::Diagnostic;
+use perl_diagnostics::codes::DiagnosticCode;
+use perl_diagnostics::codes::DiagnosticSeverity;
 use perl_heredoc_anti_patterns::{AntiPattern, AntiPatternDetector, Severity};
-use perl_lsp_diagnostic_types::{Diagnostic, DiagnosticSeverity};
 
 /// Detect heredoc anti-patterns in Perl source code.
 ///

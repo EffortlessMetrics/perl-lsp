@@ -10,12 +10,13 @@
 //! | `assignment-in-condition` | Warning | `=` in `if`/`while` condition (likely meant `==`) |
 //! | `numeric-undef` | Warning | `==`/`!=` with potentially undefined value |
 
-use perl_diagnostics_codes::DiagnosticCode;
+use perl_diagnostics::codes::DiagnosticCode;
 use perl_parser_core::ast::{Node, NodeKind};
 use perl_semantic_analyzer::symbol::{SymbolKind, SymbolTable};
 
 use super::super::walker::walk_node;
-use perl_lsp_diagnostic_types::{Diagnostic, DiagnosticSeverity, RelatedInformation};
+use crate::internal_types::{Diagnostic, RelatedInformation};
+use perl_diagnostics::codes::DiagnosticSeverity;
 
 /// Check for common mistakes
 ///

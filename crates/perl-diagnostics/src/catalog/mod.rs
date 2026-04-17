@@ -1,14 +1,10 @@
-//! Diagnostic catalog with stable codes for consistent LSP error reporting.
+//! Diagnostic metadata catalog.
 //!
-//! This crate provides a focused mapping from [`perl_diagnostics_codes::DiagnosticCode`]
-//! to LSP-facing metadata payloads.
+//! Functions to build LSP-facing metadata payloads from stable diagnostic codes.
+//! This module provides a focused mapping from [`crate::codes::DiagnosticCode`]
+//! to LSP-facing metadata.
 
-#![deny(unsafe_code)]
-#![warn(rust_2018_idioms)]
-#![warn(missing_docs)]
-#![warn(clippy::all)]
-
-use perl_diagnostics_codes::DiagnosticCode;
+use crate::codes::DiagnosticCode;
 use serde_json::{Value, json};
 
 /// Diagnostic metadata payload used by LSP diagnostics.
@@ -21,6 +17,12 @@ pub struct DiagnosticMeta {
     /// means and how to resolve it.  `None` for codes (e.g. Perl::Critic)
     /// whose per-policy descriptions already serve this purpose.
     pub hint: Option<&'static str>,
+}
+
+impl Default for DiagnosticMeta {
+    fn default() -> Self {
+        Self { code: json!("PL001"), desc: None, hint: None }
+    }
 }
 
 impl DiagnosticMeta {

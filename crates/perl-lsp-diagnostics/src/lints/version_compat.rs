@@ -14,12 +14,13 @@
 //! When no version is declared at all, the check emits nothing — undeclared
 //! version is ambiguous (the file may be targeting the system Perl).
 
-use perl_diagnostics_codes::DiagnosticCode;
+use perl_diagnostics::codes::DiagnosticCode;
 use perl_parser_core::ast::{Node, NodeKind};
 use perl_pragma::{PerlVersion, PragmaTracker, parse_perl_version};
 
 use super::super::walker::walk_node;
-use perl_lsp_diagnostic_types::{Diagnostic, DiagnosticSeverity};
+use crate::internal_types::Diagnostic;
+use perl_diagnostics::codes::DiagnosticSeverity;
 
 /// Feature → minimum (major, minor) version table.
 ///

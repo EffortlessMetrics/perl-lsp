@@ -1,5 +1,5 @@
 /// Comprehensive tests for LSP code actions and refactorings
-use perl_diagnostics_codes::DiagnosticCode;
+use perl_diagnostics::codes::DiagnosticCode;
 use serde_json::json;
 
 mod common;
