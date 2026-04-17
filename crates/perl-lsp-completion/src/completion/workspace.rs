@@ -13,7 +13,9 @@ use perl_semantic_analyzer::type_inference::{PerlType, TypeInferenceEngine};
 use perl_workspace::workspace_index::{
     SymbolKind as WsSymbolKind, VarKind, WorkspaceIndex, WorkspaceSymbol,
 };
+use std::cell::RefCell;
 use std::collections::{HashMap, HashSet, VecDeque};
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 /// Add workspace symbol completions for functions and variables
@@ -230,64 +232,362 @@ fn module_sort_tier(name: &str) -> &'static str {
     }
 }
 
+/// Performance guard constants for include path scanning.
+const SCAN_MAX_DEPTH: usize = 8;
+const SCAN_MAX_ENTRIES_PER_PATH: usize = 20;
+
+/// Convert a file path to a Perl module name.
+///
+/// Examples:
+/// - `DBI.pm` → `Some("DBI")`
+/// - `lib/DBD/MySQL.pm` → `Some("DBD::MySQL")`
+/// - `lib/perl5/vendor_perl/Foo/Bar.pm` → `Some("Foo::Bar")` (strips vendor_perl)
+/// - `some/nested/path.pm` → `Some("some::nested::path")`
+///
+/// Returns `None` if the file doesn't have a `.pm` extension or the module name
+/// cannot be derived (e.g., empty path after stripping).
+fn path_to_module_name(path: &Path, base_path: &Path) -> Option<String> {
+    // Get the file stem (filename without extension)
+    let file_stem = path.file_stem()?;
+    let module_name = file_stem.to_str()?;
+
+    // Get the parent directory relative to the base include path
+    let parent = path.parent()?;
+    let relative = parent.strip_prefix(base_path).ok()?;
+
+    // Build the module name from path components
+    let mut parts: Vec<&str> = Vec::new();
+
+    // Split the relative path into components
+    for component in relative.components() {
+        match component {
+            std::path::Component::Normal(name) => {
+                let name_str = name.to_str()?;
+                // Skip common Perl library directories
+                if name_str == "lib" || name_str == "perl5" {
+                    continue;
+                }
+                // Skip vendor_perl, site_perl, archlib components
+                if name_str == "vendor_perl" || name_str == "site_perl" || name_str == "archlib" {
+                    continue;
+                }
+                parts.push(name_str);
+            }
+            std::path::Component::ParentDir => {
+                // Skip parent directory references
+                continue;
+            }
+            _ => {
+                // Skip other components (Prefix, RootDir, CurDir, etc.)
+                continue;
+            }
+        }
+    }
+
+    // If we have path components, join them with ::
+    if parts.is_empty() {
+        // Module is directly in the include path root (e.g., DBI.pm at /path/DBI.pm)
+        Some(module_name.to_string())
+    } else {
+        // Module is in a subdirectory (e.g., DBD/MySQL.pm at /path/DBD/MySQL.pm)
+        parts.push(module_name);
+        Some(parts.join("::"))
+    }
+}
+
+/// Scan a single directory for `.pm` files matching a prefix.
+///
+/// Uses WalkDir with depth limit (8) and entry limit (20 per path) to prevent
+/// excessive filesystem traversal. Results are cached in `include_path_cache`.
+///
+/// # Arguments
+///
+/// * `dir` - The directory to scan
+/// * `prefix` - The module name prefix to filter on (e.g., `"DB"` matches `"DBI"`)
+/// * `seen` - Modules already found (used for deduplication within this scan)
+/// * `is_cancelled` - Cancellation callback
+///
+/// Returns a `Vec` of module names found in this directory.
+#[cfg(not(target_arch = "wasm32"))]
+fn scan_directory_for_modules<F>(
+    dir: &Path,
+    prefix: &str,
+    seen: &mut HashSet<String>,
+    is_cancelled: &F,
+) -> Vec<String>
+where
+    F: Fn() -> bool + ?Sized,
+{
+    use walkdir::WalkDir;
+
+    let mut results = Vec::new();
+
+    // Create a WalkDir iterator with depth and entry limits
+    let walker = WalkDir::new(dir).max_depth(SCAN_MAX_DEPTH).follow_links(false);
+
+    for (entries_examined, entry) in walker
+        .into_iter()
+        .filter_map(|e: Result<walkdir::DirEntry, walkdir::Error>| e.ok())
+        .enumerate()
+    {
+        // Check for cancellation periodically
+        if entries_examined.is_multiple_of(10) && is_cancelled() {
+            break;
+        }
+
+        // Enforce entry limit per path
+        if results.len() >= SCAN_MAX_ENTRIES_PER_PATH {
+            break;
+        }
+
+        // Only process files with .pm extension
+        let path = entry.path();
+        if !path.is_file() {
+            continue;
+        }
+
+        let extension = path.extension().and_then(|e: &std::ffi::OsStr| e.to_str());
+        if extension != Some("pm") {
+            continue;
+        }
+
+        // Convert path to module name
+        let Some(module_name) = path_to_module_name(path, dir) else {
+            continue;
+        };
+
+        // Filter by prefix - module name must start with the prefix
+        if !prefix.is_empty() && !module_name.starts_with(prefix) {
+            continue;
+        }
+
+        // Skip if already seen (handles deduplication across multiple paths)
+        if !seen.insert(module_name.clone()) {
+            continue;
+        }
+
+        results.push(module_name);
+    }
+
+    results
+}
+
+/// WASM32 fallback: no-op directory scanning.
+#[cfg(target_arch = "wasm32")]
+fn scan_directory_for_modules<F>(
+    _dir: &Path,
+    _prefix: &str,
+    _seen: &mut HashSet<String>,
+    _is_cancelled: &F,
+) -> Vec<String>
+where
+    F: Fn() -> bool + ?Sized,
+{
+    Vec::new()
+}
+
+/// Scan all include paths for modules matching a prefix.
+///
+/// This function iterates through the configured include paths and scans
+/// each directory for `.pm` files. Results are cached per-directory in
+/// `include_path_cache` to avoid repeated filesystem scans.
+///
+/// # Arguments
+///
+/// * `prefix` - The module name prefix to filter on (e.g., `"DB"` matches `"DBI"`)
+/// * `include_paths` - List of include path directories to scan
+/// * `cache` - Per-directory cache of discovered module names
+/// * `seen` - Modules already found (used for deduplication across paths)
+/// * `is_cancelled` - Cancellation callback
+///
+/// Returns a `Vec` of unique module names found across all include paths.
+#[cfg(not(target_arch = "wasm32"))]
+fn scan_include_paths_for_modules(
+    prefix: &str,
+    include_paths: &[&PathBuf],
+    cache: &RefCell<HashMap<PathBuf, Vec<String>>>,
+    seen: &HashSet<String>,
+    is_cancelled: &dyn Fn() -> bool,
+) -> Vec<String> {
+    let mut results = Vec::new();
+
+    for inc_path in include_paths {
+        // Check for cancellation before each path
+        if is_cancelled() {
+            break;
+        }
+
+        // Skip non-existent directories
+        if !inc_path.exists() || !inc_path.is_dir() {
+            continue;
+        }
+
+        // Check cache first
+        let cached = {
+            let cache_guard = cache.borrow();
+            // Iterate through cache to find a matching path
+            // inc_path is &&PathBuf, dereference to &PathBuf for comparison
+            cache_guard.iter().find(|(k, _)| **k == **inc_path).map(|(_, v)| v.clone())
+        };
+
+        let modules = if let Some(cached_modules) = cached {
+            cached_modules
+        } else {
+            // Scan the directory and cache results
+            let mut temp_seen: HashSet<String> = HashSet::new();
+            let scanned = scan_directory_for_modules(inc_path, "", &mut temp_seen, is_cancelled);
+
+            // Store in cache
+            let mut cache_guard = cache.borrow_mut();
+            // inc_path is &&PathBuf, dereference twice to get PathBuf for the insert() call
+            cache_guard.insert((**inc_path).clone(), scanned.clone());
+
+            scanned
+        };
+
+        // Filter by prefix and add to results
+        for module_name in modules {
+            // Skip if already in the global `seen` set (workspace priority)
+            if seen.contains(&module_name) {
+                continue;
+            }
+
+            // Filter by prefix
+            if !prefix.is_empty() && !module_name.starts_with(prefix) {
+                continue;
+            }
+
+            results.push(module_name);
+        }
+    }
+
+    results
+}
+
+/// WASM32 fallback: no-op include path scanning.
+#[cfg(target_arch = "wasm32")]
+fn scan_include_paths_for_modules(
+    _prefix: &str,
+    _include_paths: &[&PathBuf],
+    _cache: &RefCell<HashMap<PathBuf, Vec<String>>>,
+    _seen: &HashSet<String>,
+    _is_cancelled: &dyn Fn() -> bool,
+) -> Vec<String> {
+    Vec::new()
+}
+
 /// Add module name completions for `use` and `require` statements.
 ///
 /// When the cursor is after `use ` or `require `, suggests package names from the
-/// workspace index. This enables discovering available modules as you type.
+/// workspace index AND include paths (from `.perl-lsp.toml` `includePaths`,
+/// `PERL5LIB`, and system @INC when `useSystemInc: true`).
 ///
-/// For example, typing `use My` will suggest `MyApp`, `MyApp::Config`, etc.
+/// This implements a dual-tier search:
+/// - Tier 1 (priority): Workspace index modules — sorted with prefix `1_`
+/// - Tier 2 (fallback): Include path modules — sorted with prefix `2_`
+///
+/// Deduplication via `seen` HashSet ensures no duplicate module names.
 pub fn add_use_module_completions(
     completions: &mut Vec<CompletionItem>,
     context: &CompletionContext,
     workspace_index: &Option<Arc<WorkspaceIndex>>,
+    include_paths: &[PathBuf],
+    system_inc_paths: &[PathBuf],
+    include_path_cache: &RefCell<HashMap<PathBuf, Vec<String>>>,
 ) {
-    let Some(index) = workspace_index else {
-        return;
-    };
-
-    if !index.has_symbols() {
-        return;
-    }
-
     let mut seen: HashSet<String> = HashSet::new();
 
-    // Search for package symbols matching the prefix
-    let all_symbols = if context.prefix.is_empty() {
-        index.all_symbols()
-    } else {
-        index.find_symbols(&context.prefix)
-    };
+    // Tier 1: Search workspace index (priority)
+    if let Some(index) = workspace_index {
+        if !index.has_symbols() {
+            // No symbols in workspace, skip to include path scanning
+        } else {
+            // Search for package symbols matching the prefix
+            let all_symbols = if context.prefix.is_empty() {
+                index.all_symbols()
+            } else {
+                index.find_symbols(&context.prefix)
+            };
 
-    for symbol in all_symbols {
-        if symbol.kind != WsSymbolKind::Package {
-            continue;
+            for symbol in all_symbols {
+                if symbol.kind != WsSymbolKind::Package {
+                    continue;
+                }
+
+                // Match against the module name prefix
+                if !context.prefix.is_empty() && !symbol.name.starts_with(&context.prefix) {
+                    continue;
+                }
+
+                if !seen.insert(symbol.name.clone()) {
+                    continue;
+                }
+
+                let name = &symbol.name;
+                completions.push(CompletionItem {
+                    label: name.clone(),
+                    kind: CompletionItemKind::Module,
+                    detail: Some("module".to_string()),
+                    documentation: symbol
+                        .documentation
+                        .clone()
+                        .or_else(|| Some(format!("Package `{name}`"))),
+                    insert_text: Some(name.clone()),
+                    // Workspace modules always use "1_" prefix (tier-based sub-sorting
+                    // within workspace is handled by include path tier, not workspace tier)
+                    sort_text: Some(format!("1_{name}")),
+                    filter_text: Some(name.clone()),
+                    additional_edits: vec![],
+                    text_edit_range: Some((context.prefix_start, context.position)),
+                    commit_characters: None,
+                });
+            }
+        }
+    }
+
+    // Tier 2: Search include paths (fallback)
+    // Combine both include_paths and system_inc_paths for scanning
+    let all_inc_paths: Vec<&PathBuf> =
+        include_paths.iter().chain(system_inc_paths.iter()).collect();
+
+    if !all_inc_paths.is_empty() {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let inc_modules = scan_include_paths_for_modules(
+                &context.prefix,
+                &all_inc_paths,
+                include_path_cache,
+                &seen,
+                &|| false, // is_cancelled callback
+            );
+
+            for module_name in inc_modules {
+                // Module already in `seen` from workspace index, skip
+                if !seen.insert(module_name.clone()) {
+                    continue;
+                }
+
+                completions.push(CompletionItem {
+                    label: module_name.clone(),
+                    kind: CompletionItemKind::Module,
+                    detail: Some("module".to_string()),
+                    documentation: None,
+                    insert_text: Some(module_name.clone()),
+                    // Tier 2: include path modules sorted with prefix "2_"
+                    sort_text: Some(format!("2_{module_name}")),
+                    filter_text: Some(module_name),
+                    additional_edits: vec![],
+                    text_edit_range: Some((context.prefix_start, context.position)),
+                    commit_characters: None,
+                });
+            }
         }
 
-        // Match against the module name prefix
-        if !context.prefix.is_empty() && !symbol.name.starts_with(&context.prefix) {
-            continue;
+        // WASM32: graceful no-op - include path scanning not available on WASM
+        #[cfg(target_arch = "wasm32")]
+        {
+            let _ = (include_paths, system_inc_paths, include_path_cache);
         }
-
-        if !seen.insert(symbol.name.clone()) {
-            continue;
-        }
-
-        let name = &symbol.name;
-        completions.push(CompletionItem {
-            label: name.clone(),
-            kind: CompletionItemKind::Module,
-            detail: Some("module".to_string()),
-            documentation: symbol
-                .documentation
-                .clone()
-                .or_else(|| Some(format!("Package `{name}`"))),
-            insert_text: Some(name.clone()),
-            sort_text: Some(format!("1{}_{name}", module_sort_tier(name))),
-            filter_text: Some(name.clone()),
-            additional_edits: vec![],
-            text_edit_range: Some((context.prefix_start, context.position)),
-            commit_characters: None,
-        });
     }
 }
 

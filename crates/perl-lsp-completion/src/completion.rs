@@ -121,7 +121,9 @@ use perl_semantic_analyzer::semantic::{BuiltinDoc, get_moose_type_documentation}
 use perl_semantic_analyzer::symbol::{SymbolExtractor, SymbolKind, SymbolTable};
 use perl_semantic_analyzer::type_inference::TypeInferenceEngine;
 use perl_workspace::workspace_index::WorkspaceIndex;
+use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
+use std::path::PathBuf;
 use std::sync::Arc;
 
 /// Maps module_name -> Set of explicitly imported symbol names.
@@ -170,6 +172,13 @@ pub struct CompletionProvider {
     type_engine: Option<TypeInferenceEngine>,
     workspace_index: Option<Arc<WorkspaceIndex>>,
     import_map: ImportMap,
+    /// Include paths from `.perl-lsp.toml` `includePaths` and `PERL5LIB` env var.
+    include_paths: Vec<PathBuf>,
+    /// System @INC paths (only populated when `useSystemInc: true` in config).
+    system_inc_paths: Vec<PathBuf>,
+    /// Per-directory cache of discovered module names for include path scanning.
+    /// Maps a directory PathBuf to a Vec of module names found in that directory.
+    include_path_cache: RefCell<HashMap<PathBuf, Vec<String>>>,
 }
 
 impl CompletionProvider {
@@ -258,7 +267,62 @@ impl CompletionProvider {
         });
         let import_map = Self::extract_import_map(ast);
 
-        CompletionProvider { symbol_table, class_models, type_engine, workspace_index, import_map }
+        CompletionProvider {
+            symbol_table,
+            class_models,
+            type_engine,
+            workspace_index,
+            import_map,
+            include_paths: Vec::new(),
+            system_inc_paths: Vec::new(),
+            include_path_cache: RefCell::new(HashMap::new()),
+        }
+    }
+
+    /// Create a new completion provider with include path support for module completion.
+    ///
+    /// This constructor extends `new_with_index_and_source` with the ability to scan
+    /// include paths (from `.perl-lsp.toml` `includePaths`, `PERL5LIB`, and system @INC)
+    /// for module names when providing `use`/`require` statement completions.
+    ///
+    /// # Arguments
+    ///
+    /// * `ast` - Parsed AST containing local scope symbols and structure
+    /// * `source` - Original source code for position-based context analysis
+    /// * `workspace_index` - Optional workspace symbol index for cross-file completions
+    /// * `include_paths` - Directories from `includePaths` config and `PERL5LIB` env var
+    /// * `system_inc_paths` - Directories from system @INC when `useSystemInc: true`
+    ///
+    /// # Returns
+    ///
+    /// A configured completion provider ready for LSP completion requests with
+    /// both local/workspace symbols and include path module scanning.
+    pub fn new_with_index_and_source_with_inc(
+        ast: &Node,
+        source: &str,
+        workspace_index: Option<Arc<WorkspaceIndex>>,
+        include_paths: Vec<PathBuf>,
+        system_inc_paths: Vec<PathBuf>,
+    ) -> Self {
+        let symbol_table = SymbolExtractor::new_with_source(source).extract(ast);
+        let class_models = ClassModelBuilder::new().build(ast);
+        let type_engine = workspace_index.as_ref().map(|_| {
+            let mut type_engine = TypeInferenceEngine::new();
+            let _ = type_engine.infer(ast);
+            type_engine
+        });
+        let import_map = Self::extract_import_map(ast);
+
+        CompletionProvider {
+            symbol_table,
+            class_models,
+            type_engine,
+            workspace_index,
+            import_map,
+            include_paths,
+            system_inc_paths,
+            include_path_cache: RefCell::new(HashMap::new()),
+        }
     }
 
     /// Walk the top-level AST and build an `ImportMap` from `use` statements.
@@ -774,6 +838,9 @@ impl CompletionProvider {
                 &mut completions,
                 &context,
                 &self.workspace_index,
+                &self.include_paths,
+                &self.system_inc_paths,
+                &self.include_path_cache,
             );
         } else if self.is_has_type_value_context(source, position) {
             self.add_has_type_completions(&mut completions, &context);

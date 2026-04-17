@@ -72,6 +72,34 @@ pub fn is_perl_discovery_path(path: &Path) -> bool {
         })
 }
 
+/// Returns `true` if the path is a database migration file
+/// used by DBIx::Class::DeploymentHandler, sqitch, or similar tools.
+///
+/// This is separate from `is_perl_discovery_path()` to keep
+/// the Perl source concept clean.
+#[must_use]
+pub fn is_migration_discovery_path(path: &Path) -> bool {
+    // Check for .sql extension
+    let is_sql = path
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("sql"));
+
+    if !is_sql {
+        // Check for sqitch.plan
+        return path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .is_some_and(|n| n.eq_ignore_ascii_case("sqitch.plan"));
+    }
+
+    // Check path components for migration directory patterns
+    path.components().any(|c| {
+        let s = c.as_os_str().to_string_lossy().to_lowercase();
+        s == "share" || s == "deploy" || s == "upgrade" || s == "revert" || s == "verify"
+    })
+}
+
 fn try_git_discovery(root: &Path, start: Instant) -> Result<DiscoveryResult, std::io::Error> {
     let output = std::process::Command::new("git")
         .args(GIT_LS_FILES_ARGS)
@@ -113,7 +141,7 @@ fn parse_git_ls_files_output(root: &Path, stdout: &[u8]) -> (Vec<PathBuf>, usize
         }
 
         let path = root.join(relative_path);
-        if is_perl_discovery_path(&path) {
+        if is_perl_discovery_path(&path) || is_migration_discovery_path(&path) {
             files.push(path);
         } else {
             excluded_count += 1;
@@ -141,7 +169,7 @@ fn walk_discovery(root: &Path, start: Instant) -> DiscoveryResult {
             continue;
         }
 
-        if is_perl_discovery_path(entry.path()) {
+        if is_perl_discovery_path(entry.path()) || is_migration_discovery_path(entry.path()) {
             files.push(entry.path().to_path_buf());
         } else {
             excluded_count += 1;
@@ -180,8 +208,8 @@ fn log_discovery(result: &DiscoveryResult) {
 #[cfg(test)]
 mod tests {
     use super::{
-        DiscoveryMethod, parse_git_ls_files_output, path_contains_skipped_component,
-        should_skip_dir, walk_discovery,
+        DiscoveryMethod, is_migration_discovery_path, parse_git_ls_files_output,
+        path_contains_skipped_component, should_skip_dir, walk_discovery,
     };
     use std::fs;
     use std::path::Path;
@@ -648,5 +676,235 @@ mod tests {
         assert_eq!(files.len(), 4);
         // README.md + Makefile (non-perl) + node_modules/e.pm (skipped dir)
         assert_eq!(excluded_count, 3);
+    }
+
+    // --- Migration discovery tests ---
+
+    #[test]
+    fn migration_deployment_handler_share_deploy() {
+        let cases = [
+            "share/deploy/1.001/001-auto.sql",
+            "share/deploy/1.001/001.sql",
+            "share/deploy/002_version/002.sql",
+        ];
+        for path in cases {
+            assert!(
+                is_migration_discovery_path(Path::new(path)),
+                "should discover DeploymentHandler deploy: {path}"
+            );
+        }
+    }
+
+    #[test]
+    fn migration_deployment_handler_share_upgrade() {
+        let cases = [
+            "share/upgrade/1.001-1.002/001-auto.sql",
+            "share/upgrade/1.001-1.002/001.sql",
+            "share/upgrade/v2_v3/up.sql",
+        ];
+        for path in cases {
+            assert!(
+                is_migration_discovery_path(Path::new(path)),
+                "should discover DeploymentHandler upgrade: {path}"
+            );
+        }
+    }
+
+    #[test]
+    fn migration_deployment_handler_share_revert() {
+        let cases = [
+            "share/revert/1.002-1.001/001.sql",
+            "share/revert/2.0-1.0/down.sql",
+            "share/revert/001-auto.sql",
+        ];
+        for path in cases {
+            assert!(
+                is_migration_discovery_path(Path::new(path)),
+                "should discover DeploymentHandler revert: {path}"
+            );
+        }
+    }
+
+    #[test]
+    fn migration_sqitch_deploy_verify_revert() {
+        let cases = [
+            "deploy/20230101_initial.sql",
+            "verify/20230101_initial.sql",
+            "revert/20230101_initial.sql",
+            "deploy/001_initial.sql",
+            "verify/002_add_users.sql",
+            "revert/002_add_users.sql",
+        ];
+        for path in cases {
+            assert!(is_migration_discovery_path(Path::new(path)), "should discover sqitch: {path}");
+        }
+    }
+
+    #[test]
+    fn migration_sqitch_plan_file() {
+        let cases = ["sqitch.plan", "db/core/sqitch.plan", "app/sqitch.plan", "db/sqitch.plan"];
+        for path in cases {
+            assert!(
+                is_migration_discovery_path(Path::new(path)),
+                "should discover sqitch.plan: {path}"
+            );
+        }
+    }
+
+    #[test]
+    fn migration_non_migration_sql_not_discovered() {
+        // AC3: Non-migration SQL files should NOT be discovered
+        let cases = [
+            "sql/migrations/001.sql",
+            "scripts/cleanup.sql",
+            "fixtures/test_data.sql",
+            "docs/schema.sql",
+            "lib/MyApp/Schema.sql",
+            "db/schema.sql",
+            "database/backup.sql",
+        ];
+        for path in cases {
+            assert!(
+                !is_migration_discovery_path(Path::new(path)),
+                "should NOT discover non-migration SQL: {path}"
+            );
+        }
+    }
+
+    #[test]
+    fn migration_case_insensitive() {
+        // Edge case: case insensitive path components
+        let cases = [
+            "SHARE/DEPLOY/1.001/001.SQL",
+            "Share/Upgrade/1.001-1.002/001.SQL",
+            "share/revert/1.002-1.001/001.SQL",
+            "DEPLOY/20230101.SQL",
+            "VERIFY/20230101.SQL",
+            "REVERT/20230101.SQL",
+            "SQITCH.PLAN",
+            "Sqitch.Plan",
+        ];
+        for path in cases {
+            assert!(
+                is_migration_discovery_path(Path::new(path)),
+                "should discover case-insensitive: {path}"
+            );
+        }
+    }
+
+    #[test]
+    fn migration_non_standard_sql_extensions_not_discovered() {
+        // Non-standard SQL extensions should NOT match
+        let cases =
+            ["deploy/001.mysql", "deploy/001.pgsql", "deploy/001.sqlite", "share/deploy/001.mysql"];
+        for path in cases {
+            assert!(
+                !is_migration_discovery_path(Path::new(path)),
+                "should NOT discover non-standard SQL extension: {path}"
+            );
+        }
+    }
+
+    #[test]
+    fn migration_sqitch_plan_case_insensitive() {
+        assert!(is_migration_discovery_path(Path::new("SQITCH.PLAN")));
+        assert!(is_migration_discovery_path(Path::new("Sqitch.Plan")));
+        assert!(is_migration_discovery_path(Path::new("sqitch.PLAN")));
+    }
+
+    #[test]
+    fn migration_empty_and_single_component_paths() {
+        // Edge cases: empty path and single component
+        assert!(!is_migration_discovery_path(Path::new("")));
+        assert!(!is_migration_discovery_path(Path::new("sql"))); // just a dir name
+        assert!(!is_migration_discovery_path(Path::new("SQL"))); // just a dir name uppercase
+    }
+
+    #[test]
+    fn migration_deeply_nested_paths() {
+        // Deep nesting should still work
+        assert!(is_migration_discovery_path(Path::new("a/b/c/share/deploy/1.001/001-auto.sql")));
+        assert!(is_migration_discovery_path(Path::new("a/b/c/deploy/20230101_initial.sql")));
+        assert!(is_migration_discovery_path(Path::new(
+            "very/deep/nested/path/db/core/sqitch.plan"
+        )));
+    }
+
+    #[test]
+    fn migration_no_false_positives_on_random_sql() {
+        // Random .sql files in non-migration directories should NOT match
+        let cases = [
+            "src/main.sql",
+            "test/fixture.sql",
+            "temp/export.sql",
+            "backup/old_data.sql",
+            "migrations_dump/001.sql",
+            "upload/user_upload.sql",
+        ];
+        for path in cases {
+            assert!(
+                !is_migration_discovery_path(Path::new(path)),
+                "should NOT discover random SQL: {path}"
+            );
+        }
+    }
+
+    #[test]
+    fn migration_sql_without_migration_dir_not_discovered() {
+        // .sql file without migration directory component should not match
+        assert!(!is_migration_discovery_path(Path::new("myfile.sql")));
+        assert!(!is_migration_discovery_path(Path::new("data.sql")));
+        assert!(!is_migration_discovery_path(Path::new("dump.sql")));
+    }
+
+    #[test]
+    fn migration_walk_discovers_migration_files() -> TestResult {
+        let tmp = tempfile::tempdir()?;
+        let root = tmp.path();
+
+        // Migration files
+        create_file(root, "share/deploy/1.001/001-auto.sql")?;
+        create_file(root, "share/upgrade/1.002/002.sql")?;
+        create_file(root, "deploy/20230101_initial.sql")?;
+        create_file(root, "sqitch.plan")?;
+        create_file(root, "db/core/sqitch.plan")?;
+        // Non-migration files
+        create_file(root, "lib/App.pm")?;
+        create_file(root, "sql/cleanup.sql")?;
+        create_file(root, "README.md")?;
+
+        let result = walk_discovery(root, Instant::now());
+        // Should find: lib/App.pm + 5 migration files = 6
+        assert_eq!(result.files.len(), 6, "should find 6 files total");
+        assert!(
+            result.files.iter().any(|p| p.ends_with("share/deploy/1.001/001-auto.sql")),
+            "should find DeploymentHandler deploy"
+        );
+        assert!(
+            result.files.iter().any(|p| p.ends_with("share/upgrade/1.002/002.sql")),
+            "should find DeploymentHandler upgrade"
+        );
+        assert!(
+            result.files.iter().any(|p| p.ends_with("deploy/20230101_initial.sql")),
+            "should find sqitch deploy"
+        );
+        assert!(result.files.iter().any(|p| p.ends_with("sqitch.plan")), "should find sqitch.plan");
+        assert!(
+            result.files.iter().any(|p| p.ends_with("db/core/sqitch.plan")),
+            "should find nested sqitch.plan"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn migration_parse_git_discovers_migration_files() {
+        let root = Path::new("/tmp/workspace");
+        let payload = "share/deploy/1.001/001-auto.sql\0share/upgrade/1.002/002.sql\0deploy/20230101.sql\0sqitch.plan\0lib/App.pm\0sql/cleanup.sql\0";
+
+        let (files, excluded_count) = parse_git_ls_files_output(root, payload.as_bytes());
+        // Should find: lib/App.pm + 4 migration files = 5
+        assert_eq!(files.len(), 5, "should find 5 files");
+        assert_eq!(excluded_count, 1, "sql/cleanup.sql excluded");
     }
 }

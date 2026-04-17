@@ -1745,6 +1745,7 @@ dependencies = [
  "perl-workspace",
  "serde_json",
  "url",
+ "walkdir",
 ]
 
 [[package]]

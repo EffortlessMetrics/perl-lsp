@@ -25,6 +25,7 @@ perl-workspace = { workspace = true }
 perl-lexer = { workspace = true }
 perl-module = { workspace = true }
 url.workspace = true
+walkdir.workspace = true
 
 [features]
 default = []
