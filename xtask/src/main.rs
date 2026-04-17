@@ -723,6 +723,14 @@ enum Commands {
         crate_name: Option<String>,
     },
 
+    /// Ratchet gate: published-crate count must not increase above baseline.
+    ///
+    /// Reads the current entry count from `[workspace.metadata.publish.allow]`
+    /// (via `cargo metadata --no-deps`), compares against the baseline stored in
+    /// `xtask/published-crate-baseline.txt`, and fails if the count increased.
+    /// When the count has decreased, the baseline is auto-tightened.
+    PublishedCrateCount,
+
     /// Sweep system Perl corpus for parser error rates
     ParserCorpusSweep {
         /// Comma-separated corpus root directories
@@ -1378,6 +1386,7 @@ fn main() -> Result<()> {
         Commands::CiHygiene { command, args } => ci_hygiene::run(command, args),
         Commands::PublishVscode { yes, token } => publish::publish_vscode(yes, token),
         Commands::PublishClosure { crate_name } => publish_closure::run(crate_name),
+        Commands::PublishedCrateCount => count_ratchet::run(),
         Commands::SmokeTestRelease { version } => publish::smoke_test_release(version),
         Commands::PublishReceipts { date } => publish_receipts::run(date),
         Commands::ParserCorpusSweep {

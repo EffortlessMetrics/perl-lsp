@@ -24,6 +24,7 @@ pub mod compare_parsers;
 #[cfg(feature = "legacy")]
 pub mod corpus;
 pub mod corpus_audit;
+pub mod count_ratchet;
 pub mod cpan_corpus;
 pub mod dead_code;
 pub mod debt_report;
