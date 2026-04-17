@@ -39,6 +39,7 @@ mod extract_variable;
 mod helpers;
 mod import_management;
 mod loop_conversion;
+mod move_subroutine;
 mod postfix;
 mod signature_actions;
 
@@ -314,6 +315,12 @@ impl EnhancedCodeActionsProvider {
                 }
             }
             NodeKind::Subroutine { body, prototype, signature, .. } => {
+                // Offer "Move subroutine to module" action when cursor is on subroutine
+                if let Some(action) = move_subroutine::create_move_subroutine_action(node, &self.source)
+                {
+                    actions.push(action);
+                }
+
                 self.collect_actions_for_range(
                     body,
                     range,

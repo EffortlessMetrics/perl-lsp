@@ -36,7 +36,7 @@ mod workspace;
 // ---------------------------------------------------------------------------
 
 /// Which subsystems to regenerate.
-#[derive(Debug, Clone, PartialEq, Eq, clap::ValueEnum)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, clap::ValueEnum)]
 pub enum StatusSubsystem {
     Lsp,
     Tests,
