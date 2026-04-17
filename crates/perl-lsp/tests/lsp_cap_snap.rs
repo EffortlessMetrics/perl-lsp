@@ -4,7 +4,7 @@
 //! server so that changes to advertised capabilities are visible as intentional
 //! diff in code review rather than silent regressions.
 //!
-//! Run with `cargo test -p perl-lsp-rs --test lsp_capability_snapshot_test` to execute.
+//! Run with `cargo test -p perl-lsp-rs --test lsp_cap_snap` to execute.
 //! Update snapshots with `cargo insta review` after intentional changes.
 
 use insta::assert_yaml_snapshot;
