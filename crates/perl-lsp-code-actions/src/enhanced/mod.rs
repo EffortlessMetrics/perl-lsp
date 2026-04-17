@@ -11,6 +11,7 @@
 //! - **extract_subroutine**: Extract code block into a new subroutine
 //! - **loop_conversion**: Convert between loop styles (for/foreach/while)
 //! - **import_management**: Organize and add/remove use statements
+//! - **move_subroutine**: Move a named subroutine to another module
 //! - **postfix**: Postfix completion-style actions (e.g., `.if`, `.unless`)
 //! - **error_checking**: Add error handling around expressions
 //! - **helpers**: Shared utilities for text manipulation and position mapping
