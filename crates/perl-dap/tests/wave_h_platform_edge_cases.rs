@@ -119,7 +119,7 @@ fn test_setup_environment_with_many_paths() {
 
     // Should handle large number of paths
     // Check that PERL5LIB was set (it should be the main effect)
-    assert!(env.len() > 0, "setup_environment should set environment variables");
+    assert!(!env.is_empty(), "setup_environment should set environment variables");
 }
 
 #[test]

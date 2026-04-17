@@ -88,11 +88,11 @@ fn test_config_module_launch_and_attach() {
     // Verify both launch and attach configs are accessible
 
     let launch_snippet = create_launch_json_snippet();
-    assert!(launch_snippet.len() > 0);
+    assert!(!launch_snippet.is_empty());
     assert!(launch_snippet.contains("\"type\": \"perl\""));
 
     let attach_snippet = create_attach_json_snippet();
-    assert!(attach_snippet.len() > 0);
+    assert!(!attach_snippet.is_empty());
     assert!(attach_snippet.contains("\"type\": \"perl\""));
 }
 

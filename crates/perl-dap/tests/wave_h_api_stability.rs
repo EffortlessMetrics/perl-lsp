@@ -135,30 +135,46 @@ fn test_re_exports_from_all_eleven_modules() {
     // Counting re-exports to ensure all 11 modules are represented
     // This is a high-level count test, not exhaustive
 
-    let exports = vec![
-        // 1. breakpoint
-        std::any::type_name::<AstBreakpointValidator>(),
-        // 2. eval
-        std::any::type_name::<SafeEvaluator>(),
-        // 3. config
-        std::any::type_name::<LaunchConfiguration>(),
-        // 4. command_args
-        std::any::type_name::<std::marker::PhantomData<fn() -> String>>(), // format_command_args is fn
-        // 5. platform
-        std::any::type_name::<PerlInterpreterResult>(),
-        // 6. stack
-        std::any::type_name::<PerlStackParser>(),
-        // 7. types
-        std::any::type_name::<TypesSource>(),
-        // 8. value
-        std::any::type_name::<PerlValue>(),
-        // 9. variables
-        std::any::type_name::<PerlVariableRenderer>(),
-        // 10. security
-        std::any::type_name::<SecurityError>(),
-        // 11. shell (implicitly tested via command_args which depends on it)
-    ];
+    // Instantiate/call one item from each collapsed module to verify the re-export works
+    // at runtime, not just at compile time. This fails if api.rs stops re-exporting an item.
 
-    // At least 10 distinct modules should be represented
-    assert!(exports.len() >= 10, "should have re-exports from all 11 modules");
+    // 1. breakpoint — AstBreakpointValidator::new() takes a source string
+    let _bv = AstBreakpointValidator::new("sub foo { 1 }"); // Result; discard
+
+    // 2. eval — SafeEvaluator::new()
+    let _ev = SafeEvaluator::new();
+
+    // 3. config — create_launch_json_snippet returns a non-empty string
+    let snippet = create_launch_json_snippet();
+    assert!(!snippet.is_empty(), "create_launch_json_snippet must return non-empty string");
+
+    // 4. command_args — format_command_args returns non-empty for non-empty input
+    let args = vec!["perl".to_string(), "script.pl".to_string()];
+    let formatted = format_command_args(&args);
+    assert!(!formatted.is_empty(), "format_command_args must return non-empty for non-empty args");
+
+    // 5. platform — find_perl_interpreter is callable
+    let _interp = find_perl_interpreter(None);
+
+    // 6. stack — PerlStackParser::new() is the canonical constructor
+    let _sp = PerlStackParser::new();
+
+    // 7. types — TypesSource has required fields
+    let _ts = TypesSource {
+        name: Some("test".to_string()),
+        path: "test.pl".to_string(),
+        source_reference: None,
+    };
+
+    // 8. value — PerlValue::Undef is a valid variant
+    let _pv = PerlValue::Undef;
+
+    // 9. variables — PerlVariableRenderer::new()
+    let _vr = PerlVariableRenderer::new();
+
+    // 10. security — validate_expression rejects multi-line input (newline injection)
+    let dangerous = validate_expression("foo\nbar");
+    assert!(dangerous.is_err(), "validate_expression must reject expressions with newlines");
+
+    // 11. shell is tested indirectly via command_args above (shell depends on command_args)
 }

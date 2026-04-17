@@ -10,6 +10,10 @@
 //! 4. External consumers: perl-lsp and perl-lsp-config must compile against perl_dap::platform
 //! 5. Workspace cleanup: satellite crates removed, workspace count drops 123 → 112
 
+// Trap tests: inner `use` statements are compile-time assertions that modules exist.
+// The imports themselves are not used at runtime — that's the point.
+#![allow(unused_imports)]
+
 use anyhow::Result;
 
 /// Test that all 11 satellite modules are accessible via perl_dap::*
@@ -55,12 +59,11 @@ fn test_platform_function_imports_work() -> Result<()> {
     // After collapse, it should import from perl_dap::platform instead of perl_dap_platform
     use perl_dap::platform::resolve_perl_path_with_toolchain;
 
-    // Function must be importable to verify module structure is correct
-    assert_ne!(
-        std::any::type_name::<fn(String, Option<String>) -> anyhow::Result<std::path::PathBuf>>(),
-        "",
-        "resolve_perl_path_with_toolchain must be accessible"
-    );
+    // Call it to verify the function is accessible and has the right zero-arg signature.
+    // resolve_perl_path_with_toolchain() takes no arguments; a compile error here means
+    // the import or signature is wrong.
+    let _result = resolve_perl_path_with_toolchain();
+    // Either Ok(path) or Err(not_found) is acceptable; we only care it's callable.
     Ok(())
 }
 
