@@ -55,6 +55,11 @@
 use perl_ast::Node as AstNode;
 use perl_parser_core::Parser as CoreParser;
 
+/// Re-export of Edit type for tree-sitter-compatible incremental parsing.
+///
+/// Mirrors `tree_sitter::InputEdit` field layout for drop-in compatibility.
+pub use perl_parser_core::edit::Edit as InputEdit;
+
 /// A Perl parser with tree-sitter-style ergonomics.
 ///
 /// Wraps the v3 recursive-descent Perl parser. Create one parser instance and call
@@ -99,9 +104,21 @@ impl Parser {
     pub fn parse(&mut self, source: &str) -> Option<Tree> {
         let mut core = CoreParser::new(source);
         match core.parse() {
-            Ok(root) => Some(Tree { root, source: source.to_string() }),
+            Ok(root) => Some(Tree { root, source: source.to_string(), pending_edits: Vec::new() }),
             Err(_) => None,
         }
+    }
+
+    /// Parse `source` using `old_tree` as a hint for incremental re-parsing.
+    ///
+    /// In the current implementation this performs a full re-parse (equivalent
+    /// to [`parse`][Parser::parse]). The `old_tree` parameter is accepted for
+    /// API compatibility with `tree_sitter::Parser::parse_with_old_tree`; future
+    /// versions will use it to skip unchanged regions.
+    ///
+    /// Returns `None` on complete parse failure (same semantics as `parse`).
+    pub fn parse_with_old_tree(&mut self, source: &str, _old_tree: &Tree) -> Option<Tree> {
+        self.parse(source)
     }
 }
 
@@ -170,6 +187,8 @@ pub static LANGUAGE: PerlLanguage = PerlLanguage { kind_names: perl_ast::NodeKin
 pub struct Tree {
     root: AstNode,
     source: String,
+    /// Pending edits recorded via [`Tree::edit`].
+    pending_edits: Vec<InputEdit>,
 }
 
 impl Tree {
@@ -181,6 +200,18 @@ impl Tree {
     /// Returns the source text this tree was built from.
     pub fn source(&self) -> &str {
         &self.source
+    }
+
+    /// Records a source edit on this tree, invalidating affected byte ranges.
+    ///
+    /// After calling `edit()`, pass this tree and the new source to
+    /// [`Parser::parse_with_old_tree`] to re-parse efficiently.
+    ///
+    /// In the current implementation this stores the edit for API compatibility;
+    /// true incremental re-parsing (skipping unchanged regions) is a planned
+    /// optimization.
+    pub fn edit(&mut self, edit: &InputEdit) {
+        self.pending_edits.push(edit.clone());
     }
 }
 
