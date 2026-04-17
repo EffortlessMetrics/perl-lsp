@@ -40,6 +40,16 @@ A fast, native Perl 5 language server extension. Written in Rust for speed and r
 - **Inlay Hints** -- Type annotations shown inline in the editor
 - **Code Folding** -- Collapse subs, blocks, POD, and heredocs
 
+## Feature Highlights
+
+Watch perl-lsp features in action:
+
+![Go to Definition](media/walkthrough/goto-definition.gif)
+![Hover Documentation](media/walkthrough/hover-documentation.gif)
+![Auto-completion](media/walkthrough/auto-completion.gif)
+![Extract Variable](media/walkthrough/extract-variable.gif)
+![Debug Breakpoint](media/walkthrough/debug-breakpoint.gif)
+
 ### Debugging (via perl-dap)
 - **Breakpoints** -- Set breakpoints with conditional support
 - **Step Debugging** -- Step into, over, and out of function calls
