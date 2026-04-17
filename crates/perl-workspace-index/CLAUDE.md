@@ -25,7 +25,7 @@ cargo bench -p perl-workspace-index --features workspace  # Benchmarks
 
 - `perl-parser-core` -- core parsing infrastructure (re-exports `Parser`, `Node`, `NodeKind`, `SourceLocation`, `line_index`)
 - `perl-position-tracking` -- position/range types with `lsp-compat` feature
-- `perl-symbol-types` -- symbol taxonomy
+- `perl-symbol` -- symbol taxonomy
 - `perl-uri` -- URI normalization and filesystem path conversion
 
 ### Features

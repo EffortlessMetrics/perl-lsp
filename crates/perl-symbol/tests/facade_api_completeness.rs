@@ -6,11 +6,12 @@
 //! every microcrate-collapse facade.
 
 use perl_symbol::{
-    SymbolDecl, SymbolIndex, SymbolKind, VarKind, extract_symbol_decls,
+    SymbolDecl, SymbolIndex, SymbolKind, VarKind,
     cursor::{
         CursorSymbolKind, byte_offset_utf16, extract_symbol_from_source,
         get_symbol_range_at_position, is_modchar, is_word_boundary, token_under_cursor,
     },
+    extract_symbol_decls,
 };
 
 #[test]

@@ -52,10 +52,7 @@ ALL_CRATES=(
     perl-tdd-support
     perl-edit
     perl-incremental-parsing
-    perl-symbol-types
-    perl-symbol-surface
-    perl-symbol-cursor
-    perl-symbol-index
+    perl-symbol
     perl-uri-classify
     perl-uri
     perl-workspace-index-state-machine

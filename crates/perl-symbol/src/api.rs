@@ -16,8 +16,8 @@ pub use crate::types::{SymbolKind, VarKind};
 
 // cursor — full public surface
 pub use crate::cursor::{
-    CursorSymbolKind, byte_offset_utf16, extract_symbol_from_source,
-    get_symbol_range_at_position, is_modchar, is_word_boundary, token_under_cursor,
+    CursorSymbolKind, byte_offset_utf16, extract_symbol_from_source, get_symbol_range_at_position,
+    is_modchar, is_word_boundary, token_under_cursor,
 };
 
 // index — full public surface
