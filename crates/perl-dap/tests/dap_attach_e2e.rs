@@ -1,5 +1,8 @@
 //! End-to-end DAP attach smoke test using a loopback TCP debugger.
 
+// Tests use panic! as structured test failure reporters.
+#![allow(clippy::panic)]
+
 use perl_content_length_framing::frame;
 use perl_dap::{DapMessage, DebugAdapter};
 use serde_json::{Value, json};

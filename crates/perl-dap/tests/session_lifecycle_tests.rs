@@ -1217,7 +1217,7 @@ fn test_attach_pid_mode_default_stop_on_entry_is_false() {
 
 #[test]
 // AC:5.5
-fn test_attach_config_stop_on_entry_field() {
+fn test_attach_config_stop_on_entry_field() -> Result<(), Box<dyn std::error::Error>> {
     // AttachConfiguration must expose stop_on_entry and round-trip through serde.
     use perl_dap::configuration::AttachConfiguration;
 
@@ -1229,11 +1229,11 @@ fn test_attach_config_stop_on_entry_field() {
     };
     assert_eq!(config.stop_on_entry, Some(true));
 
-    let json_str = serde_json::to_string(&config).expect("should serialize");
-    let deserialized: AttachConfiguration =
-        serde_json::from_str(&json_str).expect("should deserialize");
+    let json_str = serde_json::to_string(&config)?;
+    let deserialized: AttachConfiguration = serde_json::from_str(&json_str)?;
     assert_eq!(deserialized.stop_on_entry, Some(true));
 
     let default_config = AttachConfiguration::default();
     assert_eq!(default_config.stop_on_entry, None);
+    Ok(())
 }

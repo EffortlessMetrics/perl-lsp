@@ -1,7 +1,11 @@
-/// Tests for pre-launch syntax checking (issue #3477)
-///
-/// The DAP server should run `perl -c` on the target script before launching
-/// `perl -d`, and report syntax errors clearly instead of failing mid-execution.
+// Tests use panic! as structured test failure reporters.
+#![allow(clippy::panic)]
+
+//! Tests for pre-launch syntax checking (issue #3477)
+//!
+//! The DAP server should run `perl -c` on the target script before launching
+//! `perl -d`, and report syntax errors clearly instead of failing mid-execution.
+
 use perl_dap::DapMessage;
 use perl_dap::DebugAdapter;
 use perl_tdd_support::must_some;
@@ -11,7 +15,9 @@ use std::fs;
 /// Helper: create a Perl script in a temp dir.
 fn write_script(dir: &tempfile::TempDir, filename: &str, content: &str) -> std::path::PathBuf {
     let path = dir.path().join(filename);
-    fs::write(&path, content).expect("write test script");
+    if let Err(e) = fs::write(&path, content) {
+        panic!("write test script failed: {e}");
+    }
     path
 }
 

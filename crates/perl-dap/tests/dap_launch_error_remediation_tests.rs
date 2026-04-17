@@ -3,6 +3,9 @@
 //! Issue #4192: Launch failure should provide actionable guidance including
 //! detected Perl location and `perl-lsp.perl.path` config suggestion.
 
+// Tests use panic! as structured test failure reporters.
+#![allow(clippy::panic)]
+
 use perl_dap::{DapMessage, DebugAdapter};
 use serde_json::json;
 

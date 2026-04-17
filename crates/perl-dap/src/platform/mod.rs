@@ -345,6 +345,7 @@ pub fn setup_environment(include_paths: &[PathBuf]) -> HashMap<String, String> {
 }
 
 #[cfg(test)]
+#[allow(clippy::panic)]
 mod tests {
     use super::*;
     use perl_tdd_support::{must, must_err};

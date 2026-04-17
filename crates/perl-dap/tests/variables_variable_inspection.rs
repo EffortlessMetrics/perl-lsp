@@ -810,7 +810,7 @@ fn blessed_hash_value_shows_class_equals_hash() -> Result<(), Box<dyn std::error
     assert_eq!(rendered.type_name.as_deref(), Some("MyApp::Model::User"));
 
     // presentation_hint must carry kind="class" so the IDE can style the icon
-    let hint = rendered.presentation_hint.as_ref().expect("presentation_hint should be set");
+    let hint = rendered.presentation_hint.as_ref().ok_or("presentation_hint should be set")?;
     assert_eq!(hint.kind.as_deref(), Some("class"));
 
     Ok(())
@@ -828,7 +828,7 @@ fn blessed_array_value_shows_class_equals_array() -> Result<(), Box<dyn std::err
 
     assert_eq!(rendered.value, "My::InsideOut = ARRAY(...)");
     assert_eq!(rendered.type_name.as_deref(), Some("My::InsideOut"));
-    let hint = rendered.presentation_hint.as_ref().expect("presentation_hint should be set");
+    let hint = rendered.presentation_hint.as_ref().ok_or("presentation_hint should be set")?;
     assert_eq!(hint.kind.as_deref(), Some("class"));
 
     Ok(())
@@ -843,7 +843,7 @@ fn blessed_scalar_value_shows_class_equals_scalar() -> Result<(), Box<dyn std::e
 
     assert_eq!(rendered.value, "URI = SCALAR(...)");
     assert_eq!(rendered.type_name.as_deref(), Some("URI"));
-    let hint = rendered.presentation_hint.as_ref().expect("presentation_hint should be set");
+    let hint = rendered.presentation_hint.as_ref().ok_or("presentation_hint should be set")?;
     assert_eq!(hint.kind.as_deref(), Some("class"));
 
     Ok(())
@@ -858,7 +858,7 @@ fn blessed_deep_namespace_value_format() -> Result<(), Box<dyn std::error::Error
 
     assert_eq!(rendered.value, "Very::Deep::Nested::Package::Name = HASH(...)");
     assert_eq!(rendered.type_name.as_deref(), Some("Very::Deep::Nested::Package::Name"));
-    let hint = rendered.presentation_hint.as_ref().expect("presentation_hint should be set");
+    let hint = rendered.presentation_hint.as_ref().ok_or("presentation_hint should be set")?;
     assert_eq!(hint.kind.as_deref(), Some("class"));
 
     Ok(())
@@ -897,7 +897,7 @@ fn multiple_objects_in_scope_all_display_class() -> Result<(), Box<dyn std::erro
 
     // All three must carry presentation hints
     for rendered in [&rendered_req, &rendered_resp, &rendered_agent] {
-        let hint = rendered.presentation_hint.as_ref().expect("hint must be set");
+        let hint = rendered.presentation_hint.as_ref().ok_or("hint must be set")?;
         assert_eq!(hint.kind.as_deref(), Some("class"));
     }
 
