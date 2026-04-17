@@ -1299,6 +1299,10 @@ impl SymbolExtractor {
         Some(2)
     }
 
+    /// Check if a name is a Moose/Moo method modifier keyword.
+    ///
+    /// Used during framework declaration extraction to identify modifier
+    /// patterns like `before`, `after`, `around`, `override`, and `augment`.
     fn is_moose_method_modifier(name: &str) -> bool {
         matches!(name, "before" | "after" | "around" | "override" | "augment")
     }
@@ -1745,6 +1749,11 @@ impl SymbolExtractor {
         }
     }
 
+    /// Synthesize a Plack middleware package symbol from an `enable` call.
+    ///
+    /// When `enable "MiddlewareName"` is encountered in a Plack::Builder block,
+    /// this synthesizes a `Package` symbol for the middleware so that navigation
+    /// and references work correctly for middleware classes.
     fn synthesize_plack_enable_symbol(
         &mut self,
         statement: &Node,
@@ -1795,6 +1804,11 @@ impl SymbolExtractor {
         });
     }
 
+    /// Synthesize a Plack mount path symbol from a `mount` call.
+    ///
+    /// When `mount "/path" => $app` is encountered in a Plack::Builder block,
+    /// this synthesizes a `Subroutine` symbol for the path so that navigation
+    /// and references work correctly for PSGI mount points.
     fn synthesize_plack_mount_symbol(
         &mut self,
         statement: &Node,
@@ -2226,6 +2240,12 @@ impl SymbolExtractor {
         }
     }
 
+    /// Mark a package as a Catalyst controller for action symbol synthesis.
+    ///
+    /// When a package is identified as a Catalyst controller (either via naming
+    /// convention like `MyApp::Controller::*` or via `extends 'Catalyst::Controller'`),
+    /// this sets the `catalyst_controller` flag so that subsequent method declarations
+    /// can be annotated with Catalyst-specific metadata for navigation support.
     fn mark_catalyst_controller_package(&mut self, package: &str) {
         self.framework_flags.entry(package.to_string()).or_default().catalyst_controller = true;
     }
@@ -3007,6 +3027,12 @@ impl SymbolExtractor {
     }
 }
 
+/// Split a variable name like `$foo` or `@bar` into its sigil and base name.
+///
+/// Returns a tuple of `(sigil, name)` where sigil is `$`, `@`, or `%` and
+/// name is the bare identifier without the sigil. Used for catch variable
+/// registration where the full name includes the sigil but the symbol table
+/// stores the name without it.
 fn split_variable_name(full_name: &str) -> (&str, &str) {
     full_name
         .char_indices()
