@@ -306,6 +306,28 @@ That entry should now read **`perl-workspace`**:
 The migration ledger at [`.spec/microcrate-collapse/ledger.md`](../../.spec/microcrate-collapse/ledger.md)
 is the authoritative source and has been updated accordingly.
 
+### Amendment 3 — 2026-04-16: Ledger corrected — perl-symbol is its own published crate (Wave B)
+
+**Source:** Accuracy-scout finding on issue #4428; user ruling: ADR wins.
+
+The migration ledger at `.spec/microcrate-collapse/ledger.md` previously listed all four
+`perl-symbol-*` satellites as Wave 5 modules absorbing into `perl-semantic-analyzer`. This
+contradicted the Decision section above ("Symbol model (1): `perl-symbol`").
+
+**The correction:** The four satellites (`perl-symbol-types`, `perl-symbol-cursor`,
+`perl-symbol-index`, `perl-symbol-surface`) absorb into **`perl-symbol`** — a standalone
+small published crate — not into `perl-semantic-analyzer`. The ledger now has a dedicated
+**Wave B** section for this family and Wave 5 is annotated to reflect it holds no symbol crates.
+
+**Rationale for keeping perl-symbol as its own published crate:**
+`perl-symbol-types` is consumed directly by `perl-workspace-index`, `perl-semantic-analyzer`,
+and `perl-lsp`. If it folded into `perl-semantic-analyzer`, then `perl-workspace-index` and
+`perl-lsp` would need to depend on the whole analyzer just to get symbol types — a dependency
+inversion. Keeping `perl-symbol` as a small, focused, published crate preserves clean layering.
+This is the same reasoning that kept `perl-workspace` as its own crate (Amendment 2).
+
+The 30-crate published target and all other ADR content remain unchanged.
+
 ## References
 
 - [Tracking issue #4410: Microcrate collapse to ~30 published crates](https://github.com/EffortlessMetrics/perl-lsp/issues/4410)
