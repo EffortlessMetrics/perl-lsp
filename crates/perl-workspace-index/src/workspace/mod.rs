@@ -11,7 +11,12 @@ pub mod state_machine;
 pub mod workspace_index;
 pub mod workspace_rename;
 
-// Re-export commonly used types
+// Re-export commonly used types at the workspace level for ergonomic access.
+// Note: `monitoring` types are intentionally NOT re-exported here — several names
+// (e.g. `DegradationReason`, `IndexStateKind`, `ResourceKind`) overlap with those
+// from `state_machine`, which would cause ambiguous glob import errors.  Callers
+// that need monitoring types use `workspace::monitoring::*` or the top-level
+// `crate::monitoring::*` path directly.
 pub use cache::{
     AstCacheConfig, BoundedLruCache, CacheConfig, CombinedWorkspaceCacheConfig, EstimateSize,
     SymbolCacheConfig, WorkspaceCacheConfig,

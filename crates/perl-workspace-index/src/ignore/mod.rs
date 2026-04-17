@@ -17,16 +17,9 @@ pub fn is_skipped_dir_name(name: &str) -> bool {
 /// Returns true when any path component belongs to the canonical skipped directory set.
 #[must_use]
 pub fn path_contains_skipped_component(path: &Path) -> bool {
-    for component in path.components() {
-        if let Component::Normal(name) = component
-            && let Some(value) = name.to_str()
-            && is_skipped_dir_name(value)
-        {
-            return true;
-        }
-    }
-
-    false
+    path.components().any(|component| {
+        matches!(component, Component::Normal(name) if name.to_str().is_some_and(is_skipped_dir_name))
+    })
 }
 
 #[cfg(test)]

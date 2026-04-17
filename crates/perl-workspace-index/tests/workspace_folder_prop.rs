@@ -37,7 +37,9 @@ proptest! {
 
     #[test]
     fn prop_file_uri_inputs_strip_file_scheme(folder in plain_path_strategy()) {
-        let uri = format!("file://{folder}");
+        // Use file:/// (triple slash / absolute path form) to avoid platform-specific
+        // UNC-path behavior on Windows when a host component is present.
+        let uri = format!("file:///{folder}");
         let parsed = workspace_folder_to_path(&uri);
         prop_assert!(!parsed.to_string_lossy().contains("file://"));
     }
