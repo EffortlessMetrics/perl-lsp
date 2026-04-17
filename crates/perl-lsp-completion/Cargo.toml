@@ -22,7 +22,7 @@ perl-lsp-file-completion = { workspace = true }
 perl-parser-core = { workspace = true }
 perl-semantic-analyzer = { workspace = true }
 perl-workspace = { workspace = true }
-perl-keywords = { workspace = true }
+perl-lexer = { workspace = true }
 perl-module = { workspace = true }
 url.workspace = true
 

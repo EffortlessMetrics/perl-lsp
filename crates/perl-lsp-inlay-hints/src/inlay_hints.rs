@@ -18,7 +18,7 @@
 //! Follows the inlay hint protocol for range-scoped responses and stable hint
 //! ordering per the LSP specification.
 
-use perl_builtins::builtin_signatures::create_builtin_signatures;
+use perl_lexer::create_builtin_signatures;
 use perl_parser_core::ast::{Node, NodeKind};
 use perl_position_tracking::{WirePosition as Position, WireRange as Range};
 use perl_semantic_analyzer::declaration::get_node_children;

@@ -136,16 +136,20 @@
     clippy::uninlined_format_args
 )]
 
-use perl_keywords::is_lexer_keyword;
 use std::sync::{Arc, OnceLock};
 
+pub mod api;
+pub mod builtins;
 pub mod checkpoint;
 pub mod error;
+pub mod keywords;
 pub mod mode;
 mod quote_handler;
 pub mod token;
+pub mod tokenizer;
 mod unicode;
 
+pub use api::*;
 pub use checkpoint::{CheckpointCache, Checkpointable, LexerCheckpoint};
 pub use error::{LexerError, Result};
 pub use mode::LexerMode;
@@ -2073,7 +2077,7 @@ impl<'a> PerlLexer<'a> {
                 }
             }
 
-            let token_type = if is_keyword(text) {
+            let token_type = if is_keyword_fast(text) {
                 // Check for special keywords that affect lexer mode
                 match text {
                     "if" | "unless" | "while" | "until" | "for" | "foreach" | "grep" | "map"
@@ -3591,7 +3595,7 @@ fn truncate_preview(text: &str, max_chars: usize) -> String {
 }
 
 #[inline(always)]
-fn is_keyword(word: &str) -> bool {
+fn is_keyword_fast(word: &str) -> bool {
     // Fast length-based rejection for most cases.
     // Lexer keywords are currently bounded to 1..=9 characters.
     matches!(word.len(), 1..=9) && is_lexer_keyword(word)

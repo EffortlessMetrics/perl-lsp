@@ -1501,21 +1501,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "perl-builtins"
-version = "0.12.4"
-dependencies = [
- "perl-builtins-phf",
- "perl-tdd-support",
-]
-
-[[package]]
-name = "perl-builtins-phf"
-version = "0.12.4"
-dependencies = [
- "phf",
-]
-
-[[package]]
 name = "perl-ci-hygiene"
 version = "0.12.4"
 dependencies = [
@@ -1561,7 +1546,7 @@ dependencies = [
  "once_cell",
  "perl-content-length-framing",
  "perl-feature-catalog",
- "perl-keywords",
+ "perl-lexer",
  "perl-lsp-launcher",
  "perl-module",
  "perl-parser",
@@ -1661,17 +1646,17 @@ dependencies = [
 ]
 
 [[package]]
-name = "perl-keywords"
-version = "0.12.4"
-
-[[package]]
 name = "perl-lexer"
 version = "0.12.4"
 dependencies = [
  "criterion",
  "memchr",
- "perl-keywords",
+ "perl-ast-v2",
+ "perl-parser-core",
  "perl-position-tracking",
+ "perl-tdd-support",
+ "perl-token",
+ "phf",
  "proptest",
  "thiserror",
  "tracing",
@@ -1713,8 +1698,8 @@ name = "perl-lsp-code-actions"
 version = "0.12.4"
 dependencies = [
  "perl-ast-utils",
- "perl-builtins",
  "perl-diagnostics",
+ "perl-lexer",
  "perl-lsp-diagnostics",
  "perl-lsp-import-management",
  "perl-lsp-rename",
@@ -1750,7 +1735,7 @@ name = "perl-lsp-completion"
 version = "0.12.4"
 dependencies = [
  "criterion",
- "perl-keywords",
+ "perl-lexer",
  "perl-lsp-completion-item",
  "perl-lsp-file-completion",
  "perl-module",
@@ -1937,7 +1922,7 @@ version = "0.12.4"
 name = "perl-lsp-inlay-hints"
 version = "0.12.4"
 dependencies = [
- "perl-builtins",
+ "perl-lexer",
  "perl-parser-core",
  "perl-position-tracking",
  "perl-semantic-analyzer",
@@ -2067,7 +2052,7 @@ dependencies = [
 name = "perl-lsp-rename"
 version = "0.12.4"
 dependencies = [
- "perl-keywords",
+ "perl-lexer",
  "perl-parser-core",
  "perl-semantic-analyzer",
  "perl-symbol",
@@ -2092,7 +2077,7 @@ dependencies = [
  "perl-dap",
  "perl-diagnostics",
  "perl-incremental-parsing",
- "perl-keywords",
+ "perl-lexer",
  "perl-lsp-ai-provider",
  "perl-lsp-cancellation",
  "perl-lsp-capability-map",
@@ -2281,7 +2266,6 @@ dependencies = [
  "perl-corpus",
  "perl-dead-code",
  "perl-incremental-parsing",
- "perl-keywords",
  "perl-lexer",
  "perl-lsp-semantic-tokens",
  "perl-parser-core",
@@ -2314,7 +2298,6 @@ version = "0.12.4"
 dependencies = [
  "perl-ast",
  "perl-ast-v2",
- "perl-builtins",
  "perl-edit",
  "perl-error",
  "perl-heredoc",
@@ -2324,7 +2307,7 @@ dependencies = [
  "perl-quote",
  "perl-regex",
  "perl-tdd-support",
- "perl-tokenizer",
+ "perl-token",
  "tracing-subscriber",
 ]
 
@@ -2496,18 +2479,6 @@ dependencies = [
 [[package]]
 name = "perl-token"
 version = "0.12.4"
-
-[[package]]
-name = "perl-tokenizer"
-version = "0.12.4"
-dependencies = [
- "perl-ast-v2",
- "perl-error",
- "perl-lexer",
- "perl-position-tracking",
- "perl-tdd-support",
- "perl-token",
-]
 
 [[package]]
 name = "perl-uri"

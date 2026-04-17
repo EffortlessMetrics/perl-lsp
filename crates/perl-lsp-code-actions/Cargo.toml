@@ -17,7 +17,7 @@ categories = ["development-tools", "text-editors"]
 doctest = false
 
 [dependencies]
-perl-builtins = { workspace = true }
+perl-lexer = { workspace = true }
 perl-diagnostics = { workspace = true }
 perl-parser-core = { workspace = true }
 perl-ast-utils = { workspace = true }

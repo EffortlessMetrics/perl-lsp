@@ -86,7 +86,7 @@
 )]
 
 /// Builtin function signatures and metadata.
-pub use perl_builtins as builtins;
+pub use perl_lexer::builtins;
 /// Parser engine components and supporting utilities.
 pub mod engine;
 /// Token stream and trivia utilities for the parser.
@@ -111,7 +111,7 @@ pub use perl_edit as edit;
 /// Heredoc content collector with FIFO ordering and indent stripping.
 pub use perl_heredoc as heredoc_collector;
 /// Parser utilities and helpers.
-pub use perl_tokenizer::util;
+pub use perl_lexer::tokenizer::util;
 
 /// Recursive-descent parser -- the main entry point for parsing Perl source.
 pub use engine::parser::Parser;

@@ -8,7 +8,7 @@
 //! own symbols or a builtin before a keyword.
 
 use super::{context::CompletionContext, items::CompletionItem};
-use perl_keywords::LSP_COMPLETION_KEYWORDS;
+use perl_lexer::LSP_COMPLETION_KEYWORDS;
 
 /// Canonical Perl keywords for completion.
 #[must_use]
