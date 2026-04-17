@@ -146,6 +146,8 @@ pub enum DiagnosticCode {
     InvalidPrototype,
     /// Same-file Moo/Moose roles provide conflicting methods
     RoleConflict,
+    /// Exported subroutine lacks POD documentation
+    MissingPodCoverage,
 
     // Best practices (PL400-PL499)
     /// Bareword filehandle usage
@@ -262,6 +264,7 @@ impl DiagnosticCode {
             Self::MissingReturn => "PL301",
             Self::InvalidPrototype => "PL302",
             Self::RoleConflict => "PL303",
+            Self::MissingPodCoverage => "PL304",
             Self::BarewordFilehandle => "PL400",
             Self::TwoArgOpen => "PL401",
             Self::ImplicitReturn => "PL402",
@@ -333,6 +336,7 @@ impl DiagnosticCode {
             "PL301" => "https://docs.perl-lsp.org/errors/PL301",
             "PL302" => "https://docs.perl-lsp.org/errors/PL302",
             "PL303" => "https://docs.perl-lsp.org/errors/PL303",
+            "PL304" => "https://docs.perl-lsp.org/errors/PL304",
             "PL400" => "https://docs.perl-lsp.org/errors/PL400",
             "PL401" => "https://docs.perl-lsp.org/errors/PL401",
             "PL402" => "https://docs.perl-lsp.org/errors/PL402",
@@ -433,7 +437,8 @@ impl DiagnosticCode {
             | Self::HeredocTiedHandle => DiagnosticSeverity::Information,
 
             // Hints
-            Self::UnusedImport
+            Self::MissingPodCoverage
+            | Self::UnusedImport
             | Self::UnreachableCode
             | Self::CriticSeverity3
             | Self::CriticSeverity4
@@ -508,6 +513,10 @@ impl DiagnosticCode {
             Self::RoleConflict => Some(
                 "Two or more consumed Moo/Moose roles provide the same method. \
                 Define the method in the class or remove one of the conflicting roles.",
+            ),
+            Self::MissingPodCoverage => Some(
+                "This exported subroutine has no corresponding `=head2` or `=item` POD section. \
+                Add documentation so users of your module can discover its API.",
             ),
             Self::InvalidPrototype => Some(
                 "The prototype contains a character that Perl does not recognise. \
@@ -746,6 +755,7 @@ impl DiagnosticCode {
             "PL301" => Some(Self::MissingReturn),
             "PL302" => Some(Self::InvalidPrototype),
             "PL303" => Some(Self::RoleConflict),
+            "PL304" => Some(Self::MissingPodCoverage),
             "PL400" => Some(Self::BarewordFilehandle),
             "PL401" => Some(Self::TwoArgOpen),
             "PL402" => Some(Self::ImplicitReturn),
@@ -817,7 +827,8 @@ impl DiagnosticCode {
             Self::DuplicateSubroutine
             | Self::MissingReturn
             | Self::InvalidPrototype
-            | Self::RoleConflict => DiagnosticCategory::Subroutine,
+            | Self::RoleConflict
+            | Self::MissingPodCoverage => DiagnosticCategory::Subroutine,
 
             Self::BarewordFilehandle
             | Self::TwoArgOpen
