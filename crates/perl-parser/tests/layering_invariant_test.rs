@@ -79,7 +79,7 @@ fn when_parser_layering_is_correct_then_no_lsp_provider_deps_in_tree() {
 
 /// Test: semantic_tokens import alias works after refactoring.
 ///
-/// Validates that the import alias pattern used in ast_snapshot_tests.rs:13
+/// Validates that the import alias pattern used in ast_snap.rs:13
 /// compiles correctly after the refactor. The refactor changes the import from:
 ///   use perl_parser::{Parser, semantic_tokens};
 /// to:
@@ -90,7 +90,7 @@ fn when_parser_layering_is_correct_then_no_lsp_provider_deps_in_tree() {
 /// it compiles and the legend() function is accessible.
 #[test]
 fn when_semantic_tokens_import_refactored_then_legend_accessible() {
-    // This pattern matches the refactored import in ast_snapshot_tests.rs after #4414
+    // This pattern matches the refactored import in ast_snap.rs after #4414
     use perl_lsp_semantic_tokens as semantic_tokens_module;
 
     let legend = semantic_tokens_module::legend();

@@ -82,7 +82,7 @@ cargo nextest run --workspace --lib
 cargo nextest run --workspace
 
 # Snapshot tests (these must all pass — stale snapshots block release)
-cargo test -p perl-lsp --test lsp_capability_snapshot_test
+cargo test -p perl-lsp --test lsp_cap_snap
 ```
 
 If any snapshot test fails and `.snap.new` files exist as untracked, accept them before releasing:
