@@ -40,6 +40,9 @@ Status legend:
 | perl-parser | perl-parser | core-public | 3-4 | — | parser facade; absorbs syntax + parser-adjacent |
 | perl-lexer | perl-lexer | core-public | 3 | — | tokenizer; absorbs satellites |
 | perl-token | perl-token | core-public | — | — | foundation primitive — stays published per ADR-0041 (see Amendment 4) |
+| perl-line-index | perl-line-index | core-public | — | — | foundation primitive — stays published per ADR-0041 (see Amendment 5) |
+| perl-uri | perl-uri | core-public | — | — | foundation primitive — stays published per ADR-0041; absorbs perl-uri-classify during Wave D (see Amendment 5) |
+| perl-pod | perl-pod | core-public | — | — | foundation primitive — stays published per ADR-0041 (see Amendment 5) |
 | perl-semantic-analyzer | perl-semantic-analyzer | core-public | 5 | — | absorbs incremental/refactor; symbol crates go to perl-symbol (Wave B) |
 | perl-symbol | perl-symbol (NEW) | core-public | B | — | absorbs 4 perl-symbol-*; own published crate (see Wave B) |
 | perl-workspace-index | perl-workspace | core-public | 2 | — | renamed to perl-workspace during Wave 2; absorbs 6 perl-workspace-* |
@@ -112,6 +115,12 @@ Wave 3 collapses only the 4 satellites below into `perl-lexer`. See Amendment 4.
 
 ## Wave 4 — parser/AST satellites → perl-parser
 
+`perl-line-index`, `perl-uri`, and `perl-pod` are **NOT** absorbed. They remain separately
+published foundation primitives per ADR-0041 ("Foundation primitives (5): perl-lexer, perl-token,
+perl-line-index, perl-uri, perl-pod"). Wave D collapses only the parser/AST satellites below into
+`perl-parser`. `perl-uri-classify` still folds — but into the retained `perl-uri` crate, not into
+`perl-parser`. See Amendment 5.
+
 | current crate | target owner | final status | wave | risk | notes |
 |---|---|---|---:|---:|---|
 | perl-ast | perl-parser | module | 4 | Med | expose via parser facade |
@@ -125,16 +134,13 @@ Wave 3 collapses only the 4 satellites below into `perl-lexer`. See Amendment 4.
 | perl-refactoring | perl-parser | module | 4 | Med | refactor engine |
 | perl-dead-code | perl-parser | module | 4 | Low | |
 | perl-feature-catalog | perl-parser | module | 4 | Low | codegen build-dep; inline into owner build.rs |
-| perl-line-index | perl-parser | module | 4 | Low | |
 | perl-position-tracking | perl-parser | module | 4 | Low | |
-| perl-pod | perl-parser | module | 4 | Low | |
 | perl-qualified-name | perl-parser | module | 4 | Low | |
 | perl-source-file | perl-parser | module | 4 | Low | |
 | perl-percentile | perl-parser | module | 4 | Low | numeric utility |
 | perl-text-line | perl-parser | module | 4 | Low | |
 | perl-edit | perl-parser | module | 4 | Low | |
-| perl-uri | perl-parser | module | 4 | Low | |
-| perl-uri-classify | perl-parser | module | 4 | Low | fold into perl-uri |
+| perl-uri-classify | perl-uri | module | 4 | Low | folds into the retained perl-uri crate (foundation primitive) |
 | perl-path-normalize | perl-parser | module | 4 | Low | |
 | perl-path-security | perl-parser | module | 4 | Med | security primitive |
 
