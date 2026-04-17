@@ -39,9 +39,15 @@ impl SymbolIndex {
     /// Add a symbol to the index.
     ///
     /// Indexes the symbol for both prefix and fuzzy matching.
+    /// Duplicate calls with the same symbol are idempotent: the symbol is
+    /// stored exactly once in both the trie and the inverted index.
     pub fn add_symbol(&mut self, symbol: String) {
-        // Add to trie for prefix matching
-        self.trie.insert(&symbol);
+        // Add to trie for prefix matching; returns true only when newly inserted.
+        // Deduplication here prevents the inverted index from accumulating
+        // duplicate entries, which would inflate fuzzy-match scores.
+        if !self.trie.insert(&symbol) {
+            return;
+        }
 
         // Add to inverted index for fuzzy matching
         let tokens = Self::tokenize(&symbol);
@@ -116,14 +122,28 @@ impl SymbolTrie {
         Self { children: HashMap::new(), symbols: Vec::new() }
     }
 
-    fn insert(&mut self, symbol: &str) {
+    /// Insert `symbol` into the trie.
+    ///
+    /// Returns `true` if the symbol was newly inserted, `false` if it was
+    /// already present (duplicate).  Callers use this to gate inverted-index
+    /// updates so both structures stay in sync.
+    fn insert(&mut self, symbol: &str) -> bool {
         let mut node = self;
 
         for ch in symbol.chars() {
             node = node.children.entry(ch).or_insert_with(|| Box::new(SymbolTrie::new()));
         }
 
-        node.symbols.push(symbol.to_string());
+        // Deduplicate: workspace indexing may call add_symbol for the same
+        // qualified name multiple times during incremental re-index.  Storing
+        // duplicates causes search_prefix to return the same entry N times,
+        // which produces duplicate completions in the UI.
+        let owned = symbol.to_string();
+        if node.symbols.contains(&owned) {
+            return false;
+        }
+        node.symbols.push(owned);
+        true
     }
 
     fn search_prefix(&self, prefix: &str) -> Vec<String> {

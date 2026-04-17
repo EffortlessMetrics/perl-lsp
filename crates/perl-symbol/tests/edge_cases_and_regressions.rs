@@ -381,9 +381,14 @@ fn edge_case_index_duplicate_insertion_does_not_double_report_prefix() -> Result
     idx.add_symbol("Foo::bar".to_string());
     idx.add_symbol("Foo::bar".to_string());
     let hits = idx.search_prefix("Foo::bar");
-    // Duplicate insertions should be tolerated; at minimum, prefix
-    // search must still return the symbol.
-    assert!(hits.iter().any(|s| s == "Foo::bar"));
+    // Duplicate insertions must be deduplicated: workspace indexing calls
+    // add_symbol for the same qualified name on incremental re-index, and
+    // the UI must not receive the same completion entry twice.
+    assert_eq!(
+        hits.iter().filter(|s| s.as_str() == "Foo::bar").count(),
+        1,
+        "duplicate add_symbol must not produce duplicate search_prefix results"
+    );
     Ok(())
 }
 
@@ -415,6 +420,31 @@ fn edge_case_index_fuzzy_search_ranks_multi_token_hits_higher() -> Result<()> {
     if let (Some(b), Some(q)) = (bar_pos, quux_pos) {
         assert!(b <= q, "multi-token match must outrank single-token match");
     }
+    Ok(())
+}
+
+#[test]
+fn edge_case_index_duplicate_insertion_does_not_inflate_fuzzy_score() -> Result<()> {
+    // When a symbol is added twice, its fuzzy token score must not be inflated
+    // relative to a symbol added once.  Score inflation causes the duplicate
+    // symbol to rank higher than correct, distorting workspace symbol ordering.
+    let mut idx = SymbolIndex::new();
+    idx.add_symbol("Foo::Bar".to_string());
+    idx.add_symbol("Foo::Bar".to_string()); // duplicate — must be idempotent
+    idx.add_symbol("Foo::Quux".to_string()); // single-inserted competitor
+
+    let results = idx.search_fuzzy("foo");
+    // Both must appear exactly once in the results.
+    assert_eq!(
+        results.iter().filter(|s| s.as_str() == "Foo::Bar").count(),
+        1,
+        "Foo::Bar must appear exactly once in fuzzy results after duplicate add"
+    );
+    assert_eq!(
+        results.iter().filter(|s| s.as_str() == "Foo::Quux").count(),
+        1,
+        "Foo::Quux must appear exactly once in fuzzy results"
+    );
     Ok(())
 }
 
