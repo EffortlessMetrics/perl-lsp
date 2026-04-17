@@ -56,27 +56,56 @@ use std::cell::{Cell, RefCell};
 use std::ops::Range;
 use std::rc::Rc;
 
+/// Kinds of issues detected during scope analysis.
+///
+/// Each variant represents a specific class of semantic problem that can be
+/// detected in Perl source code, such as unused variables, undeclared variables,
+/// variable shadowing, and bareword issues under `use strict`.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum IssueKind {
+    /// A lexically-scoped variable shadows a variable from an outer scope.
     VariableShadowing,
+    /// A declared variable is never referenced after initialization.
     UnusedVariable,
+    /// A variable is referenced but has not been declared in the current scope.
     UndeclaredVariable,
+    /// A variable with the same name is declared more than once in the same scope.
     VariableRedeclaration,
+    /// A subroutine parameter name appears more than once in the parameter list.
     DuplicateParameter,
+    /// A subroutine parameter shadows a global variable of the same name.
     ParameterShadowsGlobal,
+    /// A named subroutine parameter is never used inside the subroutine body.
     UnusedParameter,
+    /// A bareword (unquoted identifier) is used where a quoted string is required.
+    ///
+    /// This applies under `use strict subs` when a bareword is not:
+    /// - A known builtin function
+    /// - An imported builtin
+    /// - A hash key in appropriate context
     UnquotedBareword,
+    /// A variable is used before being initialized with a defined value.
     UninitializedVariable,
-    /// Capture variable (`$1`, `$2`, etc.) used with no preceding regex match in scope.
+    /// A capture variable (`$1`, `$2`, etc.) is used with no preceding regex match in the current scope.
     CaptureVarWithoutRegexMatch,
 }
 
+/// A diagnostic issue produced by scope analysis.
+///
+/// Represents a semantic problem detected in Perl source code, including
+/// unused variables, undeclared variables, variable shadowing, and bareword
+/// violations under `use strict`.
 #[derive(Debug, Clone)]
 pub struct ScopeIssue {
+    /// The kind of issue detected (e.g., `UnusedVariable`, `UndeclaredVariable`).
     pub kind: IssueKind,
+    /// The name of the variable or symbol involved in the issue.
     pub variable_name: String,
+    /// The 1-based line number where the issue occurs.
     pub line: usize,
+    /// The byte offset range in the source code that the issue refers to.
     pub range: (usize, usize),
+    /// A human-readable description of the issue.
     pub description: String,
 }
 
@@ -436,6 +465,11 @@ impl<'a> ExtractedName<'a> {
     }
 }
 
+/// Performs scope analysis on a Perl AST to detect variable and bareword issues.
+///
+/// `ScopeAnalyzer` tracks variable declarations and usage across scopes,
+/// detecting problems such as undeclared variables, unused variables, variable
+/// shadowing, and bareword violations under `use strict subs`.
 pub struct ScopeAnalyzer;
 
 impl Default for ScopeAnalyzer {
@@ -445,6 +479,7 @@ impl Default for ScopeAnalyzer {
 }
 
 impl ScopeAnalyzer {
+    /// Creates a new `ScopeAnalyzer` instance.
     pub fn new() -> Self {
         Self
     }
@@ -546,6 +581,21 @@ impl ScopeAnalyzer {
         })
     }
 
+    /// Analyzes a Perl AST for scope-related issues.
+    ///
+    /// Walks the AST tree, tracking variable declarations and usage across scopes.
+    /// Detects undeclared variables, unused variables, variable shadowing, bareword
+    /// violations under `use strict subs`, and other scope-related issues.
+    ///
+    /// # Arguments
+    ///
+    /// * `ast` - The root node of the parsed Perl AST.
+    /// * `code` - The original source code string for location information.
+    /// * `pragma_map` - A slice of pragma states (e.g., `use strict`) keyed by source range.
+    ///
+    /// # Returns
+    ///
+    /// A `Vec` of `ScopeIssue` containing all detected issues, or an empty vector if no issues were found.
     pub fn analyze(
         &self,
         ast: &Node,
@@ -1806,6 +1856,19 @@ impl ScopeAnalyzer {
         false
     }
 
+    /// Generates human-readable suggestions for a slice of scope issues.
+    ///
+    /// Maps each issue to a suggestion string that describes how to resolve
+    /// the problem, such as "Declare '$foo' with 'my', 'our', or 'local'"
+    /// for `UndeclaredVariable` issues.
+    ///
+    /// # Arguments
+    ///
+    /// * `issues` - A slice of `ScopeIssue` to generate suggestions for.
+    ///
+    /// # Returns
+    ///
+    /// A `Vec` of suggestion strings, one for each input issue, in the same order.
     pub fn get_suggestions(&self, issues: &[ScopeIssue]) -> Vec<String> {
         issues
             .iter()
