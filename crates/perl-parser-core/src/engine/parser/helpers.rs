@@ -168,7 +168,7 @@ impl<'a> Parser<'a> {
     /// Delegates to the canonical builtin registry in `perl-builtins-phf`,
     /// excluding nullary builtins and keywords that have dedicated parser handlers.
     fn is_builtin_function(name: &str) -> bool {
-        perl_builtins::builtin_signatures_phf::is_builtin(name)
+        perl_lexer::builtins::builtin_signatures_phf::is_builtin(name)
             && !Self::is_nullary_builtin(name)
             && !Self::is_keyword_handled_builtin(name)
     }

@@ -89,7 +89,7 @@ pub fn organize_imports(_ast: &Node, source: &str, helpers: &Helpers<'_>) -> Opt
 /// - `use Module;` (no import list) is handled conservatively: functions that
 ///   map to an already-used module via `guess_module_for_function` are not flagged
 pub fn find_undefined_functions(ast: &Node) -> Vec<String> {
-    use perl_builtins::builtin_signatures_phf::is_builtin;
+    use perl_lexer::is_builtin;
     use perl_lsp_import_management::guess_module_for_function;
     use perl_parser_core::ast::NodeKind;
     use std::collections::HashSet;

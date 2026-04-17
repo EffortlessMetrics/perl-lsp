@@ -2,7 +2,7 @@
 //!
 //! This module provides validation for rename operations.
 
-use perl_keywords::is_rename_keyword;
+use perl_lexer::is_rename_keyword;
 use perl_semantic_analyzer::symbol::SymbolKind;
 use perl_semantic_analyzer::symbol::SymbolTable;
 

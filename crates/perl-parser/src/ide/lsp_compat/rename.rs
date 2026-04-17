@@ -56,7 +56,7 @@ use crate::ast::{Node, NodeKind};
 use crate::position::{Position, Range};
 use crate::workspace::workspace_index::{WorkspaceIndex, SymbolReference};
 use lsp_types::*;
-use perl_keywords::is_parser_lsp_keyword;
+use perl_lexer::is_parser_lsp_keyword;
 use std::collections::HashMap;
 use url::Url;
 

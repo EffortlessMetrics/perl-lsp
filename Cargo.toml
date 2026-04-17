@@ -7,13 +7,10 @@ members = [
     "crates/perl-quote",
     "crates/perl-pragma",
     "crates/perl-edit",
-    "crates/perl-builtins",
-    "crates/perl-builtins-phf",
     "crates/perl-regex",
     "crates/perl-heredoc",
     "crates/perl-heredoc-anti-patterns",
     "crates/perl-error",
-    "crates/perl-tokenizer",
     "crates/perl-lexer",
     "crates/perl-parser",
     "crates/perl-parser-bench",
@@ -82,7 +79,6 @@ members = [
     "crates/perl-qualified-name",
     "crates/perl-text-line",
     "crates/perl-line-index",
-    "crates/perl-keywords",
     "crates/perl-source-file",
     "crates/perl-content-length-framing",
     "crates/perl-uri-classify",
@@ -118,14 +114,11 @@ allow = [
     # Tier 1 — Leaf crates (no workspace deps)
     "perl-position-tracking",
     "perl-token",
-    "perl-builtins",
-    "perl-builtins-phf",
     "perl-content-length-framing",
     "perl-percentile",
     "perl-subprocess-runtime",
     "perl-lsp-protocol",
     "perl-lsp-symbol-query",
-    "perl-keywords",
     "perl-regex",
     "perl-quote",
     "perl-pod",
@@ -141,7 +134,6 @@ allow = [
     # Tier 1c — Depend on Tier 1b crates
     "perl-error",
     "perl-pragma",
-    "perl-tokenizer",
 
     # Tier 2 — Core infrastructure
     "perl-parser-core",
@@ -255,8 +247,6 @@ perl-ast-v2 = { path = "crates/perl-ast-v2", version = "0.12.4" }
 perl-token = { path = "crates/perl-token", version = "0.12.4" }
 perl-quote = { path = "crates/perl-quote", version = "0.12.4" }
 perl-edit = { path = "crates/perl-edit", version = "0.12.4" }
-perl-builtins = { path = "crates/perl-builtins", version = "0.12.4" }
-perl-builtins-phf = { path = "crates/perl-builtins-phf", version = "0.12.4" }
 perl-regex = { path = "crates/perl-regex", version = "0.12.4" }
 perl-pragma = { path = "crates/perl-pragma", version = "0.12.4" }
 perl-lexer = { path = "crates/perl-lexer", version = "0.12.4" }
@@ -264,12 +254,10 @@ perl-ast = { path = "crates/perl-ast", version = "0.12.4" }
 perl-heredoc = { path = "crates/perl-heredoc", version = "0.12.4" }
 perl-heredoc-anti-patterns = { path = "crates/perl-heredoc-anti-patterns", version = "0.12.4" }
 perl-error = { path = "crates/perl-error", version = "0.12.4" }
-perl-tokenizer = { path = "crates/perl-tokenizer", version = "0.12.4" }
 perl-position-tracking = { path = "crates/perl-position-tracking", version = "0.12.4" }
 perl-symbol = { path = "crates/perl-symbol", version = "0.12.4" }
 perl-module = { path = 'crates/perl-module', version = "0.12.4" }
 perl-qualified-name = { path = "crates/perl-qualified-name", version = "0.12.4" }
-perl-keywords = { path = "crates/perl-keywords", version = "0.12.4" }
 perl-source-file = { path = "crates/perl-source-file", version = "0.12.4" }
 perl-text-line = { path = "crates/perl-text-line", version = "0.12.4" }
 perl-line-index = { path = "crates/perl-line-index", version = "0.12.4" }

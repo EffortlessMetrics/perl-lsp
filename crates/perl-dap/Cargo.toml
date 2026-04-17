@@ -58,7 +58,7 @@ ropey = "1.6.1"
 
 perl-module = { workspace = true }
 perl-content-length-framing = { workspace = true }
-perl-keywords = { workspace = true }
+perl-lexer = { workspace = true }
 perl-lsp-launcher = { workspace = true }
 
 # Process management

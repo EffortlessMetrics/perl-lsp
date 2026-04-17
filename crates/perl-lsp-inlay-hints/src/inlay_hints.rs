@@ -18,7 +18,7 @@
 //! Follows the inlay hint protocol for range-scoped responses and stable hint
 //! ordering per the LSP specification.
 
-use perl_builtins::builtin_signatures::create_builtin_signatures;
+use perl_lexer::create_builtin_signatures;
 use perl_parser_core::ast::{Node, NodeKind};
 use perl_position_tracking::{WirePosition as Position, WireRange as Range};
 use perl_semantic_analyzer::declaration::get_node_children;
@@ -448,7 +448,7 @@ fn method_return_type(method: &str) -> Option<String> {
 
 /// Returns a short perldoc-style summary for a builtin function parameter.
 ///
-/// Looks up the builtin's documentation from `perl_builtins::builtin_signatures`
+/// Looks up the builtin's documentation from `perl_lexer::create_builtin_signatures`
 /// rather than maintaining a hardcoded list. Falls back to `None` for unknown
 /// builtins or parameters.
 fn builtin_doc_summary(function: &str, param: &str, _param_index: usize) -> Option<String> {

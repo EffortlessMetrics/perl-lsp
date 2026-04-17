@@ -40,7 +40,7 @@ use crate::tcp_attach::{DapEvent, TcpAttachConfig, TcpAttachSession};
 use crate::types::{Source, StackFrame, Variable};
 use crate::variables::{PerlVariableRenderer, RenderedVariable, VariableParser, VariableRenderer};
 use perl_content_length_framing::{ContentLengthFramer, frame};
-use perl_keywords::DAP_COMPLETION_KEYWORDS;
+use perl_lexer::DAP_COMPLETION_KEYWORDS;
 use perl_module::path::module_path_to_name;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};

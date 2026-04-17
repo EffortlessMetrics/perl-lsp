@@ -30,11 +30,10 @@ perl-ast-v2 = { workspace = true }
 perl-quote = { workspace = true }
 perl-pragma = { workspace = true }
 perl-edit = { workspace = true }
-perl-builtins = { workspace = true }
 perl-regex = { workspace = true }
 perl-heredoc = { workspace = true }
 perl-error = { workspace = true }
-perl-tokenizer = { workspace = true }
+perl-token = { workspace = true }
 
 [dev-dependencies]
 perl-tdd-support = { workspace = true }

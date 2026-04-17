@@ -18,7 +18,7 @@ use crate::{
     runtime::routing::{IndexAccessMode, route_index_access},
     state::{completion_cap, completion_deadline},
 };
-use perl_keywords::LSP_RUNTIME_COMPLETION_KEYWORDS;
+use perl_lexer::LSP_RUNTIME_COMPLETION_KEYWORDS;
 use perl_parser::type_inference::TypeInferenceEngine;
 use regex::Regex;
 use serde_json::{Value, json};

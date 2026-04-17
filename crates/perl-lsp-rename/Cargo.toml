@@ -19,7 +19,7 @@ doctest = false
 [dependencies]
 perl-parser-core = { workspace = true }
 perl-semantic-analyzer = { workspace = true }
-perl-keywords = { workspace = true }
+perl-lexer = { workspace = true }
 perl-symbol = { workspace = true }
 
 [dev-dependencies]
