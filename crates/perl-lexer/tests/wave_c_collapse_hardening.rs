@@ -484,3 +484,32 @@ fn token_stream_lives_under_parser_core_not_lexer() {
         .join("token_stream.rs");
     assert!(core_good.exists(), "token_stream.rs must live at perl-parser-core/src/tokens/");
 }
+
+// -----------------------------------------------------------------------------
+// 8. is_keyword_fast length-bound invariant
+// -----------------------------------------------------------------------------
+//
+// `is_keyword_fast` in `perl-lexer/src/lib.rs` uses `matches!(word.len(), 1..=9)`
+// as a fast-path rejection before calling `is_lexer_keyword`. If a keyword
+// longer than 9 characters is ever added to LEXER_KEYWORDS, it would be
+// silently invisible to the lexer (the bound check short-circuits the lookup).
+// This test anchors the maximum keyword length so any addition that breaks the
+// bound surfaces immediately.
+
+#[test]
+fn lexer_keywords_fit_within_is_keyword_fast_bound() {
+    use perl_lexer::keywords::LEXER_KEYWORDS;
+
+    let max_len = LEXER_KEYWORDS.iter().map(|kw| kw.len()).max().unwrap_or(0);
+    assert!(
+        max_len <= 9,
+        "LEXER_KEYWORDS contains a keyword longer than 9 chars (found {max_len}). \
+         Update the `matches!(word.len(), 1..=9)` bound in `is_keyword_fast` in \
+         crates/perl-lexer/src/lib.rs to `1..={max_len}` to keep the fast path correct."
+    );
+    // Also guard the lower bound — empty string is not a keyword.
+    assert!(
+        LEXER_KEYWORDS.iter().all(|kw| !kw.is_empty()),
+        "LEXER_KEYWORDS must not contain the empty string"
+    );
+}
