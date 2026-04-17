@@ -124,7 +124,7 @@ fn when_requesting_grammar_kind_of_variable_with_attributes_then_snake_case_fall
     // NodeKind::VariableWithAttributes produces a double-paren sexp of the form
     // `((variable $ foo) (attributes :lvalue))` -- grammar_kind() must fall back
     // to snake_case of kind_name() and must NOT return the child kind "variable".
-    let tree = parse("my $foo :lvalue;");
+    let tree = parse("my ($foo :lvalue);");
     let root = tree.root_node();
     // Walk the tree to find the VariableWithAttributes node if present.
     fn find_var_attrs(n: tree_sitter_perl_rs::Node<'_>) -> Option<String> {
@@ -144,6 +144,4 @@ fn when_requesting_grammar_kind_of_variable_with_attributes_then_snake_case_fall
         assert_eq!(gk, "variable_with_attributes",
             "expected snake_case fallback; got {gk}");
     }
-    // If the parser does not produce VariableWithAttributes for this input,
-    // the test is vacuous by design -- the edge case simply does not arise.
 }
