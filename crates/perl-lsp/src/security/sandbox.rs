@@ -274,6 +274,11 @@ impl Sandbox {
     ///
     /// SECURITY FIX: Fails closed when sandbox is enabled but Windows job objects
     /// are not yet implemented. This prevents silent security bypass.
+    ///
+    /// Note: `self.config.enabled` is always `true` when this function is called —
+    /// `apply_sandbox_restrictions` is only reached through the `enabled=true` branch
+    /// of `execute()`. The guard is kept explicit for self-documentation and defensive
+    /// correctness if the call graph changes in the future.
     #[cfg(target_os = "windows")]
     fn apply_windows_sandbox(&self, _cmd: &mut Command) -> Result<()> {
         if self.config.enabled {
@@ -575,39 +580,83 @@ mod tests {
 
     // --- SECURITY FIX TESTS ---
 
-    /// Test that Linux sandbox fails closed when firejail is unavailable
+    /// Test that the Linux sandbox fails closed when firejail is unavailable.
+    ///
+    /// This test only runs when firejail is confirmed absent. If firejail is
+    /// present the sandbox uses it correctly and the fail-closed path is not
+    /// exercised — that is the correct production behaviour. The goal is to
+    /// verify the *fallback* path changed from silent env-var set to hard Err.
     #[test]
     #[cfg(target_os = "linux")]
     fn test_linux_sandbox_fails_closed_without_firejail() {
         use perl_tdd_support::must;
 
-        // Create a config with sandbox enabled but we'll simulate firejail missing
+        // Detect whether firejail is actually available on this machine.
+        // If it is, the fail-closed path is never reached; skip the test.
+        let firejail_present = std::process::Command::new("firejail")
+            .arg("--version")
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false);
+        if firejail_present {
+            // Firejail is installed — the sandbox works correctly here.
+            // The fail-closed path is not reachable; skip rather than
+            // asserting on a path that will never fire.
+            return;
+        }
+
         let config = SandboxConfig { enabled: true, ..SandboxConfig::default() };
         let sandbox = must(Sandbox::new(config));
 
-        // Try to execute a simple command - should fail because firejail is not available
-        // and we now fail-closed instead of falling back to ineffective env vars
+        // Without firejail the new code must return Err (not silently succeed
+        // with inert RLIMIT_* env vars as the old code did).
         let result = sandbox.execute("echo", &["test"]);
 
-        // Should fail with an error about firejail not being available
-        assert!(result.is_err(), "Expected failure when firejail unavailable");
+        assert!(result.is_err(), "Expected fail-closed error when firejail is absent");
         let err_msg = format!("{}", result.unwrap_err());
         assert!(
             err_msg.contains("firejail") || err_msg.contains("sandbox.enabled"),
-            "Error should mention firejail or sandbox.enabled: {}",
+            "Error should name firejail or sandbox.enabled, got: {}",
             err_msg
         );
     }
 
-    /// Test that Perl scripts are executed with taint mode (-T flag)
+    /// Test that the Windows sandbox fails closed when enabled=true.
+    ///
+    /// Before this fix, apply_windows_sandbox() was a no-op (returned Ok(()))
+    /// silently — a process ran with zero restrictions. After this fix it must
+    /// return a clear error so callers know the sandbox was not applied.
+    #[test]
+    #[cfg(target_os = "windows")]
+    fn test_windows_sandbox_fails_closed() {
+        use perl_tdd_support::must;
+        let config = SandboxConfig { enabled: true, ..SandboxConfig::default() };
+        let sandbox = must(Sandbox::new(config));
+
+        let result = sandbox.execute("cmd", &["/C", "echo", "test"]);
+
+        assert!(result.is_err(), "Expected fail-closed error on Windows with sandbox enabled");
+        let err_msg = format!("{}", result.unwrap_err());
+        assert!(
+            err_msg.contains("Windows job objects") || err_msg.contains("sandbox.enabled"),
+            "Error should mention Windows job objects or sandbox.enabled, got: {}",
+            err_msg
+        );
+    }
+
+    /// Test that Perl scripts are executed with taint mode (-T flag).
+    ///
+    /// Uses `execute_perl_script` with sandbox disabled so the test actually
+    /// reaches Perl rather than failing-closed at the firejail probe.
+    /// The ${^TAINT} special variable is 1 when perl is invoked with -T and
+    /// 0 otherwise — this gives a direct, non-vacuous signal.
     #[test]
     fn test_perl_taint_mode_flag() {
         use perl_tdd_support::must;
         let temp_dir = must(TempDir::new());
         let script_path = temp_dir.path().join("taint_test.pl");
 
-        // Script that checks if taint mode is enabled
-        // In taint mode, @ARGV and %ENV are tainted
+        // ${^TAINT} is 1 under -T, 0 without it (perlvar).
         let script = r#"
 if (${^TAINT}) {
     print "TAINTED\n";
@@ -617,10 +666,13 @@ if (${^TAINT}) {
 "#;
         must(fs::write(&script_path, script));
 
-        let executor = SafeExecutor::new();
+        // Use sandbox disabled so the test reaches Perl on all platforms,
+        // including Linux without firejail and Windows (which fail-close).
+        let config = SandboxConfig { enabled: false, ..Default::default() };
+        let executor = SafeExecutor::with_config(config);
         let result = executor.execute_perl_script(&script_path, &[]);
 
-        // If perl is available, verify taint mode is active
+        // If Perl is not installed on this machine, skip gracefully.
         if let Ok(result) = result {
             let stdout = must(result.stdout_str());
             assert!(
@@ -631,31 +683,47 @@ if (${^TAINT}) {
         }
     }
 
-    /// Test that taint mode prevents dangerous operations with tainted data
+    /// Test that taint mode prevents passing tainted data to dangerous sinks.
+    ///
+    /// Perl taint mode does NOT die on regex matching with tainted strings —
+    /// that is a common misconception. It dies when tainted data reaches a
+    /// dangerous sink: system(), exec(), open() with shell metacharacters, or
+    /// eval(STRING). This test verifies the correct sink: system().
     #[test]
     fn test_perl_taint_mode_blocks_dangerous_ops() {
         use perl_tdd_support::must;
         let temp_dir = must(TempDir::new());
         let script_path = temp_dir.path().join("dangerous.pl");
 
-        // Script that tries to use tainted data in a dangerous way
-        // This should fail in taint mode
+        // Under -T, $ENV{PATH} is tainted. Passing tainted data to system()
+        // without untainting it first must die with "Insecure $ENV{PATH}".
+        // We redirect stderr to stdout so the test can observe the die message.
         let script = r#"
-my $tainted = $ENV{PATH};  # ENV is tainted in -T mode
-my $result = $tainted =~ /test/;  # Regex with tainted data
-print "MATCHED\n" if $result;
+use strict;
+use warnings;
+# system() with a tainted PATH should die with "Insecure" in taint mode.
+# Catch with eval so we can print the error and exit cleanly.
+eval { system($ENV{PATH} . " --version") };
+if ($@) {
+    print "TAINT_BLOCKED\n";
+} else {
+    print "NOT_BLOCKED\n";
+}
 "#;
         must(fs::write(&script_path, script));
 
-        let executor = SafeExecutor::new();
-        let _result = executor.execute_perl_script(&script_path, &[]);
+        let config = SandboxConfig { enabled: false, ..Default::default() };
+        let executor = SafeExecutor::with_config(config);
+        let result = executor.execute_perl_script(&script_path, &[]);
 
-        // In taint mode, this should fail or behave differently
-        // The exact behavior depends on Perl version, but taint mode
-        // should at least be active
-        if let Ok(_result) = _result {
-            // Script may succeed but taint mode is active
-            // The key verification is that -T was passed
+        // If Perl is not installed on this machine, skip gracefully.
+        if let Ok(result) = result {
+            let stdout = must(result.stdout_str());
+            assert!(
+                stdout.contains("TAINT_BLOCKED"),
+                "Expected taint mode to block system() with tainted PATH. Got stdout: {}",
+                stdout
+            );
         }
     }
 }
