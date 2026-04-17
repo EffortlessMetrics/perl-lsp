@@ -1,0 +1,5 @@
+---
+source: crates/perl-semantic-analyzer/tests/snapshot_strict_subs_qualified.rs
+expression: output
+---
+3:Foo::bar: UnquotedBareword 'Foo::bar' range=((20, 28)) - Bareword 'Foo::bar' not allowed under 'use strict'

@@ -1,0 +1,5 @@
+---
+source: crates/perl-semantic-analyzer/tests/snapshot_strict_subs_qualified.rs
+expression: output
+---
+3:DBI::connect: UnquotedBareword 'DBI::connect' range=((20, 32)) - Bareword 'DBI::connect' not allowed under 'use strict'

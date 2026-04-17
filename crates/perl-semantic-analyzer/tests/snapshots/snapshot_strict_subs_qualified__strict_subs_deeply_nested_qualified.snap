@@ -1,0 +1,5 @@
+---
+source: crates/perl-semantic-analyzer/tests/snapshot_strict_subs_qualified.rs
+expression: output
+---
+3:Very::Long::Package::Name::function: UnquotedBareword 'Very::Long::Package::Name::function' range=((20, 55)) - Bareword 'Very::Long::Package::Name::function' not allowed under 'use strict'
