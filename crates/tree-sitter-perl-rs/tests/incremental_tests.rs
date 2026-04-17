@@ -45,7 +45,7 @@ fn when_parse_with_old_tree_given_invalid_source_then_some_tree_is_returned() {
 }
 
 #[test]
-fn when_multiple_edits_are_recorded_then_tree_stores_all() {
+fn when_multiple_edits_are_recorded_then_tree_remains_usable_for_reparse() {
     let mut tree = parse("my $x = 1; my $y = 2;");
 
     // First edit: replace "1" with "10"
@@ -69,7 +69,13 @@ fn when_multiple_edits_are_recorded_then_tree_stores_all() {
         Position::new(20, 0, 20),
     );
     tree.edit(&edit2);
-    // Test passes if we reach here without panic
+
+    // Verify the tree is still usable as an old_tree hint: parse the updated source
+    // and verify the resulting tree reflects the new content.
+    let new_source = "my $x = 10; my $y = 20;";
+    let mut parser = Parser::new();
+    let new_tree = must_some(parser.parse_with_old_tree(new_source, &tree));
+    assert_eq!(new_tree.source(), new_source, "reparse after two edits must reflect updated source");
 }
 
 #[test]
