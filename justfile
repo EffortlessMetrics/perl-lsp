@@ -765,12 +765,8 @@ ci-gate:
     just hook-registry-check && \
     just hook-tests && \
     just ci-publish-closure && \
-<<<<<<< HEAD
     just ci-layer-check && \
     just ci-published-crate-count
-=======
-    just ci-layer-check
->>>>>>> 0d099d183 (fix(deep-review): restore layer-check CI gate removed by Wave C branch divergence)
     # @START=$$(date +%s); \
 
 # Gate runner with receipt output (Issue #210)
@@ -879,15 +875,12 @@ ci-layer-check:
     @cargo xtask layer-check
     @echo "✅ Layer-check passed"
 
-<<<<<<< HEAD
 # Ratchet: published crate count must not increase above baseline (see #4416)
 ci-published-crate-count:
     @echo "🧮 Checking published-crate count ratchet..."
     @cargo xtask published-crate-count
     @echo "✅ Published-crate count ratchet passed"
 
-=======
->>>>>>> 0d099d183 (fix(deep-review): restore layer-check CI gate removed by Wave C branch divergence)
 # Core tests (fast, essential)
 ci-test-core:
     @echo "🧪 Running core tests..."
