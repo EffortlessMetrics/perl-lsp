@@ -430,25 +430,50 @@ fn regression_diagnostic_tag_copy() {
     assert_eq!(tag1, tag2);
 }
 
-// Edge case: DiagnosticCode.from_message() handles various inputs
+// Edge case: from_message priority — phase-scoped patterns take precedence over
+// generic "use strict" match because the phase-scoped message also contains "use strict"
+// as a substring. If checked in wrong order, "use strict" branch would fire first
+// and return MissingStrict instead of PhaseScopedStrictPragma.
 #[test]
-fn edge_case_diagnostic_code_from_message() {
-    // Known patterns should match
-    let code_opt = DiagnosticCode::from_message("parse error");
+fn edge_case_from_message_phase_scoped_takes_priority_over_use_strict() {
+    // This message contains "use strict" as a substring but should map to
+    // PhaseScopedStrictPragma, not MissingStrict, because the phase-scoped check
+    // appears first in the from_message implementation.
+    let msg = "use strict inside a begin block does not enable strict at file scope";
+    assert_eq!(
+        DiagnosticCode::from_message(msg),
+        Some(DiagnosticCode::PhaseScopedStrictPragma),
+        "Phase-scoped strict check must take priority over generic 'use strict' match"
+    );
 
-    // May or may not match depending on implementation
-    // Just verify the function is callable and returns Option
-    let _ = code_opt;
+    // Same for warnings
+    let msg_warn = "use warnings inside a phase block does not enable warnings at file scope";
+    assert_eq!(
+        DiagnosticCode::from_message(msg_warn),
+        Some(DiagnosticCode::PhaseScopedWarningsPragma),
+        "Phase-scoped warnings check must take priority over generic 'use warnings' match"
+    );
 }
 
-// Edge case: DiagnosticCode.parse_code() handles string codes
+// Edge case: from_message returns None for empty and whitespace-only strings
 #[test]
-fn edge_case_diagnostic_code_parse_code() {
-    // Test that parse_code is callable
-    let code_opt = DiagnosticCode::parse_code("PL001");
+fn edge_case_from_message_empty_and_whitespace() {
+    assert_eq!(DiagnosticCode::from_message(""), None, "empty string → None");
+    assert_eq!(DiagnosticCode::from_message("   "), None, "whitespace-only → None");
+    assert_eq!(DiagnosticCode::from_message("\t\n"), None, "tab+newline → None");
+}
 
-    // Just verify it's callable and returns Option
-    let _ = code_opt;
+// Edge case: parse_code is case-sensitive (lowercase codes must not match)
+#[test]
+fn edge_case_parse_code_case_sensitivity() {
+    // parse_code is case-sensitive by design — codes are always uppercase
+    assert_eq!(DiagnosticCode::parse_code("PL001"), Some(DiagnosticCode::ParseError));
+    assert_eq!(DiagnosticCode::parse_code("pl001"), None, "lowercase must not match");
+    assert_eq!(DiagnosticCode::parse_code("Pl001"), None, "mixed case must not match");
+    assert_eq!(DiagnosticCode::parse_code(""), None, "empty string → None");
+    assert_eq!(DiagnosticCode::parse_code("PL999"), None, "unassigned code → None");
+    assert_eq!(DiagnosticCode::parse_code("PC999"), None, "unassigned PC code → None");
+    assert_eq!(DiagnosticCode::parse_code("PL 001"), None, "space in code → None");
 }
 
 // Regression: DiagnosticSeverity implements Hash correctly
