@@ -73,7 +73,7 @@ struct ReleaseHealthOutput {
     metrics: ReleaseHealthMetrics,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 struct ReleaseHealthMetrics {
     current_release_version: Option<String>,
     history_window_days: u64,
@@ -329,7 +329,7 @@ fn write_json_output(root: &Path, metrics: &ReleaseHealthMetrics) -> Result<()> 
         schema_version: 1,
         measured_at: Utc::now().to_rfc3339(),
         subsystem: "release_health",
-        metrics: clone_metrics(metrics),
+        metrics: metrics.clone(),
     };
 
     let path = metrics_dir.join("release-health.json");
@@ -340,23 +340,6 @@ fn write_json_output(root: &Path, metrics: &ReleaseHealthMetrics) -> Result<()> 
     Ok(())
 }
 
-/// Manually clone — `ReleaseHealthMetrics` deliberately doesn't derive `Clone`
-/// because callers shouldn't need it.  Used only inside `write_json_output`
-/// where we hand the struct off to the receipt wrapper.
-fn clone_metrics(m: &ReleaseHealthMetrics) -> ReleaseHealthMetrics {
-    ReleaseHealthMetrics {
-        current_release_version: m.current_release_version.clone(),
-        history_window_days: m.history_window_days,
-        flaky_test_count: m.flaky_test_count,
-        quarantined_test_count: m.quarantined_test_count,
-        known_issues_count: m.known_issues_count,
-        technical_debt_count: m.technical_debt_count,
-        debt_budget_utilization_pct: m.debt_budget_utilization_pct.clone(),
-        merge_gate_pass_rate: m.merge_gate_pass_rate,
-        merge_gate_runs_analyzed: m.merge_gate_runs_analyzed,
-        merge_gate_billable_minutes: m.merge_gate_billable_minutes,
-    }
-}
 
 // ---------------------------------------------------------------------------
 // Tests
