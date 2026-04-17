@@ -47,6 +47,18 @@ pub fn extract_pod_from_file(path: &Path) -> io::Result<PodDoc> {
 }
 
 /// Extract POD documentation from a string of Perl source code.
+///
+/// Parses POD markup from the source string and extracts structured documentation
+/// for the NAME, SYNOPSIS, DESCRIPTION sections, and method documentation (head2).
+///
+/// # Arguments
+///
+/// * `source` - Perl source code containing POD documentation
+///
+/// # Returns
+///
+/// A `PodDoc` containing the extracted documentation fields. Empty fields indicate
+/// the corresponding POD section was not present in the source.
 #[must_use]
 pub fn extract_pod(source: &str) -> PodDoc {
     let mut doc = PodDoc::default();
@@ -161,6 +173,22 @@ enum Section {
     Other(()),
 }
 
+/// Stores accumulated body text into the appropriate `PodDoc` field.
+///
+/// Called when a POD section ends (new section starts, `=cut`, or EOF).
+/// The body text is cleaned of POD formatting and stored based on section type:
+/// - `Name` → `PodDoc::name`
+/// - `Synopsis` → `PodDoc::synopsis`
+/// - `Description` → `PodDoc::description` (first paragraph only)
+/// - `Method(name)` → `PodDoc::methods` entry
+/// - `Other` → ignored
+///
+/// # Arguments
+///
+/// * `doc` - The `PodDoc` to store extracted content into
+/// * `section` - The section type being flushed
+/// * `body` - Accumulated raw text for the section
+/// * `_in_over` - Whether inside an `=over`/`=back` block (unused, for future expansion)
 fn flush_section(doc: &mut PodDoc, section: &Option<Section>, body: &str, _in_over: bool) {
     let section = match section {
         Some(s) => s,
@@ -304,6 +332,16 @@ fn extract_link_display(link: &str) -> String {
     format!("[{display}](perl-module://{target})")
 }
 
+/// Decodes a POD E<> entity to its corresponding character.
+///
+/// Handles standard POD escape sequences:
+/// - `E<lt>` → `<`
+/// - `E<gt>` → `>`
+/// - `E<amp>` → `&`
+/// - `E<quot>` → `"`
+/// - `E<apos>` → `'`
+///
+/// Unknown entities are returned as-is.
 fn decode_pod_entity(entity: &str) -> String {
     match entity {
         "lt" => "<".to_string(),
