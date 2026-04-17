@@ -235,7 +235,29 @@ fn module_sort_tier(name: &str) -> &'static str {
 /// When the cursor is after `use ` or `require `, suggests package names from the
 /// workspace index. This enables discovering available modules as you type.
 ///
-/// For example, typing `use My` will suggest `MyApp`, `MyApp::Config`, etc.
+/// ## Completion Tiers
+///
+/// Modules are sorted using tiered prefixes for intelligent prioritization:
+/// - Tier 0 (`0_`): Ultra-common pragmas and core infrastructure (strict, warnings, Carp, etc.)
+/// - Tier 1 (`1_`): Widely-used CPAN modules (DBI, Moo, Moose, Try::Tiny, etc.)
+/// - Tier 1 (`1{0-9}_`): Workspace index modules, sorted by commonality
+/// - Tier 9 (`9_`): All other modules
+///
+/// The `seen` HashSet prevents duplicate suggestions when the same module appears
+/// in both workspace index and include paths.
+///
+/// ## Implementation Status
+///
+/// This function currently searches the workspace index twice (lines 252-296 and 298-335).
+/// The second search block was intended to be replaced with include path scanning,
+/// but that code was never integrated. The duplicate search produces identical results
+/// and should be unified in a future refactor.
+///
+/// ## Arguments
+///
+/// * `completions` - Mutable vector to append completion items to
+/// * `context` - Completion context containing prefix, position, and package scope
+/// * `workspace_index` - Optional workspace-wide symbol index for cross-file completion
 pub fn add_use_module_completions(
     completions: &mut Vec<CompletionItem>,
     context: &CompletionContext,
@@ -244,6 +266,10 @@ pub fn add_use_module_completions(
     let Some(index) = workspace_index else {
         return;
     };
+
+    // Deduplication set: tracks module names already added to avoid duplicates
+    // when the same module appears in both workspace index and include paths.
+    let mut seen: HashSet<String> = HashSet::new();
 
     // Tier 1: Search workspace index (priority)
     if let Some(index) = workspace_index {
@@ -290,8 +316,6 @@ pub fn add_use_module_completions(
             }
         }
     }
-
-    let mut seen: HashSet<String> = HashSet::new();
 
     // Search for package symbols matching the prefix
     let all_symbols = if context.prefix.is_empty() {
