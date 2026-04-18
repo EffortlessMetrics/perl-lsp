@@ -32,9 +32,11 @@ pub struct ModuleLineEdit {
 ///
 /// Also rewrites:
 /// - Qualified function calls: `Module::Name::func()` → `NewName::func()`
-/// - Static method calls: `Module::Name->method()` → `NewName->method()`
 /// - `@ISA` array assignments
-/// - Package declarations: `package Module::Name;` → `package NewName;`
+///
+/// Does **not** rewrite package declarations or occurrences inside string
+/// literals and comments — those are separate concerns handled at the call
+/// site.
 ///
 /// Legacy package separators (`Foo'Bar`) are also handled.
 #[must_use]
@@ -93,18 +95,6 @@ pub fn plan_module_rename_edits(
                     }
                 }
             }
-
-            // Check package declarations
-            {
-                let current_line = rewritten.as_deref().unwrap_or(line);
-                if line_references_package_declaration(current_line, old_variant) {
-                    let (candidate, changed) =
-                        replace_module_token(current_line, old_variant, new_variant);
-                    if changed {
-                        rewritten = Some(candidate);
-                    }
-                }
-            }
         }
 
         if let Some(new_text) = rewritten {
@@ -134,10 +124,20 @@ pub fn line_references_isa_assignment(line: &str, module_name: &str) -> bool {
 }
 
 /// Return `true` when `line` contains a qualified call that uses `module_name`
-/// as a namespace prefix.
+/// as a namespace prefix (e.g. `Module::Name::func()`).
+///
+/// Returns `false` for matches inside string literals, comments, package
+/// declarations, or import statements — those are not qualified calls.
 #[must_use]
 pub fn line_references_qualified_call(line: &str, module_name: &str) -> bool {
     if line.is_empty() || module_name.is_empty() {
+        return false;
+    }
+    let trimmed = line.trim_start();
+    if trimmed.starts_with("package ")
+        || trimmed.starts_with("use ")
+        || trimmed.starts_with("require ")
+    {
         return false;
     }
     let needle = format!("{}::", module_name);
@@ -156,6 +156,11 @@ pub fn line_references_qualified_call(line: &str, module_name: &str) -> bool {
         };
         let abs = start + rel;
         let after = abs + needle_len;
+
+        if is_in_string_or_comment(line, abs) {
+            start = abs + 1;
+            continue;
+        }
 
         let before_ok = abs == 0 || {
             let ch = line_bytes[abs - 1] as char;
@@ -189,10 +194,54 @@ pub fn line_references_package_declaration(line: &str, module_name: &str) -> boo
     crate::token::contains_module_token(line, module_name)
 }
 
-/// Replace `old_module::` namespace prefixes in `line` with `new_module::`.
+/// Return `true` when `position` falls inside a string literal or comment.
+///
+/// Tracks single-quote, double-quote, and `#`-comment context with
+/// backslash-escape awareness. Covers the common Perl quoting cases;
+/// heredocs and `qq{}` are out of scope for single-line analysis.
+fn is_in_string_or_comment(line: &str, position: usize) -> bool {
+    let bytes = line.as_bytes();
+    let mut i = 0usize;
+    let mut in_single = false;
+    let mut in_double = false;
+
+    while i < position && i < bytes.len() {
+        let ch = bytes[i];
+
+        if !in_single && !in_double && ch == b'#' {
+            return true;
+        }
+
+        if (in_single || in_double) && ch == b'\\' && i + 1 < bytes.len() {
+            i += 2;
+            continue;
+        }
+
+        if ch == b'\'' && !in_double {
+            in_single = !in_single;
+        } else if ch == b'"' && !in_single {
+            in_double = !in_double;
+        }
+
+        i += 1;
+    }
+
+    in_single || in_double
+}
+
+/// Replace `old_module::` namespace prefixes in `line` with `new_module::`,
+/// skipping occurrences inside string literals, comments, package
+/// declarations, or import statements.
 #[must_use]
 pub fn replace_module_name_prefix(line: &str, old_module: &str, new_module: &str) -> String {
     if old_module.is_empty() || new_module.is_empty() || line.is_empty() {
+        return line.to_string();
+    }
+    let trimmed = line.trim_start();
+    if trimmed.starts_with("package ")
+        || trimmed.starts_with("use ")
+        || trimmed.starts_with("require ")
+    {
         return line.to_string();
     }
 
@@ -215,6 +264,12 @@ pub fn replace_module_name_prefix(line: &str, old_module: &str, new_module: &str
         };
         let abs = cursor + rel;
         let after = abs + needle_len;
+
+        if is_in_string_or_comment(line, abs) {
+            out.push_str(&line[cursor..abs + 1]);
+            cursor = abs + 1;
+            continue;
+        }
 
         let before_ok = abs == 0 || {
             let ch = line_bytes[abs - 1] as char;

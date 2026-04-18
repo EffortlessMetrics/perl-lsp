@@ -200,8 +200,9 @@ fn test_rename_module_predicates() {
     assert!(line_references_package_declaration("package My::Module;", "My::Module"));
     assert!(!line_references_package_declaration("use My::Module;", "My::Module"));
 
-    // Note: qualified_call is known to have false positives (pre-existing bug tracked separately)
     assert!(line_references_qualified_call("My::Module::func();", "My::Module"));
+    assert!(!line_references_qualified_call("# My::Module::func()", "My::Module"));
+    assert!(!line_references_qualified_call("'My::Module::func'", "My::Module"));
 }
 
 /// Verify resolution module types can be constructed.

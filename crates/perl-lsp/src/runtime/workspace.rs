@@ -13,7 +13,10 @@ use super::*;
 use crate::runtime::routing::{IndexAccessMode, route_index_access};
 use crate::state::workspace_symbol_cap;
 use perl_module::path::file_path_to_module_name;
-use perl_module::rename::{apply_module_rename_edits, plan_module_rename_edits};
+use perl_module::rename::{
+    apply_module_rename_edits, line_references_package_declaration, plan_module_rename_edits,
+};
+use perl_module::token::replace_module_token;
 #[cfg(feature = "workspace")]
 use perl_parser::workspace_index::{DegradationReason, EarlyExitReason, ResourceKind, SymbolKind};
 #[cfg(feature = "workspace")]
@@ -993,6 +996,11 @@ impl LspServer {
                             if !planned.is_empty() {
                                 *current_text = apply_module_rename_edits(current_text, &planned);
                             }
+                            rewrite_package_declaration(
+                                current_text,
+                                &old_module,
+                                &new_module,
+                            );
                         }
 
                         // Find all files that reference the old module
@@ -2048,6 +2056,36 @@ pub(super) fn module_name_appears_in_text(text: &str, module_name: &str) -> bool
         }
     }
     false
+}
+
+/// Rewrite the `package OldModule;` declaration in `text` to use `new_module`.
+///
+/// `plan_module_rename_edits` intentionally skips package declarations (they
+/// are declarations, not references). The renamed file's own declaration is
+/// updated here at the call site instead.
+fn rewrite_package_declaration(text: &mut String, old_module: &str, new_module: &str) {
+    let mut result = String::with_capacity(text.len());
+    let mut changed = false;
+    for line in text.split('\n') {
+        if !changed && line_references_package_declaration(line, old_module) {
+            let (replaced, did_change) = replace_module_token(line, old_module, new_module);
+            if did_change {
+                result.push_str(&replaced);
+                changed = true;
+            } else {
+                result.push_str(line);
+            }
+        } else {
+            result.push_str(line);
+        }
+        result.push('\n');
+    }
+    if result.ends_with('\n') && !text.ends_with('\n') {
+        result.pop();
+    }
+    if changed {
+        *text = result;
+    }
 }
 
 /// Convert a file path to a Perl module name
