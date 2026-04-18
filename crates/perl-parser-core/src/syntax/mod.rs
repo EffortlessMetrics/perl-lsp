@@ -3,6 +3,18 @@
 //! This module contains the internal implementations of AST-adjacent utilities
 //! that were previously published as separate satellite crates. They are now
 //! internal modules of `perl-parser-core`.
+//!
+//! # Visibility pattern
+//!
+//! - `error` is an internal submodule exposed via `engine::error` (and
+//!   root-level re-exports like `ParseError`, `ParseOutput`, `error_classifier`).
+//! - `edit` and `heredoc` are re-exported at crate root under their own names
+//!   (`syntax::edit`, `heredoc_collector`).
+//! - `path_normalize`, `path_security`, `percentile`, `qualified_name`,
+//!   `source_file`, and `text_line` are re-exported directly at crate root
+//!   so consumers use `perl_parser_core::path_normalize` etc.
+//! - `quote` is only accessed via `engine::quote_parser` to keep quote-parsing
+//!   concerns encapsulated behind the engine boundary.
 
 /// Edit tracking for incremental parsing (previously `perl-edit`).
 pub mod edit;

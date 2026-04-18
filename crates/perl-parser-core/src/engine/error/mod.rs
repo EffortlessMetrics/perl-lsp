@@ -16,5 +16,17 @@
 /// Implementation of ErrorRecovery trait for ParserContext.
 pub mod context_impls;
 
-/// Error types and result aliases used by the parser engine (from internal syntax::error module).
-pub use crate::syntax::error::*;
+/// Error classification and diagnostic generation.
+pub mod classifier {
+    pub use crate::syntax::error::classifier::*;
+}
+/// Error recovery strategies and traits for the Perl parser.
+pub mod recovery {
+    pub use crate::syntax::error::recovery::*;
+}
+
+/// Error types and result aliases used by the parser engine.
+pub use crate::syntax::error::{
+    BudgetTracker, ErrorContext, ParseBudget, ParseError, ParseOutput, ParseResult, RecoveryKind,
+    RecoverySite, get_error_contexts,
+};
