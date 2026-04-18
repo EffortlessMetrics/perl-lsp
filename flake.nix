@@ -29,6 +29,8 @@
           rustToolchain
           pkg-config
           openssl
+          perl      # CPAN corpus: execute bootstrapped cpanm script
+          curl     # CPAN corpus: download cpanm standalone script
         ] ++ lib.optionals stdenv.isDarwin [
           darwin.apple_sdk.frameworks.Security
           darwin.apple_sdk.frameworks.SystemConfiguration
