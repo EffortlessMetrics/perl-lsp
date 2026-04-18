@@ -231,6 +231,7 @@ fn test_perl_lsp_facade_has_all_reexports() -> Result<(), Box<dyn std::error::Er
     use perl_lsp::features::policy;
     use perl_lsp::features::profile;
     use perl_lsp::features::profile_cli;
+    use perl_tdd_support::must_some;
 
     // All modules should be accessible
     let _ = capability_map::caps_from_feature_ids(&[]);
@@ -240,8 +241,9 @@ fn test_perl_lsp_facade_has_all_reexports() -> Result<(), Box<dyn std::error::Er
     assert_eq!(ids::LSP_COMPLETION, "lsp.completion");
     assert!(policy::from_str_name("production").is_some());
     assert!(profile::from_str_name("ga-lock").is_some());
-    let label = profile_cli::feature_profile_label(policy::from_str_name("ga-lock").unwrap());
-    assert!(!label.is_empty());
+    let ga_lock_profile = must_some(policy::from_str_name("ga-lock"));
+    let label = profile_cli::feature_profile_label(ga_lock_profile);
+    assert_eq!(label, "ga-lock", "feature_profile_label must return canonical 'ga-lock' name");
 
     Ok(())
 }

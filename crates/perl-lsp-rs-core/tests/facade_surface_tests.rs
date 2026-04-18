@@ -19,116 +19,103 @@
 #[allow(unused_imports)]
 use perl_tdd_support::{must, must_some};
 
-/// Test that features::ids module is accessible and exports expected types
+/// Test that features::ids module is accessible and exports expected constants.
 #[test]
 fn test_features_ids_facade_accessible() -> Result<(), Box<dyn std::error::Error>> {
-    // This test verifies that perl-lsp-feature-ids is correctly moved to
-    // perl-lsp-rs-core::features::ids and re-exported
-    #[allow(unused_imports)]
-    use perl_lsp_rs_core::features::ids::*;
-
-    // Basic import: the module should compile and be usable
-    let _test_passed = true;
-    assert!(_test_passed);
-
+    use perl_lsp_rs_core::features::ids::{DAP_CORE, LSP_COMPLETION, LSP_DEFINITION, LSP_HOVER};
+    // Constants must carry their documented canonical values — a rename would fail this.
+    assert_eq!(LSP_COMPLETION, "lsp.completion");
+    assert_eq!(LSP_HOVER, "lsp.hover");
+    assert_eq!(LSP_DEFINITION, "lsp.definition");
+    assert_eq!(DAP_CORE, "dap.core");
     Ok(())
 }
 
-/// Test that features::contracts module is accessible and exports expected types
+/// Test that features::contracts module is accessible and exports expected types.
 #[test]
 fn test_features_contracts_facade_accessible() -> Result<(), Box<dyn std::error::Error>> {
-    // This test verifies that perl-lsp-feature-contracts is correctly moved to
-    // perl-lsp-rs-core::features::contracts and re-exported
-    #[allow(unused_imports)]
-    use perl_lsp_rs_core::features::contracts::*;
-
-    let _test_passed = true;
-    assert!(_test_passed);
-
+    use perl_lsp_rs_core::features::contracts::{FeatureProfileKind, all_features, has_feature};
+    // Verify contract behavior, not just that the type exists.
+    assert!(!all_features().is_empty(), "contracts::all_features must return non-empty catalog");
+    assert!(has_feature("lsp.completion"), "contracts::has_feature must recognise lsp.completion");
+    assert_eq!(FeatureProfileKind::Production.as_str(), "production");
     Ok(())
 }
 
-/// Test that features::flags module is accessible and exports expected types
+/// Test that features::flags module is accessible and exports expected types.
 #[test]
 fn test_features_flags_facade_accessible() -> Result<(), Box<dyn std::error::Error>> {
-    // This test verifies that perl-lsp-feature-flags is correctly moved to
-    // perl-lsp-rs-core::features::flags and re-exported
-    #[allow(unused_imports)]
-    use perl_lsp_rs_core::features::flags::*;
-
-    let _test_passed = true;
-    assert!(_test_passed);
-
+    use perl_lsp_rs_core::features::flags::BuildFlags;
+    // Default flags must be all-false; production flags must enable completion.
+    let default = BuildFlags::default();
+    assert!(default.to_feature_ids().is_empty(), "default BuildFlags must yield no feature IDs");
+    let prod = BuildFlags::production();
+    assert!(prod.completion, "production BuildFlags must enable completion");
     Ok(())
 }
 
-/// Test that features::profile module is accessible and exports expected types
+/// Test that features::profile module is accessible and exports expected types.
 #[test]
 fn test_features_profile_facade_accessible() -> Result<(), Box<dyn std::error::Error>> {
-    // This test verifies that perl-lsp-feature-profile is correctly moved to
-    // perl-lsp-rs-core::features::profile and re-exported
-    #[allow(unused_imports)]
-    use perl_lsp_rs_core::features::profile::*;
-
-    let _test_passed = true;
-    assert!(_test_passed);
-
+    use perl_lsp_rs_core::features::profile::{FeatureProfileKind, parse_profile_token};
+    // Parse aliases to verify the module's normalization logic runs.
+    assert_eq!(
+        parse_profile_token("  GA_LOCK  "),
+        Some(FeatureProfileKind::GaLock),
+        "profile::parse_profile_token must normalise whitespace and underscores"
+    );
+    assert_eq!(FeatureProfileKind::All.as_str(), "all");
     Ok(())
 }
 
-/// Test that features::profile_cli module is accessible and exports expected types
+/// Test that features::profile_cli module is accessible and exports expected types.
 #[test]
 fn test_features_profile_cli_facade_accessible() -> Result<(), Box<dyn std::error::Error>> {
-    // This test verifies that perl-lsp-feature-profile-cli is correctly moved to
-    // perl-lsp-rs-core::features::profile_cli and re-exported
-    #[allow(unused_imports)]
-    use perl_lsp_rs_core::features::profile_cli::*;
-
-    let _test_passed = true;
-    assert!(_test_passed);
-
+    use perl_lsp_rs_core::features::policy::FeatureProfile;
+    use perl_lsp_rs_core::features::profile_cli::{
+        feature_profile_label, parse_feature_profile_arg,
+    };
+    // Verify the parser accepts canonical tokens and rejects unknowns.
+    assert!(parse_feature_profile_arg("production").is_ok());
+    assert!(parse_feature_profile_arg("__invalid__").is_err());
+    assert_eq!(feature_profile_label(FeatureProfile::GaLock), "ga-lock");
     Ok(())
 }
 
-/// Test that features::policy module is accessible and exports expected types
+/// Test that features::policy module is accessible and exports expected types.
 #[test]
 fn test_features_policy_facade_accessible() -> Result<(), Box<dyn std::error::Error>> {
-    // This test verifies that perl-lsp-feature-policy is correctly moved to
-    // perl-lsp-rs-core::features::policy and re-exported
-    #[allow(unused_imports)]
-    use perl_lsp_rs_core::features::policy::*;
-
-    let _test_passed = true;
-    assert!(_test_passed);
-
+    use perl_lsp_rs_core::features::policy::{FeatureProfile, flags_for_profile};
+    // Core behavioural invariant: ga-lock must exclude inline_values.
+    let ga_flags = flags_for_profile(FeatureProfile::GaLock);
+    let prod_flags = flags_for_profile(FeatureProfile::Production);
+    assert!(!ga_flags.inline_values, "ga-lock must gate out inline_values");
+    assert!(prod_flags.inline_values, "production must enable inline_values");
     Ok(())
 }
 
-/// Test that features::grid module is accessible and exports expected types
+/// Test that features::grid module is accessible and exports expected types.
 #[test]
 fn test_features_grid_facade_accessible() -> Result<(), Box<dyn std::error::Error>> {
-    // This test verifies that perl-lsp-feature-grid is correctly moved to
-    // perl-lsp-rs-core::features::grid and re-exported
-    #[allow(unused_imports)]
-    use perl_lsp_rs_core::features::grid::*;
-
-    let _test_passed = true;
-    assert!(_test_passed);
-
+    use perl_lsp_rs_core::features::grid::{FEATURE_GRID_COLUMNS, compliance_percent_for_profile};
+    use perl_lsp_rs_core::features::policy::FeatureProfile;
+    // Grid columns must contain the required BDD fields.
+    assert!(FEATURE_GRID_COLUMNS.contains(&"id"), "grid must export id column");
+    assert!(FEATURE_GRID_COLUMNS.contains(&"maturity"), "grid must export maturity column");
+    let pct = compliance_percent_for_profile(FeatureProfile::Production);
+    assert!((0.0..=100.0).contains(&pct), "compliance must be 0-100, got {pct}");
     Ok(())
 }
 
-/// Test that capability_map module is accessible and exports expected types
+/// Test that capability_map module is accessible and exports expected functions.
 #[test]
 fn test_capability_map_facade_accessible() -> Result<(), Box<dyn std::error::Error>> {
-    // This test verifies that perl-lsp-capability-map is correctly moved to
-    // perl-lsp-rs-core::capability_map and re-exported
-    #[allow(unused_imports)]
-    use perl_lsp_rs_core::capability_map::*;
-
-    let _test_passed = true;
-    assert!(_test_passed);
-
+    use perl_lsp_rs_core::capability_map::{caps_from_feature_ids, feature_ids_from_caps};
+    // Round-trip: hover capability must survive encode-decode.
+    let caps = caps_from_feature_ids(&["lsp.hover"]);
+    assert!(caps.hover_provider.is_some(), "caps_from_feature_ids must set hover_provider");
+    let ids = feature_ids_from_caps(&caps);
+    assert!(ids.contains(&"lsp.hover"), "feature_ids_from_caps must recover lsp.hover");
     Ok(())
 }
 
