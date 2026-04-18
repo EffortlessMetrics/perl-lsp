@@ -13,8 +13,8 @@
 mod cpan_test_helpers;
 use cpan_test_helpers::*;
 
-use perl_error::{ParseError, RecoveryKind, RecoverySite};
 use perl_parser_core::Parser;
+use perl_parser_core::error::{ParseError, RecoveryKind, RecoverySite};
 
 // ──────────────────────────────────────────────────────────────
 // Helpers

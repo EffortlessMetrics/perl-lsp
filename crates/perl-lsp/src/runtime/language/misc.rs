@@ -15,7 +15,7 @@ use super::super::*;
 use crate::protocol::{invalid_params, req_position, req_uri};
 use crate::state::{code_lens_cap, code_lens_resolve_deadline, inlay_hints_cap};
 use perl_module::import::resolve_known_export_tag;
-use perl_source_file::is_perl_source_uri;
+use perl_parser_core::source_file::is_perl_source_uri;
 use std::borrow::Cow;
 use std::sync::OnceLock;
 use std::time::Instant;

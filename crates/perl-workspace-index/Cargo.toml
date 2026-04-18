@@ -25,9 +25,7 @@ doctest = false
 [dependencies]
 parking_lot.workspace = true
 perl-parser-core = { workspace = true }
-perl-percentile = { workspace = true }
 perl-position-tracking = { workspace = true, features = ["lsp-compat"] }
-perl-source-file = { workspace = true }
 perl-symbol = { workspace = true }
 perl-uri = { workspace = true }
 serde = { workspace = true }

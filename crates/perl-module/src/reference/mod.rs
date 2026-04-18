@@ -5,7 +5,7 @@
 
 use crate::name::normalize_package_separator;
 use crate::token_parser::parse_module_token;
-use perl_text_line::{is_keyword_boundary, line_bounds_at, skip_ascii_whitespace};
+use perl_parser_core::text_line::{is_keyword_boundary, line_bounds_at, skip_ascii_whitespace};
 
 /// Statement kind for a parsed module reference.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

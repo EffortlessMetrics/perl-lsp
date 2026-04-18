@@ -1487,13 +1487,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "perl-ast-utils"
-version = "0.12.4"
-dependencies = [
- "perl-ast",
-]
-
-[[package]]
 name = "perl-ast-v2"
 version = "0.12.4"
 dependencies = [
@@ -1550,7 +1543,7 @@ dependencies = [
  "perl-lsp-launcher",
  "perl-module",
  "perl-parser",
- "perl-path-security",
+ "perl-parser-core",
  "perl-tdd-support",
  "proptest",
  "regex",
@@ -1583,27 +1576,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "perl-edit"
-version = "0.12.4"
-dependencies = [
- "perl-position-tracking",
- "perl-tdd-support",
-]
-
-[[package]]
-name = "perl-error"
-version = "0.12.4"
-dependencies = [
- "perl-ast",
- "perl-ast-v2",
- "perl-lexer",
- "perl-position-tracking",
- "perl-regex",
- "perl-tdd-support",
- "thiserror",
-]
-
-[[package]]
 name = "perl-feature-catalog"
 version = "0.12.4"
 dependencies = [
@@ -1615,27 +1587,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "perl-heredoc"
-version = "0.12.4"
-dependencies = [
- "perl-position-tracking",
- "perl-tdd-support",
-]
-
-[[package]]
-name = "perl-heredoc-anti-patterns"
-version = "0.12.4"
-dependencies = [
- "regex",
-]
-
-[[package]]
 name = "perl-incremental-parsing"
 version = "0.12.4"
 dependencies = [
  "anyhow",
  "lsp-types",
- "perl-edit",
  "perl-lexer",
  "perl-line-index",
  "perl-parser-core",
@@ -1697,13 +1653,13 @@ dependencies = [
 name = "perl-lsp-code-actions"
 version = "0.12.4"
 dependencies = [
- "perl-ast-utils",
  "perl-diagnostics",
  "perl-lexer",
  "perl-lsp-diagnostics",
  "perl-lsp-import-management",
  "perl-lsp-rename",
  "perl-lsp-text-utils",
+ "perl-parser",
  "perl-parser-core",
  "perl-tdd-support",
 ]
@@ -1779,7 +1735,6 @@ dependencies = [
  "insta",
  "perl-corpus",
  "perl-diagnostics",
- "perl-heredoc-anti-patterns",
  "perl-parser",
  "perl-parser-core",
  "perl-pragma",
@@ -1882,7 +1837,7 @@ name = "perl-lsp-file-completion"
 version = "0.12.4"
 dependencies = [
  "perl-lsp-completion-item",
- "perl-path-security",
+ "perl-parser-core",
  "tempfile",
  "walkdir",
 ]
@@ -1944,7 +1899,7 @@ version = "0.12.4"
 dependencies = [
  "anyhow",
  "perl-lsp-limits",
- "perl-path-security",
+ "perl-parser-core",
  "perl-tdd-support",
  "serde_json",
  "tempfile",
@@ -1980,7 +1935,6 @@ dependencies = [
  "perl-lsp-workspace-symbols",
  "perl-parser-core",
  "perl-position-tracking",
- "perl-qualified-name",
  "perl-tdd-support",
  "serde_json",
 ]
@@ -2071,7 +2025,6 @@ dependencies = [
  "md5",
  "once_cell",
  "parking_lot",
- "perl-ast-utils",
  "perl-content-length-framing",
  "perl-corpus",
  "perl-dap",
@@ -2122,10 +2075,9 @@ dependencies = [
  "perl-lsp-workspace-symbols",
  "perl-module",
  "perl-parser",
+ "perl-parser-core",
  "perl-pod",
  "perl-position-tracking",
- "perl-qualified-name",
- "perl-source-file",
  "perl-subprocess-runtime",
  "perl-symbol",
  "perl-tdd-support",
@@ -2235,7 +2187,6 @@ dependencies = [
  "perl-module",
  "perl-parser-core",
  "perl-position-tracking",
- "perl-qualified-name",
  "perl-semantic-analyzer",
  "perl-tdd-support",
  "serde",
@@ -2246,9 +2197,8 @@ dependencies = [
 name = "perl-module"
 version = "0.12.4"
 dependencies = [
- "perl-path-security",
+ "perl-parser-core",
  "perl-tdd-support",
- "perl-text-line",
  "perl-workspace",
  "proptest",
  "tempfile",
@@ -2263,6 +2213,7 @@ dependencies = [
  "criterion",
  "insta",
  "lsp-types",
+ "perl-ast",
  "perl-corpus",
  "perl-dead-code",
  "perl-incremental-parsing",
@@ -2281,6 +2232,7 @@ dependencies = [
  "serde_json",
  "serial_test",
  "tempfile",
+ "thiserror",
  "url",
 ]
 
@@ -2298,16 +2250,15 @@ version = "0.12.4"
 dependencies = [
  "perl-ast",
  "perl-ast-v2",
- "perl-edit",
- "perl-error",
- "perl-heredoc",
  "perl-lexer",
  "perl-position-tracking",
  "perl-pragma",
- "perl-quote",
  "perl-regex",
  "perl-tdd-support",
  "perl-token",
+ "proptest",
+ "tempfile",
+ "thiserror",
  "tracing-subscriber",
 ]
 
@@ -2322,30 +2273,6 @@ dependencies = [
  "serde",
  "stacker",
  "thiserror",
-]
-
-[[package]]
-name = "perl-path-normalize"
-version = "0.12.4"
-dependencies = [
- "tempfile",
- "thiserror",
-]
-
-[[package]]
-name = "perl-path-security"
-version = "0.12.4"
-dependencies = [
- "perl-path-normalize",
- "tempfile",
- "thiserror",
-]
-
-[[package]]
-name = "perl-percentile"
-version = "0.12.4"
-dependencies = [
- "proptest",
 ]
 
 [[package]]
@@ -2373,27 +2300,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "perl-qualified-name"
-version = "0.12.4"
-dependencies = [
- "proptest",
-]
-
-[[package]]
-name = "perl-quote"
-version = "0.12.4"
-dependencies = [
- "perl-tdd-support",
- "proptest",
-]
-
-[[package]]
 name = "perl-refactoring"
 version = "0.12.4"
 dependencies = [
  "perl-module",
  "perl-parser-core",
- "perl-qualified-name",
  "perl-tdd-support",
  "perl-workspace",
  "regex",
@@ -2422,10 +2333,6 @@ dependencies = [
  "rustc-hash",
  "tracing",
 ]
-
-[[package]]
-name = "perl-source-file"
-version = "0.12.4"
 
 [[package]]
 name = "perl-subprocess-runtime"
@@ -2468,15 +2375,6 @@ name = "perl-test-must"
 version = "0.12.4"
 
 [[package]]
-name = "perl-text-line"
-version = "0.12.4"
-dependencies = [
- "perl-module",
- "perl-tdd-support",
- "proptest",
-]
-
-[[package]]
 name = "perl-token"
 version = "0.12.4"
 
@@ -2486,15 +2384,7 @@ version = "0.12.4"
 dependencies = [
  "percent-encoding",
  "perl-tdd-support",
- "perl-uri-classify",
  "tempfile",
- "url",
-]
-
-[[package]]
-name = "perl-uri-classify"
-version = "0.12.4"
-dependencies = [
  "url",
 ]
 
@@ -2507,9 +2397,7 @@ dependencies = [
  "lsp-types",
  "parking_lot",
  "perl-parser-core",
- "perl-percentile",
  "perl-position-tracking",
- "perl-source-file",
  "perl-symbol",
  "perl-tdd-support",
  "perl-uri",

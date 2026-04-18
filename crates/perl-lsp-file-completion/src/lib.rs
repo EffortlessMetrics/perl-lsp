@@ -33,7 +33,7 @@ pub fn complete_file_paths(
     context: &FileCompletionContext,
     is_cancelled: &dyn Fn() -> bool,
 ) -> Vec<CompletionItem> {
-    use perl_path_security::{
+    use perl_parser_core::path_security::{
         build_completion_path, is_hidden_or_forbidden_entry_name, is_safe_completion_filename,
         resolve_completion_base_directory, sanitize_completion_path_input,
         split_completion_path_components,

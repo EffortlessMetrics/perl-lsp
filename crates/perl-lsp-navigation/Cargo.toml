@@ -21,7 +21,6 @@ perl-parser-core = { workspace = true }
 lsp-types = { workspace = true }
 serde_json = { workspace = true }
 perl-position-tracking = { workspace = true }
-perl-qualified-name = { workspace = true }
 perl-lsp-document-links = { workspace = true }
 perl-lsp-type-hierarchy = { workspace = true }
 perl-lsp-workspace-symbols = { workspace = true }

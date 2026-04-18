@@ -89,6 +89,8 @@
 pub use perl_lexer::builtins;
 /// Parser engine components and supporting utilities.
 pub mod engine;
+/// Syntax-level types absorbed from Wave D satellite crates.
+pub mod syntax;
 /// Token stream and trivia utilities for the parser.
 pub mod tokens;
 
@@ -106,12 +108,24 @@ pub use engine::pragma_tracker;
 pub use engine::quote_parser;
 /// Legacy module aliases for moved engine components.
 pub use engine::{error, parser, position};
-/// Edit tracking for incremental parsing.
-pub use perl_edit as edit;
-/// Heredoc content collector with FIFO ordering and indent stripping.
-pub use perl_heredoc as heredoc_collector;
 /// Parser utilities and helpers.
 pub use perl_lexer::tokenizer::util;
+/// Edit tracking for incremental parsing (internal module, previously `perl-edit`).
+pub use syntax::edit;
+/// Heredoc content collector with FIFO ordering and indent stripping (internal module, previously `perl-heredoc`).
+pub use syntax::heredoc as heredoc_collector;
+/// Secure workspace-relative path normalization (previously `perl-path-normalize`).
+pub use syntax::path_normalize;
+/// Workspace-bound path validation and traversal prevention (previously `perl-path-security`).
+pub use syntax::path_security;
+/// Percentile helpers for integer metric samples (previously `perl-percentile`).
+pub use syntax::percentile;
+/// Perl qualified-name parsing, splitting, and validation helpers (previously `perl-qualified-name`).
+pub use syntax::qualified_name;
+/// Perl source-file classification helpers (previously `perl-source-file`).
+pub use syntax::source_file;
+/// Text-line cursor and boundary helpers (previously `perl-text-line`).
+pub use syntax::text_line;
 
 /// Recursive-descent parser -- the main entry point for parsing Perl source.
 pub use engine::parser::Parser;

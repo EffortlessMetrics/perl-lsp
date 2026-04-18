@@ -17,7 +17,7 @@ use perl_module::rename::{apply_module_rename_edits, plan_module_rename_edits};
 #[cfg(feature = "workspace")]
 use perl_parser::workspace_index::{DegradationReason, EarlyExitReason, ResourceKind, SymbolKind};
 #[cfg(feature = "workspace")]
-use perl_source_file::{is_perl_source_path, is_perl_source_uri};
+use perl_parser_core::source_file::{is_perl_source_path, is_perl_source_uri};
 use perl_workspace::folder::extract_workspace_folder_change;
 #[cfg(feature = "workspace")]
 use perl_workspace::ignore::is_skipped_dir_name;
@@ -577,7 +577,9 @@ impl LspServer {
 
                                 // Add container name derived from qualified symbol name
                                 if let Some(container) =
-                                    perl_qualified_name::container_name(&sym.qualified_name)
+                                    perl_parser_core::qualified_name::container_name(
+                                        &sym.qualified_name,
+                                    )
                                 {
                                     resolved["containerName"] = json!(
                                         perl_module::path::normalize_package_separator(container)

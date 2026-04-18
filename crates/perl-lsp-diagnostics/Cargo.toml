@@ -19,10 +19,10 @@ doctest = false
 [dependencies]
 perl-diagnostics = { workspace = true }
 perl-parser-core = { workspace = true }
+perl-parser = { workspace = true }
 perl-semantic-analyzer = { workspace = true }
 perl-workspace = { workspace = true }
 perl-pragma = { workspace = true }
-perl-heredoc-anti-patterns = { workspace = true }
 
 [dev-dependencies]
 perl-corpus = { workspace = true }

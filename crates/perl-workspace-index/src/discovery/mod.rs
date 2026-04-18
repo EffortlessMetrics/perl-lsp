@@ -8,7 +8,7 @@
 //! are skipped in both modes (`.git`, `.hg`, `.svn`, `target`, `node_modules`, `.cache`).
 
 use crate::ignore::{is_skipped_dir_name, path_contains_skipped_component};
-use perl_source_file::is_perl_source_path;
+use perl_parser_core::source_file::is_perl_source_path;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 use walkdir::{DirEntry, WalkDir};

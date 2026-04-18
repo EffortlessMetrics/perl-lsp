@@ -3,8 +3,10 @@
 //! Provides automated refactoring operations for improving code structure.
 
 use super::types::{CodeAction, CodeActionEdit, CodeActionKind};
-use perl_ast_utils::{find_function_insert_position, find_node_at_range, find_statement_start};
 use perl_lsp_rename::TextEdit;
+use perl_parser::ast_utils::{
+    find_function_insert_position, find_node_at_range, find_statement_start,
+};
 use perl_parser_core::{Node, NodeKind, SourceLocation};
 
 /// Get refactoring actions for a selection

@@ -81,9 +81,8 @@ perl-lsp-document-links = { workspace = true }
 perl-position-tracking = { workspace = true, features = ["lsp-compat"] }
 perl-symbol = { workspace = true }
 perl-module = { workspace = true }
-perl-qualified-name = { workspace = true }
 perl-pod = { workspace = true }
-perl-source-file = { workspace = true }
+perl-parser-core = { workspace = true }
 perl-workspace = { workspace = true }
 perl-lexer = { workspace = true }
 lsp-types.workspace = true
@@ -151,7 +150,6 @@ perl-content-length-framing = { workspace = true }
 which = "8.0.2"
 parking_lot.workspace = true
 criterion.workspace = true
-perl-ast-utils = { workspace = true }
 perl-corpus = { workspace = true }
 
 [package.metadata.binstall]

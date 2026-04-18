@@ -2,7 +2,7 @@
 //! Input validation and sanitization utilities for production hardening.
 
 use anyhow::{Result, anyhow};
-use perl_path_security::validate_workspace_path;
+use perl_parser_core::path_security::validate_workspace_path;
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 

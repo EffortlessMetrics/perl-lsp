@@ -52,7 +52,7 @@ clap = { workspace = true }
 
 # Inlined satellite dependencies (Wave H collapse)
 perl-parser = { workspace = true }
-perl-path-security = { workspace = true }
+perl-parser-core = { workspace = true }
 thiserror.workspace = true
 ropey = "1.6.1"
 

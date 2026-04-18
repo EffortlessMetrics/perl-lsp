@@ -26,7 +26,6 @@ doctest = false
 perl-parser-core = { workspace = true }
 perl-workspace = { workspace = true }
 perl-module = { workspace = true }
-perl-qualified-name = { workspace = true }
 regex.workspace = true
 serde = { workspace = true }
 url.workspace = true

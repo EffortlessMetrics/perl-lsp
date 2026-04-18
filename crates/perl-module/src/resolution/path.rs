@@ -6,7 +6,7 @@
 use std::path::{Path, PathBuf};
 
 use crate::path::module_name_to_path;
-use perl_path_security::validate_workspace_path;
+use perl_parser_core::path_security::validate_workspace_path;
 
 /// Resolve a Perl module name to a workspace-relative filesystem path candidate.
 ///

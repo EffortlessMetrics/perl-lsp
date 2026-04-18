@@ -18,7 +18,7 @@ doctest = false
 
 [dependencies]
 perl-lsp-completion-item = { workspace = true }
-perl-path-security = { workspace = true }
+perl-parser-core = { workspace = true }
 walkdir.workspace = true
 
 [dev-dependencies]
