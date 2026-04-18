@@ -66,8 +66,9 @@ fn runtime_completion_lookup_is_case_sensitive() {
 fn field_keyword_cross_list_membership() {
     assert!(is_keyword("field"));
     assert!(is_lexer_keyword("field"));
-    // field is not in completion/rename/parser lists
-    assert!(!is_lsp_completion_keyword("field"));
+    // field is in LSP_COMPLETION_KEYWORDS (Perl 5.38+ class syntax)
+    assert!(is_lsp_completion_keyword("field"));
+    // field is not in other lists
     assert!(!is_dap_completion_keyword("field"));
     assert!(!is_lsp_runtime_completion_keyword("field"));
     assert!(!is_rename_keyword("field"));
@@ -78,8 +79,9 @@ fn field_keyword_cross_list_membership() {
 fn class_keyword_cross_list_membership() {
     assert!(is_keyword("class"));
     assert!(is_lexer_keyword("class"));
-    // class is not in completion/rename/parser lists
-    assert!(!is_lsp_completion_keyword("class"));
+    // class is in LSP_COMPLETION_KEYWORDS (Perl 5.38+ class syntax)
+    assert!(is_lsp_completion_keyword("class"));
+    // class is not in other lists
     assert!(!is_dap_completion_keyword("class"));
     assert!(!is_lsp_runtime_completion_keyword("class"));
     assert!(!is_rename_keyword("class"));
@@ -90,8 +92,9 @@ fn class_keyword_cross_list_membership() {
 fn method_keyword_cross_list_membership() {
     assert!(is_keyword("method"));
     assert!(is_lexer_keyword("method"));
-    // method is not in completion/rename/parser lists
-    assert!(!is_lsp_completion_keyword("method"));
+    // method is in LSP_COMPLETION_KEYWORDS (Perl 5.38+ class syntax)
+    assert!(is_lsp_completion_keyword("method"));
+    // method is not in other lists
     assert!(!is_dap_completion_keyword("method"));
     assert!(!is_lsp_runtime_completion_keyword("method"));
     assert!(!is_rename_keyword("method"));
@@ -167,9 +170,13 @@ fn try_catch_finally_cross_list_membership() {
         assert!(is_keyword(kw), "{kw} should be in KEYWORDS");
         assert!(is_lexer_keyword(kw), "{kw} should be in LEXER_KEYWORDS");
     }
-    // But not in completion or rename lists
-    for kw in ["try", "catch", "finally"] {
-        assert!(!is_lsp_completion_keyword(kw), "{kw} should not be in LSP_COMPLETION_KEYWORDS");
+    // catch and finally are in LSP_COMPLETION_KEYWORDS (Perl 5.34+ try/catch)
+    assert!(is_lsp_completion_keyword("catch"));
+    assert!(is_lsp_completion_keyword("finally"));
+    // try is not in LSP_COMPLETION_KEYWORDS (already handled by 'try' snippet)
+    assert!(!is_lsp_completion_keyword("try"));
+    // catch/finally not in other lists
+    for kw in ["catch", "finally"] {
         assert!(!is_dap_completion_keyword(kw), "{kw} should not be in DAP_COMPLETION_KEYWORDS");
         assert!(
             !is_lsp_runtime_completion_keyword(kw),

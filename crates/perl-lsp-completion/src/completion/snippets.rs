@@ -400,6 +400,153 @@ const SNIPPETS: &[Snippet] = &[
         detail: "flag: /x (verbose)",
         doc: "Allow whitespace and comments in pattern for readability.",
     },
+    // ── Perl 5.38+ class syntax ──────────────────────────────────────────────
+    Snippet {
+        trigger: "perlclass",
+        label: "perlclass",
+        body: "class ${1:ClassName} {\n    ${0}\n}",
+        detail: "class declaration (Perl 5.38+)",
+        doc: "Perl 5.38+ native class declaration.",
+    },
+    Snippet {
+        trigger: "perlmethod",
+        label: "perlmethod",
+        body: "method ${1:method_name} {\n    my \\$self = shift;\n    ${0}\n}",
+        detail: "method within class (Perl 5.38+)",
+        doc: "Perl 5.38+ method definition within a class.",
+    },
+    Snippet {
+        trigger: "perffield",
+        label: "perffield",
+        body: "field \\$${1:name};\n${0}",
+        detail: "field declaration (Perl 5.38+)",
+        doc: "Perl 5.38+ class field declaration.",
+    },
+    // ── Perl 5.36+ defer ─────────────────────────────────────────────────────
+    Snippet {
+        trigger: "perldefer",
+        label: "perldefer",
+        body: "defer {\n    ${0}\n}",
+        detail: "deferred block (Perl 5.36+)",
+        doc: "Perl 5.36+ deferred block executed on scope exit.",
+    },
+    // ── Perl 5.10+ given/when ────────────────────────────────────────────────
+    Snippet {
+        trigger: "perlgiven",
+        label: "perlgiven",
+        body: "given (\\$${1:expr}) {\n    ${0}\n}",
+        detail: "given switch (Perl 5.10+)",
+        doc: "Perl 5.10+ given/when switch statement (experimental).",
+    },
+    Snippet {
+        trigger: "perlwhen",
+        label: "perlwhen",
+        body: "when (\\$${1:expr}) {\n    ${0}\n}",
+        detail: "when case (Perl 5.10+)",
+        doc: "Perl 5.10+ when case within given/when (experimental).",
+    },
+    // ── Perl 5.34+ try/catch/finally ─────────────────────────────────────────
+    Snippet {
+        trigger: "perlcatch",
+        label: "perlcatch",
+        body: "catch (\\$${1:err}) {\n    ${0}\n}",
+        detail: "catch block (Perl 5.34+)",
+        doc: "Perl 5.34+ catch block for try/catch exception handling.",
+    },
+    Snippet {
+        trigger: "perlfinally",
+        label: "perlfinally",
+        body: "finally {\n    ${0}\n}",
+        detail: "finally block (Perl 5.34+)",
+        doc: "Perl 5.34+ finally block executed after try/catch.",
+    },
+    // ── Moo/Moose method modifiers ────────────────────────────────────────────
+    Snippet {
+        trigger: "perlaround",
+        label: "perlaround",
+        body: "around ${1:method_name} => sub {\n    my \\$orig = shift;\n    my \\$self = shift;\n    ${0}\n};",
+        detail: "Moo/Moose around modifier",
+        doc: "Moo/Moose method modifier that wraps around the original method.",
+    },
+    Snippet {
+        trigger: "perlbefore",
+        label: "perlbefore",
+        body: "before ${1:method_name} => sub {\n    my \\$self = shift;\n    ${0}\n};",
+        detail: "Moo/Moose before modifier",
+        doc: "Moo/Moose method modifier that runs before the original method.",
+    },
+    Snippet {
+        trigger: "perlafter",
+        label: "perlafter",
+        body: "after ${1:method_name} => sub {\n    my \\$self = shift;\n    ${0}\n};",
+        detail: "Moo/Moose after modifier",
+        doc: "Moo/Moose method modifier that runs after the original method.",
+    },
+    Snippet {
+        trigger: "perlwith",
+        label: "perlwith",
+        body: "with \\$${1:role} => sub {\n    ${0}\n};",
+        detail: "Moo/Moose with (composition)",
+        doc: "Moo/Moose role composition using `with`.",
+    },
+    // ── Test::More extensions ────────────────────────────────────────────────
+    Snippet {
+        trigger: "perlskip",
+        label: "perlskip",
+        body: "skip ${1:\\$reason};\n${0}",
+        detail: "skip test (Test::More)",
+        doc: "Skip a test with a reason (Test::More).",
+    },
+    Snippet {
+        trigger: "perltodo",
+        label: "perltodo",
+        body: "todo ${1:\\$reason};\n${0}",
+        detail: "todo test (Test::More)",
+        doc: "Mark a test as TODO (Test::More).",
+    },
+    Snippet {
+        trigger: "perlbail",
+        label: "perlbail",
+        body: "BAIL_OUT(${1:\\$reason});\n${0}",
+        detail: "bail out (Test::More)",
+        doc: "Immediately abort testing (Test::More).",
+    },
+    Snippet {
+        trigger: "perlplan",
+        label: "perlplan",
+        body: "plan tests => ${1:\\$count};\n${0}",
+        detail: "plan tests (Test::More)",
+        doc: "Declare test plan (Test::More).",
+    },
+    Snippet {
+        trigger: "perlthrows",
+        label: "perlthrows",
+        body: "throws_ok(sub { ${1} }, ${2:\\$exception}, '${3:\\$description}');\n${0}",
+        detail: "throws_ok (Test::More)",
+        doc: "Assert that a coderef throws an exception (Test::More).",
+    },
+    // ── DBI patterns ─────────────────────────────────────────────────────────
+    Snippet {
+        trigger: "perldbconnect",
+        label: "perldbconnect",
+        body: "my \\$dbh = DBI->connect(\\$dsn, \\$user, \\$pass, { RaiseError => 1 })\n    or die \\$DBI::errstr;\n${0}",
+        detail: "DBI connect",
+        doc: "Connect to a DBI database.",
+    },
+    Snippet {
+        trigger: "perldbprepare",
+        label: "perldbprepare",
+        body: "my \\$sth = \\$dbh->prepare(\"${1:SELECT * FROM table WHERE id = ?}\");\n\\$sth->execute(${2:\\@args});\n${0}",
+        detail: "DBI prepare/execute",
+        doc: "Prepare and execute a DBI statement.",
+    },
+    Snippet {
+        trigger: "perldbtrans",
+        label: "perldbtrans",
+        body: "\\$dbh->begin_work;\neval {\n    ${1:# do work}\n    \\$dbh->commit;\n};\nif (\\$@) {\n    \\$dbh->rollback;\n    die \\$@;\n}\n${0}",
+        detail: "DBI transaction",
+        doc: "Execute a DBI transaction with commit/rollback.",
+    },
 ];
 
 /// Add snippet completions to the completion list.

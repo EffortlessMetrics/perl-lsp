@@ -524,5 +524,205 @@
             "my %${1:hash} = %{\\$${2:hash_ref}};"
         ],
         "description": "Dereference a hash reference"
+    },
+    "Class Declaration": {
+        "prefix": "class",
+        "body": [
+            "class ${1:ClassName} {",
+            "    ${0}",
+            "}"
+        ],
+        "description": "Class declaration (Perl 5.38+)"
+    },
+    "Field Declaration": {
+        "prefix": "field",
+        "body": [
+            "field \\$${1:name};"
+        ],
+        "description": "Field declaration (Perl 5.38+)"
+    },
+    "Defer Block": {
+        "prefix": "defer",
+        "body": [
+            "defer {",
+            "    ${0}",
+            "}"
+        ],
+        "description": "Deferred block (Perl 5.36+)"
+    },
+    "Given Block": {
+        "prefix": "given",
+        "body": [
+            "given (\\$${1:expr}) {",
+            "    ${0}",
+            "}"
+        ],
+        "description": "Given switch (Perl 5.10+)"
+    },
+    "When Block": {
+        "prefix": "when",
+        "body": [
+            "when (\\$${1:expr}) {",
+            "    ${0}",
+            "}"
+        ],
+        "description": "When case (Perl 5.10+)"
+    },
+    "Catch Block": {
+        "prefix": "catch",
+        "body": [
+            "catch (\\$${1:err}) {",
+            "    ${0}",
+            "}"
+        ],
+        "description": "Catch block (Perl 5.34+)"
+    },
+    "Finally Block": {
+        "prefix": "finally",
+        "body": [
+            "finally {",
+            "    ${0}",
+            "}"
+        ],
+        "description": "Finally block (Perl 5.34+)"
+    },
+    "Moo Around Modifier": {
+        "prefix": "around",
+        "body": [
+            "around ${1:method_name} => sub {",
+            "    my \\$orig = shift;",
+            "    my \\$self = shift;",
+            "    ${0}",
+            "};"
+        ],
+        "description": "Moo/Moose around modifier"
+    },
+    "Moo Before Modifier": {
+        "prefix": "before",
+        "body": [
+            "before ${1:method_name} => sub {",
+            "    my \\$self = shift;",
+            "    ${0}",
+            "};"
+        ],
+        "description": "Moo/Moose before modifier"
+    },
+    "Moo After Modifier": {
+        "prefix": "after",
+        "body": [
+            "after ${1:method_name} => sub {",
+            "    my \\$self = shift;",
+            "    ${0}",
+            "};"
+        ],
+        "description": "Moo/Moose after modifier"
+    },
+    "Moo With": {
+        "prefix": "with",
+        "body": [
+            "with \\$${1:role} => sub {",
+            "    ${0}",
+            "};"
+        ],
+        "description": "Moo/Moose role composition"
+    },
+    "Has Builder": {
+        "prefix": "has-builder",
+        "body": [
+            "has '${1:attr}' => (",
+            "    is      => 'ro',",
+            "    builder => '_build_${1:attr}',",
+            "    ${0}",
+            ");"
+        ],
+        "description": "Moo/Moose attribute with builder"
+    },
+    "Has Lazy": {
+        "prefix": "has-lazy",
+        "body": [
+            "has '${1:attr}' => (",
+            "    is      => 'ro',",
+            "    lazy    => 1,",
+            "    default => sub { ${0} },",
+            ");"
+        ],
+        "description": "Moo/Moose lazy attribute"
+    },
+    "Test Skip": {
+        "prefix": "skip",
+        "body": [
+            "skip \\$${1:reason};"
+        ],
+        "description": "Skip test (Test::More)"
+    },
+    "Test Todo": {
+        "prefix": "todo",
+        "body": [
+            "todo \\$${1:reason};"
+        ],
+        "description": "Todo test (Test::More)"
+    },
+    "Test Bail Out": {
+        "prefix": "bail",
+        "body": [
+            "BAIL_OUT(\\$${1:reason});"
+        ],
+        "description": "Bail out (Test::More)"
+    },
+    "Test Plan": {
+        "prefix": "plan",
+        "body": [
+            "plan tests => \\$${1:count};"
+        ],
+        "description": "Plan tests (Test::More)"
+    },
+    "Test Throws": {
+        "prefix": "throws",
+        "body": [
+            "throws_ok(sub { ${1} }, \\$${2:exception}, '\\$${3:description}');"
+        ],
+        "description": "Assert throws exception (Test::More)"
+    },
+    "DBI Connect": {
+        "prefix": "db-connect",
+        "body": [
+            "my \\$dbh = DBI->connect(\\$dsn, \\$user, \\$pass, { RaiseError => 1 })",
+            "    or die \\$DBI::errstr;"
+        ],
+        "description": "DBI connect with error handling"
+    },
+    "DBI Prepare": {
+        "prefix": "db-prepare",
+        "body": [
+            "my \\$sth = \\$dbh->prepare(\"\\$${1:SELECT * FROM table WHERE id = ?}\");",
+            "\\$sth->execute(\\$${2:\\@args});"
+        ],
+        "description": "DBI prepare and execute"
+    },
+    "DBI Transaction": {
+        "prefix": "db-transaction",
+        "body": [
+            "\\$dbh->begin_work;",
+            "eval {",
+            "    ${1:# do work}",
+            "    \\$dbh->commit;",
+            "};",
+            "if (\\$@) {",
+            "    \\$dbh->rollback;",
+            "    die \\$@;",
+            "}"
+        ],
+        "description": "DBI transaction with rollback"
+    },
+    "Slurp File": {
+        "prefix": "slurp-file",
+        "body": [
+            "my \\$${1:content} = do {",
+            "    open my \\$${2:fh}, '<', \\$${3:file} or die \"Cannot open \\$${3:file}: \\$!\";",
+            "    local \\$/;",
+            "    <\\$${2:fh}>",
+            "};"
+        ],
+        "description": "Slurp entire file into scalar"
     }
 }
