@@ -99,65 +99,151 @@ fn test_heredoc_antipatterns_facade_accessible() -> Result<(), Box<dyn std::erro
     Ok(())
 }
 
-/// Test that path normalization utilities are accessible via facade.
+/// Test that path normalization utilities are callable via the facade.
 ///
 /// perl-path-normalize was absorbed into perl-parser-core and re-exported via perl-parser.
+/// This test calls the actual normalization function to prove it works end-to-end.
 #[test]
-fn test_path_normalize_facade_accessible() -> Result<(), Box<dyn std::error::Error>> {
-    // Path normalization should be available at the top level of perl-parser
-    // This tests that downstream consumers previously using perl-path-normalize
-    // can now use perl-parser::path_normalize or similar
+fn test_path_normalize_facade_functional() -> Result<(), Box<dyn std::error::Error>> {
+    use perl_parser_core::path_normalize::normalize_path_within_workspace;
+    use std::path::Path;
 
-    let paths = vec!["/usr/lib/perl", "/usr/lib/../lib/perl"];
-    for path in paths {
-        // Just verify the string doesn't panic when processed
-        let _normalized = path.to_string();
-    }
+    // Normal relative path within workspace should succeed
+    let workspace = Path::new("/workspace");
+    let result = normalize_path_within_workspace(Path::new("lib/Foo.pm"), workspace)?;
+    assert!(
+        result.to_string_lossy().contains("Foo.pm"),
+        "Normalized path should contain the filename"
+    );
+
+    // Parent traversal should be rejected
+    let traversal_result =
+        normalize_path_within_workspace(Path::new("../../etc/passwd"), workspace);
+    assert!(traversal_result.is_err(), "Parent traversal should be rejected");
 
     Ok(())
 }
 
-/// Test that text line utilities are accessible via facade.
+/// Test that text line utilities are callable via the facade.
 ///
-/// perl-text-line was absorbed into perl-parser-core.
+/// perl-text-line was absorbed into perl-parser-core and re-exported via perl-parser.
+/// This test calls the actual text_line functions to prove they work end-to-end.
 #[test]
-fn test_text_line_facade_accessible() -> Result<(), Box<dyn std::error::Error>> {
-    let source = "line 1\nline 2\nline 3\n";
+fn test_text_line_facade_functional() -> Result<(), Box<dyn std::error::Error>> {
+    use perl_parser_core::text_line::{is_keyword_boundary, line_bounds_at, skip_ascii_whitespace};
 
-    // Count lines without panicking
-    let line_count = source.lines().count();
-    assert_eq!(line_count, 3);
+    let source = "my $x = 1;\nmy $y = 2;\n";
+    let bytes = source.as_bytes();
+
+    // line_bounds_at: for a position in the second line, returns the line's byte range
+    let second_line_pos = must_some(source.find("$y"));
+    let (line_start, line_end) = line_bounds_at(source, second_line_pos);
+    assert!(line_start < second_line_pos, "Line start should be before $y");
+    assert!(line_end >= second_line_pos, "Line end should be at or after $y");
+    assert_eq!(&source[line_start..line_end], "my $y = 2;", "Should extract exact line");
+
+    // skip_ascii_whitespace: should skip leading spaces
+    let spaced = b"   hello";
+    let idx = skip_ascii_whitespace(spaced, 0);
+    assert_eq!(idx, 3, "Should skip 3 spaces");
+
+    // is_keyword_boundary: 'my' followed by space is a keyword boundary
+    let kw_source = b"my $x";
+    assert!(
+        is_keyword_boundary(kw_source, 0, 2),
+        "my followed by space should be a keyword boundary"
+    );
+
+    // is_keyword_boundary: 'my' immediately followed by letter is NOT a boundary
+    let no_boundary = b"myvar";
+    assert!(
+        !is_keyword_boundary(no_boundary, 0, 2),
+        "my followed by letter should not be a keyword boundary"
+    );
 
     Ok(())
 }
 
-/// Test that qualified name utilities are accessible via facade.
+/// Test that qualified name utilities are callable via the facade.
 ///
-/// perl-qualified-name was absorbed into perl-parser-core.
+/// perl-qualified-name was absorbed into perl-parser-core and re-exported via perl-parser.
+/// This test calls the actual split/validate functions to prove they work end-to-end.
 #[test]
-fn test_qualified_name_facade_basic() -> Result<(), Box<dyn std::error::Error>> {
-    // Verify that package-qualified identifiers parse correctly
-    let mut parser = Parser::new("Foo::Bar::baz()");
-    let ast = parser.parse()?;
+fn test_qualified_name_facade_functional() -> Result<(), Box<dyn std::error::Error>> {
+    use perl_parser_core::qualified_name::{
+        container_name, split_qualified_name, validate_perl_qualified_name,
+    };
 
-    // The parser should handle fully-qualified names
-    assert!(matches!(ast.kind, perl_parser::NodeKind::Program { .. }));
+    // split_qualified_name: splits "Foo::Bar::baz" into package + bare name
+    let (pkg, bare) = split_qualified_name("Foo::Bar::baz");
+    assert_eq!(pkg, Some("Foo::Bar"), "Package part should be Foo::Bar");
+    assert_eq!(bare, "baz", "Bare name should be baz");
+
+    // split_qualified_name on a bare name returns (None, name)
+    let (pkg2, bare2) = split_qualified_name("greet");
+    assert_eq!(pkg2, None, "Bare name has no package");
+    assert_eq!(bare2, "greet", "Bare name should be returned as-is");
+
+    // container_name: returns the package prefix of a qualified name
+    let container = container_name("Foo::Bar::baz");
+    assert_eq!(container, Some("Foo::Bar"), "Container should be Foo::Bar");
+
+    // validate_perl_qualified_name: well-formed name should pass
+    assert!(
+        validate_perl_qualified_name("Foo::Bar").is_ok(),
+        "Well-formed qualified name should validate"
+    );
+
+    // validate_perl_qualified_name: empty string should fail
+    assert!(
+        validate_perl_qualified_name("").is_err(),
+        "Empty name should fail validation"
+    );
 
     Ok(())
 }
 
-/// Test that source file utilities are accessible.
+/// Test that source file utilities are callable via the facade.
 ///
-/// perl-source-file was absorbed into perl-parser-core.
+/// perl-source-file was absorbed into perl-parser-core and re-exported via perl-parser.
+/// This test calls the actual classification functions to prove they work end-to-end.
 #[test]
-fn test_source_file_facade_accessible() -> Result<(), Box<dyn std::error::Error>> {
-    let source = "#!/usr/bin/perl\nuse strict;\nmy $x = 1;";
+fn test_source_file_facade_functional() -> Result<(), Box<dyn std::error::Error>> {
+    use perl_parser_core::source_file::{
+        is_binary_content, is_perl_source_extension, is_perl_source_path, is_perl_source_uri,
+    };
+    use std::path::Path;
 
-    // Parser should handle source files with shebang
-    let mut parser = Parser::new(source);
-    let ast = parser.parse()?;
+    // is_perl_source_extension
+    assert!(is_perl_source_extension("pl"), "'.pl' should be a Perl source extension");
+    assert!(is_perl_source_extension("pm"), "'.pm' should be a Perl source extension");
+    assert!(is_perl_source_extension("t"), "'.t' should be a Perl source extension");
+    assert!(!is_perl_source_extension("rs"), "'.rs' should not be a Perl source extension");
+    assert!(!is_perl_source_extension("py"), "'.py' should not be a Perl source extension");
 
-    assert!(matches!(ast.kind, perl_parser::NodeKind::Program { .. }));
+    // is_perl_source_path
+    assert!(
+        is_perl_source_path(Path::new("script.pl")),
+        "script.pl should be Perl source"
+    );
+    assert!(
+        !is_perl_source_path(Path::new("binary.exe")),
+        "binary.exe should not be Perl source"
+    );
+
+    // is_perl_source_uri
+    assert!(
+        is_perl_source_uri("file:///home/user/script.pl"),
+        "URI ending in .pl should be Perl source"
+    );
+    assert!(
+        !is_perl_source_uri("file:///home/user/main.rs"),
+        "URI ending in .rs should not be Perl source"
+    );
+
+    // is_binary_content
+    assert!(!is_binary_content("use strict;\nmy $x = 1;\n"), "Perl source is not binary");
+    assert!(is_binary_content("ELF\x00binary"), "Content with null byte is binary");
 
     Ok(())
 }
@@ -284,8 +370,10 @@ fn test_facade_type_identity() -> Result<(), Box<dyn std::error::Error>> {
     // Verify we can use NodeKind in pattern matching (would fail if types were different)
     match &ast.kind {
         perl_parser::NodeKind::Program { statements } => {
-            // Type check passes — NodeKind is the correct type
-            assert!(statements.is_empty() || !statements.is_empty());
+            // The Program node for "my $x = 1;" must have exactly one statement.
+            // This assertion is non-vacuous: it would fail if the parser returned 0
+            // statements or the wrong node kind.
+            assert_eq!(statements.len(), 1, "Single statement should yield one Program child");
             Ok(())
         }
         _ => Err("Expected Program node".into()),
@@ -333,19 +421,30 @@ fn test_workspace_index_integration_via_facade() -> Result<(), Box<dyn std::erro
     Ok(())
 }
 
-/// Test consumer crate simulation: perl-lsp-code-actions use of facade
+/// Test consumer crate simulation: perl-lsp-code-actions use of facade.
+///
+/// This simulates the actual usage pattern in quick_fixes.rs and refactors.rs
+/// which import from perl_parser::ast_utils after the Wave D collapse.
 #[test]
 fn test_code_actions_facade_integration() -> Result<(), Box<dyn std::error::Error>> {
-    use perl_parser::Parser;
+    use perl_parser::ast_utils::{find_declaration_position, find_statement_start};
 
-    // Code actions rely on AST utilities for finding declaration positions
-    let code = "my $x = 1;\nmy $y = 2;";
+    // Code actions rely on AST utilities for finding declaration positions.
+    // Simulate the quick_fixes.rs usage: given an error position, find where
+    // to insert a "my $x" declaration.
+    let code = "foo();\n$x = 1;";
 
-    let mut parser = Parser::new(code);
-    let ast = parser.parse()?;
+    // $x is at an undefined-variable position — find where to declare it
+    let error_pos = must_some(code.find("$x"));
+    let decl_pos = find_declaration_position(code, error_pos);
 
-    // Should be able to analyze the AST for code action providers
-    assert!(matches!(ast.kind, perl_parser::NodeKind::Program { .. }));
+    // Declaration should be inserted at the start of the statement containing $x
+    let stmt_start = find_statement_start(code, error_pos);
+    assert_eq!(decl_pos, stmt_start, "Declaration position should be at statement start");
+    assert!(
+        code[decl_pos..].starts_with("$x = 1"),
+        "Should position at the start of the statement containing the undefined variable"
+    );
 
     Ok(())
 }
