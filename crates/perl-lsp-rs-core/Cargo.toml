@@ -1,0 +1,46 @@
+[package]
+name = "perl-lsp-rs-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license = "MIT OR Apache-2.0"
+repository.workspace = true
+homepage.workspace = true
+description = "Implementation core for perl-lsp-rs (Wave F: feature flags, contracts, capability mapping)"
+documentation = "https://docs.rs/perl-lsp-rs-core"
+readme = "README.md"
+keywords = ["perl", "lsp", "features", "contracts", "capabilities"]
+categories = ["development-tools", "development-tools::testing"]
+include = [
+  "src/**",
+  "build.rs",
+  "features_sot.toml",
+  "Cargo.toml",
+  "README.md"
+]
+
+[lib]
+doctest = false
+
+[dependencies]
+lsp-types.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[build-dependencies]
+perl-feature-catalog.workspace = true
+
+[features]
+lsp-ga-lock = []
+
+[dev-dependencies]
+perl-tdd-support.workspace = true
+serde_json.workspace = true
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
+[lints]
+workspace = true
