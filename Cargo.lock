@@ -1641,15 +1641,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "perl-lsp-capability-map"
-version = "0.12.4"
-dependencies = [
- "lsp-types",
- "perl-lsp-feature-ids",
- "serde_json",
-]
-
-[[package]]
 name = "perl-lsp-code-actions"
 version = "0.12.4"
 dependencies = [
@@ -1762,74 +1753,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "perl-lsp-feature-contracts"
-version = "0.12.4"
-dependencies = [
- "lsp-types",
- "perl-feature-catalog",
- "perl-lsp-capability-map",
- "perl-tdd-support",
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "perl-lsp-feature-flags"
-version = "0.12.4"
-dependencies = [
- "perl-lsp-feature-contracts",
- "perl-lsp-feature-ids",
-]
-
-[[package]]
 name = "perl-lsp-feature-governance"
 version = "0.12.4"
 dependencies = [
- "perl-lsp-feature-contracts",
- "perl-lsp-feature-grid",
- "perl-lsp-feature-policy",
- "perl-lsp-feature-profile",
- "perl-lsp-feature-profile-cli",
+ "perl-lsp-rs-core",
  "serde_json",
-]
-
-[[package]]
-name = "perl-lsp-feature-grid"
-version = "0.12.4"
-dependencies = [
- "perl-lsp-feature-contracts",
- "perl-lsp-feature-policy",
- "perl-tdd-support",
- "serde_json",
-]
-
-[[package]]
-name = "perl-lsp-feature-ids"
-version = "0.12.4"
-
-[[package]]
-name = "perl-lsp-feature-policy"
-version = "0.12.4"
-dependencies = [
- "perl-lsp-feature-contracts",
- "perl-lsp-feature-flags",
- "perl-lsp-feature-profile",
-]
-
-[[package]]
-name = "perl-lsp-feature-profile"
-version = "0.12.4"
-dependencies = [
- "perl-lsp-feature-contracts",
-]
-
-[[package]]
-name = "perl-lsp-feature-profile-cli"
-version = "0.12.4"
-dependencies = [
- "perl-lsp-feature-policy",
- "perl-lsp-feature-profile",
- "perl-tdd-support",
 ]
 
 [[package]]
@@ -1970,8 +1898,7 @@ name = "perl-lsp-protocol"
 version = "0.12.4"
 dependencies = [
  "lsp-types",
- "perl-lsp-feature-contracts",
- "perl-lsp-feature-flags",
+ "perl-lsp-rs-core",
  "serde",
  "serde_json",
  "tracing",
@@ -2033,7 +1960,6 @@ dependencies = [
  "perl-lexer",
  "perl-lsp-ai-provider",
  "perl-lsp-cancellation",
- "perl-lsp-capability-map",
  "perl-lsp-code-actions",
  "perl-lsp-code-lens",
  "perl-lsp-color-provider",
@@ -2044,13 +1970,7 @@ dependencies = [
  "perl-lsp-diagnostics",
  "perl-lsp-document-highlight",
  "perl-lsp-document-links",
- "perl-lsp-feature-contracts",
- "perl-lsp-feature-flags",
  "perl-lsp-feature-governance",
- "perl-lsp-feature-grid",
- "perl-lsp-feature-policy",
- "perl-lsp-feature-profile",
- "perl-lsp-feature-profile-cli",
  "perl-lsp-formatting",
  "perl-lsp-formatting-types",
  "perl-lsp-import-management",
@@ -2065,6 +1985,7 @@ dependencies = [
  "perl-lsp-protocol",
  "perl-lsp-providers",
  "perl-lsp-rename",
+ "perl-lsp-rs-core",
  "perl-lsp-selection-range",
  "perl-lsp-semantic-tokens",
  "perl-lsp-symbol-query",
@@ -2096,6 +2017,18 @@ dependencies = [
  "uuid",
  "walkdir",
  "which",
+]
+
+[[package]]
+name = "perl-lsp-rs-core"
+version = "0.12.4"
+dependencies = [
+ "lsp-types",
+ "perl-feature-catalog",
+ "perl-lsp-rs",
+ "perl-tdd-support",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

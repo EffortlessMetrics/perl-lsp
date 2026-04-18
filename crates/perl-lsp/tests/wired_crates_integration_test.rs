@@ -198,14 +198,14 @@ fn test_wired_import_management_collect_imports() {
 }
 
 // ---------------------------------------------------------------------------
-// perl-lsp-capability-map
+// perl-lsp-rs-core::capability_map (absorbed from perl-lsp-capability-map)
 // ---------------------------------------------------------------------------
 
-/// Capability map helpers must be reachable.
+/// Capability map helpers must be reachable from perl-lsp-rs-core.
 #[test]
 fn test_wired_capability_map_roundtrip() {
     use lsp_types::ServerCapabilities;
-    use perl_lsp_capability_map::{caps_from_feature_ids, feature_ids_from_caps};
+    use perl_lsp_rs_core::capability_map::{caps_from_feature_ids, feature_ids_from_caps};
     // Default (empty) capabilities → empty feature list
     let empty_caps = ServerCapabilities::default();
     let ids = feature_ids_from_caps(&empty_caps);
@@ -234,26 +234,26 @@ fn test_wired_performance_ast_cache_accessible() {
 }
 
 // ---------------------------------------------------------------------------
-// perl-lsp-feature-flags
+// perl-lsp-rs-core::features::flags (absorbed from perl-lsp-feature-flags)
 // ---------------------------------------------------------------------------
 
-/// Feature-flags types must be reachable and BuildFlags must be constructible.
+/// Feature-flags types must be reachable from perl-lsp-rs-core and BuildFlags must be constructible.
 #[test]
 fn test_wired_feature_flags_accessible() {
-    use perl_lsp_feature_flags::BuildFlags;
+    use perl_lsp_rs_core::features::flags::BuildFlags;
     // Default BuildFlags has all capabilities disabled
     let flags = BuildFlags::default();
     assert!(!flags.completion, "default BuildFlags should have completion disabled");
 }
 
 // ---------------------------------------------------------------------------
-// perl-lsp-feature-policy
+// perl-lsp-rs-core::features::policy (absorbed from perl-lsp-feature-policy)
 // ---------------------------------------------------------------------------
 
-/// Feature-policy helpers must be reachable.
+/// Feature-policy helpers must be reachable from perl-lsp-rs-core.
 #[test]
 fn test_wired_feature_policy_accessible() {
-    use perl_lsp_feature_policy::{FeatureProfile, flags_for_profile};
+    use perl_lsp_rs_core::features::policy::{FeatureProfile, flags_for_profile};
     let flags = flags_for_profile(FeatureProfile::Production);
     // Production profile must have core capabilities enabled.
     assert!(flags.completion, "production profile must enable completion");
@@ -261,13 +261,13 @@ fn test_wired_feature_policy_accessible() {
 }
 
 // ---------------------------------------------------------------------------
-// perl-lsp-feature-contracts
+// perl-lsp-rs-core::features::contracts (absorbed from perl-lsp-feature-contracts)
 // ---------------------------------------------------------------------------
 
-/// Feature-contracts types must be reachable.
+/// Feature-contracts types must be reachable from perl-lsp-rs-core.
 #[test]
 fn test_wired_feature_contracts_accessible() {
-    use perl_lsp_feature_contracts::FEATURE_PROFILE_SPECS;
+    use perl_lsp_rs_core::features::contracts::FEATURE_PROFILE_SPECS;
     // The canonical profile names are load-bearing — check specific known values.
     let canonicals: Vec<&str> = FEATURE_PROFILE_SPECS.iter().map(|s| s.canonical).collect();
     assert!(canonicals.contains(&"ga-lock"), "FEATURE_PROFILE_SPECS must contain ga-lock profile");
@@ -278,13 +278,13 @@ fn test_wired_feature_contracts_accessible() {
 }
 
 // ---------------------------------------------------------------------------
-// perl-lsp-feature-grid
+// perl-lsp-rs-core::features::grid (absorbed from perl-lsp-feature-grid)
 // ---------------------------------------------------------------------------
 
-/// Feature-grid re-exports must be reachable.
+/// Feature-grid re-exports must be reachable from perl-lsp-rs-core.
 #[test]
 fn test_wired_feature_grid_accessible() {
-    use perl_lsp_feature_grid::feature_profile_specs;
+    use perl_lsp_rs_core::features::grid::feature_profile_specs;
     let specs = feature_profile_specs();
     // Verify the re-export returns the same data as the underlying contracts crate.
     let canonicals: Vec<&str> = specs.iter().map(|s| s.canonical).collect();
@@ -295,13 +295,13 @@ fn test_wired_feature_grid_accessible() {
 }
 
 // ---------------------------------------------------------------------------
-// perl-lsp-feature-profile
+// perl-lsp-rs-core::features::profile (absorbed from perl-lsp-feature-profile)
 // ---------------------------------------------------------------------------
 
-/// Feature-profile helpers must be reachable.
+/// Feature-profile helpers must be reachable from perl-lsp-rs-core.
 #[test]
 fn test_wired_feature_profile_accessible() {
-    use perl_lsp_feature_profile::supported_cli_profiles;
+    use perl_lsp_rs_core::features::profile::supported_cli_profiles;
     let profiles = supported_cli_profiles();
     // Check that canonical token values are present, not just that the list is non-empty.
     assert!(profiles.contains(&"production"), "supported profiles must include 'production'");
@@ -309,13 +309,13 @@ fn test_wired_feature_profile_accessible() {
 }
 
 // ---------------------------------------------------------------------------
-// perl-lsp-feature-profile-cli
+// perl-lsp-rs-core::features::profile_cli (absorbed from perl-lsp-feature-profile-cli)
 // ---------------------------------------------------------------------------
 
-/// Feature-profile-cli helpers must be reachable.
+/// Feature-profile-cli helpers must be reachable from perl-lsp-rs-core.
 #[test]
 fn test_wired_feature_profile_cli_accessible() {
-    use perl_lsp_feature_profile_cli::{
+    use perl_lsp_rs_core::features::profile_cli::{
         feature_profile_supported_tokens, parse_feature_profile_arg,
     };
     let tokens = feature_profile_supported_tokens();

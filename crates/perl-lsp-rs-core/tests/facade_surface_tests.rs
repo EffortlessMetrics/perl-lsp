@@ -15,6 +15,8 @@
 //! - perl-lsp-feature-grid (module: features::grid)
 //! - perl-lsp-capability-map (module: capability_map)
 
+// Glob imports are used as compile-time accessibility checks in some tests.
+#[allow(unused_imports)]
 use perl_tdd_support::{must, must_some};
 
 /// Test that features::ids module is accessible and exports expected types
@@ -22,6 +24,7 @@ use perl_tdd_support::{must, must_some};
 fn test_features_ids_facade_accessible() -> Result<(), Box<dyn std::error::Error>> {
     // This test verifies that perl-lsp-feature-ids is correctly moved to
     // perl-lsp-rs-core::features::ids and re-exported
+    #[allow(unused_imports)]
     use perl_lsp_rs_core::features::ids::*;
 
     // Basic import: the module should compile and be usable
@@ -36,6 +39,7 @@ fn test_features_ids_facade_accessible() -> Result<(), Box<dyn std::error::Error
 fn test_features_contracts_facade_accessible() -> Result<(), Box<dyn std::error::Error>> {
     // This test verifies that perl-lsp-feature-contracts is correctly moved to
     // perl-lsp-rs-core::features::contracts and re-exported
+    #[allow(unused_imports)]
     use perl_lsp_rs_core::features::contracts::*;
 
     let _test_passed = true;
@@ -49,6 +53,7 @@ fn test_features_contracts_facade_accessible() -> Result<(), Box<dyn std::error:
 fn test_features_flags_facade_accessible() -> Result<(), Box<dyn std::error::Error>> {
     // This test verifies that perl-lsp-feature-flags is correctly moved to
     // perl-lsp-rs-core::features::flags and re-exported
+    #[allow(unused_imports)]
     use perl_lsp_rs_core::features::flags::*;
 
     let _test_passed = true;
@@ -62,6 +67,7 @@ fn test_features_flags_facade_accessible() -> Result<(), Box<dyn std::error::Err
 fn test_features_profile_facade_accessible() -> Result<(), Box<dyn std::error::Error>> {
     // This test verifies that perl-lsp-feature-profile is correctly moved to
     // perl-lsp-rs-core::features::profile and re-exported
+    #[allow(unused_imports)]
     use perl_lsp_rs_core::features::profile::*;
 
     let _test_passed = true;
@@ -75,6 +81,7 @@ fn test_features_profile_facade_accessible() -> Result<(), Box<dyn std::error::E
 fn test_features_profile_cli_facade_accessible() -> Result<(), Box<dyn std::error::Error>> {
     // This test verifies that perl-lsp-feature-profile-cli is correctly moved to
     // perl-lsp-rs-core::features::profile_cli and re-exported
+    #[allow(unused_imports)]
     use perl_lsp_rs_core::features::profile_cli::*;
 
     let _test_passed = true;
@@ -88,6 +95,7 @@ fn test_features_profile_cli_facade_accessible() -> Result<(), Box<dyn std::erro
 fn test_features_policy_facade_accessible() -> Result<(), Box<dyn std::error::Error>> {
     // This test verifies that perl-lsp-feature-policy is correctly moved to
     // perl-lsp-rs-core::features::policy and re-exported
+    #[allow(unused_imports)]
     use perl_lsp_rs_core::features::policy::*;
 
     let _test_passed = true;
@@ -101,6 +109,7 @@ fn test_features_policy_facade_accessible() -> Result<(), Box<dyn std::error::Er
 fn test_features_grid_facade_accessible() -> Result<(), Box<dyn std::error::Error>> {
     // This test verifies that perl-lsp-feature-grid is correctly moved to
     // perl-lsp-rs-core::features::grid and re-exported
+    #[allow(unused_imports)]
     use perl_lsp_rs_core::features::grid::*;
 
     let _test_passed = true;
@@ -114,6 +123,7 @@ fn test_features_grid_facade_accessible() -> Result<(), Box<dyn std::error::Erro
 fn test_capability_map_facade_accessible() -> Result<(), Box<dyn std::error::Error>> {
     // This test verifies that perl-lsp-capability-map is correctly moved to
     // perl-lsp-rs-core::capability_map and re-exported
+    #[allow(unused_imports)]
     use perl_lsp_rs_core::capability_map::*;
 
     let _test_passed = true;
@@ -126,16 +136,19 @@ fn test_capability_map_facade_accessible() -> Result<(), Box<dyn std::error::Err
 #[test]
 fn test_features_module_complete() -> Result<(), Box<dyn std::error::Error>> {
     // This test ensures all 7 feature submodules are accessible via perl_lsp_rs_core::features
-    use perl_lsp_rs_core::features;
-
-    // All submodules should be publicly accessible as modules
-    let _ = core::mem::size_of_val(&std::any::type_name::<features::ids>());
-    let _ = core::mem::size_of_val(&std::any::type_name::<features::contracts>());
-    let _ = core::mem::size_of_val(&std::any::type_name::<features::flags>());
-    let _ = core::mem::size_of_val(&std::any::type_name::<features::profile>());
-    let _ = core::mem::size_of_val(&std::any::type_name::<features::profile_cli>());
-    let _ = core::mem::size_of_val(&std::any::type_name::<features::policy>());
-    let _ = core::mem::size_of_val(&std::any::type_name::<features::grid>());
+    // Verify each submodule exports at least one accessible type (proves the module path works).
+    let _ = std::any::type_name::<perl_lsp_rs_core::features::contracts::FeatureProfileKind>();
+    let _ = std::any::type_name::<perl_lsp_rs_core::features::flags::BuildFlags>();
+    let _ = std::any::type_name::<perl_lsp_rs_core::features::flags::AdvertisedFeatures>();
+    let _ = std::any::type_name::<perl_lsp_rs_core::features::profile::FeatureProfileKind>();
+    let _ = std::any::type_name::<
+        perl_lsp_rs_core::features::profile_cli::UnsupportedFeatureProfileError,
+    >();
+    let _ = std::any::type_name::<perl_lsp_rs_core::features::policy::FeatureProfile>();
+    let _ = std::any::type_name::<perl_lsp_rs_core::features::grid::FeatureProfile>();
+    // ids module: constants only, so check via wildcard import instead
+    use perl_lsp_rs_core::features::ids::LSP_COMPLETION;
+    assert!(!LSP_COMPLETION.is_empty(), "ids module LSP_COMPLETION constant is accessible");
 
     Ok(())
 }
@@ -145,12 +158,14 @@ fn test_features_module_complete() -> Result<(), Box<dyn std::error::Error>> {
 fn test_facade_reexports_from_perl_lsp() -> Result<(), Box<dyn std::error::Error>> {
     // After Wave F, consumers should be able to import from perl_lsp (the facade)
     // and get the same types as importing from perl_lsp_rs_core
-    use perl_lsp::capability_map;
     use perl_lsp::features;
 
-    // These should resolve without error
-    let _features_modules = features;
-    let _capability_module = capability_map;
+    // Verify by accessing a type from each re-exported submodule
+    let _ = std::any::type_name::<features::flags::BuildFlags>();
+    let _ = std::any::type_name::<features::policy::FeatureProfile>();
+
+    // Verify capability_map re-export
+    let _caps = perl_lsp::capability_map::caps_from_feature_ids(&[]);
 
     Ok(())
 }
@@ -160,19 +175,14 @@ fn test_facade_reexports_from_perl_lsp() -> Result<(), Box<dyn std::error::Error
 fn test_type_identity_facade_vs_core() -> Result<(), Box<dyn std::error::Error>> {
     // Verify that types imported via the facade (perl_lsp) are identical to
     // types imported directly from perl-lsp-rs-core
+    use perl_lsp::features::flags::BuildFlags as FacadeBuildFlags;
+    use perl_lsp_rs_core::features::flags::BuildFlags as CoreBuildFlags;
 
-    // If the re-exports are correct, these type_ids should match
-    // (This is a compile-time verification embedded in runtime)
-    use perl_lsp::features::ids;
-    use perl_lsp_rs_core::features::ids as core_ids;
-
-    // The modules should be the same (compile-time assertion via type identity)
-    let _facade_mod_name = std::any::type_name::<ids>();
-    let _core_mod_name = std::any::type_name::<core_ids>();
-
-    // If types are identical, these names will be the same string
-    // (Note: exact comparison depends on re-export vs module path, but type_name
-    //  should return the canonical path from perl-lsp-rs-core for re-exports)
+    // The types should be identical — both are the same type from the same crate.
+    // Verify by checking type names match.
+    let facade_name = std::any::type_name::<FacadeBuildFlags>();
+    let core_name = std::any::type_name::<CoreBuildFlags>();
+    assert_eq!(facade_name, core_name, "facade and core BuildFlags should be the same type");
 
     Ok(())
 }
@@ -181,9 +191,9 @@ fn test_type_identity_facade_vs_core() -> Result<(), Box<dyn std::error::Error>>
 #[test]
 fn test_capability_map_reexport_from_perl_lsp() -> Result<(), Box<dyn std::error::Error>> {
     // perl-lsp should re-export capability_map for downstream consumers
-    use perl_lsp::capability_map;
-
-    let _mod = capability_map;
+    // Verify by calling a function from the module
+    let caps = perl_lsp::capability_map::caps_from_feature_ids(&[]);
+    assert!(caps.completion_provider.is_none(), "empty feature list produces empty caps");
     Ok(())
 }
 
@@ -194,16 +204,16 @@ fn test_governance_consumer_shape_integration() -> Result<(), Box<dyn std::error
     // will consume the new perl-lsp-rs-core after Wave F consolidation
     // It should be able to import what it needs from perl_lsp_rs_core::features
 
-    use perl_lsp_rs_core::features::contracts;
-    use perl_lsp_rs_core::features::flags;
-    use perl_lsp_rs_core::features::policy;
-    use perl_lsp_rs_core::features::profile;
+    use perl_lsp_rs_core::features::contracts::FeatureProfileKind;
+    use perl_lsp_rs_core::features::flags::BuildFlags;
+    use perl_lsp_rs_core::features::policy::FeatureProfile;
+    use perl_lsp_rs_core::features::profile::FeatureProfileKind as ProfileKind;
 
-    // These imports should work (or fail for expected reasons if types don't exist yet)
-    let _c = contracts;
-    let _f = flags;
-    let _p = policy;
-    let _pr = profile;
+    // These imports should work — verify by accessing a value
+    let _ = std::any::type_name::<FeatureProfileKind>();
+    let _ = std::any::type_name::<BuildFlags>();
+    let _ = std::any::type_name::<FeatureProfile>();
+    let _ = std::any::type_name::<ProfileKind>();
 
     Ok(())
 }
@@ -214,12 +224,14 @@ fn test_protocol_consumer_shape_integration() -> Result<(), Box<dyn std::error::
     // This simulates how perl-lsp-protocol imports from the absorbed crates
     // After Wave F, it should import from perl_lsp_rs_core instead
 
-    use perl_lsp_rs_core::features::contracts;
-    use perl_lsp_rs_core::features::flags;
+    use perl_lsp_rs_core::features::contracts::feature_ids_from_caps;
+    use perl_lsp_rs_core::features::flags::{AdvertisedFeatures, BuildFlags};
 
     // BuildFlags and AdvertisedFeatures should be accessible
-    let _flags_mod = flags;
-    let _contracts_mod = contracts;
+    let _ = std::any::type_name::<BuildFlags>();
+    let _ = std::any::type_name::<AdvertisedFeatures>();
+    // Verify feature_ids_from_caps is callable (it's a function, not a type)
+    let _result = feature_ids_from_caps(&lsp_types::ServerCapabilities::default());
 
     Ok(())
 }
@@ -247,27 +259,26 @@ fn test_build_script_sot_integration() -> Result<(), Box<dyn std::error::Error>>
     // (The actual constants depend on features_sot.toml being copied during build)
 
     // If build.rs ran successfully, we should be able to access generated constants
-    // or at least verify the module structure exists
-    use perl_lsp_rs_core::features::contracts;
+    use perl_lsp_rs_core::features::contracts::{Feature, all_features, has_feature};
 
-    let _contracts = contracts;
+    let _ = std::any::type_name::<Feature>();
+    assert!(!all_features().is_empty(), "build.rs generated feature catalog should be non-empty");
+    assert!(has_feature("lsp.completion"), "build.rs catalog should include lsp.completion");
     Ok(())
 }
 
-/// Test edge case: empty module structure (before implementation)
+/// Test edge case: module structure is fully populated (after implementation)
 #[test]
 fn test_empty_module_access() -> Result<(), Box<dyn std::error::Error>> {
-    // Even before full implementation, the module structure should exist
-    // and be accessible, even if the internals are empty
-    use perl_lsp_rs_core::capability_map;
-    use perl_lsp_rs_core::features;
+    // Verify the module structure exists and is fully populated
+    // Check that at least one item is accessible from each core module
+    use perl_lsp_rs_core::capability_map::caps_from_feature_ids;
+    use perl_lsp_rs_core::features::ids::LSP_COMPLETION;
 
     // These should not panic on access
-    let features_path = std::any::type_name::<features::ids>();
-    let capability_path = std::any::type_name::<capability_map>();
-
-    assert!(!features_path.is_empty());
-    assert!(!capability_path.is_empty());
+    assert!(!LSP_COMPLETION.is_empty(), "ids module should export LSP_COMPLETION constant");
+    let caps = caps_from_feature_ids(&[]);
+    assert!(caps.completion_provider.is_none(), "empty input should produce empty caps");
 
     Ok(())
 }
@@ -277,13 +288,16 @@ fn test_empty_module_access() -> Result<(), Box<dyn std::error::Error>> {
 fn test_facade_no_conflicting_reexports() -> Result<(), Box<dyn std::error::Error>> {
     // Verify that perl-lsp (the facade) and perl-lsp-rs-core export compatible types
     // without duplication or name collision
-
-    use perl_lsp::capability_map;
-    use perl_lsp::features;
+    use perl_lsp::features::flags::BuildFlags as FacadeFlags;
+    use perl_lsp::features::policy::FeatureProfile as FacadeProfile;
 
     // If these compile without error, name resolution is working
-    let _f = features;
-    let _c = capability_map;
+    let _ = std::any::type_name::<FacadeFlags>();
+    let _ = std::any::type_name::<FacadeProfile>();
+
+    // Verify capability_map is accessible from the facade
+    let caps = perl_lsp::capability_map::caps_from_feature_ids(&[]);
+    assert!(caps.completion_provider.is_none());
 
     Ok(())
 }
@@ -294,17 +308,24 @@ fn test_comprehensive_facade_exports() -> Result<(), Box<dyn std::error::Error>>
     // Comprehensive test ensuring all feature modules are accessible
     // and capability_map is available, all from the core crate
 
-    use perl_lsp_rs_core::capability_map;
-    use perl_lsp_rs_core::features::{contracts, flags, grid, ids, policy, profile, profile_cli};
+    use perl_lsp_rs_core::capability_map::caps_from_feature_ids;
+    use perl_lsp_rs_core::features::contracts::FeatureProfileKind;
+    use perl_lsp_rs_core::features::flags::BuildFlags;
+    use perl_lsp_rs_core::features::grid::FeatureProfile as GridProfile;
+    use perl_lsp_rs_core::features::ids::LSP_COMPLETION;
+    use perl_lsp_rs_core::features::policy::FeatureProfile;
+    use perl_lsp_rs_core::features::profile::FeatureProfileKind as ProfileKind;
+    use perl_lsp_rs_core::features::profile_cli::UnsupportedFeatureProfileError;
 
-    let _ids = ids;
-    let _contracts = contracts;
-    let _flags = flags;
-    let _profile = profile;
-    let _profile_cli = profile_cli;
-    let _policy = policy;
-    let _grid = grid;
-    let _capability_map = capability_map;
+    // All types should be accessible and usable
+    let _ = std::any::type_name::<FeatureProfileKind>();
+    let _ = std::any::type_name::<BuildFlags>();
+    let _ = std::any::type_name::<GridProfile>();
+    let _ = std::any::type_name::<FeatureProfile>();
+    let _ = std::any::type_name::<ProfileKind>();
+    let _ = std::any::type_name::<UnsupportedFeatureProfileError>();
+    assert!(!LSP_COMPLETION.is_empty());
+    let _caps = caps_from_feature_ids(&[]);
 
     Ok(())
 }
@@ -314,14 +335,13 @@ fn test_comprehensive_facade_exports() -> Result<(), Box<dyn std::error::Error>>
 #[test]
 fn test_old_paths_no_longer_accessible() -> Result<(), Box<dyn std::error::Error>> {
     // After Wave F, the old crate paths should NOT be accessible
-    // This test documents that the old paths are gone
-    // If this test tries to import from perl_lsp_feature_ids, it should fail at compile time
-
+    // This test documents that the old paths are gone and the new paths work.
     // We can't directly test "this doesn't compile" in a test file,
-    // but we can verify the new path works and document that the old one should be gone
-    use perl_lsp_rs_core::features::ids;
+    // but we verify the new path works correctly.
+    use perl_lsp_rs_core::features::ids::{LSP_COMPLETION, LSP_HOVER};
 
-    let _new_path = ids;
+    assert_eq!(LSP_COMPLETION, "lsp.completion", "new path should export correct constant value");
+    assert_eq!(LSP_HOVER, "lsp.hover", "new path should export correct constant value");
     // The old path `use perl_lsp_feature_ids::*;` should not work after Wave F
 
     Ok(())

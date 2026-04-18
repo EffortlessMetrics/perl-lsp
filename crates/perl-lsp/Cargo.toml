@@ -68,14 +68,8 @@ perl-lsp-completion-item = { workspace = true }
 perl-lsp-formatting-types = { workspace = true }
 perl-lsp-critic-parser = { workspace = true }
 perl-lsp-import-management = { workspace = true }
-perl-lsp-capability-map = { workspace = true }
+perl-lsp-rs-core = { workspace = true }
 perl-lsp-performance = { workspace = true }
-perl-lsp-feature-flags = { workspace = true }
-perl-lsp-feature-policy = { workspace = true }
-perl-lsp-feature-contracts = { workspace = true }
-perl-lsp-feature-grid = { workspace = true }
-perl-lsp-feature-profile = { workspace = true }
-perl-lsp-feature-profile-cli = { workspace = true }
 perl-lsp-perltidy = { workspace = true }
 perl-lsp-document-links = { workspace = true }
 perl-position-tracking = { workspace = true, features = ["lsp-compat"] }
@@ -121,6 +115,7 @@ lsp-ga-lock = [
   "perl-lsp-protocol/lsp-ga-lock",
   "perl-lsp-feature-governance/lsp-ga-lock",
   "perl-lsp-launcher/lsp-ga-lock",
+  "perl-lsp-rs-core/lsp-ga-lock",
 ]
 experimental-features = []  # Experimental LSP features for testing
 stress-tests = []  # Enable stress tests that are too slow for CI

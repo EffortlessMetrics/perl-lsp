@@ -770,7 +770,7 @@ fn vendored_feature_catalogs_match_workspace_root_catalog() -> Result<(), Box<dy
         repo_root.join("crates/perl-lsp/features_sot.toml"),
         repo_root.join("crates/perl-dap/features_sot.toml"),
         repo_root.join("crates/perl-parser/features_sot.toml"),
-        repo_root.join("crates/perl-lsp-feature-contracts/features_sot.toml"),
+        repo_root.join("crates/perl-lsp-rs-core/features_sot.toml"),
     ];
 
     for vendored_path in vendored_paths {

@@ -36,14 +36,6 @@ members = [
     "crates/perl-lsp-semantic-tokens",
     "crates/perl-lsp-inlay-hints",
     "crates/perl-lsp-code-lens",
-    "crates/perl-lsp-feature-contracts",
-    "crates/perl-lsp-feature-flags",
-    "crates/perl-lsp-feature-grid",
-    "crates/perl-lsp-feature-ids",
-    "crates/perl-lsp-capability-map",
-    "crates/perl-lsp-feature-profile",
-    "crates/perl-lsp-feature-profile-cli",
-    "crates/perl-lsp-feature-policy",
     "crates/perl-lsp-feature-governance",
     "crates/perl-lsp-launcher",
     "crates/perl-lsp-navigation",
@@ -258,10 +250,6 @@ perl-corpus = { path = "crates/perl-corpus", version = "0.12.4" }
 perl-dap = { path = "crates/perl-dap", version = "0.12.4" }
 perl-dead-code = { path = "crates/perl-dead-code", version = "0.12.4" }
 perl-feature-catalog = { path = "crates/perl-feature-catalog", version = "0.12.4" }
-perl-lsp-feature-flags = { path = "crates/perl-lsp-feature-flags", version = "0.12.4" }
-perl-lsp-feature-ids = { path = "crates/perl-lsp-feature-ids", version = "0.12.4" }
-perl-lsp-capability-map = { path = "crates/perl-lsp-capability-map", version = "0.12.4" }
-
 # Tier 2: Single-level dependencies
 perl-parser-core = { path = "crates/perl-parser-core", version = "0.12.4" }
 perl-lsp-transport = { path = "crates/perl-lsp-transport", version = "0.12.4" }
@@ -276,16 +264,11 @@ perl-lsp-diagnostics = { path = "crates/perl-lsp-diagnostics", version = "0.12.4
 perl-lsp-semantic-tokens = { path = "crates/perl-lsp-semantic-tokens", version = "0.12.4" }
 perl-lsp-inlay-hints = { path = "crates/perl-lsp-inlay-hints", version = "0.12.4" }
 perl-lsp-code-lens = { path = "crates/perl-lsp-code-lens", version = "0.12.4" }
-perl-lsp-feature-contracts = { path = "crates/perl-lsp-feature-contracts", version = "0.12.4" }
 perl-lsp-color-provider = { path = "crates/perl-lsp-color-provider", version = "0.12.4" }
 perl-lsp-cancellation = { path = "crates/perl-lsp-cancellation", version = "0.12.4" }
 perl-lsp-limits = { path = "crates/perl-lsp-limits", version = "0.12.4" }
 perl-lsp-uri = { path = "crates/perl-lsp-uri", version = "0.12.4" }
 perl-lsp-config = { path = "crates/perl-lsp-config", version = "0.12.4" }
-perl-lsp-feature-profile = { path = "crates/perl-lsp-feature-profile", version = "0.12.4" }
-perl-lsp-feature-profile-cli = { path = "crates/perl-lsp-feature-profile-cli", version = "0.12.4" }
-perl-lsp-feature-policy = { path = "crates/perl-lsp-feature-policy", version = "0.12.4" }
-perl-lsp-feature-grid = { path = "crates/perl-lsp-feature-grid", version = "0.12.4" }
 perl-lsp-feature-governance = { path = "crates/perl-lsp-feature-governance", version = "0.12.4" }
 perl-lsp-launcher = { path = "crates/perl-lsp-launcher", version = "0.12.4" }
 perl-lsp-navigation = { path = "crates/perl-lsp-navigation", version = "0.12.4" }
