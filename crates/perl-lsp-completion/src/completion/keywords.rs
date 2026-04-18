@@ -53,6 +53,10 @@ fn keyword_doc(keyword: &str) -> Option<&'static str> {
         "or" => Some("Low-precedence logical OR. Same as '||' but lower precedence."),
         "not" => Some("Low-precedence logical NOT. Same as '!' but lower precedence."),
         "xor" => Some("Low-precedence logical exclusive OR."),
+        "async" => Some(
+            "Marks a subroutine as asynchronous (Perl 5.36+ experimental, requires `use feature 'async_await'`).",
+        ),
+        "await" => Some("Suspends execution until a Future completes (Perl 5.36+ experimental)."),
         "eq" => Some("String equality comparison. Returns true if strings are equal."),
         "ne" => Some("String inequality comparison. Returns true if strings differ."),
         "lt" => Some("String less-than comparison."),

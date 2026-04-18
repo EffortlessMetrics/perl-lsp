@@ -454,7 +454,7 @@ pub fn collect_semantic_tokens(
                     | "return" | "next" | "last" | "redo" | "goto" | "eval" | "given" | "when"
                     | "default" | "break" | "continue" | "unless" | "no" | "BEGIN" | "END"
                     | "CHECK" | "INIT" | "UNITCHECK" | "class" | "method" | "try" | "catch"
-                    | "finally" => "keyword",
+                    | "finally" | "await" => "keyword",
                     _ => continue,
                 }
             }
