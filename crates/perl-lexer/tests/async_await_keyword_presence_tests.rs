@@ -2,9 +2,6 @@
 //!
 //! These tests verify that Perl 5.36+ async/await keywords are properly
 //! registered in all required keyword lists per ADR-3538.
-//!
-//! NOTE: These tests are expected to FAIL until the implementation adds
-//! async/await to the keyword lists.
 
 use perl_lexer::{
     KEYWORDS, is_keyword, is_lexer_keyword, is_lsp_completion_keyword, is_parser_lsp_keyword,

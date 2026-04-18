@@ -2,10 +2,6 @@
 //!
 //! These tests verify that Perl 5.36+ async/await keywords produce proper
 //! semantic token highlighting per ADR-3538.
-//!
-//! NOTE: These tests are expected to FAIL until the implementation adds
-//! await to the hardcoded keyword match arm in semantic_tokens.rs.
-//!
 //! IMPORTANT: async semantic token emission is DEFERRED per ADR-3538 because
 //! the parser stores async as an attribute string without source span tracking.
 

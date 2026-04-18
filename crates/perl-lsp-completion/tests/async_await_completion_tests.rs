@@ -2,9 +2,6 @@
 //!
 //! These tests verify that Perl 5.36+ async/await keywords have proper
 //! completion support and documentation per ADR-3538.
-//!
-//! NOTE: These tests are expected to FAIL until the implementation adds
-//! async/await to the keyword lists and keyword_doc() function.
 
 use perl_lsp_completion::{CompletionItem, CompletionItemKind, CompletionProvider};
 use perl_parser_core::Parser;
