@@ -13,6 +13,8 @@
   outputs = { self, nixpkgs, rust-overlay, flake-utils }:
     flake-utils.lib.eachDefaultSystem (system:
       let
+        # rust-overlay enables using rust-bin with specific version overrides
+        # (e.g., our MSRV 1.92.0 pin) rather than nixpkgs' default Rust
         overlays = [ (import rust-overlay) ];
         pkgs = import nixpkgs { inherit system overlays; };
 
@@ -20,8 +22,12 @@
         # This matches rust-toolchain.toml and CI workflows
         rustVersion = "1.92.0";
         rustToolchain = pkgs.rust-bin.stable.${rustVersion}.default.override {
+          # rust-src for RUST_SRC_PATH (needed by some build tools)
+          # clippy and rustfmt for local CI validation
           extensions = [ "rust-src" "clippy" "rustfmt" ];
-          targets = [ "wasm32-unknown-unknown" ];  # For WASM determinism checks
+          # wasm32 target is required for determinism checks on the parser crate
+          # (cargo check --target wasm32-unknown-unknown -p perl-parser)
+          targets = [ "wasm32-unknown-unknown" ];
         };
 
         # Common build inputs (libraries needed for compilation)
@@ -211,9 +217,11 @@
             inherit buildInputs;
             nativeBuildInputs = with pkgs; [ pkg-config ];
 
+            # This workspace has multiple crates; only build/test the main LSP binary
             buildAndTestSubdir = "crates/perl-lsp";
 
-            # Skip tests during package build (run via checks)
+            # Skip tests during package build - tests run via `nix flake check`
+            # which has a proper build environment with RUST_SRC_PATH set
             doCheck = false;
 
             meta = with pkgs.lib; {
