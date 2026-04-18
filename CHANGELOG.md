@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **LSP support for Perl 5.36+ `async`/`await` keywords** — completions,
+  hover documentation, and semantic token highlighting for the experimental
+  `async` and `await` keywords (via `use feature 'async_await'`). Note:
+  `await` gets full semantic token highlighting; `async` semantic tokens
+  are deferred to a follow-up work item. (#3538)
+
 ## [0.12.4] - 2026-04-12
 
 Release notes: [v0.12.4](docs/releases/v0.12.4.md) · [GitHub Release](https://github.com/EffortlessMetrics/perl-lsp/releases/tag/v0.12.4)
