@@ -35,7 +35,8 @@ Status legend:
 | current crate | target owner | final status | wave | risk | notes |
 |---|---|---|---:|---:|---|
 | perllsp | perllsp | core-public | — | — | installer façade + binary |
-| perl-lsp-rs | perl-lsp-rs | core-public | — | — | LSP server library + bin (dir: crates/perl-lsp) |
+| perl-lsp-rs | perl-lsp-rs | core-public | — | — | thin UX facade + bin (dir: crates/perl-lsp); re-exports from perl-lsp-rs-core per Amendment 6 |
+| perl-lsp-rs-core | perl-lsp-rs-core (NEW) | core-public | F | — | implementation sibling — absorbs Wave F/G1/G2/G3 crates; see Amendment 6 |
 | perl-dap | perl-dap | core-public | H | — | DAP server; absorbs 11 perl-dap-* |
 | perl-parser | perl-parser | core-public | 3-4 | — | parser facade; absorbs syntax + parser-adjacent |
 | perl-lexer | perl-lexer | core-public | 3 | — | tokenizer; absorbs satellites |
@@ -171,20 +172,32 @@ full semantic analyzer just to get them. `perl-symbol` stays as a separate publi
 | perl-lsp-diagnostic-catalog | perl-diagnostic-catalog | module | E | Low | retired name; content absorbs |
 | perl-lsp-diagnostic-types | perl-diagnostic-catalog | module | E | Low | |
 
-## Wave F — perl-lsp-feature-* → perl-lsp-rs::features
+## Wave F — perl-lsp-feature-* → perl-lsp-rs-core::features
+
+Wave F creates the `perl-lsp-rs-core` implementation crate and moves the 8 feature/capability
+crates into it as modules. `perl-lsp-rs` becomes a thin UX facade that re-exports from
+`perl-lsp-rs-core` (same pattern Wave D established for `perl-parser` / `perl-parser-core`).
+See Amendment 6.
+
+`perl-lsp-feature-profile-cli` had NO `[[bin]]` target on master at Wave F scope time (per
+accuracy-scout on #4489) — drop the "preserve [[bin]]" note; it becomes a plain module.
 
 | current crate | target owner | final status | wave | risk | notes |
 |---|---|---|---:|---:|---|
-| perl-lsp-feature-ids | perl-lsp-rs | module | F | Low | |
-| perl-lsp-feature-contracts | perl-lsp-rs | module | F | Low | |
-| perl-lsp-feature-flags | perl-lsp-rs | module | F | Low | |
-| perl-lsp-feature-profile | perl-lsp-rs | module | F | Low | |
-| perl-lsp-feature-profile-cli | perl-lsp-rs | module | F | Low | preserve [[bin]] as subcommand |
-| perl-lsp-feature-policy | perl-lsp-rs | module | F | Low | |
-| perl-lsp-feature-grid | perl-lsp-rs | module | F | Low | |
-| perl-lsp-capability-map | perl-lsp-rs | module | F | Low | |
+| perl-lsp-feature-ids | perl-lsp-rs-core | module | F | Low | |
+| perl-lsp-feature-contracts | perl-lsp-rs-core | module | F | Low | |
+| perl-lsp-feature-flags | perl-lsp-rs-core | module | F | Low | |
+| perl-lsp-feature-profile | perl-lsp-rs-core | module | F | Low | |
+| perl-lsp-feature-profile-cli | perl-lsp-rs-core | module | F | Low | library-only on master |
+| perl-lsp-feature-policy | perl-lsp-rs-core | module | F | Low | |
+| perl-lsp-feature-grid | perl-lsp-rs-core | module | F | Low | |
+| perl-lsp-capability-map | perl-lsp-rs-core | module | F | Low | |
 
-## Wave G1 — LSP providers → perl-lsp-rs::providers
+## Wave G1 — LSP providers → perl-lsp-rs-core::providers
+
+Per Amendment 6, the target for all Wave G1/G2/G3 rows is `perl-lsp-rs-core` (the implementation
+sibling), not `perl-lsp-rs` (the thin facade). The `perl-lsp-rs` column below reflects the
+pre-Amendment-6 spec — read it as `perl-lsp-rs-core` for the actual absorption target.
 
 | current crate | target owner | final status | wave | risk | notes |
 |---|---|---|---:|---:|---|
