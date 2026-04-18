@@ -569,9 +569,9 @@ mod tests {
     #[test]
     fn test_grammar_kind_returns_variable_with_attributes_for_list_form() {
         let mut p = Parser::new();
-        // `my $x : lvalue = 42;` is a variable with attributes in list form.
-        let tree = must_some(p.parse("my $x : lvalue = 42;"));
-        // Root -> my declaration with variable and attributes.
+        // VariableWithAttributes is only produced for per-variable attributes in list form:
+        // `my ($x : lvalue);`. Scalar form `my $x : lvalue;` does not produce this node.
+        let tree = must_some(p.parse("my ($x : lvalue);"));
         let root = tree.root_node();
         let mut found_var_with_attrs = false;
         for child in root.children() {
