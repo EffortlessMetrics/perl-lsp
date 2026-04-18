@@ -27,6 +27,6 @@ pub mod recovery {
 
 /// Error types and result aliases used by the parser engine.
 pub use crate::syntax::error::{
-    get_error_contexts, BudgetTracker, ErrorContext, ParseBudget, ParseError, ParseOutput,
-    ParseResult, RecoveryKind, RecoverySite,
+    BudgetTracker, ErrorContext, ParseBudget, ParseError, ParseOutput, ParseResult, RecoveryKind,
+    RecoverySite, get_error_contexts,
 };

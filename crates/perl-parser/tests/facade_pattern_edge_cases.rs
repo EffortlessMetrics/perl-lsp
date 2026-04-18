@@ -195,10 +195,7 @@ fn test_qualified_name_facade_functional() -> Result<(), Box<dyn std::error::Err
     );
 
     // validate_perl_qualified_name: empty string should fail
-    assert!(
-        validate_perl_qualified_name("").is_err(),
-        "Empty name should fail validation"
-    );
+    assert!(validate_perl_qualified_name("").is_err(), "Empty name should fail validation");
 
     Ok(())
 }
@@ -222,14 +219,8 @@ fn test_source_file_facade_functional() -> Result<(), Box<dyn std::error::Error>
     assert!(!is_perl_source_extension("py"), "'.py' should not be a Perl source extension");
 
     // is_perl_source_path
-    assert!(
-        is_perl_source_path(Path::new("script.pl")),
-        "script.pl should be Perl source"
-    );
-    assert!(
-        !is_perl_source_path(Path::new("binary.exe")),
-        "binary.exe should not be Perl source"
-    );
+    assert!(is_perl_source_path(Path::new("script.pl")), "script.pl should be Perl source");
+    assert!(!is_perl_source_path(Path::new("binary.exe")), "binary.exe should not be Perl source");
 
     // is_perl_source_uri
     assert!(
