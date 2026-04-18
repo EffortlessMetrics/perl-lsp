@@ -1,6 +1,0 @@
----
-source: crates/perl-lsp/tests/pull_diagnostics_snap_tests.rs
-expression: snapshot_value
----
-kind: unchanged
-resultId: "<stable-result-id>"
