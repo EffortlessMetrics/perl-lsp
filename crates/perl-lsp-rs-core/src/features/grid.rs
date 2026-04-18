@@ -6,13 +6,11 @@
 //! policy microcrates to avoid feature-flag logic leaking back into the server
 //! module tree.
 
-pub use crate::features::contracts::FeatureProfileSpec;
-pub use crate::features::contracts::catalog;
-pub use crate::features::contracts::feature_profile_specs;
 pub use crate::features::contracts::{
-    BddFeatureRow, Feature, LSP_VERSION, VERSION, advertised_features,
-    advertised_trackable_feature_count_for_grid, all_features, bdd_feature_rows,
-    compliance_percent, compliance_percent_for_grid, has_feature, trackable_feature_count_for_grid,
+    BddFeatureRow, Feature, FeatureProfileSpec, LSP_VERSION, VERSION, advertised_features,
+    advertised_trackable_feature_count_for_grid, all_features, bdd_feature_rows, catalog,
+    compliance_percent, compliance_percent_for_grid, feature_profile_specs, has_feature,
+    trackable_feature_count_for_grid,
 };
 pub use crate::features::policy::{FeatureProfile, catalog_advertised_feature_ids};
 
