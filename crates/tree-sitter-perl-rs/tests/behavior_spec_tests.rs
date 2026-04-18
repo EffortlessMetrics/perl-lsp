@@ -94,3 +94,55 @@ fn when_reusing_one_parser_for_multiple_inputs_then_each_parse_still_returns_a_t
     assert!(first.is_some());
     assert!(second.is_some());
 }
+
+#[test]
+fn when_requesting_grammar_kind_of_root_then_source_file_is_returned() {
+    let tree = parse("my $x = 42;");
+    assert_eq!(tree.root_node().grammar_kind(), "source_file");
+}
+
+#[test]
+fn when_requesting_grammar_kind_of_subroutine_then_sub_is_returned() {
+    let tree = parse("sub greet { 1 }");
+    let root = tree.root_node();
+    // Find the subroutine child
+    let sub_node = must_some(root.children().find(|n| n.kind() == "Subroutine"));
+    assert_eq!(sub_node.grammar_kind(), "sub");
+}
+
+#[test]
+fn when_v3_kind_and_grammar_kind_are_both_available_then_they_differ_for_program() {
+    let tree = parse("1;");
+    let root = tree.root_node();
+    assert_eq!(root.kind(), "Program");
+    assert_eq!(root.grammar_kind(), "source_file");
+    assert_ne!(root.kind(), root.grammar_kind());
+}
+
+#[test]
+fn when_requesting_grammar_kind_of_variable_with_attributes_then_snake_case_fallback_is_used() {
+    // NodeKind::VariableWithAttributes produces a double-paren sexp of the form
+    // `((variable $ foo) (attributes :lvalue))` -- grammar_kind() must fall back
+    // to snake_case of kind_name() and must NOT return the child kind "variable".
+    let tree = parse("my ($foo :lvalue);");
+    let root = tree.root_node();
+    // Walk the tree to find the VariableWithAttributes node if present.
+    fn find_var_attrs(n: tree_sitter_perl_rs::Node<'_>) -> Option<String> {
+        if n.kind() == "VariableWithAttributes" {
+            return Some(n.grammar_kind());
+        }
+        for child in n.children() {
+            if let Some(gk) = find_var_attrs(child) {
+                return Some(gk);
+            }
+        }
+        None
+    }
+    if let Some(gk) = find_var_attrs(root) {
+        assert_ne!(
+            gk, "variable",
+            "grammar_kind() must not return child kind for VariableWithAttributes; got {gk}"
+        );
+        assert_eq!(gk, "variable_with_attributes", "expected snake_case fallback; got {gk}");
+    }
+}
