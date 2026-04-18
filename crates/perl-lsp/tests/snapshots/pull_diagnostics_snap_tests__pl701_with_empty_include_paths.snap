@@ -1,0 +1,20 @@
+---
+source: crates/perl-lsp/tests/pull_diagnostics_snap_tests.rs
+expression: snapshot_value
+---
+code: PL701
+data:
+  category: Import
+  code: PL701
+  fixable: false
+  tags: []
+message: "Module 'Missing::Module' not found in workspace or configured include paths\nSuggestion: Install with: cpanm Missing::Module or add to .perl-lsp.toml: include_paths"
+range:
+  end:
+    character: 19
+    line: 0
+  start:
+    character: 0
+    line: 0
+severity: 2
+source: perl-lsp
