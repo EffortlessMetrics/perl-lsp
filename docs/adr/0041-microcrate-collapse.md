@@ -383,6 +383,40 @@ reasoning that kept `perl-symbol` (Amendment 3), `perl-token` (Amendment 4), and
 
 The 30-crate published target and all other ADR content remain unchanged.
 
+### Amendment 6 — 2026-04-18: `perl-lsp-rs-core` facade/core split for LSP waves
+
+**Source:** Architectural decision made during Wave F scoping (#4489, #4491). Oppositional-planner and advocatus-diaboli both flagged the absence of an implementation sibling as the structural question blocking Wave F and Wave G1/G2/G3.
+
+**The decision:** Apply the same thin UX facade / implementation core pattern established by Wave D (`perl-parser` / `perl-parser-core`) to the LSP lane:
+
+- **`perl-lsp-rs`** — thin user-facing facade (re-exports, ergonomic wrappers, binary entry point in `crates/perl-lsp/src/main.rs`).
+- **`perl-lsp-rs-core`** — implementation home for Wave F/G1/G2/G3 absorptions (features, providers, runtime, governance).
+
+Dependency direction: `perl-lsp-rs → perl-lsp-rs-core` (one-way; no cycle).
+
+**Why this is the right model:**
+
+- **House pattern.** `perl-parser` / `perl-parser-core` (Wave D, #4486), `tree-sitter-perl-rs` (facade over native stack), and now `perl-lsp-rs` / `perl-lsp-rs-core` all follow the same split. Consistent across the codebase.
+- **Preserves compilation unit boundary** during the ~50-crate LSP-side absorption. Modifying feature-level code should not force rebuild of the binary entry point.
+- **Facade stays thin.** `perl-lsp-rs` remains legible as "the LSP server's public API" rather than bloating into a mega-crate with 50+ internal modules.
+- **Unblocks subsequent waves.** Wave F/G1/G2/G3 all land into the same `perl-lsp-rs-core` crate; no mid-program architectural pivots.
+
+**Published target update: 30 → 31.**
+
+`perl-lsp-rs-core` joins the Products (core-public) section alongside `perl-lsp-rs`. This mirrors `perl-parser` / `perl-parser-core`, which already occupy two slots in the published surface. The 30-crate target in the original Decision section becomes **31**.
+
+**Wave execution plan under this amendment:**
+
+| Wave | Scope | Absorption target |
+|---|---|---|
+| F | 8 `perl-lsp-feature-*` + `perl-lsp-capability-map` | `perl-lsp-rs-core::features` + `::capability_map` — creates the crate |
+| G1 | ~25 providers | `perl-lsp-rs-core::providers` |
+| G2 | ~7 runtime crates | `perl-lsp-rs-core::runtime` |
+| G3 | ~6 governance crates | `perl-lsp-rs-core::governance` |
+| Final | `perl-lsp-rs` trims to facade shape | re-exports + binary only |
+
+**Same pattern as:** Amendments 2 (`perl-workspace` naming), 3 (`perl-symbol` kept public), 4 (`perl-token` kept public), 5 (`perl-line-index` / `perl-uri` / `perl-pod` kept public) — each amendment refined the migration based on architectural reality discovered during planning. This amendment applies the already-proven Wave D pattern to the remaining LSP-side waves.
+
 ## References
 
 - [Tracking issue #4410: Microcrate collapse to ~30 published crates](https://github.com/EffortlessMetrics/perl-lsp/issues/4410)
