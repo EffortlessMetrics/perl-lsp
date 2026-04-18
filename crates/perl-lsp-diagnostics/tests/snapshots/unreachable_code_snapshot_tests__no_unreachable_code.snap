@@ -1,0 +1,5 @@
+---
+source: crates/perl-lsp-diagnostics/tests/unreachable_code_snapshot_tests.rs
+expression: snapshot
+---
+

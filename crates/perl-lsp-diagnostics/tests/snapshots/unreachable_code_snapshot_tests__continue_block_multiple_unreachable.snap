@@ -1,0 +1,7 @@
+---
+source: crates/perl-lsp-diagnostics/tests/unreachable_code_snapshot_tests.rs
+expression: snapshot
+---
+PL406 | Hint | (36, 41) | Unreachable code: this statement cannot be executed
+PL406 | Hint | (47, 52) | Unreachable code: this statement cannot be executed
+PL406 | Hint | (58, 63) | Unreachable code: this statement cannot be executed
