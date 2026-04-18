@@ -11,6 +11,15 @@ if echo "$CMD" | grep -qE 'git push --force|git push -f |git checkout \.|git res
   exit 2
 fi
 
+# Block refspec force-push forms: `git push <remote> +branch`, `git push origin +refs/heads/main`,
+# `git push <remote> +HEAD:branch`. The `+` prefix on a refspec bypasses non-fast-forward checks
+# the same way --force does.
+if echo "$CMD" | grep -qE 'git +push( +[^ ]+)*[[:space:]]\+[^[:space:]]'; then
+  echo "Blocked: refspec '+<ref>' in git push forces non-fast-forward the same as --force." >&2
+  echo "Remove the leading '+' or use a safer alternative." >&2
+  exit 2
+fi
+
 # Block git stash commands -- stash is shared across all worktrees and causes cross-contamination.
 # Use git restore <file> to discard changes, or git commit -m wip to save work in progress.
 if echo "$CMD" | grep -qE 'git stash( |$)'; then
