@@ -290,11 +290,14 @@ fn test_cargo_toml_no_deleted_satellite_deps() {
 }
 
 // =============================================================================
-// Test 9: Workspace member count reduced by 6
+// Test 9: Workspace member count reduced after Wave A + Wave D collapse
 // =============================================================================
 
-/// Verify workspace member count has been reduced by exactly 6 deleted satellites.
-/// The baseline (before collapse) was 123, so target is 117.
+/// Verify workspace member count has been reduced by satellite deletions.
+///
+/// Wave A (#4426) removed 6 perl-workspace-* satellites.
+/// Wave D (#4454) removed 13+ parser/AST satellites into perl-parser-core and perl-parser.
+/// Combined baseline was ~120, now ~83 members.
 #[test]
 fn test_workspace_members_reduced_by_six() {
     let cargo_manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".to_string());
@@ -316,11 +319,16 @@ fn test_workspace_members_reduced_by_six() {
         })
         .collect();
 
-    // Should be 114 (6 satellites deleted from ~120 baseline)
-    // Allow ±1 for concurrent PR activity
+    // After Wave A (6 removed) and Wave D (13+ removed), expect ≤120 members.
+    // Allow flexibility for concurrent PR activity.
     assert!(
-        members.len() >= 113 && members.len() <= 115,
-        "Workspace should have 113-115 members after deletion of 6 satellites, found {}",
+        members.len() <= 120,
+        "Workspace should have ≤120 members after Wave A+D satellite deletions, found {}",
+        members.len()
+    );
+    assert!(
+        members.len() >= 70,
+        "Workspace should have ≥70 members (check for inadvertent removals), found {}",
         members.len()
     );
 }

@@ -136,7 +136,7 @@ fn test_wired_completion_item_dedup() {
 /// AST utility helpers must be reachable.
 #[test]
 fn test_wired_ast_utils_find_function_insert_position() {
-    use perl_ast_utils::find_function_insert_position;
+    use perl_parser::ast_utils::find_function_insert_position;
     let source = "package Foo;\n\nsub bar { 1 }\n";
     let pos = find_function_insert_position(source);
     // Current policy: insert at end-of-file.

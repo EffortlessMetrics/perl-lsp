@@ -24,7 +24,6 @@ doctest = false
 
 [dependencies]
 perl-parser-core = { workspace = true }
-perl-edit = { workspace = true }
 perl-lexer = { workspace = true }
 perl-line-index = { workspace = true }
 anyhow.workspace = true

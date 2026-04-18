@@ -13,7 +13,7 @@
 //! - Timeouts are capped at reasonable limits
 //! - Dangerous operations are blocked in safe evaluation mode
 
-use perl_path_security::{WorkspacePathError, validate_workspace_path};
+use perl_parser_core::path_security::{WorkspacePathError, validate_workspace_path};
 use std::path::{Path, PathBuf};
 
 /// Security validation errors

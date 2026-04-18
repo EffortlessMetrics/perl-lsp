@@ -35,7 +35,7 @@
 //! ```
 
 use perl_parser_core::ast::{Node, NodeKind};
-use perl_qualified_name::split_qualified_name;
+use perl_parser_core::qualified_name::split_qualified_name;
 
 /// Return (start_offset, end_offset) for same-file references
 pub fn find_references_single_file(ast: &Node, offset: usize) -> Option<Vec<(usize, usize)>> {

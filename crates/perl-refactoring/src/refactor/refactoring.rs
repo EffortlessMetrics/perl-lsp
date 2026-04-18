@@ -38,10 +38,10 @@ use crate::workspace_index::WorkspaceIndex;
 #[cfg(feature = "workspace_refactor")]
 use crate::workspace_refactor::WorkspaceRefactor;
 use perl_parser_core::line_index::LineIndex;
-use perl_parser_core::{Node, NodeKind, Parser, SourceLocation};
-use perl_qualified_name::{
+use perl_parser_core::qualified_name::{
     is_valid_identifier_part, validate_perl_qualified_name as validate_package_name,
 };
+use perl_parser_core::{Node, NodeKind, Parser, SourceLocation};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::fs;

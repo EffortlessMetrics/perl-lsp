@@ -15,7 +15,6 @@ categories = ["development-tools", "encoding"]
 include = ["src/**", "Cargo.toml", "README.md", "LICENSE*"]
 
 [dependencies]
-perl-uri-classify = { workspace = true }
 percent-encoding = "2.3.2"
 url.workspace = true
 

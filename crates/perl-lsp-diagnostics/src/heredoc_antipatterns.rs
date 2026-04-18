@@ -3,7 +3,7 @@
 use crate::internal_types::Diagnostic;
 use perl_diagnostics::codes::DiagnosticCode;
 use perl_diagnostics::codes::DiagnosticSeverity;
-use perl_heredoc_anti_patterns::{AntiPattern, AntiPatternDetector, Severity};
+use perl_parser::heredoc_anti_patterns::{AntiPattern, AntiPatternDetector, Severity};
 
 /// Detect heredoc anti-patterns in Perl source code.
 ///

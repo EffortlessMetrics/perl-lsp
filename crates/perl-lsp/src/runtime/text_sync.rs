@@ -13,7 +13,7 @@ use crate::protocol::invalid_params;
 use crate::state::DegradationTier;
 #[cfg(feature = "workspace")]
 use perl_parser::workspace_index::{IndexPhase, IndexState};
-use perl_source_file::is_binary_content;
+use perl_parser_core::source_file::is_binary_content;
 
 impl LspServer {
     /// Handle textDocument/didOpen notification.

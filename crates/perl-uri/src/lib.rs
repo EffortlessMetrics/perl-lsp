@@ -257,7 +257,9 @@ pub fn normalize_uri(uri: &str) -> String {
     if let Ok(url) = Url::parse(uri) { url.to_string() } else { uri.to_string() }
 }
 
-pub use perl_uri_classify::{is_file_uri, is_special_scheme, uri_extension, uri_key};
+/// URI classification and key normalization helpers (previously `perl-uri-classify`).
+pub mod classify;
+pub use classify::{is_file_uri, is_special_scheme, uri_extension, uri_key};
 
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::expect_used)]

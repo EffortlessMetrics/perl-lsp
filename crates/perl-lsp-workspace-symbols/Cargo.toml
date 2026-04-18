@@ -21,7 +21,6 @@ perl-lsp-symbol-query = { workspace = true }
 perl-module = { workspace = true }
 perl-parser-core = { workspace = true }
 perl-position-tracking = { workspace = true }
-perl-qualified-name = { workspace = true }
 perl-semantic-analyzer = { workspace = true }
 serde = { workspace = true }
 

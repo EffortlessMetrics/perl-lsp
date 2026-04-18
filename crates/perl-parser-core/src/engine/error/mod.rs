@@ -16,5 +16,5 @@
 /// Implementation of ErrorRecovery trait for ParserContext.
 pub mod context_impls;
 
-/// Error types and result aliases used by the parser engine.
-pub use perl_error::*;
+/// Error types and result aliases used by the parser engine (from internal syntax::error module).
+pub use crate::syntax::error::*;

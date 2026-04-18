@@ -18,7 +18,7 @@ include = ["src/**", "Cargo.toml", "README.md", "LICENSE*"]
 anyhow.workspace = true
 serde_json = { workspace = true }
 perl-lsp-limits = { workspace = true }
-perl-path-security = { workspace = true }
+perl-parser-core = { workspace = true }
 
 [dev-dependencies]
 perl-tdd-support = { workspace = true }

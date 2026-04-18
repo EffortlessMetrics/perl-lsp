@@ -50,7 +50,7 @@
 use crate::refactor::refactoring::BackupInfo;
 use crate::refactor::workspace_refactor::{FileEdit, TextEdit};
 use crate::workspace_index::WorkspaceIndex;
-use perl_qualified_name::split_qualified_name;
+use perl_parser_core::qualified_name::split_qualified_name;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};

@@ -40,7 +40,7 @@
 //! assert!(matches!(stream.peek(), Ok(t) if t.kind == TokenKind::My));
 //! ```
 
-use perl_error::{ParseError, ParseResult};
+use crate::syntax::error::{ParseError, ParseResult};
 use perl_lexer::{LexerMode, PerlLexer, Token as LexerToken, TokenType as LexerTokenType};
 pub use perl_token::{Token, TokenKind};
 use std::collections::VecDeque;

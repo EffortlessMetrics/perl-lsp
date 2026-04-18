@@ -34,7 +34,7 @@
 //! ```
 
 use parking_lot::Mutex;
-use perl_percentile::nearest_rank_percentile;
+use perl_parser_core::percentile::nearest_rank_percentile;
 use std::collections::VecDeque;
 use std::sync::Arc;
 use std::time::{Duration, Instant};

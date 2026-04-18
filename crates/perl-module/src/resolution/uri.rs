@@ -3,7 +3,7 @@
 //! Extracts the URI-first, timeout-bounded resolution policy.
 
 use crate::path::module_name_to_path;
-use perl_path_security::validate_workspace_path;
+use perl_parser_core::path_security::validate_workspace_path;
 use perl_workspace::folder::workspace_folder_to_path;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
