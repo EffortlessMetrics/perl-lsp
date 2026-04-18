@@ -16,7 +16,7 @@
 use lsp_types::*;
 use serde_json::Value;
 
-pub use perl_lsp_feature_flags::{AdvertisedFeatures, BuildFlags};
+pub use perl_lsp_rs_core::features::flags::{AdvertisedFeatures, BuildFlags};
 /// Generate server capabilities from build flags
 #[allow(clippy::field_reassign_with_default)]
 pub fn capabilities_for(build: BuildFlags) -> ServerCapabilities {
@@ -379,7 +379,7 @@ pub fn default_capabilities() -> ServerCapabilities {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use perl_lsp_feature_contracts::feature_ids_from_caps;
+    use perl_lsp_rs_core::features::contracts::feature_ids_from_caps;
     use std::collections::BTreeSet;
 
     /// Feature IDs that `to_feature_ids()` correctly emits but

@@ -44,3 +44,12 @@ pub use feature_catalog::{
     has_feature, to_json, to_json_for_all_profiles, to_json_for_profile,
     trackable_feature_count_for_grid,
 };
+
+// Wave F re-exports: governance feature submodules from perl-lsp-rs-core
+pub use perl_lsp_rs_core::features::contracts;
+pub use perl_lsp_rs_core::features::flags;
+pub use perl_lsp_rs_core::features::grid;
+pub use perl_lsp_rs_core::features::ids;
+pub use perl_lsp_rs_core::features::policy;
+pub use perl_lsp_rs_core::features::profile;
+pub use perl_lsp_rs_core::features::profile_cli;
