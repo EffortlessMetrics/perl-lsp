@@ -258,7 +258,7 @@ fn test_mixed_import_paths_no_conflict() -> Result<(), Box<dyn std::error::Error
 /// Test error handling path: graceful degradation on bad input
 #[test]
 fn test_facade_error_recovery() -> Result<(), Box<dyn std::error::Error>> {
-    let code = "sub { if (";  // Incomplete code
+    let code = "sub { if ("; // Incomplete code
 
     let mut parser = Parser::new(code);
     let result = parser.parse();
@@ -354,7 +354,7 @@ fn test_code_actions_facade_integration() -> Result<(), Box<dyn std::error::Erro
 #[cfg(feature = "incremental")]
 #[test]
 fn test_incremental_parsing_facade() -> Result<(), Box<dyn std::error::Error>> {
-    use perl_parser::{IncrementalState, Edit};
+    use perl_parser::{Edit, IncrementalState};
 
     let code = "my $x = 1;";
     let mut state = IncrementalState::new(code);
@@ -375,7 +375,7 @@ fn test_incremental_parsing_facade() -> Result<(), Box<dyn std::error::Error>> {
 /// Test that Error trait implementations work correctly
 #[test]
 fn test_facade_error_trait_impl() -> Result<(), Box<dyn std::error::Error>> {
-    let code = "if (";  // Incomplete
+    let code = "if ("; // Incomplete
     let mut parser = Parser::new(code);
     parser.parse().ok();
 
@@ -459,7 +459,7 @@ fn test_unicode_via_facade() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn test_comprehensive_facade_exports() -> Result<(), Box<dyn std::error::Error>> {
     // This is a comprehensive test ensuring major re-exports are available
-    use perl_parser::{Parser, Node, SemanticAnalyzer, ScopeAnalyzer};
+    use perl_parser::{Node, Parser, ScopeAnalyzer, SemanticAnalyzer};
 
     let mut parser = Parser::new("sub test { }");
     let ast: Node = must(parser.parse());
