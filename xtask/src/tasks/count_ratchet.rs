@@ -18,7 +18,7 @@
 //! Related: #4416, ADR-0041 (#4413), parent collapse #4410.
 
 use crate::utils::{project_root, run_cargo_metadata};
-use color_eyre::eyre::{bail, eyre, Result};
+use color_eyre::eyre::{Result, bail, eyre};
 use serde::Deserialize;
 use std::fs;
 use std::path::Path;
@@ -192,5 +192,266 @@ mod tests {
         assert_eq!(parse_baseline("abc"), None);
         assert_eq!(parse_baseline("-5"), None);
         assert_eq!(parse_baseline("3.14"), None);
+    }
+
+    // =============================================================================
+    // PROPERTY-BASED TESTS
+    // These verify invariants across many generated inputs, not just examples.
+    // =============================================================================
+
+    /// Property: The ratchet never loosens - new_baseline is always <= original baseline
+    #[test]
+    fn property_ratchet_never_loosens() {
+        for baseline in 0u32..1000 {
+            for current in 0u32..1000 {
+                let result = check_count(current, baseline);
+                if let CountStatus::Ratchet { new_baseline } = result {
+                    assert!(
+                        new_baseline <= baseline,
+                        "Ratchet loosened: current={}, baseline={}, new_baseline={}",
+                        current,
+                        baseline,
+                        new_baseline
+                    );
+                }
+            }
+        }
+    }
+
+    /// Property: Idempotency - current == baseline always means Pass
+    #[test]
+    fn property_idempotent_pass() {
+        for baseline in 0u32..500 {
+            let result = check_count(baseline, baseline);
+            assert_eq!(result, CountStatus::Pass, "baseline={} should always Pass", baseline);
+            for current in 0u32..500 {
+                if current == baseline {
+                    assert_eq!(
+                        check_count(current, baseline),
+                        CountStatus::Pass,
+                        "current={} == baseline={} should Pass",
+                        current,
+                        baseline
+                    );
+                }
+            }
+        }
+    }
+
+    /// Property: Ratchet only fires when current < baseline
+    #[test]
+    fn property_ratchet_only_when_lower() {
+        for baseline in 0u32..500 {
+            for current in 0u32..500 {
+                let result = check_count(current, baseline);
+                if let CountStatus::Ratchet { new_baseline } = result {
+                    assert!(
+                        current < baseline,
+                        "Ratchet fired when current={} >= baseline={}",
+                        current,
+                        baseline
+                    );
+                    assert_eq!(
+                        new_baseline, current,
+                        "Ratchet new_baseline={} should equal current={}",
+                        new_baseline, current
+                    );
+                }
+            }
+        }
+    }
+
+    /// Property: Fail only occurs when current > baseline
+    #[test]
+    fn property_fail_only_when_higher() {
+        for baseline in 0u32..500 {
+            for current in 0u32..500 {
+                let result = check_count(current, baseline);
+                if matches!(result, CountStatus::Fail) {
+                    assert!(
+                        current > baseline,
+                        "Fail occurred when current={} <= baseline={}",
+                        current,
+                        baseline
+                    );
+                }
+            }
+        }
+    }
+
+    /// Property: After Ratchet fires and "updates" baseline, same current should Pass
+    #[test]
+    fn property_ratchet_after_update_passes() {
+        for original_baseline in 10u32..500 {
+            for current in 0u32..original_baseline {
+                let first_result = check_count(current, original_baseline);
+                assert_eq!(
+                    first_result,
+                    CountStatus::Ratchet { new_baseline: current },
+                    "First check should Ratchet: current={}, baseline={}",
+                    current,
+                    original_baseline
+                );
+                let second_result = check_count(current, current);
+                assert_eq!(
+                    second_result,
+                    CountStatus::Pass,
+                    "After ratchet update, same current should Pass: current={}",
+                    current
+                );
+            }
+        }
+    }
+
+    /// Property: check_count is a pure function of current vs baseline comparison
+    #[test]
+    fn property_check_count_determined_by_comparison() {
+        for baseline in 0u32..200 {
+            for current in 0u32..200 {
+                let result = check_count(current, baseline);
+                let cmp = current.cmp(&baseline);
+                let expected = match cmp {
+                    std::cmp::Ordering::Greater => CountStatus::Fail,
+                    std::cmp::Ordering::Less => CountStatus::Ratchet { new_baseline: current },
+                    std::cmp::Ordering::Equal => CountStatus::Pass,
+                };
+                assert_eq!(
+                    result, expected,
+                    "check_count({}, {}) = {:?}, expected {:?}",
+                    current, baseline, result, expected
+                );
+            }
+        }
+    }
+
+    /// Property: parse_baseline roundtrip with newlines
+    #[test]
+    fn property_parse_write_roundtrip() {
+        let test_values =
+            [0u32, 1, 42, 98, 100, 1000, 9999, 100000, u32::MAX, u32::MAX - 1, 1 << 20];
+        for value in test_values {
+            let written = format!("{}\n", value);
+            let parsed = parse_baseline(&written);
+            assert_eq!(
+                parsed,
+                Some(value),
+                "Roundtrip failed for value {}: wrote '{}', parsed back as {:?}",
+                value,
+                written.trim(),
+                parsed
+            );
+            let written_no_nl = format!("{}", value);
+            let parsed_no_nl = parse_baseline(&written_no_nl);
+            assert_eq!(
+                parsed_no_nl,
+                Some(value),
+                "Roundtrip (no newline) failed for value {}",
+                value
+            );
+        }
+    }
+
+    /// Property: parse_baseline rejects invalid inputs
+    #[test]
+    fn property_parse_rejects_invalid() {
+        let invalid_inputs = [
+            "",
+            "   ",
+            "\t",
+            "\n",
+            "abc",
+            "12abc",
+            "abc123",
+            "-1",
+            "-42",
+            "3.14",
+            "1e10",
+            "4294967296",
+            "99999999999999999999999",
+        ];
+        for input in invalid_inputs {
+            let result = parse_baseline(input);
+            assert!(
+                result.is_none(),
+                "parse_baseline({:?}) should return None, got {:?}",
+                input,
+                result
+            );
+        }
+    }
+
+    /// Property: write_baseline creates newline-terminated output
+    #[test]
+    fn property_write_newline_terminated() {
+        let temp_dir = std::env::temp_dir();
+        for value in [0u32, 42, 100, u32::MAX] {
+            let temp_path = temp_dir.join(format!("prop_baseline_{}.txt", value));
+            write_baseline(&temp_path, value).expect("write_baseline should succeed");
+            let contents = std::fs::read_to_string(&temp_path).expect("file should be readable");
+            assert!(
+                contents.ends_with('\n'),
+                "write_baseline({}) should create newline-terminated file, got {:?}",
+                value,
+                contents
+            );
+            let trimmed = contents.trim();
+            assert_eq!(
+                trimmed.parse::<u32>().ok(),
+                Some(value),
+                "Content {:?} should parse to {}",
+                contents,
+                value
+            );
+            std::fs::remove_file(&temp_path).ok();
+        }
+    }
+
+    /// Property: write/read roundtrip across a wide range of values
+    #[test]
+    fn property_write_read_roundtrip() {
+        let temp_dir = std::env::temp_dir();
+        let temp_path = temp_dir.join("prop_roundtrip_baseline.txt");
+        let test_values: Vec<u32> = vec![
+            0,
+            1,
+            2,
+            10,
+            42,
+            50,
+            81,
+            98,
+            100,
+            500,
+            1000,
+            5000,
+            10000,
+            u32::MAX,
+            u32::MAX - 1,
+            1 << 20,
+        ];
+        for value in test_values {
+            write_baseline(&temp_path, value).expect("write should succeed");
+            let read_value = read_baseline(&temp_path)
+                .unwrap_or_else(|e| panic!("read_baseline failed for value {}: {}", value, e));
+            assert_eq!(
+                read_value, value,
+                "Roundtrip failed: wrote {}, read back {}",
+                value, read_value
+            );
+        }
+    }
+
+    /// Property: read_baseline fails for various invalid contents
+    #[test]
+    fn property_read_baseline_fails_for_various_invalid() {
+        let temp_dir = std::env::temp_dir();
+        let temp_path = temp_dir.join("prop_invalid_baseline.txt");
+        let invalid_contents =
+            ["", "   \t\n", "not-a-number", "12.34", "-1", "abc", "12abc", "\x00"];
+        for content in invalid_contents {
+            std::fs::write(&temp_path, content).expect("write should succeed");
+            let result = read_baseline(&temp_path);
+            assert!(result.is_err(), "read_baseline({:?}) should fail, got {:?}", content, result);
+        }
     }
 }
