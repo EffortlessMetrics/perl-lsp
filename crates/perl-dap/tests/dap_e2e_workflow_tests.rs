@@ -44,6 +44,7 @@ fn workflow_script_content() -> &'static str {
     "use strict;\nuse warnings;\n\nmy $x = 10;\nmy $y = $x + 5;\nmy $z = $x * $y;\nprint \"$z\\n\";\n"
 }
 
+/// Shorthand for a test that returns `Ok(())` on success or propagates a boxed error.
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 // ─── Test 1: single breakpoint → inspect → continue → exit ───────────────────

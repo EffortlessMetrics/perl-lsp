@@ -324,13 +324,22 @@ impl DapWorkflowSession {
 
     // ─── Private helpers ──────────────────────────────────────────────────────
 
-    /// Send a DAP request and return the raw response message.
+    /// Issue a low-level DAP request and return the raw response.
+    ///
+    /// This is the primitive used by all higher-level helpers (e.g.
+    /// `launch`, `set_breakpoints`, `evaluate`). Incrementing `seq` is
+    /// required for DAP request/response matching.
     pub fn request(&mut self, command: &str, args: Option<Value>) -> DapMessage {
         self.seq += 1;
         self.adapter.handle_request(self.seq, command, args)
     }
 
-    /// Assert response is a success for `command`; return the body.
+    /// Validate a DAP `Response` is successful and return its optional body.
+    ///
+    /// Returns `Err` if the response is a failure response, if the command name
+    /// does not match, or if the message is not a `Response` variant at all.
+    /// This is the standard way to assert that a request succeeded before
+    /// extracting data from the response body.
     pub fn expect_success(&self, msg: &DapMessage, command: &str) -> Result<Option<Value>, String> {
         match msg {
             DapMessage::Response {
