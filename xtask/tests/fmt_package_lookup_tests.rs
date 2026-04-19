@@ -6,7 +6,15 @@
 use assert_cmd::Command;
 use color_eyre::eyre::Result;
 use std::fs;
+use std::path::PathBuf;
 use tempfile::TempDir;
+
+fn project_root() -> PathBuf {
+    // xtask is at <workspace-root>/xtask -- go up one level
+    let mut dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    dir.pop();
+    dir
+}
 
 // Helper: workspace where dir name differs from package name
 fn make_mismatched_workspace() -> TempDir {
@@ -134,8 +142,11 @@ fn resolve_uses_cargo_toml_name_not_dir_basename() -> Result<()> {
 
 #[test]
 fn resolve_perl_lsp_dir_to_perl_lsp_rs_package() -> Result<()> {
-    let output =
-        Command::cargo_bin("xtask")?.args(["resolve-package-name", "crates/perl-lsp"]).output()?;
+    let root = project_root();
+    let output = Command::cargo_bin("xtask")?
+        .current_dir(&root)
+        .args(["resolve-package-name", "crates/perl-lsp"])
+        .output()?;
     assert!(
         output.status.success(),
         "resolve-package-name crates/perl-lsp should exit 0; stderr: {}",

@@ -99,7 +99,7 @@ fn extract_crate_dirs(files: &[String]) -> BTreeSet<String> {
 ///
 /// Uses `cargo metadata` to get authoritative package names and manifest paths,
 /// then matches them against the changed crate directories.
-fn resolve_package_names(
+pub fn resolve_package_names(
     project_root: &Path,
     crate_dirs: &BTreeSet<String>,
 ) -> Result<BTreeSet<String>> {
@@ -137,8 +137,11 @@ fn resolve_package_names(
 
         // Convert absolute manifest path to a relative crate directory
         // e.g., "/path/to/project/crates/perl-parser/Cargo.toml" -> "crates/perl-parser"
-        let relative = manifest_path
-            .strip_prefix(root_str.as_ref())
+        // Normalize separators to forward slashes for cross-platform compatibility (Windows uses backslash).
+        let manifest_normalized = manifest_path.replace('\\', "/");
+        let root_normalized = root_str.replace('\\', "/");
+        let relative = manifest_normalized
+            .strip_prefix(root_normalized.as_str())
             .and_then(|p| p.strip_prefix('/'))
             .and_then(|p| p.strip_suffix("/Cargo.toml"));
 
@@ -262,6 +265,22 @@ pub fn run(base: String, mode: CheckMode) -> Result<()> {
 
     spinner.finish_with_message("Targeted checks completed");
     Ok(())
+}
+
+/// Resolve the Cargo package name for a single crate directory.
+///
+/// Returns the package name from Cargo.toml (e.g., `"perl-lsp-rs"` for `"crates/perl-lsp"`).
+/// Returns an error if the directory is not a workspace member.
+///
+/// Used by the `resolve-package-name` CLI subcommand and the pre-push hook.
+pub fn resolve_single_package_name(project_root: &Path, crate_dir: &str) -> Result<String> {
+    let mut dirs = BTreeSet::new();
+    dirs.insert(crate_dir.trim_end_matches('/').to_string());
+    let names = resolve_package_names(project_root, &dirs)?;
+    names
+        .into_iter()
+        .next()
+        .ok_or_else(|| eyre!("No workspace package found for crate directory: {crate_dir}"))
 }
 
 #[cfg(test)]
