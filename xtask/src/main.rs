@@ -4,7 +4,7 @@
 //! and maintaining the tree-sitter-perl project.
 
 use clap::{Parser, Subcommand, ValueEnum};
-use color_eyre::eyre::Result;
+use color_eyre::eyre::{Result, eyre};
 use std::path::PathBuf;
 
 mod tasks;
@@ -1012,6 +1012,17 @@ enum Commands {
         mode: CheckMode,
     },
 
+    /// Resolve the Cargo package name for a crate directory.
+    ///
+    /// Prints the package name from Cargo.toml to stdout (one line, no trailing noise).
+    /// Used by the pre-push hook to convert a directory basename into the correct -p argument.
+    ///
+    /// Example: `cargo xtask resolve-package-name crates/perl-lsp` outputs `perl-lsp-rs`
+    ResolvePackageName {
+        /// Crate directory path, relative to workspace root (e.g., "crates/perl-lsp")
+        crate_dir: String,
+    },
+
     /// Remove stale `.claude/worktrees` entries and prune Git metadata.
     WorktreeCleanup,
 
@@ -1561,6 +1572,15 @@ fn main() -> Result<()> {
             verbose,
         }),
         Commands::TargetedChecks { base, mode } => targeted_checks::run(base, mode),
+        Commands::ResolvePackageName { crate_dir } => {
+            // Use the current working directory as workspace root so this subcommand
+            // works correctly both in the main workspace and in test synthetic workspaces.
+            let root = std::env::current_dir()
+                .map_err(|e| eyre!("Failed to get current working directory: {e}"))?;
+            let name = tasks::targeted_checks::resolve_single_package_name(&root, &crate_dir)?;
+            println!("{name}");
+            Ok(())
+        }
         Commands::WorktreeCleanup => worktrees::cleanup(),
         Commands::SwarmSummary { ops_dir, since, limit, format } => {
             swarm_summary::run(swarm_summary::SwarmSummaryConfig { ops_dir, since, limit, format })
