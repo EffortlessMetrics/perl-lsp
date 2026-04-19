@@ -55,7 +55,8 @@ pub enum MethodResolutionOrder {
 }
 
 /// A Moose/Moo attribute declared via `has`.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
+#[non_exhaustive]
 pub struct Attribute {
     /// Attribute name (e.g., `name` from `has 'name' => (...)`)
     pub name: String,
@@ -107,7 +108,8 @@ pub struct FieldInfo {
 }
 
 /// Information about a method modifier (`before`, `after`, `around`, `override`, `augment`).
-#[derive(Debug, Clone)]
+#[derive(Debug)]
+#[non_exhaustive]
 pub struct MethodModifier {
     /// Modifier type
     pub kind: ModifierKind,
@@ -144,7 +146,8 @@ pub enum ClassAccessorMode {
 }
 
 /// Information about a method (subroutine) in a class.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
+#[non_exhaustive]
 pub struct MethodInfo {
     /// Method name
     pub name: String,
@@ -173,7 +176,8 @@ impl MethodInfo {
 }
 
 /// Structured model of a Perl OOP class or role.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
+#[non_exhaustive]
 pub struct ClassModel {
     /// Package name (e.g., `MyApp::User`)
     pub name: String,

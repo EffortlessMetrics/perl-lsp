@@ -18,7 +18,8 @@ pub use native_build_hints::{NativeBuildHints, detect_native_build_hints};
 ///
 /// Runtime configuration for the LSP server features including inlay hints
 /// and test runner integration. Updated dynamically via `didChangeConfiguration`.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
+#[non_exhaustive]
 pub struct ServerConfig {
     /// Whether inlay hints are globally enabled.
     pub inlay_hints_enabled: bool,
@@ -116,7 +117,8 @@ pub struct ServerConfig {
 /// Disabled by default. When enabled, the server calls an external AI provider
 /// for inline completion suggestions, falling back to deterministic rules on
 /// timeout, error, or when AI is disabled.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
+#[non_exhaustive]
 pub struct AiCompletionConfig {
     /// Whether AI completions are enabled. Default: false.
     pub enabled: bool,

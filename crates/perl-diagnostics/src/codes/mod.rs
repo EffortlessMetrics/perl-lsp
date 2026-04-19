@@ -89,6 +89,7 @@ impl fmt::Display for DiagnosticTag {
 /// Each code has a fixed string representation and associated metadata.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[non_exhaustive]
 pub enum DiagnosticCode {
     // Parser diagnostics (PL001-PL099)
     /// General parse error
@@ -160,8 +161,6 @@ pub enum DiagnosticCode {
     NumericComparisonWithUndef,
     /// printf/sprintf format specifier count does not match argument count
     PrintfFormatMismatch,
-    /// Statement that cannot be reached due to preceding unconditional exit
-    UnreachableCode,
     /// `$@` / `$EVAL_ERROR` reads that are not paired with a nearby `eval`/`try`
     EvalErrorFlow,
     /// Duplicate key in a hash literal or hash reference constructor
@@ -232,6 +231,8 @@ pub enum DiagnosticCode {
     CriticSeverity4,
     /// Perl::Critic gentle (severity 5) violation
     CriticSeverity5,
+    /// Statement that cannot be reached due to preceding unconditional exit
+    UnreachableCode,
 }
 
 impl DiagnosticCode {
@@ -266,7 +267,6 @@ impl DiagnosticCode {
             Self::AssignmentInCondition => "PL403",
             Self::NumericComparisonWithUndef => "PL404",
             Self::PrintfFormatMismatch => "PL405",
-            Self::UnreachableCode => "PL406",
             Self::EvalErrorFlow => "PL407",
             Self::DuplicateHashKey => "PL408",
             Self::GotoUndefinedLabel => "PL409",
@@ -296,6 +296,7 @@ impl DiagnosticCode {
             Self::CriticSeverity3 => "PC003",
             Self::CriticSeverity4 => "PC004",
             Self::CriticSeverity5 => "PC005",
+            Self::UnreachableCode => "PL406",
         }
     }
 
