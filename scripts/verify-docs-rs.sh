@@ -62,17 +62,17 @@ ALL_CRATES=(
     perl-workspace-index
     perl-semantic-analyzer
     perl-lsp-diagnostic-types
-    perl-lsp-diagnostics
+    # (perl-lsp-diagnostics absorbed into perl-lsp-rs-core::providers::diagnostics — Wave G1b)
     perl-lsp-text-utils
-    perl-lsp-rename
-    perl-lsp-code-actions
+    # (perl-lsp-rename absorbed into perl-lsp-rs-core::providers::rename — Wave G1b)
+    # (perl-lsp-code-actions absorbed into perl-lsp-rs-core::providers::code_actions — Wave G1b)
     # (perl-lsp-folding absorbed into perl-lsp-rs-core::providers — Wave G1a)
     # (perl-lsp-selection-range absorbed into perl-lsp-rs-core::providers — Wave G1a)
-    perl-lsp-completion
+    # (perl-lsp-completion absorbed into perl-lsp-rs-core::providers::completion — Wave G1b)
     # (perl-lsp-file-completion absorbed into perl-lsp-rs-core::providers — Wave G1a)
     # (perl-lsp-completion-item absorbed into perl-lsp-rs-core::providers — Wave G1a)
-    perl-lsp-inline-completion
-    perl-lsp-ai-provider
+    # (perl-lsp-inline-completion absorbed into perl-lsp-rs-core::providers::inline_completion — Wave G1b)
+    # (perl-lsp-ai-provider absorbed into perl-lsp-rs-core::providers::ai — Wave G1b)
     # (perl-lsp-inlay-hints absorbed into perl-lsp-rs-core::providers — Wave G1a)
     # (perl-lsp-code-lens absorbed into perl-lsp-rs-core::providers — Wave G1a)
     # (perl-lsp-color-provider absorbed into perl-lsp-rs-core::providers — Wave G1a)
@@ -84,7 +84,7 @@ ALL_CRATES=(
     perl-module-token
     perl-module-import
     # Tier 4 — LSP providers
-    perl-lsp-navigation
+    # (perl-lsp-navigation absorbed into perl-lsp-rs-core::providers::navigation — Wave G1b)
     # (perl-lsp-type-hierarchy absorbed into perl-lsp-rs-core::providers — Wave G1a)
     # (perl-lsp-document-highlight absorbed into perl-lsp-rs-core::providers — Wave G1a)
     # (perl-lsp-document-links absorbed into perl-lsp-rs-core::providers — Wave G1a)
@@ -94,10 +94,10 @@ ALL_CRATES=(
     perl-lsp-performance
     perl-lsp-critic-parser
     # (perl-lsp-formatting-types absorbed into perl-lsp-rs-core::providers — Wave G1a)
-    perl-lsp-formatting
+    # (perl-lsp-formatting absorbed into perl-lsp-rs-core::providers::formatting — Wave G1b)
     # (perl-lsp-on-type-formatting absorbed into perl-lsp-rs-core::providers — Wave G1a)
-    perl-lsp-semantic-tokens
-    perl-lsp-providers
+    # (perl-lsp-semantic-tokens absorbed into perl-lsp-rs-core::providers::semantic_tokens — Wave G1b)
+    # (perl-lsp-providers absorbed into perl-lsp-rs-core::providers::lsp_compat — Wave G1b)
     perl-ast-utils
     # (perl-lsp-import-management absorbed into perl-lsp-rs-core::providers — Wave G1a)
     perl-qualified-name

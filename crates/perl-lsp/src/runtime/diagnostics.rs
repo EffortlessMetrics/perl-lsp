@@ -410,12 +410,13 @@ impl LspServer {
             #[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
             {
                 if let Some(workspace_index) = self.workspace_index() {
-                    let dead_code_diags = perl_lsp_diagnostics::detect_dead_code(
-                        &workspace_index,
-                        uri,
-                        &text,
-                        &line_starts,
-                    );
+                    let dead_code_diags =
+                        perl_lsp_rs_core::providers::diagnostics::detect_dead_code(
+                            &workspace_index,
+                            uri,
+                            &text,
+                            &line_starts,
+                        );
                     diagnostics.extend(dead_code_diags);
                 }
             }
@@ -470,7 +471,10 @@ impl LspServer {
 
                     // Append hint so users see actionable guidance in push fallback path too
                     let message =
-                        match perl_lsp_diagnostics::build_parse_error_hint(e, &base_message) {
+                        match perl_lsp_rs_core::providers::diagnostics::build_parse_error_hint(
+                            e,
+                            &base_message,
+                        ) {
                             Some(hint) => format!("{base_message}\nSuggestion: {hint}"),
                             None => base_message,
                         };
@@ -575,39 +579,44 @@ impl LspServer {
 
         let pos16 = |offset: usize| line_starts.offset_to_position_rope(&rope, offset);
 
-        let lsp_diagnostics: Vec<Value> = parse_errors
-            .iter()
-            .map(|e| {
-                let (location, base_message) = match e {
-                    crate::error::ParseError::UnexpectedToken { location, expected, found } => {
-                        (*location, format!("Expected {}, found {}", expected, found))
-                    }
-                    crate::error::ParseError::SyntaxError { location, message } => {
-                        (*location, message.clone())
-                    }
-                    crate::error::ParseError::UnexpectedEof => {
-                        (text.len(), "Unexpected end of input".to_string())
-                    }
-                    crate::error::ParseError::LexerError { message } => (0, message.clone()),
-                    _ => (0, e.to_string()),
-                };
-                let message = match perl_lsp_diagnostics::build_parse_error_hint(e, &base_message) {
-                    Some(hint) => format!("{base_message}\nSuggestion: {hint}"),
-                    None => base_message,
-                };
-                let (line, character) = pos16(location);
-                json!({
-                    "range": {
-                        "start": {"line": line, "character": character},
-                        "end": {"line": line, "character": character + 1},
-                    },
-                    "severity": 1,
-                    "code": DiagnosticCode::ParseError.as_str(),
-                    "source": "perl-parser",
-                    "message": message,
+        let lsp_diagnostics: Vec<Value> =
+            parse_errors
+                .iter()
+                .map(|e| {
+                    let (location, base_message) = match e {
+                        crate::error::ParseError::UnexpectedToken { location, expected, found } => {
+                            (*location, format!("Expected {}, found {}", expected, found))
+                        }
+                        crate::error::ParseError::SyntaxError { location, message } => {
+                            (*location, message.clone())
+                        }
+                        crate::error::ParseError::UnexpectedEof => {
+                            (text.len(), "Unexpected end of input".to_string())
+                        }
+                        crate::error::ParseError::LexerError { message } => (0, message.clone()),
+                        _ => (0, e.to_string()),
+                    };
+                    let message =
+                        match perl_lsp_rs_core::providers::diagnostics::build_parse_error_hint(
+                            e,
+                            &base_message,
+                        ) {
+                            Some(hint) => format!("{base_message}\nSuggestion: {hint}"),
+                            None => base_message,
+                        };
+                    let (line, character) = pos16(location);
+                    json!({
+                        "range": {
+                            "start": {"line": line, "character": character},
+                            "end": {"line": line, "character": character + 1},
+                        },
+                        "severity": 1,
+                        "code": DiagnosticCode::ParseError.as_str(),
+                        "source": "perl-parser",
+                        "message": message,
+                    })
                 })
-            })
-            .collect();
+                .collect();
 
         tracing::debug!(
             count = lsp_diagnostics.len(),
@@ -995,12 +1004,13 @@ impl LspServer {
                 #[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
                 {
                     if let Some(workspace_index) = self.workspace_index() {
-                        let dead_code_diags = perl_lsp_diagnostics::detect_dead_code(
-                            &workspace_index,
-                            uri_str,
-                            &doc.text,
-                            &doc.line_starts,
-                        );
+                        let dead_code_diags =
+                            perl_lsp_rs_core::providers::diagnostics::detect_dead_code(
+                                &workspace_index,
+                                uri_str,
+                                &doc.text,
+                                &doc.line_starts,
+                            );
                         diagnostics.extend(dead_code_diags);
                     }
                 }

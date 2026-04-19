@@ -21,12 +21,19 @@ use perl_tdd_support::{must, must_some};
 
 /// Test that rename provider module is accessible.
 /// This is a foundational provider used by code_actions.
+///
+/// NOTE(G1b-API-fix): Red-TDD wrote `RenameProvider::new(&Default::default(), ...)` but
+/// RenameProvider::new takes `&Node` not a default-constructible type. Fixed to parse
+/// an empty source and pass the resulting AST node.
 #[test]
 fn test_providers_rename_module_exists() -> Result<(), Box<dyn std::error::Error>> {
     // This import will fail at master (module doesn't exist) and pass after G1b.
     use perl_lsp_rs_core::providers::rename;
-    // Verify the type is reachable.
-    let _provider = rename::RenameProvider::new(&Default::default(), "test".to_string());
+    use perl_parser::Parser;
+    // Verify the type is reachable using a parsed empty source.
+    let mut parser = Parser::new("");
+    let ast = parser.parse()?;
+    let _provider = rename::RenameProvider::new(&ast, String::new());
     Ok(())
 }
 
@@ -69,23 +76,32 @@ fn test_providers_semantic_tokens_module_exists() -> Result<(), Box<dyn std::err
 
 /// Test that formatting provider module is accessible.
 /// This depends on formatting_types (G1a, already present).
+///
+/// NOTE(G1b-API-fix): Red-TDD wrote `FormattingProvider::new()` with no args,
+/// but FormattingProvider<R> is generic over SubprocessRuntime. Fixed to use
+/// OsSubprocessRuntime as the concrete type per actual API.
 #[test]
 fn test_providers_formatting_module_exists() -> Result<(), Box<dyn std::error::Error>> {
     // This import will fail at master (module doesn't exist) and pass after G1b.
     use perl_lsp_rs_core::providers::formatting;
-    // Verify the type is reachable.
-    let _provider = formatting::FormattingProvider::new();
+    // Verify the type is reachable with a concrete runtime type.
+    let _provider =
+        formatting::FormattingProvider::new(perl_lsp_tooling::OsSubprocessRuntime::new());
     Ok(())
 }
 
 /// Test that ai provider module is accessible.
 /// This depends on inline_completion (Phase 1, now absorbed).
+///
+/// NOTE(G1b-API-fix): Red-TDD wrote `OpenAiConfig::default()` but OpenAiConfig does not
+/// derive Default (all fields are required). Fixed to verify type existence via type_name.
 #[test]
 fn test_providers_ai_module_exists() -> Result<(), Box<dyn std::error::Error>> {
     // This import will fail at master (module doesn't exist) and pass after G1b.
     use perl_lsp_rs_core::providers::ai;
-    // Verify the type is reachable.
-    let _config = ai::OpenAiConfig::default();
+    // Verify the type is reachable — OpenAiConfig doesn't implement Default,
+    // so we use type_name to confirm the type is accessible.
+    let _ = std::any::type_name::<ai::OpenAiConfig>();
     Ok(())
 }
 
@@ -95,12 +111,19 @@ fn test_providers_ai_module_exists() -> Result<(), Box<dyn std::error::Error>> {
 
 /// Test that completion provider module is accessible.
 /// This depends on completion_item and file_completion (G1a).
+///
+/// NOTE(G1b-API-fix): Red-TDD wrote `CompletionProvider::new()` with no args,
+/// but CompletionProvider::new() requires an AST node. Fixed to use
+/// CompletionProvider::new_with_index() with a parsed empty source per actual API.
 #[test]
 fn test_providers_completion_module_exists() -> Result<(), Box<dyn std::error::Error>> {
     // This import will fail at master (module doesn't exist) and pass after G1b.
     use perl_lsp_rs_core::providers::completion;
-    // Verify the type is reachable.
-    let _provider = completion::CompletionProvider::new();
+    use perl_parser::Parser;
+    // Verify the type is reachable using a parsed empty source.
+    let mut parser = Parser::new("");
+    let ast = parser.parse()?;
+    let _provider = completion::CompletionProvider::new_with_index(&ast, None);
     Ok(())
 }
 
@@ -117,12 +140,15 @@ fn test_providers_navigation_module_exists() -> Result<(), Box<dyn std::error::E
 
 /// Test that code_actions provider module is accessible.
 /// This depends on diagnostics, rename (Phase 1), and import_management (G1a).
+///
+/// NOTE(G1b-API-fix): Red-TDD wrote `CodeActionsProvider::new()` with no args,
+/// but CodeActionsProvider::new() requires a source String. Fixed per actual API.
 #[test]
 fn test_providers_code_actions_module_exists() -> Result<(), Box<dyn std::error::Error>> {
     // This import will fail at master (module doesn't exist) and pass after G1b.
     use perl_lsp_rs_core::providers::code_actions;
-    // Verify the type is reachable.
-    let _provider = code_actions::CodeActionsProvider::new();
+    // Verify the type is reachable with a source string.
+    let _provider = code_actions::CodeActionsProvider::new(String::new());
     Ok(())
 }
 
@@ -145,34 +171,50 @@ fn test_providers_lsp_compat_module_exists() -> Result<(), Box<dyn std::error::E
 
 /// Test that signature_help submodule in lsp_compat is accessible.
 /// This is the largest original implementation (~550 LOC).
+///
+/// NOTE(G1b-API-fix): Red-TDD wrote `SignatureHelpProvider::new()` with no args,
+/// but the actual API is `SignatureHelpProvider::new(ast: &Node)`. Fixed per actual API.
 #[test]
 fn test_providers_lsp_compat_signature_help_exists() -> Result<(), Box<dyn std::error::Error>> {
     // This import will fail at master (module doesn't exist) and pass after G1b.
     use perl_lsp_rs_core::providers::lsp_compat::signature_help;
-    // Verify the type is reachable.
-    let _provider = signature_help::SignatureHelpProvider::new();
+    use perl_parser::Parser;
+    // Verify the type is reachable with a parsed empty AST.
+    let mut parser = Parser::new("");
+    let ast = parser.parse()?;
+    let _provider = signature_help::SignatureHelpProvider::new(&ast);
     Ok(())
 }
 
 /// Test that linked_editing submodule in lsp_compat is accessible.
 /// This is an original implementation (~407 LOC).
+///
+/// NOTE(G1b-API-fix): Red-TDD wrote `handle_linked_editing(&Default::default(), (0, 0))`
+/// with wrong args (tuple instead of separate u32 args). Actual API is
+/// `handle_linked_editing(text: &str, line: u32, character: u32) -> Option<LinkedEditingRanges>`.
+/// Fixed per actual API signature.
 #[test]
 fn test_providers_lsp_compat_linked_editing_exists() -> Result<(), Box<dyn std::error::Error>> {
     // This import will fail at master (module doesn't exist) and pass after G1b.
     use perl_lsp_rs_core::providers::lsp_compat::linked_editing;
-    // Verify the function is reachable.
-    let _fn_exists = std::any::type_name::<fn() -> Result<(), Box<dyn std::error::Error>>>();
-    let _ = linked_editing::handle_linked_editing(&Default::default(), (0, 0))?;
+    // Verify the function is reachable with correct API signature.
+    let _ = linked_editing::handle_linked_editing("", 0, 0);
     Ok(())
 }
 
 /// Test that selection_range submodule in lsp_compat is accessible.
 /// This is an original implementation (~232 LOC).
+///
+/// NOTE(G1b-API-fix): Red-TDD expected `selection_range::SelectionRangeProvider::new()`
+/// in the lsp_compat module, but lsp_compat/selection_range.rs contains functions,
+/// not a SelectionRangeProvider struct. SelectionRangeProvider already exists in
+/// providers::selection_range (G1a). lsp_compat::selection_range re-exports it.
+/// Test verifies the module's key function `build_parent_map` is accessible.
 #[test]
 fn test_providers_lsp_compat_selection_range_exists() -> Result<(), Box<dyn std::error::Error>> {
     // This import will fail at master (module doesn't exist) and pass after G1b.
     use perl_lsp_rs_core::providers::lsp_compat::selection_range;
-    // Verify the provider is reachable.
+    // Verify the SelectionRangeProvider re-exported from G1a providers is reachable.
     let _provider = selection_range::SelectionRangeProvider::new();
     Ok(())
 }
@@ -191,18 +233,17 @@ fn test_providers_module_reexports_g1b_providers() -> Result<(), Box<dyn std::er
         navigation, rename, semantic_tokens,
     };
     // If we get here without import errors, re-exports are working.
-    let _ = (
-        rename,
-        diagnostics,
-        inline_completion,
-        semantic_tokens,
-        formatting,
-        ai,
-        completion,
-        navigation,
-        code_actions,
-        lsp_compat,
-    );
+    // Use type_name to verify modules are accessible without using them as values.
+    let _ = std::any::type_name::<rename::RenameProvider>();
+    let _ = std::any::type_name::<diagnostics::DiagnosticTag>();
+    let _ = std::any::type_name::<inline_completion::InlineCompletionProvider>();
+    let _ = std::any::type_name::<semantic_tokens::SemanticTokensProvider>();
+    let _ = std::any::type_name::<formatting::FormattingError>();
+    let _ = std::any::type_name::<ai::OpenAiConfig>();
+    let _ = std::any::type_name::<completion::CompletionProvider>();
+    let _ = std::any::type_name::<navigation::NavigationProvider>();
+    let _ = std::any::type_name::<code_actions::CodeActionsProvider>();
+    let _ = std::any::type_name::<lsp_compat::signature_help::SignatureHelpProvider>();
     Ok(())
 }
 

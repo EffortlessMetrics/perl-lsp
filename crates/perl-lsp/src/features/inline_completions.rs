@@ -5,6 +5,6 @@
 //! The previous local implementation used raw byte offsets which gave
 //! silently wrong results for documents containing non-BMP characters.
 
-pub use perl_lsp_inline_completion::{
+pub use perl_lsp_rs_core::providers::inline_completion::{
     InlineCompletionItem, InlineCompletionList, InlineCompletionProvider,
 };

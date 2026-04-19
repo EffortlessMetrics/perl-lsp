@@ -7,17 +7,19 @@
 //! 4. published-crate-baseline.txt is updated from 59 to 49
 //! 5. Snapshot files have been migrated to the correct location
 
+#![allow(clippy::expect_used)]
+
 use std::fs;
 
 // Helper to get the workspace root
 fn get_workspace_root() -> std::path::PathBuf {
     let manifest_dir = env!("CARGO_MANIFEST_DIR");
-    std::path::PathBuf::from(manifest_dir)
-        .parent()
-        .expect("Failed to get parent of manifest dir")
-        .parent()
-        .expect("Failed to get parent of perl-lsp-rs-core")
-        .to_path_buf()
+    let p = std::path::PathBuf::from(manifest_dir);
+    // CARGO_MANIFEST_DIR = .../crates/perl-lsp-rs-core
+    // parent = .../crates
+    // parent.parent = workspace root
+    let parent = p.parent().unwrap_or(&p);
+    parent.parent().unwrap_or(parent).to_path_buf()
 }
 
 // ============================================================================

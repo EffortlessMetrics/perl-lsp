@@ -337,8 +337,9 @@ pub struct LspServer {
     /// When `Some`, the `handle_inline_completion` handler will attempt
     /// AI-backed completions before falling back to deterministic rules.
     /// Set to `None` by default; a backend can be registered later.
-    pub(crate) ai_inline_backend:
-        Mutex<Option<Arc<dyn perl_lsp_inline_completion::InlineCompletionBackend>>>,
+    pub(crate) ai_inline_backend: Mutex<
+        Option<Arc<dyn perl_lsp_rs_core::providers::inline_completion::InlineCompletionBackend>>,
+    >,
 }
 
 // SAFETY: LspServer is not auto-Send/Sync because DocumentState contains
@@ -371,7 +372,8 @@ impl LspServer {
     /// The returned `Arc` is a cheap clone suitable for use outside the lock.
     pub(crate) fn ai_backend(
         &self,
-    ) -> Option<Arc<dyn perl_lsp_inline_completion::InlineCompletionBackend>> {
+    ) -> Option<Arc<dyn perl_lsp_rs_core::providers::inline_completion::InlineCompletionBackend>>
+    {
         self.ai_inline_backend.lock().clone()
     }
 
@@ -399,19 +401,20 @@ impl LspServer {
             return;
         }
 
-        let provider_config = perl_lsp_ai_provider::OpenAiConfig {
+        let provider_config = perl_lsp_rs_core::providers::ai::OpenAiConfig {
             endpoint: ai_config.endpoint.clone(),
             model: ai_config.model.clone(),
             api_key,
             timeout_ms: ai_config.timeout_ms,
         };
 
-        let limiter = Arc::new(perl_lsp_ai_provider::RateLimiter::new(
+        let limiter = Arc::new(perl_lsp_rs_core::providers::ai::RateLimiter::new(
             ai_config.rate_limit_rps,
             ai_config.max_inflight,
         ));
 
-        let provider = perl_lsp_ai_provider::OpenAiProvider::new(provider_config, limiter);
+        let provider =
+            perl_lsp_rs_core::providers::ai::OpenAiProvider::new(provider_config, limiter);
         *self.ai_inline_backend.lock() = Some(Arc::new(provider));
 
         tracing::info!(endpoint = %ai_config.endpoint, model = %ai_config.model, "AI inline completion backend configured");

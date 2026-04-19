@@ -7,8 +7,8 @@
 //! - Group 1 (helpers): completion_item, symbol_query
 //! - Group 2 (consumers of Group 1): file_completion, workspace_symbols
 //! - Group 3 (independents): code_lens, document_highlight, folding, selection_range,
-//!                            inlay_hints, type_hierarchy, formatting_types,
-//!                            on_type_formatting, color, import_management, document_links
+//!   inlay_hints, type_hierarchy, formatting_types,
+//!   on_type_formatting, color, import_management, document_links
 //!
 //! These tests FAIL at master (providers module doesn't exist) and PASS after
 //! the builder creates the module structure.
