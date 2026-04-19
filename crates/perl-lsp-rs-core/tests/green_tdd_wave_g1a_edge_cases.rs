@@ -399,10 +399,20 @@ fn test_import_management_collects_all_use_statements_regardless_of_position()
     ];
     let imports = collect_imports(&lines);
     // Both use-lines must be collected; the sub line must not be.
-    assert_eq!(imports.len(), 2, "both use-lines should be collected (scanner doesn't stop at code)");
+    assert_eq!(
+        imports.len(),
+        2,
+        "both use-lines should be collected (scanner doesn't stop at code)"
+    );
     assert!(imports.iter().any(|i| i.contains("strict")), "use strict must be in results");
-    assert!(imports.iter().any(|i| i.contains("warnings")), "use warnings after code must also be in results");
-    assert!(!imports.iter().any(|i| i.contains("sub")), "sub declaration must not appear in imports");
+    assert!(
+        imports.iter().any(|i| i.contains("warnings")),
+        "use warnings after code must also be in results"
+    );
+    assert!(
+        !imports.iter().any(|i| i.contains("sub")),
+        "sub declaration must not appear in imports"
+    );
     Ok(())
 }
 
