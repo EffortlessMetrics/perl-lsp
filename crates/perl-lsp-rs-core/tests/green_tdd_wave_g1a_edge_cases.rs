@@ -386,19 +386,23 @@ fn test_import_management_collects_use_statements() -> Result<(), Box<dyn std::e
 
 /// Import collection should stop at first non-import.
 #[test]
-fn test_import_management_stops_at_code() -> Result<(), Box<dyn std::error::Error>> {
+fn test_import_management_collects_all_use_statements_regardless_of_position()
+-> Result<(), Box<dyn std::error::Error>> {
     use perl_lsp_rs_core::providers::import_management::collect_imports;
 
+    // collect_imports is a line-by-line scanner: it collects every line that
+    // starts with "use " or "require ", regardless of surrounding code.
     let lines = vec![
         "use strict;".to_string(),
         "sub foo { 1 }".to_string(),
-        "use warnings;".to_string(), // This comes after code
+        "use warnings;".to_string(), // After code -- still collected
     ];
     let imports = collect_imports(&lines);
-    // Depending on implementation, this might collect just the first `use strict`
-    // or might continue to collect. Test that it's reasonable.
-    assert!(imports.len() <= lines.len());
-    assert!(imports.iter().any(|i| i.contains("strict")));
+    // Both use-lines must be collected; the sub line must not be.
+    assert_eq!(imports.len(), 2, "both use-lines should be collected (scanner doesn't stop at code)");
+    assert!(imports.iter().any(|i| i.contains("strict")), "use strict must be in results");
+    assert!(imports.iter().any(|i| i.contains("warnings")), "use warnings after code must also be in results");
+    assert!(!imports.iter().any(|i| i.contains("sub")), "sub declaration must not appear in imports");
     Ok(())
 }
 
