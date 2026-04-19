@@ -18,7 +18,7 @@
 //! Related: #4416, ADR-0041 (#4413), parent collapse #4410.
 
 use crate::utils::{project_root, run_cargo_metadata};
-use color_eyre::eyre::{Result, bail, eyre};
+use color_eyre::eyre::{bail, eyre, Result};
 use serde::Deserialize;
 use std::fs;
 use std::path::Path;
@@ -29,16 +29,16 @@ const BASELINE_FILE: &str = "xtask/published-crate-baseline.txt";
 #[derive(Deserialize)]
 struct Metadata {
     #[serde(rename = "metadata")]
-    workspace_metadata: Option<WorkspacePublishMeta>,
+    workspace_metadata: Option<PublishSettings>,
 }
 
 #[derive(Deserialize)]
-struct WorkspacePublishMeta {
-    publish: Option<AllowList>,
+struct PublishSettings {
+    publish: Option<PublishAllowList>,
 }
 
 #[derive(Deserialize)]
-struct AllowList {
+struct PublishAllowList {
     allow: Option<Vec<String>>,
 }
 
@@ -85,13 +85,14 @@ pub enum CountStatus {
 }
 
 /// Pure comparison helper — the core ratchet logic, extracted for unit tests.
+///
+/// Uses `Ord` derived comparison to map the three possible orderings into
+/// the corresponding `CountStatus` variants.
 pub fn check_count(current: u32, baseline: u32) -> CountStatus {
-    if current > baseline {
-        CountStatus::Fail
-    } else if current < baseline {
-        CountStatus::Ratchet { new_baseline: current }
-    } else {
-        CountStatus::Pass
+    match current.cmp(&baseline) {
+        std::cmp::Ordering::Greater => CountStatus::Fail,
+        std::cmp::Ordering::Less => CountStatus::Ratchet { new_baseline: current },
+        std::cmp::Ordering::Equal => CountStatus::Pass,
     }
 }
 
