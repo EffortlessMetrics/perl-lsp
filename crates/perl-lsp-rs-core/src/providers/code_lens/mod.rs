@@ -75,6 +75,9 @@ impl Default for CodeLensProvider {
 
 impl CodeLensProvider {
     /// Create a new code lens provider with an empty source.
+    ///
+    /// Retained for migration compatibility and `Default` derivation. New callers should
+    /// prefer [`Self::with_source`] so the source is set at construction time.
     pub fn new() -> Self {
         Self { source: String::new(), file_path: None }
     }

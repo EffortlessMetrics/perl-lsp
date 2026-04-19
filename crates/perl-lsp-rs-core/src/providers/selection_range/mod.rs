@@ -9,64 +9,22 @@
 //! - **General**: word -> trimmed line -> statement -> block -> function -> file
 
 use lsp_types::{Position, Range, SelectionRange};
+use perl_position_tracking::{offset_to_utf16_line_col, utf16_line_col_to_offset};
 
 // ---------------------------------------------------------------------------
 // Byte / position mapping helpers
 // ---------------------------------------------------------------------------
 
 fn byte_offset(text: &str, pos: Position) -> usize {
-    let mut off = 0usize;
-    for (line, l) in text.split_inclusive('\n').enumerate() {
-        if line as u32 == pos.line {
-            let mut col = 0u32;
-            for (i, ch) in l.char_indices() {
-                if col == pos.character {
-                    return off + i;
-                }
-                col += ch.len_utf16() as u32;
-            }
-            return off + l.len();
-        }
-        off += l.len();
-    }
-    off
+    utf16_line_col_to_offset(text, pos.line, pos.character)
 }
 
 fn make_range(text: &str, start: usize, end: usize) -> Range {
     let start = start.min(text.len());
     let end = end.min(text.len());
-    let mut line = 0u32;
-    let mut col = 0u32;
-    let mut i = 0usize;
-    let mut s = Position::new(0, 0);
-    let mut e = Position::new(0, 0);
-    let mut found_start = false;
-    let mut found_end = false;
-    for ch in text.chars() {
-        if i == start {
-            s = Position::new(line, col);
-            found_start = true;
-        }
-        if i == end {
-            e = Position::new(line, col);
-            found_end = true;
-            break;
-        }
-        i += ch.len_utf8();
-        if ch == '\n' {
-            line += 1;
-            col = 0;
-        } else {
-            col += ch.len_utf16() as u32;
-        }
-    }
-    if !found_start {
-        s = Position::new(line, col);
-    }
-    if !found_end {
-        e = Position::new(line, col);
-    }
-    Range::new(s, e)
+    let (sl, sc) = offset_to_utf16_line_col(text, start);
+    let (el, ec) = offset_to_utf16_line_col(text, end);
+    Range::new(Position::new(sl, sc), Position::new(el, ec))
 }
 
 // ---------------------------------------------------------------------------
