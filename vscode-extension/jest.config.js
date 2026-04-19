@@ -13,6 +13,7 @@ module.exports = {
         target: 'ES2022',
         module: 'commonjs',
         lib: ['ES2022'],
+        types: ['jest', 'node'],
         strict: true,
         esModuleInterop: true,
         skipLibCheck: true,

@@ -1,0 +1,5 @@
+---
+source: crates/tree-sitter-perl-rs/tests/snapshot_language_descriptor.rs
+expression: count
+---
+69

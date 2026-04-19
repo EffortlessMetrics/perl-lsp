@@ -85,8 +85,16 @@ export class TestMessage {
   constructor(public message: string) {}
 }
 
+export class TestRunRequest {
+  constructor(
+    public include?: any[],
+    public exclude?: any[]
+  ) {}
+}
+
 export class CancellationTokenSource {
   token = { isCancellationRequested: false };
+  cancel() { this.token.isCancellationRequested = true; }
   dispose() {}
 }
 
@@ -138,6 +146,10 @@ export const workspace = {
     inspect: jest.fn(),
     update: jest.fn(),
   })),
+  getWorkspaceFolder: jest.fn((uri?: any) => {
+    // Return a mock workspace folder if uri is provided
+    return uri ? { uri: { fsPath: '/project' } } : undefined;
+  }),
   createFileSystemWatcher: jest.fn(() => ({
     onDidCreate: jest.fn(),
     onDidChange: jest.fn(),
@@ -154,7 +166,7 @@ export const workspace = {
     uri: typeof value === 'string' ? { fsPath: value } : value,
     getText: jest.fn(() => ''),
   })),
-  workspaceFolders: undefined as any[] | undefined,
+  workspaceFolders: [{ uri: { fsPath: '/project' } }] as any[] | undefined,
 };
 
 export const tests = {

@@ -1,0 +1,10 @@
+---
+source: crates/tree-sitter-perl-rs/tests/snapshot_language_descriptor.rs
+expression: formatted
+---
+Program: true
+Subroutine: true
+Variable: true
+source_file: false
+__nonexistent__: false
+: false
