@@ -48,3 +48,34 @@ pub mod navigation;
 
 // Wave G1b Phase 4 -- aggregator (original lsp_compat code from perl-lsp-providers)
 pub mod lsp_compat;
+
+// Module-level re-exports for convenient access (O2 requirement per Wave G1b spec)
+pub use ai::*;
+pub use code_actions::*;
+pub use code_lens::*;
+pub use color::*;
+pub use completion::*;
+pub use completion_item::*;
+pub use diagnostics::*;
+pub use document_highlight::*;
+pub use document_links::*;
+pub use file_completion::*;
+pub use folding::*;
+pub use formatting::*;
+pub use formatting_types::*;
+pub use import_management::*;
+pub use inlay_hints::*;
+pub use inline_completion::*;
+pub use lsp_compat::*;
+pub use navigation::*;
+pub use on_type_formatting::*;
+pub use rename::*;
+pub use selection_range::*;
+pub use semantic_tokens::*;
+pub use symbol_query::*;
+pub use type_hierarchy::*;
+pub use workspace_symbols::*;
+
+// Deprecated re-export for backward compatibility (O2 requirement)
+#[deprecated(since = "0.12.4", note = "Use `perl_lsp_rs_core::providers` directly")]
+pub use crate as tooling_export;

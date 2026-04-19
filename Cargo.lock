@@ -1624,51 +1624,11 @@ name = "perl-line-index"
 version = "0.12.4"
 
 [[package]]
-name = "perl-lsp-ai-provider"
-version = "0.12.4"
-dependencies = [
- "perl-lsp-inline-completion",
- "serde_json",
- "ureq",
-]
-
-[[package]]
 name = "perl-lsp-cancellation"
 version = "0.12.4"
 dependencies = [
  "proptest",
  "serde_json",
-]
-
-[[package]]
-name = "perl-lsp-code-actions"
-version = "0.12.4"
-dependencies = [
- "perl-diagnostics",
- "perl-lexer",
- "perl-lsp-diagnostics",
- "perl-lsp-rename",
- "perl-lsp-rs-core",
- "perl-lsp-text-utils",
- "perl-parser",
- "perl-parser-core",
- "perl-tdd-support",
-]
-
-[[package]]
-name = "perl-lsp-completion"
-version = "0.12.4"
-dependencies = [
- "criterion",
- "perl-lexer",
- "perl-lsp-rs-core",
- "perl-module",
- "perl-parser-core",
- "perl-semantic-analyzer",
- "perl-tdd-support",
- "perl-workspace",
- "serde_json",
- "url",
 ]
 
 [[package]]
@@ -1690,47 +1650,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "perl-lsp-diagnostics"
-version = "0.12.4"
-dependencies = [
- "insta",
- "perl-corpus",
- "perl-diagnostics",
- "perl-parser",
- "perl-parser-core",
- "perl-pragma",
- "perl-semantic-analyzer",
- "perl-tdd-support",
- "perl-workspace",
- "tempfile",
-]
-
-[[package]]
 name = "perl-lsp-feature-governance"
 version = "0.12.4"
 dependencies = [
  "perl-lsp-rs-core",
  "serde_json",
-]
-
-[[package]]
-name = "perl-lsp-formatting"
-version = "0.12.4"
-dependencies = [
- "perl-lsp-perltidy",
- "perl-lsp-rs-core",
- "perl-lsp-tooling",
- "perl-tdd-support",
- "thiserror",
-]
-
-[[package]]
-name = "perl-lsp-inline-completion"
-version = "0.12.4"
-dependencies = [
- "lsp-types",
- "perl-position-tracking",
- "serde",
 ]
 
 [[package]]
@@ -1765,19 +1689,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "perl-lsp-navigation"
-version = "0.12.4"
-dependencies = [
- "criterion",
- "lsp-types",
- "perl-lsp-rs-core",
- "perl-parser-core",
- "perl-position-tracking",
- "perl-tdd-support",
- "serde_json",
-]
-
-[[package]]
 name = "perl-lsp-performance"
 version = "0.12.4"
 dependencies = [
@@ -1808,39 +1719,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "perl-lsp-providers"
-version = "0.12.4"
-dependencies = [
- "lsp-types",
- "perl-lsp-code-actions",
- "perl-lsp-completion",
- "perl-lsp-diagnostics",
- "perl-lsp-formatting",
- "perl-lsp-navigation",
- "perl-lsp-rename",
- "perl-lsp-rs-core",
- "perl-lsp-semantic-tokens",
- "perl-lsp-tooling",
- "perl-lsp-uri",
- "perl-parser-core",
- "perl-semantic-analyzer",
- "perl-tdd-support",
- "rustc-hash",
- "serde_json",
-]
-
-[[package]]
-name = "perl-lsp-rename"
-version = "0.12.4"
-dependencies = [
- "perl-lexer",
- "perl-parser-core",
- "perl-semantic-analyzer",
- "perl-symbol",
- "perl-tdd-support",
-]
-
-[[package]]
 name = "perl-lsp-rs"
 version = "0.12.4"
 dependencies = [
@@ -1858,27 +1736,17 @@ dependencies = [
  "perl-diagnostics",
  "perl-incremental-parsing",
  "perl-lexer",
- "perl-lsp-ai-provider",
  "perl-lsp-cancellation",
- "perl-lsp-code-actions",
- "perl-lsp-completion",
  "perl-lsp-config",
  "perl-lsp-critic-parser",
- "perl-lsp-diagnostics",
  "perl-lsp-feature-governance",
- "perl-lsp-formatting",
- "perl-lsp-inline-completion",
  "perl-lsp-input-validation",
  "perl-lsp-launcher",
  "perl-lsp-limits",
- "perl-lsp-navigation",
  "perl-lsp-performance",
  "perl-lsp-perltidy",
  "perl-lsp-protocol",
- "perl-lsp-providers",
- "perl-lsp-rename",
  "perl-lsp-rs-core",
- "perl-lsp-semantic-tokens",
  "perl-lsp-tooling",
  "perl-lsp-transport",
  "perl-lsp-uri",
@@ -1911,35 +1779,36 @@ dependencies = [
 name = "perl-lsp-rs-core"
 version = "0.12.4"
 dependencies = [
+ "insta",
  "lsp-types",
  "once_cell",
  "perl-ast",
+ "perl-diagnostics",
  "perl-feature-catalog",
  "perl-lexer",
+ "perl-lsp-perltidy",
  "perl-lsp-rs",
+ "perl-lsp-text-utils",
+ "perl-lsp-tooling",
+ "perl-lsp-uri",
  "perl-module",
  "perl-parser",
  "perl-parser-core",
  "perl-position-tracking",
+ "perl-pragma",
  "perl-semantic-analyzer",
+ "perl-symbol",
  "perl-tdd-support",
+ "perl-workspace",
  "regex",
+ "rustc-hash",
  "serde",
  "serde_json",
  "tempfile",
+ "thiserror",
+ "ureq",
  "url",
  "walkdir",
-]
-
-[[package]]
-name = "perl-lsp-semantic-tokens"
-version = "0.12.4"
-dependencies = [
- "perl-lexer",
- "perl-parser-core",
- "perl-tdd-support",
- "regex",
- "rustc-hash",
 ]
 
 [[package]]
@@ -2015,7 +1884,7 @@ dependencies = [
  "perl-dead-code",
  "perl-incremental-parsing",
  "perl-lexer",
- "perl-lsp-semantic-tokens",
+ "perl-lsp-rs-core",
  "perl-parser-core",
  "perl-refactoring",
  "perl-semantic-analyzer",
