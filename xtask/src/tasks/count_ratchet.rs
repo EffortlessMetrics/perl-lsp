@@ -18,7 +18,7 @@
 //! Related: #4416, ADR-0041 (#4413), parent collapse #4410.
 
 use crate::utils::{project_root, run_cargo_metadata};
-use color_eyre::eyre::{bail, eyre, Result};
+use color_eyre::eyre::{Result, bail, eyre};
 use serde::Deserialize;
 use std::fs;
 use std::path::Path;
