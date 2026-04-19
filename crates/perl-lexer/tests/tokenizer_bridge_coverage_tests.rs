@@ -79,13 +79,19 @@ fn trivia_newline_as_str_returns_newline() -> Result<(), Box<dyn std::error::Err
 
 #[test]
 fn trivia_kind_name_whitespace() -> Result<(), Box<dyn std::error::Error>> {
-    assert_eq!(Trivia::Whitespace(" ".to_string()).kind_name(), "whitespace");
+    assert_eq!(
+        Trivia::Whitespace(" ".to_string()).kind_name(),
+        "whitespace"
+    );
     Ok(())
 }
 
 #[test]
 fn trivia_kind_name_comment() -> Result<(), Box<dyn std::error::Error>> {
-    assert_eq!(Trivia::LineComment("# x".to_string()).kind_name(), "comment");
+    assert_eq!(
+        Trivia::LineComment("# x".to_string()).kind_name(),
+        "comment"
+    );
     Ok(())
 }
 
@@ -141,7 +147,11 @@ fn trivia_token_new_stores_trivia_and_range() -> Result<(), Box<dyn std::error::
 #[test]
 fn token_stream_substitution_s_operator() -> Result<(), Box<dyn std::error::Error>> {
     let kinds = collect_kinds("s/foo/bar/g");
-    assert!(kinds.contains(&TokenKind::Substitution), "Expected Substitution token in {:?}", kinds);
+    assert!(
+        kinds.contains(&TokenKind::Substitution),
+        "Expected Substitution token in {:?}",
+        kinds
+    );
     Ok(())
 }
 
@@ -170,7 +180,11 @@ fn token_stream_transliteration_y_operator() -> Result<(), Box<dyn std::error::E
 #[test]
 fn token_stream_qw_quote_words() -> Result<(), Box<dyn std::error::Error>> {
     let kinds = collect_kinds("qw(one two three)");
-    assert!(kinds.contains(&TokenKind::QuoteWords), "Expected QuoteWords token in {:?}", kinds);
+    assert!(
+        kinds.contains(&TokenKind::QuoteWords),
+        "Expected QuoteWords token in {:?}",
+        kinds
+    );
     Ok(())
 }
 
@@ -178,47 +192,74 @@ fn token_stream_qw_quote_words() -> Result<(), Box<dyn std::error::Error>> {
 fn token_stream_qq_quote_double() -> Result<(), Box<dyn std::error::Error>> {
     let kinds = collect_kinds("qq{hello world}");
     // qq{} may lex as QuoteDouble or String depending on lexer
-    let has_string_like =
-        kinds.iter().any(|k| matches!(k, TokenKind::QuoteDouble | TokenKind::String));
-    assert!(has_string_like, "Expected QuoteDouble or String for qq in {:?}", kinds);
+    let has_string_like = kinds
+        .iter()
+        .any(|k| matches!(k, TokenKind::QuoteDouble | TokenKind::String));
+    assert!(
+        has_string_like,
+        "Expected QuoteDouble or String for qq in {:?}",
+        kinds
+    );
     Ok(())
 }
 
 #[test]
 fn token_stream_q_quote_single() -> Result<(), Box<dyn std::error::Error>> {
     let kinds = collect_kinds("q{hello world}");
-    let has_string_like =
-        kinds.iter().any(|k| matches!(k, TokenKind::QuoteSingle | TokenKind::String));
-    assert!(has_string_like, "Expected QuoteSingle or String for q{{}} in {kinds:?}");
+    let has_string_like = kinds
+        .iter()
+        .any(|k| matches!(k, TokenKind::QuoteSingle | TokenKind::String));
+    assert!(
+        has_string_like,
+        "Expected QuoteSingle or String for q{{}} in {kinds:?}"
+    );
     Ok(())
 }
 
 #[test]
 fn token_stream_qx_quote_command() -> Result<(), Box<dyn std::error::Error>> {
     let kinds = collect_kinds("qx(ls -la)");
-    let has_cmd = kinds.iter().any(|k| matches!(k, TokenKind::QuoteCommand | TokenKind::String));
-    assert!(has_cmd, "Expected QuoteCommand or String for qx() in {:?}", kinds);
+    let has_cmd = kinds
+        .iter()
+        .any(|k| matches!(k, TokenKind::QuoteCommand | TokenKind::String));
+    assert!(
+        has_cmd,
+        "Expected QuoteCommand or String for qx() in {:?}",
+        kinds
+    );
     Ok(())
 }
 
 #[test]
 fn token_stream_regex_match_operator() -> Result<(), Box<dyn std::error::Error>> {
     let kinds = collect_kinds("m/pattern/i");
-    assert!(kinds.contains(&TokenKind::Regex), "Expected Regex token for m// in {:?}", kinds);
+    assert!(
+        kinds.contains(&TokenKind::Regex),
+        "Expected Regex token for m// in {:?}",
+        kinds
+    );
     Ok(())
 }
 
 #[test]
 fn token_stream_qr_regex() -> Result<(), Box<dyn std::error::Error>> {
     let kinds = collect_kinds("qr/pattern/ix");
-    assert!(kinds.contains(&TokenKind::Regex), "Expected Regex token for qr// in {:?}", kinds);
+    assert!(
+        kinds.contains(&TokenKind::Regex),
+        "Expected Regex token for qr// in {:?}",
+        kinds
+    );
     Ok(())
 }
 
 #[test]
 fn token_stream_data_marker() -> Result<(), Box<dyn std::error::Error>> {
     let kinds = collect_kinds("my $x = 1;\n__DATA__\nsome data here");
-    assert!(kinds.contains(&TokenKind::DataMarker), "Expected DataMarker token in {:?}", kinds);
+    assert!(
+        kinds.contains(&TokenKind::DataMarker),
+        "Expected DataMarker token in {:?}",
+        kinds
+    );
     Ok(())
 }
 
@@ -284,7 +325,11 @@ fn token_stream_bitwise_operators() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn token_stream_not_operator() -> Result<(), Box<dyn std::error::Error>> {
     let kinds = collect_kinds("!$x");
-    assert!(kinds.contains(&TokenKind::Not), "Expected Not operator in {:?}", kinds);
+    assert!(
+        kinds.contains(&TokenKind::Not),
+        "Expected Not operator in {:?}",
+        kinds
+    );
     Ok(())
 }
 
@@ -323,7 +368,10 @@ fn token_stream_very_long_line() -> Result<(), Box<dyn std::error::Error>> {
         }
         count += 1;
     }
-    assert!(count >= 3, "Expected at least 3 tokens from long line, got {count}");
+    assert!(
+        count >= 3,
+        "Expected at least 3 tokens from long line, got {count}"
+    );
     Ok(())
 }
 
@@ -331,7 +379,10 @@ fn token_stream_very_long_line() -> Result<(), Box<dyn std::error::Error>> {
 fn token_stream_unicode_identifier() -> Result<(), Box<dyn std::error::Error>> {
     // Perl supports Unicode identifiers with utf8 pragma
     let kinds = collect_kinds("my $\u{00E9}l\u{00E8}ve = 1;");
-    assert!(kinds.contains(&TokenKind::My), "Should parse 'my' before Unicode identifier");
+    assert!(
+        kinds.contains(&TokenKind::My),
+        "Should parse 'my' before Unicode identifier"
+    );
     Ok(())
 }
 
@@ -339,7 +390,10 @@ fn token_stream_unicode_identifier() -> Result<(), Box<dyn std::error::Error>> {
 fn token_stream_unicode_string_content() -> Result<(), Box<dyn std::error::Error>> {
     let texts = collect_texts("\"\\x{1F600}\"");
     // The string should be captured as a token
-    assert!(!texts.is_empty(), "Should produce tokens for Unicode escape string");
+    assert!(
+        !texts.is_empty(),
+        "Should produce tokens for Unicode escape string"
+    );
     Ok(())
 }
 
@@ -348,7 +402,10 @@ fn token_stream_deeply_nested_delimiters() -> Result<(), Box<dyn std::error::Err
     let src = "((([[[{{{1}}}]]])))";
     let kinds = collect_kinds(src);
     let left_parens = kinds.iter().filter(|k| **k == TokenKind::LeftParen).count();
-    let right_parens = kinds.iter().filter(|k| **k == TokenKind::RightParen).count();
+    let right_parens = kinds
+        .iter()
+        .filter(|k| **k == TokenKind::RightParen)
+        .count();
     assert_eq!(left_parens, 3, "Expected 3 left parens");
     assert_eq!(right_parens, 3, "Expected 3 right parens");
     assert!(kinds.contains(&TokenKind::Number));
@@ -480,7 +537,11 @@ fn token_positions_account_for_comments() -> Result<(), Box<dyn std::error::Erro
     let mut s = TokenStream::new(src);
     let t = must(s.next());
     assert_eq!(t.kind, TokenKind::Number);
-    assert!(t.start >= 10, "Number should start after comment, start={}", t.start);
+    assert!(
+        t.start >= 10,
+        "Number should start after comment, start={}",
+        t.start
+    );
     Ok(())
 }
 
@@ -629,9 +690,13 @@ fn trivia_lexer_whitespace_only_source() -> Result<(), Box<dyn std::error::Error
         total_trivia.extend(trivia);
     }
     // Should have found some whitespace/newline trivia
-    let has_ws =
-        total_trivia.iter().any(|t| matches!(&t.trivia, Trivia::Whitespace(_) | Trivia::Newline));
-    assert!(has_ws, "Whitespace-only source should produce whitespace trivia");
+    let has_ws = total_trivia
+        .iter()
+        .any(|t| matches!(&t.trivia, Trivia::Whitespace(_) | Trivia::Newline));
+    assert!(
+        has_ws,
+        "Whitespace-only source should produce whitespace trivia"
+    );
     Ok(())
 }
 
@@ -645,9 +710,14 @@ fn trivia_lexer_consecutive_comments() -> Result<(), Box<dyn std::error::Error>>
         all_trivia.extend(trivia);
     }
 
-    let comment_count =
-        all_trivia.iter().filter(|t| matches!(&t.trivia, Trivia::LineComment(_))).count();
-    assert!(comment_count >= 2, "Expected at least 2 comments, got {comment_count}");
+    let comment_count = all_trivia
+        .iter()
+        .filter(|t| matches!(&t.trivia, Trivia::LineComment(_)))
+        .count();
+    assert!(
+        comment_count >= 2,
+        "Expected at least 2 comments, got {comment_count}"
+    );
     Ok(())
 }
 
@@ -684,7 +754,10 @@ fn trivia_context_empty_source_is_eof() -> Result<(), Box<dyn std::error::Error>
 #[test]
 fn trivia_context_non_empty_source_is_not_eof() -> Result<(), Box<dyn std::error::Error>> {
     let ctx = TriviaParserContext::new("42".to_string());
-    assert!(!ctx.is_eof(), "Non-empty source should not be at EOF initially");
+    assert!(
+        !ctx.is_eof(),
+        "Non-empty source should not be at EOF initially"
+    );
     Ok(())
 }
 
@@ -704,7 +777,10 @@ fn trivia_context_preserves_leading_whitespace_via_parser() -> Result<(), Box<dy
     let parser = TriviaPreservingParser::new("   42".to_string());
     let result = parser.parse();
 
-    let has_ws = result.leading_trivia.iter().any(|t| matches!(&t.trivia, Trivia::Whitespace(_)));
+    let has_ws = result
+        .leading_trivia
+        .iter()
+        .any(|t| matches!(&t.trivia, Trivia::Whitespace(_)));
     assert!(has_ws, "Parser should preserve leading whitespace trivia");
     Ok(())
 }
@@ -714,8 +790,10 @@ fn trivia_context_preserves_leading_comment_via_parser() -> Result<(), Box<dyn s
     let parser = TriviaPreservingParser::new("# preamble\n42".to_string());
     let result = parser.parse();
 
-    let has_comment =
-        result.leading_trivia.iter().any(|t| matches!(&t.trivia, Trivia::LineComment(_)));
+    let has_comment = result
+        .leading_trivia
+        .iter()
+        .any(|t| matches!(&t.trivia, Trivia::LineComment(_)));
     assert!(has_comment, "Parser should preserve leading comment trivia");
     Ok(())
 }
@@ -742,9 +820,14 @@ fn trivia_parser_comment_only_preserves_trivia() -> Result<(), Box<dyn std::erro
     let result = parser.parse();
 
     // Should have comment as trivia
-    let has_comment =
-        result.leading_trivia.iter().any(|t| matches!(&t.trivia, Trivia::LineComment(_)));
-    assert!(has_comment, "Comment-only source should preserve comment as trivia");
+    let has_comment = result
+        .leading_trivia
+        .iter()
+        .any(|t| matches!(&t.trivia, Trivia::LineComment(_)));
+    assert!(
+        has_comment,
+        "Comment-only source should preserve comment as trivia"
+    );
     Ok(())
 }
 
@@ -863,7 +946,10 @@ fn token_stream_peek_second_at_eof_returns_error() -> Result<(), Box<dyn std::er
     assert_eq!(must(s.peek()).kind, TokenKind::Eof);
     // peek_second tries to read past the sticky EOF peeked token
     // and gets UnexpectedEof from the exhausted lexer
-    assert!(s.peek_second().is_err(), "peek_second at EOF should return Err");
+    assert!(
+        s.peek_second().is_err(),
+        "peek_second at EOF should return Err"
+    );
     Ok(())
 }
 
@@ -872,7 +958,10 @@ fn token_stream_peek_third_at_eof_returns_error() -> Result<(), Box<dyn std::err
     let mut s = TokenStream::new("42");
     let _ = must(s.next()); // 42
     // peek_third also returns Err when the lexer is exhausted
-    assert!(s.peek_third().is_err(), "peek_third at EOF should return Err");
+    assert!(
+        s.peek_third().is_err(),
+        "peek_third at EOF should return Err"
+    );
     Ok(())
 }
 
@@ -901,7 +990,11 @@ fn on_stmt_boundary_clears_all_peek_slots() -> Result<(), Box<dyn std::error::Er
 
     // After boundary, should re-lex from current position
     let t = must(s.peek());
-    assert_eq!(t.kind, TokenKind::Our, "After stmt boundary, should see 'our'");
+    assert_eq!(
+        t.kind,
+        TokenKind::Our,
+        "After stmt boundary, should see 'our'"
+    );
     Ok(())
 }
 
@@ -912,8 +1005,14 @@ fn on_stmt_boundary_clears_all_peek_slots() -> Result<(), Box<dyn std::error::Er
 #[test]
 fn token_stream_hash_slice() -> Result<(), Box<dyn std::error::Error>> {
     let kinds = collect_kinds("@hash{qw(a b c)}");
-    assert!(kinds.contains(&TokenKind::Identifier), "Hash slice should contain identifier");
-    assert!(kinds.contains(&TokenKind::LeftBrace), "Hash slice should contain left brace");
+    assert!(
+        kinds.contains(&TokenKind::Identifier),
+        "Hash slice should contain identifier"
+    );
+    assert!(
+        kinds.contains(&TokenKind::LeftBrace),
+        "Hash slice should contain left brace"
+    );
     Ok(())
 }
 
@@ -940,7 +1039,10 @@ fn token_stream_heredoc_in_expression() -> Result<(), Box<dyn std::error::Error>
     let src = "my $x = <<EOF . 'suffix';\nhello\nEOF\n";
     let kinds = collect_kinds(src);
     assert!(kinds.contains(&TokenKind::My), "Should see 'my' keyword");
-    assert!(kinds.contains(&TokenKind::HeredocStart), "Should see HeredocStart");
+    assert!(
+        kinds.contains(&TokenKind::HeredocStart),
+        "Should see HeredocStart"
+    );
     Ok(())
 }
 

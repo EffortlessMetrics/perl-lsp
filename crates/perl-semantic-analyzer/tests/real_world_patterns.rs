@@ -45,11 +45,17 @@ fn scope_issues(code: &str) -> Vec<ScopeIssue> {
 }
 
 fn has_symbol(table: &SymbolTable, name: &str, kind: SymbolKind) -> bool {
-    table.symbols.get(name).is_some_and(|syms| syms.iter().any(|s| s.kind == kind))
+    table
+        .symbols
+        .get(name)
+        .is_some_and(|syms| syms.iter().any(|s| s.kind == kind))
 }
 
 fn symbol_has_reference(table: &SymbolTable, name: &str) -> bool {
-    table.references.get(name).is_some_and(|refs| !refs.is_empty())
+    table
+        .references
+        .get(name)
+        .is_some_and(|refs| !refs.is_empty())
 }
 
 // ===========================================================================
@@ -270,7 +276,10 @@ sub hex   { 1 }
     assert!(has_symbol(&table, "EXPORT_OK", SymbolKind::array()));
     assert!(has_symbol(&table, "EXPORT_TAGS", SymbolKind::hash()));
     for name in ["red", "green", "blue", "rgb", "hex"] {
-        assert!(has_symbol(&table, name, SymbolKind::Subroutine), "missing sub {name}");
+        assert!(
+            has_symbol(&table, name, SymbolKind::Subroutine),
+            "missing sub {name}"
+        );
     }
     Ok(())
 }
@@ -458,7 +467,10 @@ for my $i (11..20) {
         .iter()
         .filter(|i| i.kind == IssueKind::VariableRedeclaration && i.variable_name.contains("i"))
         .count();
-    assert_eq!(redecl, 0, "for loop iterators should be independently scoped");
+    assert_eq!(
+        redecl, 0,
+        "for loop iterators should be independently scoped"
+    );
     Ok(())
 }
 
@@ -497,7 +509,10 @@ print $x;
         .iter()
         .filter(|i| i.kind == IssueKind::UnusedVariable && i.variable_name.contains("x"))
         .count();
-    assert_eq!(unused_x, 0, "$x used in unless and print should not be unused");
+    assert_eq!(
+        unused_x, 0,
+        "$x used in unless and print should not be unused"
+    );
     Ok(())
 }
 
@@ -846,7 +861,10 @@ sub build {
     let table = parse_and_extract(code);
     assert!(has_symbol(&table, "Builder", SymbolKind::Package));
     for name in ["new", "add", "build"] {
-        assert!(has_symbol(&table, name, SymbolKind::Subroutine), "missing sub {name}");
+        assert!(
+            has_symbol(&table, name, SymbolKind::Subroutine),
+            "missing sub {name}"
+        );
     }
 
     let analyzer = parse_and_analyze(code);
@@ -967,7 +985,10 @@ sub redirect {
     assert!(has_symbol(&table, "SimpleCGI", SymbolKind::Package));
     assert!(has_symbol(&table, "EXPORT_OK", SymbolKind::array()));
     for name in ["new", "header", "param", "redirect"] {
-        assert!(has_symbol(&table, name, SymbolKind::Subroutine), "missing sub {name}");
+        assert!(
+            has_symbol(&table, name, SymbolKind::Subroutine),
+            "missing sub {name}"
+        );
     }
     Ok(())
 }
@@ -1010,7 +1031,10 @@ sub disconnect {
     let table = parse_and_extract(code);
     assert!(has_symbol(&table, "Database", SymbolKind::Package));
     for name in ["new", "connect", "query", "disconnect"] {
-        assert!(has_symbol(&table, name, SymbolKind::Subroutine), "missing sub {name}");
+        assert!(
+            has_symbol(&table, name, SymbolKind::Subroutine),
+            "missing sub {name}"
+        );
     }
     Ok(())
 }
@@ -1049,8 +1073,14 @@ my $y = "hello";
     let ast = parser.parse()?;
     let _ = engine.infer(&ast);
 
-    assert_eq!(engine.get_type_at("x"), Some(PerlType::Scalar(ScalarType::Integer)));
-    assert_eq!(engine.get_type_at("y"), Some(PerlType::Scalar(ScalarType::String)));
+    assert_eq!(
+        engine.get_type_at("x"),
+        Some(PerlType::Scalar(ScalarType::Integer))
+    );
+    assert_eq!(
+        engine.get_type_at("y"),
+        Some(PerlType::Scalar(ScalarType::String))
+    );
     Ok(())
 }
 
@@ -1062,7 +1092,10 @@ fn type_inference_uninitialized_variable() -> Result<(), Box<dyn std::error::Err
     let ast = parser.parse()?;
     let _ = engine.infer(&ast);
 
-    assert_eq!(engine.get_type_at("z"), Some(PerlType::Scalar(ScalarType::Undef)));
+    assert_eq!(
+        engine.get_type_at("z"),
+        Some(PerlType::Scalar(ScalarType::Undef))
+    );
     Ok(())
 }
 
@@ -1077,11 +1110,17 @@ my $ref = \@arr;
     let ast = parser.parse()?;
     let _ = engine.infer(&ast);
 
-    assert!(matches!(engine.get_type_at("arr"), Some(PerlType::Array(_))));
+    assert!(matches!(
+        engine.get_type_at("arr"),
+        Some(PerlType::Array(_))
+    ));
     // $ref should be a reference to array
     if let Some(ref_type) = engine.get_type_at("ref") {
         assert!(
-            matches!(ref_type, PerlType::Reference(_) | PerlType::Any | PerlType::Scalar(_)),
+            matches!(
+                ref_type,
+                PerlType::Reference(_) | PerlType::Any | PerlType::Scalar(_)
+            ),
             "ref should be reference or compatible type, got {:?}",
             ref_type
         );
@@ -1101,8 +1140,14 @@ my $full = $first . " " . $last;
     let ast = parser.parse()?;
     let _ = engine.infer(&ast);
 
-    assert_eq!(engine.get_type_at("first"), Some(PerlType::Scalar(ScalarType::String)));
-    assert_eq!(engine.get_type_at("last"), Some(PerlType::Scalar(ScalarType::String)));
+    assert_eq!(
+        engine.get_type_at("first"),
+        Some(PerlType::Scalar(ScalarType::String))
+    );
+    assert_eq!(
+        engine.get_type_at("last"),
+        Some(PerlType::Scalar(ScalarType::String))
+    );
     // Concatenation should yield string
     if let Some(full_type) = engine.get_type_at("full") {
         assert!(
@@ -1127,8 +1172,14 @@ my $product = $a * $b;
     let ast = parser.parse()?;
     let _ = engine.infer(&ast);
 
-    assert_eq!(engine.get_type_at("a"), Some(PerlType::Scalar(ScalarType::Integer)));
-    assert_eq!(engine.get_type_at("b"), Some(PerlType::Scalar(ScalarType::Integer)));
+    assert_eq!(
+        engine.get_type_at("a"),
+        Some(PerlType::Scalar(ScalarType::Integer))
+    );
+    assert_eq!(
+        engine.get_type_at("b"),
+        Some(PerlType::Scalar(ScalarType::Integer))
+    );
     Ok(())
 }
 
@@ -1169,8 +1220,14 @@ my $is_defined = defined($str);
     let ast = parser.parse()?;
     let _ = engine.infer(&ast);
 
-    assert_eq!(engine.get_type_at("len"), Some(PerlType::Scalar(ScalarType::Integer)));
-    assert_eq!(engine.get_type_at("is_defined"), Some(PerlType::Scalar(ScalarType::Boolean)));
+    assert_eq!(
+        engine.get_type_at("len"),
+        Some(PerlType::Scalar(ScalarType::Integer))
+    );
+    assert_eq!(
+        engine.get_type_at("is_defined"),
+        Some(PerlType::Scalar(ScalarType::Boolean))
+    );
     Ok(())
 }
 
@@ -1186,9 +1243,18 @@ fn type_env_deeply_nested_scopes() -> Result<(), Box<dyn std::error::Error>> {
     env2.set_variable("level2".to_string(), PerlType::Scalar(ScalarType::Float));
 
     // Should resolve from each level
-    assert_eq!(env2.get_variable("level0"), Some(&PerlType::Scalar(ScalarType::Integer)));
-    assert_eq!(env2.get_variable("level1"), Some(&PerlType::Scalar(ScalarType::String)));
-    assert_eq!(env2.get_variable("level2"), Some(&PerlType::Scalar(ScalarType::Float)));
+    assert_eq!(
+        env2.get_variable("level0"),
+        Some(&PerlType::Scalar(ScalarType::Integer))
+    );
+    assert_eq!(
+        env2.get_variable("level1"),
+        Some(&PerlType::Scalar(ScalarType::String))
+    );
+    assert_eq!(
+        env2.get_variable("level2"),
+        Some(&PerlType::Scalar(ScalarType::Float))
+    );
     assert!(env2.get_variable("nonexistent").is_none());
     Ok(())
 }
@@ -1266,7 +1332,10 @@ sub timeout {
     assert!(has_symbol(&table, "HTTP::Client", SymbolKind::Package));
     assert!(has_symbol(&table, "VERSION", SymbolKind::scalar()));
     for name in ["new", "get", "post", "_request", "timeout"] {
-        assert!(has_symbol(&table, name, SymbolKind::Subroutine), "missing sub {name}");
+        assert!(
+            has_symbol(&table, name, SymbolKind::Subroutine),
+            "missing sub {name}"
+        );
     }
 
     // Semantic analysis
@@ -1278,7 +1347,10 @@ sub timeout {
     let keyword_tokens: Vec<_> = tokens
         .iter()
         .filter(|t| {
-            matches!(t.token_type, SemanticTokenType::Keyword | SemanticTokenType::Modifier)
+            matches!(
+                t.token_type,
+                SemanticTokenType::Keyword | SemanticTokenType::Modifier
+            )
         })
         .collect();
     assert!(!keyword_tokens.is_empty(), "should have keyword tokens");
@@ -1330,13 +1402,18 @@ sub rtrim {
     assert!(has_symbol(&table, "StringUtils", SymbolKind::Package));
     assert!(has_symbol(&table, "EXPORT_OK", SymbolKind::array()));
     for name in ["trim", "ltrim", "rtrim"] {
-        assert!(has_symbol(&table, name, SymbolKind::Subroutine), "missing sub {name}");
+        assert!(
+            has_symbol(&table, name, SymbolKind::Subroutine),
+            "missing sub {name}"
+        );
     }
 
     // Check qualified names
     let trim_syms = table.symbols.get("trim").ok_or("trim not found")?;
     assert!(
-        trim_syms.iter().any(|s| s.qualified_name.contains("StringUtils")),
+        trim_syms
+            .iter()
+            .any(|s| s.qualified_name.contains("StringUtils")),
         "trim should be qualified under StringUtils"
     );
     Ok(())
@@ -1430,7 +1507,10 @@ sub name { 1 }
 
     // Search should find across files
     let results = index.search_symbols("log");
-    assert!(!results.is_empty(), "search should find 'login' and 'logout'");
+    assert!(
+        !results.is_empty(),
+        "search should find 'login' and 'logout'"
+    );
 
     Ok(())
 }
@@ -1470,7 +1550,10 @@ sub result {
     // Symbol table should have all subs
     let table = model.symbol_table();
     for name in ["new", "add", "result"] {
-        assert!(has_symbol(table, name, SymbolKind::Subroutine), "missing sub {name}");
+        assert!(
+            has_symbol(table, name, SymbolKind::Subroutine),
+            "missing sub {name}"
+        );
     }
 
     // Hover info should be available for documented subs
@@ -1574,7 +1657,10 @@ sub c { return shift }
 "#;
     let table = parse_and_extract(code);
     for name in ["new", "a", "b", "c"] {
-        assert!(has_symbol(&table, name, SymbolKind::Subroutine), "missing sub {name}");
+        assert!(
+            has_symbol(&table, name, SymbolKind::Subroutine),
+            "missing sub {name}"
+        );
     }
     let analyzer = parse_and_analyze(code);
     assert!(!analyzer.semantic_tokens().is_empty());
@@ -1619,7 +1705,10 @@ fn edge_case_many_variables_in_one_scope() -> Result<(), Box<dyn std::error::Err
     let table = parse_and_extract(&code);
     for i in 0..50 {
         let name = format!("var_{}", i);
-        assert!(has_symbol(&table, &name, SymbolKind::scalar()), "missing {name}");
+        assert!(
+            has_symbol(&table, &name, SymbolKind::scalar()),
+            "missing {name}"
+        );
     }
     Ok(())
 }
@@ -1727,7 +1816,10 @@ fn type_completion_object_variable() -> Result<(), Box<dyn std::error::Error>> {
     env.set_variable("obj".to_string(), PerlType::Object("MyClass".to_string()));
 
     // Verify the type environment works correctly
-    assert_eq!(env.get_variable("obj"), Some(&PerlType::Object("MyClass".to_string())));
+    assert_eq!(
+        env.get_variable("obj"),
+        Some(&PerlType::Object("MyClass".to_string()))
+    );
     let _ = engine;
     Ok(())
 }
@@ -1758,7 +1850,10 @@ print $sum;
                     || i.variable_name.contains("sum"))
         })
         .count();
-    assert_eq!(unused, 0, "all variables are used, no unused warnings expected");
+    assert_eq!(
+        unused, 0,
+        "all variables are used, no unused warnings expected"
+    );
     Ok(())
 }
 
@@ -1798,10 +1893,16 @@ sub important_calc {
 }
 "#;
     let table = parse_and_extract(code);
-    let syms = table.symbols.get("important_calc").ok_or("important_calc not found")?;
+    let syms = table
+        .symbols
+        .get("important_calc")
+        .ok_or("important_calc not found")?;
     assert!(!syms.is_empty());
     if let Some(doc) = &syms[0].documentation {
-        assert!(doc.contains("important calculation"), "doc should contain description");
+        assert!(
+            doc.contains("important calculation"),
+            "doc should contain description"
+        );
     }
     Ok(())
 }
@@ -1814,10 +1915,16 @@ my $MAX_RETRIES = 3;
 print $MAX_RETRIES;
 "#;
     let table = parse_and_extract(code);
-    let syms = table.symbols.get("MAX_RETRIES").ok_or("MAX_RETRIES not found")?;
+    let syms = table
+        .symbols
+        .get("MAX_RETRIES")
+        .ok_or("MAX_RETRIES not found")?;
     assert!(!syms.is_empty());
     if let Some(doc) = &syms[0].documentation {
-        assert!(doc.contains("retries") || doc.contains("Maximum"), "doc should exist");
+        assert!(
+            doc.contains("retries") || doc.contains("Maximum"),
+            "doc should exist"
+        );
     }
     Ok(())
 }

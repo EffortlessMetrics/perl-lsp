@@ -32,14 +32,19 @@ pub fn run(check: bool) -> Result<()> {
     for manifest_path in workspace_manifest_paths()? {
         spinner.set_message(format!("{} {}", action, manifest_path));
 
-        let mut args = vec!["fmt".to_string(), "--manifest-path".to_string(), manifest_path];
+        let mut args = vec![
+            "fmt".to_string(),
+            "--manifest-path".to_string(),
+            manifest_path,
+        ];
         if check {
             args.push("--".to_string());
             args.push("--check".to_string());
         }
 
-        let status =
-            cmd("cargo", &args).run().with_context(|| format!("Failed to format {}", args[2]))?;
+        let status = cmd("cargo", &args)
+            .run()
+            .with_context(|| format!("Failed to format {}", args[2]))?;
 
         if !status.status.success() {
             spinner.finish_with_message(format!(
@@ -68,8 +73,11 @@ fn workspace_manifest_paths() -> Result<Vec<String>> {
     let metadata: CargoMetadata =
         serde_json::from_str(&metadata_json).context("Failed to parse cargo metadata JSON")?;
 
-    let package_by_id: HashMap<_, _> =
-        metadata.packages.into_iter().map(|package| (package.id, package.manifest_path)).collect();
+    let package_by_id: HashMap<_, _> = metadata
+        .packages
+        .into_iter()
+        .map(|package| (package.id, package.manifest_path))
+        .collect();
 
     metadata
         .workspace_members

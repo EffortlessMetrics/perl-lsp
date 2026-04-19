@@ -47,8 +47,11 @@ fn path_first_include_path_wins() -> Result<(), Box<dyn std::error::Error>> {
     std::fs::write(&first, "package My::Mod; 'first';")?;
     std::fs::write(&second, "package My::Mod; 'second';")?;
 
-    let resolved =
-        resolve_module_path(&root, "My::Mod", &["first_lib".to_string(), "second_lib".to_string()]);
+    let resolved = resolve_module_path(
+        &root,
+        "My::Mod",
+        &["first_lib".to_string(), "second_lib".to_string()],
+    );
 
     assert_eq!(resolved, Some(first));
     Ok(())
@@ -103,8 +106,12 @@ fn uri_resolves_from_second_workspace_folder() -> Result<(), Box<dyn std::error:
     std::fs::create_dir_all(module_file.parent().ok_or("no parent")?)?;
     std::fs::write(&module_file, "package Only::Here; 1;")?;
 
-    let ws1_uri = url::Url::from_file_path(&ws1).map_err(|()| "failed to create URI")?.to_string();
-    let ws2_uri = url::Url::from_file_path(&ws2).map_err(|()| "failed to create URI")?.to_string();
+    let ws1_uri = url::Url::from_file_path(&ws1)
+        .map_err(|()| "failed to create URI")?
+        .to_string();
+    let ws2_uri = url::Url::from_file_path(&ws2)
+        .map_err(|()| "failed to create URI")?
+        .to_string();
 
     let result = resolve_module_uri(
         "Only::Here",
@@ -195,13 +202,19 @@ fn uri_system_inc_disabled_skips_system_paths() -> Result<(), Box<dyn std::error
 fn uri_resolves_deeply_nested_module() -> Result<(), Box<dyn std::error::Error>> {
     let temp = tempfile::tempdir()?;
     let workspace = temp.path().join("ws");
-    let deep = workspace.join("custom_lib").join("X").join("Y").join("Z").join("W.pm");
+    let deep = workspace
+        .join("custom_lib")
+        .join("X")
+        .join("Y")
+        .join("Z")
+        .join("W.pm");
 
     std::fs::create_dir_all(deep.parent().ok_or("no parent")?)?;
     std::fs::write(&deep, "package X::Y::Z::W; 1;")?;
 
-    let ws_uri =
-        url::Url::from_file_path(&workspace).map_err(|()| "failed to create URI")?.to_string();
+    let ws_uri = url::Url::from_file_path(&workspace)
+        .map_err(|()| "failed to create URI")?
+        .to_string();
 
     let result = resolve_module_uri(
         "X::Y::Z::W",
@@ -240,8 +253,9 @@ fn uri_first_include_path_wins() -> Result<(), Box<dyn std::error::Error>> {
     std::fs::write(&first, "package Prio::Test; 'alpha';")?;
     std::fs::write(&second, "package Prio::Test; 'beta';")?;
 
-    let ws_uri =
-        url::Url::from_file_path(&workspace).map_err(|()| "failed to create URI")?.to_string();
+    let ws_uri = url::Url::from_file_path(&workspace)
+        .map_err(|()| "failed to create URI")?
+        .to_string();
 
     let result = resolve_module_uri(
         "Prio::Test",
@@ -255,7 +269,10 @@ fn uri_first_include_path_wins() -> Result<(), Box<dyn std::error::Error>> {
 
     match result {
         ModuleUriResolution::Resolved(uri) => {
-            assert!(uri.contains("alpha_lib"), "first include path should win, got: {uri}");
+            assert!(
+                uri.contains("alpha_lib"),
+                "first include path should win, got: {uri}"
+            );
         }
         other => return Err(format!("expected Resolved, got {other:?}").into()),
     }
@@ -276,8 +293,9 @@ fn uri_open_document_takes_precedence_over_filesystem() -> Result<(), Box<dyn st
     std::fs::create_dir_all(on_disk.parent().ok_or("no parent")?)?;
     std::fs::write(&on_disk, "package Dup::Mod; 1;")?;
 
-    let ws_uri =
-        url::Url::from_file_path(&workspace).map_err(|()| "failed to create URI")?.to_string();
+    let ws_uri = url::Url::from_file_path(&workspace)
+        .map_err(|()| "failed to create URI")?
+        .to_string();
     let open_doc = "file:///tmp/editor-buffer/lib/Dup/Mod.pm".to_string();
 
     let result = resolve_module_uri(

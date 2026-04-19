@@ -240,7 +240,12 @@ fn parse_four_segment_canonical() -> Result<(), String> {
 fn parse_long_real_world_module() -> Result<(), String> {
     let input = "Moose::Meta::Role::Application::ToClass";
     let span = parse_module_token(input, 0).ok_or("expected Some for long module")?;
-    if span != (ModuleTokenSpan { start: 0, end: input.len() }) {
+    if span
+        != (ModuleTokenSpan {
+            start: 0,
+            end: input.len(),
+        })
+    {
         return Err(format!("unexpected span: {span:?}"));
     }
     Ok(())
@@ -288,7 +293,11 @@ fn standalone_surrounded_by_non_module_chars() {
 
 #[test]
 fn standalone_after_space() {
-    assert!(has_standalone_module_token_boundaries("use Foo::Bar;", 4, 12));
+    assert!(has_standalone_module_token_boundaries(
+        "use Foo::Bar;",
+        4,
+        12
+    ));
 }
 
 #[test]

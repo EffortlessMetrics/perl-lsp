@@ -14,11 +14,22 @@ type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 /// Helper to validate a Location object has proper structure.
 fn assert_valid_location(location: &serde_json::Value) {
-    assert!(location.get("uri").is_some(), "Location must have 'uri' field, got: {:?}", location);
+    assert!(
+        location.get("uri").is_some(),
+        "Location must have 'uri' field, got: {:?}",
+        location
+    );
     let range = location.get("range");
-    assert!(range.is_some(), "Location must have 'range' field, got: {:?}", location);
+    assert!(
+        range.is_some(),
+        "Location must have 'range' field, got: {:?}",
+        location
+    );
     let range = range.ok_or("missing range").unwrap_or(&json!(null));
-    assert!(range.get("start").is_some(), "Range must have 'start' position");
+    assert!(
+        range.get("start").is_some(),
+        "Range must have 'start' position"
+    );
     assert!(range.get("end").is_some(), "Range must have 'end' position");
 }
 
@@ -36,7 +47,9 @@ fn first_location(response: &Value) -> Result<&Value, Box<dyn std::error::Error>
     let locations = response
         .as_array()
         .ok_or_else(|| std::io::Error::other("expected array result for definition"))?;
-    Ok(locations.first().ok_or_else(|| std::io::Error::other("definition result was empty"))?)
+    Ok(locations
+        .first()
+        .ok_or_else(|| std::io::Error::other("definition result was empty"))?)
 }
 
 fn find_pos(
@@ -251,7 +264,10 @@ my $result = calculate_sum(1, 2, 3);
     )?;
 
     let locations = result.as_array().ok_or("expected location array")?;
-    assert!(!locations.is_empty(), "expected definition result for imported function");
+    assert!(
+        !locations.is_empty(),
+        "expected definition result for imported function"
+    );
 
     let first = &locations[0];
     assert_valid_location(first);
@@ -313,7 +329,10 @@ if (WIFEXITED(0)) {
     )?;
 
     let locations = result.as_array().ok_or("expected location array")?;
-    assert!(!locations.is_empty(), "expected definition result for tag-imported symbol");
+    assert!(
+        !locations.is_empty(),
+        "expected definition result for tag-imported symbol"
+    );
 
     let first = &locations[0];
     assert_valid_location(first);
@@ -364,7 +383,9 @@ boot_My__Module(pTHX_ CV* cv)
 
     let cursor = module_pm.find("load").ok_or("missing XSLoader::load")?;
     let (line, character) = server.offset_to_position(module_pm, cursor);
-    let boot_offset = module_xs.find("boot_My__Module").ok_or("missing boot symbol")?;
+    let boot_offset = module_xs
+        .find("boot_My__Module")
+        .ok_or("missing boot symbol")?;
     let (boot_line, _) = server.offset_to_position(module_xs, boot_offset);
 
     let result = harness.request(
@@ -376,12 +397,18 @@ boot_My__Module(pTHX_ CV* cv)
     )?;
 
     let locations = result.as_array().ok_or("expected location array")?;
-    assert!(!locations.is_empty(), "expected XS bootstrap definition result");
+    assert!(
+        !locations.is_empty(),
+        "expected XS bootstrap definition result"
+    );
 
     let first = &locations[0];
     assert_valid_location(first);
     let uri = first["uri"].as_str().ok_or("expected uri")?;
-    assert!(uri.contains("Module.xs"), "expected Module.xs target, got: {uri}");
+    assert!(
+        uri.contains("Module.xs"),
+        "expected Module.xs target, got: {uri}"
+    );
     assert_eq!(
         first["range"]["start"]["line"].as_u64(),
         Some(u64::from(boot_line)),
@@ -423,9 +450,13 @@ boot_My__Module(pTHX_ CV* cv)
     harness.open(&workspace.uri("lib/My/Module.pm"), loader_pm)?;
     harness.barrier();
 
-    let cursor = loader_pm.find("bootstrap").ok_or("missing bootstrap keyword")?;
+    let cursor = loader_pm
+        .find("bootstrap")
+        .ok_or("missing bootstrap keyword")?;
     let (line, character) = server.offset_to_position(loader_pm, cursor);
-    let boot_offset = module_xs.find("boot_My__Module").ok_or("missing boot symbol")?;
+    let boot_offset = module_xs
+        .find("boot_My__Module")
+        .ok_or("missing boot symbol")?;
     let (boot_line, _) = server.offset_to_position(module_xs, boot_offset);
 
     let result = harness.request(
@@ -437,12 +468,18 @@ boot_My__Module(pTHX_ CV* cv)
     )?;
 
     let locations = result.as_array().ok_or("expected location array")?;
-    assert!(!locations.is_empty(), "expected XS bootstrap definition result");
+    assert!(
+        !locations.is_empty(),
+        "expected XS bootstrap definition result"
+    );
 
     let first = &locations[0];
     assert_valid_location(first);
     let uri = first["uri"].as_str().ok_or("expected uri")?;
-    assert!(uri.contains("Module.xs"), "expected Module.xs target, got: {uri}");
+    assert!(
+        uri.contains("Module.xs"),
+        "expected Module.xs target, got: {uri}"
+    );
     assert_eq!(
         first["range"]["start"]["line"].as_u64(),
         Some(u64::from(boot_line)),
@@ -484,9 +521,13 @@ boot_My__Module(pTHX_ CV* cv)
     harness.open(&workspace.uri("lib/My/Module.pm"), loader_pm)?;
     harness.barrier();
 
-    let cursor = loader_pm.find("DynaLoader::bootstrap").ok_or("missing DynaLoader::bootstrap")?;
+    let cursor = loader_pm
+        .find("DynaLoader::bootstrap")
+        .ok_or("missing DynaLoader::bootstrap")?;
     let (line, character) = server.offset_to_position(loader_pm, cursor);
-    let boot_offset = module_xs.find("boot_My__Module").ok_or("missing boot symbol")?;
+    let boot_offset = module_xs
+        .find("boot_My__Module")
+        .ok_or("missing boot symbol")?;
     let (boot_line, _) = server.offset_to_position(module_xs, boot_offset);
 
     let result = harness.request(
@@ -498,12 +539,18 @@ boot_My__Module(pTHX_ CV* cv)
     )?;
 
     let locations = result.as_array().ok_or("expected location array")?;
-    assert!(!locations.is_empty(), "expected XS bootstrap definition result");
+    assert!(
+        !locations.is_empty(),
+        "expected XS bootstrap definition result"
+    );
 
     let first = &locations[0];
     assert_valid_location(first);
     let uri = first["uri"].as_str().ok_or("expected uri")?;
-    assert!(uri.contains("Module.xs"), "expected Module.xs target, got: {uri}");
+    assert!(
+        uri.contains("Module.xs"),
+        "expected Module.xs target, got: {uri}"
+    );
     assert_eq!(
         first["range"]["start"]["line"].as_u64(),
         Some(u64::from(boot_line)),
@@ -564,12 +611,19 @@ sub greet {
 
     // Should find a definition (either the method or a related declaration in the same file)
     if let Some(locations) = result.as_array() {
-        assert!(!locations.is_empty(), "Should find at least one definition location");
+        assert!(
+            !locations.is_empty(),
+            "Should find at least one definition location"
+        );
         let first = &locations[0];
         assert_valid_location(first);
 
         let uri = first["uri"].as_str().ok_or("Expected URI")?;
-        assert!(uri.contains("Animal.pm"), "Definition should point to Animal.pm, got: {}", uri);
+        assert!(
+            uri.contains("Animal.pm"),
+            "Definition should point to Animal.pm, got: {}",
+            uri
+        );
     }
 
     Ok(())
@@ -622,8 +676,13 @@ sub greet {
         }),
     )?;
 
-    let locations = result.as_array().ok_or("expected array result for SUPER definition")?;
-    assert!(!locations.is_empty(), "SUPER::greet should resolve to parent implementation");
+    let locations = result
+        .as_array()
+        .ok_or("expected array result for SUPER definition")?;
+    assert!(
+        !locations.is_empty(),
+        "SUPER::greet should resolve to parent implementation"
+    );
     let first = &locations[0];
     assert_valid_location(first);
     assert!(
@@ -677,8 +736,13 @@ sub greet {
         }),
     )?;
 
-    let locations = result.as_array().ok_or("expected array result for SUPER definition")?;
-    assert!(!locations.is_empty(), "SUPER::greet should resolve under C3 mro");
+    let locations = result
+        .as_array()
+        .ok_or("expected array result for SUPER definition")?;
+    assert!(
+        !locations.is_empty(),
+        "SUPER::greet should resolve under C3 mro"
+    );
     let first = &locations[0];
     assert_valid_location(first);
     assert!(
@@ -756,7 +820,11 @@ my $valid = Base->validate();
             assert_valid_location(first);
 
             let uri = first["uri"].as_str().ok_or("Expected URI")?;
-            assert!(uri.contains("Base.pm"), "Definition should point to Base.pm, got: {}", uri);
+            assert!(
+                uri.contains("Base.pm"),
+                "Definition should point to Base.pm, got: {}",
+                uri
+            );
         }
     }
 
@@ -844,7 +912,10 @@ $dog->fetch('stick');
     let first = &locations[0];
     assert_valid_location(first);
     let uri = first["uri"].as_str().ok_or("Expected URI")?;
-    assert!(uri.contains("Dog.pm"), "Definition should point to Dog.pm, got: {uri}");
+    assert!(
+        uri.contains("Dog.pm"),
+        "Definition should point to Dog.pm, got: {uri}"
+    );
 
     Ok(())
 }
@@ -1171,7 +1242,9 @@ $cat->pounce;
         "Expected bare Moo method goto-definition to return at least one location"
     );
 
-    let fetch_uri = fetch_locations[0]["uri"].as_str().ok_or("Expected fetch URI")?;
+    let fetch_uri = fetch_locations[0]["uri"]
+        .as_str()
+        .ok_or("Expected fetch URI")?;
     assert!(
         fetch_uri.contains("MooDog.pm"),
         "Definition should point to MooDog.pm, got: {fetch_uri}"
@@ -1193,7 +1266,9 @@ $cat->pounce;
         "Expected bare Moose method goto-definition to return at least one location"
     );
 
-    let pounce_uri = pounce_locations[0]["uri"].as_str().ok_or("Expected pounce URI")?;
+    let pounce_uri = pounce_locations[0]["uri"]
+        .as_str()
+        .ok_or("Expected pounce URI")?;
     assert!(
         pounce_uri.contains("MooseCat.pm"),
         "Definition should point to MooseCat.pm, got: {pounce_uri}"
@@ -1367,7 +1442,9 @@ $cat->print_info;
             "Expected {label} goto-definition to return at least one location"
         );
 
-        let uri = locations[0]["uri"].as_str().ok_or("Expected definition URI")?;
+        let uri = locations[0]["uri"]
+            .as_str()
+            .ok_or("Expected definition URI")?;
         assert!(
             uri.contains(expected_uri_fragment),
             "{label} should point to {expected_uri_fragment}, got: {uri}"
@@ -1408,8 +1485,9 @@ sub main_work {
     let mut parser = Parser::new(code);
     let ast = parser.parse().map_err(|e| format!("parse error: {e}"))?;
 
-    let method_call_offset =
-        code.find("$self->helper()").ok_or("could not find $self->helper()")?;
+    let method_call_offset = code
+        .find("$self->helper()")
+        .ok_or("could not find $self->helper()")?;
     let helper_offset = method_call_offset + "$self->".len();
 
     let current_pkg = current_package_at(&ast, helper_offset);
@@ -1417,8 +1495,16 @@ sub main_work {
 
     let sym =
         symbol_at_cursor(&ast, helper_offset, current_pkg).ok_or("expected Some(SymbolKey)")?;
-    assert_eq!(sym.name.as_ref(), "helper", "method name should be 'helper'");
-    assert_eq!(sym.pkg.as_ref(), "MyClass", "package should be current package for $self");
+    assert_eq!(
+        sym.name.as_ref(),
+        "helper",
+        "method name should be 'helper'"
+    );
+    assert_eq!(
+        sym.pkg.as_ref(),
+        "MyClass",
+        "package should be current package for $self"
+    );
 
     Ok(())
 }
@@ -1443,8 +1529,16 @@ $dog->fetch('stick');
     let symbol = symbol_at_cursor(&ast, fetch_offset, current_pkg)
         .ok_or("expected symbol_at_cursor to resolve constructor-assigned method call")?;
 
-    assert_eq!(symbol.name.as_ref(), "fetch", "method name should be 'fetch'");
-    assert_eq!(symbol.pkg.as_ref(), "Dog", "package should be inferred from Dog->new()");
+    assert_eq!(
+        symbol.name.as_ref(),
+        "fetch",
+        "method name should be 'fetch'"
+    );
+    assert_eq!(
+        symbol.pkg.as_ref(),
+        "Dog",
+        "package should be inferred from Dog->new()"
+    );
 
     Ok(())
 }
@@ -1469,8 +1563,16 @@ $dog->fetch;
     let symbol = symbol_at_cursor(&ast, fetch_offset, current_pkg)
         .ok_or("expected symbol_at_cursor to resolve bare constructor-assigned method call")?;
 
-    assert_eq!(symbol.name.as_ref(), "fetch", "method name should be 'fetch'");
-    assert_eq!(symbol.pkg.as_ref(), "MooDog", "package should be inferred from MooDog->new()");
+    assert_eq!(
+        symbol.name.as_ref(),
+        "fetch",
+        "method name should be 'fetch'"
+    );
+    assert_eq!(
+        symbol.pkg.as_ref(),
+        "MooDog",
+        "package should be inferred from MooDog->new()"
+    );
 
     Ok(())
 }
@@ -1490,7 +1592,9 @@ fn symbol_at_cursor_resolves_use_statement() -> TestResult {
     let ast = parser.parse().map_err(|e| format!("parse error: {e}"))?;
 
     // Find offset of "Data::Dumper" in "use Data::Dumper;"
-    let module_offset = code.find("Data::Dumper").ok_or("could not find Data::Dumper")?;
+    let module_offset = code
+        .find("Data::Dumper")
+        .ok_or("could not find Data::Dumper")?;
 
     let current_pkg = current_package_at(&ast, module_offset);
     let symbol = symbol_at_cursor(&ast, module_offset, current_pkg);
@@ -1666,9 +1770,12 @@ with 'MyApp::Role::Printable';
     )?;
 
     // MUST navigate to the role file — empty result means the feature is not implemented.
-    let locations = result
-        .as_array()
-        .ok_or_else(|| format!("goto-def on 'with' role name returned non-array: {:?}", result))?;
+    let locations = result.as_array().ok_or_else(|| {
+        format!(
+            "goto-def on 'with' role name returned non-array: {:?}",
+            result
+        )
+    })?;
     assert!(
         !locations.is_empty(),
         "goto-def on 'with' role name MUST return at least one location (got empty array)"
@@ -1676,7 +1783,9 @@ with 'MyApp::Role::Printable';
     let first = &locations[0];
     assert_valid_location(first);
 
-    let uri = first["uri"].as_str().ok_or("Expected URI in goto-def result")?;
+    let uri = first["uri"]
+        .as_str()
+        .ok_or("Expected URI in goto-def result")?;
     assert!(
         uri.contains("Printable"),
         "goto-def on 'with' role name should navigate to Printable.pm, got: {}",
@@ -1749,9 +1858,12 @@ extends 'MyApp::User';
     )?;
 
     // MUST navigate to the parent file — empty result means the feature is not implemented.
-    let locations = result
-        .as_array()
-        .ok_or_else(|| format!("goto-def on 'extends' parent returned non-array: {:?}", result))?;
+    let locations = result.as_array().ok_or_else(|| {
+        format!(
+            "goto-def on 'extends' parent returned non-array: {:?}",
+            result
+        )
+    })?;
     assert!(
         !locations.is_empty(),
         "goto-def on 'extends' parent name MUST return at least one location (got empty array)"
@@ -1759,7 +1871,9 @@ extends 'MyApp::User';
     let first = &locations[0];
     assert_valid_location(first);
 
-    let uri = first["uri"].as_str().ok_or("Expected URI in goto-def result")?;
+    let uri = first["uri"]
+        .as_str()
+        .ok_or("Expected URI in goto-def result")?;
     assert!(
         uri.contains("User"),
         "goto-def on 'extends' parent should navigate to User.pm, got: {}",
@@ -1788,13 +1902,20 @@ MyModule->process();
     let ast = parser.parse().map_err(|e| format!("parse error: {e}"))?;
 
     // Find the offset of "process" in "MyModule->process()"
-    let process_offset = code.find("->process()").ok_or("could not find ->process()")? + "->".len();
+    let process_offset = code
+        .find("->process()")
+        .ok_or("could not find ->process()")?
+        + "->".len();
 
     let current_pkg = current_package_at(&ast, process_offset);
     let symbol = symbol_at_cursor(&ast, process_offset, current_pkg);
 
     if let Some(sym) = &symbol {
-        assert_eq!(sym.name.as_ref(), "process", "method name should be 'process'");
+        assert_eq!(
+            sym.name.as_ref(),
+            "process",
+            "method name should be 'process'"
+        );
         // The package should be MyModule (the object/class in the MethodCall)
         assert_eq!(sym.pkg.as_ref(), "MyModule", "package should be MyModule");
     }
@@ -1850,12 +1971,17 @@ AutoDispatch->dynamic_method();
     let locations = result
         .as_array()
         .ok_or_else(|| format!("expected goto-def array for AUTOLOAD fallback, got: {result:?}"))?;
-    assert!(!locations.is_empty(), "AUTOLOAD-backed method call should resolve to a definition");
+    assert!(
+        !locations.is_empty(),
+        "AUTOLOAD-backed method call should resolve to a definition"
+    );
 
     let first = &locations[0];
     assert_valid_location(first);
 
-    let uri = first["uri"].as_str().ok_or("expected URI in goto-def result")?;
+    let uri = first["uri"]
+        .as_str()
+        .ok_or("expected URI in goto-def result")?;
     assert!(
         uri.contains("AutoDispatch.pm"),
         "AUTOLOAD fallback should point to AutoDispatch.pm, got: {uri}"
@@ -1948,8 +2074,13 @@ $c->greet();
         "Expected use parent inherited method goto-def to return at least one location"
     );
 
-    let uri = locations[0]["uri"].as_str().ok_or("Expected definition URI")?;
-    assert!(uri.contains("Base.pm"), "use parent: definition should point to Base.pm, got: {uri}");
+    let uri = locations[0]["uri"]
+        .as_str()
+        .ok_or("Expected definition URI")?;
+    assert!(
+        uri.contains("Base.pm"),
+        "use parent: definition should point to Base.pm, got: {uri}"
+    );
 
     Ok(())
 }
@@ -2033,8 +2164,13 @@ $c->greet();
         "Expected use base inherited method goto-def to return at least one location"
     );
 
-    let uri = locations[0]["uri"].as_str().ok_or("Expected definition URI")?;
-    assert!(uri.contains("BaseB.pm"), "use base: definition should point to BaseB.pm, got: {uri}");
+    let uri = locations[0]["uri"]
+        .as_str()
+        .ok_or("Expected definition URI")?;
+    assert!(
+        uri.contains("BaseB.pm"),
+        "use base: definition should point to BaseB.pm, got: {uri}"
+    );
 
     Ok(())
 }
@@ -2118,8 +2254,13 @@ $c->greet();
         "Expected @ISA inherited method goto-def to return at least one location"
     );
 
-    let uri = locations[0]["uri"].as_str().ok_or("Expected definition URI")?;
-    assert!(uri.contains("BaseC.pm"), "@ISA: definition should point to BaseC.pm, got: {uri}");
+    let uri = locations[0]["uri"]
+        .as_str()
+        .ok_or("Expected definition URI")?;
+    assert!(
+        uri.contains("BaseC.pm"),
+        "@ISA: definition should point to BaseC.pm, got: {uri}"
+    );
 
     Ok(())
 }
@@ -2219,7 +2360,9 @@ $gc->base_method();
         "Expected grandparent chain goto-def to return at least one location"
     );
 
-    let uri = locations[0]["uri"].as_str().ok_or("Expected definition URI")?;
+    let uri = locations[0]["uri"]
+        .as_str()
+        .ok_or("Expected definition URI")?;
     assert!(
         uri.contains("GrandBase.pm"),
         "Grandparent chain: definition should point to GrandBase.pm, got: {uri}"
@@ -2307,7 +2450,9 @@ $c->greet();
         "Expected use parent -norequire inherited method goto-def to return at least one location"
     );
 
-    let uri = locations[0]["uri"].as_str().ok_or("Expected definition URI")?;
+    let uri = locations[0]["uri"]
+        .as_str()
+        .ok_or("Expected definition URI")?;
     assert!(
         uri.contains("BaseNR.pm"),
         "use parent -norequire: definition should point to BaseNR.pm, got: {uri}"
@@ -2371,7 +2516,10 @@ my $result = helper_a();
     )?;
 
     let locations = result.as_array().ok_or("expected location array")?;
-    assert!(!locations.is_empty(), "expected definition result for paren-list imported function");
+    assert!(
+        !locations.is_empty(),
+        "expected definition result for paren-list imported function"
+    );
 
     let first = &locations[0];
     assert_valid_location(first);
@@ -2438,7 +2586,10 @@ print My::Config::MAX_RETRIES;
     )?;
 
     let locations = result.as_array().ok_or("expected location array")?;
-    assert!(!locations.is_empty(), "expected definition result for cross-file use constant PI");
+    assert!(
+        !locations.is_empty(),
+        "expected definition result for cross-file use constant PI"
+    );
 
     let first = &locations[0];
     assert_valid_location(first);

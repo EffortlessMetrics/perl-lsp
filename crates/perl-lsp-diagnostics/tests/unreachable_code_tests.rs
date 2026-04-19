@@ -45,7 +45,9 @@ fn return_value_node() -> Node {
     Node::new(
         NodeKind::Return {
             value: Some(Box::new(Node::new(
-                NodeKind::Number { value: "42".to_string() },
+                NodeKind::Number {
+                    value: "42".to_string(),
+                },
                 loc(17, 19),
             ))),
         },
@@ -60,7 +62,10 @@ fn print_stmt(start: usize, end: usize) -> Node {
                 NodeKind::FunctionCall {
                     name: "print".to_string(),
                     args: vec![Node::new(
-                        NodeKind::String { value: "dead".to_string(), interpolated: false },
+                        NodeKind::String {
+                            value: "dead".to_string(),
+                            interpolated: false,
+                        },
                         loc(start + 6, end - 1),
                     )],
                 },
@@ -78,7 +83,10 @@ fn die_call(start: usize, end: usize) -> Node {
                 NodeKind::FunctionCall {
                     name: "die".to_string(),
                     args: vec![Node::new(
-                        NodeKind::String { value: "err".to_string(), interpolated: false },
+                        NodeKind::String {
+                            value: "err".to_string(),
+                            interpolated: false,
+                        },
                         loc(start + 4, end - 1),
                     )],
                 },
@@ -96,7 +104,9 @@ fn exit_call(start: usize, end: usize) -> Node {
                 NodeKind::FunctionCall {
                     name: "exit".to_string(),
                     args: vec![Node::new(
-                        NodeKind::Number { value: "0".to_string() },
+                        NodeKind::Number {
+                            value: "0".to_string(),
+                        },
                         loc(start + 5, end - 1),
                     )],
                 },
@@ -114,7 +124,10 @@ fn croak_qualified_call(start: usize, end: usize) -> Node {
                 NodeKind::FunctionCall {
                     name: "Carp::croak".to_string(),
                     args: vec![Node::new(
-                        NodeKind::String { value: "err".to_string(), interpolated: false },
+                        NodeKind::String {
+                            value: "err".to_string(),
+                            interpolated: false,
+                        },
                         loc(start + 12, end - 1),
                     )],
                 },
@@ -132,7 +145,10 @@ fn croak_unqualified_call(start: usize, end: usize) -> Node {
                 NodeKind::FunctionCall {
                     name: "croak".to_string(),
                     args: vec![Node::new(
-                        NodeKind::String { value: "err".to_string(), interpolated: false },
+                        NodeKind::String {
+                            value: "err".to_string(),
+                            interpolated: false,
+                        },
                         loc(start + 6, end - 1),
                     )],
                 },
@@ -148,12 +164,17 @@ fn my_var_decl(start: usize, end: usize, name: &str) -> Node {
         NodeKind::VariableDeclaration {
             declarator: "my".to_string(),
             variable: Box::new(Node::new(
-                NodeKind::Variable { sigil: "$".to_string(), name: name.to_string() },
+                NodeKind::Variable {
+                    sigil: "$".to_string(),
+                    name: name.to_string(),
+                },
                 loc(start + 3, end),
             )),
             attributes: vec![],
             initializer: Some(Box::new(Node::new(
-                NodeKind::Number { value: "1".to_string() },
+                NodeKind::Number {
+                    value: "1".to_string(),
+                },
                 loc(end - 1, end),
             ))),
         },
@@ -162,13 +183,24 @@ fn my_var_decl(start: usize, end: usize, name: &str) -> Node {
 }
 
 fn last_stmt(start: usize, end: usize) -> Node {
-    Node::new(NodeKind::LoopControl { op: "last".to_string(), label: None }, loc(start, end))
+    Node::new(
+        NodeKind::LoopControl {
+            op: "last".to_string(),
+            label: None,
+        },
+        loc(start, end),
+    )
 }
 
 fn while_loop(body: Node) -> Node {
     Node::new(
         NodeKind::While {
-            condition: Box::new(Node::new(NodeKind::Number { value: "1".to_string() }, loc(7, 8))),
+            condition: Box::new(Node::new(
+                NodeKind::Number {
+                    value: "1".to_string(),
+                },
+                loc(7, 8),
+            )),
             body: Box::new(body),
             continue_block: None,
         },
@@ -189,15 +221,31 @@ fn if_node(condition: Node, then_stmts: Vec<Node>, else_stmts: Option<Vec<Node>>
 }
 
 fn var_node(name: &str) -> Node {
-    Node::new(NodeKind::Variable { sigil: "$".to_string(), name: name.to_string() }, loc(4, 10))
+    Node::new(
+        NodeKind::Variable {
+            sigil: "$".to_string(),
+            name: name.to_string(),
+        },
+        loc(4, 10),
+    )
 }
 
 fn eval_block(stmts: Vec<Node>) -> Node {
-    Node::new(NodeKind::Eval { block: Box::new(block(stmts)) }, loc(0, 40))
+    Node::new(
+        NodeKind::Eval {
+            block: Box::new(block(stmts)),
+        },
+        loc(0, 40),
+    )
 }
 
 fn eval_stmt(stmts: Vec<Node>) -> Node {
-    Node::new(NodeKind::ExpressionStatement { expression: Box::new(eval_block(stmts)) }, loc(0, 42))
+    Node::new(
+        NodeKind::ExpressionStatement {
+            expression: Box::new(eval_block(stmts)),
+        },
+        loc(0, 42),
+    )
 }
 
 fn anonymous_sub(body_stmts: Vec<Node>) -> Node {
@@ -215,11 +263,16 @@ fn anonymous_sub(body_stmts: Vec<Node>) -> Node {
 }
 
 fn has_pl406(diagnostics: &[perl_lsp_diagnostics::Diagnostic]) -> bool {
-    diagnostics.iter().any(|d| d.code.as_deref() == Some("PL406"))
+    diagnostics
+        .iter()
+        .any(|d| d.code.as_deref() == Some("PL406"))
 }
 
 fn count_pl406(diagnostics: &[perl_lsp_diagnostics::Diagnostic]) -> usize {
-    diagnostics.iter().filter(|d| d.code.as_deref() == Some("PL406")).count()
+    diagnostics
+        .iter()
+        .filter(|d| d.code.as_deref() == Some("PL406"))
+        .count()
 }
 
 // ---------------------------------------------------------------------------
@@ -377,7 +430,10 @@ fn t6_last_inside_loop_body() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn t7_unqualified_croak_followed_by_statement() -> Result<(), Box<dyn std::error::Error>> {
-    let body = block(vec![croak_unqualified_call(10, 25), my_var_decl(27, 37, "x")]);
+    let body = block(vec![
+        croak_unqualified_call(10, 25),
+        my_var_decl(27, 37, "x"),
+    ]);
     let ast = program(vec![sub_node("f", body)]);
 
     let mut diagnostics = vec![];
@@ -485,7 +541,10 @@ fn n4_nested_sub_return_no_false_positive() -> Result<(), Box<dyn std::error::Er
         NodeKind::VariableDeclaration {
             declarator: "my".to_string(),
             variable: Box::new(Node::new(
-                NodeKind::Variable { sigil: "$".to_string(), name: "f".to_string() },
+                NodeKind::Variable {
+                    sigil: "$".to_string(),
+                    name: "f".to_string(),
+                },
                 loc(13, 15),
             )),
             attributes: vec![],
@@ -547,7 +606,10 @@ fn n6_die_inside_or_not_unconditional() -> Result<(), Box<dyn std::error::Error>
         NodeKind::FunctionCall {
             name: "die".to_string(),
             args: vec![Node::new(
-                NodeKind::String { value: "err".to_string(), interpolated: false },
+                NodeKind::String {
+                    value: "err".to_string(),
+                    interpolated: false,
+                },
                 loc(26, 31),
             )],
         },
@@ -559,7 +621,10 @@ fn n6_die_inside_or_not_unconditional() -> Result<(), Box<dyn std::error::Error>
                 NodeKind::Binary {
                     op: "or".to_string(),
                     left: Box::new(Node::new(
-                        NodeKind::FunctionCall { name: "open".to_string(), args: vec![] },
+                        NodeKind::FunctionCall {
+                            name: "open".to_string(),
+                            args: vec![],
+                        },
                         loc(0, 21),
                     )),
                     right: Box::new(die_expr),
@@ -592,8 +657,13 @@ fn n6_die_inside_or_not_unconditional() -> Result<(), Box<dyn std::error::Error>
 
 #[test]
 fn t8_next_inside_loop_body() -> Result<(), Box<dyn std::error::Error>> {
-    let next_stmt =
-        Node::new(NodeKind::LoopControl { op: "next".to_string(), label: None }, loc(13, 18));
+    let next_stmt = Node::new(
+        NodeKind::LoopControl {
+            op: "next".to_string(),
+            label: None,
+        },
+        loc(13, 18),
+    );
     let loop_body = block(vec![next_stmt, print_stmt(20, 40)]);
     let ast = program(vec![while_loop(loop_body)]);
 
@@ -617,8 +687,13 @@ fn t8_next_inside_loop_body() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn t9_redo_inside_loop_body() -> Result<(), Box<dyn std::error::Error>> {
-    let redo_stmt =
-        Node::new(NodeKind::LoopControl { op: "redo".to_string(), label: None }, loc(13, 18));
+    let redo_stmt = Node::new(
+        NodeKind::LoopControl {
+            op: "redo".to_string(),
+            label: None,
+        },
+        loc(13, 18),
+    );
     let loop_body = block(vec![redo_stmt, print_stmt(20, 40)]);
     let ast = program(vec![while_loop(loop_body)]);
 
@@ -648,7 +723,10 @@ fn t10_confess_qualified_followed_by_statement() -> Result<(), Box<dyn std::erro
                 NodeKind::FunctionCall {
                     name: "Carp::confess".to_string(),
                     args: vec![Node::new(
-                        NodeKind::String { value: "err".to_string(), interpolated: false },
+                        NodeKind::String {
+                            value: "err".to_string(),
+                            interpolated: false,
+                        },
                         loc(14, 19),
                     )],
                 },
@@ -668,7 +746,11 @@ fn t10_confess_qualified_followed_by_statement() -> Result<(), Box<dyn std::erro
         "T10: Expected PL406 for statement after Carp::confess, got: {:?}",
         diagnostics
     );
-    assert_eq!(count_pl406(&diagnostics), 1, "T10: Expected exactly 1 PL406");
+    assert_eq!(
+        count_pl406(&diagnostics),
+        1,
+        "T10: Expected exactly 1 PL406"
+    );
     Ok(())
 }
 
@@ -683,7 +765,9 @@ fn n7_goto_label_not_yet_detected() -> Result<(), Box<dyn std::error::Error>> {
     let goto_stmt = Node::new(
         NodeKind::Goto {
             target: Box::new(Node::new(
-                NodeKind::Identifier { name: "END".to_string() },
+                NodeKind::Identifier {
+                    name: "END".to_string(),
+                },
                 loc(5, 8),
             )),
         },

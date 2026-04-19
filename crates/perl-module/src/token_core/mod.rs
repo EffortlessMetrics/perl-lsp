@@ -32,7 +32,10 @@ pub fn parse_module_token(text: &str, start: usize) -> Option<ModuleTokenSpan> {
         index = parse_identifier_segment(bytes, index)?;
     }
 
-    Some(ModuleTokenSpan { start: token_start, end: index })
+    Some(ModuleTokenSpan {
+        start: token_start,
+        end: index,
+    })
 }
 
 /// Check if a span from `start` to `end` is bounded as a standalone token.
@@ -113,7 +116,10 @@ fn left_context_is_module_char(line: &str, start: usize) -> bool {
         return false;
     }
 
-    line[..left_idx].chars().next_back().is_some_and(is_module_identifier_char)
+    line[..left_idx]
+        .chars()
+        .next_back()
+        .is_some_and(is_module_identifier_char)
 }
 
 fn right_context_is_module_char(line: &str, end: usize) -> bool {

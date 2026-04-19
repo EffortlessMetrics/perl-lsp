@@ -61,7 +61,11 @@ fn extracts_synopsis() {
 "#;
     let doc = extract_pod(source);
     assert!(doc.synopsis.is_some());
-    assert!(doc.synopsis.as_ref().is_some_and(|s| s.contains("use Foo::Bar")));
+    assert!(
+        doc.synopsis
+            .as_ref()
+            .is_some_and(|s| s.contains("use Foo::Bar"))
+    );
 }
 
 #[test]
@@ -146,7 +150,10 @@ fn strips_link_with_section() {
     let doc = extract_pod("=head1 NAME\n\nL<Module::Name/method>\n\n=cut\n");
     let name = doc.name.as_deref().unwrap_or("");
     assert!(name.contains("[Module::Name]"), "got: {name}");
-    assert!(name.contains("perl-module://Module::Name/method"), "got: {name}");
+    assert!(
+        name.contains("perl-module://Module::Name/method"),
+        "got: {name}"
+    );
 }
 
 #[test]
@@ -266,11 +273,26 @@ sub format { ... }
 1;
 "#;
     let doc = extract_pod(source);
-    assert_eq!(doc.name.as_deref(), Some("DateTime::Format::Custom - Parse and format dates"));
-    assert!(doc.synopsis.as_ref().is_some_and(|s| s.contains("use DateTime::Format::Custom")));
-    assert!(doc.description.as_ref().is_some_and(|s| s.contains("custom date parsing")));
+    assert_eq!(
+        doc.name.as_deref(),
+        Some("DateTime::Format::Custom - Parse and format dates")
+    );
+    assert!(
+        doc.synopsis
+            .as_ref()
+            .is_some_and(|s| s.contains("use DateTime::Format::Custom"))
+    );
+    assert!(
+        doc.description
+            .as_ref()
+            .is_some_and(|s| s.contains("custom date parsing"))
+    );
     // Description should only be first paragraph
-    assert!(!doc.description.as_ref().is_none_or(|s| s.contains("auto-detect")));
+    assert!(
+        !doc.description
+            .as_ref()
+            .is_none_or(|s| s.contains("auto-detect"))
+    );
     assert_eq!(doc.methods.len(), 2);
     assert!(doc.methods["parse"].contains("Parses a date string"));
     assert!(doc.methods["parse"].contains("DateTime"));
@@ -456,7 +478,10 @@ fn inline_link_in_description_renders_markdown() {
 fn link_display_text_with_section_target_renders_markdown() {
     let doc = extract_pod("=head1 NAME\n\nL<the docs|File::Path/DESCRIPTION>\n\n=cut\n");
     let name = doc.name.as_deref().unwrap_or("");
-    assert!(name.contains("[the docs]"), "expected '[the docs]' but got: {name}");
+    assert!(
+        name.contains("[the docs]"),
+        "expected '[the docs]' but got: {name}"
+    );
     assert!(
         name.contains("perl-module://File::Path/DESCRIPTION"),
         "expected 'perl-module://File::Path/DESCRIPTION' but got: {name}"
@@ -470,13 +495,19 @@ fn link_display_text_with_section_target_renders_markdown() {
 fn link_section_with_spaces_encodes_url() {
     let doc = extract_pod("=head1 NAME\n\nL<File::Find/The wanted function>\n\n=cut\n");
     let name = doc.name.as_deref().unwrap_or("");
-    assert!(name.contains("[File::Find]"), "expected '[File::Find]' but got: {name}");
+    assert!(
+        name.contains("[File::Find]"),
+        "expected '[File::Find]' but got: {name}"
+    );
     // Spaces must be encoded — a raw space makes the markdown URL malformed
     assert!(
         name.contains("perl-module://File::Find/The%20wanted%20function"),
         "expected percent-encoded URL but got: {name}"
     );
-    assert!(!name.contains("The wanted function"), "raw space in URL — should be encoded: {name}");
+    assert!(
+        !name.contains("The wanted function"),
+        "raw space in URL — should be encoded: {name}"
+    );
 }
 
 /// `L<click here|Module/Section With Spaces>` — pipe form with spaces in section.
@@ -484,7 +515,10 @@ fn link_section_with_spaces_encodes_url() {
 fn link_pipe_with_spaced_section_encodes_url() {
     let doc = extract_pod("=head1 NAME\n\nL<click here|File::Find/The wanted function>\n\n=cut\n");
     let name = doc.name.as_deref().unwrap_or("");
-    assert!(name.contains("[click here]"), "expected '[click here]' but got: {name}");
+    assert!(
+        name.contains("[click here]"),
+        "expected '[click here]' but got: {name}"
+    );
     assert!(
         name.contains("perl-module://File::Find/The%20wanted%20function"),
         "expected percent-encoded URL but got: {name}"

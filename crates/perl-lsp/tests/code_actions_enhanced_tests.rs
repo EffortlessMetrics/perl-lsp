@@ -19,12 +19,22 @@ fn test_duplicate_parameter_code_actions() -> Result<(), Box<dyn std::error::Err
     let actions = code_actions_provider.get_code_actions((0, source.len()), &diagnostics);
 
     // Should offer to remove or rename the duplicate
-    let duplicate_actions: Vec<_> =
-        actions.iter().filter(|a| a.diagnostic_id.as_deref() == Some("PL106")).collect();
+    let duplicate_actions: Vec<_> = actions
+        .iter()
+        .filter(|a| a.diagnostic_id.as_deref() == Some("PL106"))
+        .collect();
 
     assert!(duplicate_actions.len() >= 2);
-    assert!(duplicate_actions.iter().any(|a| a.title.contains("Remove duplicate")));
-    assert!(duplicate_actions.iter().any(|a| a.title.contains("Rename duplicate")));
+    assert!(
+        duplicate_actions
+            .iter()
+            .any(|a| a.title.contains("Remove duplicate"))
+    );
+    assert!(
+        duplicate_actions
+            .iter()
+            .any(|a| a.title.contains("Rename duplicate"))
+    );
     Ok(())
 }
 
@@ -46,11 +56,17 @@ sub process($data) {
     let actions = code_actions_provider.get_code_actions((0, source.len()), &diagnostics);
 
     // Should offer to rename the parameter
-    let shadow_actions: Vec<_> =
-        actions.iter().filter(|a| a.diagnostic_id.as_deref() == Some("PL107")).collect();
+    let shadow_actions: Vec<_> = actions
+        .iter()
+        .filter(|a| a.diagnostic_id.as_deref() == Some("PL107"))
+        .collect();
 
     assert!(!shadow_actions.is_empty());
-    assert!(shadow_actions.iter().any(|a| a.title.contains("Rename parameter")));
+    assert!(
+        shadow_actions
+            .iter()
+            .any(|a| a.title.contains("Rename parameter"))
+    );
     assert!(
         shadow_actions
             .iter()
@@ -75,8 +91,10 @@ fn test_unused_parameter_code_actions() -> Result<(), Box<dyn std::error::Error>
     let actions = code_actions_provider.get_code_actions((0, source.len()), &diagnostics);
 
     // Should offer only the safe rename fix
-    let unused_actions: Vec<_> =
-        actions.iter().filter(|a| a.diagnostic_id.as_deref() == Some("PL108")).collect();
+    let unused_actions: Vec<_> = actions
+        .iter()
+        .filter(|a| a.diagnostic_id.as_deref() == Some("PL108"))
+        .collect();
 
     assert!(!unused_actions.is_empty());
     assert_eq!(unused_actions.len(), 1);
@@ -109,7 +127,11 @@ print FOO;"#;
     assert!(bareword_actions.iter().any(|a| a.title.contains("'FOO'")));
     assert!(bareword_actions.iter().any(|a| a.title.contains("\"FOO\"")));
     // For uppercase barewords, should also offer filehandle declaration
-    assert!(bareword_actions.iter().any(|a| a.title.contains("filehandle")));
+    assert!(
+        bareword_actions
+            .iter()
+            .any(|a| a.title.contains("filehandle"))
+    );
     Ok(())
 }
 
@@ -132,9 +154,21 @@ sub test($x, $y, $x, $unused) {
     let actions = code_actions_provider.get_code_actions((0, source.len()), &diagnostics);
 
     // Should have actions for all issues
-    assert!(actions.iter().any(|a| a.diagnostic_id.as_deref() == Some("PL106")));
-    assert!(actions.iter().any(|a| a.diagnostic_id.as_deref() == Some("PL107")));
-    assert!(actions.iter().any(|a| a.diagnostic_id.as_deref() == Some("PL108")));
+    assert!(
+        actions
+            .iter()
+            .any(|a| a.diagnostic_id.as_deref() == Some("PL106"))
+    );
+    assert!(
+        actions
+            .iter()
+            .any(|a| a.diagnostic_id.as_deref() == Some("PL107"))
+    );
+    assert!(
+        actions
+            .iter()
+            .any(|a| a.diagnostic_id.as_deref() == Some("PL108"))
+    );
     Ok(())
 }
 
@@ -154,11 +188,15 @@ print LOGFILE "Starting process";"#;
     let actions = code_actions_provider.get_code_actions((0, source.len()), &diagnostics);
 
     // Should suggest declaring as filehandle for uppercase barewords
-    let filehandle_actions: Vec<_> =
-        actions.iter().filter(|a| a.title.contains("filehandle")).collect();
+    let filehandle_actions: Vec<_> = actions
+        .iter()
+        .filter(|a| a.title.contains("filehandle"))
+        .collect();
 
     assert!(!filehandle_actions.is_empty());
-    let first_action = filehandle_actions.first().ok_or("No filehandle actions found")?;
+    let first_action = filehandle_actions
+        .first()
+        .ok_or("No filehandle actions found")?;
     assert!(first_action.edit.new_text.contains("open"));
     Ok(())
 }

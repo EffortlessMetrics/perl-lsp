@@ -28,8 +28,9 @@ fn boundary_padding_strategy() -> impl Strategy<Value = String> {
 }
 
 fn nonempty_boundary_padding_strategy() -> impl Strategy<Value = String> {
-    boundary_padding_strategy()
-        .prop_filter("boundary padding must not be empty", |padding| !padding.is_empty())
+    boundary_padding_strategy().prop_filter("boundary padding must not be empty", |padding| {
+        !padding.is_empty()
+    })
 }
 
 fn module_char_strategy() -> impl Strategy<Value = char> {

@@ -69,7 +69,10 @@ pub struct StreamSessionManager {
 
 impl StreamSessionManager {
     pub fn new() -> Self {
-        Self { sessions: std::sync::Mutex::new(HashMap::new()), generation: AtomicU64::new(0) }
+        Self {
+            sessions: std::sync::Mutex::new(HashMap::new()),
+            generation: AtomicU64::new(0),
+        }
     }
 
     /// Start a new session, cancelling any existing session for the same key.
@@ -129,8 +132,12 @@ mod tests {
     #[test]
     fn start_session_creates_unique_ids() {
         let mgr = StreamSessionManager::new();
-        let key =
-            SessionKey { uri: "file:///a.pl".into(), document_version: 1, line: 5, character: 10 };
+        let key = SessionKey {
+            uri: "file:///a.pl".into(),
+            document_version: 1,
+            line: 5,
+            character: 10,
+        };
         let s1 = mgr.start_session(key.clone());
         let s2 = mgr.start_session(key);
         assert_ne!(s1.session_id, s2.session_id);
@@ -139,8 +146,12 @@ mod tests {
     #[test]
     fn start_session_cancels_previous() {
         let mgr = StreamSessionManager::new();
-        let key =
-            SessionKey { uri: "file:///a.pl".into(), document_version: 1, line: 5, character: 10 };
+        let key = SessionKey {
+            uri: "file:///a.pl".into(),
+            document_version: 1,
+            line: 5,
+            character: 10,
+        };
         let s1 = mgr.start_session(key.clone());
         assert!(!s1.is_cancelled());
         let _s2 = mgr.start_session(key);
@@ -190,8 +201,12 @@ mod tests {
     #[test]
     fn cleanup_removes_cancelled() {
         let mgr = StreamSessionManager::new();
-        let key =
-            SessionKey { uri: "file:///a.pl".into(), document_version: 1, line: 0, character: 0 };
+        let key = SessionKey {
+            uri: "file:///a.pl".into(),
+            document_version: 1,
+            line: 0,
+            character: 0,
+        };
         let session = mgr.start_session(key);
         session.cancel();
         mgr.cleanup();

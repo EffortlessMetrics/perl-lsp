@@ -255,7 +255,10 @@ mod tests {
         let calls = call_count.load(Ordering::SeqCst);
         let uris = total_uris.load(Ordering::SeqCst);
         // Should coalesce into 1-2 batch calls (all 50 URIs arrive before window expires)
-        assert!(calls <= 2, "Expected <=2 batch calls for 50 rapid changes, got {calls}");
+        assert!(
+            calls <= 2,
+            "Expected <=2 batch calls for 50 rapid changes, got {calls}"
+        );
         assert_eq!(uris, 50, "All 50 URIs should be delivered, got {uris}");
     }
 }

@@ -91,7 +91,10 @@ fn streaming_completion_returns_null_and_emits_progress() -> TestResult {
     )?;
 
     // The handler returns null -- all data is sent via $/progress.
-    assert!(result.is_null(), "expected null response for streaming request, got: {result}");
+    assert!(
+        result.is_null(),
+        "expected null response for streaming request, got: {result}"
+    );
 
     // Verify that a $/progress notification was emitted.
     let progress_notifications = harness.drain_notifications(Some("$/progress"), 500);
@@ -115,14 +118,23 @@ fn streaming_completion_returns_null_and_emits_progress() -> TestResult {
         Some("perlInlineCompletionStream"),
         "progress kind must be 'perlInlineCompletionStream'"
     );
-    assert!(value.get("sessionId").is_some(), "progress must contain a sessionId");
-    assert!(value.get("sequence").is_some(), "progress must contain a sequence number");
+    assert!(
+        value.get("sessionId").is_some(),
+        "progress must contain a sessionId"
+    );
+    assert!(
+        value.get("sequence").is_some(),
+        "progress must contain a sequence number"
+    );
     assert_eq!(
         value["isFinal"].as_bool(),
         Some(true),
         "current implementation emits a single final progress"
     );
-    assert!(value.get("items").is_some(), "progress must contain an items array");
+    assert!(
+        value.get("items").is_some(),
+        "progress must contain an items array"
+    );
 
     Ok(())
 }
@@ -157,7 +169,9 @@ fn streaming_completion_progress_has_valid_session_and_sequence() -> TestResult 
     assert!(!matching.is_empty(), "expected progress notification");
 
     let value = &matching[0]["params"]["value"];
-    let session_id = value["sessionId"].as_str().ok_or("sessionId should be a string")?;
+    let session_id = value["sessionId"]
+        .as_str()
+        .ok_or("sessionId should be a string")?;
     assert!(
         session_id.starts_with("sess-"),
         "session ID should start with 'sess-', got: {session_id}"
@@ -199,7 +213,10 @@ fn streaming_completion_without_ai_falls_back_to_one_shot() -> TestResult {
         .get("items")
         .and_then(|v| v.as_array())
         .ok_or("expected items array in fallback response")?;
-    assert!(!items.is_empty(), "one-shot fallback should return completions for 'Package->'");
+    assert!(
+        !items.is_empty(),
+        "one-shot fallback should return completions for 'Package->'"
+    );
     assert_eq!(
         items[0]["insertText"].as_str(),
         Some("new()"),
@@ -212,7 +229,10 @@ fn streaming_completion_without_ai_falls_back_to_one_shot() -> TestResult {
         .iter()
         .filter(|n| n.pointer("/params/token").and_then(|v| v.as_str()) == Some("fallback-token-1"))
         .collect();
-    assert!(matching.is_empty(), "no progress notifications expected when AI is disabled");
+    assert!(
+        matching.is_empty(),
+        "no progress notifications expected when AI is disabled"
+    );
 
     Ok(())
 }
@@ -244,7 +264,10 @@ fn streaming_completion_with_streaming_disabled_falls_back() -> TestResult {
         .get("items")
         .and_then(|v| v.as_array())
         .ok_or("expected items array in fallback response")?;
-    assert!(!items.is_empty(), "one-shot fallback should return completions");
+    assert!(
+        !items.is_empty(),
+        "one-shot fallback should return completions"
+    );
 
     Ok(())
 }
@@ -278,7 +301,10 @@ fn streaming_completion_without_partial_result_token_falls_back() -> TestResult 
         .get("items")
         .and_then(|v| v.as_array())
         .ok_or("expected items array when partialResultToken is missing")?;
-    assert!(!items.is_empty(), "one-shot fallback should return completions");
+    assert!(
+        !items.is_empty(),
+        "one-shot fallback should return completions"
+    );
 
     Ok(())
 }
@@ -319,7 +345,10 @@ fn streaming_completion_second_request_cancels_first_session() -> TestResult {
             "partialResultToken": "cancel-token-2"
         }),
     )?;
-    assert!(result2.is_null(), "second streaming response should be null");
+    assert!(
+        result2.is_null(),
+        "second streaming response should be null"
+    );
 
     // Both should have emitted progress, but with different session IDs.
     let progress = harness.drain_notifications(Some("$/progress"), 500);
@@ -332,12 +361,22 @@ fn streaming_completion_second_request_cancels_first_session() -> TestResult {
         .filter(|n| n.pointer("/params/token").and_then(|v| v.as_str()) == Some("cancel-token-2"))
         .collect();
 
-    assert!(!token1_progress.is_empty(), "first request should emit progress");
-    assert!(!token2_progress.is_empty(), "second request should emit progress");
+    assert!(
+        !token1_progress.is_empty(),
+        "first request should emit progress"
+    );
+    assert!(
+        !token2_progress.is_empty(),
+        "second request should emit progress"
+    );
 
     // Verify different session IDs.
-    let sid1 = token1_progress[0].pointer("/params/value/sessionId").and_then(|v| v.as_str());
-    let sid2 = token2_progress[0].pointer("/params/value/sessionId").and_then(|v| v.as_str());
+    let sid1 = token1_progress[0]
+        .pointer("/params/value/sessionId")
+        .and_then(|v| v.as_str());
+    let sid2 = token2_progress[0]
+        .pointer("/params/value/sessionId")
+        .and_then(|v| v.as_str());
     assert_ne!(
         sid1, sid2,
         "two requests at the same position should produce different session IDs"
@@ -375,7 +414,10 @@ fn streaming_completion_on_closed_doc_returns_null() -> TestResult {
     )?;
 
     // Should gracefully return null (document not found).
-    assert!(result.is_null(), "streaming on closed doc should return null");
+    assert!(
+        result.is_null(),
+        "streaming on closed doc should return null"
+    );
 
     Ok(())
 }
@@ -392,7 +434,10 @@ fn streaming_completion_missing_params_returns_error() -> TestResult {
     let result = harness.request("textDocument/perlInlineCompletionStream", json!({}));
 
     // Should return an error (missing textDocument.uri).
-    assert!(result.is_err(), "streaming request with empty params should error");
+    assert!(
+        result.is_err(),
+        "streaming request with empty params should error"
+    );
 
     Ok(())
 }
@@ -472,7 +517,10 @@ fn streaming_completion_progress_schema_validation() -> TestResult {
     // Required fields in value
     let required_fields = ["kind", "sessionId", "sequence", "isFinal", "items"];
     for field in &required_fields {
-        assert!(value.get(field).is_some(), "progress value must contain '{field}'");
+        assert!(
+            value.get(field).is_some(),
+            "progress value must contain '{field}'"
+        );
     }
 
     // Type checks
@@ -509,7 +557,9 @@ mod mock_streaming_completion_tests {
 
     impl TestOutputCapture {
         fn new() -> Self {
-            Self { buffer: Arc::new(Mutex::new(Vec::new())) }
+            Self {
+                buffer: Arc::new(Mutex::new(Vec::new())),
+            }
         }
 
         fn messages(&self) -> Vec<Value> {
@@ -643,7 +693,10 @@ mod mock_streaming_completion_tests {
             })),
         };
 
-        server.handle_request(request).and_then(|response| response.result).unwrap_or(json!(null))
+        server
+            .handle_request(request)
+            .and_then(|response| response.result)
+            .unwrap_or(json!(null))
     }
 
     struct MockChunkBackend {
@@ -689,7 +742,9 @@ mod mock_streaming_completion_tests {
                 text: "find_".to_string(),
                 is_final: false,
             });
-            Err(perl_lsp_inline_completion::BackendError::Provider("mock stream error".into()))
+            Err(perl_lsp_inline_completion::BackendError::Provider(
+                "mock stream error".into(),
+            ))
         }
     }
 
@@ -716,7 +771,9 @@ mod mock_streaming_completion_tests {
         let mut last_sequence = None;
         for idx in 0..progress.len() {
             let value = &progress[idx]["params"]["value"];
-            let sequence = value["sequence"].as_u64().expect("progress should include sequence");
+            let sequence = value["sequence"]
+                .as_u64()
+                .expect("progress should include sequence");
             if let Some(previous) = last_sequence {
                 assert!(sequence > previous);
             } else {
@@ -753,7 +810,9 @@ mod mock_streaming_completion_tests {
         let new_result = request_streaming_completion(&server, uri, "stream-cancel-new");
         assert!(new_result.is_null());
 
-        first.join().expect("first streaming request thread panicked");
+        first
+            .join()
+            .expect("first streaming request thread panicked");
 
         thread::sleep(Duration::from_millis(250));
         let old_progress =
@@ -779,9 +838,13 @@ mod mock_streaming_completion_tests {
         let progress =
             wait_for_progress_messages(&capture, "stream-error-1", Duration::from_millis(500));
         assert!(!progress.is_empty());
-        assert_eq!(progress[0]["params"]["value"]["items"][0]["insertText"], "find_");
-        let final_progress =
-            progress.last().expect("error path should emit at least one progress frame");
+        assert_eq!(
+            progress[0]["params"]["value"]["items"][0]["insertText"],
+            "find_"
+        );
+        let final_progress = progress
+            .last()
+            .expect("error path should emit at least one progress frame");
         assert!(
             final_progress
                 .pointer("/params/value/isFinal")
@@ -794,7 +857,9 @@ mod mock_streaming_completion_tests {
             "error path should preserve final cumulative text"
         );
         assert!(
-            final_progress["params"]["value"]["sequence"].as_u64().is_some(),
+            final_progress["params"]["value"]["sequence"]
+                .as_u64()
+                .is_some(),
             "final progress frame should carry sequence"
         );
     }

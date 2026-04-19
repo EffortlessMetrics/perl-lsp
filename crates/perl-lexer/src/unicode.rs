@@ -12,7 +12,10 @@ static UNICODE_EMOJI_HITS: AtomicU64 = AtomicU64::new(0);
 /// Get Unicode processing statistics for debugging
 #[allow(dead_code)]
 pub fn get_unicode_stats() -> (u64, u64) {
-    (UNICODE_CHAR_CHECKS.load(Ordering::Relaxed), UNICODE_EMOJI_HITS.load(Ordering::Relaxed))
+    (
+        UNICODE_CHAR_CHECKS.load(Ordering::Relaxed),
+        UNICODE_EMOJI_HITS.load(Ordering::Relaxed),
+    )
 }
 
 /// Reset Unicode processing statistics

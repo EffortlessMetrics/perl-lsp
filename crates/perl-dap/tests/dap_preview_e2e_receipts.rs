@@ -13,7 +13,13 @@ type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 fn expect_success(response: DapMessage, command: &str) -> Result<Option<Value>, String> {
     match response {
-        DapMessage::Response { success, command: actual, body, message, .. } => {
+        DapMessage::Response {
+            success,
+            command: actual,
+            body,
+            message,
+            ..
+        } => {
             if actual != command {
                 return Err(format!("expected `{command}` response, got `{actual}`"));
             }
@@ -61,17 +67,32 @@ $x++;
     });
 
     assert_eq!(response.len(), 1);
-    assert!(response[0].verified, "hitCondition breakpoint should verify on executable line");
+    assert!(
+        response[0].verified,
+        "hitCondition breakpoint should verify on executable line"
+    );
 
     let first = store.register_breakpoint_hit(&script_path, 4);
     assert!(first.matched, "first hit should match breakpoint");
-    assert!(!first.should_stop, "first hit should not stop for hitCondition `=2`");
-    assert!(first.log_messages.is_empty(), "first hit should not emit logpoint output");
+    assert!(
+        !first.should_stop,
+        "first hit should not stop for hitCondition `=2`"
+    );
+    assert!(
+        first.log_messages.is_empty(),
+        "first hit should not emit logpoint output"
+    );
 
     let second = store.register_breakpoint_hit(&script_path, 4);
     assert!(second.matched, "second hit should match breakpoint");
-    assert!(second.should_stop, "second hit should stop for hitCondition `=2`");
-    assert!(second.log_messages.is_empty(), "hitCondition-only breakpoint should not emit logs");
+    assert!(
+        second.should_stop,
+        "second hit should stop for hitCondition `=2`"
+    );
+    assert!(
+        second.log_messages.is_empty(),
+        "hitCondition-only breakpoint should not emit logs"
+    );
 
     Ok(())
 }
@@ -109,23 +130,38 @@ $x++;
     });
 
     assert_eq!(response.len(), 1);
-    assert!(response[0].verified, "multi-hit breakpoint should verify on executable line");
+    assert!(
+        response[0].verified,
+        "multi-hit breakpoint should verify on executable line"
+    );
 
     let first = store.register_breakpoint_hit(&script_path, 4);
     assert!(first.matched, "first hit should match breakpoint");
-    assert!(!first.should_stop, "first hit should not stop for hitCondition `%3`");
+    assert!(
+        !first.should_stop,
+        "first hit should not stop for hitCondition `%3`"
+    );
 
     let second = store.register_breakpoint_hit(&script_path, 4);
     assert!(second.matched, "second hit should match breakpoint");
-    assert!(!second.should_stop, "second hit should not stop for hitCondition `%3`");
+    assert!(
+        !second.should_stop,
+        "second hit should not stop for hitCondition `%3`"
+    );
 
     let third = store.register_breakpoint_hit(&script_path, 4);
     assert!(third.matched, "third hit should match breakpoint");
-    assert!(third.should_stop, "third hit should stop for hitCondition `%3`");
+    assert!(
+        third.should_stop,
+        "third hit should stop for hitCondition `%3`"
+    );
 
     let fourth = store.register_breakpoint_hit(&script_path, 4);
     assert!(fourth.matched, "fourth hit should still match breakpoint");
-    assert!(!fourth.should_stop, "fourth hit should not stop for hitCondition `%3`");
+    assert!(
+        !fourth.should_stop,
+        "fourth hit should not stop for hitCondition `%3`"
+    );
 
     Ok(())
 }
@@ -162,16 +198,25 @@ $x++;
     });
 
     assert_eq!(response.len(), 1);
-    assert!(response[0].verified, "logpoint should verify on executable line");
+    assert!(
+        response[0].verified,
+        "logpoint should verify on executable line"
+    );
 
     let first = store.register_breakpoint_hit(&script_path, 4);
     assert!(first.matched, "first hit should match logpoint");
     assert!(!first.should_stop, "logpoint should not stop execution");
-    assert!(first.log_messages.is_empty(), "logpoint with `%2` should not emit on first hit");
+    assert!(
+        first.log_messages.is_empty(),
+        "logpoint with `%2` should not emit on first hit"
+    );
 
     let second = store.register_breakpoint_hit(&script_path, 4);
     assert!(second.matched, "second hit should match logpoint");
-    assert!(!second.should_stop, "logpoint should continue execution on second hit");
+    assert!(
+        !second.should_stop,
+        "logpoint should continue execution on second hit"
+    );
     assert_eq!(second.log_messages, vec!["loop tick".to_string()]);
 
     Ok(())
@@ -183,10 +228,14 @@ fn preview_set_exception_breakpoints_receipt() -> TestResult {
 
     let init = expect_success(adapter.handle_request(1, "initialize", None), "initialize")?
         .ok_or("initialize response missing body")?;
-    let supports_exception_options =
-        init.get("supportsExceptionOptions").and_then(Value::as_bool).unwrap_or(false);
-    let supports_exception_filter_options =
-        init.get("supportsExceptionFilterOptions").and_then(Value::as_bool).unwrap_or(false);
+    let supports_exception_options = init
+        .get("supportsExceptionOptions")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    let supports_exception_filter_options = init
+        .get("supportsExceptionFilterOptions")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
     let filters = init
         .get("exceptionBreakpointFilters")
         .and_then(Value::as_array)

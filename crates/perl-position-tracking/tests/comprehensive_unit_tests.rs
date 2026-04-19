@@ -406,7 +406,10 @@ fn line_starts_cache_position_to_offset_roundtrip() {
         }
         let (line, col) = cache.offset_to_position(src, byte);
         let back = cache.position_to_offset(src, line, col);
-        assert_eq!(back, byte, "roundtrip failed for byte {byte}: line={line}, col={col}");
+        assert_eq!(
+            back, byte,
+            "roundtrip failed for byte {byte}: line={line}, col={col}"
+        );
     }
 }
 
@@ -502,9 +505,18 @@ fn line_index_range() {
 #[test]
 fn offset_to_utf16_line_col_ascii() {
     let text = "abc\ndef\nghi";
-    assert_eq!(perl_position_tracking::offset_to_utf16_line_col(text, 0), (0, 0));
-    assert_eq!(perl_position_tracking::offset_to_utf16_line_col(text, 4), (1, 0));
-    assert_eq!(perl_position_tracking::offset_to_utf16_line_col(text, 6), (1, 2));
+    assert_eq!(
+        perl_position_tracking::offset_to_utf16_line_col(text, 0),
+        (0, 0)
+    );
+    assert_eq!(
+        perl_position_tracking::offset_to_utf16_line_col(text, 4),
+        (1, 0)
+    );
+    assert_eq!(
+        perl_position_tracking::offset_to_utf16_line_col(text, 6),
+        (1, 2)
+    );
 }
 
 #[test]
@@ -528,30 +540,51 @@ fn offset_to_utf16_line_col_emoji() {
     // 😀 is 4 UTF-8 bytes, 2 UTF-16 code units
     let text = "a😀b";
     // After 'a': offset 1 → col 1
-    assert_eq!(perl_position_tracking::offset_to_utf16_line_col(text, 1), (0, 1));
+    assert_eq!(
+        perl_position_tracking::offset_to_utf16_line_col(text, 1),
+        (0, 1)
+    );
     // After emoji: offset 5 → col 3 (1 + 2)
-    assert_eq!(perl_position_tracking::offset_to_utf16_line_col(text, 5), (0, 3));
+    assert_eq!(
+        perl_position_tracking::offset_to_utf16_line_col(text, 5),
+        (0, 3)
+    );
 }
 
 #[test]
 fn utf16_line_col_to_offset_ascii() {
     let text = "abc\ndef\nghi";
-    assert_eq!(perl_position_tracking::utf16_line_col_to_offset(text, 0, 0), 0);
-    assert_eq!(perl_position_tracking::utf16_line_col_to_offset(text, 1, 0), 4);
-    assert_eq!(perl_position_tracking::utf16_line_col_to_offset(text, 1, 2), 6);
+    assert_eq!(
+        perl_position_tracking::utf16_line_col_to_offset(text, 0, 0),
+        0
+    );
+    assert_eq!(
+        perl_position_tracking::utf16_line_col_to_offset(text, 1, 0),
+        4
+    );
+    assert_eq!(
+        perl_position_tracking::utf16_line_col_to_offset(text, 1, 2),
+        6
+    );
 }
 
 #[test]
 fn utf16_line_col_to_offset_past_end() {
     let text = "abc";
-    assert_eq!(perl_position_tracking::utf16_line_col_to_offset(text, 99, 0), text.len());
+    assert_eq!(
+        perl_position_tracking::utf16_line_col_to_offset(text, 99, 0),
+        text.len()
+    );
 }
 
 #[test]
 fn utf16_line_col_to_offset_emoji() {
     let text = "a😀b";
     // Col 3 (1 + 2 UTF-16 units for emoji) → byte 5
-    assert_eq!(perl_position_tracking::utf16_line_col_to_offset(text, 0, 3), 5);
+    assert_eq!(
+        perl_position_tracking::utf16_line_col_to_offset(text, 0, 3),
+        5
+    );
 }
 
 #[test]
@@ -563,7 +596,10 @@ fn convert_roundtrip_every_byte() {
         }
         let (line, col) = perl_position_tracking::offset_to_utf16_line_col(text, byte);
         let back = perl_position_tracking::utf16_line_col_to_offset(text, line, col);
-        assert_eq!(back, byte, "roundtrip failed at byte {byte}: line={line}, col={col}");
+        assert_eq!(
+            back, byte,
+            "roundtrip failed at byte {byte}: line={line}, col={col}"
+        );
     }
 }
 
@@ -1070,7 +1106,10 @@ fn line_starts_cache_rope_position_to_offset_roundtrip() {
         }
         let (line, col) = cache.offset_to_position_rope(&rope, byte);
         let back = cache.position_to_offset_rope(&rope, line, col);
-        assert_eq!(back, byte, "rope roundtrip failed at byte {byte}: line={line}, col={col}");
+        assert_eq!(
+            back, byte,
+            "rope roundtrip failed at byte {byte}: line={line}, col={col}"
+        );
     }
 }
 
@@ -1514,7 +1553,10 @@ fn offset_to_utf16_line_col_empty_text() {
 
 #[test]
 fn utf16_line_col_to_offset_empty_text() {
-    assert_eq!(perl_position_tracking::utf16_line_col_to_offset("", 0, 0), 0);
+    assert_eq!(
+        perl_position_tracking::utf16_line_col_to_offset("", 0, 0),
+        0
+    );
 }
 
 #[test]
@@ -1529,17 +1571,35 @@ fn offset_to_utf16_line_col_at_newline_char() {
 #[test]
 fn offset_to_utf16_line_col_crlf() {
     let text = "ab\r\ncd";
-    assert_eq!(perl_position_tracking::offset_to_utf16_line_col(text, 0), (0, 0));
-    assert_eq!(perl_position_tracking::offset_to_utf16_line_col(text, 4), (1, 0));
-    assert_eq!(perl_position_tracking::offset_to_utf16_line_col(text, 5), (1, 1));
+    assert_eq!(
+        perl_position_tracking::offset_to_utf16_line_col(text, 0),
+        (0, 0)
+    );
+    assert_eq!(
+        perl_position_tracking::offset_to_utf16_line_col(text, 4),
+        (1, 0)
+    );
+    assert_eq!(
+        perl_position_tracking::offset_to_utf16_line_col(text, 5),
+        (1, 1)
+    );
 }
 
 #[test]
 fn utf16_line_col_to_offset_crlf() {
     let text = "ab\r\ncd";
-    assert_eq!(perl_position_tracking::utf16_line_col_to_offset(text, 0, 0), 0);
-    assert_eq!(perl_position_tracking::utf16_line_col_to_offset(text, 1, 0), 4);
-    assert_eq!(perl_position_tracking::utf16_line_col_to_offset(text, 1, 1), 5);
+    assert_eq!(
+        perl_position_tracking::utf16_line_col_to_offset(text, 0, 0),
+        0
+    );
+    assert_eq!(
+        perl_position_tracking::utf16_line_col_to_offset(text, 1, 0),
+        4
+    );
+    assert_eq!(
+        perl_position_tracking::utf16_line_col_to_offset(text, 1, 1),
+        5
+    );
 }
 
 #[test]
@@ -1609,10 +1669,14 @@ fn wire_range_whole_document_multiline() {
 
 #[test]
 fn wire_location_different_uris() {
-    let loc1 =
-        WireLocation::new("file:///a.pl".to_string(), WireRange::empty(WirePosition::new(0, 0)));
-    let loc2 =
-        WireLocation::new("file:///b.pl".to_string(), WireRange::empty(WirePosition::new(0, 0)));
+    let loc1 = WireLocation::new(
+        "file:///a.pl".to_string(),
+        WireRange::empty(WirePosition::new(0, 0)),
+    );
+    let loc2 = WireLocation::new(
+        "file:///b.pl".to_string(),
+        WireRange::empty(WirePosition::new(0, 0)),
+    );
     assert_ne!(loc1, loc2);
 }
 
@@ -1628,7 +1692,11 @@ fn mapper_roundtrip_every_char_boundary() {
         }
         let pos = m.byte_to_lsp_pos(byte);
         let back = m.lsp_pos_to_byte(pos);
-        assert_eq!(back, Some(byte), "mapper roundtrip failed at byte {byte}: pos={pos:?}");
+        assert_eq!(
+            back,
+            Some(byte),
+            "mapper roundtrip failed at byte {byte}: pos={pos:?}"
+        );
     }
 }
 
@@ -1787,7 +1855,10 @@ fn last_line_column_utf8_single_newline() {
 #[test]
 fn last_line_column_utf8_multibyte_last_line() {
     // 日 is 3 UTF-8 bytes
-    assert_eq!(perl_position_tracking::last_line_column_utf8("abc\n日本"), 6);
+    assert_eq!(
+        perl_position_tracking::last_line_column_utf8("abc\n日本"),
+        6
+    );
 }
 
 // ─── Additional Rope-backed edge cases ──────────────────────────────────────

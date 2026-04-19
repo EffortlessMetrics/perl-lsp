@@ -1,7 +1,13 @@
 use proptest::prelude::*;
 
 fn phaser_name() -> impl Strategy<Value = &'static str> {
-    prop_oneof![Just("BEGIN"), Just("CHECK"), Just("UNITCHECK"), Just("INIT"), Just("END"),]
+    prop_oneof![
+        Just("BEGIN"),
+        Just("CHECK"),
+        Just("UNITCHECK"),
+        Just("INIT"),
+        Just("END"),
+    ]
 }
 
 fn phaser_statement() -> impl Strategy<Value = String> {

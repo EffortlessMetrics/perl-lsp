@@ -35,9 +35,18 @@ impl LineStartsCache {
     }
     pub fn offset_to_position(&self, text: &str, offset: usize) -> (u32, u32) {
         let offset = offset.min(text.len());
-        let line = self.line_starts.binary_search(&offset).unwrap_or_else(|i| i.saturating_sub(1));
+        let line = self
+            .line_starts
+            .binary_search(&offset)
+            .unwrap_or_else(|i| i.saturating_sub(1));
         let ls = self.line_starts[line];
-        (line as u32, text[ls..offset].chars().map(|c| c.len_utf16()).sum::<usize>() as u32)
+        (
+            line as u32,
+            text[ls..offset]
+                .chars()
+                .map(|c| c.len_utf16())
+                .sum::<usize>() as u32,
+        )
     }
     pub fn position_to_offset(&self, text: &str, line: u32, character: u32) -> usize {
         let line = line as usize;
@@ -70,11 +79,17 @@ impl LineStartsCache {
     }
     pub fn offset_to_position_rope(&self, rope: &Rope, offset: usize) -> (u32, u32) {
         let offset = offset.min(rope.len_bytes());
-        let line = self.line_starts.binary_search(&offset).unwrap_or_else(|i| i.saturating_sub(1));
+        let line = self
+            .line_starts
+            .binary_search(&offset)
+            .unwrap_or_else(|i| i.saturating_sub(1));
         let ls = self.line_starts[line];
         (
             line as u32,
-            rope.byte_slice(ls..offset).chars().map(|c| c.len_utf16()).sum::<usize>() as u32,
+            rope.byte_slice(ls..offset)
+                .chars()
+                .map(|c| c.len_utf16())
+                .sum::<usize>() as u32,
         )
     }
     pub fn position_to_offset_rope(&self, rope: &Rope, line: u32, character: u32) -> usize {
@@ -126,7 +141,10 @@ impl LineIndex {
 
     /// Convert byte offset to position (0-based line and UTF-16 column)
     pub fn offset_to_position(&self, offset: usize) -> (u32, u32) {
-        let line = self.line_starts.binary_search(&offset).unwrap_or_else(|i| i.saturating_sub(1));
+        let line = self
+            .line_starts
+            .binary_search(&offset)
+            .unwrap_or_else(|i| i.saturating_sub(1));
 
         let line_start = self.line_starts[line];
         let column = self.utf16_column(line, offset - line_start);
@@ -190,7 +208,11 @@ impl LineIndex {
         }
 
         // Check if we're at the end of the line
-        if current_utf16 == utf16_offset { Some(line_text.len()) } else { None }
+        if current_utf16 == utf16_offset {
+            Some(line_text.len())
+        } else {
+            None
+        }
     }
 
     /// Create a range from byte offsets

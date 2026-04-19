@@ -32,17 +32,20 @@ fn get_mason_def_regex() -> Result<&'static regex::Regex, JsonRpcError> {
 }
 
 fn get_mason_component_regex() -> Result<&'static regex::Regex, JsonRpcError> {
-    MASON_COMPONENT_RE.get_or_init(|| regex::Regex::new(r"(?s)<&(?P<body>.*?)&>")).as_ref().map_err(
-        |err| {
+    MASON_COMPONENT_RE
+        .get_or_init(|| regex::Regex::new(r"(?s)<&(?P<body>.*?)&>"))
+        .as_ref()
+        .map_err(|err| {
             crate::protocol::internal_error(&format!(
                 "Failed to initialize Mason component regex: {err}"
             ))
-        },
-    )
+        })
 }
 
 fn is_mason_template_path(path: &Path) -> bool {
-    path.extension().and_then(|ext| ext.to_str()).is_some_and(|ext| matches!(ext, "mason" | "mas"))
+    path.extension()
+        .and_then(|ext| ext.to_str())
+        .is_some_and(|ext| matches!(ext, "mason" | "mas"))
 }
 
 fn uri_to_path(uri: &str) -> Option<PathBuf> {
@@ -52,17 +55,32 @@ fn uri_to_path(uri: &str) -> Option<PathBuf> {
 fn engine_position(text: &str, offset: usize) -> EnginePosition {
     let (line, column) = byte_to_line_col(text, offset);
 
-    EnginePosition { byte: offset, line, column }
+    EnginePosition {
+        byte: offset,
+        line,
+        column,
+    }
 }
 
 fn name_range_in_text(text: &str, start: usize, end: usize) -> EngineRange {
-    EngineRange { start: engine_position(text, start), end: engine_position(text, end) }
+    EngineRange {
+        start: engine_position(text, start),
+        end: engine_position(text, end),
+    }
 }
 
 fn zero_range() -> EngineRange {
     EngineRange {
-        start: EnginePosition { byte: 0, line: 0, column: 0 },
-        end: EnginePosition { byte: 0, line: 0, column: 0 },
+        start: EnginePosition {
+            byte: 0,
+            line: 0,
+            column: 0,
+        },
+        end: EnginePosition {
+            byte: 0,
+            line: 0,
+            column: 0,
+        },
     }
 }
 
@@ -95,7 +113,9 @@ fn same_file_mason_definitions(
         let Some(name) = cap.get(1) else {
             continue;
         };
-        definitions.entry(name.as_str().to_string()).or_insert((name.start(), name.end()));
+        definitions
+            .entry(name.as_str().to_string())
+            .or_insert((name.start(), name.end()));
     }
 
     definitions
@@ -193,7 +213,10 @@ impl LspServer {
                 resolve_mason_component_file(&source_path, &component_name)
             {
                 if let Ok(component_uri) = Url::from_file_path(component_path) {
-                    return Some(Location { uri: component_uri.to_string(), range: zero_range() });
+                    return Some(Location {
+                        uri: component_uri.to_string(),
+                        range: zero_range(),
+                    });
                 }
             }
         }

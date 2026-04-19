@@ -42,7 +42,9 @@ pub fn should_enable_logging(explicit_flag: bool) -> bool {
 }
 
 fn logging_env_directive() -> Option<String> {
-    std::env::var("PERL_LSP_LOG").ok().or_else(|| std::env::var("RUST_LOG").ok())
+    std::env::var("PERL_LSP_LOG")
+        .ok()
+        .or_else(|| std::env::var("RUST_LOG").ok())
 }
 
 /// Resolve the effective tracing filter for the current process.
@@ -81,7 +83,10 @@ pub fn init_logging(default_filter: &str) {
         if let Ok(log_path) = std::env::var("PERL_LSP_LOG_FILE") {
             let path = std::path::Path::new(&log_path);
             let log_dir = path.parent().unwrap_or_else(|| std::path::Path::new("."));
-            let log_file_prefix = path.file_name().and_then(|f| f.to_str()).unwrap_or("perl-lsp");
+            let log_file_prefix = path
+                .file_name()
+                .and_then(|f| f.to_str())
+                .unwrap_or("perl-lsp");
 
             if let Ok(file_appender) = tracing_appender::rolling::RollingFileAppender::builder()
                 .rotation(tracing_appender::rolling::Rotation::DAILY)
@@ -134,7 +139,12 @@ pub fn log_server_startup(
     feature_profile: Option<FeatureProfile>,
     startup_report: Option<&StartupReport>,
 ) {
-    tracing::info!(server = server_name, version, transport = transport.label(), "server starting");
+    tracing::info!(
+        server = server_name,
+        version,
+        transport = transport.label(),
+        "server starting"
+    );
 
     if let Some(port) = transport.port() {
         tracing::info!(server = server_name, port, "listening port configured");
@@ -175,7 +185,9 @@ impl TransportArgs {
     /// Returns the resolved transport mode.
     pub fn mode(&self) -> TransportMode {
         if self.socket || self.port.is_some() {
-            TransportMode::Socket { port: self.port.unwrap_or(DEFAULT_LSP_PORT) }
+            TransportMode::Socket {
+                port: self.port.unwrap_or(DEFAULT_LSP_PORT),
+            }
         } else {
             TransportMode::Stdio
         }
@@ -305,7 +317,11 @@ pub struct LaunchConfig {
 impl LaunchConfig {
     /// Create a default launch configuration for a given feature profile.
     pub const fn new(feature_profile: FeatureProfile) -> Self {
-        Self { transport: TransportMode::Stdio, enable_logging: false, feature_profile }
+        Self {
+            transport: TransportMode::Stdio,
+            enable_logging: false,
+            feature_profile,
+        }
     }
 
     /// JSON payload describing profile-scoped advertised feature grid entries.
@@ -373,13 +389,19 @@ impl fmt::Display for LaunchParseError {
             }
             Self::InvalidFeatureProfile { raw_profile } => {
                 let supported = feature_profile_supported_tokens().join(", ");
-                write!(f, "Invalid feature profile: {raw_profile}. Supported: {supported}",)
+                write!(
+                    f,
+                    "Invalid feature profile: {raw_profile}. Supported: {supported}",
+                )
             }
             Self::InvalidPort { raw_port, reason } => {
                 write!(f, "Invalid port value: {raw_port}. {reason}")
             }
             Self::InvalidShell { raw_shell } => {
-                write!(f, "Unknown shell: {raw_shell}. Supported: bash, zsh, fish, powershell")
+                write!(
+                    f,
+                    "Unknown shell: {raw_shell}. Supported: bash, zsh, fish, powershell"
+                )
             }
         }
     }
@@ -424,7 +446,11 @@ where
                 LaunchAction::Run
             };
 
-            Ok(LaunchPlan { action, config, files: parsed_args.files })
+            Ok(LaunchPlan {
+                action,
+                config,
+                files: parsed_args.files,
+            })
         }
         Err(err) => {
             let is_help = err.kind() == clap::error::ErrorKind::DisplayHelp
@@ -445,7 +471,9 @@ where
                 });
             }
 
-            Err(LaunchParseError::UnknownOption { option: err.to_string() })
+            Err(LaunchParseError::UnknownOption {
+                option: err.to_string(),
+            })
         }
     }
 }
@@ -457,19 +485,27 @@ fn prevalidate_cli_values(args: &[std::ffi::OsString]) -> Result<(), LaunchParse
         let token = args[index].to_string_lossy();
 
         if token == "--port" {
-            let next = args.get(index + 1).map(|value| value.to_string_lossy().to_string());
+            let next = args
+                .get(index + 1)
+                .map(|value| value.to_string_lossy().to_string());
             let Some(raw_port) = next else {
-                return Err(LaunchParseError::MissingValue { option: "--port".to_string() });
+                return Err(LaunchParseError::MissingValue {
+                    option: "--port".to_string(),
+                });
             };
 
             if raw_port.starts_with("--") {
-                return Err(LaunchParseError::MissingValue { option: "--port".to_string() });
+                return Err(LaunchParseError::MissingValue {
+                    option: "--port".to_string(),
+                });
             }
 
-            raw_port.parse::<u16>().map_err(|reason| LaunchParseError::InvalidPort {
-                raw_port: raw_port.clone(),
-                reason: reason.to_string(),
-            })?;
+            raw_port
+                .parse::<u16>()
+                .map_err(|reason| LaunchParseError::InvalidPort {
+                    raw_port: raw_port.clone(),
+                    reason: reason.to_string(),
+                })?;
 
             index += 2;
             continue;
@@ -477,23 +513,33 @@ fn prevalidate_cli_values(args: &[std::ffi::OsString]) -> Result<(), LaunchParse
 
         if let Some(raw_port) = token.strip_prefix("--port=") {
             if raw_port.is_empty() {
-                return Err(LaunchParseError::MissingValue { option: "--port".to_string() });
+                return Err(LaunchParseError::MissingValue {
+                    option: "--port".to_string(),
+                });
             }
 
-            raw_port.parse::<u16>().map_err(|reason| LaunchParseError::InvalidPort {
-                raw_port: raw_port.to_string(),
-                reason: reason.to_string(),
-            })?;
+            raw_port
+                .parse::<u16>()
+                .map_err(|reason| LaunchParseError::InvalidPort {
+                    raw_port: raw_port.to_string(),
+                    reason: reason.to_string(),
+                })?;
         }
 
         if token == "--completion" {
-            let next = args.get(index + 1).map(|value| value.to_string_lossy().to_string());
+            let next = args
+                .get(index + 1)
+                .map(|value| value.to_string_lossy().to_string());
             let Some(raw_shell) = next else {
-                return Err(LaunchParseError::MissingValue { option: "--completion".to_string() });
+                return Err(LaunchParseError::MissingValue {
+                    option: "--completion".to_string(),
+                });
             };
 
             if raw_shell.starts_with("--") {
-                return Err(LaunchParseError::MissingValue { option: "--completion".to_string() });
+                return Err(LaunchParseError::MissingValue {
+                    option: "--completion".to_string(),
+                });
             }
 
             match raw_shell.as_str() {
@@ -508,7 +554,9 @@ fn prevalidate_cli_values(args: &[std::ffi::OsString]) -> Result<(), LaunchParse
         }
 
         if token == "--feature-profile" {
-            let next = args.get(index + 1).map(|value| value.to_string_lossy().to_string());
+            let next = args
+                .get(index + 1)
+                .map(|value| value.to_string_lossy().to_string());
             let Some(raw_profile) = next else {
                 return Err(LaunchParseError::MissingValue {
                     option: "--feature-profile".to_string(),
@@ -526,7 +574,9 @@ fn prevalidate_cli_values(args: &[std::ffi::OsString]) -> Result<(), LaunchParse
         }
 
         if token == "--feature-profile=" {
-            return Err(LaunchParseError::MissingValue { option: "--feature-profile".to_string() });
+            return Err(LaunchParseError::MissingValue {
+                option: "--feature-profile".to_string(),
+            });
         }
 
         index += 1;
@@ -554,7 +604,9 @@ pub fn help_text() -> String {
     ));
     out.push_str("  --log                Enable logging to stderr\n");
     out.push_str("  --feature-profile <name>\n");
-    out.push_str(&format!("                       Set feature profile ({supported_profiles})\n"));
+    out.push_str(&format!(
+        "                       Set feature profile ({supported_profiles})\n"
+    ));
     out.push('\n');
     out.push_str("Diagnostic options:\n");
     out.push_str("  --health             Quick health check (prints 'ok <version>')\n");
@@ -747,8 +799,12 @@ pub fn format_info_output(
     out.push_str(&format!("Git tag:          {git_tag}\n"));
     out.push_str("Parser:           perl-parser v3 (recursive descent)\n");
     out.push_str(&format!("Profile:          {}\n", profile.as_str()));
-    out.push_str(&format!("Features:         {feature_count}/{feature_count} active (100%)\n"));
-    out.push_str(&format!("LSP spec coverage: {feature_count}/{spec_total} ({coverage:.0}%)\n"));
+    out.push_str(&format!(
+        "Features:         {feature_count}/{feature_count} active (100%)\n"
+    ));
+    out.push_str(&format!(
+        "LSP spec coverage: {feature_count}/{spec_total} ({coverage:.0}%)\n"
+    ));
     out.push_str(&format!("Executable:       {exe_path}\n"));
     out.push_str("\nTip: run with --log or set PERL_LSP_LOG=1 for diagnostics\n");
 
@@ -776,7 +832,10 @@ pub fn startup_banner(version: &str, profile: FeatureProfile, transport: Transpo
     if std::env::var("PERL_LSP_QUIET").is_ok() {
         return;
     }
-    eprintln!("{}", format_startup_banner(version, profile, transport.is_socket()));
+    eprintln!(
+        "{}",
+        format_startup_banner(version, profile, transport.is_socket())
+    );
 }
 
 /// Produce a user-friendly message when the TCP port is already in use.
@@ -849,7 +908,10 @@ mod tests {
         assert_eq!(plan.action, LaunchAction::Run);
         assert_eq!(plan.config.transport, TransportMode::Stdio);
         assert!(!plan.config.enable_logging);
-        assert_eq!(plan.config.feature_profile, super::FeatureProfile::current());
+        assert_eq!(
+            plan.config.feature_profile,
+            super::FeatureProfile::current()
+        );
     }
 
     #[test]
@@ -917,25 +979,45 @@ mod tests {
     #[test]
     fn parse_completion_bash() {
         let plan = must(parse_args(["perl-lsp", "--completion", "bash"]));
-        assert_eq!(plan.action, LaunchAction::Completion { shell: "bash".to_string() });
+        assert_eq!(
+            plan.action,
+            LaunchAction::Completion {
+                shell: "bash".to_string()
+            }
+        );
     }
 
     #[test]
     fn parse_completion_zsh() {
         let plan = must(parse_args(["perl-lsp", "--completion", "zsh"]));
-        assert_eq!(plan.action, LaunchAction::Completion { shell: "zsh".to_string() });
+        assert_eq!(
+            plan.action,
+            LaunchAction::Completion {
+                shell: "zsh".to_string()
+            }
+        );
     }
 
     #[test]
     fn parse_completion_fish() {
         let plan = must(parse_args(["perl-lsp", "--completion", "fish"]));
-        assert_eq!(plan.action, LaunchAction::Completion { shell: "fish".to_string() });
+        assert_eq!(
+            plan.action,
+            LaunchAction::Completion {
+                shell: "fish".to_string()
+            }
+        );
     }
 
     #[test]
     fn parse_completion_powershell() {
         let plan = must(parse_args(["perl-lsp", "--completion", "powershell"]));
-        assert_eq!(plan.action, LaunchAction::Completion { shell: "powershell".to_string() });
+        assert_eq!(
+            plan.action,
+            LaunchAction::Completion {
+                shell: "powershell".to_string()
+            }
+        );
     }
 
     #[test]
@@ -1049,13 +1131,23 @@ mod tests {
     #[test]
     fn parse_check_project_no_dir_defaults_to_dot() {
         let plan = must(parse_args(["perl-lsp", "--check-project"]));
-        assert_eq!(plan.action, LaunchAction::CheckProject { dir: ".".to_string() });
+        assert_eq!(
+            plan.action,
+            LaunchAction::CheckProject {
+                dir: ".".to_string()
+            }
+        );
     }
 
     #[test]
     fn parse_check_project_with_dir() {
         let plan = must(parse_args(["perl-lsp", "--check-project", "lib/"]));
-        assert_eq!(plan.action, LaunchAction::CheckProject { dir: "lib/".to_string() });
+        assert_eq!(
+            plan.action,
+            LaunchAction::CheckProject {
+                dir: "lib/".to_string()
+            }
+        );
     }
 
     #[test]
@@ -1068,7 +1160,9 @@ mod tests {
 
     #[test]
     fn error_display_invalid_shell() {
-        let err = super::LaunchParseError::InvalidShell { raw_shell: "tcsh".to_string() };
+        let err = super::LaunchParseError::InvalidShell {
+            raw_shell: "tcsh".to_string(),
+        };
         let msg = format!("{err}");
         assert!(msg.contains("tcsh"));
         assert!(msg.contains("bash"));
@@ -1099,13 +1193,19 @@ mod tests {
     #[test]
     fn startup_banner_stdio_transport_hint() {
         let out = super::format_startup_banner("0.12.0", super::FeatureProfile::current(), false);
-        assert!(out.contains("stdio"), "banner must show transport hint 'stdio'");
+        assert!(
+            out.contains("stdio"),
+            "banner must show transport hint 'stdio'"
+        );
     }
 
     #[test]
     fn startup_banner_socket_transport_hint() {
         let out = super::format_startup_banner("0.12.0", super::FeatureProfile::current(), true);
-        assert!(out.contains("socket"), "banner must show transport hint 'socket'");
+        assert!(
+            out.contains("socket"),
+            "banner must show transport hint 'socket'"
+        );
     }
 
     #[test]

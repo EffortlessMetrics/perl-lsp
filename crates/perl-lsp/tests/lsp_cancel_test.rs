@@ -20,8 +20,10 @@ use support::{handshake_initialize, shutdown_graceful, spawn_lsp};
 fn test_cancel_request_handling() {
     // Skip test in constrained environments where LSP initialization is unreliable
     // This includes single-threaded environments and CI systems with limited resources
-    let thread_count =
-        std::env::var("RUST_TEST_THREADS").ok().and_then(|s| s.parse::<usize>().ok()).unwrap_or(8);
+    let thread_count = std::env::var("RUST_TEST_THREADS")
+        .ok()
+        .and_then(|s| s.parse::<usize>().ok())
+        .unwrap_or(8);
 
     if thread_count <= 2 || std::env::var("CI").is_ok() {
         eprintln!(
@@ -162,7 +164,9 @@ fn test_cancel_request_handling() {
             // For hover, completing is acceptable since it's fast
         }
     } else if has_test_endpoint {
-        must(Err::<(), _>("Expected a response for slow operation".to_string()));
+        must(Err::<(), _>(
+            "Expected a response for slow operation".to_string(),
+        ));
     }
     // No response for hover is acceptable (cancelled before processing)
 }
@@ -172,8 +176,10 @@ fn test_cancel_request_handling() {
 fn test_cancel_request_no_response() {
     // Skip test in constrained environments where LSP initialization is unreliable
     // This includes single-threaded environments and CI systems with limited resources
-    let thread_count =
-        std::env::var("RUST_TEST_THREADS").ok().and_then(|s| s.parse::<usize>().ok()).unwrap_or(8);
+    let thread_count = std::env::var("RUST_TEST_THREADS")
+        .ok()
+        .and_then(|s| s.parse::<usize>().ok())
+        .unwrap_or(8);
 
     if thread_count <= 2 || std::env::var("CI").is_ok() {
         eprintln!(
@@ -204,10 +210,17 @@ fn test_cancel_request_no_response() {
     );
 
     // Drain any diagnostics or other notifications from didOpen (reduced timeout for performance)
-    drain_until_quiet(&server, Duration::from_millis(50), Duration::from_millis(200));
+    drain_until_quiet(
+        &server,
+        Duration::from_millis(50),
+        Duration::from_millis(200),
+    );
 
     // Check server is still alive before sending cancel
-    assert!(server.is_alive(), "server exited before cancel test started");
+    assert!(
+        server.is_alive(),
+        "server exited before cancel test started"
+    );
 
     // Send a cancel request for a non-existent ID
     send_notification(
@@ -225,10 +238,16 @@ fn test_cancel_request_no_response() {
     let response = read_response_only_timeout(&server, Duration::from_millis(200));
 
     // $/cancelRequest is a notification and should not produce any response
-    assert!(response.is_none(), "$/cancelRequest produced an unexpected response");
+    assert!(
+        response.is_none(),
+        "$/cancelRequest produced an unexpected response"
+    );
 
     // Verify server is still alive after processing the notification
-    assert!(server.is_alive(), "server should not exit on cancel notification");
+    assert!(
+        server.is_alive(),
+        "server should not exit on cancel notification"
+    );
 }
 
 /// PHASE 1 STABLE: Test deterministic cancellation with stable harness
@@ -269,7 +288,10 @@ fn test_cancel_deterministic_stable() -> Result<(), Box<dyn std::error::Error>> 
 
     // Verify server is still responsive with a simple request
     let result = harness.request("workspace/symbol", json!({"query": ""}));
-    assert!(result.is_ok(), "Server should remain responsive after cancellation");
+    assert!(
+        result.is_ok(),
+        "Server should remain responsive after cancellation"
+    );
 
     // Clean shutdown
     shutdown_graceful(&mut harness);
@@ -282,8 +304,10 @@ fn test_cancel_deterministic_stable() -> Result<(), Box<dyn std::error::Error>> 
 fn test_cancel_multiple_requests() {
     // Skip test in constrained environments where LSP initialization is unreliable
     // This includes single-threaded environments and CI systems with limited resources
-    let thread_count =
-        std::env::var("RUST_TEST_THREADS").ok().and_then(|s| s.parse::<usize>().ok()).unwrap_or(8);
+    let thread_count = std::env::var("RUST_TEST_THREADS")
+        .ok()
+        .and_then(|s| s.parse::<usize>().ok())
+        .unwrap_or(8);
 
     if thread_count <= 2 || std::env::var("CI").is_ok() {
         eprintln!(

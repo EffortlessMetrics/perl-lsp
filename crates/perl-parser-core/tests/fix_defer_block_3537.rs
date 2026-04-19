@@ -69,7 +69,10 @@ fn test_defer_node_kind_name() {
         node.for_each_child(|child| walk(child, found));
     }
     walk(&ast, &mut found_defer);
-    assert!(found_defer, "Expected a Defer node in the AST, but none was found");
+    assert!(
+        found_defer,
+        "Expected a Defer node in the AST, but none was found"
+    );
 }
 
 #[test]
@@ -99,5 +102,8 @@ fn test_defer_not_a_function_call() {
         node.for_each_child(|child| walk(child, found));
     }
     walk(&ast, &mut found_defer_call);
-    assert!(!found_defer_call, "defer should parse as NodeKind::Defer, not as FunctionCall");
+    assert!(
+        !found_defer_call,
+        "defer should parse as NodeKind::Defer, not as FunctionCall"
+    );
 }

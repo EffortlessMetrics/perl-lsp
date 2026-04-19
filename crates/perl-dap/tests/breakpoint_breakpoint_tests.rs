@@ -63,7 +63,10 @@ fn validation_adjusted_sets_fields() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn validation_reason_display() -> Result<(), Box<dyn std::error::Error>> {
-    assert_eq!(ValidationReason::BlankLine.to_string(), "Breakpoint set on blank line");
+    assert_eq!(
+        ValidationReason::BlankLine.to_string(),
+        "Breakpoint set on blank line"
+    );
     assert_eq!(
         ValidationReason::CommentLine.to_string(),
         "Breakpoint set on comment or blank line"
@@ -72,9 +75,18 @@ fn validation_reason_display() -> Result<(), Box<dyn std::error::Error>> {
         ValidationReason::HeredocInterior.to_string(),
         "Breakpoint set inside heredoc content"
     );
-    assert_eq!(ValidationReason::PodLine.to_string(), "Breakpoint set inside POD documentation");
-    assert_eq!(ValidationReason::LineOutOfRange.to_string(), "Line number exceeds file length");
-    assert_eq!(ValidationReason::ParseError.to_string(), "Unable to parse source file");
+    assert_eq!(
+        ValidationReason::PodLine.to_string(),
+        "Breakpoint set inside POD documentation"
+    );
+    assert_eq!(
+        ValidationReason::LineOutOfRange.to_string(),
+        "Line number exceeds file length"
+    );
+    assert_eq!(
+        ValidationReason::ParseError.to_string(),
+        "Unable to parse source file"
+    );
     assert_eq!(
         ValidationReason::InvalidCondition.to_string(),
         "Conditional breakpoint expression is invalid"
@@ -159,7 +171,9 @@ fn validate_with_column_rejected_ignores_column() -> Result<(), Box<dyn std::err
 
 #[test]
 fn comment_with_leading_whitespace() -> Result<(), Box<dyn std::error::Error>> {
-    let v = must(AstBreakpointValidator::new("   # indented comment\nmy $x = 1;\n"));
+    let v = must(AstBreakpointValidator::new(
+        "   # indented comment\nmy $x = 1;\n",
+    ));
     let result = v.validate(1);
     assert!(!result.verified);
     assert_eq!(result.reason, Some(ValidationReason::CommentLine));
@@ -168,7 +182,9 @@ fn comment_with_leading_whitespace() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn whitespace_only_line_is_blank() -> Result<(), Box<dyn std::error::Error>> {
-    let v = must(AstBreakpointValidator::new("my $x = 1;\n   \t  \nmy $y = 2;\n"));
+    let v = must(AstBreakpointValidator::new(
+        "my $x = 1;\n   \t  \nmy $y = 2;\n",
+    ));
     let result = v.validate(2);
     assert!(!result.verified);
     assert_eq!(result.reason, Some(ValidationReason::BlankLine));
@@ -395,7 +411,10 @@ fn validation_reason_clone_copy_eq() -> Result<(), Box<dyn std::error::Error>> {
     assert_ne!(r, ValidationReason::PodLine);
     assert_ne!(r, ValidationReason::InvalidCondition);
     assert_eq!(ValidationReason::PodLine, ValidationReason::PodLine);
-    assert_eq!(ValidationReason::InvalidCondition, ValidationReason::InvalidCondition);
+    assert_eq!(
+        ValidationReason::InvalidCondition,
+        ValidationReason::InvalidCondition
+    );
     Ok(())
 }
 

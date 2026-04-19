@@ -80,7 +80,10 @@ fn name_to_path_simple_two_part() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn name_to_path_three_part() -> Result<(), Box<dyn std::error::Error>> {
-    assert_eq!(module_name_to_path("App::Config::Loader"), "App/Config/Loader.pm");
+    assert_eq!(
+        module_name_to_path("App::Config::Loader"),
+        "App/Config/Loader.pm"
+    );
     Ok(())
 }
 
@@ -193,13 +196,19 @@ fn path_to_name_preserves_lib_prefix_in_path() -> Result<(), Box<dyn std::error:
 
 #[test]
 fn file_path_strips_lib_prefix_unix() -> Result<(), Box<dyn std::error::Error>> {
-    assert_eq!(file_path_to_module_name("/workspace/lib/Foo/Bar.pm"), "Foo::Bar");
+    assert_eq!(
+        file_path_to_module_name("/workspace/lib/Foo/Bar.pm"),
+        "Foo::Bar"
+    );
     Ok(())
 }
 
 #[test]
 fn file_path_strips_lib_prefix_windows() -> Result<(), Box<dyn std::error::Error>> {
-    assert_eq!(file_path_to_module_name(r"C:\workspace\lib\Foo\Bar.pm"), "Foo::Bar");
+    assert_eq!(
+        file_path_to_module_name(r"C:\workspace\lib\Foo\Bar.pm"),
+        "Foo::Bar"
+    );
     Ok(())
 }
 
@@ -212,13 +221,19 @@ fn file_path_lib_at_start() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn file_path_nested_lib_takes_last() -> Result<(), Box<dyn std::error::Error>> {
     // When multiple lib/ segments exist, the *last* one is used.
-    assert_eq!(file_path_to_module_name("/a/lib/outer/lib/Inner/Mod.pm"), "Inner::Mod");
+    assert_eq!(
+        file_path_to_module_name("/a/lib/outer/lib/Inner/Mod.pm"),
+        "Inner::Mod"
+    );
     Ok(())
 }
 
 #[test]
 fn file_path_falls_back_to_file_stem_no_lib() -> Result<(), Box<dyn std::error::Error>> {
-    assert_eq!(file_path_to_module_name("/workspace/scripts/sync_worker.pl"), "sync_worker");
+    assert_eq!(
+        file_path_to_module_name("/workspace/scripts/sync_worker.pl"),
+        "sync_worker"
+    );
     Ok(())
 }
 

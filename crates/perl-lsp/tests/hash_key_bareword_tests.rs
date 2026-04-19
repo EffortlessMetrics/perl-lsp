@@ -26,11 +26,15 @@ print FOO;
     let diagnostics_provider = DiagnosticsProvider::new(&ast, source.to_string());
     let diagnostics = diagnostics_provider.get_diagnostics(&ast, &[], source, None);
 
-    let bareword_errors: Vec<_> =
-        diagnostics.iter().filter(|d| d.code.as_deref() == Some("unquoted-bareword")).collect();
+    let bareword_errors: Vec<_> = diagnostics
+        .iter()
+        .filter(|d| d.code.as_deref() == Some("unquoted-bareword"))
+        .collect();
 
     assert_eq!(bareword_errors.len(), 1);
-    let first_error = bareword_errors.first().ok_or("expected at least one bareword error")?;
+    let first_error = bareword_errors
+        .first()
+        .ok_or("expected at least one bareword error")?;
     assert!(first_error.message.contains("FOO"));
     assert!(!first_error.message.contains("key"));
 
@@ -51,12 +55,16 @@ print STDERR;
     let diagnostics_provider = DiagnosticsProvider::new(&ast, source.to_string());
     let diagnostics = diagnostics_provider.get_diagnostics(&ast, &[], source, None);
 
-    let bareword_errors: Vec<_> =
-        diagnostics.iter().filter(|d| d.code.as_deref() == Some("unquoted-bareword")).collect();
+    let bareword_errors: Vec<_> = diagnostics
+        .iter()
+        .filter(|d| d.code.as_deref() == Some("unquoted-bareword"))
+        .collect();
 
     // Only STDERR should be flagged as a bareword, not key1 or key2
     assert_eq!(bareword_errors.len(), 1);
-    let first_error = bareword_errors.first().ok_or("expected at least one bareword error")?;
+    let first_error = bareword_errors
+        .first()
+        .ok_or("expected at least one bareword error")?;
     assert!(first_error.message.contains("STDERR"));
     assert!(!first_error.message.contains("key1"));
     assert!(!first_error.message.contains("key2"));
@@ -80,8 +88,10 @@ my @values = @h{$k1, $k2};
     let diagnostics = diagnostics_provider.get_diagnostics(&ast, &[], source, None);
 
     // No bareword errors expected - variables are used as keys
-    let bareword_errors: Vec<_> =
-        diagnostics.iter().filter(|d| d.code.as_deref() == Some("unquoted-bareword")).collect();
+    let bareword_errors: Vec<_> = diagnostics
+        .iter()
+        .filter(|d| d.code.as_deref() == Some("unquoted-bareword"))
+        .collect();
     assert_eq!(bareword_errors.len(), 0);
 
     // Variables should be marked as used
@@ -118,12 +128,16 @@ print BAREWORD;
     let diagnostics_provider = DiagnosticsProvider::new(&ast, source.to_string());
     let diagnostics = diagnostics_provider.get_diagnostics(&ast, &[], source, None);
 
-    let bareword_errors: Vec<_> =
-        diagnostics.iter().filter(|d| d.code.as_deref() == Some("unquoted-bareword")).collect();
+    let bareword_errors: Vec<_> = diagnostics
+        .iter()
+        .filter(|d| d.code.as_deref() == Some("unquoted-bareword"))
+        .collect();
 
     // Only BAREWORD after print should be flagged
     assert_eq!(bareword_errors.len(), 1);
-    let first_error = bareword_errors.first().ok_or("expected at least one bareword error")?;
+    let first_error = bareword_errors
+        .first()
+        .ok_or("expected at least one bareword error")?;
     assert!(first_error.message.contains("BAREWORD"));
     // None of the hash slice elements should be flagged
     assert!(!first_error.message.contains("literal"));
@@ -147,8 +161,10 @@ my @values = @h{ @arr };
     let diagnostics = diagnostics_provider.get_diagnostics(&ast, &[], source, None);
 
     // No bareword errors expected - map expression inside hash slice
-    let bareword_errors: Vec<_> =
-        diagnostics.iter().filter(|d| d.code.as_deref() == Some("unquoted-bareword")).collect();
+    let bareword_errors: Vec<_> = diagnostics
+        .iter()
+        .filter(|d| d.code.as_deref() == Some("unquoted-bareword"))
+        .collect();
     assert_eq!(bareword_errors.len(), 0);
 
     Ok(())
@@ -169,8 +185,10 @@ my @values = @h{ get_keys() };
     let diagnostics = diagnostics_provider.get_diagnostics(&ast, &[], source, None);
 
     // Function calls in hash slices should not trigger bareword warnings
-    let bareword_errors: Vec<_> =
-        diagnostics.iter().filter(|d| d.code.as_deref() == Some("unquoted-bareword")).collect();
+    let bareword_errors: Vec<_> = diagnostics
+        .iter()
+        .filter(|d| d.code.as_deref() == Some("unquoted-bareword"))
+        .collect();
     assert_eq!(bareword_errors.len(), 0);
 
     Ok(())
@@ -190,12 +208,16 @@ print INVALID;
     let diagnostics_provider = DiagnosticsProvider::new(&ast, source.to_string());
     let diagnostics = diagnostics_provider.get_diagnostics(&ast, &[], source, None);
 
-    let bareword_errors: Vec<_> =
-        diagnostics.iter().filter(|d| d.code.as_deref() == Some("unquoted-bareword")).collect();
+    let bareword_errors: Vec<_> = diagnostics
+        .iter()
+        .filter(|d| d.code.as_deref() == Some("unquoted-bareword"))
+        .collect();
 
     // Only INVALID should be flagged, not the nested hash keys
     assert_eq!(bareword_errors.len(), 1);
-    let first_error = bareword_errors.first().ok_or("expected at least one bareword error")?;
+    let first_error = bareword_errors
+        .first()
+        .ok_or("expected at least one bareword error")?;
     assert!(first_error.message.contains("INVALID"));
     assert!(!first_error.message.contains("level1"));
     assert!(!first_error.message.contains("level2"));
@@ -223,12 +245,16 @@ print BAREWORD_WARNING;
     let diagnostics_provider = DiagnosticsProvider::new(&ast, source.to_string());
     let diagnostics = diagnostics_provider.get_diagnostics(&ast, &[], source, None);
 
-    let bareword_errors: Vec<_> =
-        diagnostics.iter().filter(|d| d.code.as_deref() == Some("unquoted-bareword")).collect();
+    let bareword_errors: Vec<_> = diagnostics
+        .iter()
+        .filter(|d| d.code.as_deref() == Some("unquoted-bareword"))
+        .collect();
 
     // Only BAREWORD_WARNING should be flagged - all hash keys should be ignored
     assert_eq!(bareword_errors.len(), 1);
-    let first_error = bareword_errors.first().ok_or("expected at least one bareword error")?;
+    let first_error = bareword_errors
+        .first()
+        .ok_or("expected at least one bareword error")?;
     assert!(first_error.message.contains("BAREWORD_WARNING"));
     // Verify none of the legitimate hash keys are flagged
     assert!(!first_error.message.contains("outer_key"));
@@ -253,12 +279,16 @@ print SHOULD_WARN;
     let diagnostics_provider = DiagnosticsProvider::new(&ast, source.to_string());
     let diagnostics = diagnostics_provider.get_diagnostics(&ast, &[], source, None);
 
-    let bareword_errors: Vec<_> =
-        diagnostics.iter().filter(|d| d.code.as_deref() == Some("unquoted-bareword")).collect();
+    let bareword_errors: Vec<_> = diagnostics
+        .iter()
+        .filter(|d| d.code.as_deref() == Some("unquoted-bareword"))
+        .collect();
 
     // Only SHOULD_WARN should trigger an error
     assert_eq!(bareword_errors.len(), 1);
-    let first_error = bareword_errors.first().ok_or("expected at least one bareword error")?;
+    let first_error = bareword_errors
+        .first()
+        .ok_or("expected at least one bareword error")?;
     assert!(first_error.message.contains("SHOULD_WARN"));
 
     Ok(())
@@ -280,12 +310,16 @@ print NORMAL_BAREWORD;
     let diagnostics_provider = DiagnosticsProvider::new(&ast, source.to_string());
     let diagnostics = diagnostics_provider.get_diagnostics(&ast, &[], source, None);
 
-    let bareword_errors: Vec<_> =
-        diagnostics.iter().filter(|d| d.code.as_deref() == Some("unquoted-bareword")).collect();
+    let bareword_errors: Vec<_> = diagnostics
+        .iter()
+        .filter(|d| d.code.as_deref() == Some("unquoted-bareword"))
+        .collect();
 
     // Should still detect legitimate barewords even with deep nesting
     assert_eq!(bareword_errors.len(), 1);
-    let first_error = bareword_errors.first().ok_or("expected at least one bareword error")?;
+    let first_error = bareword_errors
+        .first()
+        .ok_or("expected at least one bareword error")?;
     assert!(first_error.message.contains("NORMAL_BAREWORD"));
 
     Ok(())
@@ -313,12 +347,16 @@ delete $hash{delete_key};
     let diagnostics_provider = DiagnosticsProvider::new(&ast, source.to_string());
     let diagnostics = diagnostics_provider.get_diagnostics(&ast, &[], source, None);
 
-    let bareword_errors: Vec<_> =
-        diagnostics.iter().filter(|d| d.code.as_deref() == Some("unquoted-bareword")).collect();
+    let bareword_errors: Vec<_> = diagnostics
+        .iter()
+        .filter(|d| d.code.as_deref() == Some("unquoted-bareword"))
+        .collect();
 
     // Only ACTUAL_BAREWORD should be flagged
     assert_eq!(bareword_errors.len(), 1);
-    let first_error = bareword_errors.first().ok_or("expected at least one bareword error")?;
+    let first_error = bareword_errors
+        .first()
+        .ok_or("expected at least one bareword error")?;
     assert!(first_error.message.contains("ACTUAL_BAREWORD"));
 
     Ok(())

@@ -29,7 +29,11 @@ fn fuzz_inputs_never_panic_and_return_root_prefixed_path() {
     let root = PathBuf::from("/workspace");
 
     for _ in 0..2000 {
-        let module = format!("{}::{}", fuzz_segment(&mut seed, 12), fuzz_segment(&mut seed, 12),);
+        let module = format!(
+            "{}::{}",
+            fuzz_segment(&mut seed, 12),
+            fuzz_segment(&mut seed, 12),
+        );
 
         let include_paths: Vec<String> = (0..4).map(|_| fuzz_segment(&mut seed, 8)).collect();
 

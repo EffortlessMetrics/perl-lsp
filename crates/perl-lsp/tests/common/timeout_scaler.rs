@@ -53,7 +53,11 @@ pub fn effective_thread_count() -> usize {
     std::env::var("RUST_TEST_THREADS")
         .ok()
         .and_then(|s| s.parse::<usize>().ok())
-        .unwrap_or_else(|| std::thread::available_parallelism().map(|n| n.get()).unwrap_or(8))
+        .unwrap_or_else(|| {
+            std::thread::available_parallelism()
+                .map(|n| n.get())
+                .unwrap_or(8)
+        })
         .max(1)
 }
 
@@ -100,7 +104,11 @@ pub fn get_adaptive_timeout() -> Duration {
     };
 
     // Apply CI multiplier if running in CI
-    if is_ci_environment() { Duration::from_secs_f64(base.as_secs_f64() * 1.5) } else { base }
+    if is_ci_environment() {
+        Duration::from_secs_f64(base.as_secs_f64() * 1.5)
+    } else {
+        base
+    }
 }
 
 /// Get timeout scaled by a factor.
@@ -152,7 +160,11 @@ pub fn get_short_timeout() -> Duration {
         _ => Duration::from_millis(500),
     };
 
-    if is_ci_environment() { Duration::from_secs_f64(base.as_secs_f64() * 1.5) } else { base }
+    if is_ci_environment() {
+        Duration::from_secs_f64(base.as_secs_f64() * 1.5)
+    } else {
+        base
+    }
 }
 
 /// Get an initialization timeout suitable for LSP server startup.

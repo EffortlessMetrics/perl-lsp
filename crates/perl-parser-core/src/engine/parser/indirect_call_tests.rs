@@ -46,7 +46,11 @@ $method $object;
 
         let ast = must(result);
         let sexp = ast.to_sexp();
-        assert!(sexp.contains("indirect_call"), "Should detect indirect constructor in: {}", sexp);
+        assert!(
+            sexp.contains("indirect_call"),
+            "Should detect indirect constructor in: {}",
+            sexp
+        );
     }
 
     #[test]

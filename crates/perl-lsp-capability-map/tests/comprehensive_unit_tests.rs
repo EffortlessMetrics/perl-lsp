@@ -16,7 +16,10 @@ use perl_lsp_feature_ids::*;
 fn empty_caps_yields_no_features() -> Result<(), Box<dyn std::error::Error>> {
     let caps = ServerCapabilities::default();
     let ids = feature_ids_from_caps(&caps);
-    assert!(ids.is_empty(), "default ServerCapabilities should map to zero features");
+    assert!(
+        ids.is_empty(),
+        "default ServerCapabilities should map to zero features"
+    );
     Ok(())
 }
 
@@ -56,8 +59,10 @@ fn detects_signature_help() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn detects_definition() -> Result<(), Box<dyn std::error::Error>> {
-    let caps =
-        ServerCapabilities { definition_provider: Some(OneOf::Left(true)), ..Default::default() };
+    let caps = ServerCapabilities {
+        definition_provider: Some(OneOf::Left(true)),
+        ..Default::default()
+    };
     assert!(feature_ids_from_caps(&caps).contains(&LSP_DEFINITION));
     Ok(())
 }
@@ -107,8 +112,10 @@ fn detects_implementation() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn detects_references() -> Result<(), Box<dyn std::error::Error>> {
-    let caps =
-        ServerCapabilities { references_provider: Some(OneOf::Left(true)), ..Default::default() };
+    let caps = ServerCapabilities {
+        references_provider: Some(OneOf::Left(true)),
+        ..Default::default()
+    };
     assert!(feature_ids_from_caps(&caps).contains(&LSP_REFERENCES));
     Ok(())
 }
@@ -146,7 +153,9 @@ fn detects_code_action() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn detects_code_lens() -> Result<(), Box<dyn std::error::Error>> {
     let caps = ServerCapabilities {
-        code_lens_provider: Some(CodeLensOptions { resolve_provider: None }),
+        code_lens_provider: Some(CodeLensOptions {
+            resolve_provider: None,
+        }),
         ..Default::default()
     };
     assert!(feature_ids_from_caps(&caps).contains(&LSP_CODE_LENS));
@@ -211,8 +220,10 @@ fn detects_on_type_formatting() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn detects_rename() -> Result<(), Box<dyn std::error::Error>> {
-    let caps =
-        ServerCapabilities { rename_provider: Some(OneOf::Left(true)), ..Default::default() };
+    let caps = ServerCapabilities {
+        rename_provider: Some(OneOf::Left(true)),
+        ..Default::default()
+    };
     assert!(feature_ids_from_caps(&caps).contains(&LSP_RENAME));
     Ok(())
 }
@@ -262,7 +273,10 @@ fn detects_semantic_tokens() -> Result<(), Box<dyn std::error::Error>> {
     let caps = ServerCapabilities {
         semantic_tokens_provider: Some(SemanticTokensServerCapabilities::SemanticTokensOptions(
             SemanticTokensOptions {
-                legend: SemanticTokensLegend { token_types: vec![], token_modifiers: vec![] },
+                legend: SemanticTokensLegend {
+                    token_types: vec![],
+                    token_modifiers: vec![],
+                },
                 full: Some(SemanticTokensFullOptions::Bool(true)),
                 range: None,
                 ..Default::default()
@@ -276,24 +290,30 @@ fn detects_semantic_tokens() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn detects_moniker() -> Result<(), Box<dyn std::error::Error>> {
-    let caps =
-        ServerCapabilities { moniker_provider: Some(OneOf::Left(true)), ..Default::default() };
+    let caps = ServerCapabilities {
+        moniker_provider: Some(OneOf::Left(true)),
+        ..Default::default()
+    };
     assert!(feature_ids_from_caps(&caps).contains(&LSP_MONIKER));
     Ok(())
 }
 
 #[test]
 fn detects_inline_value() -> Result<(), Box<dyn std::error::Error>> {
-    let caps =
-        ServerCapabilities { inline_value_provider: Some(OneOf::Left(true)), ..Default::default() };
+    let caps = ServerCapabilities {
+        inline_value_provider: Some(OneOf::Left(true)),
+        ..Default::default()
+    };
     assert!(feature_ids_from_caps(&caps).contains(&LSP_INLINE_VALUE));
     Ok(())
 }
 
 #[test]
 fn detects_inlay_hint() -> Result<(), Box<dyn std::error::Error>> {
-    let caps =
-        ServerCapabilities { inlay_hint_provider: Some(OneOf::Left(true)), ..Default::default() };
+    let caps = ServerCapabilities {
+        inlay_hint_provider: Some(OneOf::Left(true)),
+        ..Default::default()
+    };
     assert!(feature_ids_from_caps(&caps).contains(&LSP_INLAY_HINT));
     Ok(())
 }
@@ -380,7 +400,10 @@ fn result_has_no_duplicates() -> Result<(), Box<dyn std::error::Error>> {
     let ids = feature_ids_from_caps(&caps);
     let mut deduped = ids.clone();
     deduped.dedup();
-    assert_eq!(ids, deduped, "feature_ids_from_caps output must have no duplicates");
+    assert_eq!(
+        ids, deduped,
+        "feature_ids_from_caps output must have no duplicates"
+    );
     Ok(())
 }
 
@@ -403,8 +426,14 @@ fn empty_features_yields_default_caps() -> Result<(), Box<dyn std::error::Error>
 #[test]
 fn builds_completion_with_trigger_characters() -> Result<(), Box<dyn std::error::Error>> {
     let caps = caps_from_feature_ids(&[LSP_COMPLETION]);
-    let provider = caps.completion_provider.as_ref().ok_or("missing completion_provider")?;
-    let triggers = provider.trigger_characters.as_ref().ok_or("missing trigger_characters")?;
+    let provider = caps
+        .completion_provider
+        .as_ref()
+        .ok_or("missing completion_provider")?;
+    let triggers = provider
+        .trigger_characters
+        .as_ref()
+        .ok_or("missing trigger_characters")?;
     assert!(triggers.contains(&"$".to_string()));
     assert!(triggers.contains(&"@".to_string()));
     assert!(triggers.contains(&"%".to_string()));
@@ -423,9 +452,14 @@ fn builds_hover() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn builds_signature_help_with_triggers() -> Result<(), Box<dyn std::error::Error>> {
     let caps = caps_from_feature_ids(&[LSP_SIGNATURE_HELP]);
-    let provider =
-        caps.signature_help_provider.as_ref().ok_or("missing signature_help_provider")?;
-    let triggers = provider.trigger_characters.as_ref().ok_or("missing trigger_characters")?;
+    let provider = caps
+        .signature_help_provider
+        .as_ref()
+        .ok_or("missing signature_help_provider")?;
+    let triggers = provider
+        .trigger_characters
+        .as_ref()
+        .ok_or("missing trigger_characters")?;
     assert!(triggers.contains(&"(".to_string()));
     assert!(triggers.contains(&",".to_string()));
     Ok(())
@@ -518,11 +552,20 @@ fn builds_folding_range() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn builds_semantic_tokens_with_legend() -> Result<(), Box<dyn std::error::Error>> {
     let caps = caps_from_feature_ids(&[LSP_SEMANTIC_TOKENS]);
-    let provider = caps.semantic_tokens_provider.as_ref().ok_or("missing semantic_tokens")?;
+    let provider = caps
+        .semantic_tokens_provider
+        .as_ref()
+        .ok_or("missing semantic_tokens")?;
     match provider {
         SemanticTokensServerCapabilities::SemanticTokensOptions(opts) => {
-            assert!(!opts.legend.token_types.is_empty(), "token_types should be populated");
-            assert!(!opts.legend.token_modifiers.is_empty(), "token_modifiers should be populated");
+            assert!(
+                !opts.legend.token_types.is_empty(),
+                "token_types should be populated"
+            );
+            assert!(
+                !opts.legend.token_modifiers.is_empty(),
+                "token_modifiers should be populated"
+            );
             assert_eq!(opts.full, Some(SemanticTokensFullOptions::Bool(true)));
             assert_eq!(opts.range, Some(true));
         }
@@ -541,7 +584,10 @@ fn builds_document_highlight() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn builds_code_lens_with_resolve() -> Result<(), Box<dyn std::error::Error>> {
     let caps = caps_from_feature_ids(&[LSP_CODE_LENS]);
-    let provider = caps.code_lens_provider.as_ref().ok_or("missing code_lens_provider")?;
+    let provider = caps
+        .code_lens_provider
+        .as_ref()
+        .ok_or("missing code_lens_provider")?;
     assert_eq!(provider.resolve_provider, Some(true));
     Ok(())
 }
@@ -549,7 +595,10 @@ fn builds_code_lens_with_resolve() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn builds_document_link_with_resolve() -> Result<(), Box<dyn std::error::Error>> {
     let caps = caps_from_feature_ids(&[LSP_DOCUMENT_LINK]);
-    let provider = caps.document_link_provider.as_ref().ok_or("missing document_link_provider")?;
+    let provider = caps
+        .document_link_provider
+        .as_ref()
+        .ok_or("missing document_link_provider")?;
     assert_eq!(provider.resolve_provider, Some(true));
     Ok(())
 }
@@ -564,7 +613,10 @@ fn builds_document_color_from_canonical_id() -> Result<(), Box<dyn std::error::E
 #[test]
 fn builds_document_color_from_legacy_alias() -> Result<(), Box<dyn std::error::Error>> {
     let caps = caps_from_feature_ids(&[LSP_COLOR]);
-    assert!(caps.color_provider.is_some(), "legacy LSP_COLOR alias should set color_provider");
+    assert!(
+        caps.color_provider.is_some(),
+        "legacy LSP_COLOR alias should set color_provider"
+    );
     Ok(())
 }
 
@@ -576,7 +628,10 @@ fn builds_on_type_formatting_with_triggers() -> Result<(), Box<dyn std::error::E
         .as_ref()
         .ok_or("missing on_type_formatting_provider")?;
     assert_eq!(provider.first_trigger_character, "}");
-    let extra = provider.more_trigger_character.as_ref().ok_or("missing more_trigger_character")?;
+    let extra = provider
+        .more_trigger_character
+        .as_ref()
+        .ok_or("missing more_trigger_character")?;
     assert!(extra.contains(&";".to_string()));
     assert!(extra.contains(&"\n".to_string()));
     Ok(())
@@ -620,7 +675,10 @@ fn builds_inline_value() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn builds_inlay_hint_with_resolve() -> Result<(), Box<dyn std::error::Error>> {
     let caps = caps_from_feature_ids(&[LSP_INLAY_HINT]);
-    let provider = caps.inlay_hint_provider.as_ref().ok_or("missing inlay_hint_provider")?;
+    let provider = caps
+        .inlay_hint_provider
+        .as_ref()
+        .ok_or("missing inlay_hint_provider")?;
     match provider {
         OneOf::Right(InlayHintServerCapabilities::Options(opts)) => {
             assert_eq!(opts.resolve_provider, Some(true));
@@ -633,7 +691,10 @@ fn builds_inlay_hint_with_resolve() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn builds_pull_diagnostics_with_options() -> Result<(), Box<dyn std::error::Error>> {
     let caps = caps_from_feature_ids(&[LSP_PULL_DIAGNOSTICS]);
-    let provider = caps.diagnostic_provider.as_ref().ok_or("missing diagnostic_provider")?;
+    let provider = caps
+        .diagnostic_provider
+        .as_ref()
+        .ok_or("missing diagnostic_provider")?;
     match provider {
         DiagnosticServerCapabilities::Options(opts) => {
             assert_eq!(opts.identifier.as_deref(), Some("perl-lsp"));
@@ -655,8 +716,10 @@ fn builds_workspace_symbol() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn builds_execute_command_with_commands() -> Result<(), Box<dyn std::error::Error>> {
     let caps = caps_from_feature_ids(&[LSP_EXECUTE_COMMAND]);
-    let provider =
-        caps.execute_command_provider.as_ref().ok_or("missing execute_command_provider")?;
+    let provider = caps
+        .execute_command_provider
+        .as_ref()
+        .ok_or("missing execute_command_provider")?;
     assert!(provider.commands.contains(&"perl.runCritic".to_string()));
     Ok(())
 }
@@ -669,7 +732,10 @@ fn builds_execute_command_with_commands() -> Result<(), Box<dyn std::error::Erro
 fn unknown_feature_id_is_silently_ignored() -> Result<(), Box<dyn std::error::Error>> {
     let caps = caps_from_feature_ids(&["totally.unknown.feature"]);
     let ids = feature_ids_from_caps(&caps);
-    assert!(ids.is_empty(), "unknown feature should not set any capability");
+    assert!(
+        ids.is_empty(),
+        "unknown feature should not set any capability"
+    );
     Ok(())
 }
 
@@ -738,7 +804,10 @@ fn round_trip_all_mapped_features() -> Result<(), Box<dyn std::error::Error>> {
     let mut expected: Vec<&str> = all_features.to_vec();
     expected.sort();
 
-    assert_eq!(recovered, expected, "round-trip should recover all mapped features");
+    assert_eq!(
+        recovered, expected,
+        "round-trip should recover all mapped features"
+    );
     Ok(())
 }
 
@@ -763,7 +832,10 @@ fn duplicate_feature_ids_produce_same_result() -> Result<(), Box<dyn std::error:
     let duplicated = caps_from_feature_ids(&[LSP_HOVER, LSP_HOVER, LSP_HOVER]);
     let ids_single = feature_ids_from_caps(&single);
     let ids_dup = feature_ids_from_caps(&duplicated);
-    assert_eq!(ids_single, ids_dup, "duplicate inputs should produce identical caps");
+    assert_eq!(
+        ids_single, ids_dup,
+        "duplicate inputs should produce identical caps"
+    );
     Ok(())
 }
 
@@ -774,7 +846,10 @@ fn duplicate_feature_ids_produce_same_result() -> Result<(), Box<dyn std::error:
 #[test]
 fn semantic_tokens_legend_has_expected_token_types() -> Result<(), Box<dyn std::error::Error>> {
     let caps = caps_from_feature_ids(&[LSP_SEMANTIC_TOKENS]);
-    let provider = caps.semantic_tokens_provider.as_ref().ok_or("missing semantic_tokens")?;
+    let provider = caps
+        .semantic_tokens_provider
+        .as_ref()
+        .ok_or("missing semantic_tokens")?;
     match provider {
         SemanticTokensServerCapabilities::SemanticTokensOptions(opts) => {
             let types = &opts.legend.token_types;
@@ -800,7 +875,10 @@ fn semantic_tokens_legend_has_expected_token_types() -> Result<(), Box<dyn std::
 #[test]
 fn semantic_tokens_legend_has_expected_modifiers() -> Result<(), Box<dyn std::error::Error>> {
     let caps = caps_from_feature_ids(&[LSP_SEMANTIC_TOKENS]);
-    let provider = caps.semantic_tokens_provider.as_ref().ok_or("missing semantic_tokens")?;
+    let provider = caps
+        .semantic_tokens_provider
+        .as_ref()
+        .ok_or("missing semantic_tokens")?;
     match provider {
         SemanticTokensServerCapabilities::SemanticTokensOptions(opts) => {
             let mods = &opts.legend.token_modifiers;
@@ -845,7 +923,10 @@ fn color_alias_and_canonical_produce_equivalent_caps() -> Result<(), Box<dyn std
 fn unmapped_type_hierarchy_is_ignored() -> Result<(), Box<dyn std::error::Error>> {
     let caps = caps_from_feature_ids(&[LSP_TYPE_HIERARCHY]);
     let ids = feature_ids_from_caps(&caps);
-    assert!(ids.is_empty(), "type_hierarchy has no mapping in caps_from_feature_ids");
+    assert!(
+        ids.is_empty(),
+        "type_hierarchy has no mapping in caps_from_feature_ids"
+    );
     Ok(())
 }
 
@@ -1021,13 +1102,31 @@ fn empty_string_feature_id_is_ignored() -> Result<(), Box<dyn std::error::Error>
 #[test]
 fn completion_trigger_characters_include_sigils() -> Result<(), Box<dyn std::error::Error>> {
     let caps = caps_from_feature_ids(&[LSP_COMPLETION]);
-    let provider = caps.completion_provider.as_ref().ok_or("missing completion_provider")?;
+    let provider = caps
+        .completion_provider
+        .as_ref()
+        .ok_or("missing completion_provider")?;
     if let Some(triggers) = &provider.trigger_characters {
-        assert!(triggers.contains(&"$".to_string()), "should include $ sigil");
-        assert!(triggers.contains(&"@".to_string()), "should include @ sigil");
-        assert!(triggers.contains(&"%".to_string()), "should include % sigil");
-        assert!(triggers.contains(&">".to_string()), "should include > for ->");
-        assert!(triggers.contains(&":".to_string()), "should include : for ::");
+        assert!(
+            triggers.contains(&"$".to_string()),
+            "should include $ sigil"
+        );
+        assert!(
+            triggers.contains(&"@".to_string()),
+            "should include @ sigil"
+        );
+        assert!(
+            triggers.contains(&"%".to_string()),
+            "should include % sigil"
+        );
+        assert!(
+            triggers.contains(&">".to_string()),
+            "should include > for ->"
+        );
+        assert!(
+            triggers.contains(&":".to_string()),
+            "should include : for ::"
+        );
         assert_eq!(triggers.len(), 5, "expected exactly 5 trigger characters");
     } else {
         return Err("completion trigger_characters should be Some".into());
@@ -1038,8 +1137,10 @@ fn completion_trigger_characters_include_sigils() -> Result<(), Box<dyn std::err
 #[test]
 fn signature_help_trigger_characters() -> Result<(), Box<dyn std::error::Error>> {
     let caps = caps_from_feature_ids(&[LSP_SIGNATURE_HELP]);
-    let provider =
-        caps.signature_help_provider.as_ref().ok_or("missing signature_help_provider")?;
+    let provider = caps
+        .signature_help_provider
+        .as_ref()
+        .ok_or("missing signature_help_provider")?;
     if let Some(triggers) = &provider.trigger_characters {
         assert!(triggers.contains(&"(".to_string()), "should include (");
         assert!(triggers.contains(&",".to_string()), "should include ,");
@@ -1061,7 +1162,11 @@ fn on_type_formatting_trigger_characters() -> Result<(), Box<dyn std::error::Err
     if let Some(more) = &provider.more_trigger_character {
         assert!(more.contains(&";".to_string()));
         assert!(more.contains(&"\n".to_string()));
-        assert_eq!(more.len(), 2, "expected exactly 2 additional trigger characters");
+        assert_eq!(
+            more.len(),
+            2,
+            "expected exactly 2 additional trigger characters"
+        );
     } else {
         return Err("more_trigger_character should be Some".into());
     }
@@ -1077,7 +1182,11 @@ fn notebook_sync_has_perl_cell_selector() -> Result<(), Box<dyn std::error::Erro
     let caps = caps_from_feature_ids(&[LSP_NOTEBOOK_DOCUMENT_SYNC]);
     if let Some(OneOf::Left(opts)) = &caps.notebook_document_sync {
         assert_eq!(opts.save, Some(true), "notebook sync save should be true");
-        assert_eq!(opts.notebook_selector.len(), 1, "expected one notebook selector");
+        assert_eq!(
+            opts.notebook_selector.len(),
+            1,
+            "expected one notebook selector"
+        );
     } else {
         return Err("expected NotebookDocumentSyncOptions".into());
     }
@@ -1091,7 +1200,10 @@ fn notebook_sync_has_perl_cell_selector() -> Result<(), Box<dyn std::error::Erro
 #[test]
 fn code_lens_has_resolve_provider() -> Result<(), Box<dyn std::error::Error>> {
     let caps = caps_from_feature_ids(&[LSP_CODE_LENS]);
-    let provider = caps.code_lens_provider.as_ref().ok_or("missing code_lens_provider")?;
+    let provider = caps
+        .code_lens_provider
+        .as_ref()
+        .ok_or("missing code_lens_provider")?;
     assert_eq!(provider.resolve_provider, Some(true));
     Ok(())
 }
@@ -1103,7 +1215,10 @@ fn code_lens_has_resolve_provider() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn document_link_has_resolve_provider() -> Result<(), Box<dyn std::error::Error>> {
     let caps = caps_from_feature_ids(&[LSP_DOCUMENT_LINK]);
-    let provider = caps.document_link_provider.as_ref().ok_or("missing document_link_provider")?;
+    let provider = caps
+        .document_link_provider
+        .as_ref()
+        .ok_or("missing document_link_provider")?;
     assert_eq!(provider.resolve_provider, Some(true));
     Ok(())
 }
@@ -1165,8 +1280,10 @@ fn pull_diagnostics_identifier_is_perl_lsp() -> Result<(), Box<dyn std::error::E
 #[test]
 fn execute_command_includes_run_critic() -> Result<(), Box<dyn std::error::Error>> {
     let caps = caps_from_feature_ids(&[LSP_EXECUTE_COMMAND]);
-    let provider =
-        caps.execute_command_provider.as_ref().ok_or("missing execute_command_provider")?;
+    let provider = caps
+        .execute_command_provider
+        .as_ref()
+        .ok_or("missing execute_command_provider")?;
     assert_eq!(provider.commands.len(), 1);
     assert_eq!(provider.commands[0], "perl.runCritic");
     Ok(())
@@ -1276,7 +1393,11 @@ fn round_trip_document_color() -> Result<(), Box<dyn std::error::Error>> {
 fn round_trip_color_alias_yields_canonical_id() -> Result<(), Box<dyn std::error::Error>> {
     let caps = caps_from_feature_ids(&[LSP_COLOR]);
     let ids = feature_ids_from_caps(&caps);
-    assert_eq!(ids, vec![LSP_DOCUMENT_COLOR], "alias should round-trip to canonical ID");
+    assert_eq!(
+        ids,
+        vec![LSP_DOCUMENT_COLOR],
+        "alias should round-trip to canonical ID"
+    );
     Ok(())
 }
 
@@ -1351,7 +1472,11 @@ fn mixed_mapped_and_unmapped_preserves_only_mapped() -> Result<(), Box<dyn std::
     let ids = feature_ids_from_caps(&caps);
     assert!(ids.contains(&LSP_HOVER));
     assert!(ids.contains(&LSP_DEFINITION));
-    assert_eq!(ids.len(), 2, "only mapped features should survive round-trip");
+    assert_eq!(
+        ids.len(),
+        2,
+        "only mapped features should survive round-trip"
+    );
     Ok(())
 }
 
@@ -1362,9 +1487,18 @@ fn mixed_mapped_and_unmapped_preserves_only_mapped() -> Result<(), Box<dyn std::
 #[test]
 fn unset_capabilities_remain_none() -> Result<(), Box<dyn std::error::Error>> {
     let caps = caps_from_feature_ids(&[LSP_HOVER]);
-    assert!(caps.completion_provider.is_none(), "completion should be None when not requested");
-    assert!(caps.definition_provider.is_none(), "definition should be None when not requested");
-    assert!(caps.rename_provider.is_none(), "rename should be None when not requested");
+    assert!(
+        caps.completion_provider.is_none(),
+        "completion should be None when not requested"
+    );
+    assert!(
+        caps.definition_provider.is_none(),
+        "definition should be None when not requested"
+    );
+    assert!(
+        caps.rename_provider.is_none(),
+        "rename should be None when not requested"
+    );
     assert!(
         caps.semantic_tokens_provider.is_none(),
         "semantic_tokens should be None when not requested"
@@ -1477,7 +1611,9 @@ fn all_capabilities_set_yields_all_features() -> Result<(), Box<dyn std::error::
         document_highlight_provider: Some(OneOf::Left(true)),
         document_symbol_provider: Some(OneOf::Left(true)),
         code_action_provider: Some(CodeActionProviderCapability::Simple(true)),
-        code_lens_provider: Some(CodeLensOptions { resolve_provider: None }),
+        code_lens_provider: Some(CodeLensOptions {
+            resolve_provider: None,
+        }),
         document_link_provider: Some(DocumentLinkOptions {
             resolve_provider: None,
             work_done_progress_options: WorkDoneProgressOptions::default(),
@@ -1496,7 +1632,10 @@ fn all_capabilities_set_yields_all_features() -> Result<(), Box<dyn std::error::
         call_hierarchy_provider: Some(CallHierarchyServerCapability::Simple(true)),
         semantic_tokens_provider: Some(SemanticTokensServerCapabilities::SemanticTokensOptions(
             SemanticTokensOptions {
-                legend: SemanticTokensLegend { token_types: vec![], token_modifiers: vec![] },
+                legend: SemanticTokensLegend {
+                    token_types: vec![],
+                    token_modifiers: vec![],
+                },
                 full: None,
                 range: None,
                 ..Default::default()

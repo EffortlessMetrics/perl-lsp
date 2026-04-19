@@ -120,7 +120,11 @@ pub struct IncrementalTree {
 impl IncrementalTree {
     /// Create a new incremental tree
     pub fn new(root: Node, source: String) -> Self {
-        let mut tree = IncrementalTree { root, source, node_map: HashMap::new() };
+        let mut tree = IncrementalTree {
+            root,
+            source,
+            node_map: HashMap::new(),
+        };
         tree.build_node_map();
         tree
     }
@@ -133,7 +137,10 @@ impl IncrementalTree {
 
     fn map_node(&mut self, node: &Node) {
         // Map start position to node
-        self.node_map.entry(node.location.start).or_default().push(node.clone());
+        self.node_map
+            .entry(node.location.start)
+            .or_default()
+            .push(node.clone());
 
         // Recursively map child nodes
         match &node.kind {
@@ -142,7 +149,11 @@ impl IncrementalTree {
                     self.map_node(stmt);
                 }
             }
-            NodeKind::VariableDeclaration { variable, initializer, .. } => {
+            NodeKind::VariableDeclaration {
+                variable,
+                initializer,
+                ..
+            } => {
                 self.map_node(variable);
                 if let Some(init) = initializer {
                     self.map_node(init);
@@ -160,7 +171,12 @@ impl IncrementalTree {
                     self.map_node(arg);
                 }
             }
-            NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
+            NodeKind::If {
+                condition,
+                then_branch,
+                elsif_branches,
+                else_branch,
+            } => {
                 self.map_node(condition);
                 self.map_node(then_branch);
                 for (cond, branch) in elsif_branches {
@@ -290,7 +306,10 @@ impl IncrementalParserV2 {
             // In such cases, we should report 0 reused nodes as it's truly a full reparse
             let should_skip_reuse = source.is_empty()
                 || self.pending_edits.len() > 10
-                || self.last_tree.as_ref().is_none_or(|tree| !self.is_simple_value_edit(tree));
+                || self
+                    .last_tree
+                    .as_ref()
+                    .is_none_or(|tree| !self.is_simple_value_edit(tree));
 
             if should_skip_reuse {
                 // Full fallback - no actual reuse
@@ -523,7 +542,11 @@ impl IncrementalParserV2 {
 
     /// Calculate the total byte shift from all edits
     fn calculate_total_shift(&self) -> isize {
-        self.pending_edits.edits().iter().map(|edit| edit.byte_shift()).sum()
+        self.pending_edits
+            .edits()
+            .iter()
+            .map(|edit| edit.byte_shift())
+            .sum()
     }
 
     fn incremental_parse_simple(
@@ -653,7 +676,11 @@ impl IncrementalParserV2 {
                     }
                 }
             }
-            NodeKind::VariableDeclaration { variable, initializer, .. } => {
+            NodeKind::VariableDeclaration {
+                variable,
+                initializer,
+                ..
+            } => {
                 if !self.validate_node_tree_consistency(variable, source, depth + 1, max_depth) {
                     return false;
                 }
@@ -700,11 +727,21 @@ impl IncrementalParserV2 {
                     + self.calculate_content_delta(node)) as usize;
 
                 return Node::new(
-                    NodeKind::Program { statements: new_statements },
-                    SourceLocation { start: new_start, end: new_end },
+                    NodeKind::Program {
+                        statements: new_statements,
+                    },
+                    SourceLocation {
+                        start: new_start,
+                        end: new_end,
+                    },
                 );
             }
-            NodeKind::VariableDeclaration { declarator, variable, initializer, attributes } => {
+            NodeKind::VariableDeclaration {
+                declarator,
+                variable,
+                initializer,
+                attributes,
+            } => {
                 // Recursively update child nodes
                 let new_variable = self.clone_and_update_node(variable, new_source, old_source);
                 let new_initializer = initializer
@@ -723,7 +760,10 @@ impl IncrementalParserV2 {
                         initializer: new_initializer.map(Box::new),
                         attributes: attributes.clone(),
                     },
-                    SourceLocation { start: new_start, end: new_end },
+                    SourceLocation {
+                        start: new_start,
+                        end: new_end,
+                    },
                 );
             }
             _ => {}
@@ -744,8 +784,13 @@ impl IncrementalParserV2 {
                         let new_value = &new_source[new_start..new_end];
 
                         return Node::new(
-                            NodeKind::Number { value: new_value.to_string() },
-                            SourceLocation { start: new_start, end: new_end },
+                            NodeKind::Number {
+                                value: new_value.to_string(),
+                            },
+                            SourceLocation {
+                                start: new_start,
+                                end: new_end,
+                            },
                         );
                     }
                 }
@@ -763,7 +808,10 @@ impl IncrementalParserV2 {
                                 value: new_value.to_string(),
                                 interpolated: *interpolated,
                             },
-                            SourceLocation { start: new_start, end: new_end },
+                            SourceLocation {
+                                start: new_start,
+                                end: new_end,
+                            },
                         );
                     }
                 }
@@ -778,11 +826,18 @@ impl IncrementalParserV2 {
                         end: (node.location.end as isize + shift) as usize,
                     };
                     return Node::new(
-                        NodeKind::Program { statements: new_statements },
+                        NodeKind::Program {
+                            statements: new_statements,
+                        },
                         new_location,
                     );
                 }
-                NodeKind::VariableDeclaration { declarator, variable, attributes, initializer } => {
+                NodeKind::VariableDeclaration {
+                    declarator,
+                    variable,
+                    attributes,
+                    initializer,
+                } => {
                     let new_variable =
                         Box::new(self.clone_and_update_node(variable, new_source, old_source));
                     let new_initializer = initializer.as_ref().map(|init| {
@@ -898,7 +953,9 @@ impl IncrementalParserV2 {
 
     /// Check if the last parse used advanced reuse analysis
     pub fn used_advanced_reuse(&self) -> bool {
-        self.last_reuse_analysis.as_ref().is_some_and(|analysis| analysis.reuse_percentage > 0.0)
+        self.last_reuse_analysis
+            .as_ref()
+            .is_some_and(|analysis| analysis.reuse_percentage > 0.0)
     }
 
     /// Get detailed reuse efficiency report
@@ -956,7 +1013,10 @@ impl IncrementalParserV2 {
             node.location.end.saturating_sub((-shift) as usize)
         };
 
-        let new_location = SourceLocation { start: new_start, end: new_end };
+        let new_location = SourceLocation {
+            start: new_start,
+            end: new_end,
+        };
 
         let new_kind = match &node.kind {
             NodeKind::Program { statements } => NodeKind::Program {
@@ -971,16 +1031,19 @@ impl IncrementalParserV2 {
                     .map(|s| self.clone_with_shifted_positions(s, shift))
                     .collect(),
             },
-            NodeKind::VariableDeclaration { declarator, variable, attributes, initializer } => {
-                NodeKind::VariableDeclaration {
-                    declarator: declarator.clone(),
-                    variable: Box::new(self.clone_with_shifted_positions(variable, shift)),
-                    attributes: attributes.clone(),
-                    initializer: initializer
-                        .as_ref()
-                        .map(|i| Box::new(self.clone_with_shifted_positions(i, shift))),
-                }
-            }
+            NodeKind::VariableDeclaration {
+                declarator,
+                variable,
+                attributes,
+                initializer,
+            } => NodeKind::VariableDeclaration {
+                declarator: declarator.clone(),
+                variable: Box::new(self.clone_with_shifted_positions(variable, shift)),
+                attributes: attributes.clone(),
+                initializer: initializer
+                    .as_ref()
+                    .map(|i| Box::new(self.clone_with_shifted_positions(i, shift))),
+            },
             NodeKind::Binary { op, left, right } => NodeKind::Binary {
                 op: op.clone(),
                 left: Box::new(self.clone_with_shifted_positions(left, shift)),
@@ -992,9 +1055,17 @@ impl IncrementalParserV2 {
             },
             NodeKind::FunctionCall { name, args } => NodeKind::FunctionCall {
                 name: name.clone(),
-                args: args.iter().map(|a| self.clone_with_shifted_positions(a, shift)).collect(),
+                args: args
+                    .iter()
+                    .map(|a| self.clone_with_shifted_positions(a, shift))
+                    .collect(),
             },
-            NodeKind::If { condition, then_branch, elsif_branches, else_branch } => NodeKind::If {
+            NodeKind::If {
+                condition,
+                then_branch,
+                elsif_branches,
+                else_branch,
+            } => NodeKind::If {
                 condition: Box::new(self.clone_with_shifted_positions(condition, shift)),
                 then_branch: Box::new(self.clone_with_shifted_positions(then_branch, shift)),
                 elsif_branches: elsif_branches
@@ -1028,8 +1099,12 @@ impl IncrementalParserV2 {
         // Check if nodes are structurally equivalent
         match (&old_node.kind, &new_node.kind) {
             (
-                NodeKind::Program { statements: old_stmts },
-                NodeKind::Program { statements: new_stmts },
+                NodeKind::Program {
+                    statements: old_stmts,
+                },
+                NodeKind::Program {
+                    statements: new_stmts,
+                },
             ) => {
                 let mut reused = 1; // Program node itself
                 let mut reparsed = 0;
@@ -1043,8 +1118,16 @@ impl IncrementalParserV2 {
                 (reused, reparsed)
             }
             (
-                NodeKind::VariableDeclaration { variable: old_var, initializer: old_init, .. },
-                NodeKind::VariableDeclaration { variable: new_var, initializer: new_init, .. },
+                NodeKind::VariableDeclaration {
+                    variable: old_var,
+                    initializer: old_init,
+                    ..
+                },
+                NodeKind::VariableDeclaration {
+                    variable: new_var,
+                    initializer: new_init,
+                    ..
+                },
             ) => {
                 let mut reused = 1; // VarDecl itself
                 let mut reparsed = 0;
@@ -1069,8 +1152,14 @@ impl IncrementalParserV2 {
                 }
             }
             (
-                NodeKind::Variable { sigil: old_s, name: old_n },
-                NodeKind::Variable { sigil: new_s, name: new_n },
+                NodeKind::Variable {
+                    sigil: old_s,
+                    name: old_n,
+                },
+                NodeKind::Variable {
+                    sigil: new_s,
+                    name: new_n,
+                },
             ) => {
                 if old_s == new_s && old_n == new_n {
                     (1, 0) // Reused
@@ -1097,14 +1186,26 @@ impl IncrementalParserV2 {
             // Value nodes - must match exactly
             (NodeKind::Number { value: v1 }, NodeKind::Number { value: v2 }) => v1 == v2,
             (
-                NodeKind::String { value: v1, interpolated: i1 },
-                NodeKind::String { value: v2, interpolated: i2 },
+                NodeKind::String {
+                    value: v1,
+                    interpolated: i1,
+                },
+                NodeKind::String {
+                    value: v2,
+                    interpolated: i2,
+                },
             ) => v1 == v2 && i1 == i2,
 
             // Variable nodes - sigil and name must match
             (
-                NodeKind::Variable { sigil: s1, name: n1 },
-                NodeKind::Variable { sigil: s2, name: n2 },
+                NodeKind::Variable {
+                    sigil: s1,
+                    name: n1,
+                },
+                NodeKind::Variable {
+                    sigil: s2,
+                    name: n2,
+                },
             ) => s1 == s2 && n1 == n2,
 
             // Identifier nodes
@@ -1118,8 +1219,14 @@ impl IncrementalParserV2 {
 
             // Function calls - name and argument count should match
             (
-                NodeKind::FunctionCall { name: n1, args: args1 },
-                NodeKind::FunctionCall { name: n2, args: args2 },
+                NodeKind::FunctionCall {
+                    name: n1,
+                    args: args1,
+                },
+                NodeKind::FunctionCall {
+                    name: n2,
+                    args: args2,
+                },
             ) => n1 == n2 && args1.len() == args2.len(),
 
             // Variable declarations - declarator should match
@@ -1179,7 +1286,11 @@ impl IncrementalParserV2 {
                     count += self.count_nodes(stmt);
                 }
             }
-            NodeKind::VariableDeclaration { variable, initializer, .. } => {
+            NodeKind::VariableDeclaration {
+                variable,
+                initializer,
+                ..
+            } => {
                 count += self.count_nodes(variable);
                 if let Some(init) = initializer {
                     count += self.count_nodes(init);
@@ -1197,7 +1308,12 @@ impl IncrementalParserV2 {
                     count += self.count_nodes(arg);
                 }
             }
-            NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
+            NodeKind::If {
+                condition,
+                then_branch,
+                elsif_branches,
+                else_branch,
+            } => {
                 count += self.count_nodes(condition);
                 count += self.count_nodes(then_branch);
                 for (cond, branch) in elsif_branches {
@@ -1299,7 +1415,10 @@ mod tests {
 
         // Verify efficiency - should reuse most nodes
         assert!(parser.reused_nodes >= 3, "Should reuse at least 3 nodes");
-        assert_eq!(parser.reparsed_nodes, 1, "Should only reparse the changed Number node");
+        assert_eq!(
+            parser.reparsed_nodes, 1,
+            "Should only reparse the changed Number node"
+        );
 
         // Performance ratio check - for very small examples, overhead may exceed benefits
         let speedup =
@@ -1361,7 +1480,10 @@ mod tests {
         assert_eq!(parser.reparsed_nodes, 1); // Only Number needs reparsing
 
         // Performance validation
-        assert!(incremental_time.as_micros() < 500, "Incremental update should be <500µs");
+        assert!(
+            incremental_time.as_micros() < 500,
+            "Incremental update should be <500µs"
+        );
         let efficiency =
             parser.reused_nodes as f64 / (parser.reused_nodes + parser.reparsed_nodes) as f64;
         assert!(
@@ -1372,8 +1494,10 @@ mod tests {
 
         // Verify the tree is correct
         if let NodeKind::Program { statements } = &tree2.kind {
-            if let NodeKind::VariableDeclaration { initializer: Some(init), .. } =
-                &statements[0].kind
+            if let NodeKind::VariableDeclaration {
+                initializer: Some(init),
+                ..
+            } = &statements[0].kind
             {
                 if let NodeKind::Number { value } = &init.kind {
                     assert_eq!(value, "4242");
@@ -1445,7 +1569,10 @@ mod tests {
         );
 
         // Performance validation for multiple edits — relaxed for CI runners
-        assert!(incremental_time.as_micros() < 5000, "Multiple edits should be <5ms");
+        assert!(
+            incremental_time.as_micros() < 5000,
+            "Multiple edits should be <5ms"
+        );
         let total_nodes = parser.reused_nodes + parser.reparsed_nodes;
         let reuse_ratio = parser.reused_nodes as f64 / total_nodes as f64;
         assert!(
@@ -1456,15 +1583,19 @@ mod tests {
 
         // Verify both values were updated correctly
         if let NodeKind::Program { statements } = &tree.kind {
-            if let NodeKind::VariableDeclaration { initializer: Some(init), .. } =
-                &statements[0].kind
+            if let NodeKind::VariableDeclaration {
+                initializer: Some(init),
+                ..
+            } = &statements[0].kind
             {
                 if let NodeKind::Number { value } = &init.kind {
                     assert_eq!(value, "100");
                 }
             }
-            if let NodeKind::VariableDeclaration { initializer: Some(init), .. } =
-                &statements[1].kind
+            if let NodeKind::VariableDeclaration {
+                initializer: Some(init),
+                ..
+            } = &statements[1].kind
             {
                 if let NodeKind::Number { value } = &init.kind {
                     assert_eq!(value, "200");
@@ -1539,8 +1670,10 @@ mod tests {
 
         // Tree should still be correct
         if let NodeKind::Program { statements } = &tree.kind {
-            if let NodeKind::VariableDeclaration { initializer: Some(init), .. } =
-                &statements[0].kind
+            if let NodeKind::VariableDeclaration {
+                initializer: Some(init),
+                ..
+            } = &statements[0].kind
             {
                 if let NodeKind::Number { value } = &init.kind {
                     assert_eq!(value, "123");
@@ -1582,8 +1715,10 @@ mod tests {
 
         // Verify the string was updated
         if let NodeKind::Program { statements } = &tree.kind {
-            if let NodeKind::VariableDeclaration { initializer: Some(init), .. } =
-                &statements[0].kind
+            if let NodeKind::VariableDeclaration {
+                initializer: Some(init),
+                ..
+            } = &statements[0].kind
             {
                 if let NodeKind::String { value, .. } = &init.kind {
                     assert_eq!(value, "\"world\"");
@@ -1638,7 +1773,10 @@ mod tests {
         }
 
         // Performance should still be reasonable even for empty source handling
-        assert!(parse_time.as_millis() < 100, "Empty source handling should be fast");
+        assert!(
+            parse_time.as_millis() < 100,
+            "Empty source handling should be fast"
+        );
 
         Ok(())
     }
@@ -1671,7 +1809,9 @@ if ($condition) {
         );
 
         // Edit nested value - should be challenging for incremental parser
-        let value_start = source1.find("42").ok_or(crate::error::ParseError::UnexpectedEof)?;
+        let value_start = source1
+            .find("42")
+            .ok_or(crate::error::ParseError::UnexpectedEof)?;
         parser.edit(Edit::new(
             value_start,
             value_start + 2,
@@ -1694,11 +1834,17 @@ if ($condition) {
         );
 
         // Even with complex nesting, should have reasonable performance
-        assert!(incremental_time.as_millis() < 10, "Complex nested edit should be <10ms");
+        assert!(
+            incremental_time.as_millis() < 10,
+            "Complex nested edit should be <10ms"
+        );
 
         // Should still achieve some node reuse
         if parser.reused_nodes > 0 {
-            println!("Successfully reused {} nodes in complex structure", parser.reused_nodes);
+            println!(
+                "Successfully reused {} nodes in complex structure",
+                parser.reused_nodes
+            );
         } else {
             println!("Complex structure caused full reparse (acceptable for edge cases)");
         }
@@ -1728,9 +1874,10 @@ if ($condition) {
         );
 
         // Edit in the middle of the document
-        let edit_pos =
-            large_source.find("my $var50 = 500").ok_or(crate::error::ParseError::UnexpectedEof)?
-                + 13;
+        let edit_pos = large_source
+            .find("my $var50 = 500")
+            .ok_or(crate::error::ParseError::UnexpectedEof)?
+            + 13;
         parser.edit(Edit::new(
             edit_pos,
             edit_pos + 3, // "500" -> "999"
@@ -1753,7 +1900,10 @@ if ($condition) {
         );
 
         // Large document performance targets
-        assert!(incremental_time.as_millis() < 50, "Large document incremental should be <50ms");
+        assert!(
+            incremental_time.as_millis() < 50,
+            "Large document incremental should be <50ms"
+        );
 
         // Should achieve significant node reuse on large documents
         if parser.reused_nodes > 0 {
@@ -1761,7 +1911,10 @@ if ($condition) {
                 / (parser.reused_nodes + parser.reparsed_nodes) as f64
                 * 100.0;
             println!("Large document reuse rate: {:.1}%", reuse_percentage);
-            assert!(reuse_percentage > 50.0, "Large document should reuse >50% of nodes");
+            assert!(
+                reuse_percentage > 50.0,
+                "Large document should reuse >50% of nodes"
+            );
         }
 
         Ok(())
@@ -1778,10 +1931,15 @@ if ($condition) {
         parser.parse(source1)?;
         let initial_time = start.elapsed();
 
-        println!("Unicode document initial parse: {}µs", initial_time.as_micros());
+        println!(
+            "Unicode document initial parse: {}µs",
+            initial_time.as_micros()
+        );
 
         // Edit the unicode string content
-        let edit_start = source1.find("你好世界").ok_or(crate::error::ParseError::UnexpectedEof)?;
+        let edit_start = source1
+            .find("你好世界")
+            .ok_or(crate::error::ParseError::UnexpectedEof)?;
         let edit_end = edit_start + "你好世界".len();
         parser.edit(Edit::new(
             edit_start,
@@ -1812,7 +1970,10 @@ if ($condition) {
             unicode_budget_micros,
             incremental_time.as_micros()
         );
-        assert!(parser.reused_nodes > 0 || parser.reparsed_nodes > 0, "Should parse successfully");
+        assert!(
+            parser.reused_nodes > 0 || parser.reparsed_nodes > 0,
+            "Should parse successfully"
+        );
 
         Ok(())
     }
@@ -1827,7 +1988,10 @@ if ($condition) {
         parser.parse(source1)?;
 
         // Edit right at the boundary between number and semicolon
-        let number_end = source1.find("123").ok_or(crate::error::ParseError::UnexpectedEof)? + 3;
+        let number_end = source1
+            .find("123")
+            .ok_or(crate::error::ParseError::UnexpectedEof)?
+            + 3;
         parser.edit(Edit::new(
             number_end - 1, // Edit last digit of number
             number_end,
@@ -1857,7 +2021,10 @@ if ($condition) {
             boundary_budget_micros,
             boundary_edit_time.as_micros()
         );
-        assert!(parser.reparsed_nodes >= 1, "Should reparse at least the modified node");
+        assert!(
+            parser.reparsed_nodes >= 1,
+            "Should reparse at least the modified node"
+        );
 
         Ok(())
     }
@@ -1918,8 +2085,14 @@ if ($condition) {
 
         // Statistical analysis
         let avg_time = parse_times.iter().sum::<u128>() / parse_times.len() as u128;
-        let max_time = *parse_times.iter().max().ok_or(crate::error::ParseError::UnexpectedEof)?;
-        let min_time = *parse_times.iter().min().ok_or(crate::error::ParseError::UnexpectedEof)?;
+        let max_time = *parse_times
+            .iter()
+            .max()
+            .ok_or(crate::error::ParseError::UnexpectedEof)?;
+        let min_time = *parse_times
+            .iter()
+            .min()
+            .ok_or(crate::error::ParseError::UnexpectedEof)?;
 
         println!(
             "Performance statistics: avg={}µs, min={}µs, max={}µs",

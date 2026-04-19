@@ -20,11 +20,23 @@ use perl_lsp_config::{ServerConfig, WorkspaceConfig};
 #[test]
 fn server_config_chained_hints_defaults_to_false_unlike_other_hints() {
     let cfg = ServerConfig::default();
-    assert!(cfg.inlay_hints_enabled, "inlay_hints_enabled should default true");
-    assert!(cfg.inlay_hints_parameter_hints, "inlay_hints_parameter_hints should default true");
-    assert!(cfg.inlay_hints_type_hints, "inlay_hints_type_hints should default true");
+    assert!(
+        cfg.inlay_hints_enabled,
+        "inlay_hints_enabled should default true"
+    );
+    assert!(
+        cfg.inlay_hints_parameter_hints,
+        "inlay_hints_parameter_hints should default true"
+    );
+    assert!(
+        cfg.inlay_hints_type_hints,
+        "inlay_hints_type_hints should default true"
+    );
     // chained hints defaults FALSE — mutation would swap true/false
-    assert!(!cfg.inlay_hints_chained_hints, "inlay_hints_chained_hints should default false");
+    assert!(
+        !cfg.inlay_hints_chained_hints,
+        "inlay_hints_chained_hints should default false"
+    );
 }
 
 #[test]
@@ -59,7 +71,10 @@ fn server_config_update_all_inlay_hints_fields() {
     assert!(!cfg.inlay_hints_enabled);
     assert!(!cfg.inlay_hints_parameter_hints);
     assert!(!cfg.inlay_hints_type_hints);
-    assert!(cfg.inlay_hints_chained_hints, "chainedHints should flip to true");
+    assert!(
+        cfg.inlay_hints_chained_hints,
+        "chainedHints should flip to true"
+    );
     assert_eq!(cfg.inlay_hints_max_length, 50);
 }
 
@@ -104,7 +119,10 @@ fn server_config_telemetry_can_be_enabled() {
         "telemetry": { "enabled": true }
     });
     cfg.update_from_value(&settings);
-    assert!(cfg.telemetry_enabled, "telemetry should be enabled after update");
+    assert!(
+        cfg.telemetry_enabled,
+        "telemetry should be enabled after update"
+    );
 }
 
 #[test]
@@ -115,7 +133,10 @@ fn server_config_telemetry_can_be_disabled_again() {
     assert!(cfg.telemetry_enabled);
     // then disable
     cfg.update_from_value(&serde_json::json!({"telemetry": {"enabled": false}}));
-    assert!(!cfg.telemetry_enabled, "telemetry should be disabled after second update");
+    assert!(
+        !cfg.telemetry_enabled,
+        "telemetry should be disabled after second update"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -131,7 +152,10 @@ fn server_config_wrong_type_for_enabled_is_ignored() {
         "inlayHints": { "enabled": "yes" }
     });
     cfg.update_from_value(&settings);
-    assert_eq!(cfg.inlay_hints_enabled, was_enabled, "wrong-type value must not change the field");
+    assert_eq!(
+        cfg.inlay_hints_enabled, was_enabled,
+        "wrong-type value must not change the field"
+    );
 }
 
 #[test]
@@ -189,7 +213,10 @@ fn workspace_config_enabling_use_system_inc_sets_flag() {
         "workspace": { "useSystemInc": true }
     }));
 
-    assert!(cfg.use_system_inc, "use_system_inc should be true after update");
+    assert!(
+        cfg.use_system_inc,
+        "use_system_inc should be true after update"
+    );
 }
 
 #[test]
@@ -200,10 +227,16 @@ fn workspace_config_toggling_use_system_inc_off_sets_flag_to_false() {
     assert!(cfg.use_system_inc);
     // then disable — cache should also be cleared
     cfg.update_from_value(&serde_json::json!({"workspace": {"useSystemInc": false}}));
-    assert!(!cfg.use_system_inc, "use_system_inc should be false after second update");
+    assert!(
+        !cfg.use_system_inc,
+        "use_system_inc should be false after second update"
+    );
     // get_system_inc must return empty since use_system_inc is false
     let inc = cfg.get_system_inc();
-    assert!(inc.is_empty(), "get_system_inc must return empty when use_system_inc is false");
+    assert!(
+        inc.is_empty(),
+        "get_system_inc must return empty when use_system_inc is false"
+    );
 }
 
 #[test]
@@ -212,7 +245,10 @@ fn workspace_config_get_system_inc_returns_empty_when_disabled() {
     assert!(!cfg.use_system_inc);
     // Should return empty immediately without querying the system
     let paths = cfg.get_system_inc();
-    assert!(paths.is_empty(), "should return empty slice when use_system_inc is false");
+    assert!(
+        paths.is_empty(),
+        "should return empty slice when use_system_inc is false"
+    );
 }
 
 #[cfg(unix)]
@@ -249,7 +285,11 @@ mod perl_interpreter_detection_tests {
     }
 
     fn snapshot_env(keys: &[&'static str]) -> EnvSnapshot {
-        EnvSnapshot(keys.iter().map(|key| (*key, std::env::var_os(key))).collect())
+        EnvSnapshot(
+            keys.iter()
+                .map(|key| (*key, std::env::var_os(key)))
+                .collect(),
+        )
     }
 
     fn env_lock() -> Result<MutexGuard<'static, ()>, Box<dyn std::error::Error>> {
@@ -266,7 +306,11 @@ mod perl_interpreter_detection_tests {
 
         let mut file = fs::File::create(path)?;
         writeln!(file, "#!/bin/sh")?;
-        let args = inc_paths.iter().map(|line| format!("{line:?}")).collect::<Vec<_>>().join(" ");
+        let args = inc_paths
+            .iter()
+            .map(|line| format!("{line:?}"))
+            .collect::<Vec<_>>()
+            .join(" ");
         writeln!(file, "printf '%s\\n' {args}")?;
 
         let mut perms = fs::metadata(path)?.permissions();
@@ -294,13 +338,19 @@ mod perl_interpreter_detection_tests {
         let temp = tempfile::tempdir()?;
         let path_bin = temp.path().join("path-bin").join("perl");
         let brew_root = temp.path().join("perlbrew");
-        let brew_bin = brew_root.join("perls").join("perl-5.38.0").join("bin").join("perl");
+        let brew_bin = brew_root
+            .join("perls")
+            .join("perl-5.38.0")
+            .join("bin")
+            .join("perl");
         write_fake_perl(&path_bin, &["/path/lib"])?;
         write_fake_perl(&brew_bin, &["/perlbrew/lib", "."])?;
 
         set_env_var(
             "PATH",
-            path_bin.parent().ok_or_else(|| std::io::Error::other("missing PATH bin"))?,
+            path_bin
+                .parent()
+                .ok_or_else(|| std::io::Error::other("missing PATH bin"))?,
         );
         set_env_var("PERLBREW_ROOT", &brew_root);
         set_env_var("PERLBREW_PERL", "perl-5.38.0");
@@ -331,13 +381,19 @@ mod perl_interpreter_detection_tests {
         let temp = tempfile::tempdir()?;
         let path_bin = temp.path().join("path-bin").join("perl");
         let plenv_root = temp.path().join(".plenv");
-        let plenv_bin = plenv_root.join("versions").join("5.38.0").join("bin").join("perl");
+        let plenv_bin = plenv_root
+            .join("versions")
+            .join("5.38.0")
+            .join("bin")
+            .join("perl");
         write_fake_perl(&path_bin, &["/path/lib"])?;
         write_fake_perl(&plenv_bin, &["/plenv/lib", "."])?;
 
         set_env_var(
             "PATH",
-            path_bin.parent().ok_or_else(|| std::io::Error::other("missing PATH bin"))?,
+            path_bin
+                .parent()
+                .ok_or_else(|| std::io::Error::other("missing PATH bin"))?,
         );
         unsafe {
             std::env::remove_var("PERLBREW_ROOT");
@@ -369,14 +425,20 @@ mod perl_interpreter_detection_tests {
         let explicit_bin = temp.path().join("explicit").join("perl");
         let path_bin = temp.path().join("path-bin").join("perl");
         let brew_root = temp.path().join("perlbrew");
-        let brew_bin = brew_root.join("perls").join("perl-5.40.0").join("bin").join("perl");
+        let brew_bin = brew_root
+            .join("perls")
+            .join("perl-5.40.0")
+            .join("bin")
+            .join("perl");
         write_fake_perl(&explicit_bin, &["/explicit/lib"])?;
         write_fake_perl(&path_bin, &["/path/lib"])?;
         write_fake_perl(&brew_bin, &["/perlbrew/lib"])?;
 
         set_env_var(
             "PATH",
-            path_bin.parent().ok_or_else(|| std::io::Error::other("missing PATH bin"))?,
+            path_bin
+                .parent()
+                .ok_or_else(|| std::io::Error::other("missing PATH bin"))?,
         );
         set_env_var("PERLBREW_ROOT", &brew_root);
         set_env_var("PERLBREW_PERL", "perl-5.40.0");
@@ -412,7 +474,10 @@ fn workspace_config_update_include_paths_with_empty_array_clears_paths() {
     cfg.update_from_value(&serde_json::json!({
         "workspace": { "includePaths": [] }
     }));
-    assert!(cfg.include_paths.is_empty(), "empty array must clear include paths");
+    assert!(
+        cfg.include_paths.is_empty(),
+        "empty array must clear include paths"
+    );
 }
 
 #[test]

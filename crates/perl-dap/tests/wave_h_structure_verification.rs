@@ -102,10 +102,16 @@ fn test_no_file_and_folder_conflicts() {
 
     // Additional verification: the module system can't have both simultaneously
     let platform_type = std::any::type_name::<perl_dap::platform::PerlInterpreterResult>();
-    assert!(platform_type.contains("PerlInterpreterResult"), "Platform type should be accessible");
+    assert!(
+        platform_type.contains("PerlInterpreterResult"),
+        "Platform type should be accessible"
+    );
 
     let security_type = std::any::type_name::<perl_dap::security::SecurityError>();
-    assert!(security_type.contains("SecurityError"), "Security type should be accessible");
+    assert!(
+        security_type.contains("SecurityError"),
+        "Security type should be accessible"
+    );
 }
 
 #[test]
@@ -148,7 +154,15 @@ fn test_crate_structure_is_flat_not_hierarchical() {
     // and should NOT have more than 4 (no excessive nesting)
     for name in module_names {
         let colon_count = name.matches("::").count();
-        assert!(colon_count >= 2, "module structure should be at least 2 levels: {}", name);
-        assert!(colon_count <= 4, "module structure should not be deeply nested: {}", name);
+        assert!(
+            colon_count >= 2,
+            "module structure should be at least 2 levels: {}",
+            name
+        );
+        assert!(
+            colon_count <= 4,
+            "module structure should not be deeply nested: {}",
+            name
+        );
     }
 }

@@ -92,8 +92,10 @@ impl FixtureResult {
 /// Returns elapsed milliseconds from launch request to `stopped` event, or an
 /// error string describing what went wrong.
 fn probe_launch(script_path: &Path, timeout: Duration) -> Result<u128, String> {
-    let script_str =
-        script_path.to_str().ok_or("fixture path contains non-UTF-8 characters")?.to_string();
+    let script_str = script_path
+        .to_str()
+        .ok_or("fixture path contains non-UTF-8 characters")?
+        .to_string();
 
     let mut adapter = DebugAdapter::new();
     let (tx, rx) = channel();
@@ -103,7 +105,11 @@ fn probe_launch(script_path: &Path, timeout: Duration) -> Result<u128, String> {
     let init_resp = adapter.handle_request(1, "initialize", None);
     match init_resp {
         DapMessage::Response { success: true, .. } => {}
-        DapMessage::Response { success: false, message, .. } => {
+        DapMessage::Response {
+            success: false,
+            message,
+            ..
+        } => {
             return Err(format!(
                 "initialize failed: {}",
                 message.unwrap_or_else(|| "<no message>".to_string())
@@ -132,7 +138,11 @@ fn probe_launch(script_path: &Path, timeout: Duration) -> Result<u128, String> {
     );
     match launch_resp {
         DapMessage::Response { success: true, .. } => {}
-        DapMessage::Response { success: false, message, .. } => {
+        DapMessage::Response {
+            success: false,
+            message,
+            ..
+        } => {
             return Err(format!(
                 "launch failed: {}",
                 message.unwrap_or_else(|| "<no message>".to_string())
@@ -199,7 +209,11 @@ fn scorecard_launch_success_rate() -> TestResult {
             Ok(ms) => (Some(ms), None),
             Err(e) => (None, Some(e)),
         };
-        results.push(FixtureResult { name, elapsed_ms, error });
+        results.push(FixtureResult {
+            name,
+            elapsed_ms,
+            error,
+        });
     }
 
     // ── Print scorecard table ─────────────────────────────────────────────────
@@ -209,11 +223,21 @@ fn scorecard_launch_success_rate() -> TestResult {
     eprintln!("├──────────────────────┼───────────┼──────────────┼────────────────────────┤");
     for r in &results {
         let status = if r.passed() { "PASS" } else { "FAIL" };
-        let latency = r.elapsed_ms.map(|ms| ms.to_string()).unwrap_or_else(|| "—".to_string());
+        let latency = r
+            .elapsed_ms
+            .map(|ms| ms.to_string())
+            .unwrap_or_else(|| "—".to_string());
         let detail = r.error.as_deref().unwrap_or("");
         // Truncate detail to keep the table readable
-        let detail_trunc = if detail.len() > 22 { &detail[..22] } else { detail };
-        eprintln!("│ {:<20} │ {:<9} │ {:>12} │ {:<22} │", r.name, status, latency, detail_trunc);
+        let detail_trunc = if detail.len() > 22 {
+            &detail[..22]
+        } else {
+            detail
+        };
+        eprintln!(
+            "│ {:<20} │ {:<9} │ {:>12} │ {:<22} │",
+            r.name, status, latency, detail_trunc
+        );
     }
     eprintln!("└─────────────────────────────────────────────────────────────────────────┘");
 

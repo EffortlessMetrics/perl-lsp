@@ -1205,7 +1205,11 @@ fn bench_complex_data_structures(c: &mut Criterion) {
 fn bench_large_module(c: &mut Criterion) {
     let code = build_large_module();
     let line_count = code.lines().count();
-    assert!(line_count >= 1000, "Large module should be 1000+ lines, got {}", line_count);
+    assert!(
+        line_count >= 1000,
+        "Large module should be 1000+ lines, got {}",
+        line_count
+    );
 
     c.bench_function("cpan/large_module_1000_lines", |b| {
         b.iter(|| {
@@ -1220,7 +1224,9 @@ fn bench_large_module_scope_analysis(c: &mut Criterion) {
 
     let code = build_large_module();
     let mut parser = Parser::new(&code);
-    let ast = parser.parse().expect("large module must parse for scope benchmark");
+    let ast = parser
+        .parse()
+        .expect("large module must parse for scope benchmark");
     let analyzer = ScopeAnalyzer::new();
     let pragma_map = vec![];
 

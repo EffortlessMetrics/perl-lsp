@@ -12,8 +12,14 @@ use tempfile::TempDir;
 
 use crate::utils::project_root;
 
-const CORE_LAUNCH_CRATES: &[&str] =
-    &["perl-parser", "perl-lexer", "perl-lsp-rs", "perllsp", "perl-dap", "perl-corpus"];
+const CORE_LAUNCH_CRATES: &[&str] = &[
+    "perl-parser",
+    "perl-lexer",
+    "perl-lsp-rs",
+    "perllsp",
+    "perl-dap",
+    "perl-corpus",
+];
 
 #[derive(Deserialize)]
 struct RootCargoManifest {
@@ -54,12 +60,18 @@ pub fn run(all: bool) -> Result<()> {
     let launch_crates = if all {
         load_publish_allowlist(&root)?
     } else {
-        CORE_LAUNCH_CRATES.iter().map(|name| (*name).to_string()).collect()
+        CORE_LAUNCH_CRATES
+            .iter()
+            .map(|name| (*name).to_string())
+            .collect()
     };
 
     let metadata = load_cargo_metadata(&root)?;
-    let package_names: HashSet<_> =
-        metadata.packages.iter().map(|package| package.name.as_str()).collect();
+    let package_names: HashSet<_> = metadata
+        .packages
+        .iter()
+        .map(|package| package.name.as_str())
+        .collect();
 
     let unknown = launch_crates
         .iter()
@@ -67,13 +79,21 @@ pub fn run(all: bool) -> Result<()> {
         .collect::<Vec<_>>();
 
     if !unknown.is_empty() {
-        let unknown_list = unknown.iter().map(|name| name.as_str()).collect::<Vec<_>>().join(", ");
+        let unknown_list = unknown
+            .iter()
+            .map(|name| name.as_str())
+            .collect::<Vec<_>>()
+            .join(", ");
         bail!("unknown crates for launch prep: {unknown_list}");
     }
 
     println!(
         "🚀 crates.io launch prep ({})",
-        if all { "all publish-allowlist crates" } else { "core launch crates" }
+        if all {
+            "all publish-allowlist crates"
+        } else {
+            "core launch crates"
+        }
     );
     println!(
         "📦 Running cargo check + cargo package + offline packaged-manifest check for {} crate(s)",
@@ -85,15 +105,19 @@ pub fn run(all: bool) -> Result<()> {
         println!("==> {crate_name}");
         run_cargo_check(&root, &crate_name)?;
         let patch_args = package_patch_args(&metadata, Some(&crate_name));
-        let package =
-            metadata.packages.iter().find(|package| package.name == crate_name).ok_or_else(
-                || color_eyre::eyre::eyre!("missing cargo metadata for {crate_name}"),
-            )?;
+        let package = metadata
+            .packages
+            .iter()
+            .find(|package| package.name == crate_name)
+            .ok_or_else(|| color_eyre::eyre::eyre!("missing cargo metadata for {crate_name}"))?;
         run_cargo_package_check(&root, &metadata.target_directory, package, &patch_args)?;
     }
 
     println!();
-    println!("✅ crates.io launch prep completed ({})", if all { "all" } else { "core" });
+    println!(
+        "✅ crates.io launch prep completed ({})",
+        if all { "all" } else { "core" }
+    );
 
     Ok(())
 }
@@ -147,7 +171,10 @@ fn load_cargo_metadata(root: &Path) -> Result<CargoMetadata> {
         .context("failed to run cargo metadata")?;
 
     if !output.status.success() {
-        bail!("cargo metadata failed: {}", String::from_utf8_lossy(&output.stderr).trim_end());
+        bail!(
+            "cargo metadata failed: {}",
+            String::from_utf8_lossy(&output.stderr).trim_end()
+        );
     }
 
     let metadata: CargoMetadata =
@@ -212,7 +239,10 @@ fn run_cargo_package_check(
     let archive_path = crate_archive_path(target_directory, package);
     if archive_path.exists() {
         fs::remove_file(&archive_path).with_context(|| {
-            format!("failed to remove stale crate archive {}", archive_path.display())
+            format!(
+                "failed to remove stale crate archive {}",
+                archive_path.display()
+            )
         })?;
     }
 
@@ -235,13 +265,19 @@ fn run_cargo_package_check(
         let stderr = String::from_utf8_lossy(&output.stderr);
         let metadata_learning_failed = stderr.contains("could not learn metadata for:");
         if !(metadata_learning_failed && archive_path.is_file()) {
-            bail!("cargo package failed for {}: {}", package.name, stderr.trim_end());
+            bail!(
+                "cargo package failed for {}: {}",
+                package.name,
+                stderr.trim_end()
+            );
         }
     }
 
     let unpack_dir = unpack_crate_archive(target_directory, package)?;
-    let packaged_manifest =
-        unpack_dir.path().join(format!("{}-{}", package.name, package.version)).join("Cargo.toml");
+    let packaged_manifest = unpack_dir
+        .path()
+        .join(format!("{}-{}", package.name, package.version))
+        .join("Cargo.toml");
 
     let mut verify_args = vec![
         "check".to_string(),
@@ -271,7 +307,11 @@ fn run_cargo_package_check(
 fn unpack_crate_archive(target_directory: &Path, package: &MetadataPackage) -> Result<TempDir> {
     let archive_path = crate_archive_path(target_directory, package);
     if !archive_path.is_file() {
-        bail!("crate archive missing for {}: {}", package.name, archive_path.display());
+        bail!(
+            "crate archive missing for {}: {}",
+            package.name,
+            archive_path.display()
+        );
     }
 
     let unpack_dir = tempfile::Builder::new()
@@ -287,10 +327,16 @@ fn unpack_crate_archive(target_directory: &Path, package: &MetadataPackage) -> R
         .unpack(unpack_dir.path())
         .with_context(|| format!("failed to unpack crate archive {}", archive_path.display()))?;
 
-    let manifest_path =
-        unpack_dir.path().join(format!("{}-{}", package.name, package.version)).join("Cargo.toml");
+    let manifest_path = unpack_dir
+        .path()
+        .join(format!("{}-{}", package.name, package.version))
+        .join("Cargo.toml");
     if !manifest_path.is_file() {
-        bail!("unpacked manifest missing for {}: {}", package.name, manifest_path.display());
+        bail!(
+            "unpacked manifest missing for {}: {}",
+            package.name,
+            manifest_path.display()
+        );
     }
 
     Ok(unpack_dir)
@@ -307,7 +353,10 @@ mod tests {
 
     #[test]
     fn toml_safe_path_normalizes_backslashes() {
-        assert_eq!(toml_safe_path(Path::new(r"crates\perl-ast")), "crates/perl-ast");
+        assert_eq!(
+            toml_safe_path(Path::new(r"crates\perl-ast")),
+            "crates/perl-ast"
+        );
     }
 
     #[test]
@@ -359,6 +408,9 @@ mod tests {
 
         let path = crate_archive_path(Path::new("/workspace/custom-target"), &package);
 
-        assert_eq!(path, Path::new("/workspace/custom-target/package/perl-parser-0.12.1.crate"));
+        assert_eq!(
+            path,
+            Path::new("/workspace/custom-target/package/perl-parser-0.12.1.crate")
+        );
     }
 }

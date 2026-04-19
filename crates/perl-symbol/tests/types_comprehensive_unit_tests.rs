@@ -159,8 +159,13 @@ fn varkind_serde_json_values() -> Result<(), Box<dyn std::error::Error>> {
     let json_hash = serde_json::to_string(&VarKind::Hash)?;
 
     // Verify they produce distinct JSON representations
-    let unique: HashSet<&str> =
-        [json_scalar.as_str(), json_array.as_str(), json_hash.as_str()].into_iter().collect();
+    let unique: HashSet<&str> = [
+        json_scalar.as_str(),
+        json_array.as_str(),
+        json_hash.as_str(),
+    ]
+    .into_iter()
+    .collect();
     if unique.len() != 3 {
         return Err("VarKind variants serialize to non-unique JSON".into());
     }
@@ -216,7 +221,9 @@ fn lsp_kind_all_variables_are_13() -> Result<(), String> {
     for vk in all_var_kinds() {
         let kind = SymbolKind::Variable(vk).to_lsp_kind();
         if kind != 13 {
-            return Err(format!("Variable({vk:?}) workspace LSP kind should be 13, got {kind}"));
+            return Err(format!(
+                "Variable({vk:?}) workspace LSP kind should be 13, got {kind}"
+            ));
         }
     }
     Ok(())
@@ -284,7 +291,9 @@ fn doc_sym_non_variable_matches_workspace() -> Result<(), String> {
         let ws = sk.to_lsp_kind();
         let ds = sk.to_lsp_kind_document_symbol();
         if ws != ds {
-            return Err(format!("{sk:?}: workspace={ws} but document_symbol={ds}, expected equal"));
+            return Err(format!(
+                "{sk:?}: workspace={ws} but document_symbol={ds}, expected equal"
+            ));
         }
     }
     Ok(())
@@ -325,7 +334,9 @@ fn doc_sym_variable_types_are_distinct() -> Result<(), String> {
         .collect();
     let unique: HashSet<&u32> = vals.iter().collect();
     if unique.len() != vals.len() {
-        return Err(format!("document symbol variable types not distinct: {vals:?}"));
+        return Err(format!(
+            "document symbol variable types not distinct: {vals:?}"
+        ));
     }
     Ok(())
 }
@@ -520,7 +531,11 @@ fn hash_constructor() -> Result<(), String> {
 
 #[test]
 fn constructors_are_variables() -> Result<(), String> {
-    for sk in [SymbolKind::scalar(), SymbolKind::array(), SymbolKind::hash()] {
+    for sk in [
+        SymbolKind::scalar(),
+        SymbolKind::array(),
+        SymbolKind::hash(),
+    ] {
         if !sk.is_variable() {
             return Err(format!("{sk:?} from constructor is not a variable"));
         }
@@ -530,12 +545,19 @@ fn constructors_are_variables() -> Result<(), String> {
 
 #[test]
 fn constructors_have_sigils() -> Result<(), String> {
-    let expected =
-        [("$", SymbolKind::scalar()), ("@", SymbolKind::array()), ("%", SymbolKind::hash())];
+    let expected = [
+        ("$", SymbolKind::scalar()),
+        ("@", SymbolKind::array()),
+        ("%", SymbolKind::hash()),
+    ];
     for (exp, sk) in expected {
         match sk.sigil() {
             Some(s) if s == exp => {}
-            other => return Err(format!("{sk:?}.sigil() = {other:?}, expected Some(\"{exp}\")")),
+            other => {
+                return Err(format!(
+                    "{sk:?}.sigil() = {other:?}, expected Some(\"{exp}\")"
+                ));
+            }
         }
     }
     Ok(())
@@ -580,7 +602,11 @@ fn symbolkind_hash_trait() -> Result<(), String> {
     }
     // All 13 variants should be unique
     if set.len() != kinds.len() {
-        return Err(format!("expected {} unique SymbolKinds, got {}", kinds.len(), set.len()));
+        return Err(format!(
+            "expected {} unique SymbolKinds, got {}",
+            kinds.len(),
+            set.len()
+        ));
     }
     Ok(())
 }
@@ -603,7 +629,9 @@ fn symbolkind_debug_contains_variant_name() -> Result<(), String> {
     for (sk, expected_substr) in cases {
         let dbg = format!("{sk:?}");
         if !dbg.contains(expected_substr) {
-            return Err(format!("Debug of {sk:?} missing '{expected_substr}': '{dbg}'"));
+            return Err(format!(
+                "Debug of {sk:?} missing '{expected_substr}': '{dbg}'"
+            ));
         }
     }
     Ok(())
@@ -627,8 +655,10 @@ fn symbolkind_serde_roundtrip_all_variants() -> Result<(), Box<dyn std::error::E
 
 #[test]
 fn symbolkind_serde_all_variants_distinct() -> Result<(), Box<dyn std::error::Error>> {
-    let jsons: Vec<String> =
-        all_symbol_kinds().iter().map(serde_json::to_string).collect::<Result<Vec<_>, _>>()?;
+    let jsons: Vec<String> = all_symbol_kinds()
+        .iter()
+        .map(serde_json::to_string)
+        .collect::<Result<Vec<_>, _>>()?;
     let unique: HashSet<&String> = jsons.iter().collect();
     if unique.len() != jsons.len() {
         return Err("some SymbolKind variants serialize to the same JSON".into());
@@ -702,10 +732,14 @@ fn predicates_are_mutually_exclusive_for_leaf_types() -> Result<(), String> {
         SymbolKind::Format,
     ];
     for sk in leaf_kinds {
-        let count =
-            [sk.is_variable(), sk.is_callable(), sk.is_namespace()].iter().filter(|&&b| b).count();
+        let count = [sk.is_variable(), sk.is_callable(), sk.is_namespace()]
+            .iter()
+            .filter(|&&b| b)
+            .count();
         if count > 1 {
-            return Err(format!("{sk:?} matches {count} category predicates (should be ≤1)"));
+            return Err(format!(
+                "{sk:?} matches {count} category predicates (should be ≤1)"
+            ));
         }
     }
     Ok(())
@@ -716,7 +750,9 @@ fn variable_is_not_callable_or_namespace() -> Result<(), String> {
     for vk in all_var_kinds() {
         let sk = SymbolKind::Variable(vk);
         if sk.is_callable() || sk.is_namespace() {
-            return Err(format!("Variable({vk:?}) should not be callable or namespace"));
+            return Err(format!(
+                "Variable({vk:?}) should not be callable or namespace"
+            ));
         }
     }
     Ok(())

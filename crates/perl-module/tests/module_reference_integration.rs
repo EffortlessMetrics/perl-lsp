@@ -41,7 +41,10 @@ fn multiline_cursor_lookup_resolves_line_local_reference_only() {
     let worker_cursor = source.find("Worker").unwrap_or(0);
     let package_cursor = source.find("Demo::App").unwrap_or(0);
 
-    assert_eq!(extract_module_reference(source, worker_cursor), Some("Demo::Worker".to_string()));
+    assert_eq!(
+        extract_module_reference(source, worker_cursor),
+        Some("Demo::Worker".to_string())
+    );
     assert_eq!(extract_module_reference(source, package_cursor), None);
 }
 
@@ -97,7 +100,10 @@ fn extended_handles_multiline_with_parent_statement() {
     let source = "package MyApp;\nuse parent 'Base::Class';\nuse strict;\n";
     let cursor = source.find("Base::Class").unwrap_or(0);
 
-    assert_eq!(extract_module_reference_extended(source, cursor), Some("Base::Class".to_string()));
+    assert_eq!(
+        extract_module_reference_extended(source, cursor),
+        Some("Base::Class".to_string())
+    );
 }
 
 #[test]
@@ -105,7 +111,10 @@ fn extended_selects_correct_module_from_qw_list() {
     let line = "use parent qw(First::Base Second::Base);";
     let cursor = line.find("Second::Base").unwrap_or(0);
 
-    assert_eq!(extract_module_reference_extended(line, cursor), Some("Second::Base".to_string()));
+    assert_eq!(
+        extract_module_reference_extended(line, cursor),
+        Some("Second::Base".to_string())
+    );
 }
 
 #[test]
@@ -114,6 +123,12 @@ fn extended_falls_back_to_direct_use_when_not_parent() {
     let cursor = line.find("File::Basename").unwrap_or(0);
 
     // Both direct and extended should resolve this
-    assert_eq!(extract_module_reference(line, cursor), Some("File::Basename".to_string()));
-    assert_eq!(extract_module_reference_extended(line, cursor), Some("File::Basename".to_string()));
+    assert_eq!(
+        extract_module_reference(line, cursor),
+        Some("File::Basename".to_string())
+    );
+    assert_eq!(
+        extract_module_reference_extended(line, cursor),
+        Some("File::Basename".to_string())
+    );
 }

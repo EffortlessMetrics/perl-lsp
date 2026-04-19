@@ -26,29 +26,51 @@ fn identity_pos(offset: usize) -> (u32, u32) {
 
 /// Build a program node wrapping the given statements.
 fn program(stmts: Vec<Node>) -> Node {
-    Node::new(NodeKind::Program { statements: stmts }, SourceLocation::new(0, 1000))
+    Node::new(
+        NodeKind::Program { statements: stmts },
+        SourceLocation::new(0, 1000),
+    )
 }
 
 /// Build a function-call node.
 fn func_call(name: &str, args: Vec<Node>, loc: SourceLocation) -> Node {
-    Node::new(NodeKind::FunctionCall { name: name.to_string(), args }, loc)
+    Node::new(
+        NodeKind::FunctionCall {
+            name: name.to_string(),
+            args,
+        },
+        loc,
+    )
 }
 
 /// Build an expression-statement wrapping an inner node.
 fn expr_stmt(inner: Node) -> Node {
     let loc = inner.location;
-    Node::new(NodeKind::ExpressionStatement { expression: Box::new(inner) }, loc)
+    Node::new(
+        NodeKind::ExpressionStatement {
+            expression: Box::new(inner),
+        },
+        loc,
+    )
 }
 
 /// Build a number literal node.
 fn number(value: &str, start: usize, end: usize) -> Node {
-    Node::new(NodeKind::Number { value: value.to_string() }, SourceLocation::new(start, end))
+    Node::new(
+        NodeKind::Number {
+            value: value.to_string(),
+        },
+        SourceLocation::new(start, end),
+    )
 }
 
 /// Build a string literal node.
 fn string_node(value: &str, interpolated: bool, start: usize, end: usize) -> Node {
     Node::new(
-        NodeKind::String { value: value.to_string(), interpolated },
+        NodeKind::String {
+            value: value.to_string(),
+            interpolated,
+        },
         SourceLocation::new(start, end),
     )
 }
@@ -56,7 +78,10 @@ fn string_node(value: &str, interpolated: bool, start: usize, end: usize) -> Nod
 /// Build a variable node.
 fn variable(sigil: &str, name: &str, start: usize, end: usize) -> Node {
     Node::new(
-        NodeKind::Variable { sigil: sigil.to_string(), name: name.to_string() },
+        NodeKind::Variable {
+            sigil: sigil.to_string(),
+            name: name.to_string(),
+        },
         SourceLocation::new(start, end),
     )
 }
@@ -94,17 +119,26 @@ fn regex_node(pattern: &str, start: usize, end: usize) -> Node {
 
 /// Build a hash literal with key-value pairs.
 fn hash_literal_with_pairs(pairs: Vec<(Node, Node)>, start: usize, end: usize) -> Node {
-    Node::new(NodeKind::HashLiteral { pairs }, SourceLocation::new(start, end))
+    Node::new(
+        NodeKind::HashLiteral { pairs },
+        SourceLocation::new(start, end),
+    )
 }
 
 /// Build an array literal with elements.
 fn array_literal_with_elements(elements: Vec<Node>, start: usize, end: usize) -> Node {
-    Node::new(NodeKind::ArrayLiteral { elements }, SourceLocation::new(start, end))
+    Node::new(
+        NodeKind::ArrayLiteral { elements },
+        SourceLocation::new(start, end),
+    )
 }
 
 /// Build a block node wrapping statements.
 fn block(stmts: Vec<Node>, start: usize, end: usize) -> Node {
-    Node::new(NodeKind::Block { statements: stmts }, SourceLocation::new(start, end))
+    Node::new(
+        NodeKind::Block { statements: stmts },
+        SourceLocation::new(start, end),
+    )
 }
 
 /// Build a named subroutine node.
@@ -158,7 +192,11 @@ fn if_node(condition: Node, then_stmts: Vec<Node>, start: usize, end: usize) -> 
 /// Build a binary expression node.
 fn binary(op: &str, left: Node, right: Node, start: usize, end: usize) -> Node {
     Node::new(
-        NodeKind::Binary { op: op.to_string(), left: Box::new(left), right: Box::new(right) },
+        NodeKind::Binary {
+            op: op.to_string(),
+            left: Box::new(left),
+            right: Box::new(right),
+        },
         SourceLocation::new(start, end),
     )
 }
@@ -182,8 +220,14 @@ fn parser_driven_number_literal_produces_type_hint() -> Result<(), Box<dyn std::
 
     let hints = trivial_type_hints(&ast, &identity_pos, None);
     // The number literal 42 should get a ": Num" type hint
-    let num_hints: Vec<_> = hints.iter().filter(|h| h["label"].as_str() == Some(": Num")).collect();
-    assert!(!num_hints.is_empty(), "Expected at least one Num type hint for '42;'");
+    let num_hints: Vec<_> = hints
+        .iter()
+        .filter(|h| h["label"].as_str() == Some(": Num"))
+        .collect();
+    assert!(
+        !num_hints.is_empty(),
+        "Expected at least one Num type hint for '42;'"
+    );
     Ok(())
 }
 
@@ -194,8 +238,14 @@ fn parser_driven_string_literal_produces_type_hint() -> Result<(), Box<dyn std::
     let ast = parser.parse()?;
 
     let hints = trivial_type_hints(&ast, &identity_pos, None);
-    let str_hints: Vec<_> = hints.iter().filter(|h| h["label"].as_str() == Some(": Str")).collect();
-    assert!(!str_hints.is_empty(), "Expected at least one Str type hint for '\"hello\";'");
+    let str_hints: Vec<_> = hints
+        .iter()
+        .filter(|h| h["label"].as_str() == Some(": Str"))
+        .collect();
+    assert!(
+        !str_hints.is_empty(),
+        "Expected at least one Str type hint for '\"hello\";'"
+    );
     Ok(())
 }
 
@@ -207,8 +257,10 @@ fn parser_driven_regex_produces_type_hint() -> Result<(), Box<dyn std::error::Er
     let ast = parser.parse()?;
 
     let hints = trivial_type_hints(&ast, &identity_pos, None);
-    let regex_hints: Vec<_> =
-        hints.iter().filter(|h| h["label"].as_str() == Some(": Regex")).collect();
+    let regex_hints: Vec<_> = hints
+        .iter()
+        .filter(|h| h["label"].as_str() == Some(": Regex"))
+        .collect();
     // This may or may not produce a Regex hint depending on how the parser
     // represents qr//. If it does not, that is acceptable behavior.
     // The test validates no panic occurs.
@@ -223,9 +275,14 @@ fn parser_driven_anon_sub_produces_coderef_hint() -> Result<(), Box<dyn std::err
     let ast = parser.parse()?;
 
     let hints = trivial_type_hints(&ast, &identity_pos, None);
-    let coderef_hints: Vec<_> =
-        hints.iter().filter(|h| h["label"].as_str() == Some(": CodeRef")).collect();
-    assert!(!coderef_hints.is_empty(), "Expected CodeRef type hint for anonymous sub");
+    let coderef_hints: Vec<_> = hints
+        .iter()
+        .filter(|h| h["label"].as_str() == Some(": CodeRef"))
+        .collect();
+    assert!(
+        !coderef_hints.is_empty(),
+        "Expected CodeRef type hint for anonymous sub"
+    );
     Ok(())
 }
 
@@ -236,9 +293,14 @@ fn parser_driven_named_sub_no_coderef_hint() -> Result<(), Box<dyn std::error::E
     let ast = parser.parse()?;
 
     let hints = trivial_type_hints(&ast, &identity_pos, None);
-    let coderef_hints: Vec<_> =
-        hints.iter().filter(|h| h["label"].as_str() == Some(": CodeRef")).collect();
-    assert!(coderef_hints.is_empty(), "Named sub should not produce CodeRef hint");
+    let coderef_hints: Vec<_> = hints
+        .iter()
+        .filter(|h| h["label"].as_str() == Some(": CodeRef"))
+        .collect();
+    assert!(
+        coderef_hints.is_empty(),
+        "Named sub should not produce CodeRef hint"
+    );
     Ok(())
 }
 
@@ -344,7 +406,10 @@ fn no_type_hint_for_variable_in_assignment() {
     let ast = program(vec![decl]);
 
     let hints = trivial_type_hints(&ast, &identity_pos, None);
-    assert!(hints.is_empty(), "Variable-to-variable assignment should produce no type hints");
+    assert!(
+        hints.is_empty(),
+        "Variable-to-variable assignment should produce no type hints"
+    );
 }
 
 // ===========================================================================
@@ -360,9 +425,14 @@ fn array_literal_with_number_elements_produces_type_hints() {
 
     let hints = trivial_type_hints(&ast, &identity_pos, None);
     // The array itself gets an Array hint, and each number element gets a Num hint
-    let array_hints: Vec<_> =
-        hints.iter().filter(|h| h["label"].as_str() == Some(": Array")).collect();
-    let num_hints: Vec<_> = hints.iter().filter(|h| h["label"].as_str() == Some(": Num")).collect();
+    let array_hints: Vec<_> = hints
+        .iter()
+        .filter(|h| h["label"].as_str() == Some(": Array"))
+        .collect();
+    let num_hints: Vec<_> = hints
+        .iter()
+        .filter(|h| h["label"].as_str() == Some(": Num"))
+        .collect();
 
     assert_eq!(array_hints.len(), 1);
     assert_eq!(num_hints.len(), 3);
@@ -372,17 +442,28 @@ fn array_literal_with_number_elements_produces_type_hints() {
 fn hash_literal_with_string_values_produces_type_hints() {
     // (a => "foo", b => "bar")
     let pairs = vec![
-        (string_node("a", false, 1, 2), string_node("foo", false, 6, 11)),
-        (string_node("b", false, 13, 14), string_node("bar", false, 18, 23)),
+        (
+            string_node("a", false, 1, 2),
+            string_node("foo", false, 6, 11),
+        ),
+        (
+            string_node("b", false, 13, 14),
+            string_node("bar", false, 18, 23),
+        ),
     ];
     let hash = hash_literal_with_pairs(pairs, 0, 24);
     let ast = program(vec![expr_stmt(hash)]);
 
     let hints = trivial_type_hints(&ast, &identity_pos, None);
     // Hash literal itself + 4 string values (keys and values)
-    let hash_hints: Vec<_> =
-        hints.iter().filter(|h| h["label"].as_str() == Some(": Hash")).collect();
-    let str_hints: Vec<_> = hints.iter().filter(|h| h["label"].as_str() == Some(": Str")).collect();
+    let hash_hints: Vec<_> = hints
+        .iter()
+        .filter(|h| h["label"].as_str() == Some(": Hash"))
+        .collect();
+    let str_hints: Vec<_> = hints
+        .iter()
+        .filter(|h| h["label"].as_str() == Some(": Str"))
+        .collect();
 
     assert_eq!(hash_hints.len(), 1);
     assert_eq!(str_hints.len(), 4);
@@ -391,8 +472,11 @@ fn hash_literal_with_string_values_produces_type_hints() {
 #[test]
 fn mixed_array_elements_produce_correct_hints() {
     // [42, "hello", qr/foo/]
-    let elements =
-        vec![number("42", 1, 3), string_node("hello", false, 5, 12), regex_node("foo", 14, 21)];
+    let elements = vec![
+        number("42", 1, 3),
+        string_node("hello", false, 5, 12),
+        regex_node("foo", 14, 21),
+    ];
     let arr = array_literal_with_elements(elements, 0, 22);
     let ast = program(vec![expr_stmt(arr)]);
 
@@ -413,16 +497,24 @@ fn mixed_array_elements_produce_correct_hints() {
 #[test]
 fn hints_inside_subroutine_body() {
     // sub foo { 42; "hello"; }
-    let body =
-        vec![expr_stmt(number("42", 12, 14)), expr_stmt(string_node("hello", false, 16, 23))];
+    let body = vec![
+        expr_stmt(number("42", 12, 14)),
+        expr_stmt(string_node("hello", false, 16, 23)),
+    ];
     let sub_node = named_sub("foo", body, 0, 25);
     let ast = program(vec![sub_node]);
 
     let hints = trivial_type_hints(&ast, &identity_pos, None);
     let labels: Vec<_> = hints.iter().filter_map(|h| h["label"].as_str()).collect();
 
-    assert!(labels.contains(&": Num"), "Missing Num hint inside sub body");
-    assert!(labels.contains(&": Str"), "Missing Str hint inside sub body");
+    assert!(
+        labels.contains(&": Num"),
+        "Missing Num hint inside sub body"
+    );
+    assert!(
+        labels.contains(&": Str"),
+        "Missing Str hint inside sub body"
+    );
     assert_eq!(hints.len(), 2);
 }
 
@@ -452,7 +544,10 @@ fn hints_inside_if_condition_and_body() {
     let labels: Vec<_> = hints.iter().filter_map(|h| h["label"].as_str()).collect();
 
     // Both the condition literal and the body literal should get hints
-    assert!(labels.contains(&": Num"), "Missing Num hint in if condition");
+    assert!(
+        labels.contains(&": Num"),
+        "Missing Num hint in if condition"
+    );
     assert!(labels.contains(&": Str"), "Missing Str hint in if body");
     assert_eq!(hints.len(), 2);
 }
@@ -462,7 +557,10 @@ fn parameter_hints_inside_subroutine_body() {
     // sub wrapper { push(@arr, "val"); }
     let call = func_call(
         "push",
-        vec![variable("@", "arr", 18, 22), string_node("val", false, 24, 29)],
+        vec![
+            variable("@", "arr", 18, 22),
+            string_node("val", false, 24, 29),
+        ],
         SourceLocation::new(13, 30),
     );
     let sub_node = named_sub("wrapper", vec![expr_stmt(call)], 0, 32);
@@ -483,11 +581,18 @@ fn nested_function_call_both_produce_hints() {
     // push(@arr, substr($str, 0, 5))
     let inner = func_call(
         "substr",
-        vec![variable("$", "str", 16, 20), number("0", 22, 23), number("5", 25, 26)],
+        vec![
+            variable("$", "str", 16, 20),
+            number("0", 22, 23),
+            number("5", 25, 26),
+        ],
         SourceLocation::new(10, 27),
     );
-    let outer =
-        func_call("push", vec![variable("@", "arr", 5, 9), inner], SourceLocation::new(0, 28));
+    let outer = func_call(
+        "push",
+        vec![variable("@", "arr", 5, 9), inner],
+        SourceLocation::new(0, 28),
+    );
     let ast = program(vec![expr_stmt(outer)]);
 
     let hints = parameter_hints(&ast, &identity_pos, None);
@@ -507,7 +612,11 @@ fn triple_nested_function_calls() {
     // split(/,/, join(":", substr($s, 0, 5)))
     let innermost = func_call(
         "substr",
-        vec![variable("$", "s", 30, 32), number("0", 34, 35), number("5", 37, 38)],
+        vec![
+            variable("$", "s", 30, 32),
+            number("0", 34, 35),
+            number("5", 37, 38),
+        ],
         SourceLocation::new(24, 39),
     );
     let middle = func_call(
@@ -515,7 +624,11 @@ fn triple_nested_function_calls() {
         vec![string_node(":", false, 16, 19), innermost],
         SourceLocation::new(10, 40),
     );
-    let outer = func_call("split", vec![regex_node(",", 6, 9), middle], SourceLocation::new(0, 41));
+    let outer = func_call(
+        "split",
+        vec![regex_node(",", 6, 9), middle],
+        SourceLocation::new(0, 41),
+    );
     let ast = program(vec![expr_stmt(outer)]);
 
     let hints = parameter_hints(&ast, &identity_pos, None);
@@ -614,12 +727,21 @@ fn provider_generate_hints_parameter_hint_kinds() {
     let ast = program(vec![expr_stmt(call)]);
 
     let hints = provider.generate_hints(&ast, &identity_pos, None);
-    let param_hints: Vec<_> = hints.iter().filter(|h| h.kind == InlayHintKind::Parameter).collect();
+    let param_hints: Vec<_> = hints
+        .iter()
+        .filter(|h| h.kind == InlayHintKind::Parameter)
+        .collect();
 
     assert_eq!(param_hints.len(), 2);
     for ph in &param_hints {
-        assert!(!ph.padding_left, "Parameter hints should not have left padding");
-        assert!(ph.padding_right, "Parameter hints should have right padding");
+        assert!(
+            !ph.padding_left,
+            "Parameter hints should not have left padding"
+        );
+        assert!(
+            ph.padding_right,
+            "Parameter hints should have right padding"
+        );
     }
 }
 
@@ -635,8 +757,14 @@ fn provider_generate_hints_combines_parameter_and_type_hints() {
     let ast = program(vec![expr_stmt(call)]);
 
     let hints = provider.generate_hints(&ast, &identity_pos, None);
-    let param_count = hints.iter().filter(|h| h.kind == InlayHintKind::Parameter).count();
-    let type_count = hints.iter().filter(|h| h.kind == InlayHintKind::Type).count();
+    let param_count = hints
+        .iter()
+        .filter(|h| h.kind == InlayHintKind::Parameter)
+        .count();
+    let type_count = hints
+        .iter()
+        .filter(|h| h.kind == InlayHintKind::Type)
+        .count();
 
     assert_eq!(param_count, 2, "Expected 2 parameter hints for push");
     assert_eq!(type_count, 1, "Expected 1 type hint for number 42");
@@ -681,7 +809,12 @@ fn extract_param_names_with_multiple_slashes() {
 fn extract_param_names_lowercases_all() {
     let params = extract_param_names("open FILEHANDLE, MODE, FILENAME");
     for p in &params {
-        assert_eq!(p, &p.to_lowercase(), "Parameter '{}' should be lowercase", p);
+        assert_eq!(
+            p,
+            &p.to_lowercase(),
+            "Parameter '{}' should be lowercase",
+            p
+        );
     }
 }
 
@@ -696,26 +829,43 @@ fn type_hints_for_binary_operands() {
     let ast = program(vec![expr_stmt(expr)]);
 
     let hints = trivial_type_hints(&ast, &identity_pos, None);
-    let num_hints: Vec<_> = hints.iter().filter(|h| h["label"].as_str() == Some(": Num")).collect();
+    let num_hints: Vec<_> = hints
+        .iter()
+        .filter(|h| h["label"].as_str() == Some(": Num"))
+        .collect();
     assert_eq!(num_hints.len(), 2);
 }
 
 #[test]
 fn type_hints_for_string_concatenation() {
     // "hello" . "world"
-    let expr =
-        binary(".", string_node("hello", false, 0, 7), string_node("world", false, 10, 17), 0, 17);
+    let expr = binary(
+        ".",
+        string_node("hello", false, 0, 7),
+        string_node("world", false, 10, 17),
+        0,
+        17,
+    );
     let ast = program(vec![expr_stmt(expr)]);
 
     let hints = trivial_type_hints(&ast, &identity_pos, None);
-    let str_hints: Vec<_> = hints.iter().filter(|h| h["label"].as_str() == Some(": Str")).collect();
+    let str_hints: Vec<_> = hints
+        .iter()
+        .filter(|h| h["label"].as_str() == Some(": Str"))
+        .collect();
     assert_eq!(str_hints.len(), 2);
 }
 
 #[test]
 fn type_hints_for_mixed_binary_operands() {
     // 42 . "hello" -- number and string
-    let expr = binary(".", number("42", 0, 2), string_node("hello", false, 5, 12), 0, 12);
+    let expr = binary(
+        ".",
+        number("42", 0, 2),
+        string_node("hello", false, 5, 12),
+        0,
+        12,
+    );
     let ast = program(vec![expr_stmt(expr)]);
 
     let hints = trivial_type_hints(&ast, &identity_pos, None);
@@ -787,8 +937,12 @@ fn heredoc_no_type_hint() {
 
 #[test]
 fn do_block_no_type_hint() {
-    let node =
-        Node::new(NodeKind::Do { block: Box::new(block(vec![], 3, 5)) }, SourceLocation::new(0, 6));
+    let node = Node::new(
+        NodeKind::Do {
+            block: Box::new(block(vec![], 3, 5)),
+        },
+        SourceLocation::new(0, 6),
+    );
     let ast = program(vec![expr_stmt(node)]);
     let hints = trivial_type_hints(&ast, &identity_pos, None);
     assert!(hints.is_empty(), "Do block should not produce a type hint");
@@ -797,18 +951,25 @@ fn do_block_no_type_hint() {
 #[test]
 fn eval_block_no_type_hint() {
     let node = Node::new(
-        NodeKind::Eval { block: Box::new(block(vec![], 5, 7)) },
+        NodeKind::Eval {
+            block: Box::new(block(vec![], 5, 7)),
+        },
         SourceLocation::new(0, 8),
     );
     let ast = program(vec![expr_stmt(node)]);
     let hints = trivial_type_hints(&ast, &identity_pos, None);
-    assert!(hints.is_empty(), "Eval block should not produce a type hint");
+    assert!(
+        hints.is_empty(),
+        "Eval block should not produce a type hint"
+    );
 }
 
 #[test]
 fn return_node_no_type_hint() {
     let node = Node::new(
-        NodeKind::Return { value: Some(Box::new(number("42", 7, 9))) },
+        NodeKind::Return {
+            value: Some(Box::new(number("42", 7, 9))),
+        },
         SourceLocation::new(0, 10),
     );
     let ast = program(vec![node]);
@@ -827,11 +988,17 @@ fn function_call_arg_is_function_call() {
     // split(/,/, join(":", @parts))
     let inner_call = func_call(
         "join",
-        vec![string_node(":", false, 15, 18), variable("@", "parts", 20, 26)],
+        vec![
+            string_node(":", false, 15, 18),
+            variable("@", "parts", 20, 26),
+        ],
         SourceLocation::new(10, 27),
     );
-    let outer_call =
-        func_call("split", vec![regex_node(",", 6, 9), inner_call], SourceLocation::new(0, 28));
+    let outer_call = func_call(
+        "split",
+        vec![regex_node(",", 6, 9), inner_call],
+        SourceLocation::new(0, 28),
+    );
     let ast = program(vec![expr_stmt(outer_call)]);
 
     let hints = parameter_hints(&ast, &identity_pos, None);

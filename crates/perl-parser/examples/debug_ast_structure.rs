@@ -12,7 +12,10 @@ fn print_ast_structure(node: &Node, depth: usize) {
             print_ast_structure(right, depth + 1);
         }
         NodeKind::Variable { sigil, name } => {
-            println!("{}Variable {{ sigil: {:?}, name: {:?} }}", indent, sigil, name);
+            println!(
+                "{}Variable {{ sigil: {:?}, name: {:?} }}",
+                indent, sigil, name
+            );
         }
         NodeKind::Identifier { name } => {
             println!("{}Identifier {{ name: {:?} }}", indent, name);
@@ -23,8 +26,16 @@ fn print_ast_structure(node: &Node, depth: usize) {
                 print_ast_structure(stmt, depth + 1);
             }
         }
-        NodeKind::VariableDeclaration { declarator, variable, initializer, .. } => {
-            println!("{}VariableDeclaration {{ declarator: {:?} }}", indent, declarator);
+        NodeKind::VariableDeclaration {
+            declarator,
+            variable,
+            initializer,
+            ..
+        } => {
+            println!(
+                "{}VariableDeclaration {{ declarator: {:?} }}",
+                indent, declarator
+            );
             print_ast_structure(variable, depth + 1);
             if let Some(init) = initializer {
                 println!("{}Initializer:", indent);

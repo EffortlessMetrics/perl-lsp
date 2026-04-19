@@ -226,21 +226,33 @@ mod tests {
         let links = compute_links(uri(), "use Foo::Bar;\n", &[]);
         assert_eq!(links.len(), 1);
         if let Some(link) = links.first() {
-            assert_eq!(link.pointer("/data/type").and_then(Value::as_str), Some("module"));
-            assert_eq!(link.pointer("/data/module").and_then(Value::as_str), Some("Foo::Bar"));
+            assert_eq!(
+                link.pointer("/data/type").and_then(Value::as_str),
+                Some("module")
+            );
+            assert_eq!(
+                link.pointer("/data/module").and_then(Value::as_str),
+                Some("Foo::Bar")
+            );
         }
     }
 
     #[test]
     fn does_not_emit_link_for_pragma_use_strict() {
         let links = compute_links(uri(), "use strict;\n", &[]);
-        assert!(links.is_empty(), "pragmas should not produce document links");
+        assert!(
+            links.is_empty(),
+            "pragmas should not produce document links"
+        );
     }
 
     #[test]
     fn does_not_emit_link_for_pragma_use_warnings() {
         let links = compute_links(uri(), "use warnings;\n", &[]);
-        assert!(links.is_empty(), "pragmas should not produce document links");
+        assert!(
+            links.is_empty(),
+            "pragmas should not produce document links"
+        );
     }
 
     #[test]
@@ -260,7 +272,10 @@ mod tests {
     #[test]
     fn does_not_emit_module_link_for_use_base_statement() {
         let links = compute_links(uri(), "use base 'Foo::Bar';\n", &[]);
-        assert!(links.is_empty(), "use base is a base-class declaration, not a module link");
+        assert!(
+            links.is_empty(),
+            "use base is a base-class declaration, not a module link"
+        );
     }
 
     // ── require statement ─────────────────────────────────────
@@ -270,27 +285,50 @@ mod tests {
         let links = compute_links(uri(), "require Foo::Bar;\n", &[]);
         assert_eq!(links.len(), 1);
         if let Some(link) = links.first() {
-            assert_eq!(link.pointer("/data/type").and_then(Value::as_str), Some("module"));
-            assert_eq!(link.pointer("/data/module").and_then(Value::as_str), Some("Foo::Bar"));
+            assert_eq!(
+                link.pointer("/data/type").and_then(Value::as_str),
+                Some("module")
+            );
+            assert_eq!(
+                link.pointer("/data/module").and_then(Value::as_str),
+                Some("Foo::Bar")
+            );
         }
     }
 
     #[test]
     fn emits_file_link_for_require_with_double_quoted_string() {
         let links = compute_links(uri(), r#"require "my/file.pm";"#, &[]);
-        assert_eq!(links.len(), 1, "require with file string should emit a file link");
+        assert_eq!(
+            links.len(),
+            1,
+            "require with file string should emit a file link"
+        );
         if let Some(link) = links.first() {
-            assert_eq!(link.pointer("/data/type").and_then(Value::as_str), Some("file"));
-            assert_eq!(link.pointer("/data/path").and_then(Value::as_str), Some("my/file.pm"));
+            assert_eq!(
+                link.pointer("/data/type").and_then(Value::as_str),
+                Some("file")
+            );
+            assert_eq!(
+                link.pointer("/data/path").and_then(Value::as_str),
+                Some("my/file.pm")
+            );
         }
     }
 
     #[test]
     fn emits_file_link_for_require_with_single_quoted_string() {
         let links = compute_links(uri(), "require 'lib/helper.pm';", &[]);
-        assert_eq!(links.len(), 1, "require with single-quoted file should emit a file link");
+        assert_eq!(
+            links.len(),
+            1,
+            "require with single-quoted file should emit a file link"
+        );
         if let Some(link) = links.first() {
-            assert_eq!(link.pointer("/data/type").and_then(Value::as_str), Some("file"));
+            assert_eq!(
+                link.pointer("/data/type").and_then(Value::as_str),
+                Some("file")
+            );
         }
     }
 
@@ -298,7 +336,10 @@ mod tests {
     fn does_not_emit_link_for_require_bare_word_without_colons() {
         // A bare word without '::' is not a module form require
         let links = compute_links(uri(), "require Something;\n", &[]);
-        assert!(links.is_empty(), "bare require without '::' should not emit a module link");
+        assert!(
+            links.is_empty(),
+            "bare require without '::' should not emit a module link"
+        );
     }
 
     // ── link range / metadata ─────────────────────────────────
@@ -319,8 +360,14 @@ mod tests {
         let links = compute_links(uri(), "use Foo::Bar;\n", &[]);
         assert_eq!(links.len(), 1);
         if let Some(link) = links.first() {
-            let tooltip = link.pointer("/tooltip").and_then(Value::as_str).unwrap_or("");
-            assert!(tooltip.contains("Foo::Bar"), "tooltip should reference the module name");
+            let tooltip = link
+                .pointer("/tooltip")
+                .and_then(Value::as_str)
+                .unwrap_or("");
+            assert!(
+                tooltip.contains("Foo::Bar"),
+                "tooltip should reference the module name"
+            );
         }
     }
 

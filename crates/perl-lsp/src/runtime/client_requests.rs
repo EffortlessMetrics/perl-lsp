@@ -24,7 +24,11 @@ impl LspServer {
 
     /// Request client to refresh semantic tokens (workspace/semanticTokens/refresh)
     pub fn request_semantic_tokens_refresh(&self) -> io::Result<()> {
-        if !self.client_capabilities.lock().semantic_tokens_refresh_support {
+        if !self
+            .client_capabilities
+            .lock()
+            .semantic_tokens_refresh_support
+        {
             return Ok(());
         }
         self.send_request("workspace/semanticTokens/refresh", json!(null))?;
@@ -64,7 +68,11 @@ impl LspServer {
 
     /// Request client to refresh folding ranges (workspace/foldingRange/refresh)
     pub fn request_folding_range_refresh(&self) -> io::Result<()> {
-        if !self.client_capabilities.lock().folding_range_refresh_support {
+        if !self
+            .client_capabilities
+            .lock()
+            .folding_range_refresh_support
+        {
             return Ok(());
         }
         self.send_request("workspace/foldingRange/refresh", json!(null))?;

@@ -34,19 +34,29 @@ impl StartupTimer {
     /// Create a new timer that starts counting immediately.
     pub fn new() -> Self {
         let now = Instant::now();
-        Self { phases: Vec::with_capacity(8), start: now, last: now }
+        Self {
+            phases: Vec::with_capacity(8),
+            start: now,
+            last: now,
+        }
     }
 
     /// Record elapsed time since the last checkpoint (or start) as `name`.
     pub fn checkpoint(&mut self, name: &'static str) {
         let now = Instant::now();
-        self.phases.push(StartupPhase { name, duration: now - self.last });
+        self.phases.push(StartupPhase {
+            name,
+            duration: now - self.last,
+        });
         self.last = now;
     }
 
     /// Consume the timer and produce an immutable report.
     pub fn finish(self) -> StartupReport {
-        StartupReport { total: self.start.elapsed(), phases: self.phases }
+        StartupReport {
+            total: self.start.elapsed(),
+            phases: self.phases,
+        }
     }
 
     /// Create a timer with a pre-set elapsed duration, for testing.
@@ -58,7 +68,10 @@ impl StartupTimer {
     /// platforms where `Instant` resolution is coarser than the test interval.
     #[cfg(test)]
     pub(crate) fn new_with_elapsed(elapsed: Duration) -> FrozenTimer {
-        FrozenTimer { elapsed, phases: Vec::new() }
+        FrozenTimer {
+            elapsed,
+            phases: Vec::new(),
+        }
     }
 }
 
@@ -74,7 +87,10 @@ pub(crate) struct FrozenTimer {
 #[cfg(test)]
 impl FrozenTimer {
     pub(crate) fn finish(self) -> StartupReport {
-        StartupReport { total: self.elapsed, phases: self.phases }
+        StartupReport {
+            total: self.elapsed,
+            phases: self.phases,
+        }
     }
 }
 
@@ -140,7 +156,11 @@ impl StartupReport {
 
 impl fmt::Display for StartupReport {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "Startup timing (total: {:.1} ms)", self.total.as_secs_f64() * 1000.0)?;
+        writeln!(
+            f,
+            "Startup timing (total: {:.1} ms)",
+            self.total.as_secs_f64() * 1000.0
+        )?;
         if self.phases.is_empty() {
             writeln!(f, "  (no phases recorded)")?;
             return Ok(());

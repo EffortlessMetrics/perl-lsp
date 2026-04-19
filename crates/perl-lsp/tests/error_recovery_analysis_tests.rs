@@ -69,7 +69,9 @@ mod error_recovery_analysis {
 
         let v =
             result.ok_or("documentSymbol returned null despite valid sub after syntax error")?;
-        let symbols = v.as_array().ok_or("documentSymbol must return an array or null")?;
+        let symbols = v
+            .as_array()
+            .ok_or("documentSymbol must return an array or null")?;
         let names: Vec<&str> = symbols.iter().filter_map(|s| s["name"].as_str()).collect();
         assert!(
             names.contains(&"foo"),
@@ -110,7 +112,9 @@ mod error_recovery_analysis {
             if !items.is_empty() {
                 let labels: Vec<&str> = items.iter().filter_map(|i| i["label"].as_str()).collect();
                 assert!(
-                    labels.iter().any(|l| *l == "print" || l.starts_with("print")),
+                    labels
+                        .iter()
+                        .any(|l| *l == "print" || l.starts_with("print")),
                     "Completion after syntax error should include print. Got: {:?}",
                     labels
                 );

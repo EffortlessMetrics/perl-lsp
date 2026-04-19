@@ -25,7 +25,10 @@ fn test_recursive_heredoc_terminator_hang() {
     let duration = start.elapsed();
 
     // Should complete quickly (not hang)
-    assert!(duration.as_secs() < 2, "Parser should not hang on recursive terminators");
+    assert!(
+        duration.as_secs() < 2,
+        "Parser should not hang on recursive terminators"
+    );
 
     match result {
         Ok(_) => {}
@@ -79,7 +82,10 @@ fn test_heredoc_parsing_timeout() {
     let code = "my $x = <<EOF;\ncontent\nEOF";
     let mut parser = Parser::new(code);
     let result = parser.parse();
-    assert!(result.is_ok(), "expected parse to succeed for simple heredoc");
+    assert!(
+        result.is_ok(),
+        "expected parse to succeed for simple heredoc"
+    );
 
     let errors = parser.errors();
     assert!(
@@ -106,13 +112,20 @@ EOF3
     let duration = start.elapsed();
 
     // Should complete quickly
-    assert!(duration.as_secs() < 2, "Parser should handle multiple heredocs efficiently");
+    assert!(
+        duration.as_secs() < 2,
+        "Parser should handle multiple heredocs efficiently"
+    );
 
     // Should succeed or have non-timeout errors
     match result {
         Ok(_) => {}
         Err(err) => {
-            assert!(!err.to_string().contains("timeout"), "Should not timeout: {}", err);
+            assert!(
+                !err.to_string().contains("timeout"),
+                "Should not timeout: {}",
+                err
+            );
         }
     }
 
@@ -144,7 +157,10 @@ fn test_nested_heredocs_within_limit() {
     let duration = start.elapsed();
 
     // Should complete quickly
-    assert!(duration.as_secs() < 2, "Parser should handle 50 heredocs efficiently");
+    assert!(
+        duration.as_secs() < 2,
+        "Parser should handle 50 heredocs efficiently"
+    );
 
     // Should not have depth limit errors for 50 heredocs (limit is 100)
     let errors = parser.errors();

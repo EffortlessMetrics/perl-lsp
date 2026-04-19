@@ -12,7 +12,10 @@ use perl_lsp_performance::IncrementalParser;
 #[test]
 fn needs_reparse_returns_false_when_no_changed_regions() {
     let parser = IncrementalParser::new();
-    assert!(!parser.needs_reparse(0, 100), "empty change list → nothing needs reparse");
+    assert!(
+        !parser.needs_reparse(0, 100),
+        "empty change list → nothing needs reparse"
+    );
 }
 
 #[test]
@@ -44,7 +47,10 @@ fn needs_reparse_node_spanning_entire_region_overlaps() {
     let mut parser = IncrementalParser::new();
     parser.mark_changed(10, 20);
     // node (5, 25) fully contains region (10, 20)
-    assert!(parser.needs_reparse(5, 25), "node spanning entire region must need reparse");
+    assert!(
+        parser.needs_reparse(5, 25),
+        "node spanning entire region must need reparse"
+    );
 }
 
 #[test]
@@ -52,7 +58,10 @@ fn needs_reparse_region_spanning_entire_node_overlaps() {
     let mut parser = IncrementalParser::new();
     parser.mark_changed(0, 100);
     // node (10, 20) fully inside region (0, 100)
-    assert!(parser.needs_reparse(10, 20), "node fully inside region must need reparse");
+    assert!(
+        parser.needs_reparse(10, 20),
+        "node fully inside region must need reparse"
+    );
 }
 
 #[test]
@@ -60,7 +69,10 @@ fn needs_reparse_partial_left_overlap() {
     let mut parser = IncrementalParser::new();
     parser.mark_changed(10, 20);
     // node (8, 12): overlaps left edge of region
-    assert!(parser.needs_reparse(8, 12), "partial left overlap must need reparse");
+    assert!(
+        parser.needs_reparse(8, 12),
+        "partial left overlap must need reparse"
+    );
 }
 
 #[test]
@@ -68,7 +80,10 @@ fn needs_reparse_partial_right_overlap() {
     let mut parser = IncrementalParser::new();
     parser.mark_changed(10, 20);
     // node (18, 25): overlaps right edge of region
-    assert!(parser.needs_reparse(18, 25), "partial right overlap must need reparse");
+    assert!(
+        parser.needs_reparse(18, 25),
+        "partial right overlap must need reparse"
+    );
 }
 
 #[test]
@@ -77,9 +92,15 @@ fn needs_reparse_with_multiple_disjoint_regions_only_matches_overlapping() {
     parser.mark_changed(10, 20);
     parser.mark_changed(30, 40);
     // Between the two regions: (22, 28) → should not overlap
-    assert!(!parser.needs_reparse(22, 28), "node between regions must not need reparse");
+    assert!(
+        !parser.needs_reparse(22, 28),
+        "node between regions must not need reparse"
+    );
     // Overlaps second region: (35, 45) → should overlap
-    assert!(parser.needs_reparse(35, 45), "node overlapping second region must need reparse");
+    assert!(
+        parser.needs_reparse(35, 45),
+        "node overlapping second region must need reparse"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -92,8 +113,14 @@ fn mark_changed_merges_fully_overlapping_regions() {
     parser.mark_changed(0, 50);
     parser.mark_changed(10, 30); // fully inside first
     // After merge, should still be (0, 50)
-    assert!(parser.needs_reparse(0, 1), "start of merged region must still trigger reparse");
-    assert!(parser.needs_reparse(49, 51), "end of merged region must still trigger reparse");
+    assert!(
+        parser.needs_reparse(0, 1),
+        "start of merged region must still trigger reparse"
+    );
+    assert!(
+        parser.needs_reparse(49, 51),
+        "end of merged region must still trigger reparse"
+    );
 }
 
 #[test]
@@ -115,7 +142,10 @@ fn mark_changed_does_not_merge_non_adjacent_regions() {
     parser.mark_changed(0, 10);
     parser.mark_changed(20, 30); // gap between 10 and 20
     // Node in the gap: (11, 19) → must not overlap with either region
-    assert!(!parser.needs_reparse(11, 19), "node in gap between regions must not need reparse");
+    assert!(
+        !parser.needs_reparse(11, 19),
+        "node in gap between regions must not need reparse"
+    );
 }
 
 #[test]
@@ -138,12 +168,21 @@ fn clear_removes_all_changed_regions() {
     let mut parser = IncrementalParser::new();
     parser.mark_changed(10, 20);
     parser.mark_changed(30, 40);
-    assert!(parser.needs_reparse(15, 25), "before clear: region must trigger reparse");
+    assert!(
+        parser.needs_reparse(15, 25),
+        "before clear: region must trigger reparse"
+    );
 
     parser.clear();
 
-    assert!(!parser.needs_reparse(15, 25), "after clear: no region should trigger reparse");
-    assert!(!parser.needs_reparse(35, 45), "after clear: second region should also be cleared");
+    assert!(
+        !parser.needs_reparse(15, 25),
+        "after clear: no region should trigger reparse"
+    );
+    assert!(
+        !parser.needs_reparse(35, 45),
+        "after clear: second region should also be cleared"
+    );
 }
 
 #[test]
@@ -160,6 +199,12 @@ fn mark_changed_after_clear_works_correctly() {
     parser.clear();
     parser.mark_changed(50, 60);
 
-    assert!(!parser.needs_reparse(10, 20), "old region must not exist after clear");
-    assert!(parser.needs_reparse(55, 65), "new region after clear must work");
+    assert!(
+        !parser.needs_reparse(10, 20),
+        "old region must not exist after clear"
+    );
+    assert!(
+        parser.needs_reparse(55, 65),
+        "new region after clear must work"
+    );
 }

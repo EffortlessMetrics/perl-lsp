@@ -46,7 +46,10 @@ pub fn extract_workspace_folder_uris(workspace_folders: &[Value]) -> Vec<String>
     workspace_folders
         .iter()
         .filter_map(|folder| {
-            folder.get("uri").and_then(Value::as_str).map(std::string::ToString::to_string)
+            folder
+                .get("uri")
+                .and_then(Value::as_str)
+                .map(std::string::ToString::to_string)
         })
         .collect()
 }
@@ -98,7 +101,10 @@ mod tests {
 
     #[test]
     fn parses_plain_folder_path() {
-        assert_eq!(workspace_folder_to_path("/tmp/project"), PathBuf::from("/tmp/project"));
+        assert_eq!(
+            workspace_folder_to_path("/tmp/project"),
+            PathBuf::from("/tmp/project")
+        );
     }
 
     #[cfg(not(target_arch = "wasm32"))]

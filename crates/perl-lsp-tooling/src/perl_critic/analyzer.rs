@@ -26,7 +26,11 @@ pub struct CriticAnalyzer {
 impl CriticAnalyzer {
     /// Creates a new analyzer with the given configuration and runtime.
     pub fn new(config: CriticConfig, runtime: Arc<dyn SubprocessRuntime>) -> Self {
-        Self { config, cache: HashMap::new(), runtime }
+        Self {
+            config,
+            cache: HashMap::new(),
+            runtime,
+        }
     }
 
     /// Creates a new analyzer with the OS subprocess runtime (non-WASM only).
@@ -46,8 +50,10 @@ impl CriticAnalyzer {
 
         let args = build_perlcritic_args(&self.config, &path_str);
         let args_refs: Vec<&str> = args.iter().map(String::as_str).collect();
-        let output =
-            self.runtime.run_command("perlcritic", &args_refs, None).map_err(|e| e.message)?;
+        let output = self
+            .runtime
+            .run_command("perlcritic", &args_refs, None)
+            .map_err(|e| e.message)?;
         let violations = self.parse_output(&output.stdout, &path_str)?;
         self.cache.insert(path_str, violations.clone());
         Ok(violations)
@@ -64,8 +70,16 @@ impl CriticAnalyzer {
                 explanation: self.get_policy_explanation(&parsed.policy),
                 severity: Severity::from_number(parsed.severity),
                 range: Range {
-                    start: Position { byte: 0, line: parsed.line - 1, column: parsed.column - 1 },
-                    end: Position { byte: 0, line: parsed.line - 1, column: parsed.column },
+                    start: Position {
+                        byte: 0,
+                        line: parsed.line - 1,
+                        column: parsed.column - 1,
+                    },
+                    end: Position {
+                        byte: 0,
+                        line: parsed.line - 1,
+                        column: parsed.column,
+                    },
                 },
                 file: file_path.to_string(),
             })

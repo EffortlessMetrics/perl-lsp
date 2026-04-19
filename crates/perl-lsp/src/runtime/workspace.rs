@@ -97,7 +97,11 @@ fn send_progress_begin(outbound: &super::outbound::OutboundSender) {
 /// Send a `$/progress` report notification for workspace indexing.
 #[cfg(feature = "workspace")]
 fn send_progress_report(outbound: &super::outbound::OutboundSender, indexed: usize, total: usize) {
-    let percentage = if total > 0 { (indexed * 100 / total).min(99) as u32 } else { 0 };
+    let percentage = if total > 0 {
+        (indexed * 100 / total).min(99) as u32
+    } else {
+        0
+    };
     let message = format!("Indexed {} of {} files", indexed, total);
     if let Err(e) = outbound.send_notification(
         "$/progress",
@@ -165,32 +169,46 @@ impl Drop for IndexingGuard {
 impl LspServer {
     /// Request `workspace/configuration` for each workspace folder (if supported).
     pub(crate) fn request_workspace_configuration_for_folders(&self) {
-        if !self.client_capabilities.lock().workspace_configuration_support {
+        if !self
+            .client_capabilities
+            .lock()
+            .workspace_configuration_support
+        {
             tracing::debug!("Client does not support workspace/configuration; using local config");
             return;
         }
 
         let now = std::time::Instant::now();
-        self.pending_workspace_configuration_requests.lock().retain(|request_id, pending| {
-            let still_fresh = now.saturating_duration_since(pending.created_at)
-                <= WORKSPACE_CONFIGURATION_REQUEST_TIMEOUT;
-            if !still_fresh {
-                tracing::warn!(
-                    request_id = *request_id,
-                    "Dropping stale workspace/configuration request"
-                );
-            }
-            still_fresh
-        });
+        self.pending_workspace_configuration_requests
+            .lock()
+            .retain(|request_id, pending| {
+                let still_fresh = now.saturating_duration_since(pending.created_at)
+                    <= WORKSPACE_CONFIGURATION_REQUEST_TIMEOUT;
+                if !still_fresh {
+                    tracing::warn!(
+                        request_id = *request_id,
+                        "Dropping stale workspace/configuration request"
+                    );
+                }
+                still_fresh
+            });
 
-        let folder_uris: Vec<String> =
-            self.workspace_folders.lock().iter().map(|folder| folder.uri.clone()).collect();
+        let folder_uris: Vec<String> = self
+            .workspace_folders
+            .lock()
+            .iter()
+            .map(|folder| folder.uri.clone())
+            .collect();
         if folder_uris.is_empty() {
             return;
         }
 
         let mut items: Vec<Value> = vec![json!({ "section": "perl" })];
-        items.extend(folder_uris.iter().map(|uri| json!({ "scopeUri": uri, "section": "perl" })));
+        items.extend(
+            folder_uris
+                .iter()
+                .map(|uri| json!({ "scopeUri": uri, "section": "perl" })),
+        );
         let request_id = self.next_request_id.fetch_add(1, Ordering::Relaxed);
 
         if let Err(error) = self.outbound.send_request(
@@ -221,7 +239,10 @@ impl LspServer {
             return;
         };
 
-        let maybe_pending = self.pending_workspace_configuration_requests.lock().remove(&id);
+        let maybe_pending = self
+            .pending_workspace_configuration_requests
+            .lock()
+            .remove(&id);
         let Some(pending) = maybe_pending else {
             return;
         };
@@ -250,7 +271,11 @@ impl LspServer {
             );
             return;
         };
-        let global_settings = if pending.includes_global_item { results.first() } else { None };
+        let global_settings = if pending.includes_global_item {
+            results.first()
+        } else {
+            None
+        };
         let folder_results_start = usize::from(pending.includes_global_item);
 
         let mut folders = self.workspace_folders.lock();
@@ -291,8 +316,11 @@ impl LspServer {
         &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
-        let query =
-            params.as_ref().and_then(|p| p.get("query")).and_then(|q| q.as_str()).unwrap_or("");
+        let query = params
+            .as_ref()
+            .and_then(|p| p.get("query"))
+            .and_then(|q| q.as_str())
+            .unwrap_or("");
         let cap = workspace_symbol_cap();
 
         tracing::debug!(query, cap, "Workspace symbol search v2");
@@ -387,7 +415,10 @@ impl LspServer {
         // avoiding expensive Rope, ParentMap, LineStartsCache, and parse_errors clones.
         let docs_snapshot: Vec<(String, String, Option<Arc<perl_parser::ast::Node>>)> = {
             let documents = self.documents.lock();
-            documents.iter().map(|(k, v)| (k.clone(), v.text.clone(), v.ast.clone())).collect()
+            documents
+                .iter()
+                .map(|(k, v)| (k.clone(), v.text.clone(), v.ast.clone()))
+                .collect()
         };
 
         // Pre-compute lowercased query once, outside the document loop
@@ -439,7 +470,10 @@ impl LspServer {
         query: &str,
         _cap: usize,
     ) -> Result<Option<Value>, JsonRpcError> {
-        tracing::debug!(query, "Workspace symbol: no workspace feature, returning empty");
+        tracing::debug!(
+            query,
+            "Workspace symbol: no workspace feature, returning empty"
+        );
         Ok(Some(json!([])))
     }
 
@@ -449,8 +483,11 @@ impl LspServer {
         &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
-        let query =
-            params.as_ref().and_then(|p| p.get("query")).and_then(|q| q.as_str()).unwrap_or("");
+        let query = params
+            .as_ref()
+            .and_then(|p| p.get("query"))
+            .and_then(|q| q.as_str())
+            .unwrap_or("");
 
         tracing::debug!(query, "Workspace symbol search");
 
@@ -458,7 +495,10 @@ impl LspServer {
         // avoiding expensive Rope, ParentMap, LineStartsCache, and parse_errors clones.
         let docs_snapshot: Vec<(String, String, Option<Arc<perl_parser::ast::Node>>)> = {
             let documents = self.documents.lock();
-            documents.iter().map(|(k, v)| (k.clone(), v.text.clone(), v.ast.clone())).collect()
+            documents
+                .iter()
+                .map(|(k, v)| (k.clone(), v.text.clone(), v.ast.clone()))
+                .collect()
         };
 
         // Build source map and index documents with WorkspaceSymbolsProvider.
@@ -525,8 +565,9 @@ impl LspServer {
                                 let start_pos = doc
                                     .line_starts
                                     .offset_to_position(&doc.text, sym.location.start);
-                                let end_pos =
-                                    doc.line_starts.offset_to_position(&doc.text, sym.location.end);
+                                let end_pos = doc
+                                    .line_starts
+                                    .offset_to_position(&doc.text, sym.location.end);
 
                                 // Start with the provided symbol JSON so we can add
                                 // additional details without panicking if fields are missing
@@ -596,7 +637,11 @@ impl LspServer {
             // Return the original symbol if we couldn't enhance it
             Ok(Some(json!(symbol)))
         } else {
-            Err(JsonRpcError { code: -32602, message: "Missing params".to_string(), data: None })
+            Err(JsonRpcError {
+                code: -32602,
+                message: "Missing params".to_string(),
+                data: None,
+            })
         }
     }
 
@@ -609,8 +654,10 @@ impl LspServer {
     ) -> Result<Option<Value>, JsonRpcError> {
         if let Some(params) = params {
             // Support both direct array format and ConfigurationParams with items property
-            let items =
-                params.get("items").and_then(|i| i.as_array()).or_else(|| params.as_array());
+            let items = params
+                .get("items")
+                .and_then(|i| i.as_array())
+                .or_else(|| params.as_array());
 
             if let Some(items) = items {
                 let mut results = Vec::new();
@@ -871,7 +918,10 @@ impl LspServer {
     /// exist on disk are silently skipped — they should have arrived as DELETED
     /// events and been handled immediately.
     pub(crate) fn handle_watched_file_batch(&self, uris: Vec<String>) {
-        tracing::debug!("Processing debounced file watcher batch: {} URIs", uris.len());
+        tracing::debug!(
+            "Processing debounced file watcher batch: {} URIs",
+            uris.len()
+        );
         for uri in &uris {
             self.process_file_watcher_uri_immediate(uri);
         }
@@ -1176,7 +1226,10 @@ impl LspServer {
                     let idx = coordinator.index();
                     let open_documents: Vec<(String, String)> = {
                         let documents = self.documents.lock();
-                        documents.iter().map(|(uri, doc)| (uri.clone(), doc.text.clone())).collect()
+                        documents
+                            .iter()
+                            .map(|(uri, doc)| (uri.clone(), doc.text.clone()))
+                            .collect()
                     };
                     let deleting_uris: std::collections::HashSet<String> = files
                         .iter()
@@ -1208,8 +1261,11 @@ impl LspServer {
                         let dependents: Vec<String> = dependents.into_iter().collect();
 
                         if !dependents.is_empty() {
-                            let examples: Vec<String> =
-                                dependents.iter().take(3).map(|uri| short_uri(uri)).collect();
+                            let examples: Vec<String> = dependents
+                                .iter()
+                                .take(3)
+                                .map(|uri| short_uri(uri))
+                                .collect();
                             tracing::warn!(
                                 uri,
                                 dependent_file_count = dependents.len(),
@@ -1478,7 +1534,9 @@ impl LspServer {
                 #[cfg(feature = "workspace")]
                 {
                     if let Some(coordinator) = self.coordinator() {
-                        coordinator.index().set_workspace_folders(self.workspace_folder_uris());
+                        coordinator
+                            .index()
+                            .set_workspace_folders(self.workspace_folder_uris());
 
                         // Remove files from removed folders
                         for removed_uri in &change.removed {
@@ -1526,7 +1584,9 @@ impl LspServer {
 
         // Ensure workspace folders are set in the index before indexing starts
         let workspace_folder_uris = self.workspace_folder_uris();
-        coordinator.index().set_workspace_folders(workspace_folder_uris.clone());
+        coordinator
+            .index()
+            .set_workspace_folders(workspace_folder_uris.clone());
 
         let workspace_folders = self.workspace_folders.lock().clone();
         if workspace_folders.is_empty() {
@@ -1557,8 +1617,10 @@ impl LspServer {
             let mut early_exit: Option<(EarlyExitReason, u64, usize, usize)> = None;
 
             'scan: for folder_state in workspace_folders {
-                let Some(root) =
-                    folder_state.path.clone().or_else(|| uri_to_fs_path(&folder_state.uri))
+                let Some(root) = folder_state
+                    .path
+                    .clone()
+                    .or_else(|| uri_to_fs_path(&folder_state.uri))
                 else {
                     tracing::debug!(
                         uri = %folder_state.uri,
@@ -1584,8 +1646,12 @@ impl LspServer {
                     }
 
                     if elapsed_ms > caps.initial_scan_budget_ms {
-                        early_exit =
-                            Some((EarlyExitReason::InitialTimeBudget, elapsed_ms, 0, total_files));
+                        early_exit = Some((
+                            EarlyExitReason::InitialTimeBudget,
+                            elapsed_ms,
+                            0,
+                            total_files,
+                        ));
                         break 'scan;
                     }
                 }
@@ -1826,7 +1892,9 @@ impl LspServer {
             return Ok(Some(json!({"applied": true})));
         }
 
-        Ok(Some(json!({"applied": false, "failureReason": "Invalid parameters"})))
+        Ok(Some(
+            json!({"applied": false, "failureReason": "Invalid parameters"}),
+        ))
     }
 }
 
@@ -1908,7 +1976,10 @@ fn collect_delete_target_module_names(
     }
 
     for symbol in index.file_symbols(uri) {
-        if matches!(symbol.kind, SymbolKind::Package | SymbolKind::Class | SymbolKind::Role) {
+        if matches!(
+            symbol.kind,
+            SymbolKind::Package | SymbolKind::Class | SymbolKind::Role
+        ) {
             if let Some(module_name) = symbol
                 .qualified_name
                 .clone()
@@ -2006,7 +2077,9 @@ fn short_uri(uri: &str) -> String {
     Url::parse(uri)
         .ok()
         .and_then(|parsed| {
-            parsed.path_segments().and_then(|mut s| s.next_back().map(str::to_owned))
+            parsed
+                .path_segments()
+                .and_then(|mut s| s.next_back().map(str::to_owned))
         })
         .filter(|tail| !tail.is_empty())
         .unwrap_or_else(|| uri.to_string())
@@ -2055,8 +2128,9 @@ pub(super) fn module_name_appears_in_text(text: &str, module_name: &str) -> bool
 /// Convert a file path to a Perl module name
 pub(super) fn path_to_module_name(uri: &str) -> String {
     #[cfg(feature = "workspace")]
-    let path =
-        uri_to_fs_path(uri).and_then(|p| p.to_str().map(|s| s.to_string())).unwrap_or_else(|| {
+    let path = uri_to_fs_path(uri)
+        .and_then(|p| p.to_str().map(|s| s.to_string()))
+        .unwrap_or_else(|| {
             // Fallback to trim_start_matches for backward compatibility
             uri.trim_start_matches("file://").to_string()
         });
@@ -2102,7 +2176,10 @@ mod tests {
     #[test]
     fn test_module_name_appears_in_string_literal() {
         // Module name inside a single-quoted string counts as a reference
-        assert!(module_name_appears_in_text("use parent 'MyBase';", "MyBase"));
+        assert!(module_name_appears_in_text(
+            "use parent 'MyBase';",
+            "MyBase"
+        ));
     }
 
     #[test]

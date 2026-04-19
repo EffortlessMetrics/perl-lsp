@@ -146,12 +146,20 @@ fn test_hash_ref_still_works() {
 fn test_empty_array_ref_still_works() {
     // [] must still parse as an empty array ref.
     assert_clean_parse(r#"my $e = [];"#);
-    assert_eq!(count_array_elements(r#"my $e = [];"#), 0, "[] should be empty");
+    assert_eq!(
+        count_array_elements(r#"my $e = [];"#),
+        0,
+        "[] should be empty"
+    );
 }
 
 #[test]
 fn test_single_value_array_ref_no_fat_arrow() {
     // [$k] with no fat arrow should still parse as a 1-element array ref.
     assert_clean_parse(r#"my $arr = [$k];"#);
-    assert_eq!(count_array_elements(r#"my $arr = [$k];"#), 1, "[$k] should produce 1 element");
+    assert_eq!(
+        count_array_elements(r#"my $arr = [$k];"#),
+        1,
+        "[$k] should produce 1 element"
+    );
 }

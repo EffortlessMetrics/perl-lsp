@@ -47,9 +47,13 @@ fn test_use_before_definition_same_scope() {
     let issues = analyze_strict(code);
 
     // We expect UndeclaredVariable because at the point of 'print $x', $x is not in scope
-    let undeclared =
-        issues.iter().find(|i| i.kind == IssueKind::UndeclaredVariable && i.variable_name == "$x");
-    assert!(undeclared.is_some(), "Should detect usage before definition as undeclared variable");
+    let undeclared = issues
+        .iter()
+        .find(|i| i.kind == IssueKind::UndeclaredVariable && i.variable_name == "$x");
+    assert!(
+        undeclared.is_some(),
+        "Should detect usage before definition as undeclared variable"
+    );
 }
 
 #[test]
@@ -65,7 +69,10 @@ fn test_use_before_initialization() {
     let uninitialized = issues
         .iter()
         .find(|i| i.kind == IssueKind::UninitializedVariable && i.variable_name == "$x");
-    assert!(uninitialized.is_some(), "Should detect usage before initialization");
+    assert!(
+        uninitialized.is_some(),
+        "Should detect usage before initialization"
+    );
 }
 
 #[test]
@@ -79,7 +86,9 @@ fn test_variable_shadowing() {
     "#;
 
     let issues = analyze(code);
-    let shadowing = issues.iter().find(|i| i.kind == IssueKind::VariableShadowing);
+    let shadowing = issues
+        .iter()
+        .find(|i| i.kind == IssueKind::VariableShadowing);
     assert!(shadowing.is_some(), "Should detect shadowing");
 }
 
@@ -91,7 +100,9 @@ fn test_variable_redeclaration_same_scope() {
     "#;
 
     let issues = analyze(code);
-    let redecl = issues.iter().find(|i| i.kind == IssueKind::VariableRedeclaration);
+    let redecl = issues
+        .iter()
+        .find(|i| i.kind == IssueKind::VariableRedeclaration);
     assert!(redecl.is_some(), "Should detect redeclaration");
 }
 
@@ -107,7 +118,10 @@ fn test_undeclared_assignment() {
     let undeclared = issues
         .iter()
         .find(|i| i.kind == IssueKind::UndeclaredVariable && i.variable_name == "$undeclared");
-    assert!(undeclared.is_some(), "Should detect assignment to undeclared variable");
+    assert!(
+        undeclared.is_some(),
+        "Should detect assignment to undeclared variable"
+    );
 }
 
 #[test]

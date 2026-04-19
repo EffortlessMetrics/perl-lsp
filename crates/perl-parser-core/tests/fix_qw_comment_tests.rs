@@ -46,28 +46,48 @@ fn collect_array_words(node: &perl_parser_core::Node) -> Vec<String> {
 fn qw_with_inline_comment_word_count() {
     // qw(foo # this is a comment\n bar) => ['foo', 'bar'] in Perl
     let words = parse_qw_words("my @x = qw(foo # this is a comment\n bar);");
-    assert_eq!(words, vec!["foo", "bar"], "qw comment not stripped: got {:?}", words);
+    assert_eq!(
+        words,
+        vec!["foo", "bar"],
+        "qw comment not stripped: got {:?}",
+        words
+    );
 }
 
 #[test]
 fn qw_comment_at_start_word_count() {
     // qw(# all comment\n foo bar) => ['foo', 'bar'] in Perl
     let words = parse_qw_words("my @x = qw(# all comment\n foo bar);");
-    assert_eq!(words, vec!["foo", "bar"], "qw leading comment not stripped: got {:?}", words);
+    assert_eq!(
+        words,
+        vec!["foo", "bar"],
+        "qw leading comment not stripped: got {:?}",
+        words
+    );
 }
 
 #[test]
 fn qw_multiple_comment_lines_word_count() {
     // qw(a # first\n b # second\n c) => ['a', 'b', 'c'] in Perl
     let words = parse_qw_words("my @x = qw(a # first\n b # second\n c);");
-    assert_eq!(words, vec!["a", "b", "c"], "qw multiple comments not stripped: got {:?}", words);
+    assert_eq!(
+        words,
+        vec!["a", "b", "c"],
+        "qw multiple comments not stripped: got {:?}",
+        words
+    );
 }
 
 #[test]
 fn qw_trailing_comment_word_count() {
     // qw(foo bar # trailing) => ['foo', 'bar'] in Perl
     let words = parse_qw_words("my @x = qw(foo bar # trailing comment);");
-    assert_eq!(words, vec!["foo", "bar"], "qw trailing comment not stripped: got {:?}", words);
+    assert_eq!(
+        words,
+        vec!["foo", "bar"],
+        "qw trailing comment not stripped: got {:?}",
+        words
+    );
 }
 
 // --- No-comment regression (must always pass) ---

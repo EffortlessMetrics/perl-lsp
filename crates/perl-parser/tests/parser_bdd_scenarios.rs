@@ -31,9 +31,15 @@ fn bdd_given_named_sub_with_assignment_when_parsed_then_ast_contains_subroutine_
 
     // Then: core semantic structure appears in the AST.
     assert!(sexp.contains("sub "), "Expected Subroutine node in: {sexp}");
-    assert!(sexp.contains("assignment_"), "Expected Assignment node in: {sexp}");
+    assert!(
+        sexp.contains("assignment_"),
+        "Expected Assignment node in: {sexp}"
+    );
     assert!(sexp.contains("(return"), "Expected Return node in: {sexp}");
-    assert!(!sexp.contains("ERROR"), "Did not expect recovery ERROR nodes for valid code: {sexp}");
+    assert!(
+        !sexp.contains("ERROR"),
+        "Did not expect recovery ERROR nodes for valid code: {sexp}"
+    );
 
     Ok(())
 }
@@ -48,8 +54,14 @@ fn bdd_given_regex_substitution_when_parsed_then_pattern_replacement_and_flags_a
     let sexp = parse_sexp(code)?;
 
     // Then: regex substitution semantics are preserved in AST text form.
-    assert!(sexp.contains("substitution"), "Expected Substitution node in: {sexp}");
-    assert!(sexp.contains("prefix_$1"), "Expected replacement text in: {sexp}");
+    assert!(
+        sexp.contains("substitution"),
+        "Expected Substitution node in: {sexp}"
+    );
+    assert!(
+        sexp.contains("prefix_$1"),
+        "Expected replacement text in: {sexp}"
+    );
     assert!(sexp.contains("gi"), "Expected modifier flags in: {sexp}");
     assert!(
         !sexp.contains("ERROR"),
@@ -76,7 +88,10 @@ fn bdd_given_match_switch_when_parsed_then_given_and_when_constructs_are_present
     // Then: control-flow specific nodes are present and parse is clean.
     assert!(sexp.contains("(given "), "Expected Given node in: {sexp}");
     assert!(sexp.contains("(when "), "Expected When node in: {sexp}");
-    assert!(sexp.contains("(default "), "Expected Default node in: {sexp}");
+    assert!(
+        sexp.contains("(default "),
+        "Expected Default node in: {sexp}"
+    );
     assert!(
         !sexp.contains("ERROR"),
         "Did not expect recovery ERROR nodes for valid given/when: {sexp}"
@@ -105,7 +120,10 @@ fn bdd_given_incomplete_if_when_parsed_then_parser_recovers_with_error_nodes_ins
         }
         Err(err) => {
             let message = err.to_string();
-            assert!(!message.is_empty(), "Expected diagnostic message when parse returns Err");
+            assert!(
+                !message.is_empty(),
+                "Expected diagnostic message when parse returns Err"
+            );
         }
     }
 }
@@ -131,8 +149,14 @@ fn bdd_given_multiple_realistic_statements_when_parsed_then_program_shape_is_sta
     let sexp = must(parse_sexp(code));
 
     // Then: top-level shape includes declarations and structured control flow.
-    assert!(sexp.contains("(use "), "Expected Use declarations in: {sexp}");
-    assert!(sexp.contains("(for") || sexp.contains("(foreach"), "Expected loop node in: {sexp}");
+    assert!(
+        sexp.contains("(use "),
+        "Expected Use declarations in: {sexp}"
+    );
+    assert!(
+        sexp.contains("(for") || sexp.contains("(foreach"),
+        "Expected loop node in: {sexp}"
+    );
     assert!(sexp.contains("(if "), "Expected If node in: {sexp}");
     assert!(
         !sexp.contains("ERROR"),

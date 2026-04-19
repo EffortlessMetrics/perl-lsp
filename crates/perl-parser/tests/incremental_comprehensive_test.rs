@@ -30,7 +30,10 @@ mod incremental_comprehensive_tests {
         validation.print_report();
 
         // Validate specific performance requirements for simple edits
-        assert!(result.avg_incremental_micros < 500, "Simple edits should be <500µs");
+        assert!(
+            result.avg_incremental_micros < 500,
+            "Simple edits should be <500µs"
+        );
         assert!(
             result.avg_efficiency_percentage >= 75.0,
             "Simple edits should have ≥75% efficiency"
@@ -53,8 +56,14 @@ mod incremental_comprehensive_tests {
         IncrementalTestUtils::print_performance_summary(&result);
 
         // String edits should be efficient
-        assert!(result.avg_incremental_micros < 5000, "String edits should be <5ms");
-        assert!(result.success_rate >= 0.95, "String edits should have ≥95% success rate");
+        assert!(
+            result.avg_incremental_micros < 5000,
+            "String edits should be <5ms"
+        );
+        assert!(
+            result.success_rate >= 0.95,
+            "String edits should have ≥95% success rate"
+        );
     }
 
     #[test]
@@ -71,7 +80,10 @@ mod incremental_comprehensive_tests {
         IncrementalTestUtils::print_performance_summary(&result);
 
         // Multi-statement should still be fast but may have lower reuse rates
-        assert!(result.avg_incremental_micros < 5000, "Multi-statement edits should be <5ms");
+        assert!(
+            result.avg_incremental_micros < 5000,
+            "Multi-statement edits should be <5ms"
+        );
         assert!(
             result.avg_efficiency_percentage >= 60.0,
             "Multi-statement should have ≥60% efficiency"
@@ -101,8 +113,14 @@ if ($condition) {
         IncrementalTestUtils::print_performance_summary(&result);
 
         // Complex structures use relaxed criteria
-        assert!(result.avg_incremental_micros < 5000, "Complex structures should be <5ms");
-        assert!(result.success_rate >= 0.90, "Complex structures should have ≥90% success rate");
+        assert!(
+            result.avg_incremental_micros < 5000,
+            "Complex structures should be <5ms"
+        );
+        assert!(
+            result.success_rate >= 0.90,
+            "Complex structures should have ≥90% success rate"
+        );
     }
 
     #[test]
@@ -164,8 +182,14 @@ if ($condition) {
         let scaling_factor = large_time / small_time;
         let size_factor = last_result.0 as f64 / scaling_results[0].0 as f64;
 
-        println!("Scaling factor: {:.1}x time for {:.1}x size", scaling_factor, size_factor);
-        assert!(scaling_factor < size_factor * 2.0, "Performance should scale better than O(n²)");
+        println!(
+            "Scaling factor: {:.1}x time for {:.1}x size",
+            scaling_factor, size_factor
+        );
+        assert!(
+            scaling_factor < size_factor * 2.0,
+            "Performance should scale better than O(n²)"
+        );
         Ok(())
     }
 
@@ -212,8 +236,16 @@ if ($condition) {
             IncrementalTestUtils::print_performance_summary(&result);
 
             // Unicode should not significantly impact performance
-            assert!(result.avg_incremental_micros < 2000, "{} should be <2ms", name);
-            assert!(result.success_rate >= 0.90, "{} should have ≥90% success rate", name);
+            assert!(
+                result.avg_incremental_micros < 2000,
+                "{} should be <2ms",
+                name
+            );
+            assert!(
+                result.success_rate >= 0.90,
+                "{} should have ≥90% success rate",
+                name
+            );
         }
     }
 
@@ -224,7 +256,12 @@ if ($condition) {
             ("Expansion", "my $x = 5;", "5", "12345"),
             ("Whitespace", "my $x = 42  ;", "42", "99"),
             ("At Boundary", "my($x)=42;", "42", "99"),
-            ("Multiple Occurrences", "my $x = 42; my $y = 42;", "42", "99"),
+            (
+                "Multiple Occurrences",
+                "my $x = 42; my $y = 42;",
+                "42",
+                "99",
+            ),
         ];
 
         for (name, source, old_val, new_val) in edge_cases {
@@ -238,8 +275,16 @@ if ($condition) {
             IncrementalTestUtils::print_performance_summary(&result);
 
             // Edge cases should still perform reasonably
-            assert!(result.avg_incremental_micros < 3000, "{} should be <3ms", name);
-            assert!(result.success_rate >= 0.80, "{} should have ≥80% success rate", name);
+            assert!(
+                result.avg_incremental_micros < 3000,
+                "{} should be <3ms",
+                name
+            );
+            assert!(
+                result.success_rate >= 0.80,
+                "{} should have ≥80% success rate",
+                name
+            );
         }
     }
 
@@ -282,7 +327,11 @@ if ($condition) {
             );
 
             // Each edit should be fast
-            assert!(individual_time < 3000, "Individual edit {} should be <3ms", i + 1);
+            assert!(
+                individual_time < 3000,
+                "Individual edit {} should be <3ms",
+                i + 1
+            );
 
             if result.efficiency_percentage() < 50.0 {
                 all_efficient = false;
@@ -290,10 +339,16 @@ if ($condition) {
         }
 
         println!("  Total time: {}µs", cumulative_time);
-        println!("  Average per edit: {}µs", cumulative_time / edits.len() as u128);
+        println!(
+            "  Average per edit: {}µs",
+            cumulative_time / edits.len() as u128
+        );
 
         // Overall rapid edit performance
-        assert!(cumulative_time < 10000, "Total rapid edit time should be <10ms");
+        assert!(
+            cumulative_time < 10000,
+            "Total rapid edit time should be <10ms"
+        );
 
         if all_efficient {
             println!("✅ All rapid edits maintained good efficiency");
@@ -372,13 +427,23 @@ if ($condition) {
             IncrementalTestUtils::print_performance_summary(&result);
 
             batch_averages.push(result.avg_incremental_micros);
-            println!("  Batch {}: avg={}µs", batch + 1, result.avg_incremental_micros);
+            println!(
+                "  Batch {}: avg={}µs",
+                batch + 1,
+                result.avg_incremental_micros
+            );
         }
 
         // Analyze for regression
         let overall_avg = batch_averages.iter().sum::<u128>() / batch_averages.len() as u128;
-        let min_time = *batch_averages.iter().min().ok_or("batch_averages is empty")?;
-        let max_time = *batch_averages.iter().max().ok_or("batch_averages is empty")?;
+        let min_time = *batch_averages
+            .iter()
+            .min()
+            .ok_or("batch_averages is empty")?;
+        let max_time = *batch_averages
+            .iter()
+            .max()
+            .ok_or("batch_averages is empty")?;
 
         println!("  Overall average: {}µs", overall_avg);
         println!("  Range: {}µs - {}µs", min_time, max_time);

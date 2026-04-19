@@ -66,7 +66,11 @@ mod tests {
             "expected double-quote prefix, got: {}",
             formatted[0]
         );
-        assert!(formatted[0].ends_with('"'), "expected double-quote suffix, got: {}", formatted[0]);
+        assert!(
+            formatted[0].ends_with('"'),
+            "expected double-quote suffix, got: {}",
+            formatted[0]
+        );
         // The original text must be preserved inside the wrapper.
         assert!(
             formatted[0].contains("it's a file"),
@@ -98,7 +102,11 @@ mod tests {
             "expected double-quote prefix, got: {}",
             formatted[2]
         );
-        assert!(formatted[2].ends_with('"'), "expected double-quote suffix, got: {}", formatted[2]);
+        assert!(
+            formatted[2].ends_with('"'),
+            "expected double-quote suffix, got: {}",
+            formatted[2]
+        );
         assert!(
             formatted[2].contains("it's here now"),
             "original text not found in: {}",

@@ -86,7 +86,10 @@ pub fn run_hook_registry_check() -> Result<()> {
     }
 
     if failed == 0 {
-        println!("Hook registry check passed ({} scripts verified)", commands.len());
+        println!(
+            "Hook registry check passed ({} scripts verified)",
+            commands.len()
+        );
         Ok(())
     } else {
         bail!("Hook registry check failed for {failed} script(s)");
@@ -133,8 +136,12 @@ pub fn run_hook_tests() -> Result<()> {
     let task_repo = temp_root.join("task-completed-repo");
     create_non_rust_test_repo(&task_repo, &temp_root, &isolated_hooks_dir)?;
 
-    let task_completed_no_payload =
-        run_script(task_completed.as_path(), None, None, Some(task_repo.as_path()))?;
+    let task_completed_no_payload = run_script(
+        task_completed.as_path(),
+        None,
+        None,
+        Some(task_repo.as_path()),
+    )?;
     assert_exit_code(
         0,
         "task-completed passes with no staged .rs files",
@@ -147,8 +154,12 @@ pub fn run_hook_tests() -> Result<()> {
         r#"{"subagent_name":"test-agent","subagent_type":"builder","session_id":"abc123"}"#;
     let temp_ops = temp_root.join("subagent-stop");
     fs::create_dir_all(&temp_ops).context("Failed to create temporary OPS_DIR")?;
-    let subagent_out =
-        run_script(&subagent_stop, Some(sample_payload), Some(temp_ops.as_path()), None)?;
+    let subagent_out = run_script(
+        &subagent_stop,
+        Some(sample_payload),
+        Some(temp_ops.as_path()),
+        None,
+    )?;
     assert_exit_code(
         0,
         "subagent-stop exits 0 with payload",
@@ -157,7 +168,10 @@ pub fn run_hook_tests() -> Result<()> {
         &mut fail,
     );
 
-    let output = read_file(temp_ops.join("swarm-metrics.jsonl"), "Subagent-stop output file")?;
+    let output = read_file(
+        temp_ops.join("swarm-metrics.jsonl"),
+        "Subagent-stop output file",
+    )?;
     assert_contains(
         &output,
         r#""event":"subagent_stop""#,
@@ -172,14 +186,24 @@ pub fn run_hook_tests() -> Result<()> {
         &mut pass,
         &mut fail,
     );
-    assert_regex(&output, &ts_re, "subagent-stop includes ts timestamp", &mut pass, &mut fail);
+    assert_regex(
+        &output,
+        &ts_re,
+        "subagent-stop includes ts timestamp",
+        &mut pass,
+        &mut fail,
+    );
 
     let temp_ops = temp_root.join("subagent-stop-plan-review");
     fs::create_dir_all(&temp_ops).context("Failed to create temporary OPS_DIR")?;
 
     let no_issue_payload = r#"{"subagent_name":"plan-reviewer","subagent_type":"plan-reviewer","cwd":"/repo/worktrees/agent-a071b609","session_id":"abc124"}"#;
-    let no_issue_out =
-        run_script(&subagent_stop, Some(no_issue_payload), Some(temp_ops.as_path()), None)?;
+    let no_issue_out = run_script(
+        &subagent_stop,
+        Some(no_issue_payload),
+        Some(temp_ops.as_path()),
+        None,
+    )?;
     assert_exit_code(
         3,
         "plan-reviewer without explicit issue context fails loud",
@@ -188,7 +212,10 @@ pub fn run_hook_tests() -> Result<()> {
         &mut fail,
     );
 
-    let output = read_file(temp_ops.join("swarm-metrics.jsonl"), "plan-reviewer metrics file")?;
+    let output = read_file(
+        temp_ops.join("swarm-metrics.jsonl"),
+        "plan-reviewer metrics file",
+    )?;
     assert_contains(
         &output,
         r#""event":"subagent_stop""#,
@@ -198,8 +225,12 @@ pub fn run_hook_tests() -> Result<()> {
     );
 
     let agent_name_payload = r#"{"subagent_name":"plan-review-4044","subagent_type":"plan-reviewer","session_id":"abc125"}"#;
-    let agent_name_out =
-        run_script(&subagent_stop, Some(agent_name_payload), Some(temp_ops.as_path()), None)?;
+    let agent_name_out = run_script(
+        &subagent_stop,
+        Some(agent_name_payload),
+        Some(temp_ops.as_path()),
+        None,
+    )?;
     assert_not_exit_code(
         3,
         "canonical plan-review-NNN agent name satisfies issue context fallback",
@@ -225,7 +256,10 @@ pub fn run_hook_tests() -> Result<()> {
         &mut fail,
     );
 
-    let output = read_file(temp_ops.join("swarm-metrics.jsonl"), "task-completed metrics file")?;
+    let output = read_file(
+        temp_ops.join("swarm-metrics.jsonl"),
+        "task-completed metrics file",
+    )?;
     assert_contains(
         &output,
         r#""event":"task_completed""#,
@@ -294,8 +328,12 @@ pub fn run_hook_tests() -> Result<()> {
     fs::create_dir_all(&temp_ops).context("Failed to create temporary OPS_DIR")?;
     let payload_with_cwd =
         r#"{"subagent_type":"builder","cwd":"/repo/worktrees/agent-abc","session_id":"sess1"}"#;
-    let subagent_out =
-        run_script(&subagent_stop, Some(payload_with_cwd), Some(temp_ops.as_path()), None)?;
+    let subagent_out = run_script(
+        &subagent_stop,
+        Some(payload_with_cwd),
+        Some(temp_ops.as_path()),
+        None,
+    )?;
     assert_exit_code(
         0,
         "subagent-stop exits 0 with cwd payload",
@@ -338,14 +376,23 @@ fn run_script(
         command.stdin(Stdio::piped());
     }
 
-    let mut child = command.spawn().with_context(|| format!("Failed to run {}", path.display()))?;
+    let mut child = command
+        .spawn()
+        .with_context(|| format!("Failed to run {}", path.display()))?;
 
     if let Some(input) = input {
-        let stdin = child.stdin.as_mut().context("Failed to open stdin for script")?;
-        stdin.write_all(input.as_bytes()).context("Failed to write hook input")?;
+        let stdin = child
+            .stdin
+            .as_mut()
+            .context("Failed to open stdin for script")?;
+        stdin
+            .write_all(input.as_bytes())
+            .context("Failed to write hook input")?;
     }
 
-    let output = child.wait_with_output().context("Failed to read script output")?;
+    let output = child
+        .wait_with_output()
+        .context("Failed to read script output")?;
     Ok(output)
 }
 
@@ -395,7 +442,11 @@ fn create_non_rust_test_repo(
     // workspace README.md when this invariant was violated; this assertion
     // catches any future regression at the call site.
     let readme_path = path.join("README.md");
-    assert_path_inside_temp_root(&readme_path, temp_root, "create_non_rust_test_repo README.md")?;
+    assert_path_inside_temp_root(
+        &readme_path,
+        temp_root,
+        "create_non_rust_test_repo README.md",
+    )?;
     fs::write(&readme_path, "# hook test repo\n")
         .with_context(|| format!("Failed to seed temp repo {}", path.display()))?;
 
@@ -432,10 +483,12 @@ fn assert_path_inside_temp_root(path: &Path, temp_root: &Path, context: &str) ->
         .with_context(|| format!("Failed to canonicalize temp root {}", temp_root.display()))?;
 
     let canonical_target = if path.exists() {
-        path.canonicalize().with_context(|| format!("Failed to canonicalize {}", path.display()))?
+        path.canonicalize()
+            .with_context(|| format!("Failed to canonicalize {}", path.display()))?
     } else {
-        let parent =
-            path.parent().with_context(|| format!("Path has no parent: {}", path.display()))?;
+        let parent = path
+            .parent()
+            .with_context(|| format!("Path has no parent: {}", path.display()))?;
         let canonical_parent = parent
             .canonicalize()
             .with_context(|| format!("Failed to canonicalize parent {}", parent.display()))?;
@@ -571,8 +624,10 @@ fn extract_hook_commands(document: &Value) -> Vec<String> {
         }
     }
 
-    let mut out: Vec<String> =
-        commands.into_iter().filter(|command| command.ends_with(".sh")).collect();
+    let mut out: Vec<String> = commands
+        .into_iter()
+        .filter(|command| command.ends_with(".sh"))
+        .collect();
     out.sort_unstable();
     out
 }
@@ -602,7 +657,11 @@ fn collect_commands(document: &Value, out: &mut HashSet<String>) {
 fn normalize_hook_path(value: &str) -> String {
     let mut normalized = value.replace("\"$CLAUDE_PROJECT_DIR\"/", "");
     normalized = normalized.replace("$CLAUDE_PROJECT_DIR/", "");
-    normalized.trim_matches('"').trim_matches('\\').trim().to_string()
+    normalized
+        .trim_matches('"')
+        .trim_matches('\\')
+        .trim()
+        .to_string()
 }
 
 fn read_file(path: PathBuf, desc: &str) -> Result<String> {
@@ -702,7 +761,10 @@ mod tests {
 
         // The fake workspace README must remain untouched.
         let after = std::fs::read_to_string(&workspace_readme).unwrap();
-        assert_eq!(after, "real workspace content", "fake workspace README was scribbled");
+        assert_eq!(
+            after, "real workspace content",
+            "fake workspace README was scribbled"
+        );
     }
 
     #[test]
@@ -855,8 +917,10 @@ mod tests {
         let sentinel = temp_root.join("sentinel.txt");
         std::fs::write(&sentinel, "untouched").unwrap();
         // Use bash since git uses bash on all supported platforms here.
-        let hook_body =
-            format!("#!/usr/bin/env bash\necho corrupted > '{}'\nexit 1\n", sentinel.display());
+        let hook_body = format!(
+            "#!/usr/bin/env bash\necho corrupted > '{}'\nexit 1\n",
+            sentinel.display()
+        );
         std::fs::write(&hostile_hook, hook_body).unwrap();
         #[cfg(unix)]
         {
@@ -879,8 +943,12 @@ mod tests {
         let hostile_path = hostile_hooks.to_string_lossy().to_string();
 
         // Seed identity locally so we can attempt a commit.
-        run_git(&repo, &isolated_hooks_dir, &["config", "user.email", "t@example.invalid"])
-            .expect("set user.email");
+        run_git(
+            &repo,
+            &isolated_hooks_dir,
+            &["config", "user.email", "t@example.invalid"],
+        )
+        .expect("set user.email");
         run_git(&repo, &isolated_hooks_dir, &["config", "user.name", "t"]).expect("set user.name");
 
         std::fs::write(repo.join("file.txt"), "hi").unwrap();
@@ -910,11 +978,17 @@ mod tests {
             .args(["commit", "-m", "x"])
             .status()
             .expect("git commit");
-        assert!(status.success(), "commit must succeed (hostile hook should NOT fire)");
+        assert!(
+            status.success(),
+            "commit must succeed (hostile hook should NOT fire)"
+        );
 
         // Sentinel must be untouched — proves the hostile hook never ran.
         let sentinel_after = std::fs::read_to_string(&sentinel).unwrap();
-        assert_eq!(sentinel_after, "untouched", "hostile hook fired despite -c override");
+        assert_eq!(
+            sentinel_after, "untouched",
+            "hostile hook fired despite -c override"
+        );
     }
 
     /// Capture the set of immediate top-level entries in `dir`, with file

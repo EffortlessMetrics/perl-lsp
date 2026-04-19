@@ -77,7 +77,10 @@ sub AUTOLOAD {
     assert_clean_parse(code);
     let ast = parse(code);
     let kinds = top_level_kinds(&ast);
-    assert!(kinds.contains(&"Subroutine"), "expected Subroutine for AUTOLOAD");
+    assert!(
+        kinds.contains(&"Subroutine"),
+        "expected Subroutine for AUTOLOAD"
+    );
 }
 
 #[test]

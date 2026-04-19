@@ -15,8 +15,15 @@ fn parser_ac1_sync_point_detection_semicolon() -> ParseResult<()> {
 
     if let NodeKind::Program { statements } = &ast.kind {
         // Should have 2 statements: 1 error + 1 valid
-        assert_eq!(statements.len(), 2, "Should recover and parse next statement");
-        assert!(matches!(statements[0].kind, NodeKind::Error { .. }), "First should be error");
+        assert_eq!(
+            statements.len(),
+            2,
+            "Should recover and parse next statement"
+        );
+        assert!(
+            matches!(statements[0].kind, NodeKind::Error { .. }),
+            "First should be error"
+        );
         assert!(
             matches!(statements[1].kind, NodeKind::VariableDeclaration { .. }),
             "Second should be valid"
@@ -35,7 +42,10 @@ fn parser_ac1_sync_point_detection_right_brace() -> ParseResult<()> {
     if let NodeKind::Program { statements } = &ast.kind {
         // The parser recovers within the subroutine block, so we get 1 top-level statement (the sub)
         // The "my $y = 1;" after the closing brace gets consumed during synchronization
-        assert!(!statements.is_empty(), "Should have at least the subroutine");
+        assert!(
+            !statements.is_empty(),
+            "Should have at least the subroutine"
+        );
     }
     Ok(())
 }
@@ -118,10 +128,20 @@ fn parser_ac5_resume_normal_parsing_after_sync() -> ParseResult<()> {
 
     if let NodeKind::Program { statements } = &ast.kind {
         // Should have: error, valid decl, valid print
-        assert_eq!(statements.len(), 3, "Should parse all statements after error");
+        assert_eq!(
+            statements.len(),
+            3,
+            "Should parse all statements after error"
+        );
         assert!(matches!(statements[0].kind, NodeKind::Error { .. }));
-        assert!(matches!(statements[1].kind, NodeKind::VariableDeclaration { .. }));
-        assert!(matches!(statements[2].kind, NodeKind::ExpressionStatement { .. }));
+        assert!(matches!(
+            statements[1].kind,
+            NodeKind::VariableDeclaration { .. }
+        ));
+        assert!(matches!(
+            statements[2].kind,
+            NodeKind::ExpressionStatement { .. }
+        ));
     }
     Ok(())
 }
@@ -181,7 +201,10 @@ fn parser_ac7_block_recovery_error_inside_block() -> ParseResult<()> {
     if let NodeKind::Program { statements } = &ast.kind {
         if let NodeKind::If { then_branch, .. } = &statements[0].kind {
             if let NodeKind::Block { statements } = &then_branch.kind {
-                assert!(statements.len() >= 2, "Should parse statements after error in block");
+                assert!(
+                    statements.len() >= 2,
+                    "Should parse statements after error in block"
+                );
             }
         }
     }
@@ -199,11 +222,17 @@ fn parser_ac8_preserve_source_location() -> ParseResult<()> {
     if let NodeKind::Program { statements } = &ast.kind {
         // Check that error node has valid location
         let error_loc = statements[0].location;
-        assert!(error_loc.start <= error_loc.end, "Error node should have valid location");
+        assert!(
+            error_loc.start <= error_loc.end,
+            "Error node should have valid location"
+        );
 
         // Check that recovered statement has correct location
         let valid_loc = statements[1].location;
-        assert!(valid_loc.start >= error_loc.end, "Recovered statement should be after error");
+        assert!(
+            valid_loc.start >= error_loc.end,
+            "Recovered statement should be after error"
+        );
     }
     Ok(())
 }
@@ -376,7 +405,11 @@ fn parser_recovery_preserves_good_code() -> ParseResult<()> {
 
     if let NodeKind::Program { statements } = &ast.kind {
         // First statement should be correctly parsed
-        if let NodeKind::VariableDeclaration { initializer: Some(init), .. } = &statements[0].kind {
+        if let NodeKind::VariableDeclaration {
+            initializer: Some(init),
+            ..
+        } = &statements[0].kind
+        {
             if let NodeKind::Number { value } = &init.kind {
                 assert_eq!(value, "42", "First statement should be preserved correctly");
             }
@@ -384,8 +417,10 @@ fn parser_recovery_preserves_good_code() -> ParseResult<()> {
 
         // Third statement should also be correct
         if statements.len() >= 3 {
-            if let NodeKind::VariableDeclaration { initializer: Some(init), .. } =
-                &statements[2].kind
+            if let NodeKind::VariableDeclaration {
+                initializer: Some(init),
+                ..
+            } = &statements[2].kind
             {
                 if let NodeKind::Number { value } = &init.kind {
                     assert_eq!(value, "99", "Code after error should be preserved");

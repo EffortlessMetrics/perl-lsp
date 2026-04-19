@@ -10,7 +10,10 @@ use std::time::{SystemTime, UNIX_EPOCH};
 fn scenario_temp_dir(prefix: &str) -> PathBuf {
     let mut path = std::env::temp_dir();
     let pid = std::process::id();
-    let nanos = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_nanos();
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos();
     path.push(format!("{}_{}_{}", prefix, pid, nanos));
     path
 }

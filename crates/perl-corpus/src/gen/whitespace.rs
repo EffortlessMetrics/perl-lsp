@@ -75,14 +75,17 @@ pub fn whitespace_seed() -> impl Strategy<Value = u64> {
 
 /// Generate whitespace-heavy but valid Perl
 pub fn whitespace_stress_test() -> impl Strategy<Value = String> {
-    (whitespace_pattern(), whitespace_pattern(), comment_pattern()).prop_map(
-        |(ws1, ws2, comment)| {
+    (
+        whitespace_pattern(),
+        whitespace_pattern(),
+        comment_pattern(),
+    )
+        .prop_map(|(ws1, ws2, comment)| {
             format!(
                 "use{}strict;\n{}{}my{}$x{}={}1{}+{}2;\n{}print{}$x;{}",
                 ws1, comment, ws2, ws1, ws2, ws1, ws2, ws1, comment, ws1, comment
             )
-        },
-    )
+        })
 }
 
 /// Insert comments at statement boundaries
@@ -136,7 +139,11 @@ mod tests {
             .lines()
             .flat_map(|line| {
                 // Remove comments
-                let line = if let Some(pos) = line.find('#') { &line[..pos] } else { line };
+                let line = if let Some(pos) = line.find('#') {
+                    &line[..pos]
+                } else {
+                    line
+                };
                 line.split_whitespace()
             })
             .collect();
@@ -153,7 +160,13 @@ mod tests {
         // Extract code content (no comments, no whitespace)
         let trans_str = transformed
             .lines()
-            .map(|line| if let Some(pos) = line.find('#') { &line[..pos] } else { line })
+            .map(|line| {
+                if let Some(pos) = line.find('#') {
+                    &line[..pos]
+                } else {
+                    line
+                }
+            })
             .collect::<Vec<_>>()
             .join("")
             .split_whitespace()

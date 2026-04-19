@@ -141,7 +141,10 @@ pub fn run(
         spinner.finish_with_message(format!("✅ Tests passed ({})", profile));
     } else {
         spinner.finish_with_message("❌ Tests failed");
-        return Err(color_eyre::eyre::eyre!("Tests failed with status: {}", status.status));
+        return Err(color_eyre::eyre::eyre!(
+            "Tests failed with status: {}",
+            status.status
+        ));
     }
 
     Ok(())

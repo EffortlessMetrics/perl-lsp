@@ -100,7 +100,9 @@ impl Default for IncrementalParser {
 impl IncrementalParser {
     /// Create a new incremental parser with no changed regions
     pub fn new() -> Self {
-        Self { changed_regions: Vec::new() }
+        Self {
+            changed_regions: Vec::new(),
+        }
     }
 
     /// Mark a region as changed.
@@ -401,7 +403,11 @@ mod tests {
         use std::sync::atomic::{AtomicUsize, Ordering};
 
         let processed = Arc::new(AtomicUsize::new(0));
-        let files = vec!["file1.pl".to_string(), "file2.pl".to_string(), "file3.pl".to_string()];
+        let files = vec![
+            "file1.pl".to_string(),
+            "file2.pl".to_string(),
+            "file3.pl".to_string(),
+        ];
 
         let processed_clone = Arc::clone(&processed);
         let results = parallel::process_files_parallel(files, 2, move |_file| {

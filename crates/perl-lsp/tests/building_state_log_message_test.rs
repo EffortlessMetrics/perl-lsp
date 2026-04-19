@@ -23,7 +23,11 @@ fn log_msg_timeout() -> Duration {
     let is_coverage = std::env::var("LLVM_PROFILE_FILE").is_ok()
         || std::env::var("CARGO_LLVM_COV").is_ok()
         || std::env::var("CARGO_LLVM_COV_TARGET_DIR").is_ok();
-    if is_ci || is_coverage { Duration::from_secs(10) } else { Duration::from_secs(5) }
+    if is_ci || is_coverage {
+        Duration::from_secs(10)
+    } else {
+        Duration::from_secs(5)
+    }
 }
 
 /// Create a workspace with a few Perl files so the background indexer takes
@@ -59,7 +63,10 @@ fn wait_for_log_message(
 
         for msg in batch {
             if msg.get("method").and_then(|m| m.as_str()) == Some("window/logMessage") {
-                let text = msg.pointer("/params/message").and_then(|v| v.as_str()).unwrap_or("");
+                let text = msg
+                    .pointer("/params/message")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("");
                 if text.to_lowercase().contains(&needle.to_lowercase()) {
                     return Ok(msg);
                 }
@@ -93,7 +100,10 @@ fn building_state_emits_log_message() -> TestResult {
         .map_err(|e| format!("Missing indexing log message: {e}"))?;
 
     // Verify message type is Info (3) — non-intrusive.
-    let msg_type = building_msg.pointer("/params/type").and_then(|v| v.as_i64()).unwrap_or(0);
+    let msg_type = building_msg
+        .pointer("/params/type")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(0);
 
     assert_eq!(
         msg_type, 3,
@@ -161,7 +171,10 @@ fn building_log_message_is_actionable() -> TestResult {
     // Best-effort: only validates content if message arrives.
     // Test 1 is the authoritative presence check.
     if let Ok(msg) = wait_for_log_message(&mut harness, "index", log_msg_timeout()) {
-        let text = msg.pointer("/params/message").and_then(|v| v.as_str()).unwrap_or("");
+        let text = msg
+            .pointer("/params/message")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
         assert!(
             text.to_lowercase().contains("available") || text.to_lowercase().contains("complet"),
             "expected message to say features will become available, got: {text}"

@@ -233,7 +233,9 @@ fn use_uppercase_prefix_suggests_workspace_module() -> Result<(), Box<dyn std::e
     let items = completions_with_index(code, code.len(), index);
 
     assert!(
-        items.iter().any(|i| i.label.starts_with("Str") && i.kind == CompletionItemKind::Module),
+        items
+            .iter()
+            .any(|i| i.label.starts_with("Str") && i.kind == CompletionItemKind::Module),
         "typing 'use Str' (uppercase) must suggest matching workspace modules; got: {:?}",
         labels(&items)
     );
@@ -253,7 +255,10 @@ fn use_lowercase_pragma_does_not_suggest_module_completions()
     // `use warnings`).  This must hold regardless of what the workspace index
     // contains.
     let index = Arc::new(WorkspaceIndex::new());
-    index.index_file(Url::parse("file:///lib/Strict.pm")?, "package Strict;\n1;\n".to_string())?;
+    index.index_file(
+        Url::parse("file:///lib/Strict.pm")?,
+        "package Strict;\n1;\n".to_string(),
+    )?;
 
     let code = "use str";
     let items = completions_with_index(code, code.len(), index);
@@ -261,7 +266,10 @@ fn use_lowercase_pragma_does_not_suggest_module_completions()
     assert!(
         !items.iter().any(|i| i.kind == CompletionItemKind::Module),
         "typing 'use str' (lowercase) must not produce Module-kind completions; got: {:?}",
-        items.iter().map(|i| (&i.label, &i.kind)).collect::<Vec<_>>()
+        items
+            .iter()
+            .map(|i| (&i.label, &i.kind))
+            .collect::<Vec<_>>()
     );
     Ok(())
 }
@@ -307,7 +315,11 @@ fn no_completions_inside_line_comment() {
     let code = "# pri";
     let items = completions_at_end(code);
 
-    assert!(items.is_empty(), "no completions inside a line comment; got: {:?}", labels(&items));
+    assert!(
+        items.is_empty(),
+        "no completions inside a line comment; got: {:?}",
+        labels(&items)
+    );
 }
 
 #[test]
@@ -337,7 +349,10 @@ fn no_keyword_completions_inside_double_quoted_string() {
     assert!(
         !items.iter().any(|i| i.kind == CompletionItemKind::Keyword),
         "no Keyword-kind completions inside a double-quoted string; got: {:?}",
-        items.iter().map(|i| (&i.label, &i.kind)).collect::<Vec<_>>()
+        items
+            .iter()
+            .map(|i| (&i.label, &i.kind))
+            .collect::<Vec<_>>()
     );
 }
 

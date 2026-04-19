@@ -25,7 +25,16 @@ pub(super) struct TestCounts {
 pub(super) fn count_tier_a_lib_tests(root: &Path) -> Option<usize> {
     let output = run_cmd(
         root,
-        &["cargo", "test", "--workspace", "--lib", "--exclude", "tree-sitter-perl", "--", "--list"],
+        &[
+            "cargo",
+            "test",
+            "--workspace",
+            "--lib",
+            "--exclude",
+            "tree-sitter-perl",
+            "--",
+            "--list",
+        ],
         Duration::from_secs(180),
     );
     if output.is_empty() {
@@ -50,13 +59,25 @@ pub(super) fn count_ignored_tracked(root: &Path) -> (Option<usize>, Option<usize
 pub(super) fn count_tests(root: &Path) -> TestCounts {
     let tier_a = count_tier_a_lib_tests(root);
     let (ignored_total, bug_count, manual_count) = count_ignored_tracked(root);
-    TestCounts { tier_a_lib_tests: tier_a, ignored_total, bug_count, manual_count }
+    TestCounts {
+        tier_a_lib_tests: tier_a,
+        ignored_total,
+        bug_count,
+        manual_count,
+    }
 }
 
 pub(super) fn count_missing_docs_perl_parser(root: &Path) -> Option<usize> {
     let output = run_cmd(
         root,
-        &["cargo", "check", "-p", "perl-parser", "--tests", "--message-format=json"],
+        &[
+            "cargo",
+            "check",
+            "-p",
+            "perl-parser",
+            "--tests",
+            "--message-format=json",
+        ],
         Duration::from_secs(300),
     );
     if output.is_empty() {
@@ -85,8 +106,11 @@ pub(super) fn count_missing_docs_perl_parser(root: &Path) -> Option<usize> {
             _ => continue,
         };
         let level = msg.get("level").and_then(|v| v.as_str()).unwrap_or("");
-        let code =
-            msg.get("code").and_then(|v| v.get("code")).and_then(|v| v.as_str()).unwrap_or("");
+        let code = msg
+            .get("code")
+            .and_then(|v| v.get("code"))
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
         if level == "warning" && code == "missing_docs" {
             count += 1;
         }
@@ -110,16 +134,22 @@ pub(super) fn generate_tests_status(
     missing_docs_baseline: Option<usize>,
     original: &str,
 ) -> Result<String> {
-    let tier_a_tests_str =
-        tests.tier_a_lib_tests.map_or_else(|| "UNVERIFIED".to_string(), |n| n.to_string());
+    let tier_a_tests_str = tests
+        .tier_a_lib_tests
+        .map_or_else(|| "UNVERIFIED".to_string(), |n| n.to_string());
 
-    let ignored_tests_str =
-        tests.ignored_total.map_or_else(|| "UNVERIFIED".to_string(), |n| n.to_string());
+    let ignored_tests_str = tests
+        .ignored_total
+        .map_or_else(|| "UNVERIFIED".to_string(), |n| n.to_string());
 
     let (tracked_debt_str, bug_count_str, manual_count_str) =
         match (tests.bug_count, tests.manual_count) {
             (Some(b), Some(m)) => ((b + m).to_string(), b.to_string(), m.to_string()),
-            _ => ("UNVERIFIED".to_string(), "UNVERIFIED".to_string(), "UNVERIFIED".to_string()),
+            _ => (
+                "UNVERIFIED".to_string(),
+                "UNVERIFIED".to_string(),
+                "UNVERIFIED".to_string(),
+            ),
         };
 
     let missing_docs_str =

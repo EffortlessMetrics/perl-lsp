@@ -143,7 +143,10 @@ impl PerlValue {
     /// Creates an object (blessed reference).
     #[must_use]
     pub fn object(class: impl Into<String>, value: PerlValue) -> Self {
-        Self::Object { class: class.into(), value: Box::new(value) }
+        Self::Object {
+            class: class.into(),
+            value: Box::new(value),
+        }
     }
 }
 
@@ -207,11 +210,20 @@ mod tests {
         assert!(!PerlValue::Number(3.125).is_expandable());
         assert!(!PerlValue::Integer(42).is_expandable());
         assert!(!PerlValue::Code { name: None }.is_expandable());
-        assert!(!PerlValue::Code { name: Some("foo".into()) }.is_expandable());
+        assert!(
+            !PerlValue::Code {
+                name: Some("foo".into())
+            }
+            .is_expandable()
+        );
         assert!(!PerlValue::Glob("*main::STDOUT".into()).is_expandable());
         assert!(!PerlValue::Regex("^foo$".into()).is_expandable());
         assert!(
-            !PerlValue::Truncated { summary: "...".into(), total_count: Some(100) }.is_expandable()
+            !PerlValue::Truncated {
+                summary: "...".into(),
+                total_count: Some(100)
+            }
+            .is_expandable()
         );
         assert!(!PerlValue::Error("oops".into()).is_expandable());
 
@@ -220,10 +232,19 @@ mod tests {
         assert!(PerlValue::Hash(vec![]).is_expandable());
         assert!(PerlValue::Reference(Box::new(PerlValue::Undef)).is_expandable());
         assert!(
-            PerlValue::Object { class: "Foo".into(), value: Box::new(PerlValue::Hash(vec![])) }
-                .is_expandable()
+            PerlValue::Object {
+                class: "Foo".into(),
+                value: Box::new(PerlValue::Hash(vec![]))
+            }
+            .is_expandable()
         );
-        assert!(PerlValue::Tied { class: "Tie::Hash".into(), value: None }.is_expandable());
+        assert!(
+            PerlValue::Tied {
+                class: "Tie::Hash".into(),
+                value: None
+            }
+            .is_expandable()
+        );
     }
 
     #[test]
@@ -234,18 +255,35 @@ mod tests {
         assert_eq!(PerlValue::Integer(1).type_name(), "SCALAR");
         assert_eq!(PerlValue::Array(vec![]).type_name(), "ARRAY");
         assert_eq!(PerlValue::Hash(vec![]).type_name(), "HASH");
-        assert_eq!(PerlValue::Reference(Box::new(PerlValue::Undef)).type_name(), "REF");
         assert_eq!(
-            PerlValue::Object { class: "Foo".into(), value: Box::new(PerlValue::Undef) }
-                .type_name(),
+            PerlValue::Reference(Box::new(PerlValue::Undef)).type_name(),
+            "REF"
+        );
+        assert_eq!(
+            PerlValue::Object {
+                class: "Foo".into(),
+                value: Box::new(PerlValue::Undef)
+            }
+            .type_name(),
             "OBJECT"
         );
         assert_eq!(PerlValue::Code { name: None }.type_name(), "CODE");
         assert_eq!(PerlValue::Glob("g".into()).type_name(), "GLOB");
         assert_eq!(PerlValue::Regex("r".into()).type_name(), "Regexp");
-        assert_eq!(PerlValue::Tied { class: "T".into(), value: None }.type_name(), "TIED");
         assert_eq!(
-            PerlValue::Truncated { summary: "s".into(), total_count: None }.type_name(),
+            PerlValue::Tied {
+                class: "T".into(),
+                value: None
+            }
+            .type_name(),
+            "TIED"
+        );
+        assert_eq!(
+            PerlValue::Truncated {
+                summary: "s".into(),
+                total_count: None
+            }
+            .type_name(),
             "..."
         );
         assert_eq!(PerlValue::Error("e".into()).type_name(), "ERROR");
@@ -268,19 +306,33 @@ mod tests {
         );
         assert_eq!(PerlValue::Array(vec![]).child_count(), Some(0));
         assert_eq!(
-            PerlValue::Hash(vec![("a".into(), PerlValue::Undef), ("b".into(), PerlValue::Undef)])
-                .child_count(),
+            PerlValue::Hash(vec![
+                ("a".into(), PerlValue::Undef),
+                ("b".into(), PerlValue::Undef)
+            ])
+            .child_count(),
             Some(2)
         );
         assert_eq!(PerlValue::Hash(vec![]).child_count(), Some(0));
-        assert_eq!(PerlValue::Reference(Box::new(PerlValue::Undef)).child_count(), None);
+        assert_eq!(
+            PerlValue::Reference(Box::new(PerlValue::Undef)).child_count(),
+            None
+        );
         assert_eq!(PerlValue::Code { name: None }.child_count(), None);
         assert_eq!(
-            PerlValue::Truncated { summary: "big".into(), total_count: Some(500) }.child_count(),
+            PerlValue::Truncated {
+                summary: "big".into(),
+                total_count: Some(500)
+            }
+            .child_count(),
             Some(500)
         );
         assert_eq!(
-            PerlValue::Truncated { summary: "big".into(), total_count: None }.child_count(),
+            PerlValue::Truncated {
+                summary: "big".into(),
+                total_count: None
+            }
+            .child_count(),
             None
         );
     }

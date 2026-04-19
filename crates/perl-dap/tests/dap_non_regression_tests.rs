@@ -41,8 +41,18 @@ fn unwrap_response(
     command: &str,
 ) -> (i64, i64, bool, Option<Value>, Option<String>) {
     match msg {
-        DapMessage::Response { seq, request_seq, success, command: cmd, body, message } => {
-            assert_eq!(cmd, command, "response command must echo the request command");
+        DapMessage::Response {
+            seq,
+            request_seq,
+            success,
+            command: cmd,
+            body,
+            message,
+        } => {
+            assert_eq!(
+                cmd, command,
+                "response command must echo the request command"
+            );
             (seq, request_seq, success, body, message)
         }
         other => panic!("expected Response for {command}, got {other:?}"),
@@ -52,7 +62,10 @@ fn unwrap_response(
 /// Assert success response, returning body.
 fn assert_ok(msg: DapMessage, command: &str) -> Option<Value> {
     let (_, _, success, body, message) = unwrap_response(msg, command);
-    assert!(success, "{command}: expected success=true, got message={message:?}");
+    assert!(
+        success,
+        "{command}: expected success=true, got message={message:?}"
+    );
     body
 }
 
@@ -61,7 +74,10 @@ fn assert_err(msg: DapMessage, command: &str) -> String {
     let (_, _, success, _, message) = unwrap_response(msg, command);
     assert!(!success, "{command}: expected success=false");
     let msg = message.unwrap_or_default();
-    assert!(!msg.is_empty(), "{command}: error response must include a non-empty message");
+    assert!(
+        !msg.is_empty(),
+        "{command}: error response must include a non-empty message"
+    );
     msg
 }
 
@@ -129,11 +145,19 @@ fn test_all_required_arg_commands_return_error_when_args_missing()
         let mut adapter = new_adapter();
         let msg = adapter.handle_request(1, cmd, None);
         match msg {
-            DapMessage::Response { success, command, message, .. } => {
+            DapMessage::Response {
+                success,
+                command,
+                message,
+                ..
+            } => {
                 assert_eq!(command, *cmd, "{cmd}: command echo");
                 assert!(!success, "{cmd}: must fail when args are missing");
                 let err_msg = message.unwrap_or_default();
-                assert!(!err_msg.is_empty(), "{cmd}: missing-args error must be non-empty");
+                assert!(
+                    !err_msg.is_empty(),
+                    "{cmd}: missing-args error must be non-empty"
+                );
             }
             other => panic!("{cmd}: expected Response for missing-args path, got {other:?}"),
         }
@@ -178,32 +202,56 @@ fn test_request_seq_echo_for_all_dispatched_commands() -> Result<(), Box<dyn std
         ("terminate", None),
         ("terminateThreads", None),
         ("threads", None),
-        ("breakpointLocations", Some(json!({"source": {}, "line": 1}))),
+        (
+            "breakpointLocations",
+            Some(json!({"source": {}, "line": 1})),
+        ),
         ("completions", Some(json!({"text": "$x", "column": 2}))),
         ("continue", Some(json!({"threadId": 1}))),
-        ("dataBreakpointInfo", Some(json!({"name": "$x", "variablesReference": 0}))),
+        (
+            "dataBreakpointInfo",
+            Some(json!({"name": "$x", "variablesReference": 0})),
+        ),
         ("evaluate", Some(json!({"expression": "$x"}))),
         ("goto", Some(json!({"threadId": 1, "targetId": 9999}))),
         ("gotoTargets", Some(json!({"source": {}, "line": 1}))),
-        ("modules", Some(json!({"startModule": 0, "moduleCount": 10}))),
+        (
+            "modules",
+            Some(json!({"startModule": 0, "moduleCount": 10})),
+        ),
         ("next", Some(json!({"threadId": 1}))),
         ("pause", Some(json!({"threadId": 1}))),
         ("restart", Some(json!({}))),
         ("scopes", Some(json!({"frameId": 1}))),
-        ("setBreakpoints", Some(json!({"source": {}, "breakpoints": []}))),
+        (
+            "setBreakpoints",
+            Some(json!({"source": {}, "breakpoints": []})),
+        ),
         ("setDataBreakpoints", Some(json!({"breakpoints": []}))),
         ("setExceptionBreakpoints", Some(json!({"filters": []}))),
-        ("setExpression", Some(json!({"expression": "$x", "value": "1"}))),
+        (
+            "setExpression",
+            Some(json!({"expression": "$x", "value": "1"})),
+        ),
         ("setFunctionBreakpoints", Some(json!({"breakpoints": []}))),
-        ("setVariable", Some(json!({"variablesReference": 1, "name": "$x", "value": "1"}))),
-        ("source", Some(json!({"source": {"path": "/nonexistent/file.pl"}, "sourceReference": 0}))),
+        (
+            "setVariable",
+            Some(json!({"variablesReference": 1, "name": "$x", "value": "1"})),
+        ),
+        (
+            "source",
+            Some(json!({"source": {"path": "/nonexistent/file.pl"}, "sourceReference": 0})),
+        ),
         ("stepIn", Some(json!({"threadId": 1}))),
         ("stepInTargets", Some(json!({"frameId": 0}))),
         ("stepOut", Some(json!({"threadId": 1}))),
         // Complete the sweep: inlineValues and variables are the two remaining arms
         // not covered above. Both are tested here for request_seq echo only; their
         // body contents are validated in dedicated sections.
-        ("inlineValues", Some(json!({"source": {}, "startLine": 1, "endLine": 5}))),
+        (
+            "inlineValues",
+            Some(json!({"source": {}, "startLine": 1, "endLine": 5})),
+        ),
         ("variables", Some(json!({"variablesReference": 1}))),
     ];
 
@@ -212,9 +260,19 @@ fn test_request_seq_echo_for_all_dispatched_commands() -> Result<(), Box<dyn std
         let mut adapter = new_adapter();
         let msg = adapter.handle_request(req_seq, command, args.clone());
         match msg {
-            DapMessage::Response { request_seq, command: cmd, .. } => {
-                assert_eq!(request_seq, req_seq, "{command}: request_seq must be echoed exactly");
-                assert_eq!(cmd, *command, "{command}: response command must echo request command");
+            DapMessage::Response {
+                request_seq,
+                command: cmd,
+                ..
+            } => {
+                assert_eq!(
+                    request_seq, req_seq,
+                    "{command}: request_seq must be echoed exactly"
+                );
+                assert_eq!(
+                    cmd, *command,
+                    "{command}: response command must echo request command"
+                );
             }
             other => panic!("{command}: expected Response, got {other:?}"),
         }
@@ -249,7 +307,10 @@ fn test_seq_numbers_strictly_monotone_across_session() -> Result<(), Box<dyn std
         };
 
         if let Some(prev) = prev_seq {
-            assert!(seq > prev, "seq {seq} must be > previous seq {prev} (command: {cmd})");
+            assert!(
+                seq > prev,
+                "seq {seq} must be > previous seq {prev} (command: {cmd})"
+            );
         }
         prev_seq = Some(seq);
     }
@@ -290,7 +351,10 @@ fn get_capabilities(adapter: &mut DebugAdapter) -> Value {
 fn test_capabilities_restart_frame_consistent() -> Result<(), Box<dyn std::error::Error>> {
     let mut adapter = new_adapter();
     let caps = get_capabilities(&mut adapter);
-    let advertised = caps.get("supportsRestartFrame").and_then(Value::as_bool).unwrap_or(false);
+    let advertised = caps
+        .get("supportsRestartFrame")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
 
     // Handler must always fail — this is the ground truth
     let mut adapter2 = new_adapter();
@@ -299,7 +363,10 @@ fn test_capabilities_restart_frame_consistent() -> Result<(), Box<dyn std::error
 
     if !advertised {
         // Capability says "not supported" and handler fails — consistent
-        assert!(!success, "restartFrame handler must fail when capability=false");
+        assert!(
+            !success,
+            "restartFrame handler must fail when capability=false"
+        );
     }
     // If capability were ever set to true, the handler would need to succeed — caught here
     Ok(())
@@ -310,8 +377,10 @@ fn test_capabilities_restart_frame_consistent() -> Result<(), Box<dyn std::error
 fn test_capabilities_terminate_threads_consistent() -> Result<(), Box<dyn std::error::Error>> {
     let mut adapter = new_adapter();
     let caps = get_capabilities(&mut adapter);
-    let advertised =
-        caps.get("supportsTerminateThreadsRequest").and_then(Value::as_bool).unwrap_or(false);
+    let advertised = caps
+        .get("supportsTerminateThreadsRequest")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
 
     let mut adapter2 = new_adapter();
     let response = adapter2.handle_request(2, "terminateThreads", None);
@@ -329,14 +398,22 @@ fn test_capabilities_loaded_sources_advertised_and_working()
 -> Result<(), Box<dyn std::error::Error>> {
     let mut adapter = new_adapter();
     let caps = get_capabilities(&mut adapter);
-    let advertised =
-        caps.get("supportsLoadedSourcesRequest").and_then(Value::as_bool).unwrap_or(false);
+    let advertised = caps
+        .get("supportsLoadedSourcesRequest")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
 
-    assert!(advertised, "supportsLoadedSourcesRequest must be advertised as true");
+    assert!(
+        advertised,
+        "supportsLoadedSourcesRequest must be advertised as true"
+    );
 
     // Handler must succeed
     let mut adapter2 = new_adapter();
-    let body = assert_ok(adapter2.handle_request(2, "loadedSources", None), "loadedSources");
+    let body = assert_ok(
+        adapter2.handle_request(2, "loadedSources", None),
+        "loadedSources",
+    );
     assert!(body.is_some(), "loadedSources must return a body");
     assert!(
         body.as_ref().and_then(|b| b.get("sources")).is_some(),
@@ -350,7 +427,10 @@ fn test_capabilities_loaded_sources_advertised_and_working()
 fn test_capabilities_cancel_advertised_and_working() -> Result<(), Box<dyn std::error::Error>> {
     let mut adapter = new_adapter();
     let caps = get_capabilities(&mut adapter);
-    let advertised = caps.get("supportsCancelRequest").and_then(Value::as_bool).unwrap_or(false);
+    let advertised = caps
+        .get("supportsCancelRequest")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
 
     assert!(advertised, "supportsCancelRequest must be advertised");
 
@@ -364,8 +444,10 @@ fn test_capabilities_cancel_advertised_and_working() -> Result<(), Box<dyn std::
 fn test_capabilities_exception_info_consistent() -> Result<(), Box<dyn std::error::Error>> {
     let mut adapter = new_adapter();
     let caps = get_capabilities(&mut adapter);
-    let advertised =
-        caps.get("supportsExceptionInfoRequest").and_then(Value::as_bool).unwrap_or(false);
+    let advertised = caps
+        .get("supportsExceptionInfoRequest")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
 
     // exceptionInfo always succeeds regardless of session state
     let mut adapter2 = new_adapter();
@@ -374,7 +456,10 @@ fn test_capabilities_exception_info_consistent() -> Result<(), Box<dyn std::erro
 
     // Bidirectional consistency: capability and handler must agree in both directions.
     if advertised {
-        assert!(success, "exceptionInfo must succeed when capability is advertised");
+        assert!(
+            success,
+            "exceptionInfo must succeed when capability is advertised"
+        );
     } else {
         // If capability is not advertised, the handler must also not succeed,
         // or the capability must be set to true. Mismatched = implementation drift.
@@ -392,13 +477,19 @@ fn test_capabilities_exception_info_consistent() -> Result<(), Box<dyn std::erro
 fn test_capabilities_set_expression_advertised() -> Result<(), Box<dyn std::error::Error>> {
     let mut adapter = new_adapter();
     let caps = get_capabilities(&mut adapter);
-    let advertised = caps.get("supportsSetExpression").and_then(Value::as_bool).unwrap_or(false);
+    let advertised = caps
+        .get("supportsSetExpression")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
 
     assert!(advertised, "supportsSetExpression must be advertised");
 
     // Handler must reject missing args
     let mut adapter2 = new_adapter();
-    let err = assert_err(adapter2.handle_request(2, "setExpression", None), "setExpression");
+    let err = assert_err(
+        adapter2.handle_request(2, "setExpression", None),
+        "setExpression",
+    );
     assert!(!err.is_empty(), "missing-args error must be non-empty");
     Ok(())
 }
@@ -409,8 +500,10 @@ fn test_capabilities_goto_targets_advertised_and_working() -> Result<(), Box<dyn
 {
     let mut adapter = new_adapter();
     let caps = get_capabilities(&mut adapter);
-    let advertised =
-        caps.get("supportsGotoTargetsRequest").and_then(Value::as_bool).unwrap_or(false);
+    let advertised = caps
+        .get("supportsGotoTargetsRequest")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
 
     assert!(advertised, "supportsGotoTargetsRequest must be advertised");
 
@@ -420,8 +513,14 @@ fn test_capabilities_goto_targets_advertised_and_working() -> Result<(), Box<dyn
         "gotoTargets",
     );
     let body = body.ok_or("gotoTargets must return a body")?;
-    assert!(body.get("targets").is_some(), "gotoTargets body must contain 'targets'");
-    assert!(body["targets"].is_array(), "gotoTargets 'targets' must be an array");
+    assert!(
+        body.get("targets").is_some(),
+        "gotoTargets body must contain 'targets'"
+    );
+    assert!(
+        body["targets"].is_array(),
+        "gotoTargets 'targets' must be an array"
+    );
     Ok(())
 }
 
@@ -458,7 +557,12 @@ fn test_error_responses_always_have_message() -> Result<(), Box<dyn std::error::
         let mut adapter = new_adapter();
         let msg = adapter.handle_request(1, cmd, args.clone());
         match msg {
-            DapMessage::Response { success, command, message, .. } => {
+            DapMessage::Response {
+                success,
+                command,
+                message,
+                ..
+            } => {
                 assert!(!success, "{cmd}: must fail for this input");
                 assert_eq!(command, *cmd, "{cmd}: command echo");
                 let err = message.unwrap_or_default();
@@ -499,7 +603,10 @@ fn test_initialize_capabilities_have_required_keys() -> Result<(), Box<dyn std::
     ];
 
     for key in required_keys {
-        assert!(body.get(key).is_some(), "initialize response must include capability key: {key}");
+        assert!(
+            body.get(key).is_some(),
+            "initialize response must include capability key: {key}"
+        );
     }
     Ok(())
 }
@@ -510,7 +617,10 @@ fn test_threads_response_has_threads_array() -> Result<(), Box<dyn std::error::E
     let mut adapter = new_adapter();
     let body = assert_ok(adapter.handle_request(1, "threads", None), "threads")
         .ok_or("threads must return a body")?;
-    assert!(body.get("threads").is_some(), "threads body must contain 'threads'");
+    assert!(
+        body.get("threads").is_some(),
+        "threads body must contain 'threads'"
+    );
     assert!(body["threads"].is_array(), "'threads' must be an array");
     Ok(())
 }
@@ -521,8 +631,14 @@ fn test_stack_trace_response_has_stack_frames() -> Result<(), Box<dyn std::error
     let mut adapter = new_adapter();
     let body = assert_ok(adapter.handle_request(1, "stackTrace", None), "stackTrace")
         .ok_or("stackTrace must return a body")?;
-    assert!(body.get("stackFrames").is_some(), "stackTrace body must contain 'stackFrames'");
-    assert!(body["stackFrames"].is_array(), "'stackFrames' must be an array");
+    assert!(
+        body.get("stackFrames").is_some(),
+        "stackTrace body must contain 'stackFrames'"
+    );
+    assert!(
+        body["stackFrames"].is_array(),
+        "'stackFrames' must be an array"
+    );
     Ok(())
 }
 
@@ -530,9 +646,15 @@ fn test_stack_trace_response_has_stack_frames() -> Result<(), Box<dyn std::error
 // AC:17 — loadedSources response has 'sources' array in body
 fn test_loaded_sources_response_has_sources_array() -> Result<(), Box<dyn std::error::Error>> {
     let mut adapter = new_adapter();
-    let body = assert_ok(adapter.handle_request(1, "loadedSources", None), "loadedSources")
-        .ok_or("loadedSources must return a body")?;
-    assert!(body.get("sources").is_some(), "loadedSources body must contain 'sources'");
+    let body = assert_ok(
+        adapter.handle_request(1, "loadedSources", None),
+        "loadedSources",
+    )
+    .ok_or("loadedSources must return a body")?;
+    assert!(
+        body.get("sources").is_some(),
+        "loadedSources body must contain 'sources'"
+    );
     assert!(body["sources"].is_array(), "'sources' must be an array");
     Ok(())
 }
@@ -541,10 +663,19 @@ fn test_loaded_sources_response_has_sources_array() -> Result<(), Box<dyn std::e
 // AC:17 — exceptionInfo response has required fields: exceptionId, breakMode
 fn test_exception_info_response_has_required_fields() -> Result<(), Box<dyn std::error::Error>> {
     let mut adapter = new_adapter();
-    let body = assert_ok(adapter.handle_request(1, "exceptionInfo", None), "exceptionInfo")
-        .ok_or("exceptionInfo must return a body")?;
-    assert!(body.get("exceptionId").is_some(), "exceptionInfo must include 'exceptionId'");
-    assert!(body.get("breakMode").is_some(), "exceptionInfo must include 'breakMode'");
+    let body = assert_ok(
+        adapter.handle_request(1, "exceptionInfo", None),
+        "exceptionInfo",
+    )
+    .ok_or("exceptionInfo must return a body")?;
+    assert!(
+        body.get("exceptionId").is_some(),
+        "exceptionInfo must include 'exceptionId'"
+    );
+    assert!(
+        body.get("breakMode").is_some(),
+        "exceptionInfo must include 'breakMode'"
+    );
     let exception_id = body["exceptionId"].as_str().unwrap_or("");
     assert!(!exception_id.is_empty(), "exceptionId must be non-empty");
     Ok(())
@@ -559,7 +690,10 @@ fn test_goto_targets_response_has_targets_array() -> Result<(), Box<dyn std::err
         "gotoTargets",
     )
     .ok_or("gotoTargets must return a body")?;
-    assert!(body.get("targets").is_some(), "gotoTargets must include 'targets'");
+    assert!(
+        body.get("targets").is_some(),
+        "gotoTargets must include 'targets'"
+    );
     assert!(body["targets"].is_array(), "'targets' must be an array");
     Ok(())
 }
@@ -573,7 +707,10 @@ fn test_step_in_targets_response_has_targets_array() -> Result<(), Box<dyn std::
         "stepInTargets",
     )
     .ok_or("stepInTargets must return a body")?;
-    assert!(body.get("targets").is_some(), "stepInTargets must include 'targets'");
+    assert!(
+        body.get("targets").is_some(),
+        "stepInTargets must include 'targets'"
+    );
     assert!(body["targets"].is_array(), "'targets' must be an array");
     Ok(())
 }
@@ -584,12 +721,22 @@ fn test_breakpoint_locations_response_has_breakpoints_array()
 -> Result<(), Box<dyn std::error::Error>> {
     let mut adapter = new_adapter();
     let body = assert_ok(
-        adapter.handle_request(1, "breakpointLocations", Some(json!({"source": {}, "line": 1}))),
+        adapter.handle_request(
+            1,
+            "breakpointLocations",
+            Some(json!({"source": {}, "line": 1})),
+        ),
         "breakpointLocations",
     )
     .ok_or("breakpointLocations must return a body")?;
-    assert!(body.get("breakpoints").is_some(), "breakpointLocations must include 'breakpoints'");
-    assert!(body["breakpoints"].is_array(), "'breakpoints' must be an array");
+    assert!(
+        body.get("breakpoints").is_some(),
+        "breakpointLocations must include 'breakpoints'"
+    );
+    assert!(
+        body["breakpoints"].is_array(),
+        "'breakpoints' must be an array"
+    );
     Ok(())
 }
 
@@ -598,10 +745,19 @@ fn test_breakpoint_locations_response_has_breakpoints_array()
 fn test_set_breakpoints_response_has_breakpoints_array() -> Result<(), Box<dyn std::error::Error>> {
     let mut adapter = new_adapter();
     let args = json!({"source": {}, "breakpoints": []});
-    let body = assert_ok(adapter.handle_request(1, "setBreakpoints", Some(args)), "setBreakpoints")
-        .ok_or("setBreakpoints must return a body")?;
-    assert!(body.get("breakpoints").is_some(), "setBreakpoints must include 'breakpoints'");
-    assert!(body["breakpoints"].is_array(), "'breakpoints' must be an array");
+    let body = assert_ok(
+        adapter.handle_request(1, "setBreakpoints", Some(args)),
+        "setBreakpoints",
+    )
+    .ok_or("setBreakpoints must return a body")?;
+    assert!(
+        body.get("breakpoints").is_some(),
+        "setBreakpoints must include 'breakpoints'"
+    );
+    assert!(
+        body["breakpoints"].is_array(),
+        "'breakpoints' must be an array"
+    );
     Ok(())
 }
 
@@ -616,7 +772,10 @@ fn test_set_function_breakpoints_response_has_breakpoints_array()
         "setFunctionBreakpoints",
     )
     .ok_or("setFunctionBreakpoints must return a body")?;
-    assert!(body.get("breakpoints").is_some(), "setFunctionBreakpoints must include 'breakpoints'");
+    assert!(
+        body.get("breakpoints").is_some(),
+        "setFunctionBreakpoints must include 'breakpoints'"
+    );
     Ok(())
 }
 
@@ -649,7 +808,10 @@ fn test_set_data_breakpoints_response_has_breakpoints_array()
         "setDataBreakpoints",
     )
     .ok_or("setDataBreakpoints must return a body")?;
-    assert!(body.get("breakpoints").is_some(), "setDataBreakpoints must include 'breakpoints'");
+    assert!(
+        body.get("breakpoints").is_some(),
+        "setDataBreakpoints must include 'breakpoints'"
+    );
     Ok(())
 }
 
@@ -660,9 +822,15 @@ fn test_modules_response_has_modules_array_and_count() -> Result<(), Box<dyn std
     let args = json!({"startModule": 0, "moduleCount": 10});
     let body = assert_ok(adapter.handle_request(1, "modules", Some(args)), "modules")
         .ok_or("modules must return a body")?;
-    assert!(body.get("modules").is_some(), "modules body must include 'modules'");
+    assert!(
+        body.get("modules").is_some(),
+        "modules body must include 'modules'"
+    );
     assert!(body["modules"].is_array(), "'modules' must be an array");
-    assert!(body.get("totalModules").is_some(), "modules body must include 'totalModules'");
+    assert!(
+        body.get("totalModules").is_some(),
+        "modules body must include 'totalModules'"
+    );
     Ok(())
 }
 
@@ -671,9 +839,15 @@ fn test_modules_response_has_modules_array_and_count() -> Result<(), Box<dyn std
 fn test_completions_response_has_targets_array() -> Result<(), Box<dyn std::error::Error>> {
     let mut adapter = new_adapter();
     let args = json!({"text": "$", "column": 1});
-    let body = assert_ok(adapter.handle_request(1, "completions", Some(args)), "completions")
-        .ok_or("completions must return a body")?;
-    assert!(body.get("targets").is_some(), "completions body must include 'targets'");
+    let body = assert_ok(
+        adapter.handle_request(1, "completions", Some(args)),
+        "completions",
+    )
+    .ok_or("completions must return a body")?;
+    assert!(
+        body.get("targets").is_some(),
+        "completions body must include 'targets'"
+    );
     assert!(body["targets"].is_array(), "'targets' must be an array");
     Ok(())
 }
@@ -683,8 +857,11 @@ fn test_completions_response_has_targets_array() -> Result<(), Box<dyn std::erro
 fn test_continue_response_has_all_threads_continued() -> Result<(), Box<dyn std::error::Error>> {
     let mut adapter = new_adapter();
     let args = json!({"threadId": 1});
-    let body = assert_ok(adapter.handle_request(1, "continue", Some(args)), "continue")
-        .ok_or("continue must return a body")?;
+    let body = assert_ok(
+        adapter.handle_request(1, "continue", Some(args)),
+        "continue",
+    )
+    .ok_or("continue must return a body")?;
     assert!(
         body.get("allThreadsContinued").is_some(),
         "continue body must include 'allThreadsContinued'"
@@ -754,7 +931,9 @@ fn test_cancel_followed_by_command_returns_valid_response() -> Result<(), Box<dy
     // First: cancel sets cancel_requested = true
     let cancel_msg = adapter.handle_request(1, "cancel", None);
     match cancel_msg {
-        DapMessage::Response { command, success, .. } => {
+        DapMessage::Response {
+            command, success, ..
+        } => {
             assert_eq!(command, "cancel");
             assert!(success, "cancel must succeed");
         }
@@ -769,7 +948,11 @@ fn test_cancel_followed_by_command_returns_valid_response() -> Result<(), Box<dy
         Some(json!({"source": {"path": "/nonexistent/file.pl"}, "line": 1})),
     );
     match bp_msg {
-        DapMessage::Response { command, request_seq, .. } => {
+        DapMessage::Response {
+            command,
+            request_seq,
+            ..
+        } => {
             assert_eq!(command, "breakpointLocations", "command must echo");
             assert_eq!(request_seq, 2, "request_seq must be echoed after cancel");
         }
@@ -779,7 +962,11 @@ fn test_cancel_followed_by_command_returns_valid_response() -> Result<(), Box<dy
     // Third: a subsequent command must also return a valid Response.
     let threads_msg = adapter.handle_request(3, "threads", None);
     match threads_msg {
-        DapMessage::Response { command, request_seq, .. } => {
+        DapMessage::Response {
+            command,
+            request_seq,
+            ..
+        } => {
             assert_eq!(command, "threads");
             assert_eq!(request_seq, 3);
         }
@@ -864,7 +1051,10 @@ fn test_initialize_response_seq_is_positive() -> Result<(), Box<dyn std::error::
     let msg = adapter.handle_request(1, "initialize", None);
     let (seq, _, success, _, _) = unwrap_response(msg, "initialize");
     assert!(success, "initialize must succeed");
-    assert!(seq > 0, "initialize response seq must be positive, got {seq}");
+    assert!(
+        seq > 0,
+        "initialize response seq must be positive, got {seq}"
+    );
     Ok(())
 }
 
@@ -897,7 +1087,11 @@ fn test_multiple_sequential_requests_do_not_corrupt_state() -> Result<(), Box<dy
         let req_seq = (i as i64) + 1;
         let msg = adapter.handle_request(req_seq, cmd, args.clone());
         match msg {
-            DapMessage::Response { request_seq, command, .. } => {
+            DapMessage::Response {
+                request_seq,
+                command,
+                ..
+            } => {
                 assert_eq!(request_seq, req_seq, "{cmd}: request_seq must match");
                 assert_eq!(command, *cmd, "{cmd}: command must echo");
             }

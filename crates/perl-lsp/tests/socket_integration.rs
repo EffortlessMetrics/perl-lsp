@@ -87,19 +87,32 @@ fn test_socket_connection() -> Result<(), Box<dyn std::error::Error>> {
     let response_str = String::from_utf8(body)?;
 
     // Validate response
-    assert!(response_str.contains("\"result\""), "Response should contain result");
-    assert!(response_str.contains("\"capabilities\""), "Response should contain capabilities");
+    assert!(
+        response_str.contains("\"result\""),
+        "Response should contain result"
+    );
+    assert!(
+        response_str.contains("\"capabilities\""),
+        "Response should contain capabilities"
+    );
 
     // Send shutdown request
     let shutdown_request = r#"{"jsonrpc": "2.0", "id": 2, "method": "shutdown"}"#;
-    let message = format!("Content-Length: {}\r\n\r\n{}", shutdown_request.len(), shutdown_request);
+    let message = format!(
+        "Content-Length: {}\r\n\r\n{}",
+        shutdown_request.len(),
+        shutdown_request
+    );
     write_stream.write_all(message.as_bytes())?;
     write_stream.flush()?;
 
     // Send exit notification for graceful shutdown
     let exit_notification = r#"{"jsonrpc": "2.0", "method": "exit"}"#;
-    let exit_message =
-        format!("Content-Length: {}\r\n\r\n{}", exit_notification.len(), exit_notification);
+    let exit_message = format!(
+        "Content-Length: {}\r\n\r\n{}",
+        exit_notification.len(),
+        exit_notification
+    );
     let _ = write_stream.write_all(exit_message.as_bytes());
     let _ = write_stream.flush();
 

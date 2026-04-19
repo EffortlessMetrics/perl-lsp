@@ -24,7 +24,11 @@ impl LspServer {
     /// Handle exit request
     pub(super) fn handle_exit_dispatch(&self) -> Result<Option<Value>, JsonRpcError> {
         // LSP spec: exit with 0 if shutdown was called, 1 otherwise
-        let exit_code = if self.shutdown_received.load(Ordering::Acquire) { 0 } else { 1 };
+        let exit_code = if self.shutdown_received.load(Ordering::Acquire) {
+            0
+        } else {
+            1
+        };
         tracing::info!(exit_code, "LSP server exiting");
         std::process::exit(exit_code);
     }

@@ -133,7 +133,9 @@ struct TokenCache {
 impl TokenCache {
     /// Create a new empty token cache.
     fn new() -> Self {
-        TokenCache { segments: Vec::new() }
+        TokenCache {
+            segments: Vec::new(),
+        }
     }
 
     /// Return all segments that end at or before the given position.
@@ -149,7 +151,11 @@ impl TokenCache {
     ///
     /// A vector of segments ending at or before `position`, in source order.
     fn get_segments_before(&self, position: usize) -> Vec<TokenSegment> {
-        self.segments.iter().filter(|seg| seg.is_before(position)).cloned().collect()
+        self.segments
+            .iter()
+            .filter(|seg| seg.is_before(position))
+            .cloned()
+            .collect()
     }
 
     /// Return all segments that start at or after the given position.
@@ -165,7 +171,11 @@ impl TokenCache {
     ///
     /// A vector of segments starting at or after `position`, in source order.
     fn get_segments_after(&self, position: usize) -> Vec<TokenSegment> {
-        self.segments.iter().filter(|seg| seg.is_after(position)).cloned().collect()
+        self.segments
+            .iter()
+            .filter(|seg| seg.is_after(position))
+            .cloned()
+            .collect()
     }
 
     /// Return all segments that overlap with the given range.
@@ -182,7 +192,11 @@ impl TokenCache {
     ///
     /// A vector of segments overlapping the range `[start, end)`, in source order.
     fn get_segments_in_range(&self, start: usize, end: usize) -> Vec<TokenSegment> {
-        self.segments.iter().filter(|seg| seg.overlaps(start, end)).cloned().collect()
+        self.segments
+            .iter()
+            .filter(|seg| seg.overlaps(start, end))
+            .cloned()
+            .collect()
     }
 
     /// Add a new segment to the cache, maintaining sorted order.
@@ -196,10 +210,13 @@ impl TokenCache {
     /// * `segment` - The segment to add.
     fn add_segment(&mut self, segment: TokenSegment) {
         // Remove any overlapping segments
-        self.segments.retain(|seg| !seg.overlaps(segment.start, segment.end));
+        self.segments
+            .retain(|seg| !seg.overlaps(segment.start, segment.end));
 
         // Find insertion point to maintain sorted order
-        let idx = self.segments.partition_point(|seg| seg.start < segment.start);
+        let idx = self
+            .segments
+            .partition_point(|seg| seg.start < segment.start);
 
         self.segments.insert(idx, segment);
     }
@@ -274,7 +291,11 @@ impl TokenCache {
             }
         }
 
-        if all_tokens.is_empty() { None } else { Some(all_tokens) }
+        if all_tokens.is_empty() {
+            None
+        } else {
+            Some(all_tokens)
+        }
     }
 
     /// Return cached tokens that end at or before `position`.
@@ -307,7 +328,11 @@ impl TokenCache {
             }
         }
 
-        if all_tokens.is_empty() { None } else { Some(all_tokens) }
+        if all_tokens.is_empty() {
+            None
+        } else {
+            Some(all_tokens)
+        }
     }
 
     /// Add a new segment to the cache.
@@ -367,11 +392,27 @@ impl std::fmt::Display for IncrementalStats {
         writeln!(f, "  Checkpoints used: {}", self.checkpoints_used)?;
         writeln!(f, "  Cache hits: {}", self.cache_hits)?;
         writeln!(f, "  Cache misses: {}", self.cache_misses)?;
-        writeln!(f, "  Left checkpoint distance: {} bytes", self.left_checkpoint_distance)?;
-        writeln!(f, "  Right checkpoint distance: {} bytes", self.right_checkpoint_distance)?;
+        writeln!(
+            f,
+            "  Left checkpoint distance: {} bytes",
+            self.left_checkpoint_distance
+        )?;
+        writeln!(
+            f,
+            "  Right checkpoint distance: {} bytes",
+            self.right_checkpoint_distance
+        )?;
         writeln!(f, "  Bytes relexed: {}", self.bytes_relexed)?;
-        writeln!(f, "  Segments reused before edit: {}", self.segments_reused_before)?;
-        writeln!(f, "  Segments reused after edit: {}", self.segments_reused_after)?;
+        writeln!(
+            f,
+            "  Segments reused before edit: {}",
+            self.segments_reused_before
+        )?;
+        writeln!(
+            f,
+            "  Segments reused after edit: {}",
+            self.segments_reused_after
+        )?;
         writeln!(f, "  Segments invalidated: {}", self.segments_invalidated)?;
         writeln!(f, "  Full tail fallbacks: {}", self.full_tail_fallbacks)?;
         Ok(())
@@ -450,10 +491,12 @@ impl CheckpointedIncrementalParser {
         // Update checkpoint cache
         let old_len = edit.end - edit.start;
         let new_len = new_content.len();
-        self.checkpoint_cache.apply_edit(edit.start, old_len, new_len);
+        self.checkpoint_cache
+            .apply_edit(edit.start, old_len, new_len);
 
         // Adjust token cache segment positions for the edit
-        self.token_cache.adjust_positions(edit.start, old_len, new_len);
+        self.token_cache
+            .adjust_positions(edit.start, old_len, new_len);
 
         // Find nearest checkpoints before and after the edit for two-sided window
         let left_checkpoint = self.checkpoint_cache.find_before(edit.start);
@@ -586,8 +629,10 @@ impl CheckpointedIncrementalParser {
     ) -> ParseResult<Node> {
         // Calculate relex bounds using checkpoint positions
         let relex_start = left_checkpoint.as_ref().map(|cp| cp.position).unwrap_or(0);
-        let relex_end =
-            right_checkpoint.as_ref().map(|cp| cp.position).unwrap_or(self.source.len());
+        let relex_end = right_checkpoint
+            .as_ref()
+            .map(|cp| cp.position)
+            .unwrap_or(self.source.len());
 
         // Track checkpoint distances for statistics
         let edit_end = edit.start + edit.new_text.len();
@@ -695,7 +740,8 @@ impl CheckpointedIncrementalParser {
         if let (Some(first), Some(last)) = (parser_tokens.first(), parser_tokens.last()) {
             let start = first.start;
             let end = last.end;
-            self.token_cache.cache_tokens(start, end, parser_tokens.clone());
+            self.token_cache
+                .cache_tokens(start, end, parser_tokens.clone());
         }
 
         // Drive the parse from the pre-assembled token stream — no re-lexing.
@@ -733,7 +779,11 @@ mod tests {
         let tree1 = must(parser.parse(source));
 
         // Edit: change 42 to 4242
-        let edit = SimpleEdit { start: 8, end: 10, new_text: "4242".to_string() };
+        let edit = SimpleEdit {
+            start: 8,
+            end: 10,
+            new_text: "4242".to_string(),
+        };
 
         let tree2 = must(parser.apply_edit(&edit));
 
@@ -762,13 +812,21 @@ mod tests {
         must(parser.parse(expected_source.clone()));
 
         // Multiple edits
-        let edit1 = SimpleEdit { start: 8, end: 9, new_text: "42".to_string() };
+        let edit1 = SimpleEdit {
+            start: 8,
+            end: 9,
+            new_text: "42".to_string(),
+        };
         must(parser.apply_edit(&edit1));
         expected_source.replace_range(edit1.start..edit1.end, &edit1.new_text);
         let checkpoints_after_first = parser.stats().checkpoints_used;
         let cache_events_after_first = parser.stats().cache_hits + parser.stats().cache_misses;
 
-        let edit2 = SimpleEdit { start: 20, end: 21, new_text: "99".to_string() };
+        let edit2 = SimpleEdit {
+            start: 20,
+            end: 21,
+            new_text: "99".to_string(),
+        };
         let incremental_tree = must(parser.apply_edit(&edit2));
         expected_source.replace_range(edit2.start..edit2.end, &edit2.new_text);
 
@@ -807,7 +865,11 @@ mod tests {
         // Edit after the preamble so the incremental path consults the checkpoint window.
         let edit_start = source.find('=').unwrap_or(13) + 2; // just past `= `
         let edit_end = edit_start + 5; // covers "11111"
-        let edit = SimpleEdit { start: edit_start, end: edit_end, new_text: "99999".to_string() };
+        let edit = SimpleEdit {
+            start: edit_start,
+            end: edit_end,
+            new_text: "99999".to_string(),
+        };
 
         let checkpoints_before = parser.stats().checkpoints_used;
         let cache_events_before = parser.stats().cache_hits + parser.stats().cache_misses;
@@ -839,7 +901,11 @@ mod tests {
     #[test]
     fn test_full_fallback_rebuilds_checkpoint_cache() {
         let source = "my $value = 1;\n".repeat(80);
-        let edit = SimpleEdit { start: 125, end: 126, new_text: "999".to_string() };
+        let edit = SimpleEdit {
+            start: 125,
+            end: 126,
+            new_text: "999".to_string(),
+        };
 
         let mut edited_source = source.clone();
         edited_source.replace_range(edit.start..edit.end, &edit.new_text);
@@ -852,15 +918,31 @@ mod tests {
         must(full.parse(edited_source.clone()));
 
         for query in (0..=edited_source.len()).step_by(17) {
-            let incremental_before =
-                incremental.checkpoint_cache.find_before(query).map(|cp| cp.position);
-            let full_before = full.checkpoint_cache.find_before(query).map(|cp| cp.position);
-            assert_eq!(incremental_before, full_before, "mismatched left checkpoint at {query}");
+            let incremental_before = incremental
+                .checkpoint_cache
+                .find_before(query)
+                .map(|cp| cp.position);
+            let full_before = full
+                .checkpoint_cache
+                .find_before(query)
+                .map(|cp| cp.position);
+            assert_eq!(
+                incremental_before, full_before,
+                "mismatched left checkpoint at {query}"
+            );
 
-            let incremental_after =
-                incremental.checkpoint_cache.find_after(query).map(|cp| cp.position);
-            let full_after = full.checkpoint_cache.find_after(query).map(|cp| cp.position);
-            assert_eq!(incremental_after, full_after, "mismatched right checkpoint at {query}");
+            let incremental_after = incremental
+                .checkpoint_cache
+                .find_after(query)
+                .map(|cp| cp.position);
+            let full_after = full
+                .checkpoint_cache
+                .find_after(query)
+                .map(|cp| cp.position);
+            assert_eq!(
+                incremental_after, full_after,
+                "mismatched right checkpoint at {query}"
+            );
         }
     }
 }

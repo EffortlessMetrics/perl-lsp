@@ -132,8 +132,13 @@ fn test_type_definition_3_17() -> TestResult {
         );
     } else {
         // If not supported, should return an error (MethodNotFound or InternalError)
-        assert!(response.get("error").is_some(), "Expected error when not advertised");
-        let error_code = response["error"]["code"].as_i64().ok_or("error code not i64")?;
+        assert!(
+            response.get("error").is_some(),
+            "Expected error when not advertised"
+        );
+        let error_code = response["error"]["code"]
+            .as_i64()
+            .ok_or("error code not i64")?;
         assert!(
             error_code == -32601 || error_code == -32603,
             "Expected MethodNotFound (-32601) or InternalError (-32603), got {}",
@@ -177,8 +182,13 @@ fn test_implementation_3_17() -> TestResult {
         );
     } else {
         // If not supported, should return an error (MethodNotFound or InternalError)
-        assert!(response.get("error").is_some(), "Expected error when not advertised");
-        let error_code = response["error"]["code"].as_i64().ok_or("error code not i64")?;
+        assert!(
+            response.get("error").is_some(),
+            "Expected error when not advertised"
+        );
+        let error_code = response["error"]["code"]
+            .as_i64()
+            .ok_or("error code not i64")?;
         assert!(
             error_code == -32601 || error_code == -32603,
             "Expected MethodNotFound (-32601) or InternalError (-32603), got {}",

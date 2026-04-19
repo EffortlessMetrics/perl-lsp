@@ -48,17 +48,26 @@ pub struct FormatRange {
 /// Characters in the Basic Multilingual Plane (U+0000–U+FFFF) count as 1 unit;
 /// supplementary-plane characters (U+10000 and above) count as 2 units.
 fn utf16_len(s: &str) -> usize {
-    s.chars().map(|c| if c as u32 >= 0x10000 { 2 } else { 1 }).sum()
+    s.chars()
+        .map(|c| if c as u32 >= 0x10000 { 2 } else { 1 })
+        .sum()
 }
 
 impl FormatRange {
     /// Create a range covering the entire document.
     pub fn whole_document(content: &str) -> Self {
         let lines: Vec<&str> = content.lines().collect();
-        let last_line = if lines.is_empty() { 0 } else { (lines.len() - 1) as u32 };
+        let last_line = if lines.is_empty() {
+            0
+        } else {
+            (lines.len() - 1) as u32
+        };
 
         FormatRange {
-            start: FormatPosition { line: 0, character: 0 },
+            start: FormatPosition {
+                line: 0,
+                character: 0,
+            },
             end: FormatPosition {
                 line: last_line,
                 character: lines

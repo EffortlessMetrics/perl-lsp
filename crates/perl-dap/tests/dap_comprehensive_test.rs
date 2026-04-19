@@ -47,7 +47,12 @@ fn test_dap_initialize() {
     let response = adapter.handle_request(1, "initialize", None);
 
     match response {
-        DapMessage::Response { success, command, body, .. } => {
+        DapMessage::Response {
+            success,
+            command,
+            body,
+            ..
+        } => {
             assert!(success);
             assert_eq!(command, "initialize");
             assert!(body.is_some());
@@ -65,12 +70,20 @@ fn test_dap_initialize() {
                     .unwrap_or(false)
             );
             assert!(
-                body.get("supportsEvaluateForHovers").and_then(|v| v.as_bool()).unwrap_or(false)
+                body.get("supportsEvaluateForHovers")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false)
             );
             assert!(
-                body.get("supportsFunctionBreakpoints").and_then(|v| v.as_bool()).unwrap_or(false)
+                body.get("supportsFunctionBreakpoints")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false)
             );
-            assert!(body.get("supportsInlineValues").and_then(|v| v.as_bool()).unwrap_or(false));
+            assert!(
+                body.get("supportsInlineValues")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false)
+            );
         }
         _ => must(Err::<(), _>("Expected response message")),
     }
@@ -91,7 +104,12 @@ fn test_dap_launch_with_invalid_program() {
     let response = adapter.handle_request(1, "launch", Some(launch_args));
 
     match response {
-        DapMessage::Response { success, command, message, .. } => {
+        DapMessage::Response {
+            success,
+            command,
+            message,
+            ..
+        } => {
             assert!(!success);
             assert_eq!(command, "launch");
             assert!(message.is_some());
@@ -110,7 +128,12 @@ fn test_dap_launch_missing_arguments() {
     let response = adapter.handle_request(1, "launch", None);
 
     match response {
-        DapMessage::Response { success, command, message, .. } => {
+        DapMessage::Response {
+            success,
+            command,
+            message,
+            ..
+        } => {
             assert!(!success);
             assert_eq!(command, "launch");
             assert!(message.is_some());
@@ -135,7 +158,12 @@ fn test_dap_breakpoints_no_session() {
     let response = adapter.handle_request(1, "setBreakpoints", Some(bp_args));
 
     match response {
-        DapMessage::Response { success, command, body, .. } => {
+        DapMessage::Response {
+            success,
+            command,
+            body,
+            ..
+        } => {
             assert!(success);
             assert_eq!(command, "setBreakpoints");
 
@@ -156,7 +184,10 @@ fn test_dap_breakpoints_no_session() {
 fn test_dap_inline_values() -> TestResult {
     let dir = tempdir()?;
     let script_path = dir.path().join("inline_values.pl");
-    write(&script_path, "my $x = 1;\nmy $y = $x + 2;\nmy $z = $y + 3;\n")?;
+    write(
+        &script_path,
+        "my $x = 1;\nmy $y = $x + 2;\nmy $z = $y + 3;\n",
+    )?;
 
     let mut adapter = DebugAdapter::new();
     let response = adapter.handle_request(
@@ -170,7 +201,12 @@ fn test_dap_inline_values() -> TestResult {
     );
 
     match response {
-        DapMessage::Response { success, command, body, .. } => {
+        DapMessage::Response {
+            success,
+            command,
+            body,
+            ..
+        } => {
             assert!(success);
             assert_eq!(command, "inlineValues");
             let body = body.ok_or("missing body")?;
@@ -178,16 +214,18 @@ fn test_dap_inline_values() -> TestResult {
                 .get("inlineValues")
                 .and_then(|v| v.as_array())
                 .ok_or("missing inlineValues")?;
-            assert!(
-                values.iter().any(|v| {
-                    v.get("text").and_then(|t| t.as_str()).unwrap_or("").contains("$x")
-                })
-            );
-            assert!(
-                values.iter().any(|v| {
-                    v.get("text").and_then(|t| t.as_str()).unwrap_or("").contains("$y")
-                })
-            );
+            assert!(values.iter().any(|v| {
+                v.get("text")
+                    .and_then(|t| t.as_str())
+                    .unwrap_or("")
+                    .contains("$x")
+            }));
+            assert!(values.iter().any(|v| {
+                v.get("text")
+                    .and_then(|t| t.as_str())
+                    .unwrap_or("")
+                    .contains("$y")
+            }));
         }
         _ => must(Err::<(), _>("Expected inlineValues response")),
     }
@@ -206,7 +244,9 @@ fn test_dap_breakpoints_missing_source() -> Result<(), Box<dyn std::error::Error
     let response = adapter.handle_request(1, "setBreakpoints", Some(bp_args));
 
     match response {
-        DapMessage::Response { success, message, .. } => {
+        DapMessage::Response {
+            success, message, ..
+        } => {
             assert!(!success);
             let msg = message.ok_or("Expected error message")?;
             assert!(msg.contains("missing field `source`"));
@@ -231,7 +271,12 @@ fn test_dap_breakpoints_invalid_line() {
     let response = adapter.handle_request(1, "setBreakpoints", Some(bp_args));
 
     match response {
-        DapMessage::Response { success, command, body, .. } => {
+        DapMessage::Response {
+            success,
+            command,
+            body,
+            ..
+        } => {
             assert!(success); // Request succeeds but breakpoints are not verified
             assert_eq!(command, "setBreakpoints");
 
@@ -262,7 +307,13 @@ fn test_dap_set_exception_breakpoints() -> TestResult {
     );
 
     match response {
-        DapMessage::Response { success, command, body, message, .. } => {
+        DapMessage::Response {
+            success,
+            command,
+            body,
+            message,
+            ..
+        } => {
             assert!(success);
             assert_eq!(command, "setExceptionBreakpoints");
             assert!(message.is_none());
@@ -297,7 +348,12 @@ fn test_dap_set_function_breakpoints_validation() -> TestResult {
     );
 
     match response {
-        DapMessage::Response { success, command, body, .. } => {
+        DapMessage::Response {
+            success,
+            command,
+            body,
+            ..
+        } => {
             assert!(success);
             assert_eq!(command, "setFunctionBreakpoints");
             let body = body.ok_or("Expected response body")?;
@@ -306,10 +362,22 @@ fn test_dap_set_function_breakpoints_validation() -> TestResult {
                 .and_then(|v| v.as_array())
                 .ok_or("Missing breakpoints field")?;
             assert_eq!(breakpoints.len(), 4);
-            assert_eq!(breakpoints[0].get("verified").and_then(|v| v.as_bool()), Some(true));
-            assert_eq!(breakpoints[1].get("verified").and_then(|v| v.as_bool()), Some(true));
-            assert_eq!(breakpoints[2].get("verified").and_then(|v| v.as_bool()), Some(false));
-            assert_eq!(breakpoints[3].get("verified").and_then(|v| v.as_bool()), Some(false));
+            assert_eq!(
+                breakpoints[0].get("verified").and_then(|v| v.as_bool()),
+                Some(true)
+            );
+            assert_eq!(
+                breakpoints[1].get("verified").and_then(|v| v.as_bool()),
+                Some(true)
+            );
+            assert_eq!(
+                breakpoints[2].get("verified").and_then(|v| v.as_bool()),
+                Some(false)
+            );
+            assert_eq!(
+                breakpoints[3].get("verified").and_then(|v| v.as_bool()),
+                Some(false)
+            );
         }
         _ => must(Err::<(), _>("Expected response message")),
     }
@@ -328,7 +396,12 @@ fn test_dap_evaluate_empty_expression() {
     let response = adapter.handle_request(1, "evaluate", Some(eval_args));
 
     match response {
-        DapMessage::Response { success, command, message, .. } => {
+        DapMessage::Response {
+            success,
+            command,
+            message,
+            ..
+        } => {
             assert!(!success);
             assert_eq!(command, "evaluate");
             assert_eq!(must_some(message), "Empty expression");
@@ -348,7 +421,12 @@ fn test_dap_evaluate_no_session() {
     let response = adapter.handle_request(1, "evaluate", Some(eval_args));
 
     match response {
-        DapMessage::Response { success, command, message, .. } => {
+        DapMessage::Response {
+            success,
+            command,
+            message,
+            ..
+        } => {
             assert!(!success);
             assert_eq!(command, "evaluate");
             assert!(must_some(message).contains("No debugger session"));
@@ -364,7 +442,12 @@ fn test_dap_threads_no_session() {
     let response = adapter.handle_request(1, "threads", None);
 
     match response {
-        DapMessage::Response { success, command, body, .. } => {
+        DapMessage::Response {
+            success,
+            command,
+            body,
+            ..
+        } => {
             assert!(success);
             assert_eq!(command, "threads");
 
@@ -383,7 +466,12 @@ fn test_dap_stacktrace_no_session() {
     let response = adapter.handle_request(1, "stackTrace", Some(json!({"threadId": 1})));
 
     match response {
-        DapMessage::Response { success, command, body, .. } => {
+        DapMessage::Response {
+            success,
+            command,
+            body,
+            ..
+        } => {
             assert!(success);
             assert_eq!(command, "stackTrace");
 
@@ -392,7 +480,10 @@ fn test_dap_stacktrace_no_session() {
 
             // Should return placeholder frame without session
             assert_eq!(frames.len(), 1);
-            assert_eq!(must_some(frames[0].get("name").and_then(|n| n.as_str())), "main::hello");
+            assert_eq!(
+                must_some(frames[0].get("name").and_then(|n| n.as_str())),
+                "main::hello"
+            );
         }
         _ => must(Err::<(), _>("Expected response message")),
     }
@@ -405,7 +496,12 @@ fn test_dap_pause_no_session() {
     let response = adapter.handle_request(1, "pause", None);
 
     match response {
-        DapMessage::Response { success, command, message, .. } => {
+        DapMessage::Response {
+            success,
+            command,
+            message,
+            ..
+        } => {
             assert!(!success);
             assert_eq!(command, "pause");
             assert_eq!(must_some(message), "Failed to pause debugger");
@@ -424,7 +520,9 @@ fn test_dap_disconnect_cleans_up_session() {
     let response = adapter.handle_request(1, "disconnect", None);
 
     match response {
-        DapMessage::Response { success, command, .. } => {
+        DapMessage::Response {
+            success, command, ..
+        } => {
             assert!(success);
             assert_eq!(command, "disconnect");
         }
@@ -439,7 +537,12 @@ fn test_dap_unknown_command() {
     let response = adapter.handle_request(1, "unknownCommand", None);
 
     match response {
-        DapMessage::Response { success, command, message, .. } => {
+        DapMessage::Response {
+            success,
+            command,
+            message,
+            ..
+        } => {
             assert!(!success);
             assert_eq!(command, "unknownCommand");
             assert!(must_some(message).starts_with("Unknown command"));
@@ -455,7 +558,12 @@ fn test_dap_variables_missing_reference() {
     let response = adapter.handle_request(1, "variables", None);
 
     match response {
-        DapMessage::Response { success, command, message, .. } => {
+        DapMessage::Response {
+            success,
+            command,
+            message,
+            ..
+        } => {
             assert!(!success);
             assert_eq!(command, "variables");
             assert_eq!(must_some(message), "Missing arguments");
@@ -475,7 +583,12 @@ fn test_dap_variables_default_scope() {
     let response = adapter.handle_request(1, "variables", Some(var_args));
 
     match response {
-        DapMessage::Response { success, command, body, .. } => {
+        DapMessage::Response {
+            success,
+            command,
+            body,
+            ..
+        } => {
             assert!(success);
             assert_eq!(command, "variables");
 
@@ -503,7 +616,12 @@ fn test_dap_scopes_missing_frame() {
     let response = adapter.handle_request(1, "scopes", None);
 
     match response {
-        DapMessage::Response { success, command, message, .. } => {
+        DapMessage::Response {
+            success,
+            command,
+            message,
+            ..
+        } => {
             assert!(!success);
             assert_eq!(command, "scopes");
             assert_eq!(must_some(message), "Missing frameId");
@@ -523,7 +641,12 @@ fn test_dap_scopes_valid_frame() {
     let response = adapter.handle_request(1, "scopes", Some(scope_args));
 
     match response {
-        DapMessage::Response { success, command, body, .. } => {
+        DapMessage::Response {
+            success,
+            command,
+            body,
+            ..
+        } => {
             assert!(success);
             assert_eq!(command, "scopes");
 
@@ -532,8 +655,14 @@ fn test_dap_scopes_valid_frame() {
             assert_eq!(scopes.len(), 3);
 
             let scope = &scopes[0];
-            assert_eq!(must_some(scope.get("name").and_then(|n| n.as_str())), "Locals");
-            assert_eq!(must_some(scope.get("variablesReference").and_then(|v| v.as_i64())), 11);
+            assert_eq!(
+                must_some(scope.get("name").and_then(|n| n.as_str())),
+                "Locals"
+            );
+            assert_eq!(
+                must_some(scope.get("variablesReference").and_then(|v| v.as_i64())),
+                11
+            );
         }
         _ => must(Err::<(), _>("Expected response message")),
     }
@@ -556,7 +685,11 @@ fn test_sequence_number_increment() {
 #[test]
 fn test_dap_full_session_lifecycle() -> TestResult {
     // Skip if perl is not available
-    if std::process::Command::new("perl").arg("--version").output().is_err() {
+    if std::process::Command::new("perl")
+        .arg("--version")
+        .output()
+        .is_err()
+    {
         eprintln!("Skipping DAP lifecycle test - perl not available");
         return Ok(());
     }
@@ -600,7 +733,9 @@ print "Result: $result\n";
     let launch_response = adapter.handle_request(2, "launch", Some(launch_args));
 
     match launch_response {
-        DapMessage::Response { success, message, .. } => {
+        DapMessage::Response {
+            success, message, ..
+        } => {
             if !success {
                 eprintln!("Launch failed (expected on some systems): {:?}", message);
                 // Test the rest of the API even if launch fails
@@ -631,8 +766,10 @@ print "Result: $result\n";
             assert_eq!(breakpoints.len(), 1);
 
             // Breakpoint might not be verified without active session
-            let verified =
-                breakpoints[0].get("verified").and_then(|v| v.as_bool()).unwrap_or(false);
+            let verified = breakpoints[0]
+                .get("verified")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
             eprintln!("Breakpoint verified: {}", verified);
         }
         _ => must(Err::<(), _>("Expected setBreakpoints response")),

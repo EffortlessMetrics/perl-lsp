@@ -158,7 +158,10 @@ mod tests {
     #[test]
     fn token_under_cursor_extracts_perl_module_token() {
         let text = "use Demo::Worker;\n";
-        assert_eq!(token_under_cursor(text, 0, 8), Some("Demo::Worker".to_string()));
+        assert_eq!(
+            token_under_cursor(text, 0, 8),
+            Some("Demo::Worker".to_string())
+        );
     }
 
     #[test]

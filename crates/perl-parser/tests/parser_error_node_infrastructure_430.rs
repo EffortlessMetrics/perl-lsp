@@ -22,7 +22,13 @@ fn parser_430_ac1_error_variant_structure() {
     if let NodeKind::Program { statements } = &ast.kind {
         for stmt in statements {
             println!("Statement kind: {:?}", stmt.kind.kind_name());
-            if let NodeKind::Error { message, expected, found, partial } = &stmt.kind {
+            if let NodeKind::Error {
+                message,
+                expected,
+                found,
+                partial,
+            } = &stmt.kind
+            {
                 // Verify message is present
                 assert!(!message.is_empty(), "Error message should not be empty");
 
@@ -39,16 +45,28 @@ fn parser_430_ac1_error_variant_structure() {
         }
     }
 
-    assert!(found_error, "Should find at least one Error node with complete structure");
+    assert!(
+        found_error,
+        "Should find at least one Error node with complete structure"
+    );
 }
 
 /// AC2: NodeKind enum includes MissingExpression, MissingStatement, MissingIdentifier, MissingBlock variants
 #[test]
 fn parser_430_ac2_missing_node_variants_exist() {
     // Test that these variants exist by pattern matching
-    let missing_expr = Node::new(NodeKind::MissingExpression, SourceLocation { start: 0, end: 0 });
-    let missing_stmt = Node::new(NodeKind::MissingStatement, SourceLocation { start: 0, end: 0 });
-    let missing_ident = Node::new(NodeKind::MissingIdentifier, SourceLocation { start: 0, end: 0 });
+    let missing_expr = Node::new(
+        NodeKind::MissingExpression,
+        SourceLocation { start: 0, end: 0 },
+    );
+    let missing_stmt = Node::new(
+        NodeKind::MissingStatement,
+        SourceLocation { start: 0, end: 0 },
+    );
+    let missing_ident = Node::new(
+        NodeKind::MissingIdentifier,
+        SourceLocation { start: 0, end: 0 },
+    );
     let missing_block = Node::new(NodeKind::MissingBlock, SourceLocation { start: 0, end: 0 });
 
     // Verify these compile and match correctly
@@ -73,7 +91,10 @@ fn parser_430_ac3_error_nodes_preserve_location() {
         for stmt in statements {
             if let NodeKind::Error { .. } = &stmt.kind {
                 // Verify location is captured (start is always >= 0 for usize)
-                assert!(stmt.location.end >= stmt.location.start, "End should be >= start");
+                assert!(
+                    stmt.location.end >= stmt.location.start,
+                    "End should be >= start"
+                );
 
                 println!(
                     "AC3: Error node location: start={}, end={}",
@@ -85,7 +106,10 @@ fn parser_430_ac3_error_nodes_preserve_location() {
         }
     }
 
-    assert!(found_error, "Should find error node with location information");
+    assert!(
+        found_error,
+        "Should find error node with location information"
+    );
 }
 
 /// AC4: Parser method create_error_node() constructs error nodes with contextual information
@@ -119,7 +143,10 @@ fn parser_430_ac4_error_nodes_have_context() {
         }
     }
 
-    assert!(found_error, "Should find error node with contextual information in if block");
+    assert!(
+        found_error,
+        "Should find error node with contextual information in if block"
+    );
 }
 
 /// AC5: Error nodes can contain partial valid AST nodes when phrase-level recovery succeeds
@@ -156,7 +183,10 @@ fn parser_430_ac6_partial_block_missing_closing_brace() {
     let result = parser.parse();
 
     // Should recover and return a partial AST
-    assert!(result.is_ok(), "Parser should recover from missing closing brace");
+    assert!(
+        result.is_ok(),
+        "Parser should recover from missing closing brace"
+    );
     let ast = result.unwrap();
 
     println!("AC6 AST: {}", ast.to_sexp());
@@ -187,7 +217,9 @@ fn parser_430_ac6_partial_block_missing_closing_brace() {
                         println!("AC6: Body kind: {:?}", body.kind.kind_name());
                     }
                 }
-                NodeKind::Error { message, partial, .. } => {
+                NodeKind::Error {
+                    message, partial, ..
+                } => {
                     println!("AC6: Found error: {}", message);
                     if let Some(node) = partial {
                         println!("AC6: Error has partial node: {:?}", node.kind.kind_name());
@@ -218,7 +250,13 @@ fn parser_430_ac7_partial_if_statement() {
     let mut found_if = false;
     if let NodeKind::Program { statements } = &ast.kind {
         if let Some(stmt) = statements.first() {
-            if let NodeKind::If { condition, then_branch, else_branch, .. } = &stmt.kind {
+            if let NodeKind::If {
+                condition,
+                then_branch,
+                else_branch,
+                ..
+            } = &stmt.kind
+            {
                 // Verify we have valid condition and then branch
                 assert!(
                     matches!(condition.kind, NodeKind::Binary { .. }),
@@ -238,7 +276,10 @@ fn parser_430_ac7_partial_if_statement() {
         }
     }
 
-    assert!(found_if, "Should find valid if statement with condition and then-branch");
+    assert!(
+        found_if,
+        "Should find valid if statement with condition and then-branch"
+    );
 }
 
 /// AC8: Expression parsing returns MissingExpression node when expression is absent but required
@@ -259,7 +300,10 @@ fn parser_430_ac8_missing_expression_node() {
         _ => false,
     };
 
-    assert!(has_error_handling, "Should have error or missing expression handling");
+    assert!(
+        has_error_handling,
+        "Should have error or missing expression handling"
+    );
     println!("AC8: Missing expression handling present");
 }
 
@@ -267,7 +311,10 @@ fn parser_430_ac8_missing_expression_node() {
 #[test]
 fn parser_430_ac9_missing_statement_capability() {
     // Validate MissingStatement variant exists and can be used
-    let missing_stmt = Node::new(NodeKind::MissingStatement, SourceLocation { start: 0, end: 0 });
+    let missing_stmt = Node::new(
+        NodeKind::MissingStatement,
+        SourceLocation { start: 0, end: 0 },
+    );
 
     assert!(matches!(missing_stmt.kind, NodeKind::MissingStatement));
     println!("AC9: MissingStatement capability available");
@@ -317,10 +364,14 @@ fn parser_430_integration_lsp_hover_on_broken_code() {
 
     // Verify we can still find the valid variable declaration
     if let NodeKind::Program { statements } = &ast.kind {
-        let has_valid_var =
-            statements.iter().any(|s| matches!(s.kind, NodeKind::VariableDeclaration { .. }));
+        let has_valid_var = statements
+            .iter()
+            .any(|s| matches!(s.kind, NodeKind::VariableDeclaration { .. }));
 
-        assert!(has_valid_var, "Should find valid variable declaration despite error");
+        assert!(
+            has_valid_var,
+            "Should find valid variable declaration despite error"
+        );
         println!("Integration: Found valid declarations in code with errors");
     }
 }
@@ -337,7 +388,9 @@ fn parser_430_integration_lsp_completion_on_broken_code() {
 
     // Verify we can still find the subroutine definition
     if let NodeKind::Program { statements } = &ast.kind {
-        let has_sub = statements.iter().any(|s| matches!(s.kind, NodeKind::Subroutine { .. }));
+        let has_sub = statements
+            .iter()
+            .any(|s| matches!(s.kind, NodeKind::Subroutine { .. }));
 
         assert!(has_sub, "Should find subroutine definition despite error");
         println!("Integration: Found subroutine available for completion");
@@ -371,7 +424,10 @@ fn parser_430_performance_error_recovery_overhead() {
     );
 
     // This is a soft assertion - we expect error recovery to be reasonably fast
-    assert!(ratio < 5.0, "Error recovery should not be more than 5x slower");
+    assert!(
+        ratio < 5.0,
+        "Error recovery should not be more than 5x slower"
+    );
 }
 
 /// S-expression test: Error nodes should generate valid S-expressions

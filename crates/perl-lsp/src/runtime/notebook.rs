@@ -256,7 +256,12 @@ impl LspServer {
             success: es.get("success").and_then(|v| v.as_bool()),
         });
 
-        Ok(NotebookCellState { kind, document, metadata, execution_summary })
+        Ok(NotebookCellState {
+            kind,
+            document,
+            metadata,
+            execution_summary,
+        })
     }
 
     /// Handle notebookDocument/didOpen notification
@@ -290,8 +295,10 @@ impl LspServer {
             .ok_or_else(|| invalid_params("Missing notebookDocument.cells"))?;
 
         // Extract notebook metadata (optional)
-        let metadata =
-            params.pointer("/notebookDocument/metadata").and_then(|v| v.as_object()).cloned();
+        let metadata = params
+            .pointer("/notebookDocument/metadata")
+            .and_then(|v| v.as_object())
+            .cloned();
 
         let mut cells = Vec::new();
         for cell in cells_array {
@@ -350,7 +357,12 @@ impl LspServer {
         // Register notebook in store
         self.notebook_store.register_notebook(notebook_state);
 
-        tracing::debug!(uri = notebook_uri, notebook_type, version, "Notebook opened");
+        tracing::debug!(
+            uri = notebook_uri,
+            notebook_type,
+            version,
+            "Notebook opened"
+        );
 
         Ok(())
     }
@@ -415,8 +427,9 @@ impl LspServer {
                             .unwrap_or_default();
 
                         let splice_start = start.min(updated_cells.len());
-                        let splice_end =
-                            splice_start.saturating_add(delete_count).min(updated_cells.len());
+                        let splice_end = splice_start
+                            .saturating_add(delete_count)
+                            .min(updated_cells.len());
                         updated_cells.splice(splice_start..splice_end, replacement);
                         structure_changed = true;
                     }
@@ -492,7 +505,8 @@ impl LspServer {
                     }
 
                     if structure_changed {
-                        self.notebook_store.update_cells(notebook_uri, updated_cells);
+                        self.notebook_store
+                            .update_cells(notebook_uri, updated_cells);
                     }
                 }
 
@@ -589,7 +603,10 @@ impl LspServer {
             .ok_or_else(|| invalid_params("Missing notebookDocument.uri"))?;
 
         // Get cell URIs that need closing
-        if let Some(cell_docs) = params.pointer("/cellTextDocuments").and_then(|v| v.as_array()) {
+        if let Some(cell_docs) = params
+            .pointer("/cellTextDocuments")
+            .and_then(|v| v.as_array())
+        {
             for cell_doc in cell_docs {
                 let cell_uri = cell_doc
                     .get("uri")
@@ -651,7 +668,10 @@ mod tests {
         })))?;
 
         assert_eq!(
-            server.notebook_store.get_notebook_for_cell(cell_uri).as_deref(),
+            server
+                .notebook_store
+                .get_notebook_for_cell(cell_uri)
+                .as_deref(),
             Some(notebook_uri)
         );
         assert!(server.documents_guard().contains_key(cell_uri));
@@ -737,7 +757,10 @@ mod tests {
         })))?;
 
         assert_eq!(
-            server.notebook_store.get_notebook_for_cell(cell2_uri).as_deref(),
+            server
+                .notebook_store
+                .get_notebook_for_cell(cell2_uri)
+                .as_deref(),
             Some(notebook_uri)
         );
         assert!(server.documents_guard().contains_key(cell2_uri));
@@ -754,11 +777,17 @@ mod tests {
             .find(|cell| cell.document == cell2_uri)
             .ok_or("cell2 missing from notebook state")?;
         assert_eq!(
-            cell2.execution_summary.as_ref().and_then(|summary| summary.execution_order),
+            cell2
+                .execution_summary
+                .as_ref()
+                .and_then(|summary| summary.execution_order),
             Some(7)
         );
         assert_eq!(
-            cell2.execution_summary.as_ref().and_then(|summary| summary.success),
+            cell2
+                .execution_summary
+                .as_ref()
+                .and_then(|summary| summary.success),
             Some(true)
         );
 
@@ -783,7 +812,12 @@ mod tests {
             }
         })))?;
 
-        assert!(server.notebook_store.get_notebook_for_cell(cell1_uri).is_none());
+        assert!(
+            server
+                .notebook_store
+                .get_notebook_for_cell(cell1_uri)
+                .is_none()
+        );
         assert!(!server.documents_guard().contains_key(cell1_uri));
 
         let notebook = server

@@ -165,8 +165,14 @@ fn test_print_stderr_comma_or_die() -> Result<(), Box<dyn std::error::Error>> {
 
     let sexp = ast.to_sexp();
     // Top-level should be `or` — the call is on the left, die on the right
-    assert!(sexp.contains("(binary_or"), "expected binary_or at top level, got: {sexp}");
-    assert!(sexp.contains("(call print"), "expected (call print ...), got: {sexp}");
+    assert!(
+        sexp.contains("(binary_or"),
+        "expected binary_or at top level, got: {sexp}"
+    );
+    assert!(
+        sexp.contains("(call print"),
+        "expected (call print ...), got: {sexp}"
+    );
     Ok(())
 }
 
@@ -180,8 +186,17 @@ fn test_word_not_as_terminator() -> Result<(), Box<dyn std::error::Error>> {
 
     let sexp = ast.to_sexp();
     // `or` at top level, `not` on the RHS
-    assert!(sexp.contains("(binary_or"), "expected binary_or, got: {sexp}");
-    assert!(sexp.contains("(unary_not"), "expected unary_not on RHS, got: {sexp}");
-    assert!(sexp.contains("(call open"), "expected (call open ...), got: {sexp}");
+    assert!(
+        sexp.contains("(binary_or"),
+        "expected binary_or, got: {sexp}"
+    );
+    assert!(
+        sexp.contains("(unary_not"),
+        "expected unary_not on RHS, got: {sexp}"
+    );
+    assert!(
+        sexp.contains("(call open"),
+        "expected (call open ...), got: {sexp}"
+    );
     Ok(())
 }

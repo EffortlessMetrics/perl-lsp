@@ -30,9 +30,10 @@ pub fn initialize_lsp(server: &LspServer) -> Value {
     // write without reading
     {
         let body = init.to_string();
-        if let Err(e) =
-            send_message_inner(&mut *server.writer.lock().unwrap_or_else(|e| e.into_inner()), &body)
-        {
+        if let Err(e) = send_message_inner(
+            &mut *server.writer.lock().unwrap_or_else(|e| e.into_inner()),
+            &body,
+        ) {
             // Handle write errors gracefully with proper JSON-RPC envelope (id=1)
             return map_send_error(Some(json!(1)), e, "initialize");
         }
@@ -168,5 +169,9 @@ pub fn shutdown_and_exit(server: &LspServer) {
         }
         std::thread::sleep(Duration::from_millis(50));
     }
-    let _ = server.process.lock().unwrap_or_else(|e| e.into_inner()).kill();
+    let _ = server
+        .process
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .kill();
 }

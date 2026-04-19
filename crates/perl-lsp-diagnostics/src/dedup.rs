@@ -44,7 +44,10 @@ const PARSE_ERROR_CODES: &[&str] = &["PL001", "PL002", "PL003"];
 /// or scope-analysis pass).
 fn is_parse_error_diagnostic(d: &Diagnostic) -> bool {
     d.severity == DiagnosticSeverity::Error
-        && d.code.as_deref().map(|c| PARSE_ERROR_CODES.contains(&c)).unwrap_or(false)
+        && d.code
+            .as_deref()
+            .map(|c| PARSE_ERROR_CODES.contains(&c))
+            .unwrap_or(false)
 }
 
 /// Suppress cascading parse-error diagnostics using location clustering.

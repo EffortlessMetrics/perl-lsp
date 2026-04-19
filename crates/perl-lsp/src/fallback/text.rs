@@ -299,7 +299,12 @@ mod tests {
 "#;
         let ranges = folding_ranges_from_text(src, 100);
         // Should have exactly one folding range for the sub
-        assert_eq!(ranges.len(), 1, "Expected 1 folding range, got {:?}", ranges);
+        assert_eq!(
+            ranges.len(),
+            1,
+            "Expected 1 folding range, got {:?}",
+            ranges
+        );
         assert_eq!(ranges[0]["startLine"], 0);
         assert_eq!(ranges[0]["endLine"], 7); // The closing brace of sub foo
     }
@@ -315,7 +320,12 @@ sub bar {
 }
 "#;
         let ranges = folding_ranges_from_text(src, 100);
-        assert_eq!(ranges.len(), 2, "Expected 2 folding ranges, got {:?}", ranges);
+        assert_eq!(
+            ranges.len(),
+            2,
+            "Expected 2 folding ranges, got {:?}",
+            ranges
+        );
         // First sub
         assert_eq!(ranges[0]["startLine"], 0);
         assert_eq!(ranges[0]["endLine"], 2);
@@ -337,7 +347,12 @@ sub foo {
 }
 "#;
         let ranges = folding_ranges_from_text(src, 100);
-        assert_eq!(ranges.len(), 2, "Expected 2 folding ranges (POD + sub), got {:?}", ranges);
+        assert_eq!(
+            ranges.len(),
+            2,
+            "Expected 2 folding ranges (POD + sub), got {:?}",
+            ranges
+        );
         // POD section
         assert_eq!(ranges[0]["kind"], "comment");
         // Sub
@@ -352,7 +367,12 @@ sub foo {
 }
 "#;
         let ranges = folding_ranges_from_text(src, 100);
-        assert_eq!(ranges.len(), 1, "Expected 1 folding range, got {:?}", ranges);
+        assert_eq!(
+            ranges.len(),
+            1,
+            "Expected 1 folding range, got {:?}",
+            ranges
+        );
         assert_eq!(ranges[0]["startLine"], 0);
         assert_eq!(ranges[0]["endLine"], 3); // Line 3 is the closing brace
     }

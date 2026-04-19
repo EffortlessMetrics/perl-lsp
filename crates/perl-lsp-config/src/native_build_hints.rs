@@ -20,12 +20,18 @@ pub fn detect_native_build_hints(workspace_root: &Path) -> NativeBuildHints {
 
     let makefile_path = workspace_root.join("Makefile.PL");
     if let Ok(source) = fs::read_to_string(&makefile_path) {
-        collect_unique(&mut include_dirs, extract_makefile_include_dirs(&source).into_iter());
+        collect_unique(
+            &mut include_dirs,
+            extract_makefile_include_dirs(&source).into_iter(),
+        );
     }
 
     let build_pl_path = workspace_root.join("Build.PL");
     if let Ok(source) = fs::read_to_string(&build_pl_path) {
-        collect_unique(&mut include_dirs, extract_build_include_dirs(&source).into_iter());
+        collect_unique(
+            &mut include_dirs,
+            extract_build_include_dirs(&source).into_iter(),
+        );
     }
 
     NativeBuildHints { include_dirs }
@@ -178,8 +184,10 @@ fn find_key_assignment(bytes: &[u8], key: &str, start: usize) -> Option<(usize, 
 fn is_key_boundary(bytes: &[u8], key_pos: usize, key_len: usize) -> bool {
     let is_ident = |b: u8| b.is_ascii_alphanumeric() || b == b'_';
 
-    let before_ok =
-        key_pos.checked_sub(1).and_then(|idx| bytes.get(idx)).is_none_or(|b| !is_ident(*b));
+    let before_ok = key_pos
+        .checked_sub(1)
+        .and_then(|idx| bytes.get(idx))
+        .is_none_or(|b| !is_ident(*b));
     let after_ok = bytes.get(key_pos + key_len).is_none_or(|b| !is_ident(*b));
 
     before_ok && after_ok

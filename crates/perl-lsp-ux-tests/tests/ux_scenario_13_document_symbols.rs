@@ -52,12 +52,17 @@ fn scenario_13_document_symbol_does_not_error() {
     }
 
     let harness = UxHarness::new(
-        ScenarioConfig { timeout: Duration::from_secs(15), ..Default::default() }
-            .with_file("Greeter.pm", SYMBOLS_SOURCE),
+        ScenarioConfig {
+            timeout: Duration::from_secs(15),
+            ..Default::default()
+        }
+        .with_file("Greeter.pm", SYMBOLS_SOURCE),
     )
     .expect("Failed to create UX harness");
 
-    harness.open_file("Greeter.pm", SYMBOLS_SOURCE).expect("didOpen should succeed");
+    harness
+        .open_file("Greeter.pm", SYMBOLS_SOURCE)
+        .expect("didOpen should succeed");
 
     std::thread::sleep(Duration::from_millis(300));
 
@@ -80,19 +85,30 @@ fn scenario_13_returned_symbols_have_valid_shape() {
     }
 
     let harness = UxHarness::new(
-        ScenarioConfig { timeout: Duration::from_secs(15), ..Default::default() }
-            .with_file("Greeter.pm", SYMBOLS_SOURCE),
+        ScenarioConfig {
+            timeout: Duration::from_secs(15),
+            ..Default::default()
+        }
+        .with_file("Greeter.pm", SYMBOLS_SOURCE),
     )
     .expect("Failed to create UX harness");
 
-    harness.open_file("Greeter.pm", SYMBOLS_SOURCE).expect("didOpen should succeed");
+    harness
+        .open_file("Greeter.pm", SYMBOLS_SOURCE)
+        .expect("didOpen should succeed");
 
     std::thread::sleep(Duration::from_millis(300));
 
-    let symbols = harness.document_symbols("Greeter.pm").expect("documentSymbol must not error");
+    let symbols = harness
+        .document_symbols("Greeter.pm")
+        .expect("documentSymbol must not error");
 
     for sym in &symbols {
-        assert!(sym.get("name").is_some(), "Each symbol must have a 'name' field, got: {:?}", sym);
+        assert!(
+            sym.get("name").is_some(),
+            "Each symbol must have a 'name' field, got: {:?}",
+            sym
+        );
         // kind is required by the LSP spec (1-26 SymbolKind enum).
         if let Some(kind) = sym.get("kind") {
             let k = kind.as_u64().unwrap_or(0);
@@ -121,16 +137,23 @@ fn scenario_13_rich_file_returns_known_sub_names() {
     }
 
     let harness = UxHarness::new(
-        ScenarioConfig { timeout: Duration::from_secs(15), ..Default::default() }
-            .with_file("Greeter.pm", SYMBOLS_SOURCE),
+        ScenarioConfig {
+            timeout: Duration::from_secs(15),
+            ..Default::default()
+        }
+        .with_file("Greeter.pm", SYMBOLS_SOURCE),
     )
     .expect("Failed to create UX harness");
 
-    harness.open_file("Greeter.pm", SYMBOLS_SOURCE).expect("didOpen should succeed");
+    harness
+        .open_file("Greeter.pm", SYMBOLS_SOURCE)
+        .expect("didOpen should succeed");
 
     std::thread::sleep(Duration::from_millis(300));
 
-    let symbols = harness.document_symbols("Greeter.pm").expect("documentSymbol must not error");
+    let symbols = harness
+        .document_symbols("Greeter.pm")
+        .expect("documentSymbol must not error");
 
     if symbols.is_empty() {
         eprintln!(
@@ -144,7 +167,9 @@ fn scenario_13_rich_file_returns_known_sub_names() {
     let names: Vec<&str> = symbols.iter().filter_map(|s| s["name"].as_str()).collect();
 
     // At least one of our three subs should appear.
-    let found_any = names.iter().any(|n| ["new", "greet", "farewell"].contains(n));
+    let found_any = names
+        .iter()
+        .any(|n| ["new", "greet", "farewell"].contains(n));
     assert!(
         found_any,
         "Expected at least one of [new, greet, farewell] in document symbols, \
@@ -166,10 +191,13 @@ fn scenario_13_empty_file_returns_empty_or_null() {
     let harness = UxHarness::new(ScenarioConfig::default().with_file("empty.pl", source))
         .expect("Failed to create UX harness");
 
-    harness.open_file("empty.pl", source).expect("didOpen should succeed");
+    harness
+        .open_file("empty.pl", source)
+        .expect("didOpen should succeed");
 
-    let symbols =
-        harness.document_symbols("empty.pl").expect("documentSymbol on empty file must not error");
+    let symbols = harness
+        .document_symbols("empty.pl")
+        .expect("documentSymbol on empty file must not error");
 
     // Empty list is the correct response for a file with no symbols.
     // We just verify no crash.

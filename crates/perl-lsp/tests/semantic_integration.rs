@@ -162,7 +162,10 @@ print $used;
         println!("DIAGNOSTIC ITEMS: {items:#?}");
 
         // Should have at least one diagnostic for the unused variable
-        assert!(!items.is_empty(), "should have diagnostics for unused variable");
+        assert!(
+            !items.is_empty(),
+            "should have diagnostics for unused variable"
+        );
 
         // Check if there's a diagnostic mentioning the unused variable
         let has_unused_diag = items.iter().any(|d| {
@@ -172,7 +175,10 @@ print $used;
                 .unwrap_or(false)
         });
 
-        assert!(has_unused_diag, "should have diagnostic for unused variable $unused");
+        assert!(
+            has_unused_diag,
+            "should have diagnostic for unused variable $unused"
+        );
         Ok(())
     }
 
@@ -208,7 +214,10 @@ print $value;
                 .unwrap_or(false)
         });
 
-        assert!(!has_unused_value, "should not have unused warning for used variable $value");
+        assert!(
+            !has_unused_value,
+            "should not have unused warning for used variable $value"
+        );
         Ok(())
     }
 
@@ -222,7 +231,9 @@ print "Hello, $who!\n";
         let dir = tempdir()?;
         let path = dir.path().join("interpolated.pl");
         std::fs::write(&path, code)?;
-        let uri = Url::from_file_path(&path).map_err(|_| "failed to build file URI")?.to_string();
+        let uri = Url::from_file_path(&path)
+            .map_err(|_| "failed to build file URI")?
+            .to_string();
 
         let server = TestServerBuilder::new().build();
         server.open_document(&uri, code);
@@ -262,7 +273,9 @@ print "ok\n";
         let dir = tempdir()?;
         let path = dir.path().join("script.pl");
         std::fs::write(&path, code)?;
-        let uri = Url::from_file_path(&path).map_err(|_| "failed to build file URI")?.to_string();
+        let uri = Url::from_file_path(&path)
+            .map_err(|_| "failed to build file URI")?
+            .to_string();
 
         let server = TestServerBuilder::new().build();
         server.open_document(&uri, code);
@@ -277,10 +290,16 @@ print "ok\n";
             .unwrap_or(&empty_vec);
 
         let has_pl200 = items.iter().any(|d| {
-            d.get("code").and_then(|c| c.as_str()).map(|code| code == "PL200").unwrap_or(false)
+            d.get("code")
+                .and_then(|c| c.as_str())
+                .map(|code| code == "PL200")
+                .unwrap_or(false)
         });
 
-        assert!(!has_pl200, "script-style .pl files should not emit PL200: {items:#?}");
+        assert!(
+            !has_pl200,
+            "script-style .pl files should not emit PL200: {items:#?}"
+        );
         Ok(())
     }
 

@@ -44,13 +44,17 @@ pub const PERL_SOURCE_EXTENSIONS: [&str; 9] =
 #[must_use]
 pub fn is_perl_source_extension(extension: &str) -> bool {
     let ext = extension.strip_prefix('.').unwrap_or(extension);
-    PERL_SOURCE_EXTENSIONS.iter().any(|candidate| candidate.eq_ignore_ascii_case(ext))
+    PERL_SOURCE_EXTENSIONS
+        .iter()
+        .any(|candidate| candidate.eq_ignore_ascii_case(ext))
 }
 
 /// Returns `true` if `path` points to a recognized Perl source file.
 #[must_use]
 pub fn is_perl_source_path(path: &Path) -> bool {
-    path.extension().and_then(|ext| ext.to_str()).is_some_and(is_perl_source_extension)
+    path.extension()
+        .and_then(|ext| ext.to_str())
+        .is_some_and(is_perl_source_extension)
 }
 
 /// Returns `true` if `uri` or path-like string points to a Perl source file.
@@ -62,7 +66,10 @@ pub fn is_perl_source_path(path: &Path) -> bool {
 #[must_use]
 pub fn is_perl_source_uri(uri: &str) -> bool {
     let without_fragment = uri.split('#').next().unwrap_or(uri);
-    let without_query = without_fragment.split('?').next().unwrap_or(without_fragment);
+    let without_query = without_fragment
+        .split('?')
+        .next()
+        .unwrap_or(without_fragment);
     is_perl_source_path(Path::new(without_query))
 }
 
@@ -99,7 +106,9 @@ mod tests {
         assert!(is_perl_source_path(Path::new("/workspace/lib/Foo/Bar.PM")));
         assert!(is_perl_source_path(Path::new("/workspace/app.psgi")));
         assert!(is_perl_source_path(Path::new("/var/www/cgi-bin/form.cgi")));
-        assert!(is_perl_source_path(Path::new("/var/www/cgi-bin/upload.CGI")));
+        assert!(is_perl_source_path(Path::new(
+            "/var/www/cgi-bin/upload.CGI"
+        )));
         assert!(!is_perl_source_path(Path::new("/workspace/README.md")));
         assert!(!is_perl_source_path(Path::new("/workspace/no_extension")));
     }
@@ -109,9 +118,13 @@ mod tests {
         assert!(is_perl_source_uri("file:///workspace/script.pl"));
         assert!(is_perl_source_uri("file:///workspace/lib/Foo/Bar.pm"));
         assert!(is_perl_source_uri("file:///workspace/app.psgi"));
-        assert!(is_perl_source_uri("file:///workspace/app.psgi?version=1#section"));
+        assert!(is_perl_source_uri(
+            "file:///workspace/app.psgi?version=1#section"
+        ));
         assert!(is_perl_source_uri("file:///var/www/cgi-bin/form.cgi"));
-        assert!(is_perl_source_uri("file:///var/www/cgi-bin/search.cgi?q=perl#results"));
+        assert!(is_perl_source_uri(
+            "file:///var/www/cgi-bin/search.cgi?q=perl#results"
+        ));
         assert!(!is_perl_source_uri("file:///workspace/README.md"));
     }
 
@@ -139,7 +152,9 @@ mod tests {
         // .ep — Mojolicious embedded Perl templates
         assert!(is_perl_source_extension("ep"));
         assert!(is_perl_source_extension("EP"));
-        assert!(is_perl_source_path(Path::new("/app/templates/index.html.ep")));
+        assert!(is_perl_source_path(Path::new(
+            "/app/templates/index.html.ep"
+        )));
         assert!(is_perl_source_uri("file:///app/templates/index.html.ep"));
 
         // .tt — Template Toolkit templates (version 2 default)
@@ -178,31 +193,46 @@ mod tests {
     fn binary_content_null_byte_is_detected() {
         // Simulate a binary file arriving as a string with embedded null bytes
         let binary = "PK\x00\x03some binary content\x00\x00\x00";
-        assert!(is_binary_content(binary), "null bytes must trigger binary guard");
+        assert!(
+            is_binary_content(binary),
+            "null bytes must trigger binary guard"
+        );
     }
 
     #[test]
     fn binary_content_single_null_byte_triggers_guard() {
         let text = "use strict;\x00\nuse warnings;\n";
-        assert!(is_binary_content(text), "single null byte must trigger binary guard");
+        assert!(
+            is_binary_content(text),
+            "single null byte must trigger binary guard"
+        );
     }
 
     #[test]
     fn binary_content_clean_perl_is_not_binary() {
         let perl = "#!/usr/bin/perl\nuse strict;\nuse warnings;\n\nprint \"Hello, World!\\n\";\n";
-        assert!(!is_binary_content(perl), "clean Perl source must not be classified as binary");
+        assert!(
+            !is_binary_content(perl),
+            "clean Perl source must not be classified as binary"
+        );
     }
 
     #[test]
     fn binary_content_empty_string_is_not_binary() {
-        assert!(!is_binary_content(""), "empty string must not be classified as binary");
+        assert!(
+            !is_binary_content(""),
+            "empty string must not be classified as binary"
+        );
     }
 
     #[test]
     fn binary_content_unicode_text_is_not_binary() {
         // High-byte UTF-8 sequences must not trigger the guard
         let utf8 = "# Perl with Unicode: \u{00e9}t\u{00e9}\nprint \"caf\u{00e9}\\n\";\n";
-        assert!(!is_binary_content(utf8), "UTF-8 text without null bytes must not be binary");
+        assert!(
+            !is_binary_content(utf8),
+            "UTF-8 text without null bytes must not be binary"
+        );
     }
 
     #[test]
@@ -222,20 +252,29 @@ mod tests {
         // A null byte exactly at the last probe byte must still be detected
         let prefix = "a".repeat(BINARY_PROBE_BYTES - 1);
         let text = format!("{prefix}\x00rest");
-        assert!(is_binary_content(&text), "null byte at probe boundary must trigger binary guard");
+        assert!(
+            is_binary_content(&text),
+            "null byte at probe boundary must trigger binary guard"
+        );
     }
 
     #[test]
     fn binary_content_elf_header_is_detected() {
         // ELF magic: \x7fELF followed by binary data
         let elf_like = "\x7fELF\x02\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00";
-        assert!(is_binary_content(elf_like), "ELF-like header with null bytes must be binary");
+        assert!(
+            is_binary_content(elf_like),
+            "ELF-like header with null bytes must be binary"
+        );
     }
 
     #[test]
     fn binary_content_zip_pk_header_is_detected() {
         // ZIP files start with PK\x03\x04
         let zip_like = "PK\x03\x04\x14\x00\x00\x00\x08\x00";
-        assert!(is_binary_content(zip_like), "ZIP-like header with null bytes must be binary");
+        assert!(
+            is_binary_content(zip_like),
+            "ZIP-like header with null bytes must be binary"
+        );
     }
 }

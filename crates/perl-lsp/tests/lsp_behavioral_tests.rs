@@ -90,7 +90,10 @@ fn create_test_server() -> Result<(LspHarness, TempWorkspace), Box<dyn std::erro
     // Open documents with real file URIs from the temp workspace
     harness.open_document(&workspace.uri("script.pl"), test_fixtures::MAIN_FILE)?;
 
-    harness.open_document(&workspace.uri("lib/My/Module.pm"), test_fixtures::MODULE_FILE)?;
+    harness.open_document(
+        &workspace.uri("lib/My/Module.pm"),
+        test_fixtures::MODULE_FILE,
+    )?;
 
     // Send didSave notifications to trigger any incremental indexing
     harness.did_save(&workspace.uri("script.pl")).ok();
@@ -137,10 +140,12 @@ fn test_cross_file_definition() -> TestResult {
         // Verify it points to the module file
         let first_location = &locations[0];
         assert!(
-            first_location["uri"].as_str().is_some_and(|actual| uri_matches(
-                workspace.uri("lib/My/Module.pm").as_str(),
-                actual
-            )),
+            first_location["uri"]
+                .as_str()
+                .is_some_and(|actual| uri_matches(
+                    workspace.uri("lib/My/Module.pm").as_str(),
+                    actual
+                )),
             "Should navigate to module file"
         );
     }
@@ -208,16 +213,20 @@ fn test_workspace_symbol_search() -> TestResult {
         assert!(!symbols.is_empty(), "Should find 'process' method");
 
         // Verify process method is found
-        let process_symbol = symbols.iter().find(|s| s["name"].as_str() == Some("process"));
+        let process_symbol = symbols
+            .iter()
+            .find(|s| s["name"].as_str() == Some("process"));
         assert!(process_symbol.is_some(), "Should find process method");
 
         // Verify it's in the module file
         let process_symbol = process_symbol.ok_or("Should find process method")?;
         assert!(
-            process_symbol["location"]["uri"].as_str().is_some_and(|actual| uri_matches(
-                workspace.uri("lib/My/Module.pm").as_str(),
-                actual
-            )),
+            process_symbol["location"]["uri"]
+                .as_str()
+                .is_some_and(|actual| uri_matches(
+                    workspace.uri("lib/My/Module.pm").as_str(),
+                    actual
+                )),
             "Process method should be in Module.pm"
         );
     }
@@ -249,8 +258,9 @@ fn test_extract_variable_returns_edits() -> TestResult {
         let actions = result.as_array().ok_or("Should return action array")?;
 
         // Find extract variable action
-        let extract_action =
-            actions.iter().find(|a| a["title"].as_str().is_some_and(|t| t.contains("Extract")));
+        let extract_action = actions
+            .iter()
+            .find(|a| a["title"].as_str().is_some_and(|t| t.contains("Extract")));
 
         if let Some(action) = extract_action {
             // Verify it has actual edits
@@ -305,7 +315,11 @@ sub calculate {
     // Check that we got violations
     {
         assert!(result.get("status").is_some(), "Should have status field");
-        assert_eq!(result["status"].as_str(), Some("success"), "Command should succeed");
+        assert_eq!(
+            result["status"].as_str(),
+            Some("success"),
+            "Command should succeed"
+        );
 
         let violation_count = result["violationCount"].as_u64().unwrap_or(0);
         assert!(
@@ -315,15 +329,22 @@ sub calculate {
 
         // Check for specific violations
         if let Some(violations) = result["violations"].as_array() {
-            let has_strict_violation = violations
-                .iter()
-                .any(|v| v["policy"].as_str().is_some_and(|p| p.contains("RequireUseStrict")));
-            let has_warnings_violation = violations
-                .iter()
-                .any(|v| v["policy"].as_str().is_some_and(|p| p.contains("RequireUseWarnings")));
+            let has_strict_violation = violations.iter().any(|v| {
+                v["policy"]
+                    .as_str()
+                    .is_some_and(|p| p.contains("RequireUseStrict"))
+            });
+            let has_warnings_violation = violations.iter().any(|v| {
+                v["policy"]
+                    .as_str()
+                    .is_some_and(|p| p.contains("RequireUseWarnings"))
+            });
 
             assert!(has_strict_violation, "Should detect missing 'use strict'");
-            assert!(has_warnings_violation, "Should detect missing 'use warnings'");
+            assert!(
+                has_warnings_violation,
+                "Should detect missing 'use warnings'"
+            );
         }
     }
 
@@ -342,14 +363,20 @@ sub calculate {
 
     // Verify we have quickfixes for Perl::Critic violations
     {
-        let actions = actions_result.as_array().ok_or("Should return action array")?;
+        let actions = actions_result
+            .as_array()
+            .ok_or("Should return action array")?;
         assert!(!actions.is_empty(), "Should have code actions");
 
         // Look for strict/warnings quickfixes
-        let has_strict_fix =
-            actions.iter().any(|a| a["title"].as_str().is_some_and(|t| t.contains("strict")));
+        let has_strict_fix = actions
+            .iter()
+            .any(|a| a["title"].as_str().is_some_and(|t| t.contains("strict")));
 
-        assert!(has_strict_fix, "Should have quickfix for adding strict/warnings");
+        assert!(
+            has_strict_fix,
+            "Should have quickfix for adding strict/warnings"
+        );
     }
     Ok(())
 }
@@ -376,9 +403,11 @@ fn test_test_generation_actions_present() -> TestResult {
         let actions = result.as_array().ok_or("Should return action array")?;
 
         // Find test generation action
-        let test_action = actions
-            .iter()
-            .find(|a| a["title"].as_str().is_some_and(|t| t.contains("Generate test")));
+        let test_action = actions.iter().find(|a| {
+            a["title"]
+                .as_str()
+                .is_some_and(|t| t.contains("Generate test"))
+        });
 
         assert!(test_action.is_some(), "Should have test generation action");
 
@@ -393,11 +422,20 @@ fn test_test_generation_actions_present() -> TestResult {
         // Verify arguments include test code
         let args = &action["command"]["arguments"];
         let args_array = args.as_array().ok_or("Should have arguments")?;
-        assert!(!args_array.is_empty(), "Should have test generation arguments");
+        assert!(
+            !args_array.is_empty(),
+            "Should have test generation arguments"
+        );
 
         let first_arg = &args_array[0];
-        assert!(first_arg["name"].is_string(), "Should include subroutine name");
-        assert!(first_arg["test"].is_string(), "Should include generated test code");
+        assert!(
+            first_arg["name"].is_string(),
+            "Should include subroutine name"
+        );
+        assert!(
+            first_arg["test"].is_string(),
+            "Should include generated test code"
+        );
     }
     Ok(())
 }
@@ -442,7 +480,10 @@ fn test_completion_detail_formatting() -> TestResult {
                 }
             })
             .count();
-        assert!(typed_items > 0, "Should have type information in completion details");
+        assert!(
+            typed_items > 0,
+            "Should have type information in completion details"
+        );
     }
     Ok(())
 }
@@ -477,7 +518,11 @@ fn test_hover_enriched_information() -> TestResult {
         let hover_text = if let Some(value) = contents["value"].as_str() {
             value.to_string()
         } else if let Some(markup) = contents.as_array() {
-            markup.iter().filter_map(|m| m["value"].as_str()).collect::<Vec<_>>().join("\n")
+            markup
+                .iter()
+                .filter_map(|m| m["value"].as_str())
+                .collect::<Vec<_>>()
+                .join("\n")
         } else {
             String::new()
         };
@@ -531,7 +576,10 @@ fn test_folding_ranges_work() -> TestResult {
             let end = r["endLine"].as_u64();
             matches!((start, end), (Some(s), Some(e)) if e > s)
         });
-        assert!(has_multiline_fold, "Should have at least one multiline folding range");
+        assert!(
+            has_multiline_fold,
+            "Should have at least one multiline folding range"
+        );
     }
     Ok(())
 }
@@ -586,8 +634,10 @@ use My::Module;
     harness.wait_for_idle(Duration::from_millis(200));
 
     // Compute the UTF-16 column for the 'M' in "My::Module" on that exact line.
-    let line_idx =
-        script.lines().position(|l| l == line).ok_or("line with non-ASCII is present")?;
+    let line_idx = script
+        .lines()
+        .position(|l| l == line)
+        .ok_or("line with non-ASCII is present")?;
     let m_byte = line.find("My::Module").ok_or("line contains My::Module")?;
     let char_col_utf16 = utf16_units(&line[..m_byte]);
 
@@ -609,7 +659,9 @@ use My::Module;
     }
     assert!(!locations.is_empty(), "should return at least one location");
     assert!(
-        locations[0]["uri"].as_str().is_some_and(|actual| uri_matches(module_uri.as_str(), actual)),
+        locations[0]["uri"]
+            .as_str()
+            .is_some_and(|actual| uri_matches(module_uri.as_str(), actual)),
         "definition should jump to module file"
     );
     Ok(())
@@ -663,16 +715,28 @@ print $preprocessor;   # Should NOT match
             eprintln!("Warning: local references returned no matches in fast fallback mode");
             return Ok(());
         }
-        assert_eq!(refs.len(), 2, "Should find exactly 2 uses of $process (declaration and print)");
+        assert_eq!(
+            refs.len(),
+            2,
+            "Should find exactly 2 uses of $process (declaration and print)"
+        );
 
         // Verify only the exact matches are found
-        let lines: Vec<u64> =
-            refs.iter().filter_map(|r| r["range"]["start"]["line"].as_u64()).collect();
+        let lines: Vec<u64> = refs
+            .iter()
+            .filter_map(|r| r["range"]["start"]["line"].as_u64())
+            .collect();
 
         assert!(lines.contains(&1), "Should find declaration on line 1");
         assert!(lines.contains(&4), "Should find usage on line 4");
-        assert!(!lines.contains(&5), "Should NOT find $process_data on line 5");
-        assert!(!lines.contains(&6), "Should NOT find $preprocessor on line 6");
+        assert!(
+            !lines.contains(&5),
+            "Should NOT find $process_data on line 5"
+        );
+        assert!(
+            !lines.contains(&6),
+            "Should NOT find $preprocessor on line 6"
+        );
     }
     Ok(())
 }

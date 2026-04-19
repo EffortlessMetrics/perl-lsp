@@ -38,7 +38,10 @@ pub fn add_missing_imports(ast: &Node, _source: &str, helpers: &Helpers<'_>) -> 
         diagnostics: Vec::new(),
         edit: CodeActionEdit {
             changes: vec![TextEdit {
-                location: SourceLocation { start: insert_pos, end: insert_pos },
+                location: SourceLocation {
+                    start: insert_pos,
+                    end: insert_pos,
+                },
                 new_text: format!("{}\n", imports.join("\n")),
             }],
         },
@@ -118,7 +121,10 @@ pub fn find_undefined_functions(ast: &Node) -> Vec<String> {
             }
             NodeKind::Use { module, args, .. } => {
                 // Skip pragmas (lowercase first char)
-                let is_module = module.chars().next().is_some_and(|c| c.is_ascii_uppercase());
+                let is_module = module
+                    .chars()
+                    .next()
+                    .is_some_and(|c| c.is_ascii_uppercase());
                 if is_module {
                     if args.is_empty() {
                         // Bare `use Module;` — can't know what's exported
@@ -242,7 +248,11 @@ mod tests {
         let mut parser = Parser::new(source);
         let ast = must(parser.parse());
         let undef = find_undefined_functions(&ast);
-        assert!(undef.is_empty(), "builtins should not be flagged: {:?}", undef);
+        assert!(
+            undef.is_empty(),
+            "builtins should not be flagged: {:?}",
+            undef
+        );
     }
 
     #[test]
@@ -293,7 +303,11 @@ mod tests {
         let mut parser = Parser::new(source);
         let ast = must(parser.parse());
         let undef = find_undefined_functions(&ast);
-        assert!(undef.is_empty(), "method calls should not be flagged: {:?}", undef);
+        assert!(
+            undef.is_empty(),
+            "method calls should not be flagged: {:?}",
+            undef
+        );
     }
 
     #[test]
@@ -302,7 +316,11 @@ mod tests {
         let mut parser = Parser::new(source);
         let ast = must(parser.parse());
         let undef = find_undefined_functions(&ast);
-        assert!(undef.is_empty(), "qualified calls should not be flagged: {:?}", undef);
+        assert!(
+            undef.is_empty(),
+            "qualified calls should not be flagged: {:?}",
+            undef
+        );
     }
 
     #[test]

@@ -21,7 +21,10 @@ pub enum RegexError {
 impl RegexError {
     /// Create a new syntax error with a message and byte offset.
     pub fn syntax(message: impl Into<String>, offset: usize) -> Self {
-        RegexError::Syntax { message: message.into(), offset }
+        RegexError::Syntax {
+            message: message.into(),
+            offset,
+        }
     }
 }
 
@@ -218,8 +221,10 @@ impl RegexValidator {
                     match group_type {
                         GroupType::Lookbehind => {
                             // Calculate current lookbehind depth
-                            let lookbehind_depth =
-                                stack.iter().filter(|g| matches!(g, GroupType::Lookbehind)).count();
+                            let lookbehind_depth = stack
+                                .iter()
+                                .filter(|g| matches!(g, GroupType::Lookbehind))
+                                .count();
                             if lookbehind_depth >= self.max_nesting {
                                 return Err(RegexError::syntax(
                                     "Regex lookbehind nesting too deep",
@@ -403,7 +408,11 @@ impl RegexAnalyzer {
                             String::new()
                         };
 
-                        result.push(CaptureGroup { name, index: capture_index, pattern: sub });
+                        result.push(CaptureGroup {
+                            name,
+                            index: capture_index,
+                            pattern: sub,
+                        });
                         continue;
                     } else if i < len && matches!(chars[i], ':' | '=' | '!' | '>' | '|' | 'P' | '#')
                     {

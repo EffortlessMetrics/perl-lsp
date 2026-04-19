@@ -76,15 +76,21 @@ my $c = ;       # Error 3: missing expression
         })),
     };
 
-    let response =
-        server.handle_request(diagnostic_request).ok_or("Failed to get diagnostic response")?;
+    let response = server
+        .handle_request(diagnostic_request)
+        .ok_or("Failed to get diagnostic response")?;
     let result = response.result.ok_or("Response missing result field")?;
 
     // Verify we got a full diagnostic report
-    assert_eq!(result["kind"], "full", "Should return full diagnostic report");
+    assert_eq!(
+        result["kind"], "full",
+        "Should return full diagnostic report"
+    );
 
     // Get diagnostic items
-    let items = result["items"].as_array().ok_or("Expected items to be an array")?;
+    let items = result["items"]
+        .as_array()
+        .ok_or("Expected items to be an array")?;
 
     // AC #451: Should report ALL errors, not just the first one
     // We expect at least 3 parse errors (one for each `my $x = ;`)
@@ -97,8 +103,16 @@ my $c = ;       # Error 3: missing expression
     // Verify each diagnostic has proper structure
     for (i, item) in items.iter().enumerate() {
         assert!(item["range"].is_object(), "Diagnostic {} missing range", i);
-        assert!(item["severity"].is_number(), "Diagnostic {} missing severity", i);
-        assert!(item["message"].is_string(), "Diagnostic {} missing message", i);
+        assert!(
+            item["severity"].is_number(),
+            "Diagnostic {} missing severity",
+            i
+        );
+        assert!(
+            item["message"].is_string(),
+            "Diagnostic {} missing message",
+            i
+        );
 
         // Print for debugging
         eprintln!(
@@ -178,11 +192,14 @@ while (1) {
         })),
     };
 
-    let response =
-        server.handle_request(diagnostic_request).ok_or("Failed to get diagnostic response")?;
+    let response = server
+        .handle_request(diagnostic_request)
+        .ok_or("Failed to get diagnostic response")?;
     let result = response.result.ok_or("Response missing result field")?;
 
-    let items = result["items"].as_array().ok_or("Expected items to be an array")?;
+    let items = result["items"]
+        .as_array()
+        .ok_or("Expected items to be an array")?;
 
     // Should collect errors from all nested blocks
     assert!(
@@ -250,11 +267,14 @@ fn test_451_lsp_respects_error_limit() -> Result<(), Box<dyn std::error::Error>>
         })),
     };
 
-    let response =
-        server.handle_request(diagnostic_request).ok_or("Failed to get diagnostic response")?;
+    let response = server
+        .handle_request(diagnostic_request)
+        .ok_or("Failed to get diagnostic response")?;
     let result = response.result.ok_or("Response missing result field")?;
 
-    let items = result["items"].as_array().ok_or("Expected items to be an array")?;
+    let items = result["items"]
+        .as_array()
+        .ok_or("Expected items to be an array")?;
 
     // Should have errors, but not unbounded
     assert!(!items.is_empty(), "Should have some errors");

@@ -35,7 +35,10 @@ fn test_nested_quantifiers_safe_handling() {
     let test_cases = vec![
         (r"/^(a+)+b$/", "Nested quantifiers with start/end anchors"),
         (r"m/(x*)*y/", "Nested zero-or-more quantifiers"),
-        (r"s/(a+)+(b+)+/replacement/", "Multiple nested quantifier groups"),
+        (
+            r"s/(a+)+(b+)+/replacement/",
+            "Multiple nested quantifier groups",
+        ),
         (r"qr/^(a*)*$/", "Nested star quantifiers in qr operator"),
     ];
 
@@ -104,7 +107,9 @@ fn test_very_long_pattern_budget_guard() {
     let tokens: Vec<_> = lexer.collect_tokens();
 
     // Should produce UnknownRest token when budget exceeded
-    let has_unknown_rest = tokens.iter().any(|t| matches!(t.token_type, TokenType::UnknownRest));
+    let has_unknown_rest = tokens
+        .iter()
+        .any(|t| matches!(t.token_type, TokenType::UnknownRest));
     assert!(
         has_unknown_rest,
         "Very long pattern should trigger budget guard and produce UnknownRest token"
@@ -129,7 +134,10 @@ fn test_deeply_nested_delimiters_budget_guard() {
     let tokens: Vec<_> = lexer.collect_tokens();
 
     // Should handle or produce error token for excessive nesting
-    assert!(!tokens.is_empty(), "Deeply nested delimiters should be handled without hanging");
+    assert!(
+        !tokens.is_empty(),
+        "Deeply nested delimiters should be handled without hanging"
+    );
 }
 
 /// Test that escaped characters in patterns don't cause issues
@@ -159,9 +167,15 @@ fn test_escaped_chars_in_patterns() {
 #[test]
 fn test_substitution_complex_patterns() {
     let test_cases = vec![
-        (r"s/(a+)+b/replacement/", "Nested quantifiers in substitution"),
+        (
+            r"s/(a+)+b/replacement/",
+            "Nested quantifiers in substitution",
+        ),
         (r"s{(x*)*y}{repl}", "Nested star quantifiers with braces"),
-        (r"s/pattern/(replacement+)+/", "Nested quantifiers in replacement"),
+        (
+            r"s/pattern/(replacement+)+/",
+            "Nested quantifiers in replacement",
+        ),
     ];
 
     for (input, description) in test_cases {
@@ -205,7 +219,10 @@ fn test_qr_operator_complex_patterns() {
     let test_cases = vec![
         (r"qr/(a+)+b/", "Nested quantifiers in qr"),
         (r"qr{(x|xy)+y}", "Overlapping alternation in qr with braces"),
-        (r"qr/(?:a+)+b/i", "Non-capturing group with nested quantifiers"),
+        (
+            r"qr/(?:a+)+b/i",
+            "Non-capturing group with nested quantifiers",
+        ),
     ];
 
     for (input, description) in test_cases {
@@ -264,12 +281,18 @@ fn test_mixed_operators_sequence() {
     );
 
     // Count different operator types
-    let regex_count =
-        tokens.iter().filter(|t| matches!(t.token_type, TokenType::RegexMatch)).count();
-    let subst_count =
-        tokens.iter().filter(|t| matches!(t.token_type, TokenType::Substitution)).count();
-    let trans_count =
-        tokens.iter().filter(|t| matches!(t.token_type, TokenType::Transliteration)).count();
+    let regex_count = tokens
+        .iter()
+        .filter(|t| matches!(t.token_type, TokenType::RegexMatch))
+        .count();
+    let subst_count = tokens
+        .iter()
+        .filter(|t| matches!(t.token_type, TokenType::Substitution))
+        .count();
+    let trans_count = tokens
+        .iter()
+        .filter(|t| matches!(t.token_type, TokenType::Transliteration))
+        .count();
 
     // Verify we found multiple operators (demonstrates no hang on any single operator)
     assert!(
@@ -289,10 +312,15 @@ fn test_budget_guard_clean_error() {
     let tokens: Vec<_> = lexer.collect_tokens();
 
     // Find UnknownRest token
-    let unknown_rest_tokens: Vec<_> =
-        tokens.iter().filter(|t| matches!(t.token_type, TokenType::UnknownRest)).collect();
+    let unknown_rest_tokens: Vec<_> = tokens
+        .iter()
+        .filter(|t| matches!(t.token_type, TokenType::UnknownRest))
+        .collect();
 
-    assert!(!unknown_rest_tokens.is_empty(), "Budget exhaustion should produce UnknownRest token");
+    assert!(
+        !unknown_rest_tokens.is_empty(),
+        "Budget exhaustion should produce UnknownRest token"
+    );
 
     // Verify token has valid position information
     for token in unknown_rest_tokens {
@@ -320,8 +348,9 @@ fn test_normal_patterns_fast_tokenization() {
         let tokens: Vec<_> = lexer.collect_tokens();
 
         // These should tokenize successfully without budget limits
-        let has_unknown_rest =
-            tokens.iter().any(|t| matches!(t.token_type, TokenType::UnknownRest));
+        let has_unknown_rest = tokens
+            .iter()
+            .any(|t| matches!(t.token_type, TokenType::UnknownRest));
         assert!(
             !has_unknown_rest,
             "Normal patterns should not trigger budget guard. Input: {}",
@@ -378,7 +407,11 @@ fn test_pattern_only_quantifiers() {
 /// Test `MAX_REGEX_PARSE_STEPS` is exported with a value below the byte budget.
 #[test]
 fn test_max_regex_parse_steps_constant() {
-    assert_eq!(MAX_REGEX_PARSE_STEPS, 32 * 1024, "MAX_REGEX_PARSE_STEPS should stay at 32K");
+    assert_eq!(
+        MAX_REGEX_PARSE_STEPS,
+        32 * 1024,
+        "MAX_REGEX_PARSE_STEPS should stay at 32K"
+    );
 }
 
 /// Test that the regex parse-step budget fires before the byte budget.
@@ -386,12 +419,17 @@ fn test_max_regex_parse_steps_constant() {
 fn test_regex_parse_budget_enforcement() {
     let large_pattern = "a".repeat(MAX_REGEX_PARSE_STEPS + 1_024);
     let input = format!("/{large_pattern}/");
-    assert!(input.len() < 64 * 1024, "Test input must remain below the byte budget");
+    assert!(
+        input.len() < 64 * 1024,
+        "Test input must remain below the byte budget"
+    );
 
     let mut lexer = PerlLexer::new(&input);
     let tokens: Vec<_> = lexer.collect_tokens();
 
-    let has_unknown_rest = tokens.iter().any(|t| matches!(t.token_type, TokenType::UnknownRest));
+    let has_unknown_rest = tokens
+        .iter()
+        .any(|t| matches!(t.token_type, TokenType::UnknownRest));
     assert!(
         has_unknown_rest,
         "Pattern exceeding MAX_REGEX_PARSE_STEPS should emit UnknownRest token"
@@ -401,16 +439,25 @@ fn test_regex_parse_budget_enforcement() {
 /// Test that debug preview truncation stays UTF-8 safe when the parse budget is exceeded.
 #[test]
 fn test_regex_parse_budget_enforcement_with_unicode_prefix() {
-    let large_pattern =
-        format!("{}{}{}", "a".repeat(49), "😀", "a".repeat(MAX_REGEX_PARSE_STEPS + 1_024));
+    let large_pattern = format!(
+        "{}{}{}",
+        "a".repeat(49),
+        "😀",
+        "a".repeat(MAX_REGEX_PARSE_STEPS + 1_024)
+    );
     let input = format!("/{large_pattern}/");
-    assert!(input.len() < 64 * 1024, "Test input must remain below the byte budget");
+    assert!(
+        input.len() < 64 * 1024,
+        "Test input must remain below the byte budget"
+    );
 
     let mut lexer = PerlLexer::new(&input);
     let tokens: Vec<_> = lexer.collect_tokens();
 
     assert!(
-        tokens.iter().any(|t| matches!(t.token_type, TokenType::UnknownRest)),
+        tokens
+            .iter()
+            .any(|t| matches!(t.token_type, TokenType::UnknownRest)),
         "Unicode-containing pattern exceeding MAX_REGEX_PARSE_STEPS should emit UnknownRest token"
     );
 }
@@ -430,8 +477,9 @@ fn test_normal_patterns_under_regex_parse_budget() {
         let mut lexer = PerlLexer::new(input);
         let tokens: Vec<_> = lexer.collect_tokens();
 
-        let has_unknown_rest =
-            tokens.iter().any(|t| matches!(t.token_type, TokenType::UnknownRest));
+        let has_unknown_rest = tokens
+            .iter()
+            .any(|t| matches!(t.token_type, TokenType::UnknownRest));
         assert!(
             !has_unknown_rest,
             "Normal pattern should not trigger regex parse budget: {}",
@@ -444,7 +492,11 @@ fn test_normal_patterns_under_regex_parse_budget() {
                 TokenType::RegexMatch | TokenType::Substitution | TokenType::QuoteRegex
             )
         });
-        assert!(has_regex, "Normal pattern should produce regex token: {}", input);
+        assert!(
+            has_regex,
+            "Normal pattern should produce regex token: {}",
+            input
+        );
     }
 }
 
@@ -453,16 +505,29 @@ fn test_normal_patterns_under_regex_parse_budget() {
 fn test_boundary_regex_parse_budget() {
     let medium_pattern = "a".repeat(MAX_REGEX_PARSE_STEPS - 1);
     let input = format!("/{medium_pattern}/");
-    assert!(input.len() < 64 * 1024, "Boundary test must remain below the byte budget");
+    assert!(
+        input.len() < 64 * 1024,
+        "Boundary test must remain below the byte budget"
+    );
 
     let mut lexer = PerlLexer::new(&input);
     let tokens: Vec<_> = lexer.collect_tokens();
 
-    let has_unknown_rest = tokens.iter().any(|t| matches!(t.token_type, TokenType::UnknownRest));
-    assert!(!has_unknown_rest, "Pattern just under MAX_REGEX_PARSE_STEPS should parse normally");
+    let has_unknown_rest = tokens
+        .iter()
+        .any(|t| matches!(t.token_type, TokenType::UnknownRest));
+    assert!(
+        !has_unknown_rest,
+        "Pattern just under MAX_REGEX_PARSE_STEPS should parse normally"
+    );
 
-    let has_regex = tokens.iter().any(|t| matches!(t.token_type, TokenType::RegexMatch));
-    assert!(has_regex, "Pattern under MAX_REGEX_PARSE_STEPS should parse successfully");
+    let has_regex = tokens
+        .iter()
+        .any(|t| matches!(t.token_type, TokenType::RegexMatch));
+    assert!(
+        has_regex,
+        "Pattern under MAX_REGEX_PARSE_STEPS should parse successfully"
+    );
 }
 
 /// Test the current parse-step semantics for escaped atoms.
@@ -475,7 +540,9 @@ fn test_escape_sequences_under_regex_parse_budget() {
     let mut lexer = PerlLexer::new(&input);
     let tokens: Vec<_> = lexer.collect_tokens();
 
-    let has_unknown_rest = tokens.iter().any(|t| matches!(t.token_type, TokenType::UnknownRest));
+    let has_unknown_rest = tokens
+        .iter()
+        .any(|t| matches!(t.token_type, TokenType::UnknownRest));
     assert!(
         !has_unknown_rest,
         "Pattern with escape sequences under MAX_REGEX_PARSE_STEPS should parse successfully"

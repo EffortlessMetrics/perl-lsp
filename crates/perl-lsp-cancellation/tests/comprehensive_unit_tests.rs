@@ -159,8 +159,9 @@ fn registry_duplicate_id_overwrites() -> Result<(), Box<dyn std::error::Error>> 
     assert_eq!(registry.active_count(), 1);
 
     // The token should be the second one
-    let retrieved =
-        registry.get_token(&json!(1)).ok_or("token should be retrievable after overwrite")?;
+    let retrieved = registry
+        .get_token(&json!(1))
+        .ok_or("token should be retrievable after overwrite")?;
     assert_eq!(retrieved.provider(), "second");
     Ok(())
 }
@@ -252,9 +253,13 @@ fn registry_get_token_caches_on_second_access() -> Result<(), Box<dyn std::error
     registry.register_token(token)?;
 
     // First access populates cache
-    let t1 = registry.get_token(&req_id).ok_or("first get should succeed")?;
+    let t1 = registry
+        .get_token(&req_id)
+        .ok_or("first get should succeed")?;
     // Second access hits cache
-    let t2 = registry.get_token(&req_id).ok_or("second get should succeed")?;
+    let t2 = registry
+        .get_token(&req_id)
+        .ok_or("second get should succeed")?;
 
     assert_eq!(t1.provider(), t2.provider());
     assert_eq!(t1.request_id(), t2.request_id());
@@ -275,7 +280,10 @@ fn registry_cache_eviction_on_overflow() -> Result<(), Box<dyn std::error::Error
 
     // All tokens should still be retrievable (cache or main storage)
     for i in 0..150u64 {
-        assert!(registry.get_token(&json!(i)).is_some(), "token {i} should be retrievable");
+        assert!(
+            registry.get_token(&json!(i)).is_some(),
+            "token {i} should be retrievable"
+        );
     }
     Ok(())
 }
@@ -452,7 +460,10 @@ impl CancellableProvider for TestProvider {
 
 #[test]
 fn cancellable_provider_check_passes_when_active() -> Result<(), Box<dyn std::error::Error>> {
-    let provider = TestProvider { name: "hover", cleanup_called: Arc::new(AtomicBool::new(false)) };
+    let provider = TestProvider {
+        name: "hover",
+        cleanup_called: Arc::new(AtomicBool::new(false)),
+    };
     let token = PerlLspCancellationToken::new(json!(1), "hover".into());
     provider.check_cancellation(&token)?;
     Ok(())
@@ -460,7 +471,10 @@ fn cancellable_provider_check_passes_when_active() -> Result<(), Box<dyn std::er
 
 #[test]
 fn cancellable_provider_check_fails_when_cancelled() {
-    let provider = TestProvider { name: "hover", cleanup_called: Arc::new(AtomicBool::new(false)) };
+    let provider = TestProvider {
+        name: "hover",
+        cleanup_called: Arc::new(AtomicBool::new(false)),
+    };
     let token = PerlLspCancellationToken::new(json!(1), "hover".into());
     token.cancel();
     assert!(provider.check_cancellation(&token).is_err());
@@ -469,7 +483,10 @@ fn cancellable_provider_check_fails_when_cancelled() {
 #[test]
 fn cancellable_provider_cleanup_invokes_callback() {
     let flag = Arc::new(AtomicBool::new(false));
-    let provider = TestProvider { name: "completion", cleanup_called: flag.clone() };
+    let provider = TestProvider {
+        name: "completion",
+        cleanup_called: flag.clone(),
+    };
     let ctx = ProviderCleanupContext::new("completion".into(), None);
     provider.cleanup_on_cancel(&ctx);
     assert!(flag.load(Ordering::Relaxed));
@@ -477,8 +494,10 @@ fn cancellable_provider_cleanup_invokes_callback() {
 
 #[test]
 fn cancellable_provider_name_returns_configured_name() {
-    let provider =
-        TestProvider { name: "references", cleanup_called: Arc::new(AtomicBool::new(false)) };
+    let provider = TestProvider {
+        name: "references",
+        cleanup_called: Arc::new(AtomicBool::new(false)),
+    };
     assert_eq!(provider.provider_name(), "references");
 }
 
@@ -544,7 +563,10 @@ fn concurrent_register_and_cancel() -> Result<(), Box<dyn std::error::Error>> {
 
     // All should be cancelled
     for i in 0..20u64 {
-        assert!(registry.is_cancelled(&json!(i)), "token {i} should be cancelled");
+        assert!(
+            registry.is_cancelled(&json!(i)),
+            "token {i} should be cancelled"
+        );
     }
     Ok(())
 }
@@ -709,10 +731,16 @@ fn register_cancel_remove_many_sequential() -> Result<(), Box<dyn std::error::Er
 
     // First 25 cancelled, rest active
     for i in 0..25u64 {
-        assert!(registry.is_cancelled(&json!(i)), "token {i} should be cancelled");
+        assert!(
+            registry.is_cancelled(&json!(i)),
+            "token {i} should be cancelled"
+        );
     }
     for i in 25..50u64 {
-        assert!(!registry.is_cancelled(&json!(i)), "token {i} should not be cancelled");
+        assert!(
+            !registry.is_cancelled(&json!(i)),
+            "token {i} should not be cancelled"
+        );
     }
 
     for i in 0..50u64 {

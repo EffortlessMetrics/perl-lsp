@@ -134,7 +134,10 @@ mod ast_analysis {
             // Record parent-child relationships (targets relationship mutations)
             if let Some(parent_ptr) = parent {
                 self.child_parent_map.insert(node_ptr, parent_ptr);
-                self.parent_child_map.entry(parent_ptr).or_default().push(node_ptr);
+                self.parent_child_map
+                    .entry(parent_ptr)
+                    .or_default()
+                    .push(node_ptr);
             }
 
             // Record position information (targets position arithmetic mutations)
@@ -247,11 +250,20 @@ mod ast_construction_mutation_tests {
     #[case("print 'hello';", "simple_statement")]
     #[case("sub test { my $x = 1; }", "subroutine_definition")]
     #[case("package Foo; sub bar { } 1;", "package_with_subroutine")]
-    #[case("if ($x) { print 'yes'; } else { print 'no'; }", "conditional_statement")]
+    #[case(
+        "if ($x) { print 'yes'; } else { print 'no'; }",
+        "conditional_statement"
+    )]
     #[case("for my $i (1..10) { print $i; }", "loop_construct")]
     #[case("eval { die 'test'; }; print $@ if $@;", "eval_with_error_handling")]
-    #[case("my @array = (1, 2, 3); my %hash = (a => 1, b => 2);", "data_structures")]
-    #[case("use strict; use warnings; our $VERSION = '1.0';", "pragmas_and_globals")]
+    #[case(
+        "my @array = (1, 2, 3); my %hash = (a => 1, b => 2);",
+        "data_structures"
+    )]
+    #[case(
+        "use strict; use warnings; our $VERSION = '1.0';",
+        "pragmas_and_globals"
+    )]
     fn test_ast_invariants_perl_constructs(#[case] code: &str, #[case] test_name: &str) {
         let mut parser = Parser::new(code);
         let result = parser.parse();
@@ -296,7 +308,11 @@ mod ast_construction_mutation_tests {
                 let sexp = ast.to_sexp();
                 let sexp_inner = ast.to_sexp_inner();
 
-                assert!(!sexp.is_empty(), "S-expression should not be empty for {}", test_name);
+                assert!(
+                    !sexp.is_empty(),
+                    "S-expression should not be empty for {}",
+                    test_name
+                );
                 assert!(
                     !sexp_inner.is_empty(),
                     "Inner S-expression should not be empty for {}",
@@ -437,7 +453,11 @@ mod ast_construction_mutation_tests {
         // Wait for all threads to complete
         for handle in handles {
             let res = handle.join();
-            assert!(res.is_ok(), "Thread should complete successfully: {:?}", res.err());
+            assert!(
+                res.is_ok(),
+                "Thread should complete successfully: {:?}",
+                res.err()
+            );
         }
 
         // Analyze results for consistency
@@ -520,7 +540,11 @@ mod sexp_generation_mutation_tests {
                 let sexp_inner = ast.to_sexp_inner();
 
                 // Basic structural validation (targets formatting mutations)
-                assert!(!sexp.is_empty(), "S-expression should not be empty for {}", test_name);
+                assert!(
+                    !sexp.is_empty(),
+                    "S-expression should not be empty for {}",
+                    test_name
+                );
                 assert!(
                     !sexp_inner.is_empty(),
                     "Inner S-expression should not be empty for {}",
@@ -546,7 +570,11 @@ mod sexp_generation_mutation_tests {
 
                 // Length relationship (targets length calculation mutations)
                 // Both expressions should be meaningful (not just "()")
-                assert!(sexp.len() > 2, "S-expression should be meaningful for {}", test_name);
+                assert!(
+                    sexp.len() > 2,
+                    "S-expression should be meaningful for {}",
+                    test_name
+                );
                 assert!(
                     sexp_inner.len() > 2,
                     "Inner S-expression should be meaningful for {}",
@@ -568,7 +596,11 @@ mod sexp_generation_mutation_tests {
                     println!("Named subroutine S-expression structure: {}", sexp_inner);
                 }
 
-                println!("✓ {} S-expression generation passed: {} chars", test_name, sexp.len());
+                println!(
+                    "✓ {} S-expression generation passed: {} chars",
+                    test_name,
+                    sexp.len()
+                );
             } else {
                 println!("⚠ {} failed to parse (might be expected)", test_name);
             }
@@ -599,7 +631,10 @@ mod sexp_generation_mutation_tests {
             (r#"my $regex = qr/pattern\d+/;"#, "regex_literal"),
             (r#"print "\x41\x42\x43";"#, "hex_escapes"),
             (r#"my $var = '$not_interpolated';"#, "single_quote_literal"),
-            (r#"my $var = "$interpolated";"#, "double_quote_interpolation"),
+            (
+                r#"my $var = "$interpolated";"#,
+                "double_quote_interpolation",
+            ),
         ];
 
         for (code, test_name) in special_cases {
@@ -1057,7 +1092,10 @@ mod ast_real_world_integration_tests {
                     sexp_duration
                 );
 
-                assert!(!sexp.is_empty(), "S-expression should be generated for large AST");
+                assert!(
+                    !sexp.is_empty(),
+                    "S-expression should be generated for large AST"
+                );
 
                 println!(
                     "✓ Large program test passed: {} nodes, parse: {:?}, invariants: {:?}, sexp: {:?}",

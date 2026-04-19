@@ -276,13 +276,17 @@ fn is_excluded_test_path(path: &Path) -> bool {
     }
 
     if let Some(file_name) = path.file_name().and_then(|name| name.to_str())
-        && CI_TEST_FILE_SUFFIXES.iter().any(|suffix| file_name.ends_with(suffix))
+        && CI_TEST_FILE_SUFFIXES
+            .iter()
+            .any(|suffix| file_name.ends_with(suffix))
     {
         return true;
     }
 
     if path.components().any(|component| {
-        CI_REPORT_CRATES_EXCLUDE.iter().any(|item| component.as_os_str() == OsStr::new(item))
+        CI_REPORT_CRATES_EXCLUDE
+            .iter()
+            .any(|item| component.as_os_str() == OsStr::new(item))
     }) {
         return true;
     }
@@ -302,7 +306,9 @@ fn command_with_output(
         child.env(key, value);
     }
     child.stdout(Stdio::piped()).stderr(Stdio::piped());
-    let output = child.output().wrap_err_with(|| format!("running {command}"))?;
+    let output = child
+        .output()
+        .wrap_err_with(|| format!("running {command}"))?;
     let status = output.status.code().unwrap_or(1);
     let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
     if status != 0 {
@@ -326,7 +332,9 @@ fn command_with_output_all(
         child.env(key, value);
     }
     child.stdout(Stdio::piped()).stderr(Stdio::piped());
-    let output = child.output().wrap_err_with(|| format!("running {command}"))?;
+    let output = child
+        .output()
+        .wrap_err_with(|| format!("running {command}"))?;
     let mut combined = String::from_utf8_lossy(&output.stdout).into_owned();
     if !output.stderr.is_empty() {
         combined.push_str(&String::from_utf8_lossy(&output.stderr));
@@ -352,9 +360,14 @@ fn command_with_input_with_status(
     for (key, value) in env_vars {
         child.env(key, value);
     }
-    child.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped());
+    child
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
 
-    let mut child = child.spawn().wrap_err_with(|| format!("running {command}"))?;
+    let mut child = child
+        .spawn()
+        .wrap_err_with(|| format!("running {command}"))?;
     {
         let mut stdin = child
             .stdin
@@ -364,7 +377,9 @@ fn command_with_input_with_status(
             .write_all(stdin_payload.as_bytes())
             .wrap_err_with(|| format!("writing to stdin for {command}"))?;
     }
-    let output = child.wait_with_output().wrap_err_with(|| format!("running {command}"))?;
+    let output = child
+        .wait_with_output()
+        .wrap_err_with(|| format!("running {command}"))?;
     let status = output.status.code().unwrap_or(1);
     let mut combined = String::from_utf8_lossy(&output.stdout).into_owned();
     if !output.stderr.is_empty() {
@@ -385,7 +400,9 @@ fn command_output_with_status(
         child.env(key, value);
     }
     child.stdout(Stdio::piped()).stderr(Stdio::piped());
-    let output = child.output().wrap_err_with(|| format!("running {command}"))?;
+    let output = child
+        .output()
+        .wrap_err_with(|| format!("running {command}"))?;
     let status = output.status.code().unwrap_or(1);
     let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
     Ok((status, stdout))
@@ -404,7 +421,9 @@ fn command_timed_status(
     }
     child.stdout(Stdio::null()).stderr(Stdio::null());
     let start = Instant::now();
-    let status = child.status().wrap_err_with(|| format!("running {command}"))?;
+    let status = child
+        .status()
+        .wrap_err_with(|| format!("running {command}"))?;
     let elapsed = start.elapsed();
     Ok((status.code().unwrap_or(1), elapsed))
 }
@@ -421,7 +440,9 @@ fn command_with_output_allow_empty_match(
         child.env(key, value);
     }
     child.stdout(Stdio::piped()).stderr(Stdio::piped());
-    let output = child.output().wrap_err_with(|| format!("running {command}"))?;
+    let output = child
+        .output()
+        .wrap_err_with(|| format!("running {command}"))?;
     let status = output.status.code().unwrap_or(1);
     if status != 0 && status != 1 {
         let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
@@ -444,7 +465,9 @@ fn command_with_output_allow_failure(
         child.env(key, value);
     }
     child.stdout(Stdio::piped()).stderr(Stdio::piped());
-    let output = child.output().wrap_err_with(|| format!("running {command}"))?;
+    let output = child
+        .output()
+        .wrap_err_with(|| format!("running {command}"))?;
     Ok(String::from_utf8_lossy(&output.stdout).into_owned())
 }
 
@@ -459,7 +482,9 @@ fn command_status(
     for (key, value) in env_vars {
         child.env(key, value);
     }
-    let status = child.status().wrap_err_with(|| format!("running {command}"))?;
+    let status = child
+        .status()
+        .wrap_err_with(|| format!("running {command}"))?;
     Ok(status.code().unwrap_or(1))
 }
 
@@ -471,7 +496,9 @@ fn command_status_strict(
 ) -> Result<()> {
     let status = command_status(repo_root, command, args, env_vars)?;
     if status != 0 {
-        return Err(color_eyre::eyre::eyre!("{command} failed with code {status}"));
+        return Err(color_eyre::eyre::eyre!(
+            "{command} failed with code {status}"
+        ));
     }
     Ok(())
 }
@@ -483,12 +510,20 @@ fn command_exists(command: &str) -> bool {
     let suffixes: &[&str] = &[".exe", ".cmd", ".bat", ""];
     #[cfg(not(windows))]
     let suffixes: &[&str] = &[""];
-    env::split_paths(&env::var_os("PATH").unwrap_or_default())
-        .any(|dir| suffixes.iter().any(|ext| dir.join(format!("{command}{ext}")).exists()))
+    env::split_paths(&env::var_os("PATH").unwrap_or_default()).any(|dir| {
+        suffixes
+            .iter()
+            .any(|ext| dir.join(format!("{command}{ext}")).exists())
+    })
 }
 
 fn command_output_lines(output: &str) -> Vec<String> {
-    output.lines().map(str::trim).filter(|line| !line.is_empty()).map(ToString::to_string).collect()
+    output
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .map(ToString::to_string)
+        .collect()
 }
 
 fn first_cfg_test_line_number(path: &Path) -> Result<usize> {
@@ -524,7 +559,10 @@ fn read_usize_from_tokens(path: &Path, idx: usize) -> Result<usize> {
     let raw = fs::read_to_string(path).with_context(|| format!("reading {:?}", path))?;
     let tokens: Vec<&str> = raw.split_whitespace().collect();
     if tokens.len() <= idx {
-        return Err(color_eyre::eyre::eyre!("missing token {idx} in {}", path.display()));
+        return Err(color_eyre::eyre::eyre!(
+            "missing token {idx} in {}",
+            path.display()
+        ));
     }
     tokens[idx]
         .trim()
@@ -606,8 +644,11 @@ fn cmd_test_capped(repo_root: &Path, cargo_args: &[String]) -> Result<i32> {
     let rust_test_threads = env::var("RUST_TEST_THREADS").unwrap_or_else(|_| "2".to_string());
     println!("Running Rust tests with {rust_test_threads} threads...");
 
-    let mut args: Vec<String> =
-        vec!["test".to_string(), "--".to_string(), format!("--test-threads={rust_test_threads}")];
+    let mut args: Vec<String> = vec![
+        "test".to_string(),
+        "--".to_string(),
+        format!("--test-threads={rust_test_threads}"),
+    ];
     args.extend_from_slice(cargo_args);
     let refs: Vec<&str> = args.iter().map(String::as_str).collect();
     command_status_strict(
@@ -621,8 +662,11 @@ fn cmd_test_capped(repo_root: &Path, cargo_args: &[String]) -> Result<i32> {
 
 fn cmd_e2e_gate(repo_root: &Path, cargo_args: &[String]) -> Result<i32> {
     let rust_test_threads = env::var("RUST_TEST_THREADS").unwrap_or_else(|_| "2".to_string());
-    let mut args: Vec<String> =
-        vec!["test".to_string(), "--".to_string(), format!("--test-threads={rust_test_threads}")];
+    let mut args: Vec<String> = vec![
+        "test".to_string(),
+        "--".to_string(),
+        format!("--test-threads={rust_test_threads}"),
+    ];
     args.extend_from_slice(cargo_args);
     let refs: Vec<&str> = args.iter().map(String::as_str).collect();
 
@@ -662,8 +706,9 @@ fn cmd_e2e_gate(repo_root: &Path, cargo_args: &[String]) -> Result<i32> {
 
         if command_status(repo_root, "flock", &["-n", lock_file, "true"], &[])? == 0 {
             println!("E2E slot ready");
-            let direct_args =
-                std::iter::once(lock_file).chain(refs.iter().copied()).collect::<Vec<_>>();
+            let direct_args = std::iter::once(lock_file)
+                .chain(refs.iter().copied())
+                .collect::<Vec<_>>();
             command_status_strict(
                 repo_root,
                 "flock",
@@ -674,8 +719,9 @@ fn cmd_e2e_gate(repo_root: &Path, cargo_args: &[String]) -> Result<i32> {
         }
 
         println!("E2E slot busy → waiting...");
-        let blocking_args =
-            std::iter::once(lock_file).chain(refs.iter().copied()).collect::<Vec<_>>();
+        let blocking_args = std::iter::once(lock_file)
+            .chain(refs.iter().copied())
+            .collect::<Vec<_>>();
         command_status_strict(
             repo_root,
             "flock",
@@ -733,8 +779,13 @@ fn cmd_run_parser_comparison(repo_root: &Path) -> Result<i32> {
 fn cmd_check_v2_bundle_sync(repo_root: &Path) -> Result<i32> {
     println!("🔍 Checking v2 bundle sync between tree-sitter-perl-rs and perl-parser-pest...");
 
-    const V2_BUNDLE_FILES: [&str; 5] =
-        ["grammar.pest", "pure_rust_parser.rs", "pratt_parser.rs", "sexp_formatter.rs", "error.rs"];
+    const V2_BUNDLE_FILES: [&str; 5] = [
+        "grammar.pest",
+        "pure_rust_parser.rs",
+        "pratt_parser.rs",
+        "sexp_formatter.rs",
+        "error.rs",
+    ];
 
     let source_root = repo_root.join("archive/crates/tree-sitter-perl-rs/src");
     let microcrate_root = repo_root.join("crates/perl-parser-pest/src");
@@ -746,10 +797,14 @@ fn cmd_check_v2_bundle_sync(repo_root: &Path) -> Result<i32> {
         let right_display = right.display();
 
         if !left.exists() {
-            return Err(color_eyre::eyre::eyre!("missing source file: {left_display}"));
+            return Err(color_eyre::eyre::eyre!(
+                "missing source file: {left_display}"
+            ));
         }
         if !right.exists() {
-            return Err(color_eyre::eyre::eyre!("missing microcrate file: {right_display}"));
+            return Err(color_eyre::eyre::eyre!(
+                "missing microcrate file: {right_display}"
+            ));
         }
 
         let left_bytes = fs::read(&left).with_context(|| format!("reading {left_display}"))?;
@@ -764,7 +819,11 @@ fn cmd_check_v2_bundle_sync(repo_root: &Path) -> Result<i32> {
         let diff = command_with_output_allow_failure(
             repo_root,
             "diff",
-            &["-u", left_display.to_string().as_str(), right_display.to_string().as_str()],
+            &[
+                "-u",
+                left_display.to_string().as_str(),
+                right_display.to_string().as_str(),
+            ],
             &[],
         )?;
         if !diff.is_empty() {
@@ -793,9 +852,15 @@ fn cmd_run_comparison(repo_root: &Path) -> Result<i32> {
     let test_cases = [
         ("Simple", r#"my $x = 42;"#),
         ("Expression", r#"my $result = ($a + $b) * $c;"#),
-        ("Control Flow", r#"if ($x > 10) { while ($y < 100) { $y = $y * 2; } }"#),
+        (
+            "Control Flow",
+            r#"if ($x > 10) { while ($y < 100) { $y = $y * 2; } }"#,
+        ),
         ("Method Call", r#"$obj->method($arg1, $arg2);"#),
-        ("For Loop", r#"for (my $i = 0; $i < 10; $i++) { print $i; }"#),
+        (
+            "For Loop",
+            r#"for (my $i = 0; $i < 10; $i++) { print $i; }"#,
+        ),
     ];
 
     let legacy_parser = repo_root.join("target/debug/parse");
@@ -809,7 +874,17 @@ fn cmd_run_comparison(repo_root: &Path) -> Result<i32> {
 
         println!("  Modern parser: ");
         let modern_args: Vec<&str> = if command_exists("timeout") {
-            vec!["1s", "cargo", "run", "-q", "-p", "perl-parser", "--example", "demo", "--"]
+            vec![
+                "1s",
+                "cargo",
+                "run",
+                "-q",
+                "-p",
+                "perl-parser",
+                "--example",
+                "demo",
+                "--",
+            ]
         } else {
             vec!["-q", "-p", "perl-parser", "--example", "demo", "--"]
         };
@@ -879,7 +954,13 @@ fn cmd_quick_bench(repo_root: &Path) -> Result<i32> {
         .into_iter()
         .filter(|path| path.is_file())
         .map(|path| {
-            (path.file_name().and_then(|name| name.to_str()).unwrap_or("file").to_string(), path)
+            (
+                path.file_name()
+                    .and_then(|name| name.to_str())
+                    .unwrap_or("file")
+                    .to_string(),
+                path,
+            )
         })
         .collect();
     candidates.sort_by(|a, b| a.0.cmp(&b.0));
@@ -895,11 +976,19 @@ fn cmd_quick_bench(repo_root: &Path) -> Result<i32> {
 
     let mut rows: Vec<Row> = Vec::new();
     for (name, path) in &candidates {
-        let size = fs::metadata(path).map(|metadata| metadata.len()).unwrap_or(0);
+        let size = fs::metadata(path)
+            .map(|metadata| metadata.len())
+            .unwrap_or(0);
         let rust_time = run_rust_bench_us(repo_root, path)?;
         let facade_time = run_facade_bench_us(repo_root, path)?;
         let c_time = run_c_bench_us(repo_root, path)?;
-        rows.push(Row { name: name.clone(), size, rust_time, facade_time, c_time });
+        rows.push(Row {
+            name: name.clone(),
+            size,
+            rust_time,
+            facade_time,
+            c_time,
+        });
     }
 
     // --- Table 1: raw timings ---
@@ -915,8 +1004,11 @@ fn cmd_quick_bench(repo_root: &Path) -> Result<i32> {
     );
 
     for row in &rows {
-        let times: [(&str, Option<f64>); 3] =
-            [("native-v3", row.rust_time), ("facade", row.facade_time), ("c-grammar", row.c_time)];
+        let times: [(&str, Option<f64>); 3] = [
+            ("native-v3", row.rust_time),
+            ("facade", row.facade_time),
+            ("c-grammar", row.c_time),
+        ];
         let fastest_label = times
             .iter()
             .filter_map(|(label, t)| t.map(|v| (label, v)))
@@ -925,7 +1017,8 @@ fn cmd_quick_bench(repo_root: &Path) -> Result<i32> {
             .unwrap_or("N/A");
 
         let fmt = |v: Option<f64>| -> String {
-            v.map(|us| format!("{us:.0}")).unwrap_or_else(|| "N/A".to_string())
+            v.map(|us| format!("{us:.0}"))
+                .unwrap_or_else(|| "N/A".to_string())
         };
 
         println!(
@@ -954,8 +1047,10 @@ fn cmd_quick_bench(repo_root: &Path) -> Result<i32> {
     );
 
     for row in &rows {
-        let available: Vec<f64> =
-            [row.rust_time, row.facade_time, row.c_time].iter().filter_map(|&t| t).collect();
+        let available: Vec<f64> = [row.rust_time, row.facade_time, row.c_time]
+            .iter()
+            .filter_map(|&t| t)
+            .collect();
         let min = available.iter().cloned().fold(f64::INFINITY, f64::min);
 
         let rel = |v: Option<f64>| -> String {
@@ -992,11 +1087,21 @@ fn cmd_simple_bench(repo_root: &Path) -> Result<i32> {
     command_status_strict(
         repo_root,
         "cargo",
-        &["build", "--release", "-p", "tree-sitter-perl-rs", "--bin", "parse-rust"],
+        &[
+            "build",
+            "--release",
+            "-p",
+            "tree-sitter-perl-rs",
+            "--bin",
+            "parse-rust",
+        ],
         &[],
     )?;
 
-    let workspace = repo_root.join("target").join("perl-ci-hygiene").join("simple_bench");
+    let workspace = repo_root
+        .join("target")
+        .join("perl-ci-hygiene")
+        .join("simple_bench");
     fs::create_dir_all(&workspace).with_context(|| format!("creating {}", workspace.display()))?;
     let tiny = workspace.join("tiny.pl");
     let small = workspace.join("small.pl");
@@ -1005,14 +1110,27 @@ fn cmd_simple_bench(repo_root: &Path) -> Result<i32> {
     let huge = workspace.join("huge.pl");
 
     fs::write(&tiny, "my $x = 42;\n")?;
-    fs::copy(repo_root.join("test_corpus").join("basic_constructs.pl"), &small)
-        .wrap_err("copying small fixture")?;
-    fs::copy(repo_root.join("test_corpus").join("parser_stress_cases.pl"), &medium)
-        .wrap_err("copying medium fixture")?;
-    fs::copy(repo_root.join("test_corpus").join("real_world/enterprise_cpan_patterns.pl"), &large)
-        .wrap_err("copying large fixture")?;
     fs::copy(
-        repo_root.join("test_corpus").join("edge_cases/performance_stress_scenarios.pl"),
+        repo_root.join("test_corpus").join("basic_constructs.pl"),
+        &small,
+    )
+    .wrap_err("copying small fixture")?;
+    fs::copy(
+        repo_root.join("test_corpus").join("parser_stress_cases.pl"),
+        &medium,
+    )
+    .wrap_err("copying medium fixture")?;
+    fs::copy(
+        repo_root
+            .join("test_corpus")
+            .join("real_world/enterprise_cpan_patterns.pl"),
+        &large,
+    )
+    .wrap_err("copying large fixture")?;
+    fs::copy(
+        repo_root
+            .join("test_corpus")
+            .join("edge_cases/performance_stress_scenarios.pl"),
         &huge,
     )
     .wrap_err("copying huge fixture")?;
@@ -1038,7 +1156,10 @@ fn cmd_simple_bench(repo_root: &Path) -> Result<i32> {
     println!("--------------------------------------");
 
     for path in [&tiny, &small, &medium, &large, &huge] {
-        let name = path.file_name().and_then(|s| s.to_str()).unwrap_or("benchmark");
+        let name = path
+            .file_name()
+            .and_then(|s| s.to_str())
+            .unwrap_or("benchmark");
         println!("\n{name}:");
         let mut total_ms = 0.0f64;
         for _ in 0..5 {
@@ -1067,7 +1188,10 @@ fn cmd_profile_stack_overflow(repo_root: &Path) -> Result<i32> {
         "test_deep_nested_arrays",
         "test_deep_method_chain",
     ];
-    let log_dir = repo_root.join("target").join("perl-ci-hygiene").join("stack-overflow-logs");
+    let log_dir = repo_root
+        .join("target")
+        .join("perl-ci-hygiene")
+        .join("stack-overflow-logs");
     fs::create_dir_all(&log_dir).with_context(|| format!("creating {}", log_dir.display()))?;
 
     let env_vars = [("CARGO_BUILD_MODE", "debug"), ("RUST_BACKTRACE", "full")];
@@ -1192,7 +1316,11 @@ fn run_rust_bench_us(repo_root: &Path, file: &Path) -> Result<Option<f64>> {
         file_arg.as_str(),
     ];
     let (status, elapsed) = command_timed_status(repo_root, "cargo", &args, &[])?;
-    if status == 0 { Ok(Some(elapsed.as_micros() as f64)) } else { Ok(None) }
+    if status == 0 {
+        Ok(Some(elapsed.as_micros() as f64))
+    } else {
+        Ok(None)
+    }
 }
 
 /// Run the legacy C tree-sitter parser bench binary against `file`.
@@ -1222,7 +1350,11 @@ fn run_c_bench_us(repo_root: &Path, file: &Path) -> Result<Option<f64>> {
         file_arg.as_str(),
     ];
     let (status, elapsed) = command_timed_status(repo_root, "cargo", &args, &[])?;
-    if status == 0 { Ok(Some(elapsed.as_micros() as f64)) } else { Ok(None) }
+    if status == 0 {
+        Ok(Some(elapsed.as_micros() as f64))
+    } else {
+        Ok(None)
+    }
 }
 
 /// Run the `tree-sitter-perl-rs` facade bench binary against `file`.
@@ -1244,7 +1376,11 @@ fn run_facade_bench_us(repo_root: &Path, file: &Path) -> Result<Option<f64>> {
         file_arg.as_str(),
     ];
     let (status, elapsed) = command_timed_status(repo_root, "cargo", &args, &[])?;
-    if status == 0 { Ok(Some(elapsed.as_micros() as f64)) } else { Ok(None) }
+    if status == 0 {
+        Ok(Some(elapsed.as_micros() as f64))
+    } else {
+        Ok(None)
+    }
 }
 
 fn timed_file_run_ms(repo_root: &Path, parser: &Path, file: &Path) -> Result<f64> {
@@ -1311,11 +1447,16 @@ fn cmd_cargo_package_workspace_dry_run(repo_root: &Path, crates: &[String]) -> R
             if name.is_empty() {
                 continue;
             }
-            let manifest_path = package.get("manifest_path").and_then(Value::as_str).unwrap_or("");
+            let manifest_path = package
+                .get("manifest_path")
+                .and_then(Value::as_str)
+                .unwrap_or("");
             if manifest_path.is_empty() {
                 continue;
             }
-            let crate_root = Path::new(manifest_path).parent().unwrap_or_else(|| Path::new("."));
+            let crate_root = Path::new(manifest_path)
+                .parent()
+                .unwrap_or_else(|| Path::new("."));
             let rel = crate_root
                 .strip_prefix(&workspace_root)
                 .unwrap_or(crate_root)
@@ -1331,7 +1472,10 @@ fn cmd_cargo_package_workspace_dry_run(repo_root: &Path, crates: &[String]) -> R
     patch_args.sort_by(|lhs, rhs| lhs.0.cmp(&rhs.0));
 
     let no_verify = env::var("CARGO_PACKAGE_NO_VERIFY").as_deref() == Ok("1");
-    let patch_values = patch_args.iter().map(|(_, patch)| patch.as_str()).collect::<Vec<_>>();
+    let patch_values = patch_args
+        .iter()
+        .map(|(_, patch)| patch.as_str())
+        .collect::<Vec<_>>();
 
     for crate_name in crates {
         println!("==> cargo package -p {crate_name}");
@@ -1366,7 +1510,14 @@ fn cmd_verify_stacker(repo_root: &Path) -> Result<i32> {
     let release_output = command_with_output(
         repo_root,
         "cargo",
-        &["run", "--features", "pure-rust", "--release", "--bin", "test_stacker"],
+        &[
+            "run",
+            "--features",
+            "pure-rust",
+            "--release",
+            "--bin",
+            "test_stacker",
+        ],
         &[],
     )?;
     for line in release_output.lines().take(20) {
@@ -1392,7 +1543,10 @@ fn cmd_verify_stacker(repo_root: &Path) -> Result<i32> {
             ],
         )
     } else {
-        ("cargo", vec!["run", "--features", "pure-rust", "--bin", "test_stacker"])
+        (
+            "cargo",
+            vec!["run", "--features", "pure-rust", "--bin", "test_stacker"],
+        )
     };
 
     let debug_status = if command_exists("timeout") {
@@ -1443,7 +1597,14 @@ fn cmd_test_iterative_parser(repo_root: &Path) -> Result<i32> {
     command_status_strict(
         repo_root,
         "cargo",
-        &["test", "--features", "pure-rust", "iterative_parser_tests", "--", "--nocapture"],
+        &[
+            "test",
+            "--features",
+            "pure-rust",
+            "iterative_parser_tests",
+            "--",
+            "--nocapture",
+        ],
         &[],
     )?;
 
@@ -1452,7 +1613,13 @@ fn cmd_test_iterative_parser(repo_root: &Path) -> Result<i32> {
     command_status_strict(
         repo_root,
         "cargo",
-        &["run", "--features", "pure-rust", "--bin", "benchmark_parsers"],
+        &[
+            "run",
+            "--features",
+            "pure-rust",
+            "--bin",
+            "benchmark_parsers",
+        ],
         &[],
     )?;
 
@@ -1461,7 +1628,13 @@ fn cmd_test_iterative_parser(repo_root: &Path) -> Result<i32> {
     command_status_strict(
         repo_root,
         "cargo",
-        &["test", "--features", "pure-rust", "test_deep_nesting", "--nocapture"],
+        &[
+            "test",
+            "--features",
+            "pure-rust",
+            "test_deep_nesting",
+            "--nocapture",
+        ],
         &[],
     )?;
 
@@ -1473,12 +1646,20 @@ fn cmd_test_iterative_parser(repo_root: &Path) -> Result<i32> {
 fn cmd_compare_benchmarks(repo_root: &Path, args: &[String]) -> Result<i32> {
     println!("Running parser benchmark comparator...");
     if !command_exists("python3") {
-        return Err(color_eyre::eyre::eyre!("python3 is required for benchmark comparison"));
+        return Err(color_eyre::eyre::eyre!(
+            "python3 is required for benchmark comparison"
+        ));
     }
 
-    let compare_py = repo_root.join("benchmarks").join("scripts").join("compare.py");
+    let compare_py = repo_root
+        .join("benchmarks")
+        .join("scripts")
+        .join("compare.py");
     if !compare_py.is_file() {
-        return Err(color_eyre::eyre::eyre!("missing comparator: {}", compare_py.display()));
+        return Err(color_eyre::eyre::eyre!(
+            "missing comparator: {}",
+            compare_py.display()
+        ));
     }
 
     let mut argv: Vec<String> = vec![compare_py.to_string_lossy().to_string()];
@@ -1493,8 +1674,19 @@ fn cmd_test_with_override(repo_root: &Path) -> Result<i32> {
     command_status_strict(
         repo_root,
         "cargo",
-        &["test", "-p", "perl-parser", "--test", "lsp_feature_gating_test", "--", "--nocapture"],
-        &[("FEATURES_TOML_OVERRIDE", "crates/perl-parser/tests/data/features_minimal.toml")],
+        &[
+            "test",
+            "-p",
+            "perl-parser",
+            "--test",
+            "lsp_feature_gating_test",
+            "--",
+            "--nocapture",
+        ],
+        &[(
+            "FEATURES_TOML_OVERRIDE",
+            "crates/perl-parser/tests/data/features_minimal.toml",
+        )],
     )?;
 
     println!();
@@ -1502,8 +1694,19 @@ fn cmd_test_with_override(repo_root: &Path) -> Result<i32> {
     command_status_strict(
         repo_root,
         "cargo",
-        &["test", "-p", "perl-parser", "--test", "lsp_features_snapshot_test", "--", "--nocapture"],
-        &[("FEATURES_TOML_OVERRIDE", "crates/perl-parser/tests/data/features_disabled_test.toml")],
+        &[
+            "test",
+            "-p",
+            "perl-parser",
+            "--test",
+            "lsp_features_snapshot_test",
+            "--",
+            "--nocapture",
+        ],
+        &[(
+            "FEATURES_TOML_OVERRIDE",
+            "crates/perl-parser/tests/data/features_disabled_test.toml",
+        )],
     )?;
 
     println!("✅ Override testing complete!");
@@ -1571,7 +1774,14 @@ fn cmd_test_edge_cases(repo_root: &Path, bench: bool, coverage: bool) -> Result<
     command_status_strict(
         repo_root,
         "cargo",
-        &["test", "--features", "pure-rust test-utils", "edge_case_tests", "--", "--nocapture"],
+        &[
+            "test",
+            "--features",
+            "pure-rust test-utils",
+            "edge_case_tests",
+            "--",
+            "--nocapture",
+        ],
         &[],
     )?;
 
@@ -1621,7 +1831,12 @@ fn cmd_test_edge_cases(repo_root: &Path, bench: bool, coverage: bool) -> Result<
         command_status_strict(
             repo_root,
             "cargo",
-            &["bench", "--features", "pure-rust test-utils", "edge_case_benchmarks"],
+            &[
+                "bench",
+                "--features",
+                "pure-rust test-utils",
+                "edge_case_benchmarks",
+            ],
             &[],
         )?;
     }
@@ -1630,19 +1845,37 @@ fn cmd_test_edge_cases(repo_root: &Path, bench: bool, coverage: bool) -> Result<
     command_status_strict(
         repo_root,
         "cargo",
-        &["run", "--features", "pure-rust test-utils", "--example", "edge_case_demo"],
+        &[
+            "run",
+            "--features",
+            "pure-rust test-utils",
+            "--example",
+            "edge_case_demo",
+        ],
         &[],
     )?;
     command_status_strict(
         repo_root,
         "cargo",
-        &["run", "--features", "pure-rust test-utils", "--example", "anti_pattern_analysis"],
+        &[
+            "run",
+            "--features",
+            "pure-rust test-utils",
+            "--example",
+            "anti_pattern_analysis",
+        ],
         &[],
     )?;
     command_status_strict(
         repo_root,
         "cargo",
-        &["run", "--features", "pure-rust test-utils", "--example", "tree_sitter_compatibility"],
+        &[
+            "run",
+            "--features",
+            "pure-rust test-utils",
+            "--example",
+            "tree_sitter_compatibility",
+        ],
         &[],
     )?;
 
@@ -1673,8 +1906,12 @@ fn cmd_test_edge_cases(repo_root: &Path, bench: bool, coverage: bool) -> Result<
 fn cmd_quick_receipts(repo_root: &Path) -> Result<i32> {
     println!("=== Quick Receipt Generation (no tests) ===");
 
-    let cargo_toml =
-        read_to_value(repo_root.join("crates").join("perl-parser").join("Cargo.toml"))?;
+    let cargo_toml = read_to_value(
+        repo_root
+            .join("crates")
+            .join("perl-parser")
+            .join("Cargo.toml"),
+    )?;
     let version = cargo_toml
         .get("package")
         .and_then(|pkg| pkg.get("version"))
@@ -1698,9 +1935,15 @@ fn cmd_quick_receipts(repo_root: &Path) -> Result<i32> {
     println!("Missing docs: {missing_docs}");
 
     let doc_summary = json!({ "missing_docs": missing_docs });
-    fs::write(artifacts_dir.join("doc-summary.json"), serde_json::to_string(&doc_summary)?)
-        .with_context(|| "writing doc-summary.json")?;
-    println!("Doc summary saved to {}", artifacts_dir.join("doc-summary.json").display());
+    fs::write(
+        artifacts_dir.join("doc-summary.json"),
+        serde_json::to_string(&doc_summary)?,
+    )
+    .with_context(|| "writing doc-summary.json")?;
+    println!(
+        "Doc summary saved to {}",
+        artifacts_dir.join("doc-summary.json").display()
+    );
 
     let test_summary = json!({
         "passed": 0,
@@ -1712,8 +1955,11 @@ fn cmd_quick_receipts(repo_root: &Path) -> Result<i32> {
         "pass_rate_total": 0.0,
         "note": "Run generate-receipts.sh for actual test metrics"
     });
-    fs::write(artifacts_dir.join("test-summary.json"), serde_json::to_string(&test_summary)?)
-        .with_context(|| "writing test-summary.json")?;
+    fs::write(
+        artifacts_dir.join("test-summary.json"),
+        serde_json::to_string(&test_summary)?,
+    )
+    .with_context(|| "writing test-summary.json")?;
 
     let state = json!({
         "version": version,
@@ -1721,8 +1967,11 @@ fn cmd_quick_receipts(repo_root: &Path) -> Result<i32> {
         "docs": doc_summary,
         "generated_at": Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string(),
     });
-    fs::write(artifacts_dir.join("state.json"), serde_json::to_string_pretty(&state)?)
-        .with_context(|| "writing state.json")?;
+    fs::write(
+        artifacts_dir.join("state.json"),
+        serde_json::to_string_pretty(&state)?,
+    )
+    .with_context(|| "writing state.json")?;
 
     println!(
         "State saved to {} (tests will be 0 until full receipt generation)",
@@ -1745,17 +1994,30 @@ fn cmd_test_lsp_cancellation(repo_root: &Path) -> Result<i32> {
     println!();
 
     println!("{YELLOW}Step 1: Pre-building LSP binaries...{NC}");
-    command_status_strict(repo_root, "cargo", &["build", "--release", "-p", "perl-lsp"], &[])?;
+    command_status_strict(
+        repo_root,
+        "cargo",
+        &["build", "--release", "-p", "perl-lsp"],
+        &[],
+    )?;
     println!("{GREEN}✓ LSP binaries pre-built successfully{NC}");
 
     println!("{YELLOW}Step 2: Pre-building test binaries...{NC}");
-    command_status_strict(repo_root, "cargo", &["build", "--tests", "-p", "perl-lsp"], &[])?;
+    command_status_strict(
+        repo_root,
+        "cargo",
+        &["build", "--tests", "-p", "perl-lsp"],
+        &[],
+    )?;
     println!("{GREEN}✓ Test binaries pre-built successfully{NC}");
 
     let cancel_binary = find_cancel_test_binary(repo_root).ok_or_else(|| {
         color_eyre::eyre::eyre!("cancel test binary not found in target/debug/deps")
     })?;
-    println!("{GREEN}✓ Found cancel test binary: {}{NC}", cancel_binary.display());
+    println!(
+        "{GREEN}✓ Found cancel test binary: {}{NC}",
+        cancel_binary.display()
+    );
 
     let perl_lsp_binary = repo_root.join("target").join("release").join("perl-lsp");
     if !perl_lsp_binary.is_file() {
@@ -1771,11 +2033,16 @@ fn cmd_test_lsp_cancellation(repo_root: &Path) -> Result<i32> {
     println!("  RUST_TEST_THREADS=1");
     let rust_threads = "1".to_string();
     let exe_env = [
-        ("CARGO_BIN_EXE_perl_lsp", perl_lsp_binary.to_string_lossy().to_string()),
+        (
+            "CARGO_BIN_EXE_perl_lsp",
+            perl_lsp_binary.to_string_lossy().to_string(),
+        ),
         ("RUST_TEST_THREADS", rust_threads),
     ];
-    let exe_env_refs: Vec<(&str, &str)> =
-        exe_env.iter().map(|(key, value)| (*key, value.as_str())).collect();
+    let exe_env_refs: Vec<(&str, &str)> = exe_env
+        .iter()
+        .map(|(key, value)| (*key, value.as_str()))
+        .collect();
     command_status_strict(
         repo_root,
         cancel_binary.to_string_lossy().as_ref(),
@@ -1829,7 +2096,10 @@ fn cmd_generate_badges(repo_root: &Path) -> Result<i32> {
     .join("\n");
     fs::write(&badge_file, format!("{content}\n"))
         .with_context(|| format!("writing {:?}", badge_file))?;
-    println!("Badges generated in {:?}", badge_file.file_name().unwrap_or_default());
+    println!(
+        "Badges generated in {:?}",
+        badge_file.file_name().unwrap_or_default()
+    );
     Ok(0)
 }
 
@@ -2147,7 +2417,11 @@ fn resolve_git_hooks_dir(repo_root: &Path) -> Result<PathBuf> {
     let hooks_path = hooks_path.trim();
     let hooks_dir = PathBuf::from(hooks_path);
 
-    Ok(if hooks_dir.is_absolute() { hooks_dir } else { repo_root.join(hooks_dir) })
+    Ok(if hooks_dir.is_absolute() {
+        hooks_dir
+    } else {
+        repo_root.join(hooks_dir)
+    })
 }
 
 fn write_git_hook(hook_path: &Path, hook: &str) -> Result<()> {
@@ -2163,12 +2437,18 @@ fn write_git_hook(hook_path: &Path, hook: &str) -> Result<()> {
 
 fn read_required_usize(path: &Path) -> Result<usize> {
     if !path.is_file() {
-        return Err(color_eyre::eyre::eyre!("required file not found: {}", path.display()));
+        return Err(color_eyre::eyre::eyre!(
+            "required file not found: {}",
+            path.display()
+        ));
     }
     let raw = fs::read_to_string(path).with_context(|| format!("reading {:?}", path))?;
     let trimmed = raw.trim();
     if trimmed.is_empty() {
-        return Err(color_eyre::eyre::eyre!("required file is empty: {}", path.display()));
+        return Err(color_eyre::eyre::eyre!(
+            "required file is empty: {}",
+            path.display()
+        ));
     }
     Ok(trimmed.parse::<usize>()?)
 }
@@ -2186,12 +2466,15 @@ fn find_repo_root() -> Result<PathBuf> {
 }
 
 fn display_path(root: &Path, path: &Path) -> String {
-    path.strip_prefix(root)
-        .map_or_else(|_| path.display().to_string(), |relative| relative.display().to_string())
+    path.strip_prefix(root).map_or_else(
+        |_| path.display().to_string(),
+        |relative| relative.display().to_string(),
+    )
 }
 
 fn path_has_component(path: &Path, target: &str) -> bool {
-    path.components().any(|component| component.as_os_str() == OsStr::new(target))
+    path.components()
+        .any(|component| component.as_os_str() == OsStr::new(target))
 }
 
 fn is_text_file(path: &Path) -> bool {
@@ -2199,13 +2482,21 @@ fn is_text_file(path: &Path) -> bool {
 }
 
 fn walk_entries(root: &Path) -> impl Iterator<Item = DirEntry> + '_ {
-    WalkDir::new(root).follow_links(false).into_iter().filter_map(Result::ok)
+    WalkDir::new(root)
+        .follow_links(false)
+        .into_iter()
+        .filter_map(Result::ok)
 }
 
 fn read_lines(path: &Path) -> Result<Vec<String>> {
     fs::read_to_string(path)
         .with_context(|| format!("reading {:?}", path))
-        .map(|contents| contents.lines().map(std::string::ToString::to_string).collect())
+        .map(|contents| {
+            contents
+                .lines()
+                .map(std::string::ToString::to_string)
+                .collect()
+        })
 }
 
 fn walk_rust_sources(root: &Path) -> Vec<PathBuf> {
@@ -2270,23 +2561,36 @@ fn cmd_check_doc_hygiene(repo_root: &Path) -> Result<i32> {
     println!("{}=== Documentation Hygiene Check ==={}", YELLOW, NC);
     println!();
 
-    println!("{}Checking for unescaped brackets in doc comments...{}", BLUE, NC);
+    println!(
+        "{}Checking for unescaped brackets in doc comments...{}",
+        BLUE, NC
+    );
     let unescaped_pattern = Regex::new(r"^[ \t]*//[/!].*\[")?;
     let output = command_with_output_allow_empty_match(
         repo_root,
         "rg",
-        &["-n", "--glob", "crates/**/src/**/*.rs", unescaped_pattern.as_str()],
+        &[
+            "-n",
+            "--glob",
+            "crates/**/src/**/*.rs",
+            unescaped_pattern.as_str(),
+        ],
         &[],
     )?;
     if output.trim().is_empty() {
         println!("{}✓ No suspicious brackets found{}", GREEN, NC);
     } else {
-        println!("{}⚠ Found potential unescaped brackets. Consider:{}", YELLOW, NC);
+        println!(
+            "{}⚠ Found potential unescaped brackets. Consider:{}",
+            YELLOW, NC
+        );
         println!("  - Escaping with backslash: \\[text\\]");
         println!("  - Wrapping in code blocks: `[text]`");
         println!("  - Using proper doc links: [`Type`] or [Type](link)");
-        for line in
-            command_output_lines(&output).into_iter().filter(|line| !line.contains(r"\[")).take(5)
+        for line in command_output_lines(&output)
+            .into_iter()
+            .filter(|line| !line.contains(r"\["))
+            .take(5)
         {
             println!("{line}");
         }
@@ -2298,7 +2602,12 @@ fn cmd_check_doc_hygiene(repo_root: &Path) -> Result<i32> {
     let bare_url_output = command_with_output_allow_empty_match(
         repo_root,
         "rg",
-        &["-n", "--glob", "crates/**/src/**/*.rs", "^[ \t]*//[/!].*https?://[^ \t<>\\[\\]]+"],
+        &[
+            "-n",
+            "--glob",
+            "crates/**/src/**/*.rs",
+            "^[ \t]*//[/!].*https?://[^ \t<>\\[\\]]+",
+        ],
         &[],
     )?;
     let bare_url_lines = command_output_lines(&bare_url_output)
@@ -2324,11 +2633,19 @@ fn cmd_check_doc_hygiene(repo_root: &Path) -> Result<i32> {
     let marker_output = command_with_output_allow_empty_match(
         repo_root,
         "rg",
-        &["-n", "--glob", "crates/**/src/**/*.rs", marker_pattern.as_str()],
+        &[
+            "-n",
+            "--glob",
+            "crates/**/src/**/*.rs",
+            marker_pattern.as_str(),
+        ],
         &[],
     )?;
     if !marker_output.trim().is_empty() {
-        println!("{}⚠ Found doc comments without space after marker{}", YELLOW, NC);
+        println!(
+            "{}⚠ Found doc comments without space after marker{}",
+            YELLOW, NC
+        );
         println!("  Use: /// Text  or  //! Text");
         for line in command_output_lines(&marker_output).iter().take(5) {
             println!("{line}");
@@ -2339,7 +2656,14 @@ fn cmd_check_doc_hygiene(repo_root: &Path) -> Result<i32> {
     let perl_code_output = command_with_output_allow_empty_match(
         repo_root,
         "rg",
-        &["-n", "-A2", "-B2", "--glob", "crates/**/src/**/*.rs", r"^[ \t]*///.*\\$[a-zA-Z_]"],
+        &[
+            "-n",
+            "-A2",
+            "-B2",
+            "--glob",
+            "crates/**/src/**/*.rs",
+            r"^[ \t]*///.*\\$[a-zA-Z_]",
+        ],
         &[],
     )?;
     let perl_code_lines = perl_code_output
@@ -2350,7 +2674,10 @@ fn cmd_check_doc_hygiene(repo_root: &Path) -> Result<i32> {
         .map(ToString::to_string)
         .collect::<Vec<_>>();
     if !perl_code_lines.is_empty() {
-        println!("{}⚠ Possible Perl code in docs without code blocks{}", YELLOW, NC);
+        println!(
+            "{}⚠ Possible Perl code in docs without code blocks{}",
+            YELLOW, NC
+        );
         println!("  Wrap Perl examples in triple backticks:");
         println!("  ```perl");
         println!("  my $var = 42;");
@@ -2362,11 +2689,19 @@ fn cmd_check_doc_hygiene(repo_root: &Path) -> Result<i32> {
     }
     println!();
 
-    println!("{}Checking for TODOs in public documentation...{}", BLUE, NC);
+    println!(
+        "{}Checking for TODOs in public documentation...{}",
+        BLUE, NC
+    );
     let todo_output = command_with_output_allow_empty_match(
         repo_root,
         "rg",
-        &["-n", "--glob", "crates/**/src/**/*.rs", "^[ \t]*///.*\\b(TODO|FIXME|XXX|HACK)\\b"],
+        &[
+            "-n",
+            "--glob",
+            "crates/**/src/**/*.rs",
+            "^[ \t]*///.*\\b(TODO|FIXME|XXX|HACK)\\b",
+        ],
         &[],
     )?;
     if todo_output.trim().is_empty() {
@@ -2395,7 +2730,10 @@ fn cmd_check_doc_hygiene(repo_root: &Path) -> Result<i32> {
     if status == 0 {
         println!("{}✓ Documentation builds cleanly{}", GREEN, NC);
     } else {
-        println!("{}✗ Documentation build failed with strict flags{}", RED, NC);
+        println!(
+            "{}✗ Documentation build failed with strict flags{}",
+            RED, NC
+        );
         println!("  Run to see errors:");
         println!(
             "  RUSTDOCFLAGS=\"-D rustdoc::broken_intra_doc_links -D rustdoc::bare_urls\" cargo doc --workspace --no-deps"
@@ -2486,7 +2824,11 @@ fn cmd_check_ignored(repo_root: &Path) -> Result<i32> {
     println!("  - Remaining to target: {remaining} tests");
 
     if current <= target {
-        let reduction_percent = if baseline > 0 { (reduction * 100) / baseline } else { 0 };
+        let reduction_percent = if baseline > 0 {
+            (reduction * 100) / baseline
+        } else {
+            0
+        };
         println!("  ✅ TARGET ACHIEVED: {current} ≤ {target}");
         println!("  📈 Reduction: {reduction_percent}% (target: 49%+)");
     } else if current <= baseline {
@@ -2515,7 +2857,10 @@ fn cmd_check_local(repo_root: &Path) -> Result<i32> {
 
     println!("{}1. Format check...{}", YELLOW, NC);
     if command_status_strict(repo_root, "cargo", &["xtask", "fmt", "--check"], &[]).is_err() {
-        println!("{}✗ Format check failed - run 'cargo xtask fmt' to fix{}", RED, NC);
+        println!(
+            "{}✗ Format check failed - run 'cargo xtask fmt' to fix{}",
+            RED, NC
+        );
         return Ok(1);
     }
     println!();
@@ -2525,7 +2870,16 @@ fn cmd_check_local(repo_root: &Path) -> Result<i32> {
     if command_status(
         repo_root,
         "cargo",
-        &["clippy", "-p", "perl-parser", "--all-targets", "--all-features", "--", "-D", "warnings"],
+        &[
+            "clippy",
+            "-p",
+            "perl-parser",
+            "--all-targets",
+            "--all-features",
+            "--",
+            "-D",
+            "warnings",
+        ],
         &[],
     )
     .unwrap_or(1)
@@ -2537,7 +2891,16 @@ fn cmd_check_local(repo_root: &Path) -> Result<i32> {
     if command_status(
         repo_root,
         "cargo",
-        &["clippy", "-p", "perl-lexer", "--all-targets", "--all-features", "--", "-D", "warnings"],
+        &[
+            "clippy",
+            "-p",
+            "perl-lexer",
+            "--all-targets",
+            "--all-features",
+            "--",
+            "-D",
+            "warnings",
+        ],
         &[],
     )
     .unwrap_or(1)
@@ -2549,7 +2912,10 @@ fn cmd_check_local(repo_root: &Path) -> Result<i32> {
     if clippy_failed {
         return Ok(1);
     }
-    println!("{}✓ Clippy check passed for first-party crates{}", GREEN, NC);
+    println!(
+        "{}✓ Clippy check passed for first-party crates{}",
+        GREEN, NC
+    );
     println!();
 
     println!("  Running clippy smoke check on vendor crates...");
@@ -2578,7 +2944,10 @@ fn cmd_check_local(repo_root: &Path) -> Result<i32> {
         repo_root,
         "cargo",
         &["doc", "--workspace", "--no-deps"],
-        &[("RUSTDOCFLAGS", "-D rustdoc::broken_intra_doc_links -D rustdoc::bare_urls")],
+        &[(
+            "RUSTDOCFLAGS",
+            "-D rustdoc::broken_intra_doc_links -D rustdoc::bare_urls",
+        )],
     )
     .is_err()
     {
@@ -2624,7 +2993,10 @@ fn cmd_check_local(repo_root: &Path) -> Result<i32> {
         }
         println!("{}✓ Dependencies are secure{}", GREEN, NC);
     } else {
-        println!("{}⚠ cargo-deny not installed (run: cargo install cargo-deny){}", YELLOW, NC);
+        println!(
+            "{}⚠ cargo-deny not installed (run: cargo install cargo-deny){}",
+            YELLOW, NC
+        );
     }
     println!();
 
@@ -2641,7 +3013,13 @@ fn cmd_check_missing_docs(repo_root: &Path) -> Result<i32> {
     let output = command_with_output_allow_failure(
         repo_root,
         "cargo",
-        &["check", "-p", "perl-parser", "--tests", "--message-format=json"],
+        &[
+            "check",
+            "-p",
+            "perl-parser",
+            "--tests",
+            "--message-format=json",
+        ],
         &[],
     )?;
     let mut current = 0usize;
@@ -2654,7 +3032,10 @@ fn cmd_check_missing_docs(repo_root: &Path) -> Result<i32> {
         if value.get("reason").and_then(|v| v.as_str()) != Some("compiler-message") {
             continue;
         }
-        let pkg_id = value.get("package_id").and_then(|v| v.as_str()).unwrap_or("");
+        let pkg_id = value
+            .get("package_id")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
         if !pkg_id.starts_with("perl-parser ") {
             continue;
         }
@@ -2662,7 +3043,9 @@ fn cmd_check_missing_docs(repo_root: &Path) -> Result<i32> {
         if message.is_none() {
             continue;
         }
-        let level = message.and_then(|m| m.get("level")).and_then(|v| v.as_str());
+        let level = message
+            .and_then(|m| m.get("level"))
+            .and_then(|v| v.as_str());
         let code = message
             .and_then(|m| m.get("code"))
             .and_then(|code| code.get("code"))
@@ -2682,13 +3065,22 @@ fn cmd_check_missing_docs(repo_root: &Path) -> Result<i32> {
         println!("Options:");
         println!("  1. Add documentation to the new public items");
         println!("  2. Mark test-only items with #[doc(hidden)] (still requires docs)");
-        println!("  3. If intentional, update baseline: echo {current} > {:?}", baseline_path);
+        println!(
+            "  3. If intentional, update baseline: echo {current} > {:?}",
+            baseline_path
+        );
         return Ok(1);
     }
 
     if current < baseline {
-        println!("IMPROVEMENT: {} fewer missing_docs warnings!", baseline - current);
-        println!("Consider updating baseline: echo {current} > {:?}", baseline_path);
+        println!(
+            "IMPROVEMENT: {} fewer missing_docs warnings!",
+            baseline - current
+        );
+        println!(
+            "Consider updating baseline: echo {current} > {:?}",
+            baseline_path
+        );
     }
 
     println!("Check passed: missing_docs count is within acceptable range");
@@ -2704,7 +3096,10 @@ fn cmd_check_p0_locks(repo_root: &Path) -> Result<i32> {
     }
 
     let pattern = Regex::new(r"lock\(\)\.unwrap\(\)|read\(\)\.unwrap\(\)|write\(\)\.unwrap\(\)")?;
-    println!("Checking for unsafe lock patterns in {}...", target_dir.display());
+    println!(
+        "Checking for unsafe lock patterns in {}...",
+        target_dir.display()
+    );
     println!("Target: 0 occurrences (P0 lock safety requirement)");
     println!();
     let mut matches = Vec::new();
@@ -2765,12 +3160,16 @@ fn cmd_check_parse_errors(repo_root: &Path) -> Result<i32> {
 
     let report = read_json_value(&report_file)?;
     let mut current = 0usize;
-    if let Some(value) =
-        report.get("parse_outcomes").and_then(|v| v.get("error")).and_then(|v| v.as_u64())
+    if let Some(value) = report
+        .get("parse_outcomes")
+        .and_then(|v| v.get("error"))
+        .and_then(|v| v.as_u64())
     {
         current = usize::try_from(value)?;
-    } else if let Some(value) =
-        report.get("parse_outcomes").and_then(|v| v.get("error")).and_then(|v| v.as_i64())
+    } else if let Some(value) = report
+        .get("parse_outcomes")
+        .and_then(|v| v.get("error"))
+        .and_then(|v| v.as_i64())
     {
         current = usize::try_from(value.max(0)).unwrap_or(0);
     }
@@ -2797,7 +3196,10 @@ fn cmd_check_parse_errors(repo_root: &Path) -> Result<i32> {
         if current < baseline {
             println!();
             println!("IMPROVEMENT: {} fewer parse errors!", baseline - current);
-            println!("Consider updating baseline: echo {current} > {:?}", baseline_file);
+            println!(
+                "Consider updating baseline: echo {current} > {:?}",
+                baseline_file
+            );
         }
         println!();
         println!("Check passed: parse error count is within acceptable range");
@@ -2810,7 +3212,10 @@ fn cmd_check_parser_matrix(repo_root: &Path) -> Result<i32> {
     let report_file = repo_root.join("corpus_audit_report.json");
 
     if !matrix_file.is_file() {
-        return Err(color_eyre::eyre::eyre!("Matrix file not found: {}", matrix_file.display()));
+        return Err(color_eyre::eyre::eyre!(
+            "Matrix file not found: {}",
+            matrix_file.display()
+        ));
     }
     if !report_file.is_file() {
         let _ = command_status(
@@ -2907,7 +3312,11 @@ fn cmd_check_parser_matrix(repo_root: &Path) -> Result<i32> {
     let diff = command_with_output_allow_failure(
         repo_root,
         "diff",
-        &["-u", old_matrix.to_string_lossy().as_ref(), new_matrix.to_string_lossy().as_ref()],
+        &[
+            "-u",
+            old_matrix.to_string_lossy().as_ref(),
+            new_matrix.to_string_lossy().as_ref(),
+        ],
         &[],
     )
     .unwrap_or_else(|_| String::new());
@@ -2951,7 +3360,10 @@ fn cmd_check_unsafe_prod(repo_root: &Path) -> Result<i32> {
                             return None;
                         }
                         if pattern.is_match(line) {
-                            Some(format!("{}:{line_no}:{line}", display_path(repo_root, &path)))
+                            Some(format!(
+                                "{}:{line_no}:{line}",
+                                display_path(repo_root, &path)
+                            ))
                         } else {
                             None
                         }
@@ -2964,7 +3376,10 @@ fn cmd_check_unsafe_prod(repo_root: &Path) -> Result<i32> {
 
     let all_matches = total.into_iter().flatten().collect::<Vec<_>>();
     let baseline = read_usize_file(&repo_root.join("ci/unsafe_prod_baseline.txt"), 0)?;
-    println!("unsafe syntax: {} (baseline: {baseline})", all_matches.len());
+    println!(
+        "unsafe syntax: {} (baseline: {baseline})",
+        all_matches.len()
+    );
     if all_matches.len() <= baseline {
         if all_matches.is_empty() {
             println!("No unsafe syntax in production scopes");
@@ -2972,7 +3387,10 @@ fn cmd_check_unsafe_prod(repo_root: &Path) -> Result<i32> {
         return Ok(0);
     }
 
-    println!("FAIL: unsafe syntax count ({}) exceeds baseline ({baseline})", all_matches.len());
+    println!(
+        "FAIL: unsafe syntax count ({}) exceeds baseline ({baseline})",
+        all_matches.len()
+    );
     println!("Offenders:");
     for item in &all_matches {
         println!("{item}");
@@ -3030,7 +3448,10 @@ fn run_module_ratchet(
         Some(path.to_path_buf())
     }) {
         for (line_no, text) in count_pattern_before_cfg_test(&path, pattern, false)? {
-            offenders.push(format!("{}:{line_no}:{text}", display_path(repo_root, &path)));
+            offenders.push(format!(
+                "{}:{line_no}:{text}",
+                display_path(repo_root, &path)
+            ));
         }
     }
 
@@ -3116,7 +3537,11 @@ fn cmd_check_unwraps_prod(repo_root: &Path) -> Result<i32> {
 
     let unwrap_baseline = read_usize_file(&repo_root.join("ci/unwrap_prod_baseline.txt"), 0)?;
     let panic_baseline = read_usize_file(&repo_root.join("ci/panic_prod_baseline.txt"), 0)?;
-    println!("unwrap/expect: {} (baseline: {})", unwrap_offenders.len(), unwrap_baseline);
+    println!(
+        "unwrap/expect: {} (baseline: {})",
+        unwrap_offenders.len(),
+        unwrap_baseline
+    );
     if unwrap_offenders.len() > unwrap_baseline {
         println!(
             "FAIL: unwrap/expect count ({}) exceeds baseline ({})",
@@ -3131,7 +3556,11 @@ fn cmd_check_unwraps_prod(repo_root: &Path) -> Result<i32> {
         return Ok(1);
     }
 
-    println!("panic-family macros: {} (baseline: {})", panic_offenders.len(), panic_baseline);
+    println!(
+        "panic-family macros: {} (baseline: {})",
+        panic_offenders.len(),
+        panic_baseline
+    );
     if panic_offenders.len() > panic_baseline {
         println!(
             "FAIL: panic-family count ({}) exceeds baseline ({})",
@@ -3168,13 +3597,31 @@ fn cmd_quick_check(repo_root: &Path) -> Result<i32> {
     command_status_strict(
         repo_root,
         "cargo",
-        &["clippy", "-p", "perl-parser", "--all-targets", "--all-features", "--", "-D", "warnings"],
+        &[
+            "clippy",
+            "-p",
+            "perl-parser",
+            "--all-targets",
+            "--all-features",
+            "--",
+            "-D",
+            "warnings",
+        ],
         &[],
     )?;
     command_status_strict(
         repo_root,
         "cargo",
-        &["clippy", "-p", "perl-lexer", "--all-targets", "--all-features", "--", "-D", "warnings"],
+        &[
+            "clippy",
+            "-p",
+            "perl-lexer",
+            "--all-targets",
+            "--all-features",
+            "--",
+            "-D",
+            "warnings",
+        ],
         &[],
     )?;
 
@@ -3207,12 +3654,20 @@ fn cmd_quick_check(repo_root: &Path) -> Result<i32> {
         repo_root,
         "cargo",
         &["doc", "--workspace", "--no-deps"],
-        &[("RUSTDOCFLAGS", "-D rustdoc::broken_intra_doc_links -D rustdoc::bare_urls")],
+        &[(
+            "RUSTDOCFLAGS",
+            "-D rustdoc::broken_intra_doc_links -D rustdoc::bare_urls",
+        )],
     )?;
 
     println!();
     println!("5. Tests (workspace, lib+bins+tests, no examples)");
-    command_status_strict(repo_root, "cargo", &["test", "--workspace", "--all-features"], &[])?;
+    command_status_strict(
+        repo_root,
+        "cargo",
+        &["test", "--workspace", "--all-features"],
+        &[],
+    )?;
 
     println!();
     println!("6. Ignored baseline");
@@ -3234,7 +3689,12 @@ fn cmd_test_heredocs(repo_root: &Path) -> Result<i32> {
     println!("🧪 Running comprehensive heredoc tests...");
     if command_exists("xtask") {
         println!("Using cargo xtask...");
-        command_status_strict(repo_root, "cargo", &["xtask", "test-heredoc", "--release"], &[])?;
+        command_status_strict(
+            repo_root,
+            "cargo",
+            &["xtask", "test-heredoc", "--release"],
+            &[],
+        )?;
     } else {
         println!("Running tests directly...");
         command_status_strict(
@@ -3297,7 +3757,10 @@ fn cmd_check_doc_paths(repo_root: &Path, docs_dir: Option<&str>) -> Result<i32> 
     let mut warnings = Vec::new();
 
     if !docs_path.is_dir() {
-        return Err(color_eyre::eyre::eyre!("Docs directory not found: {}", docs_path.display()));
+        return Err(color_eyre::eyre::eyre!(
+            "Docs directory not found: {}",
+            docs_path.display()
+        ));
     }
 
     for entry in walk_entries(&docs_path) {
@@ -3354,17 +3817,33 @@ fn cmd_check_todos(repo_root: &Path, list_mode: bool) -> Result<i32> {
     // the TODO-scanner itself (unwired_scan.rs), producing unavoidable self-referential matches.
     // ".claude" is excluded because it contains ephemeral agent worktrees and tooling state that
     // are gitignored — the scanner should not see them as project source.
-    let exclude_dirs = ["target", ".git", ".receipts", ".runs", "archive", "xtask", ".claude"];
+    let exclude_dirs = [
+        "target",
+        ".git",
+        ".receipts",
+        ".runs",
+        "archive",
+        "xtask",
+        ".claude",
+    ];
     let exclude_files = [
         repo_root.join("ci").join("check_todos.sh"),
-        repo_root.join("crates").join("perl-parser").join("tests").join("missing_docs_ac_tests.rs"),
+        repo_root
+            .join("crates")
+            .join("perl-parser")
+            .join("tests")
+            .join("missing_docs_ac_tests.rs"),
         repo_root
             .join("crates")
             .join("perl-tdd-support")
             .join("src")
             .join("tdd")
             .join("test_generator.rs"),
-        repo_root.join("crates").join("perl-ci-hygiene").join("src").join("main.rs"),
+        repo_root
+            .join("crates")
+            .join("perl-ci-hygiene")
+            .join("src")
+            .join("main.rs"),
         // Perl code-as-string: contains `TODO` as a Perl package bareword, not an unlinked TODO comment.
         repo_root
             .join("crates")
@@ -3477,8 +3956,10 @@ fn cmd_forbid_fatal_constructs(repo_root: &Path, verbose: bool) -> Result<i32> {
         println!();
     }
 
-    let exit_violations: Vec<String> =
-        exits.into_iter().filter(|hit| !is_allowlisted_exit_hit(hit)).collect();
+    let exit_violations: Vec<String> = exits
+        .into_iter()
+        .filter(|hit| !is_allowlisted_exit_hit(hit))
+        .collect();
 
     if !exit_violations.is_empty() {
         println!("{RED}ERROR: std::process::exit() found outside allowlist{NC}");
@@ -3563,10 +4044,21 @@ fn cmd_ignored_test_count(repo_root: &Path, update: bool, check: bool) -> Result
         ));
     }
 
-    let categories =
-        ["brokenpipe", "feature", "infra", "protocol", "manual", "stress", "bug", "bare", "other"];
-    let mut counts: HashMap<String, usize> =
-        categories.iter().map(|category| ((*category).to_string(), 0)).collect();
+    let categories = [
+        "brokenpipe",
+        "feature",
+        "infra",
+        "protocol",
+        "manual",
+        "stress",
+        "bug",
+        "bare",
+        "other",
+    ];
+    let mut counts: HashMap<String, usize> = categories
+        .iter()
+        .map(|category| ((*category).to_string(), 0))
+        .collect();
 
     let mut records: Vec<IgnoredDetail> = Vec::new();
     let crates_root = repo_root.join("crates");
@@ -3582,8 +4074,10 @@ fn cmd_ignored_test_count(repo_root: &Path, update: bool, check: bool) -> Result
         });
     }
 
-    let total: usize =
-        categories.iter().map(|category| counts.get(*category).copied().unwrap_or(0)).sum();
+    let total: usize = categories
+        .iter()
+        .map(|category| counts.get(*category).copied().unwrap_or(0))
+        .sum();
 
     let baseline = load_ignored_baseline(&baseline_path).unwrap_or_else(|_| {
         let mut empty = HashMap::new();
@@ -3599,7 +4093,10 @@ fn cmd_ignored_test_count(repo_root: &Path, update: bool, check: bool) -> Result
     println!("===============================================");
     println!("        Ignored Tests Summary");
     println!("===============================================");
-    println!("{:<12} {:>8} {:>8} {:>8}", "Category", "Count", "Baseline", "Delta");
+    println!(
+        "{:<12} {:>8} {:>8} {:>8}",
+        "Category", "Count", "Baseline", "Delta"
+    );
     println!("-----------------------------------------------");
     for category in categories {
         let current = counts.get(category).copied().unwrap_or(0);
@@ -3741,12 +4238,23 @@ fn write_ignored_baseline(
         fs::create_dir_all(parent)?;
     }
     let mut lines = Vec::new();
-    lines.push(format!("# Ignored test baseline - {}", Utc::now().format("%Y-%m-%dT%H:%M:%SZ")));
+    lines.push(format!(
+        "# Ignored test baseline - {}",
+        Utc::now().format("%Y-%m-%dT%H:%M:%SZ")
+    ));
     lines.push("# Updated by: ignored-test-count.sh --update".to_string());
     let mut ordered = BTreeMap::new();
-    for key in
-        ["brokenpipe", "feature", "infra", "protocol", "manual", "stress", "bug", "bare", "other"]
-    {
+    for key in [
+        "brokenpipe",
+        "feature",
+        "infra",
+        "protocol",
+        "manual",
+        "stress",
+        "bug",
+        "bare",
+        "other",
+    ] {
         ordered.insert(key, counts.get(key).copied().unwrap_or(0));
     }
     for (key, value) in &ordered {
@@ -3787,7 +4295,11 @@ fn collect_todo_hits(
 
     let mut hits = Vec::new();
 
-    for entry in WalkDir::new(root).follow_links(false).into_iter().filter_map(Result::ok) {
+    for entry in WalkDir::new(root)
+        .follow_links(false)
+        .into_iter()
+        .filter_map(Result::ok)
+    {
         if !entry.file_type().is_file() {
             continue;
         }
@@ -3800,7 +4312,9 @@ fn collect_todo_hits(
             continue;
         }
         if rel.components().any(|component| {
-            exclude_dirs.iter().any(|name| component.as_os_str() == OsStr::new(name))
+            exclude_dirs
+                .iter()
+                .any(|name| component.as_os_str() == OsStr::new(name))
         }) {
             continue;
         }
@@ -3808,7 +4322,9 @@ fn collect_todo_hits(
         let file_name = path.file_name().and_then(|f| f.to_str()).unwrap_or("");
         let is_hash_file = file_name == "Justfile"
             || file_name == "justfile"
-            || hash_ext.iter().any(|ext| path.extension().is_some_and(|e| e == *ext));
+            || hash_ext
+                .iter()
+                .any(|ext| path.extension().is_some_and(|e| e == *ext));
         if !is_rust && !is_hash_file {
             continue;
         }
@@ -3822,7 +4338,9 @@ fn collect_todo_hits(
             if !match_line {
                 continue;
             }
-            hits.push(TodoHit { line_text: format!("{}:{}:{}", rel.display(), line_no + 1, line) });
+            hits.push(TodoHit {
+                line_text: format!("{}:{}:{}", rel.display(), line_no + 1, line),
+            });
         }
     }
     Ok(hits)
@@ -3853,7 +4371,12 @@ fn has_unlinked_todo_in_hash_line(line: &str, token_re: &Regex) -> bool {
         if idx > 0 && line.as_bytes()[idx - 1] == b'!' {
             return false;
         }
-        if idx > 0 && !line[..idx].chars().next_back().is_some_and(char::is_whitespace) {
+        if idx > 0
+            && !line[..idx]
+                .chars()
+                .next_back()
+                .is_some_and(char::is_whitespace)
+        {
             return false;
         }
         has_unlinked_token(&line[idx + 1..], token_re)
@@ -4120,10 +4643,22 @@ mod tests {
     fn rust_todo_detection_ignores_linked_or_url_like_comments() -> Result<()> {
         let todo_re = Regex::new(r"TODO|FIXME")?;
 
-        assert!(has_unlinked_todo_in_rust_line("// TODO: investigate", &todo_re));
-        assert!(!has_unlinked_todo_in_rust_line("// TODO(#123): tracked", &todo_re));
-        assert!(!has_unlinked_todo_in_rust_line("let u = \"http://TODO\";", &todo_re));
-        assert!(has_unlinked_todo_in_rust_line("/* FIXME: needs fix */", &todo_re));
+        assert!(has_unlinked_todo_in_rust_line(
+            "// TODO: investigate",
+            &todo_re
+        ));
+        assert!(!has_unlinked_todo_in_rust_line(
+            "// TODO(#123): tracked",
+            &todo_re
+        ));
+        assert!(!has_unlinked_todo_in_rust_line(
+            "let u = \"http://TODO\";",
+            &todo_re
+        ));
+        assert!(has_unlinked_todo_in_rust_line(
+            "/* FIXME: needs fix */",
+            &todo_re
+        ));
 
         Ok(())
     }
@@ -4132,10 +4667,22 @@ mod tests {
     fn hash_comment_todo_detection_handles_shebang_and_inline_hashes() -> Result<()> {
         let todo_re = Regex::new(r"TODO|FIXME")?;
 
-        assert!(!has_unlinked_todo_in_hash_line("#!/usr/bin/env bash", &todo_re));
-        assert!(!has_unlinked_todo_in_hash_line("echo# TODO not a comment", &todo_re));
-        assert!(has_unlinked_todo_in_hash_line("echo hi # TODO: follow up", &todo_re));
-        assert!(!has_unlinked_todo_in_hash_line("echo hi # TODO(#77): tracked", &todo_re));
+        assert!(!has_unlinked_todo_in_hash_line(
+            "#!/usr/bin/env bash",
+            &todo_re
+        ));
+        assert!(!has_unlinked_todo_in_hash_line(
+            "echo# TODO not a comment",
+            &todo_re
+        ));
+        assert!(has_unlinked_todo_in_hash_line(
+            "echo hi # TODO: follow up",
+            &todo_re
+        ));
+        assert!(!has_unlinked_todo_in_hash_line(
+            "echo hi # TODO(#77): tracked",
+            &todo_re
+        ));
 
         Ok(())
     }
@@ -4145,7 +4692,10 @@ mod tests {
         assert_eq!(categorize_ignore("manual: run locally", ""), "manual");
         assert_eq!(categorize_ignore("TODO: requires CI setup", ""), "infra");
         assert_eq!(categorize_ignore("feature: not implemented", ""), "feature");
-        assert_eq!(categorize_ignore("placeholder", "#[ignore] // AC: parser behavior"), "feature");
+        assert_eq!(
+            categorize_ignore("placeholder", "#[ignore] // AC: parser behavior"),
+            "feature"
+        );
         assert_eq!(categorize_ignore("ignore", ""), "bare");
         assert_eq!(categorize_ignore("some new reason", ""), "other");
     }
@@ -4256,9 +4806,18 @@ mod tests {
         // Guard for the three-way comparison introduced after PR #3255
         // (tree-sitter-perl-rs facade). All three parser binaries must be
         // distinct so a future refactor can't silently collapse any pair.
-        assert_ne!(RUST_BENCH_BIN, C_BENCH_BIN, "raw Rust v3 and C binaries must differ");
-        assert_ne!(RUST_BENCH_BIN, FACADE_BENCH_BIN, "raw Rust v3 and facade binaries must differ");
-        assert_ne!(C_BENCH_BIN, FACADE_BENCH_BIN, "C and facade binaries must differ");
+        assert_ne!(
+            RUST_BENCH_BIN, C_BENCH_BIN,
+            "raw Rust v3 and C binaries must differ"
+        );
+        assert_ne!(
+            RUST_BENCH_BIN, FACADE_BENCH_BIN,
+            "raw Rust v3 and facade binaries must differ"
+        );
+        assert_ne!(
+            C_BENCH_BIN, FACADE_BENCH_BIN,
+            "C and facade binaries must differ"
+        );
         assert_eq!(FACADE_BENCH_BIN, "bench_facade");
         assert_eq!(FACADE_BENCH_CRATE, "tree-sitter-perl-rs");
         // Facade crate lives in the workspace, so it is invoked with -p, not
@@ -4298,8 +4857,14 @@ mod tests {
             hook.contains("Bypass policy"),
             "hook must contain a 'Bypass policy' header explaining --no-verify rules"
         );
-        assert!(hook.contains("OK to bypass"), "hook must list when bypass is acceptable");
-        assert!(hook.contains("NOT OK to bypass"), "hook must list when bypass is unacceptable");
+        assert!(
+            hook.contains("OK to bypass"),
+            "hook must list when bypass is acceptable"
+        );
+        assert!(
+            hook.contains("NOT OK to bypass"),
+            "hook must list when bypass is unacceptable"
+        );
     }
 
     #[test]
@@ -4308,12 +4873,18 @@ mod tests {
         // Issue #3205 — core.bare=true keeps getting silently set on the main
         // checkout. The hook should self-heal by unsetting it before doing any
         // work that would otherwise fail with "must be run in a work tree".
-        assert!(hook.contains("core.bare"), "hook must check for core.bare corruption");
+        assert!(
+            hook.contains("core.bare"),
+            "hook must check for core.bare corruption"
+        );
         assert!(
             hook.contains("--unset core.bare"),
             "hook must unset the core.bare flag when corruption is detected"
         );
-        assert!(hook.contains("#3205"), "hook must reference issue #3205 in the warning message");
+        assert!(
+            hook.contains("#3205"),
+            "hook must reference issue #3205 in the warning message"
+        );
     }
 
     #[test]
@@ -4433,7 +5004,10 @@ mod tests {
         let hook = pre_push_hook_script();
         // When the gate fails, the hook should hint at known issues so
         // contributors can recognize them instead of bypassing in confusion.
-        assert!(hook.contains("#3202"), "hook must mention issue #3202 (Windows file-lock race)");
+        assert!(
+            hook.contains("#3202"),
+            "hook must mention issue #3202 (Windows file-lock race)"
+        );
         assert!(
             hook.contains("cargo xtask fmt") || hook.contains("cargo fmt"),
             "hook must suggest the fmt fix command on fmt failures"

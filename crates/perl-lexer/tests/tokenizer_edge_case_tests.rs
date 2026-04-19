@@ -53,7 +53,11 @@ fn first_text(src: &str) -> String {
 #[test]
 fn ts_heredoc_bare_word() -> Result<(), Box<dyn std::error::Error>> {
     let kinds = collect_kinds("<<EOF\nhello\nEOF\n");
-    assert!(kinds.contains(&TokenKind::HeredocStart), "Expected HeredocStart in {:?}", kinds);
+    assert!(
+        kinds.contains(&TokenKind::HeredocStart),
+        "Expected HeredocStart in {:?}",
+        kinds
+    );
     Ok(())
 }
 
@@ -80,14 +84,20 @@ fn ts_heredoc_single_quoted() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn ts_heredoc_backtick() -> Result<(), Box<dyn std::error::Error>> {
     let kinds = collect_kinds("<<`CMD`\necho hello\nCMD\n");
-    assert!(kinds.contains(&TokenKind::HeredocStart), "Expected HeredocStart for backtick heredoc");
+    assert!(
+        kinds.contains(&TokenKind::HeredocStart),
+        "Expected HeredocStart for backtick heredoc"
+    );
     Ok(())
 }
 
 #[test]
 fn ts_heredoc_indented() -> Result<(), Box<dyn std::error::Error>> {
     let kinds = collect_kinds("<<~EOF\n    hello\n    EOF\n");
-    assert!(kinds.contains(&TokenKind::HeredocStart), "Expected HeredocStart for indented heredoc");
+    assert!(
+        kinds.contains(&TokenKind::HeredocStart),
+        "Expected HeredocStart for indented heredoc"
+    );
     Ok(())
 }
 
@@ -95,7 +105,10 @@ fn ts_heredoc_indented() -> Result<(), Box<dyn std::error::Error>> {
 fn ts_heredoc_followed_by_statement() -> Result<(), Box<dyn std::error::Error>> {
     let kinds = collect_kinds("<<EOF\nbody\nEOF\nmy $x = 1;\n");
     assert!(kinds.contains(&TokenKind::HeredocStart));
-    assert!(kinds.contains(&TokenKind::My), "Expected 'my' after heredoc body");
+    assert!(
+        kinds.contains(&TokenKind::My),
+        "Expected 'my' after heredoc body"
+    );
     Ok(())
 }
 
@@ -150,14 +163,22 @@ fn ts_regex_slash_with_modifiers() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn ts_substitution_brackets() -> Result<(), Box<dyn std::error::Error>> {
     let kind = first_kind("s[old][new]");
-    assert_eq!(kind, TokenKind::Substitution, "s[...][...] should be Substitution");
+    assert_eq!(
+        kind,
+        TokenKind::Substitution,
+        "s[...][...] should be Substitution"
+    );
     Ok(())
 }
 
 #[test]
 fn ts_substitution_angles() -> Result<(), Box<dyn std::error::Error>> {
     let kind = first_kind("s<old><new>");
-    assert_eq!(kind, TokenKind::Substitution, "s<...><...> should be Substitution");
+    assert_eq!(
+        kind,
+        TokenKind::Substitution,
+        "s<...><...> should be Substitution"
+    );
     Ok(())
 }
 
@@ -173,14 +194,22 @@ fn ts_substitution_with_modifiers() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn ts_transliteration_pipe() -> Result<(), Box<dyn std::error::Error>> {
     let kind = first_kind("tr|a-z|A-Z|");
-    assert_eq!(kind, TokenKind::Transliteration, "tr|...|...| should be Transliteration");
+    assert_eq!(
+        kind,
+        TokenKind::Transliteration,
+        "tr|...|...| should be Transliteration"
+    );
     Ok(())
 }
 
 #[test]
 fn ts_transliteration_y_alias() -> Result<(), Box<dyn std::error::Error>> {
     let kind = first_kind("y/a-z/A-Z/");
-    assert_eq!(kind, TokenKind::Transliteration, "y/.../.../ should be Transliteration");
+    assert_eq!(
+        kind,
+        TokenKind::Transliteration,
+        "y/.../.../ should be Transliteration"
+    );
     Ok(())
 }
 
@@ -205,7 +234,11 @@ fn ts_qr_brace() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn ts_q_brace() -> Result<(), Box<dyn std::error::Error>> {
     let kind = first_kind("q{hello}");
-    assert_eq!(kind, TokenKind::QuoteSingle, "q{{...}} should be QuoteSingle");
+    assert_eq!(
+        kind,
+        TokenKind::QuoteSingle,
+        "q{{...}} should be QuoteSingle"
+    );
     Ok(())
 }
 
@@ -240,21 +273,33 @@ fn ts_q_pipe() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn ts_qq_paren() -> Result<(), Box<dyn std::error::Error>> {
     let kind = first_kind("qq(hello $world)");
-    assert_eq!(kind, TokenKind::QuoteDouble, "qq(...) should be QuoteDouble");
+    assert_eq!(
+        kind,
+        TokenKind::QuoteDouble,
+        "qq(...) should be QuoteDouble"
+    );
     Ok(())
 }
 
 #[test]
 fn ts_qq_bracket() -> Result<(), Box<dyn std::error::Error>> {
     let kind = first_kind("qq[hello $world]");
-    assert_eq!(kind, TokenKind::QuoteDouble, "qq[...] should be QuoteDouble");
+    assert_eq!(
+        kind,
+        TokenKind::QuoteDouble,
+        "qq[...] should be QuoteDouble"
+    );
     Ok(())
 }
 
 #[test]
 fn ts_qq_angle() -> Result<(), Box<dyn std::error::Error>> {
     let kind = first_kind("qq<hello $world>");
-    assert_eq!(kind, TokenKind::QuoteDouble, "qq<...> should be QuoteDouble");
+    assert_eq!(
+        kind,
+        TokenKind::QuoteDouble,
+        "qq<...> should be QuoteDouble"
+    );
     Ok(())
 }
 
@@ -282,21 +327,33 @@ fn ts_qw_pipe() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn ts_qx_brace() -> Result<(), Box<dyn std::error::Error>> {
     let kind = first_kind("qx{ls -la}");
-    assert_eq!(kind, TokenKind::QuoteCommand, "qx{{...}} should be QuoteCommand");
+    assert_eq!(
+        kind,
+        TokenKind::QuoteCommand,
+        "qx{{...}} should be QuoteCommand"
+    );
     Ok(())
 }
 
 #[test]
 fn ts_qx_paren() -> Result<(), Box<dyn std::error::Error>> {
     let kind = first_kind("qx(ls -la)");
-    assert_eq!(kind, TokenKind::QuoteCommand, "qx(...) should be QuoteCommand");
+    assert_eq!(
+        kind,
+        TokenKind::QuoteCommand,
+        "qx(...) should be QuoteCommand"
+    );
     Ok(())
 }
 
 #[test]
 fn ts_backtick_string() -> Result<(), Box<dyn std::error::Error>> {
     let kind = first_kind("`ls -la`");
-    assert_eq!(kind, TokenKind::QuoteCommand, "backtick string should be QuoteCommand");
+    assert_eq!(
+        kind,
+        TokenKind::QuoteCommand,
+        "backtick string should be QuoteCommand"
+    );
     Ok(())
 }
 
@@ -383,7 +440,11 @@ fn ts_capture_variables() -> Result<(), Box<dyn std::error::Error>> {
     for n in 1..=9 {
         let var = format!("${}", n);
         let kinds = collect_kinds(&var);
-        assert!(!kinds.is_empty(), "Expected at least one token for '{}'", var);
+        assert!(
+            !kinds.is_empty(),
+            "Expected at least one token for '{}'",
+            var
+        );
     }
     Ok(())
 }
@@ -447,7 +508,11 @@ fn ts_division_after_variable() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn ts_regex_after_binding() -> Result<(), Box<dyn std::error::Error>> {
     let kinds = collect_kinds("$x =~ /pattern/i");
-    assert!(kinds.contains(&TokenKind::Regex), "/ after =~ should be Regex, got {:?}", kinds);
+    assert!(
+        kinds.contains(&TokenKind::Regex),
+        "/ after =~ should be Regex, got {:?}",
+        kinds
+    );
     Ok(())
 }
 
@@ -465,7 +530,11 @@ fn ts_defined_or_after_variable() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn ts_regex_at_statement_start() -> Result<(), Box<dyn std::error::Error>> {
     let kind = first_kind("/pattern/");
-    assert_eq!(kind, TokenKind::Regex, "/ at statement start should be Regex");
+    assert_eq!(
+        kind,
+        TokenKind::Regex,
+        "/ at statement start should be Regex"
+    );
     Ok(())
 }
 
@@ -493,7 +562,10 @@ fn ts_multiple_quote_ops() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn ts_special_vars_in_expression() -> Result<(), Box<dyn std::error::Error>> {
     let kinds = collect_kinds("if ($! && $@) { $_ = $0; }");
-    let id_count = kinds.iter().filter(|&&k| k == TokenKind::Identifier).count();
+    let id_count = kinds
+        .iter()
+        .filter(|&&k| k == TokenKind::Identifier)
+        .count();
     assert!(
         id_count >= 3,
         "expected at least 3 identifier tokens for special vars, got {}",

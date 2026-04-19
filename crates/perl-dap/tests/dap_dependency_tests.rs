@@ -89,7 +89,10 @@ mod dap_dependencies {
                 let version_num: f64 = version_str.parse().map_err(|e| {
                     anyhow::anyhow!("failed to parse perl version '{version_str}': {e}")
                 })?;
-                assert!(version_num >= 5.010, "Perl version must be >= 5.010, got {version_num}");
+                assert!(
+                    version_num >= 5.010,
+                    "Perl version must be >= 5.010, got {version_num}"
+                );
             }
             _ => {
                 // If Perl is unavailable in the test environment, ensure compatibility

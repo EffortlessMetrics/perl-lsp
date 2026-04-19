@@ -96,7 +96,10 @@ pub fn run(version: String, yes: bool) -> Result<()> {
 
     println!("📋 Next steps:");
     println!("1. Review the release artifacts");
-    println!("2. Create git tag: git tag -a v{} -m 'Release v{}'", version, version);
+    println!(
+        "2. Create git tag: git tag -a v{} -m 'Release v{}'",
+        version, version
+    );
     println!("3. Push tag: git push origin v{}", version);
     println!("4. Create GitHub release and upload artifacts");
     println!("5. Run: cargo xtask publish-crates");
@@ -117,57 +120,104 @@ fn check_prerequisites() -> Result<()> {
 }
 
 fn command_exists(cmd: &str) -> bool {
-    Command::new("which").arg(cmd).output().map(|output| output.status.success()).unwrap_or(false)
+    Command::new("which")
+        .arg(cmd)
+        .output()
+        .map(|output| output.status.success())
+        .unwrap_or(false)
 }
 
 fn check_git_status() -> Result<bool> {
-    let output = Command::new("git").args(["diff-index", "--quiet", "HEAD", "--"]).output()?;
+    let output = Command::new("git")
+        .args(["diff-index", "--quiet", "HEAD", "--"])
+        .output()?;
     Ok(output.status.success())
 }
 
 fn build_binaries(release_dir: &Path) -> Result<()> {
     // Build perllsp
-    let output = Command::new("cargo").args(["build", "--release", "-p", "perllsp"]).output()?;
+    let output = Command::new("cargo")
+        .args(["build", "--release", "-p", "perllsp"])
+        .output()?;
     if !output.status.success() {
-        bail!("Failed to build perllsp: {}", String::from_utf8_lossy(&output.stderr));
+        bail!(
+            "Failed to build perllsp: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
     }
 
     // Build perl-dap
     let output = Command::new("cargo")
-        .args(["build", "--release", "-p", "perl-parser", "--bin", "perl-dap"])
+        .args([
+            "build",
+            "--release",
+            "-p",
+            "perl-parser",
+            "--bin",
+            "perl-dap",
+        ])
         .output()?;
     if !output.status.success() {
-        bail!("Failed to build perl-dap: {}", String::from_utf8_lossy(&output.stderr));
+        bail!(
+            "Failed to build perl-dap: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
     }
 
     // Copy binaries
-    fs::copy("target/release/perllsp", release_dir.join("binaries/perllsp"))?;
-    fs::copy("target/release/perl-dap", release_dir.join("binaries/perl-dap"))?;
+    fs::copy(
+        "target/release/perllsp",
+        release_dir.join("binaries/perllsp"),
+    )?;
+    fs::copy(
+        "target/release/perl-dap",
+        release_dir.join("binaries/perl-dap"),
+    )?;
 
     // Strip binaries
-    Command::new("strip").arg(release_dir.join("binaries/perllsp")).output()?;
-    Command::new("strip").arg(release_dir.join("binaries/perl-dap")).output()?;
+    Command::new("strip")
+        .arg(release_dir.join("binaries/perllsp"))
+        .output()?;
+    Command::new("strip")
+        .arg(release_dir.join("binaries/perl-dap"))
+        .output()?;
 
     Ok(())
 }
 
 fn package_vscode_extension(release_dir: &Path) -> Result<()> {
     // Change to vscode-extension directory
-    let output = Command::new("npm").current_dir("vscode-extension").arg("install").output()?;
+    let output = Command::new("npm")
+        .current_dir("vscode-extension")
+        .arg("install")
+        .output()?;
     if !output.status.success() {
-        bail!("Failed to install dependencies: {}", String::from_utf8_lossy(&output.stderr));
+        bail!(
+            "Failed to install dependencies: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
     }
 
-    let output =
-        Command::new("npm").current_dir("vscode-extension").args(["run", "compile"]).output()?;
+    let output = Command::new("npm")
+        .current_dir("vscode-extension")
+        .args(["run", "compile"])
+        .output()?;
     if !output.status.success() {
-        bail!("Failed to compile extension: {}", String::from_utf8_lossy(&output.stderr));
+        bail!(
+            "Failed to compile extension: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
     }
 
-    let output =
-        Command::new("npx").current_dir("vscode-extension").args(["vsce", "package"]).output()?;
+    let output = Command::new("npx")
+        .current_dir("vscode-extension")
+        .args(["vsce", "package"])
+        .output()?;
     if !output.status.success() {
-        bail!("Failed to package extension: {}", String::from_utf8_lossy(&output.stderr));
+        bail!(
+            "Failed to package extension: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
     }
 
     // Move VSIX to release directory
@@ -198,7 +248,10 @@ fn run_tests() -> Result<()> {
 fn create_checksums(release_dir: &Path) -> Result<()> {
     let output = Command::new("sh")
         .arg("-c")
-        .arg(format!("cd {} && sha256sum binaries/* *.vsix > checksums.txt", release_dir.display()))
+        .arg(format!(
+            "cd {} && sha256sum binaries/* *.vsix > checksums.txt",
+            release_dir.display()
+        ))
         .output()?;
     if !output.status.success() {
         bail!("Failed to create checksums");
@@ -209,7 +262,12 @@ fn create_checksums(release_dir: &Path) -> Result<()> {
 fn create_release_archive(release_dir: &Path, version: &str) -> Result<()> {
     let output = Command::new("tar")
         .current_dir(release_dir.join("binaries"))
-        .args(["-czf", &format!("../perllsp-{}-linux-x64.tar.gz", version), "perllsp", "perl-dap"])
+        .args([
+            "-czf",
+            &format!("../perllsp-{}-linux-x64.tar.gz", version),
+            "perllsp",
+            "perl-dap",
+        ])
         .output()?;
     if !output.status.success() {
         bail!("Failed to create release archive");

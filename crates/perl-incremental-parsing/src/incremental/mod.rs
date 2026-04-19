@@ -74,7 +74,10 @@ impl IncrementalState {
                     found: None,
                     partial: None,
                 },
-                SourceLocation { start: 0, end: source.len() },
+                SourceLocation {
+                    start: 0,
+                    end: source.len(),
+                },
             ),
         };
 
@@ -97,13 +100,25 @@ impl IncrementalState {
         let lex_checkpoints = Self::create_lex_checkpoints(&tokens, &line_index);
         let parse_checkpoints = Self::create_parse_checkpoints(&ast);
 
-        Self { rope, line_index, lex_checkpoints, parse_checkpoints, ast, tokens, source }
+        Self {
+            rope,
+            line_index,
+            lex_checkpoints,
+            parse_checkpoints,
+            ast,
+            tokens,
+            source,
+        }
     }
 
     /// Create lexer checkpoints at safe boundaries
     fn create_lex_checkpoints(tokens: &[Token], line_index: &LineIndex) -> Vec<LexCheckpoint> {
-        let mut checkpoints =
-            vec![LexCheckpoint { byte: 0, mode: LexerMode::ExpectTerm, line: 0, column: 0 }];
+        let mut checkpoints = vec![LexCheckpoint {
+            byte: 0,
+            mode: LexerMode::ExpectTerm,
+            line: 0,
+            column: 0,
+        }];
 
         let mut mode = LexerMode::ExpectTerm;
 
@@ -214,7 +229,12 @@ impl IncrementalState {
                 let child_id = node_id.wrapping_mul(101);
                 Self::walk_ast_for_checkpoints(body, checkpoints, &mut local_scope, child_id);
             }
-            NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
+            NodeKind::If {
+                condition,
+                then_branch,
+                elsif_branches,
+                else_branch,
+            } => {
                 let base_id = node_id.wrapping_mul(101);
                 Self::walk_ast_for_checkpoints(condition, checkpoints, scope, base_id);
 
@@ -242,13 +262,21 @@ impl IncrementalState {
                     Self::walk_ast_for_checkpoints(else_br, checkpoints, scope, else_id);
                 }
             }
-            NodeKind::While { condition, body, .. } => {
+            NodeKind::While {
+                condition, body, ..
+            } => {
                 let base_id = node_id.wrapping_mul(101);
                 Self::walk_ast_for_checkpoints(condition, checkpoints, scope, base_id);
                 // body is Box<Node>, not Option<Box<Node>>
                 Self::walk_ast_for_checkpoints(body, checkpoints, scope, base_id.wrapping_add(1));
             }
-            NodeKind::For { init, condition, update, body, .. } => {
+            NodeKind::For {
+                init,
+                condition,
+                update,
+                body,
+                ..
+            } => {
                 let base_id = node_id.wrapping_mul(101);
                 let mut offset = 0;
                 if let Some(init) = init {
@@ -314,7 +342,10 @@ impl IncrementalState {
 
     /// Find the best parse checkpoint before a given byte offset
     pub fn find_parse_checkpoint(&self, byte: usize) -> Option<&ParseCheckpoint> {
-        self.parse_checkpoints.iter().rev().find(|cp| cp.byte <= byte)
+        self.parse_checkpoints
+            .iter()
+            .rev()
+            .find(|cp| cp.byte <= byte)
     }
 }
 
@@ -341,7 +372,12 @@ impl Edit {
                 .position_to_byte(range.end.line as usize, range.end.character as usize)?;
             let new_end_byte = start_byte + change.text.len();
 
-            Some(Edit { start_byte, old_end_byte, new_end_byte, new_text: change.text.clone() })
+            Some(Edit {
+                start_byte,
+                old_end_byte,
+                new_end_byte,
+                new_text: change.text.clone(),
+            })
         } else {
             // Full document change
             Some(Edit {
@@ -449,8 +485,11 @@ fn apply_single_edit(state: &mut IncrementalState, edit: &Edit) -> Result<Range<
     lexer.restore(&lex_cp);
 
     // Determine token index to splice
-    let start_idx =
-        state.tokens.iter().position(|t| t.start >= checkpoint.byte).unwrap_or(state.tokens.len());
+    let start_idx = state
+        .tokens
+        .iter()
+        .position(|t| t.start >= checkpoint.byte)
+        .unwrap_or(state.tokens.len());
 
     // Build a lookup of old tokens past the edit for synchronisation.
     // Once a newly-lexed token matches an old token (shifted by the byte delta),
@@ -458,8 +497,11 @@ fn apply_single_edit(state: &mut IncrementalState, edit: &Edit) -> Result<Range<
     let edit_end_in_new = start_byte + edit.new_text.len();
 
     // Find the first old-token index whose start >= old_end_byte (i.e. fully past the edit)
-    let old_sync_start =
-        state.tokens.iter().position(|t| t.start >= old_end_byte).unwrap_or(state.tokens.len());
+    let old_sync_start = state
+        .tokens
+        .iter()
+        .position(|t| t.start >= old_end_byte)
+        .unwrap_or(state.tokens.len());
 
     let mut new_tokens = Vec::new();
     let mut last_token_end = checkpoint.byte;
@@ -579,7 +621,10 @@ mod tests {
         );
 
         // Source must reflect the edit.
-        assert!(state.source.contains("999"), "source must contain the new value after edit");
+        assert!(
+            state.source.contains("999"),
+            "source must contain the new value after edit"
+        );
         assert!(
             !state.source.contains("= 29;"),
             "source must not contain the old value after edit"
@@ -628,7 +673,10 @@ fn full_reparse(state: &mut IncrementalState) -> Result<ReparseResult> {
                 found: None,
                 partial: None,
             },
-            SourceLocation { start: 0, end: state.source.len() },
+            SourceLocation {
+                start: 0,
+                end: state.source.len(),
+            },
         ),
     };
 

@@ -86,13 +86,19 @@ pub fn get_corpus_files() -> Vec<CorpusFile> {
 pub fn get_corpus_files_from(paths: &CorpusPaths) -> Vec<CorpusFile> {
     let mut files: Vec<CorpusFile> = get_test_files_from(paths)
         .into_iter()
-        .map(|path| CorpusFile { path, layer: CorpusLayer::TestCorpus })
+        .map(|path| CorpusFile {
+            path,
+            layer: CorpusLayer::TestCorpus,
+        })
         .collect();
 
     files.extend(
         get_fuzz_files_from(paths)
             .into_iter()
-            .map(|path| CorpusFile { path, layer: CorpusLayer::Fuzz }),
+            .map(|path| CorpusFile {
+                path,
+                layer: CorpusLayer::Fuzz,
+            }),
     );
 
     files.sort_by(|a, b| a.path.cmp(&b.path));
@@ -102,7 +108,10 @@ pub fn get_corpus_files_from(paths: &CorpusPaths) -> Vec<CorpusFile> {
 
 /// Return all available Perl sources across corpus layers.
 pub fn get_all_test_files() -> Vec<PathBuf> {
-    let mut files: Vec<PathBuf> = get_corpus_files().into_iter().map(|file| file.path).collect();
+    let mut files: Vec<PathBuf> = get_corpus_files()
+        .into_iter()
+        .map(|file| file.path)
+        .collect();
     files.sort();
     files.dedup();
     files
@@ -171,7 +180,11 @@ fn collect_files(root: &Path, extensions: &[&str]) -> Vec<PathBuf> {
 fn has_allowed_extension(path: &Path, extensions: &[&str]) -> bool {
     path.extension()
         .and_then(|ext| ext.to_str())
-        .map(|ext| extensions.iter().any(|allowed| ext.eq_ignore_ascii_case(allowed)))
+        .map(|ext| {
+            extensions
+                .iter()
+                .any(|allowed| ext.eq_ignore_ascii_case(allowed))
+        })
         .unwrap_or(false)
 }
 
@@ -183,7 +196,10 @@ mod tests {
 
     fn temp_root(prefix: &str) -> std::io::Result<PathBuf> {
         let mut root = std::env::temp_dir();
-        let nanos = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_nanos();
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos();
         root.push(format!("{}_{}_{}", prefix, std::process::id(), nanos));
         fs::create_dir_all(&root)?;
         Ok(root)
@@ -219,12 +235,21 @@ mod tests {
         let mut names: Vec<_> = files
             .iter()
             .map(|path| {
-                path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default()
+                path.file_name()
+                    .map(|n| n.to_string_lossy().to_string())
+                    .unwrap_or_default()
             })
             .collect();
         names.sort();
 
-        let expected = vec!["case.cgi", "case.pl", "case.pm", "case.psgi", "case.t", "nested.pl"];
+        let expected = vec![
+            "case.cgi",
+            "case.pl",
+            "case.pm",
+            "case.psgi",
+            "case.t",
+            "nested.pl",
+        ];
         assert_eq!(names, expected);
 
         fs::remove_dir_all(&root)?;
@@ -254,7 +279,9 @@ mod tests {
             "Expected test corpus file in results"
         );
         assert!(
-            files.iter().any(|file| file.layer == CorpusLayer::Fuzz && file.path == fuzz_file),
+            files
+                .iter()
+                .any(|file| file.layer == CorpusLayer::Fuzz && file.path == fuzz_file),
             "Expected fuzz file in results"
         );
 

@@ -77,7 +77,9 @@ impl Default for ExecuteCommandProvider {
 impl ExecuteCommandProvider {
     /// Create a new execute command provider.
     pub fn new() -> Self {
-        Self { workspace_roots: Vec::new() }
+        Self {
+            workspace_roots: Vec::new(),
+        }
     }
 
     /// Create a provider with workspace root enforcement.
@@ -247,7 +249,12 @@ impl ExecuteCommandProvider {
         let ext_path = normalize_path_for_external_command(file_path);
 
         let mut perl_cmd = Command::new("perl");
-        perl_cmd.arg("-e").arg(perl_code).arg("--").arg(ext_path.as_os_str()).arg(sub_name);
+        perl_cmd
+            .arg("-e")
+            .arg(perl_code)
+            .arg("--")
+            .arg(ext_path.as_os_str())
+            .arg(sub_name);
         match crate::util::run_command_with_timeout(perl_cmd, 30) {
             Ok(result) => {
                 Ok(self.format_command_result(result, Some(("subroutine", sub_name.into()))))
@@ -331,7 +338,10 @@ impl ExecuteCommandProvider {
         self.run_builtin_critic(&canonical_path)
     }
 
-    #[deprecated(since = "0.8.9", note = "Use run_critic_secure for secure path resolution")]
+    #[deprecated(
+        since = "0.8.9",
+        note = "Use run_critic_secure for secure path resolution"
+    )]
     #[allow(dead_code)]
     #[allow(deprecated)]
     pub(crate) fn run_critic(&self, file_path: &str) -> Result<Value, String> {
@@ -354,7 +364,11 @@ impl ExecuteCommandProvider {
     }
 
     fn run_external_critic(&self, file_path: &Path) -> Result<Value, String> {
-        let config = CriticConfig { severity: 3, verbose: true, ..Default::default() };
+        let config = CriticConfig {
+            severity: 3,
+            verbose: true,
+            ..Default::default()
+        };
         let mut analyzer = CriticAnalyzer::with_os_runtime(config);
 
         match analyzer.analyze_file(file_path) {
@@ -406,7 +420,10 @@ impl ExecuteCommandProvider {
                             found: None,
                             partial: None,
                         },
-                        crate::ast::SourceLocation { start: 0, end: code_text.len() },
+                        crate::ast::SourceLocation {
+                            start: 0,
+                            end: code_text.len(),
+                        },
                     ),
                     Some(error),
                 )
@@ -528,8 +545,10 @@ impl ExecuteCommandProvider {
             }
         }
 
-        let candidate_strings: Vec<_> =
-            candidates.iter().map(|p| p.to_string_lossy().to_string()).collect();
+        let candidate_strings: Vec<_> = candidates
+            .iter()
+            .map(|p| p.to_string_lossy().to_string())
+            .collect();
         json!({ "found": false, "candidates": candidate_strings })
     }
 
@@ -641,14 +660,20 @@ impl ExecuteCommandProvider {
             }
             let after_use = trimmed.trim_start_matches("use ").trim();
             // Extract the module name (stop at first whitespace or semicolon)
-            let module_name: String =
-                after_use.chars().take_while(|c| c.is_alphanumeric() || *c == ':').collect();
+            let module_name: String = after_use
+                .chars()
+                .take_while(|c| c.is_alphanumeric() || *c == ':')
+                .collect();
 
             if module_name.is_empty() {
                 continue;
             }
             // Skip version-only pragmas like `use 5.010;` or `use v5.10;`
-            if module_name.chars().next().is_some_and(|c| c.is_ascii_digit() || c == 'v') {
+            if module_name
+                .chars()
+                .next()
+                .is_some_and(|c| c.is_ascii_digit() || c == 'v')
+            {
                 continue;
             }
             if SKIP_MODULES.contains(&module_name.as_str()) {
@@ -693,16 +718,28 @@ impl ExecuteCommandProvider {
                 tracing::debug!(path = %path.display(), error = %e, "workspace root: failed to canonicalize path");
             }).ok();
             for root in &self.workspace_roots {
-                let Ok(canonical_root) = root.canonicalize() else { continue };
-                if canonical_path.as_ref().is_some_and(|p| p.starts_with(&canonical_root)) {
+                let Ok(canonical_root) = root.canonicalize() else {
+                    continue;
+                };
+                if canonical_path
+                    .as_ref()
+                    .is_some_and(|p| p.starts_with(&canonical_root))
+                {
                     return Some(root.clone());
                 }
             }
         }
 
         // Perl distribution marker files that indicate a project root.
-        const PROJECT_MARKERS: &[&str] =
-            &["Makefile.PL", "Build.PL", "cpanfile", "dist.ini", "META.json", "META.yml", ".git"];
+        const PROJECT_MARKERS: &[&str] = &[
+            "Makefile.PL",
+            "Build.PL",
+            "cpanfile",
+            "dist.ini",
+            "META.json",
+            "META.yml",
+            ".git",
+        ];
 
         let mut current = path.parent()?;
 
@@ -786,7 +823,9 @@ impl ExecuteCommandProvider {
         };
         let normalized_path = path.to_string_lossy();
         if normalized_path.contains("..") {
-            return Err("Path traversal attempt detected: path contains '..' component".to_string());
+            return Err(
+                "Path traversal attempt detected: path contains '..' component".to_string(),
+            );
         }
 
         let canonical_path = path
@@ -830,7 +869,11 @@ impl ExecuteCommandProvider {
         }
 
         std::fs::metadata(&canonical_path).map_err(|e| {
-            format!("Cannot read file metadata '{}': {}", canonical_path.display(), e)
+            format!(
+                "Cannot read file metadata '{}': {}",
+                canonical_path.display(),
+                e
+            )
         })?;
 
         Ok(canonical_path)
@@ -841,7 +884,10 @@ impl ExecuteCommandProvider {
         self.resolve_path_from_args(&[Value::String(file_path.to_string())])
     }
 
-    #[deprecated(since = "0.8.9", note = "Use resolve_path_from_args for secure path resolution")]
+    #[deprecated(
+        since = "0.8.9",
+        note = "Use resolve_path_from_args for secure path resolution"
+    )]
     #[allow(dead_code)]
     pub(crate) fn normalize_file_path<'a>(&self, file_path: &'a str) -> &'a str {
         file_path.strip_prefix("file://").unwrap_or(file_path)
@@ -1044,6 +1090,9 @@ mod normalize_path_tests {
     fn no_stripping_on_non_windows_even_for_unc_extended_string() {
         let path = Path::new(r"\\?\UNC\fileserver\share\project\test.pl");
         let result = normalize_path_for_external_command(path);
-        assert_eq!(result, PathBuf::from(r"\\?\UNC\fileserver\share\project\test.pl"));
+        assert_eq!(
+            result,
+            PathBuf::from(r"\\?\UNC\fileserver\share\project\test.pl")
+        );
     }
 }

@@ -23,7 +23,10 @@ pub struct SseParser<R: std::io::BufRead> {
 
 impl<R: std::io::BufRead> SseParser<R> {
     pub fn new(reader: R) -> Self {
-        Self { reader, done: false }
+        Self {
+            reader,
+            done: false,
+        }
     }
 
     /// Read the next SSE event. Returns None when stream is done.
@@ -80,7 +83,10 @@ impl<R: std::io::BufRead> SseParser<R> {
             // Ignore unknown fields (id:, retry:, etc.)
         }
 
-        Ok(Some(SseEvent { event: event_type, data: data_lines.join("\n") }))
+        Ok(Some(SseEvent {
+            event: event_type,
+            data: data_lines.join("\n"),
+        }))
     }
 }
 

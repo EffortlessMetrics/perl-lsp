@@ -322,7 +322,10 @@ mod tests {
     #[test]
     fn test_scope_distance_immediate() {
         let table = build_test_table();
-        assert_eq!(compute_scope_distance(&table, 3, 3), ScopeDistance::Immediate);
+        assert_eq!(
+            compute_scope_distance(&table, 3, 3),
+            ScopeDistance::Immediate
+        );
     }
 
     #[test]
@@ -336,14 +339,20 @@ mod tests {
     fn test_scope_distance_package_level() {
         let table = build_test_table();
         // Cursor in scope 3, symbol in scope 1 (package)
-        assert_eq!(compute_scope_distance(&table, 3, 1), ScopeDistance::PackageLevel);
+        assert_eq!(
+            compute_scope_distance(&table, 3, 1),
+            ScopeDistance::PackageLevel
+        );
     }
 
     #[test]
     fn test_scope_distance_global_level() {
         let table = build_test_table();
         // Cursor in scope 3, symbol in scope 0 (global)
-        assert_eq!(compute_scope_distance(&table, 3, 0), ScopeDistance::PackageLevel);
+        assert_eq!(
+            compute_scope_distance(&table, 3, 0),
+            ScopeDistance::PackageLevel
+        );
     }
 
     #[test]
@@ -363,7 +372,10 @@ mod tests {
 
         // Cursor in scope 3 (under scope 2), symbol in scope 4 (sibling branch)
         // scope 4 is Subroutine, not Global/Package, so it returns Workspace
-        assert_eq!(compute_scope_distance(&table, 3, 4), ScopeDistance::Workspace);
+        assert_eq!(
+            compute_scope_distance(&table, 3, 4),
+            ScopeDistance::Workspace
+        );
     }
 
     #[test]

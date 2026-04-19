@@ -83,7 +83,10 @@ impl WorkspaceIndex {
     /// Find all definitions of a symbol by name
     pub fn find_defs(&self, name: &str) -> &[SymbolDef] {
         static EMPTY: Vec<SymbolDef> = Vec::new();
-        self.by_name.get(name).map(|v| v.as_slice()).unwrap_or(&EMPTY[..])
+        self.by_name
+            .get(name)
+            .map(|v| v.as_slice())
+            .unwrap_or(&EMPTY[..])
     }
 
     /// Find all references to a symbol (simplified version)
@@ -144,7 +147,11 @@ mod tests {
             attributes: Vec::new(),
         };
 
-        symtab.symbols.entry("test_func".to_string()).or_default().push(symbol);
+        symtab
+            .symbols
+            .entry("test_func".to_string())
+            .or_default()
+            .push(symbol);
 
         // Add document to index
         index.update_from_document("file:///test.pl", "", &symtab);

@@ -28,7 +28,9 @@ mod tests {
         let start = Instant::now();
 
         // Calculate byte offset
-        let byte_offset = mapper.lsp_pos_to_byte(edit_pos).ok_or("invalid edit position")?;
+        let byte_offset = mapper
+            .lsp_pos_to_byte(edit_pos)
+            .ok_or("invalid edit position")?;
 
         // Apply edit
         let mut text = big_file.clone();
@@ -47,7 +49,11 @@ mod tests {
         let elapsed = start.elapsed();
 
         // Assert performance: should be < 50ms (allow 150ms for CI)
-        assert!(elapsed.as_millis() < 150, "Edit took {}ms, expected < 150ms", elapsed.as_millis());
+        assert!(
+            elapsed.as_millis() < 150,
+            "Edit took {}ms, expected < 150ms",
+            elapsed.as_millis()
+        );
 
         // Verify the edit was applied correctly
         let lines: Vec<&str> = text.lines().collect();
@@ -68,8 +74,9 @@ mod tests {
         };
 
         // Get byte offset
-        let byte_offset =
-            mapper.lsp_pos_to_byte(pos_after_emoji).ok_or("invalid emoji position")?;
+        let byte_offset = mapper
+            .lsp_pos_to_byte(pos_after_emoji)
+            .ok_or("invalid emoji position")?;
 
         // The emoji starts at byte 4 ("let ") and is 4 bytes long
         assert_eq!(byte_offset, 8, "Should be at byte 8 after 4-byte emoji");
@@ -81,8 +88,13 @@ mod tests {
 
         // Test round-trip
         let new_mapper = PositionMapper::new(&mutable_text);
-        let pos = Position { line: 0, character: 8 }; // After "let crab"
-        let byte = new_mapper.lsp_pos_to_byte(pos).ok_or("invalid round-trip position")?;
+        let pos = Position {
+            line: 0,
+            character: 8,
+        }; // After "let crab"
+        let byte = new_mapper
+            .lsp_pos_to_byte(pos)
+            .ok_or("invalid round-trip position")?;
         let back_pos = new_mapper.byte_to_lsp_pos(byte);
         assert_eq!(back_pos.character, 8);
         Ok(())
@@ -97,13 +109,23 @@ mod tests {
         // Test positions at line boundaries
 
         // Start of line 2 (after \r\n)
-        let line2_start = Position { line: 1, character: 0 };
-        let byte = mapper.lsp_pos_to_byte(line2_start).ok_or("invalid line2_start position")?;
+        let line2_start = Position {
+            line: 1,
+            character: 0,
+        };
+        let byte = mapper
+            .lsp_pos_to_byte(line2_start)
+            .ok_or("invalid line2_start position")?;
         assert_eq!(byte, 10); // "line one\r\n" = 10 bytes
 
         // Middle of line 2
-        let line2_mid = Position { line: 1, character: 5 };
-        let byte = mapper.lsp_pos_to_byte(line2_mid).ok_or("invalid line2_mid position")?;
+        let line2_mid = Position {
+            line: 1,
+            character: 5,
+        };
+        let byte = mapper
+            .lsp_pos_to_byte(line2_mid)
+            .ok_or("invalid line2_mid position")?;
         assert_eq!(byte, 15); // 10 + 5
 
         // Edit across CRLF boundary
@@ -130,8 +152,13 @@ mod tests {
         let mapper = PositionMapper::new(text);
 
         // Test position in middle of multibyte sequence
-        let pos = Position { line: 0, character: 5 }; // After "café "
-        let byte_offset = mapper.lsp_pos_to_byte(pos).ok_or("invalid multibyte position")?;
+        let pos = Position {
+            line: 0,
+            character: 5,
+        }; // After "café "
+        let byte_offset = mapper
+            .lsp_pos_to_byte(pos)
+            .ok_or("invalid multibyte position")?;
 
         // "café " = 'c'(1) + 'a'(1) + 'f'(1) + 'é'(2) + ' '(1) = 6 bytes
         assert_eq!(byte_offset, 6);

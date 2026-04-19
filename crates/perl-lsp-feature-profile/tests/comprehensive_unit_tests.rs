@@ -36,7 +36,11 @@ fn feature_profile_specs_length_matches_variants() -> Result<(), String> {
     let specs = feature_profile_specs();
     let variants = FeatureProfileKind::all();
     if specs.len() != variants.len() {
-        return Err(format!("specs len ({}) != variants len ({})", specs.len(), variants.len()));
+        return Err(format!(
+            "specs len ({}) != variants len ({})",
+            specs.len(),
+            variants.len()
+        ));
     }
     Ok(())
 }
@@ -66,7 +70,15 @@ fn supported_cli_profiles_contains_auto() -> Result<(), String> {
 #[test]
 fn supported_cli_profiles_contains_all_expected_tokens() -> Result<(), String> {
     let profiles = supported_cli_profiles();
-    let expected = ["auto", "ga-lock", "ga", "ga_lock", "prod", "production", "all"];
+    let expected = [
+        "auto",
+        "ga-lock",
+        "ga",
+        "ga_lock",
+        "prod",
+        "production",
+        "all",
+    ];
     for token in &expected {
         if !profiles.contains(token) {
             return Err(format!("missing expected token '{token}'"));
@@ -188,7 +200,9 @@ fn from_str_name_is_case_sensitive() -> Result<(), String> {
     // The raw from_str_name does NOT normalize case — uppercase should fail
     let result = from_str_name("GA-LOCK");
     if result.is_some() {
-        return Err(format!("from_str_name should be case-sensitive, got {result:?}"));
+        return Err(format!(
+            "from_str_name should be case-sensitive, got {result:?}"
+        ));
     }
     Ok(())
 }
@@ -324,7 +338,10 @@ fn parse_profile_token_whitespace_only_returns_none() -> Result<(), String> {
 #[test]
 fn as_str_ga_lock() -> Result<(), String> {
     if FeatureProfileKind::GaLock.as_str() != "ga-lock" {
-        return Err(format!("expected 'ga-lock', got '{}'", FeatureProfileKind::GaLock.as_str()));
+        return Err(format!(
+            "expected 'ga-lock', got '{}'",
+            FeatureProfileKind::GaLock.as_str()
+        ));
     }
     Ok(())
 }
@@ -343,7 +360,10 @@ fn as_str_production() -> Result<(), String> {
 #[test]
 fn as_str_all() -> Result<(), String> {
     if FeatureProfileKind::All.as_str() != "all" {
-        return Err(format!("expected 'all', got '{}'", FeatureProfileKind::All.as_str()));
+        return Err(format!(
+            "expected 'all', got '{}'",
+            FeatureProfileKind::All.as_str()
+        ));
     }
     Ok(())
 }
@@ -458,7 +478,9 @@ fn aliases_all_resolve_back_to_their_profile() -> Result<(), String> {
         for alias in kind.aliases() {
             let parsed = from_str_name(alias);
             if parsed != Some(*kind) {
-                return Err(format!("alias '{alias}' for {kind:?} resolved to {parsed:?}"));
+                return Err(format!(
+                    "alias '{alias}' for {kind:?} resolved to {parsed:?}"
+                ));
             }
         }
     }
@@ -518,7 +540,10 @@ fn spec_canonical_matches_variant_as_str() -> Result<(), String> {
         specs.iter().map(|s| s.canonical).collect();
     for kind in FeatureProfileKind::all() {
         if !canonical_names.contains(kind.as_str()) {
-            return Err(format!("variant {kind:?} as_str='{}' not found in specs", kind.as_str()));
+            return Err(format!(
+                "variant {kind:?} as_str='{}' not found in specs",
+                kind.as_str()
+            ));
         }
     }
     Ok(())
@@ -544,7 +569,9 @@ fn every_supported_cli_profile_resolves() -> Result<(), String> {
 fn parse_profile_token_tab_and_newline_trimming() -> Result<(), String> {
     let result = parse_profile_token("\t ga-lock \n");
     if result != Some(FeatureProfileKind::GaLock) {
-        return Err(format!("expected GaLock after tab/newline trim, got {result:?}"));
+        return Err(format!(
+            "expected GaLock after tab/newline trim, got {result:?}"
+        ));
     }
     Ok(())
 }
@@ -554,7 +581,9 @@ fn parse_profile_token_multiple_underscores_rejected() -> Result<(), String> {
     // "ga__lock" normalizes to "ga--lock" which is unknown
     let result = parse_profile_token("ga__lock");
     if result.is_some() {
-        return Err(format!("double-underscore should not match, got {result:?}"));
+        return Err(format!(
+            "double-underscore should not match, got {result:?}"
+        ));
     }
     Ok(())
 }

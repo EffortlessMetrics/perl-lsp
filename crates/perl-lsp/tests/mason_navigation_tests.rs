@@ -16,10 +16,13 @@ use support::LspHarness;
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 fn find_pos(code: &str, needle: &str, target_line: usize) -> Result<(u32, u32), String> {
-    let line =
-        code.lines().nth(target_line).ok_or_else(|| format!("missing line {target_line}"))?;
-    let character =
-        line.find(needle).ok_or_else(|| format!("missing `{needle}` on line {target_line}"))?;
+    let line = code
+        .lines()
+        .nth(target_line)
+        .ok_or_else(|| format!("missing line {target_line}"))?;
+    let character = line
+        .find(needle)
+        .ok_or_else(|| format!("missing `{needle}` on line {target_line}"))?;
     Ok((target_line as u32, character as u32))
 }
 
@@ -34,8 +37,14 @@ fn first_location(resp: &Value) -> Option<(String, u32, u32)> {
         return None;
     };
 
-    let uri = location.get("uri").or_else(|| location.get("targetUri"))?.as_str()?.to_string();
-    let range = location.get("range").or_else(|| location.get("targetRange"))?;
+    let uri = location
+        .get("uri")
+        .or_else(|| location.get("targetUri"))?
+        .as_str()?
+        .to_string();
+    let range = location
+        .get("range")
+        .or_else(|| location.get("targetRange"))?;
     let start = range.get("start")?;
     let line = start.get("line")?.as_u64()? as u32;
     let character = start.get("character")?.as_u64()? as u32;

@@ -138,6 +138,8 @@ impl LspServer {
     /// the server will look up the request ID and signal cancellation via the
     /// global cancellation registry.
     pub(crate) fn register_progress_request(&self, token: &str, request_id: Value) {
-        self.progress_token_to_request.lock().insert(token.to_string(), request_id);
+        self.progress_token_to_request
+            .lock()
+            .insert(token.to_string(), request_id);
     }
 }

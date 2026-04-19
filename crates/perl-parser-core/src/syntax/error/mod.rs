@@ -224,7 +224,12 @@ pub struct ParseBudget {
 
 impl Default for ParseBudget {
     fn default() -> Self {
-        Self { max_errors: 100, max_depth: 256, max_tokens_skipped: 1000, max_recoveries: 500 }
+        Self {
+            max_errors: 100,
+            max_depth: 256,
+            max_tokens_skipped: 1000,
+            max_recoveries: 500,
+        }
     }
 }
 
@@ -236,7 +241,12 @@ impl ParseBudget {
 
     /// Create a strict budget for parsing untrusted input.
     pub fn strict() -> Self {
-        Self { max_errors: 10, max_depth: 64, max_tokens_skipped: 100, max_recoveries: 50 }
+        Self {
+            max_errors: 10,
+            max_depth: 64,
+            max_tokens_skipped: 100,
+            max_recoveries: 50,
+        }
     }
 
     /// Create an unlimited budget (use with caution).
@@ -561,9 +571,17 @@ impl ParseOutput {
     pub fn with_errors(ast: Node, diagnostics: Vec<ParseError>) -> Self {
         let mut budget_usage = BudgetTracker::new();
         budget_usage.errors_emitted = diagnostics.len();
-        let recovered_count =
-            diagnostics.iter().filter(|e| matches!(e, ParseError::Recovered { .. })).count();
-        Self { ast, diagnostics, budget_usage, terminated_early: false, recovered_count }
+        let recovered_count = diagnostics
+            .iter()
+            .filter(|e| matches!(e, ParseError::Recovered { .. }))
+            .count();
+        Self {
+            ast,
+            diagnostics,
+            budget_usage,
+            terminated_early: false,
+            recovered_count,
+        }
     }
 
     /// Create a parse output with full budget tracking.
@@ -576,9 +594,17 @@ impl ParseOutput {
         budget_usage: BudgetTracker,
         terminated_early: bool,
     ) -> Self {
-        let recovered_count =
-            diagnostics.iter().filter(|e| matches!(e, ParseError::Recovered { .. })).count();
-        Self { ast, diagnostics, budget_usage, terminated_early, recovered_count }
+        let recovered_count = diagnostics
+            .iter()
+            .filter(|e| matches!(e, ParseError::Recovered { .. }))
+            .count();
+        Self {
+            ast,
+            diagnostics,
+            budget_usage,
+            terminated_early,
+            recovered_count,
+        }
     }
 
     /// Check if parse completed without any errors.
@@ -618,7 +644,10 @@ impl ParseError {
     /// assert!(matches!(error, ParseError::SyntaxError { .. }));
     /// ```
     pub fn syntax(message: impl Into<String>, location: usize) -> Self {
-        ParseError::SyntaxError { message: message.into(), location }
+        ParseError::SyntaxError {
+            message: message.into(),
+            location,
+        }
     }
 
     /// Create a new unexpected token error during Perl script parsing
@@ -651,7 +680,11 @@ impl ParseError {
         found: impl Into<String>,
         location: usize,
     ) -> Self {
-        ParseError::UnexpectedToken { expected: expected.into(), found: found.into(), location }
+        ParseError::UnexpectedToken {
+            expected: expected.into(),
+            found: found.into(),
+            location,
+        }
     }
 
     /// Get the byte location of the error if available
@@ -667,7 +700,9 @@ impl ParseError {
     /// Generate a fix suggestion based on the error type
     pub fn suggestion(&self) -> Option<String> {
         match self {
-            ParseError::UnexpectedToken { expected, found, .. } => {
+            ParseError::UnexpectedToken {
+                expected, found, ..
+            } => {
                 // Check for common missing delimiters
                 if expected.contains(';') {
                     return Some("add a semicolon ';' at the end of the statement".to_string());
@@ -707,9 +742,10 @@ impl ParseError {
                 }
                 None
             }
-            ParseError::UnclosedDelimiter { delimiter } => {
-                Some(format!("add closing '{}' to complete the literal", delimiter))
-            }
+            ParseError::UnclosedDelimiter { delimiter } => Some(format!(
+                "add closing '{}' to complete the literal",
+                delimiter
+            )),
             _ => None,
         }
     }
@@ -767,7 +803,10 @@ mod tests {
 
     #[test]
     fn test_budget_tracker_errors() {
-        let budget = ParseBudget { max_errors: 3, ..Default::default() };
+        let budget = ParseBudget {
+            max_errors: 3,
+            ..Default::default()
+        };
         let mut tracker = BudgetTracker::new();
 
         assert!(!tracker.errors_exhausted(&budget));
@@ -782,7 +821,10 @@ mod tests {
 
     #[test]
     fn test_budget_tracker_depth() {
-        let budget = ParseBudget { max_depth: 2, ..Default::default() };
+        let budget = ParseBudget {
+            max_depth: 2,
+            ..Default::default()
+        };
         let mut tracker = BudgetTracker::new();
 
         assert!(!tracker.depth_would_exceed(&budget));
@@ -799,7 +841,10 @@ mod tests {
 
     #[test]
     fn test_budget_tracker_skip() {
-        let budget = ParseBudget { max_tokens_skipped: 5, ..Default::default() };
+        let budget = ParseBudget {
+            max_tokens_skipped: 5,
+            ..Default::default()
+        };
         let mut tracker = BudgetTracker::new();
 
         assert!(!tracker.skip_would_exceed(&budget, 3));
@@ -811,7 +856,10 @@ mod tests {
 
     #[test]
     fn test_budget_tracker_recoveries() {
-        let budget = ParseBudget { max_recoveries: 2, ..Default::default() };
+        let budget = ParseBudget {
+            max_recoveries: 2,
+            ..Default::default()
+        };
         let mut tracker = BudgetTracker::new();
 
         assert!(!tracker.recoveries_exhausted(&budget));
@@ -847,7 +895,10 @@ mod tests {
             NodeKind::Program { statements: vec![] },
             SourceLocation { start: 0, end: 0 },
         );
-        let errors = vec![ParseError::syntax("error 1", 0), ParseError::syntax("error 2", 5)];
+        let errors = vec![
+            ParseError::syntax("error 1", 0),
+            ParseError::syntax("error 2", 5),
+        ];
         let output = ParseOutput::with_errors(ast, errors);
 
         assert!(!output.is_ok());
@@ -885,7 +936,10 @@ mod tests {
 
     #[test]
     fn test_begin_recovery_checks_budget_first() {
-        let budget = ParseBudget { max_recoveries: 0, ..Default::default() };
+        let budget = ParseBudget {
+            max_recoveries: 0,
+            ..Default::default()
+        };
         let mut tracker = BudgetTracker::new();
 
         // Should fail immediately - budget is 0
@@ -895,7 +949,10 @@ mod tests {
 
     #[test]
     fn test_can_skip_more_boundary_conditions() {
-        let budget = ParseBudget { max_tokens_skipped: 10, ..Default::default() };
+        let budget = ParseBudget {
+            max_tokens_skipped: 10,
+            ..Default::default()
+        };
         let mut tracker = BudgetTracker::new();
 
         // At 0 skipped, can skip up to 10

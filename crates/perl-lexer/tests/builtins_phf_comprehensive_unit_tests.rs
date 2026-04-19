@@ -69,7 +69,10 @@ fn builtin_sigs_is_not_empty() -> Result<(), String> {
 fn builtin_sigs_iteration_count_matches_len() -> Result<(), String> {
     let iter_count = BUILTIN_SIGS.entries().count();
     if iter_count != BUILTIN_SIGS.len() {
-        return Err(format!("entries().count()={iter_count} != len()={}", BUILTIN_SIGS.len()));
+        return Err(format!(
+            "entries().count()={iter_count} != len()={}",
+            BUILTIN_SIGS.len()
+        ));
     }
     Ok(())
 }
@@ -157,8 +160,9 @@ fn is_builtin_string_functions() -> Result<(), String> {
 
 #[test]
 fn is_builtin_array_functions() -> Result<(), String> {
-    let arrays =
-        ["push", "pop", "shift", "unshift", "splice", "grep", "map", "sort", "join", "split"];
+    let arrays = [
+        "push", "pop", "shift", "unshift", "splice", "grep", "map", "sort", "join", "split",
+    ];
     for name in &arrays {
         if !is_builtin(name) {
             return Err(format!("{name} should be a builtin (array)"));
@@ -188,8 +192,9 @@ fn is_builtin_hash_functions() -> Result<(), String> {
 
 #[test]
 fn is_builtin_math_functions() -> Result<(), String> {
-    let math =
-        ["abs", "atan2", "cos", "exp", "hex", "int", "log", "oct", "rand", "sin", "sqrt", "srand"];
+    let math = [
+        "abs", "atan2", "cos", "exp", "hex", "int", "log", "oct", "rand", "sin", "sqrt", "srand",
+    ];
     for name in &math {
         if !is_builtin(name) {
             return Err(format!("{name} should be a builtin (math)"));
@@ -516,7 +521,9 @@ fn is_builtin_rejects_nonexistent_names() -> Result<(), String> {
 
 #[test]
 fn is_builtin_case_sensitive_uppercase_rejected() -> Result<(), String> {
-    let uppercase = ["PRINT", "OPEN", "CHOMP", "PUSH", "SORT", "DIE", "EVAL", "FORK"];
+    let uppercase = [
+        "PRINT", "OPEN", "CHOMP", "PUSH", "SORT", "DIE", "EVAL", "FORK",
+    ];
     for name in &uppercase {
         if is_builtin(name) {
             return Err(format!("{name} (uppercase) should NOT be a builtin"));
@@ -527,7 +534,9 @@ fn is_builtin_case_sensitive_uppercase_rejected() -> Result<(), String> {
 
 #[test]
 fn is_builtin_case_sensitive_titlecase_rejected() -> Result<(), String> {
-    let titlecase = ["Print", "Open", "Chomp", "Push", "Sort", "Die", "Eval", "Fork"];
+    let titlecase = [
+        "Print", "Open", "Chomp", "Push", "Sort", "Die", "Eval", "Fork",
+    ];
     for name in &titlecase {
         if is_builtin(name) {
             return Err(format!("{name} (titlecase) should NOT be a builtin"));
@@ -553,7 +562,9 @@ fn is_builtin_case_sensitive_mixed_rejected() -> Result<(), String> {
 
 #[test]
 fn is_builtin_rejects_whitespace_variants() -> Result<(), String> {
-    let ws = [" print", "print ", " print ", "\tprint", "print\n", "\nprint"];
+    let ws = [
+        " print", "print ", " print ", "\tprint", "print\n", "\nprint",
+    ];
     for name in &ws {
         if is_builtin(name) {
             return Err(format!("{name:?} (whitespace) should NOT be a builtin"));
@@ -2626,7 +2637,10 @@ fn param_count_1_param() -> Result<(), String> {
     for name in &one {
         let p = get_param_names(name);
         if p.len() != 1 {
-            return Err(format!("{name} should have 1 param, got {} ({p:?})", p.len()));
+            return Err(format!(
+                "{name} should have 1 param, got {} ({p:?})",
+                p.len()
+            ));
         }
     }
     Ok(())
@@ -2682,7 +2696,10 @@ fn param_count_2_params() -> Result<(), String> {
     for name in &two {
         let p = get_param_names(name);
         if p.len() != 2 {
-            return Err(format!("{name} should have 2 params, got {} ({p:?})", p.len()));
+            return Err(format!(
+                "{name} should have 2 params, got {} ({p:?})",
+                p.len()
+            ));
         }
     }
     Ok(())
@@ -2716,7 +2733,10 @@ fn param_count_3_params() -> Result<(), String> {
     for name in &three {
         let p = get_param_names(name);
         if p.len() != 3 {
-            return Err(format!("{name} should have 3 params, got {} ({p:?})", p.len()));
+            return Err(format!(
+                "{name} should have 3 params, got {} ({p:?})",
+                p.len()
+            ));
         }
     }
     Ok(())
@@ -2742,7 +2762,10 @@ fn param_count_4_params() -> Result<(), String> {
     for name in &four {
         let p = get_param_names(name);
         if p.len() != 4 {
-            return Err(format!("{name} should have 4 params, got {} ({p:?})", p.len()));
+            return Err(format!(
+                "{name} should have 4 params, got {} ({p:?})",
+                p.len()
+            ));
         }
     }
     Ok(())
@@ -2754,7 +2777,10 @@ fn param_count_5_params() -> Result<(), String> {
     for name in &five {
         let p = get_param_names(name);
         if p.len() != 5 {
-            return Err(format!("{name} should have 5 params, got {} ({p:?})", p.len()));
+            return Err(format!(
+                "{name} should have 5 params, got {} ({p:?})",
+                p.len()
+            ));
         }
     }
     Ok(())
@@ -2868,7 +2894,9 @@ fn full_sigs_all_variants_are_ascii() -> Result<(), String> {
     for (name, sigs) in BUILTIN_FULL_SIGS.entries() {
         for sig in *sigs {
             if !sig.is_ascii() {
-                return Err(format!("{name} full sig variant contains non-ASCII: {sig:?}"));
+                return Err(format!(
+                    "{name} full sig variant contains non-ASCII: {sig:?}"
+                ));
             }
         }
     }
@@ -2912,7 +2940,10 @@ fn full_sigs_substr_variants() -> Result<(), String> {
     match BUILTIN_FULL_SIGS.get("substr") {
         Some(sigs) => {
             if sigs.len() != 3 {
-                return Err(format!("substr should have 3 full sigs, got {}", sigs.len()));
+                return Err(format!(
+                    "substr should have 3 full sigs, got {}",
+                    sigs.len()
+                ));
             }
         }
         None => return Err("substr missing from BUILTIN_FULL_SIGS".into()),
@@ -2925,7 +2956,10 @@ fn full_sigs_splice_has_four_variants() -> Result<(), String> {
     match BUILTIN_FULL_SIGS.get("splice") {
         Some(sigs) => {
             if sigs.len() != 4 {
-                return Err(format!("splice should have 4 full sigs, got {}", sigs.len()));
+                return Err(format!(
+                    "splice should have 4 full sigs, got {}",
+                    sigs.len()
+                ));
             }
         }
         None => return Err("splice missing from BUILTIN_FULL_SIGS".into()),
@@ -2951,7 +2985,10 @@ fn full_sigs_system_variants() -> Result<(), String> {
     match BUILTIN_FULL_SIGS.get("system") {
         Some(sigs) => {
             if sigs.len() != 2 {
-                return Err(format!("system should have 2 full sigs, got {}", sigs.len()));
+                return Err(format!(
+                    "system should have 2 full sigs, got {}",
+                    sigs.len()
+                ));
             }
             if sigs[0] != "system PROGRAM, LIST" {
                 return Err(format!("system first variant wrong: {}", sigs[0]));
@@ -3068,7 +3105,9 @@ fn io_functions_have_filehandle_first() -> Result<(), String> {
         match p.first() {
             Some(&"FILEHANDLE") => {}
             other => {
-                return Err(format!("{name} first param should be FILEHANDLE, got {other:?}"));
+                return Err(format!(
+                    "{name} first param should be FILEHANDLE, got {other:?}"
+                ));
             }
         }
     }
@@ -3077,13 +3116,22 @@ fn io_functions_have_filehandle_first() -> Result<(), String> {
 
 #[test]
 fn directory_functions_have_dirhandle_first() -> Result<(), String> {
-    let dirs = ["opendir", "readdir", "closedir", "rewinddir", "seekdir", "telldir"];
+    let dirs = [
+        "opendir",
+        "readdir",
+        "closedir",
+        "rewinddir",
+        "seekdir",
+        "telldir",
+    ];
     for name in &dirs {
         let p = get_param_names(name);
         match p.first() {
             Some(&"DIRHANDLE") => {}
             other => {
-                return Err(format!("{name} first param should be DIRHANDLE, got {other:?}"));
+                return Err(format!(
+                    "{name} first param should be DIRHANDLE, got {other:?}"
+                ));
             }
         }
     }
@@ -3111,7 +3159,9 @@ fn socket_functions_have_socket_first() -> Result<(), String> {
         match p.first() {
             Some(first) if first.contains("SOCKET") => {}
             other => {
-                return Err(format!("{name} first param should contain SOCKET, got {other:?}"));
+                return Err(format!(
+                    "{name} first param should contain SOCKET, got {other:?}"
+                ));
             }
         }
     }

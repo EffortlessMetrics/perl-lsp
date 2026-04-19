@@ -54,7 +54,12 @@ impl InfrastructureTestFixture {
         let adaptive_timeout = adaptive_timeout();
         drain_until_quiet(&server, Duration::from_millis(800), adaptive_timeout);
 
-        Self { server, resource_monitor, thread_safety_monitor, integration_validator }
+        Self {
+            server,
+            resource_monitor,
+            thread_safety_monitor,
+            integration_validator,
+        }
     }
 }
 
@@ -187,7 +192,11 @@ impl ResourceMonitor {
     }
 
     fn get_resource_summary(&self) -> ResourceSummary {
-        let snapshots = self.memory_snapshots.lock().map(|guard| guard.clone()).unwrap_or_default();
+        let snapshots = self
+            .memory_snapshots
+            .lock()
+            .map(|guard| guard.clone())
+            .unwrap_or_default();
 
         ResourceSummary {
             memory_snapshots: snapshots,
@@ -286,8 +295,11 @@ impl ThreadSafetyMonitor {
     }
 
     fn get_thread_safety_report(&self) -> ThreadSafetyReport {
-        let operations =
-            self.concurrent_operations.lock().map(|guard| guard.clone()).unwrap_or_default();
+        let operations = self
+            .concurrent_operations
+            .lock()
+            .map(|guard| guard.clone())
+            .unwrap_or_default();
         let race_conditions = self.data_race_counter.load(Ordering::Relaxed);
         let deadlocks = self.check_for_deadlocks();
 
@@ -345,7 +357,9 @@ struct RaceConditionDetector {
 
 impl RaceConditionDetector {
     fn new() -> Self {
-        Self { resource_access_log: Arc::new(Mutex::new(HashMap::new())) }
+        Self {
+            resource_access_log: Arc::new(Mutex::new(HashMap::new())),
+        }
     }
 
     fn check_access(
@@ -354,7 +368,11 @@ impl RaceConditionDetector {
         access_type: AccessType,
         thread_id: thread::ThreadId,
     ) -> bool {
-        let access_entry = ResourceAccess { thread_id, access_type, timestamp: Instant::now() };
+        let access_entry = ResourceAccess {
+            thread_id,
+            access_type,
+            timestamp: Instant::now(),
+        };
 
         if let Ok(mut log) = self.resource_access_log.lock() {
             let accesses = log.entry(resource_name.to_string()).or_default();
@@ -451,7 +469,9 @@ impl IntegrationValidator {
         }
 
         // Check for performance regressions
-        let performance_result = self.performance_regression_detector.check_for_regressions(server);
+        let performance_result = self
+            .performance_regression_detector
+            .check_for_regressions(server);
 
         // Validate API compatibility
         let api_result = self.api_compatibility_checker.validate_compatibility();
@@ -530,7 +550,9 @@ struct PerformanceRegressionDetector {
 
 impl PerformanceRegressionDetector {
     fn new() -> Self {
-        Self { baseline_measurements: HashMap::new() }
+        Self {
+            baseline_measurements: HashMap::new(),
+        }
     }
 
     fn check_for_regressions(&self, server: &LspServer) -> PerformanceRegressionResult {
@@ -581,7 +603,10 @@ impl PerformanceRegressionDetector {
         }
 
         let performance_score = self.calculate_performance_score(&regressions);
-        PerformanceRegressionResult { regressions, overall_performance_score: performance_score }
+        PerformanceRegressionResult {
+            regressions,
+            overall_performance_score: performance_score,
+        }
     }
 
     fn calculate_performance_score(&self, regressions: &[PerformanceRegression]) -> f64 {
@@ -709,8 +734,10 @@ fn estimate_memory_usage() -> usize {
 fn test_infrastructure_cleanup_and_resource_management_ac9() {
     // Enhanced constraint checking for infrastructure cancellation tests
     // These tests require specific threading conditions for reliable LSP initialization
-    let thread_count =
-        std::env::var("RUST_TEST_THREADS").ok().and_then(|s| s.parse::<usize>().ok()).unwrap_or(8);
+    let thread_count = std::env::var("RUST_TEST_THREADS")
+        .ok()
+        .and_then(|s| s.parse::<usize>().ok())
+        .unwrap_or(8);
 
     // Force single-threaded execution for infrastructure cancellation tests to ensure reliability
     // Multiple threads can cause race conditions in cancellation infrastructure
@@ -1060,7 +1087,10 @@ struct TestFixture {
 
 impl TestFixture {
     fn new(id: usize) -> Self {
-        Self { id, resources: Vec::new() }
+        Self {
+            id,
+            resources: Vec::new(),
+        }
     }
 
     fn perform_test_operation(&mut self, operation_id: usize) -> Result<(), String> {
@@ -1075,7 +1105,11 @@ impl TestFixture {
 
     fn cleanup(self) {
         // Resources are automatically dropped
-        println!("Test fixture {} cleaned up with {} resources", self.id, self.resources.len());
+        println!(
+            "Test fixture {} cleaned up with {} resources",
+            self.id,
+            self.resources.len()
+        );
     }
 }
 
@@ -1308,7 +1342,10 @@ fn test_concurrent_cancellation_thread_safety_ac10() {
 
         // Test scaffolding validation
         assert!(scenario.thread_count > 0, "Scenario should have threads");
-        assert!(scenario.operations_per_thread > 0, "Scenario should have operations");
+        assert!(
+            scenario.operations_per_thread > 0,
+            "Scenario should have operations"
+        );
         assert!(
             scenario.cancellation_rate >= 0.0 && scenario.cancellation_rate <= 1.0,
             "Cancellation rate should be between 0.0 and 1.0"
@@ -1348,8 +1385,10 @@ struct ThreadSafetyResult {
 fn test_deadlock_detection_and_prevention_ac10() {
     // Enhanced constraint checking for deadlock detection cancellation tests
     // These tests require specific threading conditions for reliable LSP initialization
-    let thread_count =
-        std::env::var("RUST_TEST_THREADS").ok().and_then(|s| s.parse::<usize>().ok()).unwrap_or(8);
+    let thread_count = std::env::var("RUST_TEST_THREADS")
+        .ok()
+        .and_then(|s| s.parse::<usize>().ok())
+        .unwrap_or(8);
 
     // Force single-threaded execution for infrastructure cancellation tests to ensure reliability
     // Multiple threads can cause race conditions in cancellation infrastructure
@@ -1601,8 +1640,10 @@ struct DeadlockTestResult {
 fn test_lsp_infrastructure_integration_ac11() {
     // Enhanced constraint checking for LSP infrastructure cancellation tests
     // These tests require specific threading conditions for reliable LSP initialization
-    let thread_count =
-        std::env::var("RUST_TEST_THREADS").ok().and_then(|s| s.parse::<usize>().ok()).unwrap_or(8);
+    let thread_count = std::env::var("RUST_TEST_THREADS")
+        .ok()
+        .and_then(|s| s.parse::<usize>().ok())
+        .unwrap_or(8);
 
     // Force single-threaded execution for infrastructure cancellation tests to ensure reliability
     // Multiple threads can cause race conditions in cancellation infrastructure
@@ -1629,7 +1670,9 @@ fn test_lsp_infrastructure_integration_ac11() {
     let fixture = InfrastructureTestFixture::new();
 
     // Run comprehensive integration validation
-    let integration_result = fixture.integration_validator.validate_integration(&fixture.server);
+    let integration_result = fixture
+        .integration_validator
+        .validate_integration(&fixture.server);
 
     println!("LSP Infrastructure Integration Test Results:");
 
@@ -1665,7 +1708,11 @@ fn test_lsp_infrastructure_integration_ac11() {
 
     // Validate performance regression detection
     println!("Performance regression analysis:");
-    if integration_result.performance_regression_result.regressions.is_empty() {
+    if integration_result
+        .performance_regression_result
+        .regressions
+        .is_empty()
+    {
         println!("  ✓ No performance regressions detected");
     } else {
         for regression in &integration_result.performance_regression_result.regressions {
@@ -1680,23 +1727,36 @@ fn test_lsp_infrastructure_integration_ac11() {
     }
 
     assert!(
-        integration_result.performance_regression_result.overall_performance_score >= 80.0,
+        integration_result
+            .performance_regression_result
+            .overall_performance_score
+            >= 80.0,
         "Overall performance score should be at least 80, got {:.1}",
-        integration_result.performance_regression_result.overall_performance_score
+        integration_result
+            .performance_regression_result
+            .overall_performance_score
     );
 
     // Validate API compatibility
     println!("API compatibility analysis:");
     assert!(
-        integration_result.api_compatibility_result.missing_methods.is_empty(),
+        integration_result
+            .api_compatibility_result
+            .missing_methods
+            .is_empty(),
         "No required methods should be missing: {:?}",
         integration_result.api_compatibility_result.missing_methods
     );
 
     assert!(
-        integration_result.api_compatibility_result.compatibility_score >= 95.0,
+        integration_result
+            .api_compatibility_result
+            .compatibility_score
+            >= 95.0,
         "API compatibility score should be at least 95, got {:.1}",
-        integration_result.api_compatibility_result.compatibility_score
+        integration_result
+            .api_compatibility_result
+            .compatibility_score
     );
 
     // Test integration with existing LSP behavioral patterns
@@ -1766,7 +1826,10 @@ fn test_existing_lsp_behavioral_integration(server: &LspServer) {
             "Response should maintain JSON-RPC 2.0 compliance"
         );
 
-        assert!(response.get("id").is_some(), "Response should include request ID");
+        assert!(
+            response.get("id").is_some(),
+            "Response should include request ID"
+        );
 
         println!("  ✓ {} behavioral integration verified", test_name);
     }
@@ -1822,11 +1885,17 @@ fn test_existing_lsp_utilities_integration(server: &LspServer) {
     );
 
     let response = read_response_matching_i64(server, test_id, Duration::from_secs(5));
-    assert!(response.is_some(), "read_response_matching should work with infrastructure");
+    assert!(
+        response.is_some(),
+        "read_response_matching should work with infrastructure"
+    );
     println!("  ✓ read_response_matching utility integration verified");
 
     // Test server lifecycle management
-    assert!(server.is_alive(), "Server should remain alive during utility testing");
+    assert!(
+        server.is_alive(),
+        "Server should remain alive during utility testing"
+    );
     println!("  ✓ Server lifecycle management integration verified");
 }
 
@@ -1836,8 +1905,10 @@ fn test_existing_lsp_utilities_integration(server: &LspServer) {
 fn test_lsp_regression_prevention_ac11() {
     // Enhanced constraint checking for LSP regression prevention cancellation tests
     // These tests require specific threading conditions for reliable LSP initialization
-    let thread_count =
-        std::env::var("RUST_TEST_THREADS").ok().and_then(|s| s.parse::<usize>().ok()).unwrap_or(8);
+    let thread_count = std::env::var("RUST_TEST_THREADS")
+        .ok()
+        .and_then(|s| s.parse::<usize>().ok())
+        .unwrap_or(8);
 
     // Force single-threaded execution for infrastructure cancellation tests to ensure reliability
     // Multiple threads can cause race conditions in cancellation infrastructure
@@ -1931,7 +2002,11 @@ fn test_lsp_regression_prevention_ac11() {
 
         if test_passed && performance_ok {
             passed_tests += 1;
-            println!("  ✓ {} passed ({}ms)", test_case.name, test_duration.as_millis());
+            println!(
+                "  ✓ {} passed ({}ms)",
+                test_case.name,
+                test_duration.as_millis()
+            );
         } else {
             failed_tests += 1;
             println!(
@@ -2003,13 +2078,25 @@ impl Drop for InfrastructureTestFixture {
 
         let resource_summary = self.resource_monitor.get_resource_summary();
         println!("Resource Management:");
-        println!("  Memory snapshots collected: {}", resource_summary.memory_snapshots.len());
-        println!("  Cleanup operations performed: {}", resource_summary.total_cleanup_operations);
+        println!(
+            "  Memory snapshots collected: {}",
+            resource_summary.memory_snapshots.len()
+        );
+        println!(
+            "  Cleanup operations performed: {}",
+            resource_summary.total_cleanup_operations
+        );
 
         let thread_safety_report = self.thread_safety_monitor.get_thread_safety_report();
         println!("Thread Safety:");
-        println!("  Safety score: {:.1}/100", thread_safety_report.overall_safety_score);
-        println!("  Race conditions detected: {}", thread_safety_report.detected_race_conditions);
+        println!(
+            "  Safety score: {:.1}/100",
+            thread_safety_report.overall_safety_score
+        );
+        println!(
+            "  Race conditions detected: {}",
+            thread_safety_report.detected_race_conditions
+        );
         println!(
             "  Concurrent operations tracked: {}",
             thread_safety_report.concurrent_operations.len()

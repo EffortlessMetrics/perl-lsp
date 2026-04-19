@@ -28,7 +28,11 @@ struct TestContext {
 impl TestContext {
     fn new() -> Self {
         let server = LspServer::new();
-        Self { server, documents: HashMap::new(), version_counter: 0 }
+        Self {
+            server,
+            documents: HashMap::new(),
+            version_counter: 0,
+        }
     }
 
     fn initialize(&mut self) -> Value {
@@ -74,7 +78,9 @@ impl TestContext {
         };
         self.version_counter += 1;
 
-        self.server.handle_request(request).and_then(|response| response.result)
+        self.server
+            .handle_request(request)
+            .and_then(|response| response.result)
     }
 
     fn send_notification(&mut self, method: &str, params: Option<Value>) {
@@ -160,7 +166,10 @@ fn test_e2e_initialization_and_capabilities() -> TestResult {
     #[cfg(not(feature = "lsp-ga-lock"))]
     {
         assert!(capabilities["codeLensProvider"].is_object());
-        assert_eq!(capabilities["codeLensProvider"]["resolveProvider"], json!(true));
+        assert_eq!(
+            capabilities["codeLensProvider"]["resolveProvider"],
+            json!(true)
+        );
     }
     #[cfg(feature = "lsp-ga-lock")]
     {
@@ -306,7 +315,9 @@ $us  # Complete here
 
     assert!(result.is_some());
     let result_value = result.ok_or("No completion result")?;
-    let items = result_value["items"].as_array().ok_or("Expected items array")?;
+    let items = result_value["items"]
+        .as_array()
+        .ok_or("Expected items array")?;
     assert!(items.iter().any(|i| i["label"] == "$user_name"));
     assert!(items.iter().any(|i| i["label"] == "$user_email"));
 
@@ -329,7 +340,9 @@ $us  # Complete here
 
     assert!(result.is_some());
     let result_value = result.ok_or("No builtin completion result")?;
-    let items = result_value["items"].as_array().ok_or("Expected items array")?;
+    let items = result_value["items"]
+        .as_array()
+        .ok_or("Expected items array")?;
     assert!(items.iter().any(|i| i["label"] == "print"));
 
     // Scenario 3: Method completion
@@ -525,7 +538,12 @@ connect_db("localhost",   # Signature help here
     assert!(result.is_some());
     let sig_help = result.ok_or("No signature help result")?;
     assert!(sig_help["signatures"].is_array());
-    assert!(!sig_help["signatures"].as_array().ok_or("Expected signatures array")?.is_empty());
+    assert!(
+        !sig_help["signatures"]
+            .as_array()
+            .ok_or("Expected signatures array")?
+            .is_empty()
+    );
     Ok(())
 }
 
@@ -711,7 +729,12 @@ sub method {
     assert!(result.is_some());
     let tokens = result.ok_or("No semantic tokens result")?;
     assert!(tokens["data"].is_array());
-    assert!(!tokens["data"].as_array().ok_or("Expected data array")?.is_empty());
+    assert!(
+        !tokens["data"]
+            .as_array()
+            .ok_or("Expected data array")?
+            .is_empty()
+    );
     Ok(())
 }
 
@@ -980,7 +1003,10 @@ return$x*2}
                 assert!(!formatted.is_empty(), "Formatted code should not be empty");
             }
         } else {
-            assert!(res.is_null(), "Formatting should return array of text edits or null");
+            assert!(
+                res.is_null(),
+                "Formatting should return array of text edits or null"
+            );
         }
     }
     Ok(())
@@ -1214,7 +1240,11 @@ sub function_{} {{
     let elapsed = start.elapsed();
 
     assert!(result.is_some());
-    assert!(elapsed.as_millis() < 100, "Symbol request took too long: {:?}", elapsed);
+    assert!(
+        elapsed.as_millis() < 100,
+        "Symbol request took too long: {:?}",
+        elapsed
+    );
     Ok(())
 }
 
@@ -1589,7 +1619,10 @@ sub is_valid {
 
     // Definition might be empty for external modules
     if let Some(def) = definition {
-        assert!(def.is_array() || def.is_object(), "Definition should be array or LocationLink");
+        assert!(
+            def.is_array() || def.is_object(),
+            "Definition should be array or LocationLink"
+        );
     }
     Ok(())
 }
@@ -1697,7 +1730,11 @@ fn test_edge_case_malformed_requests() -> TestResult {
     // Some LSP implementations return null for missing parameters instead of errors
     assert!(
         result.is_none()
-            || result.as_ref().ok_or("Expected Some result")?.get("error").is_some()
+            || result
+                .as_ref()
+                .ok_or("Expected Some result")?
+                .get("error")
+                .is_some()
             || result.as_ref().ok_or("Expected Some result")?.is_null()
     );
     Ok(())

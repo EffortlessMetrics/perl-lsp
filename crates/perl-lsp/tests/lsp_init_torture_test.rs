@@ -89,7 +89,10 @@ fn torture_init_shutdown_cycles() -> Result<(), Box<dyn std::error::Error>> {
         failure_count, iterations
     );
 
-    eprintln!("Init torture test passed: {}/{} iterations successful", success_count, iterations);
+    eprintln!(
+        "Init torture test passed: {}/{} iterations successful",
+        success_count, iterations
+    );
     Ok(())
 }
 
@@ -155,7 +158,10 @@ fn torture_document_lifecycle() -> Result<(), Box<dyn std::error::Error>> {
     // Final barrier
     harness.barrier();
 
-    eprintln!("Document lifecycle torture test passed: {} open/close cycles", iterations);
+    eprintln!(
+        "Document lifecycle torture test passed: {} open/close cycles",
+        iterations
+    );
     Ok(())
 }
 
@@ -178,6 +184,9 @@ fn torture_document_updates() -> Result<(), Box<dyn std::error::Error>> {
     // Final barrier
     harness.barrier();
 
-    eprintln!("Document update torture test passed: {} updates", iterations);
+    eprintln!(
+        "Document update torture test passed: {} updates",
+        iterations
+    );
     Ok(())
 }

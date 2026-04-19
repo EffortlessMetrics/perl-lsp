@@ -27,13 +27,15 @@ pub fn capabilities_for(build: BuildFlags) -> ServerCapabilities {
     // TextDocumentSyncKind::FULL (1): the server always reparses the full document
     // on every didChange notification.  INCREMENTAL (2) would be inaccurate — no
     // incremental AST state is maintained between edits.
-    caps.text_document_sync = Some(TextDocumentSyncCapability::Options(TextDocumentSyncOptions {
-        open_close: Some(true),
-        change: Some(TextDocumentSyncKind::FULL),
-        will_save: None,
-        will_save_wait_until: None,
-        save: None,
-    }));
+    caps.text_document_sync = Some(TextDocumentSyncCapability::Options(
+        TextDocumentSyncOptions {
+            open_close: Some(true),
+            change: Some(TextDocumentSyncKind::FULL),
+            will_save: None,
+            will_save_wait_until: None,
+            save: None,
+        },
+    ));
 
     if build.hover {
         caps.hover_provider = Some(HoverProviderCapability::Simple(true));
@@ -111,7 +113,9 @@ pub fn capabilities_for(build: BuildFlags) -> ServerCapabilities {
         caps.notebook_document_sync = Some(OneOf::Left(NotebookDocumentSyncOptions {
             notebook_selector: vec![NotebookSelector::ByNotebook {
                 notebook: Notebook::String("jupyter-notebook".to_string()),
-                cells: Some(vec![NotebookCellSelector { language: "perl".to_string() }]),
+                cells: Some(vec![NotebookCellSelector {
+                    language: "perl".to_string(),
+                }]),
             }],
             save: Some(true),
         }));
@@ -130,11 +134,12 @@ pub fn capabilities_for(build: BuildFlags) -> ServerCapabilities {
 
     // Conditional capabilities
     if build.inlay_hints {
-        caps.inlay_hint_provider =
-            Some(OneOf::Right(InlayHintServerCapabilities::Options(InlayHintOptions {
+        caps.inlay_hint_provider = Some(OneOf::Right(InlayHintServerCapabilities::Options(
+            InlayHintOptions {
                 resolve_provider: Some(true), // Resolver implemented in misc.rs:handle_inlay_hint_resolve
                 work_done_progress_options: WorkDoneProgressOptions::default(),
-            })));
+            },
+        )));
     }
 
     if build.pull_diagnostics {
@@ -154,8 +159,8 @@ pub fn capabilities_for(build: BuildFlags) -> ServerCapabilities {
     }
 
     if build.semantic_tokens {
-        caps.semantic_tokens_provider =
-            Some(SemanticTokensServerCapabilities::SemanticTokensOptions(SemanticTokensOptions {
+        caps.semantic_tokens_provider = Some(
+            SemanticTokensServerCapabilities::SemanticTokensOptions(SemanticTokensOptions {
                 work_done_progress_options: WorkDoneProgressOptions::default(),
                 legend: SemanticTokensLegend {
                     token_types: vec![
@@ -202,7 +207,8 @@ pub fn capabilities_for(build: BuildFlags) -> ServerCapabilities {
                 },
                 range: Some(true),
                 full: Some(SemanticTokensFullOptions::Delta { delta: Some(true) }),
-            }));
+            }),
+        );
     }
 
     if build.code_actions {
@@ -268,19 +274,28 @@ pub fn capabilities_for(build: BuildFlags) -> ServerCapabilities {
     }
 
     if build.code_lens {
-        caps.code_lens_provider = Some(CodeLensOptions { resolve_provider: Some(true) });
+        caps.code_lens_provider = Some(CodeLensOptions {
+            resolve_provider: Some(true),
+        });
     }
 
     if build.linked_editing {
-        caps.linked_editing_range_provider =
-            Some(lsp_types::LinkedEditingRangeServerCapabilities::Simple(true));
+        caps.linked_editing_range_provider = Some(
+            lsp_types::LinkedEditingRangeServerCapabilities::Simple(true),
+        );
     }
 
     // Inline completion via experimental until lsp-types has the field
     if build.inline_completion {
-        let mut experimental = caps.experimental.take().unwrap_or_else(|| serde_json::json!({}));
+        let mut experimental = caps
+            .experimental
+            .take()
+            .unwrap_or_else(|| serde_json::json!({}));
         if let Some(obj) = experimental.as_object_mut() {
-            obj.insert("inlineCompletionProvider".to_string(), serde_json::json!({}));
+            obj.insert(
+                "inlineCompletionProvider".to_string(),
+                serde_json::json!({}),
+            );
         }
         caps.experimental = Some(experimental);
     }
@@ -306,7 +321,10 @@ pub fn capabilities_for(build: BuildFlags) -> ServerCapabilities {
     // `capabilities_for()` users and `feature_ids_from_caps` can detect the capability.
     // The `handle_initialize` response also injects it at the top-level for clients.
     if build.type_hierarchy {
-        let mut experimental = caps.experimental.take().unwrap_or_else(|| serde_json::json!({}));
+        let mut experimental = caps
+            .experimental
+            .take()
+            .unwrap_or_else(|| serde_json::json!({}));
         if let Some(obj) = experimental.as_object_mut() {
             obj.insert("typeHierarchyProvider".to_string(), serde_json::json!(true));
         }
@@ -362,7 +380,8 @@ pub fn get_supported_commands() -> Vec<String> {
 
 /// Check if a capability is a boolean or object (for flexible assertions)
 pub fn cap_bool_or_object(caps: &Value, key: &str) -> bool {
-    caps.get(key).is_some_and(|v| v.is_boolean() || v.is_object())
+    caps.get(key)
+        .is_some_and(|v| v.is_boolean() || v.is_object())
 }
 
 /// Default capabilities for the current build
@@ -392,8 +411,11 @@ mod tests {
     ///
     /// Note: `type_hierarchy` was previously a gap but is now advertised via
     /// `experimental` in `capabilities_for()` and detected by `feature_ids_from_caps`.
-    const KNOWN_STRUCTURAL_GAPS: &[&str] =
-        &["lsp.inline_completion", "lsp.notebook_cell_execution", "lsp.ranges_formatting"];
+    const KNOWN_STRUCTURAL_GAPS: &[&str] = &[
+        "lsp.inline_completion",
+        "lsp.notebook_cell_execution",
+        "lsp.ranges_formatting",
+    ];
 
     /// Guard: feature IDs from BuildFlags must match feature IDs extracted
     /// from the ServerCapabilities that `capabilities_for()` actually builds.
@@ -407,8 +429,11 @@ mod tests {
 
         let gaps: BTreeSet<&str> = KNOWN_STRUCTURAL_GAPS.iter().copied().collect();
 
-        let in_flags_not_caps: BTreeSet<_> =
-            flag_ids.difference(&cap_ids).copied().filter(|id| !gaps.contains(id)).collect();
+        let in_flags_not_caps: BTreeSet<_> = flag_ids
+            .difference(&cap_ids)
+            .copied()
+            .filter(|id| !gaps.contains(id))
+            .collect();
         let in_caps_not_flags: BTreeSet<_> = cap_ids.difference(&flag_ids).collect();
 
         assert!(
@@ -438,7 +463,10 @@ mod tests {
     /// capabilities when `range_formatting` is enabled (LSP 3.18 gap fix).
     #[test]
     fn ranges_formatting_advertised_in_json_when_enabled() {
-        let flags = BuildFlags { range_formatting: true, ..BuildFlags::default() };
+        let flags = BuildFlags {
+            range_formatting: true,
+            ..BuildFlags::default()
+        };
         let json = capabilities_json(flags);
         assert!(
             json.get("documentRangesFormattingProvider").is_some(),
@@ -450,7 +478,10 @@ mod tests {
     /// Verify that `documentRangesFormattingProvider` is absent when disabled.
     #[test]
     fn ranges_formatting_absent_in_json_when_disabled() {
-        let flags = BuildFlags { range_formatting: false, ..BuildFlags::default() };
+        let flags = BuildFlags {
+            range_formatting: false,
+            ..BuildFlags::default()
+        };
         let json = capabilities_json(flags);
         assert!(
             json.get("documentRangesFormattingProvider").is_none(),
@@ -473,15 +504,21 @@ mod tests {
     fn resolve_providers_advertised_in_full_profile() {
         let json = capabilities_json(BuildFlags::all());
         assert!(
-            json["completionProvider"]["resolveProvider"].as_bool().unwrap_or(false),
+            json["completionProvider"]["resolveProvider"]
+                .as_bool()
+                .unwrap_or(false),
             "completionProvider.resolveProvider must be true"
         );
         assert!(
-            json["codeActionProvider"]["resolveProvider"].as_bool().unwrap_or(false),
+            json["codeActionProvider"]["resolveProvider"]
+                .as_bool()
+                .unwrap_or(false),
             "codeActionProvider.resolveProvider must be true"
         );
         assert!(
-            json["codeLensProvider"]["resolveProvider"].as_bool().unwrap_or(false),
+            json["codeLensProvider"]["resolveProvider"]
+                .as_bool()
+                .unwrap_or(false),
             "codeLensProvider.resolveProvider must be true"
         );
     }

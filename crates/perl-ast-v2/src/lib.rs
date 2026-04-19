@@ -231,12 +231,20 @@ impl NodeKind {
 
         match self {
             Program { statements } => {
-                let stmts = statements.iter().map(|s| s.to_sexp()).collect::<Vec<_>>().join(" ");
+                let stmts = statements
+                    .iter()
+                    .map(|s| s.to_sexp())
+                    .collect::<Vec<_>>()
+                    .join(" ");
                 format!("(source_file {})", stmts)
             }
 
             Block { statements } => {
-                let stmts = statements.iter().map(|s| s.to_sexp()).collect::<Vec<_>>().join(" ");
+                let stmts = statements
+                    .iter()
+                    .map(|s| s.to_sexp())
+                    .collect::<Vec<_>>()
+                    .join(" ");
                 format!("(block {})", stmts)
             }
 
@@ -246,7 +254,10 @@ impl NodeKind {
 
             Number { value } => format!("(number {})", value),
 
-            String { value, interpolated } => {
+            String {
+                value,
+                interpolated,
+            } => {
                 if *interpolated {
                     format!("(string_interpolated {:?})", value)
                 } else {
@@ -312,7 +323,13 @@ mod tests {
         let mut id_gen = NodeIdGenerator::new();
         let range = Range::new(Position::new(0, 1, 1), Position::new(5, 1, 6));
 
-        let node = Node::new(id_gen.next_id(), NodeKind::Number { value: "42".to_string() }, range);
+        let node = Node::new(
+            id_gen.next_id(),
+            NodeKind::Number {
+                value: "42".to_string(),
+            },
+            range,
+        );
 
         assert_eq!(node.id, 0);
         assert_eq!(node.to_sexp(), "(number 42)");

@@ -34,7 +34,10 @@ fn no_node(module: &str, args: &[&str], start: usize, end: usize) -> Node {
 }
 
 fn block(stmts: Vec<Node>, start: usize, end: usize) -> Node {
-    Node { kind: NodeKind::Block { statements: stmts }, location: loc(start, end) }
+    Node {
+        kind: NodeKind::Block { statements: stmts },
+        location: loc(start, end),
+    }
 }
 
 fn package_block(name: &str, body: Node, start: usize, end: usize) -> Node {
@@ -61,7 +64,10 @@ fn phase_block(phase: &str, body: Node, start: usize, end: usize) -> Node {
 
 fn program(stmts: Vec<Node>) -> Node {
     let end = stmts.last().map_or(0, |n| n.location.end);
-    Node { kind: NodeKind::Program { statements: stmts }, location: loc(0, end) }
+    Node {
+        kind: NodeKind::Program { statements: stmts },
+        location: loc(0, end),
+    }
 }
 
 #[test]
@@ -144,7 +150,12 @@ fn given_use_builtin_qw_when_querying_scope_then_each_imported_name_is_available
 #[test]
 fn given_use_feature_qw_when_querying_state_then_requested_features_and_unicode_strings_are_enabled()
  {
-    let ast = program(vec![use_node("feature", &["'qw(signatures unicode_strings)'"], 0, 41)]);
+    let ast = program(vec![use_node(
+        "feature",
+        &["'qw(signatures unicode_strings)'"],
+        0,
+        41,
+    )]);
     let map = PragmaTracker::build(&ast);
 
     let state = PragmaTracker::state_for_offset(&map, 20);
@@ -171,7 +182,12 @@ fn given_package_block_with_inner_no_strict_when_execution_continues_then_outer_
 {
     let ast = program(vec![
         use_node("strict", &[], 0, 12),
-        package_block("Foo", block(vec![no_node("strict", &["subs"], 20, 36)], 18, 40), 13, 42),
+        package_block(
+            "Foo",
+            block(vec![no_node("strict", &["subs"], 20, 36)], 18, 40),
+            13,
+            42,
+        ),
         use_node("warnings", &[], 43, 58),
     ]);
     let map = PragmaTracker::build(&ast);

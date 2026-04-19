@@ -29,7 +29,12 @@ mod dap_phase2_tests {
     #[allow(clippy::panic)]
     fn expect_response(msg: DapMessage, command: &str, expected_success: bool) -> Option<Value> {
         match msg {
-            DapMessage::Response { success, command: c, body, .. } => {
+            DapMessage::Response {
+                success,
+                command: c,
+                body,
+                ..
+            } => {
                 assert_eq!(c, command, "unexpected command");
                 assert_eq!(success, expected_success, "unexpected success value");
                 body
@@ -49,7 +54,10 @@ mod dap_phase2_tests {
         let init_body = expect_response(init, "initialize", true)
             .ok_or_else(|| anyhow::anyhow!("initialize response should include capability body"))?;
         assert!(init_body.get("supportsConfigurationDoneRequest").is_some());
-        assert!(start.elapsed() < Duration::from_millis(100), "initialize exceeded latency target");
+        assert!(
+            start.elapsed() < Duration::from_millis(100),
+            "initialize exceeded latency target"
+        );
 
         let initialized = rx.recv_timeout(Duration::from_millis(200))?;
         match initialized {
@@ -66,8 +74,11 @@ mod dap_phase2_tests {
     #[tokio::test]
     // AC:5
     async fn test_json_rpc_protocol_compliance() -> Result<()> {
-        let request =
-            DapMessage::Request { seq: 7, command: "threads".to_string(), arguments: None };
+        let request = DapMessage::Request {
+            seq: 7,
+            command: "threads".to_string(),
+            arguments: None,
+        };
         let serialized = serde_json::to_string(&request)?;
         assert!(serialized.contains("\"type\":\"request\""));
         assert!(serialized.contains("\"command\":\"threads\""));
@@ -75,7 +86,12 @@ mod dap_phase2_tests {
         let mut adapter = DebugAdapter::new();
         let response = adapter.handle_request(7, "threads", None);
         match response {
-            DapMessage::Response { request_seq, command, success, .. } => {
+            DapMessage::Response {
+                request_seq,
+                command,
+                success,
+                ..
+            } => {
                 assert_eq!(request_seq, 7);
                 assert_eq!(command, "threads");
                 assert!(success);
@@ -130,11 +146,17 @@ mod dap_phase2_tests {
             .ok_or_else(|| anyhow::anyhow!("missing breakpoints array"))?;
         assert_eq!(breakpoints.len(), 2);
         assert!(
-            !breakpoints[0].get("verified").and_then(Value::as_bool).unwrap_or(true),
+            !breakpoints[0]
+                .get("verified")
+                .and_then(Value::as_bool)
+                .unwrap_or(true),
             "comment line should not be verified"
         );
         assert!(
-            breakpoints[1].get("verified").and_then(Value::as_bool).unwrap_or(false),
+            breakpoints[1]
+                .get("verified")
+                .and_then(Value::as_bool)
+                .unwrap_or(false),
             "executable line should be verified"
         );
 
@@ -152,7 +174,10 @@ mod dap_phase2_tests {
 
         let store = BreakpointStore::new();
         let args = SetBreakpointsArguments {
-            source: Source { path: Some(fixture_path.clone()), name: Some("test.pl".to_string()) },
+            source: Source {
+                path: Some(fixture_path.clone()),
+                name: Some("test.pl".to_string()),
+            },
             breakpoints: Some(vec![SourceBreakpoint {
                 line: 2,
                 column: None,
@@ -188,7 +213,10 @@ mod dap_phase2_tests {
             .get("stackFrames")
             .and_then(Value::as_array)
             .ok_or_else(|| anyhow::anyhow!("stackFrames missing"))?;
-        assert!(!stack_frames.is_empty(), "expected at least one stack frame");
+        assert!(
+            !stack_frames.is_empty(),
+            "expected at least one stack frame"
+        );
 
         let scopes = adapter.handle_request(2, "scopes", Some(json!({ "frameId": 1 })));
         let scope_body = expect_response(scopes, "scopes", true)
@@ -197,7 +225,11 @@ mod dap_phase2_tests {
             .get("scopes")
             .and_then(Value::as_array)
             .ok_or_else(|| anyhow::anyhow!("scopes array missing"))?;
-        assert_eq!(scope_list.len(), 3, "expected locals/package/globals scopes");
+        assert_eq!(
+            scope_list.len(),
+            3,
+            "expected locals/package/globals scopes"
+        );
 
         Ok(())
     }
@@ -274,9 +306,17 @@ mod dap_phase2_tests {
         let mut adapter = DebugAdapter::new();
         let pause = adapter.handle_request(1, "pause", Some(json!({ "threadId": 1 })));
         match pause {
-            DapMessage::Response { success, command, message, .. } => {
+            DapMessage::Response {
+                success,
+                command,
+                message,
+                ..
+            } => {
                 assert_eq!(command, "pause");
-                assert!(!success, "pause should fail when no active debug session exists");
+                assert!(
+                    !success,
+                    "pause should fail when no active debug session exists"
+                );
                 let msg = message.ok_or_else(|| anyhow::anyhow!("pause should return message"))?;
                 assert!(msg.contains("Failed to pause debugger"));
             }
@@ -300,7 +340,12 @@ mod dap_phase2_tests {
         );
 
         match resp {
-            DapMessage::Response { success, command, message, .. } => {
+            DapMessage::Response {
+                success,
+                command,
+                message,
+                ..
+            } => {
                 assert_eq!(command, "evaluate");
                 assert!(!success, "evaluate should fail without session");
                 let msg = message.ok_or_else(|| anyhow::anyhow!("missing evaluate error"))?;
@@ -325,7 +370,9 @@ mod dap_phase2_tests {
             })),
         );
         match blocked {
-            DapMessage::Response { success, message, .. } => {
+            DapMessage::Response {
+                success, message, ..
+            } => {
                 assert!(!success);
                 let msg = message.ok_or_else(|| anyhow::anyhow!("missing blocked message"))?;
                 assert!(msg.contains("Safe evaluation mode"));
@@ -343,7 +390,9 @@ mod dap_phase2_tests {
             })),
         );
         match no_session {
-            DapMessage::Response { success, message, .. } => {
+            DapMessage::Response {
+                success, message, ..
+            } => {
                 assert!(!success);
                 let msg = message.ok_or_else(|| anyhow::anyhow!("missing no-session message"))?;
                 assert!(msg.contains("No debugger session"));

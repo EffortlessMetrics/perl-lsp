@@ -12,7 +12,10 @@ fn main() {
         loop {
             match stream.next() {
                 Ok(token) => {
-                    println!("  Token: {:?} '{}' (kind={:?})", token, token.text, token.kind);
+                    println!(
+                        "  Token: {:?} '{}' (kind={:?})",
+                        token, token.text, token.kind
+                    );
                     if token.kind == TokenKind::Eof {
                         break;
                     }

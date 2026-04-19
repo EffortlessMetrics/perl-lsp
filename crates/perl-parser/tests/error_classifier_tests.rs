@@ -170,14 +170,20 @@ fn test_classify_invalid_syntax() {
 fn test_get_suggestion_unclosed_string() {
     let classifier = ErrorClassifier::new();
     let suggestion = classifier.get_suggestion(&ParseErrorKind::UnclosedString);
-    assert_eq!(suggestion, Some("Add a closing quote to terminate the string".to_string()));
+    assert_eq!(
+        suggestion,
+        Some("Add a closing quote to terminate the string".to_string())
+    );
 }
 
 #[test]
 fn test_get_suggestion_missing_semicolon() {
     let classifier = ErrorClassifier::new();
     let suggestion = classifier.get_suggestion(&ParseErrorKind::MissingSemicolon);
-    assert_eq!(suggestion, Some("Add a semicolon ';' at the end of the statement".to_string()));
+    assert_eq!(
+        suggestion,
+        Some("Add a semicolon ';' at the end of the statement".to_string())
+    );
 }
 
 #[test]
@@ -216,7 +222,10 @@ fn test_boundary_conditions() {
             found: None,
             partial: None,
         },
-        location: SourceLocation { start: 100, end: 200 },
+        location: SourceLocation {
+            start: 100,
+            end: 200,
+        },
     };
     let result = classifier.classify(&error_node, "short");
     assert_eq!(result, ParseErrorKind::InvalidSyntax);
@@ -259,7 +268,10 @@ fn test_classify_with_context() {
     let source = "my $x = 5 $y";
     let result = classifier.classify(&error_node, source);
     // This should detect missing operator
-    assert!(matches!(result, ParseErrorKind::MissingOperator | ParseErrorKind::InvalidSyntax));
+    assert!(matches!(
+        result,
+        ParseErrorKind::MissingOperator | ParseErrorKind::InvalidSyntax
+    ));
 }
 
 #[test]

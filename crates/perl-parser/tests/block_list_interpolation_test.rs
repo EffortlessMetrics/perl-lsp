@@ -11,10 +11,18 @@ fn test_simple_array_interpolation() -> TestResult {
     if let NodeKind::Program { statements } = &ast.kind {
         assert_eq!(statements.len(), 1);
 
-        if let NodeKind::VariableDeclaration { variable: _, initializer, .. } = &statements[0].kind
+        if let NodeKind::VariableDeclaration {
+            variable: _,
+            initializer,
+            ..
+        } = &statements[0].kind
         {
             if let Some(init) = initializer {
-                if let NodeKind::String { value, interpolated } = &init.kind {
+                if let NodeKind::String {
+                    value,
+                    interpolated,
+                } = &init.kind
+                {
                     assert_eq!(interpolated, &true, "String should be interpolated");
                     assert!(
                         value.contains("@{[1, 2, 3]}"),
@@ -44,10 +52,18 @@ fn test_complex_map_interpolation() -> TestResult {
     if let NodeKind::Program { statements } = &ast.kind {
         assert_eq!(statements.len(), 1);
 
-        if let NodeKind::VariableDeclaration { variable: _, initializer, .. } = &statements[0].kind
+        if let NodeKind::VariableDeclaration {
+            variable: _,
+            initializer,
+            ..
+        } = &statements[0].kind
         {
             if let Some(init) = initializer {
-                if let NodeKind::String { value, interpolated } = &init.kind {
+                if let NodeKind::String {
+                    value,
+                    interpolated,
+                } = &init.kind
+                {
                     assert_eq!(interpolated, &true, "String should be interpolated");
                     assert!(
                         value.contains("@{[ map { $_ * 2 } @array ]}"),
@@ -77,12 +93,23 @@ fn test_hash_interpolation() -> TestResult {
     if let NodeKind::Program { statements } = &ast.kind {
         assert_eq!(statements.len(), 1);
 
-        if let NodeKind::VariableDeclaration { variable: _, initializer, .. } = &statements[0].kind
+        if let NodeKind::VariableDeclaration {
+            variable: _,
+            initializer,
+            ..
+        } = &statements[0].kind
         {
             if let Some(init) = initializer {
-                if let NodeKind::String { value, interpolated } = &init.kind {
+                if let NodeKind::String {
+                    value,
+                    interpolated,
+                } = &init.kind
+                {
                     assert_eq!(interpolated, &true, "String should be interpolated");
-                    assert!(value.contains("${hash{key}}"), "Should contain hash interpolation");
+                    assert!(
+                        value.contains("${hash{key}}"),
+                        "Should contain hash interpolation"
+                    );
                 } else {
                     return Err("Expected string initializer".into());
                 }
@@ -107,12 +134,23 @@ fn test_variable_interpolation() -> TestResult {
     if let NodeKind::Program { statements } = &ast.kind {
         assert_eq!(statements.len(), 1);
 
-        if let NodeKind::VariableDeclaration { variable: _, initializer, .. } = &statements[0].kind
+        if let NodeKind::VariableDeclaration {
+            variable: _,
+            initializer,
+            ..
+        } = &statements[0].kind
         {
             if let Some(init) = initializer {
-                if let NodeKind::String { value, interpolated } = &init.kind {
+                if let NodeKind::String {
+                    value,
+                    interpolated,
+                } = &init.kind
+                {
                     assert_eq!(interpolated, &true, "String should be interpolated");
-                    assert!(value.contains("${name}"), "Should contain variable interpolation");
+                    assert!(
+                        value.contains("${name}"),
+                        "Should contain variable interpolation"
+                    );
                 } else {
                     return Err("Expected string initializer".into());
                 }

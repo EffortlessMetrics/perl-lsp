@@ -144,7 +144,12 @@ pub fn collect_inline_values_with_runtime(
     let mut inline_values = Vec::new();
     let mut seen_on_line: HashSet<(usize, String)> = HashSet::new();
 
-    for (idx, line) in lines.iter().enumerate().skip(start_idx).take(end_idx - start_idx + 1) {
+    for (idx, line) in lines
+        .iter()
+        .enumerate()
+        .skip(start_idx)
+        .take(end_idx - start_idx + 1)
+    {
         for cap in re.captures_iter(line) {
             if let Some(m) = cap.get(0) {
                 let var_name = m.as_str();
@@ -159,7 +164,11 @@ pub fn collect_inline_values_with_runtime(
                     Some(rv) => format_inline_value(var_name, rv),
                     None => format!("{} = ?", var_name),
                 };
-                inline_values.push(InlineValueText { line: (idx + 1) as i64, column, text });
+                inline_values.push(InlineValueText {
+                    line: (idx + 1) as i64,
+                    column,
+                    text,
+                });
             }
         }
     }
@@ -192,7 +201,12 @@ pub fn collect_inline_values(source: &str, start_line: i64, end_line: i64) -> Ve
     };
     let mut inline_values = Vec::new();
 
-    for (idx, line) in lines.iter().enumerate().skip(start_idx).take(end_idx - start_idx + 1) {
+    for (idx, line) in lines
+        .iter()
+        .enumerate()
+        .skip(start_idx)
+        .take(end_idx - start_idx + 1)
+    {
         for cap in re.captures_iter(line) {
             if let Some(m) = cap.get(0) {
                 let var_text = m.as_str();

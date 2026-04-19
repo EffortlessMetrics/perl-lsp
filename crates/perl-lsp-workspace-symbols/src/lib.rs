@@ -125,7 +125,9 @@ impl WorkspaceSymbolsProvider {
     /// Creates a new empty workspace symbols provider.
     #[must_use]
     pub fn new() -> Self {
-        Self { documents: HashMap::new() }
+        Self {
+            documents: HashMap::new(),
+        }
     }
 
     /// Indexes all symbols from a parsed document.
@@ -420,7 +422,10 @@ sub baz {
         );
 
         // Simple package qualification
-        assert_eq!(container_name("MyClass::new").map(str::to_string), Some("MyClass".to_string()));
+        assert_eq!(
+            container_name("MyClass::new").map(str::to_string),
+            Some("MyClass".to_string())
+        );
 
         // Top-level symbol (no container)
         assert_eq!(container_name("toplevel").map(str::to_string), None);
@@ -429,7 +434,10 @@ sub baz {
         assert_eq!(container_name("").map(str::to_string), None);
 
         // Package name only (no method)
-        assert_eq!(container_name("Package::").map(str::to_string), Some("Package".to_string()));
+        assert_eq!(
+            container_name("Package::").map(str::to_string),
+            Some("Package".to_string())
+        );
 
         // Deep nesting
         assert_eq!(
@@ -552,7 +560,10 @@ my $top_level_var = 42;
         // This test verifies the correct container behavior when they do appear.
         let results = provider.search("top_level_var", &source_map);
         if let Some(sym) = results.iter().find(|s| s.name.contains("top_level_var")) {
-            assert!(sym.container_name.is_none(), "Lexical variable should have no container");
+            assert!(
+                sym.container_name.is_none(),
+                "Lexical variable should have no container"
+            );
         }
     }
 
@@ -569,9 +580,11 @@ my $top_level_var = 42;
         let source_b = "package FileB;\nsub process_data { 3 }\nsub render { 4 }\n";
         let source_c = "package FileC;\nsub unrelated { 5 }\n";
 
-        for (uri, src) in
-            [("file:///a.pm", source_a), ("file:///b.pm", source_b), ("file:///c.pm", source_c)]
-        {
+        for (uri, src) in [
+            ("file:///a.pm", source_a),
+            ("file:///b.pm", source_b),
+            ("file:///c.pm", source_c),
+        ] {
             source_map.insert(uri.to_string(), src.to_string());
             let mut parser = Parser::new(src);
             let ast = must(parser.parse());
@@ -603,7 +616,9 @@ my $top_level_var = 42;
         provider.index_document("file:///controller.pm", &ast, source);
 
         let results = provider.search("Controller", &source_map);
-        let pkg = results.iter().find(|s| s.name.contains("Controller") && s.kind == 2); // 2 = Module/Package
+        let pkg = results
+            .iter()
+            .find(|s| s.name.contains("Controller") && s.kind == 2); // 2 = Module/Package
         assert!(pkg.is_some(), "should find Controller package symbol");
         let pkg = pkg.unwrap_or_else(|| unreachable!());
 
@@ -631,8 +646,14 @@ my $top_level_var = 42;
         let results = provider.search("gL", &source_map);
         let names: Vec<&str> = results.iter().map(|s| s.name.as_str()).collect();
 
-        assert!(names.contains(&"getLogger"), "gL should fuzzy-match getLogger, got: {names:?}");
-        assert!(!names.contains(&"unrelated"), "gL should not match unrelated");
+        assert!(
+            names.contains(&"getLogger"),
+            "gL should fuzzy-match getLogger, got: {names:?}"
+        );
+        assert!(
+            !names.contains(&"unrelated"),
+            "gL should not match unrelated"
+        );
     }
 
     // -----------------------------------------------------------------------
@@ -714,7 +735,10 @@ sub get_log { 3 }
         let logger_pos = names.iter().position(|n| *n == "logger");
         let get_log_pos = names.iter().position(|n| *n == "get_log");
         if let (Some(lp), Some(gp)) = (logger_pos, get_log_pos) {
-            assert!(lp < gp, "prefix match 'logger' should rank above substring 'get_log'");
+            assert!(
+                lp < gp,
+                "prefix match 'logger' should rank above substring 'get_log'"
+            );
         }
     }
 
@@ -806,11 +830,16 @@ sub connect {
         assert_eq!(results.len(), 3, "Should find all three 'connect' methods");
 
         // Verify all three different containers are present
-        let containers: Vec<String> =
-            results.iter().filter_map(|r| r.container_name.clone()).collect();
+        let containers: Vec<String> = results
+            .iter()
+            .filter_map(|r| r.container_name.clone())
+            .collect();
 
         assert_eq!(containers.len(), 3, "Should have three containers");
-        assert!(containers.contains(&"Database::MySQL".to_string()), "Should have MySQL container");
+        assert!(
+            containers.contains(&"Database::MySQL".to_string()),
+            "Should have MySQL container"
+        );
         assert!(
             containers.contains(&"Database::PostgreSQL".to_string()),
             "Should have PostgreSQL container"
@@ -822,6 +851,10 @@ sub connect {
 
         // All symbols should have unique container names for disambiguation
         let unique_containers: std::collections::HashSet<_> = containers.iter().collect();
-        assert_eq!(unique_containers.len(), 3, "Each symbol should have a unique container");
+        assert_eq!(
+            unique_containers.len(),
+            3,
+            "Each symbol should have a unique container"
+        );
     }
 }

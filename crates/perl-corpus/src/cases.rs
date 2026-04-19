@@ -805,7 +805,13 @@ if ($text =~ /(?[ [a-z] - [aeiou] ])/ ) {
     EdgeCase {
         id: "hash.block.ambiguity",
         description: "Hash vs block ambiguity in function calls.",
-        tags: &["hash", "block", "ambiguous", "parser-sensitive", "edge-case"],
+        tags: &[
+            "hash",
+            "block",
+            "ambiguous",
+            "parser-sensitive",
+            "edge-case",
+        ],
         source: r#"sub handle { return 1; }
 handle { key => 1 };
 handle({ key => 1 });
@@ -1364,7 +1370,10 @@ impl EdgeCaseGenerator {
 
     /// Return edge cases with a matching tag.
     pub fn by_tag(tag: &str) -> Vec<&'static EdgeCase> {
-        edge_cases().iter().filter(|case| case.tags.contains(&tag)).collect()
+        edge_cases()
+            .iter()
+            .filter(|case| case.tags.contains(&tag))
+            .collect()
     }
 
     /// Return edge cases that match any of the provided tags.
@@ -1373,7 +1382,10 @@ impl EdgeCaseGenerator {
             return edge_cases().iter().collect();
         }
 
-        edge_cases().iter().filter(|case| case.tags.iter().any(|tag| tags.contains(tag))).collect()
+        edge_cases()
+            .iter()
+            .filter(|case| case.tags.iter().any(|tag| tags.contains(tag)))
+            .collect()
     }
 
     /// Return edge cases that match all of the provided tags.
@@ -1424,8 +1436,10 @@ impl EdgeCaseGenerator {
 
     /// Return sorted unique edge case tags.
     pub fn tags() -> Vec<&'static str> {
-        let mut tags: Vec<&'static str> =
-            edge_cases().iter().flat_map(|case| case.tags.iter().copied()).collect();
+        let mut tags: Vec<&'static str> = edge_cases()
+            .iter()
+            .flat_map(|case| case.tags.iter().copied())
+            .collect();
         tags.sort();
         tags.dedup();
         tags
@@ -1434,7 +1448,9 @@ impl EdgeCaseGenerator {
 
 /// Find a complex data structure fixture by ID.
 pub fn find_complex_case(id: &str) -> Option<&'static ComplexDataStructureCase> {
-    complex_data_structure_cases().iter().find(|case| case.id == id)
+    complex_data_structure_cases()
+        .iter()
+        .find(|case| case.id == id)
 }
 
 /// Sample a deterministic complex data structure fixture by seed.
@@ -1524,7 +1540,11 @@ mod tests {
     fn complex_case_ids_are_unique() {
         let mut seen = HashSet::new();
         for case in complex_data_structure_cases() {
-            assert!(seen.insert(case.id), "Duplicate complex case id: {}", case.id);
+            assert!(
+                seen.insert(case.id),
+                "Duplicate complex case id: {}",
+                case.id
+            );
         }
     }
 }

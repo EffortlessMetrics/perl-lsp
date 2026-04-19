@@ -109,7 +109,11 @@ fn suggestion_some_for_most_kinds() -> Result<(), Box<dyn std::error::Error>> {
         ParseErrorKind::UnexpectedEof,
     ];
     for kind in &kinds_with_suggestions {
-        assert!(c.get_suggestion(kind).is_some(), "no suggestion for {:?}", kind);
+        assert!(
+            c.get_suggestion(kind).is_some(),
+            "no suggestion for {:?}",
+            kind
+        );
     }
     // InvalidSyntax should have no suggestion
     assert!(c.get_suggestion(&ParseErrorKind::InvalidSyntax).is_none());
@@ -119,10 +123,16 @@ fn suggestion_some_for_most_kinds() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn explanation_some_for_common_kinds() -> Result<(), Box<dyn std::error::Error>> {
     let c = ErrorClassifier::new();
-    assert!(c.get_explanation(&ParseErrorKind::MissingSemicolon).is_some());
+    assert!(
+        c.get_explanation(&ParseErrorKind::MissingSemicolon)
+            .is_some()
+    );
     assert!(c.get_explanation(&ParseErrorKind::UnclosedString).is_some());
     assert!(c.get_explanation(&ParseErrorKind::UnclosedRegex).is_some());
-    assert!(c.get_explanation(&ParseErrorKind::UnterminatedHeredoc).is_some());
+    assert!(
+        c.get_explanation(&ParseErrorKind::UnterminatedHeredoc)
+            .is_some()
+    );
     assert!(c.get_explanation(&ParseErrorKind::UnclosedBlock).is_some());
     // InvalidSyntax has no explanation
     assert!(c.get_explanation(&ParseErrorKind::InvalidSyntax).is_none());

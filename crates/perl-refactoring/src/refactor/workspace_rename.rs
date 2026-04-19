@@ -233,20 +233,46 @@ impl std::fmt::Display for WorkspaceRenameError {
             WorkspaceRenameError::SymbolNotFound { symbol, file } => {
                 write!(f, "Symbol '{}' not found in {}", symbol, file)
             }
-            WorkspaceRenameError::NameConflict { new_name, conflicts } => {
-                write!(f, "Name '{}' conflicts with {} existing symbols", new_name, conflicts.len())
+            WorkspaceRenameError::NameConflict {
+                new_name,
+                conflicts,
+            } => {
+                write!(
+                    f,
+                    "Name '{}' conflicts with {} existing symbols",
+                    new_name,
+                    conflicts.len()
+                )
             }
-            WorkspaceRenameError::Timeout { elapsed_seconds, files_processed, total_files } => {
+            WorkspaceRenameError::Timeout {
+                elapsed_seconds,
+                files_processed,
+                total_files,
+            } => {
                 write!(
                     f,
                     "Operation timed out after {}s ({}/{} files)",
                     elapsed_seconds, files_processed, total_files
                 )
             }
-            WorkspaceRenameError::FileSystemError { operation, file, error } => {
-                write!(f, "File system error during {}: {} - {}", operation, file.display(), error)
+            WorkspaceRenameError::FileSystemError {
+                operation,
+                file,
+                error,
+            } => {
+                write!(
+                    f,
+                    "File system error during {}: {} - {}",
+                    operation,
+                    file.display(),
+                    error
+                )
             }
-            WorkspaceRenameError::RollbackFailed { original_error, rollback_error, backup_dir } => {
+            WorkspaceRenameError::RollbackFailed {
+                original_error,
+                rollback_error,
+                backup_dir,
+            } => {
                 write!(
                     f,
                     "Rollback failed - original: {}, rollback: {}, backup: {}",
@@ -255,8 +281,16 @@ impl std::fmt::Display for WorkspaceRenameError {
                     backup_dir.display()
                 )
             }
-            WorkspaceRenameError::IndexUpdateFailed { error, affected_files } => {
-                write!(f, "Index update failed: {} ({} files)", error, affected_files.len())
+            WorkspaceRenameError::IndexUpdateFailed {
+                error,
+                affected_files,
+            } => {
+                write!(
+                    f,
+                    "Index update failed: {} ({} files)",
+                    error,
+                    affected_files.len()
+                )
             }
             WorkspaceRenameError::SecurityError { message, path } => {
                 if let Some(p) = path {
@@ -422,7 +456,10 @@ impl WorkspaceRename {
 
         // Add the definition location if not already present
         if let Some(ref def) = definition {
-            if !all_references.iter().any(|r| r.uri == def.uri && r.range == def.range) {
+            if !all_references
+                .iter()
+                .any(|r| r.uri == def.uri && r.range == def.range)
+            {
                 all_references.push(def.clone());
             }
         }
@@ -582,14 +619,20 @@ impl WorkspaceRename {
         let files_modified = file_edits.len();
 
         // AC:AC5 - Backup creation
-        let backup_info =
-            if self.config.create_backups { self.create_backup(&file_edits).ok() } else { None };
+        let backup_info = if self.config.create_backups {
+            self.create_backup(&file_edits).ok()
+        } else {
+            None
+        };
 
         let elapsed_ms = start.elapsed().as_millis() as u64;
 
         // Emit completion progress
         if let Some(ref tx) = progress_tx {
-            let _ = tx.send(Progress::Complete { files_modified, changes: total_changes });
+            let _ = tx.send(Progress::Complete {
+                files_modified,
+                changes: total_changes,
+            });
         }
 
         Ok(WorkspaceRenameResult {
@@ -597,7 +640,11 @@ impl WorkspaceRename {
             backup_info,
             description: format!("Rename '{}' to '{}'", old_name, new_name),
             warnings: vec![],
-            statistics: RenameStatistics { files_modified, total_changes, elapsed_ms },
+            statistics: RenameStatistics {
+                files_modified,
+                total_changes,
+                elapsed_ms,
+            },
         })
     }
 
@@ -645,8 +692,9 @@ impl WorkspaceRename {
     /// Create backups of files that will be modified
     fn create_backup(&self, file_edits: &[FileEdit]) -> Result<BackupInfo, WorkspaceRenameError> {
         // Use nanos + thread ID for uniqueness across parallel operations
-        let ts =
-            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default();
+        let ts = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default();
         let backup_dir = std::env::temp_dir().join(format!(
             "perl_rename_backup_{}_{}_{:?}",
             ts.as_secs(),
@@ -688,7 +736,10 @@ impl WorkspaceRename {
             }
         }
 
-        Ok(BackupInfo { backup_dir, file_mappings })
+        Ok(BackupInfo {
+            backup_dir,
+            file_mappings,
+        })
     }
 
     /// Apply file edits atomically with rollback support
@@ -861,8 +912,14 @@ mod tests {
     #[test]
     fn test_split_qualified_name() {
         assert_eq!(split_qualified_name("process"), (None, "process"));
-        assert_eq!(split_qualified_name("Utils::process"), (Some("Utils"), "process"));
-        assert_eq!(split_qualified_name("A::B::process"), (Some("A::B"), "process"));
+        assert_eq!(
+            split_qualified_name("Utils::process"),
+            (Some("Utils"), "process")
+        );
+        assert_eq!(
+            split_qualified_name("A::B::process"),
+            (Some("A::B"), "process")
+        );
     }
 
     #[test]

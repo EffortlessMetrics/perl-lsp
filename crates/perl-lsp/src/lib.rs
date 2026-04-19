@@ -525,5 +525,7 @@ pub(crate) mod signature_help {
 /// ```
 pub fn run_stdio() -> Result<(), Box<dyn std::error::Error>> {
     let server = LspServer::new();
-    server.run().map_err(|e| Box::new(e) as Box<dyn std::error::Error>)
+    server
+        .run()
+        .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)
 }

@@ -33,7 +33,11 @@ fn test_single_char_insertion_correctness() -> Result<(), Box<dyn std::error::Er
     let mut incremental_parser = CheckpointedIncrementalParser::new();
     incremental_parser.parse(source.to_string())?;
 
-    let edit = SimpleEdit { start: 0, end: 0, new_text: "# comment\n".to_string() };
+    let edit = SimpleEdit {
+        start: 0,
+        end: 0,
+        new_text: "# comment\n".to_string(),
+    };
     let _ = incremental_parser.apply_edit(&edit)?;
 
     // Test insertion in the middle
@@ -41,7 +45,11 @@ fn test_single_char_insertion_correctness() -> Result<(), Box<dyn std::error::Er
     let mut incremental_parser = CheckpointedIncrementalParser::new();
     incremental_parser.parse(source.to_string())?;
 
-    let edit = SimpleEdit { start: 7, end: 7, new_text: "5".to_string() };
+    let edit = SimpleEdit {
+        start: 7,
+        end: 7,
+        new_text: "5".to_string(),
+    };
     let _ = incremental_parser.apply_edit(&edit)?;
 
     // Test insertion at the end
@@ -49,7 +57,11 @@ fn test_single_char_insertion_correctness() -> Result<(), Box<dyn std::error::Er
     let mut incremental_parser = CheckpointedIncrementalParser::new();
     incremental_parser.parse(source.to_string())?;
 
-    let edit = SimpleEdit { start: 11, end: 11, new_text: "\nprint $x;".to_string() };
+    let edit = SimpleEdit {
+        start: 11,
+        end: 11,
+        new_text: "\nprint $x;".to_string(),
+    };
     let _ = incremental_parser.apply_edit(&edit)?;
 
     Ok(())
@@ -63,7 +75,11 @@ fn test_single_char_deletion_correctness() -> Result<(), Box<dyn std::error::Err
     let mut incremental_parser = CheckpointedIncrementalParser::new();
     incremental_parser.parse(source.to_string())?;
 
-    let edit = SimpleEdit { start: 0, end: 1, new_text: "".to_string() };
+    let edit = SimpleEdit {
+        start: 0,
+        end: 1,
+        new_text: "".to_string(),
+    };
     let _ = incremental_parser.apply_edit(&edit)?;
 
     // Test deletion in the middle
@@ -71,7 +87,11 @@ fn test_single_char_deletion_correctness() -> Result<(), Box<dyn std::error::Err
     let mut incremental_parser = CheckpointedIncrementalParser::new();
     incremental_parser.parse(source.to_string())?;
 
-    let edit = SimpleEdit { start: 8, end: 9, new_text: "".to_string() };
+    let edit = SimpleEdit {
+        start: 8,
+        end: 9,
+        new_text: "".to_string(),
+    };
     let _ = incremental_parser.apply_edit(&edit)?;
 
     // Test deletion at the end
@@ -79,7 +99,11 @@ fn test_single_char_deletion_correctness() -> Result<(), Box<dyn std::error::Err
     let mut incremental_parser = CheckpointedIncrementalParser::new();
     incremental_parser.parse(source.to_string())?;
 
-    let edit = SimpleEdit { start: 10, end: 11, new_text: "".to_string() };
+    let edit = SimpleEdit {
+        start: 10,
+        end: 11,
+        new_text: "".to_string(),
+    };
     let _ = incremental_parser.apply_edit(&edit)?;
 
     Ok(())
@@ -93,7 +117,11 @@ fn test_replacement_inside_token_correctness() -> Result<(), Box<dyn std::error:
     let mut incremental_parser = CheckpointedIncrementalParser::new();
     incremental_parser.parse(source.to_string())?;
 
-    let edit = SimpleEdit { start: 9, end: 12, new_text: "99".to_string() };
+    let edit = SimpleEdit {
+        start: 9,
+        end: 12,
+        new_text: "99".to_string(),
+    };
     let _ = incremental_parser.apply_edit(&edit)?;
 
     // Replace part of a string
@@ -101,7 +129,11 @@ fn test_replacement_inside_token_correctness() -> Result<(), Box<dyn std::error:
     let mut incremental_parser = CheckpointedIncrementalParser::new();
     incremental_parser.parse(source.to_string())?;
 
-    let edit = SimpleEdit { start: 10, end: 13, new_text: "HEY".to_string() };
+    let edit = SimpleEdit {
+        start: 10,
+        end: 13,
+        new_text: "HEY".to_string(),
+    };
     let _ = incremental_parser.apply_edit(&edit)?;
 
     // Replace part of a variable name
@@ -109,7 +141,11 @@ fn test_replacement_inside_token_correctness() -> Result<(), Box<dyn std::error:
     let mut incremental_parser = CheckpointedIncrementalParser::new();
     incremental_parser.parse(source.to_string())?;
 
-    let edit = SimpleEdit { start: 6, end: 10, new_text: "x".to_string() };
+    let edit = SimpleEdit {
+        start: 6,
+        end: 10,
+        new_text: "x".to_string(),
+    };
     let _ = incremental_parser.apply_edit(&edit)?;
 
     Ok(())
@@ -123,7 +159,11 @@ fn test_edit_at_token_boundary_correctness() -> Result<(), Box<dyn std::error::E
     let mut incremental_parser = CheckpointedIncrementalParser::new();
     incremental_parser.parse(source.to_string())?;
 
-    let edit = SimpleEdit { start: 6, end: 6, new_text: " ".to_string() };
+    let edit = SimpleEdit {
+        start: 6,
+        end: 6,
+        new_text: " ".to_string(),
+    };
     let _ = incremental_parser.apply_edit(&edit)?;
 
     // Edit at the boundary of a number and operator
@@ -131,7 +171,11 @@ fn test_edit_at_token_boundary_correctness() -> Result<(), Box<dyn std::error::E
     let mut incremental_parser = CheckpointedIncrementalParser::new();
     incremental_parser.parse(source.to_string())?;
 
-    let edit = SimpleEdit { start: 10, end: 10, new_text: "5".to_string() };
+    let edit = SimpleEdit {
+        start: 10,
+        end: 10,
+        new_text: "5".to_string(),
+    };
     let _ = incremental_parser.apply_edit(&edit)?;
 
     // Edit at the boundary of operator and number
@@ -139,7 +183,11 @@ fn test_edit_at_token_boundary_correctness() -> Result<(), Box<dyn std::error::E
     let mut incremental_parser = CheckpointedIncrementalParser::new();
     incremental_parser.parse(source.to_string())?;
 
-    let edit = SimpleEdit { start: 12, end: 12, new_text: "5".to_string() };
+    let edit = SimpleEdit {
+        start: 12,
+        end: 12,
+        new_text: "5".to_string(),
+    };
     let _ = incremental_parser.apply_edit(&edit)?;
 
     Ok(())
@@ -153,7 +201,11 @@ fn test_source_length_increase_correctness() -> Result<(), Box<dyn std::error::E
     let mut incremental_parser = CheckpointedIncrementalParser::new();
     incremental_parser.parse(source.to_string())?;
 
-    let edit = SimpleEdit { start: 8, end: 8, new_text: "999".to_string() };
+    let edit = SimpleEdit {
+        start: 8,
+        end: 8,
+        new_text: "999".to_string(),
+    };
     let _ = incremental_parser.apply_edit(&edit)?;
 
     // Large increase (add a line)
@@ -161,7 +213,11 @@ fn test_source_length_increase_correctness() -> Result<(), Box<dyn std::error::E
     let mut incremental_parser = CheckpointedIncrementalParser::new();
     incremental_parser.parse(source.to_string())?;
 
-    let edit = SimpleEdit { start: 11, end: 11, new_text: "\nmy $y = 100;\n".to_string() };
+    let edit = SimpleEdit {
+        start: 11,
+        end: 11,
+        new_text: "\nmy $y = 100;\n".to_string(),
+    };
     let _ = incremental_parser.apply_edit(&edit)?;
 
     Ok(())
@@ -175,7 +231,11 @@ fn test_source_length_decrease_correctness() -> Result<(), Box<dyn std::error::E
     let mut incremental_parser = CheckpointedIncrementalParser::new();
     incremental_parser.parse(source.to_string())?;
 
-    let edit = SimpleEdit { start: 9, end: 12, new_text: "".to_string() };
+    let edit = SimpleEdit {
+        start: 9,
+        end: 12,
+        new_text: "".to_string(),
+    };
     let _ = incremental_parser.apply_edit(&edit)?;
 
     // Large decrease (remove a line)
@@ -183,7 +243,11 @@ fn test_source_length_decrease_correctness() -> Result<(), Box<dyn std::error::E
     let mut incremental_parser = CheckpointedIncrementalParser::new();
     incremental_parser.parse(source.to_string())?;
 
-    let edit = SimpleEdit { start: 11, end: 23, new_text: "".to_string() };
+    let edit = SimpleEdit {
+        start: 11,
+        end: 23,
+        new_text: "".to_string(),
+    };
     let _ = incremental_parser.apply_edit(&edit)?;
 
     Ok(())
@@ -194,7 +258,11 @@ fn test_source_length_decrease_correctness() -> Result<(), Box<dyn std::error::E
 fn test_interior_edit_past_checkpoint_matches_full_parse() -> Result<(), Box<dyn std::error::Error>>
 {
     let source = "my $value = 1;\n".repeat(20);
-    let edit = SimpleEdit { start: 125, end: 126, new_text: "9".to_string() };
+    let edit = SimpleEdit {
+        start: 125,
+        end: 126,
+        new_text: "9".to_string(),
+    };
 
     let mut expected_source = source.clone();
     expected_source.replace_range(edit.start..edit.end, &edit.new_text);
@@ -227,7 +295,11 @@ fn test_incremental_parsing_correctness() -> Result<(), Box<dyn std::error::Erro
     parser.parse(source.to_string())?;
 
     // Edit in the middle
-    let edit = SimpleEdit { start: 8, end: 10, new_text: "99".to_string() };
+    let edit = SimpleEdit {
+        start: 8,
+        end: 10,
+        new_text: "99".to_string(),
+    };
     parser.apply_edit(&edit)?;
 
     let stats = parser.stats();
@@ -249,13 +321,20 @@ fn test_repeated_edits_large_file() -> Result<(), Box<dyn std::error::Error>> {
     // Apply multiple edits
     for i in 0..10 {
         let edit_start = (source.len() / 10) * i;
-        let edit = SimpleEdit { start: edit_start, end: edit_start + 1, new_text: "9".to_string() };
+        let edit = SimpleEdit {
+            start: edit_start,
+            end: edit_start + 1,
+            new_text: "9".to_string(),
+        };
         parser.apply_edit(&edit)?;
     }
 
     // Verify that parser still works correctly
     let stats = parser.stats();
-    assert_eq!(stats.incremental_parses, 10, "Expected 10 incremental parses");
+    assert_eq!(
+        stats.incremental_parses, 10,
+        "Expected 10 incremental parses"
+    );
 
     Ok(())
 }
@@ -269,15 +348,27 @@ fn test_undo_redo_pattern() -> Result<(), Box<dyn std::error::Error>> {
     parser.parse(source.to_string())?;
 
     // Original edit: change 42 to 99
-    let edit1 = SimpleEdit { start: 8, end: 10, new_text: "99".to_string() };
+    let edit1 = SimpleEdit {
+        start: 8,
+        end: 10,
+        new_text: "99".to_string(),
+    };
     parser.apply_edit(&edit1)?;
 
     // Reverse edit: change 99 back to 42
-    let edit2 = SimpleEdit { start: 8, end: 10, new_text: "42".to_string() };
+    let edit2 = SimpleEdit {
+        start: 8,
+        end: 10,
+        new_text: "42".to_string(),
+    };
     parser.apply_edit(&edit2)?;
 
     // Original edit again: change 42 to 99
-    let edit3 = SimpleEdit { start: 8, end: 10, new_text: "99".to_string() };
+    let edit3 = SimpleEdit {
+        start: 8,
+        end: 10,
+        new_text: "99".to_string(),
+    };
     parser.apply_edit(&edit3)?;
 
     // Verify that all parses were correct
@@ -295,7 +386,11 @@ fn test_edit_near_regex_division_sensitive() -> Result<(), Box<dyn std::error::E
     let mut incremental_parser = CheckpointedIncrementalParser::new();
     incremental_parser.parse(source.to_string())?;
 
-    let edit = SimpleEdit { start: 11, end: 12, new_text: "0".to_string() };
+    let edit = SimpleEdit {
+        start: 11,
+        end: 12,
+        new_text: "0".to_string(),
+    };
     let _ = incremental_parser.apply_edit(&edit)?;
 
     // Regex context
@@ -303,7 +398,11 @@ fn test_edit_near_regex_division_sensitive() -> Result<(), Box<dyn std::error::E
     let mut incremental_parser = CheckpointedIncrementalParser::new();
     incremental_parser.parse(source.to_string())?;
 
-    let edit = SimpleEdit { start: 11, end: 14, new_text: "baz".to_string() };
+    let edit = SimpleEdit {
+        start: 11,
+        end: 14,
+        new_text: "baz".to_string(),
+    };
     let _ = incremental_parser.apply_edit(&edit)?;
 
     // Context that could be either
@@ -311,7 +410,11 @@ fn test_edit_near_regex_division_sensitive() -> Result<(), Box<dyn std::error::E
     let mut incremental_parser = CheckpointedIncrementalParser::new();
     incremental_parser.parse(source.to_string())?;
 
-    let edit = SimpleEdit { start: 11, end: 12, new_text: "c".to_string() };
+    let edit = SimpleEdit {
+        start: 11,
+        end: 12,
+        new_text: "c".to_string(),
+    };
     let _ = incremental_parser.apply_edit(&edit)?;
 
     Ok(())
@@ -325,7 +428,11 @@ fn test_simple_string_replacement() -> Result<(), Box<dyn std::error::Error>> {
     let mut incremental_parser = CheckpointedIncrementalParser::new();
     incremental_parser.parse(source.to_string())?;
 
-    let edit = SimpleEdit { start: 10, end: 13, new_text: "xyz".to_string() };
+    let edit = SimpleEdit {
+        start: 10,
+        end: 13,
+        new_text: "xyz".to_string(),
+    };
     let _ = incremental_parser.apply_edit(&edit)?;
 
     Ok(())
@@ -343,7 +450,11 @@ fn test_very_long_line_edit() -> Result<(), Box<dyn std::error::Error>> {
     let mut incremental_parser = CheckpointedIncrementalParser::new();
     incremental_parser.parse(source.to_string())?;
 
-    let edit = SimpleEdit { start: edit_start, end: edit_start + 1, new_text: "9".to_string() };
+    let edit = SimpleEdit {
+        start: edit_start,
+        end: edit_start + 1,
+        new_text: "9".to_string(),
+    };
     let _ = incremental_parser.apply_edit(&edit)?;
 
     Ok(())
@@ -362,7 +473,11 @@ fn test_metrics_tracking() -> Result<(), Box<dyn std::error::Error>> {
     parser.parse(source.to_string())?;
 
     // Apply an edit
-    let edit = SimpleEdit { start: 8, end: 10, new_text: "99".to_string() };
+    let edit = SimpleEdit {
+        start: 8,
+        end: 10,
+        new_text: "99".to_string(),
+    };
     parser.apply_edit(&edit)?;
 
     let stats = parser.stats();
@@ -557,7 +672,11 @@ fn test_end_to_end_incremental_parsing() -> Result<(), Box<dyn std::error::Error
 
     // Make an edit in the middle
     let edit_start = source.len() / 2;
-    let edit = SimpleEdit { start: edit_start, end: edit_start + 1, new_text: "9".to_string() };
+    let edit = SimpleEdit {
+        start: edit_start,
+        end: edit_start + 1,
+        new_text: "9".to_string(),
+    };
     let _incremental_tree = parser.apply_edit(&edit)?;
 
     // Verify metrics

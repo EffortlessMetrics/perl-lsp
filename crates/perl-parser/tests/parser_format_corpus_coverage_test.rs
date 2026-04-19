@@ -7,14 +7,17 @@ use std::path::Path;
 
 fn parse_code(input: &str) -> Result<Node, Box<dyn std::error::Error>> {
     let mut parser = Parser::new(input);
-    parser.parse().map_err(|e| Box::new(e) as Box<dyn std::error::Error>)
+    parser
+        .parse()
+        .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)
 }
 
 fn count_format_statements(node: &Node) -> usize {
     match &node.kind {
-        NodeKind::Program { statements } => {
-            statements.iter().filter(|stmt| matches!(stmt.kind, NodeKind::Format { .. })).count()
-        }
+        NodeKind::Program { statements } => statements
+            .iter()
+            .filter(|stmt| matches!(stmt.kind, NodeKind::Format { .. }))
+            .count(),
         _ => 0,
     }
 }
@@ -116,7 +119,10 @@ fn parser_format_corpus_ac2_picture_lines() -> Result<(), Box<dyn std::error::Er
                 || body.contains("@#"))
     });
 
-    assert!(has_picture_lines, "AC2: Format picture lines should be parsed and captured correctly");
+    assert!(
+        has_picture_lines,
+        "AC2: Format picture lines should be parsed and captured correctly"
+    );
 
     Ok(())
 }
@@ -143,10 +149,22 @@ fn parser_format_corpus_ac3_field_specifiers() -> Result<(), Box<dyn std::error:
     let all_bodies: Vec<&str> = formats.iter().map(|(_, body)| body.as_str()).collect();
     let combined = all_bodies.join("\n");
 
-    assert!(combined.contains("@<"), "AC3: Left-justified field specifiers should be recognized");
-    assert!(combined.contains("@>"), "AC3: Right-justified field specifiers should be recognized");
-    assert!(combined.contains("@|"), "AC3: Center-justified field specifiers should be recognized");
-    assert!(combined.contains("@#"), "AC3: Numeric field specifiers should be recognized");
+    assert!(
+        combined.contains("@<"),
+        "AC3: Left-justified field specifiers should be recognized"
+    );
+    assert!(
+        combined.contains("@>"),
+        "AC3: Right-justified field specifiers should be recognized"
+    );
+    assert!(
+        combined.contains("@|"),
+        "AC3: Center-justified field specifiers should be recognized"
+    );
+    assert!(
+        combined.contains("@#"),
+        "AC3: Numeric field specifiers should be recognized"
+    );
 
     Ok(())
 }
@@ -173,8 +191,14 @@ fn parser_format_corpus_ac4_variable_binding() -> Result<(), Box<dyn std::error:
     let has_named = formats.iter().any(|(name, _)| !name.is_empty());
     let has_anonymous = formats.iter().any(|(name, _)| name.is_empty());
 
-    assert!(has_named, "AC4: Named format declarations should be supported");
-    assert!(has_anonymous, "AC4: Anonymous format declarations should be supported");
+    assert!(
+        has_named,
+        "AC4: Named format declarations should be supported"
+    );
+    assert!(
+        has_anonymous,
+        "AC4: Anonymous format declarations should be supported"
+    );
 
     Ok(())
 }
@@ -197,8 +221,10 @@ fn parser_format_corpus_ac6_ast_structure() -> Result<(), Box<dyn std::error::Er
     let ast = parse_code(&content)?;
 
     if let NodeKind::Program { statements } = &ast.kind {
-        let format_nodes: Vec<_> =
-            statements.iter().filter(|stmt| matches!(stmt.kind, NodeKind::Format { .. })).collect();
+        let format_nodes: Vec<_> = statements
+            .iter()
+            .filter(|stmt| matches!(stmt.kind, NodeKind::Format { .. }))
+            .collect();
 
         assert!(
             !format_nodes.is_empty(),
@@ -240,7 +266,10 @@ fn parser_format_corpus_ac7_picture_lines_captured() -> Result<(), Box<dyn std::
     // Find a format with known picture line content
     let complex_format = formats.iter().find(|(name, _)| name == "COMPLEX_REPORT");
 
-    assert!(complex_format.is_some(), "AC7: Should find COMPLEX_REPORT format in corpus");
+    assert!(
+        complex_format.is_some(),
+        "AC7: Should find COMPLEX_REPORT format in corpus"
+    );
 
     if let Some((_, body)) = complex_format {
         assert!(

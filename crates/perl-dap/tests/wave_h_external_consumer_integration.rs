@@ -67,15 +67,25 @@ fn test_format_command_args_compat_reexport() {
     // is re-exported and usable. This was noted in the spec as a potential
     // compat issue during collapse.
 
-    let args: Vec<String> =
-        vec!["perl".to_string(), "-d:Debugger".to_string(), "script.pl".to_string()];
+    let args: Vec<String> = vec![
+        "perl".to_string(),
+        "-d:Debugger".to_string(),
+        "script.pl".to_string(),
+    ];
     let result = format_command_args(&args);
 
     // Just verify it returns something and doesn't panic
-    assert!(!result.is_empty(), "format_command_args should return non-empty result");
+    assert!(
+        !result.is_empty(),
+        "format_command_args should return non-empty result"
+    );
 
     // Verify it actually formats something
-    let result_str = result.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(" ");
+    let result_str = result
+        .iter()
+        .map(|s| s.as_str())
+        .collect::<Vec<_>>()
+        .join(" ");
     assert!(
         result_str.contains("perl") || result_str.contains("script.pl"),
         "formatted args should contain original args"

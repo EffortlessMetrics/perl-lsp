@@ -53,7 +53,11 @@ impl TestEnvironment {
         let thread_count = std::env::var("RUST_TEST_THREADS")
             .ok()
             .and_then(|s| s.parse::<usize>().ok())
-            .unwrap_or_else(|| std::thread::available_parallelism().map(|n| n.get()).unwrap_or(8));
+            .unwrap_or_else(|| {
+                std::thread::available_parallelism()
+                    .map(|n| n.get())
+                    .unwrap_or(8)
+            });
 
         let is_ci = std::env::var("CI").is_ok()
             || std::env::var("GITHUB_ACTIONS").is_ok()
@@ -74,7 +78,10 @@ impl TestEnvironment {
 
         // Warn about constrained environments
         if thread_count <= 2 && !is_ci {
-            eprintln!("⚠️  WARNING: Running with {} threads - tests may be slow", thread_count);
+            eprintln!(
+                "⚠️  WARNING: Running with {} threads - tests may be slow",
+                thread_count
+            );
         }
 
         if is_containerized && available_memory_mb.is_some_and(|mem| mem < 512) {
@@ -84,7 +91,13 @@ impl TestEnvironment {
             );
         }
 
-        Ok(Self { thread_count, is_ci, is_containerized, is_wsl, available_memory_mb })
+        Ok(Self {
+            thread_count,
+            is_ci,
+            is_containerized,
+            is_wsl,
+            available_memory_mb,
+        })
     }
 
     /// Get a human-readable summary of the test environment
@@ -159,7 +172,10 @@ pub struct HealthCheck<'a> {
 impl<'a> HealthCheck<'a> {
     /// Create a new health check for the given server
     pub fn new(server: &'a crate::common::LspServer) -> Self {
-        Self { server, timeout: Duration::from_secs(5) }
+        Self {
+            server,
+            timeout: Duration::from_secs(5),
+        }
     }
 
     /// Set custom timeout for health check
@@ -198,9 +214,10 @@ impl<'a> HealthCheck<'a> {
                 }
                 Ok(())
             }
-            None => {
-                Err(format!("Server did not respond to health check within {:?}", self.timeout))
-            }
+            None => Err(format!(
+                "Server did not respond to health check within {:?}",
+                self.timeout
+            )),
         }
     }
 }
@@ -214,7 +231,10 @@ pub struct ResourceMonitor {
 impl ResourceMonitor {
     /// Start monitoring a test operation
     pub fn start(operation: impl Into<String>) -> Self {
-        Self { start_time: Instant::now(), operation: operation.into() }
+        Self {
+            start_time: Instant::now(),
+            operation: operation.into(),
+        }
     }
 
     /// Record completion of the operation
@@ -258,7 +278,11 @@ impl TestError {
             }
         });
 
-        Self { context: context.into(), error: error.into(), environment }
+        Self {
+            context: context.into(),
+            error: error.into(),
+            environment,
+        }
     }
 
     /// Format error with full diagnostic information
@@ -314,7 +338,11 @@ impl std::fmt::Display for TestError {
 
 /// Truncate string to fit in formatted output
 fn truncate(s: &str, max_len: usize) -> String {
-    if s.len() <= max_len { s.to_string() } else { format!("{}...", &s[..max_len - 3]) }
+    if s.len() <= max_len {
+        s.to_string()
+    } else {
+        format!("{}...", &s[..max_len - 3])
+    }
 }
 
 /// Graceful degradation helper
@@ -327,7 +355,11 @@ pub struct GracefulDegradation {
 impl GracefulDegradation {
     /// Create a new graceful degradation helper
     pub fn new(max_retries: usize) -> Self {
-        Self { retry_count: 0, max_retries, backoff_ms: 100 }
+        Self {
+            retry_count: 0,
+            max_retries,
+            backoff_ms: 100,
+        }
     }
 
     /// Attempt an operation with graceful degradation
@@ -352,7 +384,10 @@ impl GracefulDegradation {
                     self.backoff_ms = (self.backoff_ms * 2).min(5000); // Cap at 5s
                 }
                 Err(e) => {
-                    eprintln!("❌ Operation failed after {} attempts", self.retry_count + 1);
+                    eprintln!(
+                        "❌ Operation failed after {} attempts",
+                        self.retry_count + 1
+                    );
                     return Err(e);
                 }
             }
@@ -442,7 +477,11 @@ mod tests {
 
         let result = degradation.attempt(|| {
             attempt_count += 1;
-            if attempt_count < 2 { Err("simulated failure") } else { Ok(42) }
+            if attempt_count < 2 {
+                Err("simulated failure")
+            } else {
+                Ok(42)
+            }
         });
 
         assert_eq!(result, Ok(42));

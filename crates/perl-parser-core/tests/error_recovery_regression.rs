@@ -89,7 +89,10 @@ fn incomplete_sub_no_crash() -> Result<(), Box<dyn std::error::Error>> {
         matches!(ast.kind, NodeKind::Program { .. }),
         "Parser must return a Program node for incomplete sub"
     );
-    assert!(top_level_count(&ast) >= 1, "Partial AST must have at least one top-level statement");
+    assert!(
+        top_level_count(&ast) >= 1,
+        "Partial AST must have at least one top-level statement"
+    );
     Ok(())
 }
 
@@ -119,7 +122,10 @@ fn incomplete_sub_records_unclosed_error() -> Result<(), Box<dyn std::error::Err
 
     // Parser should recognise the unclosed block
     let errors = parser.errors();
-    assert!(!errors.is_empty(), "Parser must record at least one error for unclosed sub block");
+    assert!(
+        !errors.is_empty(),
+        "Parser must record at least one error for unclosed sub block"
+    );
     Ok(())
 }
 
@@ -155,7 +161,10 @@ fn incomplete_if_records_errors() -> Result<(), Box<dyn std::error::Error>> {
 
     // Parser should recognise the unclosed block
     let errors = parser.errors();
-    assert!(!errors.is_empty(), "Parser must record at least one error for unclosed if block");
+    assert!(
+        !errors.is_empty(),
+        "Parser must record at least one error for unclosed if block"
+    );
     Ok(())
 }
 

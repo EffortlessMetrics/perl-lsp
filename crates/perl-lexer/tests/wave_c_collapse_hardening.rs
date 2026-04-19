@@ -107,7 +107,10 @@ fn keywords_inventories_are_non_empty_and_sorted_uniquely() {
         ("LEXER_KEYWORDS", kw::LEXER_KEYWORDS),
         ("LSP_COMPLETION_KEYWORDS", kw::LSP_COMPLETION_KEYWORDS),
         ("DAP_COMPLETION_KEYWORDS", kw::DAP_COMPLETION_KEYWORDS),
-        ("LSP_RUNTIME_COMPLETION_KEYWORDS", kw::LSP_RUNTIME_COMPLETION_KEYWORDS),
+        (
+            "LSP_RUNTIME_COMPLETION_KEYWORDS",
+            kw::LSP_RUNTIME_COMPLETION_KEYWORDS,
+        ),
         ("PARSER_LSP_KEYWORDS", kw::PARSER_LSP_KEYWORDS),
         ("RENAME_KEYWORDS", kw::RENAME_KEYWORDS),
     ] {
@@ -116,7 +119,11 @@ fn keywords_inventories_are_non_empty_and_sorted_uniquely() {
         let before = dedup.len();
         dedup.sort();
         dedup.dedup();
-        assert_eq!(dedup.len(), before, "{name} contains duplicates — check module merge");
+        assert_eq!(
+            dedup.len(),
+            before,
+            "{name} contains duplicates — check module merge"
+        );
     }
 }
 
@@ -287,8 +294,14 @@ fn builtin_count_is_stable_nonzero() {
     // so we only assert both are non-empty, not a size ordering between them.
     use perl_lexer::builtins::phf_lookup::{BUILTIN_FULL_SIGS, BUILTIN_SIGS, builtin_count};
     assert_eq!(builtin_count(), BUILTIN_SIGS.len());
-    assert!(!BUILTIN_SIGS.is_empty(), "BUILTIN_SIGS empty after collapse");
-    assert!(!BUILTIN_FULL_SIGS.is_empty(), "BUILTIN_FULL_SIGS empty after collapse");
+    assert!(
+        !BUILTIN_SIGS.is_empty(),
+        "BUILTIN_SIGS empty after collapse"
+    );
+    assert!(
+        !BUILTIN_FULL_SIGS.is_empty(),
+        "BUILTIN_FULL_SIGS empty after collapse"
+    );
 }
 
 // -----------------------------------------------------------------------------
@@ -311,14 +324,23 @@ fn workspace_root() -> PathBuf {
     // Manifest dir is .../crates/perl-lexer; pop to workspace root.
     p.pop(); // .../crates
     p.pop(); // workspace root
-    assert!(p.join("Cargo.toml").exists(), "expected workspace Cargo.toml at {}", p.display());
+    assert!(
+        p.join("Cargo.toml").exists(),
+        "expected workspace Cargo.toml at {}",
+        p.display()
+    );
     p
 }
 
 #[test]
 fn absorbed_satellite_directories_stay_deleted() {
     let root = workspace_root();
-    for sat in ["perl-keywords", "perl-builtins", "perl-builtins-phf", "perl-tokenizer"] {
+    for sat in [
+        "perl-keywords",
+        "perl-builtins",
+        "perl-builtins-phf",
+        "perl-tokenizer",
+    ] {
         let dir = root.join("crates").join(sat);
         assert!(
             !dir.exists(),
@@ -335,10 +357,16 @@ fn perl_lexer_claude_md_is_preserved() -> std::io::Result<()> {
     // wave accidentally deletes it, this fails.
     let root = workspace_root();
     let claude = root.join("crates").join("perl-lexer").join("CLAUDE.md");
-    assert!(claude.exists(), "crates/perl-lexer/CLAUDE.md must be preserved post-Wave-C");
+    assert!(
+        claude.exists(),
+        "crates/perl-lexer/CLAUDE.md must be preserved post-Wave-C"
+    );
     let contents = std::fs::read_to_string(&claude)?;
     // Light content invariants — don't over-constrain wording.
-    assert!(contents.contains("perl-lexer"), "CLAUDE.md mentions crate name");
+    assert!(
+        contents.contains("perl-lexer"),
+        "CLAUDE.md mentions crate name"
+    );
     assert!(
         contents.to_lowercase().contains("lexer") || contents.to_lowercase().contains("tokeniz"),
         "CLAUDE.md describes the lexer/tokenizer role"
@@ -367,7 +395,10 @@ fn workspace_has_exactly_97_members_after_wave_c() -> std::io::Result<()> {
         .ok_or_else(|| std::io::Error::other("members list missing closing bracket"))?;
     let members_block = &after_start[..end_off];
 
-    let count = members_block.lines().filter(|l| l.trim_start().starts_with('"')).count();
+    let count = members_block
+        .lines()
+        .filter(|l| l.trim_start().starts_with('"'))
+        .count();
 
     assert_eq!(
         count, 97,
@@ -384,11 +415,19 @@ fn absorbed_satellite_names_are_absent_from_cargo_toml() -> std::io::Result<()> 
     let root = workspace_root();
     let cargo_toml = std::fs::read_to_string(root.join("Cargo.toml"))?;
 
-    for sat in ["perl-keywords", "perl-builtins", "perl-builtins-phf", "perl-tokenizer"] {
+    for sat in [
+        "perl-keywords",
+        "perl-builtins",
+        "perl-builtins-phf",
+        "perl-tokenizer",
+    ] {
         // Guard against accidentally matching `perl-keywords-` or similar
         // longer names by checking exact-quote boundaries used in Cargo.toml.
         let needle_path = format!("\"crates/{sat}\"");
-        assert!(!cargo_toml.contains(&needle_path), "workspace members still lists `{sat}`");
+        assert!(
+            !cargo_toml.contains(&needle_path),
+            "workspace members still lists `{sat}`"
+        );
         let needle_dep = format!("\n{sat} =");
         assert!(
             !cargo_toml.contains(&needle_dep),
@@ -425,7 +464,12 @@ fn perl_lexer_and_perl_token_remain_published() -> std::io::Result<()> {
         allow_block.contains("\"perl-token\""),
         "`perl-token` must stay on the publish allowlist (ADR amendment #4446)"
     );
-    for sat in ["perl-keywords", "perl-builtins", "perl-builtins-phf", "perl-tokenizer"] {
+    for sat in [
+        "perl-keywords",
+        "perl-builtins",
+        "perl-builtins-phf",
+        "perl-tokenizer",
+    ] {
         let needle = format!("\"{sat}\"");
         assert!(
             !allow_block.contains(&needle),
@@ -482,7 +526,10 @@ fn token_stream_lives_under_parser_core_not_lexer() {
         .join("src")
         .join("tokens")
         .join("token_stream.rs");
-    assert!(core_good.exists(), "token_stream.rs must live at perl-parser-core/src/tokens/");
+    assert!(
+        core_good.exists(),
+        "token_stream.rs must live at perl-parser-core/src/tokens/"
+    );
 }
 
 // -----------------------------------------------------------------------------

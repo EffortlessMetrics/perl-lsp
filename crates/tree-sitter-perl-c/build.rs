@@ -39,9 +39,24 @@ fn main() {
     // Rebuild when any vendored C source or header changes.
     println!("cargo:rerun-if-changed={}", parser_c.display());
     println!("cargo:rerun-if-changed={}", scanner_c.display());
-    println!("cargo:rerun-if-changed={}", grammar_src.join("bsearch.h").display());
-    println!("cargo:rerun-if-changed={}", grammar_src.join("tsp_unicode.h").display());
-    println!("cargo:rerun-if-changed={}", grammar_src.join("tree_sitter/parser.h").display());
-    println!("cargo:rerun-if-changed={}", grammar_src.join("tree_sitter/array.h").display());
-    println!("cargo:rerun-if-changed={}", grammar_src.join("tree_sitter/alloc.h").display());
+    println!(
+        "cargo:rerun-if-changed={}",
+        grammar_src.join("bsearch.h").display()
+    );
+    println!(
+        "cargo:rerun-if-changed={}",
+        grammar_src.join("tsp_unicode.h").display()
+    );
+    println!(
+        "cargo:rerun-if-changed={}",
+        grammar_src.join("tree_sitter/parser.h").display()
+    );
+    println!(
+        "cargo:rerun-if-changed={}",
+        grammar_src.join("tree_sitter/array.h").display()
+    );
+    println!(
+        "cargo:rerun-if-changed={}",
+        grammar_src.join("tree_sitter/alloc.h").display()
+    );
 }

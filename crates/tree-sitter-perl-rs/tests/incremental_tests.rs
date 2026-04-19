@@ -30,7 +30,10 @@ fn when_parse_with_old_tree_is_called_then_new_source_is_parsed() {
     let mut parser = Parser::new();
     let old_tree = must_some(parser.parse("my $x = 1;"));
     let new_tree = parser.parse_with_old_tree("my $x = 42;", &old_tree);
-    assert!(new_tree.is_some(), "parse_with_old_tree must return a tree for valid source");
+    assert!(
+        new_tree.is_some(),
+        "parse_with_old_tree must return a tree for valid source"
+    );
     let new_tree = must_some(new_tree);
     assert_eq!(new_tree.source(), "my $x = 42;");
 }
@@ -41,7 +44,10 @@ fn when_parse_with_old_tree_given_invalid_source_then_some_tree_is_returned() {
     let mut parser = Parser::new();
     let old_tree = must_some(parser.parse("my $x = 1;"));
     let result = parser.parse_with_old_tree("sub {{{{{", &old_tree);
-    assert!(result.is_some(), "error-tolerant parser still yields a tree for malformed source");
+    assert!(
+        result.is_some(),
+        "error-tolerant parser still yields a tree for malformed source"
+    );
 }
 
 #[test]
@@ -87,8 +93,14 @@ fn when_input_edit_type_is_used_then_it_matches_tree_sitter_signature() {
     // Verify InputEdit is accessible and usable
     fn takes_input_edit(_edit: &InputEdit) {}
 
-    let edit =
-        Edit::new(0, 1, 2, Position::new(0, 0, 0), Position::new(1, 0, 1), Position::new(2, 0, 2));
+    let edit = Edit::new(
+        0,
+        1,
+        2,
+        Position::new(0, 0, 0),
+        Position::new(1, 0, 1),
+        Position::new(2, 0, 2),
+    );
     takes_input_edit(&edit);
 }
 
@@ -118,9 +130,16 @@ fn when_parse_with_old_tree_given_empty_new_source_then_tree_is_returned() {
     let mut parser = Parser::new();
     let old_tree = must_some(parser.parse("my $x = 42;"));
     let new_tree = parser.parse_with_old_tree("", &old_tree);
-    assert!(new_tree.is_some(), "parse_with_old_tree must handle empty new source");
+    assert!(
+        new_tree.is_some(),
+        "parse_with_old_tree must handle empty new source"
+    );
     let new_tree = must_some(new_tree);
-    assert_eq!(new_tree.source(), "", "tree source must be the empty string");
+    assert_eq!(
+        new_tree.source(),
+        "",
+        "tree source must be the empty string"
+    );
     // The root is still a Program node (empty program).
     assert_eq!(new_tree.root_node().kind(), "Program");
 }

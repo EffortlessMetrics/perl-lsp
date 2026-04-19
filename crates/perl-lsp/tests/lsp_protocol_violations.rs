@@ -304,7 +304,11 @@ fn test_invalid_method_name_format() {
         );
 
         // Verify the server returns METHOD_NOT_FOUND error
-        assert!(response["error"].is_object(), "Expected error for method '{}'", method);
+        assert!(
+            response["error"].is_object(),
+            "Expected error for method '{}'",
+            method
+        );
         assert_eq!(
             response["error"]["code"], -32601,
             "Expected METHOD_NOT_FOUND (-32601) for method '{}', got {:?}",
@@ -579,7 +583,9 @@ fn test_batch_request_violations() -> Result<(), Box<dyn std::error::Error>> {
     let server = start_lsp_server();
 
     // Empty batch
-    server.stdin_writer().write_all(b"Content-Length: 2\r\n\r\n[]")?;
+    server
+        .stdin_writer()
+        .write_all(b"Content-Length: 2\r\n\r\n[]")?;
     server.stdin_writer().flush()?;
 
     std::thread::sleep(Duration::from_millis(100));

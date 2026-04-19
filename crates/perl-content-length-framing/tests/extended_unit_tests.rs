@@ -442,7 +442,11 @@ fn content_length_with_leading_whitespace() -> Result<(), Box<dyn Error>> {
     let body = b"test";
 
     // Header with space before value
-    let msg = format!("Content-Length:   {}\r\n\r\n{}", body.len(), std::str::from_utf8(body)?);
+    let msg = format!(
+        "Content-Length:   {}\r\n\r\n{}",
+        body.len(),
+        std::str::from_utf8(body)?
+    );
     framer.push(msg.as_bytes());
 
     assert_eq!(take_body(framer.try_next())?, body);
@@ -455,7 +459,11 @@ fn content_length_with_trailing_whitespace() -> Result<(), Box<dyn Error>> {
     let body = b"test";
 
     // Header with trailing space
-    let msg = format!("Content-Length: {}  \r\n\r\n{}", body.len(), std::str::from_utf8(body)?);
+    let msg = format!(
+        "Content-Length: {}  \r\n\r\n{}",
+        body.len(),
+        std::str::from_utf8(body)?
+    );
     framer.push(msg.as_bytes());
 
     assert_eq!(take_body(framer.try_next())?, body);
@@ -467,7 +475,11 @@ fn content_length_with_both_whitespace() -> Result<(), Box<dyn Error>> {
     let mut framer = ContentLengthFramer::new();
     let body = b"test";
 
-    let msg = format!("Content-Length:  {}  \r\n\r\n{}", body.len(), std::str::from_utf8(body)?);
+    let msg = format!(
+        "Content-Length:  {}  \r\n\r\n{}",
+        body.len(),
+        std::str::from_utf8(body)?
+    );
     framer.push(msg.as_bytes());
 
     assert_eq!(take_body(framer.try_next())?, body);
@@ -511,11 +523,21 @@ fn header_with_many_extra_headers() -> Result<(), Box<dyn Error>> {
 #[test]
 fn header_case_variations() -> Result<(), Box<dyn Error>> {
     let body = b"test";
-    let cases = ["Content-Length", "content-length", "CONTENT-LENGTH", "CoNtEnT-LeNgTh"];
+    let cases = [
+        "Content-Length",
+        "content-length",
+        "CONTENT-LENGTH",
+        "CoNtEnT-LeNgTh",
+    ];
 
     for case in &cases {
         let mut framer = ContentLengthFramer::new();
-        let msg = format!("{}: {}\r\n\r\n{}", case, body.len(), std::str::from_utf8(body)?);
+        let msg = format!(
+            "{}: {}\r\n\r\n{}",
+            case,
+            body.len(),
+            std::str::from_utf8(body)?
+        );
         framer.push(msg.as_bytes());
 
         let got = take_body(framer.try_next())?;
@@ -544,7 +566,11 @@ fn content_length_with_leading_zeros() -> Result<(), Box<dyn Error>> {
     let mut framer = ContentLengthFramer::new();
     let body = b"test";
 
-    let msg = format!("Content-Length: 00{}\r\n\r\n{}", body.len(), std::str::from_utf8(body)?);
+    let msg = format!(
+        "Content-Length: 00{}\r\n\r\n{}",
+        body.len(),
+        std::str::from_utf8(body)?
+    );
     framer.push(msg.as_bytes());
 
     assert_eq!(take_body(framer.try_next())?, body);
@@ -630,7 +656,11 @@ fn header_with_tabs_as_whitespace() -> Result<(), Box<dyn Error>> {
     let mut framer = ContentLengthFramer::new();
     let body = b"test";
 
-    let msg = format!("Content-Length:\t{}\t\r\n\r\n{}", body.len(), std::str::from_utf8(body)?);
+    let msg = format!(
+        "Content-Length:\t{}\t\r\n\r\n{}",
+        body.len(),
+        std::str::from_utf8(body)?
+    );
     framer.push(msg.as_bytes());
 
     assert_eq!(take_body(framer.try_next())?, body);
@@ -761,10 +791,22 @@ fn clone_preserves_state() -> Result<(), Box<dyn Error>> {
 fn framing_error_display_all_variants() -> Result<(), Box<dyn Error>> {
     let errors = vec![
         (FramingError::InvalidHeader, "invalid Content-Length header"),
-        (FramingError::InvalidHeaderUtf8, "header contains invalid UTF-8"),
-        (FramingError::MissingContentLength, "missing Content-Length header"),
-        (FramingError::InvalidContentLength, "invalid Content-Length value"),
-        (FramingError::FrameTooLarge { len: 123 }, "frame too large: 123 bytes"),
+        (
+            FramingError::InvalidHeaderUtf8,
+            "header contains invalid UTF-8",
+        ),
+        (
+            FramingError::MissingContentLength,
+            "missing Content-Length header",
+        ),
+        (
+            FramingError::InvalidContentLength,
+            "invalid Content-Length value",
+        ),
+        (
+            FramingError::FrameTooLarge { len: 123 },
+            "frame too large: 123 bytes",
+        ),
     ];
 
     for (error, expected) in errors {

@@ -16,28 +16,58 @@ fn known_core_module_members(package_name: &str) -> &'static [(&'static str, &'s
     match package_name {
         "Cwd" => &[
             ("getcwd", "Return the current working directory."),
-            ("abs_path", "Return the absolute path for a file or directory."),
-            ("realpath", "Return the canonicalized path with symlinks resolved."),
+            (
+                "abs_path",
+                "Return the absolute path for a file or directory.",
+            ),
+            (
+                "realpath",
+                "Return the canonicalized path with symlinks resolved.",
+            ),
         ],
         "Data::Dumper" => &[("Dumper", "Serialize Perl values into Perl source form.")],
         "Digest::MD5" => &[
             ("md5", "Compute the raw MD5 digest for the provided data."),
-            ("md5_hex", "Compute the MD5 digest and return it as hexadecimal."),
-            ("md5_base64", "Compute the MD5 digest and return it as base64."),
+            (
+                "md5_hex",
+                "Compute the MD5 digest and return it as hexadecimal.",
+            ),
+            (
+                "md5_base64",
+                "Compute the MD5 digest and return it as base64.",
+            ),
         ],
         "File::Basename" => &[
             ("basename", "Extract the filename portion from a path."),
             ("dirname", "Extract the directory portion from a path."),
-            ("fileparse", "Split a pathname into filename, directory, and suffix."),
+            (
+                "fileparse",
+                "Split a pathname into filename, directory, and suffix.",
+            ),
         ],
         "File::Spec" => &[
-            ("catfile", "Join path parts into a platform-correct filename."),
-            ("catdir", "Join path parts into a platform-correct directory."),
-            ("splitpath", "Split a path into volume, directories, and file."),
-            ("splitdir", "Split a directory path into its individual components."),
+            (
+                "catfile",
+                "Join path parts into a platform-correct filename.",
+            ),
+            (
+                "catdir",
+                "Join path parts into a platform-correct directory.",
+            ),
+            (
+                "splitpath",
+                "Split a path into volume, directories, and file.",
+            ),
+            (
+                "splitdir",
+                "Split a directory path into its individual components.",
+            ),
         ],
         "List::Util" => &[
-            ("first", "Return the first value for which the block evaluates true."),
+            (
+                "first",
+                "Return the first value for which the block evaluates true.",
+            ),
             ("max", "Return the largest value in a list."),
             ("min", "Return the smallest value in a list."),
             ("sum", "Return the numeric sum of the provided values."),
@@ -50,16 +80,28 @@ fn known_core_module_members(package_name: &str) -> &'static [(&'static str, &'s
             ("decode_base64", "Decode base64 text into binary data."),
         ],
         "Scalar::Util" => &[
-            ("blessed", "Return the package name if a reference is blessed."),
-            ("looks_like_number", "Check whether a scalar behaves like a number."),
+            (
+                "blessed",
+                "Return the package name if a reference is blessed.",
+            ),
+            (
+                "looks_like_number",
+                "Check whether a scalar behaves like a number.",
+            ),
             ("reftype", "Return the underlying reference type."),
             ("weaken", "Turn a reference into a weak reference."),
         ],
         "Time::HiRes" => &[
-            ("time", "Return the current time with sub-second resolution."),
+            (
+                "time",
+                "Return the current time with sub-second resolution.",
+            ),
             ("sleep", "Sleep for fractional seconds."),
             ("usleep", "Sleep for a number of microseconds."),
-            ("gettimeofday", "Return the current time as seconds and microseconds."),
+            (
+                "gettimeofday",
+                "Return the current time as seconds and microseconds.",
+            ),
         ],
         // utf8:: is a core namespace for explicit UTF-8 encoding control on
         // scalars (perldoc utf8). See GitHub issue #3371.

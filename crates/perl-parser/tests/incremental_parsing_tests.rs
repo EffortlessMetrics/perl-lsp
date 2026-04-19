@@ -20,7 +20,12 @@ fn test_single_character_edit() -> TestResult {
     let mut state = IncrementalState::new(source);
 
     // Change 1 to 2
-    let edit = Edit { start_byte: 8, old_end_byte: 9, new_end_byte: 9, new_text: "2".to_string() };
+    let edit = Edit {
+        start_byte: 8,
+        old_end_byte: 9,
+        new_end_byte: 9,
+        new_text: "2".to_string(),
+    };
 
     let result = apply_edits(&mut state, &[edit])?;
 
@@ -36,8 +41,12 @@ fn test_multi_character_insertion() -> TestResult {
     let mut state = IncrementalState::new(source);
 
     // Insert "42"
-    let edit =
-        Edit { start_byte: 8, old_end_byte: 8, new_end_byte: 10, new_text: "42".to_string() };
+    let edit = Edit {
+        start_byte: 8,
+        old_end_byte: 8,
+        new_end_byte: 10,
+        new_text: "42".to_string(),
+    };
 
     let result = apply_edits(&mut state, &[edit])?;
 
@@ -52,8 +61,12 @@ fn test_line_deletion() -> TestResult {
     let mut state = IncrementalState::new(source);
 
     // Delete second line
-    let edit =
-        Edit { start_byte: 11, old_end_byte: 22, new_end_byte: 11, new_text: "".to_string() };
+    let edit = Edit {
+        start_byte: 11,
+        old_end_byte: 22,
+        new_end_byte: 11,
+        new_text: "".to_string(),
+    };
 
     let result = apply_edits(&mut state, &[edit])?;
 
@@ -71,7 +84,10 @@ fn test_checkpoint_creation() -> TestResult {
     assert!(state.lex_checkpoints.len() > 2);
 
     // Find checkpoint before "sub bar"
-    let bar_pos = state.source.find("sub bar").ok_or("expected 'sub bar' in source")?;
+    let bar_pos = state
+        .source
+        .find("sub bar")
+        .ok_or("expected 'sub bar' in source")?;
     let checkpoint = state.find_lex_checkpoint(bar_pos);
     assert!(checkpoint.is_some());
     Ok(())
@@ -104,8 +120,12 @@ fn test_incremental_vs_full_parse_equivalence() -> TestResult {
     let mut incremental_state = IncrementalState::new(initial.clone());
 
     // Apply edit incrementally
-    let edit =
-        Edit { start_byte: 8, old_end_byte: 9, new_end_byte: 10, new_text: "10".to_string() };
+    let edit = Edit {
+        start_byte: 8,
+        old_end_byte: 9,
+        new_end_byte: 10,
+        new_text: "10".to_string(),
+    };
     apply_edits(&mut incremental_state, &[edit])?;
 
     // Full parse of the result
@@ -147,8 +167,18 @@ fn test_multiple_edits_fallback() -> TestResult {
 
     // Multiple edits trigger full reparse (MVP limitation)
     let edits = vec![
-        Edit { start_byte: 8, old_end_byte: 9, new_end_byte: 9, new_text: "5".to_string() },
-        Edit { start_byte: 19, old_end_byte: 20, new_end_byte: 20, new_text: "6".to_string() },
+        Edit {
+            start_byte: 8,
+            old_end_byte: 9,
+            new_end_byte: 9,
+            new_text: "5".to_string(),
+        },
+        Edit {
+            start_byte: 19,
+            old_end_byte: 20,
+            new_end_byte: 20,
+            new_text: "6".to_string(),
+        },
     ];
 
     let result = apply_edits(&mut state, &edits)?;
@@ -173,7 +203,10 @@ fn test_edit_in_subroutine() -> TestResult {
 
     let result = apply_edits(&mut state, &[edit])?;
 
-    assert_eq!(state.source, "sub foo {\n    my $x = 42;\n    return $x;\n}");
+    assert_eq!(
+        state.source,
+        "sub foo {\n    my $x = 42;\n    return $x;\n}"
+    );
     // Should have checkpoint at sub start
     assert!(result.reparsed_bytes > 0);
     Ok(())

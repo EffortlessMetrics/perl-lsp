@@ -36,7 +36,12 @@ fn filetest_handle() -> impl Strategy<Value = String> {
 
 /// Generate filetest operator statements.
 pub fn filetest_in_context() -> impl Strategy<Value = String> {
-    prop_oneof![filetest_single(), filetest_time(), filetest_stacked(), filetest_handle(),]
+    prop_oneof![
+        filetest_single(),
+        filetest_time(),
+        filetest_stacked(),
+        filetest_handle(),
+    ]
 }
 
 #[cfg(test)]

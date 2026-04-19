@@ -29,7 +29,12 @@ impl SemanticAnalyzer {
                 }
             }
 
-            NodeKind::VariableDeclaration { declarator, variable, attributes, initializer } => {
+            NodeKind::VariableDeclaration {
+                declarator,
+                variable,
+                attributes,
+                initializer,
+            } => {
                 // Add semantic token for declaration
                 if let NodeKind::Variable { sigil, name } = &variable.kind {
                     let token_type = match declarator.as_str() {
@@ -119,7 +124,14 @@ impl SemanticAnalyzer {
                 }
             }
 
-            NodeKind::Subroutine { name, prototype, signature, attributes, body, name_span: _ } => {
+            NodeKind::Subroutine {
+                name,
+                prototype,
+                signature,
+                attributes,
+                body,
+                name_span: _,
+            } => {
                 if let Some(sub_name) = name {
                     // Named subroutine
                     let token = SemanticToken {
@@ -195,7 +207,12 @@ impl SemanticAnalyzer {
                 }
             }
 
-            NodeKind::Method { name, signature, attributes, body } => {
+            NodeKind::Method {
+                name,
+                signature,
+                attributes,
+                body,
+            } => {
                 self.semantic_tokens.push(SemanticToken {
                     location: node.location, // Approximate, ideally name span
                     token_type: SemanticTokenType::FunctionDeclaration,
@@ -232,7 +249,8 @@ impl SemanticAnalyzer {
                     } else {
                         // Check if it's a user-defined function
                         let symbols =
-                            self.symbol_table.find_symbol(name, scope_id, SymbolKind::Subroutine);
+                            self.symbol_table
+                                .find_symbol(name, scope_id, SymbolKind::Subroutine);
                         if symbols.is_empty() {
                             SemanticTokenType::Function
                         } else {
@@ -268,7 +286,11 @@ impl SemanticAnalyzer {
                 }
             }
 
-            NodeKind::Package { name, block, name_span: _ } => {
+            NodeKind::Package {
+                name,
+                block,
+                name_span: _,
+            } => {
                 self.semantic_tokens.push(SemanticToken {
                     location: node.location,
                     token_type: SemanticTokenType::Namespace,
@@ -294,7 +316,10 @@ impl SemanticAnalyzer {
                 }
             }
 
-            NodeKind::String { value: _, interpolated: _ } => {
+            NodeKind::String {
+                value: _,
+                interpolated: _,
+            } => {
                 self.semantic_tokens.push(SemanticToken {
                     location: node.location,
                     token_type: SemanticTokenType::String,
@@ -345,7 +370,10 @@ impl SemanticAnalyzer {
                 self.analyze_node(expr, scope_id);
             }
 
-            NodeKind::LabeledStatement { label: _, statement } => {
+            NodeKind::LabeledStatement {
+                label: _,
+                statement,
+            } => {
                 self.semantic_tokens.push(SemanticToken {
                     location: node.location,
                     token_type: SemanticTokenType::Label,
@@ -358,7 +386,12 @@ impl SemanticAnalyzer {
             }
 
             // Control flow keywords
-            NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
+            NodeKind::If {
+                condition,
+                then_branch,
+                elsif_branches,
+                else_branch,
+            } => {
                 self.analyze_node(condition, scope_id);
                 self.analyze_node(then_branch, scope_id);
                 for (elsif_cond, elsif_branch) in elsif_branches {
@@ -370,12 +403,22 @@ impl SemanticAnalyzer {
                 }
             }
 
-            NodeKind::While { condition, body, continue_block: _ } => {
+            NodeKind::While {
+                condition,
+                body,
+                continue_block: _,
+            } => {
                 self.analyze_node(condition, scope_id);
                 self.analyze_node(body, scope_id);
             }
 
-            NodeKind::For { init, condition, update, body, .. } => {
+            NodeKind::For {
+                init,
+                condition,
+                update,
+                body,
+                ..
+            } => {
                 if let Some(init_node) = init {
                     self.analyze_node(init_node, scope_id);
                 }
@@ -388,7 +431,12 @@ impl SemanticAnalyzer {
                 self.analyze_node(body, scope_id);
             }
 
-            NodeKind::Foreach { variable, list, body, continue_block } => {
+            NodeKind::Foreach {
+                variable,
+                list,
+                body,
+                continue_block,
+            } => {
                 self.analyze_node(variable, scope_id);
                 self.analyze_node(list, scope_id);
                 self.analyze_node(body, scope_id);
@@ -462,7 +510,11 @@ impl SemanticAnalyzer {
                 }
             }
 
-            NodeKind::Ternary { condition, then_expr, else_expr } => {
+            NodeKind::Ternary {
+                condition,
+                then_expr,
+                else_expr,
+            } => {
                 // Handle conditional expressions: $x ? $y : $z
                 self.analyze_node(condition, scope_id);
                 self.analyze_node(then_expr, scope_id);
@@ -484,7 +536,11 @@ impl SemanticAnalyzer {
                 }
             }
 
-            NodeKind::Try { body, catch_blocks, finally_block } => {
+            NodeKind::Try {
+                body,
+                catch_blocks,
+                finally_block,
+            } => {
                 // Handle try/catch error handling
                 self.analyze_node(body, scope_id);
 
@@ -498,7 +554,11 @@ impl SemanticAnalyzer {
                 }
             }
 
-            NodeKind::PhaseBlock { phase: _, phase_span: _, block } => {
+            NodeKind::PhaseBlock {
+                phase: _,
+                phase_span: _,
+                block,
+            } => {
                 // Handle BEGIN/END/INIT/CHECK/UNITCHECK blocks
                 self.semantic_tokens.push(SemanticToken {
                     location: node.location,
@@ -543,7 +603,10 @@ impl SemanticAnalyzer {
                 self.analyze_node(block, scope_id);
             }
 
-            NodeKind::VariableWithAttributes { variable, attributes } => {
+            NodeKind::VariableWithAttributes {
+                variable,
+                attributes,
+            } => {
                 // Handle attributed variables: my $x :shared = 42;
                 // Analyze the base variable node
                 self.analyze_node(variable, scope_id);
@@ -611,14 +674,21 @@ impl SemanticAnalyzer {
             }
 
             // Phase 2/3 Handlers
-            NodeKind::MethodCall { object, method, args } => {
+            NodeKind::MethodCall {
+                object,
+                method,
+                args,
+            } => {
                 self.analyze_node(object, scope_id);
 
                 if let Some(offset) =
                     self.find_substring_in_source_after(node, method, object.location.end)
                 {
                     self.semantic_tokens.push(SemanticToken {
-                        location: SourceLocation { start: offset, end: offset + method.len() },
+                        location: SourceLocation {
+                            start: offset,
+                            end: offset + method.len(),
+                        },
                         token_type: SemanticTokenType::Method,
                         modifiers: vec![],
                     });
@@ -629,10 +699,17 @@ impl SemanticAnalyzer {
                 }
             }
 
-            NodeKind::IndirectCall { method, object, args } => {
+            NodeKind::IndirectCall {
+                method,
+                object,
+                args,
+            } => {
                 if let Some(offset) = self.find_method_name_in_source(node, method) {
                     self.semantic_tokens.push(SemanticToken {
-                        location: SourceLocation { start: offset, end: offset + method.len() },
+                        location: SourceLocation {
+                            start: offset,
+                            end: offset + method.len(),
+                        },
                         token_type: SemanticTokenType::Method,
                         modifiers: vec![],
                     });
@@ -656,7 +733,10 @@ impl SemanticAnalyzer {
                 let mut args_start = node.location.start + 3;
                 if let Some(offset) = self.find_substring_in_source(node, module) {
                     self.semantic_tokens.push(SemanticToken {
-                        location: SourceLocation { start: offset, end: offset + module.len() },
+                        location: SourceLocation {
+                            start: offset,
+                            end: offset + module.len(),
+                        },
                         token_type: SemanticTokenType::Namespace,
                         modifiers: vec![],
                     });
@@ -679,7 +759,10 @@ impl SemanticAnalyzer {
                 let mut args_start = node.location.start + 2;
                 if let Some(offset) = self.find_substring_in_source(node, module) {
                     self.semantic_tokens.push(SemanticToken {
-                        location: SourceLocation { start: offset, end: offset + module.len() },
+                        location: SourceLocation {
+                            start: offset,
+                            end: offset + module.len(),
+                        },
                         token_type: SemanticTokenType::Namespace,
                         modifiers: vec![],
                     });
@@ -753,7 +836,10 @@ impl SemanticAnalyzer {
 
                 if let Some(offset) = self.find_substring_in_source(node, name) {
                     self.semantic_tokens.push(SemanticToken {
-                        location: SourceLocation { start: offset, end: offset + name.len() },
+                        location: SourceLocation {
+                            start: offset,
+                            end: offset + name.len(),
+                        },
                         token_type: SemanticTokenType::Class,
                         modifiers: vec![SemanticTokenModifier::Declaration],
                     });
@@ -865,7 +951,11 @@ impl SemanticAnalyzer {
                 // No tokens for missing constructs
             }
 
-            NodeKind::Tie { variable, package, args } => {
+            NodeKind::Tie {
+                variable,
+                package,
+                args,
+            } => {
                 self.analyze_node(variable, scope_id);
                 self.analyze_node(package, scope_id);
                 for arg in args {
@@ -873,7 +963,11 @@ impl SemanticAnalyzer {
                 }
             }
 
-            NodeKind::StatementModifier { statement, condition, modifier } => {
+            NodeKind::StatementModifier {
+                statement,
+                condition,
+                modifier,
+            } => {
                 // Handle postfix loop modifiers: for, while, until, foreach
                 // e.g., print $_ for @list; or $x++ while $x < 10;
                 if matches!(modifier.as_str(), "for" | "foreach" | "while" | "until") {
@@ -930,8 +1024,10 @@ impl SemanticAnalyzer {
         }
 
         // Check for consecutive comment lines
-        let comment_re =
-            COMMENT_RE.get_or_init(|| Regex::new(r"(?m)(#.*\n)+\s*$")).as_ref().ok()?;
+        let comment_re = COMMENT_RE
+            .get_or_init(|| Regex::new(r"(?m)(#.*\n)+\s*$"))
+            .as_ref()
+            .ok()?;
         if let Some(caps) = comment_re.captures(before) {
             if let Some(comment_match) = caps.get(0) {
                 // Strip the # prefix from each comment line
@@ -1008,7 +1104,11 @@ impl SemanticAnalyzer {
 
     /// Get line number from byte offset (simplified version)
     pub(super) fn line_number(&self, offset: usize) -> usize {
-        if self.source.is_empty() { 1 } else { self.source[..offset].lines().count() + 1 }
+        if self.source.is_empty() {
+            1
+        } else {
+            self.source[..offset].lines().count() + 1
+        }
     }
 
     /// Find substring in source within node's range
@@ -1068,7 +1168,10 @@ impl SemanticAnalyzer {
         for arg in args {
             if let Some(offset) = self.find_substring_in_source_after(node, arg, current_offset) {
                 self.semantic_tokens.push(SemanticToken {
-                    location: SourceLocation { start: offset, end: offset + arg.len() },
+                    location: SourceLocation {
+                        start: offset,
+                        end: offset + arg.len(),
+                    },
                     token_type: SemanticTokenType::String,
                     modifiers: vec![],
                 });

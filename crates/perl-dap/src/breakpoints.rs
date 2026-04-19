@@ -33,7 +33,11 @@ fn validate_breakpoint_line_with_column(
     column: Option<i64>,
 ) -> (bool, i64, Option<String>) {
     if line <= 0 {
-        return (false, line, Some("Line number must be positive".to_string()));
+        return (
+            false,
+            line,
+            Some("Line number must be positive".to_string()),
+        );
     }
 
     match AstBreakpointValidator::new(source) {
@@ -140,8 +144,13 @@ fn evaluate_hit_condition(raw: Option<&str>, hit_count: u64) -> Option<bool> {
         return parse_hit_condition_operand(rest).map(|n| hit_count < n);
     }
     if let Some(rest) = expr.strip_prefix('%') {
-        return parse_hit_condition_operand(rest)
-            .and_then(|n| if n == 0 { None } else { Some(hit_count.is_multiple_of(n)) });
+        return parse_hit_condition_operand(rest).and_then(|n| {
+            if n == 0 {
+                None
+            } else {
+                Some(hit_count.is_multiple_of(n))
+            }
+        });
     }
 
     parse_hit_condition_operand(expr).map(|n| hit_count == n)
@@ -180,7 +189,10 @@ impl BreakpointStore {
     /// let store = BreakpointStore::new();
     /// ```
     pub fn new() -> Self {
-        Self { breakpoints: Arc::new(Mutex::new(HashMap::new())), next_id: Arc::new(Mutex::new(1)) }
+        Self {
+            breakpoints: Arc::new(Mutex::new(HashMap::new())),
+            next_id: Arc::new(Mutex::new(1)),
+        }
     }
 
     /// Set breakpoints for a source file (REPLACE semantics)
@@ -230,7 +242,10 @@ impl BreakpointStore {
         };
 
         // Get breakpoints array (empty if not provided)
-        let source_breakpoints = args.breakpoints.as_ref().map_or(Vec::new(), |bps| bps.clone());
+        let source_breakpoints = args
+            .breakpoints
+            .as_ref()
+            .map_or(Vec::new(), |bps| bps.clone());
 
         // Lock stores for atomic operation
         let mut breakpoints_map = self.breakpoints.lock().unwrap_or_else(|e| e.into_inner());
@@ -332,7 +347,11 @@ impl BreakpointStore {
                 Some(Err(error)) => (false, bp.line, Some(error.clone())),
                 None => {
                     // Can't read file - mark as unverified but still create breakpoint.
-                    (false, bp.line, Some("Unable to read source file".to_string()))
+                    (
+                        false,
+                        bp.line,
+                        Some("Unable to read source file".to_string()),
+                    )
                 }
             };
 
@@ -371,7 +390,9 @@ impl BreakpointStore {
     /// Array of breakpoint records for the source, or empty if none exist.
     pub fn get_breakpoints(&self, source_path: &str) -> Vec<BreakpointRecord> {
         let breakpoints_map = self.breakpoints.lock().unwrap_or_else(|e| e.into_inner());
-        breakpoints_map.get(source_path).map_or(Vec::new(), |bps| bps.clone())
+        breakpoints_map
+            .get(source_path)
+            .map_or(Vec::new(), |bps| bps.clone())
     }
 
     /// Clear all breakpoints for a source file
@@ -554,7 +575,10 @@ print "result: $final\n";
         let (_file, source_path) = create_test_perl_file();
         let store = BreakpointStore::new();
         let args = SetBreakpointsArguments {
-            source: Source { path: Some(source_path.clone()), name: Some("script.pl".to_string()) },
+            source: Source {
+                path: Some(source_path.clone()),
+                name: Some("script.pl".to_string()),
+            },
             breakpoints: Some(vec![
                 SourceBreakpoint {
                     line: 10,
@@ -591,7 +615,10 @@ print "result: $final\n";
 
         // Set initial breakpoints
         let args1 = SetBreakpointsArguments {
-            source: Source { path: Some(source_path.clone()), name: Some("script.pl".to_string()) },
+            source: Source {
+                path: Some(source_path.clone()),
+                name: Some("script.pl".to_string()),
+            },
             breakpoints: Some(vec![SourceBreakpoint {
                 line: 10,
                 column: None,
@@ -605,7 +632,10 @@ print "result: $final\n";
 
         // Replace with new breakpoints
         let args2 = SetBreakpointsArguments {
-            source: Source { path: Some(source_path.clone()), name: Some("script.pl".to_string()) },
+            source: Source {
+                path: Some(source_path.clone()),
+                name: Some("script.pl".to_string()),
+            },
             breakpoints: Some(vec![
                 SourceBreakpoint {
                     line: 20,
@@ -641,7 +671,10 @@ print "result: $final\n";
         let (_file, source_path) = create_test_perl_file();
         let store = BreakpointStore::new();
         let args = SetBreakpointsArguments {
-            source: Source { path: Some(source_path), name: Some("script.pl".to_string()) },
+            source: Source {
+                path: Some(source_path),
+                name: Some("script.pl".to_string()),
+            },
             breakpoints: Some(vec![
                 SourceBreakpoint {
                     line: 10,
@@ -672,7 +705,10 @@ print "result: $final\n";
         let (_file, source_path) = create_test_perl_file();
         let store = BreakpointStore::new();
         let args = SetBreakpointsArguments {
-            source: Source { path: Some(source_path), name: Some("script.pl".to_string()) },
+            source: Source {
+                path: Some(source_path),
+                name: Some("script.pl".to_string()),
+            },
             // Use lines within our 30-line test file, but out of order
             breakpoints: Some(vec![
                 SourceBreakpoint {
@@ -843,7 +879,10 @@ print "result: $final\n";
     fn test_no_source_path() {
         let store = BreakpointStore::new();
         let args = SetBreakpointsArguments {
-            source: Source { path: None, name: Some("script.pl".to_string()) },
+            source: Source {
+                path: None,
+                name: Some("script.pl".to_string()),
+            },
             breakpoints: Some(vec![SourceBreakpoint {
                 line: 10,
                 column: None,
@@ -914,7 +953,10 @@ print "result: $final\n";
         let store = BreakpointStore::new();
 
         let args = SetBreakpointsArguments {
-            source: Source { path: Some(source_path.clone()), name: Some("script.pl".to_string()) },
+            source: Source {
+                path: Some(source_path.clone()),
+                name: Some("script.pl".to_string()),
+            },
             breakpoints: Some(vec![
                 SourceBreakpoint {
                     line: 10,
@@ -1007,7 +1049,10 @@ EOF
     fn test_file_paths_match_no_basename_cross_match() {
         // Same basename in different directories must NOT match
         assert!(!file_paths_match("/a/main.pl", "/b/main.pl"));
-        assert!(!file_paths_match("/workspace/a/lib.pm", "/workspace/b/lib.pm"));
+        assert!(!file_paths_match(
+            "/workspace/a/lib.pm",
+            "/workspace/b/lib.pm"
+        ));
     }
 
     #[test]
@@ -1044,7 +1089,10 @@ EOF
 
         // Set breakpoints on both files at line 5
         let args_a = SetBreakpointsArguments {
-            source: Source { path: Some(path_a.clone()), name: Some("main.pl".to_string()) },
+            source: Source {
+                path: Some(path_a.clone()),
+                name: Some("main.pl".to_string()),
+            },
             breakpoints: Some(vec![SourceBreakpoint {
                 line: 5,
                 column: None,
@@ -1055,7 +1103,10 @@ EOF
             source_modified: None,
         };
         let args_b = SetBreakpointsArguments {
-            source: Source { path: Some(path_b.clone()), name: Some("main.pl".to_string()) },
+            source: Source {
+                path: Some(path_b.clone()),
+                name: Some("main.pl".to_string()),
+            },
             breakpoints: Some(vec![SourceBreakpoint {
                 line: 5,
                 column: None,

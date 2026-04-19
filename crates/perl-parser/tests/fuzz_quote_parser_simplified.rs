@@ -177,9 +177,21 @@ fn fuzz_memory_exhaustion_resistance() {
 
         if let Ok((pattern, replacement, modifiers)) = result {
             // Results should be reasonable
-            assert!(pattern.len() <= size + 10, "Pattern too large for size {}", size);
-            assert!(replacement.len() <= size + 10, "Replacement too large for size {}", size);
-            assert!(modifiers.len() <= 10, "Modifiers too large for size {}", size);
+            assert!(
+                pattern.len() <= size + 10,
+                "Pattern too large for size {}",
+                size
+            );
+            assert!(
+                replacement.len() <= size + 10,
+                "Replacement too large for size {}",
+                size
+            );
+            assert!(
+                modifiers.len() <= 10,
+                "Modifiers too large for size {}",
+                size
+            );
         }
     }
 }

@@ -51,7 +51,11 @@ fn test_parser_cancellation_token_accepted_in_did_open() {
     // Pass a live (non-cancelled) token — parse should succeed
     let result = server
         .handle_did_open_with_cancellation(Some(params), Some(Arc::clone(&cancellation_flag)));
-    assert!(result.is_ok(), "handle_did_open_with_cancellation failed: {:?}", result);
+    assert!(
+        result.is_ok(),
+        "handle_did_open_with_cancellation failed: {:?}",
+        result
+    );
 }
 
 /// Verify that the cancellation token path in `handle_did_open_with_cancellation`
@@ -74,7 +78,11 @@ fn test_parser_pre_cancelled_token_in_did_open_still_completes() {
     // The parser accepts the flag but doesn't poll it — parse completes normally.
     let result = server
         .handle_did_open_with_cancellation(Some(params), Some(Arc::clone(&cancellation_flag)));
-    assert!(result.is_ok(), "Pre-cancelled token caused unexpected error: {:?}", result);
+    assert!(
+        result.is_ok(),
+        "Pre-cancelled token caused unexpected error: {:?}",
+        result
+    );
 }
 
 /// Verify `handle_did_change_with_cancellation` signature works correctly.
@@ -91,7 +99,9 @@ fn test_parser_cancellation_token_accepted_in_did_change() {
             "text": "use strict;\nmy $x = 1;\n"
         }
     });
-    server.handle_did_open_with_cancellation(Some(open_params), None).ok();
+    server
+        .handle_did_open_with_cancellation(Some(open_params), None)
+        .ok();
 
     let cancellation_flag = Arc::new(AtomicBool::new(false));
     let change_params = json!({
@@ -108,7 +118,11 @@ fn test_parser_cancellation_token_accepted_in_did_change() {
         Some(change_params),
         Some(Arc::clone(&cancellation_flag)),
     );
-    assert!(result.is_ok(), "handle_did_change_with_cancellation failed: {:?}", result);
+    assert!(
+        result.is_ok(),
+        "handle_did_change_with_cancellation failed: {:?}",
+        result
+    );
 }
 
 /// Verify the no-token path (None) works identically to the existing behaviour.
@@ -159,7 +173,10 @@ fn test_file_watcher_debouncer_coalesces_50_rapid_events() {
 
     let calls = call_count.load(Ordering::SeqCst);
     let uris = total_uris.load(Ordering::SeqCst);
-    assert!(calls <= 2, "Expected <=2 batch calls for 50 rapid changes, got {calls}");
+    assert!(
+        calls <= 2,
+        "Expected <=2 batch calls for 50 rapid changes, got {calls}"
+    );
     assert_eq!(uris, 50, "All 50 URIs should be delivered, got {uris}");
 }
 
@@ -202,7 +219,9 @@ fn test_file_watcher_debouncer_deduplicates_same_uri() {
     let uc = Arc::clone(&uri_counts);
 
     let debouncer = FileWatcherDebouncer::with_interval(Duration::from_millis(60), move |uris| {
-        uc.lock().unwrap_or_else(|e| e.into_inner()).push(uris.len());
+        uc.lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .push(uris.len());
     });
 
     // Schedule the same URI 20 times — should deduplicate to 1
@@ -215,5 +234,9 @@ fn test_file_watcher_debouncer_deduplicates_same_uri() {
     let counts = uri_counts.lock().unwrap_or_else(|e| e.into_inner()).clone();
     // Total URIs delivered should be 1 (deduplicated)
     let total: usize = counts.iter().sum();
-    assert_eq!(total, 1, "Expected 1 deduplicated URI, got {total} across {:?}", counts);
+    assert_eq!(
+        total, 1,
+        "Expected 1 deduplicated URI, got {total} across {:?}",
+        counts
+    );
 }

@@ -33,7 +33,11 @@ fn find_two_arg_open(source: &str) -> Vec<CodeAction> {
 
         let after_open = &trimmed[4..];
         let content = if after_open.starts_with('(') {
-            after_open.trim_start_matches('(').trim_end_matches(");").trim_end_matches(')').trim()
+            after_open
+                .trim_start_matches('(')
+                .trim_end_matches(");")
+                .trim_end_matches(')')
+                .trim()
         } else if after_open.starts_with(' ') || after_open.starts_with('\t') {
             after_open.trim().trim_end_matches(';').trim()
         } else {
@@ -74,7 +78,10 @@ fn find_two_arg_open(source: &str) -> Vec<CodeAction> {
                 diagnostics: Vec::new(),
                 edit: CodeActionEdit {
                     changes: vec![TextEdit {
-                        location: SourceLocation { start: line_start, end: line_end },
+                        location: SourceLocation {
+                            start: line_start,
+                            end: line_end,
+                        },
                         new_text: format!(
                             "{}{}",
                             &line[..line.len() - line.trim_start().len()],
@@ -132,12 +139,18 @@ fn find_deprecated_defined(source: &str) -> Vec<CodeAction> {
             };
 
             actions.push(CodeAction {
-                title: format!("Modernize: remove deprecated defined({}) (since v5.22)", sigil),
+                title: format!(
+                    "Modernize: remove deprecated defined({}) (since v5.22)",
+                    sigil
+                ),
                 kind: CodeActionKind::SourceModernize,
                 diagnostics: Vec::new(),
                 edit: CodeActionEdit {
                     changes: vec![TextEdit {
-                        location: SourceLocation { start: abs_pos, end: expr_end },
+                        location: SourceLocation {
+                            start: abs_pos,
+                            end: expr_end,
+                        },
                         new_text: var_name.to_string(),
                     }],
                 },
@@ -182,7 +195,10 @@ fn find_legacy_require_version(source: &str) -> Vec<CodeAction> {
                 diagnostics: Vec::new(),
                 edit: CodeActionEdit {
                     changes: vec![TextEdit {
-                        location: SourceLocation { start: line_start, end: line_end },
+                        location: SourceLocation {
+                            start: line_start,
+                            end: line_end,
+                        },
                         new_text: format!("{}use {};", indent, modern_version),
                     }],
                 },
@@ -256,7 +272,10 @@ fn find_missing_strict_warnings(source: &str) -> Vec<CodeAction> {
         diagnostics: Vec::new(),
         edit: CodeActionEdit {
             changes: vec![TextEdit {
-                location: SourceLocation { start: insert_pos, end: insert_pos },
+                location: SourceLocation {
+                    start: insert_pos,
+                    end: insert_pos,
+                },
                 new_text,
             }],
         },
@@ -314,14 +333,20 @@ fn find_die_in_module(source: &str) -> Vec<CodeAction> {
         let die_end = die_start + 3; // len("die")
 
         let mut changes = vec![TextEdit {
-            location: SourceLocation { start: die_start, end: die_end },
+            location: SourceLocation {
+                start: die_start,
+                end: die_end,
+            },
             new_text: "croak".to_string(),
         }];
 
         if !already_uses_carp {
             let insert_pos = find_pragma_insert_pos(source);
             changes.push(TextEdit {
-                location: SourceLocation { start: insert_pos, end: insert_pos },
+                location: SourceLocation {
+                    start: insert_pos,
+                    end: insert_pos,
+                },
                 new_text: "use Carp qw(croak);\n".to_string(),
             });
         }
@@ -473,7 +498,9 @@ mod tests {
         let source = "if (defined(@array)) { }";
         let actions = get_modernize_actions(source);
         assert!(
-            actions.iter().any(|a| a.title.contains("deprecated defined(@")),
+            actions
+                .iter()
+                .any(|a| a.title.contains("deprecated defined(@")),
             "Expected deprecated defined(@) action"
         );
     }
@@ -482,7 +509,11 @@ mod tests {
     fn test_deprecated_defined_hash() {
         let source = "if (defined(%hash)) { }";
         let actions = get_modernize_actions(source);
-        assert!(actions.iter().any(|a| a.title.contains("deprecated defined(%")));
+        assert!(
+            actions
+                .iter()
+                .any(|a| a.title.contains("deprecated defined(%"))
+        );
     }
 
     #[test]
@@ -597,11 +628,22 @@ mod tests {
     fn test_die_in_module_inserts_use_carp() {
         let source = "package Foo;\nuse strict;\ndie \"oops\";\n";
         let actions = find_die_in_module(source);
-        assert!(!actions.is_empty(), "Expected croak action for die in module");
-        let action = &actions[0];
-        assert_eq!(action.edit.changes.len(), 2, "Should emit die->croak edit AND use Carp insert");
         assert!(
-            action.edit.changes.iter().any(|e| e.new_text.contains("use Carp")),
+            !actions.is_empty(),
+            "Expected croak action for die in module"
+        );
+        let action = &actions[0];
+        assert_eq!(
+            action.edit.changes.len(),
+            2,
+            "Should emit die->croak edit AND use Carp insert"
+        );
+        assert!(
+            action
+                .edit
+                .changes
+                .iter()
+                .any(|e| e.new_text.contains("use Carp")),
             "One change should insert use Carp"
         );
     }
@@ -610,7 +652,10 @@ mod tests {
     fn test_die_in_module_already_uses_carp_no_duplicate() {
         let source = "package Foo;\nuse Carp qw(croak);\ndie \"oops\";\n";
         let actions = find_die_in_module(source);
-        assert!(!actions.is_empty(), "Expected croak action even when Carp already used");
+        assert!(
+            !actions.is_empty(),
+            "Expected croak action even when Carp already used"
+        );
         let action = &actions[0];
         assert_eq!(
             action.edit.changes.len(),
@@ -634,7 +679,10 @@ mod tests {
         // This is actually correct — the string "or die trying" contains no " or die" pattern.
         let source = "package Foo;\ndie \"or die trying harder\";\n";
         let actions = find_die_in_module(source);
-        assert!(!actions.is_empty(), "die even with 'or die' in message gets flagged (correct)");
+        assert!(
+            !actions.is_empty(),
+            "die even with 'or die' in message gets flagged (correct)"
+        );
     }
 
     #[test]
@@ -709,7 +757,10 @@ mod tests {
         // Only the die->croak edit should be emitted, no duplicate Carp insertion.
         let source = "package Foo;\nuse Carp::Heavy;\ndie \"oops\";\n";
         let actions = find_die_in_module(source);
-        assert!(!actions.is_empty(), "die in module with Carp::Heavy should still suggest croak");
+        assert!(
+            !actions.is_empty(),
+            "die in module with Carp::Heavy should still suggest croak"
+        );
         assert_eq!(
             actions[0].edit.changes.len(),
             1,

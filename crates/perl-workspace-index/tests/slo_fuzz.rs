@@ -46,9 +46,14 @@ fn operation_index(operation_type: OperationType) -> usize {
 
 #[test]
 fn fuzz_seeded_randomized_operations_keep_tracker_invariants() {
-    let config = SloConfig { sample_window_size: 32, ..SloConfig::default() };
+    let config = SloConfig {
+        sample_window_size: 32,
+        ..SloConfig::default()
+    };
     let tracker = SloTracker::new(config);
-    let mut rng = XorShift64 { state: 0xA24B_6CD0_7EF9_3B5D };
+    let mut rng = XorShift64 {
+        state: 0xA24B_6CD0_7EF9_3B5D,
+    };
     let mut observed_outcomes: [Vec<bool>; 8] = std::array::from_fn(|_| Vec::new());
     for _ in 0..2500 {
         let seed = rng.next_u64();
@@ -94,11 +99,22 @@ fn fuzz_seeded_randomized_operations_keep_tracker_invariants() {
         assert!(!stats.avg_ms.is_nan());
     }
 
-    let observed_total: u64 =
-        tracker.all_statistics().values().map(|stats| stats.total_count).sum();
-    let expected_total: u64 = observed_outcomes.iter().map(|outcomes| outcomes.len() as u64).sum();
+    let observed_total: u64 = tracker
+        .all_statistics()
+        .values()
+        .map(|stats| stats.total_count)
+        .sum();
+    let expected_total: u64 = observed_outcomes
+        .iter()
+        .map(|outcomes| outcomes.len() as u64)
+        .sum();
     assert_eq!(observed_total, expected_total);
 
     tracker.reset();
-    assert!(tracker.all_statistics().values().all(|stats| stats.total_count == 0));
+    assert!(
+        tracker
+            .all_statistics()
+            .values()
+            .all(|stats| stats.total_count == 0)
+    );
 }

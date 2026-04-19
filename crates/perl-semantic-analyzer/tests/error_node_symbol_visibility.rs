@@ -43,7 +43,10 @@ fn parse_and_extract(code: &str) -> SymbolTable {
 }
 
 fn has_symbol(table: &SymbolTable, name: &str, kind: SymbolKind) -> bool {
-    table.symbols.get(name).is_some_and(|syms| syms.iter().any(|s| s.kind == kind))
+    table
+        .symbols
+        .get(name)
+        .is_some_and(|syms| syms.iter().any(|s| s.kind == kind))
 }
 
 // ---------------------------------------------------------------------------

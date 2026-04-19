@@ -55,7 +55,9 @@ impl<'a> TextEditHelpers<'a> {
     #[must_use]
     pub fn find_subroutine_insert_position(&self, current_pos: usize) -> usize {
         let search_end = current_pos.min(self.source.len());
-        self.source[..search_end].rfind("sub ").unwrap_or(self.source.len())
+        self.source[..search_end]
+            .rfind("sub ")
+            .unwrap_or(self.source.len())
     }
 
     /// Find where leading pragmas should be inserted.
@@ -91,7 +93,10 @@ impl<'a> TextEditHelpers<'a> {
         let safe_pos = pos.min(self.source.len());
         let line_start = self.source[..safe_pos].rfind('\n').map_or(0, |p| p + 1);
 
-        self.source[line_start..].chars().take_while(|ch| *ch == ' ' || *ch == '\t').collect()
+        self.source[line_start..]
+            .chars()
+            .take_while(|ch| *ch == ' ' || *ch == '\t')
+            .collect()
     }
 
     /// Truncate an expression for display.

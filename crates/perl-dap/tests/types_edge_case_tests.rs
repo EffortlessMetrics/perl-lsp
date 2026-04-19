@@ -59,7 +59,10 @@ fn source_serialization_omits_none_source_reference() -> Result<(), serde_json::
     let src = Source::new("/script.pl");
     let json = serde_json::to_string(&src)?;
     // Source uses snake_case field names (no rename_all = "camelCase")
-    assert!(!json.contains("source_reference"), "None source_reference should be omitted: {json}");
+    assert!(
+        !json.contains("source_reference"),
+        "None source_reference should be omitted: {json}"
+    );
     Ok(())
 }
 
@@ -90,11 +93,15 @@ fn source_deserialization_with_source_reference() -> Result<(), serde_json::Erro
 fn stack_frame_builder_chaining_order_independent() {
     let src = Source::new("/a.pl");
     // with_end then with_column
-    let f1 = StackFrame::new(1, "main", src.clone(), 10).with_end(20, 30).with_column(5);
+    let f1 = StackFrame::new(1, "main", src.clone(), 10)
+        .with_end(20, 30)
+        .with_column(5);
 
     let src2 = Source::new("/a.pl");
     // with_column then with_end
-    let f2 = StackFrame::new(1, "main", src2, 10).with_column(5).with_end(20, 30);
+    let f2 = StackFrame::new(1, "main", src2, 10)
+        .with_column(5)
+        .with_end(20, 30);
 
     assert_eq!(f1.column, f2.column);
     assert_eq!(f1.end_line, f2.end_line);
@@ -133,11 +140,19 @@ fn stack_frame_unicode_name() {
 #[test]
 fn stack_frame_serde_with_all_fields() -> Result<(), serde_json::Error> {
     let src = Source::new("/script.pl");
-    let frame = StackFrame::new(5, "Foo::bar", src, 100).with_column(10).with_end(105, 20);
+    let frame = StackFrame::new(5, "Foo::bar", src, 100)
+        .with_column(10)
+        .with_end(105, 20);
 
     let json = serde_json::to_string(&frame)?;
-    assert!(json.contains("\"endLine\":105"), "endLine should be present: {json}");
-    assert!(json.contains("\"endColumn\":20"), "endColumn should be present: {json}");
+    assert!(
+        json.contains("\"endLine\":105"),
+        "endLine should be present: {json}"
+    );
+    assert!(
+        json.contains("\"endColumn\":20"),
+        "endColumn should be present: {json}"
+    );
 
     let back: StackFrame = serde_json::from_str(&json)?;
     assert_eq!(back, frame);
@@ -177,8 +192,14 @@ fn variable_with_all_optional_fields() -> Result<(), serde_json::Error> {
     };
 
     let json = serde_json::to_string(&var)?;
-    assert!(json.contains("\"namedVariables\":0"), "namedVariables present: {json}");
-    assert!(json.contains("\"indexedVariables\":10"), "indexedVariables present: {json}");
+    assert!(
+        json.contains("\"namedVariables\":0"),
+        "namedVariables present: {json}"
+    );
+    assert!(
+        json.contains("\"indexedVariables\":10"),
+        "indexedVariables present: {json}"
+    );
 
     let back: Variable = serde_json::from_str(&json)?;
     assert_eq!(back, var);
@@ -225,7 +246,10 @@ fn variable_type_field_deserialization_uses_type_not_type_underscore()
         "variablesReference": 0
     }"#;
     let var2: Variable = serde_json::from_str(json_wrong)?;
-    assert!(var2.type_.is_none(), "type_ key in JSON should not populate type_ field");
+    assert!(
+        var2.type_.is_none(),
+        "type_ key in JSON should not populate type_ field"
+    );
     Ok(())
 }
 

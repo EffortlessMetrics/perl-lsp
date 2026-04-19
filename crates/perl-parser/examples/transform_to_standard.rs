@@ -67,11 +67,16 @@ fn transform_to_standard(sexp: &str) -> String {
     let mut result = sexp.to_string();
 
     // Transform variables: (variable $ x) -> (variable name: "$x")
-    result = VAR_RE.replace_all(&result, "(variable name: \"$1$2\")").to_string();
+    result = VAR_RE
+        .replace_all(&result, "(variable name: \"$1$2\")")
+        .to_string();
 
     // Transform binary operators: (binary_+ ...) -> (binary_expression operator: "+" ...)
     result = BINARY_RE
-        .replace_all(&result, "(binary_expression left: $2 operator: \"$1\" right: $3)")
+        .replace_all(
+            &result,
+            "(binary_expression left: $2 operator: \"$1\" right: $3)",
+        )
         .to_string();
 
     // Transform declarations: (my_declaration ...) -> (variable_declaration kind: "my" ...)
@@ -105,11 +110,16 @@ fn transform_to_standard(sexp: &str) -> String {
 
     // Transform assignments: (assignment_assign ...) -> (assignment_expression operator: "=" ...)
     result = ASSIGN_RE
-        .replace_all(&result, "(assignment_expression left: $2 operator: \"$1\" right: $3)")
+        .replace_all(
+            &result,
+            "(assignment_expression left: $2 operator: \"$1\" right: $3)",
+        )
         .to_string();
 
     // Transform conditionals: (if cond then) -> (if_statement condition: cond consequence: then)
-    result = IF_RE.replace_all(&result, "(if_statement condition: $1 consequence: $2)").to_string();
+    result = IF_RE
+        .replace_all(&result, "(if_statement condition: $1 consequence: $2)")
+        .to_string();
 
     result
 }
@@ -120,7 +130,10 @@ mod tests {
 
     #[test]
     fn test_variable_transform() {
-        assert_eq!(transform_to_standard("(variable $ x)"), "(variable name: \"$x\")");
+        assert_eq!(
+            transform_to_standard("(variable $ x)"),
+            "(variable name: \"$x\")"
+        );
     }
 
     #[test]

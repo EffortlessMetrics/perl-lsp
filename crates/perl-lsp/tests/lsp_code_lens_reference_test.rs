@@ -21,7 +21,9 @@ fn setup_server() -> Result<LspServer, Box<dyn std::error::Error>> {
         id: Some(json!(1)),
     };
 
-    server.handle_request(init_request).ok_or("Failed to handle init request")?;
+    server
+        .handle_request(init_request)
+        .ok_or("Failed to handle init request")?;
 
     // Send initialized notification (required after successful initialize)
     let initialized_notification = JsonRpcRequest {
@@ -88,8 +90,9 @@ sub unused_function {
         id: Some(json!(2)),
     };
 
-    let response =
-        server.handle_request(code_lens_request).ok_or("Failed to handle code lens request")?;
+    let response = server
+        .handle_request(code_lens_request)
+        .ok_or("Failed to handle code lens request")?;
     assert!(response.result.is_some());
 
     let lenses = response.result.ok_or("Expected result in response")?;
@@ -99,7 +102,10 @@ sub unused_function {
     let greet_lens = lenses_array
         .iter()
         .find(|lens| {
-            lens.get("data").and_then(|d| d.get("name")).and_then(|n| n.as_str()) == Some("greet")
+            lens.get("data")
+                .and_then(|d| d.get("name"))
+                .and_then(|n| n.as_str())
+                == Some("greet")
         })
         .ok_or("Should find lens for 'greet'")?;
 
@@ -111,12 +117,17 @@ sub unused_function {
         id: Some(json!(3)),
     };
 
-    let resolved =
-        server.handle_request(resolve_request).ok_or("Failed to handle resolve request")?;
-    let resolved_lens = resolved.result.ok_or("Expected result in resolved response")?;
+    let resolved = server
+        .handle_request(resolve_request)
+        .ok_or("Failed to handle resolve request")?;
+    let resolved_lens = resolved
+        .result
+        .ok_or("Expected result in resolved response")?;
 
     // Check the reference count in the command title
-    let command = resolved_lens.get("command").ok_or("Expected command in resolved lens")?;
+    let command = resolved_lens
+        .get("command")
+        .ok_or("Expected command in resolved lens")?;
     let title = command
         .get("title")
         .ok_or("Expected title in command")?
@@ -124,13 +135,19 @@ sub unused_function {
         .ok_or("Expected title to be string")?;
 
     // Should report reference information
-    assert!(title.contains("reference"), "Expected reference count in title, got: {}", title);
+    assert!(
+        title.contains("reference"),
+        "Expected reference count in title, got: {}",
+        title
+    );
 
     // Find the lens for the "unused_function" subroutine
     let unused_lens = lenses_array
         .iter()
         .find(|lens| {
-            lens.get("data").and_then(|d| d.get("name")).and_then(|n| n.as_str())
+            lens.get("data")
+                .and_then(|d| d.get("name"))
+                .and_then(|n| n.as_str())
                 == Some("unused_function")
         })
         .ok_or("Should find lens for 'unused_function'")?;
@@ -143,14 +160,17 @@ sub unused_function {
         id: Some(json!(4)),
     };
 
-    let resolved_unused =
-        server.handle_request(resolve_unused).ok_or("Failed to handle resolve unused request")?;
-    let resolved_unused_lens =
-        resolved_unused.result.ok_or("Expected result in unused resolved response")?;
+    let resolved_unused = server
+        .handle_request(resolve_unused)
+        .ok_or("Failed to handle resolve unused request")?;
+    let resolved_unused_lens = resolved_unused
+        .result
+        .ok_or("Expected result in unused resolved response")?;
 
     // Check the reference count for unused function
-    let unused_command =
-        resolved_unused_lens.get("command").ok_or("Expected command in unused resolved lens")?;
+    let unused_command = resolved_unused_lens
+        .get("command")
+        .ok_or("Expected command in unused resolved lens")?;
     let unused_title = unused_command
         .get("title")
         .ok_or("Expected title in unused command")?
@@ -158,7 +178,11 @@ sub unused_function {
         .ok_or("Expected unused title to be string")?;
 
     // We expect 0 references
-    assert!(unused_title.contains("0 references"), "Expected 0 references, got: {}", unused_title);
+    assert!(
+        unused_title.contains("0 references"),
+        "Expected 0 references, got: {}",
+        unused_title
+    );
 
     Ok(())
 }
@@ -214,8 +238,9 @@ MyModule::some_method();
         id: Some(json!(2)),
     };
 
-    let response =
-        server.handle_request(code_lens_request).ok_or("Failed to handle code lens request")?;
+    let response = server
+        .handle_request(code_lens_request)
+        .ok_or("Failed to handle code lens request")?;
     let lenses = response.result.ok_or("Expected result in response")?;
     let lenses_array = lenses.as_array().ok_or("Expected lenses to be an array")?;
 
@@ -223,9 +248,14 @@ MyModule::some_method();
     let package_lens = lenses_array
         .iter()
         .find(|lens| {
-            lens.get("data").and_then(|d| d.get("name")).and_then(|n| n.as_str())
+            lens.get("data")
+                .and_then(|d| d.get("name"))
+                .and_then(|n| n.as_str())
                 == Some("MyModule")
-                && lens.get("data").and_then(|d| d.get("kind")).and_then(|k| k.as_str())
+                && lens
+                    .get("data")
+                    .and_then(|d| d.get("kind"))
+                    .and_then(|k| k.as_str())
                     == Some("package")
         })
         .ok_or("Should find lens for 'MyModule' package")?;
@@ -238,12 +268,17 @@ MyModule::some_method();
         id: Some(json!(3)),
     };
 
-    let resolved =
-        server.handle_request(resolve_request).ok_or("Failed to handle resolve request")?;
-    let resolved_lens = resolved.result.ok_or("Expected result in resolved response")?;
+    let resolved = server
+        .handle_request(resolve_request)
+        .ok_or("Failed to handle resolve request")?;
+    let resolved_lens = resolved
+        .result
+        .ok_or("Expected result in resolved response")?;
 
     // Check the reference count in the command title
-    let command = resolved_lens.get("command").ok_or("Expected command in resolved lens")?;
+    let command = resolved_lens
+        .get("command")
+        .ok_or("Expected command in resolved lens")?;
     let title = command
         .get("title")
         .ok_or("Expected title in command")?
@@ -252,7 +287,11 @@ MyModule::some_method();
 
     // We expect at least 1 reference (the 'use MyModule' statement)
     // The actual count may be higher depending on how the parser handles method calls
-    assert!(!title.contains("0 references"), "Expected at least 1 reference, got: {}", title);
+    assert!(
+        !title.contains("0 references"),
+        "Expected at least 1 reference, got: {}",
+        title
+    );
 
     Ok(())
 }

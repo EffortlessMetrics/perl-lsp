@@ -33,7 +33,9 @@ fn scenario_05_bad_tool_path_does_not_crash_server() {
     let harness = UxHarness::new(config_with_bad_tool_paths())
         .expect("Failed to create UX harness with bad config");
 
-    harness.open_file("config_test.pl", source).expect("didOpen should succeed");
+    harness
+        .open_file("config_test.pl", source)
+        .expect("didOpen should succeed");
 
     std::thread::sleep(std::time::Duration::from_millis(500));
 
@@ -51,7 +53,9 @@ fn scenario_05_server_responsive_with_bad_config() {
     let harness =
         UxHarness::new(config_with_bad_tool_paths()).expect("Failed to create UX harness");
 
-    harness.open_file("config_responsive.pl", source).expect("didOpen should succeed");
+    harness
+        .open_file("config_responsive.pl", source)
+        .expect("didOpen should succeed");
 
     let fmt = harness.format_document("config_responsive.pl");
     let hover = harness.hover("config_responsive.pl", 0, 3);
@@ -76,7 +80,9 @@ fn scenario_05_format_with_bad_perltidy_path_returns_graceful_error() {
     let harness =
         UxHarness::new(config_with_bad_tool_paths()).expect("Failed to create UX harness");
 
-    harness.open_file("format_bad.pl", source).expect("didOpen should succeed");
+    harness
+        .open_file("format_bad.pl", source)
+        .expect("didOpen should succeed");
 
     match harness.format_document("format_bad.pl") {
         Ok(result) => {

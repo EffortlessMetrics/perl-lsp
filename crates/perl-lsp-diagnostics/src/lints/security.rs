@@ -76,7 +76,12 @@ fn walk_security_node(
             walk_security_node(rhs, diagnostics, signal_shadowed);
             signal_shadowed
         }
-        NodeKind::VariableDeclaration { declarator, variable, initializer, .. } => {
+        NodeKind::VariableDeclaration {
+            declarator,
+            variable,
+            initializer,
+            ..
+        } => {
             if let Some(init) = initializer {
                 walk_security_node(init, diagnostics, signal_shadowed);
             }
@@ -91,7 +96,12 @@ fn walk_security_node(
             }
             updated_shadowed
         }
-        NodeKind::VariableListDeclaration { declarator, variables, initializer, .. } => {
+        NodeKind::VariableListDeclaration {
+            declarator,
+            variables,
+            initializer,
+            ..
+        } => {
             if let Some(init) = initializer {
                 walk_security_node(init, diagnostics, signal_shadowed);
             }
@@ -110,7 +120,12 @@ fn walk_security_node(
                 signal_shadowed
             }
         }
-        NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
+        NodeKind::If {
+            condition,
+            then_branch,
+            elsif_branches,
+            else_branch,
+        } => {
             walk_security_node(condition, diagnostics, signal_shadowed);
             walk_security_node(then_branch, diagnostics, signal_shadowed);
             for (condition, branch) in elsif_branches {
@@ -122,12 +137,20 @@ fn walk_security_node(
             }
             signal_shadowed
         }
-        NodeKind::While { condition, body, .. } => {
+        NodeKind::While {
+            condition, body, ..
+        } => {
             walk_security_node(condition, diagnostics, signal_shadowed);
             walk_security_node(body, diagnostics, signal_shadowed);
             signal_shadowed
         }
-        NodeKind::For { init, condition, update, body, continue_block } => {
+        NodeKind::For {
+            init,
+            condition,
+            update,
+            body,
+            continue_block,
+        } => {
             let mut loop_shadowed = signal_shadowed;
             if let Some(init) = init {
                 loop_shadowed = walk_security_node(init, diagnostics, loop_shadowed);
@@ -144,7 +167,12 @@ fn walk_security_node(
             }
             signal_shadowed
         }
-        NodeKind::Foreach { variable, list, body, continue_block } => {
+        NodeKind::Foreach {
+            variable,
+            list,
+            body,
+            continue_block,
+        } => {
             let mut loop_shadowed = walk_security_node(variable, diagnostics, signal_shadowed);
             if shadows_signal_table(variable) {
                 loop_shadowed = true;
@@ -170,12 +198,18 @@ fn walk_security_node(
             walk_security_node(body, diagnostics, signal_shadowed);
             signal_shadowed
         }
-        NodeKind::StatementModifier { statement, condition, .. } => {
+        NodeKind::StatementModifier {
+            statement,
+            condition,
+            ..
+        } => {
             walk_security_node(statement, diagnostics, signal_shadowed);
             walk_security_node(condition, diagnostics, signal_shadowed);
             signal_shadowed
         }
-        NodeKind::Subroutine { signature, body, .. } => {
+        NodeKind::Subroutine {
+            signature, body, ..
+        } => {
             let mut sub_shadowed = signal_shadowed;
             if let Some(signature) = signature {
                 sub_shadowed = walk_security_node(signature, diagnostics, sub_shadowed);
@@ -183,7 +217,9 @@ fn walk_security_node(
             walk_security_node(body, diagnostics, sub_shadowed);
             signal_shadowed
         }
-        NodeKind::Method { signature, body, .. } => {
+        NodeKind::Method {
+            signature, body, ..
+        } => {
             let mut method_shadowed = signal_shadowed;
             if let Some(signature) = signature {
                 method_shadowed = walk_security_node(signature, diagnostics, method_shadowed);
@@ -201,25 +237,40 @@ fn walk_security_node(
         NodeKind::MandatoryParameter { variable }
         | NodeKind::SlurpyParameter { variable }
         | NodeKind::NamedParameter { variable } => {
-            let updated_shadowed =
-                if shadows_signal_table(variable) { true } else { signal_shadowed };
+            let updated_shadowed = if shadows_signal_table(variable) {
+                true
+            } else {
+                signal_shadowed
+            };
             walk_security_node(variable, diagnostics, signal_shadowed);
             updated_shadowed
         }
-        NodeKind::OptionalParameter { variable, default_value } => {
+        NodeKind::OptionalParameter {
+            variable,
+            default_value,
+        } => {
             walk_security_node(default_value, diagnostics, signal_shadowed);
-            let updated_shadowed =
-                if shadows_signal_table(variable) { true } else { signal_shadowed };
+            let updated_shadowed = if shadows_signal_table(variable) {
+                true
+            } else {
+                signal_shadowed
+            };
             walk_security_node(variable, diagnostics, signal_shadowed);
             updated_shadowed
         }
-        NodeKind::Package { block: Some(block), .. }
+        NodeKind::Package {
+            block: Some(block), ..
+        }
         | NodeKind::PhaseBlock { block, .. }
         | NodeKind::Class { body: block, .. } => {
             walk_security_node(block, diagnostics, signal_shadowed);
             signal_shadowed
         }
-        NodeKind::Try { body, catch_blocks, finally_block } => {
+        NodeKind::Try {
+            body,
+            catch_blocks,
+            finally_block,
+        } => {
             walk_security_node(body, diagnostics, signal_shadowed);
             for (_, catch_body) in catch_blocks {
                 walk_security_node(catch_body, diagnostics, signal_shadowed);
@@ -234,7 +285,11 @@ fn walk_security_node(
             walk_security_node(right, diagnostics, signal_shadowed);
             signal_shadowed
         }
-        NodeKind::Ternary { condition, then_expr, else_expr } => {
+        NodeKind::Ternary {
+            condition,
+            then_expr,
+            else_expr,
+        } => {
             walk_security_node(condition, diagnostics, signal_shadowed);
             walk_security_node(then_expr, diagnostics, signal_shadowed);
             walk_security_node(else_expr, diagnostics, signal_shadowed);
@@ -278,7 +333,10 @@ fn walk_security_node(
         }
         // Backtick strings: the parser stores `cmd` and qx(cmd) as
         // String { value: "`cmd`", interpolated: true }
-        NodeKind::String { value, interpolated: true } if is_backtick_string(value) => {
+        NodeKind::String {
+            value,
+            interpolated: true,
+        } if is_backtick_string(value) => {
             diagnostics.push(Diagnostic {
                 range: (node.location.start, node.location.end),
                 severity: DiagnosticSeverity::Information,
@@ -305,7 +363,10 @@ fn walk_security_node(
             walk_security_node(statement, diagnostics, signal_shadowed);
             signal_shadowed
         }
-        NodeKind::Error { partial: Some(partial), .. } => {
+        NodeKind::Error {
+            partial: Some(partial),
+            ..
+        } => {
             walk_security_node(partial, diagnostics, signal_shadowed);
             signal_shadowed
         }
@@ -413,12 +474,18 @@ fn signal_handler_name(node: &Node) -> Option<SignalHandlerTarget> {
 
     match &right.kind {
         NodeKind::Identifier { name } if name == "__DIE__" || name == "__WARN__" => {
-            Some(SignalHandlerTarget { access, signal_name: name.to_string() })
+            Some(SignalHandlerTarget {
+                access,
+                signal_name: name.to_string(),
+            })
         }
         NodeKind::String { value, .. } => {
             let trimmed = value.trim_matches(['"', '\'']);
             if trimmed == "__DIE__" || trimmed == "__WARN__" {
-                Some(SignalHandlerTarget { access, signal_name: trimmed.to_string() })
+                Some(SignalHandlerTarget {
+                    access,
+                    signal_name: trimmed.to_string(),
+                })
             } else {
                 None
             }
@@ -433,8 +500,10 @@ fn signal_handler_name(node: &Node) -> Option<SignalHandlerTarget> {
 /// `eval "string"`. Block evals (`eval { ... }`) are safe exception handling;
 /// string/variable evals are a security risk.
 fn check_eval_node(block: &Node, eval_node: &Node, diagnostics: &mut Vec<Diagnostic>) {
-    let is_string_eval = matches!(&block.kind, NodeKind::String { .. } | NodeKind::Variable { .. })
-        || matches!(&block.kind, NodeKind::Binary { op, .. } if op == ".");
+    let is_string_eval = matches!(
+        &block.kind,
+        NodeKind::String { .. } | NodeKind::Variable { .. }
+    ) || matches!(&block.kind, NodeKind::Binary { op, .. } if op == ".");
 
     if !is_string_eval {
         return;
@@ -704,10 +773,16 @@ fn shadows_signal_table(node: &Node) -> bool {
     match &node.kind {
         NodeKind::Variable { sigil, name } => sigil == "%" && name == "SIG",
         NodeKind::VariableWithAttributes { variable, .. } => shadows_signal_table(variable),
-        NodeKind::VariableDeclaration { declarator, variable, .. } => {
-            matches!(declarator.as_str(), "my" | "state") && shadows_signal_table(variable)
-        }
-        NodeKind::VariableListDeclaration { declarator, variables, .. } => {
+        NodeKind::VariableDeclaration {
+            declarator,
+            variable,
+            ..
+        } => matches!(declarator.as_str(), "my" | "state") && shadows_signal_table(variable),
+        NodeKind::VariableListDeclaration {
+            declarator,
+            variables,
+            ..
+        } => {
             matches!(declarator.as_str(), "my" | "state")
                 && variables.iter().any(shadows_signal_table)
         }
@@ -783,7 +858,9 @@ mod tests {
         let die_diags = security_diags("local $SIG{__DIE__} = sub { };");
 
         assert!(
-            warn_diags.iter().all(|d| d.code.as_deref() != Some("PL602")),
+            warn_diags
+                .iter()
+                .all(|d| d.code.as_deref() != Some("PL602")),
             "localized __WARN__ handler should not be flagged: {warn_diags:?}"
         );
         assert!(

@@ -37,8 +37,10 @@ fn test_policy_checks_gate_does_not_block_on_stale_status() -> Result<(), Box<dy
 
     // Extract the policy_checks gate section (up to next gate entry or end of file)
     let policy_section = &content[policy_block_start..];
-    let section_end =
-        policy_section[1..].find("\n  - name:").map(|i| i + 1).unwrap_or(policy_section.len());
+    let section_end = policy_section[1..]
+        .find("\n  - name:")
+        .map(|i| i + 1)
+        .unwrap_or(policy_section.len());
     let policy_section = &policy_section[..section_end];
 
     // The --check on update-current-status.py must NOT appear in the policy_checks gate.
@@ -62,12 +64,15 @@ fn test_gate_registry_policy_does_not_require_status_check()
     let content = fs::read_to_string(&registry_path)?;
 
     // Find the policy gate section
-    let policy_start =
-        content.find("id = \"policy\"").ok_or("policy gate must exist in GATE_REGISTRY.toml")?;
+    let policy_start = content
+        .find("id = \"policy\"")
+        .ok_or("policy gate must exist in GATE_REGISTRY.toml")?;
 
     let policy_section = &content[policy_start..];
-    let section_end =
-        policy_section[1..].find("\n[[gate]]").map(|i| i + 1).unwrap_or(policy_section.len());
+    let section_end = policy_section[1..]
+        .find("\n[[gate]]")
+        .map(|i| i + 1)
+        .unwrap_or(policy_section.len());
     let policy_section = &policy_section[..section_end];
 
     assert!(
@@ -101,7 +106,10 @@ fn test_post_merge_workflow_triggers_on_push_to_master() -> Result<(), Box<dyn s
     let workflow_path = root.join(".github/workflows/post-merge-status.yml");
     let content = fs::read_to_string(&workflow_path)?;
 
-    assert!(content.contains("push:"), "post-merge-status.yml must have a push trigger");
+    assert!(
+        content.contains("push:"),
+        "post-merge-status.yml must have a push trigger"
+    );
     assert!(
         content.contains("master"),
         "post-merge-status.yml push trigger must include master branch"
@@ -213,7 +221,10 @@ fn test_subsystem_files_have_markers() -> Result<(), Box<dyn std::error::Error>>
     let status_dir = root.join("docs/project/status");
 
     let lsp = fs::read_to_string(status_dir.join("lsp.md"))?;
-    assert!(lsp.contains("<!-- BEGIN: LSP_COVERAGE -->"), "lsp.md missing LSP_COVERAGE block");
+    assert!(
+        lsp.contains("<!-- BEGIN: LSP_COVERAGE -->"),
+        "lsp.md missing LSP_COVERAGE block"
+    );
     assert!(
         lsp.contains("<!-- BEGIN: LSP_METRICS_BULLETS -->"),
         "lsp.md missing LSP_METRICS_BULLETS block"

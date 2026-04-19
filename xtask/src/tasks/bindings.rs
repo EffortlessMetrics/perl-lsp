@@ -20,7 +20,10 @@ pub fn run(header: PathBuf, output: PathBuf) -> Result<()> {
         fs::create_dir_all(parent).context("failed to create output directory")?;
     }
 
-    let header_dir = header.parent().map(Path::to_path_buf).unwrap_or_else(|| PathBuf::from("."));
+    let header_dir = header
+        .parent()
+        .map(Path::to_path_buf)
+        .unwrap_or_else(|| PathBuf::from("."));
 
     // Run bindgen on the provided header - aligned with build.rs configuration
     let bindings = Builder::default()
@@ -39,7 +42,9 @@ pub fn run(header: PathBuf, output: PathBuf) -> Result<()> {
         .generate()
         .context("unable to generate bindings")?;
 
-    bindings.write_to_file(&output).context("failed to write bindings")?;
+    bindings
+        .write_to_file(&output)
+        .context("failed to write bindings")?;
 
     // Format the generated bindings if rustfmt is available
     let _ = Command::new("rustfmt").arg(&output).status();

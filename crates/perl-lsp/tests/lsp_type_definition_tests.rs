@@ -67,7 +67,9 @@ $obj->method();
         if let Some(range) = location.get("range") {
             let start = &range["start"];
             let start_line = start["line"].as_u64().ok_or("Missing line number")?;
-            let start_char = start["character"].as_u64().ok_or("Missing character position")?;
+            let start_char = start["character"]
+                .as_u64()
+                .ok_or("Missing character position")?;
             assert!(
                 start_line > 0 || start_char > 0,
                 "Expected non-(0,0) position, got ({},{})",
@@ -102,7 +104,9 @@ fn test_type_definition_crlf_emoji_positions() -> Result<(), Box<dyn std::error:
         if let Some(range) = location.get("range") {
             let start = &range["start"];
             let start_line = start["line"].as_u64().ok_or("Missing line number")?;
-            let start_char = start["character"].as_u64().ok_or("Missing character position")?;
+            let start_char = start["character"]
+                .as_u64()
+                .ok_or("Missing character position")?;
 
             // With CRLF and emojis, positions should still be valid and non-zero
             assert!(
@@ -251,7 +255,13 @@ has 'id' => (is => 'ro', isa => UserID);
 
     let provider = perl_lsp_navigation::TypeDefinitionProvider::new();
     let locations = provider
-        .find_type_definition(&user_ast, line as u32, character as u32, user_uri, &documents)
+        .find_type_definition(
+            &user_ast,
+            line as u32,
+            character as u32,
+            user_uri,
+            &documents,
+        )
         .ok_or("Expected array from type definition")?;
     assert!(
         !locations.is_empty(),
@@ -259,14 +269,20 @@ has 'id' => (is => 'ro', isa => UserID);
     );
 
     let target_uri = locations[0].target_uri.as_str();
-    assert_eq!(target_uri, types_uri, "type definition should resolve into the type library");
+    assert_eq!(
+        target_uri, types_uri,
+        "type definition should resolve into the type library"
+    );
 
     let target_line = locations[0].target_range.start.line as u64;
     let expected_line = types_code
         .lines()
         .position(|line| line.contains("type UserID"))
         .ok_or("type declaration line missing")? as u64;
-    assert_eq!(target_line, expected_line, "type definition should land on `type UserID`");
+    assert_eq!(
+        target_line, expected_line,
+        "type definition should land on `type UserID`"
+    );
 
     Ok(())
 }
@@ -291,7 +307,10 @@ my %hash = (key => 'value');
 
     // Should return null for non-object types
     let is_empty_array = response.is_array()
-        && response.as_array().ok_or("Expected array but got different type")?.is_empty();
+        && response
+            .as_array()
+            .ok_or("Expected array but got different type")?
+            .is_empty();
     assert!(
         response.is_null() || is_empty_array,
         "Should return null or empty array for non-object types"
@@ -332,8 +351,13 @@ fn test_type_definition_use_parent_chain_finds_base() -> Result<(), Box<dyn std:
     let response = harness.type_definition(doc_uri, 9, 10)?;
 
     // Must return non-empty array — "package Base;" is at line 1 in this document
-    let locations = response.as_array().ok_or("Expected array from type definition, got null")?;
-    assert!(!locations.is_empty(), "Expected at least one location for 'Base' type definition");
+    let locations = response
+        .as_array()
+        .ok_or("Expected array from type definition, got null")?;
+    assert!(
+        !locations.is_empty(),
+        "Expected at least one location for 'Base' type definition"
+    );
 
     // The result should point to "package Base;" which is at line 1
     let location = &locations[0];
@@ -360,7 +384,10 @@ fn test_type_definition_cross_document_lookup() -> Result<(), Box<dyn std::error
 
     // Document 1: defines the package
     let lib_uri = "file:///lib/Widget.pm";
-    harness.open(lib_uri, "\npackage Widget;\nsub new { bless {}, shift }\nsub render { }\n")?;
+    harness.open(
+        lib_uri,
+        "\npackage Widget;\nsub new { bless {}, shift }\nsub render { }\n",
+    )?;
 
     // Document 2: uses the package — Widget is NOT defined here
     // Line 0: ""
@@ -375,15 +402,18 @@ fn test_type_definition_cross_document_lookup() -> Result<(), Box<dyn std::error
     let response = harness.type_definition(main_uri, 3, 8)?;
 
     // Must return non-empty array — package Widget is defined in lib_uri
-    let locations = response.as_array().ok_or("Expected array from type definition, got null")?;
+    let locations = response
+        .as_array()
+        .ok_or("Expected array from type definition, got null")?;
     assert!(
         !locations.is_empty(),
         "Expected location for 'Widget' defined in {lib_uri}, got empty array"
     );
 
     // The target URI must be the library document
-    let target_uri =
-        locations[0]["targetUri"].as_str().ok_or("Missing targetUri in LocationLink result")?;
+    let target_uri = locations[0]["targetUri"]
+        .as_str()
+        .ok_or("Missing targetUri in LocationLink result")?;
     assert_eq!(
         target_uri, lib_uri,
         "Type definition should point to {lib_uri} (where Widget is defined), got {target_uri}"
@@ -435,11 +465,19 @@ fn test_type_definition_method_call_strong_assertion() -> Result<(), Box<dyn std
     let locations = response.as_array().ok_or(
         "Expected array from type definition, got null — no type found for Derived->new()",
     )?;
-    assert!(!locations.is_empty(), "Expected location for 'Derived' constructor call, got empty");
+    assert!(
+        !locations.is_empty(),
+        "Expected location for 'Derived' constructor call, got empty"
+    );
 
     // Result must point to this same document
-    let target_uri = locations[0]["targetUri"].as_str().ok_or("Missing targetUri")?;
-    assert_eq!(target_uri, doc_uri, "Type definition should point to {doc_uri}, got {target_uri}");
+    let target_uri = locations[0]["targetUri"]
+        .as_str()
+        .ok_or("Missing targetUri")?;
+    assert_eq!(
+        target_uri, doc_uri,
+        "Type definition should point to {doc_uri}, got {target_uri}"
+    );
 
     // "package Derived;" is at line 4
     let target_line = locations[0]["targetRange"]["start"]["line"]

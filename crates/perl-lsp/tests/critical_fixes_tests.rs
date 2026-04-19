@@ -5,7 +5,9 @@ use std::path::PathBuf;
 use url::Url;
 
 fn synthetic_absolute_path(name: &str) -> PathBuf {
-    std::env::temp_dir().join("perl-lsp-critical-fixes").join(name)
+    std::env::temp_dir()
+        .join("perl-lsp-critical-fixes")
+        .join(name)
 }
 
 #[test]
@@ -65,7 +67,9 @@ fn test_lsp_workspace_symbol_no_internal_fields() -> Result<(), Box<dyn std::err
     let json_value = serde_json::to_value(&lsp_symbols)?;
     if let Value::Array(symbols) = json_value {
         for symbol in symbols {
-            let obj = symbol.as_object().ok_or("Expected symbol to be a JSON object")?;
+            let obj = symbol
+                .as_object()
+                .ok_or("Expected symbol to be a JSON object")?;
 
             // These fields should exist
             assert!(obj.contains_key("name"));
@@ -77,7 +81,10 @@ fn test_lsp_workspace_symbol_no_internal_fields() -> Result<(), Box<dyn std::err
                 !obj.contains_key("has_body"),
                 "Internal field 'has_body' leaked to LSP output"
             );
-            assert!(!obj.contains_key("hasBody"), "Internal field 'hasBody' leaked to LSP output");
+            assert!(
+                !obj.contains_key("hasBody"),
+                "Internal field 'hasBody' leaked to LSP output"
+            );
 
             // Check location structure
             let location = &obj["location"];
@@ -154,7 +161,12 @@ fn test_workspace_symbol_deduplication() -> Result<(), Box<dyn std::error::Error
     // Convert to LSP symbols and check deduplication by position
     let mut seen = HashSet::new();
     for sym in &symbols {
-        let key = (sym.uri.clone(), sym.range.start.line, sym.range.start.column, sym.name.clone());
+        let key = (
+            sym.uri.clone(),
+            sym.range.start.line,
+            sym.range.start.column,
+            sym.name.clone(),
+        );
 
         // This would fail if we had true duplicates at the same position
         if seen.contains(&key) {
@@ -180,9 +192,15 @@ fn test_uri_normalization_consistency() -> Result<(), Box<dyn std::error::Error>
 
     // Test various URI formats
     let test_cases = vec![
-        (absolute_path.to_string_lossy().into_owned(), absolute_path_uri),
+        (
+            absolute_path.to_string_lossy().into_owned(),
+            absolute_path_uri,
+        ),
         (file_scheme_uri.clone(), file_scheme_uri),
-        ("untitled:Untitled-1".to_string(), "untitled:Untitled-1".to_string()), // Special VSCode scheme
+        (
+            "untitled:Untitled-1".to_string(),
+            "untitled:Untitled-1".to_string(),
+        ), // Special VSCode scheme
     ];
 
     for (idx, (input_uri, _expected_pattern)) in test_cases.into_iter().enumerate() {
@@ -200,12 +218,20 @@ fn test_uri_normalization_consistency() -> Result<(), Box<dyn std::error::Error>
 
         // Should be able to find the symbol
         let symbols = index.find_symbols(&func_name);
-        assert!(!symbols.is_empty(), "Failed to find symbol indexed with URI: {}", input_uri);
+        assert!(
+            !symbols.is_empty(),
+            "Failed to find symbol indexed with URI: {}",
+            input_uri
+        );
 
         // Remove and verify it's gone
         index.remove_file(&input_uri);
         let symbols = index.find_symbols(&func_name);
-        assert!(symbols.is_empty(), "Failed to remove file with URI: {}", input_uri);
+        assert!(
+            symbols.is_empty(),
+            "Failed to remove file with URI: {}",
+            input_uri
+        );
     }
 
     Ok(())
@@ -233,7 +259,10 @@ fn test_utf16_position_encoding() -> Result<(), Box<dyn std::error::Error>> {
     let symbol = symbols.first().ok_or("Expected at least one symbol")?;
 
     // The exact position depends on the parser, but it should be consistent
-    assert!(symbol.range.start.column < 100, "Position seems unreasonably large");
+    assert!(
+        symbol.range.start.column < 100,
+        "Position seems unreasonably large"
+    );
 
     Ok(())
 }

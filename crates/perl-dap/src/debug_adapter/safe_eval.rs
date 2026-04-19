@@ -516,7 +516,11 @@ mod tests {
 
         for expr in bypasses {
             let err = validate_safe_expression(expr);
-            assert!(err.is_some(), "Expression '{}' should be blocked but was allowed", expr);
+            assert!(
+                err.is_some(),
+                "Expression '{}' should be blocked but was allowed",
+                expr
+            );
         }
     }
 

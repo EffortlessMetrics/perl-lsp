@@ -25,8 +25,10 @@ impl LspServer {
 
         let uri = req_uri(&params)?;
         let (line, character) = req_position(&params)?;
-        let partial_result_token =
-            params.get("partialResultToken").and_then(|v| v.as_str()).map(|s| s.to_string());
+        let partial_result_token = params
+            .get("partialResultToken")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
         let document_version = params
             .get("textDocument")
             .and_then(|td| td.get("version"))
@@ -124,8 +126,9 @@ impl LspServer {
         let mut sent_final = false;
 
         // Stream from the backend -- each chunk carries cumulative text
-        let stream_result =
-            backend.stream(&req, &mut |chunk: perl_lsp_inline_completion::StreamChunk| {
+        let stream_result = backend.stream(
+            &req,
+            &mut |chunk: perl_lsp_inline_completion::StreamChunk| {
                 // Check cancellation before emitting
                 if session.is_cancelled() {
                     return perl_lsp_inline_completion::StreamControl::Stop;
@@ -160,7 +163,10 @@ impl LspServer {
                 });
 
                 if let Err(e) = self.notify("$/progress", progress) {
-                    tracing::debug!("streaming inline completion: failed to send progress: {}", e);
+                    tracing::debug!(
+                        "streaming inline completion: failed to send progress: {}",
+                        e
+                    );
                     return perl_lsp_inline_completion::StreamControl::Stop;
                 }
 
@@ -169,12 +175,16 @@ impl LspServer {
                 } else {
                     perl_lsp_inline_completion::StreamControl::Continue
                 }
-            });
+            },
+        );
 
         // If the stream ended without sending a final chunk, send one now
         if !sent_final && !session.is_cancelled() {
-            let cumulative_text =
-                session.current_text.lock().map(|t| t.clone()).unwrap_or_default();
+            let cumulative_text = session
+                .current_text
+                .lock()
+                .map(|t| t.clone())
+                .unwrap_or_default();
 
             let items = if cumulative_text.is_empty() {
                 json!([])

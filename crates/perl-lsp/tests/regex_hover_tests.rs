@@ -153,8 +153,15 @@ fn test_hover_regex_returns_markdown_kind() -> TestResult {
         .unwrap_or(json!(null));
 
     if !result.is_null() {
-        let kind = result.get("contents").and_then(|c| c.get("kind")).and_then(|k| k.as_str());
-        assert_eq!(kind, Some("markdown"), "Hover kind should be 'markdown'; got: {kind:?}");
+        let kind = result
+            .get("contents")
+            .and_then(|c| c.get("kind"))
+            .and_then(|k| k.as_str());
+        assert_eq!(
+            kind,
+            Some("markdown"),
+            "Hover kind should be 'markdown'; got: {kind:?}"
+        );
     }
     Ok(())
 }

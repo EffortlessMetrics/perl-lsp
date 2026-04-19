@@ -130,7 +130,12 @@ fn test_item_to_json_basic() -> Result<(), Box<dyn std::error::Error>> {
         id: "file.t::test_one".to_string(),
         label: "test_one".to_string(),
         uri: "file.t".to_string(),
-        range: TestRange { start_line: 0, start_character: 0, end_line: 5, end_character: 1 },
+        range: TestRange {
+            start_line: 0,
+            start_character: 0,
+            end_line: 5,
+            end_character: 1,
+        },
         kind: TestKind::Test,
         children: vec![],
     };
@@ -147,7 +152,12 @@ fn test_item_to_json_with_children() -> Result<(), Box<dyn std::error::Error>> {
         id: "child".to_string(),
         label: "child_test".to_string(),
         uri: "file.t".to_string(),
-        range: TestRange { start_line: 1, start_character: 0, end_line: 3, end_character: 0 },
+        range: TestRange {
+            start_line: 1,
+            start_character: 0,
+            end_line: 3,
+            end_character: 0,
+        },
         kind: TestKind::Test,
         children: vec![],
     };
@@ -155,7 +165,12 @@ fn test_item_to_json_with_children() -> Result<(), Box<dyn std::error::Error>> {
         id: "parent".to_string(),
         label: "parent_suite".to_string(),
         uri: "file.t".to_string(),
-        range: TestRange { start_line: 0, start_character: 0, end_line: 10, end_character: 0 },
+        range: TestRange {
+            start_line: 0,
+            start_character: 0,
+            end_line: 10,
+            end_character: 0,
+        },
         kind: TestKind::Suite,
         children: vec![child],
     };
@@ -428,7 +443,10 @@ fn refactoring_analyzer_default() -> Result<(), Box<dyn std::error::Error>> {
 fn diagnostic_severity_variants() -> Result<(), Box<dyn std::error::Error>> {
     assert_eq!(DiagnosticSeverity::Error, DiagnosticSeverity::Error);
     assert_eq!(DiagnosticSeverity::Warning, DiagnosticSeverity::Warning);
-    assert_eq!(DiagnosticSeverity::Information, DiagnosticSeverity::Information);
+    assert_eq!(
+        DiagnosticSeverity::Information,
+        DiagnosticSeverity::Information
+    );
     assert_eq!(DiagnosticSeverity::Hint, DiagnosticSeverity::Hint);
     Ok(())
 }
@@ -557,7 +575,10 @@ fn test_generator_with_perf_tests() -> Result<(), Box<dyn std::error::Error>> {
     let generator = TestGenerator::with_options(TestFramework::TestMore, opts);
     let ast = make_sub_ast("hot_path");
     let tests = generator.generate_tests(&ast, "sub hot_path { 1 }     ");
-    let perf_tests: Vec<_> = tests.iter().filter(|t| t.name.contains("performance")).collect();
+    let perf_tests: Vec<_> = tests
+        .iter()
+        .filter(|t| t.name.contains("performance"))
+        .collect();
     assert!(!perf_tests.is_empty());
     Ok(())
 }
@@ -621,8 +642,10 @@ fn test_results_default() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn refactoring_suggester_empty_program() -> Result<(), Box<dyn std::error::Error>> {
     let mut suggester = RefactoringSuggester::new();
-    let ast =
-        Node::new(NodeKind::Program { statements: vec![] }, SourceLocation { start: 0, end: 0 });
+    let ast = Node::new(
+        NodeKind::Program { statements: vec![] },
+        SourceLocation { start: 0, end: 0 },
+    );
     let suggestions = suggester.analyze(&ast, "");
     assert!(suggestions.is_empty());
     Ok(())
@@ -666,8 +689,14 @@ fn test_framework_equality() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn gen_refactoring_category_equality() -> Result<(), Box<dyn std::error::Error>> {
-    assert_eq!(GenRefactoringCategory::DuplicateCode, GenRefactoringCategory::DuplicateCode);
-    assert_ne!(GenRefactoringCategory::LongMethod, GenRefactoringCategory::DeadCode);
+    assert_eq!(
+        GenRefactoringCategory::DuplicateCode,
+        GenRefactoringCategory::DuplicateCode
+    );
+    assert_ne!(
+        GenRefactoringCategory::LongMethod,
+        GenRefactoringCategory::DeadCode
+    );
     Ok(())
 }
 
@@ -677,8 +706,14 @@ fn gen_refactoring_category_equality() -> Result<(), Box<dyn std::error::Error>>
 
 #[test]
 fn basic_refactoring_category_equality() -> Result<(), Box<dyn std::error::Error>> {
-    assert_eq!(RefactoringCategory::HighComplexity, RefactoringCategory::HighComplexity);
-    assert_ne!(RefactoringCategory::LongMethod, RefactoringCategory::TooManyParameters);
+    assert_eq!(
+        RefactoringCategory::HighComplexity,
+        RefactoringCategory::HighComplexity
+    );
+    assert_ne!(
+        RefactoringCategory::LongMethod,
+        RefactoringCategory::TooManyParameters
+    );
     Ok(())
 }
 
@@ -856,7 +891,12 @@ fn guardian_warns_on_low_complexity_long_timeline() -> Result<(), Box<dyn std::e
     meta.complexity = ComplexityLevel::Low;
     meta.target_timeline = Duration::from_secs(30 * 24 * 3600); // 30 days
     let result = guardian.validate_new_ignored_test(&meta);
-    assert!(result.warnings.iter().any(|w| w.contains("shorter timeline")));
+    assert!(
+        result
+            .warnings
+            .iter()
+            .any(|w| w.contains("shorter timeline"))
+    );
     Ok(())
 }
 
@@ -884,8 +924,12 @@ fn guardian_quality_score_bonus_for_many_criteria() -> Result<(), Box<dyn std::e
     let guardian = IgnoredTestGuardian::new(gov);
 
     let mut meta = make_test_metadata();
-    meta.success_criteria =
-        vec!["a".to_string(), "b".to_string(), "c".to_string(), "d".to_string()];
+    meta.success_criteria = vec![
+        "a".to_string(),
+        "b".to_string(),
+        "c".to_string(),
+        "d".to_string(),
+    ];
     let result = guardian.validate_new_ignored_test(&meta);
     // 3+ criteria earns bonus
     assert!(result.quality_score > 0.0);
@@ -1070,7 +1114,12 @@ fn test_kind_equality() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn test_range_construction() -> Result<(), Box<dyn std::error::Error>> {
-    let range = TestRange { start_line: 0, start_character: 5, end_line: 10, end_character: 20 };
+    let range = TestRange {
+        start_line: 0,
+        start_character: 5,
+        end_line: 10,
+        end_character: 20,
+    };
     assert_eq!(range.start_line, 0);
     assert_eq!(range.end_line, 10);
     Ok(())
@@ -1082,8 +1131,10 @@ fn test_range_construction() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn node_construction() -> Result<(), Box<dyn std::error::Error>> {
-    let node =
-        Node::new(NodeKind::Program { statements: vec![] }, SourceLocation { start: 0, end: 0 });
+    let node = Node::new(
+        NodeKind::Program { statements: vec![] },
+        SourceLocation { start: 0, end: 0 },
+    );
     assert!(matches!(node.kind, NodeKind::Program { .. }));
     assert_eq!(node.location.start, 0);
     Ok(())

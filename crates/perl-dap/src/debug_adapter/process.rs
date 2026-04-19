@@ -11,14 +11,26 @@ use super::*;
 fn detect_perl_info() -> String {
     match crate::platform::resolve_perl_path_with_toolchain() {
         Ok(perl_path) => {
-            let version_output =
-                Command::new(&perl_path).arg("-e").arg("print $]").output().ok().and_then(|out| {
-                    if out.status.success() { String::from_utf8(out.stdout).ok() } else { None }
+            let version_output = Command::new(&perl_path)
+                .arg("-e")
+                .arg("print $]")
+                .output()
+                .ok()
+                .and_then(|out| {
+                    if out.status.success() {
+                        String::from_utf8(out.stdout).ok()
+                    } else {
+                        None
+                    }
                 });
 
             match version_output {
                 Some(v) if !v.trim().is_empty() => {
-                    format!("Found Perl at {} (version {})", perl_path.display(), v.trim())
+                    format!(
+                        "Found Perl at {} (version {})",
+                        perl_path.display(),
+                        v.trim()
+                    )
                 }
                 _ => format!("Found Perl at {}", perl_path.display()),
             }
@@ -158,11 +170,17 @@ impl DebugAdapter {
                 .get("args")
                 .and_then(|a| a.as_array())
                 .map(|arr| {
-                    arr.iter().filter_map(|v| v.as_str()).map(|s| s.to_string()).collect::<Vec<_>>()
+                    arr.iter()
+                        .filter_map(|v| v.as_str())
+                        .map(|s| s.to_string())
+                        .collect::<Vec<_>>()
                 })
                 .unwrap_or_default();
 
-            let stop_on_entry = args.get("stopOnEntry").and_then(|s| s.as_bool()).unwrap_or(false);
+            let stop_on_entry = args
+                .get("stopOnEntry")
+                .and_then(|s| s.as_bool())
+                .unwrap_or(false);
 
             let env_overrides = args
                 .get("env")
@@ -406,7 +424,11 @@ impl DebugAdapter {
         // normally empty for -c, but merge both for robustness).
         let raw_stderr = String::from_utf8_lossy(&output.stderr);
         let raw_stdout = String::from_utf8_lossy(&output.stdout);
-        let combined = if raw_stderr.is_empty() { raw_stdout } else { raw_stderr };
+        let combined = if raw_stderr.is_empty() {
+            raw_stdout
+        } else {
+            raw_stderr
+        };
 
         // Strip the "syntax OK" confirmation line that sometimes appears even
         // on partial failures, and drop blank lines.
@@ -636,10 +658,14 @@ impl DebugAdapter {
                         }
 
                         if context_updated {
-                            let break_on_die =
-                                exception_break_on_die.lock().map(|guard| *guard).unwrap_or(false);
-                            let break_on_warn =
-                                exception_break_on_warn.lock().map(|guard| *guard).unwrap_or(false);
+                            let break_on_die = exception_break_on_die
+                                .lock()
+                                .map(|guard| *guard)
+                                .unwrap_or(false);
+                            let break_on_warn = exception_break_on_warn
+                                .lock()
+                                .map(|guard| *guard)
+                                .unwrap_or(false);
                             let is_exception_line =
                                 exception_re().is_some_and(|re| re.is_match(&analysis_text));
                             let is_warning_line =
@@ -928,7 +954,10 @@ impl DebugAdapter {
     ) -> DapMessage {
         // Parse attach arguments
         if let Some(args) = arguments {
-            let process_id = args.get("processId").and_then(|p| p.as_u64()).map(|p| p as u32);
+            let process_id = args
+                .get("processId")
+                .and_then(|p| p.as_u64())
+                .map(|p| p as u32);
 
             // PID attachment mode: best-effort process control without requiring TCP shim transport.
             if let Some(pid) = process_id {
@@ -950,8 +979,10 @@ impl DebugAdapter {
                     *guard = Some(pid);
                 }
 
-                let stop_on_entry =
-                    args.get("stopOnEntry").and_then(|s| s.as_bool()).unwrap_or(false);
+                let stop_on_entry = args
+                    .get("stopOnEntry")
+                    .and_then(|s| s.as_bool())
+                    .unwrap_or(false);
                 let thread_id = Self::i64_to_i32_saturating(i64::from(pid));
 
                 // Always emit the "attach" stopped event to signal the client that the
@@ -1003,7 +1034,10 @@ impl DebugAdapter {
                 }
             } else {
                 // Extract host and port for TCP attachment.
-                let host = args.get("host").and_then(|h| h.as_str()).unwrap_or("localhost");
+                let host = args
+                    .get("host")
+                    .and_then(|h| h.as_str())
+                    .unwrap_or("localhost");
                 let raw_port = args.get("port").and_then(|p| p.as_u64()).unwrap_or(13603);
                 if raw_port > 65535 {
                     return DapMessage::Response {
@@ -1016,9 +1050,14 @@ impl DebugAdapter {
                     };
                 }
                 let port = raw_port as u16;
-                let timeout = args.get("timeout").and_then(|t| t.as_u64()).map(|t| t as u32);
-                let stop_on_entry =
-                    args.get("stopOnEntry").and_then(|s| s.as_bool()).unwrap_or(false);
+                let timeout = args
+                    .get("timeout")
+                    .and_then(|t| t.as_u64())
+                    .map(|t| t as u32);
+                let stop_on_entry = args
+                    .get("stopOnEntry")
+                    .and_then(|s| s.as_bool())
+                    .unwrap_or(false);
 
                 // Validate arguments.
                 if host.trim().is_empty() {
@@ -1347,7 +1386,10 @@ impl DebugAdapter {
         if let Err(e) = process.kill() {
             tracing::warn!(error = %e, "Failed to terminate process");
         }
-        Self::wait_for_child_exit(process, Duration::from_millis(DEBUG_SESSION_TERMINATE_WAIT_MS))
+        Self::wait_for_child_exit(
+            process,
+            Duration::from_millis(DEBUG_SESSION_TERMINATE_WAIT_MS),
+        )
     }
 
     /// Handle disconnect request
@@ -1404,8 +1446,11 @@ impl DebugAdapter {
 
     /// Apply stored function breakpoints to the active debugger session.
     pub(super) fn apply_stored_function_breakpoints(&self) {
-        let names =
-            self.function_breakpoints.lock().map(|stored| stored.clone()).unwrap_or_default();
+        let names = self
+            .function_breakpoints
+            .lock()
+            .map(|stored| stored.clone())
+            .unwrap_or_default();
         if names.is_empty() {
             return;
         }
@@ -1620,7 +1665,10 @@ impl DebugAdapter {
         }
         #[cfg(not(any(unix, windows)))]
         {
-            tracing::warn!("send_interrupt_signal: unsupported platform for pid {}", pid);
+            tracing::warn!(
+                "send_interrupt_signal: unsupported platform for pid {}",
+                pid
+            );
             false
         }
     }
@@ -1720,7 +1768,10 @@ mod tests {
         // Call detect_perl_info() — must not panic regardless of whether Perl
         // is on PATH.  The returned string must be non-empty.
         let info = detect_perl_info();
-        assert!(!info.is_empty(), "detect_perl_info should always return a non-empty string");
+        assert!(
+            !info.is_empty(),
+            "detect_perl_info should always return a non-empty string"
+        );
     }
 
     /// Verify that `detect_perl_info()` always mentions "perl" (case-insensitive)
@@ -1755,7 +1806,11 @@ mod tests {
         let mut tmp =
             NamedTempFile::new().map_err(|e| format!("could not create temp file: {e}"))?;
         writeln!(tmp, "# placeholder").map_err(|e| format!("could not write to temp file: {e}"))?;
-        let tmp_path = tmp.path().to_str().ok_or("temp path is not valid UTF-8")?.to_string();
+        let tmp_path = tmp
+            .path()
+            .to_str()
+            .ok_or("temp path is not valid UTF-8")?
+            .to_string();
 
         let mut adapter = DebugAdapter::new();
         let response = adapter.handle_launch(
@@ -1767,7 +1822,9 @@ mod tests {
         );
 
         match response {
-            super::DapMessage::Response { success, message, .. } => {
+            super::DapMessage::Response {
+                success, message, ..
+            } => {
                 // The launch may succeed (Perl on PATH ran the empty script) or fail.
                 // When it fails, the message must mention Perl.
                 if !success {
@@ -1780,7 +1837,9 @@ mod tests {
                 // success == true means Perl is on PATH and launched fine — valid outcome.
                 Ok(())
             }
-            other => Err(format!("expected Response from handle_launch; got {other:?}")),
+            other => Err(format!(
+                "expected Response from handle_launch; got {other:?}"
+            )),
         }
     }
 }

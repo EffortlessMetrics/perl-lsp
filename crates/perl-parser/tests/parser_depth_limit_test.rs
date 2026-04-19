@@ -55,7 +55,10 @@ fn parser_depth_limit_nested_parens() {
     let mut parser = Parser::new(&code);
     let result = parser.parse();
 
-    assert!(result.is_err(), "Expected error for deeply nested parentheses");
+    assert!(
+        result.is_err(),
+        "Expected error for deeply nested parentheses"
+    );
     assert!(
         matches!(must_err(result), ParseError::NestingTooDeep { .. }),
         "Expected NestingTooDeep error for deeply nested parentheses"
@@ -111,7 +114,10 @@ fn parser_depth_limit_reasonable_nesting() {
     let mut parser = Parser::new(&code);
     let result = parser.parse();
 
-    assert!(result.is_ok(), "Expected success for reasonable nesting depth");
+    assert!(
+        result.is_ok(),
+        "Expected success for reasonable nesting depth"
+    );
 }
 
 /// Test mixed nesting types (blocks + expressions)
@@ -163,7 +169,10 @@ fn parser_depth_limit_nested_control_flow() {
     let mut parser = Parser::new(&code);
     let result = parser.parse();
 
-    assert!(result.is_err(), "Expected error for deeply nested control flow");
+    assert!(
+        result.is_err(),
+        "Expected error for deeply nested control flow"
+    );
     assert!(
         matches!(must_err(result), ParseError::NestingTooDeep { .. }),
         "Expected NestingTooDeep error for deeply nested control flow"
@@ -190,7 +199,10 @@ fn parser_depth_limit_boundary_below() {
     let mut parser = Parser::new(&code);
     let result = parser.parse();
 
-    assert!(result.is_ok(), "Expected success for nesting just below limit");
+    assert!(
+        result.is_ok(),
+        "Expected success for nesting just below limit"
+    );
 }
 
 /// Test that exact limit boundary fails correctly (just above limit)
@@ -211,7 +223,10 @@ fn parser_depth_limit_boundary_above() {
     let mut parser = Parser::new(&code);
     let result = parser.parse();
 
-    assert!(result.is_err(), "Expected error for nesting just above limit");
+    assert!(
+        result.is_err(),
+        "Expected error for nesting just above limit"
+    );
     assert!(
         matches!(must_err(result), ParseError::NestingTooDeep { .. }),
         "Expected NestingTooDeep error for nesting just above limit"

@@ -75,7 +75,10 @@ struct Thresholds {
 
 impl Default for Thresholds {
     fn default() -> Self {
-        Self { max_unused_dependencies: default_max_5(), max_dead_code_items: default_max_10() }
+        Self {
+            max_unused_dependencies: default_max_5(),
+            max_dead_code_items: default_max_10(),
+        }
     }
 }
 
@@ -144,7 +147,9 @@ fn check_tools() -> Result<()> {
         .context("cargo is not available on PATH")?;
 
     // Check that nightly toolchain exists (needed for cargo-udeps)
-    let rustup_output = cmd("rustup", ["toolchain", "list"]).read().unwrap_or_default();
+    let rustup_output = cmd("rustup", ["toolchain", "list"])
+        .read()
+        .unwrap_or_default();
 
     if !rustup_output.contains("nightly") {
         println!("[WARN] Nightly toolchain not installed (required for cargo-udeps)");
@@ -155,7 +160,10 @@ fn check_tools() -> Result<()> {
 }
 
 fn ensure_udeps_installed() -> Result<()> {
-    let probe = cmd("cargo", ["+nightly", "udeps", "--version"]).stdout_null().stderr_null().run();
+    let probe = cmd("cargo", ["+nightly", "udeps", "--version"])
+        .stdout_null()
+        .stderr_null()
+        .run();
 
     if probe.is_err() {
         println!("[INFO] Installing cargo-udeps...");
@@ -219,12 +227,21 @@ fn run_udeps(root: &Path) -> Result<PathBuf> {
 
     println!("[INFO] Checking for unused dependencies with cargo-udeps...");
 
-    let result = cmd("cargo", ["+nightly", "udeps", "--workspace", "--all-targets", "--locked"])
-        .stdout_capture()
-        .stderr_capture()
-        .unchecked()
-        .run()
-        .context("Failed to run cargo-udeps")?;
+    let result = cmd(
+        "cargo",
+        [
+            "+nightly",
+            "udeps",
+            "--workspace",
+            "--all-targets",
+            "--locked",
+        ],
+    )
+    .stdout_capture()
+    .stderr_capture()
+    .unchecked()
+    .run()
+    .context("Failed to run cargo-udeps")?;
 
     let combined = format!(
         "{}{}",
@@ -284,8 +301,11 @@ fn run_clippy_dead_code(root: &Path) -> Result<PathBuf> {
 
 /// Count how many lines in `text` contain `needle`.
 fn count_occurrences(text: &str, needle: &str) -> u64 {
-    text.as_bytes().lines().map_while(Result::ok).filter(|line| line.contains(needle)).count()
-        as u64
+    text.as_bytes()
+        .lines()
+        .map_while(Result::ok)
+        .filter(|line| line.contains(needle))
+        .count() as u64
 }
 
 /// Count occurrences of `needle` in a file. Returns 0 if the file cannot be read.
@@ -373,7 +393,10 @@ fn check_against_baseline(root: &Path, baseline_path: &Path, strict: bool) -> Re
         }
     }
     if current_dead_code > bl.dead_code_items {
-        println!("[WARN] Dead code increased from {} to {}", bl.dead_code_items, current_dead_code);
+        println!(
+            "[WARN] Dead code increased from {} to {}",
+            bl.dead_code_items, current_dead_code
+        );
         if strict {
             failed = true;
         }
@@ -489,7 +512,9 @@ maintenance:
 
     let baseline_path = root.join(".ci/dead-code-baseline.yaml");
     fs::create_dir_all(
-        baseline_path.parent().ok_or_else(|| eyre!("baseline path has no parent directory"))?,
+        baseline_path
+            .parent()
+            .ok_or_else(|| eyre!("baseline path has no parent directory"))?,
     )
     .context("Failed to create .ci/ directory")?;
     fs::write(&baseline_path, baseline_content)
@@ -562,7 +587,10 @@ mod tests {
 
     #[test]
     fn test_count_occurrences_single_match() {
-        assert_eq!(count_occurrences("line1\nunused dep foo\nline3\n", "unused"), 1);
+        assert_eq!(
+            count_occurrences("line1\nunused dep foo\nline3\n", "unused"),
+            1
+        );
     }
 
     #[test]

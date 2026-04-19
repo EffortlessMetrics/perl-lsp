@@ -286,14 +286,26 @@ fn generate_report(ledger: &Ledger, today: NaiveDate) -> Report {
     let warn = budgets.warning_threshold_percent;
     let crit = budgets.critical_threshold_percent;
 
-    let q_pct =
-        if max_q > 0 { f64::from(quarantined_count) / f64::from(max_q) * 100.0 } else { 0.0 };
-    let i_pct =
-        if max_i > 0 { f64::from(known_issues_count) / f64::from(max_i) * 100.0 } else { 0.0 };
-    let d_pct = if max_d > 0 { f64::from(tech_debt_count) / f64::from(max_d) * 100.0 } else { 0.0 };
+    let q_pct = if max_q > 0 {
+        f64::from(quarantined_count) / f64::from(max_q) * 100.0
+    } else {
+        0.0
+    };
+    let i_pct = if max_i > 0 {
+        f64::from(known_issues_count) / f64::from(max_i) * 100.0
+    } else {
+        0.0
+    };
+    let d_pct = if max_d > 0 {
+        f64::from(tech_debt_count) / f64::from(max_d) * 100.0
+    } else {
+        0.0
+    };
 
-    let expired_quarantines: Vec<&FlakyTest> =
-        flaky_tests.iter().filter(|t| is_expired(t, today)).collect();
+    let expired_quarantines: Vec<&FlakyTest> = flaky_tests
+        .iter()
+        .filter(|t| is_expired(t, today))
+        .collect();
     let expiring_soon: Vec<&FlakyTest> = flaky_tests
         .iter()
         .filter(|t| {
@@ -330,7 +342,12 @@ fn generate_report(ledger: &Ledger, today: NaiveDate) -> Report {
     let priorities = ["critical", "high", "medium", "low"];
     let mut by_priority = BTreeMap::new();
     for p in &priorities {
-        let c = count_by_field(technical_debt.iter().filter_map(|td| td.priority.as_deref()), p);
+        let c = count_by_field(
+            technical_debt
+                .iter()
+                .filter_map(|td| td.priority.as_deref()),
+            p,
+        );
         by_priority.insert((*p).to_string(), c);
     }
 
@@ -415,7 +432,11 @@ fn status_color(status: &str) -> String {
         "critical" => ("\x1b[31m", "CRITICAL"),
         _ => ("", status),
     };
-    let upper = if label == status { status.to_uppercase() } else { label.to_string() };
+    let upper = if label == status {
+        status.to_uppercase()
+    } else {
+        label.to_string()
+    };
     format!("{code}{upper}\x1b[0m")
 }
 
@@ -428,7 +449,10 @@ fn format_console_report(report: &Report) -> String {
     lines.push("           Technical Debt Report".to_string());
     lines.push(sep.clone());
     lines.push(format!("Generated: {}", report.timestamp));
-    lines.push(format!("Overall Status: {}", status_color(&summary.overall_status)));
+    lines.push(format!(
+        "Overall Status: {}",
+        status_color(&summary.overall_status)
+    ));
     lines.push(String::new());
 
     // Quarantined tests
@@ -447,7 +471,10 @@ fn format_console_report(report: &Report) -> String {
         ));
     }
     if q.expiring_soon > 0 {
-        lines.push(format!("  \x1b[33mExpiring soon: {} within 7 days\x1b[0m", q.expiring_soon));
+        lines.push(format!(
+            "  \x1b[33mExpiring soon: {} within 7 days\x1b[0m",
+            q.expiring_soon
+        ));
     }
 
     // Known issues
@@ -459,8 +486,12 @@ fn format_console_report(report: &Report) -> String {
         k.percent,
         status_color(&k.status)
     ));
-    let status_parts: Vec<String> =
-        k.by_status.iter().filter(|(_, c)| **c > 0).map(|(s, c)| format!("{s}: {c}")).collect();
+    let status_parts: Vec<String> = k
+        .by_status
+        .iter()
+        .filter(|(_, c)| **c > 0)
+        .map(|(s, c)| format!("{s}: {c}"))
+        .collect();
     if !status_parts.is_empty() {
         lines.push(format!("  {}", status_parts.join(", ")));
     }
@@ -474,8 +505,12 @@ fn format_console_report(report: &Report) -> String {
         t.percent,
         status_color(&t.status)
     ));
-    let priority_parts: Vec<String> =
-        t.by_priority.iter().filter(|(_, c)| **c > 0).map(|(p, c)| format!("{p}: {c}")).collect();
+    let priority_parts: Vec<String> = t
+        .by_priority
+        .iter()
+        .filter(|(_, c)| **c > 0)
+        .map(|(p, c)| format!("{p}: {c}"))
+        .collect();
     if !priority_parts.is_empty() {
         lines.push(format!("  {}", priority_parts.join(", ")));
     }
@@ -488,8 +523,15 @@ fn format_console_report(report: &Report) -> String {
         lines.push("\x1b[31mExpired Quarantines (action required):\x1b[0m".to_string());
         for item in &details.expired_quarantines {
             let name = item.name.as_deref().unwrap_or("<unnamed>");
-            let issue = item.issue.as_ref().map(|i| format!(" ({i})")).unwrap_or_default();
-            lines.push(format!("  - {name}{issue}: {} days overdue", item.days_overdue));
+            let issue = item
+                .issue
+                .as_ref()
+                .map(|i| format!(" ({i})"))
+                .unwrap_or_default();
+            lines.push(format!(
+                "  - {name}{issue}: {} days overdue",
+                item.days_overdue
+            ));
         }
     }
 
@@ -498,8 +540,15 @@ fn format_console_report(report: &Report) -> String {
         lines.push("\x1b[33mExpiring Soon:\x1b[0m".to_string());
         for item in &details.expiring_soon {
             let name = item.name.as_deref().unwrap_or("<unnamed>");
-            let issue = item.issue.as_ref().map(|i| format!(" ({i})")).unwrap_or_default();
-            lines.push(format!("  - {name}{issue}: {} days remaining", item.days_remaining));
+            let issue = item
+                .issue
+                .as_ref()
+                .map(|i| format!(" ({i})"))
+                .unwrap_or_default();
+            lines.push(format!(
+                "  - {name}{issue}: {} days remaining",
+                item.days_remaining
+            ));
         }
     }
 
@@ -509,7 +558,11 @@ fn format_console_report(report: &Report) -> String {
         for item in &details.critical_debt {
             let area = item.area.as_deref().unwrap_or("unknown");
             let desc = item.description.as_deref().unwrap_or("");
-            let issue = item.issue.as_ref().map(|i| format!(" ({i})")).unwrap_or_default();
+            let issue = item
+                .issue
+                .as_ref()
+                .map(|i| format!(" ({i})"))
+                .unwrap_or_default();
             lines.push(format!("  - [{area}] {desc}{issue}"));
         }
     }
@@ -532,13 +585,25 @@ fn format_summary_markdown(report: &Report) -> String {
 
     lines.push("| Category | Count | Budget | Status |".to_string());
     lines.push("|----------|-------|--------|--------|".to_string());
-    lines.push(format!("| Quarantined Tests | {} | {} | {} |", q.count, q.budget, q.status));
-    lines.push(format!("| Known Issues | {} | {} | {} |", k.count, k.budget, k.status));
-    lines.push(format!("| Technical Debt | {} | {} | {} |", t.count, t.budget, t.status));
+    lines.push(format!(
+        "| Quarantined Tests | {} | {} | {} |",
+        q.count, q.budget, q.status
+    ));
+    lines.push(format!(
+        "| Known Issues | {} | {} | {} |",
+        k.count, k.budget, k.status
+    ));
+    lines.push(format!(
+        "| Technical Debt | {} | {} | {} |",
+        t.count, t.budget, t.status
+    ));
 
     if q.expired > 0 {
         lines.push(String::new());
-        lines.push(format!("**Warning:** {0} expired quarantine(s) need attention!", q.expired));
+        lines.push(format!(
+            "**Warning:** {0} expired quarantine(s) need attention!",
+            q.expired
+        ));
     }
 
     lines.join("\n")
@@ -550,7 +615,9 @@ fn format_summary_markdown(report: &Report) -> String {
 
 pub fn run(config: DebtReportConfig) -> Result<()> {
     let root = project_root()?;
-    let ledger_path = config.ledger.unwrap_or_else(|| root.join(".ci/debt-ledger.yaml"));
+    let ledger_path = config
+        .ledger
+        .unwrap_or_else(|| root.join(".ci/debt-ledger.yaml"));
 
     let ledger = load_ledger(&ledger_path)?;
     let today = Utc::now().date_naive();
@@ -597,7 +664,10 @@ pub fn run(config: DebtReportConfig) -> Result<()> {
         let mut failures: Vec<String> = Vec::new();
 
         if summary.quarantined_tests.expired > 0 {
-            failures.push(format!("{} expired quarantine(s)", summary.quarantined_tests.expired));
+            failures.push(format!(
+                "{} expired quarantine(s)",
+                summary.quarantined_tests.expired
+            ));
         }
         if summary.quarantined_tests.status == "critical" {
             failures.push("quarantined tests at critical level".to_string());
@@ -655,8 +725,12 @@ mod tests {
                 },
             ]),
             known_issues: Some(vec![
-                KnownIssue { status: Some("accepted".to_string()) },
-                KnownIssue { status: Some("deferred".to_string()) },
+                KnownIssue {
+                    status: Some("accepted".to_string()),
+                },
+                KnownIssue {
+                    status: Some("deferred".to_string()),
+                },
             ]),
             technical_debt: Some(vec![
                 TechDebt {
@@ -795,9 +869,18 @@ mod tests {
         let ledger = sample_ledger();
         let today = parse_date("2026-06-01").unwrap_or(NaiveDate::MIN);
         let report = generate_report(&ledger, today);
-        assert_eq!(report.summary.technical_debt.by_priority.get("critical"), Some(&1));
-        assert_eq!(report.summary.technical_debt.by_priority.get("low"), Some(&1));
-        assert_eq!(report.summary.technical_debt.by_priority.get("medium"), Some(&0));
+        assert_eq!(
+            report.summary.technical_debt.by_priority.get("critical"),
+            Some(&1)
+        );
+        assert_eq!(
+            report.summary.technical_debt.by_priority.get("low"),
+            Some(&1)
+        );
+        assert_eq!(
+            report.summary.technical_debt.by_priority.get("medium"),
+            Some(&0)
+        );
     }
 
     #[test]
@@ -805,9 +888,18 @@ mod tests {
         let ledger = sample_ledger();
         let today = parse_date("2026-06-01").unwrap_or(NaiveDate::MIN);
         let report = generate_report(&ledger, today);
-        assert_eq!(report.summary.known_issues.by_status.get("accepted"), Some(&1));
-        assert_eq!(report.summary.known_issues.by_status.get("deferred"), Some(&1));
-        assert_eq!(report.summary.known_issues.by_status.get("monitoring"), Some(&0));
+        assert_eq!(
+            report.summary.known_issues.by_status.get("accepted"),
+            Some(&1)
+        );
+        assert_eq!(
+            report.summary.known_issues.by_status.get("deferred"),
+            Some(&1)
+        );
+        assert_eq!(
+            report.summary.known_issues.by_status.get("monitoring"),
+            Some(&0)
+        );
     }
 
     #[test]

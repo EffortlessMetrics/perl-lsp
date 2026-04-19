@@ -263,7 +263,9 @@ impl DebugAdapter {
         let source_path = match args.source.path {
             Some(ref p) => p.clone(),
             None => {
-                let body = BreakpointLocationsResponseBody { breakpoints: Vec::new() };
+                let body = BreakpointLocationsResponseBody {
+                    breakpoints: Vec::new(),
+                };
                 return DapMessage::Response {
                     seq,
                     request_seq,
@@ -293,7 +295,9 @@ impl DebugAdapter {
         let content = match std::fs::read_to_string(&validated_path) {
             Ok(c) => c,
             Err(_) => {
-                let body = BreakpointLocationsResponseBody { breakpoints: Vec::new() };
+                let body = BreakpointLocationsResponseBody {
+                    breakpoints: Vec::new(),
+                };
                 return DapMessage::Response {
                     seq,
                     request_seq,
@@ -450,7 +454,9 @@ impl DebugAdapter {
             })
             .collect();
 
-        let body = SetDataBreakpointsResponseBody { breakpoints: response_breakpoints };
+        let body = SetDataBreakpointsResponseBody {
+            breakpoints: response_breakpoints,
+        };
 
         DapMessage::Response {
             seq,

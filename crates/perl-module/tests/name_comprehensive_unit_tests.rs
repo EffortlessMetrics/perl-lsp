@@ -90,7 +90,10 @@ fn normalize_returns_owned_when_transformed() -> Result<(), Box<dyn std::error::
 
 #[test]
 fn normalize_unicode_module_name() -> Result<(), Box<dyn std::error::Error>> {
-    assert_eq!(normalize_package_separator("Ünîcödé'Módule"), "Ünîcödé::Módule");
+    assert_eq!(
+        normalize_package_separator("Ünîcödé'Módule"),
+        "Ünîcödé::Módule"
+    );
     Ok(())
 }
 
@@ -183,7 +186,10 @@ fn legacy_returns_owned_when_transformed() -> Result<(), Box<dyn std::error::Err
 
 #[test]
 fn legacy_unicode_module_name() -> Result<(), Box<dyn std::error::Error>> {
-    assert_eq!(legacy_package_separator("Ünîcödé::Módule"), "Ünîcödé'Módule");
+    assert_eq!(
+        legacy_package_separator("Ünîcödé::Módule"),
+        "Ünîcödé'Módule"
+    );
     Ok(())
 }
 
@@ -283,7 +289,10 @@ fn variant_pairs_empty_names() -> Result<(), Box<dyn std::error::Error>> {
 fn variant_pairs_deeply_nested() -> Result<(), Box<dyn std::error::Error>> {
     let pairs = module_variant_pairs("A::B::C::D", "W::X::Y::Z");
     assert_eq!(pairs.len(), 2);
-    assert_eq!(pairs[0], ("A::B::C::D".to_string(), "W::X::Y::Z".to_string()));
+    assert_eq!(
+        pairs[0],
+        ("A::B::C::D".to_string(), "W::X::Y::Z".to_string())
+    );
     assert_eq!(pairs[1], ("A'B'C'D".to_string(), "W'X'Y'Z".to_string()));
     Ok(())
 }
@@ -351,7 +360,10 @@ fn legacy_with_spaces_in_name() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn normalize_numeric_components() -> Result<(), Box<dyn std::error::Error>> {
-    assert_eq!(normalize_package_separator("Perl5'Module'V2"), "Perl5::Module::V2");
+    assert_eq!(
+        normalize_package_separator("Perl5'Module'V2"),
+        "Perl5::Module::V2"
+    );
     Ok(())
 }
 
@@ -361,13 +373,19 @@ fn normalize_numeric_components() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn normalize_cpan_style_module() -> Result<(), Box<dyn std::error::Error>> {
-    assert_eq!(normalize_package_separator("File'Spec'Functions"), "File::Spec::Functions");
+    assert_eq!(
+        normalize_package_separator("File'Spec'Functions"),
+        "File::Spec::Functions"
+    );
     Ok(())
 }
 
 #[test]
 fn legacy_cpan_style_module() -> Result<(), Box<dyn std::error::Error>> {
-    assert_eq!(legacy_package_separator("File::Spec::Functions"), "File'Spec'Functions");
+    assert_eq!(
+        legacy_package_separator("File::Spec::Functions"),
+        "File'Spec'Functions"
+    );
     Ok(())
 }
 
@@ -375,8 +393,14 @@ fn legacy_cpan_style_module() -> Result<(), Box<dyn std::error::Error>> {
 fn variant_pairs_cpan_rename() -> Result<(), Box<dyn std::error::Error>> {
     let pairs = module_variant_pairs("CGI::Cookie", "HTTP::Cookie");
     assert_eq!(pairs.len(), 2);
-    assert_eq!(pairs[0], ("CGI::Cookie".to_string(), "HTTP::Cookie".to_string()));
-    assert_eq!(pairs[1], ("CGI'Cookie".to_string(), "HTTP'Cookie".to_string()));
+    assert_eq!(
+        pairs[0],
+        ("CGI::Cookie".to_string(), "HTTP::Cookie".to_string())
+    );
+    assert_eq!(
+        pairs[1],
+        ("CGI'Cookie".to_string(), "HTTP'Cookie".to_string())
+    );
     Ok(())
 }
 
@@ -384,7 +408,10 @@ fn variant_pairs_cpan_rename() -> Result<(), Box<dyn std::error::Error>> {
 fn variant_pairs_moose_like_module() -> Result<(), Box<dyn std::error::Error>> {
     let pairs = module_variant_pairs("Moose::Role", "Moo::Role");
     assert_eq!(pairs.len(), 2);
-    assert_eq!(pairs[0], ("Moose::Role".to_string(), "Moo::Role".to_string()));
+    assert_eq!(
+        pairs[0],
+        ("Moose::Role".to_string(), "Moo::Role".to_string())
+    );
     Ok(())
 }
 
@@ -518,8 +545,14 @@ fn legacy_test_more() -> Result<(), Box<dyn std::error::Error>> {
 fn variant_pairs_lwp_useragent() -> Result<(), Box<dyn std::error::Error>> {
     let pairs = module_variant_pairs("LWP::UserAgent", "HTTP::Tiny");
     assert_eq!(pairs.len(), 2);
-    assert_eq!(pairs[0], ("LWP::UserAgent".to_string(), "HTTP::Tiny".to_string()));
-    assert_eq!(pairs[1], ("LWP'UserAgent".to_string(), "HTTP'Tiny".to_string()));
+    assert_eq!(
+        pairs[0],
+        ("LWP::UserAgent".to_string(), "HTTP::Tiny".to_string())
+    );
+    assert_eq!(
+        pairs[1],
+        ("LWP'UserAgent".to_string(), "HTTP'Tiny".to_string())
+    );
     Ok(())
 }
 
@@ -527,7 +560,13 @@ fn variant_pairs_lwp_useragent() -> Result<(), Box<dyn std::error::Error>> {
 fn variant_pairs_datetime_format() -> Result<(), Box<dyn std::error::Error>> {
     let pairs = module_variant_pairs("DateTime::Format::Strptime", "Time::Piece");
     assert_eq!(pairs.len(), 2);
-    assert_eq!(pairs[0], ("DateTime::Format::Strptime".to_string(), "Time::Piece".to_string()));
+    assert_eq!(
+        pairs[0],
+        (
+            "DateTime::Format::Strptime".to_string(),
+            "Time::Piece".to_string()
+        )
+    );
     Ok(())
 }
 
@@ -614,25 +653,37 @@ fn variant_pairs_old_bare_new_bare() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn normalize_preserves_underscores() -> Result<(), Box<dyn std::error::Error>> {
-    assert_eq!(normalize_package_separator("My_Module'Sub_Pkg"), "My_Module::Sub_Pkg");
+    assert_eq!(
+        normalize_package_separator("My_Module'Sub_Pkg"),
+        "My_Module::Sub_Pkg"
+    );
     Ok(())
 }
 
 #[test]
 fn normalize_preserves_hyphens() -> Result<(), Box<dyn std::error::Error>> {
-    assert_eq!(normalize_package_separator("My-Module'Sub"), "My-Module::Sub");
+    assert_eq!(
+        normalize_package_separator("My-Module'Sub"),
+        "My-Module::Sub"
+    );
     Ok(())
 }
 
 #[test]
 fn normalize_preserves_digits() -> Result<(), Box<dyn std::error::Error>> {
-    assert_eq!(normalize_package_separator("Module123'V456"), "Module123::V456");
+    assert_eq!(
+        normalize_package_separator("Module123'V456"),
+        "Module123::V456"
+    );
     Ok(())
 }
 
 #[test]
 fn legacy_preserves_underscores() -> Result<(), Box<dyn std::error::Error>> {
-    assert_eq!(legacy_package_separator("My_Module::Sub_Pkg"), "My_Module'Sub_Pkg");
+    assert_eq!(
+        legacy_package_separator("My_Module::Sub_Pkg"),
+        "My_Module'Sub_Pkg"
+    );
     Ok(())
 }
 
@@ -688,21 +739,38 @@ fn cow_result_can_be_used_as_str_ref() -> Result<(), Box<dyn std::error::Error>>
 
 #[test]
 fn variant_pairs_always_has_at_least_one() -> Result<(), Box<dyn std::error::Error>> {
-    let test_cases = [("", ""), ("strict", "warnings"), ("A::B", "C::D"), ("A'B", "C'D")];
+    let test_cases = [
+        ("", ""),
+        ("strict", "warnings"),
+        ("A::B", "C::D"),
+        ("A'B", "C'D"),
+    ];
     for (old, new) in &test_cases {
         let pairs = module_variant_pairs(old, new);
-        assert!(!pairs.is_empty(), "variant_pairs({old:?}, {new:?}) returned empty vec");
+        assert!(
+            !pairs.is_empty(),
+            "variant_pairs({old:?}, {new:?}) returned empty vec"
+        );
     }
     Ok(())
 }
 
 #[test]
 fn variant_pairs_never_more_than_two() -> Result<(), Box<dyn std::error::Error>> {
-    let test_cases =
-        [("", ""), ("strict", "warnings"), ("A::B", "C::D"), ("A'B", "C'D"), ("A'B::C", "D'E::F")];
+    let test_cases = [
+        ("", ""),
+        ("strict", "warnings"),
+        ("A::B", "C::D"),
+        ("A'B", "C'D"),
+        ("A'B::C", "D'E::F"),
+    ];
     for (old, new) in &test_cases {
         let pairs = module_variant_pairs(old, new);
-        assert!(pairs.len() <= 2, "variant_pairs({old:?}, {new:?}) returned {} pairs", pairs.len());
+        assert!(
+            pairs.len() <= 2,
+            "variant_pairs({old:?}, {new:?}) returned {} pairs",
+            pairs.len()
+        );
     }
     Ok(())
 }
@@ -894,7 +962,13 @@ fn normalize_emoji_module_name() -> Result<(), Box<dyn std::error::Error>> {
 fn variant_pairs_unicode() -> Result<(), Box<dyn std::error::Error>> {
     let pairs = module_variant_pairs("Ünïcödë::Mödülé", "Néw::Nàmé");
     assert_eq!(pairs.len(), 2);
-    assert_eq!(pairs[0], ("Ünïcödë::Mödülé".to_string(), "Néw::Nàmé".to_string()));
-    assert_eq!(pairs[1], ("Ünïcödë'Mödülé".to_string(), "Néw'Nàmé".to_string()));
+    assert_eq!(
+        pairs[0],
+        ("Ünïcödë::Mödülé".to_string(), "Néw::Nàmé".to_string())
+    );
+    assert_eq!(
+        pairs[1],
+        ("Ünïcödë'Mödülé".to_string(), "Néw'Nàmé".to_string())
+    );
     Ok(())
 }

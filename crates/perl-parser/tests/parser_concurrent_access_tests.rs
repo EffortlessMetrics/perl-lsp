@@ -96,7 +96,11 @@ my $result = test_func($x);
     );
 
     // Should have very high success rate
-    assert!(success_rate > 0.95, "Success rate {:.1}% should be > 95%", success_rate * 100.0);
+    assert!(
+        success_rate > 0.95,
+        "Success rate {:.1}% should be > 95%",
+        success_rate * 100.0
+    );
 }
 
 /// Test multiple concurrent parsing requests with different inputs
@@ -108,8 +112,9 @@ fn test_concurrent_parsing_requests() {
     let requests_per_thread = 20;
 
     // Generate different test codes for each request
-    let test_codes: Vec<String> =
-        (0..(thread_count * requests_per_thread)).map(generate_test_code).collect();
+    let test_codes: Vec<String> = (0..(thread_count * requests_per_thread))
+        .map(generate_test_code)
+        .collect();
 
     let test_codes = Arc::new(test_codes);
     let results = Arc::new(Mutex::new(Vec::new()));
@@ -153,7 +158,11 @@ fn test_concurrent_parsing_requests() {
     let results = must(results.lock());
 
     // Verify all requests completed
-    assert_eq!(results.len(), thread_count * requests_per_thread, "All requests should complete");
+    assert_eq!(
+        results.len(),
+        thread_count * requests_per_thread,
+        "All requests should complete"
+    );
 
     // Analyze performance
     let mut total_time = Duration::new(0, 0);
@@ -191,7 +200,11 @@ fn test_concurrent_parsing_requests() {
     );
 
     // Should have good success rate
-    assert!(success_rate > 0.9, "Success rate {:.1}% should be > 90%", success_rate * 100.0);
+    assert!(
+        success_rate > 0.9,
+        "Success rate {:.1}% should be > 90%",
+        success_rate * 100.0
+    );
 }
 
 /// Test incremental parsing under concurrent modifications
@@ -297,7 +310,11 @@ print "Result: $result\n";
     );
 
     // Should have excellent success rate
-    assert!(success_rate > 0.95, "Success rate {:.1}% should be > 95%", success_rate * 100.0);
+    assert!(
+        success_rate > 0.95,
+        "Success rate {:.1}% should be > 95%",
+        success_rate * 100.0
+    );
 }
 
 /// Test workspace indexing under concurrent access
@@ -309,8 +326,9 @@ fn test_concurrent_workspace_indexing() {
     let files_per_thread = 15;
 
     // Generate workspace files
-    let workspace_files: Vec<String> =
-        (0..(thread_count * files_per_thread)).map(generate_workspace_file).collect();
+    let workspace_files: Vec<String> = (0..(thread_count * files_per_thread))
+        .map(generate_workspace_file)
+        .collect();
 
     let workspace_files = Arc::new(workspace_files);
     let workspace_index = Arc::new(RwLock::new(HashMap::new()));
@@ -410,10 +428,17 @@ fn test_concurrent_workspace_indexing() {
     );
 
     // Should have good success rate
-    assert!(success_rate > 0.9, "Success rate {:.1}% should be > 90%", success_rate * 100.0);
+    assert!(
+        success_rate > 0.9,
+        "Success rate {:.1}% should be > 90%",
+        success_rate * 100.0
+    );
 
     // Should have extracted symbols
-    assert!(!workspace_index.is_empty(), "Should have extracted symbols from workspace");
+    assert!(
+        !workspace_index.is_empty(),
+        "Should have extracted symbols from workspace"
+    );
 }
 
 /// Test parser with high contention scenarios
@@ -604,7 +629,9 @@ fn test_mixed_concurrent_operations() {
     let mut operation_stats: HashMap<&str, (usize, Duration, usize)> = HashMap::new();
 
     for (thread_id, operation, operation_name, success, parse_time) in results.iter() {
-        let entry = operation_stats.entry(*operation_name).or_insert((0, Duration::new(0, 0), 0));
+        let entry = operation_stats
+            .entry(*operation_name)
+            .or_insert((0, Duration::new(0, 0), 0));
         entry.0 += 1;
         entry.1 += *parse_time;
         if *success {
@@ -697,7 +724,10 @@ fn test_concurrent_memory_safety() {
         "All memory safety iterations should complete"
     );
 
-    println!("  ✓ Memory safety: {} iterations completed without issues", results.len());
+    println!(
+        "  ✓ Memory safety: {} iterations completed without issues",
+        results.len()
+    );
 }
 
 /// Test parser with concurrent stress and recovery
@@ -777,7 +807,13 @@ print "Result: $y\n";
                     let parse_time = start_time.elapsed();
 
                     let mut guard = must(recovery_results_clone.lock());
-                    guard.push((thread_id, iteration, result.is_ok(), parse_time, counter_value));
+                    guard.push((
+                        thread_id,
+                        iteration,
+                        result.is_ok(),
+                        parse_time,
+                        counter_value,
+                    ));
                 }
             })
         })
@@ -799,12 +835,17 @@ print "Result: $y\n";
     let recovery_results = must(recovery_results.lock());
 
     // Analyze stress results
-    let stress_success_count = stress_results.iter().filter(|(_, _, success, _)| *success).count();
+    let stress_success_count = stress_results
+        .iter()
+        .filter(|(_, _, success, _)| *success)
+        .count();
     let stress_success_rate = stress_success_count as f64 / stress_results.len() as f64;
 
     // Analyze recovery results
-    let recovery_success_count =
-        recovery_results.iter().filter(|(_, _, success, _, _)| *success).count();
+    let recovery_success_count = recovery_results
+        .iter()
+        .filter(|(_, _, success, _, _)| *success)
+        .count();
     let recovery_success_rate = recovery_success_count as f64 / recovery_results.len() as f64;
 
     println!("  ✓ Stress and recovery:");
@@ -1038,7 +1079,10 @@ fn modify_code(base_code: &str, thread_id: usize, modification: usize) -> String
     let mut modified = base_code.to_string();
 
     // Add thread and modification specific changes
-    modified.push_str(&format!("\n# Thread {} modification {}\n", thread_id, modification));
+    modified.push_str(&format!(
+        "\n# Thread {} modification {}\n",
+        thread_id, modification
+    ));
     modified.push_str(&format!(
         "my $thread_{}_mod_{} = {};\n",
         thread_id,
@@ -1097,7 +1141,10 @@ fn extract_symbols(ast: &perl_parser::ast::Node) -> Vec<String> {
         NodeKind::Package { name, .. } | NodeKind::Class { name, .. } => {
             symbols.push(name.clone());
         }
-        NodeKind::Subroutine { name: Some(name), .. } | NodeKind::Method { name, .. } => {
+        NodeKind::Subroutine {
+            name: Some(name), ..
+        }
+        | NodeKind::Method { name, .. } => {
             symbols.push(name.clone());
         }
         NodeKind::VariableDeclaration { variable, .. } => {

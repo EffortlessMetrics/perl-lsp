@@ -84,7 +84,10 @@ fn test_recovery_multiple_errors() {
             "Expected VariableDeclaration or Error, got: {:?}",
             statements[0].kind
         );
-        assert!(matches!(statements[1].kind, NodeKind::ExpressionStatement { .. }));
+        assert!(matches!(
+            statements[1].kind,
+            NodeKind::ExpressionStatement { .. }
+        ));
         assert!(
             matches!(
                 statements[2].kind,
@@ -93,12 +96,19 @@ fn test_recovery_multiple_errors() {
             "Expected VariableDeclaration or Error, got: {:?}",
             statements[2].kind
         );
-        assert!(matches!(statements[3].kind, NodeKind::ExpressionStatement { .. }));
+        assert!(matches!(
+            statements[3].kind,
+            NodeKind::ExpressionStatement { .. }
+        ));
     }
 
     // Phase 2: 2 Recovered errors (one per missing operand), down from 4 raw errors
     assert!(!parser.errors().is_empty(), "Should have errors");
-    assert!(parser.errors().len() >= 2, "Expected at least 2 errors, got: {:?}", parser.errors());
+    assert!(
+        parser.errors().len() >= 2,
+        "Expected at least 2 errors, got: {:?}",
+        parser.errors()
+    );
 }
 
 #[test]
@@ -160,7 +170,10 @@ fn test_451_ac1_maintains_error_collection() {
     let _result = parser.parse();
 
     let errors = parser.errors();
-    assert!(!errors.is_empty(), "AC1: Parser should maintain errors collection");
+    assert!(
+        !errors.is_empty(),
+        "AC1: Parser should maintain errors collection"
+    );
 }
 
 // Issue #451: AC2 - parse_with_recovery method returns both AST and errors
@@ -171,8 +184,14 @@ fn test_451_ac2_parse_with_recovery_method() {
 
     let output = parser.parse_with_recovery();
 
-    assert!(matches!(output.ast.kind, NodeKind::Program { .. }), "AC2: Should return AST");
-    assert!(!output.diagnostics.is_empty(), "AC2: Should return collected errors");
+    assert!(
+        matches!(output.ast.kind, NodeKind::Program { .. }),
+        "AC2: Should return AST"
+    );
+    assert!(
+        !output.diagnostics.is_empty(),
+        "AC2: Should return collected errors"
+    );
 }
 
 // Issue #451: AC3 - ParseOutput includes ast and diagnostics fields
@@ -182,8 +201,14 @@ fn test_451_ac3_parse_output_structure() {
     let mut parser = Parser::new(code);
     let output = parser.parse_with_recovery();
 
-    assert!(matches!(output.ast.kind, NodeKind::Program { .. }), "AC3: ast field present");
-    assert!(!output.diagnostics.is_empty(), "AC3: diagnostics field present");
+    assert!(
+        matches!(output.ast.kind, NodeKind::Program { .. }),
+        "AC3: ast field present"
+    );
+    assert!(
+        !output.diagnostics.is_empty(),
+        "AC3: diagnostics field present"
+    );
 }
 
 // Issue #451: AC4 - Parser continues after storing error (non-fail-fast)
@@ -197,7 +222,11 @@ fn test_451_ac4_continues_after_error() {
     let ast = must(result);
 
     if let NodeKind::Program { statements } = &ast.kind {
-        assert_eq!(statements.len(), 4, "AC4: Should continue parsing after each error");
+        assert_eq!(
+            statements.len(),
+            4,
+            "AC4: Should continue parsing after each error"
+        );
     }
 }
 
@@ -213,7 +242,11 @@ fn test_451_ac5_error_limit_enforcement() {
     let _result = parser.parse();
 
     let errors = parser.errors();
-    assert!(errors.len() < 500, "AC5: Should limit error collection (found {})", errors.len());
+    assert!(
+        errors.len() < 500,
+        "AC5: Should limit error collection (found {})",
+        errors.len()
+    );
 }
 
 // Issue #451: AC6 - Recovery doesn't recurse infinitely
@@ -225,7 +258,10 @@ fn test_451_ac6_recovery_prevents_infinite_loops() {
     let result = parser.parse();
 
     // Should complete successfully without hanging or stack overflow
-    assert!(result.is_ok(), "AC6: Recovery should complete on pathological input");
+    assert!(
+        result.is_ok(),
+        "AC6: Recovery should complete on pathological input"
+    );
 
     // Test with many syntax errors that recovery can handle
     let code2 = "{ { { { { { { { { {";
@@ -250,7 +286,10 @@ fn test_451_ac7_statement_level_recovery() {
     let mut parser = Parser::new(code);
     let result = parser.parse();
 
-    assert!(result.is_ok(), "AC7: Statement-level parsing should recover");
+    assert!(
+        result.is_ok(),
+        "AC7: Statement-level parsing should recover"
+    );
     let ast = must(result);
 
     if let NodeKind::Program { statements } = &ast.kind {
@@ -258,10 +297,15 @@ fn test_451_ac7_statement_level_recovery() {
 
         // Phase 2: the bad declaration is recovered as VariableDeclaration, not Error.
         // We still verify recovery happened via the errors collection.
-        let has_valid = statements.iter().any(|s| !matches!(s.kind, NodeKind::Error { .. }));
+        let has_valid = statements
+            .iter()
+            .any(|s| !matches!(s.kind, NodeKind::Error { .. }));
         assert!(has_valid, "AC7: Should have valid statements after error");
     }
-    assert!(!parser.errors().is_empty(), "AC7: Should have recorded errors");
+    assert!(
+        !parser.errors().is_empty(),
+        "AC7: Should have recorded errors"
+    );
 }
 
 // Issue #451: AC8 - Expression-level recovery creates error nodes
@@ -288,10 +332,16 @@ fn test_451_ac8_expression_level_recovery() {
                     | NodeKind::MissingExpression
             )
         });
-        assert!(has_recovered, "AC8: Should produce a recovered or error node");
+        assert!(
+            has_recovered,
+            "AC8: Should produce a recovered or error node"
+        );
     }
 
-    assert!(!parser.errors().is_empty(), "AC8: Should record expression-level error");
+    assert!(
+        !parser.errors().is_empty(),
+        "AC8: Should record expression-level error"
+    );
 }
 
 // Issue #451: AC9 - Block-level parsing collects errors for each statement
@@ -316,8 +366,15 @@ fn test_451_ac9_block_level_recovery() {
     if let NodeKind::Program { statements } = &ast.kind {
         if let Some(sub_node) = statements.first() {
             if let NodeKind::Subroutine { body, .. } = &sub_node.kind {
-                if let NodeKind::Block { statements: block_stmts } = &body.kind {
-                    assert_eq!(block_stmts.len(), 4, "AC9: Block should have all statements");
+                if let NodeKind::Block {
+                    statements: block_stmts,
+                } = &body.kind
+                {
+                    assert_eq!(
+                        block_stmts.len(),
+                        4,
+                        "AC9: Block should have all statements"
+                    );
 
                     // Phase 2: the bad declarations are VariableDeclaration (not Error).
                     // The two print statements are ExpressionStatement.
@@ -335,7 +392,10 @@ fn test_451_ac9_block_level_recovery() {
     }
 
     let errors = parser.errors();
-    assert!(errors.len() >= 2, "AC9: Should collect multiple errors from block");
+    assert!(
+        errors.len() >= 2,
+        "AC9: Should collect multiple errors from block"
+    );
 }
 
 // Issue #451: AC10 - Multiple error collection scenarios
@@ -352,7 +412,10 @@ fn test_451_ac10_comprehensive_scenarios() {
     let mut parser1 = Parser::new(code1);
     let result1 = parser1.parse();
     assert!(result1.is_ok(), "AC10: Should handle interleaved errors");
-    assert!(parser1.errors().len() >= 3, "AC10: Should collect all 3 errors");
+    assert!(
+        parser1.errors().len() >= 3,
+        "AC10: Should collect all 3 errors"
+    );
 
     // Scenario 2: Nested blocks with errors
     let code2 = "
@@ -368,11 +431,17 @@ fn test_451_ac10_comprehensive_scenarios() {
     let mut parser2 = Parser::new(code2);
     let result2 = parser2.parse();
     assert!(result2.is_ok(), "AC10: Should handle nested block errors");
-    assert!(parser2.errors().len() >= 2, "AC10: Should collect errors from nested blocks");
+    assert!(
+        parser2.errors().len() >= 2,
+        "AC10: Should collect errors from nested blocks"
+    );
 
     // Scenario 3: Different error types
     let code3 = "my $x = ; my $y = ";
     let mut parser3 = Parser::new(code3);
     let _result3 = parser3.parse();
-    assert!(!parser3.errors().is_empty(), "AC10: Should handle different error types");
+    assert!(
+        !parser3.errors().is_empty(),
+        "AC10: Should handle different error types"
+    );
 }

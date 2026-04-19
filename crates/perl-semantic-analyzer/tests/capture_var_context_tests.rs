@@ -25,7 +25,9 @@ fn scope_issues(code: &str) -> Vec<ScopeIssue> {
 }
 
 fn has_issue(issues: &[ScopeIssue], kind: IssueKind, var_name: &str) -> bool {
-    issues.iter().any(|i| i.kind == kind && i.variable_name.contains(var_name))
+    issues
+        .iter()
+        .any(|i| i.kind == kind && i.variable_name.contains(var_name))
 }
 
 fn count_of_kind(issues: &[ScopeIssue], kind: IssueKind) -> usize {
@@ -44,7 +46,10 @@ fn capture_var_no_regex_warns() -> Result<(), Box<dyn std::error::Error>> {
     assert!(
         has_issue(&issues, IssueKind::CaptureVarWithoutRegexMatch, "1"),
         "Expected CaptureVarWithoutRegexMatch for $1 with no regex; issues: {:?}",
-        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+        issues
+            .iter()
+            .map(|i| (&i.kind, &i.variable_name))
+            .collect::<Vec<_>>()
     );
     Ok(())
 }
@@ -57,7 +62,10 @@ fn capture_var_two_no_regex_warns() -> Result<(), Box<dyn std::error::Error>> {
     assert!(
         has_issue(&issues, IssueKind::CaptureVarWithoutRegexMatch, "2"),
         "Expected CaptureVarWithoutRegexMatch for $2; issues: {:?}",
-        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+        issues
+            .iter()
+            .map(|i| (&i.kind, &i.variable_name))
+            .collect::<Vec<_>>()
     );
     Ok(())
 }
@@ -78,7 +86,10 @@ my $y = $1;
     assert!(
         !has_issue(&issues, IssueKind::CaptureVarWithoutRegexMatch, "1"),
         "Should NOT warn about $1 when =~ match precedes it; issues: {:?}",
-        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+        issues
+            .iter()
+            .map(|i| (&i.kind, &i.variable_name))
+            .collect::<Vec<_>>()
     );
     Ok(())
 }
@@ -96,7 +107,10 @@ if ($str =~ /(\w+)/) {
     assert!(
         !has_issue(&issues, IssueKind::CaptureVarWithoutRegexMatch, "1"),
         "Should NOT warn about $1 inside if-block with =~ match condition; issues: {:?}",
-        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+        issues
+            .iter()
+            .map(|i| (&i.kind, &i.variable_name))
+            .collect::<Vec<_>>()
     );
     Ok(())
 }
@@ -117,7 +131,10 @@ my $z = $1;
     assert!(
         !has_issue(&issues, IssueKind::CaptureVarWithoutRegexMatch, "1"),
         "Should NOT warn about $1 after standalone m//; issues: {:?}",
-        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+        issues
+            .iter()
+            .map(|i| (&i.kind, &i.variable_name))
+            .collect::<Vec<_>>()
     );
     Ok(())
 }
@@ -138,7 +155,10 @@ my $matched = $1;
     assert!(
         !has_issue(&issues, IssueKind::CaptureVarWithoutRegexMatch, "1"),
         "Should NOT warn about $1 after s///; issues: {:?}",
-        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+        issues
+            .iter()
+            .map(|i| (&i.kind, &i.variable_name))
+            .collect::<Vec<_>>()
     );
     Ok(())
 }
@@ -160,7 +180,10 @@ my $b = $2;
         count,
         2,
         "Expected 2 CaptureVarWithoutRegexMatch issues (one for $1, one for $2); issues: {:?}",
-        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+        issues
+            .iter()
+            .map(|i| (&i.kind, &i.variable_name))
+            .collect::<Vec<_>>()
     );
     Ok(())
 }
@@ -180,7 +203,10 @@ my $b = $2;
         count,
         0,
         "Should NOT warn about $1 or $2 after =~ match; issues: {:?}",
-        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+        issues
+            .iter()
+            .map(|i| (&i.kind, &i.variable_name))
+            .collect::<Vec<_>>()
     );
     Ok(())
 }
@@ -204,7 +230,10 @@ $str =~ /(\w+)/;
     assert!(
         !has_issue(&issues, IssueKind::CaptureVarWithoutRegexMatch, "1"),
         "Nested block should inherit regex-match context from outer scope; issues: {:?}",
-        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+        issues
+            .iter()
+            .map(|i| (&i.kind, &i.variable_name))
+            .collect::<Vec<_>>()
     );
     Ok(())
 }
@@ -225,7 +254,10 @@ $str =~ /(\w+)/;
     assert!(
         has_issue(&issues, IssueKind::CaptureVarWithoutRegexMatch, "1"),
         "Should warn about $1 used before the regex match in same scope; issues: {:?}",
-        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+        issues
+            .iter()
+            .map(|i| (&i.kind, &i.variable_name))
+            .collect::<Vec<_>>()
     );
     Ok(())
 }
@@ -242,7 +274,10 @@ fn dollar_zero_is_not_capture_var_no_warn() -> Result<(), Box<dyn std::error::Er
     assert!(
         !has_issue(&issues, IssueKind::CaptureVarWithoutRegexMatch, "0"),
         "$0 is program name, not a capture variable; should not warn; issues: {:?}",
-        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+        issues
+            .iter()
+            .map(|i| (&i.kind, &i.variable_name))
+            .collect::<Vec<_>>()
     );
     Ok(())
 }
@@ -262,7 +297,10 @@ fn capture_var_in_double_quoted_string_no_warn() -> Result<(), Box<dyn std::erro
     assert!(
         !has_issue(&issues, IssueKind::CaptureVarWithoutRegexMatch, "1"),
         "Phase 1 limitation: interpolated $1 in string not currently checked; issues: {:?}",
-        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+        issues
+            .iter()
+            .map(|i| (&i.kind, &i.variable_name))
+            .collect::<Vec<_>>()
     );
     Ok(())
 }
@@ -279,7 +317,10 @@ my $msg = "matched: $1";
     assert!(
         !has_issue(&issues, IssueKind::CaptureVarWithoutRegexMatch, "1"),
         "Should NOT warn about $1 in string after regex match in scope; issues: {:?}",
-        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+        issues
+            .iter()
+            .map(|i| (&i.kind, &i.variable_name))
+            .collect::<Vec<_>>()
     );
     Ok(())
 }

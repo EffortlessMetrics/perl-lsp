@@ -88,7 +88,12 @@ fn integer_not_expandable() {
 #[test]
 fn code_not_expandable() {
     assert!(!PerlValue::Code { name: None }.is_expandable());
-    assert!(!PerlValue::Code { name: Some("foo".into()) }.is_expandable());
+    assert!(
+        !PerlValue::Code {
+            name: Some("foo".into())
+        }
+        .is_expandable()
+    );
 }
 
 #[test]
@@ -104,7 +109,11 @@ fn regex_not_expandable() {
 #[test]
 fn truncated_not_expandable() {
     assert!(
-        !PerlValue::Truncated { summary: "...".into(), total_count: Some(100) }.is_expandable()
+        !PerlValue::Truncated {
+            summary: "...".into(),
+            total_count: Some(100)
+        }
+        .is_expandable()
     );
 }
 
@@ -132,14 +141,23 @@ fn reference_is_expandable() {
 #[test]
 fn object_is_expandable() {
     assert!(
-        PerlValue::Object { class: "Foo".into(), value: Box::new(PerlValue::Hash(vec![])) }
-            .is_expandable()
+        PerlValue::Object {
+            class: "Foo".into(),
+            value: Box::new(PerlValue::Hash(vec![]))
+        }
+        .is_expandable()
     );
 }
 
 #[test]
 fn tied_is_expandable() {
-    assert!(PerlValue::Tied { class: "Tie::Hash".into(), value: None }.is_expandable());
+    assert!(
+        PerlValue::Tied {
+            class: "Tie::Hash".into(),
+            value: None
+        }
+        .is_expandable()
+    );
     assert!(
         PerlValue::Tied {
             class: "Tie::Scalar".into(),
@@ -185,13 +203,20 @@ fn type_name_hash() {
 
 #[test]
 fn type_name_reference() {
-    assert_eq!(PerlValue::Reference(Box::new(PerlValue::Undef)).type_name(), "REF");
+    assert_eq!(
+        PerlValue::Reference(Box::new(PerlValue::Undef)).type_name(),
+        "REF"
+    );
 }
 
 #[test]
 fn type_name_object() {
     assert_eq!(
-        PerlValue::Object { class: "Foo".into(), value: Box::new(PerlValue::Undef) }.type_name(),
+        PerlValue::Object {
+            class: "Foo".into(),
+            value: Box::new(PerlValue::Undef)
+        }
+        .type_name(),
         "OBJECT"
     );
 }
@@ -199,7 +224,13 @@ fn type_name_object() {
 #[test]
 fn type_name_code() {
     assert_eq!(PerlValue::Code { name: None }.type_name(), "CODE");
-    assert_eq!(PerlValue::Code { name: Some("sub".into()) }.type_name(), "CODE");
+    assert_eq!(
+        PerlValue::Code {
+            name: Some("sub".into())
+        }
+        .type_name(),
+        "CODE"
+    );
 }
 
 #[test]
@@ -214,12 +245,26 @@ fn type_name_regex() {
 
 #[test]
 fn type_name_tied() {
-    assert_eq!(PerlValue::Tied { class: "T".into(), value: None }.type_name(), "TIED");
+    assert_eq!(
+        PerlValue::Tied {
+            class: "T".into(),
+            value: None
+        }
+        .type_name(),
+        "TIED"
+    );
 }
 
 #[test]
 fn type_name_truncated() {
-    assert_eq!(PerlValue::Truncated { summary: "s".into(), total_count: None }.type_name(), "...");
+    assert_eq!(
+        PerlValue::Truncated {
+            summary: "s".into(),
+            total_count: None
+        }
+        .type_name(),
+        "..."
+    );
 }
 
 #[test]
@@ -237,7 +282,10 @@ fn child_count_none_for_leaf_variants() {
     assert_eq!(PerlValue::Scalar("s".into()).child_count(), None);
     assert_eq!(PerlValue::Number(1.0).child_count(), None);
     assert_eq!(PerlValue::Integer(1).child_count(), None);
-    assert_eq!(PerlValue::Reference(Box::new(PerlValue::Undef)).child_count(), None);
+    assert_eq!(
+        PerlValue::Reference(Box::new(PerlValue::Undef)).child_count(),
+        None
+    );
     assert_eq!(PerlValue::Code { name: None }.child_count(), None);
     assert_eq!(PerlValue::Glob("g".into()).child_count(), None);
     assert_eq!(PerlValue::Regex("r".into()).child_count(), None);
@@ -252,8 +300,12 @@ fn child_count_for_empty_array() {
 #[test]
 fn child_count_for_populated_array() {
     assert_eq!(
-        PerlValue::Array(vec![PerlValue::Integer(1), PerlValue::Integer(2), PerlValue::Integer(3)])
-            .child_count(),
+        PerlValue::Array(vec![
+            PerlValue::Integer(1),
+            PerlValue::Integer(2),
+            PerlValue::Integer(3)
+        ])
+        .child_count(),
         Some(3)
     );
 }
@@ -266,8 +318,11 @@ fn child_count_for_empty_hash() {
 #[test]
 fn child_count_for_populated_hash() {
     assert_eq!(
-        PerlValue::Hash(vec![("a".into(), PerlValue::Undef), ("b".into(), PerlValue::Undef),])
-            .child_count(),
+        PerlValue::Hash(vec![
+            ("a".into(), PerlValue::Undef),
+            ("b".into(), PerlValue::Undef),
+        ])
+        .child_count(),
         Some(2)
     );
 }
@@ -275,7 +330,11 @@ fn child_count_for_populated_hash() {
 #[test]
 fn child_count_truncated_with_total() {
     assert_eq!(
-        PerlValue::Truncated { summary: "big".into(), total_count: Some(500) }.child_count(),
+        PerlValue::Truncated {
+            summary: "big".into(),
+            total_count: Some(500)
+        }
+        .child_count(),
         Some(500)
     );
 }
@@ -283,7 +342,11 @@ fn child_count_truncated_with_total() {
 #[test]
 fn child_count_truncated_without_total() {
     assert_eq!(
-        PerlValue::Truncated { summary: "big".into(), total_count: None }.child_count(),
+        PerlValue::Truncated {
+            summary: "big".into(),
+            total_count: None
+        }
+        .child_count(),
         None
     );
 }
@@ -291,13 +354,23 @@ fn child_count_truncated_without_total() {
 #[test]
 fn child_count_object_returns_none() {
     // Objects don't report child_count directly (need to look inside the value).
-    let obj = PerlValue::object("Foo", PerlValue::Hash(vec![("x".into(), PerlValue::Integer(1))]));
+    let obj = PerlValue::object(
+        "Foo",
+        PerlValue::Hash(vec![("x".into(), PerlValue::Integer(1))]),
+    );
     assert_eq!(obj.child_count(), None);
 }
 
 #[test]
 fn child_count_tied_returns_none() {
-    assert_eq!(PerlValue::Tied { class: "T".into(), value: None }.child_count(), None);
+    assert_eq!(
+        PerlValue::Tied {
+            class: "T".into(),
+            value: None
+        }
+        .child_count(),
+        None
+    );
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -349,8 +422,9 @@ fn large_array() {
 
 #[test]
 fn large_hash() {
-    let pairs: Vec<(String, PerlValue)> =
-        (0..1_000).map(|i| (format!("key{i}"), PerlValue::Integer(i))).collect();
+    let pairs: Vec<(String, PerlValue)> = (0..1_000)
+        .map(|i| (format!("key{i}"), PerlValue::Integer(i)))
+        .collect();
     let hash = PerlValue::hash(pairs);
     assert_eq!(hash.child_count(), Some(1_000));
     assert!(hash.is_expandable());
@@ -370,15 +444,32 @@ fn clone_preserves_equality_for_all_variants() {
         PerlValue::Array(vec![PerlValue::Integer(1)]),
         PerlValue::Hash(vec![("k".into(), PerlValue::Undef)]),
         PerlValue::Reference(Box::new(PerlValue::Integer(1))),
-        PerlValue::Object { class: "Foo".into(), value: Box::new(PerlValue::Undef) },
+        PerlValue::Object {
+            class: "Foo".into(),
+            value: Box::new(PerlValue::Undef),
+        },
         PerlValue::Code { name: None },
-        PerlValue::Code { name: Some("bar".into()) },
+        PerlValue::Code {
+            name: Some("bar".into()),
+        },
         PerlValue::Glob("*main::STDOUT".into()),
         PerlValue::Regex("^foo$".into()),
-        PerlValue::Tied { class: "T".into(), value: None },
-        PerlValue::Tied { class: "T".into(), value: Some(Box::new(PerlValue::Undef)) },
-        PerlValue::Truncated { summary: "...".into(), total_count: Some(100) },
-        PerlValue::Truncated { summary: "...".into(), total_count: None },
+        PerlValue::Tied {
+            class: "T".into(),
+            value: None,
+        },
+        PerlValue::Tied {
+            class: "T".into(),
+            value: Some(Box::new(PerlValue::Undef)),
+        },
+        PerlValue::Truncated {
+            summary: "...".into(),
+            total_count: Some(100),
+        },
+        PerlValue::Truncated {
+            summary: "...".into(),
+            total_count: None,
+        },
         PerlValue::Error("oops".into()),
     ];
 
@@ -443,11 +534,22 @@ fn serde_round_trip_complex_nested() -> Result<(), Box<dyn std::error::Error>> {
             ("status".into(), PerlValue::Integer(200)),
             (
                 "headers".into(),
-                PerlValue::hash(vec![("Content-Type".into(), PerlValue::scalar("text/html"))]),
+                PerlValue::hash(vec![(
+                    "Content-Type".into(),
+                    PerlValue::scalar("text/html"),
+                )]),
             ),
             ("body".into(), PerlValue::scalar("<html></html>")),
-            ("cookies".into(), PerlValue::array(vec![PerlValue::scalar("session=abc123")])),
-            ("handler".into(), PerlValue::Code { name: Some("on_response".into()) }),
+            (
+                "cookies".into(),
+                PerlValue::array(vec![PerlValue::scalar("session=abc123")]),
+            ),
+            (
+                "handler".into(),
+                PerlValue::Code {
+                    name: Some("on_response".into()),
+                },
+            ),
             ("pattern".into(), PerlValue::Regex("\\d+".into())),
         ]),
     );
@@ -467,18 +569,32 @@ fn serde_round_trip_all_variants() -> Result<(), Box<dyn std::error::Error>> {
         PerlValue::Array(vec![PerlValue::Undef]),
         PerlValue::Hash(vec![("k".into(), PerlValue::Integer(1))]),
         PerlValue::Reference(Box::new(PerlValue::Scalar("ref".into()))),
-        PerlValue::Object { class: "Foo".into(), value: Box::new(PerlValue::Hash(vec![])) },
+        PerlValue::Object {
+            class: "Foo".into(),
+            value: Box::new(PerlValue::Hash(vec![])),
+        },
         PerlValue::Code { name: None },
-        PerlValue::Code { name: Some("sub_name".into()) },
+        PerlValue::Code {
+            name: Some("sub_name".into()),
+        },
         PerlValue::Glob("*STDOUT".into()),
         PerlValue::Regex("^pat$".into()),
-        PerlValue::Tied { class: "Tie::File".into(), value: None },
+        PerlValue::Tied {
+            class: "Tie::File".into(),
+            value: None,
+        },
         PerlValue::Tied {
             class: "Tie::Hash".into(),
             value: Some(Box::new(PerlValue::Hash(vec![]))),
         },
-        PerlValue::Truncated { summary: "large array".into(), total_count: Some(10_000) },
-        PerlValue::Truncated { summary: "unknown".into(), total_count: None },
+        PerlValue::Truncated {
+            summary: "large array".into(),
+            total_count: Some(10_000),
+        },
+        PerlValue::Truncated {
+            summary: "unknown".into(),
+            total_count: None,
+        },
         PerlValue::Error("cannot inspect".into()),
     ];
 
@@ -546,7 +662,10 @@ fn regex_with_empty_pattern() {
 
 #[test]
 fn truncated_with_zero_total() {
-    let v = PerlValue::Truncated { summary: "empty".into(), total_count: Some(0) };
+    let v = PerlValue::Truncated {
+        summary: "empty".into(),
+        total_count: Some(0),
+    };
     assert_eq!(v.child_count(), Some(0));
 }
 
@@ -563,19 +682,43 @@ fn debug_format_includes_variant_name_for_all_types() {
         (PerlValue::Integer(1), "Integer"),
         (PerlValue::Array(vec![]), "Array"),
         (PerlValue::Hash(vec![]), "Hash"),
-        (PerlValue::Reference(Box::new(PerlValue::Undef)), "Reference"),
-        (PerlValue::Object { class: "C".into(), value: Box::new(PerlValue::Undef) }, "Object"),
+        (
+            PerlValue::Reference(Box::new(PerlValue::Undef)),
+            "Reference",
+        ),
+        (
+            PerlValue::Object {
+                class: "C".into(),
+                value: Box::new(PerlValue::Undef),
+            },
+            "Object",
+        ),
         (PerlValue::Code { name: None }, "Code"),
         (PerlValue::Glob("g".into()), "Glob"),
         (PerlValue::Regex("r".into()), "Regex"),
-        (PerlValue::Tied { class: "T".into(), value: None }, "Tied"),
-        (PerlValue::Truncated { summary: "s".into(), total_count: None }, "Truncated"),
+        (
+            PerlValue::Tied {
+                class: "T".into(),
+                value: None,
+            },
+            "Tied",
+        ),
+        (
+            PerlValue::Truncated {
+                summary: "s".into(),
+                total_count: None,
+            },
+            "Truncated",
+        ),
         (PerlValue::Error("e".into()), "Error"),
     ];
 
     for (value, expected_variant) in &cases {
         let debug_str = format!("{:?}", value);
-        assert!(!debug_str.is_empty(), "Debug output should be non-empty for {expected_variant}");
+        assert!(
+            !debug_str.is_empty(),
+            "Debug output should be non-empty for {expected_variant}"
+        );
         assert!(
             debug_str.contains(expected_variant),
             "Debug output for {expected_variant} should contain variant name, got: {debug_str}"

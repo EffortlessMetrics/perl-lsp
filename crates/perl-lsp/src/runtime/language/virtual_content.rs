@@ -17,11 +17,14 @@ impl LspServer {
             data: None,
         })?;
 
-        let uri = params.get("uri").and_then(|u| u.as_str()).ok_or_else(|| JsonRpcError {
-            code: crate::protocol::INVALID_PARAMS,
-            message: "Missing or invalid URI".to_string(),
-            data: None,
-        })?;
+        let uri = params
+            .get("uri")
+            .and_then(|u| u.as_str())
+            .ok_or_else(|| JsonRpcError {
+                code: crate::protocol::INVALID_PARAMS,
+                message: "Missing or invalid URI".to_string(),
+                data: None,
+            })?;
 
         // Parse URI to determine scheme
         if let Some(content) = fetch_virtual_content(uri) {
@@ -37,7 +40,10 @@ impl LspServer {
 
     /// Request client to refresh virtual document content
     pub fn request_text_document_content_refresh(&self, uri: &str) -> io::Result<()> {
-        self.send_request("workspace/textDocumentContent/refresh", json!({ "uri": uri }))
+        self.send_request(
+            "workspace/textDocumentContent/refresh",
+            json!({ "uri": uri }),
+        )
     }
 }
 

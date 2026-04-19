@@ -30,7 +30,10 @@ x();
     let mut unused: std::collections::BTreeMap<String, Vec<String>> =
         std::collections::BTreeMap::new();
     for u in &analysis.unused_imports {
-        unused.entry(u.module.clone()).or_default().extend(u.symbols.clone());
+        unused
+            .entry(u.module.clone())
+            .or_default()
+            .extend(u.symbols.clone());
     }
     assert_eq!(
         unused
@@ -122,7 +125,10 @@ print Dumper($val);
     }
 
     assert!(
-        unused_symbols.get("List::Util").ok_or("Missing List::Util")?.contains(&"min".to_string())
+        unused_symbols
+            .get("List::Util")
+            .ok_or("Missing List::Util")?
+            .contains(&"min".to_string())
     );
     assert!(
         unused_symbols
@@ -236,7 +242,11 @@ print "Hello\n";
 
     // Should detect 'func' as unused even though it's in comment
     assert_eq!(analysis.unused_imports.len(), 1);
-    assert!(analysis.unused_imports[0].symbols.contains(&"func".to_string()));
+    assert!(
+        analysis.unused_imports[0]
+            .symbols
+            .contains(&"func".to_string())
+    );
     Ok(())
 }
 

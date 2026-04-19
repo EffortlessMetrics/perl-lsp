@@ -36,8 +36,11 @@ fn dap_mode_debug_format() {
 
 #[test]
 fn dap_server_creation_native() -> Result<(), Box<dyn std::error::Error>> {
-    let config =
-        DapConfig { log_level: "info".to_string(), mode: DapMode::Native, workspace_root: None };
+    let config = DapConfig {
+        log_level: "info".to_string(),
+        mode: DapMode::Native,
+        workspace_root: None,
+    };
     let server = DapServer::new(config)?;
     assert_eq!(server.config.mode, DapMode::Native);
     assert_eq!(server.config.log_level, "info");
@@ -54,19 +57,31 @@ fn dap_server_creation_bridge() -> Result<(), Box<dyn std::error::Error>> {
     };
     let server = DapServer::new(config)?;
     assert_eq!(server.config.mode, DapMode::Bridge);
-    assert_eq!(server.config.workspace_root, Some(std::path::PathBuf::from("/workspace")));
+    assert_eq!(
+        server.config.workspace_root,
+        Some(std::path::PathBuf::from("/workspace"))
+    );
     Ok(())
 }
 
 #[test]
 fn dap_server_socket_rejects_bridge_mode() -> Result<(), Box<dyn std::error::Error>> {
-    let config =
-        DapConfig { log_level: "info".to_string(), mode: DapMode::Bridge, workspace_root: None };
+    let config = DapConfig {
+        log_level: "info".to_string(),
+        mode: DapMode::Bridge,
+        workspace_root: None,
+    };
     let mut server = DapServer::new(config)?;
     let result = server.run_socket(9999);
-    assert!(result.is_err(), "Socket transport should be rejected in bridge mode");
+    assert!(
+        result.is_err(),
+        "Socket transport should be rejected in bridge mode"
+    );
     let err_msg = result.err().ok_or("Expected error")?.to_string();
-    assert!(err_msg.contains("not supported"), "Error should mention lack of support: {err_msg}");
+    assert!(
+        err_msg.contains("not supported"),
+        "Error should mention lack of support: {err_msg}"
+    );
     Ok(())
 }
 
@@ -95,7 +110,10 @@ fn tcp_attach_config_custom_timeout_duration() {
 #[test]
 fn tcp_attach_config_validate_whitespace_host() {
     let config = TcpAttachConfig::new("   ".to_string(), 13603);
-    assert!(config.validate().is_err(), "Whitespace-only host should be rejected");
+    assert!(
+        config.validate().is_err(),
+        "Whitespace-only host should be rejected"
+    );
 }
 
 #[test]
@@ -146,14 +164,20 @@ fn tcp_attach_session_send_message_without_connection_fails() {
 fn tcp_attach_session_disconnect_when_not_connected_is_ok() {
     let mut session = TcpAttachSession::new();
     let result = session.disconnect();
-    assert!(result.is_ok(), "Disconnecting when not connected should be fine");
+    assert!(
+        result.is_ok(),
+        "Disconnecting when not connected should be fine"
+    );
 }
 
 #[test]
 fn tcp_attach_session_start_reader_without_connection_fails() {
     let mut session = TcpAttachSession::new();
     let result = session.start_reader();
-    assert!(result.is_err(), "Starting reader without connection should fail");
+    assert!(
+        result.is_err(),
+        "Starting reader without connection should fail"
+    );
 }
 
 #[test]
@@ -162,7 +186,10 @@ fn tcp_attach_session_connect_to_invalid_host_fails() {
     // Use a very short timeout to fail fast
     let config = TcpAttachConfig::new("192.0.2.1".to_string(), 59999).with_timeout(100);
     let result = session.connect(&config);
-    assert!(result.is_err(), "Connecting to unreachable host should fail");
+    assert!(
+        result.is_err(),
+        "Connecting to unreachable host should fail"
+    );
 }
 
 #[test]
@@ -170,15 +197,20 @@ fn tcp_attach_session_connect_with_invalid_config_fails() {
     let mut session = TcpAttachSession::new();
     let config = TcpAttachConfig::new("".to_string(), 0);
     let result = session.connect(&config);
-    assert!(result.is_err(), "Should fail validation before attempting connection");
+    assert!(
+        result.is_err(),
+        "Should fail validation before attempting connection"
+    );
 }
 
 // ── DapEvent ───────────────────────────────────────────────────────
 
 #[test]
 fn dap_event_output_debug_format() {
-    let event =
-        DapEvent::Output { category: "stdout".to_string(), output: "Hello World\n".to_string() };
+    let event = DapEvent::Output {
+        category: "stdout".to_string(),
+        output: "Hello World\n".to_string(),
+    };
     let debug = format!("{:?}", event);
     assert!(debug.contains("Output"));
     assert!(debug.contains("stdout"));
@@ -186,7 +218,10 @@ fn dap_event_output_debug_format() {
 
 #[test]
 fn dap_event_stopped_debug_format() {
-    let event = DapEvent::Stopped { reason: "breakpoint".to_string(), thread_id: 1 };
+    let event = DapEvent::Stopped {
+        reason: "breakpoint".to_string(),
+        thread_id: 1,
+    };
     let debug = format!("{:?}", event);
     assert!(debug.contains("Stopped"));
     assert!(debug.contains("breakpoint"));
@@ -201,7 +236,9 @@ fn dap_event_continued_debug_format() {
 
 #[test]
 fn dap_event_terminated_debug_format() {
-    let event = DapEvent::Terminated { reason: "exited".to_string() };
+    let event = DapEvent::Terminated {
+        reason: "exited".to_string(),
+    };
     let debug = format!("{:?}", event);
     assert!(debug.contains("Terminated"));
     assert!(debug.contains("exited"));
@@ -209,7 +246,9 @@ fn dap_event_terminated_debug_format() {
 
 #[test]
 fn dap_event_error_debug_format() {
-    let event = DapEvent::Error { message: "connection lost".to_string() };
+    let event = DapEvent::Error {
+        message: "connection lost".to_string(),
+    };
     let debug = format!("{:?}", event);
     assert!(debug.contains("Error"));
     assert!(debug.contains("connection lost"));
@@ -217,7 +256,10 @@ fn dap_event_error_debug_format() {
 
 #[test]
 fn dap_event_clone() {
-    let event = DapEvent::Stopped { reason: "step".to_string(), thread_id: 2 };
+    let event = DapEvent::Stopped {
+        reason: "step".to_string(),
+        thread_id: 2,
+    };
     let cloned = event.clone();
     let debug_original = format!("{:?}", event);
     let debug_cloned = format!("{:?}", cloned);

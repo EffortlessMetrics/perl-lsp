@@ -16,7 +16,10 @@ fn parse_and_get_diagnostics(code: &str) -> Vec<String> {
 /// Helper: parse code and assert no prototype-invalid diagnostic is emitted.
 fn assert_no_prototype_warning(code: &str) {
     let diagnostics = parse_and_get_diagnostics(code);
-    let proto_diags: Vec<_> = diagnostics.iter().filter(|m| m.contains("prototype")).collect();
+    let proto_diags: Vec<_> = diagnostics
+        .iter()
+        .filter(|m| m.contains("prototype"))
+        .collect();
     assert!(
         proto_diags.is_empty(),
         "Expected no prototype diagnostics for `{}`, got: {:?}",

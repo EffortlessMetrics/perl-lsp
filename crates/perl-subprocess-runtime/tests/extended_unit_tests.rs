@@ -15,21 +15,33 @@ use std::thread;
 
 #[test]
 fn output_success_boundary_zero() -> Result<(), Box<dyn std::error::Error>> {
-    let output = SubprocessOutput { stdout: vec![], stderr: vec![], status_code: 0 };
+    let output = SubprocessOutput {
+        stdout: vec![],
+        stderr: vec![],
+        status_code: 0,
+    };
     assert!(output.success());
     Ok(())
 }
 
 #[test]
 fn output_failure_boundary_positive_one() -> Result<(), Box<dyn std::error::Error>> {
-    let output = SubprocessOutput { stdout: vec![], stderr: vec![], status_code: 1 };
+    let output = SubprocessOutput {
+        stdout: vec![],
+        stderr: vec![],
+        status_code: 1,
+    };
     assert!(!output.success());
     Ok(())
 }
 
 #[test]
 fn output_failure_boundary_negative_one() -> Result<(), Box<dyn std::error::Error>> {
-    let output = SubprocessOutput { stdout: vec![], stderr: vec![], status_code: -1 };
+    let output = SubprocessOutput {
+        stdout: vec![],
+        stderr: vec![],
+        status_code: -1,
+    };
     assert!(!output.success());
     Ok(())
 }
@@ -37,7 +49,11 @@ fn output_failure_boundary_negative_one() -> Result<(), Box<dyn std::error::Erro
 #[test]
 fn output_large_stdout() -> Result<(), Box<dyn std::error::Error>> {
     let large_output = vec![b'a'; 10_000_000]; // 10MB
-    let output = SubprocessOutput { stdout: large_output.clone(), stderr: vec![], status_code: 0 };
+    let output = SubprocessOutput {
+        stdout: large_output.clone(),
+        stderr: vec![],
+        status_code: 0,
+    };
     assert!(output.success());
     assert_eq!(output.stdout.len(), 10_000_000);
     Ok(())
@@ -46,7 +62,11 @@ fn output_large_stdout() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn output_large_stderr() -> Result<(), Box<dyn std::error::Error>> {
     let large_stderr = vec![b'x'; 1_000_000]; // 1MB
-    let output = SubprocessOutput { stdout: vec![], stderr: large_stderr.clone(), status_code: 1 };
+    let output = SubprocessOutput {
+        stdout: vec![],
+        stderr: large_stderr.clone(),
+        status_code: 1,
+    };
     assert!(!output.success());
     assert_eq!(output.stderr.len(), 1_000_000);
     Ok(())
@@ -94,7 +114,11 @@ fn output_stderr_with_special_chars() -> Result<(), Box<dyn std::error::Error>> 
 #[test]
 fn output_all_status_codes() -> Result<(), Box<dyn std::error::Error>> {
     for code in [0, 1, 127, 255, 256, i32::MIN, i32::MAX] {
-        let output = SubprocessOutput { stdout: vec![], stderr: vec![], status_code: code };
+        let output = SubprocessOutput {
+            stdout: vec![],
+            stderr: vec![],
+            status_code: code,
+        };
         let expected = code == 0;
         assert_eq!(output.success(), expected, "status code {code}");
     }
@@ -106,8 +130,11 @@ fn output_clone_preserves_all_fields() -> Result<(), Box<dyn std::error::Error>>
     let stdout = vec![1, 2, 3, 255, 0];
     let stderr = vec![42, 99];
     let status = 127;
-    let output =
-        SubprocessOutput { stdout: stdout.clone(), stderr: stderr.clone(), status_code: status };
+    let output = SubprocessOutput {
+        stdout: stdout.clone(),
+        stderr: stderr.clone(),
+        status_code: status,
+    };
 
     let cloned = output.clone();
 
@@ -122,8 +149,11 @@ fn output_clone_preserves_all_fields() -> Result<(), Box<dyn std::error::Error>>
 #[test]
 fn output_lossy_conversion_preserves_valid_utf8() -> Result<(), Box<dyn std::error::Error>> {
     let text = "Rust is awesome!";
-    let output =
-        SubprocessOutput { stdout: text.as_bytes().to_vec(), stderr: vec![], status_code: 0 };
+    let output = SubprocessOutput {
+        stdout: text.as_bytes().to_vec(),
+        stderr: vec![],
+        status_code: 0,
+    };
     assert_eq!(output.stdout_lossy(), text);
     Ok(())
 }
@@ -136,7 +166,11 @@ fn output_lossy_handles_mixed_valid_invalid_utf8() -> Result<(), Box<dyn std::er
     bytes.push(0xFE);
     bytes.extend_from_slice(b"more_valid");
 
-    let output = SubprocessOutput { stdout: bytes, stderr: vec![], status_code: 0 };
+    let output = SubprocessOutput {
+        stdout: bytes,
+        stderr: vec![],
+        status_code: 0,
+    };
     let lossy = output.stdout_lossy();
     assert!(lossy.contains("valid"));
     assert!(lossy.contains("more_valid"));
@@ -145,7 +179,11 @@ fn output_lossy_handles_mixed_valid_invalid_utf8() -> Result<(), Box<dyn std::er
 
 #[test]
 fn output_empty_with_nonzero_status() -> Result<(), Box<dyn std::error::Error>> {
-    let output = SubprocessOutput { stdout: vec![], stderr: vec![], status_code: 42 };
+    let output = SubprocessOutput {
+        stdout: vec![],
+        stderr: vec![],
+        status_code: 42,
+    };
     assert!(!output.success());
     assert_eq!(output.stdout_lossy(), "");
     assert_eq!(output.stderr_lossy(), "");
@@ -605,8 +643,11 @@ mod os_runtime_extended {
     #[test]
     fn os_runtime_stdout_and_stderr() -> Result<(), Box<dyn std::error::Error>> {
         let runtime = OsSubprocessRuntime::new();
-        let output =
-            runtime.run_command("sh", &["-c", "echo stdout_msg && echo stderr_msg >&2"], None)?;
+        let output = runtime.run_command(
+            "sh",
+            &["-c", "echo stdout_msg && echo stderr_msg >&2"],
+            None,
+        )?;
         assert!(output.success());
         assert!(!output.stdout.is_empty());
         assert!(!output.stderr.is_empty());
@@ -847,7 +888,11 @@ fn command_invocation_fields() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn command_invocation_no_stdin() -> Result<(), Box<dyn std::error::Error>> {
-    let inv = CommandInvocation { program: "prog".to_string(), args: vec![], stdin: None };
+    let inv = CommandInvocation {
+        program: "prog".to_string(),
+        args: vec![],
+        stdin: None,
+    };
 
     assert!(inv.stdin.is_none());
     Ok(())
@@ -855,7 +900,11 @@ fn command_invocation_no_stdin() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn command_invocation_empty_stdin() -> Result<(), Box<dyn std::error::Error>> {
-    let inv = CommandInvocation { program: "prog".to_string(), args: vec![], stdin: Some(vec![]) };
+    let inv = CommandInvocation {
+        program: "prog".to_string(),
+        args: vec![],
+        stdin: Some(vec![]),
+    };
 
     assert_eq!(inv.stdin, Some(vec![]));
     Ok(())
@@ -888,8 +937,11 @@ fn mock_response_default_response_used() -> Result<(), Box<dyn std::error::Error
 
 #[test]
 fn output_all_fields_accessible() -> Result<(), Box<dyn std::error::Error>> {
-    let output =
-        SubprocessOutput { stdout: b"out".to_vec(), stderr: b"err".to_vec(), status_code: 42 };
+    let output = SubprocessOutput {
+        stdout: b"out".to_vec(),
+        stderr: b"err".to_vec(),
+        status_code: 42,
+    };
 
     // Verify public fields are accessible
     let _ = &output.stdout;
@@ -923,7 +975,11 @@ fn mock_response_all_fields_accessible() -> Result<(), Box<dyn std::error::Error
 
 #[test]
 fn command_invocation_all_fields_accessible() -> Result<(), Box<dyn std::error::Error>> {
-    let inv = CommandInvocation { program: "prog".to_string(), args: vec![], stdin: None };
+    let inv = CommandInvocation {
+        program: "prog".to_string(),
+        args: vec![],
+        stdin: None,
+    };
 
     // Verify public fields are accessible
     let _ = &inv.program;
@@ -950,7 +1006,11 @@ fn os_runtime_timeout_fires_for_slow_command() -> Result<(), Box<dyn std::error:
         "expected 'timed out' in error message, got: {}",
         err.message
     );
-    assert!(elapsed.as_secs() < 4, "timeout took too long: {}ms", elapsed.as_millis());
+    assert!(
+        elapsed.as_secs() < 4,
+        "timeout took too long: {}ms",
+        elapsed.as_millis()
+    );
     Ok(())
 }
 

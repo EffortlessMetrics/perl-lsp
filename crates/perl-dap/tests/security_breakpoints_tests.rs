@@ -28,7 +28,10 @@ fn test_set_breakpoints_rejects_newlines_in_condition() -> TestResult {
 
     match response {
         DapMessage::Response { success, body, .. } => {
-            assert!(success, "Request should succeed (even if breakpoint is not verified)");
+            assert!(
+                success,
+                "Request should succeed (even if breakpoint is not verified)"
+            );
 
             let body = body.ok_or("Response should have body")?;
             let breakpoints = body
@@ -39,11 +42,17 @@ fn test_set_breakpoints_rejects_newlines_in_condition() -> TestResult {
             assert_eq!(breakpoints.len(), 1);
             let bp = &breakpoints[0];
 
-            let verified = bp.get("verified").and_then(|v| v.as_bool()).unwrap_or(false);
+            let verified = bp
+                .get("verified")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
             let message = bp.get("message").and_then(|m| m.as_str()).unwrap_or("");
 
             // Verify that the breakpoint is NOT verified
-            assert!(!verified, "Breakpoint with malicious condition should not be verified");
+            assert!(
+                !verified,
+                "Breakpoint with malicious condition should not be verified"
+            );
 
             println!("Breakpoint verification message: {}", message);
 
@@ -78,7 +87,10 @@ fn test_set_breakpoints_rejects_carriage_returns_in_condition() -> TestResult {
 
     match response {
         DapMessage::Response { success, body, .. } => {
-            assert!(success, "Request should succeed (even if breakpoint is not verified)");
+            assert!(
+                success,
+                "Request should succeed (even if breakpoint is not verified)"
+            );
 
             let body = body.ok_or("Response should have body")?;
             let breakpoints = body
@@ -89,10 +101,16 @@ fn test_set_breakpoints_rejects_carriage_returns_in_condition() -> TestResult {
             assert_eq!(breakpoints.len(), 1);
             let bp = &breakpoints[0];
 
-            let verified = bp.get("verified").and_then(|v| v.as_bool()).unwrap_or(false);
+            let verified = bp
+                .get("verified")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
             let message = bp.get("message").and_then(|m| m.as_str()).unwrap_or("");
 
-            assert!(!verified, "Breakpoint with carriage return should not be verified");
+            assert!(
+                !verified,
+                "Breakpoint with carriage return should not be verified"
+            );
             assert_eq!(
                 message, "Breakpoint condition cannot contain newlines",
                 "Condition with carriage return was not rejected"

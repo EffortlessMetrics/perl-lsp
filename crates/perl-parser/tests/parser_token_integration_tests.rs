@@ -24,7 +24,11 @@ fn parses_indented_heredoc() {
     let src = "<<~END\n    indented content\n    END";
     let mut parser = Parser::new(src);
     let result = parser.parse();
-    assert!(result.is_ok(), "Failed to parse indented heredoc: {:?}", result);
+    assert!(
+        result.is_ok(),
+        "Failed to parse indented heredoc: {:?}",
+        result
+    );
 }
 
 #[test]
@@ -46,7 +50,11 @@ fn parses_empty_sigil_brace() {
         let mut parser = Parser::new(&src);
         let result = parser.parse();
         // Parser should handle this gracefully even if semantically invalid
-        assert!(result.is_ok() || result.is_err(), "Parser should not panic on {}", expr);
+        assert!(
+            result.is_ok() || result.is_err(),
+            "Parser should not panic on {}",
+            expr
+        );
     }
 }
 

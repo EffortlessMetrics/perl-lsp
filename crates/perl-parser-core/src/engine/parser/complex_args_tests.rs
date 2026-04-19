@@ -66,7 +66,11 @@ mod tests {
             match result {
                 Ok(ast) => {
                     let sexp = ast.to_sexp();
-                    let status = if sexp.contains("ERROR") { "ERRORS" } else { "OK" };
+                    let status = if sexp.contains("ERROR") {
+                        "ERRORS"
+                    } else {
+                        "OK"
+                    };
                     eprintln!("[{}] {} => {}", status, code, sexp);
                 }
                 Err(e) => {
@@ -88,7 +92,11 @@ mod tests {
             sexp
         );
         assert!(sexp.contains("hash"), "should contain a hash ref: {}", sexp);
-        assert!(sexp.contains("(variable @ rest)"), "should contain @rest arg: {}", sexp);
+        assert!(
+            sexp.contains("(variable @ rest)"),
+            "should contain @rest arg: {}",
+            sexp
+        );
     }
 
     #[test]
@@ -100,7 +108,11 @@ mod tests {
             "should be a function call: {}",
             sexp
         );
-        assert!(sexp.contains("(array"), "should contain array ref: {}", sexp);
+        assert!(
+            sexp.contains("(array"),
+            "should contain array ref: {}",
+            sexp
+        );
         assert!(sexp.contains("hash"), "should contain hash ref: {}", sexp);
     }
 
@@ -108,7 +120,11 @@ mod tests {
     fn nested_constructors_in_hash_init() {
         // my %h = (key => [1, 2, 3], other => {a => 1})
         let sexp = parse_ok("my %h = (key => [1, 2, 3], other => {a => 1});");
-        assert!(sexp.contains("(array"), "should contain array literal: {}", sexp);
+        assert!(
+            sexp.contains("(array"),
+            "should contain array literal: {}",
+            sexp
+        );
         assert!(sexp.contains("hash"), "should contain hash ref: {}", sexp);
     }
 
@@ -116,9 +132,21 @@ mod tests {
     fn block_builtin_as_argument() {
         // push @a, map { $_ * 2 } @b
         let sexp = parse_ok("push @a, map { $_ * 2 } @b;");
-        assert!(sexp.contains("(call push"), "should be a push call: {}", sexp);
-        assert!(sexp.contains("(call map"), "should contain map call: {}", sexp);
-        assert!(sexp.contains("(variable @ b)"), "should contain @b inside map: {}", sexp);
+        assert!(
+            sexp.contains("(call push"),
+            "should be a push call: {}",
+            sexp
+        );
+        assert!(
+            sexp.contains("(call map"),
+            "should contain map call: {}",
+            sexp
+        );
+        assert!(
+            sexp.contains("(variable @ b)"),
+            "should contain @b inside map: {}",
+            sexp
+        );
     }
 
     #[test]
@@ -164,8 +192,16 @@ mod tests {
     fn hash_ref_arg_to_method_call() {
         // $obj->method({key => $val})
         let sexp = parse_ok(r#"$obj->method({key => $val});"#);
-        assert!(sexp.contains("(method_call"), "should be a method call: {}", sexp);
-        assert!(sexp.contains("hash"), "should contain hash ref arg: {}", sexp);
+        assert!(
+            sexp.contains("(method_call"),
+            "should be a method call: {}",
+            sexp
+        );
+        assert!(
+            sexp.contains("hash"),
+            "should contain hash ref arg: {}",
+            sexp
+        );
     }
 
     #[test]
@@ -177,7 +213,11 @@ mod tests {
             "should be a function call: {}",
             sexp
         );
-        assert!(sexp.contains("(array"), "should contain array ref: {}", sexp);
+        assert!(
+            sexp.contains("(array"),
+            "should contain array ref: {}",
+            sexp
+        );
     }
 
     #[test]
@@ -231,7 +271,11 @@ mod tests {
     fn push_with_hash_ref() {
         // push @arr, {key => $val}
         let sexp = parse_ok("push @arr, {key => $val};");
-        assert!(sexp.contains("(call push"), "should be a push call: {}", sexp);
+        assert!(
+            sexp.contains("(call push"),
+            "should be a push call: {}",
+            sexp
+        );
         assert!(sexp.contains("hash"), "should contain hash ref: {}", sexp);
     }
 
@@ -239,8 +283,16 @@ mod tests {
     fn push_with_array_ref() {
         // push @arr, [$a, $b]
         let sexp = parse_ok("push @arr, [$a, $b];");
-        assert!(sexp.contains("(call push"), "should be a push call: {}", sexp);
-        assert!(sexp.contains("(array"), "should contain array ref: {}", sexp);
+        assert!(
+            sexp.contains("(call push"),
+            "should be a push call: {}",
+            sexp
+        );
+        assert!(
+            sexp.contains("(array"),
+            "should contain array ref: {}",
+            sexp
+        );
     }
 
     #[test]
@@ -263,17 +315,33 @@ mod tests {
     fn push_hash_ref_then_more_args() {
         // push @arr, {key => $val}, $extra
         let sexp = parse_ok("push @arr, {key => $val}, $extra;");
-        assert!(sexp.contains("(call push"), "should be a push call: {}", sexp);
+        assert!(
+            sexp.contains("(call push"),
+            "should be a push call: {}",
+            sexp
+        );
         assert!(sexp.contains("hash"), "should contain hash ref: {}", sexp);
-        assert!(sexp.contains("(variable $ extra)"), "should contain $extra: {}", sexp);
+        assert!(
+            sexp.contains("(variable $ extra)"),
+            "should contain $extra: {}",
+            sexp
+        );
     }
 
     #[test]
     fn unshift_with_array_ref() {
         // unshift @arr, [$a, $b]
         let sexp = parse_ok("unshift @arr, [$a, $b];");
-        assert!(sexp.contains("(call unshift"), "should be an unshift call: {}", sexp);
-        assert!(sexp.contains("(array"), "should contain array ref: {}", sexp);
+        assert!(
+            sexp.contains("(call unshift"),
+            "should be an unshift call: {}",
+            sexp
+        );
+        assert!(
+            sexp.contains("(array"),
+            "should contain array ref: {}",
+            sexp
+        );
     }
 
     // ----- deeply nested constructors -----
@@ -308,30 +376,58 @@ mod tests {
         // `my` before `=>` should be autoquoted as a string, not parsed as a declaration
         let sexp = parse_ok(r#"my %h = (my => "value", use => "something");"#);
         assert!(sexp.contains("\"my\""), "my should be autoquoted: {}", sexp);
-        assert!(sexp.contains("\"use\""), "use should be autoquoted: {}", sexp);
+        assert!(
+            sexp.contains("\"use\""),
+            "use should be autoquoted: {}",
+            sexp
+        );
     }
 
     #[test]
     fn our_keyword_autoquoted_as_hash_key_in_parens() {
         // (our => 1, local => 2, state => 3)
         let sexp = parse_ok("my %h = (our => 1, local => 2, state => 3);");
-        assert!(sexp.contains("\"our\""), "our should be autoquoted: {}", sexp);
-        assert!(sexp.contains("\"local\""), "local should be autoquoted: {}", sexp);
-        assert!(sexp.contains("\"state\""), "state should be autoquoted: {}", sexp);
+        assert!(
+            sexp.contains("\"our\""),
+            "our should be autoquoted: {}",
+            sexp
+        );
+        assert!(
+            sexp.contains("\"local\""),
+            "local should be autoquoted: {}",
+            sexp
+        );
+        assert!(
+            sexp.contains("\"state\""),
+            "state should be autoquoted: {}",
+            sexp
+        );
     }
 
     #[test]
     fn my_keyword_autoquoted_in_function_call_args() {
         // foo(my => 1, our => 2)
         let sexp = parse_ok("foo(my => 1, our => 2);");
-        assert!(!sexp.contains("ERROR"), "should parse without errors: {}", sexp);
-        assert!(sexp.contains("\"my\""), "my should be autoquoted in function args: {}", sexp);
+        assert!(
+            !sexp.contains("ERROR"),
+            "should parse without errors: {}",
+            sexp
+        );
+        assert!(
+            sexp.contains("\"my\""),
+            "my should be autoquoted in function args: {}",
+            sexp
+        );
     }
 
     #[test]
     fn my_keyword_autoquoted_in_brace_hash() {
         // { my => 1, our => 2 }
         let sexp = parse_ok("my $h = {my => 1, our => 2};");
-        assert!(!sexp.contains("ERROR"), "should parse without errors: {}", sexp);
+        assert!(
+            !sexp.contains("ERROR"),
+            "should parse without errors: {}",
+            sexp
+        );
     }
 }

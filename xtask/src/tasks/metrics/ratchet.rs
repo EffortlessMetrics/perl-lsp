@@ -68,7 +68,9 @@ pub struct RatchetViolation {
 /// `repo_root` is the workspace root; the file is expected at
 /// `.ci/metrics/baselines/<subsystem>.json`.
 pub fn load_baseline(repo_root: &Path, subsystem: &str) -> Result<SubsystemBaseline> {
-    let path = repo_root.join(".ci/metrics/baselines").join(format!("{subsystem}.json"));
+    let path = repo_root
+        .join(".ci/metrics/baselines")
+        .join(format!("{subsystem}.json"));
     let raw = std::fs::read_to_string(&path)
         .with_context(|| format!("Failed to read baseline: {}", path.display()))?;
     let baseline: SubsystemBaseline = serde_json::from_str(&raw)
@@ -110,10 +112,18 @@ pub fn check_floor_metrics(
             // Use bv.max(f64::EPSILON) so that sub-1.0 baselines (e.g. an
             // error_rate of 0.05) produce a correct fractional regression rather
             // than being attenuated by a hard floor of 1.0.
-            if cv > *bv { (cv - bv) / bv.max(f64::EPSILON) } else { 0.0 }
+            if cv > *bv {
+                (cv - bv) / bv.max(f64::EPSILON)
+            } else {
+                0.0
+            }
         } else {
             // Lower current value = regression.
-            if cv < *bv { (bv - cv) / bv.max(f64::EPSILON) } else { 0.0 }
+            if cv < *bv {
+                (bv - cv) / bv.max(f64::EPSILON)
+            } else {
+                0.0
+            }
         };
 
         if regression_pct > baseline.tolerance_pct {
@@ -177,7 +187,9 @@ pub fn run_ratchet_check(
 
     // Resolve the current-metrics file.
     let receipt_path = current_path.unwrap_or_else(|| {
-        repo_root.join("target/receipts/metrics").join(format!("{subsystem}.json"))
+        repo_root
+            .join("target/receipts/metrics")
+            .join(format!("{subsystem}.json"))
     });
 
     // Load current metrics from receipt file, falling back to the baseline
@@ -219,8 +231,11 @@ pub fn run_ratchet_check(
     }
 
     // Informational: summarize improvement metrics.
-    let instrumented: Vec<_> =
-        baseline.improvement_metrics.iter().filter_map(|(k, v)| v.map(|val| (k, val))).collect();
+    let instrumented: Vec<_> = baseline
+        .improvement_metrics
+        .iter()
+        .filter_map(|(k, v)| v.map(|val| (k, val)))
+        .collect();
     if !instrumented.is_empty() {
         println!("  improvement metrics (informational):");
         for (k, v) in &instrumented {
@@ -242,10 +257,16 @@ pub fn run_ratchet_check(
                 format!("Failed to read stable-wins state: {}", state_path.display())
             })?;
             serde_json::from_str(&raw).with_context(|| {
-                format!("Failed to parse stable-wins state: {}", state_path.display())
+                format!(
+                    "Failed to parse stable-wins state: {}",
+                    state_path.display()
+                )
             })?
         } else {
-            StableWinsState { subsystem: subsystem.to_string(), recent_runs: BTreeMap::new() }
+            StableWinsState {
+                subsystem: subsystem.to_string(),
+                recent_runs: BTreeMap::new(),
+            }
         };
 
         let commit = std::env::var("GITHUB_SHA").unwrap_or_else(|_| "unknown".to_string());
@@ -255,7 +276,10 @@ pub fn run_ratchet_check(
         let json = serde_json::to_string_pretty(&state)
             .context("Failed to serialize stable-wins state")?;
         std::fs::write(&state_path, json).with_context(|| {
-            format!("Failed to write stable-wins state: {}", state_path.display())
+            format!(
+                "Failed to write stable-wins state: {}",
+                state_path.display()
+            )
         })?;
 
         println!("  stable-wins state updated: {}", state_path.display());
@@ -276,7 +300,9 @@ pub fn run_promote_baseline(repo_root: &Path, subsystem: &str, delta_pct: f64) -
 
     let baseline = load_baseline(repo_root, subsystem)?;
 
-    let state_path = repo_root.join("target/metrics/stable_wins").join(format!("{subsystem}.json"));
+    let state_path = repo_root
+        .join("target/metrics/stable_wins")
+        .join(format!("{subsystem}.json"));
 
     if !state_path.exists() {
         println!("No stable-wins state found for '{subsystem}'. Run ratchet-check --record first.");
@@ -285,8 +311,12 @@ pub fn run_promote_baseline(repo_root: &Path, subsystem: &str, delta_pct: f64) -
 
     let raw = std::fs::read_to_string(&state_path)
         .with_context(|| format!("Failed to read stable-wins state: {}", state_path.display()))?;
-    let state: StableWinsState = serde_json::from_str(&raw)
-        .with_context(|| format!("Failed to parse stable-wins state: {}", state_path.display()))?;
+    let state: StableWinsState = serde_json::from_str(&raw).with_context(|| {
+        format!(
+            "Failed to parse stable-wins state: {}",
+            state_path.display()
+        )
+    })?;
 
     let eligible = stable_improvements(&state, &baseline.improvement_metrics, delta_pct);
 
@@ -341,7 +371,10 @@ mod tests {
         ]);
 
         let violations = check_floor_metrics(&baseline, &current);
-        assert!(violations.is_empty(), "expected no violations, got: {violations:?}");
+        assert!(
+            violations.is_empty(),
+            "expected no violations, got: {violations:?}"
+        );
     }
 
     // -------------------------------------------------------------------------
@@ -349,8 +382,10 @@ mod tests {
     // -------------------------------------------------------------------------
     #[test]
     fn test_ratchet_violation_on_rate_regression() {
-        let baseline =
-            make_baseline(BTreeMap::from([("system_clean_rate".to_string(), Some(0.971))]));
+        let baseline = make_baseline(BTreeMap::from([(
+            "system_clean_rate".to_string(),
+            Some(0.971),
+        )]));
 
         // 0.90 is well below 0.971 — must trigger a violation.
         let current = BTreeMap::from([("system_clean_rate".to_string(), Some(0.90))]);
@@ -358,7 +393,10 @@ mod tests {
         let violations = check_floor_metrics(&baseline, &current);
         assert_eq!(violations.len(), 1, "expected exactly one violation");
         assert_eq!(violations[0].metric, "system_clean_rate");
-        assert!(violations[0].regression_pct > 0.005, "regression_pct should exceed tolerance");
+        assert!(
+            violations[0].regression_pct > 0.005,
+            "regression_pct should exceed tolerance"
+        );
     }
 
     // -------------------------------------------------------------------------
@@ -366,8 +404,10 @@ mod tests {
     // -------------------------------------------------------------------------
     #[test]
     fn test_ratchet_no_violation_within_tolerance() {
-        let mut baseline =
-            make_baseline(BTreeMap::from([("system_clean_rate".to_string(), Some(0.971))]));
+        let mut baseline = make_baseline(BTreeMap::from([(
+            "system_clean_rate".to_string(),
+            Some(0.971),
+        )]));
         baseline.tolerance_pct = 0.005;
 
         // 0.3 % drop — within the 0.5 % tolerance band.
@@ -386,8 +426,10 @@ mod tests {
     // -------------------------------------------------------------------------
     #[test]
     fn test_ratchet_violation_on_count_increase() {
-        let baseline =
-            make_baseline(BTreeMap::from([("system_crash_count".to_string(), Some(0.0))]));
+        let baseline = make_baseline(BTreeMap::from([(
+            "system_crash_count".to_string(),
+            Some(0.0),
+        )]));
 
         let current = BTreeMap::from([("system_crash_count".to_string(), Some(1.0))]);
 
@@ -401,8 +443,10 @@ mod tests {
     // -------------------------------------------------------------------------
     #[test]
     fn test_ratchet_violation_on_nodes_increase() {
-        let baseline =
-            make_baseline(BTreeMap::from([("system_total_error_nodes".to_string(), Some(604.0))]));
+        let baseline = make_baseline(BTreeMap::from([(
+            "system_total_error_nodes".to_string(),
+            Some(604.0),
+        )]));
 
         let current = BTreeMap::from([("system_total_error_nodes".to_string(), Some(700.0))]);
 
@@ -428,7 +472,10 @@ mod tests {
         ]);
 
         let violations = check_floor_metrics(&baseline, &current);
-        assert!(violations.is_empty(), "null baseline metric must be skipped; got {violations:?}");
+        assert!(
+            violations.is_empty(),
+            "null baseline metric must be skipped; got {violations:?}"
+        );
     }
 
     // -------------------------------------------------------------------------
@@ -436,8 +483,10 @@ mod tests {
     // -------------------------------------------------------------------------
     #[test]
     fn test_ratchet_missing_current_skipped() {
-        let baseline =
-            make_baseline(BTreeMap::from([("system_clean_rate".to_string(), Some(0.971))]));
+        let baseline = make_baseline(BTreeMap::from([(
+            "system_clean_rate".to_string(),
+            Some(0.971),
+        )]));
 
         // Current map is empty — metric is absent.
         let current: BTreeMap<String, Option<f64>> = BTreeMap::new();
@@ -454,8 +503,10 @@ mod tests {
     // -------------------------------------------------------------------------
     #[test]
     fn test_ratchet_explicit_lower_is_better() {
-        let mut baseline =
-            make_baseline(BTreeMap::from([("latency_p95_ms".to_string(), Some(100.0))]));
+        let mut baseline = make_baseline(BTreeMap::from([(
+            "latency_p95_ms".to_string(),
+            Some(100.0),
+        )]));
         baseline.lower_is_better = vec!["latency_p95_ms".to_string()];
 
         // Increase in latency is a regression.
@@ -471,13 +522,18 @@ mod tests {
     // -------------------------------------------------------------------------
     #[test]
     fn test_ratchet_no_violation_on_count_decrease() {
-        let baseline =
-            make_baseline(BTreeMap::from([("system_crash_count".to_string(), Some(5.0))]));
+        let baseline = make_baseline(BTreeMap::from([(
+            "system_crash_count".to_string(),
+            Some(5.0),
+        )]));
 
         let current = BTreeMap::from([("system_crash_count".to_string(), Some(3.0))]);
 
         let violations = check_floor_metrics(&baseline, &current);
-        assert!(violations.is_empty(), "count decrease is an improvement, not a violation");
+        assert!(
+            violations.is_empty(),
+            "count decrease is an improvement, not a violation"
+        );
     }
 
     // -------------------------------------------------------------------------
@@ -487,15 +543,21 @@ mod tests {
     // -------------------------------------------------------------------------
     #[test]
     fn test_ratchet_lower_is_better_sub_one_baseline_regression() {
-        let mut baseline =
-            make_baseline(BTreeMap::from([("error_rate_count".to_string(), Some(0.05))]));
+        let mut baseline = make_baseline(BTreeMap::from([(
+            "error_rate_count".to_string(),
+            Some(0.05),
+        )]));
         baseline.tolerance_pct = 0.005; // 0.5 % band
 
         // Doubling 0.05 -> 0.10 is a 100 % regression; must exceed tolerance.
         let current = BTreeMap::from([("error_rate_count".to_string(), Some(0.10))]);
 
         let violations = check_floor_metrics(&baseline, &current);
-        assert_eq!(violations.len(), 1, "doubling a sub-1.0 lower-is-better metric must violate");
+        assert_eq!(
+            violations.len(),
+            1,
+            "doubling a sub-1.0 lower-is-better metric must violate"
+        );
         assert_eq!(violations[0].metric, "error_rate_count");
         // regression_pct = (0.10 - 0.05) / 0.05 = 1.0 (100 %)
         assert!(

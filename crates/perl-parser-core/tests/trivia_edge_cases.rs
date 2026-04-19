@@ -32,7 +32,10 @@ This is documentation without a closing =cut
         }
     }
 
-    assert!(found_pod, "Should detect POD even without =cut at end of file");
+    assert!(
+        found_pod,
+        "Should detect POD even without =cut at end of file"
+    );
 }
 
 #[test]
@@ -51,7 +54,10 @@ package MyModule;
     let parser = TriviaPreservingParser::new(source);
     let result = parser.parse();
 
-    let has_pod = result.leading_trivia.iter().any(|t| matches!(&t.trivia, Trivia::PodComment(_)));
+    let has_pod = result
+        .leading_trivia
+        .iter()
+        .any(|t| matches!(&t.trivia, Trivia::PodComment(_)));
 
     assert!(has_pod, "Should detect POD at start of file");
 }
@@ -72,7 +78,10 @@ fn test_comment_without_newline_at_eof() {
         }
     }
 
-    assert!(found_comment, "Should detect comment at EOF without newline");
+    assert!(
+        found_comment,
+        "Should detect comment at EOF without newline"
+    );
 }
 
 #[test]
@@ -89,7 +98,10 @@ fn test_windows_line_endings() {
         .filter(|t| matches!(&t.trivia, Trivia::LineComment(_)))
         .count();
 
-    assert!(comment_count >= 1, "Should handle Windows line endings in comments");
+    assert!(
+        comment_count >= 1,
+        "Should handle Windows line endings in comments"
+    );
 }
 
 #[test]
@@ -132,7 +144,10 @@ fn test_mixed_tabs_and_spaces() {
         false
     };
 
-    assert!(found_expected, "Should capture leading whitespace with mixed tabs/spaces");
+    assert!(
+        found_expected,
+        "Should capture leading whitespace with mixed tabs/spaces"
+    );
 }
 
 #[test]
@@ -150,7 +165,11 @@ fn test_shebang_variations() {
         let result = parser.parse();
 
         let has_shebang = result.leading_trivia.iter().any(|t| {
-            if let Trivia::LineComment(text) = &t.trivia { text.starts_with("#!") } else { false }
+            if let Trivia::LineComment(text) = &t.trivia {
+                text.starts_with("#!")
+            } else {
+                false
+            }
         });
 
         assert!(has_shebang, "Should detect shebang: {}", source);
@@ -165,8 +184,11 @@ fn test_empty_lines_sequence() {
     let parser = TriviaPreservingParser::new(source);
     let result = parser.parse();
 
-    let newline_count =
-        result.leading_trivia.iter().filter(|t| matches!(&t.trivia, Trivia::Newline)).count();
+    let newline_count = result
+        .leading_trivia
+        .iter()
+        .filter(|t| matches!(&t.trivia, Trivia::Newline))
+        .count();
 
     // Should capture the initial state and newlines
     assert!(newline_count >= 1, "Should track multiple newlines");
@@ -196,8 +218,11 @@ my $x = 1;
     let parser = TriviaPreservingParser::new(source);
     let result = parser.parse();
 
-    let pod_count =
-        result.leading_trivia.iter().filter(|t| matches!(&t.trivia, Trivia::PodComment(_))).count();
+    let pod_count = result
+        .leading_trivia
+        .iter()
+        .filter(|t| matches!(&t.trivia, Trivia::PodComment(_)))
+        .count();
 
     assert!(pod_count >= 1, "Should detect POD with special commands");
 }
@@ -283,7 +308,10 @@ Hidden documentation
     let result = parser.parse();
 
     // Check if POD was captured anywhere (leading trivia or within the parse)
-    let has_pod = result.leading_trivia.iter().any(|t| matches!(&t.trivia, Trivia::PodComment(_)));
+    let has_pod = result
+        .leading_trivia
+        .iter()
+        .any(|t| matches!(&t.trivia, Trivia::PodComment(_)));
 
     assert!(has_pod, "Should detect POD in middle of code");
 }
@@ -331,7 +359,10 @@ my $x = 1;
     let parser = TriviaPreservingParser::new(source);
     let result = parser.parse();
 
-    let has_pod = result.leading_trivia.iter().any(|t| matches!(&t.trivia, Trivia::PodComment(_)));
+    let has_pod = result
+        .leading_trivia
+        .iter()
+        .any(|t| matches!(&t.trivia, Trivia::PodComment(_)));
 
     assert!(has_pod, "Should handle nested =begin/=end");
 }

@@ -44,7 +44,11 @@ impl PullDiagnosticsOrchestrator {
         // Get config values
         let (perlcritic_enabled, perlcritic_severity, perlcritic_profile) = {
             let cfg = server.config.lock();
-            (cfg.perlcritic_enabled, cfg.perlcritic_severity, cfg.perlcritic_profile.clone())
+            (
+                cfg.perlcritic_enabled,
+                cfg.perlcritic_severity,
+                cfg.perlcritic_profile.clone(),
+            )
         };
 
         let profile =
@@ -90,7 +94,11 @@ impl PullDiagnosticsOrchestrator {
         // Check config
         let (enabled, severity, profile) = {
             let cfg = server.config.lock();
-            (cfg.perlcritic_enabled, cfg.perlcritic_severity, cfg.perlcritic_profile.clone())
+            (
+                cfg.perlcritic_enabled,
+                cfg.perlcritic_severity,
+                cfg.perlcritic_profile.clone(),
+            )
         };
 
         if !enabled {
@@ -163,8 +171,11 @@ impl PullDiagnosticsOrchestrator {
                     None
                 });
 
-                let critic_config =
-                    CriticConfig { severity, profile: resolved_profile, ..Default::default() };
+                let critic_config = CriticConfig {
+                    severity,
+                    profile: resolved_profile,
+                    ..Default::default()
+                };
 
                 // Use injected test runtime if present, otherwise OS runtime
                 let analyzer = {
@@ -340,19 +351,22 @@ impl LspServer {
         // because parking_lot::Mutex is not reentrant.
         let snapshot = {
             let documents = self.documents.lock();
-            documents.get(&normalized_uri).or_else(|| documents.get(uri)).map(|doc| {
-                (
-                    doc.ast.clone(),
-                    doc.text.clone(),
-                    doc.parse_errors.clone(),
-                    doc.version,
-                    doc.degradation_tier,
-                    doc.line_starts.clone(),
-                    doc.rope.clone(),
-                    Arc::clone(&doc.generation),
-                    doc.generation.load(Ordering::SeqCst),
-                )
-            })
+            documents
+                .get(&normalized_uri)
+                .or_else(|| documents.get(uri))
+                .map(|doc| {
+                    (
+                        doc.ast.clone(),
+                        doc.text.clone(),
+                        doc.parse_errors.clone(),
+                        doc.version,
+                        doc.degradation_tier,
+                        doc.line_starts.clone(),
+                        doc.rope.clone(),
+                        Arc::clone(&doc.generation),
+                        doc.generation.load(Ordering::SeqCst),
+                    )
+                })
             // lock is released here
         };
 
@@ -379,7 +393,8 @@ impl LspServer {
             // resolver is called with the documents lock *released* — no reentrant deadlock.
             let provider = DiagnosticsProvider::new(ast, text.clone());
             let resolver = |module: &str| {
-                self.resolve_module_to_path_with_doc(module, Some(&text), Some(uri)).is_some()
+                self.resolve_module_to_path_with_doc(module, Some(&text), Some(uri))
+                    .is_some()
             };
             let search_paths: Vec<String> = self
                 .include_paths_for_doc(uri)
@@ -455,9 +470,11 @@ impl LspServer {
                 .map(|e| {
                     // Extract location and base message from error enum
                     let (location, base_message) = match e {
-                        crate::error::ParseError::UnexpectedToken { location, expected, found } => {
-                            (*location, format!("Expected {}, found {}", expected, found))
-                        }
+                        crate::error::ParseError::UnexpectedToken {
+                            location,
+                            expected,
+                            found,
+                        } => (*location, format!("Expected {}, found {}", expected, found)),
                         crate::error::ParseError::SyntaxError { location, message } => {
                             (*location, message.clone())
                         }
@@ -555,18 +572,23 @@ impl LspServer {
         let normalized_uri = self.normalize_uri_key(uri);
         let snapshot = {
             let documents = self.documents.lock();
-            documents.get(&normalized_uri).or_else(|| documents.get(uri)).map(|doc| {
-                (
-                    doc.parse_errors.clone(),
-                    doc.version,
-                    doc.line_starts.clone(),
-                    doc.rope.clone(),
-                    doc.text.clone(),
-                )
-            })
+            documents
+                .get(&normalized_uri)
+                .or_else(|| documents.get(uri))
+                .map(|doc| {
+                    (
+                        doc.parse_errors.clone(),
+                        doc.version,
+                        doc.line_starts.clone(),
+                        doc.rope.clone(),
+                        doc.text.clone(),
+                    )
+                })
             // lock is released here
         };
-        let Some((parse_errors, version, line_starts, rope, text)) = snapshot else { return };
+        let Some((parse_errors, version, line_starts, rope, text)) = snapshot else {
+            return;
+        };
 
         // Nothing to fast-publish when there are no parse errors.
         if parse_errors.is_empty() {
@@ -579,9 +601,11 @@ impl LspServer {
             .iter()
             .map(|e| {
                 let (location, base_message) = match e {
-                    crate::error::ParseError::UnexpectedToken { location, expected, found } => {
-                        (*location, format!("Expected {}, found {}", expected, found))
-                    }
+                    crate::error::ParseError::UnexpectedToken {
+                        location,
+                        expected,
+                        found,
+                    } => (*location, format!("Expected {}, found {}", expected, found)),
                     crate::error::ParseError::SyntaxError { location, message } => {
                         (*location, message.clone())
                     }
@@ -682,7 +706,9 @@ impl LspServer {
 
             if let Some(doc) = doc_snapshot {
                 // Build context from server state
-                let context = self.pull_diagnostics_orchestrator.build_context(self, uri_str);
+                let context = self
+                    .pull_diagnostics_orchestrator
+                    .build_context(self, uri_str);
 
                 // Use PullDiagnosticsProvider for clean, testable logic
                 let provider = PullDiagnosticsProvider::new();
@@ -696,12 +722,13 @@ impl LspServer {
 
                 // Collect external perlcritic diagnostics via orchestrator
                 let mut perlcritic_diags = Vec::new();
-                self.pull_diagnostics_orchestrator.collect_perlcritic_diagnostics(
-                    self,
-                    uri_str,
-                    &doc.text,
-                    &mut perlcritic_diags,
-                );
+                self.pull_diagnostics_orchestrator
+                    .collect_perlcritic_diagnostics(
+                        self,
+                        uri_str,
+                        &doc.text,
+                        &mut perlcritic_diags,
+                    );
 
                 // Convert report to JSON
                 return Ok(Some(self.document_report_to_json(
@@ -832,8 +859,12 @@ impl LspServer {
         doc: &crate::state::DocumentState,
         uri: &str,
     ) -> Value {
-        let start_pos = doc.line_starts.offset_to_position_rope(&doc.rope, d.range.0);
-        let end_pos = doc.line_starts.offset_to_position_rope(&doc.rope, d.range.1);
+        let start_pos = doc
+            .line_starts
+            .offset_to_position_rope(&doc.rope, d.range.0);
+        let end_pos = doc
+            .line_starts
+            .offset_to_position_rope(&doc.rope, d.range.1);
 
         let mut diag = json!({
             "range": {
@@ -860,10 +891,12 @@ impl LspServer {
                 d.related_information
                     .iter()
                     .map(|ri| {
-                        let ri_start =
-                            doc.line_starts.offset_to_position_rope(&doc.rope, ri.location.0);
-                        let ri_end =
-                            doc.line_starts.offset_to_position_rope(&doc.rope, ri.location.1);
+                        let ri_start = doc
+                            .line_starts
+                            .offset_to_position_rope(&doc.rope, ri.location.0);
+                        let ri_end = doc
+                            .line_starts
+                            .offset_to_position_rope(&doc.rope, ri.location.1);
                         json!({
                             "location": {
                                 "uri": uri,
@@ -954,7 +987,10 @@ impl LspServer {
         // Collect document snapshots without holding lock
         let docs_snapshot: Vec<(String, DocumentState)> = {
             let documents = self.documents.lock();
-            documents.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
+            documents
+                .iter()
+                .map(|(k, v)| (k.clone(), v.clone()))
+                .collect()
         };
 
         for (i, (uri_str, doc)) in docs_snapshot.iter().enumerate() {
@@ -964,8 +1000,10 @@ impl LspServer {
             }
 
             // Check if we have a previous result ID for this document
-            let prev_id =
-                previous_result_ids.iter().find(|(u, _)| u == uri_str).map(|(_, id)| id.clone());
+            let prev_id = previous_result_ids
+                .iter()
+                .find(|(u, _)| u == uri_str)
+                .map(|(_, id)| id.clone());
 
             if let Some(ast) = &doc.ast {
                 let provider = DiagnosticsProvider::new(ast, doc.text.clone());
@@ -1236,7 +1274,11 @@ impl LspServer {
         // Check config: perlcritic must be explicitly enabled (opt-in)
         let (enabled, severity, profile) = {
             let cfg = self.config.lock();
-            (cfg.perlcritic_enabled, cfg.perlcritic_severity, cfg.perlcritic_profile.clone())
+            (
+                cfg.perlcritic_enabled,
+                cfg.perlcritic_severity,
+                cfg.perlcritic_profile.clone(),
+            )
         };
         if !enabled {
             return;
@@ -1263,8 +1305,9 @@ impl LspServer {
         // and is only set to `true` through the test helper
         // `LspServer::test_bypass_perlcritic_command_check`, enabling mock-runtime
         // injection without a real `perlcritic` binary.
-        let skip_check =
-            self.skip_perlcritic_command_check.load(std::sync::atomic::Ordering::Relaxed);
+        let skip_check = self
+            .skip_perlcritic_command_check
+            .load(std::sync::atomic::Ordering::Relaxed);
         if !skip_check && !crate::execute_command::command_exists("perlcritic") {
             self.emit_perlcritic_workspace_warning(
                 "missing-binary".to_string(),
@@ -1514,9 +1557,13 @@ mod tests {
     }
     fn make_server_with_capture() -> (LspServer, StdArc<parking_lot::Mutex<Vec<u8>>>) {
         let buf = StdArc::new(parking_lot::Mutex::new(Vec::<u8>::new()));
-        let writer = SharedVecWriter { inner: StdArc::clone(&buf) };
-        let server =
-            LspServer::with_io(Box::new(std::io::Cursor::new(Vec::<u8>::new())), Box::new(writer));
+        let writer = SharedVecWriter {
+            inner: StdArc::clone(&buf),
+        };
+        let server = LspServer::with_io(
+            Box::new(std::io::Cursor::new(Vec::<u8>::new())),
+            Box::new(writer),
+        );
         (server, buf)
     }
 
@@ -1619,7 +1666,9 @@ mod tests {
         let (server, buf) = make_server_with_capture();
         let uri = "file:///fast_path_pull_diags_test.pl";
         // Simulate a client that supports pull diagnostics by setting the flag.
-        server.client_supports_pull_diags.store(true, Ordering::Relaxed);
+        server
+            .client_supports_pull_diags
+            .store(true, Ordering::Relaxed);
         server
             .test_handle_did_open(Some(json!({
                 "textDocument": {
@@ -1655,8 +1704,16 @@ mod tests {
             explanation: String::new(),
             severity: crate::perl_critic::Severity::Gentle,
             range: perl_parser::position::Range {
-                start: perl_parser::position::Position { byte: 0, line: 0, column: 0 },
-                end: perl_parser::position::Position { byte: 0, line: 0, column: 1 },
+                start: perl_parser::position::Position {
+                    byte: 0,
+                    line: 0,
+                    column: 0,
+                },
+                end: perl_parser::position::Position {
+                    byte: 0,
+                    line: 0,
+                    column: 1,
+                },
             },
             file: "test.pl".to_string(),
         };

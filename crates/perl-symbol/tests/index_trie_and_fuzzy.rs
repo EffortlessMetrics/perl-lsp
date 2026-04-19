@@ -27,7 +27,11 @@ fn search_prefix_empty_string_returns_all_symbols() {
     index.add_symbol("baz".to_string());
 
     let results = index.search_prefix("");
-    assert_eq!(results.len(), 3, "empty prefix must match all indexed symbols");
+    assert_eq!(
+        results.len(),
+        3,
+        "empty prefix must match all indexed symbols"
+    );
     assert!(results.contains(&"foo".to_string()));
     assert!(results.contains(&"bar".to_string()));
     assert!(results.contains(&"baz".to_string()));
@@ -54,7 +58,10 @@ fn search_prefix_partial_match_then_no_child() {
 
     // "foo" exists but "foox" doesn't
     let results = index.search_prefix("foox");
-    assert!(results.is_empty(), "prefix longer than any symbol must return empty");
+    assert!(
+        results.is_empty(),
+        "prefix longer than any symbol must return empty"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -69,7 +76,11 @@ fn search_prefix_exact_symbol_name_returns_that_symbol() {
     index.add_symbol("set_user".to_string());
 
     let results = index.search_prefix("get_user");
-    assert_eq!(results.len(), 2, "exact prefix should match symbol and its extensions");
+    assert_eq!(
+        results.len(),
+        2,
+        "exact prefix should match symbol and its extensions"
+    );
     assert!(results.contains(&"get_user".to_string()));
     assert!(results.contains(&"get_user_name".to_string()));
 }
@@ -82,14 +93,20 @@ fn search_prefix_exact_symbol_name_returns_that_symbol() {
 fn search_prefix_on_empty_index_returns_empty() {
     let index = SymbolIndex::new();
     let results = index.search_prefix("any");
-    assert!(results.is_empty(), "empty index must return empty for any prefix");
+    assert!(
+        results.is_empty(),
+        "empty index must return empty for any prefix"
+    );
 }
 
 #[test]
 fn search_fuzzy_on_empty_index_returns_empty() {
     let index = SymbolIndex::new();
     let results = index.search_fuzzy("any query");
-    assert!(results.is_empty(), "empty index must return empty for any fuzzy query");
+    assert!(
+        results.is_empty(),
+        "empty index must return empty for any fuzzy query"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -102,7 +119,10 @@ fn search_fuzzy_empty_query_returns_empty() {
     index.add_symbol("calculate_total".to_string());
 
     let results = index.search_fuzzy("");
-    assert!(results.is_empty(), "empty query has no tokens, must return empty");
+    assert!(
+        results.is_empty(),
+        "empty query has no tokens, must return empty"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -132,10 +152,16 @@ fn search_fuzzy_more_matching_tokens_ranks_higher() {
     let user_name_pos = results.iter().position(|s| s == "get_user_name");
 
     if let (Some(ap), Some(up)) = (account_pos, user_pos) {
-        assert!(up < ap, "get_user (2 tokens) should rank above get_account (1 token)");
+        assert!(
+            up < ap,
+            "get_user (2 tokens) should rank above get_account (1 token)"
+        );
     }
     if let (Some(ap), Some(unp)) = (account_pos, user_name_pos) {
-        assert!(unp < ap, "get_user_name (2 tokens) should rank above get_account (1 token)");
+        assert!(
+            unp < ap,
+            "get_user_name (2 tokens) should rank above get_account (1 token)"
+        );
     }
 }
 
@@ -181,7 +207,10 @@ fn consecutive_uppercase_not_split_is_findable_by_prefix() {
     index.add_symbol("XMLParser".to_string());
 
     let results = index.search_prefix("XML");
-    assert!(results.contains(&"XMLParser".to_string()), "prefix 'XML' must find 'XMLParser'");
+    assert!(
+        results.contains(&"XMLParser".to_string()),
+        "prefix 'XML' must find 'XMLParser'"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -217,7 +246,10 @@ fn symbol_not_added_is_not_found_by_prefix() {
     index.add_symbol("alpha".to_string());
 
     let results = index.search_prefix("beta");
-    assert!(!results.contains(&"beta".to_string()), "unadded symbol must not appear");
+    assert!(
+        !results.contains(&"beta".to_string()),
+        "unadded symbol must not appear"
+    );
 }
 
 #[test]
@@ -226,7 +258,10 @@ fn symbol_not_added_is_not_found_by_fuzzy() {
     index.add_symbol("alpha".to_string());
 
     let results = index.search_fuzzy("beta");
-    assert!(!results.contains(&"beta".to_string()), "unadded symbol must not appear in fuzzy");
+    assert!(
+        !results.contains(&"beta".to_string()),
+        "unadded symbol must not appear in fuzzy"
+    );
 }
 
 // ---------------------------------------------------------------------------

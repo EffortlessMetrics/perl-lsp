@@ -51,7 +51,11 @@ pub fn variable() -> impl Strategy<Value = String> {
         (prop_oneof![Just('$'), Just('@'), Just('%')], identifier())
             .prop_map(|(sigil, name)| format!("{}{}", sigil, name)),
         // Package-qualified
-        (prop_oneof![Just('$'), Just('@'), Just('%')], identifier(), identifier())
+        (
+            prop_oneof![Just('$'), Just('@'), Just('%')],
+            identifier(),
+            identifier()
+        )
             .prop_map(|(sigil, pkg, name)| format!("{}{}::{}", sigil, pkg, name)),
     ]
 }

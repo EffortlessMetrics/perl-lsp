@@ -37,7 +37,13 @@ class Config {
     };
 
     let adjust_stmt = must_some(statements.first());
-    let NodeKind::Method { name, signature, attributes, .. } = &adjust_stmt.kind else {
+    let NodeKind::Method {
+        name,
+        signature,
+        attributes,
+        ..
+    } = &adjust_stmt.kind
+    else {
         panic!(
             "expected ADJUST block to parse as a method-like node, got {}",
             adjust_stmt.kind.kind_name()
@@ -45,7 +51,13 @@ class Config {
     };
 
     assert_eq!(name, "ADJUST");
-    assert!(signature.is_none(), "ADJUST blocks should not carry method signatures");
-    assert!(attributes.is_empty(), "ADJUST blocks should not synthesize attributes");
+    assert!(
+        signature.is_none(),
+        "ADJUST blocks should not carry method signatures"
+    );
+    assert!(
+        attributes.is_empty(),
+        "ADJUST blocks should not synthesize attributes"
+    );
     Ok(())
 }

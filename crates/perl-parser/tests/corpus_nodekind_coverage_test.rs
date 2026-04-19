@@ -36,7 +36,10 @@ const SINGLE_FILE_ALLOWLIST: &[(&str, &str)] = &[
 #[test]
 fn test_corpus_nodekind_coverage() {
     let files = perl_corpus::get_test_files();
-    assert!(!files.is_empty(), "perl_corpus::get_test_files() returned no files");
+    assert!(
+        !files.is_empty(),
+        "perl_corpus::get_test_files() returned no files"
+    );
 
     let required = corpus_required_kinds();
     let mut observed = BTreeSet::new();
@@ -88,11 +91,18 @@ fn test_corpus_nodekind_coverage() {
     }
 
     // Ratchet metric: recovery-only kind count for burn-down visibility
-    eprintln!("RATCHET: {} recovery-only kind(s): {:?}", recovery_only.len(), recovery_only);
+    eprintln!(
+        "RATCHET: {} recovery-only kind(s): {:?}",
+        recovery_only.len(),
+        recovery_only
+    );
 
     // Hard gate: all required kinds must appear somewhere
-    let mut missing: Vec<&str> =
-        required.iter().copied().filter(|k| !observed.contains(k)).collect();
+    let mut missing: Vec<&str> = required
+        .iter()
+        .copied()
+        .filter(|k| !observed.contains(k))
+        .collect();
     missing.sort();
 
     assert!(
@@ -109,7 +119,10 @@ fn test_corpus_nodekind_coverage() {
 #[test]
 fn test_corpus_nodekind_angles() {
     let files = perl_corpus::get_test_files();
-    assert!(!files.is_empty(), "perl_corpus::get_test_files() returned no files");
+    assert!(
+        !files.is_empty(),
+        "perl_corpus::get_test_files() returned no files"
+    );
 
     let required = corpus_required_kinds();
     let allowlist_set: BTreeSet<&str> = SINGLE_FILE_ALLOWLIST.iter().map(|(k, _)| *k).collect();
@@ -127,7 +140,10 @@ fn test_corpus_nodekind_angles() {
             }
         };
 
-        let label = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+        let label = path
+            .file_name()
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_default();
 
         let mut parser = Parser::new(&source);
         let output = parser.parse_with_recovery();
@@ -145,8 +161,11 @@ fn test_corpus_nodekind_angles() {
     }
 
     // Check 1: completely missing kinds
-    let mut completely_missing: Vec<&str> =
-        required.iter().copied().filter(|k| !kind_to_files.contains_key(k)).collect();
+    let mut completely_missing: Vec<&str> = required
+        .iter()
+        .copied()
+        .filter(|k| !kind_to_files.contains_key(k))
+        .collect();
     completely_missing.sort();
 
     assert!(
@@ -178,7 +197,11 @@ fn test_corpus_nodekind_angles() {
         let parent_count = kind_to_parents.get(kind).map_or(0, |s| s.len());
         let clean_files = clean_kind_to_files.get(kind).map_or(0, |s| s.len());
         let angle = file_count.max(parent_count);
-        let clean_marker = if clean_files == 0 { " [recovery-only]" } else { "" };
+        let clean_marker = if clean_files == 0 {
+            " [recovery-only]"
+        } else {
+            ""
+        };
         eprintln!(
             "  {kind}: {angle} angle(s) ({file_count} file(s), {parent_count} parent(s)){clean_marker}"
         );

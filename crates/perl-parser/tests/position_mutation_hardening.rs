@@ -11,19 +11,31 @@ fn test_advance_line_increment_critical_bug() {
 
     // Test single newline advancement
     pos.advance("\n");
-    assert_eq!(pos.line, 2, "Line should increment from 1 to 2 after newline");
+    assert_eq!(
+        pos.line, 2,
+        "Line should increment from 1 to 2 after newline"
+    );
     assert_eq!(pos.column, 1, "Column should reset to 1 after newline");
-    assert_eq!(pos.byte, 1, "Byte position should be 1 after single newline");
+    assert_eq!(
+        pos.byte, 1,
+        "Byte position should be 1 after single newline"
+    );
 
     // Test multiple newlines
     pos.advance("\n\n\n");
     assert_eq!(pos.line, 5, "Line should be 5 after three more newlines");
     assert_eq!(pos.column, 1, "Column should remain 1 after newlines");
-    assert_eq!(pos.byte, 4, "Byte position should be 4 after four total newlines");
+    assert_eq!(
+        pos.byte, 4,
+        "Byte position should be 4 after four total newlines"
+    );
 
     // Test newline mixed with content
     pos.advance("hello\nworld\n");
-    assert_eq!(pos.line, 7, "Line should be 7 after two more newlines with content");
+    assert_eq!(
+        pos.line, 7,
+        "Line should be 7 after two more newlines with content"
+    );
     assert_eq!(pos.column, 1, "Column should be 1 after final newline");
     assert_eq!(pos.byte, 16, "Byte position should account for all content");
 }
@@ -57,7 +69,10 @@ fn test_range_edge_cases() {
     let empty_range = Range::empty(pos);
     assert!(empty_range.is_empty(), "Empty range should be empty");
     assert_eq!(empty_range.len(), 0, "Empty range length should be 0");
-    assert!(!empty_range.contains_byte(10), "Empty range should not contain any bytes");
+    assert!(
+        !empty_range.contains_byte(10),
+        "Empty range should not contain any bytes"
+    );
 
     // Test range boundary conditions
     let start = Position::new(5, 1, 1);
@@ -66,18 +81,35 @@ fn test_range_edge_cases() {
 
     // Test exact boundaries
     assert!(range.contains_byte(5), "Range should contain start byte");
-    assert!(!range.contains_byte(10), "Range should not contain end byte (exclusive)");
-    assert!(range.contains_byte(9), "Range should contain byte before end");
-    assert!(!range.contains_byte(4), "Range should not contain byte before start");
+    assert!(
+        !range.contains_byte(10),
+        "Range should not contain end byte (exclusive)"
+    );
+    assert!(
+        range.contains_byte(9),
+        "Range should contain byte before end"
+    );
+    assert!(
+        !range.contains_byte(4),
+        "Range should not contain byte before start"
+    );
 
     // Test overflow protection in range operations
     let max_pos = Position::new(usize::MAX, u32::MAX, u32::MAX);
     let range_max = Range::new(max_pos, max_pos);
-    assert_eq!(range_max.len(), 0, "Range with same max positions should have length 0");
+    assert_eq!(
+        range_max.len(),
+        0,
+        "Range with same max positions should have length 0"
+    );
 
     // Test saturating subtraction in len()
     let bad_range = Range::new(end, start); // End before start
-    assert_eq!(bad_range.len(), 0, "Invalid range should saturate to 0 length");
+    assert_eq!(
+        bad_range.len(),
+        0,
+        "Invalid range should saturate to 0 length"
+    );
 }
 
 /// Test UTF-16 conversion edge cases that are likely mutation survivors
@@ -87,12 +119,18 @@ fn test_utf16_conversion_edge_cases() {
     let text = "hello";
     let (line, col) = offset_to_utf16_line_col(text, 100);
     assert_eq!(line, 0, "Line should be 0 for offset beyond text");
-    assert_eq!(col, 5, "Column should be text length for offset beyond text");
+    assert_eq!(
+        col, 5,
+        "Column should be text length for offset beyond text"
+    );
 
     // Test offset at exact text length
     let (line, col) = offset_to_utf16_line_col(text, 5);
     assert_eq!(line, 0, "Line should be 0 for offset at text end");
-    assert_eq!(col, 5, "Column should be text length for offset at text end");
+    assert_eq!(
+        col, 5,
+        "Column should be text length for offset at text end"
+    );
 
     // Test empty text
     let (line, col) = offset_to_utf16_line_col("", 0);
@@ -101,7 +139,10 @@ fn test_utf16_conversion_edge_cases() {
 
     let (line, col) = offset_to_utf16_line_col("", 5);
     assert_eq!(line, 0, "Line should be 0 for empty text with large offset");
-    assert_eq!(col, 0, "Column should be 0 for empty text with large offset");
+    assert_eq!(
+        col, 0,
+        "Column should be 0 for empty text with large offset"
+    );
 }
 
 /// Test UTF-16 conversion with text ending in newline
@@ -143,7 +184,10 @@ fn test_utf16_fractional_positions() {
         if byte_offset == emoji_start_byte {
             assert_eq!(col, 6, "Should be at column 6 at start of emoji");
         } else if byte_offset == emoji_start_byte + 4 {
-            assert_eq!(col, 8, "Should be at column 8 after emoji (6 + 2 UTF-16 units)");
+            assert_eq!(
+                col, 8,
+                "Should be at column 8 after emoji (6 + 2 UTF-16 units)"
+            );
         } else {
             // Fractional positions should be between 6 and 8
             assert!(
@@ -269,7 +313,10 @@ fn test_mixed_line_ending_scenarios() {
 
             // Test position at line ending
             let (line, col) = offset_to_utf16_line_col(text, line_end);
-            println!("  Position {} (at line end): line {}, col {}", line_end, line, col);
+            println!(
+                "  Position {} (at line end): line {}, col {}",
+                line_end, line, col
+            );
 
             byte_pos = line_end;
         }
@@ -282,7 +329,11 @@ fn test_position_arithmetic_overflow() {
     // Test potential overflow in byte calculations
     let mut pos = Position::new(usize::MAX - 1, 1, 1);
     pos.advance_char('a'); // Should not overflow
-    assert_eq!(pos.byte, usize::MAX, "Byte position should reach MAX without overflow");
+    assert_eq!(
+        pos.byte,
+        usize::MAX,
+        "Byte position should reach MAX without overflow"
+    );
 
     // Test advance with empty string (should be no-op)
     let mut pos = Position::start();
@@ -300,6 +351,12 @@ fn test_position_arithmetic_overflow() {
         10,
         "Range length should be calculated correctly even with large values"
     );
-    assert!(range.contains_byte(usize::MAX - 5), "Range should contain intermediate values");
-    assert!(!range.contains_byte(usize::MAX), "Range should not contain end value (exclusive)");
+    assert!(
+        range.contains_byte(usize::MAX - 5),
+        "Range should contain intermediate values"
+    );
+    assert!(
+        !range.contains_byte(usize::MAX),
+        "Range should not contain end value (exclusive)"
+    );
 }

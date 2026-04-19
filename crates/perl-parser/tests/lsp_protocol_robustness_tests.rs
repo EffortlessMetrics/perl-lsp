@@ -47,7 +47,11 @@ fn test_parser_robustness_edge_cases() {
             Ok(ast) => {
                 let sexp = ast.to_sexp();
                 // Basic validation that we got some output
-                assert!(sexp.len() >= 2, "AST should have minimal content for: {}", code);
+                assert!(
+                    sexp.len() >= 2,
+                    "AST should have minimal content for: {}",
+                    code
+                );
             }
             Err(_) => {
                 // Parsing failure is acceptable for edge cases - just ensure no panic

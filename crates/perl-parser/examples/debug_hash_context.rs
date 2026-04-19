@@ -112,7 +112,11 @@ fn get_children(node: &Node) -> Vec<&Node> {
     match &node.kind {
         NodeKind::Program { statements } => statements.iter().collect(),
         NodeKind::Binary { left, right, .. } => vec![left.as_ref(), right.as_ref()],
-        NodeKind::VariableDeclaration { variable, initializer, .. } => {
+        NodeKind::VariableDeclaration {
+            variable,
+            initializer,
+            ..
+        } => {
             let mut children = vec![variable.as_ref()];
             if let Some(init) = initializer {
                 children.push(init.as_ref());

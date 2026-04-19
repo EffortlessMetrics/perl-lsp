@@ -60,15 +60,26 @@ $count++;
         )
         .unwrap_or(json!(null));
 
-    assert!(result.is_array(), "documentHighlight should return an array");
+    assert!(
+        result.is_array(),
+        "documentHighlight should return an array"
+    );
 
     let highlights = result.as_array().ok_or("Expected array result")?;
-    assert!(!highlights.is_empty(), "Should find highlights for $count variable");
+    assert!(
+        !highlights.is_empty(),
+        "Should find highlights for $count variable"
+    );
 
     // Verify structure of returned highlights
     for highlight in highlights {
-        assert!(highlight.get("range").is_some(), "Each highlight must have a range");
-        let range = highlight.get("range").ok_or("Expected range in highlight")?;
+        assert!(
+            highlight.get("range").is_some(),
+            "Each highlight must have a range"
+        );
+        let range = highlight
+            .get("range")
+            .ok_or("Expected range in highlight")?;
         assert!(
             range.get("start").is_some() && range.get("end").is_some(),
             "Range must have start and end positions"
@@ -125,7 +136,10 @@ calculate(1, 2);
         )
         .unwrap_or(json!(null));
 
-    assert!(result.is_array(), "Should return array for subroutine highlights");
+    assert!(
+        result.is_array(),
+        "Should return array for subroutine highlights"
+    );
 
     let highlights = result.as_array().ok_or("Expected array result")?;
 
@@ -138,7 +152,9 @@ calculate(1, 2);
 
     // Verify all highlights have valid ranges
     for highlight in highlights {
-        let range = highlight.get("range").ok_or("Expected range in highlight")?;
+        let range = highlight
+            .get("range")
+            .ok_or("Expected range in highlight")?;
         let start = range.get("start").ok_or("Expected start position")?;
         let end = range.get("end").ok_or("Expected end position")?;
 
@@ -200,16 +216,27 @@ my $other = MyModule->new();
         )
         .unwrap_or(json!(null));
 
-    assert!(result.is_array(), "Should return array for package name highlights");
+    assert!(
+        result.is_array(),
+        "Should return array for package name highlights"
+    );
 
     let highlights = result.as_array().ok_or("Expected array result")?;
 
     // Implementation may vary - accept any result as long as structure is valid
     // The key test is that the API works correctly
     for highlight in highlights {
-        assert!(highlight.get("range").is_some(), "Each highlight must have a range");
-        let range = highlight.get("range").ok_or("Expected range in highlight")?;
-        assert!(range.get("start").is_some(), "Range must have start position");
+        assert!(
+            highlight.get("range").is_some(),
+            "Each highlight must have a range"
+        );
+        let range = highlight
+            .get("range")
+            .ok_or("Expected range in highlight")?;
+        assert!(
+            range.get("start").is_some(),
+            "Range must have start position"
+        );
         assert!(range.get("end").is_some(), "Range must have end position");
     }
 
@@ -243,9 +270,16 @@ print $variable;
         )
         .unwrap_or(json!(null));
 
-    assert!(result.is_array(), "Should return array even for non-symbol positions");
+    assert!(
+        result.is_array(),
+        "Should return array even for non-symbol positions"
+    );
     let highlights = result.as_array().ok_or("Expected array result")?;
-    assert_eq!(highlights.len(), 0, "Should return empty array for comment positions");
+    assert_eq!(
+        highlights.len(),
+        0,
+        "Should return empty array for comment positions"
+    );
 
     // Test on whitespace line
     let result = harness
@@ -258,9 +292,16 @@ print $variable;
         )
         .unwrap_or(json!(null));
 
-    assert!(result.is_array(), "Should return array for whitespace positions");
+    assert!(
+        result.is_array(),
+        "Should return array for whitespace positions"
+    );
     let highlights = result.as_array().ok_or("Expected array result")?;
-    assert_eq!(highlights.len(), 0, "Should return empty array for whitespace positions");
+    assert_eq!(
+        highlights.len(),
+        0,
+        "Should return empty array for whitespace positions"
+    );
 
     Ok(())
 }
@@ -328,8 +369,14 @@ return $counter;          # Read (return value)
     // Ideally should have both reads and writes for this example
     if highlights.len() > 5 {
         // Only enforce if implementation is sophisticated enough
-        assert!(has_read || has_text, "Should have Read highlights for usage contexts");
-        assert!(has_write || has_text, "Should have Write highlights for assignment contexts");
+        assert!(
+            has_read || has_text,
+            "Should have Read highlights for usage contexts"
+        );
+        assert!(
+            has_write || has_text,
+            "Should have Write highlights for assignment contexts"
+        );
     }
 
     Ok(())
@@ -374,30 +421,44 @@ my $total = Σ(1, 2, 3);
         )
         .unwrap_or(json!(null));
 
-    assert!(result.is_array(), "Should successfully handle Unicode function names");
+    assert!(
+        result.is_array(),
+        "Should successfully handle Unicode function names"
+    );
 
     let highlights = result.as_array().ok_or("Expected array result")?;
 
     // Should find at least the definition and the call
     // Implementation may vary - accept any valid result
     for highlight in highlights {
-        let range = highlight.get("range").ok_or("Expected range in highlight")?;
+        let range = highlight
+            .get("range")
+            .ok_or("Expected range in highlight")?;
         assert!(
             range.get("start").is_some() && range.get("end").is_some(),
             "Unicode highlights must have valid ranges"
         );
 
         // Verify positions are reasonable (no extreme values due to UTF-16 issues)
-        let start_line =
-            range.get("start").and_then(|s| s.get("line")).and_then(|l| l.as_u64()).unwrap_or(0);
+        let start_line = range
+            .get("start")
+            .and_then(|s| s.get("line"))
+            .and_then(|l| l.as_u64())
+            .unwrap_or(0);
         let start_char = range
             .get("start")
             .and_then(|s| s.get("character"))
             .and_then(|c| c.as_u64())
             .unwrap_or(0);
 
-        assert!(start_line < 100, "Line number should be reasonable for Unicode content");
-        assert!(start_char < 1000, "Character offset should be reasonable for Unicode content");
+        assert!(
+            start_line < 100,
+            "Line number should be reasonable for Unicode content"
+        );
+        assert!(
+            start_char < 1000,
+            "Character offset should be reasonable for Unicode content"
+        );
     }
 
     Ok(())
@@ -443,14 +504,20 @@ $logger->log("Done");
         )
         .unwrap_or(json!(null));
 
-    assert!(result.is_array(), "Should return array for method highlights");
+    assert!(
+        result.is_array(),
+        "Should return array for method highlights"
+    );
 
     let highlights = result.as_array().ok_or("Expected array result")?;
 
     // Should find the method definition and all call sites
     // Implementation may vary - accept any valid result
     for highlight in highlights {
-        assert!(highlight.get("range").is_some(), "Each highlight must have a range");
+        assert!(
+            highlight.get("range").is_some(),
+            "Each highlight must have a range"
+        );
     }
 
     Ok(())
@@ -502,8 +569,13 @@ my $result = process();
 
     // Verify all highlights are within the function scope (lines 4-6)
     for highlight in highlights {
-        let range = highlight.get("range").ok_or("Expected range in highlight")?;
-        let line = range.get("start").and_then(|s| s.get("line")).and_then(|l| l.as_u64());
+        let range = highlight
+            .get("range")
+            .ok_or("Expected range in highlight")?;
+        let line = range
+            .get("start")
+            .and_then(|s| s.get("line"))
+            .and_then(|l| l.as_u64());
 
         if let Some(line_num) = line {
             assert!(
@@ -548,7 +620,10 @@ my $debug = $config{debug};
         )
         .unwrap_or(json!(null));
 
-    assert!(result.is_array(), "Should return array for array variable highlights");
+    assert!(
+        result.is_array(),
+        "Should return array for array variable highlights"
+    );
 
     let highlights = result.as_array().ok_or("Expected array result")?;
     assert!(
@@ -568,7 +643,10 @@ my $debug = $config{debug};
         )
         .unwrap_or(json!(null));
 
-    assert!(result.is_array(), "Should return array for hash variable highlights");
+    assert!(
+        result.is_array(),
+        "Should return array for hash variable highlights"
+    );
 
     let highlights = result.as_array().ok_or("Expected array result")?;
     assert!(
@@ -601,7 +679,10 @@ fn test_crlf_line_endings() -> TestResult {
         )
         .unwrap_or(json!(null));
 
-    assert!(result.is_array(), "Should handle CRLF line endings correctly");
+    assert!(
+        result.is_array(),
+        "Should handle CRLF line endings correctly"
+    );
 
     let highlights = result.as_array().ok_or("Expected array result")?;
     assert!(
@@ -612,7 +693,9 @@ fn test_crlf_line_endings() -> TestResult {
 
     // Verify positions are reasonable (no negative or extreme values)
     for highlight in highlights {
-        let range = highlight.get("range").ok_or("Expected range in highlight")?;
+        let range = highlight
+            .get("range")
+            .ok_or("Expected range in highlight")?;
         let start_line = range
             .get("start")
             .and_then(|s| s.get("line"))
@@ -624,8 +707,16 @@ fn test_crlf_line_endings() -> TestResult {
             .and_then(|c| c.as_u64())
             .unwrap_or(u64::MAX);
 
-        assert!(start_line < 10, "Line number should be reasonable: {}", start_line);
-        assert!(start_char < 100, "Character offset should be reasonable: {}", start_char);
+        assert!(
+            start_line < 10,
+            "Line number should be reasonable: {}",
+            start_line
+        );
+        assert!(
+            start_char < 100,
+            "Character offset should be reasonable: {}",
+            start_char
+        );
     }
 
     Ok(())
@@ -667,7 +758,10 @@ print $valid;
     // Should find at least some occurrences of $valid despite syntax errors
     // Implementation may vary based on error recovery capabilities
     for highlight in highlights {
-        assert!(highlight.get("range").is_some(), "Each highlight must have a range");
+        assert!(
+            highlight.get("range").is_some(),
+            "Each highlight must have a range"
+        );
     }
 
     Ok(())
@@ -695,7 +789,11 @@ fn test_empty_file_handling() -> TestResult {
     assert!(result.is_array(), "Should return array for empty file");
 
     let highlights = result.as_array().ok_or("Expected array result")?;
-    assert_eq!(highlights.len(), 0, "Should return empty array for empty file");
+    assert_eq!(
+        highlights.len(),
+        0,
+        "Should return empty array for empty file"
+    );
 
     Ok(())
 }
@@ -735,14 +833,20 @@ print "Module version: $MyModule::VERSION\n";
         )
         .unwrap_or(json!(null));
 
-    assert!(result.is_array(), "Should return array for global variable highlights");
+    assert!(
+        result.is_array(),
+        "Should return array for global variable highlights"
+    );
 
     let highlights = result.as_array().ok_or("Expected array result")?;
 
     // Should find multiple occurrences of $VERSION
     // Implementation may vary based on qualified name handling
     for highlight in highlights {
-        assert!(highlight.get("range").is_some(), "Each highlight must have a range");
+        assert!(
+            highlight.get("range").is_some(),
+            "Each highlight must have a range"
+        );
     }
 
     Ok(())
@@ -785,8 +889,13 @@ my $result = $second * 2;
 
     // Verify that all highlights are on the correct variable ($second, not $first or $third)
     for highlight in highlights {
-        let range = highlight.get("range").ok_or("Expected range in highlight")?;
-        let line = range.get("start").and_then(|s| s.get("line")).and_then(|l| l.as_u64());
+        let range = highlight
+            .get("range")
+            .ok_or("Expected range in highlight")?;
+        let line = range
+            .get("start")
+            .and_then(|s| s.get("line"))
+            .and_then(|l| l.as_u64());
 
         if let Some(line_num) = line {
             // $second appears on lines 1, 3, and 4
@@ -836,7 +945,10 @@ my $result = outer();
         )
         .unwrap_or(json!(null));
 
-    assert!(result.is_array(), "Should return array for nested scope variable");
+    assert!(
+        result.is_array(),
+        "Should return array for nested scope variable"
+    );
 
     let highlights = result.as_array().ok_or("Expected array result")?;
 
@@ -889,14 +1001,20 @@ my $formatted = Utils::format_string("world");
         )
         .unwrap_or(json!(null));
 
-    assert!(result.is_array(), "Should return array for qualified name highlights");
+    assert!(
+        result.is_array(),
+        "Should return array for qualified name highlights"
+    );
 
     let highlights = result.as_array().ok_or("Expected array result")?;
 
     // Should find definition and both qualified calls
     // Implementation may vary based on qualified name handling
     for highlight in highlights {
-        assert!(highlight.get("range").is_some(), "Each highlight must have a range");
+        assert!(
+            highlight.get("range").is_some(),
+            "Each highlight must have a range"
+        );
     }
 
     Ok(())
@@ -932,14 +1050,20 @@ if ($text =~ /(\w+)\s+(\w+)/) {
         )
         .unwrap_or(json!(null));
 
-    assert!(result.is_array(), "Should return array for regex capture variable highlights");
+    assert!(
+        result.is_array(),
+        "Should return array for regex capture variable highlights"
+    );
 
     let highlights = result.as_array().ok_or("Expected array result")?;
 
     // Should find both uses of $1 (or may not support special variables yet)
     // Accept any valid result
     for highlight in highlights {
-        assert!(highlight.get("range").is_some(), "Each highlight must have a range");
+        assert!(
+            highlight.get("range").is_some(),
+            "Each highlight must have a range"
+        );
     }
 
     Ok(())
@@ -958,7 +1082,10 @@ fn test_document_highlight_capability_advertised() -> TestResult {
     // Document highlight should be advertised (unless in ga-lock mode)
     if !cfg!(feature = "lsp-ga-lock") {
         let has_capability = capabilities.get("documentHighlightProvider").is_some();
-        assert!(has_capability, "documentHighlightProvider should be advertised in capabilities");
+        assert!(
+            has_capability,
+            "documentHighlightProvider should be advertised in capabilities"
+        );
 
         // If present, should be true or an object
         let provider = &capabilities["documentHighlightProvider"];
@@ -1054,13 +1181,19 @@ if ($@) {
         )
         .unwrap_or(json!(null));
 
-    assert!(result.is_array(), "Should return array for builtin variable highlights");
+    assert!(
+        result.is_array(),
+        "Should return array for builtin variable highlights"
+    );
 
     // Implementation may or may not support builtin variables
     // Accept any valid result
     let highlights = result.as_array().ok_or("Expected array result")?;
     for highlight in highlights {
-        assert!(highlight.get("range").is_some(), "Each highlight must have a range");
+        assert!(
+            highlight.get("range").is_some(),
+            "Each highlight must have a range"
+        );
     }
 
     Ok(())

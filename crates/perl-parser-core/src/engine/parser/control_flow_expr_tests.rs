@@ -12,7 +12,12 @@ mod tests {
     /// code parsed cleanly without recovery.
     fn assert_no_errors(input: &str, ast: &perl_ast::ast::Node) {
         let sexp = ast.to_sexp();
-        assert!(!sexp.contains("ERROR"), "Parse of {:?} produced ERROR nodes:\n{}", input, sexp);
+        assert!(
+            !sexp.contains("ERROR"),
+            "Parse of {:?} produced ERROR nodes:\n{}",
+            input,
+            sexp
+        );
     }
 
     // ---------------------------------------------------------------
@@ -95,7 +100,12 @@ mod tests {
                     NodeKind::ExpressionStatement { expression } => expression.as_ref(),
                     other => unreachable!("Expected ExpressionStatement, got {:?}", other),
                 };
-                if let NodeKind::Ternary { then_expr, else_expr, .. } = &expr.kind {
+                if let NodeKind::Ternary {
+                    then_expr,
+                    else_expr,
+                    ..
+                } = &expr.kind
+                {
                     assert!(
                         matches!(then_expr.kind, NodeKind::Return { .. }),
                         "Expected Return in then branch, got {:?}",

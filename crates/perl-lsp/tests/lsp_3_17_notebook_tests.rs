@@ -55,9 +55,13 @@ fn test_notebook_document_3_17() -> TestResult {
             }
         }),
     )?;
-    let cell1_symbols = cell1_symbols.as_array().ok_or("cell1 symbols should be an array")?;
+    let cell1_symbols = cell1_symbols
+        .as_array()
+        .ok_or("cell1 symbols should be an array")?;
     assert!(
-        cell1_symbols.iter().any(|symbol| symbol["name"].as_str() == Some("from_notebook_cell")),
+        cell1_symbols
+            .iter()
+            .any(|symbol| symbol["name"].as_str() == Some("from_notebook_cell")),
         "Expected symbol from_notebook_cell in notebook cell document symbols"
     );
 
@@ -104,9 +108,13 @@ fn test_notebook_document_3_17() -> TestResult {
             }
         }),
     )?;
-    let cell2_symbols = cell2_symbols.as_array().ok_or("cell2 symbols should be an array")?;
+    let cell2_symbols = cell2_symbols
+        .as_array()
+        .ok_or("cell2 symbols should be an array")?;
     assert!(
-        cell2_symbols.iter().any(|symbol| symbol["name"].as_str() == Some("second_notebook_cell")),
+        cell2_symbols
+            .iter()
+            .any(|symbol| symbol["name"].as_str() == Some("second_notebook_cell")),
         "Expected symbol second_notebook_cell in newly opened notebook cell"
     );
 

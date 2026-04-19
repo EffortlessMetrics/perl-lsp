@@ -426,7 +426,10 @@ impl GlobExpressionGenerator {
 
     /// Return glob expression cases with a matching tag.
     pub fn by_tag(tag: &str) -> Vec<&'static GlobExpressionCase> {
-        glob_expression_cases().iter().filter(|case| case.tags.contains(&tag)).collect()
+        glob_expression_cases()
+            .iter()
+            .filter(|case| case.tags.contains(&tag))
+            .collect()
     }
 
     /// Return glob expression cases that match any of the provided tags.
@@ -480,8 +483,10 @@ impl GlobExpressionGenerator {
 
     /// Return sorted unique glob expression tags.
     pub fn tags() -> Vec<&'static str> {
-        let mut tags: Vec<&'static str> =
-            glob_expression_cases().iter().flat_map(|case| case.tags.iter().copied()).collect();
+        let mut tags: Vec<&'static str> = glob_expression_cases()
+            .iter()
+            .flat_map(|case| case.tags.iter().copied())
+            .collect();
         tags.sort();
         tags.dedup();
         tags
@@ -496,17 +501,29 @@ mod tests {
 
     #[test]
     fn glob_cases_have_ids() {
-        assert!(glob_expression_cases().iter().all(|case| !case.id.is_empty()));
+        assert!(
+            glob_expression_cases()
+                .iter()
+                .all(|case| !case.id.is_empty())
+        );
     }
 
     #[test]
     fn glob_cases_have_descriptions() {
-        assert!(glob_expression_cases().iter().all(|case| !case.description.is_empty()));
+        assert!(
+            glob_expression_cases()
+                .iter()
+                .all(|case| !case.description.is_empty())
+        );
     }
 
     #[test]
     fn glob_cases_have_source() {
-        assert!(glob_expression_cases().iter().all(|case| !case.source.is_empty()));
+        assert!(
+            glob_expression_cases()
+                .iter()
+                .all(|case| !case.source.is_empty())
+        );
     }
 
     #[test]
@@ -602,12 +619,19 @@ mod tests {
     #[test]
     fn glob_cases_have_disambiguation_tag() {
         let cases = GlobExpressionGenerator::by_tag("disambiguation");
-        assert!(cases.len() >= 4, "Expected at least 4 disambiguation cases, got {}", cases.len());
+        assert!(
+            cases.len() >= 4,
+            "Expected at least 4 disambiguation cases, got {}",
+            cases.len()
+        );
     }
 
     #[test]
     fn glob_generator_all_cases_returns_all() {
-        assert_eq!(GlobExpressionGenerator::all_cases().len(), glob_expression_cases().len());
+        assert_eq!(
+            GlobExpressionGenerator::all_cases().len(),
+            glob_expression_cases().len()
+        );
     }
 
     #[test]

@@ -373,7 +373,10 @@ impl<'a> DeclarationProvider<'a> {
                 break;
             };
 
-            if matches!(parent.kind, NodeKind::Subroutine { .. } | NodeKind::Method { .. }) {
+            if matches!(
+                parent.kind,
+                NodeKind::Subroutine { .. } | NodeKind::Method { .. }
+            ) {
                 if let Some(links) =
                     self.find_signature_parameter_declaration(parent, usage, var_name)
                 {
@@ -496,8 +499,9 @@ impl<'a> DeclarationProvider<'a> {
 
         // If we have a target package, find subs in that specific package
         if let Some(pkg_name) = target_package {
-            if let Some(decl) =
-                declarations.iter().find(|d| self.find_current_package(d) == Some(pkg_name))
+            if let Some(decl) = declarations
+                .iter()
+                .find(|d| self.find_current_package(d) == Some(pkg_name))
             {
                 return Some(vec![self.create_location_link(
                     node,
@@ -540,8 +544,9 @@ impl<'a> DeclarationProvider<'a> {
             let mut declarations = Vec::new();
             self.collect_subroutine_declarations(&self.ast, method_name, &mut declarations);
 
-            if let Some(decl) =
-                declarations.iter().find(|d| self.find_current_package(d) == Some(pkg))
+            if let Some(decl) = declarations
+                .iter()
+                .find(|d| self.find_current_package(d) == Some(pkg))
             {
                 return Some(vec![self.create_location_link(
                     node,
@@ -551,8 +556,9 @@ impl<'a> DeclarationProvider<'a> {
             }
 
             if is_universal_method(method_name)
-                && let Some(decl) =
-                    declarations.iter().find(|d| self.find_current_package(d) == Some("UNIVERSAL"))
+                && let Some(decl) = declarations
+                    .iter()
+                    .find(|d| self.find_current_package(d) == Some("UNIVERSAL"))
             {
                 return Some(vec![self.create_location_link(
                     node,
@@ -608,7 +614,11 @@ impl<'a> DeclarationProvider<'a> {
         method_name: &str,
     ) -> Option<Vec<LocationLink>> {
         // Strip surrounding quotes from the raw token text ('save' → save, "save" → save).
-        let bare_name = method_name.trim().trim_matches('\'').trim_matches('"').trim();
+        let bare_name = method_name
+            .trim()
+            .trim_matches('\'')
+            .trim_matches('"')
+            .trim();
         if bare_name.is_empty() {
             return None;
         }
@@ -637,7 +647,11 @@ impl<'a> DeclarationProvider<'a> {
         // Check direct parent is a modifier FunctionCall where the string is first arg.
         if let NodeKind::FunctionCall { name, args } = &parent.kind {
             if matches!(name.as_str(), "before" | "after" | "around" | "override") {
-                if args.first().map(|a| std::ptr::eq(a, string_node)).unwrap_or(false) {
+                if args
+                    .first()
+                    .map(|a| std::ptr::eq(a, string_node))
+                    .unwrap_or(false)
+                {
                     return self.find_subroutine_declaration(string_node, bare_name);
                 }
             }
@@ -650,7 +664,11 @@ impl<'a> DeclarationProvider<'a> {
 
         if let NodeKind::FunctionCall { name, args } = &grandparent.kind {
             if matches!(name.as_str(), "before" | "after" | "around" | "override") {
-                if args.first().map(|a| std::ptr::eq(a, string_node)).unwrap_or(false) {
+                if args
+                    .first()
+                    .map(|a| std::ptr::eq(a, string_node))
+                    .unwrap_or(false)
+                {
                     return self.find_subroutine_declaration(string_node, bare_name);
                 }
             }
@@ -991,7 +1009,9 @@ impl<'a> DeclarationProvider<'a> {
             }
             if start < i {
                 let w = &s[start..i];
-                if w.chars().all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == '_') {
+                if w.chars()
+                    .all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == '_')
+                {
                     return Some((start, i));
                 }
             }
@@ -1000,7 +1020,11 @@ impl<'a> DeclarationProvider<'a> {
     }
 
     fn get_subroutine_name_range(&self, decl: &Node) -> (usize, usize) {
-        if let NodeKind::Subroutine { name_span: Some(loc), .. } = &decl.kind {
+        if let NodeKind::Subroutine {
+            name_span: Some(loc),
+            ..
+        } = &decl.kind
+        {
             (loc.start, loc.end)
         } else {
             (decl.location.start, decl.location.end)
@@ -1050,8 +1074,10 @@ impl<'a> DeclarationProvider<'a> {
         self.for_each_qw_window(&text, |start, end| {
             // Find the exact token position within this qw window
             if let Some((lo, hi)) = self.find_word(&text[start..end], name) {
-                found_range =
-                    Some((decl.location.start + start + lo, decl.location.start + start + hi));
+                found_range = Some((
+                    decl.location.start + start + lo,
+                    decl.location.start + start + hi,
+                ));
                 true // Stop searching
             } else {
                 false // Continue to next window
@@ -1064,8 +1090,10 @@ impl<'a> DeclarationProvider<'a> {
         // Try inside all { ... } blocks (hash form)
         self.for_each_brace_window(&text, |start, end| {
             if let Some((lo, hi)) = self.find_word(&text[start..end], name) {
-                found_range =
-                    Some((decl.location.start + start + lo, decl.location.start + start + hi));
+                found_range = Some((
+                    decl.location.start + start + lo,
+                    decl.location.start + start + hi,
+                ));
                 true // Stop searching
             } else {
                 false // Continue to next window
@@ -1111,7 +1139,12 @@ impl<'a> DeclarationProvider<'a> {
         match &node.kind {
             NodeKind::Program { statements } => statements.iter().collect(),
             NodeKind::Block { statements } => statements.iter().collect(),
-            NodeKind::If { condition, then_branch, else_branch, .. } => {
+            NodeKind::If {
+                condition,
+                then_branch,
+                else_branch,
+                ..
+            } => {
                 let mut children = vec![condition.as_ref(), then_branch.as_ref()];
                 if let Some(else_b) = else_branch {
                     children.push(else_b.as_ref());
@@ -1127,21 +1160,29 @@ impl<'a> DeclarationProvider<'a> {
                     vec![]
                 }
             }
-            NodeKind::VariableDeclaration { variable, initializer, .. } => {
+            NodeKind::VariableDeclaration {
+                variable,
+                initializer,
+                ..
+            } => {
                 let mut children = vec![variable.as_ref()];
                 if let Some(init) = initializer {
                     children.push(init.as_ref());
                 }
                 children
             }
-            NodeKind::Method { signature, body, .. } => {
+            NodeKind::Method {
+                signature, body, ..
+            } => {
                 let mut children = vec![body.as_ref()];
                 if let Some(sig) = signature {
                     children.push(sig.as_ref());
                 }
                 children
             }
-            NodeKind::Subroutine { signature, body, .. } => {
+            NodeKind::Subroutine {
+                signature, body, ..
+            } => {
                 let mut children = vec![body.as_ref()];
                 if let Some(sig) = signature {
                     children.push(sig.as_ref());
@@ -1159,10 +1200,18 @@ impl<'a> DeclarationProvider<'a> {
                 children.extend(args.iter());
                 children
             }
-            NodeKind::While { condition, body, .. } => {
+            NodeKind::While {
+                condition, body, ..
+            } => {
                 vec![condition.as_ref(), body.as_ref()]
             }
-            NodeKind::For { init, condition, update, body, .. } => {
+            NodeKind::For {
+                init,
+                condition,
+                update,
+                body,
+                ..
+            } => {
                 let mut children = Vec::new();
                 if let Some(i) = init {
                     children.push(i.as_ref());
@@ -1176,7 +1225,12 @@ impl<'a> DeclarationProvider<'a> {
                 children.push(body.as_ref());
                 children
             }
-            NodeKind::Foreach { variable, list, body, .. } => {
+            NodeKind::Foreach {
+                variable,
+                list,
+                body,
+                ..
+            } => {
                 vec![variable.as_ref(), list.as_ref(), body.as_ref()]
             }
             NodeKind::ExpressionStatement { expression } => vec![expression.as_ref()],
@@ -1301,24 +1355,41 @@ pub fn symbol_at_cursor(ast: &Node, offset: usize, current_pkg: &str) -> Option<
     }
 
     fn node_variable_name(node: &Node) -> Option<&str> {
-        if let NodeKind::Variable { name, .. } = &node.kind { Some(name.as_str()) } else { None }
+        if let NodeKind::Variable { name, .. } = &node.kind {
+            Some(name.as_str())
+        } else {
+            None
+        }
     }
 
     fn normalize_symbol_name(raw: &str) -> Option<String> {
         let trimmed = raw.trim().trim_matches('\'').trim_matches('"').trim();
-        if trimmed.is_empty() { None } else { Some(trimmed.to_string()) }
+        if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed.to_string())
+        }
     }
 
     fn export_tag_members(module: &str, tag: &str) -> &'static [&'static str] {
         match (module, tag) {
             // POSIX tag sets commonly used in system scripts.
-            ("POSIX", ":sys_wait_h") => {
-                &["WEXITSTATUS", "WIFEXITED", "WIFSIGNALED", "WIFSTOPPED", "WTERMSIG"]
-            }
+            ("POSIX", ":sys_wait_h") => &[
+                "WEXITSTATUS",
+                "WIFEXITED",
+                "WIFSIGNALED",
+                "WIFSTOPPED",
+                "WTERMSIG",
+            ],
             ("POSIX", ":fcntl_h") => &["F_GETFD", "F_SETFD", "F_GETFL", "F_SETFL", "FD_CLOEXEC"],
-            ("POSIX", ":termios_h") => {
-                &["B9600", "B19200", "B38400", "TCSANOW", "TCSADRAIN", "TCSAFLUSH"]
-            }
+            ("POSIX", ":termios_h") => &[
+                "B9600",
+                "B19200",
+                "B38400",
+                "TCSANOW",
+                "TCSADRAIN",
+                "TCSAFLUSH",
+            ],
             // File::Find exports.
             ("File::Find", ":find") => &["find", "finddepth"],
             // Fcntl exports.
@@ -1383,7 +1454,11 @@ pub fn symbol_at_cursor(ast: &Node, offset: usize, current_pkg: &str) -> Option<
             aliases: &std::collections::HashMap<String, String>,
         ) -> bool {
             let (object, method, args) = match &method_node.kind {
-                NodeKind::MethodCall { object, method, args } => (object, method, args),
+                NodeKind::MethodCall {
+                    object,
+                    method,
+                    args,
+                } => (object, method, args),
                 _ => return false,
             };
             if method != "import" {
@@ -1448,7 +1523,9 @@ pub fn symbol_at_cursor(ast: &Node, offset: usize, current_pkg: &str) -> Option<
                 }
                 NodeKind::ArrayLiteral { elements } => {
                     // qw(...) in expression context → ArrayLiteral of String nodes
-                    elements.iter().any(|el| arg_node_matches_symbol(el, module, symbol))
+                    elements
+                        .iter()
+                        .any(|el| arg_node_matches_symbol(el, module, symbol))
                 }
                 _ => false,
             }
@@ -1462,7 +1539,11 @@ pub fn symbol_at_cursor(ast: &Node, offset: usize, current_pkg: &str) -> Option<
                     };
                     (name.as_str(), rhs.as_ref())
                 }
-                NodeKind::VariableDeclaration { variable, initializer: Some(rhs), .. } => {
+                NodeKind::VariableDeclaration {
+                    variable,
+                    initializer: Some(rhs),
+                    ..
+                } => {
                     let NodeKind::Variable { name, .. } = &variable.kind else {
                         return None;
                     };
@@ -1511,8 +1592,10 @@ pub fn symbol_at_cursor(ast: &Node, offset: usize, current_pkg: &str) -> Option<
         /// statement list after (or even before) the require.
         fn scan_statements_for_require_import(stmts: &[Node], symbol: &str) -> Option<String> {
             // Collect all `require Module` names present in this block.
-            let mut required_modules: Vec<String> =
-                stmts.iter().filter_map(|s| require_module_name(inner_expr(s))).collect();
+            let mut required_modules: Vec<String> = stmts
+                .iter()
+                .filter_map(|s| require_module_name(inner_expr(s)))
+                .collect();
             let mut aliases: std::collections::HashMap<String, String> =
                 std::collections::HashMap::new();
             for stmt in stmts {
@@ -1664,7 +1747,11 @@ pub fn symbol_at_cursor(ast: &Node, offset: usize, current_pkg: &str) -> Option<
     }
 
     fn looks_like_package_name(name: &str) -> bool {
-        name.contains("::") || name.chars().next().is_some_and(|ch| ch.is_ascii_uppercase())
+        name.contains("::")
+            || name
+                .chars()
+                .next()
+                .is_some_and(|ch| ch.is_ascii_uppercase())
     }
 
     fn infer_receiver_package(
@@ -1702,9 +1789,9 @@ pub fn symbol_at_cursor(ast: &Node, offset: usize, current_pkg: &str) -> Option<
             NodeKind::MethodCall { method, object, .. } if method == "new" => {
                 infer_receiver_package(object, current_pkg, receiver_packages)
             }
-            NodeKind::FunctionCall { name, .. } => {
-                name.rsplit_once("::").map(|(package_name, _)| package_name.to_string())
-            }
+            NodeKind::FunctionCall { name, .. } => name
+                .rsplit_once("::")
+                .map(|(package_name, _)| package_name.to_string()),
             _ => None,
         }
     }
@@ -1721,7 +1808,11 @@ pub fn symbol_at_cursor(ast: &Node, offset: usize, current_pkg: &str) -> Option<
 
         if node.location.end <= offset {
             match &node.kind {
-                NodeKind::VariableDeclaration { variable, initializer, .. } => {
+                NodeKind::VariableDeclaration {
+                    variable,
+                    initializer,
+                    ..
+                } => {
                     if let (Some(variable_name), Some(initializer)) =
                         (node_variable_name(variable), initializer.as_ref())
                     {
@@ -1778,15 +1869,27 @@ pub fn symbol_at_cursor(ast: &Node, offset: usize, current_pkg: &str) -> Option<
                     name.clone(),
                 )
             };
-            Some(SymbolKey { pkg: pkg.into(), name: bare.into(), sigil: None, kind: SymKind::Sub })
+            Some(SymbolKey {
+                pkg: pkg.into(),
+                name: bare.into(),
+                sigil: None,
+                kind: SymKind::Sub,
+            })
         }
-        NodeKind::Subroutine { name: Some(name), .. } => {
+        NodeKind::Subroutine {
+            name: Some(name), ..
+        } => {
             let (pkg, bare) = if let Some(idx) = name.rfind("::") {
                 (&name[..idx], &name[idx + 2..])
             } else {
                 (current_pkg, name.as_str())
             };
-            Some(SymbolKey { pkg: pkg.into(), name: bare.into(), sigil: None, kind: SymKind::Sub })
+            Some(SymbolKey {
+                pkg: pkg.into(),
+                name: bare.into(),
+                sigil: None,
+                kind: SymKind::Sub,
+            })
         }
         NodeKind::MethodCall { object, method, .. } => {
             let mut receiver_packages = std::collections::HashMap::new();

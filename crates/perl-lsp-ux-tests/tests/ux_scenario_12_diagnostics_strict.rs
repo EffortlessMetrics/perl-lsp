@@ -49,12 +49,17 @@ fn scenario_12_server_does_not_crash_after_diagnostics_request() {
     }
 
     let harness = UxHarness::new(
-        ScenarioConfig { timeout: Duration::from_secs(15), ..Default::default() }
-            .with_file("clean.pl", CLEAN_SOURCE),
+        ScenarioConfig {
+            timeout: Duration::from_secs(15),
+            ..Default::default()
+        }
+        .with_file("clean.pl", CLEAN_SOURCE),
     )
     .expect("Failed to create UX harness");
 
-    harness.open_file("clean.pl", CLEAN_SOURCE).expect("didOpen should succeed");
+    harness
+        .open_file("clean.pl", CLEAN_SOURCE)
+        .expect("didOpen should succeed");
 
     // Allow diagnostics to publish (server-push; no blocking call needed).
     std::thread::sleep(Duration::from_secs(2));
@@ -70,19 +75,28 @@ fn scenario_12_diagnostics_notification_shape_is_valid() {
     }
 
     let harness = UxHarness::new(
-        ScenarioConfig { timeout: Duration::from_secs(15), ..Default::default() }
-            .with_file("strict_test.pl", STRICT_SOURCE),
+        ScenarioConfig {
+            timeout: Duration::from_secs(15),
+            ..Default::default()
+        }
+        .with_file("strict_test.pl", STRICT_SOURCE),
     )
     .expect("Failed to create UX harness");
 
-    harness.open_file("strict_test.pl", STRICT_SOURCE).expect("didOpen should succeed");
+    harness
+        .open_file("strict_test.pl", STRICT_SOURCE)
+        .expect("didOpen should succeed");
 
     // Wait up to 5 seconds for diagnostics to arrive.
     let diagnostics = harness.wait_for_diagnostics("strict_test.pl", Duration::from_secs(5));
 
     // Validate each diagnostic has the required LSP fields.
     for diag in &diagnostics {
-        assert!(diag.get("range").is_some(), "Diagnostic must have 'range' field, got: {:?}", diag);
+        assert!(
+            diag.get("range").is_some(),
+            "Diagnostic must have 'range' field, got: {:?}",
+            diag
+        );
         assert!(
             diag.get("message").is_some(),
             "Diagnostic must have 'message' field, got: {:?}",
@@ -91,7 +105,11 @@ fn scenario_12_diagnostics_notification_shape_is_valid() {
         // severity is optional but must be 1-4 when present.
         if let Some(severity) = diag.get("severity") {
             let s = severity.as_u64().unwrap_or(0);
-            assert!((1..=4).contains(&s), "Diagnostic severity must be 1-4, got: {}", s);
+            assert!(
+                (1..=4).contains(&s),
+                "Diagnostic severity must be 1-4, got: {}",
+                s
+            );
         }
     }
 
@@ -106,12 +124,17 @@ fn scenario_12_publishdiagnostics_notification_was_received() {
     }
 
     let harness = UxHarness::new(
-        ScenarioConfig { timeout: Duration::from_secs(15), ..Default::default() }
-            .with_file("notify_test.pl", CLEAN_SOURCE),
+        ScenarioConfig {
+            timeout: Duration::from_secs(15),
+            ..Default::default()
+        }
+        .with_file("notify_test.pl", CLEAN_SOURCE),
     )
     .expect("Failed to create UX harness");
 
-    harness.open_file("notify_test.pl", CLEAN_SOURCE).expect("didOpen should succeed");
+    harness
+        .open_file("notify_test.pl", CLEAN_SOURCE)
+        .expect("didOpen should succeed");
 
     // Poll for up to 5 seconds to see if the server ever fires publishDiagnostics.
     let deadline = std::time::Instant::now() + Duration::from_secs(5);

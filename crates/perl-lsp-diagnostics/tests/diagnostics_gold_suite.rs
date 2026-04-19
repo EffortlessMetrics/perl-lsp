@@ -53,14 +53,20 @@ fn validate_fixture(
                 let has_code = diagnostics.iter().any(|d| d.code.as_ref() == Some(code));
                 if has_code {
                     all_passed = false;
-                    report
-                        .push_str(&format!("  FAIL: Diagnostic {} should not be present\n", code));
+                    report.push_str(&format!(
+                        "  FAIL: Diagnostic {} should not be present\n",
+                        code
+                    ));
                 } else {
                     report.push_str(&format!("  PASS: Diagnostic {} not present\n", code));
                 }
             }
 
-            GoldAssertion::DiagnosticPresent { code, byte_offset, message_contains } => {
+            GoldAssertion::DiagnosticPresent {
+                code,
+                byte_offset,
+                message_contains,
+            } => {
                 let found = diagnostics.iter().find(|d| {
                     d.code.as_ref() == Some(code)
                         && byte_offset.map(|off| d.range.0 == off).unwrap_or(true)
@@ -87,10 +93,15 @@ fn validate_fixture(
             }
 
             GoldAssertion::DiagnosticCount { code, count } => {
-                let actual_count =
-                    diagnostics.iter().filter(|d| d.code.as_ref() == Some(code)).count();
+                let actual_count = diagnostics
+                    .iter()
+                    .filter(|d| d.code.as_ref() == Some(code))
+                    .count();
                 if actual_count == *count {
-                    report.push_str(&format!("  PASS: {} diagnostics with code {}\n", count, code));
+                    report.push_str(&format!(
+                        "  PASS: {} diagnostics with code {}\n",
+                        count, code
+                    ));
                 } else {
                     all_passed = false;
                     report.push_str(&format!(
@@ -120,7 +131,11 @@ fn gold_fixtures_diagnostics_suite() {
     let fixtures = match load_gold_fixtures(&gold_dir) {
         Ok(f) => f,
         Err(e) => {
-            panic!("Failed to load gold fixtures from {}: {}", gold_dir.display(), e);
+            panic!(
+                "Failed to load gold fixtures from {}: {}",
+                gold_dir.display(),
+                e
+            );
         }
     };
 
@@ -133,7 +148,11 @@ fn gold_fixtures_diagnostics_suite() {
     // Count subdirectories in the gold dir to detect silently-skipped broken fixtures.
     // load_gold_fixtures silently drops dirs that fail to parse; this catches that.
     let dir_count = std::fs::read_dir(&gold_dir)
-        .map(|rd| rd.filter_map(|e| e.ok()).filter(|e| e.path().is_dir()).count())
+        .map(|rd| {
+            rd.filter_map(|e| e.ok())
+                .filter(|e| e.path().is_dir())
+                .count()
+        })
         .unwrap_or(0);
     assert_eq!(
         fixtures.len(),
@@ -195,8 +214,15 @@ fn gold_fixtures_diagnostics_suite() {
     eprintln!("Total:  {}", passed + failed);
 
     if failed > 0 {
-        eprintln!("\nPrecision: {:.1}%", (passed as f64 / (passed + failed) as f64) * 100.0);
+        eprintln!(
+            "\nPrecision: {:.1}%",
+            (passed as f64 / (passed + failed) as f64) * 100.0
+        );
     }
 
-    assert_eq!(failed, 0, "Gold corpus diagnostics suite failed: {} failures", failed);
+    assert_eq!(
+        failed, 0,
+        "Gold corpus diagnostics suite failed: {} failures",
+        failed
+    );
 }

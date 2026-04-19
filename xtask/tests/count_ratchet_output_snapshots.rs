@@ -182,7 +182,10 @@ fn output_contains_numeric_counts() {
 
     // Extract all numbers from the output using regex
     let number_regex = regex::Regex::new(r"\d+").expect("Invalid number regex");
-    let numbers: Vec<&str> = number_regex.find_iter(&combined).map(|m| m.as_str()).collect();
+    let numbers: Vec<&str> = number_regex
+        .find_iter(&combined)
+        .map(|m| m.as_str())
+        .collect();
 
     // There should be at least one number in the output (the count)
     assert!(
@@ -224,11 +227,18 @@ fn baseline_file_exists_and_valid() {
 
     let trimmed = content.trim();
     let parsed: u32 = trimmed.parse().unwrap_or_else(|_| {
-        panic!("Baseline file should contain a valid integer, got: '{}'", trimmed)
+        panic!(
+            "Baseline file should contain a valid integer, got: '{}'",
+            trimmed
+        )
     });
 
     // Baseline should be a reasonable number (< 1000)
-    assert!(parsed < 1000, "Baseline {} seems too large for published crate count", parsed);
+    assert!(
+        parsed < 1000,
+        "Baseline {} seems too large for published crate count",
+        parsed
+    );
 }
 
 /// Test that output does not contain any unexpected error indicators.
@@ -238,8 +248,12 @@ fn no_unexpected_error_indicators() {
     let combined = format!("{}\n{}", stdout, stderr);
 
     // These should NOT appear in normal output (they indicate a bug)
-    let unexpected =
-        ["thread 'main' panicked", "panicked at", "internal error", "stack backtrace:"];
+    let unexpected = [
+        "thread 'main' panicked",
+        "panicked at",
+        "internal error",
+        "stack backtrace:",
+    ];
 
     for marker in unexpected {
         assert!(
@@ -283,8 +297,14 @@ fn output_is_deterministic() {
     let has_ok1 = stdout1.contains("OK") || stderr1.contains("OK");
     let has_ok2 = stdout2.contains("OK") || stderr2.contains("OK");
 
-    assert_eq!(has_ratchet1, has_ratchet2, "RATCHET presence should be deterministic");
-    assert_eq!(has_fail1, has_fail2, "FAIL presence should be deterministic");
+    assert_eq!(
+        has_ratchet1, has_ratchet2,
+        "RATCHET presence should be deterministic"
+    );
+    assert_eq!(
+        has_fail1, has_fail2,
+        "FAIL presence should be deterministic"
+    );
     assert_eq!(has_ok1, has_ok2, "OK presence should be deterministic");
 }
 
@@ -306,20 +326,29 @@ fn parse_baseline_valid_inputs() {
         let trimmed = content.trim();
         let parsed: Result<u32, _> = trimmed.parse();
 
-        assert!(parsed.is_ok(), "Baseline file should parse as u32, got: {}", trimmed);
+        assert!(
+            parsed.is_ok(),
+            "Baseline file should parse as u32, got: {}",
+            trimmed
+        );
     }
 }
 
 /// Test that parse_baseline correctly rejects invalid inputs.
 #[test]
 fn parse_baseline_invalid_inputs_are_rejected() {
-    let invalid_inputs =
-        ["", "   ", "\t", "\n", "abc", "12abc", "abc123", "-1", "-42", "3.14", "1e10"];
+    let invalid_inputs = [
+        "", "   ", "\t", "\n", "abc", "12abc", "abc123", "-1", "-42", "3.14", "1e10",
+    ];
 
     for input in invalid_inputs {
         let trimmed = input.trim();
         let parsed: Result<u32, _> = trimmed.parse();
 
-        assert!(parsed.is_err(), "parse_baseline({:?}) should reject invalid input", input);
+        assert!(
+            parsed.is_err(),
+            "parse_baseline({:?}) should reject invalid input",
+            input
+        );
     }
 }

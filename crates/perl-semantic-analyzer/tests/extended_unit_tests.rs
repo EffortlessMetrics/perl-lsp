@@ -57,7 +57,10 @@ fn scope_issues(code: &str) -> Vec<ScopeIssue> {
 }
 
 fn has_symbol(table: &SymbolTable, name: &str, kind: SymbolKind) -> bool {
-    table.symbols.get(name).is_some_and(|syms| syms.iter().any(|s| s.kind == kind))
+    table
+        .symbols
+        .get(name)
+        .is_some_and(|syms| syms.iter().any(|s| s.kind == kind))
 }
 
 fn byte_offset_to_line(code: &str, offset: usize) -> usize {
@@ -129,7 +132,10 @@ fn get_node_children_of_program() -> Result<(), Box<dyn std::error::Error>> {
     let mut parser = Parser::new(code);
     let ast = parser.parse()?;
     let children = get_node_children(&ast);
-    assert!(children.len() >= 2, "program should have at least 2 statements");
+    assert!(
+        children.len() >= 2,
+        "program should have at least 2 statements"
+    );
     Ok(())
 }
 
@@ -170,7 +176,10 @@ fn symbol_at_cursor_on_method_call() -> Result<(), Box<dyn std::error::Error>> {
 
     // Debug: check what node is at the offset
     let node = find_node_at_offset(&ast, helper_offset);
-    assert!(node.is_some(), "should find a node at the offset of 'helper'");
+    assert!(
+        node.is_some(),
+        "should find a node at the offset of 'helper'"
+    );
     let node = must_some(node);
     eprintln!(
         "Node at offset {}: kind={}, sexp={}",
@@ -243,7 +252,10 @@ fn declaration_provider_new_and_build_parent_map() -> Result<(), Box<dyn std::er
     let mut parent_map = ParentMap::default();
     DeclarationProvider::build_parent_map(&ast_arc, &mut parent_map, None);
     // Parent map should contain entries for child nodes
-    assert!(!parent_map.is_empty(), "parent map should not be empty for non-trivial AST");
+    assert!(
+        !parent_map.is_empty(),
+        "parent map should not be empty for non-trivial AST"
+    );
 
     let provider =
         DeclarationProvider::new(ast_arc, code.to_string(), "file:///test.pl".to_string());
@@ -361,7 +373,9 @@ fn declaration_provider_resolves_signature_parameters() -> Result<(), Box<dyn st
     let x_links = provider
         .find_declaration(x_usage, 0)
         .ok_or("expected declaration for signature parameter $x")?;
-    let x_link = x_links.first().ok_or("expected a declaration link for $x")?;
+    let x_link = x_links
+        .first()
+        .ok_or("expected a declaration link for $x")?;
     assert_eq!(
         byte_offset_to_line(code, x_link.target_selection_range.0),
         0,
@@ -377,8 +391,9 @@ fn declaration_provider_resolves_signature_parameters() -> Result<(), Box<dyn st
     let name_links = provider
         .find_declaration(name_usage, 0)
         .ok_or("expected declaration for method signature parameter $name")?;
-    let name_link =
-        name_links.first().ok_or("expected a declaration link for method parameter $name")?;
+    let name_link = name_links
+        .first()
+        .ok_or("expected a declaration link for method parameter $name")?;
     assert_eq!(
         byte_offset_to_line(code, name_link.target_selection_range.0),
         5,
@@ -400,8 +415,11 @@ fn declaration_provider_get_node_text() -> Result<(), Box<dyn std::error::Error>
     let ast = parser.parse()?;
     let ast_arc = Arc::new(ast);
 
-    let provider =
-        DeclarationProvider::new(ast_arc.clone(), code.to_string(), "file:///t.pl".to_string());
+    let provider = DeclarationProvider::new(
+        ast_arc.clone(),
+        code.to_string(),
+        "file:///t.pl".to_string(),
+    );
     let text = provider.get_node_text(&ast_arc);
     assert_eq!(text, code);
     Ok(())
@@ -453,8 +471,15 @@ my $b = 2;
 my $c = 3;
 "#;
     let issues = scope_issues(code);
-    let unused: Vec<_> = issues.iter().filter(|i| i.kind == IssueKind::UnusedVariable).collect();
-    assert!(unused.len() >= 3, "should detect at least 3 unused variables, got {}", unused.len());
+    let unused: Vec<_> = issues
+        .iter()
+        .filter(|i| i.kind == IssueKind::UnusedVariable)
+        .collect();
+    assert!(
+        unused.len() >= 3,
+        "should detect at least 3 unused variables, got {}",
+        unused.len()
+    );
     Ok(())
 }
 
@@ -476,7 +501,9 @@ fn scope_analysis_hash_variable_unused() -> Result<(), Box<dyn std::error::Error
     let code = "my %h = (a => 1);";
     let issues = scope_issues(code);
     assert!(
-        issues.iter().any(|i| i.kind == IssueKind::UnusedVariable && i.variable_name.contains("h")),
+        issues
+            .iter()
+            .any(|i| i.kind == IssueKind::UnusedVariable && i.variable_name.contains("h")),
         "should detect unused %h"
     );
     Ok(())
@@ -512,7 +539,10 @@ for my $item (@items) {
         .iter()
         .filter(|i| i.kind == IssueKind::UnusedVariable && i.variable_name.contains("item"))
         .count();
-    assert_eq!(unused_item, 0, "$item used in for loop body should not be unused");
+    assert_eq!(
+        unused_item, 0,
+        "$item used in for loop body should not be unused"
+    );
     Ok(())
 }
 
@@ -528,7 +558,10 @@ my $x = 1;
 }
 "#;
     let issues = scope_issues(code);
-    let shadow_count = issues.iter().filter(|i| i.kind == IssueKind::VariableShadowing).count();
+    let shadow_count = issues
+        .iter()
+        .filter(|i| i.kind == IssueKind::VariableShadowing)
+        .count();
     assert!(
         shadow_count >= 2,
         "should detect at least 2 levels of shadowing, got {}",
@@ -557,7 +590,10 @@ fn scope_analysis_underscore_prefix_suppresses() -> Result<(), Box<dyn std::erro
         .iter()
         .filter(|i| i.kind == IssueKind::UnusedVariable && i.variable_name.contains("_temp"))
         .count();
-    assert_eq!(unused, 0, "_prefixed variable should suppress unused warning");
+    assert_eq!(
+        unused, 0,
+        "_prefixed variable should suppress unused warning"
+    );
     Ok(())
 }
 
@@ -631,7 +667,11 @@ fn scope_suggestions_for_all_issue_kinds() -> Result<(), Box<dyn std::error::Err
     ];
 
     let suggestions = analyzer.get_suggestions(&test_issues);
-    assert_eq!(suggestions.len(), 9, "should have a suggestion for each issue");
+    assert_eq!(
+        suggestions.len(),
+        9,
+        "should have a suggestion for each issue"
+    );
     assert!(suggestions[0].contains("rename"));
     assert!(suggestions[1].contains("Remove") || suggestions[1].contains("unused"));
     assert!(suggestions[2].contains("Declare"));
@@ -651,9 +691,14 @@ my $x = 1;
 my $x = 2;
 "#;
     let issues = scope_issues(code);
-    let redecl = issues.iter().find(|i| i.kind == IssueKind::VariableRedeclaration);
+    let redecl = issues
+        .iter()
+        .find(|i| i.kind == IssueKind::VariableRedeclaration);
     if let Some(issue) = redecl {
-        assert!(!issue.description.is_empty(), "redeclaration should have description");
+        assert!(
+            !issue.description.is_empty(),
+            "redeclaration should have description"
+        );
     }
     Ok(())
 }
@@ -701,7 +746,11 @@ fn infer_type_string_literal() -> Result<(), Box<dyn std::error::Error>> {
     let children = get_node_children(&ast);
     for child in &children {
         if let Some(ty) = analyzer.infer_type(child) {
-            assert!(ty == "string" || ty == "scalar", "expected string type, got {}", ty);
+            assert!(
+                ty == "string" || ty == "scalar",
+                "expected string type, got {}",
+                ty
+            );
         }
     }
     Ok(())
@@ -769,7 +818,10 @@ sub outer {
     let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
     let table = analyzer.symbol_table();
     // inner variable should exist
-    assert!(table.symbols.contains_key("inner"), "should have inner variable");
+    assert!(
+        table.symbols.contains_key("inner"),
+        "should have inner variable"
+    );
     Ok(())
 }
 
@@ -1024,7 +1076,11 @@ my $app_var = 1;
 fn deeply_nested_package() -> Result<(), Box<dyn std::error::Error>> {
     let code = "package Very::Deeply::Nested::Package;\nsub deep_func { 1 }";
     let table = parse_and_extract(code);
-    assert!(has_symbol(&table, "Very::Deeply::Nested::Package", SymbolKind::Package));
+    assert!(has_symbol(
+        &table,
+        "Very::Deeply::Nested::Package",
+        SymbolKind::Package
+    ));
     assert!(has_symbol(&table, "deep_func", SymbolKind::Subroutine));
     Ok(())
 }
@@ -1218,7 +1274,10 @@ fn completion_item_has_detail_and_doc() -> Result<(), Box<dyn std::error::Error>
     for item in &completions {
         assert!(!item.label.is_empty(), "label should not be empty");
         assert!(!item.detail.is_empty(), "detail should not be empty");
-        assert!(!item.documentation.is_empty(), "documentation should not be empty");
+        assert!(
+            !item.documentation.is_empty(),
+            "documentation should not be empty"
+        );
     }
     Ok(())
 }
@@ -1230,7 +1289,10 @@ fn completion_item_has_detail_and_doc() -> Result<(), Box<dyn std::error::Error>
 #[test]
 fn perl_type_subroutine_construction() -> Result<(), Box<dyn std::error::Error>> {
     let ty = PerlType::Subroutine {
-        params: vec![PerlType::Scalar(ScalarType::String), PerlType::Scalar(ScalarType::Integer)],
+        params: vec![
+            PerlType::Scalar(ScalarType::String),
+            PerlType::Scalar(ScalarType::Integer),
+        ],
         returns: vec![PerlType::Scalar(ScalarType::Boolean)],
     };
     assert!(matches!(ty, PerlType::Subroutine { .. }));
@@ -1262,7 +1324,9 @@ fn perl_type_empty_union() -> Result<(), Box<dyn std::error::Error>> {
 fn perl_type_complex_hash() -> Result<(), Box<dyn std::error::Error>> {
     let ty = PerlType::Hash {
         key: Box::new(PerlType::Scalar(ScalarType::String)),
-        value: Box::new(PerlType::Array(Box::new(PerlType::Scalar(ScalarType::Integer)))),
+        value: Box::new(PerlType::Array(Box::new(PerlType::Scalar(
+            ScalarType::Integer,
+        )))),
     };
     if let PerlType::Hash { value, .. } = &ty {
         assert!(matches!(value.as_ref(), PerlType::Array(_)));
@@ -1272,22 +1336,37 @@ fn perl_type_complex_hash() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn perl_type_scalar_mixed() -> Result<(), Box<dyn std::error::Error>> {
-    assert_eq!(PerlType::Scalar(ScalarType::Mixed), PerlType::Scalar(ScalarType::Mixed));
-    assert_ne!(PerlType::Scalar(ScalarType::Mixed), PerlType::Scalar(ScalarType::Integer));
+    assert_eq!(
+        PerlType::Scalar(ScalarType::Mixed),
+        PerlType::Scalar(ScalarType::Mixed)
+    );
+    assert_ne!(
+        PerlType::Scalar(ScalarType::Mixed),
+        PerlType::Scalar(ScalarType::Integer)
+    );
     Ok(())
 }
 
 #[test]
 fn perl_type_scalar_undef() -> Result<(), Box<dyn std::error::Error>> {
-    assert_eq!(PerlType::Scalar(ScalarType::Undef), PerlType::Scalar(ScalarType::Undef));
+    assert_eq!(
+        PerlType::Scalar(ScalarType::Undef),
+        PerlType::Scalar(ScalarType::Undef)
+    );
     assert_ne!(PerlType::Scalar(ScalarType::Undef), PerlType::Void);
     Ok(())
 }
 
 #[test]
 fn perl_type_scalar_boolean() -> Result<(), Box<dyn std::error::Error>> {
-    assert_eq!(PerlType::Scalar(ScalarType::Boolean), PerlType::Scalar(ScalarType::Boolean));
-    assert_ne!(PerlType::Scalar(ScalarType::Boolean), PerlType::Scalar(ScalarType::Integer));
+    assert_eq!(
+        PerlType::Scalar(ScalarType::Boolean),
+        PerlType::Scalar(ScalarType::Boolean)
+    );
+    assert_ne!(
+        PerlType::Scalar(ScalarType::Boolean),
+        PerlType::Scalar(ScalarType::Integer)
+    );
     Ok(())
 }
 
@@ -1377,7 +1456,10 @@ fn semantic_tokens_contain_keyword() -> Result<(), Box<dyn std::error::Error>> {
     let analyzer = parse_and_analyze(code);
     let tokens = analyzer.semantic_tokens();
     // The analyzer may classify 'if' as Keyword or generate other token types
-    assert!(!tokens.is_empty(), "should produce semantic tokens for if-statement");
+    assert!(
+        !tokens.is_empty(),
+        "should produce semantic tokens for if-statement"
+    );
     Ok(())
 }
 
@@ -1406,9 +1488,11 @@ fn semantic_tokens_variable_declaration() -> Result<(), Box<dyn std::error::Erro
     let tokens = analyzer.semantic_tokens();
     // Should have a modifier token or variable declaration
     assert!(
-        tokens.iter().any(|t| t.token_type == SemanticTokenType::Modifier
-            || t.token_type == SemanticTokenType::VariableDeclaration
-            || t.token_type == SemanticTokenType::Variable),
+        tokens
+            .iter()
+            .any(|t| t.token_type == SemanticTokenType::Modifier
+                || t.token_type == SemanticTokenType::VariableDeclaration
+                || t.token_type == SemanticTokenType::Variable),
         "should have variable-related token"
     );
     Ok(())
@@ -1438,7 +1522,10 @@ fn semantic_tokens_comment() -> Result<(), Box<dyn std::error::Error>> {
     let analyzer = parse_and_analyze(code);
     let tokens = analyzer.semantic_tokens();
     // Comments may be stripped at parse level; just verify no crash and tokens generated
-    assert!(!tokens.is_empty(), "should produce tokens for code with comment");
+    assert!(
+        !tokens.is_empty(),
+        "should produce tokens for code with comment"
+    );
     Ok(())
 }
 
@@ -1448,7 +1535,9 @@ fn semantic_tokens_number_literal() -> Result<(), Box<dyn std::error::Error>> {
     let analyzer = parse_and_analyze(code);
     let tokens = analyzer.semantic_tokens();
     assert!(
-        tokens.iter().any(|t| t.token_type == SemanticTokenType::Number),
+        tokens
+            .iter()
+            .any(|t| t.token_type == SemanticTokenType::Number),
         "should have number token"
     );
     Ok(())

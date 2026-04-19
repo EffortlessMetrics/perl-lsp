@@ -12,7 +12,9 @@ type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 /// Convert a file path to a proper file:// URI (cross-platform)
 fn path_to_uri(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
-    Ok(Url::from_file_path(path).map_err(|_| "Failed to convert file path to URI")?.to_string())
+    Ok(Url::from_file_path(path)
+        .map_err(|_| "Failed to convert file path to URI")?
+        .to_string())
 }
 use common::{
     initialize_lsp, read_response, read_response_matching_i64, send_notification, send_request,

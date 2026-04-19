@@ -44,7 +44,9 @@ fn send_request_with_timeout(
 
     match &id {
         Value::Number(n) if n.as_i64().is_some() => {
-            let id_num = n.as_i64().unwrap_or_else(|| panic!("ID number should be i64: {n:?}"));
+            let id_num = n
+                .as_i64()
+                .unwrap_or_else(|| panic!("ID number should be i64: {n:?}"));
             super::read_response_matching_i64(server, id_num, timeout).unwrap_or_else(|| {
                 super::protocol_io::error_response_for_request(
                     Some(id.clone()),
@@ -244,12 +246,18 @@ impl TestServer {
 
     /// Request diagnostics for a document
     pub fn get_diagnostics(&self, uri: &str) -> Value {
-        self.request("textDocument/diagnostic", json!({ "textDocument": { "uri": uri } }))
+        self.request(
+            "textDocument/diagnostic",
+            json!({ "textDocument": { "uri": uri } }),
+        )
     }
 
     /// Request document symbols
     pub fn get_symbols(&self, uri: &str) -> Value {
-        self.request("textDocument/documentSymbol", json!({ "textDocument": { "uri": uri } }))
+        self.request(
+            "textDocument/documentSymbol",
+            json!({ "textDocument": { "uri": uri } }),
+        )
     }
 
     /// Request definition at position
@@ -347,11 +355,17 @@ pub mod assertions {
             .as_array()
             .unwrap_or_else(|| panic!("Expected diagnostic items array, got: {response:?}"));
 
-        let found = items
-            .iter()
-            .any(|item| item["message"].as_str().is_some_and(|msg| msg.contains(expected_message)));
+        let found = items.iter().any(|item| {
+            item["message"]
+                .as_str()
+                .is_some_and(|msg| msg.contains(expected_message))
+        });
 
-        assert!(found, "Expected diagnostic containing '{}', got: {:?}", expected_message, items);
+        assert!(
+            found,
+            "Expected diagnostic containing '{}', got: {:?}",
+            expected_message, items
+        );
     }
 
     /// Assert symbol count

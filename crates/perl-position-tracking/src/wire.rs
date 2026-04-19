@@ -34,7 +34,10 @@ impl WireRange {
         }
     }
     pub fn empty(pos: WirePosition) -> Self {
-        Self { start: pos, end: pos }
+        Self {
+            start: pos,
+            end: pos,
+        }
     }
     pub fn whole_document(source: &str) -> Self {
         Self {
@@ -56,30 +59,47 @@ impl WireLocation {
 #[cfg(feature = "lsp-compat")]
 impl From<WirePosition> for lsp_types::Position {
     fn from(p: WirePosition) -> Self {
-        Self { line: p.line, character: p.character }
+        Self {
+            line: p.line,
+            character: p.character,
+        }
     }
 }
 #[cfg(feature = "lsp-compat")]
 impl From<lsp_types::Position> for WirePosition {
     fn from(p: lsp_types::Position) -> Self {
-        Self { line: p.line, character: p.character }
+        Self {
+            line: p.line,
+            character: p.character,
+        }
     }
 }
 #[cfg(feature = "lsp-compat")]
 impl From<WireRange> for lsp_types::Range {
     fn from(r: WireRange) -> Self {
-        Self { start: r.start.into(), end: r.end.into() }
+        Self {
+            start: r.start.into(),
+            end: r.end.into(),
+        }
     }
 }
 #[cfg(feature = "lsp-compat")]
 impl From<lsp_types::Range> for WireRange {
     fn from(r: lsp_types::Range) -> Self {
-        Self { start: r.start.into(), end: r.end.into() }
+        Self {
+            start: r.start.into(),
+            end: r.end.into(),
+        }
     }
 }
 #[cfg(feature = "lsp-compat")]
 fn fallback_lsp_uri() -> lsp_types::Uri {
-    for candidate in ["file:///unknown", "file:///", "about:blank", "urn:perl-lsp:unknown"] {
+    for candidate in [
+        "file:///unknown",
+        "file:///",
+        "about:blank",
+        "urn:perl-lsp:unknown",
+    ] {
         if let Ok(uri) = candidate.parse::<lsp_types::Uri>() {
             return uri;
         }
@@ -103,6 +123,9 @@ impl From<WireLocation> for lsp_types::Location {
             Ok(u) => u,
             Err(_) => fallback_lsp_uri(),
         };
-        Self { uri, range: l.range.into() }
+        Self {
+            uri,
+            range: l.range.into(),
+        }
     }
 }

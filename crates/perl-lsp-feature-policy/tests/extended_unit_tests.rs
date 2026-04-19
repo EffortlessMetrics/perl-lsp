@@ -181,7 +181,10 @@ fn from_cli_argument_multiple_invalid_same_result() {
     let current = FeatureProfile::current();
     for invalid in &["", "xxx", "bogus", "unknown", "ga!lock"] {
         let result = FeatureProfile::from_cli_argument(invalid);
-        assert_eq!(result, current, "fallback should be consistent for invalid token: {invalid}");
+        assert_eq!(
+            result, current,
+            "fallback should be consistent for invalid token: {invalid}"
+        );
     }
 }
 
@@ -228,9 +231,18 @@ fn parse_profile_all_valid_aliases() {
 
 #[test]
 fn parse_profile_normalizes_whitespace_and_case() {
-    assert_eq!(FeatureProfile::parse_profile(" ga-lock"), Some(FeatureProfile::GaLock));
-    assert_eq!(FeatureProfile::parse_profile("ga-lock "), Some(FeatureProfile::GaLock));
-    assert_eq!(FeatureProfile::parse_profile("PRODUCTION"), Some(FeatureProfile::Production));
+    assert_eq!(
+        FeatureProfile::parse_profile(" ga-lock"),
+        Some(FeatureProfile::GaLock)
+    );
+    assert_eq!(
+        FeatureProfile::parse_profile("ga-lock "),
+        Some(FeatureProfile::GaLock)
+    );
+    assert_eq!(
+        FeatureProfile::parse_profile("PRODUCTION"),
+        Some(FeatureProfile::Production)
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -435,7 +447,11 @@ fn as_str_values_unique() {
     strings.sort();
     let original_len = strings.len();
     strings.dedup();
-    assert_eq!(original_len, strings.len(), "as_str values should be unique");
+    assert_eq!(
+        original_len,
+        strings.len(),
+        "as_str values should be unique"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -446,7 +462,10 @@ fn as_str_values_unique() {
 fn supported_cli_profiles_all_parseable() {
     for token in FeatureProfile::supported_cli_profiles() {
         let result = from_str_name(token);
-        assert!(result.is_some(), "all supported tokens should parse: {token}");
+        assert!(
+            result.is_some(),
+            "all supported tokens should parse: {token}"
+        );
     }
 }
 
@@ -462,7 +481,10 @@ fn supported_cli_profiles_includes_main_names() {
 #[test]
 fn supported_cli_profiles_includes_auto() {
     let supported = FeatureProfile::supported_cli_profiles();
-    assert!(supported.contains(&"auto"), "auto should be in supported profiles");
+    assert!(
+        supported.contains(&"auto"),
+        "auto should be in supported profiles"
+    );
 }
 
 #[test]
@@ -471,13 +493,20 @@ fn supported_cli_profiles_no_duplicates() {
     let mut deduped: Vec<_> = supported.to_vec();
     deduped.sort();
     deduped.dedup();
-    assert_eq!(supported.len(), deduped.len(), "supported profiles should have no duplicates");
+    assert_eq!(
+        supported.len(),
+        deduped.len(),
+        "supported profiles should have no duplicates"
+    );
 }
 
 #[test]
 fn supported_cli_profiles_no_empty_strings() {
     for token in FeatureProfile::supported_cli_profiles() {
-        assert!(!token.is_empty(), "supported profiles should not contain empty strings");
+        assert!(
+            !token.is_empty(),
+            "supported profiles should not contain empty strings"
+        );
         assert!(!token.chars().all(char::is_whitespace));
     }
 }
@@ -571,7 +600,10 @@ fn catalog_ids_all_valid_feature_ids() {
         let profile_ids = feature_ids_from_flags(&profile.build_flags());
         let catalog_ids = catalog_advertised_feature_ids(profile);
         for id in &catalog_ids {
-            assert!(profile_ids.contains(id), "catalog ID should be in profile IDs: {id}");
+            assert!(
+                profile_ids.contains(id),
+                "catalog ID should be in profile IDs: {id}"
+            );
         }
     }
 }
@@ -875,11 +907,17 @@ fn perltidy_toggle_affects_formatting_only() {
         // Non-formatting features should be the same
         for id in &with_ids {
             if !id.contains("formatting") {
-                assert!(without_ids.contains(id), "non-formatting id '{id}' should be in both");
+                assert!(
+                    without_ids.contains(id),
+                    "non-formatting id '{id}' should be in both"
+                );
             }
         }
         for id in &without_ids {
-            assert!(with_ids.contains(id), "without-tool id '{id}' should be in with-tool set");
+            assert!(
+                with_ids.contains(id),
+                "without-tool id '{id}' should be in with-tool set"
+            );
         }
     }
 }

@@ -184,18 +184,27 @@ fn default_search_paths() -> Vec<PathBuf> {
     #[cfg(target_os = "windows")]
     {
         paths.extend(
-            ["C:\\Windows\\System32", "C:\\Windows\\SysWOW64", "C:\\Windows"]
-                .iter()
-                .map(PathBuf::from),
+            [
+                "C:\\Windows\\System32",
+                "C:\\Windows\\SysWOW64",
+                "C:\\Windows",
+            ]
+            .iter()
+            .map(PathBuf::from),
         );
     }
 
     #[cfg(target_os = "macos")]
     {
         paths.extend(
-            ["/usr/lib", "/usr/local/lib", "/opt/homebrew/lib", "/opt/local/lib"]
-                .iter()
-                .map(PathBuf::from),
+            [
+                "/usr/lib",
+                "/usr/local/lib",
+                "/opt/homebrew/lib",
+                "/opt/local/lib",
+            ]
+            .iter()
+            .map(PathBuf::from),
         );
     }
 
@@ -210,8 +219,14 @@ fn default_search_paths() -> Vec<PathBuf> {
 
 #[cfg(all(unix, not(target_os = "macos")))]
 fn common_unix_search_paths() -> Vec<&'static str> {
-    let mut paths =
-        vec!["/lib", "/lib64", "/usr/lib", "/usr/lib64", "/usr/local/lib", "/opt/local/lib"];
+    let mut paths = vec![
+        "/lib",
+        "/lib64",
+        "/usr/lib",
+        "/usr/lib64",
+        "/usr/local/lib",
+        "/opt/local/lib",
+    ];
 
     #[cfg(target_arch = "x86_64")]
     paths.extend(["/lib/x86_64-linux-gnu", "/usr/lib/x86_64-linux-gnu"]);
@@ -222,7 +237,10 @@ fn common_unix_search_paths() -> Vec<&'static str> {
     #[cfg(target_arch = "x86")]
     paths.extend(["/lib/i386-linux-gnu", "/usr/lib/i386-linux-gnu"]);
     #[cfg(target_arch = "powerpc64")]
-    paths.extend(["/lib/powerpc64le-linux-gnu", "/usr/lib/powerpc64le-linux-gnu"]);
+    paths.extend([
+        "/lib/powerpc64le-linux-gnu",
+        "/usr/lib/powerpc64le-linux-gnu",
+    ]);
     #[cfg(target_arch = "s390x")]
     paths.extend(["/lib/s390x-linux-gnu", "/usr/lib/s390x-linux-gnu"]);
 
@@ -231,7 +249,9 @@ fn common_unix_search_paths() -> Vec<&'static str> {
 
 fn library_exists(lib: &str, search_paths: &[PathBuf]) -> bool {
     let candidates = candidate_library_names(lib);
-    candidates.iter().any(|candidate| library_exists_anywhere(candidate, search_paths))
+    candidates
+        .iter()
+        .any(|candidate| library_exists_anywhere(candidate, search_paths))
 }
 
 fn library_exists_anywhere(candidate: &str, search_paths: &[PathBuf]) -> bool {
@@ -240,7 +260,9 @@ fn library_exists_anywhere(candidate: &str, search_paths: &[PathBuf]) -> bool {
         return true;
     }
 
-    search_paths.iter().any(|dir| library_exists_in_dir(dir, candidate))
+    search_paths
+        .iter()
+        .any(|dir| library_exists_in_dir(dir, candidate))
 }
 
 fn library_exists_in_dir(dir: &Path, candidate: &str) -> bool {
@@ -340,7 +362,9 @@ mod tests {
         let diags =
             diagnostics_for("use FFI::CheckLib;\nfind_lib(lib => 'ffi_checklib_missing_3574');\n");
         assert!(
-            diags.iter().any(|d| d.message.contains("ffi_checklib_missing_3574")),
+            diags
+                .iter()
+                .any(|d| d.message.contains("ffi_checklib_missing_3574")),
             "expected a missing-library diagnostic, got: {diags:?}"
         );
     }
@@ -356,7 +380,10 @@ mod tests {
         );
 
         let diags = diagnostics_for(&source);
-        assert!(diags.is_empty(), "expected no diagnostics for a present library, got: {diags:?}");
+        assert!(
+            diags.is_empty(),
+            "expected no diagnostics for a present library, got: {diags:?}"
+        );
     }
 
     #[test]
@@ -370,7 +397,11 @@ mod tests {
         );
 
         let diags = diagnostics_for(&source);
-        assert_eq!(diags.len(), 1, "expected one missing library diagnostic, got: {diags:?}");
+        assert_eq!(
+            diags.len(),
+            1,
+            "expected one missing library diagnostic, got: {diags:?}"
+        );
         assert!(
             diags[0].message.contains("ffi_checklib_missing_3574"),
             "expected the missing library to be named in the diagnostic"
@@ -388,7 +419,10 @@ mod tests {
         );
 
         let diags = diagnostics_for(&source);
-        assert!(diags.is_empty(), "qualified FFI::CheckLib call should be handled, got: {diags:?}");
+        assert!(
+            diags.is_empty(),
+            "qualified FFI::CheckLib call should be handled, got: {diags:?}"
+        );
     }
 
     #[test]

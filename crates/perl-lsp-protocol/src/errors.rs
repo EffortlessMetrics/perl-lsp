@@ -127,13 +127,21 @@ pub fn cancelled_response_with_method(id: &Value, method: &str) -> JsonRpcRespon
         jsonrpc: "2.0".to_string(),
         id: Some(id.clone()),
         result: None,
-        error: Some(JsonRpcError { code: REQUEST_CANCELLED, message, data: Some(data) }),
+        error: Some(JsonRpcError {
+            code: REQUEST_CANCELLED,
+            message,
+            data: Some(data),
+        }),
     }
 }
 
 /// Create a request cancelled error
 pub fn request_cancelled_error() -> JsonRpcError {
-    JsonRpcError { code: REQUEST_CANCELLED, message: "Request cancelled".to_string(), data: None }
+    JsonRpcError {
+        code: REQUEST_CANCELLED,
+        message: "Request cancelled".to_string(),
+        data: None,
+    }
 }
 
 /// Create a server cancelled error
@@ -170,7 +178,11 @@ pub fn enhanced_error(
         data["method"] = json!(method_name);
     }
 
-    JsonRpcError { code, message: message.to_string(), data: Some(data) }
+    JsonRpcError {
+        code,
+        message: message.to_string(),
+        data: Some(data),
+    }
 }
 
 /// Create a method not found error
@@ -196,7 +208,11 @@ pub fn method_not_advertised() -> JsonRpcError {
 
 /// Create an invalid params error
 pub fn invalid_params(message: &str) -> JsonRpcError {
-    JsonRpcError { code: INVALID_PARAMS, message: message.to_string(), data: None }
+    JsonRpcError {
+        code: INVALID_PARAMS,
+        message: message.to_string(),
+        data: None,
+    }
 }
 
 /// Create a server not initialized error
@@ -218,7 +234,11 @@ pub fn document_not_found_error() -> Value {
 
 /// Create an internal error
 pub fn internal_error(message: &str) -> JsonRpcError {
-    JsonRpcError { code: INTERNAL_ERROR, message: message.to_string(), data: None }
+    JsonRpcError {
+        code: INTERNAL_ERROR,
+        message: message.to_string(),
+        data: None,
+    }
 }
 
 /// Create a connection closed error
@@ -226,14 +246,22 @@ pub fn internal_error(message: &str) -> JsonRpcError {
 /// Used when the connection to the client has been terminated (e.g., BrokenPipe).
 /// This is a transport-layer error, distinct from protocol-level InvalidRequest.
 pub fn connection_closed_error() -> JsonRpcError {
-    JsonRpcError { code: CONNECTION_CLOSED, message: "Connection closed".to_string(), data: None }
+    JsonRpcError {
+        code: CONNECTION_CLOSED,
+        message: "Connection closed".to_string(),
+        data: None,
+    }
 }
 
 /// Create a transport error with custom message
 ///
 /// Used for general I/O/transport errors that aren't specifically connection closures.
 pub fn transport_error(message: &str) -> JsonRpcError {
-    JsonRpcError { code: TRANSPORT_ERROR, message: message.to_string(), data: None }
+    JsonRpcError {
+        code: TRANSPORT_ERROR,
+        message: message.to_string(),
+        data: None,
+    }
 }
 
 // ============================================================================

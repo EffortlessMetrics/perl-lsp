@@ -70,12 +70,20 @@ fn goto_def_variable_scalar_declaration_is_first_ref() {
     let usage_offset = must_some(code.rfind("$x"));
     let refs = must_some(find_references_single_file(&ast, usage_offset));
 
-    assert!(refs.len() >= 3, "expected at least 3 refs (decl + 2 usages), got {}", refs.len());
+    assert!(
+        refs.len() >= 3,
+        "expected at least 3 refs (decl + 2 usages), got {}",
+        refs.len()
+    );
 
     // Verify the first reference is the declaration (smallest offset)
     let min_offset = refs.iter().map(|&(s, _)| s).min();
     let decl_offset = must_some(code.find("$x"));
-    assert_eq!(min_offset, Some(decl_offset), "earliest reference should be the declaration");
+    assert_eq!(
+        min_offset,
+        Some(decl_offset),
+        "earliest reference should be the declaration"
+    );
 }
 
 #[test]
@@ -176,7 +184,11 @@ fn goto_def_function_from_call_to_sub_definition() {
     // The Subroutine node covers the entire "sub greet { ... }" span,
     // so the definition reference starts at the Subroutine node start (offset 0).
     // The call reference starts at the FunctionCall node position.
-    assert!(refs.len() >= 2, "should find definition + call, got {}", refs.len());
+    assert!(
+        refs.len() >= 2,
+        "should find definition + call, got {}",
+        refs.len()
+    );
 
     // The first (earliest) reference should be the sub definition node
     let sub_start = must_some(code.find("sub greet"));
@@ -197,7 +209,11 @@ fn goto_def_function_defined_after_call() {
     let refs = must_some(find_references_single_file(&ast, call_offset));
 
     // Should find both call and definition
-    assert!(refs.len() >= 2, "should find call + definition, got {}", refs.len());
+    assert!(
+        refs.len() >= 2,
+        "should find call + definition, got {}",
+        refs.len()
+    );
 }
 
 #[test]
@@ -210,7 +226,11 @@ fn goto_def_function_called_multiple_times() {
     let refs = must_some(find_references_single_file(&ast, def_offset));
 
     // 1 definition + 3 calls = 4
-    assert!(refs.len() >= 4, "expected 4+ refs (1 def + 3 calls), got {}", refs.len());
+    assert!(
+        refs.len() >= 4,
+        "expected 4+ refs (1 def + 3 calls), got {}",
+        refs.len()
+    );
 }
 
 #[test]
@@ -262,14 +282,23 @@ fn goto_def_function_refs_include_correct_text_spans() {
 fn goto_def_module_use_statement_produces_link() -> Result<(), Box<dyn std::error::Error>> {
     let text = "use My::Module;\n";
     let links = compute_links("file:///test.pl", text, &[]);
-    assert_eq!(links.len(), 1, "use statement should produce exactly one document link");
+    assert_eq!(
+        links.len(),
+        1,
+        "use statement should produce exactly one document link"
+    );
 
     let link = links.first().ok_or("expected a link")?;
     assert_eq!(
-        link.pointer("/data/module").and_then(serde_json::Value::as_str),
+        link.pointer("/data/module")
+            .and_then(serde_json::Value::as_str),
         Some("My::Module")
     );
-    assert_eq!(link.pointer("/data/type").and_then(serde_json::Value::as_str), Some("module"));
+    assert_eq!(
+        link.pointer("/data/type")
+            .and_then(serde_json::Value::as_str),
+        Some("module")
+    );
     Ok(())
 }
 
@@ -280,7 +309,11 @@ fn goto_def_module_require_qualified_produces_link() -> Result<(), Box<dyn std::
     assert_eq!(links.len(), 1);
 
     let link = links.first().ok_or("expected a link")?;
-    assert_eq!(link.pointer("/data/module").and_then(serde_json::Value::as_str), Some("Net::HTTP"));
+    assert_eq!(
+        link.pointer("/data/module")
+            .and_then(serde_json::Value::as_str),
+        Some("Net::HTTP")
+    );
     Ok(())
 }
 
@@ -297,7 +330,10 @@ fn goto_def_module_package_definition_via_workspace_symbols() {
 
     // The package "My::Utils" should be findable via workspace symbol search
     let results = provider.search("My::Utils", &source_map);
-    assert!(!results.is_empty(), "should find My::Utils package definition");
+    assert!(
+        !results.is_empty(),
+        "should find My::Utils package definition"
+    );
     assert_eq!(results[0].name, "My::Utils");
 }
 
@@ -318,8 +354,14 @@ fn goto_def_module_multiple_packages_correct_resolution() {
     let bar_results = provider.search("Bar", &source_map);
 
     // Each package should be discoverable
-    assert!(foo_results.iter().any(|r| r.name == "Foo"), "should find Foo package");
-    assert!(bar_results.iter().any(|r| r.name == "Bar"), "should find Bar package");
+    assert!(
+        foo_results.iter().any(|r| r.name == "Foo"),
+        "should find Foo package"
+    );
+    assert!(
+        bar_results.iter().any(|r| r.name == "Bar"),
+        "should find Bar package"
+    );
 }
 
 #[test]
@@ -328,7 +370,10 @@ fn goto_def_module_nonexistent_package_returns_empty() {
     let (provider, source_map) = make_provider("file:///test.pl", code);
 
     let results = provider.search("NonExistent", &source_map);
-    assert!(results.is_empty(), "non-existent package should return empty results");
+    assert!(
+        results.is_empty(),
+        "non-existent package should return empty results"
+    );
 }
 
 #[test]
@@ -339,7 +384,8 @@ fn goto_def_module_deeply_qualified_use() -> Result<(), Box<dyn std::error::Erro
 
     let link = links.first().ok_or("expected a link")?;
     assert_eq!(
-        link.pointer("/data/module").and_then(serde_json::Value::as_str),
+        link.pointer("/data/module")
+            .and_then(serde_json::Value::as_str),
         Some("Very::Deep::Nested::Module")
     );
     Ok(())
@@ -353,7 +399,8 @@ fn goto_def_module_use_with_import_list() -> Result<(), Box<dyn std::error::Erro
 
     let link = links.first().ok_or("expected a link")?;
     assert_eq!(
-        link.pointer("/data/module").and_then(serde_json::Value::as_str),
+        link.pointer("/data/module")
+            .and_then(serde_json::Value::as_str),
         Some("File::Path")
     );
     Ok(())
@@ -366,9 +413,14 @@ fn goto_def_module_require_file_path() -> Result<(), Box<dyn std::error::Error>>
     assert_eq!(links.len(), 1);
 
     let link = links.first().ok_or("expected a link")?;
-    assert_eq!(link.pointer("/data/type").and_then(serde_json::Value::as_str), Some("file"));
     assert_eq!(
-        link.pointer("/data/path").and_then(serde_json::Value::as_str),
+        link.pointer("/data/type")
+            .and_then(serde_json::Value::as_str),
+        Some("file")
+    );
+    assert_eq!(
+        link.pointer("/data/path")
+            .and_then(serde_json::Value::as_str),
         Some("My/Helper.pm")
     );
     Ok(())
@@ -380,7 +432,10 @@ fn goto_def_module_block_form_package() {
     let (provider, source_map) = make_provider("file:///test.pl", code);
 
     let results = provider.search("MyBlock", &source_map);
-    assert!(!results.is_empty(), "block-form package should be findable via workspace symbols");
+    assert!(
+        !results.is_empty(),
+        "block-form package should be findable via workspace symbols"
+    );
     assert_eq!(results[0].name, "MyBlock");
 }
 
@@ -390,7 +445,10 @@ fn goto_def_module_workspace_symbol_for_package() {
     let (provider, source_map) = make_provider("file:///lib/Data/Processor.pm", code);
 
     let results = provider.search("Data::Processor", &source_map);
-    assert!(!results.is_empty(), "package should appear as workspace symbol");
+    assert!(
+        !results.is_empty(),
+        "package should appear as workspace symbol"
+    );
     assert_eq!(results[0].name, "Data::Processor");
 }
 
@@ -424,7 +482,11 @@ fn find_all_refs_function_covers_all_call_sites() {
     let refs = must_some(find_references_single_file(&ast, offset));
 
     // 1 definition + 3 calls
-    assert!(refs.len() >= 4, "should find 4+ refs for process, got {}", refs.len());
+    assert!(
+        refs.len() >= 4,
+        "should find 4+ refs for process, got {}",
+        refs.len()
+    );
 }
 
 #[test]
@@ -502,7 +564,11 @@ fn find_all_refs_subroutine_from_definition_site() {
     let def_offset = must_some(code.find("worker"));
     let refs = must_some(find_references_single_file(&ast, def_offset));
 
-    assert!(refs.len() >= 3, "should find def + 2 calls, got {}", refs.len());
+    assert!(
+        refs.len() >= 3,
+        "should find def + 2 calls, got {}",
+        refs.len()
+    );
 }
 
 #[test]
@@ -610,8 +676,10 @@ fn workspace_search_across_multiple_files() {
     let results = provider.search("load", &source_map);
     assert_eq!(results.len(), 2, "should find 'load' in both files");
 
-    let containers: Vec<Option<&str>> =
-        results.iter().map(|r| r.container_name.as_deref()).collect();
+    let containers: Vec<Option<&str>> = results
+        .iter()
+        .map(|r| r.container_name.as_deref())
+        .collect();
     assert!(containers.contains(&Some("Model")));
     assert!(containers.contains(&Some("Controller")));
 }
@@ -623,7 +691,10 @@ fn workspace_search_fuzzy_match_initials() {
 
     // "gube" is a subsequence of "get_user_by_email"
     let results = provider.search("gube", &source_map);
-    assert!(!results.is_empty(), "fuzzy match 'gube' should match 'get_user_by_email'");
+    assert!(
+        !results.is_empty(),
+        "fuzzy match 'gube' should match 'get_user_by_email'"
+    );
 }
 
 #[test]
@@ -632,7 +703,11 @@ fn workspace_search_empty_query_returns_all_symbols() {
     let (provider, source_map) = make_provider("file:///lib.pl", code);
 
     let results = provider.search("", &source_map);
-    assert!(results.len() >= 3, "empty query should return all symbols, got {}", results.len());
+    assert!(
+        results.len() >= 3,
+        "empty query should return all symbols, got {}",
+        results.len()
+    );
 }
 
 #[test]
@@ -653,7 +728,10 @@ fn workspace_search_symbol_has_correct_uri() {
 
     let results = provider.search("run", &source_map);
     assert!(!results.is_empty());
-    assert_eq!(results[0].location.uri, uri, "symbol URI should match indexed document");
+    assert_eq!(
+        results[0].location.uri, uri,
+        "symbol URI should match indexed document"
+    );
 }
 
 #[test]
@@ -689,10 +767,16 @@ fn workspace_search_after_reindex_shows_updated_symbols() {
     source_map.insert(uri.to_string(), v2.to_string());
 
     let old_results = provider.search("old_api", &source_map);
-    assert!(old_results.is_empty(), "old_api should be gone after reindex");
+    assert!(
+        old_results.is_empty(),
+        "old_api should be gone after reindex"
+    );
 
     let new_results = provider.search("new_api", &source_map);
-    assert!(!new_results.is_empty(), "new_api should be present after reindex");
+    assert!(
+        !new_results.is_empty(),
+        "new_api should be present after reindex"
+    );
 }
 
 #[test]
@@ -704,8 +788,14 @@ fn workspace_search_with_candidates_restricts_scope() {
     let results = provider.search_with_candidates("a", &source_map, &candidates);
 
     let names: Vec<&str> = results.iter().map(|r| r.name.as_str()).collect();
-    assert!(names.contains(&"alpha"), "alpha should match 'a' in candidates");
-    assert!(!names.contains(&"beta"), "beta should not appear -- not in candidates");
+    assert!(
+        names.contains(&"alpha"),
+        "alpha should match 'a' in candidates"
+    );
+    assert!(
+        !names.contains(&"beta"),
+        "beta should not appear -- not in candidates"
+    );
 }
 
 // ══════════════════════════════════════════════

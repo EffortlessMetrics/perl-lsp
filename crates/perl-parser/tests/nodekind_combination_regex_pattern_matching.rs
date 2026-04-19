@@ -131,7 +131,10 @@ if ($conditional_text =~ /^(?(?=\d)\d+|[a-z]+)$/) {
     assert!(has_node_kind(&ast, "Match"), "Should have match operations");
 
     // Verify conditional statements
-    assert!(has_node_kind(&ast, "If"), "Should have conditional statements");
+    assert!(
+        has_node_kind(&ast, "If"),
+        "Should have conditional statements"
+    );
 
     // Verify string literals with regex content
     assert!(has_node_kind(&ast, "String"), "Should have string literals");
@@ -249,16 +252,25 @@ process_file_substitutions('config.txt');
     let ast = must(parser.parse());
 
     // Verify substitution operations
-    assert!(has_node_kind(&ast, "Substitution"), "Should have substitution operations");
+    assert!(
+        has_node_kind(&ast, "Substitution"),
+        "Should have substitution operations"
+    );
 
     // Verify transliteration operations
-    assert!(has_node_kind(&ast, "Transliteration"), "Should have transliteration operations");
+    assert!(
+        has_node_kind(&ast, "Transliteration"),
+        "Should have transliteration operations"
+    );
 
     // Verify eval blocks for error handling
     assert!(has_node_kind(&ast, "Eval"), "Should have eval blocks");
 
     // Verify function calls
-    assert!(has_node_kind(&ast, "FunctionCall"), "Should have function calls");
+    assert!(
+        has_node_kind(&ast, "FunctionCall"),
+        "Should have function calls"
+    );
 }
 
 /// Test given/when with regex conditions and smart matching
@@ -463,16 +475,25 @@ given ($value_to_test) {
     assert!(has_node_kind(&ast, "When"), "Should have when clauses");
 
     // Verify default clauses
-    assert!(has_node_kind(&ast, "Default"), "Should have default clauses");
+    assert!(
+        has_node_kind(&ast, "Default"),
+        "Should have default clauses"
+    );
 
     // Verify regex operations
     assert!(has_node_kind(&ast, "Regex"), "Should have regex nodes");
 
     // Verify hash literals
-    assert!(has_node_kind(&ast, "HashLiteral"), "Should have hash literals");
+    assert!(
+        has_node_kind(&ast, "HashLiteral"),
+        "Should have hash literals"
+    );
 
     // Verify array literals
-    assert!(has_node_kind(&ast, "ArrayLiteral"), "Should have array literals");
+    assert!(
+        has_node_kind(&ast, "ArrayLiteral"),
+        "Should have array literals"
+    );
 }
 
 /// Test pattern matching with complex data structures
@@ -727,17 +748,29 @@ my $guard_match = match_with_guards([3, 7]);
     assert!(has_node_kind(&ast, "When"), "Should have when clauses");
 
     // Verify default clauses
-    assert!(has_node_kind(&ast, "Default"), "Should have default clauses");
+    assert!(
+        has_node_kind(&ast, "Default"),
+        "Should have default clauses"
+    );
 
     // Verify regex operations
     assert!(has_node_kind(&ast, "Regex"), "Should have regex nodes");
 
     // Verify complex data structures
-    assert!(has_node_kind(&ast, "HashLiteral"), "Should have hash literals");
-    assert!(has_node_kind(&ast, "ArrayLiteral"), "Should have array literals");
+    assert!(
+        has_node_kind(&ast, "HashLiteral"),
+        "Should have hash literals"
+    );
+    assert!(
+        has_node_kind(&ast, "ArrayLiteral"),
+        "Should have array literals"
+    );
 
     // Verify subroutine declarations
-    assert!(has_node_kind(&ast, "Subroutine"), "Should have subroutine declarations");
+    assert!(
+        has_node_kind(&ast, "Subroutine"),
+        "Should have subroutine declarations"
+    );
 }
 
 /// Test advanced regex features and edge cases
@@ -873,11 +906,17 @@ if ($verbose_text =~ /
     assert!(has_node_kind(&ast, "Match"), "Should have match operations");
 
     // Verify conditional statements
-    assert!(has_node_kind(&ast, "If"), "Should have conditional statements");
+    assert!(
+        has_node_kind(&ast, "If"),
+        "Should have conditional statements"
+    );
 
     // Verify string literals with regex content
     assert!(has_node_kind(&ast, "String"), "Should have string literals");
 
     // Verify function calls
-    assert!(has_node_kind(&ast, "FunctionCall"), "Should have function calls");
+    assert!(
+        has_node_kind(&ast, "FunctionCall"),
+        "Should have function calls"
+    );
 }

@@ -126,7 +126,12 @@ fn test_dap_evaluate_complex_expressions() -> TestResult {
 
         let response = adapter.handle_request(1, "evaluate", Some(eval_args));
         match response {
-            DapMessage::Response { success, command, message, .. } => {
+            DapMessage::Response {
+                success,
+                command,
+                message,
+                ..
+            } => {
                 assert_eq!(command, "evaluate");
                 if !success {
                     // Expected when no session - check error message is reasonable
@@ -161,7 +166,12 @@ fn test_dap_variables_complex_scopes() -> TestResult {
 
         let response = adapter.handle_request(1, "variables", Some(var_args));
         match response {
-            DapMessage::Response { success, command, body, .. } => {
+            DapMessage::Response {
+                success,
+                command,
+                body,
+                ..
+            } => {
                 assert_eq!(command, "variables");
                 if success {
                     let body = body.ok_or("Expected body in successful response")?;
@@ -185,7 +195,7 @@ fn test_dap_variables_complex_scopes() -> TestResult {
             }
             _ => {
                 return Err(
-                    format!("Expected variables response for reference: {}", var_ref).into()
+                    format!("Expected variables response for reference: {}", var_ref).into(),
                 );
             }
         }
@@ -209,7 +219,12 @@ fn test_dap_stack_trace_edge_cases() -> TestResult {
     for (i, args) in test_cases.iter().enumerate() {
         let response = adapter.handle_request(i as i64 + 1, "stackTrace", args.clone());
         match response {
-            DapMessage::Response { success, command, body, .. } => {
+            DapMessage::Response {
+                success,
+                command,
+                body,
+                ..
+            } => {
                 assert_eq!(command, "stackTrace");
                 if success {
                     let body = body.ok_or("Expected body in successful response")?;
@@ -251,7 +266,12 @@ fn test_dap_scopes_edge_cases() -> TestResult {
 
         let response = adapter.handle_request(1, "scopes", Some(scope_args));
         match response {
-            DapMessage::Response { success, command, body, .. } => {
+            DapMessage::Response {
+                success,
+                command,
+                body,
+                ..
+            } => {
                 assert_eq!(command, "scopes");
                 if success {
                     let body = body.ok_or("Expected body in successful response")?;
@@ -262,7 +282,12 @@ fn test_dap_scopes_edge_cases() -> TestResult {
 
                     // Should return at least one scope (Local) for any valid frame
                     if frame_id > 0 {
-                        assert_eq!(scopes.len(), 3, "Should have 3 scopes for frame: {}", frame_id);
+                        assert_eq!(
+                            scopes.len(),
+                            3,
+                            "Should have 3 scopes for frame: {}",
+                            frame_id
+                        );
 
                         // Check scope structure
                         let scope = &scopes[0];
@@ -289,7 +314,12 @@ fn test_dap_pause_without_session() -> TestResult {
     // Test pause without active debugger session
     let response = adapter.handle_request(1, "pause", None);
     match response {
-        DapMessage::Response { success, command, message, .. } => {
+        DapMessage::Response {
+            success,
+            command,
+            message,
+            ..
+        } => {
             assert_eq!(command, "pause");
             assert!(!success, "Pause should fail without active session");
             if let Some(msg) = message {
@@ -311,10 +341,18 @@ fn test_dap_step_commands_without_session() -> TestResult {
     for command in step_commands {
         let response = adapter.handle_request(1, command, None);
         match response {
-            DapMessage::Response { success, command: resp_cmd, .. } => {
+            DapMessage::Response {
+                success,
+                command: resp_cmd,
+                ..
+            } => {
                 assert_eq!(resp_cmd, *command);
                 // These should succeed (they're graceful no-ops without session)
-                assert!(success, "Step command {} should succeed gracefully", command);
+                assert!(
+                    success,
+                    "Step command {} should succeed gracefully",
+                    command
+                );
             }
             _ => return Err(format!("Expected response for command: {}", command).into()),
         }
@@ -341,7 +379,12 @@ fn test_dap_malformed_requests() -> TestResult {
     for (i, (command, args)) in test_cases.iter().enumerate() {
         let response = adapter.handle_request(i as i64 + 1, command, args.clone());
         match response {
-            DapMessage::Response { success, command: resp_cmd, message, .. } => {
+            DapMessage::Response {
+                success,
+                command: resp_cmd,
+                message,
+                ..
+            } => {
                 assert_eq!(resp_cmd, *command);
                 // Most should fail with helpful error messages
                 if !success {
@@ -360,7 +403,9 @@ fn test_dap_malformed_requests() -> TestResult {
                     }
                 }
             }
-            _ => return Err(format!("Expected response for malformed command: {}", command).into()),
+            _ => {
+                return Err(format!("Expected response for malformed command: {}", command).into());
+            }
         }
     }
     Ok(())
@@ -377,7 +422,13 @@ fn test_dap_attach_process_id_mode() -> TestResult {
 
     let response = adapter.handle_request(1, "attach", Some(attach_args));
     match response {
-        DapMessage::Response { success, command, body, message, .. } => {
+        DapMessage::Response {
+            success,
+            command,
+            body,
+            message,
+            ..
+        } => {
             assert_eq!(command, "attach");
             assert!(success, "PID attach should succeed");
             let body = body.ok_or("Expected attach body")?;

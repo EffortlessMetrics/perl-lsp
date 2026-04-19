@@ -58,8 +58,14 @@ fn rename_variable_file_scope_replaces_all_occurrences() -> Result<(), Box<dyn s
 
     assert!(result.success, "Rename should succeed");
     let new_code = std::fs::read_to_string(&path)?;
-    assert!(new_code.contains("$total"), "New name should appear in output");
-    assert!(!new_code.contains("$count"), "Old name should not appear in output");
+    assert!(
+        new_code.contains("$total"),
+        "New name should appear in output"
+    );
+    assert!(
+        !new_code.contains("$count"),
+        "Old name should not appear in output"
+    );
     Ok(())
 }
 
@@ -84,7 +90,10 @@ fn rename_variable_function_scope_only_renames_inside_function()
         RefactoringType::SymbolRename {
             old_name: "$val".to_string(),
             new_name: "$data".to_string(),
-            scope: RefactoringScope::Function { file: path.clone(), name: "process".to_string() },
+            scope: RefactoringScope::Function {
+                file: path.clone(),
+                name: "process".to_string(),
+            },
         },
         vec![path.clone()],
     )?;
@@ -93,13 +102,21 @@ fn rename_variable_function_scope_only_renames_inside_function()
     let new_code = std::fs::read_to_string(&path)?;
 
     // The inner function body should have $data
-    let sub_start = new_code.find("sub process").ok_or("sub process not found")?;
+    let sub_start = new_code
+        .find("sub process")
+        .ok_or("sub process not found")?;
     let sub_body = &new_code[sub_start..];
-    assert!(sub_body.contains("$data"), "Function body should contain renamed variable");
+    assert!(
+        sub_body.contains("$data"),
+        "Function body should contain renamed variable"
+    );
 
     // The last line (outside the function) should still have $val
     let last_line = new_code.lines().last().ok_or("no last line")?;
-    assert!(last_line.contains("$val"), "Code outside function should keep original variable name");
+    assert!(
+        last_line.contains("$val"),
+        "Code outside function should keep original variable name"
+    );
     Ok(())
 }
 
@@ -124,7 +141,10 @@ fn rename_variable_package_scope_only_renames_in_target_package()
         RefactoringType::SymbolRename {
             old_name: "$data".to_string(),
             new_name: "$info".to_string(),
-            scope: RefactoringScope::Package { file: path.clone(), name: "Alpha".to_string() },
+            scope: RefactoringScope::Package {
+                file: path.clone(),
+                name: "Alpha".to_string(),
+            },
         },
         vec![path.clone()],
     )?;
@@ -133,14 +153,24 @@ fn rename_variable_package_scope_only_renames_in_target_package()
     let new_code = std::fs::read_to_string(&path)?;
 
     // Alpha section should have $info
-    let alpha_start = new_code.find("package Alpha").ok_or("package Alpha not found")?;
-    let beta_start = new_code.find("package Beta").ok_or("package Beta not found")?;
+    let alpha_start = new_code
+        .find("package Alpha")
+        .ok_or("package Alpha not found")?;
+    let beta_start = new_code
+        .find("package Beta")
+        .ok_or("package Beta not found")?;
     let alpha_section = &new_code[alpha_start..beta_start];
-    assert!(alpha_section.contains("$info"), "Alpha section should contain renamed variable");
+    assert!(
+        alpha_section.contains("$info"),
+        "Alpha section should contain renamed variable"
+    );
 
     // Beta section should still have $data
     let beta_section = &new_code[beta_start..];
-    assert!(beta_section.contains("$data"), "Beta section should keep original variable name");
+    assert!(
+        beta_section.contains("$data"),
+        "Beta section should keep original variable name"
+    );
     Ok(())
 }
 
@@ -178,7 +208,10 @@ fn rename_variable_block_scope_limits_to_block_range() -> Result<(), Box<dyn std
 
     // The last line outside the block should retain $x
     let last_line = new_code.lines().last().ok_or("no last line")?;
-    assert!(last_line.contains("$x"), "Code outside block should keep $x");
+    assert!(
+        last_line.contains("$x"),
+        "Code outside block should keep $x"
+    );
 
     // Inside the block, $y should appear
     let block_start = new_code.find("{\n").ok_or("block start not found")?;
@@ -223,8 +256,14 @@ fn rename_subroutine_in_file_scope() -> Result<(), Box<dyn std::error::Error>> {
 
     assert!(result.success, "Rename should succeed");
     let new_code = std::fs::read_to_string(&path)?;
-    assert!(new_code.contains("transform_data"), "New sub name should appear");
-    assert!(!new_code.contains("process_data"), "Old sub name should not appear");
+    assert!(
+        new_code.contains("transform_data"),
+        "New sub name should appear"
+    );
+    assert!(
+        !new_code.contains("process_data"),
+        "Old sub name should not appear"
+    );
     Ok(())
 }
 
@@ -297,7 +336,10 @@ fn rename_subroutine_does_not_rename_substring_matches() -> Result<(), Box<dyn s
     let new_code = std::fs::read_to_string(&path)?;
 
     // get_name and forget should remain unchanged
-    assert!(new_code.contains("get_name"), "get_name should not be affected");
+    assert!(
+        new_code.contains("get_name"),
+        "get_name should not be affected"
+    );
     assert!(new_code.contains("forget"), "forget should not be affected");
     Ok(())
 }
@@ -308,7 +350,12 @@ fn rename_subroutine_does_not_rename_substring_matches() -> Result<(), Box<dyn s
 
 #[test]
 fn rename_package_name_in_declaration() -> Result<(), Box<dyn std::error::Error>> {
-    let code = concat!("package MyApp::Utils;\n", "use strict;\n", "sub helper { 1 }\n", "1;\n",);
+    let code = concat!(
+        "package MyApp::Utils;\n",
+        "use strict;\n",
+        "sub helper { 1 }\n",
+        "1;\n",
+    );
     let (_f, path) = temp_perl(code)?;
     let mut engine = engine_no_safe();
     engine.index_file(&path, code)?;
@@ -324,8 +371,14 @@ fn rename_package_name_in_declaration() -> Result<(), Box<dyn std::error::Error>
 
     assert!(result.success, "Rename should succeed");
     let new_code = std::fs::read_to_string(&path)?;
-    assert!(new_code.contains("MyApp::Helpers"), "New package name should appear");
-    assert!(!new_code.contains("MyApp::Utils"), "Old package name should not appear");
+    assert!(
+        new_code.contains("MyApp::Helpers"),
+        "New package name should appear"
+    );
+    assert!(
+        !new_code.contains("MyApp::Utils"),
+        "Old package name should not appear"
+    );
     Ok(())
 }
 
@@ -336,7 +389,11 @@ fn rename_package_used_in_qualified_call() -> Result<(), Box<dyn std::error::Err
     // its indexer; qualified calls (MyModule->new, MyModule::run) may
     // require deeper semantic analysis. This test validates that at least
     // the indexed occurrence is renamed and the replacement is correct.
-    let code = concat!("use MyModule;\n", "my $obj = MyModule->new();\n", "MyModule::run();\n",);
+    let code = concat!(
+        "use MyModule;\n",
+        "my $obj = MyModule->new();\n",
+        "MyModule::run();\n",
+    );
     let (_f, path) = temp_perl(code)?;
     let mut engine = engine_no_safe();
     engine.index_file(&path, code)?;
@@ -351,7 +408,10 @@ fn rename_package_used_in_qualified_call() -> Result<(), Box<dyn std::error::Err
     )?;
 
     assert!(result.success, "Rename should succeed");
-    assert!(result.changes_made >= 1, "Should rename at least one occurrence");
+    assert!(
+        result.changes_made >= 1,
+        "Should rename at least one occurrence"
+    );
     let new_code = std::fs::read_to_string(&path)?;
     assert!(
         new_code.contains("NewModule"),
@@ -388,7 +448,10 @@ fn extract_function_simple_statements() -> Result<(), Box<dyn std::error::Error>
     )?;
 
     assert!(result.success, "Extract should succeed");
-    assert_eq!(result.changes_made, 2, "Should report 2 changes (call + sub)");
+    assert_eq!(
+        result.changes_made, 2,
+        "Should report 2 changes (call + sub)"
+    );
     let new_code = std::fs::read_to_string(&path)?;
 
     // The extracted subroutine should exist
@@ -399,7 +462,10 @@ fn extract_function_simple_statements() -> Result<(), Box<dyn std::error::Error>
     );
 
     // The call site should reference the new function
-    assert!(new_code.contains("compute_sum("), "Call to extracted function should be present");
+    assert!(
+        new_code.contains("compute_sum("),
+        "Call to extracted function should be present"
+    );
     Ok(())
 }
 
@@ -427,7 +493,11 @@ fn extract_function_with_inputs_from_outer_scope() -> Result<(), Box<dyn std::er
 
     assert!(result.success, "Extract should succeed");
     let new_code = std::fs::read_to_string(&path)?;
-    assert!(new_code.contains("sub greet"), "Extracted sub should exist in: {}", new_code);
+    assert!(
+        new_code.contains("sub greet"),
+        "Extracted sub should exist in: {}",
+        new_code
+    );
     Ok(())
 }
 
@@ -506,7 +576,10 @@ fn extract_function_preserves_remaining_code() -> Result<(), Box<dyn std::error:
     // The first and last lines should still be present
     assert!(new_code.contains("my $x = 10"), "First line should remain");
     assert!(new_code.contains("print"), "Last line should remain");
-    assert!(new_code.contains("sub init_y"), "Extracted function should exist");
+    assert!(
+        new_code.contains("sub init_y"),
+        "Extracted function should exist"
+    );
     Ok(())
 }
 
@@ -540,10 +613,22 @@ fn rename_variable_across_two_files_workspace_scope() -> Result<(), Box<dyn std:
     let new_code1 = std::fs::read_to_string(&path1)?;
     let new_code2 = std::fs::read_to_string(&path2)?;
 
-    assert!(new_code1.contains("$common"), "File 1 should contain renamed variable");
-    assert!(!new_code1.contains("$shared"), "File 1 should not contain old variable");
-    assert!(new_code2.contains("$common"), "File 2 should contain renamed variable");
-    assert!(!new_code2.contains("$shared"), "File 2 should not contain old variable");
+    assert!(
+        new_code1.contains("$common"),
+        "File 1 should contain renamed variable"
+    );
+    assert!(
+        !new_code1.contains("$shared"),
+        "File 1 should not contain old variable"
+    );
+    assert!(
+        new_code2.contains("$common"),
+        "File 2 should contain renamed variable"
+    );
+    assert!(
+        !new_code2.contains("$shared"),
+        "File 2 should not contain old variable"
+    );
     Ok(())
 }
 
@@ -571,10 +656,22 @@ fn rename_subroutine_across_files_workspace_scope() -> Result<(), Box<dyn std::e
     let new_code1 = std::fs::read_to_string(&path1)?;
     let new_code2 = std::fs::read_to_string(&path2)?;
 
-    assert!(new_code1.contains("execute_task"), "File 1 should contain renamed sub");
-    assert!(!new_code1.contains("do_work"), "File 1 should not contain old sub name");
-    assert!(new_code2.contains("execute_task"), "File 2 should contain renamed sub");
-    assert!(!new_code2.contains("do_work"), "File 2 should not contain old sub name");
+    assert!(
+        new_code1.contains("execute_task"),
+        "File 1 should contain renamed sub"
+    );
+    assert!(
+        !new_code1.contains("do_work"),
+        "File 1 should not contain old sub name"
+    );
+    assert!(
+        new_code2.contains("execute_task"),
+        "File 2 should contain renamed sub"
+    );
+    assert!(
+        !new_code2.contains("do_work"),
+        "File 2 should not contain old sub name"
+    );
     Ok(())
 }
 
@@ -605,8 +702,14 @@ fn rename_file_scope_does_not_affect_other_files() -> Result<(), Box<dyn std::er
 
     // File 2 should NOT be changed
     let new_code2 = std::fs::read_to_string(&path2)?;
-    assert!(new_code2.contains("$target"), "File 2 should not be affected by file-scoped rename");
-    assert!(!new_code2.contains("$dest"), "File 2 should not contain new name");
+    assert!(
+        new_code2.contains("$target"),
+        "File 2 should not be affected by file-scoped rename"
+    );
+    assert!(
+        !new_code2.contains("$dest"),
+        "File 2 should not contain new name"
+    );
     Ok(())
 }
 
@@ -731,9 +834,15 @@ fn rename_array_variable_preserves_sigil() -> Result<(), Box<dyn std::error::Err
     )?;
 
     assert!(result.success, "Rename should succeed");
-    assert!(result.changes_made >= 1, "Should rename at least one occurrence");
+    assert!(
+        result.changes_made >= 1,
+        "Should rename at least one occurrence"
+    );
     let new_code = std::fs::read_to_string(&path)?;
-    assert!(new_code.contains("@elements"), "New array name should appear with @ sigil preserved");
+    assert!(
+        new_code.contains("@elements"),
+        "New array name should appear with @ sigil preserved"
+    );
     // Verify that the replacement kept the sigil intact (not $elements or %elements)
     assert!(
         !new_code.contains("$elements") && !new_code.contains("%elements"),
@@ -761,9 +870,15 @@ fn rename_hash_variable_preserves_sigil() -> Result<(), Box<dyn std::error::Erro
     )?;
 
     assert!(result.success, "Rename should succeed");
-    assert!(result.changes_made >= 1, "Should rename at least one occurrence");
+    assert!(
+        result.changes_made >= 1,
+        "Should rename at least one occurrence"
+    );
     let new_code = std::fs::read_to_string(&path)?;
-    assert!(new_code.contains("%settings"), "New hash name should appear with % sigil preserved");
+    assert!(
+        new_code.contains("%settings"),
+        "New hash name should appear with % sigil preserved"
+    );
     // Verify that the replacement kept the sigil intact
     assert!(
         !new_code.contains("$settings") && !new_code.contains("@settings"),
@@ -846,7 +961,11 @@ fn rename_records_operation_in_history() -> Result<(), Box<dyn std::error::Error
         vec![path.clone()],
     )?;
 
-    assert_eq!(engine.get_operation_history().len(), 1, "Should have one operation in history");
+    assert_eq!(
+        engine.get_operation_history().len(),
+        1,
+        "Should have one operation in history"
+    );
     Ok(())
 }
 
@@ -882,7 +1001,11 @@ fn multiple_operations_accumulate_in_history() -> Result<(), Box<dyn std::error:
         vec![path2.clone()],
     )?;
 
-    assert_eq!(engine.get_operation_history().len(), 2, "Should have two operations in history");
+    assert_eq!(
+        engine.get_operation_history().len(),
+        2,
+        "Should have two operations in history"
+    );
     Ok(())
 }
 
@@ -892,7 +1015,11 @@ fn multiple_operations_accumulate_in_history() -> Result<(), Box<dyn std::error:
 
 #[test]
 fn rename_qualified_subroutine_name() -> Result<(), Box<dyn std::error::Error>> {
-    let code = concat!("package Foo::Bar;\n", "sub Foo::Bar::baz { 1 }\n", "Foo::Bar::baz();\n",);
+    let code = concat!(
+        "package Foo::Bar;\n",
+        "sub Foo::Bar::baz { 1 }\n",
+        "Foo::Bar::baz();\n",
+    );
     let (_f, path) = temp_perl(code)?;
     let mut engine = engine_no_safe();
     engine.index_file(&path, code)?;
@@ -908,7 +1035,10 @@ fn rename_qualified_subroutine_name() -> Result<(), Box<dyn std::error::Error>> 
 
     assert!(result.success, "Rename should succeed");
     let new_code = std::fs::read_to_string(&path)?;
-    assert!(new_code.contains("Foo::Bar::qux"), "New qualified name should appear");
+    assert!(
+        new_code.contains("Foo::Bar::qux"),
+        "New qualified name should appear"
+    );
     Ok(())
 }
 
@@ -930,7 +1060,13 @@ fn rename_variable_with_underscores_and_digits() -> Result<(), Box<dyn std::erro
 
     assert!(result.success, "Rename should succeed");
     let new_code = std::fs::read_to_string(&path)?;
-    assert!(new_code.contains("$result_456"), "New variable name should appear");
-    assert!(!new_code.contains("$var_123"), "Old variable name should not appear");
+    assert!(
+        new_code.contains("$result_456"),
+        "New variable name should appear"
+    );
+    assert!(
+        !new_code.contains("$var_123"),
+        "Old variable name should not appear"
+    );
     Ok(())
 }

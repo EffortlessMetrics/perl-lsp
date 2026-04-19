@@ -25,7 +25,11 @@ fn fetchrow_hashref_loop() {
     assert_clean_parse(code);
     let ast = parse(code);
     let kinds = top_level_kinds(&ast);
-    assert!(kinds.contains(&"While"), "expected While loop, got: {:?}", kinds);
+    assert!(
+        kinds.contains(&"While"),
+        "expected While loop, got: {:?}",
+        kinds
+    );
 }
 
 #[test]

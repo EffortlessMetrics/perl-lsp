@@ -108,7 +108,10 @@ fn large_workspace_inherits_other_defaults() -> Result<(), Box<dyn std::error::E
     assert_eq!(lw.code_lens_resolve_deadline, d.code_lens_resolve_deadline);
     assert_eq!(lw.completion_deadline, d.completion_deadline);
     assert_eq!(lw.return_partial_on_timeout, d.return_partial_on_timeout);
-    assert_eq!(lw.include_open_docs_when_degraded, d.include_open_docs_when_degraded);
+    assert_eq!(
+        lw.include_open_docs_when_degraded,
+        d.include_open_docs_when_degraded
+    );
     Ok(())
 }
 
@@ -149,7 +152,10 @@ fn constrained_inherits_other_defaults() -> Result<(), Box<dyn std::error::Error
     assert_eq!(c.code_lens_resolve_deadline, d.code_lens_resolve_deadline);
     assert_eq!(c.completion_deadline, d.completion_deadline);
     assert_eq!(c.return_partial_on_timeout, d.return_partial_on_timeout);
-    assert_eq!(c.include_open_docs_when_degraded, d.include_open_docs_when_degraded);
+    assert_eq!(
+        c.include_open_docs_when_degraded,
+        d.include_open_docs_when_degraded
+    );
     Ok(())
 }
 
@@ -225,7 +231,10 @@ fn update_reference_search_deadline_ms() -> Result<(), Box<dyn std::error::Error
     let mut limits = LspLimits::default();
     let settings = serde_json::json!({ "limits": { "referenceSearchDeadlineMs": 5000 } });
     limits.update_from_value(&settings);
-    assert_eq!(limits.reference_search_deadline, Duration::from_millis(5000));
+    assert_eq!(
+        limits.reference_search_deadline,
+        Duration::from_millis(5000)
+    );
     Ok(())
 }
 
@@ -252,7 +261,10 @@ fn update_multiple_fields_at_once() -> Result<(), Box<dyn std::error::Error>> {
     assert_eq!(limits.max_indexed_files, 25_000);
     assert_eq!(limits.max_total_symbols, 750_000);
     assert_eq!(limits.workspace_scan_deadline, Duration::from_millis(45000));
-    assert_eq!(limits.reference_search_deadline, Duration::from_millis(3000));
+    assert_eq!(
+        limits.reference_search_deadline,
+        Duration::from_millis(3000)
+    );
     Ok(())
 }
 

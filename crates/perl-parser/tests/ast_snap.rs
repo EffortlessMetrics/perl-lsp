@@ -27,7 +27,11 @@ fn parse_errors(source: &str) -> String {
     let mut parser = Parser::new(source);
     let output = parser.parse_with_recovery();
     // Format errors as a sorted, newline-separated list for stable snapshots
-    let mut lines: Vec<String> = output.diagnostics.iter().map(|e| format!("{}", e)).collect();
+    let mut lines: Vec<String> = output
+        .diagnostics
+        .iter()
+        .map(|e| format!("{}", e))
+        .collect();
     lines.sort();
     lines.join("\n")
 }
@@ -85,7 +89,9 @@ fn ast_use_strict_warnings() {
 
 #[test]
 fn ast_while_loop() {
-    assert_snapshot!(parse_sexp("while (my $line = <STDIN>) { chomp $line; print $line; }"));
+    assert_snapshot!(parse_sexp(
+        "while (my $line = <STDIN>) { chomp $line; print $line; }"
+    ));
 }
 
 #[test]
@@ -95,12 +101,16 @@ fn ast_for_loop() {
 
 #[test]
 fn ast_anonymous_sub() {
-    assert_snapshot!(parse_sexp("my $code = sub { my ($x) = @_; return $x * 2; };"));
+    assert_snapshot!(parse_sexp(
+        "my $code = sub { my ($x) = @_; return $x * 2; };"
+    ));
 }
 
 #[test]
 fn ast_string_interpolation() {
-    assert_snapshot!(parse_sexp("my $name = \"world\"; my $msg = \"Hello, $name!\";"));
+    assert_snapshot!(parse_sexp(
+        "my $name = \"world\"; my $msg = \"Hello, $name!\";"
+    ));
 }
 
 #[test]

@@ -30,7 +30,10 @@ fn rope_performance_characteristics() {
     println!("Testing position conversion performance...");
     let mut content = String::new();
     for i in 0..1000 {
-        content.push_str(&format!("Line {}: Some content with Unicode 🚀 characters\n", i));
+        content.push_str(&format!(
+            "Line {}: Some content with Unicode 🚀 characters\n",
+            i
+        ));
     }
 
     let rope = Rope::from_str(&content);
@@ -56,7 +59,10 @@ fn rope_performance_characteristics() {
 
     // Test 3: Incremental edit performance (realistic LSP scenario)
     println!("Testing incremental edit performance...");
-    let mut doc = Doc { rope: Rope::from_str(&content), version: 1 };
+    let mut doc = Doc {
+        rope: Rope::from_str(&content),
+        version: 1,
+    };
 
     let edits = vec![
         TextDocumentContentChangeEvent {

@@ -37,9 +37,14 @@ fn test_complete_workflow_from_messy_to_clean() -> Result<(), Box<dyn std::error
         })),
     };
 
-    let response = srv.handle_request(init_req).ok_or("Failed to initialize server")?;
+    let response = srv
+        .handle_request(init_req)
+        .ok_or("Failed to initialize server")?;
 
-    assert!(response.result.is_some(), "Initialize should return capabilities");
+    assert!(
+        response.result.is_some(),
+        "Initialize should return capabilities"
+    );
 
     // Step 2: Send initialized notification
     let initialized = JsonRpcRequest {
@@ -86,7 +91,9 @@ print encode_json({result => $result});
         })),
     };
 
-    let diag_response = srv.handle_request(diag_req).ok_or("Failed to get diagnostics")?;
+    let diag_response = srv
+        .handle_request(diag_req)
+        .ok_or("Failed to get diagnostics")?;
 
     let diag_result = diag_response.result.ok_or("Expected diagnostic result")?;
 
@@ -110,7 +117,9 @@ print encode_json({result => $result});
         })),
     };
 
-    let actions_response = srv.handle_request(actions_req).ok_or("Failed to get code actions")?;
+    let actions_response = srv
+        .handle_request(actions_req)
+        .ok_or("Failed to get code actions")?;
 
     if let Some(actions_result) = actions_response.result {
         if let Some(actions) = actions_result.as_array() {
@@ -148,7 +157,10 @@ print encode_json({result => $result});
         if let Some(result) = fmt_resp.result {
             println!("Formatting result: {:?}", result);
         } else if let Some(error) = fmt_resp.error {
-            println!("Formatting error (expected if perltidy not installed): {:?}", error);
+            println!(
+                "Formatting error (expected if perltidy not installed): {:?}",
+                error
+            );
         }
     }
 
@@ -163,7 +175,10 @@ print encode_json({result => $result});
     };
 
     let final_diag_response = srv.handle_request(final_diag_req);
-    assert!(final_diag_response.is_some(), "Server should remain responsive after full workflow");
+    assert!(
+        final_diag_response.is_some(),
+        "Server should remain responsive after full workflow"
+    );
 
     Ok(())
 }
@@ -195,7 +210,10 @@ fn test_batteries_included_features_summary() -> Result<(), Box<dyn std::error::
     if capabilities.get("documentFormattingProvider").is_some() {
         println!("✓ Document Formatting (Perl::Tidy integration + built-in fallback)");
     }
-    if capabilities.get("documentRangeFormattingProvider").is_some() {
+    if capabilities
+        .get("documentRangeFormattingProvider")
+        .is_some()
+    {
         println!("✓ Range Formatting");
     }
 
@@ -207,7 +225,10 @@ fn test_batteries_included_features_summary() -> Result<(), Box<dyn std::error::
     // Code Actions
     if let Some(code_action) = capabilities.get("codeActionProvider") {
         println!("✓ Code Actions:");
-        if let Some(kinds) = code_action.get("codeActionKinds").and_then(|k| k.as_array()) {
+        if let Some(kinds) = code_action
+            .get("codeActionKinds")
+            .and_then(|k| k.as_array())
+        {
             for kind in kinds {
                 if let Some(kind_str) = kind.as_str() {
                     println!("    - {}", kind_str);

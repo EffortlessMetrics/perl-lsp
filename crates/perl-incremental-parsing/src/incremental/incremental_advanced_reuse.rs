@@ -222,7 +222,8 @@ impl AdvancedReuseAnalyzer {
 
         // Calculate structural hash
         let structural_hash = self.calculate_structural_hash(node);
-        self.node_hashes.insert(node.location.start, structural_hash);
+        self.node_hashes
+            .insert(node.location.start, structural_hash);
 
         // Create node info for analysis
         let node_info = NodeAnalysisInfo {
@@ -244,7 +245,10 @@ impl AdvancedReuseAnalyzer {
             reuse_type: ReuseType::Direct,
         };
 
-        self.position_map.entry(node.location.start).or_default().push(candidate);
+        self.position_map
+            .entry(node.location.start)
+            .or_default()
+            .push(candidate);
 
         // Recurse into children
         match &node.kind {
@@ -253,7 +257,11 @@ impl AdvancedReuseAnalyzer {
                     self.analyze_node_recursive(stmt, analysis, depth + 1, config);
                 }
             }
-            NodeKind::VariableDeclaration { variable, initializer, .. } => {
+            NodeKind::VariableDeclaration {
+                variable,
+                initializer,
+                ..
+            } => {
                 self.analyze_node_recursive(variable, analysis, depth + 1, config);
                 if let Some(init) = initializer {
                     self.analyze_node_recursive(init, analysis, depth + 1, config);
@@ -271,7 +279,12 @@ impl AdvancedReuseAnalyzer {
                     self.analyze_node_recursive(arg, analysis, depth + 1, config);
                 }
             }
-            NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
+            NodeKind::If {
+                condition,
+                then_branch,
+                elsif_branches,
+                else_branch,
+            } => {
                 self.analyze_node_recursive(condition, analysis, depth + 1, config);
                 self.analyze_node_recursive(then_branch, analysis, depth + 1, config);
                 for (cond, branch) in elsif_branches {
@@ -309,7 +322,11 @@ impl AdvancedReuseAnalyzer {
                     self.mark_affected_nodes_in_range(stmt, start, end);
                 }
             }
-            NodeKind::VariableDeclaration { variable, initializer, .. } => {
+            NodeKind::VariableDeclaration {
+                variable,
+                initializer,
+                ..
+            } => {
                 self.mark_affected_nodes_in_range(variable, start, end);
                 if let Some(init) = initializer {
                     self.mark_affected_nodes_in_range(init, start, end);
@@ -589,9 +606,11 @@ impl AdvancedReuseAnalyzer {
             NodeKind::Binary { .. } => 2, // left + right
             NodeKind::Unary { .. } => 1,  // operand
             NodeKind::FunctionCall { args, .. } => args.len(),
-            NodeKind::If { elsif_branches, else_branch, .. } => {
-                2 + elsif_branches.len() * 2 + if else_branch.is_some() { 1 } else { 0 }
-            }
+            NodeKind::If {
+                elsif_branches,
+                else_branch,
+                ..
+            } => 2 + elsif_branches.len() * 2 + if else_branch.is_some() { 1 } else { 0 },
             _ => 0, // Leaf nodes
         }
     }
@@ -678,8 +697,12 @@ impl AdvancedReuseAnalyzer {
         match (&old_node.kind, &new_node.kind) {
             (NodeKind::Number { .. }, NodeKind::Number { .. }) => true,
             (
-                NodeKind::String { interpolated: i1, .. },
-                NodeKind::String { interpolated: i2, .. },
+                NodeKind::String {
+                    interpolated: i1, ..
+                },
+                NodeKind::String {
+                    interpolated: i2, ..
+                },
             ) => i1 == i2,
             (NodeKind::Variable { sigil: s1, .. }, NodeKind::Variable { sigil: s2, .. }) => {
                 s1 == s2
@@ -715,7 +738,11 @@ impl AdvancedReuseAnalyzer {
                     count += self.count_nodes(stmt);
                 }
             }
-            NodeKind::VariableDeclaration { variable, initializer, .. } => {
+            NodeKind::VariableDeclaration {
+                variable,
+                initializer,
+                ..
+            } => {
                 count += self.count_nodes(variable);
                 if let Some(init) = initializer {
                     count += self.count_nodes(init);
@@ -733,7 +760,12 @@ impl AdvancedReuseAnalyzer {
                     count += self.count_nodes(arg);
                 }
             }
-            NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
+            NodeKind::If {
+                condition,
+                then_branch,
+                elsif_branches,
+                else_branch,
+            } => {
                 count += self.count_nodes(condition);
                 count += self.count_nodes(then_branch);
                 for (cond, branch) in elsif_branches {
@@ -759,7 +791,9 @@ struct TreeAnalysis {
 
 impl TreeAnalysis {
     fn new() -> Self {
-        TreeAnalysis { node_info: HashMap::new() }
+        TreeAnalysis {
+            node_info: HashMap::new(),
+        }
     }
 
     fn add_node_info(&mut self, position: usize, info: NodeAnalysisInfo) {
@@ -833,12 +867,16 @@ mod tests {
 
         // Create sample nodes
         let node1 = Node::new(
-            NodeKind::Number { value: "42".to_string() },
+            NodeKind::Number {
+                value: "42".to_string(),
+            },
             SourceLocation { start: 0, end: 2 },
         );
 
         let node2 = Node::new(
-            NodeKind::Number { value: "99".to_string() },
+            NodeKind::Number {
+                value: "99".to_string(),
+            },
             SourceLocation { start: 0, end: 2 },
         );
 
@@ -846,7 +884,10 @@ mod tests {
         let hash2 = analyzer.calculate_structural_hash(&node2);
 
         // Same structure should have same hash
-        assert_eq!(hash1, hash2, "Numbers should have same structural hash regardless of value");
+        assert_eq!(
+            hash1, hash2,
+            "Numbers should have same structural hash regardless of value"
+        );
     }
 
     #[test]
@@ -854,19 +895,26 @@ mod tests {
         let analyzer = AdvancedReuseAnalyzer::new();
 
         let node1 = Node::new(
-            NodeKind::Number { value: "42".to_string() },
+            NodeKind::Number {
+                value: "42".to_string(),
+            },
             SourceLocation { start: 0, end: 2 },
         );
 
         let node2 = Node::new(
-            NodeKind::Number { value: "99".to_string() },
+            NodeKind::Number {
+                value: "99".to_string(),
+            },
             SourceLocation { start: 0, end: 2 },
         );
 
         let hash1 = analyzer.calculate_content_hash(&node1);
         let hash2 = analyzer.calculate_content_hash(&node2);
 
-        assert_ne!(hash1, hash2, "Different values should have different content hashes");
+        assert_ne!(
+            hash1, hash2,
+            "Different values should have different content hashes"
+        );
     }
 
     #[test]
@@ -875,7 +923,9 @@ mod tests {
 
         // Leaf node
         let leaf = Node::new(
-            NodeKind::Number { value: "42".to_string() },
+            NodeKind::Number {
+                value: "42".to_string(),
+            },
             SourceLocation { start: 0, end: 2 },
         );
         assert_eq!(analyzer.get_children_count(&leaf), 0);
@@ -893,7 +943,9 @@ mod tests {
 
         // Program node
         let program = Node::new(
-            NodeKind::Program { statements: vec![binary] },
+            NodeKind::Program {
+                statements: vec![binary],
+            },
             SourceLocation { start: 0, end: 5 },
         );
         assert_eq!(analyzer.get_children_count(&program), 1);
@@ -914,17 +966,24 @@ mod tests {
         let analyzer = AdvancedReuseAnalyzer::new();
 
         let num1 = Node::new(
-            NodeKind::Number { value: "42".to_string() },
+            NodeKind::Number {
+                value: "42".to_string(),
+            },
             SourceLocation { start: 0, end: 2 },
         );
 
         let num2 = Node::new(
-            NodeKind::Number { value: "99".to_string() },
+            NodeKind::Number {
+                value: "99".to_string(),
+            },
             SourceLocation { start: 0, end: 2 },
         );
 
         let str1 = Node::new(
-            NodeKind::String { value: "hello".to_string(), interpolated: false },
+            NodeKind::String {
+                value: "hello".to_string(),
+                interpolated: false,
+            },
             SourceLocation { start: 0, end: 7 },
         );
 

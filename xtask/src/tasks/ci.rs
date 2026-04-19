@@ -39,14 +39,26 @@ pub fn run() -> Result<()> {
 
     // Step 1: Format check
     spinner.set_message("🔧 Checking code formatting...");
-    cmd("cargo", &["fmt", "--all", "--", "--check"]).run().context("Format check failed")?;
+    cmd("cargo", &["fmt", "--all", "--", "--check"])
+        .run()
+        .context("Format check failed")?;
     spinner.println("✓ Format check passed");
 
     // Step 2: Clippy check
     spinner.set_message("🔧 Running clippy lints...");
-    cmd("cargo", &["clippy", "--workspace", "--all-targets", "--", "-Dwarnings", "-Amissing_docs"])
-        .run()
-        .context("Clippy check failed")?;
+    cmd(
+        "cargo",
+        &[
+            "clippy",
+            "--workspace",
+            "--all-targets",
+            "--",
+            "-Dwarnings",
+            "-Amissing_docs",
+        ],
+    )
+    .run()
+    .context("Clippy check failed")?;
     spinner.println("✓ Clippy check passed");
 
     // Step 3: Test each crate explicitly with constrained resources
@@ -105,12 +117,24 @@ pub fn check_only() -> Result<()> {
     }
 
     spinner.set_message("🔧 Checking code formatting...");
-    cmd("cargo", &["fmt", "--all", "--", "--check"]).run().context("Format check failed")?;
+    cmd("cargo", &["fmt", "--all", "--", "--check"])
+        .run()
+        .context("Format check failed")?;
 
     spinner.set_message("🔧 Running clippy lints...");
-    cmd("cargo", &["clippy", "--workspace", "--all-targets", "--", "-Dwarnings", "-Amissing_docs"])
-        .run()
-        .context("Clippy check failed")?;
+    cmd(
+        "cargo",
+        &[
+            "clippy",
+            "--workspace",
+            "--all-targets",
+            "--",
+            "-Dwarnings",
+            "-Amissing_docs",
+        ],
+    )
+    .run()
+    .context("Clippy check failed")?;
 
     spinner.finish_with_message("✅ All checks passed!");
     Ok(())

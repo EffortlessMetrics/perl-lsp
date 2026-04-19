@@ -52,7 +52,11 @@ impl PerformanceTestFixture {
         // Collect baseline measurements
         let baseline_measurements = collect_baseline_measurements(&server);
 
-        Self { server, metrics_collector: MetricsCollector::new(), baseline_measurements }
+        Self {
+            server,
+            metrics_collector: MetricsCollector::new(),
+            baseline_measurements,
+        }
     }
 }
 
@@ -69,13 +73,25 @@ print $simple;
     );
 
     // Medium complexity file
-    setup_test_file(server, "file:///medium.pl", &generate_perl_content(100, false));
+    setup_test_file(
+        server,
+        "file:///medium.pl",
+        &generate_perl_content(100, false),
+    );
 
     // Large file for stress testing
-    setup_test_file(server, "file:///large.pl", &generate_perl_content(1000, true));
+    setup_test_file(
+        server,
+        "file:///large.pl",
+        &generate_perl_content(1000, true),
+    );
 
     // Complex module with cross-references
-    setup_test_file(server, "file:///lib/ComplexModule.pm", &generate_complex_module());
+    setup_test_file(
+        server,
+        "file:///lib/ComplexModule.pm",
+        &generate_complex_module(),
+    );
 }
 
 /// Generate Perl content of specified complexity
@@ -277,7 +293,13 @@ impl PerformanceStatistics {
             0.0
         };
 
-        Self { latency_stats, memory_stats, throughput, total_operations, test_duration }
+        Self {
+            latency_stats,
+            memory_stats,
+            throughput,
+            total_operations,
+            test_duration,
+        }
     }
 }
 
@@ -431,7 +453,11 @@ fn test_cancellation_check_latency_performance_ac12() -> Result<(), Box<dyn std:
         average.as_micros()
     );
 
-    assert!(p95 < Duration::from_micros(75), "95th percentile {}μs exceeds 75μs", p95.as_micros());
+    assert!(
+        p95 < Duration::from_micros(75),
+        "95th percentile {}μs exceeds 75μs",
+        p95.as_micros()
+    );
 
     assert!(
         p99 < Duration::from_micros(100),
@@ -451,7 +477,10 @@ fn test_cancellation_check_latency_performance_ac12() -> Result<(), Box<dyn std:
     println!("  Average: {}μs", average.as_micros());
     println!("  Median: {}μs", median.as_micros());
     println!("  95th percentile: {}μs", p95.as_micros());
-    println!("  99th percentile: {}μs (AC12 requirement: <100μs)", p99.as_micros());
+    println!(
+        "  99th percentile: {}μs (AC12 requirement: <100μs)",
+        p99.as_micros()
+    );
     println!("  99.9th percentile: {}μs", p99_9.as_micros());
     println!("  Maximum: {}μs", max.as_micros());
 
@@ -507,7 +536,11 @@ fn test_cancellation_check_threading_performance_ac12() -> Result<(), Box<dyn st
                         measurements.push(duration);
                     }
 
-                    ThreadPerformanceResult { thread_id, measurements, thread_count }
+                    ThreadPerformanceResult {
+                        thread_id,
+                        measurements,
+                        thread_count,
+                    }
                 })
             })
             .collect();
@@ -515,8 +548,9 @@ fn test_cancellation_check_threading_performance_ac12() -> Result<(), Box<dyn st
         // Collect results from all threads
         let mut all_measurements = Vec::new();
         for handle in handles {
-            let result =
-                handle.join().map_err(|e| format!("Thread failed to complete: {:?}", e))?;
+            let result = handle
+                .join()
+                .map_err(|e| format!("Thread failed to complete: {:?}", e))?;
             all_measurements.extend(result.measurements);
         }
 
@@ -584,9 +618,10 @@ impl ThreadingScenario {
         match self {
             Self::SingleThread => 1,
             Self::LowContention(n) | Self::MediumContention(n) | Self::HighContention(n) => *n,
-            Self::ConstrainedEnvironment => {
-                std::env::var("RUST_TEST_THREADS").ok().and_then(|s| s.parse().ok()).unwrap_or(2)
-            }
+            Self::ConstrainedEnvironment => std::env::var("RUST_TEST_THREADS")
+                .ok()
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(2),
         }
     }
 }
@@ -721,8 +756,10 @@ fn test_end_to_end_cancellation_response_time_ac12() -> Result<(), Box<dyn std::
 
     // Statistical analysis of response times
     if !response_time_measurements.is_empty() {
-        let mut all_response_times: Vec<Duration> =
-            response_time_measurements.iter().map(|(_, duration)| *duration).collect();
+        let mut all_response_times: Vec<Duration> = response_time_measurements
+            .iter()
+            .map(|(_, duration)| *duration)
+            .collect();
 
         all_response_times.sort();
 
@@ -749,7 +786,10 @@ fn test_end_to_end_cancellation_response_time_ac12() -> Result<(), Box<dyn std::
         println!("  Sample size: {}", all_response_times.len());
         println!("  Average: {}ms", average.as_millis());
         println!("  Median: {}ms", median.as_millis());
-        println!("  95th percentile: {}ms (AC12 requirement: <50ms)", p95.as_millis());
+        println!(
+            "  95th percentile: {}ms (AC12 requirement: <50ms)",
+            p95.as_millis()
+        );
         println!("  Maximum: {}ms", max.as_millis());
 
         // Provider-specific analysis
@@ -760,7 +800,11 @@ fn test_end_to_end_cancellation_response_time_ac12() -> Result<(), Box<dyn std::
 
         for (provider, durations) in provider_stats {
             let provider_avg = durations.iter().sum::<Duration>() / durations.len() as u32;
-            println!("  {} provider average: {}ms", provider, provider_avg.as_millis());
+            println!(
+                "  {} provider average: {}ms",
+                provider,
+                provider_avg.as_millis()
+            );
         }
     }
 
@@ -799,9 +843,15 @@ fn test_memory_overhead_validation_ac12() -> Result<(), Box<dyn std::error::Erro
 
     for i in 0..token_count {
         let (provider_type, params) = if i % 3 == 0 {
-            ("completion", Some(json!({"workspace_symbols": true, "cross_file": true})))
+            (
+                "completion",
+                Some(json!({"workspace_symbols": true, "cross_file": true})),
+            )
         } else if i % 3 == 1 {
-            ("workspace_symbol", Some(json!({"indexing_active": false, "file_count": 0})))
+            (
+                "workspace_symbol",
+                Some(json!({"indexing_active": false, "file_count": 0})),
+            )
         } else {
             ("generic", None)
         };
@@ -880,7 +930,10 @@ fn test_memory_overhead_validation_ac12() -> Result<(), Box<dyn std::error::Erro
     // Performance metrics reporting
     println!("Memory Overhead Analysis (AC12):");
     println!("  Baseline memory: {} MB", baseline_memory / (1024 * 1024));
-    println!("  Infrastructure overhead: {} KB", infrastructure_overhead / 1024);
+    println!(
+        "  Infrastructure overhead: {} KB",
+        infrastructure_overhead / 1024
+    );
     println!("  Per-token memory: {} bytes", per_token_memory);
     println!("  Total tokens overhead: {} KB", tokens_overhead / 1024);
     println!("  Memory after cleanup: {} KB", memory_after_cleanup / 1024);
@@ -908,8 +961,10 @@ fn test_incremental_parsing_performance_preservation_ac12() -> Result<(), Box<dy
 {
     // Enhanced constraint checking for performance cancellation tests
     // These tests require specific threading conditions for reliable LSP initialization
-    let thread_count =
-        std::env::var("RUST_TEST_THREADS").ok().and_then(|s| s.parse::<usize>().ok()).unwrap_or(8);
+    let thread_count = std::env::var("RUST_TEST_THREADS")
+        .ok()
+        .and_then(|s| s.parse::<usize>().ok())
+        .unwrap_or(8);
 
     // Force single-threaded execution for performance cancellation tests to ensure reliability
     // Multiple threads can cause race conditions in cancellation infrastructure
@@ -1054,12 +1109,19 @@ fn test_incremental_parsing_performance_preservation_ac12() -> Result<(), Box<dy
     println!("Incremental Parsing Performance Comparison (AC12):");
     println!("  Baseline average: {}μs", baseline_avg.as_micros());
     println!("  Baseline 95th percentile: {}μs", baseline_p95.as_micros());
-    println!("  With cancellation average: {}μs", cancellation_avg.as_micros());
+    println!(
+        "  With cancellation average: {}μs",
+        cancellation_avg.as_micros()
+    );
     println!(
         "  With cancellation 95th percentile: {}μs (requirement: <1ms)",
         cancellation_p95.as_micros()
     );
-    println!("  Overhead: {}μs ({:.2}%)", overhead.as_micros(), overhead_percentage);
+    println!(
+        "  Overhead: {}μs ({:.2}%)",
+        overhead.as_micros(),
+        overhead_percentage
+    );
 
     Ok(())
 }
@@ -1075,13 +1137,18 @@ fn generate_large_perl_content(line_count: usize) -> String {
                 "# Function {} for performance testing\nsub perf_function_{} {{\n",
                 i, i
             ));
-            content
-                .push_str(&format!("    my ($arg{}) = @_;\n    return $arg{} * 2;\n}}\n\n", i, i));
+            content.push_str(&format!(
+                "    my ($arg{}) = @_;\n    return $arg{} * 2;\n}}\n\n",
+                i, i
+            ));
         } else if i % 5 == 0 {
             content.push_str(&format!(
                 "my @array_{} = ({});\nmy $result_{} = join(',', @array_{});\n",
                 i,
-                (0..10).map(|x| (x + i).to_string()).collect::<Vec<_>>().join(","),
+                (0..10)
+                    .map(|x| (x + i).to_string())
+                    .collect::<Vec<_>>()
+                    .join(","),
                 i,
                 i
             ));
@@ -1144,8 +1211,14 @@ impl Drop for PerformanceTestFixture {
             if stats.latency_stats.sample_count > 0 {
                 println!("  Latency stats:");
                 println!("    Average: {}μs", stats.latency_stats.average.as_micros());
-                println!("    95th percentile: {}μs", stats.latency_stats.p95.as_micros());
-                println!("    99th percentile: {}μs", stats.latency_stats.p99.as_micros());
+                println!(
+                    "    95th percentile: {}μs",
+                    stats.latency_stats.p95.as_micros()
+                );
+                println!(
+                    "    99th percentile: {}μs",
+                    stats.latency_stats.p99.as_micros()
+                );
             }
         } else {
             eprintln!("Warning: Failed to collect performance statistics");

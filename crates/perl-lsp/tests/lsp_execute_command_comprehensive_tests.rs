@@ -118,9 +118,18 @@ print "This won't compile"
 fn create_execute_command_server() -> Result<(LspHarness, TempWorkspace), Box<dyn std::error::Error>>
 {
     let (mut harness, workspace) = LspHarness::with_workspace(&[
-        ("violations.pl", execute_command_fixtures::POLICY_VIOLATIONS_FILE),
-        ("good_practices.pl", execute_command_fixtures::GOOD_PRACTICES_FILE),
-        ("syntax_error.pl", execute_command_fixtures::SYNTAX_ERROR_FILE),
+        (
+            "violations.pl",
+            execute_command_fixtures::POLICY_VIOLATIONS_FILE,
+        ),
+        (
+            "good_practices.pl",
+            execute_command_fixtures::GOOD_PRACTICES_FILE,
+        ),
+        (
+            "syntax_error.pl",
+            execute_command_fixtures::SYNTAX_ERROR_FILE,
+        ),
     ])?;
 
     // Initialize documents
@@ -161,8 +170,9 @@ fn test_execute_command_server_capabilities() -> TestResult {
     // Initialize the server to get capabilities
     let init_result = harness.initialize_default()?;
 
-    let capabilities =
-        init_result.get("capabilities").ok_or("Initialize result should contain capabilities")?;
+    let capabilities = init_result
+        .get("capabilities")
+        .ok_or("Initialize result should contain capabilities")?;
 
     // Verify executeCommandProvider is advertised
     assert!(
@@ -180,7 +190,11 @@ fn test_execute_command_server_capabilities() -> TestResult {
         .as_array()
         .ok_or("Commands should be an array")?
         .iter()
-        .map(|cmd| cmd.as_str().map(str::to_owned).ok_or("Commands should contain only strings"))
+        .map(|cmd| {
+            cmd.as_str()
+                .map(str::to_owned)
+                .ok_or("Commands should contain only strings")
+        })
         .collect::<Result<_, _>>()?;
     actual_commands.sort_unstable();
 
@@ -215,7 +229,11 @@ fn test_execute_command_protocol_compliance() -> TestResult {
     // Should return error for invalid command
     assert!(
         invalid_result.is_err()
-            || invalid_result.as_ref().ok().and_then(|r| r.get("error")).is_some(),
+            || invalid_result
+                .as_ref()
+                .ok()
+                .and_then(|r| r.get("error"))
+                .is_some(),
         "Invalid command should return error response"
     );
 
@@ -230,7 +248,10 @@ fn test_execute_command_protocol_compliance() -> TestResult {
     );
 
     // Should return proper JSON-RPC error for missing arguments (LSP 3.17 compliance)
-    assert!(missing_args_result.is_err(), "Missing arguments should return JSON-RPC error");
+    assert!(
+        missing_args_result.is_err(),
+        "Missing arguments should return JSON-RPC error"
+    );
 
     // Verify it's the correct error code for invalid parameters
     if let Err(error) = missing_args_result {
@@ -260,7 +281,10 @@ fn test_execute_command_parameter_validation() -> TestResult {
         Duration::from_secs(2),
     );
 
-    assert!(invalid_uri_result.is_ok(), "Should handle invalid URI gracefully");
+    assert!(
+        invalid_uri_result.is_ok(),
+        "Should handle invalid URI gracefully"
+    );
 
     // Test perl.runCritic with non-existent file
     let nonexistent_result = harness.request_with_timeout(
@@ -272,7 +296,10 @@ fn test_execute_command_parameter_validation() -> TestResult {
         Duration::from_secs(2),
     );
 
-    assert!(nonexistent_result.is_ok(), "Should handle non-existent files gracefully");
+    assert!(
+        nonexistent_result.is_ok(),
+        "Should handle non-existent files gracefully"
+    );
 
     Ok(())
 }
@@ -296,15 +323,23 @@ fn test_perl_run_critic_external_tool() -> TestResult {
     )?;
 
     // Verify response structure
-    assert!(result.get("status").is_some(), "Response should have status field");
-    assert!(result.get("violations").is_some(), "Response should have violations field");
+    assert!(
+        result.get("status").is_some(),
+        "Response should have status field"
+    );
+    assert!(
+        result.get("violations").is_some(),
+        "Response should have violations field"
+    );
     assert!(
         result.get("analyzerUsed").is_some(),
         "Response should indicate which analyzer was used"
     );
 
     // Verify violations were detected
-    let violations = result["violations"].as_array().ok_or("Violations should be an array")?;
+    let violations = result["violations"]
+        .as_array()
+        .ok_or("Violations should be an array")?;
 
     assert!(!violations.is_empty(), "Should detect policy violations");
 
@@ -324,7 +359,10 @@ fn test_perl_run_critic_external_tool() -> TestResult {
     });
 
     assert!(has_strict_violation, "Should detect missing 'use strict'");
-    assert!(has_warnings_violation, "Should detect missing 'use warnings'");
+    assert!(
+        has_warnings_violation,
+        "Should detect missing 'use warnings'"
+    );
 
     Ok(())
 }
@@ -346,9 +384,15 @@ fn test_perl_run_critic_builtin_analyzer() -> TestResult {
     )?;
 
     // Verify response structure
-    assert_eq!(result["status"].as_str(), Some("success"), "Should report success");
+    assert_eq!(
+        result["status"].as_str(),
+        Some("success"),
+        "Should report success"
+    );
 
-    let violations = result["violations"].as_array().ok_or("Should return violations array")?;
+    let violations = result["violations"]
+        .as_array()
+        .ok_or("Should return violations array")?;
 
     // Good practices file should have fewer violations
     assert!(
@@ -425,7 +469,11 @@ fn test_perl_run_critic_performance() -> TestResult {
         duration
     );
 
-    assert_eq!(result["status"].as_str(), Some("success"), "Should succeed for large files");
+    assert_eq!(
+        result["status"].as_str(),
+        Some("success"),
+        "Should succeed for large files"
+    );
 
     Ok(())
 }
@@ -516,10 +564,16 @@ fn test_execute_command_empty_file() -> TestResult {
         Duration::from_secs(2),
     )?;
 
-    assert_eq!(result["status"].as_str(), Some("success"), "Should succeed for empty files");
+    assert_eq!(
+        result["status"].as_str(),
+        Some("success"),
+        "Should succeed for empty files"
+    );
 
     // Empty file should have minimal violations (maybe missing strict/warnings)
-    let violations = result["violations"].as_array().ok_or("Should return violations array")?;
+    let violations = result["violations"]
+        .as_array()
+        .ok_or("Should return violations array")?;
     assert!(
         violations.len() <= 3,
         "Empty file should have minimal violations, got: {}",
@@ -541,13 +595,21 @@ fn test_execute_command_empty_file() -> TestResult {
 fn test_builtin_analyzer_policy_coverage() -> TestResult {
     // Test each known policy individually
     let test_cases = vec![
-        ("missing_strict.pl", "#!/usr/bin/perl\nprint 'no strict';\n", "RequireUseStrict"),
+        (
+            "missing_strict.pl",
+            "#!/usr/bin/perl\nprint 'no strict';\n",
+            "RequireUseStrict",
+        ),
         (
             "missing_warnings.pl",
             "#!/usr/bin/perl\nuse strict;\nprint 'no warnings';\n",
             "RequireUseWarnings",
         ),
-        ("has_both.pl", "#!/usr/bin/perl\nuse strict;\nuse warnings;\nprint 'good';\n", "clean"),
+        (
+            "has_both.pl",
+            "#!/usr/bin/perl\nuse strict;\nuse warnings;\nprint 'good';\n",
+            "clean",
+        ),
     ];
 
     for (filename, content, expected_violation) in test_cases {
@@ -566,19 +628,35 @@ fn test_builtin_analyzer_policy_coverage() -> TestResult {
             Duration::from_secs(3),
         )?;
 
-        assert_eq!(result["status"].as_str(), Some("success"), "Policy test should succeed");
+        assert_eq!(
+            result["status"].as_str(),
+            Some("success"),
+            "Policy test should succeed"
+        );
 
-        let violations = result["violations"].as_array().ok_or("Should return violations")?;
+        let violations = result["violations"]
+            .as_array()
+            .ok_or("Should return violations")?;
 
         if expected_violation == "clean" {
             // File with both strict and warnings should have minimal violations
-            assert!(violations.len() <= 1, "Clean file should have minimal violations");
+            assert!(
+                violations.len() <= 1,
+                "Clean file should have minimal violations"
+            );
         } else {
             // Should detect the expected policy violation
             let has_expected = violations.iter().any(|v| {
-                v["policy"].as_str().map(|p| p.contains(expected_violation)).unwrap_or(false)
+                v["policy"]
+                    .as_str()
+                    .map(|p| p.contains(expected_violation))
+                    .unwrap_or(false)
             });
-            assert!(has_expected, "Should detect {} violation in {}", expected_violation, filename);
+            assert!(
+                has_expected,
+                "Should detect {} violation in {}",
+                expected_violation, filename
+            );
         }
     }
 
@@ -612,7 +690,11 @@ fn test_external_tool_timeout_handling() -> TestResult {
         duration
     );
 
-    assert_eq!(result["status"].as_str(), Some("success"), "Should succeed with timeout handling");
+    assert_eq!(
+        result["status"].as_str(),
+        Some("success"),
+        "Should succeed with timeout handling"
+    );
 
     // Should indicate which analyzer was actually used
     let analyzer_used = result["analyzerUsed"].as_str().unwrap_or("unknown");
@@ -646,7 +728,11 @@ fn test_memory_usage_patterns() -> TestResult {
             Duration::from_secs(3),
         )?;
 
-        assert_eq!(result["status"].as_str(), Some("success"), "Each analysis should succeed");
+        assert_eq!(
+            result["status"].as_str(),
+            Some("success"),
+            "Each analysis should succeed"
+        );
 
         // Brief pause between operations
         std::thread::sleep(Duration::from_millis(100));
@@ -660,7 +746,10 @@ fn test_memory_usage_patterns() -> TestResult {
 
     // This is a rough check - actual memory management varies by system
     // The important thing is that it doesn't crash or grow unbounded
-    assert!(memory_growth < 50_000_000, "Memory growth should be reasonable");
+    assert!(
+        memory_growth < 50_000_000,
+        "Memory growth should be reasonable"
+    );
 
     Ok(())
 }
@@ -688,7 +777,11 @@ fn test_error_recovery_state_consistency() -> TestResult {
         Duration::from_secs(3),
     )?;
 
-    assert_eq!(good_result["status"].as_str(), Some("success"), "Initial request should succeed");
+    assert_eq!(
+        good_result["status"].as_str(),
+        Some("success"),
+        "Initial request should succeed"
+    );
 
     // Try an operation that might cause errors
     let _error_result = harness.request_with_timeout(
@@ -710,7 +803,11 @@ fn test_error_recovery_state_consistency() -> TestResult {
         Duration::from_secs(3),
     )?;
 
-    assert_eq!(recovery_result["status"].as_str(), Some("success"), "Should recover from errors");
+    assert_eq!(
+        recovery_result["status"].as_str(),
+        Some("success"),
+        "Should recover from errors"
+    );
 
     // State should be consistent - same file should give same results
     assert_eq!(
@@ -764,12 +861,23 @@ print "Result: $result\n";
     let first_duration = first_start.elapsed();
 
     // Verify complete response structure
-    assert_eq!(analysis_result["status"].as_str(), Some("success"), "Workflow should succeed");
-    assert!(analysis_result.get("violations").is_some(), "Should have violations field");
-    assert!(analysis_result.get("analyzerUsed").is_some(), "Should indicate analyzer used");
+    assert_eq!(
+        analysis_result["status"].as_str(),
+        Some("success"),
+        "Workflow should succeed"
+    );
+    assert!(
+        analysis_result.get("violations").is_some(),
+        "Should have violations field"
+    );
+    assert!(
+        analysis_result.get("analyzerUsed").is_some(),
+        "Should indicate analyzer used"
+    );
 
-    let violations =
-        analysis_result["violations"].as_array().ok_or("Should have violations array")?;
+    let violations = analysis_result["violations"]
+        .as_array()
+        .ok_or("Should have violations array")?;
 
     // Should detect the missing warnings
     let has_warnings_violation = violations.iter().any(|v| {
@@ -779,7 +887,10 @@ print "Result: $result\n";
             .unwrap_or(false)
     });
 
-    assert!(has_warnings_violation, "Should detect missing warnings in workflow test");
+    assert!(
+        has_warnings_violation,
+        "Should detect missing warnings in workflow test"
+    );
 
     // Verify response timing is reasonable
     let start_time = std::time::Instant::now();
@@ -923,9 +1034,15 @@ sub AUTOLOAD {
     )?;
 
     // Should successfully analyze without crashes
-    assert_eq!(result["status"].as_str(), Some("success"), "Should succeed with complex syntax");
+    assert_eq!(
+        result["status"].as_str(),
+        Some("success"),
+        "Should succeed with complex syntax"
+    );
 
-    let violations = result["violations"].as_array().ok_or("Should return violations array")?;
+    let violations = result["violations"]
+        .as_array()
+        .ok_or("Should return violations array")?;
 
     // Should have detected some issues but not crashed
     assert!(
@@ -988,16 +1105,25 @@ print "Length: " . length($unicode_heredoc);
         Duration::from_secs(3),
     )?;
 
-    assert_eq!(result["status"].as_str(), Some("success"), "Should handle Unicode gracefully");
+    assert_eq!(
+        result["status"].as_str(),
+        Some("success"),
+        "Should handle Unicode gracefully"
+    );
 
     // Should properly handle UTF-8 boundaries and position mapping
-    let violations = result["violations"].as_array().ok_or("Should return violations")?;
+    let violations = result["violations"]
+        .as_array()
+        .ok_or("Should return violations")?;
 
     // Validate that position information is accurate for Unicode content
     for violation in violations {
         if let Some(range) = violation.get("range") {
             // Positions should be valid (not negative, within reasonable bounds)
-            assert!(range.get("start").is_some(), "Should have valid start position");
+            assert!(
+                range.get("start").is_some(),
+                "Should have valid start position"
+            );
             assert!(range.get("end").is_some(), "Should have valid end position");
         }
     }
@@ -1067,11 +1193,17 @@ sub test {
     )?;
 
     // Should handle malformed code without panicking
-    assert!(result.get("status").is_some(), "Should return status even for malformed code");
+    assert!(
+        result.get("status").is_some(),
+        "Should return status even for malformed code"
+    );
 
     // Either reports success with many violations or reports parsing errors
     let status = result["status"].as_str().unwrap_or("");
-    assert!(status == "success" || status == "error", "Should have valid status");
+    assert!(
+        status == "success" || status == "error",
+        "Should have valid status"
+    );
 
     Ok(())
 }
@@ -1092,7 +1224,9 @@ fn test_dual_analyzer_strategy_fallback() -> TestResult {
         Duration::from_secs(3),
     )?;
 
-    let baseline_analyzer = baseline_result["analyzerUsed"].as_str().unwrap_or("unknown");
+    let baseline_analyzer = baseline_result["analyzerUsed"]
+        .as_str()
+        .unwrap_or("unknown");
 
     // Test multiple rapid requests to check consistency
     let mut results = Vec::new();
@@ -1113,7 +1247,12 @@ fn test_dual_analyzer_strategy_fallback() -> TestResult {
 
     // All results should be consistent
     for (i, result) in results.iter().enumerate() {
-        assert_eq!(result["status"].as_str(), Some("success"), "Request {} should succeed", i);
+        assert_eq!(
+            result["status"].as_str(),
+            Some("success"),
+            "Request {} should succeed",
+            i
+        );
 
         // Analyzer used should be consistent
         let analyzer_used = result["analyzerUsed"].as_str().unwrap_or("unknown");
@@ -1169,10 +1308,16 @@ fn test_resource_exhaustion_resilience() -> TestResult {
         duration
     );
 
-    assert_eq!(result["status"].as_str(), Some("success"), "Should succeed for large files");
+    assert_eq!(
+        result["status"].as_str(),
+        Some("success"),
+        "Should succeed for large files"
+    );
 
     // Built-in analyzer should find violations (missing use strict and use warnings)
-    let violations = result["violations"].as_array().ok_or("Should return violations")?;
+    let violations = result["violations"]
+        .as_array()
+        .ok_or("Should return violations")?;
     assert!(
         !violations.is_empty(),
         "Built-in analyzer should find at least one violation (missing pragmas), found: {}",
@@ -1221,7 +1366,12 @@ fn test_concurrent_execute_command_stress() -> TestResult {
     for (i, j, result) in handles {
         match result {
             Ok(response) => {
-                assert!(response.get("status").is_some(), "Request {}.{} should have status", i, j);
+                assert!(
+                    response.get("status").is_some(),
+                    "Request {}.{} should have status",
+                    i,
+                    j
+                );
                 success_count += 1;
             }
             Err(e) => {
@@ -1232,7 +1382,10 @@ fn test_concurrent_execute_command_stress() -> TestResult {
     }
 
     // At least some requests should succeed even under stress
-    assert!(success_count >= 3, "At least half the requests should succeed under stress");
+    assert!(
+        success_count >= 3,
+        "At least half the requests should succeed under stress"
+    );
 
     Ok(())
 }

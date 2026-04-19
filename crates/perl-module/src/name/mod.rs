@@ -40,5 +40,9 @@ pub fn module_variant_pairs(old_module: &str, new_module: &str) -> Vec<(String, 
         legacy_package_separator(&canonical_new).into_owned(),
     );
 
-    if legacy == canonical { vec![canonical] } else { vec![canonical, legacy] }
+    if legacy == canonical {
+        vec![canonical]
+    } else {
+        vec![canonical, legacy]
+    }
 }

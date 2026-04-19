@@ -400,7 +400,12 @@ fn ext_token_offsets_monotonically_increase() -> Result<(), Box<dyn std::error::
         if t.kind == TokenKind::Eof {
             break;
         }
-        assert!(t.start >= prev_end, "start {} < prev_end {}", t.start, prev_end);
+        assert!(
+            t.start >= prev_end,
+            "start {} < prev_end {}",
+            t.start,
+            prev_end
+        );
         assert!(t.end > t.start, "end {} <= start {}", t.end, t.start);
         prev_end = t.end;
     }
@@ -617,10 +622,15 @@ fn ext_trivia_lexer_tabs_as_whitespace() -> Result<(), Box<dyn std::error::Error
     // Leading trivia should capture tab whitespace
     assert!(!trivia.is_empty());
     assert!(
-        trivia.iter().any(|t| matches!(&t.trivia, Trivia::Whitespace(ws) if ws.contains('\t')))
+        trivia
+            .iter()
+            .any(|t| matches!(&t.trivia, Trivia::Whitespace(ws) if ws.contains('\t')))
     );
     // Token should be a keyword
-    assert!(matches!(token.token_type, perl_lexer::TokenType::Keyword(_)));
+    assert!(matches!(
+        token.token_type,
+        perl_lexer::TokenType::Keyword(_)
+    ));
     Ok(())
 }
 
@@ -629,9 +639,14 @@ fn ext_trivia_lexer_multiple_comments() -> Result<(), Box<dyn std::error::Error>
     let src = "# line1\n# line2\nmy $x;".to_string();
     let mut lexer = TriviaLexer::new(src);
     let (_, trivia) = must_some(lexer.next_token_with_trivia());
-    let comment_count =
-        trivia.iter().filter(|t| matches!(t.trivia, Trivia::LineComment(_))).count();
-    assert!(comment_count >= 2, "expected at least 2 comments, got {comment_count}");
+    let comment_count = trivia
+        .iter()
+        .filter(|t| matches!(t.trivia, Trivia::LineComment(_)))
+        .count();
+    assert!(
+        comment_count >= 2,
+        "expected at least 2 comments, got {comment_count}"
+    );
     Ok(())
 }
 
@@ -652,7 +667,11 @@ fn ext_trivia_lexer_pod_section() -> Result<(), Box<dyn std::error::Error>> {
     let src = "=pod\nsome docs\n=cut\nmy $x;".to_string();
     let mut lexer = TriviaLexer::new(src);
     let (_, trivia) = must_some(lexer.next_token_with_trivia());
-    assert!(trivia.iter().any(|t| matches!(&t.trivia, Trivia::PodComment(_))));
+    assert!(
+        trivia
+            .iter()
+            .any(|t| matches!(&t.trivia, Trivia::PodComment(_)))
+    );
     Ok(())
 }
 
@@ -741,7 +760,10 @@ fn ext_trivia_parser_empty_produces_program() -> Result<(), Box<dyn std::error::
     let parser = TriviaPreservingParser::new(String::new());
     let result = parser.parse();
     // Node should be a Program
-    assert!(matches!(result.node.kind, perl_ast_v2::NodeKind::Program { .. }));
+    assert!(matches!(
+        result.node.kind,
+        perl_ast_v2::NodeKind::Program { .. }
+    ));
     Ok(())
 }
 
@@ -749,7 +771,10 @@ fn ext_trivia_parser_empty_produces_program() -> Result<(), Box<dyn std::error::
 fn ext_trivia_parser_whitespace_only_source() -> Result<(), Box<dyn std::error::Error>> {
     let parser = TriviaPreservingParser::new("   \n\n  \t  ".into());
     let result = parser.parse();
-    assert!(matches!(result.node.kind, perl_ast_v2::NodeKind::Program { .. }));
+    assert!(matches!(
+        result.node.kind,
+        perl_ast_v2::NodeKind::Program { .. }
+    ));
     Ok(())
 }
 
@@ -759,7 +784,12 @@ fn ext_trivia_parser_pod_in_middle() -> Result<(), Box<dyn std::error::Error>> {
     let parser = TriviaPreservingParser::new(src);
     let result = parser.parse();
     // POD should be in the trivia
-    assert!(result.leading_trivia.iter().any(|t| matches!(&t.trivia, Trivia::PodComment(_))));
+    assert!(
+        result
+            .leading_trivia
+            .iter()
+            .any(|t| matches!(&t.trivia, Trivia::PodComment(_)))
+    );
     Ok(())
 }
 
@@ -854,7 +884,10 @@ fn ext_deeply_nested_structure() -> Result<(), Box<dyn std::error::Error>> {
     let src = "((((((1))))))";
     let kinds = collect_kinds(src);
     let lparen_count = kinds.iter().filter(|k| **k == TokenKind::LeftParen).count();
-    let rparen_count = kinds.iter().filter(|k| **k == TokenKind::RightParen).count();
+    let rparen_count = kinds
+        .iter()
+        .filter(|k| **k == TokenKind::RightParen)
+        .count();
     assert_eq!(lparen_count, 6);
     assert_eq!(rparen_count, 6);
     Ok(())
@@ -912,7 +945,10 @@ fn ext_hash_constructor() -> Result<(), Box<dyn std::error::Error>> {
 fn ext_method_call_chain() -> Result<(), Box<dyn std::error::Error>> {
     let kinds = collect_kinds("$obj->method()->another()");
     let arrow_count = kinds.iter().filter(|k| **k == TokenKind::Arrow).count();
-    assert!(arrow_count >= 2, "expected at least 2 arrows, got {arrow_count}");
+    assert!(
+        arrow_count >= 2,
+        "expected at least 2 arrows, got {arrow_count}"
+    );
     Ok(())
 }
 

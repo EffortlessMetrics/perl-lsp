@@ -63,7 +63,9 @@ use std::time::Instant;
 impl LspServer {
     /// Handle a JSON-RPC request
     pub fn handle_request(&self, request: JsonRpcRequest) -> Option<JsonRpcResponse> {
-        let id = request.id.and_then(|id| if id.is_null() { None } else { Some(id) });
+        let id = request
+            .id
+            .and_then(|id| if id.is_null() { None } else { Some(id) });
         let should_respond = id.is_some();
 
         // Handle $/cancelRequest notification with enhanced context processing
@@ -144,7 +146,10 @@ impl LspServer {
                             GLOBAL_CANCELLATION_REGISTRY.cancel_request(request_id).map_err(|e| {
                                 tracing::trace!(error = %e, "cancellation: failed to cancel request (early)");
                             }).ok().flatten();
-                        return Some(enhanced_cancelled_response(&token, cleanup_context.as_ref()));
+                        return Some(enhanced_cancelled_response(
+                            &token,
+                            cleanup_context.as_ref(),
+                        ));
                     }
                     return Some(cancelled_response_with_method(request_id, &request.method));
                 }
@@ -346,7 +351,10 @@ impl LspServer {
                         GLOBAL_CANCELLATION_REGISTRY.cancel_request(request_id).map_err(|e| {
                             tracing::trace!(error = %e, "cancellation: failed to cancel request (post-dispatch)");
                         }).ok().flatten();
-                    return Some(enhanced_cancelled_response(&token, cleanup_context.as_ref()));
+                    return Some(enhanced_cancelled_response(
+                        &token,
+                        cleanup_context.as_ref(),
+                    ));
                 }
             }
         }

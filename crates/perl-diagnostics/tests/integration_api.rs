@@ -67,7 +67,11 @@ fn test_api_root_reexports_codes_types() {
     use perl_diagnostics::DiagnosticCode;
     use perl_diagnostics::DiagnosticSeverity;
 
-    let _ = (DiagnosticCode::ParseError, DiagnosticSeverity::Error, DiagnosticCategory::Parser);
+    let _ = (
+        DiagnosticCode::ParseError,
+        DiagnosticSeverity::Error,
+        DiagnosticCategory::Parser,
+    );
 }
 
 // Test 6: API re-exports catalog functions
@@ -143,7 +147,10 @@ fn test_diagnostic_struct_uses_unified_severity() {
     use perl_diagnostics::types::Diagnostic;
     use perl_diagnostics::types::DiagnosticSeverity;
 
-    let diag = Diagnostic { severity: DiagnosticSeverity::Error, ..Default::default() };
+    let diag = Diagnostic {
+        severity: DiagnosticSeverity::Error,
+        ..Default::default()
+    };
 
     // The field should bind to the unified type
     let _severity = diag.severity;
@@ -270,7 +277,10 @@ fn test_no_circular_dependency_codes_types() {
     // codes module exports DiagnosticCode (used by types)
     // types module re-exports from codes
     // This assignment demonstrates the dependency direction is correct
-    let diag = Diagnostic { code: DiagnosticCode::ParseError, ..Default::default() };
+    let diag = Diagnostic {
+        code: DiagnosticCode::ParseError,
+        ..Default::default()
+    };
 
     let _ = diag;
 }
@@ -355,7 +365,10 @@ fn test_diagnostic_meta_reexport() {
 fn test_related_information_struct_accessible() {
     use perl_diagnostics::types::RelatedInformation;
 
-    let info = RelatedInformation { message: "test".to_string(), location: Default::default() };
+    let info = RelatedInformation {
+        message: "test".to_string(),
+        location: Default::default(),
+    };
 
     assert_eq!(info.message, "test");
 }

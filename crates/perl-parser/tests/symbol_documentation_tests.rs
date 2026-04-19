@@ -10,7 +10,10 @@ fn sub_comment_is_captured() -> TestResult {
     let extractor = SymbolExtractor::new_with_source(src);
     let table = extractor.extract(&ast);
     let symbols = table.symbols.get("foo").ok_or("symbol foo not found")?;
-    assert_eq!(symbols[0].documentation.as_deref(), Some("sub docs\nline two"));
+    assert_eq!(
+        symbols[0].documentation.as_deref(),
+        Some("sub docs\nline two")
+    );
     Ok(())
 }
 
@@ -88,12 +91,18 @@ sub qux {
 
     // Check bar function in Foo package
     let bar_symbols = table.symbols.get("bar").ok_or("symbol bar not found")?;
-    assert_eq!(bar_symbols[0].documentation.as_deref(), Some("This is for sub bar"));
+    assert_eq!(
+        bar_symbols[0].documentation.as_deref(),
+        Some("This is for sub bar")
+    );
     assert_eq!(bar_symbols[0].qualified_name, "Foo::bar");
 
     // Check qux function in Baz package
     let qux_symbols = table.symbols.get("qux").ok_or("symbol qux not found")?;
-    assert_eq!(qux_symbols[0].documentation.as_deref(), Some("This is for sub qux"));
+    assert_eq!(
+        qux_symbols[0].documentation.as_deref(),
+        Some("This is for sub qux")
+    );
     assert_eq!(qux_symbols[0].qualified_name, "Baz::qux");
     Ok(())
 }
@@ -143,7 +152,10 @@ my $complex_var = "test";
     let ast = parser.parse()?;
     let extractor = SymbolExtractor::new_with_source(src);
     let table = extractor.extract(&ast);
-    let symbols = table.symbols.get("complex_var").ok_or("symbol complex_var not found")?;
+    let symbols = table
+        .symbols
+        .get("complex_var")
+        .ok_or("symbol complex_var not found")?;
 
     let expected = "This is the actual documentation for the variable\nwith mixed indentation\nand varying hash counts";
     assert_eq!(symbols[0].documentation.as_deref(), Some(expected));
@@ -168,7 +180,10 @@ my ($first, $second, @array, %hash) = (1, 2, (3, 4), (key => 'value'));
     let first_symbols = table.symbols.get("first").ok_or("symbol first not found")?;
     assert_eq!(first_symbols[0].documentation.as_deref(), Some(expected));
 
-    let second_symbols = table.symbols.get("second").ok_or("symbol second not found")?;
+    let second_symbols = table
+        .symbols
+        .get("second")
+        .ok_or("symbol second not found")?;
     assert_eq!(second_symbols[0].documentation.as_deref(), Some(expected));
 
     let array_symbols = table.symbols.get("array").ok_or("symbol array not found")?;
@@ -200,15 +215,19 @@ class MyClass {
     let extractor = SymbolExtractor::new_with_source(src);
     let table = extractor.extract(&ast);
 
-    let do_something_symbols =
-        table.symbols.get("do_something").ok_or("symbol do_something not found")?;
+    let do_something_symbols = table
+        .symbols
+        .get("do_something")
+        .ok_or("symbol do_something not found")?;
     assert_eq!(
         do_something_symbols[0].documentation.as_deref(),
         Some("This method does something\nwith multiple parameters")
     );
 
-    let simple_symbols =
-        table.symbols.get("simple_method").ok_or("symbol simple_method not found")?;
+    let simple_symbols = table
+        .symbols
+        .get("simple_method")
+        .ok_or("symbol simple_method not found")?;
     assert_eq!(
         simple_symbols[0].documentation.as_deref(),
         Some("Another method with no parameters")
@@ -223,11 +242,17 @@ fn whitespace_only_lines_vs_blank_lines() -> TestResult {
     let ast = parser.parse()?;
     let extractor = SymbolExtractor::new_with_source(src);
     let table = extractor.extract(&ast);
-    let symbols = table.symbols.get("test_func").ok_or("symbol test_func not found")?;
+    let symbols = table
+        .symbols
+        .get("test_func")
+        .ok_or("symbol test_func not found")?;
 
     // Should only capture the comment immediately preceding the function
     // Blank lines (even with whitespace) should stop the capture
-    assert_eq!(symbols[0].documentation.as_deref(), Some("This is the actual documentation"));
+    assert_eq!(
+        symbols[0].documentation.as_deref(),
+        Some("This is the actual documentation")
+    );
     Ok(())
 }
 
@@ -238,7 +263,10 @@ fn unicode_in_comments() -> TestResult {
     let ast = parser.parse()?;
     let extractor = SymbolExtractor::new_with_source(src);
     let table = extractor.extract(&ast);
-    let symbols = table.symbols.get("unicode_var").ok_or("symbol unicode_var not found")?;
+    let symbols = table
+        .symbols
+        .get("unicode_var")
+        .ok_or("symbol unicode_var not found")?;
 
     let expected =
         "Документация на русском языке\nDocumentation with émojis 🚀\nand Unicode symbols ∑∏∆";
@@ -265,7 +293,11 @@ fn performance_with_large_comment_blocks() -> TestResult {
     let duration = start.elapsed();
 
     // Should complete within reasonable time (< 10ms even for large comment blocks)
-    assert!(duration.as_millis() < 10, "Comment extraction took too long: {:?}", duration);
+    assert!(
+        duration.as_millis() < 10,
+        "Comment extraction took too long: {:?}",
+        duration
+    );
 
     let symbols = table
         .symbols
@@ -274,7 +306,10 @@ fn performance_with_large_comment_blocks() -> TestResult {
     assert!(symbols[0].documentation.is_some());
 
     // Check that all 100 lines are captured
-    let doc = symbols[0].documentation.as_ref().ok_or("documentation is None")?;
+    let doc = symbols[0]
+        .documentation
+        .as_ref()
+        .ok_or("documentation is None")?;
     let line_count = doc.lines().count();
     assert_eq!(line_count, 100, "Should capture all 100 comment lines");
     Ok(())
@@ -340,7 +375,10 @@ fn edge_case_source_boundaries() -> TestResult {
     let table = extractor.extract(&ast);
     let symbols = table.symbols.get("var").ok_or("symbol var not found")?;
 
-    assert_eq!(symbols[0].documentation.as_deref(), Some("Comment at start"));
+    assert_eq!(
+        symbols[0].documentation.as_deref(),
+        Some("Comment at start")
+    );
     Ok(())
 }
 
@@ -403,7 +441,10 @@ fn bless_with_comment_documentation() -> TestResult {
     let obj_symbols = &symbol_table.symbols["obj"];
     assert_eq!(obj_symbols.len(), 1);
     // Variable should have the preceding comment as documentation
-    assert_eq!(obj_symbols[0].documentation, Some("This creates a blessed object".to_string()));
+    assert_eq!(
+        obj_symbols[0].documentation,
+        Some("This creates a blessed object".to_string())
+    );
     Ok(())
 }
 
@@ -424,6 +465,9 @@ fn subroutine_with_bless_return() -> TestResult {
 
     assert!(symbol_table.symbols.contains_key("new"));
     let new_symbols = &symbol_table.symbols["new"];
-    assert_eq!(new_symbols[0].documentation, Some("Constructor".to_string()));
+    assert_eq!(
+        new_symbols[0].documentation,
+        Some("Constructor".to_string())
+    );
     Ok(())
 }

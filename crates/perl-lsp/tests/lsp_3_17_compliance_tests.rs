@@ -176,6 +176,9 @@ fn test_full_lsp_3_17_compliance() -> TestResult {
 
     // Note: we still list all 91 methods in the vec for documentation,
     // but some are optional based on server capabilities
-    assert!(methods.len() >= 89, "LSP 3.17 defines 91 methods, with some optional");
+    assert!(
+        methods.len() >= 89,
+        "LSP 3.17 defines 91 methods, with some optional"
+    );
     Ok(())
 }

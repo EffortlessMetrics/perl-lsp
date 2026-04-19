@@ -30,17 +30,28 @@ print encode_json($data) . "\n";
     println!("=== Import Analysis Results ===");
     println!("Total imports found: {}", analysis.imports.len());
     for import in &analysis.imports {
-        println!("  {} - {} symbols: {:?}", import.module, import.symbols.len(), import.symbols);
+        println!(
+            "  {} - {} symbols: {:?}",
+            import.module,
+            import.symbols.len(),
+            import.symbols
+        );
     }
 
     println!("\n=== Unused Imports ===");
     for unused in &analysis.unused_imports {
-        println!("  {} has unused symbols: {:?}", unused.module, unused.symbols);
+        println!(
+            "  {} has unused symbols: {:?}",
+            unused.module, unused.symbols
+        );
     }
 
     println!("\n=== Duplicate Imports ===");
     for duplicate in &analysis.duplicate_imports {
-        println!("  {} appears on lines: {:?}", duplicate.module, duplicate.lines);
+        println!(
+            "  {} appears on lines: {:?}",
+            duplicate.module, duplicate.lines
+        );
     }
 
     println!("\n=== Optimized Imports ===");

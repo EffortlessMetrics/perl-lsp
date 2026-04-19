@@ -61,11 +61,17 @@ fn extract_variable(source: &str, node: &Node, _range: (usize, usize)) -> CodeAc
         changes: vec![
             // Insert variable declaration
             TextEdit {
-                location: SourceLocation { start: stmt_start, end: stmt_start },
+                location: SourceLocation {
+                    start: stmt_start,
+                    end: stmt_start,
+                },
                 new_text: format!("my {} = {};\n", var_name, expr_text),
             },
             // Replace expression with variable
-            TextEdit { location: node.location, new_text: var_name.to_string() },
+            TextEdit {
+                location: node.location,
+                new_text: var_name.to_string(),
+            },
         ],
     }
 }
@@ -82,11 +88,17 @@ fn extract_function(source: &str, node: &Node, _range: (usize, usize)) -> CodeAc
         changes: vec![
             // Insert function definition
             TextEdit {
-                location: SourceLocation { start: insert_pos, end: insert_pos },
+                location: SourceLocation {
+                    start: insert_pos,
+                    end: insert_pos,
+                },
                 new_text: format!("\nsub {} {{\n{}\n}}\n", func_name, body_text),
             },
             // Replace statements with function call
-            TextEdit { location: node.location, new_text: format!("{}();", func_name) },
+            TextEdit {
+                location: node.location,
+                new_text: format!("{}();", func_name),
+            },
         ],
     }
 }

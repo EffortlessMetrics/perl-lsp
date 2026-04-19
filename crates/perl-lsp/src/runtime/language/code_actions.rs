@@ -20,7 +20,9 @@ fn requested_code_action_kinds(params: &Value) -> Vec<&str> {
 fn code_action_kind_matches_filter(kind: &str, requested_kind: &str) -> bool {
     requested_kind.is_empty()
         || kind == requested_kind
-        || kind.strip_prefix(requested_kind).is_some_and(|suffix| suffix.starts_with('.'))
+        || kind
+            .strip_prefix(requested_kind)
+            .is_some_and(|suffix| suffix.starts_with('.'))
 }
 
 fn retain_requested_code_action_kinds(code_actions: &mut Vec<Value>, requested_kinds: &[&str]) {
@@ -29,11 +31,14 @@ fn retain_requested_code_action_kinds(code_actions: &mut Vec<Value>, requested_k
     }
 
     code_actions.retain(|action| {
-        action.get("kind").and_then(Value::as_str).is_some_and(|kind| {
-            requested_kinds
-                .iter()
-                .any(|requested_kind| code_action_kind_matches_filter(kind, requested_kind))
-        })
+        action
+            .get("kind")
+            .and_then(Value::as_str)
+            .is_some_and(|kind| {
+                requested_kinds
+                    .iter()
+                    .any(|requested_kind| code_action_kind_matches_filter(kind, requested_kind))
+            })
     });
 }
 
@@ -76,7 +81,11 @@ impl FixAllRange {
     /// [`build_source_fix_all`], so this only returns `true` when applying
     /// both edits together would actually corrupt the text.
     fn overlaps(&self, other: &Self) -> bool {
-        let (a, b) = if self <= other { (self, other) } else { (other, self) };
+        let (a, b) = if self <= other {
+            (self, other)
+        } else {
+            (other, self)
+        };
         let a_is_insertion = a.start_line == a.end_line && a.start_char == a.end_char;
         let b_is_insertion = b.start_line == b.end_line && b.start_char == b.end_char;
         if a_is_insertion || b_is_insertion {
@@ -147,7 +156,10 @@ fn build_source_fix_all(code_actions: &[Value], uri: &str) -> Option<Value> {
             continue;
         }
 
-        if action_ranges.iter().any(|r| accepted_ranges.iter().any(|a| a.overlaps(r))) {
+        if action_ranges
+            .iter()
+            .any(|r| accepted_ranges.iter().any(|a| a.overlaps(r)))
+        {
             continue;
         }
 
@@ -156,7 +168,10 @@ fn build_source_fix_all(code_actions: &[Value], uri: &str) -> Option<Value> {
         // both add `use strict;\n` at offset 0 produce a single edit.
         accepted_ranges.extend(action_ranges.iter().copied());
         for edit in edits {
-            let new_text = edit.get("newText").and_then(Value::as_str).unwrap_or_default();
+            let new_text = edit
+                .get("newText")
+                .and_then(Value::as_str)
+                .unwrap_or_default();
             let range_repr = edit.get("range").map(|r| r.to_string()).unwrap_or_default();
             let key = format!("{range_repr}|{new_text}");
             if seen_edit_keys.insert(key) {
@@ -168,7 +183,11 @@ fn build_source_fix_all(code_actions: &[Value], uri: &str) -> Option<Value> {
             for diag in diags {
                 // Dedupe diagnostics by (code, range) so the same upstream
                 // finding isn't surfaced twice in the aggregate action.
-                let code = diag.get("code").and_then(Value::as_str).unwrap_or_default().to_string();
+                let code = diag
+                    .get("code")
+                    .and_then(Value::as_str)
+                    .unwrap_or_default()
+                    .to_string();
                 let range_key = diag.get("range").map(|r| r.to_string()).unwrap_or_default();
                 let key = format!("{code}|{range_key}");
                 if seen_diagnostic_keys.insert(key) {
@@ -486,7 +505,10 @@ impl LspServer {
                         .and_then(|d| d.get("uri"))
                         .and_then(|s| s.as_str())
                         .map(|s| s.to_string()),
-                    action.get("data").and_then(|d| d.get("insertAt")).and_then(|n| n.as_u64()),
+                    action
+                        .get("data")
+                        .and_then(|d| d.get("insertAt"))
+                        .and_then(|n| n.as_u64()),
                     action
                         .get("data")
                         .and_then(|d| d.get("text"))
@@ -630,7 +652,9 @@ impl LspServer {
                                 .and_then(|d| d.get("uri"))
                                 .and_then(|s| s.as_str())
                                 .map(|s| s.to_string()),
-                            a.get("data").and_then(|d| d.get("insertAt")).and_then(|n| n.as_u64()),
+                            a.get("data")
+                                .and_then(|d| d.get("insertAt"))
+                                .and_then(|n| n.as_u64()),
                             a.get("data")
                                 .and_then(|d| d.get("text"))
                                 .and_then(|s| s.as_str())
@@ -772,11 +796,20 @@ mod tests {
 
     #[test]
     fn code_action_kind_filter_matches_subkinds() {
-        assert!(code_action_kind_matches_filter("refactor.rewrite", "refactor"));
-        assert!(code_action_kind_matches_filter("source.organizeImports", "source"));
+        assert!(code_action_kind_matches_filter(
+            "refactor.rewrite",
+            "refactor"
+        ));
+        assert!(code_action_kind_matches_filter(
+            "source.organizeImports",
+            "source"
+        ));
         assert!(code_action_kind_matches_filter("quickfix", "quickfix"));
         assert!(!code_action_kind_matches_filter("quickfix", "refactor"));
-        assert!(!code_action_kind_matches_filter("refactor.rewrite.extra", "refactor.inline"));
+        assert!(!code_action_kind_matches_filter(
+            "refactor.rewrite.extra",
+            "refactor.inline"
+        ));
     }
 
     #[test]
@@ -789,8 +822,10 @@ mod tests {
 
         retain_requested_code_action_kinds(&mut actions, &["refactor"]);
 
-        let remaining_kinds: Vec<&str> =
-            actions.iter().filter_map(|action| action["kind"].as_str()).collect();
+        let remaining_kinds: Vec<&str> = actions
+            .iter()
+            .filter_map(|action| action["kind"].as_str())
+            .collect();
         assert_eq!(remaining_kinds, vec!["refactor.rewrite"]);
     }
 
@@ -822,11 +857,16 @@ mod tests {
             "context": { "diagnostics": [] }
         })));
 
-        let actions =
-            response.ok().flatten().and_then(|v| v.as_array().cloned()).unwrap_or_default();
+        let actions = response
+            .ok()
+            .flatten()
+            .and_then(|v| v.as_array().cloned())
+            .unwrap_or_default();
 
         assert!(
-            actions.iter().any(|a| a["title"].as_str().unwrap_or("").contains("use strict")),
+            actions
+                .iter()
+                .any(|a| a["title"].as_str().unwrap_or("").contains("use strict")),
             "expected missing pragma action, got: {actions:?}"
         );
     }
@@ -882,16 +922,36 @@ mod tests {
 
     #[test]
     fn fix_all_range_overlap_detects_contained_ranges() {
-        let outer = FixAllRange { start_line: 0, start_char: 0, end_line: 0, end_char: 20 };
-        let inner = FixAllRange { start_line: 0, start_char: 5, end_line: 0, end_char: 10 };
+        let outer = FixAllRange {
+            start_line: 0,
+            start_char: 0,
+            end_line: 0,
+            end_char: 20,
+        };
+        let inner = FixAllRange {
+            start_line: 0,
+            start_char: 5,
+            end_line: 0,
+            end_char: 10,
+        };
         assert!(outer.overlaps(&inner));
         assert!(inner.overlaps(&outer));
     }
 
     #[test]
     fn fix_all_range_overlap_excludes_adjacent_ranges() {
-        let left = FixAllRange { start_line: 0, start_char: 0, end_line: 0, end_char: 5 };
-        let right = FixAllRange { start_line: 0, start_char: 5, end_line: 0, end_char: 10 };
+        let left = FixAllRange {
+            start_line: 0,
+            start_char: 0,
+            end_line: 0,
+            end_char: 5,
+        };
+        let right = FixAllRange {
+            start_line: 0,
+            start_char: 5,
+            end_line: 0,
+            end_char: 10,
+        };
         assert!(!left.overlaps(&right));
         assert!(!right.overlaps(&left));
     }
@@ -902,15 +962,35 @@ mod tests {
         // example `use strict;\n` + `use warnings;\n`. LSP clients apply
         // them in sequence and they compose cleanly.  [`build_source_fix_all`]
         // dedupes exact-match edits separately.
-        let first = FixAllRange { start_line: 0, start_char: 0, end_line: 0, end_char: 0 };
-        let second = FixAllRange { start_line: 0, start_char: 0, end_line: 0, end_char: 0 };
+        let first = FixAllRange {
+            start_line: 0,
+            start_char: 0,
+            end_line: 0,
+            end_char: 0,
+        };
+        let second = FixAllRange {
+            start_line: 0,
+            start_char: 0,
+            end_line: 0,
+            end_char: 0,
+        };
         assert!(!first.overlaps(&second));
     }
 
     #[test]
     fn fix_all_range_overlap_allows_insertion_outside_range() {
-        let insertion = FixAllRange { start_line: 5, start_char: 0, end_line: 5, end_char: 0 };
-        let unrelated = FixAllRange { start_line: 0, start_char: 0, end_line: 0, end_char: 5 };
+        let insertion = FixAllRange {
+            start_line: 5,
+            start_char: 0,
+            end_line: 5,
+            end_char: 0,
+        };
+        let unrelated = FixAllRange {
+            start_line: 0,
+            start_char: 0,
+            end_line: 0,
+            end_char: 5,
+        };
         assert!(!insertion.overlaps(&unrelated));
         assert!(!unrelated.overlaps(&insertion));
     }
@@ -918,8 +998,18 @@ mod tests {
     #[test]
     fn fix_all_range_overlap_detects_multiline_overlap() {
         // A multi-line replacement (lines 1-3) and an edit on line 2 must conflict.
-        let multiline = FixAllRange { start_line: 1, start_char: 0, end_line: 3, end_char: 0 };
-        let inner = FixAllRange { start_line: 2, start_char: 0, end_line: 2, end_char: 10 };
+        let multiline = FixAllRange {
+            start_line: 1,
+            start_char: 0,
+            end_line: 3,
+            end_char: 0,
+        };
+        let inner = FixAllRange {
+            start_line: 2,
+            start_char: 0,
+            end_line: 2,
+            end_char: 10,
+        };
         assert!(multiline.overlaps(&inner));
         assert!(inner.overlaps(&multiline));
     }
@@ -933,8 +1023,18 @@ mod tests {
         // document"), so an insertion at (0,5) and a replacement of (0,0)-(0,10) are
         // independently valid.  This test documents the current behaviour so it is
         // visible to future maintainers.
-        let replacement = FixAllRange { start_line: 0, start_char: 0, end_line: 0, end_char: 10 };
-        let insertion = FixAllRange { start_line: 0, start_char: 5, end_line: 0, end_char: 5 };
+        let replacement = FixAllRange {
+            start_line: 0,
+            start_char: 0,
+            end_line: 0,
+            end_char: 10,
+        };
+        let insertion = FixAllRange {
+            start_line: 0,
+            start_char: 5,
+            end_line: 0,
+            end_char: 5,
+        };
         assert!(!replacement.overlaps(&insertion));
         assert!(!insertion.overlaps(&replacement));
     }
@@ -953,17 +1053,29 @@ mod tests {
         assert_eq!(aggregate["kind"], "source.fixAll");
         assert_eq!(aggregate["isPreferred"], true);
 
-        let edits = aggregate["edit"]["changes"][uri].as_array().expect("aggregate has edits");
+        let edits = aggregate["edit"]["changes"][uri]
+            .as_array()
+            .expect("aggregate has edits");
         assert_eq!(edits.len(), 3, "three non-conflicting edits were kept");
 
-        let diagnostics = aggregate["diagnostics"].as_array().expect("diagnostics array");
+        let diagnostics = aggregate["diagnostics"]
+            .as_array()
+            .expect("diagnostics array");
         assert_eq!(diagnostics.len(), 3, "one diagnostic per quickfix");
     }
 
     #[test]
     fn build_source_fix_all_returns_none_for_single_quickfix() {
         let uri = "file:///single.pl";
-        let actions = vec![make_quickfix(uri, 0, 0, 3, "fix", "Fix solo", Some("PL100"))];
+        let actions = vec![make_quickfix(
+            uri,
+            0,
+            0,
+            3,
+            "fix",
+            "Fix solo",
+            Some("PL100"),
+        )];
         assert!(build_source_fix_all(&actions, uri).is_none());
     }
 
@@ -1008,8 +1120,14 @@ mod tests {
             }),
         ];
         let aggregate = build_source_fix_all(&actions, uri).expect("aggregate present");
-        let edits = aggregate["edit"]["changes"][uri].as_array().expect("aggregate has edits");
-        assert_eq!(edits.len(), 2, "refactor action must not be merged into fixAll");
+        let edits = aggregate["edit"]["changes"][uri]
+            .as_array()
+            .expect("aggregate has edits");
+        assert_eq!(
+            edits.len(),
+            2,
+            "refactor action must not be merged into fixAll"
+        );
     }
 
     #[test]
@@ -1022,10 +1140,14 @@ mod tests {
             make_quickfix(uri, 2, 0, 3, "third", "Fix C", Some("PL102")),
         ];
         let aggregate = build_source_fix_all(&actions, uri).expect("aggregate present");
-        let edits = aggregate["edit"]["changes"][uri].as_array().expect("aggregate has edits");
+        let edits = aggregate["edit"]["changes"][uri]
+            .as_array()
+            .expect("aggregate has edits");
         assert_eq!(edits.len(), 2);
-        let new_texts: Vec<&str> =
-            edits.iter().filter_map(|edit| edit["newText"].as_str()).collect();
+        let new_texts: Vec<&str> = edits
+            .iter()
+            .filter_map(|edit| edit["newText"].as_str())
+            .collect();
         assert_eq!(new_texts, vec!["first", "third"]);
     }
 
@@ -1043,7 +1165,9 @@ mod tests {
             }),
         ];
         let aggregate = build_source_fix_all(&actions, uri).expect("aggregate present");
-        let edits = aggregate["edit"]["changes"][uri].as_array().expect("aggregate has edits");
+        let edits = aggregate["edit"]["changes"][uri]
+            .as_array()
+            .expect("aggregate has edits");
         assert_eq!(edits.len(), 2);
     }
 
@@ -1054,14 +1178,43 @@ mod tests {
         // The aggregate must only include that edit once.
         let uri = "file:///identical.pl";
         let actions = vec![
-            make_quickfix(uri, 0, 0, 0, "use strict;\n", "Add strict (A)", Some("PL100")),
-            make_quickfix(uri, 0, 0, 0, "use strict;\n", "Add strict (B)", Some("PL100")),
-            make_quickfix(uri, 0, 0, 0, "use warnings;\n", "Add warnings", Some("PL101")),
+            make_quickfix(
+                uri,
+                0,
+                0,
+                0,
+                "use strict;\n",
+                "Add strict (A)",
+                Some("PL100"),
+            ),
+            make_quickfix(
+                uri,
+                0,
+                0,
+                0,
+                "use strict;\n",
+                "Add strict (B)",
+                Some("PL100"),
+            ),
+            make_quickfix(
+                uri,
+                0,
+                0,
+                0,
+                "use warnings;\n",
+                "Add warnings",
+                Some("PL101"),
+            ),
         ];
         let aggregate = build_source_fix_all(&actions, uri).expect("aggregate present");
-        let edits = aggregate["edit"]["changes"][uri].as_array().expect("aggregate has edits");
+        let edits = aggregate["edit"]["changes"][uri]
+            .as_array()
+            .expect("aggregate has edits");
         assert_eq!(edits.len(), 2, "identical edits must dedupe: {edits:#?}");
-        let texts: Vec<&str> = edits.iter().filter_map(|edit| edit["newText"].as_str()).collect();
+        let texts: Vec<&str> = edits
+            .iter()
+            .filter_map(|edit| edit["newText"].as_str())
+            .collect();
         assert!(texts.contains(&"use strict;\n"));
         assert!(texts.contains(&"use warnings;\n"));
     }
@@ -1095,8 +1248,13 @@ mod tests {
             },
         ];
         let aggregate = build_source_fix_all(&actions, uri).expect("aggregate present");
-        let diagnostics = aggregate["diagnostics"].as_array().expect("diagnostics array");
-        let codes: Vec<&str> = diagnostics.iter().filter_map(|d| d["code"].as_str()).collect();
+        let diagnostics = aggregate["diagnostics"]
+            .as_array()
+            .expect("diagnostics array");
+        let codes: Vec<&str> = diagnostics
+            .iter()
+            .filter_map(|d| d["code"].as_str())
+            .collect();
         assert_eq!(codes, vec!["PL100", "PL200"]);
     }
 
@@ -1110,7 +1268,9 @@ mod tests {
             make_quickfix(other_uri, 0, 0, 3, "c", "Cross-file", Some("PL102")),
         ];
         let aggregate = build_source_fix_all(&actions, uri).expect("aggregate present");
-        let edits = aggregate["edit"]["changes"][uri].as_array().expect("aggregate has edits");
+        let edits = aggregate["edit"]["changes"][uri]
+            .as_array()
+            .expect("aggregate has edits");
         // Only the two edits targeting `uri` are merged; the cross-file edit
         // is skipped because it has no `changes[uri]` entry.
         assert_eq!(edits.len(), 2);
@@ -1136,8 +1296,11 @@ print $result;
             "context": { "diagnostics": [] }
         })));
 
-        let actions =
-            response.ok().flatten().and_then(|v| v.as_array().cloned()).unwrap_or_default();
+        let actions = response
+            .ok()
+            .flatten()
+            .and_then(|v| v.as_array().cloned())
+            .unwrap_or_default();
 
         assert!(
             actions.iter().any(|a| {
@@ -1168,11 +1331,16 @@ print $result;
             "context": { "diagnostics": [] }
         })));
 
-        let actions =
-            response.ok().flatten().and_then(|v| v.as_array().cloned()).unwrap_or_default();
+        let actions = response
+            .ok()
+            .flatten()
+            .and_then(|v| v.as_array().cloned())
+            .unwrap_or_default();
 
-        let fix_all: Vec<&Value> =
-            actions.iter().filter(|a| a["kind"].as_str() == Some("source.fixAll")).collect();
+        let fix_all: Vec<&Value> = actions
+            .iter()
+            .filter(|a| a["kind"].as_str() == Some("source.fixAll"))
+            .collect();
 
         assert_eq!(
             fix_all.len(),
@@ -1184,8 +1352,13 @@ print $result;
         assert_eq!(aggregate["title"], "Fix all auto-fixable issues");
         assert_eq!(aggregate["isPreferred"], true);
 
-        let edits = aggregate["edit"]["changes"][uri].as_array().expect("aggregate has edits");
-        assert!(edits.len() >= 2, "aggregate must combine at least two edits, got {edits:#?}");
+        let edits = aggregate["edit"]["changes"][uri]
+            .as_array()
+            .expect("aggregate has edits");
+        assert!(
+            edits.len() >= 2,
+            "aggregate must combine at least two edits, got {edits:#?}"
+        );
     }
 
     #[test]
@@ -1206,11 +1379,16 @@ print $result;
             "context": { "diagnostics": [] }
         })));
 
-        let actions =
-            response.ok().flatten().and_then(|v| v.as_array().cloned()).unwrap_or_default();
+        let actions = response
+            .ok()
+            .flatten()
+            .and_then(|v| v.as_array().cloned())
+            .unwrap_or_default();
 
-        let fix_all_count =
-            actions.iter().filter(|a| a["kind"].as_str() == Some("source.fixAll")).count();
+        let fix_all_count = actions
+            .iter()
+            .filter(|a| a["kind"].as_str() == Some("source.fixAll"))
+            .count();
         assert_eq!(
             fix_all_count, 0,
             "no source.fixAll should be emitted for a file with no quick fixes: {actions:#?}"
@@ -1236,10 +1414,16 @@ print $result;
             "context": { "diagnostics": [], "only": ["source.fixAll"] }
         })));
 
-        let actions =
-            response.ok().flatten().and_then(|v| v.as_array().cloned()).unwrap_or_default();
+        let actions = response
+            .ok()
+            .flatten()
+            .and_then(|v| v.as_array().cloned())
+            .unwrap_or_default();
 
-        assert!(!actions.is_empty(), "filtered request should still yield the aggregate");
+        assert!(
+            !actions.is_empty(),
+            "filtered request should still yield the aggregate"
+        );
         for action in &actions {
             assert_eq!(
                 action["kind"].as_str(),

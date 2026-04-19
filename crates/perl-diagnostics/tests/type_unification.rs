@@ -114,7 +114,10 @@ fn tag_equality_across_module_paths() {
 fn diagnostic_struct_binds_unified_severity_type() {
     use perl_diagnostics::types::Diagnostic;
 
-    let diag = Diagnostic { severity: CodesSeverity::Error, ..Default::default() };
+    let diag = Diagnostic {
+        severity: CodesSeverity::Error,
+        ..Default::default()
+    };
 
     // The field must accept CodesSeverity (same as TypesSeverity)
     let _severity: TypesSeverity = diag.severity;
@@ -216,7 +219,10 @@ fn severity_debug_works() {
 #[test]
 fn tag_debug_works() {
     let debug_str = format!("{:?}", CodesTag::Unnecessary);
-    assert_eq!(debug_str, "Unnecessary", "Debug output should be variant name");
+    assert_eq!(
+        debug_str, "Unnecessary",
+        "Debug output should be variant name"
+    );
     let types_debug = format!("{:?}", TypesTag::Deprecated);
     assert_eq!(types_debug, "Deprecated");
 }

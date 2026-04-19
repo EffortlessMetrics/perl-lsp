@@ -104,7 +104,10 @@ fn validate_position_boundary_conditions() {
         (Position::new(1, 0), "Start of second line"),
         (Position::new(2, 35), "Before emoji in long line"),
         (Position::new(2, 37), "After emoji in long line"),
-        (Position::new(100, 0), "Beyond end of document (should clamp)"),
+        (
+            Position::new(100, 0),
+            "Beyond end of document (should clamp)",
+        ),
         (Position::new(2, 1000), "Beyond end of line (should clamp)"),
     ];
 
@@ -156,7 +159,10 @@ fn validate_position_conversion_performance() {
     let mut content = String::new();
     for i in 0..1000 {
         if i % 5 == 0 {
-            content.push_str(&format!("Line {}: Unicode content 🚀 café naïve résumé 中文\n", i));
+            content.push_str(&format!(
+                "Line {}: Unicode content 🚀 café naïve résumé 中文\n",
+                i
+            ));
         } else {
             content.push_str(&format!("Line {}: Regular ASCII content here\n", i));
         }
@@ -179,13 +185,19 @@ fn validate_position_conversion_performance() {
         let back_pos = byte_to_lsp_pos(&rope, byte_offset, PosEnc::Utf16);
 
         // Verify accuracy
-        assert_eq!(*pos, back_pos, "Performance test position conversion failed");
+        assert_eq!(
+            *pos, back_pos,
+            "Performance test position conversion failed"
+        );
 
         // UTF-8 conversions for comparison
         let byte_offset_utf8 = lsp_pos_to_byte(&rope, *pos, PosEnc::Utf8);
         let back_pos_utf8 = byte_to_lsp_pos(&rope, byte_offset_utf8, PosEnc::Utf8);
 
-        assert_eq!(*pos, back_pos_utf8, "Performance test UTF-8 conversion failed");
+        assert_eq!(
+            *pos, back_pos_utf8,
+            "Performance test UTF-8 conversion failed"
+        );
     }
 
     let duration = start.elapsed();
@@ -208,9 +220,17 @@ fn validate_position_conversion_performance() {
 fn validate_problematic_unicode_scenarios() {
     let problematic_cases = vec![
         // Zero-width characters
-        ("Hello\u{200B}World\n", Position::new(0, 5), "Zero-width space"),
+        (
+            "Hello\u{200B}World\n",
+            Position::new(0, 5),
+            "Zero-width space",
+        ),
         // Combining characters
-        ("e\u{0301}t\u{0301}\n", Position::new(0, 2), "Combining acute accents"), // é and t́
+        (
+            "e\u{0301}t\u{0301}\n",
+            Position::new(0, 2),
+            "Combining acute accents",
+        ), // é and t́
         // Surrogate pairs in UTF-16 (emojis)
         ("🇺🇸🇨🇦🇬🇧\n", Position::new(0, 6), "Flag emojis"), // Each flag is 4 UTF-16 units
         // Mixed RTL/LTR text

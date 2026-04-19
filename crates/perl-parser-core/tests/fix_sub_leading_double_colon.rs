@@ -31,14 +31,20 @@ fn sub_name(source: &str) -> Option<String> {
 fn test_sub_leading_double_colon_simple() {
     // sub ::PCDATA { '#PCDATA' } — from XML::Twig
     assert_clean_parse(r#"sub ::PCDATA { '#PCDATA' }"#);
-    assert_eq!(sub_name(r#"sub ::PCDATA { '#PCDATA' }"#), Some("::PCDATA".to_string()));
+    assert_eq!(
+        sub_name(r#"sub ::PCDATA { '#PCDATA' }"#),
+        Some("::PCDATA".to_string())
+    );
 }
 
 #[test]
 fn test_sub_leading_double_colon_cdata() {
     // sub ::CDATA { '#CDATA' } — from XML::Twig
     assert_clean_parse(r#"sub ::CDATA { '#CDATA' }"#);
-    assert_eq!(sub_name(r#"sub ::CDATA { '#CDATA' }"#), Some("::CDATA".to_string()));
+    assert_eq!(
+        sub_name(r#"sub ::CDATA { '#CDATA' }"#),
+        Some("::CDATA".to_string())
+    );
 }
 
 #[test]
@@ -55,7 +61,10 @@ fn test_sub_leading_double_colon_qualified() {
 fn test_sub_leading_double_colon_deeply_qualified() {
     // Deeply qualified name with leading ::
     assert_clean_parse(r#"sub ::Foo::Bar::baz { 1 }"#);
-    assert_eq!(sub_name(r#"sub ::Foo::Bar::baz { 1 }"#), Some("::Foo::Bar::baz".to_string()));
+    assert_eq!(
+        sub_name(r#"sub ::Foo::Bar::baz { 1 }"#),
+        Some("::Foo::Bar::baz".to_string())
+    );
 }
 
 #[test]

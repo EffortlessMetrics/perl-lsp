@@ -17,14 +17,22 @@ use perl_parser_core::{Node, NodeKind, SourceLocation};
 fn empty_program(source_len: usize) -> Arc<Node> {
     Arc::new(Node::new(
         NodeKind::Program { statements: vec![] },
-        SourceLocation { start: 0, end: source_len },
+        SourceLocation {
+            start: 0,
+            end: source_len,
+        },
     ))
 }
 
 fn parse_errors_only(diags: &[Diagnostic]) -> Vec<&Diagnostic> {
     diags
         .iter()
-        .filter(|d| matches!(d.code.as_deref(), Some("PL001") | Some("PL002") | Some("PL003")))
+        .filter(|d| {
+            matches!(
+                d.code.as_deref(),
+                Some("PL001") | Some("PL002") | Some("PL003")
+            )
+        })
         .collect()
 }
 
@@ -52,7 +60,10 @@ fn error_level_parse_diags(diags: &[Diagnostic]) -> Vec<&Diagnostic> {
         .iter()
         .filter(|d| {
             d.severity == DiagnosticSeverity::Error
-                && matches!(d.code.as_deref(), Some("PL001") | Some("PL002") | Some("PL003"))
+                && matches!(
+                    d.code.as_deref(),
+                    Some("PL001") | Some("PL002") | Some("PL003")
+                )
         })
         .collect()
 }
@@ -73,7 +84,11 @@ fn single_parse_error_is_preserved() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run_diagnostics(source, errors);
     let parse_diags = parse_errors_only(&diags);
 
-    assert_eq!(parse_diags.len(), 1, "Single parse error must not be suppressed");
+    assert_eq!(
+        parse_diags.len(),
+        1,
+        "Single parse error must not be suppressed"
+    );
     Ok(())
 }
 
@@ -145,7 +160,10 @@ fn adjacent_cascade_errors_suppressed_to_one() -> Result<(), Box<dyn std::error:
         "Three parse errors within 10 bytes should be collapsed to one, got {}",
         parse_diags.len()
     );
-    assert_eq!(parse_diags[0].range.0, 5, "The first (lowest-offset) error should be preserved");
+    assert_eq!(
+        parse_diags[0].range.0, 5,
+        "The first (lowest-offset) error should be preserved"
+    );
     Ok(())
 }
 
@@ -202,8 +220,14 @@ fn two_separate_clusters_one_primary_each() -> Result<(), Box<dyn std::error::Er
     );
     // The two survivors must be the cluster heads
     let starts: Vec<usize> = parse_diags.iter().map(|d| d.range.0).collect();
-    assert!(starts.contains(&0), "First cluster head (offset 0) must be preserved");
-    assert!(starts.contains(&40), "Second cluster head (offset 40) must be preserved");
+    assert!(
+        starts.contains(&0),
+        "First cluster head (offset 0) must be preserved"
+    );
+    assert!(
+        starts.contains(&40),
+        "Second cluster head (offset 40) must be preserved"
+    );
     Ok(())
 }
 
@@ -295,7 +319,10 @@ fn non_parse_error_diagnostics_not_suppressed() -> Result<(), Box<dyn std::error
 
     // All diagnostics should have a code (regression check)
     for d in &diags {
-        assert!(d.code.is_some(), "Every diagnostic should carry a code: {d:?}");
+        assert!(
+            d.code.is_some(),
+            "Every diagnostic should carry a code: {d:?}"
+        );
     }
     // No parse-error codes should appear (no parse errors submitted)
     let parse_diags = parse_errors_only(&diags);
@@ -314,7 +341,10 @@ fn non_parse_error_diagnostics_not_suppressed() -> Result<(), Box<dyn std::error
 fn empty_error_list_produces_empty_parse_diagnostics() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run_diagnostics("", vec![]);
     let parse_diags = parse_errors_only(&diags);
-    assert!(parse_diags.is_empty(), "No errors in, no parse diagnostics out");
+    assert!(
+        parse_diags.is_empty(),
+        "No errors in, no parse diagnostics out"
+    );
     Ok(())
 }
 
@@ -435,7 +465,10 @@ fn cascade_suppression_reduces_adjacent_errors_to_one_at_error_level()
         "Three cascade errors within 10 bytes should collapse to one at Error level, got {}",
         error_diags.len()
     );
-    assert_eq!(error_diags[0].range.0, 5, "The cluster head (offset 5) should be the survivor");
+    assert_eq!(
+        error_diags[0].range.0, 5,
+        "The cluster head (offset 5) should be the survivor"
+    );
     Ok(())
 }
 

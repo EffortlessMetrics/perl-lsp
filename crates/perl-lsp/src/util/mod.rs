@@ -464,7 +464,10 @@ pub fn offset_to_position(content: &str, offset: usize) -> Position {
         }
     }
 
-    Position { line, character: col_utf16 }
+    Position {
+        line,
+        character: col_utf16,
+    }
 }
 
 #[cfg(test)]
@@ -476,7 +479,10 @@ mod tests {
         let line = "use Demo::Worker;";
         let cursor = line.find("Worker").unwrap_or(0);
 
-        assert_eq!(extract_module_reference(line, cursor), Some("Demo::Worker".to_string()));
+        assert_eq!(
+            extract_module_reference(line, cursor),
+            Some("Demo::Worker".to_string())
+        );
     }
 
     #[test]
@@ -484,6 +490,9 @@ mod tests {
         let line = "require Demo'Worker;";
         let cursor = line.find("Worker").unwrap_or(0);
 
-        assert_eq!(extract_module_reference(line, cursor), Some("Demo::Worker".to_string()));
+        assert_eq!(
+            extract_module_reference(line, cursor),
+            Some("Demo::Worker".to_string())
+        );
     }
 }

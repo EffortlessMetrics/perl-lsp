@@ -28,7 +28,10 @@ pub fn assert_hover_has_text(v: &Option<Value>) {
         && !hover.is_null()
     {
         let obj = must_some(hover.as_object());
-        assert!(obj.contains_key("contents"), "hover must have contents field");
+        assert!(
+            obj.contains_key("contents"),
+            "hover must have contents field"
+        );
 
         let contents = &obj["contents"];
         let has_text = contents.is_string()
@@ -88,20 +91,36 @@ fn assert_range_valid(range: &Value, context: &str) {
 fn assert_position_valid(position: &Value, context: &str) {
     let obj = must_some(position.as_object());
     assert!(obj.contains_key("line"), "{} must have line", context);
-    assert!(obj.contains_key("character"), "{} must have character", context);
+    assert!(
+        obj.contains_key("character"),
+        "{} must have character",
+        context
+    );
 
     if let Some(line) = obj.get("line") {
         assert!(line.is_number(), "{} line must be number", context);
         let line_num = must_some(line.as_u64());
-        assert!(line_num < 1000000, "{} line number should be reasonable", context);
+        assert!(
+            line_num < 1000000,
+            "{} line number should be reasonable",
+            context
+        );
     } else {
         assert!(false, "{} must have line", context);
     }
 
     if let Some(character) = obj.get("character") {
-        assert!(character.is_number(), "{} character must be number", context);
+        assert!(
+            character.is_number(),
+            "{} character must be number",
+            context
+        );
         let char_num = must_some(character.as_u64());
-        assert!(char_num < 10000, "{} character should be reasonable", context);
+        assert!(
+            char_num < 10000,
+            "{} character should be reasonable",
+            context
+        );
     } else {
         assert!(false, "{} must have character", context);
     }
@@ -134,9 +153,18 @@ pub fn assert_call_hierarchy_items(v: &Option<Value>, expected_name: Option<&str
                 // Validate each item has required fields
                 for item in items {
                     let item_obj = must_some(item.as_object());
-                    assert!(item_obj.contains_key("name"), "call hierarchy item must have name");
-                    assert!(item_obj.contains_key("uri"), "call hierarchy item must have uri");
-                    assert!(item_obj.contains_key("range"), "call hierarchy item must have range");
+                    assert!(
+                        item_obj.contains_key("name"),
+                        "call hierarchy item must have name"
+                    );
+                    assert!(
+                        item_obj.contains_key("uri"),
+                        "call hierarchy item must have uri"
+                    );
+                    assert!(
+                        item_obj.contains_key("range"),
+                        "call hierarchy item must have range"
+                    );
 
                     // Either selectionRange or detail should be present
                     let has_selection = item_obj.contains_key("selectionRange");
@@ -150,7 +178,9 @@ pub fn assert_call_hierarchy_items(v: &Option<Value>, expected_name: Option<&str
                 // Check for expected name if provided
                 if let Some(name) = expected_name {
                     let found = items.iter().any(|item| {
-                        item.get("name").and_then(|n| n.as_str()).is_some_and(|n| n == name)
+                        item.get("name")
+                            .and_then(|n| n.as_str())
+                            .is_some_and(|n| n == name)
                     });
                     assert!(found, "call hierarchy should contain '{}'", name);
                 }
@@ -195,12 +225,18 @@ pub fn assert_code_actions_available(v: &Option<Value>) {
 
             for action in arr {
                 let action_obj = must_some(action.as_object());
-                assert!(action_obj.contains_key("title"), "code action must have title");
+                assert!(
+                    action_obj.contains_key("title"),
+                    "code action must have title"
+                );
 
                 // Must have either command or edit
                 let has_command = action_obj.contains_key("command");
                 let has_edit = action_obj.contains_key("edit");
-                assert!(has_command || has_edit, "code action must have command or edit");
+                assert!(
+                    has_command || has_edit,
+                    "code action must have command or edit"
+                );
 
                 // If has kind, validate it's a string
                 if let Some(kind) = action_obj.get("kind") {

@@ -97,14 +97,21 @@ our $VERSION = '1.0';
         params: Some(basic_symbol.clone()),
     };
 
-    let response = server.handle_request(request).ok_or("handle_request failed")?;
+    let response = server
+        .handle_request(request)
+        .ok_or("handle_request failed")?;
     let resolved = response.result.ok_or("No result in response")?;
 
     // Check that the symbol was enhanced
     assert_eq!(resolved["name"], "hello");
     assert!(resolved["detail"].is_string(), "Should have detail field");
-    let detail_str = resolved["detail"].as_str().ok_or("detail is not a string")?;
-    assert!(detail_str.contains("sub"), "Detail should indicate it's a subroutine");
+    let detail_str = resolved["detail"]
+        .as_str()
+        .ok_or("detail is not a string")?;
+    assert!(
+        detail_str.contains("sub"),
+        "Detail should indicate it's a subroutine"
+    );
 
     // Location should still be present
     assert!(resolved["location"].is_object());
@@ -169,7 +176,9 @@ sub another_method {
         params: Some(basic_symbol),
     };
 
-    let response = server.handle_request(request).ok_or("handle_request failed")?;
+    let response = server
+        .handle_request(request)
+        .ok_or("handle_request failed")?;
     let resolved = response.result.ok_or("No result in response")?;
 
     // Check enhanced fields
@@ -179,8 +188,9 @@ sub another_method {
     // Should potentially have container information
     // (depending on implementation details)
     if resolved["containerName"].is_string() {
-        let container_str =
-            resolved["containerName"].as_str().ok_or("containerName is not a string")?;
+        let container_str = resolved["containerName"]
+            .as_str()
+            .ok_or("containerName is not a string")?;
         assert!(!container_str.is_empty());
     }
 
@@ -202,15 +212,24 @@ fn test_workspace_symbol_resolve_capability() -> Result<(), Box<dyn std::error::
         })),
     };
 
-    let response = server.handle_request(init_request).ok_or("handle_request failed")?;
+    let response = server
+        .handle_request(init_request)
+        .ok_or("handle_request failed")?;
     let result = response.result.ok_or("No result in response")?;
     let caps = &result["capabilities"];
 
     // Workspace symbol provider should advertise resolve support in non-lock mode
     if !cfg!(feature = "lsp-ga-lock") {
         let ws_provider = &caps["workspaceSymbolProvider"];
-        assert!(ws_provider.is_object(), "workspaceSymbolProvider should be an object");
-        assert_eq!(ws_provider["resolveProvider"], json!(true), "Should support resolve");
+        assert!(
+            ws_provider.is_object(),
+            "workspaceSymbolProvider should be an object"
+        );
+        assert_eq!(
+            ws_provider["resolveProvider"],
+            json!(true),
+            "Should support resolve"
+        );
     }
 
     Ok(())
@@ -240,7 +259,9 @@ fn test_workspace_symbol_resolve_unknown_symbol() -> Result<(), Box<dyn std::err
         params: Some(unknown_symbol.clone()),
     };
 
-    let response = server.handle_request(request).ok_or("handle_request failed")?;
+    let response = server
+        .handle_request(request)
+        .ok_or("handle_request failed")?;
     let resolved = response.result.ok_or("No result in response")?;
 
     // Should return the original symbol unchanged
@@ -277,8 +298,13 @@ sub hello {
     let response = server.handle_request(request).ok_or("no response")?;
     let resolved = response.result.ok_or("no result")?;
 
-    assert!(resolved["documentation"].is_string(), "Should have documentation field");
-    let doc_text = resolved["documentation"].as_str().ok_or("documentation is not a string")?;
+    assert!(
+        resolved["documentation"].is_string(),
+        "Should have documentation field"
+    );
+    let doc_text = resolved["documentation"]
+        .as_str()
+        .ok_or("documentation is not a string")?;
     assert!(
         doc_text.contains("Greets"),
         "documentation should contain leading comment text, got: {doc_text}"
@@ -336,8 +362,13 @@ fn test_workspace_symbol_resolve_container_name_from_qualified()
     let response = server.handle_request(request).ok_or("no response")?;
     let resolved = response.result.ok_or("no result")?;
 
-    let container = resolved["containerName"].as_str().ok_or("containerName is not a string")?;
-    assert_eq!(container, "Animal::Dog", "containerName should be derived from qualified name");
+    let container = resolved["containerName"]
+        .as_str()
+        .ok_or("containerName is not a string")?;
+    assert_eq!(
+        container, "Animal::Dog",
+        "containerName should be derived from qualified name"
+    );
     Ok(())
 }
 
@@ -367,7 +398,10 @@ our $counter = 0;
     let resolved = response.result.ok_or("no result")?;
 
     // Should have documentation from the leading comment
-    assert!(resolved["documentation"].is_string(), "Variables should also carry documentation");
+    assert!(
+        resolved["documentation"].is_string(),
+        "Variables should also carry documentation"
+    );
     if let Some(doc_text) = resolved["documentation"].as_str() {
         assert!(
             doc_text.contains("Global counter"),
@@ -377,8 +411,13 @@ our $counter = 0;
 
     // Detail should indicate it's a variable with proper sigil
     assert!(resolved["detail"].is_string());
-    let detail = resolved["detail"].as_str().ok_or("detail is not a string")?;
-    assert!(detail.contains("$counter"), "Detail should show variable with sigil, got: {detail}");
+    let detail = resolved["detail"]
+        .as_str()
+        .ok_or("detail is not a string")?;
+    assert!(
+        detail.contains("$counter"),
+        "Detail should show variable with sigil, got: {detail}"
+    );
 
     Ok(())
 }

@@ -195,7 +195,9 @@ fn write_vs_read_assignment() -> Result<(), Box<dyn std::error::Error>> {
 
     // Assignment is Write
     let assign_offset = code.find("\n$x = 2").ok_or("test setup")? + 1;
-    let assign_highlight = highlights.iter().find(|h| h.location.start == assign_offset);
+    let assign_highlight = highlights
+        .iter()
+        .find(|h| h.location.start == assign_offset);
     assert!(
         assign_highlight.is_some_and(|h| h.kind == DocumentHighlightKind::Write),
         "Assignment LHS should be Write"

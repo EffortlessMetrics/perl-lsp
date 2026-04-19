@@ -123,7 +123,11 @@ impl WalkCtx {
 fn walk(node: &Node, ctx: &mut WalkCtx, out: &mut Vec<SymbolDecl>) {
     match &node.kind {
         // ── Package ────────────────────────────────────────────────────────
-        NodeKind::Package { name, name_span, block } => {
+        NodeKind::Package {
+            name,
+            name_span,
+            block,
+        } => {
             let anchor = Some((name_span.start, name_span.end));
             let container = ctx.current_package.clone();
             out.push(SymbolDecl {
@@ -170,7 +174,12 @@ fn walk(node: &Node, ctx: &mut WalkCtx, out: &mut Vec<SymbolDecl>) {
         }
 
         // ── Subroutine ─────────────────────────────────────────────────────
-        NodeKind::Subroutine { name: Some(sub_name), name_span, body, .. } => {
+        NodeKind::Subroutine {
+            name: Some(sub_name),
+            name_span,
+            body,
+            ..
+        } => {
             let anchor = name_span.as_ref().map(|s| (s.start, s.end));
             let container = ctx.current_package.clone();
             let qualified_name = ctx.qualify(sub_name);
@@ -188,12 +197,18 @@ fn walk(node: &Node, ctx: &mut WalkCtx, out: &mut Vec<SymbolDecl>) {
         }
 
         // Anonymous subroutine — skip (no name to project).
-        NodeKind::Subroutine { name: None, body, .. } => {
+        NodeKind::Subroutine {
+            name: None, body, ..
+        } => {
             walk(body, ctx, out);
         }
 
         // ── Method (Perl 5.38+ `use feature 'class'`) ─────────────────────
-        NodeKind::Method { name: method_name, body, .. } => {
+        NodeKind::Method {
+            name: method_name,
+            body,
+            ..
+        } => {
             let container = ctx.current_package.clone();
             let qualified_name = ctx.qualify(method_name);
             out.push(SymbolDecl {
@@ -209,7 +224,12 @@ fn walk(node: &Node, ctx: &mut WalkCtx, out: &mut Vec<SymbolDecl>) {
         }
 
         // ── Variable declarations ──────────────────────────────────────────
-        NodeKind::VariableDeclaration { declarator, variable, initializer, .. } => {
+        NodeKind::VariableDeclaration {
+            declarator,
+            variable,
+            initializer,
+            ..
+        } => {
             if let Some(decl) = variable_decl_from_node(variable, node, ctx, declarator) {
                 out.push(decl);
             }
@@ -219,7 +239,12 @@ fn walk(node: &Node, ctx: &mut WalkCtx, out: &mut Vec<SymbolDecl>) {
             }
         }
 
-        NodeKind::VariableListDeclaration { declarator, variables, initializer, .. } => {
+        NodeKind::VariableListDeclaration {
+            declarator,
+            variables,
+            initializer,
+            ..
+        } => {
             for var in variables {
                 if let Some(decl) = variable_decl_from_node(var, node, ctx, declarator) {
                     out.push(decl);
@@ -337,7 +362,10 @@ fn qw_names(arg: &str) -> Option<Vec<String>> {
     });
 
     content.map(|text| {
-        text.split_whitespace().filter(|name| !name.is_empty()).map(str::to_owned).collect()
+        text.split_whitespace()
+            .filter(|name| !name.is_empty())
+            .map(str::to_owned)
+            .collect()
     })
 }
 
@@ -498,29 +526,50 @@ mod tests {
             "}".to_string(),
         ];
 
-        assert_eq!(constant_names_from_use_args(&args), vec!["FOO".to_string(), "BAR".to_string()]);
+        assert_eq!(
+            constant_names_from_use_args(&args),
+            vec!["FOO".to_string(), "BAR".to_string()]
+        );
     }
 
     #[test]
     fn constant_names_falls_back_to_first_top_level_candidate() {
         let args = vec!["ANSWER".to_string(), "=>".to_string(), "42".to_string()];
 
-        assert_eq!(constant_names_from_use_args(&args), vec!["ANSWER".to_string()]);
+        assert_eq!(
+            constant_names_from_use_args(&args),
+            vec!["ANSWER".to_string()]
+        );
     }
 
     #[test]
     fn constant_names_supports_qw_and_deduplicates_entries() {
         let args = vec!["qw(ONE TWO ONE)".to_string()];
 
-        assert_eq!(constant_names_from_use_args(&args), vec!["ONE".to_string(), "TWO".to_string()]);
+        assert_eq!(
+            constant_names_from_use_args(&args),
+            vec!["ONE".to_string(), "TWO".to_string()]
+        );
     }
 
     #[test]
     fn qw_names_support_multiple_delimiters() {
-        assert_eq!(qw_names("qw(one two)"), Some(vec!["one".to_string(), "two".to_string()]));
-        assert_eq!(qw_names("qw[one two]"), Some(vec!["one".to_string(), "two".to_string()]));
-        assert_eq!(qw_names("qw{one two}"), Some(vec!["one".to_string(), "two".to_string()]));
-        assert_eq!(qw_names("qw<one two>"), Some(vec!["one".to_string(), "two".to_string()]));
+        assert_eq!(
+            qw_names("qw(one two)"),
+            Some(vec!["one".to_string(), "two".to_string()])
+        );
+        assert_eq!(
+            qw_names("qw[one two]"),
+            Some(vec!["one".to_string(), "two".to_string()])
+        );
+        assert_eq!(
+            qw_names("qw{one two}"),
+            Some(vec!["one".to_string(), "two".to_string()])
+        );
+        assert_eq!(
+            qw_names("qw<one two>"),
+            Some(vec!["one".to_string(), "two".to_string()])
+        );
     }
 
     #[test]

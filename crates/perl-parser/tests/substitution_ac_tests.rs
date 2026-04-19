@@ -16,7 +16,11 @@ fn has_error(code: &str) -> bool {
 
 /// Assert that code produces an error signal (Err or ERROR node in AST).
 fn assert_error(code: &str) {
-    assert!(has_error(code), "Expected error (Err or ERROR node) for: {}", code);
+    assert!(
+        has_error(code),
+        "Expected error (Err or ERROR node) for: {}",
+        code
+    );
 }
 
 // AC1: Parse replacement text portion of substitution operator
@@ -221,7 +225,10 @@ fn test_ac3_balanced_delimiters() -> Result<(), Box<dyn std::error::Error>> {
 
         // This should fail until substitution parsing is implemented
         if let Ok(ast) = result {
-            assert!(!has_proper_balanced_delimiter_parsing(&ast, expected_delimiter));
+            assert!(!has_proper_balanced_delimiter_parsing(
+                &ast,
+                expected_delimiter
+            ));
         }
     }
     Ok(())
@@ -274,15 +281,24 @@ fn test_ac4_regex_integration() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn test_ac5_basic_forms() -> Result<(), Box<dyn std::error::Error>> {
     // AC5: Must include tests for basic forms: `s/pattern/replacement/flags`
-    let basic_forms =
-        vec!["s/foo/bar/", "s/foo/bar/g", "s/foo/bar/gi", "s/pattern/replacement/", "s/a/b/gims"];
+    let basic_forms = vec![
+        "s/foo/bar/",
+        "s/foo/bar/g",
+        "s/foo/bar/gi",
+        "s/pattern/replacement/",
+        "s/a/b/gims",
+    ];
 
     for code in basic_forms {
         let mut parser = Parser::new(code);
         let result = parser.parse()?;
 
         // These should all now pass with implementation complete
-        assert!(has_proper_substitution_node(&result), "Failed for code: {}", code);
+        assert!(
+            has_proper_substitution_node(&result),
+            "Failed for code: {}",
+            code
+        );
     }
     Ok(())
 }

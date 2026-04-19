@@ -30,29 +30,51 @@ fn test_id_generator_default() {
 #[test]
 fn test_variable_sexp() {
     let mut id_gen = NodeIdGenerator::new();
-    let node = make_node(&mut id_gen, NodeKind::Variable { sigil: "$".into(), name: "x".into() });
+    let node = make_node(
+        &mut id_gen,
+        NodeKind::Variable {
+            sigil: "$".into(),
+            name: "x".into(),
+        },
+    );
     assert_eq!(node.to_sexp(), "(variable $ x)");
 }
 
 #[test]
 fn test_number_sexp() {
     let mut id_gen = NodeIdGenerator::new();
-    let node = make_node(&mut id_gen, NodeKind::Number { value: "3.14".into() });
+    let node = make_node(
+        &mut id_gen,
+        NodeKind::Number {
+            value: "3.14".into(),
+        },
+    );
     assert_eq!(node.to_sexp(), "(number 3.14)");
 }
 
 #[test]
 fn test_string_non_interpolated_sexp() {
     let mut id_gen = NodeIdGenerator::new();
-    let node =
-        make_node(&mut id_gen, NodeKind::String { value: "hello".into(), interpolated: false });
+    let node = make_node(
+        &mut id_gen,
+        NodeKind::String {
+            value: "hello".into(),
+            interpolated: false,
+        },
+    );
     assert_eq!(node.to_sexp(), r#"(string "hello")"#);
 }
 
 #[test]
 fn test_string_interpolated_sexp() {
     let mut id_gen = NodeIdGenerator::new();
-    let node = make_node(&mut id_gen, NodeKind::String { value: "hi".into(), interpolated: true });
+    let node = make_node(
+        &mut id_gen,
+        NodeKind::String {
+            value: "hi".into(),
+            interpolated: true,
+        },
+    );
     assert_eq!(node.to_sexp(), r#"(string_interpolated "hi")"#);
 }
 
@@ -97,7 +119,10 @@ fn test_missing_kind_variant_sexp() {
     let node = make_node(&mut id_gen, NodeKind::Missing(MissingKind::Semicolon));
     let sexp = node.to_sexp();
     assert!(sexp.contains("MISSING"), "expected MISSING in {sexp}");
-    assert!(sexp.contains("Semicolon"), "expected Semicolon variant in {sexp}");
+    assert!(
+        sexp.contains("Semicolon"),
+        "expected Semicolon variant in {sexp}"
+    );
 }
 
 #[test]
@@ -111,7 +136,12 @@ fn test_program_sexp_empty() {
 fn test_program_with_child_sexp() {
     let mut id_gen = NodeIdGenerator::new();
     let child = make_node(&mut id_gen, NodeKind::Number { value: "1".into() });
-    let node = make_node(&mut id_gen, NodeKind::Program { statements: vec![child] });
+    let node = make_node(
+        &mut id_gen,
+        NodeKind::Program {
+            statements: vec![child],
+        },
+    );
     assert_eq!(node.to_sexp(), "(source_file (number 1))");
 }
 
@@ -119,7 +149,12 @@ fn test_program_with_child_sexp() {
 fn test_block_sexp() {
     let mut id_gen = NodeIdGenerator::new();
     let inner = make_node(&mut id_gen, NodeKind::Number { value: "0".into() });
-    let node = make_node(&mut id_gen, NodeKind::Block { statements: vec![inner] });
+    let node = make_node(
+        &mut id_gen,
+        NodeKind::Block {
+            statements: vec![inner],
+        },
+    );
     assert_eq!(node.to_sexp(), "(block (number 0))");
 }
 
@@ -130,7 +165,11 @@ fn test_binary_sexp() {
     let right = make_node(&mut id_gen, NodeKind::Number { value: "2".into() });
     let node = make_node(
         &mut id_gen,
-        NodeKind::Binary { op: "+".into(), left: Box::new(left), right: Box::new(right) },
+        NodeKind::Binary {
+            op: "+".into(),
+            left: Box::new(left),
+            right: Box::new(right),
+        },
     );
     assert_eq!(node.to_sexp(), "(binary_+ (number 1) (number 2))");
 }

@@ -95,7 +95,10 @@ fn missing_package_declaration_fix_inserts_at_top_without_shebang() {
     assert!(action.is_some(), "Expected a 'package main' action");
 
     let edit = &action.unwrap().edit.changes[0];
-    assert_eq!(edit.location.start, 0, "Without shebang, insertion should be at position 0");
+    assert_eq!(
+        edit.location.start, 0,
+        "Without shebang, insertion should be at position 0"
+    );
     assert_eq!(edit.new_text, "package main;\n");
 }
 
@@ -140,7 +143,10 @@ fn variable_redeclaration_fix_deletes_my_prefix() {
 
     let edit = &action.unwrap().edit.changes[0];
     assert_eq!(edit.new_text, "", "Edit should delete 'my '");
-    assert_eq!(edit.location.start, second_my_start, "Edit should start at the duplicate 'my'");
+    assert_eq!(
+        edit.location.start, second_my_start,
+        "Edit should start at the duplicate 'my'"
+    );
     assert_eq!(
         edit.location.end - edit.location.start,
         3,
@@ -162,7 +168,10 @@ fn variable_redeclaration_fix_is_preferred() {
 
     let action = find_action(&actions, "Remove duplicate");
     assert!(action.is_some(), "Expected remove duplicate action");
-    assert!(action.unwrap().is_preferred, "Remove duplicate 'my' should be the preferred action");
+    assert!(
+        action.unwrap().is_preferred,
+        "Remove duplicate 'my' should be the preferred action"
+    );
 }
 
 // ===========================================================================
@@ -203,15 +212,25 @@ fn misspelled_pragma_fix_replaces_full_range() {
     assert!(action.is_some(), "Expected a 'warnings' fix action");
 
     let edit = &action.unwrap().edit.changes[0];
-    assert_eq!(edit.new_text, "use warnings;", "Should replace with 'use warnings;'");
-    assert_eq!(edit.location.start, use_warning_start, "Should start at diagnostic range start");
+    assert_eq!(
+        edit.new_text, "use warnings;",
+        "Should replace with 'use warnings;'"
+    );
+    assert_eq!(
+        edit.location.start, use_warning_start,
+        "Should start at diagnostic range start"
+    );
 }
 
 #[test]
 fn misspelled_pragma_fix_strict_typo() {
     let src = "use structs;\nmy $x = 1;\n";
-    let diags =
-        [make_diag(0, 12, "PL111", "Did you mean 'use strict;'? 'structs' is not a known pragma")];
+    let diags = [make_diag(
+        0,
+        12,
+        "PL111",
+        "Did you mean 'use strict;'? 'structs' is not a known pragma",
+    )];
     let actions = parse_and_get_actions(src, &diags);
 
     assert!(
@@ -239,7 +258,10 @@ fn misspelled_pragma_fix_is_preferred() {
 
     let action = find_action(&actions, "warnings");
     assert!(action.is_some(), "Expected a 'warnings' fix action");
-    assert!(action.unwrap().is_preferred, "Pragma spelling fix should be preferred");
+    assert!(
+        action.unwrap().is_preferred,
+        "Pragma spelling fix should be preferred"
+    );
 }
 
 // ===========================================================================
@@ -302,7 +324,10 @@ fn unreachable_code_fix_deletes_entire_line() {
 
     let edit = &action.unwrap().edit.changes[0];
     assert_eq!(edit.new_text, "", "Should delete the line completely");
-    assert!(edit.location.end > edit.location.start, "Should span at least the statement");
+    assert!(
+        edit.location.end > edit.location.start,
+        "Should span at least the statement"
+    );
 }
 
 // ===========================================================================
@@ -399,5 +424,8 @@ fn missing_return_fix_is_preferred() {
 
     let action = find_action(&actions, "return");
     assert!(action.is_some(), "Expected a missing return action");
-    assert!(action.unwrap().is_preferred, "Add return should be the preferred action");
+    assert!(
+        action.unwrap().is_preferred,
+        "Add return should be the preferred action"
+    );
 }

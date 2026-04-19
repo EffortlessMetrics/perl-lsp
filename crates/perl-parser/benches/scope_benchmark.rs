@@ -49,7 +49,9 @@ fn benchmark_scope_analysis(c: &mut Criterion) {
     }
 
     let mut parser = Parser::new(&script);
-    let ast = parser.parse().expect("script must parse for scope benchmark");
+    let ast = parser
+        .parse()
+        .expect("script must parse for scope benchmark");
     let analyzer = ScopeAnalyzer::new();
     let pragma_map = vec![];
 
@@ -67,7 +69,9 @@ fn benchmark_strict_barewords(c: &mut Criterion) {
     }
 
     let mut parser = Parser::new(&script);
-    let ast = parser.parse().expect("script must parse for strict barewords benchmark");
+    let ast = parser
+        .parse()
+        .expect("script must parse for strict barewords benchmark");
     let analyzer = ScopeAnalyzer::new();
 
     // Enable strict subs to force is_known_function checks
@@ -89,5 +93,9 @@ fn benchmark_strict_barewords(c: &mut Criterion) {
     });
 }
 
-criterion_group!(benches, benchmark_scope_analysis, benchmark_strict_barewords);
+criterion_group!(
+    benches,
+    benchmark_scope_analysis,
+    benchmark_strict_barewords
+);
 criterion_main!(benches);

@@ -26,8 +26,16 @@ mod realistic_function_return_kills {
             let (actual_pattern, _body, actual_mods) = extract_regex_parts(input);
 
             // Kill the "xyzzy" mutations
-            assert_ne!(actual_pattern, "xyzzy", "Pattern should not be 'xyzzy' for '{}'", input);
-            assert_ne!(actual_mods, "xyzzy", "Modifiers should not be 'xyzzy' for '{}'", input);
+            assert_ne!(
+                actual_pattern, "xyzzy",
+                "Pattern should not be 'xyzzy' for '{}'",
+                input
+            );
+            assert_ne!(
+                actual_mods, "xyzzy",
+                "Modifiers should not be 'xyzzy' for '{}'",
+                input
+            );
 
             assert_eq!(actual_pattern, expected_pattern, "Pattern for '{}'", input);
             assert_eq!(actual_mods, expected_mods, "Modifiers for '{}'", input);
@@ -44,9 +52,21 @@ mod realistic_function_return_kills {
             let (actual_search, actual_replace, actual_mods) = extract_transliteration_parts(input);
 
             // Kill all "xyzzy" mutations
-            assert_ne!(actual_search, "xyzzy", "Search should not be 'xyzzy' for '{}'", input);
-            assert_ne!(actual_replace, "xyzzy", "Replace should not be 'xyzzy' for '{}'", input);
-            assert_ne!(actual_mods, "xyzzy", "Modifiers should not be 'xyzzy' for '{}'", input);
+            assert_ne!(
+                actual_search, "xyzzy",
+                "Search should not be 'xyzzy' for '{}'",
+                input
+            );
+            assert_ne!(
+                actual_replace, "xyzzy",
+                "Replace should not be 'xyzzy' for '{}'",
+                input
+            );
+            assert_ne!(
+                actual_mods, "xyzzy",
+                "Modifiers should not be 'xyzzy' for '{}'",
+                input
+            );
 
             assert_eq!(actual_search, expected_search, "Search for '{}'", input);
             assert_eq!(actual_replace, expected_replace, "Replace for '{}'", input);
@@ -70,13 +90,24 @@ mod realistic_arithmetic_kills {
 
             // With correct + arithmetic: should extract correctly
             // With * mutation: would likely break position calculation
-            assert!(!pattern.is_empty(), "Pattern should not be empty for '{}'", input);
-            assert!(!replacement.is_empty(), "Replacement should not be empty for '{}'", input);
+            assert!(
+                !pattern.is_empty(),
+                "Pattern should not be empty for '{}'",
+                input
+            );
+            assert!(
+                !replacement.is_empty(),
+                "Replacement should not be empty for '{}'",
+                input
+            );
 
             // Additional specific checks
             if input == "s/a/b/" {
                 assert_eq!(pattern, "a", "Simple pattern with correct arithmetic");
-                assert_eq!(replacement, "b", "Simple replacement with correct arithmetic");
+                assert_eq!(
+                    replacement, "b",
+                    "Simple replacement with correct arithmetic"
+                );
             }
         }
     }
@@ -90,7 +121,10 @@ mod realistic_arithmetic_kills {
 
         // With > 1: length 1 > 1 is false, use text directly
         // With >= 1: length 1 >= 1 is true, different behavior
-        assert_eq!(pattern, "mm", "Boundary case with length 1 should use > check");
+        assert_eq!(
+            pattern, "mm",
+            "Boundary case with length 1 should use > check"
+        );
 
         // Test just over boundary
         let two_chars = "m/"; // length = 2, non-alphabetic second char
@@ -108,8 +142,16 @@ mod realistic_arithmetic_kills {
             let (pattern, replacement, _) = extract_substitution_parts(input);
 
             // Should work correctly with proper arithmetic
-            assert!(!pattern.is_empty(), "Pattern extraction should work for '{}'", input);
-            assert!(!replacement.is_empty(), "Replacement extraction should work for '{}'", input);
+            assert!(
+                !pattern.is_empty(),
+                "Pattern extraction should work for '{}'",
+                input
+            );
+            assert!(
+                !replacement.is_empty(),
+                "Replacement extraction should work for '{}'",
+                input
+            );
         }
     }
 }
@@ -136,7 +178,10 @@ mod realistic_boolean_logic_kills {
         let (pattern2, _body, _) = extract_regex_parts(case2);
         // With &&: true && true && false = false (use text directly)
         // With ||: true || true || false = true (different behavior)
-        assert_eq!(pattern2, "mam", "Alphabetic second char should work with && logic");
+        assert_eq!(
+            pattern2, "mam",
+            "Alphabetic second char should work with && logic"
+        );
     }
 
     /// Kill != → == mutation in delimiter comparison
@@ -167,17 +212,30 @@ mod realistic_control_flow_kills {
     #[test]
     fn test_kill_match_arm_deletions_with_working_cases() {
         // First debug what the actual behavior is
-        let test_cases =
-            vec!["qr(test)", "qr[test]", "qr{test}", "qr<test>", "qr/test/", "qr#test#"];
+        let test_cases = vec![
+            "qr(test)", "qr[test]", "qr{test}", "qr<test>", "qr/test/", "qr#test#",
+        ];
 
         for input in test_cases {
             let (actual_pattern, _body, actual_mods) = extract_regex_parts(input);
             // Just ensure it doesn't crash and produces some output
-            assert!(!actual_pattern.is_empty(), "Pattern should not be empty for {}", input);
+            assert!(
+                !actual_pattern.is_empty(),
+                "Pattern should not be empty for {}",
+                input
+            );
 
             // The key test: ensure results are not "xyzzy" (kills FnValue mutations)
-            assert_ne!(actual_pattern, "xyzzy", "Pattern should not be xyzzy for {}", input);
-            assert_ne!(actual_mods, "xyzzy", "Modifiers should not be xyzzy for {}", input);
+            assert_ne!(
+                actual_pattern, "xyzzy",
+                "Pattern should not be xyzzy for {}",
+                input
+            );
+            assert_ne!(
+                actual_mods, "xyzzy",
+                "Modifiers should not be xyzzy for {}",
+                input
+            );
         }
 
         // Test with simple substitutions that work
@@ -187,7 +245,11 @@ mod realistic_control_flow_kills {
             let (pattern, replacement, _) = extract_substitution_parts(input);
             // Should extract something meaningful
             assert!(!pattern.is_empty(), "Pattern should extract for {}", input);
-            assert!(!replacement.is_empty(), "Replacement should extract for {}", input);
+            assert!(
+                !replacement.is_empty(),
+                "Replacement should extract for {}",
+                input
+            );
         }
     }
 }
@@ -224,7 +286,11 @@ fn test_comprehensive_realistic_mutation_coverage() {
     for (input, expected_pattern, expected_replacement, expected_mods) in sub_tests {
         let (pattern, replacement, mods) = extract_substitution_parts(input);
         assert_eq!(pattern, expected_pattern, "Sub pattern for {}", input);
-        assert_eq!(replacement, expected_replacement, "Sub replacement for {}", input);
+        assert_eq!(
+            replacement, expected_replacement,
+            "Sub replacement for {}",
+            input
+        );
         assert_eq!(mods, expected_mods, "Sub modifiers for {}", input);
 
         // Ensure no "xyzzy" mutations survive
@@ -303,12 +369,28 @@ fn test_mutation_invariants() {
         let tr_result = extract_transliteration_parts(input);
 
         // Results should never be "xyzzy" (kills FnValue mutations)
-        assert_ne!(regex_result.0, "xyzzy", "Regex pattern not xyzzy for {}", input);
-        assert_ne!(regex_result.1, "xyzzy", "Regex modifiers not xyzzy for {}", input);
+        assert_ne!(
+            regex_result.0, "xyzzy",
+            "Regex pattern not xyzzy for {}",
+            input
+        );
+        assert_ne!(
+            regex_result.1, "xyzzy",
+            "Regex modifiers not xyzzy for {}",
+            input
+        );
 
         assert_ne!(sub_result.0, "xyzzy", "Sub pattern not xyzzy for {}", input);
-        assert_ne!(sub_result.1, "xyzzy", "Sub replacement not xyzzy for {}", input);
-        assert_ne!(sub_result.2, "xyzzy", "Sub modifiers not xyzzy for {}", input);
+        assert_ne!(
+            sub_result.1, "xyzzy",
+            "Sub replacement not xyzzy for {}",
+            input
+        );
+        assert_ne!(
+            sub_result.2, "xyzzy",
+            "Sub modifiers not xyzzy for {}",
+            input
+        );
 
         assert_ne!(tr_result.0, "xyzzy", "TR search not xyzzy for {}", input);
         assert_ne!(tr_result.1, "xyzzy", "TR replace not xyzzy for {}", input);
@@ -319,7 +401,11 @@ fn test_mutation_invariants() {
         let sub_result2 = extract_substitution_parts(input);
         let tr_result2 = extract_transliteration_parts(input);
 
-        assert_eq!(regex_result, regex_result2, "Regex consistency for {}", input);
+        assert_eq!(
+            regex_result, regex_result2,
+            "Regex consistency for {}",
+            input
+        );
         assert_eq!(sub_result, sub_result2, "Sub consistency for {}", input);
         assert_eq!(tr_result, tr_result2, "TR consistency for {}", input);
     }

@@ -218,7 +218,10 @@ fn extract_qw_paths(rest: &str, out: &mut Vec<UseLibPath>) {
     let content = &inner[..end];
 
     for word in content.split_whitespace() {
-        out.push(UseLibPath { path: word.to_string(), from_findbin: false });
+        out.push(UseLibPath {
+            path: word.to_string(),
+            from_findbin: false,
+        });
     }
 }
 
@@ -265,8 +268,12 @@ fn extract_one_quoted(s: &str) -> Option<(String, bool, &str)> {
 }
 
 fn resolve_findbin_in_string(s: &str) -> (String, bool) {
-    let findbin_vars =
-        ["$FindBin::Bin", "$FindBin::RealBin", "${FindBin::Bin}", "${FindBin::RealBin}"];
+    let findbin_vars = [
+        "$FindBin::Bin",
+        "$FindBin::RealBin",
+        "${FindBin::Bin}",
+        "${FindBin::RealBin}",
+    ];
 
     for var in &findbin_vars {
         if let Some(rest) = s.strip_prefix(var) {
@@ -284,7 +291,11 @@ fn resolve_findbin_in_string(s: &str) -> (String, bool) {
 fn path_to_relative_string(path: &Path, workspace_root: &Path) -> Option<String> {
     if let Ok(rel) = path.strip_prefix(workspace_root) {
         let s = normalize_relative_path_string(rel.to_string_lossy().as_ref());
-        if s.is_empty() { Some(".".to_string()) } else { Some(s) }
+        if s.is_empty() {
+            Some(".".to_string())
+        } else {
+            Some(s)
+        }
     } else {
         let s = normalize_relative_path_string(path.to_string_lossy().as_ref());
         Some(s)

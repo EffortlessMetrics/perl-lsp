@@ -189,8 +189,11 @@ fn collect_release_health(root: &Path, days: u64) -> Result<ReleaseHealthMetrics
     let baseline = read_ci_baseline(root);
     let version = read_workspace_version(root);
 
-    let quarantined =
-        ledger.flaky_tests.iter().filter(|t| t.tier.as_deref() == Some("quarantine")).count();
+    let quarantined = ledger
+        .flaky_tests
+        .iter()
+        .filter(|t| t.tier.as_deref() == Some("quarantine"))
+        .count();
 
     let mut utilization: BTreeMap<String, Option<f64>> = BTreeMap::new();
     utilization.insert(
@@ -199,11 +202,17 @@ fn collect_release_health(root: &Path, days: u64) -> Result<ReleaseHealthMetrics
     );
     utilization.insert(
         "known_issues".to_string(),
-        budget_utilization(ledger.known_issues.len() as u64, ledger.budgets.max_known_issues),
+        budget_utilization(
+            ledger.known_issues.len() as u64,
+            ledger.budgets.max_known_issues,
+        ),
     );
     utilization.insert(
         "technical_debt".to_string(),
-        budget_utilization(ledger.technical_debt.len() as u64, ledger.budgets.max_technical_debt),
+        budget_utilization(
+            ledger.technical_debt.len() as u64,
+            ledger.budgets.max_technical_debt,
+        ),
     );
 
     let (pass_rate, runs, minutes) = match baseline.and_then(|b| b.summary) {
@@ -253,7 +262,12 @@ fn read_ci_baseline(root: &Path) -> Option<CiBaselineFile> {
 fn read_workspace_version(root: &Path) -> Option<String> {
     let raw = fs::read_to_string(root.join("Cargo.toml")).ok()?;
     let parsed: toml::Value = toml::from_str(&raw).ok()?;
-    parsed.get("workspace")?.get("package")?.get("version")?.as_str().map(str::to_string)
+    parsed
+        .get("workspace")?
+        .get("package")?
+        .get("version")?
+        .as_str()
+        .map(str::to_string)
 }
 
 /// Return `Some(percent)` of `cap` consumed by `count`, or `None` when the
@@ -290,17 +304,26 @@ fn print_table(m: &ReleaseHealthMetrics) {
     print_debt_row(
         "Flaky tests (quarantined)",
         m.quarantined_test_count,
-        m.debt_budget_utilization_pct.get("flaky_tests").copied().flatten(),
+        m.debt_budget_utilization_pct
+            .get("flaky_tests")
+            .copied()
+            .flatten(),
     );
     print_debt_row(
         "Known issues",
         m.known_issues_count,
-        m.debt_budget_utilization_pct.get("known_issues").copied().flatten(),
+        m.debt_budget_utilization_pct
+            .get("known_issues")
+            .copied()
+            .flatten(),
     );
     print_debt_row(
         "Technical debt items",
         m.technical_debt_count,
-        m.debt_budget_utilization_pct.get("technical_debt").copied().flatten(),
+        m.debt_budget_utilization_pct
+            .get("technical_debt")
+            .copied()
+            .flatten(),
     );
     if m.flaky_test_count != m.quarantined_test_count {
         println!(
@@ -331,7 +354,9 @@ fn print_table(m: &ReleaseHealthMetrics) {
 }
 
 fn print_debt_row(label: &str, count: usize, util: Option<f64>) {
-    let util_cell = util.map(|p| format!("{p:>5.1}%")).unwrap_or_else(|| "  n/a".to_string());
+    let util_cell = util
+        .map(|p| format!("{p:>5.1}%"))
+        .unwrap_or_else(|| "  n/a".to_string());
     println!("  {label:<32} {count:>5}   {util_cell}");
 }
 
@@ -382,7 +407,10 @@ mod tests {
     fn write_ci_baseline(root: &Path, summary_json: &str) -> Result<()> {
         let dir = root.join("target").join("metrics");
         fs::create_dir_all(&dir)?;
-        fs::write(dir.join("ci_baseline.json"), format!("{{\"summary\": {summary_json}}}"))?;
+        fs::write(
+            dir.join("ci_baseline.json"),
+            format!("{{\"summary\": {summary_json}}}"),
+        )?;
         Ok(())
     }
 
@@ -450,7 +478,10 @@ technical_debt:
         let m = collect_release_health(tmp.path(), 14)?;
         assert_eq!(m.current_release_version.as_deref(), Some("0.12.4"));
         assert_eq!(m.flaky_test_count, 3, "all flaky entries are counted");
-        assert_eq!(m.quarantined_test_count, 2, "only tier=quarantine count for budget");
+        assert_eq!(
+            m.quarantined_test_count, 2,
+            "only tier=quarantine count for budget"
+        );
         assert_eq!(m.known_issues_count, 2);
         assert_eq!(m.technical_debt_count, 3);
         // 2 / 10 = 20%, 2 / 20 = 10%, 3 / 30 = 10%
@@ -522,7 +553,11 @@ technical_debt:
         let m = collect_release_health(tmp.path(), 7)?;
         write_json_output(tmp.path(), &m)?;
 
-        let path = tmp.path().join(".ci").join("metrics").join("release-health.json");
+        let path = tmp
+            .path()
+            .join(".ci")
+            .join("metrics")
+            .join("release-health.json");
         let raw = fs::read_to_string(&path)?;
         let v: serde_json::Value = serde_json::from_str(&raw)?;
 
@@ -545,7 +580,9 @@ technical_debt:
         assert_eq!(metrics["debt_budget_utilization_pct"]["flaky_tests"], 0.0);
         assert_eq!(metrics["debt_budget_utilization_pct"]["known_issues"], 0.0);
         assert!(
-            (metrics["debt_budget_utilization_pct"]["technical_debt"].as_f64().unwrap_or(0.0)
+            (metrics["debt_budget_utilization_pct"]["technical_debt"]
+                .as_f64()
+                .unwrap_or(0.0)
                 - 6.7)
                 .abs()
                 < 0.05
@@ -556,7 +593,10 @@ technical_debt:
     #[test]
     fn print_table_does_not_panic_with_or_without_ci_baseline() -> Result<()> {
         let tmp = TempDir::new()?;
-        write_ledger(tmp.path(), "flaky_tests: []\nknown_issues: []\ntechnical_debt: []\n")?;
+        write_ledger(
+            tmp.path(),
+            "flaky_tests: []\nknown_issues: []\ntechnical_debt: []\n",
+        )?;
         let m = collect_release_health(tmp.path(), 30)?;
         print_table(&m);
         write_ci_baseline(
@@ -582,8 +622,14 @@ technical_debt: ~
         )?;
         let m = collect_release_health(tmp.path(), 30)?;
         assert_eq!(m.flaky_test_count, 0, "null flaky_tests treated as empty");
-        assert_eq!(m.known_issues_count, 0, "null known_issues treated as empty");
-        assert_eq!(m.technical_debt_count, 0, "null technical_debt treated as empty");
+        assert_eq!(
+            m.known_issues_count, 0,
+            "null known_issues treated as empty"
+        );
+        assert_eq!(
+            m.technical_debt_count, 0,
+            "null technical_debt treated as empty"
+        );
         Ok(())
     }
 }

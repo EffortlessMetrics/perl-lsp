@@ -42,7 +42,12 @@ impl DapWorkflowSession {
         let (tx, rx) = channel();
         adapter.set_event_sender(tx);
 
-        let mut session = Self { adapter, rx, timeout, seq: 0 };
+        let mut session = Self {
+            adapter,
+            rx,
+            timeout,
+            seq: 0,
+        };
 
         let resp = session.request("initialize", None);
         session.expect_success(&resp, "initialize")?;
@@ -123,7 +128,11 @@ impl DapWorkflowSession {
             _ => return Err("expected Event message for `stopped`".to_string()),
         };
 
-        let reason = body.get("reason").and_then(Value::as_str).unwrap_or("unknown").to_string();
+        let reason = body
+            .get("reason")
+            .and_then(Value::as_str)
+            .unwrap_or("unknown")
+            .to_string();
 
         let thread_id = body.get("threadId").and_then(Value::as_i64).unwrap_or(1);
 
@@ -147,7 +156,10 @@ impl DapWorkflowSession {
             .ok_or("stackTrace body missing `stackFrames` array")?;
 
         let frame = frames.first().ok_or("stackTrace returned empty frames")?;
-        let frame_id = frame.get("id").and_then(Value::as_i64).ok_or("stack frame missing `id`")?;
+        let frame_id = frame
+            .get("id")
+            .and_then(Value::as_i64)
+            .ok_or("stack frame missing `id`")?;
         let source_path = frame
             .get("source")
             .and_then(|s| s.get("path"))
@@ -294,7 +306,13 @@ impl DapWorkflowSession {
     /// Assert response is a success for `command`; return the body.
     pub fn expect_success(&self, msg: &DapMessage, command: &str) -> Result<Option<Value>, String> {
         match msg {
-            DapMessage::Response { success, command: actual, body, message, .. } => {
+            DapMessage::Response {
+                success,
+                command: actual,
+                body,
+                message,
+                ..
+            } => {
                 if actual != command {
                     return Err(format!("expected `{command}` response, got `{actual}`"));
                 }
@@ -352,5 +370,8 @@ pub fn workflow_timeout() -> Duration {
 
 /// Returns `true` when `perl` is on `PATH`.
 pub fn perl_available() -> bool {
-    std::process::Command::new("perl").arg("--version").output().is_ok()
+    std::process::Command::new("perl")
+        .arg("--version")
+        .output()
+        .is_ok()
 }

@@ -22,7 +22,11 @@ pub fn create_extract_subroutine_action(
     let signature = if params.is_empty() {
         format!("sub {} {{\n", sub_name)
     } else {
-        format!("sub {} {{\n    my ({}) = @_;\n", sub_name, params.join(", "))
+        format!(
+            "sub {} {{\n    my ({}) = @_;\n",
+            sub_name,
+            params.join(", ")
+        )
     };
 
     // Find insertion position (before current sub or at end)
@@ -32,7 +36,12 @@ pub fn create_extract_subroutine_action(
     let call = if returns.is_empty() {
         format!("{}({});", sub_name, params.join(", "))
     } else {
-        format!("my {} = {}({});", returns.join(", "), sub_name, params.join(", "))
+        format!(
+            "my {} = {}({});",
+            returns.join(", "),
+            sub_name,
+            params.join(", ")
+        )
     };
 
     CodeAction {
@@ -43,11 +52,17 @@ pub fn create_extract_subroutine_action(
             changes: vec![
                 // Insert function definition
                 TextEdit {
-                    location: SourceLocation { start: insert_pos, end: insert_pos },
+                    location: SourceLocation {
+                        start: insert_pos,
+                        end: insert_pos,
+                    },
                     new_text: format!("{}{}\n}}\n\n", signature, body_text),
                 },
                 // Replace block with function call
-                TextEdit { location: node.location, new_text: call },
+                TextEdit {
+                    location: node.location,
+                    new_text: call,
+                },
             ],
         },
         is_preferred: false,
@@ -138,9 +153,9 @@ fn extract_last_expression_variable(node: &Node) -> Option<String> {
             extract_last_expression_variable(expression)
         }
         NodeKind::Variable { name, .. } => Some(name.clone()),
-        NodeKind::Return { value } => {
-            value.as_ref().and_then(|v| extract_last_expression_variable(v))
-        }
+        NodeKind::Return { value } => value
+            .as_ref()
+            .and_then(|v| extract_last_expression_variable(v)),
         _ => None,
     }
 }
@@ -168,7 +183,11 @@ fn collect_variables_inner(node: &Node, vars: &mut HashSet<String>, locals: &mut
         NodeKind::ExpressionStatement { expression } => {
             collect_variables_inner(expression, vars, locals);
         }
-        NodeKind::VariableDeclaration { variable, initializer, .. } => {
+        NodeKind::VariableDeclaration {
+            variable,
+            initializer,
+            ..
+        } => {
             // The initializer may reference outer variables — collect those first.
             if let Some(init) = initializer {
                 collect_variables_inner(init, vars, locals);
@@ -178,7 +197,11 @@ fn collect_variables_inner(node: &Node, vars: &mut HashSet<String>, locals: &mut
                 locals.insert(name.clone());
             }
         }
-        NodeKind::VariableListDeclaration { variables, initializer, .. } => {
+        NodeKind::VariableListDeclaration {
+            variables,
+            initializer,
+            ..
+        } => {
             // Initializer may reference outer variables.
             if let Some(init) = initializer {
                 collect_variables_inner(init, vars, locals);
@@ -209,7 +232,12 @@ fn collect_variables_inner(node: &Node, vars: &mut HashSet<String>, locals: &mut
                 collect_variables_inner(arg, vars, locals);
             }
         }
-        NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
+        NodeKind::If {
+            condition,
+            then_branch,
+            elsif_branches,
+            else_branch,
+        } => {
             collect_variables_inner(condition, vars, locals);
             collect_variables_inner(then_branch, vars, locals);
             for (cond, branch) in elsif_branches {
@@ -220,11 +248,19 @@ fn collect_variables_inner(node: &Node, vars: &mut HashSet<String>, locals: &mut
                 collect_variables_inner(branch, vars, locals);
             }
         }
-        NodeKind::While { condition, body, .. } => {
+        NodeKind::While {
+            condition, body, ..
+        } => {
             collect_variables_inner(condition, vars, locals);
             collect_variables_inner(body, vars, locals);
         }
-        NodeKind::For { init, condition, update, body, .. } => {
+        NodeKind::For {
+            init,
+            condition,
+            update,
+            body,
+            ..
+        } => {
             if let Some(init) = init {
                 collect_variables_inner(init, vars, locals);
             }

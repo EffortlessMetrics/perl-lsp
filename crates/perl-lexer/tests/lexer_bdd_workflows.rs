@@ -47,8 +47,16 @@ fn scenario_division_and_regex_are_disambiguated_by_mode() {
     let division_tokens = collect_tokens(division_input);
 
     scenario.then("'/' is emitted as Division and not as RegexMatch");
-    assert!(division_tokens.iter().any(|t| matches!(t.token_type, TokenType::Division)));
-    assert!(!division_tokens.iter().any(|t| matches!(t.token_type, TokenType::RegexMatch)));
+    assert!(
+        division_tokens
+            .iter()
+            .any(|t| matches!(t.token_type, TokenType::Division))
+    );
+    assert!(
+        !division_tokens
+            .iter()
+            .any(|t| matches!(t.token_type, TokenType::RegexMatch))
+    );
 
     scenario.given("an expression starts with '/' so lexer expects a term");
     let regex_input = "/answer/";
@@ -57,7 +65,11 @@ fn scenario_division_and_regex_are_disambiguated_by_mode() {
     let regex_tokens = collect_tokens(regex_input);
 
     scenario.then("the token stream contains RegexMatch");
-    assert!(regex_tokens.iter().any(|t| matches!(t.token_type, TokenType::RegexMatch)));
+    assert!(
+        regex_tokens
+            .iter()
+            .any(|t| matches!(t.token_type, TokenType::RegexMatch))
+    );
 }
 
 #[test]
@@ -102,7 +114,11 @@ fn scenario_quote_operators_require_delimiters() {
             "Transliteration" => matches!(first.token_type, TokenType::Transliteration),
             _ => false,
         };
-        assert!(is_expected, "input {input:?} should be {kind_name}, got {:?}", first.token_type);
+        assert!(
+            is_expected,
+            "input {input:?} should be {kind_name}, got {:?}",
+            first.token_type
+        );
     }
 }
 
@@ -116,12 +132,19 @@ fn scenario_heredoc_is_emitted_as_start_then_body() {
     let tokens = collect_tokens_with_heredoc_bodies(input);
 
     scenario.then("the stream contains HeredocStart and HeredocBody in order");
-    let start_idx = tokens.iter().position(|t| matches!(t.token_type, TokenType::HeredocStart));
-    let body_idx = tokens.iter().position(|t| matches!(t.token_type, TokenType::HeredocBody(_)));
+    let start_idx = tokens
+        .iter()
+        .position(|t| matches!(t.token_type, TokenType::HeredocStart));
+    let body_idx = tokens
+        .iter()
+        .position(|t| matches!(t.token_type, TokenType::HeredocBody(_)));
 
     assert!(start_idx.is_some(), "expected HeredocStart token");
     assert!(body_idx.is_some(), "expected HeredocBody token");
-    assert!(start_idx < body_idx, "HeredocStart should appear before HeredocBody");
+    assert!(
+        start_idx < body_idx,
+        "HeredocStart should appear before HeredocBody"
+    );
 }
 
 #[test]
@@ -152,8 +175,16 @@ fn scenario_hash_subscript_context_suppresses_quote_op_detection() {
         );
     }
 
-    assert!(tokens.iter().any(|t| matches!(t.token_type, TokenType::LeftBrace)));
-    assert!(tokens.iter().any(|t| matches!(t.token_type, TokenType::RightBrace)));
+    assert!(
+        tokens
+            .iter()
+            .any(|t| matches!(t.token_type, TokenType::LeftBrace))
+    );
+    assert!(
+        tokens
+            .iter()
+            .any(|t| matches!(t.token_type, TokenType::RightBrace))
+    );
 }
 
 #[test]
@@ -169,12 +200,18 @@ fn scenario_sigil_brace_sequences_split_into_sigil_and_left_brace() {
 
         scenario.then("the sigil remains separate from the following left brace");
         assert!(
-            matches!(tokens.first().map(|token| &token.token_type), Some(TokenType::Identifier(_))),
+            matches!(
+                tokens.first().map(|token| &token.token_type),
+                Some(TokenType::Identifier(_))
+            ),
             "expected leading sigil token for {input:?}, got {:?}",
             tokens.first().map(|token| &token.token_type)
         );
         assert!(
-            matches!(tokens.get(1).map(|token| &token.token_type), Some(TokenType::LeftBrace)),
+            matches!(
+                tokens.get(1).map(|token| &token.token_type),
+                Some(TokenType::LeftBrace)
+            ),
             "expected LeftBrace after sigil for {input:?}, got {:?}",
             tokens.get(1).map(|token| &token.token_type)
         );

@@ -60,7 +60,10 @@ mod degraded_mode_tests {
         let mode = route_index_access(Some(&coordinator));
 
         // Should be in degraded state due to parse storm
-        assert!(mode.is_partial(), "Expected Partial mode during parse storm");
+        assert!(
+            mode.is_partial(),
+            "Expected Partial mode during parse storm"
+        );
         assert!(
             mode.description().contains("parse storm"),
             "Expected description to mention parse storm, got: {}",
@@ -215,7 +218,11 @@ mod handler_integration_tests {
             });
 
             let result = server.did_open(did_open);
-            assert!(result.is_ok(), "did_open for file {} should succeed in Building state", i);
+            assert!(
+                result.is_ok(),
+                "did_open for file {} should succeed in Building state",
+                i
+            );
         }
     }
 
@@ -260,6 +267,9 @@ sub nested_sub {
         });
 
         let result = server.did_open(did_open);
-        assert!(result.is_ok(), "did_open should handle complex Perl in Building state");
+        assert!(
+            result.is_ok(),
+            "did_open should handle complex Perl in Building state"
+        );
     }
 }

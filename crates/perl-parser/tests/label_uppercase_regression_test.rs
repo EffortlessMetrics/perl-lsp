@@ -19,12 +19,18 @@ fn test_uppercase_label_parsed() -> Result<(), Box<dyn std::error::Error>> {
     let mut parser = Parser::new(source);
     let ast = parser.parse()?;
 
-    assert!(parser.errors().is_empty(), "uppercase label should parse without errors");
+    assert!(
+        parser.errors().is_empty(),
+        "uppercase label should parse without errors"
+    );
     assert!(
         has_node_kind(&ast, "LabeledStatement"),
         "Expected LabeledStatement for `OUTER:` label"
     );
-    assert!(has_node_kind(&ast, "LoopControl"), "Expected LoopControl for `last OUTER`");
+    assert!(
+        has_node_kind(&ast, "LoopControl"),
+        "Expected LoopControl for `last OUTER`"
+    );
 
     Ok(())
 }

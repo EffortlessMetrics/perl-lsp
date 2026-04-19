@@ -370,8 +370,9 @@ impl PullDiagnosticsProvider {
     ) -> Vec<LspDiagnostic> {
         if let Some(ast) = &doc_state.ast {
             let provider = DiagnosticsProvider::new(ast, doc_state.text.clone());
-            let source_path =
-                url::Url::parse(&uri.to_string()).ok().and_then(|value| value.to_file_path().ok());
+            let source_path = url::Url::parse(&uri.to_string())
+                .ok()
+                .and_then(|value| value.to_file_path().ok());
 
             // Build module resolver using context include_paths
             let resolver = |module: &str| {
@@ -472,8 +473,10 @@ impl PullDiagnosticsProvider {
 
         match report {
             DocumentDiagnosticReport::Full(full) => {
-                let RelatedFullDocumentDiagnosticReport { full_document_diagnostic_report, .. } =
-                    full;
+                let RelatedFullDocumentDiagnosticReport {
+                    full_document_diagnostic_report,
+                    ..
+                } = full;
                 WorkspaceDocumentDiagnosticReport::Full(WorkspaceFullDocumentDiagnosticReport {
                     uri,
                     version,
@@ -731,9 +734,11 @@ impl PullDiagnosticsProvider {
         context: &PullDiagnosticsContext,
     ) -> LspDiagnostic {
         let (offset, base_message) = match error {
-            ParseError::UnexpectedToken { location, expected, found } => {
-                (*location, format!("Expected {expected}, found {found}"))
-            }
+            ParseError::UnexpectedToken {
+                location,
+                expected,
+                found,
+            } => (*location, format!("Expected {expected}, found {found}")),
             ParseError::SyntaxError { location, message } => (*location, message.clone()),
             ParseError::UnexpectedEof => (text.len(), "Unexpected end of input".to_string()),
             ParseError::LexerError { message } => (0, message.clone()),
@@ -790,10 +795,17 @@ impl PullDiagnosticsProvider {
 }
 
 fn lsp_range_from_offsets(text: &str, start: usize, end: usize) -> Range {
-    let (start, end) = if start <= end { (start, end) } else { (end, start) };
+    let (start, end) = if start <= end {
+        (start, end)
+    } else {
+        (end, start)
+    };
     let (start_line, start_col) = offset_to_utf16_line_col(text, start);
     let (end_line, end_col) = offset_to_utf16_line_col(text, end);
-    Range::new(Position::new(start_line, start_col), Position::new(end_line, end_col))
+    Range::new(
+        Position::new(start_line, start_col),
+        Position::new(end_line, end_col),
+    )
 }
 
 fn to_lsp_severity(severity: InternalDiagnosticSeverity) -> LspDiagnosticSeverity {
@@ -971,7 +983,9 @@ mod tests {
         let diag = items
             .iter()
             .find(|d| {
-                d.code.as_ref().map(|c| matches!(c, NumberOrString::String(s) if s == "PL100"))
+                d.code
+                    .as_ref()
+                    .map(|c| matches!(c, NumberOrString::String(s) if s == "PL100"))
                     == Some(true)
             })
             .ok_or("expected PL100 (missing strict) diagnostic for bare print statement")?;
@@ -993,18 +1007,29 @@ mod tests {
         let code = "use strict; use warnings; my $x = 1; my $x = 2;\n";
         let items = get_full_items(provider.get_document_diagnostics(&uri, code, None));
         if let Some(diag) = items.iter().find(|d| {
-            d.code.as_ref().map(|c| matches!(c, NumberOrString::String(s) if s == "PL105"))
+            d.code
+                .as_ref()
+                .map(|c| matches!(c, NumberOrString::String(s) if s == "PL105"))
                 == Some(true)
         }) {
             let data = diag.data.as_ref().ok_or("data should be Some for PL105")?;
             assert_eq!(data["code"], "PL105");
-            assert_eq!(data["fixable"], true, "PL105 now has a quick-fix; fixable must stay true");
+            assert_eq!(
+                data["fixable"], true,
+                "PL105 now has a quick-fix; fixable must stay true"
+            );
         }
         // Also verify that every diagnostic with a code has a valid data object
         for d in &items {
             if d.code.is_some() {
-                let data = d.data.as_ref().ok_or("data must be Some when code is Some")?;
-                assert!(data["fixable"].is_boolean(), "fixable must always be a boolean");
+                let data = d
+                    .data
+                    .as_ref()
+                    .ok_or("data must be Some when code is Some")?;
+                assert!(
+                    data["fixable"].is_boolean(),
+                    "fixable must always be a boolean"
+                );
             }
         }
         Ok(())
@@ -1017,7 +1042,10 @@ mod tests {
         let items = get_full_items(provider.get_document_diagnostics(&uri, "my $x = ;", None));
         for diag in &items {
             if diag.code.is_some() {
-                let data = diag.data.as_ref().ok_or("data must be Some when code is Some")?;
+                let data = diag
+                    .data
+                    .as_ref()
+                    .ok_or("data must be Some when code is Some")?;
                 assert!(data.is_object(), "data must be a JSON object");
                 assert!(data["code"].is_string());
                 assert!(data["category"].is_string());
@@ -1042,7 +1070,10 @@ mod tests {
             },
         );
 
-        assert_eq!(diagnostic.code, Some(NumberOrString::String("PL302".to_string())));
+        assert_eq!(
+            diagnostic.code,
+            Some(NumberOrString::String("PL302".to_string()))
+        );
         assert_eq!(diagnostic.severity, Some(LspDiagnosticSeverity::WARNING));
         let data = diagnostic.data.as_ref().ok_or("data should be populated")?;
         assert_eq!(data["code"], "PL302");
@@ -1053,8 +1084,12 @@ mod tests {
     fn perlcritic_policy_codes_are_marked_fixable_in_diagnostic_data() {
         assert!(is_fixable_diagnostic("PL502"));
         assert!(is_fixable_diagnostic("PL503"));
-        assert!(is_fixable_diagnostic("TestingAndDebugging::RequireUseStrict"));
-        assert!(is_fixable_diagnostic("TestingAndDebugging::RequireUseWarnings"));
+        assert!(is_fixable_diagnostic(
+            "TestingAndDebugging::RequireUseStrict"
+        ));
+        assert!(is_fixable_diagnostic(
+            "TestingAndDebugging::RequireUseWarnings"
+        ));
         assert!(is_fixable_diagnostic("InputOutput::RequireThreeArgOpen"));
         assert!(is_fixable_diagnostic("Variables::ProhibitUnusedVariables"));
     }
@@ -1073,7 +1108,10 @@ mod tests {
             },
         );
 
-        assert_eq!(diagnostic.code, Some(NumberOrString::String("PL002".to_string())));
+        assert_eq!(
+            diagnostic.code,
+            Some(NumberOrString::String("PL002".to_string()))
+        );
         assert_eq!(diagnostic.severity, Some(LspDiagnosticSeverity::WARNING));
         let data = diagnostic.data.as_ref().ok_or("data should be populated")?;
         assert_eq!(data["code"], "PL002");

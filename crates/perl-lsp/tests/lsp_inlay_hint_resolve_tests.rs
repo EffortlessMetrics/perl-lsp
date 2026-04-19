@@ -52,8 +52,12 @@ fn lsp_inlay_hint_resolve_adds_tooltip() -> Result<(), Box<dyn std::error::Error
         params: Some(hint.clone()),
     };
 
-    let res = srv.handle_request(req).ok_or("Failed to handle inlayHint/resolve request")?;
-    let result = res.result.ok_or("No result in inlayHint/resolve response")?;
+    let res = srv
+        .handle_request(req)
+        .ok_or("Failed to handle inlayHint/resolve request")?;
+    let result = res
+        .result
+        .ok_or("No result in inlayHint/resolve response")?;
 
     // Should add tooltip
     assert!(result.get("tooltip").is_some(), "should add tooltip");
@@ -106,8 +110,12 @@ fn lsp_inlay_hint_resolve_preserves_data() -> Result<(), Box<dyn std::error::Err
         params: Some(hint.clone()),
     };
 
-    let res = srv.handle_request(req).ok_or("Failed to handle inlayHint/resolve request")?;
-    let result = res.result.ok_or("No result in inlayHint/resolve response")?;
+    let res = srv
+        .handle_request(req)
+        .ok_or("Failed to handle inlayHint/resolve request")?;
+    let result = res
+        .result
+        .ok_or("No result in inlayHint/resolve response")?;
 
     // Data field should be preserved
     assert_eq!(result["data"], hint["data"]);
@@ -154,8 +162,12 @@ fn lsp_inlay_hint_resolve_no_op_when_complete() -> Result<(), Box<dyn std::error
         params: Some(hint.clone()),
     };
 
-    let res = srv.handle_request(req).ok_or("Failed to handle inlayHint/resolve request")?;
-    let result = res.result.ok_or("No result in inlayHint/resolve response")?;
+    let res = srv
+        .handle_request(req)
+        .ok_or("Failed to handle inlayHint/resolve request")?;
+    let result = res
+        .result
+        .ok_or("No result in inlayHint/resolve response")?;
 
     // Should return same hint
     assert_eq!(result["tooltip"], "Already has tooltip");
@@ -239,22 +251,36 @@ fn lsp_inlay_hint_resolve_adds_label_location() -> Result<(), Box<dyn std::error
         params: Some(hint),
     };
 
-    let res = srv.handle_request(req).ok_or("Failed to handle inlayHint/resolve request")?;
-    let result = res.result.ok_or("No result in inlayHint/resolve response")?;
+    let res = srv
+        .handle_request(req)
+        .ok_or("Failed to handle inlayHint/resolve request")?;
+    let result = res
+        .result
+        .ok_or("No result in inlayHint/resolve response")?;
 
     // Must have labelDetails with a location field
-    let label_details = result.get("labelDetails").ok_or("labelDetails field missing")?;
-    let location = label_details.get("location").ok_or("labelDetails.location field missing")?;
+    let label_details = result
+        .get("labelDetails")
+        .ok_or("labelDetails field missing")?;
+    let location = label_details
+        .get("location")
+        .ok_or("labelDetails.location field missing")?;
 
     // location must have uri and range
-    assert!(location.get("uri").is_some(), "labelDetails.location must have uri, got: {location}");
+    assert!(
+        location.get("uri").is_some(),
+        "labelDetails.location must have uri, got: {location}"
+    );
     assert!(
         location.get("range").is_some(),
         "labelDetails.location must have range, got: {location}"
     );
 
     // Tooltip should still be present (no regression)
-    assert!(result.get("tooltip").is_some(), "tooltip should still be populated");
+    assert!(
+        result.get("tooltip").is_some(),
+        "tooltip should still be populated"
+    );
 
     Ok(())
 }
@@ -286,7 +312,9 @@ fn lsp_inlay_hint_resolve_handles_invalid_params() -> Result<(), Box<dyn std::er
         params: None,
     };
 
-    let res = srv.handle_request(req).ok_or("Failed to handle inlayHint/resolve request")?;
+    let res = srv
+        .handle_request(req)
+        .ok_or("Failed to handle inlayHint/resolve request")?;
 
     // Should return error for invalid params
     assert!(res.error.is_some());

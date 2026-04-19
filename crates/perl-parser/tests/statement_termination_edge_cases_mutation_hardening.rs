@@ -21,7 +21,10 @@ use perl_parser::{ParseError, Parser};
 fn test_nested_statement_termination_edge_cases() {
     let test_cases = vec![
         // Basic statement sequences with proper termination
-        ("my $x = 1; my $y = 2; my $z = 3;", "Sequential statements should parse correctly"),
+        (
+            "my $x = 1; my $y = 2; my $z = 3;",
+            "Sequential statements should parse correctly",
+        ),
         // Statement modifiers with complex expressions
         (
             "print $x if defined $y && $z > 0;",
@@ -212,25 +215,65 @@ fn test_parsing_timeout_prevention() {
 fn test_statement_modifier_termination_precedence() {
     let test_cases = vec![
         // Simple statement modifiers
-        ("print 'hello' if $debug;", true, "Simple if modifier should terminate"),
-        ("return unless $error;", true, "Simple unless modifier should terminate"),
-        ("next while $continue;", true, "Simple while modifier should terminate"),
-        ("last until $done;", true, "Simple until modifier should terminate"),
+        (
+            "print 'hello' if $debug;",
+            true,
+            "Simple if modifier should terminate",
+        ),
+        (
+            "return unless $error;",
+            true,
+            "Simple unless modifier should terminate",
+        ),
+        (
+            "next while $continue;",
+            true,
+            "Simple while modifier should terminate",
+        ),
+        (
+            "last until $done;",
+            true,
+            "Simple until modifier should terminate",
+        ),
         ("redo for $i;", true, "Simple for modifier should terminate"),
         // Chained statement modifiers (not typically valid Perl, but should handle gracefully)
-        ("print 'test' if $a unless $b;", false, "Chained modifiers should not parse successfully"),
-        ("return if $x while $y;", false, "Invalid chained modifiers should fail"),
+        (
+            "print 'test' if $a unless $b;",
+            false,
+            "Chained modifiers should not parse successfully",
+        ),
+        (
+            "return if $x while $y;",
+            false,
+            "Invalid chained modifiers should fail",
+        ),
         // Statement modifiers with complex expressions
-        ("print $x if defined $x && $x > 0;", true, "Complex if condition should terminate"),
-        ("return $y unless $error || $timeout;", true, "Complex unless condition should terminate"),
+        (
+            "print $x if defined $x && $x > 0;",
+            true,
+            "Complex if condition should terminate",
+        ),
+        (
+            "return $y unless $error || $timeout;",
+            true,
+            "Complex unless condition should terminate",
+        ),
         (
             "process($item) for my $item (@list);",
             true,
             "For modifier with declaration should terminate",
         ),
         // Statement modifiers in blocks
-        ("{ print $x if $debug; }", true, "Block with modifier should terminate"),
-        ("sub test { return $x if $x > 0; }", true, "Sub with modifier should terminate"),
+        (
+            "{ print $x if $debug; }",
+            true,
+            "Block with modifier should terminate",
+        ),
+        (
+            "sub test { return $x if $x > 0; }",
+            true,
+            "Sub with modifier should terminate",
+        ),
         // Multiple statements with modifiers
         (
             "print $a if $debug; print $b unless $quiet;",
@@ -295,15 +338,33 @@ fn test_termination_special_token_edge_cases() {
         // Comments and termination
         ("# comment", "Comment without semicolon should parse"),
         ("# comment\n", "Comment with newline should parse"),
-        ("; # comment after semicolon", "Comment after semicolon should parse"),
+        (
+            "; # comment after semicolon",
+            "Comment after semicolon should parse",
+        ),
         // Mixed terminators
-        ("my $x = 1; # comment\nmy $y = 2;", "Mixed semicolons and newlines should parse"),
+        (
+            "my $x = 1; # comment\nmy $y = 2;",
+            "Mixed semicolons and newlines should parse",
+        ),
         // Special characters that might confuse termination
-        ("my $x = ';'; my $y = \";\";", "Quoted semicolons should not terminate statements"),
-        ("my $x = q{;}; my $y = qq{;};", "Quoted semicolons in q/qq should not terminate"),
+        (
+            "my $x = ';'; my $y = \";\";",
+            "Quoted semicolons should not terminate statements",
+        ),
+        (
+            "my $x = q{;}; my $y = qq{;};",
+            "Quoted semicolons in q/qq should not terminate",
+        ),
         // Operators that might be confused with terminators
-        ("my $x = $a <=> $b;", "Spaceship operator should not cause termination issues"),
-        ("my $x = $a // $b;", "Defined-or operator should not cause termination issues"),
+        (
+            "my $x = $a <=> $b;",
+            "Spaceship operator should not cause termination issues",
+        ),
+        (
+            "my $x = $a // $b;",
+            "Defined-or operator should not cause termination issues",
+        ),
     ];
 
     for (perl_code, description) in edge_cases {
@@ -340,7 +401,8 @@ fn test_deeply_nested_statement_termination() {
     let nested_parens = "(".repeat(5) + "1" + &")".repeat(5) + ";";
     let nested_arrays = "[".repeat(5) + "1" + &"]".repeat(5) + ";";
 
-    let test_cases = vec![
+    let test_cases =
+        vec![
         (nested_blocks, "Deeply nested blocks should terminate properly"),
         (nested_parens, "Deeply nested parentheses should terminate properly"),
         (nested_arrays, "Deeply nested arrays should terminate properly"),

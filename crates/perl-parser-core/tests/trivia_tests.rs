@@ -65,10 +65,20 @@ fn format_with_trivia_includes_trivia_text() -> Result<(), Box<dyn std::error::E
         range,
     );
 
-    let leading = vec![TriviaToken::new(Trivia::Whitespace("  ".to_string()), range)];
-    let nwt = NodeWithTrivia { node, leading_trivia: leading, trailing_trivia: vec![] };
+    let leading = vec![TriviaToken::new(
+        Trivia::Whitespace("  ".to_string()),
+        range,
+    )];
+    let nwt = NodeWithTrivia {
+        node,
+        leading_trivia: leading,
+        trailing_trivia: vec![],
+    };
 
     let formatted = format_with_trivia(&nwt);
-    assert!(formatted.contains("  "), "should include leading whitespace trivia");
+    assert!(
+        formatted.contains("  "),
+        "should include leading whitespace trivia"
+    );
     Ok(())
 }

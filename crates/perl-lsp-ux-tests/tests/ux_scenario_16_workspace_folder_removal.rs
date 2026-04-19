@@ -53,12 +53,15 @@ fn scenario_16_removed_workspace_folder_symbols_disappear() {
     }
 
     let harness = UxHarness::new(
-        ScenarioConfig { timeout: Duration::from_secs(20), ..Default::default() }
-            .env("PERL_LSP_WORKSPACE", "1")
-            .with_workspace_folder("svc-a", "svc-a")
-            .with_workspace_folder("svc-b", "svc-b")
-            .with_file("svc-a/lib/ModuleA.pm", MODULE_A)
-            .with_file("svc-b/lib/ModuleB.pm", MODULE_B),
+        ScenarioConfig {
+            timeout: Duration::from_secs(20),
+            ..Default::default()
+        }
+        .env("PERL_LSP_WORKSPACE", "1")
+        .with_workspace_folder("svc-a", "svc-a")
+        .with_workspace_folder("svc-b", "svc-b")
+        .with_file("svc-a/lib/ModuleA.pm", MODULE_A)
+        .with_file("svc-b/lib/ModuleB.pm", MODULE_B),
     )
     .expect("Failed to create UX harness");
 

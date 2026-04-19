@@ -179,7 +179,9 @@ fn test_enhanced_cancel_request_with_provider_context_ac1() -> Result<(), Box<dy
                 Some(-32800),
                 "Should return RequestCancelled error code"
             );
-            let message = error["message"].as_str().ok_or("Error message should be a string")?;
+            let message = error["message"]
+                .as_str()
+                .ok_or("Error message should be a string")?;
             assert!(
                 message.contains("completion"),
                 "Error message should reference completion provider"
@@ -291,10 +293,14 @@ fn test_multiple_provider_cancellation_with_context_ac1() -> Result<(), Box<dyn 
         if let Some(resp) = response {
             if let Some(error) = resp.get("error") {
                 assert_eq!(error["code"].as_i64(), Some(-32800));
-                let message =
-                    error["message"].as_str().ok_or("Error message should be a string")?;
-                let method_name =
-                    method.split('/').next_back().ok_or("Invalid method format")?.to_string();
+                let message = error["message"]
+                    .as_str()
+                    .ok_or("Error message should be a string")?;
+                let method_name = method
+                    .split('/')
+                    .next_back()
+                    .ok_or("Invalid method format")?
+                    .to_string();
                 assert!(
                     message.to_lowercase().contains(&method_name.to_lowercase()),
                     "Error message should reference specific provider: {}",
@@ -339,7 +345,10 @@ fn test_json_rpc_protocol_compliance_ac1() -> Result<(), Box<dyn std::error::Err
 
     // Verify server remains stable and doesn't crash
     let health_check = read_response_only_timeout(&fixture.server, Duration::from_millis(200));
-    assert!(health_check.is_none(), "$/cancelRequest notification should not produce response");
+    assert!(
+        health_check.is_none(),
+        "$/cancelRequest notification should not produce response"
+    );
     assert!(
         fixture.server.is_alive(),
         "Server should remain alive after invalid cancellation request"
@@ -357,7 +366,10 @@ fn test_json_rpc_protocol_compliance_ac1() -> Result<(), Box<dyn std::error::Err
 
     // Should handle gracefully without response
     let response = read_response_only_timeout(&fixture.server, Duration::from_millis(200));
-    assert!(response.is_none(), "Non-existent request cancellation should not produce response");
+    assert!(
+        response.is_none(),
+        "Non-existent request cancellation should not produce response"
+    );
 
     // Test 3: JSON-RPC structure validation
     let test_id = 3001;
@@ -468,7 +480,9 @@ fn test_atomic_cancellation_token_operations_ac2() -> Result<(), Box<dyn std::er
     });
 
     // Wait for cancel thread
-    cancel_handle.join().map_err(|e| format!("Cancel thread panicked: {:?}", e))?;
+    cancel_handle
+        .join()
+        .map_err(|e| format!("Cancel thread panicked: {:?}", e))?;
 
     // Signal workers to stop
     all_done.store(true, Ordering::Relaxed);
@@ -492,13 +506,23 @@ fn test_atomic_cancellation_token_operations_ac2() -> Result<(), Box<dyn std::er
     assert!(token.is_cancelled(), "Token should be in cancelled state");
 
     // Analyze results for thread safety
-    let observed_count = thread_results.iter().filter(|(_, observed, _)| *observed).count();
+    let observed_count = thread_results
+        .iter()
+        .filter(|(_, observed, _)| *observed)
+        .count();
 
-    assert!(observed_count > 0, "At least some threads should observe cancellation");
+    assert!(
+        observed_count > 0,
+        "At least some threads should observe cancellation"
+    );
 
     // Verify all threads did meaningful work
     for (thread_id, _, check_count) in &thread_results {
-        assert!(*check_count > 0, "Thread {} should have performed at least one check", thread_id);
+        assert!(
+            *check_count > 0,
+            "Thread {} should have performed at least one check",
+            thread_id
+        );
     }
 
     Ok(())
@@ -579,12 +603,19 @@ fn test_cancellation_registry_concurrent_operations_ac2() -> Result<(), Box<dyn 
         }
     }
 
-    let cleanup_results =
-        cleanup_handle.join().map_err(|e| format!("Cleanup thread panicked: {:?}", e))?;
+    let cleanup_results = cleanup_handle
+        .join()
+        .map_err(|e| format!("Cleanup thread panicked: {:?}", e))?;
 
     // Validate thread safety - no deadlocks or corruption occurred
-    assert!(!all_operation_results.is_empty(), "Operations should have completed");
-    assert!(!cleanup_results.is_empty(), "Cleanup operations should have completed");
+    assert!(
+        !all_operation_results.is_empty(),
+        "Operations should have completed"
+    );
+    assert!(
+        !cleanup_results.is_empty(),
+        "Cleanup operations should have completed"
+    );
 
     // Validate performance requirements
     let max_operation_time = all_operation_results
@@ -663,7 +694,11 @@ fn test_provider_cleanup_thread_safety_ac2() -> Result<(), Box<dyn std::error::E
     }
 
     // Validate cleanup coordination
-    assert_eq!(results.len(), 3, "All cancellation operations should complete");
+    assert_eq!(
+        results.len(),
+        3,
+        "All cancellation operations should complete"
+    );
 
     let successful = results.iter().filter(|(_, ok, _)| *ok).count();
     assert_eq!(successful, 3, "All cancellation operations should succeed");
@@ -676,8 +711,11 @@ fn test_provider_cleanup_thread_safety_ac2() -> Result<(), Box<dyn std::error::E
     );
 
     // Validate cleanup latency
-    let max_cleanup_latency =
-        results.iter().map(|(_, _, duration)| *duration).max().unwrap_or(Duration::from_nanos(0));
+    let max_cleanup_latency = results
+        .iter()
+        .map(|(_, _, duration)| *duration)
+        .max()
+        .unwrap_or(Duration::from_nanos(0));
 
     assert!(
         max_cleanup_latency < Duration::from_millis(100),
@@ -703,7 +741,11 @@ fn test_dual_indexing_cancellation_consistency_ac3() -> Result<(), Box<dyn std::
         3..=4 => Duration::from_secs(6),  // Moderate: reduced timeout
         _ => Duration::from_secs(4),      // Unconstrained: shorter timeout
     };
-    drain_until_quiet(&fixture.server, Duration::from_millis(500), initial_indexing_timeout);
+    drain_until_quiet(
+        &fixture.server,
+        Duration::from_millis(500),
+        initial_indexing_timeout,
+    );
 
     // Verify baseline dual pattern functionality before cancellation testing
     let baseline_qualified =
@@ -782,7 +824,11 @@ fn request_workspace_symbols(server: &LspServer, query: &str) -> Vec<Value> {
         }),
     );
 
-    response.get("result").and_then(|r| r.as_array()).cloned().unwrap_or_default()
+    response
+        .get("result")
+        .and_then(|r| r.as_array())
+        .cloned()
+        .unwrap_or_default()
 }
 
 /// Tests feature spec: LSP_CANCELLATION_INTEGRATION_SCHEMA.md#cross-file-navigation
@@ -797,7 +843,11 @@ fn test_cross_file_navigation_cancellation_ac3() -> Result<(), Box<dyn std::erro
         3..=4 => Duration::from_secs(8),  // Moderate: reduced timeout
         _ => Duration::from_secs(5),      // Unconstrained: shorter timeout
     };
-    drain_until_quiet(&fixture.server, Duration::from_millis(1000), cross_file_timeout);
+    drain_until_quiet(
+        &fixture.server,
+        Duration::from_millis(1000),
+        cross_file_timeout,
+    );
 
     // Test definition resolution cancellation across files
     let definition_id = 4001;
@@ -905,7 +955,11 @@ fn test_workspace_symbol_dual_pattern_cancellation_ac3() -> Result<(), Box<dyn s
         3..=4 => Duration::from_secs(12), // Moderate: reduced timeout
         _ => Duration::from_secs(8),      // Unconstrained: shorter timeout
     };
-    drain_until_quiet(&fixture.server, Duration::from_millis(1000), large_file_timeout);
+    drain_until_quiet(
+        &fixture.server,
+        Duration::from_millis(1000),
+        large_file_timeout,
+    );
 
     // Test qualified pattern search with cancellation
     let qualified_search_id = 5001;
@@ -1088,7 +1142,9 @@ fn test_enhanced_error_response_handling_ac4() -> Result<(), Box<dyn std::error:
                 );
 
                 // Validate enhanced error message with provider context
-                let message = error["message"].as_str().ok_or("Error should have message")?;
+                let message = error["message"]
+                    .as_str()
+                    .ok_or("Error should have message")?;
                 assert!(
                     message.contains(scenario_name) || {
                         if let Some(method_name) = method.split('/').next_back() {
@@ -1111,8 +1167,9 @@ fn test_enhanced_error_response_handling_ac4() -> Result<(), Box<dyn std::error:
 
                     // Latency tracking validation (enhanced feature)
                     if data.get("latency_ms").is_some() {
-                        let latency_ms =
-                            data["latency_ms"].as_u64().ok_or("Latency should be numeric")?;
+                        let latency_ms = data["latency_ms"]
+                            .as_u64()
+                            .ok_or("Latency should be numeric")?;
                         let total_roundtrip_latency = start_time.elapsed().as_millis() as u64;
                         assert!(
                             latency_ms <= total_roundtrip_latency,
@@ -1188,7 +1245,10 @@ fn test_graceful_error_degradation_ac4() -> Result<(), Box<dyn std::error::Error
     }
 
     // System should handle rapid cancellations gracefully
-    assert!(fixture.server.is_alive(), "Server should remain stable under rapid cancellation load");
+    assert!(
+        fixture.server.is_alive(),
+        "Server should remain stable under rapid cancellation load"
+    );
 
     // Validate error responses maintain consistency
     for (id, response) in &responses {
@@ -1487,7 +1547,11 @@ fn test_concurrent_resource_cleanup_ac5() -> Result<(), Box<dyn std::error::Erro
     }
 
     // Wait for all operations to settle
-    drain_until_quiet(&fixture.server, Duration::from_millis(500), Duration::from_secs(10));
+    drain_until_quiet(
+        &fixture.server,
+        Duration::from_millis(500),
+        Duration::from_secs(10),
+    );
 
     // Memory measurement after concurrent operations
     let final_memory = estimate_memory_usage();

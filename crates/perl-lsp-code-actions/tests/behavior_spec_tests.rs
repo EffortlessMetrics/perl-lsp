@@ -223,8 +223,14 @@ fn when_strict_and_warnings_both_missing_offers_both() {
     ];
     let actions = actions_for(source, &diagnostics);
 
-    assert!(has_action(&actions, "use strict"), "should offer use strict");
-    assert!(has_action(&actions, "use warnings"), "should offer use warnings");
+    assert!(
+        has_action(&actions, "use strict"),
+        "should offer use strict"
+    );
+    assert!(
+        has_action(&actions, "use warnings"),
+        "should offer use warnings"
+    );
 }
 
 // ===========================================================================
@@ -234,7 +240,12 @@ fn when_strict_and_warnings_both_missing_offers_both() {
 #[test]
 fn when_missing_semicolon_offers_add_semicolon() {
     let source = "my $x = 1\nprint $x;";
-    let diagnostics = [diag(0, 9, "parse-error-missingsemicolon", "Missing semicolon")];
+    let diagnostics = [diag(
+        0,
+        9,
+        "parse-error-missingsemicolon",
+        "Missing semicolon",
+    )];
     let actions = actions_for(source, &diagnostics);
 
     assert!(
@@ -247,7 +258,12 @@ fn when_missing_semicolon_offers_add_semicolon() {
 #[test]
 fn when_unclosed_parenthesis_offers_add_closing_paren() {
     let source = "print(42";
-    let diagnostics = [diag(0, 8, "parse-error-unclosedparenthesis", "Unclosed parenthesis")];
+    let diagnostics = [diag(
+        0,
+        8,
+        "parse-error-unclosedparenthesis",
+        "Unclosed parenthesis",
+    )];
     let actions = actions_for(source, &diagnostics);
 
     assert!(
@@ -299,7 +315,12 @@ fn when_unclosed_string_offers_add_closing_quote() {
 #[test]
 fn when_unclosed_bracket_offers_add_closing_bracket() {
     let source = "my @a = (1, 2, [3";
-    let diagnostics = [diag(16, 18, "parse-error-unclosedbracket", "Unclosed bracket")];
+    let diagnostics = [diag(
+        16,
+        18,
+        "parse-error-unclosedbracket",
+        "Unclosed bracket",
+    )];
     let actions = actions_for(source, &diagnostics);
 
     assert!(
@@ -354,7 +375,12 @@ fn when_numeric_undef_range_has_no_equality_operator_skips_defined_or_fallback()
 #[test]
 fn when_general_parse_error_mentions_missing_semicolon_offers_semicolon_fix() {
     let source = "my $x = 1\nprint $x;";
-    let diagnostics = [diag(0, 9, "PL001", "Missing semicolon before next statement")];
+    let diagnostics = [diag(
+        0,
+        9,
+        "PL001",
+        "Missing semicolon before next statement",
+    )];
     let actions = actions_for(source, &diagnostics);
 
     assert!(
@@ -440,7 +466,10 @@ fn when_diagnostic_is_bareword_filehandle_offers_lexical_replacement() {
     let actions = actions_for(source, &diagnostics);
 
     assert!(
-        has_action(&actions, "Replace bareword filehandle 'FILE' with lexical '$file_fh'"),
+        has_action(
+            &actions,
+            "Replace bareword filehandle 'FILE' with lexical '$file_fh'"
+        ),
         "should offer lexical filehandle replacement, got: {:?}",
         actions.iter().map(|a| &a.title).collect::<Vec<_>>()
     );
@@ -449,7 +478,12 @@ fn when_diagnostic_is_bareword_filehandle_offers_lexical_replacement() {
 #[test]
 fn when_diagnostic_is_two_arg_open_offers_three_arg_open_fix() {
     let source = "open($fh, $filename);";
-    let diagnostics = [diag(0, source.len(), "PL401", "Two-argument open is unsafe")];
+    let diagnostics = [diag(
+        0,
+        source.len(),
+        "PL401",
+        "Two-argument open is unsafe",
+    )];
     let actions = actions_for(source, &diagnostics);
 
     assert!(
@@ -499,7 +533,12 @@ fn when_unused_parameter_offers_underscore_rename() {
 #[test]
 fn when_variable_shadows_outer_scope_offers_rename_suggestions() {
     let source = "my $x = 1; { my $x = 2; }";
-    let diagnostics = [diag(17, 19, "PL104", "Variable '$x' shadows outer declaration")];
+    let diagnostics = [diag(
+        17,
+        19,
+        "PL104",
+        "Variable '$x' shadows outer declaration",
+    )];
     let actions = actions_for(source, &diagnostics);
 
     assert!(
@@ -517,7 +556,12 @@ fn when_variable_shadows_outer_scope_offers_rename_suggestions() {
 #[test]
 fn when_missing_return_in_subroutine_offers_explicit_return_fix() {
     let source = "sub compute {\n    my $x = 1;\n}\n";
-    let diagnostics = [diag(0, source.len() - 2, "PL301", "Subroutine may not return a value")];
+    let diagnostics = [diag(
+        0,
+        source.len() - 2,
+        "PL301",
+        "Subroutine may not return a value",
+    )];
     let actions = actions_for(source, &diagnostics);
 
     assert!(
@@ -585,7 +629,9 @@ fn when_source_lacks_strict_enhanced_offers_add_pragmas() {
     let actions = enhanced_actions_for(source, (0, source.len()));
 
     assert!(
-        actions.iter().any(|a| a.title.contains("pragmas") || a.title.contains("strict")),
+        actions
+            .iter()
+            .any(|a| a.title.contains("pragmas") || a.title.contains("strict")),
         "should offer to add missing pragmas when strict is absent, got: {:?}",
         actions.iter().map(|a| &a.title).collect::<Vec<_>>()
     );
@@ -595,7 +641,9 @@ fn when_source_lacks_strict_enhanced_offers_add_pragmas() {
 fn when_source_starts_with_shebang_pragmas_are_inserted_after_it() {
     let source = "#!/usr/bin/env perl\nmy $x = 1;";
     let actions = enhanced_actions_for(source, (0, source.len()));
-    let pragma_action = actions.iter().find(|action| action.title.contains("missing pragmas"));
+    let pragma_action = actions
+        .iter()
+        .find(|action| action.title.contains("missing pragmas"));
     assert!(pragma_action.is_some(), "expected pragma insertion action");
     let pragma_action = pragma_action.unwrap_or_else(|| unreachable!());
 
@@ -610,13 +658,18 @@ fn when_source_starts_with_shebang_pragmas_are_inserted_after_it() {
 fn when_imports_are_out_of_order_enhanced_actions_offer_organization() {
     let source = "use My::Local;\nuse strict;\nuse warnings;\n";
     let actions = enhanced_actions_for(source, (0, source.len()));
-    let organize = actions.iter().find(|action| action.title == "Organize imports");
+    let organize = actions
+        .iter()
+        .find(|action| action.title == "Organize imports");
     assert!(organize.is_some(), "expected organize imports action");
     let organize = organize.unwrap_or_else(|| unreachable!());
 
     assert_eq!(organize.kind, CodeActionKind::SourceOrganizeImports);
     let change = &organize.edit.changes[0];
-    assert_eq!(change.new_text, "use strict;\nuse warnings;\nuse My::Local;\n");
+    assert_eq!(
+        change.new_text,
+        "use strict;\nuse warnings;\nuse My::Local;\n"
+    );
 }
 
 #[test]
@@ -649,7 +702,10 @@ fn when_no_diagnostics_no_diagnostic_driven_quickfixes_returned() {
     assert!(
         diagnostic_quickfixes.is_empty(),
         "without diagnostics, no diagnostic-driven QuickFix actions should be generated, got: {:?}",
-        diagnostic_quickfixes.iter().map(|a| &a.title).collect::<Vec<_>>()
+        diagnostic_quickfixes
+            .iter()
+            .map(|a| &a.title)
+            .collect::<Vec<_>>()
     );
 }
 
@@ -660,7 +716,10 @@ fn when_empty_source_actions_have_valid_structure() {
     // Empty source may produce refactoring actions (e.g. add pragmas); verify
     // that any returned actions have valid structure.
     for action in &actions {
-        assert!(!action.title.is_empty(), "action titles must be non-empty even for empty source");
+        assert!(
+            !action.title.is_empty(),
+            "action titles must be non-empty even for empty source"
+        );
     }
 }
 
@@ -714,7 +773,10 @@ fn diagnostic_driven_quick_fix_actions_have_diagnostic_codes() {
         .filter(|a| a.kind == CodeActionKind::QuickFix && !a.diagnostics.is_empty())
         .collect();
 
-    assert!(!diag_actions.is_empty(), "should have at least one diagnostic-driven quickfix");
+    assert!(
+        !diag_actions.is_empty(),
+        "should have at least one diagnostic-driven quickfix"
+    );
     for action in &diag_actions {
         assert!(
             !action.diagnostics.is_empty(),
@@ -731,7 +793,10 @@ fn all_actions_have_non_empty_titles() {
     let actions = actions_for(source, &diagnostics);
 
     for action in &actions {
-        assert!(!action.title.is_empty(), "every code action must have a non-empty title");
+        assert!(
+            !action.title.is_empty(),
+            "every code action must have a non-empty title"
+        );
     }
 }
 

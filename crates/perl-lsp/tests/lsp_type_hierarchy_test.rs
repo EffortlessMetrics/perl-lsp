@@ -71,7 +71,9 @@ sub new {
         })),
     };
 
-    let response = server.handle_request(request).ok_or("Failed to get response")?;
+    let response = server
+        .handle_request(request)
+        .ok_or("Failed to get response")?;
     let result = response.result.as_ref().and_then(|r| r.as_array());
 
     assert!(result.is_some(), "Should return type hierarchy items");
@@ -151,10 +153,12 @@ package Parent2;
         })),
     };
 
-    let prepare_response =
-        server.handle_request(prepare_request).ok_or("Failed to get prepare response")?;
-    let result_value =
-        prepare_response.result.ok_or("Failed to get result from prepare response")?;
+    let prepare_response = server
+        .handle_request(prepare_request)
+        .ok_or("Failed to get prepare response")?;
+    let result_value = prepare_response
+        .result
+        .ok_or("Failed to get result from prepare response")?;
     let items_array = result_value.as_array().ok_or("Result is not an array")?;
     let items = items_array.clone();
     let child_item = &items[0];
@@ -179,19 +183,29 @@ package Parent2;
         })),
     };
 
-    let response =
-        server.handle_request(supertypes_request).ok_or("Failed to get supertypes response")?;
+    let response = server
+        .handle_request(supertypes_request)
+        .ok_or("Failed to get supertypes response")?;
     let result = response.result.as_ref().and_then(|r| r.as_array());
 
     assert!(result.is_some(), "Should return supertypes");
     let supertypes = result.ok_or("Failed to get supertypes array")?;
 
     // Should find Parent1 and Parent2
-    let names: Vec<String> =
-        supertypes.iter().filter_map(|item| item["name"].as_str()).map(|s| s.to_string()).collect();
+    let names: Vec<String> = supertypes
+        .iter()
+        .filter_map(|item| item["name"].as_str())
+        .map(|s| s.to_string())
+        .collect();
 
-    assert!(names.contains(&"Parent1".to_string()), "Should find Parent1");
-    assert!(names.contains(&"Parent2".to_string()), "Should find Parent2");
+    assert!(
+        names.contains(&"Parent1".to_string()),
+        "Should find Parent1"
+    );
+    assert!(
+        names.contains(&"Parent2".to_string()),
+        "Should find Parent2"
+    );
 
     Ok(())
 }
@@ -260,10 +274,12 @@ our @ISA = ('Base');
         })),
     };
 
-    let prepare_response =
-        server.handle_request(prepare_request).ok_or("Failed to get prepare response")?;
-    let result_value =
-        prepare_response.result.ok_or("Failed to get result from prepare response")?;
+    let prepare_response = server
+        .handle_request(prepare_request)
+        .ok_or("Failed to get prepare response")?;
+    let result_value = prepare_response
+        .result
+        .ok_or("Failed to get result from prepare response")?;
     let items_array = result_value.as_array().ok_or("Result is not an array")?;
     let items = items_array.clone();
     let base_item = &items[0];
@@ -288,19 +304,29 @@ our @ISA = ('Base');
         })),
     };
 
-    let response =
-        server.handle_request(subtypes_request).ok_or("Failed to get subtypes response")?;
+    let response = server
+        .handle_request(subtypes_request)
+        .ok_or("Failed to get subtypes response")?;
     let result = response.result.as_ref().and_then(|r| r.as_array());
 
     assert!(result.is_some(), "Should return subtypes");
     let subtypes = result.ok_or("Failed to get subtypes array")?;
 
     // Should find Derived1 and Derived2
-    let names: Vec<String> =
-        subtypes.iter().filter_map(|item| item["name"].as_str()).map(|s| s.to_string()).collect();
+    let names: Vec<String> = subtypes
+        .iter()
+        .filter_map(|item| item["name"].as_str())
+        .map(|s| s.to_string())
+        .collect();
 
-    assert!(names.contains(&"Derived1".to_string()), "Should find Derived1");
-    assert!(names.contains(&"Derived2".to_string()), "Should find Derived2");
+    assert!(
+        names.contains(&"Derived1".to_string()),
+        "Should find Derived1"
+    );
+    assert!(
+        names.contains(&"Derived2".to_string()),
+        "Should find Derived2"
+    );
 
     Ok(())
 }
@@ -320,8 +346,12 @@ fn test_type_hierarchy_capability_advertised() -> Result<(), Box<dyn std::error:
         })),
     };
 
-    let response = server.handle_request(init_request).ok_or("Failed to get init response")?;
-    let result = response.result.ok_or("Failed to get result from init response")?;
+    let response = server
+        .handle_request(init_request)
+        .ok_or("Failed to get init response")?;
+    let result = response
+        .result
+        .ok_or("Failed to get result from init response")?;
     let caps = &result["capabilities"];
 
     // Type hierarchy should be advertised in non-lock mode
@@ -398,7 +428,9 @@ package Foo::Bar::Baz;
         })),
     };
 
-    let response = server.handle_request(request).ok_or("Failed to get response")?;
+    let response = server
+        .handle_request(request)
+        .ok_or("Failed to get response")?;
     let result = response.result.as_ref().and_then(|r| r.as_array());
 
     assert!(result.is_some(), "Should return type hierarchy items");

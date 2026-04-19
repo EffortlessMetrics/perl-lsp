@@ -53,8 +53,12 @@ fn send_request(
     id: Option<Value>,
     params: Value,
 ) -> Option<Value> {
-    let req =
-        JsonRpcRequest { _jsonrpc: "2.0".into(), id, method: method.into(), params: Some(params) };
+    let req = JsonRpcRequest {
+        _jsonrpc: "2.0".into(),
+        id,
+        method: method.into(),
+        params: Some(params),
+    };
     server.handle_request(req).and_then(|r| r.result)
 }
 

@@ -48,7 +48,11 @@ sub main {
     )?;
 
     // Response should be an array of CallHierarchyItem
-    assert!(response.is_array(), "prepareCallHierarchy should return array, got: {:?}", response);
+    assert!(
+        response.is_array(),
+        "prepareCallHierarchy should return array, got: {:?}",
+        response
+    );
 
     let items = response.as_array().ok_or("not an array")?;
     if !items.is_empty() {
@@ -57,7 +61,10 @@ sub main {
         assert_eq!(item["kind"], 12, "Symbol kind should be 12 (Function)");
         assert!(item["uri"].is_string(), "URI should be present");
         assert!(item["range"].is_object(), "Range should be present");
-        assert!(item["selectionRange"].is_object(), "Selection range should be present");
+        assert!(
+            item["selectionRange"].is_object(),
+            "Selection range should be present"
+        );
     }
     Ok(())
 }
@@ -100,7 +107,10 @@ $obj->process();
         }),
     )?;
 
-    assert!(response.is_array(), "prepareCallHierarchy should return array");
+    assert!(
+        response.is_array(),
+        "prepareCallHierarchy should return array"
+    );
 
     let items = response.as_array().ok_or("not an array")?;
     if !items.is_empty() {
@@ -156,7 +166,10 @@ sub say_hi {
             }),
         )?;
 
-        assert!(incoming_response.is_array(), "incomingCalls should return array");
+        assert!(
+            incoming_response.is_array(),
+            "incomingCalls should return array"
+        );
 
         let calls = incoming_response.as_array().ok_or("not an array")?;
         // Should find both say_hello and say_hi as callers
@@ -286,7 +299,10 @@ sub main_function {
             }),
         )?;
 
-        assert!(outgoing_response.is_array(), "outgoingCalls should return array");
+        assert!(
+            outgoing_response.is_array(),
+            "outgoingCalls should return array"
+        );
 
         let calls = outgoing_response.as_array().ok_or("not an array")?;
         if !calls.is_empty() {
@@ -574,7 +590,10 @@ sub unused_function {
             }),
         )?;
 
-        assert!(incoming_response.is_array(), "Should return empty array for no incoming calls");
+        assert!(
+            incoming_response.is_array(),
+            "Should return empty array for no incoming calls"
+        );
 
         // Request outgoing calls - should be empty
         let outgoing_response = harness.request(
@@ -584,7 +603,10 @@ sub unused_function {
             }),
         )?;
 
-        assert!(outgoing_response.is_array(), "Should return empty array for no outgoing calls");
+        assert!(
+            outgoing_response.is_array(),
+            "Should return empty array for no outgoing calls"
+        );
     }
     Ok(())
 }
@@ -888,7 +910,10 @@ sub custom_print {
         )?;
 
         // Should return array (implementation may choose to include/exclude builtins)
-        assert!(outgoing_response.is_array(), "Should return array for outgoing calls");
+        assert!(
+            outgoing_response.is_array(),
+            "Should return array for outgoing calls"
+        );
     }
     Ok(())
 }
@@ -985,7 +1010,10 @@ fn test_call_hierarchy_capability_advertised() -> TestResult {
     // Check if capability exists (may be true or an object with options)
     if !cfg!(feature = "lsp-ga-lock") {
         let has_capability = capabilities.get("callHierarchyProvider").is_some();
-        assert!(has_capability, "callHierarchyProvider should be advertised in capabilities");
+        assert!(
+            has_capability,
+            "callHierarchyProvider should be advertised in capabilities"
+        );
     }
     Ok(())
 }
@@ -1037,20 +1065,33 @@ process();
         }),
     )?;
 
-    let items = prepare_response.as_array().ok_or("prepareCallHierarchy did not return array")?;
-    assert!(!items.is_empty(), "prepareCallHierarchy returned empty array — cursor may be off");
+    let items = prepare_response
+        .as_array()
+        .ok_or("prepareCallHierarchy did not return array")?;
+    assert!(
+        !items.is_empty(),
+        "prepareCallHierarchy returned empty array — cursor may be off"
+    );
 
     let item = &items[0];
-    assert_eq!(item["name"], "format_string", "Expected to prepare on format_string");
+    assert_eq!(
+        item["name"], "format_string",
+        "Expected to prepare on format_string"
+    );
 
     // Request incoming calls — must find the caller in the OTHER file
     let incoming_response =
         harness.request("callHierarchy/incomingCalls", json!({ "item": item }))?;
 
-    let calls = incoming_response.as_array().ok_or("incomingCalls did not return array")?;
+    let calls = incoming_response
+        .as_array()
+        .ok_or("incomingCalls did not return array")?;
 
-    let caller_names: Vec<String> =
-        calls.iter().filter_map(|c| c["from"]["name"].as_str()).map(String::from).collect();
+    let caller_names: Vec<String> = calls
+        .iter()
+        .filter_map(|c| c["from"]["name"].as_str())
+        .map(String::from)
+        .collect();
 
     assert!(
         caller_names.contains(&"process".to_string()),
@@ -1108,8 +1149,13 @@ process();
         }),
     )?;
 
-    let items = prepare_response.as_array().ok_or("prepareCallHierarchy returned non-array")?;
-    assert!(!items.is_empty(), "prepareCallHierarchy returned empty array for process");
+    let items = prepare_response
+        .as_array()
+        .ok_or("prepareCallHierarchy returned non-array")?;
+    assert!(
+        !items.is_empty(),
+        "prepareCallHierarchy returned empty array for process"
+    );
 
     let item = &items[0];
     assert_eq!(item["name"], "process", "Expected to prepare on process");
@@ -1118,14 +1164,21 @@ process();
     let outgoing_response =
         harness.request("callHierarchy/outgoingCalls", json!({ "item": item }))?;
 
-    let calls = outgoing_response.as_array().ok_or("outgoingCalls returned non-array")?;
+    let calls = outgoing_response
+        .as_array()
+        .ok_or("outgoingCalls returned non-array")?;
 
     // Must find format_string as an outgoing call
-    let callee_names: Vec<String> =
-        calls.iter().filter_map(|c| c["to"]["name"].as_str()).map(String::from).collect();
+    let callee_names: Vec<String> = calls
+        .iter()
+        .filter_map(|c| c["to"]["name"].as_str())
+        .map(String::from)
+        .collect();
 
     assert!(
-        callee_names.iter().any(|n| n == "format_string" || n.contains("format_string")),
+        callee_names
+            .iter()
+            .any(|n| n == "format_string" || n.contains("format_string")),
         "Expected to find format_string as an outgoing call, got: {:?}",
         callee_names
     );
@@ -1209,16 +1262,28 @@ sub orchestrate {
         }),
     )?;
 
-    let items = prepare_response.as_array().ok_or("prepareCallHierarchy returned non-array")?;
-    assert!(!items.is_empty(), "prepareCallHierarchy returned empty array for orchestrate");
+    let items = prepare_response
+        .as_array()
+        .ok_or("prepareCallHierarchy returned non-array")?;
+    assert!(
+        !items.is_empty(),
+        "prepareCallHierarchy returned empty array for orchestrate"
+    );
 
     let outgoing_response =
         harness.request("callHierarchy/outgoingCalls", json!({ "item": &items[0] }))?;
-    let calls = outgoing_response.as_array().ok_or("outgoingCalls returned non-array")?;
+    let calls = outgoing_response
+        .as_array()
+        .ok_or("outgoingCalls returned non-array")?;
 
     let run_call = calls
         .iter()
-        .find(|call| call["to"]["name"].as_str().map(|name| name.ends_with("run")).unwrap_or(false))
+        .find(|call| {
+            call["to"]["name"]
+                .as_str()
+                .map(|name| name.ends_with("run"))
+                .unwrap_or(false)
+        })
         .ok_or("expected outgoing run() call")?;
 
     assert_eq!(
@@ -1274,16 +1339,28 @@ sub process {
         }),
     )?;
 
-    let items = prepare_response.as_array().ok_or("prepareCallHierarchy returned non-array")?;
-    assert!(!items.is_empty(), "prepareCallHierarchy returned empty array for process");
+    let items = prepare_response
+        .as_array()
+        .ok_or("prepareCallHierarchy returned non-array")?;
+    assert!(
+        !items.is_empty(),
+        "prepareCallHierarchy returned empty array for process"
+    );
 
     let outgoing_response =
         harness.request("callHierarchy/outgoingCalls", json!({ "item": &items[0] }))?;
-    let calls = outgoing_response.as_array().ok_or("outgoingCalls returned non-array")?;
+    let calls = outgoing_response
+        .as_array()
+        .ok_or("outgoingCalls returned non-array")?;
 
     let fetch_call = calls
         .iter()
-        .find(|call| call["to"]["name"].as_str().map(|name| name == "fetch").unwrap_or(false))
+        .find(|call| {
+            call["to"]["name"]
+                .as_str()
+                .map(|name| name == "fetch")
+                .unwrap_or(false)
+        })
         .ok_or("expected outgoing fetch() call")?;
 
     assert_eq!(
@@ -1333,14 +1410,22 @@ sub process {
         }),
     )?;
 
-    let items = prepare_response.as_array().ok_or("prepareCallHierarchy did not return array")?;
-    let item = items.first().ok_or("prepareCallHierarchy returned empty array")?;
+    let items = prepare_response
+        .as_array()
+        .ok_or("prepareCallHierarchy did not return array")?;
+    let item = items
+        .first()
+        .ok_or("prepareCallHierarchy returned empty array")?;
 
     let incoming_before =
         harness.request("callHierarchy/incomingCalls", json!({ "item": item }))?;
-    let before_calls = incoming_before.as_array().ok_or("incomingCalls did not return array")?;
+    let before_calls = incoming_before
+        .as_array()
+        .ok_or("incomingCalls did not return array")?;
     assert!(
-        before_calls.iter().any(|call| call["from"]["name"] == "process"),
+        before_calls
+            .iter()
+            .any(|call| call["from"]["name"] == "process"),
         "expected process() as incoming caller before edit"
     );
 
@@ -1357,9 +1442,13 @@ sub process {
     harness.barrier();
 
     let incoming_after = harness.request("callHierarchy/incomingCalls", json!({ "item": item }))?;
-    let after_calls = incoming_after.as_array().ok_or("incomingCalls did not return array")?;
+    let after_calls = incoming_after
+        .as_array()
+        .ok_or("incomingCalls did not return array")?;
     assert!(
-        after_calls.iter().all(|call| call["from"]["name"] != "process"),
+        after_calls
+            .iter()
+            .all(|call| call["from"]["name"] != "process"),
         "process() should disappear from incoming callers after edit, got: {:?}",
         after_calls
     );

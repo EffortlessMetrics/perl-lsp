@@ -143,10 +143,15 @@ pub fn run_with_json(json: bool) -> Result<()> {
     let goto_fixtures = load_goto_gold_fixtures(&gold_root).unwrap_or_default();
     let completion_fixtures = load_completion_gold_fixtures(&gold_root).unwrap_or_default();
 
-    let hover_assertions: usize = hover_fixtures.iter().map(|f| f.hover_assertions.len()).sum();
+    let hover_assertions: usize = hover_fixtures
+        .iter()
+        .map(|f| f.hover_assertions.len())
+        .sum();
     let goto_assertions: usize = goto_fixtures.iter().map(|f| f.goto_assertions.len()).sum();
-    let completion_assertions: usize =
-        completion_fixtures.iter().map(|f| f.completion_assertions.len()).sum();
+    let completion_assertions: usize = completion_fixtures
+        .iter()
+        .map(|f| f.completion_assertions.len())
+        .sum();
 
     // Try to load a previous run receipt for pass-rate data
     let receipt_path = root.join(".ci").join("metrics").join("editor_ux.json");
@@ -184,7 +189,12 @@ pub fn run_with_json(json: bool) -> Result<()> {
 
 fn build_metrics(last_run: Option<&LastRunMetrics>) -> UxMetrics {
     let (hover_rate, goto_rate, completion_rate, workflow_rate) = match last_run {
-        Some(r) => (r.hover_rate(), r.goto_rate(), r.completion_rate(), r.workflow_pass_rate()),
+        Some(r) => (
+            r.hover_rate(),
+            r.goto_rate(),
+            r.completion_rate(),
+            r.workflow_pass_rate(),
+        ),
         None => (None, None, None, None),
     };
 
@@ -242,9 +252,18 @@ fn print_table(
     println!("{}", "=".repeat(60));
     println!("{:<20} {:>10} {:>12}", "Kind", "Fixtures", "Assertions");
     println!("{}", "-".repeat(44));
-    println!("{:<20} {:>10} {:>12}", "Hover", hover_fixtures, hover_assertions);
-    println!("{:<20} {:>10} {:>12}", "Goto-Definition", goto_fixtures, goto_assertions);
-    println!("{:<20} {:>10} {:>12}", "Completion", completion_fixtures, completion_assertions);
+    println!(
+        "{:<20} {:>10} {:>12}",
+        "Hover", hover_fixtures, hover_assertions
+    );
+    println!(
+        "{:<20} {:>10} {:>12}",
+        "Goto-Definition", goto_fixtures, goto_assertions
+    );
+    println!(
+        "{:<20} {:>10} {:>12}",
+        "Completion", completion_fixtures, completion_assertions
+    );
     println!("{}", "-".repeat(44));
     let total_f = hover_fixtures + goto_fixtures + completion_fixtures;
     let total_a = hover_assertions + goto_assertions + completion_assertions;

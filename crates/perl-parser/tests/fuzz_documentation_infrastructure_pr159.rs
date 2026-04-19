@@ -664,15 +664,15 @@ fn validate_memory_bounds_recursive(node: &Node, input: &str) -> bool {
 /// Validate memory bounds from node children
 fn validate_memory_bounds_from_children(node: &Node, input: &str) -> bool {
     match &node.kind {
-        NodeKind::Program { statements } => {
-            statements.iter().all(|statement| validate_memory_bounds_recursive(statement, input))
-        }
-        NodeKind::FunctionCall { args, .. } => {
-            args.iter().all(|arg| validate_memory_bounds_recursive(arg, input))
-        }
-        NodeKind::Block { statements } => {
-            statements.iter().all(|statement| validate_memory_bounds_recursive(statement, input))
-        }
+        NodeKind::Program { statements } => statements
+            .iter()
+            .all(|statement| validate_memory_bounds_recursive(statement, input)),
+        NodeKind::FunctionCall { args, .. } => args
+            .iter()
+            .all(|arg| validate_memory_bounds_recursive(arg, input)),
+        NodeKind::Block { statements } => statements
+            .iter()
+            .all(|statement| validate_memory_bounds_recursive(statement, input)),
         NodeKind::Binary { left, right, .. } => {
             validate_memory_bounds_recursive(left, input)
                 && validate_memory_bounds_recursive(right, input)

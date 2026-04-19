@@ -100,7 +100,10 @@ impl InlayHintsProvider {
                     2 => InlayHintKind::Parameter,
                     _ => InlayHintKind::Type,
                 };
-                let tooltip = v.get("tooltip").and_then(|t| t.as_str()).map(|s| s.to_string());
+                let tooltip = v
+                    .get("tooltip")
+                    .and_then(|t| t.as_str())
+                    .map(|s| s.to_string());
                 Some(InlayHint {
                     position: Position::new(
                         pos["line"].as_u64()? as u32,
@@ -133,7 +136,10 @@ impl InlayHintsProvider {
                     2 => InlayHintKind::Parameter,
                     _ => InlayHintKind::Type,
                 };
-                let tooltip = v.get("tooltip").and_then(|t| t.as_str()).map(|s| s.to_string());
+                let tooltip = v
+                    .get("tooltip")
+                    .and_then(|t| t.as_str())
+                    .map(|s| s.to_string());
                 Some(InlayHint {
                     position: Position::new(
                         pos["line"].as_u64()? as u32,
@@ -314,9 +320,10 @@ pub fn trivial_type_hints(
             NodeKind::HashLiteral { .. } => Some(("Hash".to_string(), Some("Hash reference"))),
             NodeKind::ArrayLiteral { .. } => Some(("Array".to_string(), Some("Array reference"))),
             NodeKind::Regex { .. } => Some(("Regex".to_string(), Some("Regular expression"))),
-            NodeKind::Subroutine { name: None, .. } => {
-                Some(("CodeRef".to_string(), Some("Anonymous subroutine (code reference)")))
-            }
+            NodeKind::Subroutine { name: None, .. } => Some((
+                "CodeRef".to_string(),
+                Some("Anonymous subroutine (code reference)"),
+            )),
             // Fall through to semantic type inference for non-literal nodes
             _ => infer_semantic_type(node).map(|t| (t, None)),
         };

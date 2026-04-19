@@ -134,7 +134,10 @@ fn test_hover_special_variables_return_markdown() -> TestResult {
         )
         .unwrap_or(json!(null));
     if !result.is_null() {
-        let kind = result.get("contents").and_then(|c| c.get("kind")).and_then(|k| k.as_str());
+        let kind = result
+            .get("contents")
+            .and_then(|c| c.get("kind"))
+            .and_then(|k| k.as_str());
         assert_eq!(kind, Some("markdown"), "Hover content should be markdown");
     }
     Ok(())

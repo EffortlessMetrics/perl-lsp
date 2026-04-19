@@ -102,8 +102,11 @@ pub fn run(crate_filter: Option<String>) -> Result<()> {
 
     // Build set of workspace-member package IDs (used to restrict violations
     // to workspace-local crates only -- external registry crates are never flagged).
-    let workspace_member_ids: HashSet<&str> =
-        metadata.workspace_members.iter().map(String::as_str).collect();
+    let workspace_member_ids: HashSet<&str> = metadata
+        .workspace_members
+        .iter()
+        .map(String::as_str)
+        .collect();
 
     // Collect the names of workspace members that have `publish = false`.
     let no_publish_names: HashSet<String> = metadata
@@ -124,12 +127,18 @@ pub fn run(crate_filter: Option<String>) -> Result<()> {
     };
 
     // Build package_id -> name mapping.
-    let id_to_name: HashMap<&str, &str> =
-        metadata.packages.iter().map(|pkg| (pkg.id.as_str(), pkg.name.as_str())).collect();
+    let id_to_name: HashMap<&str, &str> = metadata
+        .packages
+        .iter()
+        .map(|pkg| (pkg.id.as_str(), pkg.name.as_str()))
+        .collect();
 
     // Build name -> package_id mapping (for root lookup).
-    let name_to_id: HashMap<&str, &str> =
-        metadata.packages.iter().map(|pkg| (pkg.name.as_str(), pkg.id.as_str())).collect();
+    let name_to_id: HashMap<&str, &str> = metadata
+        .packages
+        .iter()
+        .map(|pkg| (pkg.name.as_str(), pkg.id.as_str()))
+        .collect();
 
     // Build the normal-dep resolve graph: pkg_id -> [normal dep pkg_ids].
     // Guard: if resolve is absent the walk silently reports zero violations (false green).
@@ -172,7 +181,10 @@ pub fn run(crate_filter: Option<String>) -> Result<()> {
                 published, forbidden
             );
         }
-        bail!("publish-closure check failed ({} violation(s))", violations.len());
+        bail!(
+            "publish-closure check failed ({} violation(s))",
+            violations.len()
+        );
     }
 
     let count = crates_to_check.len();
@@ -200,8 +212,12 @@ fn load_metadata() -> Result<FullMetadata> {
 fn build_normal_dep_graph(resolve: &ResolveGraph) -> HashMap<&str, Vec<&str>> {
     let mut graph: HashMap<&str, Vec<&str>> = HashMap::new();
     for node in &resolve.nodes {
-        let normal_deps: Vec<&str> =
-            node.deps.iter().filter(|dep| is_normal_dep(dep)).map(|dep| dep.pkg.as_str()).collect();
+        let normal_deps: Vec<&str> = node
+            .deps
+            .iter()
+            .filter(|dep| is_normal_dep(dep))
+            .map(|dep| dep.pkg.as_str())
+            .collect();
         graph.insert(node.id.as_str(), normal_deps);
     }
     graph

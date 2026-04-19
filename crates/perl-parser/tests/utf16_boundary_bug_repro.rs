@@ -21,8 +21,14 @@ fn test_emoji_utf16_roundtrip_failure() {
 
     // Expected: roundtrip should be close to offset (within tolerance for mid-character)
     // Actual: offset=2 -> (line=0, col=2) -> roundtrip=8 (WAY off)
-    println!("Offset {} -> (line={}, col={}) -> roundtrip={}", offset, line, col, roundtrip);
-    println!("Expected roundtrip close to {} but got {}", offset, roundtrip);
+    println!(
+        "Offset {} -> (line={}, col={}) -> roundtrip={}",
+        offset, line, col, roundtrip
+    );
+    println!(
+        "Expected roundtrip close to {} but got {}",
+        offset, roundtrip
+    );
 
     // This assertion will fail, demonstrating the bug
     let tolerance = 4; // Allow tolerance for mid-character positions
@@ -82,7 +88,10 @@ fn test_mixed_unicode_edge_cases() {
 
         // Document the expected vs actual behavior for debugging
         if roundtrip != offset {
-            println!("  MISMATCH: expected offset close to {}, got {}", offset, roundtrip);
+            println!(
+                "  MISMATCH: expected offset close to {}, got {}",
+                offset, roundtrip
+            );
         }
     }
 }

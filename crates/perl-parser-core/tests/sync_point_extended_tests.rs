@@ -2,8 +2,12 @@ use perl_parser_core::error_recovery::SyncPoint;
 
 #[test]
 fn all_variants_exist() -> Result<(), Box<dyn std::error::Error>> {
-    let variants =
-        [SyncPoint::Semicolon, SyncPoint::CloseBrace, SyncPoint::Keyword, SyncPoint::Eof];
+    let variants = [
+        SyncPoint::Semicolon,
+        SyncPoint::CloseBrace,
+        SyncPoint::Keyword,
+        SyncPoint::Eof,
+    ];
     // All are distinct
     for i in 0..variants.len() {
         for j in (i + 1)..variants.len() {

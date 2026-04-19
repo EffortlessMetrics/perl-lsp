@@ -28,13 +28,20 @@ pub struct RecoveryParser<'a> {
 
 impl<'a> RecoveryParser<'a> {
     pub fn new(source: &'a str) -> Self {
-        RecoveryParser { inner: Parser::new(source), errors: Vec::new(), source }
+        RecoveryParser {
+            inner: Parser::new(source),
+            errors: Vec::new(),
+            source,
+        }
     }
 
     pub fn parse_with_recovery(&mut self) -> RecoveryParseResult {
         // Try to parse normally first
         match self.inner.parse() {
-            Ok(ast) => RecoveryParseResult { ast: Some(ast), errors: vec![] },
+            Ok(ast) => RecoveryParseResult {
+                ast: Some(ast),
+                errors: vec![],
+            },
             Err(e) => {
                 // Initial parse failed - try recovery strategies
                 self.errors.push(e.clone());
@@ -42,7 +49,10 @@ impl<'a> RecoveryParser<'a> {
                 // For this POC, we'll try some simple recovery strategies
                 let recovered_ast = self.attempt_recovery();
 
-                RecoveryParseResult { ast: recovered_ast, errors: self.create_error_infos() }
+                RecoveryParseResult {
+                    ast: recovered_ast,
+                    errors: self.create_error_infos(),
+                }
             }
         }
     }
@@ -69,7 +79,10 @@ impl<'a> RecoveryParser<'a> {
         } else {
             Some(Node::new(
                 NodeKind::Program { statements },
-                SourceLocation { start: 0, end: self.source.len() },
+                SourceLocation {
+                    start: 0,
+                    end: self.source.len(),
+                },
             ))
         }
     }
@@ -98,15 +111,22 @@ impl<'a> RecoveryParser<'a> {
             if let Ok(node) = semi_parser.parse()
                 && let NodeKind::Program { mut statements } = node.kind
             {
-                self.errors.push(ParseError::syntax("Missing semicolon", line.len()));
+                self.errors
+                    .push(ParseError::syntax("Missing semicolon", line.len()));
                 return statements.pop();
             }
         }
 
         // Create an error node
         Some(Node::new(
-            NodeKind::String { value: format!("ERROR: {}", line), interpolated: false },
-            SourceLocation { start: 0, end: line.len() },
+            NodeKind::String {
+                value: format!("ERROR: {}", line),
+                interpolated: false,
+            },
+            SourceLocation {
+                start: 0,
+                end: line.len(),
+            },
         ))
     }
 
@@ -131,7 +151,11 @@ impl<'a> RecoveryParser<'a> {
     }
 
     fn get_error_context(&self, line: usize) -> String {
-        self.source.lines().nth(line.saturating_sub(1)).unwrap_or("").to_string()
+        self.source
+            .lines()
+            .nth(line.saturating_sub(1))
+            .unwrap_or("")
+            .to_string()
     }
 }
 
@@ -149,7 +173,10 @@ fn main() {
         // Multiple errors
         ("Multiple errors", "my $x = \nif { print }"),
         // Partial valid code
-        ("Partial valid", "my $x = 42;\nthis is not valid\nmy $y = 43;"),
+        (
+            "Partial valid",
+            "my $x = 42;\nthis is not valid\nmy $y = 43;",
+        ),
     ];
 
     for (name, code) in examples {
@@ -208,7 +235,10 @@ foreach my $num (@numbers) {
     let result = parser.parse_with_recovery();
 
     if let Some(ast) = result.ast {
-        println!("Successfully recovered partial AST with {} nodes", count_nodes(&ast));
+        println!(
+            "Successfully recovered partial AST with {} nodes",
+            count_nodes(&ast)
+        );
         println!("\nRecovered structure:");
         print_ast(&ast, 0);
     }

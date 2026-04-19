@@ -23,17 +23,35 @@ fn test_kill_transliteration_delimiter_comparison_mutation() {
     // Original: '(' != ')' = true (is_paired = true)
     // Mutated:  '(' == ')' = false (is_paired = false) - would break paired delimiter logic
     let (search, replace, modifiers) = extract_transliteration_parts("tr(abc)(xyz)d");
-    assert_eq!(search, "abc", "Paired delimiter search - kills != to == mutation");
-    assert_eq!(replace, "xyz", "Paired delimiter replace - kills != to == mutation");
-    assert_eq!(modifiers, "d", "Paired delimiter modifiers - kills != to == mutation");
+    assert_eq!(
+        search, "abc",
+        "Paired delimiter search - kills != to == mutation"
+    );
+    assert_eq!(
+        replace, "xyz",
+        "Paired delimiter replace - kills != to == mutation"
+    );
+    assert_eq!(
+        modifiers, "d",
+        "Paired delimiter modifiers - kills != to == mutation"
+    );
 
     // Case 2: Non-paired delimiters where delimiter == closing (should be false originally)
     // Original: '/' != '/' = false (is_paired = false)
     // Mutated:  '/' == '/' = true (is_paired = true) - would break non-paired delimiter logic
     let (search, replace, modifiers) = extract_transliteration_parts("tr/abc/xyz/d");
-    assert_eq!(search, "abc", "Non-paired delimiter search - kills != to == mutation");
-    assert_eq!(replace, "xyz", "Non-paired delimiter replace - kills != to == mutation");
-    assert_eq!(modifiers, "d", "Non-paired delimiter modifiers - kills != to == mutation");
+    assert_eq!(
+        search, "abc",
+        "Non-paired delimiter search - kills != to == mutation"
+    );
+    assert_eq!(
+        replace, "xyz",
+        "Non-paired delimiter replace - kills != to == mutation"
+    );
+    assert_eq!(
+        modifiers, "d",
+        "Non-paired delimiter modifiers - kills != to == mutation"
+    );
 
     // Case 3: Test all paired delimiter types to ensure comprehensive coverage
     let paired_cases = vec![
@@ -125,11 +143,17 @@ fn test_kill_delimiter_match_arm_deletions() {
     // Test parentheses - kills deletion of '(' => ')' match arm
     let (pattern, _replacement, _) = extract_substitution_parts("s(test)(repl)");
     // Note: parentheses have special behavior in substitution, but the delimiter mapping must work
-    assert_eq!(pattern, "test", "Parentheses pattern extraction - kills '(' match arm deletion");
+    assert_eq!(
+        pattern, "test",
+        "Parentheses pattern extraction - kills '(' match arm deletion"
+    );
 
     // Test square brackets - kills deletion of '[' => ']' match arm
     let (pattern, replacement, _) = extract_substitution_parts("s[test][repl]");
-    assert_eq!(pattern, "test", "Brackets pattern extraction - kills '[' match arm deletion");
+    assert_eq!(
+        pattern, "test",
+        "Brackets pattern extraction - kills '[' match arm deletion"
+    );
     assert_eq!(
         replacement, "repl",
         "Brackets replacement extraction - kills '[' match arm deletion"
@@ -137,7 +161,10 @@ fn test_kill_delimiter_match_arm_deletions() {
 
     // Test curly braces - kills deletion of '{' => '}' match arm
     let (pattern, replacement, _) = extract_substitution_parts("s{test}{repl}");
-    assert_eq!(pattern, "test", "Braces pattern extraction - kills '{{' match arm deletion");
+    assert_eq!(
+        pattern, "test",
+        "Braces pattern extraction - kills '{{' match arm deletion"
+    );
     assert_eq!(
         replacement, "repl",
         "Braces replacement extraction - kills '{{' match arm deletion"
@@ -145,7 +172,10 @@ fn test_kill_delimiter_match_arm_deletions() {
 
     // Test angle brackets - kills deletion of '<' => '>' match arm
     let (pattern, replacement, _) = extract_substitution_parts("s<test><repl>");
-    assert_eq!(pattern, "test", "Angle brackets pattern extraction - kills '<' match arm deletion");
+    assert_eq!(
+        pattern, "test",
+        "Angle brackets pattern extraction - kills '<' match arm deletion"
+    );
     assert_eq!(
         replacement, "repl",
         "Angle brackets replacement extraction - kills '<' match arm deletion"
@@ -191,7 +221,10 @@ fn test_kill_closing_delimiter_comparison_mutation() {
         replacement, "repl",
         "Replacement terminated by closing delimiter - kills == to != mutation"
     );
-    assert_eq!(modifiers, "g", "Modifiers after closing delimiter - kills == to != mutation");
+    assert_eq!(
+        modifiers, "g",
+        "Modifiers after closing delimiter - kills == to != mutation"
+    );
 
     // Case 2: Different closing delimiters
     let test_cases = vec![
@@ -223,29 +256,47 @@ fn test_kill_length_comparison_mutation_regex() {
     // Original: "m".len() > 1 = false (don't strip)
     // Mutated:  "m".len() < 1 = false (don't strip) - same result but test boundary
     let (pattern, _body, modifiers) = extract_regex_parts("m");
-    assert_eq!(pattern, "mm", "Single 'm' should not strip prefix - tests > vs < boundary");
-    assert_eq!(modifiers, "", "Single 'm' modifiers - tests > vs < boundary");
+    assert_eq!(
+        pattern, "mm",
+        "Single 'm' should not strip prefix - tests > vs < boundary"
+    );
+    assert_eq!(
+        modifiers, "",
+        "Single 'm' modifiers - tests > vs < boundary"
+    );
 
     // Case 2: Length exactly 2 with alphabetic - should not strip 'm' prefix
     // Original: "ma".len() > 1 = true, but followed by alphabetic so don't strip
     // Mutated:  "ma".len() < 1 = false (wrong branch) - would affect logic
     let (pattern, _body, modifiers) = extract_regex_parts("ma");
-    assert_eq!(pattern, "mam", "Two chars with alphabetic - kills > to < mutation");
+    assert_eq!(
+        pattern, "mam",
+        "Two chars with alphabetic - kills > to < mutation"
+    );
     assert_eq!(modifiers, "", "Alphabetic after m - kills > to < mutation");
 
     // Case 3: Length exactly 2 with non-alphabetic - should strip 'm' prefix
     // Original: "m/".len() > 1 = true, not alphabetic so strip
     // Mutated:  "m/".len() < 1 = false (wrong branch) - would not strip
     let (pattern, _body, modifiers) = extract_regex_parts("m/test/");
-    assert_eq!(pattern, "/test/", "Two chars with non-alphabetic - kills > to < mutation");
-    assert_eq!(modifiers, "", "Non-alphabetic after m - kills > to < mutation");
+    assert_eq!(
+        pattern, "/test/",
+        "Two chars with non-alphabetic - kills > to < mutation"
+    );
+    assert_eq!(
+        modifiers, "",
+        "Non-alphabetic after m - kills > to < mutation"
+    );
 
     // Case 4: Empty string
     // Original: "".len() > 1 = false
     // Mutated:  "".len() < 1 = true (wrong result) - would affect empty string handling
     let (pattern, _body, modifiers) = extract_regex_parts("");
     assert_eq!(pattern, "", "Empty string handling - kills > to < mutation");
-    assert_eq!(modifiers, "", "Empty string modifiers - kills > to < mutation");
+    assert_eq!(
+        modifiers, "",
+        "Empty string modifiers - kills > to < mutation"
+    );
 }
 
 /// Test targeting the + vs - mutation in extract_substitution_parts line 137:41
@@ -256,7 +307,10 @@ fn test_kill_character_position_arithmetic_mutation() {
 
     // Case 1: Multi-byte UTF-8 characters where len_utf8() > 1
     let (pattern, replacement, modifiers) = extract_substitution_parts("s/café/茶/g");
-    assert_eq!(pattern, "café", "UTF-8 pattern with multi-byte chars - kills + to - mutation");
+    assert_eq!(
+        pattern, "café",
+        "UTF-8 pattern with multi-byte chars - kills + to - mutation"
+    );
     assert_eq!(
         replacement, "茶",
         "UTF-8 replacement with multi-byte chars - kills + to - mutation"
@@ -273,17 +327,32 @@ fn test_kill_character_position_arithmetic_mutation() {
         replacement, "repl🦀",
         "Emoji in replacement - kills + to - mutation in position calculation"
     );
-    assert_eq!(modifiers, "", "Emoji test modifiers - kills + to - mutation");
+    assert_eq!(
+        modifiers, "",
+        "Emoji test modifiers - kills + to - mutation"
+    );
 
     // Case 3: Mixed ASCII and multi-byte characters
     let (pattern, replacement, _) = extract_substitution_parts("s/a🌟b/x🎯y/");
-    assert_eq!(pattern, "a🌟b", "Mixed ASCII/multi-byte pattern - kills + to - mutation");
-    assert_eq!(replacement, "x🎯y", "Mixed ASCII/multi-byte replacement - kills + to - mutation");
+    assert_eq!(
+        pattern, "a🌟b",
+        "Mixed ASCII/multi-byte pattern - kills + to - mutation"
+    );
+    assert_eq!(
+        replacement, "x🎯y",
+        "Mixed ASCII/multi-byte replacement - kills + to - mutation"
+    );
 
     // Case 4: Multiple delimiters in sequence with UTF-8
     let (search, replace, _) = extract_transliteration_parts("tr/αβγ/ΑΒΓ/");
-    assert_eq!(search, "αβγ", "Greek letters in transliteration - kills + to - mutation");
-    assert_eq!(replace, "ΑΒΓ", "Greek capitals in transliteration - kills + to - mutation");
+    assert_eq!(
+        search, "αβγ",
+        "Greek letters in transliteration - kills + to - mutation"
+    );
+    assert_eq!(
+        replace, "ΑΒΓ",
+        "Greek capitals in transliteration - kills + to - mutation"
+    );
 }
 
 /// Test targeting the && vs || mutation in extract_regex_parts line 12:9
@@ -296,29 +365,53 @@ fn test_kill_logical_and_to_or_mutation_regex() {
     // Original: true && true && true = true (strip 'm')
     // Mutated:  true || true || true = true (same result but need to verify correct behavior)
     let (pattern, _body, modifiers) = extract_regex_parts("m/test/");
-    assert_eq!(pattern, "/test/", "All conditions true - kills && to || mutation");
-    assert_eq!(modifiers, "", "All conditions true modifiers - kills && to || mutation");
+    assert_eq!(
+        pattern, "/test/",
+        "All conditions true - kills && to || mutation"
+    );
+    assert_eq!(
+        modifiers, "",
+        "All conditions true modifiers - kills && to || mutation"
+    );
 
     // Case 2: First condition false - should not strip
     // Original: false && ... = false (don't strip)
     // Mutated:  false || ... = depends on other conditions (could be different)
     let (pattern, _body, modifiers) = extract_regex_parts("x/test/");
-    assert_eq!(pattern, "x/test/x", "First condition false - kills && to || mutation");
-    assert_eq!(modifiers, "", "First condition false modifiers - kills && to || mutation");
+    assert_eq!(
+        pattern, "x/test/x",
+        "First condition false - kills && to || mutation"
+    );
+    assert_eq!(
+        modifiers, "",
+        "First condition false modifiers - kills && to || mutation"
+    );
 
     // Case 3: First two conditions true, third false - should not strip
     // Original: true && true && false = false (don't strip)
     // Mutated:  true || true || false = true (would strip incorrectly)
     let (pattern, _body, modifiers) = extract_regex_parts("ma");
-    assert_eq!(pattern, "mam", "Third condition false - kills && to || mutation");
-    assert_eq!(modifiers, "", "Third condition false modifiers - kills && to || mutation");
+    assert_eq!(
+        pattern, "mam",
+        "Third condition false - kills && to || mutation"
+    );
+    assert_eq!(
+        modifiers, "",
+        "Third condition false modifiers - kills && to || mutation"
+    );
 
     // Case 4: First condition true, second false - should not strip
     // Original: true && false && ... = false (don't strip)
     // Mutated:  true || false || ... = depends on third condition
     let (pattern, _body, modifiers) = extract_regex_parts("m");
-    assert_eq!(pattern, "mm", "Second condition false - kills && to || mutation");
-    assert_eq!(modifiers, "", "Second condition false modifiers - kills && to || mutation");
+    assert_eq!(
+        pattern, "mm",
+        "Second condition false - kills && to || mutation"
+    );
+    assert_eq!(
+        modifiers, "",
+        "Second condition false modifiers - kills && to || mutation"
+    );
 
     // Case 5: Verify alphabetic detection specifically
     let alphabetic_cases = vec![
@@ -335,7 +428,11 @@ fn test_kill_logical_and_to_or_mutation_regex() {
             "Alphabetic test for {} - kills && to || mutation",
             input
         );
-        assert_eq!(modifiers, "", "Alphabetic modifiers for {} - kills && to || mutation", input);
+        assert_eq!(
+            modifiers, "",
+            "Alphabetic modifiers for {} - kills && to || mutation",
+            input
+        );
     }
 }
 
@@ -354,8 +451,14 @@ fn test_kill_return_value_hardcoded_mutations() {
         replace, "xyzzy",
         "Replace should not be hardcoded xyzzy - kills return value mutation"
     );
-    assert_ne!(search, "", "Search should not be empty string - kills String::new() mutation");
-    assert_ne!(replace, "", "Replace should not be empty string - kills String::new() mutation");
+    assert_ne!(
+        search, "",
+        "Search should not be empty string - kills String::new() mutation"
+    );
+    assert_ne!(
+        replace, "",
+        "Replace should not be empty string - kills String::new() mutation"
+    );
     assert_eq!(search, "search", "Search should be actual content");
     assert_eq!(replace, "replace", "Replace should be actual content");
     assert_eq!(modifiers, "d", "Modifiers should be actual content");
@@ -384,8 +487,14 @@ fn test_kill_return_value_hardcoded_mutations() {
         replacement, "xyzzy",
         "Replacement should not be hardcoded xyzzy - kills return value mutation"
     );
-    assert_ne!(pattern, "", "Pattern should not be empty - kills String::new() mutation");
-    assert_ne!(replacement, "", "Replacement should not be empty - kills String::new() mutation");
+    assert_ne!(
+        pattern, "",
+        "Pattern should not be empty - kills String::new() mutation"
+    );
+    assert_ne!(
+        replacement, "",
+        "Replacement should not be empty - kills String::new() mutation"
+    );
     assert_eq!(pattern, "pattern", "Pattern should match input");
     assert_eq!(replacement, "replacement", "Replacement should match input");
     assert_eq!(modifiers, "gi", "Modifiers should match input");
@@ -400,7 +509,10 @@ fn test_kill_return_value_hardcoded_mutations() {
         modifiers, "xyzzy",
         "Regex modifiers should not be hardcoded xyzzy - kills return value mutation"
     );
-    assert_ne!(pattern, "", "Regex pattern should not be empty - kills String::new() mutation");
+    assert_ne!(
+        pattern, "",
+        "Regex pattern should not be empty - kills String::new() mutation"
+    );
     assert_eq!(pattern, "{regex}", "Regex pattern should match input");
     assert_eq!(modifiers, "ig", "Regex modifiers should match input");
 }
@@ -469,13 +581,25 @@ fn test_kill_boundary_arithmetic_mutations() {
 
     // Case 1: Single character delimiters and content
     let (pattern, replacement, _) = extract_substitution_parts("s/a/b/");
-    assert_eq!(pattern, "a", "Single char pattern - kills boundary arithmetic mutations");
-    assert_eq!(replacement, "b", "Single char replacement - kills boundary arithmetic mutations");
+    assert_eq!(
+        pattern, "a",
+        "Single char pattern - kills boundary arithmetic mutations"
+    );
+    assert_eq!(
+        replacement, "b",
+        "Single char replacement - kills boundary arithmetic mutations"
+    );
 
     // Case 2: Empty content between delimiters
     let (pattern, replacement, _) = extract_substitution_parts("s///");
-    assert_eq!(pattern, "", "Empty pattern - kills boundary arithmetic mutations");
-    assert_eq!(replacement, "", "Empty replacement - kills boundary arithmetic mutations");
+    assert_eq!(
+        pattern, "",
+        "Empty pattern - kills boundary arithmetic mutations"
+    );
+    assert_eq!(
+        replacement, "",
+        "Empty replacement - kills boundary arithmetic mutations"
+    );
 
     // Case 3: Content with exactly one character that needs special handling
     let test_cases = vec![
@@ -498,7 +622,10 @@ fn test_kill_boundary_arithmetic_mutations() {
 
     // Case 4: Test UTF-8 boundary handling with single multi-byte characters
     let (pattern, replacement, _) = extract_substitution_parts("s/🦀/🎯/");
-    assert_eq!(pattern, "🦀", "Single emoji pattern - kills UTF-8 boundary arithmetic mutations");
+    assert_eq!(
+        pattern, "🦀",
+        "Single emoji pattern - kills UTF-8 boundary arithmetic mutations"
+    );
     assert_eq!(
         replacement, "🎯",
         "Single emoji replacement - kills UTF-8 boundary arithmetic mutations"

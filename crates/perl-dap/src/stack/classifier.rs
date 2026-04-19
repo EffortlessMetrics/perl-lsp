@@ -115,7 +115,10 @@ impl PerlFrameClassifier {
     /// Creates a new classifier with default settings.
     #[must_use]
     pub fn new() -> Self {
-        Self { user_paths: Vec::new(), library_paths: Vec::new() }
+        Self {
+            user_paths: Vec::new(),
+            library_paths: Vec::new(),
+        }
     }
 
     /// Adds a path that should be considered user code.
@@ -138,18 +141,28 @@ impl PerlFrameClassifier {
 
     /// Checks if a path is under any of the user paths.
     fn is_under_user_path(&self, path: &str) -> bool {
-        self.user_paths.iter().any(|user_path| path.starts_with(user_path))
+        self.user_paths
+            .iter()
+            .any(|user_path| path.starts_with(user_path))
     }
 
     /// Checks if a path is under any of the library paths.
     fn is_under_library_path(&self, path: &str) -> bool {
-        self.library_paths.iter().any(|lib_path| path.starts_with(lib_path))
+        self.library_paths
+            .iter()
+            .any(|lib_path| path.starts_with(lib_path))
     }
 
     /// Checks if a path looks like a Perl core module.
     fn is_core_path(path: &str) -> bool {
         // Common core module path patterns
-        let core_patterns = ["/perl/", "/perl5/", "/site_perl/", "/vendor_perl/", "/lib/perl5/"];
+        let core_patterns = [
+            "/perl/",
+            "/perl5/",
+            "/site_perl/",
+            "/vendor_perl/",
+            "/lib/perl5/",
+        ];
 
         // Core module packages
         let core_packages = [
@@ -189,8 +202,14 @@ impl PerlFrameClassifier {
     /// Checks if a path looks like a library module.
     fn is_library_path(path: &str) -> bool {
         // Common library path patterns
-        let library_patterns =
-            ["/local/lib/", "/vendor/", "/cpan/", "/.cpanm/", "/extlib/", "/fatlib/"];
+        let library_patterns = [
+            "/local/lib/",
+            "/vendor/",
+            "/cpan/",
+            "/.cpanm/",
+            "/extlib/",
+            "/fatlib/",
+        ];
 
         for pattern in &library_patterns {
             if path.contains(pattern) {
@@ -341,10 +360,22 @@ mod tests {
 
     #[test]
     fn test_frame_category_presentation_hint() {
-        assert_eq!(FrameCategory::User.presentation_hint(), StackFramePresentationHint::Normal);
-        assert_eq!(FrameCategory::Library.presentation_hint(), StackFramePresentationHint::Subtle);
-        assert_eq!(FrameCategory::Core.presentation_hint(), StackFramePresentationHint::Subtle);
-        assert_eq!(FrameCategory::Eval.presentation_hint(), StackFramePresentationHint::Label);
+        assert_eq!(
+            FrameCategory::User.presentation_hint(),
+            StackFramePresentationHint::Normal
+        );
+        assert_eq!(
+            FrameCategory::Library.presentation_hint(),
+            StackFramePresentationHint::Subtle
+        );
+        assert_eq!(
+            FrameCategory::Core.presentation_hint(),
+            StackFramePresentationHint::Subtle
+        );
+        assert_eq!(
+            FrameCategory::Eval.presentation_hint(),
+            StackFramePresentationHint::Label
+        );
     }
 
     #[test]
@@ -353,7 +384,10 @@ mod tests {
         let frame = frame_with_path("/usr/lib/perl5/strict.pm");
 
         let classified = classifier.apply_classification(frame);
-        assert_eq!(classified.presentation_hint, Some(StackFramePresentationHint::Subtle));
+        assert_eq!(
+            classified.presentation_hint,
+            Some(StackFramePresentationHint::Subtle)
+        );
     }
 
     #[test]

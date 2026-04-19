@@ -169,7 +169,10 @@ fn create_comprehensive_workspace_with_init()
     let workspace = TempWorkspace::new()?;
 
     // Write all files to disk
-    workspace.write("lib/MyApp/DataProcessor.pm", e2e_fixtures::REALISTIC_PERL_MODULE)?;
+    workspace.write(
+        "lib/MyApp/DataProcessor.pm",
+        e2e_fixtures::REALISTIC_PERL_MODULE,
+    )?;
     workspace.write("test_script.pl", e2e_fixtures::TEST_SCRIPT)?;
     workspace.write(".perlcriticrc", e2e_fixtures::PERLCRITIC_CONFIG)?;
 
@@ -185,7 +188,9 @@ fn create_comprehensive_workspace_with_init()
     harness.open_document(&workspace.uri("test_script.pl"), e2e_fixtures::TEST_SCRIPT)?;
 
     // Trigger processing and indexing
-    harness.did_save(&workspace.uri("lib/MyApp/DataProcessor.pm")).ok();
+    harness
+        .did_save(&workspace.uri("lib/MyApp/DataProcessor.pm"))
+        .ok();
     harness.did_save(&workspace.uri("test_script.pl")).ok();
 
     // Wait for comprehensive indexing and analysis
@@ -205,8 +210,9 @@ fn test_issue_145_complete_workflow() -> TestResult {
     // Step 1: Verify server capabilities include new features
     // Server was initialized by create_comprehensive_workspace_with_init(), use the returned init_result
 
-    let capabilities =
-        init_result.get("capabilities").ok_or("Initialize result should contain capabilities")?;
+    let capabilities = init_result
+        .get("capabilities")
+        .ok_or("Initialize result should contain capabilities")?;
 
     // Verify executeCommand capability
     assert!(
@@ -218,9 +224,13 @@ fn test_issue_145_complete_workflow() -> TestResult {
         .as_array()
         .ok_or("Commands should be array")?;
 
-    let has_critic_command =
-        execute_commands.iter().any(|cmd| cmd.as_str() == Some("perl.runCritic"));
-    assert!(has_critic_command, "perl.runCritic command should be advertised");
+    let has_critic_command = execute_commands
+        .iter()
+        .any(|cmd| cmd.as_str() == Some("perl.runCritic"));
+    assert!(
+        has_critic_command,
+        "perl.runCritic command should be advertised"
+    );
 
     // Verify code action capability
     assert!(
@@ -239,12 +249,20 @@ fn test_issue_145_complete_workflow() -> TestResult {
     )?;
 
     // Validate critic results
-    assert_eq!(critic_result["status"].as_str(), Some("success"), "Critic analysis should succeed");
+    assert_eq!(
+        critic_result["status"].as_str(),
+        Some("success"),
+        "Critic analysis should succeed"
+    );
 
-    let violations =
-        critic_result["violations"].as_array().ok_or("Should return violations array")?;
+    let violations = critic_result["violations"]
+        .as_array()
+        .ok_or("Should return violations array")?;
 
-    assert!(!violations.is_empty(), "Should detect policy violations in test file");
+    assert!(
+        !violations.is_empty(),
+        "Should detect policy violations in test file"
+    );
 
     // Should detect missing 'use strict;'
     let has_strict_violation = violations.iter().any(|v| {
@@ -253,7 +271,10 @@ fn test_issue_145_complete_workflow() -> TestResult {
             .map(|p| p.contains("RequireUseStrict") || p.contains("strict"))
             .unwrap_or(false)
     });
-    assert!(has_strict_violation, "Should detect missing 'use strict;' violation");
+    assert!(
+        has_strict_violation,
+        "Should detect missing 'use strict;' violation"
+    );
 
     // Step 3: Request code actions to fix violations
     let code_actions_result = harness.request_with_timeout(
@@ -272,7 +293,9 @@ fn test_issue_145_complete_workflow() -> TestResult {
         Duration::from_secs(3),
     )?;
 
-    let _actions = code_actions_result.as_array().ok_or("Should return code actions array")?;
+    let _actions = code_actions_result
+        .as_array()
+        .ok_or("Should return code actions array")?;
 
     // Step 4: Request refactoring actions
     let refactor_actions_result = harness.request_with_timeout(
@@ -291,8 +314,9 @@ fn test_issue_145_complete_workflow() -> TestResult {
         Duration::from_secs(3),
     )?;
 
-    let _refactor_actions =
-        refactor_actions_result.as_array().ok_or("Should return refactor actions array")?;
+    let _refactor_actions = refactor_actions_result
+        .as_array()
+        .ok_or("Should return refactor actions array")?;
 
     // Step 5: Test import organization
     let _organize_imports_result = harness.request_with_timeout(
@@ -344,7 +368,10 @@ fn test_cross_file_integration() -> TestResult {
 
     // Both files should be analyzed successfully
     assert!(
-        module_symbols.as_array().map(|a| !a.is_empty()).unwrap_or(false),
+        module_symbols
+            .as_array()
+            .map(|a| !a.is_empty())
+            .unwrap_or(false),
         "Module should have symbols"
     );
 
@@ -359,7 +386,10 @@ fn test_cross_file_integration() -> TestResult {
     );
 
     // Should either provide definition or handle gracefully
-    assert!(definition_result.is_ok(), "Cross-file definition lookup should not error");
+    assert!(
+        definition_result.is_ok(),
+        "Cross-file definition lookup should not error"
+    );
 
     Ok(())
 }
@@ -428,7 +458,11 @@ fn test_error_handling_integration() -> TestResult {
     // Should handle malformed requests gracefully
     assert!(
         malformed_execute_result.is_err()
-            || malformed_execute_result.as_ref().ok().and_then(|v| v.get("error")).is_some(),
+            || malformed_execute_result
+                .as_ref()
+                .ok()
+                .and_then(|v| v.get("error"))
+                .is_some(),
         "Invalid executeCommand should be handled gracefully"
     );
 
@@ -446,7 +480,10 @@ fn test_error_handling_integration() -> TestResult {
     );
 
     // Should handle non-existent files gracefully
-    assert!(malformed_actions_result.is_ok(), "Non-existent file should be handled gracefully");
+    assert!(
+        malformed_actions_result.is_ok(),
+        "Non-existent file should be handled gracefully"
+    );
 
     Ok(())
 }
@@ -494,9 +531,18 @@ fn test_concurrent_operations() -> TestResult {
     );
 
     // All operations should succeed
-    assert!(critic_result1.is_ok(), "First critic request should succeed");
-    assert!(critic_result2.is_ok(), "Second critic request should succeed");
-    assert!(actions_result.is_ok(), "Code actions request should succeed");
+    assert!(
+        critic_result1.is_ok(),
+        "First critic request should succeed"
+    );
+    assert!(
+        critic_result2.is_ok(),
+        "Second critic request should succeed"
+    );
+    assert!(
+        actions_result.is_ok(),
+        "Code actions request should succeed"
+    );
 
     let total_time = start_time.elapsed();
 
@@ -528,7 +574,10 @@ fn test_lsp_protocol_compliance() -> TestResult {
     )?;
 
     // Response should be JSON-RPC 2.0 compliant (verified by harness)
-    assert!(execute_response.is_object(), "executeCommand response should be JSON object");
+    assert!(
+        execute_response.is_object(),
+        "executeCommand response should be JSON object"
+    );
 
     // Test codeAction request/response format compliance
     let code_action_response = harness.request_with_timeout(
@@ -545,13 +594,19 @@ fn test_lsp_protocol_compliance() -> TestResult {
     )?;
 
     // Response should be array of CodeAction | Command
-    assert!(code_action_response.is_array(), "codeAction response should be array");
+    assert!(
+        code_action_response.is_array(),
+        "codeAction response should be array"
+    );
 
     // Validate individual code actions have required fields
     if let Some(actions) = code_action_response.as_array() {
         for action in actions {
             // Each action should have title (required field)
-            assert!(action.get("title").is_some(), "Code action should have title field");
+            assert!(
+                action.get("title").is_some(),
+                "Code action should have title field"
+            );
 
             // Should have either edit OR command field
             let has_edit = action.get("edit").is_some();
@@ -613,7 +668,11 @@ fn test_backwards_compatibility() -> TestResult {
         );
 
         // Should not break existing functionality
-        assert!(result.is_ok(), "Existing command '{}' should still work", command);
+        assert!(
+            result.is_ok(),
+            "Existing command '{}' should still work",
+            command
+        );
     }
 
     // Test that basic LSP features still work
@@ -626,7 +685,10 @@ fn test_backwards_compatibility() -> TestResult {
         Duration::from_secs(2),
     );
 
-    assert!(hover_result.is_ok(), "Basic LSP features should continue to work");
+    assert!(
+        hover_result.is_ok(),
+        "Basic LSP features should continue to work"
+    );
 
     Ok(())
 }

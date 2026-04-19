@@ -27,12 +27,21 @@ pub fn offset_to_utf16_line_col(text: &str, offset: usize) -> (u32, u32) {
             while cs > 0 && !line.is_char_boundary(cs) {
                 cs -= 1;
             }
-            return (line_idx as u32, line[..cs].encode_utf16().count() as u32 + 1);
+            return (
+                line_idx as u32,
+                line[..cs].encode_utf16().count() as u32 + 1,
+            );
         }
         acc = next;
     }
     let last_line = text.lines().count().saturating_sub(1) as u32;
-    (last_line, text.lines().last().map(|l| l.encode_utf16().count()).unwrap_or(0) as u32)
+    (
+        last_line,
+        text.lines()
+            .last()
+            .map(|l| l.encode_utf16().count())
+            .unwrap_or(0) as u32,
+    )
 }
 pub fn utf16_line_col_to_offset(text: &str, line: u32, col: u32) -> usize {
     let mut offset = 0;
@@ -54,7 +63,11 @@ pub fn utf16_line_col_to_offset(text: &str, line: u32, col: u32) -> usize {
                     return offset + bi;
                 }
             }
-            let lcl = if lt.ends_with('\n') { lt.len() - 1 } else { lt.len() };
+            let lcl = if lt.ends_with('\n') {
+                lt.len() - 1
+            } else {
+                lt.len()
+            };
             return offset + lcl.min(text.len() - offset);
         }
         offset += lt.len();

@@ -22,7 +22,10 @@ fn test_wired_inline_completion_provider_accessible() {
     let provider = InlineCompletionProvider::new();
     // Basic smoke: after `->` we should get a `new()` suggestion.
     let completions = provider.get_inline_completions("$obj->", 0, 6);
-    assert!(!completions.items.is_empty(), "expected at least one inline completion");
+    assert!(
+        !completions.items.is_empty(),
+        "expected at least one inline completion"
+    );
     assert_eq!(completions.items[0].insert_text, "new()");
 }
 
@@ -55,7 +58,10 @@ fn test_wired_inline_completion_utf16_position() {
         !completions.items.is_empty(),
         "expected inline completions at UTF-16 end-of-line position; got none"
     );
-    assert_eq!(completions.items[0].insert_text, "new()", "expected 'new()' suggestion after '->'");
+    assert_eq!(
+        completions.items[0].insert_text, "new()",
+        "expected 'new()' suggestion after '->'"
+    );
 }
 
 /// Real LSP requests provide a line number within a multi-line document.
@@ -75,7 +81,10 @@ fn test_wired_inline_completion_multiline_document() {
         !completions.items.is_empty(),
         "multi-line document: expected completion on line 2 at col {col}"
     );
-    assert_eq!(completions.items[0].insert_text, "new()", "expected 'new()' after '->' on line 2");
+    assert_eq!(
+        completions.items[0].insert_text, "new()",
+        "expected 'new()' after '->' on line 2"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -89,7 +98,10 @@ fn test_wired_workspace_symbols_provider_accessible() {
     let provider = WorkspaceSymbolsProvider::new();
     // Empty provider returns no symbols — just confirm it compiles and runs.
     let results = provider.search("anything", &std::collections::HashMap::new());
-    assert!(results.is_empty(), "fresh provider should return no symbols");
+    assert!(
+        results.is_empty(),
+        "fresh provider should return no symbols"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -140,7 +152,11 @@ fn test_wired_ast_utils_find_function_insert_position() {
     let source = "package Foo;\n\nsub bar { 1 }\n";
     let pos = find_function_insert_position(source);
     // Current policy: insert at end-of-file.
-    assert_eq!(pos, source.len(), "find_function_insert_position should return end-of-file offset");
+    assert_eq!(
+        pos,
+        source.len(),
+        "find_function_insert_position should return end-of-file offset"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -155,8 +171,14 @@ fn test_wired_formatting_types_accessible() {
     // For a 3-line file the end line must be 2, not 0.
     let content = "line1\nline2\nline3";
     let range = FormatRange::whole_document(content);
-    assert_eq!(range.start.line, 0, "whole_document range must start at line 0");
-    assert_eq!(range.end.line, 2, "whole_document range must end at line 2 for a 3-line file");
+    assert_eq!(
+        range.start.line, 0,
+        "whole_document range must start at line 0"
+    );
+    assert_eq!(
+        range.end.line, 2,
+        "whole_document range must end at line 2 for a 3-line file"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -192,9 +214,19 @@ fn test_wired_import_management_collect_imports() {
     ];
     let imports = collect_imports(&lines);
     // 3 `use` lines + 1 blank + 1 sub — only the 3 use lines should be collected.
-    assert_eq!(imports.len(), 3, "should collect exactly the 3 use statements");
-    assert!(imports[0].contains("strict"), "first import should be 'use strict'");
-    assert!(imports[2].contains("Scalar::Util"), "third import should be Scalar::Util");
+    assert_eq!(
+        imports.len(),
+        3,
+        "should collect exactly the 3 use statements"
+    );
+    assert!(
+        imports[0].contains("strict"),
+        "first import should be 'use strict'"
+    );
+    assert!(
+        imports[2].contains("Scalar::Util"),
+        "third import should be Scalar::Util"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -209,7 +241,10 @@ fn test_wired_capability_map_roundtrip() {
     // Default (empty) capabilities → empty feature list
     let empty_caps = ServerCapabilities::default();
     let ids = feature_ids_from_caps(&empty_caps);
-    assert!(ids.is_empty(), "empty capabilities should yield no feature ids");
+    assert!(
+        ids.is_empty(),
+        "empty capabilities should yield no feature ids"
+    );
     // Rebuild capabilities from a known feature id
     let caps = caps_from_feature_ids(&["lsp.hover"]);
     assert!(
@@ -230,7 +265,10 @@ fn test_wired_performance_ast_cache_accessible() {
     // A freshly constructed cache must return None for any lookup —
     // this verifies the get() API is callable and the initial state is empty.
     let result = cache.get("file:///test.pl", "my $x = 1;");
-    assert!(result.is_none(), "fresh AstCache should return None before any put()");
+    assert!(
+        result.is_none(),
+        "fresh AstCache should return None before any put()"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -243,7 +281,10 @@ fn test_wired_feature_flags_accessible() {
     use perl_lsp_feature_flags::BuildFlags;
     // Default BuildFlags has all capabilities disabled
     let flags = BuildFlags::default();
-    assert!(!flags.completion, "default BuildFlags should have completion disabled");
+    assert!(
+        !flags.completion,
+        "default BuildFlags should have completion disabled"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -256,7 +297,10 @@ fn test_wired_feature_policy_accessible() {
     use perl_lsp_feature_policy::{FeatureProfile, flags_for_profile};
     let flags = flags_for_profile(FeatureProfile::Production);
     // Production profile must have core capabilities enabled.
-    assert!(flags.completion, "production profile must enable completion");
+    assert!(
+        flags.completion,
+        "production profile must enable completion"
+    );
     assert!(flags.hover, "production profile must enable hover");
 }
 
@@ -270,7 +314,10 @@ fn test_wired_feature_contracts_accessible() {
     use perl_lsp_feature_contracts::FEATURE_PROFILE_SPECS;
     // The canonical profile names are load-bearing — check specific known values.
     let canonicals: Vec<&str> = FEATURE_PROFILE_SPECS.iter().map(|s| s.canonical).collect();
-    assert!(canonicals.contains(&"ga-lock"), "FEATURE_PROFILE_SPECS must contain ga-lock profile");
+    assert!(
+        canonicals.contains(&"ga-lock"),
+        "FEATURE_PROFILE_SPECS must contain ga-lock profile"
+    );
     assert!(
         canonicals.contains(&"production"),
         "FEATURE_PROFILE_SPECS must contain production profile"
@@ -304,8 +351,14 @@ fn test_wired_feature_profile_accessible() {
     use perl_lsp_feature_profile::supported_cli_profiles;
     let profiles = supported_cli_profiles();
     // Check that canonical token values are present, not just that the list is non-empty.
-    assert!(profiles.contains(&"production"), "supported profiles must include 'production'");
-    assert!(profiles.contains(&"ga-lock"), "supported profiles must include 'ga-lock'");
+    assert!(
+        profiles.contains(&"production"),
+        "supported profiles must include 'production'"
+    );
+    assert!(
+        profiles.contains(&"ga-lock"),
+        "supported profiles must include 'ga-lock'"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -320,7 +373,10 @@ fn test_wired_feature_profile_cli_accessible() {
     };
     let tokens = feature_profile_supported_tokens();
     // Check specific tokens are present — this would fail if the list shrank unexpectedly.
-    assert!(tokens.contains(&"production"), "supported tokens must include 'production'");
+    assert!(
+        tokens.contains(&"production"),
+        "supported tokens must include 'production'"
+    );
     // parse_feature_profile_arg must successfully parse known tokens.
     assert!(
         parse_feature_profile_arg("production").is_ok(),
@@ -342,9 +398,21 @@ fn test_wired_perltidy_config_accessible() {
     use perl_lsp_perltidy::PerlTidyConfig;
     let config = PerlTidyConfig::default();
     // Verify load-bearing defaults that downstream callers depend on.
-    assert_eq!(config.indent_columns, Some(4), "default indent_columns must be 4");
-    assert_eq!(config.maximum_line_length, Some(80), "default maximum_line_length must be 80");
-    assert_eq!(config.tabs, Some(false), "default tabs must be false (spaces)");
+    assert_eq!(
+        config.indent_columns,
+        Some(4),
+        "default indent_columns must be 4"
+    );
+    assert_eq!(
+        config.maximum_line_length,
+        Some(80),
+        "default maximum_line_length must be 80"
+    );
+    assert_eq!(
+        config.tabs,
+        Some(false),
+        "default tabs must be false (spaces)"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -360,5 +428,8 @@ fn test_wired_document_links_compute_links() {
     let text = "use Scalar::Util qw(looks_like_number);\n";
     let roots: Vec<Url> = vec![];
     let links = compute_links(uri, text, &roots);
-    assert!(!links.is_empty(), "should produce a document link for Scalar::Util");
+    assert!(
+        !links.is_empty(),
+        "should produce a document link for Scalar::Util"
+    );
 }

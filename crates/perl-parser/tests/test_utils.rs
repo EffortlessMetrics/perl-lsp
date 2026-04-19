@@ -310,10 +310,17 @@ pub mod assertions {
         let items = items_opt.unwrap_or_else(|| unreachable!());
 
         let found = items.iter().any(|item| {
-            item["message"].as_str().map(|msg| msg.contains(expected_message)).unwrap_or(false)
+            item["message"]
+                .as_str()
+                .map(|msg| msg.contains(expected_message))
+                .unwrap_or(false)
         });
 
-        assert!(found, "Expected diagnostic containing '{}', got: {:?}", expected_message, items);
+        assert!(
+            found,
+            "Expected diagnostic containing '{}', got: {:?}",
+            expected_message, items
+        );
     }
 
     /// Assert symbol count
@@ -442,7 +449,15 @@ pub mod generators {
 fn start_lsp_server() -> TestServer {
     use perl_tdd_support::must;
     let process = match Command::new("cargo")
-        .args(["run", "-p", "perl-parser", "--bin", "perl-lsp", "--", "--stdio"])
+        .args([
+            "run",
+            "-p",
+            "perl-parser",
+            "--bin",
+            "perl-lsp",
+            "--",
+            "--stdio",
+        ])
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
@@ -466,7 +481,11 @@ fn send_request(child: &mut Child, request: Value) {
 
     let stdin = must_some(child.stdin.as_mut());
 
-    must(write!(stdin, "Content-Length: {}\r\n\r\n{}", length, request_str));
+    must(write!(
+        stdin,
+        "Content-Length: {}\r\n\r\n{}",
+        length, request_str
+    ));
     must(stdin.flush());
 }
 

@@ -31,13 +31,19 @@ pub(super) fn fix_undefined_variable(
             diagnostic,
             format!("Declare '{}' with 'my'", var_name),
             CodeActionKind::QuickFix,
-            TextEdit { range: (insert_pos, insert_pos), new_text: format!("my {};\n", var_name) },
+            TextEdit {
+                range: (insert_pos, insert_pos),
+                new_text: format!("my {};\n", var_name),
+            },
         ),
         diagnostic_action(
             diagnostic,
             format!("Declare '{}' with 'our'", var_name),
             CodeActionKind::QuickFix,
-            TextEdit { range: (insert_pos, insert_pos), new_text: format!("our {};\n", var_name) },
+            TextEdit {
+                range: (insert_pos, insert_pos),
+                new_text: format!("our {};\n", var_name),
+            },
         ),
     ]
 }
@@ -59,7 +65,10 @@ pub(super) fn fix_unused_variable(
             diagnostic,
             format!("Remove unused variable '{}'", var_name),
             CodeActionKind::QuickFix,
-            TextEdit { range, new_text: String::new() },
+            TextEdit {
+                range,
+                new_text: String::new(),
+            },
         ));
     }
 
@@ -67,7 +76,10 @@ pub(super) fn fix_unused_variable(
         diagnostic,
         format!("Rename to '{}' (mark as intentionally unused)", unused_name),
         CodeActionKind::QuickFix,
-        TextEdit { range: diagnostic.range, new_text: unused_name },
+        TextEdit {
+            range: diagnostic.range,
+            new_text: unused_name,
+        },
     ));
 
     actions
@@ -90,7 +102,10 @@ pub(super) fn fix_variable_shadowing(diagnostic: &Diagnostic) -> Vec<CodeAction>
             diagnostic,
             format!("Rename shadowing variable to '{}'", alt_name),
             CodeActionKind::QuickFix,
-            TextEdit { range: diagnostic.range, new_text: alt_name },
+            TextEdit {
+                range: diagnostic.range,
+                new_text: alt_name,
+            },
         )
     })
     .collect()
@@ -108,7 +123,10 @@ pub(super) fn fix_variable_redeclaration(
             diagnostic,
             "Remove redundant 'my'",
             CodeActionKind::QuickFix,
-            TextEdit { range: (range.0, range.0 + 3), new_text: String::new() },
+            TextEdit {
+                range: (range.0, range.0 + 3),
+                new_text: String::new(),
+            },
         )]
     } else {
         Vec::new()
@@ -149,13 +167,19 @@ pub(super) fn fix_parse_error(
             diagnostic,
             "Add closing parenthesis",
             CodeActionKind::QuickFix,
-            TextEdit { range: (diagnostic.range.1, diagnostic.range.1), new_text: ")".to_string() },
+            TextEdit {
+                range: (diagnostic.range.1, diagnostic.range.1),
+                new_text: ")".to_string(),
+            },
         ),
         "parse-error-unclosedbrace" => diagnostic_action(
             diagnostic,
             "Add closing brace",
             CodeActionKind::QuickFix,
-            TextEdit { range: (diagnostic.range.1, diagnostic.range.1), new_text: "}".to_string() },
+            TextEdit {
+                range: (diagnostic.range.1, diagnostic.range.1),
+                new_text: "}".to_string(),
+            },
         ),
         _ => return Vec::new(),
     };
@@ -175,13 +199,19 @@ pub(super) fn fix_duplicate_parameter(diagnostic: &Diagnostic) -> Vec<CodeAction
             diagnostic,
             format!("Remove duplicate parameter '{}'", param_name),
             CodeActionKind::QuickFix,
-            TextEdit { range: diagnostic.range, new_text: String::new() },
+            TextEdit {
+                range: diagnostic.range,
+                new_text: String::new(),
+            },
         ),
         diagnostic_action(
             diagnostic,
             format!("Rename duplicate to '{}'", new_name),
             CodeActionKind::QuickFix,
-            TextEdit { range: diagnostic.range, new_text: new_name },
+            TextEdit {
+                range: diagnostic.range,
+                new_text: new_name,
+            },
         ),
     ]
 }
@@ -203,7 +233,10 @@ pub(super) fn fix_parameter_shadowing(diagnostic: &Diagnostic) -> Vec<CodeAction
             diagnostic,
             format!("Rename parameter to '{}'", alt_name),
             CodeActionKind::QuickFix,
-            TextEdit { range: diagnostic.range, new_text: alt_name },
+            TextEdit {
+                range: diagnostic.range,
+                new_text: alt_name,
+            },
         )
     })
     .collect()
@@ -217,9 +250,15 @@ pub(super) fn fix_unused_parameter(diagnostic: &Diagnostic) -> Vec<CodeAction> {
 
     vec![diagnostic_action(
         diagnostic,
-        format!("Rename to '{}' (mark as intentionally unused)", underscore_name),
+        format!(
+            "Rename to '{}' (mark as intentionally unused)",
+            underscore_name
+        ),
         CodeActionKind::QuickFix,
-        TextEdit { range: diagnostic.range, new_text: underscore_name },
+        TextEdit {
+            range: diagnostic.range,
+            new_text: underscore_name,
+        },
     )]
 }
 
@@ -236,13 +275,19 @@ pub(super) fn fix_unquoted_bareword(
             diagnostic,
             format!("Quote bareword as '{}'", bareword),
             CodeActionKind::QuickFix,
-            TextEdit { range: diagnostic.range, new_text: format!("'{}'", bareword) },
+            TextEdit {
+                range: diagnostic.range,
+                new_text: format!("'{}'", bareword),
+            },
         ),
         diagnostic_action(
             diagnostic,
             format!("Quote bareword as \"{}\"", bareword),
             CodeActionKind::QuickFix,
-            TextEdit { range: diagnostic.range, new_text: format!("\"{}\"", bareword) },
+            TextEdit {
+                range: diagnostic.range,
+                new_text: format!("\"{}\"", bareword),
+            },
         ),
     ];
 

@@ -58,7 +58,11 @@ pub fn assert_has_error(source: &str, needle: &str) {
 
     // First verify there IS an error node somewhere using AST walk.
     let has_any_error = find_first_error(&ast).is_some();
-    assert!(has_any_error, "Expected an error node for source:\n{}\n\nsexp:\n{}", source, sexp,);
+    assert!(
+        has_any_error,
+        "Expected an error node for source:\n{}\n\nsexp:\n{}",
+        source, sexp,
+    );
 
     // Then verify the needle appears (case-insensitive) in the sexp.
     assert!(

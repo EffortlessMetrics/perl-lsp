@@ -202,7 +202,9 @@ fn test_implementation_correct_package_not_main() -> Result<(), Box<dyn std::err
     let response = harness.implementation(doc_uri, 3, 4)?;
 
     // Must return non-empty results — Dog and Cat both override speak
-    let locations = response.as_array().ok_or("Expected array from implementation, got null")?;
+    let locations = response
+        .as_array()
+        .ok_or("Expected array from implementation, got null")?;
     assert!(
         !locations.is_empty(),
         "Expected implementations of Animal::speak (Dog::speak, Cat::speak), got empty array"
@@ -217,8 +219,9 @@ fn test_implementation_correct_package_not_main() -> Result<(), Box<dyn std::err
             "Implementation result should point to {doc_uri}, got {target_uri}"
         );
         // Result line should be line 7 (Dog::speak) or line 11 (Cat::speak), NOT line 3 (Animal::speak itself)
-        let target_line =
-            loc["targetRange"]["start"]["line"].as_u64().ok_or("Missing target line")?;
+        let target_line = loc["targetRange"]["start"]["line"]
+            .as_u64()
+            .ok_or("Missing target line")?;
         assert!(
             target_line != 3,
             "Implementation should find overriders, not the base method at line 3"
@@ -257,7 +260,9 @@ fn test_implementation_location_points_to_package_not_use_parent()
     // Position (1, 8) is on "Base" in "package Base;"
     let response = harness.implementation(doc_uri, 1, 8)?;
 
-    let locations = response.as_array().ok_or("Expected array from implementation, got null")?;
+    let locations = response
+        .as_array()
+        .ok_or("Expected array from implementation, got null")?;
     assert!(
         !locations.is_empty(),
         "Expected Derived to show up as implementation of Base, got empty"
@@ -312,7 +317,9 @@ fn test_implementation_multiple_overriders_all_returned() -> Result<(), Box<dyn 
     // Cursor on "sub area { 0 }" in Shape package — line 3, character 4
     let response = harness.implementation(doc_uri, 3, 4)?;
 
-    let locations = response.as_array().ok_or("Expected array from implementation, got null")?;
+    let locations = response
+        .as_array()
+        .ok_or("Expected array from implementation, got null")?;
 
     assert_eq!(
         locations.len(),
@@ -339,7 +346,9 @@ fn test_implementation_finds_block_package_methods() -> Result<(), Box<dyn std::
 
     // Cursor on `Base::speak`
     let response = harness.implementation(doc_uri, 2, 4)?;
-    let locations = response.as_array().ok_or("Expected array from implementation, got null")?;
+    let locations = response
+        .as_array()
+        .ok_or("Expected array from implementation, got null")?;
     assert!(
         !locations.is_empty(),
         "Expected at least one implementation for Base::speak in package block form",
@@ -349,7 +358,9 @@ fn test_implementation_finds_block_package_methods() -> Result<(), Box<dyn std::
     for loc in locations {
         let target_uri = loc["targetUri"].as_str().ok_or("Missing targetUri")?;
         assert_eq!(target_uri, doc_uri);
-        let target_line = loc["targetRange"]["start"]["line"].as_u64().ok_or("Missing line")?;
+        let target_line = loc["targetRange"]["start"]["line"]
+            .as_u64()
+            .ok_or("Missing line")?;
         if target_line == 7 {
             saw_block_method = true;
         }

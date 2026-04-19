@@ -39,7 +39,11 @@ fn initialize_adapter() -> DebugAdapter {
 fn get_initialize_body() -> Result<serde_json::Value, Box<dyn std::error::Error>> {
     let mut adapter = DebugAdapter::new();
     match adapter.handle_request(1, "initialize", None) {
-        DapMessage::Response { success: true, body: Some(body), .. } => Ok(body),
+        DapMessage::Response {
+            success: true,
+            body: Some(body),
+            ..
+        } => Ok(body),
         _ => Err("Expected successful initialize response with body".into()),
     }
 }
@@ -49,15 +53,23 @@ fn expect_success_body(
     command: &str,
 ) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
     match response {
-        DapMessage::Response { success: true, command: actual, body: Some(body), .. }
-            if actual == command =>
-        {
-            Ok(body)
-        }
-        DapMessage::Response { success: true, command: actual, .. } if actual == command => {
-            Ok(serde_json::Value::Null)
-        }
-        DapMessage::Response { success: false, message, command: actual, .. } => Err(format!(
+        DapMessage::Response {
+            success: true,
+            command: actual,
+            body: Some(body),
+            ..
+        } if actual == command => Ok(body),
+        DapMessage::Response {
+            success: true,
+            command: actual,
+            ..
+        } if actual == command => Ok(serde_json::Value::Null),
+        DapMessage::Response {
+            success: false,
+            message,
+            command: actual,
+            ..
+        } => Err(format!(
             "command `{actual}` failed: {}",
             message.unwrap_or_else(|| "<no message>".to_string())
         )
@@ -73,7 +85,10 @@ fn expect_success_body(
 /// Feature gate: dap.core is registered in the catalog.
 #[test]
 fn test_feature_gate_dap_core() {
-    assert!(has_feature("dap.core"), "dap.core must be registered in the feature catalog");
+    assert!(
+        has_feature("dap.core"),
+        "dap.core must be registered in the feature catalog"
+    );
 }
 
 /// Capability test: initialize advertises core capabilities when dap.core is enabled.
@@ -82,23 +97,32 @@ fn test_capability_dap_core_initialize_response() -> TestResult {
     let body = get_initialize_body()?;
 
     if has_feature("dap.core") {
-        let supports_config_done =
-            body.get("supportsConfigurationDoneRequest").and_then(|v| v.as_bool()).unwrap_or(false);
+        let supports_config_done = body
+            .get("supportsConfigurationDoneRequest")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
         assert!(
             supports_config_done,
             "supportsConfigurationDoneRequest must be true when dap.core is enabled"
         );
 
-        let supports_evaluate =
-            body.get("supportsEvaluateForHovers").and_then(|v| v.as_bool()).unwrap_or(false);
+        let supports_evaluate = body
+            .get("supportsEvaluateForHovers")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
         assert!(
             supports_evaluate,
             "supportsEvaluateForHovers must be true when dap.core is enabled"
         );
 
-        let supports_set_variable =
-            body.get("supportsSetVariable").and_then(|v| v.as_bool()).unwrap_or(false);
-        assert!(supports_set_variable, "supportsSetVariable must be true when dap.core is enabled");
+        let supports_set_variable = body
+            .get("supportsSetVariable")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        assert!(
+            supports_set_variable,
+            "supportsSetVariable must be true when dap.core is enabled"
+        );
     }
     Ok(())
 }
@@ -129,7 +153,10 @@ fn test_functional_dap_core_threads() -> TestResult {
     let body = expect_success_body(adapter.handle_request(2, "threads", None), "threads")?;
 
     // threads array must be present (may be empty without an active session)
-    let _threads = body.get("threads").and_then(|v| v.as_array()).ok_or("missing threads array")?;
+    let _threads = body
+        .get("threads")
+        .and_then(|v| v.as_array())
+        .ok_or("missing threads array")?;
     Ok(())
 }
 
@@ -152,8 +179,10 @@ fn test_capability_dap_breakpoints_basic_initialize_response() -> TestResult {
     let body = get_initialize_body()?;
 
     if has_feature("dap.breakpoints.basic") {
-        let supports_conditional =
-            body.get("supportsConditionalBreakpoints").and_then(|v| v.as_bool()).unwrap_or(false);
+        let supports_conditional = body
+            .get("supportsConditionalBreakpoints")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
         assert!(
             supports_conditional,
             "supportsConditionalBreakpoints must be true when dap.breakpoints.basic is enabled"
@@ -178,9 +207,15 @@ fn test_functional_dap_breakpoints_basic_set_breakpoints() -> TestResult {
         "setBreakpoints",
     )?;
 
-    let breakpoints =
-        body.get("breakpoints").and_then(|v| v.as_array()).ok_or("missing breakpoints array")?;
-    assert_eq!(breakpoints.len(), 1, "setBreakpoints must return one record per requested BP");
+    let breakpoints = body
+        .get("breakpoints")
+        .and_then(|v| v.as_array())
+        .ok_or("missing breakpoints array")?;
+    assert_eq!(
+        breakpoints.len(),
+        1,
+        "setBreakpoints must return one record per requested BP"
+    );
     Ok(())
 }
 
@@ -212,9 +247,14 @@ fn test_functional_dap_breakpoints_basic_clear_breakpoints() -> TestResult {
         "setBreakpoints",
     )?;
 
-    let breakpoints =
-        body.get("breakpoints").and_then(|v| v.as_array()).ok_or("missing breakpoints array")?;
-    assert!(breakpoints.is_empty(), "clearing breakpoints must return an empty array");
+    let breakpoints = body
+        .get("breakpoints")
+        .and_then(|v| v.as_array())
+        .ok_or("missing breakpoints array")?;
+    assert!(
+        breakpoints.is_empty(),
+        "clearing breakpoints must return an empty array"
+    );
     Ok(())
 }
 
@@ -269,7 +309,11 @@ fn test_functional_dap_breakpoints_hit_condition_accepted() -> TestResult {
     };
 
     let breakpoints = store.set_breakpoints(&args);
-    assert_eq!(breakpoints.len(), 1, "hit_condition breakpoint must return one record");
+    assert_eq!(
+        breakpoints.len(),
+        1,
+        "hit_condition breakpoint must return one record"
+    );
     Ok(())
 }
 
@@ -303,7 +347,10 @@ fn test_functional_dap_breakpoints_hit_condition_gte_two() -> TestResult {
 
     let bps = store.set_breakpoints(&args);
     assert_eq!(bps.len(), 1, "expected one breakpoint record");
-    assert!(bps[0].verified, "breakpoint on executable line must be verified");
+    assert!(
+        bps[0].verified,
+        "breakpoint on executable line must be verified"
+    );
 
     let first = store.register_breakpoint_hit(&path, 2);
     assert!(first.matched, "first hit must match the breakpoint");
@@ -345,7 +392,10 @@ fn test_functional_dap_breakpoints_hit_condition_modulo() -> TestResult {
 
     let bps = store.set_breakpoints(&args);
     assert_eq!(bps.len(), 1, "expected one breakpoint record");
-    assert!(bps[0].verified, "breakpoint on executable line must be verified");
+    assert!(
+        bps[0].verified,
+        "breakpoint on executable line must be verified"
+    );
 
     let h1 = store.register_breakpoint_hit(&path, 2);
     let h2 = store.register_breakpoint_hit(&path, 2);
@@ -376,8 +426,10 @@ fn test_capability_dap_breakpoints_logpoints_initialize_response() -> TestResult
     let body = get_initialize_body()?;
 
     if has_feature("dap.breakpoints.logpoints") {
-        let supports_log_points =
-            body.get("supportsLogPoints").and_then(|v| v.as_bool()).unwrap_or(false);
+        let supports_log_points = body
+            .get("supportsLogPoints")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
         assert!(
             supports_log_points,
             "supportsLogPoints must be true when dap.breakpoints.logpoints is enabled"
@@ -416,12 +468,18 @@ fn test_functional_dap_breakpoints_logpoint_emits_and_continues() -> TestResult 
 
     let bps = store.set_breakpoints(&args);
     assert_eq!(bps.len(), 1, "expected one breakpoint record");
-    assert!(bps[0].verified, "logpoint on executable line must be verified");
+    assert!(
+        bps[0].verified,
+        "logpoint on executable line must be verified"
+    );
 
     let outcome = store.register_breakpoint_hit(&path, 3);
     assert!(outcome.matched, "logpoint must match the breakpoint");
     assert!(!outcome.should_stop, "logpoint must not stop execution");
-    assert!(!outcome.log_messages.is_empty(), "logpoint must emit at least one log message");
+    assert!(
+        !outcome.log_messages.is_empty(),
+        "logpoint must emit at least one log message"
+    );
     Ok(())
 }
 
@@ -441,9 +499,15 @@ fn test_functional_dap_breakpoints_logpoint_stored_via_set_breakpoints() -> Test
         "setBreakpoints",
     )?;
 
-    let breakpoints =
-        body.get("breakpoints").and_then(|v| v.as_array()).ok_or("missing breakpoints array")?;
-    assert_eq!(breakpoints.len(), 1, "logpoint must appear in setBreakpoints response");
+    let breakpoints = body
+        .get("breakpoints")
+        .and_then(|v| v.as_array())
+        .ok_or("missing breakpoints array")?;
+    assert_eq!(
+        breakpoints.len(),
+        1,
+        "logpoint must appear in setBreakpoints response"
+    );
     Ok(())
 }
 
@@ -466,8 +530,10 @@ fn test_capability_dap_completions_initialize_response() -> TestResult {
     let body = get_initialize_body()?;
 
     if has_feature("dap.completions") {
-        let supports_completions =
-            body.get("supportsCompletionsRequest").and_then(|v| v.as_bool()).unwrap_or(false);
+        let supports_completions = body
+            .get("supportsCompletionsRequest")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
         assert!(
             supports_completions,
             "supportsCompletionsRequest must be true when dap.completions is enabled"
@@ -481,15 +547,27 @@ fn test_capability_dap_completions_initialize_response() -> TestResult {
 fn test_functional_dap_completions_returns_keywords() -> TestResult {
     let mut adapter = initialize_adapter();
     let body = expect_success_body(
-        adapter.handle_request(2, "completions", Some(json!({ "text": "pri", "column": 3 }))),
+        adapter.handle_request(
+            2,
+            "completions",
+            Some(json!({ "text": "pri", "column": 3 })),
+        ),
         "completions",
     )?;
 
-    let targets = body.get("targets").and_then(|v| v.as_array()).ok_or("missing targets array")?;
-    assert!(!targets.is_empty(), "completions for 'pri' must return at least one target");
+    let targets = body
+        .get("targets")
+        .and_then(|v| v.as_array())
+        .ok_or("missing targets array")?;
+    assert!(
+        !targets.is_empty(),
+        "completions for 'pri' must return at least one target"
+    );
 
-    let labels: Vec<&str> =
-        targets.iter().filter_map(|t| t.get("label").and_then(|l| l.as_str())).collect();
+    let labels: Vec<&str> = targets
+        .iter()
+        .filter_map(|t| t.get("label").and_then(|l| l.as_str()))
+        .collect();
     assert!(
         labels.contains(&"print"),
         "completions for 'pri' must include 'print'; got: {labels:?}"
@@ -506,8 +584,14 @@ fn test_functional_dap_completions_empty_prefix() -> TestResult {
         "completions",
     )?;
 
-    let targets = body.get("targets").and_then(|v| v.as_array()).ok_or("missing targets array")?;
-    assert!(!targets.is_empty(), "completions with empty prefix must return some targets");
+    let targets = body
+        .get("targets")
+        .and_then(|v| v.as_array())
+        .ok_or("missing targets array")?;
+    assert!(
+        !targets.is_empty(),
+        "completions with empty prefix must return some targets"
+    );
     Ok(())
 }
 
@@ -534,7 +618,9 @@ fn test_capability_dap_exceptions_die_filter_in_initialize() -> TestResult {
         .and_then(|v| v.as_array())
         .ok_or("Missing exceptionBreakpointFilters")?;
 
-    let has_die = filters.iter().any(|f| f.get("filter").and_then(|v| v.as_str()) == Some("die"));
+    let has_die = filters
+        .iter()
+        .any(|f| f.get("filter").and_then(|v| v.as_str()) == Some("die"));
 
     if has_feature("dap.exceptions.die") {
         assert!(
@@ -553,7 +639,10 @@ fn test_capability_dap_exceptions_die_filter_in_initialize() -> TestResult {
             "die filter must have correct label"
         );
     } else {
-        assert!(!has_die, "die filter must not appear when dap.exceptions.die is disabled");
+        assert!(
+            !has_die,
+            "die filter must not appear when dap.exceptions.die is disabled"
+        );
     }
     Ok(())
 }
@@ -562,12 +651,20 @@ fn test_capability_dap_exceptions_die_filter_in_initialize() -> TestResult {
 #[test]
 fn test_functional_dap_exceptions_die_set_filter() -> TestResult {
     let mut adapter = initialize_adapter();
-    let response =
-        adapter.handle_request(2, "setExceptionBreakpoints", Some(json!({ "filters": ["die"] })));
+    let response = adapter.handle_request(
+        2,
+        "setExceptionBreakpoints",
+        Some(json!({ "filters": ["die"] })),
+    );
 
     match response {
-        DapMessage::Response { success, command, .. } => {
-            assert!(success, "setExceptionBreakpoints with die filter must succeed");
+        DapMessage::Response {
+            success, command, ..
+        } => {
+            assert!(
+                success,
+                "setExceptionBreakpoints with die filter must succeed"
+            );
             assert_eq!(command, "setExceptionBreakpoints");
         }
         _ => return Err("Expected setExceptionBreakpoints response".into()),
@@ -579,7 +676,11 @@ fn test_functional_dap_exceptions_die_set_filter() -> TestResult {
 #[test]
 fn test_functional_dap_exceptions_die_exception_info() -> TestResult {
     let mut adapter = initialize_adapter();
-    adapter.handle_request(2, "setExceptionBreakpoints", Some(json!({ "filters": ["die"] })));
+    adapter.handle_request(
+        2,
+        "setExceptionBreakpoints",
+        Some(json!({ "filters": ["die"] })),
+    );
 
     let response = adapter.handle_request(3, "exceptionInfo", Some(json!({ "threadId": 1 })));
 
@@ -587,7 +688,10 @@ fn test_functional_dap_exceptions_die_exception_info() -> TestResult {
     // but the command must be recognized (not treated as unknown).
     match response {
         DapMessage::Response { command, .. } => {
-            assert_eq!(command, "exceptionInfo", "exceptionInfo command must be dispatched");
+            assert_eq!(
+                command, "exceptionInfo",
+                "exceptionInfo command must be dispatched"
+            );
         }
         _ => return Err("Expected exceptionInfo response".into()),
     }
@@ -607,8 +711,13 @@ fn test_capability_dap_exceptions_die_and_all_filters() -> TestResult {
         .and_then(|v| v.as_array())
         .ok_or("Missing exceptionBreakpointFilters")?;
 
-    let has_all = filters.iter().any(|f| f.get("filter").and_then(|v| v.as_str()) == Some("all"));
-    assert!(has_all, "`all` filter must appear alongside `die` in exceptionBreakpointFilters");
+    let has_all = filters
+        .iter()
+        .any(|f| f.get("filter").and_then(|v| v.as_str()) == Some("all"));
+    assert!(
+        has_all,
+        "`all` filter must appear alongside `die` in exceptionBreakpointFilters"
+    );
     Ok(())
 }
 
@@ -631,8 +740,10 @@ fn test_capability_dap_inline_values_initialize_response() -> TestResult {
     let body = get_initialize_body()?;
 
     if has_feature("dap.inline_values") {
-        let supports_inline =
-            body.get("supportsInlineValues").and_then(|v| v.as_bool()).unwrap_or(false);
+        let supports_inline = body
+            .get("supportsInlineValues")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
         assert!(
             supports_inline,
             "supportsInlineValues must be true when dap.inline_values is enabled"
@@ -665,8 +776,10 @@ fn test_functional_dap_inline_values_scalar_extraction() -> TestResult {
         "inlineValues",
     )?;
 
-    let values =
-        body.get("inlineValues").and_then(|v| v.as_array()).ok_or("missing inlineValues array")?;
+    let values = body
+        .get("inlineValues")
+        .and_then(|v| v.as_array())
+        .ok_or("missing inlineValues array")?;
 
     assert!(
         values.iter().any(|v| v
@@ -711,11 +824,15 @@ fn test_functional_dap_inline_values_skips_special_vars() -> TestResult {
         "inlineValues",
     )?;
 
-    let values =
-        body.get("inlineValues").and_then(|v| v.as_array()).ok_or("missing inlineValues array")?;
+    let values = body
+        .get("inlineValues")
+        .and_then(|v| v.as_array())
+        .ok_or("missing inlineValues array")?;
 
-    let texts: Vec<&str> =
-        values.iter().filter_map(|v| v.get("text").and_then(|t| t.as_str())).collect();
+    let texts: Vec<&str> = values
+        .iter()
+        .filter_map(|v| v.get("text").and_then(|t| t.as_str()))
+        .collect();
 
     assert!(
         !texts.iter().any(|t| t.contains("$_")),
@@ -756,8 +873,10 @@ fn test_functional_dap_inline_values_array_and_hash() -> TestResult {
         "inlineValues",
     )?;
 
-    let values =
-        body.get("inlineValues").and_then(|v| v.as_array()).ok_or("missing inlineValues array")?;
+    let values = body
+        .get("inlineValues")
+        .and_then(|v| v.as_array())
+        .ok_or("missing inlineValues array")?;
 
     assert!(
         values.iter().any(|v| v
@@ -785,7 +904,10 @@ fn test_functional_dap_inline_values_array_and_hash() -> TestResult {
 /// Feature gate: dap.modules is registered in the catalog.
 #[test]
 fn test_feature_gate_dap_modules() {
-    assert!(has_feature("dap.modules"), "dap.modules must be registered in the feature catalog");
+    assert!(
+        has_feature("dap.modules"),
+        "dap.modules must be registered in the feature catalog"
+    );
 }
 
 /// Capability test: initialize advertises modules support.
@@ -794,8 +916,10 @@ fn test_capability_dap_modules_initialize_response() -> TestResult {
     let body = get_initialize_body()?;
 
     if has_feature("dap.modules") {
-        let supports_modules =
-            body.get("supportsModulesRequest").and_then(|v| v.as_bool()).unwrap_or(false);
+        let supports_modules = body
+            .get("supportsModulesRequest")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
         assert!(
             supports_modules,
             "supportsModulesRequest must be true when dap.modules is enabled"
@@ -813,11 +937,19 @@ fn test_functional_dap_modules_no_session() -> TestResult {
         "modules",
     )?;
 
-    let modules = body.get("modules").and_then(|v| v.as_array()).ok_or("missing modules array")?;
-    let total =
-        body.get("totalModules").and_then(|v| v.as_i64()).ok_or("missing totalModules field")?;
+    let modules = body
+        .get("modules")
+        .and_then(|v| v.as_array())
+        .ok_or("missing modules array")?;
+    let total = body
+        .get("totalModules")
+        .and_then(|v| v.as_i64())
+        .ok_or("missing totalModules field")?;
 
-    assert!(modules.is_empty(), "modules without active session must return empty array");
+    assert!(
+        modules.is_empty(),
+        "modules without active session must return empty array"
+    );
     assert_eq!(total, 0, "totalModules without active session must be 0");
     Ok(())
 }
@@ -827,15 +959,25 @@ fn test_functional_dap_modules_no_session() -> TestResult {
 fn test_functional_dap_modules_with_count_limit() -> TestResult {
     let mut adapter = initialize_adapter();
     let body = expect_success_body(
-        adapter.handle_request(2, "modules", Some(json!({ "startModule": 0, "moduleCount": 10 }))),
+        adapter.handle_request(
+            2,
+            "modules",
+            Some(json!({ "startModule": 0, "moduleCount": 10 })),
+        ),
         "modules",
     )?;
 
-    let modules = body.get("modules").and_then(|v| v.as_array()).ok_or("missing modules array")?;
+    let modules = body
+        .get("modules")
+        .and_then(|v| v.as_array())
+        .ok_or("missing modules array")?;
     let _total = body.get("totalModules").ok_or("missing totalModules")?;
 
     // Without an active debug session, no modules should be present
-    assert!(modules.len() <= 10, "modules must respect moduleCount limit");
+    assert!(
+        modules.len() <= 10,
+        "modules must respect moduleCount limit"
+    );
     Ok(())
 }
 
@@ -845,7 +987,10 @@ fn test_functional_dap_modules_without_arguments() -> TestResult {
     let mut adapter = initialize_adapter();
     let body = expect_success_body(adapter.handle_request(2, "modules", None), "modules")?;
 
-    let _modules = body.get("modules").and_then(|v| v.as_array()).ok_or("missing modules array")?;
+    let _modules = body
+        .get("modules")
+        .and_then(|v| v.as_array())
+        .ok_or("missing modules array")?;
     Ok(())
 }
 
@@ -872,7 +1017,9 @@ fn test_capability_dap_exceptions_warn_filter_in_initialize() -> TestResult {
         .and_then(|v| v.as_array())
         .ok_or("Missing exceptionBreakpointFilters")?;
 
-    let has_warn = filters.iter().any(|f| f.get("filter").and_then(|v| v.as_str()) == Some("warn"));
+    let has_warn = filters
+        .iter()
+        .any(|f| f.get("filter").and_then(|v| v.as_str()) == Some("warn"));
 
     if has_feature("dap.exceptions.warn") {
         assert!(
@@ -896,7 +1043,10 @@ fn test_capability_dap_exceptions_warn_filter_in_initialize() -> TestResult {
             "warn filter default must be false (non-intrusive by default)"
         );
     } else {
-        assert!(!has_warn, "warn filter must not appear when dap.exceptions.warn is disabled");
+        assert!(
+            !has_warn,
+            "warn filter must not appear when dap.exceptions.warn is disabled"
+        );
     }
     Ok(())
 }
@@ -905,12 +1055,20 @@ fn test_capability_dap_exceptions_warn_filter_in_initialize() -> TestResult {
 #[test]
 fn test_functional_dap_exceptions_warn_set_filter() -> TestResult {
     let mut adapter = initialize_adapter();
-    let response =
-        adapter.handle_request(2, "setExceptionBreakpoints", Some(json!({ "filters": ["warn"] })));
+    let response = adapter.handle_request(
+        2,
+        "setExceptionBreakpoints",
+        Some(json!({ "filters": ["warn"] })),
+    );
 
     match response {
-        DapMessage::Response { success, command, .. } => {
-            assert!(success, "setExceptionBreakpoints with warn filter must succeed");
+        DapMessage::Response {
+            success, command, ..
+        } => {
+            assert!(
+                success,
+                "setExceptionBreakpoints with warn filter must succeed"
+            );
             assert_eq!(command, "setExceptionBreakpoints");
         }
         _ => return Err("Expected setExceptionBreakpoints response".into()),
@@ -936,8 +1094,10 @@ fn test_feature_gate_dap_watchpoints() {
 fn test_capability_dap_watchpoints_initialize_response() -> TestResult {
     let body = get_initialize_body()?;
 
-    let supports_data_breakpoints =
-        body.get("supportsDataBreakpoints").and_then(|v| v.as_bool()).unwrap_or(false);
+    let supports_data_breakpoints = body
+        .get("supportsDataBreakpoints")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
 
     if has_feature("dap.watchpoints") {
         assert!(
@@ -963,7 +1123,9 @@ fn test_functional_dap_watchpoints_data_breakpoint_roundtrip() -> TestResult {
         adapter.handle_request(2, "dataBreakpointInfo", Some(json!({ "name": "$x" })));
 
     match info_response {
-        DapMessage::Response { success, command, .. } => {
+        DapMessage::Response {
+            success, command, ..
+        } => {
             assert!(success, "dataBreakpointInfo must succeed");
             assert_eq!(command, "dataBreakpointInfo");
         }
@@ -978,7 +1140,12 @@ fn test_functional_dap_watchpoints_data_breakpoint_roundtrip() -> TestResult {
     );
 
     match set_response {
-        DapMessage::Response { success, command, body: Some(body), .. } => {
+        DapMessage::Response {
+            success,
+            command,
+            body: Some(body),
+            ..
+        } => {
             assert!(success, "setDataBreakpoints must succeed");
             assert_eq!(command, "setDataBreakpoints");
             let bps = body
@@ -986,7 +1153,10 @@ fn test_functional_dap_watchpoints_data_breakpoint_roundtrip() -> TestResult {
                 .and_then(|v| v.as_array())
                 .ok_or("missing breakpoints array")?;
             assert_eq!(bps.len(), 1, "setDataBreakpoints must return one record");
-            let verified = bps[0].get("verified").and_then(|v| v.as_bool()).unwrap_or(false);
+            let verified = bps[0]
+                .get("verified")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
             assert!(verified, "returned breakpoint must be verified");
         }
         _ => return Err("Expected setDataBreakpoints response with body".into()),
@@ -1014,7 +1184,11 @@ fn test_all_dap_features_registered_in_catalog() {
         "dap.watchpoints",
     ];
 
-    let missing: Vec<&str> = dap_features.iter().filter(|&&f| !has_feature(f)).copied().collect();
+    let missing: Vec<&str> = dap_features
+        .iter()
+        .filter(|&&f| !has_feature(f))
+        .copied()
+        .collect();
 
     assert!(
         missing.is_empty(),
@@ -1039,8 +1213,14 @@ fn test_initialize_does_not_advertise_disabled_features() -> TestResult {
     //   supportsDataBreakpoints             = supports_watchpoints
     let feature_to_cap = [
         ("dap.breakpoints.basic", "supportsConditionalBreakpoints"),
-        ("dap.breakpoints.basic", "supportsBreakpointLocationsRequest"),
-        ("dap.breakpoints.hit_condition", "supportsHitConditionalBreakpoints"),
+        (
+            "dap.breakpoints.basic",
+            "supportsBreakpointLocationsRequest",
+        ),
+        (
+            "dap.breakpoints.hit_condition",
+            "supportsHitConditionalBreakpoints",
+        ),
         ("dap.breakpoints.logpoints", "supportsLogPoints"),
         ("dap.inline_values", "supportsInlineValues"),
         ("dap.completions", "supportsCompletionsRequest"),
@@ -1049,7 +1229,10 @@ fn test_initialize_does_not_advertise_disabled_features() -> TestResult {
     ];
 
     for (feature, capability) in feature_to_cap {
-        let advertised = body.get(capability).and_then(|v| v.as_bool()).unwrap_or(false);
+        let advertised = body
+            .get(capability)
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
         let enabled = has_feature(feature);
 
         assert_eq!(

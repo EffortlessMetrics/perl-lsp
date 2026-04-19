@@ -5,7 +5,9 @@ use perl_parser_core::{
 #[test]
 fn v1_node_creation() -> Result<(), Box<dyn std::error::Error>> {
     let node = V1Node::new(
-        V1NodeKind::Number { value: "42".to_string() },
+        V1NodeKind::Number {
+            value: "42".to_string(),
+        },
         SourceLocation { start: 0, end: 2 },
     );
     assert_eq!(node.location.start, 0);
@@ -17,7 +19,9 @@ fn v1_node_creation() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn v1_node_to_sexp() -> Result<(), Box<dyn std::error::Error>> {
     let node = V1Node::new(
-        V1NodeKind::Number { value: "42".to_string() },
+        V1NodeKind::Number {
+            value: "42".to_string(),
+        },
         SourceLocation { start: 0, end: 2 },
     );
     let sexp = node.to_sexp();
@@ -28,11 +32,15 @@ fn v1_node_to_sexp() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn v1_program_node() -> Result<(), Box<dyn std::error::Error>> {
     let child = V1Node::new(
-        V1NodeKind::Number { value: "1".to_string() },
+        V1NodeKind::Number {
+            value: "1".to_string(),
+        },
         SourceLocation { start: 0, end: 1 },
     );
     let program = V1Node::new(
-        V1NodeKind::Program { statements: vec![child] },
+        V1NodeKind::Program {
+            statements: vec![child],
+        },
         SourceLocation { start: 0, end: 1 },
     );
     match &program.kind {
@@ -51,7 +59,9 @@ fn v2_node_creation() -> Result<(), Box<dyn std::error::Error>> {
     let mut id_gen = perl_ast_v2::NodeIdGenerator::new();
     let node = perl_ast_v2::Node::new(
         id_gen.next_id(),
-        V2NodeKind::Number { value: "99".to_string() },
+        V2NodeKind::Number {
+            value: "99".to_string(),
+        },
         range,
     );
     assert_eq!(node.to_sexp(), node.kind.to_sexp());
@@ -75,7 +85,11 @@ fn v2_error_node() -> Result<(), Box<dyn std::error::Error>> {
         range,
     );
     match &node.kind {
-        V2NodeKind::Error { message, expected, partial } => {
+        V2NodeKind::Error {
+            message,
+            expected,
+            partial,
+        } => {
             assert_eq!(message, "test");
             assert_eq!(expected.len(), 1);
             assert!(partial.is_none());

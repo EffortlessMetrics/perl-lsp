@@ -157,8 +157,10 @@ fn find_heredoc_pair(text: &str, start_byte: usize) -> Option<(usize, usize, usi
         // Read identifier: [A-Za-z_][A-Za-z0-9_]*
         let label_start_in_line = label_pos;
         let ident_bytes = &line_text.as_bytes()[label_pos..];
-        let ident_len =
-            ident_bytes.iter().take_while(|&&b| b.is_ascii_alphanumeric() || b == b'_').count();
+        let ident_len = ident_bytes
+            .iter()
+            .take_while(|&&b| b.is_ascii_alphanumeric() || b == b'_')
+            .count();
 
         if ident_len == 0 {
             search_pos = abs_rel + 1;
@@ -235,7 +237,10 @@ fn find_regex_delimiter_pair(text: &str, start_byte: usize) -> Option<(usize, us
     // byte to identify which delimiter position the cursor occupies.
     let line_start = text[..start_byte].rfind('\n').map(|p| p + 1).unwrap_or(0);
 
-    let line_end = text[line_start..].find('\n').map(|p| line_start + p).unwrap_or(text.len());
+    let line_end = text[line_start..]
+        .find('\n')
+        .map(|p| line_start + p)
+        .unwrap_or(text.len());
 
     let line_text = text.get(line_start..line_end)?;
 
@@ -377,10 +382,19 @@ pub fn handle_linked_editing(text: &str, line: u32, character: u32) -> Option<Li
         let (b_line, b_char) = offset_to_utf16_line_col(text, b);
         let len = label_len as u32;
         let ranges = vec![
-            Range::new(Position::new(a_line, a_char), Position::new(a_line, a_char + len)),
-            Range::new(Position::new(b_line, b_char), Position::new(b_line, b_char + len)),
+            Range::new(
+                Position::new(a_line, a_char),
+                Position::new(a_line, a_char + len),
+            ),
+            Range::new(
+                Position::new(b_line, b_char),
+                Position::new(b_line, b_char + len),
+            ),
         ];
-        return Some(LinkedEditingRanges { ranges, word_pattern: None });
+        return Some(LinkedEditingRanges {
+            ranges,
+            word_pattern: None,
+        });
     }
 
     // Try regex/substitution non-bracket delimiter pair
@@ -388,10 +402,19 @@ pub fn handle_linked_editing(text: &str, line: u32, character: u32) -> Option<Li
         let (a_line, a_char) = offset_to_utf16_line_col(text, a);
         let (b_line, b_char) = offset_to_utf16_line_col(text, b);
         let ranges = vec![
-            Range::new(Position::new(a_line, a_char), Position::new(a_line, a_char + 1)),
-            Range::new(Position::new(b_line, b_char), Position::new(b_line, b_char + 1)),
+            Range::new(
+                Position::new(a_line, a_char),
+                Position::new(a_line, a_char + 1),
+            ),
+            Range::new(
+                Position::new(b_line, b_char),
+                Position::new(b_line, b_char + 1),
+            ),
         ];
-        return Some(LinkedEditingRanges { ranges, word_pattern: None });
+        return Some(LinkedEditingRanges {
+            ranges,
+            word_pattern: None,
+        });
     }
 
     // Fall through to bracket/quote pair matching
@@ -400,8 +423,17 @@ pub fn handle_linked_editing(text: &str, line: u32, character: u32) -> Option<Li
     let (b_line, b_char) = offset_to_utf16_line_col(text, b);
 
     let ranges = vec![
-        Range::new(Position::new(a_line, a_char), Position::new(a_line, a_char + 1)),
-        Range::new(Position::new(b_line, b_char), Position::new(b_line, b_char + 1)),
+        Range::new(
+            Position::new(a_line, a_char),
+            Position::new(a_line, a_char + 1),
+        ),
+        Range::new(
+            Position::new(b_line, b_char),
+            Position::new(b_line, b_char + 1),
+        ),
     ];
-    Some(LinkedEditingRanges { ranges, word_pattern: None })
+    Some(LinkedEditingRanges {
+        ranges,
+        word_pattern: None,
+    })
 }

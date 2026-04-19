@@ -51,7 +51,10 @@ pub fn get_tests() -> Vec<(&'static str, &'static str)> {
         ("$VERSION = 1.23", "numeric VERSION assignment"),
         ("$VERSION = v1.2.3", "v-string VERSION assignment"),
         ("our $VERSION = '1.23'", "our VERSION"),
-        ("use version; our $VERSION = version->new('1.23')", "version object"),
+        (
+            "use version; our $VERSION = version->new('1.23')",
+            "version object",
+        ),
         // Version in different contexts
         ("$Foo::VERSION", "package VERSION variable"),
         ("$Foo::Bar::Baz::VERSION", "deep package VERSION"),
@@ -59,7 +62,10 @@ pub fn get_tests() -> Vec<(&'static str, &'static str)> {
         ("${'Foo::VERSION'}", "symbolic VERSION"),
         // Eval version
         ("$VERSION = eval $VERSION", "eval VERSION pattern"),
-        (r#"$VERSION = "1.23_45"; $VERSION = eval $VERSION"#, "eval underscore VERSION"),
+        (
+            r#"$VERSION = "1.23_45"; $VERSION = eval $VERSION"#,
+            "eval underscore VERSION",
+        ),
         // Version declarations
         (
             r#"our $VERSION = '1.23';
@@ -68,9 +74,15 @@ our $AUTHORITY = 'cpan:AUTHOR';"#,
         ),
         // Complex version patterns
         ("use Module 1.23 if $] >= 5.010", "conditional version use"),
-        ("BEGIN { require Module; Module->VERSION(1.23) }", "BEGIN version check"),
+        (
+            "BEGIN { require Module; Module->VERSION(1.23) }",
+            "BEGIN version check",
+        ),
         // Version extraction patterns
-        (r#"our $VERSION = (qw$Revision: 1.23 $)[1]"#, "RCS revision extraction"),
+        (
+            r#"our $VERSION = (qw$Revision: 1.23 $)[1]"#,
+            "RCS revision extraction",
+        ),
         (
             r#"our $VERSION = sprintf "%d.%03d", q$Revision: 1.23 $ =~ /(\d+)\.(\d+)/g"#,
             "complex version extraction",
@@ -89,7 +101,10 @@ our $AUTHORITY = 'cpan:AUTHOR';"#,
         // Version in interpolation
         (r#"print "Version $VERSION\n""#, "interpolated VERSION"),
         (r#"print "Perl $]\n""#, "interpolated perl version"),
-        (r#"print "Perl $^V\n""#, "interpolated v-string perl version"),
+        (
+            r#"print "Perl $^V\n""#,
+            "interpolated v-string perl version",
+        ),
         // Binary/octal in version context
         ("$VERSION = 0b1010", "binary in version"),
         ("$VERSION = 0755", "octal in version"),
@@ -101,12 +116,24 @@ our $AUTHORITY = 'cpan:AUTHOR';"#,
         ("tie $VERSION, 'Version::Class'", "tied VERSION"),
         // Version checking idioms
         ("die 'Too old' if $] < 5.010", "perl version check"),
-        ("die 'Too old' unless $^V ge v5.10.0", "v-string version check"),
-        ("die 'Wrong version' unless $Module::VERSION eq '1.23'", "module version check"),
+        (
+            "die 'Too old' unless $^V ge v5.10.0",
+            "v-string version check",
+        ),
+        (
+            "die 'Wrong version' unless $Module::VERSION eq '1.23'",
+            "module version check",
+        ),
         // Version declaration styles
-        ("our $VERSION; $VERSION = '1.23'", "separate VERSION declaration"),
+        (
+            "our $VERSION; $VERSION = '1.23'",
+            "separate VERSION declaration",
+        ),
         ("our ($VERSION) = '1.23'", "list VERSION assignment"),
-        (r#"our ($VERSION) = (q$Revision: 1.23 $ =~ /(\d+(?:\.\d+)+)/)"#, "extracted VERSION"),
+        (
+            r#"our ($VERSION) = (q$Revision: 1.23 $ =~ /(\d+(?:\.\d+)+)/)"#,
+            "extracted VERSION",
+        ),
         // Multi-line version
         (
             r#"our $VERSION = 
@@ -117,7 +144,10 @@ our $AUTHORITY = 'cpan:AUTHOR';"#,
         ("BEGIN { our $VERSION = '1.23' }", "BEGIN VERSION"),
         ("BEGIN { $VERSION = '1.23' }", "BEGIN package VERSION"),
         // Readonly versions
-        ("use Readonly; Readonly our $VERSION => '1.23'", "Readonly VERSION"),
+        (
+            "use Readonly; Readonly our $VERSION => '1.23'",
+            "Readonly VERSION",
+        ),
         ("use constant VERSION => '1.23'", "constant VERSION"),
         // Version formats
         ("v49.46.51", "v-string as chars (1.2.3)"),

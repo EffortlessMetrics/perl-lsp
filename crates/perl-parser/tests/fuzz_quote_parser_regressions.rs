@@ -117,7 +117,10 @@ fn test_nested_delimiter_depth_tracking() {
         // Empty nested delimiters
         ("s{{}}{{}", ("{}", "{}", "")),
         // Complex nesting
-        ("s{test{deep{nested}deep}test}{repl}", ("test{deep{nested}deep}test", "repl", "")),
+        (
+            "s{test{deep{nested}deep}test}{repl}",
+            ("test{deep{nested}deep}test", "repl", ""),
+        ),
     ];
 
     for (input, expected) in nested_cases {
@@ -172,7 +175,11 @@ fn test_quote_parser_fuzz_robustness() {
 /// This validates that the mutation hardening work didn't introduce performance regressions
 #[test]
 fn test_quote_parser_performance_bounds() {
-    let large_pattern = format!("s/{}/{}/g", "pattern".repeat(200), "replacement".repeat(200));
+    let large_pattern = format!(
+        "s/{}/{}/g",
+        "pattern".repeat(200),
+        "replacement".repeat(200)
+    );
 
     let start = std::time::Instant::now();
     let (pattern, replacement, modifiers) = extract_substitution_parts(&large_pattern);
@@ -181,11 +188,18 @@ fn test_quote_parser_performance_bounds() {
     // Performance bounds check - relaxed for CI reliability
     // Gate timing assertions on release mode to avoid CI flakiness in debug builds
     #[cfg(not(debug_assertions))]
-    assert!(duration.as_millis() < 100, "Quote parser too slow: {}ms", duration.as_millis());
+    assert!(
+        duration.as_millis() < 100,
+        "Quote parser too slow: {}ms",
+        duration.as_millis()
+    );
 
     // In debug mode, just log the performance for monitoring
     #[cfg(debug_assertions)]
-    println!("Quote parser performance: {}ms (debug mode)", duration.as_millis());
+    println!(
+        "Quote parser performance: {}ms (debug mode)",
+        duration.as_millis()
+    );
 
     // Result sanity check
     assert!(pattern.contains("pattern"));

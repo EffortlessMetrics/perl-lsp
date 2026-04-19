@@ -322,7 +322,11 @@ impl LspServer {
                 }
             }
 
-            NodeKind::MethodCall { object, method, args } => {
+            NodeKind::MethodCall {
+                object,
+                method,
+                args,
+            } => {
                 if symbol_kind == "subroutine" && method == symbol_name {
                     count += 1;
                 }
@@ -350,7 +354,12 @@ impl LspServer {
                 }
             }
 
-            NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
+            NodeKind::If {
+                condition,
+                then_branch,
+                elsif_branches,
+                else_branch,
+            } => {
                 count += self.count_references(condition, symbol_name, symbol_kind);
                 count += self.count_references(then_branch, symbol_name, symbol_kind);
                 for (cond, branch) in elsif_branches {
@@ -362,8 +371,17 @@ impl LspServer {
                 }
             }
 
-            NodeKind::While { condition, body, continue_block }
-            | NodeKind::For { condition: Some(condition), body, continue_block, .. } => {
+            NodeKind::While {
+                condition,
+                body,
+                continue_block,
+            }
+            | NodeKind::For {
+                condition: Some(condition),
+                body,
+                continue_block,
+                ..
+            } => {
                 count += self.count_references(condition, symbol_name, symbol_kind);
                 count += self.count_references(body, symbol_name, symbol_kind);
                 if let Some(cont) = continue_block {
@@ -371,7 +389,12 @@ impl LspServer {
                 }
             }
 
-            NodeKind::Foreach { variable: _, list, body, continue_block: _ } => {
+            NodeKind::Foreach {
+                variable: _,
+                list,
+                body,
+                continue_block: _,
+            } => {
                 count += self.count_references(list, symbol_name, symbol_kind);
                 count += self.count_references(body, symbol_name, symbol_kind);
             }
@@ -393,7 +416,11 @@ impl LspServer {
                 count += self.count_references(operand, symbol_name, symbol_kind);
             }
 
-            NodeKind::Ternary { condition, then_expr, else_expr } => {
+            NodeKind::Ternary {
+                condition,
+                then_expr,
+                else_expr,
+            } => {
                 count += self.count_references(condition, symbol_name, symbol_kind);
                 count += self.count_references(then_expr, symbol_name, symbol_kind);
                 count += self.count_references(else_expr, symbol_name, symbol_kind);
@@ -433,7 +460,11 @@ impl LspServer {
                 }
             }
 
-            NodeKind::Try { body, catch_blocks, finally_block } => {
+            NodeKind::Try {
+                body,
+                catch_blocks,
+                finally_block,
+            } => {
                 count += self.count_references(body, symbol_name, symbol_kind);
                 for (_var, block) in catch_blocks {
                     count += self.count_references(block, symbol_name, symbol_kind);

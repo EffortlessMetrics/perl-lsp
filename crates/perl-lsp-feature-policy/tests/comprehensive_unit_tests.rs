@@ -62,12 +62,18 @@ fn from_str_name_unknown_returns_none() {
 fn from_kind_maps_all_variants() {
     use perl_lsp_feature_profile::FeatureProfileKind;
 
-    assert_eq!(FeatureProfile::from_kind(FeatureProfileKind::GaLock), FeatureProfile::GaLock);
+    assert_eq!(
+        FeatureProfile::from_kind(FeatureProfileKind::GaLock),
+        FeatureProfile::GaLock
+    );
     assert_eq!(
         FeatureProfile::from_kind(FeatureProfileKind::Production),
         FeatureProfile::Production
     );
-    assert_eq!(FeatureProfile::from_kind(FeatureProfileKind::All), FeatureProfile::All);
+    assert_eq!(
+        FeatureProfile::from_kind(FeatureProfileKind::All),
+        FeatureProfile::All
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -76,7 +82,10 @@ fn from_kind_maps_all_variants() {
 
 #[test]
 fn from_ga_lock_enabled_true_yields_ga_lock() {
-    assert_eq!(FeatureProfile::from_ga_lock_enabled(true), FeatureProfile::GaLock);
+    assert_eq!(
+        FeatureProfile::from_ga_lock_enabled(true),
+        FeatureProfile::GaLock
+    );
 }
 
 #[test]
@@ -103,8 +112,14 @@ fn current_is_a_valid_profile() {
 
 #[test]
 fn from_cli_argument_known_token() {
-    assert_eq!(FeatureProfile::from_cli_argument("prod"), FeatureProfile::Production);
-    assert_eq!(FeatureProfile::from_cli_argument("all"), FeatureProfile::All);
+    assert_eq!(
+        FeatureProfile::from_cli_argument("prod"),
+        FeatureProfile::Production
+    );
+    assert_eq!(
+        FeatureProfile::from_cli_argument("all"),
+        FeatureProfile::All
+    );
 }
 
 #[test]
@@ -165,7 +180,15 @@ fn supported_cli_profiles_is_non_empty() {
 #[test]
 fn supported_cli_profiles_includes_all_canonical_tokens() {
     let supported = FeatureProfile::supported_cli_profiles();
-    for expected in &["auto", "ga", "ga_lock", "ga-lock", "prod", "production", "all"] {
+    for expected in &[
+        "auto",
+        "ga",
+        "ga_lock",
+        "ga-lock",
+        "prod",
+        "production",
+        "all",
+    ] {
         assert!(supported.contains(expected), "missing token: {expected}");
     }
 }
@@ -217,7 +240,10 @@ fn build_flags_all_is_superset_of_production() {
     let prod_ids = prod.to_feature_ids();
     let all_ids = all.to_feature_ids();
     for id in &prod_ids {
-        assert!(all_ids.contains(id), "Production flag {id} missing from All profile");
+        assert!(
+            all_ids.contains(id),
+            "Production flag {id} missing from All profile"
+        );
     }
 }
 
@@ -234,10 +260,16 @@ fn build_flags_profiles_have_distinct_sets() {
 
     // The All profile is a superset of both GA-lock and Production.
     for id in &ga_ids {
-        assert!(all_ids.contains(id), "GaLock flag {id} missing from All profile");
+        assert!(
+            all_ids.contains(id),
+            "GaLock flag {id} missing from All profile"
+        );
     }
     for id in &prod_ids {
-        assert!(all_ids.contains(id), "Production flag {id} missing from All profile");
+        assert!(
+            all_ids.contains(id),
+            "Production flag {id} missing from All profile"
+        );
     }
 }
 
@@ -249,7 +281,10 @@ fn build_flags_profiles_have_distinct_sets() {
 fn runtime_flags_with_perltidy_enables_formatting() {
     for &profile in FeatureProfile::all() {
         let flags = profile.runtime_flags(true);
-        assert!(flags.formatting, "formatting should be true with perltidy for {profile:?}");
+        assert!(
+            flags.formatting,
+            "formatting should be true with perltidy for {profile:?}"
+        );
         assert!(
             flags.range_formatting,
             "range_formatting should be true with perltidy for {profile:?}"
@@ -262,7 +297,10 @@ fn runtime_flags_without_perltidy_disables_formatting() {
     for &profile in FeatureProfile::all() {
         let runtime = profile.runtime_flags(false);
         // Without perltidy, formatting is always disabled regardless of base profile.
-        assert!(!runtime.formatting, "formatting should be off without perltidy for {profile:?}");
+        assert!(
+            !runtime.formatting,
+            "formatting should be off without perltidy for {profile:?}"
+        );
         assert!(
             !runtime.range_formatting,
             "range_formatting should be off without perltidy for {profile:?}"
@@ -340,7 +378,10 @@ fn feature_ids_from_flags_non_empty_for_all_profiles() {
     for &profile in FeatureProfile::all() {
         let flags = profile.build_flags();
         let ids = feature_ids_from_flags(&flags);
-        assert!(!ids.is_empty(), "expected non-empty feature IDs for {profile:?}");
+        assert!(
+            !ids.is_empty(),
+            "expected non-empty feature IDs for {profile:?}"
+        );
     }
 }
 
@@ -366,7 +407,10 @@ fn catalog_ids_are_subset_of_feature_ids() {
         let all_ids = feature_ids_from_flags(&profile.build_flags());
         let catalog_ids = catalog_advertised_feature_ids(profile);
         for id in &catalog_ids {
-            assert!(all_ids.contains(id), "catalog ID {id} not in feature_ids for {profile:?}");
+            assert!(
+                all_ids.contains(id),
+                "catalog ID {id} not in feature_ids for {profile:?}"
+            );
         }
     }
 }
@@ -419,7 +463,10 @@ fn all_profile_has_most_features() {
     let all_count = feature_ids_from_flags(&FeatureProfile::All.build_flags()).len();
 
     // The All profile enables the broadest capability set.
-    assert!(ga_count <= all_count, "GaLock ({ga_count}) should have <= All ({all_count}) features");
+    assert!(
+        ga_count <= all_count,
+        "GaLock ({ga_count}) should have <= All ({all_count}) features"
+    );
     assert!(
         prod_count <= all_count,
         "Production ({prod_count}) should have <= All ({all_count}) features"

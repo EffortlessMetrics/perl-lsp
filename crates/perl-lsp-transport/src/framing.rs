@@ -78,7 +78,9 @@ impl ContentLengthMessageReader {
     /// Create a new reader with empty frame state.
     #[must_use]
     pub fn new() -> Self {
-        Self { framer: ContentLengthFramer::new() }
+        Self {
+            framer: ContentLengthFramer::new(),
+        }
     }
 
     /// Read and parse the next JSON-RPC request from the underlying byte stream.
@@ -533,7 +535,13 @@ mod tests {
         let mut reader = ContentLengthMessageReader::new();
 
         let methods: Vec<String> = (0..3)
-            .filter_map(|_| reader.read_next(&mut cursor).ok().flatten().map(|r| r.method))
+            .filter_map(|_| {
+                reader
+                    .read_next(&mut cursor)
+                    .ok()
+                    .flatten()
+                    .map(|r| r.method)
+            })
             .collect();
         assert_eq!(methods, vec!["a", "b", "c"]);
         Ok(())
@@ -908,7 +916,10 @@ mod tests {
         // Should be truncated to LOG_PREVIEW_MAX_BYTES (160) plus ellipsis
         assert!(result.ends_with('\u{2026}'));
         // The visible portion is 160 'a' chars + 1 ellipsis
-        assert_eq!(result.len(), super::LOG_PREVIEW_MAX_BYTES + '\u{2026}'.len_utf8());
+        assert_eq!(
+            result.len(),
+            super::LOG_PREVIEW_MAX_BYTES + '\u{2026}'.len_utf8()
+        );
     }
 
     #[test]
@@ -990,9 +1001,11 @@ mod tests {
     #[test]
     fn read_message_content_length_last_among_headers() -> io::Result<()> {
         let body = r#"{"jsonrpc":"2.0","id":1,"method":"test","params":{}}"#;
-        let mut frame =
-            format!("X-Custom-A: foo\r\nX-Custom-B: bar\r\nContent-Length: {}\r\n\r\n", body.len())
-                .into_bytes();
+        let mut frame = format!(
+            "X-Custom-A: foo\r\nX-Custom-B: bar\r\nContent-Length: {}\r\n\r\n",
+            body.len()
+        )
+        .into_bytes();
         frame.extend_from_slice(body.as_bytes());
         let mut reader = BufReader::new(Cursor::new(frame));
 
@@ -1108,7 +1121,10 @@ mod tests {
                 Ok(1)
             }
         }
-        let mut source = OneByteReader { data: full_frame, pos: 0 };
+        let mut source = OneByteReader {
+            data: full_frame,
+            pos: 0,
+        };
         let mut reader = ContentLengthMessageReader::new();
 
         let req = reader

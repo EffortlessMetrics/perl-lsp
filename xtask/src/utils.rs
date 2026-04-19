@@ -30,7 +30,10 @@ pub fn run_cargo_metadata(no_deps: bool) -> Result<Vec<u8>> {
     }
     let output = Command::new("cargo").args(&args).output()?;
     if !output.status.success() {
-        bail!("cargo metadata failed:\n{}", String::from_utf8_lossy(&output.stderr));
+        bail!(
+            "cargo metadata failed:\n{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
     }
     Ok(output.stdout)
 }

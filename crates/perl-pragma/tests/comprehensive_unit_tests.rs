@@ -39,26 +39,43 @@ fn no_node(module: &str, args: &[&str], start: usize, end: usize) -> Node {
 
 fn function_call(name: &str, args: Vec<Node>, start: usize, end: usize) -> Node {
     Node {
-        kind: NodeKind::FunctionCall { name: name.to_string(), args },
+        kind: NodeKind::FunctionCall {
+            name: name.to_string(),
+            args,
+        },
         location: loc(start, end),
     }
 }
 
 fn number_node(value: &str, start: usize, end: usize) -> Node {
-    Node { kind: NodeKind::Number { value: value.to_string() }, location: loc(start, end) }
+    Node {
+        kind: NodeKind::Number {
+            value: value.to_string(),
+        },
+        location: loc(start, end),
+    }
 }
 
 fn program(stmts: Vec<Node>) -> Node {
     let end = stmts.last().map_or(0, |n| n.location.end);
-    Node { kind: NodeKind::Program { statements: stmts }, location: loc(0, end) }
+    Node {
+        kind: NodeKind::Program { statements: stmts },
+        location: loc(0, end),
+    }
 }
 
 fn block(stmts: Vec<Node>, start: usize, end: usize) -> Node {
-    Node { kind: NodeKind::Block { statements: stmts }, location: loc(start, end) }
+    Node {
+        kind: NodeKind::Block { statements: stmts },
+        location: loc(start, end),
+    }
 }
 
 fn dummy_node(start: usize, end: usize) -> Node {
-    Node { kind: NodeKind::MissingExpression, location: loc(start, end) }
+    Node {
+        kind: NodeKind::MissingExpression,
+        location: loc(start, end),
+    }
 }
 
 // ===========================================================================
@@ -201,7 +218,12 @@ fn use_strict_quoted_args_double_quotes() -> Result<(), Box<dyn std::error::Erro
 
 #[test]
 fn use_if_strict_conditionally_enables_strict() -> Result<(), Box<dyn std::error::Error>> {
-    let ast = program(vec![use_node("if", &["$^O", "eq", "'MSWin32'", "'strict'"], 0, 35)]);
+    let ast = program(vec![use_node(
+        "if",
+        &["$^O", "eq", "'MSWin32'", "'strict'"],
+        0,
+        35,
+    )]);
     let map = PragmaTracker::build(&ast);
     let state = &map[0].1;
 
@@ -219,14 +241,22 @@ fn use_if_version_target_applies_version_semantics() -> Result<(), Box<dyn std::
 
     assert!(state.strict_vars, "v5.40 should imply strict");
     assert!(state.warnings, "v5.40 should imply warnings");
-    assert!(state.has_feature("builtin"), "v5.40 should imply builtin feature bundle");
+    assert!(
+        state.has_feature("builtin"),
+        "v5.40 should imply builtin feature bundle"
+    );
     Ok(())
 }
 
 #[test]
 fn use_if_version_condition_does_not_apply_version_semantics()
 -> Result<(), Box<dyn std::error::Error>> {
-    let ast = program(vec![use_node("if", &["$]", ">=", "5.036", "Some::Module"], 0, 38)]);
+    let ast = program(vec![use_node(
+        "if",
+        &["$]", ">=", "5.036", "Some::Module"],
+        0,
+        38,
+    )]);
     let map = PragmaTracker::build(&ast);
     let state = PragmaTracker::state_for_offset(&map, 20);
 
@@ -240,18 +270,29 @@ fn use_if_version_condition_does_not_apply_version_semantics()
 
 #[test]
 fn use_if_encoding_targets_encoding_not_argument() -> Result<(), Box<dyn std::error::Error>> {
-    let ast = program(vec![use_node("if", &["$cond", "encoding", "'utf8'"], 0, 32)]);
+    let ast = program(vec![use_node(
+        "if",
+        &["$cond", "encoding", "'utf8'"],
+        0,
+        32,
+    )]);
     let map = PragmaTracker::build(&ast);
     let state = &map[0].1;
 
     assert_eq!(state.encoding.as_deref(), Some("utf8"));
-    assert!(!state.utf8, "encoding pragma should not be mistaken for utf8 pragma");
+    assert!(
+        !state.utf8,
+        "encoding pragma should not be mistaken for utf8 pragma"
+    );
     Ok(())
 }
 
 #[test]
 fn no_strict_disables_all() -> Result<(), Box<dyn std::error::Error>> {
-    let ast = program(vec![use_node("strict", &[], 0, 12), no_node("strict", &[], 13, 23)]);
+    let ast = program(vec![
+        use_node("strict", &[], 0, 12),
+        no_node("strict", &[], 13, 23),
+    ]);
     let map = PragmaTracker::build(&ast);
     assert_eq!(map.len(), 2);
     let state = &map[1].1;
@@ -261,7 +302,10 @@ fn no_strict_disables_all() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn no_strict_selective_disables_only_specified() -> Result<(), Box<dyn std::error::Error>> {
-    let ast = program(vec![use_node("strict", &[], 0, 12), no_node("strict", &["refs"], 13, 28)]);
+    let ast = program(vec![
+        use_node("strict", &[], 0, 12),
+        no_node("strict", &["refs"], 13, 28),
+    ]);
     let map = PragmaTracker::build(&ast);
     let state = &map[1].1;
     assert!(state.strict_vars);
@@ -272,7 +316,10 @@ fn no_strict_selective_disables_only_specified() -> Result<(), Box<dyn std::erro
 
 #[test]
 fn no_strict_quoted_single() -> Result<(), Box<dyn std::error::Error>> {
-    let ast = program(vec![use_node("strict", &[], 0, 12), no_node("strict", &["'vars'"], 13, 30)]);
+    let ast = program(vec![
+        use_node("strict", &[], 0, 12),
+        no_node("strict", &["'vars'"], 13, 30),
+    ]);
     let map = PragmaTracker::build(&ast);
     let state = &map[1].1;
     assert!(!state.strict_vars);
@@ -282,8 +329,10 @@ fn no_strict_quoted_single() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn no_strict_quoted_double() -> Result<(), Box<dyn std::error::Error>> {
-    let ast =
-        program(vec![use_node("strict", &[], 0, 12), no_node("strict", &["\"subs\""], 13, 30)]);
+    let ast = program(vec![
+        use_node("strict", &[], 0, 12),
+        no_node("strict", &["\"subs\""], 13, 30),
+    ]);
     let map = PragmaTracker::build(&ast);
     let state = &map[1].1;
     assert!(state.strict_vars);
@@ -388,19 +437,36 @@ fn use_developer_version_enables_effective_strict_only() -> Result<(), Box<dyn s
 
 #[test]
 fn require_version_does_not_enable_effective_pragmas() -> Result<(), Box<dyn std::error::Error>> {
-    let ast = program(vec![function_call("require", vec![number_node("5.36", 8, 12)], 0, 13)]);
+    let ast = program(vec![function_call(
+        "require",
+        vec![number_node("5.36", 8, 12)],
+        0,
+        13,
+    )]);
     let map = PragmaTracker::build(&ast);
     let state = PragmaTracker::state_for_offset(&map, 12);
-    assert!(!state.strict_vars, "require VERSION must not enable strict vars");
-    assert!(!state.strict_subs, "require VERSION must not enable strict subs");
-    assert!(!state.strict_refs, "require VERSION must not enable strict refs");
+    assert!(
+        !state.strict_vars,
+        "require VERSION must not enable strict vars"
+    );
+    assert!(
+        !state.strict_subs,
+        "require VERSION must not enable strict subs"
+    );
+    assert!(
+        !state.strict_refs,
+        "require VERSION must not enable strict refs"
+    );
     assert!(!state.warnings, "require VERSION must not enable warnings");
     Ok(())
 }
 
 #[test]
 fn no_warnings_disables_warnings() -> Result<(), Box<dyn std::error::Error>> {
-    let ast = program(vec![use_node("warnings", &[], 0, 15), no_node("warnings", &[], 16, 30)]);
+    let ast = program(vec![
+        use_node("warnings", &[], 0, 15),
+        no_node("warnings", &[], 16, 30),
+    ]);
     let map = PragmaTracker::build(&ast);
     assert!(!map[1].1.warnings);
     Ok(())
@@ -408,7 +474,10 @@ fn no_warnings_disables_warnings() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn use_utf8_and_no_utf8_toggle_state() -> Result<(), Box<dyn std::error::Error>> {
-    let ast = program(vec![use_node("utf8", &[], 0, 9), no_node("utf8", &[], 10, 19)]);
+    let ast = program(vec![
+        use_node("utf8", &[], 0, 9),
+        no_node("utf8", &[], 10, 19),
+    ]);
     let map = PragmaTracker::build(&ast);
     assert_eq!(map.len(), 2);
     assert!(map[0].1.utf8);
@@ -418,8 +487,10 @@ fn use_utf8_and_no_utf8_toggle_state() -> Result<(), Box<dyn std::error::Error>>
 
 #[test]
 fn use_encoding_tracks_active_source_encoding() -> Result<(), Box<dyn std::error::Error>> {
-    let ast =
-        program(vec![use_node("encoding", &["'utf8'"], 0, 18), no_node("encoding", &[], 19, 31)]);
+    let ast = program(vec![
+        use_node("encoding", &["'utf8'"], 0, 18),
+        no_node("encoding", &[], 19, 31),
+    ]);
     let map = PragmaTracker::build(&ast);
     assert_eq!(map.len(), 2);
     assert_eq!(map[0].1.encoding.as_deref(), Some("utf8"));
@@ -462,11 +533,22 @@ fn use_feature_bundle_5_12_sets_unicode_strings() -> Result<(), Box<dyn std::err
 
 #[test]
 fn use_feature_quoted_qw_items_are_parsed() -> Result<(), Box<dyn std::error::Error>> {
-    let ast = program(vec![use_node("feature", &["'qw(signatures unicode_strings)'"], 0, 46)]);
+    let ast = program(vec![use_node(
+        "feature",
+        &["'qw(signatures unicode_strings)'"],
+        0,
+        46,
+    )]);
     let map = PragmaTracker::build(&ast);
     assert_eq!(map.len(), 1);
-    assert!(map[0].1.signatures_strict, "signatures should imply strictness");
-    assert!(map[0].1.unicode_strings, "unicode_strings should be enabled");
+    assert!(
+        map[0].1.signatures_strict,
+        "signatures should imply strictness"
+    );
+    assert!(
+        map[0].1.unicode_strings,
+        "unicode_strings should be enabled"
+    );
     Ok(())
 }
 
@@ -484,8 +566,10 @@ fn use_feature_bundle_5_10_enables_switch_and_say() -> Result<(), Box<dyn std::e
 #[test]
 fn no_feature_switch_disables_switch_after_version_bundle() -> Result<(), Box<dyn std::error::Error>>
 {
-    let ast =
-        program(vec![use_node("v5.10", &[], 0, 12), no_node("feature", &["'switch'"], 13, 31)]);
+    let ast = program(vec![
+        use_node("v5.10", &[], 0, 12),
+        no_node("feature", &["'switch'"], 13, 31),
+    ]);
     let map = PragmaTracker::build(&ast);
     assert_eq!(map.len(), 2);
     let state = &map[1].1;
@@ -497,7 +581,10 @@ fn no_feature_switch_disables_switch_after_version_bundle() -> Result<(), Box<dy
 
 #[test]
 fn no_feature_all_clears_bundle_features() -> Result<(), Box<dyn std::error::Error>> {
-    let ast = program(vec![use_node("v5.40", &[], 0, 12), no_node("feature", &["':all'"], 13, 31)]);
+    let ast = program(vec![
+        use_node("v5.40", &[], 0, 12),
+        no_node("feature", &["':all'"], 13, 31),
+    ]);
     let map = PragmaTracker::build(&ast);
     let state = &map[1].1;
     assert!(!state.has_feature("say"));
@@ -508,7 +595,10 @@ fn no_feature_all_clears_bundle_features() -> Result<(), Box<dyn std::error::Err
 
 #[test]
 fn no_feature_without_args_clears_bundle_features() -> Result<(), Box<dyn std::error::Error>> {
-    let ast = program(vec![use_node("v5.40", &[], 0, 12), no_node("feature", &[], 13, 23)]);
+    let ast = program(vec![
+        use_node("v5.40", &[], 0, 12),
+        no_node("feature", &[], 13, 23),
+    ]);
     let map = PragmaTracker::build(&ast);
     let state = &map[1].1;
     assert!(!state.has_feature("say"));
@@ -552,7 +642,10 @@ fn unknown_strict_arg_ignored() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn cumulative_use_strict_then_warnings() -> Result<(), Box<dyn std::error::Error>> {
-    let ast = program(vec![use_node("strict", &[], 0, 12), use_node("warnings", &[], 13, 27)]);
+    let ast = program(vec![
+        use_node("strict", &[], 0, 12),
+        use_node("warnings", &[], 13, 27),
+    ]);
     let map = PragmaTracker::build(&ast);
     assert_eq!(map.len(), 2);
     // After use warnings, strict should still be on
@@ -563,8 +656,10 @@ fn cumulative_use_strict_then_warnings() -> Result<(), Box<dyn std::error::Error
 
 #[test]
 fn incremental_strict_categories() -> Result<(), Box<dyn std::error::Error>> {
-    let ast =
-        program(vec![use_node("strict", &["vars"], 0, 20), use_node("strict", &["subs"], 21, 40)]);
+    let ast = program(vec![
+        use_node("strict", &["vars"], 0, 20),
+        use_node("strict", &["subs"], 21, 40),
+    ]);
     let map = PragmaTracker::build(&ast);
     // After second use strict, both vars and subs should be on
     let state = &map[1].1;
@@ -608,7 +703,11 @@ fn nested_blocks_restore_correctly() -> Result<(), Box<dyn std::error::Error>> {
     // After outer block, current_state is restored so use-warnings inherits strict on.
     let ast = program(vec![
         use_node("strict", &[], 0, 12),
-        block(vec![block(vec![no_node("strict", &[], 20, 30)], 18, 32)], 13, 33),
+        block(
+            vec![block(vec![no_node("strict", &[], 20, 30)], 18, 32)],
+            13,
+            33,
+        ),
         use_node("warnings", &[], 34, 49),
     ]);
     let map = PragmaTracker::build(&ast);
@@ -696,18 +795,27 @@ fn if_elsif_else_branches_restore_state() -> Result<(), Box<dyn std::error::Erro
         },
         location: loc(10, 90),
     };
-    let ast =
-        program(vec![use_node("strict", &[], 0, 12), if_node, use_node("warnings", &[], 91, 106)]);
+    let ast = program(vec![
+        use_node("strict", &[], 0, 12),
+        if_node,
+        use_node("warnings", &[], 91, 106),
+    ]);
     let map = PragmaTracker::build(&ast);
 
     let then_state = PragmaTracker::state_for_offset(&map, 25);
-    assert!(!then_state.strict_refs, "then branch pragmas must be tracked");
+    assert!(
+        !then_state.strict_refs,
+        "then branch pragmas must be tracked"
+    );
 
     let elsif_state = PragmaTracker::state_for_offset(&map, 50);
     assert!(elsif_state.warnings, "elsif branch pragmas must be tracked");
 
     let else_state = PragmaTracker::state_for_offset(&map, 75);
-    assert!(!else_state.strict_subs, "else branch pragmas must be tracked");
+    assert!(
+        !else_state.strict_subs,
+        "else branch pragmas must be tracked"
+    );
 
     let after = PragmaTracker::state_for_offset(&map, 95);
     assert!(after.strict_vars && after.strict_subs && after.strict_refs);
@@ -773,20 +881,47 @@ fn foreach_body_traversed() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn modern_container_bodies_are_traversed_and_scoped() -> Result<(), Box<dyn std::error::Error>> {
-    let method = method_node(block(vec![no_node("strict", &["refs"], 20, 34)], 18, 36), 13, 40);
-    let class = class_node(block(vec![no_node("strict", &["subs"], 45, 60)], 43, 63), 41, 65);
+    let method = method_node(
+        block(vec![no_node("strict", &["refs"], 20, 34)], 18, 36),
+        13,
+        40,
+    );
+    let class = class_node(
+        block(vec![no_node("strict", &["subs"], 45, 60)], 43, 63),
+        41,
+        65,
+    );
     let try_block = block(vec![no_node("strict", &["vars"], 70, 84)], 68, 86);
     let catch_block = block(vec![use_node("warnings", &[], 90, 104)], 88, 106);
     let finally_block = block(vec![no_node("strict", &["refs"], 110, 125)], 108, 128);
     let try_stmt = try_node(try_block, vec![catch_block], Some(finally_block), 66, 130);
-    let eval_stmt = eval_node(block(vec![use_node("warnings", &[], 135, 148)], 133, 150), 131, 152);
-    let do_stmt = do_node(block(vec![no_node("strict", &["refs"], 155, 170)], 153, 172), 153, 174);
-    let defer_stmt =
-        defer_node(block(vec![no_node("strict", &["subs"], 178, 190)], 176, 192), 175, 194);
+    let eval_stmt = eval_node(
+        block(vec![use_node("warnings", &[], 135, 148)], 133, 150),
+        131,
+        152,
+    );
+    let do_stmt = do_node(
+        block(vec![no_node("strict", &["refs"], 155, 170)], 153, 172),
+        153,
+        174,
+    );
+    let defer_stmt = defer_node(
+        block(vec![no_node("strict", &["subs"], 178, 190)], 176, 192),
+        175,
+        194,
+    );
     let given_body = block(
         vec![
-            when_node(block(vec![no_node("strict", &["vars"], 200, 214)], 198, 216), 196, 218),
-            default_node(block(vec![use_node("warnings", &[], 220, 232)], 218, 234), 218, 236),
+            when_node(
+                block(vec![no_node("strict", &["vars"], 200, 214)], 198, 216),
+                196,
+                218,
+            ),
+            default_node(
+                block(vec![use_node("warnings", &[], 220, 232)], 218, 234),
+                218,
+                236,
+            ),
         ],
         196,
         238,
@@ -822,7 +957,10 @@ fn modern_container_bodies_are_traversed_and_scoped() -> Result<(), Box<dyn std:
     assert!(catch_state.warnings, "catch blocks must be traversed");
 
     let finally_state = PragmaTracker::state_for_offset(&map, 115);
-    assert!(!finally_state.strict_refs, "finally blocks must be traversed");
+    assert!(
+        !finally_state.strict_refs,
+        "finally blocks must be traversed"
+    );
 
     let eval_state = PragmaTracker::state_for_offset(&map, 140);
     assert!(eval_state.warnings, "eval blocks must be traversed");
@@ -898,7 +1036,10 @@ fn state_for_offset_well_past_last_pragma() -> Result<(), Box<dyn std::error::Er
 
 #[test]
 fn state_for_offset_between_two_pragmas() -> Result<(), Box<dyn std::error::Error>> {
-    let ast = program(vec![use_node("strict", &[], 0, 12), use_node("warnings", &[], 100, 115)]);
+    let ast = program(vec![
+        use_node("strict", &[], 0, 12),
+        use_node("warnings", &[], 100, 115),
+    ]);
     let map = PragmaTracker::build(&ast);
     // Between the two: strict is on, warnings not yet
     let state = PragmaTracker::state_for_offset(&map, 50);
@@ -914,10 +1055,16 @@ fn state_for_offset_between_two_pragmas() -> Result<(), Box<dyn std::error::Erro
 #[test]
 fn build_sorts_by_start_offset() -> Result<(), Box<dyn std::error::Error>> {
     // Insert pragmas out of order in the AST
-    let ast = program(vec![use_node("warnings", &[], 100, 115), use_node("strict", &[], 0, 12)]);
+    let ast = program(vec![
+        use_node("warnings", &[], 100, 115),
+        use_node("strict", &[], 0, 12),
+    ]);
     let map = PragmaTracker::build(&ast);
     assert_eq!(map.len(), 2);
-    assert!(map[0].0.start <= map[1].0.start, "map should be sorted by start offset");
+    assert!(
+        map[0].0.start <= map[1].0.start,
+        "map should be sorted by start offset"
+    );
     Ok(())
 }
 
@@ -980,21 +1127,35 @@ fn no_warnings_with_category_disables_only_that_category() -> Result<(), Box<dyn
     let state = &map[1].1;
     // The disabled category must be recorded
     assert!(
-        state.disabled_warning_categories.contains(&"uninitialized".to_string()),
+        state
+            .disabled_warning_categories
+            .contains(&"uninitialized".to_string()),
         "disabled_warning_categories must contain 'uninitialized'"
     );
     // Other categories are still active
-    assert!(state.is_warning_active("deprecated"), "category 'deprecated' must still be active");
-    assert!(!state.is_warning_active("uninitialized"), "category 'uninitialized' must be inactive");
+    assert!(
+        state.is_warning_active("deprecated"),
+        "category 'deprecated' must still be active"
+    );
+    assert!(
+        !state.is_warning_active("uninitialized"),
+        "category 'uninitialized' must be inactive"
+    );
     Ok(())
 }
 
 #[test]
 fn no_warnings_bare_disables_all_warnings() -> Result<(), Box<dyn std::error::Error>> {
     // `no warnings;` (no args) must still disable the global warnings flag.
-    let ast = program(vec![use_node("warnings", &[], 0, 15), no_node("warnings", &[], 16, 28)]);
+    let ast = program(vec![
+        use_node("warnings", &[], 0, 15),
+        no_node("warnings", &[], 16, 28),
+    ]);
     let map = PragmaTracker::build(&ast);
-    assert!(!map[1].1.warnings, "bare `no warnings` must clear the global warnings flag");
+    assert!(
+        !map[1].1.warnings,
+        "bare `no warnings` must clear the global warnings flag"
+    );
     Ok(())
 }
 
@@ -1008,11 +1169,15 @@ fn no_warnings_multiple_categories_all_recorded() -> Result<(), Box<dyn std::err
     let state = &map[1].1;
     assert!(state.warnings, "global warnings flag must stay true");
     assert!(
-        state.disabled_warning_categories.contains(&"uninitialized".to_string()),
+        state
+            .disabled_warning_categories
+            .contains(&"uninitialized".to_string()),
         "must contain 'uninitialized'"
     );
     assert!(
-        state.disabled_warning_categories.contains(&"redefine".to_string()),
+        state
+            .disabled_warning_categories
+            .contains(&"redefine".to_string()),
         "must contain 'redefine'"
     );
     assert!(!state.is_warning_active("uninitialized"));
@@ -1038,7 +1203,10 @@ fn use_warnings_after_no_warnings_category_resets_disabled_list()
         state.disabled_warning_categories.is_empty(),
         "disabled categories must be cleared by `use warnings`"
     );
-    assert!(state.is_warning_active("uninitialized"), "uninitialized must be active again");
+    assert!(
+        state.is_warning_active("uninitialized"),
+        "uninitialized must be active again"
+    );
     Ok(())
 }
 
@@ -1052,7 +1220,9 @@ fn no_warnings_quoted_category_strips_quotes() -> Result<(), Box<dyn std::error:
     let map = PragmaTracker::build(&ast);
     let state = &map[1].1;
     assert!(
-        state.disabled_warning_categories.contains(&"uninitialized".to_string()),
+        state
+            .disabled_warning_categories
+            .contains(&"uninitialized".to_string()),
         "single-quoted category must be stripped and recorded as 'uninitialized'"
     );
     assert!(!state.is_warning_active("uninitialized"));
@@ -1062,7 +1232,10 @@ fn no_warnings_quoted_category_strips_quotes() -> Result<(), Box<dyn std::error:
 #[test]
 fn is_warning_active_false_when_global_warnings_off() -> Result<(), Box<dyn std::error::Error>> {
     // When warnings are globally off, no category is active
-    let state = PragmaState { warnings: false, ..PragmaState::default() };
+    let state = PragmaState {
+        warnings: false,
+        ..PragmaState::default()
+    };
     assert!(!state.is_warning_active("uninitialized"));
     assert!(!state.is_warning_active("deprecated"));
     assert!(!state.is_warning_active("all"));
@@ -1072,7 +1245,10 @@ fn is_warning_active_false_when_global_warnings_off() -> Result<(), Box<dyn std:
 #[test]
 fn is_warning_active_true_when_warnings_on_and_no_disabled()
 -> Result<(), Box<dyn std::error::Error>> {
-    let state = PragmaState { warnings: true, ..PragmaState::default() };
+    let state = PragmaState {
+        warnings: true,
+        ..PragmaState::default()
+    };
     assert!(state.is_warning_active("uninitialized"));
     assert!(state.is_warning_active("deprecated"));
     Ok(())
@@ -1095,8 +1271,10 @@ fn use_strict_multiple_categories_at_once() -> Result<(), Box<dyn std::error::Er
 
 #[test]
 fn no_strict_multiple_categories_at_once() -> Result<(), Box<dyn std::error::Error>> {
-    let ast =
-        program(vec![use_node("strict", &[], 0, 12), no_node("strict", &["vars", "subs"], 13, 35)]);
+    let ast = program(vec![
+        use_node("strict", &[], 0, 12),
+        no_node("strict", &["vars", "subs"], 13, 35),
+    ]);
     let map = PragmaTracker::build(&ast);
     let state = &map[1].1;
     assert!(!state.strict_vars);
@@ -1154,24 +1332,42 @@ fn v5_10_enables_say_and_state() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn v5_10_enables_switch() -> Result<(), Box<dyn std::error::Error>> {
     let features = features_enabled_by_version(PerlVersion::new(5, 10));
-    assert!(features.contains(&"switch"), "v5.10 must enable 'switch' (given/when)");
+    assert!(
+        features.contains(&"switch"),
+        "v5.10 must enable 'switch' (given/when)"
+    );
     Ok(())
 }
 
 #[test]
 fn v5_14_enables_unicode_strings() -> Result<(), Box<dyn std::error::Error>> {
     let features = features_enabled_by_version(PerlVersion::new(5, 14));
-    assert!(features.contains(&"say"), "v5.14 should retain v5.10 features");
-    assert!(features.contains(&"unicode_strings"), "v5.14 must enable 'unicode_strings'");
+    assert!(
+        features.contains(&"say"),
+        "v5.14 should retain v5.10 features"
+    );
+    assert!(
+        features.contains(&"unicode_strings"),
+        "v5.14 must enable 'unicode_strings'"
+    );
     Ok(())
 }
 
 #[test]
 fn v5_26_enables_unicode_eval_and_postfix_deref() -> Result<(), Box<dyn std::error::Error>> {
     let features = features_enabled_by_version(PerlVersion::new(5, 26));
-    assert!(features.contains(&"say"), "v5.26 should retain v5.10 features");
-    assert!(features.contains(&"unicode_strings"), "v5.26 should retain v5.14 features");
-    assert!(features.contains(&"postfix_deref"), "v5.26 must enable 'postfix_deref'");
+    assert!(
+        features.contains(&"say"),
+        "v5.26 should retain v5.10 features"
+    );
+    assert!(
+        features.contains(&"unicode_strings"),
+        "v5.26 should retain v5.14 features"
+    );
+    assert!(
+        features.contains(&"postfix_deref"),
+        "v5.26 must enable 'postfix_deref'"
+    );
     assert!(
         features.contains(&"unicode_eval"),
         "v5.26 must enable 'unicode_eval' (disables /xx is separate feature)"
@@ -1182,7 +1378,10 @@ fn v5_26_enables_unicode_eval_and_postfix_deref() -> Result<(), Box<dyn std::err
 #[test]
 fn v5_36_enables_signatures_defer_isa() -> Result<(), Box<dyn std::error::Error>> {
     let features = features_enabled_by_version(PerlVersion::new(5, 36));
-    assert!(features.contains(&"signatures"), "v5.36 must enable 'signatures'");
+    assert!(
+        features.contains(&"signatures"),
+        "v5.36 must enable 'signatures'"
+    );
     assert!(features.contains(&"defer"), "v5.36 must enable 'defer'");
     assert!(features.contains(&"isa"), "v5.36 must enable 'isa'");
     Ok(())
@@ -1193,7 +1392,10 @@ fn v5_40_enables_builtin() -> Result<(), Box<dyn std::error::Error>> {
     let features = features_enabled_by_version(PerlVersion::new(5, 40));
     assert!(features.contains(&"builtin"), "v5.40 must enable 'builtin'");
     // Should also retain all v5.36 features
-    assert!(features.contains(&"signatures"), "v5.40 should retain 'signatures'");
+    assert!(
+        features.contains(&"signatures"),
+        "v5.40 should retain 'signatures'"
+    );
     assert!(features.contains(&"isa"), "v5.40 should retain 'isa'");
     Ok(())
 }
@@ -1213,7 +1415,10 @@ fn v5_12_retains_switch_from_v5_10() -> Result<(), Box<dyn std::error::Error>> {
 fn v5_38_removes_switch() -> Result<(), Box<dyn std::error::Error>> {
     // switch (given/when) was removed from the bundle in v5.38
     let features = features_enabled_by_version(PerlVersion::new(5, 38));
-    assert!(!features.contains(&"switch"), "v5.38 should not include 'switch' (removed)");
+    assert!(
+        !features.contains(&"switch"),
+        "v5.38 should not include 'switch' (removed)"
+    );
     Ok(())
 }
 
@@ -1243,10 +1448,16 @@ fn parse_perl_version_rejects_non_numeric_input() -> Result<(), Box<dyn std::err
 #[test]
 fn version_implication_boundaries_match_expected_cutoffs() -> Result<(), Box<dyn std::error::Error>>
 {
-    assert!(!perl_pragma::version_implies_strict(PerlVersion::new(5, 11)));
+    assert!(!perl_pragma::version_implies_strict(PerlVersion::new(
+        5, 11
+    )));
     assert!(perl_pragma::version_implies_strict(PerlVersion::new(5, 12)));
-    assert!(!perl_pragma::version_implies_warnings(PerlVersion::new(5, 34)));
-    assert!(perl_pragma::version_implies_warnings(PerlVersion::new(5, 35)));
+    assert!(!perl_pragma::version_implies_warnings(PerlVersion::new(
+        5, 34
+    )));
+    assert!(perl_pragma::version_implies_warnings(PerlVersion::new(
+        5, 35
+    )));
     Ok(())
 }
 
@@ -1262,7 +1473,10 @@ fn use_v5_10_state_has_say_state_switch() -> Result<(), Box<dyn std::error::Erro
     let state = &map[0].1;
     assert!(state.has_feature("say"), "v5.10 state must have 'say'");
     assert!(state.has_feature("state"), "v5.10 state must have 'state'");
-    assert!(state.has_feature("switch"), "v5.10 state must have 'switch'");
+    assert!(
+        state.has_feature("switch"),
+        "v5.10 state must have 'switch'"
+    );
     Ok(())
 }
 
@@ -1271,7 +1485,10 @@ fn use_v5_36_state_has_signatures_defer_isa() -> Result<(), Box<dyn std::error::
     let ast = program(vec![use_node("v5.36", &[], 0, 12)]);
     let map = PragmaTracker::build(&ast);
     let state = &map[0].1;
-    assert!(state.has_feature("signatures"), "v5.36 state must have 'signatures'");
+    assert!(
+        state.has_feature("signatures"),
+        "v5.36 state must have 'signatures'"
+    );
     assert!(state.has_feature("defer"), "v5.36 state must have 'defer'");
     assert!(state.has_feature("isa"), "v5.36 state must have 'isa'");
     // v5.36 also implies strict and warnings
@@ -1285,9 +1502,18 @@ fn use_v5_40_state_has_builtin() -> Result<(), Box<dyn std::error::Error>> {
     let ast = program(vec![use_node("v5.40", &[], 0, 12)]);
     let map = PragmaTracker::build(&ast);
     let state = &map[0].1;
-    assert!(state.has_feature("builtin"), "v5.40 state must have 'builtin'");
-    assert!(!state.has_builtin_import("floor"), "v5.40 should not imply lexical builtin imports");
-    assert!(state.builtin_imports.is_empty(), "v5.40 should not populate lexical builtin imports");
+    assert!(
+        state.has_feature("builtin"),
+        "v5.40 state must have 'builtin'"
+    );
+    assert!(
+        !state.has_builtin_import("floor"),
+        "v5.40 should not imply lexical builtin imports"
+    );
+    assert!(
+        state.builtin_imports.is_empty(),
+        "v5.40 should not populate lexical builtin imports"
+    );
     Ok(())
 }
 
@@ -1314,7 +1540,10 @@ fn no_version_declaration_has_no_features() -> Result<(), Box<dyn std::error::Er
     let ast = program(vec![use_node("strict", &[], 0, 12)]);
     let map = PragmaTracker::build(&ast);
     let state = &map[0].1;
-    assert!(!state.has_feature("say"), "strict pragma should not imply 'say'");
+    assert!(
+        !state.has_feature("say"),
+        "strict pragma should not imply 'say'"
+    );
     Ok(())
 }
 
@@ -1365,15 +1594,30 @@ fn class_node(body_node: Node, start: usize, end: usize) -> Node {
 }
 
 fn eval_node(body_node: Node, start: usize, end: usize) -> Node {
-    Node { kind: NodeKind::Eval { block: Box::new(body_node) }, location: loc(start, end) }
+    Node {
+        kind: NodeKind::Eval {
+            block: Box::new(body_node),
+        },
+        location: loc(start, end),
+    }
 }
 
 fn do_node(body_node: Node, start: usize, end: usize) -> Node {
-    Node { kind: NodeKind::Do { block: Box::new(body_node) }, location: loc(start, end) }
+    Node {
+        kind: NodeKind::Do {
+            block: Box::new(body_node),
+        },
+        location: loc(start, end),
+    }
 }
 
 fn defer_node(body_node: Node, start: usize, end: usize) -> Node {
-    Node { kind: NodeKind::Defer { block: Box::new(body_node) }, location: loc(start, end) }
+    Node {
+        kind: NodeKind::Defer {
+            block: Box::new(body_node),
+        },
+        location: loc(start, end),
+    }
 }
 
 fn try_node(
@@ -1386,7 +1630,10 @@ fn try_node(
     Node {
         kind: NodeKind::Try {
             body: Box::new(body_node),
-            catch_blocks: catch_bodies.into_iter().map(|body| (None, Box::new(body))).collect(),
+            catch_blocks: catch_bodies
+                .into_iter()
+                .map(|body| (None, Box::new(body)))
+                .collect(),
             finally_block: finally_node.map(Box::new),
         },
         location: loc(start, end),
@@ -1414,7 +1661,12 @@ fn when_node(body_node: Node, start: usize, end: usize) -> Node {
 }
 
 fn default_node(body_node: Node, start: usize, end: usize) -> Node {
-    Node { kind: NodeKind::Default { body: Box::new(body_node) }, location: loc(start, end) }
+    Node {
+        kind: NodeKind::Default {
+            body: Box::new(body_node),
+        },
+        location: loc(start, end),
+    }
 }
 
 fn while_node(body_node: Node, continue_node: Option<Node>, start: usize, end: usize) -> Node {
@@ -1443,9 +1695,18 @@ fn package_bare_form_does_not_reset_pragma_state() -> Result<(), Box<dyn std::er
     let map = PragmaTracker::build(&ast);
 
     let state = PragmaTracker::state_for_offset(&map, 35);
-    assert!(state.strict_vars, "strict_vars must survive a bare package statement");
-    assert!(state.strict_subs, "strict_subs must survive a bare package statement");
-    assert!(state.strict_refs, "strict_refs must survive a bare package statement");
+    assert!(
+        state.strict_vars,
+        "strict_vars must survive a bare package statement"
+    );
+    assert!(
+        state.strict_subs,
+        "strict_subs must survive a bare package statement"
+    );
+    assert!(
+        state.strict_refs,
+        "strict_refs must survive a bare package statement"
+    );
     assert!(state.warnings, "warnings must be on after use warnings");
     Ok(())
 }
@@ -1461,8 +1722,14 @@ fn package_block_form_inherits_outer_pragma_state() -> Result<(), Box<dyn std::e
     let map = PragmaTracker::build(&ast);
 
     let inside = PragmaTracker::state_for_offset(&map, 28);
-    assert!(inside.strict_vars, "strict must be inherited inside package block");
-    assert!(inside.warnings, "warnings enabled inside package block must be visible");
+    assert!(
+        inside.strict_vars,
+        "strict must be inherited inside package block"
+    );
+    assert!(
+        inside.warnings,
+        "warnings enabled inside package block must be visible"
+    );
     Ok(())
 }
 
@@ -1480,14 +1747,24 @@ fn package_block_form_restores_state_after_block() -> Result<(), Box<dyn std::er
     };
     let pkg_block = block(vec![no_refs], 14, 59);
     let pkg = package_node("Foo", Some(pkg_block), 13, 60);
-    let ast = program(vec![use_node("strict", &[], 0, 12), pkg, use_node("warnings", &[], 61, 76)]);
+    let ast = program(vec![
+        use_node("strict", &[], 0, 12),
+        pkg,
+        use_node("warnings", &[], 61, 76),
+    ]);
     let map = PragmaTracker::build(&ast);
 
     let inside = PragmaTracker::state_for_offset(&map, 30);
-    assert!(!inside.strict_refs, "strict_refs must be disabled inside the package block");
+    assert!(
+        !inside.strict_refs,
+        "strict_refs must be disabled inside the package block"
+    );
 
     let after = PragmaTracker::state_for_offset(&map, 70);
-    assert!(after.strict_refs, "strict_refs must be restored after the package block");
+    assert!(
+        after.strict_refs,
+        "strict_refs must be restored after the package block"
+    );
     assert!(after.warnings, "warnings must be on after use warnings");
     Ok(())
 }
@@ -1504,6 +1781,9 @@ fn package_block_pragma_inside_is_visible_at_inner_offset() -> Result<(), Box<dy
     let map = PragmaTracker::build(&ast);
 
     let inside = PragmaTracker::state_for_offset(&map, 30);
-    assert!(inside.strict_vars, "strict_vars declared inside package block must be visible");
+    assert!(
+        inside.strict_vars,
+        "strict_vars declared inside package block must be visible"
+    );
     Ok(())
 }

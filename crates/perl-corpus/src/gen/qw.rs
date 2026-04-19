@@ -51,8 +51,11 @@ pub fn use_constant_qw() -> impl Strategy<Value = (String, Vec<String>)> {
 
             for g in 0..groups {
                 // Vary subset size by group index
-                let subset: Vec<_> =
-                    word_list.iter().take(1 + (g % word_list.len())).cloned().collect();
+                let subset: Vec<_> = word_list
+                    .iter()
+                    .take(1 + (g % word_list.len()))
+                    .cloned()
+                    .collect();
 
                 let inner = subset.join(&ws);
                 for w in &subset {

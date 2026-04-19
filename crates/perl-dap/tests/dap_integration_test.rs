@@ -10,7 +10,11 @@ type TestResult = Result<(), Box<dyn std::error::Error>>;
 #[test]
 fn test_dap_basic_flow() -> TestResult {
     // Skip if perl is not available
-    if std::process::Command::new("perl").arg("--version").output().is_err() {
+    if std::process::Command::new("perl")
+        .arg("--version")
+        .output()
+        .is_err()
+    {
         eprintln!("Skipping DAP basic flow test - perl not available");
         return Ok(());
     }
@@ -65,7 +69,9 @@ print "x=$x\n";
     });
     let launch_response = adapter.handle_request(2, "launch", Some(launch_args));
     match launch_response {
-        DapMessage::Response { success, message, .. } => {
+        DapMessage::Response {
+            success, message, ..
+        } => {
             if success {
                 eprintln!("Launch succeeded");
                 // Try to wait for stopped event, but don't require it

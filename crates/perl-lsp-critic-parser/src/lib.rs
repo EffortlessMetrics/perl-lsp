@@ -42,8 +42,14 @@ pub fn parse_perlcritic_line(line: &str) -> Option<ParsedCriticLine> {
     let max_start = parts.len().saturating_sub(4);
     for idx in 1..=max_start {
         if parts.get(idx).and_then(|v| v.parse::<u32>().ok()).is_some()
-            && parts.get(idx + 1).and_then(|v| v.parse::<u32>().ok()).is_some()
-            && parts.get(idx + 2).and_then(|v| v.parse::<u8>().ok()).is_some()
+            && parts
+                .get(idx + 1)
+                .and_then(|v| v.parse::<u32>().ok())
+                .is_some()
+            && parts
+                .get(idx + 2)
+                .and_then(|v| v.parse::<u8>().ok())
+                .is_some()
         {
             numeric_idx = Some(idx);
             break;
@@ -70,7 +76,14 @@ pub fn parse_perlcritic_line(line: &str) -> Option<ParsedCriticLine> {
         return None;
     }
 
-    Some(ParsedCriticLine { file, line: line_num, column, severity, policy, message })
+    Some(ParsedCriticLine {
+        file,
+        line: line_num,
+        column,
+        severity,
+        policy,
+        message,
+    })
 }
 
 fn find_policy_message_boundary(tail: &str) -> Option<usize> {

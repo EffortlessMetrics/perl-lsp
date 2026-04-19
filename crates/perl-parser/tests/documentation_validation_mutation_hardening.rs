@@ -35,8 +35,10 @@ mod mock_doc_analysis {
                 if content.starts_with("```rust") {
                     if in_rust_block {
                         // Nested rust blocks - malformed
-                        malformed
-                            .push(format!("Line {}: Nested rust block in doctest", line_num + 1));
+                        malformed.push(format!(
+                            "Line {}: Nested rust block in doctest",
+                            line_num + 1
+                        ));
                     }
                     in_rust_block = true;
                     rust_block_content.clear();
@@ -168,8 +170,10 @@ mod mock_doc_analysis {
             // Target boolean mutations in emptiness checks
             // Fixed: Use proper if/else conditional logic instead of boolean-to-duration multiplication casting
             if trimmed_content.is_empty() || trimmed_content.len() <= 2 {
-                empty_docs
-                    .push(format!("Line {}: Empty or trivial documentation", doc_start_line + 1));
+                empty_docs.push(format!(
+                    "Line {}: Empty or trivial documentation",
+                    doc_start_line + 1
+                ));
             } else if is_placeholder_documentation(trimmed_content) {
                 // Target string comparison mutations
                 empty_docs.push(format!(
@@ -255,7 +259,10 @@ mod mock_doc_analysis {
                     }
 
                     // Track circular references
-                    reference_map.entry(ref_text.clone()).or_default().push(line_num);
+                    reference_map
+                        .entry(ref_text.clone())
+                        .or_default()
+                        .push(line_num);
                 }
             }
         }
@@ -315,7 +322,10 @@ mod mock_doc_analysis {
 
         // Target string matching mutations and boolean logic
         // Fixed: Use proper if/else conditional logic instead of boolean-to-duration multiplication casting
-        if trivial_patterns.iter().any(|pattern| content_lower.contains(pattern)) {
+        if trivial_patterns
+            .iter()
+            .any(|pattern| content_lower.contains(pattern))
+        {
             return true;
         }
 
@@ -409,7 +419,10 @@ mod mock_doc_analysis {
 
         // Target string matching and boolean logic mutations
         // Fixed: Use proper if/else conditional logic instead of boolean-to-duration multiplication casting
-        if external_refs.iter().any(|ext_ref| func_name.contains(ext_ref)) {
+        if external_refs
+            .iter()
+            .any(|ext_ref| func_name.contains(ext_ref))
+        {
             return true;
         }
 
@@ -451,8 +464,15 @@ mod documentation_boolean_logic_tests {
         let malformed = find_malformed_doctests_hardened(&lines);
 
         if should_find_malformed {
-            assert!(!malformed.is_empty(), "Should detect malformed doctest in {}", test_name);
-            println!("Detected malformed doctests in {}: {:?}", test_name, malformed);
+            assert!(
+                !malformed.is_empty(),
+                "Should detect malformed doctest in {}",
+                test_name
+            );
+            println!(
+                "Detected malformed doctests in {}: {:?}",
+                test_name, malformed
+            );
         } else {
             assert!(
                 malformed.is_empty(),
@@ -486,7 +506,10 @@ mod documentation_boolean_logic_tests {
                 "Should detect empty/trivial documentation in {}",
                 test_name
             );
-            println!("Detected empty documentation in {}: {:?}", test_name, empty_docs);
+            println!(
+                "Detected empty documentation in {}: {:?}",
+                test_name, empty_docs
+            );
         } else {
             assert!(
                 empty_docs.is_empty(),
@@ -565,7 +588,10 @@ mod documentation_boolean_logic_tests {
                 "Should detect invalid cross-reference in {}",
                 test_name
             );
-            println!("Detected invalid cross-references in {}: {:?}", test_name, invalid_refs);
+            println!(
+                "Detected invalid cross-references in {}: {:?}",
+                test_name, invalid_refs
+            );
         } else {
             assert!(
                 invalid_refs.is_empty(),
@@ -593,7 +619,11 @@ mod documentation_arithmetic_mutation_tests {
             ("abc", 3, true),           // Just above boundary (targets <= vs < mutations)
             ("short", 5, true),         // Short content
             ("a bit longer", 12, true), // Medium content (targets threshold changes)
-            ("this is a comprehensive description with sufficient detail", 58, false), // Long content
+            (
+                "this is a comprehensive description with sufficient detail",
+                58,
+                false,
+            ), // Long content
         ];
 
         for (content, expected_len, should_be_trivial) in test_cases {
@@ -602,12 +632,24 @@ mod documentation_arithmetic_mutation_tests {
             let empty_docs = find_empty_doc_strings_hardened(&lines);
 
             // Verify length calculation isn't mutated
-            assert_eq!(content.len(), expected_len, "Length calculation mutation detected");
+            assert_eq!(
+                content.len(),
+                expected_len,
+                "Length calculation mutation detected"
+            );
 
             if should_be_trivial {
-                assert!(!empty_docs.is_empty(), "Should detect trivial content: '{}'", content);
+                assert!(
+                    !empty_docs.is_empty(),
+                    "Should detect trivial content: '{}'",
+                    content
+                );
             } else {
-                assert!(empty_docs.is_empty(), "Should not detect trivial content: '{}'", content);
+                assert!(
+                    empty_docs.is_empty(),
+                    "Should not detect trivial content: '{}'",
+                    content
+                );
             }
         }
     }
@@ -635,7 +677,11 @@ mod documentation_arithmetic_mutation_tests {
             let empty_docs = find_empty_doc_strings_hardened(&lines);
 
             if should_be_trivial {
-                assert!(!empty_docs.is_empty(), "Should detect trivial word count: '{}'", content);
+                assert!(
+                    !empty_docs.is_empty(),
+                    "Should detect trivial word count: '{}'",
+                    content
+                );
             } else {
                 assert!(
                     empty_docs.is_empty(),
@@ -708,7 +754,10 @@ mod documentation_arithmetic_mutation_tests {
 
             // Generate multiple references to the same function
             for i in 0..count {
-                lines.push(format!("/// Reference {}: see [`test_function`] for details", i + 1));
+                lines.push(format!(
+                    "/// Reference {}: see [`test_function`] for details",
+                    i + 1
+                ));
             }
 
             let line_refs: Vec<&str> = lines.iter().map(|s| s.as_str()).collect();
@@ -717,8 +766,9 @@ mod documentation_arithmetic_mutation_tests {
             // Test threshold boundary (currently set to > 3)
             let should_detect_circular = count > 3; // Target comparison mutations (>, >=, <, <=)
 
-            let has_circular_warning =
-                invalid_refs.iter().any(|r| r.contains("circular reference"));
+            let has_circular_warning = invalid_refs
+                .iter()
+                .any(|r| r.contains("circular reference"));
 
             if should_detect_circular {
                 assert!(
@@ -878,7 +928,11 @@ mod documentation_ci_integration_tests {
             ),
             (
                 "incomplete_doctest",
-                vec!["/// ```rust", "/// let x = 1;", "/// // Missing closing ```"],
+                vec![
+                    "/// ```rust",
+                    "/// let x = 1;",
+                    "/// // Missing closing ```",
+                ],
                 true, // Should detect unclosed doctest
             ),
         ];

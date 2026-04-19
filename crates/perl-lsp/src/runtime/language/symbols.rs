@@ -13,7 +13,10 @@ static PACKAGE_REGEX: OnceLock<Result<regex::Regex, regex::Error>> = OnceLock::n
 static HEAD_REGEX: OnceLock<Result<regex::Regex, regex::Error>> = OnceLock::new();
 
 fn get_sub_regex() -> Option<&'static regex::Regex> {
-    SUB_REGEX.get_or_init(|| regex::Regex::new(r"^\s*sub\s+([a-zA-Z_]\w*)\b")).as_ref().ok()
+    SUB_REGEX
+        .get_or_init(|| regex::Regex::new(r"^\s*sub\s+([a-zA-Z_]\w*)\b"))
+        .as_ref()
+        .ok()
 }
 
 fn get_package_regex() -> Option<&'static regex::Regex> {
@@ -24,7 +27,10 @@ fn get_package_regex() -> Option<&'static regex::Regex> {
 }
 
 fn get_head_regex() -> Option<&'static regex::Regex> {
-    HEAD_REGEX.get_or_init(|| regex::Regex::new(r"^=(head[1-4])\s+(.+)$")).as_ref().ok()
+    HEAD_REGEX
+        .get_or_init(|| regex::Regex::new(r"^=(head[1-4])\s+(.+)$"))
+        .as_ref()
+        .ok()
 }
 
 /// Scan source text for POD =head1..=head4 directives and return them as document symbols.
@@ -39,7 +45,11 @@ fn pod_section_symbols(source: &str) -> Vec<Value> {
             break;
         }
         if let Some(caps) = head_regex.captures(line) {
-            let name = caps.get(2).map(|m| m.as_str().trim()).unwrap_or("").to_string();
+            let name = caps
+                .get(2)
+                .map(|m| m.as_str().trim())
+                .unwrap_or("")
+                .to_string();
             if name.is_empty() {
                 continue;
             }
@@ -320,7 +330,10 @@ impl LspServer {
         &self,
         params: serde_json::Value,
     ) -> Result<serde_json::Value, JsonRpcError> {
-        let uri = params.pointer("/textDocument/uri").and_then(|v| v.as_str()).unwrap_or("");
+        let uri = params
+            .pointer("/textDocument/uri")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
         let text = self.buffer_text(uri).unwrap_or_default();
         let ranges = folding_ranges_from_text(&text, 128);
         Ok(serde_json::to_value(ranges).unwrap_or(serde_json::json!([])))
@@ -461,5 +474,8 @@ fn document_symbol_priority(symbol: &crate::symbol::Symbol) -> u8 {
 
 /// Helper function to convert offset to line number
 fn offset_to_line(content: &str, offset: usize) -> usize {
-    content[..offset.min(content.len())].chars().filter(|&c| c == '\n').count()
+    content[..offset.min(content.len())]
+        .chars()
+        .filter(|&c| c == '\n')
+        .count()
 }

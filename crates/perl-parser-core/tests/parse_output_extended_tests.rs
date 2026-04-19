@@ -10,14 +10,19 @@ use perl_parser_core::{
 };
 
 fn make_empty_program() -> V1Node {
-    V1Node::new(V1NodeKind::Program { statements: vec![] }, SourceLocation::new(0, 0))
+    V1Node::new(
+        V1NodeKind::Program { statements: vec![] },
+        SourceLocation::new(0, 0),
+    )
 }
 
 #[test]
 fn finish_preserves_all_fields() -> Result<(), Box<dyn std::error::Error>> {
     let ast = make_empty_program();
-    let errors =
-        vec![CatastrophicParseError::syntax("e1", 0), CatastrophicParseError::syntax("e2", 5)];
+    let errors = vec![
+        CatastrophicParseError::syntax("e1", 0),
+        CatastrophicParseError::syntax("e2", 5),
+    ];
     let mut tracker = BudgetTracker::new();
     tracker.errors_emitted = 7;
     tracker.tokens_skipped = 33;

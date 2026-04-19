@@ -64,7 +64,10 @@ fn test_x_not_confused_with_variable() {
     let ast = must(parser.parse());
     let sexp = ast.to_sexp();
     // Should NOT contain binary_x -- this is a variable declaration
-    assert!(!sexp.contains("binary_x"), "Should not be binary_x in: {sexp}");
+    assert!(
+        !sexp.contains("binary_x"),
+        "Should not be binary_x in: {sexp}"
+    );
 }
 
 #[test]

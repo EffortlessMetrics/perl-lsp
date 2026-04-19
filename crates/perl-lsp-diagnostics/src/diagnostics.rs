@@ -48,7 +48,10 @@ pub struct DiagnosticsProvider {
 impl DiagnosticsProvider {
     /// Create a new diagnostics provider
     pub fn new(ast: &std::sync::Arc<Node>, source: String) -> Self {
-        Self { _ast: ast.clone(), _source: source }
+        Self {
+            _ast: ast.clone(),
+            _source: source,
+        }
     }
 
     /// Generate diagnostics for the given AST
@@ -91,7 +94,11 @@ impl DiagnosticsProvider {
         // Convert parse errors to diagnostics
         for error in parse_errors {
             let (location, message) = match error {
-                ParseError::UnexpectedToken { location, expected, found } => {
+                ParseError::UnexpectedToken {
+                    location,
+                    expected,
+                    found,
+                } => {
                     let found_display = format_found_token(found);
                     let msg = build_enhanced_message(expected, found, &found_display);
                     (*location, msg)
@@ -103,7 +110,9 @@ impl DiagnosticsProvider {
             };
 
             let range_start = location.min(source_len);
-            let range_end = range_start.saturating_add(1).min(source_len.saturating_add(1));
+            let range_end = range_start
+                .saturating_add(1)
+                .min(source_len.saturating_add(1));
 
             let suggestion = build_parse_error_suggestion(error);
 

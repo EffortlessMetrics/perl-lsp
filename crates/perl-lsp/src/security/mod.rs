@@ -78,17 +78,24 @@ impl SecurityContext {
 
     /// Record a security violation
     pub fn record_violation(&self, violation_type: &str) {
-        let count = self.violation_count.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let count = self
+            .violation_count
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         if let Ok(mut last) = self.last_violation.lock() {
             *last = Some(std::time::Instant::now());
         }
 
-        tracing::warn!("Security violation #{} recorded: {}", count + 1, violation_type);
+        tracing::warn!(
+            "Security violation #{} recorded: {}",
+            count + 1,
+            violation_type
+        );
     }
 
     /// Get the number of violations
     pub fn violation_count(&self) -> usize {
-        self.violation_count.load(std::sync::atomic::Ordering::Relaxed)
+        self.violation_count
+            .load(std::sync::atomic::Ordering::Relaxed)
     }
 
     /// Check if we're in a high-violation state (possible attack)
@@ -118,7 +125,11 @@ mod tests {
         let config = SecurityConfig::default();
         // max_file_size must match the single source of truth in perl-lsp-limits
         assert_eq!(config.max_file_size, perl_lsp_limits::max_file_size_bytes());
-        assert_eq!(config.max_file_size, 1_024 * 1_024, "default must be 1MB from LspLimits");
+        assert_eq!(
+            config.max_file_size,
+            1_024 * 1_024,
+            "default must be 1MB from LspLimits"
+        );
         assert_eq!(config.max_path_length, 4096);
         assert!(config.strict_mode);
         assert_eq!(config.allowed_extensions.len(), 4);

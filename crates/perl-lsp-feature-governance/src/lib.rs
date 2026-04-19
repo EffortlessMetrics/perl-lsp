@@ -41,7 +41,10 @@ mod tests {
     #[test]
     fn facade_exposes_all_features() {
         let features = all_features();
-        assert!(!features.is_empty(), "all_features() should return non-empty list");
+        assert!(
+            !features.is_empty(),
+            "all_features() should return non-empty list"
+        );
     }
 
     #[test]
@@ -121,7 +124,10 @@ mod tests {
         let profiles = value["profiles"].as_array();
         assert!(profiles.is_some());
         let profiles = profiles.map(|p| p.len()).unwrap_or(0);
-        assert!(profiles >= 3, "should include at least ga-lock, production, all");
+        assert!(
+            profiles >= 3,
+            "should include at least ga-lock, production, all"
+        );
         Ok(())
     }
 
@@ -279,14 +285,23 @@ mod tests {
     fn facade_feature_flag_evaluation_all_enables_formatting() {
         let flags = flags_for_profile(FeatureProfile::All);
         assert!(flags.formatting, "all profile should enable formatting");
-        assert!(flags.range_formatting, "all profile should enable range_formatting");
+        assert!(
+            flags.range_formatting,
+            "all profile should enable range_formatting"
+        );
     }
 
     #[test]
     fn facade_feature_flag_evaluation_production_enables_formatting() {
         let flags = flags_for_profile(FeatureProfile::Production);
-        assert!(flags.formatting, "production profile should enable formatting");
-        assert!(flags.range_formatting, "production profile should enable range_formatting");
+        assert!(
+            flags.formatting,
+            "production profile should enable formatting"
+        );
+        assert!(
+            flags.range_formatting,
+            "production profile should enable range_formatting"
+        );
     }
 
     #[test]
@@ -294,7 +309,10 @@ mod tests {
         let all_ids = feature_ids_from_flags(&flags_for_profile(FeatureProfile::All));
         let prod_ids = feature_ids_from_flags(&flags_for_profile(FeatureProfile::Production));
         for id in &prod_ids {
-            assert!(all_ids.contains(id), "'all' profile should contain production feature '{id}'");
+            assert!(
+                all_ids.contains(id),
+                "'all' profile should contain production feature '{id}'"
+            );
         }
         assert!(
             all_ids.len() >= prod_ids.len(),
@@ -319,8 +337,14 @@ mod tests {
     fn facade_build_profile_production_enables_advanced_features() {
         let flags = flags_for_profile(FeatureProfile::Production);
         assert!(flags.inline_values, "production must enable inline_values");
-        assert!(flags.call_hierarchy, "production must enable call_hierarchy");
-        assert!(flags.type_hierarchy, "production must enable type_hierarchy");
+        assert!(
+            flags.call_hierarchy,
+            "production must enable call_hierarchy"
+        );
+        assert!(
+            flags.type_hierarchy,
+            "production must enable type_hierarchy"
+        );
         assert!(flags.code_lens, "production must enable code_lens");
         assert!(flags.rename, "production must enable rename");
         assert!(flags.inlay_hints, "production must enable inlay_hints");
@@ -329,14 +353,23 @@ mod tests {
     #[test]
     fn facade_build_profile_gating_runtime_with_perltidy_enables_formatting() {
         let flags = flags_for_runtime(FeatureProfile::GaLock, true);
-        assert!(flags.formatting, "runtime with perltidy should enable formatting");
-        assert!(flags.range_formatting, "runtime with perltidy should enable range_formatting");
+        assert!(
+            flags.formatting,
+            "runtime with perltidy should enable formatting"
+        );
+        assert!(
+            flags.range_formatting,
+            "runtime with perltidy should enable range_formatting"
+        );
     }
 
     #[test]
     fn facade_build_profile_gating_runtime_without_perltidy_disables_formatting() {
         let runtime = flags_for_runtime(FeatureProfile::Production, false);
-        assert!(!runtime.formatting, "runtime without perltidy should disable formatting");
+        assert!(
+            !runtime.formatting,
+            "runtime without perltidy should disable formatting"
+        );
         assert!(
             !runtime.range_formatting,
             "runtime without perltidy should disable range_formatting"
@@ -351,7 +384,12 @@ mod tests {
 
     #[test]
     fn facade_has_feature_validates_known_feature_ids() {
-        let known_ids = ["lsp.completion", "lsp.hover", "lsp.definition", "lsp.references"];
+        let known_ids = [
+            "lsp.completion",
+            "lsp.hover",
+            "lsp.definition",
+            "lsp.references",
+        ];
         for id in &known_ids {
             assert!(has_feature(id), "has_feature should return true for '{id}'");
         }
@@ -361,7 +399,10 @@ mod tests {
     fn facade_has_feature_rejects_invalid_ids() {
         let invalid_ids = ["", "nonexistent", "lsp.", "completion", "lsp.foobar"];
         for id in &invalid_ids {
-            assert!(!has_feature(id), "has_feature should return false for '{id}'");
+            assert!(
+                !has_feature(id),
+                "has_feature should return false for '{id}'"
+            );
         }
     }
 
@@ -419,8 +460,14 @@ mod tests {
     fn facade_ga_lock_vs_production_differ_on_inline_values() {
         let ga_flags = flags_for_profile(FeatureProfile::GaLock);
         let prod_flags = flags_for_profile(FeatureProfile::Production);
-        assert!(!ga_flags.inline_values, "ga-lock should disable inline_values");
-        assert!(prod_flags.inline_values, "production should enable inline_values");
+        assert!(
+            !ga_flags.inline_values,
+            "ga-lock should disable inline_values"
+        );
+        assert!(
+            prod_flags.inline_values,
+            "production should enable inline_values"
+        );
     }
 
     #[test]
@@ -447,7 +494,10 @@ mod tests {
         assert_eq!(with_perltidy.references, without_perltidy.references);
         assert_eq!(with_perltidy.rename, without_perltidy.rename);
         assert_eq!(with_perltidy.code_actions, without_perltidy.code_actions);
-        assert_eq!(with_perltidy.semantic_tokens, without_perltidy.semantic_tokens);
+        assert_eq!(
+            with_perltidy.semantic_tokens,
+            without_perltidy.semantic_tokens
+        );
     }
 
     #[test]
@@ -502,7 +552,10 @@ mod tests {
     fn facade_compliance_all_gte_ga_lock() {
         let all_pct = compliance_percent_for_profile(FeatureProfile::All);
         let ga_pct = compliance_percent_for_profile(FeatureProfile::GaLock);
-        assert!(all_pct >= ga_pct, "all compliance ({all_pct}) should be >= ga-lock ({ga_pct})");
+        assert!(
+            all_pct >= ga_pct,
+            "all compliance ({all_pct}) should be >= ga-lock ({ga_pct})"
+        );
     }
 
     #[test]
@@ -549,7 +602,10 @@ mod tests {
         let caps = caps_from_feature_ids(&original_ids);
         let recovered_ids = feature_ids_from_caps(&caps);
         for id in &original_ids {
-            assert!(recovered_ids.contains(id), "round-trip should preserve '{id}'");
+            assert!(
+                recovered_ids.contains(id),
+                "round-trip should preserve '{id}'"
+            );
         }
     }
 

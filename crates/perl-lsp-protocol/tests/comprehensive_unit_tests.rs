@@ -360,12 +360,21 @@ fn transport_error_builder() {
 fn document_not_found_error_is_json_value() {
     let v = document_not_found_error();
     assert_eq!(v["status"], "error");
-    assert!(v["message"].as_str().is_some_and(|s| s.contains("not found")));
+    assert!(
+        v["message"]
+            .as_str()
+            .is_some_and(|s| s.contains("not found"))
+    );
 }
 
 #[test]
 fn enhanced_error_contains_metadata() {
-    let err = enhanced_error(INTERNAL_ERROR, "oops", "RuntimeError", Some("textDocument/hover"));
+    let err = enhanced_error(
+        INTERNAL_ERROR,
+        "oops",
+        "RuntimeError",
+        Some("textDocument/hover"),
+    );
     assert_eq!(err.code, INTERNAL_ERROR);
     assert_eq!(err.message, "oops");
     let data = err.data.as_ref();
@@ -710,7 +719,10 @@ fn cap_bool_or_object_true_for_boolean() {
 #[test]
 fn cap_bool_or_object_true_for_object() {
     let caps = json!({"completionProvider": {"resolveProvider": true}});
-    assert!(capabilities::cap_bool_or_object(&caps, "completionProvider"));
+    assert!(capabilities::cap_bool_or_object(
+        &caps,
+        "completionProvider"
+    ));
 }
 
 #[test]
@@ -751,7 +763,10 @@ fn get_supported_commands_returns_nonempty() {
 fn get_supported_commands_all_start_with_perl() {
     let cmds = capabilities::get_supported_commands();
     for cmd in &cmds {
-        assert!(cmd.starts_with("perl."), "Command {cmd} doesn't start with perl.");
+        assert!(
+            cmd.starts_with("perl."),
+            "Command {cmd} doesn't start with perl."
+        );
     }
 }
 
@@ -805,8 +820,11 @@ fn no_inline_completion_when_disabled() {
     flags.inline_completion = false;
     let caps = capabilities::capabilities_for(flags);
     // experimental may still be None or may not have the key
-    let has_inline =
-        caps.experimental.as_ref().and_then(|e| e.get("inlineCompletionProvider")).is_some();
+    let has_inline = caps
+        .experimental
+        .as_ref()
+        .and_then(|e| e.get("inlineCompletionProvider"))
+        .is_some();
     assert!(!has_inline);
 }
 
@@ -840,11 +858,16 @@ fn code_actions_include_refactor_extract() -> Result<(), Box<dyn std::error::Err
     flags.code_actions = true;
     let caps = capabilities::capabilities_for(flags);
     let v = serde_json::to_value(&caps)?;
-    let kinds = v.pointer("/codeActionProvider/codeActionKinds").and_then(|v| v.as_array());
+    let kinds = v
+        .pointer("/codeActionProvider/codeActionKinds")
+        .and_then(|v| v.as_array());
     assert!(kinds.is_some());
     let kinds = kinds.unwrap_or_else(|| unreachable!());
     let has_refactor = kinds.iter().any(|k| k.as_str() == Some("refactor.extract"));
-    assert!(has_refactor, "codeActionKinds should include refactor.extract");
+    assert!(
+        has_refactor,
+        "codeActionKinds should include refactor.extract"
+    );
     Ok(())
 }
 
@@ -856,10 +879,14 @@ fn code_actions_include_source_organize_imports_when_enabled()
     flags.source_organize_imports = true;
     let caps = capabilities::capabilities_for(flags);
     let v = serde_json::to_value(&caps)?;
-    let kinds = v.pointer("/codeActionProvider/codeActionKinds").and_then(|v| v.as_array());
+    let kinds = v
+        .pointer("/codeActionProvider/codeActionKinds")
+        .and_then(|v| v.as_array());
     assert!(kinds.is_some());
     let kinds = kinds.unwrap_or_else(|| unreachable!());
-    let has_organize = kinds.iter().any(|k| k.as_str() == Some("source.organizeImports"));
+    let has_organize = kinds
+        .iter()
+        .any(|k| k.as_str() == Some("source.organizeImports"));
     assert!(has_organize);
     Ok(())
 }
@@ -883,8 +910,14 @@ fn method_constants_text_document_sync() {
     assert_eq!(methods::TEXT_DOCUMENT_DID_CLOSE, "textDocument/didClose");
     assert_eq!(methods::TEXT_DOCUMENT_DID_SAVE, "textDocument/didSave");
     assert_eq!(methods::TEXT_DOCUMENT_WILL_SAVE, "textDocument/willSave");
-    assert_eq!(methods::TEXT_DOCUMENT_WILL_SAVE_WAIT_UNTIL, "textDocument/willSaveWaitUntil");
-    assert_eq!(methods::TEXT_DOCUMENT_PUBLISH_DIAGNOSTICS, "textDocument/publishDiagnostics");
+    assert_eq!(
+        methods::TEXT_DOCUMENT_WILL_SAVE_WAIT_UNTIL,
+        "textDocument/willSaveWaitUntil"
+    );
+    assert_eq!(
+        methods::TEXT_DOCUMENT_PUBLISH_DIAGNOSTICS,
+        "textDocument/publishDiagnostics"
+    );
 }
 
 #[test]
@@ -896,23 +929,44 @@ fn method_constants_completion() {
 #[test]
 fn method_constants_navigation() {
     assert_eq!(methods::TEXT_DOCUMENT_HOVER, "textDocument/hover");
-    assert_eq!(methods::TEXT_DOCUMENT_SIGNATURE_HELP, "textDocument/signatureHelp");
+    assert_eq!(
+        methods::TEXT_DOCUMENT_SIGNATURE_HELP,
+        "textDocument/signatureHelp"
+    );
     assert_eq!(methods::TEXT_DOCUMENT_DEFINITION, "textDocument/definition");
-    assert_eq!(methods::TEXT_DOCUMENT_DECLARATION, "textDocument/declaration");
-    assert_eq!(methods::TEXT_DOCUMENT_TYPE_DEFINITION, "textDocument/typeDefinition");
-    assert_eq!(methods::TEXT_DOCUMENT_IMPLEMENTATION, "textDocument/implementation");
+    assert_eq!(
+        methods::TEXT_DOCUMENT_DECLARATION,
+        "textDocument/declaration"
+    );
+    assert_eq!(
+        methods::TEXT_DOCUMENT_TYPE_DEFINITION,
+        "textDocument/typeDefinition"
+    );
+    assert_eq!(
+        methods::TEXT_DOCUMENT_IMPLEMENTATION,
+        "textDocument/implementation"
+    );
     assert_eq!(methods::TEXT_DOCUMENT_REFERENCES, "textDocument/references");
 }
 
 #[test]
 fn method_constants_symbols() {
-    assert_eq!(methods::TEXT_DOCUMENT_DOCUMENT_SYMBOL, "textDocument/documentSymbol");
-    assert_eq!(methods::TEXT_DOCUMENT_DOCUMENT_HIGHLIGHT, "textDocument/documentHighlight");
+    assert_eq!(
+        methods::TEXT_DOCUMENT_DOCUMENT_SYMBOL,
+        "textDocument/documentSymbol"
+    );
+    assert_eq!(
+        methods::TEXT_DOCUMENT_DOCUMENT_HIGHLIGHT,
+        "textDocument/documentHighlight"
+    );
 }
 
 #[test]
 fn method_constants_code_actions() {
-    assert_eq!(methods::TEXT_DOCUMENT_CODE_ACTION, "textDocument/codeAction");
+    assert_eq!(
+        methods::TEXT_DOCUMENT_CODE_ACTION,
+        "textDocument/codeAction"
+    );
     assert_eq!(methods::CODE_ACTION_RESOLVE, "codeAction/resolve");
     assert_eq!(methods::TEXT_DOCUMENT_CODE_LENS, "textDocument/codeLens");
     assert_eq!(methods::CODE_LENS_RESOLVE, "codeLens/resolve");
@@ -921,22 +975,43 @@ fn method_constants_code_actions() {
 #[test]
 fn method_constants_formatting() {
     assert_eq!(methods::TEXT_DOCUMENT_FORMATTING, "textDocument/formatting");
-    assert_eq!(methods::TEXT_DOCUMENT_RANGE_FORMATTING, "textDocument/rangeFormatting");
-    assert_eq!(methods::TEXT_DOCUMENT_RANGES_FORMATTING, "textDocument/rangesFormatting");
-    assert_eq!(methods::TEXT_DOCUMENT_ON_TYPE_FORMATTING, "textDocument/onTypeFormatting");
+    assert_eq!(
+        methods::TEXT_DOCUMENT_RANGE_FORMATTING,
+        "textDocument/rangeFormatting"
+    );
+    assert_eq!(
+        methods::TEXT_DOCUMENT_RANGES_FORMATTING,
+        "textDocument/rangesFormatting"
+    );
+    assert_eq!(
+        methods::TEXT_DOCUMENT_ON_TYPE_FORMATTING,
+        "textDocument/onTypeFormatting"
+    );
 }
 
 #[test]
 fn method_constants_rename() {
-    assert_eq!(methods::TEXT_DOCUMENT_PREPARE_RENAME, "textDocument/prepareRename");
+    assert_eq!(
+        methods::TEXT_DOCUMENT_PREPARE_RENAME,
+        "textDocument/prepareRename"
+    );
     assert_eq!(methods::TEXT_DOCUMENT_RENAME, "textDocument/rename");
-    assert_eq!(methods::TEXT_DOCUMENT_LINKED_EDITING_RANGE, "textDocument/linkedEditingRange");
+    assert_eq!(
+        methods::TEXT_DOCUMENT_LINKED_EDITING_RANGE,
+        "textDocument/linkedEditingRange"
+    );
 }
 
 #[test]
 fn method_constants_semantic_tokens() {
-    assert_eq!(methods::TEXT_DOCUMENT_SEMANTIC_TOKENS_FULL, "textDocument/semanticTokens/full");
-    assert_eq!(methods::TEXT_DOCUMENT_SEMANTIC_TOKENS_RANGE, "textDocument/semanticTokens/range");
+    assert_eq!(
+        methods::TEXT_DOCUMENT_SEMANTIC_TOKENS_FULL,
+        "textDocument/semanticTokens/full"
+    );
+    assert_eq!(
+        methods::TEXT_DOCUMENT_SEMANTIC_TOKENS_RANGE,
+        "textDocument/semanticTokens/range"
+    );
 }
 
 #[test]
@@ -947,29 +1022,53 @@ fn method_constants_inlay_hints() {
 
 #[test]
 fn method_constants_document_links() {
-    assert_eq!(methods::TEXT_DOCUMENT_DOCUMENT_LINK, "textDocument/documentLink");
+    assert_eq!(
+        methods::TEXT_DOCUMENT_DOCUMENT_LINK,
+        "textDocument/documentLink"
+    );
     assert_eq!(methods::DOCUMENT_LINK_RESOLVE, "documentLink/resolve");
 }
 
 #[test]
 fn method_constants_folding_and_selection() {
-    assert_eq!(methods::TEXT_DOCUMENT_FOLDING_RANGE, "textDocument/foldingRange");
-    assert_eq!(methods::TEXT_DOCUMENT_SELECTION_RANGE, "textDocument/selectionRange");
+    assert_eq!(
+        methods::TEXT_DOCUMENT_FOLDING_RANGE,
+        "textDocument/foldingRange"
+    );
+    assert_eq!(
+        methods::TEXT_DOCUMENT_SELECTION_RANGE,
+        "textDocument/selectionRange"
+    );
 }
 
 #[test]
 fn method_constants_type_hierarchy() {
-    assert_eq!(methods::TEXT_DOCUMENT_PREPARE_TYPE_HIERARCHY, "textDocument/prepareTypeHierarchy");
+    assert_eq!(
+        methods::TEXT_DOCUMENT_PREPARE_TYPE_HIERARCHY,
+        "textDocument/prepareTypeHierarchy"
+    );
     assert_eq!(methods::TYPE_HIERARCHY_PREPARE, "typeHierarchy/prepare");
-    assert_eq!(methods::TYPE_HIERARCHY_SUPERTYPES, "typeHierarchy/supertypes");
+    assert_eq!(
+        methods::TYPE_HIERARCHY_SUPERTYPES,
+        "typeHierarchy/supertypes"
+    );
     assert_eq!(methods::TYPE_HIERARCHY_SUBTYPES, "typeHierarchy/subtypes");
 }
 
 #[test]
 fn method_constants_call_hierarchy() {
-    assert_eq!(methods::TEXT_DOCUMENT_PREPARE_CALL_HIERARCHY, "textDocument/prepareCallHierarchy");
-    assert_eq!(methods::CALL_HIERARCHY_INCOMING_CALLS, "callHierarchy/incomingCalls");
-    assert_eq!(methods::CALL_HIERARCHY_OUTGOING_CALLS, "callHierarchy/outgoingCalls");
+    assert_eq!(
+        methods::TEXT_DOCUMENT_PREPARE_CALL_HIERARCHY,
+        "textDocument/prepareCallHierarchy"
+    );
+    assert_eq!(
+        methods::CALL_HIERARCHY_INCOMING_CALLS,
+        "callHierarchy/incomingCalls"
+    );
+    assert_eq!(
+        methods::CALL_HIERARCHY_OUTGOING_CALLS,
+        "callHierarchy/outgoingCalls"
+    );
 }
 
 #[test]
@@ -980,14 +1079,26 @@ fn method_constants_diagnostics() {
 
 #[test]
 fn method_constants_inline_features() {
-    assert_eq!(methods::TEXT_DOCUMENT_INLINE_COMPLETION, "textDocument/inlineCompletion");
-    assert_eq!(methods::TEXT_DOCUMENT_INLINE_VALUE, "textDocument/inlineValue");
+    assert_eq!(
+        methods::TEXT_DOCUMENT_INLINE_COMPLETION,
+        "textDocument/inlineCompletion"
+    );
+    assert_eq!(
+        methods::TEXT_DOCUMENT_INLINE_VALUE,
+        "textDocument/inlineValue"
+    );
 }
 
 #[test]
 fn method_constants_colors() {
-    assert_eq!(methods::TEXT_DOCUMENT_DOCUMENT_COLOR, "textDocument/documentColor");
-    assert_eq!(methods::TEXT_DOCUMENT_COLOR_PRESENTATION, "textDocument/colorPresentation");
+    assert_eq!(
+        methods::TEXT_DOCUMENT_DOCUMENT_COLOR,
+        "textDocument/documentColor"
+    );
+    assert_eq!(
+        methods::TEXT_DOCUMENT_COLOR_PRESENTATION,
+        "textDocument/colorPresentation"
+    );
 }
 
 #[test]
@@ -998,21 +1109,48 @@ fn method_constants_moniker() {
 #[test]
 fn method_constants_workspace() {
     assert_eq!(methods::WORKSPACE_SYMBOL, "workspace/symbol");
-    assert_eq!(methods::WORKSPACE_SYMBOL_RESOLVE, "workspace/symbol/resolve");
-    assert_eq!(methods::WORKSPACE_EXECUTE_COMMAND, "workspace/executeCommand");
+    assert_eq!(
+        methods::WORKSPACE_SYMBOL_RESOLVE,
+        "workspace/symbol/resolve"
+    );
+    assert_eq!(
+        methods::WORKSPACE_EXECUTE_COMMAND,
+        "workspace/executeCommand"
+    );
     assert_eq!(methods::WORKSPACE_APPLY_EDIT, "workspace/applyEdit");
     assert_eq!(methods::WORKSPACE_CONFIGURATION, "workspace/configuration");
-    assert_eq!(methods::WORKSPACE_TEXT_DOCUMENT_CONTENT, "workspace/textDocumentContent");
+    assert_eq!(
+        methods::WORKSPACE_TEXT_DOCUMENT_CONTENT,
+        "workspace/textDocumentContent"
+    );
 }
 
 #[test]
 fn method_constants_workspace_file_ops() {
-    assert_eq!(methods::WORKSPACE_WILL_CREATE_FILES, "workspace/willCreateFiles");
-    assert_eq!(methods::WORKSPACE_DID_CREATE_FILES, "workspace/didCreateFiles");
-    assert_eq!(methods::WORKSPACE_WILL_RENAME_FILES, "workspace/willRenameFiles");
-    assert_eq!(methods::WORKSPACE_DID_RENAME_FILES, "workspace/didRenameFiles");
-    assert_eq!(methods::WORKSPACE_WILL_DELETE_FILES, "workspace/willDeleteFiles");
-    assert_eq!(methods::WORKSPACE_DID_DELETE_FILES, "workspace/didDeleteFiles");
+    assert_eq!(
+        methods::WORKSPACE_WILL_CREATE_FILES,
+        "workspace/willCreateFiles"
+    );
+    assert_eq!(
+        methods::WORKSPACE_DID_CREATE_FILES,
+        "workspace/didCreateFiles"
+    );
+    assert_eq!(
+        methods::WORKSPACE_WILL_RENAME_FILES,
+        "workspace/willRenameFiles"
+    );
+    assert_eq!(
+        methods::WORKSPACE_DID_RENAME_FILES,
+        "workspace/didRenameFiles"
+    );
+    assert_eq!(
+        methods::WORKSPACE_WILL_DELETE_FILES,
+        "workspace/willDeleteFiles"
+    );
+    assert_eq!(
+        methods::WORKSPACE_DID_DELETE_FILES,
+        "workspace/didDeleteFiles"
+    );
 }
 
 #[test]
@@ -1021,18 +1159,42 @@ fn method_constants_workspace_config() {
         methods::WORKSPACE_DID_CHANGE_WORKSPACE_FOLDERS,
         "workspace/didChangeWorkspaceFolders"
     );
-    assert_eq!(methods::WORKSPACE_DID_CHANGE_CONFIGURATION, "workspace/didChangeConfiguration");
-    assert_eq!(methods::WORKSPACE_DID_CHANGE_WATCHED_FILES, "workspace/didChangeWatchedFiles");
+    assert_eq!(
+        methods::WORKSPACE_DID_CHANGE_CONFIGURATION,
+        "workspace/didChangeConfiguration"
+    );
+    assert_eq!(
+        methods::WORKSPACE_DID_CHANGE_WATCHED_FILES,
+        "workspace/didChangeWatchedFiles"
+    );
 }
 
 #[test]
 fn method_constants_workspace_refresh() {
-    assert_eq!(methods::WORKSPACE_CODE_LENS_REFRESH, "workspace/codeLens/refresh");
-    assert_eq!(methods::WORKSPACE_SEMANTIC_TOKENS_REFRESH, "workspace/semanticTokens/refresh");
-    assert_eq!(methods::WORKSPACE_INLAY_HINT_REFRESH, "workspace/inlayHint/refresh");
-    assert_eq!(methods::WORKSPACE_INLINE_VALUE_REFRESH, "workspace/inlineValue/refresh");
-    assert_eq!(methods::WORKSPACE_DIAGNOSTIC_REFRESH, "workspace/diagnostic/refresh");
-    assert_eq!(methods::WORKSPACE_FOLDING_RANGE_REFRESH, "workspace/foldingRange/refresh");
+    assert_eq!(
+        methods::WORKSPACE_CODE_LENS_REFRESH,
+        "workspace/codeLens/refresh"
+    );
+    assert_eq!(
+        methods::WORKSPACE_SEMANTIC_TOKENS_REFRESH,
+        "workspace/semanticTokens/refresh"
+    );
+    assert_eq!(
+        methods::WORKSPACE_INLAY_HINT_REFRESH,
+        "workspace/inlayHint/refresh"
+    );
+    assert_eq!(
+        methods::WORKSPACE_INLINE_VALUE_REFRESH,
+        "workspace/inlineValue/refresh"
+    );
+    assert_eq!(
+        methods::WORKSPACE_DIAGNOSTIC_REFRESH,
+        "workspace/diagnostic/refresh"
+    );
+    assert_eq!(
+        methods::WORKSPACE_FOLDING_RANGE_REFRESH,
+        "workspace/foldingRange/refresh"
+    );
     assert_eq!(
         methods::WORKSPACE_TEXT_DOCUMENT_CONTENT_REFRESH,
         "workspace/textDocumentContent/refresh"
@@ -1041,20 +1203,41 @@ fn method_constants_workspace_refresh() {
 
 #[test]
 fn method_constants_notebook() {
-    assert_eq!(methods::NOTEBOOK_DOCUMENT_DID_OPEN, "notebookDocument/didOpen");
-    assert_eq!(methods::NOTEBOOK_DOCUMENT_DID_CHANGE, "notebookDocument/didChange");
-    assert_eq!(methods::NOTEBOOK_DOCUMENT_DID_SAVE, "notebookDocument/didSave");
-    assert_eq!(methods::NOTEBOOK_DOCUMENT_DID_CLOSE, "notebookDocument/didClose");
+    assert_eq!(
+        methods::NOTEBOOK_DOCUMENT_DID_OPEN,
+        "notebookDocument/didOpen"
+    );
+    assert_eq!(
+        methods::NOTEBOOK_DOCUMENT_DID_CHANGE,
+        "notebookDocument/didChange"
+    );
+    assert_eq!(
+        methods::NOTEBOOK_DOCUMENT_DID_SAVE,
+        "notebookDocument/didSave"
+    );
+    assert_eq!(
+        methods::NOTEBOOK_DOCUMENT_DID_CLOSE,
+        "notebookDocument/didClose"
+    );
 }
 
 #[test]
 fn method_constants_window() {
     assert_eq!(methods::WINDOW_SHOW_MESSAGE, "window/showMessage");
     assert_eq!(methods::WINDOW_LOG_MESSAGE, "window/logMessage");
-    assert_eq!(methods::WINDOW_SHOW_MESSAGE_REQUEST, "window/showMessageRequest");
+    assert_eq!(
+        methods::WINDOW_SHOW_MESSAGE_REQUEST,
+        "window/showMessageRequest"
+    );
     assert_eq!(methods::WINDOW_SHOW_DOCUMENT, "window/showDocument");
-    assert_eq!(methods::WINDOW_WORK_DONE_PROGRESS_CREATE, "window/workDoneProgress/create");
-    assert_eq!(methods::WINDOW_WORK_DONE_PROGRESS_CANCEL, "window/workDoneProgress/cancel");
+    assert_eq!(
+        methods::WINDOW_WORK_DONE_PROGRESS_CREATE,
+        "window/workDoneProgress/create"
+    );
+    assert_eq!(
+        methods::WINDOW_WORK_DONE_PROGRESS_CANCEL,
+        "window/workDoneProgress/cancel"
+    );
 }
 
 #[test]
@@ -1066,7 +1249,10 @@ fn method_constants_special() {
 
 #[test]
 fn method_constants_experimental() {
-    assert_eq!(methods::EXPERIMENTAL_TEST_DISCOVERY, "experimental/testDiscovery");
+    assert_eq!(
+        methods::EXPERIMENTAL_TEST_DISCOVERY,
+        "experimental/testDiscovery"
+    );
 }
 
 // ============================================================================
@@ -1104,7 +1290,11 @@ fn roundtrip_request_to_error_response() -> Result<(), Box<dyn std::error::Error
     let v = serde_json::to_value(&resp)?;
     assert_eq!(v["id"], 200);
     assert_eq!(v["error"]["code"], METHOD_NOT_FOUND);
-    assert!(v["error"]["message"].as_str().is_some_and(|s| s.contains("textDocument/unknown")));
+    assert!(
+        v["error"]["message"]
+            .as_str()
+            .is_some_and(|s| s.contains("textDocument/unknown"))
+    );
     Ok(())
 }
 
@@ -1134,7 +1324,9 @@ fn request_with_complex_params() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn response_with_large_result() -> Result<(), Box<dyn std::error::Error>> {
-    let items: Vec<Value> = (0..1000).map(|i| json!({"label": format!("item_{i}")})).collect();
+    let items: Vec<Value> = (0..1000)
+        .map(|i| json!({"label": format!("item_{i}")}))
+        .collect();
     let resp = JsonRpcResponse::success(Some(json!(1)), json!(items));
     let v = serde_json::to_value(&resp)?;
     let arr = v["result"].as_array();

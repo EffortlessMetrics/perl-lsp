@@ -56,7 +56,12 @@ fn has_action_matching(actions: &[CodeAction], pred: impl Fn(&CodeAction) -> boo
 #[test]
 fn undefined_variable_produces_my_and_our_declarations() {
     let src = "use strict;\nprint $undefined;";
-    let diags = [make_diag(18, 28, "PL103", "Undefined variable '$undefined'")];
+    let diags = [make_diag(
+        18,
+        28,
+        "PL103",
+        "Undefined variable '$undefined'",
+    )];
     let actions = parse_and_get_actions(src, &diags);
 
     assert!(
@@ -79,11 +84,17 @@ fn undefined_variable_preferred_is_my() {
 
     let my_action = actions.iter().find(|a| a.title.contains("my"));
     assert!(my_action.is_some(), "Expected my action");
-    assert!(my_action.is_some_and(|a| a.is_preferred), "'my' should be preferred");
+    assert!(
+        my_action.is_some_and(|a| a.is_preferred),
+        "'my' should be preferred"
+    );
 
     let our_action = actions.iter().find(|a| a.title.contains("our"));
     assert!(our_action.is_some());
-    assert!(!our_action.is_none_or(|a| a.is_preferred), "'our' should NOT be preferred");
+    assert!(
+        !our_action.is_none_or(|a| a.is_preferred),
+        "'our' should NOT be preferred"
+    );
 }
 
 #[test]
@@ -93,8 +104,14 @@ fn undefined_variable_no_quotes_in_message_yields_no_declaration() {
     let diags = [make_diag(6, 8, "PL103", "Undefined variable x")];
     let actions = parse_and_get_actions(src, &diags);
 
-    let decl_actions: Vec<_> = actions.iter().filter(|a| a.title.contains("Declare")).collect();
-    assert!(decl_actions.is_empty(), "No declarations when message lacks quoted var");
+    let decl_actions: Vec<_> = actions
+        .iter()
+        .filter(|a| a.title.contains("Declare"))
+        .collect();
+    assert!(
+        decl_actions.is_empty(),
+        "No declarations when message lacks quoted var"
+    );
 }
 
 // ---- unused-variable ------------------------------------------------------
@@ -122,7 +139,10 @@ fn unused_variable_remove_is_preferred() {
     let actions = parse_and_get_actions(src, &diags);
 
     let remove = actions.iter().find(|a| a.title == "Remove unused variable");
-    assert!(remove.is_some_and(|a| a.is_preferred), "Remove should be preferred");
+    assert!(
+        remove.is_some_and(|a| a.is_preferred),
+        "Remove should be preferred"
+    );
 }
 
 // ---- assignment-in-condition ----------------------------------------------
@@ -180,7 +200,9 @@ fn missing_warnings_adds_use_warnings() {
     let diags = [make_diag(0, 8, "PL101", "Missing use warnings")];
     let actions = parse_and_get_actions(src, &diags);
 
-    assert!(has_action_matching(&actions, |a| a.title.contains("use warnings")));
+    assert!(has_action_matching(&actions, |a| a
+        .title
+        .contains("use warnings")));
 }
 
 // ---- deprecated-defined ---------------------------------------------------
@@ -295,7 +317,12 @@ fn bareword_single_quote_is_preferred() {
 #[test]
 fn parse_error_missing_semicolon() {
     let src = "my $x = 1\n";
-    let diags = [make_diag(0, 9, "parse-error-missingsemicolon", "Missing semicolon")];
+    let diags = [make_diag(
+        0,
+        9,
+        "parse-error-missingsemicolon",
+        "Missing semicolon",
+    )];
     let actions = parse_and_get_actions(src, &diags);
 
     assert!(
@@ -307,34 +334,60 @@ fn parse_error_missing_semicolon() {
 #[test]
 fn parse_error_unclosed_string() {
     let src = r#"my $x = "hello"#;
-    let diags = [make_diag(8, 14, "parse-error-unclosedstring", "Unclosed string")];
+    let diags = [make_diag(
+        8,
+        14,
+        "parse-error-unclosedstring",
+        "Unclosed string",
+    )];
     let actions = parse_and_get_actions(src, &diags);
 
-    assert!(has_action_matching(&actions, |a| a.title.contains("closing quote")));
+    assert!(has_action_matching(&actions, |a| a
+        .title
+        .contains("closing quote")));
 }
 
 #[test]
 fn parse_error_unclosed_paren() {
     let src = "my $x = (1 + 2";
-    let diags = [make_diag(8, 14, "parse-error-unclosedparenthesis", "Unclosed paren")];
+    let diags = [make_diag(
+        8,
+        14,
+        "parse-error-unclosedparenthesis",
+        "Unclosed paren",
+    )];
     let actions = parse_and_get_actions(src, &diags);
 
-    assert!(has_action_matching(&actions, |a| a.title.contains("parenthesis")));
+    assert!(has_action_matching(&actions, |a| a
+        .title
+        .contains("parenthesis")));
 }
 
 #[test]
 fn parse_error_unclosed_bracket() {
     let src = "my @a = [1, 2";
-    let diags = [make_diag(8, 13, "parse-error-unclosedbracket", "Unclosed bracket")];
+    let diags = [make_diag(
+        8,
+        13,
+        "parse-error-unclosedbracket",
+        "Unclosed bracket",
+    )];
     let actions = parse_and_get_actions(src, &diags);
 
-    assert!(has_action_matching(&actions, |a| a.title.contains("bracket")));
+    assert!(has_action_matching(&actions, |a| a
+        .title
+        .contains("bracket")));
 }
 
 #[test]
 fn parse_error_unclosed_brace() {
     let src = "if ($x) {";
-    let diags = [make_diag(8, 9, "parse-error-unclosedbrace", "Unclosed brace")];
+    let diags = [make_diag(
+        8,
+        9,
+        "parse-error-unclosedbrace",
+        "Unclosed brace",
+    )];
     let actions = parse_and_get_actions(src, &diags);
 
     assert!(has_action_matching(&actions, |a| a.title.contains("brace")));
@@ -343,7 +396,12 @@ fn parse_error_unclosed_brace() {
 #[test]
 fn parse_error_unclosed_block() {
     let src = "sub foo {";
-    let diags = [make_diag(8, 9, "parse-error-unclosedblock", "Unclosed block")];
+    let diags = [make_diag(
+        8,
+        9,
+        "parse-error-unclosedblock",
+        "Unclosed block",
+    )];
     let actions = parse_and_get_actions(src, &diags);
 
     assert!(has_action_matching(&actions, |a| a.title.contains("brace")));
@@ -352,7 +410,12 @@ fn parse_error_unclosed_block() {
 #[test]
 fn parse_error_unknown_code_yields_no_actions_for_that_code() {
     let src = "print 1;";
-    let diags = [make_diag(0, 8, "parse-error-unknown", "Unknown parse error")];
+    let diags = [make_diag(
+        0,
+        8,
+        "parse-error-unknown",
+        "Unknown parse error",
+    )];
     let actions = parse_and_get_actions(src, &diags);
 
     assert!(
@@ -368,8 +431,12 @@ fn parse_error_unknown_code_yields_no_actions_for_that_code() {
 #[test]
 fn pl001_missing_semicolon_message_triggers_fix() {
     let src = "my $x = 1\n";
-    let diags =
-        [make_diag(0, 9, "PL001", "Missing semicolon after statement. Add `;` here (found `my`)")];
+    let diags = [make_diag(
+        0,
+        9,
+        "PL001",
+        "Missing semicolon after statement. Add `;` here (found `my`)",
+    )];
     let actions = parse_and_get_actions(src, &diags);
     assert!(
         has_action_matching(&actions, |a| a.title.contains("semicolon")),
@@ -381,8 +448,12 @@ fn pl001_missing_semicolon_message_triggers_fix() {
 #[test]
 fn pl002_missing_semicolon_message_triggers_fix() {
     let src = "my $x = 1\n";
-    let diags =
-        [make_diag(0, 9, "PL002", "Missing semicolon after statement. Add `;` here (found `my`)")];
+    let diags = [make_diag(
+        0,
+        9,
+        "PL002",
+        "Missing semicolon after statement. Add `;` here (found `my`)",
+    )];
     let actions = parse_and_get_actions(src, &diags);
     assert!(
         has_action_matching(&actions, |a| a.title.contains("semicolon")),
@@ -405,10 +476,17 @@ fn pl001_generic_message_does_not_trigger_semicolon_fix() {
 fn pl001_semicolon_inserted_before_trailing_whitespace() {
     // "my $x = 1   \n" — trailing spaces before newline
     let src = "my $x = 1   \n";
-    let diags =
-        [make_diag(0, 9, "PL001", "Missing semicolon after statement. Add `;` here (found `my`)")];
+    let diags = [make_diag(
+        0,
+        9,
+        "PL001",
+        "Missing semicolon after statement. Add `;` here (found `my`)",
+    )];
     let actions = parse_and_get_actions(src, &diags);
-    let fix = actions.iter().find(|a| a.title.contains("semicolon")).expect("fix must exist");
+    let fix = actions
+        .iter()
+        .find(|a| a.title.contains("semicolon"))
+        .expect("fix must exist");
     // The insertion point should be right after "1" (byte 9), not after trailing spaces
     assert_eq!(
         fix.edit.changes[0].location.start, 9,
@@ -420,7 +498,12 @@ fn pl001_semicolon_inserted_before_trailing_whitespace() {
 fn pl001_heredoc_does_not_trigger_semicolon_fix() {
     // Source at range start looks like a heredoc — fix must be skipped
     let src = "<<END\nhello\nEND\n";
-    let diags = [make_diag(0, 5, "PL001", "Missing semicolon after statement. Add `;` here")];
+    let diags = [make_diag(
+        0,
+        5,
+        "PL001",
+        "Missing semicolon after statement. Add `;` here",
+    )];
     let actions = parse_and_get_actions(src, &diags);
     assert!(
         !has_action_matching(&actions, |a| a.title.contains("semicolon")),
@@ -432,9 +515,17 @@ fn pl001_heredoc_does_not_trigger_semicolon_fix() {
 fn pl001_eof_without_newline_inserts_at_end() {
     // No trailing newline — `unwrap_or(source.len())` path
     let src = "my $x = 1";
-    let diags = [make_diag(0, 9, "PL001", "Missing semicolon after statement. Add `;` here")];
+    let diags = [make_diag(
+        0,
+        9,
+        "PL001",
+        "Missing semicolon after statement. Add `;` here",
+    )];
     let actions = parse_and_get_actions(src, &diags);
-    let fix = actions.iter().find(|a| a.title.contains("semicolon")).expect("fix must exist");
+    let fix = actions
+        .iter()
+        .find(|a| a.title.contains("semicolon"))
+        .expect("fix must exist");
     assert_eq!(
         fix.edit.changes[0].location.start, 9,
         "EOF without newline must insert at source.len()"
@@ -461,9 +552,14 @@ fn unused_parameter_no_quotes_yields_no_rename() {
     let diags = [make_diag(14, 16, "PL108", "Unused parameter x")];
     let actions = parse_and_get_actions(src, &diags);
 
-    let rename_actions: Vec<_> =
-        actions.iter().filter(|a| a.title.starts_with("Rename to")).collect();
-    assert!(rename_actions.is_empty(), "No rename when message lacks quoted name");
+    let rename_actions: Vec<_> = actions
+        .iter()
+        .filter(|a| a.title.starts_with("Rename to"))
+        .collect();
+    assert!(
+        rename_actions.is_empty(),
+        "No rename when message lacks quoted name"
+    );
 }
 
 // ---- variable-shadowing ---------------------------------------------------
@@ -474,15 +570,21 @@ fn variable_shadowing_suggests_three_alternatives() {
     let diags = [make_diag(17, 19, "PL104", "Variable '$x' shadows outer")];
     let actions = parse_and_get_actions(src, &diags);
 
-    let shadow_actions: Vec<_> =
-        actions.iter().filter(|a| a.diagnostics.contains(&"PL104".to_string())).collect();
+    let shadow_actions: Vec<_> = actions
+        .iter()
+        .filter(|a| a.diagnostics.contains(&"PL104".to_string()))
+        .collect();
     assert!(
         shadow_actions.len() >= 3,
         "Expected at least 3 suggestions, got {}",
         shadow_actions.len()
     );
-    assert!(has_action_matching(&actions, |a| a.title.contains("$x_inner")));
-    assert!(has_action_matching(&actions, |a| a.title.contains("$x_local")));
+    assert!(has_action_matching(&actions, |a| a
+        .title
+        .contains("$x_inner")));
+    assert!(has_action_matching(&actions, |a| a
+        .title
+        .contains("$x_local")));
     assert!(has_action_matching(&actions, |a| a.title.contains("$my_x")));
 }
 
@@ -516,8 +618,10 @@ fn variable_shadowing_none_preferred() {
     let diags = [make_diag(17, 19, "PL104", "Variable '$x' shadows outer")];
     let actions = parse_and_get_actions(src, &diags);
 
-    let shadow_actions: Vec<_> =
-        actions.iter().filter(|a| a.diagnostics.contains(&"PL104".to_string())).collect();
+    let shadow_actions: Vec<_> = actions
+        .iter()
+        .filter(|a| a.diagnostics.contains(&"PL104".to_string()))
+        .collect();
     assert!(
         shadow_actions.iter().all(|a| !a.is_preferred),
         "Shadowing renames should not be preferred"
@@ -544,7 +648,9 @@ fn empty_source_does_not_panic() {
     let actions = parse_and_get_actions(src, &diags);
 
     // Should return at least the missing-strict action
-    assert!(has_action_matching(&actions, |a| a.title.contains("use strict")));
+    assert!(has_action_matching(&actions, |a| a
+        .title
+        .contains("use strict")));
 }
 
 #[test]
@@ -578,8 +684,13 @@ fn diagnostic_without_code_produces_no_quick_fix() {
     let actions = provider.get_code_actions(&ast, (0, src.len()), &diags);
 
     // No code → no quick fixes targeted at it (refactorings may still exist)
-    let code_fixes: Vec<_> = actions.iter().filter(|a| !a.diagnostics.is_empty()).collect();
-    let has_none_code = code_fixes.iter().any(|a| a.diagnostics.iter().any(|d| d.is_empty()));
+    let code_fixes: Vec<_> = actions
+        .iter()
+        .filter(|a| !a.diagnostics.is_empty())
+        .collect();
+    let has_none_code = code_fixes
+        .iter()
+        .any(|a| a.diagnostics.iter().any(|d| d.is_empty()));
     assert!(!has_none_code);
 }
 
@@ -593,9 +704,15 @@ fn multiple_diagnostics_produce_combined_actions() {
     ];
     let actions = parse_and_get_actions(src, &diags);
 
-    assert!(has_action_matching(&actions, |a| a.title.contains("use strict")));
-    assert!(has_action_matching(&actions, |a| a.title.contains("use warnings")));
-    assert!(has_action_matching(&actions, |a| a.title.contains("Declare")));
+    assert!(has_action_matching(&actions, |a| a
+        .title
+        .contains("use strict")));
+    assert!(has_action_matching(&actions, |a| a
+        .title
+        .contains("use warnings")));
+    assert!(has_action_matching(&actions, |a| a
+        .title
+        .contains("Declare")));
 }
 
 // ===========================================================================
@@ -606,15 +723,30 @@ fn multiple_diagnostics_produce_combined_actions() {
 fn code_action_kind_equality() {
     assert_eq!(CodeActionKind::QuickFix, CodeActionKind::QuickFix);
     assert_eq!(CodeActionKind::Refactor, CodeActionKind::Refactor);
-    assert_eq!(CodeActionKind::RefactorExtract, CodeActionKind::RefactorExtract);
-    assert_eq!(CodeActionKind::RefactorInline, CodeActionKind::RefactorInline);
-    assert_eq!(CodeActionKind::RefactorRewrite, CodeActionKind::RefactorRewrite);
+    assert_eq!(
+        CodeActionKind::RefactorExtract,
+        CodeActionKind::RefactorExtract
+    );
+    assert_eq!(
+        CodeActionKind::RefactorInline,
+        CodeActionKind::RefactorInline
+    );
+    assert_eq!(
+        CodeActionKind::RefactorRewrite,
+        CodeActionKind::RefactorRewrite
+    );
     assert_eq!(CodeActionKind::Source, CodeActionKind::Source);
-    assert_eq!(CodeActionKind::SourceOrganizeImports, CodeActionKind::SourceOrganizeImports);
+    assert_eq!(
+        CodeActionKind::SourceOrganizeImports,
+        CodeActionKind::SourceOrganizeImports
+    );
     assert_eq!(CodeActionKind::SourceFixAll, CodeActionKind::SourceFixAll);
 
     assert_ne!(CodeActionKind::QuickFix, CodeActionKind::Refactor);
-    assert_ne!(CodeActionKind::RefactorExtract, CodeActionKind::RefactorRewrite);
+    assert_ne!(
+        CodeActionKind::RefactorExtract,
+        CodeActionKind::RefactorRewrite
+    );
 }
 
 // ===========================================================================
@@ -662,7 +794,9 @@ fn enhanced_error_checking_not_offered_when_die_present() {
 
     // error checking should not be offered since "die" is nearby
     assert!(
-        !has_action_matching(&actions, |a| a.title.contains("Add error checking to 'open'")),
+        !has_action_matching(&actions, |a| a
+            .title
+            .contains("Add error checking to 'open'")),
         "Should not offer error checking when 'die' already present"
     );
 }
@@ -859,7 +993,11 @@ fn assignment_in_condition_eq_edit_replaces_single_char() {
     // The change should replace 1 char '=' with '=='
     if let Some(edits) = edits {
         let first = &edits[0];
-        assert_eq!(first.location.end - first.location.start, 1, "Should replace 1 char");
+        assert_eq!(
+            first.location.end - first.location.start,
+            1,
+            "Should replace 1 char"
+        );
         assert_eq!(first.new_text, "==");
     }
 }
@@ -871,7 +1009,12 @@ fn assignment_in_condition_eq_edit_replaces_single_char() {
 #[test]
 fn missing_semicolon_inserts_before_trailing_whitespace() {
     let src = "my $x = 1   \nprint 2;";
-    let diags = [make_diag(0, 9, "parse-error-missingsemicolon", "Missing semicolon")];
+    let diags = [make_diag(
+        0,
+        9,
+        "parse-error-missingsemicolon",
+        "Missing semicolon",
+    )];
     let actions = parse_and_get_actions(src, &diags);
 
     let semi = actions.iter().find(|a| a.title.contains("semicolon"));
@@ -880,17 +1023,27 @@ fn missing_semicolon_inserts_before_trailing_whitespace() {
     // The insert position should be at byte offset 9 (after "my $x = 1", before spaces)
     if let Some(te) = te {
         assert_eq!(te.new_text, ";");
-        assert!(te.location.start <= 9, "Semicolon should be inserted before trailing whitespace");
+        assert!(
+            te.location.start <= 9,
+            "Semicolon should be inserted before trailing whitespace"
+        );
     }
 }
 
 #[test]
 fn missing_semicolon_at_end_of_file_no_newline() {
     let src = "my $x = 1";
-    let diags = [make_diag(0, 9, "parse-error-missingsemicolon", "Missing semicolon")];
+    let diags = [make_diag(
+        0,
+        9,
+        "parse-error-missingsemicolon",
+        "Missing semicolon",
+    )];
     let actions = parse_and_get_actions(src, &diags);
 
-    assert!(has_action_matching(&actions, |a| a.title.contains("semicolon")));
+    assert!(has_action_matching(&actions, |a| a
+        .title
+        .contains("semicolon")));
 }
 
 // ===========================================================================
@@ -920,11 +1073,18 @@ fn bareword_filehandle_action_is_quickfix_kind() {
     let diags = [make_diag(5, 9, "PL400", "Bareword filehandle 'FILE'")];
     let actions = parse_and_get_actions(src, &diags);
 
-    let fh_actions: Vec<_> =
-        actions.iter().filter(|a| a.diagnostics.contains(&"PL400".to_string())).collect();
-    assert!(!fh_actions.is_empty(), "Expected at least one bareword-filehandle action");
+    let fh_actions: Vec<_> = actions
+        .iter()
+        .filter(|a| a.diagnostics.contains(&"PL400".to_string()))
+        .collect();
     assert!(
-        fh_actions.iter().all(|a| a.kind == CodeActionKind::QuickFix),
+        !fh_actions.is_empty(),
+        "Expected at least one bareword-filehandle action"
+    );
+    assert!(
+        fh_actions
+            .iter()
+            .all(|a| a.kind == CodeActionKind::QuickFix),
         "bareword-filehandle actions should be QuickFix kind"
     );
 }
@@ -939,7 +1099,10 @@ fn bareword_filehandle_action_is_preferred() {
         .iter()
         .filter(|a| a.diagnostics.contains(&"PL400".to_string()) && a.is_preferred)
         .collect();
-    assert!(!preferred.is_empty(), "At least one bareword-filehandle action should be preferred");
+    assert!(
+        !preferred.is_empty(),
+        "At least one bareword-filehandle action should be preferred"
+    );
 }
 
 // ===========================================================================
@@ -968,11 +1131,18 @@ fn two_arg_open_action_is_quickfix_kind() {
     let diags = [make_diag(0, 22, "PL401", "Two-argument open() is unsafe")];
     let actions = parse_and_get_actions(src, &diags);
 
-    let open_actions: Vec<_> =
-        actions.iter().filter(|a| a.diagnostics.contains(&"PL401".to_string())).collect();
-    assert!(!open_actions.is_empty(), "Expected at least one two-arg-open action");
+    let open_actions: Vec<_> = actions
+        .iter()
+        .filter(|a| a.diagnostics.contains(&"PL401".to_string()))
+        .collect();
     assert!(
-        open_actions.iter().all(|a| a.kind == CodeActionKind::QuickFix),
+        !open_actions.is_empty(),
+        "Expected at least one two-arg-open action"
+    );
+    assert!(
+        open_actions
+            .iter()
+            .all(|a| a.kind == CodeActionKind::QuickFix),
         "two-arg-open actions should be QuickFix kind"
     );
 }
@@ -987,5 +1157,8 @@ fn two_arg_open_action_is_preferred() {
         .iter()
         .filter(|a| a.diagnostics.contains(&"PL401".to_string()) && a.is_preferred)
         .collect();
-    assert!(!preferred.is_empty(), "At least one two-arg-open action should be preferred");
+    assert!(
+        !preferred.is_empty(),
+        "At least one two-arg-open action should be preferred"
+    );
 }

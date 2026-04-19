@@ -45,9 +45,15 @@ fn parse_with_timeout(code: &str, timeout_ms: u64) -> Result<(), String> {
         Ok(_) => Ok(()),
         Err(_) => {
             // Format error message with truncated input for readability
-            let display_code =
-                if code.len() > 50 { format!("{}...", &code[..50]) } else { code.to_string() };
-            Err(format!("Parser timed out after {}ms on input: {:?}", timeout_ms, display_code))
+            let display_code = if code.len() > 50 {
+                format!("{}...", &code[..50])
+            } else {
+                code.to_string()
+            };
+            Err(format!(
+                "Parser timed out after {}ms on input: {:?}",
+                timeout_ms, display_code
+            ))
         }
     }
 }
@@ -319,8 +325,15 @@ fn truncated_method_chains_terminates() {
 /// Test truncated regex patterns
 #[test]
 fn truncated_regex_terminates() {
-    let cases =
-        ["$x =~", "$x =~ /", "$x =~ /pattern", "$x =~ s/", "$x =~ s/foo/", "$x !~", "$x !~ /"];
+    let cases = [
+        "$x =~",
+        "$x =~ /",
+        "$x =~ /pattern",
+        "$x =~ s/",
+        "$x =~ s/foo/",
+        "$x !~",
+        "$x !~ /",
+    ];
 
     for code in cases {
         must_terminate(code);
@@ -330,8 +343,13 @@ fn truncated_regex_terminates() {
 /// Test truncated package/class declarations
 #[test]
 fn truncated_package_class_terminates() {
-    let cases =
-        ["package", "package Foo", "package Foo::", "package Foo::Bar", "package Foo::Bar {"];
+    let cases = [
+        "package",
+        "package Foo",
+        "package Foo::",
+        "package Foo::Bar",
+        "package Foo::Bar {",
+    ];
 
     for code in cases {
         must_terminate(code);
@@ -457,7 +475,11 @@ fn valid_code_still_works() {
         let result = parser.parse();
         // We don't necessarily require success (some cases may error),
         // but they must terminate
-        assert!(result.is_ok() || result.is_err(), "Parse must return a result for: {:?}", code);
+        assert!(
+            result.is_ok() || result.is_err(),
+            "Parse must return a result for: {:?}",
+            code
+        );
     }
 }
 

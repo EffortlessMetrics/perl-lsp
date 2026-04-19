@@ -111,7 +111,11 @@ fn test_capture_group_has_pattern_field() -> Result<(), Box<dyn std::error::Erro
 
 #[test]
 fn test_capture_group_debug_impl() -> Result<(), Box<dyn std::error::Error>> {
-    let cg = CaptureGroup { name: "foo".to_string(), index: 1, pattern: "\\w+".to_string() };
+    let cg = CaptureGroup {
+        name: "foo".to_string(),
+        index: 1,
+        pattern: "\\w+".to_string(),
+    };
     let s = format!("{cg:?}");
     assert!(s.contains("foo"));
     Ok(())
@@ -119,7 +123,11 @@ fn test_capture_group_debug_impl() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn test_capture_group_clone() -> Result<(), Box<dyn std::error::Error>> {
-    let cg = CaptureGroup { name: "bar".to_string(), index: 2, pattern: "\\d+".to_string() };
+    let cg = CaptureGroup {
+        name: "bar".to_string(),
+        index: 2,
+        pattern: "\\d+".to_string(),
+    };
     let cg2 = cg.clone();
     assert_eq!(cg2.name, "bar");
     assert_eq!(cg2.index, 2);

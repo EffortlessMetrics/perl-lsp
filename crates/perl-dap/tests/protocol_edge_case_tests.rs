@@ -127,7 +127,10 @@ fn test_event_missing_event_field() -> Result<()> {
 fn test_initialize_args_missing_adapter_id() -> Result<()> {
     let json = r#"{"clientId": "vscode"}"#;
     let result = serde_json::from_str::<InitializeRequestArguments>(json);
-    assert!(result.is_err(), "InitializeRequestArguments without adapterId should fail");
+    assert!(
+        result.is_err(),
+        "InitializeRequestArguments without adapterId should fail"
+    );
     Ok(())
 }
 
@@ -135,7 +138,10 @@ fn test_initialize_args_missing_adapter_id() -> Result<()> {
 fn test_launch_args_missing_program() -> Result<()> {
     let json = r#"{"args": ["--verbose"]}"#;
     let result = serde_json::from_str::<LaunchRequestArguments>(json);
-    assert!(result.is_err(), "LaunchRequestArguments without program should fail");
+    assert!(
+        result.is_err(),
+        "LaunchRequestArguments without program should fail"
+    );
     Ok(())
 }
 
@@ -169,7 +175,10 @@ fn test_seq_negative() -> Result<()> {
 
 #[test]
 fn test_seq_i64_max() -> Result<()> {
-    let json = format!(r#"{{"seq": {}, "type": "request", "command": "initialize"}}"#, i64::MAX);
+    let json = format!(
+        r#"{{"seq": {}, "type": "request", "command": "initialize"}}"#,
+        i64::MAX
+    );
     let req: Request = serde_json::from_str(&json)?;
     assert_eq!(req.seq, i64::MAX);
     Ok(())
@@ -177,7 +186,10 @@ fn test_seq_i64_max() -> Result<()> {
 
 #[test]
 fn test_seq_i64_min() -> Result<()> {
-    let json = format!(r#"{{"seq": {}, "type": "request", "command": "initialize"}}"#, i64::MIN);
+    let json = format!(
+        r#"{{"seq": {}, "type": "request", "command": "initialize"}}"#,
+        i64::MIN
+    );
     let req: Request = serde_json::from_str(&json)?;
     assert_eq!(req.seq, i64::MIN);
     Ok(())
@@ -188,7 +200,10 @@ fn test_seq_overflow_beyond_i64() -> Result<()> {
     // 2^63 overflows i64
     let json = r#"{"seq": 9223372036854775808, "type": "request", "command": "initialize"}"#;
     let result = serde_json::from_str::<Request>(json);
-    assert!(result.is_err(), "seq exceeding i64::MAX should fail to parse");
+    assert!(
+        result.is_err(),
+        "seq exceeding i64::MAX should fail to parse"
+    );
     Ok(())
 }
 
@@ -208,7 +223,10 @@ fn test_seq_float_rejected() -> Result<()> {
 #[test]
 fn test_large_command_string() -> Result<()> {
     let big_cmd = "x".repeat(100_000);
-    let json = format!(r#"{{"seq": 1, "type": "request", "command": "{}"}}"#, big_cmd);
+    let json = format!(
+        r#"{{"seq": 1, "type": "request", "command": "{}"}}"#,
+        big_cmd
+    );
     let req: Request = serde_json::from_str(&json)?;
     assert_eq!(req.command.len(), 100_000);
     Ok(())
@@ -277,7 +295,10 @@ fn test_request_round_trip_no_arguments() -> Result<()> {
     };
     let json = serde_json::to_string(&req)?;
     // "arguments" should be absent (skip_serializing_if)
-    assert!(!json.contains("arguments"), "arguments key should be omitted when None");
+    assert!(
+        !json.contains("arguments"),
+        "arguments key should be omitted when None"
+    );
     let rt: Request = serde_json::from_str(&json)?;
     assert!(rt.arguments.is_none());
     Ok(())
@@ -387,7 +408,13 @@ fn test_source_breakpoint_full() -> Result<()> {
 
 #[test]
 fn test_breakpoint_verified_round_trip() -> Result<()> {
-    let bp = Breakpoint { id: 1, verified: true, line: 10, column: None, message: None };
+    let bp = Breakpoint {
+        id: 1,
+        verified: true,
+        line: 10,
+        column: None,
+        message: None,
+    };
     let json = serde_json::to_string(&bp)?;
     let rt: Breakpoint = serde_json::from_str(&json)?;
     assert_eq!(rt.id, 1);
@@ -415,7 +442,10 @@ fn test_breakpoint_unverified_with_message() -> Result<()> {
 #[test]
 fn test_set_breakpoints_args_round_trip() -> Result<()> {
     let args = SetBreakpointsArguments {
-        source: Source { path: Some("/tmp/test.pl".to_string()), name: None },
+        source: Source {
+            path: Some("/tmp/test.pl".to_string()),
+            name: None,
+        },
         breakpoints: Some(vec![
             SourceBreakpoint {
                 line: 1,
@@ -516,7 +546,10 @@ fn test_launch_args_round_trip() -> Result<()> {
         program: "/workspace/script.pl".to_string(),
         args: Some(vec!["--verbose".to_string()]),
         cwd: Some("/workspace".to_string()),
-        env: Some(std::collections::HashMap::from([("PERL5LIB".to_string(), "lib".to_string())])),
+        env: Some(std::collections::HashMap::from([(
+            "PERL5LIB".to_string(),
+            "lib".to_string(),
+        )])),
         perl_path: Some("/usr/bin/perl".to_string()),
         stop_on_entry: Some(true),
     };
@@ -549,7 +582,11 @@ fn test_attach_args_round_trip() -> Result<()> {
 
 #[test]
 fn test_stack_trace_args_round_trip() -> Result<()> {
-    let args = StackTraceArguments { thread_id: 1, start_frame: Some(0), levels: Some(20) };
+    let args = StackTraceArguments {
+        thread_id: 1,
+        start_frame: Some(0),
+        levels: Some(20),
+    };
     let json = serde_json::to_string(&args)?;
     let rt: StackTraceArguments = serde_json::from_str(&json)?;
     assert_eq!(rt.thread_id, 1);
@@ -562,7 +599,10 @@ fn test_stack_trace_response_body() -> Result<()> {
         stack_frames: vec![ProtocolStackFrame {
             id: 0,
             name: "main".to_string(),
-            source: Some(Source { path: Some("/tmp/t.pl".to_string()), name: None }),
+            source: Some(Source {
+                path: Some("/tmp/t.pl".to_string()),
+                name: None,
+            }),
             line: 1,
             column: 0,
             end_line: None,
@@ -627,7 +667,9 @@ fn test_continue_args_round_trip() -> Result<()> {
 
 #[test]
 fn test_continue_response_body() -> Result<()> {
-    let body = ContinueResponseBody { all_threads_continued: true };
+    let body = ContinueResponseBody {
+        all_threads_continued: true,
+    };
     let json = serde_json::to_string(&body)?;
     let rt: ContinueResponseBody = serde_json::from_str(&json)?;
     assert!(rt.all_threads_continued);
@@ -638,12 +680,27 @@ fn test_continue_response_body() -> Result<()> {
 fn test_next_step_pause_args() -> Result<()> {
     // All share the same shape (thread_id only)
     for (name, json_str) in [
-        ("next", serde_json::to_string(&NextArguments { thread_id: 1 })?),
-        ("stepIn", serde_json::to_string(&StepInArguments { thread_id: 2 })?),
-        ("stepOut", serde_json::to_string(&StepOutArguments { thread_id: 3 })?),
-        ("pause", serde_json::to_string(&PauseArguments { thread_id: 4 })?),
+        (
+            "next",
+            serde_json::to_string(&NextArguments { thread_id: 1 })?,
+        ),
+        (
+            "stepIn",
+            serde_json::to_string(&StepInArguments { thread_id: 2 })?,
+        ),
+        (
+            "stepOut",
+            serde_json::to_string(&StepOutArguments { thread_id: 3 })?,
+        ),
+        (
+            "pause",
+            serde_json::to_string(&PauseArguments { thread_id: 4 })?,
+        ),
     ] {
-        assert!(json_str.contains("threadId"), "{name} serialization should contain threadId");
+        assert!(
+            json_str.contains("threadId"),
+            "{name} serialization should contain threadId"
+        );
     }
     Ok(())
 }
@@ -681,7 +738,10 @@ fn test_evaluate_response_body_round_trip() -> Result<()> {
 
 #[test]
 fn test_disconnect_args_round_trip() -> Result<()> {
-    let args = DisconnectArguments { restart: Some(false), terminate_debuggee: Some(true) };
+    let args = DisconnectArguments {
+        restart: Some(false),
+        terminate_debuggee: Some(true),
+    };
     let json = serde_json::to_string(&args)?;
     let rt: DisconnectArguments = serde_json::from_str(&json)?;
     assert_eq!(rt.terminate_debuggee, Some(true));
@@ -736,7 +796,12 @@ fn test_exception_breakpoints_round_trip() -> Result<()> {
 
 #[test]
 fn test_threads_response_body() -> Result<()> {
-    let body = ThreadsResponseBody { threads: vec![Thread { id: 1, name: "main".to_string() }] };
+    let body = ThreadsResponseBody {
+        threads: vec![Thread {
+            id: 1,
+            name: "main".to_string(),
+        }],
+    };
     let json = serde_json::to_string(&body)?;
     let rt: ThreadsResponseBody = serde_json::from_str(&json)?;
     assert_eq!(rt.threads[0].id, 1);
@@ -805,7 +870,10 @@ fn test_set_variable_response_body() -> Result<()> {
 #[test]
 fn test_breakpoint_locations_args() -> Result<()> {
     let args = BreakpointLocationsArguments {
-        source: Source { path: Some("/tmp/t.pl".to_string()), name: None },
+        source: Source {
+            path: Some("/tmp/t.pl".to_string()),
+            name: None,
+        },
         line: 1,
         end_line: Some(10),
     };
@@ -841,7 +909,10 @@ fn test_breakpoint_locations_response_body() -> Result<()> {
 fn test_source_args_round_trip() -> Result<()> {
     let args = SourceArguments {
         source_reference: Some(1),
-        source: Some(Source { path: Some("/tmp/t.pl".to_string()), name: None }),
+        source: Some(Source {
+            path: Some("/tmp/t.pl".to_string()),
+            name: None,
+        }),
     };
     let json = serde_json::to_string(&args)?;
     let rt: SourceArguments = serde_json::from_str(&json)?;
@@ -869,7 +940,10 @@ fn test_source_response_body_round_trip() -> Result<()> {
 fn test_step_in_targets_round_trip() -> Result<()> {
     let args = StepInTargetsArguments { frame_id: 0 };
     let body = StepInTargetsResponseBody {
-        targets: vec![StepInTarget { id: 1, label: "foo()".to_string() }],
+        targets: vec![StepInTarget {
+            id: 1,
+            label: "foo()".to_string(),
+        }],
     };
     let json_a = serde_json::to_string(&args)?;
     let json_b = serde_json::to_string(&body)?;
@@ -882,7 +956,10 @@ fn test_step_in_targets_round_trip() -> Result<()> {
 #[test]
 fn test_goto_targets_round_trip() -> Result<()> {
     let args = GotoTargetsArguments {
-        source: Source { path: Some("/tmp/t.pl".to_string()), name: None },
+        source: Source {
+            path: Some("/tmp/t.pl".to_string()),
+            name: None,
+        },
         line: 5,
         column: None,
     };
@@ -961,7 +1038,9 @@ fn test_set_expression_round_trip() -> Result<()> {
 
 #[test]
 fn test_restart_args_round_trip() -> Result<()> {
-    let args = RestartArguments { arguments: Some(serde_json::json!({"program": "t.pl"})) };
+    let args = RestartArguments {
+        arguments: Some(serde_json::json!({"program": "t.pl"})),
+    };
     let json = serde_json::to_string(&args)?;
     let rt: RestartArguments = serde_json::from_str(&json)?;
     assert!(rt.arguments.is_some());
@@ -979,7 +1058,9 @@ fn test_restart_frame_args() -> Result<()> {
 
 #[test]
 fn test_terminate_threads_args() -> Result<()> {
-    let args = TerminateThreadsArguments { thread_ids: Some(vec![1, 2, 3]) };
+    let args = TerminateThreadsArguments {
+        thread_ids: Some(vec![1, 2, 3]),
+    };
     let json = serde_json::to_string(&args)?;
     let rt: TerminateThreadsArguments = serde_json::from_str(&json)?;
     assert_eq!(rt.thread_ids.as_ref().map(|v| v.len()), Some(3));
@@ -992,7 +1073,10 @@ fn test_terminate_threads_args() -> Result<()> {
 
 #[test]
 fn test_goto_args() -> Result<()> {
-    let args = GotoArguments { thread_id: 1, target_id: 5 };
+    let args = GotoArguments {
+        thread_id: 1,
+        target_id: 5,
+    };
     let json = serde_json::to_string(&args)?;
     let rt: GotoArguments = serde_json::from_str(&json)?;
     assert_eq!(rt.thread_id, 1);
@@ -1002,7 +1086,10 @@ fn test_goto_args() -> Result<()> {
 
 #[test]
 fn test_cancel_args() -> Result<()> {
-    let args = CancelArguments { request_id: Some(42), progress_id: None };
+    let args = CancelArguments {
+        request_id: Some(42),
+        progress_id: None,
+    };
     let json = serde_json::to_string(&args)?;
     let rt: CancelArguments = serde_json::from_str(&json)?;
     assert_eq!(rt.request_id, Some(42));
@@ -1030,7 +1117,10 @@ fn test_loaded_sources_response() -> Result<()> {
 
 #[test]
 fn test_modules_round_trip() -> Result<()> {
-    let args = ModulesArguments { start_module: Some(0), module_count: Some(10) };
+    let args = ModulesArguments {
+        start_module: Some(0),
+        module_count: Some(10),
+    };
     let body = ModulesResponseBody {
         modules: vec![Module {
             id: "Foo::Bar".to_string(),
@@ -1053,8 +1143,12 @@ fn test_modules_round_trip() -> Result<()> {
 
 #[test]
 fn test_completions_round_trip() -> Result<()> {
-    let args =
-        CompletionsArguments { text: "$x->".to_string(), column: 4, frame_id: Some(0), line: None };
+    let args = CompletionsArguments {
+        text: "$x->".to_string(),
+        column: 4,
+        frame_id: Some(0),
+        line: None,
+    };
     let body = CompletionsResponseBody {
         targets: vec![CompletionItem {
             label: "method".to_string(),

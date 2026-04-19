@@ -59,9 +59,19 @@ fn memory_snapshot_is_zero_for_empty_index() {
 
     assert_eq!(snap.file_count, 0, "empty index should have 0 files");
     assert_eq!(snap.symbol_count, 0, "empty index should have 0 symbols");
-    assert_eq!(snap.files_bytes, 0, "empty index should report 0 bytes for files map");
-    assert_eq!(snap.symbols_bytes, 0, "empty index should report 0 bytes for symbols map");
-    assert_eq!(snap.total_estimated_bytes(), 0, "total should be 0 for empty index");
+    assert_eq!(
+        snap.files_bytes, 0,
+        "empty index should report 0 bytes for files map"
+    );
+    assert_eq!(
+        snap.symbols_bytes, 0,
+        "empty index should report 0 bytes for symbols map"
+    );
+    assert_eq!(
+        snap.total_estimated_bytes(),
+        0,
+        "total should be 0 for empty index"
+    );
 }
 
 #[test]
@@ -78,9 +88,18 @@ fn memory_snapshot_grows_with_files() {
 
     assert_eq!(snap.file_count, 10, "should report 10 indexed files");
     assert!(snap.symbol_count > 0, "should have symbols after indexing");
-    assert!(snap.files_bytes > 0, "files_bytes should be positive after indexing");
-    assert!(snap.symbols_bytes > 0, "symbols_bytes should be positive after indexing");
-    assert!(snap.total_estimated_bytes() > 0, "total should be positive after indexing");
+    assert!(
+        snap.files_bytes > 0,
+        "files_bytes should be positive after indexing"
+    );
+    assert!(
+        snap.symbols_bytes > 0,
+        "symbols_bytes should be positive after indexing"
+    );
+    assert!(
+        snap.total_estimated_bytes() > 0,
+        "total should be positive after indexing"
+    );
 }
 
 #[test]
@@ -112,8 +131,14 @@ fn memory_snapshot_scales_linearly_with_file_count() {
         snap_large.total_estimated_bytes()
     );
 
-    assert!(snap_large.file_count == 100, "large index should have 100 files");
-    assert!(snap_small.file_count == 10, "small index should have 10 files");
+    assert!(
+        snap_large.file_count == 100,
+        "large index should have 100 files"
+    );
+    assert!(
+        snap_small.file_count == 10,
+        "small index should have 10 files"
+    );
 }
 
 #[test]
@@ -128,8 +153,14 @@ fn memory_snapshot_display_is_human_readable() {
     let display = snap.to_report_string();
 
     // Display should contain component names
-    assert!(display.contains("files"), "display should mention files component");
-    assert!(display.contains("symbols"), "display should mention symbols component");
+    assert!(
+        display.contains("files"),
+        "display should mention files component"
+    );
+    assert!(
+        display.contains("symbols"),
+        "display should mention symbols component"
+    );
     assert!(display.contains("total"), "display should mention total");
 }
 
@@ -150,8 +181,11 @@ fn scale_report_captures_multiple_checkpoints() {
     assert_eq!(report.checkpoints().len(), 3, "should have 3 checkpoints");
 
     // Memory should increase monotonically across scales
-    let mems: Vec<usize> =
-        report.checkpoints().iter().map(|(_, s)| s.total_estimated_bytes()).collect();
+    let mems: Vec<usize> = report
+        .checkpoints()
+        .iter()
+        .map(|(_, s)| s.total_estimated_bytes())
+        .collect();
 
     assert!(
         mems[0] < mems[1] && mems[1] < mems[2],

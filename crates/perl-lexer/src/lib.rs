@@ -217,7 +217,11 @@ pub struct LexerConfig {
 
 impl Default for LexerConfig {
     fn default() -> Self {
-        Self { parse_interpolation: true, track_positions: true, max_lookahead: 1024 }
+        Self {
+            parse_interpolation: true,
+            track_positions: true,
+            max_lookahead: 1024,
+        }
     }
 }
 
@@ -820,7 +824,9 @@ impl<'a> PerlLexer<'a> {
                 Some(byte as char)
             } else {
                 // For non-ASCII, fall back to proper UTF-8 parsing
-                self.input.get(self.position..).and_then(|s| s.chars().next())
+                self.input
+                    .get(self.position..)
+                    .and_then(|s| s.chars().next())
             }
         } else {
             None
@@ -841,7 +847,9 @@ impl<'a> PerlLexer<'a> {
                 Some(byte as char)
             } else {
                 // For non-ASCII, use chars iterator
-                self.input.get(self.position..).and_then(|s| s.chars().nth(offset))
+                self.input
+                    .get(self.position..)
+                    .and_then(|s| s.chars().nth(offset))
             }
         } else {
             None
@@ -856,7 +864,10 @@ impl<'a> PerlLexer<'a> {
             if byte < 128 {
                 // ASCII fast path
                 self.position += 1;
-            } else if let Some(ch) = self.input.get(self.position..).and_then(|s| s.chars().next())
+            } else if let Some(ch) = self
+                .input
+                .get(self.position..)
+                .and_then(|s| s.chars().next())
             {
                 self.position += ch.len_utf8();
             }
@@ -905,7 +916,11 @@ impl<'a> PerlLexer<'a> {
         }
 
         let pos = self.position.checked_add(offset)?;
-        if pos < self.input_bytes.len() { Some(self.input_bytes[pos]) } else { None }
+        if pos < self.input_bytes.len() {
+            Some(self.input_bytes[pos])
+        } else {
+            None
+        }
     }
 
     /// Check if the next bytes match a pattern (ASCII only)
@@ -1978,9 +1993,10 @@ impl<'a> PerlLexer<'a> {
 
             // Check for __DATA__ and __END__ markers using exact match
             // Only recognize these in code channel, not inside data/format sections or heredocs
-            let in_code_channel =
-                !matches!(self.mode, LexerMode::InDataSection | LexerMode::InFormatBody)
-                    && self.pending_heredocs.is_empty();
+            let in_code_channel = !matches!(
+                self.mode,
+                LexerMode::InDataSection | LexerMode::InFormatBody
+            ) && self.pending_heredocs.is_empty();
 
             let marker = if in_code_channel {
                 if text == "__DATA__" {
@@ -2228,7 +2244,12 @@ impl<'a> PerlLexer<'a> {
             // A keyword/identifier is not a variable; `{` after it is a block opener.
             self.after_var_subscript = false;
             // hash_brace_depth is managed by { and } handlers, not cleared per-token
-            Some(Token { token_type, text: Arc::from(text), start, end: self.position })
+            Some(Token {
+                token_type,
+                text: Arc::from(text),
+                start,
+                end: self.position,
+            })
         } else {
             None
         }
@@ -3472,7 +3493,12 @@ impl<'a> PerlLexer<'a> {
         self.mode = LexerMode::ExpectOperator;
         self.current_quote_op = None;
 
-        Some(Token { token_type, text: Arc::from(text), start, end: self.position })
+        Some(Token {
+            token_type,
+            text: Arc::from(text),
+            start,
+            end: self.position,
+        })
     }
 
     /// Parse regex modifiers according to the given spec
@@ -3662,8 +3688,10 @@ fn is_compound_operator(first: char, second: char) -> bool {
         // Fallback for non-ASCII (should be rare)
         matches!(
             (first, second),
-            ('+' | '-' | '*' | '/' | '%' | '&' | '|' | '^' | '.' | '<' | '>' | '=' | '!', '=')
-                | ('=' | '!' | '~', '~')
+            (
+                '+' | '-' | '*' | '/' | '%' | '&' | '|' | '^' | '.' | '<' | '>' | '=' | '!',
+                '='
+            ) | ('=' | '!' | '~', '~')
                 | ('+', '+')
                 | ('-', '-' | '>')
                 | ('&', '&')
@@ -3813,7 +3841,9 @@ mod tests {
         // Defined-or operator
         let mut lexer = PerlLexer::new("$a // $b");
         lexer.next_token(); // $a
-        let token = lexer.next_token().ok_or("Expected defined-or operator token")?;
+        let token = lexer
+            .next_token()
+            .ok_or("Expected defined-or operator token")?;
         assert!(matches!(token.token_type, TokenType::Operator(ref op) if op.as_ref() == "//"));
 
         // Regex after =~ should still parse
@@ -3826,7 +3856,9 @@ mod tests {
         // Exponent operator
         let mut lexer = PerlLexer::new("2 ** 3");
         lexer.next_token(); // 2
-        let token = lexer.next_token().ok_or("Expected exponent operator token")?;
+        let token = lexer
+            .next_token()
+            .ok_or("Expected exponent operator token")?;
         assert!(matches!(token.token_type, TokenType::Operator(ref op) if op.as_ref() == "**"));
         Ok(())
     }
@@ -3875,7 +3907,10 @@ mod tests {
         // Peek at `(` — must not permanently increment paren_depth
         let peeked = lexer.peek_token().ok_or("peek at ( failed")?;
         assert_eq!(peeked.token_type, TokenType::LeftParen);
-        assert_eq!(lexer.paren_depth, 0, "peek_token must not mutate paren_depth");
+        assert_eq!(
+            lexer.paren_depth, 0,
+            "peek_token must not mutate paren_depth"
+        );
 
         // Consume `(` — paren_depth becomes 1
         lexer.next_token();
@@ -3884,7 +3919,10 @@ mod tests {
         // Peek at `1` (a number) — paren_depth must remain 1
         let peeked2 = lexer.peek_token().ok_or("peek at 1 failed")?;
         assert!(matches!(peeked2.token_type, TokenType::Number(_)));
-        assert_eq!(lexer.paren_depth, 1, "peek at number must not change paren_depth");
+        assert_eq!(
+            lexer.paren_depth, 1,
+            "peek at number must not change paren_depth"
+        );
 
         Ok(())
     }

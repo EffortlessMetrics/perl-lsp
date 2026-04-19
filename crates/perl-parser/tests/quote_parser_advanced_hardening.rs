@@ -45,8 +45,16 @@ mod function_return_hardening {
             );
 
             // Verify correct behavior
-            assert_eq!(actual_pattern, expected_pattern, "Pattern mismatch for '{}'", input);
-            assert_eq!(actual_mods, expected_mods, "Modifiers mismatch for '{}'", input);
+            assert_eq!(
+                actual_pattern, expected_pattern,
+                "Pattern mismatch for '{}'",
+                input
+            );
+            assert_eq!(
+                actual_mods, expected_mods,
+                "Modifiers mismatch for '{}'",
+                input
+            );
         }
     }
 
@@ -76,9 +84,21 @@ mod function_return_hardening {
             }
 
             // Verify correct behavior
-            assert_eq!(actual_search, expected_search, "Search mismatch for '{}'", input);
-            assert_eq!(actual_replace, expected_replace, "Replace mismatch for '{}'", input);
-            assert_eq!(actual_mods, expected_mods, "Modifiers mismatch for '{}'", input);
+            assert_eq!(
+                actual_search, expected_search,
+                "Search mismatch for '{}'",
+                input
+            );
+            assert_eq!(
+                actual_replace, expected_replace,
+                "Replace mismatch for '{}'",
+                input
+            );
+            assert_eq!(
+                actual_mods, expected_mods,
+                "Modifiers mismatch for '{}'",
+                input
+            );
         }
     }
 }
@@ -111,8 +131,14 @@ mod arithmetic_boundary_hardening {
 
             // Additional validation: check sensible parsing
             if input == "s/a/b/" {
-                assert_eq!(pattern, "a", "Basic pattern parsing with correct arithmetic");
-                assert_eq!(replacement, "b", "Basic replacement parsing with correct arithmetic");
+                assert_eq!(
+                    pattern, "a",
+                    "Basic pattern parsing with correct arithmetic"
+                );
+                assert_eq!(
+                    replacement, "b",
+                    "Basic replacement parsing with correct arithmetic"
+                );
             }
         }
     }
@@ -127,7 +153,10 @@ mod arithmetic_boundary_hardening {
 
         // With correct > check: len()=1 > 1 is false, so should use text directly
         // With mutated >= check: len()=1 >= 1 is true, so would try to slice [1..]
-        assert_eq!(pattern, "mm", "Single 'm' should be handled correctly with > boundary");
+        assert_eq!(
+            pattern, "mm",
+            "Single 'm' should be handled correctly with > boundary"
+        );
         assert_eq!(modifiers, "", "Single 'm' modifiers");
 
         // Test just over boundary
@@ -139,7 +168,10 @@ mod arithmetic_boundary_hardening {
         // Test well over boundary
         let well_over = "m/test/"; // len() = 7
         let (pattern, _body, _modifiers) = extract_regex_parts(well_over);
-        assert_eq!(pattern, "/test/", "Multi char should extract pattern correctly");
+        assert_eq!(
+            pattern, "/test/",
+            "Multi char should extract pattern correctly"
+        );
     }
 
     /// Target -= → /= mutation in depth calculation (line_207_col_27)
@@ -192,8 +224,14 @@ mod boolean_logic_hardening {
         // Mutated ||: !true || !false = false || true = true
         let paired_non_empty = "s{pattern}{replacement}";
         let (pattern, replacement, _) = extract_substitution_parts(paired_non_empty);
-        assert_eq!(pattern, "pattern", "Paired non-empty case should work correctly");
-        assert_eq!(replacement, "replacement", "Paired replacement should be extracted");
+        assert_eq!(
+            pattern, "pattern",
+            "Paired non-empty case should work correctly"
+        );
+        assert_eq!(
+            replacement, "replacement",
+            "Paired replacement should be extracted"
+        );
 
         // Case 2: is_paired=false, rest1.is_empty()=true
         // Correct &&: !false && !true = true && false = false
@@ -224,7 +262,10 @@ mod boolean_logic_hardening {
         // With correct == 0 check: parsing stops when depth reaches 0
         // With != 0 mutation: parsing would never stop at depth 0, breaking extraction
         assert_eq!(pattern, "test", "Depth comparison should work with == 0");
-        assert_eq!(replacement, "replacement", "Replacement should be extracted correctly");
+        assert_eq!(
+            replacement, "replacement",
+            "Replacement should be extracted correctly"
+        );
 
         // Test multiple levels to ensure depth tracking works
         let multi_level = "s{a{b{c}d}e}{repl}";
@@ -242,13 +283,22 @@ mod boolean_logic_hardening {
 
         // With correct guard: c == open && is_paired detects inner { and increments depth
         // With false guard: inner { characters are not detected, breaking nesting
-        assert_eq!(pattern, "test{inner}more", "Match guard should detect nested opening chars");
-        assert_eq!(replacement, "replacement", "Nested parsing should work correctly");
+        assert_eq!(
+            pattern, "test{inner}more",
+            "Match guard should detect nested opening chars"
+        );
+        assert_eq!(
+            replacement, "replacement",
+            "Nested parsing should work correctly"
+        );
 
         // Additional test with different delimiters
         let bracket_nested = "s[test[inner]more][replacement]";
         let (pattern, replacement, _) = extract_substitution_parts(bracket_nested);
-        assert_eq!(pattern, "test[inner]more", "Match guard should work for brackets too");
+        assert_eq!(
+            pattern, "test[inner]more",
+            "Match guard should work for brackets too"
+        );
         assert_eq!(replacement, "replacement", "Bracket replacement");
     }
 }
@@ -274,7 +324,11 @@ mod control_flow_hardening {
 
         for (input, (expected_pattern, expected_replacement)) in delimiter_mappings {
             let (pattern, replacement, _) = extract_substitution_parts(input);
-            assert_eq!(pattern, expected_pattern, "Delimiter mapping failed for {}", input);
+            assert_eq!(
+                pattern, expected_pattern,
+                "Delimiter mapping failed for {}",
+                input
+            );
             assert_eq!(
                 replacement, expected_replacement,
                 "Replacement mapping failed for {}",
@@ -460,7 +514,10 @@ fn test_mutation_integration_scenarios() {
     // - Boolean logic (paired delimiter detection)
     // - Control flow (depth tracking for nesting)
     assert_eq!(pattern, "old\\/path{nested}", "Complex pattern extraction");
-    assert_eq!(replacement, "new\\/path{nested}", "Complex replacement extraction");
+    assert_eq!(
+        replacement, "new\\/path{nested}",
+        "Complex replacement extraction"
+    );
     assert_eq!(modifiers, "gi", "Complex modifiers extraction");
 
     // Scenario 2: Edge case that would break with arithmetic mutations
@@ -473,6 +530,12 @@ fn test_mutation_integration_scenarios() {
     let boolean_boundary = "s//g";
     let (pattern, replacement, modifiers) = extract_substitution_parts(boolean_boundary);
     assert_eq!(pattern, "", "Boolean boundary pattern");
-    assert_eq!(replacement, "g", "Boolean boundary replacement - actual behavior");
-    assert_eq!(modifiers, "", "Boolean boundary modifiers - actual behavior");
+    assert_eq!(
+        replacement, "g",
+        "Boolean boundary replacement - actual behavior"
+    );
+    assert_eq!(
+        modifiers, "",
+        "Boolean boundary modifiers - actual behavior"
+    );
 }

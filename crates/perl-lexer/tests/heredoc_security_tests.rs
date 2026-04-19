@@ -16,7 +16,10 @@ fn test_heredoc_depth_limit() {
         .filter(|t| matches!(t.token_type, TokenType::Error(ref msg) if msg.contains("Heredoc nesting too deep")))
         .collect();
 
-    assert!(!error_tokens.is_empty(), "Should have found 'nesting too deep' errors");
+    assert!(
+        !error_tokens.is_empty(),
+        "Should have found 'nesting too deep' errors"
+    );
 }
 
 #[test]
@@ -36,5 +39,8 @@ fn test_heredoc_timeout() {
     let _tokens = lexer.collect_tokens();
     let duration = start.elapsed();
 
-    assert!(duration < Duration::from_secs(10), "Lexer should not hang for more than 10 seconds");
+    assert!(
+        duration < Duration::from_secs(10),
+        "Lexer should not hang for more than 10 seconds"
+    );
 }

@@ -79,24 +79,42 @@ struct HierarchyIndex {
 
 impl HierarchyIndex {
     fn add_inheritance(&mut self, child: &str, parent: &str) {
-        self.parents.entry(child.to_string()).or_default().insert(parent.to_string());
-        self.children.entry(parent.to_string()).or_default().insert(child.to_string());
+        self.parents
+            .entry(child.to_string())
+            .or_default()
+            .insert(parent.to_string());
+        self.children
+            .entry(parent.to_string())
+            .or_default()
+            .insert(child.to_string());
     }
 
     fn add_role(&mut self, package: &str, role: &str) {
-        self.roles.entry(package.to_string()).or_default().insert(role.to_string());
+        self.roles
+            .entry(package.to_string())
+            .or_default()
+            .insert(role.to_string());
     }
 
     fn get_parents(&self, package: &str) -> Vec<String> {
-        self.parents.get(package).map(|set| set.iter().cloned().collect()).unwrap_or_default()
+        self.parents
+            .get(package)
+            .map(|set| set.iter().cloned().collect())
+            .unwrap_or_default()
     }
 
     fn get_roles(&self, package: &str) -> Vec<String> {
-        self.roles.get(package).map(|set| set.iter().cloned().collect()).unwrap_or_default()
+        self.roles
+            .get(package)
+            .map(|set| set.iter().cloned().collect())
+            .unwrap_or_default()
     }
 
     fn get_children(&self, package: &str) -> Vec<String> {
-        self.children.get(package).map(|set| set.iter().cloned().collect()).unwrap_or_default()
+        self.children
+            .get(package)
+            .map(|set| set.iter().cloned().collect())
+            .unwrap_or_default()
     }
 }
 
@@ -133,7 +151,11 @@ impl TypeHierarchyProvider {
         current_package: &mut String,
     ) {
         match &node.kind {
-            NodeKind::Package { name, block, name_span: _ } => {
+            NodeKind::Package {
+                name,
+                block,
+                name_span: _,
+            } => {
                 if block.is_some() {
                     // Block form: package Foo { ... }
                     // Save current package, process block, restore
@@ -158,9 +180,17 @@ impl TypeHierarchyProvider {
                     }
                 }
             }
-            NodeKind::VariableDeclaration { declarator, variable, initializer, .. } => {
+            NodeKind::VariableDeclaration {
+                declarator,
+                variable,
+                initializer,
+                ..
+            } => {
                 if declarator == "our"
-                    && let NodeKind::Variable { sigil, name: var_name } = &variable.kind
+                    && let NodeKind::Variable {
+                        sigil,
+                        name: var_name,
+                    } = &variable.kind
                     && sigil == "@"
                     && var_name == "ISA"
                     && let Some(init) = initializer
@@ -170,11 +200,19 @@ impl TypeHierarchyProvider {
                     }
                 }
             }
-            NodeKind::VariableListDeclaration { declarator, variables, initializer, .. } => {
+            NodeKind::VariableListDeclaration {
+                declarator,
+                variables,
+                initializer,
+                ..
+            } => {
                 if declarator == "our" {
                     // Check if any variable is @ISA
                     for var in variables {
-                        if let NodeKind::Variable { sigil, name: var_name } = &var.kind
+                        if let NodeKind::Variable {
+                            sigil,
+                            name: var_name,
+                        } = &var.kind
                             && sigil == "@"
                             && var_name == "ISA"
                             && let Some(init) = initializer
@@ -266,15 +304,24 @@ impl TypeHierarchyProvider {
         match &node.kind {
             NodeKind::String { value, .. } => {
                 let trimmed = value.trim().trim_matches('\'').trim_matches('"').trim();
-                if trimmed.is_empty() { Vec::new() } else { vec![trimmed.to_string()] }
+                if trimmed.is_empty() {
+                    Vec::new()
+                } else {
+                    vec![trimmed.to_string()]
+                }
             }
             NodeKind::Identifier { name } => {
                 let trimmed = name.trim();
-                if trimmed.is_empty() { Vec::new() } else { vec![trimmed.to_string()] }
+                if trimmed.is_empty() {
+                    Vec::new()
+                } else {
+                    vec![trimmed.to_string()]
+                }
             }
-            NodeKind::ArrayLiteral { elements } => {
-                elements.iter().flat_map(Self::collect_symbol_names).collect()
-            }
+            NodeKind::ArrayLiteral { elements } => elements
+                .iter()
+                .flat_map(Self::collect_symbol_names)
+                .collect(),
             _ => Vec::new(),
         }
     }
@@ -451,9 +498,14 @@ impl TypeHierarchyProvider {
             // Find the first head that does not appear in any tail
             let chosen = parent_mros.iter().find_map(|list| {
                 let candidate = list.first()?;
-                let in_tail =
-                    parent_mros.iter().any(|other| other.iter().skip(1).any(|n| n == candidate));
-                if in_tail { None } else { Some(candidate.clone()) }
+                let in_tail = parent_mros
+                    .iter()
+                    .any(|other| other.iter().skip(1).any(|n| n == candidate));
+                if in_tail {
+                    None
+                } else {
+                    Some(candidate.clone())
+                }
             });
 
             match chosen {
@@ -525,7 +577,12 @@ impl TypeHierarchyProvider {
         match &node.kind {
             NodeKind::Program { statements } => Some(statements.iter().collect()),
             NodeKind::Block { statements } => Some(statements.iter().collect()),
-            NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
+            NodeKind::If {
+                condition,
+                then_branch,
+                elsif_branches,
+                else_branch,
+            } => {
                 let mut children = vec![condition.as_ref(), then_branch.as_ref()];
                 for branch in elsif_branches {
                     children.push(&branch.0);
@@ -581,8 +638,14 @@ impl TypeHierarchyProvider {
         let start_pos = self.offset_to_position(node.location.start, position_mapper);
         let end_pos = self.offset_to_position(node.location.end, position_mapper);
         WireRange {
-            start: WirePosition { line: start_pos.0, character: start_pos.1 },
-            end: WirePosition { line: end_pos.0, character: end_pos.1 },
+            start: WirePosition {
+                line: start_pos.0,
+                character: start_pos.1,
+            },
+            end: WirePosition {
+                line: end_pos.0,
+                character: end_pos.1,
+            },
         }
     }
 
@@ -680,9 +743,18 @@ use parent 'Other';
         assert_eq!(subtypes.len(), 2, "Should find exactly 2 subtypes");
 
         let subtype_names: Vec<String> = subtypes.iter().map(|t| t.name.clone()).collect();
-        assert!(subtype_names.contains(&"Derived1".to_string()), "Should find Derived1");
-        assert!(subtype_names.contains(&"Derived2".to_string()), "Should find Derived2");
-        assert!(!subtype_names.contains(&"Unrelated".to_string()), "Should not find Unrelated");
+        assert!(
+            subtype_names.contains(&"Derived1".to_string()),
+            "Should find Derived1"
+        );
+        assert!(
+            subtype_names.contains(&"Derived2".to_string()),
+            "Should find Derived2"
+        );
+        assert!(
+            !subtype_names.contains(&"Unrelated".to_string()),
+            "Should not find Unrelated"
+        );
     }
 
     #[test]
@@ -789,8 +861,10 @@ with 'Printable';
         };
 
         let supertypes = provider.find_supertypes(&ast, &item);
-        let role_types: Vec<&TypeHierarchyItem> =
-            supertypes.iter().filter(|s| s.detail.as_deref() == Some("Role")).collect();
+        let role_types: Vec<&TypeHierarchyItem> = supertypes
+            .iter()
+            .filter(|s| s.detail.as_deref() == Some("Role"))
+            .collect();
         assert_eq!(role_types.len(), 1, "Should find 1 role via with");
         assert_eq!(role_types[0].name, "Printable");
     }
@@ -824,8 +898,14 @@ with 'Serializable', 'Printable';
             .filter(|s| s.detail.as_deref() == Some("Role"))
             .map(|s| s.name.as_str())
             .collect();
-        assert!(role_names.contains(&"Serializable"), "Should find Serializable role");
-        assert!(role_names.contains(&"Printable"), "Should find Printable role");
+        assert!(
+            role_names.contains(&"Serializable"),
+            "Should find Serializable role"
+        );
+        assert!(
+            role_names.contains(&"Printable"),
+            "Should find Printable role"
+        );
     }
 
     #[test]
@@ -929,8 +1009,14 @@ extends 'MooseBase';
             .filter(|s| s.detail.as_deref() == Some("Parent Class"))
             .map(|s| s.name.as_str())
             .collect();
-        assert!(parent_names.contains(&"OldBase"), "use parent should still work");
-        assert!(parent_names.contains(&"MooseBase"), "extends should also work");
+        assert!(
+            parent_names.contains(&"OldBase"),
+            "use parent should still work"
+        );
+        assert!(
+            parent_names.contains(&"MooseBase"),
+            "extends should also work"
+        );
     }
 
     #[test]
@@ -962,8 +1048,14 @@ extends 'Animal';
 
         let subtypes = provider.find_subtypes(&ast, &animal_item);
         let subtype_names: Vec<&str> = subtypes.iter().map(|s| s.name.as_str()).collect();
-        assert!(subtype_names.contains(&"Dog"), "Dog should be a subtype of Animal");
-        assert!(subtype_names.contains(&"Cat"), "Cat should be a subtype of Animal");
+        assert!(
+            subtype_names.contains(&"Dog"),
+            "Dog should be a subtype of Animal"
+        );
+        assert!(
+            subtype_names.contains(&"Cat"),
+            "Cat should be a subtype of Animal"
+        );
     }
 
     #[test]
@@ -992,6 +1084,10 @@ use parent 'Outer';
         // Find subtypes - should handle block form packages
         let subtypes = provider.find_subtypes(&ast, &outer_item);
         // Both Inner and Other inherit from Outer
-        assert_eq!(subtypes.len(), 2, "Should find both Inner and Other as subtypes");
+        assert_eq!(
+            subtypes.len(),
+            2,
+            "Should find both Inner and Other as subtypes"
+        );
     }
 }

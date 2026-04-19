@@ -275,8 +275,10 @@ impl TddWorkflow {
 
     /// Run tests and update state
     pub fn run_tests(&mut self, test_files: &[PathBuf]) -> TddCycleResult {
-        let file_strings: Vec<String> =
-            test_files.iter().map(|p| p.to_string_lossy().to_string()).collect();
+        let file_strings: Vec<String> = test_files
+            .iter()
+            .map(|p| p.to_string_lossy().to_string())
+            .collect();
 
         let results = self.runner.run_tests(&file_strings);
 
@@ -287,11 +289,20 @@ impl TddWorkflow {
 
         // Update state based on results
         let (new_state, message) = if results.failed > 0 {
-            (WorkflowState::Red, format!("{} tests failed", results.failed))
+            (
+                WorkflowState::Red,
+                format!("{} tests failed", results.failed),
+            )
         } else if results.todo > 0 {
-            (WorkflowState::Green, format!("All tests pass, {} TODOs remaining", results.todo))
+            (
+                WorkflowState::Green,
+                format!("All tests pass, {} TODOs remaining", results.todo),
+            )
         } else {
-            (WorkflowState::Refactor, "All tests pass! Ready to refactor".to_string())
+            (
+                WorkflowState::Refactor,
+                "All tests pass! Ready to refactor".to_string(),
+            )
         };
 
         self.state = new_state.clone();
@@ -303,7 +314,11 @@ impl TddWorkflow {
             actions.push(TddAction::SuggestRefactorings);
         }
 
-        TddCycleResult { phase: format!("{:?}", new_state), message, actions }
+        TddCycleResult {
+            phase: format!("{:?}", new_state),
+            message,
+            actions,
+        }
     }
 
     /// Get refactoring suggestions
@@ -398,7 +413,11 @@ impl TddWorkflow {
 
 impl CoverageTracker {
     fn new() -> Self {
-        Self { line_coverage: HashMap::new(), branch_coverage: HashMap::new(), total_coverage: 0.0 }
+        Self {
+            line_coverage: HashMap::new(),
+            branch_coverage: HashMap::new(),
+            total_coverage: 0.0,
+        }
     }
 
     fn calculate_total_coverage(&mut self) {
@@ -562,8 +581,14 @@ pub mod lsp_integration {
             .into_iter()
             .map(|ann| LspDiagnostic {
                 range: Range {
-                    start: Position { line: ann.line as u32, character: 0 },
-                    end: Position { line: ann.line as u32, character: 999 },
+                    start: Position {
+                        line: ann.line as u32,
+                        character: 0,
+                    },
+                    end: Position {
+                        line: ann.line as u32,
+                        character: 999,
+                    },
                 },
                 severity: Some(match ann.severity {
                     AnnotationSeverity::Error => DiagnosticSeverity::ERROR,
@@ -586,7 +611,11 @@ pub mod lsp_integration {
             status.state,
             status.coverage,
             if status.tests_passing { "✓" } else { "✗" },
-            if status.suggestions_available { "💡" } else { "" }
+            if status.suggestions_available {
+                "💡"
+            } else {
+                ""
+            }
         )
     }
 }
@@ -638,9 +667,21 @@ mod tests {
         let mut workflow = TddWorkflow::new(config);
 
         let coverage = vec![
-            LineCoverage { line: 1, hits: 5, covered: true },
-            LineCoverage { line: 2, hits: 0, covered: false },
-            LineCoverage { line: 3, hits: 10, covered: true },
+            LineCoverage {
+                line: 1,
+                hits: 5,
+                covered: true,
+            },
+            LineCoverage {
+                line: 2,
+                hits: 0,
+                covered: false,
+            },
+            LineCoverage {
+                line: 3,
+                hits: 10,
+                covered: true,
+            },
         ];
 
         workflow.update_coverage(PathBuf::from("test.pl"), coverage);

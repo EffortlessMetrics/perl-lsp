@@ -507,8 +507,14 @@ mod tests {
         assert_eq!(WINDOW_LOG_MESSAGE, "window/logMessage");
         assert_eq!(WINDOW_SHOW_MESSAGE_REQUEST, "window/showMessageRequest");
         assert_eq!(WINDOW_SHOW_DOCUMENT, "window/showDocument");
-        assert_eq!(WINDOW_WORK_DONE_PROGRESS_CREATE, "window/workDoneProgress/create");
-        assert_eq!(WINDOW_WORK_DONE_PROGRESS_CANCEL, "window/workDoneProgress/cancel");
+        assert_eq!(
+            WINDOW_WORK_DONE_PROGRESS_CREATE,
+            "window/workDoneProgress/create"
+        );
+        assert_eq!(
+            WINDOW_WORK_DONE_PROGRESS_CANCEL,
+            "window/workDoneProgress/cancel"
+        );
     }
 
     #[test]
@@ -516,13 +522,19 @@ mod tests {
         assert_eq!(TEXT_DOCUMENT_DID_OPEN, "textDocument/didOpen");
         assert_eq!(TEXT_DOCUMENT_DID_CHANGE, "textDocument/didChange");
         assert_eq!(TEXT_DOCUMENT_DID_SAVE, "textDocument/didSave");
-        assert_eq!(WORKSPACE_DID_CHANGE_CONFIGURATION, "workspace/didChangeConfiguration");
+        assert_eq!(
+            WORKSPACE_DID_CHANGE_CONFIGURATION,
+            "workspace/didChangeConfiguration"
+        );
     }
 
     #[test]
     fn test_refresh_methods() {
         assert_eq!(WORKSPACE_CODE_LENS_REFRESH, "workspace/codeLens/refresh");
-        assert_eq!(WORKSPACE_SEMANTIC_TOKENS_REFRESH, "workspace/semanticTokens/refresh");
+        assert_eq!(
+            WORKSPACE_SEMANTIC_TOKENS_REFRESH,
+            "workspace/semanticTokens/refresh"
+        );
         assert_eq!(WORKSPACE_INLAY_HINT_REFRESH, "workspace/inlayHint/refresh");
         assert_eq!(WORKSPACE_DIAGNOSTIC_REFRESH, "workspace/diagnostic/refresh");
     }

@@ -58,7 +58,11 @@ fn frame_empty_body() -> Result<(), Box<dyn std::error::Error>> {
 fn frame_simple_json() -> Result<(), Box<dyn std::error::Error>> {
     let body = br#"{"id":1}"#;
     let framed = frame(body);
-    let expected = format!("Content-Length: {}\r\n\r\n{}", body.len(), std::str::from_utf8(body)?);
+    let expected = format!(
+        "Content-Length: {}\r\n\r\n{}",
+        body.len(),
+        std::str::from_utf8(body)?
+    );
     assert_eq!(framed, expected.as_bytes());
     Ok(())
 }
@@ -472,8 +476,10 @@ fn case_insensitive_header_name_mixed() -> Result<(), Box<dyn std::error::Error>
 fn accepts_additional_headers_alongside_content_length() -> Result<(), Box<dyn std::error::Error>> {
     let mut framer = ContentLengthFramer::new();
     let body = b"{}";
-    let raw =
-        format!("Content-Type: application/json\r\nContent-Length: {}\r\n\r\n{{}}", body.len());
+    let raw = format!(
+        "Content-Type: application/json\r\nContent-Length: {}\r\n\r\n{{}}",
+        body.len()
+    );
     framer.push(raw.as_bytes());
     let got = take_body(framer.try_next())?;
     assert_eq!(got, body);
@@ -484,7 +490,10 @@ fn accepts_additional_headers_alongside_content_length() -> Result<(), Box<dyn s
 fn content_length_not_first_header() -> Result<(), Box<dyn std::error::Error>> {
     let mut framer = ContentLengthFramer::new();
     let body = b"hi";
-    let raw = format!("X-First: a\r\nX-Second: b\r\nContent-Length: {}\r\n\r\nhi", body.len());
+    let raw = format!(
+        "X-First: a\r\nX-Second: b\r\nContent-Length: {}\r\n\r\nhi",
+        body.len()
+    );
     framer.push(raw.as_bytes());
     let got = take_body(framer.try_next())?;
     assert_eq!(got, body);
@@ -628,7 +637,10 @@ fn clone_and_eq() -> Result<(), Box<dyn std::error::Error>> {
     assert_eq!(a, b);
 
     assert_ne!(FramingError::InvalidHeader, FramingError::InvalidHeaderUtf8);
-    assert_ne!(FramingError::MissingContentLength, FramingError::InvalidContentLength);
+    assert_ne!(
+        FramingError::MissingContentLength,
+        FramingError::InvalidContentLength
+    );
     Ok(())
 }
 

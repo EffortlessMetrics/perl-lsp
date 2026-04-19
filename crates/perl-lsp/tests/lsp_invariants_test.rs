@@ -32,15 +32,24 @@ fn test_response_structure_invariants() -> Result<(), Box<dyn std::error::Error>
     );
 
     // Must have jsonrpc field
-    assert_eq!(response["jsonrpc"], "2.0", "Response must have jsonrpc: 2.0");
+    assert_eq!(
+        response["jsonrpc"], "2.0",
+        "Response must have jsonrpc: 2.0"
+    );
 
     // Must have exactly one of result or error (XOR)
     let has_result = response.get("result").is_some();
     let has_error = response.get("error").is_some();
-    assert!(has_result ^ has_error, "Response must have exactly one of result or error");
+    assert!(
+        has_result ^ has_error,
+        "Response must have exactly one of result or error"
+    );
 
     // Must have matching ID
-    assert!(response.get("id").is_some(), "Response must have an id field");
+    assert!(
+        response.get("id").is_some(),
+        "Response must have an id field"
+    );
     shutdown_and_exit(&server);
     Ok(())
 }
@@ -66,10 +75,15 @@ fn test_error_response_structure() -> Result<(), Box<dyn std::error::Error>> {
 
     let error = &response["error"];
     assert!(error["code"].is_number(), "Error must have numeric code");
-    assert!(error["message"].is_string(), "Error must have string message");
+    assert!(
+        error["message"].is_string(),
+        "Error must have string message"
+    );
 
     // Standard JSON-RPC error codes
-    let code = error["code"].as_i64().ok_or("Error code must be a valid i64 number")?;
+    let code = error["code"]
+        .as_i64()
+        .ok_or("Error code must be a valid i64 number")?;
     assert!(
         code == -32700  // Parse error
         || code == -32600  // Invalid request
@@ -119,7 +133,10 @@ fn test_id_matching_invariants() -> Result<(), Box<dyn std::error::Error>> {
             }
         }),
     );
-    assert_eq!(response["id"], "test-id", "Response ID must match string request ID");
+    assert_eq!(
+        response["id"], "test-id",
+        "Response ID must match string request ID"
+    );
     shutdown_and_exit(&server);
     Ok(())
 }
@@ -153,8 +170,14 @@ fn test_diagnostics_version_invariant() -> Result<(), Box<dyn std::error::Error>
         "textDocument/publishDiagnostics",
         common::short_timeout(),
     ) {
-        assert!(diag["params"]["version"].is_number(), "Diagnostics must include version");
-        assert!(diag["params"]["diagnostics"].is_array(), "Diagnostics must be an array");
+        assert!(
+            diag["params"]["version"].is_number(),
+            "Diagnostics must include version"
+        );
+        assert!(
+            diag["params"]["diagnostics"].is_array(),
+            "Diagnostics must be an array"
+        );
     }
 
     // Fix the error by using all variables (avoids unused variable warnings)
@@ -181,13 +204,20 @@ fn test_diagnostics_version_invariant() -> Result<(), Box<dyn std::error::Error>
         "textDocument/publishDiagnostics",
         common::short_timeout(),
     ) {
-        assert_eq!(diag["params"]["version"], 2, "Diagnostics must have updated version");
-        let diags =
-            diag["params"]["diagnostics"].as_array().ok_or("Diagnostics must be an array")?;
+        assert_eq!(
+            diag["params"]["version"], 2,
+            "Diagnostics must have updated version"
+        );
+        let diags = diag["params"]["diagnostics"]
+            .as_array()
+            .ok_or("Diagnostics must be an array")?;
         // Check that there are no error-level diagnostics (severity 1)
         // Hints and warnings (severity 2-4) may still be present
         let errors: Vec<_> = diags.iter().filter(|d| d["severity"] == 1).collect();
-        assert!(errors.is_empty(), "Fixed code should have no error-level diagnostics");
+        assert!(
+            errors.is_empty(),
+            "Fixed code should have no error-level diagnostics"
+        );
     }
     shutdown_and_exit(&server);
     Ok(())
@@ -274,7 +304,10 @@ fn test_notifications_no_response() -> Result<(), Box<dyn std::error::Error>> {
     // We might get a diagnostics notification, but not a response
     if let Some(r) = resp {
         // If we got something, it should be a notification (no id field)
-        assert!(r.get("id").is_none(), "Notifications should not produce responses with IDs");
+        assert!(
+            r.get("id").is_none(),
+            "Notifications should not produce responses with IDs"
+        );
         assert_eq!(
             r.get("method").and_then(|v| v.as_str()),
             Some("textDocument/publishDiagnostics")

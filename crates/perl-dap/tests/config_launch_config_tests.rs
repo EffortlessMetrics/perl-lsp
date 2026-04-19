@@ -42,9 +42,15 @@ fn test_launch_config_validation_missing_program() {
     };
 
     let result = config.validate();
-    assert!(result.is_err(), "Should fail validation for missing program file");
+    assert!(
+        result.is_err(),
+        "Should fail validation for missing program file"
+    );
     let err = result.unwrap_err();
-    assert!(err.to_string().contains("does not exist"), "Error should mention file doesn't exist");
+    assert!(
+        err.to_string().contains("does not exist"),
+        "Error should mention file doesn't exist"
+    );
 }
 
 #[test]
@@ -61,9 +67,15 @@ fn test_launch_config_validation_program_is_directory() -> Result<(), Box<dyn st
     };
 
     let result = config.validate();
-    assert!(result.is_err(), "Should fail validation when program is a directory");
+    assert!(
+        result.is_err(),
+        "Should fail validation when program is a directory"
+    );
     let err = result.err().ok_or("Expected an error")?;
-    assert!(err.to_string().contains("not a file"), "Error should mention path is not a file");
+    assert!(
+        err.to_string().contains("not a file"),
+        "Error should mention path is not a file"
+    );
     Ok(())
 }
 
@@ -89,7 +101,10 @@ fn test_launch_config_validation_invalid_cwd() -> Result<(), Box<dyn std::error:
     // Clean up temp file
     let _ = std::fs::remove_file(&temp_file);
 
-    assert!(result.is_err(), "Should fail validation when cwd is not a directory");
+    assert!(
+        result.is_err(),
+        "Should fail validation when cwd is not a directory"
+    );
     Ok(())
 }
 
@@ -127,7 +142,10 @@ fn test_launch_config_validation_invalid_perl_path() {
     };
 
     let result = config.validate();
-    assert!(result.is_err(), "Should fail validation for missing perl binary");
+    assert!(
+        result.is_err(),
+        "Should fail validation for missing perl binary"
+    );
     let err = result.unwrap_err();
     assert!(
         err.to_string().contains("does not exist"),
@@ -228,7 +246,10 @@ fn test_launch_config_empty_args() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     let json = serde_json::to_string(&config)?;
-    assert!(json.contains("\"args\":[]"), "Empty args should serialize correctly");
+    assert!(
+        json.contains("\"args\":[]"),
+        "Empty args should serialize correctly"
+    );
     Ok(())
 }
 
@@ -245,6 +266,9 @@ fn test_launch_config_empty_include_paths() -> Result<(), Box<dyn std::error::Er
     };
 
     let json = serde_json::to_string(&config)?;
-    assert!(json.contains("\"includePaths\":[]"), "Empty include_paths should serialize correctly");
+    assert!(
+        json.contains("\"includePaths\":[]"),
+        "Empty include_paths should serialize correctly"
+    );
     Ok(())
 }

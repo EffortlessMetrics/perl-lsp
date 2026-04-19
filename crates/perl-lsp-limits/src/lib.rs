@@ -122,7 +122,10 @@ pub struct MemoryMonitor {
 impl MemoryMonitor {
     /// Create a new monitor with the given budget.
     pub fn new(budget: MemoryBudget) -> Self {
-        Self { tracked: AtomicUsize::new(0), budget }
+        Self {
+            tracked: AtomicUsize::new(0),
+            budget,
+        }
     }
 
     /// Record that `bytes` have been allocated.
@@ -404,21 +407,36 @@ impl LspLimits {
             }
 
             // Deadlines (in milliseconds)
-            if let Some(v) = limits.get("workspaceScanDeadlineMs").and_then(|v| v.as_u64()) {
+            if let Some(v) = limits
+                .get("workspaceScanDeadlineMs")
+                .and_then(|v| v.as_u64())
+            {
                 self.workspace_scan_deadline = Duration::from_millis(v);
             }
-            if let Some(v) = limits.get("referenceSearchDeadlineMs").and_then(|v| v.as_u64()) {
+            if let Some(v) = limits
+                .get("referenceSearchDeadlineMs")
+                .and_then(|v| v.as_u64())
+            {
                 self.reference_search_deadline = Duration::from_millis(v);
             }
 
             // Memory budget
-            if let Some(v) = limits.get("memoryWarningThresholdBytes").and_then(|v| v.as_u64()) {
+            if let Some(v) = limits
+                .get("memoryWarningThresholdBytes")
+                .and_then(|v| v.as_u64())
+            {
                 self.memory_budget.warning_threshold_bytes = v as usize;
             }
-            if let Some(v) = limits.get("memoryCriticalThresholdBytes").and_then(|v| v.as_u64()) {
+            if let Some(v) = limits
+                .get("memoryCriticalThresholdBytes")
+                .and_then(|v| v.as_u64())
+            {
                 self.memory_budget.critical_threshold_bytes = v as usize;
             }
-            if let Some(v) = limits.get("astCacheMaxMemoryBytes").and_then(|v| v.as_u64()) {
+            if let Some(v) = limits
+                .get("astCacheMaxMemoryBytes")
+                .and_then(|v| v.as_u64())
+            {
                 self.memory_budget.ast_cache_max_bytes = v as usize;
             }
         }
@@ -435,7 +453,10 @@ pub static LSP_LIMITS: std::sync::LazyLock<std::sync::RwLock<LspLimits>> =
 /// Get current workspace symbol cap
 #[inline]
 pub fn workspace_symbol_cap() -> usize {
-    LSP_LIMITS.read().map(|l| l.workspace_symbol_cap).unwrap_or(200)
+    LSP_LIMITS
+        .read()
+        .map(|l| l.workspace_symbol_cap)
+        .unwrap_or(200)
 }
 
 /// Get current references cap
@@ -453,13 +474,19 @@ pub fn completion_cap() -> usize {
 /// Get current reference search deadline
 #[inline]
 pub fn reference_search_deadline() -> Duration {
-    LSP_LIMITS.read().map(|l| l.reference_search_deadline).unwrap_or(Duration::from_secs(2))
+    LSP_LIMITS
+        .read()
+        .map(|l| l.reference_search_deadline)
+        .unwrap_or(Duration::from_secs(2))
 }
 
 /// Get current regex scan deadline
 #[inline]
 pub fn regex_scan_deadline() -> Duration {
-    LSP_LIMITS.read().map(|l| l.regex_scan_deadline).unwrap_or(Duration::from_secs(1))
+    LSP_LIMITS
+        .read()
+        .map(|l| l.regex_scan_deadline)
+        .unwrap_or(Duration::from_secs(1))
 }
 
 /// Get current code lens cap
@@ -471,25 +498,37 @@ pub fn code_lens_cap() -> usize {
 /// Get current document symbol cap
 #[inline]
 pub fn document_symbol_cap() -> usize {
-    LSP_LIMITS.read().map(|l| l.document_symbol_cap).unwrap_or(500)
+    LSP_LIMITS
+        .read()
+        .map(|l| l.document_symbol_cap)
+        .unwrap_or(500)
 }
 
 /// Get current semantic tokens deadline
 #[inline]
 pub fn semantic_tokens_deadline() -> Duration {
-    LSP_LIMITS.read().map(|l| l.semantic_tokens_deadline).unwrap_or(Duration::from_secs(2))
+    LSP_LIMITS
+        .read()
+        .map(|l| l.semantic_tokens_deadline)
+        .unwrap_or(Duration::from_secs(2))
 }
 
 /// Get current code lens resolve deadline
 #[inline]
 pub fn code_lens_resolve_deadline() -> Duration {
-    LSP_LIMITS.read().map(|l| l.code_lens_resolve_deadline).unwrap_or(Duration::from_secs(1))
+    LSP_LIMITS
+        .read()
+        .map(|l| l.code_lens_resolve_deadline)
+        .unwrap_or(Duration::from_secs(1))
 }
 
 /// Get current completion deadline
 #[inline]
 pub fn completion_deadline() -> Duration {
-    LSP_LIMITS.read().map(|l| l.completion_deadline).unwrap_or(Duration::from_millis(500))
+    LSP_LIMITS
+        .read()
+        .map(|l| l.completion_deadline)
+        .unwrap_or(Duration::from_millis(500))
 }
 
 /// Get current inlay hints cap
@@ -501,19 +540,28 @@ pub fn inlay_hints_cap() -> usize {
 /// Get current diagnostics per file cap
 #[inline]
 pub fn diagnostics_per_file_cap() -> usize {
-    LSP_LIMITS.read().map(|l| l.diagnostics_per_file_cap).unwrap_or(200)
+    LSP_LIMITS
+        .read()
+        .map(|l| l.diagnostics_per_file_cap)
+        .unwrap_or(200)
 }
 
 /// Get current maximum file size in bytes
 #[inline]
 pub fn max_file_size_bytes() -> usize {
-    LSP_LIMITS.read().map(|l| l.max_file_size_bytes).unwrap_or(1_024 * 1_024)
+    LSP_LIMITS
+        .read()
+        .map(|l| l.max_file_size_bytes)
+        .unwrap_or(1_024 * 1_024)
 }
 
 /// Get current memory warning threshold in bytes
 #[inline]
 pub fn memory_warning_threshold_bytes() -> usize {
-    LSP_LIMITS.read().map(|l| l.memory_budget.warning_threshold_bytes).unwrap_or(512 * 1024 * 1024)
+    LSP_LIMITS
+        .read()
+        .map(|l| l.memory_budget.warning_threshold_bytes)
+        .unwrap_or(512 * 1024 * 1024)
 }
 
 /// Get current memory critical threshold in bytes
@@ -528,7 +576,10 @@ pub fn memory_critical_threshold_bytes() -> usize {
 /// Get current AST cache maximum memory in bytes
 #[inline]
 pub fn ast_cache_max_memory_bytes() -> usize {
-    LSP_LIMITS.read().map(|l| l.memory_budget.ast_cache_max_bytes).unwrap_or(128 * 1024 * 1024)
+    LSP_LIMITS
+        .read()
+        .map(|l| l.memory_budget.ast_cache_max_bytes)
+        .unwrap_or(128 * 1024 * 1024)
 }
 
 #[cfg(test)]

@@ -75,7 +75,13 @@ use std::time::Instant;
 fn strip_qw_comments(content: &str) -> String {
     content
         .lines()
-        .map(|line| if let Some(pos) = line.find('#') { &line[..pos] } else { line })
+        .map(|line| {
+            if let Some(pos) = line.find('#') {
+                &line[..pos]
+            } else {
+                line
+            }
+        })
         .collect::<Vec<_>>()
         .join("\n")
 }
@@ -518,6 +524,9 @@ mod strip_qw_comments_unit_tests {
     #[test]
     fn test_strip_basic() {
         let result = strip_qw_comments("foo # comment\n bar");
-        assert_eq!(result.split_whitespace().collect::<Vec<_>>(), vec!["foo", "bar"]);
+        assert_eq!(
+            result.split_whitespace().collect::<Vec<_>>(),
+            vec!["foo", "bar"]
+        );
     }
 }

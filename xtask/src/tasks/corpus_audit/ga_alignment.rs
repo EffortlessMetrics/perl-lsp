@@ -85,20 +85,29 @@ pub fn check_ga_feature_alignment(files: &[CorpusFile]) -> Result<GAFeatureCover
     let ga_features = define_ga_features();
 
     // Check coverage for each feature
-    let features: Vec<FeatureCoverage> =
-        ga_features.iter().map(|feature| check_feature_coverage(feature, files)).collect();
+    let features: Vec<FeatureCoverage> = ga_features
+        .iter()
+        .map(|feature| check_feature_coverage(feature, files))
+        .collect();
 
     // Calculate overall statistics
     let total_count = features.len();
     let covered_count = features.iter().filter(|f| f.covered).count();
-    let coverage_percentage =
-        if total_count > 0 { (covered_count as f64 / total_count as f64) * 100.0 } else { 0.0 };
+    let coverage_percentage = if total_count > 0 {
+        (covered_count as f64 / total_count as f64) * 100.0
+    } else {
+        0.0
+    };
 
     // Identify uncovered critical features (P0 and P1)
     let uncovered_critical: Vec<String> = features
         .iter()
         .filter(|f| {
-            !f.covered && matches!(f.feature.priority, FeaturePriority::P0 | FeaturePriority::P1)
+            !f.covered
+                && matches!(
+                    f.feature.priority,
+                    FeaturePriority::P0 | FeaturePriority::P1
+                )
         })
         .map(|f| f.feature.id.clone())
         .collect();
@@ -140,7 +149,12 @@ fn check_feature_coverage(feature: &GAFeature, files: &[CorpusFile]) -> FeatureC
         0.0
     };
 
-    FeatureCoverage { feature: feature.clone(), covered, covering_files, coverage_percentage }
+    FeatureCoverage {
+        feature: feature.clone(),
+        covered,
+        covering_files,
+        coverage_percentage,
+    }
 }
 
 /// Check if a file covers a given GA feature
@@ -179,8 +193,9 @@ fn content_matches_nodekind(content: &str, nodekind: &str) -> bool {
         "HashLiteral" => content.contains("%") && (content.contains('{') || content.contains('(')),
         "ArrayLiteral" => content.contains("@") && (content.contains('(') || content.contains('[')),
         "FunctionCall" => {
-            let builtins =
-                ["map ", "grep ", "sort ", "push ", "pop ", "shift ", "print ", "say ", "sprintf "];
+            let builtins = [
+                "map ", "grep ", "sort ", "push ", "pop ", "shift ", "print ", "say ", "sprintf ",
+            ];
             builtins.iter().any(|b| content.contains(b))
         }
         "Given" => content.contains("given "),
@@ -208,7 +223,11 @@ fn define_ga_features() -> Vec<GAFeature> {
             id: "control-flow-loops".to_string(),
             name: "Loop Statements".to_string(),
             priority: FeaturePriority::P0,
-            expected_nodekinds: vec!["While".to_string(), "For".to_string(), "Foreach".to_string()],
+            expected_nodekinds: vec![
+                "While".to_string(),
+                "For".to_string(),
+                "Foreach".to_string(),
+            ],
             description: "Loop control flow with while/for/foreach".to_string(),
         },
         GAFeature {

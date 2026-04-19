@@ -18,8 +18,10 @@ fn test_will_rename_files_single_module() -> TestResult {
     harness.initialize(None)?;
 
     // Open a file that references the module being renamed
-    harness
-        .open_document("file:///workspace/app.pl", "use MyModule;\nmy $obj = MyModule->new();\n")?;
+    harness.open_document(
+        "file:///workspace/app.pl",
+        "use MyModule;\nmy $obj = MyModule->new();\n",
+    )?;
 
     // Send willRenameFiles request for a module rename
     let result = harness.request(
@@ -39,7 +41,10 @@ fn test_will_rename_files_single_module() -> TestResult {
     match result {
         Ok(edit) => {
             // Valid WorkspaceEdit must be an object
-            assert!(edit.is_object(), "willRenameFiles must return a WorkspaceEdit object");
+            assert!(
+                edit.is_object(),
+                "willRenameFiles must return a WorkspaceEdit object"
+            );
         }
         Err(e) => {
             // MethodNotFound is acceptable if the server does not implement this
@@ -71,7 +76,10 @@ fn test_will_delete_files_response_structure() -> TestResult {
 
     match result {
         Ok(edit) => {
-            assert!(edit.is_object(), "willDeleteFiles must return a WorkspaceEdit object");
+            assert!(
+                edit.is_object(),
+                "willDeleteFiles must return a WorkspaceEdit object"
+            );
             assert!(
                 edit.get("changes").is_some() || edit.get("documentChanges").is_some(),
                 "workspace edit should provide changes or documentChanges"
@@ -112,7 +120,10 @@ fn test_will_rename_files_multiple_files() -> TestResult {
 
     match result {
         Ok(edit) => {
-            assert!(edit.is_object(), "willRenameFiles must return a WorkspaceEdit object");
+            assert!(
+                edit.is_object(),
+                "willRenameFiles must return a WorkspaceEdit object"
+            );
         }
         Err(e) => {
             assert!(
@@ -166,7 +177,11 @@ fn test_will_rename_files_response_structure() -> TestResult {
 
     // Either "changes" or "documentChanges" is valid
     assert!(workspace_edit_with_changes.get("changes").is_some());
-    assert!(workspace_edit_with_doc_changes.get("documentChanges").is_some());
+    assert!(
+        workspace_edit_with_doc_changes
+            .get("documentChanges")
+            .is_some()
+    );
 
     // documentChanges entries must have textDocument and edits
     let doc_change = &workspace_edit_with_doc_changes["documentChanges"][0];
@@ -197,6 +212,8 @@ fn test_did_rename_files_notification() -> TestResult {
     );
 
     // Notifications have no response. Verify the server is still responsive.
-    let _result = harness.request("workspace/symbol", json!({"query": ""})).unwrap_or(json!(null));
+    let _result = harness
+        .request("workspace/symbol", json!({"query": ""}))
+        .unwrap_or(json!(null));
     Ok(())
 }

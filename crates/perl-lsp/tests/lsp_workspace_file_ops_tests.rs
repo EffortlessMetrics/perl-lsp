@@ -14,7 +14,9 @@ struct OutputCapture {
 
 impl OutputCapture {
     fn new() -> Self {
-        Self { buffer: Arc::new(Mutex::new(Vec::new())) }
+        Self {
+            buffer: Arc::new(Mutex::new(Vec::new())),
+        }
     }
 
     fn clear(&self) {
@@ -58,8 +60,10 @@ impl Write for OutputCapture {
 fn wait_for_method(output: &OutputCapture, method: &str) -> Option<Value> {
     let deadline = Instant::now() + Duration::from_millis(250);
     loop {
-        if let Some(message) =
-            output.messages().into_iter().find(|message| message["method"].as_str() == Some(method))
+        if let Some(message) = output
+            .messages()
+            .into_iter()
+            .find(|message| message["method"].as_str() == Some(method))
         {
             return Some(message);
         }
@@ -72,7 +76,9 @@ fn wait_for_method(output: &OutputCapture, method: &str) -> Option<Value> {
 
 /// Helper to create a test LSP server
 fn create_test_server() -> LspServer {
-    let output = Arc::new(Mutex::new(Box::new(Vec::new()) as Box<dyn std::io::Write + Send>));
+    let output = Arc::new(Mutex::new(
+        Box::new(Vec::new()) as Box<dyn std::io::Write + Send>
+    ));
     LspServer::with_output(output)
 }
 
@@ -266,7 +272,10 @@ fn test_did_change_watched_files_deleted_removes_from_store()
     });
     let _ = make_request(&server, "textDocument/didOpen", Some(open_params));
 
-    assert!(server.test_has_document(uri), "document must be in store after didOpen");
+    assert!(
+        server.test_has_document(uri),
+        "document must be in store after didOpen"
+    );
 
     // Send a DELETED event for that file.
     let params = json!({
@@ -312,12 +321,18 @@ fn test_did_change_watched_files_non_perl_files_handled_gracefully()
     });
     let result = make_request(&server, "workspace/didChangeWatchedFiles", Some(params));
 
-    assert!(result.is_ok(), "non-Perl file events must not produce an error");
+    assert!(
+        result.is_ok(),
+        "non-Perl file events must not produce an error"
+    );
     assert_eq!(result?, None);
 
     // Server must remain responsive after receiving non-Perl file events.
     let symbol_result = make_request(&server, "workspace/symbol", Some(json!({"query": ""})));
-    assert!(symbol_result.is_ok(), "server must still respond after non-Perl file events");
+    assert!(
+        symbol_result.is_ok(),
+        "server must still respond after non-Perl file events"
+    );
     Ok(())
 }
 
@@ -368,7 +383,10 @@ fn test_did_change_watched_files_multiple_mixed_events() -> Result<(), Box<dyn s
 
     // Server must still be responsive after processing the batch.
     let symbol_result = make_request(&server, "workspace/symbol", Some(json!({"query": ""})));
-    assert!(symbol_result.is_ok(), "server must remain responsive after batch processing");
+    assert!(
+        symbol_result.is_ok(),
+        "server must remain responsive after batch processing"
+    );
     Ok(())
 }
 
@@ -418,9 +436,15 @@ fn test_did_change_watched_files_mixed_batch_deleted_removed()
     let _ = make_request(&server, "workspace/didChangeWatchedFiles", Some(params));
 
     // The deleted document must have been evicted from the store.
-    assert!(!server.test_has_document(deleted_uri), "deleted file must be removed");
+    assert!(
+        !server.test_has_document(deleted_uri),
+        "deleted file must be removed"
+    );
     // The changed document must still be present (it was not deleted).
-    assert!(server.test_has_document(changed_uri), "changed file must still be present");
+    assert!(
+        server.test_has_document(changed_uri),
+        "changed file must still be present"
+    );
     Ok(())
 }
 
@@ -440,7 +464,10 @@ fn test_did_change_watched_files_empty_changes_array() -> Result<(), Box<dyn std
     let params = json!({"changes": []});
     let result = make_request(&server, "workspace/didChangeWatchedFiles", Some(params));
 
-    assert!(result.is_ok(), "empty changes array must not produce an error");
+    assert!(
+        result.is_ok(),
+        "empty changes array must not produce an error"
+    );
     assert_eq!(result?, None);
     Ok(())
 }
@@ -589,8 +616,10 @@ fn test_will_rename_files_returns_module_import_edits() -> Result<(), Box<dyn st
 
     let edit = make_request(&server, "workspace/willRenameFiles", Some(params))?
         .ok_or("expected workspace edit response")?;
-    let changes =
-        edit.get("changes").and_then(Value::as_object).ok_or("expected changes object")?;
+    let changes = edit
+        .get("changes")
+        .and_then(Value::as_object)
+        .ok_or("expected changes object")?;
     let main_changes = changes
         .get("file:///test/workspace/main.pl")
         .and_then(Value::as_array)
@@ -598,7 +627,12 @@ fn test_will_rename_files_returns_module_import_edits() -> Result<(), Box<dyn st
 
     let new_texts: Vec<String> = main_changes
         .iter()
-        .filter_map(|entry| entry.get("newText").and_then(Value::as_str).map(ToString::to_string))
+        .filter_map(|entry| {
+            entry
+                .get("newText")
+                .and_then(Value::as_str)
+                .map(ToString::to_string)
+        })
         .collect();
 
     assert!(
@@ -675,8 +709,10 @@ fn test_will_rename_files_coalesces_multi_rename_edits_per_line()
 
     let edit = make_request(&server, "workspace/willRenameFiles", Some(params))?
         .ok_or("expected workspace edit response")?;
-    let changes =
-        edit.get("changes").and_then(Value::as_object).ok_or("expected changes object")?;
+    let changes = edit
+        .get("changes")
+        .and_then(Value::as_object)
+        .ok_or("expected changes object")?;
     let main_changes = changes
         .get("file:///test/workspace/main.pl")
         .and_then(Value::as_array)
@@ -918,8 +954,9 @@ fn test_will_delete_files_aggregates_warning_for_multiple_unsafe_deletes()
 
     let message = wait_for_method(&output, "window/showMessage")
         .ok_or("expected aggregated safe-delete warning notification")?;
-    let message_text =
-        message["params"]["message"].as_str().ok_or("expected warning message text")?;
+    let message_text = message["params"]["message"]
+        .as_str()
+        .ok_or("expected warning message text")?;
     assert!(
         message_text.contains("2 files have dependent workspace files"),
         "expected aggregated safe-delete warning, got: {message_text}"
@@ -975,8 +1012,9 @@ fn test_will_delete_files_warns_for_cross_file_symbol_usage_without_module_impor
 
     let message = wait_for_method(&output, "window/showMessage")
         .ok_or("expected safe-delete warning notification")?;
-    let message_text =
-        message["params"]["message"].as_str().ok_or("expected warning message text")?;
+    let message_text = message["params"]["message"]
+        .as_str()
+        .ok_or("expected warning message text")?;
     assert!(
         message_text.contains("dependent workspace file"),
         "expected safe-delete warning to mention dependent files, got: {message_text}"
@@ -1163,7 +1201,10 @@ fn test_path_to_module_name() -> Result<(), Box<dyn std::error::Error>> {
     // Test various path patterns
     let test_cases = vec![
         ("file:///test/lib/Foo/Bar.pm", "file:///test/lib/Baz/Qux.pm"),
-        ("file:///test/workspace/lib/Module.pm", "file:///test/workspace/lib/NewModule.pm"),
+        (
+            "file:///test/workspace/lib/Module.pm",
+            "file:///test/workspace/lib/NewModule.pm",
+        ),
         ("file:///test/MyModule.pl", "file:///test/YourModule.pl"),
     ];
 
@@ -1232,8 +1273,10 @@ fn test_will_rename_files_pure_parent_only() -> Result<(), Box<dyn std::error::E
 
     let edit = make_request(&server, "workspace/willRenameFiles", Some(params))?
         .ok_or("expected workspace edit response")?;
-    let changes =
-        edit.get("changes").and_then(Value::as_object).ok_or("expected changes object")?;
+    let changes = edit
+        .get("changes")
+        .and_then(Value::as_object)
+        .ok_or("expected changes object")?;
 
     // The pure-parent-only file must be in the edit response (regression for #2747).
     let child_changes = changes
@@ -1243,7 +1286,11 @@ fn test_will_rename_files_pure_parent_only() -> Result<(), Box<dyn std::error::E
 
     let new_texts: Vec<String> = child_changes
         .iter()
-        .filter_map(|e| e.get("newText").and_then(Value::as_str).map(ToString::to_string))
+        .filter_map(|e| {
+            e.get("newText")
+                .and_then(Value::as_str)
+                .map(ToString::to_string)
+        })
         .collect();
 
     assert!(
@@ -1288,8 +1335,10 @@ fn test_will_rename_files_updates_package_declaration_in_renamed_file()
 
     let edit = make_request(&server, "workspace/willRenameFiles", Some(params))?
         .ok_or("expected workspace edit response")?;
-    let changes =
-        edit.get("changes").and_then(Value::as_object).ok_or("expected changes object")?;
+    let changes = edit
+        .get("changes")
+        .and_then(Value::as_object)
+        .ok_or("expected changes object")?;
 
     let solo_changes = changes
         .get("file:///test/workspace/lib/Solo.pm")
@@ -1297,11 +1346,17 @@ fn test_will_rename_files_updates_package_declaration_in_renamed_file()
         .ok_or("expected package declaration edits for Solo.pm")?;
     let new_texts: Vec<String> = solo_changes
         .iter()
-        .filter_map(|e| e.get("newText").and_then(Value::as_str).map(ToString::to_string))
+        .filter_map(|e| {
+            e.get("newText")
+                .and_then(Value::as_str)
+                .map(ToString::to_string)
+        })
         .collect();
 
     assert!(
-        new_texts.iter().any(|text| text.contains("package Renamed;")),
+        new_texts
+            .iter()
+            .any(|text| text.contains("package Renamed;")),
         "expected package declaration rewrite in Solo.pm, got: {new_texts:?}"
     );
     Ok(())

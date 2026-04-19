@@ -15,8 +15,10 @@ use std::process::Command;
 
 pub fn run(version: String) -> Result<()> {
     let root = project_root()?;
-    let local_binary =
-        root.join(format!("target/debug/perl-ci-hygiene{}", std::env::consts::EXE_SUFFIX));
+    let local_binary = root.join(format!(
+        "target/debug/perl-ci-hygiene{}",
+        std::env::consts::EXE_SUFFIX
+    ));
     let mut command = if local_binary.exists() {
         let mut cmd = Command::new(local_binary);
         cmd.arg("bump-version").arg(&version);

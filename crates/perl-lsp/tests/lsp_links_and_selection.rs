@@ -45,9 +45,12 @@ fn document_links_and_selection() -> Result<(), Box<dyn std::error::Error>> {
         method: "textDocument/documentLink".into(),
         params: Some(json!({"textDocument": {"uri": uri}})),
     };
-    let links_res =
-        srv.handle_request(links_req).ok_or("Failed to handle document link request")?;
-    let links = links_res.result.ok_or("Document link response missing result")?;
+    let links_res = srv
+        .handle_request(links_req)
+        .ok_or("Failed to handle document link request")?;
+    let links = links_res
+        .result
+        .ok_or("Document link response missing result")?;
     assert!(
         links.as_array().map(|a| !a.is_empty()).unwrap_or(false),
         "should have document links for use statement"
@@ -63,9 +66,16 @@ fn document_links_and_selection() -> Result<(), Box<dyn std::error::Error>> {
             "positions": [{"line": 1, "character": 5}]
         })),
     };
-    let sel_res = srv.handle_request(sel_req).ok_or("Failed to handle selection range request")?;
-    let sel = sel_res.result.ok_or("Selection range response missing result")?;
-    assert!(sel.as_array().map(|a| !a.is_empty()).unwrap_or(false), "should have selection ranges");
+    let sel_res = srv
+        .handle_request(sel_req)
+        .ok_or("Failed to handle selection range request")?;
+    let sel = sel_res
+        .result
+        .ok_or("Selection range response missing result")?;
+    assert!(
+        sel.as_array().map(|a| !a.is_empty()).unwrap_or(false),
+        "should have selection ranges"
+    );
 
     // Verify selection range structure
     if let Some(ranges) = sel.as_array() {

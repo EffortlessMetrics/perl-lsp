@@ -55,13 +55,19 @@ pub fn check_missing_package_declaration(
         return;
     }
 
-    let has_package = statements.iter().any(|stmt| matches!(&stmt.kind, NodeKind::Package { .. }));
+    let has_package = statements
+        .iter()
+        .any(|stmt| matches!(&stmt.kind, NodeKind::Package { .. }));
 
     if !has_package {
         diagnostics.push(Diagnostic {
             range: (0, 0),
             severity: DiagnosticSeverity::Warning,
-            code: Some(DiagnosticCode::MissingPackageDeclaration.as_str().to_string()),
+            code: Some(
+                DiagnosticCode::MissingPackageDeclaration
+                    .as_str()
+                    .to_string(),
+            ),
             message: "This file has no package declaration. \
                       Add 'package MyModule;' to declare the package namespace."
                 .to_string(),
@@ -73,8 +79,9 @@ pub fn check_missing_package_declaration(
 }
 
 fn should_skip_missing_package_declaration(source: &str, source_path: Option<&Path>) -> bool {
-    if let Some(extension) =
-        source_path.and_then(|path| path.extension()).and_then(|ext| ext.to_str())
+    if let Some(extension) = source_path
+        .and_then(|path| path.extension())
+        .and_then(|ext| ext.to_str())
     {
         let extension = extension.to_ascii_lowercase();
         if matches!(extension.as_str(), "pl" | "t" | "cgi" | "psgi" | "plx") {
@@ -94,7 +101,10 @@ pub fn check_duplicate_package(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
     let mut seen: HashMap<String, usize> = HashMap::new();
 
     walk_node(node, &mut |n| {
-        if let NodeKind::Package { name, name_span, .. } = &n.kind {
+        if let NodeKind::Package {
+            name, name_span, ..
+        } = &n.kind
+        {
             let count = seen.entry(name.clone()).or_insert(0);
             *count += 1;
             if *count > 1 {
@@ -136,7 +146,11 @@ pub fn check_duplicate_subroutine(node: &Node, diagnostics: &mut Vec<Diagnostic>
             NodeKind::Package { name, .. } => {
                 current_package = name.clone();
             }
-            NodeKind::Subroutine { name: Some(name), name_span: Some(span), .. } => {
+            NodeKind::Subroutine {
+                name: Some(name),
+                name_span: Some(span),
+                ..
+            } => {
                 // Build a fully-qualified key so that Foo::new and Bar::new are distinct.
                 // If the name already contains "::" it is explicitly qualified by the author.
                 let qualified = if name.contains("::") {
@@ -157,7 +171,11 @@ pub fn check_duplicate_subroutine(node: &Node, diagnostics: &mut Vec<Diagnostic>
         *count += 1;
         if *count > 1 {
             // Display only the bare name in the message (after the last "::").
-            let display_name = qualified.rsplit("::").next().unwrap_or(&qualified).to_string();
+            let display_name = qualified
+                .rsplit("::")
+                .next()
+                .unwrap_or(&qualified)
+                .to_string();
             diagnostics.push(Diagnostic {
                 range: span,
                 severity: DiagnosticSeverity::Warning,

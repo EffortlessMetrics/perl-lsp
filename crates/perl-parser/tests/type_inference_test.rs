@@ -18,9 +18,15 @@ fn test_variable_assignment_propagation() -> TestResult {
         my $y = $x;
     "#;
     let engine = infer(code)?;
-    assert_eq!(engine.get_type_at("x"), Some(PerlType::Scalar(ScalarType::Integer)));
+    assert_eq!(
+        engine.get_type_at("x"),
+        Some(PerlType::Scalar(ScalarType::Integer))
+    );
     // Currently this might fail or return Any if propagation isn't fully implemented
-    assert_eq!(engine.get_type_at("y"), Some(PerlType::Scalar(ScalarType::Integer)));
+    assert_eq!(
+        engine.get_type_at("y"),
+        Some(PerlType::Scalar(ScalarType::Integer))
+    );
     Ok(())
 }
 
@@ -43,7 +49,10 @@ fn test_return_type_inference() -> TestResult {
     }
 
     // Check variable assigned from function call
-    assert_eq!(engine.get_type_at("x"), Some(PerlType::Scalar(ScalarType::Integer)));
+    assert_eq!(
+        engine.get_type_at("x"),
+        Some(PerlType::Scalar(ScalarType::Integer))
+    );
     Ok(())
 }
 

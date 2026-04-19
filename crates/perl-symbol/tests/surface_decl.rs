@@ -18,10 +18,19 @@ fn loc(start: usize, end: usize) -> SourceLocation {
 fn test_package_produces_symbol_decl() {
     // package MyApp;
     let node = Node::new(
-        NodeKind::Package { name: "MyApp".to_string(), name_span: loc(8, 13), block: None },
+        NodeKind::Package {
+            name: "MyApp".to_string(),
+            name_span: loc(8, 13),
+            block: None,
+        },
         loc(0, 14),
     );
-    let program = Node::new(NodeKind::Program { statements: vec![node] }, loc(0, 14));
+    let program = Node::new(
+        NodeKind::Program {
+            statements: vec![node],
+        },
+        loc(0, 14),
+    );
 
     let decls = extract_symbol_decls(&program, None);
 
@@ -52,7 +61,12 @@ fn test_subroutine_produces_symbol_decl() {
         },
         loc(0, 13),
     );
-    let program = Node::new(NodeKind::Program { statements: vec![sub_node] }, loc(0, 13));
+    let program = Node::new(
+        NodeKind::Program {
+            statements: vec![sub_node],
+        },
+        loc(0, 13),
+    );
 
     let decls = extract_symbol_decls(&program, None);
 
@@ -81,10 +95,18 @@ fn test_anonymous_subroutine_is_skipped() {
         },
         loc(0, 12),
     );
-    let program = Node::new(NodeKind::Program { statements: vec![anon_sub] }, loc(0, 12));
+    let program = Node::new(
+        NodeKind::Program {
+            statements: vec![anon_sub],
+        },
+        loc(0, 12),
+    );
 
     let decls = extract_symbol_decls(&program, None);
-    assert!(decls.is_empty(), "anonymous sub should produce no SymbolDecl");
+    assert!(
+        decls.is_empty(),
+        "anonymous sub should produce no SymbolDecl"
+    );
 }
 
 // ── Variable declaration ─────────────────────────────────────────────────────
@@ -93,7 +115,10 @@ fn test_anonymous_subroutine_is_skipped() {
 fn test_scalar_variable_declaration_produces_symbol_decl() {
     // my $count = 0;
     let var = Node::new(
-        NodeKind::Variable { sigil: "$".to_string(), name: "count".to_string() },
+        NodeKind::Variable {
+            sigil: "$".to_string(),
+            name: "count".to_string(),
+        },
         loc(3, 9),
     );
     let decl_node = Node::new(
@@ -105,7 +130,12 @@ fn test_scalar_variable_declaration_produces_symbol_decl() {
         },
         loc(0, 9),
     );
-    let program = Node::new(NodeKind::Program { statements: vec![decl_node] }, loc(0, 9));
+    let program = Node::new(
+        NodeKind::Program {
+            statements: vec![decl_node],
+        },
+        loc(0, 9),
+    );
 
     let decls = extract_symbol_decls(&program, None);
 
@@ -123,7 +153,10 @@ fn test_scalar_variable_declaration_produces_symbol_decl() {
 fn test_array_variable_declaration() {
     // my @items;
     let var = Node::new(
-        NodeKind::Variable { sigil: "@".to_string(), name: "items".to_string() },
+        NodeKind::Variable {
+            sigil: "@".to_string(),
+            name: "items".to_string(),
+        },
         loc(3, 9),
     );
     let decl_node = Node::new(
@@ -135,7 +168,12 @@ fn test_array_variable_declaration() {
         },
         loc(0, 9),
     );
-    let program = Node::new(NodeKind::Program { statements: vec![decl_node] }, loc(0, 9));
+    let program = Node::new(
+        NodeKind::Program {
+            statements: vec![decl_node],
+        },
+        loc(0, 9),
+    );
 
     let decls = extract_symbol_decls(&program, None);
     assert_eq!(decls.len(), 1);
@@ -147,7 +185,10 @@ fn test_array_variable_declaration() {
 fn test_hash_variable_declaration() {
     // my %opts;
     let var = Node::new(
-        NodeKind::Variable { sigil: "%".to_string(), name: "opts".to_string() },
+        NodeKind::Variable {
+            sigil: "%".to_string(),
+            name: "opts".to_string(),
+        },
         loc(3, 8),
     );
     let decl_node = Node::new(
@@ -159,7 +200,12 @@ fn test_hash_variable_declaration() {
         },
         loc(0, 8),
     );
-    let program = Node::new(NodeKind::Program { statements: vec![decl_node] }, loc(0, 8));
+    let program = Node::new(
+        NodeKind::Program {
+            statements: vec![decl_node],
+        },
+        loc(0, 8),
+    );
 
     let decls = extract_symbol_decls(&program, None);
     assert_eq!(decls.len(), 1);
@@ -180,7 +226,12 @@ fn test_use_constant_produces_symbol_decl() {
         },
         loc(0, 23),
     );
-    let program = Node::new(NodeKind::Program { statements: vec![use_node] }, loc(0, 23));
+    let program = Node::new(
+        NodeKind::Program {
+            statements: vec![use_node],
+        },
+        loc(0, 23),
+    );
 
     let decls = extract_symbol_decls(&program, None);
 
@@ -216,7 +267,12 @@ fn test_use_constant_hash_ref_style_produces_all_symbol_decls() {
         },
         loc(0, 39),
     );
-    let program = Node::new(NodeKind::Program { statements: vec![use_node] }, loc(0, 39));
+    let program = Node::new(
+        NodeKind::Program {
+            statements: vec![use_node],
+        },
+        loc(0, 39),
+    );
 
     let decls = extract_symbol_decls(&program, None);
 
@@ -238,7 +294,12 @@ fn test_use_constant_qw_style_deduplicates_names() {
         },
         loc(0, 28),
     );
-    let program = Node::new(NodeKind::Program { statements: vec![use_node] }, loc(0, 28));
+    let program = Node::new(
+        NodeKind::Program {
+            statements: vec![use_node],
+        },
+        loc(0, 28),
+    );
 
     let decls = extract_symbol_decls(&program, None);
 
@@ -252,11 +313,18 @@ fn test_use_constant_qw_style_deduplicates_names() {
 #[test]
 fn test_const_fast_my_scalar_produces_constant_decl() {
     let use_node = Node::new(
-        NodeKind::Use { module: "Const::Fast".to_string(), args: vec![], has_filter_risk: false },
+        NodeKind::Use {
+            module: "Const::Fast".to_string(),
+            args: vec![],
+            has_filter_risk: false,
+        },
         loc(0, 16),
     );
     let variable = Node::new(
-        NodeKind::Variable { sigil: "$".to_string(), name: "PI".to_string() },
+        NodeKind::Variable {
+            sigil: "$".to_string(),
+            name: "PI".to_string(),
+        },
         loc(26, 29),
     );
     let decl = Node::new(
@@ -273,13 +341,28 @@ fn test_const_fast_my_scalar_produces_constant_decl() {
             name: "const".to_string(),
             args: vec![
                 decl,
-                Node::new(NodeKind::Number { value: "3.14159".to_string() }, loc(33, 40)),
+                Node::new(
+                    NodeKind::Number {
+                        value: "3.14159".to_string(),
+                    },
+                    loc(33, 40),
+                ),
             ],
         },
         loc(14, 40),
     );
-    let stmt = Node::new(NodeKind::ExpressionStatement { expression: Box::new(expr) }, loc(14, 40));
-    let program = Node::new(NodeKind::Program { statements: vec![use_node, stmt] }, loc(0, 40));
+    let stmt = Node::new(
+        NodeKind::ExpressionStatement {
+            expression: Box::new(expr),
+        },
+        loc(14, 40),
+    );
+    let program = Node::new(
+        NodeKind::Program {
+            statements: vec![use_node, stmt],
+        },
+        loc(0, 40),
+    );
 
     let decls = extract_symbol_decls(&program, None);
 
@@ -295,11 +378,18 @@ fn test_const_fast_my_scalar_produces_constant_decl() {
 #[test]
 fn test_const_fast_my_array_produces_constant_decl() {
     let use_node = Node::new(
-        NodeKind::Use { module: "Const::Fast".to_string(), args: vec![], has_filter_risk: false },
+        NodeKind::Use {
+            module: "Const::Fast".to_string(),
+            args: vec![],
+            has_filter_risk: false,
+        },
         loc(0, 16),
     );
     let variable = Node::new(
-        NodeKind::Variable { sigil: "@".to_string(), name: "ARRAY".to_string() },
+        NodeKind::Variable {
+            sigil: "@".to_string(),
+            name: "ARRAY".to_string(),
+        },
         loc(26, 32),
     );
     let decl = Node::new(
@@ -314,12 +404,25 @@ fn test_const_fast_my_array_produces_constant_decl() {
     let expr = Node::new(
         NodeKind::FunctionCall {
             name: "const".to_string(),
-            args: vec![decl, Node::new(NodeKind::ArrayLiteral { elements: vec![] }, loc(36, 38))],
+            args: vec![
+                decl,
+                Node::new(NodeKind::ArrayLiteral { elements: vec![] }, loc(36, 38)),
+            ],
         },
         loc(14, 38),
     );
-    let stmt = Node::new(NodeKind::ExpressionStatement { expression: Box::new(expr) }, loc(14, 38));
-    let program = Node::new(NodeKind::Program { statements: vec![use_node, stmt] }, loc(0, 38));
+    let stmt = Node::new(
+        NodeKind::ExpressionStatement {
+            expression: Box::new(expr),
+        },
+        loc(14, 38),
+    );
+    let program = Node::new(
+        NodeKind::Program {
+            statements: vec![use_node, stmt],
+        },
+        loc(0, 38),
+    );
 
     let decls = extract_symbol_decls(&program, None);
 
@@ -332,11 +435,18 @@ fn test_const_fast_my_array_produces_constant_decl() {
 #[test]
 fn test_readonly_my_scalar_produces_constant_decl() {
     let use_node = Node::new(
-        NodeKind::Use { module: "Readonly".to_string(), args: vec![], has_filter_risk: false },
+        NodeKind::Use {
+            module: "Readonly".to_string(),
+            args: vec![],
+            has_filter_risk: false,
+        },
         loc(0, 13),
     );
     let variable = Node::new(
-        NodeKind::Variable { sigil: "$".to_string(), name: "PI".to_string() },
+        NodeKind::Variable {
+            sigil: "$".to_string(),
+            name: "PI".to_string(),
+        },
         loc(23, 26),
     );
     let decl = Node::new(
@@ -353,13 +463,28 @@ fn test_readonly_my_scalar_produces_constant_decl() {
             name: "Readonly".to_string(),
             args: vec![
                 decl,
-                Node::new(NodeKind::Number { value: "3.14159".to_string() }, loc(30, 37)),
+                Node::new(
+                    NodeKind::Number {
+                        value: "3.14159".to_string(),
+                    },
+                    loc(30, 37),
+                ),
             ],
         },
         loc(14, 37),
     );
-    let stmt = Node::new(NodeKind::ExpressionStatement { expression: Box::new(expr) }, loc(14, 37));
-    let program = Node::new(NodeKind::Program { statements: vec![use_node, stmt] }, loc(0, 37));
+    let stmt = Node::new(
+        NodeKind::ExpressionStatement {
+            expression: Box::new(expr),
+        },
+        loc(14, 37),
+    );
+    let program = Node::new(
+        NodeKind::Program {
+            statements: vec![use_node, stmt],
+        },
+        loc(0, 37),
+    );
 
     let decls = extract_symbol_decls(&program, None);
 
@@ -375,11 +500,18 @@ fn test_readonly_my_scalar_produces_constant_decl() {
 #[test]
 fn test_readonly_hash_produces_constant_decl() {
     let use_node = Node::new(
-        NodeKind::Use { module: "Readonly".to_string(), args: vec![], has_filter_risk: false },
+        NodeKind::Use {
+            module: "Readonly".to_string(),
+            args: vec![],
+            has_filter_risk: false,
+        },
         loc(0, 13),
     );
     let variable = Node::new(
-        NodeKind::Variable { sigil: "%".to_string(), name: "HASH".to_string() },
+        NodeKind::Variable {
+            sigil: "%".to_string(),
+            name: "HASH".to_string(),
+        },
         loc(23, 28),
     );
     let decl = Node::new(
@@ -394,12 +526,25 @@ fn test_readonly_hash_produces_constant_decl() {
     let expr = Node::new(
         NodeKind::FunctionCall {
             name: "Readonly".to_string(),
-            args: vec![decl, Node::new(NodeKind::HashLiteral { pairs: vec![] }, loc(32, 34))],
+            args: vec![
+                decl,
+                Node::new(NodeKind::HashLiteral { pairs: vec![] }, loc(32, 34)),
+            ],
         },
         loc(14, 34),
     );
-    let stmt = Node::new(NodeKind::ExpressionStatement { expression: Box::new(expr) }, loc(14, 34));
-    let program = Node::new(NodeKind::Program { statements: vec![use_node, stmt] }, loc(0, 34));
+    let stmt = Node::new(
+        NodeKind::ExpressionStatement {
+            expression: Box::new(expr),
+        },
+        loc(14, 34),
+    );
+    let program = Node::new(
+        NodeKind::Program {
+            statements: vec![use_node, stmt],
+        },
+        loc(0, 34),
+    );
 
     let decls = extract_symbol_decls(&program, None);
 
@@ -412,11 +557,18 @@ fn test_readonly_hash_produces_constant_decl() {
 #[test]
 fn test_readonly_our_hash_produces_constant_decl() {
     let use_node = Node::new(
-        NodeKind::Use { module: "Readonly".to_string(), args: vec![], has_filter_risk: false },
+        NodeKind::Use {
+            module: "Readonly".to_string(),
+            args: vec![],
+            has_filter_risk: false,
+        },
         loc(0, 12),
     );
     let variable = Node::new(
-        NodeKind::Variable { sigil: "%".to_string(), name: "HASH".to_string() },
+        NodeKind::Variable {
+            sigil: "%".to_string(),
+            name: "HASH".to_string(),
+        },
         loc(24, 29),
     );
     let decl = Node::new(
@@ -431,12 +583,25 @@ fn test_readonly_our_hash_produces_constant_decl() {
     let expr = Node::new(
         NodeKind::FunctionCall {
             name: "Readonly".to_string(),
-            args: vec![decl, Node::new(NodeKind::HashLiteral { pairs: vec![] }, loc(33, 35))],
+            args: vec![
+                decl,
+                Node::new(NodeKind::HashLiteral { pairs: vec![] }, loc(33, 35)),
+            ],
         },
         loc(12, 35),
     );
-    let stmt = Node::new(NodeKind::ExpressionStatement { expression: Box::new(expr) }, loc(12, 35));
-    let program = Node::new(NodeKind::Program { statements: vec![use_node, stmt] }, loc(0, 35));
+    let stmt = Node::new(
+        NodeKind::ExpressionStatement {
+            expression: Box::new(expr),
+        },
+        loc(12, 35),
+    );
+    let program = Node::new(
+        NodeKind::Program {
+            statements: vec![use_node, stmt],
+        },
+        loc(0, 35),
+    );
 
     let decls = extract_symbol_decls(&program, Some("My::Pkg"));
 
@@ -452,11 +617,17 @@ fn test_readonly_our_hash_produces_constant_decl() {
 fn test_variable_declaration_with_attributes_is_unwrapped() {
     // my $count :shared;
     let inner = Node::new(
-        NodeKind::Variable { sigil: "$".to_string(), name: "count".to_string() },
+        NodeKind::Variable {
+            sigil: "$".to_string(),
+            name: "count".to_string(),
+        },
         loc(3, 9),
     );
     let wrapped = Node::new(
-        NodeKind::VariableWithAttributes { variable: Box::new(inner), attributes: vec![] },
+        NodeKind::VariableWithAttributes {
+            variable: Box::new(inner),
+            attributes: vec![],
+        },
         loc(3, 9),
     );
     let decl_node = Node::new(
@@ -468,7 +639,12 @@ fn test_variable_declaration_with_attributes_is_unwrapped() {
         },
         loc(0, 9),
     );
-    let program = Node::new(NodeKind::Program { statements: vec![decl_node] }, loc(0, 9));
+    let program = Node::new(
+        NodeKind::Program {
+            statements: vec![decl_node],
+        },
+        loc(0, 9),
+    );
 
     let decls = extract_symbol_decls(&program, None);
 
@@ -486,10 +662,19 @@ fn test_class_produces_symbol_decl() {
     // class Point { }
     let body = Node::new(NodeKind::Block { statements: vec![] }, loc(12, 15));
     let class_node = Node::new(
-        NodeKind::Class { name: "Point".to_string(), parents: vec![], body: Box::new(body) },
+        NodeKind::Class {
+            name: "Point".to_string(),
+            parents: vec![],
+            body: Box::new(body),
+        },
         loc(0, 15),
     );
-    let program = Node::new(NodeKind::Program { statements: vec![class_node] }, loc(0, 15));
+    let program = Node::new(
+        NodeKind::Program {
+            statements: vec![class_node],
+        },
+        loc(0, 15),
+    );
 
     let decls = extract_symbol_decls(&program, None);
 
@@ -521,17 +706,28 @@ fn test_subroutine_inside_package_has_container() -> Result<(), String> {
         loc(13, 21),
     );
     let pkg_node = Node::new(
-        NodeKind::Package { name: "Foo".to_string(), name_span: loc(8, 11), block: None },
+        NodeKind::Package {
+            name: "Foo".to_string(),
+            name_span: loc(8, 11),
+            block: None,
+        },
         loc(0, 12),
     );
-    let program = Node::new(NodeKind::Program { statements: vec![pkg_node, sub_node] }, loc(0, 21));
+    let program = Node::new(
+        NodeKind::Program {
+            statements: vec![pkg_node, sub_node],
+        },
+        loc(0, 21),
+    );
 
     let decls = extract_symbol_decls(&program, None);
 
     assert_eq!(decls.len(), 2);
     // Package decl has no container
-    let pkg_decl =
-        decls.iter().find(|d| d.kind == SymbolKind::Package).ok_or("expected Package decl")?;
+    let pkg_decl = decls
+        .iter()
+        .find(|d| d.kind == SymbolKind::Package)
+        .ok_or("expected Package decl")?;
     assert!(pkg_decl.container.is_none());
 
     // Sub decl uses current package context
@@ -561,7 +757,12 @@ fn test_subroutine_inside_package_block() -> Result<(), String> {
         },
         loc(15, 24),
     );
-    let pkg_block = Node::new(NodeKind::Block { statements: vec![inner_sub] }, loc(11, 25));
+    let pkg_block = Node::new(
+        NodeKind::Block {
+            statements: vec![inner_sub],
+        },
+        loc(11, 25),
+    );
     let pkg_node = Node::new(
         NodeKind::Package {
             name: "Foo".to_string(),
@@ -570,7 +771,12 @@ fn test_subroutine_inside_package_block() -> Result<(), String> {
         },
         loc(0, 25),
     );
-    let program = Node::new(NodeKind::Program { statements: vec![pkg_node] }, loc(0, 25));
+    let program = Node::new(
+        NodeKind::Program {
+            statements: vec![pkg_node],
+        },
+        loc(0, 25),
+    );
 
     let decls = extract_symbol_decls(&program, None);
 
@@ -592,7 +798,10 @@ fn test_subroutine_inside_package_block() -> Result<(), String> {
 fn test_our_variable_has_declarator() {
     // our $VERSION = '1.0';
     let var = Node::new(
-        NodeKind::Variable { sigil: "$".to_string(), name: "VERSION".to_string() },
+        NodeKind::Variable {
+            sigil: "$".to_string(),
+            name: "VERSION".to_string(),
+        },
         loc(4, 12),
     );
     let decl_node = Node::new(
@@ -604,7 +813,12 @@ fn test_our_variable_has_declarator() {
         },
         loc(0, 12),
     );
-    let program = Node::new(NodeKind::Program { statements: vec![decl_node] }, loc(0, 12));
+    let program = Node::new(
+        NodeKind::Program {
+            statements: vec![decl_node],
+        },
+        loc(0, 12),
+    );
 
     let decls = extract_symbol_decls(&program, None);
 
@@ -615,8 +829,13 @@ fn test_our_variable_has_declarator() {
 #[test]
 fn test_my_variable_has_declarator() {
     // my $x = 42;
-    let var =
-        Node::new(NodeKind::Variable { sigil: "$".to_string(), name: "x".to_string() }, loc(3, 5));
+    let var = Node::new(
+        NodeKind::Variable {
+            sigil: "$".to_string(),
+            name: "x".to_string(),
+        },
+        loc(3, 5),
+    );
     let decl_node = Node::new(
         NodeKind::VariableDeclaration {
             declarator: "my".to_string(),
@@ -626,7 +845,12 @@ fn test_my_variable_has_declarator() {
         },
         loc(0, 5),
     );
-    let program = Node::new(NodeKind::Program { statements: vec![decl_node] }, loc(0, 5));
+    let program = Node::new(
+        NodeKind::Program {
+            statements: vec![decl_node],
+        },
+        loc(0, 5),
+    );
 
     let decls = extract_symbol_decls(&program, None);
 
@@ -638,7 +862,10 @@ fn test_my_variable_has_declarator() {
 fn test_state_variable_has_declarator() {
     // state $count = 0;
     let var = Node::new(
-        NodeKind::Variable { sigil: "$".to_string(), name: "count".to_string() },
+        NodeKind::Variable {
+            sigil: "$".to_string(),
+            name: "count".to_string(),
+        },
         loc(6, 12),
     );
     let decl_node = Node::new(
@@ -650,7 +877,12 @@ fn test_state_variable_has_declarator() {
         },
         loc(0, 12),
     );
-    let program = Node::new(NodeKind::Program { statements: vec![decl_node] }, loc(0, 12));
+    let program = Node::new(
+        NodeKind::Program {
+            statements: vec![decl_node],
+        },
+        loc(0, 12),
+    );
 
     let decls = extract_symbol_decls(&program, None);
 
@@ -661,8 +893,13 @@ fn test_state_variable_has_declarator() {
 #[test]
 fn test_local_variable_has_declarator() {
     // local $x = 1;
-    let var =
-        Node::new(NodeKind::Variable { sigil: "$".to_string(), name: "x".to_string() }, loc(6, 8));
+    let var = Node::new(
+        NodeKind::Variable {
+            sigil: "$".to_string(),
+            name: "x".to_string(),
+        },
+        loc(6, 8),
+    );
     let decl_node = Node::new(
         NodeKind::VariableDeclaration {
             declarator: "local".to_string(),
@@ -672,7 +909,12 @@ fn test_local_variable_has_declarator() {
         },
         loc(0, 8),
     );
-    let program = Node::new(NodeKind::Program { statements: vec![decl_node] }, loc(0, 8));
+    let program = Node::new(
+        NodeKind::Program {
+            statements: vec![decl_node],
+        },
+        loc(0, 8),
+    );
 
     let decls = extract_symbol_decls(&program, None);
 
@@ -684,7 +926,10 @@ fn test_local_variable_has_declarator() {
 fn test_our_vs_my_declarations_are_distinguished() -> Result<(), String> {
     // our $GLOBAL = 1; my $local = 2;
     let var_our = Node::new(
-        NodeKind::Variable { sigil: "$".to_string(), name: "GLOBAL".to_string() },
+        NodeKind::Variable {
+            sigil: "$".to_string(),
+            name: "GLOBAL".to_string(),
+        },
         loc(4, 11),
     );
     let decl_our = Node::new(
@@ -698,7 +943,10 @@ fn test_our_vs_my_declarations_are_distinguished() -> Result<(), String> {
     );
 
     let var_my = Node::new(
-        NodeKind::Variable { sigil: "$".to_string(), name: "local".to_string() },
+        NodeKind::Variable {
+            sigil: "$".to_string(),
+            name: "local".to_string(),
+        },
         loc(16, 22),
     );
     let decl_my = Node::new(
@@ -711,17 +959,36 @@ fn test_our_vs_my_declarations_are_distinguished() -> Result<(), String> {
         loc(13, 22),
     );
 
-    let program = Node::new(NodeKind::Program { statements: vec![decl_our, decl_my] }, loc(0, 22));
+    let program = Node::new(
+        NodeKind::Program {
+            statements: vec![decl_our, decl_my],
+        },
+        loc(0, 22),
+    );
 
     let decls = extract_symbol_decls(&program, None);
 
     assert_eq!(decls.len(), 2);
 
-    let our_decl = decls.iter().find(|d| d.name == "GLOBAL").ok_or("expected GLOBAL decl")?;
-    assert_eq!(our_decl.declarator.as_deref(), Some("our"), "GLOBAL should have 'our' declarator");
+    let our_decl = decls
+        .iter()
+        .find(|d| d.name == "GLOBAL")
+        .ok_or("expected GLOBAL decl")?;
+    assert_eq!(
+        our_decl.declarator.as_deref(),
+        Some("our"),
+        "GLOBAL should have 'our' declarator"
+    );
 
-    let my_decl = decls.iter().find(|d| d.name == "local").ok_or("expected local decl")?;
-    assert_eq!(my_decl.declarator.as_deref(), Some("my"), "local should have 'my' declarator");
+    let my_decl = decls
+        .iter()
+        .find(|d| d.name == "local")
+        .ok_or("expected local decl")?;
+    assert_eq!(
+        my_decl.declarator.as_deref(),
+        Some("my"),
+        "local should have 'my' declarator"
+    );
 
     Ok(())
 }
@@ -730,11 +997,17 @@ fn test_our_vs_my_declarations_are_distinguished() -> Result<(), String> {
 fn test_our_variables_in_list_declaration_have_declarator() -> Result<(), String> {
     // our ($FOO, $BAR);
     let var_foo = Node::new(
-        NodeKind::Variable { sigil: "$".to_string(), name: "FOO".to_string() },
+        NodeKind::Variable {
+            sigil: "$".to_string(),
+            name: "FOO".to_string(),
+        },
         loc(5, 9),
     );
     let var_bar = Node::new(
-        NodeKind::Variable { sigil: "$".to_string(), name: "BAR".to_string() },
+        NodeKind::Variable {
+            sigil: "$".to_string(),
+            name: "BAR".to_string(),
+        },
         loc(11, 15),
     );
     let decl_node = Node::new(
@@ -746,7 +1019,12 @@ fn test_our_variables_in_list_declaration_have_declarator() -> Result<(), String
         },
         loc(0, 16),
     );
-    let program = Node::new(NodeKind::Program { statements: vec![decl_node] }, loc(0, 16));
+    let program = Node::new(
+        NodeKind::Program {
+            statements: vec![decl_node],
+        },
+        loc(0, 16),
+    );
 
     let decls = extract_symbol_decls(&program, None);
 
@@ -778,7 +1056,12 @@ fn test_non_variable_decls_have_no_declarator() {
         },
         loc(0, 13),
     );
-    let program = Node::new(NodeKind::Program { statements: vec![sub_node] }, loc(0, 13));
+    let program = Node::new(
+        NodeKind::Program {
+            statements: vec![sub_node],
+        },
+        loc(0, 13),
+    );
 
     let decls = extract_symbol_decls(&program, None);
 

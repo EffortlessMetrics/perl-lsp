@@ -13,7 +13,10 @@ fn extract_symbols(code: &str) -> SymbolTable {
 }
 
 fn symbol<'a>(table: &'a SymbolTable, name: &str, kind: SymbolKind) -> Option<&'a Symbol> {
-    table.symbols.get(name).and_then(|symbols| symbols.iter().find(|symbol| symbol.kind == kind))
+    table
+        .symbols
+        .get(name)
+        .and_then(|symbols| symbols.iter().find(|symbol| symbol.kind == kind))
 }
 
 #[test]
@@ -29,23 +32,38 @@ sub ping :Local { }
 
     let index = must_some(symbol(&table, "index", SymbolKind::Subroutine));
     assert!(
-        index.attributes.iter().any(|attr| attr == "framework=Catalyst"),
+        index
+            .attributes
+            .iter()
+            .any(|attr| attr == "framework=Catalyst"),
         "expected Catalyst framework metadata on `index`"
     );
     assert!(
-        index.attributes.iter().any(|attr| attr == "catalyst_controller=true"),
+        index
+            .attributes
+            .iter()
+            .any(|attr| attr == "catalyst_controller=true"),
         "expected controller marker on `index`"
     );
     assert!(
-        index.attributes.iter().any(|attr| attr == "catalyst_action=true"),
+        index
+            .attributes
+            .iter()
+            .any(|attr| attr == "catalyst_action=true"),
         "expected action marker on `index`"
     );
     assert!(
-        index.attributes.iter().any(|attr| attr == "catalyst_action_kind=Path"),
+        index
+            .attributes
+            .iter()
+            .any(|attr| attr == "catalyst_action_kind=Path"),
         "expected `Path` action kind on `index`"
     );
     assert!(
-        index.attributes.iter().any(|attr| attr.starts_with("catalyst_action_attributes=")),
+        index
+            .attributes
+            .iter()
+            .any(|attr| attr.starts_with("catalyst_action_attributes=")),
         "expected synthesized action attribute summary on `index`"
     );
     let index_doc = must_some(index.documentation.as_deref());
@@ -56,7 +74,9 @@ sub ping :Local { }
 
     let ping = must_some(symbol(&table, "ping", SymbolKind::Subroutine));
     assert!(
-        ping.attributes.iter().any(|attr| attr == "catalyst_action_kind=Local"),
+        ping.attributes
+            .iter()
+            .any(|attr| attr == "catalyst_action_kind=Local"),
         "expected `Local` action kind on `ping`"
     );
     let ping_doc = must_some(ping.documentation.as_deref());
@@ -78,15 +98,24 @@ sub dashboard :Global { }
     let table = extract_symbols(code);
     let dashboard = must_some(symbol(&table, "dashboard", SymbolKind::Subroutine));
     assert!(
-        dashboard.attributes.iter().any(|attr| attr == "framework=Catalyst"),
+        dashboard
+            .attributes
+            .iter()
+            .any(|attr| attr == "framework=Catalyst"),
         "expected Catalyst framework metadata on `dashboard`"
     );
     assert!(
-        dashboard.attributes.iter().any(|attr| attr == "catalyst_controller=true"),
+        dashboard
+            .attributes
+            .iter()
+            .any(|attr| attr == "catalyst_controller=true"),
         "expected controller marker on `dashboard`"
     );
     assert!(
-        dashboard.attributes.iter().any(|attr| attr == "catalyst_action_kind=Global"),
+        dashboard
+            .attributes
+            .iter()
+            .any(|attr| attr == "catalyst_action_kind=Global"),
         "expected `Global` action kind on `dashboard`"
     );
     let dashboard_doc = must_some(dashboard.documentation.as_deref());
@@ -107,15 +136,24 @@ sub helper :Path :Args(0) { }
     let table = extract_symbols(code);
     let helper = must_some(symbol(&table, "helper", SymbolKind::Subroutine));
     assert!(
-        !helper.attributes.iter().any(|attr| attr == "framework=Catalyst"),
+        !helper
+            .attributes
+            .iter()
+            .any(|attr| attr == "framework=Catalyst"),
         "did not expect Catalyst metadata in a non-controller package"
     );
     assert!(
-        !helper.attributes.iter().any(|attr| attr == "catalyst_action=true"),
+        !helper
+            .attributes
+            .iter()
+            .any(|attr| attr == "catalyst_action=true"),
         "did not expect Catalyst action marker in a non-controller package"
     );
     assert!(
-        helper.documentation.as_deref().map_or(true, |doc| !doc.contains("Catalyst action")),
+        helper
+            .documentation
+            .as_deref()
+            .map_or(true, |doc| !doc.contains("Catalyst action")),
         "did not expect Catalyst action documentation in a non-controller package"
     );
 }

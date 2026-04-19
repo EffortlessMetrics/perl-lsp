@@ -71,7 +71,10 @@ fn indentation_truncation_and_non_ascii() {
 
     let pos = source.find("my $x").unwrap_or(0);
     assert_eq!(helpers.get_indent_at(pos), "    ");
-    assert_eq!(helpers.truncate_expr("abcdefghijklmnopqrstuvwxyz", 10), "abcdefg...");
+    assert_eq!(
+        helpers.truncate_expr("abcdefghijklmnopqrstuvwxyz", 10),
+        "abcdefg..."
+    );
     assert!(!helpers.has_non_ascii_content());
 
     let non_ascii_source = "say \"café\";";

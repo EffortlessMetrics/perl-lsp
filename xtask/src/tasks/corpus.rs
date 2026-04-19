@@ -49,7 +49,12 @@ struct CorpusTestResults {
 
 impl CorpusTestResults {
     fn new() -> Self {
-        Self { total: 0, passed: 0, failed: 0, errors: Vec::new() }
+        Self {
+            total: 0,
+            passed: 0,
+            failed: 0,
+            errors: Vec::new(),
+        }
     }
 
     fn add_passed(&mut self) {
@@ -196,7 +201,11 @@ fn resolve_corpus_path(path: PathBuf) -> PathBuf {
         return candidate;
     }
 
-    for rel in ["tree-sitter-perl/test/corpus", "c/test/corpus", "test/corpus"] {
+    for rel in [
+        "tree-sitter-perl/test/corpus",
+        "c/test/corpus",
+        "test/corpus",
+    ] {
         let fallback = repo_root.join(rel);
         if fallback.exists() {
             return fallback;
@@ -473,7 +482,11 @@ fn find_missing_nodes(expected: &str, actual: &str) -> Vec<String> {
     let expected_nodes = extract_node_types(expected);
     let actual_nodes = extract_node_types(actual);
 
-    expected_nodes.iter().filter(|node| !actual_nodes.contains(node)).cloned().collect()
+    expected_nodes
+        .iter()
+        .filter(|node| !actual_nodes.contains(node))
+        .cloned()
+        .collect()
 }
 
 /// Find nodes that are in actual but not in expected
@@ -481,7 +494,11 @@ fn find_extra_nodes(expected: &str, actual: &str) -> Vec<String> {
     let expected_nodes = extract_node_types(expected);
     let actual_nodes = extract_node_types(actual);
 
-    actual_nodes.iter().filter(|node| !expected_nodes.contains(node)).cloned().collect()
+    actual_nodes
+        .iter()
+        .filter(|node| !expected_nodes.contains(node))
+        .cloned()
+        .collect()
 }
 
 /// Extract node types from S-expression
@@ -588,8 +605,9 @@ pub fn run(path: PathBuf, scanner: Option<ScannerType>, diagnose: bool, test: bo
         .filter(|e| e.file_type().is_file())
     {
         let file_path = entry.path();
-        let file_name =
-            file_path.file_name().map_or_else(|| "unknown".into(), |n| n.to_string_lossy());
+        let file_name = file_path
+            .file_name()
+            .map_or_else(|| "unknown".into(), |n| n.to_string_lossy());
 
         // Skip files that are clearly not corpus files
         if file_name.starts_with('_')
@@ -640,7 +658,10 @@ pub fn run(path: PathBuf, scanner: Option<ScannerType>, diagnose: bool, test: bo
     results.print_summary();
 
     if results.failed > 0 {
-        Err(color_eyre::eyre::eyre!("{} corpus tests failed", results.failed))
+        Err(color_eyre::eyre::eyre!(
+            "{} corpus tests failed",
+            results.failed
+        ))
     } else {
         Ok(())
     }

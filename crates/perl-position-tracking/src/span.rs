@@ -58,13 +58,19 @@ impl ByteSpan {
     /// Creates an empty span at the given position.
     #[inline]
     pub const fn empty(pos: usize) -> Self {
-        Self { start: pos, end: pos }
+        Self {
+            start: pos,
+            end: pos,
+        }
     }
 
     /// Creates a span covering the entire source text.
     #[inline]
     pub fn whole(source: &str) -> Self {
-        Self { start: 0, end: source.len() }
+        Self {
+            start: 0,
+            end: source.len(),
+        }
     }
 
     /// Returns the length of this span in bytes.
@@ -101,13 +107,20 @@ impl ByteSpan {
     pub fn intersection(&self, other: ByteSpan) -> Option<ByteSpan> {
         let start = self.start.max(other.start);
         let end = self.end.min(other.end);
-        if start < end { Some(ByteSpan { start, end }) } else { None }
+        if start < end {
+            Some(ByteSpan { start, end })
+        } else {
+            None
+        }
     }
 
     /// Returns a new span that covers both this span and the given span.
     #[inline]
     pub fn union(&self, other: ByteSpan) -> ByteSpan {
-        ByteSpan { start: self.start.min(other.start), end: self.end.max(other.end) }
+        ByteSpan {
+            start: self.start.min(other.start),
+            end: self.end.max(other.end),
+        }
     }
 
     /// Extracts the slice of source text covered by this span.

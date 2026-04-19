@@ -90,7 +90,10 @@ mod tests {
 
         let result =
             normalize_path_within_workspace(&PathBuf::from("../../../etc/passwd"), &workspace);
-        assert!(matches!(result, Err(NormalizePathError::PathTraversalAttempt(_))));
+        assert!(matches!(
+            result,
+            Err(NormalizePathError::PathTraversalAttempt(_))
+        ));
 
         Ok(())
     }

@@ -81,8 +81,10 @@ impl LspServer {
         message: &str,
         actions: Vec<&str>,
     ) -> io::Result<()> {
-        let action_items: Vec<Value> =
-            actions.iter().map(|title| json!({ "title": title })).collect();
+        let action_items: Vec<Value> = actions
+            .iter()
+            .map(|title| json!({ "title": title }))
+            .collect();
 
         let params = json!({
             "type": message_type as i32,
@@ -371,7 +373,12 @@ mod tests {
         assert!(!server.progress_tokens.lock().contains(token_str));
 
         // Verify mapping was removed
-        assert!(!server.progress_token_to_request.lock().contains_key(token_str));
+        assert!(
+            !server
+                .progress_token_to_request
+                .lock()
+                .contains_key(token_str)
+        );
 
         // Clean up global registry
         GLOBAL_CANCELLATION_REGISTRY.remove_request(&request_id);

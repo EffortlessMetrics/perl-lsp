@@ -17,7 +17,10 @@ pub fn run_benchmarks(
     category: Option<String>,
 ) -> Result<()> {
     let root = project_root()?;
-    let script = root.join("benchmarks").join("scripts").join("run-benchmarks.sh");
+    let script = root
+        .join("benchmarks")
+        .join("scripts")
+        .join("run-benchmarks.sh");
 
     let mut args: Vec<String> = Vec::new();
     if let Some(output_file) = output {
@@ -40,13 +43,20 @@ pub fn compare_benchmarks(fail_on_regression: bool) -> Result<()> {
     let root = project_root()?;
     let script = root.join("benchmarks").join("scripts").join("compare.sh");
 
-    let args = if fail_on_regression { vec!["--fail-on-regression"] } else { Vec::<&str>::new() };
+    let args = if fail_on_regression {
+        vec!["--fail-on-regression"]
+    } else {
+        Vec::<&str>::new()
+    };
     run_script(&script, &args, "benchmark comparison")
 }
 
 pub fn format_benchmarks(receipt: bool, markdown: bool) -> Result<()> {
     let root = project_root()?;
-    let script = root.join("benchmarks").join("scripts").join("format-results.py");
+    let script = root
+        .join("benchmarks")
+        .join("scripts")
+        .join("format-results.py");
     let source = Path::new("benchmarks/results/latest.json");
 
     let mut args: Vec<String> = vec![source.display().to_string()];
@@ -130,7 +140,12 @@ pub fn extract_criterion(base_path: Option<PathBuf>, output: Option<PathBuf>) ->
         let count = category
             .1
             .as_object()
-            .map(|benchmarks| benchmarks.keys().filter(|name| !name.starts_with("_")).count())
+            .map(|benchmarks| {
+                benchmarks
+                    .keys()
+                    .filter(|name| !name.starts_with("_"))
+                    .count()
+            })
             .unwrap_or(0);
         println!("  {}: {}", category.0, count);
     }
@@ -148,13 +163,19 @@ pub fn test_alert_system() -> Result<()> {
         .with_context(|| format!("Failed to create {}", workdir.display()))?;
 
     if !alert_script.exists() {
-        bail!("Missing benchmark alert script at {}", alert_script.display());
+        bail!(
+            "Missing benchmark alert script at {}",
+            alert_script.display()
+        );
     }
     if !baseline_path.exists() {
         bail!("Missing benchmark baseline at {}", baseline_path.display());
     }
     if !config_path.exists() {
-        bail!("Missing benchmark threshold config at {}", config_path.display());
+        bail!(
+            "Missing benchmark threshold config at {}",
+            config_path.display()
+        );
     }
 
     let baseline = load_json(&baseline_path)?;
@@ -225,7 +246,10 @@ pub fn test_alert_system() -> Result<()> {
             current_path: workdir.join("alert_test_markdown.json"),
             multiplier: 1.25,
             format: Some("markdown"),
-            expected: &["## Performance Benchmark Results", "⚠️ Performance Regressions"],
+            expected: &[
+                "## Performance Benchmark Results",
+                "⚠️ Performance Regressions",
+            ],
             expect_success: true,
         },
     )?;
@@ -296,7 +320,10 @@ fn run_alert_case(
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     if case.expect_success != output.status.success() {
-        bail!("alert.py command status mismatch (expected success: {})", case.expect_success);
+        bail!(
+            "alert.py command status mismatch (expected success: {})",
+            case.expect_success
+        );
     }
 
     for fragment in case.expected {
@@ -321,8 +348,11 @@ fn run_alert_check_case(
     fs::write(&current_path, serde_json::to_string_pretty(&current)?)
         .with_context(|| format!("Failed to write {}", current_path.display()))?;
 
-    let config_path =
-        root.join("target").join("xtask").join("bench-alert-test").join("critical_check.yaml");
+    let config_path = root
+        .join("target")
+        .join("xtask")
+        .join("bench-alert-test")
+        .join("critical_check.yaml");
     let mut config_payload = String::new();
     config_payload.push_str("defaults:\n");
     config_payload.push_str("  warn_threshold_pct: 10\n");
@@ -336,11 +366,19 @@ fn run_alert_check_case(
     let output = Command::new("python3")
         .current_dir(root)
         .args([
-            alert_script.to_str().ok_or_else(|| io::Error::other("Invalid alert script path"))?,
-            baseline_path.to_str().ok_or_else(|| io::Error::other("Invalid baseline path"))?,
-            current_path.to_str().ok_or_else(|| io::Error::other("Invalid current output path"))?,
+            alert_script
+                .to_str()
+                .ok_or_else(|| io::Error::other("Invalid alert script path"))?,
+            baseline_path
+                .to_str()
+                .ok_or_else(|| io::Error::other("Invalid baseline path"))?,
+            current_path
+                .to_str()
+                .ok_or_else(|| io::Error::other("Invalid current output path"))?,
             "--config",
-            config_path.to_str().ok_or_else(|| io::Error::other("Invalid check config path"))?,
+            config_path
+                .to_str()
+                .ok_or_else(|| io::Error::other("Invalid check config path"))?,
             "--check",
         ])
         .output()
@@ -496,9 +534,15 @@ fn display_duration(ns: u64) -> (String, String) {
     } else if ns < 1_000_000 {
         ("us".to_string(), format!("{:.1} us", ns as f64 / 1_000.0))
     } else if ns < 1_000_000_000 {
-        ("ms".to_string(), format!("{:.1} ms", ns as f64 / 1_000_000.0))
+        (
+            "ms".to_string(),
+            format!("{:.1} ms", ns as f64 / 1_000_000.0),
+        )
     } else {
-        ("s".to_string(), format!("{:.2} s", ns as f64 / 1_000_000_000.0))
+        (
+            "s".to_string(),
+            format!("{:.2} s", ns as f64 / 1_000_000_000.0),
+        )
     }
 }
 
@@ -509,7 +553,9 @@ fn git_status(root: &Path) -> Result<(String, bool)> {
         .output()
         .context("Failed to run git rev-parse")?;
     let sha = if sha_output.status.success() {
-        String::from_utf8_lossy(&sha_output.stdout).trim().to_string()
+        String::from_utf8_lossy(&sha_output.stdout)
+            .trim()
+            .to_string()
     } else {
         "unknown".to_string()
     };
@@ -525,8 +571,10 @@ fn git_status(root: &Path) -> Result<(String, bool)> {
 }
 
 fn rust_version() -> Result<String> {
-    let output =
-        Command::new("rustc").arg("--version").output().context("Failed to run rustc --version")?;
+    let output = Command::new("rustc")
+        .arg("--version")
+        .output()
+        .context("Failed to run rustc --version")?;
     if !output.status.success() {
         return Ok("unknown".to_string());
     }

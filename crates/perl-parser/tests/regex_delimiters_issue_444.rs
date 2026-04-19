@@ -6,7 +6,11 @@ fn test_m_operator_with_exclamation_delimiter() -> Result<(), Box<dyn std::error
     let mut parser = Parser::new(code);
     let ast = parser.parse()?;
     let s = format!("{:?}", ast);
-    assert!(s.contains("Regex") || s.contains("Match"), "Expected regex match: {}", s);
+    assert!(
+        s.contains("Regex") || s.contains("Match"),
+        "Expected regex match: {}",
+        s
+    );
     Ok(())
 }
 
@@ -16,7 +20,11 @@ fn test_m_operator_with_brace_delimiter() -> Result<(), Box<dyn std::error::Erro
     let mut parser = Parser::new(code);
     let ast = parser.parse()?;
     let s = format!("{:?}", ast);
-    assert!(s.contains("Regex") || s.contains("Match"), "Expected regex match: {}", s);
+    assert!(
+        s.contains("Regex") || s.contains("Match"),
+        "Expected regex match: {}",
+        s
+    );
     Ok(())
 }
 
@@ -26,7 +34,11 @@ fn test_m_operator_with_pipe_delimiter() -> Result<(), Box<dyn std::error::Error
     let mut parser = Parser::new(code);
     let ast = parser.parse()?;
     let s = format!("{:?}", ast);
-    assert!(s.contains("Regex") || s.contains("Match"), "Expected regex match: {}", s);
+    assert!(
+        s.contains("Regex") || s.contains("Match"),
+        "Expected regex match: {}",
+        s
+    );
     Ok(())
 }
 
@@ -36,7 +48,11 @@ fn test_s_operator_with_pipe_delimiter() -> Result<(), Box<dyn std::error::Error
     let mut parser = Parser::new(code);
     let ast = parser.parse()?;
     let s = format!("{:?}", ast);
-    assert!(s.contains("Substitution") || s.contains("Subst"), "Expected substitution: {}", s);
+    assert!(
+        s.contains("Substitution") || s.contains("Subst"),
+        "Expected substitution: {}",
+        s
+    );
     Ok(())
 }
 

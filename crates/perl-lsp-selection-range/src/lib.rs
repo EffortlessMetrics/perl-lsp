@@ -244,7 +244,14 @@ fn hash_access_span(text: &str, off: usize) -> Option<(usize, usize, usize, usiz
         expr_start -= 1;
     }
 
-    Some((key_start, key_end, subscript_start, subscript_end, expr_start, subscript_end))
+    Some((
+        key_start,
+        key_end,
+        subscript_start,
+        subscript_end,
+        expr_start,
+        subscript_end,
+    ))
 }
 
 /// If `off` is on a function name in a `sub` definition, return
@@ -298,7 +305,11 @@ fn sub_definition_span(
                 }
             }
         }
-        if sig_end > sig_start { Some((sig_start, sig_end)) } else { None }
+        if sig_end > sig_start {
+            Some((sig_start, sig_end))
+        } else {
+            None
+        }
     } else {
         None
     };
@@ -346,9 +357,15 @@ fn build_chain(text: &str, spans: &[(usize, usize)]) -> SelectionRange {
     }
 
     // Build nested chain from outermost to innermost
-    let mut chain = SelectionRange { range: Range::default(), parent: None };
+    let mut chain = SelectionRange {
+        range: Range::default(),
+        parent: None,
+    };
     for r in ranges.into_iter().rev() {
-        chain = SelectionRange { range: r, parent: Some(Box::new(chain)) };
+        chain = SelectionRange {
+            range: r,
+            parent: Some(Box::new(chain)),
+        };
     }
     // The outermost `chain` is now the innermost selection; strip the dummy
     // we may have left at the tail.
@@ -424,7 +441,10 @@ pub fn selection_ranges(text: &str, positions: &[Position]) -> Vec<SelectionRang
 
             // 3. Trimmed line
             let line_start = text[..off].rfind('\n').map(|i| i + 1).unwrap_or(0);
-            let line_end = text[off..].find('\n').map(|i| off + i).unwrap_or(text.len());
+            let line_end = text[off..]
+                .find('\n')
+                .map(|i| off + i)
+                .unwrap_or(text.len());
             let line_text = &text[line_start..line_end];
             let trim_left = line_text.find(|c: char| !c.is_whitespace()).unwrap_or(0);
             let trim_right = line_text
@@ -450,12 +470,20 @@ pub fn selection_ranges(text: &str, positions: &[Position]) -> Vec<SelectionRang
             let stmt_end = text[off..]
                 .find(';')
                 .map(|i| off + i + 1)
-                .unwrap_or_else(|| text[off..].find('\n').map(|i| off + i).unwrap_or(text.len()));
+                .unwrap_or_else(|| {
+                    text[off..]
+                        .find('\n')
+                        .map(|i| off + i)
+                        .unwrap_or(text.len())
+                });
             spans.push((stmt_start, stmt_end));
 
             // 6. Block (brace boundaries)
             let block_start = text[..off].rfind('{').unwrap_or(0);
-            let block_end = text[off..].find('}').map(|i| off + i + 1).unwrap_or(text.len());
+            let block_end = text[off..]
+                .find('}')
+                .map(|i| off + i + 1)
+                .unwrap_or(text.len());
             if block_end > block_start {
                 spans.push((block_start, block_end));
             }
@@ -553,7 +581,11 @@ mod tests {
 
         // The innermost range should be the word "hello" or narrower
         // Then we should see string content, then full string with quotes
-        assert!(chain.len() >= 3, "expected at least 3 levels for string, got {}", chain.len());
+        assert!(
+            chain.len() >= 3,
+            "expected at least 3 levels for string, got {}",
+            chain.len()
+        );
 
         // Verify ranges grow strictly
         for window in chain.windows(2) {
@@ -594,7 +626,10 @@ mod tests {
         for window in chain.windows(2) {
             let inner = window[0];
             let outer = window[1];
-            assert!(outer.0 <= inner.0 && outer.2 >= inner.2, "parent must encompass child");
+            assert!(
+                outer.0 <= inner.0 && outer.2 >= inner.2,
+                "parent must encompass child"
+            );
         }
     }
 

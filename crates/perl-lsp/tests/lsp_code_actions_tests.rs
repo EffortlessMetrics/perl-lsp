@@ -54,7 +54,9 @@ print $result;
         }),
     );
 
-    let actions = response["result"].as_array().ok_or("Expected result to be an array")?;
+    let actions = response["result"]
+        .as_array()
+        .ok_or("Expected result to be an array")?;
     assert!(actions.iter().any(|a| {
         let title = a["title"].as_str().unwrap_or("");
         title.contains("Extract") && title.contains("variable")
@@ -110,8 +112,14 @@ close($fh);
         }),
     );
 
-    let actions = response["result"].as_array().ok_or("Expected result to be an array")?;
-    assert!(actions.iter().any(|a| a["title"].as_str().unwrap_or("").contains("error checking")));
+    let actions = response["result"]
+        .as_array()
+        .ok_or("Expected result to be an array")?;
+    assert!(
+        actions
+            .iter()
+            .any(|a| a["title"].as_str().unwrap_or("").contains("error checking"))
+    );
     shutdown_and_exit(&server);
     Ok(())
 }
@@ -163,11 +171,18 @@ for (my $i = 0; $i < @array; $i++) {
         }),
     );
 
-    let actions = response["result"].as_array().ok_or("Expected result to be an array")?;
+    let actions = response["result"]
+        .as_array()
+        .ok_or("Expected result to be an array")?;
     assert!(
-        actions.iter().any(|a| a["title"].as_str().unwrap_or("").contains("foreach loop")),
+        actions
+            .iter()
+            .any(|a| a["title"].as_str().unwrap_or("").contains("foreach loop")),
         "Expected 'foreach loop' conversion action but got: {:?}",
-        actions.iter().map(|a| a["title"].as_str()).collect::<Vec<_>>()
+        actions
+            .iter()
+            .map(|a| a["title"].as_str())
+            .collect::<Vec<_>>()
     );
     shutdown_and_exit(&server);
     Ok(())
@@ -220,8 +235,14 @@ if ($debug) {
         }),
     );
 
-    let actions = response["result"].as_array().ok_or("Expected result to be an array")?;
-    assert!(actions.iter().any(|a| a["title"].as_str().unwrap_or("").contains("postfix")));
+    let actions = response["result"]
+        .as_array()
+        .ok_or("Expected result to be an array")?;
+    assert!(
+        actions
+            .iter()
+            .any(|a| a["title"].as_str().unwrap_or("").contains("postfix"))
+    );
     shutdown_and_exit(&server);
     Ok(())
 }
@@ -274,8 +295,14 @@ print $x;
         }),
     );
 
-    let actions = response["result"].as_array().ok_or("Expected result to be an array")?;
-    assert!(actions.iter().any(|a| a["title"].as_str().unwrap_or("").contains("pragma")));
+    let actions = response["result"]
+        .as_array()
+        .ok_or("Expected result to be an array")?;
+    assert!(
+        actions
+            .iter()
+            .any(|a| a["title"].as_str().unwrap_or("").contains("pragma"))
+    );
     shutdown_and_exit(&server);
     Ok(())
 }
@@ -341,7 +368,9 @@ print $undefined_var;
         }),
     );
 
-    let actions = response["result"].as_array().ok_or("Expected result to be an array")?;
+    let actions = response["result"]
+        .as_array()
+        .ok_or("Expected result to be an array")?;
     assert!(actions.iter().any(|a| {
         let title = a["title"].as_str().unwrap_or("");
         title.contains("Declare") && title.contains("my")
@@ -390,8 +419,9 @@ print $undefined_var;
             }
         }),
     );
-    let reported_diagnostics =
-        diag_response["result"]["items"].as_array().ok_or("Expected diagnostics result items")?;
+    let reported_diagnostics = diag_response["result"]["items"]
+        .as_array()
+        .ok_or("Expected diagnostics result items")?;
     let reported_diagnostic = reported_diagnostics
         .iter()
         .find(|diagnostic| {
@@ -423,7 +453,9 @@ print $undefined_var;
         }),
     );
 
-    let actions = response["result"].as_array().ok_or("Expected result to be an array")?;
+    let actions = response["result"]
+        .as_array()
+        .ok_or("Expected result to be an array")?;
     let declare_action = actions
         .iter()
         .find(|action| action["title"].as_str() == Some("Declare '$undefined_var' with 'my'"))
@@ -497,8 +529,14 @@ my $y = 20;
         }),
     );
 
-    let actions = response["result"].as_array().ok_or("Expected result to be an array")?;
-    assert!(actions.iter().any(|a| a["title"].as_str().unwrap_or("").contains("subroutine")));
+    let actions = response["result"]
+        .as_array()
+        .ok_or("Expected result to be an array")?;
+    assert!(
+        actions
+            .iter()
+            .any(|a| a["title"].as_str().unwrap_or("").contains("subroutine"))
+    );
     shutdown_and_exit(&server);
     Ok(())
 }
@@ -556,8 +594,15 @@ print "test\n";
         }),
     );
 
-    let actions = response["result"].as_array().ok_or("Expected result to be an array")?;
-    assert!(actions.iter().any(|a| a["title"].as_str().unwrap_or("").contains("Organize imports")));
+    let actions = response["result"]
+        .as_array()
+        .ok_or("Expected result to be an array")?;
+    assert!(actions.iter().any(|a| {
+        a["title"]
+            .as_str()
+            .unwrap_or("")
+            .contains("Organize imports")
+    }));
     shutdown_and_exit(&server);
     Ok(())
 }
@@ -611,12 +656,22 @@ open(my $fh, '<', 'data.txt');
         }),
     );
 
-    let actions = response["result"].as_array().ok_or("Expected result to be an array")?;
+    let actions = response["result"]
+        .as_array()
+        .ok_or("Expected result to be an array")?;
 
     // Should have multiple action kinds available for the same selection.
     assert!(!actions.is_empty(), "Expected code actions but got none");
-    assert!(actions.iter().any(|a| a["kind"].as_str() == Some("refactor.rewrite")));
-    assert!(actions.iter().any(|a| a["kind"].as_str() == Some("quickfix")));
+    assert!(
+        actions
+            .iter()
+            .any(|a| a["kind"].as_str() == Some("refactor.rewrite"))
+    );
+    assert!(
+        actions
+            .iter()
+            .any(|a| a["kind"].as_str() == Some("quickfix"))
+    );
     shutdown_and_exit(&server);
     Ok(())
 }
@@ -670,16 +725,29 @@ open(my $fh, '<', 'data.txt');
         }),
     );
 
-    let actions = response["result"].as_array().ok_or("Expected result to be an array")?;
+    let actions = response["result"]
+        .as_array()
+        .ok_or("Expected result to be an array")?;
 
-    assert!(!actions.is_empty(), "Expected refactor code actions but got none");
+    assert!(
+        !actions.is_empty(),
+        "Expected refactor code actions but got none"
+    );
     assert!(actions.iter().all(|action| {
         action["kind"]
             .as_str()
             .is_some_and(|kind| kind == "refactor" || kind.starts_with("refactor."))
     }));
-    assert!(actions.iter().any(|action| action["kind"].as_str() == Some("refactor.rewrite")));
-    assert!(!actions.iter().any(|action| action["kind"].as_str() == Some("quickfix")));
+    assert!(
+        actions
+            .iter()
+            .any(|action| action["kind"].as_str() == Some("refactor.rewrite"))
+    );
+    assert!(
+        !actions
+            .iter()
+            .any(|action| action["kind"].as_str() == Some("quickfix"))
+    );
 
     shutdown_and_exit(&server);
     Ok(())

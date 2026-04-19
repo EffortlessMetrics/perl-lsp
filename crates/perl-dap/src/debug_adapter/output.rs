@@ -169,7 +169,11 @@ impl DebugAdapter {
             }
         }
 
-        if values.is_empty() { None } else { Some(values) }
+        if values.is_empty() {
+            None
+        } else {
+            Some(values)
+        }
     }
 
     pub(super) fn handle_source(
@@ -223,8 +227,10 @@ impl DebugAdapter {
 
         match std::fs::read_to_string(&validated_path) {
             Ok(content) => {
-                let body =
-                    SourceResponseBody { content, mime_type: Some("text/x-perl".to_string()) };
+                let body = SourceResponseBody {
+                    content,
+                    mime_type: Some("text/x-perl".to_string()),
+                };
                 DapMessage::Response {
                     seq,
                     request_seq,
@@ -259,8 +265,10 @@ impl DebugAdapter {
         let _args: Option<ExceptionInfoArguments> =
             arguments.and_then(|v| serde_json::from_value(v).ok());
 
-        let stored_message =
-            lock_or_recover(&self.last_exception_message, "debug_adapter.last_exception_message");
+        let stored_message = lock_or_recover(
+            &self.last_exception_message,
+            "debug_adapter.last_exception_message",
+        );
         let exception_text = stored_message.clone();
         drop(stored_message);
 
@@ -348,7 +356,10 @@ impl DebugAdapter {
         let sources = if has_session {
             self.query_inc_entries()
                 .into_iter()
-                .map(|(key, path)| crate::protocol::Source { name: Some(key), path: Some(path) })
+                .map(|(key, path)| crate::protocol::Source {
+                    name: Some(key),
+                    path: Some(path),
+                })
                 .collect()
         } else {
             Vec::new()
@@ -374,12 +385,20 @@ impl DebugAdapter {
     ) -> DapMessage {
         let args: Option<ModulesArguments> = arguments.and_then(|v| serde_json::from_value(v).ok());
 
-        let start_module = args.as_ref().and_then(|a| a.start_module).unwrap_or(0).max(0) as usize;
+        let start_module = args
+            .as_ref()
+            .and_then(|a| a.start_module)
+            .unwrap_or(0)
+            .max(0) as usize;
         let module_count = args.as_ref().and_then(|a| a.module_count);
 
         let has_session = lock_or_recover(&self.session, "debug_adapter.session").is_some();
 
-        let all_entries = if has_session { self.query_inc_entries() } else { Vec::new() };
+        let all_entries = if has_session {
+            self.query_inc_entries()
+        } else {
+            Vec::new()
+        };
 
         let total = all_entries.len() as i64;
 
@@ -389,18 +408,29 @@ impl DebugAdapter {
             .enumerate()
             .map(|(idx, (key, path))| {
                 let name = module_path_to_name(&key);
-                Module { id: idx.to_string(), name, path: Some(path) }
+                Module {
+                    id: idx.to_string(),
+                    name,
+                    path: Some(path),
+                }
             })
             .collect();
 
         // Apply pagination.
         let paginated: Vec<Module> = if let Some(count) = module_count {
-            all_modules.into_iter().skip(start_module).take(count.max(0) as usize).collect()
+            all_modules
+                .into_iter()
+                .skip(start_module)
+                .take(count.max(0) as usize)
+                .collect()
         } else {
             all_modules.into_iter().skip(start_module).collect()
         };
 
-        let body = ModulesResponseBody { modules: paginated, total_modules: Some(total) };
+        let body = ModulesResponseBody {
+            modules: paginated,
+            total_modules: Some(total),
+        };
 
         DapMessage::Response {
             seq,

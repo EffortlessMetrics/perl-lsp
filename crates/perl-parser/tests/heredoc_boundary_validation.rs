@@ -35,7 +35,11 @@ fn test_heredoc_boundary_fix_validation() {
             parser.parse()
         });
 
-        assert!(result.is_ok(), "Critical boundary issue detected in: {}", description);
+        assert!(
+            result.is_ok(),
+            "Critical boundary issue detected in: {}",
+            description
+        );
         if result.is_ok() {
             println!("✅ SAFE (no crash)");
             passed_tests += 1;
@@ -48,7 +52,10 @@ fn test_heredoc_boundary_fix_validation() {
     println!("Total tests: {}", total_tests);
     println!("Passed (no crashes): {}", passed_tests);
 
-    assert_eq!(passed_tests, total_tests, "Some heredoc boundary tests failed");
+    assert_eq!(
+        passed_tests, total_tests,
+        "Some heredoc boundary tests failed"
+    );
     println!("✅ ALL TESTS PASSED - Boundary fix is working correctly!");
 }
 
@@ -67,7 +74,10 @@ print $text;
         parser.parse()
     });
 
-    assert!(result.is_ok(), "Integration test should not crash after boundary fix");
+    assert!(
+        result.is_ok(),
+        "Integration test should not crash after boundary fix"
+    );
 }
 
 #[test]
@@ -91,6 +101,10 @@ fn test_specific_boundary_conditions() {
             let _result = parser.parse();
         });
 
-        assert!(result.is_ok(), "Boundary condition test failed for: {}", test_case);
+        assert!(
+            result.is_ok(),
+            "Boundary condition test failed for: {}",
+            test_case
+        );
     }
 }

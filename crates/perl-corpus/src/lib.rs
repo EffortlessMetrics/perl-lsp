@@ -370,7 +370,11 @@ pub fn parse_file(path: &Path) -> Result<Vec<Section>> {
         let title = lines[1].trim().to_string();
 
         // Skip closing delimiter in paired-delimiter format (===\nTitle\n===)
-        let after_title_idx = if lines.len() > 2 && sec_re.is_match(lines[2]) { 3 } else { 2 };
+        let after_title_idx = if lines.len() > 2 && sec_re.is_match(lines[2]) {
+            3
+        } else {
+            2
+        };
 
         // Gather metadata lines following title
         let mut meta = HashMap::<String, String>::new();
@@ -394,21 +398,33 @@ pub fn parse_file(path: &Path) -> Result<Vec<Section>> {
         let tags = meta
             .get("tags")
             .map(|s| {
-                s.replace(',', " ").split_whitespace().map(|t| t.to_lowercase()).collect::<Vec<_>>()
+                s.replace(',', " ")
+                    .split_whitespace()
+                    .map(|t| t.to_lowercase())
+                    .collect::<Vec<_>>()
             })
             .unwrap_or_default();
         let perl = meta.get("perl").cloned().filter(|s| !s.is_empty());
         let flags = meta
             .get("flags")
             .map(|s| {
-                s.replace(',', " ").split_whitespace().map(|t| t.to_string()).collect::<Vec<_>>()
+                s.replace(',', " ")
+                    .split_whitespace()
+                    .map(|t| t.to_string())
+                    .collect::<Vec<_>>()
             })
             .unwrap_or_default();
 
         // Extract body (code after metadata)
-        let body_lines = if body_start_idx < lines.len() { &lines[body_start_idx..] } else { &[] };
-        let body_end =
-            body_lines.iter().position(|line| line.trim() == "---").unwrap_or(body_lines.len());
+        let body_lines = if body_start_idx < lines.len() {
+            &lines[body_start_idx..]
+        } else {
+            &[]
+        };
+        let body_end = body_lines
+            .iter()
+            .position(|line| line.trim() == "---")
+            .unwrap_or(body_lines.len());
         let body = body_lines[..body_end].join("\n").trim().to_string();
 
         if id.is_empty() {
@@ -420,7 +436,11 @@ pub fn parse_file(path: &Path) -> Result<Vec<Section>> {
             };
             let base_id = format!("{}.{}", file_stem, base);
             let count = auto_ids.entry(base_id.clone()).or_insert(0);
-            id = if *count == 0 { base_id } else { format!("{}-{}", base_id, *count + 1) };
+            id = if *count == 0 {
+                base_id
+            } else {
+                format!("{}-{}", base_id, *count + 1)
+            };
             *count += 1;
         }
 
@@ -490,7 +510,10 @@ mod tests {
 
     fn temp_file(prefix: &str) -> PathBuf {
         let mut path = std::env::temp_dir();
-        let nanos = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_nanos();
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos();
         path.push(format!("{}_{}.txt", prefix, nanos));
         path
     }
@@ -537,7 +560,10 @@ my $y = 2;
         assert_eq!(sample_section.body, "my $x = 1;");
         assert!(!sample_section.body.contains("---"));
         assert_eq!(tagged_section.id, "custom.id");
-        assert_eq!(tagged_section.tags, vec!["alpha".to_string(), "beta".to_string()]);
+        assert_eq!(
+            tagged_section.tags,
+            vec!["alpha".to_string(), "beta".to_string()]
+        );
         assert_eq!(tagged_section.flags, vec!["parser-sensitive".to_string()]);
         assert_eq!(tagged_section.body, "my $y = 2;");
     }

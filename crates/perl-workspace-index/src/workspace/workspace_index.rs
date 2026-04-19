@@ -458,7 +458,9 @@ impl IndexCoordinator {
 
         // Check for parse storm
         if self.metrics.is_parse_storm() {
-            self.transition_to_degraded(DegradationReason::ParseStorm { pending_parses: pending });
+            self.transition_to_degraded(DegradationReason::ParseStorm {
+                pending_parses: pending,
+            });
         }
     }
 
@@ -488,13 +490,16 @@ impl IndexCoordinator {
 
         // Check for recovery from parse storm
         if pending == 0 {
-            if let IndexState::Degraded { reason: DegradationReason::ParseStorm { .. }, .. } =
-                self.state()
+            if let IndexState::Degraded {
+                reason: DegradationReason::ParseStorm { .. },
+                ..
+            } = self.state()
             {
                 // Attempt recovery - transition back to Building for re-scan
                 let mut state = self.state.write();
                 let from_kind = state.kind();
-                self.instrumentation.record_state_transition(from_kind, IndexStateKind::Building);
+                self.instrumentation
+                    .record_state_transition(from_kind, IndexStateKind::Building);
                 *state = IndexState::Building {
                     phase: IndexPhase::Idle,
                     indexed_count: 0,
@@ -545,16 +550,23 @@ impl IndexCoordinator {
         match &*state {
             IndexState::Building { .. } | IndexState::Degraded { .. } => {
                 // Valid transition - proceed
-                *state =
-                    IndexState::Ready { symbol_count, file_count, completed_at: Instant::now() };
+                *state = IndexState::Ready {
+                    symbol_count,
+                    file_count,
+                    completed_at: Instant::now(),
+                };
             }
             IndexState::Ready { .. } => {
                 // Already Ready - update metrics but don't log as transition
-                *state =
-                    IndexState::Ready { symbol_count, file_count, completed_at: Instant::now() };
+                *state = IndexState::Ready {
+                    symbol_count,
+                    file_count,
+                    completed_at: Instant::now(),
+                };
             }
         }
-        self.instrumentation.record_state_transition(from_kind, IndexStateKind::Ready);
+        self.instrumentation
+            .record_state_transition(from_kind, IndexStateKind::Ready);
         drop(state); // Release write lock before checking limits
 
         // Enforce resource limits after transition
@@ -569,9 +581,15 @@ impl IndexCoordinator {
         let from_kind = state.kind();
 
         match &*state {
-            IndexState::Building { phase, indexed_count, total_count, started_at } => {
+            IndexState::Building {
+                phase,
+                indexed_count,
+                total_count,
+                started_at,
+            } => {
                 if *phase != IndexPhase::Scanning {
-                    self.instrumentation.record_phase_transition(*phase, IndexPhase::Scanning);
+                    self.instrumentation
+                        .record_phase_transition(*phase, IndexPhase::Scanning);
                 }
                 *state = IndexState::Building {
                     phase: IndexPhase::Scanning,
@@ -581,7 +599,8 @@ impl IndexCoordinator {
                 };
             }
             IndexState::Ready { .. } | IndexState::Degraded { .. } => {
-                self.instrumentation.record_state_transition(from_kind, IndexStateKind::Building);
+                self.instrumentation
+                    .record_state_transition(from_kind, IndexStateKind::Building);
                 self.instrumentation
                     .record_phase_transition(IndexPhase::Idle, IndexPhase::Scanning);
                 *state = IndexState::Building {
@@ -597,9 +616,16 @@ impl IndexCoordinator {
     /// Update scanning progress with the latest discovered file count
     pub fn update_scan_progress(&self, total_count: usize) {
         let mut state = self.state.write();
-        if let IndexState::Building { phase, indexed_count, started_at, .. } = &*state {
+        if let IndexState::Building {
+            phase,
+            indexed_count,
+            started_at,
+            ..
+        } = &*state
+        {
             if *phase != IndexPhase::Scanning {
-                self.instrumentation.record_phase_transition(*phase, IndexPhase::Scanning);
+                self.instrumentation
+                    .record_phase_transition(*phase, IndexPhase::Scanning);
             }
             *state = IndexState::Building {
                 phase: IndexPhase::Scanning,
@@ -618,9 +644,15 @@ impl IndexCoordinator {
         let from_kind = state.kind();
 
         match &*state {
-            IndexState::Building { phase, indexed_count, started_at, .. } => {
+            IndexState::Building {
+                phase,
+                indexed_count,
+                started_at,
+                ..
+            } => {
                 if *phase != IndexPhase::Indexing {
-                    self.instrumentation.record_phase_transition(*phase, IndexPhase::Indexing);
+                    self.instrumentation
+                        .record_phase_transition(*phase, IndexPhase::Indexing);
                 }
                 *state = IndexState::Building {
                     phase: IndexPhase::Indexing,
@@ -630,7 +662,8 @@ impl IndexCoordinator {
                 };
             }
             IndexState::Ready { .. } | IndexState::Degraded { .. } => {
-                self.instrumentation.record_state_transition(from_kind, IndexStateKind::Building);
+                self.instrumentation
+                    .record_state_transition(from_kind, IndexStateKind::Building);
                 self.instrumentation
                     .record_phase_transition(IndexPhase::Idle, IndexPhase::Indexing);
                 *state = IndexState::Building {
@@ -653,7 +686,8 @@ impl IndexCoordinator {
         // State transition guard: validate transition is allowed
         match &*state {
             IndexState::Degraded { .. } | IndexState::Ready { .. } => {
-                self.instrumentation.record_state_transition(from_kind, IndexStateKind::Building);
+                self.instrumentation
+                    .record_state_transition(from_kind, IndexStateKind::Building);
                 self.instrumentation
                     .record_phase_transition(IndexPhase::Idle, IndexPhase::Indexing);
                 *state = IndexState::Building {
@@ -663,7 +697,12 @@ impl IndexCoordinator {
                     started_at: Instant::now(),
                 };
             }
-            IndexState::Building { phase, indexed_count, started_at, .. } => {
+            IndexState::Building {
+                phase,
+                indexed_count,
+                started_at,
+                ..
+            } => {
                 let mut next_phase = *phase;
                 if *phase == IndexPhase::Idle {
                     self.instrumentation
@@ -704,14 +743,22 @@ impl IndexCoordinator {
     pub fn update_building_progress(&self, indexed_count: usize) {
         let mut state = self.state.write();
 
-        if let IndexState::Building { phase, started_at, total_count, .. } = &*state {
+        if let IndexState::Building {
+            phase,
+            started_at,
+            total_count,
+            ..
+        } = &*state
+        {
             let elapsed = started_at.elapsed().as_millis() as u64;
 
             // Check for scan timeout
             if elapsed > self.limits.max_scan_duration_ms {
                 // Timeout exceeded - transition to degraded
                 drop(state);
-                self.transition_to_degraded(DegradationReason::ScanTimeout { elapsed_ms: elapsed });
+                self.transition_to_degraded(DegradationReason::ScanTimeout {
+                    elapsed_ms: elapsed,
+                });
                 return;
             }
 
@@ -756,12 +803,19 @@ impl IndexCoordinator {
         // Get available symbols count from current state
         let available_symbols = match &*state {
             IndexState::Ready { symbol_count, .. } => *symbol_count,
-            IndexState::Degraded { available_symbols, .. } => *available_symbols,
+            IndexState::Degraded {
+                available_symbols, ..
+            } => *available_symbols,
             IndexState::Building { .. } => 0,
         };
 
-        self.instrumentation.record_state_transition(from_kind, IndexStateKind::Degraded);
-        *state = IndexState::Degraded { reason, available_symbols, since: Instant::now() };
+        self.instrumentation
+            .record_state_transition(from_kind, IndexStateKind::Degraded);
+        *state = IndexState::Degraded {
+            reason,
+            available_symbols,
+            since: Instant::now(),
+        };
     }
 
     /// Check resource limits and return degradation reason if exceeded
@@ -800,13 +854,17 @@ impl IndexCoordinator {
         // Check max_files limit
         let file_count = files.len();
         if file_count > self.limits.max_files {
-            return Some(DegradationReason::ResourceLimit { kind: ResourceKind::MaxFiles });
+            return Some(DegradationReason::ResourceLimit {
+                kind: ResourceKind::MaxFiles,
+            });
         }
 
         // Check max_total_symbols limit
         let total_symbols: usize = files.values().map(|fi| fi.symbols.len()).sum();
         if total_symbols > self.limits.max_total_symbols {
-            return Some(DegradationReason::ResourceLimit { kind: ResourceKind::MaxSymbols });
+            return Some(DegradationReason::ResourceLimit {
+                kind: ResourceKind::MaxSymbols,
+            });
         }
 
         None
@@ -1077,14 +1135,23 @@ pub struct LspWorkspaceSymbol {
 impl From<&WorkspaceSymbol> for LspWorkspaceSymbol {
     fn from(sym: &WorkspaceSymbol) -> Self {
         let range = WireRange {
-            start: WirePosition { line: sym.range.start.line, character: sym.range.start.column },
-            end: WirePosition { line: sym.range.end.line, character: sym.range.end.column },
+            start: WirePosition {
+                line: sym.range.start.line,
+                character: sym.range.start.column,
+            },
+            end: WirePosition {
+                line: sym.range.end.line,
+                character: sym.range.end.column,
+            },
         };
 
         Self {
             name: sym.name.clone(),
             kind: sym.kind.to_lsp_kind(),
-            location: WireLocation { uri: sym.uri.clone(), range },
+            location: WireLocation {
+                uri: sym.uri.clone(),
+                range,
+            },
             container_name: sym.container_name.clone(),
             workspace_folder_uri: sym.workspace_folder_uri.clone(),
         }
@@ -1241,7 +1308,10 @@ impl WorkspaceIndex {
     ) -> Option<(Location, String)> {
         for file_index in files.values() {
             if let Some(filter) = uri_filter
-                && file_index.symbols.first().is_some_and(|symbol| symbol.uri != filter)
+                && file_index
+                    .symbols
+                    .first()
+                    .is_some_and(|symbol| symbol.uri != filter)
             {
                 continue;
             }
@@ -1251,7 +1321,10 @@ impl WorkspaceIndex {
                     || symbol.qualified_name.as_deref() == Some(symbol_name)
                 {
                     return Some((
-                        Location { uri: symbol.uri.clone(), range: symbol.range },
+                        Location {
+                            uri: symbol.uri.clone(),
+                            range: symbol.range,
+                        },
                         symbol.uri.clone(),
                     ));
                 }
@@ -1311,8 +1384,10 @@ impl WorkspaceIndex {
     /// ```
     pub fn with_capacity(estimated_files: usize, avg_symbols_per_file: usize) -> Self {
         // Each symbol is stored twice (qualified + bare name) due to dual indexing.
-        let sym_cap =
-            estimated_files.saturating_mul(avg_symbols_per_file).saturating_mul(2).min(1_000_000);
+        let sym_cap = estimated_files
+            .saturating_mul(avg_symbols_per_file)
+            .saturating_mul(2)
+            .min(1_000_000);
         let ref_cap = (sym_cap / 4).min(1_000_000);
         Self {
             files: Arc::new(RwLock::new(HashMap::with_capacity(estimated_files))),
@@ -1447,14 +1522,20 @@ impl WorkspaceIndex {
         };
 
         // Get the document for line index
-        let mut doc = self.document_store.get(&uri_str).ok_or("Document not found")?;
+        let mut doc = self
+            .document_store
+            .get(&uri_str)
+            .ok_or("Document not found")?;
 
         // Determine workspace folder URI from the file URI
         let folder_uri = self.determine_folder_uri(&uri_str);
 
         // Extract symbols and references
-        let mut file_index =
-            FileIndex { content_hash, folder_uri: folder_uri.clone(), ..Default::default() };
+        let mut file_index = FileIndex {
+            content_hash,
+            folder_uri: folder_uri.clone(),
+            ..Default::default()
+        };
         let mut visitor = IndexVisitor::new(&mut doc, uri_str.clone(), folder_uri);
         visitor.visit(&ast, &mut file_index);
 
@@ -1486,7 +1567,10 @@ impl WorkspaceIndex {
                 for (name, refs) in &file_index.references {
                     let entry = global_refs.entry(name.clone()).or_default();
                     for reference in refs {
-                        entry.push(Location { uri: reference.uri.clone(), range: reference.range });
+                        entry.push(Location {
+                            uri: reference.uri.clone(),
+                            range: reference.range,
+                        });
                     }
                 }
             }
@@ -1774,8 +1858,11 @@ impl WorkspaceIndex {
             // Determine workspace folder URI from the file URI
             let folder_uri = self.determine_folder_uri(&uri_str);
 
-            let mut file_index =
-                FileIndex { content_hash, folder_uri: folder_uri.clone(), ..Default::default() };
+            let mut file_index = FileIndex {
+                content_hash,
+                folder_uri: folder_uri.clone(),
+                ..Default::default()
+            };
             let mut visitor = IndexVisitor::new(&mut doc, uri_str.clone(), folder_uri);
             visitor.visit(&ast, &mut file_index);
 
@@ -1865,7 +1952,10 @@ impl WorkspaceIndex {
                     loc.range.end.column,
                 );
                 if seen.insert(key) {
-                    locations.push(Location { uri: loc.uri.clone(), range: loc.range });
+                    locations.push(Location {
+                        uri: loc.uri.clone(),
+                        range: loc.range,
+                    });
                 }
             }
         }
@@ -1883,7 +1973,10 @@ impl WorkspaceIndex {
                         loc.range.end.column,
                     );
                     if seen.insert(key) {
-                        locations.push(Location { uri: loc.uri.clone(), range: loc.range });
+                        locations.push(Location {
+                            uri: loc.uri.clone(),
+                            range: loc.range,
+                        });
                     }
                 }
             }
@@ -2018,7 +2111,10 @@ impl WorkspaceIndex {
     /// Return the total number of symbols across all indexed files
     pub fn symbol_count(&self) -> usize {
         let files = self.files.read();
-        files.values().map(|file_index| file_index.symbols.len()).sum()
+        files
+            .values()
+            .map(|file_index| file_index.symbols.len())
+            .sum()
     }
 
     /// Get all files in a specific workspace folder
@@ -2032,7 +2128,11 @@ impl WorkspaceIndex {
     /// A vector of file indices belonging to the specified folder
     pub fn files_in_folder(&self, folder_uri: &str) -> Vec<FileIndex> {
         let files = self.files.read();
-        files.values().filter(|f| f.folder_uri.as_deref() == Some(folder_uri)).cloned().collect()
+        files
+            .values()
+            .filter(|f| f.folder_uri.as_deref() == Some(folder_uri))
+            .cloned()
+            .collect()
     }
 
     /// Get all symbols in a specific workspace folder
@@ -2148,7 +2248,9 @@ impl WorkspaceIndex {
     /// ```
     pub fn has_symbols(&self) -> bool {
         let files = self.files.read();
-        files.values().any(|file_index| !file_index.symbols.is_empty())
+        files
+            .values()
+            .any(|file_index| !file_index.symbols.is_empty())
     }
 
     /// Search for symbols by query
@@ -2332,7 +2434,11 @@ impl WorkspaceIndex {
     #[allow(dead_code)]
     pub fn extract_package_name(&self, symbol_name: &str) -> Option<String> {
         let parts: Vec<&str> = symbol_name.split("::").collect();
-        if parts.len() > 1 { Some(parts[..parts.len() - 1].join("::")) } else { None }
+        if parts.len() > 1 {
+            Some(parts[..parts.len() - 1].join("::"))
+        } else {
+            None
+        }
     }
 
     /// Get symbols in a specific file
@@ -2358,7 +2464,10 @@ impl WorkspaceIndex {
         let key = DocumentStore::uri_key(&normalized_uri);
         let files = self.files.read();
 
-        files.get(&key).map(|fi| fi.symbols.clone()).unwrap_or_default()
+        files
+            .get(&key)
+            .map(|fi| fi.symbols.clone())
+            .unwrap_or_default()
     }
 
     /// Get dependencies of a file
@@ -2384,7 +2493,10 @@ impl WorkspaceIndex {
         let key = DocumentStore::uri_key(&normalized_uri);
         let files = self.files.read();
 
-        files.get(&key).map(|fi| fi.dependencies.clone()).unwrap_or_default()
+        files
+            .get(&key)
+            .map(|fi| fi.dependencies.clone())
+            .unwrap_or_default()
     }
 
     /// Find all files that depend on a module
@@ -2588,7 +2700,10 @@ impl WorkspaceIndex {
             for (_uri_key, file_index) in files_locked.iter() {
                 if let Some(var_refs) = file_index.references.get(&var_name) {
                     for reference in var_refs {
-                        refs.push(Location { uri: reference.uri.clone(), range: reference.range });
+                        refs.push(Location {
+                            uri: reference.uri.clone(),
+                            range: reference.range,
+                        });
                     }
                 }
             }
@@ -2726,8 +2841,11 @@ impl IndexVisitor {
                 break;
             }
 
-            let (start, needs_closing_brace) =
-                if bytes[index + 1] == b'{' { (index + 2, true) } else { (index + 1, false) };
+            let (start, needs_closing_brace) = if bytes[index + 1] == b'{' {
+                (index + 2, true)
+            } else {
+                (index + 1, false)
+            };
 
             if start >= bytes.len() || !is_interpolated_var_start(bytes[start]) {
                 index += 1;
@@ -2746,11 +2864,15 @@ impl IndexVisitor {
 
             if let Some(name) = content.get(start..end) {
                 let var_name = format!("{sigil}{name}");
-                file_index.references.entry(var_name).or_default().push(SymbolReference {
-                    uri: self.uri.clone(),
-                    range,
-                    kind: ReferenceKind::Read,
-                });
+                file_index
+                    .references
+                    .entry(var_name)
+                    .or_default()
+                    .push(SymbolReference {
+                        uri: self.uri.clone(),
+                        range,
+                        kind: ReferenceKind::Read,
+                    });
             }
 
             index = if needs_closing_brace { end + 1 } else { end };
@@ -2810,20 +2932,26 @@ impl IndexVisitor {
                     }
 
                     // Mark as definition
-                    file_index.references.entry(name_str.clone()).or_default().push(
-                        SymbolReference {
+                    file_index
+                        .references
+                        .entry(name_str.clone())
+                        .or_default()
+                        .push(SymbolReference {
                             uri: self.uri.clone(),
                             range: self.node_to_range(node),
                             kind: ReferenceKind::Definition,
-                        },
-                    );
+                        });
                 }
 
                 // Visit body
                 self.visit_node(body, file_index);
             }
 
-            NodeKind::VariableDeclaration { variable, initializer, .. } => {
+            NodeKind::VariableDeclaration {
+                variable,
+                initializer,
+                ..
+            } => {
                 if let NodeKind::Variable { sigil, name } = &variable.kind {
                     let var_name = format!("{}{}", sigil, name);
 
@@ -2840,13 +2968,15 @@ impl IndexVisitor {
                     });
 
                     // Mark as definition
-                    file_index.references.entry(var_name.clone()).or_default().push(
-                        SymbolReference {
+                    file_index
+                        .references
+                        .entry(var_name.clone())
+                        .or_default()
+                        .push(SymbolReference {
                             uri: self.uri.clone(),
                             range: self.node_to_range(variable),
                             kind: ReferenceKind::Definition,
-                        },
-                    );
+                        });
                 }
 
                 // Visit initializer
@@ -2855,7 +2985,11 @@ impl IndexVisitor {
                 }
             }
 
-            NodeKind::VariableListDeclaration { variables, initializer, .. } => {
+            NodeKind::VariableListDeclaration {
+                variables,
+                initializer,
+                ..
+            } => {
                 // Handle each variable in the list declaration
                 for var in variables {
                     if let NodeKind::Variable { sigil, name } = &var.kind {
@@ -2874,11 +3008,15 @@ impl IndexVisitor {
                         });
 
                         // Mark as definition
-                        file_index.references.entry(var_name).or_default().push(SymbolReference {
-                            uri: self.uri.clone(),
-                            range: self.node_to_range(var),
-                            kind: ReferenceKind::Definition,
-                        });
+                        file_index
+                            .references
+                            .entry(var_name)
+                            .or_default()
+                            .push(SymbolReference {
+                                uri: self.uri.clone(),
+                                range: self.node_to_range(var),
+                                kind: ReferenceKind::Definition,
+                            });
                     }
                 }
 
@@ -2892,11 +3030,15 @@ impl IndexVisitor {
                 let var_name = format!("{}{}", sigil, name);
 
                 // Track as usage (could be read or write based on context)
-                file_index.references.entry(var_name).or_default().push(SymbolReference {
-                    uri: self.uri.clone(),
-                    range: self.node_to_range(node),
-                    kind: ReferenceKind::Read, // Default to read, would need context for write
-                });
+                file_index
+                    .references
+                    .entry(var_name)
+                    .or_default()
+                    .push(SymbolReference {
+                        uri: self.uri.clone(),
+                        range: self.node_to_range(node),
+                        kind: ReferenceKind::Read, // Default to read, would need context for write
+                    });
             }
 
             NodeKind::FunctionCall { name, args, .. } => {
@@ -2907,7 +3049,10 @@ impl IndexVisitor {
                 let (pkg, bare_name) = if let Some(idx) = func_name.rfind("::") {
                     (&func_name[..idx], &func_name[idx + 2..])
                 } else {
-                    (self.current_package.as_deref().unwrap_or("main"), func_name.as_str())
+                    (
+                        self.current_package.as_deref().unwrap_or("main"),
+                        func_name.as_str(),
+                    )
                 };
 
                 let qualified = format!("{}::{}", pkg, bare_name);
@@ -2915,18 +3060,24 @@ impl IndexVisitor {
                 // Track as usage for both qualified and bare forms
                 // This dual indexing allows finding references whether the function is called
                 // as `process_data()` or `Utils::process_data()`
-                file_index.references.entry(bare_name.to_string()).or_default().push(
-                    SymbolReference {
+                file_index
+                    .references
+                    .entry(bare_name.to_string())
+                    .or_default()
+                    .push(SymbolReference {
                         uri: self.uri.clone(),
                         range: location,
                         kind: ReferenceKind::Usage,
-                    },
-                );
-                file_index.references.entry(qualified).or_default().push(SymbolReference {
-                    uri: self.uri.clone(),
-                    range: location,
-                    kind: ReferenceKind::Usage,
-                });
+                    });
+                file_index
+                    .references
+                    .entry(qualified)
+                    .or_default()
+                    .push(SymbolReference {
+                        uri: self.uri.clone(),
+                        range: location,
+                        kind: ReferenceKind::Usage,
+                    });
 
                 // Visit arguments
                 for arg in args {
@@ -2951,7 +3102,11 @@ impl IndexVisitor {
                 // fully-qualified constant references (e.g. `My::Config::PI`) resolve
                 // via the workspace index just like subroutines.
                 if module == "constant" {
-                    let pkg = self.current_package.as_deref().unwrap_or("main").to_string();
+                    let pkg = self
+                        .current_package
+                        .as_deref()
+                        .unwrap_or("main")
+                        .to_string();
                     let const_node_range = self.node_to_range(node);
                     for const_name in extract_constant_names_from_use_args(args) {
                         let qualified_name = format!("{pkg}::{const_name}");
@@ -2977,11 +3132,15 @@ impl IndexVisitor {
                 }
 
                 // Track as import
-                file_index.references.entry(module_name).or_default().push(SymbolReference {
-                    uri: self.uri.clone(),
-                    range: self.node_to_range(node),
-                    kind: ReferenceKind::Import,
-                });
+                file_index
+                    .references
+                    .entry(module_name)
+                    .or_default()
+                    .push(SymbolReference {
+                        uri: self.uri.clone(),
+                        range: self.node_to_range(node),
+                        kind: ReferenceKind::Import,
+                    });
             }
 
             // Handle assignment to detect writes
@@ -2994,21 +3153,27 @@ impl IndexVisitor {
 
                     // For compound assignments, it's a read first
                     if is_compound {
-                        file_index.references.entry(var_name.clone()).or_default().push(
-                            SymbolReference {
+                        file_index
+                            .references
+                            .entry(var_name.clone())
+                            .or_default()
+                            .push(SymbolReference {
                                 uri: self.uri.clone(),
                                 range: self.node_to_range(lhs),
                                 kind: ReferenceKind::Read,
-                            },
-                        );
+                            });
                     }
 
                     // Then it's always a write
-                    file_index.references.entry(var_name).or_default().push(SymbolReference {
-                        uri: self.uri.clone(),
-                        range: self.node_to_range(lhs),
-                        kind: ReferenceKind::Write,
-                    });
+                    file_index
+                        .references
+                        .entry(var_name)
+                        .or_default()
+                        .push(SymbolReference {
+                            uri: self.uri.clone(),
+                            range: self.node_to_range(lhs),
+                            kind: ReferenceKind::Write,
+                        });
                 }
 
                 // Right side could have reads
@@ -3022,7 +3187,12 @@ impl IndexVisitor {
                 }
             }
 
-            NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
+            NodeKind::If {
+                condition,
+                then_branch,
+                elsif_branches,
+                else_branch,
+            } => {
                 self.visit_node(condition, file_index);
                 self.visit_node(then_branch, file_index);
                 for (cond, branch) in elsif_branches {
@@ -3034,7 +3204,11 @@ impl IndexVisitor {
                 }
             }
 
-            NodeKind::While { condition, body, continue_block } => {
+            NodeKind::While {
+                condition,
+                body,
+                continue_block,
+            } => {
                 self.visit_node(condition, file_index);
                 self.visit_node(body, file_index);
                 if let Some(cont) = continue_block {
@@ -3042,7 +3216,13 @@ impl IndexVisitor {
                 }
             }
 
-            NodeKind::For { init, condition, update, body, continue_block } => {
+            NodeKind::For {
+                init,
+                condition,
+                update,
+                body,
+                continue_block,
+            } => {
                 if let Some(i) = init {
                     self.visit_node(i, file_index);
                 }
@@ -3058,25 +3238,38 @@ impl IndexVisitor {
                 }
             }
 
-            NodeKind::Foreach { variable, list, body, continue_block } => {
+            NodeKind::Foreach {
+                variable,
+                list,
+                body,
+                continue_block,
+            } => {
                 // Iterator is a write context
                 if let Some(cb) = continue_block {
                     self.visit_node(cb, file_index);
                 }
                 if let NodeKind::Variable { sigil, name } = &variable.kind {
                     let var_name = format!("{}{}", sigil, name);
-                    file_index.references.entry(var_name).or_default().push(SymbolReference {
-                        uri: self.uri.clone(),
-                        range: self.node_to_range(variable),
-                        kind: ReferenceKind::Write,
-                    });
+                    file_index
+                        .references
+                        .entry(var_name)
+                        .or_default()
+                        .push(SymbolReference {
+                            uri: self.uri.clone(),
+                            range: self.node_to_range(variable),
+                            kind: ReferenceKind::Write,
+                        });
                 }
                 self.visit_node(variable, file_index);
                 self.visit_node(list, file_index);
                 self.visit_node(body, file_index);
             }
 
-            NodeKind::MethodCall { object, method, args } => {
+            NodeKind::MethodCall {
+                object,
+                method,
+                args,
+            } => {
                 // Check if this is a static method call (Package->method)
                 let qualified_method = if let NodeKind::Identifier { name } = &object.kind {
                     // Static method call: Package->method
@@ -3091,13 +3284,15 @@ impl IndexVisitor {
 
                 // Track method call with qualified name if applicable
                 let method_key = qualified_method.as_ref().unwrap_or(method);
-                file_index.references.entry(method_key.clone()).or_default().push(
-                    SymbolReference {
+                file_index
+                    .references
+                    .entry(method_key.clone())
+                    .or_default()
+                    .push(SymbolReference {
                         uri: self.uri.clone(),
                         range: self.node_to_range(node),
                         kind: ReferenceKind::Usage,
-                    },
-                );
+                    });
 
                 // Visit arguments
                 for arg in args {
@@ -3127,7 +3322,12 @@ impl IndexVisitor {
                 });
             }
 
-            NodeKind::Method { name, body, signature, .. } => {
+            NodeKind::Method {
+                name,
+                body,
+                signature,
+                ..
+            } => {
                 let method_name = name.clone();
                 let qualified_name = if let Some(ref pkg) = self.current_package {
                     format!("{}::{}", pkg, method_name)
@@ -3160,14 +3360,21 @@ impl IndexVisitor {
                 self.visit_node(body, file_index);
             }
 
-            NodeKind::String { value, interpolated } => {
+            NodeKind::String {
+                value,
+                interpolated,
+            } => {
                 if *interpolated {
                     let range = self.node_to_range(node);
                     self.record_interpolated_variable_references(value, range, file_index);
                 }
             }
 
-            NodeKind::Heredoc { content, interpolated, .. } => {
+            NodeKind::Heredoc {
+                content,
+                interpolated,
+                ..
+            } => {
                 if *interpolated {
                     let range = self.node_to_range(node);
                     self.record_interpolated_variable_references(content, range, file_index);
@@ -3181,19 +3388,25 @@ impl IndexVisitor {
                     let var_name = format!("{}{}", sigil, name);
 
                     // It's both a read and a write
-                    file_index.references.entry(var_name.clone()).or_default().push(
-                        SymbolReference {
+                    file_index
+                        .references
+                        .entry(var_name.clone())
+                        .or_default()
+                        .push(SymbolReference {
                             uri: self.uri.clone(),
                             range: self.node_to_range(operand),
                             kind: ReferenceKind::Read,
-                        },
-                    );
+                        });
 
-                    file_index.references.entry(var_name).or_default().push(SymbolReference {
-                        uri: self.uri.clone(),
-                        range: self.node_to_range(operand),
-                        kind: ReferenceKind::Write,
-                    });
+                    file_index
+                        .references
+                        .entry(var_name)
+                        .or_default()
+                        .push(SymbolReference {
+                            uri: self.uri.clone(),
+                            range: self.node_to_range(operand),
+                            kind: ReferenceKind::Write,
+                        });
                 }
             }
 
@@ -3223,7 +3436,11 @@ impl IndexVisitor {
                 self.visit_node(left, file_index);
                 self.visit_node(right, file_index);
             }
-            NodeKind::Ternary { condition, then_expr, else_expr } => {
+            NodeKind::Ternary {
+                condition,
+                then_expr,
+                else_expr,
+            } => {
                 self.visit_node(condition, file_index);
                 self.visit_node(then_expr, file_index);
                 self.visit_node(else_expr, file_index);
@@ -3247,7 +3464,11 @@ impl IndexVisitor {
             NodeKind::Eval { block } | NodeKind::Do { block } | NodeKind::Defer { block } => {
                 self.visit_node(block, file_index);
             }
-            NodeKind::Try { body, catch_blocks, finally_block } => {
+            NodeKind::Try {
+                body,
+                catch_blocks,
+                finally_block,
+            } => {
                 self.visit_node(body, file_index);
                 for (_, block) in catch_blocks {
                     self.visit_node(block, file_index);
@@ -3267,7 +3488,11 @@ impl IndexVisitor {
             NodeKind::Default { body } => {
                 self.visit_node(body, file_index);
             }
-            NodeKind::StatementModifier { statement, condition, .. } => {
+            NodeKind::StatementModifier {
+                statement,
+                condition,
+                ..
+            } => {
                 self.visit_node(statement, file_index);
                 self.visit_node(condition, file_index);
             }
@@ -3285,12 +3510,22 @@ impl IndexVisitor {
 
     fn node_to_range(&mut self, node: &Node) -> Range {
         // LineIndex.range returns line numbers and UTF-16 code unit columns
-        let ((start_line, start_col), (end_line, end_col)) =
-            self.document.line_index.range(node.location.start, node.location.end);
+        let ((start_line, start_col), (end_line, end_col)) = self
+            .document
+            .line_index
+            .range(node.location.start, node.location.end);
         // Use byte offsets from node.location directly
         Range {
-            start: Position { byte: node.location.start, line: start_line, column: start_col },
-            end: Position { byte: node.location.end, line: end_line, column: end_col },
+            start: Position {
+                byte: node.location.start,
+                line: start_line,
+                column: start_col,
+            },
+            end: Position {
+                byte: node.location.end,
+                line: end_line,
+                column: end_col,
+            },
         }
     }
 }
@@ -3334,7 +3569,10 @@ fn extract_module_names_from_use_args(args: &[String]) -> Vec<String> {
             if stripped.is_empty() {
                 return None;
             }
-            if stripped.chars().all(|c| c.is_alphanumeric() || c == '_' || c == ':' || c == '\'') {
+            if stripped
+                .chars()
+                .all(|c| c.is_alphanumeric() || c == '_' || c == ':' || c == '\'')
+            {
                 Some(stripped.to_string())
             } else {
                 None
@@ -3454,10 +3692,14 @@ pub mod lsp_adapter {
     /// ```
     pub fn to_lsp_location(ix: &IxLocation) -> Option<LspLocation> {
         parse_url(&ix.uri).map(|uri| {
-            let start =
-                lsp_types::Position { line: ix.range.start.line, character: ix.range.start.column };
-            let end =
-                lsp_types::Position { line: ix.range.end.line, character: ix.range.end.column };
+            let start = lsp_types::Position {
+                line: ix.range.start.line,
+                character: ix.range.start.column,
+            };
+            let end = lsp_types::Position {
+                line: ix.range.end.line,
+                character: ix.range.end.column,
+            };
             let range = lsp_types::Range { start, end };
             LspLocation { uri, range }
         })
@@ -3484,7 +3726,9 @@ pub mod lsp_adapter {
     /// assert_eq!(lsp_locations.len(), 1);
     /// ```
     pub fn to_lsp_locations(all: impl IntoIterator<Item = IxLocation>) -> Vec<LspLocation> {
-        all.into_iter().filter_map(|ix| to_lsp_location(&ix)).collect()
+        all.into_iter()
+            .filter_map(|ix| to_lsp_location(&ix))
+            .collect()
     }
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -3533,22 +3777,34 @@ use constant {
 
         let symbols = index.file_symbols(uri);
         assert!(
-            symbols.iter().any(|s| s.name == "PI" && s.kind == SymbolKind::Subroutine),
+            symbols
+                .iter()
+                .any(|s| s.name == "PI" && s.kind == SymbolKind::Subroutine),
             "PI should be indexed as a Subroutine symbol; got: {:?}",
-            symbols.iter().map(|s| (&s.name, &s.kind)).collect::<Vec<_>>()
+            symbols
+                .iter()
+                .map(|s| (&s.name, &s.kind))
+                .collect::<Vec<_>>()
         );
         assert!(
-            symbols.iter().any(|s| s.name == "MAX_RETRIES" && s.kind == SymbolKind::Subroutine),
+            symbols
+                .iter()
+                .any(|s| s.name == "MAX_RETRIES" && s.kind == SymbolKind::Subroutine),
             "MAX_RETRIES should be indexed"
         );
         assert!(
-            symbols.iter().any(|s| s.name == "TIMEOUT" && s.kind == SymbolKind::Subroutine),
+            symbols
+                .iter()
+                .any(|s| s.name == "TIMEOUT" && s.kind == SymbolKind::Subroutine),
             "TIMEOUT should be indexed"
         );
 
         // Qualified lookup should also work
         let def = index.find_definition("My::Config::PI");
-        assert!(def.is_some(), "find_definition('My::Config::PI') should succeed");
+        assert!(
+            def.is_some(),
+            "find_definition('My::Config::PI') should succeed"
+        );
     }
 
     #[test]
@@ -3570,9 +3826,21 @@ my $var = 42;
 
         // Should have indexed the package and subroutine
         let symbols = index.file_symbols(uri);
-        assert!(symbols.iter().any(|s| s.name == "MyPackage" && s.kind == SymbolKind::Package));
-        assert!(symbols.iter().any(|s| s.name == "hello" && s.kind == SymbolKind::Subroutine));
-        assert!(symbols.iter().any(|s| s.name == "$var" && s.kind.is_variable()));
+        assert!(
+            symbols
+                .iter()
+                .any(|s| s.name == "MyPackage" && s.kind == SymbolKind::Package)
+        );
+        assert!(
+            symbols
+                .iter()
+                .any(|s| s.name == "hello" && s.kind == SymbolKind::Subroutine)
+        );
+        assert!(
+            symbols
+                .iter()
+                .any(|s| s.name == "$var" && s.kind.is_variable())
+        );
     }
 
     #[test]
@@ -3631,12 +3899,18 @@ use Data::Dumper;
     fn test_uri_to_fs_path_with_spaces() {
         // Test with percent-encoded spaces
         if let Some(path) = uri_to_fs_path("file:///tmp/path%20with%20spaces/test.pl") {
-            assert_eq!(path, std::path::PathBuf::from("/tmp/path with spaces/test.pl"));
+            assert_eq!(
+                path,
+                std::path::PathBuf::from("/tmp/path with spaces/test.pl")
+            );
         }
 
         // Test with multiple spaces and special characters
         if let Some(path) = uri_to_fs_path("file:///tmp/My%20Documents/test%20file.pl") {
-            assert_eq!(path, std::path::PathBuf::from("/tmp/My Documents/test file.pl"));
+            assert_eq!(
+                path,
+                std::path::PathBuf::from("/tmp/My Documents/test file.pl")
+            );
         }
     }
 
@@ -3763,7 +4037,10 @@ use Data::Dumper;
         let coordinator = IndexCoordinator::new();
         assert!(matches!(
             coordinator.state(),
-            IndexState::Building { phase: IndexPhase::Idle, .. }
+            IndexState::Building {
+                phase: IndexPhase::Idle,
+                ..
+            }
         ));
     }
 
@@ -3774,7 +4051,13 @@ use Data::Dumper;
 
         let state = coordinator.state();
         assert!(
-            matches!(state, IndexState::Building { phase: IndexPhase::Scanning, .. }),
+            matches!(
+                state,
+                IndexState::Building {
+                    phase: IndexPhase::Scanning,
+                    ..
+                }
+            ),
             "Expected Building state after scanning, got: {:?}",
             state
         );
@@ -3791,7 +4074,11 @@ use Data::Dumper;
         assert!(
             matches!(
                 state,
-                IndexState::Building { phase: IndexPhase::Indexing, total_count: 3, .. }
+                IndexState::Building {
+                    phase: IndexPhase::Indexing,
+                    total_count: 3,
+                    ..
+                }
             ),
             "Expected Building state after indexing with total_count 3, got: {:?}",
             state
@@ -3804,7 +4091,12 @@ use Data::Dumper;
         coordinator.transition_to_ready(100, 5000);
 
         let state = coordinator.state();
-        if let IndexState::Ready { file_count, symbol_count, .. } = state {
+        if let IndexState::Ready {
+            file_count,
+            symbol_count,
+            ..
+        } = state
+        {
             assert_eq!(file_count, 100);
             assert_eq!(symbol_count, 5000);
         } else {
@@ -3891,9 +4183,15 @@ use Data::Dumper;
         coordinator.transition_to_ready(10, 100);
 
         let snapshot = coordinator.instrumentation_snapshot();
-        let transition =
-            IndexStateTransition { from: IndexStateKind::Building, to: IndexStateKind::Ready };
-        let count = snapshot.state_transition_counts.get(&transition).copied().unwrap_or(0);
+        let transition = IndexStateTransition {
+            from: IndexStateKind::Building,
+            to: IndexStateKind::Ready,
+        };
+        let count = snapshot
+            .state_transition_counts
+            .get(&transition)
+            .copied()
+            .unwrap_or(0);
         assert_eq!(count, 1);
     }
 
@@ -3943,7 +4241,10 @@ use Data::Dumper;
             "Expected Degraded state, got: {:?}",
             state
         );
-        if let IndexState::Degraded { available_symbols, .. } = state {
+        if let IndexState::Degraded {
+            available_symbols, ..
+        } = state
+        {
             assert_eq!(available_symbols, 5000);
         }
     }
@@ -3987,7 +4288,9 @@ use Data::Dumper;
             matches!(
                 state,
                 IndexState::Degraded {
-                    reason: DegradationReason::ResourceLimit { kind: ResourceKind::MaxFiles },
+                    reason: DegradationReason::ResourceLimit {
+                        kind: ResourceKind::MaxFiles
+                    },
                     ..
                 }
             ),
@@ -4039,7 +4342,9 @@ sub sub10 { }
             matches!(
                 state,
                 IndexState::Degraded {
-                    reason: DegradationReason::ResourceLimit { kind: ResourceKind::MaxSymbols },
+                    reason: DegradationReason::ResourceLimit {
+                        kind: ResourceKind::MaxSymbols
+                    },
                     ..
                 }
             ),
@@ -4063,7 +4368,10 @@ sub sub10 { }
 
         // Should not trigger degradation
         let limit_check = coordinator.check_limits();
-        assert!(limit_check.is_none(), "check_limits should return None when within bounds");
+        assert!(
+            limit_check.is_none(),
+            "check_limits should return None when within bounds"
+        );
 
         // State should still be Ready
         assert!(
@@ -4101,7 +4409,9 @@ sub sub10 { }
             matches!(
                 state,
                 IndexState::Degraded {
-                    reason: DegradationReason::ResourceLimit { kind: ResourceKind::MaxFiles },
+                    reason: DegradationReason::ResourceLimit {
+                        kind: ResourceKind::MaxFiles
+                    },
                     ..
                 }
             ),
@@ -4121,7 +4431,14 @@ sub sub10 { }
 
         let state = coordinator.state();
         assert!(
-            matches!(state, IndexState::Ready { file_count: 150, symbol_count: 7500, .. }),
+            matches!(
+                state,
+                IndexState::Ready {
+                    file_count: 150,
+                    symbol_count: 7500,
+                    ..
+                }
+            ),
             "Expected Ready state with updated metrics, got: {:?}",
             state
         );
@@ -4137,7 +4454,14 @@ sub sub10 { }
 
         let state = coordinator.state();
         assert!(
-            matches!(state, IndexState::Building { indexed_count: 0, total_count: 100, .. }),
+            matches!(
+                state,
+                IndexState::Building {
+                    indexed_count: 0,
+                    total_count: 100,
+                    ..
+                }
+            ),
             "Expected Building state, got: {:?}",
             state
         );
@@ -4147,7 +4471,14 @@ sub sub10 { }
 
         let state = coordinator.state();
         assert!(
-            matches!(state, IndexState::Building { indexed_count: 0, total_count: 200, .. }),
+            matches!(
+                state,
+                IndexState::Building {
+                    indexed_count: 0,
+                    total_count: 200,
+                    ..
+                }
+            ),
             "Expected Building state, got: {:?}",
             state
         );
@@ -4164,7 +4495,14 @@ sub sub10 { }
 
         let state = coordinator.state();
         assert!(
-            matches!(state, IndexState::Building { indexed_count: 0, total_count: 150, .. }),
+            matches!(
+                state,
+                IndexState::Building {
+                    indexed_count: 0,
+                    total_count: 150,
+                    ..
+                }
+            ),
             "Expected Building state after re-scan, got: {:?}",
             state
         );
@@ -4183,7 +4521,14 @@ sub sub10 { }
 
         let state = coordinator.state();
         assert!(
-            matches!(state, IndexState::Building { indexed_count: 0, total_count: 100, .. }),
+            matches!(
+                state,
+                IndexState::Building {
+                    indexed_count: 0,
+                    total_count: 100,
+                    ..
+                }
+            ),
             "Expected Building state after recovery, got: {:?}",
             state
         );
@@ -4199,7 +4544,14 @@ sub sub10 { }
 
         let state = coordinator.state();
         assert!(
-            matches!(state, IndexState::Building { indexed_count: 50, total_count: 100, .. }),
+            matches!(
+                state,
+                IndexState::Building {
+                    indexed_count: 50,
+                    total_count: 100,
+                    ..
+                }
+            ),
             "Expected Building state with updated progress, got: {:?}",
             state
         );
@@ -4209,7 +4561,14 @@ sub sub10 { }
 
         let state = coordinator.state();
         assert!(
-            matches!(state, IndexState::Building { indexed_count: 100, total_count: 100, .. }),
+            matches!(
+                state,
+                IndexState::Building {
+                    indexed_count: 100,
+                    total_count: 100,
+                    ..
+                }
+            ),
             "Expected Building state with completed progress, got: {:?}",
             state
         );
@@ -4236,7 +4595,10 @@ sub sub10 { }
         assert!(
             matches!(
                 state,
-                IndexState::Degraded { reason: DegradationReason::ScanTimeout { .. }, .. }
+                IndexState::Degraded {
+                    reason: DegradationReason::ScanTimeout { .. },
+                    ..
+                }
             ),
             "Expected Degraded state with ScanTimeout, got: {:?}",
             state
@@ -4259,7 +4621,13 @@ sub sub10 { }
 
         let state = coordinator.state();
         assert!(
-            matches!(state, IndexState::Building { indexed_count: 50, .. }),
+            matches!(
+                state,
+                IndexState::Building {
+                    indexed_count: 50,
+                    ..
+                }
+            ),
             "Expected Building state (no timeout), got: {:?}",
             state
         );
@@ -4280,16 +4648,32 @@ sub hello {
         // First indexing should parse and index
         must(index.index_file(uri.clone(), code.to_string()));
         let symbols1 = index.file_symbols(uri.as_str());
-        assert!(symbols1.iter().any(|s| s.name == "MyPackage" && s.kind == SymbolKind::Package));
-        assert!(symbols1.iter().any(|s| s.name == "hello" && s.kind == SymbolKind::Subroutine));
+        assert!(
+            symbols1
+                .iter()
+                .any(|s| s.name == "MyPackage" && s.kind == SymbolKind::Package)
+        );
+        assert!(
+            symbols1
+                .iter()
+                .any(|s| s.name == "hello" && s.kind == SymbolKind::Subroutine)
+        );
 
         // Second indexing with same content should early-exit
         // We can verify this by checking that the index still works correctly
         must(index.index_file(uri.clone(), code.to_string()));
         let symbols2 = index.file_symbols(uri.as_str());
         assert_eq!(symbols1.len(), symbols2.len());
-        assert!(symbols2.iter().any(|s| s.name == "MyPackage" && s.kind == SymbolKind::Package));
-        assert!(symbols2.iter().any(|s| s.name == "hello" && s.kind == SymbolKind::Subroutine));
+        assert!(
+            symbols2
+                .iter()
+                .any(|s| s.name == "MyPackage" && s.kind == SymbolKind::Package)
+        );
+        assert!(
+            symbols2
+                .iter()
+                .any(|s| s.name == "hello" && s.kind == SymbolKind::Subroutine)
+        );
     }
 
     #[test]
@@ -4315,14 +4699,22 @@ sub goodbye {
         // First indexing
         must(index.index_file(uri.clone(), code1.to_string()));
         let symbols1 = index.file_symbols(uri.as_str());
-        assert!(symbols1.iter().any(|s| s.name == "hello" && s.kind == SymbolKind::Subroutine));
+        assert!(
+            symbols1
+                .iter()
+                .any(|s| s.name == "hello" && s.kind == SymbolKind::Subroutine)
+        );
         assert!(!symbols1.iter().any(|s| s.name == "goodbye"));
 
         // Second indexing with different content should re-parse
         must(index.index_file(uri.clone(), code2.to_string()));
         let symbols2 = index.file_symbols(uri.as_str());
         assert!(!symbols2.iter().any(|s| s.name == "hello"));
-        assert!(symbols2.iter().any(|s| s.name == "goodbye" && s.kind == SymbolKind::Subroutine));
+        assert!(
+            symbols2
+                .iter()
+                .any(|s| s.name == "goodbye" && s.kind == SymbolKind::Subroutine)
+        );
     }
 
     #[test]
@@ -4349,13 +4741,21 @@ sub hello {
         // First indexing
         must(index.index_file(uri.clone(), code1.to_string()));
         let symbols1 = index.file_symbols(uri.as_str());
-        assert!(symbols1.iter().any(|s| s.name == "hello" && s.kind == SymbolKind::Subroutine));
+        assert!(
+            symbols1
+                .iter()
+                .any(|s| s.name == "hello" && s.kind == SymbolKind::Subroutine)
+        );
 
         // Second indexing with whitespace change should re-parse (hash will differ)
         must(index.index_file(uri.clone(), code2.to_string()));
         let symbols2 = index.file_symbols(uri.as_str());
         // Symbols should still be found, but content hash differs so it re-indexed
-        assert!(symbols2.iter().any(|s| s.name == "hello" && s.kind == SymbolKind::Subroutine));
+        assert!(
+            symbols2
+                .iter()
+                .any(|s| s.name == "hello" && s.kind == SymbolKind::Subroutine)
+        );
     }
 
     #[test]
@@ -4434,8 +4834,10 @@ Utils::process_data();
 
         // find_references should also deduplicate
         let refs = index.find_references("Utils::process_data");
-        let non_def_refs: Vec<_> =
-            refs.iter().filter(|loc| loc.uri != "file:///lib/Utils.pm").collect();
+        let non_def_refs: Vec<_> = refs
+            .iter()
+            .filter(|loc| loc.uri != "file:///lib/Utils.pm")
+            .collect();
         assert_eq!(
             non_def_refs.len(),
             2,
@@ -4450,8 +4852,10 @@ Utils::process_data();
         let files: Vec<(Url, String)> = (0..5)
             .map(|i| {
                 let uri = must(Url::parse(&format!("file:///batch/module{}.pm", i)));
-                let code =
-                    format!("package Batch::Mod{};\nsub func_{} {{ return {}; }}\n1;", i, i, i);
+                let code = format!(
+                    "package Batch::Mod{};\nsub func_{} {{ return {}; }}\n1;",
+                    i, i, i
+                );
                 (uri, code)
             })
             .collect();
@@ -4483,13 +4887,19 @@ Utils::process_data();
 
         let uri_a = must(Url::parse("file:///incr/a.pm"));
         let uri_b = must(Url::parse("file:///incr/b.pm"));
-        index.index_file(uri_a.clone(), "package A;\nsub a_func { 1 }\n1;".into()).ok();
-        index.index_file(uri_b.clone(), "package B;\nsub b_func { 2 }\n1;".into()).ok();
+        index
+            .index_file(uri_a.clone(), "package A;\nsub a_func { 1 }\n1;".into())
+            .ok();
+        index
+            .index_file(uri_b.clone(), "package B;\nsub b_func { 2 }\n1;".into())
+            .ok();
 
         assert!(index.find_definition("A::a_func").is_some());
         assert!(index.find_definition("B::b_func").is_some());
 
-        index.index_file(uri_a, "package A;\nsub a_func_v2 { 11 }\n1;".into()).ok();
+        index
+            .index_file(uri_a, "package A;\nsub a_func_v2 { 11 }\n1;".into())
+            .ok();
 
         assert!(index.find_definition("A::a_func_v2").is_some());
         assert!(index.find_definition("B::b_func").is_some());
@@ -4501,8 +4911,18 @@ Utils::process_data();
 
         let uri_a = must(Url::parse("file:///shadow/a.pm"));
         let uri_b = must(Url::parse("file:///shadow/b.pm"));
-        index.index_file(uri_a.clone(), "package ShadowA;\nsub helper { 1 }\n1;".into()).ok();
-        index.index_file(uri_b.clone(), "package ShadowB;\nsub helper { 2 }\n1;".into()).ok();
+        index
+            .index_file(
+                uri_a.clone(),
+                "package ShadowA;\nsub helper { 1 }\n1;".into(),
+            )
+            .ok();
+        index
+            .index_file(
+                uri_b.clone(),
+                "package ShadowB;\nsub helper { 2 }\n1;".into(),
+            )
+            .ok();
 
         assert!(index.find_definition("helper").is_some());
 
@@ -4526,12 +4946,18 @@ Utils::process_data();
 
         let base_url = url::Url::parse("file:///test/workspace/lib/MyBase.pm").unwrap();
         index
-            .index_file(base_url, "package MyBase;\nsub new { bless {}, shift }\n1;\n".to_string())
+            .index_file(
+                base_url,
+                "package MyBase;\nsub new { bless {}, shift }\n1;\n".to_string(),
+            )
             .expect("indexing MyBase.pm");
 
         let child_url = url::Url::parse("file:///test/workspace/child.pl").unwrap();
         index
-            .index_file(child_url, "package Child;\nuse parent 'MyBase';\n1;\n".to_string())
+            .index_file(
+                child_url,
+                "package Child;\nuse parent 'MyBase';\n1;\n".to_string(),
+            )
             .expect("indexing child.pl");
 
         let dependents = index.find_dependents("MyBase");
@@ -4544,7 +4970,12 @@ Utils::process_data();
                 let files = index.files.read();
                 files
                     .iter()
-                    .map(|(k, v)| (k.clone(), v.dependencies.iter().cloned().collect::<Vec<_>>()))
+                    .map(|(k, v)| {
+                        (
+                            k.clone(),
+                            v.dependencies.iter().cloned().collect::<Vec<_>>(),
+                        )
+                    })
                     .collect::<Vec<_>>()
             }
         );
@@ -4700,7 +5131,10 @@ Utils::process_data();
             0,
             "symbol_count should be 0 after removing the only file"
         );
-        assert!(!index.has_symbols(), "has_symbols should be false after removing the only file");
+        assert!(
+            !index.has_symbols(),
+            "has_symbols should be false after removing the only file"
+        );
     }
 
     /// Deleting file A when file B has the same bare-name symbol must leave
@@ -4824,7 +5258,10 @@ sub other_sub {
 
         // Test file not in any workspace folder
         let folder_none = index.determine_folder_uri("file:///other/project/Module.pm");
-        assert_eq!(folder_none, None, "Should return None for file outside workspace folders");
+        assert_eq!(
+            folder_none, None,
+            "Should return None for file outside workspace folders"
+        );
     }
 
     #[test]
@@ -4865,8 +5302,15 @@ sub other_sub {
         index.remove_folder("file:///project1");
 
         // Verify only project2 file remains
-        assert_eq!(index.file_count(), 1, "Should have 1 file after removing folder");
-        assert!(index.file_symbols(uri1).is_empty(), "File from removed folder should be gone");
+        assert_eq!(
+            index.file_count(),
+            1,
+            "Should have 1 file after removing folder"
+        );
+        assert!(
+            index.file_symbols(uri1).is_empty(),
+            "File from removed folder should be gone"
+        );
         assert_eq!(
             index.file_symbols(uri2).len(),
             2,

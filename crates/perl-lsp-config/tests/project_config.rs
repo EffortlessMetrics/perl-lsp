@@ -69,8 +69,13 @@ inlay_hints = false
 fn project_config_malformed_toml_returns_err() -> TestResult {
     let dir = write_toml("[invalid\ntoml = !!!")?;
     let result = load_project_config(dir.path());
-    let msg = result.err().ok_or("expected Err for malformed TOML, got Ok")?;
-    assert!(msg.contains(".perl-lsp.toml"), "error message should reference the file: {msg}");
+    let msg = result
+        .err()
+        .ok_or("expected Err for malformed TOML, got Ok")?;
+    assert!(
+        msg.contains(".perl-lsp.toml"),
+        "error message should reference the file: {msg}"
+    );
     Ok(())
 }
 
@@ -158,7 +163,10 @@ fn project_config_perlcritic_severity_clamped() -> TestResult {
         perlcritic_severity: Some(0),
     };
     project_low.apply_to_server_config(&mut config);
-    assert_eq!(config.perlcritic_severity, 1, "severity 0 should clamp to 1");
+    assert_eq!(
+        config.perlcritic_severity, 1,
+        "severity 0 should clamp to 1"
+    );
 
     // Severity 99 should clamp to 5
     let mut project_high = ProjectConfig::default();
@@ -167,7 +175,10 @@ fn project_config_perlcritic_severity_clamped() -> TestResult {
         perlcritic_severity: Some(99),
     };
     project_high.apply_to_server_config(&mut config);
-    assert_eq!(config.perlcritic_severity, 5, "severity 99 should clamp to 5");
+    assert_eq!(
+        config.perlcritic_severity, 5,
+        "severity 99 should clamp to 5"
+    );
     Ok(())
 }
 
@@ -182,9 +193,18 @@ fn project_config_unset_fields_leave_server_config_defaults() -> TestResult {
     let project = ProjectConfig::default();
     project.apply_to_server_config(&mut config);
 
-    assert_eq!(config.inlay_hints_enabled, default_inlay, "inlay_hints unchanged");
-    assert_eq!(config.perlcritic_enabled, default_perlcritic, "perlcritic unchanged");
-    assert_eq!(config.perlcritic_severity, default_severity, "severity unchanged");
+    assert_eq!(
+        config.inlay_hints_enabled, default_inlay,
+        "inlay_hints unchanged"
+    );
+    assert_eq!(
+        config.perlcritic_enabled, default_perlcritic,
+        "perlcritic unchanged"
+    );
+    assert_eq!(
+        config.perlcritic_severity, default_severity,
+        "severity unchanged"
+    );
     Ok(())
 }
 
@@ -251,8 +271,14 @@ fn project_config_lsp_override_wins_over_toml_base() -> TestResult {
     }));
 
     // LSP values must win
-    assert!(!config.perlcritic_enabled, "LSP override must disable perlcritic");
-    assert_eq!(config.perlcritic_severity, 1, "LSP override must set severity=1");
+    assert!(
+        !config.perlcritic_enabled,
+        "LSP override must disable perlcritic"
+    );
+    assert_eq!(
+        config.perlcritic_severity, 1,
+        "LSP override must set severity=1"
+    );
     Ok(())
 }
 
@@ -275,7 +301,11 @@ fn project_config_severity_out_of_u8_range_returns_err() -> TestResult {
 fn project_config_severity_negative_returns_err() -> TestResult {
     let dir = write_toml("[diagnostics]\nperlcritic_severity = -1\n")?;
     let result = load_project_config(dir.path());
-    assert!(result.is_err(), "negative severity must be a parse error, got: {:?}", result);
+    assert!(
+        result.is_err(),
+        "negative severity must be a parse error, got: {:?}",
+        result
+    );
     Ok(())
 }
 
@@ -322,7 +352,10 @@ fn parse_perl5lib_drops_empty_components() {
 fn effective_include_paths_no_perl5lib_returns_include_paths() {
     let config = WorkspaceConfig::default();
     let result = config.effective_include_paths(&[]);
-    assert_eq!(result, config.include_paths, "no PERL5LIB paths returns include_paths unchanged");
+    assert_eq!(
+        result, config.include_paths,
+        "no PERL5LIB paths returns include_paths unchanged"
+    );
 }
 
 #[test]
@@ -353,7 +386,10 @@ fn effective_include_paths_disabled_ignores_perl5lib() {
     config.use_perl5lib = false;
     let p5l = vec!["/p5l/lib".to_string()];
     let result = config.effective_include_paths(&p5l);
-    assert_eq!(result, config.include_paths, "use_perl5lib=false ignores PERL5LIB paths");
+    assert_eq!(
+        result, config.include_paths,
+        "use_perl5lib=false ignores PERL5LIB paths"
+    );
     assert!(!result.contains(&"/p5l/lib".to_string()));
 }
 
@@ -363,7 +399,10 @@ fn effective_include_paths_disabled_ignores_perl5lib() {
 fn project_config_use_perl5lib_defaults_to_none() -> TestResult {
     let dir = write_toml("[perl]\ninclude_paths = [\"lib\"]\n")?;
     let cfg = load_project_config(dir.path())?.ok_or("expected Some")?;
-    assert!(cfg.perl.use_perl5lib.is_none(), "use_perl5lib absent in TOML must be None");
+    assert!(
+        cfg.perl.use_perl5lib.is_none(),
+        "use_perl5lib absent in TOML must be None"
+    );
     Ok(())
 }
 
@@ -380,7 +419,10 @@ fn project_config_perl5lib_precedence_append_parsed() -> TestResult {
     use perl_lsp_config::Perl5LibPrecedence;
     let dir = write_toml("[perl]\nperl5lib_precedence = \"append\"\n")?;
     let cfg = load_project_config(dir.path())?.ok_or("expected Some")?;
-    assert_eq!(cfg.perl.perl5lib_precedence, Some(Perl5LibPrecedence::Append));
+    assert_eq!(
+        cfg.perl.perl5lib_precedence,
+        Some(Perl5LibPrecedence::Append)
+    );
     Ok(())
 }
 
@@ -399,7 +441,10 @@ fn project_config_applies_use_perl5lib_false_to_workspace_config() -> TestResult
         perl5lib_precedence: None,
     };
     project.apply_to_workspace_config(&mut config);
-    assert!(!config.use_perl5lib, "apply_to_workspace_config must propagate use_perl5lib=false");
+    assert!(
+        !config.use_perl5lib,
+        "apply_to_workspace_config must propagate use_perl5lib=false"
+    );
     Ok(())
 }
 
@@ -412,7 +457,10 @@ fn workspace_config_update_from_value_sets_use_perl5lib_false() {
     config.update_from_value(&serde_json::json!({
         "workspace": { "usePerl5lib": false }
     }));
-    assert!(!config.use_perl5lib, "update_from_value must set use_perl5lib=false");
+    assert!(
+        !config.use_perl5lib,
+        "update_from_value must set use_perl5lib=false"
+    );
 }
 
 #[test]
@@ -422,7 +470,10 @@ fn workspace_config_update_from_value_sets_use_perl5lib_true() {
     config.update_from_value(&serde_json::json!({
         "workspace": { "usePerl5lib": true }
     }));
-    assert!(config.use_perl5lib, "update_from_value must set use_perl5lib=true");
+    assert!(
+        config.use_perl5lib,
+        "update_from_value must set use_perl5lib=true"
+    );
 }
 
 #[test]

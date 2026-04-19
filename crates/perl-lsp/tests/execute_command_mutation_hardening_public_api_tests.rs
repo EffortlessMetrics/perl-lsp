@@ -111,8 +111,16 @@ fn test_execute_command_not_default_comprehensive() -> TestResult {
 
     // Test each command to ensure no Ok(Default::default()) returns
     let test_cases = vec![
-        ("perl.runTests", vec![Value::String(temp_file.to_string_lossy().to_string())], "runTests"),
-        ("perl.runFile", vec![Value::String(temp_file.to_string_lossy().to_string())], "runFile"),
+        (
+            "perl.runTests",
+            vec![Value::String(temp_file.to_string_lossy().to_string())],
+            "runTests",
+        ),
+        (
+            "perl.runFile",
+            vec![Value::String(temp_file.to_string_lossy().to_string())],
+            "runFile",
+        ),
         (
             "perl.runTestSub",
             vec![
@@ -148,15 +156,33 @@ fn test_execute_command_not_default_comprehensive() -> TestResult {
         );
 
         // Verify meaningful structure
-        assert!(result_value.is_object(), "Command {} should return object", description);
-        let obj = result_value.as_object().ok_or("Result should be an object")?;
-        assert!(!obj.is_empty(), "Command {} result should not be empty", description);
+        assert!(
+            result_value.is_object(),
+            "Command {} should return object",
+            description
+        );
+        let obj = result_value
+            .as_object()
+            .ok_or("Result should be an object")?;
+        assert!(
+            !obj.is_empty(),
+            "Command {} result should not be empty",
+            description
+        );
 
         // Each command should have command-specific structure
         match command {
             "perl.runTests" | "perl.runFile" => {
-                assert!(obj.contains_key("success"), "{} should have success field", description);
-                assert!(obj.contains_key("output"), "{} should have output field", description);
+                assert!(
+                    obj.contains_key("success"),
+                    "{} should have success field",
+                    description
+                );
+                assert!(
+                    obj.contains_key("output"),
+                    "{} should have output field",
+                    description
+                );
                 assert!(
                     result_value["success"].is_boolean(),
                     "{} success should be boolean",
@@ -169,7 +195,11 @@ fn test_execute_command_not_default_comprehensive() -> TestResult {
                 );
             }
             "perl.runTestSub" => {
-                assert!(obj.contains_key("success"), "{} should have success field", description);
+                assert!(
+                    obj.contains_key("success"),
+                    "{} should have success field",
+                    description
+                );
                 assert!(
                     obj.contains_key("subroutine"),
                     "{} should have subroutine field",
@@ -187,14 +217,24 @@ fn test_execute_command_not_default_comprehensive() -> TestResult {
                 );
             }
             "perl.debugTests" => {
-                assert!(obj.contains_key("success"), "{} should have success field", description);
-                assert!(obj.contains_key("output"), "{} should have output field", description);
+                assert!(
+                    obj.contains_key("success"),
+                    "{} should have success field",
+                    description
+                );
+                assert!(
+                    obj.contains_key("output"),
+                    "{} should have output field",
+                    description
+                );
                 assert_eq!(
                     result_value["success"], false,
                     "{} should indicate not implemented",
                     description
                 );
-                let output = result_value["output"].as_str().ok_or("output should be a string")?;
+                let output = result_value["output"]
+                    .as_str()
+                    .ok_or("output should be a string")?;
                 assert!(
                     output.contains("not yet implemented"),
                     "{} should have not implemented message",
@@ -202,7 +242,11 @@ fn test_execute_command_not_default_comprehensive() -> TestResult {
                 );
             }
             "perl.runCritic" => {
-                assert!(obj.contains_key("status"), "{} should have status field", description);
+                assert!(
+                    obj.contains_key("status"),
+                    "{} should have status field",
+                    description
+                );
                 assert!(
                     obj.contains_key("violations"),
                     "{} should have violations field",
@@ -277,7 +321,10 @@ fn test_command_routing_specificity_comprehensive() -> TestResult {
     // MUTATION KILLER: Verify command-specific behaviors (proves routing works)
 
     // debugTests has unique "not implemented" behavior
-    assert_eq!(debug_tests_result["success"], false, "debugTests should be false");
+    assert_eq!(
+        debug_tests_result["success"], false,
+        "debugTests should be false"
+    );
     assert!(
         debug_tests_result["output"]
             .as_str()
@@ -287,7 +334,10 @@ fn test_command_routing_specificity_comprehensive() -> TestResult {
     );
 
     // runCritic has unique structure with status/violations/analyzerUsed
-    assert!(run_critic_result.get("status").is_some(), "runCritic should have status field");
+    assert!(
+        run_critic_result.get("status").is_some(),
+        "runCritic should have status field"
+    );
     assert!(
         run_critic_result.get("violations").is_some(),
         "runCritic should have violations field"
@@ -296,11 +346,20 @@ fn test_command_routing_specificity_comprehensive() -> TestResult {
         run_critic_result.get("analyzerUsed").is_some(),
         "runCritic should have analyzerUsed field"
     );
-    assert_eq!(run_critic_result["status"], "success", "runCritic should have success status");
+    assert_eq!(
+        run_critic_result["status"], "success",
+        "runCritic should have success status"
+    );
 
     // runTests and runFile have command execution structure but different behavior
-    assert!(run_tests_result["success"].is_boolean(), "runTests should have boolean success");
-    assert!(run_file_result["success"].is_boolean(), "runFile should have boolean success");
+    assert!(
+        run_tests_result["success"].is_boolean(),
+        "runTests should have boolean success"
+    );
+    assert!(
+        run_file_result["success"].is_boolean(),
+        "runFile should have boolean success"
+    );
 
     // CRITICAL: All results should be structurally different (proving no routing bypass)
     assert_ne!(
@@ -328,7 +387,10 @@ fn test_unknown_command_handling() -> TestResult {
     // MUTATION KILLER: Should fail with specific error (not bypass to success)
     assert!(result.is_err(), "Unknown command should return error");
     let error_msg = result.err().ok_or("Expected error")?;
-    assert!(error_msg.contains("Unknown command"), "Should indicate unknown command");
+    assert!(
+        error_msg.contains("Unknown command"),
+        "Should indicate unknown command"
+    );
     assert!(
         error_msg.contains("perl.nonExistentCommand"),
         "Should include the actual command name"
@@ -345,8 +407,14 @@ fn test_unknown_command_handling() -> TestResult {
 
     for unknown_cmd in unknown_commands {
         let result = provider.execute_command(unknown_cmd, vec![]);
-        assert!(result.is_err(), "Unknown command '{}' should return error", unknown_cmd);
-        let error_msg = result.err().ok_or(format!("Expected error for '{}'", unknown_cmd))?;
+        assert!(
+            result.is_err(),
+            "Unknown command '{}' should return error",
+            unknown_cmd
+        );
+        let error_msg = result
+            .err()
+            .ok_or(format!("Expected error for '{}'", unknown_cmd))?;
         assert!(
             error_msg.contains("Unknown command"),
             "Should indicate unknown command for '{}'",
@@ -364,14 +432,24 @@ fn test_parameter_validation_comprehensive() -> TestResult {
     let provider = ExecuteCommandProvider::with_workspace_roots(vec![std::env::temp_dir()]);
 
     // Test missing file path arguments for all commands that require them
-    let commands_requiring_file_path =
-        vec!["perl.runTests", "perl.runFile", "perl.debugTests", "perl.runCritic"];
+    let commands_requiring_file_path = vec![
+        "perl.runTests",
+        "perl.runFile",
+        "perl.debugTests",
+        "perl.runCritic",
+    ];
 
     for command in commands_requiring_file_path {
         // Test with no arguments
         let result = provider.execute_command(command, vec![]);
-        assert!(result.is_err(), "Command {} should fail with no arguments", command);
-        let error_msg = result.err().ok_or(format!("Expected error for command {}", command))?;
+        assert!(
+            result.is_err(),
+            "Command {} should fail with no arguments",
+            command
+        );
+        let error_msg = result
+            .err()
+            .ok_or(format!("Expected error for command {}", command))?;
         assert!(
             error_msg.contains("Missing file path argument"),
             "Command {} should have missing file path error",
@@ -395,8 +473,9 @@ fn test_parameter_validation_comprehensive() -> TestResult {
                 command,
                 i
             );
-            let error_msg =
-                result.err().ok_or(format!("Expected error for command {} case {}", command, i))?;
+            let error_msg = result
+                .err()
+                .ok_or(format!("Expected error for command {} case {}", command, i))?;
             assert!(
                 error_msg.contains("Missing file path argument"),
                 "Command {} should have missing file path error for case {}",
@@ -415,9 +494,13 @@ fn test_parameter_validation_comprehensive() -> TestResult {
 
     let result =
         provider.execute_command("perl.runTestSub", vec![Value::String(temp_path.clone())]);
-    assert!(result.is_err(), "runTestSub should fail with missing subroutine name");
-    let error_msg =
-        result.err().ok_or("Expected error for runTestSub with missing subroutine name")?;
+    assert!(
+        result.is_err(),
+        "runTestSub should fail with missing subroutine name"
+    );
+    let error_msg = result
+        .err()
+        .ok_or("Expected error for runTestSub with missing subroutine name")?;
     assert!(
         error_msg.contains("Missing subroutine name argument"),
         "Should have missing subroutine name error, got: {}",
@@ -427,11 +510,18 @@ fn test_parameter_validation_comprehensive() -> TestResult {
     // Test with invalid subroutine name type
     let result = provider.execute_command(
         "perl.runTestSub",
-        vec![Value::String(temp_path.clone()), Value::Number(serde_json::Number::from(456))],
+        vec![
+            Value::String(temp_path.clone()),
+            Value::Number(serde_json::Number::from(456)),
+        ],
     );
-    assert!(result.is_err(), "runTestSub should fail with invalid subroutine name type");
-    let error_msg =
-        result.err().ok_or("Expected error for runTestSub with invalid subroutine name type")?;
+    assert!(
+        result.is_err(),
+        "runTestSub should fail with invalid subroutine name type"
+    );
+    let error_msg = result
+        .err()
+        .ok_or("Expected error for runTestSub with invalid subroutine name type")?;
     assert!(
         error_msg.contains("Missing subroutine name argument"),
         "Should have missing subroutine name error for invalid type, got: {}",
@@ -477,8 +567,16 @@ fn test_file_path_extraction_validation() -> TestResult {
             existing_two.to_string_lossy().to_string(),
             true,
         ),
-        (missing.to_string_lossy().to_string(), missing.to_string_lossy().to_string(), false),
-        (file_uri(&uri_file)?, uri_file.to_string_lossy().to_string(), true),
+        (
+            missing.to_string_lossy().to_string(),
+            missing.to_string_lossy().to_string(),
+            false,
+        ),
+        (
+            file_uri(&uri_file)?,
+            uri_file.to_string_lossy().to_string(),
+            true,
+        ),
     ];
 
     for (input_path, expected_path, exists) in test_paths {
@@ -486,19 +584,30 @@ fn test_file_path_extraction_validation() -> TestResult {
             provider.execute_command("perl.runCritic", vec![Value::String(input_path.clone())])?;
 
         if exists {
-            assert_eq!(result["status"], "success", "Expected critic success for {}", input_path);
-            let violations =
-                result["violations"].as_array().ok_or("violations should be an array")?;
-            let first_violation =
-                violations.first().ok_or("Expected at least one violation for existing file")?;
-            let actual_file = first_violation["file"].as_str().ok_or("file should be a string")?;
+            assert_eq!(
+                result["status"], "success",
+                "Expected critic success for {}",
+                input_path
+            );
+            let violations = result["violations"]
+                .as_array()
+                .ok_or("violations should be an array")?;
+            let first_violation = violations
+                .first()
+                .ok_or("Expected at least one violation for existing file")?;
+            let actual_file = first_violation["file"]
+                .as_str()
+                .ok_or("file should be a string")?;
             assert_eq!(
                 normalize_path_string(actual_file),
                 normalize_path_string(&expected_path),
                 "Critic should report the actual resolved file path"
             );
         } else {
-            assert_eq!(result["status"], "error", "Missing files should return critic error");
+            assert_eq!(
+                result["status"], "error",
+                "Missing files should return critic error"
+            );
             let error_msg = result["error"].as_str().ok_or("error should be a string")?;
             assert!(
                 error_msg.contains(&expected_path),
@@ -531,14 +640,27 @@ fn test_response_structure_validation() -> TestResult {
     let result_value = result.map_err(|e| format!("runCritic should return Ok: {}", e))?;
 
     // MUTATION KILLER: Verify exact response structure
-    assert_eq!(result_value["status"], "success", "Should have success status");
-    assert!(result_value["violations"].is_array(), "Should have violations array");
-    assert!(result_value["violationCount"].is_number(), "Should have violation count");
-    assert!(result_value["analyzerUsed"].is_string(), "Should have analyzer used");
+    assert_eq!(
+        result_value["status"], "success",
+        "Should have success status"
+    );
+    assert!(
+        result_value["violations"].is_array(),
+        "Should have violations array"
+    );
+    assert!(
+        result_value["violationCount"].is_number(),
+        "Should have violation count"
+    );
+    assert!(
+        result_value["analyzerUsed"].is_string(),
+        "Should have analyzer used"
+    );
 
     // Verify analyzer used is meaningful
-    let analyzer_used =
-        result_value["analyzerUsed"].as_str().ok_or("analyzerUsed should be a string")?;
+    let analyzer_used = result_value["analyzerUsed"]
+        .as_str()
+        .ok_or("analyzerUsed should be a string")?;
     assert!(
         analyzer_used == "builtin" || analyzer_used == "external",
         "Analyzer should be 'builtin' or 'external', got: {}",
@@ -546,10 +668,12 @@ fn test_response_structure_validation() -> TestResult {
     );
 
     // Verify violation count matches array length
-    let violations =
-        result_value["violations"].as_array().ok_or("violations should be an array")?;
-    let violation_count =
-        result_value["violationCount"].as_u64().ok_or("violationCount should be a number")?;
+    let violations = result_value["violations"]
+        .as_array()
+        .ok_or("violations should be an array")?;
+    let violation_count = result_value["violationCount"]
+        .as_u64()
+        .ok_or("violationCount should be a number")?;
     assert_eq!(
         violations.len() as u64,
         violation_count,
@@ -558,9 +682,13 @@ fn test_response_structure_validation() -> TestResult {
 
     // If there are violations, verify their structure
     if !violations.is_empty() {
-        let first_violation =
-            violations.first().ok_or("violations array should have at least one element")?;
-        assert!(first_violation["policy"].is_string(), "Violation should have policy string");
+        let first_violation = violations
+            .first()
+            .ok_or("violations array should have at least one element")?;
+        assert!(
+            first_violation["policy"].is_string(),
+            "Violation should have policy string"
+        );
         assert!(
             first_violation["description"].is_string(),
             "Violation should have description string"
@@ -569,20 +697,50 @@ fn test_response_structure_validation() -> TestResult {
             first_violation["explanation"].is_string(),
             "Violation should have explanation string"
         );
-        assert!(first_violation["severity"].is_number(), "Violation should have severity number");
-        assert!(first_violation["line"].is_number(), "Violation should have line number");
-        assert!(first_violation["column"].is_number(), "Violation should have column number");
-        assert!(first_violation["file"].is_string(), "Violation should have file string");
+        assert!(
+            first_violation["severity"].is_number(),
+            "Violation should have severity number"
+        );
+        assert!(
+            first_violation["line"].is_number(),
+            "Violation should have line number"
+        );
+        assert!(
+            first_violation["column"].is_number(),
+            "Violation should have column number"
+        );
+        assert!(
+            first_violation["file"].is_string(),
+            "Violation should have file string"
+        );
 
         // MUTATION KILLER: Verify line/column numbers are positive (tests + to - mutations)
-        let line = first_violation["line"].as_u64().ok_or("line should be a number")?;
-        let column = first_violation["column"].as_u64().ok_or("column should be a number")?;
-        assert!(line > 0, "Line number should be positive (1-based), got: {}", line);
-        assert!(column > 0, "Column number should be positive (1-based), got: {}", column);
+        let line = first_violation["line"]
+            .as_u64()
+            .ok_or("line should be a number")?;
+        let column = first_violation["column"]
+            .as_u64()
+            .ok_or("column should be a number")?;
+        assert!(
+            line > 0,
+            "Line number should be positive (1-based), got: {}",
+            line
+        );
+        assert!(
+            column > 0,
+            "Column number should be positive (1-based), got: {}",
+            column
+        );
 
         // Verify severity is reasonable
-        let severity = first_violation["severity"].as_u64().ok_or("severity should be a number")?;
-        assert!((1..=5).contains(&severity), "Severity should be 1-5, got: {}", severity);
+        let severity = first_violation["severity"]
+            .as_u64()
+            .ok_or("severity should be a number")?;
+        assert!(
+            (1..=5).contains(&severity),
+            "Severity should be 1-5, got: {}",
+            severity
+        );
     }
     Ok(())
 }
@@ -594,7 +752,9 @@ fn test_file_not_found_error_structure() -> TestResult {
     // Test with definitely non-existent file
     let result = provider.execute_command(
         "perl.runCritic",
-        vec![Value::String("/tmp/definitely_nonexistent_file_12345.pl".to_string())],
+        vec![Value::String(
+            "/tmp/definitely_nonexistent_file_12345.pl".to_string(),
+        )],
     );
 
     assert!(result.is_ok(), "Should handle missing files gracefully");
@@ -602,23 +762,44 @@ fn test_file_not_found_error_structure() -> TestResult {
 
     // MUTATION KILLER: Verify error response structure
     assert_eq!(result_value["status"], "error", "Should have error status");
-    assert!(result_value["error"].is_string(), "Should have error message");
-    assert!(result_value["violations"].is_array(), "Should have empty violations array");
-    assert_eq!(result_value["violationCount"], 0, "Should have zero violation count");
-    assert_eq!(result_value["analyzerUsed"], "none", "Should indicate no analyzer used");
+    assert!(
+        result_value["error"].is_string(),
+        "Should have error message"
+    );
+    assert!(
+        result_value["violations"].is_array(),
+        "Should have empty violations array"
+    );
+    assert_eq!(
+        result_value["violationCount"], 0,
+        "Should have zero violation count"
+    );
+    assert_eq!(
+        result_value["analyzerUsed"], "none",
+        "Should indicate no analyzer used"
+    );
 
     // Verify error message content
-    let error_msg = result_value["error"].as_str().ok_or("error should be a string")?;
-    assert!(error_msg.contains("File not found"), "Should indicate file not found");
+    let error_msg = result_value["error"]
+        .as_str()
+        .ok_or("error should be a string")?;
+    assert!(
+        error_msg.contains("File not found"),
+        "Should indicate file not found"
+    );
     assert!(
         error_msg.contains("definitely_nonexistent_file_12345.pl"),
         "Should mention the specific file name"
     );
 
     // Verify violations array is empty
-    let violations =
-        result_value["violations"].as_array().ok_or("violations should be an array")?;
-    assert!(violations.is_empty(), "Violations array should be empty for error response");
+    let violations = result_value["violations"]
+        .as_array()
+        .ok_or("violations should be an array")?;
+    assert!(
+        violations.is_empty(),
+        "Violations array should be empty for error response"
+    );
     Ok(())
 }
 
@@ -638,11 +819,17 @@ fn test_command_execution_success_failure_logic() -> TestResult {
         "perl.runFile",
         vec![Value::String(valid_file.to_string_lossy().to_string())],
     );
-    assert!(success_result.is_ok(), "Valid file should execute successfully");
+    assert!(
+        success_result.is_ok(),
+        "Valid file should execute successfully"
+    );
     let success_value = success_result.map_err(|e| format!("runFile should return Ok: {}", e))?;
 
     // MUTATION KILLER: Verify success logic is not negated (! deletion mutations)
-    assert!(success_value["success"].is_boolean(), "Should have boolean success field");
+    assert!(
+        success_value["success"].is_boolean(),
+        "Should have boolean success field"
+    );
     // Note: We can't assert the exact value since it depends on execution, but we verify structure
 
     // Test with subroutine execution
@@ -656,13 +843,25 @@ fn test_command_execution_success_failure_logic() -> TestResult {
             Value::String("test_execution".to_string()),
         ],
     );
-    assert!(sub_result.is_ok(), "Valid subroutine should execute successfully");
+    assert!(
+        sub_result.is_ok(),
+        "Valid subroutine should execute successfully"
+    );
     let sub_value = sub_result.map_err(|e| format!("runTestSub should return Ok: {}", e))?;
 
     // Verify subroutine-specific fields
-    assert!(sub_value["success"].is_boolean(), "Sub execution should have success field");
-    assert!(sub_value["subroutine"].is_string(), "Sub execution should have subroutine field");
-    assert_eq!(sub_value["subroutine"], "test_execution", "Should have correct subroutine name");
+    assert!(
+        sub_value["success"].is_boolean(),
+        "Sub execution should have success field"
+    );
+    assert!(
+        sub_value["subroutine"].is_string(),
+        "Sub execution should have subroutine field"
+    );
+    assert_eq!(
+        sub_value["subroutine"], "test_execution",
+        "Should have correct subroutine name"
+    );
     Ok(())
 }
 
@@ -681,7 +880,10 @@ fn test_comprehensive_edge_cases() -> TestResult {
     assert!(empty_result.is_ok(), "Should handle empty files");
     let empty_value =
         empty_result.map_err(|e| format!("runCritic should return Ok for empty file: {}", e))?;
-    assert_eq!(empty_value["status"], "success", "Empty file should be success");
+    assert_eq!(
+        empty_value["status"], "success",
+        "Empty file should be success"
+    );
 
     // Test very large file path
     let long_path = workspace.path().join(format!("{}.pl", "x".repeat(100)));
@@ -719,8 +921,15 @@ fn test_supported_commands_structure() -> TestResult {
     let commands = get_supported_commands();
 
     // MUTATION KILLER: Verify not empty/default list
-    assert!(!commands.is_empty(), "Supported commands should not be empty");
-    assert_eq!(commands.len(), 11, "Should have exactly 11 supported commands");
+    assert!(
+        !commands.is_empty(),
+        "Supported commands should not be empty"
+    );
+    assert_eq!(
+        commands.len(),
+        11,
+        "Should have exactly 11 supported commands"
+    );
 
     // Verify specific commands are present
     let expected_commands = vec![
@@ -738,13 +947,20 @@ fn test_supported_commands_structure() -> TestResult {
     ];
 
     for expected in &expected_commands {
-        assert!(commands.contains(&expected.to_string()), "Should contain command: {}", expected);
+        assert!(
+            commands.contains(&expected.to_string()),
+            "Should contain command: {}",
+            expected
+        );
     }
 
     // Verify all commands are strings and properly formatted
     for command in &commands {
         assert!(!command.is_empty(), "Commands should not be empty");
-        assert!(command.starts_with("perl."), "Commands should start with 'perl.'");
+        assert!(
+            command.starts_with("perl."),
+            "Commands should start with 'perl.'"
+        );
         assert!(!command.contains(' '), "Commands should not contain spaces");
         assert_ne!(command, "xyzzy", "Should not contain placeholder values");
     }
@@ -753,7 +969,11 @@ fn test_supported_commands_structure() -> TestResult {
     let mut unique_commands = commands.clone();
     unique_commands.sort();
     unique_commands.dedup();
-    assert_eq!(commands.len(), unique_commands.len(), "All commands should be unique");
+    assert_eq!(
+        commands.len(),
+        unique_commands.len(),
+        "All commands should be unique"
+    );
     Ok(())
 }
 
@@ -782,13 +1002,22 @@ my $result = comprehensive_workflow_test($value);
 print "Result: $result\n";
 "#;
 
-    let temp_file =
-        write_workspace_file(&workspace, "comprehensive_workflow_test.pl", comprehensive_content)?;
+    let temp_file = write_workspace_file(
+        &workspace,
+        "comprehensive_workflow_test.pl",
+        comprehensive_content,
+    )?;
 
     // Execute all commands and verify end-to-end behavior
     let all_commands = vec![
-        ("perl.runFile", vec![Value::String(temp_file.to_string_lossy().to_string())]),
-        ("perl.runTests", vec![Value::String(temp_file.to_string_lossy().to_string())]),
+        (
+            "perl.runFile",
+            vec![Value::String(temp_file.to_string_lossy().to_string())],
+        ),
+        (
+            "perl.runTests",
+            vec![Value::String(temp_file.to_string_lossy().to_string())],
+        ),
         (
             "perl.runTestSub",
             vec![
@@ -796,23 +1025,40 @@ print "Result: $result\n";
                 Value::String("comprehensive_workflow_test".to_string()),
             ],
         ),
-        ("perl.debugTests", vec![Value::String(temp_file.to_string_lossy().to_string())]),
-        ("perl.runCritic", vec![Value::String(temp_file.to_string_lossy().to_string())]),
+        (
+            "perl.debugTests",
+            vec![Value::String(temp_file.to_string_lossy().to_string())],
+        ),
+        (
+            "perl.runCritic",
+            vec![Value::String(temp_file.to_string_lossy().to_string())],
+        ),
     ];
 
     let mut all_results = Vec::new();
 
     for (command, args) in all_commands {
         let result = provider.execute_command(command, args);
-        assert!(result.is_ok(), "Command {} should succeed in workflow test", command);
+        assert!(
+            result.is_ok(),
+            "Command {} should succeed in workflow test",
+            command
+        );
 
         let result_value =
             result.map_err(|e| format!("Command {} should return Ok: {}", command, e))?;
 
         // Verify each result is meaningful and not Default::default()
-        assert!(result_value.is_object(), "Command {} should return object", command);
         assert!(
-            !result_value.as_object().ok_or("Result should be an object")?.is_empty(),
+            result_value.is_object(),
+            "Command {} should return object",
+            command
+        );
+        assert!(
+            !result_value
+                .as_object()
+                .ok_or("Result should be an object")?
+                .is_empty(),
             "Command {} should not be empty",
             command
         );
@@ -839,11 +1085,17 @@ print "Result: $result\n";
     for (command, result) in &all_results {
         match *command {
             "perl.debugTests" => {
-                assert_eq!(result["success"], false, "debugTests should indicate not implemented");
+                assert_eq!(
+                    result["success"], false,
+                    "debugTests should indicate not implemented"
+                );
             }
             "perl.runCritic" => {
                 assert_eq!(result["status"], "success", "runCritic should succeed");
-                assert!(result["violations"].is_array(), "runCritic should have violations");
+                assert!(
+                    result["violations"].is_array(),
+                    "runCritic should have violations"
+                );
             }
             "perl.runTestSub" => {
                 assert!(
@@ -856,7 +1108,11 @@ print "Result: $result\n";
                 );
             }
             _ => {
-                assert!(result["success"].is_boolean(), "{} should have success field", command);
+                assert!(
+                    result["success"].is_boolean(),
+                    "{} should have success field",
+                    command
+                );
             }
         }
     }
@@ -904,10 +1160,17 @@ fn test_run_subtest_handler_returns_correct_shape() -> TestResult {
         id: Some(json!(1)),
     };
 
-    let response = server.handle_request(request).ok_or("No response from perl.runSubtest")?;
-    let result = response.result.ok_or("perl.runSubtest returned error, expected Ok result")?;
+    let response = server
+        .handle_request(request)
+        .ok_or("No response from perl.runSubtest")?;
+    let result = response
+        .result
+        .ok_or("perl.runSubtest returned error, expected Ok result")?;
 
-    assert_eq!(result["status"], "success", "perl.runSubtest should return status=success");
+    assert_eq!(
+        result["status"], "success",
+        "perl.runSubtest should return status=success"
+    );
     assert_eq!(
         result["subtest"], "my fancy subtest",
         "perl.runSubtest should echo back the subtest name"
@@ -931,14 +1194,18 @@ fn test_run_subtest_missing_argument_returns_error() -> TestResult {
         id: Some(json!(2)),
     };
 
-    let response =
-        server.handle_request(request).ok_or("No response from perl.runSubtest (empty args)")?;
+    let response = server
+        .handle_request(request)
+        .ok_or("No response from perl.runSubtest (empty args)")?;
     // Should return an error, not a success result
     assert!(
         response.error.is_some(),
         "perl.runSubtest with empty arguments should return a JSON-RPC error"
     );
     let error = response.error.ok_or("error field missing")?;
-    assert_eq!(error.code, -32602, "Missing argument should return InvalidParams (-32602)");
+    assert_eq!(
+        error.code, -32602,
+        "Missing argument should return InvalidParams (-32602)"
+    );
     Ok(())
 }

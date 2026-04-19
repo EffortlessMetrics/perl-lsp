@@ -41,7 +41,10 @@ fn scope_issues_strict(code: &str) -> Vec<ScopeIssue> {
 }
 
 fn has_symbol(table: &SymbolTable, name: &str, kind: SymbolKind) -> bool {
-    table.symbols.get(name).is_some_and(|syms| syms.iter().any(|s| s.kind == kind))
+    table
+        .symbols
+        .get(name)
+        .is_some_and(|syms| syms.iter().any(|s| s.kind == kind))
 }
 
 fn has_symbol_with_declaration(
@@ -64,7 +67,9 @@ fn has_symbol_with_declaration(
 }
 
 fn has_issue(issues: &[ScopeIssue], kind: IssueKind, var_name: &str) -> bool {
-    issues.iter().any(|i| i.kind == kind && i.variable_name.contains(var_name))
+    issues
+        .iter()
+        .any(|i| i.kind == kind && i.variable_name.contains(var_name))
 }
 
 fn count_issues(issues: &[ScopeIssue], kind: IssueKind) -> usize {
@@ -91,7 +96,10 @@ print $inner;
     assert!(
         has_issue(&issues, IssueKind::UndeclaredVariable, "inner"),
         "my variable should not leak out of its block; issues: {:?}",
-        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+        issues
+            .iter()
+            .map(|i| (&i.kind, &i.variable_name))
+            .collect::<Vec<_>>()
     );
     Ok(())
 }
@@ -112,7 +120,10 @@ my $outer = 10;
         .iter()
         .filter(|i| i.kind == IssueKind::UnusedVariable && i.variable_name.contains("outer"))
         .count();
-    assert_eq!(unused_outer, 0, "$outer used in deeply nested block should not be unused");
+    assert_eq!(
+        unused_outer, 0,
+        "$outer used in deeply nested block should not be unused"
+    );
     Ok(())
 }
 
@@ -147,9 +158,18 @@ my ($alpha, $bravo, $charlie) = (1, 2, 3);
     let unused_alpha = has_issue(&issues, IssueKind::UnusedVariable, "alpha");
     let unused_bravo = has_issue(&issues, IssueKind::UnusedVariable, "bravo");
     let unused_charlie = has_issue(&issues, IssueKind::UnusedVariable, "charlie");
-    assert!(unused_alpha, "should detect unused $alpha from list declaration");
-    assert!(unused_bravo, "should detect unused $bravo from list declaration");
-    assert!(unused_charlie, "should detect unused $charlie from list declaration");
+    assert!(
+        unused_alpha,
+        "should detect unused $alpha from list declaration"
+    );
+    assert!(
+        unused_bravo,
+        "should detect unused $bravo from list declaration"
+    );
+    assert!(
+        unused_charlie,
+        "should detect unused $charlie from list declaration"
+    );
     Ok(())
 }
 
@@ -174,7 +194,9 @@ print $client;
 "#;
 
     let issues = scope_issues_strict(code);
-    let handled = ["$fh", "$dh", "$sys_fh", "$reader", "$writer", "$sock", "$client"];
+    let handled = [
+        "$fh", "$dh", "$sys_fh", "$reader", "$writer", "$sock", "$client",
+    ];
 
     for variable_name in handled {
         assert!(
@@ -249,9 +271,11 @@ print $phase_local;
             issues
         );
         assert!(
-            !issues.iter().any(|i| i.kind == IssueKind::UndeclaredVariable
-                && i.variable_name == "$phase_local"
-                && i.line == 5),
+            !issues
+                .iter()
+                .any(|i| i.kind == IssueKind::UndeclaredVariable
+                    && i.variable_name == "$phase_local"
+                    && i.line == 5),
             "{phase} block lexical should stay valid inside its own block: {:?}",
             issues
         );
@@ -369,12 +393,16 @@ try {
 
     let issues = scope_issues_strict(code);
     assert!(
-        !issues.iter().any(|i| i.kind == IssueKind::UndeclaredVariable && i.variable_name == "$e"),
+        !issues
+            .iter()
+            .any(|i| i.kind == IssueKind::UndeclaredVariable && i.variable_name == "$e"),
         "catch variable should be declared inside catch block: {:?}",
         issues
     );
     assert!(
-        !issues.iter().any(|i| i.kind == IssueKind::UnusedVariable && i.variable_name == "$e"),
+        !issues
+            .iter()
+            .any(|i| i.kind == IssueKind::UnusedVariable && i.variable_name == "$e"),
         "used catch variable should not be reported as unused: {:?}",
         issues
     );
@@ -410,7 +438,9 @@ try {
         "catch-variable shadowing range should target the catch parameter"
     );
     assert!(
-        !issues.iter().any(|i| i.kind == IssueKind::UndeclaredVariable && i.variable_name == "$e"),
+        !issues
+            .iter()
+            .any(|i| i.kind == IssueKind::UndeclaredVariable && i.variable_name == "$e"),
         "shadowed catch variable should still be bound in catch scope: {:?}",
         issues
     );
@@ -457,7 +487,9 @@ try {
         .find(|i| i.kind == IssueKind::UnusedVariable && i.variable_name == "$e")
         .ok_or("expected unused catch-variable issue")?;
     assert!(
-        issues.iter().any(|i| i.kind == IssueKind::UnusedVariable && i.variable_name == "$e"),
+        issues
+            .iter()
+            .any(|i| i.kind == IssueKind::UnusedVariable && i.variable_name == "$e"),
         "unused catch variable should be reported: {:?}",
         issues
     );
@@ -483,13 +515,18 @@ try {
 "#;
 
     let table = parse_and_extract(code);
-    let refs = table.references.get("err").ok_or("expected catch variable reference")?;
+    let refs = table
+        .references
+        .get("err")
+        .ok_or("expected catch variable reference")?;
     let usage = refs
         .iter()
         .find(|reference| &code[reference.location.start..reference.location.end] == "$err")
         .ok_or("expected usage reference for $err inside catch block")?;
     let defs = table.find_symbol("err", usage.scope_id, SymbolKind::scalar());
-    let def = defs.first().ok_or("expected catch variable definition in symbol table")?;
+    let def = defs
+        .first()
+        .ok_or("expected catch variable definition in symbol table")?;
 
     assert_eq!(def.declaration.as_deref(), Some("my"));
     assert_eq!(&code[def.location.start..def.location.end], "$err");
@@ -519,7 +556,9 @@ try {
         issues
     );
     assert!(
-        !issues.iter().any(|i| i.kind == IssueKind::VariableShadowing && i.variable_name == "$e"),
+        !issues
+            .iter()
+            .any(|i| i.kind == IssueKind::VariableShadowing && i.variable_name == "$e"),
         "inner catch declaration should not be treated as nested shadowing: {:?}",
         issues
     );
@@ -596,14 +635,25 @@ our %DEFAULTS = (key => 'val');
 "#;
     let table = parse_and_extract(code);
     // Check all three our variables exist
-    assert!(has_symbol(&table, "VERSION", SymbolKind::scalar()), "our $VERSION missing");
-    assert!(has_symbol(&table, "EXPORT", SymbolKind::array()), "our @EXPORT missing");
-    assert!(has_symbol(&table, "DEFAULTS", SymbolKind::hash()), "our %DEFAULTS missing");
+    assert!(
+        has_symbol(&table, "VERSION", SymbolKind::scalar()),
+        "our $VERSION missing"
+    );
+    assert!(
+        has_symbol(&table, "EXPORT", SymbolKind::array()),
+        "our @EXPORT missing"
+    );
+    assert!(
+        has_symbol(&table, "DEFAULTS", SymbolKind::hash()),
+        "our %DEFAULTS missing"
+    );
 
     // Check qualified names include the package
     let version_syms = table.symbols.get("VERSION").ok_or("VERSION not found")?;
     assert!(
-        version_syms.iter().any(|s| s.qualified_name.contains("MyPkg")),
+        version_syms
+            .iter()
+            .any(|s| s.qualified_name.contains("MyPkg")),
         "our variable should have package-qualified name"
     );
     Ok(())
@@ -627,7 +677,10 @@ our %GLOBAL_C = (x => 4);
                     || i.variable_name.contains("GLOBAL_C"))
         })
         .count();
-    assert_eq!(unused_our, 0, "our variables should not be flagged as unused");
+    assert_eq!(
+        unused_our, 0,
+        "our variables should not be flagged as unused"
+    );
     Ok(())
 }
 
@@ -649,9 +702,18 @@ sub beta_sub { 1 }
     let value_syms = table.symbols.get("VALUE").ok_or("VALUE not found")?;
     assert!(value_syms.len() >= 2, "should have VALUE in both packages");
 
-    let qualified_names: Vec<&str> = value_syms.iter().map(|s| s.qualified_name.as_str()).collect();
-    assert!(qualified_names.iter().any(|qn| qn.contains("Alpha")), "should have Alpha::VALUE");
-    assert!(qualified_names.iter().any(|qn| qn.contains("Beta")), "should have Beta::VALUE");
+    let qualified_names: Vec<&str> = value_syms
+        .iter()
+        .map(|s| s.qualified_name.as_str())
+        .collect();
+    assert!(
+        qualified_names.iter().any(|qn| qn.contains("Alpha")),
+        "should have Alpha::VALUE"
+    );
+    assert!(
+        qualified_names.iter().any(|qn| qn.contains("Beta")),
+        "should have Beta::VALUE"
+    );
     Ok(())
 }
 
@@ -834,11 +896,16 @@ sub counter {
 }
 "#;
     let table = parse_and_extract(code);
-    assert!(has_symbol(&table, "count", SymbolKind::scalar()), "state $count should be extracted");
+    assert!(
+        has_symbol(&table, "count", SymbolKind::scalar()),
+        "state $count should be extracted"
+    );
 
     let count_syms = table.symbols.get("count").ok_or("count not found")?;
     assert!(
-        count_syms.iter().any(|s| s.declaration.as_deref() == Some("state")),
+        count_syms
+            .iter()
+            .any(|s| s.declaration.as_deref() == Some("state")),
         "declaration type should be 'state'"
     );
     Ok(())
@@ -879,13 +946,17 @@ sub pad  { 1 }
 
     let trim_syms = table.symbols.get("trim").ok_or("trim not found")?;
     assert!(
-        trim_syms.iter().any(|s| s.qualified_name == "Util::String::trim"),
+        trim_syms
+            .iter()
+            .any(|s| s.qualified_name == "Util::String::trim"),
         "sub should have fully qualified name"
     );
 
     let pad_syms = table.symbols.get("pad").ok_or("pad not found")?;
     assert!(
-        pad_syms.iter().any(|s| s.qualified_name == "Util::String::pad"),
+        pad_syms
+            .iter()
+            .any(|s| s.qualified_name == "Util::String::pad"),
         "sub should have fully qualified name"
     );
     Ok(())
@@ -901,7 +972,10 @@ fn symbol_default_package_is_main() -> Result<(), Box<dyn std::error::Error>> {
     assert!(
         run_syms.iter().any(|s| s.qualified_name.contains("main")),
         "default package should be main, got: {:?}",
-        run_syms.iter().map(|s| &s.qualified_name).collect::<Vec<_>>()
+        run_syms
+            .iter()
+            .map(|s| &s.qualified_name)
+            .collect::<Vec<_>>()
     );
     Ok(())
 }
@@ -921,19 +995,28 @@ sub baz_method { 1 }
 "#;
     let table = parse_and_extract(code);
 
-    let foo_syms = table.symbols.get("foo_method").ok_or("foo_method not found")?;
+    let foo_syms = table
+        .symbols
+        .get("foo_method")
+        .ok_or("foo_method not found")?;
     assert!(
         foo_syms.iter().any(|s| s.qualified_name.contains("Foo")),
         "foo_method should be in Foo"
     );
 
-    let bar_syms = table.symbols.get("bar_method").ok_or("bar_method not found")?;
+    let bar_syms = table
+        .symbols
+        .get("bar_method")
+        .ok_or("bar_method not found")?;
     assert!(
         bar_syms.iter().any(|s| s.qualified_name.contains("Bar")),
         "bar_method should be in Bar"
     );
 
-    let baz_syms = table.symbols.get("baz_method").ok_or("baz_method not found")?;
+    let baz_syms = table
+        .symbols
+        .get("baz_method")
+        .ok_or("baz_method not found")?;
     assert!(
         baz_syms.iter().any(|s| s.qualified_name.contains("Baz")),
         "baz_method should be in Baz"
@@ -958,7 +1041,9 @@ sub third { 1 }
 
     let third_syms = table.symbols.get("third").ok_or("third not found")?;
     assert!(
-        third_syms.iter().any(|s| s.qualified_name.contains("Alpha")),
+        third_syms
+            .iter()
+            .any(|s| s.qualified_name.contains("Alpha")),
         "third should be under Alpha after switching back"
     );
     Ok(())
@@ -980,8 +1065,12 @@ our $DEBUG = 1;
     let debug_syms = table.symbols.get("DEBUG").ok_or("DEBUG not found")?;
     assert!(debug_syms.len() >= 2, "should have DEBUG in both packages");
 
-    let has_config = debug_syms.iter().any(|s| s.qualified_name == "Config::DEBUG");
-    let has_runtime = debug_syms.iter().any(|s| s.qualified_name == "Runtime::DEBUG");
+    let has_config = debug_syms
+        .iter()
+        .any(|s| s.qualified_name == "Config::DEBUG");
+    let has_runtime = debug_syms
+        .iter()
+        .any(|s| s.qualified_name == "Runtime::DEBUG");
     assert!(has_config, "should have Config::DEBUG");
     assert!(has_runtime, "should have Runtime::DEBUG");
     Ok(())
@@ -1020,7 +1109,11 @@ helper();
 
     let helper_syms = table.symbols.get("helper").ok_or("helper not found")?;
     let refs = table.find_references(&helper_syms[0]);
-    assert!(refs.len() >= 3, "should find at least 3 references to helper, got {}", refs.len());
+    assert!(
+        refs.len() >= 3,
+        "should find at least 3 references to helper, got {}",
+        refs.len()
+    );
     Ok(())
 }
 
@@ -1042,7 +1135,10 @@ sub get_config {
         .iter()
         .filter(|i| i.kind == IssueKind::UnusedVariable && i.variable_name.contains("config"))
         .count();
-    assert_eq!(unused_config, 0, "$config used in sub should not be flagged as unused");
+    assert_eq!(
+        unused_config, 0,
+        "$config used in sub should not be flagged as unused"
+    );
     Ok(())
 }
 
@@ -1059,7 +1155,10 @@ print $fn;
         .iter()
         .filter(|i| i.kind == IssueKind::UnusedVariable && i.variable_name.contains("multiplier"))
         .count();
-    assert_eq!(unused, 0, "$multiplier captured by closure should not be unused");
+    assert_eq!(
+        unused, 0,
+        "$multiplier captured by closure should not be unused"
+    );
     Ok(())
 }
 
@@ -1076,7 +1175,10 @@ sub writer { $shared = "new"; }
         .iter()
         .filter(|i| i.kind == IssueKind::UnusedVariable && i.variable_name.contains("shared"))
         .count();
-    assert_eq!(unused, 0, "$shared used in multiple subs should not be unused");
+    assert_eq!(
+        unused, 0,
+        "$shared used in multiple subs should not be unused"
+    );
     Ok(())
 }
 
@@ -1125,7 +1227,10 @@ print @keys;
         .iter()
         .filter(|i| i.kind == IssueKind::UnusedVariable && i.variable_name.contains("config"))
         .count();
-    assert_eq!(unused_config, 0, "direct usage of hash via keys() should not be unused");
+    assert_eq!(
+        unused_config, 0,
+        "direct usage of hash via keys() should not be unused"
+    );
     Ok(())
 }
 
@@ -1162,7 +1267,10 @@ print $total;
         .iter()
         .filter(|i| i.kind == IssueKind::UnusedVariable && i.variable_name.contains("total"))
         .count();
-    assert_eq!(unused_total, 0, "$total used in for body should not be unused");
+    assert_eq!(
+        unused_total, 0,
+        "$total used in for body should not be unused"
+    );
     Ok(())
 }
 
@@ -1207,7 +1315,10 @@ print $x;
         .iter()
         .filter(|i| i.kind == IssueKind::VariableShadowing && i.variable_name.ends_with('x'))
         .count();
-    assert_eq!(shadow_x, 0, "$x and @x are different variables, no shadowing expected");
+    assert_eq!(
+        shadow_x, 0,
+        "$x and @x are different variables, no shadowing expected"
+    );
     Ok(())
 }
 
@@ -1231,7 +1342,11 @@ print $val;
         .iter()
         .filter(|i| i.kind == IssueKind::VariableShadowing && i.variable_name.contains("val"))
         .count();
-    assert!(shadow_count >= 2, "should detect at least 2 shadow levels, got {}", shadow_count);
+    assert!(
+        shadow_count >= 2,
+        "should detect at least 2 shadow levels, got {}",
+        shadow_count
+    );
     Ok(())
 }
 
@@ -1250,7 +1365,10 @@ print $x;
     assert!(
         has_issue(&issues, IssueKind::ParameterShadowsGlobal, "x"),
         "sub parameter $x should shadow outer $x; issues: {:?}",
-        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+        issues
+            .iter()
+            .map(|i| (&i.kind, &i.variable_name))
+            .collect::<Vec<_>>()
     );
     Ok(())
 }
@@ -1362,13 +1480,19 @@ $arr[0];
         .iter()
         .filter(|i| i.kind == IssueKind::UnusedVariable && i.variable_name.contains("arrayref"))
         .count();
-    assert_eq!(unused_arrayref, 0, "$arrayref used via dereference should not be unused");
+    assert_eq!(
+        unused_arrayref, 0,
+        "$arrayref used via dereference should not be unused"
+    );
 
     let unused_hashref = issues
         .iter()
         .filter(|i| i.kind == IssueKind::UnusedVariable && i.variable_name.contains("hashref"))
         .count();
-    assert_eq!(unused_hashref, 0, "$hashref used via arrow dereference should not be unused");
+    assert_eq!(
+        unused_hashref, 0,
+        "$hashref used via arrow dereference should not be unused"
+    );
 
     let unused_hashslice_ref = issues
         .iter()
@@ -1385,13 +1509,19 @@ $arr[0];
         .iter()
         .filter(|i| i.kind == IssueKind::UnusedVariable && i.variable_name.contains("scalarref"))
         .count();
-    assert_eq!(unused_scalarref, 0, "$scalarref used via scalar dereference should not be unused");
+    assert_eq!(
+        unused_scalarref, 0,
+        "$scalarref used via scalar dereference should not be unused"
+    );
 
     let unused_arr = issues
         .iter()
         .filter(|i| i.kind == IssueKind::UnusedVariable && i.variable_name.contains("arr"))
         .count();
-    assert_eq!(unused_arr, 0, "@arr used via direct indexing should not be unused");
+    assert_eq!(
+        unused_arr, 0,
+        "@arr used via direct indexing should not be unused"
+    );
 
     Ok(())
 }
@@ -1417,7 +1547,10 @@ push @$arrayref, 'item';
         unused,
         0,
         "issue #3338: $arrayref used via push @$arrayref should not be unused; issues: {:?}",
-        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+        issues
+            .iter()
+            .map(|i| (&i.kind, &i.variable_name))
+            .collect::<Vec<_>>()
     );
     Ok(())
 }
@@ -1441,7 +1574,10 @@ push @$arrayref, 'second';
         unused,
         0,
         "issue #3338: $arrayref declared and used via push @$arrayref should not be unused under strict; issues: {:?}",
-        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+        issues
+            .iter()
+            .map(|i| (&i.kind, &i.variable_name))
+            .collect::<Vec<_>>()
     );
     let undeclared = issues
         .iter()
@@ -1451,7 +1587,10 @@ push @$arrayref, 'second';
         undeclared,
         0,
         "issue #3338: declared $arrayref should not be reported as undeclared under strict; issues: {:?}",
-        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+        issues
+            .iter()
+            .map(|i| (&i.kind, &i.variable_name))
+            .collect::<Vec<_>>()
     );
     Ok(())
 }
@@ -1482,7 +1621,10 @@ my $val   = $$sref;
             0,
             "issue #3338: ${} used via deref should not be unused; issues: {:?}",
             var,
-            issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+            issues
+                .iter()
+                .map(|i| (&i.kind, &i.variable_name))
+                .collect::<Vec<_>>()
         );
     }
     Ok(())
@@ -1503,16 +1645,20 @@ print *$gref;
 
     assert!(
         !issues.iter().any(|i| {
-            matches!(i.kind, IssueKind::UndeclaredVariable | IssueKind::UnusedVariable)
-                && i.variable_name.contains("cb")
+            matches!(
+                i.kind,
+                IssueKind::UndeclaredVariable | IssueKind::UnusedVariable
+            ) && i.variable_name.contains("cb")
         }),
         "$cb used via coderef invocation should not be flagged: {:?}",
         issues
     );
     assert!(
         !issues.iter().any(|i| {
-            matches!(i.kind, IssueKind::UndeclaredVariable | IssueKind::UnusedVariable)
-                && i.variable_name.contains("gref")
+            matches!(
+                i.kind,
+                IssueKind::UndeclaredVariable | IssueKind::UnusedVariable
+            ) && i.variable_name.contains("gref")
         }),
         "$gref used via glob dereference should not be flagged: {:?}",
         issues
@@ -1535,16 +1681,20 @@ $obj->$method();
 
     assert!(
         !issues.iter().any(|i| {
-            matches!(i.kind, IssueKind::UndeclaredVariable | IssueKind::UnusedVariable)
-                && i.variable_name.contains("obj")
+            matches!(
+                i.kind,
+                IssueKind::UndeclaredVariable | IssueKind::UnusedVariable
+            ) && i.variable_name.contains("obj")
         }),
         "$obj used via dynamic method deref should not be flagged: {:?}",
         issues
     );
     assert!(
         !issues.iter().any(|i| {
-            matches!(i.kind, IssueKind::UndeclaredVariable | IssueKind::UnusedVariable)
-                && i.variable_name.contains("method")
+            matches!(
+                i.kind,
+                IssueKind::UndeclaredVariable | IssueKind::UnusedVariable
+            ) && i.variable_name.contains("method")
         }),
         "$method used via dynamic method selection should not be flagged: {:?}",
         issues
@@ -1565,7 +1715,10 @@ print $arr[0];
         .iter()
         .filter(|i| i.kind == IssueKind::UnusedVariable && i.variable_name.contains("arr"))
         .count();
-    assert_eq!(unused_arr, 0, "@arr should not be flagged as unused when accessed via $arr[0]");
+    assert_eq!(
+        unused_arr, 0,
+        "@arr should not be flagged as unused when accessed via $arr[0]"
+    );
     Ok(())
 }
 
@@ -1602,8 +1755,14 @@ my @unused_arr = (1, 2, 3);
     let unused_arr = issues
         .iter()
         .any(|i| i.kind == IssueKind::UnusedVariable && i.variable_name.contains("unused_arr"));
-    assert!(unused_hash, "%unused_hash with no subscripts should still be flagged as unused");
-    assert!(unused_arr, "@unused_arr with no subscripts should still be flagged as unused");
+    assert!(
+        unused_hash,
+        "%unused_hash with no subscripts should still be flagged as unused"
+    );
+    assert!(
+        unused_arr,
+        "@unused_arr with no subscripts should still be flagged as unused"
+    );
     Ok(())
 }
 
@@ -1623,7 +1782,10 @@ my $_ignored = 2;
                     || i.variable_name.contains("_ignored"))
         })
         .count();
-    assert_eq!(unused_underscored, 0, "underscore-prefixed variables should not be flagged");
+    assert_eq!(
+        unused_underscored, 0,
+        "underscore-prefixed variables should not be flagged"
+    );
     Ok(())
 }
 
@@ -1688,7 +1850,10 @@ print "Hello, $name!\n";
         .iter()
         .filter(|i| i.kind == IssueKind::UnusedVariable && i.variable_name.contains("name"))
         .count();
-    assert_eq!(unused, 0, "$name used in interpolated string should not be unused");
+    assert_eq!(
+        unused, 0,
+        "$name used in interpolated string should not be unused"
+    );
     Ok(())
 }
 
@@ -1703,7 +1868,10 @@ print "\$name\n";
         .iter()
         .filter(|i| i.kind == IssueKind::UnusedVariable && i.variable_name.contains("name"))
         .count();
-    assert_eq!(unused, 1, "$name escaped in a string should still be unused");
+    assert_eq!(
+        unused, 1,
+        "$name escaped in a string should still be unused"
+    );
     Ok(())
 }
 
@@ -1718,7 +1886,10 @@ print "%seen\n";
         .iter()
         .filter(|i| i.kind == IssueKind::UnusedVariable && i.variable_name.contains("seen"))
         .count();
-    assert_eq!(unused, 1, "%seen in a string should not count as interpolation");
+    assert_eq!(
+        unused, 1,
+        "%seen in a string should not count as interpolation"
+    );
     Ok(())
 }
 
@@ -1734,7 +1905,11 @@ my $e = 5;
 "#;
     let issues = scope_issues(code);
     let unused_count = count_issues(&issues, IssueKind::UnusedVariable);
-    assert!(unused_count >= 5, "should detect at least 5 unused variables, got {}", unused_count);
+    assert!(
+        unused_count >= 5,
+        "should detect at least 5 unused variables, got {}",
+        unused_count
+    );
     Ok(())
 }
 
@@ -2048,7 +2223,10 @@ fn undeclared_variable_no_strict_no_issue() -> Result<(), Box<dyn std::error::Er
         .iter()
         .filter(|i| i.kind == IssueKind::UndeclaredVariable && i.variable_name.contains("whatever"))
         .count();
-    assert_eq!(undeclared, 0, "without strict, undeclared variables should not be flagged");
+    assert_eq!(
+        undeclared, 0,
+        "without strict, undeclared variables should not be flagged"
+    );
     Ok(())
 }
 
@@ -2064,7 +2242,10 @@ print $Foo::bar;
         .iter()
         .filter(|i| i.kind == IssueKind::UndeclaredVariable && i.variable_name.contains("Foo"))
         .count();
-    assert_eq!(undeclared_pkg, 0, "package-qualified variables should not be flagged");
+    assert_eq!(
+        undeclared_pkg, 0,
+        "package-qualified variables should not be flagged"
+    );
     Ok(())
 }
 
@@ -2116,7 +2297,10 @@ print $x;
 print @x;
 "#;
     let issues = scope_issues(code);
-    let redecl = issues.iter().filter(|i| i.kind == IssueKind::VariableRedeclaration).count();
+    let redecl = issues
+        .iter()
+        .filter(|i| i.kind == IssueKind::VariableRedeclaration)
+        .count();
     assert_eq!(redecl, 0, "$x and @x are different variables");
     Ok(())
 }
@@ -2136,7 +2320,10 @@ print $x;
     assert!(
         has_issue(&issues, IssueKind::UninitializedVariable, "x"),
         "should detect use of uninitialized $x; issues: {:?}",
-        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+        issues
+            .iter()
+            .map(|i| (&i.kind, &i.variable_name))
+            .collect::<Vec<_>>()
     );
     Ok(())
 }
@@ -2154,7 +2341,10 @@ print $x;
         .iter()
         .filter(|i| i.kind == IssueKind::UninitializedVariable && i.variable_name.contains("x"))
         .count();
-    assert_eq!(uninit, 0, "$x assigned before use should not be uninitialized");
+    assert_eq!(
+        uninit, 0,
+        "$x assigned before use should not be uninitialized"
+    );
     Ok(())
 }
 
@@ -2174,7 +2364,10 @@ sub bad_sub($x, $x) {
     assert!(
         has_issue(&issues, IssueKind::DuplicateParameter, "x"),
         "should detect duplicate parameter $x; issues: {:?}",
-        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+        issues
+            .iter()
+            .map(|i| (&i.kind, &i.variable_name))
+            .collect::<Vec<_>>()
     );
     Ok(())
 }
@@ -2195,7 +2388,10 @@ sub process($input) {
     assert!(
         has_issue(&issues, IssueKind::UnusedParameter, "input"),
         "should detect unused parameter $input; issues: {:?}",
-        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+        issues
+            .iter()
+            .map(|i| (&i.kind, &i.variable_name))
+            .collect::<Vec<_>>()
     );
     Ok(())
 }
@@ -2213,7 +2409,10 @@ sub callback($_event) {
         .iter()
         .filter(|i| i.kind == IssueKind::UnusedParameter && i.variable_name.contains("_event"))
         .count();
-    assert_eq!(unused_param, 0, "_prefixed parameter should not be flagged as unused");
+    assert_eq!(
+        unused_param, 0,
+        "_prefixed parameter should not be flagged as unused"
+    );
     Ok(())
 }
 
@@ -2237,7 +2436,10 @@ sub my_func {
         table.scopes.len()
     );
 
-    let has_sub_scope = table.scopes.values().any(|s| s.kind == ScopeKind::Subroutine);
+    let has_sub_scope = table
+        .scopes
+        .values()
+        .any(|s| s.kind == ScopeKind::Subroutine);
     assert!(has_sub_scope, "should have a Subroutine scope");
     Ok(())
 }
@@ -2288,7 +2490,10 @@ sub outer {
         .values()
         .filter(|s| s.kind == ScopeKind::Block && s.parent.is_some())
         .collect();
-    assert!(!block_scopes.is_empty(), "should have at least one block scope with a parent");
+    assert!(
+        !block_scopes.is_empty(),
+        "should have at least one block scope with a parent"
+    );
     Ok(())
 }
 
@@ -2313,7 +2518,10 @@ print @ISA;
                 && (i.variable_name.contains("VERSION") || i.variable_name.contains("ISA"))
         })
         .count();
-    assert_eq!(undeclared, 0, "use vars should declare globals, no undeclared warnings");
+    assert_eq!(
+        undeclared, 0,
+        "use vars should declare globals, no undeclared warnings"
+    );
     Ok(())
 }
 
@@ -2324,7 +2532,10 @@ print @ISA;
 #[test]
 fn edge_empty_source() -> Result<(), Box<dyn std::error::Error>> {
     let issues = scope_issues("");
-    assert!(issues.is_empty(), "empty source should produce no scope issues");
+    assert!(
+        issues.is_empty(),
+        "empty source should produce no scope issues"
+    );
     Ok(())
 }
 
@@ -2332,7 +2543,10 @@ fn edge_empty_source() -> Result<(), Box<dyn std::error::Error>> {
 fn edge_comments_only() -> Result<(), Box<dyn std::error::Error>> {
     let code = "# just a comment\n# another comment\n";
     let issues = scope_issues(code);
-    assert!(issues.is_empty(), "comments-only source should produce no scope issues");
+    assert!(
+        issues.is_empty(),
+        "comments-only source should produce no scope issues"
+    );
     Ok(())
 }
 
@@ -2407,9 +2621,18 @@ fn edge_scope_issue_range_within_source() -> Result<(), Box<dyn std::error::Erro
     let code = "my $x = 1;";
     let issues = scope_issues(code);
     for issue in &issues {
-        assert!(issue.range.0 <= code.len(), "range start should be within source");
-        assert!(issue.range.1 <= code.len(), "range end should be within source");
-        assert!(issue.range.0 <= issue.range.1, "range start should be <= end");
+        assert!(
+            issue.range.0 <= code.len(),
+            "range start should be within source"
+        );
+        assert!(
+            issue.range.1 <= code.len(),
+            "range end should be within source"
+        );
+        assert!(
+            issue.range.0 <= issue.range.1,
+            "range start should be <= end"
+        );
     }
     Ok(())
 }
@@ -2503,13 +2726,19 @@ print $private;
     assert!(
         has_issue(&issues, IssueKind::UndeclaredVariable, "private"),
         "my variable inside package block must not be visible outside it; issues: {:?}",
-        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+        issues
+            .iter()
+            .map(|i| (&i.kind, &i.variable_name))
+            .collect::<Vec<_>>()
     );
     let outer_undecl = issues
         .iter()
         .filter(|i| i.kind == IssueKind::UndeclaredVariable && i.variable_name.contains("outer"))
         .count();
-    assert_eq!(outer_undecl, 0, "$outer should still be accessible after package block");
+    assert_eq!(
+        outer_undecl, 0,
+        "$outer should still be accessible after package block"
+    );
     Ok(())
 }
 
@@ -2550,7 +2779,10 @@ print $inner_var;
     assert!(
         has_issue(&issues, IssueKind::UndeclaredVariable, "inner_var"),
         "my var inside package block must not escape to outer scope; issues: {:?}",
-        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+        issues
+            .iter()
+            .map(|i| (&i.kind, &i.variable_name))
+            .collect::<Vec<_>>()
     );
     Ok(())
 }
@@ -2649,7 +2881,10 @@ print $outer_var;
     assert!(
         has_issue(&issues, IssueKind::UndeclaredVariable, "inner_var"),
         "my var inside nested package block must not escape; issues: {:?}",
-        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+        issues
+            .iter()
+            .map(|i| (&i.kind, &i.variable_name))
+            .collect::<Vec<_>>()
     );
     let outer_at_file_scope = issues
         .iter()
@@ -2660,7 +2895,10 @@ print $outer_var;
     assert!(
         outer_at_file_scope > 0,
         "my var inside package Outer block must not escape to file scope; issues: {:?}",
-        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+        issues
+            .iter()
+            .map(|i| (&i.kind, &i.variable_name))
+            .collect::<Vec<_>>()
     );
     Ok(())
 }
@@ -2831,7 +3069,10 @@ print $buffer;
     assert!(
         !issues.iter().any(|i| {
             i.variable_name.contains("buffer")
-                && matches!(i.kind, IssueKind::UndeclaredVariable | IssueKind::UnusedVariable)
+                && matches!(
+                    i.kind,
+                    IssueKind::UndeclaredVariable | IssueKind::UnusedVariable
+                )
         }),
         "read buffer declaration should not be flagged (issues: {:?})",
         issues
@@ -2853,7 +3094,10 @@ print $buffer;
     assert!(
         issues.iter().any(|i| {
             i.variable_name == "$fh"
-                && matches!(i.kind, IssueKind::UnusedVariable | IssueKind::UninitializedVariable)
+                && matches!(
+                    i.kind,
+                    IssueKind::UnusedVariable | IssueKind::UninitializedVariable
+                )
         }),
         "read position-0 declaration should not be auto-consumed (issues: {:?})",
         issues
@@ -2861,7 +3105,10 @@ print $buffer;
     assert!(
         !issues.iter().any(|i| {
             i.variable_name == "$buffer"
-                && matches!(i.kind, IssueKind::UndeclaredVariable | IssueKind::UnusedVariable)
+                && matches!(
+                    i.kind,
+                    IssueKind::UndeclaredVariable | IssueKind::UnusedVariable
+                )
         }),
         "read position-1 buffer declaration should still be consumed (issues: {:?})",
         issues
@@ -2911,7 +3158,10 @@ print $b;
     assert!(
         issues.iter().any(|i| {
             i.variable_name == "$domain"
-                && matches!(i.kind, IssueKind::UnusedVariable | IssueKind::UninitializedVariable)
+                && matches!(
+                    i.kind,
+                    IssueKind::UnusedVariable | IssueKind::UninitializedVariable
+                )
         }),
         "socketpair position-2 declaration should not be auto-consumed (issues: {:?})",
         issues
@@ -2939,7 +3189,10 @@ if ("hello" =~ /ell/) {
     assert!(
         !has_issue(&issues, IssueKind::UndeclaredVariable, "-"),
         "@- should be a recognized builtin; got issues: {:?}",
-        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+        issues
+            .iter()
+            .map(|i| (&i.kind, &i.variable_name))
+            .collect::<Vec<_>>()
     );
     Ok(())
 }
@@ -2960,7 +3213,10 @@ if ("hello" =~ /ell/) {
     assert!(
         !has_issue(&issues, IssueKind::UndeclaredVariable, "+"),
         "@+ should be a recognized builtin; got issues: {:?}",
-        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+        issues
+            .iter()
+            .map(|i| (&i.kind, &i.variable_name))
+            .collect::<Vec<_>>()
     );
     Ok(())
 }
@@ -2982,7 +3238,10 @@ if ("hello world" =~ /world/p) {
     assert!(
         !has_issue(&issues, IssueKind::UndeclaredVariable, "^MATCH"),
         "{{^MATCH}} should be a recognized builtin; got issues: {:?}",
-        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+        issues
+            .iter()
+            .map(|i| (&i.kind, &i.variable_name))
+            .collect::<Vec<_>>()
     );
     Ok(())
 }
@@ -3000,7 +3259,10 @@ if ("hello world" =~ /world/p) {
     assert!(
         !has_issue(&issues, IssueKind::UndeclaredVariable, "^PREMATCH"),
         "{{^PREMATCH}} should be a recognized builtin; got issues: {:?}",
-        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+        issues
+            .iter()
+            .map(|i| (&i.kind, &i.variable_name))
+            .collect::<Vec<_>>()
     );
     Ok(())
 }
@@ -3018,7 +3280,10 @@ if ("hello world" =~ /world/p) {
     assert!(
         !has_issue(&issues, IssueKind::UndeclaredVariable, "^POSTMATCH"),
         "{{^POSTMATCH}} should be a recognized builtin; got issues: {:?}",
-        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+        issues
+            .iter()
+            .map(|i| (&i.kind, &i.variable_name))
+            .collect::<Vec<_>>()
     );
     Ok(())
 }
@@ -3041,7 +3306,10 @@ my @doubled = map { $_ * 2 } @nums;
     assert!(
         !has_issue(&issues, IssueKind::UndeclaredVariable, "_"),
         "$_ in map block should not be flagged as undeclared; issues: {:?}",
-        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+        issues
+            .iter()
+            .map(|i| (&i.kind, &i.variable_name))
+            .collect::<Vec<_>>()
     );
     Ok(())
 }
@@ -3060,7 +3328,10 @@ my @evens = grep { $_ % 2 == 0 } @nums;
     assert!(
         !has_issue(&issues, IssueKind::UndeclaredVariable, "_"),
         "$_ in grep block should not be flagged as undeclared; issues: {:?}",
-        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+        issues
+            .iter()
+            .map(|i| (&i.kind, &i.variable_name))
+            .collect::<Vec<_>>()
     );
     Ok(())
 }
@@ -3077,12 +3348,17 @@ my @doubled = map { $_ * 2 } @nums;
 my @evens = grep { $_ % 2 == 0 } @nums;
 "#;
     let issues = scope_issues_strict(code);
-    let undeclared: Vec<_> =
-        issues.iter().filter(|i| i.kind == IssueKind::UndeclaredVariable).collect();
+    let undeclared: Vec<_> = issues
+        .iter()
+        .filter(|i| i.kind == IssueKind::UndeclaredVariable)
+        .collect();
     assert!(
         undeclared.is_empty(),
         "no UndeclaredVariable diagnostics expected for $_ in map/grep contexts; got: {:?}",
-        undeclared.iter().map(|i| &i.variable_name).collect::<Vec<_>>()
+        undeclared
+            .iter()
+            .map(|i| &i.variable_name)
+            .collect::<Vec<_>>()
     );
     Ok(())
 }
@@ -3103,22 +3379,34 @@ print @sorted;
     assert!(
         !has_issue(&issues, IssueKind::UndeclaredVariable, "a"),
         "$a in sort block must not be flagged as undeclared under strict; issues: {:?}",
-        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+        issues
+            .iter()
+            .map(|i| (&i.kind, &i.variable_name))
+            .collect::<Vec<_>>()
     );
     assert!(
         !has_issue(&issues, IssueKind::UndeclaredVariable, "b"),
         "$b in sort block must not be flagged as undeclared under strict; issues: {:?}",
-        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+        issues
+            .iter()
+            .map(|i| (&i.kind, &i.variable_name))
+            .collect::<Vec<_>>()
     );
     assert!(
         !has_issue(&issues, IssueKind::UnusedVariable, "a"),
         "$a in sort block must not be flagged as unused; issues: {:?}",
-        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+        issues
+            .iter()
+            .map(|i| (&i.kind, &i.variable_name))
+            .collect::<Vec<_>>()
     );
     assert!(
         !has_issue(&issues, IssueKind::UnusedVariable, "b"),
         "$b in sort block must not be flagged as unused; issues: {:?}",
-        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+        issues
+            .iter()
+            .map(|i| (&i.kind, &i.variable_name))
+            .collect::<Vec<_>>()
     );
     Ok(())
 }
@@ -3135,12 +3423,18 @@ print @strings;
     assert!(
         !has_issue(&issues, IssueKind::UndeclaredVariable, "a"),
         "$a in string-cmp sort block must not be undeclared; issues: {:?}",
-        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+        issues
+            .iter()
+            .map(|i| (&i.kind, &i.variable_name))
+            .collect::<Vec<_>>()
     );
     assert!(
         !has_issue(&issues, IssueKind::UndeclaredVariable, "b"),
         "$b in string-cmp sort block must not be undeclared; issues: {:?}",
-        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+        issues
+            .iter()
+            .map(|i| (&i.kind, &i.variable_name))
+            .collect::<Vec<_>>()
     );
     Ok(())
 }
@@ -3158,12 +3452,18 @@ print @by_len;
     assert!(
         !has_issue(&issues, IssueKind::UndeclaredVariable, "a"),
         "$a in named sort sub must not be flagged as undeclared; issues: {:?}",
-        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+        issues
+            .iter()
+            .map(|i| (&i.kind, &i.variable_name))
+            .collect::<Vec<_>>()
     );
     assert!(
         !has_issue(&issues, IssueKind::UndeclaredVariable, "b"),
         "$b in named sort sub must not be flagged as undeclared; issues: {:?}",
-        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+        issues
+            .iter()
+            .map(|i| (&i.kind, &i.variable_name))
+            .collect::<Vec<_>>()
     );
     Ok(())
 }
@@ -3179,12 +3479,18 @@ print @sorted;
     assert!(
         !has_issue(&issues, IssueKind::UnusedVariable, "a"),
         "$a in sort block must not be flagged as unused (no strict); issues: {:?}",
-        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+        issues
+            .iter()
+            .map(|i| (&i.kind, &i.variable_name))
+            .collect::<Vec<_>>()
     );
     assert!(
         !has_issue(&issues, IssueKind::UnusedVariable, "b"),
         "$b in sort block must not be flagged as unused (no strict); issues: {:?}",
-        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+        issues
+            .iter()
+            .map(|i| (&i.kind, &i.variable_name))
+            .collect::<Vec<_>>()
     );
     Ok(())
 }
@@ -3197,7 +3503,10 @@ my $a = 42;
 "#;
     let issues = scope_issues(code);
     let undeclared = has_issue(&issues, IssueKind::UndeclaredVariable, "a");
-    assert!(!undeclared, "a lexically declared $a must never be flagged as undeclared");
+    assert!(
+        !undeclared,
+        "a lexically declared $a must never be flagged as undeclared"
+    );
     Ok(())
 }
 
@@ -3250,9 +3559,18 @@ fn phase_block_symbol_location_within_source() -> Result<(), Box<dyn std::error:
     let table = parse_and_extract(code);
     let syms = table.symbols.get("BEGIN").ok_or("BEGIN not found")?;
     let sym = syms.first().ok_or("no symbols for BEGIN")?;
-    assert!(sym.location.start <= code.len(), "start offset must be within source");
-    assert!(sym.location.end <= code.len(), "end offset must be within source");
-    assert!(sym.location.start < sym.location.end, "start must be before end");
+    assert!(
+        sym.location.start <= code.len(),
+        "start offset must be within source"
+    );
+    assert!(
+        sym.location.end <= code.len(),
+        "end offset must be within source"
+    );
+    assert!(
+        sym.location.start < sym.location.end,
+        "start must be before end"
+    );
     Ok(())
 }
 
@@ -3262,7 +3580,10 @@ fn phase_block_symbol_in_global_scope() -> Result<(), Box<dyn std::error::Error>
     let table = parse_and_extract(code);
     let begin_syms = table.symbols.get("BEGIN").ok_or("BEGIN not found")?;
     let begin_sym = begin_syms.first().ok_or("no BEGIN symbol")?;
-    assert_eq!(begin_sym.scope_id, 0, "BEGIN symbol must be in global scope");
+    assert_eq!(
+        begin_sym.scope_id, 0,
+        "BEGIN symbol must be in global scope"
+    );
     Ok(())
 }
 
@@ -3283,7 +3604,10 @@ print $inner;
             has_issue(&issues, IssueKind::UndeclaredVariable, "inner"),
             "{} block lexical must not leak to outer scope; issues: {:?}",
             phase,
-            issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+            issues
+                .iter()
+                .map(|i| (&i.kind, &i.variable_name))
+                .collect::<Vec<_>>()
         );
     }
     Ok(())
@@ -3305,7 +3629,10 @@ CHECK {
     assert!(
         has_issue(&issues, IssueKind::UndeclaredVariable, "inner"),
         "BEGIN lexical must not leak into sibling phaser; issues: {:?}",
-        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+        issues
+            .iter()
+            .map(|i| (&i.kind, &i.variable_name))
+            .collect::<Vec<_>>()
     );
     Ok(())
 }
@@ -3336,7 +3663,10 @@ MyClass->some_method();
     assert!(
         !has_issue(&issues, IssueKind::UndeclaredVariable, "$AUTOLOAD"),
         "$AUTOLOAD in AUTOLOAD context must not be flagged as undeclared; issues: {:?}",
-        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+        issues
+            .iter()
+            .map(|i| (&i.kind, &i.variable_name))
+            .collect::<Vec<_>>()
     );
     Ok(())
 }
@@ -3362,7 +3692,10 @@ print $a, $b, $c, $d, $e;
         unused,
         0,
         "all variables used in print comma-separated args should not be unused; issues: {:?}",
-        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+        issues
+            .iter()
+            .map(|i| (&i.kind, &i.variable_name))
+            .collect::<Vec<_>>()
     );
     Ok(())
 }
@@ -3437,7 +3770,9 @@ try {
         issues
     );
     assert!(
-        !issues.iter().any(|i| i.kind == IssueKind::UnusedVariable && i.variable_name == "$err"),
+        !issues
+            .iter()
+            .any(|i| i.kind == IssueKind::UnusedVariable && i.variable_name == "$err"),
         "used catch variable $err must not be reported as unused: {:?}",
         issues
     );
@@ -3538,7 +3873,9 @@ try {
     // Must not panic; must not produce any undeclared-variable issue
     let issues = scope_issues_strict(code);
     assert!(
-        !issues.iter().any(|i| i.kind == IssueKind::UndeclaredVariable),
+        !issues
+            .iter()
+            .any(|i| i.kind == IssueKind::UndeclaredVariable),
         "bare catch should not produce undeclared diagnostics: {:?}",
         issues
     );

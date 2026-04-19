@@ -28,7 +28,10 @@ fn config_without_perltidy() -> ScenarioConfig {
         .filter(|entry| !entry.contains("perltidy"))
         .map(String::from)
         .collect();
-    ScenarioConfig { path_restriction: Some(dirs), ..Default::default() }
+    ScenarioConfig {
+        path_restriction: Some(dirs),
+        ..Default::default()
+    }
 }
 
 #[test]
@@ -41,7 +44,9 @@ fn scenario_02_formatting_without_perltidy_does_not_crash() {
     let source = "sub test{my$x=1;return$x;}\n";
     let harness = UxHarness::new(config_without_perltidy()).expect("Failed to create UX harness");
 
-    harness.open_file("format_me.pl", source).expect("didOpen should succeed");
+    harness
+        .open_file("format_me.pl", source)
+        .expect("didOpen should succeed");
 
     let result = harness.format_document("format_me.pl");
 
@@ -81,7 +86,9 @@ fn scenario_02_server_remains_alive_after_failed_format() {
     let source = "my $x = 1;\n";
     let harness = UxHarness::new(config_without_perltidy()).expect("Failed to create UX harness");
 
-    harness.open_file("alive.pl", source).expect("didOpen should succeed");
+    harness
+        .open_file("alive.pl", source)
+        .expect("didOpen should succeed");
 
     let _ = harness.format_document("alive.pl");
 
@@ -89,7 +96,10 @@ fn scenario_02_server_remains_alive_after_failed_format() {
     match hover {
         Ok(_) => {}
         Err(e) => {
-            panic!("Server unresponsive after failed formatting — UX regression: {}", e);
+            panic!(
+                "Server unresponsive after failed formatting — UX regression: {}",
+                e
+            );
         }
     }
 }

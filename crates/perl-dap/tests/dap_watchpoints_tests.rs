@@ -11,10 +11,16 @@ fn data_breakpoint_info_request(
 ) -> Result<serde_json::Value, String> {
     let response = adapter.handle_request(2, "dataBreakpointInfo", Some(json!({ "name": name })));
     match response {
-        DapMessage::Response { success: true, body: Some(body), .. } => Ok(body),
-        DapMessage::Response { success: false, message, .. } => {
-            Err(message.unwrap_or_else(|| "unknown error".to_string()))
-        }
+        DapMessage::Response {
+            success: true,
+            body: Some(body),
+            ..
+        } => Ok(body),
+        DapMessage::Response {
+            success: false,
+            message,
+            ..
+        } => Err(message.unwrap_or_else(|| "unknown error".to_string())),
         _ => Err("unexpected response type".to_string()),
     }
 }
@@ -30,10 +36,16 @@ fn set_data_breakpoints_request(
         Some(json!({ "breakpoints": breakpoints })),
     );
     match response {
-        DapMessage::Response { success: true, body: Some(body), .. } => Ok(body),
-        DapMessage::Response { success: false, message, .. } => {
-            Err(message.unwrap_or_else(|| "unknown error".to_string()))
-        }
+        DapMessage::Response {
+            success: true,
+            body: Some(body),
+            ..
+        } => Ok(body),
+        DapMessage::Response {
+            success: false,
+            message,
+            ..
+        } => Err(message.unwrap_or_else(|| "unknown error".to_string())),
         _ => Err("unexpected response type".to_string()),
     }
 }
@@ -53,7 +65,10 @@ fn test_data_breakpoint_info_valid_scalar() -> TestResult {
     let access_types = body.get("accessTypes").and_then(|v| v.as_array());
     assert!(access_types.is_some(), "Should include access types");
     assert!(
-        access_types.iter().flat_map(|a| a.iter()).any(|v| v.as_str() == Some("write")),
+        access_types
+            .iter()
+            .flat_map(|a| a.iter())
+            .any(|v| v.as_str() == Some("write")),
         "Should support write access"
     );
 
@@ -91,7 +106,11 @@ fn test_data_breakpoint_info_qualified_name() -> TestResult {
 
     let body = data_breakpoint_info_request(&mut adapter, "$Foo::Bar::baz")?;
     let data_id = body.get("dataId").and_then(|v| v.as_str());
-    assert_eq!(data_id, Some("$Foo::Bar::baz"), "Qualified name should be watchable");
+    assert_eq!(
+        data_id,
+        Some("$Foo::Bar::baz"),
+        "Qualified name should be watchable"
+    );
 
     Ok(())
 }
@@ -149,7 +168,9 @@ fn test_data_breakpoint_info_missing_arguments() {
     let response = adapter.handle_request(2, "dataBreakpointInfo", None);
 
     match response {
-        DapMessage::Response { success, message, .. } => {
+        DapMessage::Response {
+            success, message, ..
+        } => {
             assert!(!success, "Expected failure for missing arguments");
             assert!(message.is_some(), "Expected error message");
         }
@@ -166,9 +187,14 @@ fn test_set_data_breakpoints_empty_list() -> TestResult {
 
     let body = set_data_breakpoints_request(&mut adapter, json!([]))?;
 
-    let breakpoints =
-        body.get("breakpoints").and_then(|v| v.as_array()).ok_or("missing breakpoints")?;
-    assert!(breakpoints.is_empty(), "Empty input should produce empty output");
+    let breakpoints = body
+        .get("breakpoints")
+        .and_then(|v| v.as_array())
+        .ok_or("missing breakpoints")?;
+    assert!(
+        breakpoints.is_empty(),
+        "Empty input should produce empty output"
+    );
 
     Ok(())
 }
@@ -183,13 +209,17 @@ fn test_set_data_breakpoints_single() -> TestResult {
         json!([{ "dataId": "$x", "accessType": "write" }]),
     )?;
 
-    let breakpoints =
-        body.get("breakpoints").and_then(|v| v.as_array()).ok_or("missing breakpoints")?;
+    let breakpoints = body
+        .get("breakpoints")
+        .and_then(|v| v.as_array())
+        .ok_or("missing breakpoints")?;
     assert_eq!(breakpoints.len(), 1, "Should have one breakpoint");
 
     let bp = &breakpoints[0];
     assert!(
-        bp.get("verified").and_then(|v| v.as_bool()).unwrap_or(false),
+        bp.get("verified")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false),
         "Breakpoint should be verified"
     );
 
@@ -210,9 +240,15 @@ fn test_set_data_breakpoints_multiple() -> TestResult {
         ]),
     )?;
 
-    let breakpoints =
-        body.get("breakpoints").and_then(|v| v.as_array()).ok_or("missing breakpoints")?;
-    assert_eq!(breakpoints.len(), 3, "Should have three breakpoints, order preserved");
+    let breakpoints = body
+        .get("breakpoints")
+        .and_then(|v| v.as_array())
+        .ok_or("missing breakpoints")?;
+    assert_eq!(
+        breakpoints.len(),
+        3,
+        "Should have three breakpoints, order preserved"
+    );
 
     // Verify IDs are sequential
     for (i, bp) in breakpoints.iter().enumerate() {
@@ -236,7 +272,10 @@ fn test_set_data_breakpoints_replace_semantics() -> TestResult {
             { "dataId": "$y", "accessType": "write" }
         ]),
     )?;
-    let bps1 = body1.get("breakpoints").and_then(|v| v.as_array()).ok_or("missing breakpoints")?;
+    let bps1 = body1
+        .get("breakpoints")
+        .and_then(|v| v.as_array())
+        .ok_or("missing breakpoints")?;
     assert_eq!(bps1.len(), 2);
 
     // Second request: replace with just one
@@ -244,7 +283,10 @@ fn test_set_data_breakpoints_replace_semantics() -> TestResult {
         &mut adapter,
         json!([{ "dataId": "$z", "accessType": "write" }]),
     )?;
-    let bps2 = body2.get("breakpoints").and_then(|v| v.as_array()).ok_or("missing breakpoints")?;
+    let bps2 = body2
+        .get("breakpoints")
+        .and_then(|v| v.as_array())
+        .ok_or("missing breakpoints")?;
     assert_eq!(bps2.len(), 1, "Second request should replace, not append");
 
     Ok(())
@@ -258,7 +300,9 @@ fn test_set_data_breakpoints_missing_arguments() {
     let response = adapter.handle_request(3, "setDataBreakpoints", None);
 
     match response {
-        DapMessage::Response { success, message, .. } => {
+        DapMessage::Response {
+            success, message, ..
+        } => {
             assert!(!success, "Expected failure for missing arguments");
             assert!(message.is_some(), "Expected error message");
         }
@@ -274,7 +318,9 @@ fn test_data_breakpoint_info_response_is_success() {
     let response = adapter.handle_request(2, "dataBreakpointInfo", Some(json!({ "name": "$x" })));
 
     match response {
-        DapMessage::Response { success, command, .. } => {
+        DapMessage::Response {
+            success, command, ..
+        } => {
             assert!(success);
             assert_eq!(command, "dataBreakpointInfo");
         }

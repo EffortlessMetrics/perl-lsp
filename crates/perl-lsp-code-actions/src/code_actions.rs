@@ -80,7 +80,11 @@ use perl_parser_core::Node;
 ///
 /// Since Diagnostic already uses byte offsets, this is a simple copy.
 fn to_quick_fix_diagnostic(diag: &Diagnostic) -> QuickFixDiagnostic {
-    QuickFixDiagnostic { range: diag.range, message: diag.message.clone(), code: diag.code.clone() }
+    QuickFixDiagnostic {
+        range: diag.range,
+        message: diag.message.clone(),
+        code: diag.code.clone(),
+    }
 }
 
 /// Code actions provider
@@ -304,7 +308,9 @@ mod tests {
         let actions = provider.get_code_actions(&ast, (0, source.len()), &diagnostics);
 
         assert!(
-            actions.iter().any(|a| a.title.contains("Declare") || a.title.contains("my")),
+            actions
+                .iter()
+                .any(|a| a.title.contains("Declare") || a.title.contains("my")),
             "Expected action to declare variable, got: {:?}",
             actions
         );
@@ -345,11 +351,16 @@ mod tests {
         let provider = CodeActionsProvider::new(source.to_string());
         let actions = provider.get_code_actions(&ast, (0, source.len()), &diagnostics);
 
-        let shebang_actions: Vec<_> =
-            actions.iter().filter(|a| a.title.contains("portable shebang")).collect();
+        let shebang_actions: Vec<_> = actions
+            .iter()
+            .filter(|a| a.title.contains("portable shebang"))
+            .collect();
 
         assert_eq!(shebang_actions.len(), 1, "Expected one shebang action");
-        assert_eq!(shebang_actions[0].edit.changes[0].new_text, "#!/usr/bin/env perl");
+        assert_eq!(
+            shebang_actions[0].edit.changes[0].new_text,
+            "#!/usr/bin/env perl"
+        );
     }
 
     #[test]
@@ -362,11 +373,16 @@ mod tests {
         let provider = CodeActionsProvider::new(source.to_string());
         let actions = provider.get_code_actions(&ast, (0, source.len()), &diagnostics);
 
-        let shebang_actions: Vec<_> =
-            actions.iter().filter(|a| a.title.contains("portable shebang")).collect();
+        let shebang_actions: Vec<_> = actions
+            .iter()
+            .filter(|a| a.title.contains("portable shebang"))
+            .collect();
 
         assert_eq!(shebang_actions.len(), 1);
-        assert_eq!(shebang_actions[0].edit.changes[0].new_text, "#!/usr/bin/env perl -w");
+        assert_eq!(
+            shebang_actions[0].edit.changes[0].new_text,
+            "#!/usr/bin/env perl -w"
+        );
     }
 
     #[test]
@@ -379,8 +395,10 @@ mod tests {
         let provider = CodeActionsProvider::new(source.to_string());
         let actions = provider.get_code_actions(&ast, (0, source.len()), &diagnostics);
 
-        let shebang_actions: Vec<_> =
-            actions.iter().filter(|a| a.title.contains("portable shebang")).collect();
+        let shebang_actions: Vec<_> = actions
+            .iter()
+            .filter(|a| a.title.contains("portable shebang"))
+            .collect();
 
         assert!(shebang_actions.is_empty(), "env perl should not be flagged");
     }
@@ -395,10 +413,15 @@ mod tests {
         let provider = CodeActionsProvider::new(source.to_string());
         let actions = provider.get_code_actions(&ast, (0, source.len()), &diagnostics);
 
-        let shebang_actions: Vec<_> =
-            actions.iter().filter(|a| a.title.contains("portable shebang")).collect();
+        let shebang_actions: Vec<_> = actions
+            .iter()
+            .filter(|a| a.title.contains("portable shebang"))
+            .collect();
 
-        assert!(shebang_actions.is_empty(), "No shebang should not be flagged");
+        assert!(
+            shebang_actions.is_empty(),
+            "No shebang should not be flagged"
+        );
     }
 
     #[test]
@@ -411,11 +434,16 @@ mod tests {
         let provider = CodeActionsProvider::new(source.to_string());
         let actions = provider.get_code_actions(&ast, (0, source.len()), &diagnostics);
 
-        let shebang_actions: Vec<_> =
-            actions.iter().filter(|a| a.title.contains("portable shebang")).collect();
+        let shebang_actions: Vec<_> = actions
+            .iter()
+            .filter(|a| a.title.contains("portable shebang"))
+            .collect();
 
         assert_eq!(shebang_actions.len(), 1, "Local bin perl should be flagged");
-        assert_eq!(shebang_actions[0].edit.changes[0].new_text, "#!/usr/bin/env perl");
+        assert_eq!(
+            shebang_actions[0].edit.changes[0].new_text,
+            "#!/usr/bin/env perl"
+        );
     }
 
     #[test]
@@ -428,11 +456,16 @@ mod tests {
         let provider = CodeActionsProvider::new(source.to_string());
         let actions = provider.get_code_actions(&ast, (0, source.len()), &diagnostics);
 
-        let shebang_actions: Vec<_> =
-            actions.iter().filter(|a| a.title.contains("portable shebang")).collect();
+        let shebang_actions: Vec<_> = actions
+            .iter()
+            .filter(|a| a.title.contains("portable shebang"))
+            .collect();
 
         assert_eq!(shebang_actions.len(), 1);
-        assert_eq!(shebang_actions[0].edit.changes[0].new_text, "#!/usr/bin/env perl -T");
+        assert_eq!(
+            shebang_actions[0].edit.changes[0].new_text,
+            "#!/usr/bin/env perl -T"
+        );
     }
 
     #[test]
@@ -445,10 +478,15 @@ mod tests {
         let provider = CodeActionsProvider::new(source.to_string());
         let actions = provider.get_code_actions(&ast, (0, source.len()), &diagnostics);
 
-        let shebang_actions: Vec<_> =
-            actions.iter().filter(|a| a.title.contains("portable shebang")).collect();
+        let shebang_actions: Vec<_> = actions
+            .iter()
+            .filter(|a| a.title.contains("portable shebang"))
+            .collect();
 
-        assert!(shebang_actions.is_empty(), "Non-perl shebang should not be flagged");
+        assert!(
+            shebang_actions.is_empty(),
+            "Non-perl shebang should not be flagged"
+        );
     }
 
     #[test]
@@ -479,8 +517,16 @@ mod tests {
 
         let provider = CodeActionsProvider::new(source.to_string());
         let actions = provider.get_code_actions(&ast, (0, source.len()), &diagnostics);
-        assert!(actions.iter().any(|a| a.title.contains("bareword filehandle")));
-        assert!(actions.iter().any(|a| a.title.contains("three-argument open() for safety")));
+        assert!(
+            actions
+                .iter()
+                .any(|a| a.title.contains("bareword filehandle"))
+        );
+        assert!(
+            actions
+                .iter()
+                .any(|a| a.title.contains("three-argument open() for safety"))
+        );
     }
 
     #[test]
@@ -523,7 +569,11 @@ mod tests {
 
         assert!(actions.iter().any(|a| a.title == "Add 'use strict'"));
         assert!(actions.iter().any(|a| a.title == "Add 'use warnings'"));
-        assert!(actions.iter().any(|a| a.title.contains("Remove unused variable")));
+        assert!(
+            actions
+                .iter()
+                .any(|a| a.title.contains("Remove unused variable"))
+        );
     }
 
     #[test]

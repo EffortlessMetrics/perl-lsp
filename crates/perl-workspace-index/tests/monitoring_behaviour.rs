@@ -35,7 +35,12 @@ fn given_instrumentation_when_recording_transitions_then_snapshot_reports_counts
         }),
         Some(&1)
     );
-    assert_eq!(snapshot.early_exit_counts.get(&EarlyExitReason::InitialTimeBudget), Some(&1));
+    assert_eq!(
+        snapshot
+            .early_exit_counts
+            .get(&EarlyExitReason::InitialTimeBudget),
+        Some(&1)
+    );
     assert!(snapshot.last_early_exit.is_some());
 }
 
@@ -124,13 +129,17 @@ fn test_instrumentation_phase_transition_count() {
 
     let snap = inst.snapshot();
     assert_eq!(
-        snap.phase_transition_counts
-            .get(&IndexPhaseTransition { from: IndexPhase::Idle, to: IndexPhase::Scanning }),
+        snap.phase_transition_counts.get(&IndexPhaseTransition {
+            from: IndexPhase::Idle,
+            to: IndexPhase::Scanning
+        }),
         Some(&2)
     );
     assert_eq!(
-        snap.phase_transition_counts
-            .get(&IndexPhaseTransition { from: IndexPhase::Scanning, to: IndexPhase::Indexing }),
+        snap.phase_transition_counts.get(&IndexPhaseTransition {
+            from: IndexPhase::Scanning,
+            to: IndexPhase::Indexing
+        }),
         Some(&1)
     );
 }
@@ -152,7 +161,10 @@ fn test_instrumentation_multiple_early_exits_accumulate() {
     });
 
     let snap = inst.snapshot();
-    assert_eq!(snap.early_exit_counts.get(&EarlyExitReason::FileLimit), Some(&2));
+    assert_eq!(
+        snap.early_exit_counts.get(&EarlyExitReason::FileLimit),
+        Some(&2)
+    );
     // last_early_exit should be the most recent one
     let last = must_some(snap.last_early_exit);
     assert_eq!(last.elapsed_ms, 200);
@@ -164,12 +176,20 @@ fn test_instrumentation_snapshot_contains_current_state_duration() {
     // Even without any transitions, the snapshot should include time in Building state
     let snap = inst.snapshot();
     assert!(
-        snap.state_durations_ms.contains_key(&IndexStateKind::Building),
+        snap.state_durations_ms
+            .contains_key(&IndexStateKind::Building),
         "snapshot must contain Building key in state_durations_ms"
     );
-    let building_ms = must_some(snap.state_durations_ms.get(&IndexStateKind::Building).copied());
+    let building_ms = must_some(
+        snap.state_durations_ms
+            .get(&IndexStateKind::Building)
+            .copied(),
+    );
     // We can't assert an exact value, but it should be small in a unit test
-    assert!(building_ms < 10_000, "duration should be small in a unit test: {building_ms}ms");
+    assert!(
+        building_ms < 10_000,
+        "duration should be small in a unit test: {building_ms}ms"
+    );
 }
 
 #[test]

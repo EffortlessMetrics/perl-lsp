@@ -54,7 +54,10 @@ my $bar = $foo * 2;"#;
         assert!(obj.contains_key("kind"));
 
         let kind = obj["kind"].as_u64().ok_or("Kind is not a u64")?;
-        assert!((1..=3).contains(&kind), "Kind should be Text(1), Read(2), or Write(3)");
+        assert!(
+            (1..=3).contains(&kind),
+            "Kind should be Text(1), Read(2), or Write(3)"
+        );
     }
 
     Ok(())
@@ -119,7 +122,10 @@ $other->process();"#;
     let highlights_arr = response.as_array().ok_or("Response is not an array")?;
 
     // Should find all 'process' method calls
-    assert!(highlights_arr.len() >= 2, "Should find at least 2 occurrences of 'process' method");
+    assert!(
+        highlights_arr.len() >= 2,
+        "Should find at least 2 occurrences of 'process' method"
+    );
 
     Ok(())
 }
@@ -154,7 +160,10 @@ my $obj = MyPackage->new();"#;
     // Note: Package name highlighting may not be fully implemented.
     // Accept any result - the key test is that the API works correctly
     // and returns a valid array response.
-    eprintln!("Package highlight: found {} occurrences of 'MyPackage'", highlights_arr.len());
+    eprintln!(
+        "Package highlight: found {} occurrences of 'MyPackage'",
+        highlights_arr.len()
+    );
 
     Ok(())
 }
@@ -179,7 +188,11 @@ my $foo = 42;"#;
     let highlights_arr = response.as_array().ok_or("Response is not an array")?;
 
     // Should return empty array for non-symbol positions
-    assert_eq!(highlights_arr.len(), 0, "Should return empty array for non-symbol positions");
+    assert_eq!(
+        highlights_arr.len(),
+        0,
+        "Should return empty array for non-symbol positions"
+    );
 
     Ok(())
 }

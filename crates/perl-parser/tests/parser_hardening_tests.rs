@@ -14,7 +14,12 @@ fn q_bareword_in_expr_positions() {
     for code in test_cases_that_should_work {
         let mut parser = Parser::new(code);
         let result = parser.parse();
-        assert!(result.is_ok(), "Failed to parse '{}': {:?}", code, result.err());
+        assert!(
+            result.is_ok(),
+            "Failed to parse '{}': {:?}",
+            code,
+            result.err()
+        );
     }
 
     // These are genuinely ambiguous in Perl and our lexer treats them as quote operators
@@ -56,7 +61,12 @@ fn quote_ops_in_real_expressions() {
     for code in test_cases {
         let mut parser = Parser::new(code);
         let result = parser.parse();
-        assert!(result.is_ok(), "Failed to parse '{}': {:?}", code, result.err());
+        assert!(
+            result.is_ok(),
+            "Failed to parse '{}': {:?}",
+            code,
+            result.err()
+        );
     }
 }
 
@@ -79,7 +89,11 @@ fn word_comparison_operators_work() {
         // In complex expression
         let code = format!("my $x = ($a {} $b) ? 1 : 0;", op);
         let mut parser = Parser::new(&code);
-        assert!(parser.parse().is_ok(), "Failed to parse ternary with {}", op);
+        assert!(
+            parser.parse().is_ok(),
+            "Failed to parse ternary with {}",
+            op
+        );
     }
 }
 
@@ -142,7 +156,13 @@ fn modifiers_are_consistent() {
     for (code, should_parse) in test_cases {
         let mut parser = Parser::new(code);
         let result = parser.parse();
-        assert_eq!(result.is_ok(), should_parse, "Unexpected result for '{}': {:?}", code, result);
+        assert_eq!(
+            result.is_ok(),
+            should_parse,
+            "Unexpected result for '{}': {:?}",
+            code,
+            result
+        );
     }
 }
 
@@ -196,7 +216,10 @@ fn modifier_canonicalization_is_stable() {
 
         // All should have identical modifier strings after canonicalization
         let first_mods = extract_modifiers(&asts[0].1);
-        println!("First pattern {} has modifiers: {:?}", asts[0].0, first_mods);
+        println!(
+            "First pattern {} has modifiers: {:?}",
+            asts[0].0, first_mods
+        );
 
         for (input, ast) in &asts[1..] {
             let mods = extract_modifiers(ast);
@@ -232,7 +255,10 @@ fn modifier_canonicalization_is_stable() {
         }
 
         let first_mods = extract_modifiers(&asts[0].1);
-        println!("First substitution {} has modifiers: {:?}", asts[0].0, first_mods);
+        println!(
+            "First substitution {} has modifiers: {:?}",
+            asts[0].0, first_mods
+        );
 
         for (input, ast) in &asts[1..] {
             let mods = extract_modifiers(ast);
@@ -351,7 +377,10 @@ fn test_recursion_depth_limiting() {
     // This should fail with NestingTooDeep error
     let mut parser = Parser::new(&unsafe_code);
     let result = parser.parse();
-    assert!(result.is_err(), "Unsafe depth should fail with nesting limit error");
+    assert!(
+        result.is_err(),
+        "Unsafe depth should fail with nesting limit error"
+    );
 
     // Check that it's specifically a NestingTooDeep error
     assert!(

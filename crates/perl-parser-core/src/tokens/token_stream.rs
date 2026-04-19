@@ -333,7 +333,12 @@ impl<'a> TokenStream<'a> {
             // Synthesise an EOF at position 0 when the buffer is exhausted.
             // The caller (parser) makes EOF sticky so position doesn't matter
             // for correctness; using 0 is safe.
-            None => Ok(Token { kind: TokenKind::Eof, text: "".into(), start: 0, end: 0 }),
+            None => Ok(Token {
+                kind: TokenKind::Eof,
+                text: "".into(),
+                start: 0,
+                end: 0,
+            }),
         }
     }
 
@@ -528,6 +533,11 @@ impl<'a> TokenStream<'a> {
             _ => TokenKind::Unknown,
         };
 
-        Token { kind, text: token.text, start: token.start, end: token.end }
+        Token {
+            kind,
+            text: token.text,
+            start: token.start,
+            end: token.end,
+        }
     }
 }

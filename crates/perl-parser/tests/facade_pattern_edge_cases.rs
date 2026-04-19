@@ -62,11 +62,17 @@ fn test_ast_utils_facade_functional() -> Result<(), Box<dyn std::error::Error>> 
     let pos = must_some(source.find("$y"));
     let stmt_start = ast_utils::find_statement_start(source, pos);
     assert!(stmt_start > 0, "Statement start should be found");
-    assert!(source[stmt_start..].starts_with("my $y"), "Should start at second statement");
+    assert!(
+        source[stmt_start..].starts_with("my $y"),
+        "Should start at second statement"
+    );
 
     // Test find_declaration_position
     let decl_pos = ast_utils::find_declaration_position(source, pos);
-    assert_eq!(decl_pos, stmt_start, "Declaration position should match statement start");
+    assert_eq!(
+        decl_pos, stmt_start,
+        "Declaration position should match statement start"
+    );
 
     // Test get_indent_at
     let indented_source = "if (1) {\n    my $x = 1;\n}\n";
@@ -85,13 +91,21 @@ fn test_heredoc_antipatterns_facade_accessible() -> Result<(), Box<dyn std::erro
     use perl_parser::heredoc_anti_patterns;
 
     // Verify that the main types are accessible
-    let _location = heredoc_anti_patterns::Location { line: 1, column: 0, offset: 0 };
+    let _location = heredoc_anti_patterns::Location {
+        line: 1,
+        column: 0,
+        offset: 0,
+    };
 
     let _severity = heredoc_anti_patterns::Severity::Warning;
 
     // The anti-pattern enum should be constructible
     let _pattern = heredoc_anti_patterns::AntiPattern::FormatHeredoc {
-        location: heredoc_anti_patterns::Location { line: 1, column: 0, offset: 0 },
+        location: heredoc_anti_patterns::Location {
+            line: 1,
+            column: 0,
+            offset: 0,
+        },
         format_name: "test".to_string(),
         heredoc_delimiter: "END".to_string(),
     };
@@ -119,7 +133,10 @@ fn test_path_normalize_facade_functional() -> Result<(), Box<dyn std::error::Err
     // Parent traversal should be rejected
     let traversal_result =
         normalize_path_within_workspace(Path::new("../../etc/passwd"), workspace);
-    assert!(traversal_result.is_err(), "Parent traversal should be rejected");
+    assert!(
+        traversal_result.is_err(),
+        "Parent traversal should be rejected"
+    );
 
     Ok(())
 }
@@ -138,9 +155,19 @@ fn test_text_line_facade_functional() -> Result<(), Box<dyn std::error::Error>> 
     // line_bounds_at: for a position in the second line, returns the line's byte range
     let second_line_pos = must_some(source.find("$y"));
     let (line_start, line_end) = line_bounds_at(source, second_line_pos);
-    assert!(line_start < second_line_pos, "Line start should be before $y");
-    assert!(line_end >= second_line_pos, "Line end should be at or after $y");
-    assert_eq!(&source[line_start..line_end], "my $y = 2;", "Should extract exact line");
+    assert!(
+        line_start < second_line_pos,
+        "Line start should be before $y"
+    );
+    assert!(
+        line_end >= second_line_pos,
+        "Line end should be at or after $y"
+    );
+    assert_eq!(
+        &source[line_start..line_end],
+        "my $y = 2;",
+        "Should extract exact line"
+    );
 
     // skip_ascii_whitespace: should skip leading spaces
     let spaced = b"   hello";
@@ -195,7 +222,10 @@ fn test_qualified_name_facade_functional() -> Result<(), Box<dyn std::error::Err
     );
 
     // validate_perl_qualified_name: empty string should fail
-    assert!(validate_perl_qualified_name("").is_err(), "Empty name should fail validation");
+    assert!(
+        validate_perl_qualified_name("").is_err(),
+        "Empty name should fail validation"
+    );
 
     Ok(())
 }
@@ -212,15 +242,36 @@ fn test_source_file_facade_functional() -> Result<(), Box<dyn std::error::Error>
     use std::path::Path;
 
     // is_perl_source_extension
-    assert!(is_perl_source_extension("pl"), "'.pl' should be a Perl source extension");
-    assert!(is_perl_source_extension("pm"), "'.pm' should be a Perl source extension");
-    assert!(is_perl_source_extension("t"), "'.t' should be a Perl source extension");
-    assert!(!is_perl_source_extension("rs"), "'.rs' should not be a Perl source extension");
-    assert!(!is_perl_source_extension("py"), "'.py' should not be a Perl source extension");
+    assert!(
+        is_perl_source_extension("pl"),
+        "'.pl' should be a Perl source extension"
+    );
+    assert!(
+        is_perl_source_extension("pm"),
+        "'.pm' should be a Perl source extension"
+    );
+    assert!(
+        is_perl_source_extension("t"),
+        "'.t' should be a Perl source extension"
+    );
+    assert!(
+        !is_perl_source_extension("rs"),
+        "'.rs' should not be a Perl source extension"
+    );
+    assert!(
+        !is_perl_source_extension("py"),
+        "'.py' should not be a Perl source extension"
+    );
 
     // is_perl_source_path
-    assert!(is_perl_source_path(Path::new("script.pl")), "script.pl should be Perl source");
-    assert!(!is_perl_source_path(Path::new("binary.exe")), "binary.exe should not be Perl source");
+    assert!(
+        is_perl_source_path(Path::new("script.pl")),
+        "script.pl should be Perl source"
+    );
+    assert!(
+        !is_perl_source_path(Path::new("binary.exe")),
+        "binary.exe should not be Perl source"
+    );
 
     // is_perl_source_uri
     assert!(
@@ -233,8 +284,14 @@ fn test_source_file_facade_functional() -> Result<(), Box<dyn std::error::Error>
     );
 
     // is_binary_content
-    assert!(!is_binary_content("use strict;\nmy $x = 1;\n"), "Perl source is not binary");
-    assert!(is_binary_content("ELF\x00binary"), "Content with null byte is binary");
+    assert!(
+        !is_binary_content("use strict;\nmy $x = 1;\n"),
+        "Perl source is not binary"
+    );
+    assert!(
+        is_binary_content("ELF\x00binary"),
+        "Content with null byte is binary"
+    );
 
     Ok(())
 }
@@ -341,7 +398,10 @@ fn test_facade_error_recovery() -> Result<(), Box<dyn std::error::Error>> {
     let result = parser.parse();
 
     // Parser should recover
-    assert!(result.is_ok(), "Parser should recover from incomplete input");
+    assert!(
+        result.is_ok(),
+        "Parser should recover from incomplete input"
+    );
 
     // But should record errors
     let errors = parser.errors();
@@ -364,7 +424,11 @@ fn test_facade_type_identity() -> Result<(), Box<dyn std::error::Error>> {
             // The Program node for "my $x = 1;" must have exactly one statement.
             // This assertion is non-vacuous: it would fail if the parser returned 0
             // statements or the wrong node kind.
-            assert_eq!(statements.len(), 1, "Single statement should yield one Program child");
+            assert_eq!(
+                statements.len(),
+                1,
+                "Single statement should yield one Program child"
+            );
             Ok(())
         }
         _ => Err("Expected Program node".into()),
@@ -431,7 +495,10 @@ fn test_code_actions_facade_integration() -> Result<(), Box<dyn std::error::Erro
 
     // Declaration should be inserted at the start of the statement containing $x
     let stmt_start = find_statement_start(code, error_pos);
-    assert_eq!(decl_pos, stmt_start, "Declaration position should be at statement start");
+    assert_eq!(
+        decl_pos, stmt_start,
+        "Declaration position should be at statement start"
+    );
     assert!(
         code[decl_pos..].starts_with("$x = 1"),
         "Should position at the start of the statement containing the undefined variable"
@@ -453,7 +520,12 @@ fn test_incremental_parsing_facade() -> Result<(), Box<dyn std::error::Error>> {
     assert!(matches!(ast.kind, perl_parser::NodeKind::Program { .. }));
 
     // Apply an edit
-    let edit = Edit { start_byte: 3, old_end_byte: 5, new_end_byte: 5, text: "$y".to_string() };
+    let edit = Edit {
+        start_byte: 3,
+        old_end_byte: 5,
+        new_end_byte: 5,
+        text: "$y".to_string(),
+    };
     perl_parser::apply_edits(&mut state, vec![edit]);
 
     // Re-parse should work

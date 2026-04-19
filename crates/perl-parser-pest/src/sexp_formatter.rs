@@ -34,7 +34,11 @@ pub struct SexpFormatter {
 
 impl SexpFormatter {
     pub fn new(source: &str) -> Self {
-        Self { source: source.to_string(), include_positions: false, compact: false }
+        Self {
+            source: source.to_string(),
+            include_positions: false,
+            compact: false,
+        }
     }
 
     pub fn with_positions(mut self, include: bool) -> Self {
@@ -59,7 +63,11 @@ impl SexpFormatter {
         use AstNode::*;
 
         let node_type = self.get_node_type(node);
-        let indent = if self.compact { std::string::String::new() } else { "  ".repeat(depth) };
+        let indent = if self.compact {
+            std::string::String::new()
+        } else {
+            "  ".repeat(depth)
+        };
 
         write!(output, "{}", indent)?;
         write!(output, "({}", node_type)?;
@@ -103,7 +111,11 @@ impl SexpFormatter {
                 self.format_node(inner, output, depth + 1)?;
             }
 
-            VariableDeclaration { scope, variables, initializer } => {
+            VariableDeclaration {
+                scope,
+                variables,
+                initializer,
+            } => {
                 write!(output, " scope: {}", scope)?;
 
                 write!(output, " (variables")?;
@@ -120,7 +132,12 @@ impl SexpFormatter {
                 }
             }
 
-            SubDeclaration { name, prototype, attributes, body } => {
+            SubDeclaration {
+                name,
+                prototype,
+                attributes,
+                body,
+            } => {
                 write!(output, " name: {}", name)?;
 
                 if let Some(proto) = prototype {
@@ -156,7 +173,11 @@ impl SexpFormatter {
                 write!(output, ")")?;
             }
 
-            TernaryOp { condition, true_expr, false_expr } => {
+            TernaryOp {
+                condition,
+                true_expr,
+                false_expr,
+            } => {
                 write!(output, " (condition ")?;
                 self.format_node(condition, output, depth + 1)?;
                 write!(output, ") (then ")?;
@@ -177,7 +198,11 @@ impl SexpFormatter {
                 write!(output, ")")?;
             }
 
-            MethodCall { object, method, args } => {
+            MethodCall {
+                object,
+                method,
+                args,
+            } => {
                 write!(output, " (object ")?;
                 self.format_node(object, output, depth + 1)?;
                 write!(output, ") method: {} (arguments", method)?;
@@ -188,7 +213,12 @@ impl SexpFormatter {
                 write!(output, ")")?;
             }
 
-            IfStatement { condition, then_block, elsif_clauses, else_block } => {
+            IfStatement {
+                condition,
+                then_block,
+                elsif_clauses,
+                else_block,
+            } => {
                 write!(output, " (condition ")?;
                 self.format_node(condition, output, depth + 1)?;
                 write!(output, ") (then ")?;
@@ -210,8 +240,16 @@ impl SexpFormatter {
                 }
             }
 
-            WhileStatement { label, condition, block }
-            | UntilStatement { label, condition, block } => {
+            WhileStatement {
+                label,
+                condition,
+                block,
+            }
+            | UntilStatement {
+                label,
+                condition,
+                block,
+            } => {
                 if let Some(lbl) = label {
                     write!(output, " label: {}", lbl)?;
                 }
@@ -222,7 +260,12 @@ impl SexpFormatter {
                 write!(output, ")")?;
             }
 
-            ForeachStatement { label, variable, list, block } => {
+            ForeachStatement {
+                label,
+                variable,
+                list,
+                block,
+            } => {
                 if let Some(lbl) = label {
                     write!(output, " label: {}", lbl)?;
                 }
@@ -245,7 +288,13 @@ impl SexpFormatter {
             ArrayVariable(name) => write!(output, " name: {}", name)?,
             HashVariable(name) => write!(output, " name: {}", name)?,
 
-            Heredoc { marker, indented, quoted, content, .. } => {
+            Heredoc {
+                marker,
+                indented,
+                quoted,
+                content,
+                ..
+            } => {
                 write!(
                     output,
                     " marker: {} indented: {} quoted: {} content: {:?}",
@@ -410,8 +459,10 @@ mod tests {
     #[test]
     fn test_compact_mode() {
         let formatter = SexpFormatter::new("").compact(true);
-        let ast =
-            AstNode::Program(vec![AstNode::Number("42".into()), AstNode::Number("43".into())]);
+        let ast = AstNode::Program(vec![
+            AstNode::Number("42".into()),
+            AstNode::Number("43".into()),
+        ]);
 
         let sexp = formatter.format(&ast);
         assert!(!sexp.contains('\n'));

@@ -121,7 +121,15 @@ pub struct ViolationSummary {
 
 pub(crate) fn insertion_range() -> Range {
     Range {
-        start: Position { byte: 0, line: 0, column: 0 },
-        end: Position { byte: 0, line: 0, column: 0 },
+        start: Position {
+            byte: 0,
+            line: 0,
+            column: 0,
+        },
+        end: Position {
+            byte: 0,
+            line: 0,
+            column: 0,
+        },
     }
 }

@@ -11,8 +11,11 @@ use std::path::Path;
 #[test]
 fn test_workspace_excludes_documented_crates() {
     // Navigate to workspace root (two levels up from perl-lsp crate)
-    let workspace_root =
-        must_some(Path::new(env!("CARGO_MANIFEST_DIR")).parent().and_then(|p| p.parent()));
+    let workspace_root = must_some(
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .and_then(|p| p.parent()),
+    );
 
     // Expected live exclusions as documented in Cargo.toml.
     // Optional exclusions like `archive/` or removed directories like
@@ -34,8 +37,11 @@ fn test_workspace_excludes_documented_crates() {
 
 #[test]
 fn test_excluded_crates_have_cargo_toml() {
-    let workspace_root =
-        must_some(Path::new(env!("CARGO_MANIFEST_DIR")).parent().and_then(|p| p.parent()));
+    let workspace_root = must_some(
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .and_then(|p| p.parent()),
+    );
 
     // Crates that should have their own Cargo.toml for independent building
     let crates_with_manifest = vec!["fuzz/Cargo.toml"];
@@ -52,8 +58,11 @@ fn test_excluded_crates_have_cargo_toml() {
 
 #[test]
 fn test_workspace_toml_excludes_section() {
-    let workspace_root =
-        must_some(Path::new(env!("CARGO_MANIFEST_DIR")).parent().and_then(|p| p.parent()));
+    let workspace_root = must_some(
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .and_then(|p| p.parent()),
+    );
 
     let cargo_toml_path = workspace_root.join("Cargo.toml");
     let cargo_toml_content = must(std::fs::read_to_string(&cargo_toml_path));
@@ -69,15 +78,24 @@ fn test_workspace_toml_excludes_section() {
         "tree-sitter-perl should be in exclusions"
     );
 
-    assert!(cargo_toml_content.contains("\"fuzz\""), "fuzz should be in exclusions");
+    assert!(
+        cargo_toml_content.contains("\"fuzz\""),
+        "fuzz should be in exclusions"
+    );
 
-    assert!(cargo_toml_content.contains("\"archive\""), "archive should be in exclusions");
+    assert!(
+        cargo_toml_content.contains("\"archive\""),
+        "archive should be in exclusions"
+    );
 }
 
 #[test]
 fn test_workspace_dependencies_dont_reference_excluded() {
-    let workspace_root =
-        must_some(Path::new(env!("CARGO_MANIFEST_DIR")).parent().and_then(|p| p.parent()));
+    let workspace_root = must_some(
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .and_then(|p| p.parent()),
+    );
 
     let cargo_toml_path = workspace_root.join("Cargo.toml");
     let cargo_toml_content = must(std::fs::read_to_string(&cargo_toml_path));
@@ -121,8 +139,11 @@ fn test_workspace_dependencies_dont_reference_excluded() {
 
 #[test]
 fn test_exclusion_strategy_is_documented() {
-    let workspace_root =
-        must_some(Path::new(env!("CARGO_MANIFEST_DIR")).parent().and_then(|p| p.parent()));
+    let workspace_root = must_some(
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .and_then(|p| p.parent()),
+    );
 
     let cargo_toml_path = workspace_root.join("Cargo.toml");
     let cargo_toml_content = must(std::fs::read_to_string(&cargo_toml_path));

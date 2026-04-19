@@ -22,7 +22,10 @@ fn test_render_7level_nested_hash_structure() {
     let rendered = renderer.render("$config", &value);
 
     // Should not panic or produce exponential output
-    assert!(rendered.value.len() < 1000, "7-level nested value should be bounded");
+    assert!(
+        rendered.value.len() < 1000,
+        "7-level nested value should be bounded"
+    );
     assert_eq!(rendered.type_name, Some("HASH".to_string()));
     assert_eq!(rendered.named_variables, Some(1));
 
@@ -64,8 +67,14 @@ fn test_render_500element_array_with_preview_truncation() {
     assert_eq!(rendered.indexed_variables, Some(500));
 
     // Preview should be truncated to max_array_preview (3) + "... (500 total)"
-    assert!(rendered.value.contains("..."), "should have truncation marker");
-    assert!(rendered.value.contains("500 total"), "should show total count");
+    assert!(
+        rendered.value.contains("..."),
+        "should have truncation marker"
+    );
+    assert!(
+        rendered.value.contains("500 total"),
+        "should show total count"
+    );
     assert!(rendered.value.len() < 500, "preview should be bounded");
 }
 
@@ -97,8 +106,9 @@ fn test_render_500element_array_pagination() {
 fn test_render_500key_hash_with_preview_truncation() {
     let renderer = PerlVariableRenderer::new();
 
-    let pairs: Vec<(String, PerlValue)> =
-        (0..500).map(|i| (format!("key_{:03}", i), PerlValue::Integer(i))).collect();
+    let pairs: Vec<(String, PerlValue)> = (0..500)
+        .map(|i| (format!("key_{:03}", i), PerlValue::Integer(i)))
+        .collect();
     let value = PerlValue::Hash(pairs);
 
     let rendered = renderer.render("%big", &value);
@@ -107,7 +117,10 @@ fn test_render_500key_hash_with_preview_truncation() {
     assert_eq!(rendered.named_variables, Some(500));
 
     // Preview should be truncated
-    assert!(rendered.value.contains("..."), "should have truncation marker");
+    assert!(
+        rendered.value.contains("..."),
+        "should have truncation marker"
+    );
     assert!(rendered.value.contains("500 keys"), "should show key count");
     assert!(rendered.value.len() < 500, "preview should be bounded");
 }
@@ -116,8 +129,9 @@ fn test_render_500key_hash_with_preview_truncation() {
 fn test_render_500key_hash_pagination() {
     let renderer = PerlVariableRenderer::new();
 
-    let pairs: Vec<(String, PerlValue)> =
-        (0..500).map(|i| (format!("key_{:03}", i), PerlValue::Integer(i))).collect();
+    let pairs: Vec<(String, PerlValue)> = (0..500)
+        .map(|i| (format!("key_{:03}", i), PerlValue::Integer(i)))
+        .collect();
     let value = PerlValue::Hash(pairs);
 
     // Request first page
@@ -141,8 +155,10 @@ fn test_render_cyclic_reference_safe() {
     let renderer = PerlVariableRenderer::new();
 
     // Simulate a self-referential hash
-    let truncated_marker =
-        PerlValue::Truncated { summary: "HASH(0x7f1234567890)".to_string(), total_count: None };
+    let truncated_marker = PerlValue::Truncated {
+        summary: "HASH(0x7f1234567890)".to_string(),
+        total_count: None,
+    };
     let value = PerlValue::Hash(vec![(
         "self".to_string(),
         PerlValue::Reference(Box::new(truncated_marker)),
@@ -159,7 +175,10 @@ fn test_render_cyclic_reference_safe() {
     let children = renderer.render_children(&value, 0, 10);
     assert_eq!(children.len(), 1, "hash has 1 child key");
     assert_eq!(children[0].name, "self");
-    assert!(!children[0].value.is_empty(), "ref child should render a non-empty value");
+    assert!(
+        !children[0].value.is_empty(),
+        "ref child should render a non-empty value"
+    );
 
     // Expanding the Reference inner value (the Truncated sentinel) must not panic
     let ref_value = PerlValue::Reference(Box::new(PerlValue::Truncated {
@@ -167,8 +186,15 @@ fn test_render_cyclic_reference_safe() {
         total_count: None,
     }));
     let ref_children = renderer.render_children(&ref_value, 0, 10);
-    assert_eq!(ref_children.len(), 1, "Reference expands to its single inner value");
-    assert!(!ref_children[0].value.is_empty(), "Truncated sentinel renders non-empty");
+    assert_eq!(
+        ref_children.len(),
+        1,
+        "Reference expands to its single inner value"
+    );
+    assert!(
+        !ref_children[0].value.is_empty(),
+        "Truncated sentinel renders non-empty"
+    );
 }
 
 #[test]
@@ -184,11 +210,17 @@ fn test_render_deep_reference_chain_bounded() {
     let rendered = renderer.render("$deep", &value);
 
     // Should be bounded, not exponential
-    assert!(rendered.value.len() < 200, "deep reference chain should be truncated");
+    assert!(
+        rendered.value.len() < 200,
+        "deep reference chain should be truncated"
+    );
     assert_eq!(rendered.type_name, Some("REF".to_string()));
 
     // Should contain truncation marker
-    assert!(rendered.value.contains("REF(...)"), "should truncate with REF(...) marker");
+    assert!(
+        rendered.value.contains("REF(...)"),
+        "should truncate with REF(...) marker"
+    );
 }
 
 #[test]
@@ -212,7 +244,10 @@ fn test_parser_default_max_depth_succeeds_7levels() {
     let result = parser.parse_assignment(text);
 
     // Should succeed with default max_depth
-    assert!(result.is_ok(), "parser with default max_depth=50 should accept 7 levels");
+    assert!(
+        result.is_ok(),
+        "parser with default max_depth=50 should accept 7 levels"
+    );
 }
 
 #[test]
@@ -221,7 +256,10 @@ fn test_mixed_nested_array_hash_rendering() {
 
     // Create: { pools => [ { host => "localhost", port => 5432 } ] }
     let db_hash = PerlValue::Hash(vec![
-        ("host".to_string(), PerlValue::Scalar("localhost".to_string())),
+        (
+            "host".to_string(),
+            PerlValue::Scalar("localhost".to_string()),
+        ),
         ("port".to_string(), PerlValue::Integer(5432)),
     ]);
 
@@ -277,7 +315,10 @@ fn test_string_truncation_in_large_structures() {
     let rendered = renderer.render("$s", &value);
 
     // Should truncate at 50 characters + "..."
-    assert!(rendered.value.contains("..."), "should have truncation marker");
+    assert!(
+        rendered.value.contains("..."),
+        "should have truncation marker"
+    );
     assert!(rendered.value.len() < 100, "should be bounded");
 }
 
@@ -316,15 +357,23 @@ fn test_object_with_deep_hash_backing() {
         (
             "config".to_string(),
             PerlValue::Hash(vec![
-                ("host".to_string(), PerlValue::Scalar("localhost".to_string())),
+                (
+                    "host".to_string(),
+                    PerlValue::Scalar("localhost".to_string()),
+                ),
                 ("port".to_string(), PerlValue::Integer(5432)),
             ]),
         ),
-        ("state".to_string(), PerlValue::Scalar("connected".to_string())),
+        (
+            "state".to_string(),
+            PerlValue::Scalar("connected".to_string()),
+        ),
     ]);
 
-    let value =
-        PerlValue::Object { class: "Database::Connection".to_string(), value: Box::new(inner) };
+    let value = PerlValue::Object {
+        class: "Database::Connection".to_string(),
+        value: Box::new(inner),
+    };
 
     let rendered = renderer.render("$db", &value);
 

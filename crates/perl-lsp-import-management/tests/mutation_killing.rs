@@ -32,12 +32,20 @@ fn guess_module_dumper_returns_data_dumper() {
 
 #[test]
 fn guess_module_decode_returns_encode() {
-    assert_eq!(guess_module_for_function("decode"), Some("Encode".to_string()), "decode → Encode");
+    assert_eq!(
+        guess_module_for_function("decode"),
+        Some("Encode".to_string()),
+        "decode → Encode"
+    );
 }
 
 #[test]
 fn guess_module_encode_returns_encode() {
-    assert_eq!(guess_module_for_function("encode"), Some("Encode".to_string()), "encode → Encode");
+    assert_eq!(
+        guess_module_for_function("encode"),
+        Some("Encode".to_string()),
+        "encode → Encode"
+    );
 }
 
 #[test]
@@ -130,13 +138,19 @@ fn guess_module_case_sensitive_uppercase_returns_none() {
 #[test]
 fn collect_imports_empty_input_returns_empty() {
     let lines: Vec<String> = vec![];
-    assert!(collect_imports(&lines).is_empty(), "empty input must return empty");
+    assert!(
+        collect_imports(&lines).is_empty(),
+        "empty input must return empty"
+    );
 }
 
 #[test]
 fn collect_imports_no_imports_returns_empty() {
-    let lines =
-        vec!["#!/usr/bin/perl".to_string(), "my $x = 1;".to_string(), "print $x;".to_string()];
+    let lines = vec![
+        "#!/usr/bin/perl".to_string(),
+        "my $x = 1;".to_string(),
+        "print $x;".to_string(),
+    ];
     assert!(collect_imports(&lines).is_empty());
 }
 
@@ -149,7 +163,10 @@ fn collect_imports_ignores_lines_without_use_or_require_prefix() {
         "my $use = 1;".to_string(), // contains "use" but not at start
     ];
     let imports = collect_imports(&lines);
-    assert!(imports.is_empty(), "comment lines and mid-line 'use' must not be collected");
+    assert!(
+        imports.is_empty(),
+        "comment lines and mid-line 'use' must not be collected"
+    );
 }
 
 #[test]

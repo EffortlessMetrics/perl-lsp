@@ -139,7 +139,10 @@ impl CodeActionsProvider {
             // indicates a missing semicolon, route through the same fix as
             // "parse-error-missingsemicolon" so the quick-fix fires correctly.
             Some("PL001") | Some("PL002")
-                if diagnostic.message.to_ascii_lowercase().contains("missing semicolon") =>
+                if diagnostic
+                    .message
+                    .to_ascii_lowercase()
+                    .contains("missing semicolon") =>
             {
                 fixes::fix_parse_error(self, diagnostic, "parse-error-missingsemicolon")
             }
@@ -305,7 +308,9 @@ mod tests {
 
         let actions = provider.get_actions_for_diagnostic(&diagnostic);
         let remove = must_some(
-            actions.iter().find(|action| action.title.contains("Remove unused variable")),
+            actions
+                .iter()
+                .find(|action| action.title.contains("Remove unused variable")),
         );
 
         let declaration_end = must_some(provider.source().find('\n')) + 1;
@@ -328,11 +333,16 @@ mod tests {
 
         let actions = provider.get_actions_for_diagnostic(&diagnostic);
         let remove = must_some(
-            actions.iter().find(|action| action.title.contains("Remove unused variable")),
+            actions
+                .iter()
+                .find(|action| action.title.contains("Remove unused variable")),
         );
 
         assert_eq!(remove.edit.range.0, inner_decl);
-        assert_eq!(&provider.source()[remove.edit.range.0..remove.edit.range.1], "my $x = 2;");
+        assert_eq!(
+            &provider.source()[remove.edit.range.0..remove.edit.range.1],
+            "my $x = 2;"
+        );
     }
 
     #[test]
@@ -350,7 +360,10 @@ mod tests {
 
         let actions = provider.get_actions_for_diagnostic(&diagnostic);
         assert_eq!(actions.len(), 1);
-        assert_eq!(actions[0].title, "Rename to '$_unused' (mark as intentionally unused)");
+        assert_eq!(
+            actions[0].title,
+            "Rename to '$_unused' (mark as intentionally unused)"
+        );
     }
 
     // ── Quick-fix: variable shadowing ───────────────────────────────────
@@ -368,8 +381,14 @@ mod tests {
         let actions = provider.get_actions_for_diagnostic(&diagnostic);
 
         assert_eq!(actions.len(), 3);
-        assert_eq!(actions[0].title, "Rename shadowing variable to '$inner_foo'");
-        assert_eq!(actions[1].title, "Rename shadowing variable to '$local_foo'");
+        assert_eq!(
+            actions[0].title,
+            "Rename shadowing variable to '$inner_foo'"
+        );
+        assert_eq!(
+            actions[1].title,
+            "Rename shadowing variable to '$local_foo'"
+        );
         assert_eq!(actions[2].title, "Rename shadowing variable to '$foo_2'");
     }
 
@@ -814,10 +833,12 @@ mod tests {
         // Query the whole line -- both diagnostics overlap
         let actions = provider.get_code_actions((0, 12), &[diag_unused, diag_undef]);
         // Should have actions from both diagnostics
-        let has_unused =
-            actions.iter().any(|a| a.diagnostic_id.as_deref() == Some("unused-variable"));
-        let has_undef =
-            actions.iter().any(|a| a.diagnostic_id.as_deref() == Some("undefined-variable"));
+        let has_unused = actions
+            .iter()
+            .any(|a| a.diagnostic_id.as_deref() == Some("unused-variable"));
+        let has_undef = actions
+            .iter()
+            .any(|a| a.diagnostic_id.as_deref() == Some("undefined-variable"));
         assert!(has_unused);
         assert!(has_undef);
     }
@@ -1072,8 +1093,11 @@ mod tests {
         let provider = CodeActionsProvider::new(source.clone());
         let inner_decl = must_some(source.rfind("my $x"));
 
-        let range =
-            must_some(source_utils::find_declaration_range(&provider, "$x", inner_decl + 3));
+        let range = must_some(source_utils::find_declaration_range(
+            &provider,
+            "$x",
+            inner_decl + 3,
+        ));
         assert_eq!(range.0, inner_decl);
         assert_eq!(&provider.source()[range.0..range.1], "my $x = 2;");
     }
@@ -1137,7 +1161,10 @@ mod tests {
         );
 
         let actions = provider.get_actions_for_diagnostic(&diagnostic);
-        assert!(actions.is_empty(), "PL001 with unrelated message must not produce actions");
+        assert!(
+            actions.is_empty(),
+            "PL001 with unrelated message must not produce actions"
+        );
     }
 
     #[test]

@@ -23,11 +23,29 @@ use perl_diagnostics::codes::DiagnosticSeverity;
 ///
 /// Each entry maps a correct pragma to a list of known typos.
 const PRAGMA_TYPOS: &[(&str, &[&str])] = &[
-    ("strict", &["structs", "strickt", "stricts", "stirct", "stict", "strct", "srict"]),
-    ("warnings", &["warning", "warningss", "warnigns", "warrnings", "warnins", "warnnigs"]),
+    (
+        "strict",
+        &[
+            "structs", "strickt", "stricts", "stirct", "stict", "strct", "srict",
+        ],
+    ),
+    (
+        "warnings",
+        &[
+            "warning",
+            "warningss",
+            "warnigns",
+            "warrnings",
+            "warnins",
+            "warnnigs",
+        ],
+    ),
     ("utf8", &["utf-8", "uft8", "utf88"]),
     ("feature", &["feaure", "featrue", "feture"]),
-    ("constant", &["constanst", "contstant", "costant", "consant"]),
+    (
+        "constant",
+        &["constanst", "contstant", "costant", "consant"],
+    ),
     ("parent", &["parrent", "parnet"]),
     ("base", &["basse", "bace"]),
     ("lib", &["lbi", "libb"]),
@@ -184,9 +202,11 @@ fn collect_phase_scoped_pragma_uses_inner(
     hits: &mut Vec<PhaseScopedPragmaUse>,
 ) {
     match &node.kind {
-        NodeKind::PhaseBlock { phase, phase_span, block }
-            if PHASE_PRAGMA_SCOPES.contains(&phase.as_str()) =>
-        {
+        NodeKind::PhaseBlock {
+            phase,
+            phase_span,
+            block,
+        } if PHASE_PRAGMA_SCOPES.contains(&phase.as_str()) => {
             let phase_range = phase_span
                 .as_ref()
                 .map(|span| (span.start, span.end))
@@ -336,8 +356,9 @@ mod tests {
     #[test]
     fn file_with_strict_and_warnings_no_diagnostic() {
         let diags = strict_warnings_diags("use strict;\nuse warnings;\nmy $x = 1;\n");
-        let has_strict_warn =
-            diags.iter().any(|d| matches!(d.code.as_deref(), Some("PL100") | Some("PL101")));
+        let has_strict_warn = diags
+            .iter()
+            .any(|d| matches!(d.code.as_deref(), Some("PL100") | Some("PL101")));
         assert!(
             !has_strict_warn,
             "file with both pragmas should get no strict/warnings diagnostic"
@@ -347,25 +368,37 @@ mod tests {
     #[test]
     fn version_pragma_suppresses_strict_warnings_diagnostic() {
         let diags = strict_warnings_diags("use v5.40;\nmy $x = 1;\n");
-        let has_strict_warn =
-            diags.iter().any(|d| matches!(d.code.as_deref(), Some("PL100") | Some("PL101")));
-        assert!(!has_strict_warn, "use v5.40 should suppress strict/warnings diagnostics");
+        let has_strict_warn = diags
+            .iter()
+            .any(|d| matches!(d.code.as_deref(), Some("PL100") | Some("PL101")));
+        assert!(
+            !has_strict_warn,
+            "use v5.40 should suppress strict/warnings diagnostics"
+        );
     }
 
     #[test]
     fn numeric_version_pragma_suppresses_strict_warnings_diagnostic() {
         let diags = strict_warnings_diags("use 5.040;\nmy $x = 1;\n");
-        let has_strict_warn =
-            diags.iter().any(|d| matches!(d.code.as_deref(), Some("PL100") | Some("PL101")));
-        assert!(!has_strict_warn, "use 5.040 should suppress strict/warnings diagnostics");
+        let has_strict_warn = diags
+            .iter()
+            .any(|d| matches!(d.code.as_deref(), Some("PL100") | Some("PL101")));
+        assert!(
+            !has_strict_warn,
+            "use 5.040 should suppress strict/warnings diagnostics"
+        );
     }
 
     #[test]
     fn developer_version_pragma_suppresses_strict_warnings_diagnostic() {
         let diags = strict_warnings_diags("use 5.040_001;\nmy $x = 1;\n");
-        let has_strict_warn =
-            diags.iter().any(|d| matches!(d.code.as_deref(), Some("PL100") | Some("PL101")));
-        assert!(!has_strict_warn, "use 5.040_001 should suppress strict/warnings diagnostics");
+        let has_strict_warn = diags
+            .iter()
+            .any(|d| matches!(d.code.as_deref(), Some("PL100") | Some("PL101")));
+        assert!(
+            !has_strict_warn,
+            "use 5.040_001 should suppress strict/warnings diagnostics"
+        );
     }
 
     #[test]
@@ -373,8 +406,9 @@ mod tests {
         // use v5.36 enables both strict and warnings via the feature bundle.
         // Neither PL100 (missing-strict) nor PL101 (missing-warnings) should fire.
         let diags = strict_warnings_diags("use v5.36;\nsub foo ($x) { my $y = $x; }\n");
-        let has_strict_warn =
-            diags.iter().any(|d| matches!(d.code.as_deref(), Some("PL100") | Some("PL101")));
+        let has_strict_warn = diags
+            .iter()
+            .any(|d| matches!(d.code.as_deref(), Some("PL100") | Some("PL101")));
         assert!(
             !has_strict_warn,
             "use v5.36 should suppress both missing-strict and missing-warnings diagnostics"
@@ -385,8 +419,9 @@ mod tests {
     fn v5_36_numeric_form_suppresses_both_strict_and_warnings() {
         // use 5.036 is the numeric form of use v5.36.
         let diags = strict_warnings_diags("use 5.036;\nmy $x = 1;\n");
-        let has_strict_warn =
-            diags.iter().any(|d| matches!(d.code.as_deref(), Some("PL100") | Some("PL101")));
+        let has_strict_warn = diags
+            .iter()
+            .any(|d| matches!(d.code.as_deref(), Some("PL100") | Some("PL101")));
         assert!(
             !has_strict_warn,
             "use 5.036 should suppress both missing-strict and missing-warnings diagnostics"
@@ -478,7 +513,9 @@ mod tests {
         let diags =
             strict_warnings_diags("eval { my $y = 1; };\nuse strict;\nuse warnings;\nmy $x = 1;\n");
         assert!(
-            diags.iter().all(|d| !matches!(d.code.as_deref(), Some("PL100") | Some("PL101"))),
+            diags
+                .iter()
+                .all(|d| !matches!(d.code.as_deref(), Some("PL100") | Some("PL101"))),
             "top-level strict after eval must suppress PL100/PL101"
         );
     }
@@ -525,7 +562,9 @@ mod tests {
     fn phase_scoped_non_strict_pragma_does_not_emit_phase_diagnostic() {
         let diags = strict_warnings_diags("BEGIN { use utf8; }\nmy $x = 1;\n");
         assert!(
-            diags.iter().all(|d| !matches!(d.code.as_deref(), Some("PL502") | Some("PL503"))),
+            diags
+                .iter()
+                .all(|d| !matches!(d.code.as_deref(), Some("PL502") | Some("PL503"))),
             "non-strict pragmas inside phase blocks should not emit PL502/PL503"
         );
     }
@@ -549,7 +588,9 @@ mod tests {
         let diags =
             strict_warnings_diags("use strict;\nuse warnings;\neval { no strict; };\nmy $x = 1;\n");
         assert!(
-            diags.iter().all(|d| !matches!(d.code.as_deref(), Some("PL100") | Some("PL101"))),
+            diags
+                .iter()
+                .all(|d| !matches!(d.code.as_deref(), Some("PL100") | Some("PL101"))),
             "top-level strict before eval must not be revoked by no-strict inside eval"
         );
     }

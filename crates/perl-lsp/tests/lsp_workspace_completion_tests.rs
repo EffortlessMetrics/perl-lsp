@@ -14,7 +14,11 @@ use common::{
 fn await_open_processing(server: &common::LspServer) {
     // didOpen triggers parse + indexing work asynchronously in the spawned server.
     // Drain until quiet before asserting on workspace-aware completions.
-    drain_until_quiet(server, Duration::from_millis(50), Duration::from_millis(500));
+    drain_until_quiet(
+        server,
+        Duration::from_millis(50),
+        Duration::from_millis(500),
+    );
 }
 
 /// Test cross-file function completion
@@ -97,8 +101,10 @@ vali
     );
 
     let items = completion_items(&response);
-    let labels: Vec<String> =
-        items.iter().filter_map(|item| item["label"].as_str().map(String::from)).collect();
+    let labels: Vec<String> = items
+        .iter()
+        .filter_map(|item| item["label"].as_str().map(String::from))
+        .collect();
 
     // Should suggest validate_email from the workspace index
     assert!(
@@ -187,8 +193,10 @@ my $result = DataProcessor::
     );
 
     let items = completion_items(&response);
-    let labels: Vec<String> =
-        items.iter().filter_map(|item| item["label"].as_str().map(String::from)).collect();
+    let labels: Vec<String> = items
+        .iter()
+        .filter_map(|item| item["label"].as_str().map(String::from))
+        .collect();
 
     // Should suggest both functions from the module
     assert!(
@@ -285,8 +293,10 @@ print $Config::CONF
     );
 
     let items = completion_items(&response);
-    let labels: Vec<String> =
-        items.iter().filter_map(|item| item["label"].as_str().map(String::from)).collect();
+    let labels: Vec<String> = items
+        .iter()
+        .filter_map(|item| item["label"].as_str().map(String::from))
+        .collect();
 
     // Should suggest CONFIG_PATH from the workspace index
     assert!(
@@ -379,8 +389,10 @@ tri
     );
 
     let items = completion_items(&response);
-    let labels: Vec<String> =
-        items.iter().filter_map(|item| item["label"].as_str().map(String::from)).collect();
+    let labels: Vec<String> = items
+        .iter()
+        .filter_map(|item| item["label"].as_str().map(String::from))
+        .collect();
 
     // Should suggest trim from the workspace index (bare name completion)
     assert!(
@@ -474,8 +486,10 @@ fn test_completion_inherited_method_from_parent() -> Result<(), Box<dyn std::err
     );
 
     let items = completion_items(&response);
-    let labels: Vec<String> =
-        items.iter().filter_map(|item| item["label"].as_str().map(String::from)).collect();
+    let labels: Vec<String> = items
+        .iter()
+        .filter_map(|item| item["label"].as_str().map(String::from))
+        .collect();
 
     // child_only_method should appear (direct member)
     assert!(

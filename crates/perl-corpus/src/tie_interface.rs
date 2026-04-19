@@ -507,7 +507,10 @@ pub fn find_tie_case(id: &str) -> Option<&'static TieInterfaceCase> {
 
 /// Find tie interface cases by tag.
 pub fn tie_cases_by_tag(tag: &str) -> Vec<&'static TieInterfaceCase> {
-    tie_interface_cases().iter().filter(|case| case.tags.contains(&tag)).collect()
+    tie_interface_cases()
+        .iter()
+        .filter(|case| case.tags.contains(&tag))
+        .collect()
 }
 
 /// Find tie interface cases matching any of the provided tags.
@@ -545,12 +548,20 @@ mod tests {
 
     #[test]
     fn tie_cases_have_descriptions() {
-        assert!(tie_interface_cases().iter().all(|case| !case.description.is_empty()));
+        assert!(
+            tie_interface_cases()
+                .iter()
+                .all(|case| !case.description.is_empty())
+        );
     }
 
     #[test]
     fn tie_cases_have_source() {
-        assert!(tie_interface_cases().iter().all(|case| !case.source.is_empty()));
+        assert!(
+            tie_interface_cases()
+                .iter()
+                .all(|case| !case.source.is_empty())
+        );
     }
 
     #[test]
@@ -581,7 +592,11 @@ mod tests {
     fn tie_cases_filter_by_tag() {
         let scalar_cases = tie_cases_by_tag("scalar");
         assert!(!scalar_cases.is_empty());
-        assert!(scalar_cases.iter().all(|case| case.tags.contains(&"scalar")));
+        assert!(
+            scalar_cases
+                .iter()
+                .all(|case| case.tags.contains(&"scalar"))
+        );
     }
 
     #[test]
@@ -589,7 +604,9 @@ mod tests {
         let cases = tie_cases_by_tags_any(&["scalar", "array"]);
         assert!(!cases.is_empty());
         assert!(
-            cases.iter().all(|case| case.tags.contains(&"scalar") || case.tags.contains(&"array"))
+            cases
+                .iter()
+                .all(|case| case.tags.contains(&"scalar") || case.tags.contains(&"array"))
         );
     }
 
@@ -598,7 +615,9 @@ mod tests {
         let cases = tie_cases_by_tags_all(&["tie", "scalar"]);
         assert!(!cases.is_empty());
         assert!(
-            cases.iter().all(|case| case.tags.contains(&"tie") && case.tags.contains(&"scalar"))
+            cases
+                .iter()
+                .all(|case| case.tags.contains(&"tie") && case.tags.contains(&"scalar"))
         );
     }
 
@@ -612,7 +631,10 @@ mod tests {
         assert!(!scalar_cases.is_empty(), "Should have scalar tie cases");
         assert!(!array_cases.is_empty(), "Should have array tie cases");
         assert!(!hash_cases.is_empty(), "Should have hash tie cases");
-        assert!(!filehandle_cases.is_empty(), "Should have filehandle tie cases");
+        assert!(
+            !filehandle_cases.is_empty(),
+            "Should have filehandle tie cases"
+        );
     }
 
     #[test]
@@ -632,13 +654,19 @@ mod tests {
     #[test]
     fn tie_cases_cover_arguments() {
         let arg_cases = tie_cases_by_tag("arguments");
-        assert!(!arg_cases.is_empty(), "Should have tie cases with arguments");
+        assert!(
+            !arg_cases.is_empty(),
+            "Should have tie cases with arguments"
+        );
     }
 
     #[test]
     fn tie_cases_cover_std_modules() {
         let std_cases = tie_cases_by_tag("std-module");
-        assert!(!std_cases.is_empty(), "Should have standard module tie cases");
+        assert!(
+            !std_cases.is_empty(),
+            "Should have standard module tie cases"
+        );
     }
 
     #[test]

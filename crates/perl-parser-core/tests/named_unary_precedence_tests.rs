@@ -5,7 +5,10 @@ fn parse_ok(src: &str) -> String {
     let mut parser = Parser::new(src);
     let ast = must(parser.parse());
     let sexp = ast.to_sexp();
-    assert!(!sexp.contains("ERROR"), "parse should succeed without errors for: {src}\ngot: {sexp}");
+    assert!(
+        !sexp.contains("ERROR"),
+        "parse should succeed without errors for: {src}\ngot: {sexp}"
+    );
     sexp
 }
 
@@ -22,9 +25,18 @@ fn defined_arrow_hash_deref_in_if() {
 #[test]
 fn ref_arrow_hash_deref_eq_comparison() {
     let sexp = parse_ok("ref $obj->{list} eq 'ARRAY';");
-    assert!(sexp.contains("(binary_eq"), "expected binary_eq root, got: {sexp}");
-    assert!(sexp.contains("(call ref (("), "expected ref call on the left-hand side, got: {sexp}");
-    assert!(!sexp.contains("(call ref ((binary_eq"), "ref ate binary_eq: {sexp}");
+    assert!(
+        sexp.contains("(binary_eq"),
+        "expected binary_eq root, got: {sexp}"
+    );
+    assert!(
+        sexp.contains("(call ref (("),
+        "expected ref call on the left-hand side, got: {sexp}"
+    );
+    assert!(
+        !sexp.contains("(call ref ((binary_eq"),
+        "ref ate binary_eq: {sexp}"
+    );
     assert!(
         !sexp.contains("(function_call_expression (function)) (identifier eq)"),
         "ref split into multiple statements: {sexp}"
@@ -34,9 +46,18 @@ fn ref_arrow_hash_deref_eq_comparison() {
 #[test]
 fn ref_variable_eq_comparison() {
     let sexp = parse_ok("ref $ref eq 'HASH';");
-    assert!(sexp.contains("(binary_eq"), "expected binary_eq root, got: {sexp}");
-    assert!(sexp.contains("(call ref (("), "expected ref call on the left-hand side, got: {sexp}");
-    assert!(!sexp.contains("(call ref ((binary_eq"), "ref ate binary_eq: {sexp}");
+    assert!(
+        sexp.contains("(binary_eq"),
+        "expected binary_eq root, got: {sexp}"
+    );
+    assert!(
+        sexp.contains("(call ref (("),
+        "expected ref call on the left-hand side, got: {sexp}"
+    );
+    assert!(
+        !sexp.contains("(call ref ((binary_eq"),
+        "ref ate binary_eq: {sexp}"
+    );
     assert!(
         !sexp.contains("(function_call_expression (function)) (identifier eq)"),
         "ref split into multiple statements: {sexp}"

@@ -30,7 +30,9 @@ fn add_parameter_action_exists_for_named_sub_with_signature() {
     let provider = EnhancedCodeActionsProvider::new(source.to_string());
     let actions = provider.get_enhanced_refactoring_actions(&ast, (sub_start, sub_start + 1));
 
-    let action = actions.iter().find(|a| a.title == "Add parameter to signature");
+    let action = actions
+        .iter()
+        .find(|a| a.title == "Add parameter to signature");
     assert!(
         action.is_some(),
         "Expected 'Add parameter to signature' action, got: {:?}",
@@ -48,7 +50,10 @@ fn add_parameter_action_kind_is_refactor_rewrite() {
     let provider = EnhancedCodeActionsProvider::new(source.to_string());
     let actions = provider.get_enhanced_refactoring_actions(&ast, (sub_start, sub_start + 1));
 
-    let action = actions.iter().find(|a| a.title == "Add parameter to signature").unwrap();
+    let action = actions
+        .iter()
+        .find(|a| a.title == "Add parameter to signature")
+        .unwrap();
     assert_eq!(
         action.kind,
         CodeActionKind::RefactorRewrite,
@@ -67,7 +72,10 @@ fn add_parameter_updates_signature_and_one_call_site() {
     let provider = EnhancedCodeActionsProvider::new(source.to_string());
     let actions = provider.get_enhanced_refactoring_actions(&ast, (sub_start, sub_start + 1));
 
-    let action = actions.iter().find(|a| a.title == "Add parameter to signature").unwrap();
+    let action = actions
+        .iter()
+        .find(|a| a.title == "Add parameter to signature")
+        .unwrap();
 
     // Exactly 2 edits: 1 signature + 1 call site
     assert_eq!(
@@ -86,7 +94,11 @@ fn add_parameter_updates_signature_and_one_call_site() {
         result
     );
     // Call site updated
-    assert!(result.contains("process($v1, {})"), "Expected call site updated, got:\n{}", result);
+    assert!(
+        result.contains("process($v1, {})"),
+        "Expected call site updated, got:\n{}",
+        result
+    );
 }
 
 #[test]
@@ -105,7 +117,10 @@ fn add_parameter_updates_three_call_sites() {
     let provider = EnhancedCodeActionsProvider::new(source.to_string());
     let actions = provider.get_enhanced_refactoring_actions(&ast, (sub_start, sub_start + 1));
 
-    let action = actions.iter().find(|a| a.title == "Add parameter to signature").unwrap();
+    let action = actions
+        .iter()
+        .find(|a| a.title == "Add parameter to signature")
+        .unwrap();
 
     // 4 edits: 1 signature + 3 call sites
     assert_eq!(
@@ -113,7 +128,12 @@ fn add_parameter_updates_three_call_sites() {
         4,
         "Expected 4 edits (1 signature + 3 call sites), got {} edits: {:?}",
         action.edit.changes.len(),
-        action.edit.changes.iter().map(|e| (&e.location, &e.new_text)).collect::<Vec<_>>()
+        action
+            .edit
+            .changes
+            .iter()
+            .map(|e| (&e.location, &e.new_text))
+            .collect::<Vec<_>>()
     );
 
     let result = apply_edits(source, action);
@@ -137,8 +157,13 @@ fn no_add_parameter_action_for_anonymous_sub() {
     let provider = EnhancedCodeActionsProvider::new(source.to_string());
     let actions = provider.get_enhanced_refactoring_actions(&ast, (0, source.len()));
 
-    let action = actions.iter().find(|a| a.title == "Add parameter to signature");
-    assert!(action.is_none(), "Should not offer add-parameter for anonymous sub");
+    let action = actions
+        .iter()
+        .find(|a| a.title == "Add parameter to signature");
+    assert!(
+        action.is_none(),
+        "Should not offer add-parameter for anonymous sub"
+    );
 }
 
 #[test]
@@ -151,8 +176,13 @@ fn no_add_parameter_action_when_last_param_is_slurpy() {
     let provider = EnhancedCodeActionsProvider::new(source.to_string());
     let actions = provider.get_enhanced_refactoring_actions(&ast, (sub_start, sub_start + 1));
 
-    let action = actions.iter().find(|a| a.title == "Add parameter to signature");
-    assert!(action.is_none(), "Should not offer add-parameter when last param is slurpy");
+    let action = actions
+        .iter()
+        .find(|a| a.title == "Add parameter to signature");
+    assert!(
+        action.is_none(),
+        "Should not offer add-parameter when last param is slurpy"
+    );
 }
 
 #[test]
@@ -166,8 +196,13 @@ fn no_add_parameter_action_for_sub_without_signature() {
     let provider = EnhancedCodeActionsProvider::new(source.to_string());
     let actions = provider.get_enhanced_refactoring_actions(&ast, (sub_start, sub_start + 1));
 
-    let action = actions.iter().find(|a| a.title == "Add parameter to signature");
-    assert!(action.is_none(), "Should not offer add-parameter for sub without signature");
+    let action = actions
+        .iter()
+        .find(|a| a.title == "Add parameter to signature");
+    assert!(
+        action.is_none(),
+        "Should not offer add-parameter for sub without signature"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -189,7 +224,10 @@ fn add_parameter_edits_have_no_overlapping_ranges() {
     let provider = EnhancedCodeActionsProvider::new(source.to_string());
     let actions = provider.get_enhanced_refactoring_actions(&ast, (sub_start, sub_start + 1));
 
-    let action = actions.iter().find(|a| a.title == "Add parameter to signature").unwrap();
+    let action = actions
+        .iter()
+        .find(|a| a.title == "Add parameter to signature")
+        .unwrap();
 
     // Check no overlapping edits
     let mut sorted = action.edit.changes.clone();
@@ -216,7 +254,10 @@ fn add_parameter_signature_edit_inserts_before_closing_paren() {
     let provider = EnhancedCodeActionsProvider::new(source.to_string());
     let actions = provider.get_enhanced_refactoring_actions(&ast, (sub_start, sub_start + 1));
 
-    let action = actions.iter().find(|a| a.title == "Add parameter to signature").unwrap();
+    let action = actions
+        .iter()
+        .find(|a| a.title == "Add parameter to signature")
+        .unwrap();
     let result = apply_edits(source, action);
 
     assert!(
@@ -224,7 +265,11 @@ fn add_parameter_signature_edit_inserts_before_closing_paren() {
         "Expected signature with $options = {{}}, got:\n{}",
         result
     );
-    assert!(result.contains("foo(1, {})"), "Expected call updated, got:\n{}", result);
+    assert!(
+        result.contains("foo(1, {})"),
+        "Expected call updated, got:\n{}",
+        result
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -250,18 +295,37 @@ fn add_parameter_only_updates_matching_sub_calls_not_other_subs() {
     let provider = EnhancedCodeActionsProvider::new(source.to_string());
     let actions = provider.get_enhanced_refactoring_actions(&ast, (sub_start, sub_start + 1));
 
-    let Some(action) = actions.iter().find(|a| a.title == "Add parameter to signature") else {
+    let Some(action) = actions
+        .iter()
+        .find(|a| a.title == "Add parameter to signature")
+    else {
         panic!("Expected add-parameter action for sub foo");
     };
 
     let result = apply_edits(source, action);
 
     // foo calls updated
-    assert!(result.contains("foo(1, {})"), "foo(1) not updated in:\n{}", result);
-    assert!(result.contains("foo(3, {})"), "foo(3) not updated in:\n{}", result);
+    assert!(
+        result.contains("foo(1, {})"),
+        "foo(1) not updated in:\n{}",
+        result
+    );
+    assert!(
+        result.contains("foo(3, {})"),
+        "foo(3) not updated in:\n{}",
+        result
+    );
     // bar call NOT touched
-    assert!(result.contains("bar(2)"), "bar(2) was wrongly modified in:\n{}", result);
-    assert!(!result.contains("bar(2, {})"), "bar(2) should not be modified in:\n{}", result);
+    assert!(
+        result.contains("bar(2)"),
+        "bar(2) was wrongly modified in:\n{}",
+        result
+    );
+    assert!(
+        !result.contains("bar(2, {})"),
+        "bar(2) should not be modified in:\n{}",
+        result
+    );
 }
 
 #[test]
@@ -288,7 +352,11 @@ fn add_parameter_sub_with_default_value_appends_correctly() {
         "Expected optional param preserved, got:\n{}",
         result
     );
-    assert!(result.contains("foo(1, 2, {})"), "Expected call updated, got:\n{}", result);
+    assert!(
+        result.contains("foo(1, 2, {})"),
+        "Expected call updated, got:\n{}",
+        result
+    );
 }
 
 #[test]
@@ -319,7 +387,11 @@ fn add_parameter_qualified_call_sites_are_updated() {
         action.edit.changes.len()
     );
     let result = apply_edits(source, action);
-    assert!(result.contains("foo(1, {})"), "bare call not updated in:\n{}", result);
+    assert!(
+        result.contains("foo(1, {})"),
+        "bare call not updated in:\n{}",
+        result
+    );
 }
 
 #[test]
@@ -333,7 +405,9 @@ fn add_parameter_no_action_for_hash_slurpy_last() {
     let provider = EnhancedCodeActionsProvider::new(source.to_string());
     let actions = provider.get_enhanced_refactoring_actions(&ast, (sub_start, sub_start + 1));
 
-    let action = actions.iter().find(|a| a.title == "Add parameter to signature");
+    let action = actions
+        .iter()
+        .find(|a| a.title == "Add parameter to signature");
     assert!(
         action.is_none(),
         "Should not offer add-parameter when last param is hash slurpy (%opts)"

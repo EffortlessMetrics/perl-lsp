@@ -28,7 +28,10 @@ fn config_without_perlcritic() -> ScenarioConfig {
         .filter(|entry| !entry.contains("perlcritic"))
         .map(String::from)
         .collect();
-    ScenarioConfig { path_restriction: Some(dirs), ..Default::default() }
+    ScenarioConfig {
+        path_restriction: Some(dirs),
+        ..Default::default()
+    }
 }
 
 #[test]
@@ -41,7 +44,9 @@ fn scenario_04_diagnostics_without_perlcritic_no_crash() {
     let source = "sub foo {\n    my $unused = 1;\n    return 42;\n}\n";
     let harness = UxHarness::new(config_without_perlcritic()).expect("Failed to create UX harness");
 
-    harness.open_file("critic.pl", source).expect("didOpen should succeed");
+    harness
+        .open_file("critic.pl", source)
+        .expect("didOpen should succeed");
     std::thread::sleep(Duration::from_secs(1));
 
     harness.assert_no_crash();
@@ -57,7 +62,9 @@ fn scenario_04_server_responsive_without_perlcritic() {
     let source = "my $x = 1;\n";
     let harness = UxHarness::new(config_without_perlcritic()).expect("Failed to create UX harness");
 
-    harness.open_file("responsive.pl", source).expect("didOpen should succeed");
+    harness
+        .open_file("responsive.pl", source)
+        .expect("didOpen should succeed");
     std::thread::sleep(Duration::from_millis(500));
 
     let hover = harness.hover("responsive.pl", 0, 3);

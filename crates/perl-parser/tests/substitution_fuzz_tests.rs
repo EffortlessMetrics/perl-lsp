@@ -15,9 +15,21 @@ fn test_substitution_batch(inputs: &[&str]) -> Vec<String> {
             let (pattern, replacement, modifiers) = extract_substitution_parts(input);
 
             // Basic invariants that should never be violated
-            assert!(pattern.len() <= input.len(), "Pattern longer than input: {}", input);
-            assert!(replacement.len() <= input.len(), "Replacement longer than input: {}", input);
-            assert!(modifiers.len() <= input.len(), "Modifiers longer than input: {}", input);
+            assert!(
+                pattern.len() <= input.len(),
+                "Pattern longer than input: {}",
+                input
+            );
+            assert!(
+                replacement.len() <= input.len(),
+                "Replacement longer than input: {}",
+                input
+            );
+            assert!(
+                modifiers.len() <= input.len(),
+                "Modifiers longer than input: {}",
+                input
+            );
 
             // Verify modifiers only contain valid characters
             for ch in modifiers.chars() {
@@ -152,9 +164,18 @@ fn generate_pathological_inputs() -> Vec<String> {
     // Deep nesting with balanced delimiters
     for depth in 1..5 {
         // Reduced depth to prevent timeout
-        let pattern = format!("s{}{}{}", "{".repeat(depth), "a".repeat(depth), "}".repeat(depth));
-        let replacement =
-            format!("{}{}{}", "{".repeat(depth), "b".repeat(depth), "}".repeat(depth));
+        let pattern = format!(
+            "s{}{}{}",
+            "{".repeat(depth),
+            "a".repeat(depth),
+            "}".repeat(depth)
+        );
+        let replacement = format!(
+            "{}{}{}",
+            "{".repeat(depth),
+            "b".repeat(depth),
+            "}".repeat(depth)
+        );
         inputs.push(format!("s{}{}", pattern, replacement));
     }
 
@@ -197,11 +218,16 @@ fn run_substitution_fuzz_tests() -> Result<(), Vec<String>> {
 #[test]
 fn test_substitution_fuzz_edge_cases() {
     // Test basic edge cases that should never crash
-    let edge_cases =
-        vec!["s", "s/", "s//", "s///", "s/a/b/", "s{a}{b}", "s[a][b]", "s(a)(b)", "s<a><b>"];
+    let edge_cases = vec![
+        "s", "s/", "s//", "s///", "s/a/b/", "s{a}{b}", "s[a][b]", "s(a)(b)", "s<a><b>",
+    ];
 
     let crashes = test_substitution_batch(&edge_cases);
-    assert!(crashes.is_empty(), "Found crashes in edge cases: {:?}", crashes);
+    assert!(
+        crashes.is_empty(),
+        "Found crashes in edge cases: {:?}",
+        crashes
+    );
 }
 
 #[test]
@@ -221,17 +247,31 @@ fn test_substitution_fuzz_delimiter_variants() {
     ];
 
     let crashes = test_substitution_batch(&delimiter_cases);
-    assert!(crashes.is_empty(), "Found crashes in delimiter cases: {:?}", crashes);
+    assert!(
+        crashes.is_empty(),
+        "Found crashes in delimiter cases: {:?}",
+        crashes
+    );
 }
 
 #[test]
 fn test_substitution_fuzz_unicode_handling() {
     // Test Unicode edge cases
-    let unicode_cases =
-        vec!["s/α/β/", "s/😀/😁/", "s/🦀/🔥/", "s/Ω/Α/", "s/नमस्ते/हैलो/", "s/Здравствуй/Привет/"];
+    let unicode_cases = vec![
+        "s/α/β/",
+        "s/😀/😁/",
+        "s/🦀/🔥/",
+        "s/Ω/Α/",
+        "s/नमस्ते/हैलो/",
+        "s/Здравствуй/Привет/",
+    ];
 
     let crashes = test_substitution_batch(&unicode_cases);
-    assert!(crashes.is_empty(), "Found crashes in Unicode cases: {:?}", crashes);
+    assert!(
+        crashes.is_empty(),
+        "Found crashes in Unicode cases: {:?}",
+        crashes
+    );
 }
 
 #[test]
@@ -248,7 +288,11 @@ fn test_substitution_fuzz_boundary_conditions() {
     ];
 
     let crashes = test_substitution_batch(&boundary_cases);
-    assert!(crashes.is_empty(), "Found crashes in boundary cases: {:?}", crashes);
+    assert!(
+        crashes.is_empty(),
+        "Found crashes in boundary cases: {:?}",
+        crashes
+    );
 }
 
 #[test]
@@ -263,7 +307,11 @@ fn test_substitution_fuzz_nested_delimiters() {
     ];
 
     let crashes = test_substitution_batch(&nested_cases);
-    assert!(crashes.is_empty(), "Found crashes in nested delimiter cases: {:?}", crashes);
+    assert!(
+        crashes.is_empty(),
+        "Found crashes in nested delimiter cases: {:?}",
+        crashes
+    );
 }
 
 #[test]

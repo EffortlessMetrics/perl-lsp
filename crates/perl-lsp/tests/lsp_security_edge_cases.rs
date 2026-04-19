@@ -524,8 +524,16 @@ fn test_symlink_and_hardlink_handling() {
     );
 
     // Both paths should return valid symbol arrays (server handles them independently)
-    assert!(response1["result"].is_array(), "response1 should have result array: {:?}", response1);
-    assert!(response2["result"].is_array(), "response2 should have result array: {:?}", response2);
+    assert!(
+        response1["result"].is_array(),
+        "response1 should have result array: {:?}",
+        response1
+    );
+    assert!(
+        response2["result"].is_array(),
+        "response2 should have result array: {:?}",
+        response2
+    );
 }
 
 #[test]

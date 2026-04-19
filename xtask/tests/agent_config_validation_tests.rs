@@ -60,7 +60,11 @@ pub enum AgentCategory {
 impl AgentCategory {
     fn from_path(path: &Path, agents_dir: &Path) -> Result<Self> {
         let relative = path.strip_prefix(agents_dir).with_context(|| {
-            format!("Agent file {} is outside {}", path.display(), agents_dir.display())
+            format!(
+                "Agent file {} is outside {}",
+                path.display(),
+                agents_dir.display()
+            )
         })?;
         let mut components = relative.components();
         let Some(first) = components.next() else {
@@ -95,7 +99,11 @@ pub struct ValidationResult {
 
 impl ValidationResult {
     fn new(path: PathBuf) -> Self {
-        Self { path, errors: Vec::new(), warnings: Vec::new() }
+        Self {
+            path,
+            errors: Vec::new(),
+            warnings: Vec::new(),
+        }
     }
 
     fn is_valid(&self) -> bool {
@@ -111,7 +119,10 @@ pub struct AgentConfigValidator {
 impl AgentConfigValidator {
     pub fn new() -> Result<Self> {
         // Try current directory first, then parent directory (for when running from xtask/)
-        let candidates = vec![PathBuf::from(".claude/agents"), PathBuf::from("../.claude/agents")];
+        let candidates = vec![
+            PathBuf::from(".claude/agents"),
+            PathBuf::from("../.claude/agents"),
+        ];
 
         for agents_dir in candidates {
             if agents_dir.exists() {
@@ -119,7 +130,9 @@ impl AgentConfigValidator {
             }
         }
 
-        Err(anyhow!("Agent directory not found. Tried: .claude/agents and ../.claude/agents"))
+        Err(anyhow!(
+            "Agent directory not found. Tried: .claude/agents and ../.claude/agents"
+        ))
     }
 
     /// Find all agent markdown files
@@ -159,7 +172,10 @@ impl AgentConfigValidator {
 
         // Extract YAML front matter between --- delimiters
         let yaml_lines = self.extract_yaml_front_matter(&content).with_context(|| {
-            format!("Failed to extract YAML front matter from: {}", path.display())
+            format!(
+                "Failed to extract YAML front matter from: {}",
+                path.display()
+            )
         })?;
 
         // Parse YAML manually due to unquoted multi-line strings with special chars
@@ -230,16 +246,19 @@ impl AgentConfigValidator {
         if config.name.is_empty() {
             result.errors.push("name field is empty".to_string());
         } else if !self.is_valid_agent_name(&config.name) {
-            result
-                .warnings
-                .push(format!("name '{}' should use lowercase-with-hyphens format", config.name));
+            result.warnings.push(format!(
+                "name '{}' should use lowercase-with-hyphens format",
+                config.name
+            ));
         }
 
         // Validate description field
         if config.description.is_empty() {
             result.errors.push("description field is empty".to_string());
         } else if config.description.len() < 50 {
-            result.warnings.push("description is very short (< 50 chars)".to_string());
+            result
+                .warnings
+                .push("description is very short (< 50 chars)".to_string());
         }
 
         // Validate model field
@@ -255,10 +274,13 @@ impl AgentConfigValidator {
 
         // Validate color field (optional but should be valid if present)
         if let Some(color) = &config.color {
-            let valid_colors =
-                ["cyan", "green", "blue", "yellow", "red", "magenta", "white", "gray"];
+            let valid_colors = [
+                "cyan", "green", "blue", "yellow", "red", "magenta", "white", "gray",
+            ];
             if !valid_colors.contains(&color.as_str()) {
-                result.warnings.push(format!("color '{}' is not a standard ANSI color", color));
+                result
+                    .warnings
+                    .push(format!("color '{}' is not a standard ANSI color", color));
             }
         }
 
@@ -267,7 +289,8 @@ impl AgentConfigValidator {
 
     fn is_valid_agent_name(&self, name: &str) -> bool {
         // Agent names should be lowercase with hyphens
-        name.chars().all(|c| c.is_ascii_lowercase() || c == '-' || c.is_ascii_digit())
+        name.chars()
+            .all(|c| c.is_ascii_lowercase() || c == '-' || c.is_ascii_digit())
     }
 
     /// Validate all agent configurations
@@ -324,10 +347,15 @@ impl AgentConfigValidator {
         let mut agents = Vec::new();
 
         for path in agent_files {
-            if let (Ok(config), Ok(category)) =
-                (self.parse_agent_config(&path), AgentCategory::from_path(&path, &self.agents_dir))
-            {
-                agents.push(AgentFile { path: path.clone(), config, category });
+            if let (Ok(config), Ok(category)) = (
+                self.parse_agent_config(&path),
+                AgentCategory::from_path(&path, &self.agents_dir),
+            ) {
+                agents.push(AgentFile {
+                    path: path.clone(),
+                    config,
+                    category,
+                });
             }
         }
 
@@ -359,7 +387,10 @@ mod tests {
         let validator = AgentConfigValidator::new()?;
         let agent_files = validator.find_agent_files()?;
 
-        assert!(!agent_files.is_empty(), "Should find at least one agent file");
+        assert!(
+            !agent_files.is_empty(),
+            "Should find at least one agent file"
+        );
         assert!(
             agent_files.len() >= 10,
             "Expected at least 10 agent files, found {}",
@@ -394,7 +425,10 @@ mod tests {
 
                     // Verify required fields are present
                     assert!(!config.name.is_empty(), "name should not be empty");
-                    assert!(!config.description.is_empty(), "description should not be empty");
+                    assert!(
+                        !config.description.is_empty(),
+                        "description should not be empty"
+                    );
                     assert!(!config.model.is_empty(), "model should not be empty");
                 }
                 Err(e) => {
@@ -477,7 +511,10 @@ mod tests {
             for dup in &duplicates {
                 eprintln!("  - {}", dup);
             }
-            eprintln!("\nFound {} duplicate agent names across directories.", duplicates.len());
+            eprintln!(
+                "\nFound {} duplicate agent names across directories.",
+                duplicates.len()
+            );
             eprintln!("Consider making agent names unique or using directory-qualified names.");
         }
 
@@ -529,7 +566,10 @@ mod tests {
             *category_counts.entry(agent.category.clone()).or_default() += 1;
         }
 
-        assert!(!category_counts.is_empty(), "Should classify at least one agent");
+        assert!(
+            !category_counts.is_empty(),
+            "Should classify at least one agent"
+        );
         assert!(
             category_counts.contains_key(&AgentCategory::Root),
             "Current active swarm agents should include root-level agent definitions"
@@ -576,8 +616,9 @@ mod tests {
 
         for agent in &agents {
             let description = agent.config.description.to_lowercase();
-            let has_perl_specialization =
-                perl_keywords.iter().any(|keyword| description.contains(keyword));
+            let has_perl_specialization = perl_keywords
+                .iter()
+                .any(|keyword| description.contains(keyword));
 
             if has_perl_specialization {
                 specialized_count += 1;

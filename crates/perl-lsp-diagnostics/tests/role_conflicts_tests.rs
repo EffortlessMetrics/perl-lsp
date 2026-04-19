@@ -44,10 +44,19 @@ sub auditable_only { 2 }
 "#;
 
     let diags = pl303_diags(source);
-    assert_eq!(diags.len(), 1, "expected exactly one PL303 diagnostic: {diags:?}");
+    assert_eq!(
+        diags.len(),
+        1,
+        "expected exactly one PL303 diagnostic: {diags:?}"
+    );
     let diag = &diags[0];
-    let anchor = source.find("with 'MyApp::Role::Printable', 'MyApp::Role::Auditable'").unwrap();
-    assert_eq!(diag.range.0, anchor, "PL303 should anchor at the `with` reference");
+    let anchor = source
+        .find("with 'MyApp::Role::Printable', 'MyApp::Role::Auditable'")
+        .unwrap();
+    assert_eq!(
+        diag.range.0, anchor,
+        "PL303 should anchor at the `with` reference"
+    );
     assert!(diag.message.contains("shared"));
     assert!(diag.message.contains("MyApp::Consumer"));
 }
@@ -75,7 +84,10 @@ use Moo::Role;
 sub shared { 2 }
 "#;
 
-    assert!(pl303_diags(source).is_empty(), "class-defined method should suppress PL303");
+    assert!(
+        pl303_diags(source).is_empty(),
+        "class-defined method should suppress PL303"
+    );
 }
 
 #[test]
@@ -100,7 +112,10 @@ use Moo::Role;
 sub auditable_only { 2 }
 "#;
 
-    assert!(pl303_diags(source).is_empty(), "distinct role methods should not produce PL303");
+    assert!(
+        pl303_diags(source).is_empty(),
+        "distinct role methods should not produce PL303"
+    );
 }
 
 #[test]
@@ -125,7 +140,10 @@ use Moo::Role;
 requires 'shared';
 "#;
 
-    assert!(pl303_diags(source).is_empty(), "`requires` should not create a role-method conflict");
+    assert!(
+        pl303_diags(source).is_empty(),
+        "`requires` should not create a role-method conflict"
+    );
 }
 
 #[test]
@@ -190,7 +208,10 @@ sub clash { 3 }
         1,
         "three roles providing the same method is still one conflict: {diags:?}"
     );
-    assert!(diags[0].message.contains("clash"), "message should mention the method name");
+    assert!(
+        diags[0].message.contains("clash"),
+        "message should mention the method name"
+    );
 }
 
 #[test]

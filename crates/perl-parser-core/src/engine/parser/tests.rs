@@ -41,9 +41,16 @@ fn test_method_attributes_parse() {
     };
     let first = must_some(statements.first());
     match &first.kind {
-        NodeKind::Method { signature, attributes, .. } => {
+        NodeKind::Method {
+            signature,
+            attributes,
+            ..
+        } => {
             assert!(signature.is_some(), "Expected method signature");
-            assert_eq!(attributes, &vec!["lvalue".to_string(), "prototype($self)".to_string()]);
+            assert_eq!(
+                attributes,
+                &vec!["lvalue".to_string(), "prototype($self)".to_string()]
+            );
         }
         other => panic!("Expected method declaration, got: {:?}", other),
     }
@@ -59,7 +66,11 @@ fn test_method_attributes_without_signature_parse() {
     };
     let first = must_some(statements.first());
     match &first.kind {
-        NodeKind::Method { signature, attributes, .. } => {
+        NodeKind::Method {
+            signature,
+            attributes,
+            ..
+        } => {
             assert!(signature.is_none(), "Did not expect method signature");
             assert_eq!(attributes, &vec!["lvalue".to_string()]);
         }
@@ -72,10 +83,9 @@ fn test_declaration_attributes_require_name() {
     let mut parser = Parser::new("sub broken : { 1; }");
     let _ast = must(parser.parse());
     assert!(
-        parser
-            .errors()
-            .iter()
-            .any(|err| err.to_string().contains("Expected attribute name after ':'")),
+        parser.errors().iter().any(|err| err
+            .to_string()
+            .contains("Expected attribute name after ':'")),
         "expected parser recovery error for missing attribute name, got: {:?}",
         parser.errors()
     );
@@ -86,10 +96,9 @@ fn test_declaration_attributes_require_closing_paren() {
     let mut parser = Parser::new("method broken :prototype($self { 1; }");
     let _ast = must(parser.parse());
     assert!(
-        parser
-            .errors()
-            .iter()
-            .any(|err| err.to_string().contains("Unterminated attribute argument list")),
+        parser.errors().iter().any(|err| err
+            .to_string()
+            .contains("Unterminated attribute argument list")),
         "expected parser recovery error for unterminated attribute argument list, got: {:?}",
         parser.errors()
     );
@@ -143,21 +152,30 @@ fn test_qw_delimiters() {
     let result = parser.parse();
     assert!(result.is_ok());
     let ast = must(result);
-    assert_eq!(ast.to_sexp(), r#"(source_file (array (string "foo") (string "bar")))"#);
+    assert_eq!(
+        ast.to_sexp(),
+        r#"(source_file (array (string "foo") (string "bar")))"#
+    );
 
     // Test qw with non-paired delimiters
     let mut parser = Parser::new("qw/alpha beta/");
     let result = parser.parse();
     assert!(result.is_ok());
     let ast = must(result);
-    assert_eq!(ast.to_sexp(), r#"(source_file (array (string "alpha") (string "beta")))"#);
+    assert_eq!(
+        ast.to_sexp(),
+        r#"(source_file (array (string "alpha") (string "beta")))"#
+    );
 
     // Test qw with exclamation marks
     let mut parser = Parser::new("qw!hello world!");
     let result = parser.parse();
     assert!(result.is_ok());
     let ast = must(result);
-    assert_eq!(ast.to_sexp(), r#"(source_file (array (string "hello") (string "world")))"#);
+    assert_eq!(
+        ast.to_sexp(),
+        r#"(source_file (array (string "hello") (string "world")))"#
+    );
 }
 
 #[test]
@@ -182,8 +200,16 @@ fn test_block_vs_hash_context() {
     let ast = must(result);
     // In expression context, should have hash
     let sexp = ast.to_sexp();
-    assert!(sexp.contains("(hash"), "Expression context should have hash, got: {}", sexp);
-    assert!(sexp.contains("my"), "Should have my declaration, got: {}", sexp);
+    assert!(
+        sexp.contains("(hash"),
+        "Expression context should have hash, got: {}",
+        sexp
+    );
+    assert!(
+        sexp.contains("my"),
+        "Should have my declaration, got: {}",
+        sexp
+    );
 
     // Hash reference with parentheses
     let mut parser = Parser::new("$ref = ( a => 1, b => 2 )");
@@ -205,7 +231,10 @@ fn test_qualified_function_call() {
     let result = parser.parse();
     match result {
         Ok(ast) => {
-            println!("✅ Successfully parsed qualified function call: {}", ast.to_sexp());
+            println!(
+                "✅ Successfully parsed qualified function call: {}",
+                ast.to_sexp()
+            );
         }
         Err(e) => {
             println!("❌ Failed to parse qualified function call: {}", e);
@@ -242,12 +271,20 @@ fn test_regex_complexity_failure() {
 
     // Parser might recover, so check either result is Err or errors list has the error
     if let Err(e) = result {
-        assert!(e.to_string().contains("Regex lookbehind nesting too deep"), "Error was: {}", e);
+        assert!(
+            e.to_string().contains("Regex lookbehind nesting too deep"),
+            "Error was: {}",
+            e
+        );
     } else {
         let errors = parser.errors();
-        assert!(!errors.is_empty(), "Should have recorded errors for excessive nesting");
-        let found =
-            errors.iter().any(|e| e.to_string().contains("Regex lookbehind nesting too deep"));
+        assert!(
+            !errors.is_empty(),
+            "Should have recorded errors for excessive nesting"
+        );
+        let found = errors
+            .iter()
+            .any(|e| e.to_string().contains("Regex lookbehind nesting too deep"));
         assert!(found, "Should have found specific error in: {:?}", errors);
     }
 }
@@ -280,11 +317,20 @@ fn test_unicode_property_complexity() {
 
     // Parser might recover, so check either result is Err or errors list has the error
     if let Err(e) = result {
-        assert!(e.to_string().contains("Too many Unicode properties"), "Error was: {}", e);
+        assert!(
+            e.to_string().contains("Too many Unicode properties"),
+            "Error was: {}",
+            e
+        );
     } else {
         let errors = parser.errors();
-        assert!(!errors.is_empty(), "Should have recorded errors for excessive Unicode properties");
-        let found = errors.iter().any(|e| e.to_string().contains("Too many Unicode properties"));
+        assert!(
+            !errors.is_empty(),
+            "Should have recorded errors for excessive Unicode properties"
+        );
+        let found = errors
+            .iter()
+            .any(|e| e.to_string().contains("Too many Unicode properties"));
         assert!(found, "Should have found specific error in: {:?}", errors);
     }
 }
@@ -308,12 +354,21 @@ fn test_deep_nesting_stack_overflow() {
     // It might fail with nesting limit, or pass if the limit is high enough (64 is default)
     // 100 levels should trigger the limit
     if let Err(e) = result {
-        assert!(e.to_string().contains("Nesting depth limit exceeded"), "Error was: {}", e);
+        assert!(
+            e.to_string().contains("Nesting depth limit exceeded"),
+            "Error was: {}",
+            e
+        );
     } else {
         let errors = parser.errors();
         // If it didn't fail immediately, it might have recovered, but we expect an error
-        assert!(!errors.is_empty(), "Should have recorded errors for excessive nesting");
-        let found = errors.iter().any(|e| e.to_string().contains("Nesting depth limit exceeded"));
+        assert!(
+            !errors.is_empty(),
+            "Should have recorded errors for excessive nesting"
+        );
+        let found = errors
+            .iter()
+            .any(|e| e.to_string().contains("Nesting depth limit exceeded"));
         // Note: RecursionLimit might be converted to NestingTooDeep
         assert!(found, "Should have found specific error in: {:?}", errors);
     }
@@ -328,7 +383,11 @@ fn test_source_filter_detection() {
     assert!(result.is_ok());
     let ast = must(result);
     let sexp = ast.to_sexp();
-    assert!(sexp.contains("(risk:filter)"), "Should detect filter usage in: {}", sexp);
+    assert!(
+        sexp.contains("(risk:filter)"),
+        "Should detect filter usage in: {}",
+        sexp
+    );
 
     // Safe module
     let code_safe = "use strict;";
@@ -353,7 +412,11 @@ fn test_regex_code_execution_detection() {
     assert!(result.is_ok());
     let ast = must(result);
     let sexp = ast.to_sexp();
-    assert!(sexp.contains("(risk:code)"), "Should detect regex code execution in: {}", sexp);
+    assert!(
+        sexp.contains("(risk:code)"),
+        "Should detect regex code execution in: {}",
+        sexp
+    );
 
     // Safe regex
     let code_safe = r#"my $re = qr/hello/;"#;
@@ -362,7 +425,11 @@ fn test_regex_code_execution_detection() {
     assert!(result_safe.is_ok());
     let ast_safe = must(result_safe);
     let sexp_safe = ast_safe.to_sexp();
-    assert!(!sexp_safe.contains("(risk:code)"), "Should not flag safe regex in: {}", sexp_safe);
+    assert!(
+        !sexp_safe.contains("(risk:code)"),
+        "Should not flag safe regex in: {}",
+        sexp_safe
+    );
 }
 
 #[test]
@@ -407,7 +474,10 @@ EOF2
 
     let mut parser = Parser::new(code);
     let result = parser.parse();
-    assert!(result.is_ok(), "Failed to parse multiple heredocs on same line");
+    assert!(
+        result.is_ok(),
+        "Failed to parse multiple heredocs on same line"
+    );
 
     let ast = must(result);
     let sexp = ast.to_sexp();
@@ -435,7 +505,11 @@ fn test_deeply_nested_quotes() {
     let result = parser.parse();
 
     // The lexer handles this safely with O(n) complexity using a counter
-    assert!(result.is_ok(), "Deeply nested quotes should parse successfully: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "Deeply nested quotes should parse successfully: {:?}",
+        result.err()
+    );
 }
 
 #[test]
@@ -454,11 +528,20 @@ fn test_branch_reset_complexity() {
 
     // Parser might recover, so check either result is Err or errors list has the error
     if let Err(e) = result {
-        assert!(e.to_string().contains("Too many branches"), "Error was: {}", e);
+        assert!(
+            e.to_string().contains("Too many branches"),
+            "Error was: {}",
+            e
+        );
     } else {
         let errors = parser.errors();
-        assert!(!errors.is_empty(), "Should have recorded errors for excessive branches");
-        let found = errors.iter().any(|e| e.to_string().contains("Too many branches"));
+        assert!(
+            !errors.is_empty(),
+            "Should have recorded errors for excessive branches"
+        );
+        let found = errors
+            .iter()
+            .any(|e| e.to_string().contains("Too many branches"));
         assert!(found, "Should have found specific error in: {:?}", errors);
     }
 }
@@ -469,9 +552,18 @@ fn test_builtin_block_list_in_assignment_context() {
     // list arguments even when used on the RHS of an assignment.
     let test_cases = vec![
         ("grep block array", "my @result = grep { $_ > 5 } @array;"),
-        ("sort block hash access", r#"my @sorted = sort { $a->{name} cmp $b->{name} } @records;"#),
-        ("map block subscript", r#"my @mapped = map { $_->[0] + $_->[1] } @pairs;"#),
-        ("sort block function call", r#"my @x = sort { length($a) <=> length($b) } keys %hash;"#),
+        (
+            "sort block hash access",
+            r#"my @sorted = sort { $a->{name} cmp $b->{name} } @records;"#,
+        ),
+        (
+            "map block subscript",
+            r#"my @mapped = map { $_->[0] + $_->[1] } @pairs;"#,
+        ),
+        (
+            "sort block function call",
+            r#"my @x = sort { length($a) <=> length($b) } keys %hash;"#,
+        ),
     ];
 
     for (name, code) in test_cases {
@@ -479,7 +571,12 @@ fn test_builtin_block_list_in_assignment_context() {
         let result = parser.parse();
         let ast = must(result);
         let sexp = ast.to_sexp();
-        assert!(!sexp.contains("ERROR"), "{} should not contain ERROR: {}", name, sexp);
+        assert!(
+            !sexp.contains("ERROR"),
+            "{} should not contain ERROR: {}",
+            name,
+            sexp
+        );
     }
 }
 
@@ -491,28 +588,54 @@ fn test_catastrophic_backtracking_detection() {
     let result = parser.parse();
 
     // Parse should succeed (nested quantifiers are no longer a hard error)
-    assert!(result.is_ok(), "Parse should succeed for nested quantifiers: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "Parse should succeed for nested quantifiers: {:?}",
+        result.err()
+    );
     let errors = parser.errors();
-    let found = errors.iter().any(|e| e.to_string().contains("Nested quantifiers"));
-    assert!(found, "Should have found backtracking diagnostic in: {:?}", errors);
+    let found = errors
+        .iter()
+        .any(|e| e.to_string().contains("Nested quantifiers"));
+    assert!(
+        found,
+        "Should have found backtracking diagnostic in: {:?}",
+        errors
+    );
 
     // Another case: (a*)*
     let code2 = r#"qr/(a*)*b/;"#;
     let mut parser2 = Parser::new(code2);
     let result2 = parser2.parse();
 
-    assert!(result2.is_ok(), "Parse should succeed for nested quantifiers: {:?}", result2.err());
+    assert!(
+        result2.is_ok(),
+        "Parse should succeed for nested quantifiers: {:?}",
+        result2.err()
+    );
     let errors2 = parser2.errors();
-    let found2 = errors2.iter().any(|e| e.to_string().contains("Nested quantifiers"));
-    assert!(found2, "Should have found backtracking diagnostic in: {:?}", errors2);
+    let found2 = errors2
+        .iter()
+        .any(|e| e.to_string().contains("Nested quantifiers"));
+    assert!(
+        found2,
+        "Should have found backtracking diagnostic in: {:?}",
+        errors2
+    );
 }
 
 #[test]
 fn test_valid_regex_patterns_no_false_positive() {
     // These valid Perl patterns should parse cleanly with no errors at all
     let valid_patterns = vec![
-        (r#"$x =~ /(?:pattern)+/;"#, "non-capturing group with literal"),
-        (r#"$x =~ /(?:ab)+/;"#, "non-capturing group with two-char literal"),
+        (
+            r#"$x =~ /(?:pattern)+/;"#,
+            "non-capturing group with literal",
+        ),
+        (
+            r#"$x =~ /(?:ab)+/;"#,
+            "non-capturing group with two-char literal",
+        ),
     ];
 
     for (code, desc) in valid_patterns {
@@ -551,12 +674,18 @@ fn test_debug_paren_regex_binding() {
         ("paren assign =~", "(my $x = $y) =~ s/foo/bar/;"),
         ("paren assign tr", "($str = $input) =~ tr/a-z/A-Z/;"),
         ("paren assign chomp", "(my $line = <STDIN>) =~ s/\\n$//;"),
-        ("paren with if modifier", "(my $x = $input) =~ s/foo/bar/ if $cond;"),
+        (
+            "paren with if modifier",
+            "(my $x = $input) =~ s/foo/bar/ if $cond;",
+        ),
         ("paren assign !~", "(my $x = $y) !~ /pattern/;"),
         ("paren assign regex match", "(my $x = $y) =~ /pattern/;"),
         ("paren assign regex global", "(my $x = $y) =~ s/foo/bar/g;"),
         ("nested paren", "((my $x = $y)) =~ s/foo/bar/;"),
-        ("paren list assign split if", "(my @parts = split /,/, $str) if $cond;"),
+        (
+            "paren list assign split if",
+            "(my @parts = split /,/, $str) if $cond;",
+        ),
     ];
 
     for (name, code) in test_cases {
@@ -565,6 +694,11 @@ fn test_debug_paren_regex_binding() {
         let ast = must(result);
         let sexp = ast.to_sexp();
         println!("{}: {}", name, sexp);
-        assert!(!sexp.contains("ERROR"), "{} should not contain ERROR: {}", name, sexp);
+        assert!(
+            !sexp.contains("ERROR"),
+            "{} should not contain ERROR: {}",
+            name,
+            sexp
+        );
     }
 }

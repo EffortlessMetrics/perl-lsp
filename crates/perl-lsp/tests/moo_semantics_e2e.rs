@@ -13,7 +13,9 @@ mod moo_semantics_e2e_tests {
     const CLASS_ACCESSOR_BASIC: &str = include_str!("fixtures/frameworks/class_accessor.pl");
 
     fn completion_items(response: &Value) -> Option<&Vec<Value>> {
-        response["result"]["items"].as_array().or_else(|| response["result"].as_array())
+        response["result"]["items"]
+            .as_array()
+            .or_else(|| response["result"].as_array())
     }
 
     #[test]
@@ -53,9 +55,10 @@ mod moo_semantics_e2e_tests {
             .nth(call_line)
             .and_then(|line| line.find("name()"))
             .ok_or("definition call position not found")?;
-        let expected_def_line =
-            code.lines().position(|line| line.contains("has 'name'")).ok_or("has line missing")?
-                as u32;
+        let expected_def_line = code
+            .lines()
+            .position(|line| line.contains("has 'name'"))
+            .ok_or("has line missing")? as u32;
 
         let definition_response = server.get_definition(uri, call_line as u32, call_char as u32);
         let (_, def_line, _) =
@@ -93,8 +96,13 @@ mod moo_semantics_e2e_tests {
             server.get_completion(uri, completion_line as u32, completion_char as u32);
         let items = completion_items(&completion_response).ok_or("missing completion items")?;
 
-        for expected in ["full_name", "timezone", "has_profile", "clear_profile", "_build_profile"]
-        {
+        for expected in [
+            "full_name",
+            "timezone",
+            "has_profile",
+            "clear_profile",
+            "_build_profile",
+        ] {
             assert!(
                 items.iter().any(|item| item["label"] == expected),
                 "expected `{expected}` completion, got: {completion_response:#}"
@@ -222,9 +230,10 @@ mod moo_semantics_e2e_tests {
             .nth(call_line)
             .and_then(|line| line.find("email()"))
             .ok_or("definition call position not found")?;
-        let expected_def_line =
-            code.lines().position(|line| line.contains("has 'email'")).ok_or("has line missing")?
-                as u32;
+        let expected_def_line = code
+            .lines()
+            .position(|line| line.contains("has 'email'"))
+            .ok_or("has line missing")? as u32;
 
         let definition_response = server.get_definition(uri, call_line as u32, call_char as u32);
         let (_, def_line, _) =
@@ -249,7 +258,10 @@ mod moo_semantics_e2e_tests {
             hover_text.contains("read-write") || hover_text.contains("rw"),
             "expected accessor mode in hover, got: {hover_text}"
         );
-        assert!(hover_text.contains("Str"), "expected isa type 'Str' in hover, got: {hover_text}");
+        assert!(
+            hover_text.contains("Str"),
+            "expected isa type 'Str' in hover, got: {hover_text}"
+        );
 
         server.shutdown();
         Ok(())

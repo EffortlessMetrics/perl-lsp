@@ -19,7 +19,12 @@ mod tests {
         });
         if let NodeKind::Program { statements } = &ast.kind {
             let stmt = &statements[0];
-            if let NodeKind::IndirectCall { method, object, args } = &stmt.kind {
+            if let NodeKind::IndirectCall {
+                method,
+                object,
+                args,
+            } = &stmt.kind
+            {
                 assert_eq!(method, "move");
                 if let NodeKind::Variable { sigil, name } = &object.kind {
                     assert_eq!(sigil, "$");
@@ -46,7 +51,12 @@ mod tests {
         });
         if let NodeKind::Program { statements } = &ast.kind {
             let stmt = &statements[0];
-            if let NodeKind::IndirectCall { method, object, args } = &stmt.kind {
+            if let NodeKind::IndirectCall {
+                method,
+                object,
+                args,
+            } = &stmt.kind
+            {
                 assert_eq!(method, "print");
                 if let NodeKind::Variable { sigil, name } = &object.kind {
                     assert_eq!(sigil, "$");

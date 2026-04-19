@@ -38,7 +38,9 @@ impl DebugAdapter {
             })),
         );
 
-        let continue_body = ContinueResponseBody { all_threads_continued: true };
+        let continue_body = ContinueResponseBody {
+            all_threads_continued: true,
+        };
 
         DapMessage::Response {
             seq,
@@ -186,7 +188,11 @@ impl DebugAdapter {
             success,
             command: "pause".to_string(),
             body: None,
-            message: if !success { Some("Failed to pause debugger".to_string()) } else { None },
+            message: if !success {
+                Some("Failed to pause debugger".to_string())
+            } else {
+                None
+            },
         }
     }
 
@@ -214,7 +220,9 @@ impl DebugAdapter {
         let source_path = match args.source.path {
             Some(ref p) => p.clone(),
             None => {
-                let body = GotoTargetsResponseBody { targets: Vec::new() };
+                let body = GotoTargetsResponseBody {
+                    targets: Vec::new(),
+                };
                 return DapMessage::Response {
                     seq,
                     request_seq,
@@ -244,7 +252,9 @@ impl DebugAdapter {
         let content = match std::fs::read_to_string(&validated_path) {
             Ok(c) => c,
             Err(_) => {
-                let body = GotoTargetsResponseBody { targets: Vec::new() };
+                let body = GotoTargetsResponseBody {
+                    targets: Vec::new(),
+                };
                 return DapMessage::Response {
                     seq,
                     request_seq,
@@ -259,8 +269,10 @@ impl DebugAdapter {
         // Clear stale goto target mappings and build fresh ones
         let mut goto_map = lock_or_recover(&self.goto_targets, "debug_adapter.goto_targets");
         goto_map.clear();
-        let mut id_counter =
-            lock_or_recover(&self.next_goto_target_id, "debug_adapter.next_goto_target_id");
+        let mut id_counter = lock_or_recover(
+            &self.next_goto_target_id,
+            "debug_adapter.next_goto_target_id",
+        );
 
         let mut targets = Vec::new();
         let search_start = (args.line - 5).max(1);

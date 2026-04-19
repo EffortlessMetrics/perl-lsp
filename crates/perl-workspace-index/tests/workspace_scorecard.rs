@@ -123,14 +123,21 @@ fn scorecard_incremental_reindex_removes_old_symbol() -> Result<(), Box<dyn std:
     let file_uri = uri("/workspace/scorecard/incremental_test.pl");
 
     // Index v1: contains `old_symbol`
-    index
-        .index_file(file_uri.clone(), "package Inc;\nsub old_symbol { return 1; }\n".to_string())?;
-    assert!(index.find_definition("Inc::old_symbol").is_some(), "old_symbol should be indexed");
+    index.index_file(
+        file_uri.clone(),
+        "package Inc;\nsub old_symbol { return 1; }\n".to_string(),
+    )?;
+    assert!(
+        index.find_definition("Inc::old_symbol").is_some(),
+        "old_symbol should be indexed"
+    );
 
     // Re-index the same URI with v2: `old_symbol` removed, `new_symbol` added
     // Simulates user saving a file after renaming the function
-    index
-        .index_file(file_uri.clone(), "package Inc;\nsub new_symbol { return 2; }\n".to_string())?;
+    index.index_file(
+        file_uri.clone(),
+        "package Inc;\nsub new_symbol { return 2; }\n".to_string(),
+    )?;
 
     // new_symbol must be present
     assert!(
@@ -171,7 +178,10 @@ fn scorecard_incremental_reindex_latency_within_slo() -> Result<(), Box<dyn std:
         let t0 = Instant::now();
         index.index_file(
             file_uri.clone(),
-            format!("package SloTest{i};\nsub func_{i}_v2 {{ return {}; }}\n", i + 100),
+            format!(
+                "package SloTest{i};\nsub func_{i}_v2 {{ return {}; }}\n",
+                i + 100
+            ),
         )?;
         latencies_ms.push(t0.elapsed().as_millis() as u64);
     }
@@ -182,7 +192,10 @@ fn scorecard_incremental_reindex_latency_within_slo() -> Result<(), Box<dyn std:
     let p95_ms = latencies_ms[p95_idx.min(latencies_ms.len() - 1)];
 
     // SLO target from perl-workspace-index-slo: incremental_update_p95_ms = 100ms
-    assert!(p95_ms <= 100, "SLO BREACH: incremental reindex P95 = {p95_ms}ms exceeds 100ms target");
+    assert!(
+        p95_ms <= 100,
+        "SLO BREACH: incremental reindex P95 = {p95_ms}ms exceeds 100ms target"
+    );
 
     Ok(())
 }
@@ -202,8 +215,14 @@ fn scorecard_file_removal_isolation() -> Result<(), Box<dyn std::error::Error>> 
     let uri_a = uri("/workspace/scorecard/isolation_a.pl");
     let uri_b = uri("/workspace/scorecard/isolation_b.pl");
 
-    index.index_file(uri_a.clone(), "package IsoA;\nsub func_a { return 'a'; }\n".to_string())?;
-    index.index_file(uri_b.clone(), "package IsoB;\nsub func_b { return 'b'; }\n".to_string())?;
+    index.index_file(
+        uri_a.clone(),
+        "package IsoA;\nsub func_a { return 'a'; }\n".to_string(),
+    )?;
+    index.index_file(
+        uri_b.clone(),
+        "package IsoB;\nsub func_b { return 'b'; }\n".to_string(),
+    )?;
 
     // Both symbols present
     assert!(index.find_definition("IsoA::func_a").is_some());
@@ -247,14 +266,31 @@ fn scorecard_clear_returns_to_empty() -> Result<(), Box<dyn std::error::Error>> 
         )?;
     }
 
-    assert!(index.file_count() > 0, "files should be indexed before clear");
-    assert!(index.symbol_count() > 0, "symbols should exist before clear");
+    assert!(
+        index.file_count() > 0,
+        "files should be indexed before clear"
+    );
+    assert!(
+        index.symbol_count() > 0,
+        "symbols should exist before clear"
+    );
 
     index.clear();
 
-    assert_eq!(index.file_count(), 0, "file_count should be 0 after clear()");
-    assert_eq!(index.symbol_count(), 0, "symbol_count should be 0 after clear()");
-    assert!(!index.has_symbols(), "has_symbols should be false after clear()");
+    assert_eq!(
+        index.file_count(),
+        0,
+        "file_count should be 0 after clear()"
+    );
+    assert_eq!(
+        index.symbol_count(),
+        0,
+        "symbol_count should be 0 after clear()"
+    );
+    assert!(
+        !index.has_symbols(),
+        "has_symbols should be false after clear()"
+    );
 
     Ok(())
 }
@@ -286,7 +322,10 @@ fn scorecard_fixture_workspaces_exist_at_expected_scales() {
             "fixture workspace 'test_corpus/workspaces/{name}/' is missing — \
              this is a committed fixture and should always exist"
         );
-        assert!(dir.is_dir(), "test_corpus/workspaces/{name} exists but is not a directory");
+        assert!(
+            dir.is_dir(),
+            "test_corpus/workspaces/{name} exists but is not a directory"
+        );
 
         // Count .pl and .pm files recursively
         let count = WalkDir::new(&dir)
@@ -294,7 +333,10 @@ fn scorecard_fixture_workspaces_exist_at_expected_scales() {
             .filter_map(|e: Result<walkdir::DirEntry, _>| e.ok())
             .filter(|e: &walkdir::DirEntry| {
                 e.file_type().is_file()
-                    && e.path().extension().map(|ext| ext == "pl" || ext == "pm").unwrap_or(false)
+                    && e.path()
+                        .extension()
+                        .map(|ext| ext == "pl" || ext == "pm")
+                        .unwrap_or(false)
             })
             .count();
 

@@ -136,9 +136,17 @@ pub trait InlineCompletionBackend: Send + Sync {
         let mut final_text = String::new();
         self.stream(req, &mut |chunk| {
             final_text = chunk.text.clone();
-            if chunk.is_final { StreamControl::Stop } else { StreamControl::Continue }
+            if chunk.is_final {
+                StreamControl::Stop
+            } else {
+                StreamControl::Continue
+            }
         })?;
-        Ok(if final_text.is_empty() { vec![] } else { vec![final_text] })
+        Ok(if final_text.is_empty() {
+            vec![]
+        } else {
+            vec![final_text]
+        })
     }
 
     /// Stream completion chunks to a callback sink.
@@ -234,7 +242,10 @@ impl InlineCompletionProvider {
         let current_line = *lines.get(line_index)?;
         let prefix_end = utf16_line_col_to_offset(current_line, 0, character);
 
-        Some(LineContext { prefix: &current_line[..prefix_end], current_line })
+        Some(LineContext {
+            prefix: &current_line[..prefix_end],
+            current_line,
+        })
     }
 
     fn normalized_lines<'a>(&self, text: &'a str) -> Vec<&'a str> {
@@ -242,7 +253,9 @@ impl InlineCompletionProvider {
             return vec![""];
         }
 
-        text.split('\n').map(|line| line.strip_suffix('\r').unwrap_or(line)).collect()
+        text.split('\n')
+            .map(|line| line.strip_suffix('\r').unwrap_or(line))
+            .collect()
     }
 
     fn get_completions_for_context(
@@ -255,7 +268,11 @@ impl InlineCompletionProvider {
         let mut sequence = 0usize;
 
         let mut push_item = |priority: u8, item: InlineCompletionItem| {
-            items.push(RankedCompletionItem { priority, order: sequence, item });
+            items.push(RankedCompletionItem {
+                priority,
+                order: sequence,
+                item,
+            });
             sequence += 1;
         };
 
@@ -516,7 +533,10 @@ impl InlineCompletionProvider {
         {
             let prefix_len = if sub_name.starts_with("is_") { 3 } else { 4 };
             let field = &sub_name[prefix_len..];
-            return format!("    my $self = shift;\n    return $self->{{{}}} ? 1 : 0;", field);
+            return format!(
+                "    my $self = shift;\n    return $self->{{{}}} ? 1 : 0;",
+                field
+            );
         }
 
         // Private method placeholder
@@ -557,9 +577,13 @@ impl InlineCompletionProvider {
         lines: &'a [&'a str],
         line_index: usize,
     ) -> Option<&'a str> {
-        lines
-            .get(..line_index)
-            .and_then(|slice| slice.iter().rev().find(|line| !line.trim().is_empty()).copied())
+        lines.get(..line_index).and_then(|slice| {
+            slice
+                .iter()
+                .rev()
+                .find(|line| !line.trim().is_empty())
+                .copied()
+        })
     }
 
     fn visible_text_until_cursor(&self, lines: &[&str], line_index: usize, prefix: &str) -> String {
@@ -575,8 +599,11 @@ impl InlineCompletionProvider {
     ) -> String {
         let mut visible_text = String::new();
 
-        for (idx, line) in
-            lines.iter().enumerate().skip(start_line).take(line_index.saturating_sub(start_line))
+        for (idx, line) in lines
+            .iter()
+            .enumerate()
+            .skip(start_line)
+            .take(line_index.saturating_sub(start_line))
         {
             if idx > start_line {
                 visible_text.push('\n');
@@ -776,13 +803,18 @@ impl InlineCompletionProvider {
 
     fn normalize_items(&self, mut items: Vec<RankedCompletionItem>) -> Vec<InlineCompletionItem> {
         items.sort_by(|left, right| {
-            left.priority.cmp(&right.priority).then_with(|| left.order.cmp(&right.order))
+            left.priority
+                .cmp(&right.priority)
+                .then_with(|| left.order.cmp(&right.order))
         });
 
         let mut deduped = Vec::new();
         let mut seen = Vec::<String>::new();
         for candidate in items.into_iter() {
-            if seen.iter().any(|existing| existing == &candidate.item.insert_text) {
+            if seen
+                .iter()
+                .any(|existing| existing == &candidate.item.insert_text)
+            {
                 continue;
             }
 
@@ -820,7 +852,10 @@ impl InlineCompletionProvider {
     }
 
     fn imports_include(&self, context: &PreparedInlineCompletionContext, expected: &str) -> bool {
-        context.imports.iter().any(|import_name| import_name == expected)
+        context
+            .imports
+            .iter()
+            .any(|import_name| import_name == expected)
     }
 
     fn push_unique(&self, values: &mut Vec<String>, value: String) {
@@ -862,7 +897,11 @@ mod tests {
         let completions = provider.get_inline_completions("sub hello", 0, 9);
         assert!(!completions.items.is_empty());
         // Default method generates simple template with shift
-        assert!(completions.items[0].insert_text.contains("my $self = shift"));
+        assert!(
+            completions.items[0]
+                .insert_text
+                .contains("my $self = shift")
+        );
     }
 
     #[test]
@@ -872,7 +911,11 @@ mod tests {
         assert!(!completions.items.is_empty());
         // Constructor generates bless pattern
         assert!(completions.items[0].insert_text.contains("bless"));
-        assert!(completions.items[0].insert_text.contains("my $class = shift"));
+        assert!(
+            completions.items[0]
+                .insert_text
+                .contains("my $class = shift")
+        );
     }
 
     #[test]
@@ -881,7 +924,11 @@ mod tests {
         let completions = provider.get_inline_completions("sub get_name", 0, 12);
         assert!(!completions.items.is_empty());
         // Getter generates accessor pattern
-        assert!(completions.items[0].insert_text.contains("return $self->{name}"));
+        assert!(
+            completions.items[0]
+                .insert_text
+                .contains("return $self->{name}")
+        );
     }
 
     #[test]
@@ -890,7 +937,11 @@ mod tests {
         let completions = provider.get_inline_completions("sub set_name", 0, 12);
         assert!(!completions.items.is_empty());
         // Setter generates mutator pattern
-        assert!(completions.items[0].insert_text.contains("$self->{name} = $value"));
+        assert!(
+            completions.items[0]
+                .insert_text
+                .contains("$self->{name} = $value")
+        );
     }
 
     #[test]
@@ -945,15 +996,34 @@ mod tests {
         let source = "use Test::More;\npackage Demo;\n\nsub helper {\n    my $result = 1;\n    my $status = $result;\n    \n}\n";
         let line = 6;
         let character = 4;
-        let context =
-            provider.prepare_context(source, line, character).ok_or("expected prepared context")?;
+        let context = provider
+            .prepare_context(source, line, character)
+            .ok_or("expected prepared context")?;
 
         assert_eq!(context.current_function.as_deref(), Some("helper"));
         assert_eq!(context.current_package.as_deref(), Some("Demo"));
-        assert_eq!(context.previous_non_empty_line.as_deref(), Some("    my $status = $result;"));
-        assert!(context.imports.iter().any(|import_name| import_name == "Test::More"));
-        assert!(context.variables.iter().any(|variable| variable == "$status"));
-        assert!(context.variables.iter().any(|variable| variable == "$result"));
+        assert_eq!(
+            context.previous_non_empty_line.as_deref(),
+            Some("    my $status = $result;")
+        );
+        assert!(
+            context
+                .imports
+                .iter()
+                .any(|import_name| import_name == "Test::More")
+        );
+        assert!(
+            context
+                .variables
+                .iter()
+                .any(|variable| variable == "$status")
+        );
+        assert!(
+            context
+                .variables
+                .iter()
+                .any(|variable| variable == "$result")
+        );
         Ok(())
     }
 
@@ -963,7 +1033,12 @@ mod tests {
         let completions = provider.get_inline_completions("", 0, 0);
 
         assert!(!completions.items.is_empty());
-        assert!(completions.items.iter().any(|item| item.insert_text.contains("use strict;")));
+        assert!(
+            completions
+                .items
+                .iter()
+                .any(|item| item.insert_text.contains("use strict;"))
+        );
     }
 
     #[test]
@@ -973,7 +1048,12 @@ mod tests {
         let completions = provider.get_inline_completions(source, 2, 4);
 
         assert!(!completions.items.is_empty());
-        assert!(completions.items.iter().any(|item| item.insert_text == "return $result;"));
+        assert!(
+            completions
+                .items
+                .iter()
+                .any(|item| item.insert_text == "return $result;")
+        );
     }
 
     #[test]
@@ -983,8 +1063,18 @@ mod tests {
         let completions = provider.get_inline_completions(source, 5, 4);
 
         assert!(!completions.items.is_empty());
-        assert!(completions.items.iter().any(|item| item.insert_text == "return $result;"));
-        assert!(completions.items.iter().any(|item| item.insert_text == "done_testing();"));
+        assert!(
+            completions
+                .items
+                .iter()
+                .any(|item| item.insert_text == "return $result;")
+        );
+        assert!(
+            completions
+                .items
+                .iter()
+                .any(|item| item.insert_text == "done_testing();")
+        );
     }
 
     #[test]

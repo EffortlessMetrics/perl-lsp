@@ -1180,7 +1180,11 @@ fn mapper_and_cache_agree_on_ascii() {
     for byte in 0..src.len() {
         let mp = mapper.byte_to_lsp_pos(byte);
         let (cl, cc) = cache.offset_to_position(src, byte);
-        assert_eq!((mp.line, mp.character), (cl, cc), "disagreement at byte {byte}");
+        assert_eq!(
+            (mp.line, mp.character),
+            (cl, cc),
+            "disagreement at byte {byte}"
+        );
     }
 }
 
@@ -1191,7 +1195,11 @@ fn mapper_and_wire_position_agree() {
     for (byte, _) in src.char_indices() {
         let mp = mapper.byte_to_lsp_pos(byte);
         let wp = WirePosition::from_byte_offset(src, byte);
-        assert_eq!((mp.line, mp.character), (wp.line, wp.character), "disagreement at byte {byte}");
+        assert_eq!(
+            (mp.line, mp.character),
+            (wp.line, wp.character),
+            "disagreement at byte {byte}"
+        );
     }
 }
 

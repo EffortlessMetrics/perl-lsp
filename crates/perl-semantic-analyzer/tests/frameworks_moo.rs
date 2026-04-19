@@ -13,7 +13,10 @@ fn extract_symbols(code: &str) -> SymbolTable {
 }
 
 fn has_symbol(table: &SymbolTable, name: &str, kind: SymbolKind) -> bool {
-    table.symbols.get(name).is_some_and(|symbols| symbols.iter().any(|symbol| symbol.kind == kind))
+    table
+        .symbols
+        .get(name)
+        .is_some_and(|symbols| symbols.iter().any(|symbol| symbol.kind == kind))
 }
 
 #[test]
@@ -57,7 +60,10 @@ has 'name' => (reader => 'get_name', writer => 'set_name');
 
     let table = extract_symbols(code);
 
-    assert!(has_symbol(&table, "name", SymbolKind::scalar()), "expected attribute symbol `name`");
+    assert!(
+        has_symbol(&table, "name", SymbolKind::scalar()),
+        "expected attribute symbol `name`"
+    );
     assert!(
         has_symbol(&table, "get_name", SymbolKind::Subroutine),
         "expected reader accessor symbol"
@@ -117,7 +123,10 @@ has [qw(first_name last_name)] => (is => 'ro');
     let table = extract_symbols(code);
 
     for attr in ["first_name", "last_name"] {
-        assert!(has_symbol(&table, attr, SymbolKind::scalar()), "expected attribute `{attr}`");
+        assert!(
+            has_symbol(&table, attr, SymbolKind::scalar()),
+            "expected attribute `{attr}`"
+        );
         assert!(
             has_symbol(&table, attr, SymbolKind::Subroutine),
             "expected generated accessor `{attr}`"
@@ -140,9 +149,14 @@ has 'profile' => (
 
     let table = extract_symbols(code);
 
-    for method in
-        ["profile", "_build_profile", "has_profile", "clear_profile", "full_name", "timezone"]
-    {
+    for method in [
+        "profile",
+        "_build_profile",
+        "has_profile",
+        "clear_profile",
+        "full_name",
+        "timezone",
+    ] {
         assert!(
             has_symbol(&table, method, SymbolKind::Subroutine),
             "expected generated Moo method `{method}`"
@@ -276,12 +290,17 @@ fn find_symbol_with_declaration<'a>(
     declaration: &str,
 ) -> Option<&'a perl_semantic_analyzer::symbol::Symbol> {
     table.symbols.get(name).and_then(|symbols| {
-        symbols.iter().find(|s| s.kind == kind && s.declaration.as_deref() == Some(declaration))
+        symbols
+            .iter()
+            .find(|s| s.kind == kind && s.declaration.as_deref() == Some(declaration))
     })
 }
 
 fn has_reference(table: &SymbolTable, name: &str, kind: SymbolKind) -> bool {
-    table.references.get(name).is_some_and(|refs| refs.iter().any(|r| r.kind == kind))
+    table
+        .references
+        .get(name)
+        .is_some_and(|refs| refs.iter().any(|r| r.kind == kind))
 }
 
 #[test]
@@ -295,7 +314,10 @@ around 'name' => sub { };
     let table = extract_symbols(code);
 
     let sym = find_symbol_with_declaration(&table, "name", SymbolKind::Subroutine, "around");
-    assert!(sym.is_some(), "expected Subroutine symbol with declaration='around' for `name`");
+    assert!(
+        sym.is_some(),
+        "expected Subroutine symbol with declaration='around' for `name`"
+    );
 }
 
 #[test]
@@ -309,7 +331,10 @@ before 'validate' => sub { };
     let table = extract_symbols(code);
 
     let sym = find_symbol_with_declaration(&table, "validate", SymbolKind::Subroutine, "before");
-    assert!(sym.is_some(), "expected Subroutine symbol with declaration='before' for `validate`");
+    assert!(
+        sym.is_some(),
+        "expected Subroutine symbol with declaration='before' for `validate`"
+    );
 }
 
 #[test]
@@ -323,7 +348,10 @@ after 'cleanup' => sub { };
     let table = extract_symbols(code);
 
     let sym = find_symbol_with_declaration(&table, "cleanup", SymbolKind::Subroutine, "after");
-    assert!(sym.is_some(), "expected Subroutine symbol with declaration='after' for `cleanup`");
+    assert!(
+        sym.is_some(),
+        "expected Subroutine symbol with declaration='after' for `cleanup`"
+    );
 }
 
 #[test]
@@ -337,7 +365,10 @@ override 'render' => sub { };
     let table = extract_symbols(code);
 
     let sym = find_symbol_with_declaration(&table, "render", SymbolKind::Subroutine, "override");
-    assert!(sym.is_some(), "expected Subroutine symbol with declaration='override' for `render`");
+    assert!(
+        sym.is_some(),
+        "expected Subroutine symbol with declaration='override' for `render`"
+    );
 }
 
 #[test]
@@ -351,7 +382,10 @@ augment 'render' => sub { };
     let table = extract_symbols(code);
 
     let sym = find_symbol_with_declaration(&table, "render", SymbolKind::Subroutine, "augment");
-    assert!(sym.is_some(), "expected Subroutine symbol with declaration='augment' for `render`");
+    assert!(
+        sym.is_some(),
+        "expected Subroutine symbol with declaration='augment' for `render`"
+    );
 }
 
 #[test]
@@ -431,7 +465,10 @@ has 'first_name', 'last_name' => (is => 'ro');
     let table = extract_symbols(code);
 
     for attr in ["first_name", "last_name"] {
-        assert!(has_symbol(&table, attr, SymbolKind::scalar()), "expected attribute `{attr}`");
+        assert!(
+            has_symbol(&table, attr, SymbolKind::scalar()),
+            "expected attribute `{attr}`"
+        );
         assert!(
             has_symbol(&table, attr, SymbolKind::Subroutine),
             "expected generated accessor `{attr}`"
@@ -455,7 +492,11 @@ requires 'some_method', 'another_method';
         some_method.is_some(),
         "expected Subroutine symbol with declaration='requires' for `some_method`"
     );
-    assert!(must_some(some_method).attributes.contains(&"requires=true".to_string()));
+    assert!(
+        must_some(some_method)
+            .attributes
+            .contains(&"requires=true".to_string())
+    );
 
     let another_method =
         find_symbol_with_declaration(&table, "another_method", SymbolKind::Subroutine, "requires");

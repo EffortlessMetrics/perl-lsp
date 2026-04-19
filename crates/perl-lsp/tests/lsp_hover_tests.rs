@@ -87,7 +87,10 @@ my $result = process(42);
 
         // If range is present, validate it
         if let Some(range) = result.get("range") {
-            assert!(range.get("start").is_some(), "Range must have start position");
+            assert!(
+                range.get("start").is_some(),
+                "Range must have start position"
+            );
             assert!(range.get("end").is_some(), "Range must have end position");
         }
     }
@@ -123,7 +126,9 @@ print $count;
 
     // Variable hover may return info or null depending on implementation depth
     if !result.is_null() {
-        let contents = result.get("contents").ok_or("Expected contents in hover response")?;
+        let contents = result
+            .get("contents")
+            .ok_or("Expected contents in hover response")?;
 
         if contents.is_object() {
             let value = contents.get("value").and_then(|v| v.as_str());
@@ -169,7 +174,9 @@ push @items, 9;
 
     // Builtin hover may return documentation or null
     if !result.is_null() {
-        let contents = result.get("contents").ok_or("Expected contents in hover response")?;
+        let contents = result
+            .get("contents")
+            .ok_or("Expected contents in hover response")?;
         if contents.is_object() {
             let value = contents.get("value").and_then(|v| v.as_str());
             assert!(value.is_some(), "Builtin hover should have content value");
@@ -225,8 +232,11 @@ my $file = "test.txt";
         .unwrap_or(json!(null));
 
     assert!(!result.is_null(), "Expected hover response for -e");
-    let value =
-        result.get("contents").and_then(|c| c.get("value")).and_then(|v| v.as_str()).unwrap_or("");
+    let value = result
+        .get("contents")
+        .and_then(|c| c.get("value"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
     assert!(
         value.contains("exists"),
         "File test hover should explain -e existence checks, got: {value}"
@@ -244,8 +254,11 @@ my $file = "test.txt";
         .unwrap_or(json!(null));
 
     assert!(!result.is_null(), "Expected hover response for -M");
-    let value =
-        result.get("contents").and_then(|c| c.get("value")).and_then(|v| v.as_str()).unwrap_or("");
+    let value = result
+        .get("contents")
+        .and_then(|c| c.get("value"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
     assert!(
         value.contains("days"),
         "Related file test hover should explain -M age semantics, got: {value}"
@@ -286,7 +299,10 @@ print $variable;
     // Some implementations may provide comment content; accept both
     if !result.is_null() {
         // If non-null, it should still be a valid hover structure
-        assert!(result.get("contents").is_some(), "Non-null hover must have contents field");
+        assert!(
+            result.get("contents").is_some(),
+            "Non-null hover must have contents field"
+        );
     }
 
     // Hover on blank line
@@ -301,7 +317,11 @@ print $variable;
         .unwrap_or(json!(null));
 
     // Blank line should return null
-    assert!(result.is_null(), "Hover on blank line should return null, got: {:?}", result);
+    assert!(
+        result.is_null(),
+        "Hover on blank line should return null, got: {:?}",
+        result
+    );
 
     Ok(())
 }
@@ -347,9 +367,14 @@ $log->info("Application started");
 
     // Method hover may return info or null depending on implementation
     if !result.is_null() {
-        let contents = result.get("contents").ok_or("Expected contents in hover response")?;
+        let contents = result
+            .get("contents")
+            .ok_or("Expected contents in hover response")?;
         if contents.is_object() {
-            assert!(contents.get("value").is_some(), "Method hover content should have value");
+            assert!(
+                contents.get("value").is_some(),
+                "Method hover content should have value"
+            );
         }
     }
 
@@ -368,7 +393,10 @@ fn test_hover_capability_advertised() -> TestResult {
 
     // Hover should be advertised
     let has_capability = capabilities.get("hoverProvider").is_some();
-    assert!(has_capability, "hoverProvider should be advertised in capabilities");
+    assert!(
+        has_capability,
+        "hoverProvider should be advertised in capabilities"
+    );
 
     // If present, should be true or an object
     let provider = &capabilities["hoverProvider"];
@@ -540,10 +568,16 @@ sub process {
         )
         .unwrap_or(json!(null));
 
-    assert!(!result.is_null(), "Expected hover response for $result usage");
+    assert!(
+        !result.is_null(),
+        "Expected hover response for $result usage"
+    );
 
-    let value =
-        result.get("contents").and_then(|c| c.get("value")).and_then(|v| v.as_str()).unwrap_or("");
+    let value = result
+        .get("contents")
+        .and_then(|c| c.get("value"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
 
     assert!(
         value.contains("line") || value.contains("Declared"),
@@ -582,10 +616,16 @@ sub process_data {
         )
         .unwrap_or(json!(null));
 
-    assert!(!result.is_null(), "Expected hover response for $local_var usage");
+    assert!(
+        !result.is_null(),
+        "Expected hover response for $local_var usage"
+    );
 
-    let value =
-        result.get("contents").and_then(|c| c.get("value")).and_then(|v| v.as_str()).unwrap_or("");
+    let value = result
+        .get("contents")
+        .and_then(|c| c.get("value"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
 
     assert!(
         value.contains("process_data") || value.contains("subroutine") || value.contains("Scope"),
@@ -623,8 +663,11 @@ fn test_hover_variable_shows_my_declaration_keyword() -> TestResult {
 
     assert!(!result.is_null(), "Expected hover response for $name");
 
-    let value =
-        result.get("contents").and_then(|c| c.get("value")).and_then(|v| v.as_str()).unwrap_or("");
+    let value = result
+        .get("contents")
+        .and_then(|c| c.get("value"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
 
     assert!(
         value.contains("my") || value.contains("lexical"),
@@ -661,10 +704,16 @@ print $top_level;
 
     assert!(!result.is_null(), "Expected hover response for $top_level");
 
-    let value =
-        result.get("contents").and_then(|c| c.get("value")).and_then(|v| v.as_str()).unwrap_or("");
+    let value = result
+        .get("contents")
+        .and_then(|c| c.get("value"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
 
-    assert!(!value.is_empty(), "Hover for file-scope $top_level should return non-empty content");
+    assert!(
+        !value.is_empty(),
+        "Hover for file-scope $top_level should return non-empty content"
+    );
 
     assert!(
         value.contains("line") || value.contains("Declared") || value.contains("Scalar"),
@@ -762,7 +811,10 @@ $c->hover_greet();
             .and_then(|c| c.get("value"))
             .and_then(|v| v.as_str())
             .unwrap_or("");
-        assert!(!value.is_empty(), "Hover on inherited method should return non-empty content");
+        assert!(
+            !value.is_empty(),
+            "Hover on inherited method should return non-empty content"
+        );
         // If the workspace BFS resolved the method, the content should mention
         // the method name or its origin package.
         if value.contains("Method") || value.contains("hover_greet") || value.contains("HoverBase")
@@ -814,12 +866,21 @@ HoverAuto->dynamic_hover();
         )
         .unwrap_or(json!(null));
 
-    assert!(!result.is_null(), "AUTOLOAD-backed method hover should not be null");
+    assert!(
+        !result.is_null(),
+        "AUTOLOAD-backed method hover should not be null"
+    );
 
-    let value =
-        result.get("contents").and_then(|c| c.get("value")).and_then(|v| v.as_str()).unwrap_or("");
+    let value = result
+        .get("contents")
+        .and_then(|c| c.get("value"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
 
-    assert!(value.contains("AUTOLOAD"), "hover should mention AUTOLOAD resolution, got: {value}");
+    assert!(
+        value.contains("AUTOLOAD"),
+        "hover should mention AUTOLOAD resolution, got: {value}"
+    );
     assert!(
         value.contains("dynamic_hover"),
         "hover should mention the requested method name, got: {value}"
@@ -850,9 +911,15 @@ fn hover_compile_time_constant_file() -> TestResult {
         .unwrap_or(json!(null));
 
     assert!(!result.is_null(), "__FILE__ hover should not be null");
-    let value =
-        result.get("contents").and_then(|c| c.get("value")).and_then(|v| v.as_str()).unwrap_or("");
-    assert!(value.contains("__FILE__"), "__FILE__ hover must mention __FILE__, got: {value}");
+    let value = result
+        .get("contents")
+        .and_then(|c| c.get("value"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    assert!(
+        value.contains("__FILE__"),
+        "__FILE__ hover must mention __FILE__, got: {value}"
+    );
     assert!(
         value.contains("file name") || value.contains("source file"),
         "__FILE__ hover must describe file name, got: {value}"
@@ -883,9 +950,15 @@ fn hover_compile_time_constant_line() -> TestResult {
         .unwrap_or(json!(null));
 
     assert!(!result.is_null(), "__LINE__ hover should not be null");
-    let value =
-        result.get("contents").and_then(|c| c.get("value")).and_then(|v| v.as_str()).unwrap_or("");
-    assert!(value.contains("__LINE__"), "__LINE__ hover must mention __LINE__, got: {value}");
+    let value = result
+        .get("contents")
+        .and_then(|c| c.get("value"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    assert!(
+        value.contains("__LINE__"),
+        "__LINE__ hover must mention __LINE__, got: {value}"
+    );
     assert!(
         value.contains("line number"),
         "__LINE__ hover must describe line number, got: {value}"
@@ -916,8 +989,11 @@ fn hover_compile_time_constant_package() -> TestResult {
         .unwrap_or(json!(null));
 
     assert!(!result.is_null(), "__PACKAGE__ hover should not be null");
-    let value =
-        result.get("contents").and_then(|c| c.get("value")).and_then(|v| v.as_str()).unwrap_or("");
+    let value = result
+        .get("contents")
+        .and_then(|c| c.get("value"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
     assert!(
         value.contains("__PACKAGE__"),
         "__PACKAGE__ hover must mention __PACKAGE__, got: {value}"
@@ -957,9 +1033,15 @@ fn hover_compile_time_constant_sub() -> TestResult {
         .unwrap_or(json!(null));
 
     assert!(!result.is_null(), "__SUB__ hover should not be null");
-    let value =
-        result.get("contents").and_then(|c| c.get("value")).and_then(|v| v.as_str()).unwrap_or("");
-    assert!(value.contains("__SUB__"), "__SUB__ hover must mention __SUB__, got: {value}");
+    let value = result
+        .get("contents")
+        .and_then(|c| c.get("value"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    assert!(
+        value.contains("__SUB__"),
+        "__SUB__ hover must mention __SUB__, got: {value}"
+    );
     assert!(
         value.contains("subroutine") || value.contains("current_sub"),
         "__SUB__ hover must describe current subroutine, got: {value}"

@@ -14,7 +14,9 @@ fn full_capabilities_match_contract() -> Result<(), Box<dyn std::error::Error>> 
         method: "initialize".into(),
         params: Some(json!({"capabilities":{}})),
     };
-    let res = srv.handle_request(init).ok_or("Failed to handle initialize request")?;
+    let res = srv
+        .handle_request(init)
+        .ok_or("Failed to handle initialize request")?;
     let result = res.result.ok_or("Response missing result field")?;
     let caps = &result["capabilities"];
 
@@ -33,7 +35,10 @@ fn full_capabilities_match_contract() -> Result<(), Box<dyn std::error::Error>> 
         caps["workspaceSymbolProvider"].is_object(),
         "workspaceSymbolProvider should be object"
     );
-    assert_eq!(caps["workspaceSymbolProvider"]["resolveProvider"], json!(true));
+    assert_eq!(
+        caps["workspaceSymbolProvider"]["resolveProvider"],
+        json!(true)
+    );
     // renameProvider can be bool or object with prepareProvider
     assert!(
         caps["renameProvider"] == json!(true)
@@ -64,17 +69,29 @@ fn full_capabilities_match_contract() -> Result<(), Box<dyn std::error::Error>> 
     assert!(ot.is_object());
 
     // Call and type hierarchy should now be advertised
-    assert!(!caps["callHierarchyProvider"].is_null(), "callHierarchyProvider must be advertised");
-    assert!(!caps["typeHierarchyProvider"].is_null(), "typeHierarchyProvider must be advertised");
+    assert!(
+        !caps["callHierarchyProvider"].is_null(),
+        "callHierarchyProvider must be advertised"
+    );
+    assert!(
+        !caps["typeHierarchyProvider"].is_null(),
+        "typeHierarchyProvider must be advertised"
+    );
 
     // Pull diagnostics is now advertised (v0.8.5)
-    assert!(caps["diagnosticProvider"].is_object(), "diagnosticProvider must be advertised");
+    assert!(
+        caps["diagnosticProvider"].is_object(),
+        "diagnosticProvider must be advertised"
+    );
     let diag = &caps["diagnosticProvider"];
     assert_eq!(diag["interFileDependencies"], json!(false));
     assert_eq!(diag["workspaceDiagnostics"], json!(true));
 
     // Code lens should now be advertised
-    assert!(caps["codeLensProvider"].is_object(), "codeLensProvider must be advertised");
+    assert!(
+        caps["codeLensProvider"].is_object(),
+        "codeLensProvider must be advertised"
+    );
     assert_eq!(
         caps["codeLensProvider"]["resolveProvider"],
         json!(true),

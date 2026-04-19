@@ -96,7 +96,10 @@ fn lsp_server_version_matches_crate_version() {
     // Clean shutdown
     common::shutdown_and_exit(&server);
 
-    eprintln!("✓ Server version {} matches expected {}", server_version, EXPECTED_VERSION);
+    eprintln!(
+        "✓ Server version {} matches expected {}",
+        server_version, EXPECTED_VERSION
+    );
 }
 
 #[test]

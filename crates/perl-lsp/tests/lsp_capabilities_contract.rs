@@ -21,26 +21,63 @@ fn test_ga_capabilities_contract() -> Result<(), Box<dyn std::error::Error>> {
         })),
     };
 
-    let response =
-        server.handle_request(request).ok_or("Initialize request failed to return response")?;
+    let response = server
+        .handle_request(request)
+        .ok_or("Initialize request failed to return response")?;
     assert!(response.error.is_none(), "Initialize should succeed");
-    let caps = response.result.ok_or("Initialize response missing result")?["capabilities"].clone();
+    let caps = response
+        .result
+        .ok_or("Initialize response missing result")?["capabilities"]
+        .clone();
 
     // Assert what SHOULD be advertised (working features)
-    assert!(caps["textDocumentSync"].is_object(), "textDocumentSync must be advertised");
-    assert!(caps["completionProvider"].is_object(), "completionProvider must be advertised");
-    assert_eq!(caps["hoverProvider"], json!(true), "hoverProvider must be true");
-    assert_eq!(caps["definitionProvider"], json!(true), "definitionProvider must be true");
-    assert_eq!(caps["declarationProvider"], json!(true), "declarationProvider must be true");
-    assert_eq!(caps["referencesProvider"], json!(true), "referencesProvider must be true");
+    assert!(
+        caps["textDocumentSync"].is_object(),
+        "textDocumentSync must be advertised"
+    );
+    assert!(
+        caps["completionProvider"].is_object(),
+        "completionProvider must be advertised"
+    );
+    assert_eq!(
+        caps["hoverProvider"],
+        json!(true),
+        "hoverProvider must be true"
+    );
+    assert_eq!(
+        caps["definitionProvider"],
+        json!(true),
+        "definitionProvider must be true"
+    );
+    assert_eq!(
+        caps["declarationProvider"],
+        json!(true),
+        "declarationProvider must be true"
+    );
+    assert_eq!(
+        caps["referencesProvider"],
+        json!(true),
+        "referencesProvider must be true"
+    );
     assert_eq!(
         caps["documentHighlightProvider"],
         json!(true),
         "documentHighlightProvider must be true"
     );
-    assert!(caps["signatureHelpProvider"].is_object(), "signatureHelpProvider must be advertised");
-    assert_eq!(caps["documentSymbolProvider"], json!(true), "documentSymbolProvider must be true");
-    assert_eq!(caps["foldingRangeProvider"], json!(true), "foldingRangeProvider must be true");
+    assert!(
+        caps["signatureHelpProvider"].is_object(),
+        "signatureHelpProvider must be advertised"
+    );
+    assert_eq!(
+        caps["documentSymbolProvider"],
+        json!(true),
+        "documentSymbolProvider must be true"
+    );
+    assert_eq!(
+        caps["foldingRangeProvider"],
+        json!(true),
+        "foldingRangeProvider must be true"
+    );
     // PR 3: Workspace symbols now work via index
     // workspaceSymbolProvider can be either bool or object with resolveProvider
     match &caps["workspaceSymbolProvider"] {
@@ -53,13 +90,19 @@ fn test_ga_capabilities_contract() -> Result<(), Box<dyn std::error::Error>> {
             );
         }
         other => {
-            must(Err::<(), _>(format!("unexpected workspaceSymbolProvider: {:?}", other)));
+            must(Err::<(), _>(format!(
+                "unexpected workspaceSymbolProvider: {:?}",
+                other
+            )));
             unreachable!()
         }
     }
 
     // Assert what SHOULD be advertised (v0.8.4 features)
-    assert!(!caps["renameProvider"].is_null(), "renameProvider must be advertised (v0.8.4)");
+    assert!(
+        !caps["renameProvider"].is_null(),
+        "renameProvider must be advertised (v0.8.4)"
+    );
     assert!(
         !caps["codeActionProvider"].is_null(),
         "codeActionProvider must be advertised (v0.8.4)"
@@ -68,12 +111,18 @@ fn test_ga_capabilities_contract() -> Result<(), Box<dyn std::error::Error>> {
         !caps["semanticTokensProvider"].is_null(),
         "semanticTokensProvider must be advertised (v0.8.4)"
     );
-    assert!(!caps["inlayHintProvider"].is_null(), "inlayHintProvider must be advertised (v0.8.4)");
+    assert!(
+        !caps["inlayHintProvider"].is_null(),
+        "inlayHintProvider must be advertised (v0.8.4)"
+    );
 
     // Assert new features that SHOULD be advertised
     #[cfg(not(feature = "lsp-ga-lock"))]
     {
-        assert!(caps["codeLensProvider"].is_object(), "codeLensProvider must be advertised");
+        assert!(
+            caps["codeLensProvider"].is_object(),
+            "codeLensProvider must be advertised"
+        );
         assert_eq!(
             caps["codeLensProvider"]["resolveProvider"],
             json!(true),
@@ -103,8 +152,14 @@ fn test_ga_capabilities_contract() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     // Features that should NOT be advertised
-    assert!(!caps["typeHierarchyProvider"].is_null(), "typeHierarchyProvider must be advertised");
-    assert!(!caps["callHierarchyProvider"].is_null(), "callHierarchyProvider must be advertised");
+    assert!(
+        !caps["typeHierarchyProvider"].is_null(),
+        "typeHierarchyProvider must be advertised"
+    );
+    assert!(
+        !caps["callHierarchyProvider"].is_null(),
+        "callHierarchyProvider must be advertised"
+    );
     // ExecuteCommand is now implemented in v0.8.6
     assert!(
         !caps["executeCommandProvider"].is_null(),
@@ -160,11 +215,21 @@ fn test_unsupported_methods_return_error() -> Result<(), Box<dyn std::error::Err
         };
 
         let response = server.handle_request(request);
-        assert!(response.is_some(), "Method {} should return a response", method);
+        assert!(
+            response.is_some(),
+            "Method {} should return a response",
+            method
+        );
 
         let resp = response.ok_or(format!("Method {} failed to return response", method))?;
-        let error = resp.error.ok_or(format!("Method {} should return an error", method))?;
-        assert_eq!(error.code, -32601, "Method {} should return method_not_found error", method);
+        let error = resp
+            .error
+            .ok_or(format!("Method {} should return an error", method))?;
+        assert_eq!(
+            error.code, -32601,
+            "Method {} should return method_not_found error",
+            method
+        );
     }
 
     Ok(())

@@ -128,7 +128,11 @@ fn scope_snapshot_default_is_empty() {
 
 #[test]
 fn parse_checkpoint_fields_accessible() {
-    let cp = ParseCheckpoint { byte: 42, scope_snapshot: ScopeSnapshot::default(), node_id: 7 };
+    let cp = ParseCheckpoint {
+        byte: 42,
+        scope_snapshot: ScopeSnapshot::default(),
+        node_id: 7,
+    };
     assert_eq!(cp.byte, 42);
     assert_eq!(cp.node_id, 7);
 }
@@ -199,8 +203,14 @@ fn edit_from_lsp_change_with_range() {
     let line_index = LineIndex::new("hello world");
     let change = TextDocumentContentChangeEvent {
         range: Some(LspRange {
-            start: lsp_types::Position { line: 0, character: 6 },
-            end: lsp_types::Position { line: 0, character: 11 },
+            start: lsp_types::Position {
+                line: 0,
+                character: 6,
+            },
+            end: lsp_types::Position {
+                line: 0,
+                character: 11,
+            },
         }),
         range_length: None,
         text: "Perl".to_string(),
@@ -241,8 +251,12 @@ fn edit_from_lsp_change_full_document() {
 #[test]
 fn apply_edits_single_small_edit() -> Result<(), Box<dyn std::error::Error>> {
     let mut state = IncrementalState::new("my $x = 42;".to_string());
-    let edit =
-        Edit { start_byte: 8, old_end_byte: 10, new_end_byte: 12, new_text: "9999".to_string() };
+    let edit = Edit {
+        start_byte: 8,
+        old_end_byte: 10,
+        new_end_byte: 12,
+        new_text: "9999".to_string(),
+    };
     let result = apply_edits(&mut state, &[edit])?;
     assert!(!result.changed_ranges.is_empty());
     assert!(result.reparsed_bytes > 0);
@@ -254,8 +268,18 @@ fn apply_edits_single_small_edit() -> Result<(), Box<dyn std::error::Error>> {
 fn apply_edits_multiple_edits_triggers_full_reparse() -> Result<(), Box<dyn std::error::Error>> {
     let mut state = IncrementalState::new("my $a = 1; my $b = 2;".to_string());
     let edits = vec![
-        Edit { start_byte: 8, old_end_byte: 9, new_end_byte: 10, new_text: "11".to_string() },
-        Edit { start_byte: 19, old_end_byte: 20, new_end_byte: 21, new_text: "22".to_string() },
+        Edit {
+            start_byte: 8,
+            old_end_byte: 9,
+            new_end_byte: 10,
+            new_text: "11".to_string(),
+        },
+        Edit {
+            start_byte: 19,
+            old_end_byte: 20,
+            new_end_byte: 21,
+            new_text: "22".to_string(),
+        },
     ];
     let result = apply_edits(&mut state, &edits)?;
     assert!(!result.changed_ranges.is_empty());
@@ -580,7 +604,11 @@ fn checkpointed_parser_initial_parse() {
 fn checkpointed_parser_apply_edit() {
     let mut parser = CheckpointedIncrementalParser::new();
     let _ = parser.parse("my $x = 42; my $y = 99;".to_string());
-    let edit = SimpleEdit { start: 8, end: 10, new_text: "55".to_string() };
+    let edit = SimpleEdit {
+        start: 8,
+        end: 10,
+        new_text: "55".to_string(),
+    };
     let result = parser.apply_edit(&edit);
     assert!(result.is_ok());
     let stats = parser.stats();
@@ -592,10 +620,18 @@ fn checkpointed_parser_multiple_edits_sequential() {
     let mut parser = CheckpointedIncrementalParser::new();
     let _ = parser.parse("my $x = 1;\n".repeat(10));
 
-    let edit1 = SimpleEdit { start: 8, end: 9, new_text: "42".to_string() };
+    let edit1 = SimpleEdit {
+        start: 8,
+        end: 9,
+        new_text: "42".to_string(),
+    };
     let _ = parser.apply_edit(&edit1);
 
-    let edit2 = SimpleEdit { start: 20, end: 21, new_text: "99".to_string() };
+    let edit2 = SimpleEdit {
+        start: 20,
+        end: 21,
+        new_text: "99".to_string(),
+    };
     let _ = parser.apply_edit(&edit2);
 
     let stats = parser.stats();
@@ -609,7 +645,11 @@ fn checkpointed_parser_clear_caches() {
     let _ = parser.parse("my $x = 1;".to_string());
     parser.clear_caches();
     // After clearing, should still be able to apply edits (falls back to full parse)
-    let edit = SimpleEdit { start: 8, end: 9, new_text: "2".to_string() };
+    let edit = SimpleEdit {
+        start: 8,
+        end: 9,
+        new_text: "2".to_string(),
+    };
     let result = parser.apply_edit(&edit);
     assert!(result.is_ok());
 }
@@ -625,7 +665,11 @@ fn checkpointed_parser_default_impl() {
 fn checkpointed_parser_stats_tokens_relexed() {
     let mut parser = CheckpointedIncrementalParser::new();
     let _ = parser.parse("my $a = 1; my $b = 2;".to_string());
-    let edit = SimpleEdit { start: 8, end: 9, new_text: "42".to_string() };
+    let edit = SimpleEdit {
+        start: 8,
+        end: 9,
+        new_text: "42".to_string(),
+    };
     let _ = parser.apply_edit(&edit);
     let stats = parser.stats();
     assert!(stats.tokens_relexed > 0);
@@ -807,54 +851,83 @@ fn metrics_efficiency_percentage_zero() {
 
 #[test]
 fn metrics_efficiency_percentage_half() {
-    let m = IncrementalMetrics { nodes_reused: 50, nodes_reparsed: 50, ..Default::default() };
+    let m = IncrementalMetrics {
+        nodes_reused: 50,
+        nodes_reparsed: 50,
+        ..Default::default()
+    };
     let eff = m.efficiency_percentage();
     assert!((eff - 50.0).abs() < 0.1);
 }
 
 #[test]
 fn metrics_efficiency_percentage_full() {
-    let m = IncrementalMetrics { nodes_reused: 100, nodes_reparsed: 0, ..Default::default() };
+    let m = IncrementalMetrics {
+        nodes_reused: 100,
+        nodes_reparsed: 0,
+        ..Default::default()
+    };
     let eff = m.efficiency_percentage();
     assert!((eff - 100.0).abs() < 0.1);
 }
 
 #[test]
 fn metrics_is_sub_millisecond() {
-    let m = IncrementalMetrics { parse_time_micros: 500, ..Default::default() };
+    let m = IncrementalMetrics {
+        parse_time_micros: 500,
+        ..Default::default()
+    };
     assert!(m.is_sub_millisecond());
 
-    let m2 = IncrementalMetrics { parse_time_micros: 1500, ..Default::default() };
+    let m2 = IncrementalMetrics {
+        parse_time_micros: 1500,
+        ..Default::default()
+    };
     assert!(!m2.is_sub_millisecond());
 }
 
 #[test]
 fn metrics_performance_category_excellent() {
-    let m = IncrementalMetrics { parse_time_micros: 50, ..Default::default() };
+    let m = IncrementalMetrics {
+        parse_time_micros: 50,
+        ..Default::default()
+    };
     assert_eq!(m.performance_category(), "Excellent (<100µs)");
 }
 
 #[test]
 fn metrics_performance_category_very_good() {
-    let m = IncrementalMetrics { parse_time_micros: 200, ..Default::default() };
+    let m = IncrementalMetrics {
+        parse_time_micros: 200,
+        ..Default::default()
+    };
     assert_eq!(m.performance_category(), "Very Good (<500µs)");
 }
 
 #[test]
 fn metrics_performance_category_good() {
-    let m = IncrementalMetrics { parse_time_micros: 800, ..Default::default() };
+    let m = IncrementalMetrics {
+        parse_time_micros: 800,
+        ..Default::default()
+    };
     assert_eq!(m.performance_category(), "Good (<1ms)");
 }
 
 #[test]
 fn metrics_performance_category_acceptable() {
-    let m = IncrementalMetrics { parse_time_micros: 3000, ..Default::default() };
+    let m = IncrementalMetrics {
+        parse_time_micros: 3000,
+        ..Default::default()
+    };
     assert_eq!(m.performance_category(), "Acceptable (<5ms)");
 }
 
 #[test]
 fn metrics_performance_category_needs_optimization() {
-    let m = IncrementalMetrics { parse_time_micros: 10_000, ..Default::default() };
+    let m = IncrementalMetrics {
+        parse_time_micros: 10_000,
+        ..Default::default()
+    };
     assert_eq!(m.performance_category(), "Needs Optimization (>5ms)");
 }
 
@@ -995,7 +1068,10 @@ fn byte_to_lsp_pos_past_end_clamped() {
 
 #[test]
 fn document_parser_full_mode() {
-    let config = IncrementalConfig { enabled: false, ..Default::default() };
+    let config = IncrementalConfig {
+        enabled: false,
+        ..Default::default()
+    };
     let result = DocumentParser::new("my $x = 1;".to_string(), &config);
     assert!(result.is_ok());
     if let Ok(dp) = result {
@@ -1007,8 +1083,11 @@ fn document_parser_full_mode() {
 
 #[test]
 fn document_parser_incremental_mode() {
-    let config =
-        IncrementalConfig { enabled: true, target_parse_time_ms: 1.0, max_cache_size: 100 };
+    let config = IncrementalConfig {
+        enabled: true,
+        target_parse_time_ms: 1.0,
+        max_cache_size: 100,
+    };
     let result = DocumentParser::new("my $x = 1;".to_string(), &config);
     assert!(result.is_ok());
     if let Ok(dp) = result {
@@ -1020,7 +1099,10 @@ fn document_parser_incremental_mode() {
 
 #[test]
 fn document_parser_apply_full_document_change() {
-    let config = IncrementalConfig { enabled: false, ..Default::default() };
+    let config = IncrementalConfig {
+        enabled: false,
+        ..Default::default()
+    };
     let result = DocumentParser::new("my $x = 1;".to_string(), &config);
     if let Ok(mut dp) = result {
         let change = serde_json::json!({ "text": "my $y = 2;" });
@@ -1047,8 +1129,12 @@ fn incremental_config_default() {
 #[test]
 fn round_trip_parse_edit_reparse_via_state() -> Result<(), Box<dyn std::error::Error>> {
     let mut state = IncrementalState::new("my $x = 1; my $y = 2;".to_string());
-    let edit =
-        Edit { start_byte: 8, old_end_byte: 9, new_end_byte: 10, new_text: "42".to_string() };
+    let edit = Edit {
+        start_byte: 8,
+        old_end_byte: 9,
+        new_end_byte: 10,
+        new_text: "42".to_string(),
+    };
     let result = apply_edits(&mut state, &[edit])?;
     assert!(state.source.contains("42"));
     assert!(result.reparsed_bytes > 0);
@@ -1082,7 +1168,11 @@ fn v2_parser_edit_then_reparse_preserves_program_structure() {
 
 #[test]
 fn simple_edit_to_original_edit_conversion() {
-    let se = SimpleEdit { start: 5, end: 10, new_text: "hello".to_string() };
+    let se = SimpleEdit {
+        start: 5,
+        end: 10,
+        new_text: "hello".to_string(),
+    };
     let original = se.to_original_edit();
     assert_eq!(original.start_byte, 5);
     assert_eq!(original.old_end_byte, 10);

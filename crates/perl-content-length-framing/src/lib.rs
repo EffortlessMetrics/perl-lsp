@@ -220,7 +220,8 @@ fn find_subslice(hay: &[u8], needle: &[u8]) -> Option<usize> {
     if needle.is_empty() {
         return Some(0);
     }
-    hay.windows(needle.len()).position(|window| window == needle)
+    hay.windows(needle.len())
+        .position(|window| window == needle)
 }
 
 #[cfg(test)]
@@ -241,7 +242,10 @@ mod tests {
     }
 
     fn assert_pending(result: Result<Option<Vec<u8>>, FramingError>) {
-        assert!(matches!(result, Ok(None)), "expected Ok(None) from framer, got {result:?}");
+        assert!(
+            matches!(result, Ok(None)),
+            "expected Ok(None) from framer, got {result:?}"
+        );
     }
 
     fn take_error(result: Result<Option<Vec<u8>>, FramingError>) -> FramingError {

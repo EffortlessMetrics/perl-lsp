@@ -108,7 +108,12 @@ fn test_proto_then_attr_correct_order() {
     let Some(first) = statements.first() else {
         panic!("expected a subroutine statement");
     };
-    let NodeKind::Subroutine { prototype, attributes, .. } = &first.kind else {
+    let NodeKind::Subroutine {
+        prototype,
+        attributes,
+        ..
+    } = &first.kind
+    else {
         panic!("expected subroutine node, got: {:?}", first.kind);
     };
     assert!(prototype.is_some(), "expected prototype for sub foo (+)");

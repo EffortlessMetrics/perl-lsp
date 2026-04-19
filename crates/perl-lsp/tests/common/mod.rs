@@ -101,7 +101,12 @@ pub struct LspServer {
 impl LspServer {
     /// Check if the server process is still running
     pub fn is_alive(&self) -> bool {
-        match self.process.lock().unwrap_or_else(|e| e.into_inner()).try_wait() {
+        match self
+            .process
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .try_wait()
+        {
             Ok(status) => status.is_none(),
             Err(_) => false, // If we can't check status, assume not alive
         }
@@ -128,7 +133,12 @@ pub fn start_lsp_server() -> LspServer {
     let mut process: Child = {
         let mut spawned: Option<Child> = None;
         for mut cmd in resolve_perl_lsp_cmds() {
-            match cmd.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn() {
+            match cmd
+                .stdin(Stdio::piped())
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped())
+                .spawn()
+            {
                 Ok(child) => {
                     spawned = Some(child);
                     break;
@@ -148,7 +158,10 @@ pub fn start_lsp_server() -> LspServer {
             eprintln!("║ ERROR: Failed to start perl-lsp server                             ║");
             eprintln!("╠════════════════════════════════════════════════════════════════════╣");
             eprintln!("║ Resolution order tried:                                            ║");
-            eprintln!("║  1. PERL_LSP_BIN env var: {:?}", std::env::var("PERL_LSP_BIN").ok());
+            eprintln!(
+                "║  1. PERL_LSP_BIN env var: {:?}",
+                std::env::var("PERL_LSP_BIN").ok()
+            );
             eprintln!("║  2. Compile-time CARGO_BIN_EXE: {:?}", CARGO_BIN_EXE);
             eprintln!(
                 "║  3. Runtime CARGO_BIN_EXE_perl-lsp: {:?}",
@@ -177,7 +190,10 @@ pub fn start_lsp_server() -> LspServer {
                     release_binary.display()
                 );
             }
-            eprintln!("║  7. perl-lsp in PATH: {:?}", which::which("perl-lsp").ok());
+            eprintln!(
+                "║  7. perl-lsp in PATH: {:?}",
+                which::which("perl-lsp").ok()
+            );
             eprintln!("║  8. cargo run fallback");
             eprintln!("╠════════════════════════════════════════════════════════════════════╣");
             eprintln!("║ Last error: {:?}", last_err);
@@ -209,8 +225,9 @@ pub fn start_lsp_server() -> LspServer {
         )),
     };
     let echo = std::env::var_os("LSP_TEST_ECHO_STDERR").is_some();
-    let _stderr_thread =
-        match std::thread::Builder::new().name("lsp-stderr-drain".into()).spawn(move || {
+    let _stderr_thread = match std::thread::Builder::new()
+        .name("lsp-stderr-drain".into())
+        .spawn(move || {
             let mut r = BufReader::new(stderr);
             let mut line = String::new();
             while r.read_line(&mut line).unwrap_or(0) > 0 {
@@ -220,11 +237,11 @@ pub fn start_lsp_server() -> LspServer {
                 line.clear();
             }
         }) {
-            Ok(handle) => handle,
-            Err(e) => must(Err::<std::thread::JoinHandle<()>, _>(format!(
-                "Failed to spawn stderr drain thread: {e}"
-            ))),
-        };
+        Ok(handle) => handle,
+        Err(e) => must(Err::<std::thread::JoinHandle<()>, _>(format!(
+            "Failed to spawn stderr drain thread: {e}"
+        ))),
+    };
 
     // -------- stdout LSP reader thread --------
     let stdout = match process.stdout.take() {
@@ -235,8 +252,9 @@ pub fn start_lsp_server() -> LspServer {
     };
     let (tx, rx) = mpsc::channel::<Value>();
     let debug_reader = std::env::var_os("LSP_TEST_DEBUG_READER").is_some();
-    let _stdout_thread =
-        match std::thread::Builder::new().name("lsp-stdout-reader".into()).spawn(move || {
+    let _stdout_thread = match std::thread::Builder::new()
+        .name("lsp-stdout-reader".into())
+        .spawn(move || {
             let mut r = BufReader::new(stdout);
             if debug_reader {
                 eprintln!("[reader] Thread started");
@@ -296,11 +314,11 @@ pub fn start_lsp_server() -> LspServer {
                 }
             }
         }) {
-            Ok(handle) => handle,
-            Err(e) => must(Err::<std::thread::JoinHandle<()>, _>(format!(
-                "Failed to spawn stdout reader thread: {e}"
-            ))),
-        };
+        Ok(handle) => handle,
+        Err(e) => must(Err::<std::thread::JoinHandle<()>, _>(format!(
+            "Failed to spawn stdout reader thread: {e}"
+        ))),
+    };
 
     let server = LspServer {
         process: Mutex::new(process),
@@ -331,9 +349,10 @@ pub fn send_request(server: &LspServer, mut request: Value) -> Value {
     };
 
     let body = request.to_string();
-    if let Err(e) =
-        send_message_inner(&mut *server.writer.lock().unwrap_or_else(|e| e.into_inner()), &body)
-    {
+    if let Err(e) = send_message_inner(
+        &mut *server.writer.lock().unwrap_or_else(|e| e.into_inner()),
+        &body,
+    ) {
         // Handle write errors gracefully with proper JSON-RPC envelope
         // BrokenPipe during teardown is expected; other errors are transport failures
         return map_send_error(Some(id), e, "send_request");
@@ -370,8 +389,10 @@ pub fn send_request(server: &LspServer, mut request: Value) -> Value {
 pub fn send_notification(server: &LspServer, notification: Value) {
     let body = notification.to_string();
     // Ignore write errors during notification sends - BrokenPipe during teardown is expected
-    let _ =
-        send_message_inner(&mut *server.writer.lock().unwrap_or_else(|e| e.into_inner()), &body);
+    let _ = send_message_inner(
+        &mut *server.writer.lock().unwrap_or_else(|e| e.into_inner()),
+        &body,
+    );
 }
 
 fn default_timeout() -> Duration {
@@ -419,7 +440,9 @@ pub fn max_concurrent_threads() -> usize {
         .and_then(|s| s.parse::<usize>().ok())
         .unwrap_or_else(|| {
             // Try to detect system thread count, default to 8
-            std::thread::available_parallelism().map(|n| n.get()).unwrap_or(8)
+            std::thread::available_parallelism()
+                .map(|n| n.get())
+                .unwrap_or(8)
         })
         .max(1) // Ensure at least 1 thread
 }
@@ -486,8 +509,16 @@ impl Drop for LspServer {
                 }
                 std::thread::sleep(Duration::from_millis(10));
             }
-            let _ = self.process.get_mut().unwrap_or_else(|e| e.into_inner()).kill();
-            let _ = self.process.get_mut().unwrap_or_else(|e| e.into_inner()).wait();
+            let _ = self
+                .process
+                .get_mut()
+                .unwrap_or_else(|e| e.into_inner())
+                .kill();
+            let _ = self
+                .process
+                .get_mut()
+                .unwrap_or_else(|e| e.into_inner())
+                .wait();
             return;
         }
 
@@ -523,7 +554,15 @@ impl Drop for LspServer {
         }
 
         // 4. Fall back to hard kill if graceful shutdown didn't work
-        let _ = self.process.get_mut().unwrap_or_else(|e| e.into_inner()).kill();
-        let _ = self.process.get_mut().unwrap_or_else(|e| e.into_inner()).wait();
+        let _ = self
+            .process
+            .get_mut()
+            .unwrap_or_else(|e| e.into_inner())
+            .kill();
+        let _ = self
+            .process
+            .get_mut()
+            .unwrap_or_else(|e| e.into_inner())
+            .wait();
     }
 }

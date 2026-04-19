@@ -20,16 +20,28 @@ fn assert_parse(
         .ok_or_else(|| format!("expected Some for line: {line:?}"))?;
 
     if head.kind != expected_kind {
-        return Err(format!("kind mismatch: {:?} != {:?}", head.kind, expected_kind));
+        return Err(format!(
+            "kind mismatch: {:?} != {:?}",
+            head.kind, expected_kind
+        ));
     }
     if head.token != expected_token {
-        return Err(format!("token mismatch: {:?} != {:?}", head.token, expected_token));
+        return Err(format!(
+            "token mismatch: {:?} != {:?}",
+            head.token, expected_token
+        ));
     }
     if head.token_start != expected_start {
-        return Err(format!("token_start mismatch: {} != {}", head.token_start, expected_start));
+        return Err(format!(
+            "token_start mismatch: {} != {}",
+            head.token_start, expected_start
+        ));
     }
     if head.token_end != expected_end {
-        return Err(format!("token_end mismatch: {} != {}", head.token_end, expected_end));
+        return Err(format!(
+            "token_end mismatch: {} != {}",
+            head.token_end, expected_end
+        ));
     }
     // Cross-check: slice must equal token
     if &line[head.token_start..head.token_end] != head.token {
@@ -123,7 +135,13 @@ fn use_qualified_module() -> Result<(), String> {
 
 #[test]
 fn use_deeply_qualified_module() -> Result<(), String> {
-    assert_parse("use A::B::C::D::E;", ModuleImportKind::Use, "A::B::C::D::E", 4, 17)
+    assert_parse(
+        "use A::B::C::D::E;",
+        ModuleImportKind::Use,
+        "A::B::C::D::E",
+        4,
+        17,
+    )
 }
 
 #[test]
@@ -170,12 +188,24 @@ fn require_simple_module() -> Result<(), String> {
 
 #[test]
 fn require_qualified_module() -> Result<(), String> {
-    assert_parse("require Foo::Bar;", ModuleImportKind::Require, "Foo::Bar", 8, 16)
+    assert_parse(
+        "require Foo::Bar;",
+        ModuleImportKind::Require,
+        "Foo::Bar",
+        8,
+        16,
+    )
 }
 
 #[test]
 fn require_module_no_semicolon() -> Result<(), String> {
-    assert_parse("require Foo::Bar", ModuleImportKind::Require, "Foo::Bar", 8, 16)
+    assert_parse(
+        "require Foo::Bar",
+        ModuleImportKind::Require,
+        "Foo::Bar",
+        8,
+        16,
+    )
 }
 
 // ===========================================================================
@@ -184,22 +214,46 @@ fn require_module_no_semicolon() -> Result<(), String> {
 
 #[test]
 fn use_parent_with_qw() -> Result<(), String> {
-    assert_parse("use parent qw(Foo::Bar);", ModuleImportKind::UseParent, "parent", 4, 10)
+    assert_parse(
+        "use parent qw(Foo::Bar);",
+        ModuleImportKind::UseParent,
+        "parent",
+        4,
+        10,
+    )
 }
 
 #[test]
 fn use_parent_with_single_quote() -> Result<(), String> {
-    assert_parse("use parent 'Foo::Bar';", ModuleImportKind::UseParent, "parent", 4, 10)
+    assert_parse(
+        "use parent 'Foo::Bar';",
+        ModuleImportKind::UseParent,
+        "parent",
+        4,
+        10,
+    )
 }
 
 #[test]
 fn use_base_with_qw() -> Result<(), String> {
-    assert_parse("use base qw(Foo::Bar Baz::Quux);", ModuleImportKind::UseBase, "base", 4, 8)
+    assert_parse(
+        "use base qw(Foo::Bar Baz::Quux);",
+        ModuleImportKind::UseBase,
+        "base",
+        4,
+        8,
+    )
 }
 
 #[test]
 fn use_base_with_quoted_string() -> Result<(), String> {
-    assert_parse("use base 'Foo::Bar';", ModuleImportKind::UseBase, "base", 4, 8)
+    assert_parse(
+        "use base 'Foo::Bar';",
+        ModuleImportKind::UseBase,
+        "base",
+        4,
+        8,
+    )
 }
 
 // ===========================================================================
@@ -223,12 +277,24 @@ fn use_with_four_space_indent() -> Result<(), String> {
 
 #[test]
 fn require_with_two_space_indent() -> Result<(), String> {
-    assert_parse("  require Foo::Bar;", ModuleImportKind::Require, "Foo::Bar", 10, 18)
+    assert_parse(
+        "  require Foo::Bar;",
+        ModuleImportKind::Require,
+        "Foo::Bar",
+        10,
+        18,
+    )
 }
 
 #[test]
 fn use_parent_with_indent() -> Result<(), String> {
-    assert_parse("  use parent 'Base';", ModuleImportKind::UseParent, "parent", 6, 12)
+    assert_parse(
+        "  use parent 'Base';",
+        ModuleImportKind::UseParent,
+        "parent",
+        6,
+        12,
+    )
 }
 
 #[test]
@@ -243,7 +309,13 @@ fn use_with_tab_between_keyword_and_token() -> Result<(), String> {
 
 #[test]
 fn require_with_mixed_whitespace() -> Result<(), String> {
-    assert_parse(" \t require  Foo;", ModuleImportKind::Require, "Foo", 12, 15)
+    assert_parse(
+        " \t require  Foo;",
+        ModuleImportKind::Require,
+        "Foo",
+        12,
+        15,
+    )
 }
 
 // ===========================================================================
@@ -462,7 +534,10 @@ fn token_slice_equals_token_field() -> Result<(), String> {
             parse_module_import_head(line).ok_or_else(|| format!("expected Some for: {line:?}"))?;
         let slice = &line[head.token_start..head.token_end];
         if slice != head.token {
-            return Err(format!("slice {slice:?} != token {:?} for {line:?}", head.token,));
+            return Err(format!(
+                "slice {slice:?} != token {:?} for {line:?}",
+                head.token,
+            ));
         }
     }
     Ok(())
@@ -503,12 +578,24 @@ fn use_carp_qw_croak() -> Result<(), String> {
 
 #[test]
 fn use_scalar_util() -> Result<(), String> {
-    assert_parse("use Scalar::Util 'blessed';", ModuleImportKind::Use, "Scalar::Util", 4, 16)
+    assert_parse(
+        "use Scalar::Util 'blessed';",
+        ModuleImportKind::Use,
+        "Scalar::Util",
+        4,
+        16,
+    )
 }
 
 #[test]
 fn use_file_basename() -> Result<(), String> {
-    assert_parse("use File::Basename;", ModuleImportKind::Use, "File::Basename", 4, 18)
+    assert_parse(
+        "use File::Basename;",
+        ModuleImportKind::Use,
+        "File::Basename",
+        4,
+        18,
+    )
 }
 
 #[test]
@@ -523,7 +610,13 @@ fn use_moo() -> Result<(), String> {
 
 #[test]
 fn use_test_more() -> Result<(), String> {
-    assert_parse("use Test::More tests => 42;", ModuleImportKind::Use, "Test::More", 4, 14)
+    assert_parse(
+        "use Test::More tests => 42;",
+        ModuleImportKind::Use,
+        "Test::More",
+        4,
+        14,
+    )
 }
 
 #[test]
@@ -544,7 +637,13 @@ fn use_parent_multiple_bases() -> Result<(), String> {
 
 #[test]
 fn use_base_exporter() -> Result<(), String> {
-    assert_parse("use base 'Exporter';", ModuleImportKind::UseBase, "base", 4, 8)
+    assert_parse(
+        "use base 'Exporter';",
+        ModuleImportKind::UseBase,
+        "base",
+        4,
+        8,
+    )
 }
 
 // ===========================================================================
@@ -568,7 +667,13 @@ fn use_underscore_module() -> Result<(), String> {
 
 #[test]
 fn use_module_with_numbers() -> Result<(), String> {
-    assert_parse("use Encode::JP2K;", ModuleImportKind::Use, "Encode::JP2K", 4, 16)
+    assert_parse(
+        "use Encode::JP2K;",
+        ModuleImportKind::Use,
+        "Encode::JP2K",
+        4,
+        16,
+    )
 }
 
 #[test]
@@ -579,7 +684,13 @@ fn use_module_token_at_end_of_line() -> Result<(), String> {
 
 #[test]
 fn require_module_token_at_end_of_line() -> Result<(), String> {
-    assert_parse("require Foo::Bar", ModuleImportKind::Require, "Foo::Bar", 8, 16)
+    assert_parse(
+        "require Foo::Bar",
+        ModuleImportKind::Require,
+        "Foo::Bar",
+        8,
+        16,
+    )
 }
 
 // ===========================================================================

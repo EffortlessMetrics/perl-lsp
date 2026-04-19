@@ -142,7 +142,10 @@ fn test_diagnostics_clear_protocol_framing() -> Result<(), Box<dyn std::error::E
         .filter(|m| m.get("method") == Some(&json!("textDocument/publishDiagnostics")))
         .collect();
 
-    assert!(!diagnostics.is_empty(), "No diagnostics notifications emitted");
+    assert!(
+        !diagnostics.is_empty(),
+        "No diagnostics notifications emitted"
+    );
     let last = diagnostics.last().ok_or("No last diagnostic message")?;
     assert_eq!(last["params"]["uri"], "file:///test/test.pl");
     assert_eq!(last["params"]["diagnostics"], json!([]));
@@ -203,7 +206,11 @@ sub another {
 
     // There should be no duplicates in the final result
     // (The workspace/symbol handler should deduplicate)
-    assert!(duplicates.is_empty(), "Found duplicate symbols: {:?}", duplicates);
+    assert!(
+        duplicates.is_empty(),
+        "Found duplicate symbols: {:?}",
+        duplicates
+    );
 
     Ok(())
 }
@@ -241,22 +248,38 @@ sub test_function {
         assert!(json.get("kind").is_some(), "Symbol missing 'kind' field");
 
         // Location should contain uri and range
-        let location = json.get("location").ok_or("Symbol missing 'location' field")?;
-        assert!(location.get("uri").is_some(), "Location missing 'uri' field");
-        assert!(location.get("range").is_some(), "Location missing 'range' field");
+        let location = json
+            .get("location")
+            .ok_or("Symbol missing 'location' field")?;
+        assert!(
+            location.get("uri").is_some(),
+            "Location missing 'uri' field"
+        );
+        assert!(
+            location.get("range").is_some(),
+            "Location missing 'range' field"
+        );
 
         // Verify range structure
-        let range = location.get("range").ok_or("Location missing 'range' field")?;
+        let range = location
+            .get("range")
+            .ok_or("Location missing 'range' field")?;
         assert!(range.get("start").is_some(), "Range missing 'start' field");
         assert!(range.get("end").is_some(), "Range missing 'end' field");
 
         let start = range.get("start").ok_or("Range missing 'start' field")?;
         assert!(start.get("line").is_some(), "Start missing 'line' field");
-        assert!(start.get("character").is_some(), "Start missing 'character' field");
+        assert!(
+            start.get("character").is_some(),
+            "Start missing 'character' field"
+        );
 
         let end = range.get("end").ok_or("Range missing 'end' field")?;
         assert!(end.get("line").is_some(), "End missing 'line' field");
-        assert!(end.get("character").is_some(), "End missing 'character' field");
+        assert!(
+            end.get("character").is_some(),
+            "End missing 'character' field"
+        );
     }
 
     Ok(())
@@ -334,7 +357,10 @@ fn test_uri_normalization() -> Result<(), Box<dyn std::error::Error>> {
     ];
 
     #[cfg(windows)]
-    test_cases.push((r"C:\Users\tester\test.pl", "file:///C:/Users/tester/test.pl"));
+    test_cases.push((
+        r"C:\Users\tester\test.pl",
+        "file:///C:/Users/tester/test.pl",
+    ));
 
     #[cfg(not(windows))]
     test_cases.push(("/home/user/test.pl", "file:///home/user/test.pl"));

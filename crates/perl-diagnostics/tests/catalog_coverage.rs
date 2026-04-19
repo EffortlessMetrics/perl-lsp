@@ -218,7 +218,11 @@ fn all_pl_codes_have_docs_url_all_pc_codes_do_not() {
         DiagnosticCode::MissingWarnings,
     ] {
         let meta = catalog::diagnostic_meta(code);
-        assert!(meta.desc.is_some(), "PL code {:?} should have a docs URL", meta.code);
+        assert!(
+            meta.desc.is_some(),
+            "PL code {:?} should have a docs URL",
+            meta.code
+        );
     }
 
     // PC codes should NOT have docs URLs
@@ -230,6 +234,10 @@ fn all_pl_codes_have_docs_url_all_pc_codes_do_not() {
         DiagnosticCode::CriticSeverity1,
     ] {
         let meta = catalog::diagnostic_meta(code);
-        assert!(meta.desc.is_none(), "PC code {:?} should NOT have a docs URL", meta.code);
+        assert!(
+            meta.desc.is_none(),
+            "PC code {:?} should NOT have a docs URL",
+            meta.code
+        );
     }
 }

@@ -91,8 +91,10 @@ mod tests {
 
     #[test]
     fn test_record_run_appends_values() {
-        let mut state =
-            StableWinsState { subsystem: "parser".to_string(), recent_runs: BTreeMap::new() };
+        let mut state = StableWinsState {
+            subsystem: "parser".to_string(),
+            recent_runs: BTreeMap::new(),
+        };
         let metrics = BTreeMap::from([("system_clean_rate".to_string(), Some(0.972_f64))]);
         record_run(&mut state, "abc123", "2026-01-01T00:00:00Z", &metrics);
 
@@ -102,13 +104,20 @@ mod tests {
 
     #[test]
     fn test_record_run_caps_window() {
-        let mut state =
-            StableWinsState { subsystem: "parser".to_string(), recent_runs: BTreeMap::new() };
+        let mut state = StableWinsState {
+            subsystem: "parser".to_string(),
+            recent_runs: BTreeMap::new(),
+        };
         let metrics = BTreeMap::from([("system_clean_rate".to_string(), Some(0.972_f64))]);
 
         // Insert more entries than the cap.
         for i in 0..(STABLE_WIN_THRESHOLD + 5) {
-            record_run(&mut state, &format!("commit{i}"), "2026-01-01T00:00:00Z", &metrics);
+            record_run(
+                &mut state,
+                &format!("commit{i}"),
+                "2026-01-01T00:00:00Z",
+                &metrics,
+            );
         }
 
         let runs = &state.recent_runs["system_clean_rate"];
@@ -121,8 +130,10 @@ mod tests {
 
     #[test]
     fn test_stable_improvements_requires_threshold_runs() {
-        let mut state =
-            StableWinsState { subsystem: "parser".to_string(), recent_runs: BTreeMap::new() };
+        let mut state = StableWinsState {
+            subsystem: "parser".to_string(),
+            recent_runs: BTreeMap::new(),
+        };
         let baseline = BTreeMap::from([("system_clean_rate".to_string(), Some(0.971_f64))]);
 
         // Only 2 runs — not enough.
@@ -131,19 +142,29 @@ mod tests {
         record_run(&mut state, "c2", "2026-01-01T00:00:00Z", &metrics);
 
         let stable = stable_improvements(&state, &baseline, 0.01);
-        assert!(stable.is_empty(), "need {STABLE_WIN_THRESHOLD} runs, only have 2");
+        assert!(
+            stable.is_empty(),
+            "need {STABLE_WIN_THRESHOLD} runs, only have 2"
+        );
     }
 
     #[test]
     fn test_stable_improvements_detected_after_threshold() {
-        let mut state =
-            StableWinsState { subsystem: "parser".to_string(), recent_runs: BTreeMap::new() };
+        let mut state = StableWinsState {
+            subsystem: "parser".to_string(),
+            recent_runs: BTreeMap::new(),
+        };
         let baseline = BTreeMap::from([("system_clean_rate".to_string(), Some(0.971_f64))]);
 
         // 3 runs all above baseline + 1% delta.
         let metrics = BTreeMap::from([("system_clean_rate".to_string(), Some(0.985_f64))]);
         for i in 0..STABLE_WIN_THRESHOLD {
-            record_run(&mut state, &format!("c{i}"), "2026-01-01T00:00:00Z", &metrics);
+            record_run(
+                &mut state,
+                &format!("c{i}"),
+                "2026-01-01T00:00:00Z",
+                &metrics,
+            );
         }
 
         let stable = stable_improvements(&state, &baseline, 0.01);
@@ -152,18 +173,28 @@ mod tests {
 
     #[test]
     fn test_stable_improvements_not_triggered_below_delta() {
-        let mut state =
-            StableWinsState { subsystem: "parser".to_string(), recent_runs: BTreeMap::new() };
+        let mut state = StableWinsState {
+            subsystem: "parser".to_string(),
+            recent_runs: BTreeMap::new(),
+        };
         let baseline = BTreeMap::from([("system_clean_rate".to_string(), Some(0.971_f64))]);
 
         // 3 runs only 0.5 % above baseline — below the 1 % material_delta_pct.
         let marginal = 0.971 * 1.005; // just 0.5% above
         let metrics = BTreeMap::from([("system_clean_rate".to_string(), Some(marginal))]);
         for i in 0..STABLE_WIN_THRESHOLD {
-            record_run(&mut state, &format!("c{i}"), "2026-01-01T00:00:00Z", &metrics);
+            record_run(
+                &mut state,
+                &format!("c{i}"),
+                "2026-01-01T00:00:00Z",
+                &metrics,
+            );
         }
 
         let stable = stable_improvements(&state, &baseline, 0.01);
-        assert!(stable.is_empty(), "0.5% improvement below 1% delta should not trigger");
+        assert!(
+            stable.is_empty(),
+            "0.5% improvement below 1% delta should not trigger"
+        );
     }
 }

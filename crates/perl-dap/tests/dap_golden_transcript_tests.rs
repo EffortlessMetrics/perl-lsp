@@ -31,13 +31,17 @@ mod dap_golden_transcripts {
     }
 
     fn resolve_workspace_vars(value: &Value) -> Value {
-        let workspace_root =
-            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..").to_string_lossy().to_string();
+        let workspace_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../..")
+            .to_string_lossy()
+            .to_string();
         match value {
             Value::String(s) => Value::String(s.replace("${workspaceFolder}", &workspace_root)),
             Value::Array(items) => Value::Array(items.iter().map(resolve_workspace_vars).collect()),
             Value::Object(map) => Value::Object(
-                map.iter().map(|(k, v)| (k.clone(), resolve_workspace_vars(v))).collect(),
+                map.iter()
+                    .map(|(k, v)| (k.clone(), resolve_workspace_vars(v)))
+                    .collect(),
             ),
             _ => value.clone(),
         }
@@ -51,7 +55,11 @@ mod dap_golden_transcripts {
     ) -> Result<()> {
         let response = adapter.handle_request(request_seq, command, arguments);
         match response {
-            DapMessage::Response { success, command: actual, .. } => {
+            DapMessage::Response {
+                success,
+                command: actual,
+                ..
+            } => {
                 if !success {
                     anyhow::bail!("expected success for {command}, got failure");
                 }
@@ -88,7 +96,12 @@ mod dap_golden_transcripts {
             })),
         )?;
         send_and_expect_success(&mut adapter, 3, "continue", Some(json!({ "threadId": 1 })))?;
-        send_and_expect_success(&mut adapter, 4, "stackTrace", Some(json!({ "threadId": 1 })))?;
+        send_and_expect_success(
+            &mut adapter,
+            4,
+            "stackTrace",
+            Some(json!({ "threadId": 1 })),
+        )?;
         send_and_expect_success(&mut adapter, 5, "disconnect", None)?;
         Ok(())
     }
@@ -143,7 +156,12 @@ mod dap_golden_transcripts {
         assert!(messages.iter().any(|m| m["command"] == "variables"));
 
         let mut adapter = DebugAdapter::new();
-        send_and_expect_success(&mut adapter, 1, "stackTrace", Some(json!({ "threadId": 1 })))?;
+        send_and_expect_success(
+            &mut adapter,
+            1,
+            "stackTrace",
+            Some(json!({ "threadId": 1 })),
+        )?;
         send_and_expect_success(&mut adapter, 2, "scopes", Some(json!({ "frameId": 1 })))?;
         send_and_expect_success(
             &mut adapter,
@@ -174,7 +192,10 @@ mod dap_golden_transcripts {
         );
         match response {
             DapMessage::Response { success, body, .. } => {
-                assert!(success, "request should succeed with unverified breakpoint payload");
+                assert!(
+                    success,
+                    "request should succeed with unverified breakpoint payload"
+                );
                 let body = body.ok_or_else(|| anyhow::anyhow!("missing setBreakpoints body"))?;
                 let bps = body["breakpoints"]
                     .as_array()

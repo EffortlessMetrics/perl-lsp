@@ -17,14 +17,22 @@ fn heredoc_produces_region_fold_via_ast() -> Result<(), ParseError> {
     let mut extractor = FoldingRangeExtractor::new();
     let ranges = extractor.extract(&ast);
 
-    let region_folds: Vec<_> =
-        ranges.iter().filter(|r| matches!(r.kind, Some(FoldingRangeKind::Region))).collect();
+    let region_folds: Vec<_> = ranges
+        .iter()
+        .filter(|r| matches!(r.kind, Some(FoldingRangeKind::Region)))
+        .collect();
 
-    assert!(!region_folds.is_empty(), "heredoc should produce at least one Region fold");
+    assert!(
+        !region_folds.is_empty(),
+        "heredoc should produce at least one Region fold"
+    );
 
     // The fold should cover a meaningful span
     for fold in &region_folds {
-        assert!(fold.end_offset > fold.start_offset, "fold range must be non-empty");
+        assert!(
+            fold.end_offset > fold.start_offset,
+            "fold range must be non-empty"
+        );
     }
     Ok(())
 }
@@ -36,10 +44,15 @@ fn indented_heredoc_produces_region_fold() -> Result<(), ParseError> {
     let mut extractor = FoldingRangeExtractor::new();
     let ranges = extractor.extract(&ast);
 
-    let region_folds: Vec<_> =
-        ranges.iter().filter(|r| matches!(r.kind, Some(FoldingRangeKind::Region))).collect();
+    let region_folds: Vec<_> = ranges
+        .iter()
+        .filter(|r| matches!(r.kind, Some(FoldingRangeKind::Region)))
+        .collect();
 
-    assert!(!region_folds.is_empty(), "indented heredoc should produce a Region fold");
+    assert!(
+        !region_folds.is_empty(),
+        "indented heredoc should produce a Region fold"
+    );
     Ok(())
 }
 
@@ -50,10 +63,15 @@ fn single_quoted_heredoc_produces_region_fold() -> Result<(), ParseError> {
     let mut extractor = FoldingRangeExtractor::new();
     let ranges = extractor.extract(&ast);
 
-    let region_folds: Vec<_> =
-        ranges.iter().filter(|r| matches!(r.kind, Some(FoldingRangeKind::Region))).collect();
+    let region_folds: Vec<_> = ranges
+        .iter()
+        .filter(|r| matches!(r.kind, Some(FoldingRangeKind::Region)))
+        .collect();
 
-    assert!(!region_folds.is_empty(), "single-quoted heredoc should produce a Region fold");
+    assert!(
+        !region_folds.is_empty(),
+        "single-quoted heredoc should produce a Region fold"
+    );
     Ok(())
 }
 
@@ -65,10 +83,15 @@ fn heredoc_fold_has_region_kind_not_none() -> Result<(), ParseError> {
     let ranges = extractor.extract(&ast);
 
     // Every Region fold must actually have kind = Region (not None)
-    let region_folds: Vec<_> =
-        ranges.iter().filter(|r| matches!(r.kind, Some(FoldingRangeKind::Region))).collect();
+    let region_folds: Vec<_> = ranges
+        .iter()
+        .filter(|r| matches!(r.kind, Some(FoldingRangeKind::Region)))
+        .collect();
 
-    assert!(!region_folds.is_empty(), "heredoc should produce at least one Region fold");
+    assert!(
+        !region_folds.is_empty(),
+        "heredoc should produce at least one Region fold"
+    );
 
     // Verify that no fold has kind = None (the old bug)
     let none_folds: Vec<_> = ranges.iter().filter(|r| r.kind.is_none()).collect();
@@ -87,10 +110,15 @@ fn no_heredoc_no_region_fold() -> Result<(), ParseError> {
     let mut extractor = FoldingRangeExtractor::new();
     let ranges = extractor.extract(&ast);
 
-    let region_folds: Vec<_> =
-        ranges.iter().filter(|r| matches!(r.kind, Some(FoldingRangeKind::Region))).collect();
+    let region_folds: Vec<_> = ranges
+        .iter()
+        .filter(|r| matches!(r.kind, Some(FoldingRangeKind::Region)))
+        .collect();
 
-    assert!(region_folds.is_empty(), "code without heredocs should not produce Region folds");
+    assert!(
+        region_folds.is_empty(),
+        "code without heredocs should not produce Region folds"
+    );
     Ok(())
 }
 

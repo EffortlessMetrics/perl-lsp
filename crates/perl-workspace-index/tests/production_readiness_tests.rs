@@ -43,15 +43,24 @@ fn test_state_machine_full_lifecycle() {
     let machine = IndexStateMachine::new();
 
     // Idle → Initializing
-    assert!(matches!(machine.transition_to_initializing(), TransitionResult::Success));
+    assert!(matches!(
+        machine.transition_to_initializing(),
+        TransitionResult::Success
+    ));
     assert!(matches!(machine.state(), IndexState::Initializing { .. }));
     assert!(machine.state().is_transitional());
 
     // Update initialization progress
-    assert!(matches!(machine.update_initialization_progress(50), TransitionResult::Success));
+    assert!(matches!(
+        machine.update_initialization_progress(50),
+        TransitionResult::Success
+    ));
 
     // Initializing → Building
-    assert!(matches!(machine.transition_to_building(100), TransitionResult::Success));
+    assert!(matches!(
+        machine.transition_to_building(100),
+        TransitionResult::Success
+    ));
     assert!(matches!(machine.state(), IndexState::Building { .. }));
 
     // Update building progress
@@ -61,7 +70,10 @@ fn test_state_machine_full_lifecycle() {
     ));
 
     // Building → Ready
-    assert!(matches!(machine.transition_to_ready(100, 5000), TransitionResult::Success));
+    assert!(matches!(
+        machine.transition_to_ready(100, 5000),
+        TransitionResult::Success
+    ));
     assert!(matches!(machine.state(), IndexState::Ready { .. }));
     assert!(machine.state().is_ready());
     assert!(!machine.state().is_transitional());
@@ -78,14 +90,18 @@ fn test_state_machine_degradation() {
 
     // Ready → Degraded
     assert!(matches!(
-        machine
-            .transition_to_degraded(DegradationReason::IoError { message: "IO error".to_string() }),
+        machine.transition_to_degraded(DegradationReason::IoError {
+            message: "IO error".to_string()
+        }),
         TransitionResult::Success
     ));
     assert!(matches!(machine.state(), IndexState::Degraded { .. }));
 
     // Degraded → Ready (recovery)
-    assert!(matches!(machine.transition_to_ready(100, 5000), TransitionResult::Success));
+    assert!(matches!(
+        machine.transition_to_ready(100, 5000),
+        TransitionResult::Success
+    ));
     assert!(matches!(machine.state(), IndexState::Ready { .. }));
 }
 
@@ -102,7 +118,10 @@ fn test_state_machine_error_recovery() {
     assert!(machine.state().is_error());
 
     // Error → Initializing (recovery)
-    assert!(matches!(machine.transition_to_initializing(), TransitionResult::Success));
+    assert!(matches!(
+        machine.transition_to_initializing(),
+        TransitionResult::Success
+    ));
     assert!(matches!(machine.state(), IndexState::Initializing { .. }));
 }
 
@@ -162,11 +181,17 @@ fn test_state_machine_update_state() {
 
     // Ready → Updating
     machine.transition_to_ready(100, 5000);
-    assert!(matches!(machine.transition_to_updating(5), TransitionResult::Success));
+    assert!(matches!(
+        machine.transition_to_updating(5),
+        TransitionResult::Success
+    ));
     assert!(matches!(machine.state(), IndexState::Updating { .. }));
 
     // Updating → Ready
-    assert!(matches!(machine.transition_to_ready(100, 5000), TransitionResult::Success));
+    assert!(matches!(
+        machine.transition_to_ready(100, 5000),
+        TransitionResult::Success
+    ));
     assert!(matches!(machine.state(), IndexState::Ready { .. }));
 }
 
@@ -185,7 +210,10 @@ fn test_state_machine_invalidation() {
     assert!(matches!(machine.state(), IndexState::Invalidating { .. }));
 
     // Invalidating → Ready
-    assert!(matches!(machine.transition_to_ready(100, 5000), TransitionResult::Success));
+    assert!(matches!(
+        machine.transition_to_ready(100, 5000),
+        TransitionResult::Success
+    ));
     assert!(matches!(machine.state(), IndexState::Ready { .. }));
 }
 
@@ -207,7 +235,11 @@ fn test_cache_basic_operations() {
 
 #[test]
 fn test_cache_lru_eviction() {
-    let config = CacheConfig { max_items: 2, max_bytes: 100, ttl: None };
+    let config = CacheConfig {
+        max_items: 2,
+        max_bytes: 100,
+        ttl: None,
+    };
     let cache = BoundedLruCache::<String, String>::new(config);
 
     cache.insert("key1".to_string(), "value1".to_string());
@@ -274,7 +306,10 @@ fn test_cache_remove() {
     let cache = BoundedLruCache::<String, String>::default();
 
     cache.insert("key1".to_string(), "value1".to_string());
-    assert_eq!(cache.remove(&"key1".to_string()), Some("value1".to_string()));
+    assert_eq!(
+        cache.remove(&"key1".to_string()),
+        Some("value1".to_string())
+    );
     assert_eq!(cache.get(&"key1".to_string()), None);
 }
 
@@ -356,7 +391,11 @@ fn test_slo_tracker_basic() {
 
     let start = tracker.start_operation(OperationType::DefinitionLookup);
     thread::sleep(Duration::from_millis(1));
-    tracker.record_operation_type(OperationType::DefinitionLookup, start, OperationResult::Success);
+    tracker.record_operation_type(
+        OperationType::DefinitionLookup,
+        start,
+        OperationResult::Success,
+    );
 
     let stats = tracker.statistics(OperationType::DefinitionLookup);
     assert_eq!(stats.total_count, 1);
@@ -456,7 +495,11 @@ fn test_slo_tracker_reset() {
     let tracker = SloTracker::default();
 
     let start = tracker.start_operation(OperationType::DefinitionLookup);
-    tracker.record_operation_type(OperationType::DefinitionLookup, start, OperationResult::Success);
+    tracker.record_operation_type(
+        OperationType::DefinitionLookup,
+        start,
+        OperationResult::Success,
+    );
 
     tracker.reset();
 
@@ -520,7 +563,10 @@ fn test_slo_all_slos_met() {
 fn test_operation_type_targets() {
     let config = SloConfig::default();
 
-    assert_eq!(OperationType::IndexInitialization.slo_target_ms(&config), 5000);
+    assert_eq!(
+        OperationType::IndexInitialization.slo_target_ms(&config),
+        5000
+    );
     assert_eq!(OperationType::IncrementalUpdate.slo_target_ms(&config), 100);
     assert_eq!(OperationType::DefinitionLookup.slo_target_ms(&config), 50);
     assert_eq!(OperationType::Completion.slo_target_ms(&config), 100);
@@ -529,8 +575,14 @@ fn test_operation_type_targets() {
 
 #[test]
 fn test_operation_type_names() {
-    assert_eq!(OperationType::IndexInitialization.name(), "index_initialization");
-    assert_eq!(OperationType::IncrementalUpdate.name(), "incremental_update");
+    assert_eq!(
+        OperationType::IndexInitialization.name(),
+        "index_initialization"
+    );
+    assert_eq!(
+        OperationType::IncrementalUpdate.name(),
+        "incremental_update"
+    );
     assert_eq!(OperationType::DefinitionLookup.name(), "definition_lookup");
     assert_eq!(OperationType::Completion.name(), "completion");
     assert_eq!(OperationType::Hover.name(), "hover");
@@ -591,7 +643,11 @@ fn test_state_machine_slo_integration() {
     // Track definition lookup
     let start = tracker.start_operation(OperationType::DefinitionLookup);
     thread::sleep(Duration::from_millis(1));
-    tracker.record_operation_type(OperationType::DefinitionLookup, start, OperationResult::Success);
+    tracker.record_operation_type(
+        OperationType::DefinitionLookup,
+        start,
+        OperationResult::Success,
+    );
 
     assert!(machine.state().is_ready());
     assert!(tracker.all_slos_met());
@@ -719,7 +775,11 @@ fn test_production_coordinator_caching() {
     let code = "sub hello { return 42; }";
 
     // First indexing - should cache
-    assert!(coordinator.index_file(uri.clone(), code.to_string()).is_ok());
+    assert!(
+        coordinator
+            .index_file(uri.clone(), code.to_string())
+            .is_ok()
+    );
 
     // Second indexing - should hit cache
     assert!(coordinator.index_file(uri, code.to_string()).is_ok());

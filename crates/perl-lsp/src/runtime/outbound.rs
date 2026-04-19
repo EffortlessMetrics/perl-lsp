@@ -17,7 +17,11 @@ pub(crate) enum OutboundMessage {
     /// JSON-RPC notification (no id, no response expected).
     Notification { method: String, params: Value },
     /// JSON-RPC request from server to client (has id, expects response).
-    Request { id: i64, method: String, params: Value },
+    Request {
+        id: i64,
+        method: String,
+        params: Value,
+    },
 }
 
 /// Cloneable handle for sending outbound messages.
@@ -40,14 +44,21 @@ impl OutboundSender {
     /// Send a JSON-RPC notification.
     pub fn send_notification(&self, method: &str, params: Value) -> io::Result<()> {
         self.tx
-            .send(OutboundMessage::Notification { method: method.to_string(), params })
+            .send(OutboundMessage::Notification {
+                method: method.to_string(),
+                params,
+            })
             .map_err(|_| io::Error::new(io::ErrorKind::BrokenPipe, "outbound channel closed"))
     }
 
     /// Send a server→client JSON-RPC request.
     pub fn send_request(&self, id: i64, method: &str, params: Value) -> io::Result<()> {
         self.tx
-            .send(OutboundMessage::Request { id, method: method.to_string(), params })
+            .send(OutboundMessage::Request {
+                id,
+                method: method.to_string(),
+                params,
+            })
             .map_err(|_| io::Error::new(io::ErrorKind::BrokenPipe, "outbound channel closed"))
     }
 }

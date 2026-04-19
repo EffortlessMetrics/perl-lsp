@@ -151,10 +151,16 @@ print "Global: $globalVar\n";
 /// Create test server with code actions-focused workspace
 fn create_code_actions_server() -> Result<(LspHarness, TempWorkspace), Box<dyn std::error::Error>> {
     let (mut harness, workspace) = LspHarness::with_workspace(&[
-        ("refactoring.pl", code_actions_fixtures::REFACTORING_OPPORTUNITIES_FILE),
+        (
+            "refactoring.pl",
+            code_actions_fixtures::REFACTORING_OPPORTUNITIES_FILE,
+        ),
         ("imports.pl", code_actions_fixtures::IMPORT_MANAGEMENT_FILE),
         ("pragmas.pl", code_actions_fixtures::MISSING_PRAGMAS_FILE),
-        ("undefined.pl", code_actions_fixtures::UNDEFINED_VARIABLES_FILE),
+        (
+            "undefined.pl",
+            code_actions_fixtures::UNDEFINED_VARIABLES_FILE,
+        ),
     ])?;
 
     // Initialize documents
@@ -168,8 +174,10 @@ fn create_code_actions_server() -> Result<(LspHarness, TempWorkspace), Box<dyn s
         code_actions_fixtures::IMPORT_MANAGEMENT_FILE,
     )?;
 
-    harness
-        .open_document(&workspace.uri("pragmas.pl"), code_actions_fixtures::MISSING_PRAGMAS_FILE)?;
+    harness.open_document(
+        &workspace.uri("pragmas.pl"),
+        code_actions_fixtures::MISSING_PRAGMAS_FILE,
+    )?;
 
     harness.open_document(
         &workspace.uri("undefined.pl"),
@@ -195,7 +203,10 @@ fn create_capabilities_test_server()
     let workspace = TempWorkspace::new()?;
 
     // Write test files
-    workspace.write("test.pl", code_actions_fixtures::REFACTORING_OPPORTUNITIES_FILE)?;
+    workspace.write(
+        "test.pl",
+        code_actions_fixtures::REFACTORING_OPPORTUNITIES_FILE,
+    )?;
 
     let mut harness = LspHarness::new_without_initialize();
     let init_result = harness.initialize_with_root(&workspace.root_uri, None)?;
@@ -208,8 +219,9 @@ fn create_capabilities_test_server()
 fn test_code_action_server_capabilities() -> TestResult {
     let (_harness, _workspace, init_result) = create_capabilities_test_server()?;
 
-    let capabilities =
-        init_result.get("capabilities").ok_or("Initialize result should contain capabilities")?;
+    let capabilities = init_result
+        .get("capabilities")
+        .ok_or("Initialize result should contain capabilities")?;
 
     // Verify codeActionProvider is advertised
     assert!(
@@ -241,7 +253,10 @@ fn test_code_action_server_capabilities() -> TestResult {
 
             // Verify that at least 'quickfix' is supported (it's always expected)
             let has_quickfix = kinds_array.iter().any(|k| k.as_str() == Some("quickfix"));
-            assert!(has_quickfix, "Server should support 'quickfix' code action kind");
+            assert!(
+                has_quickfix,
+                "Server should support 'quickfix' code action kind"
+            );
 
             // Log what kinds are available for diagnostic purposes
             let available_kinds: Vec<&str> =
@@ -251,7 +266,10 @@ fn test_code_action_server_capabilities() -> TestResult {
 
         // Check for resolve provider capability (optional but validate type if present)
         if let Some(resolve_provider) = code_action_provider.get("resolveProvider") {
-            assert!(resolve_provider.is_boolean(), "resolveProvider should be boolean");
+            assert!(
+                resolve_provider.is_boolean(),
+                "resolveProvider should be boolean"
+            );
         }
     } else {
         return Err("codeActionProvider should be boolean or object".into());
@@ -283,7 +301,9 @@ fn test_extract_variable_refactoring() -> TestResult {
         Duration::from_secs(2),
     )?;
 
-    let actions = actions_result.as_array().ok_or("Should return action array")?;
+    let actions = actions_result
+        .as_array()
+        .ok_or("Should return action array")?;
     assert!(!actions.is_empty(), "Should have refactoring actions");
 
     // Look for extract variable action
@@ -294,7 +314,10 @@ fn test_extract_variable_refactoring() -> TestResult {
             .unwrap_or(false)
     });
 
-    assert!(extract_var_action.is_some(), "Should have 'Extract variable' action available");
+    assert!(
+        extract_var_action.is_some(),
+        "Should have 'Extract variable' action available"
+    );
 
     let action = extract_var_action.ok_or("Extract variable action not found")?;
 
@@ -334,7 +357,9 @@ fn test_extract_subroutine_refactoring() -> TestResult {
         Duration::from_secs(2),
     )?;
 
-    let actions = actions_result.as_array().ok_or("Should return action array")?;
+    let actions = actions_result
+        .as_array()
+        .ok_or("Should return action array")?;
 
     // Look for extract subroutine action
     let extract_sub_action = actions.iter().find(|action| {
@@ -385,7 +410,9 @@ fn test_organize_imports_refactoring() -> TestResult {
         Duration::from_secs(2),
     )?;
 
-    let actions = actions_result.as_array().ok_or("Should return action array")?;
+    let actions = actions_result
+        .as_array()
+        .ok_or("Should return action array")?;
 
     // Look for organize imports action
     let organize_imports_action = actions.iter().find(|action| {
@@ -401,7 +428,10 @@ fn test_organize_imports_refactoring() -> TestResult {
             Some("source.organizeImports"),
             "Should have correct action kind"
         );
-        assert!(action.get("edit").is_some(), "Should have text edits for import organization");
+        assert!(
+            action.get("edit").is_some(),
+            "Should have text edits for import organization"
+        );
     }
 
     Ok(())
@@ -429,7 +459,9 @@ fn test_code_quality_refactorings() -> TestResult {
         Duration::from_secs(2),
     )?;
 
-    let loop_actions = loop_actions_result.as_array().ok_or("Should return action array")?;
+    let loop_actions = loop_actions_result
+        .as_array()
+        .ok_or("Should return action array")?;
 
     // Look for loop conversion actions
     let convert_loop_action = loop_actions.iter().find(|action| {
@@ -466,7 +498,9 @@ fn test_code_quality_refactorings() -> TestResult {
         Duration::from_secs(2),
     )?;
 
-    let error_actions = error_check_actions.as_array().ok_or("Should return action array")?;
+    let error_actions = error_check_actions
+        .as_array()
+        .ok_or("Should return action array")?;
 
     // Look for error checking actions
     let add_error_check_action = error_actions.iter().find(|action| {
@@ -509,7 +543,9 @@ fn test_add_missing_pragmas_refactoring() -> TestResult {
         Duration::from_secs(2),
     )?;
 
-    let actions = actions_result.as_array().ok_or("Should return action array")?;
+    let actions = actions_result
+        .as_array()
+        .ok_or("Should return action array")?;
 
     // Look for pragma addition actions
     let strict_action = actions.iter().find(|action| {
@@ -599,11 +635,14 @@ fn test_code_action_resolve() -> TestResult {
         Duration::from_secs(2),
     )?;
 
-    let actions = actions_result.as_array().ok_or("Should return action array")?;
+    let actions = actions_result
+        .as_array()
+        .ok_or("Should return action array")?;
 
     if !actions.is_empty() {
-        let first_action =
-            actions.first().ok_or("Actions array should have at least one element")?;
+        let first_action = actions
+            .first()
+            .ok_or("Actions array should have at least one element")?;
 
         // If action doesn't have edit but has data, it needs resolving
         if first_action.get("edit").is_none() && first_action.get("data").is_some() {
@@ -613,7 +652,10 @@ fn test_code_action_resolve() -> TestResult {
                 Duration::from_secs(2),
             );
 
-            assert!(resolved_result.is_ok(), "Code action resolve should succeed");
+            assert!(
+                resolved_result.is_ok(),
+                "Code action resolve should succeed"
+            );
 
             let resolved_action = resolved_result?;
             assert!(
@@ -662,10 +704,14 @@ fn test_quickfix_actions_from_diagnostics() -> TestResult {
         Duration::from_secs(2),
     )?;
 
-    let actions = actions_result.as_array().ok_or("Should return action array")?;
+    let actions = actions_result
+        .as_array()
+        .ok_or("Should return action array")?;
 
     // Look for quickfix actions
-    let quickfix_action = actions.iter().find(|action| action["kind"].as_str() == Some("quickfix"));
+    let quickfix_action = actions
+        .iter()
+        .find(|action| action["kind"].as_str() == Some("quickfix"));
 
     if let Some(action) = quickfix_action {
         assert!(
@@ -703,7 +749,9 @@ fn test_code_actions_empty_selection() -> TestResult {
         Duration::from_secs(2),
     )?;
 
-    let _actions = actions_result.as_array().ok_or("Should return action array")?;
+    let _actions = actions_result
+        .as_array()
+        .ok_or("Should return action array")?;
     // Empty selection may have fewer actions, but should not error
 
     Ok(())
@@ -730,7 +778,10 @@ fn test_code_actions_invalid_range() -> TestResult {
     );
 
     // Should handle invalid range gracefully (either empty actions or error)
-    assert!(actions_result.is_ok() || actions_result.is_err(), "Should handle invalid range");
+    assert!(
+        actions_result.is_ok() || actions_result.is_err(),
+        "Should handle invalid range"
+    );
 
     Ok(())
 }
@@ -758,7 +809,9 @@ fn test_code_actions_filtering() -> TestResult {
         Duration::from_secs(2),
     )?;
 
-    let refactor_actions_array = refactor_actions.as_array().ok_or("Should return action array")?;
+    let refactor_actions_array = refactor_actions
+        .as_array()
+        .ok_or("Should return action array")?;
 
     // Verify all returned actions are refactor kinds
     for action in refactor_actions_array {
@@ -788,12 +841,18 @@ fn test_code_actions_filtering() -> TestResult {
         Duration::from_secs(2),
     )?;
 
-    let quickfix_actions_array = quickfix_actions.as_array().ok_or("Should return action array")?;
+    let quickfix_actions_array = quickfix_actions
+        .as_array()
+        .ok_or("Should return action array")?;
 
     // Verify all returned actions are quickfix kinds (if any)
     for action in quickfix_actions_array {
         if let Some(kind) = action.get("kind").and_then(|k| k.as_str()) {
-            assert!(kind == "quickfix", "All actions should be quickfix kind, found: {}", kind);
+            assert!(
+                kind == "quickfix",
+                "All actions should be quickfix kind, found: {}",
+                kind
+            );
         }
     }
 

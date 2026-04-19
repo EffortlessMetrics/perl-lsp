@@ -24,7 +24,10 @@ fn bdd_given_raw_lexer_tokens_when_converted_then_trivia_is_filtered_and_eof_is_
     let parser_tokens = TokenStream::lexer_tokens_to_parser_tokens(raw);
 
     assert_eq!(
-        parser_tokens.iter().map(|token| token.kind).collect::<Vec<_>>(),
+        parser_tokens
+            .iter()
+            .map(|token| token.kind)
+            .collect::<Vec<_>>(),
         vec![
             TokenKind::My,
             TokenKind::Identifier,

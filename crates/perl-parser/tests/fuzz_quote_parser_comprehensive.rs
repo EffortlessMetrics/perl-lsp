@@ -14,8 +14,10 @@ use proptest::test_runner::{Config as ProptestConfig, FileFailurePersistence};
 
 /// Regression directory for fuzz test cases
 #[allow(dead_code)]
-const REGRESS_DIR: &str =
-    concat!(env!("CARGO_MANIFEST_DIR"), "/tests/_proptest-regressions/fuzz_quote_parser");
+const REGRESS_DIR: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/tests/_proptest-regressions/fuzz_quote_parser"
+);
 
 /// Helper to create regex strategy safely without unwrap/expect in tests
 /// These regex patterns are compile-time constants and should always be valid
@@ -42,7 +44,11 @@ fn fuzz_extract_regex_parts_stress_test() {
         // Core invariant: function should never panic, regardless of input
         let result = std::panic::catch_unwind(|| extract_regex_parts(&input));
 
-        prop_assert!(result.is_ok(), "extract_regex_parts panicked on input: {:?}", input);
+        prop_assert!(
+            result.is_ok(),
+            "extract_regex_parts panicked on input: {:?}",
+            input
+        );
 
         if let Ok((pattern, _body, modifiers)) = result {
             // AST invariant: results should be valid UTF-8 strings
@@ -116,7 +122,11 @@ fn fuzz_extract_substitution_parts_crash_detection() {
     ) -> Result<(), proptest::test_runner::TestCaseError> {
         let result = std::panic::catch_unwind(|| extract_substitution_parts(&input));
 
-        prop_assert!(result.is_ok(), "extract_substitution_parts crashed on: {:?}", input);
+        prop_assert!(
+            result.is_ok(),
+            "extract_substitution_parts crashed on: {:?}",
+            input
+        );
 
         if let Ok((pattern, replacement, modifiers)) = result {
             // Memory safety invariants
@@ -204,7 +214,11 @@ fn fuzz_extract_transliteration_ast_invariants() {
     ) -> Result<(), proptest::test_runner::TestCaseError> {
         let result = std::panic::catch_unwind(|| extract_transliteration_parts(&input));
 
-        prop_assert!(result.is_ok(), "extract_transliteration_parts panicked on: {:?}", input);
+        prop_assert!(
+            result.is_ok(),
+            "extract_transliteration_parts panicked on: {:?}",
+            input
+        );
 
         if let Ok((search, replace, modifiers)) = result {
             // AST consistency invariants
@@ -301,7 +315,11 @@ fn fuzz_quote_parser_extreme_stress() {
 
         // Test extract_regex_parts
         let result = std::panic::catch_unwind(|| extract_regex_parts(&input));
-        prop_assert!(result.is_ok(), "extract_regex_parts panicked on extreme input: {:?}", input);
+        prop_assert!(
+            result.is_ok(),
+            "extract_regex_parts panicked on extreme input: {:?}",
+            input
+        );
         if let Ok((output1, output2, output3)) = result {
             prop_assert!(
                 output1.len() <= input.len() * 10,
@@ -451,7 +469,11 @@ print "Done\n";
             parser.parse()
         });
 
-        prop_assert!(result.is_ok(), "Parser crashed on quote construct integration: {:?}", input);
+        prop_assert!(
+            result.is_ok(),
+            "Parser crashed on quote construct integration: {:?}",
+            input
+        );
 
         // Collapse nested if let per clippy suggestion
         if let Ok(Ok(ast)) = result {

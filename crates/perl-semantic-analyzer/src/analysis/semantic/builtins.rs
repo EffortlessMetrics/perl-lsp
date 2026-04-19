@@ -14,7 +14,10 @@ pub struct BuiltinDoc {
 ///
 /// Returns `true` if the name is a control-flow keyword like `next`, `last`, etc.
 pub(super) fn is_control_keyword(name: &str) -> bool {
-    matches!(name, "next" | "last" | "redo" | "goto" | "return" | "exit" | "die")
+    matches!(
+        name,
+        "next" | "last" | "redo" | "goto" | "return" | "exit" | "die"
+    )
 }
 
 /// Check if a function name is a Perl built-in.
@@ -109,12 +112,18 @@ pub(super) fn is_file_test_operator(op: &str) -> bool {
 pub fn get_operator_documentation(op: &str) -> Option<BuiltinDoc> {
     macro_rules! doc {
         ($signature:expr, $description:expr) => {
-            Some(BuiltinDoc { signature: $signature, description: $description })
+            Some(BuiltinDoc {
+                signature: $signature,
+                description: $description,
+            })
         };
     }
 
     match op {
-        "-e" => doc!("-e FILE\n-e", "Returns true if FILE exists. If FILE is omitted, tests `$_`."),
+        "-e" => doc!(
+            "-e FILE\n-e",
+            "Returns true if FILE exists. If FILE is omitted, tests `$_`."
+        ),
         "-f" => doc!(
             "-f FILE\n-f",
             "Returns true if FILE is a plain file. If FILE is omitted, tests `$_`."
@@ -172,7 +181,10 @@ pub fn get_operator_documentation(op: &str) -> Option<BuiltinDoc> {
             "Returns true if FILE is a named pipe (FIFO). If FILE is omitted, tests `$_`."
         ),
         "-S" => {
-            doc!("-S FILE\n-S", "Returns true if FILE is a socket. If FILE is omitted, tests `$_`.")
+            doc!(
+                "-S FILE\n-S",
+                "Returns true if FILE is a socket. If FILE is omitted, tests `$_`."
+            )
         }
         "-u" => doc!(
             "-u FILE\n-u",
@@ -202,9 +214,15 @@ pub fn get_operator_documentation(op: &str) -> Option<BuiltinDoc> {
             "-M FILE\n-M",
             "Returns the file age in days at program start, based on the file's modification time."
         ),
-        "-A" => doc!("-A FILE\n-A", "Returns the file age in days based on the last access time."),
+        "-A" => doc!(
+            "-A FILE\n-A",
+            "Returns the file age in days based on the last access time."
+        ),
         "-C" => {
-            doc!("-C FILE\n-C", "Returns the file age in days based on the last inode change time.")
+            doc!(
+                "-C FILE\n-C",
+                "Returns the file age in days based on the last inode change time."
+            )
         }
         "-b" => doc!(
             "-b FILE\n-b",
@@ -816,7 +834,10 @@ pub fn get_moose_type_documentation(type_str: &str) -> Option<BuiltinDoc> {
             description: "Synonym for Any. Used as a base for the type hierarchy.",
         }),
         // Undef / Defined
-        "Undef" => Some(BuiltinDoc { signature: "Undef", description: "Accepts only undef." }),
+        "Undef" => Some(BuiltinDoc {
+            signature: "Undef",
+            description: "Accepts only undef.",
+        }),
         "Defined" => Some(BuiltinDoc {
             signature: "Defined",
             description: "Accepts any defined value (anything that is not undef).",
@@ -852,7 +873,10 @@ pub fn get_moose_type_documentation(type_str: &str) -> Option<BuiltinDoc> {
             description: "Accepts a string that is the name of a loaded Moose role.",
         }),
         // References
-        "Ref" => Some(BuiltinDoc { signature: "Ref", description: "Accepts any reference." }),
+        "Ref" => Some(BuiltinDoc {
+            signature: "Ref",
+            description: "Accepts any reference.",
+        }),
         "ScalarRef" => Some(BuiltinDoc {
             signature: "ScalarRef[TYPE]",
             description: "Accepts a scalar reference. Optionally parametrized: ScalarRef[Int] requires the referent to satisfy Int.",
@@ -873,9 +897,10 @@ pub fn get_moose_type_documentation(type_str: &str) -> Option<BuiltinDoc> {
             signature: "RegexpRef",
             description: "Accepts a compiled regular expression reference (qr//).",
         }),
-        "GlobRef" => {
-            Some(BuiltinDoc { signature: "GlobRef", description: "Accepts a glob reference." })
-        }
+        "GlobRef" => Some(BuiltinDoc {
+            signature: "GlobRef",
+            description: "Accepts a glob reference.",
+        }),
         "FileHandle" => Some(BuiltinDoc {
             signature: "FileHandle",
             description: "Accepts an IO object or a glob reference that can be used as a filehandle.",
@@ -1003,7 +1028,10 @@ pub struct ExceptionContext {
 /// assert!(!is_exception_function("print"));
 /// ```
 pub fn is_exception_function(name: &str) -> bool {
-    matches!(name, "die" | "warn" | "croak" | "carp" | "confess" | "cluck")
+    matches!(
+        name,
+        "die" | "warn" | "croak" | "carp" | "confess" | "cluck"
+    )
 }
 
 /// Get exception context for upgrade suggestions and error variables.
@@ -1039,9 +1067,10 @@ pub fn get_exception_context(name: &str) -> Option<ExceptionContext> {
             error_variable: Some("$@".to_string()),
             preferred_alternative: None,
         }),
-        "carp" | "cluck" => {
-            Some(ExceptionContext { error_variable: None, preferred_alternative: None })
-        }
+        "carp" | "cluck" => Some(ExceptionContext {
+            error_variable: None,
+            preferred_alternative: None,
+        }),
         _ => None,
     }
 }
@@ -1318,7 +1347,10 @@ mod tests {
             "feature doc should mention specific features, got: {}",
             doc.description
         );
-        assert!(doc.version_required.is_some(), "feature pragma should have a version requirement");
+        assert!(
+            doc.version_required.is_some(),
+            "feature pragma should have a version requirement"
+        );
         Ok(())
     }
 

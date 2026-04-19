@@ -97,7 +97,13 @@ pub fn build_auto_import_edit(source: &str, module: &str) -> Option<(SourceLocat
     let insert_offset = find_use_block_end(source);
     let insert_text = format!("use {module};\n");
 
-    Some((SourceLocation { start: insert_offset, end: insert_offset }, insert_text))
+    Some((
+        SourceLocation {
+            start: insert_offset,
+            end: insert_offset,
+        },
+        insert_text,
+    ))
 }
 
 #[cfg(test)]

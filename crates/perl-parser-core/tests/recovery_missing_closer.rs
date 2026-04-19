@@ -30,7 +30,15 @@ fn parse_errors(src: &str) -> (perl_parser_core::Node, Vec<ParseError>) {
 fn count_inserted_closer(errors: &[ParseError]) -> usize {
     errors
         .iter()
-        .filter(|e| matches!(e, ParseError::Recovered { kind: RecoveryKind::InsertedCloser, .. }))
+        .filter(|e| {
+            matches!(
+                e,
+                ParseError::Recovered {
+                    kind: RecoveryKind::InsertedCloser,
+                    ..
+                }
+            )
+        })
         .count()
 }
 
@@ -322,7 +330,12 @@ fn clean_if_condition_no_recovery() {
 
 #[test]
 fn clean_inputs_produce_zero_inserted_closer() {
-    let cases = ["my $x = foo(1, 2);", "my @a = (1, 2, 3);", "my $v = $h{k};", "my $v = $a[0];"];
+    let cases = [
+        "my $x = foo(1, 2);",
+        "my @a = (1, 2, 3);",
+        "my $v = $h{k};",
+        "my $v = $a[0];",
+    ];
     for src in cases {
         let (_, errors) = parse_errors(src);
         let recovered = count_inserted_closer(&errors);

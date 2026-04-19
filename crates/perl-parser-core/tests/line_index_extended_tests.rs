@@ -38,7 +38,10 @@ fn wave2b_push_fat_arrow() -> Result<(), Box<dyn std::error::Error>> {
     let mut parser = Parser::new("push @array => $value;");
     let ast = parser.parse()?;
     let sexp = ast.to_sexp();
-    assert!(!sexp.contains("ERROR"), "push @array => $value should parse cleanly, got: {sexp}");
+    assert!(
+        !sexp.contains("ERROR"),
+        "push @array => $value should parse cleanly, got: {sexp}"
+    );
     assert!(sexp.contains("call push"), "should be a function call");
     Ok(())
 }
@@ -48,7 +51,10 @@ fn wave2b_bless_fat_arrow() -> Result<(), Box<dyn std::error::Error>> {
     let mut parser = Parser::new("bless \\%opts => $class;");
     let ast = parser.parse()?;
     let sexp = ast.to_sexp();
-    assert!(!sexp.contains("ERROR"), "bless \\%opts => $class should parse cleanly, got: {sexp}");
+    assert!(
+        !sexp.contains("ERROR"),
+        "bless \\%opts => $class should parse cleanly, got: {sexp}"
+    );
     Ok(())
 }
 
@@ -69,7 +75,10 @@ fn wave2b_push_comma_regression() -> Result<(), Box<dyn std::error::Error>> {
     let mut parser = Parser::new("push @array, $value;");
     let ast = parser.parse()?;
     let sexp = ast.to_sexp();
-    assert!(!sexp.contains("ERROR"), "push @array, $value should still work, got: {sexp}");
+    assert!(
+        !sexp.contains("ERROR"),
+        "push @array, $value should still work, got: {sexp}"
+    );
     assert!(sexp.contains("call push"), "should be a function call");
     Ok(())
 }
@@ -79,7 +88,10 @@ fn wave2b_indirect_call_regression() -> Result<(), Box<dyn std::error::Error>> {
     let mut parser = Parser::new("print $fh \"data\";");
     let ast = parser.parse()?;
     let sexp = ast.to_sexp();
-    assert!(!sexp.contains("ERROR"), "print $fh \"data\" should parse cleanly, got: {sexp}");
+    assert!(
+        !sexp.contains("ERROR"),
+        "print $fh \"data\" should parse cleanly, got: {sexp}"
+    );
     Ok(())
 }
 
@@ -89,7 +101,10 @@ fn wave2b_hash_fat_arrow_regression() -> Result<(), Box<dyn std::error::Error>> 
     let mut parser = Parser::new("my %h = (key => 'value');");
     let ast = parser.parse()?;
     let sexp = ast.to_sexp();
-    assert!(!sexp.contains("ERROR"), "hash construction should still work, got: {sexp}");
+    assert!(
+        !sexp.contains("ERROR"),
+        "hash construction should still work, got: {sexp}"
+    );
     Ok(())
 }
 
@@ -98,7 +113,10 @@ fn wave2b_unshift_fat_arrow() -> Result<(), Box<dyn std::error::Error>> {
     let mut parser = Parser::new("unshift @arr => $val;");
     let ast = parser.parse()?;
     let sexp = ast.to_sexp();
-    assert!(!sexp.contains("ERROR"), "unshift @arr => $val should parse cleanly, got: {sexp}");
+    assert!(
+        !sexp.contains("ERROR"),
+        "unshift @arr => $val should parse cleanly, got: {sexp}"
+    );
     assert!(sexp.contains("call unshift"), "should be a function call");
     Ok(())
 }
@@ -141,7 +159,10 @@ fn wave2b_map_fat_arrow_separator() -> Result<(), Box<dyn std::error::Error>> {
     let mut parser = Parser::new("map { $_ * 2 } => @list;");
     let ast = parser.parse()?;
     let sexp = ast.to_sexp();
-    assert!(!sexp.contains("ERROR"), "map {{ $_ * 2 }} => @list should parse cleanly, got: {sexp}");
+    assert!(
+        !sexp.contains("ERROR"),
+        "map {{ $_ * 2 }} => @list should parse cleanly, got: {sexp}"
+    );
     Ok(())
 }
 
@@ -177,8 +198,14 @@ fn wave2b_bless_hash_literal_fat_arrow() -> Result<(), Box<dyn std::error::Error
     let mut parser = Parser::new("bless {} => $class;");
     let ast = parser.parse()?;
     let sexp = ast.to_sexp();
-    assert!(!sexp.contains("ERROR"), "bless {{}} => $class should parse cleanly, got: {sexp}");
-    assert!(sexp.contains("call bless"), "should be a bless call, got: {sexp}");
+    assert!(
+        !sexp.contains("ERROR"),
+        "bless {{}} => $class should parse cleanly, got: {sexp}"
+    );
+    assert!(
+        sexp.contains("call bless"),
+        "should be a bless call, got: {sexp}"
+    );
     Ok(())
 }
 
@@ -201,7 +228,10 @@ fn wave2b_split_regex_fat_arrow() -> Result<(), Box<dyn std::error::Error>> {
     let mut parser = Parser::new("split /,/ => @parts;");
     let ast = parser.parse()?;
     let sexp = ast.to_sexp();
-    assert!(!sexp.contains("ERROR"), "split /,/ => @parts should parse cleanly, got: {sexp}");
+    assert!(
+        !sexp.contains("ERROR"),
+        "split /,/ => @parts should parse cleanly, got: {sexp}"
+    );
     Ok(())
 }
 
@@ -211,8 +241,14 @@ fn wave2b_unshift_fat_arrow_multiple() -> Result<(), Box<dyn std::error::Error>>
     let mut parser = Parser::new("unshift @arr => 1, 2, 3;");
     let ast = parser.parse()?;
     let sexp = ast.to_sexp();
-    assert!(!sexp.contains("ERROR"), "unshift @arr => 1, 2, 3 should parse cleanly, got: {sexp}");
-    assert!(sexp.contains("call unshift"), "should be an unshift call, got: {sexp}");
+    assert!(
+        !sexp.contains("ERROR"),
+        "unshift @arr => 1, 2, 3 should parse cleanly, got: {sexp}"
+    );
+    assert!(
+        sexp.contains("call unshift"),
+        "should be an unshift call, got: {sexp}"
+    );
     Ok(())
 }
 
@@ -289,7 +325,10 @@ fn wave2c_split_regex() -> Result<(), Box<dyn std::error::Error>> {
     let mut parser = Parser::new("split /\\./, $string;");
     let ast = parser.parse()?;
     let sexp = ast.to_sexp();
-    assert!(!sexp.contains("ERROR"), "split /\\./, $string should parse cleanly, got: {sexp}");
+    assert!(
+        !sexp.contains("ERROR"),
+        "split /\\./, $string should parse cleanly, got: {sexp}"
+    );
     assert!(sexp.contains("regex"), "should contain a regex node");
     Ok(())
 }
@@ -299,7 +338,10 @@ fn wave2c_split_regex_whitespace() -> Result<(), Box<dyn std::error::Error>> {
     let mut parser = Parser::new("split /\\s+/, $cmd;");
     let ast = parser.parse()?;
     let sexp = ast.to_sexp();
-    assert!(!sexp.contains("ERROR"), "split /\\s+/, $cmd should parse cleanly, got: {sexp}");
+    assert!(
+        !sexp.contains("ERROR"),
+        "split /\\s+/, $cmd should parse cleanly, got: {sexp}"
+    );
     Ok(())
 }
 
@@ -321,7 +363,10 @@ fn wave2c_split_parens_regression() -> Result<(), Box<dyn std::error::Error>> {
     let mut parser = Parser::new("split(/\\./, $x);");
     let ast = parser.parse()?;
     let sexp = ast.to_sexp();
-    assert!(!sexp.contains("ERROR"), "split(/\\./, $x) should parse cleanly, got: {sexp}");
+    assert!(
+        !sexp.contains("ERROR"),
+        "split(/\\./, $x) should parse cleanly, got: {sexp}"
+    );
     Ok(())
 }
 
@@ -331,7 +376,10 @@ fn wave2c_split_string_regression() -> Result<(), Box<dyn std::error::Error>> {
     let mut parser = Parser::new("split ',', $csv;");
     let ast = parser.parse()?;
     let sexp = ast.to_sexp();
-    assert!(!sexp.contains("ERROR"), "split with string should still work, got: {sexp}");
+    assert!(
+        !sexp.contains("ERROR"),
+        "split with string should still work, got: {sexp}"
+    );
     Ok(())
 }
 
@@ -343,8 +391,14 @@ fn wave2c_split_regex_in_assignment_comma_pattern() -> Result<(), Box<dyn std::e
     let mut parser = Parser::new("my @p = split /,/, $s;");
     let ast = parser.parse()?;
     let sexp = ast.to_sexp();
-    assert!(!sexp.contains("ERROR"), "my @p = split /,/, $s should parse cleanly, got: {sexp}");
-    assert!(sexp.contains("regex"), "should contain a regex node, got: {sexp}");
+    assert!(
+        !sexp.contains("ERROR"),
+        "my @p = split /,/, $s should parse cleanly, got: {sexp}"
+    );
+    assert!(
+        sexp.contains("regex"),
+        "should contain a regex node, got: {sexp}"
+    );
     Ok(())
 }
 
@@ -358,7 +412,10 @@ fn wave2c_split_regex_after_return() -> Result<(), Box<dyn std::error::Error>> {
         !sexp.contains("ERROR"),
         "return split /\\s+/, $line should parse cleanly, got: {sexp}"
     );
-    assert!(sexp.contains("regex"), "should contain a regex node, got: {sexp}");
+    assert!(
+        sexp.contains("regex"),
+        "should contain a regex node, got: {sexp}"
+    );
     Ok(())
 }
 
@@ -368,8 +425,14 @@ fn wave2c_split_regex_inside_push_args() -> Result<(), Box<dyn std::error::Error
     let mut parser = Parser::new("push @r, split /;/, $v;");
     let ast = parser.parse()?;
     let sexp = ast.to_sexp();
-    assert!(!sexp.contains("ERROR"), "push @r, split /;/, $v should parse cleanly, got: {sexp}");
-    assert!(sexp.contains("regex"), "should contain a regex node, got: {sexp}");
+    assert!(
+        !sexp.contains("ERROR"),
+        "push @r, split /;/, $v should parse cleanly, got: {sexp}"
+    );
+    assert!(
+        sexp.contains("regex"),
+        "should contain a regex node, got: {sexp}"
+    );
     Ok(())
 }
 
@@ -379,8 +442,14 @@ fn wave2c_split_regex_in_for_list() -> Result<(), Box<dyn std::error::Error>> {
     let mut parser = Parser::new("for my $x (split /,/, $s) { }");
     let ast = parser.parse()?;
     let sexp = ast.to_sexp();
-    assert!(!sexp.contains("ERROR"), "for my $x (split /,/, $s) should parse cleanly, got: {sexp}");
-    assert!(sexp.contains("regex"), "should contain a regex node, got: {sexp}");
+    assert!(
+        !sexp.contains("ERROR"),
+        "for my $x (split /,/, $s) should parse cleanly, got: {sexp}"
+    );
+    assert!(
+        sexp.contains("regex"),
+        "should contain a regex node, got: {sexp}"
+    );
     Ok(())
 }
 
@@ -390,7 +459,10 @@ fn wave2c_split_regex_in_ternary() -> Result<(), Box<dyn std::error::Error>> {
     let mut parser = Parser::new("my @r = $flag ? split(/,/, $a) : split(/;/, $b);");
     let ast = parser.parse()?;
     let sexp = ast.to_sexp();
-    assert!(!sexp.contains("ERROR"), "ternary with split should parse cleanly, got: {sexp}");
+    assert!(
+        !sexp.contains("ERROR"),
+        "ternary with split should parse cleanly, got: {sexp}"
+    );
     Ok(())
 }
 
@@ -413,7 +485,10 @@ fn wave2c_split_regex_in_array_ref() -> Result<(), Box<dyn std::error::Error>> {
     let mut parser = Parser::new("my $r = [split /,/, $s];");
     let ast = parser.parse()?;
     let sexp = ast.to_sexp();
-    assert!(!sexp.contains("ERROR"), "[split /,/, $s] should parse cleanly, got: {sexp}");
+    assert!(
+        !sexp.contains("ERROR"),
+        "[split /,/, $s] should parse cleanly, got: {sexp}"
+    );
     Ok(())
 }
 
@@ -423,7 +498,10 @@ fn wave2c_split_regex_conditional_or() -> Result<(), Box<dyn std::error::Error>>
     let mut parser = Parser::new("my @r = split(/,/, $s) || die;");
     let ast = parser.parse()?;
     let sexp = ast.to_sexp();
-    assert!(!sexp.contains("ERROR"), "split(/,/, $s) || die should parse cleanly, got: {sexp}");
+    assert!(
+        !sexp.contains("ERROR"),
+        "split(/,/, $s) || die should parse cleanly, got: {sexp}"
+    );
     Ok(())
 }
 
@@ -433,7 +511,10 @@ fn wave2c_split_regex_three_args() -> Result<(), Box<dyn std::error::Error>> {
     let mut parser = Parser::new("my @p = split /,/, $s, 3;");
     let ast = parser.parse()?;
     let sexp = ast.to_sexp();
-    assert!(!sexp.contains("ERROR"), "split /,/, $s, 3 should parse cleanly, got: {sexp}");
+    assert!(
+        !sexp.contains("ERROR"),
+        "split /,/, $s, 3 should parse cleanly, got: {sexp}"
+    );
     Ok(())
 }
 
@@ -443,7 +524,10 @@ fn wave2c_split_regex_no_parens_method_chain() -> Result<(), Box<dyn std::error:
     let mut parser = Parser::new("my $count = scalar(split /,/, $s);");
     let ast = parser.parse()?;
     let sexp = ast.to_sexp();
-    assert!(!sexp.contains("ERROR"), "scalar(split /,/, $s) should parse cleanly, got: {sexp}");
+    assert!(
+        !sexp.contains("ERROR"),
+        "scalar(split /,/, $s) should parse cleanly, got: {sexp}"
+    );
     Ok(())
 }
 
@@ -466,7 +550,10 @@ fn wave2d_push_deref_simple() -> Result<(), Box<dyn std::error::Error>> {
     let mut parser = Parser::new("push @{$arr}, 1;");
     let ast = parser.parse()?;
     let sexp = ast.to_sexp();
-    assert!(!sexp.contains("ERROR"), "push @{{$arr}}, 1 should parse cleanly, got: {sexp}");
+    assert!(
+        !sexp.contains("ERROR"),
+        "push @{{$arr}}, 1 should parse cleanly, got: {sexp}"
+    );
     Ok(())
 }
 
@@ -487,7 +574,10 @@ fn wave2d_simple_modifier_regression() -> Result<(), Box<dyn std::error::Error>>
     let mut parser = Parser::new("print $msg unless $quiet;");
     let ast = parser.parse()?;
     let sexp = ast.to_sexp();
-    assert!(!sexp.contains("ERROR"), "print $msg unless $quiet should parse cleanly, got: {sexp}");
+    assert!(
+        !sexp.contains("ERROR"),
+        "print $msg unless $quiet should parse cleanly, got: {sexp}"
+    );
     Ok(())
 }
 
@@ -496,7 +586,10 @@ fn wave2d_do_thing_for_list() -> Result<(), Box<dyn std::error::Error>> {
     let mut parser = Parser::new("do_thing() for @list;");
     let ast = parser.parse()?;
     let sexp = ast.to_sexp();
-    assert!(!sexp.contains("ERROR"), "do_thing() for @list should parse cleanly, got: {sexp}");
+    assert!(
+        !sexp.contains("ERROR"),
+        "do_thing() for @list should parse cleanly, got: {sexp}"
+    );
     Ok(())
 }
 

@@ -10,8 +10,14 @@ fn pod_comment_variant() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn kind_name_for_all_variants() -> Result<(), Box<dyn std::error::Error>> {
-    assert_eq!(Trivia::Whitespace("  ".to_string()).kind_name(), "whitespace");
-    assert_eq!(Trivia::LineComment("# comment".to_string()).kind_name(), "comment");
+    assert_eq!(
+        Trivia::Whitespace("  ".to_string()).kind_name(),
+        "whitespace"
+    );
+    assert_eq!(
+        Trivia::LineComment("# comment".to_string()).kind_name(),
+        "comment"
+    );
     assert_eq!(Trivia::PodComment("=pod".to_string()).kind_name(), "pod");
     assert_eq!(Trivia::Newline.kind_name(), "newline");
     Ok(())

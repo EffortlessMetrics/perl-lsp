@@ -20,7 +20,11 @@ fn assert_no_error_nodes(node: &Node) {
     assert!(
         !matches!(&node.kind, NodeKind::Error { .. }),
         "Found Error node in AST: {}",
-        if let NodeKind::Error { message, .. } = &node.kind { message.as_str() } else { "" }
+        if let NodeKind::Error { message, .. } = &node.kind {
+            message.as_str()
+        } else {
+            ""
+        }
     );
     visit_children(node, assert_no_error_nodes);
 }
@@ -33,7 +37,11 @@ fn visit_children<F: FnMut(&Node)>(node: &Node, mut f: F) {
                 f(s);
             }
         }
-        NodeKind::VariableDeclaration { variable, initializer, .. } => {
+        NodeKind::VariableDeclaration {
+            variable,
+            initializer,
+            ..
+        } => {
             f(variable);
             if let Some(init) = initializer {
                 f(init);
@@ -50,7 +58,11 @@ fn visit_children<F: FnMut(&Node)>(node: &Node, mut f: F) {
         NodeKind::Unary { operand, .. } => {
             f(operand);
         }
-        NodeKind::Ternary { condition, then_expr, else_expr } => {
+        NodeKind::Ternary {
+            condition,
+            then_expr,
+            else_expr,
+        } => {
             f(condition);
             f(then_expr);
             f(else_expr);
@@ -69,7 +81,12 @@ fn visit_children<F: FnMut(&Node)>(node: &Node, mut f: F) {
                 f(a);
             }
         }
-        NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
+        NodeKind::If {
+            condition,
+            then_branch,
+            elsif_branches,
+            else_branch,
+        } => {
             f(condition);
             f(then_branch);
             for (cond, body) in elsif_branches {

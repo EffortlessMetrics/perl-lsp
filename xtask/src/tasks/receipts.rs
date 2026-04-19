@@ -40,7 +40,12 @@ pub struct ReceiptsConfig {
 
 impl Default for ReceiptsConfig {
     fn default() -> Self {
-        Self { tests_only: false, docs_only: false, output_dir: None, test_threads: 2 }
+        Self {
+            tests_only: false,
+            docs_only: false,
+            output_dir: None,
+            test_threads: 2,
+        }
     }
 }
 
@@ -81,9 +86,16 @@ pub fn run(config: ReceiptsConfig) -> Result<()> {
     let root = project_root()?;
     std::env::set_current_dir(&root).context("Failed to change to project root")?;
 
-    let artifacts_dir = config.output_dir.clone().unwrap_or_else(|| root.join("artifacts"));
-    fs::create_dir_all(&artifacts_dir)
-        .with_context(|| format!("Failed to create artifacts dir: {}", artifacts_dir.display()))?;
+    let artifacts_dir = config
+        .output_dir
+        .clone()
+        .unwrap_or_else(|| root.join("artifacts"));
+    fs::create_dir_all(&artifacts_dir).with_context(|| {
+        format!(
+            "Failed to create artifacts dir: {}",
+            artifacts_dir.display()
+        )
+    })?;
 
     let test_summary = if !config.docs_only {
         println!("=== Generating Test Receipts ===");
@@ -129,11 +141,26 @@ pub fn run(config: ReceiptsConfig) -> Result<()> {
     println!();
     println!("=== Receipt Generation Complete ===");
     println!("Artifacts:");
-    println!("  - {}/test-output.txt     (raw test output)", artifacts_dir.display());
-    println!("  - {}/test-summary.json   (parsed test metrics)", artifacts_dir.display());
-    println!("  - {}/rustdoc.log         (doc build output)", artifacts_dir.display());
-    println!("  - {}/doc-summary.json    (doc metrics)", artifacts_dir.display());
-    println!("  - {}/state.json          (consolidated truth)", artifacts_dir.display());
+    println!(
+        "  - {}/test-output.txt     (raw test output)",
+        artifacts_dir.display()
+    );
+    println!(
+        "  - {}/test-summary.json   (parsed test metrics)",
+        artifacts_dir.display()
+    );
+    println!(
+        "  - {}/rustdoc.log         (doc build output)",
+        artifacts_dir.display()
+    );
+    println!(
+        "  - {}/doc-summary.json    (doc metrics)",
+        artifacts_dir.display()
+    );
+    println!(
+        "  - {}/state.json          (consolidated truth)",
+        artifacts_dir.display()
+    );
 
     Ok(())
 }
@@ -177,7 +204,10 @@ fn generate_test_receipts(artifacts_dir: &Path, test_threads: u32) -> Result<Tes
 
     // Write raw output
     fs::write(&test_output_path, output.as_bytes()).with_context(|| {
-        format!("Failed to write test output to {}", test_output_path.display())
+        format!(
+            "Failed to write test output to {}",
+            test_output_path.display()
+        )
     })?;
 
     let elapsed = start.elapsed();
@@ -194,7 +224,10 @@ fn generate_test_receipts(artifacts_dir: &Path, test_threads: u32) -> Result<Tes
     let summary_json =
         serde_json::to_string_pretty(&summary).context("Failed to serialize test summary")?;
     fs::write(&test_summary_path, &summary_json).with_context(|| {
-        format!("Failed to write test summary to {}", test_summary_path.display())
+        format!(
+            "Failed to write test summary to {}",
+            test_summary_path.display()
+        )
     })?;
     println!("Test summary saved to {}", test_summary_path.display());
 
@@ -232,8 +265,11 @@ fn parse_test_output(output: &str) -> TestSummary {
     let active_tests = total_passed + total_failed;
     let total_all_tests = active_tests + total_ignored;
 
-    let pass_rate_active =
-        if active_tests > 0 { (total_passed as f64 / active_tests as f64) * 100.0 } else { 0.0 };
+    let pass_rate_active = if active_tests > 0 {
+        (total_passed as f64 / active_tests as f64) * 100.0
+    } else {
+        0.0
+    };
 
     let pass_rate_total = if total_all_tests > 0 {
         (total_passed as f64 / total_all_tests as f64) * 100.0
@@ -279,24 +315,36 @@ fn generate_doc_receipts(artifacts_dir: &Path) -> Result<DocSummary> {
     let doc_summary_path = artifacts_dir.join("doc-summary.json");
 
     // Run cargo doc, capturing stderr (where warnings go)
-    let result = cmd!("cargo", "+stable", "doc", "--no-deps", "--workspace", "--exclude", "xtask")
-        .stdout_capture()
-        .stderr_capture()
-        .unchecked()
-        .run()
-        .context("Failed to execute cargo doc")?;
+    let result = cmd!(
+        "cargo",
+        "+stable",
+        "doc",
+        "--no-deps",
+        "--workspace",
+        "--exclude",
+        "xtask"
+    )
+    .stdout_capture()
+    .stderr_capture()
+    .unchecked()
+    .run()
+    .context("Failed to execute cargo doc")?;
 
     let stderr = String::from_utf8_lossy(&result.stderr);
 
     // Write rustdoc log
     fs::write(&rustdoc_log_path, stderr.as_bytes()).with_context(|| {
-        format!("Failed to write rustdoc log to {}", rustdoc_log_path.display())
+        format!(
+            "Failed to write rustdoc log to {}",
+            rustdoc_log_path.display()
+        )
     })?;
 
     // Count "warning: missing documentation" lines
-    let missing_docs =
-        stderr.lines().filter(|line| line.starts_with("warning: missing documentation")).count()
-            as u64;
+    let missing_docs = stderr
+        .lines()
+        .filter(|line| line.starts_with("warning: missing documentation"))
+        .count() as u64;
 
     let summary = DocSummary { missing_docs };
 
@@ -304,7 +352,10 @@ fn generate_doc_receipts(artifacts_dir: &Path) -> Result<DocSummary> {
     let summary_json =
         serde_json::to_string_pretty(&summary).context("Failed to serialize doc summary")?;
     fs::write(&doc_summary_path, &summary_json).with_context(|| {
-        format!("Failed to write doc summary to {}", doc_summary_path.display())
+        format!(
+            "Failed to write doc summary to {}",
+            doc_summary_path.display()
+        )
     })?;
     println!("Doc summary saved to {}", doc_summary_path.display());
 
@@ -320,7 +371,12 @@ fn generate_consolidated_state(tests: TestSummary, docs: DocSummary) -> Result<C
     let version = extract_version()?;
     let generated_at = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string();
 
-    Ok(ConsolidatedState { version, tests, docs, generated_at })
+    Ok(ConsolidatedState {
+        version,
+        tests,
+        docs,
+        generated_at,
+    })
 }
 
 /// Extract perl-parser version from cargo metadata
@@ -344,7 +400,10 @@ fn extract_version() -> Result<String> {
     for package in packages {
         let name = package.get("name").and_then(|n| n.as_str()).unwrap_or("");
         if name == "perl-parser" {
-            let version = package.get("version").and_then(|v| v.as_str()).unwrap_or("unknown");
+            let version = package
+                .get("version")
+                .and_then(|v| v.as_str())
+                .unwrap_or("unknown");
             return Ok(version.to_string());
         }
     }

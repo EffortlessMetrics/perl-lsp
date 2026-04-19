@@ -137,19 +137,34 @@ my $cloned_data = deep_clone($data);
     let ast = must(parser.parse());
 
     // Verify hash literals
-    assert!(has_node_kind(&ast, "HashLiteral"), "Should have hash literals");
+    assert!(
+        has_node_kind(&ast, "HashLiteral"),
+        "Should have hash literals"
+    );
 
     // Verify array literals
-    assert!(has_node_kind(&ast, "ArrayLiteral"), "Should have array literals");
+    assert!(
+        has_node_kind(&ast, "ArrayLiteral"),
+        "Should have array literals"
+    );
 
     // Verify dereferencing operations (binary operations with {} and [])
-    assert!(has_node_kind(&ast, "Binary"), "Should have binary operations for dereferencing");
+    assert!(
+        has_node_kind(&ast, "Binary"),
+        "Should have binary operations for dereferencing"
+    );
 
     // Verify reference operations (unary with \)
-    assert!(has_node_kind(&ast, "Unary"), "Should have unary operations for references");
+    assert!(
+        has_node_kind(&ast, "Unary"),
+        "Should have unary operations for references"
+    );
 
     // Verify variable declarations
-    assert!(has_node_kind(&ast, "VariableDeclaration"), "Should have variable declarations");
+    assert!(
+        has_node_kind(&ast, "VariableDeclaration"),
+        "Should have variable declarations"
+    );
 }
 
 /// Test VariableListDeclaration with nested structures and function calls
@@ -297,16 +312,28 @@ sub process_text {
     );
 
     // Verify function calls in initializers
-    assert!(has_node_kind(&ast, "FunctionCall"), "Should have function calls");
+    assert!(
+        has_node_kind(&ast, "FunctionCall"),
+        "Should have function calls"
+    );
 
     // Verify method calls
-    assert!(has_node_kind(&ast, "MethodCall"), "Should have method calls");
+    assert!(
+        has_node_kind(&ast, "MethodCall"),
+        "Should have method calls"
+    );
 
     // Verify array literals in initializers
-    assert!(has_node_kind(&ast, "ArrayLiteral"), "Should have array literals");
+    assert!(
+        has_node_kind(&ast, "ArrayLiteral"),
+        "Should have array literals"
+    );
 
     // Verify hash literals in initializers
-    assert!(has_node_kind(&ast, "HashLiteral"), "Should have hash literals");
+    assert!(
+        has_node_kind(&ast, "HashLiteral"),
+        "Should have hash literals"
+    );
 
     // Verify regex operations
     assert!(has_node_kind(&ast, "Match"), "Should have match operations");
@@ -472,14 +499,26 @@ sub load_config {
     assert!(has_node_kind(&ast, "Untie"), "Should have untie operations");
 
     // Verify typeglob operations (for filehandle ties)
-    assert!(has_node_kind(&ast, "Typeglob"), "Should have typeglob operations");
+    assert!(
+        has_node_kind(&ast, "Typeglob"),
+        "Should have typeglob operations"
+    );
 
     // Verify complex data structures in tie arguments
-    assert!(has_node_kind(&ast, "HashLiteral"), "Should have hash literals in tie arguments");
-    assert!(has_node_kind(&ast, "ArrayLiteral"), "Should have array literals in tie arguments");
+    assert!(
+        has_node_kind(&ast, "HashLiteral"),
+        "Should have hash literals in tie arguments"
+    );
+    assert!(
+        has_node_kind(&ast, "ArrayLiteral"),
+        "Should have array literals in tie arguments"
+    );
 
     // Verify eval blocks for error handling
-    assert!(has_node_kind(&ast, "Eval"), "Should have eval blocks for error handling");
+    assert!(
+        has_node_kind(&ast, "Eval"),
+        "Should have eval blocks for error handling"
+    );
 }
 
 /// Test package/module interactions with symbol tables and exports
@@ -707,25 +746,43 @@ my $temp_var_value = $TempNamespace::temp_var;
     let ast = must(parser.parse());
 
     // Verify package declarations
-    assert!(has_node_kind(&ast, "Package"), "Should have package declarations");
+    assert!(
+        has_node_kind(&ast, "Package"),
+        "Should have package declarations"
+    );
 
     // Verify our variable declarations
-    assert!(has_node_kind(&ast, "VariableDeclaration"), "Should have variable declarations");
+    assert!(
+        has_node_kind(&ast, "VariableDeclaration"),
+        "Should have variable declarations"
+    );
 
     // Verify subroutine declarations
-    assert!(has_node_kind(&ast, "Subroutine"), "Should have subroutine declarations");
+    assert!(
+        has_node_kind(&ast, "Subroutine"),
+        "Should have subroutine declarations"
+    );
 
     // Verify use statements
     assert!(has_node_kind(&ast, "Use"), "Should have use statements");
 
     // Verify typeglob operations
-    assert!(has_node_kind(&ast, "Typeglob"), "Should have typeglob operations");
+    assert!(
+        has_node_kind(&ast, "Typeglob"),
+        "Should have typeglob operations"
+    );
 
     // Verify function calls
-    assert!(has_node_kind(&ast, "FunctionCall"), "Should have function calls");
+    assert!(
+        has_node_kind(&ast, "FunctionCall"),
+        "Should have function calls"
+    );
 
     // Verify method calls
-    assert!(has_node_kind(&ast, "MethodCall"), "Should have method calls");
+    assert!(
+        has_node_kind(&ast, "MethodCall"),
+        "Should have method calls"
+    );
 }
 
 /// Test complex reference and dereferencing patterns
@@ -878,18 +935,36 @@ my $chain_result = $$$ref_chain->{users}[0]{data}{metadata}{level};
     let ast = must(parser.parse());
 
     // Verify unary operations (reference creation)
-    assert!(has_node_kind(&ast, "Unary"), "Should have unary operations for references");
+    assert!(
+        has_node_kind(&ast, "Unary"),
+        "Should have unary operations for references"
+    );
 
     // Verify binary operations (dereferencing)
-    assert!(has_node_kind(&ast, "Binary"), "Should have binary operations for dereferencing");
+    assert!(
+        has_node_kind(&ast, "Binary"),
+        "Should have binary operations for dereferencing"
+    );
 
     // Verify anonymous structures
-    assert!(has_node_kind(&ast, "ArrayLiteral"), "Should have array literals");
-    assert!(has_node_kind(&ast, "HashLiteral"), "Should have hash literals");
+    assert!(
+        has_node_kind(&ast, "ArrayLiteral"),
+        "Should have array literals"
+    );
+    assert!(
+        has_node_kind(&ast, "HashLiteral"),
+        "Should have hash literals"
+    );
 
     // Verify subroutine declarations
-    assert!(has_node_kind(&ast, "Subroutine"), "Should have subroutine declarations");
+    assert!(
+        has_node_kind(&ast, "Subroutine"),
+        "Should have subroutine declarations"
+    );
 
     // Verify typeglob operations
-    assert!(has_node_kind(&ast, "Typeglob"), "Should have typeglob operations");
+    assert!(
+        has_node_kind(&ast, "Typeglob"),
+        "Should have typeglob operations"
+    );
 }

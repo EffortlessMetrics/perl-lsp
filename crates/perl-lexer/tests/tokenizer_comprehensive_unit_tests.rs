@@ -306,7 +306,11 @@ fn token_stream_word_operators() -> Result<(), Box<dyn std::error::Error>> {
         ("cmp", TokenKind::StringCompare),
     ] {
         let mut s = TokenStream::new(src);
-        assert_eq!(must(s.peek()).kind, expected, "word op mismatch for `{src}`");
+        assert_eq!(
+            must(s.peek()).kind,
+            expected,
+            "word op mismatch for `{src}`"
+        );
     }
     Ok(())
 }
@@ -540,7 +544,11 @@ fn token_stream_collect_all_tokens() -> Result<(), Box<dyn std::error::Error>> {
         kinds.push(t.kind);
     }
     // Expect at least: My, ScalarSigil, Identifier, Assign, Number, Semicolon
-    assert!(kinds.len() >= 5, "expected at least 5 tokens, got {}", kinds.len());
+    assert!(
+        kinds.len() >= 5,
+        "expected at least 5 tokens, got {}",
+        kinds.len()
+    );
     assert_eq!(kinds[0], TokenKind::My);
     Ok(())
 }
@@ -629,7 +637,10 @@ fn position_tracker_wrap_token() -> Result<(), Box<dyn std::error::Error>> {
 fn trivia_as_str() -> Result<(), Box<dyn std::error::Error>> {
     assert_eq!(Trivia::Whitespace("  ".to_string()).as_str(), "  ");
     assert_eq!(Trivia::LineComment("# hi".to_string()).as_str(), "# hi");
-    assert_eq!(Trivia::PodComment("=pod\n=cut".to_string()).as_str(), "=pod\n=cut");
+    assert_eq!(
+        Trivia::PodComment("=pod\n=cut".to_string()).as_str(),
+        "=pod\n=cut"
+    );
     assert_eq!(Trivia::Newline.as_str(), "\n");
     Ok(())
 }
@@ -662,7 +673,11 @@ fn trivia_token_new() -> Result<(), Box<dyn std::error::Error>> {
 fn trivia_lexer_whitespace_before_token() -> Result<(), Box<dyn std::error::Error>> {
     let mut lexer = TriviaLexer::new("   42".to_string());
     let (token, trivia) = must_some(lexer.next_token_with_trivia());
-    assert!(trivia.iter().any(|t| matches!(&t.trivia, Trivia::Whitespace(_))));
+    assert!(
+        trivia
+            .iter()
+            .any(|t| matches!(&t.trivia, Trivia::Whitespace(_)))
+    );
     assert!(!matches!(token.token_type, perl_lexer::TokenType::EOF));
     Ok(())
 }
@@ -671,7 +686,11 @@ fn trivia_lexer_whitespace_before_token() -> Result<(), Box<dyn std::error::Erro
 fn trivia_lexer_comment_before_token() -> Result<(), Box<dyn std::error::Error>> {
     let mut lexer = TriviaLexer::new("# comment\n42".to_string());
     let (_token, trivia) = must_some(lexer.next_token_with_trivia());
-    assert!(trivia.iter().any(|t| matches!(&t.trivia, Trivia::LineComment(_))));
+    assert!(
+        trivia
+            .iter()
+            .any(|t| matches!(&t.trivia, Trivia::LineComment(_)))
+    );
     Ok(())
 }
 
@@ -688,7 +707,11 @@ fn trivia_lexer_pod_trivia() -> Result<(), Box<dyn std::error::Error>> {
     let src = "=head1 NAME\n\nStuff\n\n=cut\nmy $x;".to_string();
     let mut lexer = TriviaLexer::new(src);
     let (_token, trivia) = must_some(lexer.next_token_with_trivia());
-    assert!(trivia.iter().any(|t| matches!(&t.trivia, Trivia::PodComment(_))));
+    assert!(
+        trivia
+            .iter()
+            .any(|t| matches!(&t.trivia, Trivia::PodComment(_)))
+    );
     Ok(())
 }
 
@@ -741,7 +764,10 @@ fn trivia_preserving_parser_basic() -> Result<(), Box<dyn std::error::Error>> {
     let parser = TriviaPreservingParser::new("my $x = 1;".to_string());
     let result = parser.parse();
     // Should produce a Program node
-    assert!(matches!(&result.node.kind, perl_ast_v2::NodeKind::Program { .. }));
+    assert!(matches!(
+        &result.node.kind,
+        perl_ast_v2::NodeKind::Program { .. }
+    ));
     Ok(())
 }
 
@@ -749,7 +775,10 @@ fn trivia_preserving_parser_basic() -> Result<(), Box<dyn std::error::Error>> {
 fn trivia_preserving_parser_empty_source() -> Result<(), Box<dyn std::error::Error>> {
     let parser = TriviaPreservingParser::new(String::new());
     let result = parser.parse();
-    assert!(matches!(&result.node.kind, perl_ast_v2::NodeKind::Program { .. }));
+    assert!(matches!(
+        &result.node.kind,
+        perl_ast_v2::NodeKind::Program { .. }
+    ));
     Ok(())
 }
 
@@ -758,11 +787,19 @@ fn trivia_preserving_parser_comment_only() -> Result<(), Box<dyn std::error::Err
     let parser = TriviaPreservingParser::new("# just a comment\n".to_string());
     let result = parser.parse();
     // Should still produce a valid program
-    assert!(matches!(&result.node.kind, perl_ast_v2::NodeKind::Program { .. }));
+    assert!(matches!(
+        &result.node.kind,
+        perl_ast_v2::NodeKind::Program { .. }
+    ));
     // Leading trivia should contain the comment
-    let has_comment =
-        result.leading_trivia.iter().any(|t| matches!(&t.trivia, Trivia::LineComment(_)));
-    assert!(has_comment, "comment-only source should capture comment as trivia");
+    let has_comment = result
+        .leading_trivia
+        .iter()
+        .any(|t| matches!(&t.trivia, Trivia::LineComment(_)));
+    assert!(
+        has_comment,
+        "comment-only source should capture comment as trivia"
+    );
     Ok(())
 }
 
@@ -772,7 +809,11 @@ fn trivia_preserving_parser_multiple_statements() -> Result<(), Box<dyn std::err
     let parser = TriviaPreservingParser::new(src);
     let result = parser.parse();
     if let perl_ast_v2::NodeKind::Program { statements } = &result.node.kind {
-        assert!(statements.len() >= 2, "expected >=2 statements, got {}", statements.len());
+        assert!(
+            statements.len() >= 2,
+            "expected >=2 statements, got {}",
+            statements.len()
+        );
     }
     Ok(())
 }
@@ -783,7 +824,11 @@ fn trivia_preserving_parser_shebang_and_code() -> Result<(), Box<dyn std::error:
     let parser = TriviaPreservingParser::new(src);
     let result = parser.parse();
     let has_shebang = result.leading_trivia.iter().any(|t| {
-        if let Trivia::LineComment(text) = &t.trivia { text.starts_with("#!") } else { false }
+        if let Trivia::LineComment(text) = &t.trivia {
+            text.starts_with("#!")
+        } else {
+            false
+        }
     });
     assert!(has_shebang, "should detect shebang line as trivia");
     Ok(())
@@ -794,7 +839,10 @@ fn trivia_preserving_parser_pod_in_code() -> Result<(), Box<dyn std::error::Erro
     let src = "=head1 NAME\n\nFoo\n\n=cut\n\nmy $x = 1;\n".to_string();
     let parser = TriviaPreservingParser::new(src);
     let result = parser.parse();
-    let has_pod = result.leading_trivia.iter().any(|t| matches!(&t.trivia, Trivia::PodComment(_)));
+    let has_pod = result
+        .leading_trivia
+        .iter()
+        .any(|t| matches!(&t.trivia, Trivia::PodComment(_)));
     assert!(has_pod, "should detect POD as trivia");
     Ok(())
 }
@@ -808,7 +856,10 @@ fn format_with_trivia_includes_leading() -> Result<(), Box<dyn std::error::Error
     let parser = TriviaPreservingParser::new("# hello\nmy $x;".to_string());
     let result = parser.parse();
     let formatted = perl_parser_core::trivia_parser::format_with_trivia(&result);
-    assert!(formatted.contains("# hello"), "formatted output should contain leading comment");
+    assert!(
+        formatted.contains("# hello"),
+        "formatted output should contain leading comment"
+    );
     Ok(())
 }
 
@@ -931,7 +982,10 @@ fn token_stream_mixed_constructs() -> Result<(), Box<dyn std::error::Error>> {
         }
         token_count += 1;
     }
-    assert!(token_count > 20, "complex source should produce many tokens");
+    assert!(
+        token_count > 20,
+        "complex source should produce many tokens"
+    );
     Ok(())
 }
 
@@ -1048,7 +1102,10 @@ fn format_with_trivia_empty() -> Result<(), Box<dyn std::error::Error>> {
     let result = parser.parse();
     let formatted = perl_parser_core::trivia_parser::format_with_trivia(&result);
     // Should not panic or produce garbage
-    assert!(formatted.contains("Program"), "should contain Program node repr");
+    assert!(
+        formatted.contains("Program"),
+        "should contain Program node repr"
+    );
     Ok(())
 }
 
@@ -1219,7 +1276,11 @@ fn token_stream_double_colon() -> Result<(), Box<dyn std::error::Error>> {
     // Verify it produces valid tokens without crashing
     let mut s = TokenStream::new("Foo::Bar");
     let t = must(s.next());
-    assert_eq!(t.kind, TokenKind::Identifier, "qualified name should be an identifier");
+    assert_eq!(
+        t.kind,
+        TokenKind::Identifier,
+        "qualified name should be an identifier"
+    );
     Ok(())
 }
 
@@ -1441,7 +1502,10 @@ fn token_stream_token_positions_are_monotonic() -> Result<(), Box<dyn std::error
         if t.kind == TokenKind::Eof {
             break;
         }
-        assert!(t.start >= prev_start, "token starts should be non-decreasing");
+        assert!(
+            t.start >= prev_start,
+            "token starts should be non-decreasing"
+        );
         assert!(t.end > t.start, "token end should be after start");
         prev_start = t.start;
     }
@@ -1464,7 +1528,10 @@ fn token_stream_peek_does_not_advance() -> Result<(), Box<dyn std::error::Error>
     let mut s = TokenStream::new("if (1) { }");
     let peeked = must(s.peek()).kind;
     let consumed = must(s.next()).kind;
-    assert_eq!(peeked, consumed, "peek and next should return the same token");
+    assert_eq!(
+        peeked, consumed,
+        "peek and next should return the same token"
+    );
     Ok(())
 }
 
@@ -1791,9 +1858,15 @@ fn trivia_lexer_consecutive_comments() -> Result<(), Box<dyn std::error::Error>>
     let source = "# line 1\n# line 2\nmy $x;".to_string();
     let mut lexer = TriviaLexer::new(source);
     let (_, trivia) = must_some(lexer.next_token_with_trivia());
-    let comment_count =
-        trivia.iter().filter(|t| matches!(&t.trivia, Trivia::LineComment(_))).count();
-    assert!(comment_count >= 2, "should detect consecutive comments, got {}", comment_count);
+    let comment_count = trivia
+        .iter()
+        .filter(|t| matches!(&t.trivia, Trivia::LineComment(_)))
+        .count();
+    assert!(
+        comment_count >= 2,
+        "should detect consecutive comments, got {}",
+        comment_count
+    );
     Ok(())
 }
 
@@ -1822,7 +1895,9 @@ fn trivia_lexer_comment_only_source() -> Result<(), Box<dyn std::error::Error>> 
     if let Some((tok, trivia)) = result {
         if !matches!(tok.token_type, perl_lexer::TokenType::EOF) {
             // If not EOF, the trivia should have the comment
-            let has_comment = trivia.iter().any(|t| matches!(&t.trivia, Trivia::LineComment(_)));
+            let has_comment = trivia
+                .iter()
+                .any(|t| matches!(&t.trivia, Trivia::LineComment(_)));
             assert!(has_comment, "comment should be in trivia");
         }
     }
@@ -1834,8 +1909,12 @@ fn trivia_lexer_mixed_whitespace_and_comments() -> Result<(), Box<dyn std::error
     let source = "  \n  # comment\n  my $x;".to_string();
     let mut lexer = TriviaLexer::new(source);
     let (_, trivia) = must_some(lexer.next_token_with_trivia());
-    let has_ws = trivia.iter().any(|t| matches!(&t.trivia, Trivia::Whitespace(_)));
-    let has_comment = trivia.iter().any(|t| matches!(&t.trivia, Trivia::LineComment(_)));
+    let has_ws = trivia
+        .iter()
+        .any(|t| matches!(&t.trivia, Trivia::Whitespace(_)));
+    let has_comment = trivia
+        .iter()
+        .any(|t| matches!(&t.trivia, Trivia::LineComment(_)));
     assert!(has_ws, "should have whitespace trivia");
     assert!(has_comment, "should have comment trivia");
     Ok(())
@@ -1880,7 +1959,10 @@ fn trivia_preserving_parser_format_roundtrip() -> Result<(), Box<dyn std::error:
     let result = parser.parse();
     let formatted = perl_parser_core::trivia_parser::format_with_trivia(&result);
     // Should include the comment in output
-    assert!(!formatted.is_empty(), "formatted output should not be empty");
+    assert!(
+        !formatted.is_empty(),
+        "formatted output should not be empty"
+    );
     Ok(())
 }
 
@@ -1941,7 +2023,11 @@ fn on_stmt_boundary_after_peek_second() -> Result<(), Box<dyn std::error::Error>
     let t = must(s.peek());
     // The lexer continues from its current position (not from the start),
     // so we just verify the boundary reset doesn't crash and returns a valid token
-    assert_ne!(t.kind, TokenKind::Unknown, "should return a valid token after boundary reset");
+    assert_ne!(
+        t.kind,
+        TokenKind::Unknown,
+        "should return a valid token after boundary reset"
+    );
     Ok(())
 }
 
@@ -1954,7 +2040,11 @@ fn on_stmt_boundary_after_peek_third() -> Result<(), Box<dyn std::error::Error>>
     s.on_stmt_boundary();
     // Boundary clears peek cache; lexer continues from its current position
     let t = must(s.peek());
-    assert_ne!(t.kind, TokenKind::Unknown, "should return a valid token after boundary reset");
+    assert_ne!(
+        t.kind,
+        TokenKind::Unknown,
+        "should return a valid token after boundary reset"
+    );
     Ok(())
 }
 
@@ -1968,7 +2058,11 @@ fn token_stream_division_after_number() -> Result<(), Box<dyn std::error::Error>
     let num = must(s.next());
     assert_eq!(num.kind, TokenKind::Number);
     let div = must(s.next());
-    assert_eq!(div.kind, TokenKind::Slash, "/ after number should be division");
+    assert_eq!(
+        div.kind,
+        TokenKind::Slash,
+        "/ after number should be division"
+    );
     Ok(())
 }
 
@@ -1981,7 +2075,10 @@ fn trivia_token_range_is_valid() -> Result<(), Box<dyn std::error::Error>> {
     use perl_position_tracking::{Position, Range};
     let start = Position::new(0, 1, 1);
     let end = Position::new(5, 1, 6);
-    let tt = TriviaToken::new(Trivia::Whitespace("     ".to_string()), Range::new(start, end));
+    let tt = TriviaToken::new(
+        Trivia::Whitespace("     ".to_string()),
+        Range::new(start, end),
+    );
     assert_eq!(tt.range.start.byte, 0);
     assert_eq!(tt.range.end.byte, 5);
     assert_eq!(tt.trivia.as_str(), "     ");

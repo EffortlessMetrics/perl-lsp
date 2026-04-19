@@ -198,8 +198,10 @@ pub fn check_missing_modules<F>(
 
     for (raw_module, start, end) in &use_statements {
         // Strip embedded version — "Foo::Bar 1.23" → "Foo::Bar"
-        let module_str =
-            raw_module.split_once(' ').map(|(name, _)| name).unwrap_or(raw_module.as_str());
+        let module_str = raw_module
+            .split_once(' ')
+            .map(|(name, _)| name)
+            .unwrap_or(raw_module.as_str());
 
         // Skip empty module names — these come from parser error-recovery nodes
         // (NodeKind::Use { module: String::new(), .. }) and would produce false positives.
@@ -208,7 +210,11 @@ pub fn check_missing_modules<F>(
         }
 
         // Skip version-only use: `use 5.010;` or `use v5.38;`
-        if module_str.chars().next().is_some_and(|c| c.is_ascii_digit() || c == 'v') {
+        if module_str
+            .chars()
+            .next()
+            .is_some_and(|c| c.is_ascii_digit() || c == 'v')
+        {
             continue;
         }
 
@@ -223,7 +229,10 @@ pub fn check_missing_modules<F>(
         }
 
         let message = if search_paths.is_empty() {
-            format!("Module '{}' not found in workspace or configured include paths", module_str)
+            format!(
+                "Module '{}' not found in workspace or configured include paths",
+                module_str
+            )
         } else {
             const MAX_SHOWN: usize = 10;
             let shown = search_paths.len().min(MAX_SHOWN);
@@ -300,20 +309,34 @@ mod tests {
             let ast = must(Parser::new(source).parse());
             let mut diags = vec![];
             check_missing_modules(&ast, source, resolver_never_finds, &[], &mut diags);
-            assert!(diags.is_empty(), "version-only use should not be flagged: {}", source);
+            assert!(
+                diags.is_empty(),
+                "version-only use should not be flagged: {}",
+                source
+            );
         }
     }
 
     #[test]
     fn core_modules_not_flagged() {
-        for module in
-            &["strict", "warnings", "Carp", "POSIX", "Scalar::Util", "FindBin", "File::Basename"]
-        {
+        for module in &[
+            "strict",
+            "warnings",
+            "Carp",
+            "POSIX",
+            "Scalar::Util",
+            "FindBin",
+            "File::Basename",
+        ] {
             let source = format!("use {};\n", module);
             let ast = must(Parser::new(&source).parse());
             let mut diags = vec![];
             check_missing_modules(&ast, &source, resolver_never_finds, &[], &mut diags);
-            assert!(diags.is_empty(), "core module {} should not be flagged", module);
+            assert!(
+                diags.is_empty(),
+                "core module {} should not be flagged",
+                module
+            );
         }
     }
 
@@ -325,7 +348,10 @@ mod tests {
         let mut diags = vec![];
         // resolver_finds_foo only returns true for "Foo::Bar" (bare, no version)
         check_missing_modules(&ast, source, resolver_finds_foo, &[], &mut diags);
-        assert!(diags.is_empty(), "versioned use should strip version before resolver lookup");
+        assert!(
+            diags.is_empty(),
+            "versioned use should strip version before resolver lookup"
+        );
     }
 
     #[test]
@@ -434,7 +460,11 @@ mod tests {
             &[],
             &mut diags,
         );
-        assert_eq!(diags.len(), 5, "five distinct missing modules should each emit PL701");
+        assert_eq!(
+            diags.len(),
+            5,
+            "five distinct missing modules should each emit PL701"
+        );
         assert_eq!(
             call_count.get(),
             5,
@@ -450,11 +480,17 @@ mod tests {
         // Construct a Program node wrapping a Use node with an empty module name.
         // This simulates what the parser emits during error recovery.
         let use_node = Node::new(
-            NodeKind::Use { module: String::new(), args: vec![], has_filter_risk: false },
+            NodeKind::Use {
+                module: String::new(),
+                args: vec![],
+                has_filter_risk: false,
+            },
             SourceLocation { start: 0, end: 4 },
         );
         let program = Node::new(
-            NodeKind::Program { statements: vec![use_node] },
+            NodeKind::Program {
+                statements: vec![use_node],
+            },
             SourceLocation { start: 0, end: 4 },
         );
         let mut diags = vec![];
@@ -490,7 +526,10 @@ mod tests {
         let source = "use My::Missing::Mod;\n";
         let ast = must(Parser::new(source).parse());
         let mut diags = vec![];
-        let paths = vec!["/usr/lib/perl5".to_string(), "/home/user/perl/lib".to_string()];
+        let paths = vec![
+            "/usr/lib/perl5".to_string(),
+            "/home/user/perl/lib".to_string(),
+        ];
         check_missing_modules(&ast, source, resolver_never_finds, &paths, &mut diags);
         assert_eq!(diags.len(), 1);
         let msg = &diags[0].message;
@@ -512,7 +551,11 @@ mod tests {
         let ast = must(Parser::new(source).parse());
         let mut diags = vec![];
         check_missing_modules(&ast, source, resolver_never_finds, &[], &mut diags);
-        assert_eq!(diags.len(), 1, "should still emit PL701 with empty search paths");
+        assert_eq!(
+            diags.len(),
+            1,
+            "should still emit PL701 with empty search paths"
+        );
         assert_eq!(diags[0].code.as_deref(), Some("PL701"));
         assert!(diags[0].message.contains("My::Missing::Mod"));
     }
@@ -573,7 +616,14 @@ mod tests {
         check_missing_modules(&ast, source, resolver_never_finds, &[], &mut diags);
         // Must not panic; if the Use node was recovered, we get PL701.
         // If recovery omitted it entirely we get 0. Either is acceptable — but not a panic.
-        let pl701_count = diags.iter().filter(|d| d.code.as_deref() == Some("PL701")).count();
-        assert!(pl701_count <= 1, "at most one PL701 for one use statement (got {})", pl701_count);
+        let pl701_count = diags
+            .iter()
+            .filter(|d| d.code.as_deref() == Some("PL701"))
+            .count();
+        assert!(
+            pl701_count <= 1,
+            "at most one PL701 for one use statement (got {})",
+            pl701_count
+        );
     }
 }

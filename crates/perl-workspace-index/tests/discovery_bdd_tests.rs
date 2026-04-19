@@ -51,7 +51,12 @@ fn given_non_git_workspace_when_discovering_then_walk_fallback_finds_perl_source
     assert_eq!(result.files.len(), 2);
     assert!(result.files.iter().any(|path| path.ends_with("app.pl")));
     assert!(result.files.iter().any(|path| path.ends_with("lib/Foo.pm")));
-    assert!(!result.files.iter().any(|path| path.to_string_lossy().contains("node_modules")));
+    assert!(
+        !result
+            .files
+            .iter()
+            .any(|path| path.to_string_lossy().contains("node_modules"))
+    );
 
     Ok(())
 }
@@ -77,8 +82,18 @@ fn given_git_workspace_when_discovering_then_git_strategy_respects_gitignore() -
 
     assert_eq!(result.method, DiscoveryMethod::Git);
     assert!(result.files.iter().any(|path| path.ends_with("script.pl")));
-    assert!(result.files.iter().any(|path| path.ends_with("lib/App/Worker.pm")));
-    assert!(!result.files.iter().any(|path| path.to_string_lossy().contains("node_modules")));
+    assert!(
+        result
+            .files
+            .iter()
+            .any(|path| path.ends_with("lib/App/Worker.pm"))
+    );
+    assert!(
+        !result
+            .files
+            .iter()
+            .any(|path| path.to_string_lossy().contains("node_modules"))
+    );
 
     Ok(())
 }
@@ -102,8 +117,18 @@ fn given_git_workspace_with_untracked_sources_when_discovering_then_git_strategy
     let result = discover_perl_files(root);
 
     assert_eq!(result.method, DiscoveryMethod::Git);
-    assert!(result.files.iter().any(|path| path.ends_with("tracked/Module.pm")));
-    assert!(result.files.iter().any(|path| path.ends_with("untracked/script.pl")));
+    assert!(
+        result
+            .files
+            .iter()
+            .any(|path| path.ends_with("tracked/Module.pm"))
+    );
+    assert!(
+        result
+            .files
+            .iter()
+            .any(|path| path.ends_with("untracked/script.pl"))
+    );
     assert!(!result.files.iter().any(|path| path.ends_with("notes.txt")));
 
     Ok(())
@@ -129,10 +154,23 @@ fn given_git_workspace_with_tracked_noise_inside_skipped_dir_when_discovering_th
 
     assert_eq!(result.method, DiscoveryMethod::Git);
     assert_eq!(result.files.len(), 1);
-    assert!(result.files.iter().any(|path| path.ends_with("lib/Kept.pm")));
-    assert!(!result.files.iter().any(|path| path.to_string_lossy().contains("target/generated")));
     assert!(
-        !result.files.iter().any(|path| path.to_string_lossy().contains("node_modules/vendor"))
+        result
+            .files
+            .iter()
+            .any(|path| path.ends_with("lib/Kept.pm"))
+    );
+    assert!(
+        !result
+            .files
+            .iter()
+            .any(|path| path.to_string_lossy().contains("target/generated"))
+    );
+    assert!(
+        !result
+            .files
+            .iter()
+            .any(|path| path.to_string_lossy().contains("node_modules/vendor"))
     );
     assert!(result.excluded_count >= 2);
 

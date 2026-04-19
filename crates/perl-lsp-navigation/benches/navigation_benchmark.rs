@@ -18,7 +18,12 @@ fn bench_find_references_variable(c: &mut Criterion) {
     let ast = parser.parse().expect("must parse");
     let offset = source.find("$count").expect("find $count");
     c.bench_function("nav_find_refs_variable", |b| {
-        b.iter(|| black_box(find_references_single_file(black_box(&ast), black_box(offset))))
+        b.iter(|| {
+            black_box(find_references_single_file(
+                black_box(&ast),
+                black_box(offset),
+            ))
+        })
     });
 }
 
@@ -27,7 +32,12 @@ fn bench_find_references_subroutine(c: &mut Criterion) {
     let ast = parser.parse().expect("must parse");
     let offset = SIMPLE_SCRIPT.find("process").expect("find process");
     c.bench_function("nav_find_refs_subroutine", |b| {
-        b.iter(|| black_box(find_references_single_file(black_box(&ast), black_box(offset))))
+        b.iter(|| {
+            black_box(find_references_single_file(
+                black_box(&ast),
+                black_box(offset),
+            ))
+        })
     });
 }
 
@@ -36,7 +46,12 @@ fn bench_find_references_large_file(c: &mut Criterion) {
     let ast = parser.parse().expect("must parse");
     let offset = LARGE_FILE.find("$shared").expect("find $shared");
     c.bench_function("nav_find_refs_large_file", |b| {
-        b.iter(|| black_box(find_references_single_file(black_box(&ast), black_box(offset))))
+        b.iter(|| {
+            black_box(find_references_single_file(
+                black_box(&ast),
+                black_box(offset),
+            ))
+        })
     });
 }
 

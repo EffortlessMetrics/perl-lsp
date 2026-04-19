@@ -54,7 +54,11 @@ impl FeatureProfileKind {
 
     /// Resolve explicit GA-lock toggle into canonical profile.
     pub const fn from_ga_lock_enabled(ga_lock_enabled: bool) -> Self {
-        if ga_lock_enabled { Self::GaLock } else { Self::Production }
+        if ga_lock_enabled {
+            Self::GaLock
+        } else {
+            Self::Production
+        }
     }
 
     /// Canonical runtime label for diagnostics and APIs.
@@ -73,8 +77,15 @@ impl FeatureProfileKind {
 
     /// Supported CLI tokens, including aliases and backward compatible forms.
     pub const fn supported_cli_profiles() -> &'static [&'static str] {
-        const PROFILE_CLI_NAMES: &[&str] =
-            &["auto", "ga-lock", "ga", "ga_lock", "prod", "production", "all"];
+        const PROFILE_CLI_NAMES: &[&str] = &[
+            "auto",
+            "ga-lock",
+            "ga",
+            "ga_lock",
+            "prod",
+            "production",
+            "all",
+        ];
 
         PROFILE_CLI_NAMES
     }
@@ -205,12 +216,18 @@ mod tests {
 
     #[test]
     fn from_ga_lock_enabled_true_yields_ga_lock() {
-        assert_eq!(FeatureProfileKind::from_ga_lock_enabled(true), FeatureProfileKind::GaLock);
+        assert_eq!(
+            FeatureProfileKind::from_ga_lock_enabled(true),
+            FeatureProfileKind::GaLock
+        );
     }
 
     #[test]
     fn from_ga_lock_enabled_false_yields_production() {
-        assert_eq!(FeatureProfileKind::from_ga_lock_enabled(false), FeatureProfileKind::Production,);
+        assert_eq!(
+            FeatureProfileKind::from_ga_lock_enabled(false),
+            FeatureProfileKind::Production,
+        );
     }
 
     #[test]
@@ -284,8 +301,10 @@ mod tests {
     #[test]
     fn feature_profile_specs_canonical_names_match_enum() {
         let specs = feature_profile_specs();
-        let expected_names: Vec<&str> =
-            FeatureProfileKind::all().iter().map(|p| p.as_str()).collect();
+        let expected_names: Vec<&str> = FeatureProfileKind::all()
+            .iter()
+            .map(|p| p.as_str())
+            .collect();
         let spec_names: Vec<&str> = specs.iter().map(|s| s.canonical).collect();
         assert_eq!(spec_names, expected_names);
     }
@@ -317,7 +336,14 @@ mod tests {
 
     #[test]
     fn all_features_have_valid_areas() {
-        let valid_areas = ["text_document", "workspace", "window", "notebook", "debug", "protocol"];
+        let valid_areas = [
+            "text_document",
+            "workspace",
+            "window",
+            "notebook",
+            "debug",
+            "protocol",
+        ];
         for feature in all_features() {
             assert!(
                 valid_areas.contains(&feature.area),
@@ -354,7 +380,10 @@ mod tests {
     fn bdd_feature_rows_sorted_by_area_then_id() {
         let rows = bdd_feature_rows();
         for window in rows.windows(2) {
-            let ordering = window[0].area.cmp(window[1].area).then(window[0].id.cmp(window[1].id));
+            let ordering = window[0]
+                .area
+                .cmp(window[1].area)
+                .then(window[0].id.cmp(window[1].id));
             assert!(
                 ordering.is_le(),
                 "BDD rows not sorted: '{}' in '{}' should come before '{}' in '{}'",
@@ -388,7 +417,10 @@ mod tests {
     #[test]
     fn compliance_percent_is_in_valid_range() {
         let pct = compliance_percent_for_grid();
-        assert!((0.0..=100.0).contains(&pct), "compliance must be 0-100, got {pct}");
+        assert!(
+            (0.0..=100.0).contains(&pct),
+            "compliance must be 0-100, got {pct}"
+        );
     }
 
     #[test]

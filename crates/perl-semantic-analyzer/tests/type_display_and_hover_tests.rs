@@ -149,7 +149,11 @@ fn test_hover_label_array() {
 
     let label = engine.hover_label_for("list");
     let label_str = label.as_deref().unwrap_or("");
-    assert!(label_str.starts_with("Array"), "Expected Array-prefixed label, got: {:?}", label);
+    assert!(
+        label_str.starts_with("Array"),
+        "Expected Array-prefixed label, got: {:?}",
+        label
+    );
 }
 
 /// After inferring `my %h = (a => 1)`, `hover_label_for("h")` starts with "Hash".
@@ -163,7 +167,11 @@ fn test_hover_label_hash() {
 
     let label = engine.hover_label_for("h");
     let label_str = label.as_deref().unwrap_or("");
-    assert!(label_str.starts_with("Hash"), "Expected Hash-prefixed label, got: {:?}", label);
+    assert!(
+        label_str.starts_with("Hash"),
+        "Expected Hash-prefixed label, got: {:?}",
+        label
+    );
 }
 
 /// Unknown variable returns `None`.

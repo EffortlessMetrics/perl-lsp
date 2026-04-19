@@ -331,7 +331,10 @@ fn formatting_options_clone() {
     let cloned = opts.clone();
     assert_eq!(cloned.tab_size, opts.tab_size);
     assert_eq!(cloned.insert_spaces, opts.insert_spaces);
-    assert_eq!(cloned.trim_trailing_whitespace, opts.trim_trailing_whitespace);
+    assert_eq!(
+        cloned.trim_trailing_whitespace,
+        opts.trim_trailing_whitespace
+    );
 }
 
 #[test]
@@ -405,7 +408,10 @@ fn formatted_document_construction() {
 
 #[test]
 fn formatted_document_empty_edits() {
-    let doc = FormattedDocument { text: "unchanged".to_string(), edits: vec![] };
+    let doc = FormattedDocument {
+        text: "unchanged".to_string(),
+        edits: vec![],
+    };
     assert!(doc.edits.is_empty());
     assert_eq!(doc.text, "unchanged");
 }
@@ -444,7 +450,10 @@ fn formatted_document_clone_is_independent() {
 
 #[test]
 fn formatted_document_debug() {
-    let doc = FormattedDocument { text: "hello".to_string(), edits: vec![] };
+    let doc = FormattedDocument {
+        text: "hello".to_string(),
+        edits: vec![],
+    };
     let dbg = format!("{doc:?}");
     assert!(dbg.contains("text"));
     assert!(dbg.contains("edits"));
@@ -458,7 +467,10 @@ fn formatted_document_debug() {
 fn whole_document_edit_replaces_all_content() -> Result<(), serde_json::Error> {
     let original = "sub foo {\n    return 1;\n}\n";
     let range = FormatRange::whole_document(original);
-    let edit = FormatTextEdit { range, new_text: "sub foo {\n  return 1;\n}\n".to_string() };
+    let edit = FormatTextEdit {
+        range,
+        new_text: "sub foo {\n  return 1;\n}\n".to_string(),
+    };
 
     // Verify serialization preserves camelCase
     let json = serde_json::to_string(&edit)?;

@@ -61,7 +61,10 @@ pub fn run_with_metadata(metadata: Option<serde_json::Value>) -> Result<()> {
                 .output()?;
 
             if !output.status.success() {
-                bail!("cargo metadata failed: {}", String::from_utf8_lossy(&output.stderr));
+                bail!(
+                    "cargo metadata failed: {}",
+                    String::from_utf8_lossy(&output.stderr)
+                );
             }
 
             serde_json::from_slice(&output.stdout)?
@@ -110,13 +113,19 @@ pub fn run_with_metadata(metadata: Option<serde_json::Value>) -> Result<()> {
     }
 
     if violations.is_empty() {
-        println!("Layer check passed: all {} rule(s) satisfied.", LAYER_RULES.len());
+        println!(
+            "Layer check passed: all {} rule(s) satisfied.",
+            LAYER_RULES.len()
+        );
         Ok(())
     } else {
         for v in &violations {
             eprintln!("{v}");
         }
-        bail!("Layer check failed: {} violation(s) found.", violations.len());
+        bail!(
+            "Layer check failed: {} violation(s) found.",
+            violations.len()
+        );
     }
 }
 
@@ -133,7 +142,10 @@ mod tests {
     #[test]
     fn run_passes_on_clean_workspace() {
         let result = run_with_metadata(None);
-        assert!(result.is_ok(), "layer-check should pass on the real workspace; got: {result:?}");
+        assert!(
+            result.is_ok(),
+            "layer-check should pass on the real workspace; got: {result:?}"
+        );
     }
 
     /// Synthetic metadata: `perl-diagnostics` has a dev-dependency on a

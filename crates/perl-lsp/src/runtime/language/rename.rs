@@ -35,7 +35,10 @@ impl LspServer {
                         && (token.starts_with('$')
                             || token.starts_with('@')
                             || token.starts_with('%')
-                            || token.chars().next().is_some_and(|c| c.is_alphabetic() || c == '_'))
+                            || token
+                                .chars()
+                                .next()
+                                .is_some_and(|c| c.is_alphabetic() || c == '_'))
                     {
                         // Find the token bounds
                         let (start_offset, end_offset) = self.get_token_bounds(&doc.text, offset);
@@ -143,9 +146,15 @@ impl LspServer {
     ) -> Result<Option<Value>, JsonRpcError> {
         if let Some(p) = params {
             if let (Some(uri), Some(line), Some(ch), Some(new_name)) = (
-                p.get("textDocument").and_then(|t| t.get("uri")).and_then(|s| s.as_str()),
-                p.get("position").and_then(|p| p.get("line")).and_then(|n| n.as_u64()),
-                p.get("position").and_then(|p| p.get("character")).and_then(|n| n.as_u64()),
+                p.get("textDocument")
+                    .and_then(|t| t.get("uri"))
+                    .and_then(|s| s.as_str()),
+                p.get("position")
+                    .and_then(|p| p.get("line"))
+                    .and_then(|n| n.as_u64()),
+                p.get("position")
+                    .and_then(|p| p.get("character"))
+                    .and_then(|n| n.as_u64()),
                 p.get("newName").and_then(|s| s.as_str()),
             ) {
                 if !self.is_valid_identifier(new_name) {

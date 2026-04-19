@@ -49,7 +49,10 @@ fn assert_path_rejected(
 fn passwd_single_level_traversal() -> TestResult {
     let (_tmp, ws) = workspace()?;
     let result = validate_path(Path::new("../etc/passwd"), &ws);
-    assert!(result.is_err(), "Single-level traversal to /etc/passwd must be blocked");
+    assert!(
+        result.is_err(),
+        "Single-level traversal to /etc/passwd must be blocked"
+    );
     assert_path_rejected(&result, "../etc/passwd")?;
     Ok(())
 }
@@ -58,7 +61,10 @@ fn passwd_single_level_traversal() -> TestResult {
 fn passwd_double_level_traversal() -> TestResult {
     let (_tmp, ws) = workspace()?;
     let result = validate_path(Path::new("../../etc/passwd"), &ws);
-    assert!(result.is_err(), "Double-level traversal to /etc/passwd must be blocked");
+    assert!(
+        result.is_err(),
+        "Double-level traversal to /etc/passwd must be blocked"
+    );
     assert_path_rejected(&result, "../../etc/passwd")?;
     Ok(())
 }
@@ -188,7 +194,10 @@ fn windows_backslash_traversal_system32_cmd() -> TestResult {
 #[test]
 fn windows_backslash_deep_traversal() -> TestResult {
     let (_tmp, ws) = workspace()?;
-    let result = validate_path(Path::new("..\\..\\..\\..\\windows\\system32\\config\\sam"), &ws);
+    let result = validate_path(
+        Path::new("..\\..\\..\\..\\windows\\system32\\config\\sam"),
+        &ws,
+    );
     if let Ok(ref resolved) = result {
         assert!(resolved.starts_with(&ws));
     }
@@ -203,7 +212,10 @@ fn windows_mixed_separator_traversal() -> TestResult {
     match &result {
         Err(_) => {} // rejected is fine
         Ok(resolved) => {
-            assert!(resolved.starts_with(&ws), "Mixed separator path must stay within workspace");
+            assert!(
+                resolved.starts_with(&ws),
+                "Mixed separator path must stay within workspace"
+            );
         }
     }
     Ok(())
@@ -268,7 +280,10 @@ mod symlink_attacks {
         std::os::unix::fs::symlink(Path::new("/etc/passwd"), &link)?;
 
         let result = validate_path(Path::new("passwd_link"), ws);
-        assert!(result.is_err(), "Symlink directly to /etc/passwd must be blocked");
+        assert!(
+            result.is_err(),
+            "Symlink directly to /etc/passwd must be blocked"
+        );
         Ok(())
     }
 
@@ -281,7 +296,10 @@ mod symlink_attacks {
         std::os::unix::fs::symlink(Path::new("/"), &link)?;
 
         let result = validate_path(Path::new("root_link/etc/passwd"), ws);
-        assert!(result.is_err(), "Symlink to / then traversal to /etc/passwd must be blocked");
+        assert!(
+            result.is_err(),
+            "Symlink to / then traversal to /etc/passwd must be blocked"
+        );
         Ok(())
     }
 
@@ -303,7 +321,10 @@ mod symlink_attacks {
         std::os::unix::fs::symlink(&link2, &link1)?;
 
         let result = validate_path(Path::new("link1/key.pem"), &ws);
-        assert!(result.is_err(), "3-hop symlink chain escaping workspace must be blocked");
+        assert!(
+            result.is_err(),
+            "3-hop symlink chain escaping workspace must be blocked"
+        );
         Ok(())
     }
 
@@ -317,7 +338,10 @@ mod symlink_attacks {
         std::os::unix::fs::symlink(outer.path(), &link)?;
 
         let result = validate_path(Path::new("parent_escape"), &ws);
-        assert!(result.is_err(), "Symlink to parent directory must be blocked");
+        assert!(
+            result.is_err(),
+            "Symlink to parent directory must be blocked"
+        );
         Ok(())
     }
 
@@ -336,7 +360,10 @@ mod symlink_attacks {
         std::os::unix::fs::symlink(&sibling, &link)?;
 
         let result = validate_path(Path::new("tmp_link/some_file"), &ws);
-        assert!(result.is_err(), "Symlink to sibling directory must be blocked");
+        assert!(
+            result.is_err(),
+            "Symlink to sibling directory must be blocked"
+        );
         Ok(())
     }
 
@@ -354,7 +381,10 @@ mod symlink_attacks {
         std::os::unix::fs::symlink(&fake_home, &link)?;
 
         let result = validate_path(Path::new("home_link/.ssh/id_rsa"), &ws);
-        assert!(result.is_err(), "Symlink to external home-style dir must be blocked");
+        assert!(
+            result.is_err(),
+            "Symlink to external home-style dir must be blocked"
+        );
         Ok(())
     }
 
@@ -372,7 +402,10 @@ mod symlink_attacks {
         std::os::unix::fs::symlink(Path::new("../secret_data"), &link)?;
 
         let result = validate_path(Path::new("sneaky/credentials.json"), &ws);
-        assert!(result.is_err(), "Relative symlink with .. escaping workspace must be blocked");
+        assert!(
+            result.is_err(),
+            "Relative symlink with .. escaping workspace must be blocked"
+        );
         Ok(())
     }
 
@@ -409,7 +442,10 @@ mod symlink_attacks {
         std::os::unix::fs::symlink(&secret, &link)?;
 
         let result = validate_path(Path::new("src/modules/escape_link/token"), &ws);
-        assert!(result.is_err(), "Symlink in nested dir escaping workspace must be blocked");
+        assert!(
+            result.is_err(),
+            "Symlink in nested dir escaping workspace must be blocked"
+        );
         Ok(())
     }
 
@@ -421,7 +457,10 @@ mod symlink_attacks {
         let link = ws.join("environ_link");
         if std::os::unix::fs::symlink(Path::new("/proc/self/environ"), &link).is_ok() {
             let result = validate_path(Path::new("environ_link"), ws);
-            assert!(result.is_err(), "Symlink to /proc/self/environ must be blocked");
+            assert!(
+                result.is_err(),
+                "Symlink to /proc/self/environ must be blocked"
+            );
         }
         Ok(())
     }
@@ -451,7 +490,10 @@ fn null_byte_at_end() -> TestResult {
 fn null_byte_between_traversal_and_payload() -> TestResult {
     let (_tmp, ws) = workspace()?;
     let result = validate_path(Path::new("../../\0etc/passwd"), &ws);
-    assert!(result.is_err(), "Null byte between traversal and payload must be blocked");
+    assert!(
+        result.is_err(),
+        "Null byte between traversal and payload must be blocked"
+    );
     Ok(())
 }
 
@@ -573,7 +615,10 @@ fn very_long_path_component() -> TestResult {
     match &result {
         Err(_) => {}
         Ok(resolved) => {
-            assert!(resolved.starts_with(&ws), "Long path must stay within workspace");
+            assert!(
+                resolved.starts_with(&ws),
+                "Long path must stay within workspace"
+            );
         }
     }
     Ok(())
@@ -589,7 +634,10 @@ fn url_encoded_dotdot_slash() -> TestResult {
     // %2e%2e%2f == "../" URL-encoded -- OS treats as literal filename
     let result = validate_path(Path::new("%2e%2e/%2e%2e/etc/passwd"), &ws);
     if let Ok(ref resolved) = result {
-        assert!(resolved.starts_with(&ws), "URL-encoded path must stay within workspace");
+        assert!(
+            resolved.starts_with(&ws),
+            "URL-encoded path must stay within workspace"
+        );
     }
     Ok(())
 }
@@ -687,8 +735,11 @@ fn traversal_to_ssh_keys() -> TestResult {
 #[test]
 fn traversal_to_environment_files() -> TestResult {
     let (_tmp, ws) = workspace()?;
-    let targets =
-        ["../../../etc/environment", "../../../proc/1/environ", "../../../proc/self/environ"];
+    let targets = [
+        "../../../etc/environment",
+        "../../../proc/1/environ",
+        "../../../proc/self/environ",
+    ];
     for target in &targets {
         let result = validate_path(Path::new(target), &ws);
         assert!(result.is_err(), "Traversal to {target} must be blocked");

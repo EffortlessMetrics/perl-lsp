@@ -27,7 +27,10 @@ fn test_environment_validation() -> Result<(), String> {
     eprintln!("╠════════════════════════════════════════════════════════════════════╣");
     eprintln!("║ {:<66} ║", env.summary());
     eprintln!("║ Constrained: {:<54} ║", env.is_constrained());
-    eprintln!("║ Timeout multiplier: {:<47} ║", format!("{:.2}x", env.timeout_multiplier()));
+    eprintln!(
+        "║ Timeout multiplier: {:<47} ║",
+        format!("{:.2}x", env.timeout_multiplier())
+    );
     eprintln!("╚════════════════════════════════════════════════════════════════════╝");
 
     // Validate basic properties
@@ -53,8 +56,9 @@ fn test_health_check_server_responsiveness() -> Result<(), String> {
     );
 
     // Perform health check
-    let health_result =
-        HealthCheck::new(&server).with_timeout(TimeoutProfile::Standard.timeout()).verify();
+    let health_result = HealthCheck::new(&server)
+        .with_timeout(TimeoutProfile::Standard.timeout())
+        .verify();
 
     shutdown_and_exit(&server);
 
@@ -89,7 +93,11 @@ fn test_graceful_degradation_retry_logic() {
 
     let result: Result<i32, &str> = degradation.attempt(|| {
         attempt_count += 1;
-        if attempt_count < 2 { Err("simulated transient failure") } else { Ok(42) }
+        if attempt_count < 2 {
+            Err("simulated transient failure")
+        } else {
+            Ok(42)
+        }
     });
 
     assert_eq!(result, Ok(42), "Should succeed after retry");
@@ -138,15 +146,24 @@ fn test_timeout_profiles_are_appropriate() {
     // Verify ordering
     assert!(quick <= performance, "Quick should be <= performance");
     assert!(performance <= standard, "Performance should be <= standard");
-    assert!(standard <= initialization, "Standard should be <= initialization");
-    assert!(initialization <= stress, "Initialization should be <= stress");
+    assert!(
+        standard <= initialization,
+        "Standard should be <= initialization"
+    );
+    assert!(
+        initialization <= stress,
+        "Initialization should be <= stress"
+    );
 
     // All timeouts should be reasonable
     assert!(
         standard >= std::time::Duration::from_secs(1),
         "Standard timeout should be at least 1s"
     );
-    assert!(stress <= std::time::Duration::from_secs(120), "Stress timeout should be at most 120s");
+    assert!(
+        stress <= std::time::Duration::from_secs(120),
+        "Stress timeout should be at most 120s"
+    );
 }
 
 /// Test that CI environment detection works
@@ -172,20 +189,31 @@ fn test_adaptive_timeout_scaling() {
     eprintln!("Environment: {}", env.summary());
 
     // Timeout should be reasonable
-    assert!(timeout >= std::time::Duration::from_secs(2), "Timeout should be at least 2s");
-    assert!(timeout <= std::time::Duration::from_secs(60), "Timeout should be at most 60s");
+    assert!(
+        timeout >= std::time::Duration::from_secs(2),
+        "Timeout should be at least 2s"
+    );
+    assert!(
+        timeout <= std::time::Duration::from_secs(60),
+        "Timeout should be at most 60s"
+    );
 
     // In CI, timeout should be longer
     if env.is_ci {
-        assert!(timeout >= std::time::Duration::from_secs(5), "CI timeout should be at least 5s");
+        assert!(
+            timeout >= std::time::Duration::from_secs(5),
+            "CI timeout should be at least 5s"
+        );
     }
 }
 
 /// Test error formatting with context
 #[test]
 fn test_error_formatting() {
-    let error =
-        TestError::new("LSP server initialization", "Timeout waiting for initialize response");
+    let error = TestError::new(
+        "LSP server initialization",
+        "Timeout waiting for initialize response",
+    );
 
     let formatted = error.format();
     eprintln!("{}", formatted);
@@ -227,13 +255,14 @@ fn test_lsp_lifecycle_with_infrastructure_support() -> Result<(), String> {
     );
 
     // Perform health check
-    HealthCheck::new(&server).with_timeout(TimeoutProfile::Standard.timeout()).verify().map_err(
-        |e| {
+    HealthCheck::new(&server)
+        .with_timeout(TimeoutProfile::Standard.timeout())
+        .verify()
+        .map_err(|e| {
             let error = TestError::new("LSP lifecycle health check", e);
             eprintln!("{}", error);
             "Health check failed".to_string()
-        },
-    )?;
+        })?;
 
     shutdown_and_exit(&server);
 
@@ -294,14 +323,21 @@ fn test_stability_helpers() {
 
     assert!(result.is_ok(), "Condition should be met");
     assert!(counter >= 3, "Counter should have been incremented");
-    assert!(start.elapsed() < std::time::Duration::from_secs(2), "Should complete quickly");
+    assert!(
+        start.elapsed() < std::time::Duration::from_secs(2),
+        "Should complete quickly"
+    );
 
     // Test retry_with_backoff
     let mut attempt = 0;
     let result: Result<i32, &str> = retry_with_backoff(
         || {
             attempt += 1;
-            if attempt < 2 { Err("not ready") } else { Ok(42) }
+            if attempt < 2 {
+                Err("not ready")
+            } else {
+                Ok(42)
+            }
         },
         3,
         std::time::Duration::from_millis(10),
@@ -324,7 +360,10 @@ fn test_infrastructure_overhead_is_minimal() {
     let elapsed = start.elapsed();
     let per_iteration = elapsed / iterations;
 
-    eprintln!("Infrastructure overhead: {:?} total, {:?} per iteration", elapsed, per_iteration);
+    eprintln!(
+        "Infrastructure overhead: {:?} total, {:?} per iteration",
+        elapsed, per_iteration
+    );
 
     // Overhead should be negligible (< 1ms per iteration)
     assert!(

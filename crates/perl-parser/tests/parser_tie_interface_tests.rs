@@ -83,7 +83,10 @@ fn parser_tie_with_arguments() {
 
     // Verify the tie node has children (the arguments)
     let tie_node = tie_nodes[0];
-    assert!(!tie_node.children().is_empty(), "Tie node should have children for arguments");
+    assert!(
+        !tie_node.children().is_empty(),
+        "Tie node should have children for arguments"
+    );
 }
 
 #[test]
@@ -104,7 +107,10 @@ untie $var;
     let ast = must(parse_code(code));
 
     let untie_nodes = find_nodes(&ast, "Untie");
-    assert!(!untie_nodes.is_empty(), "Should find at least one Untie node");
+    assert!(
+        !untie_nodes.is_empty(),
+        "Should find at least one Untie node"
+    );
 }
 
 #[test]
@@ -116,7 +122,10 @@ untie %hash;
     let ast = must(parse_code(code));
 
     let untie_nodes = find_nodes(&ast, "Untie");
-    assert!(!untie_nodes.is_empty(), "Should find at least one Untie node");
+    assert!(
+        !untie_nodes.is_empty(),
+        "Should find at least one Untie node"
+    );
 }
 
 #[test]
@@ -130,7 +139,11 @@ my $obj = tied %hash;
     // tied() is a function call that returns the underlying object
     let function_nodes = find_nodes(&ast, "FunctionCall");
     let has_tied = function_nodes.iter().any(|node| {
-        if let NodeKind::FunctionCall { name, .. } = &node.kind { name == "tied" } else { false }
+        if let NodeKind::FunctionCall { name, .. } = &node.kind {
+            name == "tied"
+        } else {
+            false
+        }
     });
     assert!(has_tied, "Should find tied function call");
 }
@@ -172,7 +185,10 @@ untie %cache;
     assert!(!tie_nodes.is_empty(), "Should find at least one Tie node");
 
     let untie_nodes = find_nodes(&ast, "Untie");
-    assert!(!untie_nodes.is_empty(), "Should find at least one Untie node");
+    assert!(
+        !untie_nodes.is_empty(),
+        "Should find at least one Untie node"
+    );
 }
 
 #[test]
@@ -353,7 +369,11 @@ fn parser_tie_all_variable_types() {
         match parse_code(code) {
             Ok(ast) => {
                 let tie_nodes = find_nodes(&ast, "Tie");
-                assert!(!tie_nodes.is_empty(), "Should find Tie node for {} type", var_type);
+                assert!(
+                    !tie_nodes.is_empty(),
+                    "Should find Tie node for {} type",
+                    var_type
+                );
             }
             Err(e) => {
                 unreachable!("Failed to parse tie with {} type: {:?}", var_type, e);
@@ -393,7 +413,10 @@ fn parser_tie_with_standard_modules() {
                 assert!(!tie_nodes.is_empty(), "Should find Tie node in: {}", code);
             }
             Err(e) => {
-                unreachable!("Failed to parse tie with standard module: {:?}\nCode: {}", e, code);
+                unreachable!(
+                    "Failed to parse tie with standard module: {:?}\nCode: {}",
+                    e, code
+                );
             }
         }
     }
@@ -415,7 +438,10 @@ fn parser_tie_with_real_world_modules() {
                 assert!(!tie_nodes.is_empty(), "Should find Tie node in: {}", code);
             }
             Err(e) => {
-                unreachable!("Failed to parse tie with real-world module: {:?}\nCode: {}", e, code);
+                unreachable!(
+                    "Failed to parse tie with real-world module: {:?}\nCode: {}",
+                    e, code
+                );
             }
         }
     }

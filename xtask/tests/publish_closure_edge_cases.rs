@@ -29,20 +29,40 @@ use color_eyre::eyre::Result;
 #[test]
 fn publish_closure_output_format_and_grammar() -> Result<()> {
     // Default invocation: plural form, zero violations shown explicitly.
-    let default_out = Command::cargo_bin("xtask")?.args(["publish-closure"]).output()?;
-    assert!(default_out.status.success(), "Default invocation should succeed");
+    let default_out = Command::cargo_bin("xtask")?
+        .args(["publish-closure"])
+        .output()?;
+    assert!(
+        default_out.status.success(),
+        "Default invocation should succeed"
+    );
     let default_stdout = String::from_utf8_lossy(&default_out.stdout);
-    assert!(default_stdout.contains("publish-closure: OK"), "Output should contain success marker");
-    assert!(default_stdout.contains("crates checked"), "Multiple crates should use plural form");
-    assert!(default_stdout.contains("0 violations"), "Zero violations must be shown explicitly");
+    assert!(
+        default_stdout.contains("publish-closure: OK"),
+        "Output should contain success marker"
+    );
+    assert!(
+        default_stdout.contains("crates checked"),
+        "Multiple crates should use plural form"
+    );
+    assert!(
+        default_stdout.contains("0 violations"),
+        "Zero violations must be shown explicitly"
+    );
 
     // Single-crate invocation: singular form.
     let single_out = Command::cargo_bin("xtask")?
         .args(["publish-closure", "--crate-name", "perl-token"])
         .output()?;
-    assert!(single_out.status.success(), "Single-crate invocation should succeed");
+    assert!(
+        single_out.status.success(),
+        "Single-crate invocation should succeed"
+    );
     let single_stdout = String::from_utf8_lossy(&single_out.stdout);
-    assert!(single_stdout.contains("1 crate checked"), "Single crate should use singular form");
+    assert!(
+        single_stdout.contains("1 crate checked"),
+        "Single crate should use singular form"
+    );
     Ok(())
 }
 
@@ -91,11 +111,17 @@ fn publish_closure_invalid_crate_error_message_clear() -> Result<()> {
 /// (only stdout contains the OK message).
 #[test]
 fn publish_closure_success_has_no_stderr() -> Result<()> {
-    let output = Command::cargo_bin("xtask")?.args(["publish-closure"]).output()?;
+    let output = Command::cargo_bin("xtask")?
+        .args(["publish-closure"])
+        .output()?;
 
     assert!(output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(stderr.is_empty(), "Success should have no stderr output. Got: {}", stderr);
+    assert!(
+        stderr.is_empty(),
+        "Success should have no stderr output. Got: {}",
+        stderr
+    );
     Ok(())
 }
 
@@ -126,7 +152,10 @@ fn publish_closure_invalid_crate_names_rejected() -> Result<()> {
             .args(["publish-closure", "--crate-name", name])
             .output()?
             .status;
-        assert!(!status.success(), "Expected rejection for {description}: {name:?}");
+        assert!(
+            !status.success(),
+            "Expected rejection for {description}: {name:?}"
+        );
     }
     Ok(())
 }
@@ -148,7 +177,10 @@ fn publish_closure_filtering_works_for_multiple_crates() -> Result<()> {
 
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("1 crate checked"), "Should filter to single crate");
+    assert!(
+        stdout.contains("1 crate checked"),
+        "Should filter to single crate"
+    );
     Ok(())
 }
 
@@ -160,7 +192,13 @@ fn publish_closure_multiple_crate_name_flags_rejected() -> Result<()> {
     // Clap parser rejects repeated non-repeatable flags with a clear error.
     // Ensure the command fails gracefully with a helpful message.
     let output = Command::cargo_bin("xtask")?
-        .args(["publish-closure", "--crate-name", "perl-token", "--crate-name", "perl-error"])
+        .args([
+            "publish-closure",
+            "--crate-name",
+            "perl-token",
+            "--crate-name",
+            "perl-error",
+        ])
         .output()?;
 
     assert!(!output.status.success());
@@ -194,10 +232,21 @@ fn publish_closure_transitive_deps_are_walked() -> Result<()> {
     let output = Command::cargo_bin("xtask")?
         .args(["publish-closure", "--crate-name", "perl-semantic-analyzer"])
         .output()?;
-    assert!(output.status.success(), "publish-closure should succeed for perl-semantic-analyzer");
+    assert!(
+        output.status.success(),
+        "publish-closure should succeed for perl-semantic-analyzer"
+    );
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("1 crate checked"), "Should filter to single crate; got: {}", stdout);
-    assert!(stdout.contains("0 violations"), "No violations expected on master; got: {}", stdout);
+    assert!(
+        stdout.contains("1 crate checked"),
+        "Should filter to single crate; got: {}",
+        stdout
+    );
+    assert!(
+        stdout.contains("0 violations"),
+        "No violations expected on master; got: {}",
+        stdout
+    );
     Ok(())
 }
 
@@ -211,7 +260,10 @@ fn publish_closure_transitive_deps_are_walked() -> Result<()> {
 fn publish_closure_bfs_handles_graph_cycles() -> Result<()> {
     use std::time::Instant;
     let start = Instant::now();
-    Command::cargo_bin("xtask")?.args(["publish-closure"]).assert().success();
+    Command::cargo_bin("xtask")?
+        .args(["publish-closure"])
+        .assert()
+        .success();
     let elapsed = start.elapsed();
     assert!(
         elapsed.as_secs() < 60,
@@ -238,11 +290,16 @@ fn publish_closure_normal_deps_are_checked() -> Result<()> {
     // Every published crate depends on something (direct or transitive).
     // The closure walk must include normal deps.
     // On master, all normal deps are publishable, so this should succeed.
-    let output = Command::cargo_bin("xtask")?.args(["publish-closure"]).output()?;
+    let output = Command::cargo_bin("xtask")?
+        .args(["publish-closure"])
+        .output()?;
 
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("0 violations"), "Master should have no violations");
+    assert!(
+        stdout.contains("0 violations"),
+        "Master should have no violations"
+    );
     Ok(())
 }
 
@@ -264,8 +321,13 @@ fn publish_closure_build_deps_are_part_of_closure() -> Result<()> {
     // If any of those resolve to a publish=false crate it should NOT be flagged
     // (because is_normal_dep filters out pure build edges).
     // On master this exits 0, confirming build-only deps are not over-flagged.
-    let output = Command::cargo_bin("xtask")?.args(["publish-closure"]).output()?;
-    assert!(output.status.success(), "Build-only deps must not cause false violations");
+    let output = Command::cargo_bin("xtask")?
+        .args(["publish-closure"])
+        .output()?;
+    assert!(
+        output.status.success(),
+        "Build-only deps must not cause false violations"
+    );
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
         stdout.contains("0 violations"),
@@ -283,7 +345,9 @@ fn publish_closure_build_deps_are_part_of_closure() -> Result<()> {
 /// Regression guard: Ensure the subcommand provides help information.
 #[test]
 fn publish_closure_help_flag_works() -> Result<()> {
-    let output = Command::cargo_bin("xtask")?.args(["publish-closure", "--help"]).output()?;
+    let output = Command::cargo_bin("xtask")?
+        .args(["publish-closure", "--help"])
+        .output()?;
 
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -315,7 +379,10 @@ fn publish_closure_violation_message_format_documented() -> Result<()> {
     // The implementation reports all violations before exiting 1.
     // Each violation includes: published crate name, forbidden crate name, and reason.
     // On master (clean closure), this path is never taken, so we verify success instead.
-    Command::cargo_bin("xtask")?.args(["publish-closure"]).assert().success();
+    Command::cargo_bin("xtask")?
+        .args(["publish-closure"])
+        .assert()
+        .success();
     Ok(())
 }
 
@@ -345,7 +412,9 @@ fn publish_closure_exits_nonzero_on_error() -> Result<()> {
 /// This catches off-by-one errors in the crate counting logic.
 #[test]
 fn publish_closure_crate_count_is_reasonable() -> Result<()> {
-    let output = Command::cargo_bin("xtask")?.args(["publish-closure"]).output()?;
+    let output = Command::cargo_bin("xtask")?
+        .args(["publish-closure"])
+        .output()?;
 
     assert!(output.status.success(), "Command should succeed");
 
@@ -363,7 +432,11 @@ fn publish_closure_crate_count_is_reasonable() -> Result<()> {
     {
         let count_str = &stdout[pos + 1..pos + space_pos];
         if let Ok(count) = count_str.parse::<u32>() {
-            assert!((100..=200).contains(&count), "Crate count {} is out of expected range", count);
+            assert!(
+                (100..=200).contains(&count),
+                "Crate count {} is out of expected range",
+                count
+            );
         }
     }
 
@@ -382,10 +455,15 @@ fn publish_closure_crate_count_is_reasonable() -> Result<()> {
 /// This test should always pass on master.
 #[test]
 fn publish_closure_master_is_clean() -> Result<()> {
-    let output = Command::cargo_bin("xtask")?.args(["publish-closure"]).output()?;
+    let output = Command::cargo_bin("xtask")?
+        .args(["publish-closure"])
+        .output()?;
 
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("0 violations"), "Master closure should be clean");
+    assert!(
+        stdout.contains("0 violations"),
+        "Master closure should be clean"
+    );
     Ok(())
 }

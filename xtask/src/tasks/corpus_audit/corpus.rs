@@ -172,10 +172,17 @@ pub fn generate_inventory(files: &[CorpusFile]) -> CorpusInventory {
         *layer_counts.entry(file.layer).or_insert(0) += 1;
     }
 
-    let files_by_layer =
-        layer_counts.into_iter().map(|(layer, count)| LayerCount { layer, count }).collect();
+    let files_by_layer = layer_counts
+        .into_iter()
+        .map(|(layer, count)| LayerCount { layer, count })
+        .collect();
 
-    CorpusInventory { total_files, files_by_layer, total_size_bytes, total_line_count }
+    CorpusInventory {
+        total_files,
+        files_by_layer,
+        total_size_bytes,
+        total_line_count,
+    }
 }
 
 #[cfg(test)]
@@ -187,7 +194,10 @@ mod tests {
         assert_eq!(CorpusLayer::TreeSitter.directory(), "c/test/corpus");
         assert_eq!(CorpusLayer::Highlight.directory(), "c/test/highlight");
         assert_eq!(CorpusLayer::TestCorpus.directory(), "test_corpus");
-        assert_eq!(CorpusLayer::PerlCorpus.directory(), "crates/perl-corpus/src/gen");
+        assert_eq!(
+            CorpusLayer::PerlCorpus.directory(),
+            "crates/perl-corpus/src/gen"
+        );
     }
 
     #[test]

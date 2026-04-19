@@ -28,7 +28,11 @@ fn fuzz_incremental_parsing_robustness() {
         let mut parser = Parser::new(original_script);
         let result = std::panic::catch_unwind(AssertUnwindSafe(|| parser.parse()));
 
-        assert!(result.is_ok(), "Parser crashed on script: {}", original_script);
+        assert!(
+            result.is_ok(),
+            "Parser crashed on script: {}",
+            original_script
+        );
 
         // Test incremental modifications don't break parsing
         let modifications = vec![
@@ -154,7 +158,11 @@ fn fuzz_workspace_indexing_stress() {
         let mut parser = Parser::new(script);
         let result = std::panic::catch_unwind(AssertUnwindSafe(|| parser.parse()));
 
-        assert!(result.is_ok(), "Complex workspace indexing failed for script: {}", script);
+        assert!(
+            result.is_ok(),
+            "Complex workspace indexing failed for script: {}",
+            script
+        );
 
         // Additional validation for workspace features if available
         // (This would test the actual indexing functionality)
@@ -188,7 +196,11 @@ fn fuzz_malformed_quote_incremental_interaction() {
         let result = std::panic::catch_unwind(AssertUnwindSafe(|| parser.parse()));
 
         // These may fail to parse, but should not crash
-        assert!(result.is_ok(), "Parser crashed (not just failed) on malformed quote: {}", script);
+        assert!(
+            result.is_ok(),
+            "Parser crashed (not just failed) on malformed quote: {}",
+            script
+        );
     }
 }
 
@@ -252,7 +264,10 @@ fn fuzz_performance_under_stress() {
         // Large nested structures
         format!(
             "my $data = {{{}}};",
-            (0..100).map(|i| format!("key_{} => 'value_{}'", i, i)).collect::<Vec<_>>().join(", ")
+            (0..100)
+                .map(|i| format!("key_{} => 'value_{}'", i, i))
+                .collect::<Vec<_>>()
+                .join(", ")
         ),
     ];
 

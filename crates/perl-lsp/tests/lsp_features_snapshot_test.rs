@@ -43,7 +43,11 @@ fn test_advertised_features_match_capabilities() -> Result<(), Box<dyn std::erro
 
     // Also verify compliance percentage is reasonable
     let p = compliance_percent();
-    assert!((95.0..=100.0).contains(&p), "unexpected compliance percent: {}", p);
+    assert!(
+        (95.0..=100.0).contains(&p),
+        "unexpected compliance percent: {}",
+        p
+    );
 
     Ok(())
 }
@@ -62,11 +66,18 @@ fn test_lsp_318_features_present() {
     ];
 
     for feature in expected_features {
-        assert!(advertised.contains(&feature), "LSP feature {} should be advertised", feature);
+        assert!(
+            advertised.contains(&feature),
+            "LSP feature {} should be advertised",
+            feature
+        );
     }
 
     // Validate feature count is reasonable (v0.8.8 has comprehensive LSP feature set)
     assert!(!advertised.is_empty(), "Should have advertised features");
-    assert!(advertised.len() >= 10, "Should have at least 10 advertised features");
+    assert!(
+        advertised.len() >= 10,
+        "Should have at least 10 advertised features"
+    );
     // Upper bound check removed - feature count grows with LSP version support
 }

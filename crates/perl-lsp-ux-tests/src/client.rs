@@ -34,7 +34,10 @@ pub enum LspEvent {
     /// `window/logMessage` — IDE output panel message.
     LogMessage { message_type: u32, message: String },
     /// `textDocument/publishDiagnostics` — diagnostic update.
-    Diagnostics { uri: String, diagnostics: Vec<Value> },
+    Diagnostics {
+        uri: String,
+        diagnostics: Vec<Value>,
+    },
     /// Any other server-initiated notification.
     Other { method: String, params: Value },
 }
@@ -296,8 +299,12 @@ impl UxClient {
         let body = msg.to_string();
         let header = format!("Content-Length: {}\r\n\r\n", body.len());
         let mut stdin = self.stdin.lock().unwrap_or_else(|e| e.into_inner());
-        stdin.write_all(header.as_bytes()).context("Failed to write LSP header to stdin")?;
-        stdin.write_all(body.as_bytes()).context("Failed to write LSP body to stdin")?;
+        stdin
+            .write_all(header.as_bytes())
+            .context("Failed to write LSP header to stdin")?;
+        stdin
+            .write_all(body.as_bytes())
+            .context("Failed to write LSP body to stdin")?;
         stdin.flush().context("Failed to flush LSP stdin")?;
         Ok(())
     }
@@ -307,8 +314,9 @@ impl UxClient {
         loop {
             {
                 let mut guard = self.responses.lock().unwrap_or_else(|e| e.into_inner());
-                if let Some(pos) =
-                    guard.iter().position(|v| v["id"].as_u64() == Some(id) || v["id"] == json!(id))
+                if let Some(pos) = guard
+                    .iter()
+                    .position(|v| v["id"].as_u64() == Some(id) || v["id"] == json!(id))
                 {
                     // pos is valid since we just found it
                     if let Some(msg) = guard.remove(pos) {
@@ -391,19 +399,31 @@ fn decode_event(v: Value) -> LspEvent {
         "window/showMessage" => {
             let message_type = v["params"]["type"].as_u64().unwrap_or(0) as u32;
             let message = v["params"]["message"].as_str().unwrap_or("").to_string();
-            LspEvent::WindowMessage { message_type, message }
+            LspEvent::WindowMessage {
+                message_type,
+                message,
+            }
         }
         "window/logMessage" => {
             let message_type = v["params"]["type"].as_u64().unwrap_or(0) as u32;
             let message = v["params"]["message"].as_str().unwrap_or("").to_string();
-            LspEvent::LogMessage { message_type, message }
+            LspEvent::LogMessage {
+                message_type,
+                message,
+            }
         }
         "textDocument/publishDiagnostics" => {
             let uri = v["params"]["uri"].as_str().unwrap_or("").to_string();
-            let diagnostics = v["params"]["diagnostics"].as_array().cloned().unwrap_or_default();
+            let diagnostics = v["params"]["diagnostics"]
+                .as_array()
+                .cloned()
+                .unwrap_or_default();
             LspEvent::Diagnostics { uri, diagnostics }
         }
-        _ => LspEvent::Other { method, params: v["params"].clone() },
+        _ => LspEvent::Other {
+            method,
+            params: v["params"].clone(),
+        },
     }
 }
 

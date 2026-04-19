@@ -38,8 +38,10 @@ fn test_unified_api_paths_resolve() {
         // We use the workaround of checking that the unified crate name exists
         // by attempting to construct a path that would need the module.
         let cargo_manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".to_string());
-        let crate_dir =
-            PathBuf::from(&cargo_manifest_dir).parent().unwrap().join("perl-workspace-index");
+        let crate_dir = PathBuf::from(&cargo_manifest_dir)
+            .parent()
+            .unwrap()
+            .join("perl-workspace-index");
 
         // The module files must exist after collapse
         let expected_modules = vec![
@@ -65,7 +67,11 @@ fn test_unified_api_paths_resolve() {
         Ok(())
     })();
 
-    assert!(result.is_ok(), "Module paths not yet resolved: {}", result.unwrap_err());
+    assert!(
+        result.is_ok(),
+        "Module paths not yet resolved: {}",
+        result.unwrap_err()
+    );
 }
 
 // =============================================================================
@@ -120,9 +126,13 @@ fn test_workspace_member_count_reduced() {
     // Count workspace members by extracting only the members = [...] array.
     // We find the section between `members = [` and the closing `]` to avoid
     // counting workspace.dependencies paths (which also contain "crates/").
-    let members_start = content.find("members = [").expect("members array not found");
+    let members_start = content
+        .find("members = [")
+        .expect("members array not found");
     let members_section = &content[members_start
-        ..content[members_start..].find(']').map_or(content.len(), |i| members_start + i)];
+        ..content[members_start..]
+            .find(']')
+            .map_or(content.len(), |i| members_start + i)];
     let member_count = members_section.matches("\"crates/").count();
 
     // Expected: 117 (123 - 6 deleted satellites)
@@ -178,7 +188,10 @@ fn test_publish_allowlist_updated() {
 
     // Verify old name is not present (in the context of the allowlist)
     // We check for the exact pattern: allow list entry for perl-workspace-index
-    let allowlist_section = content.split("[workspace.metadata.publish]").nth(1).unwrap_or("");
+    let allowlist_section = content
+        .split("[workspace.metadata.publish]")
+        .nth(1)
+        .unwrap_or("");
     assert!(
         !allowlist_section.contains("\"perl-workspace-index\""),
         "Old crate name 'perl-workspace-index' should be renamed to 'perl-workspace' in allowlist"
@@ -267,7 +280,12 @@ fn test_no_old_crate_names_in_source() {
     let crates_dir = workspace_root.join("crates");
 
     // Scan for old crate names in Cargo.toml files of key consumers
-    let consumers = vec!["perl-module", "perl-parser", "perl-lsp", "perl-semantic-analyzer"];
+    let consumers = vec![
+        "perl-module",
+        "perl-parser",
+        "perl-lsp",
+        "perl-semantic-analyzer",
+    ];
 
     let old_crate_patterns = vec![
         "perl-workspace-discovery",
@@ -309,12 +327,17 @@ fn test_no_old_crate_names_in_source() {
 #[test]
 fn test_backward_compat_workspace_module_exists() {
     let cargo_manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".to_string());
-    let crate_dir =
-        PathBuf::from(&cargo_manifest_dir).parent().unwrap().join("perl-workspace-index");
+    let crate_dir = PathBuf::from(&cargo_manifest_dir)
+        .parent()
+        .unwrap()
+        .join("perl-workspace-index");
 
     // Check that workspace/mod.rs exists and declares the modules
     let workspace_mod = crate_dir.join("src/workspace/mod.rs");
-    assert!(workspace_mod.exists(), "workspace/mod.rs must exist for backward compatibility");
+    assert!(
+        workspace_mod.exists(),
+        "workspace/mod.rs must exist for backward compatibility"
+    );
 
     let content = std::fs::read_to_string(&workspace_mod).expect("Failed to read workspace/mod.rs");
 
@@ -347,8 +370,10 @@ fn test_backward_compat_workspace_module_exists() {
 #[test]
 fn test_api_reexport_surface_explicit() {
     let cargo_manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".to_string());
-    let crate_dir =
-        PathBuf::from(&cargo_manifest_dir).parent().unwrap().join("perl-workspace-index");
+    let crate_dir = PathBuf::from(&cargo_manifest_dir)
+        .parent()
+        .unwrap()
+        .join("perl-workspace-index");
 
     let api_file = crate_dir.join("src/api.rs");
 
@@ -390,8 +415,10 @@ fn test_api_reexport_surface_explicit() {
 #[test]
 fn test_lib_rs_declares_new_modules() {
     let cargo_manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".to_string());
-    let crate_dir =
-        PathBuf::from(&cargo_manifest_dir).parent().unwrap().join("perl-workspace-index");
+    let crate_dir = PathBuf::from(&cargo_manifest_dir)
+        .parent()
+        .unwrap()
+        .join("perl-workspace-index");
 
     let lib_file = crate_dir.join("src/lib.rs");
     assert!(lib_file.exists(), "lib.rs not found");
@@ -399,8 +426,14 @@ fn test_lib_rs_declares_new_modules() {
     let content = std::fs::read_to_string(&lib_file).expect("Failed to read lib.rs");
 
     // Check that lib.rs declares or references the new modules
-    let required_modules =
-        vec!["discovery", "folder", "ignore", "monitoring", "slo", "state_machine"];
+    let required_modules = vec![
+        "discovery",
+        "folder",
+        "ignore",
+        "monitoring",
+        "slo",
+        "state_machine",
+    ];
 
     for module in required_modules {
         // The module should be declared with: mod <name> or pub mod <name>
@@ -429,11 +462,16 @@ fn test_lib_rs_declares_new_modules() {
 #[test]
 fn test_package_name_renamed_to_perl_workspace() {
     let cargo_manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".to_string());
-    let crate_dir =
-        PathBuf::from(&cargo_manifest_dir).parent().unwrap().join("perl-workspace-index");
+    let crate_dir = PathBuf::from(&cargo_manifest_dir)
+        .parent()
+        .unwrap()
+        .join("perl-workspace-index");
 
     let cargo_toml = crate_dir.join("Cargo.toml");
-    assert!(cargo_toml.exists(), "Cargo.toml not found in perl-workspace-index");
+    assert!(
+        cargo_toml.exists(),
+        "Cargo.toml not found in perl-workspace-index"
+    );
 
     let content = std::fs::read_to_string(&cargo_toml).expect("Failed to read Cargo.toml");
 

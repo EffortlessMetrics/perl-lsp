@@ -38,9 +38,17 @@ fn assert_response(
     expected_success: bool,
 ) -> Option<Value> {
     match msg {
-        DapMessage::Response { success, command, body, .. } => {
+        DapMessage::Response {
+            success,
+            command,
+            body,
+            ..
+        } => {
             assert_eq!(command, expected_command, "command mismatch");
-            assert_eq!(success, expected_success, "success mismatch for {expected_command}");
+            assert_eq!(
+                success, expected_success,
+                "success mismatch for {expected_command}"
+            );
             body
         }
         other => panic!("expected Response for {expected_command}, got {other:?}"),
@@ -50,7 +58,9 @@ fn assert_response(
 #[allow(clippy::panic)]
 fn assert_response_message(msg: DapMessage, expected_command: &str) -> Option<String> {
     match msg {
-        DapMessage::Response { command, message, .. } => {
+        DapMessage::Response {
+            command, message, ..
+        } => {
             assert_eq!(command, expected_command);
             message
         }
@@ -86,7 +96,10 @@ fn test_breakpoint_locations_no_source_path_returns_empty_success()
     let response = adapter.handle_request(1, "breakpointLocations", Some(args));
     let body = assert_response(response, "breakpointLocations", true);
     let body = body.ok_or("breakpointLocations should return a body")?;
-    assert!(body.get("breakpoints").is_some(), "body must include breakpoints array");
+    assert!(
+        body.get("breakpoints").is_some(),
+        "body must include breakpoints array"
+    );
     Ok(())
 }
 
@@ -147,7 +160,12 @@ fn test_goto_unknown_target_id_returns_failure() -> Result<(), Box<dyn std::erro
     // targetId 9999 has never been registered via gotoTargets, so the implementation
     // removes it from the goto_map (returning None) and unconditionally returns failure.
     match response {
-        DapMessage::Response { success, command, message, .. } => {
+        DapMessage::Response {
+            success,
+            command,
+            message,
+            ..
+        } => {
             assert_eq!(command, "goto");
             assert!(!success, "goto with unregistered targetId must fail");
             assert!(message.is_some(), "failure response must include a message");
@@ -180,7 +198,10 @@ fn test_goto_targets_no_source_path_returns_empty_success() -> Result<(), Box<dy
     let response = adapter.handle_request(1, "gotoTargets", Some(args));
     let body = assert_response(response, "gotoTargets", true);
     let body = body.ok_or("gotoTargets must return a body")?;
-    assert!(body.get("targets").is_some(), "targets array required in response body");
+    assert!(
+        body.get("targets").is_some(),
+        "targets array required in response body"
+    );
     Ok(())
 }
 
@@ -283,7 +304,10 @@ fn test_terminate_threads_always_fails_with_message() -> Result<(), Box<dyn std:
     let mut adapter = make_adapter();
     let response = adapter.handle_request(1, "terminateThreads", None);
     let msg = assert_response_message(response, "terminateThreads");
-    assert!(msg.is_some(), "terminateThreads must include an error message");
+    assert!(
+        msg.is_some(),
+        "terminateThreads must include an error message"
+    );
     let msg = msg.unwrap();
     assert!(
         msg.contains("thread") || msg.contains("Perl"),
@@ -306,8 +330,11 @@ fn test_goto_targets_path_traversal_blocked_when_workspace_set()
     // This test verifies that the path traversal path doesn't panic and
     // returns a safe/empty response rather than reading arbitrary files.
     let mut adapter = make_adapter();
-    let malicious_paths =
-        vec!["../../../etc/passwd", "/etc/passwd", "../../../../../../tmp/sensitive"];
+    let malicious_paths = vec![
+        "../../../etc/passwd",
+        "/etc/passwd",
+        "../../../../../../tmp/sensitive",
+    ];
 
     for path in malicious_paths {
         let args = json!({
@@ -353,7 +380,11 @@ fn test_breakpoint_locations_path_traversal_does_not_panic()
 // AC:16 (Security: newline injection in evaluate)
 fn test_evaluate_newline_injection_blocked() -> Result<(), Box<dyn std::error::Error>> {
     let mut adapter = make_adapter();
-    let injections = vec!["$x\nsystem('rm -rf /')", "$x\rsystem('evil')", "$x\r\ndie()"];
+    let injections = vec![
+        "$x\nsystem('rm -rf /')",
+        "$x\rsystem('evil')",
+        "$x\r\ndie()",
+    ];
 
     for expr in injections {
         let args = json!({
@@ -362,7 +393,12 @@ fn test_evaluate_newline_injection_blocked() -> Result<(), Box<dyn std::error::E
         });
         let response = adapter.handle_request(1, "evaluate", Some(args));
         match response {
-            DapMessage::Response { success, command, message, .. } => {
+            DapMessage::Response {
+                success,
+                command,
+                message,
+                ..
+            } => {
                 assert_eq!(command, "evaluate");
                 assert!(!success, "Newline injection should be rejected: {expr:?}");
                 let msg = message.ok_or("rejection must include a message")?;
@@ -504,7 +540,12 @@ fn test_all_commands_return_proper_response_shape() -> Result<(), Box<dyn std::e
         let mut adapter = make_adapter();
         let response = adapter.handle_request(1, cmd, args);
         match response {
-            DapMessage::Response { seq, request_seq, command, .. } => {
+            DapMessage::Response {
+                seq,
+                request_seq,
+                command,
+                ..
+            } => {
                 assert!(seq > 0, "{cmd}: seq must be positive, got {seq}");
                 assert_eq!(request_seq, 1, "{cmd}: request_seq must echo input seq");
                 assert_eq!(command, cmd, "{cmd}: command must echo input command");
@@ -524,11 +565,20 @@ fn test_unknown_command_returns_structured_error_response() -> Result<(), Box<dy
     let mut adapter = make_adapter();
     let response = adapter.handle_request(42, "thisCommandDoesNotExist", None);
     match response {
-        DapMessage::Response { success, command, message, request_seq, .. } => {
+        DapMessage::Response {
+            success,
+            command,
+            message,
+            request_seq,
+            ..
+        } => {
             assert!(!success, "unknown command should not succeed");
             assert_eq!(command, "thisCommandDoesNotExist");
             assert_eq!(request_seq, 42, "request_seq must echo the input");
-            assert!(message.is_some(), "unknown command must include an error message");
+            assert!(
+                message.is_some(),
+                "unknown command must include an error message"
+            );
         }
         other => panic!("expected Response for unknown command, got {other:?}"),
     }
@@ -552,7 +602,9 @@ fn test_goto_targets_response_body_has_targets_array() -> Result<(), Box<dyn std
     let response = adapter.handle_request(1, "gotoTargets", Some(args));
     let body = assert_response(response, "gotoTargets", true);
     let body = body.ok_or("gotoTargets body is required")?;
-    let targets = body.get("targets").ok_or("gotoTargets body must have 'targets'")?;
+    let targets = body
+        .get("targets")
+        .ok_or("gotoTargets body must have 'targets'")?;
     assert!(targets.is_array(), "'targets' must be an array");
     Ok(())
 }
@@ -568,7 +620,9 @@ fn test_step_in_targets_response_body_has_targets_array() -> Result<(), Box<dyn 
     let response = adapter.handle_request(1, "stepInTargets", Some(args));
     let body = assert_response(response, "stepInTargets", true);
     let body = body.ok_or("stepInTargets body is required")?;
-    let targets = body.get("targets").ok_or("stepInTargets body must have 'targets'")?;
+    let targets = body
+        .get("targets")
+        .ok_or("stepInTargets body must have 'targets'")?;
     assert!(targets.is_array(), "'targets' must be an array");
     Ok(())
 }
@@ -582,7 +636,9 @@ fn test_loaded_sources_response_body_has_sources_array() -> Result<(), Box<dyn s
     let response = adapter.handle_request(1, "loadedSources", None);
     let body = assert_response(response, "loadedSources", true);
     let body = body.ok_or("loadedSources body is required")?;
-    let sources = body.get("sources").ok_or("loadedSources body must have 'sources'")?;
+    let sources = body
+        .get("sources")
+        .ok_or("loadedSources body must have 'sources'")?;
     assert!(sources.is_array(), "'sources' must be an array");
     Ok(())
 }
@@ -601,7 +657,9 @@ fn test_breakpoint_locations_response_body_has_breakpoints_array()
     let response = adapter.handle_request(1, "breakpointLocations", Some(args));
     let body = assert_response(response, "breakpointLocations", true);
     let body = body.ok_or("breakpointLocations body is required")?;
-    let bps = body.get("breakpoints").ok_or("breakpointLocations body must have 'breakpoints'")?;
+    let bps = body
+        .get("breakpoints")
+        .ok_or("breakpointLocations body must have 'breakpoints'")?;
     assert!(bps.is_array(), "'breakpoints' must be an array");
     Ok(())
 }
@@ -682,7 +740,10 @@ fn test_threads_without_session_succeeds() -> Result<(), Box<dyn std::error::Err
     let response = adapter.handle_request(1, "threads", None);
     let body = assert_response(response, "threads", true);
     let body = body.ok_or("threads must return a body")?;
-    assert!(body.get("threads").is_some(), "threads body must include 'threads' array");
+    assert!(
+        body.get("threads").is_some(),
+        "threads body must include 'threads' array"
+    );
     Ok(())
 }
 
@@ -693,6 +754,9 @@ fn test_stack_trace_without_session_returns_frames() -> Result<(), Box<dyn std::
     let response = adapter.handle_request(1, "stackTrace", None);
     let body = assert_response(response, "stackTrace", true);
     let body = body.ok_or("stackTrace must return a body")?;
-    assert!(body.get("stackFrames").is_some(), "stackTrace body must include 'stackFrames'");
+    assert!(
+        body.get("stackFrames").is_some(),
+        "stackTrace body must include 'stackFrames'"
+    );
     Ok(())
 }

@@ -137,7 +137,10 @@ impl Catalog {
 
     /// Trackable feature count (`maturity != planned`).
     pub fn trackable_feature_count(&self) -> usize {
-        self.feature.iter().filter(|feature| feature.maturity.is_trackable()).count()
+        self.feature
+            .iter()
+            .filter(|feature| feature.maturity.is_trackable())
+            .count()
     }
 
     /// Advertised trackable count.
@@ -226,7 +229,11 @@ impl Catalog {
             }
         }
 
-        if issues.is_empty() { Ok(()) } else { Err(CatalogError::Validation(issues.join(", "))) }
+        if issues.is_empty() {
+            Ok(())
+        } else {
+            Err(CatalogError::Validation(issues.join(", ")))
+        }
     }
 }
 
@@ -329,7 +336,10 @@ pub fn resolve_catalog_source(manifest_dir: &Path) -> Result<CatalogSource, Cata
     if let Ok(override_path) = env::var("FEATURES_TOML_OVERRIDE") {
         let override_path = PathBuf::from(override_path);
         if override_path.exists() {
-            return Ok(CatalogSource { path: override_path, kind: CatalogSourceKind::Override });
+            return Ok(CatalogSource {
+                path: override_path,
+                kind: CatalogSourceKind::Override,
+            });
         }
     }
 
@@ -346,12 +356,18 @@ pub fn resolve_catalog_source(manifest_dir: &Path) -> Result<CatalogSource, Cata
         path.exists().then_some(path)
     });
     if let Some(path) = parent_workspace {
-        return Ok(CatalogSource { path, kind: CatalogSourceKind::Workspace });
+        return Ok(CatalogSource {
+            path,
+            kind: CatalogSourceKind::Workspace,
+        });
     }
 
     let vendored = manifest_dir.join("features_sot.toml");
     if vendored.exists() {
-        return Ok(CatalogSource { path: vendored, kind: CatalogSourceKind::Vendored });
+        return Ok(CatalogSource {
+            path: vendored,
+            kind: CatalogSourceKind::Vendored,
+        });
     }
 
     Err(CatalogError::MissingSource(manifest_dir.to_path_buf()))
@@ -387,9 +403,15 @@ pub fn render_lsp_feature_catalog_module(catalog: &Catalog, source_comment: &str
     code.push('\n');
 
     code.push_str("/// Current parser version extracted from features.toml metadata\n");
-    code.push_str(&format!("pub const VERSION: &str = {:?};\n", catalog.meta.version));
+    code.push_str(&format!(
+        "pub const VERSION: &str = {:?};\n",
+        catalog.meta.version
+    ));
     code.push_str("/// LSP protocol version supported by this parser implementation\n");
-    code.push_str(&format!("pub const LSP_VERSION: &str = {:?};\n", catalog.meta.lsp_version));
+    code.push_str(&format!(
+        "pub const LSP_VERSION: &str = {:?};\n",
+        catalog.meta.lsp_version
+    ));
     code.push_str("/// Compliance percentage of advertised GA features vs trackable features\n");
     code.push_str(&format!(
         "pub const COMPLIANCE_PERCENT: f32 = {:.2};\n\n",
@@ -430,10 +452,19 @@ pub fn render_lsp_feature_catalog_module(catalog: &Catalog, source_comment: &str
         code.push_str(&format!("        id: {:?},\n", feature.id));
         code.push_str(&format!("        spec: {:?},\n", feature.spec));
         code.push_str(&format!("        area: {:?},\n", feature.area));
-        code.push_str(&format!("        maturity: {:?},\n", feature.maturity.label()));
+        code.push_str(&format!(
+            "        maturity: {:?},\n",
+            feature.maturity.label()
+        ));
         code.push_str(&format!("        advertised: {},\n", feature.advertised));
-        code.push_str(&format!("        description: {:?},\n", feature.description));
-        code.push_str(&format!("        counts_in_coverage: {},\n", feature.counts_in_coverage));
+        code.push_str(&format!(
+            "        description: {:?},\n",
+            feature.description
+        ));
+        code.push_str(&format!(
+            "        counts_in_coverage: {},\n",
+            feature.counts_in_coverage
+        ));
         code.push_str(&format!("        tests: &{:?},\n", feature.tests));
         code.push_str("    },\n");
     }

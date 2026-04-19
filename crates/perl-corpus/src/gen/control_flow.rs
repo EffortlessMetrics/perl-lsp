@@ -55,8 +55,13 @@ fn while_loop() -> impl Strategy<Value = String> {
         prop::option::of((loop_control(), condition())),
     )
         .prop_map(|(var, init, cond, body, ctrl)| {
-            let control = ctrl.map(|(kw, c)| format!("\n    {} if {};", kw, c)).unwrap_or_default();
-            format!("my ${} = {};\nwhile ({}) {{\n    {}{}\n}}\n", var, init, cond, body, control)
+            let control = ctrl
+                .map(|(kw, c)| format!("\n    {} if {};", kw, c))
+                .unwrap_or_default();
+            format!(
+                "my ${} = {};\nwhile ({}) {{\n    {}{}\n}}\n",
+                var, init, cond, body, control
+            )
         })
 }
 
@@ -64,7 +69,10 @@ fn while_loop() -> impl Strategy<Value = String> {
 fn until_loop() -> impl Strategy<Value = String> {
     (identifier(), small_int(), condition(), body_statement()).prop_map(
         |(var, init, cond, body)| {
-            format!("my ${} = {};\nuntil ({}) {{\n    {}\n}}\n", var, init, cond, body)
+            format!(
+                "my ${} = {};\nuntil ({}) {{\n    {}\n}}\n",
+                var, init, cond, body
+            )
         },
     )
 }
@@ -92,27 +100,44 @@ fn foreach_loop() -> impl Strategy<Value = String> {
         prop::option::of((loop_control(), condition())),
     )
         .prop_map(|(var, _arr, start, end, body, ctrl)| {
-            let control = ctrl.map(|(kw, c)| format!("\n    {} if {};", kw, c)).unwrap_or_default();
-            format!("for my ${} ({}..{}) {{\n    {}{}\n}}\n", var, start, end, body, control)
+            let control = ctrl
+                .map(|(kw, c)| format!("\n    {} if {};", kw, c))
+                .unwrap_or_default();
+            format!(
+                "for my ${} ({}..{}) {{\n    {}{}\n}}\n",
+                var, start, end, body, control
+            )
         })
 }
 
 /// Generate a foreach with continue block
 fn foreach_with_continue() -> impl Strategy<Value = String> {
-    (identifier(), small_int(), small_int(), body_statement(), body_statement()).prop_map(
-        |(var, start, end, body, cont_body)| {
+    (
+        identifier(),
+        small_int(),
+        small_int(),
+        body_statement(),
+        body_statement(),
+    )
+        .prop_map(|(var, start, end, body, cont_body)| {
             format!(
                 "for my ${} ({}..{}) {{\n    {}\n}} continue {{\n    {}\n}}\n",
                 var, start, end, body, cont_body
             )
-        },
-    )
+        })
 }
 
 /// Generate a labeled loop with control
 fn labeled_loop() -> impl Strategy<Value = String> {
-    (label(), identifier(), small_int(), small_int(), body_statement(), loop_control()).prop_map(
-        |(lbl, var, start, end, body, ctrl)| {
+    (
+        label(),
+        identifier(),
+        small_int(),
+        small_int(),
+        body_statement(),
+        loop_control(),
+    )
+        .prop_map(|(lbl, var, start, end, body, ctrl)| {
             format!(
                 "{}: for my ${} ({}..{}) {{\n    {}\n    {} {} if ${} == {};\n}}\n",
                 lbl,
@@ -125,8 +150,7 @@ fn labeled_loop() -> impl Strategy<Value = String> {
                 var,
                 (start + end) / 2
             )
-        },
-    )
+        })
 }
 
 /// Generate nested labeled loops
@@ -152,8 +176,14 @@ fn postfix_loop() -> impl Strategy<Value = String> {
     (identifier(), small_int(), body_statement())
         .prop_map(|(var, limit, body)| {
             prop_oneof![
-                Just(format!("my ${} = 0;\n{} while ${} < {};\n", var, body, var, limit)),
-                Just(format!("my ${} = {};\n{} until ${} < 1;\n", var, limit, body, var)),
+                Just(format!(
+                    "my ${} = 0;\n{} while ${} < {};\n",
+                    var, body, var, limit
+                )),
+                Just(format!(
+                    "my ${} = {};\n{} until ${} < 1;\n",
+                    var, limit, body, var
+                )),
             ]
         })
         .prop_flat_map(|s| s)
@@ -192,7 +222,10 @@ fn eval_block() -> impl Strategy<Value = String> {
 /// Generate a do block
 fn do_block() -> impl Strategy<Value = String> {
     (identifier(), small_int(), small_int()).prop_map(|(var, a, b)| {
-        format!("my ${} = do {{\n    my $x = {};\n    $x + {};\n}};\n", var, a, b)
+        format!(
+            "my ${} = do {{\n    my $x = {};\n    $x + {};\n}};\n",
+            var, a, b
+        )
     })
 }
 

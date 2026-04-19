@@ -96,7 +96,11 @@ impl PragmaState {
     /// the `disabled_warning_categories` list.
     #[must_use]
     pub fn is_warning_active(&self, category: &str) -> bool {
-        self.warnings && !self.disabled_warning_categories.iter().any(|c| c == category)
+        self.warnings
+            && !self
+                .disabled_warning_categories
+                .iter()
+                .any(|c| c == category)
     }
 
     /// Returns `true` if the given feature name is currently enabled.
@@ -134,7 +138,9 @@ pub fn parse_perl_version(module: &str) -> Option<PerlVersion> {
 }
 
 fn parse_version_component(component: &str) -> Option<u32> {
-    let component = component.split_once('_').map_or(component, |(head, _)| head);
+    let component = component
+        .split_once('_')
+        .map_or(component, |(head, _)| head);
     component.parse().ok()
 }
 
@@ -334,7 +340,10 @@ fn apply_feature_state(state: &mut PragmaState, args: &[String], enabled: bool) 
 fn builtin_import_names(arg: &str) -> Vec<String> {
     let trimmed = arg.trim();
 
-    if let Some(inner) = trimmed.strip_prefix("qw(").and_then(|s| s.strip_suffix(')')) {
+    if let Some(inner) = trimmed
+        .strip_prefix("qw(")
+        .and_then(|s| s.strip_suffix(')'))
+    {
         return inner
             .split_whitespace()
             .filter(|name| !name.is_empty())
@@ -343,7 +352,11 @@ fn builtin_import_names(arg: &str) -> Vec<String> {
     }
 
     let name = trimmed.trim_matches('\'').trim_matches('"');
-    if name.is_empty() { Vec::new() } else { vec![name.to_string()] }
+    if name.is_empty() {
+        Vec::new()
+    } else {
+        vec![name.to_string()]
+    }
 }
 
 fn apply_builtin_imports(state: &mut PragmaState, args: &[String]) {
@@ -359,8 +372,14 @@ fn apply_builtin_imports(state: &mut PragmaState, args: &[String]) {
 fn pragma_arg_items(arg: &str) -> Vec<String> {
     let trimmed = arg.trim().trim_matches('\'').trim_matches('"');
 
-    if let Some(inner) = trimmed.strip_prefix("qw(").and_then(|s| s.strip_suffix(')')) {
-        return inner.split_whitespace().map(|item| item.to_string()).collect();
+    if let Some(inner) = trimmed
+        .strip_prefix("qw(")
+        .and_then(|s| s.strip_suffix(')'))
+    {
+        return inner
+            .split_whitespace()
+            .map(|item| item.to_string())
+            .collect();
     }
 
     vec![trimmed.to_string()]
@@ -371,7 +390,10 @@ fn normalized_pragma_token(arg: &str) -> &str {
 }
 
 fn is_tracked_pragma_module(module: &str) -> bool {
-    matches!(module, "strict" | "warnings" | "utf8" | "encoding" | "locale" | "feature" | "builtin")
+    matches!(
+        module,
+        "strict" | "warnings" | "utf8" | "encoding" | "locale" | "feature" | "builtin"
+    )
 }
 
 fn valid_strict_args(args: &[String]) -> bool {
@@ -442,7 +464,11 @@ impl PragmaTracker {
         // then take the element before it.
         let idx = pragma_map.partition_point(|(range, _)| range.start <= offset);
 
-        if idx > 0 { pragma_map[idx - 1].1.clone() } else { PragmaState::default() }
+        if idx > 0 {
+            pragma_map[idx - 1].1.clone()
+        } else {
+            PragmaState::default()
+        }
     }
 
     /// Process a lexically scoped body and then restore the caller state.
@@ -618,36 +644,46 @@ impl PragmaTracker {
                         }
 
                         // Record the state change at this location
-                        ranges
-                            .push((node.location.start..node.location.end, current_state.clone()));
+                        ranges.push((
+                            node.location.start..node.location.end,
+                            current_state.clone(),
+                        ));
                     }
                     "warnings" => {
                         current_state.warnings = true;
                         // `use warnings` re-enables all warnings; clear any previously
                         // disabled categories so they are active again.
                         current_state.disabled_warning_categories.clear();
-                        ranges
-                            .push((node.location.start..node.location.end, current_state.clone()));
+                        ranges.push((
+                            node.location.start..node.location.end,
+                            current_state.clone(),
+                        ));
                     }
                     "utf8" => {
                         current_state.utf8 = true;
-                        ranges
-                            .push((node.location.start..node.location.end, current_state.clone()));
+                        ranges.push((
+                            node.location.start..node.location.end,
+                            current_state.clone(),
+                        ));
                     }
                     "encoding" => {
                         current_state.encoding = args
                             .first()
                             .map(|arg| arg.trim().trim_matches('\'').trim_matches('"').to_string());
-                        ranges
-                            .push((node.location.start..node.location.end, current_state.clone()));
+                        ranges.push((
+                            node.location.start..node.location.end,
+                            current_state.clone(),
+                        ));
                     }
                     "locale" => {
                         current_state.locale = true;
                         current_state.locale_scope = args
                             .first()
                             .map(|arg| arg.trim().trim_matches('\'').trim_matches('"').to_string());
-                        ranges
-                            .push((node.location.start..node.location.end, current_state.clone()));
+                        ranges.push((
+                            node.location.start..node.location.end,
+                            current_state.clone(),
+                        ));
                     }
                     "feature" => {
                         if apply_feature_state(current_state, args, true) {
@@ -659,8 +695,10 @@ impl PragmaTracker {
                     }
                     "builtin" => {
                         apply_builtin_imports(current_state, args);
-                        ranges
-                            .push((node.location.start..node.location.end, current_state.clone()));
+                        ranges.push((
+                            node.location.start..node.location.end,
+                            current_state.clone(),
+                        ));
                     }
                     _ => {
                         if let Some(version) = parse_perl_version(module) {
@@ -701,8 +739,10 @@ impl PragmaTracker {
                         }
 
                         // Record the state change at this location
-                        ranges
-                            .push((node.location.start..node.location.end, current_state.clone()));
+                        ranges.push((
+                            node.location.start..node.location.end,
+                            current_state.clone(),
+                        ));
                     }
                     "warnings" => {
                         if args.is_empty() {
@@ -728,24 +768,32 @@ impl PragmaTracker {
                                 }
                             }
                         }
-                        ranges
-                            .push((node.location.start..node.location.end, current_state.clone()));
+                        ranges.push((
+                            node.location.start..node.location.end,
+                            current_state.clone(),
+                        ));
                     }
                     "utf8" => {
                         current_state.utf8 = false;
-                        ranges
-                            .push((node.location.start..node.location.end, current_state.clone()));
+                        ranges.push((
+                            node.location.start..node.location.end,
+                            current_state.clone(),
+                        ));
                     }
                     "encoding" => {
                         current_state.encoding = None;
-                        ranges
-                            .push((node.location.start..node.location.end, current_state.clone()));
+                        ranges.push((
+                            node.location.start..node.location.end,
+                            current_state.clone(),
+                        ));
                     }
                     "locale" => {
                         current_state.locale = false;
                         current_state.locale_scope = None;
-                        ranges
-                            .push((node.location.start..node.location.end, current_state.clone()));
+                        ranges.push((
+                            node.location.start..node.location.end,
+                            current_state.clone(),
+                        ));
                     }
                     "feature" => {
                         if apply_feature_state(current_state, args, false) {
@@ -787,7 +835,12 @@ impl PragmaTracker {
             NodeKind::Class { body, .. } => {
                 Self::build_scoped_body(body, current_state, ranges);
             }
-            NodeKind::If { then_branch, elsif_branches, else_branch, .. } => {
+            NodeKind::If {
+                then_branch,
+                elsif_branches,
+                else_branch,
+                ..
+            } => {
                 Self::build_scoped_body(then_branch, current_state, ranges);
                 for (_, elsif_body) in elsif_branches {
                     Self::build_scoped_body(elsif_body, current_state, ranges);
@@ -796,9 +849,21 @@ impl PragmaTracker {
                     Self::build_scoped_body(else_b, current_state, ranges);
                 }
             }
-            NodeKind::While { body, continue_block, .. }
-            | NodeKind::For { body, continue_block, .. }
-            | NodeKind::Foreach { body, continue_block, .. } => {
+            NodeKind::While {
+                body,
+                continue_block,
+                ..
+            }
+            | NodeKind::For {
+                body,
+                continue_block,
+                ..
+            }
+            | NodeKind::Foreach {
+                body,
+                continue_block,
+                ..
+            } => {
                 Self::build_scoped_body(body, current_state, ranges);
                 if let Some(continue_block) = continue_block {
                     Self::build_scoped_body(continue_block, current_state, ranges);
@@ -815,7 +880,11 @@ impl PragmaTracker {
             | NodeKind::Default { body } => {
                 Self::build_scoped_body(body, current_state, ranges);
             }
-            NodeKind::Try { body, catch_blocks, finally_block } => {
+            NodeKind::Try {
+                body,
+                catch_blocks,
+                finally_block,
+            } => {
                 Self::build_scoped_body(body, current_state, ranges);
                 for (_, catch_body) in catch_blocks {
                     Self::build_scoped_body(catch_body, current_state, ranges);
@@ -827,7 +896,11 @@ impl PragmaTracker {
             NodeKind::LabeledStatement { statement, .. } => {
                 Self::build_ranges(statement, current_state, ranges);
             }
-            NodeKind::StatementModifier { statement, condition, .. } => {
+            NodeKind::StatementModifier {
+                statement,
+                condition,
+                ..
+            } => {
                 Self::build_ranges(statement, current_state, ranges);
                 Self::build_ranges(condition, current_state, ranges);
             }
@@ -837,7 +910,10 @@ impl PragmaTracker {
             //
             // `package Foo;` (no block) has no inner scope to walk — its
             // siblings in `Program` already accumulate state normally.
-            NodeKind::Package { block: Some(pkg_block), .. } => {
+            NodeKind::Package {
+                block: Some(pkg_block),
+                ..
+            } => {
                 Self::build_scoped_body(pkg_block, current_state, ranges);
             }
             // Other node types don't contain use/no statements

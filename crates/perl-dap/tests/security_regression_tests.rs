@@ -28,10 +28,19 @@ fn test_command_injection_via_program_argument() -> TestResult {
 
     // Verify response indicates failure (due to file "-e" not found)
     match response {
-        DapMessage::Response { success, message, .. } => {
-            assert!(!success, "Launch should fail because file '-e' does not exist");
+        DapMessage::Response {
+            success, message, ..
+        } => {
+            assert!(
+                !success,
+                "Launch should fail because file '-e' does not exist"
+            );
             let msg = message.ok_or("Expected error message")?;
-            assert!(msg.contains("Cannot find"), "Should fail with access error: {}", msg);
+            assert!(
+                msg.contains("Cannot find"),
+                "Should fail with access error: {}",
+                msg
+            );
         }
         _ => return Err("Expected Response".into()),
     }
@@ -42,7 +51,11 @@ fn test_command_injection_via_program_argument() -> TestResult {
     // Check if we received any output containing "pwned"
     let mut found_pwned = false;
     while let Ok(msg) = rx.try_recv() {
-        if let DapMessage::Event { event, body: Some(body), .. } = msg
+        if let DapMessage::Event {
+            event,
+            body: Some(body),
+            ..
+        } = msg
             && event == "output"
             && let Some(output) = body.get("output").and_then(|o| o.as_str())
             && output.contains("pwned")
@@ -71,10 +84,16 @@ fn test_launch_with_nonexistent_file_errors_gracefully() -> TestResult {
     let response = adapter.handle_request(1, "launch", Some(args));
 
     match response {
-        DapMessage::Response { success, message, .. } => {
+        DapMessage::Response {
+            success, message, ..
+        } => {
             assert!(!success, "Launch should fail for nonexistent file");
             let msg = message.ok_or("Expected error message")?;
-            assert!(msg.contains("Cannot find"), "Should return meaningful error: {}", msg);
+            assert!(
+                msg.contains("Cannot find"),
+                "Should return meaningful error: {}",
+                msg
+            );
         }
         _ => return Err("Expected Response".into()),
     }
@@ -96,7 +115,9 @@ fn test_launch_with_empty_program_rejected() -> TestResult {
     let response = adapter.handle_request(1, "launch", Some(args));
 
     match response {
-        DapMessage::Response { success, message, .. } => {
+        DapMessage::Response {
+            success, message, ..
+        } => {
             assert!(!success, "Launch should fail for empty program");
             let msg = message.ok_or("Expected error message")?;
             assert!(
@@ -125,7 +146,9 @@ fn test_launch_with_whitespace_program_rejected() -> TestResult {
     let response = adapter.handle_request(1, "launch", Some(args));
 
     match response {
-        DapMessage::Response { success, message, .. } => {
+        DapMessage::Response {
+            success, message, ..
+        } => {
             assert!(!success, "Launch should fail for whitespace-only program");
             let msg = message.ok_or("Expected error message")?;
             assert!(
@@ -148,7 +171,10 @@ fn test_launch_with_directory_rejected() -> TestResult {
 
     // Use tempdir for cross-platform compatibility (avoids hardcoded /tmp on non-Unix)
     let temp_dir = tempfile::tempdir()?;
-    let dir_path = temp_dir.path().to_str().ok_or("Failed to convert path to string")?;
+    let dir_path = temp_dir
+        .path()
+        .to_str()
+        .ok_or("Failed to convert path to string")?;
 
     let args = json!({
         "program": dir_path,
@@ -158,10 +184,16 @@ fn test_launch_with_directory_rejected() -> TestResult {
     let response = adapter.handle_request(1, "launch", Some(args));
 
     match response {
-        DapMessage::Response { success, message, .. } => {
+        DapMessage::Response {
+            success, message, ..
+        } => {
             assert!(!success, "Launch should fail for directory path");
             let msg = message.ok_or("Expected error message")?;
-            assert!(msg.contains("is not a file"), "Should indicate path is not a file: {}", msg);
+            assert!(
+                msg.contains("is not a file"),
+                "Should indicate path is not a file: {}",
+                msg
+            );
         }
         _ => return Err("Expected Response".into()),
     }
@@ -185,9 +217,19 @@ fn test_other_flag_injection_blocked() -> TestResult {
         let response = adapter.handle_request(1, "launch", Some(args));
 
         match response {
-            DapMessage::Response { success, message, .. } => {
-                assert!(!success, "Launch should fail for flag '{}' as program", flag);
-                assert!(message.is_some(), "Should have error message for flag '{}'", flag);
+            DapMessage::Response {
+                success, message, ..
+            } => {
+                assert!(
+                    !success,
+                    "Launch should fail for flag '{}' as program",
+                    flag
+                );
+                assert!(
+                    message.is_some(),
+                    "Should have error message for flag '{}'",
+                    flag
+                );
             }
             _ => return Err(format!("Expected Response for flag '{}'", flag).into()),
         }

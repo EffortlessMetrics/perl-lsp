@@ -19,10 +19,11 @@ use perl_semantic_analyzer::symbol::{SymbolKind, SymbolTable};
 use super::super::walker::walk_node;
 
 fn has_label(symbol_table: &SymbolTable, label: &str) -> bool {
-    symbol_table
-        .symbols
-        .get(label)
-        .is_some_and(|symbols| symbols.iter().any(|symbol| symbol.kind == SymbolKind::Label))
+    symbol_table.symbols.get(label).is_some_and(|symbols| {
+        symbols
+            .iter()
+            .any(|symbol| symbol.kind == SymbolKind::Label)
+    })
 }
 
 fn goto_target_is_plain_label(target: &Node) -> Option<&str> {

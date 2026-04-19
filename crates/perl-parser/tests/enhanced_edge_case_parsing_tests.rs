@@ -175,7 +175,11 @@ fn test_unicode_and_encoding_edge_cases() -> TestResult {
         let sexp = ast.to_sexp();
 
         // Basic validation that structure is captured
-        assert!(!sexp.is_empty(), "Empty AST for Unicode test case: {}", input);
+        assert!(
+            !sexp.is_empty(),
+            "Empty AST for Unicode test case: {}",
+            input
+        );
     }
     Ok(())
 }
@@ -211,7 +215,12 @@ fn test_error_recovery_scenarios() {
         match result {
             Ok(ast) => {
                 let sexp = ast.to_sexp();
-                assert!(!sexp.is_empty(), "Empty AST for error case {}: {}", i, input);
+                assert!(
+                    !sexp.is_empty(),
+                    "Empty AST for error case {}: {}",
+                    i,
+                    input
+                );
             }
             Err(_) => {
                 // Expected for malformed input - just ensure no panic
@@ -225,11 +234,19 @@ fn test_error_recovery_scenarios() {
 fn test_large_literal_handling() -> TestResult {
     // Test handling of large literals and edge cases
     let long_string = format!("my $long = '{}';", "x".repeat(1000));
-    let large_array =
-        format!("my @big = ({});", (0..100).map(|i| i.to_string()).collect::<Vec<_>>().join(", "));
+    let large_array = format!(
+        "my @big = ({});",
+        (0..100)
+            .map(|i| i.to_string())
+            .collect::<Vec<_>>()
+            .join(", ")
+    );
     let large_hash = format!(
         "my %big = ({});",
-        (0..50).map(|i| format!("'key{}' => 'value{}'", i, i)).collect::<Vec<_>>().join(", ")
+        (0..50)
+            .map(|i| format!("'key{}' => 'value{}'", i, i))
+            .collect::<Vec<_>>()
+            .join(", ")
     );
 
     let test_cases = [
@@ -255,7 +272,11 @@ fn test_large_literal_handling() -> TestResult {
         let sexp = ast.to_sexp();
 
         // Ensure parsing completes and produces reasonable output
-        assert!(!sexp.is_empty(), "Empty AST for large literal test case: {}", input);
+        assert!(
+            !sexp.is_empty(),
+            "Empty AST for large literal test case: {}",
+            input
+        );
         assert!(sexp.len() > 10, "AST too small for input: {}", input);
     }
     Ok(())
@@ -289,7 +310,11 @@ fn test_modern_perl_features() {
         match result {
             Ok(ast) => {
                 let sexp = ast.to_sexp();
-                assert!(!sexp.is_empty(), "Empty AST for modern Perl test case: {}", input);
+                assert!(
+                    !sexp.is_empty(),
+                    "Empty AST for modern Perl test case: {}",
+                    input
+                );
             }
             Err(_) => {
                 // Some modern features might not be implemented yet
@@ -368,10 +393,18 @@ fn test_performance_stress_patterns() {
     let long_identifier = format!("my ${} = 42;", "a".repeat(100));
     let many_variables = format!(
         "my ({}) = (1..100);",
-        (0..100).map(|i| format!("$var{}", i)).collect::<Vec<_>>().join(", ")
+        (0..100)
+            .map(|i| format!("$var{}", i))
+            .collect::<Vec<_>>()
+            .join(", ")
     );
-    let alternation_options =
-        format!("/{}/", (0..50).map(|i| format!("option{}", i)).collect::<Vec<_>>().join("|"));
+    let alternation_options = format!(
+        "/{}/",
+        (0..50)
+            .map(|i| format!("option{}", i))
+            .collect::<Vec<_>>()
+            .join("|")
+    );
     let long_string = format!("my $str = '{}';", "content ".repeat(200));
 
     let test_cases = [
@@ -402,6 +435,10 @@ fn test_performance_stress_patterns() {
         );
 
         // Verify parsing succeeded
-        assert!(result.is_ok(), "Performance test case {} failed to parse", i);
+        assert!(
+            result.is_ok(),
+            "Performance test case {} failed to parse",
+            i
+        );
     }
 }

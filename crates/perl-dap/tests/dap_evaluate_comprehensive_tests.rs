@@ -31,11 +31,19 @@ fn assert_evaluate_blocked(
     needle: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
     match response {
-        DapMessage::Response { success, command, message, .. } => {
+        DapMessage::Response {
+            success,
+            command,
+            message,
+            ..
+        } => {
             assert_eq!(command, "evaluate");
             assert!(!success, "expected evaluate to be blocked");
             let msg = message.ok_or("expected error message")?;
-            assert!(msg.contains(needle), "error message {msg:?} does not contain {needle:?}");
+            assert!(
+                msg.contains(needle),
+                "error message {msg:?} does not contain {needle:?}"
+            );
         }
         other => return Err(format!("expected Response, got {other:?}").into()),
     }
@@ -48,7 +56,9 @@ fn assert_evaluate_not_safe_blocked(
     banned: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
     match response {
-        DapMessage::Response { command, message, .. } => {
+        DapMessage::Response {
+            command, message, ..
+        } => {
             assert_eq!(command, "evaluate");
             let msg = message.unwrap_or_default();
             assert!(
@@ -134,9 +144,12 @@ fn test_evaluate_hash_element_access_is_safe() -> TestResult {
 #[test]
 fn test_evaluate_nested_hashref_dereference_is_safe() -> TestResult {
     let mut adapter = new_adapter();
-    for expr in
-        ["$ref->{field}", "$obj->{name}", "$data->{nested}->{deep}", "$complex_var->{nested}->[0]"]
-    {
+    for expr in [
+        "$ref->{field}",
+        "$obj->{name}",
+        "$data->{nested}->{deep}",
+        "$complex_var->{nested}->[0]",
+    ] {
         let response = adapter.handle_request(
             1,
             "evaluate",
@@ -248,7 +261,9 @@ fn test_evaluate_equality_operators_blocked_by_microcrate_validator() -> TestRes
         );
         // Currently blocked — documents known microcrate limitation.
         match response {
-            DapMessage::Response { success, command, .. } => {
+            DapMessage::Response {
+                success, command, ..
+            } => {
                 assert_eq!(command, "evaluate");
                 assert!(!success, "expected microcrate to block {expr:?}");
             }
@@ -439,7 +454,12 @@ fn test_evaluate_missing_arguments_returns_error() -> TestResult {
     let mut adapter = new_adapter();
     let response = adapter.handle_request(1, "evaluate", None);
     match response {
-        DapMessage::Response { success, command, message, .. } => {
+        DapMessage::Response {
+            success,
+            command,
+            message,
+            ..
+        } => {
             assert_eq!(command, "evaluate");
             assert!(!success, "evaluate with no arguments should fail");
             let msg = message.ok_or("expected error message")?;
@@ -485,7 +505,12 @@ fn test_evaluate_no_session_returns_meaningful_error() -> TestResult {
     let response =
         adapter.handle_request(1, "evaluate", Some(json!({ "expression": "$valid_var" })));
     match response {
-        DapMessage::Response { success, command, message, .. } => {
+        DapMessage::Response {
+            success,
+            command,
+            message,
+            ..
+        } => {
             assert_eq!(command, "evaluate");
             assert!(!success, "evaluate without debugger session should fail");
             let msg = message.ok_or("expected error message")?;
@@ -522,7 +547,10 @@ fn test_evaluate_response_body_has_required_fields() -> TestResult {
 
     // DAP spec requires these fields in the evaluate response body.
     assert!(serialized.get("result").is_some(), "missing 'result' field");
-    assert!(serialized.get("variablesReference").is_some(), "missing 'variablesReference' field");
+    assert!(
+        serialized.get("variablesReference").is_some(),
+        "missing 'variablesReference' field"
+    );
     // `type` is optional per spec; when present it should be under `type`.
     assert_eq!(serialized["result"].as_str(), Some("42"));
     assert_eq!(serialized["variablesReference"].as_i64(), Some(0));
@@ -536,8 +564,11 @@ fn test_evaluate_response_body_no_type_omitted() -> TestResult {
     use perl_dap::protocol::EvaluateResponseBody;
     use serde_json::Value;
 
-    let body =
-        EvaluateResponseBody { result: "hello".to_string(), type_: None, variables_reference: 0 };
+    let body = EvaluateResponseBody {
+        result: "hello".to_string(),
+        type_: None,
+        variables_reference: 0,
+    };
 
     let serialized: Value = serde_json::to_value(&body)?;
 
@@ -579,7 +610,10 @@ fn test_evaluate_command_name_in_all_responses() -> TestResult {
     let cases: &[(&str, serde_json::Value)] = &[
         ("empty", json!({ "expression": "" })),
         ("newline", json!({ "expression": "1\n2" })),
-        ("safe-block", json!({ "expression": "system('ls')", "allowSideEffects": false })),
+        (
+            "safe-block",
+            json!({ "expression": "system('ls')", "allowSideEffects": false }),
+        ),
         ("no-session", json!({ "expression": "$x" })),
     ];
 
@@ -641,7 +675,12 @@ fn test_set_expression_missing_arguments_returns_error() -> TestResult {
     let mut adapter = new_adapter();
     let response = adapter.handle_request(1, "setExpression", None);
     match response {
-        DapMessage::Response { success, command, message, .. } => {
+        DapMessage::Response {
+            success,
+            command,
+            message,
+            ..
+        } => {
             assert_eq!(command, "setExpression");
             assert!(!success, "setExpression with no arguments should fail");
             let msg = message.ok_or("expected error message")?;
@@ -661,11 +700,19 @@ fn test_set_expression_empty_expression_returns_error() -> TestResult {
         Some(json!({ "expression": "", "value": "42" })),
     );
     match response {
-        DapMessage::Response { success, command, message, .. } => {
+        DapMessage::Response {
+            success,
+            command,
+            message,
+            ..
+        } => {
             assert_eq!(command, "setExpression");
             assert!(!success);
             let msg = message.ok_or("expected error message")?;
-            assert!(msg.contains("expression") || msg.contains("Missing"), "got: {msg:?}");
+            assert!(
+                msg.contains("expression") || msg.contains("Missing"),
+                "got: {msg:?}"
+            );
         }
         other => return Err(format!("expected Response, got {other:?}").into()),
     }
@@ -681,11 +728,19 @@ fn test_set_expression_empty_value_returns_error() -> TestResult {
         Some(json!({ "expression": "$x", "value": "" })),
     );
     match response {
-        DapMessage::Response { success, command, message, .. } => {
+        DapMessage::Response {
+            success,
+            command,
+            message,
+            ..
+        } => {
             assert_eq!(command, "setExpression");
             assert!(!success);
             let msg = message.ok_or("expected error message")?;
-            assert!(msg.contains("value") || msg.contains("Missing"), "got: {msg:?}");
+            assert!(
+                msg.contains("value") || msg.contains("Missing"),
+                "got: {msg:?}"
+            );
         }
         other => return Err(format!("expected Response, got {other:?}").into()),
     }
@@ -701,7 +756,12 @@ fn test_set_expression_newline_in_value_is_rejected() -> TestResult {
         Some(json!({ "expression": "$x", "value": "42\nsystem('evil')" })),
     );
     match response {
-        DapMessage::Response { success, command, message, .. } => {
+        DapMessage::Response {
+            success,
+            command,
+            message,
+            ..
+        } => {
             assert_eq!(command, "setExpression");
             assert!(!success);
             let msg = message.ok_or("expected error message")?;

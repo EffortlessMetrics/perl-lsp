@@ -49,7 +49,10 @@ pub fn add_workspace_symbol_completions(
     for symbol in matching_symbols {
         // Skip symbols that don't match the prefix
         if !symbol.name.starts_with(&context.prefix)
-            && !symbol.qualified_name.as_ref().is_some_and(|qn| qn.contains(&context.prefix))
+            && !symbol
+                .qualified_name
+                .as_ref()
+                .is_some_and(|qn| qn.contains(&context.prefix))
         {
             continue;
         }
@@ -57,7 +60,11 @@ pub fn add_workspace_symbol_completions(
         match symbol.kind {
             WsSymbolKind::Subroutine | WsSymbolKind::Method => {
                 // Determine sort priority and detail based on import map
-                let label = symbol.qualified_name.as_ref().unwrap_or(&symbol.name).clone();
+                let label = symbol
+                    .qualified_name
+                    .as_ref()
+                    .unwrap_or(&symbol.name)
+                    .clone();
                 let module = symbol.container_name.as_deref().unwrap_or("");
 
                 let (sort_prefix, detail) = match import_map.get(module) {
@@ -130,7 +137,10 @@ pub fn add_workspace_symbol_completions(
                     filter_text: Some(label.clone()),
                     label,
                     kind: CompletionItemKind::Variable,
-                    detail: symbol.container_name.clone().or_else(|| Some("workspace".to_string())),
+                    detail: symbol
+                        .container_name
+                        .clone()
+                        .or_else(|| Some("workspace".to_string())),
                     documentation: symbol.documentation.clone(),
                     additional_edits: vec![],
                     text_edit_range: Some((context.prefix_start, context.position)),
@@ -159,7 +169,10 @@ pub fn add_workspace_symbol_completions(
                 completions.push(CompletionItem {
                     label: name.clone(),
                     kind: CompletionItemKind::Constant,
-                    detail: symbol.container_name.clone().or_else(|| Some("workspace".to_string())),
+                    detail: symbol
+                        .container_name
+                        .clone()
+                        .or_else(|| Some("workspace".to_string())),
                     documentation: symbol.documentation.clone(),
                     insert_text: Some(name.clone()),
                     sort_text: Some(format!("4_{name}")),
@@ -213,8 +226,15 @@ const COMMON_MODULES_TIER_0: &[&str] = &[
 /// Common CPAN modules that are frequently used but less universal than tier-0.
 ///
 /// Tier 1: widely-used libraries (DB, OOP, testing, filesystem).
-const COMMON_MODULES_TIER_1: &[&str] =
-    &["DBI", "Moo", "Moose", "Try::Tiny", "Path::Tiny", "Test::More", "Test::Exception"];
+const COMMON_MODULES_TIER_1: &[&str] = &[
+    "DBI",
+    "Moo",
+    "Moose",
+    "Try::Tiny",
+    "Path::Tiny",
+    "Test::More",
+    "Test::Exception",
+];
 
 /// Returns the sort-text tier prefix for a module name.
 ///
@@ -376,7 +396,10 @@ fn infer_receiver_package(context: &CompletionContext, source: &str) -> Option<S
     if !arrow_prefix.starts_with('$')
         && !arrow_prefix.starts_with('@')
         && !arrow_prefix.starts_with('%')
-        && arrow_prefix.chars().next().is_some_and(|c| c.is_ascii_uppercase())
+        && arrow_prefix
+            .chars()
+            .next()
+            .is_some_and(|c| c.is_ascii_uppercase())
     {
         return Some(arrow_prefix.to_string());
     }
@@ -505,11 +528,16 @@ pub fn add_workspace_method_completions(
             continue;
         }
 
-        let additional_edits =
-            auto_import_edit.as_ref().map(|e| vec![e.clone()]).unwrap_or_default();
+        let additional_edits = auto_import_edit
+            .as_ref()
+            .map(|e| vec![e.clone()])
+            .unwrap_or_default();
 
         // Show which package actually defines the method for inherited completions
-        let defining_pkg = symbol.container_name.as_deref().unwrap_or(package_name.as_str());
+        let defining_pkg = symbol
+            .container_name
+            .as_deref()
+            .unwrap_or(package_name.as_str());
         let detail = if defining_pkg == package_name {
             format!("{package_name} method")
         } else {
@@ -519,14 +547,21 @@ pub fn add_workspace_method_completions(
         // Own-class methods rank above inherited: tier 2 for own, tier 3 for inherited.
         // This ensures $obj->zoom (own) sorts before $obj->abstract_method (inherited)
         // even when the own method name is alphabetically after the inherited name.
-        let method_tier = if defining_pkg == package_name { "2" } else { "3" };
+        let method_tier = if defining_pkg == package_name {
+            "2"
+        } else {
+            "3"
+        };
 
         completions.push(CompletionItem {
             label: symbol.name.clone(),
             kind: CompletionItemKind::Function,
             detail: Some(detail),
             documentation: symbol.documentation.clone().or_else(|| {
-                Some(format!("Method `{}::{}` from workspace index.", defining_pkg, symbol.name))
+                Some(format!(
+                    "Method `{}::{}` from workspace index.",
+                    defining_pkg, symbol.name
+                ))
             }),
             insert_text: Some(format!("{}()", symbol.name)),
             sort_text: Some(format!("{method_tier}_{}", symbol.name)), // tier 2=own, 3=inherited, after local (tier 1)
@@ -575,10 +610,13 @@ fn collect_all_package_members(index: &WorkspaceIndex, package_name: &str) -> Ve
                     return Vec::new();
                 };
 
-                let text = index.document_store().get_text(&pkg_location.uri).or_else(|| {
-                    perl_workspace::workspace_index::uri_to_fs_path(&pkg_location.uri)
-                        .and_then(|path| std::fs::read_to_string(path).ok())
-                });
+                let text = index
+                    .document_store()
+                    .get_text(&pkg_location.uri)
+                    .or_else(|| {
+                        perl_workspace::workspace_index::uri_to_fs_path(&pkg_location.uri)
+                            .and_then(|path| std::fs::read_to_string(path).ok())
+                    });
 
                 let Some(text) = text else {
                     return Vec::new();
@@ -594,7 +632,12 @@ fn collect_all_package_members(index: &WorkspaceIndex, package_name: &str) -> Ve
                     .into_iter()
                     .find(|model| model.name == pkg)
                     .map(|model| {
-                        model.parents.iter().chain(model.roles.iter()).cloned().collect::<Vec<_>>()
+                        model
+                            .parents
+                            .iter()
+                            .chain(model.roles.iter())
+                            .cloned()
+                            .collect::<Vec<_>>()
                     })
                     .unwrap_or_default()
             })

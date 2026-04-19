@@ -58,7 +58,11 @@ impl OpenAiProvider {
     fn extract_finish_reason(data: &str) -> Option<String> {
         let parsed: serde_json::Value = serde_json::from_str(data).ok()?;
         let choices = parsed.get("choices")?.as_array()?;
-        choices.first()?.get("finish_reason")?.as_str().map(|s| s.to_string())
+        choices
+            .first()?
+            .get("finish_reason")?
+            .as_str()
+            .map(|s| s.to_string())
     }
 }
 
@@ -75,7 +79,9 @@ impl InlineCompletionBackend for OpenAiProvider {
         let body = self.build_request_body(req);
         let timeout = std::time::Duration::from_millis(req.timeout_ms);
 
-        let config = ureq::Agent::config_builder().timeout_global(Some(timeout)).build();
+        let config = ureq::Agent::config_builder()
+            .timeout_global(Some(timeout))
+            .build();
         let agent = ureq::Agent::new_with_config(config);
 
         let response = agent
@@ -107,7 +113,10 @@ impl InlineCompletionBackend for OpenAiProvider {
                         let is_final = Self::extract_finish_reason(&event.data)
                             .is_some_and(|r| r == "stop" || r == "length");
 
-                        let control = sink(StreamChunk { text: cumulative.clone(), is_final });
+                        let control = sink(StreamChunk {
+                            text: cumulative.clone(),
+                            is_final,
+                        });
 
                         if control == StreamControl::Stop || is_final {
                             break;
@@ -117,7 +126,10 @@ impl InlineCompletionBackend for OpenAiProvider {
                 Ok(None) => {
                     // Stream ended -- emit final chunk if we have content
                     if !cumulative.is_empty() {
-                        sink(StreamChunk { text: cumulative, is_final: true });
+                        sink(StreamChunk {
+                            text: cumulative,
+                            is_final: true,
+                        });
                     }
                     break;
                 }

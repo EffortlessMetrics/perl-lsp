@@ -79,8 +79,12 @@ fn send_request(
         method: method.to_string(),
         params: Some(params),
     };
-    let response = server.handle_request(req).ok_or_else(|| format!("no response for {method}"))?;
-    response.result.ok_or_else(|| format!("no result in response for {method}"))
+    let response = server
+        .handle_request(req)
+        .ok_or_else(|| format!("no response for {method}"))?;
+    response
+        .result
+        .ok_or_else(|| format!("no result in response for {method}"))
 }
 
 // ===========================================================================
@@ -99,7 +103,9 @@ fn semantic_tokens_empty_document() -> TestResult {
         json!({"textDocument": {"uri": "file:///empty.pl"}}),
     )?;
 
-    let data = result["data"].as_array().ok_or("semantic tokens should have data array")?;
+    let data = result["data"]
+        .as_array()
+        .ok_or("semantic tokens should have data array")?;
     assert!(
         data.is_empty(),
         "empty document should produce no semantic tokens, got {} tokens",
@@ -127,10 +133,17 @@ fn semantic_tokens_multiline_subroutine() -> TestResult {
         json!({"textDocument": {"uri": "file:///multi.pl"}}),
     )?;
 
-    let data = result["data"].as_array().ok_or("semantic tokens should have data array")?;
+    let data = result["data"]
+        .as_array()
+        .ok_or("semantic tokens should have data array")?;
 
     // Must be valid 5-tuples
-    assert_eq!(data.len() % 5, 0, "semantic tokens must be 5-tuples, got {} elements", data.len());
+    assert_eq!(
+        data.len() % 5,
+        0,
+        "semantic tokens must be 5-tuples, got {} elements",
+        data.len()
+    );
     // Multi-line subroutine should produce several tokens
     assert!(
         data.len() / 5 >= 3,
@@ -168,7 +181,9 @@ __PACKAGE__->meta->make_immutable;
         json!({"textDocument": {"uri": "file:///moose.pm"}}),
     )?;
 
-    let data = result["data"].as_array().ok_or("semantic tokens should have data array")?;
+    let data = result["data"]
+        .as_array()
+        .ok_or("semantic tokens should have data array")?;
 
     assert_eq!(data.len() % 5, 0, "semantic tokens must be 5-tuples");
     // A Moose class with package, attributes, and subroutine should produce many tokens
@@ -227,8 +242,13 @@ fn inlay_hints_empty_document() -> TestResult {
         }),
     )?;
 
-    let hints = result.as_array().ok_or("inlay hints should return an array")?;
-    assert!(hints.is_empty(), "empty document should produce no inlay hints");
+    let hints = result
+        .as_array()
+        .ok_or("inlay hints should return an array")?;
+    assert!(
+        hints.is_empty(),
+        "empty document should produce no inlay hints"
+    );
 
     Ok(())
 }
@@ -257,14 +277,22 @@ splice(@data, 1, 2, 99);
         }),
     )?;
 
-    let hints = result.as_array().ok_or("inlay hints should return an array")?;
+    let hints = result
+        .as_array()
+        .ok_or("inlay hints should return an array")?;
 
     // Multiple builtin calls with named parameters should produce hints
-    assert!(!hints.is_empty(), "builtins with multiple arguments should produce inlay hints");
+    assert!(
+        !hints.is_empty(),
+        "builtins with multiple arguments should produce inlay hints"
+    );
 
     // Validate structure of each hint
     for hint in hints {
-        assert!(hint.get("position").is_some(), "each hint must have a position");
+        assert!(
+            hint.get("position").is_some(),
+            "each hint must have a position"
+        );
         assert!(hint.get("label").is_some(), "each hint must have a label");
     }
 
@@ -291,7 +319,10 @@ fn inlay_hints_invalid_perl_does_not_crash() -> TestResult {
     )?;
 
     // Should return valid response without crashing
-    assert!(result.is_array(), "inlay hints should return an array even for invalid input");
+    assert!(
+        result.is_array(),
+        "inlay hints should return an array even for invalid input"
+    );
 
     Ok(())
 }
@@ -318,14 +349,22 @@ require JSON::XS;
         json!({"textDocument": {"uri": "file:///links.pl"}}),
     )?;
 
-    let links = result.as_array().ok_or("document links should return an array")?;
+    let links = result
+        .as_array()
+        .ok_or("document links should return an array")?;
 
     // use and require statements should generate links
-    assert!(!links.is_empty(), "use/require statements should produce document links");
+    assert!(
+        !links.is_empty(),
+        "use/require statements should produce document links"
+    );
 
     // Validate link structure
     for link in links {
-        assert!(link.get("range").is_some(), "each document link must have a range");
+        assert!(
+            link.get("range").is_some(),
+            "each document link must have a range"
+        );
         // target may be resolved lazily, so it's optional here
     }
 
@@ -344,8 +383,13 @@ fn document_links_empty_document() -> TestResult {
         json!({"textDocument": {"uri": "file:///empty_links.pl"}}),
     )?;
 
-    let links = result.as_array().ok_or("document links should return an array")?;
-    assert!(links.is_empty(), "empty document should produce no document links");
+    let links = result
+        .as_array()
+        .ok_or("document links should return an array")?;
+    assert!(
+        links.is_empty(),
+        "empty document should produce no document links"
+    );
 
     Ok(())
 }
@@ -369,7 +413,9 @@ use Scalar::Util 'blessed';
         json!({"textDocument": {"uri": "file:///modules.pl"}}),
     )?;
 
-    let links = result.as_array().ok_or("document links should return an array")?;
+    let links = result
+        .as_array()
+        .ok_or("document links should return an array")?;
 
     // Various module forms should all produce links
     assert!(
@@ -414,13 +460,21 @@ sub process {
         }),
     )?;
 
-    let ranges = result.as_array().ok_or("selection ranges should return an array")?;
+    let ranges = result
+        .as_array()
+        .ok_or("selection ranges should return an array")?;
 
-    assert!(!ranges.is_empty(), "nested scope position should produce selection ranges");
+    assert!(
+        !ranges.is_empty(),
+        "nested scope position should produce selection ranges"
+    );
 
     // The innermost range should have a parent chain
     let first = &ranges[0];
-    assert!(first.get("range").is_some(), "selection range must have a range field");
+    assert!(
+        first.get("range").is_some(),
+        "selection range must have a range field"
+    );
 
     // Walk the parent chain and count nesting depth
     let mut depth = 1;
@@ -468,7 +522,9 @@ my $sum = add($x, $y);
         }),
     )?;
 
-    let ranges = result.as_array().ok_or("selection ranges should return an array")?;
+    let ranges = result
+        .as_array()
+        .ok_or("selection ranges should return an array")?;
 
     // Should return one selection range per position
     assert_eq!(
@@ -479,7 +535,11 @@ my $sum = add($x, $y);
     );
 
     for (i, range) in ranges.iter().enumerate() {
-        assert!(range.get("range").is_some(), "selection range {} must have a range field", i);
+        assert!(
+            range.get("range").is_some(),
+            "selection range {} must have a range field",
+            i
+        );
     }
 
     Ok(())
@@ -502,7 +562,9 @@ fn selection_range_empty_document() -> TestResult {
         }),
     )?;
 
-    let ranges = result.as_array().ok_or("selection ranges should return an array")?;
+    let ranges = result
+        .as_array()
+        .ok_or("selection ranges should return an array")?;
 
     // Even for empty document, should return one result per position
     assert_eq!(
@@ -544,14 +606,22 @@ HTML
         json!({"textDocument": {"uri": "file:///heredoc.pl"}}),
     )?;
 
-    let ranges = result.as_array().ok_or("folding ranges should return an array")?;
+    let ranges = result
+        .as_array()
+        .ok_or("folding ranges should return an array")?;
 
     // Heredocs may or may not produce folding ranges depending on the parser.
     // This test verifies the server handles the request without errors.
     // If ranges are returned, validate their structure.
     for range in ranges {
-        assert!(range.get("startLine").is_some(), "folding range must have startLine");
-        assert!(range.get("endLine").is_some(), "folding range must have endLine");
+        assert!(
+            range.get("startLine").is_some(),
+            "folding range must have startLine"
+        );
+        assert!(
+            range.get("endLine").is_some(),
+            "folding range must have endLine"
+        );
     }
 
     Ok(())
@@ -590,18 +660,27 @@ sub new {
         json!({"textDocument": {"uri": "file:///pod.pm"}}),
     )?;
 
-    let ranges = result.as_array().ok_or("folding ranges should return an array")?;
+    let ranges = result
+        .as_array()
+        .ok_or("folding ranges should return an array")?;
 
     // POD documentation and sub should produce folding ranges
-    assert!(!ranges.is_empty(), "POD and subroutine should produce folding ranges");
+    assert!(
+        !ranges.is_empty(),
+        "POD and subroutine should produce folding ranges"
+    );
 
     // Check for comment-kind folding ranges (POD)
-    let has_comment_range =
-        ranges.iter().any(|r| r.get("kind").and_then(|k| k.as_str()) == Some("comment"));
+    let has_comment_range = ranges
+        .iter()
+        .any(|r| r.get("kind").and_then(|k| k.as_str()) == Some("comment"));
     // POD is typically folded as comments; if not, at least ensure region ranges exist
     if !has_comment_range {
         // At minimum, the subroutine should fold
-        assert!(!ranges.is_empty(), "should have at least one folding range for subroutine");
+        assert!(
+            !ranges.is_empty(),
+            "should have at least one folding range for subroutine"
+        );
     }
 
     Ok(())
@@ -643,13 +722,20 @@ __PACKAGE__->meta->make_immutable;
         json!({"textDocument": {"uri": "file:///animal.pm"}}),
     )?;
 
-    let symbols = result.as_array().ok_or("document symbols should return an array")?;
+    let symbols = result
+        .as_array()
+        .ok_or("document symbols should return an array")?;
 
-    assert!(!symbols.is_empty(), "Moose class should produce document symbols");
+    assert!(
+        !symbols.is_empty(),
+        "Moose class should produce document symbols"
+    );
 
     // Collect all symbol names
-    let names: Vec<&str> =
-        symbols.iter().filter_map(|s| s.get("name").and_then(|n| n.as_str())).collect();
+    let names: Vec<&str> = symbols
+        .iter()
+        .filter_map(|s| s.get("name").and_then(|n| n.as_str()))
+        .collect();
 
     // Should find the package
     assert!(
@@ -662,10 +748,13 @@ __PACKAGE__->meta->make_immutable;
         .iter()
         .find(|s| s.get("name").and_then(|n| n.as_str()) == Some("Animal"))
         .ok_or("Animal package symbol not found")?;
-    let children =
-        package["children"].as_array().ok_or("Animal package symbol should have children")?;
-    let child_names: Vec<&str> =
-        children.iter().filter_map(|s| s.get("name").and_then(|n| n.as_str())).collect();
+    let children = package["children"]
+        .as_array()
+        .ok_or("Animal package symbol should have children")?;
+    let child_names: Vec<&str> = children
+        .iter()
+        .filter_map(|s| s.get("name").and_then(|n| n.as_str()))
+        .collect();
     assert!(
         child_names.first() == Some(&"name") && child_names.get(1) == Some(&"sound"),
         "attribute symbols should lead the Animal outline children, found: {:?}",
@@ -677,13 +766,17 @@ __PACKAGE__->meta->make_immutable;
         child_names
     );
     assert!(
-        children.iter().any(|s| s.get("name").and_then(|n| n.as_str()) == Some("name")
-            && s.get("kind").and_then(|k| k.as_i64()) == Some(7)),
+        children
+            .iter()
+            .any(|s| s.get("name").and_then(|n| n.as_str()) == Some("name")
+                && s.get("kind").and_then(|k| k.as_i64()) == Some(7)),
         "name attribute should appear as a Property symbol"
     );
     assert!(
-        children.iter().any(|s| s.get("name").and_then(|n| n.as_str()) == Some("sound")
-            && s.get("kind").and_then(|k| k.as_i64()) == Some(7)),
+        children
+            .iter()
+            .any(|s| s.get("name").and_then(|n| n.as_str()) == Some("sound")
+                && s.get("kind").and_then(|k| k.as_i64()) == Some(7)),
         "sound attribute should appear as a Property symbol"
     );
 
@@ -741,8 +834,10 @@ get_
         .or_else(|| result.as_array())
         .ok_or("completion should return items")?;
 
-    let labels: Vec<&str> =
-        items.iter().filter_map(|i| i.get("label").and_then(|l| l.as_str())).collect();
+    let labels: Vec<&str> = items
+        .iter()
+        .filter_map(|i| i.get("label").and_then(|l| l.as_str()))
+        .collect();
 
     assert!(
         labels.contains(&"get_user"),
@@ -790,20 +885,38 @@ sub query {
         json!({"textDocument": {"uri": "file:///db.pm"}}),
     )?;
 
-    let symbols = result.as_array().ok_or("document symbols should return an array")?;
+    let symbols = result
+        .as_array()
+        .ok_or("document symbols should return an array")?;
 
-    let names: Vec<&str> =
-        symbols.iter().filter_map(|s| s.get("name").and_then(|n| n.as_str())).collect();
+    let names: Vec<&str> = symbols
+        .iter()
+        .filter_map(|s| s.get("name").and_then(|n| n.as_str()))
+        .collect();
 
     // Should find the package and its subroutines
     assert!(
-        names.iter().any(|n| n.contains("MyApp::DB") || n.contains("MyApp")),
+        names
+            .iter()
+            .any(|n| n.contains("MyApp::DB") || n.contains("MyApp")),
         "should find MyApp::DB package, found: {:?}",
         names
     );
-    assert!(names.contains(&"new"), "should find new subroutine, found: {:?}", names);
-    assert!(names.contains(&"connect"), "should find connect subroutine, found: {:?}", names);
-    assert!(names.contains(&"query"), "should find query subroutine, found: {:?}", names);
+    assert!(
+        names.contains(&"new"),
+        "should find new subroutine, found: {:?}",
+        names
+    );
+    assert!(
+        names.contains(&"connect"),
+        "should find connect subroutine, found: {:?}",
+        names
+    );
+    assert!(
+        names.contains(&"query"),
+        "should find query subroutine, found: {:?}",
+        names
+    );
 
     Ok(())
 }
@@ -844,7 +957,9 @@ __PACKAGE__->meta->make_immutable;
         json!({"textDocument": {"uri": "file:///moose_fold.pm"}}),
     )?;
 
-    let ranges = result.as_array().ok_or("folding ranges should return an array")?;
+    let ranges = result
+        .as_array()
+        .ok_or("folding ranges should return an array")?;
 
     // Should fold the multi-line has() calls and the subroutine
     assert!(
@@ -929,7 +1044,10 @@ fn diagnostics_syntax_error_does_not_crash_server() -> TestResult {
     };
     let hover_resp = server.handle_request(hover_req);
     // Should return Some response (either hover data or null result), not crash
-    assert!(hover_resp.is_some(), "hover should return a response for file with syntax errors");
+    assert!(
+        hover_resp.is_some(),
+        "hover should return a response for file with syntax errors"
+    );
 
     Ok(())
 }
@@ -963,7 +1081,10 @@ sub new {
     };
     let response = server.handle_request(req);
     // Should return a response (hover info or null), not crash
-    assert!(response.is_some(), "hover on package name should return a response");
+    assert!(
+        response.is_some(),
+        "hover on package name should return a response"
+    );
 
     Ok(())
 }
@@ -984,7 +1105,10 @@ fn hover_on_use_statement_module() -> TestResult {
         })),
     };
     let response = server.handle_request(req);
-    assert!(response.is_some(), "hover on module name in use statement should return a response");
+    assert!(
+        response.is_some(),
+        "hover on module name in use statement should return a response"
+    );
 
     Ok(())
 }
@@ -1014,12 +1138,17 @@ fn code_actions_empty_range() -> TestResult {
             }
         })),
     };
-    let response =
-        server.handle_request(req).ok_or("code action request should return a response")?;
+    let response = server
+        .handle_request(req)
+        .ok_or("code action request should return a response")?;
 
     // Response should have a result (possibly empty array)
     let result = response.result.ok_or("code action should have result")?;
-    assert!(result.is_array(), "code actions should return an array, got: {:?}", result);
+    assert!(
+        result.is_array(),
+        "code actions should return an array, got: {:?}",
+        result
+    );
 
     Ok(())
 }
@@ -1040,8 +1169,13 @@ fn document_symbols_empty_file() -> TestResult {
         json!({"textDocument": {"uri": "file:///empty_sym.pl"}}),
     )?;
 
-    let symbols = result.as_array().ok_or("document symbols should return an array")?;
-    assert!(symbols.is_empty(), "empty document should produce no document symbols");
+    let symbols = result
+        .as_array()
+        .ok_or("document symbols should return an array")?;
+    assert!(
+        symbols.is_empty(),
+        "empty document should produce no document symbols"
+    );
 
     Ok(())
 }
@@ -1072,15 +1206,31 @@ sub baz_method { return 3 }
         json!({"textDocument": {"uri": "file:///multi_pkg.pm"}}),
     )?;
 
-    let symbols = result.as_array().ok_or("document symbols should return an array")?;
+    let symbols = result
+        .as_array()
+        .ok_or("document symbols should return an array")?;
 
-    let names: Vec<&str> =
-        symbols.iter().filter_map(|s| s.get("name").and_then(|n| n.as_str())).collect();
+    let names: Vec<&str> = symbols
+        .iter()
+        .filter_map(|s| s.get("name").and_then(|n| n.as_str()))
+        .collect();
 
     // Should find all three packages and their methods
-    assert!(names.iter().any(|n| n.contains("Foo")), "should find Foo package, found: {:?}", names);
-    assert!(names.iter().any(|n| n.contains("Bar")), "should find Bar package, found: {:?}", names);
-    assert!(names.iter().any(|n| n.contains("Baz")), "should find Baz package, found: {:?}", names);
+    assert!(
+        names.iter().any(|n| n.contains("Foo")),
+        "should find Foo package, found: {:?}",
+        names
+    );
+    assert!(
+        names.iter().any(|n| n.contains("Bar")),
+        "should find Bar package, found: {:?}",
+        names
+    );
+    assert!(
+        names.iter().any(|n| n.contains("Baz")),
+        "should find Baz package, found: {:?}",
+        names
+    );
 
     Ok(())
 }

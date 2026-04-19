@@ -29,13 +29,17 @@ fn test_fast_path_contains_only_parse_errors() {
     let uri = "file:///fast_slow_test.pl";
 
     // Open a clean document first
-    harness.open(uri, "my $x = 1;\n").expect("open should succeed");
+    harness
+        .open(uri, "my $x = 1;\n")
+        .expect("open should succeed");
 
     // Drain any existing notifications (from didOpen)
     let _ = harness.drain_notifications(Some("textDocument/publishDiagnostics"), 400);
 
     // Now change to a document with a parse error
-    harness.change_full(uri, 2, "my $broken = ;\n").expect("change should succeed");
+    harness
+        .change_full(uri, 2, "my $broken = ;\n")
+        .expect("change should succeed");
 
     // Wait for notifications to arrive
     let all_notifications =
@@ -48,7 +52,10 @@ fn test_fast_path_contains_only_parse_errors() {
 
     // The FIRST notification must be the fast path: only parse-error diagnostics
     let first = &all_notifications[0];
-    let first_diags = first["params"]["diagnostics"].as_array().cloned().unwrap_or_default();
+    let first_diags = first["params"]["diagnostics"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
 
     assert!(
         !first_diags.is_empty(),
@@ -57,13 +64,19 @@ fn test_fast_path_contains_only_parse_errors() {
 
     let parse_error_code = "PL001";
     assert!(
-        first_diags
-            .iter()
-            .all(|d| { d["code"].as_str().map(|c| c == parse_error_code).unwrap_or(false) }),
+        first_diags.iter().all(|d| {
+            d["code"]
+                .as_str()
+                .map(|c| c == parse_error_code)
+                .unwrap_or(false)
+        }),
         "Fast-path publishDiagnostics must ONLY contain parse-error diagnostics \
          (code {}), but found other codes: {:?}",
         parse_error_code,
-        first_diags.iter().map(|d| d["code"].as_str()).collect::<Vec<_>>()
+        first_diags
+            .iter()
+            .map(|d| d["code"].as_str())
+            .collect::<Vec<_>>()
     );
 }
 
@@ -80,13 +93,17 @@ fn test_two_phase_diagnostic_delivery_on_change() {
 
     let uri = "file:///two_phase_test.pl";
 
-    harness.open(uri, "my $x = 1;\n").expect("open should succeed");
+    harness
+        .open(uri, "my $x = 1;\n")
+        .expect("open should succeed");
 
     // Drain didOpen notifications
     let _ = harness.drain_notifications(Some("textDocument/publishDiagnostics"), 400);
 
     // Change to a document with a parse error
-    harness.change_full(uri, 2, "my $broken = ;\n").expect("change should succeed");
+    harness
+        .change_full(uri, 2, "my $broken = ;\n")
+        .expect("change should succeed");
 
     // Collect all notifications that arrive within a generous window
     let all_notifications =
@@ -101,22 +118,39 @@ fn test_two_phase_diagnostic_delivery_on_change() {
     );
 
     // First notification: parse errors only
-    let first_diags =
-        all_notifications[0]["params"]["diagnostics"].as_array().cloned().unwrap_or_default();
+    let first_diags = all_notifications[0]["params"]["diagnostics"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
     assert!(
-        first_diags.iter().all(|d| d["code"].as_str() == Some("PL001")),
+        first_diags
+            .iter()
+            .all(|d| d["code"].as_str() == Some("PL001")),
         "First (fast-path) notification must contain only parse errors (PL001), \
          got codes: {:?}",
-        first_diags.iter().map(|d| d["code"].as_str()).collect::<Vec<_>>()
+        first_diags
+            .iter()
+            .map(|d| d["code"].as_str())
+            .collect::<Vec<_>>()
     );
 
     // Last notification: full set — must include non-parse-error diagnostics
-    let last = all_notifications.last().expect("at least two notifications");
-    let last_diags = last["params"]["diagnostics"].as_array().cloned().unwrap_or_default();
+    let last = all_notifications
+        .last()
+        .expect("at least two notifications");
+    let last_diags = last["params"]["diagnostics"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
     assert!(
-        last_diags.iter().any(|d| d["code"].as_str() != Some("PL001")),
+        last_diags
+            .iter()
+            .any(|d| d["code"].as_str() != Some("PL001")),
         "Last (slow-path) notification must contain the full diagnostic set \
          including non-parse-error codes, but only found: {:?}",
-        last_diags.iter().map(|d| d["code"].as_str()).collect::<Vec<_>>()
+        last_diags
+            .iter()
+            .map(|d| d["code"].as_str())
+            .collect::<Vec<_>>()
     );
 }

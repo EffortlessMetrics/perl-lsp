@@ -18,8 +18,10 @@ mod tests {
 
     #[test]
     fn test_setup_environment_with_paths() {
-        let env =
-            setup_environment(&[PathBuf::from("/workspace/lib"), PathBuf::from("/custom/lib")]);
+        let env = setup_environment(&[
+            PathBuf::from("/workspace/lib"),
+            PathBuf::from("/custom/lib"),
+        ]);
         assert!(env.contains_key("PERL5LIB"));
     }
 
@@ -32,7 +34,9 @@ mod tests {
     #[test]
     fn test_setup_environment_multiple_paths_joined_with_separator() -> Result<(), String> {
         let env = setup_environment(&[PathBuf::from("/a"), PathBuf::from("/b")]);
-        let perl5lib = env.get("PERL5LIB").ok_or_else(|| "PERL5LIB must be set".to_string())?;
+        let perl5lib = env
+            .get("PERL5LIB")
+            .ok_or_else(|| "PERL5LIB must be set".to_string())?;
         assert!(perl5lib.contains("/a"), "first path present in PERL5LIB");
         assert!(perl5lib.contains("/b"), "second path present in PERL5LIB");
         #[cfg(not(windows))]
@@ -63,7 +67,10 @@ mod tests {
     fn test_format_command_args_without_spaces_passthrough() {
         let args = vec!["simple".to_string(), "/path/to/file.pl".to_string()];
         let formatted = format_command_args(&args);
-        assert_eq!(formatted, args, "args without spaces pass through unchanged");
+        assert_eq!(
+            formatted, args,
+            "args without spaces pass through unchanged"
+        );
     }
 
     #[test]
@@ -78,8 +85,14 @@ mod tests {
         let formatted = format_command_args(&args);
         assert_eq!(formatted.len(), 2);
         assert_eq!(formatted[0], "plain", "no-space arg unchanged");
-        assert!(formatted[1].contains("has space"), "space arg contains original text");
-        assert_ne!(formatted[1], "has space", "space arg must be wrapped in quotes");
+        assert!(
+            formatted[1].contains("has space"),
+            "space arg contains original text"
+        );
+        assert_ne!(
+            formatted[1], "has space",
+            "space arg must be wrapped in quotes"
+        );
     }
 
     #[test]
@@ -95,9 +108,18 @@ mod tests {
     fn test_format_command_args_space_with_single_quote_uses_double_quotes() {
         let args = vec!["it's here".to_string()];
         let formatted = format_command_args(&args);
-        assert!(formatted[0].starts_with('"'), "double-quoted when arg contains single quote");
-        assert!(formatted[0].ends_with('"'), "double-quoted when arg contains single quote");
-        assert!(formatted[0].contains("it's here"), "original content preserved");
+        assert!(
+            formatted[0].starts_with('"'),
+            "double-quoted when arg contains single quote"
+        );
+        assert!(
+            formatted[0].ends_with('"'),
+            "double-quoted when arg contains single quote"
+        );
+        assert!(
+            formatted[0].contains("it's here"),
+            "original content preserved"
+        );
     }
 
     #[test]
@@ -105,6 +127,9 @@ mod tests {
     fn test_format_command_args_inner_double_quote_escaped_in_double_quoted_form() {
         let args = vec!["say \"hello\" it's".to_string()];
         let formatted = format_command_args(&args);
-        assert!(formatted[0].contains(r#"\""#), "inner double quotes should be escaped as \\\" ");
+        assert!(
+            formatted[0].contains(r#"\""#),
+            "inner double quotes should be escaped as \\\" "
+        );
     }
 }

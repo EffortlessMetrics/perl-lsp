@@ -131,7 +131,14 @@ fn count_nodes(node: &perl_parser::Node, stats: &mut AstStats) {
             }
         }
         NodeKind::Use { .. } => stats.uses += 1,
-        NodeKind::For { body, init, condition, update, continue_block, .. } => {
+        NodeKind::For {
+            body,
+            init,
+            condition,
+            update,
+            continue_block,
+            ..
+        } => {
             stats.loops += 1;
             if let Some(i) = init {
                 count_nodes(i, stats);
@@ -159,7 +166,11 @@ fn count_nodes(node: &perl_parser::Node, stats: &mut AstStats) {
         }
 
         // Check for Unicode in variable names
-        NodeKind::VariableDeclaration { variable, initializer, .. } => {
+        NodeKind::VariableDeclaration {
+            variable,
+            initializer,
+            ..
+        } => {
             count_nodes(variable, stats);
             if let Some(init) = initializer {
                 count_nodes(init, stats);

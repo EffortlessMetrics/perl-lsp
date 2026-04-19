@@ -61,7 +61,9 @@ fn get_diagnostics_for_code(code: &str) -> Result<serde_json::Value, Box<dyn std
         })),
     };
 
-    let response = server.handle_request(request).ok_or("Failed to get response")?;
+    let response = server
+        .handle_request(request)
+        .ok_or("Failed to get response")?;
     let result = response.result.ok_or("Response missing result")?;
 
     Ok(result)
@@ -195,7 +197,10 @@ sub test {
     let items = result["items"].as_array().ok_or("Expected items array")?;
 
     // Should have multiple diagnostics
-    assert!(!items.is_empty(), "Should have diagnostics for multiple errors");
+    assert!(
+        !items.is_empty(),
+        "Should have diagnostics for multiple errors"
+    );
 
     Ok(())
 }

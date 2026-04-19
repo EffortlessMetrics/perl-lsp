@@ -21,7 +21,9 @@ fn ok(expr: &str) -> ValidationResult {
 }
 
 fn err(expr: &str) -> ValidationError {
-    eval().validate(expr).expect_err("Expected validation error")
+    eval()
+        .validate(expr)
+        .expect_err("Expected validation error")
 }
 
 // ---------------------------------------------------------------------------

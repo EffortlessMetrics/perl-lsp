@@ -58,7 +58,10 @@ fn test_request_without_arguments() -> Result<(), Box<dyn std::error::Error>> {
 
     let json = serde_json::to_string(&request)?;
     // arguments should be omitted from JSON
-    assert!(!json.contains("arguments"), "None arguments should be skipped in serialization");
+    assert!(
+        !json.contains("arguments"),
+        "None arguments should be skipped in serialization"
+    );
 
     let deserialized: Request = serde_json::from_str(&json)?;
     assert!(deserialized.arguments.is_none());
@@ -102,7 +105,12 @@ fn test_response_error_serde_round_trip() -> Result<(), Box<dyn std::error::Erro
     let deserialized: Response = serde_json::from_str(&json)?;
 
     assert!(!deserialized.success);
-    assert!(deserialized.message.as_ref().is_some_and(|m| m.contains("Unknown command")));
+    assert!(
+        deserialized
+            .message
+            .as_ref()
+            .is_some_and(|m| m.contains("Unknown command"))
+    );
     assert!(deserialized.body.is_none());
     Ok(())
 }
@@ -207,8 +215,14 @@ fn test_set_breakpoints_arguments_round_trip() -> Result<(), Box<dyn std::error:
     let json = serde_json::to_string(&args)?;
     let deserialized: SetBreakpointsArguments = serde_json::from_str(&json)?;
 
-    assert_eq!(deserialized.source.path.as_deref(), Some("/workspace/script.pl"));
-    let bps = deserialized.breakpoints.as_ref().ok_or("Expected breakpoints")?;
+    assert_eq!(
+        deserialized.source.path.as_deref(),
+        Some("/workspace/script.pl")
+    );
+    let bps = deserialized
+        .breakpoints
+        .as_ref()
+        .ok_or("Expected breakpoints")?;
     assert_eq!(bps.len(), 2);
     assert_eq!(bps[0].line, 10);
     assert_eq!(bps[1].line, 20);
@@ -245,7 +259,9 @@ fn test_capabilities_round_trip() -> Result<(), Box<dyn std::error::Error>> {
 
     assert_eq!(deserialized.supports_configuration_done_request, Some(true));
     assert_eq!(deserialized.supports_step_back, Some(false));
-    let filters = deserialized.exception_breakpoint_filters.ok_or("Expected filters")?;
+    let filters = deserialized
+        .exception_breakpoint_filters
+        .ok_or("Expected filters")?;
     assert_eq!(filters.len(), 1);
     assert_eq!(filters[0].filter, "die");
     Ok(())
@@ -253,7 +269,11 @@ fn test_capabilities_round_trip() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn test_stack_trace_arguments_round_trip() -> Result<(), Box<dyn std::error::Error>> {
-    let args = StackTraceArguments { thread_id: 1, start_frame: Some(0), levels: Some(20) };
+    let args = StackTraceArguments {
+        thread_id: 1,
+        start_frame: Some(0),
+        levels: Some(20),
+    };
 
     let json = serde_json::to_string(&args)?;
     let deserialized: StackTraceArguments = serde_json::from_str(&json)?;
@@ -405,7 +425,9 @@ fn test_scopes_response_body_round_trip() -> Result<(), Box<dyn std::error::Erro
 
 #[test]
 fn test_continue_response_body_round_trip() -> Result<(), Box<dyn std::error::Error>> {
-    let body = ContinueResponseBody { all_threads_continued: true };
+    let body = ContinueResponseBody {
+        all_threads_continued: true,
+    };
 
     let json = serde_json::to_string(&body)?;
     let deserialized: ContinueResponseBody = serde_json::from_str(&json)?;
@@ -416,7 +438,12 @@ fn test_continue_response_body_round_trip() -> Result<(), Box<dyn std::error::Er
 
 #[test]
 fn test_threads_response_body_round_trip() -> Result<(), Box<dyn std::error::Error>> {
-    let body = ThreadsResponseBody { threads: vec![Thread { id: 1, name: "main".to_string() }] };
+    let body = ThreadsResponseBody {
+        threads: vec![Thread {
+            id: 1,
+            name: "main".to_string(),
+        }],
+    };
 
     let json = serde_json::to_string(&body)?;
     let deserialized: ThreadsResponseBody = serde_json::from_str(&json)?;
@@ -469,7 +496,10 @@ fn test_control_flow_arguments_round_trip() -> Result<(), Box<dyn std::error::Er
 
 #[test]
 fn test_disconnect_arguments_round_trip() -> Result<(), Box<dyn std::error::Error>> {
-    let args = DisconnectArguments { restart: Some(false), terminate_debuggee: Some(true) };
+    let args = DisconnectArguments {
+        restart: Some(false),
+        terminate_debuggee: Some(true),
+    };
 
     let json = serde_json::to_string(&args)?;
     let deserialized: DisconnectArguments = serde_json::from_str(&json)?;
@@ -481,7 +511,9 @@ fn test_disconnect_arguments_round_trip() -> Result<(), Box<dyn std::error::Erro
 
 #[test]
 fn test_terminate_arguments_round_trip() -> Result<(), Box<dyn std::error::Error>> {
-    let args = TerminateArguments { restart: Some(true) };
+    let args = TerminateArguments {
+        restart: Some(true),
+    };
 
     let json = serde_json::to_string(&args)?;
     let deserialized: TerminateArguments = serde_json::from_str(&json)?;
@@ -535,7 +567,9 @@ fn test_exception_breakpoints_round_trip() -> Result<(), Box<dyn std::error::Err
     let deserialized: SetExceptionBreakpointsArguments = serde_json::from_str(&json)?;
 
     assert_eq!(deserialized.filters.len(), 2);
-    let opts = deserialized.filter_options.ok_or("Expected filter_options")?;
+    let opts = deserialized
+        .filter_options
+        .ok_or("Expected filter_options")?;
     assert_eq!(opts.len(), 1);
     assert_eq!(opts[0].filter_id, "die");
     Ok(())
@@ -554,7 +588,11 @@ fn test_modules_response_round_trip() -> Result<(), Box<dyn std::error::Error>> 
                 name: "Foo::Bar".to_string(),
                 path: Some("/workspace/lib/Foo/Bar.pm".to_string()),
             },
-            Module { id: "strict".to_string(), name: "strict".to_string(), path: None },
+            Module {
+                id: "strict".to_string(),
+                name: "strict".to_string(),
+                path: None,
+            },
         ],
         total_modules: Some(2),
     };
@@ -703,7 +741,11 @@ fn test_dap_message_request_serde() -> Result<(), Box<dyn std::error::Error>> {
 
     let deserialized: DapMessage = serde_json::from_str(&json)?;
     match deserialized {
-        DapMessage::Request { seq, command, arguments } => {
+        DapMessage::Request {
+            seq,
+            command,
+            arguments,
+        } => {
             assert_eq!(seq, 1);
             assert_eq!(command, "initialize");
             assert!(arguments.is_some());
@@ -730,7 +772,9 @@ fn test_dap_message_response_serde() -> Result<(), Box<dyn std::error::Error>> {
 
     let deserialized: DapMessage = serde_json::from_str(&json)?;
     match deserialized {
-        DapMessage::Response { success, command, .. } => {
+        DapMessage::Response {
+            success, command, ..
+        } => {
             assert!(success);
             assert_eq!(command, "initialize");
         }
@@ -776,7 +820,9 @@ fn test_dap_message_response_error_serde() -> Result<(), Box<dyn std::error::Err
     let json = serde_json::to_string(&msg)?;
     let deserialized: DapMessage = serde_json::from_str(&json)?;
     match deserialized {
-        DapMessage::Response { success, message, .. } => {
+        DapMessage::Response {
+            success, message, ..
+        } => {
             assert!(!success);
             assert_eq!(message.as_deref(), Some("evaluation failed"));
         }
@@ -826,8 +872,11 @@ fn test_dap_server_creation_native() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn test_dap_server_creation_bridge() -> Result<(), Box<dyn std::error::Error>> {
-    let config =
-        DapConfig { log_level: "debug".to_string(), mode: DapMode::Bridge, workspace_root: None };
+    let config = DapConfig {
+        log_level: "debug".to_string(),
+        mode: DapMode::Bridge,
+        workspace_root: None,
+    };
     let server = DapServer::new(config)?;
     assert_eq!(server.config.mode, DapMode::Bridge);
     assert!(server.config.workspace_root.is_none());
@@ -836,8 +885,11 @@ fn test_dap_server_creation_bridge() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn test_dap_server_socket_rejects_bridge_mode() -> Result<(), Box<dyn std::error::Error>> {
-    let config =
-        DapConfig { log_level: "info".to_string(), mode: DapMode::Bridge, workspace_root: None };
+    let config = DapConfig {
+        log_level: "info".to_string(),
+        mode: DapMode::Bridge,
+        workspace_root: None,
+    };
     let mut server = DapServer::new(config)?;
     let result = server.run_socket(0);
     assert!(result.is_err());
@@ -897,7 +949,10 @@ fn test_breakpoint_store_is_empty() {
 
     let (_file, source_path) = create_test_perl_file();
     let args = SetBreakpointsArguments {
-        source: Source { path: Some(source_path.clone()), name: None },
+        source: Source {
+            path: Some(source_path.clone()),
+            name: None,
+        },
         breakpoints: Some(vec![SourceBreakpoint {
             line: 5,
             column: None,
@@ -934,7 +989,10 @@ fn test_breakpoint_record_to_protocol() {
     assert_eq!(protocol_bp.line, 10);
     assert_eq!(protocol_bp.column, Some(5));
     assert!(protocol_bp.verified);
-    assert_eq!(protocol_bp.message.as_deref(), Some("adjusted to executable line"));
+    assert_eq!(
+        protocol_bp.message.as_deref(),
+        Some("adjusted to executable line")
+    );
 }
 
 #[test]
@@ -981,7 +1039,10 @@ fn test_register_breakpoint_hit_unverified_breakpoint_not_matched() {
     let store = BreakpointStore::new();
     // Set a breakpoint on a file that doesn't exist (will be unverified)
     let args = SetBreakpointsArguments {
-        source: Source { path: Some("/nonexistent/file.pl".to_string()), name: None },
+        source: Source {
+            path: Some("/nonexistent/file.pl".to_string()),
+            name: None,
+        },
         breakpoints: Some(vec![SourceBreakpoint {
             line: 10,
             column: None,
@@ -1007,7 +1068,10 @@ fn test_adjust_breakpoints_for_edit_negative_delta_clamps_to_one() {
     // Use set_breakpoints with a real temp file
     let (_file, source_path) = create_test_perl_file();
     let args = SetBreakpointsArguments {
-        source: Source { path: Some(source_path.clone()), name: None },
+        source: Source {
+            path: Some(source_path.clone()),
+            name: None,
+        },
         breakpoints: Some(vec![SourceBreakpoint {
             line: 5,
             column: None,
@@ -1027,7 +1091,10 @@ fn test_adjust_breakpoints_for_edit_negative_delta_clamps_to_one() {
     assert_eq!(bps[0].line, 1);
     assert!(!bps[0].verified, "Breakpoint should be invalidated by edit");
     assert!(
-        bps[0].message.as_ref().is_some_and(|m| m.contains("invalidated")),
+        bps[0]
+            .message
+            .as_ref()
+            .is_some_and(|m| m.contains("invalidated")),
         "Should have invalidation message"
     );
 }
@@ -1037,7 +1104,10 @@ fn test_breakpoint_store_negative_line_rejected() {
     let (_file, source_path) = create_test_perl_file();
     let store = BreakpointStore::new();
     let args = SetBreakpointsArguments {
-        source: Source { path: Some(source_path), name: None },
+        source: Source {
+            path: Some(source_path),
+            name: None,
+        },
         breakpoints: Some(vec![SourceBreakpoint {
             line: -1,
             column: None,
@@ -1051,7 +1121,10 @@ fn test_breakpoint_store_negative_line_rejected() {
     assert_eq!(bps.len(), 1);
     assert!(!bps[0].verified);
     assert!(
-        bps[0].message.as_ref().is_some_and(|m| m.contains("positive")),
+        bps[0]
+            .message
+            .as_ref()
+            .is_some_and(|m| m.contains("positive")),
         "Should mention line must be positive"
     );
 }
@@ -1061,7 +1134,10 @@ fn test_breakpoint_condition_with_newline_rejected() {
     let (_file, source_path) = create_test_perl_file();
     let store = BreakpointStore::new();
     let args = SetBreakpointsArguments {
-        source: Source { path: Some(source_path), name: None },
+        source: Source {
+            path: Some(source_path),
+            name: None,
+        },
         breakpoints: Some(vec![SourceBreakpoint {
             line: 5,
             column: None,
@@ -1075,7 +1151,10 @@ fn test_breakpoint_condition_with_newline_rejected() {
     assert_eq!(bps.len(), 1);
     assert!(!bps[0].verified);
     assert!(
-        bps[0].message.as_ref().is_some_and(|m| m.contains("newline")),
+        bps[0]
+            .message
+            .as_ref()
+            .is_some_and(|m| m.contains("newline")),
         "Should mention newlines are not allowed"
     );
 }
@@ -1085,7 +1164,10 @@ fn test_breakpoint_invalid_hit_condition_rejected() {
     let (_file, source_path) = create_test_perl_file();
     let store = BreakpointStore::new();
     let args = SetBreakpointsArguments {
-        source: Source { path: Some(source_path), name: None },
+        source: Source {
+            path: Some(source_path),
+            name: None,
+        },
         breakpoints: Some(vec![SourceBreakpoint {
             line: 5,
             column: None,
@@ -1099,7 +1181,10 @@ fn test_breakpoint_invalid_hit_condition_rejected() {
     assert_eq!(bps.len(), 1);
     assert!(!bps[0].verified);
     assert!(
-        bps[0].message.as_ref().is_some_and(|m| m.contains("Invalid hitCondition")),
+        bps[0]
+            .message
+            .as_ref()
+            .is_some_and(|m| m.contains("Invalid hitCondition")),
         "Should mention invalid hit condition"
     );
 }
@@ -1170,7 +1255,10 @@ fn test_debug_adapter_new() {
 #[test]
 fn test_feature_catalog_has_feature_known() {
     let result = perl_dap::feature_catalog::has_feature("dap.breakpoints.basic");
-    assert!(result, "dap.breakpoints.basic should be a registered feature");
+    assert!(
+        result,
+        "dap.breakpoints.basic should be a registered feature"
+    );
 }
 
 #[test]
@@ -1204,7 +1292,10 @@ fn test_feature_catalog_has_feature_unknown() {
 #[test]
 fn test_feature_catalog_advertised_features_not_empty() {
     let features = perl_dap::feature_catalog::advertised_features();
-    assert!(!features.is_empty(), "Should have at least one advertised feature");
+    assert!(
+        !features.is_empty(),
+        "Should have at least one advertised feature"
+    );
 }
 
 // ============================================================================
@@ -1309,7 +1400,12 @@ fn test_breakpoint_locations_round_trip() -> Result<(), Box<dyn std::error::Erro
                 end_line: Some(10),
                 end_column: Some(20),
             },
-            BreakpointLocation { line: 15, column: None, end_line: None, end_column: None },
+            BreakpointLocation {
+                line: 15,
+                column: None,
+                end_line: None,
+                end_column: None,
+            },
         ],
     };
 
@@ -1366,8 +1462,10 @@ fn test_set_expression_arguments_round_trip() -> Result<(), Box<dyn std::error::
 
 #[test]
 fn test_cancel_arguments_round_trip() -> Result<(), Box<dyn std::error::Error>> {
-    let args =
-        CancelArguments { request_id: Some(42), progress_id: Some("progress-1".to_string()) };
+    let args = CancelArguments {
+        request_id: Some(42),
+        progress_id: Some("progress-1".to_string()),
+    };
 
     let json = serde_json::to_string(&args)?;
     let deserialized: CancelArguments = serde_json::from_str(&json)?;
@@ -1390,7 +1488,9 @@ fn test_restart_frame_arguments_round_trip() -> Result<(), Box<dyn std::error::E
 
 #[test]
 fn test_terminate_threads_arguments_round_trip() -> Result<(), Box<dyn std::error::Error>> {
-    let args = TerminateThreadsArguments { thread_ids: Some(vec![1, 2, 3]) };
+    let args = TerminateThreadsArguments {
+        thread_ids: Some(vec![1, 2, 3]),
+    };
 
     let json = serde_json::to_string(&args)?;
     let deserialized: TerminateThreadsArguments = serde_json::from_str(&json)?;
@@ -1443,7 +1543,9 @@ fn test_loaded_sources_response_body_round_trip() -> Result<(), Box<dyn std::err
 
 #[test]
 fn test_restart_arguments_round_trip() -> Result<(), Box<dyn std::error::Error>> {
-    let args = RestartArguments { arguments: Some(json!({"program": "script.pl"})) };
+    let args = RestartArguments {
+        arguments: Some(json!({"program": "script.pl"})),
+    };
 
     let json = serde_json::to_string(&args)?;
     let deserialized: RestartArguments = serde_json::from_str(&json)?;
@@ -1460,8 +1562,14 @@ fn test_restart_arguments_round_trip() -> Result<(), Box<dyn std::error::Error>>
 fn test_step_in_targets_round_trip() -> Result<(), Box<dyn std::error::Error>> {
     let body = StepInTargetsResponseBody {
         targets: vec![
-            StepInTarget { id: 1, label: "My::Module::process".to_string() },
-            StepInTarget { id: 2, label: "closure at line 42".to_string() },
+            StepInTarget {
+                id: 1,
+                label: "My::Module::process".to_string(),
+            },
+            StepInTarget {
+                id: 2,
+                label: "closure at line 42".to_string(),
+            },
         ],
     };
 
@@ -1549,7 +1657,10 @@ fn test_attach_request_arguments_round_trip() -> Result<(), Box<dyn std::error::
 #[test]
 fn test_inline_values_arguments_round_trip() -> Result<(), Box<dyn std::error::Error>> {
     let args = InlineValuesArguments {
-        source: Source { path: Some("/workspace/script.pl".to_string()), name: None },
+        source: Source {
+            path: Some("/workspace/script.pl".to_string()),
+            name: None,
+        },
         start_line: 1,
         end_line: 50,
     };
@@ -1568,7 +1679,10 @@ fn test_inline_values_arguments_round_trip() -> Result<(), Box<dyn std::error::E
 
 #[test]
 fn test_goto_arguments_round_trip() -> Result<(), Box<dyn std::error::Error>> {
-    let args = GotoArguments { thread_id: 1, target_id: 42 };
+    let args = GotoArguments {
+        thread_id: 1,
+        target_id: 42,
+    };
 
     let json = serde_json::to_string(&args)?;
     let deserialized: GotoArguments = serde_json::from_str(&json)?;

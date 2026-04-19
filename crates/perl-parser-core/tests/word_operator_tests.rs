@@ -579,7 +579,10 @@ fn test_sort_bare_list_or_die() {
     // This must NOT be misclassified as an indirect call.
     let ast = parse(r#"sort @list or die;"#);
     let sexp = ast.to_sexp();
-    assert!(sexp.contains("(binary_or"), "expected binary_or at top level, got: {sexp}");
+    assert!(
+        sexp.contains("(binary_or"),
+        "expected binary_or at top level, got: {sexp}"
+    );
     assert_clean_parse(r#"sort @list or die;"#);
 }
 

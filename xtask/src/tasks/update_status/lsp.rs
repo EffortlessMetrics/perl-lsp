@@ -138,8 +138,9 @@ pub(super) fn compute_compliance_table(root: &Path) -> Result<String> {
     } else {
         ((total_impl as f64 / total_all as f64) * 100.0).round() as usize
     };
-    lines
-        .push(format!("| **Overall** | **{total_impl}** | **{total_all}** | **{overall_pct}%** |"));
+    lines.push(format!(
+        "| **Overall** | **{total_impl}** | **{total_all}** | **{overall_pct}%** |"
+    ));
 
     Ok(lines.join("\n"))
 }
@@ -154,7 +155,11 @@ pub(super) fn generate_lsp_status(
     original: &str,
 ) -> Result<String> {
     let lsp_target_pct: usize = 100;
-    let lsp_status = if cov.ux_percent >= lsp_target_pct { "PASS" } else { "In progress" };
+    let lsp_status = if cov.ux_percent >= lsp_target_pct {
+        "PASS"
+    } else {
+        "In progress"
+    };
     let lsp_table_row = format!(
         "| **LSP Coverage** | {}% ({}/{} advertised features, `features.toml`) | {}% | {} |",
         cov.ux_percent, cov.ux_implemented, cov.ux_total, lsp_target_pct, lsp_status
@@ -172,7 +177,10 @@ pub(super) fn generate_lsp_status(
     let lsp_target = if cov.ux_percent >= lsp_target_pct {
         "**Target**: maintain 100% LSP coverage (no regressions)".to_string()
     } else {
-        format!("**Target**: 100% LSP coverage (from current {}%)", cov.ux_percent)
+        format!(
+            "**Target**: 100% LSP coverage (from current {}%)",
+            cov.ux_percent
+        )
     };
 
     let bullets_content = [
@@ -234,7 +242,11 @@ mod tests {
         let cov = count_lsp_coverage(&root)?;
         assert!(cov.ux_total > 0, "expected non-zero ux_total");
         assert!(cov.protocol_total > 0, "expected non-zero protocol_total");
-        assert!(cov.ux_percent <= 100, "ux_percent should be <= 100, got {}", cov.ux_percent);
+        assert!(
+            cov.ux_percent <= 100,
+            "ux_percent should be <= 100, got {}",
+            cov.ux_percent
+        );
         Ok(())
     }
 }

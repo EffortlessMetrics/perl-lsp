@@ -104,12 +104,18 @@ impl Default for ScenarioConfig {
 impl ScenarioConfig {
     /// Create a config with only the listed directories on PATH.
     pub fn with_restricted_path(dirs: Vec<String>) -> Self {
-        Self { path_restriction: Some(dirs), ..Default::default() }
+        Self {
+            path_restriction: Some(dirs),
+            ..Default::default()
+        }
     }
 
     /// Create a config with PATH completely cleared (simulates no tools installed).
     pub fn with_empty_path() -> Self {
-        Self { path_restriction: Some(Vec::new()), ..Default::default() }
+        Self {
+            path_restriction: Some(Vec::new()),
+            ..Default::default()
+        }
     }
 
     /// Add an environment variable to pass to the server process.
@@ -136,7 +142,8 @@ impl ScenarioConfig {
         relative_path: impl Into<String>,
         name: impl Into<String>,
     ) -> Self {
-        self.workspace_folders.push((relative_path.into(), name.into()));
+        self.workspace_folders
+            .push((relative_path.into(), name.into()));
         self
     }
 }
@@ -171,7 +178,11 @@ impl UxHarness {
         let client = UxClient::spawn(&binary_path, &workspace, &config)
             .context("Failed to spawn LSP server")?;
 
-        Ok(Self { client, workspace, config })
+        Ok(Self {
+            client,
+            workspace,
+            config,
+        })
     }
 
     /// Open a file in the LSP server (textDocument/didOpen).
@@ -291,7 +302,10 @@ impl UxHarness {
             self.config.timeout,
         )?;
         if resp.get("error").is_some() {
-            return Err(anyhow!("workspace/symbol returned error: {}", resp["error"]));
+            return Err(anyhow!(
+                "workspace/symbol returned error: {}",
+                resp["error"]
+            ));
         }
         match resp["result"].as_array() {
             Some(symbols) => Ok(symbols.clone()),
@@ -384,7 +398,11 @@ impl UxHarness {
             {
                 let events = self.client.peek_events();
                 for ev in &events {
-                    if let LspEvent::Diagnostics { uri: diag_uri, diagnostics } = ev {
+                    if let LspEvent::Diagnostics {
+                        uri: diag_uri,
+                        diagnostics,
+                    } = ev
+                    {
                         if diag_uri == &uri {
                             return diagnostics.clone();
                         }
@@ -539,7 +557,11 @@ impl FormatResult {
 
     /// Extract the error message string if this is an error.
     pub fn error_message(&self) -> Option<&str> {
-        if let Self::Error(v) = self { v["message"].as_str() } else { None }
+        if let Self::Error(v) = self {
+            v["message"].as_str()
+        } else {
+            None
+        }
     }
 
     /// True if there are text edits.
@@ -588,15 +610,21 @@ pub fn resolve_binary() -> Result<String> {
 
 /// Utility: find `perl` on PATH, returning its path or `None`.
 pub fn find_perl() -> Option<String> {
-    which::which("perl").ok().map(|p| p.to_string_lossy().to_string())
+    which::which("perl")
+        .ok()
+        .map(|p| p.to_string_lossy().to_string())
 }
 
 /// Utility: find `perltidy` on PATH, returning its path or `None`.
 pub fn find_perltidy() -> Option<String> {
-    which::which("perltidy").ok().map(|p| p.to_string_lossy().to_string())
+    which::which("perltidy")
+        .ok()
+        .map(|p| p.to_string_lossy().to_string())
 }
 
 /// Utility: find `perlcritic` on PATH, returning its path or `None`.
 pub fn find_perlcritic() -> Option<String> {
-    which::which("perlcritic").ok().map(|p| p.to_string_lossy().to_string())
+    which::which("perlcritic")
+        .ok()
+        .map(|p| p.to_string_lossy().to_string())
 }

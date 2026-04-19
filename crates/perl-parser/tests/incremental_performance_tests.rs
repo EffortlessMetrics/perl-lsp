@@ -132,13 +132,19 @@ mod incremental_performance_tests {
                 "Min/Max Incremental: {}µs / {}µs",
                 report.min_incremental_micros, report.max_incremental_micros
             );
-            println!("Speedup: {:.2}x faster than initial parse", report.speedup_ratio);
+            println!(
+                "Speedup: {:.2}x faster than initial parse",
+                report.speedup_ratio
+            );
             println!(
                 "Node Reuse: avg {:.1} reused, {:.1} reparsed",
                 report.avg_nodes_reused, report.avg_nodes_reparsed
             );
             println!("Efficiency: {:.1}%", report.avg_efficiency_percentage);
-            println!("Sub-millisecond rate: {:.1}%", report.sub_millisecond_rate * 100.0);
+            println!(
+                "Sub-millisecond rate: {:.1}%",
+                report.sub_millisecond_rate * 100.0
+            );
 
             // Performance category classification
             let category = match report.avg_incremental_micros {
@@ -313,7 +319,10 @@ if ($condition) {
         );
 
         if report.avg_efficiency_percentage >= 70.0 {
-            println!("✅ Good node reuse efficiency: {:.1}%", report.avg_efficiency_percentage);
+            println!(
+                "✅ Good node reuse efficiency: {:.1}%",
+                report.avg_efficiency_percentage
+            );
         } else {
             println!(
                 "⚠️ Lower node reuse efficiency: {:.1}% (acceptable for micro-benchmarks)",
@@ -367,9 +376,15 @@ if ($condition) {
         );
 
         if report.avg_efficiency_percentage >= 50.0 {
-            println!("✅ Good node reuse efficiency: {:.1}%", report.avg_efficiency_percentage);
+            println!(
+                "✅ Good node reuse efficiency: {:.1}%",
+                report.avg_efficiency_percentage
+            );
         } else {
-            println!("⚠️ Lower node reuse efficiency: {:.1}%", report.avg_efficiency_percentage);
+            println!(
+                "⚠️ Lower node reuse efficiency: {:.1}%",
+                report.avg_efficiency_percentage
+            );
         }
 
         report.assert_consistency();
@@ -403,7 +418,10 @@ if ($condition) {
         );
 
         // Complex structures may have lower reuse rates but should still be fast
-        assert!(report.avg_incremental_micros < 5000, "Complex nested should be <5ms");
+        assert!(
+            report.avg_incremental_micros < 5000,
+            "Complex nested should be <5ms"
+        );
         report.assert_consistency();
     }
 
@@ -433,7 +451,10 @@ if ($condition) {
         );
 
         // Large documents should still have reasonable performance
-        assert!(report.avg_incremental_micros < 50000, "Large document should be <50ms");
+        assert!(
+            report.avg_incremental_micros < 50000,
+            "Large document should be <50ms"
+        );
         if report.avg_nodes_reused > 0 {
             report.assert_efficiency(50.0); // Lower bar for large documents
         }
@@ -467,7 +488,10 @@ if ($condition) {
         );
 
         // Unicode should not significantly impact performance
-        assert!(report.avg_incremental_micros < 5000, "Unicode handling should be <5ms");
+        assert!(
+            report.avg_incremental_micros < 5000,
+            "Unicode handling should be <5ms"
+        );
         report.assert_consistency();
     }
 
@@ -504,8 +528,10 @@ if ($condition) {
         }
 
         // Analyze for regression across batches
-        let batch_averages: Vec<u128> =
-            all_reports.iter().map(|r| r.avg_incremental_micros).collect();
+        let batch_averages: Vec<u128> = all_reports
+            .iter()
+            .map(|r| r.avg_incremental_micros)
+            .collect();
         let overall_avg = batch_averages.iter().sum::<u128>() / batch_averages.len() as u128;
 
         println!("\n=== Regression Analysis ===");
@@ -553,7 +579,10 @@ if ($condition) {
         );
 
         // Boundary edits are challenging but should still be reasonable
-        assert!(report.avg_incremental_micros < 5000, "Boundary edits should be <5ms");
+        assert!(
+            report.avg_incremental_micros < 5000,
+            "Boundary edits should be <5ms"
+        );
         report.assert_consistency();
     }
 
@@ -624,7 +653,10 @@ if ($condition) {
         println!("Total reused/reparsed: {}/{}", total_reused, total_reparsed);
 
         // Overall concurrent performance should be reasonable
-        assert!(total_time.as_millis() < 10, "Total concurrent edit time should be <10ms");
+        assert!(
+            total_time.as_millis() < 10,
+            "Total concurrent edit time should be <10ms"
+        );
     }
 }
 

@@ -283,7 +283,10 @@ fn test_format_document_perltidy_not_found() -> Result<(), Box<dyn std::error::E
 #[test]
 fn test_format_document_perltidy_execution_error() -> Result<(), Box<dyn std::error::Error>> {
     let runtime = MockSubprocessRuntime::new();
-    runtime.add_response(MockResponse::failure(b"syntax error near line 5".to_vec(), 1));
+    runtime.add_response(MockResponse::failure(
+        b"syntax error near line 5".to_vec(),
+        1,
+    ));
     let provider = make_provider(runtime);
 
     let result = provider.format_document("bad code", &default_options());
@@ -541,7 +544,10 @@ fn test_error_is_debug() {
 
 #[test]
 fn test_formatted_document_empty_edits() {
-    let doc = FormattedDocument { text: "hello".to_string(), edits: vec![] };
+    let doc = FormattedDocument {
+        text: "hello".to_string(),
+        edits: vec![],
+    };
     assert_eq!(doc.text, "hello");
     assert!(doc.edits.is_empty());
 }
@@ -718,7 +724,9 @@ impl perl_lsp_tooling::SubprocessRuntime for ErrorRuntime {
         _args: &[&str],
         _stdin: Option<&[u8]>,
     ) -> Result<perl_lsp_tooling::SubprocessOutput, perl_lsp_tooling::SubprocessError> {
-        Err(perl_lsp_tooling::SubprocessError::new("command not found: perltidy"))
+        Err(perl_lsp_tooling::SubprocessError::new(
+            "command not found: perltidy",
+        ))
     }
 }
 
@@ -766,7 +774,9 @@ fn test_format_range_end_char_set_correctly() -> Result<(), Box<dyn std::error::
 
 #[test]
 fn test_format_document_large_content() -> Result<(), Box<dyn std::error::Error>> {
-    let source = (0..1000).map(|i| format!("my $var{i} = {i};\n")).collect::<String>();
+    let source = (0..1000)
+        .map(|i| format!("my $var{i} = {i};\n"))
+        .collect::<String>();
     let formatted = source.replace("my ", "my  "); // slightly different
     let runtime = MockSubprocessRuntime::new();
     runtime.add_response(MockResponse::success(formatted.as_bytes().to_vec()));

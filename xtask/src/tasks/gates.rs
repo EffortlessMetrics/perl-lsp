@@ -557,7 +557,9 @@ fn list_gates(gates: &[&GateDefinition], policy: &GatePolicy) -> Result<()> {
     for tier_name in &["pr_fast", "merge_gate", "nightly"] {
         if let Some(tier_gates) = by_tier.get(tier_name) {
             let tier_def = policy.tiers.get(*tier_name);
-            let tier_desc = tier_def.map(|t| t.description.as_str()).unwrap_or("Unknown tier");
+            let tier_desc = tier_def
+                .map(|t| t.description.as_str())
+                .unwrap_or("Unknown tier");
 
             writeln!(
                 term,
@@ -583,7 +585,11 @@ fn list_gates(gates: &[&GateDefinition], policy: &GatePolicy) -> Result<()> {
         }
     }
 
-    writeln!(term, "{}", dim.apply_to("* = required gate, [Q] = quarantined"))?;
+    writeln!(
+        term,
+        "{}",
+        dim.apply_to("* = required gate, [Q] = quarantined")
+    )?;
 
     Ok(())
 }
@@ -693,7 +699,11 @@ fn run_gates(
         timeout: if timeout > 0 { Some(timeout) } else { None },
         error: if error > 0 { Some(error) } else { None },
         total_duration_ms,
-        tier_results: if tier_summaries.is_empty() { None } else { Some(tier_summaries) },
+        tier_results: if tier_summaries.is_empty() {
+            None
+        } else {
+            Some(tier_summaries)
+        },
         overall_status: overall_status.to_string(),
         blocking_failures: if blocking_failures.is_empty() {
             None
@@ -764,7 +774,11 @@ fn run_single_gate(
     }
 
     // Run the command
-    let result = cmd!("bash", "-lc", command).stderr_to_stdout().stdout_capture().unchecked().run();
+    let result = cmd!("bash", "-lc", command)
+        .stderr_to_stdout()
+        .stdout_capture()
+        .unchecked()
+        .run();
 
     let duration_ms = start.elapsed().as_millis() as u64;
 
@@ -847,8 +861,14 @@ fn run_internal_xtask_gate(
     let duration_ms = start.elapsed().as_millis() as u64;
 
     let (status, output_summary) = match result {
-        Ok(()) => ("pass".to_string(), "Executed internally via xtask task dispatch".to_string()),
-        Err(err) => ("fail".to_string(), format!("Internal xtask execution failed: {err:#}")),
+        Ok(()) => (
+            "pass".to_string(),
+            "Executed internally via xtask task dispatch".to_string(),
+        ),
+        Err(err) => (
+            "fail".to_string(),
+            format!("Internal xtask execution failed: {err:#}"),
+        ),
     };
 
     if let Err(err) = fs::write(log_path, output_summary.as_bytes()) {
@@ -866,7 +886,11 @@ fn run_internal_xtask_gate(
         output_summary: Some(output_summary),
         log_path: Some(format!("logs/{}.log", gate.name)),
         metrics: None,
-        artifacts: if gate.artifacts.is_empty() { None } else { Some(gate.artifacts.clone()) },
+        artifacts: if gate.artifacts.is_empty() {
+            None
+        } else {
+            Some(gate.artifacts.clone())
+        },
     })
 }
 
@@ -879,8 +903,11 @@ fn collect_metadata(timestamp: DateTime<Utc>) -> Result<ReceiptMetadata> {
         .trim()
         .to_string();
 
-    let git_sha_short =
-        if git_sha.len() >= 7 { git_sha[..7].to_string() } else { "UNVERIF".to_string() };
+    let git_sha_short = if git_sha.len() >= 7 {
+        git_sha[..7].to_string()
+    } else {
+        "UNVERIF".to_string()
+    };
 
     let git_branch = cmd!("git", "rev-parse", "--abbrev-ref", "HEAD")
         .read()
@@ -888,8 +915,10 @@ fn collect_metadata(timestamp: DateTime<Utc>) -> Result<ReceiptMetadata> {
         .trim()
         .to_string();
 
-    let git_dirty =
-        cmd!("git", "status", "--porcelain").read().map(|s| !s.trim().is_empty()).unwrap_or(false);
+    let git_dirty = cmd!("git", "status", "--porcelain")
+        .read()
+        .map(|s| !s.trim().is_empty())
+        .unwrap_or(false);
 
     // Toolchain info
     let rustc_version = cmd!("rustc", "--version")
@@ -898,7 +927,10 @@ fn collect_metadata(timestamp: DateTime<Utc>) -> Result<ReceiptMetadata> {
         .trim()
         .to_string();
 
-    let rustc_semver = rustc_version.split_whitespace().nth(1).map(|s| s.to_string());
+    let rustc_semver = rustc_version
+        .split_whitespace()
+        .nth(1)
+        .map(|s| s.to_string());
 
     let rustc_channel = rustc_version
         .split_whitespace()
@@ -912,16 +944,27 @@ fn collect_metadata(timestamp: DateTime<Utc>) -> Result<ReceiptMetadata> {
         })
         .map(|s| s.to_string());
 
-    let cargo_version = cmd!("cargo", "--version").read().ok().map(|s| s.trim().to_string());
+    let cargo_version = cmd!("cargo", "--version")
+        .read()
+        .ok()
+        .map(|s| s.trim().to_string());
 
-    let nix_version = cmd!("nix", "--version").read().ok().map(|s| s.trim().to_string());
+    let nix_version = cmd!("nix", "--version")
+        .read()
+        .ok()
+        .map(|s| s.trim().to_string());
 
     // Platform info
     let os = std::env::consts::OS.to_string();
     let arch = std::env::consts::ARCH.to_string();
 
     #[cfg(target_os = "linux")]
-    let os_version = { cmd!("uname", "-r").read().ok().map(|s| s.trim().to_string()) };
+    let os_version = {
+        cmd!("uname", "-r")
+            .read()
+            .ok()
+            .map(|s| s.trim().to_string())
+    };
 
     #[cfg(not(target_os = "linux"))]
     let os_version: Option<String> = None;
@@ -931,18 +974,26 @@ fn collect_metadata(timestamp: DateTime<Utc>) -> Result<ReceiptMetadata> {
         .map(|v| v.to_lowercase().contains("microsoft") || v.to_lowercase().contains("wsl"))
         .unwrap_or(false);
 
-    let cpu_cores = std::thread::available_parallelism().map(|p| p.get() as u32).ok();
+    let cpu_cores = std::thread::available_parallelism()
+        .map(|p| p.get() as u32)
+        .ok();
 
     // Memory (Linux only for now)
     #[cfg(target_os = "linux")]
     let memory_gb = {
-        fs::read_to_string("/proc/meminfo").ok().and_then(|content| {
-            content
-                .lines()
-                .find(|l| l.starts_with("MemTotal:"))
-                .and_then(|l| l.split_whitespace().nth(1).and_then(|s| s.parse::<u64>().ok()))
-                .map(|kb| kb as f64 / 1024.0 / 1024.0)
-        })
+        fs::read_to_string("/proc/meminfo")
+            .ok()
+            .and_then(|content| {
+                content
+                    .lines()
+                    .find(|l| l.starts_with("MemTotal:"))
+                    .and_then(|l| {
+                        l.split_whitespace()
+                            .nth(1)
+                            .and_then(|s| s.parse::<u64>().ok())
+                    })
+                    .map(|kb| kb as f64 / 1024.0 / 1024.0)
+            })
     };
 
     #[cfg(not(target_os = "linux"))]
@@ -969,12 +1020,18 @@ fn collect_metadata(timestamp: DateTime<Utc>) -> Result<ReceiptMetadata> {
             .map(|repo| format!("https://github.com/{}/actions/runs/{}", repo, run_id))
     });
 
-    let pr_number = std::env::var("GITHUB_EVENT_NUMBER").ok().and_then(|s| s.parse().ok());
+    let pr_number = std::env::var("GITHUB_EVENT_NUMBER")
+        .ok()
+        .and_then(|s| s.parse().ok());
 
     let nix_shell = std::env::var("IN_NIX_SHELL").is_ok();
 
     let trigger = std::env::var("CI_TRIGGER").ok().or_else(|| {
-        if env_type == "ci" { Some("ci-pr".to_string()) } else { Some("manual".to_string()) }
+        if env_type == "ci" {
+            Some("ci-pr".to_string())
+        } else {
+            Some("manual".to_string())
+        }
     });
 
     Ok(ReceiptMetadata {
@@ -991,7 +1048,14 @@ fn collect_metadata(timestamp: DateTime<Utc>) -> Result<ReceiptMetadata> {
             node_version: None,
             nix_version,
         },
-        platform: PlatformInfo { os, os_version, arch, cpu_cores, memory_gb, is_wsl: Some(is_wsl) },
+        platform: PlatformInfo {
+            os,
+            os_version,
+            arch,
+            cpu_cores,
+            memory_gb,
+            is_wsl: Some(is_wsl),
+        },
         environment: EnvironmentInfo {
             env_type,
             ci_provider,
@@ -1007,7 +1071,11 @@ fn collect_metadata(timestamp: DateTime<Utc>) -> Result<ReceiptMetadata> {
 /// Extract summary from command output
 fn extract_output_summary(output: &str, max_lines: usize) -> String {
     let lines: Vec<&str> = output.lines().collect();
-    let start = if lines.len() > max_lines { lines.len() - max_lines } else { 0 };
+    let start = if lines.len() > max_lines {
+        lines.len() - max_lines
+    } else {
+        0
+    };
     lines[start..].join("\n")
 }
 
@@ -1051,7 +1119,10 @@ fn extract_number(line: &str, suffix: &str) -> Option<u32> {
     line.find(&pattern).and_then(|idx| {
         // Look backwards for the number
         let before = &line[..idx];
-        before.split_whitespace().last().and_then(|s| s.parse().ok())
+        before
+            .split_whitespace()
+            .last()
+            .and_then(|s| s.parse().ok())
     })
 }
 
@@ -1079,16 +1150,35 @@ fn output_human(receipt: &Receipt) -> Result<()> {
     writeln!(term)?;
 
     // Metadata
-    writeln!(term, "{} {}", bold.apply_to("Git:"), receipt.metadata.git_sha_short)?;
-    writeln!(term, "{} {}", bold.apply_to("Branch:"), receipt.metadata.git_branch)?;
-    writeln!(term, "{} {}", bold.apply_to("Rust:"), receipt.metadata.toolchain.rustc_version)?;
+    writeln!(
+        term,
+        "{} {}",
+        bold.apply_to("Git:"),
+        receipt.metadata.git_sha_short
+    )?;
+    writeln!(
+        term,
+        "{} {}",
+        bold.apply_to("Branch:"),
+        receipt.metadata.git_branch
+    )?;
+    writeln!(
+        term,
+        "{} {}",
+        bold.apply_to("Rust:"),
+        receipt.metadata.toolchain.rustc_version
+    )?;
     writeln!(term)?;
 
     // Results by tier
     if let Some(ref tier_results) = receipt.summary.tier_results {
         for tier in &["pr_fast", "merge_gate", "nightly"] {
             if let Some(summary) = tier_results.get(*tier) {
-                let status_style = if summary.failed > 0 { red.clone() } else { green.clone() };
+                let status_style = if summary.failed > 0 {
+                    red.clone()
+                } else {
+                    green.clone()
+                };
                 writeln!(
                     term,
                     "{}: {} passed, {} failed, {} skipped ({:.1}s)",
@@ -1179,11 +1269,17 @@ fn load_receipt(path: &PathBuf) -> Result<Receipt> {
 
 /// Compare two receipts and generate diff
 fn compare_receipts(baseline: &Receipt, current: &Receipt) -> Result<DiffResult> {
-    let baseline_gates: HashMap<&str, &GateResult> =
-        baseline.gates.iter().map(|g| (g.gate_name.as_str(), g)).collect();
+    let baseline_gates: HashMap<&str, &GateResult> = baseline
+        .gates
+        .iter()
+        .map(|g| (g.gate_name.as_str(), g))
+        .collect();
 
-    let current_gates: HashMap<&str, &GateResult> =
-        current.gates.iter().map(|g| (g.gate_name.as_str(), g)).collect();
+    let current_gates: HashMap<&str, &GateResult> = current
+        .gates
+        .iter()
+        .map(|g| (g.gate_name.as_str(), g))
+        .collect();
 
     // Find added gates
     let gates_added: Vec<String> = current_gates
@@ -1314,7 +1410,11 @@ fn output_diff(diff: &DiffResult, config: &GateRunnerConfig) -> Result<()> {
             } else {
                 format!("{:.1}%", change.delta_percent)
             };
-            let style = if change.exceeds_threshold { yellow.clone() } else { Style::new() };
+            let style = if change.exceeds_threshold {
+                yellow.clone()
+            } else {
+                Style::new()
+            };
             writeln!(
                 term,
                 "  {} [{}]: {} -> {} ({})",
@@ -1339,7 +1439,12 @@ fn output_diff(diff: &DiffResult, config: &GateRunnerConfig) -> Result<()> {
 
 /// Check if there are any blocking failures
 fn has_blocking_failures(receipt: &Receipt) -> bool {
-    receipt.summary.blocking_failures.as_ref().map(|f| !f.is_empty()).unwrap_or(false)
+    receipt
+        .summary
+        .blocking_failures
+        .as_ref()
+        .map(|f| !f.is_empty())
+        .unwrap_or(false)
 }
 
 fn is_blocking_gate_status(status: &str) -> bool {
@@ -1355,7 +1460,11 @@ fn blocking_failure_gate_names(results: &[GateResult]) -> Vec<String> {
 }
 
 fn determine_overall_status(failed: u32, blocking_failures: &[String]) -> &'static str {
-    if blocking_failures.is_empty() { if failed > 0 { "partial" } else { "pass" } } else { "fail" }
+    if blocking_failures.is_empty() {
+        if failed > 0 { "partial" } else { "pass" }
+    } else {
+        "fail"
+    }
 }
 
 #[cfg(test)]

@@ -46,8 +46,16 @@ fn test_types_qualified_imports_work() -> Result<()> {
     use perl_dap::types::{Source, StackFrame};
 
     // Verify the types are accessible
-    assert_ne!(std::any::type_name::<StackFrame>(), "", "StackFrame type must be accessible");
-    assert_ne!(std::any::type_name::<Source>(), "", "Source type must be accessible");
+    assert_ne!(
+        std::any::type_name::<StackFrame>(),
+        "",
+        "StackFrame type must be accessible"
+    );
+    assert_ne!(
+        std::any::type_name::<Source>(),
+        "",
+        "Source type must be accessible"
+    );
     Ok(())
 }
 
@@ -76,7 +84,11 @@ fn test_debug_adapter_uses_internal_modules() -> Result<()> {
     use perl_dap::DebugAdapter;
 
     // If we get here, all satellite references in DebugAdapter have been migrated
-    assert_ne!(std::any::type_name::<DebugAdapter>(), "", "DebugAdapter must be importable");
+    assert_ne!(
+        std::any::type_name::<DebugAdapter>(),
+        "",
+        "DebugAdapter must be importable"
+    );
     Ok(())
 }
 
@@ -87,7 +99,11 @@ fn test_breakpoint_store_uses_internal_modules() -> Result<()> {
     // this will fail to compile
     use perl_dap::BreakpointStore;
 
-    assert_ne!(std::any::type_name::<BreakpointStore>(), "", "BreakpointStore must be importable");
+    assert_ne!(
+        std::any::type_name::<BreakpointStore>(),
+        "",
+        "BreakpointStore must be importable"
+    );
     Ok(())
 }
 
@@ -98,7 +114,11 @@ fn test_dap_config_uses_internal_modules() -> Result<()> {
     // this will fail to compile
     use perl_dap::DapConfig;
 
-    assert_ne!(std::any::type_name::<DapConfig>(), "", "DapConfig must be importable");
+    assert_ne!(
+        std::any::type_name::<DapConfig>(),
+        "",
+        "DapConfig must be importable"
+    );
     Ok(())
 }
 
@@ -109,7 +129,11 @@ fn test_bridge_adapter_uses_internal_modules() -> Result<()> {
     // this will fail to compile
     use perl_dap::BridgeAdapter;
 
-    assert_ne!(std::any::type_name::<BridgeAdapter>(), "", "BridgeAdapter must be importable");
+    assert_ne!(
+        std::any::type_name::<BridgeAdapter>(),
+        "",
+        "BridgeAdapter must be importable"
+    );
     Ok(())
 }
 

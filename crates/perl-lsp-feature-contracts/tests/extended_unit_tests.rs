@@ -131,7 +131,11 @@ fn ga_lock_aliases_contains_no_duplicates() {
     let mut unique = aliases.to_vec();
     unique.sort();
     unique.dedup();
-    assert_eq!(len_before, unique.len(), "GA-Lock aliases contain duplicates");
+    assert_eq!(
+        len_before,
+        unique.len(),
+        "GA-Lock aliases contain duplicates"
+    );
 }
 
 #[test]
@@ -141,7 +145,11 @@ fn production_aliases_contains_no_duplicates() {
     let mut unique = aliases.to_vec();
     unique.sort();
     unique.dedup();
-    assert_eq!(len_before, unique.len(), "Production aliases contain duplicates");
+    assert_eq!(
+        len_before,
+        unique.len(),
+        "Production aliases contain duplicates"
+    );
 }
 
 #[test]
@@ -158,7 +166,10 @@ fn all_aliases_contains_no_duplicates() {
 fn aliases_for_each_variant_are_non_empty() {
     for &kind in FeatureProfileKind::all() {
         let aliases = kind.aliases();
-        assert!(!aliases.is_empty(), "Expected non-empty aliases for {kind:?}");
+        assert!(
+            !aliases.is_empty(),
+            "Expected non-empty aliases for {kind:?}"
+        );
     }
 }
 
@@ -210,7 +221,10 @@ fn supported_cli_profiles_are_all_parseable() -> Result<(), Box<dyn std::error::
 #[test]
 fn supported_cli_profiles_includes_auto() {
     let profiles = FeatureProfileKind::supported_cli_profiles();
-    assert!(profiles.contains(&"auto"), "Expected 'auto' in supported CLI profiles");
+    assert!(
+        profiles.contains(&"auto"),
+        "Expected 'auto' in supported CLI profiles"
+    );
 }
 
 #[test]
@@ -230,7 +244,10 @@ fn supported_cli_profiles_includes_major_aliases() {
     let profiles = FeatureProfileKind::supported_cli_profiles();
     let expected_aliases = vec!["ga", "ga_lock", "prod"];
     for alias in expected_aliases {
-        assert!(profiles.contains(&alias), "Expected alias '{alias}' in CLI profiles");
+        assert!(
+            profiles.contains(&alias),
+            "Expected alias '{alias}' in CLI profiles"
+        );
     }
 }
 
@@ -241,7 +258,11 @@ fn supported_cli_profiles_no_internal_duplicates() {
     let mut unique = profiles.to_vec();
     unique.sort();
     unique.dedup();
-    assert_eq!(len_before, unique.len(), "Supported CLI profiles have duplicates");
+    assert_eq!(
+        len_before,
+        unique.len(),
+        "Supported CLI profiles have duplicates"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -264,7 +285,10 @@ fn feature_profile_spec_canonical_fields_are_static() {
 #[test]
 fn feature_profile_specs_all_have_non_empty_canonical() {
     for spec in feature_profile_specs() {
-        assert!(!spec.canonical.is_empty(), "Found spec with empty canonical field");
+        assert!(
+            !spec.canonical.is_empty(),
+            "Found spec with empty canonical field"
+        );
         assert!(
             !spec.canonical.starts_with(' '),
             "Canonical starts with whitespace: '{}'",
@@ -293,7 +317,11 @@ fn feature_profile_specs_all_have_non_empty_description() {
 fn feature_profile_specs_aliases_all_non_empty() {
     for spec in feature_profile_specs() {
         for alias in spec.aliases {
-            assert!(!alias.is_empty(), "Spec '{}' has empty alias", spec.canonical);
+            assert!(
+                !alias.is_empty(),
+                "Spec '{}' has empty alias",
+                spec.canonical
+            );
         }
     }
 }
@@ -321,7 +349,10 @@ fn feature_profile_specs_canonical_matches_kind_names() {
 fn feature_profile_specs_const_eq_fn() {
     assert_eq!(FEATURE_PROFILE_SPECS.len(), feature_profile_specs().len());
 
-    for (const_spec, fn_spec) in FEATURE_PROFILE_SPECS.iter().zip(feature_profile_specs().iter()) {
+    for (const_spec, fn_spec) in FEATURE_PROFILE_SPECS
+        .iter()
+        .zip(feature_profile_specs().iter())
+    {
         assert_eq!(const_spec.canonical, fn_spec.canonical);
         assert_eq!(const_spec.aliases, fn_spec.aliases);
         assert_eq!(const_spec.description, fn_spec.description);
@@ -430,7 +461,11 @@ fn bdd_feature_rows_id_uniqueness() {
 #[test]
 fn bdd_feature_rows_descriptions_non_empty() {
     for row in bdd_feature_rows() {
-        assert!(!row.description.is_empty(), "BDD row {} has empty description", row.id);
+        assert!(
+            !row.description.is_empty(),
+            "BDD row {} has empty description",
+            row.id
+        );
     }
 }
 
@@ -460,8 +495,10 @@ fn all_features_are_readable() {
 #[test]
 fn trackable_feature_count_excludes_planned() {
     let trackable = trackable_feature_count_for_grid();
-    let all_non_planned =
-        all_features().iter().filter(|f| f.maturity != "planned" && f.counts_in_coverage).count();
+    let all_non_planned = all_features()
+        .iter()
+        .filter(|f| f.maturity != "planned" && f.counts_in_coverage)
+        .count();
 
     assert_eq!(trackable, all_non_planned);
 }
@@ -480,13 +517,19 @@ fn advertised_trackable_count_is_subset_of_trackable() {
 #[test]
 fn compliance_percent_is_non_negative() {
     let compliance = compliance_percent_for_grid();
-    assert!(compliance >= 0.0, "Compliance percent is negative: {compliance}");
+    assert!(
+        compliance >= 0.0,
+        "Compliance percent is negative: {compliance}"
+    );
 }
 
 #[test]
 fn compliance_percent_is_at_most_100() {
     let compliance = compliance_percent_for_grid();
-    assert!(compliance <= 100.0, "Compliance percent exceeds 100: {compliance}");
+    assert!(
+        compliance <= 100.0,
+        "Compliance percent exceeds 100: {compliance}"
+    );
 }
 
 #[test]
@@ -505,8 +548,11 @@ fn compliance_calculation_matches_manual() {
     let advertised = advertised_trackable_feature_count_for_grid() as f64;
     let trackable = trackable_feature_count_for_grid() as f64;
 
-    let expected =
-        if trackable == 0.0 { 0.0 } else { (advertised / trackable * 100.0).round() as f32 };
+    let expected = if trackable == 0.0 {
+        0.0
+    } else {
+        (advertised / trackable * 100.0).round() as f32
+    };
 
     let actual = compliance_percent_for_grid();
     assert_eq!(
@@ -545,7 +591,10 @@ fn bdd_feature_row_can_be_serialized_to_json() -> Result<(), Box<dyn std::error:
     if let Some(first_row) = rows.first() {
         let json = serde_json::to_string(first_row)?;
         assert!(!json.is_empty(), "Serialized JSON is empty");
-        assert!(json.contains(first_row.id), "Serialized JSON should contain row ID");
+        assert!(
+            json.contains(first_row.id),
+            "Serialized JSON should contain row ID"
+        );
     }
 
     Ok(())
@@ -565,8 +614,11 @@ fn all_bdd_rows_serializable_to_json() -> Result<(), Box<dyn std::error::Error>>
 
 #[test]
 fn feature_profile_spec_can_be_serialized() -> Result<(), Box<dyn std::error::Error>> {
-    let spec =
-        FeatureProfileSpec { canonical: "test", aliases: &["t"], description: "Test profile" };
+    let spec = FeatureProfileSpec {
+        canonical: "test",
+        aliases: &["t"],
+        description: "Test profile",
+    };
 
     let json = serde_json::to_string(&spec)?;
     assert!(json.contains("test"));

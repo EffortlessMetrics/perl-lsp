@@ -208,8 +208,10 @@ impl Source {
     #[must_use]
     pub fn new(path: impl Into<String>) -> Self {
         let path_str = path.into();
-        let name =
-            std::path::Path::new(&path_str).file_name().and_then(|n| n.to_str()).map(String::from);
+        let name = std::path::Path::new(&path_str)
+            .file_name()
+            .and_then(|n| n.to_str())
+            .map(String::from);
 
         Self {
             name,
@@ -350,7 +352,10 @@ mod tests {
         let frame = StackFrame::new(1, "foo", None, 1)
             .with_presentation_hint(StackFramePresentationHint::Subtle);
 
-        assert_eq!(frame.presentation_hint, Some(StackFramePresentationHint::Subtle));
+        assert_eq!(
+            frame.presentation_hint,
+            Some(StackFramePresentationHint::Subtle)
+        );
         assert!(!frame.is_user_code());
     }
 

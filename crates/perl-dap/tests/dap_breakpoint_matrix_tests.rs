@@ -45,7 +45,10 @@ fn create_test_file_and_set_breakpoints(
         .collect();
 
     let args = SetBreakpointsArguments {
-        source: Source { path: Some(path.clone()), name: Some("test.pl".to_string()) },
+        source: Source {
+            path: Some(path.clone()),
+            name: Some("test.pl".to_string()),
+        },
         breakpoints: Some(source_breakpoints),
         source_modified: None,
     };
@@ -70,7 +73,10 @@ my $x = 42;
     let breakpoints = create_test_file_and_set_breakpoints(source, vec![2])?;
 
     assert_eq!(breakpoints.len(), 1);
-    assert!(!breakpoints[0].verified, "Breakpoint on comment line should be unverified");
+    assert!(
+        !breakpoints[0].verified,
+        "Breakpoint on comment line should be unverified"
+    );
     let message = breakpoints[0]
         .message
         .as_ref()
@@ -91,7 +97,10 @@ my $y = 100;
     let breakpoints = create_test_file_and_set_breakpoints(source, vec![2])?;
 
     assert_eq!(breakpoints.len(), 1);
-    assert!(!breakpoints[0].verified, "Breakpoint on blank line should be unverified");
+    assert!(
+        !breakpoints[0].verified,
+        "Breakpoint on blank line should be unverified"
+    );
     let message = breakpoints[0]
         .message
         .as_ref()
@@ -112,8 +121,14 @@ print $x;
     let breakpoints = create_test_file_and_set_breakpoints(source, vec![2, 3])?;
 
     assert_eq!(breakpoints.len(), 2);
-    assert!(breakpoints[0].verified, "Breakpoint on executable line should be verified");
-    assert!(breakpoints[1].verified, "Breakpoint on executable line should be verified");
+    assert!(
+        breakpoints[0].verified,
+        "Breakpoint on executable line should be verified"
+    );
+    assert!(
+        breakpoints[1].verified,
+        "Breakpoint on executable line should be verified"
+    );
 
     Ok(())
 }
@@ -133,14 +148,20 @@ my $x = 42;
     assert_eq!(breakpoints.len(), 3);
 
     // Lines 2 and 3 are inside heredoc - should be unverified
-    assert!(!breakpoints[0].verified, "Breakpoint inside heredoc should be unverified");
+    assert!(
+        !breakpoints[0].verified,
+        "Breakpoint inside heredoc should be unverified"
+    );
     let message_0 = breakpoints[0]
         .message
         .as_ref()
         .ok_or_else(|| anyhow::anyhow!("Expected breakpoint message for line 2"))?;
     assert!(message_0.contains("heredoc"));
 
-    assert!(!breakpoints[1].verified, "Breakpoint inside heredoc should be unverified");
+    assert!(
+        !breakpoints[1].verified,
+        "Breakpoint inside heredoc should be unverified"
+    );
     let message_1 = breakpoints[1]
         .message
         .as_ref()
@@ -148,7 +169,10 @@ my $x = 42;
     assert!(message_1.contains("heredoc"));
 
     // Line 5 is executable code - should be verified
-    assert!(breakpoints[2].verified, "Breakpoint on executable line should be verified");
+    assert!(
+        breakpoints[2].verified,
+        "Breakpoint on executable line should be verified"
+    );
 
     Ok(())
 }
@@ -201,7 +225,10 @@ fn test_breakpoint_on_whitespace_line() -> Result<()> {
     let breakpoints = create_test_file_and_set_breakpoints(source, vec![2])?;
 
     assert_eq!(breakpoints.len(), 1);
-    assert!(!breakpoints[0].verified, "Breakpoint on whitespace-only line should be unverified");
+    assert!(
+        !breakpoints[0].verified,
+        "Breakpoint on whitespace-only line should be unverified"
+    );
 
     Ok(())
 }
@@ -244,7 +271,10 @@ my $y = 100;
 
     // Set initial breakpoints
     let args1 = SetBreakpointsArguments {
-        source: Source { path: Some(path.clone()), name: Some("test.pl".to_string()) },
+        source: Source {
+            path: Some(path.clone()),
+            name: Some("test.pl".to_string()),
+        },
         breakpoints: Some(vec![SourceBreakpoint {
             line: 2,
             column: None,
@@ -258,7 +288,10 @@ my $y = 100;
 
     // Replace with new breakpoints
     let args2 = SetBreakpointsArguments {
-        source: Source { path: Some(path.clone()), name: Some("test.pl".to_string()) },
+        source: Source {
+            path: Some(path.clone()),
+            name: Some("test.pl".to_string()),
+        },
         breakpoints: Some(vec![
             SourceBreakpoint {
                 line: 1,
@@ -280,12 +313,22 @@ my $y = 100;
     let breakpoints = store.set_breakpoints(&args2);
 
     assert_eq!(breakpoints.len(), 2);
-    assert!(!breakpoints[0].verified, "Line 1 is comment, should be unverified");
-    assert!(breakpoints[1].verified, "Line 3 is executable, should be verified");
+    assert!(
+        !breakpoints[0].verified,
+        "Line 1 is comment, should be unverified"
+    );
+    assert!(
+        breakpoints[1].verified,
+        "Line 3 is executable, should be verified"
+    );
 
     // Verify stored breakpoints
     let stored = store.get_breakpoints(&path);
-    assert_eq!(stored.len(), 2, "Should have exactly 2 breakpoints after REPLACE");
+    assert_eq!(
+        stored.len(),
+        2,
+        "Should have exactly 2 breakpoints after REPLACE"
+    );
 
     Ok(())
 }
@@ -313,7 +356,10 @@ fn test_breakpoint_file_not_found() -> Result<()> {
     let breakpoints = store.set_breakpoints(&args);
 
     assert_eq!(breakpoints.len(), 1);
-    assert!(!breakpoints[0].verified, "Breakpoint on nonexistent file should be unverified");
+    assert!(
+        !breakpoints[0].verified,
+        "Breakpoint on nonexistent file should be unverified"
+    );
     let message = breakpoints[0]
         .message
         .as_ref()
@@ -340,7 +386,10 @@ mod dap_breakpoint_matrix_phase2 {
     fn set_breakpoints(path: &str, lines: &[i64]) -> Vec<perl_dap::protocol::Breakpoint> {
         let store = BreakpointStore::new();
         let args = SetBreakpointsArguments {
-            source: Source { path: Some(path.to_string()), name: None },
+            source: Source {
+                path: Some(path.to_string()),
+                name: None,
+            },
             breakpoints: Some(
                 lines
                     .iter()
@@ -366,10 +415,22 @@ mod dap_breakpoint_matrix_phase2 {
         let breakpoints = set_breakpoints(&path, &[1, 7, 10, 21]);
 
         assert_eq!(breakpoints.len(), 4);
-        assert!(!breakpoints[0].verified, "shebang line should not be executable");
-        assert!(breakpoints[1].verified, "use strict line should be executable");
-        assert!(breakpoints[2].verified, "function declaration line should be executable");
-        assert!(!breakpoints[3].verified, "EOF comment line should not be executable");
+        assert!(
+            !breakpoints[0].verified,
+            "shebang line should not be executable"
+        );
+        assert!(
+            breakpoints[1].verified,
+            "use strict line should be executable"
+        );
+        assert!(
+            breakpoints[2].verified,
+            "function declaration line should be executable"
+        );
+        assert!(
+            !breakpoints[3].verified,
+            "EOF comment line should not be executable"
+        );
         Ok(())
     }
 
@@ -381,10 +442,22 @@ mod dap_breakpoint_matrix_phase2 {
         let breakpoints = set_breakpoints(&path, &[10, 11, 28, 29]);
 
         assert_eq!(breakpoints.len(), 4);
-        assert!(breakpoints[0].verified, "BEGIN block header should be executable");
-        assert!(!breakpoints[1].verified, "comment in BEGIN block should be rejected");
-        assert!(breakpoints[2].verified, "END block header should be executable");
-        assert!(!breakpoints[3].verified, "comment in END block should be rejected");
+        assert!(
+            breakpoints[0].verified,
+            "BEGIN block header should be executable"
+        );
+        assert!(
+            !breakpoints[1].verified,
+            "comment in BEGIN block should be rejected"
+        );
+        assert!(
+            breakpoints[2].verified,
+            "END block header should be executable"
+        );
+        assert!(
+            !breakpoints[3].verified,
+            "comment in END block should be rejected"
+        );
         Ok(())
     }
 
@@ -411,11 +484,26 @@ mod dap_breakpoint_matrix_phase2 {
         let breakpoints = set_breakpoints(&path, &[5, 7, 18, 23, 31]);
 
         assert_eq!(breakpoints.len(), 5);
-        assert!(!breakpoints[0].verified, "POD opening should not be executable");
-        assert!(!breakpoints[1].verified, "POD content should not be executable");
-        assert!(breakpoints[2].verified, "documented function should be executable");
-        assert!(!breakpoints[3].verified, "second POD section should not be executable");
-        assert!(breakpoints[4].verified, "post-POD executable statement should be executable");
+        assert!(
+            !breakpoints[0].verified,
+            "POD opening should not be executable"
+        );
+        assert!(
+            !breakpoints[1].verified,
+            "POD content should not be executable"
+        );
+        assert!(
+            breakpoints[2].verified,
+            "documented function should be executable"
+        );
+        assert!(
+            !breakpoints[3].verified,
+            "second POD section should not be executable"
+        );
+        assert!(
+            breakpoints[4].verified,
+            "post-POD executable statement should be executable"
+        );
         Ok(())
     }
 

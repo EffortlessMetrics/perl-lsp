@@ -30,8 +30,15 @@ fn test_recursion_depth_boundary() {
     let result = parser.parse();
     let parse_time = start_time.elapsed();
 
-    assert!(result.is_ok(), "Should parse successfully below recursion limit");
-    println!("  ✓ Below limit ({}): parsed in {:?}", MAX_RECURSION_DEPTH - 5, parse_time);
+    assert!(
+        result.is_ok(),
+        "Should parse successfully below recursion limit"
+    );
+    println!(
+        "  ✓ Below limit ({}): parsed in {:?}",
+        MAX_RECURSION_DEPTH - 5,
+        parse_time
+    );
 
     // Test exactly at the limit
     let at_limit_code = generate_nested_code(MAX_RECURSION_DEPTH);
@@ -49,7 +56,10 @@ fn test_recursion_depth_boundary() {
             );
         }
         Err(e) => {
-            println!("  ✓ At limit ({}): failed gracefully: {:?}", MAX_RECURSION_DEPTH, e);
+            println!(
+                "  ✓ At limit ({}): failed gracefully: {:?}",
+                MAX_RECURSION_DEPTH, e
+            );
             assert!(
                 e.to_string().contains("recursion")
                     || e.to_string().contains("depth")
@@ -69,10 +79,17 @@ fn test_recursion_depth_boundary() {
     // Should fail gracefully above the limit
     match result {
         Ok(_) => {
-            println!("  ⚠ Above limit ({}): unexpectedly succeeded", MAX_RECURSION_DEPTH + 5);
+            println!(
+                "  ⚠ Above limit ({}): unexpectedly succeeded",
+                MAX_RECURSION_DEPTH + 5
+            );
         }
         Err(e) => {
-            println!("  ✓ Above limit ({}): failed as expected: {:?}", MAX_RECURSION_DEPTH + 5, e);
+            println!(
+                "  ✓ Above limit ({}): failed as expected: {:?}",
+                MAX_RECURSION_DEPTH + 5,
+                e
+            );
             assert!(
                 e.to_string().contains("recursion")
                     || e.to_string().contains("depth")
@@ -101,8 +118,15 @@ fn test_heredoc_depth_boundary() {
     let result = parser.parse();
     let parse_time = start_time.elapsed();
 
-    assert!(result.is_ok(), "Should parse successfully below heredoc limit");
-    println!("  ✓ Below limit ({}): parsed in {:?}", MAX_HEREDOC_DEPTH - 5, parse_time);
+    assert!(
+        result.is_ok(),
+        "Should parse successfully below heredoc limit"
+    );
+    println!(
+        "  ✓ Below limit ({}): parsed in {:?}",
+        MAX_HEREDOC_DEPTH - 5,
+        parse_time
+    );
 
     // Test exactly at the limit
     let at_limit_code = generate_heredoc_code(MAX_HEREDOC_DEPTH);
@@ -120,7 +144,10 @@ fn test_heredoc_depth_boundary() {
             );
         }
         Err(e) => {
-            println!("  ✓ At limit ({}): failed gracefully: {:?}", MAX_HEREDOC_DEPTH, e);
+            println!(
+                "  ✓ At limit ({}): failed gracefully: {:?}",
+                MAX_HEREDOC_DEPTH, e
+            );
             assert!(
                 e.to_string().contains("heredoc")
                     || e.to_string().contains("depth")
@@ -140,10 +167,17 @@ fn test_heredoc_depth_boundary() {
     // Should fail gracefully above the limit
     match result {
         Ok(_) => {
-            println!("  ⚠ Above limit ({}): unexpectedly succeeded", MAX_HEREDOC_DEPTH + 5);
+            println!(
+                "  ⚠ Above limit ({}): unexpectedly succeeded",
+                MAX_HEREDOC_DEPTH + 5
+            );
         }
         Err(e) => {
-            println!("  ✓ Above limit ({}): failed as expected: {:?}", MAX_HEREDOC_DEPTH + 5, e);
+            println!(
+                "  ✓ Above limit ({}): failed as expected: {:?}",
+                MAX_HEREDOC_DEPTH + 5,
+                e
+            );
             assert!(
                 e.to_string().contains("heredoc")
                     || e.to_string().contains("depth")
@@ -173,7 +207,10 @@ fn test_timeout_boundary() {
     let parse_time = start_time.elapsed();
 
     assert!(result.is_ok(), "Should parse reasonable code quickly");
-    assert!(parse_time < Duration::from_millis(100), "Should complete well before timeout");
+    assert!(
+        parse_time < Duration::from_millis(100),
+        "Should complete well before timeout"
+    );
     println!("  ✓ Fast code: completed in {:?}", parse_time);
 
     // Test code that approaches timeout
@@ -211,10 +248,16 @@ fn test_timeout_boundary() {
     // Should timeout gracefully
     match result {
         Ok(_) => {
-            println!("  ⚠ Timeout code: unexpectedly succeeded in {:?}", parse_time);
+            println!(
+                "  ⚠ Timeout code: unexpectedly succeeded in {:?}",
+                parse_time
+            );
         }
         Err(e) => {
-            println!("  ✓ Timeout code: timed out as expected in {:?}: {:?}", parse_time, e);
+            println!(
+                "  ✓ Timeout code: timed out as expected in {:?}: {:?}",
+                parse_time, e
+            );
             assert!(
                 e.to_string().contains("timeout") || e.to_string().contains("time"),
                 "Should fail with timeout-related error"
@@ -259,7 +302,10 @@ fn test_file_size_boundaries() {
             // Very large files might fail gracefully
             match result {
                 Ok(_) => {
-                    println!("  ✓ {}: parsed successfully in {:?}", description, parse_time);
+                    println!(
+                        "  ✓ {}: parsed successfully in {:?}",
+                        description, parse_time
+                    );
                 }
                 Err(e) => {
                     println!("  ✓ {}: failed gracefully: {:?}", description, e);
@@ -309,7 +355,10 @@ fn test_token_count_boundaries() {
             // Very high token counts might fail gracefully
             match result {
                 Ok(_) => {
-                    println!("  ✓ {}: parsed successfully in {:?}", description, parse_time);
+                    println!(
+                        "  ✓ {}: parsed successfully in {:?}",
+                        description, parse_time
+                    );
                 }
                 Err(e) => {
                     println!("  ✓ {}: failed gracefully: {:?}", description, e);
@@ -360,7 +409,10 @@ fn test_ast_node_boundaries() {
         match result {
             Ok(ast) => {
                 let actual_nodes = count_ast_nodes(&ast);
-                println!("  ✓ {}: {} nodes in {:?}", description, actual_nodes, parse_time);
+                println!(
+                    "  ✓ {}: {} nodes in {:?}",
+                    description, actual_nodes, parse_time
+                );
 
                 // Should be reasonably close to target
                 let ratio = actual_nodes as f64 / target_nodes as f64;
@@ -413,7 +465,10 @@ fn test_graceful_degradation() {
         // Should either succeed or fail gracefully
         match result {
             Ok(_ast) => {
-                println!("  ✓ {}: succeeded with partial AST in {:?}", scenario_name, parse_time);
+                println!(
+                    "  ✓ {}: succeeded with partial AST in {:?}",
+                    scenario_name, parse_time
+                );
 
                 // Even when succeeding, should have reasonable performance
                 assert!(
@@ -422,12 +477,21 @@ fn test_graceful_degradation() {
                 );
             }
             Err(e) => {
-                println!("  ✓ {}: failed gracefully in {:?}: {:?}", scenario_name, parse_time, e);
+                println!(
+                    "  ✓ {}: failed gracefully in {:?}: {:?}",
+                    scenario_name, parse_time, e
+                );
 
                 // Should fail with meaningful error message
-                assert!(!e.to_string().is_empty(), "Error message should not be empty");
+                assert!(
+                    !e.to_string().is_empty(),
+                    "Error message should not be empty"
+                );
 
-                assert!(parse_time < Duration::from_secs(10), "Should fail quickly, not hang");
+                assert!(
+                    parse_time < Duration::from_secs(10),
+                    "Should fail quickly, not hang"
+                );
             }
         }
     }
@@ -465,7 +529,10 @@ print "Result: $y\n";
     let mut recovery_parser = Parser::new(normal_code);
     let recovery_result = recovery_parser.parse();
 
-    assert!(recovery_result.is_ok(), "Parser should recover and handle normal code");
+    assert!(
+        recovery_result.is_ok(),
+        "Parser should recover and handle normal code"
+    );
     println!("  ✓ Parser recovered and handled normal code successfully");
 
     // Test multiple cycles of violation and recovery
@@ -480,7 +547,10 @@ print "Result: $y\n";
         assert!(result.is_ok(), "Parser should recover in cycle {}", cycle);
     }
 
-    println!("  ✓ Parser recovered through {} violation/recovery cycles", 5);
+    println!(
+        "  ✓ Parser recovered through {} violation/recovery cycles",
+        5
+    );
 }
 
 /// Test boundary conditions with concurrent access
@@ -511,7 +581,10 @@ fn test_concurrent_boundary_conditions() {
                             generate_nested_code(MAX_RECURSION_DEPTH + operation % 10),
                             "recursion",
                         ),
-                        1 => (generate_heredoc_code(MAX_HEREDOC_DEPTH + operation % 10), "heredoc"),
+                        1 => (
+                            generate_heredoc_code(MAX_HEREDOC_DEPTH + operation % 10),
+                            "heredoc",
+                        ),
                         2 => (generate_complex_code(100 + operation * 75), "complexity"),
                         3 => (generate_large_code(500 + operation * 500), "size"),
                         _ => unreachable!(),
@@ -553,7 +626,9 @@ fn test_concurrent_boundary_conditions() {
         std::collections::HashMap::new();
 
     for (thread_id, operation, scenario_name, acceptable, parse_time) in results.iter() {
-        let entry = scenario_stats.entry(*scenario_name).or_insert((0, Duration::new(0, 0), 0));
+        let entry = scenario_stats
+            .entry(*scenario_name)
+            .or_insert((0, Duration::new(0, 0), 0));
         entry.0 += 1;
         entry.1 += *parse_time;
         if *acceptable {
@@ -635,7 +710,10 @@ fn test_boundary_edge_cases() {
                 println!("  ✓ {}: parsed successfully in {:?}", case_name, parse_time);
             }
             Err(e) => {
-                println!("  ✓ {}: failed gracefully in {:?}: {:?}", case_name, parse_time, e);
+                println!(
+                    "  ✓ {}: failed gracefully in {:?}: {:?}",
+                    case_name, parse_time, e
+                );
 
                 // Should fail with meaningful error
                 assert!(

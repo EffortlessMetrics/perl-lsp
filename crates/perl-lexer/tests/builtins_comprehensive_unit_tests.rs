@@ -83,9 +83,9 @@ fn is_builtin_string_functions() -> Result<(), String> {
 
 #[test]
 fn is_builtin_array_functions() -> Result<(), String> {
-    for name in
-        &["push", "pop", "shift", "unshift", "splice", "grep", "map", "sort", "join", "split"]
-    {
+    for name in &[
+        "push", "pop", "shift", "unshift", "splice", "grep", "map", "sort", "join", "split",
+    ] {
         if !is_builtin(name) {
             return Err(format!("{name} should be a builtin"));
         }
@@ -105,9 +105,9 @@ fn is_builtin_hash_functions() -> Result<(), String> {
 
 #[test]
 fn is_builtin_math_functions() -> Result<(), String> {
-    for name in
-        &["abs", "atan2", "cos", "exp", "hex", "int", "log", "oct", "rand", "sin", "sqrt", "srand"]
-    {
+    for name in &[
+        "abs", "atan2", "cos", "exp", "hex", "int", "log", "oct", "rand", "sin", "sqrt", "srand",
+    ] {
         if !is_builtin(name) {
             return Err(format!("{name} should be a builtin"));
         }
@@ -447,7 +447,9 @@ fn get_param_names_returns_empty_for_unknown() -> Result<(), String> {
 fn get_param_names_returns_empty_for_empty_string() -> Result<(), String> {
     let params = get_param_names("");
     if !params.is_empty() {
-        return Err(format!("Expected empty params for empty string, got {params:?}"));
+        return Err(format!(
+            "Expected empty params for empty string, got {params:?}"
+        ));
     }
     Ok(())
 }
@@ -464,8 +466,13 @@ fn get_param_names_file_test_operator() -> Result<(), String> {
 #[test]
 fn get_param_names_multi_param_functions() -> Result<(), String> {
     // Verify various param counts
-    let cases: &[(&str, usize)] =
-        &[("close", 1), ("crypt", 2), ("index", 3), ("read", 4), ("socketpair", 5)];
+    let cases: &[(&str, usize)] = &[
+        ("close", 1),
+        ("crypt", 2),
+        ("index", 3),
+        ("read", 4),
+        ("socketpair", 5),
+    ];
     for &(name, expected_count) in cases {
         let params = get_param_names(name);
         if params.len() != expected_count {
@@ -484,7 +491,9 @@ fn get_param_names_multi_param_functions() -> Result<(), String> {
 
 #[test]
 fn full_sigs_contains_expected_entries() -> Result<(), String> {
-    for name in &["print", "printf", "say", "open", "close", "substr", "splice", "split"] {
+    for name in &[
+        "print", "printf", "say", "open", "close", "substr", "splice", "split",
+    ] {
         if BUILTIN_FULL_SIGS.get(name).is_none() {
             return Err(format!("BUILTIN_FULL_SIGS missing entry for {name}"));
         }
@@ -496,7 +505,10 @@ fn full_sigs_contains_expected_entries() -> Result<(), String> {
 fn full_sigs_print_has_multiple_variants() -> Result<(), String> {
     let sigs = must_some(BUILTIN_FULL_SIGS.get("print"));
     if sigs.len() < 2 {
-        return Err(format!("print should have multiple full signatures, got {}", sigs.len()));
+        return Err(format!(
+            "print should have multiple full signatures, got {}",
+            sigs.len()
+        ));
     }
     Ok(())
 }
@@ -505,7 +517,10 @@ fn full_sigs_print_has_multiple_variants() -> Result<(), String> {
 fn full_sigs_substr_has_multiple_variants() -> Result<(), String> {
     let sigs = must_some(BUILTIN_FULL_SIGS.get("substr"));
     if sigs.len() < 3 {
-        return Err(format!("substr should have at least 3 full signatures, got {}", sigs.len()));
+        return Err(format!(
+            "substr should have at least 3 full signatures, got {}",
+            sigs.len()
+        ));
     }
     Ok(())
 }
@@ -514,7 +529,10 @@ fn full_sigs_substr_has_multiple_variants() -> Result<(), String> {
 fn full_sigs_splice_has_four_variants() -> Result<(), String> {
     let sigs = must_some(BUILTIN_FULL_SIGS.get("splice"));
     if sigs.len() != 4 {
-        return Err(format!("splice should have 4 full signatures, got {}", sigs.len()));
+        return Err(format!(
+            "splice should have 4 full signatures, got {}",
+            sigs.len()
+        ));
     }
     Ok(())
 }
@@ -523,7 +541,10 @@ fn full_sigs_splice_has_four_variants() -> Result<(), String> {
 fn full_sigs_split_has_four_variants() -> Result<(), String> {
     let sigs = must_some(BUILTIN_FULL_SIGS.get("split"));
     if sigs.len() != 4 {
-        return Err(format!("split should have 4 full signatures, got {}", sigs.len()));
+        return Err(format!(
+            "split should have 4 full signatures, got {}",
+            sigs.len()
+        ));
     }
     Ok(())
 }
@@ -682,7 +703,9 @@ fn signatures_contains_string_functions() -> Result<(), String> {
 #[test]
 fn signatures_contains_array_functions() -> Result<(), String> {
     let sigs = create_builtin_signatures();
-    for name in &["push", "pop", "shift", "unshift", "splice", "map", "grep", "sort"] {
+    for name in &[
+        "push", "pop", "shift", "unshift", "splice", "map", "grep", "sort",
+    ] {
         if !sigs.contains_key(name) {
             return Err(format!("Missing array function: {name}"));
         }
@@ -704,7 +727,9 @@ fn signatures_contains_hash_functions() -> Result<(), String> {
 #[test]
 fn signatures_contains_math_functions() -> Result<(), String> {
     let sigs = create_builtin_signatures();
-    for name in &["abs", "atan2", "cos", "sin", "exp", "log", "sqrt", "int", "rand", "srand"] {
+    for name in &[
+        "abs", "atan2", "cos", "sin", "exp", "log", "sqrt", "int", "rand", "srand",
+    ] {
         if !sigs.contains_key(name) {
             return Err(format!("Missing math function: {name}"));
         }
@@ -715,7 +740,9 @@ fn signatures_contains_math_functions() -> Result<(), String> {
 #[test]
 fn signatures_contains_process_functions() -> Result<(), String> {
     let sigs = create_builtin_signatures();
-    for name in &["system", "exec", "fork", "wait", "waitpid", "kill", "getpid", "getppid"] {
+    for name in &[
+        "system", "exec", "fork", "wait", "waitpid", "kill", "getpid", "getppid",
+    ] {
         if !sigs.contains_key(name) {
             return Err(format!("Missing process function: {name}"));
         }
@@ -737,7 +764,9 @@ fn signatures_contains_time_functions() -> Result<(), String> {
 #[test]
 fn signatures_contains_control_flow() -> Result<(), String> {
     let sigs = create_builtin_signatures();
-    for name in &["die", "warn", "exit", "return", "next", "last", "redo", "goto"] {
+    for name in &[
+        "die", "warn", "exit", "return", "next", "last", "redo", "goto",
+    ] {
         if !sigs.contains_key(name) {
             return Err(format!("Missing control flow function: {name}"));
         }
@@ -818,7 +847,9 @@ fn signatures_contains_socket_functions() -> Result<(), String> {
 #[test]
 fn signatures_contains_io_control() -> Result<(), String> {
     let sigs = create_builtin_signatures();
-    for name in &["pipe", "fcntl", "ioctl", "flock", "select", "getc", "binmode", "fileno"] {
+    for name in &[
+        "pipe", "fcntl", "ioctl", "flock", "select", "getc", "binmode", "fileno",
+    ] {
         if !sigs.contains_key(name) {
             return Err(format!("Missing IO control function: {name}"));
         }
@@ -894,7 +925,14 @@ fn signatures_contains_user_group() -> Result<(), String> {
 #[test]
 fn signatures_contains_directory_functions() -> Result<(), String> {
     let sigs = create_builtin_signatures();
-    for name in &["opendir", "readdir", "closedir", "rewinddir", "telldir", "seekdir"] {
+    for name in &[
+        "opendir",
+        "readdir",
+        "closedir",
+        "rewinddir",
+        "telldir",
+        "seekdir",
+    ] {
         if !sigs.contains_key(name) {
             return Err(format!("Missing directory function: {name}"));
         }
@@ -996,7 +1034,10 @@ fn signature_fork_has_single_variant() -> Result<(), String> {
     let sigs = create_builtin_signatures();
     let fork_sig = must_some(sigs.get("fork"));
     if fork_sig.signatures.len() != 1 {
-        return Err(format!("fork should have 1 variant, got {}", fork_sig.signatures.len()));
+        return Err(format!(
+            "fork should have 1 variant, got {}",
+            fork_sig.signatures.len()
+        ));
     }
     Ok(())
 }
@@ -1006,7 +1047,10 @@ fn signature_open_has_three_variants() -> Result<(), String> {
     let sigs = create_builtin_signatures();
     let open_sig = must_some(sigs.get("open"));
     if open_sig.signatures.len() != 3 {
-        return Err(format!("open should have 3 variants, got {}", open_sig.signatures.len()));
+        return Err(format!(
+            "open should have 3 variants, got {}",
+            open_sig.signatures.len()
+        ));
     }
     Ok(())
 }
@@ -1204,7 +1248,10 @@ fn specific_signature_details_no() -> Result<(), String> {
     let sigs = create_builtin_signatures();
     let no_sig = must_some(sigs.get("no"));
     if no_sig.signatures.len() < 4 {
-        return Err(format!("no should have at least 4 variants, got {}", no_sig.signatures.len()));
+        return Err(format!(
+            "no should have at least 4 variants, got {}",
+            no_sig.signatures.len()
+        ));
     }
     Ok(())
 }
@@ -1216,7 +1263,9 @@ fn specific_signature_splice_variants_ordered() -> Result<(), String> {
     // Most specific variant should come first
     let first = splice_sig.signatures.first().copied();
     if first != Some("splice ARRAY, OFFSET, LENGTH, LIST") {
-        return Err(format!("splice first variant should be most specific, got {first:?}"));
+        return Err(format!(
+            "splice first variant should be most specific, got {first:?}"
+        ));
     }
     Ok(())
 }
@@ -1243,7 +1292,9 @@ fn specific_phf_params_socketpair() -> Result<(), String> {
 fn specific_phf_params_bless() -> Result<(), String> {
     let params = get_param_names("bless");
     if params != ["REF", "CLASSNAME"] {
-        return Err(format!("bless params should be [REF, CLASSNAME], got {params:?}"));
+        return Err(format!(
+            "bless params should be [REF, CLASSNAME], got {params:?}"
+        ));
     }
     Ok(())
 }
@@ -1252,7 +1303,9 @@ fn specific_phf_params_bless() -> Result<(), String> {
 fn specific_phf_params_use() -> Result<(), String> {
     let params = get_param_names("use");
     if params != ["MODULE", "VERSION", "LIST"] {
-        return Err(format!("use params should be [MODULE, VERSION, LIST], got {params:?}"));
+        return Err(format!(
+            "use params should be [MODULE, VERSION, LIST], got {params:?}"
+        ));
     }
     Ok(())
 }
@@ -1262,7 +1315,10 @@ fn goto_has_three_signature_variants() -> Result<(), String> {
     let sigs = create_builtin_signatures();
     let goto_sig = must_some(sigs.get("goto"));
     if goto_sig.signatures.len() != 3 {
-        return Err(format!("goto should have 3 variants, got {}", goto_sig.signatures.len()));
+        return Err(format!(
+            "goto should have 3 variants, got {}",
+            goto_sig.signatures.len()
+        ));
     }
     Ok(())
 }
@@ -1272,7 +1328,10 @@ fn select_has_three_signature_variants() -> Result<(), String> {
     let sigs = create_builtin_signatures();
     let select_sig = must_some(sigs.get("select"));
     if select_sig.signatures.len() != 3 {
-        return Err(format!("select should have 3 variants, got {}", select_sig.signatures.len()));
+        return Err(format!(
+            "select should have 3 variants, got {}",
+            select_sig.signatures.len()
+        ));
     }
     Ok(())
 }
@@ -1282,7 +1341,10 @@ fn require_has_four_signature_variants() -> Result<(), String> {
     let sigs = create_builtin_signatures();
     let req_sig = must_some(sigs.get("require"));
     if req_sig.signatures.len() != 4 {
-        return Err(format!("require should have 4 variants, got {}", req_sig.signatures.len()));
+        return Err(format!(
+            "require should have 4 variants, got {}",
+            req_sig.signatures.len()
+        ));
     }
     Ok(())
 }

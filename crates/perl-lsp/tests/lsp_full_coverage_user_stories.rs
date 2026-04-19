@@ -78,7 +78,10 @@ impl TestContext {
     }
 
     fn story_context(&self) -> String {
-        let latest = self.storybook.last().map_or("unknown-story", std::string::String::as_str);
+        let latest = self
+            .storybook
+            .last()
+            .map_or("unknown-story", std::string::String::as_str);
         format!("story={latest} booked_stories={}", self.storybook.len())
     }
 
@@ -113,7 +116,9 @@ impl TestContext {
         };
         self.request_id += 1;
 
-        self.server.handle_request(request).and_then(|response| response.result)
+        self.server
+            .handle_request(request)
+            .and_then(|response| response.result)
     }
 
     fn send_notification(&mut self, method: &str, params: Option<Value>) {
@@ -143,7 +148,8 @@ impl TestContext {
     }
 
     fn change_document(&mut self, uri: &str, new_content: &str) {
-        self.documents.insert(uri.to_string(), new_content.to_string());
+        self.documents
+            .insert(uri.to_string(), new_content.to_string());
 
         self.send_notification(
             "textDocument/didChange",
@@ -215,7 +221,11 @@ impl TestContext {
         });
 
         let result = self.send_request("textDocument/references", Some(params));
-        result.as_ref().and_then(|r| r.as_array()).cloned().unwrap_or_default()
+        result
+            .as_ref()
+            .and_then(|r| r.as_array())
+            .cloned()
+            .unwrap_or_default()
     }
 
     fn get_code_actions_for_range(
@@ -238,7 +248,11 @@ impl TestContext {
         });
 
         let result = self.send_request("textDocument/codeAction", Some(params));
-        result.as_ref().and_then(|r| r.as_array()).cloned().unwrap_or_default()
+        result
+            .as_ref()
+            .and_then(|r| r.as_array())
+            .cloned()
+            .unwrap_or_default()
     }
 
     fn get_code_actions(&mut self, uri: &str, start_line: u32, end_line: u32) -> Vec<Value> {
@@ -261,7 +275,11 @@ impl TestContext {
         });
 
         let result = self.send_request("workspace/symbol", Some(params));
-        result.as_ref().and_then(|r| r.as_array()).cloned().unwrap_or_default()
+        result
+            .as_ref()
+            .and_then(|r| r.as_array())
+            .cloned()
+            .unwrap_or_default()
     }
 
     fn get_document_symbols(&mut self, uri: &str) -> Vec<Value> {
@@ -270,7 +288,11 @@ impl TestContext {
         });
 
         let result = self.send_request("textDocument/documentSymbol", Some(params));
-        result.as_ref().and_then(|r| r.as_array()).cloned().unwrap_or_default()
+        result
+            .as_ref()
+            .and_then(|r| r.as_array())
+            .cloned()
+            .unwrap_or_default()
     }
 
     fn format_document(&mut self, uri: &str) -> Vec<Value> {
@@ -283,7 +305,11 @@ impl TestContext {
         });
 
         let result = self.send_request("textDocument/formatting", Some(params));
-        result.as_ref().and_then(|r| r.as_array()).cloned().unwrap_or_default()
+        result
+            .as_ref()
+            .and_then(|r| r.as_array())
+            .cloned()
+            .unwrap_or_default()
     }
 
     /// Wait for workspace indexing to complete by polling for symbols
@@ -346,7 +372,11 @@ print "Fibonacci(10) = $result\n";
 
     // Get references to the function
     let refs = ctx.get_references("file:///workspace/debug_test.pl", 4, 4, true);
-    assert!(!refs.is_empty(), "Should find function references ({})", ctx.story_context());
+    assert!(
+        !refs.is_empty(),
+        "Should find function references ({})",
+        ctx.story_context()
+    );
 
     // Request code actions for the "$a + $b" expression inside the loop.
     let actions = ctx.get_code_actions_for_range("file:///workspace/debug_test.pl", 11, 19, 11, 26);
@@ -471,7 +501,10 @@ sub connect {
     );
     assert!(
         doc_symbols.iter().any(|s| {
-            s.get("name").and_then(|n| n.as_str()).map(|n| n == "connect").unwrap_or(false)
+            s.get("name")
+                .and_then(|n| n.as_str())
+                .map(|n| n == "connect")
+                .unwrap_or(false)
         }),
         "Should find connect method ({})",
         ctx.story_context()
@@ -485,7 +518,10 @@ sub connect {
         ctx.story_context()
     );
     assert!(symbols.iter().any(|s| {
-        s.get("name").and_then(|n| n.as_str()).map(|n| n.contains("Database")).unwrap_or(false)
+        s.get("name")
+            .and_then(|n| n.as_str())
+            .map(|n| n.contains("Database"))
+            .unwrap_or(false)
     }));
 }
 
@@ -562,8 +598,9 @@ print "Result: $result, Time: $elapsed seconds\n";
     let actions = ctx.get_code_actions("file:///workspace/slow.pl", 9, 14);
 
     // Should suggest loop optimizations
-    let has_optimization_suggestions =
-        actions.iter().any(|a| a.get("title").and_then(|t| t.as_str()).is_some());
+    let has_optimization_suggestions = actions
+        .iter()
+        .any(|a| a.get("title").and_then(|t| t.as_str()).is_some());
     assert!(
         has_optimization_suggestions || actions.is_empty(),
         "Should provide code actions or recognize no optimizations available"
@@ -731,7 +768,9 @@ sub process_data {
         let new_content = format!(
             "{}
 # Developer {} was here",
-            ctx.documents.get("file:///workspace/shared.pl").unwrap_or(&String::new()),
+            ctx.documents
+                .get("file:///workspace/shared.pl")
+                .unwrap_or(&String::new()),
             i
         );
         ctx.change_document("file:///workspace/shared.pl", &new_content);
@@ -1011,7 +1050,10 @@ sub run {
 
     // Test project-wide refactoring
     let rename_result = ctx.rename("file:///workspace/lib/Project/Main.pm", 6, 4, "initialize");
-    assert!(rename_result.is_some(), "Rename should return workspace edits");
+    assert!(
+        rename_result.is_some(),
+        "Rename should return workspace edits"
+    );
 
     // Test workspace symbols
     // Wait for indexing to ensure robustness against async behavior
@@ -1058,7 +1100,10 @@ fn test_performance_large_file() {
 
     // Get symbols
     let _ = ctx.get_workspace_symbols("function_500");
-    assert!(start.elapsed() < Duration::from_secs(1), "Symbol search should be fast");
+    assert!(
+        start.elapsed() < Duration::from_secs(1),
+        "Symbol search should be fast"
+    );
 }
 
 #[test]

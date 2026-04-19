@@ -144,7 +144,10 @@ pub fn run(config: AuditConfig) -> Result<()> {
     println!("   Corpus path: {}", config.corpus_path.display());
     println!("   Output path: {}", config.output_path.display());
     println!("   Timeout: {:?}", config.timeout);
-    println!("   Mode: {}", if config.check { "check (CI)" } else { "full" });
+    println!(
+        "   Mode: {}",
+        if config.check { "check (CI)" } else { "full" }
+    );
 
     // Create output directory if needed
     if let Some(parent) = config.output_path.parent() {
@@ -255,8 +258,14 @@ fn print_audit_summary(report: &AuditReport) {
         report.nodekind_coverage.total_count,
         report.nodekind_coverage.coverage_percentage
     );
-    println!("   Never-seen NodeKinds: {}", report.nodekind_coverage.never_seen.len());
-    println!("   At-risk NodeKinds (<5 occurrences): {}", report.nodekind_coverage.at_risk.len());
+    println!(
+        "   Never-seen NodeKinds: {}",
+        report.nodekind_coverage.never_seen.len()
+    );
+    println!(
+        "   At-risk NodeKinds (<5 occurrences): {}",
+        report.nodekind_coverage.at_risk.len()
+    );
     println!(
         "   GA features covered: {}/{} ({:.1}%)",
         report.ga_coverage.covered_count,
@@ -294,10 +303,15 @@ fn validate_report_for_ci(report: &AuditReport) -> Result<()> {
     if baseline_path.exists() {
         let baseline_str =
             fs::read_to_string(baseline_path).context("Failed to read parse errors baseline")?;
-        let baseline: usize =
-            baseline_str.trim().parse().context("Failed to parse baseline as number")?;
+        let baseline: usize = baseline_str
+            .trim()
+            .parse()
+            .context("Failed to parse baseline as number")?;
 
-        println!("   Parse errors: {} (baseline: {})", current_errors, baseline);
+        println!(
+            "   Parse errors: {} (baseline: {})",
+            current_errors, baseline
+        );
 
         if current_errors > baseline {
             failures.push(format!(
@@ -318,12 +332,18 @@ fn validate_report_for_ci(report: &AuditReport) -> Result<()> {
 
     // Timeouts should always be zero
     if report.parse_outcomes.timeout > 0 {
-        failures.push(format!("Parse timeouts: {} files timed out", report.parse_outcomes.timeout));
+        failures.push(format!(
+            "Parse timeouts: {} files timed out",
+            report.parse_outcomes.timeout
+        ));
     }
 
     // Panics should always be zero
     if report.parse_outcomes.panic > 0 {
-        failures.push(format!("Parse panics: {} files caused panics", report.parse_outcomes.panic));
+        failures.push(format!(
+            "Parse panics: {} files caused panics",
+            report.parse_outcomes.panic
+        ));
     }
 
     // Check for critical timeout risks
@@ -334,8 +354,10 @@ fn validate_report_for_ci(report: &AuditReport) -> Result<()> {
         .collect();
 
     if !critical_risks.is_empty() {
-        failures
-            .push(format!("Critical timeout risks: {} P0 risks detected", critical_risks.len()));
+        failures.push(format!(
+            "Critical timeout risks: {} P0 risks detected",
+            critical_risks.len()
+        ));
     }
 
     // Check GA feature coverage
@@ -364,7 +386,10 @@ fn validate_report_for_ci(report: &AuditReport) -> Result<()> {
         for failure in &failures {
             println!("   - {}", failure);
         }
-        Err(color_eyre::eyre::eyre!("CI gate validation failed: {}", failures.join("; ")))
+        Err(color_eyre::eyre::eyre!(
+            "CI gate validation failed: {}",
+            failures.join("; ")
+        ))
     }
 }
 

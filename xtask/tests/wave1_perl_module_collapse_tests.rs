@@ -30,14 +30,20 @@ fn test_workspace_member_count_is_123_after_collapse() -> Result<(), Box<dyn std
     let content = fs::read_to_string(&workspace_cargo_path)?;
 
     // Extract the [workspace] members section
-    let members_start = content.find("[workspace]").ok_or("No [workspace] section found")?;
+    let members_start = content
+        .find("[workspace]")
+        .ok_or("No [workspace] section found")?;
 
     let members_section = &content[members_start..];
-    let members_list_start = members_section.find("members = [").ok_or("No members list found")?;
+    let members_list_start = members_section
+        .find("members = [")
+        .ok_or("No members list found")?;
 
     // Count the number of quoted strings (crate paths) in the members list
     let members_part = &members_section[members_list_start..];
-    let members_end = members_part.find("]").ok_or("Members list closing ] not found")?;
+    let members_end = members_part
+        .find("]")
+        .ok_or("Members list closing ] not found")?;
     let members_content = &members_part[..members_end];
 
     let member_count = members_content.matches('"').count() / 2; // Each path has opening and closing quote
@@ -212,8 +218,10 @@ fn test_publish_allowlist_contains_single_perl_module_entry()
 
     // Extract the allow list (up to next [section] or end of file)
     let publish_section = &content[publish_start..];
-    let section_end =
-        publish_section[1..].find("\n[").map(|i| i + 1).unwrap_or(publish_section.len());
+    let section_end = publish_section[1..]
+        .find("\n[")
+        .map(|i| i + 1)
+        .unwrap_or(publish_section.len());
     let publish_section = &publish_section[..section_end];
 
     // Count occurrences of "perl-module" in the publish allowlist

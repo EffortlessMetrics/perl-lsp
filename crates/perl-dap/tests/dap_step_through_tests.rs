@@ -47,9 +47,17 @@ fn assert_response(
     expected_success: bool,
 ) -> Option<serde_json::Value> {
     match msg {
-        DapMessage::Response { success, command, body, .. } => {
+        DapMessage::Response {
+            success,
+            command,
+            body,
+            ..
+        } => {
             assert_eq!(command, expected_command, "command mismatch");
-            assert_eq!(success, expected_success, "success mismatch for {expected_command}");
+            assert_eq!(
+                success, expected_success,
+                "success mismatch for {expected_command}"
+            );
             body
         }
         other => panic!("expected Response for {expected_command}, got {other:?}"),
@@ -82,7 +90,9 @@ fn test_step_in_emits_continued_event_no_session() -> Result<(), Box<dyn std::er
     let response = adapter.handle_request(1, "stepIn", None);
 
     match response {
-        DapMessage::Response { success, command, .. } => {
+        DapMessage::Response {
+            success, command, ..
+        } => {
             assert!(success, "stepIn should succeed");
             assert_eq!(command, "stepIn");
         }
@@ -99,7 +109,9 @@ fn test_step_out_emits_continued_event_no_session() -> Result<(), Box<dyn std::e
     let response = adapter.handle_request(1, "stepOut", None);
 
     match response {
-        DapMessage::Response { success, command, .. } => {
+        DapMessage::Response {
+            success, command, ..
+        } => {
             assert!(success, "stepOut should succeed");
             assert_eq!(command, "stepOut");
         }
@@ -116,7 +128,9 @@ fn test_next_emits_continued_event_no_session() -> Result<(), Box<dyn std::error
     let response = adapter.handle_request(1, "next", None);
 
     match response {
-        DapMessage::Response { success, command, .. } => {
+        DapMessage::Response {
+            success, command, ..
+        } => {
             assert!(success, "next (stepOver) should succeed");
             assert_eq!(command, "next");
         }
@@ -134,7 +148,12 @@ fn test_continue_emits_continued_event() -> Result<(), Box<dyn std::error::Error
     let response = adapter.handle_request(1, "continue", None);
 
     match response {
-        DapMessage::Response { success, command, body, .. } => {
+        DapMessage::Response {
+            success,
+            command,
+            body,
+            ..
+        } => {
             assert!(success, "continue should succeed");
             assert_eq!(command, "continue");
             let body = body.ok_or("continue response must have a body")?;
@@ -173,7 +192,9 @@ fn test_next_at_if_boundary() -> Result<(), Box<dyn std::error::Error>> {
     let response = adapter.handle_request(1, "next", Some(args));
 
     match response {
-        DapMessage::Response { success, command, .. } => {
+        DapMessage::Response {
+            success, command, ..
+        } => {
             assert!(success, "next at if boundary should succeed");
             assert_eq!(command, "next");
         }
@@ -195,7 +216,9 @@ fn test_step_in_at_while_boundary() -> Result<(), Box<dyn std::error::Error>> {
     let response = adapter.handle_request(1, "stepIn", Some(args));
 
     match response {
-        DapMessage::Response { success, command, .. } => {
+        DapMessage::Response {
+            success, command, ..
+        } => {
             assert!(success, "stepIn at while boundary should succeed");
             assert_eq!(command, "stepIn");
         }
@@ -217,7 +240,9 @@ fn test_step_out_at_for_boundary() -> Result<(), Box<dyn std::error::Error>> {
     let response = adapter.handle_request(1, "stepOut", Some(args));
 
     match response {
-        DapMessage::Response { success, command, .. } => {
+        DapMessage::Response {
+            success, command, ..
+        } => {
             assert!(success, "stepOut at for boundary should succeed");
             assert_eq!(command, "stepOut");
         }
@@ -244,7 +269,11 @@ fn test_step_sequence_at_block_boundaries() -> Result<(), Box<dyn std::error::Er
     for (seq, (command, args)) in ops.iter().enumerate() {
         let response = adapter.handle_request((seq + 1) as i64, command, Some(args.clone()));
         match response {
-            DapMessage::Response { success, command: cmd, .. } => {
+            DapMessage::Response {
+                success,
+                command: cmd,
+                ..
+            } => {
                 assert!(success, "op {command} at seq {seq} should succeed");
                 assert_eq!(&cmd, command, "command name mismatch at seq {seq}");
             }
@@ -272,8 +301,13 @@ fn test_step_in_to_xs_builtin_via_target_id() -> Result<(), Box<dyn std::error::
     let response = adapter.handle_request(1, "stepIn", Some(args));
 
     match response {
-        DapMessage::Response { success, command, .. } => {
-            assert!(success, "stepIn with unknown targetId should succeed gracefully");
+        DapMessage::Response {
+            success, command, ..
+        } => {
+            assert!(
+                success,
+                "stepIn with unknown targetId should succeed gracefully"
+            );
             assert_eq!(command, "stepIn");
         }
         _ => return Err("Expected Response for stepIn with unknown targetId".into()),
@@ -301,12 +335,19 @@ fn test_step_in_targets_with_real_perl_function_calls() -> Result<(), Box<dyn st
     let response = adapter.handle_request(1, "stepInTargets", Some(args));
 
     match response {
-        DapMessage::Response { success, command, body, .. } => {
+        DapMessage::Response {
+            success,
+            command,
+            body,
+            ..
+        } => {
             assert!(success, "stepInTargets should succeed");
             assert_eq!(command, "stepInTargets");
             let body = body.ok_or("expected body")?;
-            let targets =
-                body.get("targets").and_then(|v| v.as_array()).ok_or("expected targets")?;
+            let targets = body
+                .get("targets")
+                .and_then(|v| v.as_array())
+                .ok_or("expected targets")?;
             // No active session → no frames → empty targets list
             assert!(
                 targets.is_empty(),
@@ -339,7 +380,12 @@ fn test_variables_request_during_stepping_sequence() -> Result<(), Box<dyn std::
         adapter.handle_request(4, "variables", Some(json!({"variablesReference": 11})));
 
     match var_response {
-        DapMessage::Response { success, command, body, .. } => {
+        DapMessage::Response {
+            success,
+            command,
+            body,
+            ..
+        } => {
             assert!(success, "variables request after stepping should succeed");
             assert_eq!(command, "variables");
             let body = body.ok_or("variables response must have a body")?;
@@ -366,7 +412,12 @@ fn test_scopes_request_during_stepping_sequence() -> Result<(), Box<dyn std::err
     let scopes_response = adapter.handle_request(2, "scopes", Some(json!({"frameId": 1})));
 
     match scopes_response {
-        DapMessage::Response { success, command, body, .. } => {
+        DapMessage::Response {
+            success,
+            command,
+            body,
+            ..
+        } => {
             assert!(success, "scopes request after stepping should succeed");
             assert_eq!(command, "scopes");
             let body = body.ok_or("scopes response must have a body")?;
@@ -409,12 +460,19 @@ fn test_goto_targets_with_executable_perl_lines() -> Result<(), Box<dyn std::err
     let response = adapter.handle_request(1, "gotoTargets", Some(args));
 
     match response {
-        DapMessage::Response { success, command, body, .. } => {
+        DapMessage::Response {
+            success,
+            command,
+            body,
+            ..
+        } => {
             assert!(success, "gotoTargets should succeed for valid Perl file");
             assert_eq!(command, "gotoTargets");
             let body = body.ok_or("expected body")?;
-            let targets =
-                body.get("targets").and_then(|v| v.as_array()).ok_or("expected targets array")?;
+            let targets = body
+                .get("targets")
+                .and_then(|v| v.as_array())
+                .ok_or("expected targets array")?;
             // There should be at least one executable target near line 3
             assert!(
                 !targets.is_empty(),
@@ -425,7 +483,10 @@ fn test_goto_targets_with_executable_perl_lines() -> Result<(), Box<dyn std::err
                 assert!(target.get("id").is_some(), "target must have id");
                 assert!(target.get("label").is_some(), "target must have label");
                 let label = target.get("label").and_then(|v| v.as_str()).unwrap_or("");
-                assert!(label.starts_with("Line "), "label should start with 'Line ': {label}");
+                assert!(
+                    label.starts_with("Line "),
+                    "label should start with 'Line ': {label}"
+                );
             }
         }
         _ => return Err("Expected Response for gotoTargets".into()),
@@ -446,7 +507,12 @@ fn test_goto_targets_nonexistent_file_returns_empty_targets()
     let response = adapter.handle_request(1, "gotoTargets", Some(args));
 
     match response {
-        DapMessage::Response { success, command, body, .. } => {
+        DapMessage::Response {
+            success,
+            command,
+            body,
+            ..
+        } => {
             // Path validation may reject as traversal or file not found → either empty success or failure
             let _ = success;
             assert_eq!(command, "gotoTargets");
@@ -456,7 +522,10 @@ fn test_goto_targets_nonexistent_file_returns_empty_targets()
                     .get("targets")
                     .and_then(|v| v.as_array())
                     .ok_or("gotoTargets body must have a targets array")?;
-                assert!(targets.is_empty(), "nonexistent file must yield empty targets");
+                assert!(
+                    targets.is_empty(),
+                    "nonexistent file must yield empty targets"
+                );
             }
             // if !success, that is also acceptable (path validation rejected the path)
         }
@@ -477,7 +546,12 @@ fn test_goto_unknown_target_id_returns_failure() -> Result<(), Box<dyn std::erro
     let response = adapter.handle_request(1, "goto", Some(args));
 
     match response {
-        DapMessage::Response { success, command, message, .. } => {
+        DapMessage::Response {
+            success,
+            command,
+            message,
+            ..
+        } => {
             assert!(!success, "goto with unknown targetId should fail");
             assert_eq!(command, "goto");
             assert!(message.is_some(), "failure must include a message");
@@ -499,7 +573,12 @@ fn test_goto_missing_args_returns_failure() -> Result<(), Box<dyn std::error::Er
     let response = adapter.handle_request(1, "goto", None);
 
     match response {
-        DapMessage::Response { success, command, message, .. } => {
+        DapMessage::Response {
+            success,
+            command,
+            message,
+            ..
+        } => {
             assert!(!success, "goto with missing args should fail");
             assert_eq!(command, "goto");
             assert!(message.is_some(), "failure must include a message");
@@ -528,7 +607,9 @@ fn test_cancel_during_stepping_sequence() -> Result<(), Box<dyn std::error::Erro
     // After cancel, further step operations must still be serviced gracefully.
     let response = adapter.handle_request(4, "next", Some(json!({"threadId": 1})));
     match response {
-        DapMessage::Response { success, command, .. } => {
+        DapMessage::Response {
+            success, command, ..
+        } => {
             assert!(success, "next after cancel should succeed");
             assert_eq!(command, "next");
         }
@@ -560,8 +641,16 @@ fn test_restart_frame_is_unsupported_for_perl() -> Result<(), Box<dyn std::error
     let response = adapter.handle_request(1, "restartFrame", None);
 
     match response {
-        DapMessage::Response { success, command, message, .. } => {
-            assert!(!success, "restartFrame should fail — Perl doesn't support it");
+        DapMessage::Response {
+            success,
+            command,
+            message,
+            ..
+        } => {
+            assert!(
+                !success,
+                "restartFrame should fail — Perl doesn't support it"
+            );
             assert_eq!(command, "restartFrame");
             let msg = message.ok_or("restartFrame failure must include a message")?;
             assert!(
@@ -582,8 +671,16 @@ fn test_terminate_threads_is_unsupported_for_perl() -> Result<(), Box<dyn std::e
     let response = adapter.handle_request(1, "terminateThreads", None);
 
     match response {
-        DapMessage::Response { success, command, message, .. } => {
-            assert!(!success, "terminateThreads should fail — Perl model doesn't support it");
+        DapMessage::Response {
+            success,
+            command,
+            message,
+            ..
+        } => {
+            assert!(
+                !success,
+                "terminateThreads should fail — Perl model doesn't support it"
+            );
             assert_eq!(command, "terminateThreads");
             let msg = message.ok_or("terminateThreads failure must include a message")?;
             assert!(
@@ -613,7 +710,9 @@ fn test_sequence_numbers_monotonically_increasing_across_steps()
     for (i, command) in commands.iter().enumerate() {
         let response = adapter.handle_request((i + 1) as i64, command, None);
         match response {
-            DapMessage::Response { seq, request_seq, .. } => {
+            DapMessage::Response {
+                seq, request_seq, ..
+            } => {
                 assert!(
                     seq > last_seq,
                     "seq {seq} must be greater than previous {last_seq} for command {command}"
@@ -643,11 +742,19 @@ fn test_continue_pause_cycle_response_shapes() -> Result<(), Box<dyn std::error:
     // Continue
     let continue_resp = adapter.handle_request(1, "continue", None);
     match continue_resp {
-        DapMessage::Response { success, command, body, .. } => {
+        DapMessage::Response {
+            success,
+            command,
+            body,
+            ..
+        } => {
             assert!(success, "continue should succeed");
             assert_eq!(command, "continue");
             let body = body.ok_or("continue response must have a body")?;
-            assert!(body.get("allThreadsContinued").is_some(), "must have allThreadsContinued");
+            assert!(
+                body.get("allThreadsContinued").is_some(),
+                "must have allThreadsContinued"
+            );
         }
         _ => return Err("Expected continue Response".into()),
     }
@@ -655,7 +762,12 @@ fn test_continue_pause_cycle_response_shapes() -> Result<(), Box<dyn std::error:
     // Pause (no active session → failure)
     let pause_resp = adapter.handle_request(2, "pause", None);
     match pause_resp {
-        DapMessage::Response { success, command, message, .. } => {
+        DapMessage::Response {
+            success,
+            command,
+            message,
+            ..
+        } => {
             assert!(!success, "pause without session must fail");
             assert_eq!(command, "pause");
             assert!(message.is_some(), "pause failure must include a message");
@@ -675,7 +787,12 @@ fn test_continue_with_all_threads_arg() -> Result<(), Box<dyn std::error::Error>
     let response = adapter.handle_request(1, "continue", Some(args));
 
     match response {
-        DapMessage::Response { success, command, body, .. } => {
+        DapMessage::Response {
+            success,
+            command,
+            body,
+            ..
+        } => {
             assert!(success, "continue with singleThread=false should succeed");
             assert_eq!(command, "continue");
             let body = body.ok_or("continue response must have a body")?;
@@ -706,7 +823,12 @@ fn test_stack_trace_available_after_step_operations() -> Result<(), Box<dyn std:
     let st_response = adapter.handle_request(3, "stackTrace", Some(json!({"threadId": 1})));
 
     match st_response {
-        DapMessage::Response { success, command, body, .. } => {
+        DapMessage::Response {
+            success,
+            command,
+            body,
+            ..
+        } => {
             assert!(success, "stackTrace should succeed after stepping");
             assert_eq!(command, "stackTrace");
             let body = body.ok_or("stackTrace response must have a body")?;
@@ -733,7 +855,12 @@ fn test_threads_available_after_step_operations() -> Result<(), Box<dyn std::err
     let threads_response = adapter.handle_request(3, "threads", None);
 
     match threads_response {
-        DapMessage::Response { success, command, body, .. } => {
+        DapMessage::Response {
+            success,
+            command,
+            body,
+            ..
+        } => {
             assert!(success, "threads should succeed after stepping");
             assert_eq!(command, "threads");
             let body = body.ok_or("threads response must have a body")?;
@@ -742,7 +869,10 @@ fn test_threads_available_after_step_operations() -> Result<(), Box<dyn std::err
                 .and_then(|v| v.as_array())
                 .ok_or("threads body must have a threads array")?;
             // Without a session, threads list is empty
-            assert!(threads.is_empty(), "without a session, threads list should be empty");
+            assert!(
+                threads.is_empty(),
+                "without a session, threads list should be empty"
+            );
         }
         _ => return Err("Expected Response for threads".into()),
     }
@@ -762,7 +892,9 @@ fn test_step_in_targets_missing_frame_id_returns_failure() -> Result<(), Box<dyn
     let response = adapter.handle_request(1, "stepInTargets", None);
 
     match response {
-        DapMessage::Response { success, command, .. } => {
+        DapMessage::Response {
+            success, command, ..
+        } => {
             assert!(!success, "stepInTargets with no args should fail");
             assert_eq!(command, "stepInTargets");
         }
@@ -781,7 +913,12 @@ fn test_step_in_targets_with_frame_id_no_session_returns_empty()
     let response = adapter.handle_request(1, "stepInTargets", Some(args));
 
     match response {
-        DapMessage::Response { success, command, body, .. } => {
+        DapMessage::Response {
+            success,
+            command,
+            body,
+            ..
+        } => {
             assert!(success, "stepInTargets with valid frameId should succeed");
             assert_eq!(command, "stepInTargets");
             let body = body.ok_or("stepInTargets response must have a body")?;
@@ -818,10 +955,18 @@ fn test_many_consecutive_step_operations() -> Result<(), Box<dyn std::error::Err
     for (i, op) in ops.iter().enumerate() {
         let response = adapter.handle_request((i + 1) as i64, op, None);
         match response {
-            DapMessage::Response { seq, success, command, .. } => {
+            DapMessage::Response {
+                seq,
+                success,
+                command,
+                ..
+            } => {
                 assert!(success, "op {op} at index {i} should succeed");
                 assert_eq!(&command, op, "command name should match at index {i}");
-                assert!(seq > prev_seq, "seq must increase: {seq} > {prev_seq} at index {i}");
+                assert!(
+                    seq > prev_seq,
+                    "seq must increase: {seq} > {prev_seq} at index {i}"
+                );
                 prev_seq = seq;
             }
             _ => return Err(format!("Expected Response for {op} at index {i}").into()),

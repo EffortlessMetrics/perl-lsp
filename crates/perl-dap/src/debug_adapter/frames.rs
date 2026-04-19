@@ -12,10 +12,17 @@ impl DebugAdapter {
     ) -> DapMessage {
         let args: Option<StackTraceArguments> =
             arguments.and_then(|v| serde_json::from_value(v).ok());
-        let start_frame =
-            args.as_ref().and_then(|value| value.start_frame).unwrap_or(0).max(0) as usize;
+        let start_frame = args
+            .as_ref()
+            .and_then(|value| value.start_frame)
+            .unwrap_or(0)
+            .max(0) as usize;
         let levels = args.as_ref().and_then(|value| value.levels).unwrap_or(0);
-        let requested_count = if levels <= 0 { None } else { Some(levels as usize) };
+        let requested_count = if levels <= 0 {
+            None
+        } else {
+            Some(levels as usize)
+        };
         let mut framed_output_lines = None;
 
         // Ask the debugger for an explicit stack snapshot when a live session is present.

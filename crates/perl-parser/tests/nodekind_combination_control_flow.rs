@@ -103,7 +103,10 @@ longwordwithoutvowels
     // Verify loop control statements
     let loop_control_nodes =
         find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::LoopControl { .. }));
-    assert!(!loop_control_nodes.is_empty(), "Should have loop control statements");
+    assert!(
+        !loop_control_nodes.is_empty(),
+        "Should have loop control statements"
+    );
 
     // Verify conditional statements
     let if_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::If { .. }));
@@ -139,8 +142,14 @@ $step++;
         find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::LabeledStatement { .. }));
 
     assert!(!goto_nodes.is_empty(), "Should have goto statements");
-    assert!(goto_nodes.len() >= 2, "Should cover both label and subroutine goto targets");
-    assert!(!labeled_nodes.is_empty(), "Should have labeled statements for goto targets");
+    assert!(
+        goto_nodes.len() >= 2,
+        "Should cover both label and subroutine goto targets"
+    );
+    assert!(
+        !labeled_nodes.is_empty(),
+        "Should have labeled statements for goto targets"
+    );
 }
 
 /// Test statement modifiers with complex expressions and subroutines
@@ -232,7 +241,10 @@ sub commit_successful {
     // Verify statement modifiers
     let modifier_nodes =
         find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::StatementModifier { .. }));
-    assert!(!modifier_nodes.is_empty(), "Should have statement modifiers");
+    assert!(
+        !modifier_nodes.is_empty(),
+        "Should have statement modifiers"
+    );
 
     // Verify different types of expressions in modifiers
     let binary_ops = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::Binary { .. }));
@@ -249,8 +261,14 @@ sub commit_successful {
     let transliteration_nodes =
         find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::Transliteration { .. }));
 
-    assert!(!substitution_nodes.is_empty(), "Should have substitution operations");
-    assert!(!transliteration_nodes.is_empty(), "Should have transliteration operations");
+    assert!(
+        !substitution_nodes.is_empty(),
+        "Should have substitution operations"
+    );
+    assert!(
+        !transliteration_nodes.is_empty(),
+        "Should have transliteration operations"
+    );
 }
 
 /// Test return statements in various contexts
@@ -389,14 +407,26 @@ my $result8 = subroutine_reference_return(sub { return shift() * 2 });
     let eval_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::Eval { .. }));
     let try_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::Try { .. }));
 
-    assert!(!if_nodes.is_empty(), "Should have if statements with returns");
+    assert!(
+        !if_nodes.is_empty(),
+        "Should have if statements with returns"
+    );
     assert!(
         !for_nodes.is_empty() || !foreach_nodes.is_empty(),
         "Should have loop nodes with returns for list-style and C-style for forms"
     );
-    assert!(!foreach_nodes.is_empty(), "Should have foreach loops with returns");
-    assert!(!while_nodes.is_empty(), "Should have while loops with returns");
-    assert!(!eval_nodes.is_empty(), "Should have eval blocks with returns");
+    assert!(
+        !foreach_nodes.is_empty(),
+        "Should have foreach loops with returns"
+    );
+    assert!(
+        !while_nodes.is_empty(),
+        "Should have while loops with returns"
+    );
+    assert!(
+        !eval_nodes.is_empty(),
+        "Should have eval blocks with returns"
+    );
     assert!(!try_nodes.is_empty(), "Should have try blocks with returns");
 }
 
@@ -535,7 +565,10 @@ QUIT
     // Verify loop control statements
     let loop_control_nodes =
         find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::LoopControl { .. }));
-    assert!(!loop_control_nodes.is_empty(), "Should have loop control statements");
+    assert!(
+        !loop_control_nodes.is_empty(),
+        "Should have loop control statements"
+    );
 
     // Check for different control types
     let mut next_count = 0;
@@ -826,12 +859,21 @@ where
         NodeKind::Unary { operand, .. } => {
             find_nodes_recursive(operand, predicate, results);
         }
-        NodeKind::Ternary { condition, then_expr, else_expr } => {
+        NodeKind::Ternary {
+            condition,
+            then_expr,
+            else_expr,
+        } => {
             find_nodes_recursive(condition, predicate, results);
             find_nodes_recursive(then_expr, predicate, results);
             find_nodes_recursive(else_expr, predicate, results);
         }
-        NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
+        NodeKind::If {
+            condition,
+            then_branch,
+            elsif_branches,
+            else_branch,
+        } => {
             find_nodes_recursive(condition, predicate, results);
             find_nodes_recursive(then_branch, predicate, results);
             for (_, branch) in elsif_branches {
@@ -841,14 +883,24 @@ where
                 find_nodes_recursive(else_branch, predicate, results);
             }
         }
-        NodeKind::While { condition, body, continue_block } => {
+        NodeKind::While {
+            condition,
+            body,
+            continue_block,
+        } => {
             find_nodes_recursive(condition, predicate, results);
             find_nodes_recursive(body, predicate, results);
             if let Some(cont) = continue_block {
                 find_nodes_recursive(cont, predicate, results);
             }
         }
-        NodeKind::For { init, condition, update, body, continue_block } => {
+        NodeKind::For {
+            init,
+            condition,
+            update,
+            body,
+            continue_block,
+        } => {
             if let Some(init) = init {
                 find_nodes_recursive(init, predicate, results);
             }
@@ -863,7 +915,12 @@ where
                 find_nodes_recursive(cont, predicate, results);
             }
         }
-        NodeKind::Foreach { variable, list, body, continue_block } => {
+        NodeKind::Foreach {
+            variable,
+            list,
+            body,
+            continue_block,
+        } => {
             find_nodes_recursive(variable, predicate, results);
             find_nodes_recursive(list, predicate, results);
             find_nodes_recursive(body, predicate, results);
@@ -871,7 +928,11 @@ where
                 find_nodes_recursive(cont, predicate, results);
             }
         }
-        NodeKind::Try { body, catch_blocks, finally_block } => {
+        NodeKind::Try {
+            body,
+            catch_blocks,
+            finally_block,
+        } => {
             find_nodes_recursive(body, predicate, results);
             for (_, catch_body) in catch_blocks {
                 find_nodes_recursive(catch_body, predicate, results);
@@ -922,7 +983,11 @@ where
                 find_nodes_recursive(value, predicate, results);
             }
         }
-        NodeKind::StatementModifier { statement, condition, .. } => {
+        NodeKind::StatementModifier {
+            statement,
+            condition,
+            ..
+        } => {
             find_nodes_recursive(statement, predicate, results);
             find_nodes_recursive(condition, predicate, results);
         }
@@ -941,7 +1006,11 @@ where
         NodeKind::Goto { target } => {
             find_nodes_recursive(target, predicate, results);
         }
-        NodeKind::Tie { variable, package, args } => {
+        NodeKind::Tie {
+            variable,
+            package,
+            args,
+        } => {
             find_nodes_recursive(variable, predicate, results);
             find_nodes_recursive(package, predicate, results);
             for arg in args {
@@ -996,7 +1065,10 @@ where
         NodeKind::MandatoryParameter { variable } => {
             find_nodes_recursive(variable, predicate, results);
         }
-        NodeKind::OptionalParameter { variable, default_value } => {
+        NodeKind::OptionalParameter {
+            variable,
+            default_value,
+        } => {
             find_nodes_recursive(variable, predicate, results);
             find_nodes_recursive(default_value, predicate, results);
         }

@@ -109,7 +109,9 @@ This is a sample CPAN-style module for testing.
     );
     assert!(response["result"].is_array());
 
-    let symbols = response["result"].as_array().ok_or("Expected result to be an array")?;
+    let symbols = response["result"]
+        .as_array()
+        .ok_or("Expected result to be an array")?;
 
     // Verify expected symbols are found
     let symbol_names: Vec<&str> = symbols.iter().filter_map(|s| s["name"].as_str()).collect();
@@ -227,10 +229,16 @@ __DATA__
             }
         }),
     );
-    let items = response["result"]["items"].as_array().ok_or("Expected items to be an array")?;
+    let items = response["result"]["items"]
+        .as_array()
+        .ok_or("Expected items to be an array")?;
 
     // Should parse without errors
-    assert_eq!(items.len(), 0, "Mojolicious app should parse without errors");
+    assert_eq!(
+        items.len(),
+        0,
+        "Mojolicious app should parse without errors"
+    );
 
     Ok(())
 }
@@ -367,7 +375,9 @@ END {
             }
         }),
     );
-    let symbols = response["result"].as_array().ok_or("Expected result to be an array")?;
+    let symbols = response["result"]
+        .as_array()
+        .ok_or("Expected result to be an array")?;
 
     // Verify subroutines are detected
     let sub_names: Vec<&str> = symbols
@@ -491,7 +501,9 @@ done_testing();
             }
         }),
     );
-    let items = response["result"]["items"].as_array().ok_or("Expected items to be an array")?;
+    let items = response["result"]["items"]
+        .as_array()
+        .ok_or("Expected items to be an array")?;
     assert_eq!(items.len(), 0, "Test file should parse without errors");
 
     Ok(())
@@ -664,7 +676,9 @@ __PACKAGE__->meta->make_immutable;
             }
         }),
     );
-    let symbols = response["result"].as_array().ok_or("Expected result to be an array")?;
+    let symbols = response["result"]
+        .as_array()
+        .ok_or("Expected result to be an array")?;
 
     let method_names: Vec<&str> = symbols.iter().filter_map(|s| s["name"].as_str()).collect();
 
@@ -825,8 +839,14 @@ sub normalize_text {
             }
         }),
     );
-    let items = response["result"]["items"].as_array().ok_or("Expected items to be an array")?;
-    assert_eq!(items.len(), 0, "Complex regex patterns should parse correctly");
+    let items = response["result"]["items"]
+        .as_array()
+        .ok_or("Expected items to be an array")?;
+    assert_eq!(
+        items.len(),
+        0,
+        "Complex regex patterns should parse correctly"
+    );
 
     Ok(())
 }
@@ -964,7 +984,9 @@ sub array_operations {
             }
         }),
     );
-    let symbols = response["result"].as_array().ok_or("Expected result to be an array")?;
+    let symbols = response["result"]
+        .as_array()
+        .ok_or("Expected result to be an array")?;
 
     // Look for class and methods
     let symbol_names: Vec<&str> = symbols.iter().filter_map(|s| s["name"].as_str()).collect();
@@ -1103,7 +1125,9 @@ sub get {
             }
         }),
     );
-    let items = response["result"]["items"].as_array().ok_or("Expected items to be an array")?;
+    let items = response["result"]["items"]
+        .as_array()
+        .ok_or("Expected items to be an array")?;
     assert_eq!(items.len(), 0, "Main script should parse without errors");
 
     let response = send_request(
@@ -1117,7 +1141,9 @@ sub get {
             }
         }),
     );
-    let items = response["result"]["items"].as_array().ok_or("Expected items to be an array")?;
+    let items = response["result"]["items"]
+        .as_array()
+        .ok_or("Expected items to be an array")?;
     assert_eq!(items.len(), 0, "Config module should parse without errors");
 
     Ok(())

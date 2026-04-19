@@ -105,12 +105,15 @@ fn validate_location_link(link: &Value) -> Result<(), String> {
     }
 
     // targetRange is required
-    let target_range = link.get("targetRange").ok_or("LocationLink missing 'targetRange'")?;
+    let target_range = link
+        .get("targetRange")
+        .ok_or("LocationLink missing 'targetRange'")?;
     validate_range(target_range).map_err(|e| format!("LocationLink.targetRange: {}", e))?;
 
     // targetSelectionRange is required
-    let target_sel =
-        link.get("targetSelectionRange").ok_or("LocationLink missing 'targetSelectionRange'")?;
+    let target_sel = link
+        .get("targetSelectionRange")
+        .ok_or("LocationLink missing 'targetSelectionRange'")?;
     validate_range(target_sel).map_err(|e| format!("LocationLink.targetSelectionRange: {}", e))?;
 
     Ok(())
@@ -123,7 +126,11 @@ fn validate_text_document_identifier(doc: &Value) -> Result<(), String> {
         return Err("TextDocumentIdentifier must be object".into());
     }
 
-    let uri = doc.get("uri").ok_or("Missing 'uri'")?.as_str().ok_or("'uri' must be string")?;
+    let uri = doc
+        .get("uri")
+        .ok_or("Missing 'uri'")?
+        .as_str()
+        .ok_or("'uri' must be string")?;
 
     if !uri.contains(':') {
         return Err("'uri' must be valid URI".into());
@@ -189,7 +196,9 @@ fn validate_diagnostic(diag: &Value) -> Result<(), String> {
     }
 
     if let Some(related) = diag.get("relatedInformation") {
-        let arr = related.as_array().ok_or("relatedInformation must be array")?;
+        let arr = related
+            .as_array()
+            .ok_or("relatedInformation must be array")?;
         for info in arr {
             validate_diagnostic_related_information(info)?;
         }
@@ -212,7 +221,9 @@ fn validate_diagnostic(diag: &Value) -> Result<(), String> {
 }
 
 fn validate_diagnostic_related_information(info: &Value) -> Result<(), String> {
-    let location = info.get("location").ok_or("DiagnosticRelatedInformation missing 'location'")?;
+    let location = info
+        .get("location")
+        .ok_or("DiagnosticRelatedInformation missing 'location'")?;
     validate_location(location)?;
 
     info.get("message")
@@ -381,7 +392,10 @@ fn test_completion_response_schema() -> TestResult {
         }
     } else if result.is_object() {
         // CompletionList
-        assert!(result["items"].is_array(), "CompletionList must have items array");
+        assert!(
+            result["items"].is_array(),
+            "CompletionList must have items array"
+        );
 
         if let Some(incomplete) = result.get("isIncomplete") {
             assert!(incomplete.is_boolean(), "isIncomplete must be boolean");
@@ -417,8 +431,12 @@ fn validate_completion_item_defaults(defaults: &Value) -> Result<(), String> {
         if edit_range.get("start").is_some() {
             validate_range(edit_range)?;
         } else {
-            let insert = edit_range.get("insert").ok_or("editRange missing 'insert'")?;
-            let replace = edit_range.get("replace").ok_or("editRange missing 'replace'")?;
+            let insert = edit_range
+                .get("insert")
+                .ok_or("editRange missing 'insert'")?;
+            let replace = edit_range
+                .get("replace")
+                .ok_or("editRange missing 'replace'")?;
             validate_range(insert)?;
             validate_range(replace)?;
         }
@@ -485,10 +503,13 @@ fn validate_completion_item(item: &Value) -> Result<(), String> {
     // 3.16+ label details
     if let Some(label_details) = item.get("labelDetails") {
         if let Some(detail) = label_details.get("detail") {
-            detail.as_str().ok_or("labelDetails.detail must be string")?;
+            detail
+                .as_str()
+                .ok_or("labelDetails.detail must be string")?;
         }
         if let Some(desc) = label_details.get("description") {
-            desc.as_str().ok_or("labelDetails.description must be string")?;
+            desc.as_str()
+                .ok_or("labelDetails.description must be string")?;
         }
     }
 
@@ -540,7 +561,9 @@ fn validate_symbol_information(sym: &Value) -> Result<(), String> {
         return Err("kind must be 1-26".into());
     }
 
-    let location = sym.get("location").ok_or("SymbolInformation missing 'location'")?;
+    let location = sym
+        .get("location")
+        .ok_or("SymbolInformation missing 'location'")?;
     validate_location(location)?;
 
     // Optional tags (3.15+)
@@ -576,8 +599,9 @@ fn validate_document_symbol(sym: &Value) -> Result<(), String> {
     let range = sym.get("range").ok_or("DocumentSymbol missing 'range'")?;
     validate_range(range)?;
 
-    let selection_range =
-        sym.get("selectionRange").ok_or("DocumentSymbol missing 'selectionRange'")?;
+    let selection_range = sym
+        .get("selectionRange")
+        .ok_or("DocumentSymbol missing 'selectionRange'")?;
     validate_range(selection_range)?;
 
     // Optional children
@@ -686,7 +710,9 @@ fn validate_workspace_symbol(sym: &Value) -> Result<(), String> {
     }
 
     // location with only URI (range is optional until resolved)
-    let location = sym.get("location").ok_or("WorkspaceSymbol missing 'location'")?;
+    let location = sym
+        .get("location")
+        .ok_or("WorkspaceSymbol missing 'location'")?;
 
     if location.is_object() {
         let uri = location
@@ -733,7 +759,10 @@ fn test_code_action_response_schema() -> TestResult {
     }));
 
     let result = &response["result"];
-    assert!(result.is_array() || result.is_null(), "codeAction must return array or null");
+    assert!(
+        result.is_array() || result.is_null(),
+        "codeAction must return array or null"
+    );
 
     if result.is_array() {
         for action in result.as_array().ok_or("result must be array")? {
@@ -788,7 +817,9 @@ fn validate_code_action(action: &Value) -> Result<(), String> {
 
         // 3.16+ fields
         if let Some(is_preferred) = action.get("isPreferred") {
-            is_preferred.as_bool().ok_or("isPreferred must be boolean")?;
+            is_preferred
+                .as_bool()
+                .ok_or("isPreferred must be boolean")?;
         }
 
         if let Some(disabled) = action.get("disabled") {
@@ -827,7 +858,9 @@ fn validate_workspace_edit(edit: &Value) -> Result<(), String> {
     }
 
     if let Some(doc_changes) = edit.get("documentChanges") {
-        let arr = doc_changes.as_array().ok_or("documentChanges must be array")?;
+        let arr = doc_changes
+            .as_array()
+            .ok_or("documentChanges must be array")?;
         for change in arr {
             // Can be TextDocumentEdit, CreateFile, RenameFile, DeleteFile
             if change.get("textDocument").is_some() {
@@ -846,7 +879,9 @@ fn validate_workspace_edit(edit: &Value) -> Result<(), String> {
 
     // 3.16+ changeAnnotations
     if let Some(annotations) = edit.get("changeAnnotations") {
-        let obj = annotations.as_object().ok_or("changeAnnotations must be object")?;
+        let obj = annotations
+            .as_object()
+            .ok_or("changeAnnotations must be object")?;
         for (_, annotation) in obj {
             validate_change_annotation(annotation)?;
         }
@@ -856,10 +891,15 @@ fn validate_workspace_edit(edit: &Value) -> Result<(), String> {
 }
 
 fn validate_text_document_edit(edit: &Value) -> Result<(), String> {
-    let doc = edit.get("textDocument").ok_or("TextDocumentEdit missing 'textDocument'")?;
+    let doc = edit
+        .get("textDocument")
+        .ok_or("TextDocumentEdit missing 'textDocument'")?;
 
     // Must have uri and version
-    doc.get("uri").ok_or("textDocument missing 'uri'")?.as_str().ok_or("uri must be string")?;
+    doc.get("uri")
+        .ok_or("textDocument missing 'uri'")?
+        .as_str()
+        .ok_or("uri must be string")?;
 
     doc.get("version").ok_or("textDocument missing 'version'")?;
 
@@ -878,7 +918,10 @@ fn validate_text_document_edit(edit: &Value) -> Result<(), String> {
 }
 
 fn validate_create_file(op: &Value) -> Result<(), String> {
-    op.get("uri").ok_or("CreateFile missing 'uri'")?.as_str().ok_or("uri must be string")?;
+    op.get("uri")
+        .ok_or("CreateFile missing 'uri'")?
+        .as_str()
+        .ok_or("uri must be string")?;
 
     if let Some(options) = op.get("options") {
         if let Some(overwrite) = options.get("overwrite") {
@@ -916,14 +959,19 @@ fn validate_rename_file(op: &Value) -> Result<(), String> {
 }
 
 fn validate_delete_file(op: &Value) -> Result<(), String> {
-    op.get("uri").ok_or("DeleteFile missing 'uri'")?.as_str().ok_or("uri must be string")?;
+    op.get("uri")
+        .ok_or("DeleteFile missing 'uri'")?
+        .as_str()
+        .ok_or("uri must be string")?;
 
     if let Some(options) = op.get("options") {
         if let Some(recursive) = options.get("recursive") {
             recursive.as_bool().ok_or("recursive must be boolean")?;
         }
         if let Some(ignore) = options.get("ignoreIfNotExists") {
-            ignore.as_bool().ok_or("ignoreIfNotExists must be boolean")?;
+            ignore
+                .as_bool()
+                .ok_or("ignoreIfNotExists must be boolean")?;
         }
     }
 
@@ -937,7 +985,9 @@ fn validate_change_annotation(ann: &Value) -> Result<(), String> {
         .ok_or("label must be string")?;
 
     if let Some(needs_confirmation) = ann.get("needsConfirmation") {
-        needs_confirmation.as_bool().ok_or("needsConfirmation must be boolean")?;
+        needs_confirmation
+            .as_bool()
+            .ok_or("needsConfirmation must be boolean")?;
     }
 
     if let Some(description) = ann.get("description") {
@@ -1011,7 +1061,11 @@ fn test_publish_diagnostics_schema() -> TestResult {
 }
 
 fn validate_publish_diagnostics_params(params: &Value) -> Result<(), String> {
-    params.get("uri").ok_or("Missing 'uri'")?.as_str().ok_or("'uri' must be string")?;
+    params
+        .get("uri")
+        .ok_or("Missing 'uri'")?
+        .as_str()
+        .ok_or("'uri' must be string")?;
 
     // version is optional (3.15+)
     if let Some(version) = params.get("version") {
@@ -1046,16 +1100,23 @@ fn test_error_response_schema() -> TestResult {
         }
     }));
 
-    assert!(response["error"].is_object(), "Error response must have 'error'");
+    assert!(
+        response["error"].is_object(),
+        "Error response must have 'error'"
+    );
 
     let error = &response["error"];
 
     // Required fields
-    let code =
-        error.get("code").and_then(|c| c.as_i64()).ok_or("Error must have numeric 'code'")?;
+    let code = error
+        .get("code")
+        .and_then(|c| c.as_i64())
+        .ok_or("Error must have numeric 'code'")?;
 
-    let message =
-        error.get("message").and_then(|m| m.as_str()).ok_or("Error must have string 'message'")?;
+    let message = error
+        .get("message")
+        .and_then(|m| m.as_str())
+        .ok_or("Error must have string 'message'")?;
 
     assert!(!message.is_empty(), "Error message cannot be empty");
 
@@ -1079,7 +1140,11 @@ fn test_error_response_schema() -> TestResult {
 
     // Custom error codes are also allowed (non-reserved range)
     if !(-32099..=-32000).contains(&code) {
-        assert!(valid_codes.contains(&code) || code >= 0, "Invalid error code: {}", code);
+        assert!(
+            valid_codes.contains(&code) || code >= 0,
+            "Invalid error code: {}",
+            code
+        );
     }
     Ok(())
 }
@@ -1122,8 +1187,9 @@ fn test_signature_help_response_schema() -> TestResult {
 
                 for param in param_arr {
                     // Must have label
-                    let label =
-                        param.get("label").ok_or("ParameterInformation must have 'label'")?;
+                    let label = param
+                        .get("label")
+                        .ok_or("ParameterInformation must have 'label'")?;
 
                     // Label can be string or [usize, usize]
                     if label.is_string() {
@@ -1131,8 +1197,12 @@ fn test_signature_help_response_schema() -> TestResult {
                     } else if label.is_array() {
                         let arr = label.as_array().ok_or("label must be array")?;
                         assert_eq!(arr.len(), 2, "label array must have 2 elements");
-                        arr.first().and_then(|v| v.as_u64()).ok_or("label[0] must be number")?;
-                        arr.get(1).and_then(|v| v.as_u64()).ok_or("label[1] must be number")?;
+                        arr.first()
+                            .and_then(|v| v.as_u64())
+                            .ok_or("label[0] must be number")?;
+                        arr.get(1)
+                            .and_then(|v| v.as_u64())
+                            .ok_or("label[1] must be number")?;
                     } else {
                         return Err("Parameter label must be string or [number, number]".into());
                     }
@@ -1141,18 +1211,24 @@ fn test_signature_help_response_schema() -> TestResult {
 
             // 3.16+ activeParameter per signature
             if let Some(active_param) = sig.get("activeParameter") {
-                active_param.as_u64().ok_or("activeParameter must be number")?;
+                active_param
+                    .as_u64()
+                    .ok_or("activeParameter must be number")?;
             }
         }
 
         // Optional activeSignature
         if let Some(active_sig) = sig_help.get("activeSignature") {
-            active_sig.as_u64().ok_or("activeSignature must be number")?;
+            active_sig
+                .as_u64()
+                .ok_or("activeSignature must be number")?;
         }
 
         // Optional activeParameter (deprecated in favor of per-signature)
         if let Some(active_param) = sig_help.get("activeParameter") {
-            active_param.as_u64().ok_or("activeParameter must be number")?;
+            active_param
+                .as_u64()
+                .ok_or("activeParameter must be number")?;
         }
     }
     Ok(())
@@ -1189,10 +1265,15 @@ fn test_semantic_tokens_response_schema() -> TestResult {
                 .ok_or("SemanticTokens must have 'data' array")?;
 
             // Data must be array of numbers, length divisible by 5
-            assert_eq!(data.len() % 5, 0, "SemanticTokens data length must be divisible by 5");
+            assert_eq!(
+                data.len() % 5,
+                0,
+                "SemanticTokens data length must be divisible by 5"
+            );
 
             for val in data {
-                val.as_u64().ok_or("SemanticTokens data must be unsigned integers")?;
+                val.as_u64()
+                    .ok_or("SemanticTokens data must be unsigned integers")?;
             }
 
             // Optional resultId for delta
@@ -1226,11 +1307,15 @@ fn test_inlay_hint_response_schema() -> TestResult {
     }));
 
     if response.get("result").is_some() && !response["result"].is_null() {
-        let hints = response["result"].as_array().ok_or("inlayHint must return array")?;
+        let hints = response["result"]
+            .as_array()
+            .ok_or("inlayHint must return array")?;
 
         for hint in hints {
             // Required: position
-            let pos = hint.get("position").ok_or("InlayHint must have 'position'")?;
+            let pos = hint
+                .get("position")
+                .ok_or("InlayHint must have 'position'")?;
             validate_position(pos).map_err(|e| e.to_string())?;
 
             // Required: label (string or InlayHintLabelPart[])
@@ -1322,7 +1407,9 @@ fn test_diagnostic_pull_response_schema() -> TestResult {
 
         // Optional relatedDocuments
         if let Some(related) = report.get("relatedDocuments") {
-            let obj = related.as_object().ok_or("relatedDocuments must be object")?;
+            let obj = related
+                .as_object()
+                .ok_or("relatedDocuments must be object")?;
             for (uri, _doc_report) in obj {
                 assert!(uri.contains(':'), "relatedDocuments key must be valid URI");
                 // Recursively validate document reports
@@ -1351,8 +1438,9 @@ fn test_type_hierarchy_response_schema() -> TestResult {
     }));
 
     if response.get("result").is_some() && !response["result"].is_null() {
-        let items =
-            response["result"].as_array().ok_or("prepareTypeHierarchy must return array")?;
+        let items = response["result"]
+            .as_array()
+            .ok_or("prepareTypeHierarchy must return array")?;
 
         for item in items {
             validate_type_hierarchy_item(item).map_err(|e| e.to_string())?;
@@ -1387,11 +1475,14 @@ fn validate_type_hierarchy_item(item: &Value) -> Result<(), String> {
         return Err("uri must be valid URI".into());
     }
 
-    let range = item.get("range").ok_or("TypeHierarchyItem missing 'range'")?;
+    let range = item
+        .get("range")
+        .ok_or("TypeHierarchyItem missing 'range'")?;
     validate_range(range)?;
 
-    let sel_range =
-        item.get("selectionRange").ok_or("TypeHierarchyItem missing 'selectionRange'")?;
+    let sel_range = item
+        .get("selectionRange")
+        .ok_or("TypeHierarchyItem missing 'selectionRange'")?;
     validate_range(sel_range)?;
 
     // Optional detail
@@ -1445,7 +1536,9 @@ fn validate_logtrace(msg: &Value, trace: &str) -> Result<(), String> {
         return Ok(());
     }
     let p = msg.get("params").ok_or("$/logTrace missing params")?;
-    p.get("message").and_then(|m| m.as_str()).ok_or("message must be string")?;
+    p.get("message")
+        .and_then(|m| m.as_str())
+        .ok_or("message must be string")?;
     if trace == "messages" && p.get("verbose").is_some() {
         return Err("verbose must not be present when trace=='messages'".into());
     }

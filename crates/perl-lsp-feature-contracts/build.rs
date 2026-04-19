@@ -25,14 +25,20 @@ fn main() -> Result<(), Box<dyn Error>> {
             println!("cargo:rerun-if-changed={}", source.path.display());
             let code = render_lsp_feature_catalog_module(&catalog, source.comment());
             fs::write(&dest_path, code).map_err(|error| {
-                format!("Failed to write feature_contracts.rs to {:?}: {error}", dest_path)
+                format!(
+                    "Failed to write feature_contracts.rs to {:?}: {error}",
+                    dest_path
+                )
             })?;
         }
         Err(error) => {
             eprintln!("Warning: failed to load LSP feature catalog from features.toml: {error}");
             let code = render_lsp_fallback_module();
             fs::write(&dest_path, code).map_err(|error| {
-                format!("Failed to write fallback feature_contracts.rs to {:?}: {error}", dest_path)
+                format!(
+                    "Failed to write fallback feature_contracts.rs to {:?}: {error}",
+                    dest_path
+                )
             })?;
         }
     }

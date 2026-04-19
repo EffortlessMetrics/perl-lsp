@@ -43,8 +43,14 @@ mod dap_phase1_tests {
 
         assert!(launch.get("program").is_some(), "Missing program attribute");
         assert!(launch.get("args").is_some(), "Missing args attribute");
-        assert!(launch.get("perlPath").is_some(), "Missing perlPath attribute");
-        assert!(launch.get("includePaths").is_some(), "Missing includePaths attribute");
+        assert!(
+            launch.get("perlPath").is_some(),
+            "Missing perlPath attribute"
+        );
+        assert!(
+            launch.get("includePaths").is_some(),
+            "Missing includePaths attribute"
+        );
 
         Ok(())
     }
@@ -68,14 +74,20 @@ mod dap_phase1_tests {
             .get("Perl: Launch Script")
             .ok_or_else(|| anyhow::anyhow!("Missing 'Perl: Launch Script' snippet"))?;
 
-        assert!(launch_snippet["prefix"] == "perl-launch", "Wrong prefix for launch");
+        assert!(
+            launch_snippet["prefix"] == "perl-launch",
+            "Wrong prefix for launch"
+        );
 
         // Verify "Perl: Attach" snippet exists
         let attach_snippet = json
             .get("Perl: Attach to Process")
             .ok_or_else(|| anyhow::anyhow!("Missing 'Perl: Attach to Process' snippet"))?;
 
-        assert!(attach_snippet["prefix"] == "perl-attach", "Wrong prefix for attach");
+        assert!(
+            attach_snippet["prefix"] == "perl-attach",
+            "Wrong prefix for attach"
+        );
 
         // Verify package.json snippet registration
         let pkg_path = "../../vscode-extension/package.json";
@@ -92,7 +104,10 @@ mod dap_phase1_tests {
         let has_json = snippets.iter().any(|s| {
             s["language"] == "json" && s["path"].as_str().unwrap_or("").contains("launch.json")
         });
-        assert!(has_json, "Missing launch.json snippet registration for json language");
+        assert!(
+            has_json,
+            "Missing launch.json snippet registration for json language"
+        );
 
         Ok(())
     }
@@ -123,7 +138,10 @@ mod dap_phase1_tests {
         );
 
         // Verify troubleshooting guide exists
-        assert!(content.contains("Troubleshooting"), "Missing troubleshooting section");
+        assert!(
+            content.contains("Troubleshooting"),
+            "Missing troubleshooting section"
+        );
 
         Ok(())
     }

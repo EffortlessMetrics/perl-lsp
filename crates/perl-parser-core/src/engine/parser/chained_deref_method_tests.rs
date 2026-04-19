@@ -40,7 +40,12 @@ mod tests {
     fn assert_no_errors(code: &str) {
         let ast = parse_program(code);
         let sexp = ast.to_sexp();
-        assert!(!sexp.contains("ERROR"), "Parse of `{}` produced ERROR nodes:\n{}", code, sexp,);
+        assert!(
+            !sexp.contains("ERROR"),
+            "Parse of `{}` produced ERROR nodes:\n{}",
+            code,
+            sexp,
+        );
     }
 
     /// Helper: extract expression from an ExpressionStatement.
@@ -66,7 +71,11 @@ mod tests {
         let expr = unwrap_expr_stmt(parse_first_stmt(code));
         match &expr.kind {
             NodeKind::MethodCall { object, method, .. } => {
-                assert_eq!(method, "method", "Expected method name 'method', got '{}'", method);
+                assert_eq!(
+                    method, "method",
+                    "Expected method name 'method', got '{}'",
+                    method
+                );
                 // The object should be a Binary{} (hash access) node wrapping $obj
                 assert_eq!(
                     object.kind.kind_name(),
@@ -94,7 +103,11 @@ mod tests {
         let expr = unwrap_expr_stmt(parse_first_stmt(code));
         match &expr.kind {
             NodeKind::MethodCall { object, method, .. } => {
-                assert_eq!(method, "method", "Expected method name 'method', got '{}'", method);
+                assert_eq!(
+                    method, "method",
+                    "Expected method name 'method', got '{}'",
+                    method
+                );
                 // The object should be a Binary[] (array access) node wrapping $obj
                 assert_eq!(
                     object.kind.kind_name(),
@@ -122,12 +135,22 @@ mod tests {
         let expr = unwrap_expr_stmt(parse_first_stmt(code));
         // Outermost should be ->search({})
         match &expr.kind {
-            NodeKind::MethodCall { object, method, args } => {
+            NodeKind::MethodCall {
+                object,
+                method,
+                args,
+            } => {
                 assert_eq!(method, "search");
-                assert!(!args.is_empty(), "search() should have at least one argument");
+                assert!(
+                    !args.is_empty(),
+                    "search() should have at least one argument"
+                );
                 // The object of search() should be ->resultset('Foo')
                 match &object.kind {
-                    NodeKind::MethodCall { method: inner_method, .. } => {
+                    NodeKind::MethodCall {
+                        method: inner_method,
+                        ..
+                    } => {
                         assert_eq!(inner_method, "resultset");
                     }
                     _ => panic!(
@@ -160,7 +183,11 @@ mod tests {
                 assert_eq!(method, "another");
                 // Inner: ->method
                 match &object.kind {
-                    NodeKind::MethodCall { object: inner_obj, method: inner_method, .. } => {
+                    NodeKind::MethodCall {
+                        object: inner_obj,
+                        method: inner_method,
+                        ..
+                    } => {
                         assert_eq!(inner_method, "method");
                         // Innermost: $hash{key} (Binary hash access)
                         assert_eq!(
@@ -255,7 +282,11 @@ mod tests {
         // Outermost should be ->[] (arrow array deref)
         match &expr.kind {
             NodeKind::Binary { op, left, .. } => {
-                assert_eq!(op, "->[]", "Outer should be arrow array deref, got op={}", op);
+                assert_eq!(
+                    op, "->[]",
+                    "Outer should be arrow array deref, got op={}",
+                    op
+                );
                 // Inner should be ->{} (arrow hash deref)
                 match &left.kind {
                     NodeKind::Binary { op: inner_op, .. } => {
@@ -292,7 +323,11 @@ mod tests {
         // Outermost should be ->{} (arrow hash deref)
         match &expr.kind {
             NodeKind::Binary { op, left, .. } => {
-                assert_eq!(op, "->{}", "Outer should be arrow hash deref, got op={}", op);
+                assert_eq!(
+                    op, "->{}",
+                    "Outer should be arrow hash deref, got op={}",
+                    op
+                );
                 // Inner should be ->[] (arrow array deref)
                 match &left.kind {
                     NodeKind::Binary { op: inner_op, .. } => {
@@ -329,7 +364,11 @@ mod tests {
         // Outermost should be ->{} (arrow hash deref on method result)
         match &expr.kind {
             NodeKind::Binary { op, left, .. } => {
-                assert_eq!(op, "->{}", "Outer should be arrow hash deref, got op={}", op);
+                assert_eq!(
+                    op, "->{}",
+                    "Outer should be arrow hash deref, got op={}",
+                    op
+                );
                 // Inner should be the MethodCall
                 match &left.kind {
                     NodeKind::MethodCall { method, .. } => {
@@ -362,7 +401,11 @@ mod tests {
         // Outermost should be ->[] (arrow array deref on method result)
         match &expr.kind {
             NodeKind::Binary { op, left, .. } => {
-                assert_eq!(op, "->[]", "Outer should be arrow array deref, got op={}", op);
+                assert_eq!(
+                    op, "->[]",
+                    "Outer should be arrow array deref, got op={}",
+                    op
+                );
                 // Inner should be the MethodCall
                 match &left.kind {
                     NodeKind::MethodCall { method, .. } => {
@@ -398,7 +441,10 @@ mod tests {
         let expr_arrow = unwrap_expr_stmt(parse_first_stmt(code_arrow));
         let arrow_op = match &expr_arrow.kind {
             NodeKind::Binary { op, .. } => op.clone(),
-            _ => panic!("Expected Binary for arrow deref, got {}", expr_arrow.to_sexp()),
+            _ => panic!(
+                "Expected Binary for arrow deref, got {}",
+                expr_arrow.to_sexp()
+            ),
         };
 
         // Bare hash access: $obj{key}
@@ -414,7 +460,11 @@ mod tests {
             "Arrow hash deref should use op '->{{}}'  but got '{}'",
             arrow_op
         );
-        assert_eq!(bare_op, "{}", "Bare hash access should use op '{{}}' but got '{}'", bare_op);
+        assert_eq!(
+            bare_op, "{}",
+            "Bare hash access should use op '{{}}' but got '{}'",
+            bare_op
+        );
     }
 
     #[test]
@@ -424,7 +474,10 @@ mod tests {
         let expr_arrow = unwrap_expr_stmt(parse_first_stmt(code_arrow));
         let arrow_op = match &expr_arrow.kind {
             NodeKind::Binary { op, .. } => op.clone(),
-            _ => panic!("Expected Binary for arrow deref, got {}", expr_arrow.to_sexp()),
+            _ => panic!(
+                "Expected Binary for arrow deref, got {}",
+                expr_arrow.to_sexp()
+            ),
         };
 
         // Bare array access: $obj[0]
@@ -432,7 +485,10 @@ mod tests {
         let expr_bare = unwrap_expr_stmt(parse_first_stmt(code_bare));
         let bare_op = match &expr_bare.kind {
             NodeKind::Binary { op, .. } => op.clone(),
-            _ => panic!("Expected Binary for bare array, got {}", expr_bare.to_sexp()),
+            _ => panic!(
+                "Expected Binary for bare array, got {}",
+                expr_bare.to_sexp()
+            ),
         };
 
         assert_eq!(
@@ -440,7 +496,11 @@ mod tests {
             "Arrow array deref should use op '->[]' but got '{}'",
             arrow_op
         );
-        assert_eq!(bare_op, "[]", "Bare array access should use op '[]' but got '{}'", bare_op);
+        assert_eq!(
+            bare_op, "[]",
+            "Bare array access should use op '[]' but got '{}'",
+            bare_op
+        );
     }
 
     // ---------------------------------------------------------------
@@ -469,16 +529,27 @@ mod tests {
         // 2. Next: ->[0] (Binary with op "->[]")
         let array_deref = match &method_call.kind {
             NodeKind::Binary { op, left, .. } => {
-                assert_eq!(op, "->[]", "Expected arrow array deref '->[]', got '{}'", op);
+                assert_eq!(
+                    op, "->[]",
+                    "Expected arrow array deref '->[]', got '{}'",
+                    op
+                );
                 left
             }
-            _ => panic!("Expected Binary (->[] array deref), got {}", method_call.to_sexp()),
+            _ => panic!(
+                "Expected Binary (->[] array deref), got {}",
+                method_call.to_sexp()
+            ),
         };
 
         // 3. Next: ->{key} (Binary with op "->{}")
         match &array_deref.kind {
             NodeKind::Binary { op, left, .. } => {
-                assert_eq!(op, "->{}", "Expected arrow hash deref '->{{}}', got '{}'", op);
+                assert_eq!(
+                    op, "->{}",
+                    "Expected arrow hash deref '->{{}}', got '{}'",
+                    op
+                );
                 // 4. Innermost: ->method (MethodCall)
                 match &left.kind {
                     NodeKind::MethodCall { method, .. } => {
@@ -491,7 +562,10 @@ mod tests {
                     ),
                 }
             }
-            _ => panic!("Expected Binary (arrow hash deref), got {}", array_deref.to_sexp()),
+            _ => panic!(
+                "Expected Binary (arrow hash deref), got {}",
+                array_deref.to_sexp()
+            ),
         }
     }
 }

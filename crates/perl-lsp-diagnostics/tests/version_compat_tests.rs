@@ -25,14 +25,22 @@ fn block(stmts: Vec<Node>) -> Node {
 
 fn use_node(module: &str) -> Node {
     Node::new(
-        NodeKind::Use { module: module.to_string(), args: vec![], has_filter_risk: false },
+        NodeKind::Use {
+            module: module.to_string(),
+            args: vec![],
+            has_filter_risk: false,
+        },
         loc(0, 12),
     )
 }
 
 fn use_node_at(module: &str, start: usize, end: usize) -> Node {
     Node::new(
-        NodeKind::Use { module: module.to_string(), args: vec![], has_filter_risk: false },
+        NodeKind::Use {
+            module: module.to_string(),
+            args: vec![],
+            has_filter_risk: false,
+        },
         loc(start, end),
     )
 }
@@ -105,18 +113,31 @@ fn no_feature_arg(arg: &str) -> Node {
 
 fn class_node(name: &str) -> Node {
     Node::new(
-        NodeKind::Class { name: name.to_string(), parents: vec![], body: Box::new(block(vec![])) },
+        NodeKind::Class {
+            name: name.to_string(),
+            parents: vec![],
+            body: Box::new(block(vec![])),
+        },
         loc(20, 50),
     )
 }
 
 fn num_node(value: &str) -> Node {
-    Node::new(NodeKind::Number { value: value.to_string() }, loc(20, 21))
+    Node::new(
+        NodeKind::Number {
+            value: value.to_string(),
+        },
+        loc(20, 21),
+    )
 }
 
 fn try_node() -> Node {
     Node::new(
-        NodeKind::Try { body: Box::new(block(vec![])), catch_blocks: vec![], finally_block: None },
+        NodeKind::Try {
+            body: Box::new(block(vec![])),
+            catch_blocks: vec![],
+            finally_block: None,
+        },
         loc(20, 60),
     )
 }
@@ -125,7 +146,9 @@ fn given_when_node() -> Node {
     let when = Node::new(
         NodeKind::When {
             condition: Box::new(Node::new(
-                NodeKind::Number { value: "1".to_string() },
+                NodeKind::Number {
+                    value: "1".to_string(),
+                },
                 loc(34, 35),
             )),
             body: Box::new(block(vec![say_call()])),
@@ -136,7 +159,10 @@ fn given_when_node() -> Node {
     Node::new(
         NodeKind::Given {
             expr: Box::new(Node::new(
-                NodeKind::Variable { sigil: "$".to_string(), name: "value".to_string() },
+                NodeKind::Variable {
+                    sigil: "$".to_string(),
+                    name: "value".to_string(),
+                },
                 loc(24, 30),
             )),
             body: Box::new(block(vec![when])),
@@ -150,7 +176,10 @@ fn say_call() -> Node {
         NodeKind::FunctionCall {
             name: "say".to_string(),
             args: vec![Node::new(
-                NodeKind::String { value: "hello".to_string(), interpolated: false },
+                NodeKind::String {
+                    value: "hello".to_string(),
+                    interpolated: false,
+                },
                 loc(24, 31),
             )],
         },
@@ -170,17 +199,30 @@ fn given_node() -> Node {
 
 fn when_node() -> Node {
     Node::new(
-        NodeKind::When { condition: Box::new(num_node("1")), body: Box::new(block(vec![])) },
+        NodeKind::When {
+            condition: Box::new(num_node("1")),
+            body: Box::new(block(vec![])),
+        },
         loc(30, 50),
     )
 }
 
 fn default_node() -> Node {
-    Node::new(NodeKind::Default { body: Box::new(block(vec![])) }, loc(50, 70))
+    Node::new(
+        NodeKind::Default {
+            body: Box::new(block(vec![])),
+        },
+        loc(50, 70),
+    )
 }
 
 fn default_with_class_node() -> Node {
-    Node::new(NodeKind::Default { body: Box::new(block(vec![class_node("Nested")])) }, loc(50, 90))
+    Node::new(
+        NodeKind::Default {
+            body: Box::new(block(vec![class_node("Nested")])),
+        },
+        loc(50, 90),
+    )
 }
 
 fn sub_with_signature() -> Node {
@@ -189,7 +231,10 @@ fn sub_with_signature() -> Node {
             parameters: vec![Node::new(
                 NodeKind::MandatoryParameter {
                     variable: Box::new(Node::new(
-                        NodeKind::Variable { sigil: "$".to_string(), name: "x".to_string() },
+                        NodeKind::Variable {
+                            sigil: "$".to_string(),
+                            name: "x".to_string(),
+                        },
                         loc(25, 27),
                     )),
                 },
@@ -234,8 +279,16 @@ fn test_class_warns_on_v5_36() -> Result<(), Box<dyn std::error::Error>> {
         "Expected PL900 warning for 'class' in v5.36, got: {:?}",
         diagnostics
     );
-    let msg = must_some(diagnostics.iter().find(|d| d.code.as_deref() == Some("PL900")));
-    assert!(msg.message.contains("class"), "Message should mention 'class': {}", msg.message);
+    let msg = must_some(
+        diagnostics
+            .iter()
+            .find(|d| d.code.as_deref() == Some("PL900")),
+    );
+    assert!(
+        msg.message.contains("class"),
+        "Message should mention 'class': {}",
+        msg.message
+    );
     assert!(
         msg.message.contains("v5.38") || msg.message.contains("5.38"),
         "Message should mention minimum version v5.38: {}",
@@ -315,7 +368,11 @@ fn test_class_ok_on_v5_38_dev_release() -> Result<(), Box<dyn std::error::Error>
 fn test_class_ok_with_use_feature_class() -> Result<(), Box<dyn std::error::Error>> {
     // version IS declared (v5.10 does NOT bundle class), but explicit `use feature 'class'`
     // should suppress the PL900 warning.
-    let ast = program(vec![use_node("v5.10"), use_feature("class"), class_node("Bar")]);
+    let ast = program(vec![
+        use_node("v5.10"),
+        use_feature("class"),
+        class_node("Bar"),
+    ]);
     let mut diagnostics = vec![];
     check_version_compat(&ast, &mut diagnostics);
 
@@ -342,8 +399,16 @@ fn test_try_warns_on_v5_32() -> Result<(), Box<dyn std::error::Error>> {
         "Expected PL900 warning for 'try' in v5.32, got: {:?}",
         diagnostics
     );
-    let msg = must_some(diagnostics.iter().find(|d| d.code.as_deref() == Some("PL900")));
-    assert!(msg.message.contains("try"), "Message should mention 'try': {}", msg.message);
+    let msg = must_some(
+        diagnostics
+            .iter()
+            .find(|d| d.code.as_deref() == Some("PL900")),
+    );
+    assert!(
+        msg.message.contains("try"),
+        "Message should mention 'try': {}",
+        msg.message
+    );
     Ok(())
 }
 
@@ -375,7 +440,11 @@ fn test_given_when_warns_on_v5_38() -> Result<(), Box<dyn std::error::Error>> {
     let mut diagnostics = vec![];
     check_version_compat(&ast, &mut diagnostics);
 
-    let diag = must_some(diagnostics.iter().find(|d| d.code.as_deref() == Some("PL900")));
+    let diag = must_some(
+        diagnostics
+            .iter()
+            .find(|d| d.code.as_deref() == Some("PL900")),
+    );
     assert_eq!(
         diag.severity,
         perl_diagnostics::codes::DiagnosticSeverity::Warning,
@@ -400,14 +469,22 @@ fn test_default_warns_on_v5_38() -> Result<(), Box<dyn std::error::Error>> {
     let mut diagnostics = vec![];
     check_version_compat(&ast, &mut diagnostics);
 
-    let diag = must_some(diagnostics.iter().find(|d| d.code.as_deref() == Some("PL900")));
+    let diag = must_some(
+        diagnostics
+            .iter()
+            .find(|d| d.code.as_deref() == Some("PL900")),
+    );
     assert_eq!(
         diag.severity,
         perl_diagnostics::codes::DiagnosticSeverity::Warning,
         "Expected warning severity for deprecated default on v5.38, got: {:?}",
         diag
     );
-    assert!(diag.message.contains("default"), "Message should mention default: {}", diag.message);
+    assert!(
+        diag.message.contains("default"),
+        "Message should mention default: {}",
+        diag.message
+    );
     assert!(
         diag.message.contains("deprecated"),
         "Message should mention deprecation: {}",
@@ -422,7 +499,11 @@ fn test_when_warns_on_v5_38() -> Result<(), Box<dyn std::error::Error>> {
     let mut diagnostics = vec![];
     check_version_compat(&ast, &mut diagnostics);
 
-    let diag = must_some(diagnostics.iter().find(|d| d.code.as_deref() == Some("PL900")));
+    let diag = must_some(
+        diagnostics
+            .iter()
+            .find(|d| d.code.as_deref() == Some("PL900")),
+    );
     assert_eq!(diag.severity, DiagnosticSeverity::Warning);
     assert!(
         diag.message.contains("given/when/default"),
@@ -442,7 +523,11 @@ fn test_given_when_errors_on_v5_42() -> Result<(), Box<dyn std::error::Error>> {
     let mut diagnostics = vec![];
     check_version_compat(&ast, &mut diagnostics);
 
-    let diag = must_some(diagnostics.iter().find(|d| d.code.as_deref() == Some("PL900")));
+    let diag = must_some(
+        diagnostics
+            .iter()
+            .find(|d| d.code.as_deref() == Some("PL900")),
+    );
     assert_eq!(
         diag.severity,
         perl_diagnostics::codes::DiagnosticSeverity::Error,
@@ -469,15 +554,27 @@ fn test_default_errors_on_v5_42() -> Result<(), Box<dyn std::error::Error>> {
     let mut diagnostics = vec![];
     check_version_compat(&ast, &mut diagnostics);
 
-    let diag = must_some(diagnostics.iter().find(|d| d.code.as_deref() == Some("PL900")));
+    let diag = must_some(
+        diagnostics
+            .iter()
+            .find(|d| d.code.as_deref() == Some("PL900")),
+    );
     assert_eq!(
         diag.severity,
         perl_diagnostics::codes::DiagnosticSeverity::Error,
         "Expected error severity for removed default on v5.42, got: {:?}",
         diag
     );
-    assert!(diag.message.contains("default"), "Message should mention default: {}", diag.message);
-    assert!(diag.message.contains("removed"), "Message should mention removal: {}", diag.message);
+    assert!(
+        diag.message.contains("default"),
+        "Message should mention default: {}",
+        diag.message
+    );
+    assert!(
+        diag.message.contains("removed"),
+        "Message should mention removal: {}",
+        diag.message
+    );
     assert!(
         diag.suggestion
             .as_deref()
@@ -521,7 +618,11 @@ fn test_given_warns_on_v5_38() -> Result<(), Box<dyn std::error::Error>> {
         "Expected PL900 warning for 'given/when' in v5.38, got: {:?}",
         diagnostics
     );
-    let msg = must_some(diagnostics.iter().find(|d| d.code.as_deref() == Some("PL900")));
+    let msg = must_some(
+        diagnostics
+            .iter()
+            .find(|d| d.code.as_deref() == Some("PL900")),
+    );
     assert_eq!(msg.severity, DiagnosticSeverity::Warning);
     assert!(
         msg.message.contains("v5.38") || msg.message.contains("5.38"),
@@ -546,14 +647,22 @@ fn test_given_errors_on_v5_42() -> Result<(), Box<dyn std::error::Error>> {
     let mut diagnostics = vec![];
     check_version_compat(&ast, &mut diagnostics);
 
-    let msg = must_some(diagnostics.iter().find(|d| d.code.as_deref() == Some("PL900")));
+    let msg = must_some(
+        diagnostics
+            .iter()
+            .find(|d| d.code.as_deref() == Some("PL900")),
+    );
     assert_eq!(msg.severity, DiagnosticSeverity::Error);
     assert!(
         msg.message.contains("v5.42") || msg.message.contains("5.42"),
         "Message should mention removal version v5.42: {}",
         msg.message
     );
-    assert!(msg.message.contains("removed"), "Message should mention removal: {}", msg.message);
+    assert!(
+        msg.message.contains("removed"),
+        "Message should mention removal: {}",
+        msg.message
+    );
     Ok(())
 }
 
@@ -572,8 +681,16 @@ fn test_say_warns_on_v5_8() -> Result<(), Box<dyn std::error::Error>> {
         "Expected PL900 warning for 'say' in v5.8, got: {:?}",
         diagnostics
     );
-    let msg = must_some(diagnostics.iter().find(|d| d.code.as_deref() == Some("PL900")));
-    assert!(msg.message.contains("say"), "Message should mention 'say': {}", msg.message);
+    let msg = must_some(
+        diagnostics
+            .iter()
+            .find(|d| d.code.as_deref() == Some("PL900")),
+    );
+    assert!(
+        msg.message.contains("say"),
+        "Message should mention 'say': {}",
+        msg.message
+    );
     Ok(())
 }
 
@@ -669,7 +786,11 @@ fn test_numeric_version_5_036() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn test_explicit_use_feature_suppresses_warning() -> Result<(), Box<dyn std::error::Error>> {
-    let ast = program(vec![use_node("v5.18"), use_feature("signatures"), sub_with_signature()]);
+    let ast = program(vec![
+        use_node("v5.18"),
+        use_feature("signatures"),
+        sub_with_signature(),
+    ]);
     let mut diagnostics = vec![];
     check_version_compat(&ast, &mut diagnostics);
 
@@ -703,7 +824,11 @@ fn test_signatures_warns_on_v5_20() -> Result<(), Box<dyn std::error::Error>> {
         "Expected PL900 warning for signatures on v5.20 (stable bundle requires v5.36), got: {:?}",
         diagnostics
     );
-    let msg = must_some(diagnostics.iter().find(|d| d.code.as_deref() == Some("PL900")));
+    let msg = must_some(
+        diagnostics
+            .iter()
+            .find(|d| d.code.as_deref() == Some("PL900")),
+    );
     // The minimum version in the warning must be 5.36, not 5.20 (which would be nonsensical)
     assert!(
         msg.message.contains("v5.36") || msg.message.contains("5.36"),
@@ -781,12 +906,18 @@ fn test_say_in_ternary_branch_detected() -> Result<(), Box<dyn std::error::Error
     let ternary = Node::new(
         NodeKind::Ternary {
             condition: Box::new(Node::new(
-                NodeKind::Variable { sigil: "$".to_string(), name: "x".to_string() },
+                NodeKind::Variable {
+                    sigil: "$".to_string(),
+                    name: "x".to_string(),
+                },
                 loc(20, 22),
             )),
             then_expr: Box::new(say_call()),
             else_expr: Box::new(Node::new(
-                NodeKind::String { value: "b".to_string(), interpolated: false },
+                NodeKind::String {
+                    value: "b".to_string(),
+                    interpolated: false,
+                },
                 loc(40, 43),
             )),
         },
@@ -816,7 +947,12 @@ fn test_say_in_ternary_branch_detected() -> Result<(), Box<dyn std::error::Error
 #[test]
 fn test_say_in_return_value_detected() -> Result<(), Box<dyn std::error::Error>> {
     // Models: `return say("hi");` — say in return value
-    let ret = Node::new(NodeKind::Return { value: Some(Box::new(say_call())) }, loc(20, 40));
+    let ret = Node::new(
+        NodeKind::Return {
+            value: Some(Box::new(say_call())),
+        },
+        loc(20, 40),
+    );
     let ast = program(vec![use_node("v5.8"), ret]);
     let mut diagnostics = vec![];
     check_version_compat(&ast, &mut diagnostics);
@@ -837,7 +973,10 @@ fn issue_3344_given_node() -> Node {
     Node::new(
         NodeKind::Given {
             expr: Box::new(Node::new(
-                NodeKind::Variable { sigil: "$".to_string(), name: "x".to_string() },
+                NodeKind::Variable {
+                    sigil: "$".to_string(),
+                    name: "x".to_string(),
+                },
                 loc(26, 28),
             )),
             body: Box::new(block(vec![])),
@@ -850,7 +989,10 @@ fn issue_3344_when_node() -> Node {
     Node::new(
         NodeKind::When {
             condition: Box::new(Node::new(
-                NodeKind::Variable { sigil: "$".to_string(), name: "x".to_string() },
+                NodeKind::Variable {
+                    sigil: "$".to_string(),
+                    name: "x".to_string(),
+                },
                 loc(26, 28),
             )),
             body: Box::new(block(vec![])),
@@ -860,7 +1002,12 @@ fn issue_3344_when_node() -> Node {
 }
 
 fn issue_3344_default_node() -> Node {
-    Node::new(NodeKind::Default { body: Box::new(block(vec![])) }, loc(20, 40))
+    Node::new(
+        NodeKind::Default {
+            body: Box::new(block(vec![])),
+        },
+        loc(20, 40),
+    )
 }
 
 fn smartmatch_node() -> Node {
@@ -868,11 +1015,17 @@ fn smartmatch_node() -> Node {
         NodeKind::Binary {
             op: "~~".to_string(),
             left: Box::new(Node::new(
-                NodeKind::Variable { sigil: "$".to_string(), name: "value".to_string() },
+                NodeKind::Variable {
+                    sigil: "$".to_string(),
+                    name: "value".to_string(),
+                },
                 loc(20, 26),
             )),
             right: Box::new(Node::new(
-                NodeKind::String { value: "pattern".to_string(), interpolated: false },
+                NodeKind::String {
+                    value: "pattern".to_string(),
+                    interpolated: false,
+                },
                 loc(30, 39),
             )),
         },
@@ -884,7 +1037,10 @@ fn defer_call() -> Node {
     // `defer { }` is now parsed as NodeKind::Defer (Perl 5.36+ experimental, stable in 5.40).
     Node::new(
         NodeKind::Defer {
-            block: Box::new(Node::new(NodeKind::Block { statements: vec![] }, loc(26, 40))),
+            block: Box::new(Node::new(
+                NodeKind::Block { statements: vec![] },
+                loc(26, 40),
+            )),
         },
         loc(20, 41),
     )
@@ -895,7 +1051,10 @@ fn defer_helper_call() -> Node {
         NodeKind::FunctionCall {
             name: "defer".to_string(),
             args: vec![Node::new(
-                NodeKind::String { value: "cleanup".to_string(), interpolated: false },
+                NodeKind::String {
+                    value: "cleanup".to_string(),
+                    interpolated: false,
+                },
                 loc(26, 35),
             )],
         },
@@ -918,8 +1077,16 @@ fn test_given_warns_on_v5_8() -> Result<(), Box<dyn std::error::Error>> {
         "Expected PL900 warning for 'given' in v5.8, got: {:?}",
         diagnostics
     );
-    let msg = must_some(diagnostics.iter().find(|d| d.code.as_deref() == Some("PL900")));
-    assert!(msg.message.contains("given"), "Message should mention 'given': {}", msg.message);
+    let msg = must_some(
+        diagnostics
+            .iter()
+            .find(|d| d.code.as_deref() == Some("PL900")),
+    );
+    assert!(
+        msg.message.contains("given"),
+        "Message should mention 'given': {}",
+        msg.message
+    );
     assert!(
         msg.message.contains("v5.10") || msg.message.contains("5.10"),
         "Message should mention minimum version v5.10: {}",
@@ -943,8 +1110,16 @@ fn test_when_warns_on_v5_8() -> Result<(), Box<dyn std::error::Error>> {
         "Expected PL900 warning for 'when' in v5.8, got: {:?}",
         diagnostics
     );
-    let msg = must_some(diagnostics.iter().find(|d| d.code.as_deref() == Some("PL900")));
-    assert!(msg.message.contains("when"), "Message should mention 'when': {}", msg.message);
+    let msg = must_some(
+        diagnostics
+            .iter()
+            .find(|d| d.code.as_deref() == Some("PL900")),
+    );
+    assert!(
+        msg.message.contains("when"),
+        "Message should mention 'when': {}",
+        msg.message
+    );
     Ok(())
 }
 
@@ -963,8 +1138,16 @@ fn test_default_warns_on_v5_8() -> Result<(), Box<dyn std::error::Error>> {
         "Expected PL900 warning for 'default' in v5.8, got: {:?}",
         diagnostics
     );
-    let msg = must_some(diagnostics.iter().find(|d| d.code.as_deref() == Some("PL900")));
-    assert!(msg.message.contains("default"), "Message should mention 'default': {}", msg.message);
+    let msg = must_some(
+        diagnostics
+            .iter()
+            .find(|d| d.code.as_deref() == Some("PL900")),
+    );
+    assert!(
+        msg.message.contains("default"),
+        "Message should mention 'default': {}",
+        msg.message
+    );
     Ok(())
 }
 
@@ -1024,7 +1207,11 @@ fn test_default_ok_on_v5_10() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn test_given_ok_with_use_feature_switch() -> Result<(), Box<dyn std::error::Error>> {
-    let ast = program(vec![use_node("v5.8"), use_feature("switch"), issue_3344_given_node()]);
+    let ast = program(vec![
+        use_node("v5.8"),
+        use_feature("switch"),
+        issue_3344_given_node(),
+    ]);
     let mut diagnostics = vec![];
     check_version_compat(&ast, &mut diagnostics);
 
@@ -1038,8 +1225,11 @@ fn test_given_ok_with_use_feature_switch() -> Result<(), Box<dyn std::error::Err
 
 #[test]
 fn test_given_ok_with_use_feature_qw_switch() -> Result<(), Box<dyn std::error::Error>> {
-    let ast =
-        program(vec![use_node("v5.8"), use_feature_arg("qw(switch say)"), issue_3344_given_node()]);
+    let ast = program(vec![
+        use_node("v5.8"),
+        use_feature_arg("qw(switch say)"),
+        issue_3344_given_node(),
+    ]);
     let mut diagnostics = vec![];
     check_version_compat(&ast, &mut diagnostics);
 
@@ -1066,7 +1256,11 @@ fn test_smartmatch_warns_on_v5_8() -> Result<(), Box<dyn std::error::Error>> {
         "Expected PL900 warning for smartmatch in v5.8, got: {:?}",
         diagnostics
     );
-    let msg = must_some(diagnostics.iter().find(|d| d.code.as_deref() == Some("PL900")));
+    let msg = must_some(
+        diagnostics
+            .iter()
+            .find(|d| d.code.as_deref() == Some("PL900")),
+    );
     assert!(
         msg.message.contains("smartmatch") || msg.message.contains("~~"),
         "Message should mention smartmatch: {}",
@@ -1105,7 +1299,11 @@ fn test_smartmatch_warns_on_v5_38() -> Result<(), Box<dyn std::error::Error>> {
         "Expected PL900 warning for smartmatch in v5.38, got: {:?}",
         diagnostics
     );
-    let msg = must_some(diagnostics.iter().find(|d| d.code.as_deref() == Some("PL900")));
+    let msg = must_some(
+        diagnostics
+            .iter()
+            .find(|d| d.code.as_deref() == Some("PL900")),
+    );
     assert!(
         msg.message.contains("deprecated") || msg.message.contains("v5.38"),
         "Message should mention deprecation: {}",
@@ -1125,19 +1323,31 @@ fn test_smartmatch_errors_on_v5_42() -> Result<(), Box<dyn std::error::Error>> {
         "Expected PL900 error for smartmatch in v5.42, got: {:?}",
         diagnostics
     );
-    let msg = must_some(diagnostics.iter().find(|d| d.code.as_deref() == Some("PL900")));
+    let msg = must_some(
+        diagnostics
+            .iter()
+            .find(|d| d.code.as_deref() == Some("PL900")),
+    );
     assert!(
         msg.message.contains("removed") || msg.message.contains("v5.42"),
         "Message should mention removal: {}",
         msg.message
     );
-    assert_eq!(msg.severity, DiagnosticSeverity::Error, "Expected removal severity to be an error");
+    assert_eq!(
+        msg.severity,
+        DiagnosticSeverity::Error,
+        "Expected removal severity to be an error"
+    );
     Ok(())
 }
 
 #[test]
 fn test_smartmatch_ok_with_use_feature_switch() -> Result<(), Box<dyn std::error::Error>> {
-    let ast = program(vec![use_node("v5.8"), use_feature("switch"), smartmatch_node()]);
+    let ast = program(vec![
+        use_node("v5.8"),
+        use_feature("switch"),
+        smartmatch_node(),
+    ]);
     let mut diagnostics = vec![];
     check_version_compat(&ast, &mut diagnostics);
 
@@ -1151,7 +1361,11 @@ fn test_smartmatch_ok_with_use_feature_switch() -> Result<(), Box<dyn std::error
 
 #[test]
 fn test_smartmatch_ok_with_use_feature_bundle_5_10() -> Result<(), Box<dyn std::error::Error>> {
-    let ast = program(vec![use_node("v5.8"), use_feature_arg("':5.10'"), smartmatch_node()]);
+    let ast = program(vec![
+        use_node("v5.8"),
+        use_feature_arg("':5.10'"),
+        smartmatch_node(),
+    ]);
     let mut diagnostics = vec![];
     check_version_compat(&ast, &mut diagnostics);
 
@@ -1165,7 +1379,11 @@ fn test_smartmatch_ok_with_use_feature_bundle_5_10() -> Result<(), Box<dyn std::
 
 #[test]
 fn test_smartmatch_warns_after_no_feature_switch() -> Result<(), Box<dyn std::error::Error>> {
-    let ast = program(vec![use_node("v5.10"), no_feature("switch"), smartmatch_node()]);
+    let ast = program(vec![
+        use_node("v5.10"),
+        no_feature("switch"),
+        smartmatch_node(),
+    ]);
     let mut diagnostics = vec![];
     check_version_compat(&ast, &mut diagnostics);
 
@@ -1199,7 +1417,11 @@ fn test_smartmatch_warns_after_no_feature_switch_disables_bundle()
 
 #[test]
 fn test_smartmatch_warns_after_no_feature_all() -> Result<(), Box<dyn std::error::Error>> {
-    let ast = program(vec![use_node("v5.10"), no_feature_arg("':all'"), smartmatch_node()]);
+    let ast = program(vec![
+        use_node("v5.10"),
+        no_feature_arg("':all'"),
+        smartmatch_node(),
+    ]);
     let mut diagnostics = vec![];
     check_version_compat(&ast, &mut diagnostics);
 
@@ -1266,8 +1488,16 @@ fn test_defer_warns_on_v5_34() -> Result<(), Box<dyn std::error::Error>> {
         "Expected PL900 warning for 'defer' in v5.34, got: {:?}",
         diagnostics
     );
-    let msg = must_some(diagnostics.iter().find(|d| d.code.as_deref() == Some("PL900")));
-    assert!(msg.message.contains("defer"), "Message should mention 'defer': {}", msg.message);
+    let msg = must_some(
+        diagnostics
+            .iter()
+            .find(|d| d.code.as_deref() == Some("PL900")),
+    );
+    assert!(
+        msg.message.contains("defer"),
+        "Message should mention 'defer': {}",
+        msg.message
+    );
     assert!(
         msg.message.contains("v5.36") || msg.message.contains("5.36"),
         "Message should mention minimum version v5.36: {}",
@@ -1343,7 +1573,10 @@ fn builtin_call(name: &str) -> Node {
         NodeKind::FunctionCall {
             name: name.to_string(),
             args: vec![Node::new(
-                NodeKind::Variable { sigil: "$".to_string(), name: "x".to_string() },
+                NodeKind::Variable {
+                    sigil: "$".to_string(),
+                    name: "x".to_string(),
+                },
                 loc(30, 32),
             )],
         },
@@ -1375,11 +1608,17 @@ fn isa_node() -> Node {
         NodeKind::Binary {
             op: "isa".to_string(),
             left: Box::new(Node::new(
-                NodeKind::Variable { sigil: "$".to_string(), name: "obj".to_string() },
+                NodeKind::Variable {
+                    sigil: "$".to_string(),
+                    name: "obj".to_string(),
+                },
                 loc(24, 28),
             )),
             right: Box::new(Node::new(
-                NodeKind::String { value: "MyClass".to_string(), interpolated: false },
+                NodeKind::String {
+                    value: "MyClass".to_string(),
+                    interpolated: false,
+                },
                 loc(29, 38),
             )),
         },
@@ -1473,7 +1712,10 @@ fn test_use_builtin_suppresses_qualified_call_warning() -> Result<(), Box<dyn st
     let mut diagnostics = vec![];
     check_version_compat(&ast, &mut diagnostics);
 
-    let pl900_count = diagnostics.iter().filter(|d| d.code.as_deref() == Some("PL900")).count();
+    let pl900_count = diagnostics
+        .iter()
+        .filter(|d| d.code.as_deref() == Some("PL900"))
+        .count();
     assert!(
         pl900_count <= 1,
         "Expected at most one PL900 for 'use builtin load_module' + 'builtin::load_module' on v5.38, got {} warnings: {:?}",
@@ -1589,8 +1831,16 @@ fn test_isa_warns_on_v5_30() -> Result<(), Box<dyn std::error::Error>> {
         "Expected PL900 warning for 'isa' operator in v5.30, got: {:?}",
         diagnostics
     );
-    let msg = must_some(diagnostics.iter().find(|d| d.code.as_deref() == Some("PL900")));
-    assert!(msg.message.contains("isa"), "Message should mention 'isa': {}", msg.message);
+    let msg = must_some(
+        diagnostics
+            .iter()
+            .find(|d| d.code.as_deref() == Some("PL900")),
+    );
+    assert!(
+        msg.message.contains("isa"),
+        "Message should mention 'isa': {}",
+        msg.message
+    );
     assert!(
         msg.message.contains("v5.36") || msg.message.contains("5.36"),
         "Message should mention minimum version v5.36: {}",

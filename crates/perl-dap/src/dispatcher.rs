@@ -335,8 +335,10 @@ impl DapDispatcher {
             .ok_or_else(|| anyhow::anyhow!("Missing arguments for inlineValues"))
             .and_then(|v| serde_json::from_value(v.clone()).context("Invalid arguments"))?;
 
-        let source_path =
-            args.source.path.ok_or_else(|| anyhow::anyhow!("inlineValues requires source.path"))?;
+        let source_path = args
+            .source
+            .path
+            .ok_or_else(|| anyhow::anyhow!("inlineValues requires source.path"))?;
 
         if args.start_line <= 0 || args.end_line <= 0 {
             anyhow::bail!("inlineValues requires positive startLine/endLine");
@@ -604,7 +606,10 @@ print "result: $final\n";
         assert_eq!(response.command, "unknownCommand");
         assert!(response.message.is_some());
         assert!(
-            response.message.ok_or("Expected message")?.contains("Unknown command: unknownCommand")
+            response
+                .message
+                .ok_or("Expected message")?
+                .contains("Unknown command: unknownCommand")
         );
         Ok(())
     }
@@ -749,7 +754,12 @@ print "result: $final\n";
 
         assert!(!response.success);
         assert!(response.message.is_some());
-        assert!(response.message.ok_or("Expected message")?.contains("before initialized"));
+        assert!(
+            response
+                .message
+                .ok_or("Expected message")?
+                .contains("before initialized")
+        );
         Ok(())
     }
 

@@ -32,7 +32,10 @@ impl fmt::Display for QualifiedNameError {
                 write!(f, "qualified name cannot start with sigil '{sigil}'")
             }
             Self::EmptySegment { index } => {
-                write!(f, "segment {index} is empty (leading/trailing/double separator)")
+                write!(
+                    f,
+                    "segment {index} is empty (leading/trailing/double separator)"
+                )
             }
             Self::InvalidSegment { index } => {
                 write!(f, "segment {index} is not a valid identifier")

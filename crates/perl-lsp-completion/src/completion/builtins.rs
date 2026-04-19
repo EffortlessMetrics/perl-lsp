@@ -312,7 +312,11 @@ fn builtin_info(name: &'static str) -> (&'static str, &'static str, Option<&'sta
                 "Set a filehandle to binary mode (no CRLF translation). Use a layer for encoding.",
             ),
         ),
-        "eof" => ("eof ", "eof FILEHANDLE", Some("Return true if at end of FILEHANDLE.")),
+        "eof" => (
+            "eof ",
+            "eof FILEHANDLE",
+            Some("Return true if at end of FILEHANDLE."),
+        ),
         "fileno" => (
             "fileno ",
             "fileno FILEHANDLE",
@@ -339,7 +343,11 @@ fn builtin_info(name: &'static str) -> (&'static str, &'static str, Option<&'sta
             "chomp LIST",
             Some("Remove trailing input record separator (usually newline) from a string or list."),
         ),
-        "chop" => ("chop ", "chop LIST", Some("Remove and return the last character of a string.")),
+        "chop" => (
+            "chop ",
+            "chop LIST",
+            Some("Remove and return the last character of a string."),
+        ),
         "chr" => (
             "chr ",
             "chr NUMBER",
@@ -350,14 +358,26 @@ fn builtin_info(name: &'static str) -> (&'static str, &'static str, Option<&'sta
             "ord EXPR",
             Some("Return the numeric character value of the first character of EXPR."),
         ),
-        "lc" => ("lc ", "lc EXPR", Some("Return EXPR converted to lowercase.")),
-        "uc" => ("uc ", "uc EXPR", Some("Return EXPR converted to uppercase.")),
-        "lcfirst" => {
-            ("lcfirst ", "lcfirst EXPR", Some("Return EXPR with the first character lowercased."))
-        }
-        "ucfirst" => {
-            ("ucfirst ", "ucfirst EXPR", Some("Return EXPR with the first character uppercased."))
-        }
+        "lc" => (
+            "lc ",
+            "lc EXPR",
+            Some("Return EXPR converted to lowercase."),
+        ),
+        "uc" => (
+            "uc ",
+            "uc EXPR",
+            Some("Return EXPR converted to uppercase."),
+        ),
+        "lcfirst" => (
+            "lcfirst ",
+            "lcfirst EXPR",
+            Some("Return EXPR with the first character lowercased."),
+        ),
+        "ucfirst" => (
+            "ucfirst ",
+            "ucfirst EXPR",
+            Some("Return EXPR with the first character uppercased."),
+        ),
         "length" => (
             "length ",
             "length EXPR",
@@ -408,7 +428,11 @@ fn builtin_info(name: &'static str) -> (&'static str, &'static str, Option<&'sta
             "push ARRAY, LIST",
             Some("Append LIST to the end of ARRAY. Returns the new number of elements."),
         ),
-        "pop" => ("pop ", "pop ARRAY", Some("Remove and return the last element of ARRAY.")),
+        "pop" => (
+            "pop ",
+            "pop ARRAY",
+            Some("Remove and return the last element of ARRAY."),
+        ),
         "shift" => (
             "shift ",
             "shift ARRAY",
@@ -478,15 +502,41 @@ fn builtin_info(name: &'static str) -> (&'static str, &'static str, Option<&'sta
             Some("Delete a hash key or array element. Returns the deleted value."),
         ),
         // Math
-        "abs" => ("abs ", "abs VALUE", Some("Return the absolute value of VALUE.")),
-        "atan2" => {
-            ("atan2 ", "atan2 Y, X", Some("Return the arctangent of Y/X in the range -pi to pi."))
-        }
-        "cos" => ("cos ", "cos EXPR", Some("Return the cosine of EXPR (in radians).")),
-        "sin" => ("sin ", "sin EXPR", Some("Return the sine of EXPR (in radians).")),
-        "exp" => ("exp ", "exp EXPR", Some("Return e raised to the power EXPR.")),
-        "log" => ("log ", "log EXPR", Some("Return the natural logarithm of EXPR.")),
-        "sqrt" => ("sqrt ", "sqrt EXPR", Some("Return the non-negative square root of EXPR.")),
+        "abs" => (
+            "abs ",
+            "abs VALUE",
+            Some("Return the absolute value of VALUE."),
+        ),
+        "atan2" => (
+            "atan2 ",
+            "atan2 Y, X",
+            Some("Return the arctangent of Y/X in the range -pi to pi."),
+        ),
+        "cos" => (
+            "cos ",
+            "cos EXPR",
+            Some("Return the cosine of EXPR (in radians)."),
+        ),
+        "sin" => (
+            "sin ",
+            "sin EXPR",
+            Some("Return the sine of EXPR (in radians)."),
+        ),
+        "exp" => (
+            "exp ",
+            "exp EXPR",
+            Some("Return e raised to the power EXPR."),
+        ),
+        "log" => (
+            "log ",
+            "log EXPR",
+            Some("Return the natural logarithm of EXPR."),
+        ),
+        "sqrt" => (
+            "sqrt ",
+            "sqrt EXPR",
+            Some("Return the non-negative square root of EXPR."),
+        ),
         "int" => (
             "int ",
             "int EXPR",
@@ -502,7 +552,11 @@ fn builtin_info(name: &'static str) -> (&'static str, &'static str, Option<&'sta
             "srand EXPR",
             Some("Seed the random number generator. Without arg, uses a platform-specific seed."),
         ),
-        "hex" => ("hex ", "hex EXPR", Some("Convert a hex string to a decimal number.")),
+        "hex" => (
+            "hex ",
+            "hex EXPR",
+            Some("Convert a hex string to a decimal number."),
+        ),
         "oct" => (
             "oct ",
             "oct EXPR",
@@ -529,9 +583,11 @@ fn builtin_info(name: &'static str) -> (&'static str, &'static str, Option<&'sta
             "wait",
             Some("Wait for a child process to terminate. Returns PID of deceased child."),
         ),
-        "waitpid" => {
-            ("waitpid ", "waitpid PID, FLAGS", Some("Wait for a specific child PID to terminate."))
-        }
+        "waitpid" => (
+            "waitpid ",
+            "waitpid PID, FLAGS",
+            Some("Wait for a specific child PID to terminate."),
+        ),
         "kill" => (
             "kill ",
             "kill SIGNAL, LIST",
@@ -549,13 +605,21 @@ fn builtin_info(name: &'static str) -> (&'static str, &'static str, Option<&'sta
                 "Schedule a SIGALRM delivery in SECONDS. Returns remaining time of previous alarm.",
             ),
         ),
-        "getpid" => {
-            ("getpid", "getpid", Some("Return the process ID of the current process. Same as $$."))
-        }
-        "getppid" => ("getppid", "getppid", Some("Return the process ID of the parent process.")),
-        "times" => {
-            ("times", "times", Some("Return (user, system, cuser, csystem) CPU times in seconds."))
-        }
+        "getpid" => (
+            "getpid",
+            "getpid",
+            Some("Return the process ID of the current process. Same as $$."),
+        ),
+        "getppid" => (
+            "getppid",
+            "getppid",
+            Some("Return the process ID of the parent process."),
+        ),
+        "times" => (
+            "times",
+            "times",
+            Some("Return (user, system, cuser, csystem) CPU times in seconds."),
+        ),
         // Time
         "time" => (
             "time",
@@ -654,9 +718,11 @@ fn builtin_info(name: &'static str) -> (&'static str, &'static str, Option<&'sta
             "defined EXPR",
             Some("Return true if EXPR has a defined (non-undef) value."),
         ),
-        "undef" => {
-            ("undef ", "undef EXPR", Some("Undefine a variable or subroutine, freeing its memory."))
-        }
+        "undef" => (
+            "undef ",
+            "undef EXPR",
+            Some("Undefine a variable or subroutine, freeing its memory."),
+        ),
         "prototype" => (
             "prototype ",
             "prototype FUNCTION",
@@ -688,9 +754,21 @@ fn builtin_info(name: &'static str) -> (&'static str, &'static str, Option<&'sta
             "mkdir FILENAME, MODE",
             Some("Create a directory. Mode defaults to 0777."),
         ),
-        "rmdir" => ("rmdir ", "rmdir FILENAME", Some("Remove an empty directory.")),
-        "chdir" => ("chdir ", "chdir EXPR", Some("Change the working directory to EXPR.")),
-        "chmod" => ("chmod(, )", "chmod MODE, LIST", Some("Change permissions on files in LIST.")),
+        "rmdir" => (
+            "rmdir ",
+            "rmdir FILENAME",
+            Some("Remove an empty directory."),
+        ),
+        "chdir" => (
+            "chdir ",
+            "chdir EXPR",
+            Some("Change the working directory to EXPR."),
+        ),
+        "chmod" => (
+            "chmod(, )",
+            "chmod MODE, LIST",
+            Some("Change permissions on files in LIST."),
+        ),
         "chown" => (
             "chown(, , )",
             "chown UID, GID, LIST",
@@ -706,9 +784,11 @@ fn builtin_info(name: &'static str) -> (&'static str, &'static str, Option<&'sta
             "symlink OLDFILE, NEWFILE",
             Some("Create a symbolic link NEWFILE pointing to OLDFILE."),
         ),
-        "readlink" => {
-            ("readlink ", "readlink EXPR", Some("Return the path a symbolic link points to."))
-        }
+        "readlink" => (
+            "readlink ",
+            "readlink EXPR",
+            Some("Return the path a symbolic link points to."),
+        ),
         "opendir" => (
             "opendir(my $dh, )",
             "opendir DIRHANDLE, EXPR",
@@ -719,10 +799,16 @@ fn builtin_info(name: &'static str) -> (&'static str, &'static str, Option<&'sta
             "readdir DIRHANDLE",
             Some("Return next entry (or all entries in list context) from a directory."),
         ),
-        "closedir" => {
-            ("closedir ", "closedir DIRHANDLE", Some("Close a directory handle opened by opendir."))
-        }
-        "glob" => ("glob ", "glob EXPR", Some("Expand shell glob patterns in EXPR; like <*.pl>.")),
+        "closedir" => (
+            "closedir ",
+            "closedir DIRHANDLE",
+            Some("Close a directory handle opened by opendir."),
+        ),
+        "glob" => (
+            "glob ",
+            "glob EXPR",
+            Some("Expand shell glob patterns in EXPR; like <*.pl>."),
+        ),
         "truncate" => (
             "truncate(, )",
             "truncate FILEHANDLE|EXPR, LENGTH",
@@ -749,16 +835,26 @@ fn builtin_info(name: &'static str) -> (&'static str, &'static str, Option<&'sta
             "accept NEWSOCKET, GENERICSOCKET",
             Some("Accept an incoming socket connection."),
         ),
-        "connect" => {
-            ("connect(, )", "connect SOCKET, NAME", Some("Connect a socket to a remote address."))
-        }
-        "bind" => ("bind(, )", "bind SOCKET, NAME", Some("Bind a socket to a local address.")),
+        "connect" => (
+            "connect(, )",
+            "connect SOCKET, NAME",
+            Some("Connect a socket to a remote address."),
+        ),
+        "bind" => (
+            "bind(, )",
+            "bind SOCKET, NAME",
+            Some("Bind a socket to a local address."),
+        ),
         "recv" => (
             "recv(, , , )",
             "recv SOCKET, SCALAR, LENGTH, FLAGS",
             Some("Receive a message from a socket into SCALAR."),
         ),
-        "send" => ("send(, , )", "send SOCKET, MSG, FLAGS", Some("Send a message on a socket.")),
+        "send" => (
+            "send(, , )",
+            "send SOCKET, MSG, FLAGS",
+            Some("Send a message on a socket."),
+        ),
         "shutdown" => (
             "shutdown(, )",
             "shutdown SOCKET, HOW",
@@ -769,9 +865,11 @@ fn builtin_info(name: &'static str) -> (&'static str, &'static str, Option<&'sta
             "getpeername SOCKET",
             Some("Return the remote address of a connected socket."),
         ),
-        "getsockname" => {
-            ("getsockname ", "getsockname SOCKET", Some("Return the local address of a socket."))
-        }
+        "getsockname" => (
+            "getsockname ",
+            "getsockname SOCKET",
+            Some("Return the local address of a socket."),
+        ),
         "getsockopt" => (
             "getsockopt(, , )",
             "getsockopt SOCKET, LEVEL, OPTNAME",
@@ -783,19 +881,37 @@ fn builtin_info(name: &'static str) -> (&'static str, &'static str, Option<&'sta
             Some("Set a socket option."),
         ),
         // User / group
-        "getlogin" => ("getlogin", "getlogin", Some("Return the login name of the current user.")),
-        "getpwnam" => {
-            ("getpwnam ", "getpwnam NAME", Some("Return the passwd entry for user NAME."))
-        }
-        "getpwuid" => ("getpwuid ", "getpwuid UID", Some("Return the passwd entry for user UID.")),
-        "getgrnam" => {
-            ("getgrnam ", "getgrnam NAME", Some("Return the group entry for group NAME."))
-        }
-        "getgrgid" => ("getgrgid ", "getgrgid GID", Some("Return the group entry for group GID.")),
+        "getlogin" => (
+            "getlogin",
+            "getlogin",
+            Some("Return the login name of the current user."),
+        ),
+        "getpwnam" => (
+            "getpwnam ",
+            "getpwnam NAME",
+            Some("Return the passwd entry for user NAME."),
+        ),
+        "getpwuid" => (
+            "getpwuid ",
+            "getpwuid UID",
+            Some("Return the passwd entry for user UID."),
+        ),
+        "getgrnam" => (
+            "getgrnam ",
+            "getgrnam NAME",
+            Some("Return the group entry for group NAME."),
+        ),
+        "getgrgid" => (
+            "getgrgid ",
+            "getgrgid GID",
+            Some("Return the group entry for group GID."),
+        ),
         // Network lookup
-        "gethostbyname" => {
-            ("gethostbyname ", "gethostbyname NAME", Some("Resolve a hostname to its address(es)."))
-        }
+        "gethostbyname" => (
+            "gethostbyname ",
+            "gethostbyname NAME",
+            Some("Resolve a hostname to its address(es)."),
+        ),
         "gethostbyaddr" => (
             "gethostbyaddr(, )",
             "gethostbyaddr ADDR, ADDRTYPE",

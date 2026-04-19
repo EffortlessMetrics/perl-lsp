@@ -30,8 +30,13 @@ pub fn run(doctor: bool) -> Result<()> {
         .with_context(|| format!("Failed to read {}", toolchain_file.display()))?;
     let toolchain: RustToolchainFile =
         toml::from_str(&raw).context("Failed to parse rust-toolchain.toml")?;
-    let required =
-        toolchain.toolchain.channel.trim().trim_matches('\"').trim_matches('\'').to_string();
+    let required = toolchain
+        .toolchain
+        .channel
+        .trim()
+        .trim_matches('\"')
+        .trim_matches('\'')
+        .to_string();
     let required_parts = parse_version_parts(&required);
 
     if required_parts.is_empty() {
@@ -39,8 +44,10 @@ pub fn run(doctor: bool) -> Result<()> {
         return Ok(());
     }
 
-    let rustc_output =
-        Command::new("rustc").arg("--version").output().context("Failed to run rustc --version")?;
+    let rustc_output = Command::new("rustc")
+        .arg("--version")
+        .output()
+        .context("Failed to run rustc --version")?;
     let rustc_text = String::from_utf8(rustc_output.stdout)
         .context("rustc --version output is not valid UTF-8")?;
     let current = rustc_text
@@ -82,7 +89,11 @@ fn parse_version_parts(version: &str) -> Vec<u32> {
     version
         .split(['.', '-', '+'])
         .filter_map(|part| {
-            part.chars().take_while(|c| c.is_ascii_digit()).collect::<String>().parse::<u32>().ok()
+            part.chars()
+                .take_while(|c| c.is_ascii_digit())
+                .collect::<String>()
+                .parse::<u32>()
+                .ok()
         })
         .collect()
 }

@@ -63,7 +63,10 @@ try {
 
     // Should not crash and should generate some tokens
     let tokens = analyzer.semantic_tokens();
-    assert!(!tokens.is_empty(), "Try blocks should generate semantic tokens");
+    assert!(
+        !tokens.is_empty(),
+        "Try blocks should generate semantic tokens"
+    );
     Ok(())
 }
 
@@ -85,10 +88,15 @@ if ($@) {
 
     // Should have tokens for variables inside eval
     let tokens = analyzer.semantic_tokens();
-    assert!(!tokens.is_empty(), "Eval blocks should generate semantic tokens");
+    assert!(
+        !tokens.is_empty(),
+        "Eval blocks should generate semantic tokens"
+    );
 
     // Should have symbol for $result (scoped to eval block)
-    let _result_symbols = analyzer.symbol_table().find_symbol("result", 0, SymbolKind::scalar());
+    let _result_symbols = analyzer
+        .symbol_table()
+        .find_symbol("result", 0, SymbolKind::scalar());
 
     // Note: Depending on scope handling, this might be empty
     // The important part is that analyzer doesn't crash
@@ -109,7 +117,10 @@ my $value = do {
     let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
 
     let tokens = analyzer.semantic_tokens();
-    assert!(!tokens.is_empty(), "Do blocks should generate semantic tokens");
+    assert!(
+        !tokens.is_empty(),
+        "Do blocks should generate semantic tokens"
+    );
 
     // Should have symbols for both $value and $temp
     let symbols = analyzer.symbol_table();
@@ -166,10 +177,15 @@ sub lvalue_sub :lvalue {
 
     // Should handle attribute annotations
     let tokens = analyzer.semantic_tokens();
-    assert!(!tokens.is_empty(), "Should generate tokens for attributed variables");
+    assert!(
+        !tokens.is_empty(),
+        "Should generate tokens for attributed variables"
+    );
 
     // Should have symbol for $shared
-    let shared_symbols = analyzer.symbol_table().find_symbol("shared", 0, SymbolKind::scalar());
+    let shared_symbols = analyzer
+        .symbol_table()
+        .find_symbol("shared", 0, SymbolKind::scalar());
     assert!(!shared_symbols.is_empty(), "Should find $shared symbol");
     Ok(())
 }
@@ -197,8 +213,10 @@ my $result = $x > 5 ? "big" : "small";
             )
         })
         .count();
-    let string_count =
-        tokens.iter().filter(|t| matches!(t.token_type, SemanticTokenType::String)).count();
+    let string_count = tokens
+        .iter()
+        .filter(|t| matches!(t.token_type, SemanticTokenType::String))
+        .count();
 
     assert!(var_count >= 2, "Should have variable tokens");
     assert!(string_count >= 2, "Should have string tokens");
@@ -251,10 +269,15 @@ while (<>) {
     let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
 
     let tokens = analyzer.semantic_tokens();
-    assert!(!tokens.is_empty(), "Should generate tokens for readline operations");
+    assert!(
+        !tokens.is_empty(),
+        "Should generate tokens for readline operations"
+    );
 
     // Should have symbol for $line
-    let line_symbols = analyzer.symbol_table().find_symbol("line", 0, SymbolKind::scalar());
+    let line_symbols = analyzer
+        .symbol_table()
+        .find_symbol("line", 0, SymbolKind::scalar());
     assert!(!line_symbols.is_empty(), "Should find $line symbol");
     Ok(())
 }
@@ -286,10 +309,15 @@ my $first = $arr[0];
     assert!(!var_tokens.is_empty(), "Should have variable tokens");
 
     // Should have number tokens for array elements
-    let num_tokens: Vec<_> =
-        tokens.iter().filter(|t| matches!(t.token_type, SemanticTokenType::Number)).collect();
+    let num_tokens: Vec<_> = tokens
+        .iter()
+        .filter(|t| matches!(t.token_type, SemanticTokenType::Number))
+        .collect();
 
-    assert!(num_tokens.len() >= 4, "Should have number tokens for [1,2,3,4]");
+    assert!(
+        num_tokens.len() >= 4,
+        "Should have number tokens for [1,2,3,4]"
+    );
     Ok(())
 }
 
@@ -320,10 +348,15 @@ my $val = $hash{key1};
     assert!(!var_tokens.is_empty(), "Should have variable tokens");
 
     // Should have string tokens for values
-    let string_tokens: Vec<_> =
-        tokens.iter().filter(|t| matches!(t.token_type, SemanticTokenType::String)).collect();
+    let string_tokens: Vec<_> = tokens
+        .iter()
+        .filter(|t| matches!(t.token_type, SemanticTokenType::String))
+        .collect();
 
-    assert!(string_tokens.len() >= 2, "Should have string tokens for hash values");
+    assert!(
+        string_tokens.len() >= 2,
+        "Should have string tokens for hash values"
+    );
     Ok(())
 }
 
@@ -348,11 +381,16 @@ INIT {
     let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
 
     let tokens = analyzer.semantic_tokens();
-    assert!(!tokens.is_empty(), "Should generate tokens for phase blocks");
+    assert!(
+        !tokens.is_empty(),
+        "Should generate tokens for phase blocks"
+    );
 
     // Should have function tokens for print
-    let fn_tokens: Vec<_> =
-        tokens.iter().filter(|t| matches!(t.token_type, SemanticTokenType::Function)).collect();
+    let fn_tokens: Vec<_> = tokens
+        .iter()
+        .filter(|t| matches!(t.token_type, SemanticTokenType::Function))
+        .collect();
 
     assert!(!fn_tokens.is_empty(), "Should have function tokens");
     Ok(())
@@ -376,10 +414,15 @@ $text =~ s/world/universe/g;
     let tokens = analyzer.semantic_tokens();
 
     // Should have operator tokens
-    let op_tokens: Vec<_> =
-        tokens.iter().filter(|t| matches!(t.token_type, SemanticTokenType::Operator)).collect();
+    let op_tokens: Vec<_> = tokens
+        .iter()
+        .filter(|t| matches!(t.token_type, SemanticTokenType::Operator))
+        .collect();
 
-    assert!(!op_tokens.is_empty(), "Should have operator tokens for s///");
+    assert!(
+        !op_tokens.is_empty(),
+        "Should have operator tokens for s///"
+    );
     Ok(())
 }
 
@@ -411,10 +454,15 @@ my $result = $obj->get_value();
         let tokens = analyzer.semantic_tokens();
 
         // Should have method tokens
-        let method_tokens: Vec<_> =
-            tokens.iter().filter(|t| matches!(t.token_type, SemanticTokenType::Method)).collect();
+        let method_tokens: Vec<_> = tokens
+            .iter()
+            .filter(|t| matches!(t.token_type, SemanticTokenType::Method))
+            .collect();
 
-        assert!(method_tokens.len() >= 3, "Should have tokens for new, process, get_value");
+        assert!(
+            method_tokens.len() >= 3,
+            "Should have tokens for new, process, get_value"
+        );
         Ok(())
     }
 
@@ -435,9 +483,21 @@ my $value = $$ref;
 
         // Should have symbols for all variables
         let symbols = analyzer.symbol_table();
-        assert!(!symbols.find_symbol("scalar", 0, SymbolKind::scalar()).is_empty());
-        assert!(!symbols.find_symbol("ref", 0, SymbolKind::scalar()).is_empty());
-        assert!(!symbols.find_symbol("value", 0, SymbolKind::scalar()).is_empty());
+        assert!(
+            !symbols
+                .find_symbol("scalar", 0, SymbolKind::scalar())
+                .is_empty()
+        );
+        assert!(
+            !symbols
+                .find_symbol("ref", 0, SymbolKind::scalar())
+                .is_empty()
+        );
+        assert!(
+            !symbols
+                .find_symbol("value", 0, SymbolKind::scalar())
+                .is_empty()
+        );
         Ok(())
     }
 
@@ -462,7 +522,10 @@ require Exporter;
             .filter(|t| matches!(t.token_type, SemanticTokenType::Namespace))
             .collect();
 
-        assert!(!ns_tokens.is_empty(), "Should have namespace tokens for modules");
+        assert!(
+            !ns_tokens.is_empty(),
+            "Should have namespace tokens for modules"
+        );
         Ok(())
     }
 
@@ -504,7 +567,10 @@ sub process {
         let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
 
         let tokens = analyzer.semantic_tokens();
-        assert!(!tokens.is_empty(), "Should generate tokens for control flow");
+        assert!(
+            !tokens.is_empty(),
+            "Should generate tokens for control flow"
+        );
         Ok(())
     }
 
@@ -521,7 +587,10 @@ print "$_\n" while <>;
         let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
 
         let tokens = analyzer.semantic_tokens();
-        assert!(!tokens.is_empty(), "Should generate tokens for postfix loops");
+        assert!(
+            !tokens.is_empty(),
+            "Should generate tokens for postfix loops"
+        );
         Ok(())
     }
 
@@ -588,15 +657,26 @@ sub process {
 
     // Should not crash
     let tokens = analyzer.semantic_tokens();
-    assert!(!tokens.is_empty(), "Should generate tokens for complex code");
+    assert!(
+        !tokens.is_empty(),
+        "Should generate tokens for complex code"
+    );
 
     // Should have multiple token types
-    let has_package = tokens.iter().any(|t| matches!(t.token_type, SemanticTokenType::Namespace));
+    let has_package = tokens
+        .iter()
+        .any(|t| matches!(t.token_type, SemanticTokenType::Namespace));
     let has_function = tokens.iter().any(|t| {
-        matches!(t.token_type, SemanticTokenType::Function | SemanticTokenType::FunctionDeclaration)
+        matches!(
+            t.token_type,
+            SemanticTokenType::Function | SemanticTokenType::FunctionDeclaration
+        )
     });
     let has_variable = tokens.iter().any(|t| {
-        matches!(t.token_type, SemanticTokenType::Variable | SemanticTokenType::VariableDeclaration)
+        matches!(
+            t.token_type,
+            SemanticTokenType::Variable | SemanticTokenType::VariableDeclaration
+        )
     });
 
     assert!(has_package, "Should have package tokens");

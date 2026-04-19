@@ -263,7 +263,10 @@ fn dap_symlink_relative_escape() -> TestResult {
     std::os::unix::fs::symlink(Path::new("../secret"), &link)?;
 
     let result = validate_path(Path::new("escape/key.pem"), &ws);
-    assert!(result.is_err(), "Relative symlink escape via DAP must be blocked");
+    assert!(
+        result.is_err(),
+        "Relative symlink escape via DAP must be blocked"
+    );
     Ok(())
 }
 
@@ -283,7 +286,10 @@ fn dap_symlink_chain_escape() -> TestResult {
     std::os::unix::fs::symlink(&link2, &link1)?;
 
     let result = validate_path(Path::new("link1/data"), &ws);
-    assert!(result.is_err(), "Chained symlink escape via DAP must be blocked");
+    assert!(
+        result.is_err(),
+        "Chained symlink escape via DAP must be blocked"
+    );
     Ok(())
 }
 
@@ -297,7 +303,10 @@ fn dap_symlink_to_proc_rejected() -> TestResult {
     std::os::unix::fs::symlink(Path::new("/proc/self"), &link)?;
 
     let result = validate_path(Path::new("proc_link/environ"), ws);
-    assert!(result.is_err(), "Symlink to /proc/self must be blocked in DAP");
+    assert!(
+        result.is_err(),
+        "Symlink to /proc/self must be blocked in DAP"
+    );
     Ok(())
 }
 
@@ -709,7 +718,10 @@ fn dap_concurrent_validations() -> TestResult {
 #[test]
 fn dap_constants_are_reasonable() {
     assert_eq!(MAX_TIMEOUT_MS, 300_000, "Max timeout should be 5 minutes");
-    assert_eq!(DEFAULT_TIMEOUT_MS, 5_000, "Default timeout should be 5 seconds");
+    assert_eq!(
+        DEFAULT_TIMEOUT_MS, 5_000,
+        "Default timeout should be 5 seconds"
+    );
     // Compile-time assertions for constant relationships
     const {
         assert!(DEFAULT_TIMEOUT_MS < MAX_TIMEOUT_MS);

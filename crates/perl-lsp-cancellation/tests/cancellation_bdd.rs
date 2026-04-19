@@ -19,11 +19,15 @@ fn given_an_active_request_when_cancelled_then_global_registry_cleans_and_marks_
     assert!(!GLOBAL_CANCELLATION_REGISTRY.is_cancelled(&request_id));
 
     GLOBAL_CANCELLATION_REGISTRY.register_token(token)?;
-    assert_eq!(GLOBAL_CANCELLATION_REGISTRY.active_count(), count_before + 1);
+    assert_eq!(
+        GLOBAL_CANCELLATION_REGISTRY.active_count(),
+        count_before + 1
+    );
     assert!(!GLOBAL_CANCELLATION_REGISTRY.is_cancelled(&request_id));
 
-    let snapshot =
-        GLOBAL_CANCELLATION_REGISTRY.get_token(&request_id).ok_or("token should be retrievable")?;
+    let snapshot = GLOBAL_CANCELLATION_REGISTRY
+        .get_token(&request_id)
+        .ok_or("token should be retrievable")?;
     assert!(!snapshot.is_cancelled());
 
     let cancel_context = GLOBAL_CANCELLATION_REGISTRY.cancel_request(&request_id)?;
@@ -45,7 +49,10 @@ fn given_cleanup_guard_when_dropped_then_request_is_removed()
     GLOBAL_CANCELLATION_REGISTRY.remove_request(&request_id);
     let count_before = GLOBAL_CANCELLATION_REGISTRY.active_count();
     GLOBAL_CANCELLATION_REGISTRY.register_token(token)?;
-    assert_eq!(GLOBAL_CANCELLATION_REGISTRY.active_count(), count_before + 1);
+    assert_eq!(
+        GLOBAL_CANCELLATION_REGISTRY.active_count(),
+        count_before + 1
+    );
 
     {
         let _guard = RequestCleanupGuard::new(Some(request_id.clone()));

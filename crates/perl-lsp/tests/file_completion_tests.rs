@@ -37,9 +37,14 @@ fn completes_files_in_src_directory() -> TestResult {
     );
 
     // Should provide proper file type information
-    let completion_file = completions.iter().find(|c| c.label == "src/features/completion.rs");
+    let completion_file = completions
+        .iter()
+        .find(|c| c.label == "src/features/completion.rs");
     if let Some(comp) = completion_file {
-        assert_eq!(comp.detail.as_ref().ok_or("detail field is None")?, "Rust source file");
+        assert_eq!(
+            comp.detail.as_ref().ok_or("detail field is None")?,
+            "Rust source file"
+        );
     }
     Ok(())
 }
@@ -50,11 +55,18 @@ fn completes_files_in_tests_directory() -> TestResult {
     let mut parser = Parser::new(code);
     let ast = parser.parse()?;
     let provider = CompletionProvider::new_with_index(&ast, None);
-    let pos = code.find("file_comp").ok_or("'file_comp' substring not found")? + "file_comp".len();
+    let pos = code
+        .find("file_comp")
+        .ok_or("'file_comp' substring not found")?
+        + "file_comp".len();
     let completions = provider.get_completions(code, pos);
 
     // Should find our comprehensive test file
-    assert!(completions.iter().any(|c| c.label.contains("file_completion")));
+    assert!(
+        completions
+            .iter()
+            .any(|c| c.label.contains("file_completion"))
+    );
     Ok(())
 }
 
@@ -78,8 +90,10 @@ fn basic_security_test_rejects_path_traversal() -> TestResult {
     let mut parser = Parser::new(code);
     let ast = parser.parse()?;
     let provider = CompletionProvider::new_with_index(&ast, None);
-    let pos =
-        code.find("completion").ok_or("'completion' substring not found")? + "completion".len();
+    let pos = code
+        .find("completion")
+        .ok_or("'completion' substring not found")?
+        + "completion".len();
     let completions = provider.get_completions(code, pos);
 
     // Should reject path traversal attempts
@@ -98,7 +112,10 @@ fn security_test_rejects_path_traversal_etc() -> TestResult {
     let pos = code.len() - 1;
     let completions = provider.get_completions(code, pos);
     // Should not provide any completions for path traversal attempts
-    assert!(completions.is_empty(), "Should reject path traversal attempts");
+    assert!(
+        completions.is_empty(),
+        "Should reject path traversal attempts"
+    );
     Ok(())
 }
 
@@ -111,7 +128,10 @@ fn security_test_rejects_null_bytes() -> TestResult {
     let pos = code.len() - 1;
     let completions = provider.get_completions(code, pos);
     // Should not provide completions for paths with null bytes
-    assert!(completions.is_empty(), "Should reject paths with null bytes");
+    assert!(
+        completions.is_empty(),
+        "Should reject paths with null bytes"
+    );
     Ok(())
 }
 
@@ -151,7 +171,10 @@ fn security_test_rejects_control_characters() -> TestResult {
     let pos = code.len() - 1;
     let completions = provider.get_completions(code, pos);
     // Should not provide completions for paths with control characters
-    assert!(completions.is_empty(), "Should reject paths with control characters");
+    assert!(
+        completions.is_empty(),
+        "Should reject paths with control characters"
+    );
     Ok(())
 }
 
@@ -175,12 +198,14 @@ fn security_test_rejects_windows_reserved_names() -> TestResult {
         let completions = provider.get_completions(code, pos);
         // Should not provide completions containing Windows reserved names
         assert!(
-            completions.iter().all(|c| !c.label.to_uppercase().contains("CON")
-                && !c.label.to_uppercase().contains("PRN")
-                && !c.label.to_uppercase().contains("AUX")
-                && !c.label.to_uppercase().contains("NUL")
-                && !c.label.to_uppercase().contains("COM1")
-                && !c.label.to_uppercase().contains("LPT1")),
+            completions
+                .iter()
+                .all(|c| !c.label.to_uppercase().contains("CON")
+                    && !c.label.to_uppercase().contains("PRN")
+                    && !c.label.to_uppercase().contains("AUX")
+                    && !c.label.to_uppercase().contains("NUL")
+                    && !c.label.to_uppercase().contains("COM1")
+                    && !c.label.to_uppercase().contains("LPT1")),
             "Should filter out Windows reserved names for {}",
             code
         );
@@ -242,7 +267,10 @@ fn performance_test_rejects_very_long_paths() -> TestResult {
     let completions = provider.get_completions(&code, pos);
 
     // Should reject overly long paths
-    assert!(completions.is_empty(), "Should reject paths longer than 1024 characters");
+    assert!(
+        completions.is_empty(),
+        "Should reject paths longer than 1024 characters"
+    );
     Ok(())
 }
 
@@ -304,7 +332,10 @@ fn file_type_recognition_works() -> TestResult {
 
     // Look for Cargo.toml in completions and verify it has a proper file type description
     if let Some(cargo_toml) = completions.iter().find(|c| c.label == "Cargo.toml") {
-        assert!(cargo_toml.detail.is_some(), "Cargo.toml should have detail information");
+        assert!(
+            cargo_toml.detail.is_some(),
+            "Cargo.toml should have detail information"
+        );
         let detail = cargo_toml.detail.as_ref().ok_or("detail field is None")?;
         assert!(
             detail.contains("TOML") || detail.contains("file"),
@@ -325,7 +356,10 @@ fn file_type_recognition_rust_files() -> TestResult {
     let completions = provider.get_completions(code, pos);
 
     // Look for .rs files and verify they have proper file type description
-    let rust_files: Vec<_> = completions.iter().filter(|c| c.label.ends_with(".rs")).collect();
+    let rust_files: Vec<_> = completions
+        .iter()
+        .filter(|c| c.label.ends_with(".rs"))
+        .collect();
     for rust_file in rust_files {
         if let Some(detail) = &rust_file.detail {
             assert!(
@@ -348,7 +382,10 @@ fn no_completions_in_comments() -> TestResult {
     let completions = provider.get_completions(code, pos);
 
     // Should not provide file completions inside comments
-    assert!(completions.is_empty(), "Should not provide completions inside comments");
+    assert!(
+        completions.is_empty(),
+        "Should not provide completions inside comments"
+    );
     Ok(())
 }
 
@@ -362,8 +399,10 @@ fn no_completions_without_slash() -> TestResult {
     let completions = provider.get_completions(code, pos);
 
     // Should not provide file completions for strings without slash (path separator)
-    let file_completions: Vec<_> =
-        completions.iter().filter(|c| c.kind == CompletionItemKind::File).collect();
+    let file_completions: Vec<_> = completions
+        .iter()
+        .filter(|c| c.kind == CompletionItemKind::File)
+        .collect();
     assert!(
         file_completions.is_empty(),
         "Should not provide file completions without path separator"

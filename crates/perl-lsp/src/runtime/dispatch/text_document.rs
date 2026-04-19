@@ -188,7 +188,8 @@ impl LspServer {
             }
         } else {
             // Production: try real handler first, fall back if needed
-            self.handle_references(params).or_else(|_| self.on_references(json!({})).map(Some))
+            self.handle_references(params)
+                .or_else(|_| self.on_references(json!({})).map(Some))
         }
     }
 

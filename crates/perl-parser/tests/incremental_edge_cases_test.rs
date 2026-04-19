@@ -41,7 +41,11 @@ fn test_deeply_nested_structures() -> TestResult {
     let initial_time = start.elapsed();
     let initial_nodes = parser.reparsed_nodes;
 
-    println!("  Initial parse: {}ms, {} nodes", initial_time.as_millis(), initial_nodes);
+    println!(
+        "  Initial parse: {}ms, {} nodes",
+        initial_time.as_millis(),
+        initial_nodes
+    );
 
     // Edit deep inside the structure
     let (new_source, edit) = IncrementalTestUtils::create_value_edit(&nested_source, "42", "999");
@@ -64,7 +68,10 @@ fn test_deeply_nested_structures() -> TestResult {
     );
 
     // Deep nesting should still be handled reasonably
-    assert!(incremental_time.as_millis() < 100, "Deep nesting should parse in <100ms");
+    assert!(
+        incremental_time.as_millis() < 100,
+        "Deep nesting should parse in <100ms"
+    );
     assert!(result.success, "Deep nesting parse should succeed");
 
     // Some reuse should be achieved even in complex structures
@@ -86,14 +93,30 @@ fn test_complex_string_handling() -> TestResult {
 
     let complex_strings = [
         (r#"my $single = 'hello world';"#, "hello world", "modified"),
-        (r#"my $double = "hello \"quoted\" world";"#, "hello \\\"quoted\\\" world", "new content"),
-        (r#"my $backtick = `echo hello`;"#, "echo hello", "echo modified"),
+        (
+            r#"my $double = "hello \"quoted\" world";"#,
+            "hello \\\"quoted\\\" world",
+            "new content",
+        ),
+        (
+            r#"my $backtick = `echo hello`;"#,
+            "echo hello",
+            "echo modified",
+        ),
         (r#"my $heredoc = <<'EOF';\nhello\nEOF"#, "hello", "modified"),
-        (r#"my $interpolated = "Value: $var";"#, "Value: $var", "New: $other"),
+        (
+            r#"my $interpolated = "Value: $var";"#,
+            "Value: $var",
+            "New: $other",
+        ),
     ];
 
     for (i, (source, old_val, new_val)) in complex_strings.iter().enumerate() {
-        println!("  Test case {}: {}", i + 1, source.get(..30).unwrap_or(source));
+        println!(
+            "  Test case {}: {}",
+            i + 1,
+            source.get(..30).unwrap_or(source)
+        );
 
         let mut parser = IncrementalParserV2::new();
         parser.parse(source)?;
@@ -122,7 +145,10 @@ fn test_complex_string_handling() -> TestResult {
                     result.success
                 );
 
-                assert!(parse_time.as_millis() < 10, "Complex string parsing should be <10ms");
+                assert!(
+                    parse_time.as_millis() < 10,
+                    "Complex string parsing should be <10ms"
+                );
                 assert!(result.success, "Complex string parsing should succeed");
             }
             Err(_) => {
@@ -169,8 +195,14 @@ fn test_whitespace_sensitivity() -> TestResult {
             result.efficiency_percentage()
         );
 
-        assert!(parse_time.as_micros() < 5000, "Whitespace handling should be <5ms");
-        assert!(result.success, "Whitespace variations should parse successfully");
+        assert!(
+            parse_time.as_micros() < 5000,
+            "Whitespace handling should be <5ms"
+        );
+        assert!(
+            result.success,
+            "Whitespace variations should parse successfully"
+        );
 
         // Whitespace changes should generally achieve good reuse
         if result.nodes_reused > 0 {
@@ -208,7 +240,11 @@ fn test_syntax_error_recovery() {
         let initial_result = parser.parse(source);
         println!(
             "    Initial parse: {}",
-            if initial_result.is_ok() { "OK" } else { "Failed (expected)" }
+            if initial_result.is_ok() {
+                "OK"
+            } else {
+                "Failed (expected)"
+            }
         );
 
         // Try the incremental edit anyway
@@ -236,7 +272,10 @@ fn test_syntax_error_recovery() {
                 );
 
                 // Error recovery should complete quickly even if it fails
-                assert!(parse_time.as_millis() < 20, "Error recovery should complete in <20ms");
+                assert!(
+                    parse_time.as_millis() < 20,
+                    "Error recovery should complete in <20ms"
+                );
 
                 // It's OK if error recovery doesn't succeed - the important thing is it doesn't crash
                 println!("    Error recovery handled gracefully");
@@ -270,7 +309,11 @@ fn test_very_large_statements() -> TestResult {
     let initial_time = start.elapsed();
     let initial_nodes = parser.reparsed_nodes;
 
-    println!("  Large array parse: {}ms, {} nodes", initial_time.as_millis(), initial_nodes);
+    println!(
+        "  Large array parse: {}ms, {} nodes",
+        initial_time.as_millis(),
+        initial_nodes
+    );
 
     // Edit one element in the middle
     let (new_source, edit) = IncrementalTestUtils::create_value_edit(&large_array, "500", "777");
@@ -292,7 +335,10 @@ fn test_very_large_statements() -> TestResult {
         result.efficiency_percentage()
     );
 
-    assert!(incremental_time.as_millis() < 100, "Large array incremental should be <100ms");
+    assert!(
+        incremental_time.as_millis() < 100,
+        "Large array incremental should be <100ms"
+    );
     assert!(result.success, "Large array incremental should succeed");
 
     // Large statements should show some efficiency improvement
@@ -388,7 +434,10 @@ fn test_extreme_position_shifts() -> TestResult {
         result.efficiency_percentage()
     );
 
-    assert!(parse_time.as_millis() < 50, "Position shift handling should be <50ms");
+    assert!(
+        parse_time.as_millis() < 50,
+        "Position shift handling should be <50ms"
+    );
     assert!(result.success, "Position shift handling should succeed");
 
     // Position shifts are challenging but some reuse should still be possible
@@ -421,7 +470,14 @@ fn test_circular_reference_patterns() {
 
         // Parse initial - might have issues with circular refs, that's OK
         let initial_result = parser.parse(source);
-        println!("    Initial parse: {}", if initial_result.is_ok() { "OK" } else { "Failed" });
+        println!(
+            "    Initial parse: {}",
+            if initial_result.is_ok() {
+                "OK"
+            } else {
+                "Failed"
+            }
+        );
 
         if initial_result.is_ok() {
             let (new_source, edit) =
@@ -484,7 +540,10 @@ fn test_memory_pressure_scenarios() -> TestResult {
         println!("  Parser {}: initial parse {}ms", i, parse_time.as_millis());
 
         // Each parser should complete in reasonable time even under memory pressure
-        assert!(parse_time.as_millis() < 200, "Parse under memory pressure should be <200ms");
+        assert!(
+            parse_time.as_millis() < 200,
+            "Parse under memory pressure should be <200ms"
+        );
     }
 
     // Now test incremental updates on all parsers
@@ -505,8 +564,14 @@ fn test_memory_pressure_scenarios() -> TestResult {
             result.nodes_reparsed
         );
 
-        assert!(parse_time.as_millis() < 100, "Incremental under memory pressure should be <100ms");
-        assert!(result.success, "Incremental under memory pressure should succeed");
+        assert!(
+            parse_time.as_millis() < 100,
+            "Incremental under memory pressure should be <100ms"
+        );
+        assert!(
+            result.success,
+            "Incremental under memory pressure should succeed"
+        );
     }
 
     println!("  Memory pressure test completed successfully");
@@ -543,7 +608,12 @@ fn test_rapid_fire_edits() -> TestResult {
         let parse_time = start.elapsed();
 
         cumulative_time += parse_time.as_micros();
-        all_results.push((i, parse_time.as_micros(), result.nodes_reused, result.nodes_reparsed));
+        all_results.push((
+            i,
+            parse_time.as_micros(),
+            result.nodes_reused,
+            result.nodes_reparsed,
+        ));
 
         if i % 10 == 0 || i < 5 {
             println!(
@@ -556,24 +626,47 @@ fn test_rapid_fire_edits() -> TestResult {
         }
 
         // Each rapid edit should be very fast
-        assert!(parse_time.as_millis() < 10, "Rapid edit {} should be <10ms", i);
+        assert!(
+            parse_time.as_millis() < 10,
+            "Rapid edit {} should be <10ms",
+            i
+        );
         assert!(result.success, "Rapid edit {} should succeed", i);
     }
 
     let avg_time = cumulative_time / all_results.len() as u128;
-    println!("  Total rapid edits: {}µs, average per edit: {}µs", cumulative_time, avg_time);
+    println!(
+        "  Total rapid edits: {}µs, average per edit: {}µs",
+        cumulative_time, avg_time
+    );
 
     // Rapid edits should maintain good average performance
     assert!(avg_time < 2000, "Average rapid edit time should be <2ms");
 
     // Check for performance stability (no major degradation over time)
-    let early_avg = all_results.iter().take(10).map(|(_, t, _, _)| *t).sum::<u128>() / 10;
-    let late_avg = all_results.iter().skip(40).map(|(_, t, _, _)| *t).sum::<u128>() / 10;
+    let early_avg = all_results
+        .iter()
+        .take(10)
+        .map(|(_, t, _, _)| *t)
+        .sum::<u128>()
+        / 10;
+    let late_avg = all_results
+        .iter()
+        .skip(40)
+        .map(|(_, t, _, _)| *t)
+        .sum::<u128>()
+        / 10;
 
-    println!("  Performance stability: early avg={}µs, late avg={}µs", early_avg, late_avg);
+    println!(
+        "  Performance stability: early avg={}µs, late avg={}µs",
+        early_avg, late_avg
+    );
 
     // Performance should not degrade significantly over rapid edits
-    assert!(late_avg < early_avg * 3, "Rapid edit performance should remain stable");
+    assert!(
+        late_avg < early_avg * 3,
+        "Rapid edit performance should remain stable"
+    );
 
     println!("  ✅ Rapid fire edit test completed successfully");
     Ok(())
@@ -594,11 +687,19 @@ fn test_unicode_edge_cases() {
         // Emoji with skin tone modifiers
         ("my $emoji = '👨‍💻';", "👨‍💻", "👩‍💻"),
         // Various Unicode spaces
-        ("my $spaces = 'normal\u{2000}thin\u{2009}hair\u{200A}space';", "normal", "changed"),
+        (
+            "my $spaces = 'normal\u{2000}thin\u{2009}hair\u{200A}space';",
+            "normal",
+            "changed",
+        ),
     ];
 
     for (i, (source, old_val, new_val)) in unicode_edge_cases.iter().enumerate() {
-        println!("  Unicode edge case {}: chars={}", i + 1, source.chars().count());
+        println!(
+            "  Unicode edge case {}: chars={}",
+            i + 1,
+            source.chars().count()
+        );
 
         let mut parser = IncrementalParserV2::new();
 
@@ -632,7 +733,10 @@ fn test_unicode_edge_cases() {
                 );
 
                 // Unicode edge cases should not cause crashes or excessive delays
-                assert!(parse_time.as_millis() < 50, "Unicode edge case should be <50ms");
+                assert!(
+                    parse_time.as_millis() < 50,
+                    "Unicode edge case should be <50ms"
+                );
 
                 if result.success {
                     println!("    ✅ Unicode edge case handled successfully");

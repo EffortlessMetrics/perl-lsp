@@ -238,7 +238,11 @@ impl IncrementalTestUtils {
             ));
         }
 
-        ValidationReport { passed: violations.is_empty(), violations, warnings }
+        ValidationReport {
+            passed: violations.is_empty(),
+            violations,
+            warnings,
+        }
     }
 
     /// Generate detailed performance report
@@ -248,21 +252,33 @@ impl IncrementalTestUtils {
         println!("═════════════════════════════════════════════");
         println!("📈 Timing Statistics:");
         println!("  Average Incremental: {}µs", result.avg_incremental_micros);
-        println!("  Median Incremental:  {}µs", result.median_incremental_micros);
+        println!(
+            "  Median Incremental:  {}µs",
+            result.median_incremental_micros
+        );
         println!(
             "  Range: {}µs - {}µs",
             result.min_incremental_micros, result.max_incremental_micros
         );
         println!("  Standard Deviation: {}µs", result.std_deviation_micros);
-        println!("  Coefficient of Variation: {:.3}", result.coefficient_of_variation);
+        println!(
+            "  Coefficient of Variation: {:.3}",
+            result.coefficient_of_variation
+        );
 
         println!("\n⚡ Performance Metrics:");
         println!("  Speedup Ratio: {:.2}x faster", result.speedup_ratio);
-        println!("  Sub-millisecond Rate: {:.1}%", result.sub_millisecond_rate * 100.0);
+        println!(
+            "  Sub-millisecond Rate: {:.1}%",
+            result.sub_millisecond_rate * 100.0
+        );
         println!("  Success Rate: {:.1}%", result.success_rate * 100.0);
 
         println!("\n🔄 Node Reuse Statistics:");
-        println!("  Average Efficiency: {:.1}%", result.avg_efficiency_percentage);
+        println!(
+            "  Average Efficiency: {:.1}%",
+            result.avg_efficiency_percentage
+        );
 
         let category = match result.avg_incremental_micros {
             0..=100 => "🟢 Excellent (<100µs)",
@@ -405,7 +421,11 @@ macro_rules! perf_test {
         let validation = IncrementalTestUtils::validate_performance_criteria(&result, &criteria);
         validation.print_report();
 
-        assert!(validation.passed, "Performance test '{}' failed validation", $name);
+        assert!(
+            validation.passed,
+            "Performance test '{}' failed validation",
+            $name
+        );
         result
     }};
 }
@@ -433,7 +453,11 @@ macro_rules! perf_test_relaxed {
         let validation = IncrementalTestUtils::validate_performance_criteria(&result, &criteria);
         validation.print_report();
 
-        assert!(validation.passed, "Performance test '{}' failed validation", $name);
+        assert!(
+            validation.passed,
+            "Performance test '{}' failed validation",
+            $name
+        );
         result
     }};
 }

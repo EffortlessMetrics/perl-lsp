@@ -8,10 +8,16 @@ mod declaration_edge_cases_tests {
         code: &str,
     ) -> Result<DeclarationProvider<'_>, Box<dyn std::error::Error>> {
         let mut parser = Parser::new(code);
-        let ast = parser.parse().map_err(|e| format!("Failed to parse: {:?}", e))?;
+        let ast = parser
+            .parse()
+            .map_err(|e| format!("Failed to parse: {:?}", e))?;
         let ast_arc = Arc::new(ast);
 
-        Ok(DeclarationProvider::new(ast_arc, code.to_string(), "file:///test.pl".to_string()))
+        Ok(DeclarationProvider::new(
+            ast_arc,
+            code.to_string(),
+            "file:///test.pl".to_string(),
+        ))
     }
 
     #[cfg(feature = "constant-advanced")]
@@ -22,12 +28,18 @@ mod declaration_edge_cases_tests {
 
         // Should find FOO despite -strict option
         let decls = provider.find_declaration(43, 0).unwrap_or_default(); // Position at FOO usage
-        assert!(!decls.is_empty(), "Should find FOO constant despite -strict option");
+        assert!(
+            !decls.is_empty(),
+            "Should find FOO constant despite -strict option"
+        );
 
         // Verify the declaration points to the right place
         if let Some(decl) = decls.first() {
             let text = &code[decl.target_range.0..decl.target_range.1];
-            assert!(text.contains("FOO"), "Declaration should point to FOO constant");
+            assert!(
+                text.contains("FOO"),
+                "Declaration should point to FOO constant"
+            );
         }
 
         Ok(())
@@ -59,7 +71,10 @@ my $x = FOO;
         let provider = parse_and_get_provider(code)?;
 
         // Should find FOO with pipe delimiters
-        let pos = code.find("my $x = FOO").ok_or("Could not find 'my $x = FOO' in code")? + 8;
+        let pos = code
+            .find("my $x = FOO")
+            .ok_or("Could not find 'my $x = FOO' in code")?
+            + 8;
         let decls = provider.find_declaration(pos, 0).unwrap_or_default();
         assert!(!decls.is_empty(), "Should find FOO with pipe delimiters");
 
@@ -77,9 +92,15 @@ my $x = FOO;
         let provider = parse_and_get_provider(code)?;
 
         // Should still find FOO despite qwerty in comment
-        let pos = code.find("my $x = FOO").ok_or("Could not find 'my $x = FOO' in code")? + 8;
+        let pos = code
+            .find("my $x = FOO")
+            .ok_or("Could not find 'my $x = FOO' in code")?
+            + 8;
         let decls = provider.find_declaration(pos, 0).unwrap_or_default();
-        assert!(!decls.is_empty(), "Should find FOO despite qwerty in comment");
+        assert!(
+            !decls.is_empty(),
+            "Should find FOO despite qwerty in comment"
+        );
 
         Ok(())
     }
@@ -94,7 +115,10 @@ my $x = BAR;
         let provider = parse_and_get_provider(code)?;
 
         // Should find BAR from the second qw
-        let pos = code.find("my $x = BAR").ok_or("Could not find 'my $x = BAR' in code")? + 8;
+        let pos = code
+            .find("my $x = BAR")
+            .ok_or("Could not find 'my $x = BAR' in code")?
+            + 8;
         let decls = provider.find_declaration(pos, 0).unwrap_or_default();
         // This is a complex case that may not be fully supported yet
         // Just verify we don't crash
@@ -113,9 +137,15 @@ my $x = FOO;
         let provider = parse_and_get_provider(code)?;
 
         // Should find FOO despite unary + before hash
-        let pos = code.find("my $x = FOO").ok_or("Could not find 'my $x = FOO' in code")? + 8;
+        let pos = code
+            .find("my $x = FOO")
+            .ok_or("Could not find 'my $x = FOO' in code")?
+            + 8;
         let decls = provider.find_declaration(pos, 0).unwrap_or_default();
-        assert!(!decls.is_empty(), "Should find FOO with unary + before hash");
+        assert!(
+            !decls.is_empty(),
+            "Should find FOO with unary + before hash"
+        );
 
         Ok(())
     }
@@ -136,7 +166,10 @@ my $x = BAR;
         let provider = parse_and_get_provider(code)?;
 
         // Should find BAR from the second hash block
-        let pos = code.find("my $x = BAR").ok_or("Could not find 'my $x = BAR' in code")? + 8;
+        let pos = code
+            .find("my $x = BAR")
+            .ok_or("Could not find 'my $x = BAR' in code")?
+            + 8;
         let decls = provider.find_declaration(pos, 0).unwrap_or_default();
         // Verify we scan all {...} blocks
         // Should scan all hash blocks (or gracefully handle)
@@ -151,7 +184,10 @@ my $x = BAR;
         let provider = parse_and_get_provider(code)?;
 
         // Should handle mixed line endings
-        let pos = code.find("my $x = BAR").ok_or("Could not find 'my $x = BAR' in code")? + 8;
+        let pos = code
+            .find("my $x = BAR")
+            .ok_or("Could not find 'my $x = BAR' in code")?
+            + 8;
         let decls = provider.find_declaration(pos, 0).unwrap_or_default();
         assert!(!decls.is_empty(), "Should find BAR with mixed line endings");
 
@@ -179,7 +215,10 @@ my $x = BAR;
         let provider = parse_and_get_provider(code)?;
 
         // This form may not be fully supported, but shouldn't crash
-        let pos = code.find("my $x = FOO").ok_or("Could not find 'my $x = FOO' in code")? + 8;
+        let pos = code
+            .find("my $x = FOO")
+            .ok_or("Could not find 'my $x = FOO' in code")?
+            + 8;
         let decls = provider.find_declaration(pos, 0).unwrap_or_default();
         let _ = decls; // Just verify no panic
 
@@ -211,7 +250,10 @@ my $x = BAR;
         let provider = parse_and_get_provider(code)?;
 
         // Should find BAR despite nested braces
-        let pos = code.find("my $x = BAR").ok_or("Could not find 'my $x = BAR' in code")? + 8;
+        let pos = code
+            .find("my $x = BAR")
+            .ok_or("Could not find 'my $x = BAR' in code")?
+            + 8;
         let decls = provider.find_declaration(pos, 0).unwrap_or_default();
         // Complex nested structure may be challenging
         let _ = decls;
@@ -233,7 +275,10 @@ my $x = BAR;
         let provider = parse_and_get_provider(code)?;
 
         // Should find BAR in multi-line qw
-        let pos = code.find("my $x = BAR").ok_or("Could not find 'my $x = BAR' in code")? + 8;
+        let pos = code
+            .find("my $x = BAR")
+            .ok_or("Could not find 'my $x = BAR' in code")?
+            + 8;
         let decls = provider.find_declaration(pos, 0).unwrap_or_default();
         assert!(!decls.is_empty(), "Should find BAR in multi-line qw");
 
@@ -250,7 +295,10 @@ my $x = FOO;
         let provider = parse_and_get_provider(code)?;
 
         // Should find both FOO definitions
-        let pos = code.find("my $x = FOO").ok_or("Could not find 'my $x = FOO' in code")? + 8;
+        let pos = code
+            .find("my $x = FOO")
+            .ok_or("Could not find 'my $x = FOO' in code")?
+            + 8;
         let decls = provider.find_declaration(pos, 0).unwrap_or_default();
         // May find one or both - just verify no crash
         let _ = decls;
@@ -269,7 +317,10 @@ my $x = Foo::BAR;
         let provider = parse_and_get_provider(code)?;
 
         // Should handle package-qualified constants
-        let pos = code.find("Foo::BAR").ok_or("Could not find 'Foo::BAR' in code")? + 5;
+        let pos = code
+            .find("Foo::BAR")
+            .ok_or("Could not find 'Foo::BAR' in code")?
+            + 5;
         let decls = provider.find_declaration(pos, 0).unwrap_or_default();
         // Package-qualified lookups are complex
         let _ = decls;

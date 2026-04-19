@@ -53,7 +53,11 @@ impl MockLspState {
 
     /// Check if a request has been cancelled - targets boolean logic mutations
     fn is_cancelled(&self, id: &Value) -> bool {
-        if let Ok(set) = self.cancelled.lock() { set.contains(id) } else { false }
+        if let Ok(set) = self.cancelled.lock() {
+            set.contains(id)
+        } else {
+            false
+        }
     }
 
     /// Record request processing completion
@@ -138,19 +142,31 @@ mod cancellation_boolean_logic_tests {
         let request_id = json!(12345);
 
         // Initially not cancelled - test !is_cancelled() logic
-        assert!(!state.is_cancelled(&request_id), "Should not be cancelled initially");
+        assert!(
+            !state.is_cancelled(&request_id),
+            "Should not be cancelled initially"
+        );
 
         // Mark as cancelled
         state.mark_cancelled(&request_id);
-        assert!(state.is_cancelled(&request_id), "Should be cancelled after marking");
+        assert!(
+            state.is_cancelled(&request_id),
+            "Should be cancelled after marking"
+        );
 
         // Clear cancellation
         state.cancel_clear(&request_id);
-        assert!(!state.is_cancelled(&request_id), "Should not be cancelled after clearing");
+        assert!(
+            !state.is_cancelled(&request_id),
+            "Should not be cancelled after clearing"
+        );
 
         // Test edge case: multiple clears don't change state
         state.cancel_clear(&request_id);
-        assert!(!state.is_cancelled(&request_id), "Multiple clears should be safe");
+        assert!(
+            !state.is_cancelled(&request_id),
+            "Multiple clears should be safe"
+        );
 
         Ok(())
     }
@@ -185,14 +201,20 @@ mod cancellation_boolean_logic_tests {
 
         // Wait for all threads to complete
         for handle in handles {
-            handle.join().map_err(|_| "Thread should complete successfully")?;
+            handle
+                .join()
+                .map_err(|_| "Thread should complete successfully")?;
         }
 
         // Verify final state consistency
         for id in &request_ids {
             let final_state = state.is_cancelled(id);
             // After clearing, all should be not cancelled
-            assert!(!final_state, "Final state should be not cancelled for {:?}", id);
+            assert!(
+                !final_state,
+                "Final state should be not cancelled for {:?}",
+                id
+            );
         }
 
         Ok(())
@@ -204,7 +226,10 @@ mod cancellation_boolean_logic_tests {
         let state = MockLspState::new();
 
         // Test with empty set
-        assert!(!state.is_cancelled(&json!(1)), "Empty set should return false for any ID");
+        assert!(
+            !state.is_cancelled(&json!(1)),
+            "Empty set should return false for any ID"
+        );
 
         // Fill set with many entries to test performance boundaries
         let many_ids: Vec<Value> = (1..=1000).map(|i| json!(i)).collect();
@@ -215,7 +240,11 @@ mod cancellation_boolean_logic_tests {
         // Test lookup performance with large set
         let start = Instant::now();
         for id in &many_ids {
-            assert!(state.is_cancelled(id), "Should find ID {:?} in large set", id);
+            assert!(
+                state.is_cancelled(id),
+                "Should find ID {:?} in large set",
+                id
+            );
         }
         let duration = start.elapsed();
         assert!(
@@ -282,7 +311,9 @@ mod workspace_cancellation_tests {
         state.mark_cancelled(&request_id);
 
         // Wait for indexing to complete or be cancelled
-        let result = indexing_handle.join().map_err(|_| "Indexing thread should complete")?;
+        let result = indexing_handle
+            .join()
+            .map_err(|_| "Indexing thread should complete")?;
 
         // Verify cancellation was detected
         match result {
@@ -356,16 +387,27 @@ mod workspace_cancellation_tests {
             let result = handle.join().map_err(|_| "Thread should complete")?;
             if result.contains("Cancelled") {
                 cancelled_count += 1;
-                assert!(is_odd, "Only odd-numbered requests should be cancelled: {:?}", id);
+                assert!(
+                    is_odd,
+                    "Only odd-numbered requests should be cancelled: {:?}",
+                    id
+                );
             } else if result == "Completed" {
                 completed_count += 1;
             }
         }
 
         // Verify selective cancellation worked
-        assert!(cancelled_count > 0, "Some requests should have been cancelled");
+        assert!(
+            cancelled_count > 0,
+            "Some requests should have been cancelled"
+        );
         assert!(completed_count > 0, "Some requests should have completed");
-        assert_eq!(state.operation_count(), 0, "All operations should be finished");
+        assert_eq!(
+            state.operation_count(),
+            0,
+            "All operations should be finished"
+        );
 
         Ok(())
     }
@@ -426,7 +468,9 @@ mod cancellation_timeout_tests {
         thread::sleep(timeout_duration);
         state.mark_cancelled(&request_id);
 
-        let result = operation_handle.join().map_err(|_| "Operation should complete")?;
+        let result = operation_handle
+            .join()
+            .map_err(|_| "Operation should complete")?;
 
         // Verify proper cancellation behavior
         match result {
@@ -447,7 +491,11 @@ mod cancellation_timeout_tests {
             }
         }
 
-        assert_eq!(state.operation_count(), 0, "Operation count should be reset");
+        assert_eq!(
+            state.operation_count(),
+            0,
+            "Operation count should be reset"
+        );
 
         Ok(())
     }
@@ -479,13 +527,17 @@ mod cancellation_timeout_tests {
 
             // Test error code boundaries
             assert_eq!(
-                response["error"]["code"].as_i64().ok_or("Missing error code")?,
+                response["error"]["code"]
+                    .as_i64()
+                    .ok_or("Missing error code")?,
                 -32800,
                 "Error code mutation detected for {}",
                 test_name
             );
             assert_eq!(
-                response["error"]["message"].as_str().ok_or("Missing error message")?,
+                response["error"]["message"]
+                    .as_str()
+                    .ok_or("Missing error message")?,
                 "Request cancelled",
                 "Error message mutation detected for {}",
                 test_name
@@ -535,7 +587,9 @@ mod cancellation_timeout_tests {
 
         // Wait for all contention threads to complete
         for handle in handles {
-            handle.join().map_err(|_| "Contention thread should complete")?;
+            handle
+                .join()
+                .map_err(|_| "Contention thread should complete")?;
         }
 
         // Verify cancellation state survived the contention
@@ -546,7 +600,10 @@ mod cancellation_timeout_tests {
 
         // Clear and verify
         state.cancel_clear(&request_id);
-        assert!(!state.is_cancelled(&request_id), "Clear should work after high contention");
+        assert!(
+            !state.is_cancelled(&request_id),
+            "Clear should work after high contention"
+        );
 
         Ok(())
     }
@@ -718,17 +775,28 @@ mod cancellation_integration_tests {
         thread::sleep(Duration::from_millis(25));
         state.mark_cancelled(&request_id);
 
-        let result = operation_handle.join().map_err(|_| "Operation should complete")?;
+        let result = operation_handle
+            .join()
+            .map_err(|_| "Operation should complete")?;
 
         // Verify appropriate cancellation behavior
         if result.contains("Cancelled") {
             // Successfully cancelled mid-workflow
-            assert!(result.contains("step"), "Should specify which step was cancelled");
-            assert_eq!(state.operation_count(), 0, "Operation count should be reset");
+            assert!(
+                result.contains("step"),
+                "Should specify which step was cancelled"
+            );
+            assert_eq!(
+                state.operation_count(),
+                0,
+                "Operation count should be reset"
+            );
         } else if result == "Completed all steps" {
             // Workflow completed before cancellation took effect
-            let processed =
-                state.requests_processed.lock().map_err(|_| "Failed to acquire lock")?;
+            let processed = state
+                .requests_processed
+                .lock()
+                .map_err(|_| "Failed to acquire lock")?;
             assert!(processed.contains(&request_id), "Should record completion");
         }
 

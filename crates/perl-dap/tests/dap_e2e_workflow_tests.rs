@@ -63,7 +63,10 @@ fn test_e2e_single_breakpoint_hit_inspect_continue() -> TestResult {
     let script = workspace.path().join("workflow_e2e.pl");
     write(&script, workflow_script_content())?;
 
-    let script_str = script.to_str().ok_or("script path is not valid UTF-8")?.to_string();
+    let script_str = script
+        .to_str()
+        .ok_or("script path is not valid UTF-8")?
+        .to_string();
 
     let timeout = workflow_timeout();
     let mut session = DapWorkflowSession::new(timeout)?;
@@ -117,7 +120,10 @@ fn test_e2e_single_breakpoint_hit_inspect_continue() -> TestResult {
     // All variable entries must have a non-empty name.
     for var in &variables {
         let name = var.get("name").and_then(|v| v.as_str()).unwrap_or("");
-        assert!(!name.is_empty(), "variable entry must have a non-empty `name` field: {var:?}");
+        assert!(
+            !name.is_empty(),
+            "variable entry must have a non-empty `name` field: {var:?}"
+        );
     }
 
     // Continue to script exit.
@@ -148,7 +154,10 @@ fn test_e2e_multi_breakpoint_sequence() -> TestResult {
     let script = workspace.path().join("workflow_multi.pl");
     write(&script, workflow_script_content())?;
 
-    let script_str = script.to_str().ok_or("script path is not valid UTF-8")?.to_string();
+    let script_str = script
+        .to_str()
+        .ok_or("script path is not valid UTF-8")?
+        .to_string();
 
     let timeout = workflow_timeout();
     let mut session = DapWorkflowSession::new(timeout)?;
@@ -224,7 +233,10 @@ fn test_e2e_step_over_changes_execution() -> TestResult {
     let script = workspace.path().join("workflow_step.pl");
     write(&script, workflow_script_content())?;
 
-    let script_str = script.to_str().ok_or("script path is not valid UTF-8")?.to_string();
+    let script_str = script
+        .to_str()
+        .ok_or("script path is not valid UTF-8")?
+        .to_string();
 
     let timeout = workflow_timeout();
     let mut session = DapWorkflowSession::new(timeout)?;
@@ -290,10 +302,16 @@ fn test_e2e_attach_workflow_stopped_event() -> TestResult {
     let workspace = tempdir()?;
     let script = workspace.path().join("dummy.pl");
     write(&script, workflow_script_content())?;
-    let script_str = script.to_str().ok_or("script path is not valid UTF-8")?.to_string();
+    let script_str = script
+        .to_str()
+        .ok_or("script path is not valid UTF-8")?
+        .to_string();
 
     let bp_response = session.set_breakpoints(&script_str, &[BP_LINE_2])?;
-    assert!(bp_response.is_some(), "setBreakpoints should succeed after attach");
+    assert!(
+        bp_response.is_some(),
+        "setBreakpoints should succeed after attach"
+    );
 
     session.disconnect()?;
 
@@ -356,7 +374,10 @@ fn test_e2e_step_into_subroutine() -> TestResult {
     let script = workspace.path().join("workflow_stepinto.pl");
     write(&script, workflow_script_content())?;
 
-    let script_str = script.to_str().ok_or("script path is not valid UTF-8")?.to_string();
+    let script_str = script
+        .to_str()
+        .ok_or("script path is not valid UTF-8")?
+        .to_string();
 
     let timeout = workflow_timeout();
     let mut session = DapWorkflowSession::new(timeout)?;
@@ -407,7 +428,10 @@ fn test_e2e_globals_scope_inspection() -> TestResult {
     let content = "use strict;\nuse warnings;\n\nour $global_var = 999;\nmy $x = 10;\nmy $y = $x + 5;\nprint \"$y\\n\";\n";
     write(&script, content)?;
 
-    let script_str = script.to_str().ok_or("script path is not valid UTF-8")?.to_string();
+    let script_str = script
+        .to_str()
+        .ok_or("script path is not valid UTF-8")?
+        .to_string();
 
     let timeout = workflow_timeout();
     let mut session = DapWorkflowSession::new(timeout)?;
@@ -426,16 +450,25 @@ fn test_e2e_globals_scope_inspection() -> TestResult {
 
     // Retrieve globals scope reference
     let globals_ref = session.scopes_globals_ref(frame_id)?;
-    assert!(globals_ref > 0, "globals scope variablesReference must be positive");
+    assert!(
+        globals_ref > 0,
+        "globals scope variablesReference must be positive"
+    );
 
     // Retrieve global variables
     let globals = session.variables(globals_ref)?;
-    assert!(!globals.is_empty(), "globals scope must contain at least one variable");
+    assert!(
+        !globals.is_empty(),
+        "globals scope must contain at least one variable"
+    );
 
     // Verify variable entries have non-empty names
     for var in &globals {
         let name = var.get("name").and_then(|v| v.as_str()).unwrap_or("");
-        assert!(!name.is_empty(), "global variable entry must have non-empty name: {var:?}");
+        assert!(
+            !name.is_empty(),
+            "global variable entry must have non-empty name: {var:?}"
+        );
     }
 
     session.disconnect()?;

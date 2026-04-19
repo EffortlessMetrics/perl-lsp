@@ -54,7 +54,9 @@ impl PositionTracker {
 
     /// Convert byte offset to position with UTF-16 support
     fn byte_to_position(&self, byte_offset: usize) -> Position {
-        let (line, character) = self.line_cache.offset_to_position(&self.source, byte_offset);
+        let (line, character) = self
+            .line_cache
+            .offset_to_position(&self.source, byte_offset);
         // LineStartsCache returns 0-based line numbers, but Position expects 1-based
         Position::new(byte_offset, line + 1, character + 1)
     }
@@ -233,7 +235,10 @@ impl ParserContext {
                 Ok(&self.tokens[self.current - 1])
             }
             Some(token) => Err(ParseError::new(
-                format!("Expected {:?}, found {:?}", expected, token.token.token_type),
+                format!(
+                    "Expected {:?}, found {:?}",
+                    expected, token.token.token_type
+                ),
                 token.range(),
             )
             .with_expected(vec![format!("{:?}", expected)])
@@ -249,7 +254,9 @@ impl ParserContext {
 
     /// Check if current token matches
     pub fn check(&self, token_type: &TokenType) -> bool {
-        self.current_token().map(|t| &t.token.token_type == token_type).unwrap_or(false)
+        self.current_token()
+            .map(|t| &t.token.token_type == token_type)
+            .unwrap_or(false)
     }
 
     /// Consume token if it matches
@@ -322,13 +329,21 @@ mod tests {
         let first_offset = must_some(source.find("my"));
         let second_offset = must_some(source.rfind("my"));
 
-        let first = must_some(ctx.tokens.iter().find(|t| t.range().start.byte == first_offset));
+        let first = must_some(
+            ctx.tokens
+                .iter()
+                .find(|t| t.range().start.byte == first_offset),
+        );
         assert_eq!(first.range().start.line, 1);
         assert_eq!(first.range().start.column, 1);
         assert_eq!(first.range().end.line, 1);
         assert_eq!(first.range().end.column, 3);
 
-        let second = must_some(ctx.tokens.iter().find(|t| t.range().start.byte == second_offset));
+        let second = must_some(
+            ctx.tokens
+                .iter()
+                .find(|t| t.range().start.byte == second_offset),
+        );
         assert_eq!(second.range().start.line, 2);
         assert_eq!(second.range().start.column, 1);
         assert_eq!(second.range().end.line, 2);
@@ -341,7 +356,11 @@ mod tests {
         let ctx = ParserContext::new(source.clone());
 
         let string_offset = must_some(source.find('"'));
-        let token = must_some(ctx.tokens.iter().find(|t| t.range().start.byte == string_offset));
+        let token = must_some(
+            ctx.tokens
+                .iter()
+                .find(|t| t.range().start.byte == string_offset),
+        );
 
         assert_eq!(token.range().start.line, 1);
         assert_eq!(token.range().start.column, 9);
@@ -358,8 +377,11 @@ mod tests {
         // Find the emoji token (if lexer produces it as separate token)
         // For now, test that positions are computed correctly for the = token
         let equals_offset = must_some(source.find('='));
-        let equals_token =
-            must_some(ctx.tokens.iter().find(|t| t.range().start.byte == equals_offset));
+        let equals_token = must_some(
+            ctx.tokens
+                .iter()
+                .find(|t| t.range().start.byte == equals_offset),
+        );
 
         // Before emoji: "my $emoji "  = 10 characters but the emoji counts as 2 UTF-16 units
         // So column should account for UTF-16 encoding
@@ -376,11 +398,19 @@ mod tests {
         let first_offset = must_some(source.find("my"));
         let second_offset = must_some(source.rfind("my"));
 
-        let first = must_some(ctx.tokens.iter().find(|t| t.range().start.byte == first_offset));
+        let first = must_some(
+            ctx.tokens
+                .iter()
+                .find(|t| t.range().start.byte == first_offset),
+        );
         assert_eq!(first.range().start.line, 1);
         assert_eq!(first.range().start.column, 1);
 
-        let second = must_some(ctx.tokens.iter().find(|t| t.range().start.byte == second_offset));
+        let second = must_some(
+            ctx.tokens
+                .iter()
+                .find(|t| t.range().start.byte == second_offset),
+        );
         assert_eq!(second.range().start.line, 2);
         assert_eq!(second.range().start.column, 1);
     }

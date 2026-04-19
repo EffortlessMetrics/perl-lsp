@@ -8,11 +8,22 @@ use support::lsp_harness::{LspHarness, TempWorkspace};
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 fn assert_valid_location(location: &serde_json::Value) {
-    assert!(location.get("uri").is_some(), "Location must have 'uri' field, got: {:?}", location);
+    assert!(
+        location.get("uri").is_some(),
+        "Location must have 'uri' field, got: {:?}",
+        location
+    );
     let range = location.get("range");
-    assert!(range.is_some(), "Location must have 'range' field, got: {:?}", location);
+    assert!(
+        range.is_some(),
+        "Location must have 'range' field, got: {:?}",
+        location
+    );
     let range = range.unwrap_or(&json!(null));
-    assert!(range.get("start").is_some(), "Range must have 'start' position");
+    assert!(
+        range.get("start").is_some(),
+        "Range must have 'start' position"
+    );
     assert!(range.get("end").is_some(), "Range must have 'end' position");
 }
 

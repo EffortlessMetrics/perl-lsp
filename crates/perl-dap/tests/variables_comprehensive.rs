@@ -40,8 +40,10 @@ fn perl_value_array_constructor() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn perl_value_hash_constructor() -> Result<(), Box<dyn std::error::Error>> {
-    let pairs =
-        vec![("a".to_string(), PerlValue::Integer(1)), ("b".to_string(), PerlValue::Integer(2))];
+    let pairs = vec![
+        ("a".to_string(), PerlValue::Integer(1)),
+        ("b".to_string(), PerlValue::Integer(2)),
+    ];
     let val = PerlValue::hash(pairs);
     assert_eq!(val.child_count(), Some(2));
     Ok(())
@@ -76,8 +78,11 @@ fn is_expandable_for_all_variants() -> Result<(), Box<dyn std::error::Error>> {
     assert!(!PerlValue::Glob("main::foo".to_string()).is_expandable());
     assert!(!PerlValue::Regex("abc".to_string()).is_expandable());
     assert!(
-        !PerlValue::Truncated { summary: "...".to_string(), total_count: Some(100) }
-            .is_expandable()
+        !PerlValue::Truncated {
+            summary: "...".to_string(),
+            total_count: Some(100)
+        }
+        .is_expandable()
     );
     assert!(!PerlValue::Error("oops".to_string()).is_expandable());
 
@@ -86,10 +91,19 @@ fn is_expandable_for_all_variants() -> Result<(), Box<dyn std::error::Error>> {
     assert!(PerlValue::Hash(vec![]).is_expandable());
     assert!(PerlValue::Reference(Box::new(PerlValue::Undef)).is_expandable());
     assert!(
-        PerlValue::Object { class: "X".to_string(), value: Box::new(PerlValue::Undef) }
-            .is_expandable()
+        PerlValue::Object {
+            class: "X".to_string(),
+            value: Box::new(PerlValue::Undef)
+        }
+        .is_expandable()
     );
-    assert!(PerlValue::Tied { class: "Y".to_string(), value: None }.is_expandable());
+    assert!(
+        PerlValue::Tied {
+            class: "Y".to_string(),
+            value: None
+        }
+        .is_expandable()
+    );
     Ok(())
 }
 
@@ -103,17 +117,35 @@ fn type_name_for_all_variants() -> Result<(), Box<dyn std::error::Error>> {
     assert_eq!(PerlValue::Integer(0).type_name(), "SCALAR");
     assert_eq!(PerlValue::Array(vec![]).type_name(), "ARRAY");
     assert_eq!(PerlValue::Hash(vec![]).type_name(), "HASH");
-    assert_eq!(PerlValue::Reference(Box::new(PerlValue::Undef)).type_name(), "REF");
     assert_eq!(
-        PerlValue::Object { class: "C".to_string(), value: Box::new(PerlValue::Undef) }.type_name(),
+        PerlValue::Reference(Box::new(PerlValue::Undef)).type_name(),
+        "REF"
+    );
+    assert_eq!(
+        PerlValue::Object {
+            class: "C".to_string(),
+            value: Box::new(PerlValue::Undef)
+        }
+        .type_name(),
         "OBJECT"
     );
     assert_eq!(PerlValue::Code { name: None }.type_name(), "CODE");
     assert_eq!(PerlValue::Glob("g".to_string()).type_name(), "GLOB");
     assert_eq!(PerlValue::Regex("r".to_string()).type_name(), "Regexp");
-    assert_eq!(PerlValue::Tied { class: "T".to_string(), value: None }.type_name(), "TIED");
     assert_eq!(
-        PerlValue::Truncated { summary: "s".to_string(), total_count: None }.type_name(),
+        PerlValue::Tied {
+            class: "T".to_string(),
+            value: None
+        }
+        .type_name(),
+        "TIED"
+    );
+    assert_eq!(
+        PerlValue::Truncated {
+            summary: "s".to_string(),
+            total_count: None
+        }
+        .type_name(),
         "..."
     );
     assert_eq!(PerlValue::Error("e".to_string()).type_name(), "ERROR");
@@ -128,7 +160,10 @@ fn child_count_for_non_collection_types() -> Result<(), Box<dyn std::error::Erro
     assert_eq!(PerlValue::Scalar("x".to_string()).child_count(), None);
     assert_eq!(PerlValue::Number(1.0).child_count(), None);
     assert_eq!(PerlValue::Integer(1).child_count(), None);
-    assert_eq!(PerlValue::Reference(Box::new(PerlValue::Undef)).child_count(), None);
+    assert_eq!(
+        PerlValue::Reference(Box::new(PerlValue::Undef)).child_count(),
+        None
+    );
     assert_eq!(PerlValue::Code { name: None }.child_count(), None);
     assert_eq!(PerlValue::Glob("g".to_string()).child_count(), None);
     assert_eq!(PerlValue::Regex("r".to_string()).child_count(), None);
@@ -156,10 +191,16 @@ fn child_count_for_hashes() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn child_count_for_truncated() -> Result<(), Box<dyn std::error::Error>> {
-    let with_count = PerlValue::Truncated { summary: "...".to_string(), total_count: Some(50) };
+    let with_count = PerlValue::Truncated {
+        summary: "...".to_string(),
+        total_count: Some(50),
+    };
     assert_eq!(with_count.child_count(), Some(50));
 
-    let without_count = PerlValue::Truncated { summary: "...".to_string(), total_count: None };
+    let without_count = PerlValue::Truncated {
+        summary: "...".to_string(),
+        total_count: None,
+    };
     assert_eq!(without_count.child_count(), None);
     Ok(())
 }
@@ -177,16 +218,24 @@ fn perl_value_serde_roundtrip() -> Result<(), Box<dyn std::error::Error>> {
         PerlValue::Hash(vec![("k".to_string(), PerlValue::Scalar("v".to_string()))]),
         PerlValue::Reference(Box::new(PerlValue::Integer(1))),
         PerlValue::object("Foo", PerlValue::Hash(vec![])),
-        PerlValue::Code { name: Some("my_sub".to_string()) },
+        PerlValue::Code {
+            name: Some("my_sub".to_string()),
+        },
         PerlValue::Code { name: None },
         PerlValue::Glob("main::STDOUT".to_string()),
         PerlValue::Regex("^\\d+$".to_string()),
-        PerlValue::Tied { class: "Tie::Hash".to_string(), value: None },
+        PerlValue::Tied {
+            class: "Tie::Hash".to_string(),
+            value: None,
+        },
         PerlValue::Tied {
             class: "Tie::Array".to_string(),
             value: Some(Box::new(PerlValue::Array(vec![]))),
         },
-        PerlValue::Truncated { summary: "large".to_string(), total_count: Some(1000) },
+        PerlValue::Truncated {
+            summary: "large".to_string(),
+            total_count: Some(1000),
+        },
         PerlValue::Error("something broke".to_string()),
     ];
 
@@ -204,7 +253,10 @@ fn perl_value_serde_roundtrip() -> Result<(), Box<dyn std::error::Error>> {
 fn perl_value_clone_equality() -> Result<(), Box<dyn std::error::Error>> {
     let original = PerlValue::object(
         "My::Class",
-        PerlValue::Hash(vec![("attr".to_string(), PerlValue::Scalar("val".to_string()))]),
+        PerlValue::Hash(vec![(
+            "attr".to_string(),
+            PerlValue::Scalar("val".to_string()),
+        )]),
     );
     let cloned = original.clone();
     assert_eq!(original, cloned);
@@ -852,7 +904,9 @@ fn rendered_variable_is_expandable() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn rendered_variable_serde_roundtrip() -> Result<(), Box<dyn std::error::Error>> {
-    let rv = RenderedVariable::new("$x", "42").with_type("SCALAR").with_reference(0);
+    let rv = RenderedVariable::new("$x", "42")
+        .with_type("SCALAR")
+        .with_reference(0);
     let json = serde_json::to_string(&rv)?;
     let deserialized: RenderedVariable = serde_json::from_str(&json)?;
     assert_eq!(rv, deserialized);
@@ -1075,7 +1129,9 @@ fn render_object_without_hash() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn render_code_named() -> Result<(), Box<dyn std::error::Error>> {
     let renderer = PerlVariableRenderer::new();
-    let val = PerlValue::Code { name: Some("my_sub".to_string()) };
+    let val = PerlValue::Code {
+        name: Some("my_sub".to_string()),
+    };
     let rendered = renderer.render("$code", &val);
     assert!(rendered.value.contains("my_sub"));
     assert_eq!(rendered.type_name, Some("CODE".to_string()));
@@ -1129,7 +1185,10 @@ fn render_tied_with_value() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn render_tied_without_value() -> Result<(), Box<dyn std::error::Error>> {
     let renderer = PerlVariableRenderer::new();
-    let val = PerlValue::Tied { class: "Tie::File".to_string(), value: None };
+    let val = PerlValue::Tied {
+        class: "Tie::File".to_string(),
+        value: None,
+    };
     let rendered = renderer.render("$tied", &val);
     assert!(rendered.value.contains("TIED"));
     assert!(rendered.value.contains("Tie::File"));
@@ -1139,7 +1198,10 @@ fn render_tied_without_value() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn render_truncated_with_count() -> Result<(), Box<dyn std::error::Error>> {
     let renderer = PerlVariableRenderer::new();
-    let val = PerlValue::Truncated { summary: "large array".to_string(), total_count: Some(1000) };
+    let val = PerlValue::Truncated {
+        summary: "large array".to_string(),
+        total_count: Some(1000),
+    };
     let rendered = renderer.render("@big", &val);
     assert!(rendered.value.contains("large array"));
     assert!(rendered.value.contains("1000"));
@@ -1150,7 +1212,10 @@ fn render_truncated_with_count() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn render_truncated_without_count() -> Result<(), Box<dyn std::error::Error>> {
     let renderer = PerlVariableRenderer::new();
-    let val = PerlValue::Truncated { summary: "big structure".to_string(), total_count: None };
+    let val = PerlValue::Truncated {
+        summary: "big structure".to_string(),
+        total_count: None,
+    };
     let rendered = renderer.render("$big", &val);
     assert_eq!(rendered.value, "big structure");
     Ok(())
@@ -1260,7 +1325,10 @@ fn render_with_reference_object() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn render_with_reference_tied() -> Result<(), Box<dyn std::error::Error>> {
     let renderer = PerlVariableRenderer::new();
-    let val = PerlValue::Tied { class: "T".to_string(), value: None };
+    let val = PerlValue::Tied {
+        class: "T".to_string(),
+        value: None,
+    };
     let rendered = renderer.render_with_reference("$t", &val, 33);
     assert_eq!(rendered.variables_reference, 33);
     Ok(())
@@ -1370,7 +1438,10 @@ fn render_children_tied_with_value() -> Result<(), Box<dyn std::error::Error>> {
     let renderer = PerlVariableRenderer::new();
     let val = PerlValue::Tied {
         class: "Tie::Hash".to_string(),
-        value: Some(Box::new(PerlValue::Hash(vec![("k".to_string(), PerlValue::Integer(1))]))),
+        value: Some(Box::new(PerlValue::Hash(vec![(
+            "k".to_string(),
+            PerlValue::Integer(1),
+        )]))),
     };
     let children = renderer.render_children(&val, 0, 10);
     assert_eq!(children.len(), 1);
@@ -1381,7 +1452,10 @@ fn render_children_tied_with_value() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn render_children_tied_without_value() -> Result<(), Box<dyn std::error::Error>> {
     let renderer = PerlVariableRenderer::new();
-    let val = PerlValue::Tied { class: "Tie::File".to_string(), value: None };
+    let val = PerlValue::Tied {
+        class: "Tie::File".to_string(),
+        value: None,
+    };
     let children = renderer.render_children(&val, 0, 10);
     assert!(children.is_empty());
     Ok(())
@@ -1391,14 +1465,46 @@ fn render_children_tied_without_value() -> Result<(), Box<dyn std::error::Error>
 fn render_children_non_expandable_returns_empty() -> Result<(), Box<dyn std::error::Error>> {
     let renderer = PerlVariableRenderer::new();
 
-    assert!(renderer.render_children(&PerlValue::Undef, 0, 10).is_empty());
-    assert!(renderer.render_children(&PerlValue::Integer(1), 0, 10).is_empty());
-    assert!(renderer.render_children(&PerlValue::Scalar("x".to_string()), 0, 10).is_empty());
-    assert!(renderer.render_children(&PerlValue::Number(1.0), 0, 10).is_empty());
-    assert!(renderer.render_children(&PerlValue::Code { name: None }, 0, 10).is_empty());
-    assert!(renderer.render_children(&PerlValue::Glob("g".to_string()), 0, 10).is_empty());
-    assert!(renderer.render_children(&PerlValue::Regex("r".to_string()), 0, 10).is_empty());
-    assert!(renderer.render_children(&PerlValue::Error("e".to_string()), 0, 10).is_empty());
+    assert!(
+        renderer
+            .render_children(&PerlValue::Undef, 0, 10)
+            .is_empty()
+    );
+    assert!(
+        renderer
+            .render_children(&PerlValue::Integer(1), 0, 10)
+            .is_empty()
+    );
+    assert!(
+        renderer
+            .render_children(&PerlValue::Scalar("x".to_string()), 0, 10)
+            .is_empty()
+    );
+    assert!(
+        renderer
+            .render_children(&PerlValue::Number(1.0), 0, 10)
+            .is_empty()
+    );
+    assert!(
+        renderer
+            .render_children(&PerlValue::Code { name: None }, 0, 10)
+            .is_empty()
+    );
+    assert!(
+        renderer
+            .render_children(&PerlValue::Glob("g".to_string()), 0, 10)
+            .is_empty()
+    );
+    assert!(
+        renderer
+            .render_children(&PerlValue::Regex("r".to_string()), 0, 10)
+            .is_empty()
+    );
+    assert!(
+        renderer
+            .render_children(&PerlValue::Error("e".to_string()), 0, 10)
+            .is_empty()
+    );
     Ok(())
 }
 
@@ -1416,8 +1522,11 @@ fn renderer_with_max_string_length() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn renderer_with_max_array_preview() -> Result<(), Box<dyn std::error::Error>> {
     let renderer = PerlVariableRenderer::new().with_max_array_preview(1);
-    let val =
-        PerlValue::Array(vec![PerlValue::Integer(1), PerlValue::Integer(2), PerlValue::Integer(3)]);
+    let val = PerlValue::Array(vec![
+        PerlValue::Integer(1),
+        PerlValue::Integer(2),
+        PerlValue::Integer(3),
+    ]);
     let rendered = renderer.render("@a", &val);
     assert!(rendered.value.contains("3 total"));
     Ok(())
@@ -1450,12 +1559,20 @@ fn brief_format_covers_all_variants_in_preview() -> Result<(), Box<dyn std::erro
         PerlValue::Hash(vec![("k".to_string(), PerlValue::Undef)]),
         PerlValue::Reference(Box::new(PerlValue::Integer(1))),
         PerlValue::object("Cls", PerlValue::Hash(vec![])),
-        PerlValue::Code { name: Some("fn".to_string()) },
+        PerlValue::Code {
+            name: Some("fn".to_string()),
+        },
         PerlValue::Code { name: None },
         PerlValue::Glob("main::FOO".to_string()),
         PerlValue::Regex("abc".to_string()),
-        PerlValue::Tied { class: "T".to_string(), value: None },
-        PerlValue::Truncated { summary: "trunc".to_string(), total_count: None },
+        PerlValue::Tied {
+            class: "T".to_string(),
+            value: None,
+        },
+        PerlValue::Truncated {
+            summary: "trunc".to_string(),
+            total_count: None,
+        },
         PerlValue::Error("err".to_string()),
     ];
 

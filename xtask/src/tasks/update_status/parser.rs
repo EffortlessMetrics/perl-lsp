@@ -50,7 +50,9 @@ pub(super) fn count_common_corpus_pinned(root: &Path) -> usize {
     let Ok(raw) = fs::read_to_string(path) else {
         return 0;
     };
-    raw.lines().filter(|l| !l.trim().is_empty() && !l.trim_start().starts_with('#')).count()
+    raw.lines()
+        .filter(|l| !l.trim().is_empty() && !l.trim_start().starts_with('#'))
+        .count()
 }
 
 pub(super) fn read_sweep_report(
@@ -65,8 +67,10 @@ pub(super) fn count_corpus_sections(root: &Path) -> usize {
     let marker = Regex::new(r"^=+\s*$").ok();
     let mut total: usize = 0;
 
-    let walker =
-        walkdir::WalkDir::new(&corpus_dir).into_iter().filter_map(|e| e.ok()).filter(|e| {
+    let walker = walkdir::WalkDir::new(&corpus_dir)
+        .into_iter()
+        .filter_map(|e| e.ok())
+        .filter(|e| {
             e.file_type().is_file() && e.path().extension().is_some_and(|ext| ext == "txt")
         });
 
@@ -176,7 +180,12 @@ pub(super) fn generate_parser_status(metrics: &ParserMetrics, original: &str) ->
             .map_or_else(|| "?".to_string(), |r| r.files_unreadable.to_string());
         let proj_detail = metrics.project_corpus.as_ref().map_or_else(
             || "Project: UNVERIFIED".to_string(),
-            |s| format!("Project: {} timeout, {} panic, 0 unread", s.timeout_files, s.panic_files,),
+            |s| {
+                format!(
+                    "Project: {} timeout, {} panic, 0 unread",
+                    s.timeout_files, s.panic_files,
+                )
+            },
         );
         format!(
             "| **Reliability** | Ubuntu: {} unread / CPAN: {} unread / {} | -- | `.ci/*-baseline.json` |",
@@ -266,9 +275,18 @@ mod tests {
     fn test_parser_receipts_load() -> Result<()> {
         let root = crate::utils::project_root()?;
         let metrics = collect_parser_metrics(&root);
-        assert!(metrics.system_receipt.is_some(), "expected system corpus baseline receipt");
-        assert!(metrics.cpan_receipt.is_some(), "expected CPAN corpus baseline receipt");
-        assert!(metrics.project_corpus.is_some(), "expected live repo corpus summary");
+        assert!(
+            metrics.system_receipt.is_some(),
+            "expected system corpus baseline receipt"
+        );
+        assert!(
+            metrics.cpan_receipt.is_some(),
+            "expected CPAN corpus baseline receipt"
+        );
+        assert!(
+            metrics.project_corpus.is_some(),
+            "expected live repo corpus summary"
+        );
         Ok(())
     }
 
@@ -276,7 +294,10 @@ mod tests {
     fn test_count_common_corpus_pinned() -> Result<()> {
         let root = crate::utils::project_root()?;
         let count = count_common_corpus_pinned(&root);
-        assert_eq!(count, 10, "expected 10 pinned modules in common-corpus-manifest.txt");
+        assert_eq!(
+            count, 10,
+            "expected 10 pinned modules in common-corpus-manifest.txt"
+        );
         Ok(())
     }
 
@@ -311,12 +332,18 @@ mod tests {
         let result = generate_parser_status(&metrics, template)?;
         assert!(result.contains("65/69"), "nodekind row missing 65/69");
         assert!(result.contains("94.2"), "nodekind row missing 94.2%");
-        assert!(result.contains("4 never-seen"), "nodekind row missing never-seen count");
+        assert!(
+            result.contains("4 never-seen"),
+            "nodekind row missing never-seen count"
+        );
         assert!(
             result.contains("unverified"),
             "strict-clean no-receipt row should say 'unverified'"
         );
-        assert!(!result.contains("10/10"), "strict-clean no-receipt row must not show 10/10");
+        assert!(
+            !result.contains("10/10"),
+            "strict-clean no-receipt row must not show 10/10"
+        );
         Ok(())
     }
 

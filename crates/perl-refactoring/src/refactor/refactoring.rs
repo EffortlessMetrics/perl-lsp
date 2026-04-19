@@ -321,15 +321,21 @@ impl RefactoringEngine {
 
         // Perform the operation
         let result = match operation_type.clone() {
-            RefactoringType::SymbolRename { old_name, new_name, scope } => {
-                self.perform_symbol_rename(&old_name, &new_name, &scope)
-            }
-            RefactoringType::ExtractMethod { method_name, start_position, end_position } => {
-                self.perform_extract_method(&method_name, start_position, end_position, &files)
-            }
-            RefactoringType::MoveCode { source_file, target_file, elements } => {
-                self.perform_move_code(&source_file, &target_file, &elements)
-            }
+            RefactoringType::SymbolRename {
+                old_name,
+                new_name,
+                scope,
+            } => self.perform_symbol_rename(&old_name, &new_name, &scope),
+            RefactoringType::ExtractMethod {
+                method_name,
+                start_position,
+                end_position,
+            } => self.perform_extract_method(&method_name, start_position, end_position, &files),
+            RefactoringType::MoveCode {
+                source_file,
+                target_file,
+                elements,
+            } => self.perform_move_code(&source_file, &target_file, &elements),
             RefactoringType::Modernize { patterns } => self.perform_modernize(&patterns, &files),
             RefactoringType::OptimizeImports {
                 remove_unused,
@@ -341,9 +347,10 @@ impl RefactoringEngine {
                 group_by_type,
                 &files,
             ),
-            RefactoringType::Inline { symbol_name, all_occurrences } => {
-                self.perform_inline(&symbol_name, all_occurrences, &files)
-            }
+            RefactoringType::Inline {
+                symbol_name,
+                all_occurrences,
+            } => self.perform_inline(&symbol_name, all_occurrences, &files),
         };
 
         // Record operation in history
@@ -369,12 +376,13 @@ impl RefactoringEngine {
     /// Rollback a previous refactoring operation
     pub fn rollback(&mut self, operation_id: &str) -> ParseResult<RefactoringResult> {
         // Find the operation in history
-        let operation =
-            self.operation_history.iter().find(|op| op.id == operation_id).ok_or_else(|| {
-                ParseError::SyntaxError {
-                    message: format!("Operation {} not found", operation_id),
-                    location: 0,
-                }
+        let operation = self
+            .operation_history
+            .iter()
+            .find(|op| op.id == operation_id)
+            .ok_or_else(|| ParseError::SyntaxError {
+                message: format!("Operation {} not found", operation_id),
+                location: 0,
             })?;
 
         if let Some(backup_info) = &operation.backup_info {
@@ -432,9 +440,13 @@ impl RefactoringEngine {
                 message: format!("URL parsing failed: {}", e),
                 location: 0,
             })?;
-            self.workspace_refactor._index.index_file(url, content.to_string()).map_err(|e| {
-                ParseError::SyntaxError { message: format!("Indexing failed: {}", e), location: 0 }
-            })?;
+            self.workspace_refactor
+                ._index
+                .index_file(url, content.to_string())
+                .map_err(|e| ParseError::SyntaxError {
+                    message: format!("Indexing failed: {}", e),
+                    location: 0,
+                })?;
         }
         let _ = content; // Acknowledge when feature disabled
         Ok(())
@@ -443,9 +455,14 @@ impl RefactoringEngine {
     // Private implementation methods
 
     fn generate_operation_id(&self) -> String {
-        let duration =
-            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default();
-        format!("refactor_{}_{}", duration.as_secs(), duration.subsec_nanos())
+        let duration = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default();
+        format!(
+            "refactor_{}_{}",
+            duration.as_secs(),
+            duration.subsec_nanos()
+        )
     }
 
     fn validate_operation(
@@ -467,7 +484,11 @@ impl RefactoringEngine {
 
         // Operation-specific validation
         match operation_type {
-            RefactoringType::SymbolRename { old_name, new_name, scope } => {
+            RefactoringType::SymbolRename {
+                old_name,
+                new_name,
+                scope,
+            } => {
                 self.validate_perl_identifier(old_name, "old_name")?;
                 self.validate_perl_identifier(new_name, "new_name")?;
 
@@ -536,7 +557,11 @@ impl RefactoringEngine {
                 }
             }
 
-            RefactoringType::ExtractMethod { method_name, start_position, end_position } => {
+            RefactoringType::ExtractMethod {
+                method_name,
+                start_position,
+                end_position,
+            } => {
                 self.validate_perl_subroutine_name(method_name)?;
 
                 // ExtractMethod generates `sub name {}`, so method_name must be a bare identifier
@@ -578,7 +603,11 @@ impl RefactoringEngine {
                 }
             }
 
-            RefactoringType::MoveCode { source_file, target_file, elements } => {
+            RefactoringType::MoveCode {
+                source_file,
+                target_file,
+                elements,
+            } => {
                 self.validate_file_exists(source_file)?;
 
                 // Reject moving code to the same file
@@ -758,7 +787,11 @@ impl RefactoringEngine {
     /// Extracts the sigil from a Perl identifier, if present.
     fn extract_sigil(name: &str) -> Option<char> {
         let first_char = name.chars().next()?;
-        if matches!(first_char, '$' | '@' | '%' | '&' | '*') { Some(first_char) } else { None }
+        if matches!(first_char, '$' | '@' | '%' | '&' | '*') {
+            Some(first_char)
+        } else {
+            None
+        }
     }
 
     fn validate_file_exists(&self, path: &Path) -> ParseResult<()> {
@@ -826,7 +859,10 @@ impl RefactoringEngine {
             }
         }
 
-        Ok(BackupInfo { backup_dir, file_mappings })
+        Ok(BackupInfo {
+            backup_dir,
+            file_mappings,
+        })
     }
 
     /// Returns the backup root directory, using the configured path or the default temp location.
@@ -841,7 +877,10 @@ impl RefactoringEngine {
         let backup_root = self.backup_root();
 
         if !backup_root.exists() {
-            return Ok(BackupCleanupResult { directories_removed: 0, space_reclaimed: 0 });
+            return Ok(BackupCleanupResult {
+                directories_removed: 0,
+                space_reclaimed: 0,
+            });
         }
 
         // Collect all backup directories with metadata
@@ -854,7 +893,10 @@ impl RefactoringEngine {
         let (directories_removed, space_reclaimed) =
             self.remove_backup_directories(&dirs_to_remove)?;
 
-        Ok(BackupCleanupResult { directories_removed, space_reclaimed })
+        Ok(BackupCleanupResult {
+            directories_removed,
+            space_reclaimed,
+        })
     }
 
     fn collect_backup_directories(
@@ -899,7 +941,11 @@ impl RefactoringEngine {
 
                     let size = self.calculate_directory_size(&path)?;
 
-                    backup_dirs.push(BackupDirMetadata { path, modified, size });
+                    backup_dirs.push(BackupDirMetadata {
+                        path,
+                        modified,
+                        size,
+                    });
                 }
             }
         }
@@ -917,7 +963,11 @@ impl RefactoringEngine {
 
         // Ensure it's a directory and not a symlink (security check)
         let metadata = std::fs::symlink_metadata(dir).map_err(|e| ParseError::SyntaxError {
-            message: format!("Failed to read symlink metadata for {}: {}", dir.display(), e),
+            message: format!(
+                "Failed to read symlink metadata for {}: {}",
+                dir.display(),
+                e
+            ),
             location: 0,
         })?;
 
@@ -1048,7 +1098,8 @@ impl RefactoringEngine {
                         _ => Path::new(""),
                     };
 
-                    self.workspace_refactor.rename_symbol(old_name, new_name, target_file, (0, 0))
+                    self.workspace_refactor
+                        .rename_symbol(old_name, new_name, target_file, (0, 0))
                 }
             };
 
@@ -1056,8 +1107,11 @@ impl RefactoringEngine {
                 Ok(result) => {
                     let filtered_result = self.filter_rename_result_by_scope(result, scope)?;
                     let files_modified = self.apply_file_edits(&filtered_result.file_edits)?;
-                    let changes_made =
-                        filtered_result.file_edits.iter().map(|e| e.edits.len()).sum();
+                    let changes_made = filtered_result
+                        .file_edits
+                        .iter()
+                        .map(|e| e.edits.len())
+                        .sum();
 
                     let refac_result = RefactoringResult {
                         success: true,
@@ -1159,8 +1213,11 @@ impl RefactoringEngine {
                     Self::offset_with_fallback(&line_index, &source, start.0, start.1, false);
                 let end_off = Self::offset_with_fallback(&line_index, &source, end.0, end.1, true);
 
-                let (start_off, end_off) =
-                    if start_off <= end_off { (start_off, end_off) } else { (end_off, start_off) };
+                let (start_off, end_off) = if start_off <= end_off {
+                    (start_off, end_off)
+                } else {
+                    (end_off, start_off)
+                };
 
                 result.file_edits = Self::filter_file_edits_to_range(
                     std::mem::take(&mut result.file_edits),
@@ -1187,8 +1244,14 @@ impl RefactoringEngine {
                     return None;
                 }
 
-                file_edit.edits.retain(|edit| edit.start >= start_off && edit.end <= end_off);
-                if file_edit.edits.is_empty() { None } else { Some(file_edit) }
+                file_edit
+                    .edits
+                    .retain(|edit| edit.start >= start_off && edit.end <= end_off);
+                if file_edit.edits.is_empty() {
+                    None
+                } else {
+                    Some(file_edit)
+                }
             })
             .collect()
     }
@@ -1221,8 +1284,9 @@ impl RefactoringEngine {
     fn find_function_byte_range(source: &str, function_name: &str) -> Option<(usize, usize)> {
         let sub_decl = format!("sub {function_name}");
         let start = source.find(&sub_decl)?;
-        let open_brace =
-            source[start + sub_decl.len()..].find('{').map(|idx| start + sub_decl.len() + idx)?;
+        let open_brace = source[start + sub_decl.len()..]
+            .find('{')
+            .map(|idx| start + sub_decl.len() + idx)?;
 
         let mut depth = 0usize;
         for (relative_idx, ch) in source[open_brace..].char_indices() {
@@ -1281,11 +1345,17 @@ impl RefactoringEngine {
             });
         };
 
-        let source_code = std::fs::read_to_string(file_path).map_err(|e| {
-            ParseError::SyntaxError { message: format!("Failed to read file: {}", e), location: 0 }
-        })?;
+        let source_code =
+            std::fs::read_to_string(file_path).map_err(|e| ParseError::SyntaxError {
+                message: format!("Failed to read file: {}", e),
+                location: 0,
+            })?;
 
-        let line_ending = if source_code.contains("\r\n") { "\r\n" } else { "\n" };
+        let line_ending = if source_code.contains("\r\n") {
+            "\r\n"
+        } else {
+            "\n"
+        };
 
         // Calculate offsets
         let line_index = LineIndex::new(source_code.clone());
@@ -1381,8 +1451,11 @@ impl RefactoringEngine {
 
         // Apply changes
         let mut final_source = String::new();
-        let prefix_len =
-            if source_code[..start_offset].ends_with(&indentation) { indentation.len() } else { 0 };
+        let prefix_len = if source_code[..start_offset].ends_with(&indentation) {
+            indentation.len()
+        } else {
+            0
+        };
         final_source.push_str(&source_code[..start_offset - prefix_len]);
         final_source.push_str(&call_with_indent);
         final_source.push_str(&source_code[end_offset..]);
@@ -1620,10 +1693,13 @@ impl RefactoringEngine {
         let mut modified_files = 0;
 
         for file in files {
-            let analysis = self
-                .import_optimizer
-                .analyze_file(file)
-                .map_err(|e| ParseError::SyntaxError { message: e, location: 0 })?;
+            let analysis =
+                self.import_optimizer
+                    .analyze_file(file)
+                    .map_err(|e| ParseError::SyntaxError {
+                        message: e,
+                        location: 0,
+                    })?;
             let mut changes_made = 0;
 
             if remove_unused && !analysis.unused_imports.is_empty() {
@@ -1684,7 +1760,9 @@ impl RefactoringEngine {
                                 .to_string(),
                         location: 0,
                     })?;
-                    match self.workspace_refactor.inline_variable_all(symbol_name, def_file, (0, 0))
+                    match self
+                        .workspace_refactor
+                        .inline_variable_all(symbol_name, def_file, (0, 0))
                     {
                         Ok(refactor_result) => {
                             let edits = refactor_result.file_edits;
@@ -1732,7 +1810,10 @@ impl RefactoringEngine {
                     let mut applied = false;
 
                     for file in files {
-                        match self.workspace_refactor.inline_variable(symbol_name, file, (0, 0)) {
+                        match self
+                            .workspace_refactor
+                            .inline_variable(symbol_name, file, (0, 0))
+                        {
                             Ok(refactor_result) => {
                                 let edits = refactor_result.file_edits;
                                 if !edits.is_empty() {
@@ -1931,7 +2012,10 @@ fn analyze_extraction(ast: &Node, start: usize, end: usize) -> ExtractionAnalysi
     let mut outputs_vec: Vec<_> = outputs.into_iter().collect();
     outputs_vec.sort();
 
-    ExtractionAnalysis { inputs: inputs_vec, outputs: outputs_vec }
+    ExtractionAnalysis {
+        inputs: inputs_vec,
+        outputs: outputs_vec,
+    }
 }
 
 fn visit_node(
@@ -1946,7 +2030,12 @@ fn visit_node(
     let in_range = node.location.start >= start && node.location.end <= end;
 
     match &node.kind {
-        NodeKind::VariableDeclaration { declarator, variable, initializer, .. } => {
+        NodeKind::VariableDeclaration {
+            declarator,
+            variable,
+            initializer,
+            ..
+        } => {
             if declarator == "my" || declarator == "state" {
                 let name = extract_var_name(variable);
                 if in_range {
@@ -1956,10 +2045,23 @@ fn visit_node(
                 }
             }
             if let Some(init) = initializer {
-                visit_node(init, start, end, inputs, outputs, declared_in_scope, declared_in_range);
+                visit_node(
+                    init,
+                    start,
+                    end,
+                    inputs,
+                    outputs,
+                    declared_in_scope,
+                    declared_in_range,
+                );
             }
         }
-        NodeKind::VariableListDeclaration { declarator, variables, initializer, .. } => {
+        NodeKind::VariableListDeclaration {
+            declarator,
+            variables,
+            initializer,
+            ..
+        } => {
             if declarator == "my" || declarator == "state" {
                 for var in variables {
                     let name = extract_var_name(var);
@@ -1971,7 +2073,15 @@ fn visit_node(
                 }
             }
             if let Some(init) = initializer {
-                visit_node(init, start, end, inputs, outputs, declared_in_scope, declared_in_range);
+                visit_node(
+                    init,
+                    start,
+                    end,
+                    inputs,
+                    outputs,
+                    declared_in_scope,
+                    declared_in_range,
+                );
             }
         }
         NodeKind::MandatoryParameter { variable }
@@ -1984,7 +2094,10 @@ fn visit_node(
                 declared_in_scope.insert(name);
             }
         }
-        NodeKind::OptionalParameter { variable, default_value } => {
+        NodeKind::OptionalParameter {
+            variable,
+            default_value,
+        } => {
             let name = extract_var_name(variable);
             if in_range {
                 declared_in_range.insert(name);
@@ -2020,18 +2133,56 @@ fn visit_node(
         NodeKind::Block { statements } => {
             let mut inner_scope = declared_in_scope.clone();
             for stmt in statements {
-                visit_node(stmt, start, end, inputs, outputs, &mut inner_scope, declared_in_range);
+                visit_node(
+                    stmt,
+                    start,
+                    end,
+                    inputs,
+                    outputs,
+                    &mut inner_scope,
+                    declared_in_range,
+                );
             }
         }
-        NodeKind::Subroutine { signature, body, .. } => {
+        NodeKind::Subroutine {
+            signature, body, ..
+        } => {
             let mut inner_scope = declared_in_scope.clone();
             if let Some(sig) = signature {
-                visit_node(sig, start, end, inputs, outputs, &mut inner_scope, declared_in_range);
+                visit_node(
+                    sig,
+                    start,
+                    end,
+                    inputs,
+                    outputs,
+                    &mut inner_scope,
+                    declared_in_range,
+                );
             }
-            visit_node(body, start, end, inputs, outputs, &mut inner_scope, declared_in_range);
+            visit_node(
+                body,
+                start,
+                end,
+                inputs,
+                outputs,
+                &mut inner_scope,
+                declared_in_range,
+            );
         }
-        NodeKind::Try { body, catch_blocks, finally_block } => {
-            visit_node(body, start, end, inputs, outputs, declared_in_scope, declared_in_range);
+        NodeKind::Try {
+            body,
+            catch_blocks,
+            finally_block,
+        } => {
+            visit_node(
+                body,
+                start,
+                end,
+                inputs,
+                outputs,
+                declared_in_scope,
+                declared_in_range,
+            );
             for (var, catch_body) in catch_blocks {
                 let mut inner_scope = declared_in_scope.clone();
                 if let Some(v_name) = var {
@@ -2069,34 +2220,117 @@ fn visit_node(
                 );
             }
         }
-        NodeKind::Foreach { variable, list, body, continue_block } => {
+        NodeKind::Foreach {
+            variable,
+            list,
+            body,
+            continue_block,
+        } => {
             // Visit list with outer scope
-            visit_node(list, start, end, inputs, outputs, declared_in_scope, declared_in_range);
+            visit_node(
+                list,
+                start,
+                end,
+                inputs,
+                outputs,
+                declared_in_scope,
+                declared_in_range,
+            );
 
             // Visit continue block if present
             if let Some(cb) = continue_block {
-                visit_node(cb, start, end, inputs, outputs, declared_in_scope, declared_in_range);
+                visit_node(
+                    cb,
+                    start,
+                    end,
+                    inputs,
+                    outputs,
+                    declared_in_scope,
+                    declared_in_range,
+                );
             }
 
             // Create inner scope for variable and body
             let mut inner_scope = declared_in_scope.clone();
-            visit_node(variable, start, end, inputs, outputs, &mut inner_scope, declared_in_range);
-            visit_node(body, start, end, inputs, outputs, &mut inner_scope, declared_in_range);
+            visit_node(
+                variable,
+                start,
+                end,
+                inputs,
+                outputs,
+                &mut inner_scope,
+                declared_in_range,
+            );
+            visit_node(
+                body,
+                start,
+                end,
+                inputs,
+                outputs,
+                &mut inner_scope,
+                declared_in_range,
+            );
         }
-        NodeKind::For { init, condition, update, body, continue_block } => {
+        NodeKind::For {
+            init,
+            condition,
+            update,
+            body,
+            continue_block,
+        } => {
             let mut inner_scope = declared_in_scope.clone();
             if let Some(n) = init {
-                visit_node(n, start, end, inputs, outputs, &mut inner_scope, declared_in_range);
+                visit_node(
+                    n,
+                    start,
+                    end,
+                    inputs,
+                    outputs,
+                    &mut inner_scope,
+                    declared_in_range,
+                );
             }
             if let Some(n) = condition {
-                visit_node(n, start, end, inputs, outputs, &mut inner_scope, declared_in_range);
+                visit_node(
+                    n,
+                    start,
+                    end,
+                    inputs,
+                    outputs,
+                    &mut inner_scope,
+                    declared_in_range,
+                );
             }
             if let Some(n) = update {
-                visit_node(n, start, end, inputs, outputs, &mut inner_scope, declared_in_range);
+                visit_node(
+                    n,
+                    start,
+                    end,
+                    inputs,
+                    outputs,
+                    &mut inner_scope,
+                    declared_in_range,
+                );
             }
-            visit_node(body, start, end, inputs, outputs, &mut inner_scope, declared_in_range);
+            visit_node(
+                body,
+                start,
+                end,
+                inputs,
+                outputs,
+                &mut inner_scope,
+                declared_in_range,
+            );
             if let Some(n) = continue_block {
-                visit_node(n, start, end, inputs, outputs, &mut inner_scope, declared_in_range);
+                visit_node(
+                    n,
+                    start,
+                    end,
+                    inputs,
+                    outputs,
+                    &mut inner_scope,
+                    declared_in_range,
+                );
             }
         }
         _ => {
@@ -2310,7 +2544,11 @@ sub complex {
             assert!(engine.validate_perl_identifier("foo", "test").is_ok());
             assert!(engine.validate_perl_identifier("_private", "test").is_ok());
             assert!(engine.validate_perl_identifier("CamelCase", "test").is_ok());
-            assert!(engine.validate_perl_identifier("name_with_123", "test").is_ok());
+            assert!(
+                engine
+                    .validate_perl_identifier("name_with_123", "test")
+                    .is_ok()
+            );
         }
 
         #[test]
@@ -2327,10 +2565,26 @@ sub complex {
         #[test]
         fn test_validate_identifier_qualified_names() {
             let engine = RefactoringEngine::new();
-            assert!(engine.validate_perl_identifier("Package::name", "test").is_ok());
-            assert!(engine.validate_perl_identifier("$Package::var", "test").is_ok());
-            assert!(engine.validate_perl_identifier("@Deep::Nested::array", "test").is_ok());
-            assert!(engine.validate_perl_identifier("::main_package", "test").is_ok());
+            assert!(
+                engine
+                    .validate_perl_identifier("Package::name", "test")
+                    .is_ok()
+            );
+            assert!(
+                engine
+                    .validate_perl_identifier("$Package::var", "test")
+                    .is_ok()
+            );
+            assert!(
+                engine
+                    .validate_perl_identifier("@Deep::Nested::array", "test")
+                    .is_ok()
+            );
+            assert!(
+                engine
+                    .validate_perl_identifier("::main_package", "test")
+                    .is_ok()
+            );
         }
 
         #[test]
@@ -2362,7 +2616,11 @@ sub complex {
             let engine = RefactoringEngine::new();
             assert!(engine.validate_perl_subroutine_name("my_sub").is_ok());
             assert!(engine.validate_perl_subroutine_name("_private_sub").is_ok());
-            assert!(engine.validate_perl_subroutine_name("&explicit_sub").is_ok());
+            assert!(
+                engine
+                    .validate_perl_subroutine_name("&explicit_sub")
+                    .is_ok()
+            );
         }
 
         #[test]
@@ -2387,7 +2645,11 @@ sub complex {
             let engine = RefactoringEngine::new();
             assert!(engine.validate_perl_qualified_name("Package").is_ok());
             assert!(engine.validate_perl_qualified_name("Package::Sub").is_ok());
-            assert!(engine.validate_perl_qualified_name("Deep::Nested::Name").is_ok());
+            assert!(
+                engine
+                    .validate_perl_qualified_name("Deep::Nested::Name")
+                    .is_ok()
+            );
         }
 
         #[test]
@@ -2400,7 +2662,11 @@ sub complex {
         #[test]
         fn test_validate_qualified_name_invalid_segment() {
             let engine = RefactoringEngine::new();
-            assert!(engine.validate_perl_qualified_name("Package::123invalid").is_err());
+            assert!(
+                engine
+                    .validate_perl_qualified_name("Package::123invalid")
+                    .is_err()
+            );
         }
 
         // --- File count limit validation tests ---
@@ -2409,8 +2675,9 @@ sub complex {
         fn test_validate_file_count_limit() {
             let engine = RefactoringEngine::new();
             // Create more files than allowed
-            let files: Vec<PathBuf> =
-                (0..150).map(|i| PathBuf::from(format!("/fake/{}.pl", i))).collect();
+            let files: Vec<PathBuf> = (0..150)
+                .map(|i| PathBuf::from(format!("/fake/{}.pl", i)))
+                .collect();
 
             let op = RefactoringType::OptimizeImports {
                 remove_unused: true,
@@ -2453,8 +2720,10 @@ sub complex {
                 end_position: (5, 0),
             };
 
-            let result = engine
-                .validate_operation(&op, &[file1.path().to_path_buf(), file2.path().to_path_buf()]);
+            let result = engine.validate_operation(
+                &op,
+                &[file1.path().to_path_buf(), file2.path().to_path_buf()],
+            );
             assert!(result.is_err());
             let err_msg = format!("{:?}", must_err(result));
             assert!(err_msg.contains("operates on a single file"));
@@ -2565,8 +2834,10 @@ sub complex {
         #[test]
         fn test_inline_requires_files() {
             let engine = RefactoringEngine::new();
-            let op =
-                RefactoringType::Inline { symbol_name: "$var".to_string(), all_occurrences: true };
+            let op = RefactoringType::Inline {
+                symbol_name: "$var".to_string(),
+                all_occurrences: true,
+            };
 
             let result = engine.validate_operation(&op, &[]);
             assert!(result.is_err());
@@ -2642,8 +2913,16 @@ sub complex {
         fn test_validate_identifier_double_separator_rejected() {
             let engine = RefactoringEngine::new();
             // Double :: should be rejected
-            assert!(engine.validate_perl_identifier("Foo::::Bar", "test").is_err());
-            assert!(engine.validate_perl_identifier("$Foo::::Bar", "test").is_err());
+            assert!(
+                engine
+                    .validate_perl_identifier("Foo::::Bar", "test")
+                    .is_err()
+            );
+            assert!(
+                engine
+                    .validate_perl_identifier("$Foo::::Bar", "test")
+                    .is_err()
+            );
         }
 
         #[test]
@@ -2651,7 +2930,11 @@ sub complex {
             let engine = RefactoringEngine::new();
             // Trailing :: should be rejected
             assert!(engine.validate_perl_identifier("Foo::", "test").is_err());
-            assert!(engine.validate_perl_identifier("$Foo::Bar::", "test").is_err());
+            assert!(
+                engine
+                    .validate_perl_identifier("$Foo::Bar::", "test")
+                    .is_err()
+            );
         }
 
         #[test]
@@ -2659,7 +2942,11 @@ sub complex {
             let engine = RefactoringEngine::new();
             // Leading :: should be allowed (for main package/absolute names)
             assert!(engine.validate_perl_identifier("::Foo", "test").is_ok());
-            assert!(engine.validate_perl_identifier("::Foo::Bar", "test").is_ok());
+            assert!(
+                engine
+                    .validate_perl_identifier("::Foo::Bar", "test")
+                    .is_ok()
+            );
             assert!(engine.validate_perl_identifier("$::Foo", "test").is_ok());
         }
 
@@ -2708,7 +2995,11 @@ sub complex {
             // Unicode package names should be allowed
             assert!(engine.validate_perl_qualified_name("Müller").is_ok());
             assert!(engine.validate_perl_qualified_name("Müller::Util").is_ok());
-            assert!(engine.validate_perl_qualified_name("日本::パッケージ").is_ok());
+            assert!(
+                engine
+                    .validate_perl_qualified_name("日本::パッケージ")
+                    .is_ok()
+            );
         }
 
         // --- ExtractMethod '&' prefix tests ---
@@ -2757,13 +3048,16 @@ sub complex {
         #[test]
         fn test_fileset_scope_max_files_limit() {
             // Create temp files for the test
-            let files: Vec<tempfile::NamedTempFile> =
-                (0..5).map(|_| must(tempfile::NamedTempFile::new())).collect();
+            let files: Vec<tempfile::NamedTempFile> = (0..5)
+                .map(|_| must(tempfile::NamedTempFile::new()))
+                .collect();
             let paths: Vec<_> = files.iter().map(|f| f.path().to_path_buf()).collect();
 
             // Create engine with low max_files limit
-            let config =
-                RefactoringConfig { max_files_per_operation: 3, ..RefactoringConfig::default() };
+            let config = RefactoringConfig {
+                max_files_per_operation: 3,
+                ..RefactoringConfig::default()
+            };
             let engine = RefactoringEngine::with_config(config);
 
             let op = RefactoringType::SymbolRename {
@@ -3037,7 +3331,10 @@ sub complex {
 
             for (i, backup) in backups.iter().enumerate() {
                 must(fs::create_dir_all(backup));
-                must(fs::write(backup.join("file.pl"), format!("sub test{} {{}}", i)));
+                must(fs::write(
+                    backup.join("file.pl"),
+                    format!("sub test{} {{}}", i),
+                ));
                 // Sleep to ensure different modification times
                 thread::sleep(Duration::from_millis(50));
             }
@@ -3338,11 +3635,18 @@ sub complex {
 
         // Pass only path_a (definition file); path_b is omitted from `files` intentionally
         let result = must(engine.refactor(
-            RefactoringType::Inline { symbol_name: "$const".to_string(), all_occurrences: true },
+            RefactoringType::Inline {
+                symbol_name: "$const".to_string(),
+                all_occurrences: true,
+            },
             vec![path_a.clone()],
         ));
 
-        assert!(result.success, "expected success, warnings: {:?}", result.warnings);
+        assert!(
+            result.success,
+            "expected success, warnings: {:?}",
+            result.warnings
+        );
 
         // path_b must have its $const replaced — inline_variable_all found it via workspace index
         let updated_b = must(std::fs::read_to_string(&path_b));
@@ -3370,11 +3674,18 @@ sub complex {
         must(engine.index_file(&path_a, content_a));
 
         let result = must(engine.refactor(
-            RefactoringType::Inline { symbol_name: "$x".to_string(), all_occurrences: false },
+            RefactoringType::Inline {
+                symbol_name: "$x".to_string(),
+                all_occurrences: false,
+            },
             vec![path_a.clone()],
         ));
 
-        assert!(result.success, "expected success, warnings: {:?}", result.warnings);
+        assert!(
+            result.success,
+            "expected success, warnings: {:?}",
+            result.warnings
+        );
         assert_eq!(result.files_modified, 1);
     }
 }

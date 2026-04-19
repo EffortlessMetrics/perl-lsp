@@ -246,8 +246,11 @@ $name, $age, $salary
     let manual_ast = manual_recovery_nodekind_fixture(SourceLocation { start: 0, end: 0 });
     collect_node_kinds(&manual_ast, &mut observed);
 
-    let missing: Vec<_> =
-        ALL_NODE_KIND_NAMES.iter().copied().filter(|k| !observed.contains(k)).collect();
+    let missing: Vec<_> = ALL_NODE_KIND_NAMES
+        .iter()
+        .copied()
+        .filter(|k| !observed.contains(k))
+        .collect();
 
     assert!(missing.is_empty(), "Missing NodeKind coverage: {missing:?}");
 
@@ -261,14 +264,22 @@ fn test_manual_only_nodekinds_exist_and_analyze_without_panic() {
 
     // 1) Ensure the fixture still contains the intended synthetic kinds.
     for kind in SYNTHETIC_NODE_KIND_NAMES {
-        assert!(has_node_kind(&manual_ast, kind), "manual fixture must include NodeKind::{kind}");
+        assert!(
+            has_node_kind(&manual_ast, kind),
+            "manual fixture must include NodeKind::{kind}"
+        );
     }
 
     // 2) Ensure semantic analysis doesn't panic on any synthetic kind in isolation.
     for kind in SYNTHETIC_NODE_KIND_NAMES {
         let node = must_some(find_first_node_of_kind(&manual_ast, kind)).clone();
 
-        let single = Node::new(NodeKind::Program { statements: vec![node] }, location);
+        let single = Node::new(
+            NodeKind::Program {
+                statements: vec![node],
+            },
+            location,
+        );
 
         let ok = catch_unwind(AssertUnwindSafe(|| {
             let _ = SemanticAnalyzer::analyze_with_source(&single, "");

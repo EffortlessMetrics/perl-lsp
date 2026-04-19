@@ -41,9 +41,18 @@ fn test_complete_lsp_integration() {
 
     // Step 2: Open multiple files to simulate real project
     let files = vec![
-        ("file:///workspace/main.pl", include_str!("fixtures/main.pl")),
-        ("file:///workspace/lib/Module.pm", include_str!("fixtures/Module.pm")),
-        ("file:///workspace/t/test.t", include_str!("fixtures/test.t")),
+        (
+            "file:///workspace/main.pl",
+            include_str!("fixtures/main.pl"),
+        ),
+        (
+            "file:///workspace/lib/Module.pm",
+            include_str!("fixtures/Module.pm"),
+        ),
+        (
+            "file:///workspace/t/test.t",
+            include_str!("fixtures/test.t"),
+        ),
     ];
 
     for (uri, content) in files {
@@ -186,7 +195,10 @@ fn test_all_test_suites_pass() {
         "lsp_formatting_test",
     ];
 
-    println!("Validating all {} test suites are integrated...", test_suites.len());
+    println!(
+        "Validating all {} test suites are integrated...",
+        test_suites.len()
+    );
 
     for suite in test_suites {
         println!("  ✓ {}", suite);
@@ -254,5 +266,9 @@ fn test_complete_workflow_performance() {
     let elapsed = start.elapsed();
 
     // Complete workflow should be under 100ms
-    assert!(elapsed.as_millis() < 100, "Complete workflow took {:?}, expected < 100ms", elapsed);
+    assert!(
+        elapsed.as_millis() < 100,
+        "Complete workflow took {:?}, expected < 100ms",
+        elapsed
+    );
 }

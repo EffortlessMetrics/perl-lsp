@@ -32,7 +32,11 @@ fn load_features() -> Result<Catalog> {
 
 fn repo_relative_path(path: impl AsRef<Path>) -> PathBuf {
     let path = path.as_ref();
-    if path.is_absolute() { path.to_path_buf() } else { PathBuf::from(path) }
+    if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        PathBuf::from(path)
+    }
 }
 
 fn lsp_feature_snapshot_path() -> PathBuf {
@@ -42,8 +46,10 @@ fn lsp_feature_snapshot_path() -> PathBuf {
 }
 
 fn snapshot_comparable_feature_ids() -> BTreeSet<String> {
-    let mut ids: BTreeSet<String> =
-        catalog_advertised_feature_ids(FeatureProfile::All).into_iter().map(String::from).collect();
+    let mut ids: BTreeSet<String> = catalog_advertised_feature_ids(FeatureProfile::All)
+        .into_iter()
+        .map(String::from)
+        .collect();
 
     // The capability snapshot intentionally excludes formatting because
     // initialize capabilities depend on runtime perltidy availability.
@@ -72,7 +78,10 @@ fn check_invariants() -> Result<()> {
 
     for feature in catalog.features() {
         if !seen_ids.insert(feature.id.clone()) {
-            violations.push(format!("DUPLICATE_ID: {:?} appears more than once", feature.id));
+            violations.push(format!(
+                "DUPLICATE_ID: {:?} appears more than once",
+                feature.id
+            ));
         }
 
         if feature.advertised
@@ -100,8 +109,11 @@ fn check_invariants() -> Result<()> {
     }
 
     let total = catalog.features().len();
-    let ga_advertised =
-        catalog.features().iter().filter(|f| f.advertised && f.maturity == Maturity::Ga).count();
+    let ga_advertised = catalog
+        .features()
+        .iter()
+        .filter(|f| f.advertised && f.maturity == Maturity::Ga)
+        .count();
     let headline_features = catalog
         .features()
         .iter()
@@ -143,13 +155,18 @@ fn update_roadmap(
     // Calculate overall compliance
     let total: usize = area_stats.values().map(|s| s.total).sum();
     let advertised: usize = area_stats.values().map(|s| s.advertised).sum();
-    let compliance =
-        if total == 0 { 0 } else { (advertised as f64 / total as f64 * 100.0).round() as u32 };
+    let compliance = if total == 0 {
+        0
+    } else {
+        (advertised as f64 / total as f64 * 100.0).round() as u32
+    };
 
     // Update compliance percentage in header
     let new_text = format!("partial LSP 3.18 compliance (~{}%)", compliance);
     let old_pattern = r"partial LSP 3.18 compliance \(~\d+%\)";
-    content = regex::Regex::new(old_pattern)?.replace_all(&content, new_text.as_str()).to_string();
+    content = regex::Regex::new(old_pattern)?
+        .replace_all(&content, new_text.as_str())
+        .to_string();
 
     // Update the compliance table
     let mut table = String::new();
@@ -194,7 +211,10 @@ fn update_lsp_status(catalog: &Catalog) -> Result<()> {
 
     let mut by_area: BTreeMap<String, Vec<&perl_feature_catalog::Feature>> = BTreeMap::new();
     for feature in catalog.features() {
-        by_area.entry(feature.area.clone()).or_default().push(feature);
+        by_area
+            .entry(feature.area.clone())
+            .or_default()
+            .push(feature);
     }
 
     let mut content = String::new();
@@ -254,9 +274,12 @@ fn replace_fence(content: &str, tag: &str, new_body: &str) -> Result<String> {
     let begin_marker = format!("<!-- BEGIN: {tag} -->");
     let end_marker = format!("<!-- END: {tag} -->");
 
-    let begin_pos =
-        content.find(&begin_marker).ok_or_else(|| eyre!("Missing begin marker for {tag}"))?;
-    let end_pos = content.find(&end_marker).ok_or_else(|| eyre!("Missing end marker for {tag}"))?;
+    let begin_pos = content
+        .find(&begin_marker)
+        .ok_or_else(|| eyre!("Missing begin marker for {tag}"))?;
+    let end_pos = content
+        .find(&end_marker)
+        .ok_or_else(|| eyre!("Missing end marker for {tag}"))?;
 
     let mut result = String::with_capacity(content.len());
     result.push_str(&content[..begin_pos]);
@@ -280,9 +303,14 @@ fn snapshot_caps_from_content(content: &str) -> Result<Option<BTreeSet<String>>>
         after_first_doc
     };
     let yaml: serde_yaml_ng::Value = serde_yaml_ng::from_str(yaml_content)?;
-    let caps = yaml.get("caps").and_then(|value| value.as_sequence()).map(|caps| {
-        caps.iter().filter_map(|value| value.as_str().map(String::from)).collect::<BTreeSet<_>>()
-    });
+    let caps = yaml
+        .get("caps")
+        .and_then(|value| value.as_sequence())
+        .map(|caps| {
+            caps.iter()
+                .filter_map(|value| value.as_str().map(String::from))
+                .collect::<BTreeSet<_>>()
+        });
 
     Ok(caps)
 }
@@ -294,20 +322,32 @@ fn compare_snapshot_caps(
     let mut warnings = Vec::new();
     let mut errors = Vec::new();
 
-    let missing_in_caps = catalog_advertised.difference(snapshot_caps).collect::<Vec<_>>();
-    let extra_in_caps = snapshot_caps.difference(catalog_advertised).collect::<Vec<_>>();
+    let missing_in_caps = catalog_advertised
+        .difference(snapshot_caps)
+        .collect::<Vec<_>>();
+    let extra_in_caps = snapshot_caps
+        .difference(catalog_advertised)
+        .collect::<Vec<_>>();
 
     if !missing_in_caps.is_empty() {
         errors.push(format!(
             "Features advertised in catalog but not in capabilities: {}",
-            missing_in_caps.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", ")
+            missing_in_caps
+                .iter()
+                .map(|s| s.as_str())
+                .collect::<Vec<_>>()
+                .join(", ")
         ));
     }
 
     if !extra_in_caps.is_empty() {
         warnings.push(format!(
             "Features in capabilities but not advertised in catalog: {}",
-            extra_in_caps.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", ")
+            extra_in_caps
+                .iter()
+                .map(|s| s.as_str())
+                .collect::<Vec<_>>()
+                .join(", ")
         ));
     }
 
@@ -410,7 +450,10 @@ fn verify_features() -> Result<()> {
         for error in &errors {
             println!("  - {}", error);
         }
-        return Err(eyre!("Feature verification failed with {} errors", errors.len()));
+        return Err(eyre!(
+            "Feature verification failed with {} errors",
+            errors.len()
+        ));
     }
 
     if !warnings.is_empty() {
@@ -442,16 +485,31 @@ fn generate_report() -> Result<()> {
         .iter()
         .filter(|f| matches!(f.maturity, Maturity::Preview) && f.advertised)
         .count();
-    let experimental =
-        catalog.feature.iter().filter(|f| matches!(f.maturity, Maturity::Experimental)).count();
-    let planned =
-        catalog.feature.iter().filter(|f| matches!(f.maturity, Maturity::Planned)).count();
+    let experimental = catalog
+        .feature
+        .iter()
+        .filter(|f| matches!(f.maturity, Maturity::Experimental))
+        .count();
+    let planned = catalog
+        .feature
+        .iter()
+        .filter(|f| matches!(f.maturity, Maturity::Planned))
+        .count();
 
     println!("\n=== LSP Compliance Report ===");
-    println!("Version: {} | LSP: {}", catalog.meta.version, catalog.meta.lsp_version);
-    let overall =
-        if total == 0 { 0 } else { (advertised as f64 / total as f64 * 100.0).round() as usize };
-    println!("\nOverall: {}/{} features ({}%)", advertised, total, overall);
+    println!(
+        "Version: {} | LSP: {}",
+        catalog.meta.version, catalog.meta.lsp_version
+    );
+    let overall = if total == 0 {
+        0
+    } else {
+        (advertised as f64 / total as f64 * 100.0).round() as usize
+    };
+    println!(
+        "\nOverall: {}/{} features ({}%)",
+        advertised, total, overall
+    );
     println!("\nBreakdown:");
     println!("  GA:           {} features", ga);
     println!("  Preview:      {} features", preview);
@@ -495,7 +553,10 @@ mod tests {
 
         assert_eq!(
             caps,
-            Some(BTreeSet::from(["lsp.definition".to_string(), "lsp.hover".to_string()]))
+            Some(BTreeSet::from([
+                "lsp.definition".to_string(),
+                "lsp.hover".to_string()
+            ]))
         );
         Ok(())
     }
@@ -510,7 +571,10 @@ mod tests {
     #[test]
     fn repo_relative_path_keeps_catalog_test_paths_rooted_at_repo() {
         let path = repo_relative_path("crates/perl-lsp/tests/lsp_completion_tests.rs");
-        assert_eq!(path, PathBuf::from("crates/perl-lsp/tests/lsp_completion_tests.rs"));
+        assert_eq!(
+            path,
+            PathBuf::from("crates/perl-lsp/tests/lsp_completion_tests.rs")
+        );
     }
 
     #[test]
@@ -556,7 +620,10 @@ caps:\n\
         let caps = snapshot_caps_from_content(content)?;
         assert_eq!(
             caps,
-            Some(BTreeSet::from(["lsp.definition".to_string(), "lsp.hover".to_string()]))
+            Some(BTreeSet::from([
+                "lsp.definition".to_string(),
+                "lsp.hover".to_string()
+            ]))
         );
         Ok(())
     }

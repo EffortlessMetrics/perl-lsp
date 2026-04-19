@@ -197,14 +197,20 @@ fn contains_legacy_separator() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn contains_multiple_occurrences_on_line() -> Result<(), Box<dyn std::error::Error>> {
-    assert!(contains_module_token("use Foo::Bar; my $x = Foo::Bar->new;", "Foo::Bar"));
+    assert!(contains_module_token(
+        "use Foo::Bar; my $x = Foo::Bar->new;",
+        "Foo::Bar"
+    ));
     Ok(())
 }
 
 #[test]
 fn contains_module_after_arrow_operator() -> Result<(), Box<dyn std::error::Error>> {
     // Foo::Bar inside Foo::Bar::method is not standalone (it's a prefix of a longer token)
-    assert!(!contains_module_token("$obj->Foo::Bar::method()", "Foo::Bar"));
+    assert!(!contains_module_token(
+        "$obj->Foo::Bar::method()",
+        "Foo::Bar"
+    ));
     // But a standalone method call is detected
     assert!(contains_module_token("$obj->Foo::Bar", "Foo::Bar"));
     Ok(())
@@ -317,8 +323,11 @@ fn replace_with_longer_replacement() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn replace_with_shorter_replacement() -> Result<(), Box<dyn std::error::Error>> {
-    let (out, changed) =
-        replace_module_token("use Very::Long::Module::Name;", "Very::Long::Module::Name", "X");
+    let (out, changed) = replace_module_token(
+        "use Very::Long::Module::Name;",
+        "Very::Long::Module::Name",
+        "X",
+    );
     assert!(changed);
     assert_eq!(out, "use X;");
     Ok(())

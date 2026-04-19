@@ -21,7 +21,11 @@ fn completes_visible_matching_files_and_directories() -> Result<(), Box<dyn std:
     assert!(labels.contains(&"lib.pm"));
     assert!(labels.contains(&"lib.rs"));
     assert!(labels.contains(&"libdir/"));
-    assert!(completions.iter().all(|item| item.kind == CompletionItemKind::File));
+    assert!(
+        completions
+            .iter()
+            .all(|item| item.kind == CompletionItemKind::File)
+    );
     Ok(())
 }
 

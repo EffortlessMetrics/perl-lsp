@@ -14,7 +14,12 @@ fn debug_substitution_parsing() {
             if let NodeKind::Program { statements } = &ast.kind {
                 for stmt in statements {
                     match &stmt.kind {
-                        NodeKind::Substitution { pattern, replacement, modifiers, .. } => {
+                        NodeKind::Substitution {
+                            pattern,
+                            replacement,
+                            modifiers,
+                            ..
+                        } => {
                             println!("Found substitution:");
                             println!("  Pattern: {}", pattern);
                             println!("  Replacement: {}", replacement);
@@ -52,7 +57,12 @@ fn debug_substitution_with_flags() {
             if let NodeKind::Program { statements } = &ast.kind {
                 for stmt in statements {
                     match &stmt.kind {
-                        NodeKind::Substitution { pattern, replacement, modifiers, .. } => {
+                        NodeKind::Substitution {
+                            pattern,
+                            replacement,
+                            modifiers,
+                            ..
+                        } => {
                             println!("Found substitution:");
                             println!("  Pattern: {}", pattern);
                             println!("  Replacement: {}", replacement);

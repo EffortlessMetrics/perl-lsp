@@ -33,7 +33,10 @@ mod bless_parsing_tests {
 
     #[test]
     fn test_return_bless_empty_hash() -> Result<(), Box<dyn std::error::Error>> {
-        parse_and_check("return bless {}", "(source_file (return (call bless ((hash )))))")
+        parse_and_check(
+            "return bless {}",
+            "(source_file (return (call bless ((hash )))))",
+        )
     }
 
     #[test]

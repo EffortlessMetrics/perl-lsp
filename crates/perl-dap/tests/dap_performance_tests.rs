@@ -238,12 +238,17 @@ mod dap_performance {
         }
 
         for handle in handles {
-            handle.join().map_err(|_| anyhow::anyhow!("worker thread panicked"))?;
+            handle
+                .join()
+                .map_err(|_| anyhow::anyhow!("worker thread panicked"))?;
         }
         let elapsed = start.elapsed();
         let results = results.lock().unwrap_or_else(|e| e.into_inner());
         assert_eq!(results.len(), workers);
-        assert!(results.iter().all(|ok| *ok), "all concurrent workers must succeed");
+        assert!(
+            results.iter().all(|ok| *ok),
+            "all concurrent workers must succeed"
+        );
         assert!(
             elapsed < Duration::from_secs(2),
             "concurrent session check exceeded budget: {:?}",

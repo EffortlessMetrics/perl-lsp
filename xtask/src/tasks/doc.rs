@@ -22,7 +22,9 @@ pub fn run(open: bool, all_features: bool) -> Result<()> {
         args.push("--open");
     }
 
-    let status = cmd("cargo", &args).run().context("Failed to build documentation")?;
+    let status = cmd("cargo", &args)
+        .run()
+        .context("Failed to build documentation")?;
 
     if status.status.success() {
         spinner.finish_with_message("✅ Documentation built");

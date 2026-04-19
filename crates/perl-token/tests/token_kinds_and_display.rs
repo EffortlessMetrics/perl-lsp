@@ -367,7 +367,11 @@ fn display_name_keywords() {
         (TokenKind::Undef, "'undef'"),
     ];
     for (kind, expected) in cases {
-        assert_eq!(kind.display_name(), *expected, "display_name mismatch for {kind:?}");
+        assert_eq!(
+            kind.display_name(),
+            *expected,
+            "display_name mismatch for {kind:?}"
+        );
     }
 }
 
@@ -434,7 +438,11 @@ fn display_name_operators() {
         (TokenKind::Backslash, "'\\'"),
     ];
     for (kind, expected) in cases {
-        assert_eq!(kind.display_name(), *expected, "display_name mismatch for {kind:?}");
+        assert_eq!(
+            kind.display_name(),
+            *expected,
+            "display_name mismatch for {kind:?}"
+        );
     }
 }
 
@@ -451,7 +459,11 @@ fn display_name_delimiters() {
         (TokenKind::Comma, "','"),
     ];
     for (kind, expected) in cases {
-        assert_eq!(kind.display_name(), *expected, "display_name mismatch for {kind:?}");
+        assert_eq!(
+            kind.display_name(),
+            *expected,
+            "display_name mismatch for {kind:?}"
+        );
     }
 }
 
@@ -476,7 +488,11 @@ fn display_name_literals() {
         (TokenKind::HeredocDepthLimit, "heredoc depth limit"),
     ];
     for (kind, expected) in cases {
-        assert_eq!(kind.display_name(), *expected, "display_name mismatch for {kind:?}");
+        assert_eq!(
+            kind.display_name(),
+            *expected,
+            "display_name mismatch for {kind:?}"
+        );
     }
 }
 
@@ -491,7 +507,11 @@ fn display_name_identifiers_and_sigils() {
         (TokenKind::GlobSigil, "'*'"),
     ];
     for (kind, expected) in cases {
-        assert_eq!(kind.display_name(), *expected, "display_name mismatch for {kind:?}");
+        assert_eq!(
+            kind.display_name(),
+            *expected,
+            "display_name mismatch for {kind:?}"
+        );
     }
 }
 
@@ -505,7 +525,10 @@ fn display_name_special() {
 fn display_name_returns_non_empty_for_all_variants() {
     for kind in all_kinds() {
         let name = kind.display_name();
-        assert!(!name.is_empty(), "display_name() returned empty for {kind:?}");
+        assert!(
+            !name.is_empty(),
+            "display_name() returned empty for {kind:?}"
+        );
     }
 }
 
@@ -664,7 +687,10 @@ fn every_variant_has_exactly_one_category() {
             is_special(kind),
         ];
         let count = categories.iter().filter(|&&b| b).count();
-        assert_eq!(count, 1, "{kind:?} belongs to {count} categories (expected exactly 1)");
+        assert_eq!(
+            count, 1,
+            "{kind:?} belongs to {count} categories (expected exactly 1)"
+        );
     }
 }
 
@@ -694,7 +720,10 @@ fn literal_classification_count() {
 
 #[test]
 fn identifier_sigil_classification_count() {
-    let count = all_kinds().iter().filter(|k| is_identifier_or_sigil(**k)).count();
+    let count = all_kinds()
+        .iter()
+        .filter(|k| is_identifier_or_sigil(**k))
+        .count();
     assert_eq!(count, 6, "expected 6 identifier/sigil variants");
 }
 
@@ -707,7 +736,11 @@ fn special_classification_count() {
 #[test]
 fn total_variant_count() {
     // 40 keywords + 58 operators + 8 delimiters + 16 literals + 6 ident/sigil + 2 special = 130
-    assert_eq!(all_kinds().len(), 130, "expected 130 total TokenKind variants");
+    assert_eq!(
+        all_kinds().len(),
+        130,
+        "expected 130 total TokenKind variants"
+    );
 }
 
 // ===========================================================================
@@ -784,8 +817,14 @@ fn sigils_classified_correctly() {
         TokenKind::GlobSigil,
     ];
     for sigil in &sigils {
-        assert!(is_identifier_or_sigil(*sigil), "{sigil:?} should be identifier_or_sigil");
-        assert!(!is_operator(*sigil), "{sigil:?} should not be classified as operator");
+        assert!(
+            is_identifier_or_sigil(*sigil),
+            "{sigil:?} should be identifier_or_sigil"
+        );
+        assert!(
+            !is_operator(*sigil),
+            "{sigil:?} should not be classified as operator"
+        );
     }
 }
 
@@ -795,7 +834,12 @@ fn sigils_classified_correctly() {
 
 #[test]
 fn declaration_keywords() {
-    let decl = [TokenKind::My, TokenKind::Our, TokenKind::Local, TokenKind::State];
+    let decl = [
+        TokenKind::My,
+        TokenKind::Our,
+        TokenKind::Local,
+        TokenKind::State,
+    ];
     for kind in &decl {
         assert!(is_keyword(*kind), "{kind:?} should be a keyword");
     }
@@ -803,7 +847,12 @@ fn declaration_keywords() {
 
 #[test]
 fn loop_keywords() {
-    let loops = [TokenKind::While, TokenKind::Until, TokenKind::For, TokenKind::Foreach];
+    let loops = [
+        TokenKind::While,
+        TokenKind::Until,
+        TokenKind::For,
+        TokenKind::Foreach,
+    ];
     for kind in &loops {
         assert!(is_keyword(*kind), "{kind:?} should be a keyword");
     }
@@ -835,8 +884,13 @@ fn perl_538_oop_keywords() {
 
 #[test]
 fn phase_block_keywords() {
-    let phases =
-        [TokenKind::Begin, TokenKind::End, TokenKind::Check, TokenKind::Init, TokenKind::Unitcheck];
+    let phases = [
+        TokenKind::Begin,
+        TokenKind::End,
+        TokenKind::Check,
+        TokenKind::Init,
+        TokenKind::Unitcheck,
+    ];
     for kind in &phases {
         assert!(is_keyword(*kind), "{kind:?} should be a keyword");
     }
@@ -1052,8 +1106,18 @@ fn token_equality_considers_all_fields() {
 #[test]
 fn token_equality_with_shared_arc() {
     let shared: Arc<str> = Arc::from("shared");
-    let a = Token { kind: TokenKind::Identifier, text: shared.clone(), start: 0, end: 6 };
-    let b = Token { kind: TokenKind::Identifier, text: shared, start: 0, end: 6 };
+    let a = Token {
+        kind: TokenKind::Identifier,
+        text: shared.clone(),
+        start: 0,
+        end: 6,
+    };
+    let b = Token {
+        kind: TokenKind::Identifier,
+        text: shared,
+        start: 0,
+        end: 6,
+    };
     assert_eq!(a, b);
 }
 

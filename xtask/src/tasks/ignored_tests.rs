@@ -24,8 +24,17 @@ const NC: &str = "\x1b[0m";
 
 // ── Categories ──────────────────────────────────────────────────────────────
 
-const CATEGORIES: [&str; 9] =
-    ["brokenpipe", "feature", "infra", "protocol", "manual", "stress", "bug", "bare", "other"];
+const CATEGORIES: [&str; 9] = [
+    "brokenpipe",
+    "feature",
+    "infra",
+    "protocol",
+    "manual",
+    "stress",
+    "bug",
+    "bare",
+    "other",
+];
 
 // ── Public entry points ─────────────────────────────────────────────────────
 
@@ -50,7 +59,9 @@ pub fn compute_category_counts(root: &Path) -> Result<HashMap<String, usize>> {
 
 pub fn run(update: bool, check: bool, verbose: bool) -> Result<()> {
     if update && check {
-        return Err(eyre!("choose exactly one of --update or --check for ignored-tests"));
+        return Err(eyre!(
+            "choose exactly one of --update or --check for ignored-tests"
+        ));
     }
 
     let root = project_root()?;
@@ -75,7 +86,10 @@ pub fn run(update: bool, check: bool, verbose: bool) -> Result<()> {
         });
     }
 
-    let total: usize = CATEGORIES.iter().map(|c| counts.get(*c).copied().unwrap_or(0)).sum();
+    let total: usize = CATEGORIES
+        .iter()
+        .map(|c| counts.get(*c).copied().unwrap_or(0))
+        .sum();
 
     let baseline = load_ignored_baseline(&baseline_path).unwrap_or_else(|_| {
         let mut empty = HashMap::new();
@@ -93,7 +107,10 @@ pub fn run(update: bool, check: bool, verbose: bool) -> Result<()> {
     println!("===============================================");
     println!("        Ignored Tests Summary");
     println!("===============================================");
-    println!("{:<12} {:>8} {:>8} {:>8}", "Category", "Count", "Baseline", "Delta");
+    println!(
+        "{:<12} {:>8} {:>8} {:>8}",
+        "Category", "Count", "Baseline", "Delta"
+    );
     println!("-----------------------------------------------");
     for category in CATEGORIES {
         let current = counts.get(category).copied().unwrap_or(0);
@@ -171,7 +188,11 @@ pub fn run(update: bool, check: bool, verbose: bool) -> Result<()> {
             println!("New ignores must be justified. If intentional, run:");
             println!("  cargo run -p xtask -- ignored-tests --update");
             println!();
-            return Err(eyre!("ignored test count increased from {} to {}", baseline_total, total));
+            return Err(eyre!(
+                "ignored test count increased from {} to {}",
+                baseline_total,
+                total
+            ));
         }
         println!(
             "{GREEN}OK: Ignored test count ({total}) is not higher than baseline ({baseline_total}){NC}"
@@ -266,8 +287,10 @@ struct IgnoredDetail {
 }
 
 fn display_path(root: &Path, path: &Path) -> String {
-    path.strip_prefix(root)
-        .map_or_else(|_| path.display().to_string(), |relative| relative.display().to_string())
+    path.strip_prefix(root).map_or_else(
+        |_| path.display().to_string(),
+        |relative| relative.display().to_string(),
+    )
 }
 
 fn read_lines(path: &Path) -> Result<Vec<String>> {
@@ -285,7 +308,11 @@ fn collect_ignored_matches(crates_root: &Path, repo_root: &Path) -> Result<Vec<I
         Regex::new(r"\bfn\s+([A-Za-z_][A-Za-z0-9_]*)").with_context(|| "compiling fn regex")?;
     let comment_re = Regex::new(r"//\s*(.+)$").with_context(|| "compiling comment regex")?;
 
-    for entry in WalkDir::new(crates_root).follow_links(false).into_iter().filter_map(Result::ok) {
+    for entry in WalkDir::new(crates_root)
+        .follow_links(false)
+        .into_iter()
+        .filter_map(Result::ok)
+    {
         let path = entry.path();
         if !entry.file_type().is_file() || path.extension().is_none_or(|ext| ext != "rs") {
             continue;
@@ -517,7 +544,10 @@ mod tests {
 
     #[test]
     fn categorize_brokenpipe() {
-        assert_eq!(categorize_ignore("brokenpipe: transport error", ""), "brokenpipe");
+        assert_eq!(
+            categorize_ignore("brokenpipe: transport error", ""),
+            "brokenpipe"
+        );
     }
 
     #[test]
@@ -533,7 +563,10 @@ mod tests {
 
     #[test]
     fn categorize_other() {
-        assert_eq!(categorize_ignore("some unique unmatched reason", ""), "other");
+        assert_eq!(
+            categorize_ignore("some unique unmatched reason", ""),
+            "other"
+        );
     }
 
     #[test]

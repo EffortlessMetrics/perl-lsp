@@ -25,15 +25,18 @@ impl LspClient {
     /// Spawn a new LSP server process with environment variables
     pub fn spawn_with_env(bin: &str, env_vars: &[(&str, &str)]) -> Result<Self> {
         let mut cmd = Command::new(bin);
-        cmd.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::null());
+        cmd.stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null());
 
         // Add any environment variables
         for (key, value) in env_vars {
             cmd.env(key, value);
         }
 
-        let mut child =
-            cmd.spawn().with_context(|| format!("Failed to start LSP server '{}'", bin))?;
+        let mut child = cmd
+            .spawn()
+            .with_context(|| format!("Failed to start LSP server '{}'", bin))?;
 
         let stdout = child
             .stdout
@@ -41,7 +44,12 @@ impl LspClient {
             .ok_or_else(|| anyhow!("Failed to get stdout from LSP server process"))?;
         let reader = BufReader::new(stdout);
 
-        let mut client = Self { child, reader, buf: Vec::new(), next_id: 1 };
+        let mut client = Self {
+            child,
+            reader,
+            buf: Vec::new(),
+            next_id: 1,
+        };
 
         client.initialize()?;
         Ok(client)
@@ -73,8 +81,10 @@ impl LspClient {
 
         loop {
             line.clear();
-            let bytes_read =
-                self.reader.read_line(&mut line).context("Failed to read line from LSP server")?;
+            let bytes_read = self
+                .reader
+                .read_line(&mut line)
+                .context("Failed to read line from LSP server")?;
 
             if bytes_read == 0 {
                 return Err(anyhow!("LSP server closed stdout unexpectedly"));
@@ -120,8 +130,10 @@ impl LspClient {
 
         loop {
             // First check buffered messages
-            if let Some(pos) =
-                self.buf.iter().position(|m| m.get("id") == Some(&serde_json::json!(id)))
+            if let Some(pos) = self
+                .buf
+                .iter()
+                .position(|m| m.get("id") == Some(&serde_json::json!(id)))
             {
                 return Ok(self.buf.remove(pos));
             }

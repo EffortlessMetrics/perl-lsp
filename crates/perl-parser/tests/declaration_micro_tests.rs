@@ -22,7 +22,11 @@ mod declaration_micro_tests {
     fn parse_and_get_provider(
         code: &str,
     ) -> Result<
-        (DeclarationProvider<'static>, ParentMap, Arc<perl_parser::ast::Node>),
+        (
+            DeclarationProvider<'static>,
+            ParentMap,
+            Arc<perl_parser::ast::Node>,
+        ),
         Box<dyn std::error::Error>,
     > {
         let mut parser = Parser::new(code);
@@ -59,7 +63,10 @@ mod declaration_micro_tests {
         let links = links.ok_or("Expected links for BAR")?;
         assert!(!links.is_empty(), "Links should not be empty");
         // Should point to the second qw, not the first
-        assert!(links[0].target_selection_range.0 > 21, "Should point to second use constant");
+        assert!(
+            links[0].target_selection_range.0 > 21,
+            "Should point to second use constant"
+        );
         Ok(())
     }
 
@@ -118,7 +125,11 @@ mod declaration_micro_tests {
         // place caret far past EOL on line 0, ensure clamp then round-trip
         let off = cache.position_to_offset(text, 0, 999);
         let (line, col) = cache.offset_to_position(text, off);
-        assert_eq!((line, col), (0, 3), "Should clamp to end of line which is column 3 in UTF-16");
+        assert_eq!(
+            (line, col),
+            (0, 3),
+            "Should clamp to end of line which is column 3 in UTF-16"
+        );
     }
 
     // =========================================================================
@@ -132,13 +143,17 @@ mod declaration_micro_tests {
         let (provider, _map, _ast) = parse_and_get_provider(code)?;
 
         // Look up $qwerty at print position - parser should NOT confuse "qwerty" with "qw" operator
-        let ref_pos = code.rfind("$qwerty").ok_or("reference position not found")?;
+        let ref_pos = code
+            .rfind("$qwerty")
+            .ok_or("reference position not found")?;
         let links = provider.find_declaration(ref_pos, 0);
         assert!(links.is_some(), "Should find qwerty variable");
         let links = links.ok_or("Expected links for qwerty")?;
         assert!(!links.is_empty(), "Links should not be empty");
         // The declaration span includes the sigil: "$qwerty" starts at position 3
-        let decl_pos = code.find("$qwerty").ok_or("declaration position not found")?;
+        let decl_pos = code
+            .find("$qwerty")
+            .ok_or("declaration position not found")?;
         assert_eq!(links[0].target_selection_range.0, decl_pos);
         Ok(())
     }
@@ -157,7 +172,12 @@ mod declaration_micro_tests {
         );
         // Verify it points to the declaration (first $var)
         let decl_pos = code.find("$var").ok_or("declaration position not found")?;
-        assert_eq!(links.as_ref().ok_or("Expected links")?[0].target_selection_range.0, decl_pos);
+        assert_eq!(
+            links.as_ref().ok_or("Expected links")?[0]
+                .target_selection_range
+                .0,
+            decl_pos
+        );
         Ok(())
     }
 }
@@ -178,7 +198,11 @@ mod constant_advanced_tests {
     fn parse_and_get_provider(
         code: &str,
     ) -> Result<
-        (DeclarationProvider<'static>, ParentMap, Arc<perl_parser::ast::Node>),
+        (
+            DeclarationProvider<'static>,
+            ParentMap,
+            Arc<perl_parser::ast::Node>,
+        ),
         Box<dyn std::error::Error>,
     > {
         let mut parser = Parser::new(code);
@@ -283,18 +307,32 @@ mod constant_advanced_tests {
         let foo_links = provider.find_declaration(foo_off, 0);
         assert!(foo_links.is_some(), "Should find FOO");
         let foo_links = foo_links.ok_or("Expected links for FOO")?;
-        assert!(!foo_links.is_empty(), "Should have at least one link for FOO");
+        assert!(
+            !foo_links.is_empty(),
+            "Should have at least one link for FOO"
+        );
         let foo_link = &foo_links[0].target_selection_range;
-        assert_eq!(&code[foo_link.0..foo_link.1], "FOO", "FOO span should be exact");
+        assert_eq!(
+            &code[foo_link.0..foo_link.1],
+            "FOO",
+            "FOO span should be exact"
+        );
 
         // offset for BAR
         let bar_off = code.rfind("BAR").ok_or("BAR not found")?;
         let bar_links = provider.find_declaration(bar_off, 0);
         assert!(bar_links.is_some(), "Should find BAR");
         let bar_links = bar_links.ok_or("Expected links for BAR")?;
-        assert!(!bar_links.is_empty(), "Should have at least one link for BAR");
+        assert!(
+            !bar_links.is_empty(),
+            "Should have at least one link for BAR"
+        );
         let bar_link = &bar_links[0].target_selection_range;
-        assert_eq!(&code[bar_link.0..bar_link.1], "BAR", "BAR span should be exact");
+        assert_eq!(
+            &code[bar_link.0..bar_link.1],
+            "BAR",
+            "BAR span should be exact"
+        );
         Ok(())
     }
 }
@@ -315,7 +353,11 @@ mod qw_variants_tests {
     fn parse_and_get_provider(
         code: &str,
     ) -> Result<
-        (DeclarationProvider<'static>, ParentMap, Arc<perl_parser::ast::Node>),
+        (
+            DeclarationProvider<'static>,
+            ParentMap,
+            Arc<perl_parser::ast::Node>,
+        ),
         Box<dyn std::error::Error>,
     > {
         let mut parser = Parser::new(code);
@@ -381,7 +423,11 @@ mod parser_extras_tests {
     fn parse_and_get_provider(
         code: &str,
     ) -> Result<
-        (DeclarationProvider<'static>, ParentMap, Arc<perl_parser::ast::Node>),
+        (
+            DeclarationProvider<'static>,
+            ParentMap,
+            Arc<perl_parser::ast::Node>,
+        ),
         Box<dyn std::error::Error>,
     > {
         let mut parser = Parser::new(code);

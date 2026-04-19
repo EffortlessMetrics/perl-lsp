@@ -23,7 +23,11 @@ fn safe_content(lines: Vec<String>, terminator: &str) -> Vec<String> {
         .into_iter()
         .map(|line| {
             // If the line exactly matches the terminator, append a space
-            if line.trim() == terminator { format!("{} ", line) } else { line }
+            if line.trim() == terminator {
+                format!("{} ", line)
+            } else {
+                line
+            }
         })
         .collect()
 }
@@ -116,8 +120,13 @@ pub fn backtick_heredoc() -> impl Strategy<Value = String> {
 
 /// Generate multiple heredocs in sequence
 pub fn multiple_heredocs() -> impl Strategy<Value = String> {
-    (heredoc_id(), heredoc_id(), heredoc_content(), heredoc_content()).prop_map(
-        |(id1, id2, lines1, lines2)| {
+    (
+        heredoc_id(),
+        heredoc_id(),
+        heredoc_content(),
+        heredoc_content(),
+    )
+        .prop_map(|(id1, id2, lines1, lines2)| {
             let safe_lines1 = safe_content(lines1, &id1);
             let safe_lines2 = safe_content(lines2, &id2);
             let mut result = format!("print <<{}, <<{};\n", id1, id2);
@@ -139,8 +148,7 @@ pub fn multiple_heredocs() -> impl Strategy<Value = String> {
             result.push('\n');
 
             result
-        },
-    )
+        })
 }
 
 /// Generate heredoc in various contexts
@@ -148,7 +156,14 @@ pub fn heredoc_in_context() -> impl Strategy<Value = String> {
     (
         heredoc_id(),
         heredoc_content(),
-        prop::sample::select(vec!["print ", "my $x = ", "push @arr, ", "return ", "die ", "warn "]),
+        prop::sample::select(vec![
+            "print ",
+            "my $x = ",
+            "push @arr, ",
+            "return ",
+            "die ",
+            "warn ",
+        ]),
     )
         .prop_map(|(id, lines, prefix)| {
             let safe_lines = safe_content(lines, &id);

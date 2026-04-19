@@ -9,7 +9,12 @@ fn extract_substitution(ast: &perl_parser::ast::Node) -> Option<(&str, &str, &st
     if let NodeKind::Program { statements } = &ast.kind
         && let Some(stmt) = statements.first()
         && let NodeKind::ExpressionStatement { expression } = &stmt.kind
-        && let NodeKind::Substitution { pattern, replacement, modifiers, .. } = &expression.kind
+        && let NodeKind::Substitution {
+            pattern,
+            replacement,
+            modifiers,
+            ..
+        } = &expression.kind
     {
         return Some((pattern, replacement, modifiers));
     }
@@ -73,11 +78,17 @@ fn test_substitution_with_different_delimiters() -> TestResult {
 
     for (code, expected_pattern, expected_replacement) in test_cases {
         let mut parser = Parser::new(code);
-        let ast = parser.parse().map_err(|e| format!("parse {}: {:?}", code, e))?;
+        let ast = parser
+            .parse()
+            .map_err(|e| format!("parse {}: {:?}", code, e))?;
 
         if let Some((pattern, replacement, _modifiers)) = extract_substitution(&ast) {
             assert_eq!(pattern, expected_pattern, "Pattern mismatch for {}", code);
-            assert_eq!(replacement, expected_replacement, "Replacement mismatch for {}", code);
+            assert_eq!(
+                replacement, expected_replacement,
+                "Replacement mismatch for {}",
+                code
+            );
         } else {
             return Err(format!("Expected Substitution node for {}", code).into());
         }
@@ -87,15 +98,25 @@ fn test_substitution_with_different_delimiters() -> TestResult {
 
 #[test]
 fn test_substitution_empty_pattern_or_replacement() -> TestResult {
-    let test_cases = vec![("s///", "", ""), ("s/foo//", "foo", ""), ("s//bar/", "", "bar")];
+    let test_cases = vec![
+        ("s///", "", ""),
+        ("s/foo//", "foo", ""),
+        ("s//bar/", "", "bar"),
+    ];
 
     for (code, expected_pattern, expected_replacement) in test_cases {
         let mut parser = Parser::new(code);
-        let ast = parser.parse().map_err(|e| format!("parse {}: {:?}", code, e))?;
+        let ast = parser
+            .parse()
+            .map_err(|e| format!("parse {}: {:?}", code, e))?;
 
         if let Some((pattern, replacement, _modifiers)) = extract_substitution(&ast) {
             assert_eq!(pattern, expected_pattern, "Pattern mismatch for {}", code);
-            assert_eq!(replacement, expected_replacement, "Replacement mismatch for {}", code);
+            assert_eq!(
+                replacement, expected_replacement,
+                "Replacement mismatch for {}",
+                code
+            );
         } else {
             return Err(format!("Expected Substitution node for {}", code).into());
         }

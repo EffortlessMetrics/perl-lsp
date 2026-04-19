@@ -14,8 +14,10 @@ fn semantic_tokens_expected_ranges() -> Result<(), Box<dyn std::error::Error>> {
     let source = "my $x = 1;\nsub foo { $x }\nfoo();\n";
     client.did_open(uri, "perl", source)?;
 
-    let response = client
-        .request("textDocument/semanticTokens/full", json!({"textDocument": {"uri": uri}}))?;
+    let response = client.request(
+        "textDocument/semanticTokens/full",
+        json!({"textDocument": {"uri": uri}}),
+    )?;
     let data = response["result"]["data"]
         .as_array()
         .ok_or("semanticTokens response should contain data array")?;
@@ -60,7 +62,11 @@ fn semantic_tokens_expected_ranges() -> Result<(), Box<dyn std::error::Error>> {
         (2, 0, 5, 7),   // foo(); - function (index 7)
     ];
 
-    assert_eq!(tokens.len(), expected_non_overlapping.len(), "semantic token count mismatch");
+    assert_eq!(
+        tokens.len(),
+        expected_non_overlapping.len(),
+        "semantic token count mismatch"
+    );
 
     for (i, &expected_token) in expected_non_overlapping.iter().enumerate() {
         assert_eq!(tokens[i], expected_token, "token {} mismatch", i);

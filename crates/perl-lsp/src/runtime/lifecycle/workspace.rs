@@ -41,7 +41,10 @@ impl LspServer {
             PerlInterpreterResult::FoundOnPath(ref path) => {
                 tracing::debug!(path = %path.display(), "Perl interpreter: found on PATH");
             }
-            PerlInterpreterResult::FoundViaFallback { ref path, ref label } => {
+            PerlInterpreterResult::FoundViaFallback {
+                ref path,
+                ref label,
+            } => {
                 let msg = format!(
                     "perl-lsp: Perl not found on PATH; using {label} at {}. \
                      Add Perl to PATH or set `perl-lsp.perl.path` to suppress this message.",
@@ -239,10 +242,12 @@ include_paths = ["other_lib"]
         .expect("failed to write config2");
 
         // Add workspace folders
-        let uri1 =
-            url::Url::from_directory_path(&folder1).expect("failed to create uri1").to_string();
-        let uri2 =
-            url::Url::from_directory_path(&folder2).expect("failed to create uri2").to_string();
+        let uri1 = url::Url::from_directory_path(&folder1)
+            .expect("failed to create uri1")
+            .to_string();
+        let uri2 = url::Url::from_directory_path(&folder2)
+            .expect("failed to create uri2")
+            .to_string();
 
         server.workspace_folders.lock().push(
             crate::runtime::workspace_folder::WorkspaceFolderState::new(uri1.clone())
@@ -287,7 +292,9 @@ include_paths = ["other_lib"]
         std::fs::create_dir_all(&folder).expect("failed to create folder");
 
         // Add workspace folder without config
-        let uri = url::Url::from_directory_path(&folder).expect("failed to create uri").to_string();
+        let uri = url::Url::from_directory_path(&folder)
+            .expect("failed to create uri")
+            .to_string();
 
         server.workspace_folders.lock().push(
             crate::runtime::workspace_folder::WorkspaceFolderState::new(uri.clone())
@@ -304,7 +311,12 @@ include_paths = ["other_lib"]
         let folder_state = folders.iter().find(|f| f.uri == uri).unwrap();
         assert!(folder_state.project_config.is_none());
         // Should have default include paths
-        assert!(!folder_state.effective_workspace_config.include_paths.is_empty());
+        assert!(
+            !folder_state
+                .effective_workspace_config
+                .include_paths
+                .is_empty()
+        );
     }
 
     #[test]
@@ -316,10 +328,12 @@ include_paths = ["other_lib"]
         std::fs::create_dir_all(&folder1).expect("failed to create folder1");
         std::fs::create_dir_all(&folder2).expect("failed to create folder2");
 
-        let uri1 =
-            url::Url::from_directory_path(&folder1).expect("failed to create uri1").to_string();
-        let uri2 =
-            url::Url::from_directory_path(&folder2).expect("failed to create uri2").to_string();
+        let uri1 = url::Url::from_directory_path(&folder1)
+            .expect("failed to create uri1")
+            .to_string();
+        let uri2 = url::Url::from_directory_path(&folder2)
+            .expect("failed to create uri2")
+            .to_string();
 
         server.workspace_folders.lock().push(
             crate::runtime::workspace_folder::WorkspaceFolderState::new(uri1.clone())
@@ -330,14 +344,17 @@ include_paths = ["other_lib"]
                 .with_path(folder2.clone()),
         );
 
-        server.pending_workspace_configuration_requests.lock().insert(
-            11,
-            crate::runtime::PendingWorkspaceConfigurationRequest {
-                folder_uris: vec![uri1.clone(), uri2.clone()],
-                includes_global_item: true,
-                created_at: std::time::Instant::now(),
-            },
-        );
+        server
+            .pending_workspace_configuration_requests
+            .lock()
+            .insert(
+                11,
+                crate::runtime::PendingWorkspaceConfigurationRequest {
+                    folder_uris: vec![uri1.clone(), uri2.clone()],
+                    includes_global_item: true,
+                    created_at: std::time::Instant::now(),
+                },
+            );
 
         server.handle_client_response(Some(serde_json::json!({
             "id": 11,
@@ -349,14 +366,26 @@ include_paths = ["other_lib"]
         })));
 
         let folders = server.workspace_folders.lock();
-        let folder1_state = folders.iter().find(|f| f.uri == uri1).expect("missing folder1");
-        let folder2_state = folders.iter().find(|f| f.uri == uri2).expect("missing folder2");
+        let folder1_state = folders
+            .iter()
+            .find(|f| f.uri == uri1)
+            .expect("missing folder1");
+        let folder2_state = folders
+            .iter()
+            .find(|f| f.uri == uri2)
+            .expect("missing folder2");
 
         assert!(
-            folder1_state.effective_workspace_config.include_paths.contains(&"api_lib".to_string())
+            folder1_state
+                .effective_workspace_config
+                .include_paths
+                .contains(&"api_lib".to_string())
         );
         assert!(
-            folder2_state.effective_workspace_config.include_paths.contains(&"ui_lib".to_string())
+            folder2_state
+                .effective_workspace_config
+                .include_paths
+                .contains(&"ui_lib".to_string())
         );
         assert!(folder1_state.effective_workspace_config.use_system_inc);
         assert!(folder2_state.effective_workspace_config.use_system_inc);
@@ -368,20 +397,25 @@ include_paths = ["other_lib"]
         let temp = tempfile::tempdir().expect("failed to create temp dir");
         let folder = temp.path().join("folder");
         std::fs::create_dir_all(&folder).expect("failed to create folder");
-        let uri = url::Url::from_directory_path(&folder).expect("failed to create uri").to_string();
+        let uri = url::Url::from_directory_path(&folder)
+            .expect("failed to create uri")
+            .to_string();
 
         server.workspace_folders.lock().push(
             crate::runtime::workspace_folder::WorkspaceFolderState::new(uri.clone())
                 .with_path(folder.clone()),
         );
-        server.pending_workspace_configuration_requests.lock().insert(
-            99,
-            crate::runtime::PendingWorkspaceConfigurationRequest {
-                folder_uris: vec![uri.clone()],
-                includes_global_item: true,
-                created_at: std::time::Instant::now(),
-            },
-        );
+        server
+            .pending_workspace_configuration_requests
+            .lock()
+            .insert(
+                99,
+                crate::runtime::PendingWorkspaceConfigurationRequest {
+                    folder_uris: vec![uri.clone()],
+                    includes_global_item: true,
+                    created_at: std::time::Instant::now(),
+                },
+            );
 
         server.handle_client_response(Some(serde_json::json!({
             "id": 99,
@@ -389,9 +423,15 @@ include_paths = ["other_lib"]
         })));
 
         let folders = server.workspace_folders.lock();
-        let folder_state = folders.iter().find(|f| f.uri == uri).expect("missing folder");
+        let folder_state = folders
+            .iter()
+            .find(|f| f.uri == uri)
+            .expect("missing folder");
         assert!(
-            !folder_state.effective_workspace_config.include_paths.contains(&"oops".to_string())
+            !folder_state
+                .effective_workspace_config
+                .include_paths
+                .contains(&"oops".to_string())
         );
     }
 
@@ -404,10 +444,12 @@ include_paths = ["other_lib"]
         std::fs::create_dir_all(&folder1).expect("failed to create folder1");
         std::fs::create_dir_all(&folder2).expect("failed to create folder2");
 
-        let uri1 =
-            url::Url::from_directory_path(&folder1).expect("failed to create uri1").to_string();
-        let uri2 =
-            url::Url::from_directory_path(&folder2).expect("failed to create uri2").to_string();
+        let uri1 = url::Url::from_directory_path(&folder1)
+            .expect("failed to create uri1")
+            .to_string();
+        let uri2 = url::Url::from_directory_path(&folder2)
+            .expect("failed to create uri2")
+            .to_string();
 
         server.workspace_folders.lock().push(
             crate::runtime::workspace_folder::WorkspaceFolderState::new(uri1)
@@ -433,7 +475,10 @@ include_paths = ["other_lib"]
         assert_eq!(folders.len(), 2);
         for folder in folders.iter() {
             assert!(
-                folder.effective_workspace_config.include_paths.contains(&"client_lib".to_string()),
+                folder
+                    .effective_workspace_config
+                    .include_paths
+                    .contains(&"client_lib".to_string()),
                 "folder {} missing client_lib in effective include_paths",
                 folder.uri
             );

@@ -12,7 +12,10 @@ fn get_actions(source: &str) -> Vec<perl_lsp_code_actions::CodeAction> {
 }
 
 fn modernize_actions(source: &str) -> Vec<perl_lsp_code_actions::CodeAction> {
-    get_actions(source).into_iter().filter(|a| a.kind == CodeActionKind::SourceModernize).collect()
+    get_actions(source)
+        .into_iter()
+        .filter(|a| a.kind == CodeActionKind::SourceModernize)
+        .collect()
 }
 
 #[test]
@@ -50,7 +53,9 @@ fn two_arg_open_edit_contains_error_handling() {
 fn deprecated_defined_array_detected() {
     let actions = modernize_actions("if (defined(@array)) { }");
     assert!(
-        actions.iter().any(|a| a.title.contains("deprecated defined(@")),
+        actions
+            .iter()
+            .any(|a| a.title.contains("deprecated defined(@")),
         "Expected deprecated defined(@) suggestion, got: {:?}",
         actions.iter().map(|a| &a.title).collect::<Vec<_>>()
     );
@@ -60,7 +65,9 @@ fn deprecated_defined_array_detected() {
 fn deprecated_defined_hash_detected() {
     let actions = modernize_actions("if (defined(%hash)) { }");
     assert!(
-        actions.iter().any(|a| a.title.contains("deprecated defined(%")),
+        actions
+            .iter()
+            .any(|a| a.title.contains("deprecated defined(%")),
         "Expected deprecated defined(%) suggestion"
     );
 }
@@ -69,7 +76,9 @@ fn deprecated_defined_hash_detected() {
 fn defined_scalar_not_flagged() {
     let actions = modernize_actions("if (defined($x)) { }");
     assert!(
-        !actions.iter().any(|a| a.title.contains("deprecated defined")),
+        !actions
+            .iter()
+            .any(|a| a.title.contains("deprecated defined")),
         "defined($scalar) should NOT be flagged"
     );
 }
@@ -137,7 +146,9 @@ fn strict_warnings_present_no_modernize_suggestion() {
 fn moose_implies_strict_no_suggestion() {
     let actions = modernize_actions("use Moose;\nprint 'hello';");
     assert!(
-        !actions.iter().any(|a| a.title.contains("Modernize: add use strict")),
+        !actions
+            .iter()
+            .any(|a| a.title.contains("Modernize: add use strict")),
         "Moose implies strict/warnings"
     );
 }
@@ -146,7 +157,10 @@ fn moose_implies_strict_no_suggestion() {
 fn all_modernize_actions_have_correct_kind() {
     let source = "require 5.006;\nopen(FILE, \">foo\");\nif (defined(@arr)) {}";
     let actions = modernize_actions(source);
-    assert!(!actions.is_empty(), "Expected at least one modernize action");
+    assert!(
+        !actions.is_empty(),
+        "Expected at least one modernize action"
+    );
     for action in &actions {
         assert_eq!(
             action.kind,

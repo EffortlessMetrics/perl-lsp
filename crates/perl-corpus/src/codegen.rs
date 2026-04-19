@@ -124,12 +124,19 @@ pub fn generate_perl_code() -> String {
 
 /// Generate random Perl code with a specific statement count.
 pub fn generate_perl_code_with_statements(statements: usize) -> String {
-    generate_perl_code_with_options(CodegenOptions { statements, ..Default::default() })
+    generate_perl_code_with_options(CodegenOptions {
+        statements,
+        ..Default::default()
+    })
 }
 
 /// Generate random Perl code with explicit statement count and seed.
 pub fn generate_perl_code_with_seed(statements: usize, seed: u64) -> String {
-    generate_perl_code_with_options(CodegenOptions { statements, seed, ..Default::default() })
+    generate_perl_code_with_options(CodegenOptions {
+        statements,
+        seed,
+        ..Default::default()
+    })
 }
 
 /// Generate random Perl code with explicit options.

@@ -107,9 +107,13 @@ fn find_latest_benchmark_json(root: &Path) -> Result<PathBuf> {
 
     candidates.sort_by(|a, b| b.0.cmp(&a.0)); // newest first
 
-    candidates.into_iter().map(|(_, p)| p).next().ok_or_else(|| {
-        color_eyre::eyre::eyre!("no *.json files found in {}", results_dir.display())
-    })
+    candidates
+        .into_iter()
+        .map(|(_, p)| p)
+        .next()
+        .ok_or_else(|| {
+            color_eyre::eyre::eyre!("no *.json files found in {}", results_dir.display())
+        })
 }
 
 /// Print a human-readable table sorted by mean descending.
@@ -142,22 +146,36 @@ fn print_table(file: &BenchmarkFile) {
     for (name, entry) in &timed {
         let mean_us = entry.mean.as_ref().map(|s| s.microseconds).unwrap_or(0.0);
         let median_us = entry.median.as_ref().map(|s| s.microseconds).unwrap_or(0.0);
-        let std_dev_us = entry.std_dev.as_ref().map(|s| s.microseconds).unwrap_or(0.0);
-        let loc = entry.source_lines.map(|n| n.to_string()).unwrap_or_else(|| "-".to_string());
+        let std_dev_us = entry
+            .std_dev
+            .as_ref()
+            .map(|s| s.microseconds)
+            .unwrap_or(0.0);
+        let loc = entry
+            .source_lines
+            .map(|n| n.to_string())
+            .unwrap_or_else(|| "-".to_string());
         println!(
             "{:<40} {:>12.2} {:>12.2} {:>12.2} {:>8}",
             name, mean_us, median_us, std_dev_us, loc
         );
     }
     for (name, entry) in &no_timing {
-        let loc = entry.source_lines.map(|n| n.to_string()).unwrap_or_else(|| "-".to_string());
+        let loc = entry
+            .source_lines
+            .map(|n| n.to_string())
+            .unwrap_or_else(|| "-".to_string());
         println!(
             "{:<40} {:>12} {:>12} {:>12} {:>8}",
             name, "(no data)", "(no data)", "(no data)", loc
         );
     }
     println!();
-    println!("{} benchmark(s) loaded ({} with timing data).", file.benchmarks.len(), timed.len());
+    println!(
+        "{} benchmark(s) loaded ({} with timing data).",
+        file.benchmarks.len(),
+        timed.len()
+    );
 }
 
 /// Write `.ci/metrics/parser.json`.
@@ -191,7 +209,10 @@ fn write_json_output(root: &Path, file: &BenchmarkFile) -> Result<()> {
         schema_version: 1,
         measured_at: Utc::now().to_rfc3339(),
         subsystem: "parser",
-        metrics: ParserMetrics { benchmark_count: file.benchmarks.len(), slowest },
+        metrics: ParserMetrics {
+            benchmark_count: file.benchmarks.len(),
+            slowest,
+        },
     };
 
     let out_path = metrics_dir.join("parser.json");
@@ -215,8 +236,11 @@ mod tests {
         let json = r#"{"benchmarks":{"parse_simple":{"mean":{"nanoseconds":21255.87,"microseconds":21.26},"median":{"nanoseconds":19773.55,"microseconds":19.77},"std_dev":{"nanoseconds":5731.70,"microseconds":5.73},"source_lines":15}}}"#;
         let file: BenchmarkFile = serde_json::from_str(json)?;
         assert_eq!(file.benchmarks.len(), 1);
-        let mean_us =
-            file.benchmarks["parse_simple"].mean.as_ref().map(|s| s.microseconds).unwrap_or(0.0);
+        let mean_us = file.benchmarks["parse_simple"]
+            .mean
+            .as_ref()
+            .map(|s| s.microseconds)
+            .unwrap_or(0.0);
         assert!((mean_us - 21.26).abs() < 0.01);
         Ok(())
     }
@@ -258,21 +282,32 @@ mod tests {
         // Schema contract checks
         assert_eq!(parsed["schema_version"], 1, "schema_version must be 1");
         assert_eq!(parsed["subsystem"], "parser", "subsystem must be 'parser'");
-        assert!(parsed["measured_at"].is_string(), "measured_at must be a string");
+        assert!(
+            parsed["measured_at"].is_string(),
+            "measured_at must be a string"
+        );
         assert_eq!(
             parsed["metrics"]["benchmark_count"], 3,
             "benchmark_count must include incomplete entries"
         );
 
         // slowest must contain only timed entries, sorted descending by mean_us
-        let slowest = parsed["metrics"]["slowest"].as_array().expect("slowest must be an array");
+        let slowest = parsed["metrics"]["slowest"]
+            .as_array()
+            .expect("slowest must be an array");
         assert_eq!(slowest.len(), 2, "slowest must only contain timed entries");
-        assert_eq!(slowest[0]["name"], "slow", "first entry must be the slowest benchmark");
+        assert_eq!(
+            slowest[0]["name"], "slow",
+            "first entry must be the slowest benchmark"
+        );
         assert!(
             (slowest[0]["mean_us"].as_f64().unwrap() - 50.0).abs() < 0.01,
             "mean_us must match"
         );
-        assert_eq!(slowest[1]["name"], "fast", "second entry must be the faster benchmark");
+        assert_eq!(
+            slowest[1]["name"], "fast",
+            "second entry must be the faster benchmark"
+        );
 
         Ok(())
     }
@@ -295,8 +330,13 @@ mod tests {
         let parsed: serde_json::Value = serde_json::from_str(&raw)?;
 
         assert_eq!(parsed["metrics"]["benchmark_count"], 3);
-        let slowest = parsed["metrics"]["slowest"].as_array().expect("slowest must be an array");
-        assert!(slowest.is_empty(), "slowest must be empty when no entries have timing data");
+        let slowest = parsed["metrics"]["slowest"]
+            .as_array()
+            .expect("slowest must be an array");
+        assert!(
+            slowest.is_empty(),
+            "slowest must be empty when no entries have timing data"
+        );
 
         Ok(())
     }

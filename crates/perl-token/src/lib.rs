@@ -66,7 +66,12 @@ impl Token {
     /// assert_eq!(&*tok.text, "sub");
     /// ```
     pub fn new(kind: TokenKind, text: impl Into<Arc<str>>, start: usize, end: usize) -> Self {
-        Token { kind, text: text.into(), start, end }
+        Token {
+            kind,
+            text: text.into(),
+            start,
+            end,
+        }
     }
 }
 

@@ -31,11 +31,17 @@ static SNIPPET_PLACEHOLDER_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock:
 static SNIPPET_SIMPLE_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
 
 fn get_snippet_placeholder_regex() -> Option<&'static Regex> {
-    SNIPPET_PLACEHOLDER_RE.get_or_init(|| Regex::new(r"\$\{(\d+):([^}]+)\}")).as_ref().ok()
+    SNIPPET_PLACEHOLDER_RE
+        .get_or_init(|| Regex::new(r"\$\{(\d+):([^}]+)\}"))
+        .as_ref()
+        .ok()
 }
 
 fn get_snippet_simple_regex() -> Option<&'static Regex> {
-    SNIPPET_SIMPLE_RE.get_or_init(|| Regex::new(r"\$\d+")).as_ref().ok()
+    SNIPPET_SIMPLE_RE
+        .get_or_init(|| Regex::new(r"\$\d+"))
+        .as_ref()
+        .ok()
 }
 
 /// Returns commit characters for a completion item based on its kind.
@@ -171,8 +177,10 @@ impl LspServer {
                 let workspace_symbols =
                     qualified_variable_symbols.unwrap_or_else(|| index.find_symbols(&prefix));
                 use std::collections::HashSet;
-                let mut seen: HashSet<String> =
-                    completions.iter().map(|completion| completion.label.clone()).collect();
+                let mut seen: HashSet<String> = completions
+                    .iter()
+                    .map(|completion| completion.label.clone())
+                    .collect();
 
                 for symbol in workspace_symbols {
                     if completions.len() >= cap {
@@ -309,8 +317,9 @@ impl LspServer {
             let (line, character) = req_position(&params)?;
 
             // Reject stale requests
-            let req_version =
-                params["textDocument"]["version"].as_i64().and_then(|n| i32::try_from(n).ok());
+            let req_version = params["textDocument"]["version"]
+                .as_i64()
+                .and_then(|n| i32::try_from(n).ok());
             self.ensure_latest(uri, req_version)?;
 
             // Use routing to determine workspace index access mode
@@ -507,14 +516,16 @@ impl LspServer {
         if let Some(params) = params {
             // Create or get cancellation token for this request
             let token = if let Some(req_id) = request_id {
-                GLOBAL_CANCELLATION_REGISTRY.get_token(req_id).unwrap_or_else(|| {
-                    let token = PerlLspCancellationToken::new(
-                        req_id.clone(),
-                        "textDocument/completion".to_string(),
-                    );
-                    let _ = GLOBAL_CANCELLATION_REGISTRY.register_token(token.clone());
-                    token
-                })
+                GLOBAL_CANCELLATION_REGISTRY
+                    .get_token(req_id)
+                    .unwrap_or_else(|| {
+                        let token = PerlLspCancellationToken::new(
+                            req_id.clone(),
+                            "textDocument/completion".to_string(),
+                        );
+                        let _ = GLOBAL_CANCELLATION_REGISTRY.register_token(token.clone());
+                        token
+                    })
             } else {
                 PerlLspCancellationToken::new(
                     serde_json::Value::Null,
@@ -536,8 +547,9 @@ impl LspServer {
             let (line, character) = req_position(&params)?;
 
             // Reject stale requests
-            let req_version =
-                params["textDocument"]["version"].as_i64().and_then(|n| i32::try_from(n).ok());
+            let req_version = params["textDocument"]["version"]
+                .as_i64()
+                .and_then(|n| i32::try_from(n).ok());
             self.ensure_latest(uri, req_version)?;
 
             // Use routing to determine workspace index access mode
@@ -716,7 +728,10 @@ impl LspServer {
                 == ">-";
 
         // Check what sigil we're after (if any)
-        let sigil = text_before.chars().rev().find(|&c| !(c.is_alphanumeric() || c == '_'));
+        let sigil = text_before
+            .chars()
+            .rev()
+            .find(|&c| !(c.is_alphanumeric() || c == '_'));
 
         // If we're completing after '->', provide common method completions
         if is_method_call {
@@ -870,7 +885,11 @@ impl LspServer {
         };
 
         // Extract the label and kind upfront (clone to avoid borrow issues)
-        let label = item.get("label").and_then(|v| v.as_str()).unwrap_or("").to_string();
+        let label = item
+            .get("label")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
         let kind = item.get("kind").and_then(|v| v.as_u64()).unwrap_or(0);
         let has_doc = item.get("documentation").is_some();
 
@@ -1018,7 +1037,9 @@ mod tests {
             )?
             .ok_or("expected completion response")?;
 
-        let items = response["items"].as_array().ok_or("expected completion items")?;
+        let items = response["items"]
+            .as_array()
+            .ok_or("expected completion items")?;
         let item = items
             .iter()
             .find(|item| item["label"].as_str() == Some("$CONFIG_PATH"))
@@ -1044,12 +1065,15 @@ mod tests {
         let result = server.handle_completion_resolve(Some(item));
 
         assert!(result.is_ok());
-        let resolved =
-            result.map_err(|e| e.message.to_string())?.ok_or("expected resolved value")?;
+        let resolved = result
+            .map_err(|e| e.message.to_string())?
+            .ok_or("expected resolved value")?;
 
         // Check that documentation was added
         assert!(resolved.get("documentation").is_some());
-        let doc = resolved.get("documentation").ok_or("expected documentation")?;
+        let doc = resolved
+            .get("documentation")
+            .ok_or("expected documentation")?;
         assert_eq!(doc.get("kind").and_then(|v| v.as_str()), Some("markdown"));
 
         let value = doc.get("value").and_then(|v| v.as_str()).unwrap_or("");
@@ -1070,12 +1094,15 @@ mod tests {
         let result = server.handle_completion_resolve(Some(item));
 
         assert!(result.is_ok());
-        let resolved =
-            result.map_err(|e| e.message.to_string())?.ok_or("expected resolved value")?;
+        let resolved = result
+            .map_err(|e| e.message.to_string())?
+            .ok_or("expected resolved value")?;
 
         // Check that documentation was added
         assert!(resolved.get("documentation").is_some());
-        let doc = resolved.get("documentation").ok_or("expected documentation")?;
+        let doc = resolved
+            .get("documentation")
+            .ok_or("expected documentation")?;
         let value = doc.get("value").and_then(|v| v.as_str()).unwrap_or("");
         assert!(value.contains("lexically scoped"));
         Ok(())
@@ -1093,12 +1120,15 @@ mod tests {
         let result = server.handle_completion_resolve(Some(item));
 
         assert!(result.is_ok());
-        let resolved =
-            result.map_err(|e| e.message.to_string())?.ok_or("expected resolved value")?;
+        let resolved = result
+            .map_err(|e| e.message.to_string())?
+            .ok_or("expected resolved value")?;
 
         // Check that documentation was added
         assert!(resolved.get("documentation").is_some());
-        let doc = resolved.get("documentation").ok_or("expected documentation")?;
+        let doc = resolved
+            .get("documentation")
+            .ok_or("expected documentation")?;
         let value = doc.get("value").and_then(|v| v.as_str()).unwrap_or("");
         assert!(value.contains("Scalar variable"));
         Ok(())
@@ -1116,12 +1146,15 @@ mod tests {
         let result = server.handle_completion_resolve(Some(item));
 
         assert!(result.is_ok());
-        let resolved =
-            result.map_err(|e| e.message.to_string())?.ok_or("expected resolved value")?;
+        let resolved = result
+            .map_err(|e| e.message.to_string())?
+            .ok_or("expected resolved value")?;
 
         // Check that documentation was added
         assert!(resolved.get("documentation").is_some());
-        let doc = resolved.get("documentation").ok_or("expected documentation")?;
+        let doc = resolved
+            .get("documentation")
+            .ok_or("expected documentation")?;
         let value = doc.get("value").and_then(|v| v.as_str()).unwrap_or("");
         assert!(value.contains("Array variable"));
         Ok(())
@@ -1139,11 +1172,15 @@ mod tests {
         let result = server.handle_completion_resolve(Some(item.clone()));
 
         assert!(result.is_ok());
-        let resolved =
-            result.map_err(|e| e.message.to_string())?.ok_or("expected resolved value")?;
+        let resolved = result
+            .map_err(|e| e.message.to_string())?
+            .ok_or("expected resolved value")?;
 
         // Label should be preserved
-        assert_eq!(resolved.get("label").and_then(|v| v.as_str()), Some("some_custom_function"));
+        assert_eq!(
+            resolved.get("label").and_then(|v| v.as_str()),
+            Some("some_custom_function")
+        );
         // Kind should be preserved
         assert_eq!(resolved.get("kind").and_then(|v| v.as_u64()), Some(3));
         Ok(())

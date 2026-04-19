@@ -30,7 +30,10 @@ END
 print $text;
 "#;
     let diags = detect_heredoc_antipatterns(source);
-    assert!(diags.is_empty(), "Clean heredoc should produce no diagnostics, got: {diags:?}");
+    assert!(
+        diags.is_empty(),
+        "Clean heredoc should produce no diagnostics, got: {diags:?}"
+    );
 }
 
 #[test]
@@ -39,7 +42,10 @@ fn source_filter_heredoc_detected() {
     let diags = detect_heredoc_antipatterns(source);
     for d in &diags {
         if d.code.as_deref() == Some("PL803") {
-            assert!(matches!(d.severity, DiagnosticSeverity::Warning | DiagnosticSeverity::Error));
+            assert!(matches!(
+                d.severity,
+                DiagnosticSeverity::Warning | DiagnosticSeverity::Error
+            ));
             return;
         }
     }

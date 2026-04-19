@@ -7,7 +7,12 @@ fn parse_ok(code: &str) -> String {
     let result = parser.parse();
     let ast = must(result);
     let sexp = ast.to_sexp();
-    assert!(!sexp.contains("ERROR"), "Parse produced ERROR node(s) for: {}\nSexp: {}", code, sexp);
+    assert!(
+        !sexp.contains("ERROR"),
+        "Parse produced ERROR node(s) for: {}\nSexp: {}",
+        code,
+        sexp
+    );
     sexp
 }
 
@@ -320,7 +325,10 @@ fn test_modifier_after_local_sig_handler() -> Result<(), Box<dyn std::error::Err
 #[test]
 fn test_modifier_after_postfix_deref_push() -> Result<(), Box<dyn std::error::Error>> {
     // push @{$data->{list}}, map { $_ * 2 } @vals if @vals;
-    assert_has_modifier(r#"push @{$data->{list}}, map { $_ * 2 } @vals if @vals;"#, "if");
+    assert_has_modifier(
+        r#"push @{$data->{list}}, map { $_ * 2 } @vals if @vals;"#,
+        "if",
+    );
     Ok(())
 }
 
@@ -356,6 +364,9 @@ fn test_modifier_after_open_with_three_args() -> Result<(), Box<dyn std::error::
 #[test]
 fn test_modifier_after_push_with_map() -> Result<(), Box<dyn std::error::Error>> {
     // push @result, map { $_->{name} } @items unless $skip;
-    assert_has_modifier(r#"push @result, map { $_->{name} } @items unless $skip;"#, "unless");
+    assert_has_modifier(
+        r#"push @result, map { $_->{name} } @items unless $skip;"#,
+        "unless",
+    );
     Ok(())
 }

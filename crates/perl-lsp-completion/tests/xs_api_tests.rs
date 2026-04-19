@@ -18,7 +18,10 @@ fn labels(items: &[CompletionItem]) -> Vec<String> {
 }
 
 fn kind_for(items: &[CompletionItem], label: &str) -> Option<CompletionItemKind> {
-    items.iter().find(|item| item.label == label).map(|item| item.kind)
+    items
+        .iter()
+        .find(|item| item.label == label)
+        .map(|item| item.kind)
 }
 
 #[test]
@@ -47,7 +50,16 @@ fn xs_api_completion_is_available_in_xs_sources() {
     assert!(names.contains(&"EXTEND".to_string()));
     assert!(names.contains(&"PL_sv_yes".to_string()));
     assert_eq!(kind_for(&items, "ST"), Some(CompletionItemKind::Snippet));
-    assert_eq!(kind_for(&items, "newSVpv"), Some(CompletionItemKind::Snippet));
-    assert_eq!(kind_for(&items, "newSViv"), Some(CompletionItemKind::Snippet));
-    assert_eq!(kind_for(&items, "EXTEND"), Some(CompletionItemKind::Snippet));
+    assert_eq!(
+        kind_for(&items, "newSVpv"),
+        Some(CompletionItemKind::Snippet)
+    );
+    assert_eq!(
+        kind_for(&items, "newSViv"),
+        Some(CompletionItemKind::Snippet)
+    );
+    assert_eq!(
+        kind_for(&items, "EXTEND"),
+        Some(CompletionItemKind::Snippet)
+    );
 }

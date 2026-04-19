@@ -25,7 +25,10 @@ fn init_returns_capabilities() -> TestResult {
     let mut h = LspHarness::new();
     let result = h.initialize(None)?;
 
-    assert!(result.get("capabilities").is_some(), "initialize must return capabilities");
+    assert!(
+        result.get("capabilities").is_some(),
+        "initialize must return capabilities"
+    );
     h.shutdown_gracefully();
     Ok(())
 }
@@ -73,7 +76,10 @@ fn init_advertises_hover() -> TestResult {
     let result = h.initialize(None)?;
 
     let caps = result.get("capabilities").ok_or("no capabilities")?;
-    assert!(caps.get("hoverProvider").is_some(), "hoverProvider should be advertised");
+    assert!(
+        caps.get("hoverProvider").is_some(),
+        "hoverProvider should be advertised"
+    );
     h.shutdown_gracefully();
     Ok(())
 }
@@ -85,7 +91,10 @@ fn init_advertises_definition() -> TestResult {
     let result = h.initialize(None)?;
 
     let caps = result.get("capabilities").ok_or("no capabilities")?;
-    assert!(caps.get("definitionProvider").is_some(), "definitionProvider should be advertised");
+    assert!(
+        caps.get("definitionProvider").is_some(),
+        "definitionProvider should be advertised"
+    );
     h.shutdown_gracefully();
     Ok(())
 }
@@ -97,7 +106,10 @@ fn init_advertises_text_sync() -> TestResult {
     let result = h.initialize(None)?;
 
     let caps = result.get("capabilities").ok_or("no capabilities")?;
-    assert!(caps.get("textDocumentSync").is_some(), "textDocumentSync should be advertised");
+    assert!(
+        caps.get("textDocumentSync").is_some(),
+        "textDocumentSync should be advertised"
+    );
     h.shutdown_gracefully();
     Ok(())
 }
@@ -123,7 +135,11 @@ fn document_open_enables_hover() -> TestResult {
     );
     // We don't require a specific hover content, just that the server
     // doesn't error out for an open document.
-    assert!(result.is_ok(), "hover on open document should not error: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "hover on open document should not error: {:?}",
+        result.err()
+    );
     h.shutdown_gracefully();
     Ok(())
 }
@@ -150,7 +166,10 @@ fn document_change_updates_state() -> TestResult {
             "position": { "line": 0, "character": 5 }
         }),
     );
-    assert!(result.is_ok(), "hover after content change should not error");
+    assert!(
+        result.is_ok(),
+        "hover after content change should not error"
+    );
     h.shutdown_gracefully();
     Ok(())
 }
@@ -169,7 +188,10 @@ fn document_close_graceful() -> TestResult {
 
     // Server should still respond to other requests after close
     let result = h.request("workspace/symbol", json!({"query": ""}));
-    assert!(result.is_ok(), "server should remain responsive after document close");
+    assert!(
+        result.is_ok(),
+        "server should remain responsive after document close"
+    );
     h.shutdown_gracefully();
     Ok(())
 }
@@ -240,7 +262,11 @@ fn shutdown_returns_null() -> TestResult {
     h.initialize(None)?;
 
     let result = h.request("shutdown", json!({}))?;
-    assert!(result.is_null(), "shutdown must return null, got: {}", result);
+    assert!(
+        result.is_null(),
+        "shutdown must return null, got: {}",
+        result
+    );
 
     h.shutdown_gracefully();
     Ok(())
@@ -287,7 +313,11 @@ fn unknown_method_returns_error() -> TestResult {
 
     // Should have an error field
     let error = response.get("error");
-    assert!(error.is_some(), "unknown method should produce an error response, got: {}", response);
+    assert!(
+        error.is_some(),
+        "unknown method should produce an error response, got: {}",
+        response
+    );
     h.shutdown_gracefully();
     Ok(())
 }
@@ -337,7 +367,10 @@ fn hover_invalid_position() -> TestResult {
 
     // null result is acceptable; error is also fine; crash is not
     if let Ok(val) = result {
-        assert!(val.is_null() || val.is_object(), "expected null or hover object");
+        assert!(
+            val.is_null() || val.is_object(),
+            "expected null or hover object"
+        );
     }
     // Error is acceptable for out-of-bounds — key is no crash
     h.shutdown_gracefully();
@@ -352,7 +385,10 @@ fn empty_params_handled() -> TestResult {
 
     // workspace/symbol with empty query is valid
     let result = h.request("workspace/symbol", json!({"query": ""}));
-    assert!(result.is_ok(), "workspace/symbol with empty query should succeed");
+    assert!(
+        result.is_ok(),
+        "workspace/symbol with empty query should succeed"
+    );
     h.shutdown_gracefully();
     Ok(())
 }
@@ -384,7 +420,11 @@ fn rapid_sequential_requests() -> TestResult {
             successes += 1;
         }
     }
-    assert!(successes >= 3, "at least 3 of 5 rapid requests should succeed, got {}", successes);
+    assert!(
+        successes >= 3,
+        "at least 3 of 5 rapid requests should succeed, got {}",
+        successes
+    );
     h.shutdown_gracefully();
     Ok(())
 }
@@ -401,7 +441,11 @@ fn interleaved_edit_and_query() -> TestResult {
 
     // Interleave edits and queries
     for version in 2..=5 {
-        h.change_full(uri, version, &format!("my $x = {};\nmy $y = {};\n", version, version * 10))?;
+        h.change_full(
+            uri,
+            version,
+            &format!("my $x = {};\nmy $y = {};\n", version, version * 10),
+        )?;
         let result = h.request(
             "textDocument/hover",
             json!({
@@ -459,7 +503,10 @@ fn empty_configuration_change() -> TestResult {
     h.barrier();
 
     let result = h.request("workspace/symbol", json!({"query": ""}));
-    assert!(result.is_ok(), "server should respond after empty config change");
+    assert!(
+        result.is_ok(),
+        "server should respond after empty config change"
+    );
     h.shutdown_gracefully();
     Ok(())
 }
@@ -470,11 +517,17 @@ fn null_configuration_settings() -> TestResult {
     let mut h = LspHarness::new();
     h.initialize(None)?;
 
-    h.notify("workspace/didChangeConfiguration", json!({"settings": null}));
+    h.notify(
+        "workspace/didChangeConfiguration",
+        json!({"settings": null}),
+    );
     h.barrier();
 
     let result = h.request("workspace/symbol", json!({"query": ""}));
-    assert!(result.is_ok(), "server should respond after null config settings");
+    assert!(
+        result.is_ok(),
+        "server should respond after null config settings"
+    );
     h.shutdown_gracefully();
     Ok(())
 }
@@ -509,7 +562,10 @@ fn request_before_initialize() -> TestResult {
 
     // Should still be able to initialize normally after
     let init_result = h.initialize(None);
-    assert!(init_result.is_ok(), "should be able to initialize after pre-init request");
+    assert!(
+        init_result.is_ok(),
+        "should be able to initialize after pre-init request"
+    );
     h.shutdown_gracefully();
     Ok(())
 }
@@ -550,7 +606,10 @@ fn close_never_opened() -> TestResult {
 
     // Server should still respond
     let result = h.request("workspace/symbol", json!({"query": ""}));
-    assert!(result.is_ok(), "server should respond after closing never-opened doc");
+    assert!(
+        result.is_ok(),
+        "server should respond after closing never-opened doc"
+    );
     h.shutdown_gracefully();
     Ok(())
 }

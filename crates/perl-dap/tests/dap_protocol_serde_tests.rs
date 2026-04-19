@@ -34,7 +34,10 @@ fn request_without_arguments() -> Result<(), Box<dyn std::error::Error>> {
         arguments: None,
     };
     let json = serde_json::to_string(&req)?;
-    assert!(!json.contains("arguments"), "None arguments should be omitted: {json}");
+    assert!(
+        !json.contains("arguments"),
+        "None arguments should be omitted: {json}"
+    );
     let back: Request = serde_json::from_str(&json)?;
     assert!(back.arguments.is_none());
     Ok(())
@@ -103,7 +106,10 @@ fn event_without_body() -> Result<(), Box<dyn std::error::Error>> {
         body: None,
     };
     let json = serde_json::to_string(&evt)?;
-    assert!(!json.contains("body"), "None body should be omitted: {json}");
+    assert!(
+        !json.contains("body"),
+        "None body should be omitted: {json}"
+    );
     Ok(())
 }
 
@@ -166,8 +172,14 @@ fn capabilities_omits_none_fields() -> Result<(), Box<dyn std::error::Error>> {
     };
     let json = serde_json::to_string(&caps)?;
     assert!(json.contains("supportsConfigurationDoneRequest"));
-    assert!(!json.contains("supportsEvaluateForHovers"), "None should be omitted: {json}");
-    assert!(!json.contains("exceptionBreakpointFilters"), "None should be omitted: {json}");
+    assert!(
+        !json.contains("supportsEvaluateForHovers"),
+        "None should be omitted: {json}"
+    );
+    assert!(
+        !json.contains("exceptionBreakpointFilters"),
+        "None should be omitted: {json}"
+    );
     Ok(())
 }
 
@@ -233,7 +245,10 @@ fn attach_request_args_pid_mode() -> Result<(), Box<dyn std::error::Error>> {
     };
     let json = serde_json::to_string(&args)?;
     assert!(json.contains("processId"), "camelCase: {json}");
-    assert!(!json.contains("host"), "None host should be omitted: {json}");
+    assert!(
+        !json.contains("host"),
+        "None host should be omitted: {json}"
+    );
 
     let back: AttachRequestArguments = serde_json::from_str(&json)?;
     assert_eq!(back.process_id, Some(12345));
@@ -292,7 +307,11 @@ fn pause_args_round_trip() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn stack_trace_args_round_trip() -> Result<(), Box<dyn std::error::Error>> {
-    let args = StackTraceArguments { thread_id: 1, start_frame: Some(0), levels: Some(20) };
+    let args = StackTraceArguments {
+        thread_id: 1,
+        start_frame: Some(0),
+        levels: Some(20),
+    };
     let json = serde_json::to_string(&args)?;
     assert!(json.contains("threadId"), "camelCase: {json}");
     assert!(json.contains("startFrame"), "camelCase: {json}");
@@ -389,7 +408,10 @@ fn evaluate_args_minimal() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn disconnect_args_round_trip() -> Result<(), Box<dyn std::error::Error>> {
-    let args = DisconnectArguments { restart: Some(false), terminate_debuggee: Some(true) };
+    let args = DisconnectArguments {
+        restart: Some(false),
+        terminate_debuggee: Some(true),
+    };
     let json = serde_json::to_string(&args)?;
     assert!(json.contains("terminateDebuggee"), "camelCase: {json}");
     let back: DisconnectArguments = serde_json::from_str(&json)?;
@@ -400,7 +422,9 @@ fn disconnect_args_round_trip() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn terminate_args_round_trip() -> Result<(), Box<dyn std::error::Error>> {
-    let args = TerminateArguments { restart: Some(true) };
+    let args = TerminateArguments {
+        restart: Some(true),
+    };
     let json = serde_json::to_string(&args)?;
     let back: TerminateArguments = serde_json::from_str(&json)?;
     assert_eq!(back.restart, Some(true));
@@ -461,7 +485,10 @@ fn function_breakpoint_round_trip() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn set_breakpoints_args_round_trip() -> Result<(), Box<dyn std::error::Error>> {
     let args = SetBreakpointsArguments {
-        source: Source { path: Some("/ws/test.pl".to_string()), name: Some("test.pl".to_string()) },
+        source: Source {
+            path: Some("/ws/test.pl".to_string()),
+            name: Some("test.pl".to_string()),
+        },
         breakpoints: Some(vec![
             SourceBreakpoint {
                 line: 10,
@@ -508,7 +535,10 @@ fn set_exception_breakpoints_args_round_trip() -> Result<(), Box<dyn std::error:
 
     let back: SetExceptionBreakpointsArguments = serde_json::from_str(&json)?;
     assert_eq!(back.filters, vec!["die"]);
-    let opts = back.filter_options.as_ref().ok_or("Expected filter_options")?;
+    let opts = back
+        .filter_options
+        .as_ref()
+        .ok_or("Expected filter_options")?;
     assert_eq!(opts[0].filter_id, "die");
     Ok(())
 }
@@ -534,8 +564,14 @@ fn exception_breakpoint_filter_round_trip() -> Result<(), Box<dyn std::error::Er
 fn threads_response_body_round_trip() -> Result<(), Box<dyn std::error::Error>> {
     let body = ThreadsResponseBody {
         threads: vec![
-            Thread { id: 1, name: "main".to_string() },
-            Thread { id: 2, name: "worker".to_string() },
+            Thread {
+                id: 1,
+                name: "main".to_string(),
+            },
+            Thread {
+                id: 2,
+                name: "worker".to_string(),
+            },
         ],
     };
     let json = serde_json::to_string(&body)?;
@@ -547,7 +583,9 @@ fn threads_response_body_round_trip() -> Result<(), Box<dyn std::error::Error>> 
 
 #[test]
 fn continue_response_body_round_trip() -> Result<(), Box<dyn std::error::Error>> {
-    let body = ContinueResponseBody { all_threads_continued: true };
+    let body = ContinueResponseBody {
+        all_threads_continued: true,
+    };
     let json = serde_json::to_string(&body)?;
     assert!(json.contains("allThreadsContinued"), "camelCase: {json}");
     let back: ContinueResponseBody = serde_json::from_str(&json)?;
@@ -563,7 +601,10 @@ fn evaluate_response_body_round_trip() -> Result<(), Box<dyn std::error::Error>>
         variables_reference: 0,
     };
     let json = serde_json::to_string(&body)?;
-    assert!(json.contains("\"type\":"), "type field should use 'type' not 'type_': {json}");
+    assert!(
+        json.contains("\"type\":"),
+        "type field should use 'type' not 'type_': {json}"
+    );
     assert!(!json.contains("type_"), "type_ should not leak: {json}");
 
     let back: EvaluateResponseBody = serde_json::from_str(&json)?;
@@ -702,7 +743,10 @@ fn goto_target_round_trip() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn step_in_target_round_trip() -> Result<(), Box<dyn std::error::Error>> {
-    let target = StepInTarget { id: 5, label: "Foo::bar()".to_string() };
+    let target = StepInTarget {
+        id: 5,
+        label: "Foo::bar()".to_string(),
+    };
     let json = serde_json::to_string(&target)?;
     let back: StepInTarget = serde_json::from_str(&json)?;
     assert_eq!(back.id, 5);
@@ -745,8 +789,12 @@ fn set_variable_args_round_trip() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn breakpoint_location_round_trip() -> Result<(), Box<dyn std::error::Error>> {
-    let loc =
-        BreakpointLocation { line: 15, column: Some(1), end_line: Some(15), end_column: Some(40) };
+    let loc = BreakpointLocation {
+        line: 15,
+        column: Some(1),
+        end_line: Some(15),
+        end_column: Some(40),
+    };
     let json = serde_json::to_string(&loc)?;
     let back: BreakpointLocation = serde_json::from_str(&json)?;
     assert_eq!(back.line, 15);
@@ -759,8 +807,18 @@ fn breakpoint_location_round_trip() -> Result<(), Box<dyn std::error::Error>> {
 fn breakpoint_locations_response_body_round_trip() -> Result<(), Box<dyn std::error::Error>> {
     let body = BreakpointLocationsResponseBody {
         breakpoints: vec![
-            BreakpointLocation { line: 10, column: None, end_line: None, end_column: None },
-            BreakpointLocation { line: 15, column: Some(5), end_line: None, end_column: None },
+            BreakpointLocation {
+                line: 10,
+                column: None,
+                end_line: None,
+                end_column: None,
+            },
+            BreakpointLocation {
+                line: 15,
+                column: Some(5),
+                end_line: None,
+                end_column: None,
+            },
         ],
     };
     let json = serde_json::to_string(&body)?;

@@ -136,7 +136,10 @@ fn test_extract_substitution_parts_delimiter_detection() {
 
     // Test edge case where second delimiter might be missing for paired
     let (pattern, replacement, modifiers) = extract_substitution_parts("s{old}");
-    assert_eq!(pattern, "old", "Pattern should be extracted even without replacement");
+    assert_eq!(
+        pattern, "old",
+        "Pattern should be extracted even without replacement"
+    );
     assert_eq!(replacement, "", "Replacement should be empty when missing");
     assert_eq!(modifiers, "", "Modifiers should be empty");
 }
@@ -170,7 +173,10 @@ fn test_extract_delimited_content_core_parsing_via_public_api() {
     // Test paired delimiter depth tracking through substitution parsing
     let (pattern, replacement, _) = extract_substitution_parts("s{a{b}c}{x{y}z}");
     assert_eq!(pattern, "a{b}c", "Nested paired delimiters in pattern");
-    assert_eq!(replacement, "x{y}z", "Nested paired delimiters in replacement");
+    assert_eq!(
+        replacement, "x{y}z",
+        "Nested paired delimiters in replacement"
+    );
 
     // Test depth increment for paired delimiters
     let (pattern, replacement, _) = extract_substitution_parts("s{{}}{{}}");
@@ -219,19 +225,31 @@ fn test_get_closing_delimiter_comprehensive() {
         // by verifying they handle all delimiter types correctly
 
         let expected_s = expected.to_string();
-        let third_delim = if open == expected { "" } else { expected_s.as_str() };
+        let third_delim = if open == expected {
+            ""
+        } else {
+            expected_s.as_str()
+        };
         let test_input = format!("s{}test{}replacement{}", open, expected, third_delim);
         let (pattern, replacement, _) = extract_substitution_parts(&test_input);
 
         if open == expected {
             // Non-paired (symmetric) delimiter case - uses same delimiter for both parts
             assert_eq!(pattern, "test", "Symmetric delimiter {} should work", open);
-            assert_eq!(replacement, "replacement", "Symmetric delimiter {} replacement", open);
+            assert_eq!(
+                replacement, "replacement",
+                "Symmetric delimiter {} replacement",
+                open
+            );
         } else {
             // Paired delimiter case (e.g., () [] {} <>)
             assert_eq!(pattern, "test", "Paired delimiter {} should work", open);
             // All paired delimiters should extract replacement correctly
-            assert_eq!(replacement, "replacement", "Paired delimiter {} replacement", expected);
+            assert_eq!(
+                replacement, "replacement",
+                "Paired delimiter {} replacement",
+                expected
+            );
         }
     }
 }
@@ -296,7 +314,10 @@ fn test_extract_transliteration_delimiter_detection() {
     // Test non-paired delimiter detection - security fix applied
     let (search, replace, modifiers) = extract_transliteration_parts("tr/old/new/");
     assert_eq!(search, "old", "Non-paired delimiter search extraction");
-    assert_eq!(replace, "new", "Non-paired delimiter replace extraction - corrected behavior");
+    assert_eq!(
+        replace, "new",
+        "Non-paired delimiter replace extraction - corrected behavior"
+    );
     assert_eq!(
         modifiers, "",
         "Non-paired delimiter modifiers - security fix: invalid modifiers filtered"
@@ -365,7 +386,11 @@ fn test_extract_modifiers_properties() {
                 input
             );
         }
-        assert_eq!(modifiers, expected, "Modifiers mismatch for input '{}'", input);
+        assert_eq!(
+            modifiers, expected,
+            "Modifiers mismatch for input '{}'",
+            input
+        );
     }
 
     // Property: empty modifiers should give empty result, not "xyzzy"
@@ -375,11 +400,17 @@ fn test_extract_modifiers_properties() {
     // Property: alphabetic modifiers have quirky filtering
     // Note: Current behavior doesn't match expected "valid modifier" validation
     let (_, _, modifiers) = extract_substitution_parts("s/test/repl/abcDEF");
-    assert_eq!(modifiers, "ac", "Current behavior filters some alphabetic chars");
+    assert_eq!(
+        modifiers, "ac",
+        "Current behavior filters some alphabetic chars"
+    );
 
     // Property: valid substitution modifiers should be preserved
     let (_, _, modifiers) = extract_substitution_parts("s/test/repl/gimsx");
-    assert_eq!(modifiers, "gimsx", "Valid substitution modifiers should be preserved");
+    assert_eq!(
+        modifiers, "gimsx",
+        "Valid substitution modifiers should be preserved"
+    );
 }
 
 // Integration tests combining all functions
@@ -393,8 +424,14 @@ fn test_quote_parser_integration() {
 
     // Test that substitution parsing works end-to-end
     let (pattern, replacement, modifiers) = extract_substitution_parts("s/old\\/path/new\\/path/g");
-    assert_eq!(pattern, "old\\/path", "Integration: substitution pattern with escapes");
-    assert_eq!(replacement, "new\\/path", "Integration: substitution replacement with escapes");
+    assert_eq!(
+        pattern, "old\\/path",
+        "Integration: substitution pattern with escapes"
+    );
+    assert_eq!(
+        replacement, "new\\/path",
+        "Integration: substitution replacement with escapes"
+    );
     assert_eq!(modifiers, "g", "Integration: substitution modifiers");
 
     // Test that transliteration parsing works end-to-end
@@ -510,7 +547,10 @@ fn test_kill_mutation_logical_operator_boundary_cases() {
     // Test single character content to stress boundary detection
     let (pattern, replacement, modifiers) = extract_substitution_parts("s/a/b/");
     assert_eq!(pattern, "a", "Single char pattern");
-    assert_eq!(replacement, "b", "Single char replacement - tests precise boundary logic");
+    assert_eq!(
+        replacement, "b",
+        "Single char replacement - tests precise boundary logic"
+    );
     assert_eq!(modifiers, "", "No modifiers");
 
     // Test with escaped delimiters in content (complex rest1 content)
@@ -548,7 +588,10 @@ fn test_kill_mutation_modifier_validation() {
     // Test modifiers with quirky filtering behavior
     // Note: 'b' is filtered out while 'a', 'c' are kept (unclear why)
     let (_, _, modifiers) = extract_substitution_parts("s/test/repl/abc");
-    assert_eq!(modifiers, "ac", "Modifiers abc filtered to ac - current behavior (b filtered)");
+    assert_eq!(
+        modifiers, "ac",
+        "Modifiers abc filtered to ac - current behavior (b filtered)"
+    );
 
     let (_, _, modifiers) = extract_substitution_parts("s/test/repl/xyz");
     assert_eq!(
@@ -584,12 +627,18 @@ fn test_kill_mutation_comprehensive_logic_coverage() {
     // Case: Non-paired delimiter, empty content after first delimiter
     let (pattern, replacement, modifiers) = extract_substitution_parts("s##");
     assert_eq!(pattern, "", "Empty pattern non-paired");
-    assert_eq!(replacement, "", "Empty replacement non-paired - exercises empty rest1 logic");
+    assert_eq!(
+        replacement, "",
+        "Empty replacement non-paired - exercises empty rest1 logic"
+    );
     assert_eq!(modifiers, "", "Empty modifiers");
 
     // Case: Paired delimiter, missing second delimiter (creates edge case)
     let (pattern, replacement, modifiers) = extract_substitution_parts("s{test}");
-    assert_eq!(pattern, "test", "Pattern extracted even with missing second delimiter");
+    assert_eq!(
+        pattern, "test",
+        "Pattern extracted even with missing second delimiter"
+    );
     assert_eq!(
         replacement, "",
         "Missing second delimiter results in empty replacement - tests paired delimiter edge case"

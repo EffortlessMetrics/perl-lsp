@@ -179,5 +179,8 @@ fn full_span_covers_all_segments() {
     assert_eq!(content.full_span.end, segs[segs.len() - 1].end);
 
     // Verify content
-    assert_eq!(&src[content.full_span.start..content.full_span.end], b"first\nmiddle\nlast");
+    assert_eq!(
+        &src[content.full_span.start..content.full_span.end],
+        b"first\nmiddle\nlast"
+    );
 }

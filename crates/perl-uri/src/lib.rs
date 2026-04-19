@@ -78,7 +78,9 @@ pub fn uri_to_fs_path(uri: &str) -> Option<std::path::PathBuf> {
     // Convert to filesystem path using the url crate's built-in method.
     // On Windows, accept rooted file URIs like file:///tmp/test.pl as \tmp\test.pl
     // so cross-platform tests and internal helpers stay permissive.
-    url.to_file_path().ok().or_else(|| windows_rooted_file_uri_to_path(&url))
+    url.to_file_path()
+        .ok()
+        .or_else(|| windows_rooted_file_uri_to_path(&url))
 }
 
 /// Convert a filesystem path to a `file://` URI.
@@ -254,7 +256,11 @@ pub fn normalize_uri(uri: &str) -> String {
 #[cfg(target_arch = "wasm32")]
 pub fn normalize_uri(uri: &str) -> String {
     // On wasm32, just try to parse as URL or return as-is
-    if let Ok(url) = Url::parse(uri) { url.to_string() } else { uri.to_string() }
+    if let Ok(url) = Url::parse(uri) {
+        url.to_string()
+    } else {
+        uri.to_string()
+    }
 }
 
 /// URI classification and key normalization helpers (previously `perl-uri-classify`).
@@ -273,7 +279,10 @@ mod tests {
 
     #[test]
     fn test_uri_key_windows_drive() {
-        assert_eq!(uri_key("file:///C:/Users/test.pl"), "file:///c:/Users/test.pl");
+        assert_eq!(
+            uri_key("file:///C:/Users/test.pl"),
+            "file:///c:/Users/test.pl"
+        );
         assert_eq!(uri_key("file:///D:/foo/bar.pm"), "file:///d:/foo/bar.pm");
     }
 

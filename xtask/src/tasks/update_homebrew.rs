@@ -138,7 +138,10 @@ fn checksum_for(
     version: &str,
 ) -> Result<String> {
     let filename = format!("{}-{}-{artifact}", config.prefix, version);
-    checksums.get(&filename).cloned().ok_or_else(|| eyre!("missing checksum for {filename}"))
+    checksums
+        .get(&filename)
+        .cloned()
+        .ok_or_else(|| eyre!("missing checksum for {filename}"))
 }
 
 fn build_brew_formula(
@@ -245,7 +248,10 @@ fn artifact_filename(prefix: &str, version: &str, artifact: &str) -> String {
 }
 
 fn write_formula(path: &std::path::Path, content: &str) -> Result<()> {
-    if let Some(parent) = path.parent().filter(|parent| !parent.as_os_str().is_empty()) {
+    if let Some(parent) = path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+    {
         fs::create_dir_all(parent)
             .with_context(|| format!("failed to create directory for {}", path.display()))?;
     }

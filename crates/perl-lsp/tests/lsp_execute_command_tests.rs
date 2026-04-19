@@ -80,8 +80,9 @@ print "Hello, World!\n";
         id: Some(json!(2)),
     };
 
-    let response =
-        server.handle_request(execute_request).ok_or("No response from execute command")?;
+    let response = server
+        .handle_request(execute_request)
+        .ok_or("No response from execute command")?;
     let result = response.result.ok_or("No result in response")?;
 
     // Check that we got a response (even if the command might fail due to perl not installed/env issues)
@@ -142,8 +143,9 @@ is(1 + 1, 2, "Math works");
         id: Some(json!(2)),
     };
 
-    let response =
-        server.handle_request(execute_request).ok_or("No response from execute command")?;
+    let response = server
+        .handle_request(execute_request)
+        .ok_or("No response from execute command")?;
     let result = response.result.ok_or("No result in response")?;
 
     // Check response structure
@@ -206,9 +208,13 @@ fn test_execute_command_capabilities() -> Result<(), Box<dyn std::error::Error>>
         id: Some(json!(10)),
     };
 
-    let response = server.handle_request(init_request).ok_or("No response from initialize")?;
+    let response = server
+        .handle_request(init_request)
+        .ok_or("No response from initialize")?;
     let result = response.result.ok_or("No result in initialize response")?;
-    let capabilities = result.get("capabilities").ok_or("No capabilities in result")?;
+    let capabilities = result
+        .get("capabilities")
+        .ok_or("No capabilities in result")?;
     let execute_command = capabilities
         .get("executeCommandProvider")
         .ok_or("No executeCommandProvider in capabilities")?;

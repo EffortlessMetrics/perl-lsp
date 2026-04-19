@@ -17,12 +17,18 @@ fn parser_many_errors_recovers() -> Result<(), Box<dyn std::error::Error>> {
 
     match &ast.kind {
         V1NodeKind::Program { statements } => {
-            assert!(!statements.is_empty(), "should produce at least one statement");
+            assert!(
+                !statements.is_empty(),
+                "should produce at least one statement"
+            );
         }
         other => return Err(format!("expected Program, got {:?}", other).into()),
     }
     // Should have recorded at least one error
-    assert!(!parser.errors().is_empty(), "should have errors for missing expressions");
+    assert!(
+        !parser.errors().is_empty(),
+        "should have errors for missing expressions"
+    );
     Ok(())
 }
 
@@ -38,7 +44,10 @@ fn parser_parse_and_errors_consistent() -> Result<(), Box<dyn std::error::Error>
         other => return Err(format!("expected Program, got {:?}", other).into()),
     }
     // Valid code should have no errors
-    assert!(parser.errors().is_empty(), "valid code should have no parse errors");
+    assert!(
+        parser.errors().is_empty(),
+        "valid code should have no parse errors"
+    );
     Ok(())
 }
 
@@ -49,7 +58,10 @@ fn whitespace_only_input() -> Result<(), Box<dyn std::error::Error>> {
 
     match &ast.kind {
         V1NodeKind::Program { statements } => {
-            assert!(statements.is_empty(), "whitespace-only should yield empty program");
+            assert!(
+                statements.is_empty(),
+                "whitespace-only should yield empty program"
+            );
         }
         other => return Err(format!("expected Program, got {:?}", other).into()),
     }
@@ -63,7 +75,10 @@ fn comment_only_input() -> Result<(), Box<dyn std::error::Error>> {
 
     match &ast.kind {
         V1NodeKind::Program { statements } => {
-            assert!(statements.is_empty(), "comment-only should yield empty program");
+            assert!(
+                statements.is_empty(),
+                "comment-only should yield empty program"
+            );
         }
         other => return Err(format!("expected Program, got {:?}", other).into()),
     }

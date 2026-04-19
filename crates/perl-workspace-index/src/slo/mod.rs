@@ -233,7 +233,11 @@ impl OperationSloTracker {
     /// Record an operation result.
     fn record(&mut self, duration: Duration, result: OperationResult) {
         let success = result.is_success();
-        let sample = LatencySample { duration, success, _timestamp: Instant::now() };
+        let sample = LatencySample {
+            duration,
+            success,
+            _timestamp: Instant::now(),
+        };
 
         // Add sample
         if self.samples.len() >= self.max_samples {
@@ -251,12 +255,18 @@ impl OperationSloTracker {
         let total_count = self.samples.len() as u64;
         let success_count = self.samples.iter().filter(|s| s.success).count() as u64;
         let failure_count = total_count - success_count;
-        let error_rate =
-            if total_count > 0 { failure_count as f64 / total_count as f64 } else { 0.0 };
+        let error_rate = if total_count > 0 {
+            failure_count as f64 / total_count as f64
+        } else {
+            0.0
+        };
 
         // Calculate percentiles
-        let mut durations_ms: Vec<u64> =
-            self.samples.iter().map(|s| s.duration.as_millis() as u64).collect();
+        let mut durations_ms: Vec<u64> = self
+            .samples
+            .iter()
+            .map(|s| s.duration.as_millis() as u64)
+            .collect();
         durations_ms.sort_unstable();
 
         let p50_ms = nearest_rank_percentile(&durations_ms, 50);
@@ -330,7 +340,10 @@ impl SloTracker {
             trackers.insert(op_type, OperationSloTracker::new(op_type, &config));
         }
 
-        Self { config, trackers: Arc::new(Mutex::new(trackers)) }
+        Self {
+            config,
+            trackers: Arc::new(Mutex::new(trackers)),
+        }
     }
 
     /// Start tracking an operation.
@@ -436,7 +449,10 @@ impl SloTracker {
     /// ```
     pub fn statistics(&self, operation_type: OperationType) -> SloStatistics {
         let trackers = self.trackers.lock();
-        trackers.get(&operation_type).map(|t| t.statistics()).unwrap_or_default()
+        trackers
+            .get(&operation_type)
+            .map(|t| t.statistics())
+            .unwrap_or_default()
     }
 
     /// Get SLO statistics for all operation types.
@@ -455,7 +471,10 @@ impl SloTracker {
     /// ```
     pub fn all_statistics(&self) -> std::collections::HashMap<OperationType, SloStatistics> {
         let trackers = self.trackers.lock();
-        trackers.iter().map(|(op_type, tracker)| (*op_type, tracker.statistics())).collect()
+        trackers
+            .iter()
+            .map(|(op_type, tracker)| (*op_type, tracker.statistics()))
+            .collect()
     }
 
     /// Check if all SLOs are being met.

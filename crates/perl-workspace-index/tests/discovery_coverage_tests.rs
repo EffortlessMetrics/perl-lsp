@@ -92,9 +92,19 @@ fn git_discovery_excludes_gitignored_perl_files() -> TestResult {
 
     assert_eq!(result.method, DiscoveryMethod::Git);
     assert!(result.files.iter().any(|p| p.ends_with("Visible.pm")));
-    assert!(!result.files.iter().any(|p| p.to_string_lossy().contains("build/")));
+    assert!(
+        !result
+            .files
+            .iter()
+            .any(|p| p.to_string_lossy().contains("build/"))
+    );
     // .bak files are not perl extensions anyway, but gitignore also suppresses them
-    assert!(!result.files.iter().any(|p| p.to_string_lossy().contains(".bak")));
+    assert!(
+        !result
+            .files
+            .iter()
+            .any(|p| p.to_string_lossy().contains(".bak"))
+    );
 
     Ok(())
 }
@@ -164,8 +174,18 @@ fn git_discovery_with_gitignore_glob_patterns() -> TestResult {
 
     assert_eq!(result.method, DiscoveryMethod::Git);
     assert!(result.files.iter().any(|p| p.ends_with("Clean.pm")));
-    assert!(!result.files.iter().any(|p| p.to_string_lossy().contains("generated")));
-    assert!(!result.files.iter().any(|p| p.to_string_lossy().contains("tmp_scratch")));
+    assert!(
+        !result
+            .files
+            .iter()
+            .any(|p| p.to_string_lossy().contains("generated"))
+    );
+    assert!(
+        !result
+            .files
+            .iter()
+            .any(|p| p.to_string_lossy().contains("tmp_scratch"))
+    );
 
     Ok(())
 }
@@ -194,7 +214,12 @@ fn git_discovery_with_nested_gitignore() -> TestResult {
 
     assert_eq!(result.method, DiscoveryMethod::Git);
     assert!(result.files.iter().any(|p| p.ends_with("App.pm")));
-    assert!(!result.files.iter().any(|p| p.to_string_lossy().contains("vendor")));
+    assert!(
+        !result
+            .files
+            .iter()
+            .any(|p| p.to_string_lossy().contains("vendor"))
+    );
 
     Ok(())
 }
@@ -372,12 +397,18 @@ fn extension_filtering_rejects_non_perl_extensions() -> TestResult {
     let result = discover_perl_files(root);
 
     // Makefile.PL has extension "PL" which is_perl_source_extension matches case-insensitively
-    let non_makefile_pl: Vec<_> =
-        result.files.iter().filter(|p| !p.to_string_lossy().contains("Makefile.PL")).collect();
+    let non_makefile_pl: Vec<_> = result
+        .files
+        .iter()
+        .filter(|p| !p.to_string_lossy().contains("Makefile.PL"))
+        .collect();
 
     // None of the non-perl files should appear (except possibly Makefile.PL)
     for path in &non_makefile_pl {
-        let ext = path.extension().and_then(|e| e.to_str()).ok_or("missing extension")?;
+        let ext = path
+            .extension()
+            .and_then(|e| e.to_str())
+            .ok_or("missing extension")?;
         assert!(
             ["pl", "pm", "t", "psgi"].contains(&ext.to_lowercase().as_str()),
             "unexpected non-perl file: {path:?}"
@@ -443,11 +474,22 @@ fn symlink_to_directory_is_not_followed() -> TestResult {
     let result = discover_perl_files(root);
 
     // Should find the file in real_lib but NOT via the symlink
-    let linked_files: Vec<_> =
-        result.files.iter().filter(|p| p.to_string_lossy().contains("linked_lib")).collect();
+    let linked_files: Vec<_> = result
+        .files
+        .iter()
+        .filter(|p| p.to_string_lossy().contains("linked_lib"))
+        .collect();
 
-    assert!(linked_files.is_empty(), "symlinked directory should not be followed");
-    assert!(result.files.iter().any(|p| p.ends_with("real_lib/Module.pm")));
+    assert!(
+        linked_files.is_empty(),
+        "symlinked directory should not be followed"
+    );
+    assert!(
+        result
+            .files
+            .iter()
+            .any(|p| p.ends_with("real_lib/Module.pm"))
+    );
 
     Ok(())
 }
@@ -468,8 +510,11 @@ fn symlink_to_file_is_not_counted_as_regular_file() -> TestResult {
     assert!(result.files.iter().any(|p| p.ends_with("real/Original.pm")));
 
     // The symlink should NOT be treated as a regular file
-    let linked: Vec<_> =
-        result.files.iter().filter(|p| p.to_string_lossy().contains("links/Linked.pm")).collect();
+    let linked: Vec<_> = result
+        .files
+        .iter()
+        .filter(|p| p.to_string_lossy().contains("links/Linked.pm"))
+        .collect();
     assert!(linked.is_empty(), "symlink to file should not be followed");
 
     Ok(())
@@ -571,7 +616,12 @@ fn hidden_perl_files_at_root_are_discovered() -> TestResult {
     let result = discover_perl_files(root);
 
     assert_eq!(result.files.len(), 2);
-    assert!(result.files.iter().any(|p| p.ends_with(".hidden_script.pl")));
+    assert!(
+        result
+            .files
+            .iter()
+            .any(|p| p.ends_with(".hidden_script.pl"))
+    );
     assert!(result.files.iter().any(|p| p.ends_with("visible.pl")));
 
     Ok(())
@@ -632,15 +682,36 @@ fn directories_with_similar_names_to_skipped_dirs_are_not_skipped() -> TestResul
         .collect();
 
     // Similar names should be found
-    assert!(found_names.contains("Module.pm"), "target_release/ should not be skipped");
-    assert!(found_names.contains("Script.pl"), "my_target/ should not be skipped");
-    assert!(found_names.contains("Old.pm"), "node_modules_backup/ should not be skipped");
-    assert!(found_names.contains("Helper.pm"), "git_tools/ should not be skipped");
-    assert!(found_names.contains("Fast.pm"), "caches/ should not be skipped");
+    assert!(
+        found_names.contains("Module.pm"),
+        "target_release/ should not be skipped"
+    );
+    assert!(
+        found_names.contains("Script.pl"),
+        "my_target/ should not be skipped"
+    );
+    assert!(
+        found_names.contains("Old.pm"),
+        "node_modules_backup/ should not be skipped"
+    );
+    assert!(
+        found_names.contains("Helper.pm"),
+        "git_tools/ should not be skipped"
+    );
+    assert!(
+        found_names.contains("Fast.pm"),
+        "caches/ should not be skipped"
+    );
 
     // Exact matches should be skipped
-    assert!(!found_names.contains("Build.pm"), "target/ should be skipped");
-    assert!(!found_names.contains("Dep.pm"), "node_modules/ should be skipped");
+    assert!(
+        !found_names.contains("Build.pm"),
+        "target/ should be skipped"
+    );
+    assert!(
+        !found_names.contains("Dep.pm"),
+        "node_modules/ should be skipped"
+    );
 
     Ok(())
 }
@@ -899,7 +970,10 @@ fn git_discovery_still_applies_skip_rules_even_if_tracked() -> TestResult {
     // node_modules should be filtered even if git-tracked
     assert!(result.files.iter().any(|p| p.ends_with("Kept.pm")));
     assert!(
-        !result.files.iter().any(|p| p.to_string_lossy().contains("node_modules")),
+        !result
+            .files
+            .iter()
+            .any(|p| p.to_string_lossy().contains("node_modules")),
         "skipped directories should be filtered even when git-tracked"
     );
 

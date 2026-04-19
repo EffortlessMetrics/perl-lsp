@@ -135,7 +135,11 @@ struct Scope {
 impl Scope {
     fn new() -> Self {
         let vars = std::array::from_fn(|_| None);
-        Self { variables: RefCell::new(vars), parent: None, has_regex_match: Cell::new(false) }
+        Self {
+            variables: RefCell::new(vars),
+            parent: None,
+            has_regex_match: Cell::new(false),
+        }
     }
 
     fn with_parent(parent: Rc<Scope>) -> Self {
@@ -152,7 +156,11 @@ impl Scope {
         if self.has_regex_match.get() {
             return true;
         }
-        if let Some(ref parent) = self.parent { parent.regex_match_in_scope() } else { false }
+        if let Some(ref parent) = self.parent {
+            parent.regex_match_in_scope()
+        } else {
+            false
+        }
     }
 
     fn declare_variable_parts(
@@ -196,7 +204,11 @@ impl Scope {
             }),
         );
 
-        if shadows { Some(IssueKind::VariableShadowing) } else { None }
+        if shadows {
+            Some(IssueKind::VariableShadowing)
+        } else {
+            None
+        }
     }
 
     fn has_variable_parts(&self, sigil: &str, name: &str) -> bool {
@@ -508,9 +520,10 @@ impl ScopeAnalyzer {
             return (found, initialized);
         }
 
-        self.package_variable_name(name, context).map_or((false, false), |qualified_name| {
-            scope.use_variable_parts(sigil, &qualified_name)
-        })
+        self.package_variable_name(name, context)
+            .map_or((false, false), |qualified_name| {
+                scope.use_variable_parts(sigil, &qualified_name)
+            })
     }
 
     fn initialize_variable_parts_in_context(
@@ -541,9 +554,10 @@ impl ScopeAnalyzer {
             return true;
         }
 
-        self.package_variable_name(name, context).is_some_and(|qualified_name| {
-            scope.initialize_and_use_variable_parts(sigil, &qualified_name)
-        })
+        self.package_variable_name(name, context)
+            .is_some_and(|qualified_name| {
+                scope.initialize_and_use_variable_parts(sigil, &qualified_name)
+            })
     }
 
     pub fn analyze(
@@ -581,7 +595,12 @@ impl ScopeAnalyzer {
         let strict_vars_mode = pragma_state.strict_vars || pragma_state.signatures_strict;
         let strict_subs_mode = pragma_state.strict_subs || pragma_state.signatures_strict;
         match &node.kind {
-            NodeKind::VariableDeclaration { declarator, variable, initializer, .. } => {
+            NodeKind::VariableDeclaration {
+                declarator,
+                variable,
+                initializer,
+                ..
+            } => {
                 let extracted = self.extract_variable_name(variable);
                 let (sigil, var_name_part) = extracted.parts();
 
@@ -660,7 +679,12 @@ impl ScopeAnalyzer {
                 }
             }
 
-            NodeKind::VariableListDeclaration { declarator, variables, initializer, .. } => {
+            NodeKind::VariableListDeclaration {
+                declarator,
+                variables,
+                initializer,
+                ..
+            } => {
                 let is_our = declarator == "our";
                 let is_initialized = initializer.is_some();
 
@@ -826,7 +850,9 @@ impl ScopeAnalyzer {
                     );
                 }
             }
-            NodeKind::Readline { filehandle: Some(filehandle) } => {
+            NodeKind::Readline {
+                filehandle: Some(filehandle),
+            } => {
                 let (sigil, var_name) = split_variable_name(filehandle);
                 if !sigil.is_empty() && !var_name.is_empty() && !var_name.contains("::") {
                     self.record_variable_use(
@@ -878,7 +904,11 @@ impl ScopeAnalyzer {
                 }
                 ancestors.pop();
             }
-            NodeKind::MethodCall { object, method, args } => {
+            NodeKind::MethodCall {
+                object,
+                method,
+                args,
+            } => {
                 ancestors.push(node);
                 self.analyze_node(object, scope, ancestors, issues, context);
                 if let Some((sigil, var_name)) = self.extract_method_name_variable(method) {
@@ -902,7 +932,10 @@ impl ScopeAnalyzer {
                 self.analyze_node(operand, scope, ancestors, issues, context);
                 ancestors.pop();
             }
-            NodeKind::String { value, interpolated } => {
+            NodeKind::String {
+                value,
+                interpolated,
+            } => {
                 if *interpolated
                     || value.starts_with('"')
                     || value.starts_with('`')
@@ -912,7 +945,11 @@ impl ScopeAnalyzer {
                     self.mark_interpolated_variables_used(value, scope, context);
                 }
             }
-            NodeKind::Heredoc { content, interpolated, .. } => {
+            NodeKind::Heredoc {
+                content,
+                interpolated,
+                ..
+            } => {
                 if *interpolated {
                     self.mark_interpolated_variables_used(content, scope, context);
                 }
@@ -944,7 +981,11 @@ impl ScopeAnalyzer {
                 self.analyze_node(lhs, scope, ancestors, issues, context);
             }
 
-            NodeKind::Tie { variable, package, args } => {
+            NodeKind::Tie {
+                variable,
+                package,
+                args,
+            } => {
                 ancestors.push(node);
                 // Analyze arguments first
                 self.analyze_node(package, scope, ancestors, issues, context);
@@ -1026,7 +1067,13 @@ impl ScopeAnalyzer {
                 self.collect_unused_variables(&phase_scope, issues, context);
             }
 
-            NodeKind::For { init, condition, update, body, .. } => {
+            NodeKind::For {
+                init,
+                condition,
+                update,
+                body,
+                ..
+            } => {
                 let loop_scope = Rc::new(Scope::with_parent(scope.clone()));
 
                 ancestors.push(node);
@@ -1047,7 +1094,12 @@ impl ScopeAnalyzer {
                 self.collect_unused_variables(&loop_scope, issues, context);
             }
 
-            NodeKind::Foreach { variable, list, body, continue_block } => {
+            NodeKind::Foreach {
+                variable,
+                list,
+                body,
+                continue_block,
+            } => {
                 let loop_scope = Rc::new(Scope::with_parent(scope.clone()));
 
                 ancestors.push(node);
@@ -1067,7 +1119,9 @@ impl ScopeAnalyzer {
                 self.collect_unused_variables(&loop_scope, issues, context);
             }
 
-            NodeKind::Subroutine { signature, body, .. } => {
+            NodeKind::Subroutine {
+                signature, body, ..
+            } => {
                 let sub_scope = Rc::new(Scope::with_parent(scope.clone()));
 
                 // Check for duplicate parameters and shadowing
@@ -1179,7 +1233,11 @@ impl ScopeAnalyzer {
                 self.collect_unused_variables(&sub_scope, issues, context);
             }
 
-            NodeKind::Try { body, catch_blocks, finally_block } => {
+            NodeKind::Try {
+                body,
+                catch_blocks,
+                finally_block,
+            } => {
                 ancestors.push(node);
                 self.analyze_node(body, scope, ancestors, issues, context);
 
@@ -1593,8 +1651,11 @@ impl ScopeAnalyzer {
                 break;
             }
 
-            let (start, requires_closing_brace) =
-                if bytes[index + 1] == b'{' { (index + 2, true) } else { (index + 1, false) };
+            let (start, requires_closing_brace) = if bytes[index + 1] == b'{' {
+                (index + 2, true)
+            } else {
+                (index + 1, false)
+            };
 
             if start >= bytes.len() || !is_interpolated_var_start(bytes[start]) {
                 index += 1;
@@ -1782,7 +1843,10 @@ impl ScopeAnalyzer {
             .iter()
             .map(|issue| match issue.kind {
                 IssueKind::VariableShadowing => {
-                    format!("Consider rename '{}' to avoid shadowing", issue.variable_name)
+                    format!(
+                        "Consider rename '{}' to avoid shadowing",
+                        issue.variable_name
+                    )
                 }
                 IssueKind::UnusedVariable => {
                     format!(
@@ -1791,22 +1855,37 @@ impl ScopeAnalyzer {
                     )
                 }
                 IssueKind::UndeclaredVariable => {
-                    format!("Declare '{}' with 'my', 'our', or 'local'", issue.variable_name)
+                    format!(
+                        "Declare '{}' with 'my', 'our', or 'local'",
+                        issue.variable_name
+                    )
                 }
                 IssueKind::VariableRedeclaration => {
                     format!("Remove duplicate declaration of '{}'", issue.variable_name)
                 }
                 IssueKind::DuplicateParameter => {
-                    format!("Remove or rename duplicate parameter '{}'", issue.variable_name)
+                    format!(
+                        "Remove or rename duplicate parameter '{}'",
+                        issue.variable_name
+                    )
                 }
                 IssueKind::ParameterShadowsGlobal => {
-                    format!("Rename parameter '{}' to avoid shadowing", issue.variable_name)
+                    format!(
+                        "Rename parameter '{}' to avoid shadowing",
+                        issue.variable_name
+                    )
                 }
                 IssueKind::UnusedParameter => {
-                    format!("Rename '{}' with underscore or add comment", issue.variable_name)
+                    format!(
+                        "Rename '{}' with underscore or add comment",
+                        issue.variable_name
+                    )
                 }
                 IssueKind::UnquotedBareword => {
-                    format!("Quote bareword '{}' or declare as filehandle", issue.variable_name)
+                    format!(
+                        "Quote bareword '{}' or declare as filehandle",
+                        issue.variable_name
+                    )
                 }
                 IssueKind::UninitializedVariable => {
                     format!("Initialize '{}' before use", issue.variable_name)
@@ -1914,7 +1993,10 @@ fn is_builtin_global(sigil: &str, name: &str) -> bool {
                 false
             }
         },
-        b'@' => matches!(name, "_" | "+" | "-" | "INC" | "ARGV" | "EXPORT" | "EXPORT_OK" | "ISA"),
+        b'@' => matches!(
+            name,
+            "_" | "+" | "-" | "INC" | "ARGV" | "EXPORT" | "EXPORT_OK" | "ISA"
+        ),
         b'%' => matches!(name, "_" | "+" | "ENV" | "INC" | "SIG" | "EXPORT_TAGS"),
         _ => false,
     }
@@ -2038,8 +2120,10 @@ fn is_explicit_scalar_reference_deref(source: &str) -> bool {
 }
 
 fn normalize_scalar_deref_base_name(name: &str) -> &str {
-    let unwrapped =
-        name.strip_prefix('{').and_then(|inner| inner.strip_suffix('}')).unwrap_or(name);
+    let unwrapped = name
+        .strip_prefix('{')
+        .and_then(|inner| inner.strip_suffix('}'))
+        .unwrap_or(name);
 
     unwrapped.strip_prefix('$').unwrap_or(unwrapped)
 }

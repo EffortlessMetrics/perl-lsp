@@ -90,7 +90,12 @@ impl DebugAdapter {
                     }
                 };
 
-                let DapMessage::Request { seq, command, arguments } = msg else {
+                let DapMessage::Request {
+                    seq,
+                    command,
+                    arguments,
+                } = msg
+                else {
                     continue;
                 };
 

@@ -76,7 +76,11 @@ pub fn collect_all(
         terminators_found.push(found);
         offset = off2;
     }
-    CollectionResult { contents: results, terminators_found, next_offset: offset }
+    CollectionResult {
+        contents: results,
+        terminators_found,
+        next_offset: offset,
+    }
 }
 
 /// Reads content lines until `label` matches after optional leading whitespace.
@@ -117,7 +121,10 @@ fn collect_one(src: &[u8], mut off: usize, hd: &PendingHeredoc) -> (HeredocConte
             break;
         }
 
-        raw_lines.push(Line { start: ls, end_no_eol: le });
+        raw_lines.push(Line {
+            start: ls,
+            end_no_eol: le,
+        });
         off = next;
     }
 
@@ -125,26 +132,54 @@ fn collect_one(src: &[u8], mut off: usize, hd: &PendingHeredoc) -> (HeredocConte
         .iter()
         .map(|ln| {
             if baseline_indent.is_empty() {
-                ByteSpan { start: ln.start, end: ln.end_no_eol }
+                ByteSpan {
+                    start: ln.start,
+                    end: ln.end_no_eol,
+                }
             } else {
                 let bytes = &src[ln.start..ln.end_no_eol];
                 let strip = common_prefix_len(bytes, &baseline_indent);
-                ByteSpan { start: ln.start + strip, end: ln.end_no_eol }
+                ByteSpan {
+                    start: ln.start + strip,
+                    end: ln.end_no_eol,
+                }
             }
         })
         .collect();
 
     let full_span = match (segments.first(), segments.last()) {
-        (Some(f), Some(l)) => ByteSpan { start: f.start, end: l.end },
-        _ => ByteSpan { start: off, end: off }, // empty heredoc
+        (Some(f), Some(l)) => ByteSpan {
+            start: f.start,
+            end: l.end,
+        },
+        _ => ByteSpan {
+            start: off,
+            end: off,
+        }, // empty heredoc
     };
 
     if !found {
         // Unterminated; return what we have (upstream should report a syntax error)
-        return (HeredocContent { segments, full_span, terminated: false }, off, false);
+        return (
+            HeredocContent {
+                segments,
+                full_span,
+                terminated: false,
+            },
+            off,
+            false,
+        );
     }
 
-    (HeredocContent { segments, full_span, terminated: true }, after_terminator_off, true)
+    (
+        HeredocContent {
+            segments,
+            full_span,
+            terminated: true,
+        },
+        after_terminator_off,
+        true,
+    )
 }
 
 /// (line_start, line_end_excluding_newline, next_offset_after_newline)
@@ -179,7 +214,11 @@ fn split_leading_ws(s: &[u8]) -> (usize, &[u8]) {
 
 /// For label comparison only, drop a trailing '\r' (CRLF normalization).
 fn strip_trailing_cr(s: &[u8]) -> &[u8] {
-    if s.last().copied() == Some(b'\r') { &s[..s.len() - 1] } else { s }
+    if s.last().copied() == Some(b'\r') {
+        &s[..s.len() - 1]
+    } else {
+        s
+    }
 }
 
 /// Returns the length of the common byte prefix between two slices.

@@ -72,12 +72,18 @@ pub fn analyze_nodekind_coverage(
     let all_nodekinds = get_all_nodekinds();
     let total_count = all_nodekinds.len();
     let covered_count = nodekind_counts.len();
-    let coverage_percentage =
-        if total_count > 0 { (covered_count as f64 / total_count as f64) * 100.0 } else { 0.0 };
+    let coverage_percentage = if total_count > 0 {
+        (covered_count as f64 / total_count as f64) * 100.0
+    } else {
+        0.0
+    };
 
     // Find never-seen NodeKinds
-    let never_seen: Vec<String> =
-        all_nodekinds.iter().filter(|nk| !nodekind_counts.contains_key(*nk)).cloned().collect();
+    let never_seen: Vec<String> = all_nodekinds
+        .iter()
+        .filter(|nk| !nodekind_counts.contains_key(*nk))
+        .cloned()
+        .collect();
 
     // Find at-risk NodeKinds (low coverage)
     let at_risk: Vec<AtRiskNodeKind> = nodekind_counts
@@ -93,7 +99,11 @@ pub fn analyze_nodekind_coverage(
                 RiskLevel::Medium
             };
 
-            AtRiskNodeKind { name: name.clone(), count, risk_level }
+            AtRiskNodeKind {
+                name: name.clone(),
+                count,
+                risk_level,
+            }
         })
         .collect();
 
@@ -143,7 +153,10 @@ fn collect_nodekinds_recursive(node: &perl_parser::ast::Node, out: &mut HashSet<
 
 /// Get all NodeKinds from the parser's canonical list.
 fn get_all_nodekinds() -> HashSet<String> {
-    perl_parser::ast::NodeKind::ALL_KIND_NAMES.iter().map(|s| (*s).to_string()).collect()
+    perl_parser::ast::NodeKind::ALL_KIND_NAMES
+        .iter()
+        .map(|s| (*s).to_string())
+        .collect()
 }
 
 #[cfg(test)]

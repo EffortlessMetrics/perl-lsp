@@ -17,7 +17,9 @@ struct OutputCapture {
 
 impl OutputCapture {
     fn new() -> Self {
-        Self { buffer: Arc::new(Mutex::new(Vec::new())) }
+        Self {
+            buffer: Arc::new(Mutex::new(Vec::new())),
+        }
     }
 
     fn get_messages(&self) -> Vec<Value> {
@@ -66,8 +68,9 @@ fn wait_for_method(output: &OutputCapture, method: &str) -> Option<Value> {
     let deadline = Instant::now() + Duration::from_millis(250);
     loop {
         let messages = output.get_messages();
-        if let Some(message) =
-            messages.into_iter().find(|message| message["method"].as_str() == Some(method))
+        if let Some(message) = messages
+            .into_iter()
+            .find(|message| message["method"].as_str() == Some(method))
         {
             return Some(message);
         }
@@ -90,7 +93,9 @@ impl Write for OutputCapture {
 
 impl Clone for OutputCapture {
     fn clone(&self) -> Self {
-        Self { buffer: Arc::clone(&self.buffer) }
+        Self {
+            buffer: Arc::clone(&self.buffer),
+        }
     }
 }
 
@@ -139,7 +144,9 @@ fn lsp_window_show_message_request_format() -> Result<(), Box<dyn std::error::Er
     assert_eq!(request["params"]["type"], 2); // Warning = 2
     assert_eq!(request["params"]["message"], "Do you want to continue?");
 
-    let actions = request["params"]["actions"].as_array().ok_or("Expected actions array")?;
+    let actions = request["params"]["actions"]
+        .as_array()
+        .ok_or("Expected actions array")?;
     assert_eq!(actions.len(), 2);
     assert_eq!(actions[0]["title"], "Yes");
     assert_eq!(actions[1]["title"], "No");
@@ -154,8 +161,12 @@ fn lsp_window_show_document_requires_capability() -> Result<(), Box<dyn std::err
     let server = LspServer::with_output(Arc::new(Mutex::new(output_box)));
 
     // Try to show document without capability
-    let result =
-        server.show_document("file:///test.pl", ShowDocumentOptions { ..Default::default() });
+    let result = server.show_document(
+        "file:///test.pl",
+        ShowDocumentOptions {
+            ..Default::default()
+        },
+    );
 
     // Should fail with Unsupported error
     assert!(result.is_err());
@@ -198,8 +209,14 @@ fn lsp_window_show_document_with_capability() {
         external: false,
         take_focus: true,
         selection: Some(lsp_types::Range {
-            start: lsp_types::Position { line: 10, character: 5 },
-            end: lsp_types::Position { line: 10, character: 15 },
+            start: lsp_types::Position {
+                line: 10,
+                character: 5,
+            },
+            end: lsp_types::Position {
+                line: 10,
+                character: 15,
+            },
         }),
     };
 
@@ -246,7 +263,10 @@ fn lsp_window_progress_lifecycle() {
     assert!(result.is_ok(), "Failed to create progress: {:?}", result);
 
     let create_message = wait_for_method(&output, "window/workDoneProgress/create");
-    assert!(create_message.is_some(), "Expected window/workDoneProgress/create request");
+    assert!(
+        create_message.is_some(),
+        "Expected window/workDoneProgress/create request"
+    );
     let create_message = create_message.unwrap_or_else(|| unreachable!());
     assert_eq!(create_message["method"], "window/workDoneProgress/create");
     assert_eq!(create_message["params"]["token"], token);
@@ -258,7 +278,10 @@ fn lsp_window_progress_lifecycle() {
     assert!(result.is_ok());
 
     let begin_message = wait_for_method(&output, "$/progress");
-    assert!(begin_message.is_some(), "Expected begin $/progress notification");
+    assert!(
+        begin_message.is_some(),
+        "Expected begin $/progress notification"
+    );
     let begin_message = begin_message.unwrap_or_else(|| unreachable!());
     assert_eq!(begin_message["method"], "$/progress");
     assert_eq!(begin_message["params"]["token"], token);
@@ -273,7 +296,10 @@ fn lsp_window_progress_lifecycle() {
     assert!(result.is_ok());
 
     let report_message = wait_for_method(&output, "$/progress");
-    assert!(report_message.is_some(), "Expected report $/progress notification");
+    assert!(
+        report_message.is_some(),
+        "Expected report $/progress notification"
+    );
     let report_message = report_message.unwrap_or_else(|| unreachable!());
     assert_eq!(report_message["method"], "$/progress");
     assert_eq!(report_message["params"]["value"]["kind"], "report");
@@ -286,7 +312,10 @@ fn lsp_window_progress_lifecycle() {
     assert!(result.is_ok());
 
     let end_message = wait_for_method(&output, "$/progress");
-    assert!(end_message.is_some(), "Expected end $/progress notification");
+    assert!(
+        end_message.is_some(),
+        "Expected end $/progress notification"
+    );
     let end_message = end_message.unwrap_or_else(|| unreachable!());
     assert_eq!(end_message["method"], "$/progress");
     assert_eq!(end_message["params"]["value"]["kind"], "end");
@@ -412,8 +441,9 @@ fn lsp_window_telemetry_respects_config() {
     // No telemetry/event notification should be sent while disabled.
     std::thread::sleep(Duration::from_millis(50));
     let messages = output.get_messages();
-    let telemetry_sent =
-        messages.iter().any(|message| message["method"].as_str() == Some("telemetry/event"));
+    let telemetry_sent = messages
+        .iter()
+        .any(|message| message["method"].as_str() == Some("telemetry/event"));
     assert!(!telemetry_sent, "Telemetry sent when disabled");
 
     output.clear();
@@ -441,7 +471,10 @@ fn lsp_window_telemetry_respects_config() {
 
     // Telemetry should now be sent
     let telemetry_message = wait_for_method(&output, "telemetry/event");
-    assert!(telemetry_message.is_some(), "Expected telemetry/event notification");
+    assert!(
+        telemetry_message.is_some(),
+        "Expected telemetry/event notification"
+    );
     let telemetry_message = telemetry_message.unwrap_or_else(|| unreachable!());
     assert_eq!(telemetry_message["method"], "telemetry/event");
     assert_eq!(telemetry_message["params"]["event"], "test");
@@ -518,7 +551,11 @@ fn lsp_window_show_document_external_flag() {
     output.clear();
 
     // Test external = true
-    let options = ShowDocumentOptions { external: true, take_focus: false, selection: None };
+    let options = ShowDocumentOptions {
+        external: true,
+        take_focus: false,
+        selection: None,
+    };
 
     let _ = server.show_document("https://example.com", options);
 

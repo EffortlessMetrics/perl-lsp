@@ -15,26 +15,50 @@ fn test_api_module_exposes_all_required_symbols() {
 
     // breakpoint module exports
     let name = std::any::type_name::<AstBreakpointValidator>();
-    assert!(name.contains("AstBreakpointValidator"), "AstBreakpointValidator not found: {}", name);
+    assert!(
+        name.contains("AstBreakpointValidator"),
+        "AstBreakpointValidator not found: {}",
+        name
+    );
 
     let name = std::any::type_name::<BreakpointError>();
-    assert!(name.contains("BreakpointError"), "BreakpointError not found: {}", name);
+    assert!(
+        name.contains("BreakpointError"),
+        "BreakpointError not found: {}",
+        name
+    );
 
     // eval module exports
     let name = std::any::type_name::<SafeEvaluator>();
-    assert!(name.contains("SafeEvaluator"), "SafeEvaluator not found: {}", name);
+    assert!(
+        name.contains("SafeEvaluator"),
+        "SafeEvaluator not found: {}",
+        name
+    );
 
     // config module exports
     let name = std::any::type_name::<LaunchConfiguration>();
-    assert!(name.contains("LaunchConfiguration"), "LaunchConfiguration not found: {}", name);
+    assert!(
+        name.contains("LaunchConfiguration"),
+        "LaunchConfiguration not found: {}",
+        name
+    );
 
     // platform module exports
     let name = std::any::type_name::<PerlInterpreterResult>();
-    assert!(name.contains("PerlInterpreterResult"), "PerlInterpreterResult not found: {}", name);
+    assert!(
+        name.contains("PerlInterpreterResult"),
+        "PerlInterpreterResult not found: {}",
+        name
+    );
 
     // stack module exports
     let name = std::any::type_name::<PerlStackParser>();
-    assert!(name.contains("PerlStackParser"), "PerlStackParser not found: {}", name);
+    assert!(
+        name.contains("PerlStackParser"),
+        "PerlStackParser not found: {}",
+        name
+    );
 
     // types module exports (with TypesSource alias to avoid collision)
     let name = std::any::type_name::<TypesSource>();
@@ -46,11 +70,19 @@ fn test_api_module_exposes_all_required_symbols() {
 
     // variables module exports
     let name = std::any::type_name::<PerlVariableRenderer>();
-    assert!(name.contains("PerlVariableRenderer"), "PerlVariableRenderer not found: {}", name);
+    assert!(
+        name.contains("PerlVariableRenderer"),
+        "PerlVariableRenderer not found: {}",
+        name
+    );
 
     // security module exports
     let name = std::any::type_name::<SecurityError>();
-    assert!(name.contains("SecurityError"), "SecurityError not found: {}", name);
+    assert!(
+        name.contains("SecurityError"),
+        "SecurityError not found: {}",
+        name
+    );
 }
 
 #[test]
@@ -59,9 +91,16 @@ fn test_api_functions_are_callable() {
     // (implicitly tests that api.rs imports are working)
 
     // command_args::format_command_args function
-    let args: Vec<String> = vec!["perl".to_string(), "-d".to_string(), "script.pl".to_string()];
+    let args: Vec<String> = vec![
+        "perl".to_string(),
+        "-d".to_string(),
+        "script.pl".to_string(),
+    ];
     let result = format_command_args(&args);
-    assert!(!result.is_empty(), "format_command_args should return non-empty result");
+    assert!(
+        !result.is_empty(),
+        "format_command_args should return non-empty result"
+    );
 
     // platform functions
     let _result = find_perl_interpreter(None);
@@ -146,12 +185,18 @@ fn test_re_exports_from_all_eleven_modules() {
 
     // 3. config — create_launch_json_snippet returns a non-empty string
     let snippet = create_launch_json_snippet();
-    assert!(!snippet.is_empty(), "create_launch_json_snippet must return non-empty string");
+    assert!(
+        !snippet.is_empty(),
+        "create_launch_json_snippet must return non-empty string"
+    );
 
     // 4. command_args — format_command_args returns non-empty for non-empty input
     let args = vec!["perl".to_string(), "script.pl".to_string()];
     let formatted = format_command_args(&args);
-    assert!(!formatted.is_empty(), "format_command_args must return non-empty for non-empty args");
+    assert!(
+        !formatted.is_empty(),
+        "format_command_args must return non-empty for non-empty args"
+    );
 
     // 5. platform — find_perl_interpreter is callable
     let _interp = find_perl_interpreter(None);
@@ -174,7 +219,10 @@ fn test_re_exports_from_all_eleven_modules() {
 
     // 10. security — validate_expression rejects multi-line input (newline injection)
     let dangerous = validate_expression("foo\nbar");
-    assert!(dangerous.is_err(), "validate_expression must reject expressions with newlines");
+    assert!(
+        dangerous.is_err(),
+        "validate_expression must reject expressions with newlines"
+    );
 
     // 11. shell is tested indirectly via command_args above (shell depends on command_args)
 }

@@ -115,8 +115,12 @@ fn scope_snapshot_default() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn lex_checkpoint_clone() -> Result<(), Box<dyn std::error::Error>> {
-    let cp =
-        LexCheckpoint { byte: 42, mode: perl_lexer::LexerMode::ExpectTerm, line: 1, column: 5 };
+    let cp = LexCheckpoint {
+        byte: 42,
+        mode: perl_lexer::LexerMode::ExpectTerm,
+        line: 1,
+        column: 5,
+    };
     let cp2 = cp;
     assert_eq!(cp2.byte, 42);
     assert_eq!(cp2.line, 1);
@@ -217,8 +221,14 @@ fn edit_from_lsp_range_change() -> Result<(), Box<dyn std::error::Error>> {
     let li = LineIndex::new(old);
     let change = TextDocumentContentChangeEvent {
         range: Some(LspRange {
-            start: lsp_types::Position { line: 0, character: 8 },
-            end: lsp_types::Position { line: 0, character: 10 },
+            start: lsp_types::Position {
+                line: 0,
+                character: 8,
+            },
+            end: lsp_types::Position {
+                line: 0,
+                character: 10,
+            },
         }),
         range_length: None,
         text: "99".to_string(),
@@ -241,8 +251,12 @@ fn apply_single_small_edit() -> Result<(), Box<dyn std::error::Error>> {
     let src = "my $x = 42;";
     let mut state = IncrementalState::new(src.to_string());
 
-    let edit =
-        Edit { start_byte: 8, old_end_byte: 10, new_end_byte: 10, new_text: "99".to_string() };
+    let edit = Edit {
+        start_byte: 8,
+        old_end_byte: 10,
+        new_end_byte: 10,
+        new_text: "99".to_string(),
+    };
 
     let result = apply_edits(&mut state, &[edit])?;
     assert!(!result.changed_ranges.is_empty());
@@ -257,8 +271,12 @@ fn apply_single_insertion_edit() -> Result<(), Box<dyn std::error::Error>> {
     let mut state = IncrementalState::new(src.to_string());
 
     // Insert "00" after "1" making it "100"
-    let edit =
-        Edit { start_byte: 9, old_end_byte: 9, new_end_byte: 11, new_text: "00".to_string() };
+    let edit = Edit {
+        start_byte: 9,
+        old_end_byte: 9,
+        new_end_byte: 11,
+        new_text: "00".to_string(),
+    };
 
     let result = apply_edits(&mut state, &[edit])?;
     assert!(state.source.contains("100"));
@@ -272,7 +290,12 @@ fn apply_single_deletion_edit() -> Result<(), Box<dyn std::error::Error>> {
     let mut state = IncrementalState::new(src.to_string());
 
     // Delete "yz" from "$xyz" -> "$x"
-    let edit = Edit { start_byte: 5, old_end_byte: 7, new_end_byte: 5, new_text: String::new() };
+    let edit = Edit {
+        start_byte: 5,
+        old_end_byte: 7,
+        new_end_byte: 5,
+        new_text: String::new(),
+    };
 
     let result = apply_edits(&mut state, &[edit])?;
     assert!(state.source.contains("$x ="));
@@ -314,9 +337,18 @@ fn apply_multiple_edits() -> Result<(), Box<dyn std::error::Error>> {
     let src = "my $x = 1; my $y = 2;";
     let mut state = IncrementalState::new(src.to_string());
 
-    let e1 = Edit { start_byte: 8, old_end_byte: 9, new_end_byte: 10, new_text: "10".to_string() };
-    let e2 =
-        Edit { start_byte: 19, old_end_byte: 20, new_end_byte: 21, new_text: "20".to_string() };
+    let e1 = Edit {
+        start_byte: 8,
+        old_end_byte: 9,
+        new_end_byte: 10,
+        new_text: "10".to_string(),
+    };
+    let e2 = Edit {
+        start_byte: 19,
+        old_end_byte: 20,
+        new_end_byte: 21,
+        new_text: "20".to_string(),
+    };
 
     let result = apply_edits(&mut state, &[e1, e2])?;
     // Multiple edits -> full reparse path.
@@ -335,8 +367,12 @@ fn apply_edits_exceeding_max_size() -> Result<(), Box<dyn std::error::Error>> {
 
     // Create an edit larger than 64 KB.
     let huge = "a".repeat(65 * 1024);
-    let edit =
-        Edit { start_byte: 0, old_end_byte: src.len(), new_end_byte: huge.len(), new_text: huge };
+    let edit = Edit {
+        start_byte: 0,
+        old_end_byte: src.len(),
+        new_end_byte: huge.len(),
+        new_text: huge,
+    };
 
     let result = apply_edits(&mut state, &[edit])?;
     assert_eq!(result.changed_ranges.len(), 1);
@@ -598,7 +634,11 @@ fn checkpointed_parser_apply_edit() -> Result<(), Box<dyn std::error::Error>> {
     let mut parser = CheckpointedIncrementalParser::new();
     let _ = parser.parse("my $x = 42;\nmy $y = 99;\n".to_string())?;
 
-    let edit = SimpleEdit { start: 8, end: 10, new_text: "4242".to_string() };
+    let edit = SimpleEdit {
+        start: 8,
+        end: 10,
+        new_text: "4242".to_string(),
+    };
     let tree2 = parser.apply_edit(&edit)?;
 
     assert_eq!(parser.stats().total_parses, 2);
@@ -616,10 +656,18 @@ fn checkpointed_parser_multiple_edits() -> Result<(), Box<dyn std::error::Error>
     let source = "my $x = 1;\n".repeat(20);
     let _ = parser.parse(source)?;
 
-    let e1 = SimpleEdit { start: 8, end: 9, new_text: "42".to_string() };
+    let e1 = SimpleEdit {
+        start: 8,
+        end: 9,
+        new_text: "42".to_string(),
+    };
     let _ = parser.apply_edit(&e1)?;
 
-    let e2 = SimpleEdit { start: 20, end: 21, new_text: "99".to_string() };
+    let e2 = SimpleEdit {
+        start: 20,
+        end: 21,
+        new_text: "99".to_string(),
+    };
     let _ = parser.apply_edit(&e2)?;
 
     assert_eq!(parser.stats().incremental_parses, 2);
@@ -633,7 +681,11 @@ fn checkpointed_parser_clear_caches() -> Result<(), Box<dyn std::error::Error>> 
     let _ = parser.parse("my $x = 1;".to_string())?;
     parser.clear_caches();
     // After clearing, a subsequent edit should still work.
-    let edit = SimpleEdit { start: 8, end: 9, new_text: "99".to_string() };
+    let edit = SimpleEdit {
+        start: 8,
+        end: 9,
+        new_text: "99".to_string(),
+    };
     let _ = parser.apply_edit(&edit)?;
     Ok(())
 }
@@ -890,7 +942,10 @@ fn incremental_config_defaults() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn document_parser_full_mode() -> Result<(), Box<dyn std::error::Error>> {
-    let config = IncrementalConfig { enabled: false, ..IncrementalConfig::default() };
+    let config = IncrementalConfig {
+        enabled: false,
+        ..IncrementalConfig::default()
+    };
     let dp = DocumentParser::new("my $x = 1;".to_string(), &config)?;
 
     assert_eq!(dp.content(), "my $x = 1;");
@@ -901,7 +956,10 @@ fn document_parser_full_mode() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn document_parser_full_mode_apply_changes() -> Result<(), Box<dyn std::error::Error>> {
-    let config = IncrementalConfig { enabled: false, ..IncrementalConfig::default() };
+    let config = IncrementalConfig {
+        enabled: false,
+        ..IncrementalConfig::default()
+    };
     let mut dp = DocumentParser::new("my $x = 1;".to_string(), &config)?;
 
     let change = serde_json::json!({ "text": "my $x = 2;" });
@@ -917,8 +975,11 @@ fn document_parser_full_mode_apply_changes() -> Result<(), Box<dyn std::error::E
 
 #[test]
 fn document_parser_incremental_mode() -> Result<(), Box<dyn std::error::Error>> {
-    let config =
-        IncrementalConfig { enabled: true, target_parse_time_ms: 1.0, max_cache_size: 1000 };
+    let config = IncrementalConfig {
+        enabled: true,
+        target_parse_time_ms: 1.0,
+        max_cache_size: 1000,
+    };
     let dp = DocumentParser::new("my $x = 1;".to_string(), &config)?;
 
     assert_eq!(dp.content(), "my $x = 1;");
@@ -929,8 +990,11 @@ fn document_parser_incremental_mode() -> Result<(), Box<dyn std::error::Error>> 
 
 #[test]
 fn document_parser_incremental_full_text_change() -> Result<(), Box<dyn std::error::Error>> {
-    let config =
-        IncrementalConfig { enabled: true, target_parse_time_ms: 1.0, max_cache_size: 1000 };
+    let config = IncrementalConfig {
+        enabled: true,
+        target_parse_time_ms: 1.0,
+        max_cache_size: 1000,
+    };
     let mut dp = DocumentParser::new("my $x = 1;".to_string(), &config)?;
 
     // Full document replacement (no range).
@@ -943,8 +1007,11 @@ fn document_parser_incremental_full_text_change() -> Result<(), Box<dyn std::err
 
 #[test]
 fn document_parser_incremental_range_change() -> Result<(), Box<dyn std::error::Error>> {
-    let config =
-        IncrementalConfig { enabled: true, target_parse_time_ms: 1.0, max_cache_size: 1000 };
+    let config = IncrementalConfig {
+        enabled: true,
+        target_parse_time_ms: 1.0,
+        max_cache_size: 1000,
+    };
     let mut dp = DocumentParser::new("my $x = 42;".to_string(), &config)?;
 
     // Incremental range change: replace "42" with "99".
@@ -986,8 +1053,12 @@ fn edit_noop_replacement() -> Result<(), Box<dyn std::error::Error>> {
     let mut state = IncrementalState::new(src.to_string());
 
     // Replace "42" with "42" — no actual change.
-    let edit =
-        Edit { start_byte: 8, old_end_byte: 10, new_end_byte: 10, new_text: "42".to_string() };
+    let edit = Edit {
+        start_byte: 8,
+        old_end_byte: 10,
+        new_end_byte: 10,
+        new_text: "42".to_string(),
+    };
     let result = apply_edits(&mut state, &[edit])?;
     assert!(state.source.contains("42"));
     assert!(!result.changed_ranges.is_empty());
@@ -1007,7 +1078,10 @@ fn incremental_state_with_package() -> Result<(), Box<dyn std::error::Error>> {
     assert!(state.parse_checkpoints.len() >= 2);
 
     // Scope should capture the package name.
-    let pkg_cp = state.parse_checkpoints.iter().find(|cp| cp.scope_snapshot.package_name == "Foo");
+    let pkg_cp = state
+        .parse_checkpoints
+        .iter()
+        .find(|cp| cp.scope_snapshot.package_name == "Foo");
     assert!(pkg_cp.is_some());
     Ok(())
 }
@@ -1018,7 +1092,11 @@ fn incremental_state_with_package() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn simple_edit_to_original_edit() -> Result<(), Box<dyn std::error::Error>> {
-    let se = SimpleEdit { start: 5, end: 10, new_text: "hello".to_string() };
+    let se = SimpleEdit {
+        start: 5,
+        end: 10,
+        new_text: "hello".to_string(),
+    };
     let oe = se.to_original_edit();
     assert_eq!(oe.start_byte, 5);
     assert_eq!(oe.old_end_byte, 10);
@@ -1036,8 +1114,12 @@ fn integration_edit_preserves_statement_count() -> Result<(), Box<dyn std::error
     let mut state = IncrementalState::new(src.to_string());
 
     // Change "1" to "10"
-    let edit =
-        Edit { start_byte: 8, old_end_byte: 9, new_end_byte: 10, new_text: "10".to_string() };
+    let edit = Edit {
+        start_byte: 8,
+        old_end_byte: 9,
+        new_end_byte: 10,
+        new_text: "10".to_string(),
+    };
     let _ = apply_edits(&mut state, &[edit])?;
 
     // Re-parse and verify three statements remain.
@@ -1054,7 +1136,11 @@ fn integration_checkpointed_parser_preserves_structure() -> Result<(), Box<dyn s
     let mut parser = CheckpointedIncrementalParser::new();
     let t1 = parser.parse("my $x = 42;\nmy $y = 99;\n".to_string())?;
 
-    let edit = SimpleEdit { start: 8, end: 10, new_text: "4242".to_string() };
+    let edit = SimpleEdit {
+        start: 8,
+        end: 10,
+        new_text: "4242".to_string(),
+    };
     let t2 = parser.apply_edit(&edit)?;
 
     // Both trees should have the same number of top-level statements.
@@ -1249,8 +1335,12 @@ fn edit_from_lsp_no_range_full_replace() -> Result<(), Box<dyn std::error::Error
 
 #[test]
 fn edit_byte_shift_insert() -> Result<(), Box<dyn std::error::Error>> {
-    let edit =
-        Edit { start_byte: 5, old_end_byte: 5, new_end_byte: 10, new_text: "hello".to_string() };
+    let edit = Edit {
+        start_byte: 5,
+        old_end_byte: 5,
+        new_end_byte: 10,
+        new_text: "hello".to_string(),
+    };
     // Insertion: new_end - old_end == 5
     assert_eq!(edit.new_end_byte - edit.old_end_byte, 5);
     Ok(())
@@ -1258,7 +1348,12 @@ fn edit_byte_shift_insert() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn edit_byte_shift_delete() -> Result<(), Box<dyn std::error::Error>> {
-    let edit = Edit { start_byte: 5, old_end_byte: 15, new_end_byte: 5, new_text: String::new() };
+    let edit = Edit {
+        start_byte: 5,
+        old_end_byte: 15,
+        new_end_byte: 5,
+        new_text: String::new(),
+    };
     assert_eq!(edit.new_end_byte, edit.start_byte);
     Ok(())
 }
@@ -1398,8 +1493,12 @@ fn apply_edits_empty_edit_list() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn apply_edits_replacement_preserves_surrounding() -> Result<(), Box<dyn std::error::Error>> {
     let mut state = IncrementalState::new("my $x = 42; my $y = 99;".to_string());
-    let edit =
-        Edit { start_byte: 8, old_end_byte: 10, new_end_byte: 12, new_text: "1234".to_string() };
+    let edit = Edit {
+        start_byte: 8,
+        old_end_byte: 10,
+        new_end_byte: 12,
+        new_text: "1234".to_string(),
+    };
     let _result = apply_edits(&mut state, &[edit])?;
     assert!(state.source.contains("1234"));
     assert!(state.source.contains("my $y = 99;"));
@@ -1409,8 +1508,12 @@ fn apply_edits_replacement_preserves_surrounding() -> Result<(), Box<dyn std::er
 #[test]
 fn apply_edits_insert_at_beginning() -> Result<(), Box<dyn std::error::Error>> {
     let mut state = IncrementalState::new("my $x = 1;".to_string());
-    let edit =
-        Edit { start_byte: 0, old_end_byte: 0, new_end_byte: 4, new_text: "use ".to_string() };
+    let edit = Edit {
+        start_byte: 0,
+        old_end_byte: 0,
+        new_end_byte: 4,
+        new_text: "use ".to_string(),
+    };
     let _result = apply_edits(&mut state, &[edit])?;
     assert!(state.source.starts_with("use "));
     Ok(())
@@ -1577,7 +1680,11 @@ fn checkpointed_parser_stats_initial() -> Result<(), Box<dyn std::error::Error>>
 fn checkpointed_parser_stats_after_edit() -> Result<(), Box<dyn std::error::Error>> {
     let mut parser = CheckpointedIncrementalParser::new();
     let _tree = parser.parse("my $x = 1;\nmy $y = 2;\n".to_string())?;
-    let edit = SimpleEdit { start: 8, end: 9, new_text: "42".to_string() };
+    let edit = SimpleEdit {
+        start: 8,
+        end: 9,
+        new_text: "42".to_string(),
+    };
     let _tree2 = parser.apply_edit(&edit)?;
     assert_eq!(parser.stats().incremental_parses, 1);
     assert!(parser.stats().tokens_relexed > 0);
@@ -1590,7 +1697,11 @@ fn checkpointed_parser_clear_and_reparse() -> Result<(), Box<dyn std::error::Err
     let _tree = parser.parse("my $x = 1;".to_string())?;
     parser.clear_caches();
     // After clearing, edit should still work (fallback to full parse)
-    let edit = SimpleEdit { start: 8, end: 9, new_text: "2".to_string() };
+    let edit = SimpleEdit {
+        start: 8,
+        end: 9,
+        new_text: "2".to_string(),
+    };
     let tree2 = parser.apply_edit(&edit)?;
     if let NodeKind::Program { statements } = &tree2.kind {
         assert!(!statements.is_empty());
@@ -1600,7 +1711,11 @@ fn checkpointed_parser_clear_and_reparse() -> Result<(), Box<dyn std::error::Err
 
 #[test]
 fn simple_edit_to_original_preserves_positions() -> Result<(), Box<dyn std::error::Error>> {
-    let se = SimpleEdit { start: 10, end: 15, new_text: "hello".to_string() };
+    let se = SimpleEdit {
+        start: 10,
+        end: 15,
+        new_text: "hello".to_string(),
+    };
     let oe = se.to_original_edit();
     assert_eq!(oe.start_position.byte, 10);
     assert_eq!(oe.old_end_position.byte, 15);
@@ -1942,8 +2057,11 @@ fn lsp_roundtrip_multiline() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn document_parser_full_content_accessor() -> Result<(), Box<dyn std::error::Error>> {
-    let config =
-        IncrementalConfig { enabled: false, target_parse_time_ms: 1.0, max_cache_size: 100 };
+    let config = IncrementalConfig {
+        enabled: false,
+        target_parse_time_ms: 1.0,
+        max_cache_size: 100,
+    };
     let dp = DocumentParser::new("my $x = 1;".to_string(), &config)?;
     assert_eq!(dp.content(), "my $x = 1;");
     Ok(())
@@ -1951,8 +2069,11 @@ fn document_parser_full_content_accessor() -> Result<(), Box<dyn std::error::Err
 
 #[test]
 fn document_parser_full_no_metrics() -> Result<(), Box<dyn std::error::Error>> {
-    let config =
-        IncrementalConfig { enabled: false, target_parse_time_ms: 1.0, max_cache_size: 100 };
+    let config = IncrementalConfig {
+        enabled: false,
+        target_parse_time_ms: 1.0,
+        max_cache_size: 100,
+    };
     let dp = DocumentParser::new("my $x = 1;".to_string(), &config)?;
     // Full mode has no incremental metrics
     assert!(dp.metrics().is_none());
@@ -1961,8 +2082,11 @@ fn document_parser_full_no_metrics() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn document_parser_incremental_has_metrics() -> Result<(), Box<dyn std::error::Error>> {
-    let config =
-        IncrementalConfig { enabled: true, target_parse_time_ms: 1.0, max_cache_size: 100 };
+    let config = IncrementalConfig {
+        enabled: true,
+        target_parse_time_ms: 1.0,
+        max_cache_size: 100,
+    };
     let dp = DocumentParser::new("my $x = 1;".to_string(), &config)?;
     assert!(dp.metrics().is_some());
     Ok(())
@@ -1970,8 +2094,11 @@ fn document_parser_incremental_has_metrics() -> Result<(), Box<dyn std::error::E
 
 #[test]
 fn document_parser_incremental_content_accessor() -> Result<(), Box<dyn std::error::Error>> {
-    let config =
-        IncrementalConfig { enabled: true, target_parse_time_ms: 1.0, max_cache_size: 100 };
+    let config = IncrementalConfig {
+        enabled: true,
+        target_parse_time_ms: 1.0,
+        max_cache_size: 100,
+    };
     let dp = DocumentParser::new("my $x = 1;".to_string(), &config)?;
     assert_eq!(dp.content(), "my $x = 1;");
     Ok(())
@@ -1979,8 +2106,11 @@ fn document_parser_incremental_content_accessor() -> Result<(), Box<dyn std::err
 
 #[test]
 fn document_parser_incremental_ast_available() -> Result<(), Box<dyn std::error::Error>> {
-    let config =
-        IncrementalConfig { enabled: true, target_parse_time_ms: 1.0, max_cache_size: 100 };
+    let config = IncrementalConfig {
+        enabled: true,
+        target_parse_time_ms: 1.0,
+        max_cache_size: 100,
+    };
     let dp = DocumentParser::new("my $x = 1;".to_string(), &config)?;
     assert!(dp.ast().is_some());
     Ok(())
@@ -2047,8 +2177,12 @@ fn scope_snapshot_clone() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn lex_checkpoint_fields() -> Result<(), Box<dyn std::error::Error>> {
-    let cp =
-        LexCheckpoint { byte: 42, mode: perl_lexer::LexerMode::ExpectTerm, line: 3, column: 7 };
+    let cp = LexCheckpoint {
+        byte: 42,
+        mode: perl_lexer::LexerMode::ExpectTerm,
+        line: 3,
+        column: 7,
+    };
     assert_eq!(cp.byte, 42);
     assert_eq!(cp.line, 3);
     assert_eq!(cp.column, 7);
@@ -2102,8 +2236,11 @@ fn parse_metrics_default() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn incremental_config_custom() -> Result<(), Box<dyn std::error::Error>> {
-    let config =
-        IncrementalConfig { enabled: true, target_parse_time_ms: 2.0, max_cache_size: 5000 };
+    let config = IncrementalConfig {
+        enabled: true,
+        target_parse_time_ms: 2.0,
+        max_cache_size: 5000,
+    };
     assert!(config.enabled);
     assert!((config.target_parse_time_ms - 2.0).abs() < f64::EPSILON);
     assert_eq!(config.max_cache_size, 5000);
@@ -2189,7 +2326,12 @@ fn incremental_edit_set_default() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn apply_edits_single_char_insert() -> Result<(), Box<dyn std::error::Error>> {
     let mut state = IncrementalState::new("my $x=1;".to_string());
-    let edit = Edit { start_byte: 5, old_end_byte: 5, new_end_byte: 6, new_text: " ".to_string() };
+    let edit = Edit {
+        start_byte: 5,
+        old_end_byte: 5,
+        new_end_byte: 6,
+        new_text: " ".to_string(),
+    };
     let _result = apply_edits(&mut state, &[edit])?;
     assert!(state.source.contains("$x "));
     Ok(())
@@ -2198,7 +2340,12 @@ fn apply_edits_single_char_insert() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn apply_edits_single_char_delete() -> Result<(), Box<dyn std::error::Error>> {
     let mut state = IncrementalState::new("my  $x = 1;".to_string());
-    let edit = Edit { start_byte: 2, old_end_byte: 3, new_end_byte: 2, new_text: String::new() };
+    let edit = Edit {
+        start_byte: 2,
+        old_end_byte: 3,
+        new_end_byte: 2,
+        new_text: String::new(),
+    };
     let _result = apply_edits(&mut state, &[edit])?;
     assert!(state.source.starts_with("my $x"));
     Ok(())

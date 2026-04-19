@@ -41,7 +41,11 @@ fn ternary_statement() -> impl Strategy<Value = String> {
 fn defined_or_statement() -> impl Strategy<Value = String> {
     (
         scalar_name(),
-        prop_oneof![Just("undef".to_string()), Just("0".to_string()), Just("\"\"".to_string()),],
+        prop_oneof![
+            Just("undef".to_string()),
+            Just("0".to_string()),
+            Just("\"\"".to_string()),
+        ],
         prop_oneof![
             int_literal().prop_map(|value| value.to_string()),
             Just("\"fallback\"".to_string()),
@@ -75,7 +79,11 @@ fn concat_statement() -> impl Strategy<Value = String> {
 }
 
 fn repeat_statement() -> impl Strategy<Value = String> {
-    (scalar_name(), prop::sample::select(vec!["\"-\"", "\"*\"", "\".\""]), small_literal())
+    (
+        scalar_name(),
+        prop::sample::select(vec!["\"-\"", "\"*\"", "\".\""]),
+        small_literal(),
+    )
         .prop_map(|(name, token, count)| format!("my ${} = {} x {};\n", name, token, count))
 }
 
@@ -119,11 +127,16 @@ fn compound_assignment_statement() -> impl Strategy<Value = String> {
 }
 
 fn binding_statement() -> impl Strategy<Value = String> {
-    (scalar_name(), prop::sample::select(vec!["alpha", "beta", "gamma"])).prop_map(
-        |(name, token)| {
-            format!("my ${} = \"{}\";\nmy $ok = ${} =~ /{}/;\n", name, token, name, token)
-        },
+    (
+        scalar_name(),
+        prop::sample::select(vec!["alpha", "beta", "gamma"]),
     )
+        .prop_map(|(name, token)| {
+            format!(
+                "my ${} = \"{}\";\nmy $ok = ${} =~ /{}/;\n",
+                name, token, name, token
+            )
+        })
 }
 
 fn smartmatch_statement() -> impl Strategy<Value = String> {
@@ -145,7 +158,10 @@ fn isa_statement() -> impl Strategy<Value = String> {
 }
 
 fn exists_statement() -> impl Strategy<Value = String> {
-    (scalar_name(), prop::sample::select(vec!["HOME", "PATH", "SHELL"]))
+    (
+        scalar_name(),
+        prop::sample::select(vec!["HOME", "PATH", "SHELL"]),
+    )
         .prop_map(|(name, key)| format!("my ${} = exists $ENV{{{}}} ? 1 : 0;\n", name, key))
 }
 

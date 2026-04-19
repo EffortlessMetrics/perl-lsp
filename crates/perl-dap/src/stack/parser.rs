@@ -103,7 +103,11 @@ impl PerlStackParser {
     /// Creates a new stack parser with default settings.
     #[must_use]
     pub fn new() -> Self {
-        Self { include_unknown_frames: false, auto_assign_ids: true, next_id: 1 }
+        Self {
+            include_unknown_frames: false,
+            auto_assign_ids: true,
+            next_id: 1,
+        }
     }
 
     /// Sets whether to include frames with no source location.
@@ -298,7 +302,11 @@ impl PerlStackParser {
     pub fn parse_context(&self, line: &str) -> Option<(String, String, i64)> {
         if let Some(caps) = context_re().and_then(|re| re.captures(line)) {
             let func = caps.name("func").map_or("main", |m| m.as_str()).to_string();
-            let file = caps.name("file").or_else(|| caps.name("file2"))?.as_str().to_string();
+            let file = caps
+                .name("file")
+                .or_else(|| caps.name("file2"))?
+                .as_str()
+                .to_string();
             let line_str = caps.name("line").or_else(|| caps.name("line2"))?.as_str();
             let line: i64 = line_str.parse().ok()?;
 
@@ -433,8 +441,12 @@ $ = main::run() called from file `script.pl' line 5
 
     #[test]
     fn test_looks_like_frame() {
-        assert!(PerlStackParser::looks_like_frame("  #0  main::foo at script.pl line 10"));
-        assert!(PerlStackParser::looks_like_frame("$ = foo() called from file 'x' line 1"));
+        assert!(PerlStackParser::looks_like_frame(
+            "  #0  main::foo at script.pl line 10"
+        ));
+        assert!(PerlStackParser::looks_like_frame(
+            "$ = foo() called from file 'x' line 1"
+        ));
         assert!(!PerlStackParser::looks_like_frame("some random text"));
         assert!(!PerlStackParser::looks_like_frame(""));
     }

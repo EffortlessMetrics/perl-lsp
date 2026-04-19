@@ -86,20 +86,38 @@ fn class_without_isa_has_no_parents() {
 #[test]
 fn class_with_isa_has_correct_parent() {
     let parents = class_parents(r#"class Point3D :isa(Point) { }"#);
-    assert_eq!(parents, vec!["Point"], "expected parent 'Point', got {:?}", parents);
+    assert_eq!(
+        parents,
+        vec!["Point"],
+        "expected parent 'Point', got {:?}",
+        parents
+    );
 }
 
 #[test]
 fn class_with_multiple_isa_has_all_parents() {
     let parents = class_parents(r#"class Shape3D :isa(Shape) :isa(Printable) { }"#);
-    assert!(parents.contains(&"Shape".to_string()), "expected 'Shape' in {:?}", parents);
-    assert!(parents.contains(&"Printable".to_string()), "expected 'Printable' in {:?}", parents);
+    assert!(
+        parents.contains(&"Shape".to_string()),
+        "expected 'Shape' in {:?}",
+        parents
+    );
+    assert!(
+        parents.contains(&"Printable".to_string()),
+        "expected 'Printable' in {:?}",
+        parents
+    );
 }
 
 #[test]
 fn class_with_qualified_isa_has_qualified_parent() {
     let parents = class_parents(r#"class MyApp::Point3D :isa(MyApp::Point) { }"#);
-    assert_eq!(parents, vec!["MyApp::Point"], "expected qualified parent, got {:?}", parents);
+    assert_eq!(
+        parents,
+        vec!["MyApp::Point"],
+        "expected qualified parent, got {:?}",
+        parents
+    );
 }
 
 // ── Regression: :isa must not produce spurious "unknown attribute" errors ─────
@@ -155,7 +173,14 @@ fn sub_with_isa_attr_still_warns() {
     let mut parser = Parser::new(src);
     let _ast = must(parser.parse());
     let errors = parser.errors();
-    assert!(!errors.is_empty(), "sub :isa should warn (not valid for subs), but errors was empty");
+    assert!(
+        !errors.is_empty(),
+        "sub :isa should warn (not valid for subs), but errors was empty"
+    );
     let mentions_isa = errors.iter().any(|e| format!("{e}").contains("isa"));
-    assert!(mentions_isa, "warning should mention 'isa', got: {:?}", errors);
+    assert!(
+        mentions_isa,
+        "warning should mention 'isa', got: {:?}",
+        errors
+    );
 }

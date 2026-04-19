@@ -95,7 +95,11 @@ impl LspTestRunner {
             );
         }
 
-        Self { features, test_results: Vec::new(), start_time: Instant::now() }
+        Self {
+            features,
+            test_results: Vec::new(),
+            start_time: Instant::now(),
+        }
     }
 
     /// Run a single test and track results
@@ -197,8 +201,12 @@ impl LspTestRunner {
         }
 
         // Untested features
-        let untested: Vec<_> =
-            self.features.values().filter(|f| !f.tested).map(|f| f.name.as_str()).collect();
+        let untested: Vec<_> = self
+            .features
+            .values()
+            .filter(|f| !f.tested)
+            .map(|f| f.name.as_str())
+            .collect();
 
         if !untested.is_empty() {
             println!("\n{}", "Untested Features:".bold().yellow());
@@ -219,9 +227,17 @@ impl LspTestRunner {
         println!(
             "Tests Failed: {} {}",
             failed_tests,
-            if failed_tests > 0 { "✗".red() } else { "✓".green() }
+            if failed_tests > 0 {
+                "✗".red()
+            } else {
+                "✓".green()
+            }
         );
-        println!("Features Tested: {}/{}", tested_features, self.features.len());
+        println!(
+            "Features Tested: {}/{}",
+            tested_features,
+            self.features.len()
+        );
         println!(
             "Overall Coverage: {:.1}%",
             (tested_features as f64 / self.features.len() as f64) * 100.0
@@ -237,11 +253,17 @@ impl LspTestRunner {
             sorted_results.sort_by_key(|r| r.duration_ms);
 
             if let Some(fastest) = sorted_results.first() {
-                println!("Fastest Test: {} ({} ms)", fastest.name, fastest.duration_ms);
+                println!(
+                    "Fastest Test: {} ({} ms)",
+                    fastest.name, fastest.duration_ms
+                );
             }
 
             if let Some(slowest) = sorted_results.last() {
-                println!("Slowest Test: {} ({} ms)", slowest.name, slowest.duration_ms);
+                println!(
+                    "Slowest Test: {} ({} ms)",
+                    slowest.name, slowest.duration_ms
+                );
             }
 
             let avg_duration = sorted_results.iter().map(|r| r.duration_ms).sum::<u128>()
@@ -376,8 +398,17 @@ impl LspTestRunner {
 
         writeln!(file, "- **Total Tests**: {}", self.test_results.len())?;
         writeln!(file, "- **Passed**: {} ✅", passed_tests)?;
-        writeln!(file, "- **Failed**: {} ❌", self.test_results.len() - passed_tests)?;
-        writeln!(file, "- **Features Tested**: {}/{}", tested_features, self.features.len())?;
+        writeln!(
+            file,
+            "- **Failed**: {} ❌",
+            self.test_results.len() - passed_tests
+        )?;
+        writeln!(
+            file,
+            "- **Features Tested**: {}/{}",
+            tested_features,
+            self.features.len()
+        )?;
         writeln!(
             file,
             "- **Coverage**: {:.1}%\n",
@@ -390,7 +421,11 @@ impl LspTestRunner {
 
         for coverage in self.features.values() {
             if coverage.tested {
-                let status = if coverage.fail_count == 0 { "✅" } else { "⚠️" };
+                let status = if coverage.fail_count == 0 {
+                    "✅"
+                } else {
+                    "⚠️"
+                };
                 writeln!(
                     file,
                     "| {} | {} | {} | {} | {:.1}% |",
@@ -424,18 +459,30 @@ impl LspTestRunner {
             let total_ms: u128 = self.test_results.iter().map(|r| r.duration_ms).sum();
             let avg_ms = total_ms / self.test_results.len() as u128;
 
-            writeln!(file, "- **Total Duration**: {:.2}s", total_ms as f64 / 1000.0)?;
+            writeln!(
+                file,
+                "- **Total Duration**: {:.2}s",
+                total_ms as f64 / 1000.0
+            )?;
             writeln!(file, "- **Average Test Duration**: {}ms", avg_ms)?;
 
             let mut sorted = self.test_results.clone();
             sorted.sort_by_key(|r| r.duration_ms);
 
             if let Some(fastest) = sorted.first() {
-                writeln!(file, "- **Fastest Test**: {} ({}ms)", fastest.name, fastest.duration_ms)?;
+                writeln!(
+                    file,
+                    "- **Fastest Test**: {} ({}ms)",
+                    fastest.name, fastest.duration_ms
+                )?;
             }
 
             if let Some(slowest) = sorted.last() {
-                writeln!(file, "- **Slowest Test**: {} ({}ms)", slowest.name, slowest.duration_ms)?;
+                writeln!(
+                    file,
+                    "- **Slowest Test**: {} ({}ms)",
+                    slowest.name, slowest.duration_ms
+                )?;
             }
         }
 
@@ -527,8 +574,10 @@ mod tests {
         assert!(passed);
         assert_eq!(runner.test_results.len(), 1);
 
-        let completion_feature =
-            runner.features.get("Completion").ok_or("Completion feature not found")?;
+        let completion_feature = runner
+            .features
+            .get("Completion")
+            .ok_or("Completion feature not found")?;
         assert!(completion_feature.tested);
 
         Ok(())

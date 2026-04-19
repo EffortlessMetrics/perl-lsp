@@ -224,8 +224,11 @@ fn array_children_with_mixed_types() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn array_preview_within_limit() -> Result<(), Box<dyn std::error::Error>> {
     let renderer = PerlVariableRenderer::new().with_max_array_preview(3);
-    let val =
-        PerlValue::Array(vec![PerlValue::Integer(1), PerlValue::Integer(2), PerlValue::Integer(3)]);
+    let val = PerlValue::Array(vec![
+        PerlValue::Integer(1),
+        PerlValue::Integer(2),
+        PerlValue::Integer(3),
+    ]);
     let rendered = renderer.render("@arr", &val);
 
     // All 3 fit within preview limit
@@ -309,8 +312,9 @@ fn double_reference_deref_chain() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn triple_reference_deref_chain() -> Result<(), Box<dyn std::error::Error>> {
     let renderer = PerlVariableRenderer::new();
-    let val =
-        PerlValue::reference(PerlValue::reference(PerlValue::reference(PerlValue::scalar("deep"))));
+    let val = PerlValue::reference(PerlValue::reference(PerlValue::reference(
+        PerlValue::scalar("deep"),
+    )));
     let rendered = renderer.render("$rrref", &val);
 
     // Should show three backslashes and the final string value
@@ -540,8 +544,10 @@ fn object_value_shows_class_equals_brief() -> Result<(), Box<dyn std::error::Err
 #[test]
 fn object_expandable_via_render_with_reference() -> Result<(), Box<dyn std::error::Error>> {
     let renderer = PerlVariableRenderer::new();
-    let val =
-        PerlValue::object("Config", PerlValue::Hash(vec![("debug".into(), PerlValue::Integer(1))]));
+    let val = PerlValue::object(
+        "Config",
+        PerlValue::Hash(vec![("debug".into(), PerlValue::Integer(1))]),
+    );
 
     let rendered = renderer.render_with_reference("$cfg", &val, 99);
     assert_eq!(rendered.variables_reference, 99);
@@ -620,8 +626,9 @@ fn array_preview_truncation_with_many_elements() -> Result<(), Box<dyn std::erro
 #[test]
 fn hash_preview_truncation_with_many_keys() -> Result<(), Box<dyn std::error::Error>> {
     let renderer = PerlVariableRenderer::new().with_max_hash_preview(2);
-    let pairs: Vec<(String, PerlValue)> =
-        (0..50).map(|i| (format!("key_{}", i), PerlValue::Integer(i))).collect();
+    let pairs: Vec<(String, PerlValue)> = (0..50)
+        .map(|i| (format!("key_{}", i), PerlValue::Integer(i)))
+        .collect();
     let val = PerlValue::Hash(pairs);
     let rendered = renderer.render("%big", &val);
 
@@ -636,8 +643,10 @@ fn hash_preview_truncation_with_many_keys() -> Result<(), Box<dyn std::error::Er
 #[test]
 fn truncated_value_rendering() -> Result<(), Box<dyn std::error::Error>> {
     let renderer = PerlVariableRenderer::new();
-    let val =
-        PerlValue::Truncated { summary: "ARRAY [1, 2, 3, ...]".into(), total_count: Some(10_000) };
+    let val = PerlValue::Truncated {
+        summary: "ARRAY [1, 2, 3, ...]".into(),
+        total_count: Some(10_000),
+    };
     let rendered = renderer.render("@huge", &val);
 
     assert!(rendered.value.contains("10000 total"));
@@ -649,7 +658,10 @@ fn truncated_value_rendering() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn truncated_value_without_count() -> Result<(), Box<dyn std::error::Error>> {
     let renderer = PerlVariableRenderer::new();
-    let val = PerlValue::Truncated { summary: "deeply nested structure".into(), total_count: None };
+    let val = PerlValue::Truncated {
+        summary: "deeply nested structure".into(),
+        total_count: None,
+    };
     let rendered = renderer.render("$deep", &val);
 
     assert_eq!(rendered.value, "deeply nested structure");
@@ -675,8 +687,9 @@ fn large_array_children_pagination() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn large_hash_children_pagination() -> Result<(), Box<dyn std::error::Error>> {
     let renderer = PerlVariableRenderer::new();
-    let pairs: Vec<(String, PerlValue)> =
-        (0..100).map(|i| (format!("k{}", i), PerlValue::Integer(i))).collect();
+    let pairs: Vec<(String, PerlValue)> = (0..100)
+        .map(|i| (format!("k{}", i), PerlValue::Integer(i)))
+        .collect();
     let val = PerlValue::Hash(pairs);
 
     // Fetch a slice
@@ -751,8 +764,14 @@ fn reference_to_object_with_nested_hash() -> Result<(), Box<dyn std::error::Erro
 fn array_of_objects() -> Result<(), Box<dyn std::error::Error>> {
     let renderer = PerlVariableRenderer::new();
     let val = PerlValue::Array(vec![
-        PerlValue::object("Item", PerlValue::Hash(vec![("id".into(), PerlValue::Integer(1))])),
-        PerlValue::object("Item", PerlValue::Hash(vec![("id".into(), PerlValue::Integer(2))])),
+        PerlValue::object(
+            "Item",
+            PerlValue::Hash(vec![("id".into(), PerlValue::Integer(1))]),
+        ),
+        PerlValue::object(
+            "Item",
+            PerlValue::Hash(vec![("id".into(), PerlValue::Integer(2))]),
+        ),
     ]);
 
     let rendered = renderer.render("@items", &val);
@@ -773,9 +792,15 @@ fn hash_of_arrays() -> Result<(), Box<dyn std::error::Error>> {
     let val = PerlValue::Hash(vec![
         (
             "fruits".into(),
-            PerlValue::Array(vec![PerlValue::scalar("apple"), PerlValue::scalar("banana")]),
+            PerlValue::Array(vec![
+                PerlValue::scalar("apple"),
+                PerlValue::scalar("banana"),
+            ]),
         ),
-        ("vegs".into(), PerlValue::Array(vec![PerlValue::scalar("carrot")])),
+        (
+            "vegs".into(),
+            PerlValue::Array(vec![PerlValue::scalar("carrot")]),
+        ),
     ]);
 
     let children = renderer.render_children(&val, 0, 10);
@@ -810,7 +835,10 @@ fn blessed_hash_value_shows_class_equals_hash() -> Result<(), Box<dyn std::error
     assert_eq!(rendered.type_name.as_deref(), Some("MyApp::Model::User"));
 
     // presentation_hint must carry kind="class" so the IDE can style the icon
-    let hint = rendered.presentation_hint.as_ref().ok_or("presentation_hint should be set")?;
+    let hint = rendered
+        .presentation_hint
+        .as_ref()
+        .ok_or("presentation_hint should be set")?;
     assert_eq!(hint.kind.as_deref(), Some("class"));
 
     Ok(())
@@ -828,7 +856,10 @@ fn blessed_array_value_shows_class_equals_array() -> Result<(), Box<dyn std::err
 
     assert_eq!(rendered.value, "My::InsideOut = ARRAY(...)");
     assert_eq!(rendered.type_name.as_deref(), Some("My::InsideOut"));
-    let hint = rendered.presentation_hint.as_ref().ok_or("presentation_hint should be set")?;
+    let hint = rendered
+        .presentation_hint
+        .as_ref()
+        .ok_or("presentation_hint should be set")?;
     assert_eq!(hint.kind.as_deref(), Some("class"));
 
     Ok(())
@@ -843,7 +874,10 @@ fn blessed_scalar_value_shows_class_equals_scalar() -> Result<(), Box<dyn std::e
 
     assert_eq!(rendered.value, "URI = SCALAR(...)");
     assert_eq!(rendered.type_name.as_deref(), Some("URI"));
-    let hint = rendered.presentation_hint.as_ref().ok_or("presentation_hint should be set")?;
+    let hint = rendered
+        .presentation_hint
+        .as_ref()
+        .ok_or("presentation_hint should be set")?;
     assert_eq!(hint.kind.as_deref(), Some("class"));
 
     Ok(())
@@ -856,9 +890,18 @@ fn blessed_deep_namespace_value_format() -> Result<(), Box<dyn std::error::Error
     let val = PerlValue::object("Very::Deep::Nested::Package::Name", PerlValue::Hash(vec![]));
     let rendered = renderer.render("$obj", &val);
 
-    assert_eq!(rendered.value, "Very::Deep::Nested::Package::Name = HASH(...)");
-    assert_eq!(rendered.type_name.as_deref(), Some("Very::Deep::Nested::Package::Name"));
-    let hint = rendered.presentation_hint.as_ref().ok_or("presentation_hint should be set")?;
+    assert_eq!(
+        rendered.value,
+        "Very::Deep::Nested::Package::Name = HASH(...)"
+    );
+    assert_eq!(
+        rendered.type_name.as_deref(),
+        Some("Very::Deep::Nested::Package::Name")
+    );
+    let hint = rendered
+        .presentation_hint
+        .as_ref()
+        .ok_or("presentation_hint should be set")?;
     assert_eq!(hint.kind.as_deref(), Some("class"));
 
     Ok(())
@@ -897,7 +940,10 @@ fn multiple_objects_in_scope_all_display_class() -> Result<(), Box<dyn std::erro
 
     // All three must carry presentation hints
     for rendered in [&rendered_req, &rendered_resp, &rendered_agent] {
-        let hint = rendered.presentation_hint.as_ref().ok_or("hint must be set")?;
+        let hint = rendered
+            .presentation_hint
+            .as_ref()
+            .ok_or("hint must be set")?;
         assert_eq!(hint.kind.as_deref(), Some("class"));
     }
 

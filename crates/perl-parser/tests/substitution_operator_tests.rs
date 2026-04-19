@@ -19,7 +19,12 @@ fn test_basic_substitution() -> TestResult {
     if let NodeKind::Program { statements } = &ast.kind {
         assert_eq!(statements.len(), 1);
         if let NodeKind::ExpressionStatement { expression } = &statements[0].kind {
-            if let NodeKind::Substitution { pattern, replacement, modifiers, .. } = &expression.kind
+            if let NodeKind::Substitution {
+                pattern,
+                replacement,
+                modifiers,
+                ..
+            } = &expression.kind
             {
                 assert_eq!(pattern, "foo");
                 assert_eq!(replacement, "bar");
@@ -32,9 +37,11 @@ fn test_basic_substitution() -> TestResult {
                 .into());
             }
         } else {
-            return Err(
-                format!("Expected ExpressionStatement node, got {:?}", statements[0].kind).into()
-            );
+            return Err(format!(
+                "Expected ExpressionStatement node, got {:?}",
+                statements[0].kind
+            )
+            .into());
         }
     } else {
         return Err("Expected Program node".into());
@@ -67,7 +74,7 @@ fn test_substitution_with_modifiers() -> TestResult {
                     assert_eq!(modifiers, expected_modifiers, "Failed for {}", code);
                 } else {
                     return Err(
-                        format!("Expected Substitution node in expression for {}", code).into()
+                        format!("Expected Substitution node in expression for {}", code).into(),
                     );
                 }
             } else {
@@ -95,11 +102,18 @@ fn test_substitution_with_different_delimiters() -> TestResult {
 
     for (code, expected_pattern, expected_replacement) in test_cases {
         let mut parser = Parser::new(code);
-        let ast = parser.parse().map_err(|e| format!("parse {} failed: {}", code, e))?;
+        let ast = parser
+            .parse()
+            .map_err(|e| format!("parse {} failed: {}", code, e))?;
 
         if let NodeKind::Program { statements } = &ast.kind {
             if let NodeKind::ExpressionStatement { expression } = &statements[0].kind {
-                if let NodeKind::Substitution { pattern, replacement, .. } = &expression.kind {
+                if let NodeKind::Substitution {
+                    pattern,
+                    replacement,
+                    ..
+                } = &expression.kind
+                {
                     assert_eq!(pattern, expected_pattern, "Pattern mismatch for {}", code);
                     assert_eq!(
                         replacement, expected_replacement,
@@ -129,11 +143,18 @@ fn test_substitution_with_nested_delimiters() -> TestResult {
 
     for (code, expected_pattern, expected_replacement) in test_cases {
         let mut parser = Parser::new(code);
-        let ast = parser.parse().map_err(|e| format!("parse {} failed: {}", code, e))?;
+        let ast = parser
+            .parse()
+            .map_err(|e| format!("parse {} failed: {}", code, e))?;
 
         if let NodeKind::Program { statements } = &ast.kind {
             if let NodeKind::ExpressionStatement { expression } = &statements[0].kind {
-                if let NodeKind::Substitution { pattern, replacement, .. } = &expression.kind {
+                if let NodeKind::Substitution {
+                    pattern,
+                    replacement,
+                    ..
+                } = &expression.kind
+                {
                     assert_eq!(pattern, expected_pattern, "Pattern mismatch for {}", code);
                     assert_eq!(
                         replacement, expected_replacement,
@@ -163,11 +184,18 @@ fn test_substitution_with_special_chars() -> TestResult {
 
     for (code, expected_pattern, expected_replacement) in test_cases {
         let mut parser = Parser::new(code);
-        let ast = parser.parse().map_err(|e| format!("parse {} failed: {}", code, e))?;
+        let ast = parser
+            .parse()
+            .map_err(|e| format!("parse {} failed: {}", code, e))?;
 
         if let NodeKind::Program { statements } = &ast.kind {
             if let NodeKind::ExpressionStatement { expression } = &statements[0].kind {
-                if let NodeKind::Substitution { pattern, replacement, .. } = &expression.kind {
+                if let NodeKind::Substitution {
+                    pattern,
+                    replacement,
+                    ..
+                } = &expression.kind
+                {
                     assert_eq!(pattern, expected_pattern, "Pattern mismatch for {}", code);
                     assert_eq!(
                         replacement, expected_replacement,
@@ -188,15 +216,26 @@ fn test_substitution_with_special_chars() -> TestResult {
 #[test]
 // #[ignore = "substitution operator not implemented"]
 fn test_substitution_empty_pattern_or_replacement() -> TestResult {
-    let test_cases = vec![("s///", "", ""), ("s/foo//", "foo", ""), ("s//bar/", "", "bar")];
+    let test_cases = vec![
+        ("s///", "", ""),
+        ("s/foo//", "foo", ""),
+        ("s//bar/", "", "bar"),
+    ];
 
     for (code, expected_pattern, expected_replacement) in test_cases {
         let mut parser = Parser::new(code);
-        let ast = parser.parse().map_err(|e| format!("parse {} failed: {}", code, e))?;
+        let ast = parser
+            .parse()
+            .map_err(|e| format!("parse {} failed: {}", code, e))?;
 
         if let NodeKind::Program { statements } = &ast.kind {
             if let NodeKind::ExpressionStatement { expression } = &statements[0].kind {
-                if let NodeKind::Substitution { pattern, replacement, .. } = &expression.kind {
+                if let NodeKind::Substitution {
+                    pattern,
+                    replacement,
+                    ..
+                } = &expression.kind
+                {
                     assert_eq!(pattern, expected_pattern, "Pattern mismatch for {}", code);
                     assert_eq!(
                         replacement, expected_replacement,
@@ -236,11 +275,18 @@ fn test_substitution_empty_replacement_balanced_delimiters() -> TestResult {
 
     for (code, expected_pattern, expected_replacement) in test_cases {
         let mut parser = Parser::new(code);
-        let ast = parser.parse().map_err(|e| format!("parse {} failed: {}", code, e))?;
+        let ast = parser
+            .parse()
+            .map_err(|e| format!("parse {} failed: {}", code, e))?;
 
         if let NodeKind::Program { statements } = &ast.kind {
             if let NodeKind::ExpressionStatement { expression } = &statements[0].kind {
-                if let NodeKind::Substitution { pattern, replacement, .. } = &expression.kind {
+                if let NodeKind::Substitution {
+                    pattern,
+                    replacement,
+                    ..
+                } = &expression.kind
+                {
                     assert_eq!(pattern, expected_pattern, "Pattern mismatch for {}", code);
                     assert_eq!(
                         replacement, expected_replacement,
@@ -267,26 +313,49 @@ fn test_substitution_balanced_delimiters_with_trailing_code() -> TestResult {
     // Test cases that specifically target the trailing code parsing after balanced delimiters
     // Each case verifies that both the substitution and subsequent statements are properly parsed
     let test_cases = vec![
-        ("s[foo]{bar}; $x = 1;", 2, "Substitution + expression statement"),
+        (
+            "s[foo]{bar}; $x = 1;",
+            2,
+            "Substitution + expression statement",
+        ),
         ("s{foo}{bar}; print;", 2, "Substitution + function call"),
         ("s(foo)(bar); $x++;", 2, "Substitution + postfix increment"),
-        ("s<foo><bar>; my $y = 1;", 2, "Substitution + variable declaration"),
+        (
+            "s<foo><bar>; my $y = 1;",
+            2,
+            "Substitution + variable declaration",
+        ),
         ("s[pattern]{repl}; s/a/b/;", 2, "Two substitutions"),
         ("s{x}{y}; if (1) { }", 2, "Substitution + if block"),
-        ("s{a}{b}; s[c][d]; s(e)(f);", 3, "Three substitutions with different delimiters"),
+        (
+            "s{a}{b}; s[c][d]; s(e)(f);",
+            3,
+            "Three substitutions with different delimiters",
+        ),
         (
             "s[test]{value}; $var =~ s/old/new/g;",
             2,
             "Mixed balanced delimiters + bind operator with substitution",
         ),
-        ("s{}{empty}; print 'hello';", 2, "Empty pattern substitution + print statement"),
-        ("s<pattern><replacement>; my ($a, $b) = @_;", 2, "Substitution + list assignment"),
+        (
+            "s{}{empty}; print 'hello';",
+            2,
+            "Empty pattern substitution + print statement",
+        ),
+        (
+            "s<pattern><replacement>; my ($a, $b) = @_;",
+            2,
+            "Substitution + list assignment",
+        ),
     ];
 
     for (code, expected_stmt_count, description) in test_cases {
         let mut parser = Parser::new(code);
         let ast = parser.parse().map_err(|err| {
-            format!("Parse failed for test case '{}': {}\nCode: {}", description, err, code)
+            format!(
+                "Parse failed for test case '{}': {}\nCode: {}",
+                description, err, code
+            )
         })?;
 
         if let NodeKind::Program { statements } = &ast.kind {
@@ -349,7 +418,12 @@ fn test_substitution_with_expressions() -> TestResult {
 
     if let NodeKind::Program { statements } = &ast.kind {
         if let NodeKind::ExpressionStatement { expression } = &statements[0].kind {
-            if let NodeKind::Substitution { pattern, replacement, modifiers, .. } = &expression.kind
+            if let NodeKind::Substitution {
+                pattern,
+                replacement,
+                modifiers,
+                ..
+            } = &expression.kind
             {
                 assert_eq!(pattern, r"(\d+)");
                 assert_eq!(replacement, r#"sprintf("%02d", $1)"#);
@@ -375,15 +449,25 @@ fn test_substitution_in_context() -> TestResult {
 
     for (code, expected_pattern, expected_replacement, expected_modifiers) in test_cases {
         let mut parser = Parser::new(code);
-        let ast = parser.parse().map_err(|e| format!("parse {} failed: {}", code, e))?;
+        let ast = parser
+            .parse()
+            .map_err(|e| format!("parse {} failed: {}", code, e))?;
 
         // Find the substitution node (might be nested)
         let found = find_substitution_node(&ast);
         let (pattern, replacement, modifiers) =
             found.ok_or_else(|| format!("No Substitution node found in {}", code))?;
         assert_eq!(pattern, expected_pattern, "Pattern mismatch for {}", code);
-        assert_eq!(replacement, expected_replacement, "Replacement mismatch for {}", code);
-        assert_eq!(modifiers, expected_modifiers, "Modifiers mismatch for {}", code);
+        assert_eq!(
+            replacement, expected_replacement,
+            "Replacement mismatch for {}",
+            code
+        );
+        assert_eq!(
+            modifiers, expected_modifiers,
+            "Modifiers mismatch for {}",
+            code
+        );
     }
     Ok(())
 }
@@ -399,11 +483,18 @@ fn test_substitution_unicode() -> TestResult {
 
     for (code, expected_pattern, expected_replacement) in test_cases {
         let mut parser = Parser::new(code);
-        let ast = parser.parse().map_err(|e| format!("parse {} failed: {}", code, e))?;
+        let ast = parser
+            .parse()
+            .map_err(|e| format!("parse {} failed: {}", code, e))?;
 
         if let NodeKind::Program { statements } = &ast.kind {
             if let NodeKind::ExpressionStatement { expression } = &statements[0].kind {
-                if let NodeKind::Substitution { pattern, replacement, .. } = &expression.kind {
+                if let NodeKind::Substitution {
+                    pattern,
+                    replacement,
+                    ..
+                } = &expression.kind
+                {
                     assert_eq!(pattern, expected_pattern, "Pattern mismatch for {}", code);
                     assert_eq!(
                         replacement, expected_replacement,
@@ -424,9 +515,12 @@ fn test_substitution_unicode() -> TestResult {
 // Helper function to find substitution node in AST
 fn find_substitution_node(node: &perl_parser::ast::Node) -> Option<(String, String, String)> {
     match &node.kind {
-        NodeKind::Substitution { pattern, replacement, modifiers, .. } => {
-            Some((pattern.clone(), replacement.clone(), modifiers.clone()))
-        }
+        NodeKind::Substitution {
+            pattern,
+            replacement,
+            modifiers,
+            ..
+        } => Some((pattern.clone(), replacement.clone(), modifiers.clone())),
         NodeKind::Program { statements } => {
             for stmt in statements {
                 if let Some(result) = find_substitution_node(stmt) {
@@ -447,14 +541,17 @@ fn find_substitution_node(node: &perl_parser::ast::Node) -> Option<(String, Stri
             }
             None
         }
-        NodeKind::If { condition, then_branch, else_branch, .. } => {
-            find_substitution_node(condition)
-                .or_else(|| find_substitution_node(then_branch))
-                .or_else(|| else_branch.as_ref().and_then(|b| find_substitution_node(b)))
-        }
-        NodeKind::While { condition, body, .. } => {
-            find_substitution_node(condition).or_else(|| find_substitution_node(body))
-        }
+        NodeKind::If {
+            condition,
+            then_branch,
+            else_branch,
+            ..
+        } => find_substitution_node(condition)
+            .or_else(|| find_substitution_node(then_branch))
+            .or_else(|| else_branch.as_ref().and_then(|b| find_substitution_node(b))),
+        NodeKind::While {
+            condition, body, ..
+        } => find_substitution_node(condition).or_else(|| find_substitution_node(body)),
         _ => None,
     }
 }
@@ -575,7 +672,11 @@ fn test_substitution_valid_modifier_combinations() -> TestResult {
         if let NodeKind::Program { statements } = &ast.kind {
             if let NodeKind::ExpressionStatement { expression } = &statements[0].kind {
                 if let NodeKind::Substitution { modifiers, .. } = &expression.kind {
-                    assert_eq!(modifiers, expected_modifiers, "Modifiers mismatch for {}", code);
+                    assert_eq!(
+                        modifiers, expected_modifiers,
+                        "Modifiers mismatch for {}",
+                        code
+                    );
                 } else {
                     return Err(format!("Expected Substitution node for {}", code).into());
                 }
@@ -622,11 +723,18 @@ fn test_substitution_delimiter_edge_cases() -> TestResult {
 
     for (code, expected_pattern, expected_replacement) in edge_cases {
         let mut parser = Parser::new(code);
-        let ast = parser.parse().map_err(|e| format!("parse {} failed: {}", code, e))?;
+        let ast = parser
+            .parse()
+            .map_err(|e| format!("parse {} failed: {}", code, e))?;
 
         if let NodeKind::Program { statements } = &ast.kind {
             if let NodeKind::ExpressionStatement { expression } = &statements[0].kind {
-                if let NodeKind::Substitution { pattern, replacement, .. } = &expression.kind {
+                if let NodeKind::Substitution {
+                    pattern,
+                    replacement,
+                    ..
+                } = &expression.kind
+                {
                     assert_eq!(pattern, expected_pattern, "Pattern mismatch for {}", code);
                     assert_eq!(
                         replacement, expected_replacement,
@@ -667,11 +775,18 @@ fn test_substitution_complex_nested_scenarios() -> TestResult {
 
     for (code, expected_pattern, expected_replacement) in complex_cases {
         let mut parser = Parser::new(code);
-        let ast = parser.parse().map_err(|e| format!("parse {} failed: {}", code, e))?;
+        let ast = parser
+            .parse()
+            .map_err(|e| format!("parse {} failed: {}", code, e))?;
 
         if let NodeKind::Program { statements } = &ast.kind {
             if let NodeKind::ExpressionStatement { expression } = &statements[0].kind {
-                if let NodeKind::Substitution { pattern, replacement, .. } = &expression.kind {
+                if let NodeKind::Substitution {
+                    pattern,
+                    replacement,
+                    ..
+                } = &expression.kind
+                {
                     assert_eq!(pattern, expected_pattern, "Pattern mismatch for {}", code);
                     assert_eq!(
                         replacement, expected_replacement,
@@ -712,8 +827,9 @@ fn test_kill_mutation_modifier_character_matching() -> TestResult {
 
     for (code, expected_modifiers) in valid_cases {
         let mut parser = Parser::new(code);
-        let ast =
-            parser.parse().map_err(|e| format!("Valid modifier '{}' should parse: {}", code, e))?;
+        let ast = parser
+            .parse()
+            .map_err(|e| format!("Valid modifier '{}' should parse: {}", code, e))?;
 
         if let NodeKind::Program { statements } = &ast.kind
             && let NodeKind::ExpressionStatement { expression } = &statements[0].kind
@@ -791,7 +907,11 @@ fn test_kill_mutation_mixed_modifier_validation() {
         } else {
             let mut parser = Parser::new(code);
             let result = parser.parse();
-            assert!(result.is_ok(), "Pure valid modifier case '{}' should succeed", code);
+            assert!(
+                result.is_ok(),
+                "Pure valid modifier case '{}' should succeed",
+                code
+            );
             if let Ok(ast) = result
                 && let NodeKind::Program { statements } = &ast.kind
                 && let NodeKind::ExpressionStatement { expression } = &statements[0].kind

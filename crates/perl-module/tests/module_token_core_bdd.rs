@@ -27,7 +27,11 @@ fn given_partial_standalone_prefix_when_matching_boundaries_then_false() {
     let span = span.unwrap_or(ModuleTokenSpan { start: 0, end: 0 });
     let partial_end = span.start + "App::Config".len();
 
-    assert!(!has_standalone_module_token_boundaries(line, span.start, partial_end));
+    assert!(!has_standalone_module_token_boundaries(
+        line,
+        span.start,
+        partial_end
+    ));
 }
 
 #[test]

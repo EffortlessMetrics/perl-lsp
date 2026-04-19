@@ -15,7 +15,13 @@ mod issue_146_tests {
     fn test_tdd_workflow_compilation_fix() {
         // Test that tdd_workflow.rs compiles without the undefined signature error
         let output_res = Command::new("cargo")
-            .args(["check", "--package", "perl-parser", "--message-format", "json"])
+            .args([
+                "check",
+                "--package",
+                "perl-parser",
+                "--message-format",
+                "json",
+            ])
             .output();
         assert!(output_res.is_ok(), "Failed to run cargo check");
         let output = output_res.unwrap_or_else(|_| unreachable!());
@@ -109,7 +115,9 @@ mod integration_tests {
     /// Full compilation test for entire perl-parser crate
     #[test]
     fn test_full_crate_compilation() {
-        let output_res = Command::new("cargo").args(["build", "--package", "perl-parser"]).output();
+        let output_res = Command::new("cargo")
+            .args(["build", "--package", "perl-parser"])
+            .output();
         assert!(output_res.is_ok(), "Failed to run cargo build");
         let output = output_res.unwrap_or_else(|_| unreachable!());
 
@@ -143,7 +151,13 @@ mod integration_tests {
         // after tdd_workflow.rs and refactoring.rs are restored
 
         let output_res = Command::new("cargo")
-            .args(["test", "--package", "perl-lsp", "--test", "lsp_comprehensive_e2e_test"])
+            .args([
+                "test",
+                "--package",
+                "perl-lsp",
+                "--test",
+                "lsp_comprehensive_e2e_test",
+            ])
             .output();
         assert!(output_res.is_ok(), "Failed to run LSP E2E tests");
         let output = output_res.unwrap_or_else(|_| unreachable!());

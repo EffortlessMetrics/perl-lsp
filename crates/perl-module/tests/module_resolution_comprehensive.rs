@@ -158,7 +158,11 @@ mod resolve_path {
         let result = resolve_module_path(
             root,
             "Foo::Bar",
-            &["..".to_string(), "../../etc".to_string(), "../sibling".to_string()],
+            &[
+                "..".to_string(),
+                "../../etc".to_string(),
+                "../sibling".to_string(),
+            ],
         );
         // All traversal paths rejected, falls back to lib
         assert_eq!(result, Some(root.join("lib").join("Foo/Bar.pm")));
@@ -279,7 +283,9 @@ mod uri_workspace {
         std::fs::create_dir_all(target.parent().ok_or("no parent")?)?;
         std::fs::write(&target, "package App::Config; 1;")?;
 
-        let ws_uri = url::Url::from_file_path(&ws).map_err(|()| "bad URI")?.to_string();
+        let ws_uri = url::Url::from_file_path(&ws)
+            .map_err(|()| "bad URI")?
+            .to_string();
 
         let result = resolve_module_uri(
             "App::Config",
@@ -306,7 +312,9 @@ mod uri_workspace {
         let ws = temp.path().join("ws");
         std::fs::create_dir_all(ws.join("lib"))?;
 
-        let ws_uri = url::Url::from_file_path(&ws).map_err(|()| "bad URI")?.to_string();
+        let ws_uri = url::Url::from_file_path(&ws)
+            .map_err(|()| "bad URI")?
+            .to_string();
 
         let result = resolve_module_uri(
             "Ghost::Module",
@@ -333,8 +341,12 @@ mod uri_workspace {
         std::fs::create_dir_all(target.parent().ok_or("no parent")?)?;
         std::fs::write(&target, "package Only::Here; 1;")?;
 
-        let ws1_uri = url::Url::from_file_path(&ws1).map_err(|()| "bad URI")?.to_string();
-        let ws2_uri = url::Url::from_file_path(&ws2).map_err(|()| "bad URI")?.to_string();
+        let ws1_uri = url::Url::from_file_path(&ws1)
+            .map_err(|()| "bad URI")?
+            .to_string();
+        let ws2_uri = url::Url::from_file_path(&ws2)
+            .map_err(|()| "bad URI")?
+            .to_string();
 
         let result = resolve_module_uri(
             "Only::Here",
@@ -368,8 +380,12 @@ mod uri_workspace {
         std::fs::write(&t1, "package Dup::Mod; 'ws1';")?;
         std::fs::write(&t2, "package Dup::Mod; 'ws2';")?;
 
-        let ws1_uri = url::Url::from_file_path(&ws1).map_err(|()| "bad URI")?.to_string();
-        let ws2_uri = url::Url::from_file_path(&ws2).map_err(|()| "bad URI")?.to_string();
+        let ws1_uri = url::Url::from_file_path(&ws1)
+            .map_err(|()| "bad URI")?
+            .to_string();
+        let ws2_uri = url::Url::from_file_path(&ws2)
+            .map_err(|()| "bad URI")?
+            .to_string();
 
         let result = resolve_module_uri(
             "Dup::Mod",
@@ -383,7 +399,10 @@ mod uri_workspace {
 
         match result {
             ModuleUriResolution::Resolved(uri) => {
-                assert!(uri.contains("ws1"), "first workspace should win, got: {uri}");
+                assert!(
+                    uri.contains("ws1"),
+                    "first workspace should win, got: {uri}"
+                );
             }
             other => return Err(format!("expected Resolved, got {other:?}").into()),
         }
@@ -402,7 +421,9 @@ mod uri_workspace {
         std::fs::create_dir_all(target.parent().ok_or("no parent")?)?;
         std::fs::write(&target, "package Secret::Data; 1;")?;
 
-        let ws_uri = url::Url::from_file_path(&ws).map_err(|()| "bad URI")?.to_string();
+        let ws_uri = url::Url::from_file_path(&ws)
+            .map_err(|()| "bad URI")?
+            .to_string();
 
         let result = resolve_module_uri(
             "Secret::Data",
@@ -427,7 +448,9 @@ mod uri_workspace {
         std::fs::create_dir_all(target.parent().ok_or("no parent")?)?;
         std::fs::write(&target, "package Local::Mod; 1;")?;
 
-        let ws_uri = url::Url::from_file_path(&ws).map_err(|()| "bad URI")?.to_string();
+        let ws_uri = url::Url::from_file_path(&ws)
+            .map_err(|()| "bad URI")?
+            .to_string();
 
         let result = resolve_module_uri(
             "Local::Mod",
@@ -522,7 +545,9 @@ mod uri_system_inc {
         std::fs::write(&ws_target, "package Dup::Mod; 'ws';")?;
         std::fs::write(&inc_target, "package Dup::Mod; 'inc';")?;
 
-        let ws_uri = url::Url::from_file_path(&ws).map_err(|()| "bad URI")?.to_string();
+        let ws_uri = url::Url::from_file_path(&ws)
+            .map_err(|()| "bad URI")?
+            .to_string();
 
         let result = resolve_module_uri(
             "Dup::Mod",
@@ -536,7 +561,10 @@ mod uri_system_inc {
 
         match result {
             ModuleUriResolution::Resolved(uri) => {
-                assert!(uri.contains("ws"), "workspace should win over @INC, got: {uri}");
+                assert!(
+                    uri.contains("ws"),
+                    "workspace should win over @INC, got: {uri}"
+                );
             }
             other => return Err(format!("expected Resolved, got {other:?}").into()),
         }
@@ -631,7 +659,9 @@ mod uri_timeout {
         std::fs::create_dir_all(target.parent().ok_or("no parent")?)?;
         std::fs::write(&target, "package Fast::Mod; 1;")?;
 
-        let ws_uri = url::Url::from_file_path(&ws).map_err(|()| "bad URI")?.to_string();
+        let ws_uri = url::Url::from_file_path(&ws)
+            .map_err(|()| "bad URI")?
+            .to_string();
 
         let result = resolve_module_uri(
             "Fast::Mod",
@@ -675,7 +705,9 @@ mod uri_edge_cases {
         let ws = temp.path().join("ws");
         std::fs::create_dir_all(ws.join("lib"))?;
 
-        let ws_uri = url::Url::from_file_path(&ws).map_err(|()| "bad URI")?.to_string();
+        let ws_uri = url::Url::from_file_path(&ws)
+            .map_err(|()| "bad URI")?
+            .to_string();
 
         let result = resolve_module_uri(
             "",
@@ -701,7 +733,9 @@ mod uri_edge_cases {
         std::fs::create_dir_all(ws.join("lib"))?;
         std::fs::write(&target, "package Scalar; 1;")?;
 
-        let ws_uri = url::Url::from_file_path(&ws).map_err(|()| "bad URI")?.to_string();
+        let ws_uri = url::Url::from_file_path(&ws)
+            .map_err(|()| "bad URI")?
+            .to_string();
 
         let result = resolve_module_uri(
             "Scalar",
@@ -752,7 +786,9 @@ mod uri_edge_cases {
         std::fs::write(&ws_target, "package All::Three; 'ws';")?;
         std::fs::write(&inc_target, "package All::Three; 'inc';")?;
 
-        let ws_uri = url::Url::from_file_path(&ws).map_err(|()| "bad URI")?.to_string();
+        let ws_uri = url::Url::from_file_path(&ws)
+            .map_err(|()| "bad URI")?
+            .to_string();
         let open_doc = "file:///editor/lib/All/Three.pm".to_string();
 
         let result = resolve_module_uri(
@@ -778,13 +814,19 @@ mod uri_edge_cases {
         std::fs::create_dir_all(target.parent().ok_or("no parent")?)?;
         std::fs::write(&target, "package Custom::Path; 1;")?;
 
-        let ws_uri = url::Url::from_file_path(&ws).map_err(|()| "bad URI")?.to_string();
+        let ws_uri = url::Url::from_file_path(&ws)
+            .map_err(|()| "bad URI")?
+            .to_string();
 
         let result = resolve_module_uri(
             "Custom::Path",
             &[],
             &[ws_uri],
-            &["lib".to_string(), "local_lib".to_string(), "vendor".to_string()],
+            &[
+                "lib".to_string(),
+                "local_lib".to_string(),
+                "vendor".to_string(),
+            ],
             false,
             &[],
             Duration::from_millis(200),
@@ -792,7 +834,10 @@ mod uri_edge_cases {
 
         match result {
             ModuleUriResolution::Resolved(uri) => {
-                assert!(uri.contains("local_lib"), "should find in local_lib, got: {uri}");
+                assert!(
+                    uri.contains("local_lib"),
+                    "should find in local_lib, got: {uri}"
+                );
             }
             other => return Err(format!("expected Resolved, got {other:?}").into()),
         }
@@ -843,7 +888,10 @@ mod resolution_enum {
     fn debug_format_is_readable() -> Result<(), Box<dyn std::error::Error>> {
         let res = ModuleUriResolution::Resolved("file:///x.pm".to_string());
         let debug = format!("{res:?}");
-        assert!(debug.contains("Resolved"), "debug should contain variant name");
+        assert!(
+            debug.contains("Resolved"),
+            "debug should contain variant name"
+        );
         assert!(debug.contains("x.pm"), "debug should contain URI");
         Ok(())
     }

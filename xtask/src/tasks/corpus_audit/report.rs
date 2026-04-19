@@ -133,7 +133,11 @@ fn extract_snippet(source: &str, line_number: usize) -> String {
 
     let line = lines[line_idx];
     // Truncate long lines
-    if line.len() > 80 { format!("{}...", &line[..77]) } else { line.to_string() }
+    if line.len() > 80 {
+        format!("{}...", &line[..77])
+    } else {
+        line.to_string()
+    }
 }
 
 /// Parse found/expected tokens from error message
@@ -178,8 +182,10 @@ pub fn generate_report(
     let inventory = super::corpus::generate_inventory(&corpus_files);
 
     // Build source content map for error categorization
-    let sources: HashMap<PathBuf, String> =
-        corpus_files.iter().map(|f| (f.path.clone(), f.content.clone())).collect();
+    let sources: HashMap<PathBuf, String> = corpus_files
+        .iter()
+        .map(|f| (f.path.clone(), f.content.clone()))
+        .collect();
 
     // Generate parse outcomes summary with category breakdown
     let parse_outcomes = generate_parse_outcomes_summary(&parse_results, &sources);
@@ -238,8 +244,9 @@ fn generate_parse_outcomes_summary(
                 };
 
                 // Extract code snippet if we have a line number
-                let code_snippet =
-                    line_number.map(|ln| extract_snippet(source, ln)).filter(|s| !s.is_empty());
+                let code_snippet = line_number
+                    .map(|ln| extract_snippet(source, ln))
+                    .filter(|s| !s.is_empty());
 
                 // Parse found/expected tokens
                 let (found_token, expected) = parse_token_info(message);
@@ -277,7 +284,15 @@ fn generate_parse_outcomes_summary(
     // Sort failing files by path for consistent output
     failing_files.sort_by(|a, b| a.path.cmp(&b.path));
 
-    ParseOutcomesSummary { total, ok, error, timeout, panic, error_by_category, failing_files }
+    ParseOutcomesSummary {
+        total,
+        ok,
+        error,
+        timeout,
+        panic,
+        error_by_category,
+        failing_files,
+    }
 }
 
 #[cfg(test)]
@@ -287,15 +302,25 @@ mod tests {
     #[test]
     fn test_generate_parse_outcomes_summary() {
         let mut results = std::collections::HashMap::new();
-        results.insert(PathBuf::from("test1.pl"), ParseOutcome::Ok { duration_ms: 100 });
+        results.insert(
+            PathBuf::from("test1.pl"),
+            ParseOutcome::Ok { duration_ms: 100 },
+        );
         results.insert(
             PathBuf::from("test2.pl"),
-            ParseOutcome::Error { message: "error".to_string() },
+            ParseOutcome::Error {
+                message: "error".to_string(),
+            },
         );
-        results.insert(PathBuf::from("test3.pl"), ParseOutcome::Timeout { timeout_ms: 1000 });
+        results.insert(
+            PathBuf::from("test3.pl"),
+            ParseOutcome::Timeout { timeout_ms: 1000 },
+        );
         results.insert(
             PathBuf::from("test4.pl"),
-            ParseOutcome::Panic { message: "panic".to_string() },
+            ParseOutcome::Panic {
+                message: "panic".to_string(),
+            },
         );
 
         // Create empty sources map for test
@@ -328,7 +353,10 @@ mod tests {
     #[test]
     fn test_parse_byte_offset() {
         assert_eq!(parse_byte_offset("Unexpected token at 334"), Some(334));
-        assert_eq!(parse_byte_offset("expected RightParen, found Identifier at 2018"), Some(2018));
+        assert_eq!(
+            parse_byte_offset("expected RightParen, found Identifier at 2018"),
+            Some(2018)
+        );
         assert_eq!(parse_byte_offset("no offset here"), None);
         assert_eq!(parse_byte_offset("at the end at 42"), Some(42));
     }

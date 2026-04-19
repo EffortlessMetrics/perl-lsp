@@ -18,7 +18,11 @@ type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 fn indexing_timeout() -> Duration {
     let is_ci = std::env::var("CI").is_ok() || std::env::var("GITHUB_ACTIONS").is_ok();
-    if is_ci { Duration::from_secs(12) } else { Duration::from_secs(6) }
+    if is_ci {
+        Duration::from_secs(12)
+    } else {
+        Duration::from_secs(6)
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -42,16 +46,25 @@ fn is_permission_denied(e: &std::io::Error) -> bool {
 #[test]
 fn is_permission_denied_detects_standard_kind() {
     let e = std::io::Error::new(std::io::ErrorKind::PermissionDenied, "access denied");
-    assert!(is_permission_denied(&e), "should detect PermissionDenied kind");
+    assert!(
+        is_permission_denied(&e),
+        "should detect PermissionDenied kind"
+    );
 }
 
 #[test]
 fn is_permission_denied_ignores_other_errors() {
     let e = std::io::Error::new(std::io::ErrorKind::NotFound, "not found");
-    assert!(!is_permission_denied(&e), "should not flag NotFound as permission-denied");
+    assert!(
+        !is_permission_denied(&e),
+        "should not flag NotFound as permission-denied"
+    );
 
     let e2 = std::io::Error::new(std::io::ErrorKind::BrokenPipe, "broken pipe");
-    assert!(!is_permission_denied(&e2), "should not flag BrokenPipe as permission-denied");
+    assert!(
+        !is_permission_denied(&e2),
+        "should not flag BrokenPipe as permission-denied"
+    );
 }
 
 #[test]
@@ -59,7 +72,10 @@ fn is_permission_denied_ignores_other_errors() {
 fn is_permission_denied_detects_windows_error_5() {
     // ERROR_ACCESS_DENIED is os error 5 on Windows
     let e = std::io::Error::from_raw_os_error(5);
-    assert!(is_permission_denied(&e), "should detect Windows ERROR_ACCESS_DENIED (os error 5)");
+    assert!(
+        is_permission_denied(&e),
+        "should detect Windows ERROR_ACCESS_DENIED (os error 5)"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -106,15 +122,19 @@ fn make_workspace_with_permission_denied_file()
     let ws = TempWorkspace::new()?;
 
     // Normal file — indexed without error
-    ws.write("lib/Normal.pm", "package Normal;\nsub new { bless {}, shift }\n1;\n")?;
+    ws.write(
+        "lib/Normal.pm",
+        "package Normal;\nsub new { bless {}, shift }\n1;\n",
+    )?;
 
     // Create an unreadable file: write it, then chmod 000
     let secret_path = ws.dir.path().join("lib/Secret.pm");
     std::fs::write(&secret_path, "package Secret;\n1;\n")
         .map_err(|e| format!("write Secret.pm: {e}"))?;
 
-    let mut perms =
-        std::fs::metadata(&secret_path).map_err(|e| format!("metadata: {e}"))?.permissions();
+    let mut perms = std::fs::metadata(&secret_path)
+        .map_err(|e| format!("metadata: {e}"))?
+        .permissions();
     perms.set_mode(0o000);
     std::fs::set_permissions(&secret_path, perms).map_err(|e| format!("chmod: {e}"))?;
 
@@ -180,7 +200,10 @@ fn permission_denied_file_emits_show_message_once() -> TestResult {
     );
 
     // The message type must be Warning (2) or Error (1).
-    let msg_type = permission_msgs[0].pointer("/params/type").and_then(|v| v.as_u64()).unwrap_or(0);
+    let msg_type = permission_msgs[0]
+        .pointer("/params/type")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(0);
     assert!(
         msg_type == 1 || msg_type == 2,
         "expected Warning(2) or Error(1) message type, got {msg_type}"
@@ -199,8 +222,9 @@ fn permission_denied_file_emits_per_file_diagnostic() -> TestResult {
 
     let (ws, secret_path) = make_workspace_with_permission_denied_file()?;
 
-    let secret_uri =
-        url::Url::from_file_path(&secret_path).map_err(|_| "failed to build URI")?.to_string();
+    let secret_uri = url::Url::from_file_path(&secret_path)
+        .map_err(|_| "failed to build URI")?
+        .to_string();
 
     let mut harness = LspHarness::new_raw();
     harness.initialize_with_root(
@@ -256,7 +280,9 @@ fn permission_denied_show_message_fires_only_once_for_multiple_files() -> TestRe
     std::fs::write(&secret2, "package Secret2;\n1;\n").map_err(|e| e.to_string())?;
 
     for path in [&secret1, &secret2] {
-        let mut perms = std::fs::metadata(path).map_err(|e| e.to_string())?.permissions();
+        let mut perms = std::fs::metadata(path)
+            .map_err(|e| e.to_string())?
+            .permissions();
         perms.set_mode(0o000);
         std::fs::set_permissions(path, perms).map_err(|e| e.to_string())?;
     }

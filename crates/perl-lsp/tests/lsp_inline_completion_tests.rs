@@ -63,7 +63,9 @@ fn inline_completion(
             "position": { "line": line, "character": character }
         })),
     };
-    let response = server.handle_request(request).ok_or("inline completion response")?;
+    let response = server
+        .handle_request(request)
+        .ok_or("inline completion response")?;
     response.result.ok_or("result field present".into())
 }
 
@@ -75,7 +77,12 @@ fn test_inline_completion_after_arrow() -> Result<(), Box<dyn std::error::Error>
     let result = inline_completion(&server, uri, 0, 19)?;
     let items = result["items"].as_array().ok_or("items array")?;
     assert!(!items.is_empty());
-    assert_eq!(items[0]["insertText"].as_str().ok_or("insertText not a string")?, "new()");
+    assert_eq!(
+        items[0]["insertText"]
+            .as_str()
+            .ok_or("insertText not a string")?,
+        "new()"
+    );
     Ok(())
 }
 
@@ -89,7 +96,9 @@ fn test_inline_completion_after_use() -> Result<(), Box<dyn std::error::Error>> 
     assert!(!items.is_empty());
     let mut suggestions = Vec::new();
     for item in items.iter() {
-        let text = item["insertText"].as_str().ok_or("insertText not a string")?;
+        let text = item["insertText"]
+            .as_str()
+            .ok_or("insertText not a string")?;
         suggestions.push(text.to_string());
     }
     assert!(suggestions.contains(&"strict;".to_string()));
@@ -126,7 +135,9 @@ fn test_inline_completion_shebang() -> Result<(), Box<dyn std::error::Error>> {
     let items = result["items"].as_array().ok_or("items array")?;
     assert!(!items.is_empty());
     assert_eq!(
-        items[0]["insertText"].as_str().ok_or("insertText not a string")?,
+        items[0]["insertText"]
+            .as_str()
+            .ok_or("insertText not a string")?,
         "/usr/bin/env perl"
     );
     Ok(())
@@ -140,7 +151,12 @@ fn test_inline_completion_sub_body() -> Result<(), Box<dyn std::error::Error>> {
     let result = inline_completion(&server, uri, 0, 9)?;
     let items = result["items"].as_array().ok_or("items array")?;
     assert!(!items.is_empty());
-    assert!(items[0]["insertText"].as_str().ok_or("insertText not a string")?.contains("{"));
+    assert!(
+        items[0]["insertText"]
+            .as_str()
+            .ok_or("insertText not a string")?
+            .contains("{")
+    );
     Ok(())
 }
 
@@ -170,7 +186,12 @@ fn test_inline_completion_after_arrow_with_multibyte_prefix()
     let items = result["items"].as_array().ok_or("items array")?;
 
     assert!(!items.is_empty());
-    assert_eq!(items[0]["insertText"].as_str().ok_or("insertText not a string")?, "new()");
+    assert_eq!(
+        items[0]["insertText"]
+            .as_str()
+            .ok_or("insertText not a string")?,
+        "new()"
+    );
     Ok(())
 }
 
@@ -208,7 +229,9 @@ fn test_inline_completion_utf16_position_correct() -> Result<(), Box<dyn std::er
         "expected inline completion after -> when using correct UTF-16 position"
     );
     assert_eq!(
-        items[0]["insertText"].as_str().ok_or("insertText not a string")?,
+        items[0]["insertText"]
+            .as_str()
+            .ok_or("insertText not a string")?,
         "new()",
         "expected 'new()' suggestion after ->"
     );
@@ -231,9 +254,14 @@ fn test_inline_completion_multiline_doc_line1() -> Result<(), Box<dyn std::error
     let result = inline_completion(&server, uri, 1, character)?;
     let items = result["items"].as_array().ok_or("items array")?;
 
-    assert!(!items.is_empty(), "expected completion on line 1 of multiline doc");
+    assert!(
+        !items.is_empty(),
+        "expected completion on line 1 of multiline doc"
+    );
     assert_eq!(
-        items[0]["insertText"].as_str().ok_or("insertText not a string")?,
+        items[0]["insertText"]
+            .as_str()
+            .ok_or("insertText not a string")?,
         "new()",
         "expected 'new()' suggestion after -> on line 1"
     );
@@ -249,9 +277,15 @@ fn test_inline_completion_empty_file_returns_scaffold() -> Result<(), Box<dyn st
     let result = inline_completion(&server, uri, 0, 0)?;
     let items = result["items"].as_array().ok_or("items array")?;
 
-    assert!(!items.is_empty(), "expected scaffold suggestions for an empty file");
+    assert!(
+        !items.is_empty(),
+        "expected scaffold suggestions for an empty file"
+    );
     assert!(items.iter().any(|item| {
-        item["insertText"].as_str().map(|text| text.contains("use strict;")).unwrap_or(false)
+        item["insertText"]
+            .as_str()
+            .map(|text| text.contains("use strict;"))
+            .unwrap_or(false)
     }));
     Ok(())
 }
@@ -267,9 +301,15 @@ fn test_inline_completion_mid_code_uses_nearby_variable_context()
     let result = inline_completion(&server, uri, 4, 4)?;
     let items = result["items"].as_array().ok_or("items array")?;
 
-    assert!(!items.is_empty(), "expected contextual inline completions inside a sub");
+    assert!(
+        !items.is_empty(),
+        "expected contextual inline completions inside a sub"
+    );
     assert!(items.iter().any(|item| {
-        item["insertText"].as_str().map(|text| text == "return $result;").unwrap_or(false)
+        item["insertText"]
+            .as_str()
+            .map(|text| text == "return $result;")
+            .unwrap_or(false)
     }));
     Ok(())
 }
@@ -286,9 +326,15 @@ fn test_inline_completion_after_comment_keeps_contextual_suggestions()
     let result = inline_completion(&server, uri, 5, 4)?;
     let items = result["items"].as_array().ok_or("items array")?;
 
-    assert!(!items.is_empty(), "expected inline completions on a blank line after a comment");
+    assert!(
+        !items.is_empty(),
+        "expected inline completions on a blank line after a comment"
+    );
     assert!(items.iter().any(|item| {
-        item["insertText"].as_str().map(|text| text == "return $result;").unwrap_or(false)
+        item["insertText"]
+            .as_str()
+            .map(|text| text == "return $result;")
+            .unwrap_or(false)
     }));
     Ok(())
 }

@@ -15,7 +15,10 @@ fn builder_chain_all_methods() -> Result<(), Box<dyn std::error::Error>> {
     assert_eq!(err.message, "test error");
     assert_eq!(err.expected.len(), 2);
     assert_eq!(err.found, "comma");
-    assert_eq!(err.recovery_hint.as_deref().unwrap_or(""), "try adding a semicolon");
+    assert_eq!(
+        err.recovery_hint.as_deref().unwrap_or(""),
+        "try adding a semicolon"
+    );
     Ok(())
 }
 

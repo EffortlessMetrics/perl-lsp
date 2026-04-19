@@ -11,8 +11,11 @@ pub fn enhanced_cancelled_response(
     token: &PerlLspCancellationToken,
     cleanup_context: Option<&ProviderCleanupContext>,
 ) -> JsonRpcResponse {
-    let provider_name =
-        if let Some(context) = cleanup_context { &context.provider_type } else { token.provider() };
+    let provider_name = if let Some(context) = cleanup_context {
+        &context.provider_type
+    } else {
+        token.provider()
+    };
 
     let method_name = provider_name.split('/').next_back().unwrap_or_default();
     let message = format!("Request cancelled - {} provider", method_name);
@@ -47,7 +50,11 @@ pub fn enhanced_cancelled_response(
         jsonrpc: "2.0".to_string(),
         id: Some(token.request_id().clone()),
         result: None,
-        error: Some(JsonRpcError { code: REQUEST_CANCELLED, message, data: Some(data) }),
+        error: Some(JsonRpcError {
+            code: REQUEST_CANCELLED,
+            message,
+            data: Some(data),
+        }),
     }
 }
 

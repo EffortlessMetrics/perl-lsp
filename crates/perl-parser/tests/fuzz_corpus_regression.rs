@@ -7,9 +7,13 @@ use std::fs;
 use std::path::PathBuf;
 
 fn get_fuzzed_files() -> Vec<PathBuf> {
-    let fuzz_dir =
-        std::env::var("PERL_PARSER_FUZZ_CORPUS_DIR").map(PathBuf::from).unwrap_or_else(|_| {
-            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..").join("perl-corpus").join("fuzz")
+    let fuzz_dir = std::env::var("PERL_PARSER_FUZZ_CORPUS_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| {
+            PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("..")
+                .join("perl-corpus")
+                .join("fuzz")
         });
 
     let max_files = std::env::var("PERL_PARSER_FUZZ_CORPUS_LIMIT")
@@ -23,7 +27,10 @@ fn get_fuzzed_files() -> Vec<PathBuf> {
             .map(|entry| entry.path())
             .filter(|path| path.is_file())
             .filter(|path| {
-                !matches!(path.extension().and_then(|extension| extension.to_str()), Some("md"))
+                !matches!(
+                    path.extension().and_then(|extension| extension.to_str()),
+                    Some("md")
+                )
             })
             .collect();
 
@@ -80,7 +87,10 @@ fn test_fuzz_corpus_regression() {
     println!("  Parse panics: {}", parse_panics);
 
     // The key invariant: parser should never panic, even on malformed input
-    assert_eq!(parse_panics, 0, "Parser should never panic on fuzzed corpus");
+    assert_eq!(
+        parse_panics, 0,
+        "Parser should never panic on fuzzed corpus"
+    );
 
     // Parse failures are acceptable for malformed fuzzed input
     // We're primarily checking for crashes/panics, not parse success

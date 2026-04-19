@@ -26,14 +26,20 @@ mod lsp_error_tests {
 
     #[test]
     fn construct_and_read_fields() {
-        let err = LspError { code: -32600, message: "Invalid Request".to_string() };
+        let err = LspError {
+            code: -32600,
+            message: "Invalid Request".to_string(),
+        };
         assert_eq!(err.code, -32600);
         assert_eq!(err.message, "Invalid Request");
     }
 
     #[test]
     fn clone_and_debug() {
-        let err = LspError { code: -32601, message: "Method not found".to_string() };
+        let err = LspError {
+            code: -32601,
+            message: "Method not found".to_string(),
+        };
         let cloned = err.clone();
         assert_eq!(err, cloned);
         let dbg = format!("{:?}", err);
@@ -42,16 +48,28 @@ mod lsp_error_tests {
 
     #[test]
     fn equality() {
-        let a = LspError { code: 1, message: "a".to_string() };
-        let b = LspError { code: 1, message: "a".to_string() };
-        let c = LspError { code: 2, message: "a".to_string() };
+        let a = LspError {
+            code: 1,
+            message: "a".to_string(),
+        };
+        let b = LspError {
+            code: 1,
+            message: "a".to_string(),
+        };
+        let c = LspError {
+            code: 2,
+            message: "a".to_string(),
+        };
         assert_eq!(a, b);
         assert_ne!(a, c);
     }
 
     #[test]
     fn empty_message() {
-        let err = LspError { code: 0, message: String::new() };
+        let err = LspError {
+            code: 0,
+            message: String::new(),
+        };
         assert_eq!(err.code, 0);
         assert!(err.message.is_empty());
     }
@@ -101,7 +119,10 @@ mod folding_tests {
         let ast = parse(code)?;
         let mut extractor = FoldingRangeExtractor::new();
         let ranges = extractor.extract(&ast);
-        assert!(!ranges.is_empty(), "subroutine should produce at least one fold");
+        assert!(
+            !ranges.is_empty(),
+            "subroutine should produce at least one fold"
+        );
         Ok(())
     }
 
@@ -111,9 +132,14 @@ mod folding_tests {
         let ast = parse(code)?;
         let mut extractor = FoldingRangeExtractor::new();
         let ranges = extractor.extract(&ast);
-        let import_folds: Vec<&FoldingRange> =
-            ranges.iter().filter(|r| matches!(r.kind, Some(FoldingRangeKind::Imports))).collect();
-        assert!(!import_folds.is_empty(), "consecutive use statements should produce import fold");
+        let import_folds: Vec<&FoldingRange> = ranges
+            .iter()
+            .filter(|r| matches!(r.kind, Some(FoldingRangeKind::Imports)))
+            .collect();
+        assert!(
+            !import_folds.is_empty(),
+            "consecutive use statements should produce import fold"
+        );
         Ok(())
     }
 
@@ -123,9 +149,14 @@ mod folding_tests {
         let ast = parse(code)?;
         let mut extractor = FoldingRangeExtractor::new();
         let ranges = extractor.extract(&ast);
-        let import_folds: Vec<&FoldingRange> =
-            ranges.iter().filter(|r| matches!(r.kind, Some(FoldingRangeKind::Imports))).collect();
-        assert!(import_folds.is_empty(), "single use should not produce import fold");
+        let import_folds: Vec<&FoldingRange> = ranges
+            .iter()
+            .filter(|r| matches!(r.kind, Some(FoldingRangeKind::Imports)))
+            .collect();
+        assert!(
+            import_folds.is_empty(),
+            "single use should not produce import fold"
+        );
         Ok(())
     }
 
@@ -207,7 +238,11 @@ mod folding_tests {
         let mut extractor = FoldingRangeExtractor::new();
         let first = extractor.extract(&ast);
         let second = extractor.extract(&ast);
-        assert_eq!(first.len(), second.len(), "extract should reset internal state");
+        assert_eq!(
+            first.len(),
+            second.len(),
+            "extract should reset internal state"
+        );
         Ok(())
     }
 
@@ -237,8 +272,11 @@ mod folding_tests {
 
     #[test]
     fn folding_range_debug_and_clone() {
-        let range =
-            FoldingRange { start_offset: 0, end_offset: 10, kind: Some(FoldingRangeKind::Comment) };
+        let range = FoldingRange {
+            start_offset: 0,
+            end_offset: 10,
+            kind: Some(FoldingRangeKind::Comment),
+        };
         let cloned = range.clone();
         assert_eq!(cloned.start_offset, 0);
         assert_eq!(cloned.end_offset, 10);
@@ -265,8 +303,10 @@ mod folding_tests {
         let ast = parse(code)?;
         let mut extractor = FoldingRangeExtractor::new();
         let ranges = extractor.extract(&ast);
-        let import_folds: Vec<&FoldingRange> =
-            ranges.iter().filter(|r| matches!(r.kind, Some(FoldingRangeKind::Imports))).collect();
+        let import_folds: Vec<&FoldingRange> = ranges
+            .iter()
+            .filter(|r| matches!(r.kind, Some(FoldingRangeKind::Imports)))
+            .collect();
         assert!(
             !import_folds.is_empty(),
             "trailing consecutive use statements should produce import fold"
@@ -280,10 +320,15 @@ mod folding_tests {
         let ast = parse(code)?;
         let mut extractor = FoldingRangeExtractor::new();
         let ranges = extractor.extract(&ast);
-        let comment_folds: Vec<&FoldingRange> =
-            ranges.iter().filter(|r| matches!(r.kind, Some(FoldingRangeKind::Comment))).collect();
+        let comment_folds: Vec<&FoldingRange> = ranges
+            .iter()
+            .filter(|r| matches!(r.kind, Some(FoldingRangeKind::Comment)))
+            .collect();
         // __DATA__ with body should produce comment fold
-        assert!(!comment_folds.is_empty(), "DATA section with body should produce comment fold");
+        assert!(
+            !comment_folds.is_empty(),
+            "DATA section with body should produce comment fold"
+        );
         Ok(())
     }
 
@@ -320,7 +365,10 @@ mod on_type_formatting_tests {
     fn open_brace_is_not_a_trigger() {
         let text = "sub foo {";
         let edits = compute_on_type_edit(text, 0, 9, '{', 2);
-        assert!(edits.is_none(), "open brace is not an on-type formatting trigger");
+        assert!(
+            edits.is_none(),
+            "open brace is not an on-type formatting trigger"
+        );
     }
 
     #[test]
@@ -396,7 +444,10 @@ mod on_type_formatting_tests {
     fn carriage_return_trigger() {
         let text = "sub foo {\n    ";
         let edits = compute_on_type_edit(text, 1, 0, '\r', 2);
-        assert!(edits.is_some(), "carriage return should behave like newline");
+        assert!(
+            edits.is_some(),
+            "carriage return should behave like newline"
+        );
     }
 
     #[test]
@@ -580,7 +631,11 @@ mod selection_range_tests {
             }
         }
         // On a function name, we should get at least: name_span -> Subroutine -> Program
-        assert!(depth >= 2, "function name should produce >= 2 levels, got {}", depth,);
+        assert!(
+            depth >= 2,
+            "function name should produce >= 2 levels, got {}",
+            depth,
+        );
         Ok(())
     }
 }
@@ -717,7 +772,10 @@ mod signature_help_tests {
     #[test]
     fn parameter_info_fields() {
         use perl_lsp_providers::ide::lsp_compat::signature_help::ParameterInfo;
-        let p = ParameterInfo { label: "$x".to_string(), documentation: Some("a var".to_string()) };
+        let p = ParameterInfo {
+            label: "$x".to_string(),
+            documentation: Some("a var".to_string()),
+        };
         assert_eq!(p.label, "$x");
         assert_eq!(p.documentation.as_deref(), Some("a var"));
         let _ = format!("{:?}", p);
@@ -743,8 +801,11 @@ mod signature_help_tests {
     #[test]
     fn signature_help_fields() {
         use perl_lsp_providers::ide::lsp_compat::signature_help::SignatureHelp;
-        let h =
-            SignatureHelp { signatures: vec![], active_signature: None, active_parameter: None };
+        let h = SignatureHelp {
+            signatures: vec![],
+            active_signature: None,
+            active_parameter: None,
+        };
         assert!(h.signatures.is_empty());
         assert!(h.active_signature.is_none());
         let _ = format!("{:?}", h);
@@ -776,7 +837,10 @@ mod signature_help_tests {
         assert!(!help.signatures.is_empty());
         assert_eq!(help.active_parameter, Some(0));
         // open has 3 signature variants
-        assert!(help.signatures.len() >= 2, "open should have multiple variants");
+        assert!(
+            help.signatures.len() >= 2,
+            "open should have multiple variants"
+        );
     }
 
     #[test]
@@ -802,7 +866,10 @@ mod signature_help_tests {
         let ast = must(parse(""));
         let provider = SignatureHelpProvider::new(&ast);
         let sig = must_some(provider.get_builtin_signature("open"));
-        assert!(!sig.documentation.is_empty(), "open should have documentation");
+        assert!(
+            !sig.documentation.is_empty(),
+            "open should have documentation"
+        );
     }
 
     #[test]
@@ -814,7 +881,10 @@ mod signature_help_tests {
         assert!(!help.signatures.is_empty());
         assert_eq!(help.active_parameter, Some(0));
         // print has 4 signature variants
-        assert!(help.signatures.len() >= 2, "print should have multiple variants");
+        assert!(
+            help.signatures.len() >= 2,
+            "print should have multiple variants"
+        );
     }
 
     #[test]
@@ -856,7 +926,10 @@ mod signature_help_tests {
         let help = must_some(provider.get_signature_help(code, code.len()));
         let first_param = &help.signatures[0].parameters[0];
         assert_eq!(first_param.label, "ARRAY");
-        assert!(first_param.documentation.is_some(), "ARRAY param should have documentation");
+        assert!(
+            first_param.documentation.is_some(),
+            "ARRAY param should have documentation"
+        );
     }
 
     #[test]
@@ -868,7 +941,10 @@ mod signature_help_tests {
         assert!(!help.signatures.is_empty());
         assert_eq!(help.active_parameter, Some(0));
         // pop has two variants: pop ARRAY and pop
-        assert!(help.signatures.len() >= 2, "pop should have at least 2 variants");
+        assert!(
+            help.signatures.len() >= 2,
+            "pop should have at least 2 variants"
+        );
     }
 
     #[test]
@@ -889,7 +965,10 @@ mod signature_help_tests {
         // 4 commas means we are on 5th element (index 4)
         assert_eq!(help.active_parameter, Some(4));
         // splice has 4 variants
-        assert!(help.signatures.len() >= 3, "splice should have multiple variants");
+        assert!(
+            help.signatures.len() >= 3,
+            "splice should have multiple variants"
+        );
     }
 
     #[test]
@@ -919,7 +998,10 @@ mod signature_help_tests {
         assert!(!help.signatures.is_empty());
         assert_eq!(help.active_parameter, Some(0));
         // map has two variants: map BLOCK LIST and map EXPR, LIST
-        assert!(help.signatures.len() >= 2, "map should have at least 2 variants");
+        assert!(
+            help.signatures.len() >= 2,
+            "map should have at least 2 variants"
+        );
     }
 
     #[test]
@@ -944,7 +1026,10 @@ mod signature_help_tests {
         let help = must_some(provider.get_signature_help(code, code.len()));
         assert!(!help.signatures.is_empty());
         assert_eq!(help.active_parameter, Some(0));
-        assert!(help.signatures.len() >= 2, "grep should have at least 2 variants");
+        assert!(
+            help.signatures.len() >= 2,
+            "grep should have at least 2 variants"
+        );
     }
 
     #[test]
@@ -965,7 +1050,10 @@ mod signature_help_tests {
         assert!(!help.signatures.is_empty());
         assert_eq!(help.active_parameter, Some(0));
         // sort has three variants
-        assert!(help.signatures.len() >= 2, "sort should have multiple variants");
+        assert!(
+            help.signatures.len() >= 2,
+            "sort should have multiple variants"
+        );
     }
 
     #[test]
@@ -1005,7 +1093,10 @@ mod signature_help_tests {
         let provider = SignatureHelpProvider::new(&ast);
         let help = must_some(provider.get_signature_help(code, code.len()));
         let sig = &help.signatures[0];
-        assert!(sig.parameters.len() >= 2, "join should have at least EXPR and LIST params");
+        assert!(
+            sig.parameters.len() >= 2,
+            "join should have at least EXPR and LIST params"
+        );
         assert_eq!(sig.parameters[0].label, "EXPR");
         assert_eq!(sig.parameters[1].label, "LIST");
     }
@@ -1019,7 +1110,10 @@ mod signature_help_tests {
         assert!(!help.signatures.is_empty());
         assert_eq!(help.active_parameter, Some(0));
         // split has 4 variants
-        assert!(help.signatures.len() >= 3, "split should have multiple variants");
+        assert!(
+            help.signatures.len() >= 3,
+            "split should have multiple variants"
+        );
     }
 
     #[test]
@@ -1048,10 +1142,15 @@ mod signature_help_tests {
     fn all_target_builtins_recognized() {
         let ast = must(parse(""));
         let provider = SignatureHelpProvider::new(&ast);
-        let targets =
-            ["open", "print", "push", "pop", "splice", "map", "grep", "sort", "join", "split"];
+        let targets = [
+            "open", "print", "push", "pop", "splice", "map", "grep", "sort", "join", "split",
+        ];
         for name in &targets {
-            assert!(provider.has_builtin(name), "builtin '{}' should be recognized", name);
+            assert!(
+                provider.has_builtin(name),
+                "builtin '{}' should be recognized",
+                name
+            );
         }
     }
 
@@ -1059,8 +1158,9 @@ mod signature_help_tests {
     fn all_target_builtins_have_signatures() {
         let ast = must(parse(""));
         let provider = SignatureHelpProvider::new(&ast);
-        let targets =
-            ["open", "print", "push", "pop", "splice", "map", "grep", "sort", "join", "split"];
+        let targets = [
+            "open", "print", "push", "pop", "splice", "map", "grep", "sort", "join", "split",
+        ];
         for name in &targets {
             let sig = provider.get_builtin_signature(name);
             assert!(sig.is_some(), "builtin '{}' should have a signature", name);
@@ -1077,8 +1177,9 @@ mod signature_help_tests {
     fn all_target_builtins_have_documentation() {
         let ast = must(parse(""));
         let provider = SignatureHelpProvider::new(&ast);
-        let targets =
-            ["open", "print", "push", "pop", "splice", "map", "grep", "sort", "join", "split"];
+        let targets = [
+            "open", "print", "push", "pop", "splice", "map", "grep", "sort", "join", "split",
+        ];
         for name in &targets {
             let sig = must_some(provider.get_builtin_signature(name));
             assert!(
@@ -1093,8 +1194,9 @@ mod signature_help_tests {
     fn all_target_builtins_provide_help_at_open_paren() {
         let ast = must(parse(""));
         let provider = SignatureHelpProvider::new(&ast);
-        let targets =
-            ["open", "print", "push", "pop", "splice", "map", "grep", "sort", "join", "split"];
+        let targets = [
+            "open", "print", "push", "pop", "splice", "map", "grep", "sort", "join", "split",
+        ];
         for name in &targets {
             let code = format!("{}(", name);
             let help = provider.get_signature_help(&code, code.len());
@@ -1122,8 +1224,9 @@ mod signature_help_tests {
     fn signature_help_parameters_have_labels() {
         let ast = must(parse(""));
         let provider = SignatureHelpProvider::new(&ast);
-        let targets =
-            ["open", "print", "push", "pop", "splice", "map", "grep", "sort", "join", "split"];
+        let targets = [
+            "open", "print", "push", "pop", "splice", "map", "grep", "sort", "join", "split",
+        ];
         for name in &targets {
             let code = format!("{}(", name);
             let help = must_some(provider.get_signature_help(&code, code.len()));
@@ -1267,7 +1370,10 @@ mod linked_editing_tests {
         // "(x)" — ')' is at byte 2, line 0, col 2
         let text = "(x)";
         let result = handle_linked_editing(text, 0, 2);
-        assert!(result.is_some(), "cursor on close paren should find matching open");
+        assert!(
+            result.is_some(),
+            "cursor on close paren should find matching open"
+        );
         if let Some(r) = result {
             assert_eq!(r.ranges.len(), 2);
             assert_eq!(r.ranges[0].start.character, 0); // open paren
@@ -1280,7 +1386,10 @@ mod linked_editing_tests {
         // Cursor ON ']' at col 5; '[' is at col 0
         let text = "[1, 2]";
         let result = handle_linked_editing(text, 0, 5);
-        assert!(result.is_some(), "cursor on close bracket should find matching open");
+        assert!(
+            result.is_some(),
+            "cursor on close bracket should find matching open"
+        );
         if let Some(r) = result {
             assert_eq!(r.ranges.len(), 2);
             assert_eq!(r.ranges[0].start.character, 0); // open bracket
@@ -1293,7 +1402,10 @@ mod linked_editing_tests {
         // Cursor ON '}' at col 7; '{' is at col 0
         let text = "{ code }";
         let result = handle_linked_editing(text, 0, 7);
-        assert!(result.is_some(), "cursor on close brace should find matching open");
+        assert!(
+            result.is_some(),
+            "cursor on close brace should find matching open"
+        );
         if let Some(r) = result {
             assert_eq!(r.ranges.len(), 2);
             assert_eq!(r.ranges[0].start.character, 0); // open brace
@@ -1306,7 +1418,10 @@ mod linked_editing_tests {
         // "(())" — cursor on outer ')' at col 3
         let text = "(())";
         let result = handle_linked_editing(text, 0, 3);
-        assert!(result.is_some(), "cursor on outer close paren should find outer open");
+        assert!(
+            result.is_some(),
+            "cursor on outer close paren should find outer open"
+        );
         if let Some(r) = result {
             assert_eq!(r.ranges.len(), 2);
             assert_eq!(r.ranges[0].start.character, 0); // outer open
@@ -1319,7 +1434,10 @@ mod linked_editing_tests {
         // "x)" — no matching open bracket, must return None without panicking
         let text = "x)";
         let result = handle_linked_editing(text, 0, 1);
-        assert!(result.is_none(), "unmatched close paren should return None, not panic");
+        assert!(
+            result.is_none(),
+            "unmatched close paren should return None, not panic"
+        );
     }
 
     #[test]
@@ -1328,7 +1446,10 @@ mod linked_editing_tests {
         // '>' is in CLOSE but not in OPEN, so it takes the close-bracket branch (not quote branch)
         let text = "<data>";
         let result = handle_linked_editing(text, 0, 5);
-        assert!(result.is_some(), "cursor on close angle bracket should find matching open");
+        assert!(
+            result.is_some(),
+            "cursor on close angle bracket should find matching open"
+        );
         if let Some(r) = result {
             assert_eq!(r.ranges.len(), 2);
             assert_eq!(r.ranges[0].start.character, 0); // open angle
@@ -1366,7 +1487,10 @@ mod reexport_tests {
     fn parser_reexport_works() -> Result<(), ParseError> {
         let mut parser = perl_lsp_providers::Parser::new("my $x = 1;");
         let ast = parser.parse()?;
-        assert!(matches!(ast.kind, perl_lsp_providers::ast::NodeKind::Program { .. }));
+        assert!(matches!(
+            ast.kind,
+            perl_lsp_providers::ast::NodeKind::Program { .. }
+        ));
         Ok(())
     }
 
@@ -1620,13 +1744,21 @@ mod tooling_tests {
 
     #[test]
     fn subprocess_output_success() {
-        let out = SubprocessOutput { stdout: vec![1, 2, 3], stderr: vec![], status_code: 0 };
+        let out = SubprocessOutput {
+            stdout: vec![1, 2, 3],
+            stderr: vec![],
+            status_code: 0,
+        };
         assert!(out.success());
     }
 
     #[test]
     fn subprocess_output_failure() {
-        let out = SubprocessOutput { stdout: vec![], stderr: vec![1], status_code: 127 };
+        let out = SubprocessOutput {
+            stdout: vec![],
+            stderr: vec![1],
+            status_code: 127,
+        };
         assert!(!out.success());
     }
 
@@ -1644,7 +1776,11 @@ mod tooling_tests {
 
     #[test]
     fn subprocess_output_empty() {
-        let out = SubprocessOutput { stdout: vec![], stderr: vec![], status_code: 0 };
+        let out = SubprocessOutput {
+            stdout: vec![],
+            stderr: vec![],
+            status_code: 0,
+        };
         assert!(out.success());
         assert!(out.stdout.is_empty());
         assert!(out.stderr.is_empty());

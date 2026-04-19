@@ -213,7 +213,11 @@ pub fn legend() -> TokensLegend {
         map.insert(t.clone(), i as u32);
     }
 
-    TokensLegend { token_types: types, modifiers, map }
+    TokensLegend {
+        token_types: types,
+        modifiers,
+        map,
+    }
 }
 
 #[inline]
@@ -260,7 +264,9 @@ fn heredoc_injection_language(text: &str) -> Option<&'static str> {
         return None;
     }
     // Strip matching quote characters (single or double)
-    let label = rest.trim_start_matches(['\'', '"']).trim_end_matches(['\'', '"']);
+    let label = rest
+        .trim_start_matches(['\'', '"'])
+        .trim_end_matches(['\'', '"']);
     match label.to_ascii_lowercase().as_str() {
         "sql" | "mysql" | "postgres" | "postgresql" | "sqlite" => Some("sql"),
         "json" => Some("json"),
@@ -477,7 +483,11 @@ pub fn collect_semantic_tokens(
                                     let part_end = part_start + lit.len();
                                     let (psl, psc) = to_pos16(part_start);
                                     let (pel, pec) = to_pos16(part_end);
-                                    let plen = if psl == pel { pec.saturating_sub(psc) } else { 0 };
+                                    let plen = if psl == pel {
+                                        pec.saturating_sub(psc)
+                                    } else {
+                                        0
+                                    };
                                     if plen > 0 {
                                         lexer_tokens.push((
                                             psl,
@@ -497,7 +507,11 @@ pub fn collect_semantic_tokens(
                                     let part_end = part_start + var.len();
                                     let (psl, psc) = to_pos16(part_start);
                                     let (pel, pec) = to_pos16(part_end);
-                                    let plen = if psl == pel { pec.saturating_sub(psc) } else { 0 };
+                                    let plen = if psl == pel {
+                                        pec.saturating_sub(psc)
+                                    } else {
+                                        0
+                                    };
                                     if plen > 0 {
                                         lexer_tokens.push((
                                             psl,
@@ -598,7 +612,11 @@ pub fn collect_semantic_tokens(
                 }
                 return true;
             }
-            NodeKind::Subroutine { name: Some(_), name_span: Some(span), .. } => {
+            NodeKind::Subroutine {
+                name: Some(_),
+                name_span: Some(span),
+                ..
+            } => {
                 let (sl, sc) = to_pos16(span.start);
                 let (el, ec) = to_pos16(span.end);
                 let len = if sl == el { ec.saturating_sub(sc) } else { 0 };
@@ -652,7 +670,10 @@ pub fn collect_semantic_tokens(
                 }
                 return true;
             }
-            NodeKind::PhaseBlock { phase_span: Some(span), .. } => {
+            NodeKind::PhaseBlock {
+                phase_span: Some(span),
+                ..
+            } => {
                 let (sl, sc) = to_pos16(span.start);
                 let (el, ec) = to_pos16(span.end);
                 let len = if sl == el { ec.saturating_sub(sc) } else { 0 };
@@ -661,7 +682,11 @@ pub fn collect_semantic_tokens(
                 }
                 return true;
             }
-            NodeKind::MethodCall { object, method, args } => {
+            NodeKind::MethodCall {
+                object,
+                method,
+                args,
+            } => {
                 // Emit a narrow token for just the method name, not the entire expression.
                 // object.location.end is the byte offset after the receiver; +2 skips "->".
                 let method_name_start = object.location.end + 2;
@@ -695,7 +720,11 @@ pub fn collect_semantic_tokens(
                 {
                     let (asl, asc) = to_pos16(first_arg.location.start);
                     let (ael, aec) = to_pos16(first_arg.location.end);
-                    let alen = if asl == ael { aec.saturating_sub(asc) } else { 0 };
+                    let alen = if asl == ael {
+                        aec.saturating_sub(asc)
+                    } else {
+                        0
+                    };
                     if alen > 0 {
                         ast_tokens.push((asl, asc, alen, kind_idx(&leg, "sql_string"), 0));
                     }
@@ -728,7 +757,11 @@ pub fn collect_semantic_tokens(
                 let (vs, ve) = (node.location.start, node.location.end);
                 let decl_info = decl_spans.iter().find(|(ds, de, _)| *ds <= vs && ve <= *de);
                 let full_name = format!("{sigil}{name}");
-                let special_mod = if is_special_variable(&full_name) { 512 } else { 0 }; // defaultLibrary bit 9
+                let special_mod = if is_special_variable(&full_name) {
+                    512
+                } else {
+                    0
+                }; // defaultLibrary bit 9
                 let sigil_mod: u32 = match sigil.as_str() {
                     "$" => 1024, // scalarVariable bit 10
                     "@" => 2048, // arrayVariable  bit 11
@@ -840,14 +873,22 @@ where
             statements.iter().collect()
         }
         NodeKind::ExpressionStatement { expression } => vec![expression.as_ref()],
-        NodeKind::VariableDeclaration { variable, initializer, .. } => {
+        NodeKind::VariableDeclaration {
+            variable,
+            initializer,
+            ..
+        } => {
             let mut c = vec![variable.as_ref()];
             if let Some(init) = initializer {
                 c.push(init.as_ref());
             }
             c
         }
-        NodeKind::VariableListDeclaration { variables, initializer, .. } => {
+        NodeKind::VariableListDeclaration {
+            variables,
+            initializer,
+            ..
+        } => {
             let mut c: Vec<&Node> = variables.iter().collect();
             if let Some(init) = initializer {
                 c.push(init.as_ref());
@@ -856,7 +897,11 @@ where
         }
         NodeKind::Assignment { lhs, rhs, .. } => vec![lhs.as_ref(), rhs.as_ref()],
         NodeKind::Binary { left, right, .. } => vec![left.as_ref(), right.as_ref()],
-        NodeKind::Ternary { condition, then_expr, else_expr } => {
+        NodeKind::Ternary {
+            condition,
+            then_expr,
+            else_expr,
+        } => {
             vec![condition.as_ref(), then_expr.as_ref(), else_expr.as_ref()]
         }
         NodeKind::Unary { operand, .. } => vec![operand.as_ref()],
@@ -871,7 +916,12 @@ where
             c.extend(args.iter());
             c
         }
-        NodeKind::Subroutine { prototype, signature, body, .. } => {
+        NodeKind::Subroutine {
+            prototype,
+            signature,
+            body,
+            ..
+        } => {
             let mut c = Vec::new();
             if let Some(proto) = prototype {
                 c.push(proto.as_ref());
@@ -882,7 +932,9 @@ where
             c.push(body.as_ref());
             c
         }
-        NodeKind::Method { signature, body, .. } => {
+        NodeKind::Method {
+            signature, body, ..
+        } => {
             let mut c = Vec::new();
             if let Some(sig) = signature {
                 c.push(sig.as_ref());
@@ -896,10 +948,18 @@ where
         | NodeKind::NamedParameter { variable } => {
             vec![variable.as_ref()]
         }
-        NodeKind::OptionalParameter { variable, default_value } => {
+        NodeKind::OptionalParameter {
+            variable,
+            default_value,
+        } => {
             vec![variable.as_ref(), default_value.as_ref()]
         }
-        NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
+        NodeKind::If {
+            condition,
+            then_branch,
+            elsif_branches,
+            else_branch,
+        } => {
             let mut c = vec![condition.as_ref(), then_branch.as_ref()];
             for (cond, body) in elsif_branches {
                 c.push(cond.as_ref());
@@ -910,14 +970,24 @@ where
             }
             c
         }
-        NodeKind::While { condition, body, continue_block } => {
+        NodeKind::While {
+            condition,
+            body,
+            continue_block,
+        } => {
             let mut c = vec![condition.as_ref(), body.as_ref()];
             if let Some(cb) = continue_block {
                 c.push(cb.as_ref());
             }
             c
         }
-        NodeKind::For { init, condition, update, body, continue_block } => {
+        NodeKind::For {
+            init,
+            condition,
+            update,
+            body,
+            continue_block,
+        } => {
             let mut c = Vec::new();
             if let Some(i) = init {
                 c.push(i.as_ref());
@@ -934,7 +1004,12 @@ where
             }
             c
         }
-        NodeKind::Foreach { variable, list, body, continue_block } => {
+        NodeKind::Foreach {
+            variable,
+            list,
+            body,
+            continue_block,
+        } => {
             let mut c = vec![variable.as_ref(), list.as_ref(), body.as_ref()];
             if let Some(cb) = continue_block {
                 c.push(cb.as_ref());
@@ -952,7 +1027,11 @@ where
         NodeKind::Eval { block } | NodeKind::Do { block } | NodeKind::Defer { block } => {
             vec![block.as_ref()]
         }
-        NodeKind::Try { body, catch_blocks, finally_block } => {
+        NodeKind::Try {
+            body,
+            catch_blocks,
+            finally_block,
+        } => {
             let mut c = vec![body.as_ref()];
             for (_var, handler) in catch_blocks {
                 c.push(handler.as_ref());
@@ -962,7 +1041,11 @@ where
             }
             c
         }
-        NodeKind::StatementModifier { statement, condition, .. } => {
+        NodeKind::StatementModifier {
+            statement,
+            condition,
+            ..
+        } => {
             vec![statement.as_ref(), condition.as_ref()]
         }
         NodeKind::Return { value } => {
@@ -982,7 +1065,11 @@ where
             c
         }
         NodeKind::LabeledStatement { statement, .. } => vec![statement.as_ref()],
-        NodeKind::Given { expr, body } | NodeKind::When { condition: expr, body } => {
+        NodeKind::Given { expr, body }
+        | NodeKind::When {
+            condition: expr,
+            body,
+        } => {
             vec![expr.as_ref(), body.as_ref()]
         }
         NodeKind::Default { body } => vec![body.as_ref()],
@@ -993,7 +1080,11 @@ where
         | NodeKind::Transliteration { expr, .. } => {
             vec![expr.as_ref()]
         }
-        NodeKind::Tie { variable, package, args } => {
+        NodeKind::Tie {
+            variable,
+            package,
+            args,
+        } => {
             let mut c = vec![variable.as_ref(), package.as_ref()];
             c.extend(args.iter());
             c
@@ -1026,14 +1117,22 @@ fn declaration_readonly_flags(ast: &Node) -> FxHashMap<(usize, usize), bool> {
 
     walk_ast_full(ast, &mut |node| {
         match &node.kind {
-            NodeKind::VariableDeclaration { declarator, variable, .. } => {
+            NodeKind::VariableDeclaration {
+                declarator,
+                variable,
+                ..
+            } => {
                 let is_readonly = declarator == "our";
                 flags
                     .entry((variable.location.start, variable.location.end))
                     .and_modify(|flag| *flag |= is_readonly)
                     .or_insert(is_readonly);
             }
-            NodeKind::VariableListDeclaration { declarator, variables, .. } => {
+            NodeKind::VariableListDeclaration {
+                declarator,
+                variables,
+                ..
+            } => {
                 let is_readonly = declarator == "our";
                 for variable in variables {
                     flags
@@ -1233,7 +1332,11 @@ mod tests {
         // Token A: [0, 5), Token B: [5, 10) - touching but not overlapping
         let input = vec![tok(0, 0, 5, 0, 0), tok(0, 5, 5, 1, 0)];
         let result = remove_overlapping_tokens(input.clone());
-        assert_eq!(result.len(), 2, "Adjacent non-overlapping tokens must both be kept");
+        assert_eq!(
+            result.len(),
+            2,
+            "Adjacent non-overlapping tokens must both be kept"
+        );
         assert_eq!(result[0], tok(0, 0, 5, 0, 0));
         assert_eq!(result[1], tok(0, 5, 5, 1, 0));
     }
@@ -1245,7 +1348,11 @@ mod tests {
         // Token A: [10, 15), Token B: [15, 20) - exact boundary
         let input = vec![tok(0, 10, 5, 0, 0), tok(0, 15, 5, 1, 0)];
         let result = remove_overlapping_tokens(input);
-        assert_eq!(result.len(), 2, "Tokens with exact boundaries must not overlap");
+        assert_eq!(
+            result.len(),
+            2,
+            "Tokens with exact boundaries must not overlap"
+        );
     }
 
     /// Test one-character overlap triggers replacement
@@ -1256,7 +1363,11 @@ mod tests {
         // A is kept because it comes first and B is not longer (A=6, B=5)
         let input = vec![tok(0, 0, 6, 0, 0), tok(0, 5, 5, 1, 0)];
         let result = remove_overlapping_tokens(input);
-        assert_eq!(result.len(), 1, "Single char overlap must trigger deduplication");
+        assert_eq!(
+            result.len(),
+            1,
+            "Single char overlap must trigger deduplication"
+        );
         assert_eq!(result[0], tok(0, 0, 6, 0, 0), "First token kept (longer)");
     }
 
@@ -1268,7 +1379,11 @@ mod tests {
         let input = vec![tok(0, 0, 5, 0, 0), tok(0, 3, 7, 1, 0)];
         let result = remove_overlapping_tokens(input);
         assert_eq!(result.len(), 1, "Partial overlap must keep only one token");
-        assert_eq!(result[0], tok(0, 3, 7, 1, 0), "Longer overlapping token must win");
+        assert_eq!(
+            result[0],
+            tok(0, 3, 7, 1, 0),
+            "Longer overlapping token must win"
+        );
     }
 
     /// Test equal length overlap keeps first token
@@ -1278,8 +1393,16 @@ mod tests {
         // Token A: [0, 5) len=5, Token B: [2, 7) len=5 - equal length overlap
         let input = vec![tok(0, 0, 5, 0, 0), tok(0, 2, 5, 1, 0)];
         let result = remove_overlapping_tokens(input);
-        assert_eq!(result.len(), 1, "Equal length overlap must keep first token");
-        assert_eq!(result[0], tok(0, 0, 5, 0, 0), "First token must be kept when lengths equal");
+        assert_eq!(
+            result.len(),
+            1,
+            "Equal length overlap must keep first token"
+        );
+        assert_eq!(
+            result[0],
+            tok(0, 0, 5, 0, 0),
+            "First token must be kept when lengths equal"
+        );
     }
 
     /// Test tokens on different lines never overlap
@@ -1291,7 +1414,11 @@ mod tests {
             tok(1, 0, 5, 1, 0),   // Line 1, early position
         ];
         let result = remove_overlapping_tokens(input.clone());
-        assert_eq!(result.len(), 2, "Tokens on different lines must never overlap");
+        assert_eq!(
+            result.len(),
+            2,
+            "Tokens on different lines must never overlap"
+        );
         assert_eq!(result[0], tok(0, 0, 100, 0, 0));
         assert_eq!(result[1], tok(1, 0, 5, 1, 0));
     }
@@ -1347,10 +1474,17 @@ mod tests {
     /// Kills BinaryOperator mutations in arithmetic operations
     #[test]
     fn mutation_hardening_large_positions() {
-        let input = vec![tok(1000, u32::MAX - 100, 50, 0, 0), tok(1000, u32::MAX - 40, 20, 1, 0)];
+        let input = vec![
+            tok(1000, u32::MAX - 100, 50, 0, 0),
+            tok(1000, u32::MAX - 40, 20, 1, 0),
+        ];
         let result = remove_overlapping_tokens(input);
         // Overflow is prevented by saturating operations in the original code
-        assert_eq!(result.len(), 2, "Large positions must not cause overflow issues");
+        assert_eq!(
+            result.len(),
+            2,
+            "Large positions must not cause overflow issues"
+        );
     }
 
     /// Test sorting preserves token order correctly
@@ -1358,9 +1492,17 @@ mod tests {
     #[test]
     fn mutation_hardening_sort_order() {
         // Input in reverse order
-        let input = vec![tok(2, 10, 5, 0, 0), tok(1, 10, 5, 1, 0), tok(0, 10, 5, 2, 0)];
+        let input = vec![
+            tok(2, 10, 5, 0, 0),
+            tok(1, 10, 5, 1, 0),
+            tok(0, 10, 5, 2, 0),
+        ];
         let result = remove_overlapping_tokens(input);
-        assert_eq!(result.len(), 3, "Non-overlapping tokens must all be preserved");
+        assert_eq!(
+            result.len(),
+            3,
+            "Non-overlapping tokens must all be preserved"
+        );
         // Verify sorted by line
         assert_eq!(result[0].0, 0);
         assert_eq!(result[1].0, 1);
@@ -1372,9 +1514,17 @@ mod tests {
     #[test]
     fn mutation_hardening_sort_order_same_line() {
         // Input with tokens in reverse order on same line
-        let input = vec![tok(0, 30, 5, 0, 0), tok(0, 20, 5, 1, 0), tok(0, 10, 5, 2, 0)];
+        let input = vec![
+            tok(0, 30, 5, 0, 0),
+            tok(0, 20, 5, 1, 0),
+            tok(0, 10, 5, 2, 0),
+        ];
         let result = remove_overlapping_tokens(input);
-        assert_eq!(result.len(), 3, "Non-overlapping tokens must all be preserved");
+        assert_eq!(
+            result.len(),
+            3,
+            "Non-overlapping tokens must all be preserved"
+        );
         // Verify sorted by start position
         assert_eq!(result[0].1, 10);
         assert_eq!(result[1].1, 20);
@@ -1386,11 +1536,23 @@ mod tests {
     #[test]
     fn mutation_hardening_systematic_removal() {
         // All tokens overlap at same position, increasing length
-        let input =
-            vec![tok(0, 0, 3, 0, 0), tok(0, 0, 5, 1, 0), tok(0, 0, 7, 2, 0), tok(0, 0, 9, 3, 0)];
+        let input = vec![
+            tok(0, 0, 3, 0, 0),
+            tok(0, 0, 5, 1, 0),
+            tok(0, 0, 7, 2, 0),
+            tok(0, 0, 9, 3, 0),
+        ];
         let result = remove_overlapping_tokens(input);
-        assert_eq!(result.len(), 1, "Longest token must survive multiple replacements");
-        assert_eq!(result[0], tok(0, 0, 9, 3, 0), "Longest token must be the survivor");
+        assert_eq!(
+            result.len(),
+            1,
+            "Longest token must survive multiple replacements"
+        );
+        assert_eq!(
+            result[0],
+            tok(0, 0, 9, 3, 0),
+            "Longest token must be the survivor"
+        );
     }
 
     /// Test interleaved tokens without overlap
@@ -1404,7 +1566,11 @@ mod tests {
             tok(0, 15, 3, 3, 0), // [15, 18)
         ];
         let result = remove_overlapping_tokens(input.clone());
-        assert_eq!(result.len(), 4, "All non-overlapping tokens must be preserved");
+        assert_eq!(
+            result.len(),
+            4,
+            "All non-overlapping tokens must be preserved"
+        );
         assert_eq!(result, input, "Token order and content must be unchanged");
     }
 

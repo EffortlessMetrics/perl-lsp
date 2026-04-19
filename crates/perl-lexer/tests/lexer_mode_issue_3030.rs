@@ -185,7 +185,11 @@ fn all_modes_have_non_empty_debug_output() {
     ];
     for mode in &modes {
         let dbg = format!("{:?}", mode);
-        assert!(!dbg.is_empty(), "debug output for {:?} must be non-empty", mode);
+        assert!(
+            !dbg.is_empty(),
+            "debug output for {:?} must be non-empty",
+            mode
+        );
     }
 }
 
@@ -231,14 +235,24 @@ fn mode_transitions_after_identifier() -> R {
         .collect_tokens()
         .into_iter()
         .filter(|t| {
-            !matches!(t.token_type, TokenType::Whitespace | TokenType::Newline | TokenType::EOF)
+            !matches!(
+                t.token_type,
+                TokenType::Whitespace | TokenType::Newline | TokenType::EOF
+            )
         })
         .collect();
     // We expect: Variable($x), Division(/), IntLiteral(2)
-    let has_divide = tokens.iter().any(|t| matches!(t.token_type, TokenType::Division));
-    let has_regex = tokens.iter().any(|t| matches!(t.token_type, TokenType::RegexMatch));
+    let has_divide = tokens
+        .iter()
+        .any(|t| matches!(t.token_type, TokenType::Division));
+    let has_regex = tokens
+        .iter()
+        .any(|t| matches!(t.token_type, TokenType::RegexMatch));
     assert!(has_divide, "after $x the slash must be division, not regex");
-    assert!(!has_regex, "must not produce a Regex token after an identifier");
+    assert!(
+        !has_regex,
+        "must not produce a Regex token after an identifier"
+    );
     Ok(())
 }
 
@@ -251,10 +265,15 @@ fn mode_transitions_after_keyword_to_expect_term() -> R {
         .collect_tokens()
         .into_iter()
         .filter(|t| {
-            !matches!(t.token_type, TokenType::Whitespace | TokenType::Newline | TokenType::EOF)
+            !matches!(
+                t.token_type,
+                TokenType::Whitespace | TokenType::Newline | TokenType::EOF
+            )
         })
         .collect();
-    let has_regex = tokens.iter().any(|t| matches!(t.token_type, TokenType::RegexMatch));
+    let has_regex = tokens
+        .iter()
+        .any(|t| matches!(t.token_type, TokenType::RegexMatch));
     assert!(has_regex, "after 'if' keyword the slash must start a regex");
     Ok(())
 }

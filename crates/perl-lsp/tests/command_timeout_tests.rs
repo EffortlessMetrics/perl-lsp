@@ -46,7 +46,11 @@ fn test_command_timeout_fires() {
     let result = run_command_with_timeout(cmd, 1);
     let elapsed = start.elapsed();
 
-    assert!(result.is_err(), "Expected timeout error but got: {:?}", result.ok());
+    assert!(
+        result.is_err(),
+        "Expected timeout error but got: {:?}",
+        result.ok()
+    );
     assert!(
         elapsed.as_secs() >= 1 && elapsed.as_secs() <= 3,
         "Expected ~1s timeout, got {}s",
@@ -59,7 +63,11 @@ fn test_command_completes_before_timeout() {
     let cmd = fast_command();
     let result = run_command_with_timeout(cmd, 10);
 
-    assert!(result.is_ok(), "Expected success but got: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "Expected success but got: {:?}",
+        result.err()
+    );
     if let Ok(output) = result {
         assert!(output.status.success());
     }

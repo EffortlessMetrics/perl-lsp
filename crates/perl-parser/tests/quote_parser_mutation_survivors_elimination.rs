@@ -49,12 +49,21 @@ fn test_kill_arithmetic_boundary_mutations_position_tracking() {
         pattern, "a{b{c}b}a",
         "Triple-nested delimiter tracking - kills depth -= to /= mutation at line 290:27"
     );
-    assert_eq!(replacement, "x{y{z}y}x", "Triple-nested replacement depth calculation");
+    assert_eq!(
+        replacement, "x{y{z}y}x",
+        "Triple-nested replacement depth calculation"
+    );
 
     // Edge case: Single character positions
     let (pattern, replacement, _) = extract_substitution_parts("s/a/b/");
-    assert_eq!(pattern, "a", "Single char pattern - precise position arithmetic");
-    assert_eq!(replacement, "b", "Single char replacement - kills all arithmetic mutations");
+    assert_eq!(
+        pattern, "a",
+        "Single char pattern - precise position arithmetic"
+    );
+    assert_eq!(
+        replacement, "b",
+        "Single char replacement - kills all arithmetic mutations"
+    );
 }
 
 // TARGET: lines 12:9, 80:54 - Boolean logic mutations (&& to ||)
@@ -70,17 +79,29 @@ fn test_kill_boolean_logic_mutations_operator_precedence() {
     assert_eq!(modifiers, "", "No modifiers for 'ma'");
 
     let (pattern, _body, modifiers) = extract_regex_parts("mz");
-    assert_eq!(pattern, "mzm", "m followed by alphabetic 'z' - ensures && logic preserved");
+    assert_eq!(
+        pattern, "mzm",
+        "m followed by alphabetic 'z' - ensures && logic preserved"
+    );
     assert_eq!(modifiers, "", "No modifiers for 'mz'");
 
     let (pattern, _body, modifiers) = extract_regex_parts("m/test/i");
-    assert_eq!(pattern, "/test/", "m followed by non-alphabetic '/' should extract properly");
-    assert_eq!(modifiers, "i", "Modifiers preserved with non-alphabetic delimiter");
+    assert_eq!(
+        pattern, "/test/",
+        "m followed by non-alphabetic '/' should extract properly"
+    );
+    assert_eq!(
+        modifiers, "i",
+        "Modifiers preserved with non-alphabetic delimiter"
+    );
 
     // Test line 80:54: !is_paired && !rest1.is_empty()
     // && to || mutation would trigger wrong parsing branch
     let (pattern, replacement, modifiers) = extract_substitution_parts("s/test/replace/g");
-    assert_eq!(pattern, "test", "Non-paired with content - kills && to || mutation at line 80:54");
+    assert_eq!(
+        pattern, "test",
+        "Non-paired with content - kills && to || mutation at line 80:54"
+    );
     assert_eq!(replacement, "replace", "Non-paired replacement extraction");
     assert_eq!(modifiers, "g", "Non-paired modifiers");
 
@@ -88,13 +109,22 @@ fn test_kill_boolean_logic_mutations_operator_precedence() {
     // Original: !false && !false = true && true = true (manual parsing)
     // Mutated: !false || !false = true || true = true (same result but wrong logic path)
     let (pattern, replacement, _) = extract_substitution_parts("s#abc#def#");
-    assert_eq!(pattern, "abc", "Non-paired delimiter with content - tests && logic precisely");
-    assert_eq!(replacement, "def", "Non-paired replacement - critical for && vs || distinction");
+    assert_eq!(
+        pattern, "abc",
+        "Non-paired delimiter with content - tests && logic precisely"
+    );
+    assert_eq!(
+        replacement, "def",
+        "Non-paired replacement - critical for && vs || distinction"
+    );
 
     // Edge case: empty content but non-paired delimiters
     let (pattern, replacement, _) = extract_substitution_parts("s##");
     assert_eq!(pattern, "", "Empty non-paired pattern");
-    assert_eq!(replacement, "", "Empty non-paired replacement - tests !rest1.is_empty() condition");
+    assert_eq!(
+        replacement, "",
+        "Empty non-paired replacement - tests !rest1.is_empty() condition"
+    );
 }
 
 // TARGET: lines 9:5, 160:5 - Function return value mutations (FnValue genre)
@@ -103,28 +133,64 @@ fn test_kill_function_return_value_mutations() {
     // Test line 9:5: extract_regex_parts return value mutations
     // Mutations: (String::new(), String::new()) vs ("xyzzy".into(), String::new())
     let (pattern, _body, modifiers) = extract_regex_parts("");
-    assert_eq!(pattern, "", "Empty input should return empty pattern, not 'xyzzy'");
-    assert_eq!(modifiers, "", "Empty input should return empty modifiers, not any string");
+    assert_eq!(
+        pattern, "",
+        "Empty input should return empty pattern, not 'xyzzy'"
+    );
+    assert_eq!(
+        modifiers, "",
+        "Empty input should return empty modifiers, not any string"
+    );
 
     let (pattern, _body, modifiers) = extract_regex_parts("qr");
-    assert_eq!(pattern, "", "qr without delimiter should return empty pattern, not 'xyzzy'");
-    assert_eq!(modifiers, "", "qr without delimiter should return empty modifiers");
+    assert_eq!(
+        pattern, "",
+        "qr without delimiter should return empty pattern, not 'xyzzy'"
+    );
+    assert_eq!(
+        modifiers, "",
+        "qr without delimiter should return empty modifiers"
+    );
 
     let (pattern, _body, modifiers) = extract_regex_parts("qr/test/i");
-    assert_eq!(pattern, "/test/", "Valid regex should return proper pattern, not empty or 'xyzzy'");
-    assert_eq!(modifiers, "i", "Valid regex should return proper modifiers, not empty or 'xyzzy'");
+    assert_eq!(
+        pattern, "/test/",
+        "Valid regex should return proper pattern, not empty or 'xyzzy'"
+    );
+    assert_eq!(
+        modifiers, "i",
+        "Valid regex should return proper modifiers, not empty or 'xyzzy'"
+    );
 
     // Test line 160:5: extract_transliteration_parts return value mutations
     // Mutations: (String::new(), String::new(), String::new()) vs (String::new(), "xyzzy".into(), String::new())
     let (search, replace, modifiers) = extract_transliteration_parts("");
-    assert_eq!(search, "", "Empty input should return empty search, not 'xyzzy'");
-    assert_eq!(replace, "", "Empty input should return empty replace, not 'xyzzy'");
-    assert_eq!(modifiers, "", "Empty input should return empty modifiers, not any string");
+    assert_eq!(
+        search, "",
+        "Empty input should return empty search, not 'xyzzy'"
+    );
+    assert_eq!(
+        replace, "",
+        "Empty input should return empty replace, not 'xyzzy'"
+    );
+    assert_eq!(
+        modifiers, "",
+        "Empty input should return empty modifiers, not any string"
+    );
 
     let (search, replace, modifiers) = extract_transliteration_parts("tr");
-    assert_eq!(search, "", "tr without delimiter should return empty search, not 'xyzzy'");
-    assert_eq!(replace, "", "tr without delimiter should return empty replace, not 'xyzzy'");
-    assert_eq!(modifiers, "", "tr without delimiter should return empty modifiers");
+    assert_eq!(
+        search, "",
+        "tr without delimiter should return empty search, not 'xyzzy'"
+    );
+    assert_eq!(
+        replace, "",
+        "tr without delimiter should return empty replace, not 'xyzzy'"
+    );
+    assert_eq!(
+        modifiers, "",
+        "tr without delimiter should return empty modifiers"
+    );
 
     let (search, replace, modifiers) = extract_transliteration_parts("tr/abc/xyz/d");
     assert_eq!(
@@ -151,7 +217,10 @@ fn test_kill_escape_handling_match_arm_deletions() {
         pattern, "test\\/end",
         "Escaped delimiter in pattern - kills escape arm deletion at line 280:13"
     );
-    assert_eq!(replacement, "repl\\/end", "Escaped delimiter in replacement");
+    assert_eq!(
+        replacement, "repl\\/end",
+        "Escaped delimiter in replacement"
+    );
 
     // Test line 95:17: delete match arm '\\' in extract_substitution_parts (manual parsing)
     let (pattern, replacement, _) = extract_substitution_parts("s/a\\\\b/c\\\\d/");
@@ -167,7 +236,10 @@ fn test_kill_escape_handling_match_arm_deletions() {
         pattern, "test\\]end[repl\\]end",
         "Escaped bracket in pattern - kills escape arm deletion at line 132:25"
     );
-    assert_eq!(replacement, "", "Escaped bracket in replacement falls back to empty");
+    assert_eq!(
+        replacement, "",
+        "Escaped bracket in replacement falls back to empty"
+    );
 
     // Test line 212:17: delete match arm '\\' in extract_transliteration_parts
     let (search, replace, _) = extract_transliteration_parts("tr/a\\/b/c\\/d/");
@@ -175,16 +247,25 @@ fn test_kill_escape_handling_match_arm_deletions() {
         search, "a\\/b",
         "Escaped delimiter in transliteration search - kills escape arm deletion at line 212:17"
     );
-    assert_eq!(replace, "c\\/d", "Escaped delimiter in transliteration replace");
+    assert_eq!(
+        replace, "c\\/d",
+        "Escaped delimiter in transliteration replace"
+    );
 
     // Complex escape sequences to ensure robust handling
     let (pattern, replacement, _) = extract_substitution_parts("s/\\\\\\//\\\\\\/\\/");
     assert_eq!(pattern, "\\\\\\/", "Complex escape sequence in pattern");
-    assert_eq!(replacement, "\\\\\\/\\/", "Complex escape sequence in replacement");
+    assert_eq!(
+        replacement, "\\\\\\/\\/",
+        "Complex escape sequence in replacement"
+    );
 
     // Escaped delimiters that should NOT terminate parsing
     let (search, replace, _) = extract_transliteration_parts("tr{a\\}b}{c\\}d}");
-    assert_eq!(search, "a\\}b", "Escaped closing delimiter should not terminate parsing");
+    assert_eq!(
+        search, "a\\}b",
+        "Escaped closing delimiter should not terminate parsing"
+    );
     assert_eq!(replace, "c\\}d", "Escaped closing delimiter in replace");
 }
 
@@ -198,22 +279,37 @@ fn test_kill_delimiter_mapping_deletion_angle_brackets() {
         pattern, "old",
         "Angle bracket opening delimiter - kills '<' arm deletion at line 248:9"
     );
-    assert_eq!(replacement, "new", "Angle bracket closing delimiter mapping");
+    assert_eq!(
+        replacement, "new",
+        "Angle bracket closing delimiter mapping"
+    );
 
     // Test angle brackets in regex contexts
     let (pattern, _body, modifiers) = extract_regex_parts("qr<test.*>");
-    assert_eq!(pattern, "<test.*>", "Angle bracket regex pattern - ensures '<' mapping preserved");
+    assert_eq!(
+        pattern, "<test.*>",
+        "Angle bracket regex pattern - ensures '<' mapping preserved"
+    );
     assert_eq!(modifiers, "", "Angle bracket regex modifiers");
 
     // Test angle brackets in transliteration
     let (search, replace, _) = extract_transliteration_parts("tr<abc><xyz>");
-    assert_eq!(search, "abc", "Angle bracket transliteration search - tests '<' delimiter mapping");
+    assert_eq!(
+        search, "abc",
+        "Angle bracket transliteration search - tests '<' delimiter mapping"
+    );
     assert_eq!(replace, "xyz", "Angle bracket transliteration replace");
 
     // Nested angle brackets to test depth tracking with proper closing
     let (pattern, replacement, _) = extract_substitution_parts("s<test<inner>end><repl<inner>end>");
-    assert_eq!(pattern, "test<inner>end", "Nested angle brackets in pattern");
-    assert_eq!(replacement, "repl<inner>end", "Nested angle brackets in replacement");
+    assert_eq!(
+        pattern, "test<inner>end",
+        "Nested angle brackets in pattern"
+    );
+    assert_eq!(
+        replacement, "repl<inner>end",
+        "Nested angle brackets in replacement"
+    );
 
     // Edge case: angle brackets as non-paired delimiters (should work the same)
     let (pattern, replacement, _) = extract_substitution_parts("s<<<>>>>");
@@ -234,7 +330,10 @@ fn test_kill_equality_comparison_mutations() {
     assert_eq!(replacement, "new", "Paired delimiter replacement");
 
     let (pattern, replacement, _) = extract_substitution_parts("s/old/new/");
-    assert_eq!(pattern, "old", "Non-paired delimiter detection - ensures != comparison works");
+    assert_eq!(
+        pattern, "old",
+        "Non-paired delimiter detection - ensures != comparison works"
+    );
     assert_eq!(replacement, "new", "Non-paired delimiter replacement");
 
     // Test line 116:26: delimiter == '(' special case
@@ -253,7 +352,10 @@ fn test_kill_equality_comparison_mutations() {
         pattern, "test",
         "Closing delimiter detection in pattern - kills == to != mutation at line 136:32"
     );
-    assert_eq!(replacement, "replace", "Closing delimiter detection in replacement");
+    assert_eq!(
+        replacement, "replace",
+        "Closing delimiter detection in replacement"
+    );
 
     // Test line 216:24: c == closing in transliteration parsing
     // == to != mutation would break transliteration closing delimiter detection
@@ -262,17 +364,26 @@ fn test_kill_equality_comparison_mutations() {
         search, "old",
         "Transliteration closing delimiter - kills == to != mutation at line 216:24"
     );
-    assert_eq!(replace, "new", "Transliteration closing delimiter detection");
+    assert_eq!(
+        replace, "new",
+        "Transliteration closing delimiter detection"
+    );
 
     // Edge case: delimiter characters that are equal to closing
     let (pattern, replacement, _) = extract_substitution_parts("s///");
     assert_eq!(pattern, "", "Empty pattern with same open/close delimiter");
-    assert_eq!(replacement, "", "Empty replacement with same open/close delimiter");
+    assert_eq!(
+        replacement, "",
+        "Empty replacement with same open/close delimiter"
+    );
 
     // Complex case: multiple potential closing delimiters
     let (pattern, replacement, _) = extract_substitution_parts("s/test/replace/more/");
     assert_eq!(pattern, "test", "Pattern stops at first closing delimiter");
-    assert_eq!(replacement, "replace", "Replacement stops at correct closing delimiter");
+    assert_eq!(
+        replacement, "replace",
+        "Replacement stops at correct closing delimiter"
+    );
 }
 
 // TARGET: Complex interaction testing - multiple mutations combined
@@ -286,19 +397,31 @@ fn test_kill_complex_mutation_interactions() {
         pattern, "test\\}with\\\\escape",
         "Complex pattern with escapes and paired delimiters"
     );
-    assert_eq!(replacement, "repl\\}with\\\\escape", "Complex replacement with escapes");
+    assert_eq!(
+        replacement, "repl\\}with\\\\escape",
+        "Complex replacement with escapes"
+    );
     assert_eq!(modifiers, "gi", "Complex modifiers");
 
     // Test transliteration with complex escaping and arithmetic
     let (search, replace, modifiers) =
         extract_transliteration_parts("tr{a\\}b\\\\c}{x\\}y\\\\z}cd");
-    assert_eq!(search, "a\\}b\\\\c", "Complex transliteration search with escapes");
-    assert_eq!(replace, "x\\}y\\\\z", "Complex transliteration replace with escapes");
+    assert_eq!(
+        search, "a\\}b\\\\c",
+        "Complex transliteration search with escapes"
+    );
+    assert_eq!(
+        replace, "x\\}y\\\\z",
+        "Complex transliteration replace with escapes"
+    );
     assert_eq!(modifiers, "cd", "Valid transliteration modifiers");
 
     // Test regex with complex parsing
     let (pattern, _body, modifiers) = extract_regex_parts("qr{test\\{nested\\}end}gimsx");
-    assert_eq!(pattern, "{test\\{nested\\}end}", "Complex regex pattern with nested escapes");
+    assert_eq!(
+        pattern, "{test\\{nested\\}end}",
+        "Complex regex pattern with nested escapes"
+    );
     assert_eq!(modifiers, "gimsx", "Full modifier set");
 
     // Unicode + escaping + arithmetic boundaries
@@ -307,7 +430,10 @@ fn test_kill_complex_mutation_interactions() {
         pattern, "🦀test\\/end🦀",
         "Unicode with escaped delimiters - tests all mutation types"
     );
-    assert_eq!(replacement, "🚀repl\\/end🚀", "Unicode replacement with escapes");
+    assert_eq!(
+        replacement, "🚀repl\\/end🚀",
+        "Unicode replacement with escapes"
+    );
 }
 
 // TARGET: Edge cases that stress all mutation types simultaneously
@@ -315,7 +441,11 @@ fn test_kill_complex_mutation_interactions() {
 fn test_kill_mutations_comprehensive_edge_cases() {
     // Empty input edge cases (function return mutations)
     let (pattern, _body, modifiers) = extract_regex_parts("");
-    assert_eq!((pattern, modifiers), ("".to_string(), "".to_string()), "Empty regex input");
+    assert_eq!(
+        (pattern, modifiers),
+        ("".to_string(), "".to_string()),
+        "Empty regex input"
+    );
 
     let (pattern, replacement, modifiers) = extract_substitution_parts("");
     assert_eq!(
@@ -345,11 +475,22 @@ fn test_kill_mutations_comprehensive_edge_cases() {
     assert_eq!(replacement, "", "Malformed paired delimiter replacement");
 
     // All delimiter types (delimiter mapping mutations)
-    let delimiters = vec![('(', ')'), ('[', ']'), ('{', '}'), ('<', '>'), ('/', '/'), ('#', '#')];
+    let delimiters = vec![
+        ('(', ')'),
+        ('[', ']'),
+        ('{', '}'),
+        ('<', '>'),
+        ('/', '/'),
+        ('#', '#'),
+    ];
     for (open, close) in delimiters {
         let open_s = open.to_string();
         let close_s = close.to_string();
-        let third_delim = if open_s == close_s { "" } else { close_s.as_str() };
+        let third_delim = if open_s == close_s {
+            ""
+        } else {
+            close_s.as_str()
+        };
         // Keep multi-line layout: this file doubles as a formatting canary.
         #[rustfmt::skip]
         let input = format!(
@@ -361,7 +502,11 @@ fn test_kill_mutations_comprehensive_edge_cases() {
         let (pattern, replacement, _) = extract_substitution_parts(&input);
         assert_eq!(pattern, "test", "Pattern extraction for delimiter {}", open);
         // All paired delimiters should correctly extract the replacement
-        assert_eq!(replacement, "repl", "Replacement extraction for delimiter {}", open);
+        assert_eq!(
+            replacement, "repl",
+            "Replacement extraction for delimiter {}",
+            open
+        );
     }
 }
 
@@ -369,13 +514,26 @@ fn test_kill_mutations_comprehensive_edge_cases() {
 #[test]
 fn test_kill_mutations_invariant_properties() {
     // Property: All functions should handle empty input gracefully (return mutations)
-    assert_eq!(extract_regex_parts(""), ("".to_string(), "".to_string(), "".to_string()));
-    assert_eq!(extract_substitution_parts(""), ("".to_string(), "".to_string(), "".to_string()));
-    assert_eq!(extract_transliteration_parts(""), ("".to_string(), "".to_string(), "".to_string()));
+    assert_eq!(
+        extract_regex_parts(""),
+        ("".to_string(), "".to_string(), "".to_string())
+    );
+    assert_eq!(
+        extract_substitution_parts(""),
+        ("".to_string(), "".to_string(), "".to_string())
+    );
+    assert_eq!(
+        extract_transliteration_parts(""),
+        ("".to_string(), "".to_string(), "".to_string())
+    );
 
     // Property: Delimiter balance should be maintained (arithmetic mutations)
-    let balanced_tests =
-        vec!["s{a{b}c}{x{y}z}", "s[a[b]c][x[y]z]", "s(a(b)c)(x(y)z)", "s<a<b>c><x<y>z>"];
+    let balanced_tests = vec![
+        "s{a{b}c}{x{y}z}",
+        "s[a[b]c][x[y]z]",
+        "s(a(b)c)(x(y)z)",
+        "s<a<b>c><x<y>z>",
+    ];
 
     for test in balanced_tests {
         let (pattern, replacement, _) = extract_substitution_parts(test);

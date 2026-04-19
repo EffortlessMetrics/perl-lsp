@@ -60,7 +60,10 @@ fn legend_contains_expected_token_types() {
         "macro",
     ];
     for ty in &expected {
-        assert!(leg.token_types.contains(&ty.to_string()), "legend missing token type: {ty}");
+        assert!(
+            leg.token_types.contains(&ty.to_string()),
+            "legend missing token type: {ty}"
+        );
     }
 }
 
@@ -77,7 +80,10 @@ fn legend_contains_expected_modifiers() {
         "async",
     ];
     for m in &expected {
-        assert!(leg.modifiers.contains(&m.to_string()), "legend missing modifier: {m}");
+        assert!(
+            leg.modifiers.contains(&m.to_string()),
+            "legend missing modifier: {m}"
+        );
     }
 }
 
@@ -183,7 +189,10 @@ fn empty_source_produces_empty_tokens() {
 #[test]
 fn whitespace_only_source_produces_no_tokens() {
     let tokens = tokens_for("   \t  \n  \n  ");
-    assert!(tokens.is_empty(), "whitespace-only should produce no tokens");
+    assert!(
+        tokens.is_empty(),
+        "whitespace-only should produce no tokens"
+    );
 }
 
 // ===========================================================================
@@ -208,7 +217,10 @@ fn keyword_sub_produces_function_via_ast_overlay() {
     let leg = legend();
     let fn_idx = must_some(leg.map.get("function"));
     let has_fn = tokens.iter().any(|t| t[3] == *fn_idx && t[4] & 1 != 0);
-    assert!(has_fn, "sub declaration should produce function token with declaration modifier");
+    assert!(
+        has_fn,
+        "sub declaration should produce function token with declaration modifier"
+    );
 }
 
 #[test]
@@ -238,7 +250,10 @@ fn keyword_return_classified_on_separate_line() {
     let leg = legend();
     let kw_idx = must_some(leg.map.get("keyword"));
     let has_keyword = tokens.iter().any(|t| t[3] == *kw_idx);
-    assert!(has_keyword, "'return' on separate line should be classified as keyword");
+    assert!(
+        has_keyword,
+        "'return' on separate line should be classified as keyword"
+    );
 }
 
 #[test]
@@ -342,7 +357,10 @@ fn comments_are_skipped_by_lexer() {
     let leg = legend();
     let cmt_idx = must_some(leg.map.get("comment"));
     let has_comment = tokens.iter().any(|t| t[3] == *cmt_idx);
-    assert!(!has_comment, "comments are skipped by the lexer, so no comment tokens");
+    assert!(
+        !has_comment,
+        "comments are skipped by the lexer, so no comment tokens"
+    );
 }
 
 // ===========================================================================
@@ -429,7 +447,10 @@ fn tokens_across_lines_have_positive_delta_line() {
     let tokens = tokens_for(code);
     // There should be at least one token with delta_line > 0
     let has_line_delta = tokens.iter().any(|t| t[0] > 0);
-    assert!(has_line_delta, "multi-line code should have tokens with delta_line > 0");
+    assert!(
+        has_line_delta,
+        "multi-line code should have tokens with delta_line > 0"
+    );
 }
 
 #[test]
@@ -442,7 +463,10 @@ fn delta_start_resets_on_new_line() {
         if t[0] > 0 {
             // delta_start is absolute column on new line
             // Just verify it's a reasonable value
-            assert!(t[1] < 100, "delta_start on new line should be a column offset");
+            assert!(
+                t[1] < 100,
+                "delta_start on new line should be a column offset"
+            );
             break;
         }
     }
@@ -457,7 +481,11 @@ fn all_tokens_have_positive_length() {
     let code = "my $x = 42; sub foo { return $x; }";
     let tokens = tokens_for(code);
     for (i, t) in tokens.iter().enumerate() {
-        assert!(t[2] > 0, "token {i} should have positive length, got {}", t[2]);
+        assert!(
+            t[2] > 0,
+            "token {i} should have positive length, got {}",
+            t[2]
+        );
     }
 }
 
@@ -474,10 +502,16 @@ fn multiline_subroutine_produces_tokens() {
     let kw_idx = must_some(leg.map.get("keyword"));
     let str_idx = must_some(leg.map.get("string"));
     // Multi-line sub: "sub" and "my" appear as keyword tokens from the lexer
-    assert!(tokens.iter().any(|t| t[3] == *kw_idx), "should have keyword (sub/my)");
+    assert!(
+        tokens.iter().any(|t| t[3] == *kw_idx),
+        "should have keyword (sub/my)"
+    );
     // Multi-line AST nodes (function) have len=0 and are filtered, but
     // string literals on their own line should appear
-    assert!(tokens.iter().any(|t| t[3] == *str_idx), "should have string token");
+    assert!(
+        tokens.iter().any(|t| t[3] == *str_idx),
+        "should have string token"
+    );
 }
 
 #[test]
@@ -487,8 +521,14 @@ fn package_with_subroutines() {
     let leg = legend();
     let ns_idx = must_some(leg.map.get("namespace"));
     let fn_idx = must_some(leg.map.get("function"));
-    assert!(tokens.iter().any(|t| t[3] == *ns_idx), "should have namespace");
-    assert!(tokens.iter().any(|t| t[3] == *fn_idx), "should have function");
+    assert!(
+        tokens.iter().any(|t| t[3] == *ns_idx),
+        "should have namespace"
+    );
+    assert!(
+        tokens.iter().any(|t| t[3] == *fn_idx),
+        "should have function"
+    );
 }
 
 #[test]
@@ -499,7 +539,10 @@ fn nested_control_structures() {
     let kw_idx = must_some(leg.map.get("keyword"));
     let keyword_count = tokens.iter().filter(|t| t[3] == *kw_idx).count();
     // Should have at least "if", "while", "last"
-    assert!(keyword_count >= 3, "expected >=3 keyword tokens, got {keyword_count}");
+    assert!(
+        keyword_count >= 3,
+        "expected >=3 keyword tokens, got {keyword_count}"
+    );
 }
 
 // ===========================================================================
@@ -574,7 +617,10 @@ fn named_subroutine_has_declaration_modifier() {
     let fn_tokens: Vec<_> = tokens.iter().filter(|t| t[3] == *fn_idx).collect();
     // At least one function token should have declaration modifier (bit 0 = 1)
     let has_decl = fn_tokens.iter().any(|t| t[4] & 1 != 0);
-    assert!(has_decl, "named sub should have declaration modifier on function token");
+    assert!(
+        has_decl,
+        "named sub should have declaration modifier on function token"
+    );
 }
 
 #[test]
@@ -585,7 +631,11 @@ fn function_call_has_no_declaration_modifier() {
     let call_tokens: Vec<_> = tokens.iter().filter(|t| t[3] == *fn_idx).collect();
     // Function call tokens should NOT have declaration modifier
     for t in &call_tokens {
-        assert_eq!(t[4] & 1, 0, "function call should not have declaration modifier");
+        assert_eq!(
+            t[4] & 1,
+            0,
+            "function call should not have declaration modifier"
+        );
     }
 }
 
@@ -618,7 +668,10 @@ fn mixed_code_produces_diverse_token_types() {
 fn semicolons_only_produce_no_semantic_tokens() {
     let tokens = tokens_for(";;;");
     // Semicolons are not semantic tokens
-    assert!(tokens.is_empty(), "semicolons-only should produce no semantic tokens");
+    assert!(
+        tokens.is_empty(),
+        "semicolons-only should produce no semantic tokens"
+    );
 }
 
 #[test]
@@ -631,7 +684,10 @@ fn single_variable_declaration() {
 fn deeply_nested_blocks() {
     let code = "if (1) { if (1) { if (1) { my $x; } } }";
     let tokens = tokens_for(code);
-    assert!(!tokens.is_empty(), "deeply nested blocks should produce tokens");
+    assert!(
+        !tokens.is_empty(),
+        "deeply nested blocks should produce tokens"
+    );
 }
 
 #[test]
@@ -678,7 +734,10 @@ fn require_classified_as_function_call() {
     let leg = legend();
     let fn_idx = must_some(leg.map.get("function"));
     let has_fn = tokens.iter().any(|t| t[3] == *fn_idx);
-    assert!(has_fn, "require should be classified as function (FunctionCall in AST)");
+    assert!(
+        has_fn,
+        "require should be classified as function (FunctionCall in AST)"
+    );
 }
 
 #[test]
@@ -689,7 +748,10 @@ fn elsif_else_keywords_classified() {
     let kw_idx = must_some(leg.map.get("keyword"));
     let kw_count = tokens.iter().filter(|t| t[3] == *kw_idx).count();
     // "if", "elsif", "else" = at least 3 keywords
-    assert!(kw_count >= 3, "expected >=3 keywords for if/elsif/else, got {kw_count}");
+    assert!(
+        kw_count >= 3,
+        "expected >=3 keywords for if/elsif/else, got {kw_count}"
+    );
 }
 
 // ===========================================================================
@@ -709,7 +771,10 @@ fn custom_pos16_mapper_is_respected() {
     let mut col = 0u32;
     for t in &tokens {
         col += t[1];
-        assert!(col >= 100, "custom mapper column should be >= 100, got {col}");
+        assert!(
+            col >= 100,
+            "custom mapper column should be >= 100, got {col}"
+        );
     }
 }
 
@@ -738,7 +803,10 @@ fn three_line_code_delta_correctness() {
         }
     }
     // Three lines means max line should be at least 2
-    assert!(max_line >= 2, "three-line code should span lines 0-2, max_line={max_line}");
+    assert!(
+        max_line >= 2,
+        "three-line code should span lines 0-2, max_line={max_line}"
+    );
 }
 
 // ===========================================================================
@@ -769,7 +837,10 @@ fn parsing_same_code_twice_produces_same_tokens() {
     let code = "my $x = 1; sub foo { return $x; }";
     let tokens1 = tokens_for(code);
     let tokens2 = tokens_for(code);
-    assert_eq!(tokens1, tokens2, "same code should produce identical tokens");
+    assert_eq!(
+        tokens1, tokens2,
+        "same code should produce identical tokens"
+    );
 }
 
 // ===========================================================================
@@ -783,8 +854,10 @@ fn anonymous_sub_does_not_produce_function_declaration() {
     let fn_idx = must_some(leg.map.get("function"));
     // Anonymous sub (name=None) shouldn't match Subroutine{name: Some(_)}
     // so no function token with declaration modifier from AST overlay
-    let fn_decl_tokens: Vec<_> =
-        tokens.iter().filter(|t| t[3] == *fn_idx && t[4] & 1 != 0).collect();
+    let fn_decl_tokens: Vec<_> = tokens
+        .iter()
+        .filter(|t| t[3] == *fn_idx && t[4] & 1 != 0)
+        .collect();
     assert!(
         fn_decl_tokens.is_empty(),
         "anonymous sub should not produce function declaration token"
@@ -806,7 +879,10 @@ fn many_lines_produce_correct_deltas() {
     for t in &tokens {
         line += t[0];
     }
-    assert!(line >= 15, "20-line code should span many lines, final line={line}");
+    assert!(
+        line >= 15,
+        "20-line code should span many lines, final line={line}"
+    );
 }
 
 // ===========================================================================
@@ -904,7 +980,10 @@ fn subroutine_name_gets_function_type_with_definition_modifier() {
     let leg = legend();
     let fn_idx = must_some(leg.map.get("function"));
     let fn_tokens: Vec<_> = tokens.iter().filter(|t| t[3] == *fn_idx).collect();
-    assert!(!fn_tokens.is_empty(), "sub declaration should produce function token");
+    assert!(
+        !fn_tokens.is_empty(),
+        "sub declaration should produce function token"
+    );
     // Should have declaration modifier (bit 0)
     let has_decl = fn_tokens.iter().any(|t| t[4] & 1 != 0);
     assert!(has_decl, "named sub should have declaration modifier");
@@ -917,7 +996,10 @@ fn multiline_sub_name_still_gets_function_token() {
     let leg = legend();
     let fn_idx = must_some(leg.map.get("function"));
     let has_fn = tokens.iter().any(|t| t[3] == *fn_idx);
-    assert!(has_fn, "multi-line sub should still produce function token for name");
+    assert!(
+        has_fn,
+        "multi-line sub should still produce function token for name"
+    );
 }
 
 #[test]
@@ -926,9 +1008,16 @@ fn function_call_gets_function_type_without_declaration() {
     let leg = legend();
     let fn_idx = must_some(leg.map.get("function"));
     let fn_tokens: Vec<_> = tokens.iter().filter(|t| t[3] == *fn_idx).collect();
-    assert!(!fn_tokens.is_empty(), "function call should produce function token");
+    assert!(
+        !fn_tokens.is_empty(),
+        "function call should produce function token"
+    );
     for t in &fn_tokens {
-        assert_eq!(t[4] & 1, 0, "function call should NOT have declaration modifier");
+        assert_eq!(
+            t[4] & 1,
+            0,
+            "function call should NOT have declaration modifier"
+        );
     }
 }
 
@@ -1028,7 +1117,10 @@ fn my_declaration_variable_has_declaration_modifier() {
     let var_tokens: Vec<_> = tokens.iter().filter(|t| t[3] == *var_idx).collect();
     assert!(!var_tokens.is_empty(), "should have variable token");
     let has_decl = var_tokens.iter().any(|t| t[4] & 1 != 0);
-    assert!(has_decl, "my-declared variable should have declaration modifier");
+    assert!(
+        has_decl,
+        "my-declared variable should have declaration modifier"
+    );
 }
 
 #[test]
@@ -1040,7 +1132,10 @@ fn our_declaration_variable_has_readonly_modifier() {
     assert!(!var_tokens.is_empty(), "should have variable token");
     // our variables should have declaration (bit 0) and readonly (bit 2) modifiers
     let has_our_mods = var_tokens.iter().any(|t| t[4] & 1 != 0 && t[4] & 4 != 0);
-    assert!(has_our_mods, "our-declared variable should have declaration+readonly modifiers");
+    assert!(
+        has_our_mods,
+        "our-declared variable should have declaration+readonly modifiers"
+    );
 }
 
 #[test]
@@ -1051,7 +1146,10 @@ fn const_fast_scalar_variable_has_readonly_modifier() {
     let var_tokens: Vec<_> = tokens.iter().filter(|t| t[3] == *var_idx).collect();
     assert!(!var_tokens.is_empty(), "should have variable token");
     let has_const_mods = var_tokens.iter().any(|t| t[4] & 1 != 0 && t[4] & 4 != 0);
-    assert!(has_const_mods, "Const::Fast scalar should have declaration+readonly modifiers");
+    assert!(
+        has_const_mods,
+        "Const::Fast scalar should have declaration+readonly modifiers"
+    );
 }
 
 #[test]
@@ -1062,7 +1160,10 @@ fn const_fast_array_variable_has_readonly_modifier() {
     let var_tokens: Vec<_> = tokens.iter().filter(|t| t[3] == *var_idx).collect();
     assert!(!var_tokens.is_empty(), "should have variable token");
     let has_const_mods = var_tokens.iter().any(|t| t[4] & 1 != 0 && t[4] & 4 != 0);
-    assert!(has_const_mods, "Const::Fast array should have declaration+readonly modifiers");
+    assert!(
+        has_const_mods,
+        "Const::Fast array should have declaration+readonly modifiers"
+    );
 }
 
 #[test]
@@ -1073,7 +1174,10 @@ fn readonly_scalar_variable_has_readonly_modifier() {
     let var_tokens: Vec<_> = tokens.iter().filter(|t| t[3] == *var_idx).collect();
     assert!(!var_tokens.is_empty(), "should have variable token");
     let has_readonly_mods = var_tokens.iter().any(|t| t[4] & 1 != 0 && t[4] & 4 != 0);
-    assert!(has_readonly_mods, "Readonly scalar should have declaration+readonly modifiers");
+    assert!(
+        has_readonly_mods,
+        "Readonly scalar should have declaration+readonly modifiers"
+    );
 }
 
 #[test]
@@ -1084,7 +1188,10 @@ fn readonly_hash_variable_has_readonly_modifier() {
     let var_tokens: Vec<_> = tokens.iter().filter(|t| t[3] == *var_idx).collect();
     assert!(!var_tokens.is_empty(), "should have variable token");
     let has_readonly_mods = var_tokens.iter().any(|t| t[4] & 1 != 0 && t[4] & 4 != 0);
-    assert!(has_readonly_mods, "Readonly hash should have declaration+readonly modifiers");
+    assert!(
+        has_readonly_mods,
+        "Readonly hash should have declaration+readonly modifiers"
+    );
 }
 
 #[test]
@@ -1095,7 +1202,10 @@ fn local_declaration_variable_has_declaration_modifier() {
     let var_tokens: Vec<_> = tokens.iter().filter(|t| t[3] == *var_idx).collect();
     assert!(!var_tokens.is_empty(), "should have variable token");
     let has_decl = var_tokens.iter().any(|t| t[4] & 1 != 0);
-    assert!(has_decl, "local-declared variable should have declaration modifier");
+    assert!(
+        has_decl,
+        "local-declared variable should have declaration modifier"
+    );
 }
 
 #[test]
@@ -1106,7 +1216,10 @@ fn state_declaration_variable_has_declaration_modifier() {
     let var_idx = must_some(leg.map.get("variable"));
     let var_tokens: Vec<_> = tokens.iter().filter(|t| t[3] == *var_idx).collect();
     let has_decl = var_tokens.iter().any(|t| t[4] & 1 != 0);
-    assert!(has_decl, "state-declared variable should have declaration modifier");
+    assert!(
+        has_decl,
+        "state-declared variable should have declaration modifier"
+    );
 }
 
 #[test]
@@ -1120,7 +1233,10 @@ fn undeclared_variable_has_no_declaration_modifier() {
     if !var_tokens.is_empty() {
         // At least one variable token should NOT have declaration modifier
         let has_non_decl = var_tokens.iter().any(|t| t[4] & 1 == 0);
-        assert!(has_non_decl, "undeclared variable should not have declaration modifier");
+        assert!(
+            has_non_decl,
+            "undeclared variable should not have declaration modifier"
+        );
     }
 }
 
@@ -1192,7 +1308,10 @@ fn variables_inside_if_get_variable_type() {
     let leg = legend();
     let var_idx = must_some(leg.map.get("variable"));
     let has_var = tokens.iter().any(|t| t[3] == *var_idx);
-    assert!(has_var, "variable inside if block should produce variable token");
+    assert!(
+        has_var,
+        "variable inside if block should produce variable token"
+    );
 }
 
 #[test]
@@ -1202,7 +1321,10 @@ fn variables_inside_while_get_variable_type() {
     let leg = legend();
     let var_idx = must_some(leg.map.get("variable"));
     let has_var = tokens.iter().any(|t| t[3] == *var_idx);
-    assert!(has_var, "variable inside while block should produce variable token");
+    assert!(
+        has_var,
+        "variable inside while block should produce variable token"
+    );
 }
 
 #[test]
@@ -1212,7 +1334,10 @@ fn variables_inside_for_get_variable_type() {
     let leg = legend();
     let var_idx = must_some(leg.map.get("variable"));
     let var_count = tokens.iter().filter(|t| t[3] == *var_idx).count();
-    assert!(var_count >= 2, "should find multiple variables in for loop, got {var_count}");
+    assert!(
+        var_count >= 2,
+        "should find multiple variables in for loop, got {var_count}"
+    );
 }
 
 #[test]
@@ -1222,7 +1347,10 @@ fn function_call_inside_if_gets_function_type() {
     let leg = legend();
     let fn_idx = must_some(leg.map.get("function"));
     let has_fn = tokens.iter().any(|t| t[3] == *fn_idx);
-    assert!(has_fn, "function call inside if should produce function token");
+    assert!(
+        has_fn,
+        "function call inside if should produce function token"
+    );
 }
 
 #[test]
@@ -1232,7 +1360,10 @@ fn deeply_nested_variable_produces_token() {
     let leg = legend();
     let var_idx = must_some(leg.map.get("variable"));
     let var_count = tokens.iter().filter(|t| t[3] == *var_idx).count();
-    assert!(var_count >= 2, "deeply nested variables should produce tokens, got {var_count}");
+    assert!(
+        var_count >= 2,
+        "deeply nested variables should produce tokens, got {var_count}"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -1281,7 +1412,10 @@ fn backtick_command_classified_as_string() {
     let leg = legend();
     let str_idx = must_some(leg.map.get("string"));
     let has_string = tokens.iter().any(|t| t[3] == *str_idx);
-    assert!(has_string, "backtick command should be classified as string");
+    assert!(
+        has_string,
+        "backtick command should be classified as string"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -1312,7 +1446,10 @@ fn variable_in_ternary_gets_token() {
     let leg = legend();
     let var_idx = must_some(leg.map.get("variable"));
     let var_count = tokens.iter().filter(|t| t[3] == *var_idx).count();
-    assert!(var_count >= 1, "variables in ternary should produce tokens, got {var_count}");
+    assert!(
+        var_count >= 1,
+        "variables in ternary should produce tokens, got {var_count}"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -1326,7 +1463,10 @@ fn variable_in_return_gets_token() {
     let leg = legend();
     let var_idx = must_some(leg.map.get("variable"));
     let var_count = tokens.iter().filter(|t| t[3] == *var_idx).count();
-    assert!(var_count >= 2, "variable in return should produce token, got {var_count}");
+    assert!(
+        var_count >= 2,
+        "variable in return should produce token, got {var_count}"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -1340,7 +1480,10 @@ fn variables_in_array_literal_get_tokens() {
     let leg = legend();
     let var_idx = must_some(leg.map.get("variable"));
     let var_count = tokens.iter().filter(|t| t[3] == *var_idx).count();
-    assert!(var_count >= 2, "variables in array literal should produce tokens, got {var_count}");
+    assert!(
+        var_count >= 2,
+        "variables in array literal should produce tokens, got {var_count}"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -1365,8 +1508,14 @@ fn complex_code_produces_many_token_types() {
     assert!(types_present.contains(kw_idx), "should have keyword tokens");
     assert!(types_present.contains(str_idx), "should have string tokens");
     assert!(types_present.contains(num_idx), "should have number tokens");
-    assert!(types_present.contains(ns_idx), "should have namespace tokens");
-    assert!(types_present.contains(var_idx), "should have variable tokens");
+    assert!(
+        types_present.contains(ns_idx),
+        "should have namespace tokens"
+    );
+    assert!(
+        types_present.contains(var_idx),
+        "should have variable tokens"
+    );
     assert!(types_present.contains(re_idx), "should have regexp tokens");
 }
 
@@ -1379,16 +1528,34 @@ fn complex_code_produces_many_token_types() {
 fn legend_has_sigil_modifiers() {
     let leg = legend();
     let mods = &leg.modifiers;
-    assert!(mods.contains(&"scalarVariable".to_string()), "legend missing scalarVariable modifier");
-    assert!(mods.contains(&"arrayVariable".to_string()), "legend missing arrayVariable modifier");
-    assert!(mods.contains(&"hashVariable".to_string()), "legend missing hashVariable modifier");
+    assert!(
+        mods.contains(&"scalarVariable".to_string()),
+        "legend missing scalarVariable modifier"
+    );
+    assert!(
+        mods.contains(&"arrayVariable".to_string()),
+        "legend missing arrayVariable modifier"
+    );
+    assert!(
+        mods.contains(&"hashVariable".to_string()),
+        "legend missing hashVariable modifier"
+    );
     // Bit positions must be 10, 11, 12 — legend position is the bit index
     let scalar_bit = must_some(mods.iter().position(|m| m == "scalarVariable"));
-    assert_eq!(scalar_bit, 10, "scalarVariable must be at bit 10 (position 10 in modifiers list)");
+    assert_eq!(
+        scalar_bit, 10,
+        "scalarVariable must be at bit 10 (position 10 in modifiers list)"
+    );
     let array_bit = must_some(mods.iter().position(|m| m == "arrayVariable"));
-    assert_eq!(array_bit, 11, "arrayVariable must be at bit 11 (position 11 in modifiers list)");
+    assert_eq!(
+        array_bit, 11,
+        "arrayVariable must be at bit 11 (position 11 in modifiers list)"
+    );
     let hash_bit = must_some(mods.iter().position(|m| m == "hashVariable"));
-    assert_eq!(hash_bit, 12, "hashVariable must be at bit 12 (position 12 in modifiers list)");
+    assert_eq!(
+        hash_bit, 12,
+        "hashVariable must be at bit 12 (position 12 in modifiers list)"
+    );
 }
 
 /// A scalar variable `$x` must receive the `scalarVariable` modifier bit (1 << 10 = 1024).
@@ -1398,8 +1565,13 @@ fn scalar_variable_gets_scalar_sigil_modifier() {
     let leg = legend();
     let var_idx = must_some(leg.map.get("variable"));
     let scalar_mod_bit: u32 = 1 << 10; // 1024
-    let has_scalar_mod = tokens.iter().any(|t| t[3] == *var_idx && (t[4] & scalar_mod_bit) != 0);
-    assert!(has_scalar_mod, "$x should have scalarVariable modifier (bit 10 = 1024)");
+    let has_scalar_mod = tokens
+        .iter()
+        .any(|t| t[3] == *var_idx && (t[4] & scalar_mod_bit) != 0);
+    assert!(
+        has_scalar_mod,
+        "$x should have scalarVariable modifier (bit 10 = 1024)"
+    );
 }
 
 /// An array variable `@arr` must receive the `arrayVariable` modifier bit (1 << 11 = 2048).
@@ -1409,8 +1581,13 @@ fn array_variable_gets_array_sigil_modifier() {
     let leg = legend();
     let var_idx = must_some(leg.map.get("variable"));
     let array_mod_bit: u32 = 1 << 11; // 2048
-    let has_array_mod = tokens.iter().any(|t| t[3] == *var_idx && (t[4] & array_mod_bit) != 0);
-    assert!(has_array_mod, "@arr should have arrayVariable modifier (bit 11 = 2048)");
+    let has_array_mod = tokens
+        .iter()
+        .any(|t| t[3] == *var_idx && (t[4] & array_mod_bit) != 0);
+    assert!(
+        has_array_mod,
+        "@arr should have arrayVariable modifier (bit 11 = 2048)"
+    );
 }
 
 /// A hash variable `%h` must receive the `hashVariable` modifier bit (1 << 12 = 4096).
@@ -1420,8 +1597,13 @@ fn hash_variable_gets_hash_sigil_modifier() {
     let leg = legend();
     let var_idx = must_some(leg.map.get("variable"));
     let hash_mod_bit: u32 = 1 << 12; // 4096
-    let has_hash_mod = tokens.iter().any(|t| t[3] == *var_idx && (t[4] & hash_mod_bit) != 0);
-    assert!(has_hash_mod, "%h should have hashVariable modifier (bit 12 = 4096)");
+    let has_hash_mod = tokens
+        .iter()
+        .any(|t| t[3] == *var_idx && (t[4] & hash_mod_bit) != 0);
+    assert!(
+        has_hash_mod,
+        "%h should have hashVariable modifier (bit 12 = 4096)"
+    );
 }
 
 // ===========================================================================
@@ -1439,8 +1621,14 @@ fn interpolated_string_emits_variable_token() {
     let str_idx = must_some(leg.map.get("string"));
     let has_var = tokens.iter().any(|t| t[3] == *var_idx);
     let has_str = tokens.iter().any(|t| t[3] == *str_idx);
-    assert!(has_var, "should have variable token inside interpolated string");
-    assert!(has_str, "should have string token for literal parts of interpolated string");
+    assert!(
+        has_var,
+        "should have variable token inside interpolated string"
+    );
+    assert!(
+        has_str,
+        "should have string token for literal parts of interpolated string"
+    );
 }
 
 /// A variable that appears twice in the same interpolated string must produce
@@ -1473,5 +1661,8 @@ fn single_quoted_string_no_variable_token_inside() {
     assert!(has_str, "single-quoted string should produce string token");
     // Only $s declaration should be a variable; nothing from inside '$name'
     let var_count = tokens.iter().filter(|t| t[3] == *var_idx).count();
-    assert_eq!(var_count, 1, "should have only the $s declaration variable, got {var_count}");
+    assert_eq!(
+        var_count, 1,
+        "should have only the $s declaration variable, got {var_count}"
+    );
 }

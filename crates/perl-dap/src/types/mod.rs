@@ -20,7 +20,15 @@ pub struct StackFrame {
 impl StackFrame {
     #[must_use]
     pub fn new(id: i32, name: impl Into<String>, source: Source, line: i32) -> Self {
-        Self { id, name: name.into(), source, line, column: 1, end_line: None, end_column: None }
+        Self {
+            id,
+            name: name.into(),
+            source,
+            line,
+            column: 1,
+            end_line: None,
+            end_column: None,
+        }
     }
 
     #[must_use]
@@ -56,12 +64,18 @@ impl Source {
             .and_then(|name| name.to_str())
             .map(ToOwned::to_owned);
         let name = if path_name.as_deref() == Some(path.as_str()) && path.contains('\\') {
-            path.rsplit('\\').find(|segment| !segment.is_empty()).map(ToOwned::to_owned)
+            path.rsplit('\\')
+                .find(|segment| !segment.is_empty())
+                .map(ToOwned::to_owned)
         } else {
             path_name
         };
 
-        Self { name, path, source_reference: None }
+        Self {
+            name,
+            path,
+            source_reference: None,
+        }
     }
 }
 
@@ -99,7 +113,9 @@ mod tests {
     #[test]
     fn stack_frame_with_column_and_end() {
         let src = Source::new("/a.pl");
-        let frame = StackFrame::new(2, "foo", src, 10).with_column(5).with_end(10, 20);
+        let frame = StackFrame::new(2, "foo", src, 10)
+            .with_column(5)
+            .with_end(10, 20);
         assert_eq!(frame.column, 5);
         assert_eq!(frame.end_line, Some(10));
         assert_eq!(frame.end_column, Some(20));
@@ -129,8 +145,14 @@ mod tests {
         let src = Source::new("/a.pl");
         let frame = StackFrame::new(1, "foo", src, 1);
         let json = serde_json::to_string(&frame)?;
-        assert!(!json.contains("endLine"), "endLine should be absent: {json}");
-        assert!(!json.contains("endColumn"), "endColumn should be absent: {json}");
+        assert!(
+            !json.contains("endLine"),
+            "endLine should be absent: {json}"
+        );
+        assert!(
+            !json.contains("endColumn"),
+            "endColumn should be absent: {json}"
+        );
         Ok(())
     }
 
@@ -145,8 +167,14 @@ mod tests {
             indexed_variables: None,
         };
         let json = serde_json::to_string(&var)?;
-        assert!(json.contains("\"type\":"), "must serialize as 'type' not 'type_': {json}");
-        assert!(!json.contains("type_"), "must not leak Rust field name: {json}");
+        assert!(
+            json.contains("\"type\":"),
+            "must serialize as 'type' not 'type_': {json}"
+        );
+        assert!(
+            !json.contains("type_"),
+            "must not leak Rust field name: {json}"
+        );
         Ok(())
     }
 

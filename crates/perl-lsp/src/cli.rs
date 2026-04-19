@@ -43,7 +43,10 @@ where
         }
         LaunchAction::Health => {
             let use_color = is_terminal_stdout();
-            println!("{}", format_health_output(env!("CARGO_PKG_VERSION"), use_color));
+            println!(
+                "{}",
+                format_health_output(env!("CARGO_PKG_VERSION"), use_color)
+            );
             0
         }
         LaunchAction::Info => {
@@ -104,7 +107,9 @@ fn render_help_text(command_name: &str) -> String {
 
 fn render_shell_completion(script: &str, command_name: &str) -> String {
     let function_name = command_name.replace('-', "_");
-    script.replace("_perl_lsp", &format!("_{function_name}")).replace("perl-lsp", command_name)
+    script
+        .replace("_perl_lsp", &format!("_{function_name}"))
+        .replace("perl-lsp", command_name)
 }
 
 /// Spawn a blocking reader thread that reads LSP messages from `reader` and
@@ -220,9 +225,14 @@ fn run_check_project(dir: &str) -> i32 {
         let source = match std::fs::read_to_string(path) {
             Ok(s) => s,
             Err(e) => {
-                file_errors
-                    .push(FileError { path: path_str, errors: vec![format!("read error: {e}")] });
-                category_counts.entry("IO error".to_string()).and_modify(|c| *c += 1).or_insert(1);
+                file_errors.push(FileError {
+                    path: path_str,
+                    errors: vec![format!("read error: {e}")],
+                });
+                category_counts
+                    .entry("IO error".to_string())
+                    .and_modify(|c| *c += 1)
+                    .or_insert(1);
                 continue;
             }
         };
@@ -235,20 +245,29 @@ fn run_check_project(dir: &str) -> i32 {
 
         for err in recovered_errors {
             let cat = categorize_error(&format!("{err}"));
-            category_counts.entry(cat).and_modify(|c| *c += 1).or_insert(1);
+            category_counts
+                .entry(cat)
+                .and_modify(|c| *c += 1)
+                .or_insert(1);
             errors_for_file.push(format!("{err}"));
         }
 
         if let Err(ref e) = parse_result {
             let cat = categorize_error(&format!("{e}"));
-            category_counts.entry(cat).and_modify(|c| *c += 1).or_insert(1);
+            category_counts
+                .entry(cat)
+                .and_modify(|c| *c += 1)
+                .or_insert(1);
             errors_for_file.push(format!("{e}"));
         }
 
         if errors_for_file.is_empty() {
             clean += 1;
         } else {
-            file_errors.push(FileError { path: path_str, errors: errors_for_file });
+            file_errors.push(FileError {
+                path: path_str,
+                errors: errors_for_file,
+            });
         }
     }
 
@@ -264,7 +283,11 @@ fn run_check_project(dir: &str) -> i32 {
         return 0;
     }
 
-    let pct = if total > 0 { (clean as f64 / total as f64) * 100.0 } else { 0.0 };
+    let pct = if total > 0 {
+        (clean as f64 / total as f64) * 100.0
+    } else {
+        0.0
+    };
 
     println!("Clean parses: {clean}/{total} ({pct:.1}%)");
     println!();
@@ -357,8 +380,9 @@ fn run_server(command_name: &str, launch_config: LaunchConfig) {
 
             rt.block_on(async {
                 startup_timer.checkpoint("runtime_setup");
-                let server =
-                    Arc::new(LspServer::new_with_feature_profile(launch_config.feature_profile));
+                let server = Arc::new(LspServer::new_with_feature_profile(
+                    launch_config.feature_profile,
+                ));
                 startup_timer.checkpoint("server_construction");
 
                 let (tx, rx) = tokio::sync::mpsc::channel(64);

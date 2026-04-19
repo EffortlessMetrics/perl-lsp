@@ -61,7 +61,10 @@ fn tie_handle() -> impl Strategy<Value = String> {
 /// Generate tie with object capture
 fn tie_with_object() -> impl Strategy<Value = String> {
     (identifier(), identifier(), tie_class()).prop_map(|(obj, var, class)| {
-        format!("my ${} = tie my %{}, \"{}\";\n${}{{\"key\"}} = 1;\n", obj, var, class, var)
+        format!(
+            "my ${} = tie my %{}, \"{}\";\n${}{{\"key\"}} = 1;\n",
+            obj, var, class, var
+        )
     })
 }
 

@@ -199,8 +199,10 @@ fn test_c_graceful_skip_when_perlcritic_not_installed() {
     let result = pull_diagnostics(&server, uri, "use strict;\n");
 
     let diags = result["items"].as_array().cloned().unwrap_or_default();
-    let perlcritic_diags: Vec<_> =
-        diags.iter().filter(|d| d["code"].as_str().is_some_and(|c| c.contains("::"))).collect();
+    let perlcritic_diags: Vec<_> = diags
+        .iter()
+        .filter(|d| d["code"].as_str().is_some_and(|c| c.contains("::")))
+        .collect();
 
     assert_eq!(
         perlcritic_diags.len(),
@@ -251,7 +253,9 @@ fn test_d_perlcriticrc_walkup_finds_workspace_root_config() {
     server.test_install_mock_critic_runtime(runtime.clone());
     server.test_bypass_perlcritic_command_check();
 
-    let uri = url::Url::from_file_path(&module_path).expect("file url").to_string();
+    let uri = url::Url::from_file_path(&module_path)
+        .expect("file url")
+        .to_string();
 
     pull_diagnostics(&server, &uri, "package MyModule;\n1;\n");
 
@@ -297,7 +301,9 @@ fn test_e_empty_profile_falls_back_to_walkup_config() {
     server.test_install_mock_critic_runtime(runtime.clone());
     server.test_bypass_perlcritic_command_check();
 
-    let uri = url::Url::from_file_path(&module_path).expect("file url").to_string();
+    let uri = url::Url::from_file_path(&module_path)
+        .expect("file url")
+        .to_string();
 
     pull_diagnostics(&server, &uri, "package MyModule;\n1;\n");
 
@@ -336,13 +342,19 @@ fn test_f_missing_configured_profile_skips_subprocess_and_diagnostics() {
     server.test_install_mock_critic_runtime(runtime.clone());
     server.test_bypass_perlcritic_command_check();
 
-    let uri = url::Url::from_file_path(&module_path).expect("file url").to_string();
+    let uri = url::Url::from_file_path(&module_path)
+        .expect("file url")
+        .to_string();
     let result = pull_diagnostics(&server, &uri, "package NoProfile;\n1;\n");
 
     let diags = result["items"].as_array().cloned().unwrap_or_default();
     let critic_diags: Vec<_> = diags
         .iter()
-        .filter(|diag| diag["code"].as_str().is_some_and(|code| code.contains("::")))
+        .filter(|diag| {
+            diag["code"]
+                .as_str()
+                .is_some_and(|code| code.contains("::"))
+        })
         .collect();
     assert!(
         critic_diags.is_empty(),

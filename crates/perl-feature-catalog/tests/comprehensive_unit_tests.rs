@@ -10,7 +10,11 @@ use perl_feature_catalog::{
 // ---------------------------------------------------------------------------
 
 fn minimal_meta() -> Meta {
-    Meta { version: "1.0.0".to_string(), lsp_version: "3.18".to_string(), compliance_percent: None }
+    Meta {
+        version: "1.0.0".to_string(),
+        lsp_version: "3.18".to_string(),
+        compliance_percent: None,
+    }
 }
 
 fn make_feature(id: &str, maturity: Maturity, advertised: bool) -> Feature {
@@ -27,7 +31,10 @@ fn make_feature(id: &str, maturity: Maturity, advertised: bool) -> Feature {
 }
 
 fn make_catalog(features: Vec<Feature>) -> Catalog {
-    Catalog { meta: minimal_meta(), feature: features }
+    Catalog {
+        meta: minimal_meta(),
+        feature: features,
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -64,8 +71,12 @@ fn maturity_labels() {
 #[test]
 fn maturity_ordering() {
     // Derived Ord should work without panicking.
-    let mut maturities =
-        [Maturity::Production, Maturity::Ga, Maturity::Experimental, Maturity::Preview];
+    let mut maturities = [
+        Maturity::Production,
+        Maturity::Ga,
+        Maturity::Experimental,
+        Maturity::Preview,
+    ];
     maturities.sort();
     // Just verify sort completes; exact order is derive-dependent.
     assert_eq!(maturities.len(), 4);
@@ -311,26 +322,43 @@ fn area_stats_default() {
 
 #[test]
 fn area_stats_trackable_excludes_planned() {
-    let s = AreaStats { total: 5, planned: 2, ..Default::default() };
+    let s = AreaStats {
+        total: 5,
+        planned: 2,
+        ..Default::default()
+    };
     assert_eq!(s.trackable(), 3);
 }
 
 #[test]
 fn area_stats_coverage_percent() {
-    let s = AreaStats { total: 4, advertised: 2, ..Default::default() };
+    let s = AreaStats {
+        total: 4,
+        advertised: 2,
+        ..Default::default()
+    };
     assert_eq!(s.coverage_percent(), 50);
 }
 
 #[test]
 fn area_stats_trackable_coverage_percent() {
-    let s = AreaStats { total: 5, advertised: 3, planned: 2, ..Default::default() };
+    let s = AreaStats {
+        total: 5,
+        advertised: 3,
+        planned: 2,
+        ..Default::default()
+    };
     // trackable = 5-2 = 3, advertised = 3 → 100%
     assert_eq!(s.trackable_coverage_percent(), 100);
 }
 
 #[test]
 fn area_stats_trackable_coverage_zero_trackable() {
-    let s = AreaStats { total: 3, planned: 3, ..Default::default() };
+    let s = AreaStats {
+        total: 3,
+        planned: 3,
+        ..Default::default()
+    };
     assert_eq!(s.trackable(), 0);
     assert_eq!(s.trackable_coverage_percent(), 0);
 }
@@ -720,13 +748,22 @@ fn resolve_catalog_source_override_env() -> Result<(), Box<dyn std::error::Error
 fn catalog_source_comment_variants() {
     use perl_feature_catalog::CatalogSource;
 
-    let s1 = CatalogSource { path: "a".into(), kind: CatalogSourceKind::Override };
+    let s1 = CatalogSource {
+        path: "a".into(),
+        kind: CatalogSourceKind::Override,
+    };
     assert!(s1.comment().contains("FEATURES_TOML_OVERRIDE"));
 
-    let s2 = CatalogSource { path: "b".into(), kind: CatalogSourceKind::Workspace };
+    let s2 = CatalogSource {
+        path: "b".into(),
+        kind: CatalogSourceKind::Workspace,
+    };
     assert!(s2.comment().contains("features.toml"));
 
-    let s3 = CatalogSource { path: "c".into(), kind: CatalogSourceKind::Vendored };
+    let s3 = CatalogSource {
+        path: "c".into(),
+        kind: CatalogSourceKind::Vendored,
+    };
     assert!(s3.comment().contains("features_sot.toml"));
 }
 
@@ -840,7 +877,10 @@ fn render_lsp_module_advertised_sorted() {
     let code = perl_feature_catalog::render_lsp_feature_catalog_module(&cat, "");
 
     // ADVERTISED_LSP_FEATURES should contain lsp.a before lsp.z
-    let section_start = code.find("ADVERTISED_LSP_FEATURES: &[&str]").ok_or("missing section").ok();
+    let section_start = code
+        .find("ADVERTISED_LSP_FEATURES: &[&str]")
+        .ok_or("missing section")
+        .ok();
     assert!(section_start.is_some());
     let section = &code[perl_tdd_support::must_some(section_start)..];
     let a_pos = section.find("\"lsp.a\"");

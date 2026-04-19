@@ -164,9 +164,15 @@ my $sum = add(3, 4);
         let resp = hover_at(code, "file:///fn_sig.pl", "add(3", 5)?;
 
         let content = hover_content(&resp).ok_or("expected hover content for add()")?;
-        assert!(content.contains("Subroutine"), "hover should indicate Subroutine, got: {content}");
+        assert!(
+            content.contains("Subroutine"),
+            "hover should indicate Subroutine, got: {content}"
+        );
         // The handler extracts params from `my ($a, $b) = @_;` pattern
-        assert!(content.contains("add"), "hover should include function name, got: {content}");
+        assert!(
+            content.contains("add"),
+            "hover should include function name, got: {content}"
+        );
         Ok(())
     }
 
@@ -448,7 +454,10 @@ my $r = Util::helper();
 
         let resp = server.get_hover("file:///blank.pl", 1, 0);
         let result = resp.get("result").ok_or("expected result field")?;
-        assert!(result.is_null(), "hover on blank line should return null, got: {result:?}");
+        assert!(
+            result.is_null(),
+            "hover on blank line should return null, got: {result:?}"
+        );
         Ok(())
     }
 
@@ -497,7 +506,10 @@ my $r = Util::helper();
 
         let resp = server.get_hover("file:///empty.pl", 0, 0);
         let result = resp.get("result").ok_or("expected result field")?;
-        assert!(result.is_null(), "hover on empty document should return null, got: {result:?}");
+        assert!(
+            result.is_null(),
+            "hover on empty document should return null, got: {result:?}"
+        );
         Ok(())
     }
 
@@ -509,7 +521,10 @@ my $r = Util::helper();
 
         let resp = server.get_hover("file:///ws.pl", 1, 1);
         let result = resp.get("result").ok_or("expected result field")?;
-        assert!(result.is_null(), "hover on whitespace should return null, got: {result:?}");
+        assert!(
+            result.is_null(),
+            "hover on whitespace should return null, got: {result:?}"
+        );
         Ok(())
     }
 
@@ -587,7 +602,10 @@ my $limit = MAX;
                         "hover content kind should be markdown or plaintext, got: {k}"
                     );
                 }
-                assert!(contents.get("value").is_some(), "MarkupContent must have a value field");
+                assert!(
+                    contents.get("value").is_some(),
+                    "MarkupContent must have a value field"
+                );
             }
         }
         Ok(())
@@ -712,7 +730,10 @@ $obj;
         );
 
         // Should show the variable name
-        assert!(content.contains("$obj"), "hover should include variable name, got: {content}");
+        assert!(
+            content.contains("$obj"),
+            "hover should include variable name, got: {content}"
+        );
 
         // Should show the inferred type (Foo class)
         assert!(
@@ -830,7 +851,10 @@ $name;
             content.contains("Test::More"),
             "hover should show Test::More heading, got: {content}"
         );
-        assert!(content.contains("is("), "hover should include is() signature, got: {content}");
+        assert!(
+            content.contains("is("),
+            "hover should include is() signature, got: {content}"
+        );
         Ok(())
     }
 
@@ -843,7 +867,10 @@ $name;
             content.contains("Test::More"),
             "hover should show Test::More heading, got: {content}"
         );
-        assert!(content.contains("ok("), "hover should include ok() signature, got: {content}");
+        assert!(
+            content.contains("ok("),
+            "hover should include ok() signature, got: {content}"
+        );
         Ok(())
     }
 
@@ -947,7 +974,10 @@ $name;
         let code = "BEGIN { 1; }\n";
         let resp = hover_at(code, "file:///begin_hover.pl", "BEGIN", 0)?;
         let content = hover_content(&resp).ok_or("BEGIN hover must return content, not null")?;
-        assert!(content.contains("BEGIN"), "hover content should mention BEGIN, got: {content}");
+        assert!(
+            content.contains("BEGIN"),
+            "hover content should mention BEGIN, got: {content}"
+        );
         assert!(
             content.contains("compile") || content.contains("compile-time"),
             "hover content should describe compile-time execution, got: {content}"
@@ -960,7 +990,10 @@ $name;
         let code = "END { 1; }\n";
         let resp = hover_at(code, "file:///end_hover.pl", "END", 0)?;
         let content = hover_content(&resp).ok_or("END hover must return content, not null")?;
-        assert!(content.contains("END"), "hover content should mention END, got: {content}");
+        assert!(
+            content.contains("END"),
+            "hover content should mention END, got: {content}"
+        );
         assert!(
             content.contains("exit") || content.contains("cleanup") || content.contains("program"),
             "hover content should describe program-exit execution, got: {content}"
@@ -974,7 +1007,10 @@ $name;
         let code = "INIT { print 'init'; }\n";
         let resp = hover_at(code, "file:///init_hover.pl", "INIT", 0)?;
         let content = hover_content(&resp).ok_or("INIT hover must return content, not null")?;
-        assert!(content.contains("INIT"), "hover content should mention INIT, got: {content}");
+        assert!(
+            content.contains("INIT"),
+            "hover content should mention INIT, got: {content}"
+        );
         assert!(
             content.contains("compilation")
                 || content.contains("compile")
@@ -990,7 +1026,10 @@ $name;
         let code = "CHECK { print 'check'; }\n";
         let resp = hover_at(code, "file:///check_hover.pl", "CHECK", 0)?;
         let content = hover_content(&resp).ok_or("CHECK hover must return content, not null")?;
-        assert!(content.contains("CHECK"), "hover content should mention CHECK, got: {content}");
+        assert!(
+            content.contains("CHECK"),
+            "hover content should mention CHECK, got: {content}"
+        );
         assert!(
             content.contains("compilation") || content.contains("compile"),
             "hover content should describe end-of-compilation execution, got: {content}"
@@ -1155,7 +1194,12 @@ with 'MyApp::Printable', 'MyApp::Serializable';
 1;
 "#;
         // Hover on the SECOND role name on line 2.
-        let resp = hover_at(code, "file:///multi_role_second.pl", "MyApp::Serializable", 2)?;
+        let resp = hover_at(
+            code,
+            "file:///multi_role_second.pl",
+            "MyApp::Serializable",
+            2,
+        )?;
 
         let content = hover_content(&resp).ok_or("expected hover content for second role name")?;
         assert!(

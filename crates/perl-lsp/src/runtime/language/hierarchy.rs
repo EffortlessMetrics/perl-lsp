@@ -18,7 +18,10 @@ static SUB_REGEX: OnceLock<Result<regex::Regex, regex::Error>> = OnceLock::new()
 static PACKAGE_REGEX: OnceLock<Result<regex::Regex, regex::Error>> = OnceLock::new();
 
 fn get_sub_regex() -> Option<&'static regex::Regex> {
-    SUB_REGEX.get_or_init(|| regex::Regex::new(r"\bsub\s+([a-zA-Z_]\w*)\b")).as_ref().ok()
+    SUB_REGEX
+        .get_or_init(|| regex::Regex::new(r"\bsub\s+([a-zA-Z_]\w*)\b"))
+        .as_ref()
+        .ok()
 }
 
 fn get_package_regex() -> Option<&'static regex::Regex> {
@@ -65,7 +68,10 @@ fn workspace_symbol_to_item(
     symbol: &WorkspaceSymbol,
 ) -> crate::call_hierarchy_provider::CallHierarchyItem {
     let qualified_name = symbol.qualified_name.clone().or_else(|| {
-        symbol.container_name.as_ref().map(|package| format!("{package}::{}", symbol.name))
+        symbol
+            .container_name
+            .as_ref()
+            .map(|package| format!("{package}::{}", symbol.name))
     });
     crate::call_hierarchy_provider::CallHierarchyItem {
         name: symbol.name.clone(),
@@ -136,8 +142,16 @@ impl LspServer {
             })
             .min_by_key(|symbol| {
                 (
-                    symbol.range.end.line.saturating_sub(symbol.range.start.line),
-                    symbol.range.end.column.saturating_sub(symbol.range.start.column),
+                    symbol
+                        .range
+                        .end
+                        .line
+                        .saturating_sub(symbol.range.start.line),
+                    symbol
+                        .range
+                        .end
+                        .column
+                        .saturating_sub(symbol.range.start.column),
                 )
             })
             .map(workspace_symbol_to_item)
@@ -386,8 +400,9 @@ impl LspServer {
                             ),
                             selection_range: WireRange::new(
                                 WirePosition::new(
-                                    item["selectionRange"]["start"]["line"].as_u64().unwrap_or(0)
-                                        as u32,
+                                    item["selectionRange"]["start"]["line"]
+                                        .as_u64()
+                                        .unwrap_or(0) as u32,
                                     item["selectionRange"]["start"]["character"]
                                         .as_u64()
                                         .unwrap_or(0) as u32,
@@ -395,8 +410,9 @@ impl LspServer {
                                 WirePosition::new(
                                     item["selectionRange"]["end"]["line"].as_u64().unwrap_or(0)
                                         as u32,
-                                    item["selectionRange"]["end"]["character"].as_u64().unwrap_or(0)
-                                        as u32,
+                                    item["selectionRange"]["end"]["character"]
+                                        .as_u64()
+                                        .unwrap_or(0) as u32,
                                 ),
                             ),
                             detail: item["detail"].as_str().map(String::from),
@@ -485,8 +501,9 @@ impl LspServer {
                             ),
                             selection_range: WireRange::new(
                                 WirePosition::new(
-                                    item["selectionRange"]["start"]["line"].as_u64().unwrap_or(0)
-                                        as u32,
+                                    item["selectionRange"]["start"]["line"]
+                                        .as_u64()
+                                        .unwrap_or(0) as u32,
                                     item["selectionRange"]["start"]["character"]
                                         .as_u64()
                                         .unwrap_or(0) as u32,
@@ -494,8 +511,9 @@ impl LspServer {
                                 WirePosition::new(
                                     item["selectionRange"]["end"]["line"].as_u64().unwrap_or(0)
                                         as u32,
-                                    item["selectionRange"]["end"]["character"].as_u64().unwrap_or(0)
-                                        as u32,
+                                    item["selectionRange"]["end"]["character"]
+                                        .as_u64()
+                                        .unwrap_or(0) as u32,
                                 ),
                             ),
                             detail: item["detail"].as_str().map(String::from),
@@ -644,7 +662,9 @@ impl LspServer {
                 documents
                     .iter()
                     .filter_map(|(doc_uri, doc)| {
-                        doc.ast.as_ref().map(|ast| (doc_uri.clone(), doc.text.clone(), ast.clone()))
+                        doc.ast
+                            .as_ref()
+                            .map(|ast| (doc_uri.clone(), doc.text.clone(), ast.clone()))
                     })
                     .collect();
             drop(documents);
@@ -683,7 +703,10 @@ impl LspServer {
             let uri = item["uri"].as_str().unwrap_or("");
             let ch_item = self.json_to_call_hierarchy_item(item)?;
 
-            tracing::debug!(target = item["name"].as_str().unwrap_or(""), "Getting outgoing calls");
+            tracing::debug!(
+                target = item["name"].as_str().unwrap_or(""),
+                "Getting outgoing calls"
+            );
 
             // Snapshot all open documents for fallback callee resolution.
             let documents = self.documents_guard();
@@ -691,7 +714,9 @@ impl LspServer {
                 documents
                     .iter()
                     .filter_map(|(doc_uri, doc)| {
-                        doc.ast.as_ref().map(|ast| (doc_uri.clone(), doc.text.clone(), ast.clone()))
+                        doc.ast
+                            .as_ref()
+                            .map(|ast| (doc_uri.clone(), doc.text.clone(), ast.clone()))
                     })
                     .collect();
 
@@ -735,12 +760,20 @@ impl LspServer {
                 if resolved_with_workspace[idx] {
                     continue;
                 }
-                let bare_name =
-                    call.to.name.split("::").last().unwrap_or(&call.to.name).to_string();
+                let bare_name = call
+                    .to
+                    .name
+                    .split("::")
+                    .last()
+                    .unwrap_or(&call.to.name)
+                    .to_string();
                 // For qualified calls (e.g. `Utils::format_string`), prefer the
                 // package-matching file first.  For bare calls, accept any match.
-                let qualified_pkg =
-                    call.to.name.rsplit_once("::").map(|(pkg, _)| pkg.replace("::", "/"));
+                let qualified_pkg = call
+                    .to
+                    .name
+                    .rsplit_once("::")
+                    .map(|(pkg, _)| pkg.replace("::", "/"));
 
                 'outer: for (doc_uri, doc_text, ast) in &doc_snapshots {
                     let provider = CallHierarchyProvider::new(doc_text.clone(), doc_uri.clone());
@@ -795,19 +828,26 @@ impl LspServer {
 
         let selection_range = Range {
             start: Position {
-                line: json["selectionRange"]["start"]["line"].as_u64().unwrap_or(0) as u32,
-                character: json["selectionRange"]["start"]["character"].as_u64().unwrap_or(0)
-                    as u32,
+                line: json["selectionRange"]["start"]["line"]
+                    .as_u64()
+                    .unwrap_or(0) as u32,
+                character: json["selectionRange"]["start"]["character"]
+                    .as_u64()
+                    .unwrap_or(0) as u32,
             },
             end: Position {
                 line: json["selectionRange"]["end"]["line"].as_u64().unwrap_or(0) as u32,
-                character: json["selectionRange"]["end"]["character"].as_u64().unwrap_or(0) as u32,
+                character: json["selectionRange"]["end"]["character"]
+                    .as_u64()
+                    .unwrap_or(0) as u32,
             },
         };
 
         let detail = json["detail"].as_str().map(|s| s.to_string());
         let package_name = json["data"]["packageName"].as_str().map(|s| s.to_string());
-        let qualified_name = json["data"]["qualifiedName"].as_str().map(|s| s.to_string());
+        let qualified_name = json["data"]["qualifiedName"]
+            .as_str()
+            .map(|s| s.to_string());
 
         Ok(CallHierarchyItem {
             name,

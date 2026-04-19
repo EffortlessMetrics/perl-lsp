@@ -186,7 +186,11 @@ impl PerlVariableRenderer {
     /// Creates a new Perl variable renderer with default settings.
     #[must_use]
     pub fn new() -> Self {
-        Self { max_string_length: 100, max_array_preview: 3, max_hash_preview: 3 }
+        Self {
+            max_string_length: 100,
+            max_array_preview: 3,
+            max_hash_preview: 3,
+        }
     }
 
     /// Sets the maximum string length before truncation.
@@ -360,9 +364,9 @@ impl PerlVariableRenderer {
                 };
                 format!("{} = {}(...)", class, backing)
             }
-            PerlValue::Code { name } => {
-                name.as_ref().map_or_else(|| "CODE(...)".to_string(), |n| format!("\\&{}", n))
-            }
+            PerlValue::Code { name } => name
+                .as_ref()
+                .map_or_else(|| "CODE(...)".to_string(), |n| format!("\\&{}", n)),
             PerlValue::Glob(name) => format!("*{}", name),
             PerlValue::Regex(pattern) => format!("qr/{}/", pattern),
             PerlValue::Tied { class, .. } => format!("TIED({})", class),
@@ -393,9 +397,9 @@ impl PerlVariableRenderer {
                 };
                 format!("{} = {}(...)", class, backing)
             }
-            PerlValue::Code { name } => {
-                name.as_ref().map_or_else(|| "sub { ... }".to_string(), |n| format!("\\&{}", n))
-            }
+            PerlValue::Code { name } => name
+                .as_ref()
+                .map_or_else(|| "sub { ... }".to_string(), |n| format!("\\&{}", n)),
             PerlValue::Glob(name) => format!("*{}", name),
             PerlValue::Regex(pattern) => format!("qr/{}/", pattern),
             PerlValue::Tied { class, value } => {
@@ -405,7 +409,10 @@ impl PerlVariableRenderer {
                     format!("TIED({})", class)
                 }
             }
-            PerlValue::Truncated { summary, total_count } => {
+            PerlValue::Truncated {
+                summary,
+                total_count,
+            } => {
                 if let Some(count) = total_count {
                     format!("{} ({} total)", summary, count)
                 } else {
@@ -432,7 +439,10 @@ impl VariableRenderer for PerlVariableRenderer {
             PerlValue::Hash(pairs) => {
                 rendered.named_variables = Some(pairs.len() as i64);
             }
-            PerlValue::Object { class, value: inner } => {
+            PerlValue::Object {
+                class,
+                value: inner,
+            } => {
                 rendered.type_name = Some(class.clone());
                 rendered.presentation_hint = Some(VariablePresentationHint {
                     kind: Some("class".to_string()),
@@ -484,14 +494,19 @@ impl VariableRenderer for PerlVariableRenderer {
                 .take(count)
                 .map(|(i, v)| self.render(&format!("[{}]", i), v))
                 .collect(),
-            PerlValue::Hash(pairs) => {
-                pairs.iter().skip(start).take(count).map(|(k, v)| self.render(k, v)).collect()
-            }
+            PerlValue::Hash(pairs) => pairs
+                .iter()
+                .skip(start)
+                .take(count)
+                .map(|(k, v)| self.render(k, v))
+                .collect(),
             PerlValue::Reference(inner) => {
                 vec![self.render("$_", inner)]
             }
             PerlValue::Object { value: inner, .. } => self.render_children(inner, start, count),
-            PerlValue::Tied { value: Some(inner), .. } => self.render_children(inner, start, count),
+            PerlValue::Tied {
+                value: Some(inner), ..
+            } => self.render_children(inner, start, count),
             _ => vec![],
         }
     }
@@ -658,7 +673,9 @@ mod tests {
     #[test]
     fn test_render_code() {
         let renderer = PerlVariableRenderer::new();
-        let value = PerlValue::Code { name: Some("my_sub".to_string()) };
+        let value = PerlValue::Code {
+            name: Some("my_sub".to_string()),
+        };
         let rendered = renderer.render("$code", &value);
 
         assert!(rendered.value.contains("my_sub"));
@@ -681,8 +698,10 @@ mod tests {
 
         // Simulate: my $self = { a => \$self }
         // The debugger would show the back-reference as a truncated/circular marker.
-        let circular_marker =
-            PerlValue::Truncated { summary: "HASH(0x...circular)".to_string(), total_count: None };
+        let circular_marker = PerlValue::Truncated {
+            summary: "HASH(0x...circular)".to_string(),
+            total_count: None,
+        };
         let value = PerlValue::Hash(vec![(
             "a".to_string(),
             PerlValue::Reference(Box::new(circular_marker)),
@@ -822,8 +841,9 @@ mod tests {
     fn test_render_large_hash_over_5k_pairs_truncates() {
         let renderer = PerlVariableRenderer::new();
 
-        let pairs: Vec<(String, PerlValue)> =
-            (0..5_001).map(|i| (format!("key_{}", i), PerlValue::Integer(i))).collect();
+        let pairs: Vec<(String, PerlValue)> = (0..5_001)
+            .map(|i| (format!("key_{}", i), PerlValue::Integer(i)))
+            .collect();
         let value = PerlValue::Hash(pairs);
 
         let rendered = renderer.render("%big", &value);
@@ -855,8 +875,9 @@ mod tests {
     fn test_render_children_large_hash_pagination() {
         let renderer = PerlVariableRenderer::new();
 
-        let pairs: Vec<(String, PerlValue)> =
-            (0..5_001).map(|i| (format!("key_{}", i), PerlValue::Integer(i))).collect();
+        let pairs: Vec<(String, PerlValue)> = (0..5_001)
+            .map(|i| (format!("key_{}", i), PerlValue::Integer(i)))
+            .collect();
         let value = PerlValue::Hash(pairs);
 
         // Request a window of 50 starting at index 2500
@@ -964,7 +985,10 @@ mod tests {
 
         let rendered = renderer.render("$obj", &value);
 
-        assert_eq!(rendered.type_name, Some("Very::Deep::Nested::Package::Name".to_string()),);
+        assert_eq!(
+            rendered.type_name,
+            Some("Very::Deep::Nested::Package::Name".to_string()),
+        );
         assert!(rendered.value.contains("Very::Deep::Nested::Package::Name"));
         assert_eq!(rendered.named_variables, Some(0));
     }
@@ -1007,8 +1031,14 @@ mod tests {
         };
 
         let value = PerlValue::Hash(vec![
-            ("parent".to_string(), PerlValue::Reference(Box::new(grandparent_marker))),
-            ("child".to_string(), PerlValue::Reference(Box::new(self_marker))),
+            (
+                "parent".to_string(),
+                PerlValue::Reference(Box::new(grandparent_marker)),
+            ),
+            (
+                "child".to_string(),
+                PerlValue::Reference(Box::new(self_marker)),
+            ),
             ("name".to_string(), PerlValue::Scalar("node".to_string())),
         ]);
 
@@ -1046,8 +1076,9 @@ mod tests {
     /// large structures.
     #[test]
     fn test_render_large_array_with_custom_preview_limit() {
-        let renderer =
-            PerlVariableRenderer::new().with_max_array_preview(1).with_max_hash_preview(1);
+        let renderer = PerlVariableRenderer::new()
+            .with_max_array_preview(1)
+            .with_max_hash_preview(1);
 
         let elements: Vec<PerlValue> = (0..100).map(PerlValue::Integer).collect();
         let value = PerlValue::Array(elements);
@@ -1064,8 +1095,9 @@ mod tests {
     fn test_render_large_hash_with_custom_preview_limit() {
         let renderer = PerlVariableRenderer::new().with_max_hash_preview(1);
 
-        let pairs: Vec<(String, PerlValue)> =
-            (0..100).map(|i| (format!("k{}", i), PerlValue::Integer(i))).collect();
+        let pairs: Vec<(String, PerlValue)> = (0..100)
+            .map(|i| (format!("k{}", i), PerlValue::Integer(i)))
+            .collect();
         let value = PerlValue::Hash(pairs);
 
         let rendered = renderer.render("%h", &value);

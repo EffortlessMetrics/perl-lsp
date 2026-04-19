@@ -18,21 +18,48 @@ fn test_vscode_debugger_contribution() -> Result<()> {
     let launch_snippet = create_launch_json_snippet();
     let launch_json: serde_json::Value = serde_json::from_str(&launch_snippet)?;
 
-    assert_eq!(launch_json["type"], "perl", "Debugger type should be 'perl'");
-    assert_eq!(launch_json["request"], "launch", "Request type should be 'launch'");
-    assert!(launch_json["program"].is_string(), "program property should exist");
+    assert_eq!(
+        launch_json["type"], "perl",
+        "Debugger type should be 'perl'"
+    );
+    assert_eq!(
+        launch_json["request"], "launch",
+        "Request type should be 'launch'"
+    );
+    assert!(
+        launch_json["program"].is_string(),
+        "program property should exist"
+    );
     assert!(launch_json["args"].is_array(), "args property should exist");
-    assert!(launch_json["perlPath"].is_string(), "perlPath property should exist");
-    assert!(launch_json["includePaths"].is_array(), "includePaths property should exist");
+    assert!(
+        launch_json["perlPath"].is_string(),
+        "perlPath property should exist"
+    );
+    assert!(
+        launch_json["includePaths"].is_array(),
+        "includePaths property should exist"
+    );
 
     // Verify attach configuration
     let attach_snippet = create_attach_json_snippet();
     let attach_json: serde_json::Value = serde_json::from_str(&attach_snippet)?;
 
-    assert_eq!(attach_json["type"], "perl", "Debugger type should be 'perl'");
-    assert_eq!(attach_json["request"], "attach", "Request type should be 'attach'");
-    assert!(attach_json["host"].is_string(), "host property should exist");
-    assert!(attach_json["port"].is_number(), "port property should exist");
+    assert_eq!(
+        attach_json["type"], "perl",
+        "Debugger type should be 'perl'"
+    );
+    assert_eq!(
+        attach_json["request"], "attach",
+        "Request type should be 'attach'"
+    );
+    assert!(
+        attach_json["host"].is_string(),
+        "host property should exist"
+    );
+    assert!(
+        attach_json["port"].is_number(),
+        "port property should exist"
+    );
 
     Ok(())
 }
@@ -221,7 +248,10 @@ async fn test_bridge_cross_platform_compatibility() -> Result<()> {
         let wsl_path = PathBuf::from("/mnt/c/Users/Name/script.pl");
         let normalized = normalize_path(&wsl_path);
         let normalized_str = normalized.to_string_lossy();
-        assert!(normalized_str.starts_with("C:"), "WSL path should be translated");
+        assert!(
+            normalized_str.starts_with("C:"),
+            "WSL path should be translated"
+        );
     }
 
     // Test environment setup
@@ -289,7 +319,10 @@ fn test_launch_json_snippet_completeness() -> Result<()> {
     assert!(json.get("program").is_some(), "program field missing");
     assert!(json.get("args").is_some(), "args field missing");
     assert!(json.get("perlPath").is_some(), "perlPath field missing");
-    assert!(json.get("includePaths").is_some(), "includePaths field missing");
+    assert!(
+        json.get("includePaths").is_some(),
+        "includePaths field missing"
+    );
     assert!(json.get("cwd").is_some(), "cwd field missing");
 
     // Verify field types
@@ -408,7 +441,10 @@ async fn test_workspace_variable_expansion() -> Result<()> {
 
     // Verify serialization preserves variables
     let json = serde_json::to_string(&config)?;
-    assert!(json.contains("${workspaceFolder}"), "Should preserve workspace variables");
+    assert!(
+        json.contains("${workspaceFolder}"),
+        "Should preserve workspace variables"
+    );
 
     Ok(())
 }
@@ -428,7 +464,11 @@ async fn test_platform_command_args() -> Result<()> {
     for (input, _expected) in test_cases {
         let input: Vec<String> = input.iter().map(|s| s.to_string()).collect();
         let formatted = format_command_args(&input);
-        assert_eq!(formatted.len(), input.len(), "Should preserve argument count");
+        assert_eq!(
+            formatted.len(),
+            input.len(),
+            "Should preserve argument count"
+        );
     }
 
     Ok(())
@@ -464,7 +504,10 @@ async fn test_empty_environment_handling() -> Result<()> {
     };
 
     let json = serde_json::to_string(&config)?;
-    assert!(json.contains("\"env\":{}"), "Empty env should serialize correctly");
+    assert!(
+        json.contains("\"env\":{}"),
+        "Empty env should serialize correctly"
+    );
 
     Ok(())
 }

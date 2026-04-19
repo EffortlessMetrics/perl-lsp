@@ -43,13 +43,19 @@ fn assert_use_args(source: &str, expected_use: &str) {
 #[test]
 fn test_use_constant_ternary_with_number_lhs() {
     // Number followed by ternary operator — the `?` must not be left orphaned
-    assert_use_args("use constant FOO => 1 ? 'a' : 'b';", "(use constant (FOO 1 ? 'a' : 'b'))");
+    assert_use_args(
+        "use constant FOO => 1 ? 'a' : 'b';",
+        "(use constant (FOO 1 ? 'a' : 'b'))",
+    );
 }
 
 #[test]
 fn test_use_constant_ternary_with_string_lhs() {
     // String followed by ternary — same root cause as number
-    assert_use_args("use constant FOO => 'yes' ? 1 : 0;", "(use constant (FOO 'yes' ? 1 : 0))");
+    assert_use_args(
+        "use constant FOO => 'yes' ? 1 : 0;",
+        "(use constant (FOO 'yes' ? 1 : 0))",
+    );
 }
 
 #[test]
@@ -70,7 +76,10 @@ fn test_use_constant_string_with_concat_op() {
 #[test]
 fn test_use_constant_number_comparison() {
     // Number followed by comparison
-    assert_use_args("use constant OLD => 5.008 < 5.016;", "(use constant (OLD 5.008 < 5.016))");
+    assert_use_args(
+        "use constant OLD => 5.008 < 5.016;",
+        "(use constant (OLD 5.008 < 5.016))",
+    );
 }
 
 #[test]

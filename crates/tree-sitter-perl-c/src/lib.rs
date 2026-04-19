@@ -230,7 +230,10 @@ mod tests {
             }
         }
 
-        assert!(matched, "expected Inline::CPP heredoc to match the injection query");
+        assert!(
+            matched,
+            "expected Inline::CPP heredoc to match the injection query"
+        );
         Ok(())
     }
 }

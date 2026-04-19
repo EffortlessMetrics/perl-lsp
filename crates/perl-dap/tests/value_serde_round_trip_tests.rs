@@ -182,7 +182,9 @@ fn object_with_array_base_round_trip() -> Result<(), serde_json::Error> {
 
 #[test]
 fn code_named_round_trip() -> Result<(), serde_json::Error> {
-    let val = PerlValue::Code { name: Some("main::handler".to_string()) };
+    let val = PerlValue::Code {
+        name: Some("main::handler".to_string()),
+    };
     let json = serde_json::to_string(&val)?;
     let back: PerlValue = serde_json::from_str(&json)?;
     assert_eq!(back, val);
@@ -239,7 +241,10 @@ fn tied_with_value_round_trip() -> Result<(), serde_json::Error> {
 
 #[test]
 fn tied_without_value_round_trip() -> Result<(), serde_json::Error> {
-    let val = PerlValue::Tied { class: "Tie::File".to_string(), value: None };
+    let val = PerlValue::Tied {
+        class: "Tie::File".to_string(),
+        value: None,
+    };
     let json = serde_json::to_string(&val)?;
     let back: PerlValue = serde_json::from_str(&json)?;
     assert_eq!(back, val);
@@ -250,8 +255,10 @@ fn tied_without_value_round_trip() -> Result<(), serde_json::Error> {
 
 #[test]
 fn truncated_with_count_round_trip() -> Result<(), serde_json::Error> {
-    let val =
-        PerlValue::Truncated { summary: "Array too large".to_string(), total_count: Some(50000) };
+    let val = PerlValue::Truncated {
+        summary: "Array too large".to_string(),
+        total_count: Some(50000),
+    };
     let json = serde_json::to_string(&val)?;
     let back: PerlValue = serde_json::from_str(&json)?;
     assert_eq!(back, val);
@@ -260,7 +267,10 @@ fn truncated_with_count_round_trip() -> Result<(), serde_json::Error> {
 
 #[test]
 fn truncated_without_count_round_trip() -> Result<(), serde_json::Error> {
-    let val = PerlValue::Truncated { summary: "Deep nesting".to_string(), total_count: None };
+    let val = PerlValue::Truncated {
+        summary: "Deep nesting".to_string(),
+        total_count: None,
+    };
     let json = serde_json::to_string(&val)?;
     let back: PerlValue = serde_json::from_str(&json)?;
     assert_eq!(back, val);
@@ -290,7 +300,10 @@ fn deeply_nested_structure_round_trip() -> Result<(), serde_json::Error> {
                 PerlValue::Object {
                     class: "DBI::db".to_string(),
                     value: Box::new(PerlValue::Hash(vec![
-                        ("host".to_string(), PerlValue::Scalar("localhost".to_string())),
+                        (
+                            "host".to_string(),
+                            PerlValue::Scalar("localhost".to_string()),
+                        ),
                         ("port".to_string(), PerlValue::Integer(5432)),
                     ])),
                 },
@@ -350,10 +363,16 @@ fn error_is_not_expandable() {
 
 #[test]
 fn truncated_child_count_returns_total() {
-    let val = PerlValue::Truncated { summary: "big array".to_string(), total_count: Some(10000) };
+    let val = PerlValue::Truncated {
+        summary: "big array".to_string(),
+        total_count: Some(10000),
+    };
     assert_eq!(val.child_count(), Some(10000));
 
-    let val_none = PerlValue::Truncated { summary: "unknown".to_string(), total_count: None };
+    let val_none = PerlValue::Truncated {
+        summary: "unknown".to_string(),
+        total_count: None,
+    };
     assert_eq!(val_none.child_count(), None);
 }
 
@@ -367,7 +386,13 @@ fn number_and_integer_share_scalar_type_name() {
 #[test]
 fn code_type_name_is_code() {
     assert_eq!(PerlValue::Code { name: None }.type_name(), "CODE");
-    assert_eq!(PerlValue::Code { name: Some("f".to_string()) }.type_name(), "CODE");
+    assert_eq!(
+        PerlValue::Code {
+            name: Some("f".to_string())
+        }
+        .type_name(),
+        "CODE"
+    );
 }
 
 #[test]

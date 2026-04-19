@@ -430,7 +430,16 @@ mod tests {
 
     fn make_context(prefix: &str) -> CompletionContext {
         let st = SymbolTable::default();
-        CompletionContext::new(&st, prefix.len(), None, false, false, false, prefix.to_string(), 0)
+        CompletionContext::new(
+            &st,
+            prefix.len(),
+            None,
+            false,
+            false,
+            false,
+            prefix.to_string(),
+            0,
+        )
     }
 
     #[test]
@@ -473,7 +482,11 @@ mod tests {
         for item in &items {
             assert!(item.documentation.is_some(), "{}", item.label);
             let t = item.insert_text.as_deref();
-            assert!(t.is_some_and(|t| t.contains("$0") || t.contains("${0")), "{}", item.label);
+            assert!(
+                t.is_some_and(|t| t.contains("$0") || t.contains("${0")),
+                "{}",
+                item.label
+            );
         }
     }
 
@@ -491,7 +504,10 @@ mod tests {
         let ctx = make_context("");
         let mut items = Vec::new();
         add_snippet_completions(&mut items, &ctx);
-        let triggers: Vec<&str> = items.iter().filter_map(|i| i.filter_text.as_deref()).collect();
+        let triggers: Vec<&str> = items
+            .iter()
+            .filter_map(|i| i.filter_text.as_deref())
+            .collect();
         // Basic operators
         assert!(triggers.contains(&"mbasic"), "mbasic snippet missing");
         assert!(triggers.contains(&"sbasic"), "sbasic snippet missing");
@@ -500,9 +516,18 @@ mod tests {
         assert!(triggers.contains(&"namedcap"), "namedcap snippet missing");
         // Lookahead / lookbehind
         assert!(triggers.contains(&"lookahead"), "lookahead snippet missing");
-        assert!(triggers.contains(&"neglookahead"), "neglookahead snippet missing");
-        assert!(triggers.contains(&"lookbehind"), "lookbehind snippet missing");
-        assert!(triggers.contains(&"neglookbehind"), "neglookbehind snippet missing");
+        assert!(
+            triggers.contains(&"neglookahead"),
+            "neglookahead snippet missing"
+        );
+        assert!(
+            triggers.contains(&"lookbehind"),
+            "lookbehind snippet missing"
+        );
+        assert!(
+            triggers.contains(&"neglookbehind"),
+            "neglookbehind snippet missing"
+        );
         // Flag variants
         assert!(triggers.contains(&"rxglobal"), "rxglobal snippet missing");
         assert!(triggers.contains(&"rxcase"), "rxcase snippet missing");
@@ -516,8 +541,14 @@ mod tests {
         let ctx = make_context("mba");
         let mut items = Vec::new();
         add_snippet_completions(&mut items, &ctx);
-        assert!(items.iter().any(|i| i.label == "mbasic"), "mbasic not returned for prefix 'mba'");
-        assert!(!items.iter().any(|i| i.label == "sbasic"), "sbasic should not match 'mba'");
+        assert!(
+            items.iter().any(|i| i.label == "mbasic"),
+            "mbasic not returned for prefix 'mba'"
+        );
+        assert!(
+            !items.iter().any(|i| i.label == "sbasic"),
+            "sbasic should not match 'mba'"
+        );
     }
 
     #[test]
@@ -532,8 +563,14 @@ mod tests {
                 .map(|s| s.body.to_string())
                 .unwrap_or_else(|| format!("SNIPPET_MISSING:{trigger}"))
         };
-        assert!(body("namedcap").contains("(?<"), "namedcap must contain named-capture opener (?<");
-        assert!(body("lookahead").contains("(?="), "lookahead must contain positive lookahead (?=");
+        assert!(
+            body("namedcap").contains("(?<"),
+            "namedcap must contain named-capture opener (?<"
+        );
+        assert!(
+            body("lookahead").contains("(?="),
+            "lookahead must contain positive lookahead (?="
+        );
         assert!(
             body("neglookahead").contains("(?!"),
             "neglookahead must contain negative lookahead (?!"
@@ -546,13 +583,28 @@ mod tests {
             body("neglookbehind").contains("(?<!"),
             "neglookbehind must contain negative lookbehind (?<!"
         );
-        assert!(body("rxglobal").contains("/g"), "rxglobal must embed /g flag");
+        assert!(
+            body("rxglobal").contains("/g"),
+            "rxglobal must embed /g flag"
+        );
         assert!(body("rxcase").contains("/i"), "rxcase must embed /i flag");
         assert!(body("rxmulti").contains("/m"), "rxmulti must embed /m flag");
         assert!(body("rxdots").contains("/s"), "rxdots must embed /s flag");
-        assert!(body("rxverbose").contains("/x"), "rxverbose must embed /x flag");
-        assert!(body("mbasic").starts_with("m/"), "mbasic body must start with m/");
-        assert!(body("sbasic").starts_with("s/"), "sbasic body must start with s/");
-        assert!(body("qrbasic").starts_with("qr/"), "qrbasic body must start with qr/");
+        assert!(
+            body("rxverbose").contains("/x"),
+            "rxverbose must embed /x flag"
+        );
+        assert!(
+            body("mbasic").starts_with("m/"),
+            "mbasic body must start with m/"
+        );
+        assert!(
+            body("sbasic").starts_with("s/"),
+            "sbasic body must start with s/"
+        );
+        assert!(
+            body("qrbasic").starts_with("qr/"),
+            "qrbasic body must start with qr/"
+        );
     }
 }

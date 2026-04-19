@@ -205,7 +205,10 @@ fn print_block_scalar_fh_is_indirect_call() {
     let code = r#"print { $fh } "data\n";"#;
     let ast = parse(code);
     let sexp = ast.to_sexp();
-    assert!(sexp.contains("indirect_call"), "Expected indirect_call, got: {sexp}");
+    assert!(
+        sexp.contains("indirect_call"),
+        "Expected indirect_call, got: {sexp}"
+    );
 }
 
 #[test]

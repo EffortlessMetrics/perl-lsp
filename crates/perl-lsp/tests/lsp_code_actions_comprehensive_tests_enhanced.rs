@@ -123,10 +123,22 @@ fn create_enhanced_code_actions_server()
 
     // Write all files to workspace
     let files = [
-        ("extract_vars.pl", enhanced_code_actions_fixtures::EXTRACT_VARIABLE_OPPORTUNITIES),
-        ("imports_org.pl", enhanced_code_actions_fixtures::IMPORT_ORGANIZATION_OPPORTUNITIES),
-        ("missing_pragmas.pl", enhanced_code_actions_fixtures::MISSING_PRAGMAS_OPPORTUNITIES),
-        ("refactoring_ops.pl", enhanced_code_actions_fixtures::REFACTORING_OPPORTUNITIES),
+        (
+            "extract_vars.pl",
+            enhanced_code_actions_fixtures::EXTRACT_VARIABLE_OPPORTUNITIES,
+        ),
+        (
+            "imports_org.pl",
+            enhanced_code_actions_fixtures::IMPORT_ORGANIZATION_OPPORTUNITIES,
+        ),
+        (
+            "missing_pragmas.pl",
+            enhanced_code_actions_fixtures::MISSING_PRAGMAS_OPPORTUNITIES,
+        ),
+        (
+            "refactoring_ops.pl",
+            enhanced_code_actions_fixtures::REFACTORING_OPPORTUNITIES,
+        ),
     ];
 
     for (path, content) in &files {
@@ -150,10 +162,22 @@ fn initialize_enhanced_harness(
 
     // Open all documents
     let files = [
-        ("extract_vars.pl", enhanced_code_actions_fixtures::EXTRACT_VARIABLE_OPPORTUNITIES),
-        ("imports_org.pl", enhanced_code_actions_fixtures::IMPORT_ORGANIZATION_OPPORTUNITIES),
-        ("missing_pragmas.pl", enhanced_code_actions_fixtures::MISSING_PRAGMAS_OPPORTUNITIES),
-        ("refactoring_ops.pl", enhanced_code_actions_fixtures::REFACTORING_OPPORTUNITIES),
+        (
+            "extract_vars.pl",
+            enhanced_code_actions_fixtures::EXTRACT_VARIABLE_OPPORTUNITIES,
+        ),
+        (
+            "imports_org.pl",
+            enhanced_code_actions_fixtures::IMPORT_ORGANIZATION_OPPORTUNITIES,
+        ),
+        (
+            "missing_pragmas.pl",
+            enhanced_code_actions_fixtures::MISSING_PRAGMAS_OPPORTUNITIES,
+        ),
+        (
+            "refactoring_ops.pl",
+            enhanced_code_actions_fixtures::REFACTORING_OPPORTUNITIES,
+        ),
     ];
 
     for (file, content) in &files {
@@ -162,8 +186,10 @@ fn initialize_enhanced_harness(
     }
 
     // Revolutionary performance: adaptive timeout
-    let thread_count =
-        std::env::var("RUST_TEST_THREADS").ok().and_then(|s| s.parse::<usize>().ok()).unwrap_or(8);
+    let thread_count = std::env::var("RUST_TEST_THREADS")
+        .ok()
+        .and_then(|s| s.parse::<usize>().ok())
+        .unwrap_or(8);
 
     let timeout_ms = match thread_count {
         n if n <= 2 => 500, // High contention
@@ -193,8 +219,9 @@ fn test_enhanced_code_action_server_capabilities() -> Result<(), Box<dyn std::er
         }
     });
 
-    let capabilities =
-        init_result.get("capabilities").ok_or("Initialize result should contain capabilities")?;
+    let capabilities = init_result
+        .get("capabilities")
+        .ok_or("Initialize result should contain capabilities")?;
 
     // AC3: Verify codeActionProvider is advertised with proper structure
     assert!(
@@ -216,8 +243,12 @@ fn test_enhanced_code_action_server_capabilities() -> Result<(), Box<dyn std::er
         if let Some(kinds) = code_action_provider.get("codeActionKinds") {
             let kinds_array = kinds.as_array().ok_or("codeActionKinds should be array")?;
 
-            let expected_kinds =
-                vec!["quickfix", "refactor.extract", "refactor.rewrite", "source.organizeImports"];
+            let expected_kinds = vec![
+                "quickfix",
+                "refactor.extract",
+                "refactor.rewrite",
+                "source.organizeImports",
+            ];
 
             let found_kinds: Vec<&str> = kinds_array.iter().filter_map(|k| k.as_str()).collect();
 
@@ -233,7 +264,10 @@ fn test_enhanced_code_action_server_capabilities() -> Result<(), Box<dyn std::er
             }
 
             // Should have at least some kinds
-            assert!(!found_kinds.is_empty(), "Should advertise at least some code action kinds");
+            assert!(
+                !found_kinds.is_empty(),
+                "Should advertise at least some code action kinds"
+            );
         }
 
         // AC3: Check for resolve provider capability
@@ -273,7 +307,9 @@ fn test_enhanced_extract_variable_refactoring() -> Result<(), Box<dyn std::error
         Duration::from_secs(2),
     )?;
 
-    let actions = actions_result.as_array().ok_or("Should return action array")?;
+    let actions = actions_result
+        .as_array()
+        .ok_or("Should return action array")?;
 
     // AC3: Enhanced validation - look for extract variable action
     let extract_var_action = actions.iter().find(|action| {
@@ -299,7 +335,10 @@ fn test_enhanced_extract_variable_refactoring() -> Result<(), Box<dyn std::error
             "Extract variable action should have edit or command"
         );
 
-        assert!(action["title"].is_string(), "Action should have descriptive title");
+        assert!(
+            action["title"].is_string(),
+            "Action should have descriptive title"
+        );
     } else {
         // If not implemented yet, this is acceptable - just log
         eprintln!(
@@ -308,7 +347,10 @@ fn test_enhanced_extract_variable_refactoring() -> Result<(), Box<dyn std::error
 
         // Should at least return empty array, not error
         // actions is already Vec<Value>, so just check it's valid
-        eprintln!("Extract variable not implemented yet, got {} actions", actions.len());
+        eprintln!(
+            "Extract variable not implemented yet, got {} actions",
+            actions.len()
+        );
     }
 
     Ok(())
@@ -338,7 +380,9 @@ fn test_enhanced_organize_imports_refactoring() -> Result<(), Box<dyn std::error
         Duration::from_secs(2),
     )?;
 
-    let actions = actions_result.as_array().ok_or("Should return action array")?;
+    let actions = actions_result
+        .as_array()
+        .ok_or("Should return action array")?;
 
     // AC3: Look for organize imports action with enhanced validation
     let organize_imports_action = actions.iter().find(|action| {
@@ -363,7 +407,10 @@ fn test_enhanced_organize_imports_refactoring() -> Result<(), Box<dyn std::error
             action_kind
         );
 
-        assert!(action.get("edit").is_some(), "Organize imports should have text edits");
+        assert!(
+            action.get("edit").is_some(),
+            "Organize imports should have text edits"
+        );
     } else {
         // Check if any actions were returned with wrong kind
         for action in actions {
@@ -410,7 +457,9 @@ fn test_enhanced_quickfix_pragma_actions() -> Result<(), Box<dyn std::error::Err
         Duration::from_secs(2),
     )?;
 
-    let actions = actions_result.as_array().ok_or("Should return action array")?;
+    let actions = actions_result
+        .as_array()
+        .ok_or("Should return action array")?;
 
     // AC3: Enhanced pragma detection
     let pragma_actions: Vec<_> = actions
@@ -461,8 +510,10 @@ fn test_enhanced_code_actions_performance() -> Result<(), Box<dyn std::error::Er
     initialize_enhanced_harness(&mut harness, &workspace)?;
 
     // Revolutionary performance: thread-aware expectations
-    let thread_count =
-        std::env::var("RUST_TEST_THREADS").ok().and_then(|s| s.parse::<usize>().ok()).unwrap_or(8);
+    let thread_count = std::env::var("RUST_TEST_THREADS")
+        .ok()
+        .and_then(|s| s.parse::<usize>().ok())
+        .unwrap_or(8);
 
     let (timeout_ms, max_duration_ms) = match thread_count {
         n if n <= 2 => (150, 120), // High contention: more lenient
@@ -534,7 +585,9 @@ fn test_enhanced_code_action_resolve() -> Result<(), Box<dyn std::error::Error>>
         Duration::from_secs(2),
     )?;
 
-    let actions = actions_result.as_array().ok_or("Should return action array")?;
+    let actions = actions_result
+        .as_array()
+        .ok_or("Should return action array")?;
 
     if !actions.is_empty() {
         let first_action = &actions[0];
@@ -603,10 +656,15 @@ fn test_enhanced_code_actions_filtering() -> Result<(), Box<dyn std::error::Erro
                 Duration::from_secs(2),
             )
             .map_err(|e| {
-                format!("Request with filter {:?} should succeed: {}", expected_prefix, e)
+                format!(
+                    "Request with filter {:?} should succeed: {}",
+                    expected_prefix, e
+                )
             })?;
 
-        let actions = actions_result.as_array().ok_or("Should return action array")?;
+        let actions = actions_result
+            .as_array()
+            .ok_or("Should return action array")?;
 
         // AC3: Validate filtering works correctly
         for action in actions {

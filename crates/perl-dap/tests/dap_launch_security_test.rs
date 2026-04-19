@@ -31,8 +31,13 @@ fn test_launch_rejects_path_traversal() -> Result<(), Box<dyn std::error::Error>
 
     // Verify response
     match response {
-        DapMessage::Response { success, message, .. } => {
-            assert!(!success, "Launch should have failed due to path traversal/workspace escape");
+        DapMessage::Response {
+            success, message, ..
+        } => {
+            assert!(
+                !success,
+                "Launch should have failed due to path traversal/workspace escape"
+            );
             let msg = must_some(message);
             assert!(
                 msg.contains("outside your workspace folder") || msg.contains("outside workspace"),
@@ -69,7 +74,9 @@ fn test_launch_allows_valid_path() -> Result<(), Box<dyn std::error::Error>> {
 
     // Verify response
     match response {
-        DapMessage::Response { success, message, .. } => {
+        DapMessage::Response {
+            success, message, ..
+        } => {
             if !success {
                 let msg = message.clone().unwrap_or_default();
                 assert!(

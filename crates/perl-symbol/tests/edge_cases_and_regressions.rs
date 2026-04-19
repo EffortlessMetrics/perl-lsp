@@ -129,7 +129,10 @@ fn type_identity_symbolkind_is_same_via_module_and_crate_root() -> Result<()> {
 
     // Hash/eq semantics are shared: a value constructed via one path
     // equals a value constructed via the other.
-    assert_eq!(SymbolKind::Subroutine, perl_symbol::types::SymbolKind::Subroutine);
+    assert_eq!(
+        SymbolKind::Subroutine,
+        perl_symbol::types::SymbolKind::Subroutine
+    );
     Ok(())
 }
 
@@ -153,7 +156,10 @@ fn type_identity_symbol_index_is_same_via_module_and_crate_root() -> Result<()> 
     from_root.add_symbol("Foo::bar".to_string());
     from_module.add_symbol("Foo::bar".to_string());
 
-    assert_eq!(from_root.search_prefix("Foo"), from_module.search_prefix("Foo"));
+    assert_eq!(
+        from_root.search_prefix("Foo"),
+        from_module.search_prefix("Foo")
+    );
     Ok(())
 }
 
@@ -208,11 +214,20 @@ fn regression_to_lsp_kind_mapping_is_exhaustive_and_stable() -> Result<()> {
 
     // Workspace profile — all variables collapse to LSP Variable (13).
     let workspace_codes: Vec<u32> = all.iter().map(|k| k.to_lsp_kind()).collect();
-    assert_eq!(workspace_codes, vec![2, 5, 8, 12, 6, 13, 13, 13, 14, 2, 12, 20, 23]);
+    assert_eq!(
+        workspace_codes,
+        vec![2, 5, 8, 12, 6, 13, 13, 13, 14, 2, 12, 20, 23]
+    );
 
     // Document profile — scalar/array/hash get richer codes.
-    let doc_codes: Vec<u32> = all.iter().map(|k| k.to_lsp_kind_document_symbol()).collect();
-    assert_eq!(doc_codes, vec![2, 5, 8, 12, 6, 13, 18, 19, 14, 2, 12, 20, 23]);
+    let doc_codes: Vec<u32> = all
+        .iter()
+        .map(|k| k.to_lsp_kind_document_symbol())
+        .collect();
+    assert_eq!(
+        doc_codes,
+        vec![2, 5, 8, 12, 6, 13, 18, 19, 14, 2, 12, 20, 23]
+    );
     Ok(())
 }
 
@@ -397,7 +412,10 @@ fn edge_case_index_prefix_search_is_case_sensitive() -> Result<()> {
     let mut idx = SymbolIndex::new();
     idx.add_symbol("Foo::Bar".to_string());
     let exact = idx.search_prefix("Foo");
-    assert!(exact.iter().any(|s| s == "Foo::Bar"), "exact-case prefix must match");
+    assert!(
+        exact.iter().any(|s| s == "Foo::Bar"),
+        "exact-case prefix must match"
+    );
     let wrong_case = idx.search_prefix("foo");
     assert!(
         !wrong_case.iter().any(|s| s == "Foo::Bar"),
@@ -477,13 +495,21 @@ fn edge_case_surface_seed_package_qualifies_top_level_subs() -> Result<()> {
         },
         loc(0, 13),
     );
-    let program = Node::new(NodeKind::Program { statements: vec![sub_node] }, loc(0, 13));
+    let program = Node::new(
+        NodeKind::Program {
+            statements: vec![sub_node],
+        },
+        loc(0, 13),
+    );
 
     let decls = extract_symbol_decls(&program, Some("Foo"));
     assert_eq!(decls.len(), 1, "one decl expected");
     let d = &decls[0];
     assert_eq!(d.name, "greet");
-    assert_eq!(d.qualified_name, "Foo::greet", "seed package must qualify top-level sub");
+    assert_eq!(
+        d.qualified_name, "Foo::greet",
+        "seed package must qualify top-level sub"
+    );
     assert_eq!(d.container.as_deref(), Some("Foo"));
     Ok(())
 }
@@ -524,7 +550,13 @@ fn edge_case_is_word_boundary_word_at_start_and_end() -> Result<()> {
     // "foo bar": "foo" starts at 0 (boundary before EOF and after SOF),
     // "bar" starts at 4 (whitespace before).
     let text = b"foo bar";
-    assert!(is_word_boundary(text, 0, 3), "word at start must be a boundary");
-    assert!(is_word_boundary(text, 4, 3), "word after whitespace must be a boundary");
+    assert!(
+        is_word_boundary(text, 0, 3),
+        "word at start must be a boundary"
+    );
+    assert!(
+        is_word_boundary(text, 4, 3),
+        "word after whitespace must be a boundary"
+    );
     Ok(())
 }

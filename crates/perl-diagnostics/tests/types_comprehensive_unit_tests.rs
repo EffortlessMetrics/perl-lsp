@@ -103,8 +103,10 @@ fn tag_equality() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn related_info_construction() -> Result<(), Box<dyn std::error::Error>> {
-    let info =
-        RelatedInformation { location: (10, 20), message: "see declaration here".to_string() };
+    let info = RelatedInformation {
+        location: (10, 20),
+        message: "see declaration here".to_string(),
+    };
     assert_eq!(info.location, (10, 20));
     assert_eq!(info.message, "see declaration here");
     Ok(())
@@ -112,7 +114,10 @@ fn related_info_construction() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn related_info_debug_format() -> Result<(), Box<dyn std::error::Error>> {
-    let info = RelatedInformation { location: (0, 5), message: "note".to_string() };
+    let info = RelatedInformation {
+        location: (0, 5),
+        message: "note".to_string(),
+    };
     let dbg = format!("{:?}", info);
     assert!(dbg.contains("RelatedInformation"));
     assert!(dbg.contains("note"));
@@ -121,7 +126,10 @@ fn related_info_debug_format() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn related_info_clone() -> Result<(), Box<dyn std::error::Error>> {
-    let info = RelatedInformation { location: (1, 2), message: "original".to_string() };
+    let info = RelatedInformation {
+        location: (1, 2),
+        message: "original".to_string(),
+    };
     let cloned = info.clone();
     assert_eq!(info, cloned);
     Ok(())
@@ -129,9 +137,18 @@ fn related_info_clone() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn related_info_equality() -> Result<(), Box<dyn std::error::Error>> {
-    let a = RelatedInformation { location: (1, 2), message: "msg".to_string() };
-    let b = RelatedInformation { location: (1, 2), message: "msg".to_string() };
-    let c = RelatedInformation { location: (3, 4), message: "msg".to_string() };
+    let a = RelatedInformation {
+        location: (1, 2),
+        message: "msg".to_string(),
+    };
+    let b = RelatedInformation {
+        location: (1, 2),
+        message: "msg".to_string(),
+    };
+    let c = RelatedInformation {
+        location: (3, 4),
+        message: "msg".to_string(),
+    };
     assert_eq!(a, b);
     assert_ne!(a, c);
     Ok(())
@@ -181,14 +198,20 @@ fn diagnostic_default() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn diagnostic_with_severity_field() -> Result<(), Box<dyn std::error::Error>> {
-    let d = Diagnostic { severity: DiagnosticSeverity::Warning, ..Default::default() };
+    let d = Diagnostic {
+        severity: DiagnosticSeverity::Warning,
+        ..Default::default()
+    };
     assert_eq!(d.severity, DiagnosticSeverity::Warning);
     Ok(())
 }
 
 #[test]
 fn diagnostic_with_tags() -> Result<(), Box<dyn std::error::Error>> {
-    let d = Diagnostic { tags: Some(vec![DiagnosticTag::Unnecessary]), ..Default::default() };
+    let d = Diagnostic {
+        tags: Some(vec![DiagnosticTag::Unnecessary]),
+        ..Default::default()
+    };
     assert!(d.tags.is_some());
     assert_eq!(d.tags.as_ref().map(|t| t.len()), Some(1));
     Ok(())
@@ -286,8 +309,14 @@ fn diagnostics_can_be_collected_in_vec() -> Result<(), Box<dyn std::error::Error
 #[test]
 fn severity_can_be_used_as_sort_key() -> Result<(), Box<dyn std::error::Error>> {
     let mut diagnostics = [
-        Diagnostic { severity: DiagnosticSeverity::Hint, ..Default::default() },
-        Diagnostic { severity: DiagnosticSeverity::Error, ..Default::default() },
+        Diagnostic {
+            severity: DiagnosticSeverity::Hint,
+            ..Default::default()
+        },
+        Diagnostic {
+            severity: DiagnosticSeverity::Error,
+            ..Default::default()
+        },
     ];
     diagnostics.sort_by_key(|d| d.severity);
     assert_eq!(diagnostics[0].severity, DiagnosticSeverity::Error);
@@ -305,8 +334,10 @@ fn diagnostic_fields_are_mutable() -> Result<(), Box<dyn std::error::Error>> {
     d.range = (100, 200);
     d.severity = DiagnosticSeverity::Hint;
     d.message = "updated".to_string();
-    d.related_information =
-        Some(vec![RelatedInformation { location: (0, 0), message: "added".to_string() }]);
+    d.related_information = Some(vec![RelatedInformation {
+        location: (0, 0),
+        message: "added".to_string(),
+    }]);
     d.tags = Some(vec![DiagnosticTag::Deprecated]);
 
     assert_eq!(d.range, (100, 200));

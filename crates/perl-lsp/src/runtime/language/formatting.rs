@@ -53,15 +53,20 @@ impl LspServer {
     ) -> Result<Option<Value>, JsonRpcError> {
         if let Some(p) = params {
             let uri = req_uri(&p)?;
-            let ch = p["ch"].as_str().and_then(|s| s.chars().next()).unwrap_or('\n');
+            let ch = p["ch"]
+                .as_str()
+                .and_then(|s| s.chars().next())
+                .unwrap_or('\n');
             let (line, col) = req_position(&p)?;
 
             let documents = self.documents_guard();
-            let doc = self.get_document(&documents, uri).ok_or_else(|| JsonRpcError {
-                code: INVALID_REQUEST,
-                message: format!("Document not open: {}", uri),
-                data: None,
-            })?;
+            let doc = self
+                .get_document(&documents, uri)
+                .ok_or_else(|| JsonRpcError {
+                    code: INVALID_REQUEST,
+                    message: format!("Document not open: {}", uri),
+                    data: None,
+                })?;
 
             let indent_step = p["options"]["tabSize"].as_u64().unwrap_or(4) as usize;
 
@@ -87,8 +92,9 @@ impl LspServer {
             let uri = req_uri(&params)?;
 
             // Reject stale requests
-            let req_version =
-                params["textDocument"]["version"].as_i64().and_then(|n| i32::try_from(n).ok());
+            let req_version = params["textDocument"]["version"]
+                .as_i64()
+                .and_then(|n| i32::try_from(n).ok());
             self.ensure_latest(uri, req_version)?;
 
             let options: FormattingOptions = serde_json::from_value(params["options"].clone())
@@ -228,7 +234,11 @@ impl LspServer {
                 return Ok(Some(json!([])));
             }
 
-            tracing::debug!(count = ranges_array.len(), uri, "Formatting ranges in document");
+            tracing::debug!(
+                count = ranges_array.len(),
+                uri,
+                "Formatting ranges in document"
+            );
 
             let documents = self.documents_guard();
             if let Some(doc) = self.get_document(&documents, uri) {
@@ -238,34 +248,42 @@ impl LspServer {
 
                 // Process each range
                 for (idx, range_val) in ranges_array.iter().enumerate() {
-                    let start_line_u64 =
-                        range_val.pointer("/start/line").and_then(|v| v.as_u64()).ok_or_else(
-                            || invalid_params(&format!("Missing ranges[{}].start.line", idx)),
-                        )?;
+                    let start_line_u64 = range_val
+                        .pointer("/start/line")
+                        .and_then(|v| v.as_u64())
+                        .ok_or_else(|| {
+                            invalid_params(&format!("Missing ranges[{}].start.line", idx))
+                        })?;
                     let start_line = u32::try_from(start_line_u64).map_err(|_| {
                         invalid_params(&format!("ranges[{}].start.line exceeds u32::MAX", idx))
                     })?;
 
-                    let start_char_u64 =
-                        range_val.pointer("/start/character").and_then(|v| v.as_u64()).ok_or_else(
-                            || invalid_params(&format!("Missing ranges[{}].start.character", idx)),
-                        )?;
+                    let start_char_u64 = range_val
+                        .pointer("/start/character")
+                        .and_then(|v| v.as_u64())
+                        .ok_or_else(|| {
+                            invalid_params(&format!("Missing ranges[{}].start.character", idx))
+                        })?;
                     let start_char = u32::try_from(start_char_u64).map_err(|_| {
                         invalid_params(&format!("ranges[{}].start.character exceeds u32::MAX", idx))
                     })?;
 
-                    let end_line_u64 =
-                        range_val.pointer("/end/line").and_then(|v| v.as_u64()).ok_or_else(
-                            || invalid_params(&format!("Missing ranges[{}].end.line", idx)),
-                        )?;
+                    let end_line_u64 = range_val
+                        .pointer("/end/line")
+                        .and_then(|v| v.as_u64())
+                        .ok_or_else(|| {
+                            invalid_params(&format!("Missing ranges[{}].end.line", idx))
+                        })?;
                     let end_line = u32::try_from(end_line_u64).map_err(|_| {
                         invalid_params(&format!("ranges[{}].end.line exceeds u32::MAX", idx))
                     })?;
 
-                    let end_char_u64 =
-                        range_val.pointer("/end/character").and_then(|v| v.as_u64()).ok_or_else(
-                            || invalid_params(&format!("Missing ranges[{}].end.character", idx)),
-                        )?;
+                    let end_char_u64 = range_val
+                        .pointer("/end/character")
+                        .and_then(|v| v.as_u64())
+                        .ok_or_else(|| {
+                            invalid_params(&format!("Missing ranges[{}].end.character", idx))
+                        })?;
                     let end_char = u32::try_from(end_char_u64).map_err(|_| {
                         invalid_params(&format!("ranges[{}].end.character exceeds u32::MAX", idx))
                     })?;
@@ -327,7 +345,10 @@ mod tests {
         let err = FormattingError::PerltidyNotFound("command not found".to_string());
         let rpc = formatting_error_to_rpc("Formatting failed", err);
         assert_eq!(rpc.code, -32603);
-        assert!(rpc.message.contains("Formatting failed"), "message should contain context prefix");
+        assert!(
+            rpc.message.contains("Formatting failed"),
+            "message should contain context prefix"
+        );
         assert!(
             rpc.message.contains("perltidy not found"),
             "message should contain the error description"

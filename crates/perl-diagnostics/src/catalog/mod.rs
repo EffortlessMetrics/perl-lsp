@@ -21,7 +21,11 @@ pub struct DiagnosticMeta {
 
 impl Default for DiagnosticMeta {
     fn default() -> Self {
-        Self { code: json!("PL001"), desc: None, hint: None }
+        Self {
+            code: json!("PL001"),
+            desc: None,
+            hint: None,
+        }
     }
 }
 
@@ -202,6 +206,9 @@ mod tests {
     fn message_inference_is_case_insensitive() {
         let meta = from_message("Missing USE STRICT pragma");
         assert!(meta.is_some());
-        assert_eq!(meta.as_ref().map(|m| &m.code), Some(&serde_json::json!("PL100")));
+        assert_eq!(
+            meta.as_ref().map(|m| &m.code),
+            Some(&serde_json::json!("PL100"))
+        );
     }
 }

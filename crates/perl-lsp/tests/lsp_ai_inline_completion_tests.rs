@@ -86,7 +86,9 @@ fn inline_completion(
             "position": { "line": line, "character": character }
         })),
     };
-    let response = server.handle_request(request).ok_or("inline completion response")?;
+    let response = server
+        .handle_request(request)
+        .ok_or("inline completion response")?;
     response.result.ok_or("result field present".into())
 }
 
@@ -154,7 +156,9 @@ impl perl_lsp_inline_completion::InlineCompletionBackend for MockErrorBackend {
             perl_lsp_inline_completion::StreamChunk,
         ) -> perl_lsp_inline_completion::StreamControl,
     ) -> Result<(), perl_lsp_inline_completion::BackendError> {
-        Err(perl_lsp_inline_completion::BackendError::Provider("test error".into()))
+        Err(perl_lsp_inline_completion::BackendError::Provider(
+            "test error".into(),
+        ))
     }
 }
 
@@ -178,7 +182,10 @@ fn test_ai_disabled_returns_deterministic() -> Result<(), Box<dyn std::error::Er
 
     // Should get deterministic results (strict;, warnings;, etc.), not AI
     assert!(!items.is_empty());
-    let texts: Vec<&str> = items.iter().filter_map(|item| item["insertText"].as_str()).collect();
+    let texts: Vec<&str> = items
+        .iter()
+        .filter_map(|item| item["insertText"].as_str())
+        .collect();
     assert!(
         texts.contains(&"strict;"),
         "expected deterministic 'strict;' when AI is disabled, got: {texts:?}",
@@ -208,8 +215,13 @@ fn test_ai_enabled_success_backend_returns_ai_result() -> Result<(), Box<dyn std
     let items = result["items"].as_array().ok_or("items array")?;
 
     assert!(!items.is_empty(), "expected AI completion items");
-    let first_text = items[0]["insertText"].as_str().ok_or("insertText not a string")?;
-    assert_eq!(first_text, "AI_COMPLETION_TEXT", "expected AI backend result to be returned");
+    let first_text = items[0]["insertText"]
+        .as_str()
+        .ok_or("insertText not a string")?;
+    assert_eq!(
+        first_text, "AI_COMPLETION_TEXT",
+        "expected AI backend result to be returned"
+    );
     Ok(())
 }
 
@@ -227,8 +239,14 @@ fn test_ai_timeout_with_fallback_returns_deterministic() -> Result<(), Box<dyn s
     let result = inline_completion(&server, uri, 0, 4)?;
     let items = result["items"].as_array().ok_or("items array")?;
 
-    assert!(!items.is_empty(), "expected deterministic fallback on timeout");
-    let texts: Vec<&str> = items.iter().filter_map(|item| item["insertText"].as_str()).collect();
+    assert!(
+        !items.is_empty(),
+        "expected deterministic fallback on timeout"
+    );
+    let texts: Vec<&str> = items
+        .iter()
+        .filter_map(|item| item["insertText"].as_str())
+        .collect();
     assert!(
         texts.contains(&"strict;"),
         "expected deterministic 'strict;' on timeout fallback, got: {texts:?}",
@@ -251,8 +269,14 @@ fn test_ai_rate_limited_with_fallback_returns_deterministic()
     let result = inline_completion(&server, uri, 0, 4)?;
     let items = result["items"].as_array().ok_or("items array")?;
 
-    assert!(!items.is_empty(), "expected deterministic fallback on rate limit");
-    let texts: Vec<&str> = items.iter().filter_map(|item| item["insertText"].as_str()).collect();
+    assert!(
+        !items.is_empty(),
+        "expected deterministic fallback on rate limit"
+    );
+    let texts: Vec<&str> = items
+        .iter()
+        .filter_map(|item| item["insertText"].as_str())
+        .collect();
     assert!(
         texts.contains(&"strict;"),
         "expected deterministic 'strict;' on rate limit fallback, got: {texts:?}",
@@ -297,8 +321,14 @@ fn test_ai_no_backend_registered_returns_deterministic() -> Result<(), Box<dyn s
     let result = inline_completion(&server, uri, 0, 4)?;
     let items = result["items"].as_array().ok_or("items array")?;
 
-    assert!(!items.is_empty(), "expected deterministic fallback when no backend is registered");
-    let texts: Vec<&str> = items.iter().filter_map(|item| item["insertText"].as_str()).collect();
+    assert!(
+        !items.is_empty(),
+        "expected deterministic fallback when no backend is registered"
+    );
+    let texts: Vec<&str> = items
+        .iter()
+        .filter_map(|item| item["insertText"].as_str())
+        .collect();
     assert!(
         texts.contains(&"strict;"),
         "expected deterministic 'strict;' when no backend is registered, got: {texts:?}",
@@ -344,8 +374,14 @@ fn test_ai_provider_error_with_fallback_returns_deterministic()
     let result = inline_completion(&server, uri, 0, 4)?;
     let items = result["items"].as_array().ok_or("items array")?;
 
-    assert!(!items.is_empty(), "expected deterministic fallback on provider error");
-    let texts: Vec<&str> = items.iter().filter_map(|item| item["insertText"].as_str()).collect();
+    assert!(
+        !items.is_empty(),
+        "expected deterministic fallback on provider error"
+    );
+    let texts: Vec<&str> = items
+        .iter()
+        .filter_map(|item| item["insertText"].as_str())
+        .collect();
     assert!(
         texts.contains(&"strict;"),
         "expected deterministic 'strict;' on provider error fallback, got: {texts:?}",

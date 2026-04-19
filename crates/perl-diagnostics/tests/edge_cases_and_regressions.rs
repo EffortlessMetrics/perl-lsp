@@ -37,7 +37,10 @@ fn edge_case_related_information_default_is_valid() {
 // Edge case: Diagnostic with all fields populated
 #[test]
 fn edge_case_diagnostic_with_all_fields_populated() {
-    let info = RelatedInformation { message: "related info".to_string(), location: (10, 20) };
+    let info = RelatedInformation {
+        message: "related info".to_string(),
+        location: (10, 20),
+    };
 
     let diag = Diagnostic {
         code: DiagnosticCode::SyntaxError,
@@ -95,7 +98,10 @@ fn edge_case_diagnostic_category_all_variants_accessible() {
 
     // Verify they can be compared for equality
     assert_eq!(DiagnosticCategory::Parser, DiagnosticCategory::Parser);
-    assert_ne!(DiagnosticCategory::Parser, DiagnosticCategory::StrictWarnings);
+    assert_ne!(
+        DiagnosticCategory::Parser,
+        DiagnosticCategory::StrictWarnings
+    );
 }
 
 // Edge case: DiagnosticCode has expected key variants
@@ -189,29 +195,49 @@ fn edge_case_severity_ordering_complete() {
 #[test]
 fn edge_case_diagnostic_message_various_lengths() {
     // Empty message
-    let diag1 = Diagnostic { message: String::new(), ..Default::default() };
+    let diag1 = Diagnostic {
+        message: String::new(),
+        ..Default::default()
+    };
     assert_eq!(diag1.message, "");
 
     // Long message (10k chars)
     let long_msg = "a".repeat(10000);
-    let diag2 = Diagnostic { message: long_msg.clone(), ..Default::default() };
+    let diag2 = Diagnostic {
+        message: long_msg.clone(),
+        ..Default::default()
+    };
     assert_eq!(diag2.message, long_msg);
 
     // Unicode message
     let unicode_msg = "Error in ñoño → 🚀 ⚠️".to_string();
-    let diag3 = Diagnostic { message: unicode_msg.clone(), ..Default::default() };
+    let diag3 = Diagnostic {
+        message: unicode_msg.clone(),
+        ..Default::default()
+    };
     assert_eq!(diag3.message, unicode_msg);
 }
 
 // Edge case: Multiple related_information entries
 #[test]
 fn edge_case_diagnostic_multiple_related_information() {
-    let info1 = RelatedInformation { message: "First related".to_string(), location: (0, 10) };
-    let info2 = RelatedInformation { message: "Second related".to_string(), location: (20, 30) };
-    let info3 = RelatedInformation { message: "Third related".to_string(), location: (40, 50) };
+    let info1 = RelatedInformation {
+        message: "First related".to_string(),
+        location: (0, 10),
+    };
+    let info2 = RelatedInformation {
+        message: "Second related".to_string(),
+        location: (20, 30),
+    };
+    let info3 = RelatedInformation {
+        message: "Third related".to_string(),
+        location: (40, 50),
+    };
 
-    let diag =
-        Diagnostic { related_information: Some(vec![info1, info2, info3]), ..Default::default() };
+    let diag = Diagnostic {
+        related_information: Some(vec![info1, info2, info3]),
+        ..Default::default()
+    };
 
     let infos = must_some(diag.related_information);
     assert_eq!(infos.len(), 3);
@@ -320,7 +346,10 @@ fn regression_diagnostic_category_copy() {
 // Edge case: Diagnostic struct Debug representation is valid
 #[test]
 fn edge_case_diagnostic_debug_representation() {
-    let diag = Diagnostic { message: "Debug test".to_string(), ..Default::default() };
+    let diag = Diagnostic {
+        message: "Debug test".to_string(),
+        ..Default::default()
+    };
 
     let debug_str = format!("{:?}", diag);
     assert!(debug_str.contains("Debug test") || !debug_str.is_empty());
@@ -403,7 +432,10 @@ fn edge_case_diagnostic_clone_and_equality() {
 // Edge case: Large range values work correctly
 #[test]
 fn edge_case_diagnostic_large_range_values() {
-    let diag = Diagnostic { range: (1_000_000, 2_000_000), ..Default::default() };
+    let diag = Diagnostic {
+        range: (1_000_000, 2_000_000),
+        ..Default::default()
+    };
 
     assert_eq!(diag.range.0, 1_000_000);
     assert_eq!(diag.range.1, 2_000_000);
@@ -412,8 +444,14 @@ fn edge_case_diagnostic_large_range_values() {
 // Regression: Diagnostic can be used in collections
 #[test]
 fn regression_diagnostic_in_collections() {
-    let diag1 = Diagnostic { message: "First".to_string(), ..Default::default() };
-    let diag2 = Diagnostic { message: "Second".to_string(), ..Default::default() };
+    let diag1 = Diagnostic {
+        message: "First".to_string(),
+        ..Default::default()
+    };
+    let diag2 = Diagnostic {
+        message: "Second".to_string(),
+        ..Default::default()
+    };
 
     let diagnostics: Vec<Diagnostic> = vec![diag1, diag2];
     assert_eq!(diagnostics.len(), 2);
@@ -458,22 +496,57 @@ fn edge_case_from_message_phase_scoped_takes_priority_over_use_strict() {
 // Edge case: from_message returns None for empty and whitespace-only strings
 #[test]
 fn edge_case_from_message_empty_and_whitespace() {
-    assert_eq!(DiagnosticCode::from_message(""), None, "empty string → None");
-    assert_eq!(DiagnosticCode::from_message("   "), None, "whitespace-only → None");
-    assert_eq!(DiagnosticCode::from_message("\t\n"), None, "tab+newline → None");
+    assert_eq!(
+        DiagnosticCode::from_message(""),
+        None,
+        "empty string → None"
+    );
+    assert_eq!(
+        DiagnosticCode::from_message("   "),
+        None,
+        "whitespace-only → None"
+    );
+    assert_eq!(
+        DiagnosticCode::from_message("\t\n"),
+        None,
+        "tab+newline → None"
+    );
 }
 
 // Edge case: parse_code is case-sensitive (lowercase codes must not match)
 #[test]
 fn edge_case_parse_code_case_sensitivity() {
     // parse_code is case-sensitive by design — codes are always uppercase
-    assert_eq!(DiagnosticCode::parse_code("PL001"), Some(DiagnosticCode::ParseError));
-    assert_eq!(DiagnosticCode::parse_code("pl001"), None, "lowercase must not match");
-    assert_eq!(DiagnosticCode::parse_code("Pl001"), None, "mixed case must not match");
+    assert_eq!(
+        DiagnosticCode::parse_code("PL001"),
+        Some(DiagnosticCode::ParseError)
+    );
+    assert_eq!(
+        DiagnosticCode::parse_code("pl001"),
+        None,
+        "lowercase must not match"
+    );
+    assert_eq!(
+        DiagnosticCode::parse_code("Pl001"),
+        None,
+        "mixed case must not match"
+    );
     assert_eq!(DiagnosticCode::parse_code(""), None, "empty string → None");
-    assert_eq!(DiagnosticCode::parse_code("PL999"), None, "unassigned code → None");
-    assert_eq!(DiagnosticCode::parse_code("PC999"), None, "unassigned PC code → None");
-    assert_eq!(DiagnosticCode::parse_code("PL 001"), None, "space in code → None");
+    assert_eq!(
+        DiagnosticCode::parse_code("PL999"),
+        None,
+        "unassigned code → None"
+    );
+    assert_eq!(
+        DiagnosticCode::parse_code("PC999"),
+        None,
+        "unassigned PC code → None"
+    );
+    assert_eq!(
+        DiagnosticCode::parse_code("PL 001"),
+        None,
+        "space in code → None"
+    );
 }
 
 // Regression: DiagnosticSeverity implements Hash correctly

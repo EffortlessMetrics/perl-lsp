@@ -17,7 +17,9 @@
 pub fn line_bounds_at(text: &str, cursor_pos: usize) -> (usize, usize) {
     let cursor = cursor_pos.min(text.len());
     let start = text[..cursor].rfind('\n').map_or(0, |idx| idx + 1);
-    let end = text[cursor..].find('\n').map_or(text.len(), |idx| cursor + idx);
+    let end = text[cursor..]
+        .find('\n')
+        .map_or(text.len(), |idx| cursor + idx);
     (start, end)
 }
 

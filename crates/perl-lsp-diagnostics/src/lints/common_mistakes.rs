@@ -112,7 +112,9 @@ fn might_be_undef(node: &Node, symbol_table: &SymbolTable) -> bool {
     match &node.kind {
         NodeKind::Variable { name, .. } => {
             // If variable is not defined in scope, it might be undef
-            symbol_table.find_symbol(name, 0, SymbolKind::scalar()).is_empty()
+            symbol_table
+                .find_symbol(name, 0, SymbolKind::scalar())
+                .is_empty()
         }
         NodeKind::Undef => true,
         _ => false,

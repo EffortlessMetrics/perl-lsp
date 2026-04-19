@@ -45,8 +45,14 @@ fn test_tie_magic_method_docs_are_non_empty() -> Result<(), Box<dyn std::error::
     for method in &magic_methods {
         let doc = get_builtin_documentation(method)
             .ok_or_else(|| format!("Missing docs for {method}"))?;
-        assert!(!doc.signature.is_empty(), "signature should be non-empty for {method}");
-        assert!(!doc.description.is_empty(), "description should be non-empty for {method}");
+        assert!(
+            !doc.signature.is_empty(),
+            "signature should be non-empty for {method}"
+        );
+        assert!(
+            !doc.description.is_empty(),
+            "description should be non-empty for {method}"
+        );
     }
     Ok(())
 }

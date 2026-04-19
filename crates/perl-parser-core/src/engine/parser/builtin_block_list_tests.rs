@@ -19,7 +19,11 @@ mod tests {
         let mut parser = Parser::new(code);
         let ast = must(parser.parse());
         let sexp = ast.to_sexp();
-        assert!(sexp.contains("(call grep"), "should be a grep call: {}", sexp);
+        assert!(
+            sexp.contains("(call grep"),
+            "should be a grep call: {}",
+            sexp
+        );
         assert!(sexp.contains("(block"), "should contain a block: {}", sexp);
         assert!(
             sexp.contains("(variable @ array)"),
@@ -60,7 +64,11 @@ mod tests {
         let mut parser = Parser::new(code);
         let ast = must(parser.parse());
         let sexp = ast.to_sexp();
-        assert!(!sexp.contains("ERROR"), "should not contain ERROR: {}", sexp);
+        assert!(
+            !sexp.contains("ERROR"),
+            "should not contain ERROR: {}",
+            sexp
+        );
         // The trailing list must be inside the grep call, not a separate statement
         assert!(
             sexp.contains("(call grep") && sexp.contains("(variable @ items)"),
@@ -78,7 +86,11 @@ mod tests {
         let ast = must(parser.parse());
         let sexp = ast.to_sexp();
         assert!(sexp.contains("(call map"), "should be a map call: {}", sexp);
-        assert!(sexp.contains(".."), "trailing range should be inside call: {}", sexp);
+        assert!(
+            sexp.contains(".."),
+            "trailing range should be inside call: {}",
+            sexp
+        );
     }
 
     #[test]
@@ -100,7 +112,11 @@ mod tests {
         let mut parser = Parser::new(code);
         let ast = must(parser.parse());
         let sexp = ast.to_sexp();
-        assert!(!sexp.contains("ERROR"), "should not contain ERROR: {}", sexp);
+        assert!(
+            !sexp.contains("ERROR"),
+            "should not contain ERROR: {}",
+            sexp
+        );
         assert!(
             sexp.contains("(call map") && sexp.contains("(variable @ pairs)"),
             "trailing list should be inside the map call: {}",
@@ -116,7 +132,11 @@ mod tests {
         let mut parser = Parser::new(code);
         let ast = must(parser.parse());
         let sexp = ast.to_sexp();
-        assert!(sexp.contains("(call sort"), "should be a sort call: {}", sexp);
+        assert!(
+            sexp.contains("(call sort"),
+            "should be a sort call: {}",
+            sexp
+        );
         assert!(
             sexp.contains("(variable @ numbers)"),
             "trailing list should be inside call: {}",
@@ -143,9 +163,17 @@ mod tests {
         let mut parser = Parser::new(code);
         let ast = must(parser.parse());
         let sexp = ast.to_sexp();
-        assert!(sexp.contains("(call sort"), "should be a sort call: {}", sexp);
+        assert!(
+            sexp.contains("(call sort"),
+            "should be a sort call: {}",
+            sexp
+        );
         // keys %hash should be inside the sort call
-        assert!(sexp.contains("(call keys"), "keys should be inside sort call: {}", sexp);
+        assert!(
+            sexp.contains("(call keys"),
+            "keys should be inside sort call: {}",
+            sexp
+        );
     }
 
     #[test]
@@ -154,7 +182,11 @@ mod tests {
         let mut parser = Parser::new(code);
         let ast = must(parser.parse());
         let sexp = ast.to_sexp();
-        assert!(!sexp.contains("ERROR"), "should not contain ERROR: {}", sexp);
+        assert!(
+            !sexp.contains("ERROR"),
+            "should not contain ERROR: {}",
+            sexp
+        );
         assert!(
             sexp.contains("(call sort") && sexp.contains("(variable @ records)"),
             "trailing list should be inside the sort call: {}",
@@ -168,7 +200,11 @@ mod tests {
         let mut parser = Parser::new(code);
         let ast = must(parser.parse());
         let sexp = ast.to_sexp();
-        assert!(!sexp.contains("ERROR"), "should not contain ERROR: {}", sexp);
+        assert!(
+            !sexp.contains("ERROR"),
+            "should not contain ERROR: {}",
+            sexp
+        );
         assert!(
             sexp.contains("(call sort") && sexp.contains("(call keys"),
             "keys call should be inside the sort call: {}",
@@ -184,8 +220,16 @@ mod tests {
         let mut parser = Parser::new(code);
         let ast = must(parser.parse());
         let sexp = ast.to_sexp();
-        assert!(!sexp.contains("ERROR"), "should not contain ERROR: {}", sexp);
-        assert!(sexp.contains("(call grep"), "outer should be grep: {}", sexp);
+        assert!(
+            !sexp.contains("ERROR"),
+            "should not contain ERROR: {}",
+            sexp
+        );
+        assert!(
+            sexp.contains("(call grep"),
+            "outer should be grep: {}",
+            sexp
+        );
         assert!(sexp.contains("(call map"), "inner should be map: {}", sexp);
     }
 
@@ -195,8 +239,16 @@ mod tests {
         let mut parser = Parser::new(code);
         let ast = must(parser.parse());
         let sexp = ast.to_sexp();
-        assert!(!sexp.contains("ERROR"), "should not contain ERROR: {}", sexp);
-        assert!(sexp.contains("(call sort"), "outer should be sort: {}", sexp);
+        assert!(
+            !sexp.contains("ERROR"),
+            "should not contain ERROR: {}",
+            sexp
+        );
+        assert!(
+            sexp.contains("(call sort"),
+            "outer should be sort: {}",
+            sexp
+        );
         assert!(sexp.contains("(call map"), "inner should be map: {}", sexp);
     }
 
@@ -209,7 +261,11 @@ mod tests {
         let mut parser = Parser::new(code);
         let ast = must(parser.parse());
         let sexp = ast.to_sexp();
-        assert!(sexp.contains("(call grep"), "should be a grep call: {}", sexp);
+        assert!(
+            sexp.contains("(call grep"),
+            "should be a grep call: {}",
+            sexp
+        );
         assert!(
             sexp.contains("(variable @ array)"),
             "trailing list with comma should work: {}",
@@ -224,6 +280,10 @@ mod tests {
         let mut parser = Parser::new(code);
         let ast = must(parser.parse());
         let sexp = ast.to_sexp();
-        assert!(!sexp.contains("ERROR"), "should not contain ERROR: {}", sexp);
+        assert!(
+            !sexp.contains("ERROR"),
+            "should not contain ERROR: {}",
+            sexp
+        );
     }
 }

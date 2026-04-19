@@ -471,7 +471,12 @@ fn document_not_found_error_contains_status_and_message() {
 
 #[test]
 fn enhanced_error_includes_server_info() {
-    let err = enhanced_error(INTERNAL_ERROR, "failed", "runtime", Some("textDocument/hover"));
+    let err = enhanced_error(
+        INTERNAL_ERROR,
+        "failed",
+        "runtime",
+        Some("textDocument/hover"),
+    );
     if let Some(data) = &err.data {
         assert!(data.get("server_info").is_some());
         assert_eq!(data["method"], json!("textDocument/hover"));
@@ -707,7 +712,10 @@ fn req_range_max_u32_values() {
             "end": {"line": max, "character": max}
         }
     });
-    assert!(matches!(req_range(&params), Ok(((u32::MAX, u32::MAX), (u32::MAX, u32::MAX)))));
+    assert!(matches!(
+        req_range(&params),
+        Ok(((u32::MAX, u32::MAX), (u32::MAX, u32::MAX)))
+    ));
 }
 
 // ============================================================================
@@ -1235,7 +1243,11 @@ fn all_workspace_methods_start_with_prefix() {
         methods::WORKSPACE_DIAGNOSTIC,
     ];
     for method in &workspace_methods {
-        assert!(method.starts_with("workspace/"), "Expected workspace/ prefix for: {}", method);
+        assert!(
+            method.starts_with("workspace/"),
+            "Expected workspace/ prefix for: {}",
+            method
+        );
     }
 }
 
@@ -1250,7 +1262,11 @@ fn all_window_methods_start_with_prefix() {
         methods::WINDOW_WORK_DONE_PROGRESS_CANCEL,
     ];
     for method in &window_methods {
-        assert!(method.starts_with("window/"), "Expected window/ prefix for: {}", method);
+        assert!(
+            method.starts_with("window/"),
+            "Expected window/ prefix for: {}",
+            method
+        );
     }
 }
 
@@ -1273,9 +1289,17 @@ fn all_notebook_methods_start_with_prefix() {
 
 #[test]
 fn special_methods_start_with_dollar() {
-    let special = [methods::CANCEL_REQUEST, methods::DOLLAR_PROGRESS, methods::TEST_SLOW_OPERATION];
+    let special = [
+        methods::CANCEL_REQUEST,
+        methods::DOLLAR_PROGRESS,
+        methods::TEST_SLOW_OPERATION,
+    ];
     for method in &special {
-        assert!(method.starts_with("$/"), "Expected $/ prefix for: {}", method);
+        assert!(
+            method.starts_with("$/"),
+            "Expected $/ prefix for: {}",
+            method
+        );
     }
 }
 
@@ -1289,7 +1313,11 @@ fn resolve_methods_use_slash_resolve_pattern() {
         methods::DOCUMENT_LINK_RESOLVE,
     ];
     for method in &resolve_methods {
-        assert!(method.contains("/resolve"), "Expected /resolve in: {}", method);
+        assert!(
+            method.contains("/resolve"),
+            "Expected /resolve in: {}",
+            method
+        );
     }
 }
 

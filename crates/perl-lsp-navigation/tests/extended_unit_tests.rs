@@ -51,7 +51,8 @@ fn links_use_deeply_nested_module() {
     assert_eq!(links.len(), 1);
     if let Some(link) = links.first() {
         assert_eq!(
-            link.pointer("/data/module").and_then(serde_json::Value::as_str),
+            link.pointer("/data/module")
+                .and_then(serde_json::Value::as_str),
             Some("A::B::C::D::E")
         );
     }
@@ -70,7 +71,8 @@ fn links_use_with_import_list_still_links() {
     assert_eq!(links.len(), 1);
     if let Some(link) = links.first() {
         assert_eq!(
-            link.pointer("/data/module").and_then(serde_json::Value::as_str),
+            link.pointer("/data/module")
+                .and_then(serde_json::Value::as_str),
             Some("Foo::Bar")
         );
     }
@@ -95,7 +97,8 @@ fn links_require_file_with_relative_path() -> Result<(), Box<dyn std::error::Err
     assert_eq!(links.len(), 1);
     let link = links.first().ok_or("expected a link")?;
     assert_eq!(
-        link.pointer("/data/path").and_then(serde_json::Value::as_str),
+        link.pointer("/data/path")
+            .and_then(serde_json::Value::as_str),
         Some("lib/Helper.pm")
     );
     Ok(())
@@ -106,7 +109,11 @@ fn links_require_file_double_quotes() -> Result<(), Box<dyn std::error::Error>> 
     let links = compute_links("file:///t.pl", "require \"Helper.pm\";\n", &[]);
     assert_eq!(links.len(), 1);
     let link = links.first().ok_or("expected a link")?;
-    assert_eq!(link.pointer("/data/type").and_then(serde_json::Value::as_str), Some("file"));
+    assert_eq!(
+        link.pointer("/data/type")
+            .and_then(serde_json::Value::as_str),
+        Some("file")
+    );
     Ok(())
 }
 
@@ -127,7 +134,9 @@ fn links_use_on_second_line() {
     let links = compute_links("file:///t.pl", text, &[]);
     assert_eq!(links.len(), 1);
     if let Some(link) = links.first() {
-        let line = link.pointer("/range/start/line").and_then(serde_json::Value::as_u64);
+        let line = link
+            .pointer("/range/start/line")
+            .and_then(serde_json::Value::as_u64);
         assert_eq!(line, Some(1), "link should be on line 1 (0-indexed)");
     }
 }
@@ -152,7 +161,9 @@ fn links_line_numbers_sequential() {
     let links = compute_links("file:///t.pl", text, &[]);
     assert_eq!(links.len(), 3);
     for (i, link) in links.iter().enumerate() {
-        let line = link.pointer("/range/start/line").and_then(serde_json::Value::as_u64);
+        let line = link
+            .pointer("/range/start/line")
+            .and_then(serde_json::Value::as_u64);
         assert_eq!(line, Some(i as u64), "link {} should be on line {}", i, i);
     }
 }
@@ -189,7 +200,11 @@ fn links_all_extended_pragmas_skipped() {
     ];
     for pragma in &extended_pragmas {
         let links = compute_links("file:///t.pl", pragma, &[]);
-        assert!(links.is_empty(), "pragma '{}' should not produce a link", pragma);
+        assert!(
+            links.is_empty(),
+            "pragma '{}' should not produce a link",
+            pragma
+        );
     }
 }
 
@@ -242,7 +257,11 @@ fn refs_subroutine_defined_and_called_twice() {
     let refs = find_references_single_file(&ast, offset);
     assert!(refs.is_some());
     let refs = must_some(refs);
-    assert!(refs.len() >= 3, "should find definition + 2 calls, found {}", refs.len());
+    assert!(
+        refs.len() >= 3,
+        "should find definition + 2 calls, found {}",
+        refs.len()
+    );
 }
 
 #[test]
@@ -362,7 +381,11 @@ fn hierarchy_diamond_inheritance() {
 
     let base = make_hierarchy_item("Base");
     let subtypes = provider.find_subtypes(&ast, &base);
-    assert_eq!(subtypes.len(), 2, "Base should have Left and Right as subtypes");
+    assert_eq!(
+        subtypes.len(),
+        2,
+        "Base should have Left and Right as subtypes"
+    );
 }
 
 #[test]
@@ -464,11 +487,23 @@ fn hierarchy_item_with_data_field() -> Result<(), Box<dyn std::error::Error>> {
 fn hierarchy_item_kind_serialization() -> Result<(), Box<dyn std::error::Error>> {
     // Serde serializes the enum variant name as a string (not the discriminant)
     let json = serde_json::to_string(&TypeHierarchySymbolKind::Class)?;
-    assert!(json.contains("Class"), "Class should serialize, got {}", json);
+    assert!(
+        json.contains("Class"),
+        "Class should serialize, got {}",
+        json
+    );
     let json = serde_json::to_string(&TypeHierarchySymbolKind::Method)?;
-    assert!(json.contains("Method"), "Method should serialize, got {}", json);
+    assert!(
+        json.contains("Method"),
+        "Method should serialize, got {}",
+        json
+    );
     let json = serde_json::to_string(&TypeHierarchySymbolKind::Function)?;
-    assert!(json.contains("Function"), "Function should serialize, got {}", json);
+    assert!(
+        json.contains("Function"),
+        "Function should serialize, got {}",
+        json
+    );
 
     // Round-trip deserialization
     let rt: TypeHierarchySymbolKind = serde_json::from_str(&json)?;
@@ -587,10 +622,16 @@ fn ws_multi_doc_remove_one() {
     provider.remove_document("file:///a.pl");
 
     let results = provider.search("alpha", &source_map);
-    assert!(results.is_empty(), "alpha should be gone after removing a.pl");
+    assert!(
+        results.is_empty(),
+        "alpha should be gone after removing a.pl"
+    );
 
     let results = provider.search("beta", &source_map);
-    assert!(!results.is_empty(), "beta should remain after removing a.pl");
+    assert!(
+        !results.is_empty(),
+        "beta should remain after removing a.pl"
+    );
 }
 
 #[test]
@@ -618,7 +659,10 @@ fn ws_search_with_candidates_empty_candidates() {
 
     let candidates: Vec<String> = vec![];
     let results = provider.search_with_candidates("a", &source_map, &candidates);
-    assert!(results.is_empty(), "empty candidates should yield no results");
+    assert!(
+        results.is_empty(),
+        "empty candidates should yield no results"
+    );
 }
 
 #[test]
@@ -664,7 +708,10 @@ fn ws_sub_symbol_kind() {
     let results = provider.search("my_function", &source_map);
     assert!(!results.is_empty());
     // LSP SymbolKind::Function is 12
-    assert_eq!(results[0].kind, 12, "subroutine should have Function kind (12)");
+    assert_eq!(
+        results[0].kind, 12,
+        "subroutine should have Function kind (12)"
+    );
 }
 
 #[test]
@@ -699,7 +746,10 @@ fn ws_reindex_same_uri_updates() {
     source_map.insert(uri.to_string(), v2.to_string());
 
     let results = provider.search("old", &source_map);
-    assert!(results.is_empty(), "old symbol should be gone after reindex");
+    assert!(
+        results.is_empty(),
+        "old symbol should be gone after reindex"
+    );
     let results = provider.search("replaced", &source_map);
     assert!(!results.is_empty(), "new symbol should be present");
 }
@@ -755,8 +805,14 @@ fn ws_symbol_serialization_with_location() -> Result<(), Box<dyn std::error::Err
         location: perl_position_tracking::WireLocation::new(
             "file:///loc.pl".to_string(),
             perl_position_tracking::WireRange {
-                start: perl_position_tracking::WirePosition { line: 5, character: 4 },
-                end: perl_position_tracking::WirePosition { line: 5, character: 12 },
+                start: perl_position_tracking::WirePosition {
+                    line: 5,
+                    character: 4,
+                },
+                end: perl_position_tracking::WirePosition {
+                    line: 5,
+                    character: 12,
+                },
             },
         ),
         container_name: Some("Container".to_string()),
@@ -860,7 +916,11 @@ fn hierarchy_mixed_use_parent_and_use_base() {
 
     let root = make_hierarchy_item("Root");
     let subtypes = provider.find_subtypes(&ast, &root);
-    assert_eq!(subtypes.len(), 2, "Both use parent and use base should be detected");
+    assert_eq!(
+        subtypes.len(),
+        2,
+        "Both use parent and use base should be detected"
+    );
     let names: Vec<&str> = subtypes.iter().map(|s| s.name.as_str()).collect();
     assert!(names.contains(&"Child1"));
     assert!(names.contains(&"Child2"));
@@ -891,7 +951,10 @@ fn ws_fuzzy_match_subsequence() {
 
     // "gui" is a subsequence of "get_user_by_id"
     let results = provider.search("gui", &source_map);
-    assert!(!results.is_empty(), "subsequence 'gui' should match 'get_user_by_id'");
+    assert!(
+        !results.is_empty(),
+        "subsequence 'gui' should match 'get_user_by_id'"
+    );
 }
 
 #[test]

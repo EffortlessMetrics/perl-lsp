@@ -59,37 +59,61 @@ fn assert_not_recovered(errors: &[ParseError], site: RecoverySite, kind: Recover
 fn missing_rhs_plus_before_semicolon_emits_recovered() {
     // `my $x = $a +;` — `+` consumes, next is `;`
     let errors = parse_errors("my $x = $a +;");
-    assert_recovered(&errors, RecoverySite::InfixRhs, RecoveryKind::MissingOperand);
+    assert_recovered(
+        &errors,
+        RecoverySite::InfixRhs,
+        RecoveryKind::MissingOperand,
+    );
 }
 
 #[test]
 fn missing_rhs_minus_before_semicolon_emits_recovered() {
     let errors = parse_errors("my $x = $a -;");
-    assert_recovered(&errors, RecoverySite::InfixRhs, RecoveryKind::MissingOperand);
+    assert_recovered(
+        &errors,
+        RecoverySite::InfixRhs,
+        RecoveryKind::MissingOperand,
+    );
 }
 
 #[test]
 fn missing_rhs_dot_concat_before_semicolon_emits_recovered() {
     let errors = parse_errors(r#"my $s = $a .;"#);
-    assert_recovered(&errors, RecoverySite::InfixRhs, RecoveryKind::MissingOperand);
+    assert_recovered(
+        &errors,
+        RecoverySite::InfixRhs,
+        RecoveryKind::MissingOperand,
+    );
 }
 
 #[test]
 fn missing_rhs_logical_and_before_semicolon_emits_recovered() {
     let errors = parse_errors("my $x = $a &&;");
-    assert_recovered(&errors, RecoverySite::InfixRhs, RecoveryKind::MissingOperand);
+    assert_recovered(
+        &errors,
+        RecoverySite::InfixRhs,
+        RecoveryKind::MissingOperand,
+    );
 }
 
 #[test]
 fn missing_rhs_logical_or_before_semicolon_emits_recovered() {
     let errors = parse_errors("my $x = $a ||;");
-    assert_recovered(&errors, RecoverySite::InfixRhs, RecoveryKind::MissingOperand);
+    assert_recovered(
+        &errors,
+        RecoverySite::InfixRhs,
+        RecoveryKind::MissingOperand,
+    );
 }
 
 #[test]
 fn missing_rhs_defined_or_before_semicolon_emits_recovered() {
     let errors = parse_errors("my $x = $a //;");
-    assert_recovered(&errors, RecoverySite::InfixRhs, RecoveryKind::MissingOperand);
+    assert_recovered(
+        &errors,
+        RecoverySite::InfixRhs,
+        RecoveryKind::MissingOperand,
+    );
 }
 
 // ──────────────────────────────────────────────────────────────
@@ -100,20 +124,32 @@ fn missing_rhs_defined_or_before_semicolon_emits_recovered() {
 fn missing_rhs_plus_before_rbrace_emits_recovered() {
     // Inside a block: `{ $a + }` — `+` then `}`
     let errors = parse_errors("sub foo { return $a + }");
-    assert_recovered(&errors, RecoverySite::InfixRhs, RecoveryKind::MissingOperand);
+    assert_recovered(
+        &errors,
+        RecoverySite::InfixRhs,
+        RecoveryKind::MissingOperand,
+    );
 }
 
 #[test]
 fn missing_rhs_star_before_rbrace_emits_recovered() {
     let errors = parse_errors("sub foo { my $x = $a * }");
-    assert_recovered(&errors, RecoverySite::InfixRhs, RecoveryKind::MissingOperand);
+    assert_recovered(
+        &errors,
+        RecoverySite::InfixRhs,
+        RecoveryKind::MissingOperand,
+    );
 }
 
 #[test]
 fn missing_rhs_eq_before_rbrace_emits_recovered() {
     let errors = parse_errors("sub foo { my $x = }");
     // Assignment operator with missing RHS before `}`
-    assert_recovered(&errors, RecoverySite::InfixRhs, RecoveryKind::MissingOperand);
+    assert_recovered(
+        &errors,
+        RecoverySite::InfixRhs,
+        RecoveryKind::MissingOperand,
+    );
 }
 
 // ──────────────────────────────────────────────────────────────
@@ -125,14 +161,20 @@ fn missing_rhs_plus_does_not_catastrophically_fail() {
     // Parser must return Ok (or at least not crash)
     let mut parser = Parser::new("my $x = $a +;");
     let result = parser.parse();
-    assert!(result.is_ok(), "Parser must not return catastrophic Err for recoverable input");
+    assert!(
+        result.is_ok(),
+        "Parser must not return catastrophic Err for recoverable input"
+    );
 }
 
 #[test]
 fn missing_rhs_in_if_condition_does_not_crash() {
     let mut parser = Parser::new("if ($x +) { print 1; }");
     let result = parser.parse();
-    assert!(result.is_ok(), "Parser must not crash on missing RHS in if condition");
+    assert!(
+        result.is_ok(),
+        "Parser must not crash on missing RHS in if condition"
+    );
 }
 
 // ──────────────────────────────────────────────────────────────
@@ -143,21 +185,33 @@ fn missing_rhs_in_if_condition_does_not_crash() {
 fn truncated_arrow_before_semicolon_emits_recovered() {
     // `$obj->;` — `->` consumed, next is `;`
     let errors = parse_errors("my $x = $obj->;");
-    assert_recovered(&errors, RecoverySite::PostfixChain, RecoveryKind::TruncatedChain);
+    assert_recovered(
+        &errors,
+        RecoverySite::PostfixChain,
+        RecoveryKind::TruncatedChain,
+    );
 }
 
 #[test]
 fn truncated_arrow_at_eof_emits_recovered() {
     // `$obj->` with no following token
     let errors = parse_errors("$obj->");
-    assert_recovered(&errors, RecoverySite::PostfixChain, RecoveryKind::TruncatedChain);
+    assert_recovered(
+        &errors,
+        RecoverySite::PostfixChain,
+        RecoveryKind::TruncatedChain,
+    );
 }
 
 #[test]
 fn truncated_arrow_before_rbrace_emits_recovered() {
     // Inside a block: `sub foo { $obj-> }`
     let errors = parse_errors("sub foo { $obj-> }");
-    assert_recovered(&errors, RecoverySite::PostfixChain, RecoveryKind::TruncatedChain);
+    assert_recovered(
+        &errors,
+        RecoverySite::PostfixChain,
+        RecoveryKind::TruncatedChain,
+    );
 }
 
 // ──────────────────────────────────────────────────────────────
@@ -168,14 +222,20 @@ fn truncated_arrow_before_rbrace_emits_recovered() {
 fn truncated_arrow_does_not_catastrophically_fail() {
     let mut parser = Parser::new("my $x = $obj->;");
     let result = parser.parse();
-    assert!(result.is_ok(), "Parser must not return catastrophic Err for truncated arrow");
+    assert!(
+        result.is_ok(),
+        "Parser must not return catastrophic Err for truncated arrow"
+    );
 }
 
 #[test]
 fn truncated_arrow_chain_at_eof_does_not_crash() {
     let mut parser = Parser::new("$a->b->c->");
     let result = parser.parse();
-    assert!(result.is_ok(), "Parser must not crash on truncated method chain at EOF");
+    assert!(
+        result.is_ok(),
+        "Parser must not crash on truncated method chain at EOF"
+    );
 }
 
 // ──────────────────────────────────────────────────────────────
@@ -185,49 +245,81 @@ fn truncated_arrow_chain_at_eof_does_not_crash() {
 #[test]
 fn clean_addition_does_not_emit_recovered() {
     let errors = parse_errors("my $x = $a + $b;");
-    assert_not_recovered(&errors, RecoverySite::InfixRhs, RecoveryKind::MissingOperand);
+    assert_not_recovered(
+        &errors,
+        RecoverySite::InfixRhs,
+        RecoveryKind::MissingOperand,
+    );
 }
 
 #[test]
 fn clean_concatenation_does_not_emit_recovered() {
     let errors = parse_errors(r#"my $s = $a . $b . $c;"#);
-    assert_not_recovered(&errors, RecoverySite::InfixRhs, RecoveryKind::MissingOperand);
+    assert_not_recovered(
+        &errors,
+        RecoverySite::InfixRhs,
+        RecoveryKind::MissingOperand,
+    );
 }
 
 #[test]
 fn clean_method_call_does_not_emit_recovered() {
     let errors = parse_errors("my $x = $obj->method();");
-    assert_not_recovered(&errors, RecoverySite::PostfixChain, RecoveryKind::TruncatedChain);
+    assert_not_recovered(
+        &errors,
+        RecoverySite::PostfixChain,
+        RecoveryKind::TruncatedChain,
+    );
 }
 
 #[test]
 fn clean_arrow_subscript_does_not_emit_recovered() {
     let errors = parse_errors("my $x = $aref->[0];");
-    assert_not_recovered(&errors, RecoverySite::PostfixChain, RecoveryKind::TruncatedChain);
+    assert_not_recovered(
+        &errors,
+        RecoverySite::PostfixChain,
+        RecoveryKind::TruncatedChain,
+    );
 }
 
 #[test]
 fn clean_hash_subscript_does_not_emit_recovered() {
     let errors = parse_errors(r#"my $x = $href->{key};"#);
-    assert_not_recovered(&errors, RecoverySite::PostfixChain, RecoveryKind::TruncatedChain);
+    assert_not_recovered(
+        &errors,
+        RecoverySite::PostfixChain,
+        RecoveryKind::TruncatedChain,
+    );
 }
 
 #[test]
 fn clean_chained_methods_does_not_emit_recovered() {
     let errors = parse_errors("my $x = $obj->foo->bar->baz;");
-    assert_not_recovered(&errors, RecoverySite::PostfixChain, RecoveryKind::TruncatedChain);
+    assert_not_recovered(
+        &errors,
+        RecoverySite::PostfixChain,
+        RecoveryKind::TruncatedChain,
+    );
 }
 
 #[test]
 fn clean_logical_or_does_not_emit_recovered() {
     let errors = parse_errors("my $x = $a || $b || $c;");
-    assert_not_recovered(&errors, RecoverySite::InfixRhs, RecoveryKind::MissingOperand);
+    assert_not_recovered(
+        &errors,
+        RecoverySite::InfixRhs,
+        RecoveryKind::MissingOperand,
+    );
 }
 
 #[test]
 fn clean_defined_or_assign_does_not_emit_recovered() {
     let errors = parse_errors("$x //= 'default';");
-    assert_not_recovered(&errors, RecoverySite::InfixRhs, RecoveryKind::MissingOperand);
+    assert_not_recovered(
+        &errors,
+        RecoverySite::InfixRhs,
+        RecoveryKind::MissingOperand,
+    );
 }
 
 // ──────────────────────────────────────────────────────────────
@@ -238,40 +330,64 @@ fn clean_defined_or_assign_does_not_emit_recovered() {
 fn missing_rhs_equality_before_semicolon_emits_recovered() {
     // `$x == ;` — equality operator with missing RHS
     let errors = parse_errors("my $x = $a ==;");
-    assert_recovered(&errors, RecoverySite::InfixRhs, RecoveryKind::MissingOperand);
+    assert_recovered(
+        &errors,
+        RecoverySite::InfixRhs,
+        RecoveryKind::MissingOperand,
+    );
 }
 
 #[test]
 fn missing_rhs_less_than_before_semicolon_emits_recovered() {
     // `$x < ;` — relational operator with missing RHS
     let errors = parse_errors("my $x = $a <;");
-    assert_recovered(&errors, RecoverySite::InfixRhs, RecoveryKind::MissingOperand);
+    assert_recovered(
+        &errors,
+        RecoverySite::InfixRhs,
+        RecoveryKind::MissingOperand,
+    );
 }
 
 #[test]
 fn missing_rhs_string_eq_before_semicolon_emits_recovered() {
     // `$s eq ;` — string equality operator with missing RHS
     let errors = parse_errors("my $x = $s eq;");
-    assert_recovered(&errors, RecoverySite::InfixRhs, RecoveryKind::MissingOperand);
+    assert_recovered(
+        &errors,
+        RecoverySite::InfixRhs,
+        RecoveryKind::MissingOperand,
+    );
 }
 
 #[test]
 fn missing_rhs_power_before_semicolon_emits_recovered() {
     // `$x ** ;` — power operator with missing RHS
     let errors = parse_errors("my $x = $a **;");
-    assert_recovered(&errors, RecoverySite::InfixRhs, RecoveryKind::MissingOperand);
+    assert_recovered(
+        &errors,
+        RecoverySite::InfixRhs,
+        RecoveryKind::MissingOperand,
+    );
 }
 
 #[test]
 fn clean_equality_does_not_emit_recovered() {
     let errors = parse_errors("my $x = $a == $b;");
-    assert_not_recovered(&errors, RecoverySite::InfixRhs, RecoveryKind::MissingOperand);
+    assert_not_recovered(
+        &errors,
+        RecoverySite::InfixRhs,
+        RecoveryKind::MissingOperand,
+    );
 }
 
 #[test]
 fn clean_relational_does_not_emit_recovered() {
     let errors = parse_errors("if ($a < $b) { print 1; }");
-    assert_not_recovered(&errors, RecoverySite::InfixRhs, RecoveryKind::MissingOperand);
+    assert_not_recovered(
+        &errors,
+        RecoverySite::InfixRhs,
+        RecoveryKind::MissingOperand,
+    );
 }
 
 // ──────────────────────────────────────────────────────────────

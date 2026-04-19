@@ -33,11 +33,19 @@ pub fn run(clippy: bool, fmt: bool, all: bool) -> Result<()> {
         spinner.set_message(format!("Running {} check", check));
 
         let status = match check {
-            "clippy" => {
-                cmd("cargo", &["clippy", "--all-targets", "--all-features", "--", "-D", "warnings"])
-                    .run()
-                    .context("Clippy check failed")?
-            }
+            "clippy" => cmd(
+                "cargo",
+                &[
+                    "clippy",
+                    "--all-targets",
+                    "--all-features",
+                    "--",
+                    "-D",
+                    "warnings",
+                ],
+            )
+            .run()
+            .context("Clippy check failed")?,
             "fmt" => cmd("cargo", &["fmt", "--all", "--", "--check"])
                 .run()
                 .context("Format check failed")?,

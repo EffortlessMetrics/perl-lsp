@@ -41,7 +41,11 @@ fn test_lsp_features_unaffected_by_dap() -> Result<()> {
 
     // Wait for diagnostics or settle time to ensure file is processed
     std::thread::sleep(Duration::from_millis(500));
-    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_millis(1000));
+    drain_until_quiet(
+        &server,
+        Duration::from_millis(100),
+        Duration::from_millis(1000),
+    );
 
     // AC1: hover
     let hover_id = 100;
@@ -164,7 +168,11 @@ fn test_lsp_response_time_maintained() -> Result<()> {
     );
 
     std::thread::sleep(Duration::from_millis(500));
-    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_millis(1000));
+    drain_until_quiet(
+        &server,
+        Duration::from_millis(100),
+        Duration::from_millis(1000),
+    );
 
     // AC2: measure latency across 10 requests, assert p50 < 100ms
     let mut latencies = Vec::with_capacity(10);
@@ -227,7 +235,11 @@ fn test_workspace_navigation_with_dap() -> Result<()> {
 
     // Wait for indexing
     std::thread::sleep(Duration::from_millis(1000));
-    drain_until_quiet(&server, Duration::from_millis(200), Duration::from_millis(2000));
+    drain_until_quiet(
+        &server,
+        Duration::from_millis(200),
+        Duration::from_millis(2000),
+    );
 
     // Verify workspace symbol search works
     let search_id = 300;
@@ -242,7 +254,10 @@ fn test_workspace_navigation_with_dap() -> Result<()> {
     );
 
     let response = read_response_matching_i64(&server, search_id, Duration::from_secs(5));
-    assert!(response.is_some(), "Workspace symbol response should be present");
+    assert!(
+        response.is_some(),
+        "Workspace symbol response should be present"
+    );
     let resp_val = response.ok_or_else(|| anyhow::anyhow!("Expected workspace symbol response"))?;
     assert!(
         resp_val["result"].as_array().is_some_and(|a| !a.is_empty()),
@@ -280,7 +295,11 @@ fn test_lsp_dap_memory_isolation() -> Result<()> {
     );
 
     std::thread::sleep(Duration::from_millis(500));
-    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_millis(1000));
+    drain_until_quiet(
+        &server,
+        Duration::from_millis(100),
+        Duration::from_millis(1000),
+    );
 
     // Send multiple LSP requests to test responsiveness under load
     for i in 0..50 {
@@ -319,7 +338,10 @@ fn test_lsp_dap_memory_isolation() -> Result<()> {
     );
 
     let response = read_response_matching_i64(&server, final_id, Duration::from_secs(5));
-    assert!(response.is_some(), "Server should remain responsive after load");
+    assert!(
+        response.is_some(),
+        "Server should remain responsive after load"
+    );
 
     Ok(())
 }
@@ -351,7 +373,11 @@ fn test_lsp_test_pass_rate_100_percent() -> Result<()> {
     );
 
     std::thread::sleep(Duration::from_millis(500));
-    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_millis(1000));
+    drain_until_quiet(
+        &server,
+        Duration::from_millis(100),
+        Duration::from_millis(1000),
+    );
 
     // Test hover
     let hover_id = 600;
@@ -421,7 +447,11 @@ fn test_concurrent_lsp_dap_sessions() -> Result<()> {
     );
 
     std::thread::sleep(Duration::from_millis(500));
-    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_millis(1000));
+    drain_until_quiet(
+        &server,
+        Duration::from_millis(100),
+        Duration::from_millis(1000),
+    );
 
     // Send concurrent requests
     let hover_id = 700;
@@ -458,8 +488,14 @@ fn test_concurrent_lsp_dap_sessions() -> Result<()> {
     let completion_resp =
         read_response_matching_i64(&server, completion_id, Duration::from_secs(5));
 
-    assert!(hover_resp.is_some(), "Hover response should arrive in concurrent scenario");
-    assert!(completion_resp.is_some(), "Completion response should arrive in concurrent scenario");
+    assert!(
+        hover_resp.is_some(),
+        "Hover response should arrive in concurrent scenario"
+    );
+    assert!(
+        completion_resp.is_some(),
+        "Completion response should arrive in concurrent scenario"
+    );
 
     Ok(())
 }
@@ -491,7 +527,11 @@ fn test_incremental_parsing_during_debugging() -> Result<()> {
     );
 
     std::thread::sleep(Duration::from_millis(500));
-    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_millis(1000));
+    drain_until_quiet(
+        &server,
+        Duration::from_millis(100),
+        Duration::from_millis(1000),
+    );
 
     // Apply ranged (incremental) edit — insert a new line at line 1
     let start_time = Instant::now();
@@ -517,7 +557,11 @@ fn test_incremental_parsing_during_debugging() -> Result<()> {
     // The server-side parse is <1ms; this is a CI-safe "server didn't hang" check.
     // Threshold: 100ms (mandatory sleep) + 500ms (drain ceiling) + 200ms (CI margin) = 800ms.
     std::thread::sleep(Duration::from_millis(100));
-    drain_until_quiet(&server, Duration::from_millis(50), Duration::from_millis(500));
+    drain_until_quiet(
+        &server,
+        Duration::from_millis(50),
+        Duration::from_millis(500),
+    );
     let settle_time = start_time.elapsed();
 
     // Verify LSP still responsive after incremental edit
@@ -536,7 +580,10 @@ fn test_incremental_parsing_during_debugging() -> Result<()> {
     );
 
     let response = read_response_matching_i64(&server, hover_id, Duration::from_secs(5));
-    assert!(response.is_some(), "LSP should remain responsive after incremental edit");
+    assert!(
+        response.is_some(),
+        "LSP should remain responsive after incremental edit"
+    );
     assert!(
         settle_time < Duration::from_millis(800),
         "Server failed to settle after incremental edit within 800ms: {:?}",
@@ -575,7 +622,11 @@ fn test_performance_baseline_no_regression() -> Result<()> {
     );
 
     std::thread::sleep(Duration::from_millis(500));
-    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_millis(1000));
+    drain_until_quiet(
+        &server,
+        Duration::from_millis(100),
+        Duration::from_millis(1000),
+    );
 
     let mut latencies = Vec::with_capacity(10);
     for i in 0..10 {

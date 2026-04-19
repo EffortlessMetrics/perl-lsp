@@ -88,7 +88,11 @@ fn test_depth_arithmetic_mutations() {
     // Target -= → /= in depth calculation (depth /= 1 does nothing)
     let nested_cases = vec![
         ("s{a{b}c}{repl}", "a{b}c", "repl"),
-        ("s[test[inner]more][replacement]", "test[inner]more", "replacement"),
+        (
+            "s[test[inner]more][replacement]",
+            "test[inner]more",
+            "replacement",
+        ),
         ("s{{{deep}}}{shallow}", "{{deep}}", "shallow"),
     ];
 
@@ -203,8 +207,17 @@ fn decode_position(tokens: &[EncodedToken], index: usize) -> (u32, u32) {
 /// Critical function return value tests targeting FnValue → "xyzzy" mutations
 #[test]
 fn test_function_return_mutations() {
-    let test_inputs =
-        vec!["", "qr", "m", "s", "tr", "y", "s/test/repl/", "tr/abc/xyz/", "m/pattern/i"];
+    let test_inputs = vec![
+        "",
+        "qr",
+        "m",
+        "s",
+        "tr",
+        "y",
+        "s/test/repl/",
+        "tr/abc/xyz/",
+        "m/pattern/i",
+    ];
 
     for input in test_inputs {
         // Test all quote parser functions don't return sentinel "xyzzy"
@@ -213,8 +226,16 @@ fn test_function_return_mutations() {
         let (tr_search, tr_replace, tr_mods) = extract_transliteration_parts(input);
 
         // Kill FnValue mutations that return "xyzzy"
-        assert_ne!(regex_pattern, "xyzzy", "extract_regex_parts sentinel value for '{}'", input);
-        assert_ne!(regex_mods, "xyzzy", "extract_regex_parts modifiers sentinel for '{}'", input);
+        assert_ne!(
+            regex_pattern, "xyzzy",
+            "extract_regex_parts sentinel value for '{}'",
+            input
+        );
+        assert_ne!(
+            regex_mods, "xyzzy",
+            "extract_regex_parts modifiers sentinel for '{}'",
+            input
+        );
         assert_ne!(
             sub_pattern, "xyzzy",
             "extract_substitution_parts pattern sentinel for '{}'",
@@ -286,7 +307,11 @@ fn test_control_flow_mutations() {
     // Target match guard mutations: c == open && is_paired → false
     let control_flow_cases = vec![
         ("s{outer{inner}more}{repl}", "outer{inner}more", "repl"),
-        ("s[test[nested]content][result]", "test[nested]content", "result"),
+        (
+            "s[test[nested]content][result]",
+            "test[nested]content",
+            "result",
+        ),
     ];
 
     for (input, expected_pattern, expected_replacement) in control_flow_cases {
@@ -324,9 +349,17 @@ fn test_comprehensive_property_validation() {
         assert!(_regex_result.is_ok(), "Regex parsing panicked: '{}'", input);
 
         let _sub_result = std::panic::catch_unwind(|| extract_substitution_parts(input));
-        assert!(_sub_result.is_ok(), "Substitution parsing panicked: '{}'", input);
+        assert!(
+            _sub_result.is_ok(),
+            "Substitution parsing panicked: '{}'",
+            input
+        );
 
         let _tr_result = std::panic::catch_unwind(|| extract_transliteration_parts(input));
-        assert!(_tr_result.is_ok(), "Transliteration parsing panicked: '{}'", input);
+        assert!(
+            _tr_result.is_ok(),
+            "Transliteration parsing panicked: '{}'",
+            input
+        );
     }
 }

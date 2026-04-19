@@ -84,7 +84,11 @@ pub fn scan(workspace_root: &Path) -> Result<WiringAuditReport> {
     for crate_dir in crates {
         report.crates_scanned += 1;
         let crate_name = parse_package_name(&crate_dir.join("Cargo.toml")).unwrap_or_else(|| {
-            crate_dir.file_name().and_then(|s| s.to_str()).unwrap_or("<unknown>").to_string()
+            crate_dir
+                .file_name()
+                .and_then(|s| s.to_str())
+                .unwrap_or("<unknown>")
+                .to_string()
         });
 
         let crate_offenders = scan_crate(&crate_dir, workspace_root, &crate_name)
@@ -137,8 +141,11 @@ fn scan_crate(crate_dir: &Path, workspace_root: &Path, crate_name: &str) -> Resu
             continue;
         }
 
-        let rel =
-            canonical.strip_prefix(workspace_root).unwrap_or(&canonical).display().to_string();
+        let rel = canonical
+            .strip_prefix(workspace_root)
+            .unwrap_or(&canonical)
+            .display()
+            .to_string();
         offenders.push(Offender {
             crate_name: crate_name.to_string(),
             path: rel,
@@ -146,7 +153,10 @@ fn scan_crate(crate_dir: &Path, workspace_root: &Path, crate_name: &str) -> Resu
         });
     }
 
-    Ok(CrateScan { scanned_files, offenders })
+    Ok(CrateScan {
+        scanned_files,
+        offenders,
+    })
 }
 
 fn print_report(report: &WiringAuditReport) {
@@ -160,9 +170,15 @@ fn print_report(report: &WiringAuditReport) {
         return;
     }
 
-    println!("[WARN] {} unwired test file(s) found:", report.offenders.len());
+    println!(
+        "[WARN] {} unwired test file(s) found:",
+        report.offenders.len()
+    );
     for offender in &report.offenders {
-        println!("  [{}] {} — {}", offender.crate_name, offender.path, offender.reason);
+        println!(
+            "  [{}] {} — {}",
+            offender.crate_name, offender.path, offender.reason
+        );
     }
     println!();
 }
@@ -199,9 +215,14 @@ fn crate_root_files(src_dir: &Path) -> Vec<PathBuf> {
 
     let bin_dir = src_dir.join("bin");
     if let Ok(entries) = fs::read_dir(&bin_dir) {
-        roots.extend(entries.filter_map(|entry| entry.ok()).map(|entry| entry.path()).filter(
-            |path| path.is_file() && path.extension().and_then(|ext| ext.to_str()) == Some("rs"),
-        ));
+        roots.extend(
+            entries
+                .filter_map(|entry| entry.ok())
+                .map(|entry| entry.path())
+                .filter(|path| {
+                    path.is_file() && path.extension().and_then(|ext| ext.to_str()) == Some("rs")
+                }),
+        );
     }
 
     roots
@@ -241,7 +262,8 @@ fn test_candidate_files(dir: &Path) -> Vec<PathBuf> {
 fn should_ignore_candidate(path: &Path) -> bool {
     let path_str = path.to_string_lossy();
 
-    path.components().any(|component| component.as_os_str() == "fixtures")
+    path.components()
+        .any(|component| component.as_os_str() == "fixtures")
         || path_str.contains("/src/gen/")
 }
 
@@ -309,15 +331,24 @@ fn resolve_module_path(parent_dir: &Path, module_name: &str) -> PathBuf {
 }
 
 fn strip_line_comment(line: &str) -> &str {
-    line.split_once("//").map(|(prefix, _)| prefix).unwrap_or(line).trim()
+    line.split_once("//")
+        .map(|(prefix, _)| prefix)
+        .unwrap_or(line)
+        .trim()
 }
 
 fn extract_path_attr(line: &str) -> Option<PathBuf> {
-    PATH_ATTR_RE.captures(line).and_then(|caps| caps.get(1)).map(|m| PathBuf::from(m.as_str()))
+    PATH_ATTR_RE
+        .captures(line)
+        .and_then(|caps| caps.get(1))
+        .map(|m| PathBuf::from(m.as_str()))
 }
 
 fn extract_module_name(line: &str) -> Option<String> {
-    MODULE_DECL_RE.captures(line).and_then(|caps| caps.get(1)).map(|m| m.as_str().to_string())
+    MODULE_DECL_RE
+        .captures(line)
+        .and_then(|caps| caps.get(1))
+        .map(|m| m.as_str().to_string())
 }
 
 fn contains_test_markers(content: &str) -> bool {
@@ -325,7 +356,10 @@ fn contains_test_markers(content: &str) -> bool {
 }
 
 fn missing_module_reason(file: &Path) -> String {
-    let stem = file.file_stem().and_then(|s| s.to_str()).unwrap_or("<module>");
+    let stem = file
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("<module>");
     if stem == "mod" {
         "contains #[test] or #[cfg(test)] but is not reachable from its crate/module tree; add the missing module declaration in the parent module".to_string()
     } else {
@@ -414,7 +448,11 @@ mod tests {
 
         let report = scan(root).unwrap();
         assert_eq!(report.offenders.len(), 1);
-        assert!(report.offenders[0].path.ends_with("crates/perl-audit/src/orphan.rs"));
+        assert!(
+            report.offenders[0]
+                .path
+                .ends_with("crates/perl-audit/src/orphan.rs")
+        );
     }
 
     #[test]

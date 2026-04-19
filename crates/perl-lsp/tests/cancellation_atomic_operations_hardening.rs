@@ -60,20 +60,44 @@ mod atomic_state_transition_tests {
 
         // Test initial state - targets AtomicBool::new(false) mutations
         assert!(!token.is_cancelled(), "Initial state must be not cancelled");
-        assert!(!token.is_cancelled_relaxed(), "Initial relaxed state must be not cancelled");
-        assert!(!token.is_cancelled_hot_path(), "Initial hot path state must be not cancelled");
+        assert!(
+            !token.is_cancelled_relaxed(),
+            "Initial relaxed state must be not cancelled"
+        );
+        assert!(
+            !token.is_cancelled_hot_path(),
+            "Initial hot path state must be not cancelled"
+        );
 
         // Test state transition through cancel() - targets store(true) mutations
         token.cancel();
-        assert!(token.is_cancelled(), "State must be cancelled after cancel()");
-        assert!(token.is_cancelled_relaxed(), "Relaxed state must be cancelled after cancel()");
-        assert!(token.is_cancelled_hot_path(), "Hot path state must be cancelled after cancel()");
+        assert!(
+            token.is_cancelled(),
+            "State must be cancelled after cancel()"
+        );
+        assert!(
+            token.is_cancelled_relaxed(),
+            "Relaxed state must be cancelled after cancel()"
+        );
+        assert!(
+            token.is_cancelled_hot_path(),
+            "Hot path state must be cancelled after cancel()"
+        );
 
         // Test state persistence - all methods must agree consistently
         for _ in 0..100 {
-            assert!(token.is_cancelled(), "Cancelled state must persist across checks");
-            assert!(token.is_cancelled_relaxed(), "Relaxed cancelled state must persist");
-            assert!(token.is_cancelled_hot_path(), "Hot path cancelled state must persist");
+            assert!(
+                token.is_cancelled(),
+                "Cancelled state must persist across checks"
+            );
+            assert!(
+                token.is_cancelled_relaxed(),
+                "Relaxed cancelled state must persist"
+            );
+            assert!(
+                token.is_cancelled_hot_path(),
+                "Hot path cancelled state must persist"
+            );
         }
 
         // All methods must return identical results - targets ordering consistency
@@ -82,7 +106,10 @@ mod atomic_state_transition_tests {
         let hot_path = token.is_cancelled_hot_path();
         assert_eq!(standard, relaxed, "Standard and relaxed methods must agree");
         assert_eq!(relaxed, hot_path, "Relaxed and hot path methods must agree");
-        assert_eq!(standard, hot_path, "Standard and hot path methods must agree");
+        assert_eq!(
+            standard, hot_path,
+            "Standard and hot path methods must agree"
+        );
     }
 
     /// Test is_cancelled() method consistency across multiple calls
@@ -122,17 +149,32 @@ mod atomic_state_transition_tests {
 
         // Test cancel() method - targets store(true, Ordering::Release)
         token.cancel();
-        assert!(token.is_cancelled(), "cancel() must set cancelled state to true");
+        assert!(
+            token.is_cancelled(),
+            "cancel() must set cancelled state to true"
+        );
 
         // Verify state persists across all check methods - targets Release/Acquire consistency
-        assert!(token.is_cancelled(), "cancel() state must be visible to is_cancelled()");
-        assert!(token.is_cancelled_relaxed(), "cancel() state must be visible to relaxed check");
-        assert!(token.is_cancelled_hot_path(), "cancel() state must be visible to hot path check");
+        assert!(
+            token.is_cancelled(),
+            "cancel() state must be visible to is_cancelled()"
+        );
+        assert!(
+            token.is_cancelled_relaxed(),
+            "cancel() state must be visible to relaxed check"
+        );
+        assert!(
+            token.is_cancelled_hot_path(),
+            "cancel() state must be visible to hot path check"
+        );
 
         // Test idempotence - targets multiple store operations
         token.cancel();
         token.cancel();
-        assert!(token.is_cancelled(), "Multiple cancel() calls must be idempotent");
+        assert!(
+            token.is_cancelled(),
+            "Multiple cancel() calls must be idempotent"
+        );
     }
 
     /// Test is_cancelled_relaxed() performance optimization mutations
@@ -195,7 +237,10 @@ mod atomic_state_transition_tests {
     /// Test atomic ordering mutations under concurrent access
     #[test]
     fn test_atomic_ordering_mutations_concurrent() -> TestResult {
-        let token = Arc::new(PerlLspCancellationToken::new(json!(6), "concurrent".to_string()));
+        let token = Arc::new(PerlLspCancellationToken::new(
+            json!(6),
+            "concurrent".to_string(),
+        ));
         let num_threads = 10;
         let iterations = 100;
         let start_barrier = Arc::new(Barrier::new(num_threads));
@@ -253,7 +298,9 @@ mod atomic_state_transition_tests {
 
         // Wait for all threads
         for handle in handles {
-            handle.join().map_err(|_| "Thread should complete without panic")?;
+            handle
+                .join()
+                .map_err(|_| "Thread should complete without panic")?;
         }
 
         // Final state should be cancelled (since we have canceller threads)
@@ -281,14 +328,22 @@ mod registry_coordination_hardening_tests {
         assert!(result.is_ok(), "Token registration must succeed");
 
         // Verify active count - targets HashMap::insert() success
-        assert_eq!(registry.active_count(), 1, "Active count must be 1 after registration");
+        assert_eq!(
+            registry.active_count(),
+            1,
+            "Active count must be 1 after registration"
+        );
 
         // Test duplicate registration - targets HashMap key handling
         let duplicate_token =
             PerlLspCancellationToken::new(json!(100), "duplicate_test".to_string());
         let result2 = registry.register_token(duplicate_token);
         assert!(result2.is_ok(), "Duplicate registration should overwrite");
-        assert_eq!(registry.active_count(), 1, "Active count should still be 1 after duplicate");
+        assert_eq!(
+            registry.active_count(),
+            1,
+            "Active count should still be 1 after duplicate"
+        );
     }
 
     /// Test get_token RwLock read operations mutations
@@ -300,16 +355,30 @@ mod registry_coordination_hardening_tests {
 
         // Test get on empty registry - targets RwLock::read() empty case
         let result = registry.get_token(&request_id);
-        assert!(result.is_none(), "get_token must return None for non-existent token");
+        assert!(
+            result.is_none(),
+            "get_token must return None for non-existent token"
+        );
 
         // Register and test get - targets RwLock::read() success case
         registry.register_token(token.clone())?;
         let result = registry.get_token(&request_id);
-        assert!(result.is_some(), "get_token must return Some for existing token");
+        assert!(
+            result.is_some(),
+            "get_token must return Some for existing token"
+        );
 
         let retrieved = result.ok_or("Failed to retrieve token")?;
-        assert_eq!(retrieved.request_id(), &request_id, "Retrieved token must match request ID");
-        assert_eq!(retrieved.provider(), "get_test", "Retrieved token must match provider");
+        assert_eq!(
+            retrieved.request_id(),
+            &request_id,
+            "Retrieved token must match request ID"
+        );
+        assert_eq!(
+            retrieved.provider(),
+            "get_test",
+            "Retrieved token must match provider"
+        );
         Ok(())
     }
 
@@ -354,16 +423,28 @@ mod registry_coordination_hardening_tests {
 
         // Test cancel_request - targets RwLock::read() + token.cancel() coordination
         let result = registry.cancel_request(&request_id);
-        assert!(result.is_ok(), "cancel_request must succeed for existing token");
+        assert!(
+            result.is_ok(),
+            "cancel_request must succeed for existing token"
+        );
 
         // Verify token is cancelled - targets coordination success
-        assert!(token.is_cancelled(), "Token must be cancelled after cancel_request");
-        assert!(registry.is_cancelled(&request_id), "Registry must report token as cancelled");
+        assert!(
+            token.is_cancelled(),
+            "Token must be cancelled after cancel_request"
+        );
+        assert!(
+            registry.is_cancelled(&request_id),
+            "Registry must report token as cancelled"
+        );
 
         // Test cancel non-existent request - targets error handling path
         let non_existent_id = json!(999999);
         let result = registry.cancel_request(&non_existent_id);
-        assert!(result.is_ok(), "cancel_request must succeed even for non-existent token");
+        assert!(
+            result.is_ok(),
+            "cancel_request must succeed even for non-existent token"
+        );
         Ok(())
     }
 
@@ -388,7 +469,11 @@ mod registry_coordination_hardening_tests {
 
         // Test remove non-existent - targets removal idempotence
         registry.remove_request(&request_id);
-        assert_eq!(registry.active_count(), 0, "Remove non-existent should be safe");
+        assert_eq!(
+            registry.active_count(),
+            0,
+            "Remove non-existent should be safe"
+        );
         Ok(())
     }
 
@@ -413,13 +498,24 @@ mod registry_coordination_hardening_tests {
         // Verify both results are equivalent - targets cache correctness
         let token1 = result1.ok_or("First access failed to retrieve token")?;
         let token2 = result2.ok_or("Second access failed to retrieve token")?;
-        assert_eq!(token1.request_id(), token2.request_id(), "Cached token must match original");
-        assert_eq!(token1.provider(), token2.provider(), "Cached token provider must match");
+        assert_eq!(
+            token1.request_id(),
+            token2.request_id(),
+            "Cached token must match original"
+        );
+        assert_eq!(
+            token1.provider(),
+            token2.provider(),
+            "Cached token provider must match"
+        );
 
         // Test cache with cancellation state
         token.cancel();
         let cached_cancelled = registry.is_cancelled(&request_id);
-        assert!(cached_cancelled, "Cached token must reflect cancellation state");
+        assert!(
+            cached_cancelled,
+            "Cached token must reflect cancellation state"
+        );
         Ok(())
     }
 
@@ -476,12 +572,17 @@ mod registry_coordination_hardening_tests {
 
         // Wait for all operations to complete
         for handle in handles {
-            handle.join().map_err(|_| "Concurrent operation should not panic")?;
+            handle
+                .join()
+                .map_err(|_| "Concurrent operation should not panic")?;
         }
 
         // Registry should be in a consistent state (no panics = success)
         let final_count = registry.active_count();
-        println!("Final active count after concurrent operations: {}", final_count);
+        println!(
+            "Final active count after concurrent operations: {}",
+            final_count
+        );
 
         // Any final count is acceptable as long as no panics occurred
         // This test primarily targets thread safety mutations
@@ -562,7 +663,10 @@ mod performance_optimization_hardening_tests {
         );
 
         // Print performance comparison for visibility
-        println!("Performance comparison ({}k iterations):", iterations / 1000);
+        println!(
+            "Performance comparison ({}k iterations):",
+            iterations / 1000
+        );
         println!("  Regular: {:?}", duration1);
         println!("  Relaxed: {:?}", duration2);
         println!("  Hot path: {:?}", duration3);
@@ -595,11 +699,18 @@ mod performance_optimization_hardening_tests {
         // Results should be equivalent - targets cache correctness
         let token_slow = result_slow.ok_or("Slow path failed to retrieve token")?;
         let token_fast = result_fast.ok_or("Fast path failed to retrieve token")?;
-        assert_eq!(token_slow.request_id(), token_fast.request_id(), "Path results must match");
+        assert_eq!(
+            token_slow.request_id(),
+            token_fast.request_id(),
+            "Path results must match"
+        );
 
         // Fast path should generally be faster, but we won't assert on timing
         // since it's unreliable in test environments
-        println!("Path performance: slow={:?}, fast={:?}", duration_slow, duration_fast);
+        println!(
+            "Path performance: slow={:?}, fast={:?}",
+            duration_slow, duration_fast
+        );
         Ok(())
     }
 
@@ -630,11 +741,17 @@ mod performance_optimization_hardening_tests {
         registry.register_token(test_token)?;
 
         let result = registry.get_token(&test_id);
-        assert!(result.is_some(), "Operations must work after cache eviction");
+        assert!(
+            result.is_some(),
+            "Operations must work after cache eviction"
+        );
 
         // Test cancellation still works
         registry.cancel_request(&test_id)?;
-        assert!(registry.is_cancelled(&test_id), "Cancellation must work after cache eviction");
+        assert!(
+            registry.is_cancelled(&test_id),
+            "Cancellation must work after cache eviction"
+        );
         Ok(())
     }
 }
@@ -650,24 +767,53 @@ mod metrics_atomic_counter_hardening_tests {
         let metrics = CancellationMetrics::new();
 
         // Test initial state - targets AtomicU64::new(0) mutations
-        assert_eq!(metrics.registered_count(), 0, "Initial registered count must be 0");
-        assert_eq!(metrics.cancelled_count(), 0, "Initial cancelled count must be 0");
-        assert_eq!(metrics.completed_count(), 0, "Initial completed count must be 0");
+        assert_eq!(
+            metrics.registered_count(),
+            0,
+            "Initial registered count must be 0"
+        );
+        assert_eq!(
+            metrics.cancelled_count(),
+            0,
+            "Initial cancelled count must be 0"
+        );
+        assert_eq!(
+            metrics.completed_count(),
+            0,
+            "Initial completed count must be 0"
+        );
 
         // Test increment operations - targets fetch_add(1, Ordering::Relaxed) mutations
         metrics.increment_registered();
-        assert_eq!(metrics.registered_count(), 1, "Registered count must increment to 1");
+        assert_eq!(
+            metrics.registered_count(),
+            1,
+            "Registered count must increment to 1"
+        );
 
         metrics.increment_cancelled();
-        assert_eq!(metrics.cancelled_count(), 1, "Cancelled count must increment to 1");
+        assert_eq!(
+            metrics.cancelled_count(),
+            1,
+            "Cancelled count must increment to 1"
+        );
 
         metrics.increment_completed();
-        assert_eq!(metrics.completed_count(), 1, "Completed count must increment to 1");
+        assert_eq!(
+            metrics.completed_count(),
+            1,
+            "Completed count must increment to 1"
+        );
 
         // Test multiple increments - targets atomic accumulation
         for i in 2..=10 {
             metrics.increment_registered();
-            assert_eq!(metrics.registered_count(), i, "Registered count must increment to {}", i);
+            assert_eq!(
+                metrics.registered_count(),
+                i,
+                "Registered count must increment to {}",
+                i
+            );
         }
 
         // Test independent counter mutations
@@ -704,15 +850,31 @@ mod metrics_atomic_counter_hardening_tests {
         }
 
         // Test load operations - targets load(Ordering::Relaxed) mutations
-        assert_eq!(metrics.registered_count(), 5, "Registered load must return 5");
+        assert_eq!(
+            metrics.registered_count(),
+            5,
+            "Registered load must return 5"
+        );
         assert_eq!(metrics.cancelled_count(), 3, "Cancelled load must return 3");
         assert_eq!(metrics.completed_count(), 7, "Completed load must return 7");
 
         // Test load consistency - multiple loads should return same value
         for _ in 0..10 {
-            assert_eq!(metrics.registered_count(), 5, "Multiple loads must be consistent");
-            assert_eq!(metrics.cancelled_count(), 3, "Multiple loads must be consistent");
-            assert_eq!(metrics.completed_count(), 7, "Multiple loads must be consistent");
+            assert_eq!(
+                metrics.registered_count(),
+                5,
+                "Multiple loads must be consistent"
+            );
+            assert_eq!(
+                metrics.cancelled_count(),
+                3,
+                "Multiple loads must be consistent"
+            );
+            assert_eq!(
+                metrics.completed_count(),
+                7,
+                "Multiple loads must be consistent"
+            );
         }
     }
 
@@ -750,7 +912,9 @@ mod metrics_atomic_counter_hardening_tests {
 
         // Wait for all threads
         for handle in handles {
-            handle.join().map_err(|_| "Metrics thread should not panic")?;
+            handle
+                .join()
+                .map_err(|_| "Metrics thread should not panic")?;
         }
 
         // Calculate expected counts
@@ -803,9 +967,21 @@ mod metrics_atomic_counter_hardening_tests {
         let initial_metrics = registry.metrics();
 
         // Test initial metrics state
-        assert_eq!(initial_metrics.registered_count(), 0, "Initial registered count must be 0");
-        assert_eq!(initial_metrics.cancelled_count(), 0, "Initial cancelled count must be 0");
-        assert_eq!(initial_metrics.completed_count(), 0, "Initial completed count must be 0");
+        assert_eq!(
+            initial_metrics.registered_count(),
+            0,
+            "Initial registered count must be 0"
+        );
+        assert_eq!(
+            initial_metrics.cancelled_count(),
+            0,
+            "Initial cancelled count must be 0"
+        );
+        assert_eq!(
+            initial_metrics.completed_count(),
+            0,
+            "Initial completed count must be 0"
+        );
 
         // Register a token - should increment registered counter
         let token = PerlLspCancellationToken::new(json!(500), "metrics_test".to_string());
@@ -834,9 +1010,21 @@ mod metrics_atomic_counter_hardening_tests {
         );
 
         // Test metrics persistence - counters should not reset
-        assert_eq!(initial_metrics.registered_count(), 1, "Registered count must persist");
-        assert_eq!(initial_metrics.cancelled_count(), 1, "Cancelled count must persist");
-        assert_eq!(initial_metrics.completed_count(), 1, "Completed count must persist");
+        assert_eq!(
+            initial_metrics.registered_count(),
+            1,
+            "Registered count must persist"
+        );
+        assert_eq!(
+            initial_metrics.cancelled_count(),
+            1,
+            "Cancelled count must persist"
+        );
+        assert_eq!(
+            initial_metrics.completed_count(),
+            1,
+            "Completed count must persist"
+        );
         Ok(())
     }
 
@@ -853,7 +1041,10 @@ mod metrics_atomic_counter_hardening_tests {
         // Test consistency - multiple calls should return same value
         for _ in 0..10 {
             let overhead_check = metrics.memory_overhead_bytes();
-            assert_eq!(overhead, overhead_check, "Memory overhead calculation must be consistent");
+            assert_eq!(
+                overhead, overhead_check,
+                "Memory overhead calculation must be consistent"
+            );
         }
 
         // Test bounds - targets size_of + buffer calculation
@@ -896,11 +1087,17 @@ mod global_registry_hardening_tests {
         // Test that global registry operations work
         let test_token = PerlLspCancellationToken::new(json!(600), "global_test".to_string());
         let register_result = GLOBAL_CANCELLATION_REGISTRY.register_token(test_token.clone());
-        assert!(register_result.is_ok(), "Global registry registration must succeed");
+        assert!(
+            register_result.is_ok(),
+            "Global registry registration must succeed"
+        );
 
         // Verify the token is accessible
         let retrieved = GLOBAL_CANCELLATION_REGISTRY.get_token(&json!(600));
-        assert!(retrieved.is_some(), "Global registry must provide registered tokens");
+        assert!(
+            retrieved.is_some(),
+            "Global registry must provide registered tokens"
+        );
 
         // Clean up
         GLOBAL_CANCELLATION_REGISTRY.remove_request(&json!(600));
@@ -940,7 +1137,9 @@ mod global_registry_hardening_tests {
 
         // Wait for all threads - tests concurrent access safety
         for handle in handles {
-            handle.join().map_err(|_| "Global registry thread should not panic")?;
+            handle
+                .join()
+                .map_err(|_| "Global registry thread should not panic")?;
         }
 
         // Global registry should remain in consistent state
@@ -948,7 +1147,10 @@ mod global_registry_hardening_tests {
         println!("Global registry final active count: {}", final_count);
 
         // Should be 0 or close to 0 since we cleaned up
-        assert!(final_count < 10, "Global registry should be mostly clean after operations");
+        assert!(
+            final_count < 10,
+            "Global registry should be mostly clean after operations"
+        );
         Ok(())
     }
 }

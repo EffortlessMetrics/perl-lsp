@@ -115,7 +115,11 @@ struct BenchmarkResult {
 impl BenchmarkResult {
     fn efficiency(&self) -> f64 {
         let total = self.tokens_reused + self.tokens_relexed;
-        if total == 0 { 0.0 } else { (self.tokens_reused as f64 / total as f64) * 100.0 }
+        if total == 0 {
+            0.0
+        } else {
+            (self.tokens_reused as f64 / total as f64) * 100.0
+        }
     }
 
     fn bytes_reuse_ratio(&self) -> f64 {
@@ -193,7 +197,11 @@ fn bench_single_char_insertion(c: &mut Criterion) {
             _ => unreachable!(),
         };
 
-        let edit = SimpleEdit { start: edit_start, end: edit_start, new_text: "x".to_string() };
+        let edit = SimpleEdit {
+            start: edit_start,
+            end: edit_start,
+            new_text: "x".to_string(),
+        };
 
         group.bench_with_input(
             BenchmarkId::from_parameter(position),
@@ -201,7 +209,9 @@ fn bench_single_char_insertion(c: &mut Criterion) {
             |b, (source, edit)| {
                 b.iter(|| {
                     let mut parser = CheckpointedIncrementalParser::new();
-                    parser.parse(black_box(source.clone())).expect("Initial parse failed");
+                    parser
+                        .parse(black_box(source.clone()))
+                        .expect("Initial parse failed");
                     benchmark_incremental_parse(&mut parser, black_box(edit))
                 })
             },
@@ -230,7 +240,11 @@ fn bench_single_char_deletion(c: &mut Criterion) {
             _ => unreachable!(),
         };
 
-        let edit = SimpleEdit { start: edit_start, end: edit_start + 1, new_text: String::new() };
+        let edit = SimpleEdit {
+            start: edit_start,
+            end: edit_start + 1,
+            new_text: String::new(),
+        };
 
         group.bench_with_input(
             BenchmarkId::from_parameter(position),
@@ -238,7 +252,9 @@ fn bench_single_char_deletion(c: &mut Criterion) {
             |b, (source, edit)| {
                 b.iter(|| {
                     let mut parser = CheckpointedIncrementalParser::new();
-                    parser.parse(black_box(source.clone())).expect("Initial parse failed");
+                    parser
+                        .parse(black_box(source.clone()))
+                        .expect("Initial parse failed");
                     benchmark_incremental_parse(&mut parser, black_box(edit))
                 })
             },
@@ -262,8 +278,11 @@ fn bench_large_paste(c: &mut Criterion) {
         let paste_content = "my $pasted = 1;\n".repeat(size / 20);
         let paste_len = paste_content.len();
 
-        let edit =
-            SimpleEdit { start: source.len() / 2, end: source.len() / 2, new_text: paste_content };
+        let edit = SimpleEdit {
+            start: source.len() / 2,
+            end: source.len() / 2,
+            new_text: paste_content,
+        };
 
         group.throughput(Throughput::Bytes(paste_len as u64));
 
@@ -273,7 +292,9 @@ fn bench_large_paste(c: &mut Criterion) {
             |b, (source, edit)| {
                 b.iter(|| {
                     let mut parser = CheckpointedIncrementalParser::new();
-                    parser.parse(black_box(source.clone())).expect("Initial parse failed");
+                    parser
+                        .parse(black_box(source.clone()))
+                        .expect("Initial parse failed");
                     benchmark_incremental_parse(&mut parser, black_box(edit))
                 })
             },
@@ -294,16 +315,25 @@ fn bench_undo_redo(c: &mut Criterion) {
     let edit_start = source.len() / 2;
 
     // Original edit
-    let edit = SimpleEdit { start: edit_start, end: edit_start + 5, new_text: "99999".to_string() };
+    let edit = SimpleEdit {
+        start: edit_start,
+        end: edit_start + 5,
+        new_text: "99999".to_string(),
+    };
 
     // Reverse edit (undo)
-    let undo_edit =
-        SimpleEdit { start: edit_start, end: edit_start + 5, new_text: "12345".to_string() };
+    let undo_edit = SimpleEdit {
+        start: edit_start,
+        end: edit_start + 5,
+        new_text: "12345".to_string(),
+    };
 
     group.bench_function("edit_undo_redo", |b| {
         b.iter(|| {
             let mut parser = CheckpointedIncrementalParser::new();
-            parser.parse(black_box(source.clone())).expect("Initial parse failed");
+            parser
+                .parse(black_box(source.clone()))
+                .expect("Initial parse failed");
 
             // Apply edit
             benchmark_incremental_parse(&mut parser, black_box(&edit));
@@ -333,7 +363,9 @@ fn bench_repeated_edits(c: &mut Criterion) {
             b.iter(|| {
                 let source = generate_large_file_with_patterns(100, 10);
                 let mut parser = CheckpointedIncrementalParser::new();
-                parser.parse(black_box(source.clone())).expect("Initial parse failed");
+                parser
+                    .parse(black_box(source.clone()))
+                    .expect("Initial parse failed");
 
                 for i in 0..count {
                     let edit_start = (source.len() / (count + 1)) * (i + 1);
@@ -370,7 +402,11 @@ fn bench_checkpoint_boundaries(c: &mut Criterion) {
 
     for (name, position) in boundary_positions {
         let source = generate_file_with_checkpoints();
-        let edit = SimpleEdit { start: position, end: position, new_text: "x".to_string() };
+        let edit = SimpleEdit {
+            start: position,
+            end: position,
+            new_text: "x".to_string(),
+        };
 
         group.bench_with_input(
             BenchmarkId::from_parameter(name),
@@ -378,7 +414,9 @@ fn bench_checkpoint_boundaries(c: &mut Criterion) {
             |b, (source, edit)| {
                 b.iter(|| {
                     let mut parser = CheckpointedIncrementalParser::new();
-                    parser.parse(black_box(source.clone())).expect("Initial parse failed");
+                    parser
+                        .parse(black_box(source.clone()))
+                        .expect("Initial parse failed");
                     benchmark_incremental_parse(&mut parser, black_box(edit))
                 })
             },
@@ -401,21 +439,27 @@ fn bench_repeated_patterns(c: &mut Criterion) {
         let source = generate_large_file_with_patterns(100, count);
         let source_clone = source.clone();
 
-        group.bench_with_input(BenchmarkId::from_parameter(count), &source_clone, |b, source| {
-            b.iter(|| {
-                let mut parser = CheckpointedIncrementalParser::new();
-                parser.parse(black_box(source.clone())).expect("Initial parse failed");
+        group.bench_with_input(
+            BenchmarkId::from_parameter(count),
+            &source_clone,
+            |b, source| {
+                b.iter(|| {
+                    let mut parser = CheckpointedIncrementalParser::new();
+                    parser
+                        .parse(black_box(source.clone()))
+                        .expect("Initial parse failed");
 
-                // Edit in a repeated pattern
-                let edit_start = source.find("sub process_item").unwrap_or(0) + 20;
-                let edit = SimpleEdit {
-                    start: edit_start,
-                    end: edit_start + 1,
-                    new_text: "x".to_string(),
-                };
-                benchmark_incremental_parse(&mut parser, black_box(&edit))
-            })
-        });
+                    // Edit in a repeated pattern
+                    let edit_start = source.find("sub process_item").unwrap_or(0) + 20;
+                    let edit = SimpleEdit {
+                        start: edit_start,
+                        end: edit_start + 1,
+                        new_text: "x".to_string(),
+                    };
+                    benchmark_incremental_parse(&mut parser, black_box(&edit))
+                })
+            },
+        );
     }
 
     group.finish();
@@ -453,12 +497,18 @@ fn bench_incremental_vs_full(c: &mut Criterion) {
 
     let source = generate_large_file_with_patterns(100, 10);
     let edit_start = source.len() / 2;
-    let edit = SimpleEdit { start: edit_start, end: edit_start + 5, new_text: "99999".to_string() };
+    let edit = SimpleEdit {
+        start: edit_start,
+        end: edit_start + 5,
+        new_text: "99999".to_string(),
+    };
 
     group.bench_function("incremental", |b| {
         b.iter(|| {
             let mut parser = CheckpointedIncrementalParser::new();
-            parser.parse(black_box(source.clone())).expect("Initial parse failed");
+            parser
+                .parse(black_box(source.clone()))
+                .expect("Initial parse failed");
             benchmark_incremental_parse(&mut parser, black_box(&edit))
         })
     });
@@ -466,7 +516,9 @@ fn bench_incremental_vs_full(c: &mut Criterion) {
     group.bench_function("full_relex", |b| {
         b.iter(|| {
             let mut parser = CheckpointedIncrementalParser::new();
-            parser.parse(black_box(source.clone())).expect("Initial parse failed");
+            parser
+                .parse(black_box(source.clone()))
+                .expect("Initial parse failed");
             benchmark_incremental_parse(&mut parser, black_box(&edit))
         })
     });
@@ -486,7 +538,9 @@ fn bench_metrics_tracking(c: &mut Criterion) {
     group.bench_function("single_edit_metrics", |b| {
         b.iter(|| {
             let mut parser = CheckpointedIncrementalParser::new();
-            parser.parse(black_box(source.clone())).expect("Initial parse failed");
+            parser
+                .parse(black_box(source.clone()))
+                .expect("Initial parse failed");
 
             let edit = SimpleEdit {
                 start: source.len() / 2,
@@ -516,7 +570,11 @@ fn bench_metrics_tracking(c: &mut Criterion) {
 fn bench_cache_efficiency(c: &mut Criterion) {
     let mut group = c.benchmark_group("cache_efficiency");
 
-    let scenarios = vec![("small_edit", 1, 5), ("medium_edit", 10, 50), ("large_edit", 100, 500)];
+    let scenarios = vec![
+        ("small_edit", 1, 5),
+        ("medium_edit", 10, 50),
+        ("large_edit", 100, 500),
+    ];
 
     for (name, edit_pos, edit_len) in scenarios {
         let source = generate_large_file_with_patterns(100, 10);
@@ -527,7 +585,9 @@ fn bench_cache_efficiency(c: &mut Criterion) {
             |b, (source, edit_pos, edit_len)| {
                 b.iter(|| {
                     let mut parser = CheckpointedIncrementalParser::new();
-                    parser.parse(black_box(source.clone())).expect("Initial parse failed");
+                    parser
+                        .parse(black_box(source.clone()))
+                        .expect("Initial parse failed");
 
                     let edit = SimpleEdit {
                         start: *edit_pos,
@@ -566,10 +626,16 @@ fn bench_segment_reuse(c: &mut Criterion) {
     group.bench_function("verify_segment_reuse", |b| {
         b.iter(|| {
             let mut parser = CheckpointedIncrementalParser::new();
-            parser.parse(black_box(source.clone())).expect("Initial parse failed");
+            parser
+                .parse(black_box(source.clone()))
+                .expect("Initial parse failed");
 
             // Edit in the middle of the file
-            let edit = SimpleEdit { start: 600, end: 605, new_text: "xxxxx".to_string() };
+            let edit = SimpleEdit {
+                start: 600,
+                end: 605,
+                new_text: "xxxxx".to_string(),
+            };
 
             let result = benchmark_incremental_parse(&mut parser, black_box(&edit));
 
@@ -604,10 +670,15 @@ fn bench_checkpoint_distance(c: &mut Criterion) {
             |b, (source, pos)| {
                 b.iter(|| {
                     let mut parser = CheckpointedIncrementalParser::new();
-                    parser.parse(black_box(source.clone())).expect("Initial parse failed");
+                    parser
+                        .parse(black_box(source.clone()))
+                        .expect("Initial parse failed");
 
-                    let edit =
-                        SimpleEdit { start: *pos, end: *pos + 5, new_text: "xxxxx".to_string() };
+                    let edit = SimpleEdit {
+                        start: *pos,
+                        end: *pos + 5,
+                        new_text: "xxxxx".to_string(),
+                    };
 
                     let result = benchmark_incremental_parse(&mut parser, black_box(&edit));
 

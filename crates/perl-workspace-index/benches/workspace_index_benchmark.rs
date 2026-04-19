@@ -182,7 +182,10 @@ fn bench_initial_index_small_workspace(c: &mut Criterion) {
 
                 // Create 5 different Perl files
                 must(fs::write(base_path.join("module1.pm"), SAMPLE_MODULE));
-                must(fs::write(base_path.join("module2.pm"), MULTI_PACKAGE_MODULE));
+                must(fs::write(
+                    base_path.join("module2.pm"),
+                    MULTI_PACKAGE_MODULE,
+                ));
                 must(fs::write(base_path.join("script.pl"), SAMPLE_SCRIPT));
                 must(fs::write(base_path.join("modern.pm"), MODERN_PERL));
                 must(fs::write(base_path.join("complex.pm"), COMPLEX_MODULE));
@@ -200,7 +203,9 @@ fn bench_initial_index_small_workspace(c: &mut Criterion) {
                 let uri5 = must(Url::from_file_path(base_path.join("complex.pm")));
 
                 index.index_file(uri1, SAMPLE_MODULE.to_string()).ok();
-                index.index_file(uri2, MULTI_PACKAGE_MODULE.to_string()).ok();
+                index
+                    .index_file(uri2, MULTI_PACKAGE_MODULE.to_string())
+                    .ok();
                 index.index_file(uri3, SAMPLE_SCRIPT.to_string()).ok();
                 index.index_file(uri4, MODERN_PERL.to_string()).ok();
                 index.index_file(uri5, COMPLEX_MODULE.to_string()).ok();
@@ -270,7 +275,10 @@ fn bench_incremental_update(c: &mut Criterion) {
                 let base_path = temp_dir.path();
 
                 must(fs::write(base_path.join("module1.pm"), SAMPLE_MODULE));
-                must(fs::write(base_path.join("module2.pm"), MULTI_PACKAGE_MODULE));
+                must(fs::write(
+                    base_path.join("module2.pm"),
+                    MULTI_PACKAGE_MODULE,
+                ));
                 must(fs::write(base_path.join("script.pl"), SAMPLE_SCRIPT));
                 must(fs::write(base_path.join("modern.pm"), MODERN_PERL));
                 must(fs::write(base_path.join("complex.pm"), COMPLEX_MODULE));
@@ -356,7 +364,9 @@ sub new_method {  # New method added
 1;
 "#;
 
-                index.index_file(update_uri, updated_content.to_string()).ok();
+                index
+                    .index_file(update_uri, updated_content.to_string())
+                    .ok();
                 black_box(&index);
                 black_box(temp_dir);
             },
@@ -375,7 +385,10 @@ fn bench_symbol_lookup(c: &mut Criterion) {
     let base_path = temp_dir.path();
 
     must(fs::write(base_path.join("module1.pm"), SAMPLE_MODULE));
-    must(fs::write(base_path.join("module2.pm"), MULTI_PACKAGE_MODULE));
+    must(fs::write(
+        base_path.join("module2.pm"),
+        MULTI_PACKAGE_MODULE,
+    ));
     must(fs::write(base_path.join("complex.pm"), COMPLEX_MODULE));
 
     let index = WorkspaceIndex::new();
@@ -420,7 +433,10 @@ fn bench_find_references(c: &mut Criterion) {
     let base_path = temp_dir.path();
 
     must(fs::write(base_path.join("module1.pm"), SAMPLE_MODULE));
-    must(fs::write(base_path.join("module2.pm"), MULTI_PACKAGE_MODULE));
+    must(fs::write(
+        base_path.join("module2.pm"),
+        MULTI_PACKAGE_MODULE,
+    ));
     must(fs::write(base_path.join("complex.pm"), COMPLEX_MODULE));
 
     let index = WorkspaceIndex::new();
@@ -511,7 +527,10 @@ fn bench_file_removal_and_reindex(c: &mut Criterion) {
                 let base_path = temp_dir.path();
 
                 must(fs::write(base_path.join("module1.pm"), SAMPLE_MODULE));
-                must(fs::write(base_path.join("module2.pm"), MULTI_PACKAGE_MODULE));
+                must(fs::write(
+                    base_path.join("module2.pm"),
+                    MULTI_PACKAGE_MODULE,
+                ));
                 must(fs::write(base_path.join("complex.pm"), COMPLEX_MODULE));
 
                 let index = WorkspaceIndex::new();
@@ -520,16 +539,24 @@ fn bench_file_removal_and_reindex(c: &mut Criterion) {
                 let uri2 = must(Url::from_file_path(base_path.join("module2.pm")));
                 let uri3 = must(Url::from_file_path(base_path.join("complex.pm")));
 
-                index.index_file(uri1.clone(), SAMPLE_MODULE.to_string()).ok();
-                index.index_file(uri2.clone(), MULTI_PACKAGE_MODULE.to_string()).ok();
-                index.index_file(uri3.clone(), COMPLEX_MODULE.to_string()).ok();
+                index
+                    .index_file(uri1.clone(), SAMPLE_MODULE.to_string())
+                    .ok();
+                index
+                    .index_file(uri2.clone(), MULTI_PACKAGE_MODULE.to_string())
+                    .ok();
+                index
+                    .index_file(uri3.clone(), COMPLEX_MODULE.to_string())
+                    .ok();
 
                 (temp_dir, index, uri2)
             },
             |(temp_dir, index, uri_to_remove)| {
                 // Benchmark: remove a file and re-index it
                 index.remove_file_url(&uri_to_remove);
-                index.index_file(uri_to_remove, MULTI_PACKAGE_MODULE.to_string()).ok();
+                index
+                    .index_file(uri_to_remove, MULTI_PACKAGE_MODULE.to_string())
+                    .ok();
 
                 black_box(&index);
                 black_box(temp_dir);
@@ -636,7 +663,9 @@ fn bench_early_exit_optimization(c: &mut Criterion) {
                 let uri = must(Url::from_file_path(base_path.join("module1.pm")));
 
                 // Initial index
-                index.index_file(uri.clone(), SAMPLE_MODULE.to_string()).ok();
+                index
+                    .index_file(uri.clone(), SAMPLE_MODULE.to_string())
+                    .ok();
 
                 (temp_dir, index, uri)
             },
@@ -818,7 +847,11 @@ fn generate_dense_module(index: usize) -> String {
         idx = index
     );
     for j in 0..96 {
-        src.push_str(&format!("sub method_{idx}_{j} {{ return {j}; }}\n", idx = index, j = j));
+        src.push_str(&format!(
+            "sub method_{idx}_{j} {{ return {j}; }}\n",
+            idx = index,
+            j = j
+        ));
     }
     src.push_str(&format!(
         "sub get_{idx} {{ return {idx}; }}\nsub set_{idx} {{ my ($self, $v) = @_; }}\nsub reset_{idx} {{ }}\n1;\n",

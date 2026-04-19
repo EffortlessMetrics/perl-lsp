@@ -48,9 +48,16 @@ pub fn publish_crates(yes: bool, dry_run: bool) -> Result<()> {
             )
         })?;
 
-        let output = Command::new("cargo").current_dir(crate_dir).args(&args).output()?;
+        let output = Command::new("cargo")
+            .current_dir(crate_dir)
+            .args(&args)
+            .output()?;
         if !output.status.success() {
-            bail!("Failed to publish {}: {}", target.name, String::from_utf8_lossy(&output.stderr));
+            bail!(
+                "Failed to publish {}: {}",
+                target.name,
+                String::from_utf8_lossy(&output.stderr)
+            );
         }
         println!("✅ {} published", target.name);
 
@@ -131,7 +138,10 @@ fn load_publish_targets() -> Result<Vec<PublishTarget>> {
             )
         })?;
 
-        targets.push(PublishTarget { name: crate_name, manifest_path: manifest_path.clone() });
+        targets.push(PublishTarget {
+            name: crate_name,
+            manifest_path: manifest_path.clone(),
+        });
     }
 
     Ok(targets)
@@ -164,11 +174,16 @@ pub fn publish_vscode(yes: bool, token: Option<String>) -> Result<()> {
 
     // First compile the extension
     println!("Compiling extension...");
-    let output =
-        Command::new("npm").current_dir("vscode-extension").args(["run", "compile"]).output()?;
+    let output = Command::new("npm")
+        .current_dir("vscode-extension")
+        .args(["run", "compile"])
+        .output()?;
 
     if !output.status.success() {
-        bail!("Failed to compile extension: {}", String::from_utf8_lossy(&output.stderr));
+        bail!(
+            "Failed to compile extension: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
     }
 
     // Publish to marketplace
@@ -183,7 +198,10 @@ pub fn publish_vscode(yes: bool, token: Option<String>) -> Result<()> {
         .output()?;
 
     if !output.status.success() {
-        bail!("Failed to publish extension: {}", String::from_utf8_lossy(&output.stderr));
+        bail!(
+            "Failed to publish extension: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
     }
 
     println!("✅ VSCode extension published successfully!");

@@ -30,7 +30,9 @@ fn stack_frame_with_end_stores_both_values() {
 
 #[test]
 fn stack_frame_chained_with_end_and_column() {
-    let f = StackFrame::new(1, "f", None, 1).with_column(5).with_end(10, 15);
+    let f = StackFrame::new(1, "f", None, 1)
+        .with_column(5)
+        .with_end(10, 15);
     assert_eq!(f.column, 5);
     assert_eq!(f.end_line, Some(10));
     assert_eq!(f.end_column, Some(15));
@@ -146,7 +148,10 @@ fn source_with_origin_chained_with_presentation_hint() {
         .with_origin("require")
         .with_presentation_hint(SourcePresentationHint::Deemphasize);
     assert_eq!(s.origin.as_deref(), Some("require"));
-    assert_eq!(s.presentation_hint, Some(SourcePresentationHint::Deemphasize));
+    assert_eq!(
+        s.presentation_hint,
+        Some(SourcePresentationHint::Deemphasize)
+    );
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -406,12 +411,16 @@ fn parser_looks_like_frame_hash_prefix() {
 
 #[test]
 fn parser_looks_like_frame_dot_equals() {
-    assert!(PerlStackParser::looks_like_frame(". = foo() called from 'x' line 1"));
+    assert!(PerlStackParser::looks_like_frame(
+        ". = foo() called from 'x' line 1"
+    ));
 }
 
 #[test]
 fn parser_looks_like_frame_at_equals() {
-    assert!(PerlStackParser::looks_like_frame("@ = foo() called from 'x' line 1"));
+    assert!(PerlStackParser::looks_like_frame(
+        "@ = foo() called from 'x' line 1"
+    ));
 }
 
 #[test]
@@ -480,7 +489,12 @@ fn classifier_core_by_known_module_name_feature() {
 #[test]
 fn classifier_library_cpanm_path() {
     let c = PerlFrameClassifier::new();
-    let f = frame(1, "Foo::bar", "/home/user/.cpanm/work/12345/Foo-1.0/lib/Foo.pm", 1);
+    let f = frame(
+        1,
+        "Foo::bar",
+        "/home/user/.cpanm/work/12345/Foo-1.0/lib/Foo.pm",
+        1,
+    );
     assert_eq!(c.classify(&f), FrameCategory::Library);
 }
 
@@ -569,7 +583,10 @@ fn frame_category_eval_is_not_external() {
 
 #[test]
 fn frame_category_unknown_presentation_hint_is_subtle() {
-    assert_eq!(FrameCategory::Unknown.presentation_hint(), StackFramePresentationHint::Subtle);
+    assert_eq!(
+        FrameCategory::Unknown.presentation_hint(),
+        StackFramePresentationHint::Subtle
+    );
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -578,7 +595,10 @@ fn frame_category_unknown_presentation_hint_is_subtle() {
 
 #[test]
 fn is_internal_frame_name_db_sub_any_path() {
-    assert!(is_internal_frame_name_and_path("DB::sub", Some("/random/path.pl")));
+    assert!(is_internal_frame_name_and_path(
+        "DB::sub",
+        Some("/random/path.pl")
+    ));
 }
 
 #[test]
@@ -596,18 +616,27 @@ fn is_internal_frame_name_devel_tsperlap_nested() {
 
 #[test]
 fn is_internal_frame_perl5db_embedded_in_long_path() {
-    assert!(is_internal_frame_name_and_path("helper", Some("/very/long/path/to/perl5db.pl")));
+    assert!(is_internal_frame_name_and_path(
+        "helper",
+        Some("/very/long/path/to/perl5db.pl")
+    ));
 }
 
 #[test]
 fn is_not_internal_frame_partial_db_name() {
     // "Database::connect" should NOT match DB:: prefix
-    assert!(!is_internal_frame_name_and_path("Database::connect", Some("/app/lib.pm")));
+    assert!(!is_internal_frame_name_and_path(
+        "Database::connect",
+        Some("/app/lib.pm")
+    ));
 }
 
 #[test]
 fn is_not_internal_frame_path_without_perl5db() {
-    assert!(!is_internal_frame_name_and_path("main::run", Some("/app/perl5.pl")));
+    assert!(!is_internal_frame_name_and_path(
+        "main::run",
+        Some("/app/perl5.pl")
+    ));
 }
 
 #[test]

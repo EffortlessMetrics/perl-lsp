@@ -5,13 +5,17 @@ use proptest::prelude::*;
 
 fn head_chars() -> impl Strategy<Value = String> {
     prop::char::range('A', 'z')
-        .prop_filter("invalid head chars", |c| c.is_ascii_alphabetic() || *c == '_')
+        .prop_filter("invalid head chars", |c| {
+            c.is_ascii_alphabetic() || *c == '_'
+        })
         .prop_map(|c| c.to_string())
 }
 
 fn body_chars() -> impl Strategy<Value = String> {
     prop::char::range('A', 'z')
-        .prop_filter("invalid body chars", |c| c.is_ascii_alphanumeric() || *c == '_')
+        .prop_filter("invalid body chars", |c| {
+            c.is_ascii_alphanumeric() || *c == '_'
+        })
         .prop_map(|c| c.to_string())
 }
 
@@ -26,7 +30,10 @@ fn token_segment() -> impl Strategy<Value = String> {
 fn module_name() -> impl Strategy<Value = String> {
     (
         token_segment(),
-        prop::collection::vec((token_segment(), prop::sample::select(vec!["::", "'"])), 0..3),
+        prop::collection::vec(
+            (token_segment(), prop::sample::select(vec!["::", "'"])),
+            0..3,
+        ),
     )
         .prop_map(|(first, mut rest)| {
             let mut token = first;

@@ -88,14 +88,25 @@ fn show_ast_error(
 fn show_ast_returns_string_for_valid_perl() {
     let server = create_and_init_server();
     let uri = "file:///test_ast.pl";
-    open_document(&server, uri, "use strict;\nuse warnings;\nsub foo { return 1; }\n");
+    open_document(
+        &server,
+        uri,
+        "use strict;\nuse warnings;\nsub foo { return 1; }\n",
+    );
 
     let result = show_ast(&server, uri);
     assert!(result.is_some(), "perl/showAst should return a response");
 
     let value = result.unwrap();
-    assert!(!value.is_null(), "perl/showAst should return a non-null AST string for a valid file");
-    assert!(value.is_string(), "perl/showAst result should be a JSON string, got: {:?}", value);
+    assert!(
+        !value.is_null(),
+        "perl/showAst should return a non-null AST string for a valid file"
+    );
+    assert!(
+        value.is_string(),
+        "perl/showAst result should be a JSON string, got: {:?}",
+        value
+    );
 }
 
 /// The returned S-expression must contain recognizable Perl constructs.
@@ -127,11 +138,17 @@ fn show_ast_returns_error_for_unknown_document() {
     // Intentionally do NOT open any document
 
     let err = show_ast_error(&server, Some(json!({ "uri": "file:///never_opened.pl" })));
-    assert!(err.is_some(), "perl/showAst should return an error for an unopened document");
+    assert!(
+        err.is_some(),
+        "perl/showAst should return an error for an unopened document"
+    );
     // Error code -32602 (INVALID_PARAMS) is the spec-compliant choice for
     // "document not found" in a custom request with a URI parameter.
     let code = err.unwrap().code;
-    assert_eq!(code, -32602, "Expected INVALID_PARAMS (-32602) for unknown document, got {code}");
+    assert_eq!(
+        code, -32602,
+        "Expected INVALID_PARAMS (-32602) for unknown document, got {code}"
+    );
 }
 
 /// Calling `perl/showAst` before `initialize` returns ServerNotInitialized.
@@ -140,9 +157,15 @@ fn show_ast_before_init_returns_server_not_initialized() {
     let server = LspServer::new(); // NOT initialized
 
     let err = show_ast_error(&server, Some(json!({ "uri": "file:///foo.pl" })));
-    assert!(err.is_some(), "Should return an error before initialization");
+    assert!(
+        err.is_some(),
+        "Should return an error before initialization"
+    );
     let code = err.unwrap().code;
-    assert_eq!(code, -32002, "Expected ServerNotInitialized (-32002), got {code}");
+    assert_eq!(
+        code, -32002,
+        "Expected ServerNotInitialized (-32002), got {code}"
+    );
 }
 
 /// Missing `uri` field in params returns INVALID_PARAMS.
@@ -153,7 +176,10 @@ fn show_ast_missing_uri_returns_invalid_params() {
     let err = show_ast_error(&server, Some(json!({ "other": "value" })));
     assert!(err.is_some(), "Should return an error when uri is missing");
     let code = err.unwrap().code;
-    assert_eq!(code, -32602, "Expected INVALID_PARAMS (-32602) for missing uri, got {code}");
+    assert_eq!(
+        code, -32602,
+        "Expected INVALID_PARAMS (-32602) for missing uri, got {code}"
+    );
 }
 
 /// Null params returns INVALID_PARAMS.
@@ -164,5 +190,8 @@ fn show_ast_null_params_returns_invalid_params() {
     let err = show_ast_error(&server, None);
     assert!(err.is_some(), "Should return an error for null params");
     let code = err.unwrap().code;
-    assert_eq!(code, -32602, "Expected INVALID_PARAMS (-32602) for null params, got {code}");
+    assert_eq!(
+        code, -32602,
+        "Expected INVALID_PARAMS (-32602) for null params, got {code}"
+    );
 }

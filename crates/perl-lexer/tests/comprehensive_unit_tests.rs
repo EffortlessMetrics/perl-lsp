@@ -29,7 +29,10 @@ fn first_token(input: &str) -> Option<Token> {
 }
 
 fn _token_types(input: &str) -> Vec<String> {
-    tokens(input).iter().map(|t| format!("{:?}", std::mem::discriminant(&t.token_type))).collect()
+    tokens(input)
+        .iter()
+        .map(|t| format!("{:?}", std::mem::discriminant(&t.token_type)))
+        .collect()
 }
 
 /// Collect only the significant (non-whitespace, non-newline, non-EOF) tokens.
@@ -37,7 +40,10 @@ fn significant(input: &str) -> Vec<Token> {
     tokens(input)
         .into_iter()
         .filter(|t| {
-            !matches!(t.token_type, TokenType::Whitespace | TokenType::Newline | TokenType::EOF)
+            !matches!(
+                t.token_type,
+                TokenType::Whitespace | TokenType::Newline | TokenType::EOF
+            )
         })
         .collect()
 }
@@ -149,7 +155,10 @@ fn token_type_with_arc_data() {
 
 #[test]
 fn interpolated_string_token_type() {
-    let parts = vec![StringPart::Literal(Arc::from("hi ")), StringPart::Variable(Arc::from("$x"))];
+    let parts = vec![
+        StringPart::Literal(Arc::from("hi ")),
+        StringPart::Variable(Arc::from("$x")),
+    ];
     let tt = TokenType::InterpolatedString(parts.clone());
     if let TokenType::InterpolatedString(ref p) = tt {
         assert_eq!(p.len(), 2);
@@ -214,11 +223,35 @@ fn lexer_error_position_extraction() {
     let errors = [
         (LexerError::UnterminatedString { position: 10 }, Some(10)),
         (LexerError::UnterminatedRegex { position: 20 }, Some(20)),
-        (LexerError::InvalidEscape { char: 'z', position: 5 }, Some(5)),
-        (LexerError::InvalidNumber { position: 7, reason: "bad".into() }, Some(7)),
-        (LexerError::UnexpectedChar { char: '?', position: 3 }, Some(3)),
+        (
+            LexerError::InvalidEscape {
+                char: 'z',
+                position: 5,
+            },
+            Some(5),
+        ),
+        (
+            LexerError::InvalidNumber {
+                position: 7,
+                reason: "bad".into(),
+            },
+            Some(7),
+        ),
+        (
+            LexerError::UnexpectedChar {
+                char: '?',
+                position: 3,
+            },
+            Some(3),
+        ),
         (LexerError::InvalidUtf8 { position: 0 }, Some(0)),
-        (LexerError::HeredocError { position: 15, reason: "no end".into() }, Some(15)),
+        (
+            LexerError::HeredocError {
+                position: 15,
+                reason: "no end".into(),
+            },
+            Some(15),
+        ),
         (LexerError::Other("misc".into()), None),
     ];
     for (err, expected_pos) in &errors {
@@ -233,7 +266,10 @@ fn lexer_error_display_messages() {
     assert!(msg.contains("42"), "display should contain position");
     assert!(msg.to_lowercase().contains("unterminated"));
 
-    let err2 = LexerError::InvalidEscape { char: 'q', position: 1 };
+    let err2 = LexerError::InvalidEscape {
+        char: 'q',
+        position: 1,
+    };
     let msg2 = format!("{}", err2);
     assert!(msg2.contains("q"));
 
@@ -243,7 +279,10 @@ fn lexer_error_display_messages() {
 
 #[test]
 fn lexer_error_clone() {
-    let err = LexerError::InvalidNumber { position: 3, reason: "overflow".into() };
+    let err = LexerError::InvalidNumber {
+        position: 3,
+        reason: "overflow".into(),
+    };
     let err2 = err.clone();
     assert_eq!(err.position(), err2.position());
 }
@@ -262,7 +301,11 @@ fn default_config_values() {
 
 #[test]
 fn custom_config() {
-    let cfg = LexerConfig { parse_interpolation: false, track_positions: false, max_lookahead: 64 };
+    let cfg = LexerConfig {
+        parse_interpolation: false,
+        track_positions: false,
+        max_lookahead: 64,
+    };
     assert!(!cfg.parse_interpolation);
     assert!(!cfg.track_positions);
     assert_eq!(cfg.max_lookahead, 64);
@@ -300,7 +343,10 @@ fn new_lexer_whitespace_only() -> R {
 
 #[test]
 fn with_config_custom_lookahead() -> R {
-    let cfg = LexerConfig { max_lookahead: 8, ..LexerConfig::default() };
+    let cfg = LexerConfig {
+        max_lookahead: 8,
+        ..LexerConfig::default()
+    };
     let mut lexer = PerlLexer::with_config("my $x;", cfg);
     let tok = lexer.next_token().ok_or("expected token")?;
     assert!(matches!(tok.token_type, TokenType::Keyword(_)));
@@ -309,7 +355,10 @@ fn with_config_custom_lookahead() -> R {
 
 #[test]
 fn with_config_zero_lookahead_disables_decimal_number_peek() -> R {
-    let cfg = LexerConfig { max_lookahead: 0, ..LexerConfig::default() };
+    let cfg = LexerConfig {
+        max_lookahead: 0,
+        ..LexerConfig::default()
+    };
     let mut lexer = PerlLexer::with_config(".5", cfg);
 
     let dot = lexer.next_token().ok_or("expected dot operator")?;
@@ -327,7 +376,10 @@ fn with_config_small_lookahead_limits_namespace_parsing() -> R {
     // so "Foo::Bar" emits "Foo" as the identifier rather than "Foo::Bar". However, try_operator
     // uses current_char (not peek_char), so "::" is still correctly emitted as a single DoubleColon
     // operator token regardless of max_lookahead.
-    let cfg = LexerConfig { max_lookahead: 0, ..LexerConfig::default() };
+    let cfg = LexerConfig {
+        max_lookahead: 0,
+        ..LexerConfig::default()
+    };
     let mut lexer = PerlLexer::with_config("Foo::Bar", cfg);
 
     let first = lexer.next_token().ok_or("expected first token")?;
@@ -344,8 +396,13 @@ fn with_body_tokens_emits_heredoc_body() -> R {
     let input = "print <<EOF;\nhello world\nEOF\n";
     let mut lexer = PerlLexer::with_body_tokens(input);
     let toks = lexer.collect_tokens();
-    let has_heredoc_body = toks.iter().any(|t| matches!(t.token_type, TokenType::HeredocBody(_)));
-    assert!(has_heredoc_body, "with_body_tokens should emit HeredocBody tokens");
+    let has_heredoc_body = toks
+        .iter()
+        .any(|t| matches!(t.token_type, TokenType::HeredocBody(_)));
+    assert!(
+        has_heredoc_body,
+        "with_body_tokens should emit HeredocBody tokens"
+    );
     Ok(())
 }
 
@@ -354,8 +411,13 @@ fn regular_lexer_omits_heredoc_body() -> R {
     let input = "print <<EOF;\nhello world\nEOF\n";
     let mut lexer = PerlLexer::new(input);
     let toks = lexer.collect_tokens();
-    let has_heredoc_body = toks.iter().any(|t| matches!(t.token_type, TokenType::HeredocBody(_)));
-    assert!(!has_heredoc_body, "default lexer should NOT emit HeredocBody tokens");
+    let has_heredoc_body = toks
+        .iter()
+        .any(|t| matches!(t.token_type, TokenType::HeredocBody(_)));
+    assert!(
+        !has_heredoc_body,
+        "default lexer should NOT emit HeredocBody tokens"
+    );
     Ok(())
 }
 
@@ -560,7 +622,10 @@ fn deref_sigils() -> R {
     for input in ["@$ref", "$$ref", "%$ref"] {
         let tok = first_token(input).ok_or_else(|| format!("no token for '{}'", input))?;
         assert!(
-            matches!(tok.token_type, TokenType::Identifier(_) | TokenType::Operator(_)),
+            matches!(
+                tok.token_type,
+                TokenType::Identifier(_) | TokenType::Operator(_)
+            ),
             "'{}' => {:?}",
             input,
             tok.token_type
@@ -595,13 +660,19 @@ fn integer_literal() -> R {
 #[test]
 fn negative_number_is_operator_plus_number() -> R {
     let toks = significant("-42");
-    assert!(toks.len() >= 2, "expected operator then number, got {} tokens", toks.len());
+    assert!(
+        toks.len() >= 2,
+        "expected operator then number, got {} tokens",
+        toks.len()
+    );
     Ok(())
 }
 
 #[test]
 fn float_literal() -> R {
-    for input in ["3.14", "0.5", ".25", "1.", "1e10", "2.5e-3", "1E+5", "1e1_0", "2.5e-1_0"] {
+    for input in [
+        "3.14", "0.5", ".25", "1.", "1e10", "2.5e-3", "1E+5", "1e1_0", "2.5e-1_0",
+    ] {
         let tok = first_token(input).ok_or_else(|| format!("no token for '{}'", input))?;
         match &tok.token_type {
             TokenType::Number(_) => {} // expected
@@ -674,10 +745,16 @@ fn double_quoted_string() -> R {
 #[test]
 fn interpolated_string_preserves_complex_tails() -> R {
     let cases = [
-        (r#""${expr}""#, vec![StringPart::Expression(Arc::from("${expr}"))]),
+        (
+            r#""${expr}""#,
+            vec![StringPart::Expression(Arc::from("${expr}"))],
+        ),
         (
             r#""$arr[0]""#,
-            vec![StringPart::Variable(Arc::from("$arr")), StringPart::ArraySlice(Arc::from("[0]"))],
+            vec![
+                StringPart::Variable(Arc::from("$arr")),
+                StringPart::ArraySlice(Arc::from("[0]")),
+            ],
         ),
         (
             r#""$hash{key}""#,
@@ -736,7 +813,10 @@ fn interpolated_string_preserves_complex_tails() -> R {
 fn single_quoted_string() -> R {
     let tok = first_token("'hello'").ok_or("no token")?;
     assert!(
-        matches!(tok.token_type, TokenType::StringLiteral | TokenType::QuoteSingle),
+        matches!(
+            tok.token_type,
+            TokenType::StringLiteral | TokenType::QuoteSingle
+        ),
         "got {:?}",
         tok.token_type
     );
@@ -747,7 +827,10 @@ fn single_quoted_string() -> R {
 fn backtick_string() -> R {
     let tok = first_token("`ls -la`").ok_or("no token")?;
     assert!(
-        matches!(tok.token_type, TokenType::QuoteCommand | TokenType::StringLiteral),
+        matches!(
+            tok.token_type,
+            TokenType::QuoteCommand | TokenType::StringLiteral
+        ),
         "got {:?}",
         tok.token_type
     );
@@ -790,14 +873,21 @@ fn arithmetic_operators() -> R {
     for op in &ops {
         let input = format!("1 {} 2", op);
         let toks = significant(&input);
-        assert!(toks.len() >= 3, "expected 3+ tokens for '{}', got {}", input, toks.len());
+        assert!(
+            toks.len() >= 3,
+            "expected 3+ tokens for '{}', got {}",
+            input,
+            toks.len()
+        );
     }
     Ok(())
 }
 
 #[test]
 fn comparison_operators() -> R {
-    let ops = ["==", "!=", "<", ">", "<=", ">=", "<=>", "eq", "ne", "lt", "gt", "le", "ge"];
+    let ops = [
+        "==", "!=", "<", ">", "<=", ">=", "<=>", "eq", "ne", "lt", "gt", "le", "ge",
+    ];
     for op in &ops {
         let input = format!("$a {} $b", op);
         let toks = tokens(&input);
@@ -914,7 +1004,11 @@ fn binding_operators() -> R {
         let has_binding = toks
             .iter()
             .any(|t| matches!(&t.token_type, TokenType::Operator(op) if op.as_ref() == op_text));
-        assert!(has_binding, "expected binding operator '{}' in tokens", op_text);
+        assert!(
+            has_binding,
+            "expected binding operator '{}' in tokens",
+            op_text
+        );
     }
     Ok(())
 }
@@ -948,8 +1042,12 @@ fn paired_delimiters() -> R {
 #[test]
 fn semicolon_and_comma() -> R {
     let toks = significant("1; 2, 3");
-    let has_semi = toks.iter().any(|t| matches!(t.token_type, TokenType::Semicolon));
-    let has_comma = toks.iter().any(|t| matches!(t.token_type, TokenType::Comma));
+    let has_semi = toks
+        .iter()
+        .any(|t| matches!(t.token_type, TokenType::Semicolon));
+    let has_comma = toks
+        .iter()
+        .any(|t| matches!(t.token_type, TokenType::Comma));
     assert!(has_semi);
     assert!(has_comma);
     Ok(())
@@ -1169,7 +1267,9 @@ fn quote_ops_with_alternate_delimiters() -> R {
 fn heredoc_double_quoted_marker() -> R {
     let input = "<<EOF\nhello\nEOF\n";
     let toks = tokens(input);
-    let has_heredoc = toks.iter().any(|t| matches!(t.token_type, TokenType::HeredocStart));
+    let has_heredoc = toks
+        .iter()
+        .any(|t| matches!(t.token_type, TokenType::HeredocStart));
     assert!(has_heredoc, "expected HeredocStart token");
     Ok(())
 }
@@ -1178,7 +1278,9 @@ fn heredoc_double_quoted_marker() -> R {
 fn heredoc_single_quoted_marker() -> R {
     let input = "<<'END'\nhello\nEND\n";
     let toks = tokens(input);
-    let has_heredoc = toks.iter().any(|t| matches!(t.token_type, TokenType::HeredocStart));
+    let has_heredoc = toks
+        .iter()
+        .any(|t| matches!(t.token_type, TokenType::HeredocStart));
     assert!(has_heredoc, "expected HeredocStart token");
     Ok(())
 }
@@ -1187,7 +1289,9 @@ fn heredoc_single_quoted_marker() -> R {
 fn heredoc_indented() -> R {
     let input = "<<~EOF\n  hello\n  EOF\n";
     let toks = tokens(input);
-    let has_heredoc = toks.iter().any(|t| matches!(t.token_type, TokenType::HeredocStart));
+    let has_heredoc = toks
+        .iter()
+        .any(|t| matches!(t.token_type, TokenType::HeredocStart));
     assert!(has_heredoc, "expected HeredocStart for indented heredoc");
     Ok(())
 }
@@ -1208,9 +1312,12 @@ fn heredoc_unterminated_does_not_hang() {
 fn data_section_marker() -> R {
     let input = "__DATA__\nsome data here\n";
     let toks = tokens(input);
-    let has_data = toks
-        .iter()
-        .any(|t| matches!(&t.token_type, TokenType::DataMarker(_) | TokenType::DataBody(_)));
+    let has_data = toks.iter().any(|t| {
+        matches!(
+            &t.token_type,
+            TokenType::DataMarker(_) | TokenType::DataBody(_)
+        )
+    });
     assert!(has_data, "expected data section tokens");
     Ok(())
 }
@@ -1219,9 +1326,12 @@ fn data_section_marker() -> R {
 fn end_section_marker() -> R {
     let input = "__END__\nstuff after end\n";
     let toks = tokens(input);
-    let has_data = toks
-        .iter()
-        .any(|t| matches!(&t.token_type, TokenType::DataMarker(_) | TokenType::DataBody(_)));
+    let has_data = toks.iter().any(|t| {
+        matches!(
+            &t.token_type,
+            TokenType::DataMarker(_) | TokenType::DataBody(_)
+        )
+    });
     assert!(has_data, "expected data/end section tokens");
     Ok(())
 }
@@ -1405,7 +1515,9 @@ fn checkpoint_cache_apply_edit() -> R {
 
 #[test]
 fn single_character_inputs() {
-    let chars = [";", ",", "(", ")", "[", "]", "{", "}", "+", "-", "*", "=", "<", ">", "!", "~"];
+    let chars = [
+        ";", ",", "(", ")", "[", "]", "{", "}", "+", "-", "*", "=", "<", ">", "!", "~",
+    ];
     for ch in &chars {
         let toks = tokens(ch);
         assert!(!toks.is_empty(), "expected tokens for '{}'", ch);
@@ -1419,7 +1531,10 @@ fn very_long_identifier() -> R {
     let toks = tokens(&input);
     assert!(!toks.is_empty());
     let first = toks.first().ok_or("no tokens")?;
-    assert!(!matches!(first.token_type, TokenType::EOF), "long identifier should produce a token");
+    assert!(
+        !matches!(first.token_type, TokenType::EOF),
+        "long identifier should produce a token"
+    );
     Ok(())
 }
 
@@ -1427,7 +1542,10 @@ fn very_long_identifier() -> R {
 fn many_semicolons() {
     let input = ";;;;;;;;;;;";
     let toks = significant(input);
-    let semi_count = toks.iter().filter(|t| matches!(t.token_type, TokenType::Semicolon)).count();
+    let semi_count = toks
+        .iter()
+        .filter(|t| matches!(t.token_type, TokenType::Semicolon))
+        .count();
     assert_eq!(semi_count, 11);
 }
 
@@ -1447,8 +1565,9 @@ fn comment_line() -> R {
     let toks = tokens(input);
     let _first = toks.first().ok_or("no tokens")?;
     // The comment may be skipped or returned
-    let has_keyword =
-        toks.iter().any(|t| matches!(&t.token_type, TokenType::Keyword(k) if k.as_ref() == "my"));
+    let has_keyword = toks
+        .iter()
+        .any(|t| matches!(&t.token_type, TokenType::Keyword(k) if k.as_ref() == "my"));
     assert!(has_keyword, "should have 'my' keyword after comment");
     Ok(())
 }
@@ -1559,7 +1678,10 @@ fn emoji_variation_selector_identifier() -> R {
             TokenType::Identifier(id) if id.as_ref().contains("☕️_count")
         )
     });
-    assert!(has_ident, "expected variation-selector emoji identifier token");
+    assert!(
+        has_ident,
+        "expected variation-selector emoji identifier token"
+    );
     Ok(())
 }
 
@@ -1678,7 +1800,9 @@ fn real_world_array_operations() -> R {
 fn real_world_regex_substitution() -> R {
     let input = "$str =~ s/foo/bar/g;";
     let toks = significant(input);
-    let has_sub = toks.iter().any(|t| matches!(t.token_type, TokenType::Substitution));
+    let has_sub = toks
+        .iter()
+        .any(|t| matches!(t.token_type, TokenType::Substitution));
     assert!(has_sub, "expected Substitution token");
     Ok(())
 }
@@ -1687,9 +1811,14 @@ fn real_world_regex_substitution() -> R {
 fn real_world_conditional() -> R {
     let input = "if ($x > 0) { print \"positive\\n\"; } elsif ($x == 0) { print \"zero\\n\"; } else { print \"negative\\n\"; }";
     let toks = tokens(input);
-    let keyword_count =
-        toks.iter().filter(|t| matches!(t.token_type, TokenType::Keyword(_))).count();
-    assert!(keyword_count >= 3, "expected at least 3 keywords (if, elsif, else, print...)");
+    let keyword_count = toks
+        .iter()
+        .filter(|t| matches!(t.token_type, TokenType::Keyword(_)))
+        .count();
+    assert!(
+        keyword_count >= 3,
+        "expected at least 3 keywords (if, elsif, else, print...)"
+    );
     Ok(())
 }
 
@@ -1717,8 +1846,9 @@ fn real_world_use_statement() -> R {
 fn real_world_for_loop() -> R {
     let input = "for my $i (0..9) { print $i; }";
     let toks = tokens(input);
-    let has_for =
-        toks.iter().any(|t| matches!(&t.token_type, TokenType::Keyword(k) if k.as_ref() == "for"));
+    let has_for = toks
+        .iter()
+        .any(|t| matches!(&t.token_type, TokenType::Keyword(k) if k.as_ref() == "for"));
     assert!(has_for);
     Ok(())
 }
@@ -1727,8 +1857,9 @@ fn real_world_for_loop() -> R {
 fn real_world_anonymous_sub() -> R {
     let input = "my $cb = sub { return 42; };";
     let toks = tokens(input);
-    let has_sub =
-        toks.iter().any(|t| matches!(&t.token_type, TokenType::Keyword(k) if k.as_ref() == "sub"));
+    let has_sub = toks
+        .iter()
+        .any(|t| matches!(&t.token_type, TokenType::Keyword(k) if k.as_ref() == "sub"));
     assert!(has_sub);
     Ok(())
 }

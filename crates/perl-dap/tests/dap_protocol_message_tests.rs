@@ -20,7 +20,12 @@ use serde_json::json;
 #[allow(clippy::panic)]
 fn assert_response(msg: DapMessage, expected_command: &str) -> (bool, Option<String>) {
     match msg {
-        DapMessage::Response { success, command, message, .. } => {
+        DapMessage::Response {
+            success,
+            command,
+            message,
+            ..
+        } => {
             assert_eq!(command, expected_command, "command name must match");
             (success, message)
         }
@@ -30,7 +35,10 @@ fn assert_response(msg: DapMessage, expected_command: &str) -> (bool, Option<Str
 
 fn assert_success_response(msg: DapMessage, expected_command: &str) {
     let (success, msg_text) = assert_response(msg, expected_command);
-    assert!(success, "{expected_command} should succeed, but got message: {msg_text:?}");
+    assert!(
+        success,
+        "{expected_command} should succeed, but got message: {msg_text:?}"
+    );
 }
 
 fn assert_failure_response(msg: DapMessage, expected_command: &str) -> String {
@@ -67,7 +75,10 @@ fn test_breakpoint_locations_no_source_path_returns_empty() -> Result<(), Box<dy
     });
     let msg = adapter.handle_request(1, "breakpointLocations", Some(args));
     let (success, _) = assert_response(msg, "breakpointLocations");
-    assert!(success, "missing source.path should succeed with empty breakpoint list");
+    assert!(
+        success,
+        "missing source.path should succeed with empty breakpoint list"
+    );
     Ok(())
 }
 
@@ -82,7 +93,10 @@ fn test_breakpoint_locations_nonexistent_file_returns_empty()
     });
     let msg = adapter.handle_request(1, "breakpointLocations", Some(args));
     let (success, _) = assert_response(msg, "breakpointLocations");
-    assert!(success, "nonexistent file should return success with empty list");
+    assert!(
+        success,
+        "nonexistent file should return success with empty list"
+    );
     Ok(())
 }
 
@@ -202,7 +216,10 @@ fn test_exception_info_body_has_required_fields() -> Result<(), Box<dyn std::err
                 body.get("exceptionId").is_some(),
                 "body must contain exceptionId, got: {body}"
             );
-            assert!(body.get("breakMode").is_some(), "body must contain breakMode, got: {body}");
+            assert!(
+                body.get("breakMode").is_some(),
+                "body must contain breakMode, got: {body}"
+            );
         }
         other => panic!("expected Response, got {:?}", other),
     }
@@ -302,7 +319,10 @@ fn test_goto_targets_no_source_path_returns_empty() -> Result<(), Box<dyn std::e
     let args = json!({ "source": {}, "line": 5 });
     let msg = adapter.handle_request(1, "gotoTargets", Some(args));
     let (success, _) = assert_response(msg, "gotoTargets");
-    assert!(success, "missing source.path should produce empty targets, not error");
+    assert!(
+        success,
+        "missing source.path should produce empty targets, not error"
+    );
     Ok(())
 }
 
@@ -316,7 +336,10 @@ fn test_goto_targets_nonexistent_file_returns_empty() -> Result<(), Box<dyn std:
     });
     let msg = adapter.handle_request(1, "gotoTargets", Some(args));
     let (success, _) = assert_response(msg, "gotoTargets");
-    assert!(success, "nonexistent file should succeed with empty targets");
+    assert!(
+        success,
+        "nonexistent file should succeed with empty targets"
+    );
     Ok(())
 }
 
@@ -380,7 +403,9 @@ fn test_loaded_sources_no_session_returns_empty_list() -> Result<(), Box<dyn std
     match msg {
         DapMessage::Response { body, .. } => {
             let body = body.ok_or("must have body")?;
-            let sources = body["sources"].as_array().ok_or("sources must be an array")?;
+            let sources = body["sources"]
+                .as_array()
+                .ok_or("sources must be an array")?;
             assert!(sources.is_empty(), "no session means no loaded sources");
         }
         other => panic!("expected Response, got {:?}", other),
@@ -640,15 +665,25 @@ fn test_all_ten_commands_echo_request_seq() -> Result<(), Box<dyn std::error::Er
         ("goto", Some(json!({ "threadId": 1, "targetId": 0 }))),
         ("gotoTargets", Some(json!({ "source": {}, "line": 1 }))),
         ("stepInTargets", Some(json!({ "frameId": 0 }))),
-        ("breakpointLocations", Some(json!({ "source": {}, "line": 1 }))),
-        ("setExpression", Some(json!({ "expression": "$x", "value": "1" }))),
+        (
+            "breakpointLocations",
+            Some(json!({ "source": {}, "line": 1 })),
+        ),
+        (
+            "setExpression",
+            Some(json!({ "expression": "$x", "value": "1" })),
+        ),
     ];
 
     for (seq, (command, args)) in cases.iter().enumerate() {
         let req_seq = (seq as i64) + 100;
         let msg = adapter.handle_request(req_seq, command, args.clone());
         match msg {
-            DapMessage::Response { request_seq, command: cmd, .. } => {
+            DapMessage::Response {
+                request_seq,
+                command: cmd,
+                ..
+            } => {
                 assert_eq!(request_seq, req_seq, "{cmd}: request_seq must match");
             }
             other => panic!("{command}: expected Response, got {:?}", other),

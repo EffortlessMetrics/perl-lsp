@@ -103,15 +103,20 @@ fn discover_perl_files_all_returned_paths_are_perl_sources() -> TestResult {
     create_file(root, "Cargo.toml")?;
 
     let result = discover_perl_files(root);
-    let valid_extensions: HashSet<&str> =
-        ["pl", "pm", "t", "psgi", "xs", "ep", "tt", "tt2"].iter().copied().collect();
+    let valid_extensions: HashSet<&str> = ["pl", "pm", "t", "psgi", "xs", "ep", "tt", "tt2"]
+        .iter()
+        .copied()
+        .collect();
 
     for path in &result.files {
         let ext = path
             .extension()
             .and_then(|e| e.to_str())
             .ok_or_else(|| format!("no extension on: {path:?}"))?;
-        assert!(valid_extensions.contains(ext), "unexpected extension {ext:?} in {path:?}");
+        assert!(
+            valid_extensions.contains(ext),
+            "unexpected extension {ext:?} in {path:?}"
+        );
     }
     Ok(())
 }
@@ -150,9 +155,15 @@ fn discover_perl_files_does_not_follow_symlinks() -> TestResult {
 
     let result = discover_perl_files(root);
     // Should only find the real file, not the symlink target
-    let paths_with_link: Vec<_> =
-        result.files.iter().filter(|p| p.to_string_lossy().contains("links/real_link")).collect();
-    assert!(paths_with_link.is_empty(), "symlinked directories should not be followed");
+    let paths_with_link: Vec<_> = result
+        .files
+        .iter()
+        .filter(|p| p.to_string_lossy().contains("links/real_link"))
+        .collect();
+    assert!(
+        paths_with_link.is_empty(),
+        "symlinked directories should not be followed"
+    );
     Ok(())
 }
 
@@ -293,7 +304,10 @@ fn discovery_result_files_start_with_root() -> TestResult {
 
     let result = discover_perl_files(root);
     for path in &result.files {
-        assert!(path.starts_with(root), "path {path:?} does not start with root {root:?}");
+        assert!(
+            path.starts_with(root),
+            "path {path:?} does not start with root {root:?}"
+        );
     }
     Ok(())
 }
@@ -401,10 +415,22 @@ fn discover_perl_files_distinguishes_skipped_from_non_skipped_siblings() -> Test
         .filter_map(|p| p.file_name().and_then(|n| n.to_str()).map(String::from))
         .collect();
 
-    assert!(found_names.contains("Visible.pm"), "node_helpers/ should not be skipped");
-    assert!(found_names.contains("Helper.pm"), "target_utils/ should not be skipped");
-    assert!(!found_names.contains("Skipped.pm"), "node_modules/ should be skipped");
-    assert!(!found_names.contains("Build.pm"), "target/ should be skipped");
+    assert!(
+        found_names.contains("Visible.pm"),
+        "node_helpers/ should not be skipped"
+    );
+    assert!(
+        found_names.contains("Helper.pm"),
+        "target_utils/ should not be skipped"
+    );
+    assert!(
+        !found_names.contains("Skipped.pm"),
+        "node_modules/ should be skipped"
+    );
+    assert!(
+        !found_names.contains("Build.pm"),
+        "target/ should be skipped"
+    );
     Ok(())
 }
 

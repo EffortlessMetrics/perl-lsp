@@ -183,7 +183,9 @@ fn get_known_module_exports(module: &str) -> Option<Vec<&'static str>> {
         "JSON" => Some(vec!["encode_json", "decode_json", "to_json", "from_json"]),
         "YAML" => Some(vec!["Load", "Dump", "LoadFile", "DumpFile"]),
         "Storable" => Some(vec!["store", "retrieve", "freeze", "thaw"]),
-        "List::Util" => Some(vec!["first", "max", "min", "sum", "reduce", "shuffle", "uniq"]),
+        "List::Util" => Some(vec![
+            "first", "max", "min", "sum", "reduce", "shuffle", "uniq",
+        ]),
         "Scalar::Util" => Some(vec!["blessed", "reftype", "looks_like_number", "weaken"]),
         "File::Spec" => Some(vec!["catfile", "catdir", "splitpath", "splitdir"]),
         "File::Basename" => Some(vec!["basename", "dirname", "fileparse"]),
@@ -280,14 +282,21 @@ impl ImportOptimizer {
                         .map(|s| s.to_string())
                         .collect::<Vec<_>>()
                 };
-                imports.push(ImportEntry { module, symbols, line: idx + 1 });
+                imports.push(ImportEntry {
+                    module,
+                    symbols,
+                    line: idx + 1,
+                });
             }
         }
 
         // Build map for duplicate detection
         let mut module_to_lines: BTreeMap<String, Vec<usize>> = BTreeMap::new();
         for imp in &imports {
-            module_to_lines.entry(imp.module.clone()).or_default().push(imp.line);
+            module_to_lines
+                .entry(imp.module.clone())
+                .or_default()
+                .push(imp.line);
         }
         let duplicate_imports = module_to_lines
             .iter()
@@ -475,8 +484,11 @@ impl ImportOptimizer {
 
         // Suggest removing duplicate imports
         if !duplicate_imports.is_empty() {
-            let modules =
-                duplicate_imports.iter().map(|d| d.module.clone()).collect::<Vec<_>>().join(", ");
+            let modules = duplicate_imports
+                .iter()
+                .map(|d| d.module.clone())
+                .collect::<Vec<_>>()
+                .join(", ");
             organization_suggestions.push(OrganizationSuggestion {
                 description: format!("Remove duplicate imports for modules: {}", modules),
                 priority: SuggestionPriority::Medium,
@@ -587,8 +599,10 @@ impl ImportOptimizer {
         // or are bare imports (originally had empty symbols)
         for (module, symbols) in &module_symbols {
             // Check if this was originally a bare import by seeing if any original import had empty symbols
-            let was_bare_import =
-                analysis.imports.iter().any(|imp| imp.module == *module && imp.symbols.is_empty());
+            let was_bare_import = analysis
+                .imports
+                .iter()
+                .any(|imp| imp.module == *module && imp.symbols.is_empty());
 
             if symbols.is_empty() && was_bare_import {
                 // Bare import (like 'use strict;')
@@ -635,8 +649,11 @@ impl ImportOptimizer {
             if optimized.is_empty() {
                 return Vec::new();
             }
-            let insert_line =
-                analysis.missing_imports.first().map(|m| m.suggested_location).unwrap_or(1);
+            let insert_line = analysis
+                .missing_imports
+                .first()
+                .map(|m| m.suggested_location)
+                .unwrap_or(1);
             let insert_offset = self.line_offset(content, insert_line);
             return vec![TextEdit {
                 range: (insert_offset, insert_offset),
@@ -654,7 +671,11 @@ impl ImportOptimizer {
 
         vec![TextEdit {
             range: (start_offset, end_offset),
-            new_text: if optimized.is_empty() { String::new() } else { optimized + "\n" },
+            new_text: if optimized.is_empty() {
+                String::new()
+            } else {
+                optimized + "\n"
+            },
         }]
     }
 
@@ -754,7 +775,12 @@ print Data::Dumper::Dumper(\@ARGV);
         let analysis = optimizer.analyze_file(&file_path)?;
         assert_eq!(analysis.missing_imports.len(), 2);
         assert!(analysis.missing_imports.iter().any(|m| m.module == "JSON"));
-        assert!(analysis.missing_imports.iter().any(|m| m.module == "Data::Dumper"));
+        assert!(
+            analysis
+                .missing_imports
+                .iter()
+                .any(|m| m.module == "Data::Dumper")
+        );
         for m in &analysis.missing_imports {
             assert_eq!(m.suggested_location, 3);
         }
@@ -873,8 +899,16 @@ print "First: " . first { $_ > 3 } @nums;
 
         let analysis = ImportAnalysis {
             imports: vec![
-                ImportEntry { module: "strict".to_string(), symbols: vec![], line: 1 },
-                ImportEntry { module: "warnings".to_string(), symbols: vec![], line: 2 },
+                ImportEntry {
+                    module: "strict".to_string(),
+                    symbols: vec![],
+                    line: 1,
+                },
+                ImportEntry {
+                    module: "warnings".to_string(),
+                    symbols: vec![],
+                    line: 2,
+                },
                 ImportEntry {
                     module: "List::Util".to_string(),
                     symbols: vec!["first".to_string(), "max".to_string(), "unused".to_string()],
@@ -954,17 +988,29 @@ print Dumper($response);
         let analysis = optimizer.analyze_file(&file_path)?;
 
         // Should detect unused imports
-        assert!(analysis.unused_imports.iter().any(|u| u.module == "LWP::UserAgent"));
+        assert!(
+            analysis
+                .unused_imports
+                .iter()
+                .any(|u| u.module == "LWP::UserAgent")
+        );
 
         // Should detect unused symbols from File::Spec::Functions
-        let file_spec_unused =
-            analysis.unused_imports.iter().find(|u| u.module == "File::Spec::Functions");
+        let file_spec_unused = analysis
+            .unused_imports
+            .iter()
+            .find(|u| u.module == "File::Spec::Functions");
         if let Some(unused) = file_spec_unused {
             assert!(unused.symbols.contains(&"catdir".to_string()));
         }
 
         // Should detect missing import for HTTP::Tiny
-        assert!(analysis.missing_imports.iter().any(|m| m.module == "HTTP::Tiny"));
+        assert!(
+            analysis
+                .missing_imports
+                .iter()
+                .any(|m| m.module == "HTTP::Tiny")
+        );
         Ok(())
     }
 
@@ -984,7 +1030,12 @@ print Dumper(\@ARGV);
         let analysis = optimizer.analyze_file(&file_path)?;
 
         // Data::Dumper should not be unused (Dumper is used)
-        assert!(!analysis.unused_imports.iter().any(|u| u.module == "Data::Dumper"));
+        assert!(
+            !analysis
+                .unused_imports
+                .iter()
+                .any(|u| u.module == "Data::Dumper")
+        );
 
         // JSON and SomeUnknownModule are treated as having potential side effects,
         // so neither is flagged as unused.

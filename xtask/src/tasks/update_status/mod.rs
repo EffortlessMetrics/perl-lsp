@@ -110,7 +110,9 @@ fn replace_block(
     });
 
     if count != 1 {
-        return Err(eyre!("Expected 1 match for block {begin_marker:?}, got {count}"));
+        return Err(eyre!(
+            "Expected 1 match for block {begin_marker:?}, got {count}"
+        ));
     }
 
     Ok(result.into_owned())
@@ -215,7 +217,11 @@ pub fn run(write: bool, check: bool, only: Option<StatusSubsystem>) -> Result<()
             fs::read_to_string(&quality_path).context("reading docs/project/status/quality.md")?;
         let updated_quality = quality::generate_quality_status(&root, &original_quality)?;
         if updated_quality != original_quality {
-            files_to_update.push(("docs/project/status/quality.md", quality_path, updated_quality));
+            files_to_update.push((
+                "docs/project/status/quality.md",
+                quality_path,
+                updated_quality,
+            ));
         }
 
         let ux_path = root.join("docs/project/status/editor_ux.json");
@@ -292,7 +298,10 @@ mod mod_tests {
     fn test_replace_block() -> Result<()> {
         let input = "before\n<!-- BEGIN: X -->\nold content\n<!-- END: X -->\nafter";
         let result = replace_block(input, "<!-- BEGIN: X -->", "<!-- END: X -->", "new content")?;
-        assert_eq!(result, "before\n<!-- BEGIN: X -->\nnew content\n<!-- END: X -->\nafter");
+        assert_eq!(
+            result,
+            "before\n<!-- BEGIN: X -->\nnew content\n<!-- END: X -->\nafter"
+        );
         Ok(())
     }
 

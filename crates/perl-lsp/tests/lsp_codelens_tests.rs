@@ -86,7 +86,10 @@ sub add {
                 .unwrap_or(false)
         });
 
-        assert!(has_run_test, "Test subroutine should have a 'Run Test' code lens");
+        assert!(
+            has_run_test,
+            "Test subroutine should have a 'Run Test' code lens"
+        );
     }
 
     Ok(())
@@ -121,7 +124,10 @@ sub new {
 
     if let Some(lenses) = result.as_array() {
         // Should have lenses for both package and sub
-        assert!(lenses.len() >= 2, "Should have code lenses for package and subroutine");
+        assert!(
+            lenses.len() >= 2,
+            "Should have code lenses for package and subroutine"
+        );
     }
 
     Ok(())
@@ -157,15 +163,22 @@ my $y = helper();
         // Find a lens with data (unresolved references lens)
         if let Some(unresolved_lens) = lenses.iter().find(|l| l.get("data").is_some()) {
             // Try to resolve it
-            let resolved =
-                harness.request("codeLens/resolve", unresolved_lens.clone()).unwrap_or(json!(null));
+            let resolved = harness
+                .request("codeLens/resolve", unresolved_lens.clone())
+                .unwrap_or(json!(null));
 
             // After resolution, it should have a command
-            assert!(resolved.get("command").is_some(), "Resolved lens should have a command");
+            assert!(
+                resolved.get("command").is_some(),
+                "Resolved lens should have a command"
+            );
 
             if let Some(command) = resolved.get("command") {
                 let title = command.get("title").and_then(|t| t.as_str()).unwrap_or("");
-                assert!(title.contains("ref"), "Command title should mention references");
+                assert!(
+                    title.contains("ref"),
+                    "Command title should mention references"
+                );
             }
         }
     }

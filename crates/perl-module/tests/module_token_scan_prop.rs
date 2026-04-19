@@ -2,11 +2,15 @@ use perl_module::token_parser::{ModuleTokenSpan, parse_module_token};
 use proptest::prelude::*;
 
 fn head_chars() -> Vec<char> {
-    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_".chars().collect()
+    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_"
+        .chars()
+        .collect()
 }
 
 fn body_chars() -> Vec<char> {
-    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_".chars().collect()
+    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_"
+        .chars()
+        .collect()
 }
 
 fn identifier_segment() -> impl Strategy<Value = String> {
@@ -25,7 +29,10 @@ fn identifier_segment() -> impl Strategy<Value = String> {
 fn module_name() -> impl Strategy<Value = String> {
     (
         identifier_segment(),
-        prop::collection::vec((identifier_segment(), prop::sample::select(vec!["::", "'"])), 0..3),
+        prop::collection::vec(
+            (identifier_segment(), prop::sample::select(vec!["::", "'"])),
+            0..3,
+        ),
     )
         .prop_map(|(first, rest)| {
             let mut token = first;

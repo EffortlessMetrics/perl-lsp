@@ -71,7 +71,9 @@ fn scenario_file_test_operator_metadata_is_available() -> Result<(), String> {
         return Err("file-test operator should be recognized as builtin".into());
     }
     if params != ["FILE"] {
-        return Err(format!("file-test operator should expose FILE parameter, got {params:?}"));
+        return Err(format!(
+            "file-test operator should expose FILE parameter, got {params:?}"
+        ));
     }
     if !file_test_signature.documentation.contains("File") {
         return Err("file-test operator documentation should mention files".into());
@@ -99,10 +101,16 @@ fn scenario_utf8_encode_decode_signatures_are_available() -> Result<(), String> 
         return Err("utf8::decode should be recognized as builtin".into());
     }
     if encode.signatures != vec!["utf8::encode SCALAR"] {
-        return Err(format!("utf8::encode signature mismatch: {:?}", encode.signatures));
+        return Err(format!(
+            "utf8::encode signature mismatch: {:?}",
+            encode.signatures
+        ));
     }
     if decode.signatures != vec!["utf8::decode SCALAR"] {
-        return Err(format!("utf8::decode signature mismatch: {:?}", decode.signatures));
+        return Err(format!(
+            "utf8::decode signature mismatch: {:?}",
+            decode.signatures
+        ));
     }
     if !encode.documentation.contains("UTF-8") {
         return Err("utf8::encode documentation should mention UTF-8".into());
@@ -182,7 +190,9 @@ fn scenario_utf8_namespace_functions_all_registered() -> Result<(), String> {
         // Every full signature variant starts with the function name so that
         // signature help renders qualified call syntax.
         if !full.iter().all(|s| s.starts_with(name)) {
-            return Err(format!("full signatures for {name} should start with the name: {full:?}"));
+            return Err(format!(
+                "full signatures for {name} should start with the name: {full:?}"
+            ));
         }
     }
     Ok(())

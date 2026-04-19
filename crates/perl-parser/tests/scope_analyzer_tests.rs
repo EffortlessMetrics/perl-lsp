@@ -21,7 +21,11 @@ print $undefined_var;
 "#;
 
     let issues = analyze_code(code);
-    assert!(issues.iter().any(|i| matches!(i.kind, IssueKind::UndeclaredVariable)));
+    assert!(
+        issues
+            .iter()
+            .any(|i| matches!(i.kind, IssueKind::UndeclaredVariable))
+    );
 }
 
 #[test]
@@ -33,7 +37,11 @@ print "Hello";
 "#;
 
     let issues = analyze_code(code);
-    assert!(issues.iter().any(|i| matches!(i.kind, IssueKind::UnusedVariable)));
+    assert!(
+        issues
+            .iter()
+            .any(|i| matches!(i.kind, IssueKind::UnusedVariable))
+    );
 }
 
 #[test]
@@ -47,7 +55,11 @@ my $x = 1;
 "#;
 
     let issues = analyze_code(code);
-    assert!(issues.iter().any(|i| matches!(i.kind, IssueKind::VariableShadowing)));
+    assert!(
+        issues
+            .iter()
+            .any(|i| matches!(i.kind, IssueKind::VariableShadowing))
+    );
 }
 
 #[test]
@@ -59,7 +71,11 @@ print $global_var;
 "#;
 
     let issues = analyze_code(code);
-    assert!(!issues.iter().any(|i| matches!(i.kind, IssueKind::UndeclaredVariable)));
+    assert!(
+        !issues
+            .iter()
+            .any(|i| matches!(i.kind, IssueKind::UndeclaredVariable))
+    );
 }
 
 #[test]
@@ -78,8 +94,10 @@ print %ENV;  # Built-in global should not trigger undefined
         .any(|i| matches!(i.kind, IssueKind::UndeclaredVariable) && (i.variable_name == "%ENV")));
     // local $custom_var should not trigger undefined either
     assert!(
-        !issues.iter().any(|i| matches!(i.kind, IssueKind::UndeclaredVariable)
-            && (i.variable_name == "$custom_var"))
+        !issues
+            .iter()
+            .any(|i| matches!(i.kind, IssueKind::UndeclaredVariable)
+                && (i.variable_name == "$custom_var"))
     );
 }
 
@@ -96,8 +114,12 @@ print $Foo::package_var;  # Should be ok
 "#;
 
     let issues = analyze_code(code);
-    assert!(!issues.iter().any(|i| matches!(i.kind, IssueKind::UndeclaredVariable)
-        && (i.variable_name == "$Foo::package_var")));
+    assert!(
+        !issues
+            .iter()
+            .any(|i| matches!(i.kind, IssueKind::UndeclaredVariable)
+                && (i.variable_name == "$Foo::package_var"))
+    );
 }
 
 #[test]
@@ -111,7 +133,11 @@ sub foo {
 "#;
 
     let issues = analyze_code(code);
-    assert!(!issues.iter().any(|i| matches!(i.kind, IssueKind::UndeclaredVariable)));
+    assert!(
+        !issues
+            .iter()
+            .any(|i| matches!(i.kind, IssueKind::UndeclaredVariable))
+    );
 }
 
 #[test]
@@ -125,7 +151,11 @@ foreach my $item (@arr) {
 "#;
 
     let issues = analyze_code(code);
-    assert!(!issues.iter().any(|i| matches!(i.kind, IssueKind::UndeclaredVariable)));
+    assert!(
+        !issues
+            .iter()
+            .any(|i| matches!(i.kind, IssueKind::UndeclaredVariable))
+    );
 }
 
 #[test]
@@ -138,7 +168,11 @@ while (my $line = <STDIN>) {
 "#;
 
     let issues = analyze_code(code);
-    assert!(!issues.iter().any(|i| matches!(i.kind, IssueKind::UndeclaredVariable)));
+    assert!(
+        !issues
+            .iter()
+            .any(|i| matches!(i.kind, IssueKind::UndeclaredVariable))
+    );
 }
 
 #[test]
@@ -198,7 +232,11 @@ print $$;
 
     let issues = analyze_code(code);
     // None of these should be undefined
-    assert!(!issues.iter().any(|i| matches!(i.kind, IssueKind::UndeclaredVariable)));
+    assert!(
+        !issues
+            .iter()
+            .any(|i| matches!(i.kind, IssueKind::UndeclaredVariable))
+    );
 }
 
 #[test]
@@ -210,8 +248,10 @@ my $unused = 42;
     let issues = analyze_code(code);
 
     // Check for unused variables
-    let unused_issues: Vec<_> =
-        issues.iter().filter(|i| matches!(i.kind, IssueKind::UnusedVariable)).collect();
+    let unused_issues: Vec<_> = issues
+        .iter()
+        .filter(|i| matches!(i.kind, IssueKind::UnusedVariable))
+        .collect();
     assert!(!unused_issues.is_empty());
 }
 
@@ -224,7 +264,11 @@ print "$x $y $z";
 "#;
 
     let issues = analyze_code(code);
-    assert!(!issues.iter().any(|i| matches!(i.kind, IssueKind::UndeclaredVariable)));
+    assert!(
+        !issues
+            .iter()
+            .any(|i| matches!(i.kind, IssueKind::UndeclaredVariable))
+    );
 }
 
 #[test]
@@ -237,7 +281,11 @@ print @values;
 "#;
 
     let issues = analyze_code(code);
-    assert!(!issues.iter().any(|i| matches!(i.kind, IssueKind::UndeclaredVariable)));
+    assert!(
+        !issues
+            .iter()
+            .any(|i| matches!(i.kind, IssueKind::UndeclaredVariable))
+    );
 }
 
 #[test]
@@ -250,7 +298,11 @@ print @slice;
 "#;
 
     let issues = analyze_code(code);
-    assert!(!issues.iter().any(|i| matches!(i.kind, IssueKind::UndeclaredVariable)));
+    assert!(
+        !issues
+            .iter()
+            .any(|i| matches!(i.kind, IssueKind::UndeclaredVariable))
+    );
 }
 
 #[test]
@@ -268,7 +320,11 @@ END {
 "#;
 
     let issues = analyze_code(code);
-    assert!(!issues.iter().any(|i| matches!(i.kind, IssueKind::UndeclaredVariable)));
+    assert!(
+        !issues
+            .iter()
+            .any(|i| matches!(i.kind, IssueKind::UndeclaredVariable))
+    );
 }
 
 #[test]
@@ -283,7 +339,11 @@ $global_var = 42;
 
     let issues = analyze_code(code);
     // Variables declared with 'our' should not be undefined
-    assert!(!issues.iter().any(|i| matches!(i.kind, IssueKind::UndeclaredVariable)));
+    assert!(
+        !issues
+            .iter()
+            .any(|i| matches!(i.kind, IssueKind::UndeclaredVariable))
+    );
 }
 
 #[test]
@@ -311,7 +371,11 @@ sub counter {
 "#;
 
     let issues = analyze_code(code);
-    assert!(!issues.iter().any(|i| matches!(i.kind, IssueKind::UndeclaredVariable)));
+    assert!(
+        !issues
+            .iter()
+            .any(|i| matches!(i.kind, IssueKind::UndeclaredVariable))
+    );
 }
 
 #[test]
@@ -326,8 +390,12 @@ if ($text =~ /(\w+)\s+(\w+)/) {
 
     let issues = analyze_code(code);
     // $1, $2 etc. are special regex capture variables
-    assert!(!issues.iter().any(|i| matches!(i.kind, IssueKind::UndeclaredVariable)
-        && (i.variable_name == "$1" || i.variable_name == "$2")));
+    assert!(
+        !issues
+            .iter()
+            .any(|i| matches!(i.kind, IssueKind::UndeclaredVariable)
+                && (i.variable_name == "$1" || i.variable_name == "$2"))
+    );
 }
 
 #[test]
@@ -358,7 +426,11 @@ print $result;
 "#;
 
     let issues = analyze_code(code);
-    assert!(!issues.iter().any(|i| matches!(i.kind, IssueKind::UndeclaredVariable)));
+    assert!(
+        !issues
+            .iter()
+            .any(|i| matches!(i.kind, IssueKind::UndeclaredVariable))
+    );
 }
 
 #[test]
@@ -375,7 +447,11 @@ given ($value) {
 "#;
 
     let issues = analyze_code(code);
-    assert!(!issues.iter().any(|i| matches!(i.kind, IssueKind::UndeclaredVariable)));
+    assert!(
+        !issues
+            .iter()
+            .any(|i| matches!(i.kind, IssueKind::UndeclaredVariable))
+    );
 }
 
 // ================================
@@ -394,8 +470,10 @@ my $v = $config{path};  # Should resolve $config{path} -> %config
     let issues = analyze_code(code);
     // $config{path} should be resolved to %config and not trigger undefined
     assert!(
-        !issues.iter().any(|i| matches!(i.kind, IssueKind::UndeclaredVariable)
-            && i.variable_name.contains("config"))
+        !issues
+            .iter()
+            .any(|i| matches!(i.kind, IssueKind::UndeclaredVariable)
+                && i.variable_name.contains("config"))
     );
 }
 
@@ -411,8 +489,10 @@ my $v2 = $items[1];  # Should resolve $items[1] -> @items
     let issues = analyze_code(code);
     // $items[0] and $items[1] should be resolved to @items and not trigger undefined
     assert!(
-        !issues.iter().any(|i| matches!(i.kind, IssueKind::UndeclaredVariable)
-            && i.variable_name.contains("items"))
+        !issues
+            .iter()
+            .any(|i| matches!(i.kind, IssueKind::UndeclaredVariable)
+                && i.variable_name.contains("items"))
     );
 }
 
@@ -444,7 +524,11 @@ my $v2 = $lookup{alice};   # Should resolve to %lookup
 
     let issues = analyze_code(code);
     // No undefined variable errors should occur
-    assert!(!issues.iter().any(|i| matches!(i.kind, IssueKind::UndeclaredVariable)));
+    assert!(
+        !issues
+            .iter()
+            .any(|i| matches!(i.kind, IssueKind::UndeclaredVariable))
+    );
 }
 
 #[test]
@@ -463,7 +547,11 @@ my $v3 = $servers[$index]; # @servers access (dynamic index)
 
     let issues = analyze_code(code);
     // All variables should be properly resolved
-    assert!(!issues.iter().any(|i| matches!(i.kind, IssueKind::UndeclaredVariable)));
+    assert!(
+        !issues
+            .iter()
+            .any(|i| matches!(i.kind, IssueKind::UndeclaredVariable))
+    );
 }
 
 #[test]
@@ -476,10 +564,18 @@ my $v2 = $undeclared_array[0];     # Should trigger undefined for array access
 
     let issues = analyze_code(code);
     // Should find undefined variables for the hash and array accesses
-    assert!(issues.iter().any(|i| matches!(i.kind, IssueKind::UndeclaredVariable)
-        && i.variable_name.starts_with("$undeclared_hash")));
-    assert!(issues.iter().any(|i| matches!(i.kind, IssueKind::UndeclaredVariable)
-        && i.variable_name.starts_with("$undeclared_array")));
+    assert!(
+        issues
+            .iter()
+            .any(|i| matches!(i.kind, IssueKind::UndeclaredVariable)
+                && i.variable_name.starts_with("$undeclared_hash"))
+    );
+    assert!(
+        issues
+            .iter()
+            .any(|i| matches!(i.kind, IssueKind::UndeclaredVariable)
+                && i.variable_name.starts_with("$undeclared_array"))
+    );
 }
 
 #[test]
@@ -509,8 +605,10 @@ my @v = @subset;
     let issues = analyze_code(code);
     // Array slice should not trigger undefined
     assert!(
-        !issues.iter().any(|i| matches!(i.kind, IssueKind::UndeclaredVariable)
-            && i.variable_name.contains("colors"))
+        !issues
+            .iter()
+            .any(|i| matches!(i.kind, IssueKind::UndeclaredVariable)
+                && i.variable_name.contains("colors"))
     );
 }
 
@@ -526,8 +624,10 @@ my @v = @values;
     let issues = analyze_code(code);
     // Hash slice should not trigger undefined
     assert!(
-        !issues.iter().any(|i| matches!(i.kind, IssueKind::UndeclaredVariable)
-            && i.variable_name.contains("settings"))
+        !issues
+            .iter()
+            .any(|i| matches!(i.kind, IssueKind::UndeclaredVariable)
+                && i.variable_name.contains("settings"))
     );
 }
 
@@ -546,8 +646,12 @@ my $v3 = $list[-1];        # Negative array index (if supported)
 
     let issues = analyze_code(code);
     // All accesses should resolve to declared variables
-    assert!(!issues.iter().any(|i| matches!(i.kind, IssueKind::UndeclaredVariable)
-        && (i.variable_name.contains("data") || i.variable_name.contains("list"))));
+    assert!(
+        !issues
+            .iter()
+            .any(|i| matches!(i.kind, IssueKind::UndeclaredVariable)
+                && (i.variable_name.contains("data") || i.variable_name.contains("list")))
+    );
 }
 
 #[test]
@@ -565,7 +669,11 @@ my $v2 = $array_var[0];
 
     let issues = analyze_code(code);
     // Enhanced resolution should properly convert sigils
-    assert!(!issues.iter().any(|i| matches!(i.kind, IssueKind::UndeclaredVariable)));
+    assert!(
+        !issues
+            .iter()
+            .any(|i| matches!(i.kind, IssueKind::UndeclaredVariable))
+    );
 }
 
 #[test]
@@ -582,8 +690,12 @@ my @v2 = @methods;         # Simple array access
 
     let issues = analyze_code(code);
     // Should not flag the base variables as undefined
-    assert!(!issues.iter().any(|i| matches!(i.kind, IssueKind::UndeclaredVariable)
-        && (i.variable_name == "$obj" || i.variable_name == "@methods")));
+    assert!(
+        !issues
+            .iter()
+            .any(|i| matches!(i.kind, IssueKind::UndeclaredVariable)
+                && (i.variable_name == "$obj" || i.variable_name == "@methods"))
+    );
 }
 
 #[test]
@@ -599,8 +711,10 @@ my $v = $outer{inner};    # Should resolve to %outer
     let issues = analyze_code(code);
     // Recursive resolution should work
     assert!(
-        !issues.iter().any(|i| matches!(i.kind, IssueKind::UndeclaredVariable)
-            && i.variable_name.contains("outer"))
+        !issues
+            .iter()
+            .any(|i| matches!(i.kind, IssueKind::UndeclaredVariable)
+                && i.variable_name.contains("outer"))
     );
 }
 
@@ -616,7 +730,11 @@ my $v = $simple_var;
 
     let issues = analyze_code(code);
     // Simple variables should still work with enhanced resolution
-    assert!(!issues.iter().any(|i| matches!(i.kind, IssueKind::UndeclaredVariable)));
+    assert!(
+        !issues
+            .iter()
+            .any(|i| matches!(i.kind, IssueKind::UndeclaredVariable))
+    );
 }
 
 #[test]
@@ -629,8 +747,10 @@ print FOO;
 "#;
 
     let issues = analyze_code(code);
-    let bareword_issues: Vec<_> =
-        issues.iter().filter(|i| matches!(i.kind, IssueKind::UnquotedBareword)).collect();
+    let bareword_issues: Vec<_> = issues
+        .iter()
+        .filter(|i| matches!(i.kind, IssueKind::UnquotedBareword))
+        .collect();
     assert_eq!(bareword_issues.len(), 1);
     assert_eq!(bareword_issues[0].variable_name, "FOO");
 }
@@ -645,8 +765,10 @@ print STDERR;
 "#;
 
     let issues = analyze_code(code);
-    let bareword_issues: Vec<_> =
-        issues.iter().filter(|i| matches!(i.kind, IssueKind::UnquotedBareword)).collect();
+    let bareword_issues: Vec<_> = issues
+        .iter()
+        .filter(|i| matches!(i.kind, IssueKind::UnquotedBareword))
+        .collect();
     assert_eq!(bareword_issues.len(), 1);
     assert_eq!(bareword_issues[0].variable_name, "STDERR");
 }
@@ -663,8 +785,10 @@ print INVALID_BAREWORD;
 "#;
 
     let issues = analyze_code(code);
-    let bareword_issues: Vec<_> =
-        issues.iter().filter(|i| matches!(i.kind, IssueKind::UnquotedBareword)).collect();
+    let bareword_issues: Vec<_> = issues
+        .iter()
+        .filter(|i| matches!(i.kind, IssueKind::UnquotedBareword))
+        .collect();
 
     // Only INVALID_BAREWORD should be flagged - hash keys should be ignored
     assert_eq!(bareword_issues.len(), 1);
@@ -715,7 +839,9 @@ print($h{k}); # Should also resolve (FunctionCall -> Binary)
 "#;
     let issues = analyze_code(code);
     assert!(
-        !issues.iter().any(|i| matches!(i.kind, IssueKind::UndeclaredVariable)),
+        !issues
+            .iter()
+            .any(|i| matches!(i.kind, IssueKind::UndeclaredVariable)),
         "Unexpected undeclared variable error for $h{{k}}: {:?}",
         issues
     );
@@ -730,7 +856,9 @@ print($a[0]); # Should resolve to @a
 "#;
     let issues = analyze_code(code);
     assert!(
-        !issues.iter().any(|i| matches!(i.kind, IssueKind::UndeclaredVariable)),
+        !issues
+            .iter()
+            .any(|i| matches!(i.kind, IssueKind::UndeclaredVariable)),
         "Unexpected undeclared variable error for $a[0]: {:?}",
         issues
     );

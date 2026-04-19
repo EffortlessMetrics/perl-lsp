@@ -19,8 +19,14 @@ fn resolves_existing_module_under_include_path() -> Result<(), Box<dyn std::erro
 #[test]
 fn returns_lib_fallback_when_no_include_path_matches() {
     let workspace = PathBuf::from("/workspace");
-    let resolved =
-        resolve_module_path(&workspace, "Missing::Module", &["nonexistent/include".to_string()]);
+    let resolved = resolve_module_path(
+        &workspace,
+        "Missing::Module",
+        &["nonexistent/include".to_string()],
+    );
 
-    assert_eq!(resolved, Some(workspace.join("lib").join("Missing/Module.pm")));
+    assert_eq!(
+        resolved,
+        Some(workspace.join("lib").join("Missing/Module.pm"))
+    );
 }

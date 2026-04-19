@@ -77,7 +77,10 @@ my $value = gre
         }),
         init_timeout,
     )?;
-    assert!(init_response.get("error").is_none(), "initialize returned error: {init_response:#}");
+    assert!(
+        init_response.get("error").is_none(),
+        "initialize returned error: {init_response:#}"
+    );
 
     common::send_notification(
         &server,
@@ -133,7 +136,10 @@ my $value = gre
         .as_array()
         .or_else(|| completion_response["result"].as_array())
         .ok_or("completion result missing items array")?;
-    assert!(!completion_items.is_empty(), "completion items should not be empty");
+    assert!(
+        !completion_items.is_empty(),
+        "completion items should not be empty"
+    );
 
     let (hover_line, hover_col) = line_col(fixture, 4, "$greeting")?;
     let hover_response = send_request_with_timeout(
@@ -146,7 +152,10 @@ my $value = gre
         }),
         timeout,
     )?;
-    assert!(hover_response.get("error").is_none(), "hover returned error: {hover_response:#}");
+    assert!(
+        hover_response.get("error").is_none(),
+        "hover returned error: {hover_response:#}"
+    );
     let hover_has_content = hover_response["result"]["contents"]["value"]
         .as_str()
         .is_some_and(|content| !content.is_empty());
@@ -167,11 +176,19 @@ my $value = gre
         definition_response.get("error").is_none(),
         "definition returned error: {definition_response:#}"
     );
-    let definition_items =
-        definition_response["result"].as_array().ok_or("definition result should be an array")?;
-    let first_location = definition_items.first().ok_or("definition result should be non-empty")?;
-    let definition_uri = first_location["uri"].as_str().ok_or("definition uri missing")?;
-    assert_eq!(definition_uri, uri, "definition should resolve inside opened file");
+    let definition_items = definition_response["result"]
+        .as_array()
+        .ok_or("definition result should be an array")?;
+    let first_location = definition_items
+        .first()
+        .ok_or("definition result should be non-empty")?;
+    let definition_uri = first_location["uri"]
+        .as_str()
+        .ok_or("definition uri missing")?;
+    assert_eq!(
+        definition_uri, uri,
+        "definition should resolve inside opened file"
+    );
 
     // ── Step 5: textDocument/didChange + re-completion ──────────────────
     let fixture_v2 = r#"use strict;
@@ -226,7 +243,10 @@ my $value = gre
         .as_array()
         .or_else(|| v2_completion_response["result"].as_array())
         .ok_or("re-completion result missing items array")?;
-    assert!(!v2_items.is_empty(), "re-completion items should not be empty after didChange");
+    assert!(
+        !v2_items.is_empty(),
+        "re-completion items should not be empty after didChange"
+    );
 
     // ── Step 6: textDocument/references ─────────────────────────────────
     let (ref_line, ref_col) = line_col(fixture_v2, 4, "$greeting")?;
@@ -248,7 +268,10 @@ my $value = gre
     // Soft assertion: if the server returns a result, it should be an array
     if let Some(ref_items) = references_response["result"].as_array() {
         // $greeting appears in: declaration (line 3), sub greet body (line 4), sub greetings body (line 5)
-        assert!(!ref_items.is_empty(), "references for $greeting should not be empty");
+        assert!(
+            !ref_items.is_empty(),
+            "references for $greeting should not be empty"
+        );
     }
 
     // ── Step 7: textDocument/documentSymbol ─────────────────────────────
@@ -341,13 +364,25 @@ my $value = gre
 
     let wait_deadline = Instant::now() + Duration::from_secs(2);
     loop {
-        if let Some(status) = server.process.lock().unwrap_or_else(|e| e.into_inner()).try_wait()? {
-            assert!(status.success(), "perl-lsp process exited with non-zero status: {status}");
+        if let Some(status) = server
+            .process
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .try_wait()?
+        {
+            assert!(
+                status.success(),
+                "perl-lsp process exited with non-zero status: {status}"
+            );
             break;
         }
 
         if Instant::now() >= wait_deadline {
-            let _ = server.process.lock().unwrap_or_else(|e| e.into_inner()).kill();
+            let _ = server
+                .process
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .kill();
             return Err("perl-lsp did not exit cleanly within timeout".into());
         }
 

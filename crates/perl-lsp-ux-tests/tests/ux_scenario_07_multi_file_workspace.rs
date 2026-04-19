@@ -42,9 +42,15 @@ fn scenario_07_multi_file_workspace_opens_without_crash() {
     )
     .expect("Failed to create multi-file harness");
 
-    harness.open_file("lib/MyProject/Utils.pm", module_a).expect("Utils.pm should open");
-    harness.open_file("lib/MyProject/Config.pm", module_b).expect("Config.pm should open");
-    harness.open_file("script.pl", script).expect("script.pl should open");
+    harness
+        .open_file("lib/MyProject/Utils.pm", module_a)
+        .expect("Utils.pm should open");
+    harness
+        .open_file("lib/MyProject/Config.pm", module_b)
+        .expect("Config.pm should open");
+    harness
+        .open_file("script.pl", script)
+        .expect("script.pl should open");
 
     harness.assert_no_crash();
 }
@@ -64,20 +70,31 @@ fn scenario_07_definition_request_does_not_crash() {
                   my $c = Counter->new();\n$c->increment();\nprint $c->value();\n";
 
     let harness = UxHarness::new(
-        ScenarioConfig { timeout: Duration::from_secs(15), ..Default::default() }
-            .with_file("lib/Counter.pm", module)
-            .with_file("main.pl", script),
+        ScenarioConfig {
+            timeout: Duration::from_secs(15),
+            ..Default::default()
+        }
+        .with_file("lib/Counter.pm", module)
+        .with_file("main.pl", script),
     )
     .expect("Failed to create harness");
 
-    harness.open_file("lib/Counter.pm", module).expect("Counter.pm should open");
-    harness.open_file("main.pl", script).expect("main.pl should open");
+    harness
+        .open_file("lib/Counter.pm", module)
+        .expect("Counter.pm should open");
+    harness
+        .open_file("main.pl", script)
+        .expect("main.pl should open");
 
     // Allow workspace index to build.
     std::thread::sleep(Duration::from_secs(2));
 
     let defs = harness.definition("main.pl", 3, 4);
-    assert!(defs.is_ok(), "definition request crashed server — UX regression: {:?}", defs);
+    assert!(
+        defs.is_ok(),
+        "definition request crashed server — UX regression: {:?}",
+        defs
+    );
 
     harness.assert_no_crash();
 }

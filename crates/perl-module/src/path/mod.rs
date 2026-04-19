@@ -56,7 +56,8 @@ fn strip_to_lib_relative_path(path: &str) -> Option<&str> {
         return Some(stripped);
     }
 
-    path.rfind("/lib/").map(|lib_idx| &path[lib_idx + "/lib/".len()..])
+    path.rfind("/lib/")
+        .map(|lib_idx| &path[lib_idx + "/lib/".len()..])
 }
 
 fn strip_perl_extension(path: &str) -> &str {

@@ -48,7 +48,9 @@ fn kind_eq_and_ne() {
 #[test]
 fn extract_scalar_cursor_after_sigil() -> Result<(), String> {
     let source = "my $name = 1;";
-    let pos = source.find('n').ok_or_else(|| "missing 'n' in fixture".to_string())?;
+    let pos = source
+        .find('n')
+        .ok_or_else(|| "missing 'n' in fixture".to_string())?;
     let (name, kind) = must_some(extract_symbol_from_source(pos, source));
     assert_eq!(name, "name");
     assert_eq!(kind, CursorSymbolKind::Scalar);
@@ -58,7 +60,9 @@ fn extract_scalar_cursor_after_sigil() -> Result<(), String> {
 #[test]
 fn extract_array_cursor_after_sigil() -> Result<(), String> {
     let source = "my @items;";
-    let pos = source.find('i').ok_or_else(|| "missing 'i' in fixture".to_string())?;
+    let pos = source
+        .find('i')
+        .ok_or_else(|| "missing 'i' in fixture".to_string())?;
     let (name, kind) = must_some(extract_symbol_from_source(pos, source));
     assert_eq!(name, "items");
     assert_eq!(kind, CursorSymbolKind::Array);
@@ -68,7 +72,9 @@ fn extract_array_cursor_after_sigil() -> Result<(), String> {
 #[test]
 fn extract_hash_cursor_after_sigil() -> Result<(), String> {
     let source = "my %config;";
-    let pos = source.find('c').ok_or_else(|| "missing 'c' in fixture".to_string())?;
+    let pos = source
+        .find('c')
+        .ok_or_else(|| "missing 'c' in fixture".to_string())?;
     let (name, kind) = must_some(extract_symbol_from_source(pos, source));
     assert_eq!(name, "config");
     assert_eq!(kind, CursorSymbolKind::Hash);
@@ -78,7 +84,9 @@ fn extract_hash_cursor_after_sigil() -> Result<(), String> {
 #[test]
 fn extract_subroutine_cursor_after_ampersand() -> Result<(), String> {
     let source = "&process();";
-    let pos = source.find('p').ok_or_else(|| "missing 'p' in fixture".to_string())?;
+    let pos = source
+        .find('p')
+        .ok_or_else(|| "missing 'p' in fixture".to_string())?;
     let (name, kind) = must_some(extract_symbol_from_source(pos, source));
     assert_eq!(name, "process");
     assert_eq!(kind, CursorSymbolKind::Subroutine);
@@ -280,7 +288,9 @@ fn extract_stops_at_colon_in_qualified_name() -> Result<(), String> {
 #[test]
 fn extract_qualified_after_colons() -> Result<(), String> {
     let source = "Foo::bar";
-    let pos = source.find("bar").ok_or_else(|| "missing 'bar'".to_string())?;
+    let pos = source
+        .find("bar")
+        .ok_or_else(|| "missing 'bar'".to_string())?;
     let (name, kind) = must_some(extract_symbol_from_source(pos, source));
     assert_eq!(name, "bar");
     assert_eq!(kind, CursorSymbolKind::Subroutine);
@@ -292,7 +302,9 @@ fn extract_qualified_after_colons() -> Result<(), String> {
 #[test]
 fn range_of_scalar_includes_sigil() -> Result<(), String> {
     let source = "print $total;";
-    let pos = source.find("total").ok_or_else(|| "missing 'total'".to_string())?;
+    let pos = source
+        .find("total")
+        .ok_or_else(|| "missing 'total'".to_string())?;
     let (start, end) = must_some(get_symbol_range_at_position(pos, source));
     // $ is at pos-1, name runs "total" = 5 chars
     assert_eq!(start, pos - 1); // includes the $
@@ -303,7 +315,9 @@ fn range_of_scalar_includes_sigil() -> Result<(), String> {
 #[test]
 fn range_of_array_includes_sigil() -> Result<(), String> {
     let source = "push @list, 1;";
-    let pos = source.find("list").ok_or_else(|| "missing 'list'".to_string())?;
+    let pos = source
+        .find("list")
+        .ok_or_else(|| "missing 'list'".to_string())?;
     let (start, end) = must_some(get_symbol_range_at_position(pos, source));
     assert_eq!(start, pos - 1); // includes @
     assert_eq!(end, pos + 4);
@@ -313,7 +327,9 @@ fn range_of_array_includes_sigil() -> Result<(), String> {
 #[test]
 fn range_of_hash_includes_sigil() -> Result<(), String> {
     let source = "keys %opts;";
-    let pos = source.find("opts").ok_or_else(|| "missing 'opts'".to_string())?;
+    let pos = source
+        .find("opts")
+        .ok_or_else(|| "missing 'opts'".to_string())?;
     let (start, end) = must_some(get_symbol_range_at_position(pos, source));
     assert_eq!(start, pos - 1); // includes %
     assert_eq!(end, pos + 4);
@@ -323,7 +339,9 @@ fn range_of_hash_includes_sigil() -> Result<(), String> {
 #[test]
 fn range_of_ampersand_includes_sigil() -> Result<(), String> {
     let source = "call &func;";
-    let pos = source.find("func").ok_or_else(|| "missing 'func'".to_string())?;
+    let pos = source
+        .find("func")
+        .ok_or_else(|| "missing 'func'".to_string())?;
     let (start, end) = must_some(get_symbol_range_at_position(pos, source));
     assert_eq!(start, pos - 1); // includes &
     assert_eq!(end, pos + 4);
@@ -412,7 +430,9 @@ fn range_sigil_at_start_cursor_on_name() -> Result<(), String> {
 #[test]
 fn extract_and_range_agree_on_symbol_length() -> Result<(), String> {
     let source = "my $count = 42;";
-    let pos = source.find("count").ok_or_else(|| "missing 'count'".to_string())?;
+    let pos = source
+        .find("count")
+        .ok_or_else(|| "missing 'count'".to_string())?;
 
     let (name, _kind) = must_some(extract_symbol_from_source(pos, source));
     let (start, end) = must_some(get_symbol_range_at_position(pos, source));
@@ -438,7 +458,10 @@ fn extract_and_range_for_bare_word() -> Result<(), String> {
 #[test]
 fn extract_symbol_from_multiline_source() -> Result<(), String> {
     let source = "my $x = 1;\nmy $y = 2;\n";
-    let pos = source.find("$y").ok_or_else(|| "missing '$y'".to_string())? + 1; // cursor on 'y' after '$'
+    let pos = source
+        .find("$y")
+        .ok_or_else(|| "missing '$y'".to_string())?
+        + 1; // cursor on 'y' after '$'
     let (name, kind) = must_some(extract_symbol_from_source(pos, source));
     assert_eq!(name, "y");
     assert_eq!(kind, CursorSymbolKind::Scalar);

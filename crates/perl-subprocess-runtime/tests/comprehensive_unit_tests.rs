@@ -7,7 +7,11 @@ use perl_subprocess_runtime::{SubprocessError, SubprocessOutput, SubprocessRunti
 
 #[test]
 fn output_success_with_zero_status() -> Result<(), Box<dyn std::error::Error>> {
-    let output = SubprocessOutput { stdout: vec![], stderr: vec![], status_code: 0 };
+    let output = SubprocessOutput {
+        stdout: vec![],
+        stderr: vec![],
+        status_code: 0,
+    };
     assert!(output.success());
     Ok(())
 }
@@ -15,32 +19,48 @@ fn output_success_with_zero_status() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn output_failure_with_nonzero_status() -> Result<(), Box<dyn std::error::Error>> {
     for code in [1, 2, -1, 127, 255] {
-        let output = SubprocessOutput { stdout: vec![], stderr: vec![], status_code: code };
-        assert!(!output.success(), "status_code {code} should not be success");
+        let output = SubprocessOutput {
+            stdout: vec![],
+            stderr: vec![],
+            status_code: code,
+        };
+        assert!(
+            !output.success(),
+            "status_code {code} should not be success"
+        );
     }
     Ok(())
 }
 
 #[test]
 fn output_stdout_lossy_valid_utf8() -> Result<(), Box<dyn std::error::Error>> {
-    let output =
-        SubprocessOutput { stdout: b"hello world".to_vec(), stderr: vec![], status_code: 0 };
+    let output = SubprocessOutput {
+        stdout: b"hello world".to_vec(),
+        stderr: vec![],
+        status_code: 0,
+    };
     assert_eq!(output.stdout_lossy(), "hello world");
     Ok(())
 }
 
 #[test]
 fn output_stderr_lossy_valid_utf8() -> Result<(), Box<dyn std::error::Error>> {
-    let output =
-        SubprocessOutput { stdout: vec![], stderr: b"some error".to_vec(), status_code: 1 };
+    let output = SubprocessOutput {
+        stdout: vec![],
+        stderr: b"some error".to_vec(),
+        status_code: 1,
+    };
     assert_eq!(output.stderr_lossy(), "some error");
     Ok(())
 }
 
 #[test]
 fn output_stdout_lossy_with_invalid_utf8() -> Result<(), Box<dyn std::error::Error>> {
-    let output =
-        SubprocessOutput { stdout: vec![0xFF, 0xFE, b'a', b'b'], stderr: vec![], status_code: 0 };
+    let output = SubprocessOutput {
+        stdout: vec![0xFF, 0xFE, b'a', b'b'],
+        stderr: vec![],
+        status_code: 0,
+    };
     let lossy = output.stdout_lossy();
     assert!(lossy.contains("ab"));
     assert!(lossy.contains('\u{FFFD}'));
@@ -49,8 +69,11 @@ fn output_stdout_lossy_with_invalid_utf8() -> Result<(), Box<dyn std::error::Err
 
 #[test]
 fn output_stderr_lossy_with_invalid_utf8() -> Result<(), Box<dyn std::error::Error>> {
-    let output =
-        SubprocessOutput { stdout: vec![], stderr: vec![b'e', 0x80, 0x81, b'r'], status_code: 1 };
+    let output = SubprocessOutput {
+        stdout: vec![],
+        stderr: vec![b'e', 0x80, 0x81, b'r'],
+        status_code: 1,
+    };
     let lossy = output.stderr_lossy();
     assert!(lossy.contains('\u{FFFD}'));
     Ok(())
@@ -58,7 +81,11 @@ fn output_stderr_lossy_with_invalid_utf8() -> Result<(), Box<dyn std::error::Err
 
 #[test]
 fn output_empty_stdout_stderr() -> Result<(), Box<dyn std::error::Error>> {
-    let output = SubprocessOutput { stdout: vec![], stderr: vec![], status_code: 0 };
+    let output = SubprocessOutput {
+        stdout: vec![],
+        stderr: vec![],
+        status_code: 0,
+    };
     assert_eq!(output.stdout_lossy(), "");
     assert_eq!(output.stderr_lossy(), "");
     Ok(())
@@ -66,8 +93,11 @@ fn output_empty_stdout_stderr() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn output_clone() -> Result<(), Box<dyn std::error::Error>> {
-    let output =
-        SubprocessOutput { stdout: b"out".to_vec(), stderr: b"err".to_vec(), status_code: 42 };
+    let output = SubprocessOutput {
+        stdout: b"out".to_vec(),
+        stderr: b"err".to_vec(),
+        status_code: 42,
+    };
     let cloned = output.clone();
     assert_eq!(cloned.stdout, output.stdout);
     assert_eq!(cloned.stderr, output.stderr);
@@ -77,7 +107,11 @@ fn output_clone() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn output_debug_format() -> Result<(), Box<dyn std::error::Error>> {
-    let output = SubprocessOutput { stdout: vec![1], stderr: vec![2], status_code: 0 };
+    let output = SubprocessOutput {
+        stdout: vec![1],
+        stderr: vec![2],
+        status_code: 0,
+    };
     let debug = format!("{output:?}");
     assert!(debug.contains("SubprocessOutput"));
     Ok(())

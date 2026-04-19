@@ -43,8 +43,10 @@ impl LspServer {
                 .pointer("/textDocument/text")
                 .and_then(|v| v.as_str())
                 .ok_or_else(|| invalid_params("Missing required parameter: textDocument.text"))?;
-            let version_i64 =
-                params.pointer("/textDocument/version").and_then(|v| v.as_i64()).unwrap_or(0);
+            let version_i64 = params
+                .pointer("/textDocument/version")
+                .and_then(|v| v.as_i64())
+                .unwrap_or(0);
             let version = i32::try_from(version_i64).unwrap_or(0);
 
             tracing::debug!("Document opened: {}", uri);
@@ -172,7 +174,8 @@ impl LspServer {
                     Ok(ast) => {
                         let errors = parser.errors().to_vec();
                         let arc_ast = Arc::new(ast);
-                        self.ast_cache.put(uri.to_string(), text, Arc::clone(&arc_ast));
+                        self.ast_cache
+                            .put(uri.to_string(), text, Arc::clone(&arc_ast));
                         (Some((*arc_ast).clone()), errors)
                     }
                     Err(crate::error::ParseError::Cancelled) => {
@@ -299,7 +302,10 @@ impl LspServer {
                                 Ok(()) => {
                                     if matches!(
                                         coordinator_clone.state(),
-                                        IndexState::Building { phase: IndexPhase::Idle, .. }
+                                        IndexState::Building {
+                                            phase: IndexPhase::Idle,
+                                            ..
+                                        }
                                     ) {
                                         let symbol_count = workspace_index.symbol_count();
                                         let file_count = workspace_index.file_count();
@@ -383,13 +389,16 @@ impl LspServer {
                 .pointer("/textDocument/uri")
                 .and_then(|v| v.as_str())
                 .ok_or_else(|| invalid_params("Missing required parameter: textDocument.uri"))?;
-            let version_i64 =
-                params.pointer("/textDocument/version").and_then(|v| v.as_i64()).unwrap_or(0);
+            let version_i64 = params
+                .pointer("/textDocument/version")
+                .and_then(|v| v.as_i64())
+                .unwrap_or(0);
             let version = i32::try_from(version_i64).unwrap_or(0);
 
             // Cancel any active streaming inline completion sessions for this URI
             // that are older than the new document version.
-            self.stream_sessions().cancel_for_uri_version(uri, version_i64);
+            self.stream_sessions()
+                .cancel_for_uri_version(uri, version_i64);
 
             if let Some(changes) = params["contentChanges"].as_array() {
                 // Get current document state or create new one
@@ -406,7 +415,9 @@ impl LspServer {
                 // the next diagnostic cycle re-runs perlcritic on the new content.
                 #[cfg(not(target_arch = "wasm32"))]
                 {
-                    let file_path = url::Url::parse(uri).ok().and_then(|u| u.to_file_path().ok());
+                    let file_path = url::Url::parse(uri)
+                        .ok()
+                        .and_then(|u| u.to_file_path().ok());
                     if let Some(path) = file_path {
                         let path_str = path.to_string_lossy().to_string();
                         if let Some(ref mut analyzer) = *self.critic_analyzer.lock() {
@@ -436,14 +447,20 @@ impl LspServer {
                     });
 
                 // Increment generation counter for this change
-                let next_gen = doc_state.generation.fetch_add(1, Ordering::SeqCst).wrapping_add(1);
+                let next_gen = doc_state
+                    .generation
+                    .fetch_add(1, Ordering::SeqCst)
+                    .wrapping_add(1);
                 let target_version = version;
 
                 // Apply incremental changes with UTF-16 aware mapping
                 use crate::textdoc::{Doc, PosEnc, apply_changes};
                 use lsp_types::TextDocumentContentChangeEvent;
 
-                let mut doc = Doc { rope: doc_state.rope.clone(), version };
+                let mut doc = Doc {
+                    rope: doc_state.rope.clone(),
+                    version,
+                };
 
                 // Convert JSON changes to proper LSP types with error logging
                 // (Silent filter_map failures can mask document state corruption)
@@ -505,7 +522,11 @@ impl LspServer {
                             break;
                         }
                     }
-                    if all_ranged && !edit_set.is_empty() { Some(edit_set) } else { None }
+                    if all_ranged && !edit_set.is_empty() {
+                        Some(edit_set)
+                    } else {
+                        None
+                    }
                 };
 
                 // Apply changes with UTF-16 encoding (as advertised in initialize)
@@ -633,7 +654,8 @@ impl LspServer {
                         Ok(ast) => {
                             let errors = parser.errors().to_vec();
                             let arc_ast = Arc::new(ast);
-                            self.ast_cache.put(uri.to_string(), &text, Arc::clone(&arc_ast));
+                            self.ast_cache
+                                .put(uri.to_string(), &text, Arc::clone(&arc_ast));
                             (Some((*arc_ast).clone()), errors)
                         }
                         Err(crate::error::ParseError::Cancelled) => {
@@ -730,7 +752,10 @@ impl LspServer {
                         Edit as IncEdit, IncrementalState, apply_edits as inc_apply_edits,
                     };
                     let code_text = crate::util::code_slice(&text);
-                    match (doc_state.incremental_state.take(), &incremental_edits_opt_clone) {
+                    match (
+                        doc_state.incremental_state.take(),
+                        &incremental_edits_opt_clone,
+                    ) {
                         (Some(mut inc_state), Some(edit_set)) => {
                             // Convert IncrementalEditSet -> Vec<IncEdit> for apply_edits
                             let edits: Vec<IncEdit> = edit_set
@@ -903,7 +928,9 @@ impl LspServer {
 
             // Remove from documents
             let mut documents = self.documents.lock();
-            documents.remove(&normalized_uri).or_else(|| documents.remove(uri));
+            documents
+                .remove(&normalized_uri)
+                .or_else(|| documents.remove(uri));
 
             // Cancel any in-progress parse and clean up the cancellation flag.
             {
@@ -1160,9 +1187,15 @@ mod tests {
             let docs = server.documents.lock();
             let doc = docs.get(uri).ok_or("document not stored after didChange")?;
             assert!(doc.text.contains("43"), "document text must be updated");
-            assert!(doc.ast.is_some(), "AST must be present after incremental change");
+            assert!(
+                doc.ast.is_some(),
+                "AST must be present after incremental change"
+            );
             // incremental_doc must still be present after a ranged edit
-            assert!(doc.incremental_doc.is_some(), "incremental_doc must survive a ranged edit");
+            assert!(
+                doc.incremental_doc.is_some(),
+                "incremental_doc must survive a ranged edit"
+            );
             // The incremental doc's internal source must reflect the edit.
             // This catches a silent reinit-instead-of-apply bug: reinit would also hold
             // "43" in the source, but would not have the version counter bumped from 0.
@@ -1209,12 +1242,17 @@ mod tests {
         })))?;
 
         let docs = server.documents.lock();
-        let doc = docs.get(uri).ok_or("document not stored after full replace")?;
+        let doc = docs
+            .get(uri)
+            .ok_or("document not stored after full replace")?;
         assert!(
             doc.incremental_doc.is_some(),
             "incremental_doc must be re-initialized on full replace"
         );
-        assert!(doc.text.contains("$y"), "text must be updated to new content");
+        assert!(
+            doc.text.contains("$y"),
+            "text must be updated to new content"
+        );
         Ok(())
     }
 
@@ -1240,7 +1278,10 @@ mod tests {
             }]
         })))?;
 
-        assert!(server.documents.lock().contains_key(uri), "document must survive broken syntax");
+        assert!(
+            server.documents.lock().contains_key(uri),
+            "document must survive broken syntax"
+        );
         Ok(())
     }
 
@@ -1264,9 +1305,14 @@ mod tests {
         })))?;
 
         let docs = server.documents.lock();
-        let doc = docs.get(uri).ok_or("document not stored after empty change")?;
+        let doc = docs
+            .get(uri)
+            .ok_or("document not stored after empty change")?;
         // Text must be unchanged
-        assert_eq!(doc.text, text, "empty contentChanges must not modify document text");
+        assert_eq!(
+            doc.text, text,
+            "empty contentChanges must not modify document text"
+        );
         // incremental_doc must still be present (reinit from same text is fine)
         assert!(
             doc.incremental_doc.is_some(),
@@ -1301,8 +1347,13 @@ mod tests {
         })))?;
 
         let docs = server.documents.lock();
-        let doc = docs.get(uri).ok_or("document not stored after end-of-doc insert")?;
-        assert!(doc.text.contains("$y"), "new line must appear in document text");
+        let doc = docs
+            .get(uri)
+            .ok_or("document not stored after end-of-doc insert")?;
+        assert!(
+            doc.text.contains("$y"),
+            "new line must appear in document text"
+        );
         assert!(
             doc.incremental_doc.is_some(),
             "incremental_doc must survive end-of-document insert"
@@ -1341,14 +1392,19 @@ mod tests {
         })))?;
 
         let docs = server.documents.lock();
-        let doc = docs.get(uri).ok_or("document not stored after UTF-16 edit")?;
+        let doc = docs
+            .get(uri)
+            .ok_or("document not stored after UTF-16 edit")?;
         // Should have replaced emoji with "xx"
         assert!(
             doc.text.contains("xx"),
             "UTF-16 multi-byte replacement failed: expected 'xx' in text"
         );
         // The emoji should no longer be there
-        assert!(!doc.text.contains("😀"), "UTF-16 multi-byte removal failed: emoji should be gone");
+        assert!(
+            !doc.text.contains("😀"),
+            "UTF-16 multi-byte removal failed: emoji should be gone"
+        );
         Ok(())
     }
 
@@ -1473,17 +1529,32 @@ mod tests {
         let uri = "file:///test_cancel_token.pl";
 
         let first = server.new_parse_token(uri);
-        assert!(!first.load(Ordering::Relaxed), "first token must start false");
+        assert!(
+            !first.load(Ordering::Relaxed),
+            "first token must start false"
+        );
 
         // Second call for same URI must set the first flag to true.
         let second = server.new_parse_token(uri);
-        assert!(first.load(Ordering::Relaxed), "first token must be cancelled after second call");
-        assert!(!second.load(Ordering::Relaxed), "second token must start false");
+        assert!(
+            first.load(Ordering::Relaxed),
+            "first token must be cancelled after second call"
+        );
+        assert!(
+            !second.load(Ordering::Relaxed),
+            "second token must start false"
+        );
 
         // Third call cancels second, returns fresh third.
         let third = server.new_parse_token(uri);
-        assert!(second.load(Ordering::Relaxed), "second token must be cancelled after third call");
-        assert!(!third.load(Ordering::Relaxed), "third token must start false");
+        assert!(
+            second.load(Ordering::Relaxed),
+            "second token must be cancelled after third call"
+        );
+        assert!(
+            !third.load(Ordering::Relaxed),
+            "third token must start false"
+        );
     }
 
     /// Different URIs must not interfere with each other's cancellation tokens.
@@ -1584,7 +1655,11 @@ mod tests {
         );
 
         // The handler must return Ok (not propagate Cancelled as a JsonRpcError).
-        assert!(result.is_ok(), "cancelled open must return Ok(()): {:?}", result);
+        assert!(
+            result.is_ok(),
+            "cancelled open must return Ok(()): {:?}",
+            result
+        );
 
         // The document must NOT have been stored (cancelled parse = no result).
         let normalized = server.normalize_uri_key(uri);
@@ -1615,13 +1690,18 @@ mod tests {
         }))?;
 
         let docs = server.documents.lock();
-        let doc = docs.get(uri).ok_or("document not stored after binary didOpen")?;
+        let doc = docs
+            .get(uri)
+            .ok_or("document not stored after binary didOpen")?;
         assert_eq!(
             doc.degradation_tier,
             DegradationTier::Minimal,
             "binary content should result in Minimal degradation tier"
         );
-        assert!(doc.ast.is_none(), "parser must not be called on binary content");
+        assert!(
+            doc.ast.is_none(),
+            "parser must not be called on binary content"
+        );
         Ok(())
     }
 
@@ -1643,13 +1723,18 @@ mod tests {
         }))?;
 
         let docs = server.documents.lock();
-        let doc = docs.get(uri).ok_or("document not stored after single-null didOpen")?;
+        let doc = docs
+            .get(uri)
+            .ok_or("document not stored after single-null didOpen")?;
         assert_eq!(
             doc.degradation_tier,
             DegradationTier::Minimal,
             "a single null byte must trigger the binary guard"
         );
-        assert!(doc.ast.is_none(), "parser must not be called when null byte is present");
+        assert!(
+            doc.ast.is_none(),
+            "parser must not be called when null byte is present"
+        );
         Ok(())
     }
 
@@ -1669,7 +1754,9 @@ mod tests {
         }))?;
 
         let docs = server.documents.lock();
-        let doc = docs.get(uri).ok_or("document not stored after normal didOpen")?;
+        let doc = docs
+            .get(uri)
+            .ok_or("document not stored after normal didOpen")?;
         assert_ne!(
             doc.degradation_tier,
             DegradationTier::Minimal,
@@ -1701,13 +1788,18 @@ mod tests {
         })))?;
 
         let docs = server.documents.lock();
-        let doc = docs.get(uri).ok_or("document not stored after binary didChange")?;
+        let doc = docs
+            .get(uri)
+            .ok_or("document not stored after binary didChange")?;
         assert_eq!(
             doc.degradation_tier,
             DegradationTier::Minimal,
             "binary content via didChange should result in Minimal degradation tier"
         );
-        assert!(doc.ast.is_none(), "parser must not be called on binary content via didChange");
+        assert!(
+            doc.ast.is_none(),
+            "parser must not be called on binary content via didChange"
+        );
         Ok(())
     }
 
@@ -1773,7 +1865,10 @@ mod tests {
         // Verify the cache has an entry before the change.
         {
             let cache = server.semantic_analyzer_cache.lock();
-            assert!(!cache.is_empty(), "cache must be populated before didChange");
+            assert!(
+                !cache.is_empty(),
+                "cache must be populated before didChange"
+            );
         }
 
         // Apply a document change.
@@ -1786,7 +1881,10 @@ mod tests {
         let cache = server.semantic_analyzer_cache.lock();
         let uri_key = server.normalize_uri_key(uri);
         let still_has_stale = cache.keys().any(|(k, _)| k == &uri_key);
-        assert!(!still_has_stale, "semantic_analyzer_cache must evict entries for changed URI");
+        assert!(
+            !still_has_stale,
+            "semantic_analyzer_cache must evict entries for changed URI"
+        );
 
         Ok(())
     }
@@ -1823,7 +1921,10 @@ mod tests {
         let cache = server.semantic_analyzer_cache.lock();
         let uri_key = server.normalize_uri_key(uri);
         let still_has_stale = cache.keys().any(|(k, _)| k == &uri_key);
-        assert!(!still_has_stale, "semantic_analyzer_cache must evict entries for closed URI");
+        assert!(
+            !still_has_stale,
+            "semantic_analyzer_cache must evict entries for closed URI"
+        );
 
         Ok(())
     }
@@ -1883,7 +1984,10 @@ mod tests {
     fn handle_did_close_missing_uri_returns_invalid_params() {
         let server = LspServer::new();
         let result = server.handle_did_close(Some(json!({ "textDocument": {} })));
-        assert!(result.is_err(), "handle_did_close must error on missing URI");
+        assert!(
+            result.is_err(),
+            "handle_did_close must error on missing URI"
+        );
         if let Err(err) = result {
             assert_eq!(
                 err.code,
@@ -1904,7 +2008,10 @@ mod tests {
     fn handle_did_close_none_params_is_ok() {
         let server = LspServer::new();
         let result = server.handle_did_close(None);
-        assert!(result.is_ok(), "handle_did_close with None params must not error");
+        assert!(
+            result.is_ok(),
+            "handle_did_close with None params must not error"
+        );
     }
 
     /// handle_did_close for a non-existent URI must succeed silently.
@@ -1914,7 +2021,10 @@ mod tests {
         let result = server.handle_did_close(Some(
             json!({ "textDocument": { "uri": "file:///never_opened.pl" } }),
         ));
-        assert!(result.is_ok(), "closing a document that was never opened must not error");
+        assert!(
+            result.is_ok(),
+            "closing a document that was never opened must not error"
+        );
     }
 
     /// handle_did_save with no textDocument.uri must return INVALID_PARAMS.
@@ -1938,7 +2048,10 @@ mod tests {
     fn handle_did_save_none_params_is_ok() {
         let server = LspServer::new();
         let result = server.handle_did_save(None);
-        assert!(result.is_ok(), "handle_did_save with None params must not error");
+        assert!(
+            result.is_ok(),
+            "handle_did_save with None params must not error"
+        );
     }
 
     /// did_open with a missing textDocument.text field must return INVALID_PARAMS.
@@ -1952,7 +2065,10 @@ mod tests {
                 "version": 1
             }
         }));
-        assert!(result.is_err(), "did_open must error when textDocument.text is absent");
+        assert!(
+            result.is_err(),
+            "did_open must error when textDocument.text is absent"
+        );
         if let Err(err) = result {
             assert_eq!(
                 err.code,
@@ -1974,7 +2090,10 @@ mod tests {
                 "text": "my $x = 1;\n"
             }
         }));
-        assert!(result.is_err(), "did_open must error when textDocument.uri is absent");
+        assert!(
+            result.is_err(),
+            "did_open must error when textDocument.uri is absent"
+        );
         if let Err(err) = result {
             assert_eq!(
                 err.code,
@@ -1993,7 +2112,10 @@ mod tests {
             "textDocument": {},
             "contentChanges": []
         })));
-        assert!(result.is_err(), "handle_did_change with missing URI must error");
+        assert!(
+            result.is_err(),
+            "handle_did_change with missing URI must error"
+        );
         if let Err(err) = result {
             assert_eq!(
                 err.code,

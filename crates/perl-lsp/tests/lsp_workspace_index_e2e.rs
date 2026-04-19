@@ -58,7 +58,10 @@ Foo::baz();
     // Test that removing a file updates the index
     index.remove_file(uri_a.as_str());
     let bar_def_after = index.find_definition("bar");
-    assert!(bar_def_after.is_none(), "Definition should be removed after file removal");
+    assert!(
+        bar_def_after.is_none(),
+        "Definition should be removed after file removal"
+    );
 
     Ok(())
 }
@@ -169,7 +172,9 @@ fn test_lsp_workspace_symbols_with_index() -> Result<(), Box<dyn std::error::Err
         })),
     };
 
-    let response = server.handle_request(search_request).ok_or("handle_request returned None")?;
+    let response = server
+        .handle_request(search_request)
+        .ok_or("handle_request returned None")?;
     assert!(response.error.is_none(), "Should not return error");
 
     if let Some(result) = response.result {
@@ -270,7 +275,9 @@ fn test_cross_file_definition() -> Result<(), Box<dyn std::error::Error>> {
         })),
     };
 
-    let response = server.handle_request(def_request).ok_or("handle_request returned None")?;
+    let response = server
+        .handle_request(def_request)
+        .ok_or("handle_request returned None")?;
     assert!(response.error.is_none(), "Should not return error");
 
     if let Some(result) = response.result {

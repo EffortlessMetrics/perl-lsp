@@ -59,7 +59,11 @@ fn test_single_line_middle_byte() -> Result<(), Box<dyn std::error::Error>> {
 fn test_single_line_last_byte() -> Result<(), Box<dyn std::error::Error>> {
     let index = LineIndex::new("hello");
     let (line, col) = index.byte_to_position(4);
-    assert_eq!((line, col), (0, 4), "byte 4 of 'hello' is column 4 (last char 'o')");
+    assert_eq!(
+        (line, col),
+        (0, 4),
+        "byte 4 of 'hello' is column 4 (last char 'o')"
+    );
     Ok(())
 }
 
@@ -188,7 +192,11 @@ fn test_crlf_roundtrip() -> Result<(), Box<dyn std::error::Error>> {
     for offset in 0..text.len() {
         let (line, col) = index.byte_to_position(offset);
         let back = index.position_to_byte(line, col);
-        assert_eq!(back, Some(offset), "roundtrip failed at offset {offset} in CRLF text");
+        assert_eq!(
+            back,
+            Some(offset),
+            "roundtrip failed at offset {offset} in CRLF text"
+        );
     }
     Ok(())
 }
@@ -390,7 +398,10 @@ fn test_byte_past_end_maps_to_last_line() -> Result<(), Box<dyn std::error::Erro
     // byte 7 = text.len(), which is one past the last char
     let (line, col) = index.byte_to_position(7);
     assert_eq!(line, 1, "past-end byte should map to last line");
-    assert_eq!(col, 3, "past-end byte should have col = bytes past line start");
+    assert_eq!(
+        col, 3,
+        "past-end byte should have col = bytes past line start"
+    );
     Ok(())
 }
 

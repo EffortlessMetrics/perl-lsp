@@ -24,7 +24,10 @@ fn diagnostics_for(source: &str) -> Vec<Diagnostic> {
 }
 
 fn bareword_diags(source: &str) -> Vec<Diagnostic> {
-    diagnostics_for(source).into_iter().filter(|d| d.code.as_deref() == Some("PL109")).collect()
+    diagnostics_for(source)
+        .into_iter()
+        .filter(|d| d.code.as_deref() == Some("PL109"))
+        .collect()
 }
 
 // ---------------------------------------------------------------------------
@@ -35,7 +38,10 @@ fn bareword_diags(source: &str) -> Vec<Diagnostic> {
 fn bareword_under_strict_is_flagged() -> Result<(), Box<dyn std::error::Error>> {
     let source = "use strict;\nuse warnings;\nmy $x = FOO;\n";
     let diags = bareword_diags(source);
-    assert!(!diags.is_empty(), "expected at least one unquoted-bareword diagnostic");
+    assert!(
+        !diags.is_empty(),
+        "expected at least one unquoted-bareword diagnostic"
+    );
     Ok(())
 }
 
@@ -64,7 +70,9 @@ fn bareword_under_strict_severity_is_error() -> Result<(), Box<dyn std::error::E
     let diags = bareword_diags(source);
     assert!(!diags.is_empty(), "should have a bareword diagnostic");
     assert!(
-        diags.iter().all(|d| d.severity == DiagnosticSeverity::Error),
+        diags
+            .iter()
+            .all(|d| d.severity == DiagnosticSeverity::Error),
         "bareword under strict should have Error severity"
     );
     Ok(())
@@ -80,7 +88,10 @@ fn bareword_diagnostic_message_names_the_bareword() -> Result<(), Box<dyn std::e
     let diags = bareword_diags(source);
     assert!(!diags.is_empty(), "should have a bareword diagnostic");
     let msg = &diags[0].message;
-    assert!(msg.contains("FOO"), "message should name the bareword 'FOO', got: {msg}");
+    assert!(
+        msg.contains("FOO"),
+        "message should name the bareword 'FOO', got: {msg}"
+    );
     Ok(())
 }
 
@@ -111,7 +122,10 @@ fn bareword_diagnostic_has_auto_quote_suggestion() -> Result<(), Box<dyn std::er
     let diags = bareword_diags(source);
     assert!(!diags.is_empty(), "should have a bareword diagnostic");
     let suggestion = diags[0].suggestion.as_deref();
-    assert!(suggestion.is_some(), "bareword diagnostic should have a suggestion");
+    assert!(
+        suggestion.is_some(),
+        "bareword diagnostic should have a suggestion"
+    );
     Ok(())
 }
 
@@ -207,6 +221,9 @@ fn bareword_without_strict_is_not_flagged() -> Result<(), Box<dyn std::error::Er
     // Without use strict, barewords should not generate unquoted-bareword diagnostics
     let source = "my $x = FOO;\n";
     let diags = bareword_diags(source);
-    assert!(diags.is_empty(), "bareword should not be flagged without use strict, got: {diags:?}");
+    assert!(
+        diags.is_empty(),
+        "bareword should not be flagged without use strict, got: {diags:?}"
+    );
     Ok(())
 }

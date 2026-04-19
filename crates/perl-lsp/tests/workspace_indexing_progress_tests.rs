@@ -48,7 +48,11 @@ fn make_workspace_with_files(n: usize) -> Result<TempWorkspace, String> {
 /// Adaptive timeout: longer in CI or constrained environments.
 fn progress_timeout() -> Duration {
     let is_ci = std::env::var("CI").is_ok() || std::env::var("GITHUB_ACTIONS").is_ok();
-    if is_ci { Duration::from_secs(10) } else { Duration::from_secs(5) }
+    if is_ci {
+        Duration::from_secs(10)
+    } else {
+        Duration::from_secs(5)
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -164,8 +168,14 @@ fn progress_report_percentage_is_valid() -> TestResult {
         .collect();
 
     for report in &report_notifications {
-        if let Some(pct) = report.pointer("/params/value/percentage").and_then(|v| v.as_u64()) {
-            assert!(pct <= 100, "progress percentage must be <= 100, got {pct} in {report}");
+        if let Some(pct) = report
+            .pointer("/params/value/percentage")
+            .and_then(|v| v.as_u64())
+        {
+            assert!(
+                pct <= 100,
+                "progress percentage must be <= 100, got {pct} in {report}"
+            );
         }
     }
 

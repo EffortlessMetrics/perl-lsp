@@ -56,13 +56,18 @@ pub fn run(
     }
 
     // Execute build
-    let status = cmd("cargo", &args).run().context("Failed to build project")?;
+    let status = cmd("cargo", &args)
+        .run()
+        .context("Failed to build project")?;
 
     if status.status.success() {
         spinner.finish_with_message(format!("✅ Built tree-sitter-perl ({})", profile));
     } else {
         spinner.finish_with_message("❌ Build failed");
-        return Err(color_eyre::eyre::eyre!("Build failed with status: {}", status.status));
+        return Err(color_eyre::eyre::eyre!(
+            "Build failed with status: {}",
+            status.status
+        ));
     }
 
     Ok(())

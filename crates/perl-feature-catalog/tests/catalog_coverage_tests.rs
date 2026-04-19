@@ -11,7 +11,11 @@ use perl_feature_catalog::{AreaStats, Catalog, CatalogError, Feature, Maturity, 
 // ---------------------------------------------------------------------------
 
 fn minimal_meta() -> Meta {
-    Meta { version: "1.0.0".to_string(), lsp_version: "3.18".to_string(), compliance_percent: None }
+    Meta {
+        version: "1.0.0".to_string(),
+        lsp_version: "3.18".to_string(),
+        compliance_percent: None,
+    }
 }
 
 fn make_feature(id: &str, maturity: Maturity, advertised: bool) -> Feature {
@@ -41,7 +45,10 @@ fn make_feature_in_area(id: &str, maturity: Maturity, advertised: bool, area: &s
 }
 
 fn make_catalog(features: Vec<Feature>) -> Catalog {
-    Catalog { meta: minimal_meta(), feature: features }
+    Catalog {
+        meta: minimal_meta(),
+        feature: features,
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -52,8 +59,10 @@ fn make_catalog(features: Vec<Feature>) -> Catalog {
 fn load_real_features_toml() -> Result<(), Box<dyn std::error::Error>> {
     // Walk up from the crate directory to find the workspace root features.toml
     let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
-    let workspace_root =
-        manifest_dir.parent().and_then(|p| p.parent()).ok_or("could not find workspace root")?;
+    let workspace_root = manifest_dir
+        .parent()
+        .and_then(|p| p.parent())
+        .ok_or("could not find workspace root")?;
     let features_path = workspace_root.join("features.toml");
     if !features_path.exists() {
         // Skip gracefully in environments where features.toml is absent
@@ -62,9 +71,18 @@ fn load_real_features_toml() -> Result<(), Box<dyn std::error::Error>> {
     let catalog = perl_feature_catalog::read_catalog(&features_path)?;
 
     // Basic structural assertions about the real catalog
-    assert!(!catalog.features().is_empty(), "real features.toml should have features");
-    assert!(!catalog.meta.version.is_empty(), "meta.version should be non-empty");
-    assert!(!catalog.meta.lsp_version.is_empty(), "meta.lsp_version should be non-empty");
+    assert!(
+        !catalog.features().is_empty(),
+        "real features.toml should have features"
+    );
+    assert!(
+        !catalog.meta.version.is_empty(),
+        "meta.version should be non-empty"
+    );
+    assert!(
+        !catalog.meta.lsp_version.is_empty(),
+        "meta.lsp_version should be non-empty"
+    );
 
     // Validation must pass on the real file
     catalog.validate()?;
@@ -74,8 +92,10 @@ fn load_real_features_toml() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn real_features_toml_has_advertised_features() -> Result<(), Box<dyn std::error::Error>> {
     let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
-    let workspace_root =
-        manifest_dir.parent().and_then(|p| p.parent()).ok_or("could not find workspace root")?;
+    let workspace_root = manifest_dir
+        .parent()
+        .and_then(|p| p.parent())
+        .ok_or("could not find workspace root")?;
     let features_path = workspace_root.join("features.toml");
     if !features_path.exists() {
         return Ok(());
@@ -83,7 +103,10 @@ fn real_features_toml_has_advertised_features() -> Result<(), Box<dyn std::error
     let catalog = perl_feature_catalog::read_catalog(&features_path)?;
     let advertised = catalog.advertised_feature_ids();
 
-    assert!(!advertised.is_empty(), "real catalog should have advertised features");
+    assert!(
+        !advertised.is_empty(),
+        "real catalog should have advertised features"
+    );
     // Advertised IDs must be sorted
     let mut sorted = advertised.clone();
     sorted.sort_unstable();
@@ -94,8 +117,10 @@ fn real_features_toml_has_advertised_features() -> Result<(), Box<dyn std::error
 #[test]
 fn real_features_toml_has_multiple_areas() -> Result<(), Box<dyn std::error::Error>> {
     let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
-    let workspace_root =
-        manifest_dir.parent().and_then(|p| p.parent()).ok_or("could not find workspace root")?;
+    let workspace_root = manifest_dir
+        .parent()
+        .and_then(|p| p.parent())
+        .ok_or("could not find workspace root")?;
     let features_path = workspace_root.join("features.toml");
     if !features_path.exists() {
         return Ok(());
@@ -103,15 +128,21 @@ fn real_features_toml_has_multiple_areas() -> Result<(), Box<dyn std::error::Err
     let catalog = perl_feature_catalog::read_catalog(&features_path)?;
     let stats = catalog.area_statistics();
 
-    assert!(stats.len() >= 2, "real catalog should span at least 2 areas, found {}", stats.len());
+    assert!(
+        stats.len() >= 2,
+        "real catalog should span at least 2 areas, found {}",
+        stats.len()
+    );
     Ok(())
 }
 
 #[test]
 fn real_features_toml_compliance_is_positive() -> Result<(), Box<dyn std::error::Error>> {
     let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
-    let workspace_root =
-        manifest_dir.parent().and_then(|p| p.parent()).ok_or("could not find workspace root")?;
+    let workspace_root = manifest_dir
+        .parent()
+        .and_then(|p| p.parent())
+        .ok_or("could not find workspace root")?;
     let features_path = workspace_root.join("features.toml");
     if !features_path.exists() {
         return Ok(());
@@ -119,7 +150,10 @@ fn real_features_toml_compliance_is_positive() -> Result<(), Box<dyn std::error:
     let catalog = perl_feature_catalog::read_catalog(&features_path)?;
     let pct = catalog.compliance_percent();
 
-    assert!(pct > 0.0, "real catalog compliance should be positive, got {pct}");
+    assert!(
+        pct > 0.0,
+        "real catalog compliance should be positive, got {pct}"
+    );
     Ok(())
 }
 
@@ -156,8 +190,12 @@ fn lookup_feature_by_id_prefix_match() {
         make_feature("lsp.completion.snippet", Maturity::Preview, false),
         make_feature("dap.breakpoints", Maturity::Ga, true),
     ]);
-    let lsp_features: Vec<&str> =
-        cat.features().iter().filter(|f| f.id.starts_with("lsp.")).map(|f| f.id.as_str()).collect();
+    let lsp_features: Vec<&str> = cat
+        .features()
+        .iter()
+        .filter(|f| f.id.starts_with("lsp."))
+        .map(|f| f.id.as_str())
+        .collect();
     assert_eq!(lsp_features.len(), 2);
     assert!(lsp_features.contains(&"lsp.completion"));
     assert!(lsp_features.contains(&"lsp.completion.snippet"));
@@ -290,7 +328,10 @@ fn compliance_rounding_one_third() {
         make_feature("f.c", Maturity::Experimental, false),
     ]);
     let pct = cat.compliance_percent();
-    assert!((pct - 33.0).abs() < f32::EPSILON, "expected 33.0, got {pct}");
+    assert!(
+        (pct - 33.0).abs() < f32::EPSILON,
+        "expected 33.0, got {pct}"
+    );
 }
 
 #[test]
@@ -302,7 +343,10 @@ fn compliance_rounding_two_thirds() {
         make_feature("f.c", Maturity::Experimental, false),
     ]);
     let pct = cat.compliance_percent();
-    assert!((pct - 67.0).abs() < f32::EPSILON, "expected 67.0, got {pct}");
+    assert!(
+        (pct - 67.0).abs() < f32::EPSILON,
+        "expected 67.0, got {pct}"
+    );
 }
 
 #[test]
@@ -310,7 +354,11 @@ fn compliance_large_catalog() {
     // Build a catalog with many features to test larger scale
     let mut features = Vec::new();
     for i in 0..100 {
-        let maturity = if i < 80 { Maturity::Ga } else { Maturity::Preview };
+        let maturity = if i < 80 {
+            Maturity::Ga
+        } else {
+            Maturity::Preview
+        };
         let advertised = i < 80;
         features.push(make_feature(&format!("f.{i}"), maturity, advertised));
     }
@@ -344,7 +392,10 @@ fn grid_compliance_excludes_non_coverage_features() {
     assert_eq!(cat.trackable_feature_count_for_grid(), 3);
     assert_eq!(cat.advertised_trackable_count_for_grid(), 2);
     let pct = cat.compliance_percent_for_grid();
-    assert!((pct - 67.0).abs() < f32::EPSILON, "expected 67.0, got {pct}");
+    assert!(
+        (pct - 67.0).abs() < f32::EPSILON,
+        "expected 67.0, got {pct}"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -437,20 +488,33 @@ fn area_feature_ids_empty_area_name() {
 
 #[test]
 fn area_stats_coverage_percent_all_advertised() {
-    let s = AreaStats { total: 10, advertised: 10, ..Default::default() };
+    let s = AreaStats {
+        total: 10,
+        advertised: 10,
+        ..Default::default()
+    };
     assert_eq!(s.coverage_percent(), 100);
 }
 
 #[test]
 fn area_stats_coverage_percent_none_advertised() {
-    let s = AreaStats { total: 5, advertised: 0, ..Default::default() };
+    let s = AreaStats {
+        total: 5,
+        advertised: 0,
+        ..Default::default()
+    };
     assert_eq!(s.coverage_percent(), 0);
 }
 
 #[test]
 fn area_stats_trackable_coverage_rounding() {
     // 2 advertised out of 3 trackable = 66.667 -> rounds to 67
-    let s = AreaStats { total: 4, advertised: 2, planned: 1, ..Default::default() };
+    let s = AreaStats {
+        total: 4,
+        advertised: 2,
+        planned: 1,
+        ..Default::default()
+    };
     assert_eq!(s.trackable(), 3);
     assert_eq!(s.trackable_coverage_percent(), 67);
 }
@@ -513,8 +577,9 @@ fn validate_single_valid_feature() -> Result<(), CatalogError> {
 
 #[test]
 fn validate_many_unique_features() -> Result<(), CatalogError> {
-    let features: Vec<Feature> =
-        (0..50).map(|i| make_feature(&format!("f.{i}"), Maturity::Ga, true)).collect();
+    let features: Vec<Feature> = (0..50)
+        .map(|i| make_feature(&format!("f.{i}"), Maturity::Ga, true))
+        .collect();
     let cat = make_catalog(features);
     cat.validate()?;
     assert_eq!(cat.features().len(), 50);
@@ -654,7 +719,10 @@ lsp_version = "3.18"
 maturity = "ga"
 "#;
     let result: Result<Catalog, _> = toml::from_str(toml_str);
-    assert!(result.is_err(), "missing id field should fail deserialization");
+    assert!(
+        result.is_err(),
+        "missing id field should fail deserialization"
+    );
 }
 
 #[test]
@@ -731,10 +799,19 @@ fn render_lsp_module_version_strings() {
     let mut meta = minimal_meta();
     meta.version = "0.12.0".to_string();
     meta.lsp_version = "3.18".to_string();
-    let cat = Catalog { meta, feature: vec![make_feature("lsp.a", Maturity::Ga, true)] };
+    let cat = Catalog {
+        meta,
+        feature: vec![make_feature("lsp.a", Maturity::Ga, true)],
+    };
     let code = perl_feature_catalog::render_lsp_feature_catalog_module(&cat, "");
-    assert!(code.contains("\"0.12.0\""), "version should appear in output");
-    assert!(code.contains("\"3.18\""), "lsp_version should appear in output");
+    assert!(
+        code.contains("\"0.12.0\""),
+        "version should appear in output"
+    );
+    assert!(
+        code.contains("\"3.18\""),
+        "lsp_version should appear in output"
+    );
 }
 
 #[test]

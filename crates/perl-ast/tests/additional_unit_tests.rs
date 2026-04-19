@@ -22,12 +22,20 @@ fn loc(start: usize, end: usize) -> SourceLocation {
 }
 
 fn num_node(value: &str) -> Node {
-    Node::new(NodeKind::Number { value: value.to_string() }, loc(0, value.len()))
+    Node::new(
+        NodeKind::Number {
+            value: value.to_string(),
+        },
+        loc(0, value.len()),
+    )
 }
 
 fn var_node(sigil: &str, name: &str) -> Node {
     Node::new(
-        NodeKind::Variable { sigil: sigil.to_string(), name: name.to_string() },
+        NodeKind::Variable {
+            sigil: sigil.to_string(),
+            name: name.to_string(),
+        },
         loc(0, sigil.len() + name.len()),
     )
 }
@@ -44,7 +52,10 @@ fn block_node(statements: Vec<Node>) -> Node {
 fn debug_output_for_number_node() {
     let node = num_node("42");
     let dbg = format!("{:?}", node);
-    assert!(dbg.contains("Number"), "Debug should contain variant name, got: {dbg}");
+    assert!(
+        dbg.contains("Number"),
+        "Debug should contain variant name, got: {dbg}"
+    );
     assert!(dbg.contains("42"), "Debug should contain value, got: {dbg}");
 }
 
@@ -58,7 +69,12 @@ fn debug_output_for_variable_node() {
 
 #[test]
 fn debug_output_for_program_node() {
-    let prog = Node::new(NodeKind::Program { statements: vec![num_node("1")] }, loc(0, 10));
+    let prog = Node::new(
+        NodeKind::Program {
+            statements: vec![num_node("1")],
+        },
+        loc(0, 10),
+    );
     let dbg = format!("{:?}", prog);
     assert!(dbg.contains("Program"), "got: {dbg}");
 }
@@ -88,10 +104,19 @@ fn debug_output_for_unit_variants() {
         Node::new(NodeKind::MissingExpression, loc(0, 0)),
         Node::new(NodeKind::UnknownRest, loc(0, 0)),
     ];
-    let names = ["Diamond", "Ellipsis", "Undef", "MissingExpression", "UnknownRest"];
+    let names = [
+        "Diamond",
+        "Ellipsis",
+        "Undef",
+        "MissingExpression",
+        "UnknownRest",
+    ];
     for (node, name) in variants.iter().zip(names.iter()) {
         let dbg = format!("{:?}", node);
-        assert!(dbg.contains(name), "expected {name} in debug output, got: {dbg}");
+        assert!(
+            dbg.contains(name),
+            "expected {name} in debug output, got: {dbg}"
+        );
     }
 }
 
@@ -109,15 +134,25 @@ fn clone_deep_tree_preserves_equality() {
         },
         loc(0, 5),
     );
-    let outer =
-        Node::new(NodeKind::Unary { op: "-".to_string(), operand: Box::new(inner) }, loc(0, 6));
+    let outer = Node::new(
+        NodeKind::Unary {
+            op: "-".to_string(),
+            operand: Box::new(inner),
+        },
+        loc(0, 6),
+    );
     let cloned = outer.clone();
     assert_eq!(outer, cloned);
 }
 
 #[test]
 fn cloned_tree_is_independent() {
-    let mut original = Node::new(NodeKind::Program { statements: vec![num_node("1")] }, loc(0, 10));
+    let mut original = Node::new(
+        NodeKind::Program {
+            statements: vec![num_node("1")],
+        },
+        loc(0, 10),
+    );
     let cloned = original.clone();
     // Mutate original
     if let NodeKind::Program { statements } = &mut original.kind {
@@ -131,15 +166,36 @@ fn cloned_tree_is_independent() {
 
 #[test]
 fn partial_eq_returns_false_for_different_locations() {
-    let a = Node::new(NodeKind::Number { value: "1".to_string() }, loc(0, 1));
-    let b = Node::new(NodeKind::Number { value: "1".to_string() }, loc(5, 6));
+    let a = Node::new(
+        NodeKind::Number {
+            value: "1".to_string(),
+        },
+        loc(0, 1),
+    );
+    let b = Node::new(
+        NodeKind::Number {
+            value: "1".to_string(),
+        },
+        loc(5, 6),
+    );
     assert_ne!(a, b);
 }
 
 #[test]
 fn partial_eq_returns_false_for_different_kinds() {
-    let a = Node::new(NodeKind::Number { value: "1".to_string() }, loc(0, 1));
-    let b = Node::new(NodeKind::String { value: "1".to_string(), interpolated: false }, loc(0, 1));
+    let a = Node::new(
+        NodeKind::Number {
+            value: "1".to_string(),
+        },
+        loc(0, 1),
+    );
+    let b = Node::new(
+        NodeKind::String {
+            value: "1".to_string(),
+            interpolated: false,
+        },
+        loc(0, 1),
+    );
     assert_ne!(a, b);
 }
 
@@ -166,7 +222,10 @@ fn for_each_child_mut_visits_while_continue() {
 #[test]
 fn for_each_child_mut_visits_given_when_default() {
     let mut given = Node::new(
-        NodeKind::Given { expr: Box::new(var_node("$", "x")), body: Box::new(block_node(vec![])) },
+        NodeKind::Given {
+            expr: Box::new(var_node("$", "x")),
+            body: Box::new(block_node(vec![])),
+        },
         loc(0, 20),
     );
     let mut count = 0;
@@ -174,15 +233,22 @@ fn for_each_child_mut_visits_given_when_default() {
     assert_eq!(count, 2);
 
     let mut when = Node::new(
-        NodeKind::When { condition: Box::new(num_node("1")), body: Box::new(block_node(vec![])) },
+        NodeKind::When {
+            condition: Box::new(num_node("1")),
+            body: Box::new(block_node(vec![])),
+        },
         loc(0, 10),
     );
     count = 0;
     when.for_each_child_mut(|_| count += 1);
     assert_eq!(count, 2);
 
-    let mut default =
-        Node::new(NodeKind::Default { body: Box::new(block_node(vec![])) }, loc(0, 10));
+    let mut default = Node::new(
+        NodeKind::Default {
+            body: Box::new(block_node(vec![])),
+        },
+        loc(0, 10),
+    );
     count = 0;
     default.for_each_child_mut(|_| count += 1);
     assert_eq!(count, 1);
@@ -219,12 +285,22 @@ fn for_each_child_mut_visits_labeled_statement() {
 
 #[test]
 fn for_each_child_mut_visits_eval_and_do() {
-    let mut eval = Node::new(NodeKind::Eval { block: Box::new(block_node(vec![])) }, loc(0, 10));
+    let mut eval = Node::new(
+        NodeKind::Eval {
+            block: Box::new(block_node(vec![])),
+        },
+        loc(0, 10),
+    );
     let mut count = 0;
     eval.for_each_child_mut(|_| count += 1);
     assert_eq!(count, 1);
 
-    let mut do_node = Node::new(NodeKind::Do { block: Box::new(block_node(vec![])) }, loc(0, 10));
+    let mut do_node = Node::new(
+        NodeKind::Do {
+            block: Box::new(block_node(vec![])),
+        },
+        loc(0, 10),
+    );
     count = 0;
     do_node.for_each_child_mut(|_| count += 1);
     assert_eq!(count, 1);
@@ -232,8 +308,12 @@ fn for_each_child_mut_visits_eval_and_do() {
 
 #[test]
 fn for_each_child_mut_visits_expression_statement() {
-    let mut es =
-        Node::new(NodeKind::ExpressionStatement { expression: Box::new(num_node("7")) }, loc(0, 1));
+    let mut es = Node::new(
+        NodeKind::ExpressionStatement {
+            expression: Box::new(num_node("7")),
+        },
+        loc(0, 1),
+    );
     let mut count = 0;
     es.for_each_child_mut(|_| count += 1);
     assert_eq!(count, 1);
@@ -303,7 +383,9 @@ fn for_each_child_mut_visits_indirect_call() {
         NodeKind::IndirectCall {
             method: "new".to_string(),
             object: Box::new(Node::new(
-                NodeKind::Identifier { name: "Foo".to_string() },
+                NodeKind::Identifier {
+                    name: "Foo".to_string(),
+                },
                 loc(0, 3),
             )),
             args: vec![num_node("1")],
@@ -318,7 +400,12 @@ fn for_each_child_mut_visits_indirect_call() {
 
 #[test]
 fn for_each_child_mut_visits_return_with_value() {
-    let mut ret = Node::new(NodeKind::Return { value: Some(Box::new(num_node("42"))) }, loc(0, 10));
+    let mut ret = Node::new(
+        NodeKind::Return {
+            value: Some(Box::new(num_node("42"))),
+        },
+        loc(0, 10),
+    );
     let mut count = 0;
     ret.for_each_child_mut(|_| count += 1);
     assert_eq!(count, 1);
@@ -402,7 +489,11 @@ fn for_each_child_mut_visits_package_with_block() {
 #[test]
 fn for_each_child_mut_package_without_block() {
     let mut node = Node::new(
-        NodeKind::Package { name: "Foo".to_string(), name_span: loc(8, 11), block: None },
+        NodeKind::Package {
+            name: "Foo".to_string(),
+            name_span: loc(8, 11),
+            block: None,
+        },
         loc(0, 12),
     );
     let mut count = 0;
@@ -475,7 +566,9 @@ fn for_each_child_mut_visits_optional_parameter() {
 #[test]
 fn for_each_child_mut_visits_mandatory_parameter() {
     let mut node = Node::new(
-        NodeKind::MandatoryParameter { variable: Box::new(var_node("$", "x")) },
+        NodeKind::MandatoryParameter {
+            variable: Box::new(var_node("$", "x")),
+        },
         loc(0, 2),
     );
     let mut count = 0;
@@ -486,15 +579,21 @@ fn for_each_child_mut_visits_mandatory_parameter() {
 #[test]
 fn for_each_child_mut_visits_slurpy_and_named_parameter() {
     let mut slurpy = Node::new(
-        NodeKind::SlurpyParameter { variable: Box::new(var_node("@", "rest")) },
+        NodeKind::SlurpyParameter {
+            variable: Box::new(var_node("@", "rest")),
+        },
         loc(0, 5),
     );
     let mut count = 0;
     slurpy.for_each_child_mut(|_| count += 1);
     assert_eq!(count, 1);
 
-    let mut named =
-        Node::new(NodeKind::NamedParameter { variable: Box::new(var_node("$", "k")) }, loc(0, 2));
+    let mut named = Node::new(
+        NodeKind::NamedParameter {
+            variable: Box::new(var_node("$", "k")),
+        },
+        loc(0, 2),
+    );
     count = 0;
     named.for_each_child_mut(|_| count += 1);
     assert_eq!(count, 1);
@@ -502,8 +601,12 @@ fn for_each_child_mut_visits_slurpy_and_named_parameter() {
 
 #[test]
 fn for_each_child_mut_visits_untie() {
-    let mut node =
-        Node::new(NodeKind::Untie { variable: Box::new(var_node("%", "h")) }, loc(0, 10));
+    let mut node = Node::new(
+        NodeKind::Untie {
+            variable: Box::new(var_node("%", "h")),
+        },
+        loc(0, 10),
+    );
     let mut count = 0;
     node.for_each_child_mut(|_| count += 1);
     assert_eq!(count, 1);
@@ -556,7 +659,9 @@ fn count_nodes_foreach_with_continue() {
         NodeKind::Foreach {
             variable: Box::new(var_node("$", "i")),
             list: Box::new(Node::new(
-                NodeKind::ArrayLiteral { elements: vec![num_node("1"), num_node("2")] },
+                NodeKind::ArrayLiteral {
+                    elements: vec![num_node("1"), num_node("2")],
+                },
                 loc(0, 5),
             )),
             body: Box::new(block_node(vec![])),
@@ -573,7 +678,9 @@ fn count_nodes_subroutine_with_signature() {
     let sig = Node::new(
         NodeKind::Signature {
             parameters: vec![Node::new(
-                NodeKind::MandatoryParameter { variable: Box::new(var_node("$", "x")) },
+                NodeKind::MandatoryParameter {
+                    variable: Box::new(var_node("$", "x")),
+                },
                 loc(0, 2),
             )],
         },
@@ -656,7 +763,10 @@ fn sexp_unary_operators_comprehensive() {
     ];
     for (op, expected_prefix) in &ops_and_expected {
         let node = Node::new(
-            NodeKind::Unary { op: op.to_string(), operand: Box::new(var_node("$", "x")) },
+            NodeKind::Unary {
+                op: op.to_string(),
+                operand: Box::new(var_node("$", "x")),
+            },
             loc(0, 5),
         );
         let sexp = node.to_sexp();
@@ -675,11 +785,17 @@ fn sexp_unary_file_test_operators() {
     ];
     for op in &file_tests {
         let node = Node::new(
-            NodeKind::Unary { op: op.to_string(), operand: Box::new(var_node("$", "f")) },
+            NodeKind::Unary {
+                op: op.to_string(),
+                operand: Box::new(var_node("$", "f")),
+            },
             loc(0, 5),
         );
         let sexp = node.to_sexp();
-        assert!(sexp.starts_with(&format!("(unary_{}", op)), "op={op}, got: {sexp}");
+        assert!(
+            sexp.starts_with(&format!("(unary_{}", op)),
+            "op={op}, got: {sexp}"
+        );
     }
 }
 
@@ -688,11 +804,17 @@ fn sexp_unary_postfix_deref_operators() {
     let ops = ["->@*", "->%*", "->$*", "->&*", "->**"];
     for op in &ops {
         let node = Node::new(
-            NodeKind::Unary { op: op.to_string(), operand: Box::new(var_node("$", "r")) },
+            NodeKind::Unary {
+                op: op.to_string(),
+                operand: Box::new(var_node("$", "r")),
+            },
             loc(0, 5),
         );
         let sexp = node.to_sexp();
-        assert!(sexp.starts_with(&format!("(unary_{}", op)), "op={op}, got: {sexp}");
+        assert!(
+            sexp.starts_with(&format!("(unary_{}", op)),
+            "op={op}, got: {sexp}"
+        );
     }
 }
 
@@ -712,28 +834,43 @@ fn sexp_binary_assignment_operators() {
             loc(0, 5),
         );
         let sexp = node.to_sexp();
-        assert!(sexp.starts_with(&format!("(binary_{}", op)), "op={op}, got: {sexp}");
+        assert!(
+            sexp.starts_with(&format!("(binary_{}", op)),
+            "op={op}, got: {sexp}"
+        );
     }
 }
 
 #[test]
 fn sexp_string_escapes_quotes() {
     let node = Node::new(
-        NodeKind::String { value: "he said \"hello\"".to_string(), interpolated: false },
+        NodeKind::String {
+            value: "he said \"hello\"".to_string(),
+            interpolated: false,
+        },
         loc(0, 20),
     );
     let sexp = node.to_sexp();
-    assert!(sexp.contains("\\\""), "quotes should be escaped in sexp, got: {sexp}");
+    assert!(
+        sexp.contains("\\\""),
+        "quotes should be escaped in sexp, got: {sexp}"
+    );
 }
 
 #[test]
 fn sexp_string_escapes_backslashes() {
     let node = Node::new(
-        NodeKind::String { value: "path\\to\\file".to_string(), interpolated: false },
+        NodeKind::String {
+            value: "path\\to\\file".to_string(),
+            interpolated: false,
+        },
         loc(0, 15),
     );
     let sexp = node.to_sexp();
-    assert!(sexp.contains("\\\\"), "backslashes should be escaped, got: {sexp}");
+    assert!(
+        sexp.contains("\\\\"),
+        "backslashes should be escaped, got: {sexp}"
+    );
 }
 
 #[test]
@@ -767,7 +904,10 @@ fn sexp_heredoc_indented_interpolated_variant() {
         loc(0, 30),
     );
     let sexp = node.to_sexp();
-    assert!(sexp.starts_with("(heredoc_indented_interpolated"), "got: {sexp}");
+    assert!(
+        sexp.starts_with("(heredoc_indented_interpolated"),
+        "got: {sexp}"
+    );
 }
 
 #[test]
@@ -789,16 +929,26 @@ fn sexp_heredoc_indented_non_interpolated() {
 
 #[test]
 fn sexp_function_call_builtin_no_args() {
-    let node =
-        Node::new(NodeKind::FunctionCall { name: "shift".to_string(), args: vec![] }, loc(0, 5));
+    let node = Node::new(
+        NodeKind::FunctionCall {
+            name: "shift".to_string(),
+            args: vec![],
+        },
+        loc(0, 5),
+    );
     let sexp = node.to_sexp();
     assert_eq!(sexp, "(call shift ())");
 }
 
 #[test]
 fn sexp_function_call_user_no_args() {
-    let node =
-        Node::new(NodeKind::FunctionCall { name: "my_func".to_string(), args: vec![] }, loc(0, 7));
+    let node = Node::new(
+        NodeKind::FunctionCall {
+            name: "my_func".to_string(),
+            args: vec![],
+        },
+        loc(0, 7),
+    );
     let sexp = node.to_sexp();
     assert_eq!(sexp, "(function_call_expression (function))");
 }
@@ -806,11 +956,17 @@ fn sexp_function_call_user_no_args() {
 #[test]
 fn sexp_function_call_user_with_args() {
     let node = Node::new(
-        NodeKind::FunctionCall { name: "my_func".to_string(), args: vec![num_node("1")] },
+        NodeKind::FunctionCall {
+            name: "my_func".to_string(),
+            args: vec![num_node("1")],
+        },
         loc(0, 10),
     );
     let sexp = node.to_sexp();
-    assert!(sexp.contains("ambiguous_function_call_expression"), "got: {sexp}");
+    assert!(
+        sexp.contains("ambiguous_function_call_expression"),
+        "got: {sexp}"
+    );
 }
 
 #[test]
@@ -866,7 +1022,10 @@ fn sexp_catch_without_variable() {
         loc(0, 20),
     );
     let sexp = node.to_sexp();
-    assert!(sexp.contains("(catch (block"), "catch without var, got: {sexp}");
+    assert!(
+        sexp.contains("(catch (block"),
+        "catch without var, got: {sexp}"
+    );
 }
 
 #[test]
@@ -890,7 +1049,10 @@ fn sexp_foreach_with_continue() {
     let node = Node::new(
         NodeKind::Foreach {
             variable: Box::new(var_node("$", "i")),
-            list: Box::new(Node::new(NodeKind::ArrayLiteral { elements: vec![] }, loc(0, 2))),
+            list: Box::new(Node::new(
+                NodeKind::ArrayLiteral { elements: vec![] },
+                loc(0, 2),
+            )),
             body: Box::new(block_node(vec![])),
             continue_block: Some(Box::new(block_node(vec![]))),
         },
@@ -959,7 +1121,10 @@ fn sexp_anonymous_subroutine() {
         loc(0, 15),
     );
     let sexp = node.to_sexp();
-    assert!(sexp.contains("anonymous_subroutine_expression"), "got: {sexp}");
+    assert!(
+        sexp.contains("anonymous_subroutine_expression"),
+        "got: {sexp}"
+    );
 }
 
 #[test]
@@ -976,7 +1141,10 @@ fn sexp_anonymous_subroutine_with_attributes() {
         loc(0, 15),
     );
     let sexp = node.to_sexp();
-    assert!(sexp.contains("anonymous_subroutine_expression"), "got: {sexp}");
+    assert!(
+        sexp.contains("anonymous_subroutine_expression"),
+        "got: {sexp}"
+    );
     assert!(sexp.contains("attrlist"), "got: {sexp}");
 }
 
@@ -1021,7 +1189,9 @@ fn sexp_error_with_partial_and_escape() {
 #[test]
 fn sexp_inner_unwraps_non_anon_expression_statement() {
     let es = Node::new(
-        NodeKind::ExpressionStatement { expression: Box::new(num_node("42")) },
+        NodeKind::ExpressionStatement {
+            expression: Box::new(num_node("42")),
+        },
         loc(0, 2),
     );
     let sexp = es.to_sexp_inner();
@@ -1041,9 +1211,17 @@ fn sexp_inner_keeps_anon_subroutine_wrapped() {
         },
         loc(0, 10),
     );
-    let es = Node::new(NodeKind::ExpressionStatement { expression: Box::new(anon) }, loc(0, 10));
+    let es = Node::new(
+        NodeKind::ExpressionStatement {
+            expression: Box::new(anon),
+        },
+        loc(0, 10),
+    );
     let sexp = es.to_sexp_inner();
-    assert!(sexp.contains("expression_statement"), "anon sub should stay wrapped, got: {sexp}");
+    assert!(
+        sexp.contains("expression_statement"),
+        "anon sub should stay wrapped, got: {sexp}"
+    );
 }
 
 #[test]
@@ -1169,7 +1347,13 @@ fn v2_node_clone_and_eq() {
 
     let mut id_gen = NodeIdGenerator::new();
     let range = Range::new(Position::new(0, 1, 1), Position::new(5, 1, 6));
-    let node = V2Node::new(id_gen.next_id(), V2Kind::Number { value: "42".to_string() }, range);
+    let node = V2Node::new(
+        id_gen.next_id(),
+        V2Kind::Number {
+            value: "42".to_string(),
+        },
+        range,
+    );
     let cloned = node.clone();
     assert_eq!(node, cloned);
 }
@@ -1202,8 +1386,16 @@ fn v2_block_sexp() {
 
     let mut id_gen = NodeIdGenerator::new();
     let range = Range::new(Position::new(0, 1, 1), Position::new(10, 1, 11));
-    let child = V2Node::new(id_gen.next_id(), V2Kind::Number { value: "1".to_string() }, range);
-    let block = V2Kind::Block { statements: vec![child] };
+    let child = V2Node::new(
+        id_gen.next_id(),
+        V2Kind::Number {
+            value: "1".to_string(),
+        },
+        range,
+    );
+    let block = V2Kind::Block {
+        statements: vec![child],
+    };
     let sexp = block.to_sexp();
     assert!(sexp.starts_with("(block"), "got: {sexp}");
     assert!(sexp.contains("(number 1)"), "got: {sexp}");
@@ -1239,7 +1431,10 @@ fn v2_variable_declaration_sexp_fallthrough() {
         declarator: "my".to_string(),
         variable: Box::new(perl_ast::v2::Node::new(
             0,
-            V2Kind::Variable { sigil: "$".to_string(), name: "x".to_string() },
+            V2Kind::Variable {
+                sigil: "$".to_string(),
+                name: "x".to_string(),
+            },
             perl_position_tracking::Range::new(
                 perl_position_tracking::Position::new(0, 1, 1),
                 perl_position_tracking::Position::new(4, 1, 5),

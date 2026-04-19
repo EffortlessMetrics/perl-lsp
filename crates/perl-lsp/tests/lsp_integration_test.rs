@@ -110,7 +110,11 @@ fn test_lsp_initialize() -> Result<(), Box<dyn std::error::Error>> {
         .map_err(|e| format!("Failed to send init request: {}", e))?;
 
     // AC4: Use in-memory mock I/O for testing LSP message exchange
-    let mock_in = MockIO { input: _rx_in, output: _tx_out.clone(), buffer: Vec::new() };
+    let mock_in = MockIO {
+        input: _rx_in,
+        output: _tx_out.clone(),
+        buffer: Vec::new(),
+    };
     let mock_out = MockIO {
         input: mpsc::channel().1, // dummy
         output: _tx_out,
@@ -178,7 +182,10 @@ fn test_incomplete_headers() {
 
     let parsed = read_lsp_response(&mut reader);
     // Incomplete header (missing blank line) should result in None since the protocol requires it
-    assert!(parsed.is_none(), "Missing blank line separator should fail to parse");
+    assert!(
+        parsed.is_none(),
+        "Missing blank line separator should fail to parse"
+    );
 }
 
 #[test]
@@ -190,7 +197,10 @@ fn test_missing_content_length_header() {
 
     let parsed = read_lsp_response(&mut reader);
     // Missing Content-Length should result in None
-    assert!(parsed.is_none(), "Missing Content-Length should fail to parse");
+    assert!(
+        parsed.is_none(),
+        "Missing Content-Length should fail to parse"
+    );
 }
 
 #[test]
@@ -203,7 +213,10 @@ fn test_invalid_content_length() {
 
     let parsed = read_lsp_response(&mut reader);
     // Invalid Content-Length should result in None
-    assert!(parsed.is_none(), "Invalid Content-Length should fail to parse");
+    assert!(
+        parsed.is_none(),
+        "Invalid Content-Length should fail to parse"
+    );
 }
 
 #[test]
@@ -229,20 +242,28 @@ fn test_zero_content_length() {
 
     let parsed = read_lsp_response(&mut reader);
     // Zero-length content should parse as None (empty JSON)
-    assert!(parsed.is_none(), "Zero-length content should fail to parse as valid JSON");
+    assert!(
+        parsed.is_none(),
+        "Zero-length content should fail to parse as valid JSON"
+    );
 }
 
 #[test]
 fn test_multiple_headers() {
     // Test that multiple headers are handled correctly
     let json_content = r#"{"jsonrpc":"2.0","id":1,"method":"test"}"#;
-    let header =
-        format!("Content-Length: {}\r\nContent-Type: application/json\r\n\r\n", json_content.len());
+    let header = format!(
+        "Content-Length: {}\r\nContent-Type: application/json\r\n\r\n",
+        json_content.len()
+    );
     let message = [header.as_bytes(), json_content.as_bytes()].concat();
     let mut reader = BufReader::new(&message[..]);
 
     let parsed = read_lsp_response(&mut reader);
-    assert!(parsed.is_some(), "Multiple headers should be parsed correctly");
+    assert!(
+        parsed.is_some(),
+        "Multiple headers should be parsed correctly"
+    );
 
     let value = must_some(parsed);
     assert_eq!(value["jsonrpc"], "2.0");
@@ -284,7 +305,10 @@ fn test_lsp_server_with_cursor_io() {
     let server = LspServer::with_io(Box::new(input), Box::new(output));
 
     // Verify server is created successfully
-    assert!(!server.is_initialized(), "Server should not be initialized yet");
+    assert!(
+        !server.is_initialized(),
+        "Server should not be initialized yet"
+    );
 }
 
 #[test]

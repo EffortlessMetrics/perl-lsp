@@ -8,7 +8,11 @@ fn main() {
     println!();
 
     while let Some(token) = lexer.next_token() {
-        println!("Token: {:?} = {:?}", token.token_type, &input[token.start..token.end]);
+        println!(
+            "Token: {:?} = {:?}",
+            token.token_type,
+            &input[token.start..token.end]
+        );
         if matches!(token.token_type, TokenType::EOF) {
             break;
         }

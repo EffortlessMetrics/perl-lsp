@@ -118,7 +118,10 @@ static IMPORT_BLOCK_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
 
 /// Get the import block regex, returning None if compilation failed
 fn get_import_block_regex() -> Option<&'static Regex> {
-    IMPORT_BLOCK_RE.get_or_init(|| Regex::new(r"(?m)^(?:use\s+[\w:]+[^\n]*\n)+")).as_ref().ok()
+    IMPORT_BLOCK_RE
+        .get_or_init(|| Regex::new(r"(?m)^(?:use\s+[\w:]+[^\n]*\n)+"))
+        .as_ref()
+        .ok()
 }
 
 /// A file edit as part of a refactoring operation
@@ -241,18 +244,28 @@ impl WorkspaceRefactor {
     ) -> Result<RefactorResult, RefactorError> {
         // Validate input parameters
         if old_name.is_empty() {
-            return Err(RefactorError::InvalidInput("Symbol name cannot be empty".to_string()));
+            return Err(RefactorError::InvalidInput(
+                "Symbol name cannot be empty".to_string(),
+            ));
         }
         if new_name.is_empty() {
-            return Err(RefactorError::InvalidInput("New name cannot be empty".to_string()));
+            return Err(RefactorError::InvalidInput(
+                "New name cannot be empty".to_string(),
+            ));
         }
         if old_name == new_name {
-            return Err(RefactorError::InvalidInput("Old and new names are identical".to_string()));
+            return Err(RefactorError::InvalidInput(
+                "Old and new names are identical".to_string(),
+            ));
         }
 
         // Infer symbol kind and bare name
         let (sigil, bare) = normalize_var(old_name);
-        let kind = if sigil.is_some() { SymKind::Var } else { SymKind::Sub };
+        let kind = if sigil.is_some() {
+            SymKind::Var
+        } else {
+            SymKind::Sub
+        };
 
         // For now assume package 'main'
         let key = SymbolKey {
@@ -270,7 +283,10 @@ impl WorkspaceRefactor {
         // Always try to include the definition explicitly
         let def_loc = self._index.find_def(&key);
         if let Some(def) = def_loc {
-            if !locations.iter().any(|loc| loc.uri == def.uri && loc.range == def.range) {
+            if !locations
+                .iter()
+                .any(|loc| loc.uri == def.uri && loc.range == def.range)
+            {
                 locations.push(def);
             }
         }
@@ -341,10 +357,12 @@ impl WorkspaceRefactor {
                 RefactorError::UriConversion(format!("Failed to convert URI to path: {}", loc.uri))
             })?;
             if let Some(doc) = store.get(&loc.uri) {
-                let start_off =
-                    doc.line_index.position_to_offset(loc.range.start.line, loc.range.start.column);
-                let end_off =
-                    doc.line_index.position_to_offset(loc.range.end.line, loc.range.end.column);
+                let start_off = doc
+                    .line_index
+                    .position_to_offset(loc.range.start.line, loc.range.start.column);
+                let end_off = doc
+                    .line_index
+                    .position_to_offset(loc.range.end.line, loc.range.end.column);
                 if let (Some(start_off), Some(end_off)) = (start_off, end_off) {
                     let replacement = match kind {
                         SymKind::Var => {
@@ -362,11 +380,17 @@ impl WorkspaceRefactor {
             }
         }
 
-        let file_edits: Vec<FileEdit> =
-            edits.into_iter().map(|(file_path, edits)| FileEdit { file_path, edits }).collect();
+        let file_edits: Vec<FileEdit> = edits
+            .into_iter()
+            .map(|(file_path, edits)| FileEdit { file_path, edits })
+            .collect();
 
         let description = format!("Rename '{}' to '{}'", old_name, new_name);
-        Ok(RefactorResult { file_edits, description, warnings: vec![] })
+        Ok(RefactorResult {
+            file_edits,
+            description,
+            warnings: vec![],
+        })
     }
 
     /// Extract selected code into a new module
@@ -416,7 +440,9 @@ impl WorkspaceRefactor {
     ) -> Result<RefactorResult, RefactorError> {
         // Validate input parameters
         if module_name.is_empty() {
-            return Err(RefactorError::InvalidInput("Module name cannot be empty".to_string()));
+            return Err(RefactorError::InvalidInput(
+                "Module name cannot be empty".to_string(),
+            ));
         }
         if start_line > end_line {
             return Err(RefactorError::InvalidInput(
@@ -434,13 +460,15 @@ impl WorkspaceRefactor {
         let idx = doc.line_index.clone();
 
         // Determine byte offsets for lines
-        let start_off = idx.position_to_offset(start_line as u32 - 1, 0).ok_or_else(|| {
-            RefactorError::InvalidPosition {
+        let start_off = idx
+            .position_to_offset(start_line as u32 - 1, 0)
+            .ok_or_else(|| RefactorError::InvalidPosition {
                 file: file_path.display().to_string(),
                 details: format!("Invalid start line: {}", start_line),
-            }
-        })?;
-        let end_off = idx.position_to_offset(end_line as u32, 0).unwrap_or(doc.text.len());
+            })?;
+        let end_off = idx
+            .position_to_offset(end_line as u32, 0)
+            .unwrap_or(doc.text.len());
 
         let extracted = doc.text[start_off..end_off].to_string();
 
@@ -453,11 +481,21 @@ impl WorkspaceRefactor {
 
         // New module file content
         let new_path = file_path.with_file_name(module_name_to_path(module_name));
-        let new_edits = vec![TextEdit { start: 0, end: 0, new_text: extracted }];
+        let new_edits = vec![TextEdit {
+            start: 0,
+            end: 0,
+            new_text: extracted,
+        }];
 
         let file_edits = vec![
-            FileEdit { file_path: file_path.to_path_buf(), edits: original_edits },
-            FileEdit { file_path: new_path.clone(), edits: new_edits },
+            FileEdit {
+                file_path: file_path.to_path_buf(),
+                edits: original_edits,
+            },
+            FileEdit {
+                file_path: new_path.clone(),
+                edits: new_edits,
+            },
         ];
 
         Ok(RefactorResult {
@@ -490,7 +528,9 @@ impl WorkspaceRefactor {
 
         // Iterate over all open documents in the workspace
         for doc in self._index.document_store().all_documents() {
-            let Some(path) = uri_to_fs_path(&doc.uri) else { continue };
+            let Some(path) = uri_to_fs_path(&doc.uri) else {
+                continue;
+            };
 
             let analysis = optimizer.analyze_content(&doc.text)?;
             let optimized = optimizer.generate_optimized_imports(&analysis);
@@ -513,7 +553,11 @@ impl WorkspaceRefactor {
 
             file_edits.push(FileEdit {
                 file_path: path.clone(),
-                edits: vec![TextEdit { start, end, new_text: format!("{}\n", optimized) }],
+                edits: vec![TextEdit {
+                    start,
+                    end,
+                    new_text: format!("{}\n", optimized),
+                }],
             });
         }
 
@@ -570,7 +614,9 @@ impl WorkspaceRefactor {
     ) -> Result<RefactorResult, RefactorError> {
         // Validate input parameters
         if sub_name.is_empty() {
-            return Err(RefactorError::InvalidInput("Subroutine name cannot be empty".to_string()));
+            return Err(RefactorError::InvalidInput(
+                "Subroutine name cannot be empty".to_string(),
+            ));
         }
         if to_module.is_empty() {
             return Err(RefactorError::InvalidInput(
@@ -582,12 +628,13 @@ impl WorkspaceRefactor {
             RefactorError::UriConversion(format!("Failed to convert path to URI: {}", e))
         })?;
         let symbols = self._index.file_symbols(&uri);
-        let sym = symbols.into_iter().find(|s| s.name == sub_name).ok_or_else(|| {
-            RefactorError::SymbolNotFound {
+        let sym = symbols
+            .into_iter()
+            .find(|s| s.name == sub_name)
+            .ok_or_else(|| RefactorError::SymbolNotFound {
                 symbol: sub_name.to_string(),
                 file: from_file.display().to_string(),
-            }
-        })?;
+            })?;
 
         let store = self._index.document_store();
         let doc = store
@@ -603,22 +650,25 @@ impl WorkspaceRefactor {
                     sub_name, sym.range.start.line, sym.range.start.column
                 ),
             })?;
-        let end_off =
-            idx.position_to_offset(sym.range.end.line, sym.range.end.column).ok_or_else(|| {
-                RefactorError::InvalidPosition {
-                    file: from_file.display().to_string(),
-                    details: format!(
-                        "Invalid end position for subroutine '{}' at line {}, column {}",
-                        sub_name, sym.range.end.line, sym.range.end.column
-                    ),
-                }
+        let end_off = idx
+            .position_to_offset(sym.range.end.line, sym.range.end.column)
+            .ok_or_else(|| RefactorError::InvalidPosition {
+                file: from_file.display().to_string(),
+                details: format!(
+                    "Invalid end position for subroutine '{}' at line {}, column {}",
+                    sub_name, sym.range.end.line, sym.range.end.column
+                ),
             })?;
         let sub_text = doc.text[start_off..end_off].to_string();
 
         // Remove from original file
         let mut file_edits = vec![FileEdit {
             file_path: from_file.to_path_buf(),
-            edits: vec![TextEdit { start: start_off, end: end_off, new_text: String::new() }],
+            edits: vec![TextEdit {
+                start: start_off,
+                end: end_off,
+                new_text: String::new(),
+            }],
         }];
 
         // Append to new module file
@@ -703,7 +753,9 @@ impl WorkspaceRefactor {
 
         // Validate input parameters
         if var_name.is_empty() {
-            return Err(RefactorError::InvalidInput("Variable name cannot be empty".to_string()));
+            return Err(RefactorError::InvalidInput(
+                "Variable name cannot be empty".to_string(),
+            ));
         }
 
         let uri = fs_path_to_uri(file_path).map_err(|e| {
@@ -724,14 +776,18 @@ impl WorkspaceRefactor {
                 symbol: var_name.to_string(),
                 file: file_path.display().to_string(),
             })?;
-        let def_line_start = idx.position_to_offset(def_line_idx as u32, 0).ok_or_else(|| {
-            RefactorError::InvalidPosition {
+        let def_line_start = idx
+            .position_to_offset(def_line_idx as u32, 0)
+            .ok_or_else(|| RefactorError::InvalidPosition {
                 file: file_path.display().to_string(),
-                details: format!("Invalid start position for definition line: {}", def_line_idx),
-            }
-        })?;
-        let def_line_end =
-            idx.position_to_offset(def_line_idx as u32 + 1, 0).unwrap_or(doc.text.len());
+                details: format!(
+                    "Invalid start position for definition line: {}",
+                    def_line_idx
+                ),
+            })?;
+        let def_line_end = idx
+            .position_to_offset(def_line_idx as u32 + 1, 0)
+            .unwrap_or(doc.text.len());
         let def_line = doc.text.lines().nth(def_line_idx).unwrap_or("");
         let expr = def_line
             .split('=')
@@ -748,27 +804,35 @@ impl WorkspaceRefactor {
         let mut edits_map: BTreeMap<PathBuf, Vec<TextEdit>> = BTreeMap::new();
 
         // Remove definition line
-        edits_map.entry(file_path.to_path_buf()).or_default().push(TextEdit {
-            start: def_line_start,
-            end: def_line_end,
-            new_text: String::new(),
-        });
+        edits_map
+            .entry(file_path.to_path_buf())
+            .or_default()
+            .push(TextEdit {
+                start: def_line_start,
+                end: def_line_end,
+                new_text: String::new(),
+            });
 
         // Replace remaining occurrences
         let mut search_pos = def_line_end;
         while let Some(found) = doc.text[search_pos..].find(var_name) {
             let start = search_pos + found;
             let end = start + var_name.len();
-            edits_map.entry(file_path.to_path_buf()).or_default().push(TextEdit {
-                start,
-                end,
-                new_text: expr.clone(),
-            });
+            edits_map
+                .entry(file_path.to_path_buf())
+                .or_default()
+                .push(TextEdit {
+                    start,
+                    end,
+                    new_text: expr.clone(),
+                });
             search_pos = end;
         }
 
-        let file_edits =
-            edits_map.into_iter().map(|(file_path, edits)| FileEdit { file_path, edits }).collect();
+        let file_edits = edits_map
+            .into_iter()
+            .map(|(file_path, edits)| FileEdit { file_path, edits })
+            .collect();
 
         Ok(RefactorResult {
             file_edits,
@@ -796,7 +860,9 @@ impl WorkspaceRefactor {
         _position: (usize, usize),
     ) -> Result<RefactorResult, RefactorError> {
         if var_name.is_empty() {
-            return Err(RefactorError::InvalidInput("Variable name cannot be empty".to_string()));
+            return Err(RefactorError::InvalidInput(
+                "Variable name cannot be empty".to_string(),
+            ));
         }
 
         let (sigil, bare) = normalize_var(var_name);
@@ -850,7 +916,9 @@ impl WorkspaceRefactor {
         let mut all_locations = self._index.find_refs(&key);
 
         if let Some(def_loc) = self._index.find_def(&key) {
-            if !all_locations.iter().any(|loc| loc.uri == def_loc.uri && loc.range == def_loc.range)
+            if !all_locations
+                .iter()
+                .any(|loc| loc.uri == def_loc.uri && loc.range == def_loc.range)
             {
                 all_locations.push(def_loc);
             }
@@ -922,10 +990,12 @@ impl WorkspaceRefactor {
             files_affected.insert(path.clone());
 
             if let Some(doc) = store.get(&loc.uri) {
-                let start_off =
-                    doc.line_index.position_to_offset(loc.range.start.line, loc.range.start.column);
-                let end_off =
-                    doc.line_index.position_to_offset(loc.range.end.line, loc.range.end.column);
+                let start_off = doc
+                    .line_index
+                    .position_to_offset(loc.range.start.line, loc.range.start.column);
+                let end_off = doc
+                    .line_index
+                    .position_to_offset(loc.range.end.line, loc.range.end.column);
 
                 if let (Some(start_off), Some(end_off)) = (start_off, end_off) {
                     let is_definition = doc.uri == def_uri
@@ -933,8 +1003,10 @@ impl WorkspaceRefactor {
                             .contains("my ");
 
                     if is_definition {
-                        let line_start =
-                            doc.text[..start_off].rfind('\n').map(|p| p + 1).unwrap_or(0);
+                        let line_start = doc.text[..start_off]
+                            .rfind('\n')
+                            .map(|p| p + 1)
+                            .unwrap_or(0);
                         let line_end = doc.text[end_off..]
                             .find('\n')
                             .map(|p| end_off + p + 1)
@@ -969,7 +1041,11 @@ impl WorkspaceRefactor {
             files_affected.len()
         );
 
-        Ok(RefactorResult { file_edits, description, warnings })
+        Ok(RefactorResult {
+            file_edits,
+            description,
+            warnings,
+        })
     }
 }
 
@@ -998,8 +1074,10 @@ mod tests {
 
     #[test]
     fn test_rename_symbol() -> Result<(), Box<dyn std::error::Error>> {
-        let (_dir, index, paths) =
-            setup_index(vec![("a.pl", "my $foo = 1; print $foo;"), ("b.pl", "print $foo;")])?;
+        let (_dir, index, paths) = setup_index(vec![
+            ("a.pl", "my $foo = 1; print $foo;"),
+            ("b.pl", "print $foo;"),
+        ])?;
         let refactor = WorkspaceRefactor::new(index);
         let result = refactor.rename_symbol("$foo", "$bar", &paths[0], (0, 0))?;
         assert!(!result.file_edits.is_empty());
@@ -1022,7 +1100,10 @@ mod tests {
         let refactor = WorkspaceRefactor::new(index);
         let res = refactor.extract_module(&paths[0], 2, 2, "My::Extracted")?;
         assert_eq!(res.file_edits.len(), 2);
-        assert_eq!(res.file_edits[1].file_path, paths[0].with_file_name("My/Extracted.pm"));
+        assert_eq!(
+            res.file_edits[1].file_path,
+            paths[0].with_file_name("My/Extracted.pm")
+        );
         Ok(())
     }
 
@@ -1054,7 +1135,10 @@ mod tests {
         let refactor = WorkspaceRefactor::new(index);
         let res = refactor.move_subroutine("foo", &paths[0], "Target::Module")?;
         assert_eq!(res.file_edits.len(), 2);
-        assert_eq!(res.file_edits[1].file_path, paths[0].with_file_name("Target/Module.pm"));
+        assert_eq!(
+            res.file_edits[1].file_path,
+            paths[0].with_file_name("Target/Module.pm")
+        );
         Ok(())
     }
 
@@ -1196,7 +1280,11 @@ mod tests {
 
         // Check that the replacement contains the Unicode string literal
         let edits = &result.file_edits[0].edits;
-        assert!(edits.iter().any(|edit| edit.new_text.contains("测试表达式")));
+        assert!(
+            edits
+                .iter()
+                .any(|edit| edit.new_text.contains("测试表达式"))
+        );
         Ok(())
     }
 
@@ -1255,7 +1343,11 @@ sub main_func {
 
         // Check that extracted content includes the subroutine
         let new_module_edit = &result.file_edits[1];
-        assert!(new_module_edit.edits[0].new_text.contains("sub utility_func"));
+        assert!(
+            new_module_edit.edits[0]
+                .new_text
+                .contains("sub utility_func")
+        );
         assert!(new_module_edit.edits[0].new_text.contains("utility result"));
         Ok(())
     }
@@ -1364,11 +1456,18 @@ use JSON; # Duplicate
     #[test]
     fn test_multiple_files_workspace() -> Result<(), Box<dyn std::error::Error>> {
         let files = (0..10)
-            .map(|i| (format!("file_{}.pl", i), format!("my $shared = {}; print $shared;\n", i)))
+            .map(|i| {
+                (
+                    format!("file_{}.pl", i),
+                    format!("my $shared = {}; print $shared;\n", i),
+                )
+            })
             .collect::<Vec<_>>();
 
-        let files_refs: Vec<_> =
-            files.iter().map(|(name, content)| (name.as_str(), content.as_str())).collect();
+        let files_refs: Vec<_> = files
+            .iter()
+            .map(|(name, content)| (name.as_str(), content.as_str()))
+            .collect();
         let (_dir, index, paths) = setup_index(files_refs)?;
         let refactor = WorkspaceRefactor::new(index);
 
@@ -1410,7 +1509,10 @@ use JSON; # Duplicate
         let result = refactor.inline_variable_all("$x", &paths[0], (0, 0))?;
         assert!(!result.file_edits.is_empty());
         // AC2: Warning detection validates that initializer contains function calls
-        assert!(!result.warnings.is_empty(), "Should have warning about function call");
+        assert!(
+            !result.warnings.is_empty(),
+            "Should have warning about function call"
+        );
         Ok(())
     }
 

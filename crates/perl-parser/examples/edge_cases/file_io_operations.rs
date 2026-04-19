@@ -12,7 +12,10 @@ pub fn get_tests() -> Vec<(&'static str, &'static str)> {
         ("open FH, '+>>', 'file.txt'", "open append-read"),
         // Lexical filehandles
         ("open my $fh, '<', 'file.txt'", "open lexical filehandle"),
-        ("open my $fh, '<', 'file.txt' or die $!", "open with error check"),
+        (
+            "open my $fh, '<', 'file.txt' or die $!",
+            "open with error check",
+        ),
         ("open(my $fh, '<', 'file.txt') || die", "open parens style"),
         // Pipe operations
         ("open FH, '|-', 'command'", "open pipe to command"),
@@ -23,8 +26,14 @@ pub fn get_tests() -> Vec<(&'static str, &'static str)> {
         ("open FH, '<:utf8', 'file.txt'", "open with encoding"),
         ("open FH, '<:raw', 'file.txt'", "open raw mode"),
         ("open FH, '<:crlf', 'file.txt'", "open crlf mode"),
-        ("open FH, '<:encoding(UTF-8)', 'file.txt'", "open with encoding layer"),
-        ("open FH, '<:via(Module)', 'file.txt'", "open with via layer"),
+        (
+            "open FH, '<:encoding(UTF-8)', 'file.txt'",
+            "open with encoding layer",
+        ),
+        (
+            "open FH, '<:via(Module)', 'file.txt'",
+            "open with via layer",
+        ),
         // Multiple layers
         ("open FH, '<:raw:utf8', 'file.txt'", "open multiple layers"),
         ("open FH, '<:utf8:crlf', 'file.txt'", "open utf8 and crlf"),
@@ -67,7 +76,10 @@ pub fn get_tests() -> Vec<(&'static str, &'static str)> {
         ("print FH 'hello'", "print to filehandle"),
         ("print $fh 'hello'", "print to scalar filehandle"),
         ("print {$fh} 'hello'", "print to braced filehandle"),
-        ("print { select_fh() } 'hello'", "print to expression filehandle"),
+        (
+            "print { select_fh() } 'hello'",
+            "print to expression filehandle",
+        ),
         // Printf variations
         ("printf '%s', $x", "printf default handle"),
         ("printf FH '%s', $x", "printf to filehandle"),
@@ -164,7 +176,10 @@ pub fn get_tests() -> Vec<(&'static str, &'static str)> {
         ("ioctl FH, $cmd, $arg", "ioctl"),
         // Sysopen
         ("sysopen FH, 'file.txt', O_RDONLY", "sysopen read"),
-        ("sysopen FH, 'file.txt', O_WRONLY|O_CREAT", "sysopen write create"),
+        (
+            "sysopen FH, 'file.txt', O_WRONLY|O_CREAT",
+            "sysopen write create",
+        ),
         ("sysopen FH, 'file.txt', O_RDWR, 0644", "sysopen with mode"),
         // Sysread/syswrite
         ("sysread FH, $buf, 1024", "sysread"),
@@ -210,7 +225,10 @@ pub fn get_tests() -> Vec<(&'static str, &'static str)> {
         ("socket SOCK, AF_INET, SOCK_STREAM, 0", "socket creation"),
         ("socketpair S1, S2, AF_UNIX, SOCK_STREAM, 0", "socketpair"),
         // Select with timeout
-        ("select $rout, $wout, $eout, $timeout", "select multiplexing"),
+        (
+            "select $rout, $wout, $eout, $timeout",
+            "select multiplexing",
+        ),
         ("select undef, undef, undef, 0.5", "select sleep"),
         // Getc
         ("getc", "getc default"),

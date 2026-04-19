@@ -210,8 +210,11 @@ impl Node {
     pub fn to_sexp(&self) -> String {
         match &self.kind {
             NodeKind::Program { statements } => {
-                let stmts =
-                    statements.iter().map(|s| s.to_sexp_inner()).collect::<Vec<_>>().join(" ");
+                let stmts = statements
+                    .iter()
+                    .map(|s| s.to_sexp_inner())
+                    .collect::<Vec<_>>()
+                    .join(" ");
                 format!("(source_file {})", stmts)
             }
 
@@ -219,7 +222,12 @@ impl Node {
                 format!("(expression_statement {})", expression.to_sexp())
             }
 
-            NodeKind::VariableDeclaration { declarator, variable, attributes, initializer } => {
+            NodeKind::VariableDeclaration {
+                declarator,
+                variable,
+                attributes,
+                initializer,
+            } => {
                 let attrs_str = if attributes.is_empty() {
                     String::new()
                 } else {
@@ -234,7 +242,12 @@ impl Node {
                         init.to_sexp()
                     )
                 } else {
-                    format!("({}_declaration {}{})", declarator, variable.to_sexp(), attrs_str)
+                    format!(
+                        "({}_declaration {}{})",
+                        declarator,
+                        variable.to_sexp(),
+                        attrs_str
+                    )
                 }
             }
 
@@ -244,7 +257,11 @@ impl Node {
                 attributes,
                 initializer,
             } => {
-                let vars = variables.iter().map(|v| v.to_sexp()).collect::<Vec<_>>().join(" ");
+                let vars = variables
+                    .iter()
+                    .map(|v| v.to_sexp())
+                    .collect::<Vec<_>>()
+                    .join(" ");
                 let attrs_str = if attributes.is_empty() {
                     String::new()
                 } else {
@@ -268,7 +285,10 @@ impl Node {
                 format!("(variable {} {})", sigil, name)
             }
 
-            NodeKind::VariableWithAttributes { variable, attributes } => {
+            NodeKind::VariableWithAttributes {
+                variable,
+                attributes,
+            } => {
                 let attrs = attributes.join(" ");
                 format!("({} (attributes {}))", variable.to_sexp(), attrs)
             }
@@ -288,7 +308,11 @@ impl Node {
                 format!("({} {} {})", op_name, left.to_sexp(), right.to_sexp())
             }
 
-            NodeKind::Ternary { condition, then_expr, else_expr } => {
+            NodeKind::Ternary {
+                condition,
+                then_expr,
+                else_expr,
+            } => {
                 format!(
                     "(ternary {} {} {})",
                     condition.to_sexp(),
@@ -329,7 +353,10 @@ impl Node {
                 format!("(number {})", value)
             }
 
-            NodeKind::String { value, interpolated } => {
+            NodeKind::String {
+                value,
+                interpolated,
+            } => {
                 // Escape quotes in string value to prevent S-expression parsing issues
                 let escaped_value = value.replace('\\', "\\\\").replace('"', "\\\"");
 
@@ -341,11 +368,22 @@ impl Node {
                 }
             }
 
-            NodeKind::Heredoc { delimiter, content, interpolated, indented, command, .. } => {
+            NodeKind::Heredoc {
+                delimiter,
+                content,
+                interpolated,
+                indented,
+                command,
+                ..
+            } => {
                 let type_str = if *command {
                     "heredoc_command"
                 } else if *indented {
-                    if *interpolated { "heredoc_indented_interpolated" } else { "heredoc_indented" }
+                    if *interpolated {
+                        "heredoc_indented_interpolated"
+                    } else {
+                        "heredoc_indented"
+                    }
                 } else if *interpolated {
                     "heredoc_interpolated"
                 } else {
@@ -355,7 +393,11 @@ impl Node {
             }
 
             NodeKind::ArrayLiteral { elements } => {
-                let elems = elements.iter().map(|e| e.to_sexp()).collect::<Vec<_>>().join(" ");
+                let elems = elements
+                    .iter()
+                    .map(|e| e.to_sexp())
+                    .collect::<Vec<_>>()
+                    .join(" ");
                 format!("(array {})", elems)
             }
 
@@ -369,7 +411,11 @@ impl Node {
             }
 
             NodeKind::Block { statements } => {
-                let stmts = statements.iter().map(|s| s.to_sexp()).collect::<Vec<_>>().join(" ");
+                let stmts = statements
+                    .iter()
+                    .map(|s| s.to_sexp())
+                    .collect::<Vec<_>>()
+                    .join(" ");
                 format!("(block {})", stmts)
             }
 
@@ -385,7 +431,11 @@ impl Node {
                 format!("(defer {})", block.to_sexp())
             }
 
-            NodeKind::Try { body, catch_blocks, finally_block } => {
+            NodeKind::Try {
+                body,
+                catch_blocks,
+                finally_block,
+            } => {
                 let mut parts = vec![format!("(try {})", body.to_sexp())];
 
                 for (var, block) in catch_blocks {
@@ -403,9 +453,17 @@ impl Node {
                 parts.join(" ")
             }
 
-            NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
-                let mut parts =
-                    vec![format!("(if {} {})", condition.to_sexp(), then_branch.to_sexp())];
+            NodeKind::If {
+                condition,
+                then_branch,
+                elsif_branches,
+                else_branch,
+            } => {
+                let mut parts = vec![format!(
+                    "(if {} {})",
+                    condition.to_sexp(),
+                    then_branch.to_sexp()
+                )];
 
                 for (cond, block) in elsif_branches {
                     parts.push(format!("(elsif {} {})", cond.to_sexp(), block.to_sexp()));
@@ -422,14 +480,22 @@ impl Node {
                 format!("(labeled_statement {} {})", label, statement.to_sexp())
             }
 
-            NodeKind::While { condition, body, continue_block } => {
+            NodeKind::While {
+                condition,
+                body,
+                continue_block,
+            } => {
                 let mut s = format!("(while {} {})", condition.to_sexp(), body.to_sexp());
                 if let Some(cont) = continue_block {
                     s.push_str(&format!(" (continue {})", cont.to_sexp()));
                 }
                 s
             }
-            NodeKind::Tie { variable, package, args } => {
+            NodeKind::Tie {
+                variable,
+                package,
+                args,
+            } => {
                 let mut s = format!("(tie {} {}", variable.to_sexp(), package.to_sexp());
                 for arg in args {
                     s.push_str(&format!(" {}", arg.to_sexp()));
@@ -440,22 +506,44 @@ impl Node {
             NodeKind::Untie { variable } => {
                 format!("(untie {})", variable.to_sexp())
             }
-            NodeKind::For { init, condition, update, body, continue_block } => {
-                let init_str =
-                    init.as_ref().map(|i| i.to_sexp()).unwrap_or_else(|| "()".to_string());
-                let cond_str =
-                    condition.as_ref().map(|c| c.to_sexp()).unwrap_or_else(|| "()".to_string());
-                let update_str =
-                    update.as_ref().map(|u| u.to_sexp()).unwrap_or_else(|| "()".to_string());
-                let mut result =
-                    format!("(for {} {} {} {})", init_str, cond_str, update_str, body.to_sexp());
+            NodeKind::For {
+                init,
+                condition,
+                update,
+                body,
+                continue_block,
+            } => {
+                let init_str = init
+                    .as_ref()
+                    .map(|i| i.to_sexp())
+                    .unwrap_or_else(|| "()".to_string());
+                let cond_str = condition
+                    .as_ref()
+                    .map(|c| c.to_sexp())
+                    .unwrap_or_else(|| "()".to_string());
+                let update_str = update
+                    .as_ref()
+                    .map(|u| u.to_sexp())
+                    .unwrap_or_else(|| "()".to_string());
+                let mut result = format!(
+                    "(for {} {} {} {})",
+                    init_str,
+                    cond_str,
+                    update_str,
+                    body.to_sexp()
+                );
                 if let Some(cont) = continue_block {
                     result.push_str(&format!(" (continue {})", cont.to_sexp()));
                 }
                 result
             }
 
-            NodeKind::Foreach { variable, list, body, continue_block } => {
+            NodeKind::Foreach {
+                variable,
+                list,
+                body,
+                continue_block,
+            } => {
                 let cont = if let Some(cb) = continue_block {
                     format!(" {}", cb.to_sexp())
                 } else {
@@ -482,7 +570,11 @@ impl Node {
                 format!("(default {})", body.to_sexp())
             }
 
-            NodeKind::StatementModifier { statement, modifier, condition } => {
+            NodeKind::StatementModifier {
+                statement,
+                modifier,
+                condition,
+            } => {
                 format!(
                     "(statement_modifier_{} {} {})",
                     modifier,
@@ -491,7 +583,14 @@ impl Node {
                 )
             }
 
-            NodeKind::Subroutine { name, prototype, signature, attributes, body, name_span: _ } => {
+            NodeKind::Subroutine {
+                name,
+                prototype,
+                signature,
+                attributes,
+                body,
+                name_span: _,
+            } => {
                 if let Some(sub_name) = name {
                     // Named subroutine - bless test expected format: (sub name () block)
                     let mut parts = vec![sub_name.clone()];
@@ -558,7 +657,11 @@ impl Node {
             NodeKind::Prototype { content: _ } => "(prototype)".to_string(),
 
             NodeKind::Signature { parameters } => {
-                let params = parameters.iter().map(|p| p.to_sexp()).collect::<Vec<_>>().join(" ");
+                let params = parameters
+                    .iter()
+                    .map(|p| p.to_sexp())
+                    .collect::<Vec<_>>()
+                    .join(" ");
                 format!("(signature {})", params)
             }
 
@@ -566,8 +669,15 @@ impl Node {
                 format!("(mandatory_parameter {})", variable.to_sexp())
             }
 
-            NodeKind::OptionalParameter { variable, default_value } => {
-                format!("(optional_parameter {} {})", variable.to_sexp(), default_value.to_sexp())
+            NodeKind::OptionalParameter {
+                variable,
+                default_value,
+            } => {
+                format!(
+                    "(optional_parameter {} {})",
+                    variable.to_sexp(),
+                    default_value.to_sexp()
+                )
             }
 
             NodeKind::SlurpyParameter { variable } => {
@@ -578,11 +688,18 @@ impl Node {
                 format!("(named_parameter {})", variable.to_sexp())
             }
 
-            NodeKind::Method { name: _, signature, attributes, body } => {
+            NodeKind::Method {
+                name: _,
+                signature,
+                attributes,
+                body,
+            } => {
                 let block_contents = match &body.kind {
-                    NodeKind::Block { statements } => {
-                        statements.iter().map(|s| s.to_sexp()).collect::<Vec<_>>().join(" ")
-                    }
+                    NodeKind::Block { statements } => statements
+                        .iter()
+                        .map(|s| s.to_sexp())
+                        .collect::<Vec<_>>()
+                        .join(" "),
                     _ => body.to_sexp(),
                 };
 
@@ -626,9 +743,22 @@ impl Node {
                 format!("(goto {})", target.to_sexp())
             }
 
-            NodeKind::MethodCall { object, method, args } => {
-                let args_str = args.iter().map(|a| a.to_sexp()).collect::<Vec<_>>().join(" ");
-                format!("(method_call {} {} ({}))", object.to_sexp(), method, args_str)
+            NodeKind::MethodCall {
+                object,
+                method,
+                args,
+            } => {
+                let args_str = args
+                    .iter()
+                    .map(|a| a.to_sexp())
+                    .collect::<Vec<_>>()
+                    .join(" ");
+                format!(
+                    "(method_call {} {} ({}))",
+                    object.to_sexp(),
+                    method,
+                    args_str
+                )
             }
 
             NodeKind::FunctionCall { name, args } => {
@@ -656,7 +786,11 @@ impl Node {
                         | "scalar"
                         | "ref"
                 ) {
-                    let args_str = args.iter().map(|a| a.to_sexp()).collect::<Vec<_>>().join(" ");
+                    let args_str = args
+                        .iter()
+                        .map(|a| a.to_sexp())
+                        .collect::<Vec<_>>()
+                        .join(" ");
                     if args.is_empty() {
                         format!("(call {} ())", name)
                     } else {
@@ -664,27 +798,69 @@ impl Node {
                     }
                 } else {
                     // Tree-sitter format varies by context
-                    let args_str = args.iter().map(|a| a.to_sexp()).collect::<Vec<_>>().join(" ");
+                    let args_str = args
+                        .iter()
+                        .map(|a| a.to_sexp())
+                        .collect::<Vec<_>>()
+                        .join(" ");
                     if args.is_empty() {
                         "(function_call_expression (function))".to_string()
                     } else {
-                        format!("(ambiguous_function_call_expression (function) {})", args_str)
+                        format!(
+                            "(ambiguous_function_call_expression (function) {})",
+                            args_str
+                        )
                     }
                 }
             }
 
-            NodeKind::IndirectCall { method, object, args } => {
-                let args_str = args.iter().map(|a| a.to_sexp()).collect::<Vec<_>>().join(" ");
-                format!("(indirect_call {} {} ({}))", method, object.to_sexp(), args_str)
+            NodeKind::IndirectCall {
+                method,
+                object,
+                args,
+            } => {
+                let args_str = args
+                    .iter()
+                    .map(|a| a.to_sexp())
+                    .collect::<Vec<_>>()
+                    .join(" ");
+                format!(
+                    "(indirect_call {} {} ({}))",
+                    method,
+                    object.to_sexp(),
+                    args_str
+                )
             }
 
-            NodeKind::Regex { pattern, replacement, modifiers, has_embedded_code } => {
-                let risk_marker = if *has_embedded_code { " (risk:code)" } else { "" };
-                format!("(regex {:?} {:?} {:?}{})", pattern, replacement, modifiers, risk_marker)
+            NodeKind::Regex {
+                pattern,
+                replacement,
+                modifiers,
+                has_embedded_code,
+            } => {
+                let risk_marker = if *has_embedded_code {
+                    " (risk:code)"
+                } else {
+                    ""
+                };
+                format!(
+                    "(regex {:?} {:?} {:?}{})",
+                    pattern, replacement, modifiers, risk_marker
+                )
             }
 
-            NodeKind::Match { expr, pattern, modifiers, has_embedded_code, negated } => {
-                let risk_marker = if *has_embedded_code { " (risk:code)" } else { "" };
+            NodeKind::Match {
+                expr,
+                pattern,
+                modifiers,
+                has_embedded_code,
+                negated,
+            } => {
+                let risk_marker = if *has_embedded_code {
+                    " (risk:code)"
+                } else {
+                    ""
+                };
                 let op = if *negated { "not_match" } else { "match" };
                 format!(
                     "({} {} (regex {:?} {:?}{}))",
@@ -704,7 +880,11 @@ impl Node {
                 has_embedded_code,
                 negated,
             } => {
-                let risk_marker = if *has_embedded_code { " (risk:code)" } else { "" };
+                let risk_marker = if *has_embedded_code {
+                    " (risk:code)"
+                } else {
+                    ""
+                };
                 let neg_marker = if *negated { " (negated)" } else { "" };
                 format!(
                     "(substitution {} {:?} {:?} {:?}{}{})",
@@ -717,7 +897,13 @@ impl Node {
                 )
             }
 
-            NodeKind::Transliteration { expr, search, replace, modifiers, negated } => {
+            NodeKind::Transliteration {
+                expr,
+                search,
+                replace,
+                modifiers,
+                negated,
+            } => {
                 let neg_marker = if *negated { " (negated)" } else { "" };
                 format!(
                     "(transliteration {} {:?} {:?} {:?}{})",
@@ -729,7 +915,11 @@ impl Node {
                 )
             }
 
-            NodeKind::Package { name, block, name_span: _ } => {
+            NodeKind::Package {
+                name,
+                block,
+                name_span: _,
+            } => {
                 if let Some(blk) = block {
                     format!("(package {} {})", name, blk.to_sexp())
                 } else {
@@ -737,8 +927,16 @@ impl Node {
                 }
             }
 
-            NodeKind::Use { module, args, has_filter_risk } => {
-                let risk_marker = if *has_filter_risk { " (risk:filter)" } else { "" };
+            NodeKind::Use {
+                module,
+                args,
+                has_filter_risk,
+            } => {
+                let risk_marker = if *has_filter_risk {
+                    " (risk:filter)"
+                } else {
+                    ""
+                };
                 if args.is_empty() {
                     format!("(use {}{})", module, risk_marker)
                 } else {
@@ -747,8 +945,16 @@ impl Node {
                 }
             }
 
-            NodeKind::No { module, args, has_filter_risk } => {
-                let risk_marker = if *has_filter_risk { " (risk:filter)" } else { "" };
+            NodeKind::No {
+                module,
+                args,
+                has_filter_risk,
+            } => {
+                let risk_marker = if *has_filter_risk {
+                    " (risk:filter)"
+                } else {
+                    ""
+                };
                 if args.is_empty() {
                     format!("(no {}{})", module, risk_marker)
                 } else {
@@ -757,23 +963,40 @@ impl Node {
                 }
             }
 
-            NodeKind::PhaseBlock { phase, phase_span: _, block } => {
+            NodeKind::PhaseBlock {
+                phase,
+                phase_span: _,
+                block,
+            } => {
                 format!("({} {})", phase, block.to_sexp())
             }
 
             NodeKind::DataSection { marker, body } => {
                 if let Some(body_text) = body {
-                    format!("(data_section {} \"{}\")", marker, body_text.escape_default())
+                    format!(
+                        "(data_section {} \"{}\")",
+                        marker,
+                        body_text.escape_default()
+                    )
                 } else {
                     format!("(data_section {})", marker)
                 }
             }
 
-            NodeKind::Class { name, parents, body } => {
+            NodeKind::Class {
+                name,
+                parents,
+                body,
+            } => {
                 if parents.is_empty() {
                     format!("(class {} {})", name, body.to_sexp())
                 } else {
-                    format!("(class {} :isa({}) {})", name, parents.join(","), body.to_sexp())
+                    format!(
+                        "(class {} :isa({}) {})",
+                        name,
+                        parents.join(","),
+                        body.to_sexp()
+                    )
                 }
             }
 
@@ -786,9 +1009,15 @@ impl Node {
                 format!("(identifier {})", name)
             }
 
-            NodeKind::Error { message, partial, .. } => {
+            NodeKind::Error {
+                message, partial, ..
+            } => {
                 if let Some(node) = partial {
-                    format!("(ERROR \"{}\" {})", message.escape_default(), node.to_sexp())
+                    format!(
+                        "(ERROR \"{}\" {})",
+                        message.escape_default(),
+                        node.to_sexp()
+                    )
                 } else {
                     format!("(ERROR \"{}\")", message.escape_default())
                 }
@@ -831,7 +1060,11 @@ impl Node {
     #[inline]
     pub fn for_each_child_mut<F: FnMut(&mut Node)>(&mut self, mut f: F) {
         match &mut self.kind {
-            NodeKind::Tie { variable, package, args } => {
+            NodeKind::Tie {
+                variable,
+                package,
+                args,
+            } => {
                 f(variable);
                 f(package);
                 for arg in args {
@@ -851,13 +1084,21 @@ impl Node {
             NodeKind::ExpressionStatement { expression } => f(expression),
 
             // Variable declarations
-            NodeKind::VariableDeclaration { variable, initializer, .. } => {
+            NodeKind::VariableDeclaration {
+                variable,
+                initializer,
+                ..
+            } => {
                 f(variable);
                 if let Some(init) = initializer {
                     f(init);
                 }
             }
-            NodeKind::VariableListDeclaration { variables, initializer, .. } => {
+            NodeKind::VariableListDeclaration {
+                variables,
+                initializer,
+                ..
+            } => {
                 for var in variables {
                     f(var);
                 }
@@ -872,7 +1113,11 @@ impl Node {
                 f(left);
                 f(right);
             }
-            NodeKind::Ternary { condition, then_expr, else_expr } => {
+            NodeKind::Ternary {
+                condition,
+                then_expr,
+                else_expr,
+            } => {
                 f(condition);
                 f(then_expr);
                 f(else_expr);
@@ -889,7 +1134,13 @@ impl Node {
                     f(stmt);
                 }
             }
-            NodeKind::If { condition, then_branch, elsif_branches, else_branch, .. } => {
+            NodeKind::If {
+                condition,
+                then_branch,
+                elsif_branches,
+                else_branch,
+                ..
+            } => {
                 f(condition);
                 f(then_branch);
                 for (elsif_cond, elsif_body) in elsif_branches {
@@ -900,14 +1151,26 @@ impl Node {
                     f(else_body);
                 }
             }
-            NodeKind::While { condition, body, continue_block, .. } => {
+            NodeKind::While {
+                condition,
+                body,
+                continue_block,
+                ..
+            } => {
                 f(condition);
                 f(body);
                 if let Some(cont) = continue_block {
                     f(cont);
                 }
             }
-            NodeKind::For { init, condition, update, body, continue_block, .. } => {
+            NodeKind::For {
+                init,
+                condition,
+                update,
+                body,
+                continue_block,
+                ..
+            } => {
                 if let Some(i) = init {
                     f(i);
                 }
@@ -922,7 +1185,12 @@ impl Node {
                     f(cont);
                 }
             }
-            NodeKind::Foreach { variable, list, body, continue_block } => {
+            NodeKind::Foreach {
+                variable,
+                list,
+                body,
+                continue_block,
+            } => {
                 f(variable);
                 f(list);
                 f(body);
@@ -939,7 +1207,11 @@ impl Node {
                 f(body);
             }
             NodeKind::Default { body } => f(body),
-            NodeKind::StatementModifier { statement, condition, .. } => {
+            NodeKind::StatementModifier {
+                statement,
+                condition,
+                ..
+            } => {
                 f(statement);
                 f(condition);
             }
@@ -949,7 +1221,11 @@ impl Node {
             NodeKind::Eval { block } => f(block),
             NodeKind::Do { block } => f(block),
             NodeKind::Defer { block } => f(block),
-            NodeKind::Try { body, catch_blocks, finally_block } => {
+            NodeKind::Try {
+                body,
+                catch_blocks,
+                finally_block,
+            } => {
                 f(body);
                 for (_, catch_body) in catch_blocks {
                     f(catch_body);
@@ -979,7 +1255,12 @@ impl Node {
             }
 
             // Functions
-            NodeKind::Subroutine { prototype, signature, body, .. } => {
+            NodeKind::Subroutine {
+                prototype,
+                signature,
+                body,
+                ..
+            } => {
                 if let Some(proto) = prototype {
                     f(proto);
                 }
@@ -988,7 +1269,9 @@ impl Node {
                 }
                 f(body);
             }
-            NodeKind::Method { signature, body, .. } => {
+            NodeKind::Method {
+                signature, body, ..
+            } => {
                 if let Some(sig) = signature {
                     f(sig);
                 }
@@ -1006,7 +1289,10 @@ impl Node {
                 }
             }
             NodeKind::MandatoryParameter { variable } => f(variable),
-            NodeKind::OptionalParameter { variable, default_value } => {
+            NodeKind::OptionalParameter {
+                variable,
+                default_value,
+            } => {
                 f(variable);
                 f(default_value);
             }
@@ -1081,7 +1367,11 @@ impl Node {
     #[inline]
     pub fn for_each_child<'a, F: FnMut(&'a Node)>(&'a self, mut f: F) {
         match &self.kind {
-            NodeKind::Tie { variable, package, args } => {
+            NodeKind::Tie {
+                variable,
+                package,
+                args,
+            } => {
                 f(variable);
                 f(package);
                 for arg in args {
@@ -1101,13 +1391,21 @@ impl Node {
             NodeKind::ExpressionStatement { expression } => f(expression),
 
             // Variable declarations
-            NodeKind::VariableDeclaration { variable, initializer, .. } => {
+            NodeKind::VariableDeclaration {
+                variable,
+                initializer,
+                ..
+            } => {
                 f(variable);
                 if let Some(init) = initializer {
                     f(init);
                 }
             }
-            NodeKind::VariableListDeclaration { variables, initializer, .. } => {
+            NodeKind::VariableListDeclaration {
+                variables,
+                initializer,
+                ..
+            } => {
                 for var in variables {
                     f(var);
                 }
@@ -1122,7 +1420,11 @@ impl Node {
                 f(left);
                 f(right);
             }
-            NodeKind::Ternary { condition, then_expr, else_expr } => {
+            NodeKind::Ternary {
+                condition,
+                then_expr,
+                else_expr,
+            } => {
                 f(condition);
                 f(then_expr);
                 f(else_expr);
@@ -1139,7 +1441,13 @@ impl Node {
                     f(stmt);
                 }
             }
-            NodeKind::If { condition, then_branch, elsif_branches, else_branch, .. } => {
+            NodeKind::If {
+                condition,
+                then_branch,
+                elsif_branches,
+                else_branch,
+                ..
+            } => {
                 f(condition);
                 f(then_branch);
                 for (elsif_cond, elsif_body) in elsif_branches {
@@ -1150,14 +1458,26 @@ impl Node {
                     f(else_body);
                 }
             }
-            NodeKind::While { condition, body, continue_block, .. } => {
+            NodeKind::While {
+                condition,
+                body,
+                continue_block,
+                ..
+            } => {
                 f(condition);
                 f(body);
                 if let Some(cont) = continue_block {
                     f(cont);
                 }
             }
-            NodeKind::For { init, condition, update, body, continue_block, .. } => {
+            NodeKind::For {
+                init,
+                condition,
+                update,
+                body,
+                continue_block,
+                ..
+            } => {
                 if let Some(i) = init {
                     f(i);
                 }
@@ -1172,7 +1492,12 @@ impl Node {
                     f(cont);
                 }
             }
-            NodeKind::Foreach { variable, list, body, continue_block } => {
+            NodeKind::Foreach {
+                variable,
+                list,
+                body,
+                continue_block,
+            } => {
                 f(variable);
                 f(list);
                 f(body);
@@ -1189,7 +1514,11 @@ impl Node {
                 f(body);
             }
             NodeKind::Default { body } => f(body),
-            NodeKind::StatementModifier { statement, condition, .. } => {
+            NodeKind::StatementModifier {
+                statement,
+                condition,
+                ..
+            } => {
                 f(statement);
                 f(condition);
             }
@@ -1199,7 +1528,11 @@ impl Node {
             NodeKind::Eval { block } => f(block),
             NodeKind::Do { block } => f(block),
             NodeKind::Defer { block } => f(block),
-            NodeKind::Try { body, catch_blocks, finally_block } => {
+            NodeKind::Try {
+                body,
+                catch_blocks,
+                finally_block,
+            } => {
                 f(body);
                 for (_, catch_body) in catch_blocks {
                     f(catch_body);
@@ -1229,7 +1562,12 @@ impl Node {
             }
 
             // Functions
-            NodeKind::Subroutine { prototype, signature, body, .. } => {
+            NodeKind::Subroutine {
+                prototype,
+                signature,
+                body,
+                ..
+            } => {
                 if let Some(proto) = prototype {
                     f(proto);
                 }
@@ -1238,7 +1576,9 @@ impl Node {
                 }
                 f(body);
             }
-            NodeKind::Method { signature, body, .. } => {
+            NodeKind::Method {
+                signature, body, ..
+            } => {
                 if let Some(sig) = signature {
                     f(sig);
                 }
@@ -1256,7 +1596,10 @@ impl Node {
                 }
             }
             NodeKind::MandatoryParameter { variable } => f(variable),
-            NodeKind::OptionalParameter { variable, default_value } => {
+            NodeKind::OptionalParameter {
+                variable,
+                default_value,
+            } => {
                 f(variable);
                 f(default_value);
             }
@@ -2433,7 +2776,9 @@ mod tests {
 
         let variants: Vec<NodeKind> = vec![
             NodeKind::Program { statements: vec![] },
-            NodeKind::ExpressionStatement { expression: Box::new(dummy_node()) },
+            NodeKind::ExpressionStatement {
+                expression: Box::new(dummy_node()),
+            },
             NodeKind::VariableDeclaration {
                 declarator: String::new(),
                 variable: Box::new(dummy_node()),
@@ -2446,7 +2791,10 @@ mod tests {
                 attributes: vec![],
                 initializer: None,
             },
-            NodeKind::Variable { sigil: String::new(), name: String::new() },
+            NodeKind::Variable {
+                sigil: String::new(),
+                name: String::new(),
+            },
             NodeKind::VariableWithAttributes {
                 variable: Box::new(dummy_node()),
                 attributes: vec![],
@@ -2466,15 +2814,27 @@ mod tests {
                 then_expr: Box::new(dummy_node()),
                 else_expr: Box::new(dummy_node()),
             },
-            NodeKind::Unary { op: String::new(), operand: Box::new(dummy_node()) },
+            NodeKind::Unary {
+                op: String::new(),
+                operand: Box::new(dummy_node()),
+            },
             NodeKind::Diamond,
             NodeKind::Ellipsis,
             NodeKind::Undef,
             NodeKind::Readline { filehandle: None },
-            NodeKind::Glob { pattern: String::new() },
-            NodeKind::Typeglob { name: String::new() },
-            NodeKind::Number { value: String::new() },
-            NodeKind::String { value: String::new(), interpolated: false },
+            NodeKind::Glob {
+                pattern: String::new(),
+            },
+            NodeKind::Typeglob {
+                name: String::new(),
+            },
+            NodeKind::Number {
+                value: String::new(),
+            },
+            NodeKind::String {
+                value: String::new(),
+                interpolated: false,
+            },
             NodeKind::Heredoc {
                 delimiter: String::new(),
                 content: String::new(),
@@ -2486,9 +2846,15 @@ mod tests {
             NodeKind::ArrayLiteral { elements: vec![] },
             NodeKind::HashLiteral { pairs: vec![] },
             NodeKind::Block { statements: vec![] },
-            NodeKind::Eval { block: Box::new(dummy_node()) },
-            NodeKind::Do { block: Box::new(dummy_node()) },
-            NodeKind::Defer { block: Box::new(dummy_node()) },
+            NodeKind::Eval {
+                block: Box::new(dummy_node()),
+            },
+            NodeKind::Do {
+                block: Box::new(dummy_node()),
+            },
+            NodeKind::Defer {
+                block: Box::new(dummy_node()),
+            },
             NodeKind::Try {
                 body: Box::new(dummy_node()),
                 catch_blocks: vec![],
@@ -2500,7 +2866,10 @@ mod tests {
                 elsif_branches: vec![],
                 else_branch: None,
             },
-            NodeKind::LabeledStatement { label: String::new(), statement: Box::new(dummy_node()) },
+            NodeKind::LabeledStatement {
+                label: String::new(),
+                statement: Box::new(dummy_node()),
+            },
             NodeKind::While {
                 condition: Box::new(dummy_node()),
                 body: Box::new(dummy_node()),
@@ -2511,7 +2880,9 @@ mod tests {
                 package: Box::new(dummy_node()),
                 args: vec![],
             },
-            NodeKind::Untie { variable: Box::new(dummy_node()) },
+            NodeKind::Untie {
+                variable: Box::new(dummy_node()),
+            },
             NodeKind::For {
                 init: None,
                 condition: None,
@@ -2525,9 +2896,17 @@ mod tests {
                 body: Box::new(dummy_node()),
                 continue_block: None,
             },
-            NodeKind::Given { expr: Box::new(dummy_node()), body: Box::new(dummy_node()) },
-            NodeKind::When { condition: Box::new(dummy_node()), body: Box::new(dummy_node()) },
-            NodeKind::Default { body: Box::new(dummy_node()) },
+            NodeKind::Given {
+                expr: Box::new(dummy_node()),
+                body: Box::new(dummy_node()),
+            },
+            NodeKind::When {
+                condition: Box::new(dummy_node()),
+                body: Box::new(dummy_node()),
+            },
+            NodeKind::Default {
+                body: Box::new(dummy_node()),
+            },
             NodeKind::StatementModifier {
                 statement: Box::new(dummy_node()),
                 modifier: String::new(),
@@ -2541,15 +2920,23 @@ mod tests {
                 attributes: vec![],
                 body: Box::new(dummy_node()),
             },
-            NodeKind::Prototype { content: String::new() },
+            NodeKind::Prototype {
+                content: String::new(),
+            },
             NodeKind::Signature { parameters: vec![] },
-            NodeKind::MandatoryParameter { variable: Box::new(dummy_node()) },
+            NodeKind::MandatoryParameter {
+                variable: Box::new(dummy_node()),
+            },
             NodeKind::OptionalParameter {
                 variable: Box::new(dummy_node()),
                 default_value: Box::new(dummy_node()),
             },
-            NodeKind::SlurpyParameter { variable: Box::new(dummy_node()) },
-            NodeKind::NamedParameter { variable: Box::new(dummy_node()) },
+            NodeKind::SlurpyParameter {
+                variable: Box::new(dummy_node()),
+            },
+            NodeKind::NamedParameter {
+                variable: Box::new(dummy_node()),
+            },
             NodeKind::Method {
                 name: String::new(),
                 signature: None,
@@ -2557,14 +2944,22 @@ mod tests {
                 body: Box::new(dummy_node()),
             },
             NodeKind::Return { value: None },
-            NodeKind::LoopControl { op: String::new(), label: None },
-            NodeKind::Goto { target: Box::new(dummy_node()) },
+            NodeKind::LoopControl {
+                op: String::new(),
+                label: None,
+            },
+            NodeKind::Goto {
+                target: Box::new(dummy_node()),
+            },
             NodeKind::MethodCall {
                 object: Box::new(dummy_node()),
                 method: String::new(),
                 args: vec![],
             },
-            NodeKind::FunctionCall { name: String::new(), args: vec![] },
+            NodeKind::FunctionCall {
+                name: String::new(),
+                args: vec![],
+            },
             NodeKind::IndirectCall {
                 method: String::new(),
                 object: Box::new(dummy_node()),
@@ -2598,18 +2993,42 @@ mod tests {
                 modifiers: String::new(),
                 negated: false,
             },
-            NodeKind::Package { name: String::new(), name_span: loc, block: None },
-            NodeKind::Use { module: String::new(), args: vec![], has_filter_risk: false },
-            NodeKind::No { module: String::new(), args: vec![], has_filter_risk: false },
+            NodeKind::Package {
+                name: String::new(),
+                name_span: loc,
+                block: None,
+            },
+            NodeKind::Use {
+                module: String::new(),
+                args: vec![],
+                has_filter_risk: false,
+            },
+            NodeKind::No {
+                module: String::new(),
+                args: vec![],
+                has_filter_risk: false,
+            },
             NodeKind::PhaseBlock {
                 phase: String::new(),
                 phase_span: None,
                 block: Box::new(dummy_node()),
             },
-            NodeKind::DataSection { marker: String::new(), body: None },
-            NodeKind::Class { name: String::new(), parents: vec![], body: Box::new(dummy_node()) },
-            NodeKind::Format { name: String::new(), body: String::new() },
-            NodeKind::Identifier { name: String::new() },
+            NodeKind::DataSection {
+                marker: String::new(),
+                body: None,
+            },
+            NodeKind::Class {
+                name: String::new(),
+                parents: vec![],
+                body: Box::new(dummy_node()),
+            },
+            NodeKind::Format {
+                name: String::new(),
+                body: String::new(),
+            },
+            NodeKind::Identifier {
+                name: String::new(),
+            },
             NodeKind::Error {
                 message: String::new(),
                 expected: vec![],

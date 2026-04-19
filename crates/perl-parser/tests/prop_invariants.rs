@@ -8,8 +8,10 @@ use proptest::prelude::*;
 use proptest::test_runner::{Config as ProptestConfig, FileFailurePersistence};
 use std::collections::HashSet;
 
-const REGRESS_DIR: &str =
-    concat!(env!("CARGO_MANIFEST_DIR"), "/tests/_proptest-regressions/prop_invariants");
+const REGRESS_DIR: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/tests/_proptest-regressions/prop_invariants"
+);
 
 /// Visit all nodes and check for cycles
 fn check_no_cycles(root: &Node) -> Result<(), String> {
@@ -32,7 +34,11 @@ fn check_no_cycles_rec(
 
     // Add current node to path
     let kind_str = format!("{:?}", node.kind);
-    let variant = kind_str.split(['(', '{']).next().unwrap_or_else(|| &kind_str).to_string();
+    let variant = kind_str
+        .split(['(', '{'])
+        .next()
+        .unwrap_or_else(|| &kind_str)
+        .to_string();
     path.push(variant);
 
     // Visit children based on node kind
@@ -57,13 +63,21 @@ where
                 f(stmt)?;
             }
         }
-        VariableDeclaration { variable, initializer, .. } => {
+        VariableDeclaration {
+            variable,
+            initializer,
+            ..
+        } => {
             f(variable)?;
             if let Some(init) = initializer {
                 f(init)?;
             }
         }
-        VariableListDeclaration { variables, initializer, .. } => {
+        VariableListDeclaration {
+            variables,
+            initializer,
+            ..
+        } => {
             for var in variables {
                 f(var)?;
             }
@@ -82,7 +96,11 @@ where
         Unary { operand, .. } => {
             f(operand)?;
         }
-        Ternary { condition, then_expr, else_expr } => {
+        Ternary {
+            condition,
+            then_expr,
+            else_expr,
+        } => {
             f(condition)?;
             f(then_expr)?;
             f(else_expr)?;
@@ -92,7 +110,12 @@ where
                 f(stmt)?;
             }
         }
-        If { condition, then_branch, elsif_branches, else_branch } => {
+        If {
+            condition,
+            then_branch,
+            elsif_branches,
+            else_branch,
+        } => {
             f(condition)?;
             f(then_branch)?;
             for (cond, branch) in elsif_branches {
@@ -103,11 +126,18 @@ where
                 f(else_br)?;
             }
         }
-        While { condition, body, .. } => {
+        While {
+            condition, body, ..
+        } => {
             f(condition)?;
             f(body)?;
         }
-        Foreach { variable, list, body, continue_block: _ } => {
+        Foreach {
+            variable,
+            list,
+            body,
+            continue_block: _,
+        } => {
             f(variable)?;
             f(list)?;
             f(body)?;
@@ -156,10 +186,15 @@ fn count_nodes(node: &Node) -> usize {
 /// Check depth doesn't exceed reasonable limits
 fn check_depth(node: &Node, current_depth: usize, max_depth: usize) -> Result<(), String> {
     if current_depth > max_depth {
-        return Err(format!("AST depth {} exceeds maximum {}", current_depth, max_depth));
+        return Err(format!(
+            "AST depth {} exceeds maximum {}",
+            current_depth, max_depth
+        ));
     }
 
-    visit_children(node, |child| check_depth(child, current_depth + 1, max_depth))
+    visit_children(node, |child| {
+        check_depth(child, current_depth + 1, max_depth)
+    })
 }
 
 proptest! {

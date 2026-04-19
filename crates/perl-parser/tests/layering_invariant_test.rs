@@ -165,8 +165,12 @@ fn when_parser_layering_is_correct_then_no_dap_provider_deps_in_tree() {
     let stderr = String::from_utf8_lossy(&output.stderr);
 
     // Collect all DAP-related crate names that should NOT appear in tree
-    let forbidden_crates =
-        vec!["perl-dap", "perl-dap-types", "perl-dap-protocol", "perl-dap-server"];
+    let forbidden_crates = vec![
+        "perl-dap",
+        "perl-dap-types",
+        "perl-dap-protocol",
+        "perl-dap-server",
+    ];
 
     // Check each line of output for any forbidden crate names
     let found_dap_deps: Vec<_> = stdout
@@ -249,5 +253,8 @@ fn when_refactor_tokens_preserved_then_imports_are_valid() {
     // The stream over a real Perl snippet should peek successfully (not fail immediately).
     let mut stream = TokenStream::new("my $x = 42;");
     let first = stream.peek();
-    assert!(first.is_ok(), "TokenStream over 'my $x = 42;' should peek successfully");
+    assert!(
+        first.is_ok(),
+        "TokenStream over 'my $x = 42;' should peek successfully"
+    );
 }

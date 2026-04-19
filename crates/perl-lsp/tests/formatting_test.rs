@@ -56,7 +56,10 @@ fn test_range_formatting() {
     let code = "my $x = 1;\nsub test{return$x;}\nmy $y = 2;";
 
     // Format only the middle line
-    let range = WireRange { start: WirePosition::new(1, 0), end: WirePosition::new(1, 20) };
+    let range = WireRange {
+        start: WirePosition::new(1, 0),
+        end: WirePosition::new(1, 20),
+    };
 
     match formatter.format_range(code, &range, &options) {
         Ok(edits) => {
@@ -100,7 +103,10 @@ fn test_empty_document() {
                 eprintln!("Skipping test: perltidy not installed");
                 return;
             }
-            must(Err::<(), _>(format!("Formatting empty document failed: {}", e)));
+            must(Err::<(), _>(format!(
+                "Formatting empty document failed: {}",
+                e
+            )));
         }
     }
 }

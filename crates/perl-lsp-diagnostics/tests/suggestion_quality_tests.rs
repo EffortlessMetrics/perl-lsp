@@ -26,7 +26,12 @@ fn parse_diags(diags: &[Diagnostic]) -> Vec<&Diagnostic> {
     // PL001=ParseError, PL002=SyntaxError, PL003=UnexpectedEof
     diags
         .iter()
-        .filter(|d| matches!(d.code.as_deref(), Some("PL001") | Some("PL002") | Some("PL003")))
+        .filter(|d| {
+            matches!(
+                d.code.as_deref(),
+                Some("PL001") | Some("PL002") | Some("PL003")
+            )
+        })
         .collect()
 }
 
@@ -241,7 +246,9 @@ fn suggestion_surfaces_as_related_information() -> Result<(), Box<dyn std::error
         "diagnostic with suggestion should have related_information"
     );
     assert!(
-        pd[0].related_information[0].message.starts_with("Suggestion:"),
+        pd[0].related_information[0]
+            .message
+            .starts_with("Suggestion:"),
         "related info should start with 'Suggestion:': {}",
         pd[0].related_information[0].message
     );
@@ -252,7 +259,10 @@ fn suggestion_surfaces_as_related_information() -> Result<(), Box<dyn std::error
 fn no_related_info_when_no_suggestion() -> Result<(), Box<dyn std::error::Error>> {
     let diags = diagnostics_for("my $x = 1;", vec![]);
     let pd = parse_diags(&diags);
-    assert!(pd.is_empty(), "no parse errors means no parse-error diagnostics");
+    assert!(
+        pd.is_empty(),
+        "no parse errors means no parse-error diagnostics"
+    );
     Ok(())
 }
 
@@ -273,7 +283,10 @@ fn all_parse_errors_have_code() -> Result<(), Box<dyn std::error::Error>> {
             expected: ";".to_string(),
             found: "x".to_string(),
         },
-        ParseError::SyntaxError { location: 30, message: "syntax error mid-file".to_string() },
+        ParseError::SyntaxError {
+            location: 30,
+            message: "syntax error mid-file".to_string(),
+        },
         ParseError::UnexpectedEof,
     ];
     let diags = diagnostics_for(&source, errors);
@@ -282,7 +295,10 @@ fn all_parse_errors_have_code() -> Result<(), Box<dyn std::error::Error>> {
     for d in &pd {
         // Each parse error should have a stable PL-prefixed code
         assert!(
-            matches!(d.code.as_deref(), Some("PL001") | Some("PL002") | Some("PL003")),
+            matches!(
+                d.code.as_deref(),
+                Some("PL001") | Some("PL002") | Some("PL003")
+            ),
             "Parse error should have stable code PL001/PL002/PL003, got: {:?}",
             d.code
         );

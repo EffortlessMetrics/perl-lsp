@@ -24,7 +24,10 @@ fn significant_tokens(input: &str) -> Vec<Token> {
     tokens(input)
         .into_iter()
         .filter(|t| {
-            !matches!(t.token_type, TokenType::Whitespace | TokenType::Newline | TokenType::EOF)
+            !matches!(
+                t.token_type,
+                TokenType::Whitespace | TokenType::Newline | TokenType::EOF
+            )
         })
         .collect()
 }
@@ -40,7 +43,13 @@ fn assert_spans_valid(input: &str, toks: &[Token]) {
             t.end,
             input.len()
         );
-        assert!(t.start <= t.end, "Token {:?} has start {} > end {}", t.token_type, t.start, t.end);
+        assert!(
+            t.start <= t.end,
+            "Token {:?} has start {} > end {}",
+            t.token_type,
+            t.start,
+            t.end
+        );
     }
 }
 
@@ -62,8 +71,9 @@ fn simple_variable_assignment() -> R {
     );
 
     // Should contain a number token with value "42"
-    let has_42 =
-        toks.iter().any(|t| matches!(&t.token_type, TokenType::Number(n) if n.as_ref() == "42"));
+    let has_42 = toks
+        .iter()
+        .any(|t| matches!(&t.token_type, TokenType::Number(n) if n.as_ref() == "42"));
     assert!(has_42, "expected Number(42) in tokens");
     Ok(())
 }
@@ -103,7 +113,10 @@ for my $item (@items) {
 
     // Last token must be EOF
     let last = toks.last().ok_or("empty tokens")?;
-    assert!(matches!(last.token_type, TokenType::EOF), "last token should be EOF");
+    assert!(
+        matches!(last.token_type, TokenType::EOF),
+        "last token should be EOF"
+    );
     Ok(())
 }
 
@@ -121,7 +134,10 @@ fn hash_operations() -> R {
                 || matches!(&t.token_type, TokenType::Operator(o) if o.as_ref() == "=>")
         })
         .count();
-    assert!(fat_commas >= 2, "expected at least 2 fat commas, got {fat_commas}");
+    assert!(
+        fat_commas >= 2,
+        "expected at least 2 fat commas, got {fat_commas}"
+    );
     Ok(())
 }
 
@@ -178,7 +194,10 @@ fn string_operators() -> R {
                 || matches!(&t.token_type, TokenType::Keyword(k) if k.as_ref() == expected_op)
                 || matches!(&t.token_type, TokenType::Identifier(id) if id.as_ref() == expected_op)
         });
-        assert!(found, "operator/keyword '{expected_op}' not found in '{input}'");
+        assert!(
+            found,
+            "operator/keyword '{expected_op}' not found in '{input}'"
+        );
     }
 
     // `x` is the repetition operator but the lexer emits it as Identifier
@@ -210,7 +229,10 @@ fn arrow_operator() -> R {
         matches!(t.token_type, TokenType::Arrow)
             || matches!(&t.token_type, TokenType::Operator(o) if o.as_ref() == "->")
     });
-    assert!(has_arrow, "expected Arrow or Operator('->') in '$obj->method()'");
+    assert!(
+        has_arrow,
+        "expected Arrow or Operator('->') in '$obj->method()'"
+    );
     Ok(())
 }
 
@@ -219,8 +241,9 @@ fn defined_or_operator() -> R {
     let input = "$a // $b";
     let toks = significant_tokens(input);
     // After an identifier, // should be defined-or, not regex
-    let has_op =
-        toks.iter().any(|t| matches!(&t.token_type, TokenType::Operator(o) if o.as_ref() == "//"));
+    let has_op = toks
+        .iter()
+        .any(|t| matches!(&t.token_type, TokenType::Operator(o) if o.as_ref() == "//"));
     assert!(has_op, "expected defined-or (//) operator");
     Ok(())
 }
@@ -229,8 +252,9 @@ fn defined_or_operator() -> R {
 fn range_operator() -> R {
     let input = "1 .. 10";
     let toks = significant_tokens(input);
-    let has_range =
-        toks.iter().any(|t| matches!(&t.token_type, TokenType::Operator(o) if o.as_ref() == ".."));
+    let has_range = toks
+        .iter()
+        .any(|t| matches!(&t.token_type, TokenType::Operator(o) if o.as_ref() == ".."));
     assert!(has_range, "expected range (..) operator");
     Ok(())
 }
@@ -259,8 +283,14 @@ fn semicolons_and_commas() -> R {
     let input = "1, 2; 3, 4;";
     let toks = significant_tokens(input);
 
-    let semis = toks.iter().filter(|t| matches!(t.token_type, TokenType::Semicolon)).count();
-    let commas = toks.iter().filter(|t| matches!(t.token_type, TokenType::Comma)).count();
+    let semis = toks
+        .iter()
+        .filter(|t| matches!(t.token_type, TokenType::Semicolon))
+        .count();
+    let commas = toks
+        .iter()
+        .filter(|t| matches!(t.token_type, TokenType::Comma))
+        .count();
     assert_eq!(semis, 2, "expected 2 semicolons");
     assert_eq!(commas, 2, "expected 2 commas");
     Ok(())
@@ -276,7 +306,10 @@ fn double_quoted_string() -> R {
     let toks = significant_tokens(input);
     let first = toks.first().ok_or("no tokens")?;
     assert!(
-        matches!(first.token_type, TokenType::StringLiteral | TokenType::InterpolatedString(_)),
+        matches!(
+            first.token_type,
+            TokenType::StringLiteral | TokenType::InterpolatedString(_)
+        ),
         "expected string token, got {:?}",
         first.token_type
     );
@@ -374,7 +407,9 @@ fn quote_operators_with_single_quote_delimiter() -> R {
 
     for (input, expected_variant) in cases {
         let toks = significant_tokens(input);
-        let first = toks.first().ok_or_else(|| format!("no tokens for '{input}'"))?;
+        let first = toks
+            .first()
+            .ok_or_else(|| format!("no tokens for '{input}'"))?;
         assert!(
             std::mem::discriminant(&first.token_type) == std::mem::discriminant(&expected_variant),
             "input '{input}': expected {:?}, got {:?}",
@@ -397,7 +432,9 @@ fn quote_operators_with_alternate_delimiters() -> R {
     ];
     for (input, expected_variant) in cases {
         let toks = significant_tokens(input);
-        let first = toks.first().ok_or_else(|| format!("no tokens for '{input}'"))?;
+        let first = toks
+            .first()
+            .ok_or_else(|| format!("no tokens for '{input}'"))?;
         assert!(
             std::mem::discriminant(&first.token_type) == std::mem::discriminant(&expected_variant),
             "input '{input}': expected {:?}, got {:?}",
@@ -520,7 +557,9 @@ fn transliteration_y() -> R {
 fn slash_as_division_after_identifier() -> R {
     let input = "$x / 2";
     let toks = significant_tokens(input);
-    let has_div = toks.iter().any(|t| matches!(t.token_type, TokenType::Division));
+    let has_div = toks
+        .iter()
+        .any(|t| matches!(t.token_type, TokenType::Division));
     assert!(has_div, "expected Division after identifier");
     Ok(())
 }
@@ -529,7 +568,9 @@ fn slash_as_division_after_identifier() -> R {
 fn slash_disambiguation_after_paren() -> R {
     let input = ") / 2";
     let toks = significant_tokens(input);
-    let has_div = toks.iter().any(|t| matches!(t.token_type, TokenType::Division));
+    let has_div = toks
+        .iter()
+        .any(|t| matches!(t.token_type, TokenType::Division));
     assert!(has_div, "expected Division after closing paren");
     Ok(())
 }
@@ -544,7 +585,9 @@ fn heredoc_double_quoted() -> R {
     let toks = tokens(input);
     assert_spans_valid(input, &toks);
 
-    let has_heredoc_start = toks.iter().any(|t| matches!(t.token_type, TokenType::HeredocStart));
+    let has_heredoc_start = toks
+        .iter()
+        .any(|t| matches!(t.token_type, TokenType::HeredocStart));
     assert!(has_heredoc_start, "expected HeredocStart token");
     Ok(())
 }
@@ -555,8 +598,13 @@ fn heredoc_single_quoted() -> R {
     let toks = tokens(input);
     assert_spans_valid(input, &toks);
 
-    let has_heredoc_start = toks.iter().any(|t| matches!(t.token_type, TokenType::HeredocStart));
-    assert!(has_heredoc_start, "expected HeredocStart for single-quoted heredoc");
+    let has_heredoc_start = toks
+        .iter()
+        .any(|t| matches!(t.token_type, TokenType::HeredocStart));
+    assert!(
+        has_heredoc_start,
+        "expected HeredocStart for single-quoted heredoc"
+    );
     Ok(())
 }
 
@@ -566,8 +614,13 @@ fn heredoc_indented() -> R {
     let toks = tokens(input);
     assert_spans_valid(input, &toks);
 
-    let has_heredoc_start = toks.iter().any(|t| matches!(t.token_type, TokenType::HeredocStart));
-    assert!(has_heredoc_start, "expected HeredocStart for indented heredoc");
+    let has_heredoc_start = toks
+        .iter()
+        .any(|t| matches!(t.token_type, TokenType::HeredocStart));
+    assert!(
+        has_heredoc_start,
+        "expected HeredocStart for indented heredoc"
+    );
     Ok(())
 }
 
@@ -578,7 +631,9 @@ fn heredoc_with_body_tokens() -> R {
     let toks = lexer.collect_tokens();
     assert_spans_valid(input, &toks);
 
-    let has_start = toks.iter().any(|t| matches!(t.token_type, TokenType::HeredocStart));
+    let has_start = toks
+        .iter()
+        .any(|t| matches!(t.token_type, TokenType::HeredocStart));
     assert!(has_start, "expected HeredocStart in body-token mode");
     Ok(())
 }
@@ -641,7 +696,10 @@ fn special_variables() -> R {
     let cases = ["$_", "$!", "$@", "$$", "$0"];
     for input in cases {
         let toks = significant_tokens(input);
-        assert!(!toks.is_empty(), "expected at least one token for '{input}'");
+        assert!(
+            !toks.is_empty(),
+            "expected at least one token for '{input}'"
+        );
     }
     Ok(())
 }
@@ -651,12 +709,18 @@ fn sigil_followed_by_brace() -> R {
     // ${foo} may be emitted as a single Identifier("${foo}") or split tokens
     let input = "${foo}";
     let toks = significant_tokens(input);
-    assert!(!toks.is_empty(), "expected at least one token for '${{foo}}'");
+    assert!(
+        !toks.is_empty(),
+        "expected at least one token for '${{foo}}'"
+    );
     let has_foo = toks.iter().any(|t| match &t.token_type {
         TokenType::Identifier(id) => id.as_ref().contains("foo"),
         _ => false,
     });
-    assert!(has_foo, "expected identifier containing 'foo' in '${{foo}}'");
+    assert!(
+        has_foo,
+        "expected identifier containing 'foo' in '${{foo}}'"
+    );
     Ok(())
 }
 
@@ -669,7 +733,9 @@ fn integer_literals() -> R {
     let cases = ["0", "42", "1_000_000"];
     for input in cases {
         let toks = significant_tokens(input);
-        let first = toks.first().ok_or_else(|| format!("no tokens for '{input}'"))?;
+        let first = toks
+            .first()
+            .ok_or_else(|| format!("no tokens for '{input}'"))?;
         assert!(
             matches!(first.token_type, TokenType::Number(_)),
             "expected Number for '{input}', got {:?}",
@@ -684,7 +750,9 @@ fn float_literals() -> R {
     let cases = ["3.14", "1.0e10", ".5"];
     for input in cases {
         let toks = significant_tokens(input);
-        let first = toks.first().ok_or_else(|| format!("no tokens for '{input}'"))?;
+        let first = toks
+            .first()
+            .ok_or_else(|| format!("no tokens for '{input}'"))?;
         assert!(
             matches!(first.token_type, TokenType::Number(_)),
             "expected Number for '{input}', got {:?}",
@@ -699,7 +767,9 @@ fn hex_octal_binary_literals() -> R {
     let cases = ["0x1F", "0b1010", "0777"];
     for input in cases {
         let toks = significant_tokens(input);
-        let first = toks.first().ok_or_else(|| format!("no tokens for '{input}'"))?;
+        let first = toks
+            .first()
+            .ok_or_else(|| format!("no tokens for '{input}'"))?;
         assert!(
             matches!(first.token_type, TokenType::Number(_)),
             "expected Number for '{input}', got {:?}",
@@ -721,7 +791,9 @@ fn common_keywords() -> R {
     ];
     for kw in keywords {
         let toks = significant_tokens(kw);
-        let first = toks.first().ok_or_else(|| format!("no tokens for '{kw}'"))?;
+        let first = toks
+            .first()
+            .ok_or_else(|| format!("no tokens for '{kw}'"))?;
         assert!(
             matches!(&first.token_type, TokenType::Keyword(k) if k.as_ref() == kw),
             "expected Keyword({kw}), got {:?}",
@@ -776,7 +848,9 @@ fn pod_head1() -> R {
 fn data_section() -> R {
     let input = "__DATA__\nsome data here\n";
     let toks = tokens(input);
-    let has_data_marker = toks.iter().any(|t| matches!(t.token_type, TokenType::DataMarker(_)));
+    let has_data_marker = toks
+        .iter()
+        .any(|t| matches!(t.token_type, TokenType::DataMarker(_)));
     assert!(has_data_marker, "expected DataMarker token");
     Ok(())
 }
@@ -785,7 +859,9 @@ fn data_section() -> R {
 fn end_section() -> R {
     let input = "__END__\nsome data here\n";
     let toks = tokens(input);
-    let has_data_marker = toks.iter().any(|t| matches!(t.token_type, TokenType::DataMarker(_)));
+    let has_data_marker = toks
+        .iter()
+        .any(|t| matches!(t.token_type, TokenType::DataMarker(_)));
     assert!(has_data_marker, "expected DataMarker for __END__");
     Ok(())
 }
@@ -853,7 +929,10 @@ fn bom_is_skipped() -> R {
 fn empty_input() -> R {
     let toks = tokens("");
     let first = toks.first().ok_or("expected EOF for empty input")?;
-    assert!(matches!(first.token_type, TokenType::EOF), "empty input should produce EOF");
+    assert!(
+        matches!(first.token_type, TokenType::EOF),
+        "empty input should produce EOF"
+    );
     Ok(())
 }
 
@@ -861,7 +940,10 @@ fn empty_input() -> R {
 fn whitespace_only_input() -> R {
     let toks = tokens("   \n\t  \n  ");
     let last = toks.last().ok_or("expected tokens")?;
-    assert!(matches!(last.token_type, TokenType::EOF), "whitespace-only input should end with EOF");
+    assert!(
+        matches!(last.token_type, TokenType::EOF),
+        "whitespace-only input should end with EOF"
+    );
     Ok(())
 }
 
@@ -879,7 +961,9 @@ fn single_character_tokens() -> R {
     ];
     for (input, expected) in cases {
         let toks = significant_tokens(input);
-        let first = toks.first().ok_or_else(|| format!("no tokens for '{input}'"))?;
+        let first = toks
+            .first()
+            .ok_or_else(|| format!("no tokens for '{input}'"))?;
         assert_eq!(
             std::mem::discriminant(&first.token_type),
             std::mem::discriminant(&expected),
@@ -917,7 +1001,10 @@ fn collect_tokens_includes_eof() -> R {
     let mut lexer = PerlLexer::new("1 + 2");
     let toks = lexer.collect_tokens();
     let last = toks.last().ok_or("empty tokens")?;
-    assert!(matches!(last.token_type, TokenType::EOF), "collect_tokens should end with EOF");
+    assert!(
+        matches!(last.token_type, TokenType::EOF),
+        "collect_tokens should end with EOF"
+    );
     Ok(())
 }
 
@@ -933,7 +1020,10 @@ fn peek_does_not_advance() -> R {
         std::mem::discriminant(&actual.token_type),
         "peek and next should return same token type"
     );
-    assert_eq!(peeked.start, actual.start, "peek and next should have same start");
+    assert_eq!(
+        peeked.start, actual.start,
+        "peek and next should have same start"
+    );
     Ok(())
 }
 
@@ -943,7 +1033,10 @@ fn reset_replays_tokens() -> R {
     let first_pass = lexer.next_token().ok_or("no first token")?;
     lexer.reset();
     let second_pass = lexer.next_token().ok_or("no token after reset")?;
-    assert_eq!(first_pass.start, second_pass.start, "reset should replay from start");
+    assert_eq!(
+        first_pass.start, second_pass.start,
+        "reset should replay from start"
+    );
     Ok(())
 }
 
@@ -966,12 +1059,18 @@ fn next_token_returns_none_after_eof() -> R {
 
 #[test]
 fn custom_config() -> R {
-    let config =
-        LexerConfig { parse_interpolation: false, track_positions: false, max_lookahead: 512 };
+    let config = LexerConfig {
+        parse_interpolation: false,
+        track_positions: false,
+        max_lookahead: 512,
+    };
     let mut lexer = PerlLexer::with_config("my $x = 1;", config);
     let toks = lexer.collect_tokens();
     let last = toks.last().ok_or("no tokens")?;
-    assert!(matches!(last.token_type, TokenType::EOF), "custom config should still produce EOF");
+    assert!(
+        matches!(last.token_type, TokenType::EOF),
+        "custom config should still produce EOF"
+    );
     Ok(())
 }
 
@@ -999,7 +1098,10 @@ fn checkpoint_save_and_restore() -> R {
     lexer.restore(&cp);
     let replayed = lexer.next_token().ok_or("no token after restore")?;
 
-    assert_eq!(second.start, replayed.start, "restore should replay from checkpoint");
+    assert_eq!(
+        second.start, replayed.start,
+        "restore should replay from checkpoint"
+    );
     assert_eq!(
         std::mem::discriminant(&second.token_type),
         std::mem::discriminant(&replayed.token_type),
@@ -1015,7 +1117,10 @@ fn can_restore_checks() -> R {
     assert!(lexer.can_restore(&cp), "should be able to restore to start");
 
     let far_cp = LexerCheckpoint::at_position(99999);
-    assert!(!lexer.can_restore(&far_cp), "should not restore past input end");
+    assert!(
+        !lexer.can_restore(&far_cp),
+        "should not restore past input end"
+    );
     Ok(())
 }
 
@@ -1023,10 +1128,16 @@ fn can_restore_checks() -> R {
 fn checkpoint_validity() -> R {
     let input = "my $x";
     let cp = LexerCheckpoint::at_position(3);
-    assert!(cp.is_valid_for(input), "position 3 should be valid for 5-byte input");
+    assert!(
+        cp.is_valid_for(input),
+        "position 3 should be valid for 5-byte input"
+    );
 
     let cp2 = LexerCheckpoint::at_position(100);
-    assert!(!cp2.is_valid_for(input), "position 100 should not be valid for 5-byte input");
+    assert!(
+        !cp2.is_valid_for(input),
+        "position 100 should not be valid for 5-byte input"
+    );
     Ok(())
 }
 
@@ -1199,8 +1310,9 @@ sub bark { print "Woof!\n"; }
         .any(|t| matches!(&t.token_type, TokenType::Keyword(k) if k.as_ref() == "package"));
     assert!(has_package, "expected 'package' keyword");
 
-    let has_sub =
-        toks.iter().any(|t| matches!(&t.token_type, TokenType::Keyword(k) if k.as_ref() == "sub"));
+    let has_sub = toks
+        .iter()
+        .any(|t| matches!(&t.token_type, TokenType::Keyword(k) if k.as_ref() == "sub"));
     assert!(has_sub, "expected 'sub' keyword");
     Ok(())
 }
@@ -1219,9 +1331,17 @@ if ($line =~ /^(\d+)\s+(.*)$/) {
 
     let regex_count = toks
         .iter()
-        .filter(|t| matches!(t.token_type, TokenType::RegexMatch | TokenType::Substitution))
+        .filter(|t| {
+            matches!(
+                t.token_type,
+                TokenType::RegexMatch | TokenType::Substitution
+            )
+        })
         .count();
-    assert!(regex_count >= 1, "expected at least 1 regex/substitution token, got {regex_count}");
+    assert!(
+        regex_count >= 1,
+        "expected at least 1 regex/substitution token, got {regex_count}"
+    );
     Ok(())
 }
 

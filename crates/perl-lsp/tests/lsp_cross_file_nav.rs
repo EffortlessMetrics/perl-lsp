@@ -191,11 +191,18 @@ for (1..10) {
             // 2. The call in test_self
             // 3. The call in script1.pl
             // 4. The call in script2.pl
-            assert!(refs.len() >= 3, "Should find at least 3 references, found {}", refs.len());
+            assert!(
+                refs.len() >= 3,
+                "Should find at least 3 references, found {}",
+                refs.len()
+            );
 
             // Check that we found references in multiple files
-            let uris: Vec<String> =
-                refs.iter().filter_map(|r| r["uri"].as_str()).map(|s| s.to_string()).collect();
+            let uris: Vec<String> = refs
+                .iter()
+                .filter_map(|r| r["uri"].as_str())
+                .map(|s| s.to_string())
+                .collect();
 
             assert!(uris.iter().any(|u| u.ends_with("/lib/Utils.pm")));
             assert!(uris.iter().any(|u| u.ends_with("/script1.pl")));
@@ -267,8 +274,11 @@ sub reverse_str { reverse $_[0] }
                 symbols
             );
 
-            let names: Vec<String> =
-                symbols.iter().filter_map(|s| s["name"].as_str()).map(|s| s.to_string()).collect();
+            let names: Vec<String> = symbols
+                .iter()
+                .filter_map(|s| s["name"].as_str())
+                .map(|s| s.to_string())
+                .collect();
 
             assert!(
                 names.contains(&"String".to_string()) || names.contains(&"reverse_str".to_string()),

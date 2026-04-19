@@ -22,27 +22,79 @@ use std::time::{Duration, Instant};
 fn test_statement_termination_boolean_mutations() {
     let statement_cases = vec![
         // Cases that MUST terminate properly with semicolon
-        (r"my $x = 1;", true, "Simple variable declaration should terminate with semicolon"),
-        (r"print 'hello';", true, "Print statement should terminate with semicolon"),
-        (r"return $value;", true, "Return statement should terminate with semicolon"),
-        (r"$x = $y + $z;", true, "Assignment should terminate with semicolon"),
-        (r"sub test { }; my $x = 1;", true, "Multiple statements should terminate properly"),
+        (
+            r"my $x = 1;",
+            true,
+            "Simple variable declaration should terminate with semicolon",
+        ),
+        (
+            r"print 'hello';",
+            true,
+            "Print statement should terminate with semicolon",
+        ),
+        (
+            r"return $value;",
+            true,
+            "Return statement should terminate with semicolon",
+        ),
+        (
+            r"$x = $y + $z;",
+            true,
+            "Assignment should terminate with semicolon",
+        ),
+        (
+            r"sub test { }; my $x = 1;",
+            true,
+            "Multiple statements should terminate properly",
+        ),
         // Cases that MUST terminate at EOF without semicolon
-        (r"my $x = 1", true, "Variable declaration should terminate at EOF"),
-        (r"print 'hello'", true, "Print statement should terminate at EOF"),
-        (r"return $value", true, "Return statement should terminate at EOF"),
+        (
+            r"my $x = 1",
+            true,
+            "Variable declaration should terminate at EOF",
+        ),
+        (
+            r"print 'hello'",
+            true,
+            "Print statement should terminate at EOF",
+        ),
+        (
+            r"return $value",
+            true,
+            "Return statement should terminate at EOF",
+        ),
         // Cases with statement modifiers that should parse correctly
-        (r"print $x if $debug;", true, "Statement modifier should not break termination"),
-        (r"return unless $error;", true, "Unless modifier should not break termination"),
-        (r"next while $continue;", true, "While modifier should not break termination"),
-        (r"last until $done;", true, "Until modifier should not break termination"),
+        (
+            r"print $x if $debug;",
+            true,
+            "Statement modifier should not break termination",
+        ),
+        (
+            r"return unless $error;",
+            true,
+            "Unless modifier should not break termination",
+        ),
+        (
+            r"next while $continue;",
+            true,
+            "While modifier should not break termination",
+        ),
+        (
+            r"last until $done;",
+            true,
+            "Until modifier should not break termination",
+        ),
         // Edge cases that should handle gracefully
         (";", true, "Empty statement should parse"),
         (";;", true, "Multiple empty statements should parse"),
         ("# comment", true, "Comment-only should parse"),
         ("", true, "Empty input should parse"),
         // Cases that should fail but not hang (malformed statements)
-        (r"my $x =", false, "Incomplete assignment should fail cleanly"),
+        (
+            r"my $x =",
+            false,
+            "Incomplete assignment should fail cleanly",
+        ),
         ("print", false, "Incomplete print should fail cleanly"),
         ("if (", false, "Incomplete if should fail cleanly"),
         ("sub test {", false, "Incomplete sub should fail cleanly"),
@@ -110,17 +162,44 @@ fn test_logical_operator_parsing_mutations() {
         (r"$x = $a && $b;", "Logical AND should parse correctly"),
         (r"$x = $a and $b;", "Word AND should parse correctly"),
         // Complex logical expressions
-        (r"$result = $a || $b && $c;", "Mixed logical operators should parse"),
-        (r"$result = ($a || $b) && $c;", "Parenthesized logical should parse"),
-        (r"$result = $a // $b || $c;", "Mixed defined-or and logical-or should parse"),
+        (
+            r"$result = $a || $b && $c;",
+            "Mixed logical operators should parse",
+        ),
+        (
+            r"$result = ($a || $b) && $c;",
+            "Parenthesized logical should parse",
+        ),
+        (
+            r"$result = $a // $b || $c;",
+            "Mixed defined-or and logical-or should parse",
+        ),
         // Statement modifiers with logical operators
-        (r"print $x if $a || $b;", "Statement modifier with OR should parse"),
-        (r"return unless $error && $critical;", "Statement modifier with AND should parse"),
-        (r"next if defined $x && $x > 0;", "Complex modifier condition should parse"),
+        (
+            r"print $x if $a || $b;",
+            "Statement modifier with OR should parse",
+        ),
+        (
+            r"return unless $error && $critical;",
+            "Statement modifier with AND should parse",
+        ),
+        (
+            r"next if defined $x && $x > 0;",
+            "Complex modifier condition should parse",
+        ),
         // Logical operators in different contexts
-        (r"if ($a || $b) { print 'yes'; }", "Logical OR in if condition should parse"),
-        (r"while ($x && $y) { $x--; }", "Logical AND in while condition should parse"),
-        (r"for my $i (0..10) { next if $i % 2 || $skip; }", "Logical OR in loop should parse"),
+        (
+            r"if ($a || $b) { print 'yes'; }",
+            "Logical OR in if condition should parse",
+        ),
+        (
+            r"while ($x && $y) { $x--; }",
+            "Logical AND in while condition should parse",
+        ),
+        (
+            r"for my $i (0..10) { next if $i % 2 || $skip; }",
+            "Logical OR in loop should parse",
+        ),
     ];
 
     for (perl_code, description) in logical_cases {
@@ -157,20 +236,47 @@ fn test_postfix_operator_parsing_mutations() {
         // Postfix increment/decrement
         (r"$x++;", "Postfix increment should parse"),
         (r"$x--;", "Postfix decrement should parse"),
-        (r"$array[$i++] = $value;", "Postfix increment in array index should parse"),
-        (r"print $hash{$key++};", "Postfix increment in hash key should parse"),
+        (
+            r"$array[$i++] = $value;",
+            "Postfix increment in array index should parse",
+        ),
+        (
+            r"print $hash{$key++};",
+            "Postfix increment in hash key should parse",
+        ),
         // Prefix vs postfix distinction
         (r"++$x;", "Prefix increment should parse"),
         (r"--$x;", "Prefix decrement should parse"),
-        (r"$y = ++$x + $z++;", "Mixed prefix and postfix should parse"),
+        (
+            r"$y = ++$x + $z++;",
+            "Mixed prefix and postfix should parse",
+        ),
         // Postfix in complex expressions
-        (r"$result = $x++ * $y--;", "Multiple postfix operators should parse"),
-        (r"for (my $i = 0; $i < 10; $i++) { print $i; }", "Postfix in for loop should parse"),
-        (r"while ($x++ < 100) { process($x); }", "Postfix in while condition should parse"),
+        (
+            r"$result = $x++ * $y--;",
+            "Multiple postfix operators should parse",
+        ),
+        (
+            r"for (my $i = 0; $i < 10; $i++) { print $i; }",
+            "Postfix in for loop should parse",
+        ),
+        (
+            r"while ($x++ < 100) { process($x); }",
+            "Postfix in while condition should parse",
+        ),
         // Postfix with other operators
-        (r"$x++ if $condition;", "Postfix with statement modifier should parse"),
-        (r"return $x++ unless $error;", "Postfix with unless modifier should parse"),
-        (r"$result = $x++ || $default;", "Postfix with logical OR should parse"),
+        (
+            r"$x++ if $condition;",
+            "Postfix with statement modifier should parse",
+        ),
+        (
+            r"return $x++ unless $error;",
+            "Postfix with unless modifier should parse",
+        ),
+        (
+            r"$result = $x++ || $default;",
+            "Postfix with logical OR should parse",
+        ),
     ];
 
     for (perl_code, description) in postfix_cases {
@@ -207,7 +313,10 @@ fn test_variable_sigil_parsing_mutations() {
         // Scalar variables
         (r"my $scalar = 'value';", "Scalar sigil should parse"),
         (r"our $global_scalar = 42;", "Global scalar should parse"),
-        (r"local $local_scalar = $other;", "Local scalar should parse"),
+        (
+            r"local $local_scalar = $other;",
+            "Local scalar should parse",
+        ),
         (r"state $state_scalar = 0;", "State scalar should parse"),
         // Array variables
         (r"my @array = (1, 2, 3);", "Array sigil should parse"),
@@ -218,16 +327,31 @@ fn test_variable_sigil_parsing_mutations() {
         (r"our %global_hash = ();", "Global hash should parse"),
         (r"local %local_hash = %other;", "Local hash should parse"),
         // Mixed variable types
-        (r"my ($x, @y, %z) = (1, (2, 3), (a => 'b'));", "Mixed sigils should parse"),
-        (r"our ($global, @array, %hash);", "Multiple global declarations should parse"),
+        (
+            r"my ($x, @y, %z) = (1, (2, 3), (a => 'b'));",
+            "Mixed sigils should parse",
+        ),
+        (
+            r"our ($global, @array, %hash);",
+            "Multiple global declarations should parse",
+        ),
         // Variables in expressions
-        (r"$result = $scalar + $array[0] + $hash{key};", "Mixed variable access should parse"),
-        (r#"print "$scalar: @array %hash";"#, "Variables in string interpolation should parse"),
+        (
+            r"$result = $scalar + $array[0] + $hash{key};",
+            "Mixed variable access should parse",
+        ),
+        (
+            r#"print "$scalar: @array %hash";"#,
+            "Variables in string interpolation should parse",
+        ),
         // Complex variable usage
         (r"$array_ref = \@array;", "Array reference should parse"),
         (r"$hash_ref = \%hash;", "Hash reference should parse"),
         (r"$scalar_ref = \$scalar;", "Scalar reference should parse"),
-        (r"my $sub_ref = \&subroutine;", "Subroutine reference should parse"),
+        (
+            r"my $sub_ref = \&subroutine;",
+            "Subroutine reference should parse",
+        ),
     ];
 
     for (perl_code, description) in sigil_cases {
@@ -263,31 +387,58 @@ fn test_statement_modifier_parsing_mutations() {
     let modifier_cases = vec![
         // If modifiers
         (r"print 'debug' if $debug;", "If modifier should parse"),
-        (r"return $value if defined $value;", "If with defined should parse"),
-        (r"next if $skip_iteration;", "If with control flow should parse"),
+        (
+            r"return $value if defined $value;",
+            "If with defined should parse",
+        ),
+        (
+            r"next if $skip_iteration;",
+            "If with control flow should parse",
+        ),
         // Unless modifiers
         (r"die 'error' unless $ok;", "Unless modifier should parse"),
-        (r"return unless defined $result;", "Unless with defined should parse"),
-        (r"last unless $continue;", "Unless with control flow should parse"),
+        (
+            r"return unless defined $result;",
+            "Unless with defined should parse",
+        ),
+        (
+            r"last unless $continue;",
+            "Unless with control flow should parse",
+        ),
         // While modifiers
         (r"process() while $has_data;", "While modifier should parse"),
         (r"print $_ while <>;", "While with input should parse"),
         (r"$x++ while $x < 10;", "While with increment should parse"),
         // Until modifiers
         (r"wait() until $ready;", "Until modifier should parse"),
-        (r"sleep 1 until $condition;", "Until with sleep should parse"),
+        (
+            r"sleep 1 until $condition;",
+            "Until with sleep should parse",
+        ),
         (r"$x-- until $x == 0;", "Until with decrement should parse"),
         // For modifiers
         (r"print $_ for @list;", "For modifier should parse"),
         (r"process($_) for 1..10;", "For with range should parse"),
-        (r"validate($item) for @items;", "For with array should parse"),
+        (
+            r"validate($item) for @items;",
+            "For with array should parse",
+        ),
         // When modifiers (in given/when context)
         // Note: These might not parse in simple contexts, but should not hang
 
         // Complex modifier conditions
-        (r"print $x if defined $x && $x > 0;", "Complex if condition should parse"),
-        (r"return unless $error || $timeout;", "Complex unless condition should parse"),
-        (r"process() while $running && !eof(FH);", "Complex while condition should parse"),
+        (
+            r"print $x if defined $x && $x > 0;",
+            "Complex if condition should parse",
+        ),
+        (
+            r"return unless $error || $timeout;",
+            "Complex unless condition should parse",
+        ),
+        (
+            r"process() while $running && !eof(FH);",
+            "Complex while condition should parse",
+        ),
     ];
 
     for (perl_code, description) in modifier_cases {

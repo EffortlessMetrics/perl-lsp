@@ -10,7 +10,10 @@ use tempfile::tempdir;
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 fn perl_available() -> bool {
-    std::process::Command::new("perl").arg("--version").output().is_ok()
+    std::process::Command::new("perl")
+        .arg("--version")
+        .output()
+        .is_ok()
 }
 
 fn smoke_timeout() -> Duration {
@@ -50,7 +53,13 @@ fn wait_for_event(
 
 fn response_success(response: DapMessage, command: &str) -> Result<Option<Value>, String> {
     match response {
-        DapMessage::Response { success, command: actual, body, message, .. } => {
+        DapMessage::Response {
+            success,
+            command: actual,
+            body,
+            message,
+            ..
+        } => {
             if actual != command {
                 return Err(format!("expected `{command}` response, got `{actual}`"));
             }
@@ -114,7 +123,12 @@ print "$x\n";
             .and_then(|v| v.as_bool())
             .unwrap_or(false)
     );
-    assert!(capabilities.get("supportsInlineValues").and_then(|v| v.as_bool()).unwrap_or(false));
+    assert!(
+        capabilities
+            .get("supportsInlineValues")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false)
+    );
     let _initialized = wait_for_event(&rx, "initialized", timeout)?;
 
     response_success(

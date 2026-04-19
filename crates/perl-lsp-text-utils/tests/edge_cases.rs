@@ -53,8 +53,14 @@ fn find_statement_start_at_exact_end_of_source() {
     // ';' at byte 9 → raw=10; byte 10 is '\n' → skip → 11 == source.len().
     // The result must be at most source.len() (end-of-string insert is valid).
     let result = h.find_statement_start(source.len());
-    assert_eq!(result, 11, "after skipping trailing newline, result is source.len()");
-    assert!(result <= source.len(), "result must not exceed source length");
+    assert_eq!(
+        result, 11,
+        "after skipping trailing newline, result is source.len()"
+    );
+    assert!(
+        result <= source.len(),
+        "result must not exceed source length"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -115,7 +121,10 @@ fn import_insert_position_single_require_line() {
     let h = helpers(source, &lines);
     // After 'require Carp;\n' = 14 chars
     let pos = h.find_import_insert_position();
-    assert!(pos > 0, "import insert position should be after require line");
+    assert!(
+        pos > 0,
+        "import insert position should be after require line"
+    );
 }
 
 #[test]

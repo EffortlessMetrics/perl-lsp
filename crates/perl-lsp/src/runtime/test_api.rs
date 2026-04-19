@@ -260,7 +260,8 @@ impl LspServer {
     /// without needing perlcritic installed on the test machine.
     #[cfg(not(target_arch = "wasm32"))]
     pub fn test_bypass_perlcritic_command_check(&self) {
-        self.skip_perlcritic_command_check.store(true, std::sync::atomic::Ordering::Relaxed);
+        self.skip_perlcritic_command_check
+            .store(true, std::sync::atomic::Ordering::Relaxed);
     }
 
     /// Set the server root path (used for `.perlcriticrc` walk-up discovery).

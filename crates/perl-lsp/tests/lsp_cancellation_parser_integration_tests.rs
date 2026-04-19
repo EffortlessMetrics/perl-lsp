@@ -60,7 +60,11 @@ impl ParserIntegrationFixture {
         };
         drain_until_quiet(&server, Duration::from_millis(1500), adaptive_timeout);
 
-        Self { server, test_workspace, parser_test_files }
+        Self {
+            server,
+            test_workspace,
+            parser_test_files,
+        }
     }
 
     fn get_test_file_content(&self, uri: &str) -> Option<&String> {
@@ -677,8 +681,10 @@ fn test_incremental_parsing_checkpoint_cancellation_ac6() -> Result<(), Box<dyn 
 {
     // Enhanced constraint checking for parser integration cancellation tests
     // These tests require specific threading conditions for reliable LSP initialization
-    let thread_count =
-        std::env::var("RUST_TEST_THREADS").ok().and_then(|s| s.parse::<usize>().ok()).unwrap_or(8);
+    let thread_count = std::env::var("RUST_TEST_THREADS")
+        .ok()
+        .and_then(|s| s.parse::<usize>().ok())
+        .unwrap_or(8);
 
     // Force single-threaded execution for parser integration cancellation tests to ensure reliability
     // Multiple threads can cause race conditions in cancellation infrastructure
@@ -805,7 +811,10 @@ fn test_incremental_parsing_checkpoint_cancellation_ac6() -> Result<(), Box<dyn 
 
     // Placeholder test validation for scaffolding
     let content_length = test_content.len();
-    assert!(content_length > 100, "Test content should be substantial for checkpoint testing");
+    assert!(
+        content_length > 100,
+        "Test content should be substantial for checkpoint testing"
+    );
 
     println!("Checkpoint-based parsing test scaffolding established");
     // AC6 checkpoint-based incremental parsing test scaffolding completed
@@ -837,8 +846,10 @@ enum ParsingPhase {
 fn test_workspace_indexing_cancellation_integrity_ac7() -> Result<(), Box<dyn std::error::Error>> {
     // Enhanced constraint checking for workspace indexing cancellation tests
     // These tests require specific threading conditions for reliable LSP initialization
-    let thread_count =
-        std::env::var("RUST_TEST_THREADS").ok().and_then(|s| s.parse::<usize>().ok()).unwrap_or(8);
+    let thread_count = std::env::var("RUST_TEST_THREADS")
+        .ok()
+        .and_then(|s| s.parse::<usize>().ok())
+        .unwrap_or(8);
 
     // Force single-threaded execution for parser integration cancellation tests to ensure reliability
     // Multiple threads can cause race conditions in cancellation infrastructure
@@ -990,8 +1001,14 @@ fn test_workspace_indexing_cancellation_integrity_ac7() -> Result<(), Box<dyn st
         */
 
         // Placeholder validation for test scaffolding
-        assert!(scenario.symbol_count > 0, "Scenario should have symbols to index");
-        assert!(scenario.cross_references > 0, "Scenario should have cross-references");
+        assert!(
+            scenario.symbol_count > 0,
+            "Scenario should have symbols to index"
+        );
+        assert!(
+            scenario.cross_references > 0,
+            "Scenario should have cross-references"
+        );
 
         println!("  Scenario {} scaffolding validated", scenario.name);
     }
@@ -1008,8 +1025,10 @@ fn test_workspace_indexing_cancellation_integrity_ac7() -> Result<(), Box<dyn st
 fn test_dual_pattern_indexing_cancellation_ac7() -> Result<(), Box<dyn std::error::Error>> {
     // Enhanced constraint checking for dual pattern indexing cancellation tests
     // These tests require specific threading conditions for reliable LSP initialization
-    let thread_count =
-        std::env::var("RUST_TEST_THREADS").ok().and_then(|s| s.parse::<usize>().ok()).unwrap_or(8);
+    let thread_count = std::env::var("RUST_TEST_THREADS")
+        .ok()
+        .and_then(|s| s.parse::<usize>().ok())
+        .unwrap_or(8);
 
     // Force single-threaded execution for parser integration cancellation tests to ensure reliability
     // Multiple threads can cause race conditions in cancellation infrastructure
@@ -1141,8 +1160,11 @@ fn test_dual_pattern_indexing_cancellation_ac7() -> Result<(), Box<dyn std::erro
     */
 
     // Placeholder validation for dual pattern testing
-    let test_functions =
-        ["extended_function", "indexing_test_function", "complex_parsing_function"];
+    let test_functions = [
+        "extended_function",
+        "indexing_test_function",
+        "complex_parsing_function",
+    ];
     for func_name in &test_functions {
         assert!(
             test_module.contains(func_name),
@@ -1173,7 +1195,11 @@ struct MockLocation {
 
 impl MockLocation {
     fn new(uri: &str, line: u32, character: u32) -> Self {
-        Self { uri: uri.to_string(), line, character }
+        Self {
+            uri: uri.to_string(),
+            line,
+            character,
+        }
     }
 }
 
@@ -1187,8 +1213,10 @@ impl MockLocation {
 fn test_cross_file_reference_cancellation_ac8() -> Result<(), Box<dyn std::error::Error>> {
     // Enhanced constraint checking for cross-file reference cancellation tests
     // These tests require specific threading conditions for reliable LSP initialization
-    let thread_count =
-        std::env::var("RUST_TEST_THREADS").ok().and_then(|s| s.parse::<usize>().ok()).unwrap_or(8);
+    let thread_count = std::env::var("RUST_TEST_THREADS")
+        .ok()
+        .and_then(|s| s.parse::<usize>().ok())
+        .unwrap_or(8);
 
     // Force single-threaded execution for parser integration cancellation tests to ensure reliability
     // Multiple threads can cause race conditions in cancellation infrastructure
@@ -1373,12 +1401,16 @@ fn test_cross_file_reference_cancellation_ac8() -> Result<(), Box<dyn std::error
 
         // Placeholder validation for cross-file reference testing
         assert!(
-            fixture.parser_test_files.contains_key(&scenario.source_file),
+            fixture
+                .parser_test_files
+                .contains_key(&scenario.source_file),
             "Source file should exist: {}",
             scenario.source_file
         );
         assert!(
-            fixture.parser_test_files.contains_key(&scenario.target_file),
+            fixture
+                .parser_test_files
+                .contains_key(&scenario.target_file),
             "Target file should exist: {}",
             scenario.target_file
         );
@@ -1398,8 +1430,10 @@ fn test_cross_file_reference_cancellation_ac8() -> Result<(), Box<dyn std::error
 fn test_multi_tier_resolver_cancellation_ac8() -> Result<(), Box<dyn std::error::Error>> {
     // Enhanced constraint checking for multi-tier resolver cancellation tests
     // These tests require specific threading conditions for reliable LSP initialization
-    let thread_count =
-        std::env::var("RUST_TEST_THREADS").ok().and_then(|s| s.parse::<usize>().ok()).unwrap_or(8);
+    let thread_count = std::env::var("RUST_TEST_THREADS")
+        .ok()
+        .and_then(|s| s.parse::<usize>().ok())
+        .unwrap_or(8);
 
     // Force single-threaded execution for parser integration cancellation tests to ensure reliability
     // Multiple threads can cause race conditions in cancellation infrastructure
@@ -1569,8 +1603,9 @@ fn test_multi_tier_resolver_cancellation_ac8() -> Result<(), Box<dyn std::error:
     */
 
     // Test scaffolding validation
-    let main_content =
-        fixture.get_test_file_content("file:///main.pl").ok_or("Main test file should exist")?;
+    let main_content = fixture
+        .get_test_file_content("file:///main.pl")
+        .ok_or("Main test file should exist")?;
     assert!(
         main_content.contains("ExtendedModule"),
         "Main file should reference ExtendedModule for multi-tier testing"
@@ -1598,8 +1633,11 @@ impl Drop for ParserIntegrationFixture {
         println!("\nParser Integration Test Summary:");
         println!("  Test files created: {}", self.parser_test_files.len());
 
-        let total_content_size: usize =
-            self.parser_test_files.values().map(|content| content.len()).sum();
+        let total_content_size: usize = self
+            .parser_test_files
+            .values()
+            .map(|content| content.len())
+            .sum();
         println!("  Total test content: {} KB", total_content_size / 1024);
 
         // Graceful server shutdown

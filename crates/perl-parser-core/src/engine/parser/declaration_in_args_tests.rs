@@ -10,14 +10,19 @@ mod tests {
     /// Helper: parse code and return the full AST.
     fn parse_program(code: &str) -> Node {
         let mut parser = Parser::new(code);
-        parser.parse().unwrap_or_else(|e| panic!("Parse failed for `{code}`: {e:?}"))
+        parser
+            .parse()
+            .unwrap_or_else(|e| panic!("Parse failed for `{code}`: {e:?}"))
     }
 
     /// Helper: assert that the AST sexp contains no ERROR nodes.
     fn assert_no_errors(code: &str) {
         let ast = parse_program(code);
         let sexp = ast.to_sexp();
-        assert!(!sexp.contains("ERROR"), "Parse of `{code}` produced ERROR nodes: {sexp}",);
+        assert!(
+            !sexp.contains("ERROR"),
+            "Parse of `{code}` produced ERROR nodes: {sexp}",
+        );
     }
 
     /// Helper: parse code and return the first statement node.
@@ -42,7 +47,10 @@ mod tests {
         let stmt = first_stmt(code);
         let sexp = stmt.to_sexp();
         // Sexp format uses `my_declaration` for VariableDeclaration with declarator "my"
-        assert!(sexp.contains("my_declaration"), "Expected my_declaration in sexp, got: {sexp}",);
+        assert!(
+            sexp.contains("my_declaration"),
+            "Expected my_declaration in sexp, got: {sexp}",
+        );
     }
 
     // ---------------------------------------------------------------
@@ -55,7 +63,10 @@ mod tests {
 
         let stmt = first_stmt(code);
         let sexp = stmt.to_sexp();
-        assert!(sexp.contains("my_declaration"), "Expected my_declaration in sexp, got: {sexp}",);
+        assert!(
+            sexp.contains("my_declaration"),
+            "Expected my_declaration in sexp, got: {sexp}",
+        );
     }
 
     // ---------------------------------------------------------------
@@ -68,7 +79,10 @@ mod tests {
 
         let stmt = first_stmt(code);
         let sexp = stmt.to_sexp();
-        assert!(sexp.contains("my_declaration"), "Expected my_declaration in sexp, got: {sexp}",);
+        assert!(
+            sexp.contains("my_declaration"),
+            "Expected my_declaration in sexp, got: {sexp}",
+        );
         // Verify that 1, 2, 3 are separate args, not consumed into the declaration
         assert!(
             sexp.contains("1") && sexp.contains("2") && sexp.contains("3"),
@@ -86,7 +100,10 @@ mod tests {
 
         let stmt = first_stmt(code);
         let sexp = stmt.to_sexp();
-        assert!(sexp.contains("our_declaration"), "Expected our_declaration in sexp, got: {sexp}",);
+        assert!(
+            sexp.contains("our_declaration"),
+            "Expected our_declaration in sexp, got: {sexp}",
+        );
     }
 
     // ---------------------------------------------------------------
@@ -132,7 +149,10 @@ mod tests {
 
         let stmt = first_stmt(code);
         let sexp = stmt.to_sexp();
-        assert!(sexp.contains("my_declaration"), "Expected my_declaration in sexp, got: {sexp}",);
+        assert!(
+            sexp.contains("my_declaration"),
+            "Expected my_declaration in sexp, got: {sexp}",
+        );
         // $y must be a separate argument, not part of the declaration initializer
         // The sexp should contain both the declaration and a separate variable for $y
         assert!(
@@ -153,7 +173,13 @@ mod tests {
         let sexp = stmt.to_sexp();
         // VariableListDeclaration sexp format should contain the declarator
         assert!(sexp.contains("my"), "Expected 'my' in sexp, got: {sexp}",);
-        assert!(sexp.contains("(variable $ a)"), "Expected variable $a in sexp, got: {sexp}",);
-        assert!(sexp.contains("(variable $ b)"), "Expected variable $b in sexp, got: {sexp}",);
+        assert!(
+            sexp.contains("(variable $ a)"),
+            "Expected variable $a in sexp, got: {sexp}",
+        );
+        assert!(
+            sexp.contains("(variable $ b)"),
+            "Expected variable $b in sexp, got: {sexp}",
+        );
     }
 }

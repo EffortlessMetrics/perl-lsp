@@ -23,7 +23,10 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 // ─── Helper ───────────────────────────────────────────────────────────────────
 
 fn make_program_node() -> Node {
-    Node::new(NodeKind::Program { statements: vec![] }, SourceLocation { start: 0, end: 0 })
+    Node::new(
+        NodeKind::Program { statements: vec![] },
+        SourceLocation { start: 0, end: 0 },
+    )
 }
 
 fn make_error_node() -> Node {
@@ -364,11 +367,26 @@ fn severity_from_number_out_of_range_defaults_to_harsh() {
 fn severity_to_diagnostic_severity() {
     use lsp_types::DiagnosticSeverity;
 
-    assert_eq!(Severity::Brutal.to_diagnostic_severity(), DiagnosticSeverity::HINT);
-    assert_eq!(Severity::Cruel.to_diagnostic_severity(), DiagnosticSeverity::INFORMATION);
-    assert_eq!(Severity::Harsh.to_diagnostic_severity(), DiagnosticSeverity::WARNING);
-    assert_eq!(Severity::Stern.to_diagnostic_severity(), DiagnosticSeverity::WARNING);
-    assert_eq!(Severity::Gentle.to_diagnostic_severity(), DiagnosticSeverity::ERROR);
+    assert_eq!(
+        Severity::Brutal.to_diagnostic_severity(),
+        DiagnosticSeverity::HINT
+    );
+    assert_eq!(
+        Severity::Cruel.to_diagnostic_severity(),
+        DiagnosticSeverity::INFORMATION
+    );
+    assert_eq!(
+        Severity::Harsh.to_diagnostic_severity(),
+        DiagnosticSeverity::WARNING
+    );
+    assert_eq!(
+        Severity::Stern.to_diagnostic_severity(),
+        DiagnosticSeverity::WARNING
+    );
+    assert_eq!(
+        Severity::Gentle.to_diagnostic_severity(),
+        DiagnosticSeverity::ERROR
+    );
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -482,7 +500,10 @@ fn critic_analyzer_passes_config_args() -> Result<(), String> {
     let inv = &runtime.invocations()[0];
     assert_eq!(inv.program, "perlcritic");
     assert!(inv.args.contains(&"--severity=1".to_string()));
-    assert!(inv.args.contains(&"--profile=/etc/perlcriticrc".to_string()));
+    assert!(
+        inv.args
+            .contains(&"--profile=/etc/perlcriticrc".to_string())
+    );
     assert!(inv.args.contains(&"--theme=core".to_string()));
     assert!(inv.args.contains(&"--include=IncludeMe".to_string()));
     assert!(inv.args.contains(&"--exclude=ExcludeMe".to_string()));
@@ -517,7 +538,9 @@ fn builtin_analyzer_detects_missing_strict() {
     let ast = make_error_node();
     let violations = analyzer.analyze(&ast, "print 'hello';\n");
 
-    let strict_violation = violations.iter().find(|v| v.policy.contains("RequireUseStrict"));
+    let strict_violation = violations
+        .iter()
+        .find(|v| v.policy.contains("RequireUseStrict"));
     assert!(strict_violation.is_some());
 }
 
@@ -527,7 +550,9 @@ fn builtin_analyzer_detects_missing_warnings() {
     let ast = make_error_node();
     let violations = analyzer.analyze(&ast, "print 'hello';\n");
 
-    let warn_violation = violations.iter().find(|v| v.policy.contains("RequireUseWarnings"));
+    let warn_violation = violations
+        .iter()
+        .find(|v| v.policy.contains("RequireUseWarnings"));
     assert!(warn_violation.is_some());
 }
 
@@ -549,8 +574,16 @@ fn builtin_analyzer_quick_fix_strict() {
         explanation: String::new(),
         severity: Severity::Harsh,
         range: Range {
-            start: Position { byte: 0, line: 0, column: 0 },
-            end: Position { byte: 0, line: 0, column: 0 },
+            start: Position {
+                byte: 0,
+                line: 0,
+                column: 0,
+            },
+            end: Position {
+                byte: 0,
+                line: 0,
+                column: 0,
+            },
         },
         file: String::new(),
     };
@@ -570,8 +603,16 @@ fn builtin_analyzer_quick_fix_warnings() {
         explanation: String::new(),
         severity: Severity::Harsh,
         range: Range {
-            start: Position { byte: 0, line: 0, column: 0 },
-            end: Position { byte: 0, line: 0, column: 0 },
+            start: Position {
+                byte: 0,
+                line: 0,
+                column: 0,
+            },
+            end: Position {
+                byte: 0,
+                line: 0,
+                column: 0,
+            },
         },
         file: String::new(),
     };
@@ -591,8 +632,16 @@ fn builtin_analyzer_no_quick_fix_for_unknown_policy() {
         explanation: String::new(),
         severity: Severity::Gentle,
         range: Range {
-            start: Position { byte: 0, line: 0, column: 0 },
-            end: Position { byte: 0, line: 0, column: 0 },
+            start: Position {
+                byte: 0,
+                line: 0,
+                column: 0,
+            },
+            end: Position {
+                byte: 0,
+                line: 0,
+                column: 0,
+            },
         },
         file: String::new(),
     };
@@ -616,8 +665,16 @@ fn critic_analyzer_to_diagnostics() {
         explanation: "test explanation".to_string(),
         severity: Severity::Cruel,
         range: Range {
-            start: Position { byte: 0, line: 5, column: 3 },
-            end: Position { byte: 0, line: 5, column: 10 },
+            start: Position {
+                byte: 0,
+                line: 5,
+                column: 3,
+            },
+            end: Position {
+                byte: 0,
+                line: 5,
+                column: 10,
+            },
         },
         file: "test.pl".to_string(),
     }];
@@ -652,15 +709,26 @@ fn critic_analyzer_quick_fix_strict_lsp() {
         explanation: String::new(),
         severity: Severity::Harsh,
         range: Range {
-            start: Position { byte: 0, line: 0, column: 0 },
-            end: Position { byte: 0, line: 0, column: 0 },
+            start: Position {
+                byte: 0,
+                line: 0,
+                column: 0,
+            },
+            end: Position {
+                byte: 0,
+                line: 0,
+                column: 0,
+            },
         },
         file: String::new(),
     };
 
     let fix = analyzer.get_quick_fix(&violation, "");
     assert!(fix.is_some());
-    assert_eq!(fix.map(|f| f.edit.new_text), Some("use strict;\n".to_string()));
+    assert_eq!(
+        fix.map(|f| f.edit.new_text),
+        Some("use strict;\n".to_string())
+    );
 }
 
 #[cfg(feature = "lsp-compat")]
@@ -675,15 +743,26 @@ fn critic_analyzer_quick_fix_unused_variable() {
         explanation: String::new(),
         severity: Severity::Stern,
         range: Range {
-            start: Position { byte: 0, line: 3, column: 0 },
-            end: Position { byte: 0, line: 3, column: 10 },
+            start: Position {
+                byte: 0,
+                line: 3,
+                column: 0,
+            },
+            end: Position {
+                byte: 0,
+                line: 3,
+                column: 10,
+            },
         },
         file: String::new(),
     };
 
     let fix = analyzer.get_quick_fix(&violation, "");
     assert!(fix.is_some());
-    assert_eq!(fix.map(|f| f.title), Some("Remove unused variable".to_string()));
+    assert_eq!(
+        fix.map(|f| f.title),
+        Some("Remove unused variable".to_string())
+    );
 }
 
 #[cfg(feature = "lsp-compat")]
@@ -698,15 +777,26 @@ fn critic_analyzer_quick_fix_unused_subroutine() {
         explanation: String::new(),
         severity: Severity::Stern,
         range: Range {
-            start: Position { byte: 0, line: 0, column: 0 },
-            end: Position { byte: 0, line: 0, column: 0 },
+            start: Position {
+                byte: 0,
+                line: 0,
+                column: 0,
+            },
+            end: Position {
+                byte: 0,
+                line: 0,
+                column: 0,
+            },
         },
         file: String::new(),
     };
 
     let fix = analyzer.get_quick_fix(&violation, "");
     assert!(fix.is_some());
-    assert_eq!(fix.map(|f| f.title), Some("Remove unused subroutine".to_string()));
+    assert_eq!(
+        fix.map(|f| f.title),
+        Some("Remove unused subroutine".to_string())
+    );
 }
 
 #[cfg(feature = "lsp-compat")]
@@ -721,8 +811,16 @@ fn critic_analyzer_no_quick_fix_for_unknown_policy_lsp() {
         explanation: String::new(),
         severity: Severity::Gentle,
         range: Range {
-            start: Position { byte: 0, line: 0, column: 0 },
-            end: Position { byte: 0, line: 0, column: 0 },
+            start: Position {
+                byte: 0,
+                line: 0,
+                column: 0,
+            },
+            end: Position {
+                byte: 0,
+                line: 0,
+                column: 0,
+            },
         },
         file: String::new(),
     };
@@ -756,7 +854,11 @@ fn perltidy_config_pbp_style() {
     assert_eq!(config.maximum_line_length, Some(78));
     assert_eq!(config.cuddled_else, Some(false));
     assert_eq!(config.add_trailing_commas, Some(true));
-    assert!(config.extra_args.contains(&"--perl-best-practices".to_string()));
+    assert!(
+        config
+            .extra_args
+            .contains(&"--perl-best-practices".to_string())
+    );
 }
 
 #[test]
@@ -787,7 +889,11 @@ fn perltidy_config_profile_overrides_other_args() {
     // Should contain profile arg
     assert!(inv.args.iter().any(|a| a.starts_with("--profile=")));
     // Should NOT contain --maximum-line-length (profile overrides)
-    assert!(!inv.args.iter().any(|a| a.starts_with("--maximum-line-length")));
+    assert!(
+        !inv.args
+            .iter()
+            .any(|a| a.starts_with("--maximum-line-length"))
+    );
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -1035,7 +1141,10 @@ fn builtin_formatter_handles_nested_blocks() {
 
 #[test]
 fn builtin_formatter_uses_tabs_when_configured() {
-    let config = PerlTidyConfig { tabs: Some(true), ..PerlTidyConfig::default() };
+    let config = PerlTidyConfig {
+        tabs: Some(true),
+        ..PerlTidyConfig::default()
+    };
     let formatter = BuiltInFormatter::new(config);
     let code = "if ($x) {\nprint;\n}\n";
     let formatted = formatter.format(code);
@@ -1045,7 +1154,10 @@ fn builtin_formatter_uses_tabs_when_configured() {
 
 #[test]
 fn builtin_formatter_uses_custom_indent_size() {
-    let config = PerlTidyConfig { indent_columns: Some(2), ..PerlTidyConfig::default() };
+    let config = PerlTidyConfig {
+        indent_columns: Some(2),
+        ..PerlTidyConfig::default()
+    };
     let formatter = BuiltInFormatter::new(config);
     let code = "if ($x) {\nprint;\n}\n";
     let formatted = formatter.format(code);
@@ -1115,8 +1227,16 @@ fn violation_debug_and_clone() {
         explanation: "explain".to_string(),
         severity: Severity::Stern,
         range: Range {
-            start: Position { byte: 0, line: 1, column: 2 },
-            end: Position { byte: 0, line: 1, column: 5 },
+            start: Position {
+                byte: 0,
+                line: 1,
+                column: 2,
+            },
+            end: Position {
+                byte: 0,
+                line: 1,
+                column: 5,
+            },
         },
         file: "test.pl".to_string(),
     };
@@ -1135,8 +1255,16 @@ fn quick_fix_debug_and_clone() {
         title: "Fix it".to_string(),
         edit: TextEdit {
             range: Range {
-                start: Position { byte: 0, line: 0, column: 0 },
-                end: Position { byte: 0, line: 0, column: 0 },
+                start: Position {
+                    byte: 0,
+                    line: 0,
+                    column: 0,
+                },
+                end: Position {
+                    byte: 0,
+                    line: 0,
+                    column: 0,
+                },
             },
             new_text: "use strict;\n".to_string(),
         },
@@ -1168,8 +1296,16 @@ fn violation_serialize_deserialize() -> Result<(), Box<dyn std::error::Error>> {
         explanation: "explain".to_string(),
         severity: Severity::Gentle,
         range: Range {
-            start: Position { byte: 0, line: 1, column: 0 },
-            end: Position { byte: 0, line: 1, column: 5 },
+            start: Position {
+                byte: 0,
+                line: 1,
+                column: 0,
+            },
+            end: Position {
+                byte: 0,
+                line: 1,
+                column: 5,
+            },
         },
         file: "test.pl".to_string(),
     };
@@ -1524,8 +1660,13 @@ fn severity_all_variants_from_number_roundtrip() {
 #[test]
 fn severity_all_variants_have_diagnostic_mapping() {
     // Ensure every variant maps to a valid DiagnosticSeverity
-    let variants =
-        [Severity::Brutal, Severity::Cruel, Severity::Harsh, Severity::Stern, Severity::Gentle];
+    let variants = [
+        Severity::Brutal,
+        Severity::Cruel,
+        Severity::Harsh,
+        Severity::Stern,
+        Severity::Gentle,
+    ];
     for v in &variants {
         let _ = v.to_diagnostic_severity(); // should not panic
     }
@@ -1698,7 +1839,10 @@ fn perltidy_config_all_none_produces_no_args() {
 
 #[test]
 fn perltidy_config_tabs_enabled_arg() {
-    let config = PerlTidyConfig { tabs: Some(true), ..PerlTidyConfig::default() };
+    let config = PerlTidyConfig {
+        tabs: Some(true),
+        ..PerlTidyConfig::default()
+    };
     let runtime = Arc::new(MockSubprocessRuntime::new());
     runtime.add_response(MockResponse::success(b"ok\n".to_vec()));
     let mut formatter = PerlTidyFormatter::new(config, runtime.clone());
@@ -1711,7 +1855,10 @@ fn perltidy_config_tabs_enabled_arg() {
 
 #[test]
 fn perltidy_config_no_cuddled_else_arg() {
-    let config = PerlTidyConfig { cuddled_else: Some(false), ..PerlTidyConfig::default() };
+    let config = PerlTidyConfig {
+        cuddled_else: Some(false),
+        ..PerlTidyConfig::default()
+    };
     let runtime = Arc::new(MockSubprocessRuntime::new());
     runtime.add_response(MockResponse::success(b"ok\n".to_vec()));
     let mut formatter = PerlTidyFormatter::new(config, runtime.clone());
@@ -1723,7 +1870,10 @@ fn perltidy_config_no_cuddled_else_arg() {
 
 #[test]
 fn perltidy_config_nospace_after_keyword_arg() {
-    let config = PerlTidyConfig { space_after_keyword: Some(false), ..PerlTidyConfig::default() };
+    let config = PerlTidyConfig {
+        space_after_keyword: Some(false),
+        ..PerlTidyConfig::default()
+    };
     let runtime = Arc::new(MockSubprocessRuntime::new());
     runtime.add_response(MockResponse::success(b"ok\n".to_vec()));
     let mut formatter = PerlTidyFormatter::new(config, runtime.clone());
@@ -1735,7 +1885,10 @@ fn perltidy_config_nospace_after_keyword_arg() {
 
 #[test]
 fn perltidy_config_add_trailing_commas_arg() {
-    let config = PerlTidyConfig { add_trailing_commas: Some(true), ..PerlTidyConfig::default() };
+    let config = PerlTidyConfig {
+        add_trailing_commas: Some(true),
+        ..PerlTidyConfig::default()
+    };
     let runtime = Arc::new(MockSubprocessRuntime::new());
     runtime.add_response(MockResponse::success(b"ok\n".to_vec()));
     let mut formatter = PerlTidyFormatter::new(config, runtime.clone());
@@ -1747,7 +1900,10 @@ fn perltidy_config_add_trailing_commas_arg() {
 
 #[test]
 fn perltidy_config_no_vertical_alignment_arg() {
-    let config = PerlTidyConfig { vertical_alignment: Some(false), ..PerlTidyConfig::default() };
+    let config = PerlTidyConfig {
+        vertical_alignment: Some(false),
+        ..PerlTidyConfig::default()
+    };
     let runtime = Arc::new(MockSubprocessRuntime::new());
     runtime.add_response(MockResponse::success(b"ok\n".to_vec()));
     let mut formatter = PerlTidyFormatter::new(config, runtime.clone());
@@ -1759,15 +1915,20 @@ fn perltidy_config_no_vertical_alignment_arg() {
 
 #[test]
 fn perltidy_config_opening_brace_on_new_line_true() {
-    let config =
-        PerlTidyConfig { opening_brace_on_new_line: Some(true), ..PerlTidyConfig::default() };
+    let config = PerlTidyConfig {
+        opening_brace_on_new_line: Some(true),
+        ..PerlTidyConfig::default()
+    };
     let runtime = Arc::new(MockSubprocessRuntime::new());
     runtime.add_response(MockResponse::success(b"ok\n".to_vec()));
     let mut formatter = PerlTidyFormatter::new(config, runtime.clone());
     let _ = formatter.format("x");
 
     let inv = &runtime.invocations()[0];
-    assert!(inv.args.contains(&"--opening-brace-on-new-line".to_string()));
+    assert!(
+        inv.args
+            .contains(&"--opening-brace-on-new-line".to_string())
+    );
 }
 
 #[test]
@@ -1804,7 +1965,9 @@ fn formatter_empty_code_input() -> Result<(), String> {
 #[test]
 fn formatter_unicode_content() -> Result<(), String> {
     let runtime = Arc::new(MockSubprocessRuntime::new());
-    runtime.add_response(MockResponse::success("my $名前 = '日本語';\n".as_bytes().to_vec()));
+    runtime.add_response(MockResponse::success(
+        "my $名前 = '日本語';\n".as_bytes().to_vec(),
+    ));
 
     let mut formatter = PerlTidyFormatter::new(PerlTidyConfig::default(), runtime);
     let result = formatter.format("my $名前='日本語';")?;
@@ -1948,8 +2111,13 @@ fn critic_config_default_roundtrip() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn severity_all_variants_serialize() -> Result<(), Box<dyn std::error::Error>> {
-    let variants =
-        [Severity::Brutal, Severity::Cruel, Severity::Harsh, Severity::Stern, Severity::Gentle];
+    let variants = [
+        Severity::Brutal,
+        Severity::Cruel,
+        Severity::Harsh,
+        Severity::Stern,
+        Severity::Gentle,
+    ];
     for v in &variants {
         let json = serde_json::to_string(v)?;
         let restored: Severity = serde_json::from_str(&json)?;
@@ -2024,8 +2192,16 @@ fn critic_analyzer_to_diagnostics_multiple_severities() {
             explanation: String::new(),
             severity: Severity::Brutal,
             range: Range {
-                start: Position { byte: 0, line: 0, column: 0 },
-                end: Position { byte: 0, line: 0, column: 5 },
+                start: Position {
+                    byte: 0,
+                    line: 0,
+                    column: 0,
+                },
+                end: Position {
+                    byte: 0,
+                    line: 0,
+                    column: 5,
+                },
             },
             file: "f.pl".to_string(),
         },
@@ -2035,8 +2211,16 @@ fn critic_analyzer_to_diagnostics_multiple_severities() {
             explanation: String::new(),
             severity: Severity::Harsh,
             range: Range {
-                start: Position { byte: 0, line: 1, column: 0 },
-                end: Position { byte: 0, line: 1, column: 5 },
+                start: Position {
+                    byte: 0,
+                    line: 1,
+                    column: 0,
+                },
+                end: Position {
+                    byte: 0,
+                    line: 1,
+                    column: 5,
+                },
             },
             file: "f.pl".to_string(),
         },
@@ -2046,8 +2230,16 @@ fn critic_analyzer_to_diagnostics_multiple_severities() {
             explanation: String::new(),
             severity: Severity::Gentle,
             range: Range {
-                start: Position { byte: 0, line: 2, column: 0 },
-                end: Position { byte: 0, line: 2, column: 5 },
+                start: Position {
+                    byte: 0,
+                    line: 2,
+                    column: 0,
+                },
+                end: Position {
+                    byte: 0,
+                    line: 2,
+                    column: 5,
+                },
             },
             file: "f.pl".to_string(),
         },
@@ -2055,9 +2247,18 @@ fn critic_analyzer_to_diagnostics_multiple_severities() {
 
     let diagnostics = analyzer.to_diagnostics(&violations);
     assert_eq!(diagnostics.len(), 3);
-    assert_eq!(diagnostics[0].severity, Some(lsp_types::DiagnosticSeverity::ERROR));
-    assert_eq!(diagnostics[1].severity, Some(lsp_types::DiagnosticSeverity::WARNING));
-    assert_eq!(diagnostics[2].severity, Some(lsp_types::DiagnosticSeverity::HINT));
+    assert_eq!(
+        diagnostics[0].severity,
+        Some(lsp_types::DiagnosticSeverity::ERROR)
+    );
+    assert_eq!(
+        diagnostics[1].severity,
+        Some(lsp_types::DiagnosticSeverity::WARNING)
+    );
+    assert_eq!(
+        diagnostics[2].severity,
+        Some(lsp_types::DiagnosticSeverity::HINT)
+    );
 }
 
 #[cfg(feature = "lsp-compat")]
@@ -2072,15 +2273,26 @@ fn critic_analyzer_quick_fix_warnings_lsp() {
         explanation: String::new(),
         severity: Severity::Harsh,
         range: Range {
-            start: Position { byte: 0, line: 0, column: 0 },
-            end: Position { byte: 0, line: 0, column: 0 },
+            start: Position {
+                byte: 0,
+                line: 0,
+                column: 0,
+            },
+            end: Position {
+                byte: 0,
+                line: 0,
+                column: 0,
+            },
         },
         file: String::new(),
     };
 
     let fix = analyzer.get_quick_fix(&violation, "");
     assert!(fix.is_some());
-    assert_eq!(fix.map(|f| f.edit.new_text), Some("use warnings;\n".to_string()));
+    assert_eq!(
+        fix.map(|f| f.edit.new_text),
+        Some("use warnings;\n".to_string())
+    );
 }
 
 #[cfg(feature = "lsp-compat")]
@@ -2095,8 +2307,16 @@ fn critic_diagnostics_have_perlcritic_source() {
         explanation: String::new(),
         severity: Severity::Harsh,
         range: Range {
-            start: Position { byte: 0, line: 0, column: 0 },
-            end: Position { byte: 0, line: 0, column: 0 },
+            start: Position {
+                byte: 0,
+                line: 0,
+                column: 0,
+            },
+            end: Position {
+                byte: 0,
+                line: 0,
+                column: 0,
+            },
         },
         file: String::new(),
     }];

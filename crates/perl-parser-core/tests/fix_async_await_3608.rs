@@ -8,7 +8,9 @@ fn find_unary_op<'a>(node: &'a Node, op: &str) -> Option<&'a Node> {
         return Some(node);
     }
 
-    node.children().into_iter().find_map(|child| find_unary_op(child, op))
+    node.children()
+        .into_iter()
+        .find_map(|child| find_unary_op(child, op))
 }
 
 #[test]
@@ -23,7 +25,13 @@ fn async_named_subroutine_carries_async_attribute() {
         .find(|statement| matches!(statement.kind, NodeKind::Subroutine { .. }))
         .expect("expected named subroutine statement");
 
-    let NodeKind::Subroutine { name, attributes, body, .. } = &sub.kind else {
+    let NodeKind::Subroutine {
+        name,
+        attributes,
+        body,
+        ..
+    } = &sub.kind
+    else {
         panic!("expected subroutine node, got {}", sub.kind.kind_name());
     };
 
@@ -47,12 +55,22 @@ fn await_parses_as_unary_operator() {
     };
 
     let decl = statements.first().expect("expected one statement");
-    let NodeKind::VariableDeclaration { initializer: Some(initializer), .. } = &decl.kind else {
-        panic!("expected variable declaration with initializer, got {}", decl.kind.kind_name());
+    let NodeKind::VariableDeclaration {
+        initializer: Some(initializer),
+        ..
+    } = &decl.kind
+    else {
+        panic!(
+            "expected variable declaration with initializer, got {}",
+            decl.kind.kind_name()
+        );
     };
 
     let NodeKind::Unary { op, .. } = &initializer.kind else {
-        panic!("expected unary initializer, got {}", initializer.kind.kind_name());
+        panic!(
+            "expected unary initializer, got {}",
+            initializer.kind.kind_name()
+        );
     };
 
     assert_eq!(op, "await");

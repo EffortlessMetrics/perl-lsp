@@ -42,13 +42,21 @@ pub fn parse_error_to_diagnostic(error: &ParseError) -> Diagnostic {
     };
 
     let suggestion = match error {
-        ParseError::UnexpectedToken { expected, found, .. } => {
+        ParseError::UnexpectedToken {
+            expected, found, ..
+        } => {
             if expected.contains(';') || expected.contains("semicolon") {
                 Some("Add a ';' at the end of the statement".to_string())
             } else if found == ";" {
-                Some(format!("A {} is required here -- the statement appears incomplete", expected))
+                Some(format!(
+                    "A {} is required here -- the statement appears incomplete",
+                    expected
+                ))
             } else if found == "}" || found == ")" || found == "]" {
-                Some(format!("Check for a missing {} before '{}'", expected, found))
+                Some(format!(
+                    "Check for a missing {} before '{}'",
+                    expected, found
+                ))
             } else {
                 None
             }

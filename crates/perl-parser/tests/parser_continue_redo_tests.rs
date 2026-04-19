@@ -55,10 +55,16 @@ fn parser_continue_keyword_recognized() {
 
     // Check that we have a While node with a continue_block
     let while_nodes = find_nodes(&ast, |kind| matches!(kind, NodeKind::While { .. }));
-    assert!(!while_nodes.is_empty(), "Should find at least one While node");
+    assert!(
+        !while_nodes.is_empty(),
+        "Should find at least one While node"
+    );
 
     if let NodeKind::While { continue_block, .. } = &while_nodes[0].kind {
-        assert!(continue_block.is_some(), "While loop should have a continue block");
+        assert!(
+            continue_block.is_some(),
+            "While loop should have a continue block"
+        );
     } else {
         unreachable!("Expected While node");
     }
@@ -69,8 +75,10 @@ fn parser_redo_keyword_recognized() {
     let code = r#"while (1) { redo; }"#;
     let ast = must(parse_code(code));
 
-    let redo_nodes =
-        find_nodes(&ast, |kind| matches!(kind, NodeKind::LoopControl { op, .. } if op == "redo"));
+    let redo_nodes = find_nodes(
+        &ast,
+        |kind| matches!(kind, NodeKind::LoopControl { op, .. } if op == "redo"),
+    );
     assert!(!redo_nodes.is_empty(), "Should find at least one redo node");
 }
 
@@ -87,7 +95,10 @@ fn parser_continue_in_while_loop() {
     assert_eq!(while_nodes.len(), 1, "Should have exactly one While node");
 
     if let NodeKind::While { continue_block, .. } = &while_nodes[0].kind {
-        assert!(continue_block.is_some(), "While loop should have a continue block");
+        assert!(
+            continue_block.is_some(),
+            "While loop should have a continue block"
+        );
     }
 }
 
@@ -101,7 +112,10 @@ fn parser_continue_in_until_loop() {
     assert_eq!(while_nodes.len(), 1, "Should have exactly one While node");
 
     if let NodeKind::While { continue_block, .. } = &while_nodes[0].kind {
-        assert!(continue_block.is_some(), "Until loop should have a continue block");
+        assert!(
+            continue_block.is_some(),
+            "Until loop should have a continue block"
+        );
     }
 }
 
@@ -110,14 +124,21 @@ fn parser_continue_in_for_loop() {
     let case = must_some(find_continue_redo_case("continue.for.basic"));
     let ast = must(parse_code(case.source));
 
-    let for_nodes =
-        find_nodes(&ast, |kind| matches!(kind, NodeKind::For { .. } | NodeKind::Foreach { .. }));
-    assert!(!for_nodes.is_empty(), "Should have at least one For/Foreach node");
+    let for_nodes = find_nodes(&ast, |kind| {
+        matches!(kind, NodeKind::For { .. } | NodeKind::Foreach { .. })
+    });
+    assert!(
+        !for_nodes.is_empty(),
+        "Should have at least one For/Foreach node"
+    );
 
     // Check for continue block
     match &for_nodes[0].kind {
         NodeKind::For { continue_block, .. } => {
-            assert!(continue_block.is_some(), "For loop should have a continue block");
+            assert!(
+                continue_block.is_some(),
+                "For loop should have a continue block"
+            );
         }
         NodeKind::Foreach { .. } => {
             // Note: Foreach doesn't have continue_block in current AST
@@ -132,7 +153,11 @@ fn parser_continue_in_foreach_loop() {
     let ast = must(parse_code(case.source));
 
     let foreach_nodes = find_nodes(&ast, |kind| matches!(kind, NodeKind::Foreach { .. }));
-    assert_eq!(foreach_nodes.len(), 1, "Should have exactly one Foreach node");
+    assert_eq!(
+        foreach_nodes.len(),
+        1,
+        "Should have exactly one Foreach node"
+    );
 }
 
 #[test]
@@ -140,9 +165,14 @@ fn parser_redo_in_while_loop() {
     let case = must_some(find_continue_redo_case("redo.while.basic"));
     let ast = must(parse_code(case.source));
 
-    let redo_nodes =
-        find_nodes(&ast, |kind| matches!(kind, NodeKind::LoopControl { op, .. } if op == "redo"));
-    assert!(!redo_nodes.is_empty(), "Should find at least one redo statement");
+    let redo_nodes = find_nodes(
+        &ast,
+        |kind| matches!(kind, NodeKind::LoopControl { op, .. } if op == "redo"),
+    );
+    assert!(
+        !redo_nodes.is_empty(),
+        "Should find at least one redo statement"
+    );
 }
 
 #[test]
@@ -150,9 +180,14 @@ fn parser_redo_in_until_loop() {
     let case = must_some(find_continue_redo_case("redo.until.basic"));
     let ast = must(parse_code(case.source));
 
-    let redo_nodes =
-        find_nodes(&ast, |kind| matches!(kind, NodeKind::LoopControl { op, .. } if op == "redo"));
-    assert!(!redo_nodes.is_empty(), "Should find at least one redo statement");
+    let redo_nodes = find_nodes(
+        &ast,
+        |kind| matches!(kind, NodeKind::LoopControl { op, .. } if op == "redo"),
+    );
+    assert!(
+        !redo_nodes.is_empty(),
+        "Should find at least one redo statement"
+    );
 }
 
 #[test]
@@ -160,9 +195,14 @@ fn parser_redo_in_for_loop() {
     let case = must_some(find_continue_redo_case("redo.for.basic"));
     let ast = must(parse_code(case.source));
 
-    let redo_nodes =
-        find_nodes(&ast, |kind| matches!(kind, NodeKind::LoopControl { op, .. } if op == "redo"));
-    assert!(!redo_nodes.is_empty(), "Should find at least one redo statement");
+    let redo_nodes = find_nodes(
+        &ast,
+        |kind| matches!(kind, NodeKind::LoopControl { op, .. } if op == "redo"),
+    );
+    assert!(
+        !redo_nodes.is_empty(),
+        "Should find at least one redo statement"
+    );
 }
 
 // ============================================================================
@@ -178,7 +218,10 @@ fn parser_redo_with_label() {
         &ast,
         |kind| matches!(kind, NodeKind::LoopControl { op, label, .. } if op == "redo" && label.is_some()),
     );
-    assert!(!redo_nodes.is_empty(), "Should find at least one redo statement with label");
+    assert!(
+        !redo_nodes.is_empty(),
+        "Should find at least one redo statement with label"
+    );
 
     if let NodeKind::LoopControl { label, .. } = &redo_nodes[0].kind {
         assert_eq!(label.as_deref(), Some("LOOP"), "Label should be LOOP");
@@ -194,7 +237,10 @@ fn parser_redo_nested_labeled() {
         &ast,
         |kind| matches!(kind, NodeKind::LoopControl { op, label, .. } if op == "redo" && label.is_some()),
     );
-    assert!(redo_nodes.len() >= 2, "Should find at least two redo statements with labels");
+    assert!(
+        redo_nodes.len() >= 2,
+        "Should find at least two redo statements with labels"
+    );
 
     // Check that we have both INNER and OUTER labels
     let labels: Vec<&str> = redo_nodes
@@ -221,12 +267,15 @@ fn parser_continue_next_interaction() {
     let case = must_some(find_continue_redo_case("continue.next.interaction"));
     let ast = must(parse_code(case.source));
 
-    let for_nodes =
-        find_nodes(&ast, |kind| matches!(kind, NodeKind::For { .. } | NodeKind::Foreach { .. }));
+    let for_nodes = find_nodes(&ast, |kind| {
+        matches!(kind, NodeKind::For { .. } | NodeKind::Foreach { .. })
+    });
     assert!(!for_nodes.is_empty(), "Should have at least one loop");
 
-    let next_nodes =
-        find_nodes(&ast, |kind| matches!(kind, NodeKind::LoopControl { op, .. } if op == "next"));
+    let next_nodes = find_nodes(
+        &ast,
+        |kind| matches!(kind, NodeKind::LoopControl { op, .. } if op == "next"),
+    );
     assert!(!next_nodes.is_empty(), "Should find next statement");
 }
 
@@ -235,8 +284,10 @@ fn parser_continue_last_interaction() {
     let case = must_some(find_continue_redo_case("continue.last.interaction"));
     let ast = must(parse_code(case.source));
 
-    let last_nodes =
-        find_nodes(&ast, |kind| matches!(kind, NodeKind::LoopControl { op, .. } if op == "last"));
+    let last_nodes = find_nodes(
+        &ast,
+        |kind| matches!(kind, NodeKind::LoopControl { op, .. } if op == "last"),
+    );
     assert!(!last_nodes.is_empty(), "Should find last statement");
 }
 
@@ -248,8 +299,10 @@ fn parser_continue_redo_interaction() {
     let while_nodes = find_nodes(&ast, |kind| matches!(kind, NodeKind::While { .. }));
     assert_eq!(while_nodes.len(), 1, "Should have exactly one While node");
 
-    let redo_nodes =
-        find_nodes(&ast, |kind| matches!(kind, NodeKind::LoopControl { op, .. } if op == "redo"));
+    let redo_nodes = find_nodes(
+        &ast,
+        |kind| matches!(kind, NodeKind::LoopControl { op, .. } if op == "redo"),
+    );
     assert!(!redo_nodes.is_empty(), "Should find redo statement");
 }
 
@@ -258,9 +311,13 @@ fn parser_continue_nested_loops() {
     let case = must_some(find_continue_redo_case("continue.nested.loops"));
     let ast = must(parse_code(case.source));
 
-    let for_nodes =
-        find_nodes(&ast, |kind| matches!(kind, NodeKind::For { .. } | NodeKind::Foreach { .. }));
-    assert!(for_nodes.len() >= 2, "Should have at least two nested loops");
+    let for_nodes = find_nodes(&ast, |kind| {
+        matches!(kind, NodeKind::For { .. } | NodeKind::Foreach { .. })
+    });
+    assert!(
+        for_nodes.len() >= 2,
+        "Should have at least two nested loops"
+    );
 
     // Count continue blocks
     let continue_blocks = for_nodes
@@ -271,7 +328,10 @@ fn parser_continue_nested_loops() {
             _ => false,
         })
         .count();
-    assert!(continue_blocks >= 2, "Both loops should have continue blocks");
+    assert!(
+        continue_blocks >= 2,
+        "Both loops should have continue blocks"
+    );
 }
 
 #[test]
@@ -279,8 +339,9 @@ fn parser_continue_multiple_statements() {
     let case = must_some(find_continue_redo_case("continue.multiple.statements"));
     let ast = must(parse_code(case.source));
 
-    let for_nodes =
-        find_nodes(&ast, |kind| matches!(kind, NodeKind::For { .. } | NodeKind::Foreach { .. }));
+    let for_nodes = find_nodes(&ast, |kind| {
+        matches!(kind, NodeKind::For { .. } | NodeKind::Foreach { .. })
+    });
     assert!(!for_nodes.is_empty(), "Should have at least one loop");
 
     // Verify continue block exists and has content for either loop representation.
@@ -289,7 +350,10 @@ fn parser_continue_multiple_statements() {
             assert!(continue_block.is_some(), "Should have a continue block");
             let cont = must_some(continue_block.as_ref());
             if let NodeKind::Block { statements } = &cont.kind {
-                assert!(statements.len() >= 3, "Continue block should have multiple statements");
+                assert!(
+                    statements.len() >= 3,
+                    "Continue block should have multiple statements"
+                );
             }
         }
         _ => unreachable!("Expected For or Foreach node"),
@@ -301,8 +365,9 @@ fn parser_continue_empty_block() {
     let case = must_some(find_continue_redo_case("continue.empty.block"));
     let ast = must(parse_code(case.source));
 
-    let for_nodes =
-        find_nodes(&ast, |kind| matches!(kind, NodeKind::For { .. } | NodeKind::Foreach { .. }));
+    let for_nodes = find_nodes(&ast, |kind| {
+        matches!(kind, NodeKind::For { .. } | NodeKind::Foreach { .. })
+    });
     assert!(!for_nodes.is_empty(), "Should have at least one loop");
 
     // Verify empty continue block for either loop representation.
@@ -319,8 +384,10 @@ fn parser_redo_do_while() {
     let case = must_some(find_continue_redo_case("redo.do.while"));
     let ast = must(parse_code(case.source));
 
-    let redo_nodes =
-        find_nodes(&ast, |kind| matches!(kind, NodeKind::LoopControl { op, .. } if op == "redo"));
+    let redo_nodes = find_nodes(
+        &ast,
+        |kind| matches!(kind, NodeKind::LoopControl { op, .. } if op == "redo"),
+    );
     assert!(!redo_nodes.is_empty(), "Should find redo statement");
 }
 
@@ -329,8 +396,10 @@ fn parser_redo_conditional() {
     let case = must_some(find_continue_redo_case("redo.conditional"));
     let ast = must(parse_code(case.source));
 
-    let redo_nodes =
-        find_nodes(&ast, |kind| matches!(kind, NodeKind::LoopControl { op, .. } if op == "redo"));
+    let redo_nodes = find_nodes(
+        &ast,
+        |kind| matches!(kind, NodeKind::LoopControl { op, .. } if op == "redo"),
+    );
     assert!(!redo_nodes.is_empty(), "Should find redo statement");
 }
 
@@ -339,8 +408,10 @@ fn parser_redo_counter_reset() {
     let case = must_some(find_continue_redo_case("redo.counter.reset"));
     let ast = must(parse_code(case.source));
 
-    let redo_nodes =
-        find_nodes(&ast, |kind| matches!(kind, NodeKind::LoopControl { op, .. } if op == "redo"));
+    let redo_nodes = find_nodes(
+        &ast,
+        |kind| matches!(kind, NodeKind::LoopControl { op, .. } if op == "redo"),
+    );
     assert!(!redo_nodes.is_empty(), "Should find redo statement");
 }
 
@@ -359,12 +430,22 @@ for my $i (1..3) {
 "#;
     let ast = must(parse_code(code));
 
-    let for_nodes =
-        find_nodes(&ast, |kind| matches!(kind, NodeKind::For { .. } | NodeKind::Foreach { .. }));
-    assert_eq!(for_nodes.len(), 1, "Should have exactly one For/Foreach node");
+    let for_nodes = find_nodes(&ast, |kind| {
+        matches!(kind, NodeKind::For { .. } | NodeKind::Foreach { .. })
+    });
+    assert_eq!(
+        for_nodes.len(),
+        1,
+        "Should have exactly one For/Foreach node"
+    );
 
     match &for_nodes[0].kind {
-        NodeKind::Foreach { variable, list, body, .. } => {
+        NodeKind::Foreach {
+            variable,
+            list,
+            body,
+            ..
+        } => {
             // Verify iterator variable exists
             assert!(
                 matches!(
@@ -379,7 +460,10 @@ for my $i (1..3) {
                 "Should have list (range expression)"
             );
             // Verify body exists
-            assert!(matches!(body.kind, NodeKind::Block { .. }), "Should have body block");
+            assert!(
+                matches!(body.kind, NodeKind::Block { .. }),
+                "Should have body block"
+            );
         }
         _ => unreachable!("Expected Foreach node"),
     }
@@ -395,8 +479,10 @@ while ($count < 3) {
 "#;
     let ast = must(parse_code(code));
 
-    let redo_nodes =
-        find_nodes(&ast, |kind| matches!(kind, NodeKind::LoopControl { op, .. } if op == "redo"));
+    let redo_nodes = find_nodes(
+        &ast,
+        |kind| matches!(kind, NodeKind::LoopControl { op, .. } if op == "redo"),
+    );
     assert_eq!(redo_nodes.len(), 1, "Should have exactly one redo node");
 
     if let NodeKind::LoopControl { op, label } = &redo_nodes[0].kind {
@@ -415,8 +501,10 @@ LOOP: while ($count < 3) {
 "#;
     let ast = must(parse_code(code));
 
-    let redo_nodes =
-        find_nodes(&ast, |kind| matches!(kind, NodeKind::LoopControl { op, .. } if op == "redo"));
+    let redo_nodes = find_nodes(
+        &ast,
+        |kind| matches!(kind, NodeKind::LoopControl { op, .. } if op == "redo"),
+    );
     assert_eq!(redo_nodes.len(), 1, "Should have exactly one redo node");
 
     if let NodeKind::LoopControl { op, label } = &redo_nodes[0].kind {
@@ -460,6 +548,12 @@ fn parser_continue_redo_coverage() {
     println!("  Valid cases: {}", valid_count);
     println!("  Invalid cases: {}", invalid_count);
 
-    assert!(valid_count >= 20, "Should have at least 20 valid test cases");
-    assert!(all_cases.len() >= 25, "Should have at least 25 total test cases");
+    assert!(
+        valid_count >= 20,
+        "Should have at least 20 valid test cases"
+    );
+    assert!(
+        all_cases.len() >= 25,
+        "Should have at least 25 total test cases"
+    );
 }

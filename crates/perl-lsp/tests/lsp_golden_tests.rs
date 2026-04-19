@@ -57,8 +57,9 @@ impl TestContext {
         // Try workspace target directory
         if let Ok(manifest_dir) = std::env::var("CARGO_MANIFEST_DIR") {
             let crate_dir = std::path::Path::new(&manifest_dir);
-            if let Some(workspace_root) =
-                crate_dir.ancestors().find(|p| p.join("Cargo.lock").exists())
+            if let Some(workspace_root) = crate_dir
+                .ancestors()
+                .find(|p| p.join("Cargo.lock").exists())
             {
                 let debug_binary = workspace_root.join("target/debug/perl-lsp");
                 if debug_binary.exists() {
@@ -86,11 +87,22 @@ impl TestContext {
             .spawn()
             .map_err(|e| format!("Failed to start LSP server: {}", e))?;
 
-        let reader =
-            std::io::BufReader::new(server.stdout.take().ok_or("Failed to capture server stdout")?);
-        let writer = server.stdin.take().ok_or("Failed to capture server stdin")?;
+        let reader = std::io::BufReader::new(
+            server
+                .stdout
+                .take()
+                .ok_or("Failed to capture server stdout")?,
+        );
+        let writer = server
+            .stdin
+            .take()
+            .ok_or("Failed to capture server stdin")?;
 
-        let mut ctx = TestContext { server, reader, writer };
+        let mut ctx = TestContext {
+            server,
+            reader,
+            writer,
+        };
 
         // Initialize with minimal capabilities for faster startup
         let current_dir = std::env::current_dir()
@@ -147,7 +159,9 @@ impl TestContext {
         self.writer
             .write_all(message.as_bytes())
             .map_err(|e| format!("Failed to write request: {}", e))?;
-        self.writer.flush().map_err(|e| format!("Failed to flush writer: {}", e))?;
+        self.writer
+            .flush()
+            .map_err(|e| format!("Failed to flush writer: {}", e))?;
 
         // Read response using proper LSP framing:
         // 1. Parse headers line-by-line until blank line
@@ -213,7 +227,9 @@ impl TestContext {
         self.writer
             .write_all(message.as_bytes())
             .map_err(|e| format!("Failed to write notification: {}", e))?;
-        self.writer.flush().map_err(|e| format!("Failed to flush writer: {}", e))?;
+        self.writer
+            .flush()
+            .map_err(|e| format!("Failed to flush writer: {}", e))?;
         Ok(())
     }
 
@@ -354,7 +370,10 @@ fn test_completion_golden() -> Result<(), Box<dyn std::error::Error>> {
         let items = if let Some(arr) = comp.as_array() {
             arr.clone()
         } else if let Some(obj) = comp.as_object() {
-            obj.get("items").and_then(|v| v.as_array()).cloned().unwrap_or_default()
+            obj.get("items")
+                .and_then(|v| v.as_array())
+                .cloned()
+                .unwrap_or_default()
         } else {
             vec![]
         };
@@ -367,8 +386,14 @@ fn test_completion_golden() -> Result<(), Box<dyn std::error::Error>> {
             .collect();
 
         // In a real snapshot test, we'd compare the exact list
-        assert!(labels.iter().any(|l| l.contains("user_name")), "Should complete $user_name");
-        assert!(labels.iter().any(|l| l.contains("user_age")), "Should complete $user_age");
+        assert!(
+            labels.iter().any(|l| l.contains("user_name")),
+            "Should complete $user_name"
+        );
+        assert!(
+            labels.iter().any(|l| l.contains("user_age")),
+            "Should complete $user_age"
+        );
     }
     Ok(())
 }
@@ -398,7 +423,10 @@ fn test_semantic_tokens_golden() -> Result<(), Box<dyn std::error::Error>> {
         // In a real snapshot test, we'd verify the exact token positions and types
         if let Some(token_data) = data {
             // Tokens come in groups of 5: [deltaLine, deltaStartChar, length, tokenType, tokenModifiers]
-            assert!(token_data.len() % 5 == 0, "Token data should be multiple of 5");
+            assert!(
+                token_data.len() % 5 == 0,
+                "Token data should be multiple of 5"
+            );
             assert!(token_data.len() >= 5, "Should have at least one token");
         }
     }

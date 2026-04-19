@@ -68,7 +68,10 @@ impl TotalStats {
         if self.files_parsed > 0 {
             let avg_speed = self.total_bytes as f64 / self.total_time.as_secs_f64() / 1_000_000.0;
             eprintln!("Average speed: {:.2} MB/s", avg_speed);
-            eprintln!("Average nodes per file: {}", self.total_nodes / self.files_parsed);
+            eprintln!(
+                "Average nodes per file: {}",
+                self.total_nodes / self.files_parsed
+            );
         }
 
         if self.file_details.len() > 1 && self.file_details.len() <= 20 {
@@ -157,7 +160,14 @@ impl Args {
             inputs.push(Input::Stdin);
         }
 
-        Ok(Args { inputs, output_format, show_stats, pretty, quiet, continue_on_error })
+        Ok(Args {
+            inputs,
+            output_format,
+            show_stats,
+            pretty,
+            quiet,
+            continue_on_error,
+        })
     }
 }
 
@@ -330,9 +340,18 @@ fn print_error(error: &ParseError, source: &str) {
     let mut stderr = io::stderr();
 
     match error {
-        ParseError::UnexpectedToken { expected, found, location } => {
+        ParseError::UnexpectedToken {
+            expected,
+            found,
+            location,
+        } => {
             let (line, col) = position_to_line_col(source, *location);
-            writeln!(stderr, "Parse error: Unexpected token at line {}, column {}", line, col).ok();
+            writeln!(
+                stderr,
+                "Parse error: Unexpected token at line {}, column {}",
+                line, col
+            )
+            .ok();
             writeln!(stderr, "  Expected: {}", expected).ok();
             writeln!(stderr, "  Found: {}", found).ok();
             print_error_context(source, *location, &mut stderr);
@@ -345,7 +364,12 @@ fn print_error(error: &ParseError, source: &str) {
         }
         ParseError::SyntaxError { message, location } => {
             let (line, col) = position_to_line_col(source, *location);
-            writeln!(stderr, "Parse error: {} at line {}, column {}", message, line, col).ok();
+            writeln!(
+                stderr,
+                "Parse error: {} at line {}, column {}",
+                message, line, col
+            )
+            .ok();
             print_error_context(source, *location, &mut stderr);
         }
         ParseError::InvalidNumber { literal } => {
@@ -367,7 +391,12 @@ fn print_error(error: &ParseError, source: &str) {
             writeln!(stderr, "Parse error: Maximum recursion depth exceeded").ok();
         }
         ParseError::NestingTooDeep { depth, max_depth } => {
-            writeln!(stderr, "Parse error: Nesting too deep ({} > {})", depth, max_depth).ok();
+            writeln!(
+                stderr,
+                "Parse error: Nesting too deep ({} > {})",
+                depth, max_depth
+            )
+            .ok();
         }
         ParseError::Cancelled => {
             writeln!(stderr, "Parse error: Parsing cancelled").ok();

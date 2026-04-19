@@ -97,21 +97,40 @@ fn open_document_match_takes_precedence_over_workspace() -> Result<(), Box<dyn s
 
 #[test]
 fn first_matching_open_document_wins() {
-    let docs =
-        vec!["file:///first/Foo/Bar.pm".to_string(), "file:///second/Foo/Bar.pm".to_string()];
+    let docs = vec![
+        "file:///first/Foo/Bar.pm".to_string(),
+        "file:///second/Foo/Bar.pm".to_string(),
+    ];
 
-    let result =
-        resolve_module_uri("Foo::Bar", &docs, &[], &[], false, &[], Duration::from_millis(100));
+    let result = resolve_module_uri(
+        "Foo::Bar",
+        &docs,
+        &[],
+        &[],
+        false,
+        &[],
+        Duration::from_millis(100),
+    );
 
-    assert_eq!(result, ModuleUriResolution::Resolved("file:///first/Foo/Bar.pm".to_string()));
+    assert_eq!(
+        result,
+        ModuleUriResolution::Resolved("file:///first/Foo/Bar.pm".to_string())
+    );
 }
 
 #[test]
 fn open_document_no_match_falls_through() {
     let docs = vec!["file:///unrelated/Baz/Quux.pm".to_string()];
 
-    let result =
-        resolve_module_uri("Foo::Bar", &docs, &[], &[], false, &[], Duration::from_millis(100));
+    let result = resolve_module_uri(
+        "Foo::Bar",
+        &docs,
+        &[],
+        &[],
+        false,
+        &[],
+        Duration::from_millis(100),
+    );
 
     assert_eq!(result, ModuleUriResolution::NotFound);
 }
@@ -121,8 +140,15 @@ fn open_document_partial_suffix_does_not_match() {
     // "Bar.pm" does not end with "Foo/Bar.pm" — module_name_to_path("Foo::Bar") == "Foo/Bar.pm"
     let docs = vec!["file:///only/Bar.pm".to_string()];
 
-    let result =
-        resolve_module_uri("Foo::Bar", &docs, &[], &[], false, &[], Duration::from_millis(100));
+    let result = resolve_module_uri(
+        "Foo::Bar",
+        &docs,
+        &[],
+        &[],
+        false,
+        &[],
+        Duration::from_millis(100),
+    );
 
     assert_eq!(result, ModuleUriResolution::NotFound);
 }
@@ -190,7 +216,9 @@ fn workspace_folder_multiple_include_paths_first_match_wins()
     std::fs::create_dir_all(&parent)?;
     std::fs::write(&module_file, "1;")?;
 
-    let workspace_uri = url::Url::from_file_path(&workspace).map_err(|()| "build URI")?.to_string();
+    let workspace_uri = url::Url::from_file_path(&workspace)
+        .map_err(|()| "build URI")?
+        .to_string();
 
     let result = resolve_module_uri(
         "Alpha",
@@ -219,7 +247,9 @@ fn workspace_folder_module_not_on_disk_returns_not_found() -> Result<(), Box<dyn
     let workspace = temp.path().join("workspace");
     std::fs::create_dir_all(&workspace)?;
 
-    let workspace_uri = url::Url::from_file_path(&workspace).map_err(|()| "build URI")?.to_string();
+    let workspace_uri = url::Url::from_file_path(&workspace)
+        .map_err(|()| "build URI")?
+        .to_string();
 
     let result = resolve_module_uri(
         "Missing::Module",
@@ -248,8 +278,12 @@ fn multiple_workspace_folders_searches_in_order() -> Result<(), Box<dyn std::err
     std::fs::create_dir_all(must_some(module_file.parent()))?;
     std::fs::write(&module_file, "1;")?;
 
-    let uri1 = url::Url::from_file_path(&ws1).map_err(|()| "uri1")?.to_string();
-    let uri2 = url::Url::from_file_path(&ws2).map_err(|()| "uri2")?.to_string();
+    let uri1 = url::Url::from_file_path(&ws1)
+        .map_err(|()| "uri1")?
+        .to_string();
+    let uri2 = url::Url::from_file_path(&ws2)
+        .map_err(|()| "uri2")?
+        .to_string();
 
     let result = resolve_module_uri(
         "Found",
@@ -490,7 +524,9 @@ fn nanosecond_timeout_with_many_folders_times_out() {
 #[test]
 fn nanosecond_timeout_with_system_inc_times_out() {
     let folders: Vec<String> = (0..100).map(|i| format!("file:///ws-{i}")).collect();
-    let system_inc: Vec<PathBuf> = (0..500).map(|i| PathBuf::from(format!("/inc/{i}"))).collect();
+    let system_inc: Vec<PathBuf> = (0..500)
+        .map(|i| PathBuf::from(format!("/inc/{i}")))
+        .collect();
 
     let result = resolve_module_uri(
         "Never::Found",
@@ -511,8 +547,15 @@ fn nanosecond_timeout_with_system_inc_times_out() {
 
 #[test]
 fn all_empty_inputs_returns_not_found() {
-    let result =
-        resolve_module_uri("Anything", &[], &[], &[], false, &[], Duration::from_millis(100));
+    let result = resolve_module_uri(
+        "Anything",
+        &[],
+        &[],
+        &[],
+        false,
+        &[],
+        Duration::from_millis(100),
+    );
 
     assert_eq!(result, ModuleUriResolution::NotFound);
 }
@@ -606,7 +649,9 @@ fn include_path_traversal_is_blocked() -> Result<(), Box<dyn std::error::Error>>
     let escaped = temp.path().join("Evil.pm");
     std::fs::write(&escaped, "1;")?;
 
-    let workspace_uri = url::Url::from_file_path(&workspace).map_err(|()| "uri")?.to_string();
+    let workspace_uri = url::Url::from_file_path(&workspace)
+        .map_err(|()| "uri")?
+        .to_string();
 
     let result = resolve_module_uri(
         "Evil",
@@ -632,7 +677,9 @@ fn absolute_include_path_outside_workspace_is_honored() -> Result<(), Box<dyn st
     std::fs::create_dir_all(module_file.parent().ok_or("no parent")?)?;
     std::fs::write(&module_file, "1;")?;
 
-    let workspace_uri = url::Url::from_file_path(&workspace).map_err(|()| "uri")?.to_string();
+    let workspace_uri = url::Url::from_file_path(&workspace)
+        .map_err(|()| "uri")?
+        .to_string();
 
     let result = resolve_module_uri(
         "External::Util",
@@ -659,7 +706,9 @@ fn deeply_nested_traversal_is_blocked() -> Result<(), Box<dyn std::error::Error>
     let workspace = temp.path().join("deep").join("nested").join("workspace");
     std::fs::create_dir_all(&workspace)?;
 
-    let workspace_uri = url::Url::from_file_path(&workspace).map_err(|()| "uri")?.to_string();
+    let workspace_uri = url::Url::from_file_path(&workspace)
+        .map_err(|()| "uri")?
+        .to_string();
 
     let result = resolve_module_uri(
         "Escape",

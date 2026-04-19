@@ -303,7 +303,11 @@ my $test = 'hello';
 
     let hover_response = read_response_timeout(&server, Duration::from_secs(10));
     let hover_time = hover_start.elapsed();
-    eprintln!("Hover request completed in {:?}: {:?}", hover_time, hover_response.is_some());
+    eprintln!(
+        "Hover request completed in {:?}: {:?}",
+        hover_time,
+        hover_response.is_some()
+    );
 
     // Now try document symbols with performance tracking
     eprintln!("Testing document symbols request...");
@@ -324,7 +328,10 @@ my $test = 'hello';
     let response = read_response_timeout(&server, unicode_timeout);
 
     if response.is_none() {
-        eprintln!("Document symbols request timed out after {:?}", unicode_timeout);
+        eprintln!(
+            "Document symbols request timed out after {:?}",
+            unicode_timeout
+        );
         eprintln!("Attempting graceful fallback...");
 
         // Try a simpler request to see if server is still alive
@@ -369,9 +376,15 @@ my $test = 'hello';
         response.get("error")
     );
 
-    let result = response.get("result").ok_or("Response missing 'result' field")?;
+    let result = response
+        .get("result")
+        .ok_or("Response missing 'result' field")?;
 
-    assert!(result.is_array(), "Document symbols result must be an array, got: {:?}", result);
+    assert!(
+        result.is_array(),
+        "Document symbols result must be an array, got: {:?}",
+        result
+    );
 
     let symbols = result.as_array().ok_or("Result should be array")?;
 
@@ -384,7 +397,9 @@ my $test = 'hello';
         .collect();
 
     // Verify critical Unicode variables are found
-    let expected_symbols = ["heart", "rocket", "pi", "sum", "infinity", "hebrew", "arabic"];
+    let expected_symbols = [
+        "heart", "rocket", "pi", "sum", "infinity", "hebrew", "arabic",
+    ];
     let mut found_symbols = Vec::new();
 
     for expected in &expected_symbols {

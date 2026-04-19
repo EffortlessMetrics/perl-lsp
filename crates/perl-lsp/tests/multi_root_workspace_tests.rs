@@ -29,13 +29,21 @@ type TestResult = Result<(), Box<dyn std::error::Error>>;
 /// Adaptive timeout for indexing operations
 fn indexing_timeout() -> Duration {
     let is_ci = std::env::var("CI").is_ok() || std::env::var("GITHUB_ACTIONS").is_ok();
-    if is_ci { Duration::from_secs(15) } else { Duration::from_secs(8) }
+    if is_ci {
+        Duration::from_secs(15)
+    } else {
+        Duration::from_secs(8)
+    }
 }
 
 /// Adaptive timeout for LSP requests
 fn request_timeout() -> Duration {
     let is_ci = std::env::var("CI").is_ok() || std::env::var("GITHUB_ACTIONS").is_ok();
-    if is_ci { Duration::from_secs(5) } else { Duration::from_secs(2) }
+    if is_ci {
+        Duration::from_secs(5)
+    } else {
+        Duration::from_secs(2)
+    }
 }
 
 /// Helper to create a workspace folder with a .perl-lsp.toml config
@@ -112,12 +120,18 @@ fn test_per_folder_toml_config() -> TestResult {
     )?;
 
     // Create script in folder A that uses ModuleA
-    let script_a_uri =
-        create_script(&ws, "folder-a/script.pl", "use ModuleA;\nmy $x = ModuleA::func_a();\n")?;
+    let script_a_uri = create_script(
+        &ws,
+        "folder-a/script.pl",
+        "use ModuleA;\nmy $x = ModuleA::func_a();\n",
+    )?;
 
     // Create script in folder B that uses ModuleB
-    let script_b_uri =
-        create_script(&ws, "folder-b/script.pl", "use ModuleB;\nmy $y = ModuleB::func_b();\n")?;
+    let script_b_uri = create_script(
+        &ws,
+        "folder-b/script.pl",
+        "use ModuleB;\nmy $y = ModuleB::func_b();\n",
+    )?;
 
     // Initialize with both workspace folders
     let mut harness = LspHarness::new_raw();
@@ -259,7 +273,10 @@ fn test_cross_folder_module_navigation() -> TestResult {
 
     // Open the script
     let script_uri = ws.uri("service-a/bin/run.pl");
-    harness.open(&script_uri, "use Shared;\nmy $result = Shared::shared_func();\n")?;
+    harness.open(
+        &script_uri,
+        "use Shared;\nmy $result = Shared::shared_func();\n",
+    )?;
 
     harness.wait_for_idle(Duration::from_millis(500));
 
@@ -325,12 +342,18 @@ fn test_same_name_ambiguity() -> TestResult {
     )?;
 
     // Create script in folder A that uses Foo::Util
-    let script_a_uri =
-        create_script(&ws, "folder-a/script.pl", "use Foo::Util;\nmy $x = Foo::Util::run();\n")?;
+    let script_a_uri = create_script(
+        &ws,
+        "folder-a/script.pl",
+        "use Foo::Util;\nmy $x = Foo::Util::run();\n",
+    )?;
 
     // Create script in folder B that uses Foo::Util
-    let script_b_uri =
-        create_script(&ws, "folder-b/script.pl", "use Foo::Util;\nmy $y = Foo::Util::run();\n")?;
+    let script_b_uri = create_script(
+        &ws,
+        "folder-b/script.pl",
+        "use Foo::Util;\nmy $y = Foo::Util::run();\n",
+    )?;
 
     // Initialize with both workspace folders
     let mut harness = LspHarness::new_raw();
@@ -421,7 +444,10 @@ fn test_same_name_ambiguity() -> TestResult {
 
     // The server should handle the query without errors
     // (whether it finds symbols depends on indexing implementation)
-    assert!(symbols_result.is_ok(), "Workspace symbol query should succeed");
+    assert!(
+        symbols_result.is_ok(),
+        "Workspace symbol query should succeed"
+    );
 
     Ok(())
 }
@@ -512,7 +538,10 @@ fn test_workspace_folder_removal() -> TestResult {
     );
 
     // Verify the server is still responsive after folder removal
-    assert!(symbols_after_result.is_ok(), "Server should remain responsive after folder removal");
+    assert!(
+        symbols_after_result.is_ok(),
+        "Server should remain responsive after folder removal"
+    );
 
     Ok(())
 }
@@ -574,7 +603,10 @@ fn test_hover_definition_consistency() -> TestResult {
     std::thread::sleep(indexing_timeout());
 
     // Open script
-    harness.open(&script_uri, "use MyModule;\nmy $x = MyModule::my_function();\n")?;
+    harness.open(
+        &script_uri,
+        "use MyModule;\nmy $x = MyModule::my_function();\n",
+    )?;
 
     harness.wait_for_idle(Duration::from_millis(500));
 
@@ -718,7 +750,10 @@ fn test_folder_context_preservation() -> TestResult {
     // Assert: didChange preserves folder context
     // Close and reopen with modified content to simulate didChange
     harness.close(&script_a_uri)?;
-    harness.open(&script_a_uri, "use ModuleA;\n# comment\nmy $x = ModuleA::func_a();\n")?;
+    harness.open(
+        &script_a_uri,
+        "use ModuleA;\n# comment\nmy $x = ModuleA::func_a();\n",
+    )?;
 
     // Verify definition still works correctly after change
     let def_after_result = harness.request_with_timeout(
@@ -779,8 +814,11 @@ fn test_ordered_scope_resolution() -> TestResult {
     )?;
 
     // Create script in folder A that uses Shared
-    let script_uri =
-        create_script(&ws, "folder-a/script.pl", "use Shared;\nmy $x = Shared::func();\n")?;
+    let script_uri = create_script(
+        &ws,
+        "folder-a/script.pl",
+        "use Shared;\nmy $x = Shared::func();\n",
+    )?;
 
     // Initialize with folder A first, then folder B
     let mut harness = LspHarness::new_raw();
@@ -842,8 +880,11 @@ fn test_ordered_scope_resolution() -> TestResult {
     )?;
 
     // Create script in folder A that uses OnlyInB
-    let script_b_uri =
-        create_script(&ws, "folder-a/script_b.pl", "use OnlyInB;\nmy $y = OnlyInB::func();\n")?;
+    let script_b_uri = create_script(
+        &ws,
+        "folder-a/script_b.pl",
+        "use OnlyInB;\nmy $y = OnlyInB::func();\n",
+    )?;
 
     // Wait for re-indexing
     std::thread::sleep(indexing_timeout());
@@ -920,8 +961,11 @@ fn test_folder_aware_ranking() -> TestResult {
     )?;
 
     // Create script in folder A that uses Common
-    let script_uri =
-        create_script(&ws, "folder-a/script.pl", "use Common;\nmy $x = Common::helper();\n")?;
+    let script_uri = create_script(
+        &ws,
+        "folder-a/script.pl",
+        "use Common;\nmy $x = Common::helper();\n",
+    )?;
 
     // Initialize with all three workspace folders
     let mut harness = LspHarness::new_raw();
@@ -1044,8 +1088,11 @@ fn test_cross_folder_rename_updates_multiple_workspace_roots() -> TestResult {
         "folder-a/lib/Shared.pm",
         "package Shared;\nsub ping { return 1; }\n1;\n",
     )?;
-    let consumer_uri =
-        create_script(&ws, "folder-b/consumer.pl", "use Shared;\nmy $x = Shared::ping();\n")?;
+    let consumer_uri = create_script(
+        &ws,
+        "folder-b/consumer.pl",
+        "use Shared;\nmy $x = Shared::ping();\n",
+    )?;
 
     let mut harness = LspHarness::new_raw();
     harness.notify(
@@ -1081,9 +1128,13 @@ fn test_cross_folder_rename_updates_multiple_workspace_roots() -> TestResult {
         request_timeout(),
     )?;
 
-    let changes =
-        rename["changes"].as_object().ok_or("rename response must include changes map")?;
-    assert!(changes.contains_key(&module_uri), "rename should update defining file in folder-a");
+    let changes = rename["changes"]
+        .as_object()
+        .ok_or("rename response must include changes map")?;
+    assert!(
+        changes.contains_key(&module_uri),
+        "rename should update defining file in folder-a"
+    );
     assert!(
         changes.contains_key(&consumer_uri),
         "rename should update consumer file in folder-b (cross-folder workspace edit)"
@@ -1129,7 +1180,11 @@ fn test_workspace_symbol_during_building_state() -> TestResult {
         .test_handle_workspace_symbols(Some(serde_json::json!({"query": "building_func"})))
         .map_err(|e| format!("{e:?}"))?;
 
-    let symbol_count = result.as_ref().and_then(|v| v.as_array()).map(|a| a.len()).unwrap_or(0);
+    let symbol_count = result
+        .as_ref()
+        .and_then(|v| v.as_array())
+        .map(|a| a.len())
+        .unwrap_or(0);
 
     // ASSERT: must find at least one result from the partial index.
     // This fails before the fix (returns 0 results) and passes after (returns 1+).
@@ -1186,7 +1241,11 @@ fn test_workspace_symbol_includes_folder_uri_for_disambiguation() -> TestResult 
 
     // Search for "run" — both folders define it.
     let symbols = index.search_symbols("run");
-    assert!(symbols.len() >= 2, "Expected at least 2 'run' symbols, got {}", symbols.len());
+    assert!(
+        symbols.len() >= 2,
+        "Expected at least 2 'run' symbols, got {}",
+        symbols.len()
+    );
 
     // Each symbol from the index must have workspace_folder_uri set.
     for sym in &symbols {
@@ -1360,7 +1419,9 @@ fn test_cross_folder_rename_spans_both_roots() -> TestResult {
     }
 
     // At minimum, the definition file (A.pm) must appear in the edit
-    let a_pm_key = change_map.keys().find(|k| k.contains("A.pm") || *k == &a_pm_uri);
+    let a_pm_key = change_map
+        .keys()
+        .find(|k| k.contains("A.pm") || *k == &a_pm_uri);
     assert!(
         a_pm_key.is_some(),
         "WorkspaceEdit must include an edit for A.pm (the definition file). \
@@ -1369,7 +1430,9 @@ fn test_cross_folder_rename_spans_both_roots() -> TestResult {
     );
 
     // If B.pm is also present in the edit, verify the new name appears there
-    let b_pm_key = change_map.keys().find(|k| k.contains("B.pm") || *k == &b_pm_uri);
+    let b_pm_key = change_map
+        .keys()
+        .find(|k| k.contains("B.pm") || *k == &b_pm_uri);
     if let Some(b_key) = b_pm_key {
         if let Some(edits) = change_map[b_key].as_array() {
             for edit in edits {

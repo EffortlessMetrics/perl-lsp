@@ -270,8 +270,14 @@ anyhow = "1.0"
     )?;
     let deps = parse_crate_deps(&cargo_toml);
     assert!(deps.contains(&"serde".to_string()), "should contain serde");
-    assert!(deps.contains(&"perl-parser".to_string()), "should contain perl-parser");
-    assert!(deps.contains(&"anyhow".to_string()), "should contain anyhow");
+    assert!(
+        deps.contains(&"perl-parser".to_string()),
+        "should contain perl-parser"
+    );
+    assert!(
+        deps.contains(&"anyhow".to_string()),
+        "should contain anyhow"
+    );
     Ok(())
 }
 
@@ -304,7 +310,12 @@ fn test_parse_crate_deps_missing_file() {
 
 /// Find files containing TODO/FIXME wiring-related comments.
 fn scan_wiring_comments(src_dir: &std::path::Path) -> Vec<(PathBuf, String)> {
-    let keywords = ["TODO: wire", "TODO: connect", "FIXME: not called", "TODO: wire this"];
+    let keywords = [
+        "TODO: wire",
+        "TODO: connect",
+        "FIXME: not called",
+        "TODO: wire this",
+    ];
     let mut results = Vec::new();
     let mut queue = vec![src_dir.to_path_buf()];
     while let Some(path) = queue.pop() {
@@ -333,11 +344,17 @@ fn test_scan_wiring_comments_finds_todo_wire() {
     let dir = TempDir::new().expect("tempdir");
     let src = dir.path().join("src");
     fs::create_dir_all(&src).expect("create src");
-    fs::write(src.join("lib.rs"), "// TODO: wire this into get_diagnostics()\npub fn check() {}\n")
-        .expect("write");
+    fs::write(
+        src.join("lib.rs"),
+        "// TODO: wire this into get_diagnostics()\npub fn check() {}\n",
+    )
+    .expect("write");
     let hits = scan_wiring_comments(&src);
     assert_eq!(hits.len(), 1, "should find one wiring comment");
-    assert!(hits[0].1.contains("TODO: wire"), "comment text should match");
+    assert!(
+        hits[0].1.contains("TODO: wire"),
+        "comment text should match"
+    );
 }
 
 #[test]
@@ -355,8 +372,11 @@ fn test_scan_wiring_comments_fixme_not_called() {
     let dir = TempDir::new().expect("tempdir");
     let src = dir.path().join("src");
     fs::create_dir_all(&src).expect("create src");
-    fs::write(src.join("lib.rs"), "// FIXME: not called from anywhere\npub fn orphan() {}\n")
-        .expect("write");
+    fs::write(
+        src.join("lib.rs"),
+        "// FIXME: not called from anywhere\npub fn orphan() {}\n",
+    )
+    .expect("write");
     let hits = scan_wiring_comments(&src);
     assert_eq!(hits.len(), 1);
 }
@@ -454,7 +474,10 @@ fn test_find_unwired_crates_identifies_unwired() -> anyhow::Result<()> {
     assert!(unwired.is_some(), "perl-unwired should appear in report");
     let unwired = unwired.unwrap();
     assert_eq!(unwired.test_count, 2, "perl-unwired has 2 tests");
-    assert!(!unwired.is_depended_on_by_lsp, "perl-unwired should NOT be depended on");
+    assert!(
+        !unwired.is_depended_on_by_lsp,
+        "perl-unwired should NOT be depended on"
+    );
 
     Ok(())
 }
@@ -467,7 +490,10 @@ fn test_find_unwired_crates_wired_crate_marked_as_wired() -> anyhow::Result<()> 
     let wired = reports.iter().find(|r| r.name == "perl-wired");
     assert!(wired.is_some(), "perl-wired should appear in report");
     let wired = wired.unwrap();
-    assert!(wired.is_depended_on_by_lsp, "perl-wired should be marked as depended on");
+    assert!(
+        wired.is_depended_on_by_lsp,
+        "perl-wired should be marked as depended on"
+    );
 
     Ok(())
 }
@@ -494,8 +520,14 @@ fn test_find_unwired_crates_todo_comments_captured() -> anyhow::Result<()> {
     let todo = reports.iter().find(|r| r.name == "perl-todo-wire");
     assert!(todo.is_some(), "perl-todo-wire should appear in report");
     let todo = todo.unwrap();
-    assert!(!todo.wiring_comments.is_empty(), "should have captured a wiring comment");
-    assert!(todo.wiring_comments[0].contains("TODO: wire"), "wiring comment content should match");
+    assert!(
+        !todo.wiring_comments.is_empty(),
+        "should have captured a wiring comment"
+    );
+    assert!(
+        todo.wiring_comments[0].contains("TODO: wire"),
+        "wiring comment content should match"
+    );
 
     Ok(())
 }
@@ -506,15 +538,29 @@ fn test_find_unwired_crates_only_with_tests_are_candidates() -> anyhow::Result<(
     let reports = find_unwired_crates(workspace.path(), "perl-lsp-rs")?;
 
     // The unwired candidates are: crates that have tests AND are NOT depended on
-    let candidates: Vec<&CrateReport> =
-        reports.iter().filter(|r| r.test_count > 0 && !r.is_depended_on_by_lsp).collect();
+    let candidates: Vec<&CrateReport> = reports
+        .iter()
+        .filter(|r| r.test_count > 0 && !r.is_depended_on_by_lsp)
+        .collect();
 
     // perl-unwired and perl-todo-wire both qualify
     let names: Vec<&str> = candidates.iter().map(|r| r.name.as_str()).collect();
-    assert!(names.contains(&"perl-unwired"), "perl-unwired is a candidate");
-    assert!(names.contains(&"perl-todo-wire"), "perl-todo-wire is a candidate");
-    assert!(!names.contains(&"perl-no-tests"), "perl-no-tests is NOT a candidate");
-    assert!(!names.contains(&"perl-wired"), "perl-wired is NOT a candidate");
+    assert!(
+        names.contains(&"perl-unwired"),
+        "perl-unwired is a candidate"
+    );
+    assert!(
+        names.contains(&"perl-todo-wire"),
+        "perl-todo-wire is a candidate"
+    );
+    assert!(
+        !names.contains(&"perl-no-tests"),
+        "perl-no-tests is NOT a candidate"
+    );
+    assert!(
+        !names.contains(&"perl-wired"),
+        "perl-wired is NOT a candidate"
+    );
 
     Ok(())
 }
@@ -577,8 +623,17 @@ fn test_json_mode_emits_valid_json_with_expected_fields() {
         serde_json::from_str(&stdout).expect("--json output must be valid JSON");
 
     // All top-level fields from ScanReport must be present.
-    for field in ["lsp_crate", "crates", "flagged", "total_crates", "total_flagged"] {
-        assert!(parsed.get(field).is_some(), "JSON must contain '{field}'; full output: {parsed}");
+    for field in [
+        "lsp_crate",
+        "crates",
+        "flagged",
+        "total_crates",
+        "total_flagged",
+    ] {
+        assert!(
+            parsed.get(field).is_some(),
+            "JSON must contain '{field}'; full output: {parsed}"
+        );
     }
 
     // lsp_crate must be the default value.
@@ -589,8 +644,13 @@ fn test_json_mode_emits_valid_json_with_expected_fields() {
     );
 
     // The real workspace has crates, so total_crates > 0.
-    let total_crates = parsed["total_crates"].as_u64().expect("total_crates is a number");
-    assert!(total_crates > 0, "real workspace must have at least one examined crate");
+    let total_crates = parsed["total_crates"]
+        .as_u64()
+        .expect("total_crates is a number");
+    assert!(
+        total_crates > 0,
+        "real workspace must have at least one examined crate"
+    );
 }
 
 /// total_flagged must equal the length of the flagged array — internal
@@ -603,8 +663,13 @@ fn test_json_mode_flagged_count_matches_flagged_array() {
     let stdout = String::from_utf8(output.stdout).expect("utf8 stdout");
     let parsed: serde_json::Value = serde_json::from_str(&stdout).expect("valid JSON");
 
-    let flagged_array_len = parsed["flagged"].as_array().expect("flagged is array").len();
-    let total_flagged = parsed["total_flagged"].as_u64().expect("total_flagged is u64") as usize;
+    let flagged_array_len = parsed["flagged"]
+        .as_array()
+        .expect("flagged is array")
+        .len();
+    let total_flagged = parsed["total_flagged"]
+        .as_u64()
+        .expect("total_flagged is u64") as usize;
 
     assert_eq!(
         flagged_array_len, total_flagged,
@@ -623,11 +688,20 @@ fn test_json_mode_crate_entries_have_expected_fields() {
     let parsed: serde_json::Value = serde_json::from_str(&stdout).expect("valid JSON");
 
     let crates = parsed["crates"].as_array().expect("crates is array");
-    assert!(!crates.is_empty(), "real workspace must have at least one crate entry");
+    assert!(
+        !crates.is_empty(),
+        "real workspace must have at least one crate entry"
+    );
 
     // Check the first crate entry has all CrateReport fields.
     let first = &crates[0];
-    for field in ["name", "path", "test_count", "is_direct_dep_of_lsp", "wiring_comments"] {
+    for field in [
+        "name",
+        "path",
+        "test_count",
+        "is_direct_dep_of_lsp",
+        "wiring_comments",
+    ] {
         assert!(
             first.get(field).is_some(),
             "CrateReport JSON must contain '{field}'; entry: {first}"

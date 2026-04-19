@@ -48,7 +48,9 @@ impl LspServer {
             register_options,
         };
 
-        let params = RegistrationParams { registrations: vec![reg] };
+        let params = RegistrationParams {
+            registrations: vec![reg],
+        };
         let params_value = match serde_json::to_value(&params) {
             Ok(v) => v,
             Err(e) => {
@@ -66,7 +68,8 @@ impl LspServer {
 
         // Send using the outbound channel
         if let Err(e) =
-            self.outbound.send_request(request_id as i64, "client/registerCapability", params_value)
+            self.outbound
+                .send_request(request_id as i64, "client/registerCapability", params_value)
         {
             tracing::error!(error = %e, "Failed to send file watcher request");
         }

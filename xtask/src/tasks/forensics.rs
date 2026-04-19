@@ -14,31 +14,46 @@ pub fn run_harvest(pr: &str) -> Result<()> {
 
 pub fn run_temporal(pr: &str) -> Result<()> {
     let root = project_root()?;
-    let script = root.join("scripts").join("forensics").join("temporal-analysis.sh");
+    let script = root
+        .join("scripts")
+        .join("forensics")
+        .join("temporal-analysis.sh");
     run_script(&script, &[pr])
 }
 
 pub fn run_telemetry_quick(pr: &str) -> Result<()> {
     let root = project_root()?;
-    let script = root.join("scripts").join("forensics").join("telemetry-runner.sh");
+    let script = root
+        .join("scripts")
+        .join("forensics")
+        .join("telemetry-runner.sh");
     run_script(&script, &[pr, "--mode", "quick"])
 }
 
 pub fn run_telemetry_full(pr: &str) -> Result<()> {
     let root = project_root()?;
-    let script = root.join("scripts").join("forensics").join("telemetry-runner.sh");
+    let script = root
+        .join("scripts")
+        .join("forensics")
+        .join("telemetry-runner.sh");
     run_script(&script, &[pr, "--mode", "full"])
 }
 
 pub fn run_dossier(pr: &str) -> Result<()> {
     let root = project_root()?;
-    let script = root.join("scripts").join("forensics").join("dossier-runner.sh");
+    let script = root
+        .join("scripts")
+        .join("forensics")
+        .join("dossier-runner.sh");
     run_script(&script, &[pr])
 }
 
 pub fn run_render(pr: &str, format: &str) -> Result<()> {
     let root = project_root()?;
-    let script = root.join("scripts").join("forensics").join("render-dossier.sh");
+    let script = root
+        .join("scripts")
+        .join("forensics")
+        .join("render-dossier.sh");
     run_script(&script, &[pr, "--format", format])
 }
 

@@ -67,10 +67,21 @@ fn test_utf16_line_boundary_security() {
             let (line, col) = offset_to_utf16_line_col(text, offset);
 
             // Validate line numbers are reasonable
-            assert!(line < 100, "Line number {} too large for text: {:?}", line, text);
+            assert!(
+                line < 100,
+                "Line number {} too large for text: {:?}",
+                line,
+                text
+            );
 
             // Validate column is not negative or extremely large
-            assert!(col < 1000, "Column {} too large for line {} in text: {:?}", col, line, text);
+            assert!(
+                col < 1000,
+                "Column {} too large for line {} in text: {:?}",
+                col,
+                line,
+                text
+            );
 
             // Test roundtrip doesn't cause buffer overflow
             let roundtrip = utf16_line_col_to_offset(text, line, col);
@@ -131,7 +142,11 @@ fn test_utf16_malicious_input_protection() {
             // Validate results are within reasonable bounds
             assert!(line < 10000, "Line number {} unreasonable", line);
             assert!(col < 20000, "Column {} unreasonable", col);
-            assert!(roundtrip < text.len() * 3, "Roundtrip {} unreasonable", roundtrip);
+            assert!(
+                roundtrip < text.len() * 3,
+                "Roundtrip {} unreasonable",
+                roundtrip
+            );
         }
     }
 }
@@ -167,8 +182,18 @@ fn test_utf16_edge_case_combinations() {
         let _roundtrip = utf16_line_col_to_offset(text, line, col);
 
         // For edge cases, we're more lenient but still check for crashes
-        assert!(line < 100, "Line {} unreasonable for edge case: {:?}", line, text);
-        assert!(col < 100, "Column {} unreasonable for edge case: {:?}", col, text);
+        assert!(
+            line < 100,
+            "Line {} unreasonable for edge case: {:?}",
+            line,
+            text
+        );
+        assert!(
+            col < 100,
+            "Column {} unreasonable for edge case: {:?}",
+            col,
+            text
+        );
 
         // Test all byte positions to find any that cause issues
         for offset in 0..=text.len() {
@@ -262,8 +287,13 @@ fn test_utf16_memory_safety() {
 
     for pattern in patterns {
         // Test with various offsets to ensure memory safety
-        let offsets =
-            vec![0, pattern.len() / 4, pattern.len() / 2, pattern.len() * 3 / 4, pattern.len()];
+        let offsets = vec![
+            0,
+            pattern.len() / 4,
+            pattern.len() / 2,
+            pattern.len() * 3 / 4,
+            pattern.len(),
+        ];
 
         for offset in offsets {
             if offset <= pattern.len() {
@@ -272,7 +302,11 @@ fn test_utf16_memory_safety() {
                 let roundtrip = utf16_line_col_to_offset(pattern, line, col);
 
                 // Basic sanity checks
-                assert!(line < u32::MAX / 1000, "Line number {} suspiciously large", line);
+                assert!(
+                    line < u32::MAX / 1000,
+                    "Line number {} suspiciously large",
+                    line
+                );
                 assert!(col < u32::MAX / 1000, "Column {} suspiciously large", col);
                 assert!(
                     roundtrip < pattern.len() * 10,
@@ -320,8 +354,16 @@ fn test_utf16_lsp_workflow_security() {
         let (back_line, back_col) = offset_to_utf16_line_col(document, offset);
 
         // Results should be reasonable
-        assert!(back_line < 1000, "Back-converted line {} unreasonable", back_line);
-        assert!(back_col < 1000, "Back-converted column {} unreasonable", back_col);
+        assert!(
+            back_line < 1000,
+            "Back-converted line {} unreasonable",
+            back_line
+        );
+        assert!(
+            back_col < 1000,
+            "Back-converted column {} unreasonable",
+            back_col
+        );
     }
 
     // Test rapid-fire position conversions (DoS protection)
@@ -333,5 +375,9 @@ fn test_utf16_lsp_workflow_security() {
     }
     let duration = start_time.elapsed();
 
-    assert!(duration.as_millis() < 100, "1000 position conversions took too long: {:?}", duration);
+    assert!(
+        duration.as_millis() < 100,
+        "1000 position conversions took too long: {:?}",
+        duration
+    );
 }

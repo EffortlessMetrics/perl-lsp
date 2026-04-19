@@ -6,7 +6,14 @@ use perl_parser_core::ast::{Node, NodeKind};
 
 /// Convert old-style for loops to modern foreach
 pub fn convert_loop_style(node: &Node, source: &str) -> Option<CodeAction> {
-    if let NodeKind::For { init, condition, update, body, .. } = &node.kind {
+    if let NodeKind::For {
+        init,
+        condition,
+        update,
+        body,
+        ..
+    } = &node.kind
+    {
         // Check if it's a C-style for loop that can be converted
         if let Some(converted) = try_convert_c_style_loop(init, condition, update, body, source) {
             return Some(CodeAction {
@@ -14,7 +21,10 @@ pub fn convert_loop_style(node: &Node, source: &str) -> Option<CodeAction> {
                 kind: CodeActionKind::RefactorRewrite,
                 diagnostics: Vec::new(),
                 edit: CodeActionEdit {
-                    changes: vec![TextEdit { location: node.location, new_text: converted }],
+                    changes: vec![TextEdit {
+                        location: node.location,
+                        new_text: converted,
+                    }],
                 },
                 is_preferred: false,
             });
@@ -22,7 +32,13 @@ pub fn convert_loop_style(node: &Node, source: &str) -> Option<CodeAction> {
     }
 
     // Check for foreach that could be improved
-    if let NodeKind::Foreach { variable, list, body, continue_block: _ } = &node.kind {
+    if let NodeKind::Foreach {
+        variable,
+        list,
+        body,
+        continue_block: _,
+    } = &node.kind
+    {
         // Check if using implicit $_
         if let NodeKind::Variable { name, sigil } = &variable.kind
             && name == "_"
@@ -63,9 +79,17 @@ pub fn try_convert_c_style_loop(
     // Check that we have all parts of a C-style for loop
     if let (Some(init), Some(condition), Some(update)) = (init, condition, update) {
         // Check if init is "my $i = 0" pattern
-        if let NodeKind::VariableDeclaration { variable, initializer, .. } = &init.kind {
+        if let NodeKind::VariableDeclaration {
+            variable,
+            initializer,
+            ..
+        } = &init.kind
+        {
             // Get iterator variable name
-            if let NodeKind::Variable { name: iter_name, .. } = &variable.kind {
+            if let NodeKind::Variable {
+                name: iter_name, ..
+            } = &variable.kind
+            {
                 // Check if initialized to 0
                 if let Some(init_val) = initializer
                     && let NodeKind::Number { value } = &init_val.kind
@@ -79,11 +103,23 @@ pub fn try_convert_c_style_loop(
                 {
                     // Check if right is an array
                     let array_name = if let NodeKind::Variable { sigil, name, .. } = &right.kind {
-                        if sigil == "@" { Some(format!("@{}", name)) } else { None }
-                    } else if let NodeKind::FunctionCall { name: func_name, args } = &right.kind {
+                        if sigil == "@" {
+                            Some(format!("@{}", name))
+                        } else {
+                            None
+                        }
+                    } else if let NodeKind::FunctionCall {
+                        name: func_name,
+                        args,
+                    } = &right.kind
+                    {
                         if func_name == "scalar" && args.len() == 1 {
                             if let NodeKind::Variable { sigil, name, .. } = &args[0].kind {
-                                if sigil == "@" { Some(format!("@{}", name)) } else { None }
+                                if sigil == "@" {
+                                    Some(format!("@{}", name))
+                                } else {
+                                    None
+                                }
                             } else {
                                 None
                             }

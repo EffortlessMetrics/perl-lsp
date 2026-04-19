@@ -453,11 +453,17 @@ enum Commands {
     #[cfg(feature = "parser-tasks")]
     Bindings {
         /// Header file to generate bindings from
-        #[arg(long, default_value = "archive/crates/tree-sitter-perl-rs/src/tree_sitter/parser.h")]
+        #[arg(
+            long,
+            default_value = "archive/crates/tree-sitter-perl-rs/src/tree_sitter/parser.h"
+        )]
         header: PathBuf,
 
         /// Output file for bindings
-        #[arg(long, default_value = "archive/crates/tree-sitter-perl-rs/src/bindings.rs")]
+        #[arg(
+            long,
+            default_value = "archive/crates/tree-sitter-perl-rs/src/bindings.rs"
+        )]
         output: PathBuf,
     },
 
@@ -1225,16 +1231,25 @@ fn main() -> Result<()> {
         Commands::Ci => ci::run(),
         Commands::CheckOnly => ci::check_only(),
         Commands::CheckToolchain { doctor } => check_toolchain::run(doctor),
-        Commands::Build { release, features, c_scanner, rust_scanner } => {
-            build::run(release, features, c_scanner, rust_scanner)
-        }
-        Commands::Test { release, suite, features, verbose, coverage } => {
-            test::run(release, suite, features, verbose, coverage)
-        }
+        Commands::Build {
+            release,
+            features,
+            c_scanner,
+            rust_scanner,
+        } => build::run(release, features, c_scanner, rust_scanner),
+        Commands::Test {
+            release,
+            suite,
+            features,
+            verbose,
+            coverage,
+        } => test::run(release, suite, features, verbose, coverage),
         Commands::Bench { name, save, output } => bench::run(name, save, output),
-        Commands::BenchRun { output, quick, category } => {
-            benchmarks::run_benchmarks(output, quick, category)
-        }
+        Commands::BenchRun {
+            output,
+            quick,
+            category,
+        } => benchmarks::run_benchmarks(output, quick, category),
         Commands::BenchCompare { fail_on_regression } => {
             benchmarks::compare_benchmarks(fail_on_regression)
         }
@@ -1263,15 +1278,19 @@ fn main() -> Result<()> {
             brew_out,
             asset_map_out,
         }),
-        Commands::UpdateHomebrew { version, owner, repo, prefix, output } => {
-            update_homebrew::run(update_homebrew::UpdateHomebrewConfig {
-                version,
-                owner,
-                repo,
-                prefix,
-                output,
-            })
-        }
+        Commands::UpdateHomebrew {
+            version,
+            owner,
+            repo,
+            prefix,
+            output,
+        } => update_homebrew::run(update_homebrew::UpdateHomebrewConfig {
+            version,
+            owner,
+            repo,
+            prefix,
+            output,
+        }),
         Commands::Compare {
             c_only,
             rust_only,
@@ -1293,9 +1312,12 @@ fn main() -> Result<()> {
         Commands::Check { clippy, fmt, all } => check::run(clippy, fmt, all),
         Commands::Fmt { check } => fmt::run(check),
         #[cfg(feature = "legacy")]
-        Commands::Corpus { path, scanner, diagnose, test } => {
-            corpus::run(path, scanner, diagnose, test)
-        }
+        Commands::Corpus {
+            path,
+            scanner,
+            diagnose,
+            test,
+        } => corpus::run(path, scanner, diagnose, test),
         #[cfg(feature = "parser-tasks")]
         Commands::Highlight { path, scanner } => highlight::run(path, scanner),
         Commands::Clean { all } => clean::run(all),
@@ -1304,9 +1326,12 @@ fn main() -> Result<()> {
         Commands::Bindings { header, output } => bindings::run(header, output),
         Commands::Dev { watch, port } => dev::run(watch, port),
         Commands::DevexDoctor => devex_doctor::run(),
-        Commands::ParseRust { source, sexp, ast, bench } => {
-            parse_rust::run(source, sexp, ast, bench)
-        }
+        Commands::ParseRust {
+            source,
+            sexp,
+            ast,
+            bench,
+        } => parse_rust::run(source, sexp, ast, bench),
         Commands::Release { version, yes } => release::run(version, yes),
         Commands::ReleaseTurnkey {
             version,
@@ -1348,13 +1373,20 @@ fn main() -> Result<()> {
                 false,
             )
         }
-        Commands::TestEdgeCases { bench, coverage, test } => edge_cases::run(bench, coverage, test),
+        Commands::TestEdgeCases {
+            bench,
+            coverage,
+            test,
+        } => edge_cases::run(bench, coverage, test),
         Commands::CiAuditWorkflows => ci_audit_workflows::run(),
         Commands::CiMeasure => ci_measure::run(),
         Commands::CiCostMonitor { days, json } => ci_metrics::run_cost_monitor(days, json),
-        Commands::CiBaseline { branch, days, limit, output } => {
-            ci_metrics::run_ci_baseline(branch, days, limit, output)
-        }
+        Commands::CiBaseline {
+            branch,
+            days,
+            limit,
+            output,
+        } => ci_metrics::run_ci_baseline(branch, days, limit, output),
         Commands::CheckVersionSync => check_version_sync::run(),
         Commands::CheckFromRaw => ci_policy::check_from_raw(),
         Commands::SecurityHardening => hardening::security_hardening(),
@@ -1370,28 +1402,35 @@ fn main() -> Result<()> {
         Commands::GhLabels => github::run_labels(),
         Commands::GhTriage { limit } => github::run_issues_needing_triage(limit),
         Commands::GhBackfillPrefixedLabels { apply } => github::run_backfill_prefixed_labels(apply),
-        Commands::CorpusAudit { corpus_path, output, check, fresh } => {
-            corpus_audit::run(corpus_audit::AuditConfig {
-                corpus_path,
-                output_path: output,
-                timeout: std::time::Duration::from_secs(30),
-                fresh,
-                check,
-            })
-        }
+        Commands::CorpusAudit {
+            corpus_path,
+            output,
+            check,
+            fresh,
+        } => corpus_audit::run(corpus_audit::AuditConfig {
+            corpus_path,
+            output_path: output,
+            timeout: std::time::Duration::from_secs(30),
+            fresh,
+            check,
+        }),
         Commands::ParserMatrix { report, output } => parser_matrix::run_with_paths(report, output),
         #[cfg(feature = "parser-tasks")]
         Commands::CompareThree { verbose, format } => {
             compare_parsers::run_three_way(verbose, format.as_str())
         }
-        Commands::TestLsp { create_only, test, cleanup } => {
-            test_lsp::run(create_only, test, cleanup)
-        }
+        Commands::TestLsp {
+            create_only,
+            test,
+            cleanup,
+        } => test_lsp::run(create_only, test, cleanup),
         Commands::BumpVersion { version } => bump_version::run(version),
         Commands::PublishCrates { yes, dry_run } => publish::publish_crates(yes, dry_run),
-        Commands::PublishRelease { version, dry_run, git_ref } => {
-            publish::publish_release(version, dry_run, git_ref)
-        }
+        Commands::PublishRelease {
+            version,
+            dry_run,
+            git_ref,
+        } => publish::publish_release(version, dry_run, git_ref),
         Commands::HookCheck => hook_checks::run_hook_check(),
         Commands::HookRegistryCheck => hook_checks::run_hook_registry_check(),
         Commands::HookTests => hook_checks::run_hook_tests(),
@@ -1436,7 +1475,12 @@ fn main() -> Result<()> {
                     }
                     cpan_corpus::fetch_list(&config)
                 }
-                CpanCorpusCommand::Install { dist_list, install_dir, verbose, reset } => {
+                CpanCorpusCommand::Install {
+                    dist_list,
+                    install_dir,
+                    verbose,
+                    reset,
+                } => {
                     if let Some(dl) = dist_list {
                         config.dist_list = dl;
                     }
@@ -1447,14 +1491,22 @@ fn main() -> Result<()> {
                     config.verbose = verbose;
                     cpan_corpus::install(&config)
                 }
-                CpanCorpusCommand::Sweep { output, enforce, verbose, install_dir } => {
+                CpanCorpusCommand::Sweep {
+                    output,
+                    enforce,
+                    verbose,
+                    install_dir,
+                } => {
                     if let Some(id) = install_dir {
                         config.install_dir = id;
                     }
                     config.verbose = verbose;
                     cpan_corpus::sweep(&config, output, enforce)
                 }
-                CpanCorpusCommand::Ratchet { verbose, install_dir } => {
+                CpanCorpusCommand::Ratchet {
+                    verbose,
+                    install_dir,
+                } => {
                     if let Some(id) = install_dir {
                         config.install_dir = id;
                     }
@@ -1463,26 +1515,35 @@ fn main() -> Result<()> {
                 }
             }
         }
-        Commands::Receipts { tests_only, docs_only, output_dir, test_threads } => {
-            receipts::run(receipts::ReceiptsConfig {
-                tests_only,
-                docs_only,
-                output_dir,
-                test_threads,
-            })
-        }
-        Commands::IgnoredTests { update, check, verbose } => {
-            ignored_tests::run(update, check, verbose)
-        }
-        Commands::DebtReport { check, json, summary, expired, ledger } => {
-            debt_report::run(debt_report::DebtReportConfig {
-                check,
-                json,
-                summary,
-                expired,
-                ledger,
-            })
-        }
+        Commands::Receipts {
+            tests_only,
+            docs_only,
+            output_dir,
+            test_threads,
+        } => receipts::run(receipts::ReceiptsConfig {
+            tests_only,
+            docs_only,
+            output_dir,
+            test_threads,
+        }),
+        Commands::IgnoredTests {
+            update,
+            check,
+            verbose,
+        } => ignored_tests::run(update, check, verbose),
+        Commands::DebtReport {
+            check,
+            json,
+            summary,
+            expired,
+            ledger,
+        } => debt_report::run(debt_report::DebtReportConfig {
+            check,
+            json,
+            summary,
+            expired,
+            ledger,
+        }),
         Commands::DocClaims => doc_claims::run(),
         Commands::Features { command } => match command {
             FeaturesCommand::SyncDocs => features::sync_docs(),
@@ -1492,9 +1553,15 @@ fn main() -> Result<()> {
         },
         Commands::UpdateStatus { write, check, only } => update_status::run(write, check, only),
         Commands::SrpMicrocrates { output } => srp_microcrates::run(output),
-        Commands::UnwiredScan { json, check, lsp_crate } => {
-            unwired_scan::run(UnwiredScanConfig { lsp_crate, json, check })
-        }
+        Commands::UnwiredScan {
+            json,
+            check,
+            lsp_crate,
+        } => unwired_scan::run(UnwiredScanConfig {
+            lsp_crate,
+            json,
+            check,
+        }),
         Commands::CheckTestWiring => check_test_wiring::run(),
         Commands::Metrics { command } => match command {
             MetricsCommand::ParserStats { input, json } => metrics::parser_stats::run(input, json),
@@ -1505,26 +1572,37 @@ fn main() -> Result<()> {
             MetricsCommand::ReleaseHealth { days, json } => {
                 metrics::release_health::run(days, json)
             }
-            MetricsCommand::RatchetCheck { subsystem, current, record } => {
+            MetricsCommand::RatchetCheck {
+                subsystem,
+                current,
+                record,
+            } => {
                 let root = utils::project_root()?;
                 metrics::ratchet::run_ratchet_check(&root, &subsystem, current, record)
             }
-            MetricsCommand::PromoteBaseline { subsystem, delta_pct } => {
+            MetricsCommand::PromoteBaseline {
+                subsystem,
+                delta_pct,
+            } => {
                 let root = utils::project_root()?;
                 metrics::ratchet::run_promote_baseline(&root, &subsystem, delta_pct)
             }
             MetricsCommand::SweepStats { input } => metrics::sweep_stats::run(input),
         },
         Commands::ValidateMemoryProfiler => compare::validate_memory_profiling(),
-        Commands::E2eValidate { workspace_size, report, skip_workspace, skip_bench, verbose } => {
-            e2e_validate::run(e2e_validate::E2eConfig {
-                workspace_size,
-                report_path: report,
-                skip_workspace,
-                skip_bench,
-                verbose,
-            })
-        }
+        Commands::E2eValidate {
+            workspace_size,
+            report,
+            skip_workspace,
+            skip_bench,
+            verbose,
+        } => e2e_validate::run(e2e_validate::E2eConfig {
+            workspace_size,
+            report_path: report,
+            skip_workspace,
+            skip_bench,
+            verbose,
+        }),
         Commands::Gates {
             tier,
             gate,
@@ -1550,15 +1628,27 @@ fn main() -> Result<()> {
         }),
         Commands::TargetedChecks { base, mode } => targeted_checks::run(base, mode),
         Commands::WorktreeCleanup => worktrees::cleanup(),
-        Commands::SwarmSummary { ops_dir, since, limit, format } => {
-            swarm_summary::run(swarm_summary::SwarmSummaryConfig { ops_dir, since, limit, format })
-        }
+        Commands::SwarmSummary {
+            ops_dir,
+            since,
+            limit,
+            format,
+        } => swarm_summary::run(swarm_summary::SwarmSummaryConfig {
+            ops_dir,
+            since,
+            limit,
+            format,
+        }),
         Commands::PopulateBook => populate_book::run(),
         Commands::LayerCheck => layer_check::run(),
         Commands::ValidateWorkspaceExclusions => validate_workspace_exclusions::run(),
-        Commands::BuildTimingReceipt { clean, incremental, tests, output, baseline } => {
-            build_timing::run_receipt(clean, incremental, tests, output, baseline)
-        }
+        Commands::BuildTimingReceipt {
+            clean,
+            incremental,
+            tests,
+            output,
+            baseline,
+        } => build_timing::run_receipt(clean, incremental, tests, output, baseline),
         Commands::CompareBuildTiming { baseline, current } => {
             build_timing::run_compare(baseline, current)
         }

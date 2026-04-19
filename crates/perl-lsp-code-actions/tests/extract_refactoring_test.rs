@@ -23,7 +23,10 @@ my $result = $x + $y;
         .iter()
         .find(|a| matches!(a.kind, CodeActionKind::RefactorExtract) && a.title.contains("Extract"));
 
-    assert!(extract_action.is_some(), "Should have extract variable action");
+    assert!(
+        extract_action.is_some(),
+        "Should have extract variable action"
+    );
 
     let action = extract_action.unwrap();
     assert!(!action.edit.changes.is_empty(), "Should have edits");
@@ -96,7 +99,9 @@ my $result = length("hello world");
     let actions = provider.get_code_actions(&ast, (13, 36), &[]);
 
     // Find extract variable action
-    let extract_action = actions.iter().find(|a| matches!(a.kind, CodeActionKind::RefactorExtract));
+    let extract_action = actions
+        .iter()
+        .find(|a| matches!(a.kind, CodeActionKind::RefactorExtract));
 
     if let Some(action) = extract_action {
         assert!(!action.edit.changes.is_empty(), "Should have edits");
@@ -264,7 +269,10 @@ fn extract_variable_from_arithmetic_expression() {
         replace.location.start, rhs_start,
         "Replacement start should match expression start"
     );
-    assert_eq!(replace.location.end, rhs_end, "Replacement end should match expression end");
+    assert_eq!(
+        replace.location.end, rhs_end,
+        "Replacement end should match expression end"
+    );
 }
 
 // Issue #3031: Extract variable title must contain "variable" for LSP client matching.
@@ -431,7 +439,9 @@ fn large_file_narrow_range_returns_only_in_range_actions() {
 
     // Add 49 more if-blocks that each contain an open() call (triggering error_checking)
     for i in 1..50 {
-        source.push_str(&format!("if ($cond_{i}) {{ open my $fh, '<', 'file_{i}.txt'; }}\n"));
+        source.push_str(&format!(
+            "if ($cond_{i}) {{ open my $fh, '<', 'file_{i}.txt'; }}\n"
+        ));
     }
 
     let mut parser = Parser::new(&source);
@@ -478,8 +488,9 @@ fn traversal_skips_nodes_entirely_before_range() {
     let actions = provider.get_enhanced_refactoring_actions(&ast, (third_start, source.len()));
 
     // Any extract-variable action must reference the third expression, not $a or $b
-    for action in
-        actions.iter().filter(|a| a.title.contains("Extract") && a.title.contains("variable"))
+    for action in actions
+        .iter()
+        .filter(|a| a.title.contains("Extract") && a.title.contains("variable"))
     {
         for edit in &action.edit.changes {
             assert!(

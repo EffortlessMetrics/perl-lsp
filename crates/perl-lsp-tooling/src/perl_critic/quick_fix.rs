@@ -24,11 +24,17 @@ pub(crate) fn perlcritic_quick_fix(violation: &Violation) -> Option<QuickFix> {
     match violation.policy.as_str() {
         "Variables::ProhibitUnusedVariables" => Some(QuickFix {
             title: "Remove unused variable".to_string(),
-            edit: TextEdit { range: violation.range, new_text: String::new() },
+            edit: TextEdit {
+                range: violation.range,
+                new_text: String::new(),
+            },
         }),
         "Subroutines::ProhibitUnusedPrivateSubroutines" => Some(QuickFix {
             title: "Remove unused subroutine".to_string(),
-            edit: TextEdit { range: violation.range, new_text: String::new() },
+            edit: TextEdit {
+                range: violation.range,
+                new_text: String::new(),
+            },
         }),
         "TestingAndDebugging::RequireUseStrict" => Some(use_statement_fix("strict")),
         "TestingAndDebugging::RequireUseWarnings" => Some(use_statement_fix("warnings")),
@@ -47,6 +53,9 @@ pub(crate) fn built_in_quick_fix(violation: &Violation) -> Option<QuickFix> {
 fn use_statement_fix(feature: &str) -> QuickFix {
     QuickFix {
         title: format!("Add 'use {feature}'"),
-        edit: TextEdit { range: insertion_range(), new_text: format!("use {feature};\n") },
+        edit: TextEdit {
+            range: insertion_range(),
+            new_text: format!("use {feature};\n"),
+        },
     }
 }

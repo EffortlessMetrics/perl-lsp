@@ -130,8 +130,12 @@ fn test_absent_initialization_options_is_noop() -> TestResult {
     let without = harness_without.initialize(Some(json!({})))?;
 
     // Both should have semanticTokensProvider
-    let present_with = with_empty["capabilities"].get("semanticTokensProvider").is_some();
-    let present_without = without["capabilities"].get("semanticTokensProvider").is_some();
+    let present_with = with_empty["capabilities"]
+        .get("semanticTokensProvider")
+        .is_some();
+    let present_without = without["capabilities"]
+        .get("semanticTokensProvider")
+        .is_some();
     assert_eq!(
         present_with, present_without,
         "semanticTokensProvider presence must match: with_empty={}, without={}",

@@ -68,7 +68,10 @@ fn test_incoming_calls_3_17() -> TestResult {
 fn test_prepare_type_hierarchy_3_17() -> TestResult {
     let mut harness = LspHarness::new();
     harness.initialize(None)?;
-    harness.open("file:///test.pl", "package Base;\npackage Derived;\nuse base 'Base';")?;
+    harness.open(
+        "file:///test.pl",
+        "package Base;\npackage Derived;\nuse base 'Base';",
+    )?;
 
     let response = harness.request(
         "textDocument/prepareTypeHierarchy",

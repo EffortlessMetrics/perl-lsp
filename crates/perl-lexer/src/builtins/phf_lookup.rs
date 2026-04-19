@@ -392,8 +392,9 @@ mod tests {
 
     #[test]
     fn full_sigs_cover_target_builtins() {
-        let targets =
-            ["open", "print", "push", "pop", "splice", "map", "grep", "sort", "join", "split"];
+        let targets = [
+            "open", "print", "push", "pop", "splice", "map", "grep", "sort", "join", "split",
+        ];
         for name in &targets {
             assert!(
                 BUILTIN_FULL_SIGS.contains_key(name),
@@ -405,13 +406,22 @@ mod tests {
 
     #[test]
     fn full_sigs_have_nonempty_variants() {
-        let targets =
-            ["open", "print", "push", "pop", "splice", "map", "grep", "sort", "join", "split"];
+        let targets = [
+            "open", "print", "push", "pop", "splice", "map", "grep", "sort", "join", "split",
+        ];
         for name in &targets {
             let sigs = BUILTIN_FULL_SIGS.get(name);
-            assert!(sigs.is_some(), "BUILTIN_FULL_SIGS should have entry for '{}'", name);
+            assert!(
+                sigs.is_some(),
+                "BUILTIN_FULL_SIGS should have entry for '{}'",
+                name
+            );
             let sigs = sigs.copied().unwrap_or(&[]);
-            assert!(!sigs.is_empty(), "'{}' should have at least one full signature", name);
+            assert!(
+                !sigs.is_empty(),
+                "'{}' should have at least one full signature",
+                name
+            );
         }
     }
 
@@ -574,8 +584,19 @@ mod tests {
     #[test]
     fn utf8_downgrade_signatures_cover_both_forms() {
         // Two-argument and one-argument forms must both be present.
-        let sigs = BUILTIN_FULL_SIGS.get("utf8::downgrade").copied().unwrap_or(&[]);
-        assert!(sigs.iter().any(|s| s.contains("FAIL_OK")), "two-arg form missing: {:?}", sigs);
-        assert!(sigs.contains(&"utf8::downgrade SCALAR"), "one-arg form missing: {:?}", sigs);
+        let sigs = BUILTIN_FULL_SIGS
+            .get("utf8::downgrade")
+            .copied()
+            .unwrap_or(&[]);
+        assert!(
+            sigs.iter().any(|s| s.contains("FAIL_OK")),
+            "two-arg form missing: {:?}",
+            sigs
+        );
+        assert!(
+            sigs.contains(&"utf8::downgrade SCALAR"),
+            "one-arg form missing: {:?}",
+            sigs
+        );
     }
 }

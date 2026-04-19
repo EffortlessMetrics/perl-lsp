@@ -232,7 +232,10 @@ pub fn check_version_compat(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
                             n,
                             "use builtin",
                             declared_version,
-                            (BUILTIN_BUNDLE_MIN_VERSION.major, BUILTIN_BUNDLE_MIN_VERSION.minor),
+                            (
+                                BUILTIN_BUNDLE_MIN_VERSION.major,
+                                BUILTIN_BUNDLE_MIN_VERSION.minor,
+                            ),
                         ));
                     }
                     return;
@@ -273,7 +276,9 @@ pub fn check_version_compat(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
             }
 
             // Subroutine with a signature — requires v5.20
-            NodeKind::Subroutine { signature: Some(_), .. } => {
+            NodeKind::Subroutine {
+                signature: Some(_), ..
+            } => {
                 if !pragma_state.has_feature("signatures") {
                     let min = feature_min_version("signatures");
                     diagnostics.push(make_diagnostic(
@@ -347,7 +352,10 @@ fn builtin_import_min_version(name: &str) -> PerlVersion {
 fn builtin_import_names(arg: &str) -> Vec<String> {
     let trimmed = arg.trim();
 
-    if let Some(inner) = trimmed.strip_prefix("qw(").and_then(|s| s.strip_suffix(')')) {
+    if let Some(inner) = trimmed
+        .strip_prefix("qw(")
+        .and_then(|s| s.strip_suffix(')'))
+    {
         return inner
             .split_whitespace()
             .filter(|name| !name.is_empty())
@@ -409,7 +417,11 @@ fn make_given_when_default_diagnostic(
         tags: vec![],
         suggestion: Some(format!(
             "Refactor `given` / `when` / `default` to `if` / `elsif` or another supported control-flow form; this feature is {} in v{}.{}.",
-            if severity == DiagnosticSeverity::Error { "removed" } else { "deprecated" },
+            if severity == DiagnosticSeverity::Error {
+                "removed"
+            } else {
+                "deprecated"
+            },
             min_version.0,
             min_version.1
         )),
@@ -447,7 +459,11 @@ fn make_smartmatch_diagnostic(
         tags: vec![],
         suggestion: Some(format!(
             "Replace smartmatch `~~` with `if` / `elsif`, `grep`, or `any` from List::Util; this operator is {} in v{}.{}.",
-            if severity == DiagnosticSeverity::Error { "removed" } else { "deprecated" },
+            if severity == DiagnosticSeverity::Error {
+                "removed"
+            } else {
+                "deprecated"
+            },
             min_version.0,
             min_version.1
         )),

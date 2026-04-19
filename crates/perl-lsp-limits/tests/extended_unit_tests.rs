@@ -187,9 +187,15 @@ fn maximum_deadlines() -> Result<(), Box<dyn std::error::Error>> {
     limits.code_lens_resolve_deadline = Duration::from_secs(u64::MAX);
     limits.completion_deadline = Duration::from_secs(u64::MAX);
 
-    assert_eq!(limits.workspace_scan_deadline, Duration::from_secs(u64::MAX));
+    assert_eq!(
+        limits.workspace_scan_deadline,
+        Duration::from_secs(u64::MAX)
+    );
     assert_eq!(limits.file_index_deadline, Duration::from_secs(u64::MAX));
-    assert_eq!(limits.reference_search_deadline, Duration::from_secs(u64::MAX));
+    assert_eq!(
+        limits.reference_search_deadline,
+        Duration::from_secs(u64::MAX)
+    );
     assert_eq!(limits.regex_scan_deadline, Duration::from_secs(u64::MAX));
     Ok(())
 }
@@ -330,8 +336,14 @@ fn update_with_huge_values() -> Result<(), Box<dyn std::error::Error>> {
     assert_eq!(limits.ast_cache_max_entries, large_num as usize);
     assert_eq!(limits.max_indexed_files, large_num as usize);
     assert_eq!(limits.max_total_symbols, large_num as usize);
-    assert_eq!(limits.workspace_scan_deadline, Duration::from_millis(large_num));
-    assert_eq!(limits.reference_search_deadline, Duration::from_millis(large_num));
+    assert_eq!(
+        limits.workspace_scan_deadline,
+        Duration::from_millis(large_num)
+    );
+    assert_eq!(
+        limits.reference_search_deadline,
+        Duration::from_millis(large_num)
+    );
     Ok(())
 }
 
@@ -527,8 +539,14 @@ fn clone_preserves_all_fields() -> Result<(), Box<dyn std::error::Error>> {
     assert_eq!(original.references_cap, cloned.references_cap);
     assert_eq!(original.completion_cap, cloned.completion_cap);
     assert_eq!(original.max_indexed_files, cloned.max_indexed_files);
-    assert_eq!(original.return_partial_on_timeout, cloned.return_partial_on_timeout);
-    assert_eq!(original.include_open_docs_when_degraded, cloned.include_open_docs_when_degraded);
+    assert_eq!(
+        original.return_partial_on_timeout,
+        cloned.return_partial_on_timeout
+    );
+    assert_eq!(
+        original.include_open_docs_when_degraded,
+        cloned.include_open_docs_when_degraded
+    );
     Ok(())
 }
 

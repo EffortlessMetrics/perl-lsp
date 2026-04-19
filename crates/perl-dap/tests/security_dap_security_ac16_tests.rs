@@ -50,7 +50,10 @@ fn breakpoint_path_absolute_system_file_rejected() -> R {
     let tmp = tempfile::tempdir()?;
     let ws = tmp.path().canonicalize()?;
     let result = validate_path(Path::new("/etc/passwd"), &ws);
-    assert!(result.is_err(), "Absolute path outside workspace must be rejected");
+    assert!(
+        result.is_err(),
+        "Absolute path outside workspace must be rejected"
+    );
     Ok(())
 }
 
@@ -73,7 +76,10 @@ fn breakpoint_path_within_workspace_accepted() -> R {
     let tmp = tempfile::tempdir()?;
     let ws = tmp.path().canonicalize()?;
     let result = validate_path(Path::new("src/main.pl"), &ws)?;
-    assert!(result.starts_with(&ws), "Resolved path must be within workspace");
+    assert!(
+        result.starts_with(&ws),
+        "Resolved path must be within workspace"
+    );
     Ok(())
 }
 
@@ -97,7 +103,10 @@ fn breakpoint_path_proc_self_environ_rejected() -> R {
     let tmp = tempfile::tempdir()?;
     let ws = tmp.path().canonicalize()?;
     let result = validate_path(Path::new("/proc/self/environ"), &ws);
-    assert!(result.is_err(), "/proc/self/environ must be rejected as breakpoint path");
+    assert!(
+        result.is_err(),
+        "/proc/self/environ must be rejected as breakpoint path"
+    );
     Ok(())
 }
 
@@ -227,5 +236,8 @@ fn resource_limit_normal_timeouts_accepted_unchanged() -> R {
 /// documented security boundary and must not silently change.
 #[test]
 fn resource_limit_cap_is_five_minutes() {
-    assert_eq!(MAX_TIMEOUT_MS, 300_000, "Security cap must be 5 minutes (300,000ms)");
+    assert_eq!(
+        MAX_TIMEOUT_MS, 300_000,
+        "Security cap must be 5 minutes (300,000ms)"
+    );
 }

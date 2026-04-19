@@ -63,7 +63,9 @@ impl Policy for RequireUseWarnings {
 
 impl Default for BuiltInAnalyzer {
     fn default() -> Self {
-        Self { policies: vec![Box::new(RequireUseStrict), Box::new(RequireUseWarnings)] }
+        Self {
+            policies: vec![Box::new(RequireUseStrict), Box::new(RequireUseWarnings)],
+        }
     }
 }
 

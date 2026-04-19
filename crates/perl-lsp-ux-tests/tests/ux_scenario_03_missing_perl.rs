@@ -19,7 +19,10 @@ fn binary_available() -> bool {
 }
 
 fn config_without_perl() -> ScenarioConfig {
-    ScenarioConfig { path_restriction: Some(Vec::new()), ..Default::default() }
+    ScenarioConfig {
+        path_restriction: Some(Vec::new()),
+        ..Default::default()
+    }
 }
 
 #[test]
@@ -33,7 +36,9 @@ fn scenario_03_server_starts_without_perl() {
     let harness =
         UxHarness::new(config_without_perl()).expect("Failed to create UX harness (no perl)");
 
-    harness.open_file("no_perl.pl", source).expect("didOpen should succeed without perl");
+    harness
+        .open_file("no_perl.pl", source)
+        .expect("didOpen should succeed without perl");
 
     harness.assert_no_crash();
 }
@@ -49,7 +54,9 @@ fn scenario_03_degraded_mode_hover_does_not_crash() {
     let harness =
         UxHarness::new(config_without_perl()).expect("Failed to create UX harness (no perl)");
 
-    harness.open_file("degraded.pl", source).expect("didOpen should succeed");
+    harness
+        .open_file("degraded.pl", source)
+        .expect("didOpen should succeed");
 
     let result = harness.hover("degraded.pl", 0, 3);
     assert!(
@@ -72,10 +79,16 @@ fn scenario_03_degraded_mode_completion_does_not_crash() {
     let harness =
         UxHarness::new(config_without_perl()).expect("Failed to create UX harness (no perl)");
 
-    harness.open_file("complete.pl", source).expect("didOpen should succeed");
+    harness
+        .open_file("complete.pl", source)
+        .expect("didOpen should succeed");
 
     let result = harness.completion("complete.pl", 0, 7);
-    assert!(result.is_ok(), "completion should not error in degraded mode: {:?}", result);
+    assert!(
+        result.is_ok(),
+        "completion should not error in degraded mode: {:?}",
+        result
+    );
 
     harness.assert_no_crash();
 }
@@ -91,7 +104,9 @@ fn scenario_03_warning_message_about_missing_perl() {
     let harness =
         UxHarness::new(config_without_perl()).expect("Failed to create UX harness (no perl)");
 
-    harness.open_file("warn_test.pl", source).expect("didOpen should succeed");
+    harness
+        .open_file("warn_test.pl", source)
+        .expect("didOpen should succeed");
     std::thread::sleep(Duration::from_secs(1));
 
     let events = harness.collect_notifications();
@@ -115,7 +130,10 @@ fn scenario_03_warning_message_about_missing_perl() {
              may be OK if server uses a different channel"
         );
     } else {
-        eprintln!("INFO scenario_03: server emitted Perl messages: {:?}", perl_messages);
+        eprintln!(
+            "INFO scenario_03: server emitted Perl messages: {:?}",
+            perl_messages
+        );
     }
 
     harness.assert_no_crash();

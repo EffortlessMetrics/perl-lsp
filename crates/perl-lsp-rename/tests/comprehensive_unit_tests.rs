@@ -37,35 +37,57 @@ fn test_rename_options_default() {
 
 #[test]
 fn test_text_edit_equality() {
-    let a = TextEdit { location: SourceLocation::new(0, 5), new_text: "foo".to_string() };
-    let b = TextEdit { location: SourceLocation::new(0, 5), new_text: "foo".to_string() };
+    let a = TextEdit {
+        location: SourceLocation::new(0, 5),
+        new_text: "foo".to_string(),
+    };
+    let b = TextEdit {
+        location: SourceLocation::new(0, 5),
+        new_text: "foo".to_string(),
+    };
     assert_eq!(a, b);
 }
 
 #[test]
 fn test_text_edit_inequality() {
-    let a = TextEdit { location: SourceLocation::new(0, 5), new_text: "foo".to_string() };
-    let b = TextEdit { location: SourceLocation::new(0, 5), new_text: "bar".to_string() };
+    let a = TextEdit {
+        location: SourceLocation::new(0, 5),
+        new_text: "foo".to_string(),
+    };
+    let b = TextEdit {
+        location: SourceLocation::new(0, 5),
+        new_text: "bar".to_string(),
+    };
     assert_ne!(a, b);
 }
 
 #[test]
 fn test_text_edit_clone() {
-    let a = TextEdit { location: SourceLocation::new(1, 3), new_text: "x".to_string() };
+    let a = TextEdit {
+        location: SourceLocation::new(1, 3),
+        new_text: "x".to_string(),
+    };
     let b = a.clone();
     assert_eq!(a, b);
 }
 
 #[test]
 fn test_text_edit_debug() {
-    let edit = TextEdit { location: SourceLocation::new(0, 1), new_text: "z".to_string() };
+    let edit = TextEdit {
+        location: SourceLocation::new(0, 1),
+        new_text: "z".to_string(),
+    };
     let debug = format!("{:?}", edit);
     assert!(!debug.is_empty());
 }
 
 #[test]
 fn test_rename_result_debug() {
-    let result = RenameResult { edits: vec![], is_valid: true, error: None };
+    let result = RenameResult {
+        edits: vec![],
+        is_valid: true,
+        error: None,
+    };
     let debug = format!("{:?}", result);
     assert!(debug.contains("is_valid"));
 }
@@ -202,17 +224,26 @@ fn test_validate_name_scalar_no_conflict() {
 
 #[test]
 fn test_can_rename_special_var_underscore() {
-    assert!(!perl_lsp_rename::rename::can_rename_symbol("_", SymbolKind::scalar()));
+    assert!(!perl_lsp_rename::rename::can_rename_symbol(
+        "_",
+        SymbolKind::scalar()
+    ));
 }
 
 #[test]
 fn test_can_rename_special_var_dot() {
-    assert!(!perl_lsp_rename::rename::can_rename_symbol(".", SymbolKind::scalar()));
+    assert!(!perl_lsp_rename::rename::can_rename_symbol(
+        ".",
+        SymbolKind::scalar()
+    ));
 }
 
 #[test]
 fn test_can_rename_special_var_ampersand() {
-    assert!(!perl_lsp_rename::rename::can_rename_symbol("&", SymbolKind::scalar()));
+    assert!(!perl_lsp_rename::rename::can_rename_symbol(
+        "&",
+        SymbolKind::scalar()
+    ));
 }
 
 #[test]
@@ -228,38 +259,62 @@ fn test_can_rename_special_var_numbers() {
 
 #[test]
 fn test_can_rename_special_var_caret() {
-    assert!(!perl_lsp_rename::rename::can_rename_symbol("^W", SymbolKind::scalar()));
-    assert!(!perl_lsp_rename::rename::can_rename_symbol("^O", SymbolKind::scalar()));
+    assert!(!perl_lsp_rename::rename::can_rename_symbol(
+        "^W",
+        SymbolKind::scalar()
+    ));
+    assert!(!perl_lsp_rename::rename::can_rename_symbol(
+        "^O",
+        SymbolKind::scalar()
+    ));
 }
 
 #[test]
 fn test_can_rename_builtin_print() {
-    assert!(!perl_lsp_rename::rename::can_rename_symbol("print", SymbolKind::Subroutine));
+    assert!(!perl_lsp_rename::rename::can_rename_symbol(
+        "print",
+        SymbolKind::Subroutine
+    ));
 }
 
 #[test]
 fn test_can_rename_builtin_die() {
-    assert!(!perl_lsp_rename::rename::can_rename_symbol("die", SymbolKind::Subroutine));
+    assert!(!perl_lsp_rename::rename::can_rename_symbol(
+        "die",
+        SymbolKind::Subroutine
+    ));
 }
 
 #[test]
 fn test_can_rename_builtin_push() {
-    assert!(!perl_lsp_rename::rename::can_rename_symbol("push", SymbolKind::Subroutine));
+    assert!(!perl_lsp_rename::rename::can_rename_symbol(
+        "push",
+        SymbolKind::Subroutine
+    ));
 }
 
 #[test]
 fn test_can_rename_builtin_eval() {
-    assert!(!perl_lsp_rename::rename::can_rename_symbol("eval", SymbolKind::Subroutine));
+    assert!(!perl_lsp_rename::rename::can_rename_symbol(
+        "eval",
+        SymbolKind::Subroutine
+    ));
 }
 
 #[test]
 fn test_can_rename_user_defined() {
-    assert!(perl_lsp_rename::rename::can_rename_symbol("my_func", SymbolKind::Subroutine));
+    assert!(perl_lsp_rename::rename::can_rename_symbol(
+        "my_func",
+        SymbolKind::Subroutine
+    ));
 }
 
 #[test]
 fn test_can_rename_user_variable() {
-    assert!(perl_lsp_rename::rename::can_rename_symbol("count", SymbolKind::scalar()));
+    assert!(perl_lsp_rename::rename::can_rename_symbol(
+        "count",
+        SymbolKind::scalar()
+    ));
 }
 
 // ─── adjust_location_for_sigil ──────────────────────────────────────────────
@@ -501,8 +556,10 @@ fn test_apply_edits_empty_list() {
 #[test]
 fn test_apply_edits_single_edit() {
     let code = "hello world";
-    let edits =
-        vec![TextEdit { location: SourceLocation::new(0, 5), new_text: "goodbye".to_string() }];
+    let edits = vec![TextEdit {
+        location: SourceLocation::new(0, 5),
+        new_text: "goodbye".to_string(),
+    }];
     let result = perl_lsp_rename::rename::apply_rename_edits(code, &edits);
     assert_eq!(result, "goodbye world");
 }
@@ -511,9 +568,18 @@ fn test_apply_edits_single_edit() {
 fn test_apply_edits_multiple_non_overlapping() {
     let code = "aaa bbb ccc";
     let edits = vec![
-        TextEdit { location: SourceLocation::new(0, 3), new_text: "xxx".to_string() },
-        TextEdit { location: SourceLocation::new(4, 7), new_text: "yyy".to_string() },
-        TextEdit { location: SourceLocation::new(8, 11), new_text: "zzz".to_string() },
+        TextEdit {
+            location: SourceLocation::new(0, 3),
+            new_text: "xxx".to_string(),
+        },
+        TextEdit {
+            location: SourceLocation::new(4, 7),
+            new_text: "yyy".to_string(),
+        },
+        TextEdit {
+            location: SourceLocation::new(8, 11),
+            new_text: "zzz".to_string(),
+        },
     ];
     let result = perl_lsp_rename::rename::apply_rename_edits(code, &edits);
     assert_eq!(result, "xxx yyy zzz");
@@ -522,8 +588,10 @@ fn test_apply_edits_multiple_non_overlapping() {
 #[test]
 fn test_apply_edits_different_length_replacement() {
     let code = "ab cd";
-    let edits =
-        vec![TextEdit { location: SourceLocation::new(0, 2), new_text: "longer_text".to_string() }];
+    let edits = vec![TextEdit {
+        location: SourceLocation::new(0, 2),
+        new_text: "longer_text".to_string(),
+    }];
     let result = perl_lsp_rename::rename::apply_rename_edits(code, &edits);
     assert_eq!(result, "longer_text cd");
 }
@@ -531,7 +599,10 @@ fn test_apply_edits_different_length_replacement() {
 #[test]
 fn test_apply_edits_shrinking_replacement() {
     let code = "long_name = 1;";
-    let edits = vec![TextEdit { location: SourceLocation::new(0, 9), new_text: "x".to_string() }];
+    let edits = vec![TextEdit {
+        location: SourceLocation::new(0, 9),
+        new_text: "x".to_string(),
+    }];
     let result = perl_lsp_rename::rename::apply_rename_edits(code, &edits);
     assert_eq!(result, "x = 1;");
 }
@@ -539,16 +610,20 @@ fn test_apply_edits_shrinking_replacement() {
 #[test]
 fn test_apply_edits_out_of_bounds_skipped() {
     let code = "short";
-    let edits =
-        vec![TextEdit { location: SourceLocation::new(100, 200), new_text: "nope".to_string() }];
+    let edits = vec![TextEdit {
+        location: SourceLocation::new(100, 200),
+        new_text: "nope".to_string(),
+    }];
     let result = perl_lsp_rename::rename::apply_rename_edits(code, &edits);
     assert_eq!(result, "short");
 }
 
 #[test]
 fn test_apply_edits_empty_source() {
-    let edits =
-        vec![TextEdit { location: SourceLocation::new(0, 0), new_text: "inserted".to_string() }];
+    let edits = vec![TextEdit {
+        location: SourceLocation::new(0, 0),
+        new_text: "inserted".to_string(),
+    }];
     let result = perl_lsp_rename::rename::apply_rename_edits("", &edits);
     assert_eq!(result, "inserted");
 }
@@ -559,7 +634,10 @@ fn test_apply_edits_empty_source() {
 fn test_is_in_comment_simple() {
     let code = "my $x = 1; # a comment";
     let comment_start = must_some(code.find('#'));
-    assert!(perl_lsp_rename::rename::is_in_comment(comment_start + 3, code));
+    assert!(perl_lsp_rename::rename::is_in_comment(
+        comment_start + 3,
+        code
+    ));
 }
 
 #[test]
@@ -854,8 +932,11 @@ fn test_rename_options_debug() {
 
 #[test]
 fn test_rename_result_with_error() {
-    let result =
-        RenameResult { edits: vec![], is_valid: false, error: Some("test error".to_string()) };
+    let result = RenameResult {
+        edits: vec![],
+        is_valid: false,
+        error: Some("test error".to_string()),
+    };
     assert!(!result.is_valid);
     assert_eq!(must_some(result.error.as_deref()), "test error");
 }
@@ -863,8 +944,10 @@ fn test_rename_result_with_error() {
 #[test]
 fn test_apply_edits_preserves_newlines() {
     let code = "line1\nline2\nline3\n";
-    let edits =
-        vec![TextEdit { location: SourceLocation::new(0, 5), new_text: "replaced".to_string() }];
+    let edits = vec![TextEdit {
+        location: SourceLocation::new(0, 5),
+        new_text: "replaced".to_string(),
+    }];
     let result = perl_lsp_rename::rename::apply_rename_edits(code, &edits);
     assert!(result.contains('\n'));
     assert!(result.contains("line2"));
@@ -906,8 +989,9 @@ fn test_multiple_builtins_cannot_rename() {
 
 #[test]
 fn test_multiple_special_vars_cannot_rename() {
-    let specials =
-        ["_", ".", ",", "/", "\\", "!", "@", "$", "%", "&", "`", "'", "+", "[", "]", "{", "}"];
+    let specials = [
+        "_", ".", ",", "/", "\\", "!", "@", "$", "%", "&", "`", "'", "+", "[", "]", "{", "}",
+    ];
     for s in &specials {
         assert!(
             !perl_lsp_rename::rename::can_rename_symbol(s, SymbolKind::scalar()),

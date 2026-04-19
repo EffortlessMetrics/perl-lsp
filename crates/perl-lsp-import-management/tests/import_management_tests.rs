@@ -4,7 +4,10 @@ use perl_lsp_import_management::{
 
 #[test]
 fn guesses_common_module_names() {
-    assert_eq!(guess_module_for_function("encode"), Some("Encode".to_string()));
+    assert_eq!(
+        guess_module_for_function("encode"),
+        Some("Encode".to_string())
+    );
     assert_eq!(guess_module_for_function("missing"), None);
 }
 
@@ -33,7 +36,13 @@ fn sorts_imports_by_expected_bucket_order() {
 
     assert_eq!(
         sorted,
-        vec!["use strict;", "use warnings;", "use integer;", "use Foo::Bar;", "use lib './lib';",]
+        vec![
+            "use strict;",
+            "use warnings;",
+            "use integer;",
+            "use Foo::Bar;",
+            "use lib './lib';",
+        ]
     );
 }
 
@@ -57,7 +66,10 @@ fn finds_import_block_range_when_import_line_repeats_later() {
     let range = find_imports_range(source, &lines);
     assert!(range.is_some());
     if let Some((start, end)) = range {
-        assert_eq!(&source[start..end], "use strict;\nuse warnings;\nprint 'ok';\nuse warnings;");
+        assert_eq!(
+            &source[start..end],
+            "use strict;\nuse warnings;\nprint 'ok';\nuse warnings;"
+        );
     }
 }
 
@@ -78,7 +90,10 @@ fn sort_imports_removes_duplicates() {
         "use warnings;".to_string(),
     ]);
 
-    assert_eq!(sorted, vec!["use strict;", "use warnings;", "use Data::Dumper;"]);
+    assert_eq!(
+        sorted,
+        vec!["use strict;", "use warnings;", "use Data::Dumper;"]
+    );
 }
 
 #[test]

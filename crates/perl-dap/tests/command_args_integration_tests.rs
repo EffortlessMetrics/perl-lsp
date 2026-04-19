@@ -35,8 +35,11 @@ fn single_simple_arg_unchanged() {
 
 #[test]
 fn flag_style_args_pass_through() {
-    let args =
-        vec!["--verbose".to_string(), "-I/usr/lib".to_string(), "--output=result.txt".to_string()];
+    let args = vec![
+        "--verbose".to_string(),
+        "-I/usr/lib".to_string(),
+        "--output=result.txt".to_string(),
+    ];
     let result = format_command_args(&args);
     assert_eq!(result, args);
 }
@@ -199,7 +202,10 @@ mod unix_quoting {
         assert!(result[0].starts_with('"'));
         assert!(result[0].ends_with('"'));
         // The inner double quotes should be escaped.
-        assert!(result[0].contains(r#"\""#), "inner double quotes should be escaped");
+        assert!(
+            result[0].contains(r#"\""#),
+            "inner double quotes should be escaped"
+        );
     }
 
     #[test]
@@ -223,18 +229,32 @@ mod unix_quoting {
 
 #[test]
 fn many_args_each_handled_independently() {
-    let args: Vec<String> =
-        (0..100).map(|i| if i % 2 == 0 { format!("arg{i}") } else { format!("arg {i}") }).collect();
+    let args: Vec<String> = (0..100)
+        .map(|i| {
+            if i % 2 == 0 {
+                format!("arg{i}")
+            } else {
+                format!("arg {i}")
+            }
+        })
+        .collect();
 
     let result = format_command_args(&args);
     assert_eq!(result.len(), 100);
 
     for (i, formatted) in result.iter().enumerate() {
         if i % 2 == 0 {
-            assert_eq!(formatted, &format!("arg{i}"), "even index should be unquoted");
+            assert_eq!(
+                formatted,
+                &format!("arg{i}"),
+                "even index should be unquoted"
+            );
         } else {
             assert_ne!(formatted, &format!("arg {i}"), "odd index should be quoted");
-            assert!(formatted.contains(&format!("arg {i}")), "original text preserved");
+            assert!(
+                formatted.contains(&format!("arg {i}")),
+                "original text preserved"
+            );
         }
     }
 }

@@ -4,7 +4,12 @@ use cpan_test_helpers::*;
 fn first_errors(code: &str) -> Vec<String> {
     let mut parser = perl_parser_core::Parser::new(code);
     let _ = parser.parse();
-    parser.errors().iter().take(5).map(|e| format!("{}", e)).collect()
+    parser
+        .errors()
+        .iter()
+        .take(5)
+        .map(|e| format!("{}", e))
+        .collect()
 }
 
 // DBI::ProfileData pattern

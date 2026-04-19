@@ -41,7 +41,10 @@ async fn test_default_matches_new() -> Result<()> {
 async fn test_proxy_messages_errors_without_spawn() -> Result<()> {
     let mut adapter = BridgeAdapter::new();
     let result = adapter.proxy_messages().await;
-    assert!(result.is_err(), "proxy_messages should fail without a spawned process");
+    assert!(
+        result.is_err(),
+        "proxy_messages should fail without a spawned process"
+    );
     let err_msg = match &result {
         Err(e) => format!("{e}"),
         Ok(_) => String::new(),
@@ -108,7 +111,10 @@ async fn test_spawn_fails_when_perl_not_on_path() -> Result<()> {
         }
     }
 
-    assert!(result.is_err(), "spawn_pls_dap should fail when perl is not on PATH");
+    assert!(
+        result.is_err(),
+        "spawn_pls_dap should fail when perl is not on PATH"
+    );
     let err_msg = match &result {
         Err(e) => format!("{e:#}"),
         Ok(_) => String::new(),
@@ -170,7 +176,10 @@ async fn test_sequential_adapters_are_independent() -> Result<()> {
 
     let mut second = BridgeAdapter::new();
     let result = second.proxy_messages().await;
-    assert!(result.is_err(), "second adapter should still require spawn before proxy_messages");
+    assert!(
+        result.is_err(),
+        "second adapter should still require spawn before proxy_messages"
+    );
     second.shutdown().await?;
     Ok(())
 }

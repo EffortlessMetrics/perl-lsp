@@ -57,9 +57,16 @@ fn dbi_static_method_generates_auto_import_when_not_imported() {
     );
 
     let item = item_with_edit.unwrap();
-    assert_eq!(item.additional_edits.len(), 1, "Should have exactly one auto-import edit");
+    assert_eq!(
+        item.additional_edits.len(),
+        1,
+        "Should have exactly one auto-import edit"
+    );
     let (loc, text) = &item.additional_edits[0];
-    assert_eq!(text, "use DBI;\n", "Auto-import text should be `use DBI;\\n`");
+    assert_eq!(
+        text, "use DBI;\n",
+        "Auto-import text should be `use DBI;\\n`"
+    );
     // Insertion is zero-width (start == end)
     assert_eq!(loc.start, loc.end, "Auto-import is a zero-width insertion");
 }
@@ -71,7 +78,10 @@ fn dbi_static_method_no_auto_import_when_already_imported() {
     let items = completions_at_end(code);
 
     let has_any_import_edit = items.iter().any(|i| !i.additional_edits.is_empty());
-    assert!(!has_any_import_edit, "Should produce no auto-import edits when DBI already imported");
+    assert!(
+        !has_any_import_edit,
+        "Should produce no auto-import edits when DBI already imported"
+    );
 }
 
 /// The auto-import insertion point is after the last `use` block.
@@ -82,10 +92,16 @@ fn dbi_auto_import_inserts_after_use_block() {
     let items = completions_at_end(code);
 
     let item_with_edit = items.iter().find(|i| !i.additional_edits.is_empty());
-    assert!(item_with_edit.is_some(), "Expected a DBI method completion with import edit");
+    assert!(
+        item_with_edit.is_some(),
+        "Expected a DBI method completion with import edit"
+    );
     let (loc, _) = &item_with_edit.unwrap().additional_edits[0];
     // "use strict;\n" = 12 + "use warnings;\n" = 14 => offset 26
-    assert_eq!(loc.start, 26, "Should insert after the last use statement line");
+    assert_eq!(
+        loc.start, 26,
+        "Should insert after the last use statement line"
+    );
 }
 
 /// When there is no use block at all, insertion point is at offset 0.
@@ -95,9 +111,15 @@ fn dbi_auto_import_inserts_at_top_when_no_use_block() {
     let items = completions_at_end(code);
 
     let item_with_edit = items.iter().find(|i| !i.additional_edits.is_empty());
-    assert!(item_with_edit.is_some(), "Expected a DBI method completion with import edit");
+    assert!(
+        item_with_edit.is_some(),
+        "Expected a DBI method completion with import edit"
+    );
     let (loc, _) = &item_with_edit.unwrap().additional_edits[0];
-    assert_eq!(loc.start, 0, "Should insert at offset 0 when no use block exists");
+    assert_eq!(
+        loc.start, 0,
+        "Should insert at offset 0 when no use block exists"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -112,7 +134,10 @@ fn lwp_static_new_generates_auto_import() {
 
     // "new" should appear (generic Object methods) with an auto-import edit
     let new_item = find_item(&items, "new");
-    assert!(new_item.is_some(), "Expected 'new' in completions for LWP::UserAgent->");
+    assert!(
+        new_item.is_some(),
+        "Expected 'new' in completions for LWP::UserAgent->"
+    );
     let new_item = new_item.unwrap();
     assert!(
         !new_item.additional_edits.is_empty(),
@@ -148,14 +173,20 @@ fn lwp_no_auto_import_when_already_imported() {
 fn workspace_method_auto_import_when_not_imported() {
     let index = Arc::new(WorkspaceIndex::new());
     let uri = must(Url::parse("file:///workspace/MyApp/Client.pm"));
-    must(index.index_file(uri, "package MyApp::Client;\nsub fetch { }\n1;\n".to_string()));
+    must(index.index_file(
+        uri,
+        "package MyApp::Client;\nsub fetch { }\n1;\n".to_string(),
+    ));
 
     let code = "use strict;\n\nmy $c = MyApp::Client->";
     let provider = parse_provider_with_index(code, index);
     let items = provider.get_completions(code, code.len());
 
     let fetch_item = find_item(&items, "fetch");
-    assert!(fetch_item.is_some(), "Expected 'fetch' from workspace index");
+    assert!(
+        fetch_item.is_some(),
+        "Expected 'fetch' from workspace index"
+    );
     let fetch_item = fetch_item.unwrap();
     assert!(
         !fetch_item.additional_edits.is_empty(),
@@ -170,7 +201,10 @@ fn workspace_method_auto_import_when_not_imported() {
 fn workspace_method_no_auto_import_when_already_imported() {
     let index = Arc::new(WorkspaceIndex::new());
     let uri = must(Url::parse("file:///workspace/MyApp/Client.pm"));
-    must(index.index_file(uri, "package MyApp::Client;\nsub fetch { }\n1;\n".to_string()));
+    must(index.index_file(
+        uri,
+        "package MyApp::Client;\nsub fetch { }\n1;\n".to_string(),
+    ));
 
     let code = "use strict;\nuse MyApp::Client;\n\nmy $c = MyApp::Client->";
     let provider = parse_provider_with_index(code, index);
@@ -194,7 +228,12 @@ fn workspace_method_no_auto_import_when_already_imported() {
 fn method_completions_have_function_kind() {
     let code = "DBI->";
     let items = completions_at_end(code);
-    let method_items: Vec<_> =
-        items.iter().filter(|i| i.kind == CompletionItemKind::Function).collect();
-    assert!(!method_items.is_empty(), "Expected Function-kind items for DBI methods");
+    let method_items: Vec<_> = items
+        .iter()
+        .filter(|i| i.kind == CompletionItemKind::Function)
+        .collect();
+    assert!(
+        !method_items.is_empty(),
+        "Expected Function-kind items for DBI methods"
+    );
 }

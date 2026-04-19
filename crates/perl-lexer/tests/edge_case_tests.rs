@@ -23,7 +23,10 @@ fn significant(input: &str) -> Vec<perl_lexer::Token> {
     tokens(input)
         .into_iter()
         .filter(|t| {
-            !matches!(t.token_type, TokenType::Whitespace | TokenType::Newline | TokenType::EOF)
+            !matches!(
+                t.token_type,
+                TokenType::Whitespace | TokenType::Newline | TokenType::EOF
+            )
         })
         .collect()
 }
@@ -43,7 +46,13 @@ fn assert_terminates(input: &str) {
             t.end,
             input.len()
         );
-        assert!(t.start <= t.end, "Token {:?} has start {} > end {}", t.token_type, t.start, t.end);
+        assert!(
+            t.start <= t.end,
+            "Token {:?} has start {} > end {}",
+            t.token_type,
+            t.start,
+            t.end
+        );
     }
     assert!(
         toks.iter().any(|t| matches!(t.token_type, TokenType::EOF)),
@@ -167,9 +176,12 @@ fn heredoc_body_consumed_before_next_statement() -> R {
     assert_terminates(input);
     let sig = significant(input);
     // Should contain HeredocStart, then my, $x, =, 1, ;
-    let has_heredoc = sig.iter().any(|t| matches!(t.token_type, TokenType::HeredocStart));
-    let has_my =
-        sig.iter().any(|t| matches!(&t.token_type, TokenType::Keyword(k) if k.as_ref() == "my"));
+    let has_heredoc = sig
+        .iter()
+        .any(|t| matches!(t.token_type, TokenType::HeredocStart));
+    let has_my = sig
+        .iter()
+        .any(|t| matches!(&t.token_type, TokenType::Keyword(k) if k.as_ref() == "my"));
     assert!(has_heredoc, "expected HeredocStart");
     assert!(has_my, "expected 'my' keyword after heredoc body");
     Ok(())
@@ -195,7 +207,9 @@ fn heredoc_with_trailing_whitespace_on_terminator() -> R {
     let input = "<<EOF\nhello\nEOF   \n";
     assert_terminates(input);
     let sig = significant(input);
-    let has_heredoc = sig.iter().any(|t| matches!(t.token_type, TokenType::HeredocStart));
+    let has_heredoc = sig
+        .iter()
+        .any(|t| matches!(t.token_type, TokenType::HeredocStart));
     assert!(has_heredoc, "expected HeredocStart");
     Ok(())
 }
@@ -777,7 +791,11 @@ fn capture_variables_1_through_9() -> R {
         let var = format!("${}", n);
         let toks = tokens(&var);
         // The variable should be tokenized (may be as Identifier or as $ + Number)
-        assert!(!toks.is_empty(), "Expected at least one token for '{}'", var);
+        assert!(
+            !toks.is_empty(),
+            "Expected at least one token for '{}'",
+            var
+        );
         // Verify the lexer terminates and produces valid spans
         for t in &toks {
             assert!(
@@ -1028,8 +1046,12 @@ fn heredoc_followed_by_regex() -> R {
     let input = "<<EOF\nbody\nEOF\nif (/pattern/) { }\n";
     assert_terminates(input);
     let sig = significant(input);
-    let has_heredoc = sig.iter().any(|t| matches!(t.token_type, TokenType::HeredocStart));
-    let has_regex = sig.iter().any(|t| matches!(t.token_type, TokenType::RegexMatch));
+    let has_heredoc = sig
+        .iter()
+        .any(|t| matches!(t.token_type, TokenType::HeredocStart));
+    let has_regex = sig
+        .iter()
+        .any(|t| matches!(t.token_type, TokenType::RegexMatch));
     assert!(has_heredoc, "expected HeredocStart");
     assert!(has_regex, "expected RegexMatch after heredoc");
     Ok(())
@@ -1040,9 +1062,15 @@ fn multiple_quote_operators_in_sequence() -> R {
     let input = "my $a = q{one}; my $b = qq(two); my @c = qw[three four];";
     assert_terminates(input);
     let sig = significant(input);
-    let has_q = sig.iter().any(|t| matches!(t.token_type, TokenType::QuoteSingle));
-    let has_qq = sig.iter().any(|t| matches!(t.token_type, TokenType::QuoteDouble));
-    let has_qw = sig.iter().any(|t| matches!(t.token_type, TokenType::QuoteWords));
+    let has_q = sig
+        .iter()
+        .any(|t| matches!(t.token_type, TokenType::QuoteSingle));
+    let has_qq = sig
+        .iter()
+        .any(|t| matches!(t.token_type, TokenType::QuoteDouble));
+    let has_qw = sig
+        .iter()
+        .any(|t| matches!(t.token_type, TokenType::QuoteWords));
     assert!(has_q, "expected QuoteSingle");
     assert!(has_qq, "expected QuoteDouble");
     assert!(has_qw, "expected QuoteWords");
@@ -1055,9 +1083,15 @@ fn special_variables_in_expressions() -> R {
     assert_terminates(input);
     let sig = significant(input);
     // Should produce several Identifier tokens for $!, $@, $_, $1
-    let ident_count =
-        sig.iter().filter(|t| matches!(t.token_type, TokenType::Identifier(_))).count();
-    assert!(ident_count >= 3, "expected at least 3 identifier tokens, got {}", ident_count);
+    let ident_count = sig
+        .iter()
+        .filter(|t| matches!(t.token_type, TokenType::Identifier(_)))
+        .count();
+    assert!(
+        ident_count >= 3,
+        "expected at least 3 identifier tokens, got {}",
+        ident_count
+    );
     Ok(())
 }
 
@@ -1067,7 +1101,9 @@ fn regex_after_binding_operator() -> R {
     let input = "$x =~ /pattern/i";
     assert_terminates(input);
     let sig = significant(input);
-    let has_regex = sig.iter().any(|t| matches!(t.token_type, TokenType::RegexMatch));
+    let has_regex = sig
+        .iter()
+        .any(|t| matches!(t.token_type, TokenType::RegexMatch));
     assert!(has_regex, "expected RegexMatch after =~ binding operator");
     Ok(())
 }
@@ -1078,7 +1114,9 @@ fn division_after_variable() -> R {
     let input = "$x / 2";
     assert_terminates(input);
     let sig = significant(input);
-    let has_division = sig.iter().any(|t| matches!(t.token_type, TokenType::Division));
+    let has_division = sig
+        .iter()
+        .any(|t| matches!(t.token_type, TokenType::Division));
     assert!(
         has_division,
         "expected Division after variable, got: {:?}",
@@ -1093,7 +1131,9 @@ fn division_after_closing_paren() -> R {
     let input = "($x) / 2";
     assert_terminates(input);
     let sig = significant(input);
-    let has_division = sig.iter().any(|t| matches!(t.token_type, TokenType::Division));
+    let has_division = sig
+        .iter()
+        .any(|t| matches!(t.token_type, TokenType::Division));
     assert!(has_division, "expected Division after closing paren");
     Ok(())
 }
@@ -1104,7 +1144,9 @@ fn regex_after_keyword() -> R {
     let input = "if /pattern/";
     assert_terminates(input);
     let sig = significant(input);
-    let has_regex = sig.iter().any(|t| matches!(t.token_type, TokenType::RegexMatch));
+    let has_regex = sig
+        .iter()
+        .any(|t| matches!(t.token_type, TokenType::RegexMatch));
     assert!(has_regex, "expected RegexMatch after keyword 'if'");
     Ok(())
 }
@@ -1143,9 +1185,13 @@ fn defined_or_after_variable() -> R {
     let input = "$x // $y";
     assert_terminates(input);
     let sig = significant(input);
-    let has_defined_or =
-        sig.iter().any(|t| matches!(&t.token_type, TokenType::Operator(op) if op.as_ref() == "//"));
-    assert!(has_defined_or, "expected // as defined-or operator after variable");
+    let has_defined_or = sig
+        .iter()
+        .any(|t| matches!(&t.token_type, TokenType::Operator(op) if op.as_ref() == "//"));
+    assert!(
+        has_defined_or,
+        "expected // as defined-or operator after variable"
+    );
     Ok(())
 }
 
@@ -1155,7 +1201,9 @@ fn heredoc_with_expression_on_same_line() -> R {
     let input = "my $x = <<EOF . \"suffix\";\nhello\nEOF\n";
     assert_terminates(input);
     let sig = significant(input);
-    let has_heredoc = sig.iter().any(|t| matches!(t.token_type, TokenType::HeredocStart));
+    let has_heredoc = sig
+        .iter()
+        .any(|t| matches!(t.token_type, TokenType::HeredocStart));
     assert!(has_heredoc, "expected HeredocStart");
     Ok(())
 }
@@ -1210,7 +1258,9 @@ fn sub_no_prototype_does_not_leak() -> R {
     assert!(
         !var_tokens.is_empty(),
         "Expected $^W to be lexed as a Variable containing '^W', got tokens: {:?}",
-        sig.iter().map(|t| (&t.token_type, t.text.as_ref())).collect::<Vec<_>>()
+        sig.iter()
+            .map(|t| (&t.token_type, t.text.as_ref()))
+            .collect::<Vec<_>>()
     );
     Ok(())
 }
@@ -1228,7 +1278,9 @@ fn sub_attribute_without_prototype_does_not_leak() -> R {
     assert!(
         !var_tokens.is_empty(),
         "Expected $^W to be lexed correctly after sub with attribute, got tokens: {:?}",
-        sig.iter().map(|t| (&t.token_type, t.text.as_ref())).collect::<Vec<_>>()
+        sig.iter()
+            .map(|t| (&t.token_type, t.text.as_ref()))
+            .collect::<Vec<_>>()
     );
     Ok(())
 }
@@ -1247,7 +1299,9 @@ fn sub_signature_does_not_leak() -> R {
     assert!(
         !var_tokens.is_empty(),
         "Expected $^W to be lexed correctly after sub with signature, got tokens: {:?}",
-        sig.iter().map(|t| (&t.token_type, t.text.as_ref())).collect::<Vec<_>>()
+        sig.iter()
+            .map(|t| (&t.token_type, t.text.as_ref()))
+            .collect::<Vec<_>>()
     );
     Ok(())
 }
@@ -1266,7 +1320,9 @@ fn sub_with_prototype_works_correctly() -> R {
     assert!(
         !var_tokens.is_empty(),
         "Expected $^W after prototype to be lexed correctly, got tokens: {:?}",
-        sig.iter().map(|t| (&t.token_type, t.text.as_ref())).collect::<Vec<_>>()
+        sig.iter()
+            .map(|t| (&t.token_type, t.text.as_ref()))
+            .collect::<Vec<_>>()
     );
     Ok(())
 }
@@ -1284,7 +1340,9 @@ fn sub_forward_declaration_does_not_leak() -> R {
     assert!(
         !var_tokens.is_empty(),
         "Expected $^W after forward declaration to be lexed correctly, got tokens: {:?}",
-        sig.iter().map(|t| (&t.token_type, t.text.as_ref())).collect::<Vec<_>>()
+        sig.iter()
+            .map(|t| (&t.token_type, t.text.as_ref()))
+            .collect::<Vec<_>>()
     );
     Ok(())
 }

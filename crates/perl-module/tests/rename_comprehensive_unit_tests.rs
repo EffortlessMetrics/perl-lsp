@@ -32,7 +32,10 @@ fn plan_returns_empty_for_empty_new_module() -> Result<(), Box<dyn std::error::E
 #[test]
 fn plan_returns_empty_when_old_equals_new() -> Result<(), Box<dyn std::error::Error>> {
     let edits = plan_module_rename_edits("use Foo::Bar;", "Foo::Bar", "Foo::Bar");
-    assert!(edits.is_empty(), "identical old/new should produce no edits");
+    assert!(
+        edits.is_empty(),
+        "identical old/new should produce no edits"
+    );
     Ok(())
 }
 
@@ -289,8 +292,18 @@ fn apply_replaces_single_line() -> Result<(), Box<dyn std::error::Error>> {
 fn apply_replaces_multiple_lines() -> Result<(), Box<dyn std::error::Error>> {
     let source = "a\nb\nc\nd";
     let edits = vec![
-        ModuleLineEdit { line: 0, start_character: 0, end_character: 1, new_text: "A".to_string() },
-        ModuleLineEdit { line: 2, start_character: 0, end_character: 1, new_text: "C".to_string() },
+        ModuleLineEdit {
+            line: 0,
+            start_character: 0,
+            end_character: 1,
+            new_text: "A".to_string(),
+        },
+        ModuleLineEdit {
+            line: 2,
+            start_character: 0,
+            end_character: 1,
+            new_text: "C".to_string(),
+        },
     ];
     let result = apply_module_rename_edits(source, &edits);
     assert_eq!(result, "A\nb\nC\nd");
@@ -302,8 +315,18 @@ fn apply_handles_edits_in_reverse_order() -> Result<(), Box<dyn std::error::Erro
     let source = "a\nb\nc";
     // Edits given in reverse line order — apply should sort them
     let edits = vec![
-        ModuleLineEdit { line: 2, start_character: 0, end_character: 1, new_text: "C".to_string() },
-        ModuleLineEdit { line: 0, start_character: 0, end_character: 1, new_text: "A".to_string() },
+        ModuleLineEdit {
+            line: 2,
+            start_character: 0,
+            end_character: 1,
+            new_text: "C".to_string(),
+        },
+        ModuleLineEdit {
+            line: 0,
+            start_character: 0,
+            end_character: 1,
+            new_text: "A".to_string(),
+        },
     ];
     let result = apply_module_rename_edits(source, &edits);
     assert_eq!(result, "A\nb\nC");
@@ -510,7 +533,10 @@ fn plan_start_character_always_zero() -> Result<(), Box<dyn std::error::Error>> 
     let source = "use Foo::Bar;\nrequire Foo::Bar;\nuse parent 'Foo::Bar';";
     let edits = plan_module_rename_edits(source, "Foo::Bar", "X::Y");
     for edit in &edits {
-        assert_eq!(edit.start_character, 0, "start_character should always be 0");
+        assert_eq!(
+            edit.start_character, 0,
+            "start_character should always be 0"
+        );
     }
     Ok(())
 }

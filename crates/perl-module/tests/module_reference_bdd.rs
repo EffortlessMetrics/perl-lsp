@@ -12,7 +12,10 @@ fn given_use_statement_when_cursor_is_inside_module_then_reference_is_extracted(
     if let Some(reference) = reference {
         assert_eq!(reference.kind, ModuleReferenceKind::Use);
         assert_eq!(reference.module_name, "Demo::Worker");
-        assert_eq!(extract_module_reference(line, cursor), Some("Demo::Worker".to_string()));
+        assert_eq!(
+            extract_module_reference(line, cursor),
+            Some("Demo::Worker".to_string())
+        );
     }
 }
 
@@ -21,7 +24,10 @@ fn given_require_statement_when_cursor_is_inside_module_then_reference_is_extrac
     let line = "require Demo::Worker;";
     let cursor = line.find("Demo").unwrap_or(0) + 1;
 
-    assert_eq!(extract_module_reference(line, cursor), Some("Demo::Worker".to_string()));
+    assert_eq!(
+        extract_module_reference(line, cursor),
+        Some("Demo::Worker".to_string())
+    );
 }
 
 #[test]
@@ -29,7 +35,10 @@ fn given_legacy_separator_when_cursor_is_inside_module_then_name_is_canonicalize
     let line = "use Demo'Worker;";
     let cursor = line.find("Worker").unwrap_or(0) + 1;
 
-    assert_eq!(extract_module_reference(line, cursor), Some("Demo::Worker".to_string()));
+    assert_eq!(
+        extract_module_reference(line, cursor),
+        Some("Demo::Worker".to_string())
+    );
 }
 
 #[test]

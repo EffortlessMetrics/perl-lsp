@@ -37,11 +37,21 @@ fn main() -> anyhow::Result<()> {
     let args = Args::parse();
 
     init_logging(&args.log_level);
-    log_server_startup("perl-dap", env!("CARGO_PKG_VERSION"), args.transport.mode(), None, None);
+    log_server_startup(
+        "perl-dap",
+        env!("CARGO_PKG_VERSION"),
+        args.transport.mode(),
+        None,
+        None,
+    );
 
     let config = DapConfig {
         log_level: args.log_level,
-        mode: if args.bridge { DapMode::Bridge } else { DapMode::Native },
+        mode: if args.bridge {
+            DapMode::Bridge
+        } else {
+            DapMode::Native
+        },
         workspace_root: None,
     };
 
@@ -65,22 +75,33 @@ mod tests {
 
     #[test]
     fn socket_mode_uses_dap_default_port() {
-        let args = perl_lsp_launcher::TransportArgs { stdio: false, socket: true, port: None };
+        let args = perl_lsp_launcher::TransportArgs {
+            stdio: false,
+            socket: true,
+            port: None,
+        };
 
         assert_eq!(resolve_socket_port(&args), Some(DEFAULT_DAP_PORT));
     }
 
     #[test]
     fn explicit_socket_port_is_preserved() {
-        let args =
-            perl_lsp_launcher::TransportArgs { stdio: false, socket: true, port: Some(9_999) };
+        let args = perl_lsp_launcher::TransportArgs {
+            stdio: false,
+            socket: true,
+            port: Some(9_999),
+        };
 
         assert_eq!(resolve_socket_port(&args), Some(9_999));
     }
 
     #[test]
     fn stdio_mode_does_not_resolve_a_socket_port() {
-        let args = perl_lsp_launcher::TransportArgs { stdio: true, socket: false, port: None };
+        let args = perl_lsp_launcher::TransportArgs {
+            stdio: true,
+            socket: false,
+            port: None,
+        };
 
         assert_eq!(resolve_socket_port(&args), None);
     }

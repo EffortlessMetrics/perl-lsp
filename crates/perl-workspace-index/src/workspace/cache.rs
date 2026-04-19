@@ -79,7 +79,11 @@ impl CacheStats {
     /// Calculate hit rate from hits and misses.
     pub fn calculate_hit_rate(hits: u64, misses: u64) -> f64 {
         let total = hits + misses;
-        if total == 0 { 0.0 } else { hits as f64 / total as f64 }
+        if total == 0 {
+            0.0
+        } else {
+            hits as f64 / total as f64
+        }
     }
 }
 
@@ -100,7 +104,12 @@ impl<V> CacheEntry<V> {
     /// Create a new cache entry.
     fn new(value: V, size_bytes: usize) -> Self {
         let now = Instant::now();
-        Self { value, last_accessed: now, _inserted_at: now, size_bytes }
+        Self {
+            value,
+            last_accessed: now,
+            _inserted_at: now,
+            size_bytes,
+        }
     }
 
     /// Check if this entry has expired based on TTL.
@@ -543,7 +552,9 @@ where
     V: EstimateSize,
 {
     fn estimate_size(&self) -> usize {
-        self.iter().map(|(k, v)| k.estimate_size() + v.estimate_size()).sum()
+        self.iter()
+            .map(|(k, v)| k.estimate_size() + v.estimate_size())
+            .sum()
     }
 }
 
@@ -683,7 +694,11 @@ mod tests {
 
     #[test]
     fn test_cache_eviction() {
-        let config = CacheConfig { max_items: 2, max_bytes: 100, ttl: None };
+        let config = CacheConfig {
+            max_items: 2,
+            max_bytes: 100,
+            ttl: None,
+        };
         let cache = BoundedLruCache::<String, String>::new(config);
 
         cache.insert("key1".to_string(), "value1".to_string());
@@ -724,7 +739,10 @@ mod tests {
     fn test_cache_remove() {
         let cache = BoundedLruCache::<String, String>::default();
         cache.insert("key1".to_string(), "value1".to_string());
-        assert_eq!(cache.remove(&"key1".to_string()), Some("value1".to_string()));
+        assert_eq!(
+            cache.remove(&"key1".to_string()),
+            Some("value1".to_string())
+        );
         assert_eq!(cache.get(&"key1".to_string()), None);
     }
 

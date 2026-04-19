@@ -14,7 +14,11 @@ const BASELINE_PATH: &str = "ci/parse_errors_baseline.txt";
 const UNKNOWN: &str = "unknown";
 
 const CATEGORY_TAXONOMY: &[(&str, &str, &str)] = &[
-    ("ModernFeature", "P1", "class/try/catch/field/method keywords"),
+    (
+        "ModernFeature",
+        "P1",
+        "class/try/catch/field/method keywords",
+    ),
     ("QuoteLike", "P2", "q/qq/qw/qx/qr, heredocs, strings"),
     ("Regex", "P2", "m//, s///, tr///, patterns"),
     ("ControlFlow", "P2", "given/when/default"),
@@ -30,7 +34,11 @@ pub fn run_with_paths(report: PathBuf, output: PathBuf) -> Result<()> {
 
     let report = load_report(&report_path)?;
     let output = generate_matrix(&root, &report)?;
-    fs::create_dir_all(output_path.parent().context("matrix output parent path missing")?)?;
+    fs::create_dir_all(
+        output_path
+            .parent()
+            .context("matrix output parent path missing")?,
+    )?;
     fs::write(&output_path, output)
         .context(format!("failed to write {}", output_path.display()))?;
 
@@ -52,7 +60,10 @@ pub fn run_with_paths(report: PathBuf, output: PathBuf) -> Result<()> {
 
 fn load_report(path: &Path) -> Result<AuditReport> {
     if !path.exists() {
-        bail!("Error: {} not found. Run 'just parser-audit' first.", path.display());
+        bail!(
+            "Error: {} not found. Run 'just parser-audit' first.",
+            path.display()
+        );
     }
 
     let report_text = fs::read_to_string(path)
@@ -61,13 +72,21 @@ fn load_report(path: &Path) -> Result<AuditReport> {
 }
 
 fn get_git_sha(root: &Path) -> String {
-    let output =
-        Command::new("git").arg("rev-parse").arg("--short").arg("HEAD").current_dir(root).output();
+    let output = Command::new("git")
+        .arg("rev-parse")
+        .arg("--short")
+        .arg("HEAD")
+        .current_dir(root)
+        .output();
     match output {
         Ok(result) => {
             if result.status.success() {
                 let sha = String::from_utf8_lossy(&result.stdout).trim().to_string();
-                if sha.is_empty() { UNKNOWN.to_string() } else { sha }
+                if sha.is_empty() {
+                    UNKNOWN.to_string()
+                } else {
+                    sha
+                }
             } else {
                 UNKNOWN.to_string()
             }
@@ -95,7 +114,11 @@ fn get_crate_version(root: &Path, crate_name: &str) -> String {
 }
 
 fn success_rate(outcomes: &ParseOutcomesSummary) -> f64 {
-    if outcomes.total == 0 { 0.0 } else { outcomes.ok as f64 * 100.0 / outcomes.total as f64 }
+    if outcomes.total == 0 {
+        0.0
+    } else {
+        outcomes.ok as f64 * 100.0 / outcomes.total as f64
+    }
 }
 
 fn format_location(file: &FailingFile) -> Option<String> {
@@ -133,9 +156,15 @@ fn generate_matrix(root: &Path, report: &AuditReport) -> Result<String> {
     lines.push(String::new());
     lines.push("| Field | Value |".to_string());
     lines.push("|-------|-------|".to_string());
-    lines.push(format!("| Generated | {} |", Local::now().format("%Y-%m-%d %H:%M")));
+    lines.push(format!(
+        "| Generated | {} |",
+        Local::now().format("%Y-%m-%d %H:%M")
+    ));
     lines.push(format!("| Commit | `{}` |", get_git_sha(root)));
-    lines.push(format!("| perl-parser | v{} |", get_crate_version(root, "perl-parser")));
+    lines.push(format!(
+        "| perl-parser | v{} |",
+        get_crate_version(root, "perl-parser")
+    ));
     lines.push("| Corpus | `test_corpus/` |".to_string());
     lines.push("| Command | `just parser-audit && just parser-matrix-update` |".to_string());
     lines.push(String::new());
@@ -149,27 +178,47 @@ fn generate_matrix(root: &Path, report: &AuditReport) -> Result<String> {
         success_rate,
         outcomes.ok,
         outcomes.total,
-        if outcomes.error == 0 { "Passing" } else { "In Progress" }
+        if outcomes.error == 0 {
+            "Passing"
+        } else {
+            "In Progress"
+        }
     ));
     lines.push(format!(
         "| Parse Errors | {} | 0 | {} |",
         outcomes.error,
-        if outcomes.error == 0 { "Passing" } else { "Baseline Set" }
+        if outcomes.error == 0 {
+            "Passing"
+        } else {
+            "Baseline Set"
+        }
     ));
     lines.push(format!(
         "| Timeouts | {} | 0 | {} |",
         outcomes.timeout,
-        if outcomes.timeout == 0 { "Passing" } else { "Failed" }
+        if outcomes.timeout == 0 {
+            "Passing"
+        } else {
+            "Failed"
+        }
     ));
     lines.push(format!(
         "| Panics | {} | 0 | {} |",
         outcomes.panic,
-        if outcomes.panic == 0 { "Passing" } else { "Failed" }
+        if outcomes.panic == 0 {
+            "Passing"
+        } else {
+            "Failed"
+        }
     ));
     lines.push(format!(
         "| Test Corpus Inventory | {:.0}% | 100% | {} |",
         ga_coverage,
-        if ga_coverage >= 80.0 { "Passing" } else { "In Progress" }
+        if ga_coverage >= 80.0 {
+            "Passing"
+        } else {
+            "In Progress"
+        }
     ));
     if let Some(baseline) = baseline {
         lines.push(format!("| Baseline | {} | 0 | Ratcheted |", baseline));

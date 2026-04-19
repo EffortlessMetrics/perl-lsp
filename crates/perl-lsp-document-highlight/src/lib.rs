@@ -161,7 +161,11 @@ impl DocumentHighlightProvider {
         }
 
         // Check for subroutine/method name at cursor position
-        if let NodeKind::Subroutine { name: Some(sub_name), name_span: Some(span), .. } = &node.kind
+        if let NodeKind::Subroutine {
+            name: Some(sub_name),
+            name_span: Some(span),
+            ..
+        } = &node.kind
         {
             if offset >= span.start && offset <= span.end {
                 return Some(SymbolInfo {
@@ -189,14 +193,22 @@ impl DocumentHighlightProvider {
     fn get_children<'a>(&self, node: &'a Node) -> Option<Vec<&'a Node>> {
         match &node.kind {
             NodeKind::Program { statements } => Some(statements.iter().collect()),
-            NodeKind::VariableDeclaration { variable, initializer, .. } => {
+            NodeKind::VariableDeclaration {
+                variable,
+                initializer,
+                ..
+            } => {
                 let mut children = vec![variable.as_ref()];
                 if let Some(init) = initializer {
                     children.push(init.as_ref());
                 }
                 Some(children)
             }
-            NodeKind::VariableListDeclaration { variables, initializer, .. } => {
+            NodeKind::VariableListDeclaration {
+                variables,
+                initializer,
+                ..
+            } => {
                 let mut children: Vec<&Node> = variables.iter().collect();
                 if let Some(init) = initializer {
                     children.push(init.as_ref());
@@ -213,7 +225,12 @@ impl DocumentHighlightProvider {
             }
             NodeKind::FunctionCall { args, .. } => Some(args.iter().collect()),
             NodeKind::Block { statements } => Some(statements.iter().collect()),
-            NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
+            NodeKind::If {
+                condition,
+                then_branch,
+                elsif_branches,
+                else_branch,
+            } => {
                 let mut children = vec![condition.as_ref(), then_branch.as_ref()];
                 for (cond, branch) in elsif_branches {
                     children.push(cond.as_ref());
@@ -224,7 +241,13 @@ impl DocumentHighlightProvider {
                 }
                 Some(children)
             }
-            NodeKind::For { init, condition, update, body, .. } => {
+            NodeKind::For {
+                init,
+                condition,
+                update,
+                body,
+                ..
+            } => {
                 let mut children = Vec::new();
                 if let Some(i) = init {
                     children.push(i.as_ref());
@@ -238,17 +261,29 @@ impl DocumentHighlightProvider {
                 children.push(body.as_ref());
                 Some(children)
             }
-            NodeKind::Foreach { variable, list, body, continue_block } => {
+            NodeKind::Foreach {
+                variable,
+                list,
+                body,
+                continue_block,
+            } => {
                 if let Some(cb) = continue_block {
-                    Some(vec![variable.as_ref(), list.as_ref(), body.as_ref(), cb.as_ref()])
+                    Some(vec![
+                        variable.as_ref(),
+                        list.as_ref(),
+                        body.as_ref(),
+                        cb.as_ref(),
+                    ])
                 } else {
                     Some(vec![variable.as_ref(), list.as_ref(), body.as_ref()])
                 }
             }
-            NodeKind::While { condition, body, .. } => {
-                Some(vec![condition.as_ref(), body.as_ref()])
-            }
-            NodeKind::Subroutine { body, signature, .. } => {
+            NodeKind::While {
+                condition, body, ..
+            } => Some(vec![condition.as_ref(), body.as_ref()]),
+            NodeKind::Subroutine {
+                body, signature, ..
+            } => {
                 let mut children = Vec::new();
                 if let Some(sig) = signature {
                     // Signature node may have zero-width span; expose parameters directly
@@ -271,15 +306,23 @@ impl DocumentHighlightProvider {
                 }
                 Some(children)
             }
-            NodeKind::Ternary { condition, then_expr, else_expr } => {
-                Some(vec![condition.as_ref(), then_expr.as_ref(), else_expr.as_ref()])
-            }
+            NodeKind::Ternary {
+                condition,
+                then_expr,
+                else_expr,
+            } => Some(vec![
+                condition.as_ref(),
+                then_expr.as_ref(),
+                else_expr.as_ref(),
+            ]),
             NodeKind::VariableWithAttributes { variable, .. } => Some(vec![variable.as_ref()]),
             NodeKind::ExpressionStatement { expression } => Some(vec![expression.as_ref()]),
             // Statement modifiers (Issue #191)
-            NodeKind::StatementModifier { statement, condition, .. } => {
-                Some(vec![statement.as_ref(), condition.as_ref()])
-            }
+            NodeKind::StatementModifier {
+                statement,
+                condition,
+                ..
+            } => Some(vec![statement.as_ref(), condition.as_ref()]),
             // Regex operations - only expr is a child node, patterns are strings (Issue #191)
             NodeKind::Match { expr, .. }
             | NodeKind::Substitution { expr, .. }
@@ -294,7 +337,11 @@ impl DocumentHighlightProvider {
                 Some(vec![block.as_ref()])
             }
             // Error handling (Issue #191)
-            NodeKind::Try { body, catch_blocks, finally_block } => {
+            NodeKind::Try {
+                body,
+                catch_blocks,
+                finally_block,
+            } => {
                 let mut children = vec![body.as_ref()];
                 for (_, catch_body) in catch_blocks {
                     children.push(catch_body.as_ref());
@@ -305,7 +352,9 @@ impl DocumentHighlightProvider {
                 Some(children)
             }
             // Method declarations (Issue #191)
-            NodeKind::Method { body, signature, .. } => {
+            NodeKind::Method {
+                body, signature, ..
+            } => {
                 let mut children = Vec::new();
                 if let Some(sig) = signature {
                     // Signature node may have zero-width span; expose parameters directly
@@ -329,9 +378,10 @@ impl DocumentHighlightProvider {
             // Signature and parameter types (Issue #191)
             NodeKind::Signature { parameters } => Some(parameters.iter().collect()),
             NodeKind::MandatoryParameter { variable } => Some(vec![variable.as_ref()]),
-            NodeKind::OptionalParameter { variable, default_value } => {
-                Some(vec![variable.as_ref(), default_value.as_ref()])
-            }
+            NodeKind::OptionalParameter {
+                variable,
+                default_value,
+            } => Some(vec![variable.as_ref(), default_value.as_ref()]),
             NodeKind::SlurpyParameter { variable } => Some(vec![variable.as_ref()]),
             NodeKind::NamedParameter { variable } => Some(vec![variable.as_ref()]),
             _ => None,
@@ -512,7 +562,10 @@ impl DocumentHighlightProvider {
         if self.node_matches_symbol(node, source, target) {
             let kind = self.determine_highlight_kind_with_parent(node, parent);
             // Use the full location including the sigil
-            highlights.push(DocumentHighlight { location: node.location, kind });
+            highlights.push(DocumentHighlight {
+                location: node.location,
+                kind,
+            });
         }
 
         // Cross-sigil matching for variables that refer to the same underlying
@@ -528,14 +581,21 @@ impl DocumentHighlightProvider {
                         self.is_cross_sigil_match(sigil, name, target_sigil, &target.name, parent);
                     if cross_match {
                         let kind = self.determine_highlight_kind_with_parent(node, parent);
-                        highlights.push(DocumentHighlight { location: node.location, kind });
+                        highlights.push(DocumentHighlight {
+                            location: node.location,
+                            kind,
+                        });
                     }
                 }
             }
         }
 
         // Emit highlight for subroutine definition name_span
-        if let NodeKind::Subroutine { name: Some(sub_name), name_span: Some(span), .. } = &node.kind
+        if let NodeKind::Subroutine {
+            name: Some(sub_name),
+            name_span: Some(span),
+            ..
+        } = &node.kind
         {
             if target.is_function && sub_name == &target.name {
                 highlights.push(DocumentHighlight {
@@ -553,7 +613,10 @@ impl DocumentHighlightProvider {
         }
 
         // Emit synthetic highlights for Try catch parameter variables
-        if let NodeKind::Try { catch_blocks, body, .. } = &node.kind {
+        if let NodeKind::Try {
+            catch_blocks, body, ..
+        } = &node.kind
+        {
             if let Some(target_sigil) = &target.sigil {
                 let expected = format!("{}{}", target_sigil, target.name);
                 let mut search_from = body.location.end;
@@ -584,7 +647,10 @@ impl DocumentHighlightProvider {
         }
 
         // Scan interpolated strings for variable references
-        if let NodeKind::String { interpolated: true, .. } = &node.kind {
+        if let NodeKind::String {
+            interpolated: true, ..
+        } = &node.kind
+        {
             if let Some(target_sigil) = &target.sigil {
                 let expected = format!("{}{}", target_sigil, target.name);
                 if let Some(node_text) = source.get(node.location.start..node.location.end) {

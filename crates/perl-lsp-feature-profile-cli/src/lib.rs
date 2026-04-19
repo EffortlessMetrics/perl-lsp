@@ -18,7 +18,9 @@ pub fn parse_feature_profile_arg(
 ) -> Result<FeatureProfile, UnsupportedFeatureProfileError> {
     match parse_profile_token(raw_profile) {
         Some(kind) => Ok(FeatureProfile::from_kind(kind)),
-        None => Err(UnsupportedFeatureProfileError { raw_profile: raw_profile.to_string() }),
+        None => Err(UnsupportedFeatureProfileError {
+            raw_profile: raw_profile.to_string(),
+        }),
     }
 }
 
@@ -48,7 +50,10 @@ impl UnsupportedFeatureProfileError {
     /// Human-friendly error message with support list.
     pub fn message(&self) -> String {
         let supported = feature_profile_supported_tokens().join(", ");
-        format!("Invalid feature profile: {}. Supported: {}", self.raw_profile, supported)
+        format!(
+            "Invalid feature profile: {}. Supported: {}",
+            self.raw_profile, supported
+        )
     }
 }
 
@@ -101,19 +106,29 @@ mod tests {
     #[test]
     fn parse_feature_profile_arg_returns_error_for_unknown() {
         let err = must_err(parse_feature_profile_arg("bogus"));
-        assert!(err.raw_profile == "bogus", "error should capture the raw profile token");
+        assert!(
+            err.raw_profile == "bogus",
+            "error should capture the raw profile token"
+        );
     }
 
     #[test]
     fn unsupported_error_message_contains_raw_token() {
-        let err = UnsupportedFeatureProfileError { raw_profile: "xyzzy".to_string() };
+        let err = UnsupportedFeatureProfileError {
+            raw_profile: "xyzzy".to_string(),
+        };
         let msg = err.message();
-        assert!(msg.contains("xyzzy"), "error message should contain the raw token");
+        assert!(
+            msg.contains("xyzzy"),
+            "error message should contain the raw token"
+        );
     }
 
     #[test]
     fn unsupported_error_message_lists_supported_tokens() {
-        let err = UnsupportedFeatureProfileError { raw_profile: "bad".to_string() };
+        let err = UnsupportedFeatureProfileError {
+            raw_profile: "bad".to_string(),
+        };
         let msg = err.message();
         assert!(msg.contains("auto"), "error message should list 'auto'");
         assert!(msg.contains("prod"), "error message should list 'prod'");
@@ -122,15 +137,18 @@ mod tests {
 
     #[test]
     fn unsupported_error_display_matches_message() {
-        let err = UnsupportedFeatureProfileError { raw_profile: "nope".to_string() };
+        let err = UnsupportedFeatureProfileError {
+            raw_profile: "nope".to_string(),
+        };
         let display = format!("{err}");
         assert_eq!(display, err.message());
     }
 
     #[test]
     fn unsupported_error_is_std_error() {
-        let err: Box<dyn std::error::Error> =
-            Box::new(UnsupportedFeatureProfileError { raw_profile: "test".to_string() });
+        let err: Box<dyn std::error::Error> = Box::new(UnsupportedFeatureProfileError {
+            raw_profile: "test".to_string(),
+        });
         let msg = format!("{err}");
         assert!(msg.contains("test"));
     }
@@ -140,7 +158,10 @@ mod tests {
     #[test]
     fn feature_profile_label_returns_canonical_name() {
         assert_eq!(feature_profile_label(FeatureProfile::GaLock), "ga-lock");
-        assert_eq!(feature_profile_label(FeatureProfile::Production), "production");
+        assert_eq!(
+            feature_profile_label(FeatureProfile::Production),
+            "production"
+        );
         assert_eq!(feature_profile_label(FeatureProfile::All), "all");
     }
 

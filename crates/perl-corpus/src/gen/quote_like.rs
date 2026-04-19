@@ -2,7 +2,9 @@ use proptest::prelude::*;
 
 /// Sanitize payload to avoid containing chosen delimiters
 fn sanitize_payload(s: &str, left: char, right: char) -> String {
-    s.chars().filter(|&ch| ch != left && ch != right && ch != '\r').collect()
+    s.chars()
+        .filter(|&ch| ch != left && ch != right && ch != '\r')
+        .collect()
 }
 
 fn sorted_modifiers(modifiers: impl IntoIterator<Item = char>) -> String {
@@ -59,7 +61,11 @@ pub fn q_like_metamorphic(
 
 /// Generate a single quote-like expression
 pub fn quote_like_single() -> impl Strategy<Value = String> {
-    (prop::sample::select(vec!["q", "qq", "qr", "qx", "qw"]), q_like_payload(), quote_delim())
+    (
+        prop::sample::select(vec!["q", "qq", "qr", "qx", "qw"]),
+        q_like_payload(),
+        quote_delim(),
+    )
         .prop_map(|(op, payload, (open, close))| {
             let clean_payload = sanitize_payload(&payload, open, close);
             format!("{}{}{}{}", op, open, clean_payload, close)
@@ -100,7 +106,10 @@ pub fn substitution() -> impl Strategy<Value = String> {
             let mods = sorted_modifiers(modifiers);
             if open == close {
                 // Symmetric delimiter
-                format!("s{}{}{}{}{}{}", open, clean_pattern, open, clean_replacement, open, mods)
+                format!(
+                    "s{}{}{}{}{}{}",
+                    open, clean_pattern, open, clean_replacement, open, mods
+                )
             } else {
                 // Paired delimiters - special syntax
                 format!(
@@ -124,9 +133,15 @@ pub fn transliteration() -> impl Strategy<Value = String> {
             let clean_to = sanitize_payload(&to, open, close);
             let mods = sorted_modifiers(modifiers);
             if open == close {
-                format!("tr{}{}{}{}{}{}", open, clean_from, open, clean_to, open, mods)
+                format!(
+                    "tr{}{}{}{}{}{}",
+                    open, clean_from, open, clean_to, open, mods
+                )
             } else {
-                format!("tr{}{}{}{}{}{}{}", open, clean_from, close, open, clean_to, close, mods)
+                format!(
+                    "tr{}{}{}{}{}{}{}",
+                    open, clean_from, close, open, clean_to, close, mods
+                )
             }
         })
 }
@@ -144,9 +159,15 @@ pub fn transliteration_alias() -> impl Strategy<Value = String> {
             let clean_to = sanitize_payload(&to, open, close);
             let mods = sorted_modifiers(modifiers);
             if open == close {
-                format!("y{}{}{}{}{}{}", open, clean_from, open, clean_to, open, mods)
+                format!(
+                    "y{}{}{}{}{}{}",
+                    open, clean_from, open, clean_to, open, mods
+                )
             } else {
-                format!("y{}{}{}{}{}{}{}", open, clean_from, close, open, clean_to, close, mods)
+                format!(
+                    "y{}{}{}{}{}{}{}",
+                    open, clean_from, close, open, clean_to, close, mods
+                )
             }
         })
 }

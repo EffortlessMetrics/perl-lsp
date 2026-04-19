@@ -27,9 +27,18 @@ fn test_massive_data_structures() {
         ("500K element array", generate_massive_array(500_000)),
         ("100K element hash", generate_massive_hash(100_000)),
         ("250K element hash", generate_massive_hash(250_000)),
-        ("2.5K deep nested structure", generate_deep_nested_structure(2_500)),
-        ("5K deep nested structure", generate_deep_nested_structure(5_000)),
-        ("10K deep nested structure", generate_deep_nested_structure(10_000)),
+        (
+            "2.5K deep nested structure",
+            generate_deep_nested_structure(2_500),
+        ),
+        (
+            "5K deep nested structure",
+            generate_deep_nested_structure(5_000),
+        ),
+        (
+            "10K deep nested structure",
+            generate_deep_nested_structure(10_000),
+        ),
     ];
 
     for (name, code) in test_cases {
@@ -93,25 +102,64 @@ fn test_pathological_regex_patterns() {
                 .to_string(),
         ),
         // Excessive alternation
-        ("1000 alternatives".to_string(), generate_regex_alternations(1000)),
-        ("5000 alternatives".to_string(), generate_regex_alternations(5000)),
-        ("10000 alternatives".to_string(), generate_regex_alternations(10000)),
+        (
+            "1000 alternatives".to_string(),
+            generate_regex_alternations(1000),
+        ),
+        (
+            "5000 alternatives".to_string(),
+            generate_regex_alternations(5000),
+        ),
+        (
+            "10000 alternatives".to_string(),
+            generate_regex_alternations(10000),
+        ),
         // Complex character classes
-        ("Huge character class".to_string(), generate_huge_character_class()),
-        ("Nested character classes".to_string(), generate_nested_character_classes()),
+        (
+            "Huge character class".to_string(),
+            generate_huge_character_class(),
+        ),
+        (
+            "Nested character classes".to_string(),
+            generate_nested_character_classes(),
+        ),
         // Complex lookarounds
-        ("Complex lookaheads".to_string(), generate_complex_lookaheads()),
-        ("Complex lookbehinds".to_string(), generate_complex_lookbehinds()),
-        ("Nested lookarounds".to_string(), generate_nested_lookarounds()),
+        (
+            "Complex lookaheads".to_string(),
+            generate_complex_lookaheads(),
+        ),
+        (
+            "Complex lookbehinds".to_string(),
+            generate_complex_lookbehinds(),
+        ),
+        (
+            "Nested lookarounds".to_string(),
+            generate_nested_lookarounds(),
+        ),
         // Recursive patterns
         ("Deep recursion".to_string(), generate_recursive_regex(100)),
-        ("Mutual recursion".to_string(), generate_mutual_recursive_regex()),
+        (
+            "Mutual recursion".to_string(),
+            generate_mutual_recursive_regex(),
+        ),
         // Unicode complexity
-        ("Massive Unicode class".to_string(), generate_massive_unicode_class()),
-        ("Complex Unicode properties".to_string(), generate_complex_unicode_properties()),
+        (
+            "Massive Unicode class".to_string(),
+            generate_massive_unicode_class(),
+        ),
+        (
+            "Complex Unicode properties".to_string(),
+            generate_complex_unicode_properties(),
+        ),
         // Backreference hell
-        ("Many backreferences".to_string(), generate_many_backreferences(100)),
-        ("Nested backreferences".to_string(), generate_nested_backreferences()),
+        (
+            "Many backreferences".to_string(),
+            generate_many_backreferences(100),
+        ),
+        (
+            "Nested backreferences".to_string(),
+            generate_nested_backreferences(),
+        ),
     ];
 
     for (name, code) in &test_cases {
@@ -265,10 +313,22 @@ fn test_complex_expressions() {
         ("10000 method chain", generate_massive_method_chain(10000)),
         ("1000 dereference chain", generate_complex_dereference(1000)),
         ("5000 dereference chain", generate_complex_dereference(5000)),
-        ("10000 dereference chain", generate_complex_dereference(10000)),
-        ("1000 operator precedence", generate_operator_precedence_mess(1000)),
-        ("5000 operator precedence", generate_operator_precedence_mess(5000)),
-        ("10000 operator precedence", generate_operator_precedence_mess(10000)),
+        (
+            "10000 dereference chain",
+            generate_complex_dereference(10000),
+        ),
+        (
+            "1000 operator precedence",
+            generate_operator_precedence_mess(1000),
+        ),
+        (
+            "5000 operator precedence",
+            generate_operator_precedence_mess(5000),
+        ),
+        (
+            "10000 operator precedence",
+            generate_operator_precedence_mess(10000),
+        ),
     ];
 
     for (name, code) in test_cases {
@@ -359,7 +419,11 @@ fn test_concurrent_parsing_stress() {
     let results = results.lock().unwrap();
     let error_count = *error_count.lock().unwrap();
 
-    println!("Completed {} concurrent parses with {} errors", results.len(), error_count);
+    println!(
+        "Completed {} concurrent parses with {} errors",
+        results.len(),
+        error_count
+    );
 
     // Verify no parse took too long
     for (thread_id, iteration, case_index, parse_time, _success) in results.iter() {
@@ -374,7 +438,10 @@ fn test_concurrent_parsing_stress() {
     }
 
     // At least some parses should succeed even under stress
-    let success_count = results.iter().filter(|(_, _, _, _, success)| *success).count();
+    let success_count = results
+        .iter()
+        .filter(|(_, _, _, _, success)| *success)
+        .count();
     assert!(success_count > 0, "At least some parses should succeed");
 }
 
@@ -396,7 +463,11 @@ fn test_memory_pressure_scenarios() {
     ];
 
     for (i, code) in test_cases.iter().enumerate() {
-        println!("Testing memory pressure case {} (size: {} bytes)", i, code.len());
+        println!(
+            "Testing memory pressure case {} (size: {} bytes)",
+            i,
+            code.len()
+        );
 
         let start_time = Instant::now();
         let mut parser = Parser::new(code);
@@ -442,7 +513,10 @@ fn test_resource_exhaustion_scenarios() {
         // Regex compilation exhaustion
         ("Many regex", generate_many_regex(1000)),
         // Subroutine call depth exhaustion
-        ("Deep subroutine calls", generate_deep_subroutine_calls(1000)),
+        (
+            "Deep subroutine calls",
+            generate_deep_subroutine_calls(1000),
+        ),
         // Array/Hash exhaustion
         ("Huge arrays", generate_huge_arrays(1000)),
         ("Huge hashes", generate_huge_hashes(1000)),
@@ -521,7 +595,11 @@ fn assert_shallow_program_shape(ast: &Node, input: &str, case_name: &str) {
                 case_name
             );
         }
-        other => unreachable!("Expected Program root for {}, got {}", case_name, other.kind_name()),
+        other => unreachable!(
+            "Expected Program root for {}, got {}",
+            case_name,
+            other.kind_name()
+        ),
     }
 }
 
@@ -779,7 +857,10 @@ fn generate_nested_backreferences() -> String {
 fn generate_many_file_handles(count: usize) -> String {
     let mut result = String::new();
     for i in 0..count {
-        result.push_str(&format!("open my $fh{}, '<', 'file{}.txt' or die $!; ", i, i));
+        result.push_str(&format!(
+            "open my $fh{}, '<', 'file{}.txt' or die $!; ",
+            i, i
+        ));
     }
     result.push_str("print 'Many file handles\\n';");
     result
@@ -834,7 +915,10 @@ fn generate_huge_arrays(count: usize) -> String {
 fn generate_huge_hashes(count: usize) -> String {
     let mut result = String::new();
     for i in 0..count {
-        result.push_str(&format!("my %hash{} = map {{ $_ => $_ * 2 }} (1..1000);\n", i));
+        result.push_str(&format!(
+            "my %hash{} = map {{ $_ => $_ * 2 }} (1..1000);\n",
+            i
+        ));
     }
     result.push_str("print 'Huge hashes\\n';");
     result

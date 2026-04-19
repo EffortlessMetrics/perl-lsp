@@ -37,7 +37,10 @@ fn resolve_base_ref(base: &str) -> Result<String> {
         return Ok(base.to_string());
     }
 
-    eprintln!("Warning: Base ref '{}' not found; falling back to HEAD~1", base);
+    eprintln!(
+        "Warning: Base ref '{}' not found; falling back to HEAD~1",
+        base
+    );
 
     let fallback = "HEAD~1";
     let verify_fallback = cmd("git", &["rev-parse", "--verify", fallback])
@@ -51,7 +54,11 @@ fn resolve_base_ref(base: &str) -> Result<String> {
         return Ok(fallback.to_string());
     }
 
-    Err(eyre!("Could not resolve a valid base ref (tried '{}' and '{}')", base, fallback,))
+    Err(eyre!(
+        "Could not resolve a valid base ref (tried '{}' and '{}')",
+        base,
+        fallback,
+    ))
 }
 
 /// Get the list of files changed between base_ref and HEAD.

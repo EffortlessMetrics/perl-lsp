@@ -20,8 +20,9 @@ fn send_request(server: &LspServer, method: &str, params: Value) -> Result<Value
         params: Some(params),
     };
 
-    let response =
-        server.handle_request(request).ok_or_else(|| "Failed to get response".to_string())?;
+    let response = server
+        .handle_request(request)
+        .ok_or_else(|| "Failed to get response".to_string())?;
     if let Some(error) = response.error {
         return Err(error.message);
     }
@@ -30,7 +31,9 @@ fn send_request(server: &LspServer, method: &str, params: Value) -> Result<Value
 
 /// Create a test server with a document containing color codes
 fn setup_color_server() -> LspServer {
-    let output = Arc::new(Mutex::new(Box::new(Vec::new()) as Box<dyn std::io::Write + Send>));
+    let output = Arc::new(Mutex::new(
+        Box::new(Vec::new()) as Box<dyn std::io::Write + Send>
+    ));
     let server = LspServer::with_output(output);
 
     // Initialize the server
@@ -108,9 +111,15 @@ fn lsp_color_detect_hex_colors() -> TestResult {
 
     // Verify first color (#FF0000 - red)
     let first_color = &color_array[0];
-    let red = first_color["color"]["red"].as_f64().ok_or("Red value should be a number")?;
-    let green = first_color["color"]["green"].as_f64().ok_or("Green value should be a number")?;
-    let blue = first_color["color"]["blue"].as_f64().ok_or("Blue value should be a number")?;
+    let red = first_color["color"]["red"]
+        .as_f64()
+        .ok_or("Red value should be a number")?;
+    let green = first_color["color"]["green"]
+        .as_f64()
+        .ok_or("Green value should be a number")?;
+    let blue = first_color["color"]["blue"]
+        .as_f64()
+        .ok_or("Blue value should be a number")?;
 
     assert!(red > 0.99);
     assert!(green < 0.01);
@@ -149,14 +158,19 @@ fn lsp_color_detect_ansi_colors() -> TestResult {
         })
         .collect();
 
-    assert!(!ansi_colors.is_empty(), "Should detect at least one ANSI color");
+    assert!(
+        !ansi_colors.is_empty(),
+        "Should detect at least one ANSI color"
+    );
 
     Ok(())
 }
 
 #[test]
 fn lsp_color_detect_ansi_colors_with_utf16_prefix() -> TestResult {
-    let output = Arc::new(Mutex::new(Box::new(Vec::new()) as Box<dyn std::io::Write + Send>));
+    let output = Arc::new(Mutex::new(
+        Box::new(Vec::new()) as Box<dyn std::io::Write + Send>
+    ));
     let server = LspServer::with_output(output);
 
     send_request(
@@ -242,15 +256,29 @@ fn lsp_color_presentation_hex() -> TestResult {
     let pres_array = result.as_array().ok_or("Result should be an array")?;
 
     // Should provide multiple presentation formats
-    assert!(pres_array.len() >= 3, "Should provide at least 3 presentation formats");
+    assert!(
+        pres_array.len() >= 3,
+        "Should provide at least 3 presentation formats"
+    );
 
     // Check for hex format
-    let labels: Vec<String> =
-        pres_array.iter().filter_map(|p| p["label"].as_str().map(String::from)).collect();
+    let labels: Vec<String> = pres_array
+        .iter()
+        .filter_map(|p| p["label"].as_str().map(String::from))
+        .collect();
 
-    assert!(labels.iter().any(|l| l.starts_with('#')), "Should have hex format");
-    assert!(labels.iter().any(|l| l.starts_with("rgb(")), "Should have RGB format");
-    assert!(labels.iter().any(|l| l.starts_with("hsl(")), "Should have HSL format");
+    assert!(
+        labels.iter().any(|l| l.starts_with('#')),
+        "Should have hex format"
+    );
+    assert!(
+        labels.iter().any(|l| l.starts_with("rgb(")),
+        "Should have RGB format"
+    );
+    assert!(
+        labels.iter().any(|l| l.starts_with("hsl(")),
+        "Should have HSL format"
+    );
 
     Ok(())
 }
@@ -282,12 +310,16 @@ fn lsp_color_presentation_with_alpha() -> TestResult {
 
     let pres_array = result.as_array().ok_or("Result should be an array")?;
 
-    let labels: Vec<String> =
-        pres_array.iter().filter_map(|p| p["label"].as_str().map(String::from)).collect();
+    let labels: Vec<String> = pres_array
+        .iter()
+        .filter_map(|p| p["label"].as_str().map(String::from))
+        .collect();
 
     // Should include RGBA/HSLA formats when alpha < 1.0
     assert!(
-        labels.iter().any(|l| l.contains("rgba") || (l.len() == 9 && l.starts_with('#'))),
+        labels
+            .iter()
+            .any(|l| l.contains("rgba") || (l.len() == 9 && l.starts_with('#'))),
         "Should have RGBA or 8-digit hex format"
     );
 
@@ -296,7 +328,9 @@ fn lsp_color_presentation_with_alpha() -> TestResult {
 
 #[test]
 fn lsp_color_empty_document() -> TestResult {
-    let output = Arc::new(Mutex::new(Box::new(Vec::new()) as Box<dyn std::io::Write + Send>));
+    let output = Arc::new(Mutex::new(
+        Box::new(Vec::new()) as Box<dyn std::io::Write + Send>
+    ));
     let server = LspServer::with_output(output);
 
     // Initialize
@@ -358,7 +392,10 @@ fn lsp_color_invalid_params() {
 
     // Missing textDocument field
     let result = send_request(&server, "textDocument/documentColor", json!({}));
-    assert!(result.is_err(), "Should return error for missing textDocument");
+    assert!(
+        result.is_err(),
+        "Should return error for missing textDocument"
+    );
 
     // Missing color field in presentation
     let result = send_request(
@@ -386,7 +423,9 @@ fn lsp_color_round_trip() -> TestResult {
         }),
     )?;
 
-    let colors = detected.as_array().ok_or("Detected colors should be an array")?;
+    let colors = detected
+        .as_array()
+        .ok_or("Detected colors should be an array")?;
 
     if let Some(first_color) = colors.first() {
         // Use detected color to get presentations
@@ -402,8 +441,13 @@ fn lsp_color_round_trip() -> TestResult {
             }),
         )?;
 
-        let pres_array = presentations.as_array().ok_or("Presentations should be an array")?;
-        assert!(!pres_array.is_empty(), "Should have at least one presentation");
+        let pres_array = presentations
+            .as_array()
+            .ok_or("Presentations should be an array")?;
+        assert!(
+            !pres_array.is_empty(),
+            "Should have at least one presentation"
+        );
     }
 
     Ok(())
@@ -416,7 +460,9 @@ fn lsp_color_round_trip() -> TestResult {
 /// position misalignment if conversion isn't done correctly.
 #[test]
 fn lsp_color_utf16_position_with_non_ascii_prefix() -> TestResult {
-    let output = Arc::new(Mutex::new(Box::new(Vec::new()) as Box<dyn std::io::Write + Send>));
+    let output = Arc::new(Mutex::new(
+        Box::new(Vec::new()) as Box<dyn std::io::Write + Send>
+    ));
     let server = LspServer::with_output(output);
 
     // Initialize
@@ -482,16 +528,27 @@ fn lsp_color_utf16_position_with_non_ascii_prefix() -> TestResult {
 
     // Verify that colors on line 0 and line 1 are found
     // (specific positions depend on implementation, but they should exist)
-    let lines: Vec<u64> =
-        color_array.iter().filter_map(|c| c["range"]["start"]["line"].as_u64()).collect();
+    let lines: Vec<u64> = color_array
+        .iter()
+        .filter_map(|c| c["range"]["start"]["line"].as_u64())
+        .collect();
 
-    assert!(lines.contains(&0), "Should find color on line 0 (after Japanese + French text)");
-    assert!(lines.contains(&1), "Should find color on line 1 (after 'café')");
+    assert!(
+        lines.contains(&0),
+        "Should find color on line 0 (after Japanese + French text)"
+    );
+    assert!(
+        lines.contains(&1),
+        "Should find color on line 1 (after 'café')"
+    );
 
     // Verify first color is red (sanity check)
     let first_color = &color_array[0];
     let red = first_color["color"]["red"].as_f64().unwrap_or(0.0);
-    assert!(red > 0.5, "First color should have significant red component");
+    assert!(
+        red > 0.5,
+        "First color should have significant red component"
+    );
 
     Ok(())
 }

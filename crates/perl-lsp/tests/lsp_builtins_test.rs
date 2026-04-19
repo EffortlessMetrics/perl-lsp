@@ -66,7 +66,9 @@ fn get_signature_help(server: &LspServer, uri: &str, line: u32, character: u32) 
         })),
     };
 
-    server.handle_request(request).and_then(|response| response.result)
+    server
+        .handle_request(request)
+        .and_then(|response| response.result)
 }
 
 #[test]
@@ -81,7 +83,10 @@ fn test_file_operation_signatures() -> TestResult {
     assert!(result.is_some());
     let sig = result.ok_or("Expected signature result")?;
     assert!(
-        sig["signatures"][0]["label"].as_str().ok_or("Expected label string")?.contains("seek")
+        sig["signatures"][0]["label"]
+            .as_str()
+            .ok_or("Expected label string")?
+            .contains("seek")
     );
     assert!(
         sig["signatures"][0]["label"]
@@ -98,7 +103,10 @@ fn test_file_operation_signatures() -> TestResult {
     assert!(result.is_some());
     let sig = result.ok_or("Expected signature result")?;
     assert!(
-        sig["signatures"][0]["label"].as_str().ok_or("Expected label string")?.contains("chmod")
+        sig["signatures"][0]["label"]
+            .as_str()
+            .ok_or("Expected label string")?
+            .contains("chmod")
     );
     assert!(
         sig["signatures"][0]["label"]
@@ -115,7 +123,10 @@ fn test_file_operation_signatures() -> TestResult {
     assert!(result.is_some());
     let sig = result.ok_or("Expected signature result")?;
     assert!(
-        sig["signatures"][0]["label"].as_str().ok_or("Expected label string")?.contains("stat")
+        sig["signatures"][0]["label"]
+            .as_str()
+            .ok_or("Expected label string")?
+            .contains("stat")
     );
 
     Ok(())
@@ -133,7 +144,10 @@ fn test_string_data_signatures() -> TestResult {
     assert!(result.is_some());
     let sig = result.ok_or("Expected signature result")?;
     assert!(
-        sig["signatures"][0]["label"].as_str().ok_or("Expected label string")?.contains("pack")
+        sig["signatures"][0]["label"]
+            .as_str()
+            .ok_or("Expected label string")?
+            .contains("pack")
     );
     assert!(
         sig["signatures"][0]["label"]
@@ -150,7 +164,10 @@ fn test_string_data_signatures() -> TestResult {
     assert!(result.is_some());
     let sig = result.ok_or("Expected signature result")?;
     assert!(
-        sig["signatures"][0]["label"].as_str().ok_or("Expected label string")?.contains("unpack")
+        sig["signatures"][0]["label"]
+            .as_str()
+            .ok_or("Expected label string")?
+            .contains("unpack")
     );
 
     // Test hex signature
@@ -160,7 +177,12 @@ fn test_string_data_signatures() -> TestResult {
 
     assert!(result.is_some());
     let sig = result.ok_or("Expected signature result")?;
-    assert!(sig["signatures"][0]["label"].as_str().ok_or("Expected label string")?.contains("hex"));
+    assert!(
+        sig["signatures"][0]["label"]
+            .as_str()
+            .ok_or("Expected label string")?
+            .contains("hex")
+    );
 
     Ok(())
 }
@@ -185,8 +207,15 @@ fn test_math_signatures() -> TestResult {
 
         assert!(result.is_some(), "Failed for function: {}", func_name);
         let sig = result.ok_or("Expected signature result")?;
-        let label = sig["signatures"][0]["label"].as_str().ok_or("Expected label string")?;
-        assert!(label.contains(func_name), "Label doesn't contain {}: {}", func_name, label);
+        let label = sig["signatures"][0]["label"]
+            .as_str()
+            .ok_or("Expected label string")?;
+        assert!(
+            label.contains(func_name),
+            "Label doesn't contain {}: {}",
+            func_name,
+            label
+        );
         assert!(
             label.contains(expected_params),
             "Label doesn't contain params for {}: {}",
@@ -210,7 +239,10 @@ fn test_system_process_signatures() -> TestResult {
     assert!(result.is_some());
     let sig = result.ok_or("Expected signature result")?;
     assert!(
-        sig["signatures"][0]["label"].as_str().ok_or("Expected label string")?.contains("fork")
+        sig["signatures"][0]["label"]
+            .as_str()
+            .ok_or("Expected label string")?
+            .contains("fork")
     );
 
     // Test kill signature
@@ -221,7 +253,10 @@ fn test_system_process_signatures() -> TestResult {
     assert!(result.is_some());
     let sig = result.ok_or("Expected signature result")?;
     assert!(
-        sig["signatures"][0]["label"].as_str().ok_or("Expected label string")?.contains("kill")
+        sig["signatures"][0]["label"]
+            .as_str()
+            .ok_or("Expected label string")?
+            .contains("kill")
     );
     assert!(
         sig["signatures"][0]["label"]
@@ -238,7 +273,10 @@ fn test_system_process_signatures() -> TestResult {
     assert!(result.is_some());
     let sig = result.ok_or("Expected signature result")?;
     assert!(
-        sig["signatures"][0]["label"].as_str().ok_or("Expected label string")?.contains("system")
+        sig["signatures"][0]["label"]
+            .as_str()
+            .ok_or("Expected label string")?
+            .contains("system")
     );
 
     Ok(())
@@ -256,7 +294,10 @@ fn test_network_signatures() -> TestResult {
     assert!(result.is_some());
     let sig = result.ok_or("Expected signature result")?;
     assert!(
-        sig["signatures"][0]["label"].as_str().ok_or("Expected label string")?.contains("socket")
+        sig["signatures"][0]["label"]
+            .as_str()
+            .ok_or("Expected label string")?
+            .contains("socket")
     );
     assert!(
         sig["signatures"][0]["label"]
@@ -273,7 +314,10 @@ fn test_network_signatures() -> TestResult {
     assert!(result.is_some());
     let sig = result.ok_or("Expected signature result")?;
     assert!(
-        sig["signatures"][0]["label"].as_str().ok_or("Expected label string")?.contains("bind")
+        sig["signatures"][0]["label"]
+            .as_str()
+            .ok_or("Expected label string")?
+            .contains("bind")
     );
     assert!(
         sig["signatures"][0]["label"]
@@ -297,7 +341,10 @@ fn test_control_flow_signatures() -> TestResult {
     assert!(result.is_some());
     let sig = result.ok_or("Expected signature result")?;
     assert!(
-        sig["signatures"][0]["label"].as_str().ok_or("Expected label string")?.contains("eval")
+        sig["signatures"][0]["label"]
+            .as_str()
+            .ok_or("Expected label string")?
+            .contains("eval")
     );
 
     // Test require signature
@@ -308,7 +355,10 @@ fn test_control_flow_signatures() -> TestResult {
     assert!(result.is_some());
     let sig = result.ok_or("Expected signature result")?;
     assert!(
-        sig["signatures"][0]["label"].as_str().ok_or("Expected label string")?.contains("require")
+        sig["signatures"][0]["label"]
+            .as_str()
+            .ok_or("Expected label string")?
+            .contains("require")
     );
 
     Ok(())
@@ -325,7 +375,12 @@ fn test_misc_signatures() -> TestResult {
 
     assert!(result.is_some());
     let sig = result.ok_or("Expected signature result")?;
-    assert!(sig["signatures"][0]["label"].as_str().ok_or("Expected label string")?.contains("tie"));
+    assert!(
+        sig["signatures"][0]["label"]
+            .as_str()
+            .ok_or("Expected label string")?
+            .contains("tie")
+    );
     assert!(
         sig["signatures"][0]["label"]
             .as_str()
@@ -341,7 +396,10 @@ fn test_misc_signatures() -> TestResult {
     assert!(result.is_some());
     let sig = result.ok_or("Expected signature result")?;
     assert!(
-        sig["signatures"][0]["label"].as_str().ok_or("Expected label string")?.contains("select")
+        sig["signatures"][0]["label"]
+            .as_str()
+            .ok_or("Expected label string")?
+            .contains("select")
     );
 
     Ok(())
@@ -358,7 +416,12 @@ fn test_active_parameter_tracking() -> TestResult {
 
     assert!(result.is_some());
     let sig = result.ok_or("Expected signature result")?;
-    assert_eq!(sig["activeParameter"].as_u64().ok_or("Expected activeParameter u64")?, 1); // Second parameter
+    assert_eq!(
+        sig["activeParameter"]
+            .as_u64()
+            .ok_or("Expected activeParameter u64")?,
+        1
+    ); // Second parameter
 
     // Test with three parameters
     let code = "substr($text, 5, 10);";
@@ -367,7 +430,12 @@ fn test_active_parameter_tracking() -> TestResult {
 
     assert!(result.is_some());
     let sig = result.ok_or("Expected signature result")?;
-    assert_eq!(sig["activeParameter"].as_u64().ok_or("Expected activeParameter u64")?, 2); // Third parameter
+    assert_eq!(
+        sig["activeParameter"]
+            .as_u64()
+            .ok_or("Expected activeParameter u64")?,
+        2
+    ); // Third parameter
 
     Ok(())
 }
@@ -534,9 +602,15 @@ fn test_all_114_builtins_are_recognized() -> TestResult {
         let cursor_pos = func.len() as u32 + 1;
         let result = get_signature_help(&server, &uri, 0, cursor_pos);
 
-        assert!(result.is_some(), "No signature found for function: {}", func);
+        assert!(
+            result.is_some(),
+            "No signature found for function: {}",
+            func
+        );
         let sig = result.ok_or("Expected signature result")?;
-        let label = sig["signatures"][0]["label"].as_str().ok_or("Expected label string")?;
+        let label = sig["signatures"][0]["label"]
+            .as_str()
+            .ok_or("Expected label string")?;
         assert!(
             label.contains(func),
             "Signature for {} doesn't contain function name: {}",

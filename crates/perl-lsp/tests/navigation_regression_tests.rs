@@ -75,18 +75,30 @@ fn location_count(result: &serde_json::Value) -> usize {
     if result.is_null() {
         return 0;
     }
-    if let Some(arr) = result.as_array() { arr.len() } else { 1 }
+    if let Some(arr) = result.as_array() {
+        arr.len()
+    } else {
+        1
+    }
 }
 
 /// Count total TextEdits across all URIs in a WorkspaceEdit `changes` map.
 fn count_workspace_edits(edit: &serde_json::Value) -> usize {
     if let Some(changes) = edit.get("changes").and_then(|c| c.as_object()) {
-        return changes.values().map(|v| v.as_array().map(|a| a.len()).unwrap_or(0)).sum();
+        return changes
+            .values()
+            .map(|v| v.as_array().map(|a| a.len()).unwrap_or(0))
+            .sum();
     }
     if let Some(doc_changes) = edit.get("documentChanges").and_then(|c| c.as_array()) {
         return doc_changes
             .iter()
-            .map(|dc| dc.get("edits").and_then(|e| e.as_array()).map(|a| a.len()).unwrap_or(0))
+            .map(|dc| {
+                dc.get("edits")
+                    .and_then(|e| e.as_array())
+                    .map(|a| a.len())
+                    .unwrap_or(0)
+            })
             .sum();
     }
     0
@@ -404,8 +416,10 @@ fn test_refs_variable_all_uses_counted() -> TestResult {
         );
         // Each line with $item must have at least one location pointing to it.
         if let Some(locs) = result.as_array() {
-            let reported_lines: Vec<u64> =
-                locs.iter().filter_map(|l| l.pointer("/range/start/line")?.as_u64()).collect();
+            let reported_lines: Vec<u64> = locs
+                .iter()
+                .filter_map(|l| l.pointer("/range/start/line")?.as_u64())
+                .collect();
             for expected_line in 0u64..5 {
                 assert!(
                     reported_lines.contains(&expected_line),
@@ -460,7 +474,10 @@ fn test_refs_variable_returns_valid_locations_with_sibling_sigils() -> TestResul
     );
     if !result.is_null() {
         let count = location_count(&result);
-        assert!(count > 0, "find-references for `$data` returned an empty array");
+        assert!(
+            count > 0,
+            "find-references for `$data` returned an empty array"
+        );
 
         // All locations must have valid structure.
         if let Some(locs) = result.as_array() {
@@ -520,8 +537,10 @@ fn test_refs_sub_all_call_sites_covered() -> TestResult {
         );
         // Every line with a `greet` occurrence must appear in the result.
         if let Some(locs) = result.as_array() {
-            let reported_lines: Vec<u64> =
-                locs.iter().filter_map(|l| l.pointer("/range/start/line")?.as_u64()).collect();
+            let reported_lines: Vec<u64> = locs
+                .iter()
+                .filter_map(|l| l.pointer("/range/start/line")?.as_u64())
+                .collect();
             for expected_line in 0u64..4 {
                 assert!(
                     reported_lines.contains(&expected_line),
@@ -652,8 +671,10 @@ fn test_refs_scope_returns_valid_response_for_nested_scopes() -> TestResult {
 
     // At minimum, each query must return at least the lines in its own scope.
     if let Some(if_locs) = if_result.as_array() {
-        let reported: Vec<u64> =
-            if_locs.iter().filter_map(|l| l.pointer("/range/start/line")?.as_u64()).collect();
+        let reported: Vec<u64> = if_locs
+            .iter()
+            .filter_map(|l| l.pointer("/range/start/line")?.as_u64())
+            .collect();
         assert!(
             reported.contains(&2),
             "if-scope query must include line 2 (declaration); reported: {reported:?}"
@@ -665,8 +686,10 @@ fn test_refs_scope_returns_valid_response_for_nested_scopes() -> TestResult {
     }
 
     if let Some(else_locs) = else_result.as_array() {
-        let reported: Vec<u64> =
-            else_locs.iter().filter_map(|l| l.pointer("/range/start/line")?.as_u64()).collect();
+        let reported: Vec<u64> = else_locs
+            .iter()
+            .filter_map(|l| l.pointer("/range/start/line")?.as_u64())
+            .collect();
         assert!(
             reported.contains(&5),
             "else-scope query must include line 5 (declaration); reported: {reported:?}"
@@ -940,8 +963,16 @@ fn test_rename_scope_isolation_nested_same_name() -> TestResult {
 fn helper_find_pos_correctness() {
     let src = "line0\nline1 needle here\nline2\n";
     let pos = find_pos(src, "needle");
-    assert_eq!(pos, Some((1, 6)), "find_pos should return (1, 6) for 'needle' on line 1");
+    assert_eq!(
+        pos,
+        Some((1, 6)),
+        "find_pos should return (1, 6) for 'needle' on line 1"
+    );
 
     let last = find_last_pos(src, "line");
-    assert_eq!(last, Some((2, 0)), "find_last_pos should return (2, 0) for last 'line'");
+    assert_eq!(
+        last,
+        Some((2, 0)),
+        "find_last_pos should return (2, 0) for last 'line'"
+    );
 }

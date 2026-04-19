@@ -24,7 +24,10 @@ pub fn fix_undefined_variable(source: &str, diagnostic: &QuickFixDiagnostic) -> 
             diagnostics: vec![DiagnosticCode::UndefinedVariable.as_str().to_string()],
             edit: CodeActionEdit {
                 changes: vec![TextEdit {
-                    location: SourceLocation { start: insert_pos, end: insert_pos },
+                    location: SourceLocation {
+                        start: insert_pos,
+                        end: insert_pos,
+                    },
                     new_text: format!("my {};\n", var_name),
                 }],
             },
@@ -38,7 +41,10 @@ pub fn fix_undefined_variable(source: &str, diagnostic: &QuickFixDiagnostic) -> 
             diagnostics: vec![DiagnosticCode::UndefinedVariable.as_str().to_string()],
             edit: CodeActionEdit {
                 changes: vec![TextEdit {
-                    location: SourceLocation { start: insert_pos, end: insert_pos },
+                    location: SourceLocation {
+                        start: insert_pos,
+                        end: insert_pos,
+                    },
                     new_text: format!("our {};\n", var_name),
                 }],
             },
@@ -54,7 +60,10 @@ pub fn fix_unused_variable(source: &str, diagnostic: &QuickFixDiagnostic) -> Vec
     let mut actions = Vec::new();
 
     // Find the declaration line
-    let line_start = source[..diagnostic.range.0].rfind('\n').map(|p| p + 1).unwrap_or(0);
+    let line_start = source[..diagnostic.range.0]
+        .rfind('\n')
+        .map(|p| p + 1)
+        .unwrap_or(0);
     let line_end = source[diagnostic.range.1..]
         .find('\n')
         .map(|p| diagnostic.range.1 + p)
@@ -66,7 +75,10 @@ pub fn fix_unused_variable(source: &str, diagnostic: &QuickFixDiagnostic) -> Vec
         diagnostics: vec![DiagnosticCode::UnusedVariable.as_str().to_string()],
         edit: CodeActionEdit {
             changes: vec![TextEdit {
-                location: SourceLocation { start: line_start, end: line_end + 1 },
+                location: SourceLocation {
+                    start: line_start,
+                    end: line_end + 1,
+                },
                 new_text: String::new(),
             }],
         },
@@ -81,7 +93,10 @@ pub fn fix_unused_variable(source: &str, diagnostic: &QuickFixDiagnostic) -> Vec
             diagnostics: vec![DiagnosticCode::UnusedVariable.as_str().to_string()],
             edit: CodeActionEdit {
                 changes: vec![TextEdit {
-                    location: SourceLocation { start: diagnostic.range.0, end: diagnostic.range.1 },
+                    location: SourceLocation {
+                        start: diagnostic.range.0,
+                        end: diagnostic.range.1,
+                    },
                     new_text: format!("_{}", var_name),
                 }],
             },
@@ -100,8 +115,9 @@ pub fn fix_assignment_in_condition(
     let mut actions = Vec::new();
 
     // Change = to ==
-    let assignment_pos =
-        source[diagnostic.range.0..diagnostic.range.1].find('=').map(|p| diagnostic.range.0 + p);
+    let assignment_pos = source[diagnostic.range.0..diagnostic.range.1]
+        .find('=')
+        .map(|p| diagnostic.range.0 + p);
 
     if let Some(pos) = assignment_pos {
         actions.push(CodeAction {
@@ -110,7 +126,10 @@ pub fn fix_assignment_in_condition(
             diagnostics: vec![DiagnosticCode::AssignmentInCondition.as_str().to_string()],
             edit: CodeActionEdit {
                 changes: vec![TextEdit {
-                    location: SourceLocation { start: pos, end: pos + 1 },
+                    location: SourceLocation {
+                        start: pos,
+                        end: pos + 1,
+                    },
                     new_text: "==".to_string(),
                 }],
             },
@@ -181,7 +200,10 @@ pub fn add_use_warnings() -> Vec<CodeAction> {
 
 fn file_scope_pragma_insertion_offset(source: &str) -> usize {
     if source.starts_with("#!") {
-        source.find('\n').map(|offset| offset + 1).unwrap_or(source.len())
+        source
+            .find('\n')
+            .map(|offset| offset + 1)
+            .unwrap_or(source.len())
     } else {
         0
     }
@@ -206,11 +228,17 @@ pub fn move_use_strict_to_file_scope(
         edit: CodeActionEdit {
             changes: vec![
                 TextEdit {
-                    location: SourceLocation { start: diagnostic.range.0, end: delete_end },
+                    location: SourceLocation {
+                        start: diagnostic.range.0,
+                        end: delete_end,
+                    },
                     new_text: String::new(),
                 },
                 TextEdit {
-                    location: SourceLocation { start: insert_at, end: insert_at },
+                    location: SourceLocation {
+                        start: insert_at,
+                        end: insert_at,
+                    },
                     new_text: "use strict;\n".to_string(),
                 },
             ],
@@ -234,15 +262,25 @@ pub fn move_use_warnings_to_file_scope(
     vec![CodeAction {
         title: "Move 'use warnings' to file scope".to_string(),
         kind: CodeActionKind::QuickFix,
-        diagnostics: vec![DiagnosticCode::PhaseScopedWarningsPragma.as_str().to_string()],
+        diagnostics: vec![
+            DiagnosticCode::PhaseScopedWarningsPragma
+                .as_str()
+                .to_string(),
+        ],
         edit: CodeActionEdit {
             changes: vec![
                 TextEdit {
-                    location: SourceLocation { start: diagnostic.range.0, end: delete_end },
+                    location: SourceLocation {
+                        start: diagnostic.range.0,
+                        end: delete_end,
+                    },
                     new_text: String::new(),
                 },
                 TextEdit {
-                    location: SourceLocation { start: insert_at, end: insert_at },
+                    location: SourceLocation {
+                        start: insert_at,
+                        end: insert_at,
+                    },
                     new_text: "use warnings;\n".to_string(),
                 },
             ],
@@ -269,7 +307,10 @@ pub fn fix_deprecated_defined(source: &str, diagnostic: &QuickFixDiagnostic) -> 
             diagnostics: vec![DiagnosticCode::DeprecatedDefined.as_str().to_string()],
             edit: CodeActionEdit {
                 changes: vec![TextEdit {
-                    location: SourceLocation { start: defined_start, end: diagnostic.range.1 },
+                    location: SourceLocation {
+                        start: defined_start,
+                        end: diagnostic.range.1,
+                    },
                     new_text: arg_text.to_string(),
                 }],
             },
@@ -288,15 +329,25 @@ pub fn fix_numeric_undef(source: &str, diagnostic: &QuickFixDiagnostic) -> Vec<C
     actions.push(CodeAction {
         title: "Add defined check".to_string(),
         kind: CodeActionKind::QuickFix,
-        diagnostics: vec![DiagnosticCode::NumericComparisonWithUndef.as_str().to_string()],
+        diagnostics: vec![
+            DiagnosticCode::NumericComparisonWithUndef
+                .as_str()
+                .to_string(),
+        ],
         edit: CodeActionEdit {
             changes: vec![
                 TextEdit {
-                    location: SourceLocation { start: diagnostic.range.0, end: diagnostic.range.0 },
+                    location: SourceLocation {
+                        start: diagnostic.range.0,
+                        end: diagnostic.range.0,
+                    },
                     new_text: "defined(".to_string(),
                 },
                 TextEdit {
-                    location: SourceLocation { start: diagnostic.range.1, end: diagnostic.range.1 },
+                    location: SourceLocation {
+                        start: diagnostic.range.1,
+                        end: diagnostic.range.1,
+                    },
                     new_text: ")".to_string(),
                 },
             ],
@@ -309,10 +360,17 @@ pub fn fix_numeric_undef(source: &str, diagnostic: &QuickFixDiagnostic) -> Vec<C
         actions.push(CodeAction {
             title: "Use defined-or operator (//)".to_string(),
             kind: CodeActionKind::QuickFix,
-            diagnostics: vec![DiagnosticCode::NumericComparisonWithUndef.as_str().to_string()],
+            diagnostics: vec![
+                DiagnosticCode::NumericComparisonWithUndef
+                    .as_str()
+                    .to_string(),
+            ],
             edit: CodeActionEdit {
                 changes: vec![TextEdit {
-                    location: SourceLocation { start: diagnostic.range.0, end: diagnostic.range.1 },
+                    location: SourceLocation {
+                        start: diagnostic.range.0,
+                        end: diagnostic.range.1,
+                    },
                     new_text: "// 0".to_string(), // Default to 0
                 }],
             },
@@ -345,7 +403,10 @@ pub fn fix_bareword(source: &str, diagnostic: &QuickFixDiagnostic) -> Vec<CodeAc
         diagnostics: vec![DiagnosticCode::UnquotedBareword.as_str().to_string()],
         edit: CodeActionEdit {
             changes: vec![TextEdit {
-                location: SourceLocation { start: diagnostic.range.0, end: diagnostic.range.1 },
+                location: SourceLocation {
+                    start: diagnostic.range.0,
+                    end: diagnostic.range.1,
+                },
                 new_text: format!("'{}'", bareword),
             }],
         },
@@ -359,7 +420,10 @@ pub fn fix_bareword(source: &str, diagnostic: &QuickFixDiagnostic) -> Vec<CodeAc
         diagnostics: vec![DiagnosticCode::UnquotedBareword.as_str().to_string()],
         edit: CodeActionEdit {
             changes: vec![TextEdit {
-                location: SourceLocation { start: diagnostic.range.0, end: diagnostic.range.1 },
+                location: SourceLocation {
+                    start: diagnostic.range.0,
+                    end: diagnostic.range.1,
+                },
                 new_text: format!("\"{}\"", bareword),
             }],
         },
@@ -378,7 +442,10 @@ pub fn fix_bareword(source: &str, diagnostic: &QuickFixDiagnostic) -> Vec<CodeAc
             diagnostics: vec![DiagnosticCode::UnquotedBareword.as_str().to_string()],
             edit: CodeActionEdit {
                 changes: vec![TextEdit {
-                    location: SourceLocation { start: insert_pos, end: insert_pos },
+                    location: SourceLocation {
+                        start: insert_pos,
+                        end: insert_pos,
+                    },
                     new_text: format!("{}open my ${};\n", indent, bareword),
                 }],
             },
@@ -419,7 +486,10 @@ pub fn fix_parse_error(
                 diagnostics: vec![code.to_string()],
                 edit: CodeActionEdit {
                     changes: vec![TextEdit {
-                        location: SourceLocation { start: end_pos, end: end_pos },
+                        location: SourceLocation {
+                            start: end_pos,
+                            end: end_pos,
+                        },
                         new_text: ";".to_string(),
                     }],
                 },
@@ -427,11 +497,16 @@ pub fn fix_parse_error(
             });
         }
         "PL001" | "PL002"
-            if diagnostic.message.to_ascii_lowercase().contains("missing semicolon") =>
+            if diagnostic
+                .message
+                .to_ascii_lowercase()
+                .contains("missing semicolon") =>
         {
             // PL001/PL002 are general parse error codes. When the message indicates a missing
             // semicolon, apply the same fix — but skip heredoc contexts where insertion is wrong.
-            let at_heredoc = source[diagnostic.range.0..].get(..2).is_some_and(|s| s == "<<");
+            let at_heredoc = source[diagnostic.range.0..]
+                .get(..2)
+                .is_some_and(|s| s == "<<");
             if !at_heredoc {
                 let line_end = source[diagnostic.range.0..]
                     .find('\n')
@@ -452,7 +527,10 @@ pub fn fix_parse_error(
                     diagnostics: vec![code.to_string()],
                     edit: CodeActionEdit {
                         changes: vec![TextEdit {
-                            location: SourceLocation { start: end_pos, end: end_pos },
+                            location: SourceLocation {
+                                start: end_pos,
+                                end: end_pos,
+                            },
                             new_text: ";".to_string(),
                         }],
                     },
@@ -547,7 +625,10 @@ pub fn fix_unused_parameter(diagnostic: &QuickFixDiagnostic) -> Vec<CodeAction> 
             diagnostics: vec![DiagnosticCode::UnusedParameter.as_str().to_string()],
             edit: CodeActionEdit {
                 changes: vec![TextEdit {
-                    location: SourceLocation { start: diagnostic.range.0, end: diagnostic.range.1 },
+                    location: SourceLocation {
+                        start: diagnostic.range.0,
+                        end: diagnostic.range.1,
+                    },
                     new_text: format!("_{}", param_name),
                 }],
             },
@@ -601,7 +682,10 @@ pub fn fix_hardcoded_shebang(source: &str) -> Vec<CodeAction> {
         diagnostics: vec!["hardcoded-shebang".to_string()],
         edit: CodeActionEdit {
             changes: vec![TextEdit {
-                location: SourceLocation { start: 0, end: first_line.len() },
+                location: SourceLocation {
+                    start: 0,
+                    end: first_line.len(),
+                },
                 new_text: new_shebang,
             }],
         },
@@ -615,7 +699,11 @@ fn extract_shebang_flags(shebang_line: &str) -> String {
     if let Some(perl_pos) = shebang_line.find("perl") {
         let after_perl = &shebang_line[perl_pos + 4..];
         let trimmed = after_perl.trim();
-        if trimmed.is_empty() { String::new() } else { trimmed.to_string() }
+        if trimmed.is_empty() {
+            String::new()
+        } else {
+            trimmed.to_string()
+        }
     } else {
         String::new()
     }
@@ -627,8 +715,10 @@ pub fn fix_variable_shadowing(diagnostic: &QuickFixDiagnostic) -> Vec<CodeAction
 
     if let Some(var_name) = diagnostic.message.split('\'').nth(1) {
         // Remove sigil for the base name
-        let base_name =
-            var_name.trim_start_matches('$').trim_start_matches('@').trim_start_matches('%');
+        let base_name = var_name
+            .trim_start_matches('$')
+            .trim_start_matches('@')
+            .trim_start_matches('%');
 
         // Suggest alternative names
         let suggestions = vec![
@@ -680,12 +770,18 @@ pub fn fix_bareword_filehandle(diagnostic: &QuickFixDiagnostic) -> Vec<CodeActio
     let lexical_name = format!("${}_fh", fh_name.to_lowercase());
 
     vec![CodeAction {
-        title: format!("Replace bareword filehandle '{}' with lexical '{}'", fh_name, lexical_name),
+        title: format!(
+            "Replace bareword filehandle '{}' with lexical '{}'",
+            fh_name, lexical_name
+        ),
         kind: CodeActionKind::QuickFix,
         diagnostics: vec![DiagnosticCode::BarewordFilehandle.as_str().to_string()],
         edit: CodeActionEdit {
             changes: vec![TextEdit {
-                location: SourceLocation { start: diagnostic.range.0, end: diagnostic.range.1 },
+                location: SourceLocation {
+                    start: diagnostic.range.0,
+                    end: diagnostic.range.1,
+                },
                 new_text: format!("my {}", lexical_name),
             }],
         },
@@ -700,16 +796,26 @@ pub fn fix_bareword_filehandle(diagnostic: &QuickFixDiagnostic) -> Vec<CodeActio
 /// at the top of the file.
 pub fn fix_missing_package_declaration(source: &str) -> Vec<CodeAction> {
     // Insert after shebang if present, otherwise at top
-    let insert_pos =
-        if source.starts_with("#!") { source.find('\n').map(|p| p + 1).unwrap_or(0) } else { 0 };
+    let insert_pos = if source.starts_with("#!") {
+        source.find('\n').map(|p| p + 1).unwrap_or(0)
+    } else {
+        0
+    };
 
     vec![CodeAction {
         title: "Add 'package main;' declaration".to_string(),
         kind: CodeActionKind::QuickFix,
-        diagnostics: vec![DiagnosticCode::MissingPackageDeclaration.as_str().to_string()],
+        diagnostics: vec![
+            DiagnosticCode::MissingPackageDeclaration
+                .as_str()
+                .to_string(),
+        ],
         edit: CodeActionEdit {
             changes: vec![TextEdit {
-                location: SourceLocation { start: insert_pos, end: insert_pos },
+                location: SourceLocation {
+                    start: insert_pos,
+                    end: insert_pos,
+                },
                 new_text: "package main;\n".to_string(),
             }],
         },
@@ -737,7 +843,10 @@ pub fn fix_variable_redeclaration(
             diagnostics: vec![DiagnosticCode::VariableRedeclaration.as_str().to_string()],
             edit: CodeActionEdit {
                 changes: vec![TextEdit {
-                    location: SourceLocation { start: abs_my_start, end: abs_my_end },
+                    location: SourceLocation {
+                        start: abs_my_start,
+                        end: abs_my_end,
+                    },
                     new_text: String::new(),
                 }],
             },
@@ -750,7 +859,10 @@ pub fn fix_variable_redeclaration(
 
 fn find_duplicate_my_span(source: &str, diagnostic: &QuickFixDiagnostic) -> Option<(usize, usize)> {
     let variable_start = diagnostic.range.0.min(source.len());
-    let line_start = source[..variable_start].rfind('\n').map(|pos| pos + 1).unwrap_or(0);
+    let line_start = source[..variable_start]
+        .rfind('\n')
+        .map(|pos| pos + 1)
+        .unwrap_or(0);
     let before_var = &source[line_start..variable_start];
     let my_offset = before_var.rfind("my ")?;
 
@@ -782,7 +894,10 @@ pub fn fix_misspelled_pragma(source: &str, diagnostic: &QuickFixDiagnostic) -> V
             diagnostics: vec![DiagnosticCode::MisspelledPragma.as_str().to_string()],
             edit: CodeActionEdit {
                 changes: vec![TextEdit {
-                    location: SourceLocation { start: diagnostic.range.0, end: diagnostic.range.1 },
+                    location: SourceLocation {
+                        start: diagnostic.range.0,
+                        end: diagnostic.range.1,
+                    },
                     new_text: format!("use {};", correct_pragma),
                 }],
             },
@@ -803,7 +918,10 @@ pub fn fix_misspelled_pragma(source: &str, diagnostic: &QuickFixDiagnostic) -> V
 /// The fix removes the entire line containing the unreachable statement.
 pub fn fix_unreachable_code(source: &str, diagnostic: &QuickFixDiagnostic) -> Vec<CodeAction> {
     // Find the full line containing the unreachable statement
-    let line_start = source[..diagnostic.range.0].rfind('\n').map(|p| p + 1).unwrap_or(0);
+    let line_start = source[..diagnostic.range.0]
+        .rfind('\n')
+        .map(|p| p + 1)
+        .unwrap_or(0);
     let line_end = source[diagnostic.range.1..]
         .find('\n')
         .map(|p| diagnostic.range.1 + p + 1)
@@ -815,7 +933,10 @@ pub fn fix_unreachable_code(source: &str, diagnostic: &QuickFixDiagnostic) -> Ve
         diagnostics: vec![DiagnosticCode::UnreachableCode.as_str().to_string()],
         edit: CodeActionEdit {
             changes: vec![TextEdit {
-                location: SourceLocation { start: line_start, end: line_end },
+                location: SourceLocation {
+                    start: line_start,
+                    end: line_end,
+                },
                 new_text: String::new(),
             }],
         },
@@ -834,12 +955,18 @@ pub fn fix_duplicate_subroutine(diagnostic: &QuickFixDiagnostic) -> Vec<CodeActi
     let sub_name = diagnostic.message.split('\'').nth(1).unwrap_or("sub");
 
     actions.push(CodeAction {
-        title: format!("Rename duplicate subroutine '{}' to '{}_2'", sub_name, sub_name),
+        title: format!(
+            "Rename duplicate subroutine '{}' to '{}_2'",
+            sub_name, sub_name
+        ),
         kind: CodeActionKind::QuickFix,
         diagnostics: vec![DiagnosticCode::DuplicateSubroutine.as_str().to_string()],
         edit: CodeActionEdit {
             changes: vec![TextEdit {
-                location: SourceLocation { start: diagnostic.range.0, end: diagnostic.range.1 },
+                location: SourceLocation {
+                    start: diagnostic.range.0,
+                    end: diagnostic.range.1,
+                },
                 new_text: format!("{}_2", sub_name),
             }],
         },
@@ -864,7 +991,10 @@ pub fn fix_missing_return(source: &str, diagnostic: &QuickFixDiagnostic) -> Vec<
         diagnostics: vec![DiagnosticCode::MissingReturn.as_str().to_string()],
         edit: CodeActionEdit {
             changes: vec![TextEdit {
-                location: SourceLocation { start: insert_pos, end: insert_pos },
+                location: SourceLocation {
+                    start: insert_pos,
+                    end: insert_pos,
+                },
                 new_text: format!("{}return;\n", indent),
             }],
         },
@@ -884,7 +1014,10 @@ pub fn fix_two_arg_open(diagnostic: &QuickFixDiagnostic) -> Vec<CodeAction> {
         diagnostics: vec![DiagnosticCode::TwoArgOpen.as_str().to_string()],
         edit: CodeActionEdit {
             changes: vec![TextEdit {
-                location: SourceLocation { start: diagnostic.range.0, end: diagnostic.range.1 },
+                location: SourceLocation {
+                    start: diagnostic.range.0,
+                    end: diagnostic.range.1,
+                },
                 new_text: "open(my $fh, '<', $filename)".to_string(),
             }],
         },

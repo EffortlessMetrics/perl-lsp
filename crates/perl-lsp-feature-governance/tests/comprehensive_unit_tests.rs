@@ -141,7 +141,10 @@ fn label_ga_lock() {
 
 #[test]
 fn label_production() {
-    assert_eq!(feature_profile_label(FeatureProfile::Production), "production");
+    assert_eq!(
+        feature_profile_label(FeatureProfile::Production),
+        "production"
+    );
 }
 
 #[test]
@@ -162,8 +165,19 @@ fn supported_tokens_is_non_empty() {
 #[test]
 fn supported_tokens_contain_canonical_set() {
     let tokens = feature_profile_supported_tokens();
-    for expected in &["auto", "ga-lock", "ga", "ga_lock", "prod", "production", "all"] {
-        assert!(tokens.contains(expected), "expected supported tokens to contain {expected:?}",);
+    for expected in &[
+        "auto",
+        "ga-lock",
+        "ga",
+        "ga_lock",
+        "prod",
+        "production",
+        "all",
+    ] {
+        assert!(
+            tokens.contains(expected),
+            "expected supported tokens to contain {expected:?}",
+        );
     }
 }
 
@@ -179,7 +193,10 @@ fn metadata_has_three_profiles() {
 
 #[test]
 fn metadata_canonical_labels_are_known() {
-    let canonicals: Vec<&str> = feature_profile_metadata().iter().map(|s| s.canonical).collect();
+    let canonicals: Vec<&str> = feature_profile_metadata()
+        .iter()
+        .map(|s| s.canonical)
+        .collect();
     assert!(canonicals.contains(&"ga-lock"));
     assert!(canonicals.contains(&"production"));
     assert!(canonicals.contains(&"all"));
@@ -213,35 +230,48 @@ fn metadata_specs_have_non_empty_aliases() {
 
 #[test]
 fn error_message_includes_raw_profile() {
-    let err = UnsupportedFeatureProfileError { raw_profile: "bad-token".to_string() };
+    let err = UnsupportedFeatureProfileError {
+        raw_profile: "bad-token".to_string(),
+    };
     let msg = err.message();
-    assert!(msg.contains("bad-token"), "message should contain the raw token");
+    assert!(
+        msg.contains("bad-token"),
+        "message should contain the raw token"
+    );
 }
 
 #[test]
 fn error_message_lists_supported_tokens() {
-    let err = UnsupportedFeatureProfileError { raw_profile: "x".to_string() };
+    let err = UnsupportedFeatureProfileError {
+        raw_profile: "x".to_string(),
+    };
     let msg = err.message();
     assert!(msg.contains("auto"), "message should list supported tokens");
 }
 
 #[test]
 fn error_display_matches_message() {
-    let err = UnsupportedFeatureProfileError { raw_profile: "xyz".to_string() };
+    let err = UnsupportedFeatureProfileError {
+        raw_profile: "xyz".to_string(),
+    };
     let display = format!("{err}");
     assert_eq!(display, err.message());
 }
 
 #[test]
 fn error_debug_includes_raw_profile() {
-    let err = UnsupportedFeatureProfileError { raw_profile: "test".to_string() };
+    let err = UnsupportedFeatureProfileError {
+        raw_profile: "test".to_string(),
+    };
     let debug = format!("{err:?}");
     assert!(debug.contains("test"));
 }
 
 #[test]
 fn error_implements_std_error() {
-    let err = UnsupportedFeatureProfileError { raw_profile: "t".to_string() };
+    let err = UnsupportedFeatureProfileError {
+        raw_profile: "t".to_string(),
+    };
     let _: &dyn std::error::Error = &err;
 }
 
@@ -284,7 +314,10 @@ fn feature_profile_from_cli_argument_invalid_falls_back() {
 
 #[test]
 fn feature_profile_parse_profile_known() {
-    assert_eq!(FeatureProfile::parse_profile("ga"), Some(FeatureProfile::GaLock));
+    assert_eq!(
+        FeatureProfile::parse_profile("ga"),
+        Some(FeatureProfile::GaLock)
+    );
 }
 
 #[test]
@@ -317,8 +350,14 @@ fn profile_kind_aliases_are_non_empty() {
 
 #[test]
 fn profile_kind_from_ga_lock_enabled() {
-    assert_eq!(FeatureProfileKind::from_ga_lock_enabled(true), FeatureProfileKind::GaLock);
-    assert_eq!(FeatureProfileKind::from_ga_lock_enabled(false), FeatureProfileKind::Production);
+    assert_eq!(
+        FeatureProfileKind::from_ga_lock_enabled(true),
+        FeatureProfileKind::GaLock
+    );
+    assert_eq!(
+        FeatureProfileKind::from_ga_lock_enabled(false),
+        FeatureProfileKind::Production
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -327,8 +366,14 @@ fn profile_kind_from_ga_lock_enabled() {
 
 #[test]
 fn parse_profile_name_known_values() {
-    assert_eq!(parse_profile_name("ga-lock"), Some(FeatureProfileKind::GaLock));
-    assert_eq!(parse_profile_name("prod"), Some(FeatureProfileKind::Production));
+    assert_eq!(
+        parse_profile_name("ga-lock"),
+        Some(FeatureProfileKind::GaLock)
+    );
+    assert_eq!(
+        parse_profile_name("prod"),
+        Some(FeatureProfileKind::Production)
+    );
     assert_eq!(parse_profile_name("all"), Some(FeatureProfileKind::All));
 }
 
@@ -339,24 +384,39 @@ fn parse_profile_name_unknown_returns_none() {
 
 #[test]
 fn parse_profile_token_normalizes_case() {
-    assert_eq!(parse_profile_token("GA-LOCK"), Some(FeatureProfileKind::GaLock));
+    assert_eq!(
+        parse_profile_token("GA-LOCK"),
+        Some(FeatureProfileKind::GaLock)
+    );
     assert_eq!(parse_profile_token("ALL"), Some(FeatureProfileKind::All));
-    assert_eq!(parse_profile_token("Prod"), Some(FeatureProfileKind::Production));
+    assert_eq!(
+        parse_profile_token("Prod"),
+        Some(FeatureProfileKind::Production)
+    );
 }
 
 #[test]
 fn parse_profile_token_trims_whitespace() {
-    assert_eq!(parse_profile_token("  all  "), Some(FeatureProfileKind::All));
+    assert_eq!(
+        parse_profile_token("  all  "),
+        Some(FeatureProfileKind::All)
+    );
 }
 
 #[test]
 fn parse_profile_token_converts_underscores() {
-    assert_eq!(parse_profile_token("ga_lock"), Some(FeatureProfileKind::GaLock));
+    assert_eq!(
+        parse_profile_token("ga_lock"),
+        Some(FeatureProfileKind::GaLock)
+    );
 }
 
 #[test]
 fn parse_profile_token_combined_normalization() {
-    assert_eq!(parse_profile_token("  GA_LOCK  "), Some(FeatureProfileKind::GaLock));
+    assert_eq!(
+        parse_profile_token("  GA_LOCK  "),
+        Some(FeatureProfileKind::GaLock)
+    );
 }
 
 #[test]
@@ -382,22 +442,37 @@ fn supported_cli_profiles_equals_facade_tokens() {
 fn flags_for_all_profiles_are_non_default() {
     for &profile in FeatureProfile::all() {
         let flags = flags_for_profile(profile);
-        assert!(flags.completion, "profile {profile:?} should enable completion");
+        assert!(
+            flags.completion,
+            "profile {profile:?} should enable completion"
+        );
     }
 }
 
 #[test]
 fn flags_for_runtime_enables_formatting_with_perltidy() {
     let flags = flags_for_runtime(FeatureProfile::Production, true);
-    assert!(flags.formatting, "formatting should be on when perltidy is available");
-    assert!(flags.range_formatting, "range_formatting should be on when perltidy is available");
+    assert!(
+        flags.formatting,
+        "formatting should be on when perltidy is available"
+    );
+    assert!(
+        flags.range_formatting,
+        "range_formatting should be on when perltidy is available"
+    );
 }
 
 #[test]
 fn flags_for_runtime_without_perltidy_disables_formatting() {
     let runtime = flags_for_runtime(FeatureProfile::Production, false);
-    assert!(!runtime.formatting, "without perltidy, runtime should disable formatting");
-    assert!(!runtime.range_formatting, "without perltidy, runtime should disable range_formatting");
+    assert!(
+        !runtime.formatting,
+        "without perltidy, runtime should disable formatting"
+    );
+    assert!(
+        !runtime.range_formatting,
+        "without perltidy, runtime should disable range_formatting"
+    );
     // Other flags should still match production
     let base = flags_for_profile(FeatureProfile::Production);
     assert_eq!(base.completion, runtime.completion);
@@ -467,14 +542,20 @@ fn advertised_features_is_non_empty() {
 fn advertised_features_are_subset_of_all() {
     let all_ids: Vec<&str> = all_features().iter().map(|f| f.id).collect();
     for &id in advertised_features() {
-        assert!(all_ids.contains(&id), "advertised feature {id:?} not in all_features()");
+        assert!(
+            all_ids.contains(&id),
+            "advertised feature {id:?} not in all_features()"
+        );
     }
 }
 
 #[test]
 fn has_feature_returns_true_for_advertised_ids() {
     for &id in advertised_features() {
-        assert!(has_feature(id), "has_feature({id}) should be true for advertised feature");
+        assert!(
+            has_feature(id),
+            "has_feature({id}) should be true for advertised feature"
+        );
     }
 }
 
@@ -494,7 +575,10 @@ fn bdd_feature_rows_matches_all_features_count() {
 fn bdd_feature_rows_are_sorted_by_area_then_id() {
     let rows = bdd_feature_rows();
     for window in rows.windows(2) {
-        let ordering = window[0].area.cmp(window[1].area).then(window[0].id.cmp(window[1].id));
+        let ordering = window[0]
+            .area
+            .cmp(window[1].area)
+            .then(window[0].id.cmp(window[1].id));
         assert!(
             ordering.is_le(),
             "BDD rows not sorted: ({area_a}, {id_a}) > ({area_b}, {id_b})",
@@ -529,13 +613,19 @@ fn advertised_trackable_count_lte_trackable_count() {
 #[test]
 fn compliance_percent_in_range() {
     let pct = compliance_percent();
-    assert!((0.0..=100.0).contains(&pct), "compliance_percent {pct} out of range");
+    assert!(
+        (0.0..=100.0).contains(&pct),
+        "compliance_percent {pct} out of range"
+    );
 }
 
 #[test]
 fn compliance_percent_for_grid_in_range() {
     let pct = compliance_percent_for_grid();
-    assert!((0.0..=100.0).contains(&pct), "grid compliance {pct} out of range");
+    assert!(
+        (0.0..=100.0).contains(&pct),
+        "grid compliance {pct} out of range"
+    );
 }
 
 #[test]
@@ -559,8 +649,18 @@ fn feature_grid_columns_are_non_empty() {
 
 #[test]
 fn feature_grid_columns_contain_expected_keys() {
-    for key in &["area", "id", "spec", "maturity", "advertised", "description"] {
-        assert!(FEATURE_GRID_COLUMNS.contains(key), "FEATURE_GRID_COLUMNS missing {key:?}");
+    for key in &[
+        "area",
+        "id",
+        "spec",
+        "maturity",
+        "advertised",
+        "description",
+    ] {
+        assert!(
+            FEATURE_GRID_COLUMNS.contains(key),
+            "FEATURE_GRID_COLUMNS missing {key:?}"
+        );
     }
 }
 
@@ -578,7 +678,10 @@ fn to_json_contains_version_and_grid() -> Result<(), Box<dyn std::error::Error>>
     assert!(val.get("lsp_version").is_some(), "missing lsp_version");
     assert!(val.get("feature_grid").is_some(), "missing feature_grid");
     assert!(val.get("profiles").is_some(), "missing profiles");
-    assert!(val.get("compliance_percent").is_some(), "missing compliance_percent");
+    assert!(
+        val.get("compliance_percent").is_some(),
+        "missing compliance_percent"
+    );
     Ok(())
 }
 
@@ -586,7 +689,10 @@ fn to_json_contains_version_and_grid() -> Result<(), Box<dyn std::error::Error>>
 fn to_json_for_profile_scopes_to_single_profile() -> Result<(), Box<dyn std::error::Error>> {
     for &profile in FeatureProfile::all() {
         let val: serde_json::Value = serde_json::from_str(&to_json_for_profile(profile))?;
-        let label = val.get("profile").and_then(|v| v.as_str()).ok_or("missing profile key")?;
+        let label = val
+            .get("profile")
+            .and_then(|v| v.as_str())
+            .ok_or("missing profile key")?;
         assert_eq!(label, profile.as_str());
     }
     Ok(())
@@ -595,10 +701,14 @@ fn to_json_for_profile_scopes_to_single_profile() -> Result<(), Box<dyn std::err
 #[test]
 fn to_json_for_all_profiles_includes_all_three() -> Result<(), Box<dyn std::error::Error>> {
     let val: serde_json::Value = serde_json::from_str(&to_json_for_all_profiles())?;
-    let profiles =
-        val.get("profiles").and_then(|v| v.as_array()).ok_or("missing profiles array")?;
-    let labels: Vec<&str> =
-        profiles.iter().filter_map(|p| p.get("profile").and_then(|v| v.as_str())).collect();
+    let profiles = val
+        .get("profiles")
+        .and_then(|v| v.as_array())
+        .ok_or("missing profiles array")?;
+    let labels: Vec<&str> = profiles
+        .iter()
+        .filter_map(|p| p.get("profile").and_then(|v| v.as_str()))
+        .collect();
     assert!(labels.contains(&"ga-lock"));
     assert!(labels.contains(&"production"));
     assert!(labels.contains(&"all"));
@@ -611,8 +721,10 @@ fn to_json_for_profiles_with_subset() -> Result<(), Box<dyn std::error::Error>> 
         FeatureProfile::GaLock,
         FeatureProfile::All,
     ]))?;
-    let profiles =
-        val.get("profiles").and_then(|v| v.as_array()).ok_or("missing profiles array")?;
+    let profiles = val
+        .get("profiles")
+        .and_then(|v| v.as_array())
+        .ok_or("missing profiles array")?;
     assert_eq!(profiles.len(), 2);
     Ok(())
 }
@@ -621,7 +733,10 @@ fn to_json_for_profiles_with_subset() -> Result<(), Box<dyn std::error::Error>> 
 fn compliance_percent_for_profile_in_range() {
     for &profile in FeatureProfile::all() {
         let pct = compliance_percent_for_profile(profile);
-        assert!((0.0..=100.0).contains(&pct), "compliance for {profile:?} out of range: {pct}",);
+        assert!(
+            (0.0..=100.0).contains(&pct),
+            "compliance for {profile:?} out of range: {pct}",
+        );
     }
 }
 
@@ -629,7 +744,10 @@ fn compliance_percent_for_profile_in_range() {
 fn compliance_all_gte_ga_lock() {
     let all_pct = compliance_percent_for_profile(FeatureProfile::All);
     let ga_pct = compliance_percent_for_profile(FeatureProfile::GaLock);
-    assert!(all_pct >= ga_pct, "All ({all_pct}) should be >= GaLock ({ga_pct})");
+    assert!(
+        all_pct >= ga_pct,
+        "All ({all_pct}) should be >= GaLock ({ga_pct})"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -697,7 +815,11 @@ fn grid_rows_json_matches_bdd_rows() -> Result<(), Box<dyn std::error::Error>> {
         .and_then(|r| r.as_array())
         .ok_or("missing grid rows")?;
     let bdd = bdd_feature_rows();
-    assert_eq!(rows.len(), bdd.len(), "grid row count should match BDD row count");
+    assert_eq!(
+        rows.len(),
+        bdd.len(),
+        "grid row count should match BDD row count"
+    );
     Ok(())
 }
 
@@ -716,7 +838,10 @@ fn all_profile_is_superset_of_others() {
     for &profile in &[FeatureProfile::GaLock, FeatureProfile::Production] {
         let ids = feature_ids_from_flags(&flags_for_profile(profile));
         for id in &ids {
-            assert!(all_ids.contains(id), "All profile missing {id:?} from {profile:?}");
+            assert!(
+                all_ids.contains(id),
+                "All profile missing {id:?} from {profile:?}"
+            );
         }
     }
 }

@@ -82,7 +82,11 @@ impl TypeDefinitionProvider {
             }
         }
 
-        if !locations.is_empty() { Some(locations) } else { None }
+        if !locations.is_empty() {
+            Some(locations)
+        } else {
+            None
+        }
     }
 
     /// Find a custom Moose/Type::Tiny type declaration across all open documents.
@@ -115,7 +119,11 @@ impl TypeDefinitionProvider {
             }
         }
 
-        if !locations.is_empty() { Some(locations) } else { None }
+        if !locations.is_empty() {
+            Some(locations)
+        } else {
+            None
+        }
     }
 
     /// Extract type name from a node
@@ -123,7 +131,11 @@ impl TypeDefinitionProvider {
     fn extract_type_name(&self, node: &Node) -> Option<String> {
         match &node.kind {
             // Variable declaration with type: my ClassName $var
-            NodeKind::VariableDeclaration { variable, attributes, .. } => {
+            NodeKind::VariableDeclaration {
+                variable,
+                attributes,
+                ..
+            } => {
                 // Check if there's a type attribute (Perl 5.20+ style)
                 // Attributes are Vec<String>
                 for attr in attributes {
@@ -309,7 +321,10 @@ impl TypeDefinitionProvider {
     /// Return `true` when a function call looks like a type declaration.
     #[cfg(feature = "lsp-compat")]
     fn is_type_declaration_call(name: &str) -> bool {
-        matches!(name, "type" | "subtype" | "class_type" | "role_type" | "enum" | "declare")
+        matches!(
+            name,
+            "type" | "subtype" | "class_type" | "role_type" | "enum" | "declare"
+        )
     }
 
     /// Extract a declared type name from the arguments of a type declaration call.
@@ -361,14 +376,23 @@ impl TypeDefinitionProvider {
     /// Return `true` when a source line looks like a supported custom type declaration.
     #[cfg(feature = "lsp-compat")]
     fn line_declares_custom_type(line: &str, type_name: &str) -> bool {
-        let keywords = ["type", "subtype", "class_type", "role_type", "enum", "declare"];
+        let keywords = [
+            "type",
+            "subtype",
+            "class_type",
+            "role_type",
+            "enum",
+            "declare",
+        ];
 
         keywords.iter().any(|keyword| {
             let Some(rest) = line.strip_prefix(keyword) else {
                 return false;
             };
 
-            Self::first_declared_name(rest).as_deref().is_some_and(|declared| declared == type_name)
+            Self::first_declared_name(rest)
+                .as_deref()
+                .is_some_and(|declared| declared == type_name)
         })
     }
 
@@ -430,7 +454,11 @@ impl TypeDefinitionProvider {
         let mut locations = Vec::new();
         self.find_package_in_node(ast, package_name, uri, source_text, &mut locations);
 
-        if !locations.is_empty() { Some(locations) } else { None }
+        if !locations.is_empty() {
+            Some(locations)
+        } else {
+            None
+        }
     }
 
     /// Recursively find package definitions
@@ -501,8 +529,14 @@ impl TypeDefinitionProvider {
             );
 
         let target_range = lsp_types::Range {
-            start: lsp_types::Position { line: target_start_line, character: target_start_char },
-            end: lsp_types::Position { line: target_end_line, character: target_end_char },
+            start: lsp_types::Position {
+                line: target_start_line,
+                character: target_start_char,
+            },
+            end: lsp_types::Position {
+                line: target_end_line,
+                character: target_end_char,
+            },
         };
 
         if let Ok(target_uri) = lsp_types::Uri::from_str(uri) {
@@ -531,8 +565,14 @@ impl TypeDefinitionProvider {
             perl_parser_core::engine::position::offset_to_utf16_line_col(source_text, end_offset);
 
         let target_range = lsp_types::Range {
-            start: lsp_types::Position { line: target_start_line, character: target_start_char },
-            end: lsp_types::Position { line: target_end_line, character: target_end_char },
+            start: lsp_types::Position {
+                line: target_start_line,
+                character: target_start_char,
+            },
+            end: lsp_types::Position {
+                line: target_end_line,
+                character: target_end_char,
+            },
         };
 
         if let Ok(target_uri) = lsp_types::Uri::from_str(uri) {
@@ -560,7 +600,11 @@ impl TypeDefinitionProvider {
             NodeKind::Package { block: Some(b), .. } => {
                 f(b);
             }
-            NodeKind::VariableDeclaration { variable, initializer, .. } => {
+            NodeKind::VariableDeclaration {
+                variable,
+                initializer,
+                ..
+            } => {
                 f(variable);
                 if let Some(init) = initializer {
                     f(init);
@@ -597,18 +641,31 @@ impl TypeDefinitionProvider {
             NodeKind::ExpressionStatement { expression } => {
                 f(expression);
             }
-            NodeKind::If { condition, then_branch, else_branch, .. } => {
+            NodeKind::If {
+                condition,
+                then_branch,
+                else_branch,
+                ..
+            } => {
                 f(condition);
                 f(then_branch);
                 if let Some(else_b) = else_branch {
                     f(else_b);
                 }
             }
-            NodeKind::While { condition, body, .. } => {
+            NodeKind::While {
+                condition, body, ..
+            } => {
                 f(condition);
                 f(body);
             }
-            NodeKind::For { init, condition, update, body, .. } => {
+            NodeKind::For {
+                init,
+                condition,
+                update,
+                body,
+                ..
+            } => {
                 if let Some(i) = init {
                     f(i);
                 }
@@ -620,7 +677,12 @@ impl TypeDefinitionProvider {
                 }
                 f(body);
             }
-            NodeKind::Foreach { variable, list, body, continue_block } => {
+            NodeKind::Foreach {
+                variable,
+                list,
+                body,
+                continue_block,
+            } => {
                 f(variable);
                 if let Some(cb) = continue_block {
                     f(cb);
@@ -795,7 +857,10 @@ $obj->method();
             }
         }
 
-        assert!(locations.is_some(), "Should find type definition for MyClass->new()");
+        assert!(
+            locations.is_some(),
+            "Should find type definition for MyClass->new()"
+        );
         let locs = must_some(locations);
         assert_eq!(locs.len(), 1, "Should find exactly one definition");
     }

@@ -98,7 +98,9 @@ sub calculate {
         id: Some(json!(2)),
     };
 
-    let response = server.handle_request(request).ok_or("No response from server")?;
+    let response = server
+        .handle_request(request)
+        .ok_or("No response from server")?;
     let result = response.result.ok_or("Missing result")?;
 
     // Check that we have symbols
@@ -107,12 +109,18 @@ sub calculate {
     assert!(!symbols.is_empty());
 
     // Check for package symbol
-    let package_symbol = symbols.iter().find(|s| s["name"].as_str() == Some("MyModule"));
+    let package_symbol = symbols
+        .iter()
+        .find(|s| s["name"].as_str() == Some("MyModule"));
     assert!(package_symbol.is_some());
     let package_symbol = package_symbol.ok_or("Package symbol not found")?;
     // Kind can be 4 (Package) or 2 (Module) depending on client cap/server version
     let kind = package_symbol["kind"].as_i64().unwrap_or(0);
-    assert!(kind == 4 || kind == 2, "Expected Package(4) or Module(2), got {}", kind);
+    assert!(
+        kind == 4 || kind == 2,
+        "Expected Package(4) or Module(2), got {}",
+        kind
+    );
 
     // Check for subroutine symbols
     let hello_sub = symbols.iter().find(|s| s["name"].as_str() == Some("hello"));
@@ -120,18 +128,24 @@ sub calculate {
     let hello_sub = hello_sub.ok_or("hello sub not found")?;
     assert_eq!(hello_sub["kind"], 12); // Function
 
-    let calc_sub = symbols.iter().find(|s| s["name"].as_str() == Some("calculate"));
+    let calc_sub = symbols
+        .iter()
+        .find(|s| s["name"].as_str() == Some("calculate"));
     assert!(calc_sub.is_some());
     let calc_sub = calc_sub.ok_or("calculate sub not found")?;
     assert_eq!(calc_sub["kind"], 12); // Function
 
     // Check for variable symbols
-    let global_var = symbols.iter().find(|s| s["name"].as_str() == Some("$global_var"));
+    let global_var = symbols
+        .iter()
+        .find(|s| s["name"].as_str() == Some("$global_var"));
     assert!(global_var.is_some());
     let global_var = global_var.ok_or("global_var not found")?;
     assert_eq!(global_var["kind"], 13); // Variable
 
-    let shared_array = symbols.iter().find(|s| s["name"].as_str() == Some("@shared_array"));
+    let shared_array = symbols
+        .iter()
+        .find(|s| s["name"].as_str() == Some("@shared_array"));
     assert!(shared_array.is_some());
     let shared_array = shared_array.ok_or("shared_array not found")?;
     assert_eq!(shared_array["kind"], 18); // Array
@@ -165,12 +179,16 @@ builder {
         id: Some(json!(2)),
     };
 
-    let response = server.handle_request(request).ok_or("No response from server")?;
+    let response = server
+        .handle_request(request)
+        .ok_or("No response from server")?;
     let result = response.result.ok_or("Missing result")?;
     let symbols = result.as_array().ok_or("Result is not an array")?;
 
     assert!(
-        symbols.iter().any(|s| s["name"].as_str() == Some("Plack::Middleware::Static")),
+        symbols
+            .iter()
+            .any(|s| s["name"].as_str() == Some("Plack::Middleware::Static")),
         "document symbols should expose the synthesized Plack middleware entry: {symbols:?}"
     );
     assert!(
@@ -216,7 +234,9 @@ sub another_sub {
         id: Some(json!(2)),
     };
 
-    let response = server.handle_request(request).ok_or("No response from server")?;
+    let response = server
+        .handle_request(request)
+        .ok_or("No response from server")?;
     let result = response.result.ok_or("Missing result")?;
 
     let symbols = result.as_array().ok_or("Result is not an array")?;
@@ -229,13 +249,17 @@ sub another_sub {
     assert!(inner_package.is_some());
 
     // Check for subroutines
-    let parent_sub = symbols.iter().find(|s| s["name"].as_str() == Some("parent_sub"));
+    let parent_sub = symbols
+        .iter()
+        .find(|s| s["name"].as_str() == Some("parent_sub"));
     if parent_sub.is_none() {
         println!("Symbols found: {:?}", symbols);
     }
     assert!(parent_sub.is_some(), "parent_sub not found");
 
-    let another_sub = symbols.iter().find(|s| s["name"].as_str() == Some("another_sub"));
+    let another_sub = symbols
+        .iter()
+        .find(|s| s["name"].as_str() == Some("another_sub"));
     assert!(another_sub.is_some());
 
     Ok(())
@@ -258,7 +282,9 @@ fn test_document_symbols_empty_document() -> TestResult {
         id: Some(json!(2)),
     };
 
-    let response = server.handle_request(request).ok_or("No response from server")?;
+    let response = server
+        .handle_request(request)
+        .ok_or("No response from server")?;
     let result = response.result.ok_or("Missing result")?;
 
     // Should return empty array for empty document
@@ -299,7 +325,9 @@ sub area {
         id: Some(json!(2)),
     };
 
-    let response = server.handle_request(request).ok_or("No response from server")?;
+    let response = server
+        .handle_request(request)
+        .ok_or("No response from server")?;
     let result = response.result.ok_or("Missing result")?;
 
     let symbols = result.as_array().ok_or("Result is not an array")?;
@@ -345,13 +373,17 @@ sub process {
         id: Some(json!(2)),
     };
 
-    let response = server.handle_request(request).ok_or("No response from server")?;
+    let response = server
+        .handle_request(request)
+        .ok_or("No response from server")?;
     let result = response.result.ok_or("Missing result")?;
 
     let symbols = result.as_array().ok_or("Result is not an array")?;
 
     // Check for subroutine
-    let process_sub = symbols.iter().find(|s| s["name"].as_str() == Some("process"));
+    let process_sub = symbols
+        .iter()
+        .find(|s| s["name"].as_str() == Some("process"));
     assert!(process_sub.is_some());
 
     Ok(())
@@ -387,19 +419,25 @@ state $persistent = 0;
         id: Some(json!(2)),
     };
 
-    let response = server.handle_request(request).ok_or("No response from server")?;
+    let response = server
+        .handle_request(request)
+        .ok_or("No response from server")?;
     let result = response.result.ok_or("Missing result")?;
 
     let symbols = result.as_array().ok_or("Result is not an array")?;
 
     // Check for scalar variables
-    let scalar = symbols.iter().find(|s| s["name"].as_str() == Some("$scalar"));
+    let scalar = symbols
+        .iter()
+        .find(|s| s["name"].as_str() == Some("$scalar"));
     assert!(scalar.is_some());
     let scalar = scalar.ok_or("$scalar not found")?;
     assert_eq!(scalar["kind"], 13); // Variable
 
     // Check for array variables
-    let array = symbols.iter().find(|s| s["name"].as_str() == Some("@array"));
+    let array = symbols
+        .iter()
+        .find(|s| s["name"].as_str() == Some("@array"));
     assert!(array.is_some());
     let array = array.ok_or("@array not found")?;
     assert_eq!(array["kind"], 18); // Array
@@ -411,13 +449,19 @@ state $persistent = 0;
     assert_eq!(hash["kind"], 19); // Object (closest to hash)
 
     // Check for shared variables
-    let shared_scalar = symbols.iter().find(|s| s["name"].as_str() == Some("$shared_scalar"));
+    let shared_scalar = symbols
+        .iter()
+        .find(|s| s["name"].as_str() == Some("$shared_scalar"));
     assert!(shared_scalar.is_some());
 
-    let shared_array = symbols.iter().find(|s| s["name"].as_str() == Some("@shared_array"));
+    let shared_array = symbols
+        .iter()
+        .find(|s| s["name"].as_str() == Some("@shared_array"));
     assert!(shared_array.is_some());
 
-    let shared_hash = symbols.iter().find(|s| s["name"].as_str() == Some("%shared_hash"));
+    let shared_hash = symbols
+        .iter()
+        .find(|s| s["name"].as_str() == Some("%shared_hash"));
     assert!(shared_hash.is_some());
 
     Ok(())
@@ -460,7 +504,9 @@ sub child_method {
         id: Some(json!(2)),
     };
 
-    let response = server.handle_request(request).ok_or("No response from server")?;
+    let response = server
+        .handle_request(request)
+        .ok_or("No response from server")?;
     let result = response.result.ok_or("Missing result")?;
 
     let symbols = result.as_array().ok_or("Result is not an array")?;
@@ -468,9 +514,21 @@ sub child_method {
     // Check that we have the expected top-level symbols
     assert!(symbols.iter().any(|s| s["name"].as_str() == Some("Parent")));
     assert!(symbols.iter().any(|s| s["name"].as_str() == Some("Child")));
-    assert!(symbols.iter().any(|s| s["name"].as_str() == Some("parent_method")));
-    assert!(symbols.iter().any(|s| s["name"].as_str() == Some("child_method")));
-    assert!(symbols.iter().any(|s| s["name"].as_str() == Some("$package_var")));
+    assert!(
+        symbols
+            .iter()
+            .any(|s| s["name"].as_str() == Some("parent_method"))
+    );
+    assert!(
+        symbols
+            .iter()
+            .any(|s| s["name"].as_str() == Some("child_method"))
+    );
+    assert!(
+        symbols
+            .iter()
+            .any(|s| s["name"].as_str() == Some("$package_var"))
+    );
 
     Ok(())
 }
@@ -493,19 +551,36 @@ fn test_pod_sections_as_document_symbols() -> TestResult {
     let symbols = result.as_array().ok_or("Not an array")?;
 
     // Code symbols must still be present
-    assert!(symbols.iter().any(|s| s["name"] == "MyLib"), "Missing package symbol");
     assert!(
-        symbols.iter().any(|s| s["name"] == "process" && s["kind"] == 12),
+        symbols.iter().any(|s| s["name"] == "MyLib"),
+        "Missing package symbol"
+    );
+    assert!(
+        symbols
+            .iter()
+            .any(|s| s["name"] == "process" && s["kind"] == 12),
         "Missing sub symbol (kind 12)"
     );
 
     // POD section symbols must appear
-    assert!(symbols.iter().any(|s| s["name"] == "NAME"), "Missing =head1 NAME");
-    assert!(symbols.iter().any(|s| s["name"] == "SYNOPSIS"), "Missing =head1 SYNOPSIS");
+    assert!(
+        symbols.iter().any(|s| s["name"] == "NAME"),
+        "Missing =head1 NAME"
+    );
+    assert!(
+        symbols.iter().any(|s| s["name"] == "SYNOPSIS"),
+        "Missing =head1 SYNOPSIS"
+    );
 
     // POD section kind must be 26 (TypeParameter)
-    let name_sym = symbols.iter().find(|s| s["name"] == "NAME").ok_or("NAME not found")?;
-    assert_eq!(name_sym["kind"], 26, "POD section kind must be 26 (TypeParameter)");
+    let name_sym = symbols
+        .iter()
+        .find(|s| s["name"] == "NAME")
+        .ok_or("NAME not found")?;
+    assert_eq!(
+        name_sym["kind"], 26,
+        "POD section kind must be 26 (TypeParameter)"
+    );
 
     // Line ordering: NAME must appear before SYNOPSIS
     let name_line = symbols
@@ -518,7 +593,10 @@ fn test_pod_sections_as_document_symbols() -> TestResult {
         .find(|s| s["name"] == "SYNOPSIS" && s["kind"] == 26)
         .and_then(|s| s["range"]["start"]["line"].as_u64())
         .ok_or("SYNOPSIS line not found")?;
-    assert!(name_line < synopsis_line, "NAME must appear before SYNOPSIS");
+    assert!(
+        name_line < synopsis_line,
+        "NAME must appear before SYNOPSIS"
+    );
 
     Ok(())
 }
@@ -539,7 +617,9 @@ fn test_pod_sections_stop_at_data_block() -> TestResult {
     let symbols = result.as_array().ok_or("Not an array")?;
 
     assert!(
-        symbols.iter().any(|s| s["name"] == "NAME" && s["kind"] == 26),
+        symbols
+            .iter()
+            .any(|s| s["name"] == "NAME" && s["kind"] == 26),
         "Real NAME section must appear"
     );
     assert!(
@@ -566,7 +646,9 @@ fn test_pod_section_multiword_title() -> TestResult {
     let symbols = result.as_array().ok_or("Not an array")?;
 
     assert!(
-        symbols.iter().any(|s| s["name"] == "SEE ALSO" && s["kind"] == 26),
+        symbols
+            .iter()
+            .any(|s| s["name"] == "SEE ALSO" && s["kind"] == 26),
         "Multi-word POD heading must appear as full string"
     );
 
@@ -588,8 +670,14 @@ fn test_no_pod_unchanged_symbols() -> TestResult {
     let result = response.result.ok_or("Missing result")?;
     let symbols = result.as_array().ok_or("Not an array")?;
 
-    assert!(symbols.iter().any(|s| s["name"] == "Bar"), "Package symbol must remain");
-    assert!(symbols.iter().any(|s| s["name"] == "baz"), "Sub symbol must remain");
+    assert!(
+        symbols.iter().any(|s| s["name"] == "Bar"),
+        "Package symbol must remain"
+    );
+    assert!(
+        symbols.iter().any(|s| s["name"] == "baz"),
+        "Sub symbol must remain"
+    );
     assert!(
         !symbols.iter().any(|s| s["kind"] == 26),
         "No POD symbols should appear for file with no POD"
@@ -616,11 +704,15 @@ fn test_pod_sections_reject_invalid_levels() -> TestResult {
 
     // Valid levels should appear
     assert!(
-        symbols.iter().any(|s| s["name"] == "VALID" && s["kind"] == 26),
+        symbols
+            .iter()
+            .any(|s| s["name"] == "VALID" && s["kind"] == 26),
         "Valid =head1 must appear"
     );
     assert!(
-        symbols.iter().any(|s| s["name"] == "ALSO VALID" && s["kind"] == 26),
+        symbols
+            .iter()
+            .any(|s| s["name"] == "ALSO VALID" && s["kind"] == 26),
         "Valid =head2 must appear"
     );
 
@@ -650,7 +742,9 @@ fn test_pod_sections_stop_at_end_block() -> TestResult {
     let symbols = result.as_array().ok_or("Not an array")?;
 
     assert!(
-        symbols.iter().any(|s| s["name"] == "BEFORE" && s["kind"] == 26),
+        symbols
+            .iter()
+            .any(|s| s["name"] == "BEFORE" && s["kind"] == 26),
         "Section before __END__ must appear"
     );
     assert!(
@@ -682,11 +776,15 @@ fn test_pod_section_unicode_heading() -> TestResult {
 
     // Names must be the full Unicode string, not garbled bytes
     assert!(
-        symbols.iter().any(|s| s["name"] == "Ñoño" && s["kind"] == 26),
+        symbols
+            .iter()
+            .any(|s| s["name"] == "Ñoño" && s["kind"] == 26),
         "Latin-extended POD heading must round-trip correctly"
     );
     assert!(
-        symbols.iter().any(|s| s["name"] == "日本語" && s["kind"] == 26),
+        symbols
+            .iter()
+            .any(|s| s["name"] == "日本語" && s["kind"] == 26),
         "CJK POD heading must round-trip correctly"
     );
 
@@ -695,8 +793,13 @@ fn test_pod_section_unicode_heading() -> TestResult {
         .iter()
         .find(|s| s["name"] == "日本語" && s["kind"] == 26)
         .ok_or("CJK heading not found")?;
-    let end_char = cjk_sym["range"]["end"]["character"].as_u64().ok_or("no end char")?;
-    assert!(end_char > 0, "end character must be > 0 for multi-byte heading");
+    let end_char = cjk_sym["range"]["end"]["character"]
+        .as_u64()
+        .ok_or("no end char")?;
+    assert!(
+        end_char > 0,
+        "end character must be > 0 for multi-byte heading"
+    );
 
     Ok(())
 }
@@ -721,12 +824,21 @@ fn test_begin_block_appears_in_document_symbols() -> TestResult {
     assert!(
         symbols.iter().any(|s| s["name"] == "BEGIN"),
         "BEGIN block must appear in document symbols; got: {:?}",
-        symbols.iter().map(|s| s["name"].as_str().unwrap_or("?")).collect::<Vec<_>>()
+        symbols
+            .iter()
+            .map(|s| s["name"].as_str().unwrap_or("?"))
+            .collect::<Vec<_>>()
     );
 
-    let begin_sym = symbols.iter().find(|s| s["name"] == "BEGIN").ok_or("BEGIN not found")?;
+    let begin_sym = symbols
+        .iter()
+        .find(|s| s["name"] == "BEGIN")
+        .ok_or("BEGIN not found")?;
     // Phase blocks map to Function (12) kind
-    assert_eq!(begin_sym["kind"], 12, "BEGIN block should have Function (12) kind");
+    assert_eq!(
+        begin_sym["kind"], 12,
+        "BEGIN block should have Function (12) kind"
+    );
 
     Ok(())
 }
@@ -749,7 +861,10 @@ fn test_end_block_appears_in_document_symbols() -> TestResult {
     assert!(
         symbols.iter().any(|s| s["name"] == "END"),
         "END block must appear in document symbols; got: {:?}",
-        symbols.iter().map(|s| s["name"].as_str().unwrap_or("?")).collect::<Vec<_>>()
+        symbols
+            .iter()
+            .map(|s| s["name"].as_str().unwrap_or("?"))
+            .collect::<Vec<_>>()
     );
 
     Ok(())
@@ -775,9 +890,15 @@ fn test_all_phase_blocks_appear_in_document_symbols() -> TestResult {
             symbols.iter().any(|s| s["name"].as_str() == Some(phase)),
             "{} block must appear in document symbols; got: {:?}",
             phase,
-            symbols.iter().map(|s| s["name"].as_str().unwrap_or("?")).collect::<Vec<_>>()
+            symbols
+                .iter()
+                .map(|s| s["name"].as_str().unwrap_or("?"))
+                .collect::<Vec<_>>()
         );
-        let sym = symbols.iter().find(|s| s["name"].as_str() == Some(phase)).ok_or(*phase)?;
+        let sym = symbols
+            .iter()
+            .find(|s| s["name"].as_str() == Some(phase))
+            .ok_or(*phase)?;
         assert_eq!(sym["kind"], 12, "{} must have Function (12) kind", phase);
     }
 
@@ -800,8 +921,15 @@ fn test_multiple_begin_blocks_all_appear() -> TestResult {
     let result = response.result.ok_or("Missing result")?;
     let symbols = result.as_array().ok_or("Not an array")?;
 
-    let begin_count = symbols.iter().filter(|s| s["name"].as_str() == Some("BEGIN")).count();
-    assert!(begin_count >= 1, "At least one BEGIN block must appear; got {}", begin_count);
+    let begin_count = symbols
+        .iter()
+        .filter(|s| s["name"].as_str() == Some("BEGIN"))
+        .count();
+    assert!(
+        begin_count >= 1,
+        "At least one BEGIN block must appear; got {}",
+        begin_count
+    );
 
     Ok(())
 }

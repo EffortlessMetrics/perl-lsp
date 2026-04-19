@@ -68,8 +68,13 @@ EOF
 /// following Perl heredoc identifier rules.
 #[test]
 fn test_heredoc_decl_bare_label_alphanumeric() {
-    let test_cases =
-        vec!["<<END_OF_DATA", "<<EOF123", "<<SQL_QUERY", "<<HTML_CONTENT", "<<DATA_2024"];
+    let test_cases = vec![
+        "<<END_OF_DATA",
+        "<<EOF123",
+        "<<SQL_QUERY",
+        "<<HTML_CONTENT",
+        "<<DATA_2024",
+    ];
 
     for label_decl in test_cases {
         let label = &label_decl[2..];
@@ -249,7 +254,11 @@ END	TAB
         "Expected label with tab and content, got: {}",
         sexp
     );
-    assert!(sexp.contains("(UNKNOWN_REST)"), "Should contain UNKNOWN_REST: {}", sexp);
+    assert!(
+        sexp.contains("(UNKNOWN_REST)"),
+        "Should contain UNKNOWN_REST: {}",
+        sexp
+    );
 }
 
 /// Tests feature spec: Sprint A Issue #183 - backslash escapes in labels
@@ -270,7 +279,11 @@ END\SLASH
         "Expected label with backslash and content, got: {}",
         sexp
     );
-    assert!(sexp.contains("(UNKNOWN_REST)"), "Should contain UNKNOWN_REST: {}", sexp);
+    assert!(
+        sexp.contains("(UNKNOWN_REST)"),
+        "Should contain UNKNOWN_REST: {}",
+        sexp
+    );
 }
 
 // ============================================================================
@@ -395,7 +408,9 @@ content without terminator"#;
     let _ = parser.parse();
     let errors = parser.errors();
     assert!(
-        errors.iter().any(|e| e.to_string().contains("Unterminated heredoc")),
+        errors
+            .iter()
+            .any(|e| e.to_string().contains("Unterminated heredoc")),
         "Expected missing terminator error, got: {:?}",
         errors
     );
@@ -438,7 +453,10 @@ EOF WITH SPACES
     let mut parser = Parser::new(input);
     let result = parser.parse();
 
-    assert!(result.is_ok(), "Quoted label with spaces should be accepted");
+    assert!(
+        result.is_ok(),
+        "Quoted label with spaces should be accepted"
+    );
 }
 
 // ============================================================================
@@ -601,7 +619,11 @@ EOF
     parse_and_verify_success(input, "test_heredoc_decl_empty_body");
 
     let sexp = parse_to_sexp(input);
-    assert!(sexp.contains("(heredoc_interpolated \"EOF\" \"\")"), "Empty body mismatch: {}", sexp);
+    assert!(
+        sexp.contains("(heredoc_interpolated \"EOF\" \"\")"),
+        "Empty body mismatch: {}",
+        sexp
+    );
 }
 
 /// Tests feature spec: Sprint A Issue #183 - heredoc label max length

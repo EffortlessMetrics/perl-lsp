@@ -27,13 +27,34 @@ pub enum Severity {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum AntiPattern {
-    FormatHeredoc { location: Location, format_name: String, heredoc_delimiter: String },
-    BeginTimeHeredoc { location: Location, heredoc_content: String, side_effects: Vec<String> },
-    DynamicHeredocDelimiter { location: Location, expression: String },
-    SourceFilterHeredoc { location: Location, module: String },
-    RegexCodeBlockHeredoc { location: Location },
-    EvalStringHeredoc { location: Location },
-    TiedHandleHeredoc { location: Location, handle_name: String },
+    FormatHeredoc {
+        location: Location,
+        format_name: String,
+        heredoc_delimiter: String,
+    },
+    BeginTimeHeredoc {
+        location: Location,
+        heredoc_content: String,
+        side_effects: Vec<String>,
+    },
+    DynamicHeredocDelimiter {
+        location: Location,
+        expression: String,
+    },
+    SourceFilterHeredoc {
+        location: Location,
+        module: String,
+    },
+    RegexCodeBlockHeredoc {
+        location: Location,
+    },
+    EvalStringHeredoc {
+        location: Location,
+    },
+    TiedHandleHeredoc {
+        location: Location,
+        handle_name: String,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -80,7 +101,9 @@ impl PatternDetector for FormatHeredocDetector {
 
                 // Look for heredoc marker inside format body (simplified)
                 let body_start = match_pos.end();
-                let body_end = code[body_start..].find("\n.").unwrap_or(code.len() - body_start);
+                let body_end = code[body_start..]
+                    .find("\n.")
+                    .unwrap_or(code.len() - body_start);
                 let body = &code[body_start..body_start + body_end];
 
                 if body.contains("<<") {
@@ -173,10 +196,12 @@ struct DynamicDelimiterDetector;
 
 /// Pattern for identifying dynamic heredoc delimiters
 static DYNAMIC_DELIMITER_PATTERN: LazyLock<Regex> =
-    LazyLock::new(|| match Regex::new(r"<<\s*\$\{[^}]+\}|<<\s*\$\w+|<<\s*`[^`]+`") {
-        Ok(re) => re,
-        Err(_) => unreachable!("DYNAMIC_DELIMITER_PATTERN regex failed to compile"),
-    });
+    LazyLock::new(
+        || match Regex::new(r"<<\s*\$\{[^}]+\}|<<\s*\$\w+|<<\s*`[^`]+`") {
+            Ok(re) => re,
+            Err(_) => unreachable!("DYNAMIC_DELIMITER_PATTERN regex failed to compile"),
+        },
+    );
 
 impl PatternDetector for DynamicDelimiterDetector {
     fn detect(&self, code: &str, offset: usize) -> Vec<(AntiPattern, Location)> {
@@ -192,7 +217,10 @@ impl PatternDetector for DynamicDelimiterDetector {
                 };
 
                 results.push((
-                    AntiPattern::DynamicHeredocDelimiter { location: location.clone(), expression },
+                    AntiPattern::DynamicHeredocDelimiter {
+                        location: location.clone(),
+                        expression,
+                    },
                     location,
                 ));
             }
@@ -293,7 +321,9 @@ impl PatternDetector for RegexHeredocDetector {
                 };
 
                 results.push((
-                    AntiPattern::RegexCodeBlockHeredoc { location: location.clone() },
+                    AntiPattern::RegexCodeBlockHeredoc {
+                        location: location.clone(),
+                    },
                     location,
                 ));
             }
@@ -323,10 +353,12 @@ struct EvalHeredocDetector;
 
 /// Pattern for identifying heredocs inside eval strings
 static EVAL_HEREDOC_PATTERN: LazyLock<Regex> =
-    LazyLock::new(|| match Regex::new(r#"eval\s+(?:'[^']*<<[^']*'|"[^"]*<<[^"]*")"#) {
-        Ok(re) => re,
-        Err(_) => unreachable!("EVAL_HEREDOC_PATTERN regex failed to compile"),
-    });
+    LazyLock::new(
+        || match Regex::new(r#"eval\s+(?:'[^']*<<[^']*'|"[^"]*<<[^"]*")"#) {
+            Ok(re) => re,
+            Err(_) => unreachable!("EVAL_HEREDOC_PATTERN regex failed to compile"),
+        },
+    );
 
 impl PatternDetector for EvalHeredocDetector {
     fn detect(&self, code: &str, offset: usize) -> Vec<(AntiPattern, Location)> {
@@ -341,7 +373,9 @@ impl PatternDetector for EvalHeredocDetector {
                 };
 
                 results.push((
-                    AntiPattern::EvalStringHeredoc { location: location.clone() },
+                    AntiPattern::EvalStringHeredoc {
+                        location: location.clone(),
+                    },
                     location,
                 ));
             }
@@ -488,7 +522,10 @@ impl AntiPatternDetector {
             return report;
         }
 
-        report.push_str(&format!("Found {} problematic patterns:\n\n", diagnostics.len()));
+        report.push_str(&format!(
+            "Found {} problematic patterns:\n\n",
+            diagnostics.len()
+        ));
 
         for (i, diag) in diagnostics.iter().enumerate() {
             report.push_str(&format!(
@@ -557,7 +594,10 @@ END
         // But FormatHeredoc should appear first because it starts at 'format'.
         // So diagnostics[0] should be FormatHeredoc.
         assert!(!diagnostics.is_empty());
-        assert!(matches!(diagnostics[0].pattern, AntiPattern::FormatHeredoc { .. }));
+        assert!(matches!(
+            diagnostics[0].pattern,
+            AntiPattern::FormatHeredoc { .. }
+        ));
     }
 
     #[test]
@@ -573,7 +613,10 @@ END
 
         let diagnostics = detector.detect_all(code);
         assert_eq!(diagnostics.len(), 1);
-        assert!(matches!(diagnostics[0].pattern, AntiPattern::BeginTimeHeredoc { .. }));
+        assert!(matches!(
+            diagnostics[0].pattern,
+            AntiPattern::BeginTimeHeredoc { .. }
+        ));
     }
 
     #[test]
@@ -588,7 +631,10 @@ EOF
 
         let diagnostics = detector.detect_all(code);
         assert_eq!(diagnostics.len(), 1);
-        assert!(matches!(diagnostics[0].pattern, AntiPattern::DynamicHeredocDelimiter { .. }));
+        assert!(matches!(
+            diagnostics[0].pattern,
+            AntiPattern::DynamicHeredocDelimiter { .. }
+        ));
     }
 
     #[test]
@@ -602,7 +648,10 @@ EOF
 "###;
         let diagnostics = detector.detect_all(code);
         assert_eq!(diagnostics.len(), 1);
-        assert!(matches!(diagnostics[0].pattern, AntiPattern::SourceFilterHeredoc { .. }));
+        assert!(matches!(
+            diagnostics[0].pattern,
+            AntiPattern::SourceFilterHeredoc { .. }
+        ));
     }
 
     #[test]
@@ -617,7 +666,10 @@ MATCH
 "###;
         let diagnostics = detector.detect_all(code);
         assert_eq!(diagnostics.len(), 1);
-        assert!(matches!(diagnostics[0].pattern, AntiPattern::RegexCodeBlockHeredoc { .. }));
+        assert!(matches!(
+            diagnostics[0].pattern,
+            AntiPattern::RegexCodeBlockHeredoc { .. }
+        ));
     }
 
     #[test]
@@ -630,7 +682,10 @@ EVAL';
 "###;
         let diagnostics = detector.detect_all(code);
         assert_eq!(diagnostics.len(), 1);
-        assert!(matches!(diagnostics[0].pattern, AntiPattern::EvalStringHeredoc { .. }));
+        assert!(matches!(
+            diagnostics[0].pattern,
+            AntiPattern::EvalStringHeredoc { .. }
+        ));
     }
 
     #[test]
@@ -644,7 +699,10 @@ DATA
 "###;
         let diagnostics = detector.detect_all(code);
         assert_eq!(diagnostics.len(), 1);
-        assert!(matches!(diagnostics[0].pattern, AntiPattern::TiedHandleHeredoc { .. }));
+        assert!(matches!(
+            diagnostics[0].pattern,
+            AntiPattern::TiedHandleHeredoc { .. }
+        ));
     }
 
     #[test]
@@ -658,6 +716,9 @@ DATA
 "###;
         let diagnostics = detector.detect_all(code);
         assert_eq!(diagnostics.len(), 1);
-        assert!(matches!(diagnostics[0].pattern, AntiPattern::TiedHandleHeredoc { .. }));
+        assert!(matches!(
+            diagnostics[0].pattern,
+            AntiPattern::TiedHandleHeredoc { .. }
+        ));
     }
 }

@@ -136,7 +136,10 @@ pub fn scope_issues_to_diagnostics(issues: Vec<ScopeIssue>) -> Vec<Diagnostic> {
             code: Some(code.as_str().to_string()),
             message: build_enhanced_scope_message(&issue),
             related_information: related_info,
-            tags: if matches!(issue.kind, IssueKind::UnusedVariable | IssueKind::UnusedParameter) {
+            tags: if matches!(
+                issue.kind,
+                IssueKind::UnusedVariable | IssueKind::UnusedParameter
+            ) {
                 vec![DiagnosticTag::Unnecessary]
             } else {
                 Vec::new()

@@ -57,7 +57,9 @@ fn inlay_hints_for_substr_and_types() -> Result<(), Box<dyn std::error::Error>> 
             }
         })),
     };
-    let res = srv.handle_request(req).ok_or("handle_request returned None")?;
+    let res = srv
+        .handle_request(req)
+        .ok_or("handle_request returned None")?;
     let result = res.result.ok_or("response result is None")?;
     let hints = result.as_array().ok_or("result is not an array")?;
 
@@ -71,13 +73,19 @@ fn inlay_hints_for_substr_and_types() -> Result<(), Box<dyn std::error::Error>> 
     }
 
     // Collect all labels
-    let labels: Vec<_> =
-        hints.iter().filter_map(|h| h.get("label").and_then(|l| l.as_str())).collect();
+    let labels: Vec<_> = hints
+        .iter()
+        .filter_map(|h| h.get("label").and_then(|l| l.as_str()))
+        .collect();
 
     // Should have parameter hints for substr
     let param_hints = ["expr:", "offset:", "length:"];
     let has_substr_hints = param_hints.iter().any(|&h| labels.contains(&h));
-    assert!(has_substr_hints, "should have substr parameter hints, found: {:?}", labels);
+    assert!(
+        has_substr_hints,
+        "should have substr parameter hints, found: {:?}",
+        labels
+    );
 
     Ok(())
 }

@@ -34,7 +34,11 @@ fn test_brace_pair() -> Result<(), Box<dyn std::error::Error>> {
         .unwrap_or(json!(null));
 
     if let Some(ranges) = result.get("ranges").and_then(|r| r.as_array()) {
-        assert_eq!(ranges.len(), 2, "Should return two linked ranges for brace pair");
+        assert_eq!(
+            ranges.len(),
+            2,
+            "Should return two linked ranges for brace pair"
+        );
     } else {
         // Null is also acceptable if no linked ranges at this position
         assert!(result.is_null(), "Should return either ranges or null");
@@ -64,7 +68,11 @@ fn test_quotes_pair() -> Result<(), Box<dyn std::error::Error>> {
         .unwrap_or(json!(null));
 
     if let Some(ranges) = result.get("ranges").and_then(|r| r.as_array()) {
-        assert_eq!(ranges.len(), 2, "Should return two linked ranges for quote pair");
+        assert_eq!(
+            ranges.len(),
+            2,
+            "Should return two linked ranges for quote pair"
+        );
     } else {
         assert!(result.is_null(), "Should return either ranges or null");
     }
@@ -93,7 +101,11 @@ fn test_nested_parens() -> Result<(), Box<dyn std::error::Error>> {
         .unwrap_or(json!(null));
 
     if let Some(ranges) = result.get("ranges").and_then(|r| r.as_array()) {
-        assert_eq!(ranges.len(), 2, "Should return two linked ranges for innermost parens");
+        assert_eq!(
+            ranges.len(),
+            2,
+            "Should return two linked ranges for innermost parens"
+        );
     } else {
         assert!(result.is_null(), "Should return either ranges or null");
     }
@@ -122,7 +134,11 @@ fn test_square_brackets() -> Result<(), Box<dyn std::error::Error>> {
         .unwrap_or(json!(null));
 
     if let Some(ranges) = result.get("ranges").and_then(|r| r.as_array()) {
-        assert_eq!(ranges.len(), 2, "Should return two linked ranges for bracket pair");
+        assert_eq!(
+            ranges.len(),
+            2,
+            "Should return two linked ranges for bracket pair"
+        );
     } else {
         assert!(result.is_null(), "Should return either ranges or null");
     }
@@ -150,7 +166,10 @@ fn test_no_pair_at_position() -> Result<(), Box<dyn std::error::Error>> {
         )
         .unwrap_or(json!(null));
 
-    assert!(result.is_null(), "Should return null when no paired delimiter at position");
+    assert!(
+        result.is_null(),
+        "Should return null when no paired delimiter at position"
+    );
 
     Ok(())
 }
@@ -181,9 +200,17 @@ fn test_heredoc_pair() -> Result<(), Box<dyn std::error::Error>> {
     assert!(!result.is_null(), "heredoc pair: expected ranges, got null");
     assert_eq!(result["ranges"].as_array().map(|a| a.len()), Some(2));
     // opener range: line 0, chars 10..13  ("EOF")
-    assert_eq!(get_range(&result, 0), (0, 10, 0, 13), "opener range mismatch");
+    assert_eq!(
+        get_range(&result, 0),
+        (0, 10, 0, 13),
+        "opener range mismatch"
+    );
     // terminator range: line 2, chars 0..3  ("EOF")
-    assert_eq!(get_range(&result, 1), (2, 0, 2, 3), "terminator range mismatch");
+    assert_eq!(
+        get_range(&result, 1),
+        (2, 0, 2, 3),
+        "terminator range mismatch"
+    );
 
     Ok(())
 }
@@ -209,12 +236,23 @@ fn test_heredoc_indented() -> Result<(), Box<dyn std::error::Error>> {
         )
         .unwrap_or(json!(null));
 
-    assert!(!result.is_null(), "indented heredoc: expected ranges, got null");
+    assert!(
+        !result.is_null(),
+        "indented heredoc: expected ranges, got null"
+    );
     assert_eq!(result["ranges"].as_array().map(|a| a.len()), Some(2));
     // opener range: line 0, chars 11..14  ("EOF")
-    assert_eq!(get_range(&result, 0), (0, 11, 0, 14), "opener range mismatch");
+    assert_eq!(
+        get_range(&result, 0),
+        (0, 11, 0, 14),
+        "opener range mismatch"
+    );
     // terminator range: line 2, chars 2..5  ("EOF" after leading spaces)
-    assert_eq!(get_range(&result, 1), (2, 2, 2, 5), "terminator range mismatch");
+    assert_eq!(
+        get_range(&result, 1),
+        (2, 2, 2, 5),
+        "terminator range mismatch"
+    );
 
     Ok(())
 }
@@ -242,12 +280,23 @@ fn test_heredoc_quoted_label() -> Result<(), Box<dyn std::error::Error>> {
         )
         .unwrap_or(json!(null));
 
-    assert!(!result.is_null(), "quoted heredoc: expected ranges, got null");
+    assert!(
+        !result.is_null(),
+        "quoted heredoc: expected ranges, got null"
+    );
     assert_eq!(result["ranges"].as_array().map(|a| a.len()), Some(2));
     // opener range covers label only (not surrounding quotes): chars 11..14
-    assert_eq!(get_range(&result, 0), (0, 11, 0, 14), "opener range mismatch");
+    assert_eq!(
+        get_range(&result, 0),
+        (0, 11, 0, 14),
+        "opener range mismatch"
+    );
     // terminator range: line 2, chars 0..3
-    assert_eq!(get_range(&result, 1), (2, 0, 2, 3), "terminator range mismatch");
+    assert_eq!(
+        get_range(&result, 1),
+        (2, 0, 2, 3),
+        "terminator range mismatch"
+    );
 
     Ok(())
 }
@@ -277,8 +326,16 @@ fn test_regex_slash_delimiter() -> Result<(), Box<dyn std::error::Error>> {
 
     assert!(!result.is_null(), "regex slash: expected ranges, got null");
     assert_eq!(result["ranges"].as_array().map(|a| a.len()), Some(2));
-    assert_eq!(get_range(&result, 0), (0, 17, 0, 18), "opening delimiter range mismatch");
-    assert_eq!(get_range(&result, 1), (0, 21, 0, 22), "closing delimiter range mismatch");
+    assert_eq!(
+        get_range(&result, 0),
+        (0, 17, 0, 18),
+        "opening delimiter range mismatch"
+    );
+    assert_eq!(
+        get_range(&result, 1),
+        (0, 21, 0, 22),
+        "closing delimiter range mismatch"
+    );
 
     Ok(())
 }
@@ -306,8 +363,16 @@ fn test_regex_pipe_delimiter() -> Result<(), Box<dyn std::error::Error>> {
 
     assert!(!result.is_null(), "regex pipe: expected ranges, got null");
     assert_eq!(result["ranges"].as_array().map(|a| a.len()), Some(2));
-    assert_eq!(get_range(&result, 0), (0, 17, 0, 18), "opening delimiter range mismatch");
-    assert_eq!(get_range(&result, 1), (0, 21, 0, 22), "closing delimiter range mismatch");
+    assert_eq!(
+        get_range(&result, 0),
+        (0, 17, 0, 18),
+        "opening delimiter range mismatch"
+    );
+    assert_eq!(
+        get_range(&result, 1),
+        (0, 21, 0, 22),
+        "closing delimiter range mismatch"
+    );
 
     Ok(())
 }
@@ -335,10 +400,21 @@ fn test_subst_first_delimiter() -> Result<(), Box<dyn std::error::Error>> {
         )
         .unwrap_or(json!(null));
 
-    assert!(!result.is_null(), "subst first /: expected ranges, got null");
+    assert!(
+        !result.is_null(),
+        "subst first /: expected ranges, got null"
+    );
     assert_eq!(result["ranges"].as_array().map(|a| a.len()), Some(2));
-    assert_eq!(get_range(&result, 0), (0, 9, 0, 10), "first delimiter range mismatch");
-    assert_eq!(get_range(&result, 1), (0, 13, 0, 14), "second delimiter range mismatch");
+    assert_eq!(
+        get_range(&result, 0),
+        (0, 9, 0, 10),
+        "first delimiter range mismatch"
+    );
+    assert_eq!(
+        get_range(&result, 1),
+        (0, 13, 0, 14),
+        "second delimiter range mismatch"
+    );
 
     Ok(())
 }
@@ -364,10 +440,21 @@ fn test_subst_second_delimiter() -> Result<(), Box<dyn std::error::Error>> {
         )
         .unwrap_or(json!(null));
 
-    assert!(!result.is_null(), "subst second /: expected ranges, got null");
+    assert!(
+        !result.is_null(),
+        "subst second /: expected ranges, got null"
+    );
     assert_eq!(result["ranges"].as_array().map(|a| a.len()), Some(2));
-    assert_eq!(get_range(&result, 0), (0, 13, 0, 14), "second delimiter range mismatch");
-    assert_eq!(get_range(&result, 1), (0, 17, 0, 18), "third delimiter range mismatch");
+    assert_eq!(
+        get_range(&result, 0),
+        (0, 13, 0, 14),
+        "second delimiter range mismatch"
+    );
+    assert_eq!(
+        get_range(&result, 1),
+        (0, 17, 0, 18),
+        "third delimiter range mismatch"
+    );
 
     Ok(())
 }
@@ -401,7 +488,11 @@ fn test_quote_escape() -> Result<(), Box<dyn std::error::Error>> {
     assert!(!result.is_null(), "quote escape: expected ranges, got null");
     assert_eq!(result["ranges"].as_array().map(|a| a.len()), Some(2));
     // Must link opening " (char 8) to the REAL closing " (char 19), not the escaped \" (char 14)
-    assert_eq!(get_range(&result, 0), (0, 8, 0, 9), "opening quote range mismatch");
+    assert_eq!(
+        get_range(&result, 0),
+        (0, 8, 0, 9),
+        "opening quote range mismatch"
+    );
     assert_eq!(
         get_range(&result, 1),
         (0, 19, 0, 20),

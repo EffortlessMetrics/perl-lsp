@@ -316,7 +316,9 @@ pub fn is_dap_completion_keyword(token: &str) -> bool {
 /// Return `true` when `token` exists in the runtime completion keyword bucket.
 #[must_use]
 pub fn is_lsp_runtime_completion_keyword(token: &str) -> bool {
-    LSP_RUNTIME_COMPLETION_KEYWORDS.binary_search(&token).is_ok()
+    LSP_RUNTIME_COMPLETION_KEYWORDS
+        .binary_search(&token)
+        .is_ok()
 }
 
 /// Return `true` when `token` is reserved in rename validation paths.
@@ -343,7 +345,10 @@ mod tests {
     fn assert_sorted_unique(name: &str, items: &[&str]) {
         let mut last = "";
         for &item in items {
-            assert!(item > last, "{name} must be sorted + unique: {item} after {last}");
+            assert!(
+                item > last,
+                "{name} must be sorted + unique: {item} after {last}"
+            );
             last = item;
         }
     }
@@ -353,7 +358,10 @@ mod tests {
         assert_sorted_unique("KEYWORDS", KEYWORDS);
         assert_sorted_unique("LSP_COMPLETION_KEYWORDS", LSP_COMPLETION_KEYWORDS);
         assert_sorted_unique("DAP_COMPLETION_KEYWORDS", DAP_COMPLETION_KEYWORDS);
-        assert_sorted_unique("LSP_RUNTIME_COMPLETION_KEYWORDS", LSP_RUNTIME_COMPLETION_KEYWORDS);
+        assert_sorted_unique(
+            "LSP_RUNTIME_COMPLETION_KEYWORDS",
+            LSP_RUNTIME_COMPLETION_KEYWORDS,
+        );
         assert_sorted_unique("RENAME_KEYWORDS", RENAME_KEYWORDS);
         assert_sorted_unique("PARSER_LSP_KEYWORDS", PARSER_LSP_KEYWORDS);
         assert_sorted_unique("LEXER_KEYWORDS", LEXER_KEYWORDS);

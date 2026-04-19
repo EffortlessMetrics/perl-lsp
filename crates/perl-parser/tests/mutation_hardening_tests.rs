@@ -52,7 +52,10 @@ mod incremental_position_arithmetic_tests {
         // Access the private method through apply_edit to test the boundary logic
         // This indirectly tests is_single_token_edit which contains the mutant at line 232
         let result = doc.apply_edit(edit);
-        assert!(result.is_ok(), "Edit should succeed regardless of size boundary");
+        assert!(
+            result.is_ok(),
+            "Edit should succeed regardless of size boundary"
+        );
         Ok(())
     }
 
@@ -85,7 +88,10 @@ mod incremental_position_arithmetic_tests {
         // The key test is that position arithmetic doesn't panic or produce invalid results
         if initial_position as isize + delta < 0 {
             // Negative result should be handled gracefully
-            assert!(result.is_ok() || result.is_err(), "Should not panic on underflow");
+            assert!(
+                result.is_ok() || result.is_err(),
+                "Should not panic on underflow"
+            );
         } else {
             assert!(result.is_ok(), "Valid position adjustments should succeed");
         }
@@ -174,7 +180,10 @@ mod qualified_identifier_parsing_tests {
             // The test verifies the parser handles edge cases gracefully
             match result {
                 Ok(_) => {
-                    println!("Note: '{}' parsed successfully (might be valid Perl syntax)", input)
+                    println!(
+                        "Note: '{}' parsed successfully (might be valid Perl syntax)",
+                        input
+                    )
                 }
                 Err(_) => println!("Note: '{}' failed to parse as expected", input),
             }
@@ -236,7 +245,12 @@ mod qualified_identifier_parsing_tests {
         let result = parser.parse();
 
         if should_parse {
-            assert!(result.is_ok(), "Should parse version string '{}': {:?}", code, result.err());
+            assert!(
+                result.is_ok(),
+                "Should parse version string '{}': {:?}",
+                code,
+                result.err()
+            );
         } else {
             // Some invalid version strings might still parse (Perl is permissive)
             match result {
@@ -317,7 +331,12 @@ mod workspace_eval_do_tests {
         let mut parser = Parser::new(code);
         let result = parser.parse();
 
-        assert!(result.is_ok(), "Should parse {}: {:?}", test_name, result.err());
+        assert!(
+            result.is_ok(),
+            "Should parse {}: {:?}",
+            test_name,
+            result.err()
+        );
 
         let _ast = result?;
         let index = WorkspaceIndex::new();
@@ -430,7 +449,11 @@ mod position_utf16_conversion_tests {
                 let roundtrip = utf16_line_col_to_offset(text, line, col);
 
                 // For invalid UTF-8 positions (middle of multi-byte), allow some tolerance
-                let tolerance = if text.chars().any(|c| c.len_utf8() > 1) { 4 } else { 0 };
+                let tolerance = if text.chars().any(|c| c.len_utf8() > 1) {
+                    4
+                } else {
+                    0
+                };
 
                 assert!(
                     roundtrip <= offset + tolerance
@@ -584,7 +607,10 @@ mod parser_completeness_tests {
 
         if should_parse {
             match result {
-                Ok(_) => println!("✓ Successfully parsed qualified identifier: {}", qualified_name),
+                Ok(_) => println!(
+                    "✓ Successfully parsed qualified identifier: {}",
+                    qualified_name
+                ),
                 Err(e) => println!(
                     "⚠ Expected parse success for '{}' but got error: {}",
                     qualified_name, e
@@ -596,7 +622,10 @@ mod parser_completeness_tests {
                     "Note: '{}' parsed successfully (Perl might allow this)",
                     qualified_name
                 ),
-                Err(_) => println!("✓ Correctly rejected invalid identifier: {}", qualified_name),
+                Err(_) => println!(
+                    "✓ Correctly rejected invalid identifier: {}",
+                    qualified_name
+                ),
             }
         }
     }
@@ -627,12 +656,18 @@ mod parser_completeness_tests {
         if should_parse {
             match result {
                 Ok(_) => println!("✓ Successfully parsed version statement: {}", code),
-                Err(e) => println!("⚠ Expected parse success for '{}' but got error: {}", code, e),
+                Err(e) => println!(
+                    "⚠ Expected parse success for '{}' but got error: {}",
+                    code, e
+                ),
             }
         } else {
             match result {
                 Ok(_) => {
-                    println!("Note: '{}' parsed successfully (Perl might be more permissive)", code)
+                    println!(
+                        "Note: '{}' parsed successfully (Perl might be more permissive)",
+                        code
+                    )
                 }
                 Err(_) => println!("✓ Correctly rejected invalid version syntax: {}", code),
             }
@@ -666,9 +701,21 @@ mod ast_sexp_validation_tests {
         let test_cases = vec![
             ("sub { print 'anonymous'; }", "anonymous_subroutine", true),
             ("sub named { print 'named'; }", "named_subroutine", false),
-            ("sub _private { print 'private'; }", "private_subroutine", false),
-            ("sub AUTOLOAD { print 'autoload'; }", "autoload_subroutine", false),
-            ("sub DESTROY { print 'destroy'; }", "destroy_subroutine", false),
+            (
+                "sub _private { print 'private'; }",
+                "private_subroutine",
+                false,
+            ),
+            (
+                "sub AUTOLOAD { print 'autoload'; }",
+                "autoload_subroutine",
+                false,
+            ),
+            (
+                "sub DESTROY { print 'destroy'; }",
+                "destroy_subroutine",
+                false,
+            ),
         ];
 
         for (code, test_name, is_anonymous) in test_cases {
@@ -676,7 +723,11 @@ mod ast_sexp_validation_tests {
             let result = parser.parse();
 
             if result.is_err() {
-                println!("Note: {} parsing not fully supported: {:?}", test_name, result.err());
+                println!(
+                    "Note: {} parsing not fully supported: {:?}",
+                    test_name,
+                    result.err()
+                );
                 continue;
             }
 
@@ -689,7 +740,11 @@ mod ast_sexp_validation_tests {
             println!("  sexp_inner: {}", sexp_inner);
 
             // Both should be non-empty
-            assert!(!sexp.is_empty(), "S-expression should not be empty for {}", test_name);
+            assert!(
+                !sexp.is_empty(),
+                "S-expression should not be empty for {}",
+                test_name
+            );
             assert!(
                 !sexp_inner.is_empty(),
                 "Inner S-expression should not be empty for {}",
@@ -735,7 +790,11 @@ mod ast_sexp_validation_tests {
         let result = parser.parse();
 
         if result.is_err() {
-            println!("Note: {} parsing not fully supported: {:?}", test_name, result.err());
+            println!(
+                "Note: {} parsing not fully supported: {:?}",
+                test_name,
+                result.err()
+            );
             return Ok(());
         }
 
@@ -748,8 +807,16 @@ mod ast_sexp_validation_tests {
         println!("  sexp_inner: {}", sexp_inner);
 
         // Validate S-expression generation doesn't crash
-        assert!(!sexp.is_empty(), "S-expression should not be empty for {}", test_name);
-        assert!(!sexp_inner.is_empty(), "Inner S-expression should not be empty for {}", test_name);
+        assert!(
+            !sexp.is_empty(),
+            "S-expression should not be empty for {}",
+            test_name
+        );
+        assert!(
+            !sexp_inner.is_empty(),
+            "Inner S-expression should not be empty for {}",
+            test_name
+        );
 
         // Check that both formats are valid S-expressions (basic validation)
         assert!(
@@ -820,10 +887,22 @@ mod dual_indexing_pattern_tests {
     #[test]
     fn test_dual_indexing_function_patterns() -> TestResult {
         let source_files = vec![
-            ("test1.pl", "package TestPackage; sub test_function { } sub _private_function { }"),
-            ("test2.pl", "package Another::Package; sub public_method { } sub CONSTANT { }"),
-            ("test3.pl", "sub global_function { } package Local; sub local_function { }"),
-            ("test4.pl", "use strict; use warnings; sub main { TestPackage::test_function(); }"),
+            (
+                "test1.pl",
+                "package TestPackage; sub test_function { } sub _private_function { }",
+            ),
+            (
+                "test2.pl",
+                "package Another::Package; sub public_method { } sub CONSTANT { }",
+            ),
+            (
+                "test3.pl",
+                "sub global_function { } package Local; sub local_function { }",
+            ),
+            (
+                "test4.pl",
+                "use strict; use warnings; sub main { TestPackage::test_function(); }",
+            ),
         ];
 
         let index = WorkspaceIndex::new();
@@ -850,14 +929,25 @@ mod dual_indexing_pattern_tests {
 
         for symbol_name in test_cases {
             let references = index.find_references(symbol_name);
-            println!("References for '{}': {} found", symbol_name, references.len());
+            println!(
+                "References for '{}': {} found",
+                symbol_name,
+                references.len()
+            );
 
             // Test that we can find references using dual pattern matching
             // (implementation should check both qualified and bare forms)
             if symbol_name.contains("::") {
-                let bare_name = symbol_name.split("::").last().ok_or("split returned empty")?;
+                let bare_name = symbol_name
+                    .split("::")
+                    .last()
+                    .ok_or("split returned empty")?;
                 let bare_references = index.find_references(bare_name);
-                println!("  Bare name '{}': {} found", bare_name, bare_references.len());
+                println!(
+                    "  Bare name '{}': {} found",
+                    bare_name,
+                    bare_references.len()
+                );
             }
         }
         Ok(())
@@ -923,7 +1013,10 @@ mod dual_indexing_pattern_tests {
         println!("All workspace symbols: {}", all_symbols.len());
 
         // Ensure we have reasonable symbol coverage
-        assert!(symbols.len() >= 5, "Should find at least 5 symbols in complex file");
+        assert!(
+            symbols.len() >= 5,
+            "Should find at least 5 symbols in complex file"
+        );
         Ok(())
     }
 
@@ -971,7 +1064,10 @@ mod ast_node_validation_tests {
         // For anonymous subroutines, the behavior should be different
         // The mutant at line 541 affects the is_none() check
         assert!(!sexp.is_empty(), "S-expression should not be empty");
-        assert!(!sexp_inner.is_empty(), "Inner S-expression should not be empty");
+        assert!(
+            !sexp_inner.is_empty(),
+            "Inner S-expression should not be empty"
+        );
 
         // Check that the S-expression was generated without panicking
         // The exact content may vary based on parser implementation
@@ -991,7 +1087,10 @@ mod ast_node_validation_tests {
         let sexp_inner = ast.to_sexp_inner();
 
         assert!(!sexp.is_empty(), "S-expression should not be empty");
-        assert!(!sexp_inner.is_empty(), "Inner S-expression should not be empty");
+        assert!(
+            !sexp_inner.is_empty(),
+            "Inner S-expression should not be empty"
+        );
 
         // Check that the S-expression was generated without panicking
         // The exact content may vary based on parser implementation
@@ -1015,15 +1114,28 @@ mod ast_node_validation_tests {
         let mut parser = Parser::new(code);
         let result = parser.parse();
 
-        assert!(result.is_ok(), "Should parse {}: {:?}", test_name, result.err());
+        assert!(
+            result.is_ok(),
+            "Should parse {}: {:?}",
+            test_name,
+            result.err()
+        );
 
         let ast = result?;
         let sexp = ast.to_sexp();
         let sexp_inner = ast.to_sexp_inner();
 
         // Basic validation that S-expression generation doesn't crash
-        assert!(!sexp.is_empty(), "S-expression should not be empty for {}", test_name);
-        assert!(!sexp_inner.is_empty(), "Inner S-expression should not be empty for {}", test_name);
+        assert!(
+            !sexp.is_empty(),
+            "S-expression should not be empty for {}",
+            test_name
+        );
+        assert!(
+            !sexp_inner.is_empty(),
+            "Inner S-expression should not be empty for {}",
+            test_name
+        );
 
         // The difference between sexp and sexp_inner tests the unwrapping logic
         if test_name == "anonymous_subroutine" {
@@ -1115,7 +1227,10 @@ mod integration_mutation_tests {
 
         // This tests the workspace indexing functionality
         // The success is that we can index and re-index without issues
-        assert!(!initial_symbols.is_empty(), "Should have some symbols initially");
+        assert!(
+            !initial_symbols.is_empty(),
+            "Should have some symbols initially"
+        );
         assert!(
             updated_symbols.len() >= initial_symbols.len(),
             "Should have at least as many symbols after update"

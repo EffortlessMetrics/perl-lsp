@@ -58,7 +58,9 @@ impl SemanticModel {
     /// - Analysis time: O(n) where n is AST node count
     /// - Memory: ~1MB per 10K lines of Perl code
     pub fn build(root: &Node, source: &str) -> Self {
-        Self { analyzer: SemanticAnalyzer::analyze_with_source(root, source) }
+        Self {
+            analyzer: SemanticAnalyzer::analyze_with_source(root, source),
+        }
     }
 
     /// All semantic tokens for syntax highlighting.

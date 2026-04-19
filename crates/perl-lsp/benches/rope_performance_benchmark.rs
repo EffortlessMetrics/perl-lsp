@@ -83,7 +83,10 @@ fn benchmark_incremental_edits(c: &mut Criterion) {
     // Benchmark multiple small edits (common LSP scenario)
     group.bench_function("multiple_small_edits", |b| {
         b.iter(|| {
-            let mut doc = Doc { rope: Rope::from_str(&content), version: 1 };
+            let mut doc = Doc {
+                rope: Rope::from_str(&content),
+                version: 1,
+            };
 
             let edits = vec![
                 TextDocumentContentChangeEvent {
@@ -111,7 +114,10 @@ fn benchmark_incremental_edits(c: &mut Criterion) {
     // Benchmark single large edit
     group.bench_function("single_large_edit", |b| {
         b.iter(|| {
-            let mut doc = Doc { rope: Rope::from_str(&content), version: 1 };
+            let mut doc = Doc {
+                rope: Rope::from_str(&content),
+                version: 1,
+            };
 
             let large_text = "# ".repeat(5000) + "Large insertion\n";
             let edit = TextDocumentContentChangeEvent {

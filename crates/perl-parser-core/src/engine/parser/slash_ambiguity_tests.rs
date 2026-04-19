@@ -26,7 +26,10 @@ mod tests {
         let mut parser = Parser::new(code);
         let ast = must(parser.parse());
         let sexp = ast.to_sexp();
-        assert!(sexp.contains("binary_/"), "Should be division after paren: {sexp}");
+        assert!(
+            sexp.contains("binary_/"),
+            "Should be division after paren: {sexp}"
+        );
         assert!(!sexp.contains("regex"), "Should not be regex: {sexp}");
     }
 
@@ -37,7 +40,10 @@ mod tests {
         let mut parser = Parser::new(code);
         let ast = must(parser.parse());
         let sexp = ast.to_sexp();
-        assert!(sexp.contains("binary_/"), "Should be division in condition: {sexp}");
+        assert!(
+            sexp.contains("binary_/"),
+            "Should be division in condition: {sexp}"
+        );
     }
 
     #[test]
@@ -47,7 +53,10 @@ mod tests {
         let mut parser = Parser::new(code);
         let ast = must(parser.parse());
         let sexp = ast.to_sexp();
-        assert!(sexp.contains("binary_/"), "Should be division after hash deref: {sexp}");
+        assert!(
+            sexp.contains("binary_/"),
+            "Should be division after hash deref: {sexp}"
+        );
     }
 
     #[test]
@@ -57,7 +66,10 @@ mod tests {
         let mut parser = Parser::new(code);
         let ast = must(parser.parse());
         let sexp = ast.to_sexp();
-        assert!(sexp.contains("assignment_/assign"), "Should be division-assign: {sexp}");
+        assert!(
+            sexp.contains("assignment_/assign"),
+            "Should be division-assign: {sexp}"
+        );
     }
 
     #[test]
@@ -67,7 +79,10 @@ mod tests {
         let mut parser = Parser::new(code);
         let ast = must(parser.parse());
         let sexp = ast.to_sexp();
-        assert!(sexp.matches("binary_/").count() >= 2, "Should be two divisions: {sexp}");
+        assert!(
+            sexp.matches("binary_/").count() >= 2,
+            "Should be two divisions: {sexp}"
+        );
         assert!(!sexp.contains("regex"), "Should not be regex: {sexp}");
     }
 
@@ -78,7 +93,10 @@ mod tests {
         let mut parser = Parser::new(code);
         let ast = must(parser.parse());
         let sexp = ast.to_sexp();
-        assert!(sexp.contains("binary_/"), "Should be division after number: {sexp}");
+        assert!(
+            sexp.contains("binary_/"),
+            "Should be division after number: {sexp}"
+        );
     }
 
     #[test]
@@ -88,7 +106,10 @@ mod tests {
         let mut parser = Parser::new(code);
         let ast = must(parser.parse());
         let sexp = ast.to_sexp();
-        assert!(sexp.contains("binary_/"), "Should be division after closing bracket: {sexp}");
+        assert!(
+            sexp.contains("binary_/"),
+            "Should be division after closing bracket: {sexp}"
+        );
     }
 
     // ───────────────────────────────────────────────────────────────────
@@ -122,7 +143,10 @@ mod tests {
         let mut parser = Parser::new(code);
         let ast = must(parser.parse());
         let sexp = ast.to_sexp();
-        assert!(sexp.contains("regex") || sexp.contains("match"), "Should be regex match: {sexp}");
+        assert!(
+            sexp.contains("regex") || sexp.contains("match"),
+            "Should be regex match: {sexp}"
+        );
     }
 
     #[test]
@@ -132,7 +156,10 @@ mod tests {
         let mut parser = Parser::new(code);
         let ast = must(parser.parse());
         let sexp = ast.to_sexp();
-        assert!(sexp.contains("regex"), "Should be regex in void context: {sexp}");
+        assert!(
+            sexp.contains("regex"),
+            "Should be regex in void context: {sexp}"
+        );
     }
 
     #[test]
@@ -142,7 +169,10 @@ mod tests {
         let mut parser = Parser::new(code);
         let ast = must(parser.parse());
         let sexp = ast.to_sexp();
-        assert!(sexp.contains("regex"), "Should be regex with interpolation: {sexp}");
+        assert!(
+            sexp.contains("regex"),
+            "Should be regex with interpolation: {sexp}"
+        );
     }
 
     #[test]
@@ -172,7 +202,10 @@ mod tests {
         let mut parser = Parser::new(code);
         let ast = must(parser.parse());
         let sexp = ast.to_sexp();
-        assert!(sexp.contains("regex"), "Should be regex after while: {sexp}");
+        assert!(
+            sexp.contains("regex"),
+            "Should be regex after while: {sexp}"
+        );
     }
 
     #[test]
@@ -182,7 +215,10 @@ mod tests {
         let mut parser = Parser::new(code);
         let ast = must(parser.parse());
         let sexp = ast.to_sexp();
-        assert!(sexp.contains("regex"), "Should be regex after unless: {sexp}");
+        assert!(
+            sexp.contains("regex"),
+            "Should be regex after unless: {sexp}"
+        );
     }
 
     // ───────────────────────────────────────────────────────────────────
@@ -196,7 +232,10 @@ mod tests {
         let mut parser = Parser::new(code);
         let ast = must(parser.parse());
         let sexp = ast.to_sexp();
-        assert!(sexp.contains("binary_/"), "Should be division after nullary function: {sexp}");
+        assert!(
+            sexp.contains("binary_/"),
+            "Should be division after nullary function: {sexp}"
+        );
     }
 
     #[test]
@@ -216,7 +255,10 @@ mod tests {
         let mut parser = Parser::new(code);
         let ast = must(parser.parse());
         let sexp = ast.to_sexp();
-        assert!(sexp.contains("assignment_//assign"), "Should be defined-or-assign: {sexp}");
+        assert!(
+            sexp.contains("assignment_//assign"),
+            "Should be defined-or-assign: {sexp}"
+        );
     }
 
     #[test]
@@ -237,7 +279,10 @@ mod tests {
         let mut parser = Parser::new(code);
         let ast = must(parser.parse());
         let sexp = ast.to_sexp();
-        assert!(sexp.contains("regex"), "Should be regex after comma: {sexp}");
+        assert!(
+            sexp.contains("regex"),
+            "Should be regex after comma: {sexp}"
+        );
     }
 
     #[test]
@@ -247,7 +292,10 @@ mod tests {
         let mut parser = Parser::new(code);
         let ast = must(parser.parse());
         let sexp = ast.to_sexp();
-        assert!(sexp.contains("regex"), "Should be regex after open paren: {sexp}");
+        assert!(
+            sexp.contains("regex"),
+            "Should be regex after open paren: {sexp}"
+        );
     }
 
     #[test]
@@ -272,9 +320,18 @@ mod tests {
         let mut parser = Parser::new(code);
         let ast = must(parser.parse());
         let sexp = ast.to_sexp();
-        assert!(sexp.contains("regex"), "Should be regex in split assignment RHS: {sexp}");
-        assert!(!sexp.contains("binary_/"), "Should not contain division: {sexp}");
-        assert!(!sexp.contains("ERROR"), "Should not contain parse errors: {sexp}");
+        assert!(
+            sexp.contains("regex"),
+            "Should be regex in split assignment RHS: {sexp}"
+        );
+        assert!(
+            !sexp.contains("binary_/"),
+            "Should not contain division: {sexp}"
+        );
+        assert!(
+            !sexp.contains("ERROR"),
+            "Should not contain parse errors: {sexp}"
+        );
     }
 
     #[test]
@@ -284,8 +341,14 @@ mod tests {
         let mut parser = Parser::new(code);
         let ast = must(parser.parse());
         let sexp = ast.to_sexp();
-        assert!(sexp.contains("regex"), "Should be regex in split after return: {sexp}");
-        assert!(!sexp.contains("ERROR"), "Should not contain parse errors: {sexp}");
+        assert!(
+            sexp.contains("regex"),
+            "Should be regex in split after return: {sexp}"
+        );
+        assert!(
+            !sexp.contains("ERROR"),
+            "Should not contain parse errors: {sexp}"
+        );
     }
 
     #[test]
@@ -295,8 +358,14 @@ mod tests {
         let mut parser = Parser::new(code);
         let ast = must(parser.parse());
         let sexp = ast.to_sexp();
-        assert!(sexp.contains("regex"), "Should be regex in split as push arg: {sexp}");
-        assert!(!sexp.contains("ERROR"), "Should not contain parse errors: {sexp}");
+        assert!(
+            sexp.contains("regex"),
+            "Should be regex in split as push arg: {sexp}"
+        );
+        assert!(
+            !sexp.contains("ERROR"),
+            "Should not contain parse errors: {sexp}"
+        );
     }
 
     #[test]
@@ -306,8 +375,14 @@ mod tests {
         let mut parser = Parser::new(code);
         let ast = must(parser.parse());
         let sexp = ast.to_sexp();
-        assert!(sexp.contains("regex"), "Should be regex in split inside map block: {sexp}");
-        assert!(!sexp.contains("ERROR"), "Should not contain parse errors: {sexp}");
+        assert!(
+            sexp.contains("regex"),
+            "Should be regex in split inside map block: {sexp}"
+        );
+        assert!(
+            !sexp.contains("ERROR"),
+            "Should not contain parse errors: {sexp}"
+        );
     }
 
     #[test]
@@ -317,8 +392,14 @@ mod tests {
         let mut parser = Parser::new(code);
         let ast = must(parser.parse());
         let sexp = ast.to_sexp();
-        assert!(sexp.contains("regex"), "Should be regex in split hash value assignment: {sexp}");
-        assert!(!sexp.contains("ERROR"), "Should not contain parse errors: {sexp}");
+        assert!(
+            sexp.contains("regex"),
+            "Should be regex in split hash value assignment: {sexp}"
+        );
+        assert!(
+            !sexp.contains("ERROR"),
+            "Should not contain parse errors: {sexp}"
+        );
     }
 
     #[test]
@@ -328,8 +409,14 @@ mod tests {
         let mut parser = Parser::new(code);
         let ast = must(parser.parse());
         let sexp = ast.to_sexp();
-        assert!(sexp.contains("regex"), "Should be regex in split inside call: {sexp}");
-        assert!(!sexp.contains("ERROR"), "Should not contain parse errors: {sexp}");
+        assert!(
+            sexp.contains("regex"),
+            "Should be regex in split inside call: {sexp}"
+        );
+        assert!(
+            !sexp.contains("ERROR"),
+            "Should not contain parse errors: {sexp}"
+        );
     }
 
     #[test]
@@ -339,8 +426,14 @@ mod tests {
         let mut parser = Parser::new(code);
         let ast = must(parser.parse());
         let sexp = ast.to_sexp();
-        assert!(sexp.matches("regex").count() >= 2, "Should have two regexes: {sexp}");
-        assert!(!sexp.contains("ERROR"), "Should not contain parse errors: {sexp}");
+        assert!(
+            sexp.matches("regex").count() >= 2,
+            "Should have two regexes: {sexp}"
+        );
+        assert!(
+            !sexp.contains("ERROR"),
+            "Should not contain parse errors: {sexp}"
+        );
     }
 
     #[test]
@@ -350,8 +443,14 @@ mod tests {
         let mut parser = Parser::new(code);
         let ast = must(parser.parse());
         let sexp = ast.to_sexp();
-        assert!(sexp.contains("regex"), "Should be regex in split with parens: {sexp}");
-        assert!(!sexp.contains("ERROR"), "Should not contain parse errors: {sexp}");
+        assert!(
+            sexp.contains("regex"),
+            "Should be regex in split with parens: {sexp}"
+        );
+        assert!(
+            !sexp.contains("ERROR"),
+            "Should not contain parse errors: {sexp}"
+        );
     }
 
     #[test]
@@ -361,8 +460,14 @@ mod tests {
         let mut parser = Parser::new(code);
         let ast = must(parser.parse());
         let sexp = ast.to_sexp();
-        assert!(sexp.contains("regex"), "Should be regex in grep assignment RHS: {sexp}");
-        assert!(!sexp.contains("ERROR"), "Should not contain parse errors: {sexp}");
+        assert!(
+            sexp.contains("regex"),
+            "Should be regex in grep assignment RHS: {sexp}"
+        );
+        assert!(
+            !sexp.contains("ERROR"),
+            "Should not contain parse errors: {sexp}"
+        );
     }
 
     #[test]
@@ -372,8 +477,14 @@ mod tests {
         let mut parser = Parser::new(code);
         let ast = must(parser.parse());
         let sexp = ast.to_sexp();
-        assert!(sexp.contains("regex"), "Should be regex in split for array elem assign: {sexp}");
-        assert!(!sexp.contains("ERROR"), "Should not contain parse errors: {sexp}");
+        assert!(
+            sexp.contains("regex"),
+            "Should be regex in split for array elem assign: {sexp}"
+        );
+        assert!(
+            !sexp.contains("ERROR"),
+            "Should not contain parse errors: {sexp}"
+        );
     }
 
     #[test]
@@ -383,8 +494,14 @@ mod tests {
         let mut parser = Parser::new(code);
         let ast = must(parser.parse());
         let sexp = ast.to_sexp();
-        assert!(sexp.contains("regex"), "Should be regex in split inside for list: {sexp}");
-        assert!(!sexp.contains("binary_/"), "Should not contain division: {sexp}");
+        assert!(
+            sexp.contains("regex"),
+            "Should be regex in split inside for list: {sexp}"
+        );
+        assert!(
+            !sexp.contains("binary_/"),
+            "Should not contain division: {sexp}"
+        );
     }
 
     #[test]
@@ -394,7 +511,10 @@ mod tests {
         let mut parser = Parser::new(code);
         let ast = must(parser.parse());
         let sexp = ast.to_sexp();
-        assert!(sexp.contains("regex"), "Should be regex in split inside while: {sexp}");
+        assert!(
+            sexp.contains("regex"),
+            "Should be regex in split inside while: {sexp}"
+        );
     }
 
     #[test]
@@ -404,8 +524,14 @@ mod tests {
         let mut parser = Parser::new(code);
         let ast = must(parser.parse());
         let sexp = ast.to_sexp();
-        assert!(sexp.contains("regex"), "Should be regex in split as arg to join: {sexp}");
-        assert!(!sexp.contains("ERROR"), "Should not contain parse errors: {sexp}");
+        assert!(
+            sexp.contains("regex"),
+            "Should be regex in split as arg to join: {sexp}"
+        );
+        assert!(
+            !sexp.contains("ERROR"),
+            "Should not contain parse errors: {sexp}"
+        );
     }
 
     #[test]
@@ -415,8 +541,14 @@ mod tests {
         let mut parser = Parser::new(code);
         let ast = must(parser.parse());
         let sexp = ast.to_sexp();
-        assert!(sexp.contains("regex"), "Should be regex in split inside array ref: {sexp}");
-        assert!(!sexp.contains("ERROR"), "Should not contain parse errors: {sexp}");
+        assert!(
+            sexp.contains("regex"),
+            "Should be regex in split inside array ref: {sexp}"
+        );
+        assert!(
+            !sexp.contains("ERROR"),
+            "Should not contain parse errors: {sexp}"
+        );
     }
 
     #[test]
@@ -426,7 +558,10 @@ mod tests {
         let mut parser = Parser::new(code);
         let ast = must(parser.parse());
         let sexp = ast.to_sexp();
-        assert!(sexp.contains("regex"), "Should be regex in split inside if: {sexp}");
+        assert!(
+            sexp.contains("regex"),
+            "Should be regex in split inside if: {sexp}"
+        );
     }
 
     #[test]
@@ -436,8 +571,14 @@ mod tests {
         let mut parser = Parser::new(code);
         let ast = must(parser.parse());
         let sexp = ast.to_sexp();
-        assert!(sexp.contains("regex"), "Should be regex in map assignment RHS: {sexp}");
-        assert!(!sexp.contains("ERROR"), "Should not contain parse errors: {sexp}");
+        assert!(
+            sexp.contains("regex"),
+            "Should be regex in map assignment RHS: {sexp}"
+        );
+        assert!(
+            !sexp.contains("ERROR"),
+            "Should not contain parse errors: {sexp}"
+        );
     }
 
     #[test]
@@ -447,8 +588,14 @@ mod tests {
         let mut parser = Parser::new(code);
         let ast = must(parser.parse());
         let sexp = ast.to_sexp();
-        assert!(sexp.contains("regex"), "Should be regex in split as hash ref value: {sexp}");
-        assert!(!sexp.contains("binary_/"), "Should not contain division: {sexp}");
+        assert!(
+            sexp.contains("regex"),
+            "Should be regex in split as hash ref value: {sexp}"
+        );
+        assert!(
+            !sexp.contains("binary_/"),
+            "Should not contain division: {sexp}"
+        );
     }
 
     #[test]
@@ -458,7 +605,10 @@ mod tests {
         let mut parser = Parser::new(code);
         let ast = must(parser.parse());
         let sexp = ast.to_sexp();
-        assert!(sexp.contains("regex"), "Should be regex in split with subscript: {sexp}");
+        assert!(
+            sexp.contains("regex"),
+            "Should be regex in split with subscript: {sexp}"
+        );
     }
 
     #[test]

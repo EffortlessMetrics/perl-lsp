@@ -151,7 +151,12 @@ pub fn route_index_access(coordinator: Option<&Arc<IndexCoordinator>>) -> IndexA
         Some(coord) => {
             match coord.state() {
                 IndexState::Ready { .. } => IndexAccessMode::Full(coord),
-                IndexState::Building { phase, indexed_count, total_count, .. } => {
+                IndexState::Building {
+                    phase,
+                    indexed_count,
+                    total_count,
+                    ..
+                } => {
                     // Provide specific reason for building state
                     match phase {
                         IndexPhase::Idle => IndexAccessMode::Partial("index building (idle)"),

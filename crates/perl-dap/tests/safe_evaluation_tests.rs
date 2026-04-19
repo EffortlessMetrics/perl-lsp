@@ -26,9 +26,16 @@ fn test_evaluate_safe_mode_blocks_assignment() -> Result<(), Box<dyn std::error:
     });
     let response = adapter.handle_request(1, "evaluate", Some(args));
 
-    if let DapMessage::Response { success, message, .. } = response {
+    if let DapMessage::Response {
+        success, message, ..
+    } = response
+    {
         assert!(!success);
-        assert!(message.ok_or("Expected error message")?.contains("assignment operator"));
+        assert!(
+            message
+                .ok_or("Expected error message")?
+                .contains("assignment operator")
+        );
     }
     Ok(())
 }
@@ -57,7 +64,10 @@ fn test_evaluate_safe_mode_blocks_iterator_and_io() -> Result<(), Box<dyn std::e
         });
         let response = adapter.handle_request(1, "evaluate", Some(args));
 
-        if let DapMessage::Response { success, message, .. } = response {
+        if let DapMessage::Response {
+            success, message, ..
+        } = response
+        {
             assert!(!success, "Operation '{}' should have failed", op);
             if let Some(msg) = message {
                 assert!(
@@ -79,7 +89,14 @@ fn test_evaluate_safe_mode_blocks_iterator_and_io() -> Result<(), Box<dyn std::e
 fn test_evaluate_safe_mode_allows_comparisons_and_lookups() -> Result<(), Box<dyn std::error::Error>>
 {
     let mut adapter = create_test_adapter();
-    let safe_ops = vec!["$a < $b", "$a > $b", "$hash{key}", "$keys", "$values", "$each"];
+    let safe_ops = vec![
+        "$a < $b",
+        "$a > $b",
+        "$hash{key}",
+        "$keys",
+        "$values",
+        "$each",
+    ];
 
     for op in safe_ops {
         let args = json!({
@@ -91,7 +108,10 @@ fn test_evaluate_safe_mode_allows_comparisons_and_lookups() -> Result<(), Box<dy
 
         // It should NOT fail with "Safe evaluation mode"
         // It likely fails with "No debugger session" or succeeds if mocked
-        if let DapMessage::Response { message: Some(msg), .. } = response {
+        if let DapMessage::Response {
+            message: Some(msg), ..
+        } = response
+        {
             assert!(
                 !msg.contains("Safe evaluation mode"),
                 "Safe operation '{}' was blocked: {}",
@@ -113,10 +133,15 @@ fn test_evaluate_safe_mode_blocks_mutation() -> Result<(), Box<dyn std::error::E
     });
     let response = adapter.handle_request(1, "evaluate", Some(args));
 
-    if let DapMessage::Response { success, message, .. } = response {
+    if let DapMessage::Response {
+        success, message, ..
+    } = response
+    {
         assert!(!success);
         assert!(
-            message.ok_or("Expected error message")?.contains("potentially mutating operation")
+            message
+                .ok_or("Expected error message")?
+                .contains("potentially mutating operation")
         );
     }
     Ok(())
@@ -133,11 +158,18 @@ fn test_evaluate_allows_side_effects_opt_in() -> Result<(), Box<dyn std::error::
     // Without active session, it will fail at execution, but pass safety validation
     let response = adapter.handle_request(1, "evaluate", Some(args));
 
-    if let DapMessage::Response { success, message, .. } = response {
+    if let DapMessage::Response {
+        success, message, ..
+    } = response
+    {
         // If it failed due to safety, success=false and message mentions "assignment"
         // If it passed safety, it would fail due to "No debugger session"
         if !success {
-            assert!(!message.ok_or("Expected error message")?.contains("assignment operator"));
+            assert!(
+                !message
+                    .ok_or("Expected error message")?
+                    .contains("assignment operator")
+            );
         }
     }
     Ok(())

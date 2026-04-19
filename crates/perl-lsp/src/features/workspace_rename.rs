@@ -91,7 +91,10 @@ pub fn build_rename_edit(
     }
 
     // Convert to RenameEdit structs
-    grouped.into_iter().map(|(uri, edits)| RenameEdit { uri, edits }).collect()
+    grouped
+        .into_iter()
+        .map(|(uri, edits)| RenameEdit { uri, edits })
+        .collect()
 }
 
 /// Convert RenameEdit to LSP WorkspaceEdit JSON.

@@ -146,7 +146,10 @@ mod tests {
 
         let result = validate_path(&outside_file, workspace);
 
-        assert!(result.is_err(), "Absolute path outside workspace should be rejected");
+        assert!(
+            result.is_err(),
+            "Absolute path outside workspace should be rejected"
+        );
 
         match result {
             Err(SecurityError::PathOutsideWorkspace(_))
@@ -188,7 +191,10 @@ mod tests {
         let invalid_path = PathBuf::from("file\x1fname.pl");
         let result = validate_path(&invalid_path, workspace);
 
-        assert!(result.is_err(), "Path with control character should be rejected");
+        assert!(
+            result.is_err(),
+            "Path with control character should be rejected"
+        );
         assert!(
             matches!(result, Err(SecurityError::InvalidPathCharacters)),
             "Expected InvalidPathCharacters error"
@@ -205,7 +211,10 @@ mod tests {
         let safe_path = PathBuf::from("subdir/../main.pl");
         let result = validate_path(&safe_path, workspace);
 
-        assert!(result.is_ok(), "Normalized path within workspace should be valid");
+        assert!(
+            result.is_ok(),
+            "Normalized path within workspace should be valid"
+        );
         Ok(())
     }
 
@@ -221,7 +230,10 @@ mod tests {
     fn test_validate_expression_newline() -> Result<()> {
         let result = validate_expression("1\nprint 'hacked'");
 
-        assert!(result.is_err(), "Expression with newline should be rejected");
+        assert!(
+            result.is_err(),
+            "Expression with newline should be rejected"
+        );
         assert!(
             matches!(result, Err(SecurityError::InvalidExpression)),
             "Expected InvalidExpression error"
@@ -232,7 +244,10 @@ mod tests {
     #[test]
     fn test_validate_expression_carriage_return() {
         let result = validate_expression("1\rprint 'hacked'");
-        assert!(result.is_err(), "Expression with carriage return should be rejected");
+        assert!(
+            result.is_err(),
+            "Expression with carriage return should be rejected"
+        );
         assert!(matches!(result, Err(SecurityError::InvalidExpression)));
     }
 
@@ -246,7 +261,11 @@ mod tests {
 
     #[test]
     fn test_validate_timeout_zero() -> Result<()> {
-        assert_eq!(validate_timeout(0)?, 1, "Zero timeout should be clamped to 1ms");
+        assert_eq!(
+            validate_timeout(0)?,
+            1,
+            "Zero timeout should be clamped to 1ms"
+        );
         Ok(())
     }
 
@@ -303,7 +322,10 @@ mod tests {
         let empty_path = PathBuf::from("");
         let result = validate_path(&empty_path, workspace);
 
-        assert!(result.is_ok(), "Empty path should resolve to workspace root");
+        assert!(
+            result.is_ok(),
+            "Empty path should resolve to workspace root"
+        );
         Ok(())
     }
 
@@ -327,7 +349,10 @@ mod tests {
         assert!(format!("{}", path_error).contains("Path traversal attempt detected"));
 
         let expr_error = SecurityError::InvalidExpression;
-        assert_eq!(format!("{}", expr_error), "Expression cannot contain newlines");
+        assert_eq!(
+            format!("{}", expr_error),
+            "Expression cannot contain newlines"
+        );
 
         let timeout_error = SecurityError::ExcessiveTimeout(500_000);
         assert!(format!("{}", timeout_error).contains("500000ms"));

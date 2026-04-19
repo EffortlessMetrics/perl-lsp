@@ -28,9 +28,12 @@ impl FinalCoverageTestContext {
 
     fn initialize(&mut self) {
         // Initialize with default workspace configuration
-        self.workspace_config.insert("perl.executable".to_string(), json!("/usr/bin/perl"));
-        self.workspace_config.insert("perl.critic.enabled".to_string(), json!(true));
-        self.workspace_config.insert("perl.tidy.enabled".to_string(), json!(true));
+        self.workspace_config
+            .insert("perl.executable".to_string(), json!("/usr/bin/perl"));
+        self.workspace_config
+            .insert("perl.critic.enabled".to_string(), json!(true));
+        self.workspace_config
+            .insert("perl.tidy.enabled".to_string(), json!(true));
 
         println!("Final coverage LSP server initialized");
     }
@@ -38,7 +41,8 @@ impl FinalCoverageTestContext {
     fn load_workspace_config(&mut self, config_file: &str) {
         // Simulate loading .vscode/settings.json or similar
         println!("Loading workspace config from: {}", config_file);
-        self.workspace_config.insert("loaded_from".to_string(), json!(config_file));
+        self.workspace_config
+            .insert("loaded_from".to_string(), json!(config_file));
     }
 
     fn send_request(&self, method: &str, _params: Option<Value>) -> Option<Value> {
@@ -68,7 +72,8 @@ impl FinalCoverageTestContext {
     }
 
     fn register_snippet(&mut self, name: &str, template: &str) {
-        self.snippet_library.insert(name.to_string(), template.to_string());
+        self.snippet_library
+            .insert(name.to_string(), template.to_string());
         println!("Registered snippet: {}", name);
     }
 }
@@ -255,7 +260,10 @@ main() unless caller;
         })),
     );
 
-    assert!(breakpoint_request.is_some(), "Should validate and set breakpoints");
+    assert!(
+        breakpoint_request.is_some(),
+        "Should validate and set breakpoints"
+    );
     println!("✓ Conditional and log breakpoints work");
 
     // TEST 3: Variable Inspection
@@ -267,7 +275,10 @@ main() unless caller;
         })),
     );
 
-    assert!(variable_request.is_some(), "Should provide variable inspection");
+    assert!(
+        variable_request.is_some(),
+        "Should provide variable inspection"
+    );
     println!("✓ Variable inspection during debugging");
 
     // TEST 4: Step Through Debugging
@@ -279,7 +290,11 @@ main() unless caller;
                 "threadId": 1
             })),
         );
-        assert!(step_request.is_some(), "Should handle step command: {}", command);
+        assert!(
+            step_request.is_some(),
+            "Should handle step command: {}",
+            command
+        );
     }
     println!("✓ Step-through debugging controls work");
 
@@ -293,7 +308,10 @@ main() unless caller;
         })),
     );
 
-    assert!(stack_trace.is_some(), "Should provide call stack information");
+    assert!(
+        stack_trace.is_some(),
+        "Should provide call stack information"
+    );
     println!("✓ Call stack navigation works");
 
     // TEST 6: Debug Console/REPL
@@ -306,7 +324,10 @@ main() unless caller;
         })),
     );
 
-    assert!(eval_request.is_some(), "Should evaluate expressions in debug context");
+    assert!(
+        eval_request.is_some(),
+        "Should evaluate expressions in debug context"
+    );
     println!("✓ Debug console/REPL works");
 
     println!("✅ Advanced debugging user story test complete");
@@ -359,7 +380,10 @@ fn test_user_story_workspace_configuration() -> Result<(), Box<dyn std::error::E
         })),
     );
 
-    assert!(config_request.is_some(), "Should load workspace configuration");
+    assert!(
+        config_request.is_some(),
+        "Should load workspace configuration"
+    );
     println!("✓ Project-specific Perl configuration works");
 
     // TEST 2: .perlcriticrc Integration
@@ -391,7 +415,10 @@ sections = NAME | SYNOPSIS | DESCRIPTION | AUTHOR
         })),
     );
 
-    assert!(critic_validation.is_some(), "Should validate Perl::Critic configuration");
+    assert!(
+        critic_validation.is_some(),
+        "Should validate Perl::Critic configuration"
+    );
     println!("✓ .perlcriticrc integration works");
 
     // TEST 3: .perltidyrc Integration
@@ -427,7 +454,10 @@ sections = NAME | SYNOPSIS | DESCRIPTION | AUTHOR
         })),
     );
 
-    assert!(tidy_format.is_some(), "Should format with .perltidyrc settings");
+    assert!(
+        tidy_format.is_some(),
+        "Should format with .perltidyrc settings"
+    );
     println!("✓ .perltidyrc integration works");
 
     // TEST 4: Environment-specific Configuration
@@ -446,7 +476,11 @@ sections = NAME | SYNOPSIS | DESCRIPTION | AUTHOR
             })),
         );
 
-        assert!(env_config.is_some(), "Should load environment-specific config for {}", env);
+        assert!(
+            env_config.is_some(),
+            "Should load environment-specific config for {}",
+            env
+        );
     }
     println!("✓ Environment-specific configuration works");
 
@@ -459,7 +493,10 @@ sections = NAME | SYNOPSIS | DESCRIPTION | AUTHOR
         })),
     );
 
-    assert!(team_settings_validation.is_some(), "Should validate team settings consistency");
+    assert!(
+        team_settings_validation.is_some(),
+        "Should validate team settings consistency"
+    );
     println!("✓ Team settings validation works");
 
     println!("✅ Workspace configuration user story test complete");
@@ -485,10 +522,19 @@ fn test_user_story_custom_snippets() -> Result<(), Box<dyn std::error::Error>> {
             "sub",
             "sub ${1:name} {\n    my (${2:args}) = @_;\n    ${3:# code}\n    return ${4:value};\n}",
         ),
-        ("package", "package ${1:Name};\nuse strict;\nuse warnings;\n\n${2:# code}\n\n1;"),
+        (
+            "package",
+            "package ${1:Name};\nuse strict;\nuse warnings;\n\n${2:# code}\n\n1;",
+        ),
         ("if", "if (${1:condition}) {\n    ${2:# code}\n}"),
-        ("foreach", "foreach my ${1:\\$item} (${2:@array}) {\n    ${3:# code}\n}"),
-        ("try", "use Try::Tiny;\ntry {\n    ${1:# code}\n} catch {\n    ${2:# error handling}\n};"),
+        (
+            "foreach",
+            "foreach my ${1:\\$item} (${2:@array}) {\n    ${3:# code}\n}",
+        ),
+        (
+            "try",
+            "use Try::Tiny;\ntry {\n    ${1:# code}\n} catch {\n    ${2:# error handling}\n};",
+        ),
     ];
 
     for (trigger, template) in builtin_snippets {
@@ -506,7 +552,11 @@ fn test_user_story_custom_snippets() -> Result<(), Box<dyn std::error::Error>> {
             })),
         );
 
-        assert!(snippet_completion.is_some(), "Should provide snippet completion for {}", trigger);
+        assert!(
+            snippet_completion.is_some(),
+            "Should provide snippet completion for {}",
+            trigger
+        );
     }
     println!("✓ Built-in Perl snippets work");
 
@@ -627,7 +677,10 @@ fn test_user_story_custom_snippets() -> Result<(), Box<dyn std::error::Error>> {
         ]
     })));
 
-    assert!(variable_resolution.is_some(), "Should resolve snippet variables");
+    assert!(
+        variable_resolution.is_some(),
+        "Should resolve snippet variables"
+    );
     println!("✓ Snippet variable resolution works");
 
     // TEST 5: Multi-file Snippet Generation
@@ -649,7 +702,10 @@ fn test_user_story_custom_snippets() -> Result<(), Box<dyn std::error::Error>> {
         })),
     );
 
-    assert!(multi_file_snippet.is_some(), "Should generate multi-file snippets");
+    assert!(
+        multi_file_snippet.is_some(),
+        "Should generate multi-file snippets"
+    );
     println!("✓ Multi-file snippet generation works");
 
     println!("✅ Custom snippet system user story test complete");
@@ -689,7 +745,10 @@ fn test_user_story_version_control_integration() -> Result<(), Box<dyn std::erro
         })),
     );
 
-    assert!(file_decorations.is_some(), "Should provide file status decorations");
+    assert!(
+        file_decorations.is_some(),
+        "Should provide file status decorations"
+    );
     println!("✓ File status decorations work");
 
     // TEST 2: Git Blame Information
@@ -702,7 +761,10 @@ fn test_user_story_version_control_integration() -> Result<(), Box<dyn std::erro
         })),
     );
 
-    assert!(blame_info.is_some(), "Should include git blame in hover information");
+    assert!(
+        blame_info.is_some(),
+        "Should include git blame in hover information"
+    );
     println!("✓ Git blame integration works");
 
     // TEST 3: Change Tracking and Diff View
@@ -756,7 +818,10 @@ fn test_user_story_version_control_integration() -> Result<(), Box<dyn std::erro
         })),
     );
 
-    assert!(conflict_resolution.is_some(), "Should provide merge conflict resolution helpers");
+    assert!(
+        conflict_resolution.is_some(),
+        "Should provide merge conflict resolution helpers"
+    );
     println!("✓ Conflict resolution helpers work");
 
     // TEST 6: Commit Message Assistance
@@ -768,7 +833,10 @@ fn test_user_story_version_control_integration() -> Result<(), Box<dyn std::erro
         })),
     );
 
-    assert!(commit_assistance.is_some(), "Should provide commit message assistance");
+    assert!(
+        commit_assistance.is_some(),
+        "Should provide commit message assistance"
+    );
     println!("✓ Commit message assistance works");
 
     println!("✅ Version control integration user story test complete");
@@ -810,7 +878,10 @@ fn test_user_story_real_time_collaboration() -> Result<(), Box<dyn std::error::E
         })),
     );
 
-    assert!(collaboration_session.is_some(), "Should manage collaboration sessions");
+    assert!(
+        collaboration_session.is_some(),
+        "Should manage collaboration sessions"
+    );
     println!("✓ Collaboration session management works");
 
     // TEST 2: Cursor Position Sharing
@@ -861,7 +932,10 @@ fn test_user_story_real_time_collaboration() -> Result<(), Box<dyn std::error::E
         })),
     );
 
-    assert!(collaborative_edit.is_some(), "Should handle collaborative editing");
+    assert!(
+        collaborative_edit.is_some(),
+        "Should handle collaborative editing"
+    );
     println!("✓ Collaborative editing works");
 
     // TEST 4: Conflict Resolution in Real-time
@@ -878,7 +952,10 @@ fn test_user_story_real_time_collaboration() -> Result<(), Box<dyn std::error::E
         })),
     );
 
-    assert!(conflict_resolution.is_some(), "Should resolve collaborative conflicts");
+    assert!(
+        conflict_resolution.is_some(),
+        "Should resolve collaborative conflicts"
+    );
     println!("✓ Real-time conflict resolution works");
 
     // TEST 5: Presence Awareness
@@ -904,7 +981,10 @@ fn test_user_story_real_time_collaboration() -> Result<(), Box<dyn std::error::E
         })),
     );
 
-    assert!(presence_update.is_some(), "Should update user presence information");
+    assert!(
+        presence_update.is_some(),
+        "Should update user presence information"
+    );
     println!("✓ Presence awareness works");
 
     // TEST 6: Shared Terminal/Execution
@@ -917,7 +997,10 @@ fn test_user_story_real_time_collaboration() -> Result<(), Box<dyn std::error::E
         })),
     );
 
-    assert!(shared_execution.is_some(), "Should handle shared command execution");
+    assert!(
+        shared_execution.is_some(),
+        "Should handle shared command execution"
+    );
     println!("✓ Shared terminal/execution works");
 
     println!("✅ Real-time collaboration user story test complete");

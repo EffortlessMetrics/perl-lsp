@@ -18,7 +18,10 @@ fn extract_symbols(code: &str) -> SymbolTable {
 }
 
 fn has_symbol(table: &SymbolTable, name: &str, kind: SymbolKind) -> bool {
-    table.symbols.get(name).is_some_and(|symbols| symbols.iter().any(|symbol| symbol.kind == kind))
+    table
+        .symbols
+        .get(name)
+        .is_some_and(|symbols| symbols.iter().any(|symbol| symbol.kind == kind))
 }
 
 fn has_reference(table: &SymbolTable, name: &str, kind: SymbolKind) -> bool {
@@ -168,9 +171,18 @@ post '/bar' => sub { 'bar' };
 get '/baz' => sub { 'baz' };
 "#;
     let table = extract_symbols(code);
-    assert!(has_symbol(&table, "/foo", SymbolKind::Subroutine), "expected /foo route symbol");
-    assert!(has_symbol(&table, "/bar", SymbolKind::Subroutine), "expected /bar route symbol");
-    assert!(has_symbol(&table, "/baz", SymbolKind::Subroutine), "expected /baz route symbol");
+    assert!(
+        has_symbol(&table, "/foo", SymbolKind::Subroutine),
+        "expected /foo route symbol"
+    );
+    assert!(
+        has_symbol(&table, "/bar", SymbolKind::Subroutine),
+        "expected /bar route symbol"
+    );
+    assert!(
+        has_symbol(&table, "/baz", SymbolKind::Subroutine),
+        "expected /baz route symbol"
+    );
 }
 
 #[test]
@@ -369,8 +381,14 @@ builder {
 "#;
     let table = extract_symbols(code);
 
-    assert!(has_symbol(&table, "/api", SymbolKind::Subroutine), "expected `/api` mount symbol");
-    assert!(has_symbol(&table, "/", SymbolKind::Subroutine), "expected `/` mount symbol");
+    assert!(
+        has_symbol(&table, "/api", SymbolKind::Subroutine),
+        "expected `/api` mount symbol"
+    );
+    assert!(
+        has_symbol(&table, "/", SymbolKind::Subroutine),
+        "expected `/` mount symbol"
+    );
 
     let attrs = symbol_attrs(&table, "/api", SymbolKind::Subroutine);
     assert!(

@@ -228,7 +228,10 @@ impl PerlModernizer {
         let modernized = self.apply(&content);
 
         // Count changes (suggestions that were applied)
-        let changes = suggestions.iter().filter(|s| !s.manual_review_required).count();
+        let changes = suggestions
+            .iter()
+            .filter(|s| !s.manual_review_required)
+            .count();
 
         // Write back if changes were made
         if modernized != content {

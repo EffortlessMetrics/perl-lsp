@@ -62,7 +62,11 @@ pub fn validate_workspace_path(
         })?);
 
     // Join relative paths with workspace; keep absolute paths untouched.
-    let resolved = if path.is_absolute() { path.to_path_buf() } else { workspace_root.join(path) };
+    let resolved = if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        workspace_root.join(path)
+    };
 
     // Existing paths are canonicalized directly. Non-existing paths are normalized by
     // processing components while preventing escape beyond workspace depth.
@@ -272,7 +276,10 @@ mod tests {
 
         let result =
             validate_workspace_path(&PathBuf::from("valid.pl\0../../etc/passwd"), workspace);
-        assert!(matches!(result, Err(WorkspacePathError::InvalidPathCharacters)));
+        assert!(matches!(
+            result,
+            Err(WorkspacePathError::InvalidPathCharacters)
+        ));
 
         Ok(())
     }
@@ -318,7 +325,10 @@ mod tests {
     #[test]
     fn completion_path_sanitization_blocks_traversal() {
         assert_eq!(sanitize_completion_path_input(""), Some(String::new()));
-        assert_eq!(sanitize_completion_path_input("lib/Foo.pm"), Some("lib/Foo.pm".to_string()));
+        assert_eq!(
+            sanitize_completion_path_input("lib/Foo.pm"),
+            Some("lib/Foo.pm".to_string())
+        );
         assert!(sanitize_completion_path_input("../etc/passwd").is_none());
     }
 
@@ -328,9 +338,18 @@ mod tests {
             split_completion_path_components("lib/Foo"),
             ("lib".to_string(), "Foo".to_string())
         );
-        assert_eq!(split_completion_path_components("Foo"), (".".to_string(), "Foo".to_string()));
-        assert_eq!(build_completion_path(".", "Foo.pm", false), "Foo.pm".to_string());
-        assert_eq!(build_completion_path("lib", "Foo", true), "lib/Foo/".to_string());
+        assert_eq!(
+            split_completion_path_components("Foo"),
+            (".".to_string(), "Foo".to_string())
+        );
+        assert_eq!(
+            build_completion_path(".", "Foo.pm", false),
+            "Foo.pm".to_string()
+        );
+        assert_eq!(
+            build_completion_path("lib", "Foo", true),
+            "lib/Foo/".to_string()
+        );
     }
 
     #[test]
@@ -435,7 +454,10 @@ mod tests {
         let workspace = temp_dir.path();
 
         let result = validate_workspace_path(&PathBuf::from("\0foo.pm"), workspace);
-        assert!(matches!(result, Err(WorkspacePathError::InvalidPathCharacters)));
+        assert!(matches!(
+            result,
+            Err(WorkspacePathError::InvalidPathCharacters)
+        ));
         Ok(())
     }
 
@@ -445,7 +467,10 @@ mod tests {
         let workspace = temp_dir.path();
 
         let result = validate_workspace_path(&PathBuf::from("lib/Foo\0Bar.pm"), workspace);
-        assert!(matches!(result, Err(WorkspacePathError::InvalidPathCharacters)));
+        assert!(matches!(
+            result,
+            Err(WorkspacePathError::InvalidPathCharacters)
+        ));
         Ok(())
     }
 
@@ -455,7 +480,10 @@ mod tests {
         let workspace = temp_dir.path();
 
         let result = validate_workspace_path(&PathBuf::from("lib/Foo.pm\0"), workspace);
-        assert!(matches!(result, Err(WorkspacePathError::InvalidPathCharacters)));
+        assert!(matches!(
+            result,
+            Err(WorkspacePathError::InvalidPathCharacters)
+        ));
         Ok(())
     }
 
@@ -467,7 +495,10 @@ mod tests {
         // Classic attack: attacker supplies "file\x00.pm" hoping the C layer
         // truncates at the null and opens "file" instead of "file.pm".
         let result = validate_workspace_path(&PathBuf::from("file\0.pm"), workspace);
-        assert!(matches!(result, Err(WorkspacePathError::InvalidPathCharacters)));
+        assert!(matches!(
+            result,
+            Err(WorkspacePathError::InvalidPathCharacters)
+        ));
         Ok(())
     }
 
@@ -495,7 +526,10 @@ mod tests {
         let workspace = temp_dir.path();
 
         let result = validate_workspace_path(&PathBuf::from("lib/\x07file.pm"), workspace);
-        assert!(matches!(result, Err(WorkspacePathError::InvalidPathCharacters)));
+        assert!(matches!(
+            result,
+            Err(WorkspacePathError::InvalidPathCharacters)
+        ));
         Ok(())
     }
 
@@ -505,7 +539,10 @@ mod tests {
         let workspace = temp_dir.path();
 
         let result = validate_workspace_path(&PathBuf::from("lib/\x08file.pm"), workspace);
-        assert!(matches!(result, Err(WorkspacePathError::InvalidPathCharacters)));
+        assert!(matches!(
+            result,
+            Err(WorkspacePathError::InvalidPathCharacters)
+        ));
         Ok(())
     }
 
@@ -515,7 +552,10 @@ mod tests {
         let workspace = temp_dir.path();
 
         let result = validate_workspace_path(&PathBuf::from("lib/file\n.pm"), workspace);
-        assert!(matches!(result, Err(WorkspacePathError::InvalidPathCharacters)));
+        assert!(matches!(
+            result,
+            Err(WorkspacePathError::InvalidPathCharacters)
+        ));
         Ok(())
     }
 
@@ -525,7 +565,10 @@ mod tests {
         let workspace = temp_dir.path();
 
         let result = validate_workspace_path(&PathBuf::from("lib/file\r.pm"), workspace);
-        assert!(matches!(result, Err(WorkspacePathError::InvalidPathCharacters)));
+        assert!(matches!(
+            result,
+            Err(WorkspacePathError::InvalidPathCharacters)
+        ));
         Ok(())
     }
 
@@ -538,7 +581,10 @@ mod tests {
 
         let result = validate_workspace_path(&PathBuf::from("lib/file\t.pm"), workspace);
         // Tab should NOT trigger InvalidPathCharacters
-        assert!(!matches!(result, Err(WorkspacePathError::InvalidPathCharacters)));
+        assert!(!matches!(
+            result,
+            Err(WorkspacePathError::InvalidPathCharacters)
+        ));
         Ok(())
     }
 
@@ -661,9 +707,15 @@ mod tests {
     fn test_windows_reserved_com_ports() {
         for i in 1..=9 {
             let name = format!("COM{i}");
-            assert!(!is_safe_completion_filename(&name), "COM{i} should be rejected");
+            assert!(
+                !is_safe_completion_filename(&name),
+                "COM{i} should be rejected"
+            );
             let lower = name.to_lowercase();
-            assert!(!is_safe_completion_filename(&lower), "com{i} should be rejected");
+            assert!(
+                !is_safe_completion_filename(&lower),
+                "com{i} should be rejected"
+            );
         }
     }
 
@@ -671,9 +723,15 @@ mod tests {
     fn test_windows_reserved_lpt_ports() {
         for i in 1..=9 {
             let name = format!("LPT{i}");
-            assert!(!is_safe_completion_filename(&name), "LPT{i} should be rejected");
+            assert!(
+                !is_safe_completion_filename(&name),
+                "LPT{i} should be rejected"
+            );
             let lower = name.to_lowercase();
-            assert!(!is_safe_completion_filename(&lower), "lpt{i} should be rejected");
+            assert!(
+                !is_safe_completion_filename(&lower),
+                "lpt{i} should be rejected"
+            );
         }
     }
 
@@ -737,7 +795,10 @@ mod tests {
         // Traversal errors or outside-workspace errors are both acceptable.
         if let Ok(resolved) = &result {
             let canonical_ws = normalize_filesystem_path(workspace.canonicalize()?);
-            assert!(resolved.starts_with(&canonical_ws), "Long path must resolve inside workspace");
+            assert!(
+                resolved.starts_with(&canonical_ws),
+                "Long path must resolve inside workspace"
+            );
         }
         Ok(())
     }
@@ -860,7 +921,9 @@ mod tests {
         assert!(is_hidden_or_forbidden_entry_name("build"));
         assert!(is_hidden_or_forbidden_entry_name(".cargo"));
         assert!(is_hidden_or_forbidden_entry_name(".rustup"));
-        assert!(is_hidden_or_forbidden_entry_name("System Volume Information"));
+        assert!(is_hidden_or_forbidden_entry_name(
+            "System Volume Information"
+        ));
         assert!(is_hidden_or_forbidden_entry_name("$RECYCLE.BIN"));
         assert!(is_hidden_or_forbidden_entry_name("__pycache__"));
         assert!(is_hidden_or_forbidden_entry_name(".pytest_cache"));
@@ -927,7 +990,10 @@ mod tests {
             sanitize_completion_path_input("t/01-basic.t"),
             Some("t/01-basic.t".to_string())
         );
-        assert_eq!(sanitize_completion_path_input("Makefile.PL"), Some("Makefile.PL".to_string()));
+        assert_eq!(
+            sanitize_completion_path_input("Makefile.PL"),
+            Some("Makefile.PL".to_string())
+        );
     }
 
     #[test]
@@ -1042,7 +1108,10 @@ mod tests {
             &PathBuf::from("foo.pm"),
             &PathBuf::from("/nonexistent/workspace/root/that/does/not/exist"),
         );
-        assert!(matches!(result, Err(WorkspacePathError::PathOutsideWorkspace(_))));
+        assert!(matches!(
+            result,
+            Err(WorkspacePathError::PathOutsideWorkspace(_))
+        ));
     }
 
     // -----------------------------------------------------------------------

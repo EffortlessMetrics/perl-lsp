@@ -258,7 +258,13 @@ impl CompletionProvider {
         });
         let import_map = Self::extract_import_map(ast);
 
-        CompletionProvider { symbol_table, class_models, type_engine, workspace_index, import_map }
+        CompletionProvider {
+            symbol_table,
+            class_models,
+            type_engine,
+            workspace_index,
+            import_map,
+        }
     }
 
     /// Walk the top-level AST and build an `ImportMap` from `use` statements.
@@ -391,7 +397,11 @@ impl CompletionProvider {
                     };
                     (name.as_str(), rhs.as_ref())
                 }
-                NodeKind::VariableDeclaration { variable, initializer: Some(rhs), .. } => {
+                NodeKind::VariableDeclaration {
+                    variable,
+                    initializer: Some(rhs),
+                    ..
+                } => {
                     let NodeKind::Variable { name, .. } = &variable.kind else {
                         return None;
                     };
@@ -496,7 +506,12 @@ impl CompletionProvider {
 
                     for stmt in statements {
                         let expr = inner_expr(stmt);
-                        let NodeKind::MethodCall { object, method, args } = &expr.kind else {
+                        let NodeKind::MethodCall {
+                            object,
+                            method,
+                            args,
+                        } = &expr.kind
+                        else {
                             continue;
                         };
                         if method != "import" {
@@ -543,7 +558,9 @@ impl CompletionProvider {
                         if has_unresolved_tag || !has_symbols {
                             continue;
                         }
-                        map.entry(object_name.to_string()).or_default().extend(imported_symbols);
+                        map.entry(object_name.to_string())
+                            .or_default()
+                            .extend(imported_symbols);
                     }
 
                     for stmt in statements {
@@ -1053,8 +1070,9 @@ impl CompletionProvider {
         let rest = rest.trim_start();
 
         // Extract module name (starts uppercase, contains ::, alphanumeric, _)
-        let mod_end =
-            rest.find(|c: char| !c.is_alphanumeric() && c != ':' && c != '_').unwrap_or(rest.len());
+        let mod_end = rest
+            .find(|c: char| !c.is_alphanumeric() && c != ':' && c != '_')
+            .unwrap_or(rest.len());
         if mod_end == 0 {
             return None;
         }
@@ -1091,7 +1109,10 @@ impl CompletionProvider {
 
         // Extract the prefix: the last word being typed inside qw()
         // Words in qw() are whitespace-separated
-        let prefix = inside_qw.rsplit(|c: char| c.is_ascii_whitespace()).next().unwrap_or("");
+        let prefix = inside_qw
+            .rsplit(|c: char| c.is_ascii_whitespace())
+            .next()
+            .unwrap_or("");
 
         Some((module_name.to_string(), prefix.to_string()))
     }
@@ -1341,7 +1362,8 @@ impl CompletionProvider {
     /// Check whether the cursor is inside the value position of a Moo/Moose `isa => ...`
     /// attribute inside a `has(...)` declaration.
     fn is_has_type_value_context(&self, source: &str, position: usize) -> bool {
-        self.has_option_value_prefix(source, position, "isa").is_some()
+        self.has_option_value_prefix(source, position, "isa")
+            .is_some()
     }
 
     /// Return the current value prefix for a `has(...)` option if the cursor is in that
@@ -1538,7 +1560,10 @@ impl CompletionProvider {
         // word chars and whitespace (no operators, semicolons, etc.) — if it contains
         // any non-whitespace non-word chars it is not a simple hash subscript.
         let between = &before[brace_pos + 1..position - key_prefix.len()];
-        if between.chars().any(|c| !c.is_alphanumeric() && c != '_' && !c.is_whitespace()) {
+        if between
+            .chars()
+            .any(|c| !c.is_alphanumeric() && c != '_' && !c.is_whitespace())
+        {
             return None;
         }
 
@@ -1664,7 +1689,10 @@ impl CompletionProvider {
         while let Some(arrow_pos) = remaining.find("=>") {
             let key_segment = remaining[..arrow_pos].trim_end();
             // Find the last token (after the previous `,` or start)
-            let token_start = key_segment.rfind([',', '(', '\n']).map(|p| p + 1).unwrap_or(0);
+            let token_start = key_segment
+                .rfind([',', '(', '\n'])
+                .map(|p| p + 1)
+                .unwrap_or(0);
             let token = key_segment[token_start..].trim();
             // Strip single or double quotes
             let token = token
@@ -1976,7 +2004,10 @@ impl CompletionProvider {
         if let Some(last_char) = pre_slash.chars().next_back() {
             // After `(`, `,`, `=`, `!`, `&&`, `||`, `or`, `and`, `not`, `;`, `{`
             // a `/` starts a regex rather than a division.
-            if matches!(last_char, '(' | ',' | '=' | '!' | '&' | '|' | ';' | '{' | '~') {
+            if matches!(
+                last_char,
+                '(' | ',' | '=' | '!' | '&' | '|' | ';' | '{' | '~'
+            ) {
                 return true;
             }
         }
@@ -2027,8 +2058,9 @@ impl CompletionProvider {
             return false;
         }
         let before = &source[..position];
-        let flag_chars: &[char] =
-            &['g', 'i', 'm', 's', 'x', 'e', 'r', 'a', 'd', 'u', 'p', 'l', 'c'];
+        let flag_chars: &[char] = &[
+            'g', 'i', 'm', 's', 'x', 'e', 'r', 'a', 'd', 'u', 'p', 'l', 'c',
+        ];
         let without_flags = before.trim_end_matches(|c: char| flag_chars.contains(&c));
         // Must end with the closing delimiter '/'.
         if !without_flags.ends_with('/') {
@@ -2280,10 +2312,16 @@ $"#;
         let provider = CompletionProvider::new_with_index_and_source(&ast, code, None);
         let completions = provider.get_completions(code, code.len());
 
-        let block_item =
-            must_some(completions.iter().find(|completion| completion.label == "$block_var"));
-        let sub_item =
-            must_some(completions.iter().find(|completion| completion.label == "$sub_var"));
+        let block_item = must_some(
+            completions
+                .iter()
+                .find(|completion| completion.label == "$block_var"),
+        );
+        let sub_item = must_some(
+            completions
+                .iter()
+                .find(|completion| completion.label == "$sub_var"),
+        );
 
         assert!(
             block_item.sort_text < sub_item.sort_text,
@@ -2318,8 +2356,11 @@ sub internal_sub { }
             completions.iter().any(|c| c.label == "exported_sub"),
             "should suggest exported_sub"
         );
-        let exported_sub =
-            must_some(completions.iter().find(|completion| completion.label == "exported_sub"));
+        let exported_sub = must_some(
+            completions
+                .iter()
+                .find(|completion| completion.label == "exported_sub"),
+        );
         let documentation = must_some(exported_sub.documentation.as_deref());
         assert!(
             documentation.contains("MyModule::exported_sub"),
@@ -2349,9 +2390,16 @@ sub greet {
             .symbol_table
             .symbols
             .get("name")
-            .map(|symbols| symbols.iter().any(|symbol| symbol.kind == SymbolKind::Subroutine))
+            .map(|symbols| {
+                symbols
+                    .iter()
+                    .any(|symbol| symbol.kind == SymbolKind::Subroutine)
+            })
             .unwrap_or(false);
-        assert!(synthesized, "expected synthesized `name` subroutine symbol in symbol table");
+        assert!(
+            synthesized,
+            "expected synthesized `name` subroutine symbol in symbol table"
+        );
 
         let pos = must_some(code.find("$self->name")) + "$self->".len();
         let completions = provider.get_completions(code, pos);
@@ -2520,7 +2568,10 @@ Point->new(na"#;
             .map(|item| item.label.as_str())
             .collect();
 
-        assert!(constructor_labels.contains(&"name"), "expected `name` to match prefix `na`");
+        assert!(
+            constructor_labels.contains(&"name"),
+            "expected `name` to match prefix `na`"
+        );
         assert!(
             constructor_labels.contains(&"native_name"),
             "expected `native_name` to remain available when matching prefix"
@@ -2606,7 +2657,10 @@ has 'id' => (
         assert!(
             completions.iter().any(|item| item.label == "Str"),
             "expected built-in Moose type `Str` in isa completion, got: {:?}",
-            completions.iter().map(|item| &item.label).collect::<Vec<_>>()
+            completions
+                .iter()
+                .map(|item| &item.label)
+                .collect::<Vec<_>>()
         );
         assert!(
             completions.iter().any(|item| item.label == "ArrayRef"),
@@ -2797,7 +2851,11 @@ has 'id' => (
                 "regex completion '{}' should have documentation",
                 item.label
             );
-            assert!(item.detail.is_some(), "regex completion '{}' should have detail", item.label);
+            assert!(
+                item.detail.is_some(),
+                "regex completion '{}' should have detail",
+                item.label
+            );
         }
     }
 
@@ -2887,7 +2945,11 @@ has 'id' => (
         let provider = CompletionProvider::new(&ast);
         let completions = provider.get_completions(code, code.len());
 
-        let item = must_some(completions.iter().find(|completion| completion.label == r"\d"));
+        let item = must_some(
+            completions
+                .iter()
+                .find(|completion| completion.label == r"\d"),
+        );
         assert_eq!(
             item.text_edit_range,
             Some((code.len() - r"\d".len(), code.len())),
@@ -2905,7 +2967,11 @@ has 'id' => (
         let provider = CompletionProvider::new(&ast);
         let completions = provider.get_completions(code, code.len());
 
-        let item = must_some(completions.iter().find(|completion| completion.label == "(?:...)"));
+        let item = must_some(
+            completions
+                .iter()
+                .find(|completion| completion.label == "(?:...)"),
+        );
         assert_eq!(
             item.text_edit_range,
             Some((code.len() - "(?:".len(), code.len())),
@@ -2919,8 +2985,10 @@ has 'id' => (
         let code = "use MyModule qw(";
         let result = CompletionProvider::detect_use_qw_import_context(code, code.len());
         assert!(result.is_some(), "should detect qw() import context");
-        let (module, prefix) =
-            result.as_ref().map(|(m, p)| (m.as_str(), p.as_str())).unwrap_or_default();
+        let (module, prefix) = result
+            .as_ref()
+            .map(|(m, p)| (m.as_str(), p.as_str()))
+            .unwrap_or_default();
         assert_eq!(module, "MyModule");
         assert_eq!(prefix, "");
     }
@@ -2929,9 +2997,14 @@ has 'id' => (
     fn test_detect_use_qw_import_context_with_prefix() {
         let code = "use File::Basename qw(bas";
         let result = CompletionProvider::detect_use_qw_import_context(code, code.len());
-        assert!(result.is_some(), "should detect qw() import context with prefix");
-        let (module, prefix) =
-            result.as_ref().map(|(m, p)| (m.as_str(), p.as_str())).unwrap_or_default();
+        assert!(
+            result.is_some(),
+            "should detect qw() import context with prefix"
+        );
+        let (module, prefix) = result
+            .as_ref()
+            .map(|(m, p)| (m.as_str(), p.as_str()))
+            .unwrap_or_default();
         assert_eq!(module, "File::Basename");
         assert_eq!(prefix, "bas");
     }
@@ -2940,9 +3013,14 @@ has 'id' => (
     fn test_detect_use_qw_import_context_with_existing_imports() {
         let code = "use MyModule qw(foo bar ba";
         let result = CompletionProvider::detect_use_qw_import_context(code, code.len());
-        assert!(result.is_some(), "should detect qw() import context after existing imports");
-        let (module, prefix) =
-            result.as_ref().map(|(m, p)| (m.as_str(), p.as_str())).unwrap_or_default();
+        assert!(
+            result.is_some(),
+            "should detect qw() import context after existing imports"
+        );
+        let (module, prefix) = result
+            .as_ref()
+            .map(|(m, p)| (m.as_str(), p.as_str()))
+            .unwrap_or_default();
         assert_eq!(module, "MyModule");
         assert_eq!(prefix, "ba");
     }
@@ -2952,14 +3030,20 @@ has 'id' => (
         // Cursor after the closing paren
         let code = "use MyModule qw(foo bar);";
         let result = CompletionProvider::detect_use_qw_import_context(code, code.len());
-        assert!(result.is_none(), "should not detect context after closing paren");
+        assert!(
+            result.is_none(),
+            "should not detect context after closing paren"
+        );
     }
 
     #[test]
     fn test_detect_use_qw_not_for_pragmas() {
         let code = "use strict qw(";
         let result = CompletionProvider::detect_use_qw_import_context(code, code.len());
-        assert!(result.is_none(), "should not detect context for lowercase pragmas");
+        assert!(
+            result.is_none(),
+            "should not detect context for lowercase pragmas"
+        );
     }
 
     #[test]
@@ -3049,7 +3133,10 @@ sub do_work { }
         let do_work = completions.iter().find(|c| c.label == "do_work");
         assert!(do_work.is_some(), "should suggest do_work");
         let detail = must_some(do_work.and_then(|c| c.detail.as_deref()));
-        assert!(detail.contains("MyLib"), "detail should mention module name, got: {detail:?}");
+        assert!(
+            detail.contains("MyLib"),
+            "detail should mention module name, got: {detail:?}"
+        );
         Ok(())
     }
 
@@ -3176,9 +3263,14 @@ sub helper { }
         let provider = CompletionProvider::new_with_index(&ast, Some(index));
         let completions = provider.get_completions(code, code.len());
         assert!(
-            completions.iter().any(|c| c.label == "MyApp" && c.kind == CompletionItemKind::Module),
+            completions
+                .iter()
+                .any(|c| c.label == "MyApp" && c.kind == CompletionItemKind::Module),
             "use <cursor> should suggest workspace module names; got: {:?}",
-            completions.iter().map(|c| (&c.label, &c.kind)).collect::<Vec<_>>()
+            completions
+                .iter()
+                .map(|c| (&c.label, &c.kind))
+                .collect::<Vec<_>>()
         );
         Ok(())
     }
@@ -3187,8 +3279,10 @@ sub helper { }
     fn test_use_statement_context_with_prefix() -> Result<(), Box<dyn std::error::Error>> {
         // "use MyA" — prefix filtering should narrow to MyApp, not OtherLib
         let index = Arc::new(WorkspaceIndex::new());
-        index
-            .index_file(Url::parse("file:///lib/MyApp.pm")?, "package MyApp;\n1;\n".to_string())?;
+        index.index_file(
+            Url::parse("file:///lib/MyApp.pm")?,
+            "package MyApp;\n1;\n".to_string(),
+        )?;
         index.index_file(
             Url::parse("file:///lib/OtherLib.pm")?,
             "package OtherLib;\n1;\n".to_string(),
@@ -3199,7 +3293,9 @@ sub helper { }
         let provider = CompletionProvider::new_with_index(&ast, Some(index));
         let completions = provider.get_completions(code, code.len());
         assert!(
-            completions.iter().any(|c| c.label == "MyApp" && c.kind == CompletionItemKind::Module),
+            completions
+                .iter()
+                .any(|c| c.label == "MyApp" && c.kind == CompletionItemKind::Module),
             "use MyA should suggest MyApp with Module kind"
         );
         assert!(
@@ -3226,9 +3322,14 @@ sub helper { }
         let provider = CompletionProvider::new_with_index(&ast, Some(index));
         let completions = provider.get_completions(code, code.len());
         assert!(
-            !completions.iter().any(|c| c.kind == CompletionItemKind::Module),
+            !completions
+                .iter()
+                .any(|c| c.kind == CompletionItemKind::Module),
             "use strict should not trigger module completions; got: {:?}",
-            completions.iter().map(|c| (&c.label, &c.kind)).collect::<Vec<_>>()
+            completions
+                .iter()
+                .map(|c| (&c.label, &c.kind))
+                .collect::<Vec<_>>()
         );
         Ok(())
     }
@@ -3252,9 +3353,14 @@ sub helper { }
         // This context routes to qw-import completions (Function kind), not module-name
         // completions (Module kind).
         assert!(
-            !completions.iter().any(|c| c.kind == CompletionItemKind::Module),
+            !completions
+                .iter()
+                .any(|c| c.kind == CompletionItemKind::Module),
             "cursor inside qw() should not get module-name completions; got: {:?}",
-            completions.iter().map(|c| (&c.label, &c.kind)).collect::<Vec<_>>()
+            completions
+                .iter()
+                .map(|c| (&c.label, &c.kind))
+                .collect::<Vec<_>>()
         );
         Ok(())
     }
@@ -3263,17 +3369,24 @@ sub helper { }
     fn test_require_statement_triggers_module_completion() -> Result<(), Box<dyn std::error::Error>>
     {
         let index = Arc::new(WorkspaceIndex::new());
-        index
-            .index_file(Url::parse("file:///lib/Utils.pm")?, "package Utils;\n1;\n".to_string())?;
+        index.index_file(
+            Url::parse("file:///lib/Utils.pm")?,
+            "package Utils;\n1;\n".to_string(),
+        )?;
         let code = "require Ut";
         let mut parser = Parser::new(code);
         let ast = must(parser.parse());
         let provider = CompletionProvider::new_with_index(&ast, Some(index));
         let completions = provider.get_completions(code, code.len());
         assert!(
-            completions.iter().any(|c| c.label == "Utils" && c.kind == CompletionItemKind::Module),
+            completions
+                .iter()
+                .any(|c| c.label == "Utils" && c.kind == CompletionItemKind::Module),
             "require Ut should suggest Utils with Module kind; got: {:?}",
-            completions.iter().map(|c| (&c.label, &c.kind)).collect::<Vec<_>>()
+            completions
+                .iter()
+                .map(|c| (&c.label, &c.kind))
+                .collect::<Vec<_>>()
         );
         Ok(())
     }
@@ -3282,8 +3395,10 @@ sub helper { }
     fn test_use_module_deduplication() -> Result<(), Box<dyn std::error::Error>> {
         // Two files declaring the same package should produce one completion, not two
         let index = Arc::new(WorkspaceIndex::new());
-        index
-            .index_file(Url::parse("file:///lib/MyApp.pm")?, "package MyApp;\n1;\n".to_string())?;
+        index.index_file(
+            Url::parse("file:///lib/MyApp.pm")?,
+            "package MyApp;\n1;\n".to_string(),
+        )?;
         index.index_file(
             Url::parse("file:///lib/MyApp2.pm")?,
             "package MyApp;\n1;\n".to_string(), // duplicate package name
@@ -3319,7 +3434,9 @@ sub helper { }
         // The "1_MyApp" sort_text is only emitted by add_use_module_completions,
         // which is guarded by in_use_statement. It must not appear outside that context.
         assert!(
-            !completions.iter().any(|c| c.sort_text.as_deref() == Some("1_MyApp")),
+            !completions
+                .iter()
+                .any(|c| c.sort_text.as_deref() == Some("1_MyApp")),
             "Module-priority sort_text should only appear in use context"
         );
         Ok(())
@@ -3342,9 +3459,14 @@ sub helper { }
         let provider = CompletionProvider::new_with_index(&ast, Some(index));
         let completions = provider.get_completions(code, code.len());
         assert!(
-            !completions.iter().any(|c| c.kind == CompletionItemKind::Module),
+            !completions
+                .iter()
+                .any(|c| c.kind == CompletionItemKind::Module),
             "cursor after `use Module;` should not trigger module-name completions; got: {:?}",
-            completions.iter().map(|c| (&c.label, &c.kind)).collect::<Vec<_>>()
+            completions
+                .iter()
+                .map(|c| (&c.label, &c.kind))
+                .collect::<Vec<_>>()
         );
         Ok(())
     }
@@ -3471,7 +3593,10 @@ sub helper { }
         let provider = CompletionProvider::new(&ast);
         let completions = provider.get_completions(code, code.len());
         let labels: Vec<&str> = completions.iter().map(|c| c.label.as_str()).collect();
-        assert!(!labels.contains(&"g"), "already-typed flag 'g' should be excluded");
+        assert!(
+            !labels.contains(&"g"),
+            "already-typed flag 'g' should be excluded"
+        );
         assert!(labels.contains(&"i"), "flag 'i' should still be offered");
     }
 
@@ -3491,7 +3616,10 @@ sub helper { }
             );
         }
         for flag in &["g", "i", "e"] {
-            assert!(!labels.contains(flag), "tr/// should NOT offer '{flag}'; got: {labels:?}");
+            assert!(
+                !labels.contains(flag),
+                "tr/// should NOT offer '{flag}'; got: {labels:?}"
+            );
         }
     }
 
@@ -3510,7 +3638,10 @@ sub helper { }
                 "tr/// binding flag '{flag}' should be offered; got: {labels:?}"
             );
         }
-        assert!(!labels.contains(&"g"), "tr/// should NOT offer 'g'; got: {labels:?}");
+        assert!(
+            !labels.contains(&"g"),
+            "tr/// should NOT offer 'g'; got: {labels:?}"
+        );
     }
 
     // ── Gap 3: Statement-level regex operator snippets ───────────────────────
@@ -3523,9 +3654,18 @@ sub helper { }
         let provider = CompletionProvider::new(&ast);
         let completions = provider.get_completions(code, 0);
         let labels: Vec<&str> = completions.iter().map(|c| c.label.as_str()).collect();
-        assert!(labels.contains(&"mregex"), "mregex snippet missing; got: {labels:?}");
-        assert!(labels.contains(&"ssubst"), "ssubst snippet missing; got: {labels:?}");
-        assert!(labels.contains(&"qrpat"), "qrpat snippet missing; got: {labels:?}");
+        assert!(
+            labels.contains(&"mregex"),
+            "mregex snippet missing; got: {labels:?}"
+        );
+        assert!(
+            labels.contains(&"ssubst"),
+            "ssubst snippet missing; got: {labels:?}"
+        );
+        assert!(
+            labels.contains(&"qrpat"),
+            "qrpat snippet missing; got: {labels:?}"
+        );
     }
 
     #[test]
@@ -3539,7 +3679,10 @@ sub helper { }
 
         let mregex = must_some(completions.iter().find(|c| c.label == "mregex"));
         let insert = mregex.insert_text.as_deref().unwrap_or_default();
-        assert!(insert.starts_with("m/"), "mregex body must start with m/; got: {insert:?}");
+        assert!(
+            insert.starts_with("m/"),
+            "mregex body must start with m/; got: {insert:?}"
+        );
 
         // Also verify ssubst and qrpat with explicit prefix lookup
         let code2 = "ssubst";
@@ -3549,7 +3692,10 @@ sub helper { }
         let completions2 = provider2.get_completions(code2, code2.len());
         let ssubst = must_some(completions2.iter().find(|c| c.label == "ssubst"));
         let insert2 = ssubst.insert_text.as_deref().unwrap_or_default();
-        assert!(insert2.starts_with("s/"), "ssubst body must start with s/; got: {insert2:?}");
+        assert!(
+            insert2.starts_with("s/"),
+            "ssubst body must start with s/; got: {insert2:?}"
+        );
 
         let code3 = "qrpat";
         let mut parser3 = Parser::new(code3);
@@ -3558,7 +3704,10 @@ sub helper { }
         let completions3 = provider3.get_completions(code3, code3.len());
         let qrpat = must_some(completions3.iter().find(|c| c.label == "qrpat"));
         let insert3 = qrpat.insert_text.as_deref().unwrap_or_default();
-        assert!(insert3.starts_with("qr/"), "qrpat body must start with qr/; got: {insert3:?}");
+        assert!(
+            insert3.starts_with("qr/"),
+            "qrpat body must start with qr/; got: {insert3:?}"
+        );
     }
 
     // ── Dash trigger character tests (#2865) ─────────────────────────────────
@@ -3590,7 +3739,9 @@ sub run {
         let completions = provider.get_completions(code, code.len());
         // Must find method completions from the workspace index
         assert!(
-            completions.iter().any(|c| c.label == "process" || c.label == "validate"),
+            completions
+                .iter()
+                .any(|c| c.label == "process" || c.label == "validate"),
             "dash trigger on `$self-` should produce method completions; got: {:?}",
             completions.iter().map(|c| &c.label).collect::<Vec<_>>()
         );
@@ -3598,7 +3749,9 @@ sub run {
         // "arrayref", "hashref" are snippets from the generic path; they should not
         // appear when the context is a method-call arrow.
         assert!(
-            !completions.iter().any(|c| c.label == "arrayref" || c.label == "hashref"),
+            !completions
+                .iter()
+                .any(|c| c.label == "arrayref" || c.label == "hashref"),
             "dash trigger on `$self-` must not return generic snippets; got: {:?}",
             completions.iter().map(|c| &c.label).collect::<Vec<_>>()
         );
@@ -3672,13 +3825,17 @@ sub run {
         let provider = CompletionProvider::new_with_index(&ast, Some(index));
         let completions = provider.get_completions(code, code.len());
         assert!(
-            completions.iter().any(|c| c.label == "get_data" || c.label == "new"),
+            completions
+                .iter()
+                .any(|c| c.label == "get_data" || c.label == "new"),
             "dash trigger on `$hash-` should produce completions; got: {:?}",
             completions.iter().map(|c| &c.label).collect::<Vec<_>>()
         );
         // Must not return generic snippet dump
         assert!(
-            !completions.iter().any(|c| c.label == "arrayref" || c.label == "hashref"),
+            !completions
+                .iter()
+                .any(|c| c.label == "arrayref" || c.label == "hashref"),
             "dash trigger on `$hash-` must not return generic snippets; got: {:?}",
             completions.iter().map(|c| &c.label).collect::<Vec<_>>()
         );
@@ -3744,7 +3901,10 @@ sub run {
                 .iter()
                 .any(|c| c.label == "host" && c.kind == CompletionItemKind::Property),
             "hashref deref `$ref->{{ho` must not produce Property-kinded 'host' completion; got: {:?}",
-            completions.iter().map(|c| (&c.label, &c.kind)).collect::<Vec<_>>()
+            completions
+                .iter()
+                .map(|c| (&c.label, &c.kind))
+                .collect::<Vec<_>>()
         );
     }
 
@@ -3761,7 +3921,10 @@ sub run {
                 .iter()
                 .any(|c| c.label == "host" && c.kind == CompletionItemKind::Property),
             "hash key completion must not fire inside a comment; got: {:?}",
-            completions.iter().map(|c| (&c.label, &c.kind)).collect::<Vec<_>>()
+            completions
+                .iter()
+                .map(|c| (&c.label, &c.kind))
+                .collect::<Vec<_>>()
         );
     }
 
@@ -3775,9 +3938,14 @@ sub run {
         let completions = provider.get_completions(code, code.len());
         // Keys from %other must not appear as completions for $config{}
         assert!(
-            !completions.iter().any(|c| c.label == "a" && c.kind == CompletionItemKind::Property),
+            !completions
+                .iter()
+                .any(|c| c.label == "a" && c.kind == CompletionItemKind::Property),
             "keys from %%other must not leak into %%config completions; got: {:?}",
-            completions.iter().map(|c| (&c.label, &c.kind)).collect::<Vec<_>>()
+            completions
+                .iter()
+                .map(|c| (&c.label, &c.kind))
+                .collect::<Vec<_>>()
         );
     }
 }

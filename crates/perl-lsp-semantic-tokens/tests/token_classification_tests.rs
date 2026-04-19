@@ -91,7 +91,10 @@ fn test_class_declaration_has_declaration_modifier() {
     let cls_tokens: Vec<_> = tokens.iter().filter(|t| t[3] == cls_idx).collect();
     assert!(!cls_tokens.is_empty(), "should have class token");
     let has_decl = cls_tokens.iter().any(|t| t[4] & 1 != 0);
-    assert!(has_decl, "class declaration should have declaration modifier (bit 0)");
+    assert!(
+        has_decl,
+        "class declaration should have declaration modifier (bit 0)"
+    );
 }
 
 // ===========================================================================
@@ -135,7 +138,10 @@ fn test_begin_block_produces_macro_token() {
     // depending on whether PhaseBlock has phase_span set. Check both.
     let kw_idx = type_idx("keyword");
     let has_macro_or_keyword = tokens.iter().any(|t| t[3] == macro_idx || t[3] == kw_idx);
-    assert!(has_macro_or_keyword, "BEGIN block should produce macro or keyword token");
+    assert!(
+        has_macro_or_keyword,
+        "BEGIN block should produce macro or keyword token"
+    );
 }
 
 #[test]
@@ -156,7 +162,10 @@ fn test_check_init_unitcheck_phase_blocks() {
         let macro_idx = type_idx("macro");
         let kw_idx = type_idx("keyword");
         let has_token = tokens.iter().any(|t| t[3] == macro_idx || t[3] == kw_idx);
-        assert!(has_token, "{phase} block should produce macro or keyword token");
+        assert!(
+            has_token,
+            "{phase} block should produce macro or keyword token"
+        );
     }
 }
 
@@ -175,7 +184,10 @@ fn test_named_sub_with_name_span_has_definition_modifier() {
     assert!(!fn_tokens.is_empty(), "should have function token");
     // Check that at least one function token has declaration modifier
     let has_decl = fn_tokens.iter().any(|t| t[4] & 1 != 0);
-    assert!(has_decl, "named sub should have declaration modifier (bit 0)");
+    assert!(
+        has_decl,
+        "named sub should have declaration modifier (bit 0)"
+    );
 }
 
 #[test]
@@ -209,7 +221,10 @@ fn test_modifier_declaration_is_bit_zero() {
     let var_idx = type_idx("variable");
     let var_tokens: Vec<_> = tokens.iter().filter(|t| t[3] == var_idx).collect();
     let has_bit_zero = var_tokens.iter().any(|t| t[4] & 1 != 0);
-    assert!(has_bit_zero, "my-declared variable should set bit 0 (declaration)");
+    assert!(
+        has_bit_zero,
+        "my-declared variable should set bit 0 (declaration)"
+    );
 }
 
 #[test]
@@ -220,7 +235,10 @@ fn test_modifier_readonly_is_bit_two() {
     let var_idx = type_idx("variable");
     let var_tokens: Vec<_> = tokens.iter().filter(|t| t[3] == var_idx).collect();
     let has_bit_two = var_tokens.iter().any(|t| t[4] & 4 != 0);
-    assert!(has_bit_two, "our-declared variable should set bit 2 (readonly)");
+    assert!(
+        has_bit_two,
+        "our-declared variable should set bit 2 (readonly)"
+    );
 }
 
 #[test]
@@ -231,7 +249,10 @@ fn test_our_variable_has_combined_declaration_readonly_mask() {
     let var_idx = type_idx("variable");
     let var_tokens: Vec<_> = tokens.iter().filter(|t| t[3] == var_idx).collect();
     let has_mask_5 = var_tokens.iter().any(|t| t[4] & 5 == 5);
-    assert!(has_mask_5, "our variable should have modifier bitmask with bits 0 and 2 set");
+    assert!(
+        has_mask_5,
+        "our variable should have modifier bitmask with bits 0 and 2 set"
+    );
 }
 
 #[test]
@@ -260,9 +281,15 @@ fn test_non_declared_variable_has_zero_modifiers() {
         let declaration_bit: u32 = 1;
         // No declaration bit; only the sigil modifier is expected
         let has_no_decl = var_tokens.iter().any(|t| (t[4] & declaration_bit) == 0);
-        assert!(has_no_decl, "undeclared variable should not have declaration modifier bit");
+        assert!(
+            has_no_decl,
+            "undeclared variable should not have declaration modifier bit"
+        );
         let has_scalar_mod = var_tokens.iter().any(|t| (t[4] & scalar_mod_bit) != 0);
-        assert!(has_scalar_mod, "undeclared $global should still have scalarVariable modifier");
+        assert!(
+            has_scalar_mod,
+            "undeclared $global should still have scalarVariable modifier"
+        );
     }
 }
 
@@ -296,7 +323,10 @@ fn test_package_has_declaration_modifier_only() {
     let ns_tokens: Vec<_> = tokens.iter().filter(|t| t[3] == ns_idx).collect();
     assert!(!ns_tokens.is_empty(), "should have namespace token");
     for t in &ns_tokens {
-        assert_eq!(t[4], 1, "package namespace should have modifier = 1 (declaration only)");
+        assert_eq!(
+            t[4], 1,
+            "package namespace should have modifier = 1 (declaration only)"
+        );
     }
 }
 
@@ -345,7 +375,11 @@ fn test_multiline_sub_body_produces_no_zero_length_tokens() {
     let code = "sub long_function {\n    my $a = 1;\n    my $b = 2;\n    return $a + $b;\n}";
     let tokens = tokens_for(code);
     for (i, t) in tokens.iter().enumerate() {
-        assert!(t[2] > 0, "token {i} should have positive length, got len={}", t[2]);
+        assert!(
+            t[2] > 0,
+            "token {i} should have positive length, got len={}",
+            t[2]
+        );
     }
 }
 
@@ -355,7 +389,10 @@ fn test_multiline_string_produces_no_zero_length_tokens() {
     let code = "my $s = <<'END';\nline1\nline2\nEND\nmy $x = 1;";
     let tokens = tokens_for(code);
     for (i, t) in tokens.iter().enumerate() {
-        assert!(t[2] > 0, "token {i} should have positive length in heredoc code");
+        assert!(
+            t[2] > 0,
+            "token {i} should have positive length in heredoc code"
+        );
     }
 }
 
@@ -430,7 +467,11 @@ fn test_delta_start_is_absolute_column_on_new_line() {
         if t[0] > 0 {
             // delta_start should be the absolute column on the new line
             // "my" starts at column 0
-            assert!(t[1] < 50, "delta_start on new line should be absolute column, got {}", t[1]);
+            assert!(
+                t[1] < 50,
+                "delta_start on new line should be absolute column, got {}",
+                t[1]
+            );
             break;
         }
     }
@@ -446,7 +487,11 @@ fn test_reconstructed_positions_match_source_locations() {
     // All positions should be within bounds of the source
     for (i, (line, col)) in positions.iter().enumerate() {
         assert!(*line <= 2, "token {i} line {} exceeds source lines", line);
-        assert!(*col < 20, "token {i} col {} seems too large for this code", col);
+        assert!(
+            *col < 20,
+            "token {i} col {} seems too large for this code",
+            col
+        );
     }
 }
 
@@ -600,7 +645,10 @@ fn test_scientific_notation_classified() {
     let tokens = tokens_for(code);
     let num_idx = type_idx("number");
     let has_number = tokens.iter().any(|t| t[3] == num_idx);
-    assert!(has_number, "scientific notation should be classified as number");
+    assert!(
+        has_number,
+        "scientific notation should be classified as number"
+    );
 }
 
 #[test]
@@ -634,7 +682,10 @@ fn test_string_comparison_operators_classified() {
         let tokens = tokens_for(&code);
         let op_idx = type_idx("operator");
         let has_op = tokens.iter().any(|t| t[3] == op_idx);
-        assert!(has_op, "string comparison '{op}' should be classified as operator");
+        assert!(
+            has_op,
+            "string comparison '{op}' should be classified as operator"
+        );
     }
 }
 
@@ -659,7 +710,10 @@ fn test_substitution_with_flags_classified() {
     let tokens = tokens_for(code);
     let re_idx = type_idx("regexp");
     let has_re = tokens.iter().any(|t| t[3] == re_idx);
-    assert!(has_re, "substitution with flags should produce regexp token");
+    assert!(
+        has_re,
+        "substitution with flags should produce regexp token"
+    );
 }
 
 #[test]
@@ -685,7 +739,10 @@ fn test_eval_not_classified_as_function_call() {
     // eval should be keyword, not function
     let fn_count = tokens.iter().filter(|t| t[3] == fn_idx).count();
     let kw_count = tokens.iter().filter(|t| t[3] == kw_idx).count();
-    assert!(kw_count >= fn_count, "eval should appear as keyword rather than function");
+    assert!(
+        kw_count >= fn_count,
+        "eval should appear as keyword rather than function"
+    );
 }
 
 #[test]
@@ -721,7 +778,14 @@ fn test_complex_code_all_token_types_present() {
     let types_present: std::collections::HashSet<u32> = tokens.iter().map(|t| t[3]).collect();
 
     // Should have at least these types
-    for expected_type in &["namespace", "keyword", "variable", "number", "string", "regexp"] {
+    for expected_type in &[
+        "namespace",
+        "keyword",
+        "variable",
+        "number",
+        "string",
+        "regexp",
+    ] {
         let idx = leg.map.get(*expected_type).copied().unwrap_or(u32::MAX);
         assert!(
             types_present.contains(&idx),
@@ -737,7 +801,11 @@ fn test_all_token_indices_valid_for_complex_code() {
     let leg = legend();
     let max_idx = leg.token_types.len() as u32;
     for (i, t) in tokens.iter().enumerate() {
-        assert!(t[3] < max_idx, "token {i} has type index {} but legend max is {max_idx}", t[3]);
+        assert!(
+            t[3] < max_idx,
+            "token {i} has type index {} but legend max is {max_idx}",
+            t[3]
+        );
     }
 }
 
@@ -766,7 +834,10 @@ fn test_indented_code_correct_column_offsets() {
     if !tokens.is_empty() {
         let positions = absolute_positions(&tokens);
         // First token ("my") should be at column 4
-        assert_eq!(positions[0].1, 4, "first token in indented code should be at column 4");
+        assert_eq!(
+            positions[0].1, 4,
+            "first token in indented code should be at column 4"
+        );
     }
 }
 
@@ -789,7 +860,11 @@ fn test_token_length_matches_source_text_for_numbers() {
     let num_idx = type_idx("number");
     let num_tokens: Vec<_> = tokens.iter().filter(|t| t[3] == num_idx).collect();
     if !num_tokens.is_empty() {
-        assert_eq!(num_tokens[0][2], 5, "'12345' should have length 5, got {}", num_tokens[0][2]);
+        assert_eq!(
+            num_tokens[0][2], 5,
+            "'12345' should have length 5, got {}",
+            num_tokens[0][2]
+        );
     }
 }
 
@@ -802,7 +877,10 @@ fn test_legend_type_indices_are_sequential_from_zero() {
     let leg = legend();
     for (i, ty) in leg.token_types.iter().enumerate() {
         let idx = leg.map.get(ty).copied().unwrap_or(u32::MAX);
-        assert_eq!(idx, i as u32, "legend index for '{ty}' should be {i}, got {idx}");
+        assert_eq!(
+            idx, i as u32,
+            "legend index for '{ty}' should be {i}, got {idx}"
+        );
     }
 }
 
@@ -879,7 +957,10 @@ fn test_tokenization_is_deterministic() {
     let code = "package Foo;\nsub bar { my $x = 1; return $x; }";
     let results: Vec<Vec<EncodedToken>> = (0..5).map(|_| tokens_for(code)).collect();
     for i in 1..results.len() {
-        assert_eq!(results[0], results[i], "tokenization run {i} differs from run 0");
+        assert_eq!(
+            results[0], results[i],
+            "tokenization run {i} differs from run 0"
+        );
     }
 }
 
@@ -893,7 +974,10 @@ fn test_empty_sub_body() {
     let tokens = tokens_for(code);
     let fn_idx = type_idx("function");
     let has_fn = tokens.iter().any(|t| t[3] == fn_idx);
-    assert!(has_fn, "empty sub should still produce function token for name");
+    assert!(
+        has_fn,
+        "empty sub should still produce function token for name"
+    );
 }
 
 #[test]
@@ -931,15 +1015,24 @@ fn test_multiline_sub_tokens_span_correct_lines() {
 
     // Verify tokens exist on lines 1 and 2 (inside the sub body)
     let lines: std::collections::HashSet<u32> = positions.iter().map(|(l, _)| *l).collect();
-    assert!(lines.contains(&1), "should have tokens on line 1 (my $name = shift)");
-    assert!(lines.contains(&2), "should have tokens on line 2 (print $name)");
+    assert!(
+        lines.contains(&1),
+        "should have tokens on line 1 (my $name = shift)"
+    );
+    assert!(
+        lines.contains(&2),
+        "should have tokens on line 2 (print $name)"
+    );
 }
 
 #[test]
 fn test_labeled_statement_does_not_crash() {
     let code = "OUTER: for my $i (1..10) { next OUTER; }";
     let tokens = tokens_for(code);
-    assert!(!tokens.is_empty(), "labeled statement should produce tokens");
+    assert!(
+        !tokens.is_empty(),
+        "labeled statement should produce tokens"
+    );
 }
 
 #[test]
@@ -965,7 +1058,10 @@ fn test_tokens_of_type_helper_returns_correct_type() {
     let matches = tokens_of_type("my $x = 42;", "keyword");
     for (_, _, t) in &matches {
         let kw_idx = type_idx("keyword");
-        assert_eq!(t[3], kw_idx, "tokens_of_type should only return keyword tokens");
+        assert_eq!(
+            t[3], kw_idx,
+            "tokens_of_type should only return keyword tokens"
+        );
     }
 }
 
@@ -992,7 +1088,10 @@ fn test_dbi_prepare_with_sql_string_is_sql_token() {
     let sql_idx = type_idx("sql_string");
 
     let has_sql_token = tokens.iter().any(|t| t[3] == sql_idx);
-    assert!(has_sql_token, "prepare() first argument should be sql_string token");
+    assert!(
+        has_sql_token,
+        "prepare() first argument should be sql_string token"
+    );
 }
 
 #[test]
@@ -1002,7 +1101,10 @@ fn test_dbi_do_with_sql_string_is_sql_token() {
     let sql_idx = type_idx("sql_string");
 
     let has_sql_token = tokens.iter().any(|t| t[3] == sql_idx);
-    assert!(has_sql_token, "do() first argument should be sql_string token");
+    assert!(
+        has_sql_token,
+        "do() first argument should be sql_string token"
+    );
 }
 
 #[test]
@@ -1012,7 +1114,10 @@ fn test_dbi_query_with_sql_string_is_sql_token() {
     let sql_idx = type_idx("sql_string");
 
     let has_sql_token = tokens.iter().any(|t| t[3] == sql_idx);
-    assert!(has_sql_token, "query() first argument should be sql_string token");
+    assert!(
+        has_sql_token,
+        "query() first argument should be sql_string token"
+    );
 }
 
 #[test]
@@ -1022,7 +1127,10 @@ fn test_dbi_selectrow_arrayref_with_sql_string() {
     let sql_idx = type_idx("sql_string");
 
     let has_sql_token = tokens.iter().any(|t| t[3] == sql_idx);
-    assert!(has_sql_token, "selectrow_arrayref() first argument should be sql_string token");
+    assert!(
+        has_sql_token,
+        "selectrow_arrayref() first argument should be sql_string token"
+    );
 }
 
 #[test]
@@ -1032,7 +1140,10 @@ fn test_dbi_selectall_arrayref_with_sql_string() {
     let sql_idx = type_idx("sql_string");
 
     let has_sql_token = tokens.iter().any(|t| t[3] == sql_idx);
-    assert!(has_sql_token, "selectall_arrayref() first argument should be sql_string token");
+    assert!(
+        has_sql_token,
+        "selectall_arrayref() first argument should be sql_string token"
+    );
 }
 
 #[test]
@@ -1042,7 +1153,10 @@ fn test_non_sql_method_call_string_not_sql_token() {
     let sql_idx = type_idx("sql_string");
 
     let has_sql_token = tokens.iter().any(|t| t[3] == sql_idx);
-    assert!(!has_sql_token, "non-SQL method calls should not classify strings as sql_string");
+    assert!(
+        !has_sql_token,
+        "non-SQL method calls should not classify strings as sql_string"
+    );
 }
 
 #[test]
@@ -1052,7 +1166,10 @@ fn test_regular_string_literal_not_sql_token() {
     let sql_idx = type_idx("sql_string");
 
     let has_sql_token = tokens.iter().any(|t| t[3] == sql_idx);
-    assert!(!has_sql_token, "standalone string literals should not be sql_string tokens");
+    assert!(
+        !has_sql_token,
+        "standalone string literals should not be sql_string tokens"
+    );
 }
 
 #[test]
@@ -1062,7 +1179,10 @@ fn test_dbi_prepare_with_interpolated_string_still_sql_token() {
     let sql_idx = type_idx("sql_string");
 
     let has_sql_token = tokens.iter().any(|t| t[3] == sql_idx);
-    assert!(has_sql_token, "interpolated SQL strings should still be sql_string tokens");
+    assert!(
+        has_sql_token,
+        "interpolated SQL strings should still be sql_string tokens"
+    );
 }
 
 #[test]
@@ -1072,7 +1192,10 @@ fn test_dbi_do_multiple_arguments_first_is_sql() {
     let sql_idx = type_idx("sql_string");
 
     let has_sql_token = tokens.iter().any(|t| t[3] == sql_idx);
-    assert!(has_sql_token, "first argument of do() with multiple args should be sql_string");
+    assert!(
+        has_sql_token,
+        "first argument of do() with multiple args should be sql_string"
+    );
 }
 
 #[test]
@@ -1088,7 +1211,10 @@ fn test_nested_dbi_call_in_complex_expression() {
     let sql_idx = type_idx("sql_string");
 
     let has_sql_token = tokens.iter().any(|t| t[3] == sql_idx);
-    assert!(has_sql_token, "SQL string in complex nested call should be sql_string token");
+    assert!(
+        has_sql_token,
+        "SQL string in complex nested call should be sql_string token"
+    );
 }
 
 #[test]
@@ -1099,7 +1225,10 @@ fn test_dbi_prepare_still_produces_method_token_for_method_name() {
     let tokens = tokens_for(code);
     let meth_idx = type_idx("method");
     let has_method = tokens.iter().any(|t| t[3] == meth_idx);
-    assert!(has_method, "method name 'prepare' should still produce a method token");
+    assert!(
+        has_method,
+        "method name 'prepare' should still produce a method token"
+    );
 }
 
 #[test]
@@ -1109,7 +1238,10 @@ fn test_non_sql_method_call_still_produces_method_token() {
     let tokens = tokens_for(code);
     let meth_idx = type_idx("method");
     let has_method = tokens.iter().any(|t| t[3] == meth_idx);
-    assert!(has_method, "non-SQL method call should still produce a method token");
+    assert!(
+        has_method,
+        "non-SQL method call should still produce a method token"
+    );
 }
 
 // ===========================================================================
@@ -1138,13 +1270,18 @@ fn test_special_variable_dollar_underscore_has_default_library_modifier() {
     let code = "sub f { return $_; }";
     let tokens = tokens_for(code);
     let var_idx = type_idx("variable");
-    let special_tokens: Vec<_> =
-        tokens.iter().filter(|t| t[3] == var_idx && has_default_library_modifier(t)).collect();
+    let special_tokens: Vec<_> = tokens
+        .iter()
+        .filter(|t| t[3] == var_idx && has_default_library_modifier(t))
+        .collect();
     assert!(
         !special_tokens.is_empty(),
         "$_ should produce a variable token with defaultLibrary modifier (bit 9 = 512), \
          got variable tokens: {:?}",
-        tokens.iter().filter(|t| t[3] == var_idx).collect::<Vec<_>>()
+        tokens
+            .iter()
+            .filter(|t| t[3] == var_idx)
+            .collect::<Vec<_>>()
     );
 }
 
@@ -1154,13 +1291,18 @@ fn test_special_variable_at_underscore_has_default_library_modifier() {
     let code = "sub f { my @a = @_; }";
     let tokens = tokens_for(code);
     let var_idx = type_idx("variable");
-    let special_tokens: Vec<_> =
-        tokens.iter().filter(|t| t[3] == var_idx && has_default_library_modifier(t)).collect();
+    let special_tokens: Vec<_> = tokens
+        .iter()
+        .filter(|t| t[3] == var_idx && has_default_library_modifier(t))
+        .collect();
     assert!(
         !special_tokens.is_empty(),
         "@_ should produce at least one variable token with defaultLibrary modifier, \
         got variable tokens: {:?}",
-        tokens.iter().filter(|t| t[3] == var_idx).collect::<Vec<_>>()
+        tokens
+            .iter()
+            .filter(|t| t[3] == var_idx)
+            .collect::<Vec<_>>()
     );
 }
 
@@ -1185,7 +1327,10 @@ fn test_internal_pl_sv_variables_have_default_library_modifier() {
         assert!(
             token.is_some(),
             "{needle} should produce a variable token with defaultLibrary modifier, got: {:?}",
-            tokens.iter().filter(|t| t[3] == var_idx).collect::<Vec<_>>()
+            tokens
+                .iter()
+                .filter(|t| t[3] == var_idx)
+                .collect::<Vec<_>>()
         );
     }
 }
@@ -1196,8 +1341,10 @@ fn test_regular_variable_does_not_have_default_library_modifier() {
     let code = "my $user_var = 42;";
     let tokens = tokens_for(code);
     let var_idx = type_idx("variable");
-    let with_default_lib: Vec<_> =
-        tokens.iter().filter(|t| t[3] == var_idx && has_default_library_modifier(t)).collect();
+    let with_default_lib: Vec<_> = tokens
+        .iter()
+        .filter(|t| t[3] == var_idx && has_default_library_modifier(t))
+        .collect();
     assert!(
         with_default_lib.is_empty(),
         "user-defined $user_var should NOT have defaultLibrary modifier, got: {:?}",
@@ -1212,13 +1359,18 @@ fn test_special_variable_env_hash_has_default_library_modifier() {
     let code = "sub f { my $h = $ENV{HOME}; }";
     let tokens = tokens_for(code);
     let var_idx = type_idx("variable");
-    let special_tokens: Vec<_> =
-        tokens.iter().filter(|t| t[3] == var_idx && has_default_library_modifier(t)).collect();
+    let special_tokens: Vec<_> = tokens
+        .iter()
+        .filter(|t| t[3] == var_idx && has_default_library_modifier(t))
+        .collect();
     assert!(
         !special_tokens.is_empty(),
         "$ENV{{...}} access should produce a variable token with defaultLibrary modifier, \
          got variable tokens: {:?}",
-        tokens.iter().filter(|t| t[3] == var_idx).collect::<Vec<_>>()
+        tokens
+            .iter()
+            .filter(|t| t[3] == var_idx)
+            .collect::<Vec<_>>()
     );
 }
 
@@ -1228,13 +1380,18 @@ fn test_special_variable_argv_has_default_library_modifier() {
     let code = "sub main { my @args = @ARGV; }";
     let tokens = tokens_for(code);
     let var_idx = type_idx("variable");
-    let special_tokens: Vec<_> =
-        tokens.iter().filter(|t| t[3] == var_idx && has_default_library_modifier(t)).collect();
+    let special_tokens: Vec<_> = tokens
+        .iter()
+        .filter(|t| t[3] == var_idx && has_default_library_modifier(t))
+        .collect();
     assert!(
         !special_tokens.is_empty(),
         "@ARGV should produce a variable token with defaultLibrary modifier, \
          got variable tokens: {:?}",
-        tokens.iter().filter(|t| t[3] == var_idx).collect::<Vec<_>>()
+        tokens
+            .iter()
+            .filter(|t| t[3] == var_idx)
+            .collect::<Vec<_>>()
     );
 }
 
@@ -1244,13 +1401,18 @@ fn test_special_variable_dollar_question_has_default_library_modifier() {
     let code = "sub f { system('ls'); return $?; }";
     let tokens = tokens_for(code);
     let var_idx = type_idx("variable");
-    let special_tokens: Vec<_> =
-        tokens.iter().filter(|t| t[3] == var_idx && has_default_library_modifier(t)).collect();
+    let special_tokens: Vec<_> = tokens
+        .iter()
+        .filter(|t| t[3] == var_idx && has_default_library_modifier(t))
+        .collect();
     assert!(
         !special_tokens.is_empty(),
         "$? should produce a variable token with defaultLibrary modifier, \
          got variable tokens: {:?}",
-        tokens.iter().filter(|t| t[3] == var_idx).collect::<Vec<_>>()
+        tokens
+            .iter()
+            .filter(|t| t[3] == var_idx)
+            .collect::<Vec<_>>()
     );
 }
 
@@ -1261,8 +1423,10 @@ fn test_two_special_variables_in_same_expression_both_get_modifier() {
     let code = "sub f { eval { die 'boom' }; return $@ || $!; }";
     let tokens = tokens_for(code);
     let var_idx = type_idx("variable");
-    let special_count =
-        tokens.iter().filter(|t| t[3] == var_idx && has_default_library_modifier(t)).count();
+    let special_count = tokens
+        .iter()
+        .filter(|t| t[3] == var_idx && has_default_library_modifier(t))
+        .count();
     assert!(
         special_count >= 2,
         "Both $@ and $! should receive defaultLibrary modifier; \
@@ -1391,5 +1555,8 @@ fn indented_heredoc_sql_tag_is_recognized() {
     // <<~SQL (indented heredoc) should trigger SQL injection.
     let code = "my $s = <<~SQL;\n    SELECT 1\n    SQL\n";
     let result = tokens_of_type(code, "sql_heredoc_keyword");
-    assert!(!result.is_empty(), "Indented <<~SQL tag should produce sql_heredoc_keyword tokens");
+    assert!(
+        !result.is_empty(),
+        "Indented <<~SQL tag should produce sql_heredoc_keyword tokens"
+    );
 }

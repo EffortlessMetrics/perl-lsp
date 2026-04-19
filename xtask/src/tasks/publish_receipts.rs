@@ -12,8 +12,13 @@ use std::process::Command;
 
 use crate::utils::project_root;
 
-const RECEIPT_FILES: [&str; 5] =
-    ["test-output.txt", "test-summary.json", "rustdoc.log", "doc-summary.json", "state.json"];
+const RECEIPT_FILES: [&str; 5] = [
+    "test-output.txt",
+    "test-summary.json",
+    "rustdoc.log",
+    "doc-summary.json",
+    "state.json",
+];
 
 pub fn run(date: Option<String>) -> Result<()> {
     let date = date.unwrap_or_else(|| Utc::now().format("%Y-%m-%d").to_string());
@@ -58,7 +63,12 @@ pub fn run(date: Option<String>) -> Result<()> {
                 println!("⚠️  Missing artifact file: {}", source.display());
             }
             Err(err) => {
-                bail!("failed to copy {} to {}: {}", source.display(), target.display(), err);
+                bail!(
+                    "failed to copy {} to {}: {}",
+                    source.display(),
+                    target.display(),
+                    err
+                );
             }
         }
     }
@@ -85,8 +95,12 @@ pub fn run(date: Option<String>) -> Result<()> {
         copied = copied,
     );
 
-    fs::write(destination.join("README.md"), readme)
-        .with_context(|| format!("Failed to write {}", destination.join("README.md").display()))?;
+    fs::write(destination.join("README.md"), readme).with_context(|| {
+        format!(
+            "Failed to write {}",
+            destination.join("README.md").display()
+        )
+    })?;
 
     println!("Receipt bundle ready: {}", destination.display());
     Ok(())
@@ -106,7 +120,10 @@ fn command_receipts() -> Command {
 
 fn run_and_log(stage: &str, root: &Path, command: &mut Command, log_path: &Path) -> Result<String> {
     let output = command.current_dir(root).output().with_context(|| {
-        format!("Failed to execute {stage} command in {}", root.join(".").display())
+        format!(
+            "Failed to execute {stage} command in {}",
+            root.join(".").display()
+        )
     })?;
 
     let combined = format!(
@@ -137,7 +154,11 @@ fn command_output_or_unknown(root: &Path, args: &[&str], fallback: &str) -> Stri
     match command.output() {
         Ok(output) => {
             let value = String::from_utf8_lossy(&output.stdout).trim().to_string();
-            if value.is_empty() { fallback.to_string() } else { value }
+            if value.is_empty() {
+                fallback.to_string()
+            } else {
+                value
+            }
         }
         Err(_) => fallback.to_string(),
     }

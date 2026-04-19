@@ -114,7 +114,17 @@ fn scenario_workspace_analysis_aggregates_unreachable_and_dead_branch() -> Resul
     // Then both behavior classes are represented in the result summary
     assert!(analysis.stats.unreachable_statements >= 1);
     assert!(analysis.stats.dead_branches >= 1);
-    assert!(analysis.dead_code.iter().any(|item| item.code_type == DeadCodeType::UnreachableCode));
-    assert!(analysis.dead_code.iter().any(|item| item.code_type == DeadCodeType::DeadBranch));
+    assert!(
+        analysis
+            .dead_code
+            .iter()
+            .any(|item| item.code_type == DeadCodeType::UnreachableCode)
+    );
+    assert!(
+        analysis
+            .dead_code
+            .iter()
+            .any(|item| item.code_type == DeadCodeType::DeadBranch)
+    );
     Ok(())
 }

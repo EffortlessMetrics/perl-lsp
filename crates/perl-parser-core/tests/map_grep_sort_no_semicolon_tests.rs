@@ -5,7 +5,10 @@ fn parse_ok(src: &str) {
     let mut parser = Parser::new(src);
     let ast = must(parser.parse());
     let sexp = ast.to_sexp();
-    assert!(!sexp.contains("ERROR"), "parse should succeed without errors for: {src}\ngot: {sexp}");
+    assert!(
+        !sexp.contains("ERROR"),
+        "parse should succeed without errors for: {src}\ngot: {sexp}"
+    );
 }
 
 #[test]

@@ -44,7 +44,10 @@ pub struct CallHierarchyProvider {
 
 impl CallHierarchyProvider {
     fn extract_qualified_call_name(&self, node: &Node) -> Option<String> {
-        let snippet = self.source.get(node.location.start..node.location.end)?.trim();
+        let snippet = self
+            .source
+            .get(node.location.start..node.location.end)?
+            .trim();
         let callee = snippet.split('(').next()?.trim();
         callee.contains("::").then(|| callee.to_string())
     }
@@ -54,7 +57,11 @@ impl CallHierarchyProvider {
     }
 
     fn node_variable_name(node: &Node) -> Option<&str> {
-        if let NodeKind::Variable { name, .. } = &node.kind { Some(name.as_str()) } else { None }
+        if let NodeKind::Variable { name, .. } = &node.kind {
+            Some(name.as_str())
+        } else {
+            None
+        }
     }
 
     fn current_package_for_function(
@@ -66,19 +73,23 @@ impl CallHierarchyProvider {
             .clone()
             .or_else(|| {
                 item.qualified_name.as_deref().and_then(|qualified| {
-                    qualified.rsplit_once("::").map(|(package_name, _)| package_name.to_string())
+                    qualified
+                        .rsplit_once("::")
+                        .map(|(package_name, _)| package_name.to_string())
                 })
             })
             .or_else(|| {
-                self.source.get(..func_node.location.start).and_then(|prefix| {
-                    prefix.lines().rev().find_map(|line| {
-                        let line = line.trim();
-                        line.strip_prefix("package ")
-                            .map(|rest| rest.trim_end_matches(';').trim())
-                            .filter(|package_name| !package_name.is_empty())
-                            .map(|package_name| package_name.to_string())
+                self.source
+                    .get(..func_node.location.start)
+                    .and_then(|prefix| {
+                        prefix.lines().rev().find_map(|line| {
+                            let line = line.trim();
+                            line.strip_prefix("package ")
+                                .map(|rest| rest.trim_end_matches(';').trim())
+                                .filter(|package_name| !package_name.is_empty())
+                                .map(|package_name| package_name.to_string())
+                        })
                     })
-                })
             })
     }
 
@@ -115,9 +126,9 @@ impl CallHierarchyProvider {
             NodeKind::MethodCall { method, object, .. } if method == "new" => {
                 self.infer_receiver_package(object, current_package, receiver_packages)
             }
-            NodeKind::FunctionCall { name, .. } => {
-                name.rsplit_once("::").map(|(package_name, _)| package_name.to_string())
-            }
+            NodeKind::FunctionCall { name, .. } => name
+                .rsplit_once("::")
+                .map(|(package_name, _)| package_name.to_string()),
             _ => None,
         }
     }
@@ -164,9 +175,17 @@ impl CallHierarchyProvider {
     /// ```
     pub fn new(source: String, uri: String) -> Self {
         // Validate that URI is well-formed (basic security check)
-        let uri = if uri.is_empty() { "file:///unknown".to_string() } else { uri };
+        let uri = if uri.is_empty() {
+            "file:///unknown".to_string()
+        } else {
+            uri
+        };
         let position_mapper = PositionMapper::new(&source);
-        Self { source, uri, position_mapper }
+        Self {
+            source,
+            uri,
+            position_mapper,
+        }
     }
 
     /// Prepare call hierarchy - find items at a given position
@@ -217,7 +236,13 @@ impl CallHierarchyProvider {
         if offset >= node.location.start && offset <= node.location.end {
             let uri = &self.uri;
             match &node.kind {
-                NodeKind::Subroutine { name, prototype: _, signature, name_span, .. } => {
+                NodeKind::Subroutine {
+                    name,
+                    prototype: _,
+                    signature,
+                    name_span,
+                    ..
+                } => {
                     if let Some(name_str) = name {
                         if let Some(span) = name_span {
                             if offset >= span.start && offset <= span.end {
@@ -312,7 +337,9 @@ impl CallHierarchyProvider {
     ) {
         let uri = &self.uri;
         match &node.kind {
-            NodeKind::Subroutine { name, name_span, .. } => {
+            NodeKind::Subroutine {
+                name, name_span, ..
+            } => {
                 if let Some(name_str) = name {
                     let range = self.node_to_range(node);
                     let selection_range = self.selection_range_from_name_span(name_span, &range);
@@ -410,12 +437,16 @@ impl CallHierarchyProvider {
 
                 // Check if we already have a call to this function
                 let item_key = Self::outgoing_call_key(&item);
-                if let Some(existing) =
-                    calls.iter_mut().find(|c| Self::outgoing_call_key(&c.to) == item_key)
+                if let Some(existing) = calls
+                    .iter_mut()
+                    .find(|c| Self::outgoing_call_key(&c.to) == item_key)
                 {
                     existing.from_ranges.extend(ranges);
                 } else {
-                    calls.push(CallHierarchyOutgoingCall { to: item, from_ranges: ranges });
+                    calls.push(CallHierarchyOutgoingCall {
+                        to: item,
+                        from_ranges: ranges,
+                    });
                 }
             }
             NodeKind::MethodCall { method, object, .. } => {
@@ -427,8 +458,9 @@ impl CallHierarchyProvider {
 
                 let package_name =
                     self.infer_receiver_package(object, current_package, receiver_packages);
-                let qualified_name =
-                    package_name.as_ref().map(|package_name| format!("{package_name}::{method}"));
+                let qualified_name = package_name
+                    .as_ref()
+                    .map(|package_name| format!("{package_name}::{method}"));
 
                 let item = CallHierarchyItem {
                     name: method.clone(),
@@ -444,15 +476,23 @@ impl CallHierarchyProvider {
                 let ranges = vec![self.node_to_range(node)];
 
                 let item_key = Self::outgoing_call_key(&item);
-                if let Some(existing) =
-                    calls.iter_mut().find(|c| Self::outgoing_call_key(&c.to) == item_key)
+                if let Some(existing) = calls
+                    .iter_mut()
+                    .find(|c| Self::outgoing_call_key(&c.to) == item_key)
                 {
                     existing.from_ranges.extend(ranges);
                 } else {
-                    calls.push(CallHierarchyOutgoingCall { to: item, from_ranges: ranges });
+                    calls.push(CallHierarchyOutgoingCall {
+                        to: item,
+                        from_ranges: ranges,
+                    });
                 }
             }
-            NodeKind::VariableDeclaration { variable, initializer, .. } => {
+            NodeKind::VariableDeclaration {
+                variable,
+                initializer,
+                ..
+            } => {
                 if let Some(initializer) = initializer {
                     self.record_receiver_assignment(
                         variable,
@@ -479,7 +519,12 @@ impl CallHierarchyProvider {
     /// `CallHierarchyItem` pointing at it.  Returns `None` if not found.
     pub fn find_definition(&self, name: &str, ast: &Node) -> Option<CallHierarchyItem> {
         let func_node = self.find_function_by_name(ast, name)?;
-        if let NodeKind::Subroutine { name: func_name, name_span, signature, .. } = &func_node.kind
+        if let NodeKind::Subroutine {
+            name: func_name,
+            name_span,
+            signature,
+            ..
+        } = &func_node.kind
         {
             let range = self.node_to_range(func_node);
             let selection_range = self.selection_range_from_name_span(name_span, &range);
@@ -535,7 +580,12 @@ impl CallHierarchyProvider {
                     return Some(result);
                 }
             }
-            NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
+            NodeKind::If {
+                condition,
+                then_branch,
+                elsif_branches,
+                else_branch,
+            } => {
                 if let Some(result) = f(condition) {
                     return Some(result);
                 }
@@ -556,7 +606,9 @@ impl CallHierarchyProvider {
                     }
                 }
             }
-            NodeKind::While { condition, body, .. } => {
+            NodeKind::While {
+                condition, body, ..
+            } => {
                 if let Some(result) = f(condition) {
                     return Some(result);
                 }
@@ -564,7 +616,13 @@ impl CallHierarchyProvider {
                     return Some(result);
                 }
             }
-            NodeKind::For { init, condition, update, body, .. } => {
+            NodeKind::For {
+                init,
+                condition,
+                update,
+                body,
+                ..
+            } => {
                 if let Some(init_node) = init {
                     if let Some(result) = f(init_node) {
                         return Some(result);
@@ -584,7 +642,12 @@ impl CallHierarchyProvider {
                     return Some(result);
                 }
             }
-            NodeKind::Foreach { variable, list, body, continue_block: _ } => {
+            NodeKind::Foreach {
+                variable,
+                list,
+                body,
+                continue_block: _,
+            } => {
                 if let Some(result) = f(variable) {
                     return Some(result);
                 }
@@ -595,7 +658,9 @@ impl CallHierarchyProvider {
                     return Some(result);
                 }
             }
-            NodeKind::Subroutine { signature, body, .. } => {
+            NodeKind::Subroutine {
+                signature, body, ..
+            } => {
                 if let Some(sig) = signature {
                     if let NodeKind::Signature { parameters } = &sig.kind {
                         for param in parameters {
@@ -671,7 +736,11 @@ impl CallHierarchyProvider {
                     }
                 }
             }
-            NodeKind::VariableDeclaration { variable, initializer, .. } => {
+            NodeKind::VariableDeclaration {
+                variable,
+                initializer,
+                ..
+            } => {
                 if let Some(result) = f(variable) {
                     return Some(result);
                 }
@@ -696,13 +765,18 @@ impl CallHierarchyProvider {
     /// Convert byte offset to line/character position using PositionMapper for UTF-16 compliance
     fn offset_to_position(&self, offset: usize) -> Position {
         let pos = self.position_mapper.byte_to_lsp_pos(offset);
-        Position { line: pos.line, character: pos.character }
+        Position {
+            line: pos.line,
+            character: pos.character,
+        }
     }
 
     /// Convert line/character position to byte offset using PositionMapper for UTF-16 compliance
     fn position_to_offset(&self, line: u32, character: u32) -> usize {
         let pos = WirePosition { line, character };
-        self.position_mapper.lsp_pos_to_byte(pos).unwrap_or(self.source.len())
+        self.position_mapper
+            .lsp_pos_to_byte(pos)
+            .unwrap_or(self.source.len())
     }
 
     /// Compute selection range from an optional name_span, falling back to full range
@@ -910,12 +984,24 @@ sub target_func {
                 kind: "function".to_string(),
                 uri: "file:///test.pl".to_string(),
                 range: Range {
-                    start: Position { line: 10, character: 0 },
-                    end: Position { line: 12, character: 1 },
+                    start: Position {
+                        line: 10,
+                        character: 0,
+                    },
+                    end: Position {
+                        line: 12,
+                        character: 1,
+                    },
                 },
                 selection_range: Range {
-                    start: Position { line: 10, character: 4 },
-                    end: Position { line: 10, character: 15 },
+                    start: Position {
+                        line: 10,
+                        character: 4,
+                    },
+                    end: Position {
+                        line: 10,
+                        character: 15,
+                    },
                 },
                 detail: None,
                 package_name: None,
@@ -963,12 +1049,24 @@ sub helper {
                 kind: "function".to_string(),
                 uri: "file:///test.pl".to_string(),
                 range: Range {
-                    start: Position { line: 1, character: 0 },
-                    end: Position { line: 5, character: 1 },
+                    start: Position {
+                        line: 1,
+                        character: 0,
+                    },
+                    end: Position {
+                        line: 5,
+                        character: 1,
+                    },
                 },
                 selection_range: Range {
-                    start: Position { line: 1, character: 4 },
-                    end: Position { line: 1, character: 8 },
+                    start: Position {
+                        line: 1,
+                        character: 4,
+                    },
+                    end: Position {
+                        line: 1,
+                        character: 8,
+                    },
                 },
                 detail: None,
                 package_name: None,

@@ -14,7 +14,10 @@ fn test_benchmark_saves_output() -> Result<()> {
     )?;
     let benches_dir = temp_dir.path().join("benches");
     fs::create_dir(&benches_dir)?;
-    fs::write(benches_dir.join("dummy.rs"), "fn main() { println!(\"dummy bench ran\"); }")?;
+    fs::write(
+        benches_dir.join("dummy.rs"),
+        "fn main() { println!(\"dummy bench ran\"); }",
+    )?;
 
     // Path where benchmark results should be written
     let output_path = temp_dir.path().join("bench_output.txt");

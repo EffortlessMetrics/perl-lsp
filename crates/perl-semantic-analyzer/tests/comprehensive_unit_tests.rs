@@ -39,7 +39,10 @@ fn scope_issues(code: &str) -> Vec<ScopeIssue> {
 }
 
 fn has_symbol(table: &SymbolTable, name: &str, kind: SymbolKind) -> bool {
-    table.symbols.get(name).is_some_and(|syms| syms.iter().any(|s| s.kind == kind))
+    table
+        .symbols
+        .get(name)
+        .is_some_and(|syms| syms.iter().any(|s| s.kind == kind))
 }
 
 // ===========================================================================
@@ -97,7 +100,10 @@ sub gamma { 3 }
 "#;
     let table = parse_and_extract(code);
     for name in ["alpha", "beta", "gamma"] {
-        assert!(has_symbol(&table, name, SymbolKind::Subroutine), "missing sub {name}");
+        assert!(
+            has_symbol(&table, name, SymbolKind::Subroutine),
+            "missing sub {name}"
+        );
     }
     Ok(())
 }
@@ -106,8 +112,10 @@ sub gamma { 3 }
 fn symbol_extraction_method_preserves_attributes() -> Result<(), Box<dyn std::error::Error>> {
     let code = "method size :lvalue :prototype($self) ($self) { $self }";
     let table = parse_and_extract(code);
-    let methods =
-        table.symbols.get("size").ok_or("expected method symbol `size` to be extracted")?;
+    let methods = table
+        .symbols
+        .get("size")
+        .ok_or("expected method symbol `size` to be extracted")?;
     let method = methods
         .iter()
         .find(|symbol| symbol.kind == SymbolKind::Method)
@@ -219,14 +227,20 @@ use Readonly;
 Readonly our $PACKAGE_CONSTANT => 'foo';
 "#;
     let table = parse_and_extract(code);
-    let symbols = table.symbols.get("PACKAGE_CONSTANT").ok_or("PACKAGE_CONSTANT not found")?;
+    let symbols = table
+        .symbols
+        .get("PACKAGE_CONSTANT")
+        .ok_or("PACKAGE_CONSTANT not found")?;
     assert!(
         symbols.iter().any(|symbol| {
             symbol.kind == SymbolKind::Constant
                 && symbol.qualified_name == "My::Pkg::PACKAGE_CONSTANT"
         }),
         "expected package-qualified Readonly constant symbol, got: {:?}",
-        symbols.iter().map(|symbol| &symbol.qualified_name).collect::<Vec<_>>()
+        symbols
+            .iter()
+            .map(|symbol| &symbol.qualified_name)
+            .collect::<Vec<_>>()
     );
     Ok(())
 }
@@ -251,7 +265,10 @@ my $x = 10;
 print $x;
 "#;
     let table = parse_and_extract(code);
-    assert!(!table.references.is_empty(), "references should be tracked for variable usage");
+    assert!(
+        !table.references.is_empty(),
+        "references should be tracked for variable usage"
+    );
     Ok(())
 }
 
@@ -334,7 +351,9 @@ sub greet { 1 }
     let table = analyzer.symbol_table();
     let syms = table.find_symbol("greet", 0, SymbolKind::Subroutine);
     assert!(!syms.is_empty());
-    let hover = analyzer.hover_at(syms[0].location).ok_or("hover expected")?;
+    let hover = analyzer
+        .hover_at(syms[0].location)
+        .ok_or("hover expected")?;
     assert!(hover.signature.contains("greet"));
     Ok(())
 }
@@ -346,7 +365,10 @@ fn semantic_analyzer_symbol_at_returns_most_specific() -> Result<(), Box<dyn std
     let ast = parser.parse()?;
     let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
     let pos = code.find("$x").ok_or("$x not found")?;
-    let loc = perl_semantic_analyzer::SourceLocation { start: pos + 1, end: pos + 2 };
+    let loc = perl_semantic_analyzer::SourceLocation {
+        start: pos + 1,
+        end: pos + 2,
+    };
     let sym = analyzer.symbol_at(loc);
     assert!(sym.is_some(), "should find symbol at $x position");
     Ok(())
@@ -418,7 +440,11 @@ fn semantic_model_symbol_table() -> Result<(), Box<dyn std::error::Error>> {
     let mut parser = Parser::new(code);
     let ast = parser.parse()?;
     let model = SemanticModel::build(&ast, code);
-    assert!(has_symbol(model.symbol_table(), "helper", SymbolKind::Subroutine));
+    assert!(has_symbol(
+        model.symbol_table(),
+        "helper",
+        SymbolKind::Subroutine
+    ));
     Ok(())
 }
 
@@ -490,7 +516,9 @@ my $x = 1;
 "#;
     let issues = scope_issues(code);
     assert!(
-        issues.iter().any(|i| i.kind == IssueKind::VariableShadowing),
+        issues
+            .iter()
+            .any(|i| i.kind == IssueKind::VariableShadowing),
         "should detect variable shadowing"
     );
     Ok(())
@@ -507,7 +535,9 @@ fn scope_analysis_redeclaration() -> Result<(), Box<dyn std::error::Error>> {
 "#;
     let issues = scope_issues(code);
     assert!(
-        issues.iter().any(|i| i.kind == IssueKind::VariableRedeclaration),
+        issues
+            .iter()
+            .any(|i| i.kind == IssueKind::VariableRedeclaration),
         "should detect redeclaration in same scope"
     );
     Ok(())
@@ -520,7 +550,10 @@ fn scope_analysis_our_variables_not_unused() -> Result<(), Box<dyn std::error::E
         .iter()
         .filter(|i| i.kind == IssueKind::UnusedVariable && i.variable_name.contains("VERSION"))
         .collect();
-    assert!(unused_version.is_empty(), "our variables should not be reported as unused");
+    assert!(
+        unused_version.is_empty(),
+        "our variables should not be reported as unused"
+    );
     Ok(())
 }
 
@@ -531,7 +564,10 @@ fn scope_analysis_underscore_prefix_suppresses_unused() -> Result<(), Box<dyn st
         .iter()
         .filter(|i| i.kind == IssueKind::UnusedVariable && i.variable_name.contains("_ignored"))
         .collect();
-    assert!(unused.is_empty(), "underscore-prefixed variables should be suppressed");
+    assert!(
+        unused.is_empty(),
+        "underscore-prefixed variables should be suppressed"
+    );
     Ok(())
 }
 
@@ -592,7 +628,10 @@ fn type_inference_integer_literal() -> Result<(), Box<dyn std::error::Error>> {
     let ast = parser.parse()?;
     let result = engine.infer(&ast);
     assert!(result.is_ok());
-    assert_eq!(engine.get_type_at("x"), Some(PerlType::Scalar(ScalarType::Integer)));
+    assert_eq!(
+        engine.get_type_at("x"),
+        Some(PerlType::Scalar(ScalarType::Integer))
+    );
     Ok(())
 }
 
@@ -603,7 +642,10 @@ fn type_inference_string_literal() -> Result<(), Box<dyn std::error::Error>> {
     let ast = parser.parse()?;
     let result = engine.infer(&ast);
     assert!(result.is_ok());
-    assert_eq!(engine.get_type_at("s"), Some(PerlType::Scalar(ScalarType::String)));
+    assert_eq!(
+        engine.get_type_at("s"),
+        Some(PerlType::Scalar(ScalarType::String))
+    );
     Ok(())
 }
 
@@ -614,7 +656,10 @@ fn type_inference_float_literal() -> Result<(), Box<dyn std::error::Error>> {
     let ast = parser.parse()?;
     let result = engine.infer(&ast);
     assert!(result.is_ok());
-    assert_eq!(engine.get_type_at("f"), Some(PerlType::Scalar(ScalarType::Float)));
+    assert_eq!(
+        engine.get_type_at("f"),
+        Some(PerlType::Scalar(ScalarType::Float))
+    );
     Ok(())
 }
 
@@ -624,7 +669,10 @@ fn type_inference_array() -> Result<(), Box<dyn std::error::Error>> {
     let mut parser = Parser::new("my @arr = (1, 2, 3);");
     let ast = parser.parse()?;
     let _ = engine.infer(&ast);
-    assert!(matches!(engine.get_type_at("arr"), Some(PerlType::Array(_))));
+    assert!(matches!(
+        engine.get_type_at("arr"),
+        Some(PerlType::Array(_))
+    ));
     Ok(())
 }
 
@@ -634,7 +682,10 @@ fn type_inference_hash() -> Result<(), Box<dyn std::error::Error>> {
     let mut parser = Parser::new("my %h = (a => 1, b => 2);");
     let ast = parser.parse()?;
     let _ = engine.infer(&ast);
-    assert!(matches!(engine.get_type_at("h"), Some(PerlType::Hash { .. })));
+    assert!(matches!(
+        engine.get_type_at("h"),
+        Some(PerlType::Hash { .. })
+    ));
     Ok(())
 }
 
@@ -645,7 +696,10 @@ fn type_inference_undef() -> Result<(), Box<dyn std::error::Error>> {
     let ast = parser.parse()?;
     let result = engine.infer(&ast);
     assert!(result.is_ok());
-    assert_eq!(engine.get_type_at("u"), Some(PerlType::Scalar(ScalarType::Undef)));
+    assert_eq!(
+        engine.get_type_at("u"),
+        Some(PerlType::Scalar(ScalarType::Undef))
+    );
     Ok(())
 }
 
@@ -655,7 +709,10 @@ fn type_inference_builtin_length() -> Result<(), Box<dyn std::error::Error>> {
     let mut parser = Parser::new("my $n = length(\"hello\");");
     let ast = parser.parse()?;
     let _ = engine.infer(&ast);
-    assert_eq!(engine.get_type_at("n"), Some(PerlType::Scalar(ScalarType::Integer)));
+    assert_eq!(
+        engine.get_type_at("n"),
+        Some(PerlType::Scalar(ScalarType::Integer))
+    );
     Ok(())
 }
 
@@ -694,7 +751,10 @@ fn type_inference_get_subroutine() -> Result<(), Box<dyn std::error::Error>> {
 fn type_env_set_get_variable() -> Result<(), Box<dyn std::error::Error>> {
     let mut env = TypeEnvironment::new();
     env.set_variable("x".to_string(), PerlType::Scalar(ScalarType::Integer));
-    assert_eq!(env.get_variable("x"), Some(&PerlType::Scalar(ScalarType::Integer)));
+    assert_eq!(
+        env.get_variable("x"),
+        Some(&PerlType::Scalar(ScalarType::Integer))
+    );
     Ok(())
 }
 
@@ -703,7 +763,10 @@ fn type_env_parent_scope_lookup() -> Result<(), Box<dyn std::error::Error>> {
     let mut parent = TypeEnvironment::new();
     parent.set_variable("outer".to_string(), PerlType::Scalar(ScalarType::String));
     let child = TypeEnvironment::with_parent(parent);
-    assert_eq!(child.get_variable("outer"), Some(&PerlType::Scalar(ScalarType::String)));
+    assert_eq!(
+        child.get_variable("outer"),
+        Some(&PerlType::Scalar(ScalarType::String))
+    );
     Ok(())
 }
 
@@ -713,7 +776,10 @@ fn type_env_child_shadows_parent() -> Result<(), Box<dyn std::error::Error>> {
     parent.set_variable("v".to_string(), PerlType::Scalar(ScalarType::Integer));
     let mut child = TypeEnvironment::with_parent(parent);
     child.set_variable("v".to_string(), PerlType::Scalar(ScalarType::String));
-    assert_eq!(child.get_variable("v"), Some(&PerlType::Scalar(ScalarType::String)));
+    assert_eq!(
+        child.get_variable("v"),
+        Some(&PerlType::Scalar(ScalarType::String))
+    );
     Ok(())
 }
 
@@ -792,8 +858,14 @@ fn completion_unknown_variable_empty() -> Result<(), Box<dyn std::error::Error>>
 
 #[test]
 fn perl_type_scalar_equality() -> Result<(), Box<dyn std::error::Error>> {
-    assert_eq!(PerlType::Scalar(ScalarType::Integer), PerlType::Scalar(ScalarType::Integer));
-    assert_ne!(PerlType::Scalar(ScalarType::Integer), PerlType::Scalar(ScalarType::String));
+    assert_eq!(
+        PerlType::Scalar(ScalarType::Integer),
+        PerlType::Scalar(ScalarType::Integer)
+    );
+    assert_ne!(
+        PerlType::Scalar(ScalarType::Integer),
+        PerlType::Scalar(ScalarType::String)
+    );
     Ok(())
 }
 
@@ -1049,7 +1121,9 @@ print $x;
     // Scope issues
     let issues = scope_issues(code);
     assert!(
-        issues.iter().any(|i| i.kind == IssueKind::VariableShadowing),
+        issues
+            .iter()
+            .any(|i| i.kind == IssueKind::VariableShadowing),
         "inner $x shadows outer"
     );
     Ok(())

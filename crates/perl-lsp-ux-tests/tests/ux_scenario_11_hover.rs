@@ -42,12 +42,17 @@ fn scenario_11_hover_on_variable_does_not_error() {
     }
 
     let harness = UxHarness::new(
-        ScenarioConfig { timeout: Duration::from_secs(15), ..Default::default() }
-            .with_file("calc.pl", HOVER_SOURCE),
+        ScenarioConfig {
+            timeout: Duration::from_secs(15),
+            ..Default::default()
+        }
+        .with_file("calc.pl", HOVER_SOURCE),
     )
     .expect("Failed to create UX harness");
 
-    harness.open_file("calc.pl", HOVER_SOURCE).expect("didOpen should succeed");
+    harness
+        .open_file("calc.pl", HOVER_SOURCE)
+        .expect("didOpen should succeed");
 
     std::thread::sleep(Duration::from_millis(300));
 
@@ -70,12 +75,17 @@ fn scenario_11_hover_result_has_valid_shape_when_non_null() {
     }
 
     let harness = UxHarness::new(
-        ScenarioConfig { timeout: Duration::from_secs(15), ..Default::default() }
-            .with_file("calc.pl", HOVER_SOURCE),
+        ScenarioConfig {
+            timeout: Duration::from_secs(15),
+            ..Default::default()
+        }
+        .with_file("calc.pl", HOVER_SOURCE),
     )
     .expect("Failed to create UX harness");
 
-    harness.open_file("calc.pl", HOVER_SOURCE).expect("didOpen should succeed");
+    harness
+        .open_file("calc.pl", HOVER_SOURCE)
+        .expect("didOpen should succeed");
 
     std::thread::sleep(Duration::from_millis(300));
 
@@ -103,7 +113,10 @@ fn scenario_11_hover_result_has_valid_shape_when_non_null() {
             eprintln!("INFO scenario_11: hover returned null (degraded mode acceptable)");
         }
         Err(e) => {
-            panic!("Hover returned a JSON-RPC error — feature grid regression: {}", e);
+            panic!(
+                "Hover returned a JSON-RPC error — feature grid regression: {}",
+                e
+            );
         }
     }
 
@@ -118,18 +131,27 @@ fn scenario_11_hover_on_sub_name_does_not_crash() {
     }
 
     let harness = UxHarness::new(
-        ScenarioConfig { timeout: Duration::from_secs(15), ..Default::default() }
-            .with_file("calc.pl", HOVER_SOURCE),
+        ScenarioConfig {
+            timeout: Duration::from_secs(15),
+            ..Default::default()
+        }
+        .with_file("calc.pl", HOVER_SOURCE),
     )
     .expect("Failed to create UX harness");
 
-    harness.open_file("calc.pl", HOVER_SOURCE).expect("didOpen should succeed");
+    harness
+        .open_file("calc.pl", HOVER_SOURCE)
+        .expect("didOpen should succeed");
 
     std::thread::sleep(Duration::from_millis(300));
 
     // Hover on `calculate_sum` sub declaration — line 3, char 4.
     let hover_result = harness.hover("calc.pl", 3, 4);
-    assert!(hover_result.is_ok(), "Hover on sub declaration must not error: {:?}", hover_result);
+    assert!(
+        hover_result.is_ok(),
+        "Hover on sub declaration must not error: {:?}",
+        hover_result
+    );
 
     harness.assert_no_crash();
 }

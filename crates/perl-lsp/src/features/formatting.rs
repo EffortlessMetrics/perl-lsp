@@ -21,7 +21,9 @@ pub struct CodeFormatter {
 impl CodeFormatter {
     /// Create a new code formatter with the default OS subprocess runtime
     pub fn new() -> Self {
-        Self { inner: FormattingProvider::new(OsSubprocessRuntime::with_timeout(10)) }
+        Self {
+            inner: FormattingProvider::new(OsSubprocessRuntime::with_timeout(10)),
+        }
     }
 
     /// Create a new code formatter with perltidy configuration
@@ -54,8 +56,14 @@ impl CodeFormatter {
     ) -> Result<Vec<FormatTextEdit>, FormattingError> {
         // Convert WireRange to FormatRange
         let format_range = FormatRange {
-            start: FormatPosition { line: range.start.line, character: range.start.character },
-            end: FormatPosition { line: range.end.line, character: range.end.character },
+            start: FormatPosition {
+                line: range.start.line,
+                character: range.start.character,
+            },
+            end: FormatPosition {
+                line: range.end.line,
+                character: range.end.character,
+            },
         };
         let doc = self.inner.format_range(content, &format_range, options)?;
         Ok(doc.edits)

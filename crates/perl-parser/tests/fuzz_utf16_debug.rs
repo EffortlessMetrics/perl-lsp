@@ -11,7 +11,10 @@ fn debug_utf16_roundtrip_failure() {
     for offset in 0..=text.len() {
         let (line, col) = offset_to_utf16_line_col(text, offset);
         let roundtrip = utf16_line_col_to_offset(text, line, col);
-        println!("Offset {} -> (line={}, col={}) -> roundtrip={}", offset, line, col, roundtrip);
+        println!(
+            "Offset {} -> (line={}, col={}) -> roundtrip={}",
+            offset, line, col, roundtrip
+        );
 
         if offset == 2 {
             println!(">>> FAILING CASE at offset 2 <<<");
@@ -37,7 +40,10 @@ fn debug_utf16_roundtrip_failure() {
             // Demonstrate the specific issue with offset 2
             println!("\n--- Analysis of offset 2 ---");
             println!("Offset 2 is mid-emoji (😀 spans bytes 1-4)");
-            println!("Position conversion at offset 2: line={}, col={}", line, col);
+            println!(
+                "Position conversion at offset 2: line={}, col={}",
+                line, col
+            );
             println!("Roundtrip conversion: {}", roundtrip);
 
             // Show what the algorithm thinks
@@ -95,6 +101,9 @@ fn test_simple_emoji_utf16() {
     for offset in 0..=text.len() {
         let (line, col) = offset_to_utf16_line_col(text, offset);
         let roundtrip = utf16_line_col_to_offset(text, line, col);
-        println!("Offset {} -> (line={}, col={}) -> roundtrip={}", offset, line, col, roundtrip);
+        println!(
+            "Offset {} -> (line={}, col={}) -> roundtrip={}",
+            offset, line, col, roundtrip
+        );
     }
 }

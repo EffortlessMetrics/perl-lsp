@@ -161,7 +161,10 @@ fn test_division_assignment() -> TestResult {
 
     // Should be Division token (the lexer emits Division, then = separately in current impl)
     // This is acceptable behavior as the parser handles compound assignment
-    assert!(matches!(token.token_type, TokenType::Division | TokenType::Operator(_)));
+    assert!(matches!(
+        token.token_type,
+        TokenType::Division | TokenType::Operator(_)
+    ));
     Ok(())
 }
 
@@ -198,7 +201,11 @@ fn test_slash_disambiguation_performance() {
     let elapsed = start.elapsed();
 
     // Should complete in under 1ms for this simple code
-    assert!(elapsed.as_millis() < 10, "Disambiguation took too long: {:?}", elapsed);
+    assert!(
+        elapsed.as_millis() < 10,
+        "Disambiguation took too long: {:?}",
+        elapsed
+    );
 }
 
 #[test]
@@ -230,15 +237,26 @@ fn test_division_in_list_context() -> TestResult {
 #[test]
 fn test_regex_in_conditional() -> TestResult {
     // Regex in if/unless/while conditions
-    let test_cases = vec!["if (/test/)", "unless (/test/)", "while (/test/)", "until (/test/)"];
+    let test_cases = vec![
+        "if (/test/)",
+        "unless (/test/)",
+        "while (/test/)",
+        "until (/test/)",
+    ];
 
     for code in test_cases {
         let mut lexer = PerlLexer::new(code);
         lexer.next_token(); // keyword
         lexer.next_token(); // (
-        let token =
-            lexer.next_token().ok_or_else(|| format!("Expected regex token for: {}", code))?;
-        assert_eq!(token.token_type, TokenType::RegexMatch, "Failed for: {}", code);
+        let token = lexer
+            .next_token()
+            .ok_or_else(|| format!("Expected regex token for: {}", code))?;
+        assert_eq!(
+            token.token_type,
+            TokenType::RegexMatch,
+            "Failed for: {}",
+            code
+        );
     }
     Ok(())
 }

@@ -21,29 +21,51 @@ fn identity_pos(offset: usize) -> (u32, u32) {
 
 /// Build a minimal AST program wrapping the given statements.
 fn program(stmts: Vec<Node>) -> Node {
-    Node::new(NodeKind::Program { statements: stmts }, SourceLocation::new(0, 100))
+    Node::new(
+        NodeKind::Program { statements: stmts },
+        SourceLocation::new(0, 100),
+    )
 }
 
 /// Build a function-call node.
 fn func_call(name: &str, args: Vec<Node>, loc: SourceLocation) -> Node {
-    Node::new(NodeKind::FunctionCall { name: name.to_string(), args }, loc)
+    Node::new(
+        NodeKind::FunctionCall {
+            name: name.to_string(),
+            args,
+        },
+        loc,
+    )
 }
 
 /// Build an expression-statement wrapping an inner node.
 fn expr_stmt(inner: Node) -> Node {
     let loc = inner.location;
-    Node::new(NodeKind::ExpressionStatement { expression: Box::new(inner) }, loc)
+    Node::new(
+        NodeKind::ExpressionStatement {
+            expression: Box::new(inner),
+        },
+        loc,
+    )
 }
 
 /// Build a number literal node.
 fn number(value: &str, start: usize, end: usize) -> Node {
-    Node::new(NodeKind::Number { value: value.to_string() }, SourceLocation::new(start, end))
+    Node::new(
+        NodeKind::Number {
+            value: value.to_string(),
+        },
+        SourceLocation::new(start, end),
+    )
 }
 
 /// Build a string literal node.
 fn string(value: &str, interpolated: bool, start: usize, end: usize) -> Node {
     Node::new(
-        NodeKind::String { value: value.to_string(), interpolated },
+        NodeKind::String {
+            value: value.to_string(),
+            interpolated,
+        },
         SourceLocation::new(start, end),
     )
 }
@@ -99,18 +121,27 @@ fn regex_node(pattern: &str, start: usize, end: usize) -> Node {
 
 /// Build a hash literal node.
 fn hash_literal(start: usize, end: usize) -> Node {
-    Node::new(NodeKind::HashLiteral { pairs: vec![] }, SourceLocation::new(start, end))
+    Node::new(
+        NodeKind::HashLiteral { pairs: vec![] },
+        SourceLocation::new(start, end),
+    )
 }
 
 /// Build an array literal node.
 fn array_literal(elements: Vec<Node>, start: usize, end: usize) -> Node {
-    Node::new(NodeKind::ArrayLiteral { elements }, SourceLocation::new(start, end))
+    Node::new(
+        NodeKind::ArrayLiteral { elements },
+        SourceLocation::new(start, end),
+    )
 }
 
 /// Build a variable node.
 fn variable(sigil: &str, name: &str, start: usize, end: usize) -> Node {
     Node::new(
-        NodeKind::Variable { sigil: sigil.to_string(), name: name.to_string() },
+        NodeKind::Variable {
+            sigil: sigil.to_string(),
+            name: name.to_string(),
+        },
         SourceLocation::new(start, end),
     )
 }
@@ -233,7 +264,11 @@ fn trivial_type_hints_empty_program() {
 
 #[test]
 fn parameter_hints_substr() {
-    let args = vec![string("hello", false, 10, 17), number("0", 19, 20), number("3", 22, 23)];
+    let args = vec![
+        string("hello", false, 10, 17),
+        number("0", 19, 20),
+        number("3", 22, 23),
+    ];
     let call = func_call("substr", args, SourceLocation::new(3, 24));
     let ast = program(vec![expr_stmt(call)]);
 
@@ -264,7 +299,11 @@ fn parameter_hints_index_function() {
 
 #[test]
 fn parameter_hints_rindex() {
-    let args = vec![string("hello", false, 5, 12), string("l", false, 14, 17), number("3", 19, 20)];
+    let args = vec![
+        string("hello", false, 5, 12),
+        string("l", false, 14, 17),
+        number("3", 19, 20),
+    ];
     let call = func_call("rindex", args, SourceLocation::new(0, 21));
     let ast = program(vec![expr_stmt(call)]);
 
@@ -314,7 +353,11 @@ fn parameter_hints_join() {
 
 #[test]
 fn parameter_hints_split() {
-    let args = vec![regex_node("/,/", 6, 9), string("a,b,c", false, 11, 18), number("3", 20, 21)];
+    let args = vec![
+        regex_node("/,/", 6, 9),
+        string("a,b,c", false, 11, 18),
+        number("3", 20, 21),
+    ];
     let call = func_call("split", args, SourceLocation::new(0, 22));
     let ast = program(vec![expr_stmt(call)]);
 
@@ -327,7 +370,11 @@ fn parameter_hints_split() {
 
 #[test]
 fn parameter_hints_splice() {
-    let args = vec![variable("@", "arr", 7, 11), number("0", 13, 14), number("2", 16, 17)];
+    let args = vec![
+        variable("@", "arr", 7, 11),
+        number("0", 13, 14),
+        number("2", 16, 17),
+    ];
     let call = func_call("splice", args, SourceLocation::new(0, 18));
     let ast = program(vec![expr_stmt(call)]);
 
@@ -448,8 +495,11 @@ fn parameter_hints_unknown_function() {
 #[test]
 fn parameter_hints_extra_args_ignored() {
     // join has 2 labels: ["expr", "list"] — 3rd arg should be skipped
-    let args =
-        vec![string(",", false, 5, 8), variable("@", "a", 10, 12), variable("@", "b", 14, 16)];
+    let args = vec![
+        string(",", false, 5, 8),
+        variable("@", "a", 10, 12),
+        variable("@", "b", 14, 16),
+    ];
     let call = func_call("join", args, SourceLocation::new(0, 17));
     let ast = program(vec![expr_stmt(call)]);
 
@@ -689,7 +739,11 @@ fn type_hints_range_just_inside() {
 fn range_filtering_multiline() {
     // Position mapper that puts offset 10 on line 2
     let multiline_pos = |offset: usize| -> (u32, u32) {
-        if offset < 10 { (0, offset as u32) } else { (2, (offset - 10) as u32) }
+        if offset < 10 {
+            (0, offset as u32)
+        } else {
+            (2, (offset - 10) as u32)
+        }
     };
 
     let ast = program(vec![expr_stmt(number("42", 10, 12))]);
@@ -839,7 +893,10 @@ fn large_offsets() {
     let large_pos = |offset: usize| -> (u32, u32) { (0, offset as u32) };
     let hints = trivial_type_hints(&ast, &large_pos, None);
     assert_eq!(hints.len(), 1);
-    assert_eq!(hints[0]["position"]["character"].as_u64(), Some((big_offset + 2) as u64));
+    assert_eq!(
+        hints[0]["position"]["character"].as_u64(),
+        Some((big_offset + 2) as u64)
+    );
 }
 
 // ===========================================================================
@@ -884,7 +941,10 @@ fn generate_hints_returns_correct_inlay_hint_fields() {
     let hints = provider.generate_hints(&ast, &identity_pos, None);
 
     // Should have at least the type hint for the number
-    let type_hints: Vec<_> = hints.iter().filter(|h| h.kind == InlayHintKind::Type).collect();
+    let type_hints: Vec<_> = hints
+        .iter()
+        .filter(|h| h.kind == InlayHintKind::Type)
+        .collect();
     assert!(!type_hints.is_empty());
 
     let h = &type_hints[0];
@@ -903,7 +963,10 @@ fn generate_hints_parameter_hint_fields() {
     let ast = program(vec![expr_stmt(call)]);
 
     let hints = provider.generate_hints(&ast, &identity_pos, None);
-    let param_hints: Vec<_> = hints.iter().filter(|h| h.kind == InlayHintKind::Parameter).collect();
+    let param_hints: Vec<_> = hints
+        .iter()
+        .filter(|h| h.kind == InlayHintKind::Parameter)
+        .collect();
     assert!(!param_hints.is_empty());
 
     let h = &param_hints[0];
@@ -961,7 +1024,10 @@ fn range_different_line_after() {
 
 #[test]
 fn undef_node_no_hints() {
-    let ast = program(vec![expr_stmt(Node::new(NodeKind::Undef, SourceLocation::new(0, 5)))]);
+    let ast = program(vec![expr_stmt(Node::new(
+        NodeKind::Undef,
+        SourceLocation::new(0, 5),
+    ))]);
     let param_h = parameter_hints(&ast, &identity_pos, None);
     let type_h = trivial_type_hints(&ast, &identity_pos, None);
     assert!(param_h.is_empty());
@@ -970,8 +1036,12 @@ fn undef_node_no_hints() {
 
 #[test]
 fn identifier_node_no_hints() {
-    let node =
-        Node::new(NodeKind::Identifier { name: "foo".to_string() }, SourceLocation::new(0, 3));
+    let node = Node::new(
+        NodeKind::Identifier {
+            name: "foo".to_string(),
+        },
+        SourceLocation::new(0, 3),
+    );
     let ast = program(vec![expr_stmt(node)]);
     let hints = trivial_type_hints(&ast, &identity_pos, None);
     assert!(hints.is_empty());
@@ -1009,7 +1079,11 @@ fn many_function_calls_performance() {
                 string(",", false, start + 5, start + 8),
                 variable("@", "a", start + 10, start + 12),
             ];
-            expr_stmt(func_call("join", args, SourceLocation::new(start, start + 13)))
+            expr_stmt(func_call(
+                "join",
+                args,
+                SourceLocation::new(start, start + 13),
+            ))
         })
         .collect();
     let ast = program(stmts);
@@ -1077,7 +1151,10 @@ fn extract_params_push() {
 #[test]
 fn builtin_push_shows_array_and_list_hints() {
     // push(@array, $value) → array:, list:
-    let args = vec![variable("@", "array", 5, 11), variable("$", "value", 13, 19)];
+    let args = vec![
+        variable("@", "array", 5, 11),
+        variable("$", "value", 13, 19),
+    ];
     let call = func_call("push", args, SourceLocation::new(0, 20));
     let ast = program(vec![expr_stmt(call)]);
 
@@ -1092,8 +1169,11 @@ fn builtin_push_shows_array_and_list_hints() {
 #[test]
 fn builtin_open_shows_filehandle_mode_filename_hints() {
     // open(my $fh, '<', $file) → filehandle:, mode:, filename:
-    let args =
-        vec![variable("$", "fh", 5, 8), string("<", false, 10, 13), variable("$", "file", 15, 20)];
+    let args = vec![
+        variable("$", "fh", 5, 8),
+        string("<", false, 10, 13),
+        variable("$", "file", 15, 20),
+    ];
     let call = func_call("open", args, SourceLocation::new(0, 21));
     let ast = program(vec![expr_stmt(call)]);
 
@@ -1130,7 +1210,10 @@ fn builtin_substr_shows_parameter_name_hints() {
 #[test]
 fn builtin_bless_shows_ref_classname_hints() {
     // bless($ref, "MyClass") → ref:, classname:
-    let args = vec![variable("$", "ref", 6, 10), string("MyClass", false, 12, 21)];
+    let args = vec![
+        variable("$", "ref", 6, 10),
+        string("MyClass", false, 12, 21),
+    ];
     let call = func_call("bless", args, SourceLocation::new(0, 22));
     let ast = program(vec![expr_stmt(call)]);
 
@@ -1162,7 +1245,10 @@ fn single_param_builtins_skip_hints() {
     let ast = program(vec![expr_stmt(call)]);
 
     let hints = parameter_hints(&ast, &identity_pos, None);
-    assert!(hints.is_empty(), "Single-param builtins should not produce hints");
+    assert!(
+        hints.is_empty(),
+        "Single-param builtins should not produce hints"
+    );
 }
 
 #[test]

@@ -206,8 +206,11 @@ impl SemanticAnalyzer {
         }
 
         // If no reference found, check if we're on a definition itself
-        self.symbol_at(SourceLocation { start: position, end: position })
-            .map(|symbol| self.resolve_definition_target(symbol))
+        self.symbol_at(SourceLocation {
+            start: position,
+            end: position,
+        })
+        .map(|symbol| self.resolve_definition_target(symbol))
     }
 
     /// Redirect method modifier definitions to the underlying method they modify.
@@ -216,7 +219,11 @@ impl SemanticAnalyzer {
     /// subroutine symbols so hover/navigation can describe them, but go-to-definition
     /// should land on the real method declaration when it exists.
     fn resolve_definition_target<'a>(&'a self, symbol: &'a Symbol) -> &'a Symbol {
-        if let Some(target) = self.resolve_method_modifier_target(symbol) { target } else { symbol }
+        if let Some(target) = self.resolve_method_modifier_target(symbol) {
+            target
+        } else {
+            symbol
+        }
     }
 
     /// If `symbol` is a method modifier target, find the underlying method symbol.
@@ -229,7 +236,11 @@ impl SemanticAnalyzer {
         }
 
         self.symbol_table
-            .find_symbol(&symbol.name, symbol.scope_id, crate::symbol::SymbolKind::Subroutine)
+            .find_symbol(
+                &symbol.name,
+                symbol.scope_id,
+                crate::symbol::SymbolKind::Subroutine,
+            )
             .into_iter()
             .find(|candidate| {
                 candidate.location != symbol.location
@@ -281,8 +292,11 @@ impl SemanticAnalyzer {
         receiver_class: &str,
         method_name: &str,
     ) -> Option<SourceLocation> {
-        let models_by_name: HashMap<&str, &ClassModel> =
-            self.class_models.iter().map(|model| (model.name.as_str(), model)).collect();
+        let models_by_name: HashMap<&str, &ClassModel> = self
+            .class_models
+            .iter()
+            .map(|model| (model.name.as_str(), model))
+            .collect();
 
         let receiver_model = models_by_name.get(receiver_class).copied()?;
         let ancestor_order = match receiver_model.mro {
@@ -320,8 +334,11 @@ impl SemanticAnalyzer {
         receiver_class: &str,
         method_name: &str,
     ) -> Option<HoverInfo> {
-        let models_by_name: HashMap<&str, &ClassModel> =
-            self.class_models.iter().map(|model| (model.name.as_str(), model)).collect();
+        let models_by_name: HashMap<&str, &ClassModel> = self
+            .class_models
+            .iter()
+            .map(|model| (model.name.as_str(), model))
+            .collect();
 
         let Some(receiver_model) = models_by_name.get(receiver_class).copied() else {
             return self.resolve_plain_package_method_hover(receiver_class, method_name);
@@ -412,7 +429,12 @@ impl SemanticAnalyzer {
             .methods
             .iter()
             .find(|method| method.name == method_name)
-            .or_else(|| model.methods.iter().find(|method| method.name == "AUTOLOAD"))
+            .or_else(|| {
+                model
+                    .methods
+                    .iter()
+                    .find(|method| method.name == "AUTOLOAD")
+            })
             .map(|method| method.location)
     }
 
@@ -422,12 +444,17 @@ impl SemanticAnalyzer {
         method_name: &str,
     ) -> Option<HoverInfo> {
         let qualified = format!("{}::{}", package_name, method_name);
-        let found_in_table = self.symbol_table.symbols.get(method_name).is_some_and(|syms| {
-            syms.iter().any(|s| {
-                matches!(s.kind, crate::symbol::SymbolKind::Subroutine)
-                    && s.qualified_name == qualified
+        let found_in_table = self
+            .symbol_table
+            .symbols
+            .get(method_name)
+            .is_some_and(|syms| {
+                syms.iter().any(|s| {
+                    matches!(s.kind, crate::symbol::SymbolKind::Subroutine)
+                        && s.qualified_name == qualified
+                })
             })
-        }) || self.symbol_table.symbols.contains_key(&qualified);
+            || self.symbol_table.symbols.contains_key(&qualified);
 
         if found_in_table {
             return Some(HoverInfo {
@@ -438,12 +465,17 @@ impl SemanticAnalyzer {
         }
 
         let qualified_autoload = format!("{}::AUTOLOAD", package_name);
-        let autoload_in_table = self.symbol_table.symbols.get("AUTOLOAD").is_some_and(|syms| {
-            syms.iter().any(|s| {
-                matches!(s.kind, crate::symbol::SymbolKind::Subroutine)
-                    && s.qualified_name == qualified_autoload
+        let autoload_in_table = self
+            .symbol_table
+            .symbols
+            .get("AUTOLOAD")
+            .is_some_and(|syms| {
+                syms.iter().any(|s| {
+                    matches!(s.kind, crate::symbol::SymbolKind::Subroutine)
+                        && s.qualified_name == qualified_autoload
+                })
             })
-        }) || self.symbol_table.symbols.contains_key(&qualified_autoload);
+            || self.symbol_table.symbols.contains_key(&qualified_autoload);
 
         if autoload_in_table {
             return Some(HoverInfo {
@@ -537,7 +569,11 @@ impl SemanticAnalyzer {
                     let in_tail = parent_mros
                         .iter()
                         .any(|other| other.iter().skip(1).any(|name| name == candidate));
-                    if in_tail { None } else { Some(candidate.clone()) }
+                    if in_tail {
+                        None
+                    } else {
+                        Some(candidate.clone())
+                    }
                 });
 
                 match chosen {
@@ -567,7 +603,10 @@ impl SemanticAnalyzer {
             result
         }
 
-        linearize(package, models_by_name, &mut HashSet::new()).into_iter().skip(1).collect()
+        linearize(package, models_by_name, &mut HashSet::new())
+            .into_iter()
+            .skip(1)
+            .collect()
     }
 }
 
@@ -606,7 +645,11 @@ print $x;
             })
             .collect();
         assert!(!x_tokens.is_empty());
-        assert!(x_tokens[0].modifiers.contains(&SemanticTokenModifier::Declaration));
+        assert!(
+            x_tokens[0]
+                .modifiers
+                .contains(&SemanticTokenModifier::Declaration)
+        );
         Ok(())
     }
 
@@ -647,9 +690,20 @@ sub foo {
         let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
 
         // Find the symbol for foo and check its hover documentation
-        let sym = analyzer.symbol_table().symbols.get("foo").ok_or("symbol not found")?[0].clone();
+        let sym = analyzer
+            .symbol_table()
+            .symbols
+            .get("foo")
+            .ok_or("symbol not found")?[0]
+            .clone();
         let hover = analyzer.hover_at(sym.location).ok_or("hover not found")?;
-        assert!(hover.documentation.as_ref().ok_or("doc not found")?.contains("This is foo"));
+        assert!(
+            hover
+                .documentation
+                .as_ref()
+                .ok_or("doc not found")?
+                .contains("This is foo")
+        );
         Ok(())
     }
 
@@ -666,9 +720,13 @@ sub add { 1 }
         let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
 
         let sub_symbols =
-            analyzer.symbol_table().find_symbol("add", 0, crate::symbol::SymbolKind::Subroutine);
+            analyzer
+                .symbol_table()
+                .find_symbol("add", 0, crate::symbol::SymbolKind::Subroutine);
         assert!(!sub_symbols.is_empty());
-        let hover = analyzer.hover_at(sub_symbols[0].location).ok_or("hover not found")?;
+        let hover = analyzer
+            .hover_at(sub_symbols[0].location)
+            .ok_or("hover not found")?;
         assert_eq!(hover.documentation.as_deref(), Some("Adds two numbers"));
         Ok(())
     }
@@ -693,7 +751,13 @@ Foo::bar();
         assert_eq!(def.name, "bar");
 
         let hover = analyzer.hover_at(def.location).ok_or("hover not found")?;
-        assert!(hover.documentation.as_ref().ok_or("doc not found")?.contains("bar sub"));
+        assert!(
+            hover
+                .documentation
+                .as_ref()
+                .ok_or("doc not found")?
+                .contains("bar sub")
+        );
         Ok(())
     }
 
@@ -722,7 +786,10 @@ sub new { bless {}, shift }
             hover.signature
         );
         assert!(
-            hover.details.iter().any(|detail| detail.contains("UNIVERSAL")),
+            hover
+                .details
+                .iter()
+                .any(|detail| detail.contains("UNIVERSAL")),
             "expected UNIVERSAL hover details, got: {:?}",
             hover.details
         );
@@ -750,12 +817,18 @@ sub AUTOLOAD { 1 }
             hover.signature
         );
         assert!(
-            hover.details.iter().any(|detail| detail.contains("AUTOLOAD")),
+            hover
+                .details
+                .iter()
+                .any(|detail| detail.contains("AUTOLOAD")),
             "expected AUTOLOAD hover details, got: {:?}",
             hover.details
         );
         assert!(
-            hover.details.iter().any(|detail| detail.contains("dynamic_method")),
+            hover
+                .details
+                .iter()
+                .any(|detail| detail.contains("dynamic_method")),
             "expected requested method detail, got: {:?}",
             hover.details
         );
@@ -778,12 +851,16 @@ my $y = $x;
         let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
 
         let inner_ref_pos = code.find("return $x").ok_or("return $x not found")? + "return ".len();
-        let inner_def = analyzer.find_definition(inner_ref_pos).ok_or("inner def not found")?;
+        let inner_def = analyzer
+            .find_definition(inner_ref_pos)
+            .ok_or("inner def not found")?;
         let expected_inner = code.find("my $x = 1").ok_or("my $x = 1 not found")? + 3;
         assert_eq!(inner_def.location.start, expected_inner);
 
         let outer_ref_pos = code.rfind("$x;").ok_or("$x; not found")?;
-        let outer_def = analyzer.find_definition(outer_ref_pos).ok_or("outer def not found")?;
+        let outer_def = analyzer
+            .find_definition(outer_ref_pos)
+            .ok_or("outer def not found")?;
         let expected_outer = code.find("my $x = 0").ok_or("my $x = 0 not found")? + 3;
         assert_eq!(outer_def.location.start, expected_outer);
         Ok(())
@@ -808,7 +885,9 @@ sub documented_with_comment {
             crate::symbol::SymbolKind::Subroutine,
         );
         assert!(!sub_symbols.is_empty());
-        let hover = analyzer.hover_at(sub_symbols[0].location).ok_or("hover not found")?;
+        let hover = analyzer
+            .hover_at(sub_symbols[0].location)
+            .ok_or("hover not found")?;
         let doc = hover.documentation.as_ref().ok_or("doc not found")?;
         assert!(doc.contains("Simple comment before sub"));
         Ok(())
@@ -848,7 +927,9 @@ sub multi_commented {
             crate::symbol::SymbolKind::Subroutine,
         );
         assert!(!sub_symbols.is_empty());
-        let hover = analyzer.hover_at(sub_symbols[0].location).ok_or("hover not found")?;
+        let hover = analyzer
+            .hover_at(sub_symbols[0].location)
+            .ok_or("hover not found")?;
         let doc = hover.documentation.as_ref().ok_or("doc not found")?;
         assert!(doc.contains("First comment"));
         assert!(doc.contains("Second comment"));
@@ -883,7 +964,10 @@ $x + $y;
                 )
             })
             .collect();
-        assert!(var_tokens.len() >= 2, "Should have at least 2 variable tokens");
+        assert!(
+            var_tokens.len() >= 2,
+            "Should have at least 2 variable tokens"
+        );
         Ok(())
     }
 
@@ -906,7 +990,10 @@ sub foo {
         assert!(!x_symbols.is_empty(), "Should find $x in symbol table");
 
         let foo_symbols = symbol_table.find_symbol("foo", 0, SymbolKind::Subroutine);
-        assert!(!foo_symbols.is_empty(), "Should find sub foo in symbol table");
+        assert!(
+            !foo_symbols.is_empty(),
+            "Should find sub foo in symbol table"
+        );
         Ok(())
     }
 
@@ -928,7 +1015,10 @@ my $documented = 42;
 
         // Check if hover info is available
         if let Some(hover) = model.hover_info_at(symbols[0].location) {
-            assert!(hover.signature.contains("documented"), "Hover should contain variable name");
+            assert!(
+                hover.signature.contains("documented"),
+                "Hover should contain variable name"
+            );
         }
         // Note: hover_info_at might return None if no explicit hover was generated,
         // which is acceptable for now
@@ -950,8 +1040,9 @@ my $documented = 42;
         let col_in_line = ref_line.find("$x").ok_or("could not find $x on line 2")?;
         let ref_pos = line_offset + col_in_line;
 
-        let symbol =
-            analyzer.find_definition(ref_pos).ok_or("definition not found for $x reference")?;
+        let symbol = analyzer
+            .find_definition(ref_pos)
+            .ok_or("definition not found for $x reference")?;
 
         // 1. Must be a scalar named "x"
         assert_eq!(symbol.name, "x");
@@ -1022,10 +1113,15 @@ my $closure = sub {
         let tokens = analyzer.semantic_tokens();
 
         // Should have a keyword token for 'sub'
-        let sub_keywords: Vec<_> =
-            tokens.iter().filter(|t| matches!(t.token_type, SemanticTokenType::Keyword)).collect();
+        let sub_keywords: Vec<_> = tokens
+            .iter()
+            .filter(|t| matches!(t.token_type, SemanticTokenType::Keyword))
+            .collect();
 
-        assert!(!sub_keywords.is_empty(), "Should have keyword token for 'sub'");
+        assert!(
+            !sub_keywords.is_empty(),
+            "Should have keyword token for 'sub'"
+        );
 
         // Check hover info exists for the anonymous sub
         let sub_position = code.find("sub {").ok_or("sub { not found")?;
@@ -1034,7 +1130,10 @@ my $closure = sub {
             .iter()
             .any(|(loc, _)| loc.start <= sub_position && loc.end >= sub_position);
 
-        assert!(hover_exists, "Should have hover info for anonymous subroutine");
+        assert!(
+            hover_exists,
+            "Should have hover info for anonymous subroutine"
+        );
         Ok(())
     }
 
@@ -1073,7 +1172,11 @@ my %hash = (a => 1);
 
         if let Some(num_node) = find_number_node(&ast) {
             let inferred = analyzer.infer_type(num_node);
-            assert_eq!(inferred, Some("number".to_string()), "Should infer number type");
+            assert_eq!(
+                inferred,
+                Some("number".to_string()),
+                "Should infer number type"
+            );
         }
 
         Ok(())
@@ -1101,9 +1204,9 @@ my $concat = "a" . "b";
                     }
                     None
                 }
-                NodeKind::VariableDeclaration { initializer, .. } => {
-                    initializer.as_ref().and_then(|init| find_binary_node(init, op))
-                }
+                NodeKind::VariableDeclaration { initializer, .. } => initializer
+                    .as_ref()
+                    .and_then(|init| find_binary_node(init, op)),
                 _ => None,
             }
         }
@@ -1111,7 +1214,11 @@ my $concat = "a" . "b";
         // Test arithmetic operation infers to number
         if let Some(add_node) = find_binary_node(&ast, "+") {
             let inferred = analyzer.infer_type(add_node);
-            assert_eq!(inferred, Some("number".to_string()), "Arithmetic should infer to number");
+            assert_eq!(
+                inferred,
+                Some("number".to_string()),
+                "Arithmetic should infer to number"
+            );
         }
 
         // Test concatenation infers to string
@@ -1152,7 +1259,10 @@ my $adder = sub {
         assert!(hover.is_some(), "Should have hover info");
 
         if let Some(h) = hover {
-            assert!(h.signature.contains("sub"), "Hover signature should contain 'sub'");
+            assert!(
+                h.signature.contains("sub"),
+                "Hover signature should contain 'sub'"
+            );
             assert!(
                 h.details.iter().any(|d| d.contains("Anonymous")),
                 "Hover details should mention anonymous subroutine"
@@ -1182,10 +1292,15 @@ $str =~ s/world/Perl/;
         let analyzer = SemanticAnalyzer::analyze(&ast);
 
         let tokens = analyzer.semantic_tokens();
-        let operator_tokens: Vec<_> =
-            tokens.iter().filter(|t| matches!(t.token_type, SemanticTokenType::Operator)).collect();
+        let operator_tokens: Vec<_> = tokens
+            .iter()
+            .filter(|t| matches!(t.token_type, SemanticTokenType::Operator))
+            .collect();
 
-        assert!(!operator_tokens.is_empty(), "Should have operator tokens for substitution");
+        assert!(
+            !operator_tokens.is_empty(),
+            "Should have operator tokens for substitution"
+        );
         Ok(())
     }
 
@@ -1200,10 +1315,15 @@ $str =~ tr/el/ol/;
         let analyzer = SemanticAnalyzer::analyze(&ast);
 
         let tokens = analyzer.semantic_tokens();
-        let operator_tokens: Vec<_> =
-            tokens.iter().filter(|t| matches!(t.token_type, SemanticTokenType::Operator)).collect();
+        let operator_tokens: Vec<_> = tokens
+            .iter()
+            .filter(|t| matches!(t.token_type, SemanticTokenType::Operator))
+            .collect();
 
-        assert!(!operator_tokens.is_empty(), "Should have operator tokens for transliteration");
+        assert!(
+            !operator_tokens.is_empty(),
+            "Should have operator tokens for transliteration"
+        );
         Ok(())
     }
 
@@ -1218,10 +1338,15 @@ my $ref = \$x;
         let analyzer = SemanticAnalyzer::analyze(&ast);
 
         let tokens = analyzer.semantic_tokens();
-        let operator_tokens: Vec<_> =
-            tokens.iter().filter(|t| matches!(t.token_type, SemanticTokenType::Operator)).collect();
+        let operator_tokens: Vec<_> = tokens
+            .iter()
+            .filter(|t| matches!(t.token_type, SemanticTokenType::Operator))
+            .collect();
 
-        assert!(!operator_tokens.is_empty(), "Should have operator tokens for reference operator");
+        assert!(
+            !operator_tokens.is_empty(),
+            "Should have operator tokens for reference operator"
+        );
         Ok(())
     }
 
@@ -1243,7 +1368,10 @@ $x++ while $x < 10;
             .filter(|t| matches!(t.token_type, SemanticTokenType::KeywordControl))
             .collect();
 
-        assert!(!control_tokens.is_empty(), "Should have control keyword tokens for postfix loops");
+        assert!(
+            !control_tokens.is_empty(),
+            "Should have control keyword tokens for postfix loops"
+        );
         Ok(())
     }
 
@@ -1266,10 +1394,15 @@ if (-f $file) {
         let analyzer = SemanticAnalyzer::analyze(&ast);
 
         let tokens = analyzer.semantic_tokens();
-        let operator_tokens: Vec<_> =
-            tokens.iter().filter(|t| matches!(t.token_type, SemanticTokenType::Operator)).collect();
+        let operator_tokens: Vec<_> = tokens
+            .iter()
+            .filter(|t| matches!(t.token_type, SemanticTokenType::Operator))
+            .collect();
 
-        assert!(!operator_tokens.is_empty(), "Should have operator tokens for file test operators");
+        assert!(
+            !operator_tokens.is_empty(),
+            "Should have operator tokens for file test operators"
+        );
         Ok(())
     }
 
@@ -1345,8 +1478,10 @@ $str =~ s/world/Perl/gi;
         let analyzer = SemanticAnalyzer::analyze(&ast);
 
         let tokens = analyzer.semantic_tokens();
-        let operator_tokens: Vec<_> =
-            tokens.iter().filter(|t| matches!(t.token_type, SemanticTokenType::Operator)).collect();
+        let operator_tokens: Vec<_> = tokens
+            .iter()
+            .filter(|t| matches!(t.token_type, SemanticTokenType::Operator))
+            .collect();
 
         assert!(
             !operator_tokens.is_empty(),
@@ -1366,8 +1501,10 @@ $str =~ y/hello/world/;
         let analyzer = SemanticAnalyzer::analyze(&ast);
 
         let tokens = analyzer.semantic_tokens();
-        let operator_tokens: Vec<_> =
-            tokens.iter().filter(|t| matches!(t.token_type, SemanticTokenType::Operator)).collect();
+        let operator_tokens: Vec<_> = tokens
+            .iter()
+            .filter(|t| matches!(t.token_type, SemanticTokenType::Operator))
+            .collect();
 
         assert!(
             !operator_tokens.is_empty(),
@@ -1388,7 +1525,11 @@ $str =~ y/hello/world/;
 
         for name in &builtins {
             let doc = get_builtin_documentation(name);
-            assert!(doc.is_some(), "Built-in '{}' should have documentation", name);
+            assert!(
+                doc.is_some(),
+                "Built-in '{}' should have documentation",
+                name
+            );
             let doc = doc.unwrap();
             assert!(
                 !doc.signature.is_empty(),
@@ -1416,17 +1557,25 @@ push @items, 5;
 
         // Find the hover info for 'push' function call
         let push_pos = code.find("push").ok_or("push not found")?;
-        let hover_for_push =
-            analyzer.hover_info.iter().find(|(loc, _)| loc.start <= push_pos && loc.end > push_pos);
+        let hover_for_push = analyzer
+            .hover_info
+            .iter()
+            .find(|(loc, _)| loc.start <= push_pos && loc.end > push_pos);
 
-        assert!(hover_for_push.is_some(), "Should have hover info for 'push' builtin");
+        assert!(
+            hover_for_push.is_some(),
+            "Should have hover info for 'push' builtin"
+        );
         let (_, hover) = hover_for_push.unwrap();
         assert!(
             hover.signature.contains("push"),
             "Hover signature should contain 'push', got: {}",
             hover.signature
         );
-        assert!(hover.documentation.is_some(), "Hover for 'push' should have documentation");
+        assert!(
+            hover.documentation.is_some(),
+            "Hover for 'push' should have documentation"
+        );
         Ok(())
     }
 
@@ -1455,7 +1604,10 @@ sub new { bless {}, shift }
 
         // Find the package symbol
         let pkg_symbols = analyzer.symbol_table().symbols.get("My::Module");
-        assert!(pkg_symbols.is_some(), "Should find My::Module in symbol table");
+        assert!(
+            pkg_symbols.is_some(),
+            "Should find My::Module in symbol table"
+        );
 
         let pkg = &pkg_symbols.unwrap()[0];
         let hover = analyzer.hover_at(pkg.location);
@@ -1533,7 +1685,9 @@ sub process {
         let ast = parser.parse()?;
         let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
 
-        let sub_symbols = analyzer.symbol_table().find_symbol("process", 0, SymbolKind::Subroutine);
+        let sub_symbols = analyzer
+            .symbol_table()
+            .find_symbol("process", 0, SymbolKind::Subroutine);
         assert!(!sub_symbols.is_empty(), "Should find sub process");
 
         let hover = analyzer.hover_at(sub_symbols[0].location);
@@ -1596,8 +1750,10 @@ my %config = (key => "value");
 
         // Check hash variable hover
         let hash_pos = code.find("%config").ok_or("%config not found")?;
-        let hash_hover =
-            analyzer.hover_info.iter().find(|(loc, _)| loc.start <= hash_pos && loc.end > hash_pos);
+        let hash_hover = analyzer
+            .hover_info
+            .iter()
+            .find(|(loc, _)| loc.start <= hash_pos && loc.end > hash_pos);
         assert!(hash_hover.is_some(), "Should have hover for %config");
         let (_, hover) = hash_hover.unwrap();
         assert!(
@@ -1621,10 +1777,14 @@ my %config = (key => "value");
         let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
 
         let sub_symbols =
-            analyzer.symbol_table().find_symbol("add", 0, crate::symbol::SymbolKind::Subroutine);
+            analyzer
+                .symbol_table()
+                .find_symbol("add", 0, crate::symbol::SymbolKind::Subroutine);
         assert!(!sub_symbols.is_empty(), "symbol 'add' not found");
 
-        let hover = analyzer.hover_at(sub_symbols[0].location).ok_or("hover not found")?;
+        let hover = analyzer
+            .hover_at(sub_symbols[0].location)
+            .ok_or("hover not found")?;
         assert!(
             hover.signature.contains("$x"),
             "hover signature should contain '$x', got: {}",
@@ -1652,10 +1812,14 @@ my %config = (key => "value");
         let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
 
         let sub_symbols =
-            analyzer.symbol_table().find_symbol("greet", 0, crate::symbol::SymbolKind::Subroutine);
+            analyzer
+                .symbol_table()
+                .find_symbol("greet", 0, crate::symbol::SymbolKind::Subroutine);
         assert!(!sub_symbols.is_empty(), "symbol 'greet' not found");
 
-        let hover = analyzer.hover_at(sub_symbols[0].location).ok_or("hover not found")?;
+        let hover = analyzer
+            .hover_at(sub_symbols[0].location)
+            .ok_or("hover not found")?;
         assert!(
             hover.signature.contains("$name"),
             "hover signature should contain '$name', got: {}",
@@ -1684,7 +1848,9 @@ my %config = (key => "value");
         );
         assert!(!sub_symbols.is_empty(), "symbol 'log_all' not found");
 
-        let hover = analyzer.hover_at(sub_symbols[0].location).ok_or("hover not found")?;
+        let hover = analyzer
+            .hover_at(sub_symbols[0].location)
+            .ok_or("hover not found")?;
         assert!(
             hover.signature.contains("@messages"),
             "hover signature should contain '@messages', got: {}",
@@ -1708,7 +1874,9 @@ my %config = (key => "value");
         let col = line1.find("bar").ok_or("bar not found on line 1")?;
         let offset = line0_len + col;
 
-        let sym = analyzer.find_definition(offset).ok_or("no symbol found at 'bar'")?;
+        let sym = analyzer
+            .find_definition(offset)
+            .ok_or("no symbol found at 'bar'")?;
         assert_eq!(sym.name, "bar", "symbol name should be 'bar'");
         assert_eq!(
             sym.kind,
@@ -1731,7 +1899,10 @@ my %config = (key => "value");
 
         // The method definition is line 3; the modifier targets are on lines 8, 13, and 18.
         for target_line in [8, 13, 18] {
-            let line = code.lines().nth(target_line).ok_or("missing modifier line")?;
+            let line = code
+                .lines()
+                .nth(target_line)
+                .ok_or("missing modifier line")?;
             let col = line.find("save").ok_or("modifier target not found")?;
             let mut offset = 0;
             for line in code.lines().take(target_line) {
@@ -1743,7 +1914,9 @@ my %config = (key => "value");
                 .find_definition(offset)
                 .ok_or("no symbol found at method modifier target")?;
             assert_eq!(sym.name, "save", "modifier target should resolve to save");
-            let method_start = code.find("sub save").ok_or("method declaration not found")?;
+            let method_start = code
+                .find("sub save")
+                .ok_or("method declaration not found")?;
             assert_eq!(
                 sym.location.start, method_start,
                 "modifier target should resolve to the underlying method declaration"

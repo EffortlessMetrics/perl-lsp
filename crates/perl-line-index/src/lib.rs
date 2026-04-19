@@ -31,7 +31,10 @@ impl LineIndex {
     /// Convert a byte offset to `(line, column)` using byte columns.
     #[must_use]
     pub fn byte_to_position(&self, byte: usize) -> (usize, usize) {
-        let line = self.line_starts.binary_search(&byte).unwrap_or_else(|i| i.saturating_sub(1));
+        let line = self
+            .line_starts
+            .binary_search(&byte)
+            .unwrap_or_else(|i| i.saturating_sub(1));
         let column = byte - self.line_starts[line];
         (line, column)
     }

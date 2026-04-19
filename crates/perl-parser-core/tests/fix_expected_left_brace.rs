@@ -12,7 +12,12 @@ fn assert_no_diagnostics(source: &str) {
         output.diagnostics.is_empty(),
         "Expected no diagnostics for source:\n{}\n\nDiagnostics:\n{}",
         source,
-        output.diagnostics.iter().map(|d| format!("  {}", d)).collect::<Vec<_>>().join("\n"),
+        output
+            .diagnostics
+            .iter()
+            .map(|d| format!("  {}", d))
+            .collect::<Vec<_>>()
+            .join("\n"),
     );
 
     // Also check sexp for error markers

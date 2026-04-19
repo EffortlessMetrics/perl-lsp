@@ -269,7 +269,10 @@ my @doubled = map { $_ * 2 } @items;
         let content = hover_content(&response);
 
         // Either we get semantic info or at least the token
-        assert!(content.is_some(), "hover should provide some information for builtin function");
+        assert!(
+            content.is_some(),
+            "hover should provide some information for builtin function"
+        );
 
         if let Some(c) = content {
             assert!(
@@ -427,8 +430,13 @@ my $result = $value + process();
         println!("EMPTY SPACE HOVER RESPONSE: {response:#}");
 
         // Should return null result for empty space
-        let result = response.get("result").ok_or("expected result field in hover response")?;
-        assert!(result.is_null(), "hover on empty space should return null result");
+        let result = response
+            .get("result")
+            .ok_or("expected result field in hover response")?;
+        assert!(
+            result.is_null(),
+            "hover on empty space should return null result"
+        );
         Ok(())
     }
 
@@ -776,7 +784,9 @@ mod module_hover_tests {
         fs::write(module_dir.join("Module.pm"), "package My::Module; 1;")?;
 
         let workspace_path = workspace.to_str().ok_or("non-UTF-8 workspace path")?;
-        let server = TestServerBuilder::new().with_workspace(workspace_path).build();
+        let server = TestServerBuilder::new()
+            .with_workspace(workspace_path)
+            .build();
 
         let code = "use My::Module;\nmy $x = 1;\n";
         let uri = "file:///test.pl";
@@ -786,7 +796,10 @@ mod module_hover_tests {
         let response = server.get_hover(uri, 0, 5);
         let content = hover_content(&response).ok_or("expected hover content for use statement")?;
 
-        assert!(content.contains("My::Module"), "hover should show module name, got: {content}");
+        assert!(
+            content.contains("My::Module"),
+            "hover should show module name, got: {content}"
+        );
         assert!(
             content.contains("Module.pm") && content.contains("Go to module"),
             "hover should show resolved path for found module, got: {content}"
@@ -812,7 +825,9 @@ mod module_hover_tests {
         }
 
         let workspace_path = workspace.to_str().ok_or("non-UTF-8 workspace path")?;
-        let server = TestServerBuilder::new().with_workspace(workspace_path).build();
+        let server = TestServerBuilder::new()
+            .with_workspace(workspace_path)
+            .build();
 
         let code = "use External::Tool;\nmy $x = 1;\n";
         let uri = "file:///test.pl";
@@ -857,7 +872,10 @@ mod module_hover_tests {
             content.contains("Not found"),
             "hover should indicate module not found, got: {content}"
         );
-        assert!(content.contains("Search paths"), "hover should show search paths, got: {content}");
+        assert!(
+            content.contains("Search paths"),
+            "hover should show search paths, got: {content}"
+        );
         Ok(())
     }
 }

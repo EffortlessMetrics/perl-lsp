@@ -182,7 +182,10 @@ fn test_validate_timeout_very_large() {
     match result {
         Ok(valid_timeout) => {
             // Should be capped or adjusted
-            assert!(valid_timeout <= 3600000, "timeout should have a reasonable cap");
+            assert!(
+                valid_timeout <= 3600000,
+                "timeout should have a reasonable cap"
+            );
         }
         Err(_) => {
             // Rejected; acceptable
@@ -204,8 +207,14 @@ fn test_validate_condition_with_empty_string() {
 #[test]
 fn test_validate_condition_with_logical_expressions() {
     // Edge case: condition with logical operators
-    let conditions =
-        vec!["$x > 5", "$y == 'string'", "$a && $b", "$x || $y", "!$flag", "($x > 0 && $y < 10)"];
+    let conditions = vec![
+        "$x > 5",
+        "$y == 'string'",
+        "$a && $b",
+        "$x || $y",
+        "!$flag",
+        "($x > 0 && $y < 10)",
+    ];
 
     for cond in conditions {
         let result = validate_condition(cond);
@@ -220,7 +229,13 @@ fn test_validate_condition_with_logical_expressions() {
 #[test]
 fn test_validate_condition_with_method_calls() {
     // Edge case: condition with method calls and data access
-    let conditions = vec!["$obj->method()", "$ref->{key}", "@array[0]", "$hash{key}", "$#array"];
+    let conditions = vec![
+        "$obj->method()",
+        "$ref->{key}",
+        "@array[0]",
+        "$hash{key}",
+        "$#array",
+    ];
 
     for cond in conditions {
         let result = validate_condition(cond);

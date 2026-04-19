@@ -95,16 +95,22 @@ fn find_in_line(
     line_offset: usize,
     cursor_in_line: usize,
 ) -> Option<ModuleReference<'_>> {
-    find_in_line_for_keyword(line, line_offset, cursor_in_line, "use", ModuleReferenceKind::Use)
-        .or_else(|| {
-            find_in_line_for_keyword(
-                line,
-                line_offset,
-                cursor_in_line,
-                "require",
-                ModuleReferenceKind::Require,
-            )
-        })
+    find_in_line_for_keyword(
+        line,
+        line_offset,
+        cursor_in_line,
+        "use",
+        ModuleReferenceKind::Use,
+    )
+    .or_else(|| {
+        find_in_line_for_keyword(
+            line,
+            line_offset,
+            cursor_in_line,
+            "require",
+            ModuleReferenceKind::Require,
+        )
+    })
 }
 
 fn find_parent_base_module_in_line<'a>(
@@ -153,7 +159,10 @@ fn find_parent_base_module_in_line<'a>(
         let module_name = &args_area[token_start_in_args..token_end_in_args];
 
         let is_module_like = module_name.contains("::")
-            || module_name.as_bytes().first().is_some_and(u8::is_ascii_uppercase);
+            || module_name
+                .as_bytes()
+                .first()
+                .is_some_and(u8::is_ascii_uppercase);
 
         if is_module_like
             && cursor_in_line >= token_start_in_line

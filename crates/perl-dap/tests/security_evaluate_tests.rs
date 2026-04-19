@@ -15,8 +15,13 @@ fn test_evaluate_rejects_newlines() -> TestResult {
     let response = adapter.handle_request(1, "evaluate", Some(args));
 
     match response {
-        DapMessage::Response { success, message, .. } => {
-            assert!(!success, "Evaluate should fail for expression with newlines");
+        DapMessage::Response {
+            success, message, ..
+        } => {
+            assert!(
+                !success,
+                "Evaluate should fail for expression with newlines"
+            );
             let msg = message.ok_or("Should have error message")?;
             assert_eq!(
                 msg, "Expression cannot contain newlines",
@@ -41,7 +46,9 @@ fn test_evaluate_detects_unsafe_backticks() -> TestResult {
     let response = adapter.handle_request(1, "evaluate", Some(args));
 
     match response {
-        DapMessage::Response { success, message, .. } => {
+        DapMessage::Response {
+            success, message, ..
+        } => {
             assert!(!success, "Evaluate should fail for backticks in safe mode");
             let msg = message.ok_or("Should have error message")?;
             assert!(
@@ -67,7 +74,9 @@ fn test_evaluate_detects_unsafe_qx() -> TestResult {
     let response = adapter.handle_request(1, "evaluate", Some(args));
 
     match response {
-        DapMessage::Response { success, message, .. } => {
+        DapMessage::Response {
+            success, message, ..
+        } => {
             assert!(!success, "Evaluate should fail for qx in safe mode");
             let msg = message.ok_or("Should have error message")?;
             assert!(
@@ -91,7 +100,9 @@ fn test_evaluate_defaults_to_safe_mode_without_side_effects_flag() -> TestResult
     let response = adapter.handle_request(1, "evaluate", Some(args));
 
     match response {
-        DapMessage::Response { success, message, .. } => {
+        DapMessage::Response {
+            success, message, ..
+        } => {
             assert!(
                 !success,
                 "Evaluate should fail for dangerous ops when allowSideEffects is omitted"
@@ -120,8 +131,13 @@ fn test_evaluate_rejects_carriage_returns() -> TestResult {
     let response = adapter.handle_request(1, "evaluate", Some(args));
 
     match response {
-        DapMessage::Response { success, message, .. } => {
-            assert!(!success, "Evaluate should fail for expression with carriage returns");
+        DapMessage::Response {
+            success, message, ..
+        } => {
+            assert!(
+                !success,
+                "Evaluate should fail for expression with carriage returns"
+            );
             let msg = message.ok_or("Should have error message")?;
             assert_eq!(
                 msg, "Expression cannot contain newlines",
@@ -196,7 +212,9 @@ fn test_evaluate_blocks_dangerous_operations() -> TestResult {
         let response = adapter.handle_request(1, "evaluate", Some(args));
 
         match response {
-            DapMessage::Response { success, message, .. } => {
+            DapMessage::Response {
+                success, message, ..
+            } => {
                 let msg = message.unwrap_or_default();
                 let expected_pattern = format!("potentially mutating operation '{}'", op_name);
 
@@ -209,7 +227,10 @@ fn test_evaluate_blocks_dangerous_operations() -> TestResult {
                     ));
                 }
             }
-            _ => failures.push(format!("Operation '{}': expected Response, got Event", op_name)),
+            _ => failures.push(format!(
+                "Operation '{}': expected Response, got Event",
+                op_name
+            )),
         }
     }
 

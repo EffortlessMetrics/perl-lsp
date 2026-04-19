@@ -78,7 +78,9 @@ fn test_package_with_emoji_comment_prefix() -> TestResult {
     // Total before "MyPackage": 13 UTF-16 units
 
     // Let's find where "MyPackage" starts (byte offset of 'M')
-    let pkg_start = line.find("MyPackage").ok_or("expected 'MyPackage' in line")?;
+    let pkg_start = line
+        .find("MyPackage")
+        .ok_or("expected 'MyPackage' in line")?;
     let pkg_end = pkg_start + "MyPackage".len();
 
     let start_utf16 = byte_to_utf16_col(line, pkg_start);

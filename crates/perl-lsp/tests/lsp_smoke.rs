@@ -138,8 +138,13 @@ fn initialize_server(server: &LspServer) -> Result<Value, Box<dyn std::error::Er
         })),
     };
 
-    let response = server.handle_request(request).ok_or("Initialize should return response")?;
-    assert!(response.error.is_none(), "Initialize should not return error");
+    let response = server
+        .handle_request(request)
+        .ok_or("Initialize should return response")?;
+    assert!(
+        response.error.is_none(),
+        "Initialize should not return error"
+    );
 
     Ok(response.result.ok_or("Initialize should return result")?)
 }
@@ -237,13 +242,20 @@ fn smoke_server_initialization_and_capabilities() -> Result<(), Box<dyn std::err
         caps.get("textDocumentSync").is_some(),
         "textDocumentSync capability must be advertised"
     );
-    assert_eq!(caps.get("hoverProvider"), Some(&json!(true)), "hoverProvider must be true");
+    assert_eq!(
+        caps.get("hoverProvider"),
+        Some(&json!(true)),
+        "hoverProvider must be true"
+    );
     assert_eq!(
         caps.get("definitionProvider"),
         Some(&json!(true)),
         "definitionProvider must be true"
     );
-    assert!(caps.get("completionProvider").is_some(), "completionProvider must be advertised");
+    assert!(
+        caps.get("completionProvider").is_some(),
+        "completionProvider must be advertised"
+    );
     assert_eq!(
         caps.get("referencesProvider"),
         Some(&json!(true)),
@@ -276,8 +288,13 @@ fn smoke_double_initialization_rejected() -> Result<(), Box<dyn std::error::Erro
         })),
     };
 
-    let response = server.handle_request(request).ok_or("Should return response")?;
-    assert!(response.error.is_some(), "Second initialize should return error");
+    let response = server
+        .handle_request(request)
+        .ok_or("Should return response")?;
+    assert!(
+        response.error.is_some(),
+        "Second initialize should return error"
+    );
 
     shutdown_server(&server);
     Ok(())
@@ -307,7 +324,10 @@ fn smoke_document_open() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     // Result can be null but should not error
-    assert!(result.is_some(), "Hover should return a response (even if null)");
+    assert!(
+        result.is_some(),
+        "Hover should return a response (even if null)"
+    );
 
     shutdown_server(&server);
     Ok(())
@@ -349,7 +369,10 @@ fn smoke_document_change() -> Result<(), Box<dyn std::error::Error>> {
         }),
     );
 
-    assert!(result.is_some(), "Server should still respond after document change");
+    assert!(
+        result.is_some(),
+        "Server should still respond after document change"
+    );
 
     shutdown_server(&server);
     Ok(())
@@ -409,7 +432,10 @@ fn smoke_hover_on_subroutine() -> Result<(), Box<dyn std::error::Error>> {
         }),
     );
 
-    assert!(result.is_some(), "Hover on subroutine should return response");
+    assert!(
+        result.is_some(),
+        "Hover on subroutine should return response"
+    );
 
     shutdown_server(&server);
     Ok(())
@@ -450,7 +476,10 @@ fn smoke_completion_returns_items() -> Result<(), Box<dyn std::error::Error>> {
     if let Some(items) = items {
         if !items.is_empty() {
             // Verify structure of first item
-            assert!(items[0].get("label").is_some(), "Completion items must have label");
+            assert!(
+                items[0].get("label").is_some(),
+                "Completion items must have label"
+            );
         }
     }
 
@@ -477,7 +506,10 @@ fn smoke_completion_builtins() -> Result<(), Box<dyn std::error::Error>> {
         }),
     );
 
-    assert!(result.is_some(), "Completion should return a response for builtins");
+    assert!(
+        result.is_some(),
+        "Completion should return a response for builtins"
+    );
 
     let completion = result.ok_or("Completion should return a value")?;
     let items = if completion.is_array() {
@@ -489,9 +521,15 @@ fn smoke_completion_builtins() -> Result<(), Box<dyn std::error::Error>> {
     // Should have at least 'print' in completions
     if let Some(items) = items {
         let has_print = items.iter().any(|item| {
-            item.get("label").and_then(|l| l.as_str()).map(|s| s.contains("print")).unwrap_or(false)
+            item.get("label")
+                .and_then(|l| l.as_str())
+                .map(|s| s.contains("print"))
+                .unwrap_or(false)
         });
-        assert!(has_print, "Completion should include 'print' for 'pri' prefix");
+        assert!(
+            has_print,
+            "Completion should include 'print' for 'pri' prefix"
+        );
     }
 
     shutdown_server(&server);
@@ -526,10 +564,15 @@ fn smoke_definition_returns_locations() -> Result<(), Box<dyn std::error::Error>
     if !definition.is_null() {
         // Definition returns either Location or Location[]
         if definition.is_array() {
-            let locations = definition.as_array().ok_or("Definition array should be valid")?;
+            let locations = definition
+                .as_array()
+                .ok_or("Definition array should be valid")?;
             if !locations.is_empty() {
                 assert!(locations[0].get("uri").is_some(), "Location must have uri");
-                assert!(locations[0].get("range").is_some(), "Location must have range");
+                assert!(
+                    locations[0].get("range").is_some(),
+                    "Location must have range"
+                );
             }
         } else if definition.is_object() {
             assert!(definition.get("uri").is_some(), "Location must have uri");
@@ -560,7 +603,10 @@ fn smoke_document_symbols() -> Result<(), Box<dyn std::error::Error>> {
         }),
     );
 
-    assert!(result.is_some(), "Document symbols should return a response");
+    assert!(
+        result.is_some(),
+        "Document symbols should return a response"
+    );
 
     let symbols = result.ok_or("Document symbols should return a value")?;
     let symbols_array = symbols.as_array().ok_or("Symbols should be an array")?;
@@ -578,8 +624,10 @@ fn smoke_document_symbols() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // Check for expected symbol
-    let names: Vec<&str> =
-        symbols_array.iter().filter_map(|s| s.get("name").and_then(|n| n.as_str())).collect();
+    let names: Vec<&str> = symbols_array
+        .iter()
+        .filter_map(|s| s.get("name").and_then(|n| n.as_str()))
+        .collect();
 
     assert!(
         names.iter().any(|n| n.contains("say_hello")),
@@ -620,7 +668,10 @@ fn smoke_find_references() -> Result<(), Box<dyn std::error::Error>> {
         // Verify structure
         for reference in refs_array {
             assert!(reference.get("uri").is_some(), "Reference must have uri");
-            assert!(reference.get("range").is_some(), "Reference must have range");
+            assert!(
+                reference.get("range").is_some(),
+                "Reference must have range"
+            );
         }
     }
 
@@ -653,8 +704,14 @@ fn smoke_folding_ranges() -> Result<(), Box<dyn std::error::Error>> {
     let ranges = result.ok_or("Folding ranges should return a value")?;
     if let Some(ranges_array) = ranges.as_array() {
         for range in ranges_array {
-            assert!(range.get("startLine").is_some(), "Folding range must have startLine");
-            assert!(range.get("endLine").is_some(), "Folding range must have endLine");
+            assert!(
+                range.get("startLine").is_some(),
+                "Folding range must have startLine"
+            );
+            assert!(
+                range.get("endLine").is_some(),
+                "Folding range must have endLine"
+            );
         }
     }
 
@@ -683,13 +740,19 @@ fn smoke_workspace_symbols() -> Result<(), Box<dyn std::error::Error>> {
         }),
     );
 
-    assert!(result.is_some(), "Workspace symbols should return a response");
+    assert!(
+        result.is_some(),
+        "Workspace symbols should return a response"
+    );
 
     // Response may be empty if indexing is not complete, which is acceptable
     let symbols = result.ok_or("Workspace symbols should return a value")?;
     if let Some(symbols_array) = symbols.as_array() {
         for symbol in symbols_array {
-            assert!(symbol.get("name").is_some(), "Workspace symbol must have name");
+            assert!(
+                symbol.get("name").is_some(),
+                "Workspace symbol must have name"
+            );
             // May have location or containerName
         }
     }
@@ -718,7 +781,10 @@ fn smoke_unknown_method_error() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     // Should return None (error response)
-    assert!(result.is_none(), "Unknown method should return error (None)");
+    assert!(
+        result.is_none(),
+        "Unknown method should return error (None)"
+    );
 
     // Server should still be responsive
     let hover_result = send_request(
@@ -730,7 +796,10 @@ fn smoke_unknown_method_error() -> Result<(), Box<dyn std::error::Error>> {
             "position": { "line": 0, "character": 0 }
         }),
     );
-    assert!(hover_result.is_some(), "Server should still respond after error");
+    assert!(
+        hover_result.is_some(),
+        "Server should still respond after error"
+    );
 
     shutdown_server(&server);
     Ok(())
@@ -754,7 +823,10 @@ fn smoke_nonexistent_document() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     // Should return something (null is acceptable)
-    assert!(result.is_some(), "Should return response for non-existent document");
+    assert!(
+        result.is_some(),
+        "Should return response for non-existent document"
+    );
 
     shutdown_server(&server);
     Ok(())
@@ -790,8 +862,9 @@ fn smoke_graceful_shutdown() -> Result<(), Box<dyn std::error::Error>> {
         params: None,
     };
 
-    let response =
-        server.handle_request(shutdown_request).ok_or("Shutdown should return response")?;
+    let response = server
+        .handle_request(shutdown_request)
+        .ok_or("Shutdown should return response")?;
     assert!(response.error.is_none(), "Shutdown should not return error");
 
     // Exit

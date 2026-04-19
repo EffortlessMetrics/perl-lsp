@@ -50,7 +50,8 @@ impl ExtendedTestContext {
     }
 
     fn create_file(&mut self, path: &str, content: &str) {
-        self.workspace_files.insert(path.to_string(), content.to_string());
+        self.workspace_files
+            .insert(path.to_string(), content.to_string());
         println!("Created file: {}", path);
     }
 
@@ -181,7 +182,10 @@ print $obj->to_json();
         })),
     );
 
-    assert!(install_module.is_some(), "Should handle module installation");
+    assert!(
+        install_module.is_some(),
+        "Should handle module installation"
+    );
     println!("✓ CPAN module installation works");
 
     // TEST 3: Completion for Module Methods
@@ -194,7 +198,10 @@ print $obj->to_json();
         })),
     );
 
-    assert!(module_completion.is_some(), "Should provide module method completion");
+    assert!(
+        module_completion.is_some(),
+        "Should provide module method completion"
+    );
     println!("✓ CPAN module method completion works");
 
     // TEST 4: Module Documentation on Hover
@@ -406,7 +413,10 @@ sub insecure_query {
         })),
     );
 
-    assert!(perlcritic_analysis.is_some(), "Should run Perl::Critic analysis");
+    assert!(
+        perlcritic_analysis.is_some(),
+        "Should run Perl::Critic analysis"
+    );
     println!("✓ Perl::Critic integration works");
 
     // TEST 4: Security Vulnerability Detection
@@ -600,7 +610,10 @@ it under the same terms as Perl itself.
 1;
 "#;
 
-    ctx.create_file("file:///workspace/lib/Calculator/Advanced.pm", pod_documented_code);
+    ctx.create_file(
+        "file:///workspace/lib/Calculator/Advanced.pm",
+        pod_documented_code,
+    );
 
     println!("\n=== Testing POD Documentation Support ===");
 
@@ -618,7 +631,10 @@ it under the same terms as Perl itself.
     );
 
     // Should show POD documentation for the method
-    assert!(pod_hover.is_some(), "Should show POD documentation on hover");
+    assert!(
+        pod_hover.is_some(),
+        "Should show POD documentation on hover"
+    );
     println!("✓ POD documentation in hover works");
 
     // TEST 3: POD Validation
@@ -761,7 +777,10 @@ sub incomplete_function {
         })),
     );
 
-    assert!(completion_in_broken.is_some(), "Should provide completion even with syntax errors");
+    assert!(
+        completion_in_broken.is_some(),
+        "Should provide completion even with syntax errors"
+    );
     println!("✓ Graceful handling of malformed code");
 
     // TEST 2: Invalid UTF-8 Handling
@@ -811,7 +830,10 @@ sub incomplete_function {
         })),
     );
 
-    assert!(memory_recovery.is_some(), "Should handle memory pressure recovery");
+    assert!(
+        memory_recovery.is_some(),
+        "Should handle memory pressure recovery"
+    );
     println!("✓ Memory pressure recovery");
 
     // TEST 5: Server Restart Recovery
@@ -835,7 +857,10 @@ sub incomplete_function {
         })),
     );
 
-    assert!(partial_analysis.is_some(), "Should provide partial analysis despite errors");
+    assert!(
+        partial_analysis.is_some(),
+        "Should provide partial analysis despite errors"
+    );
     println!("✓ Partial file analysis in error conditions");
 
     println!("✅ Error recovery user story test complete");

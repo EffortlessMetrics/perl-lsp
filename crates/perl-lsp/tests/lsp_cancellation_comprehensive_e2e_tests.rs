@@ -53,9 +53,18 @@ impl E2ETestFixture {
             5..=8 => Duration::from_secs(30), // Lightly constrained environment
             _ => Duration::from_secs(20),     // Unconstrained environment
         };
-        drain_until_quiet(&server, Duration::from_millis(2000), adaptive_initialization_timeout);
+        drain_until_quiet(
+            &server,
+            Duration::from_millis(2000),
+            adaptive_initialization_timeout,
+        );
 
-        Self { server, test_workspace, scenario_runner, performance_monitor }
+        Self {
+            server,
+            test_workspace,
+            scenario_runner,
+            performance_monitor,
+        }
     }
 }
 
@@ -243,7 +252,10 @@ struct E2EScenarioRunner {
 
 impl E2EScenarioRunner {
     fn new() -> Self {
-        Self { active_scenarios: HashMap::new(), scenario_metrics: HashMap::new() }
+        Self {
+            active_scenarios: HashMap::new(),
+            scenario_metrics: HashMap::new(),
+        }
     }
 
     fn run_scenario(&mut self, scenario: &E2ETestScenario, _server: &LspServer) -> ScenarioResult {
@@ -276,7 +288,10 @@ struct E2EPerformanceMonitor {
 
 impl E2EPerformanceMonitor {
     fn new() -> Self {
-        Self { performance_snapshots: Vec::new(), baseline_metrics: None }
+        Self {
+            performance_snapshots: Vec::new(),
+            baseline_metrics: None,
+        }
     }
 
     fn take_performance_snapshot(&mut self, label: &str) {
@@ -299,8 +314,12 @@ impl E2EPerformanceMonitor {
 
             analysis.total_duration = last.timestamp.duration_since(first.timestamp);
             analysis.memory_growth = last.memory_usage.saturating_sub(first.memory_usage);
-            analysis.peak_memory =
-                self.performance_snapshots.iter().map(|s| s.memory_usage).max().unwrap_or(0);
+            analysis.peak_memory = self
+                .performance_snapshots
+                .iter()
+                .map(|s| s.memory_usage)
+                .max()
+                .unwrap_or(0);
         }
 
         analysis
@@ -313,7 +332,11 @@ fn create_real_world_patterns() -> Vec<RealWorldPattern> {
         RealWorldPattern {
             name: "ide_navigation_pattern".to_string(),
             description: "Common IDE navigation with hover -> definition -> references".to_string(),
-            sequence: vec![PatternStep::Hover, PatternStep::Definition, PatternStep::References],
+            sequence: vec![
+                PatternStep::Hover,
+                PatternStep::Definition,
+                PatternStep::References,
+            ],
             cancellation_likelihood: 0.2, // 20% chance of cancellation at each step
         },
         RealWorldPattern {
@@ -488,23 +511,34 @@ fn test_comprehensive_cancellation_workflow_e2e() {
     let mut fixture = E2ETestFixture::new();
 
     println!("Starting comprehensive E2E cancellation workflow test");
-    fixture.performance_monitor.take_performance_snapshot("test_start");
+    fixture
+        .performance_monitor
+        .take_performance_snapshot("test_start");
 
     // Run all E2E test scenarios
     for scenario in &fixture.test_workspace.scenarios.clone() {
         println!("Executing E2E scenario: {}", scenario.name);
 
-        let scenario_result = fixture.scenario_runner.run_scenario(scenario, &fixture.server);
+        let scenario_result = fixture
+            .scenario_runner
+            .run_scenario(scenario, &fixture.server);
 
         // Validate scenario results
-        assert!(scenario_result.success, "E2E scenario '{}' should succeed", scenario.name);
+        assert!(
+            scenario_result.success,
+            "E2E scenario '{}' should succeed",
+            scenario.name
+        );
 
         assert!(
             scenario_result.duration <= scenario.performance_requirements.max_total_duration,
             "Scenario '{}' duration {}ms exceeds limit {}ms",
             scenario.name,
             scenario_result.duration.as_millis(),
-            scenario.performance_requirements.max_total_duration.as_millis()
+            scenario
+                .performance_requirements
+                .max_total_duration
+                .as_millis()
         );
 
         println!(
@@ -516,17 +550,30 @@ fn test_comprehensive_cancellation_workflow_e2e() {
         );
 
         // Take performance snapshot after each scenario
-        fixture.performance_monitor.take_performance_snapshot(&format!("after_{}", scenario.name));
+        fixture
+            .performance_monitor
+            .take_performance_snapshot(&format!("after_{}", scenario.name));
     }
 
-    fixture.performance_monitor.take_performance_snapshot("test_end");
+    fixture
+        .performance_monitor
+        .take_performance_snapshot("test_end");
 
     // Analyze overall E2E performance
     let performance_analysis = fixture.performance_monitor.analyze_performance();
     println!("E2E Performance Analysis:");
-    println!("  Total duration: {}ms", performance_analysis.total_duration.as_millis());
-    println!("  Memory growth: {} KB", performance_analysis.memory_growth / 1024);
-    println!("  Peak memory: {} MB", performance_analysis.peak_memory / (1024 * 1024));
+    println!(
+        "  Total duration: {}ms",
+        performance_analysis.total_duration.as_millis()
+    );
+    println!(
+        "  Memory growth: {} KB",
+        performance_analysis.memory_growth / 1024
+    );
+    println!(
+        "  Peak memory: {} MB",
+        performance_analysis.peak_memory / (1024 * 1024)
+    );
 
     // Validate overall performance requirements
     assert!(
@@ -580,7 +627,9 @@ fn test_high_load_cancellation_behavior_e2e() {
     // Create high-load scenario with concurrent operations and cancellations
     let high_load_operations = create_high_load_operations(20); // Reduced for E2E stability
 
-    fixture.performance_monitor.take_performance_snapshot("high_load_start");
+    fixture
+        .performance_monitor
+        .take_performance_snapshot("high_load_start");
 
     // Execute high-load operations concurrently
     let operation_start = Instant::now();
@@ -592,7 +641,9 @@ fn test_high_load_cancellation_behavior_e2e() {
         load_duration.as_millis()
     );
 
-    fixture.performance_monitor.take_performance_snapshot("high_load_end");
+    fixture
+        .performance_monitor
+        .take_performance_snapshot("high_load_end");
 
     // Validate system remains responsive after high load
     let health_check_start = Instant::now();
@@ -663,7 +714,11 @@ fn create_high_load_operations(count: usize) -> Vec<HighLoadOperation> {
             } else {
                 0
             }),
-            priority: if i % 10 == 0 { OperationPriority::High } else { OperationPriority::Normal },
+            priority: if i % 10 == 0 {
+                OperationPriority::High
+            } else {
+                OperationPriority::Normal
+            },
         });
     }
 
@@ -698,9 +753,18 @@ impl Drop for E2ETestFixture {
         // Generate comprehensive E2E report
         let performance_analysis = self.performance_monitor.analyze_performance();
         println!("Performance Summary:");
-        println!("  Total test duration: {}s", performance_analysis.total_duration.as_secs());
-        println!("  Memory growth: {} MB", performance_analysis.memory_growth / (1024 * 1024));
-        println!("  Peak memory usage: {} MB", performance_analysis.peak_memory / (1024 * 1024));
+        println!(
+            "  Total test duration: {}s",
+            performance_analysis.total_duration.as_secs()
+        );
+        println!(
+            "  Memory growth: {} MB",
+            performance_analysis.memory_growth / (1024 * 1024)
+        );
+        println!(
+            "  Peak memory usage: {} MB",
+            performance_analysis.peak_memory / (1024 * 1024)
+        );
 
         // Report scenario metrics
         println!("Scenario Metrics:");

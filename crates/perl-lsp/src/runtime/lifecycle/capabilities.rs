@@ -180,7 +180,8 @@ impl LspServer {
                 .is_some();
 
             if supports_pull {
-                self.client_supports_pull_diags.store(true, Ordering::Relaxed);
+                self.client_supports_pull_diags
+                    .store(true, Ordering::Relaxed);
                 tracing::debug!(
                     "Client supports pull diagnostics - suppressing automatic publishing"
                 );
@@ -239,7 +240,11 @@ impl LspServer {
         let has_perltidy = self.detect_tool("perltidy");
         let has_perlcritic = self.detect_tool("perlcritic");
 
-        tracing::debug!(perltidy = has_perltidy, perlcritic = has_perlcritic, "Tool availability");
+        tracing::debug!(
+            perltidy = has_perltidy,
+            perlcritic = has_perlcritic,
+            "Tool availability"
+        );
 
         // TextDocumentSyncKind::Full (1): the server always reparses the full
         // document on every didChange notification.  Advertising Incremental (2)
@@ -428,7 +433,10 @@ mod tests {
     fn apply_disabled_feature_id_execute_command_zeros_field() {
         let mut flags = BuildFlags::all();
         apply_disabled_feature_id(&mut flags, "lsp.execute_command");
-        assert!(!flags.execute_command, "lsp.execute_command must zero execute_command field");
+        assert!(
+            !flags.execute_command,
+            "lsp.execute_command must zero execute_command field"
+        );
         assert!(flags.completion, "other flags must be unchanged");
     }
 
@@ -480,6 +488,11 @@ mod tests {
 
         let _ = server.handle_initialize(Some(params));
 
-        assert!(server.client_capabilities.lock().workspace_configuration_support);
+        assert!(
+            server
+                .client_capabilities
+                .lock()
+                .workspace_configuration_support
+        );
     }
 }

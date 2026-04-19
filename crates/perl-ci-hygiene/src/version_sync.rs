@@ -98,11 +98,16 @@ pub fn check(repo_root: &Path) -> Result<()> {
     println!("  Canonical (Cargo.toml workspace): {workspace_version}");
     println!("  Discovered version sites: {}", sites.len());
 
-    let mismatches: Vec<&VersionSite> =
-        sites.iter().filter(|s| s.found != workspace_version).collect();
+    let mismatches: Vec<&VersionSite> = sites
+        .iter()
+        .filter(|s| s.found != workspace_version)
+        .collect();
 
     if mismatches.is_empty() {
-        println!("Version sync check: all {} sites agree on {workspace_version}", sites.len());
+        println!(
+            "Version sync check: all {} sites agree on {workspace_version}",
+            sites.len()
+        );
         return Ok(());
     }
 
@@ -318,7 +323,10 @@ fn collect_root_cargo_toml_sites(repo_root: &Path, sites: &mut Vec<VersionSite>)
             && let Some(caps) = patterns.workspace_dep_with_version.captures(line)
         {
             // Name is everything before the first `=` on the line.
-            let name = line.split_once('=').map(|(n, _)| n.trim()).unwrap_or("<unknown>");
+            let name = line
+                .split_once('=')
+                .map(|(n, _)| n.trim())
+                .unwrap_or("<unknown>");
             let v = caps[1].to_string();
             sites.push(VersionSite {
                 path: rel.clone(),
@@ -396,7 +404,10 @@ fn collect_crate_cargo_toml_sites(repo_root: &Path, sites: &mut Vec<VersionSite>
                     line: line_no,
                     description: format!(
                         "{} [package] version",
-                        crate_dir.file_name().and_then(|n| n.to_str()).unwrap_or("<crate>")
+                        crate_dir
+                            .file_name()
+                            .and_then(|n| n.to_str())
+                            .unwrap_or("<crate>")
                     ),
                     found: v,
                 });
@@ -405,14 +416,20 @@ fn collect_crate_cargo_toml_sites(repo_root: &Path, sites: &mut Vec<VersionSite>
             }
 
             if in_deps && let Some(caps) = patterns.crate_dep_with_version.captures(line) {
-                let name = line.split_once('=').map(|(n, _)| n.trim()).unwrap_or("<unknown>");
+                let name = line
+                    .split_once('=')
+                    .map(|(n, _)| n.trim())
+                    .unwrap_or("<unknown>");
                 let v = caps[1].to_string();
                 sites.push(VersionSite {
                     path: rel.clone(),
                     line: line_no,
                     description: format!(
                         "{} dependency on {name}",
-                        crate_dir.file_name().and_then(|n| n.to_str()).unwrap_or("<crate>")
+                        crate_dir
+                            .file_name()
+                            .and_then(|n| n.to_str())
+                            .unwrap_or("<crate>")
                     ),
                     found: v,
                 });
@@ -613,7 +630,10 @@ mod tests {
     fn rewrite_version_in_line_replaces_only_target() {
         let line = r#"perl-foo = { path = "crates/perl-foo", version = "0.12.2" }"#;
         let updated = rewrite_version_in_line(line, "0.12.2", "0.13.0");
-        assert_eq!(updated, r#"perl-foo = { path = "crates/perl-foo", version = "0.13.0" }"#);
+        assert_eq!(
+            updated,
+            r#"perl-foo = { path = "crates/perl-foo", version = "0.13.0" }"#
+        );
     }
 
     #[test]

@@ -42,7 +42,11 @@ mod module_name_to_path_mapping {
     fn three_segment_module_creates_nested_dirs() -> Result<(), Box<dyn std::error::Error>> {
         let temp = tempfile::tempdir()?;
         let root = temp.path();
-        let target = root.join("lib").join("App").join("Config").join("Loader.pm");
+        let target = root
+            .join("lib")
+            .join("App")
+            .join("Config")
+            .join("Loader.pm");
 
         std::fs::create_dir_all(target.parent().ok_or("missing parent")?)?;
         std::fs::write(&target, "package App::Config::Loader; 1;")?;
@@ -73,8 +77,13 @@ mod module_name_to_path_mapping {
     fn five_segment_module_maps_to_deep_path() -> Result<(), Box<dyn std::error::Error>> {
         let temp = tempfile::tempdir()?;
         let root = temp.path();
-        let target =
-            root.join("lib").join("Org").join("Corp").join("Dept").join("Team").join("Worker.pm");
+        let target = root
+            .join("lib")
+            .join("Org")
+            .join("Corp")
+            .join("Dept")
+            .join("Team")
+            .join("Worker.pm");
 
         std::fs::create_dir_all(target.parent().ok_or("missing parent")?)?;
         std::fs::write(&target, "package Org::Corp::Dept::Team::Worker; 1;")?;
@@ -96,7 +105,9 @@ mod module_name_to_path_mapping {
         std::fs::create_dir_all(target.parent().ok_or("missing parent")?)?;
         std::fs::write(&target, "package Data::Dumper; 1;")?;
 
-        let ws_uri = url::Url::from_file_path(&ws).map_err(|()| "bad URI")?.to_string();
+        let ws_uri = url::Url::from_file_path(&ws)
+            .map_err(|()| "bad URI")?
+            .to_string();
 
         let result = resolve_module_uri(
             "Data::Dumper",
@@ -116,7 +127,10 @@ mod module_name_to_path_mapping {
                 );
                 // Verify no `::` leaked into the file path portion
                 let path_part = uri.strip_prefix("file://").ok_or("not a file URI")?;
-                assert!(!path_part.contains("::"), "path should not contain ::, got: {path_part}");
+                assert!(
+                    !path_part.contains("::"),
+                    "path should not contain ::, got: {path_part}"
+                );
             }
             other => return Err(format!("expected Resolved, got {other:?}").into()),
         }
@@ -159,7 +173,9 @@ mod require_module_resolution {
         std::fs::create_dir_all(target.parent().ok_or("missing parent")?)?;
         std::fs::write(&target, "package IO::Socket; 1;")?;
 
-        let ws_uri = url::Url::from_file_path(&ws).map_err(|()| "bad URI")?.to_string();
+        let ws_uri = url::Url::from_file_path(&ws)
+            .map_err(|()| "bad URI")?
+            .to_string();
 
         let result = resolve_module_uri(
             "IO::Socket",
@@ -173,7 +189,10 @@ mod require_module_resolution {
 
         match result {
             ModuleUriResolution::Resolved(uri) => {
-                assert!(uri.ends_with("IO/Socket.pm"), "expected IO/Socket.pm, got: {uri}");
+                assert!(
+                    uri.ends_with("IO/Socket.pm"),
+                    "expected IO/Socket.pm, got: {uri}"
+                );
             }
             other => return Err(format!("expected Resolved, got {other:?}").into()),
         }
@@ -190,8 +209,15 @@ mod require_module_resolution {
         std::fs::create_dir_all(&inc_dir)?;
         std::fs::write(&target, "package Cwd; 1;")?;
 
-        let result =
-            resolve_module_uri("Cwd", &[], &[], &[], true, &[inc_dir], Duration::from_millis(200));
+        let result = resolve_module_uri(
+            "Cwd",
+            &[],
+            &[],
+            &[],
+            true,
+            &[inc_dir],
+            Duration::from_millis(200),
+        );
 
         match result {
             ModuleUriResolution::Resolved(uri) => {
@@ -250,7 +276,11 @@ mod require_file_path_resolution {
     fn file_path_require_deep_nesting() -> Result<(), Box<dyn std::error::Error>> {
         let temp = tempfile::tempdir()?;
         let root = temp.path();
-        let target = root.join("lib").join("HTTP").join("Request").join("Common.pm");
+        let target = root
+            .join("lib")
+            .join("HTTP")
+            .join("Request")
+            .join("Common.pm");
 
         std::fs::create_dir_all(target.parent().ok_or("missing parent")?)?;
         std::fs::write(&target, "package HTTP::Request::Common; 1;")?;
@@ -287,7 +317,9 @@ mod inc_search_order {
         std::fs::write(&ws_target, "# workspace version")?;
         std::fs::write(&inc_target, "# inc version")?;
 
-        let ws_uri = url::Url::from_file_path(&ws).map_err(|()| "bad URI")?.to_string();
+        let ws_uri = url::Url::from_file_path(&ws)
+            .map_err(|()| "bad URI")?
+            .to_string();
 
         // An open document matching the suffix should win over everything
         let open_doc = "file:///editor/lib/Order/Test.pm".to_string();
@@ -326,7 +358,9 @@ mod inc_search_order {
         std::fs::write(&ws_target, "# workspace")?;
         std::fs::write(&inc_target, "# system inc")?;
 
-        let ws_uri = url::Url::from_file_path(&ws).map_err(|()| "bad URI")?.to_string();
+        let ws_uri = url::Url::from_file_path(&ws)
+            .map_err(|()| "bad URI")?
+            .to_string();
 
         let result = resolve_module_uri(
             "Priority::Mod",
@@ -340,7 +374,10 @@ mod inc_search_order {
 
         match result {
             ModuleUriResolution::Resolved(uri) => {
-                assert!(uri.contains("ws"), "workspace should win over @INC, got: {uri}");
+                assert!(
+                    uri.contains("ws"),
+                    "workspace should win over @INC, got: {uri}"
+                );
             }
             other => return Err(format!("expected Resolved, got {other:?}").into()),
         }
@@ -359,7 +396,9 @@ mod inc_search_order {
         std::fs::create_dir_all(target.parent().ok_or("missing parent")?)?;
         std::fs::write(&target, "package Fallback::Mod; 1;")?;
 
-        let ws_uri = url::Url::from_file_path(&ws).map_err(|()| "bad URI")?.to_string();
+        let ws_uri = url::Url::from_file_path(&ws)
+            .map_err(|()| "bad URI")?
+            .to_string();
 
         let result = resolve_module_uri(
             "Fallback::Mod",
@@ -373,7 +412,10 @@ mod inc_search_order {
 
         match result {
             ModuleUriResolution::Resolved(uri) => {
-                assert!(uri.contains("perl5lib"), "should fall back to system @INC, got: {uri}");
+                assert!(
+                    uri.contains("perl5lib"),
+                    "should fall back to system @INC, got: {uri}"
+                );
             }
             other => return Err(format!("expected Resolved, got {other:?}").into()),
         }
@@ -404,7 +446,11 @@ mod inc_search_order {
             &[],
             &[],
             true,
-            &[PathBuf::from(&site_perl), PathBuf::from(&vendor_perl), PathBuf::from(&core_perl)],
+            &[
+                PathBuf::from(&site_perl),
+                PathBuf::from(&vendor_perl),
+                PathBuf::from(&core_perl),
+            ],
             Duration::from_millis(200),
         );
 
@@ -436,8 +482,11 @@ mod inc_search_order {
         std::fs::write(&lib_target, "# lib")?;
 
         // "vendor" listed first in include_paths
-        let result =
-            resolve_module_path(root, "Search::Order", &["vendor".to_string(), "lib".to_string()]);
+        let result = resolve_module_path(
+            root,
+            "Search::Order",
+            &["vendor".to_string(), "lib".to_string()],
+        );
         assert_eq!(result, Some(vendor_target));
         Ok(())
     }
@@ -508,10 +557,18 @@ mod use_lib_effect {
         let result = resolve_module_path(
             root,
             "Stack::Mod",
-            &["second_lib".to_string(), "first_lib".to_string(), "lib".to_string()],
+            &[
+                "second_lib".to_string(),
+                "first_lib".to_string(),
+                "lib".to_string(),
+            ],
         );
 
-        assert_eq!(result, Some(second_lib), "most recently prepended use lib should win");
+        assert_eq!(
+            result,
+            Some(second_lib),
+            "most recently prepended use lib should win"
+        );
         Ok(())
     }
 
@@ -527,10 +584,17 @@ mod use_lib_effect {
         std::fs::write(&target, "package Real::Mod; 1;")?;
 
         // "nonexistent" does not exist on disk
-        let result =
-            resolve_module_path(root, "Real::Mod", &["nonexistent".to_string(), "lib".to_string()]);
+        let result = resolve_module_path(
+            root,
+            "Real::Mod",
+            &["nonexistent".to_string(), "lib".to_string()],
+        );
 
-        assert_eq!(result, Some(target), "should fall through nonexistent path to lib");
+        assert_eq!(
+            result,
+            Some(target),
+            "should fall through nonexistent path to lib"
+        );
         Ok(())
     }
 
@@ -549,7 +613,9 @@ mod use_lib_effect {
         std::fs::write(&lib_target, "# lib version")?;
         std::fs::write(&extra_target, "# extra_lib version")?;
 
-        let ws_uri = url::Url::from_file_path(&ws).map_err(|()| "bad URI")?.to_string();
+        let ws_uri = url::Url::from_file_path(&ws)
+            .map_err(|()| "bad URI")?
+            .to_string();
 
         // Simulate: use lib 'extra_lib' prepends before 'lib'
         let result = resolve_module_uri(
@@ -603,7 +669,11 @@ mod relative_vs_absolute_paths {
     fn nested_relative_include_path() -> Result<(), Box<dyn std::error::Error>> {
         let temp = tempfile::tempdir()?;
         let root = temp.path();
-        let target = root.join("vendor").join("lib").join("Nested").join("Rel.pm");
+        let target = root
+            .join("vendor")
+            .join("lib")
+            .join("Nested")
+            .join("Rel.pm");
 
         std::fs::create_dir_all(target.parent().ok_or("missing parent")?)?;
         std::fs::write(&target, "package Nested::Rel; 1;")?;
@@ -723,7 +793,10 @@ mod legacy_separator_resolution {
         // Should produce a valid path (the fallback)
         assert!(path.is_some());
         if let Some(p) = path {
-            assert!(p.to_string_lossy().contains("Old"), "path should contain module directory");
+            assert!(
+                p.to_string_lossy().contains("Old"),
+                "path should contain module directory"
+            );
         }
     }
 }

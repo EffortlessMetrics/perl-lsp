@@ -72,7 +72,10 @@ fn scalar_variable_no_false_positives() {
     let items = completions_at_end(code);
     assert!(has_label(&items, "$alpha"), "should suggest $alpha");
     // @beta should NOT appear as a scalar completion
-    assert!(!has_label(&items, "@beta"), "should not suggest @beta for scalar prefix");
+    assert!(
+        !has_label(&items, "@beta"),
+        "should not suggest @beta for scalar prefix"
+    );
 }
 
 #[test]
@@ -125,7 +128,10 @@ fn variable_completion_with_longer_prefix() {
     let items = completions_at_end(code);
     assert!(has_label(&items, "$total_items"));
     assert!(has_label(&items, "$total_count"));
-    assert!(!has_label(&items, "$other"), "should not suggest $other for prefix $total_");
+    assert!(
+        !has_label(&items, "$other"),
+        "should not suggest $other for prefix $total_"
+    );
 }
 
 // ===========================================================================
@@ -144,7 +150,10 @@ fn user_defined_function_completion() {
 fn ampersand_function_completion() {
     let code = "sub my_func { }\n&my";
     let items = completions_at_end(code);
-    assert!(has_label(&items, "my_func"), "should suggest my_func via &prefix");
+    assert!(
+        has_label(&items, "my_func"),
+        "should suggest my_func via &prefix"
+    );
 }
 
 #[test]
@@ -228,7 +237,10 @@ fn keyword_snippets_have_insert_text() {
     let items = completions_at_end(code);
     let sub_item = must_some(items.iter().find(|i| i.label == "sub"));
     let insert = must_some(sub_item.insert_text.as_ref());
-    assert!(insert.contains("${1:name}"), "sub snippet should contain placeholder");
+    assert!(
+        insert.contains("${1:name}"),
+        "sub snippet should contain placeholder"
+    );
 }
 
 #[test]
@@ -265,7 +277,10 @@ fn dbi_db_method_completion() {
     let items = completions_at_end(code);
     assert!(has_label(&items, "prepare"), "should suggest prepare");
     assert!(has_label(&items, "do"), "should suggest do");
-    assert!(has_label(&items, "selectrow_hashref"), "should suggest selectrow_hashref");
+    assert!(
+        has_label(&items, "selectrow_hashref"),
+        "should suggest selectrow_hashref"
+    );
     assert!(has_label(&items, "disconnect"), "should suggest disconnect");
     assert!(has_label(&items, "commit"), "should suggest commit");
 }
@@ -275,8 +290,14 @@ fn dbi_st_method_completion() {
     let code = "my $sth = $dbh->prepare('SELECT 1');\n$sth->";
     let items = completions_at_end(code);
     assert!(has_label(&items, "execute"), "should suggest execute");
-    assert!(has_label(&items, "fetchrow_hashref"), "should suggest fetchrow_hashref");
-    assert!(has_label(&items, "fetchall_arrayref"), "should suggest fetchall_arrayref");
+    assert!(
+        has_label(&items, "fetchrow_hashref"),
+        "should suggest fetchrow_hashref"
+    );
+    assert!(
+        has_label(&items, "fetchall_arrayref"),
+        "should suggest fetchall_arrayref"
+    );
     assert!(has_label(&items, "finish"), "should suggest finish");
     assert!(has_label(&items, "rows"), "should suggest rows");
 }
@@ -312,7 +333,10 @@ sub internal_func { }
     let code = "use Utils;\nUtils::";
     let provider = parse_provider_with_index(code, index);
     let items = provider.get_completions(code, code.len());
-    assert!(has_label(&items, "helper_func"), "should suggest helper_func");
+    assert!(
+        has_label(&items, "helper_func"),
+        "should suggest helper_func"
+    );
 }
 
 #[test]
@@ -357,7 +381,10 @@ fn test_more_completions_in_test_file() {
     let items = provider.get_completions_with_path(code, code.len(), Some("/t/basic.t"));
     assert!(has_label(&items, "ok"), "should suggest ok in test file");
     assert!(has_label(&items, "is"), "should suggest is in test file");
-    assert!(has_label(&items, "done_testing"), "should suggest done_testing");
+    assert!(
+        has_label(&items, "done_testing"),
+        "should suggest done_testing"
+    );
     assert!(has_label(&items, "subtest"), "should suggest subtest");
 }
 
@@ -367,7 +394,10 @@ fn test_more_completions_with_use_test_more() {
     let provider = parse_and_provider(code);
     // Even without .t extension, use Test::More triggers test context
     let items = provider.get_completions_with_path(code, code.len(), Some("/lib/foo.pl"));
-    assert!(has_label(&items, "ok"), "use Test::More should enable test completions");
+    assert!(
+        has_label(&items, "ok"),
+        "use Test::More should enable test completions"
+    );
 }
 
 #[test]
@@ -375,7 +405,10 @@ fn test_more_completions_with_use_test2() {
     let code = "use Test2::V0;\n";
     let provider = parse_and_provider(code);
     let items = provider.get_completions_with_path(code, code.len(), Some("/lib/foo.pl"));
-    assert!(has_label(&items, "ok"), "use Test2::V0 should enable test completions");
+    assert!(
+        has_label(&items, "ok"),
+        "use Test2::V0 should enable test completions"
+    );
 }
 
 #[test]
@@ -395,11 +428,15 @@ fn test_more_completion_has_snippet() {
     let code = "use Test::More;\nis";
     let provider = parse_and_provider(code);
     let items = provider.get_completions_with_path(code, code.len(), Some("/t/test.t"));
-    let is_item =
-        items.iter().find(|i| i.label == "is" && i.detail.as_deref() == Some("Test::More"));
+    let is_item = items
+        .iter()
+        .find(|i| i.label == "is" && i.detail.as_deref() == Some("Test::More"));
     if let Some(item) = is_item {
         let insert = must_some(item.insert_text.as_ref());
-        assert!(insert.contains("${1:got}"), "is snippet should have placeholders");
+        assert!(
+            insert.contains("${1:got}"),
+            "is snippet should have placeholders"
+        );
     }
 }
 
@@ -413,20 +450,38 @@ fn moo_has_option_completion_basic() {
     let items = completions_at_end(code);
     assert!(has_label(&items, "is"), "should suggest 'is' option");
     assert!(has_label(&items, "isa"), "should suggest 'isa' option");
-    assert!(has_label(&items, "default"), "should suggest 'default' option");
-    assert!(has_label(&items, "required"), "should suggest 'required' option");
+    assert!(
+        has_label(&items, "default"),
+        "should suggest 'default' option"
+    );
+    assert!(
+        has_label(&items, "required"),
+        "should suggest 'required' option"
+    );
     assert!(has_label(&items, "lazy"), "should suggest 'lazy' option");
-    assert!(has_label(&items, "builder"), "should suggest 'builder' option");
+    assert!(
+        has_label(&items, "builder"),
+        "should suggest 'builder' option"
+    );
 }
 
 #[test]
 fn moo_has_option_completion_with_prefix() {
     let code = "use Moo;\nhas 'name' => (re";
     let items = completions_at_end(code);
-    assert!(has_label(&items, "required"), "should suggest 'required' matching 're'");
-    assert!(has_label(&items, "reader"), "should suggest 'reader' matching 're'");
+    assert!(
+        has_label(&items, "required"),
+        "should suggest 'required' matching 're'"
+    );
+    assert!(
+        has_label(&items, "reader"),
+        "should suggest 'reader' matching 're'"
+    );
     // 'is' should NOT appear because it doesn't start with 're'
-    assert!(!has_label(&items, "is"), "'is' should not match prefix 're'");
+    assert!(
+        !has_label(&items, "is"),
+        "'is' should not match prefix 're'"
+    );
 }
 
 #[test]
@@ -465,10 +520,23 @@ fn test_get_test_more_documentation_unknown_returns_none() {
 
 #[test]
 fn test_get_test_more_documentation_covers_core_assertions() {
-    let core_fns = ["ok", "is", "isnt", "like", "unlike", "is_deeply", "isa_ok", "can_ok"];
+    let core_fns = [
+        "ok",
+        "is",
+        "isnt",
+        "like",
+        "unlike",
+        "is_deeply",
+        "isa_ok",
+        "can_ok",
+    ];
     for name in core_fns {
         let doc = perl_lsp_completion::get_test_more_documentation(name);
-        assert!(doc.is_some(), "'{}' should have Test::More documentation", name);
+        assert!(
+            doc.is_some(),
+            "'{}' should have Test::More documentation",
+            name
+        );
     }
 }
 
@@ -502,7 +570,11 @@ fn test_get_test_more_documentation_covers_all_functions() {
     ];
     for name in all_fns {
         let doc = perl_lsp_completion::get_test_more_documentation(name);
-        assert!(doc.is_some(), "'{}' should have Test::More documentation", name);
+        assert!(
+            doc.is_some(),
+            "'{}' should have Test::More documentation",
+            name
+        );
     }
 }
 
@@ -548,18 +620,28 @@ fn test_get_test_more_documentation_signatures_are_valid_perl() {
 #[test]
 fn test_get_test_more_documentation_diag_mentions_stderr() {
     let (_sig, desc) = must_some(perl_lsp_completion::get_test_more_documentation("diag"));
-    assert!(desc.contains("STDERR"), "diag description should mention STDERR, got: {}", desc);
+    assert!(
+        desc.contains("STDERR"),
+        "diag description should mention STDERR, got: {}",
+        desc
+    );
 }
 
 #[test]
 fn test_get_test_more_documentation_note_mentions_stdout() {
     let (_sig, desc) = must_some(perl_lsp_completion::get_test_more_documentation("note"));
-    assert!(desc.contains("STDOUT"), "note description should mention STDOUT, got: {}", desc);
+    assert!(
+        desc.contains("STDOUT"),
+        "note description should mention STDOUT, got: {}",
+        desc
+    );
 }
 
 #[test]
 fn test_get_test_more_documentation_done_testing_has_optional_param() {
-    let (sig, _desc) = must_some(perl_lsp_completion::get_test_more_documentation("done_testing"));
+    let (sig, _desc) = must_some(perl_lsp_completion::get_test_more_documentation(
+        "done_testing",
+    ));
     assert!(
         sig.contains("?"),
         "done_testing signature should indicate optional parameter, got: {}",
@@ -588,7 +670,10 @@ fn moo_has_option_not_in_value_position() {
     let code = "use Moo;\nhas 'name' => (is => ";
     let items = completions_at_end(code);
     // In value position (after =>), should NOT suggest option keys
-    assert!(!has_label(&items, "required"), "should not suggest option keys in value position");
+    assert!(
+        !has_label(&items, "required"),
+        "should not suggest option keys in value position"
+    );
 }
 
 #[test]
@@ -623,7 +708,10 @@ fn no_completion_in_comment() {
 fn no_completion_in_comment_middle_of_line() {
     let code = "my $x = 1; # some comment pr";
     let items = completions_at_end(code);
-    assert!(items.is_empty(), "should not complete inside line-end comments");
+    assert!(
+        items.is_empty(),
+        "should not complete inside line-end comments"
+    );
 }
 
 // ===========================================================================
@@ -648,7 +736,10 @@ fn non_cancelled_returns_results() {
     let code = "my $x = 1;\n$x";
     let provider = parse_and_provider(code);
     let items = provider.get_completions_with_path_cancellable(code, code.len(), None, &|| false);
-    assert!(!items.is_empty(), "non-cancelled request should return results");
+    assert!(
+        !items.is_empty(),
+        "non-cancelled request should return results"
+    );
 }
 
 // ===========================================================================
@@ -660,7 +751,10 @@ fn empty_source_returns_something() {
     let code = "";
     let items = completions_at_end(code);
     // Empty prefix returns keywords + builtins
-    assert!(!items.is_empty(), "empty source should still return keyword completions");
+    assert!(
+        !items.is_empty(),
+        "empty source should still return keyword completions"
+    );
 }
 
 #[test]
@@ -668,7 +762,10 @@ fn position_beyond_source_returns_empty() {
     let code = "my $x = 1;";
     let provider = parse_and_provider(code);
     let items = provider.get_completions(code, code.len() + 100);
-    assert!(items.is_empty(), "position beyond source should return empty");
+    assert!(
+        items.is_empty(),
+        "position beyond source should return empty"
+    );
 }
 
 #[test]
@@ -683,7 +780,10 @@ fn position_zero_returns_completions() {
 fn single_character_prefix() {
     let code = "m";
     let items = completions_at_end(code);
-    assert!(has_label(&items, "map"), "should suggest 'map' for prefix 'm'");
+    assert!(
+        has_label(&items, "map"),
+        "should suggest 'map' for prefix 'm'"
+    );
 }
 
 #[test]
@@ -718,7 +818,10 @@ fn completion_item_has_sort_text() {
     let code = "my $foo = 1;\n$f";
     let items = completions_at_end(code);
     let item = must_some(items.iter().find(|i| i.label == "$foo"));
-    assert!(item.sort_text.is_some(), "completion item should have sort_text");
+    assert!(
+        item.sort_text.is_some(),
+        "completion item should have sort_text"
+    );
 }
 
 #[test]
@@ -726,7 +829,10 @@ fn completion_item_has_filter_text() {
     let code = "my $bar = 1;\n$b";
     let items = completions_at_end(code);
     let item = must_some(items.iter().find(|i| i.label == "$bar"));
-    assert!(item.filter_text.is_some(), "completion item should have filter_text");
+    assert!(
+        item.filter_text.is_some(),
+        "completion item should have filter_text"
+    );
 }
 
 #[test]
@@ -734,7 +840,10 @@ fn completion_item_has_text_edit_range() {
     let code = "my $baz = 1;\n$b";
     let items = completions_at_end(code);
     let item = must_some(items.iter().find(|i| i.label == "$baz"));
-    assert!(item.text_edit_range.is_some(), "completion item should have text_edit_range");
+    assert!(
+        item.text_edit_range.is_some(),
+        "completion item should have text_edit_range"
+    );
 }
 
 #[test]
@@ -742,7 +851,10 @@ fn completion_item_has_insert_text() {
     let code = "my $qux = 1;\n$q";
     let items = completions_at_end(code);
     let item = must_some(items.iter().find(|i| i.label == "$qux"));
-    assert!(item.insert_text.is_some(), "completion item should have insert_text");
+    assert!(
+        item.insert_text.is_some(),
+        "completion item should have insert_text"
+    );
 }
 
 // ===========================================================================
@@ -813,7 +925,11 @@ fn duplicates_are_removed() {
     let code = "sub sort { }\nsor";
     let items = completions_at_end(code);
     let sort_count = items.iter().filter(|i| i.label == "sort").count();
-    assert!(sort_count <= 1, "duplicate 'sort' should be removed, found {}", sort_count);
+    assert!(
+        sort_count <= 1,
+        "duplicate 'sort' should be removed, found {}",
+        sort_count
+    );
 }
 
 // ===========================================================================
@@ -869,7 +985,10 @@ fn get_completions_with_path_some() {
     let code = "my $x = 1;\n$x";
     let provider = parse_and_provider(code);
     let items = provider.get_completions_with_path(code, code.len(), Some("/path/to/file.pl"));
-    assert!(has_label(&items, "$x"), "should complete $x with a filepath");
+    assert!(
+        has_label(&items, "$x"),
+        "should complete $x with a filepath"
+    );
 }
 
 // ===========================================================================
@@ -910,8 +1029,10 @@ fn workspace_symbol_completion_requires_prefix() {
     let provider = parse_provider_with_index(code, index);
     let items = provider.get_completions(code, 0);
     // With empty prefix, workspace symbols may be skipped
-    let ws_funcs: Vec<_> =
-        items.iter().filter(|i| i.detail.as_deref() == Some("workspace")).collect();
+    let ws_funcs: Vec<_> = items
+        .iter()
+        .filter(|i| i.detail.as_deref() == Some("workspace"))
+        .collect();
     // This is expected behavior: empty prefix filters workspace symbols
     let _ = ws_funcs;
 }
@@ -931,7 +1052,10 @@ sub private_fn { }
     let code = "use MyLib;\nMyLib::";
     let provider = parse_provider_with_index(code, index);
     let items = provider.get_completions(code, code.len());
-    assert!(has_label(&items, "exported_fn"), "exported_fn should be in completions");
+    assert!(
+        has_label(&items, "exported_fn"),
+        "exported_fn should be in completions"
+    );
 }
 
 // ===========================================================================
@@ -958,7 +1082,10 @@ fn completions_include_both_local_and_builtin() {
     let items = completions_at_end(code);
     // Should see both the builtin 'split' and user-defined 'split_data'
     assert!(has_label(&items, "split"), "should suggest builtin split");
-    assert!(has_label(&items, "split_data"), "should suggest user-defined split_data");
+    assert!(
+        has_label(&items, "split_data"),
+        "should suggest user-defined split_data"
+    );
 }
 
 #[test]
@@ -1006,7 +1133,10 @@ sub process {
     let pos = must_some(code.find("$self->")) + "$self->".len();
     let provider = parse_and_provider(code);
     let items = provider.get_completions(code, pos);
-    assert!(has_label(&items, "email"), "Moo accessor 'email' should appear in method completions");
+    assert!(
+        has_label(&items, "email"),
+        "Moo accessor 'email' should appear in method completions"
+    );
 }
 
 // ===========================================================================
@@ -1036,7 +1166,10 @@ fn get_completions_equivalent_to_with_path_none() {
     let items2 = provider.get_completions_with_path(code, code.len(), None);
     let l1 = labels(&items1);
     let l2 = labels(&items2);
-    assert_eq!(l1, l2, "get_completions should equal get_completions_with_path(None)");
+    assert_eq!(
+        l1, l2,
+        "get_completions should equal get_completions_with_path(None)"
+    );
 }
 
 // ===========================================================================
@@ -1055,7 +1188,10 @@ fn completion_at_line_boundary() {
 fn completion_mid_word() {
     let code = "my $abcdef = 1;\n$abc";
     let items = completions_at(code, code.len());
-    assert!(has_label(&items, "$abcdef"), "should complete $abcdef from prefix $abc");
+    assert!(
+        has_label(&items, "$abcdef"),
+        "should complete $abcdef from prefix $abc"
+    );
 }
 
 #[test]
@@ -1071,7 +1207,9 @@ $"#;
     let items = completions_at_end(code);
     // Both should be discovered by the symbol extractor
     assert!(
-        items.iter().any(|i| i.label.contains("outer_var") || i.label.contains("inner_var")),
+        items
+            .iter()
+            .any(|i| i.label.contains("outer_var") || i.label.contains("inner_var")),
         "should find variables from nested subs"
     );
 }

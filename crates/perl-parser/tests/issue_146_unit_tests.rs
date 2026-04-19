@@ -224,12 +224,18 @@ mod quality_assurance_tests {
     /// Test that the crate builds without warnings after fixes
     #[test]
     fn test_build_without_warnings() -> Result<(), Box<dyn std::error::Error>> {
-        let output = Command::new("cargo").args(["build", "--package", "perl-parser"]).output()?;
+        let output = Command::new("cargo")
+            .args(["build", "--package", "perl-parser"])
+            .output()?;
 
         let stderr = String::from_utf8_lossy(&output.stderr);
 
         // Should not contain compilation warnings
-        assert!(!stderr.contains("warning:"), "Build contains warnings: {}", stderr);
+        assert!(
+            !stderr.contains("warning:"),
+            "Build contains warnings: {}",
+            stderr
+        );
 
         assert!(output.status.success(), "Build failed: {}", stderr);
 
@@ -239,8 +245,9 @@ mod quality_assurance_tests {
     /// Test that tests pass after architectural repair
     #[test]
     fn test_test_suite_passes() -> Result<(), Box<dyn std::error::Error>> {
-        let output =
-            Command::new("cargo").args(["test", "--package", "perl-parser", "--lib"]).output()?;
+        let output = Command::new("cargo")
+            .args(["test", "--package", "perl-parser", "--lib"])
+            .output()?;
 
         assert!(
             output.status.success(),

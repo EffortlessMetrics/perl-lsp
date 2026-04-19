@@ -51,7 +51,12 @@ pub fn find_node_at_range(node: &Node, range: (usize, usize)) -> Option<&Node> {
                     }
                 }
             }
-            NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
+            NodeKind::If {
+                condition,
+                then_branch,
+                elsif_branches,
+                else_branch,
+            } => {
                 if let Some(result) = find_node_at_range(condition, range) {
                     return Some(result);
                 }
@@ -113,14 +118,20 @@ mod tests {
     fn finds_statement_start_after_semicolon() {
         let src = "my $x = 1;\nmy $y = 2;";
         let pos = src.find("$y").unwrap_or(0);
-        assert_eq!(find_statement_start(src, pos), src.find('\n').unwrap_or(0) + 1);
+        assert_eq!(
+            find_statement_start(src, pos),
+            src.find('\n').unwrap_or(0) + 1
+        );
     }
 
     #[test]
     fn declaration_position_delegates_to_statement_start() {
         let src = "print 'a';\nprint 'b';";
         let pos = src.find("'b'").unwrap_or(0);
-        assert_eq!(find_declaration_position(src, pos), find_statement_start(src, pos));
+        assert_eq!(
+            find_declaration_position(src, pos),
+            find_statement_start(src, pos)
+        );
     }
 
     #[test]

@@ -172,8 +172,10 @@ print "\nShowcase complete!";
             // Count different node types
             let sexp = ast.to_sexp();
             let lines: Vec<&str> = showcase.lines().collect();
-            let non_empty_lines =
-                lines.iter().filter(|l| !l.trim().is_empty() && !l.trim().starts_with('#')).count();
+            let non_empty_lines = lines
+                .iter()
+                .filter(|l| !l.trim().is_empty() && !l.trim().starts_with('#'))
+                .count();
 
             println!("\nStatistics:");
             println!("  Total lines: {}", lines.len());

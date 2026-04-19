@@ -20,8 +20,16 @@ fn compute_links_use_qualified_module() -> Result<(), Box<dyn std::error::Error>
     let links = compute_links("file:///ws/test.pl", "use Foo::Bar;\n", &[]);
     assert_eq!(links.len(), 1);
     let link = links.first().ok_or("expected at least one link")?;
-    assert_eq!(link.pointer("/data/type").and_then(serde_json::Value::as_str), Some("module"));
-    assert_eq!(link.pointer("/data/module").and_then(serde_json::Value::as_str), Some("Foo::Bar"));
+    assert_eq!(
+        link.pointer("/data/type")
+            .and_then(serde_json::Value::as_str),
+        Some("module")
+    );
+    assert_eq!(
+        link.pointer("/data/module")
+            .and_then(serde_json::Value::as_str),
+        Some("Foo::Bar")
+    );
     Ok(())
 }
 
@@ -30,7 +38,11 @@ fn compute_links_require_qualified_module() -> Result<(), Box<dyn std::error::Er
     let links = compute_links("file:///ws/test.pl", "require Foo::Bar;\n", &[]);
     assert_eq!(links.len(), 1);
     let link = links.first().ok_or("expected at least one link")?;
-    assert_eq!(link.pointer("/data/type").and_then(serde_json::Value::as_str), Some("module"));
+    assert_eq!(
+        link.pointer("/data/type")
+            .and_then(serde_json::Value::as_str),
+        Some("module")
+    );
     Ok(())
 }
 
@@ -39,8 +51,16 @@ fn compute_links_require_quoted_file_path() -> Result<(), Box<dyn std::error::Er
     let links = compute_links("file:///ws/test.pl", "require 'Foo/Bar.pm';\n", &[]);
     assert_eq!(links.len(), 1);
     let link = links.first().ok_or("expected at least one link")?;
-    assert_eq!(link.pointer("/data/type").and_then(serde_json::Value::as_str), Some("file"));
-    assert_eq!(link.pointer("/data/path").and_then(serde_json::Value::as_str), Some("Foo/Bar.pm"));
+    assert_eq!(
+        link.pointer("/data/type")
+            .and_then(serde_json::Value::as_str),
+        Some("file")
+    );
+    assert_eq!(
+        link.pointer("/data/path")
+            .and_then(serde_json::Value::as_str),
+        Some("Foo/Bar.pm")
+    );
     Ok(())
 }
 
@@ -49,7 +69,11 @@ fn compute_links_require_double_quoted_file_path() -> Result<(), Box<dyn std::er
     let links = compute_links("file:///ws/test.pl", "require \"Foo/Bar.pm\";\n", &[]);
     assert_eq!(links.len(), 1);
     let link = links.first().ok_or("expected at least one link")?;
-    assert_eq!(link.pointer("/data/type").and_then(serde_json::Value::as_str), Some("file"));
+    assert_eq!(
+        link.pointer("/data/type")
+            .and_then(serde_json::Value::as_str),
+        Some("file")
+    );
     Ok(())
 }
 
@@ -67,7 +91,11 @@ fn compute_links_skips_pragmas() {
     ];
     for pragma in &pragmas {
         let links = compute_links("file:///t.pl", pragma, &[]);
-        assert!(links.is_empty(), "pragma '{}' should not produce a document link", pragma);
+        assert!(
+            links.is_empty(),
+            "pragma '{}' should not produce a document link",
+            pragma
+        );
     }
 }
 
@@ -133,9 +161,14 @@ fn compute_links_correct_range_for_use() -> Result<(), Box<dyn std::error::Error
 fn compute_links_tooltip_contains_module_name() -> Result<(), Box<dyn std::error::Error>> {
     let links = compute_links("file:///t.pl", "use My::Module;\n", &[]);
     let link = links.first().ok_or("expected a link")?;
-    let tooltip =
-        link.pointer("/tooltip").and_then(serde_json::Value::as_str).ok_or("missing tooltip")?;
-    assert!(tooltip.contains("My::Module"), "tooltip should contain module name");
+    let tooltip = link
+        .pointer("/tooltip")
+        .and_then(serde_json::Value::as_str)
+        .ok_or("missing tooltip")?;
+    assert!(
+        tooltip.contains("My::Module"),
+        "tooltip should contain module name"
+    );
     Ok(())
 }
 
@@ -173,7 +206,11 @@ fn refs_finds_variable_references() {
     // Should find at least the declaration and one usage
     assert!(refs.is_some(), "should find variable references");
     let refs = must_some(refs);
-    assert!(refs.len() >= 2, "should find at least 2 references, found {}", refs.len());
+    assert!(
+        refs.len() >= 2,
+        "should find at least 2 references, found {}",
+        refs.len()
+    );
 }
 
 #[test]
@@ -187,7 +224,11 @@ fn refs_finds_function_call_references() {
 
     assert!(refs.is_some(), "should find subroutine references");
     let refs = must_some(refs);
-    assert!(refs.len() >= 2, "should find definition + call, found {}", refs.len());
+    assert!(
+        refs.len() >= 2,
+        "should find definition + call, found {}",
+        refs.len()
+    );
 }
 
 #[test]
@@ -278,7 +319,10 @@ fn type_hierarchy_prepare_on_package() {
 
     // Offset inside "MyClass" (byte 8 is within "package MyClass")
     let items = provider.prepare(&ast, code, 8);
-    assert!(items.is_some(), "should find type hierarchy item for package");
+    assert!(
+        items.is_some(),
+        "should find type hierarchy item for package"
+    );
     let items = must_some(items);
     assert_eq!(items.len(), 1);
     assert_eq!(items[0].name, "MyClass");
@@ -292,7 +336,10 @@ fn type_hierarchy_prepare_outside_package_returns_none() {
 
     let items = provider.prepare(&ast, code, 0);
     // Should be None since there's no package at offset 0
-    assert!(items.is_none(), "should not find hierarchy for non-package position");
+    assert!(
+        items.is_none(),
+        "should not find hierarchy for non-package position"
+    );
 }
 
 #[test]
@@ -395,7 +442,10 @@ fn type_hierarchy_no_supertypes_for_root_class() {
     };
 
     let supertypes = provider.find_supertypes(&ast, &item);
-    assert!(supertypes.is_empty(), "root class should have no supertypes");
+    assert!(
+        supertypes.is_empty(),
+        "root class should have no supertypes"
+    );
 }
 
 #[test]
@@ -589,7 +639,10 @@ fn workspace_symbols_fuzzy_match() {
     let (provider, source_map) = make_provider_with_source("file:///test.pl", source);
 
     let results = provider.search("fb", &source_map);
-    assert!(!results.is_empty(), "fuzzy match 'fb' should match 'foobar'");
+    assert!(
+        !results.is_empty(),
+        "fuzzy match 'fb' should match 'foobar'"
+    );
     assert_eq!(results[0].name, "foobar");
 }
 
@@ -616,7 +669,10 @@ fn workspace_symbols_remove_document() {
 
     // Symbol should no longer be found
     let results = provider.search("hello", &source_map);
-    assert!(results.is_empty(), "removed document symbols should not appear");
+    assert!(
+        results.is_empty(),
+        "removed document symbols should not appear"
+    );
 }
 
 #[test]
@@ -633,7 +689,10 @@ fn workspace_symbols_get_all_symbols() {
     let (provider, _source_map) = make_provider_with_source("file:///test.pl", source);
 
     let all = provider.get_all_symbols();
-    assert!(all.len() >= 2, "should return at least 2 symbols (alpha, beta)");
+    assert!(
+        all.len() >= 2,
+        "should return at least 2 symbols (alpha, beta)"
+    );
 }
 
 #[test]
@@ -686,10 +745,16 @@ fn workspace_symbols_reindex_replaces_old() {
     source_map.insert(uri.to_string(), source_v2.to_string());
 
     let results = provider.search("old_func", &source_map);
-    assert!(results.is_empty(), "old symbol should be replaced after re-index");
+    assert!(
+        results.is_empty(),
+        "old symbol should be replaced after re-index"
+    );
 
     let results = provider.search("new_func", &source_map);
-    assert!(!results.is_empty(), "new symbol should be found after re-index");
+    assert!(
+        !results.is_empty(),
+        "new symbol should be found after re-index"
+    );
 }
 
 #[test]
@@ -728,7 +793,10 @@ fn workspace_symbols_search_with_candidates() {
     assert!(!results.is_empty());
     let names: Vec<&str> = results.iter().map(|r| r.name.as_str()).collect();
     assert!(names.contains(&"alpha"));
-    assert!(!names.contains(&"beta"), "beta should not appear — not in candidates");
+    assert!(
+        !names.contains(&"beta"),
+        "beta should not appear — not in candidates"
+    );
 }
 
 #[test]
@@ -739,7 +807,10 @@ fn workspace_symbols_search_missing_source_map_entry() {
     // Search with an empty source map — should gracefully return empty
     let empty_map = HashMap::new();
     let results = provider.search("hello", &empty_map);
-    assert!(results.is_empty(), "missing source map entry should yield empty results");
+    assert!(
+        results.is_empty(),
+        "missing source map entry should yield empty results"
+    );
 }
 
 #[test]
@@ -786,7 +857,10 @@ fn workspace_symbol_serialization_no_container() -> Result<(), Box<dyn std::erro
 
     let json = serde_json::to_string(&sym)?;
     // container_name should be omitted (skip_serializing_if = "Option::is_none")
-    assert!(!json.contains("containerName"), "None container should be omitted");
+    assert!(
+        !json.contains("containerName"),
+        "None container should be omitted"
+    );
     Ok(())
 }
 
@@ -847,7 +921,11 @@ fn workspace_symbols_large_file() {
 
     let all = provider.get_all_symbols();
     // Should have at least 50 functions + the package
-    assert!(all.len() >= 50, "should index many symbols, found {}", all.len());
+    assert!(
+        all.len() >= 50,
+        "should index many symbols, found {}",
+        all.len()
+    );
 
     // Search should still work efficiently
     let results = provider.search("func_25", &source_map);

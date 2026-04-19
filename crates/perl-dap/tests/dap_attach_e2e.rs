@@ -53,7 +53,13 @@ fn wait_for_event(
 
 fn response_success(response: DapMessage, command: &str) -> Result<Option<Value>, String> {
     match response {
-        DapMessage::Response { success, command: actual, body, message, .. } => {
+        DapMessage::Response {
+            success,
+            command: actual,
+            body,
+            message,
+            ..
+        } => {
             if actual != command {
                 return Err(format!("expected `{command}` response, got `{actual}`"));
             }
@@ -124,7 +130,12 @@ fn dap_attach_e2e_tcp_loopback() -> TestResult {
 
     let init_body = response_success(adapter.handle_request(1, "initialize", None), "initialize")?;
     let capabilities = init_body.ok_or("initialize response missing capability body")?;
-    assert!(capabilities.get("supportsRestartRequest").and_then(|v| v.as_bool()).unwrap_or(false));
+    assert!(
+        capabilities
+            .get("supportsRestartRequest")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false)
+    );
     let _initialized = wait_for_event(&rx, "initialized", timeout)?;
 
     response_success(
@@ -152,12 +163,23 @@ fn dap_attach_e2e_tcp_loopback() -> TestResult {
 
     let stopped = wait_for_event(&rx, "stopped", timeout)?;
     let stopped_body = event_body(&stopped).ok_or("stopped event missing body")?;
-    assert_eq!(stopped_body.get("reason").and_then(Value::as_str), Some("breakpoint"));
-    assert_eq!(stopped_body.get("threadId").and_then(Value::as_i64), Some(7));
+    assert_eq!(
+        stopped_body.get("reason").and_then(Value::as_str),
+        Some("breakpoint")
+    );
+    assert_eq!(
+        stopped_body.get("threadId").and_then(Value::as_i64),
+        Some(7)
+    );
 
-    response_success(adapter.handle_request(4, "disconnect", Some(json!({}))), "disconnect")?;
+    response_success(
+        adapter.handle_request(4, "disconnect", Some(json!({}))),
+        "disconnect",
+    )?;
     let _terminated = wait_for_event(&rx, "terminated", timeout)?;
 
-    server_handle.join().map_err(|_| std::io::Error::other("fake TCP debugger server panicked"))?;
+    server_handle
+        .join()
+        .map_err(|_| std::io::Error::other("fake TCP debugger server panicked"))?;
     Ok(())
 }

@@ -91,7 +91,11 @@ mod tests {
 
         assert!(result.is_err(), "expected timeout error");
         // Should take approximately 1s, allow up to 4s for slow CI
-        assert!(elapsed.as_secs() < 4, "timeout took too long: {}ms", elapsed.as_millis());
+        assert!(
+            elapsed.as_secs() < 4,
+            "timeout took too long: {}ms",
+            elapsed.as_millis()
+        );
     }
 
     #[test]

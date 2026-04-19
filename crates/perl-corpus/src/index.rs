@@ -54,7 +54,10 @@ fn write_coverage_summary(dir: &Path, sections: &[Section]) -> Result<()> {
     let mut lines = vec![
         "# Corpus Coverage Summary".to_string(),
         String::new(),
-        format!("Generated: {}", chrono::Local::now().format("%Y-%m-%d %H:%M:%S")),
+        format!(
+            "Generated: {}",
+            chrono::Local::now().format("%Y-%m-%d %H:%M:%S")
+        ),
         String::new(),
     ];
 
@@ -118,7 +121,11 @@ fn write_coverage_summary(dir: &Path, sections: &[Section]) -> Result<()> {
     lines.push(format!("- Total sections: {}", sections.len()));
     lines.push(format!(
         "- Total files: {}",
-        sections.iter().map(|s| &s.file).collect::<std::collections::HashSet<_>>().len()
+        sections
+            .iter()
+            .map(|s| &s.file)
+            .collect::<std::collections::HashSet<_>>()
+            .len()
     ));
     lines.push(format!("- Unique tags: {}", tag_counts.len()));
 

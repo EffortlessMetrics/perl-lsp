@@ -36,7 +36,10 @@ fn fuzz_reference_extraction_never_panics_and_emits_consistent_ranges() {
             assert!(reference.module_start <= reference.module_end);
             assert!(reference.module_end <= text.len());
             assert!(!reference.module_name.is_empty());
-            assert_eq!(reference.module_name, &text[reference.module_start..reference.module_end]);
+            assert_eq!(
+                reference.module_name,
+                &text[reference.module_start..reference.module_end]
+            );
 
             let extracted = extract_module_reference(&text, cursor);
             assert!(extracted.is_some());

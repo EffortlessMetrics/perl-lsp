@@ -65,7 +65,10 @@ BEGIN {
     assert_clean_parse(code);
     let ast = parse(code);
     let kinds = top_level_kinds(&ast);
-    assert!(kinds.contains(&"PhaseBlock"), "expected PhaseBlock for BEGIN");
+    assert!(
+        kinds.contains(&"PhaseBlock"),
+        "expected PhaseBlock for BEGIN"
+    );
 }
 
 #[test]

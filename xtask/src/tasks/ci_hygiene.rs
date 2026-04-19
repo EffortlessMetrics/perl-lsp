@@ -73,7 +73,12 @@ fn local_binary_is_fresh(root: &Path, local_binary: &Path) -> bool {
 
 fn ci_hygiene_sources(root: &Path) -> [PathBuf; 2] {
     [
-        root.join("crates").join(CI_HYGIENE_PACKAGE).join("Cargo.toml"),
-        root.join("crates").join(CI_HYGIENE_PACKAGE).join("src").join("main.rs"),
+        root.join("crates")
+            .join(CI_HYGIENE_PACKAGE)
+            .join("Cargo.toml"),
+        root.join("crates")
+            .join(CI_HYGIENE_PACKAGE)
+            .join("src")
+            .join("main.rs"),
     ]
 }

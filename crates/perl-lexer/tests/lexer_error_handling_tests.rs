@@ -132,9 +132,21 @@ fn test_ac2_lexer_substitution_operator_error_handling() {
     // AC:2 - Test that valid substitution operators work correctly
     // This establishes that the lexer correctly parses s//, tr//, and y// operators
     let test_cases = vec![
-        ("s/old/new/", TokenType::Substitution, "Valid substitution operator"),
-        ("tr/abc/xyz/", TokenType::Transliteration, "Valid transliteration operator"),
-        ("y/abc/xyz/", TokenType::Transliteration, "Valid transliteration operator (y syntax)"),
+        (
+            "s/old/new/",
+            TokenType::Substitution,
+            "Valid substitution operator",
+        ),
+        (
+            "tr/abc/xyz/",
+            TokenType::Transliteration,
+            "Valid transliteration operator",
+        ),
+        (
+            "y/abc/xyz/",
+            TokenType::Transliteration,
+            "Valid transliteration operator (y syntax)",
+        ),
     ];
 
     for (input, expected_token_type, description) in test_cases {
@@ -142,8 +154,14 @@ fn test_ac2_lexer_substitution_operator_error_handling() {
         let tokens: Vec<_> = lexer.collect_tokens();
 
         // Should successfully tokenize without error tokens
-        let has_error = tokens.iter().any(|t| matches!(t.token_type, TokenType::Error(_)));
-        assert!(!has_error, "{}: should not produce error tokens. Input: {}", description, input);
+        let has_error = tokens
+            .iter()
+            .any(|t| matches!(t.token_type, TokenType::Error(_)));
+        assert!(
+            !has_error,
+            "{}: should not produce error tokens. Input: {}",
+            description, input
+        );
 
         // Verify we got the expected token type
         let has_expected_token = tokens.iter().any(|t| {
@@ -155,7 +173,10 @@ fn test_ac2_lexer_substitution_operator_error_handling() {
             description,
             expected_token_type,
             input,
-            tokens.iter().map(|t| format!("{:?}", t.token_type)).collect::<Vec<_>>()
+            tokens
+                .iter()
+                .map(|t| format!("{:?}", t.token_type))
+                .collect::<Vec<_>>()
         );
     }
 
@@ -196,8 +217,14 @@ fn test_ac2_multiple_invalid_substitution_operators() {
     for op in valid_operators {
         let mut lexer = PerlLexer::new(op);
         let tokens: Vec<_> = lexer.collect_tokens();
-        let has_errors = tokens.iter().any(|t| matches!(t.token_type, TokenType::Error(_)));
-        assert!(!has_errors, "Valid operator '{}' should not produce error tokens", op);
+        let has_errors = tokens
+            .iter()
+            .any(|t| matches!(t.token_type, TokenType::Error(_)));
+        assert!(
+            !has_errors,
+            "Valid operator '{}' should not produce error tokens",
+            op
+        );
     }
 }
 
@@ -275,8 +302,14 @@ fn test_regression_lexer_lib_line_1385_unreachable_path() {
     for op in operators {
         let mut lexer = PerlLexer::new(op);
         let tokens: Vec<_> = lexer.collect_tokens();
-        let has_errors = tokens.iter().any(|t| matches!(t.token_type, TokenType::Error(_)));
-        assert!(!has_errors, "Operator '{}' should not trigger defensive error path", op);
+        let has_errors = tokens
+            .iter()
+            .any(|t| matches!(t.token_type, TokenType::Error(_)));
+        assert!(
+            !has_errors,
+            "Operator '{}' should not trigger defensive error path",
+            op
+        );
     }
 }
 
@@ -311,8 +344,10 @@ fn test_regression_guard_bypass_scenarios() {
     for (input, description) in test_cases {
         let mut lexer = PerlLexer::new(input);
         let tokens: Vec<_> = lexer.collect_tokens();
-        let error_count =
-            tokens.iter().filter(|t| matches!(t.token_type, TokenType::Error(_))).count();
+        let error_count = tokens
+            .iter()
+            .filter(|t| matches!(t.token_type, TokenType::Error(_)))
+            .count();
         assert_eq!(error_count, 0, "{} should not produce errors", description);
     }
 }
@@ -335,8 +370,10 @@ fn test_ac7_lexer_documentation_presence() -> TestResult {
     // Expected: unreachable!() removed, error handling documented
     // Verify that the source code contains TokenType::Error pattern (not unreachable!)
     let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
-    let source_path =
-        manifest_dir.parent().ok_or("Expected parent directory")?.join("perl-lexer/src/lib.rs");
+    let source_path = manifest_dir
+        .parent()
+        .ok_or("Expected parent directory")?
+        .join("perl-lexer/src/lib.rs");
 
     if source_path.exists() {
         let source_content = std::fs::read_to_string(&source_path)?;
@@ -411,7 +448,11 @@ fn test_mutation_lexer_error_message_quality() {
         // Test edge cases
         ("s{old}{new}", "s", "Substitution with balanced braces"),
         ("tr[abc][xyz]", "tr", "Transliteration with brackets"),
-        ("y<abc><xyz>", "y", "Transliteration (y syntax) with angle brackets"),
+        (
+            "y<abc><xyz>",
+            "y",
+            "Transliteration (y syntax) with angle brackets",
+        ),
     ];
 
     for (input, _expected_op, description) in test_cases {
@@ -419,16 +460,27 @@ fn test_mutation_lexer_error_message_quality() {
         let tokens: Vec<_> = lexer.collect_tokens();
 
         // Verify tokenization succeeds (these are all valid Perl constructs)
-        assert!(!tokens.is_empty(), "{}: should produce tokens. Input: {}", description, input);
+        assert!(
+            !tokens.is_empty(),
+            "{}: should produce tokens. Input: {}",
+            description,
+            input
+        );
 
         // Check that no error tokens are produced for valid input
-        let error_tokens: Vec<_> =
-            tokens.iter().filter(|t| matches!(t.token_type, TokenType::Error(_))).collect();
+        let error_tokens: Vec<_> = tokens
+            .iter()
+            .filter(|t| matches!(t.token_type, TokenType::Error(_)))
+            .collect();
 
         let error_messages: Vec<String> = error_tokens
             .iter()
             .filter_map(|t| {
-                if let TokenType::Error(msg) = &t.token_type { Some(msg.to_string()) } else { None }
+                if let TokenType::Error(msg) = &t.token_type {
+                    Some(msg.to_string())
+                } else {
+                    None
+                }
             })
             .collect();
 
@@ -446,7 +498,11 @@ fn test_mutation_lexer_error_message_quality() {
     let essential_keywords = vec!["unexpected", "expected", "position"];
     for keyword in essential_keywords {
         // Verify the keyword pattern is documented in the spec
-        assert!(!keyword.is_empty(), "Essential keyword '{}' is documented", keyword);
+        assert!(
+            !keyword.is_empty(),
+            "Essential keyword '{}' is documented",
+            keyword
+        );
     }
 }
 
@@ -567,14 +623,21 @@ fn test_mutation_arc_str_message_storage() {
     let error_token = TokenType::Error(error_msg.clone());
 
     // Verify the error token is an Error variant
-    assert!(matches!(error_token, TokenType::Error(_)), "TokenType::Error should contain Arc<str>");
+    assert!(
+        matches!(error_token, TokenType::Error(_)),
+        "TokenType::Error should contain Arc<str>"
+    );
 
     // Verify the error token contains the expected message
     let TokenType::Error(msg) = error_token else {
         return; // Already asserted above, so this is unreachable
     };
 
-    assert_eq!(msg.as_ref(), "test error message", "Error token should preserve Arc<str> message");
+    assert_eq!(
+        msg.as_ref(),
+        "test error message",
+        "Error token should preserve Arc<str> message"
+    );
     // Arc reference counting works
     assert_eq!(
         Arc::strong_count(&msg),
@@ -615,7 +678,10 @@ fn test_lexer_error_lsp_diagnostic_conversion() {
 
         // If it's an error token, verify it has a message for diagnostic
         if let TokenType::Error(msg) = &token.token_type {
-            assert!(!msg.is_empty(), "Error token must have non-empty message for LSP diagnostic");
+            assert!(
+                !msg.is_empty(),
+                "Error token must have non-empty message for LSP diagnostic"
+            );
         }
     }
 }
@@ -642,10 +708,14 @@ fn test_multiple_error_tokens_diagnostic_collection() {
     let tokens: Vec<_> = lexer.collect_tokens();
 
     // Count different token types
-    let substitution_count =
-        tokens.iter().filter(|t| matches!(t.token_type, TokenType::Substitution)).count();
-    let transliteration_count =
-        tokens.iter().filter(|t| matches!(t.token_type, TokenType::Transliteration)).count();
+    let substitution_count = tokens
+        .iter()
+        .filter(|t| matches!(t.token_type, TokenType::Substitution))
+        .count();
+    let transliteration_count = tokens
+        .iter()
+        .filter(|t| matches!(t.token_type, TokenType::Transliteration))
+        .count();
 
     // Verify we found multiple operators (demonstrates error recovery continuation)
     assert!(
@@ -673,15 +743,23 @@ fn test_performance_happy_path_zero_overhead() {
     // Validate that happy path tokenization completes successfully
     use perl_lexer::PerlLexer;
 
-    let test_cases =
-        vec!["my $x = 42;", "s/old/new/", "tr/abc/xyz/", "if ($x > 10) { print 'hello'; }"];
+    let test_cases = vec![
+        "my $x = 42;",
+        "s/old/new/",
+        "tr/abc/xyz/",
+        "if ($x > 10) { print 'hello'; }",
+    ];
 
     for input in test_cases {
         let mut lexer = PerlLexer::new(input);
         let tokens: Vec<_> = lexer.collect_tokens();
 
         // Verify tokenization completes (doesn't hang or panic)
-        assert!(!tokens.is_empty(), "Happy path tokenization should complete for: {}", input);
+        assert!(
+            !tokens.is_empty(),
+            "Happy path tokenization should complete for: {}",
+            input
+        );
     }
 }
 
@@ -704,8 +782,9 @@ fn test_performance_error_path_budget_compliance() {
     use std::sync::Arc;
 
     // Create error tokens efficiently
-    let error_messages: Vec<_> =
-        (0..100).map(|i| TokenType::Error(Arc::from(format!("Error {}", i)))).collect();
+    let error_messages: Vec<_> = (0..100)
+        .map(|i| TokenType::Error(Arc::from(format!("Error {}", i))))
+        .collect();
 
     // Verify all error tokens were created successfully
     assert_eq!(
@@ -783,7 +862,10 @@ fn test_edge_case_empty_operator() {
     }
 
     // If we get here, all edge cases were handled without panic
-    assert!(edge_case_count > 0, "Edge cases were processed successfully");
+    assert!(
+        edge_case_count > 0,
+        "Edge cases were processed successfully"
+    );
 }
 
 // Edge Cases - Unicode Operators
@@ -813,7 +895,11 @@ fn test_edge_case_unicode_operators() {
         let tokens: Vec<_> = lexer.collect_tokens();
 
         // Verify lexer handles Unicode without panicking
-        assert!(!tokens.is_empty(), "Lexer should handle Unicode input: {}", input);
+        assert!(
+            !tokens.is_empty(),
+            "Lexer should handle Unicode input: {}",
+            input
+        );
     }
 }
 
@@ -842,7 +928,10 @@ fn test_edge_case_very_long_operator_strings() {
     let tokens: Vec<_> = lexer.collect_tokens();
 
     // Verify lexer handles long strings without issues
-    assert!(!tokens.is_empty(), "Lexer should handle very long operator strings");
+    assert!(
+        !tokens.is_empty(),
+        "Lexer should handle very long operator strings"
+    );
 }
 
 // Token Stream Validity - Error Tokens Integration
@@ -871,15 +960,24 @@ fn test_token_stream_validity_error_integration() {
 
     // Verify token stream covers the input
     if let Some(last) = tokens.last() {
-        assert!(last.end >= test_input.len() || last.end == 0, "Token stream should span input");
+        assert!(
+            last.end >= test_input.len() || last.end == 0,
+            "Token stream should span input"
+        );
     }
 
     // Count valid vs error tokens
-    let error_count = tokens.iter().filter(|t| matches!(t.token_type, TokenType::Error(_))).count();
+    let error_count = tokens
+        .iter()
+        .filter(|t| matches!(t.token_type, TokenType::Error(_)))
+        .count();
     let total_count = tokens.len();
 
     // For valid input, error count should be low/zero
-    assert!(error_count < total_count, "Valid input should produce mostly non-error tokens");
+    assert!(
+        error_count < total_count,
+        "Valid input should produce mostly non-error tokens"
+    );
 }
 
 // Error Message Clarity - User-Facing Messages

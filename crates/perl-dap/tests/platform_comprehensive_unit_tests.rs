@@ -14,7 +14,10 @@ fn resolve_perl_path_returns_existing_file_when_perl_is_installed() -> Result<()
         assert!(path.exists(), "resolved path should exist");
         assert!(path.is_file(), "resolved path should be a file");
         let filename = must_some(path.file_name()).to_string_lossy().to_string();
-        assert!(filename.starts_with("perl"), "filename should start with 'perl', got: {filename}");
+        assert!(
+            filename.starts_with("perl"),
+            "filename should start with 'perl', got: {filename}"
+        );
     }
     Ok(())
 }
@@ -25,7 +28,10 @@ fn resolve_perl_path_returns_existing_file_when_perl_is_installed() -> Result<()
 fn normalize_path_preserves_non_empty_relative_path() -> Result<(), anyhow::Error> {
     let input = PathBuf::from("script.pl");
     let normalized = normalize_path(&input);
-    assert!(!normalized.as_os_str().is_empty(), "normalized path should not be empty");
+    assert!(
+        !normalized.as_os_str().is_empty(),
+        "normalized path should not be empty"
+    );
     Ok(())
 }
 
@@ -33,7 +39,10 @@ fn normalize_path_preserves_non_empty_relative_path() -> Result<(), anyhow::Erro
 fn normalize_path_handles_absolute_path() -> Result<(), anyhow::Error> {
     let input = PathBuf::from("/usr/bin/perl");
     let normalized = normalize_path(&input);
-    assert!(!normalized.as_os_str().is_empty(), "normalized absolute path should not be empty");
+    assert!(
+        !normalized.as_os_str().is_empty(),
+        "normalized absolute path should not be empty"
+    );
     Ok(())
 }
 
@@ -41,7 +50,10 @@ fn normalize_path_handles_absolute_path() -> Result<(), anyhow::Error> {
 fn normalize_path_handles_dot_path() -> Result<(), anyhow::Error> {
     let input = PathBuf::from(".");
     let normalized = normalize_path(&input);
-    assert!(!normalized.as_os_str().is_empty(), "normalized dot path should not be empty");
+    assert!(
+        !normalized.as_os_str().is_empty(),
+        "normalized dot path should not be empty"
+    );
     Ok(())
 }
 
@@ -62,8 +74,14 @@ fn normalize_path_converts_wsl_mnt_path_to_windows_style() -> Result<(), anyhow:
     let input = PathBuf::from("/mnt/c/Users/test/script.pl");
     let normalized = normalize_path(&input);
     let s = normalized.to_string_lossy().to_string();
-    assert!(s.starts_with("C:"), "WSL /mnt/c path should convert to C: drive, got: {s}");
-    assert!(s.contains('\\'), "WSL converted path should use backslashes, got: {s}");
+    assert!(
+        s.starts_with("C:"),
+        "WSL /mnt/c path should convert to C: drive, got: {s}"
+    );
+    assert!(
+        s.contains('\\'),
+        "WSL converted path should use backslashes, got: {s}"
+    );
     Ok(())
 }
 
@@ -86,7 +104,10 @@ fn normalize_path_does_not_convert_non_wsl_mnt_path() -> Result<(), anyhow::Erro
     let input = PathBuf::from("/home/user/project");
     let normalized = normalize_path(&input);
     let s = normalized.to_string_lossy().to_string();
-    assert!(!s.contains('\\'), "non-WSL path should not get backslashes, got: {s}");
+    assert!(
+        !s.contains('\\'),
+        "non-WSL path should not get backslashes, got: {s}"
+    );
     Ok(())
 }
 
@@ -99,7 +120,10 @@ fn normalize_path_wsl_short_mnt_path_no_conversion() -> Result<(), anyhow::Error
     let normalized = normalize_path(&input);
     let s = normalized.to_string_lossy().to_string();
     // The path is exactly 6 chars, so the > 6 check means it won't convert
-    assert!(!s.contains(':'), "path of exactly 6 chars should not be converted, got: {s}");
+    assert!(
+        !s.contains(':'),
+        "path of exactly 6 chars should not be converted, got: {s}"
+    );
     Ok(())
 }
 
@@ -109,7 +133,10 @@ fn normalize_path_canonicalizes_existing_path() -> Result<(), anyhow::Error> {
     // Canonicalize should resolve ".." for existing paths
     let input = PathBuf::from("/tmp/./");
     let normalized = normalize_path(&input);
-    assert!(normalized.is_absolute(), "canonicalized existing path should be absolute");
+    assert!(
+        normalized.is_absolute(),
+        "canonicalized existing path should be absolute"
+    );
     Ok(())
 }
 
@@ -132,7 +159,10 @@ fn normalize_path_returns_original_for_nonexistent_path() -> Result<(), anyhow::
 #[test]
 fn setup_environment_empty_paths_returns_no_perl5lib() -> Result<(), anyhow::Error> {
     let env = setup_environment(&[]);
-    assert!(!env.contains_key("PERL5LIB"), "empty include paths should not set PERL5LIB");
+    assert!(
+        !env.contains_key("PERL5LIB"),
+        "empty include paths should not set PERL5LIB"
+    );
     assert!(env.is_empty(), "env map should be empty with no paths");
     Ok(())
 }
@@ -142,7 +172,10 @@ fn setup_environment_single_path() -> Result<(), anyhow::Error> {
     let paths = [PathBuf::from("/workspace/lib")];
     let env = setup_environment(&paths);
     let perl5lib = must_some(env.get("PERL5LIB"));
-    assert_eq!(perl5lib, "/workspace/lib", "single path should be set directly");
+    assert_eq!(
+        perl5lib, "/workspace/lib",
+        "single path should be set directly"
+    );
     Ok(())
 }
 
@@ -174,7 +207,10 @@ fn setup_environment_preserves_path_with_spaces() -> Result<(), anyhow::Error> {
     let paths = [PathBuf::from("/my workspace/lib")];
     let env = setup_environment(&paths);
     let perl5lib = must_some(env.get("PERL5LIB"));
-    assert!(perl5lib.contains("my workspace"), "path with spaces should be preserved");
+    assert!(
+        perl5lib.contains("my workspace"),
+        "path with spaces should be preserved"
+    );
     Ok(())
 }
 
@@ -191,7 +227,11 @@ fn setup_environment_only_sets_perl5lib() -> Result<(), anyhow::Error> {
 fn setup_environment_duplicate_paths_preserved_as_is() -> Result<(), anyhow::Error> {
     // setup_environment does not deduplicate — duplicates pass through and
     // Perl resolves them at runtime. This documents the contract explicitly.
-    let paths = [PathBuf::from("/lib/a"), PathBuf::from("/lib/a"), PathBuf::from("/lib/b")];
+    let paths = [
+        PathBuf::from("/lib/a"),
+        PathBuf::from("/lib/a"),
+        PathBuf::from("/lib/b"),
+    ];
     let env = setup_environment(&paths);
     let perl5lib = must_some(env.get("PERL5LIB"));
 
@@ -201,7 +241,11 @@ fn setup_environment_duplicate_paths_preserved_as_is() -> Result<(), anyhow::Err
     let sep = ';';
 
     let parts: Vec<&str> = perl5lib.split(sep).collect();
-    assert_eq!(parts.len(), 3, "duplicates are NOT removed; all three entries present");
+    assert_eq!(
+        parts.len(),
+        3,
+        "duplicates are NOT removed; all three entries present"
+    );
     assert_eq!(parts[0], "/lib/a");
     assert_eq!(parts[1], "/lib/a");
     assert_eq!(parts[2], "/lib/b");
@@ -215,7 +259,10 @@ fn setup_environment_empty_string_path_is_included() -> Result<(), anyhow::Error
     let paths = [PathBuf::from("")];
     let env = setup_environment(&paths);
     // Non-empty slice → PERL5LIB must be set (even if the value is "")
-    assert!(env.contains_key("PERL5LIB"), "single empty-string path still triggers PERL5LIB");
+    assert!(
+        env.contains_key("PERL5LIB"),
+        "single empty-string path still triggers PERL5LIB"
+    );
     Ok(())
 }
 
@@ -233,7 +280,10 @@ fn format_command_args_no_spaces_unchanged() -> Result<(), anyhow::Error> {
 fn format_command_args_empty_input() -> Result<(), anyhow::Error> {
     let args: Vec<String> = vec![];
     let formatted = format_command_args(&args);
-    assert!(formatted.is_empty(), "empty args should produce empty result");
+    assert!(
+        formatted.is_empty(),
+        "empty args should produce empty result"
+    );
     Ok(())
 }
 
@@ -243,7 +293,10 @@ fn format_command_args_with_spaces_gets_quoted() -> Result<(), anyhow::Error> {
     let formatted = format_command_args(&args);
     assert_eq!(formatted.len(), 1);
     let formatted_arg = &formatted[0];
-    assert!(formatted_arg.contains("file with spaces.pl"), "original content should be preserved");
+    assert!(
+        formatted_arg.contains("file with spaces.pl"),
+        "original content should be preserved"
+    );
     // On all platforms, args with spaces get some form of quoting
     assert!(
         formatted_arg.starts_with('\'') || formatted_arg.starts_with('"'),
@@ -257,7 +310,10 @@ fn format_command_args_with_spaces_gets_quoted() -> Result<(), anyhow::Error> {
 fn format_command_args_unix_single_quotes_simple_space() -> Result<(), anyhow::Error> {
     let args = vec!["hello world".to_string()];
     let formatted = format_command_args(&args);
-    assert_eq!(formatted[0], "'hello world'", "unix: simple space arg should be single-quoted");
+    assert_eq!(
+        formatted[0], "'hello world'",
+        "unix: simple space arg should be single-quoted"
+    );
     Ok(())
 }
 
@@ -320,7 +376,10 @@ fn format_command_args_mixed_args() -> Result<(), anyhow::Error> {
     assert_eq!(formatted.len(), 4);
     assert_eq!(formatted[0], "perl", "no-space arg unchanged");
     assert_eq!(formatted[1], "-I", "no-space arg unchanged");
-    assert!(formatted[2].contains("/my lib/path"), "space arg should be quoted");
+    assert!(
+        formatted[2].contains("/my lib/path"),
+        "space arg should be quoted"
+    );
     assert_eq!(formatted[3], "script.pl", "no-space arg unchanged");
     Ok(())
 }
@@ -330,7 +389,10 @@ fn format_command_args_single_empty_string() -> Result<(), anyhow::Error> {
     let args = vec![String::new()];
     let formatted = format_command_args(&args);
     assert_eq!(formatted.len(), 1);
-    assert_eq!(formatted[0], "", "empty string has no space, returned as-is");
+    assert_eq!(
+        formatted[0], "",
+        "empty string has no space, returned as-is"
+    );
     Ok(())
 }
 
@@ -339,7 +401,11 @@ fn format_command_args_preserves_order() -> Result<(), anyhow::Error> {
     let args: Vec<String> = (0..5).map(|i| format!("arg{i}")).collect();
     let formatted = format_command_args(&args);
     for (i, arg) in formatted.iter().enumerate() {
-        assert_eq!(arg, &format!("arg{i}"), "order should be preserved at index {i}");
+        assert_eq!(
+            arg,
+            &format!("arg{i}"),
+            "order should be preserved at index {i}"
+        );
     }
     Ok(())
 }

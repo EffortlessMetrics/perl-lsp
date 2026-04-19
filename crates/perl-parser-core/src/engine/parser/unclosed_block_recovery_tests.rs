@@ -15,12 +15,18 @@ fn test_unclosed_sub_block_at_eof() {
     let result = parser.parse();
 
     // Should return Ok with a partial AST, not Err
-    assert!(result.is_ok(), "Parser should recover from unclosed sub block");
+    assert!(
+        result.is_ok(),
+        "Parser should recover from unclosed sub block"
+    );
     let ast = must(result);
 
     if let NodeKind::Program { statements } = &ast.kind {
         // We should have at least one statement: the (partial) subroutine
-        assert!(!statements.is_empty(), "Program should have at least one statement");
+        assert!(
+            !statements.is_empty(),
+            "Program should have at least one statement"
+        );
 
         // The first statement should be a Subroutine (possibly wrapped in Error with partial)
         let has_sub = statements.iter().any(|s| {
@@ -30,14 +36,20 @@ fn test_unclosed_sub_block_at_eof() {
         assert!(
             has_sub,
             "Should have a (possibly partial) subroutine node for 'foo'. Got: {:?}",
-            statements.iter().map(|s| s.kind.kind_name()).collect::<Vec<_>>()
+            statements
+                .iter()
+                .map(|s| s.kind.kind_name())
+                .collect::<Vec<_>>()
         );
     } else {
         panic!("Expected Program node");
     }
 
     // Should have recorded errors about the unclosed block
-    assert!(!parser.errors().is_empty(), "Should have errors about unclosed block");
+    assert!(
+        !parser.errors().is_empty(),
+        "Should have errors about unclosed block"
+    );
 }
 
 /// Unclosed else block should still parse the if branch correctly.
@@ -47,11 +59,17 @@ fn test_unclosed_else_block_parses_if_branch() {
     let mut parser = Parser::new(code);
     let result = parser.parse();
 
-    assert!(result.is_ok(), "Parser should recover from unclosed else block");
+    assert!(
+        result.is_ok(),
+        "Parser should recover from unclosed else block"
+    );
     let ast = must(result);
 
     if let NodeKind::Program { statements } = &ast.kind {
-        assert!(!statements.is_empty(), "Program should have at least one statement");
+        assert!(
+            !statements.is_empty(),
+            "Program should have at least one statement"
+        );
 
         // Look for an If node (possibly wrapped in Error with partial)
         let has_if = statements.iter().any(|s| {
@@ -61,13 +79,19 @@ fn test_unclosed_else_block_parses_if_branch() {
         assert!(
             has_if,
             "Should have an if statement node. Got: {:?}",
-            statements.iter().map(|s| s.kind.kind_name()).collect::<Vec<_>>()
+            statements
+                .iter()
+                .map(|s| s.kind.kind_name())
+                .collect::<Vec<_>>()
         );
     } else {
         panic!("Expected Program node");
     }
 
-    assert!(!parser.errors().is_empty(), "Should have errors about unclosed else block");
+    assert!(
+        !parser.errors().is_empty(),
+        "Should have errors about unclosed else block"
+    );
 }
 
 /// Nested unclosed blocks: inner block should parse, outer should recover.
@@ -77,16 +101,25 @@ fn test_nested_unclosed_blocks() {
     let mut parser = Parser::new(code);
     let result = parser.parse();
 
-    assert!(result.is_ok(), "Parser should recover from nested unclosed blocks");
+    assert!(
+        result.is_ok(),
+        "Parser should recover from nested unclosed blocks"
+    );
     let ast = must(result);
 
     if let NodeKind::Program { statements } = &ast.kind {
-        assert!(!statements.is_empty(), "Program should have at least one statement");
+        assert!(
+            !statements.is_empty(),
+            "Program should have at least one statement"
+        );
     } else {
         panic!("Expected Program node");
     }
 
-    assert!(!parser.errors().is_empty(), "Should have errors about unclosed block");
+    assert!(
+        !parser.errors().is_empty(),
+        "Should have errors about unclosed block"
+    );
 }
 
 /// When a second sub is unclosed, the first sub should be fully parsed.
@@ -96,7 +129,10 @@ fn test_first_sub_clean_when_second_unclosed() {
     let mut parser = Parser::new(code);
     let result = parser.parse();
 
-    assert!(result.is_ok(), "Parser should recover from unclosed second sub");
+    assert!(
+        result.is_ok(),
+        "Parser should recover from unclosed second sub"
+    );
     let ast = must(result);
 
     if let NodeKind::Program { statements } = &ast.kind {
@@ -105,7 +141,10 @@ fn test_first_sub_clean_when_second_unclosed() {
             statements.len() >= 2,
             "Should have at least 2 statements (two subs). Got {} statements: {:?}",
             statements.len(),
-            statements.iter().map(|s| s.kind.kind_name()).collect::<Vec<_>>()
+            statements
+                .iter()
+                .map(|s| s.kind.kind_name())
+                .collect::<Vec<_>>()
         );
 
         // First statement should be a clean Subroutine named "foo"
@@ -127,13 +166,19 @@ fn test_first_sub_clean_when_second_unclosed() {
         assert!(
             second_is_bar,
             "Should have a (possibly partial) subroutine node for 'bar'. Got: {:?}",
-            statements[1..].iter().map(|s| s.kind.kind_name()).collect::<Vec<_>>()
+            statements[1..]
+                .iter()
+                .map(|s| s.kind.kind_name())
+                .collect::<Vec<_>>()
         );
     } else {
         panic!("Expected Program node");
     }
 
-    assert!(!parser.errors().is_empty(), "Should have errors about unclosed block");
+    assert!(
+        !parser.errors().is_empty(),
+        "Should have errors about unclosed block"
+    );
 }
 
 /// Clean files should still parse correctly (no regression).
@@ -160,7 +205,10 @@ fn test_clean_file_unaffected() {
         panic!("Expected Program node");
     }
 
-    assert!(parser.errors().is_empty(), "Clean file should have no errors");
+    assert!(
+        parser.errors().is_empty(),
+        "Clean file should have no errors"
+    );
 }
 
 /// Unclosed block inside while loop should recover.
@@ -170,7 +218,10 @@ fn test_unclosed_while_block_at_eof() {
     let mut parser = Parser::new(code);
     let result = parser.parse();
 
-    assert!(result.is_ok(), "Parser should recover from unclosed while block");
+    assert!(
+        result.is_ok(),
+        "Parser should recover from unclosed while block"
+    );
     let ast = must(result);
 
     if let NodeKind::Program { statements } = &ast.kind {
@@ -179,7 +230,10 @@ fn test_unclosed_while_block_at_eof() {
         panic!("Expected Program node");
     }
 
-    assert!(!parser.errors().is_empty(), "Should have errors about unclosed block");
+    assert!(
+        !parser.errors().is_empty(),
+        "Should have errors about unclosed block"
+    );
 }
 
 /// Recovery when a new `sub` keyword is found while inside an unclosed block.
@@ -193,7 +247,10 @@ fn test_recovery_on_sub_keyword_in_unclosed_block() {
     let mut parser = Parser::new(code);
     let result = parser.parse();
 
-    assert!(result.is_ok(), "Parser should recover on encountering new sub");
+    assert!(
+        result.is_ok(),
+        "Parser should recover on encountering new sub"
+    );
     let ast = must(result);
 
     if let NodeKind::Program { statements } = &ast.kind {
@@ -202,7 +259,10 @@ fn test_recovery_on_sub_keyword_in_unclosed_block() {
             !statements.is_empty(),
             "Should have at least 1 statement. Got {} statements: {:?}",
             statements.len(),
-            statements.iter().map(|s| s.kind.kind_name()).collect::<Vec<_>>()
+            statements
+                .iter()
+                .map(|s| s.kind.kind_name())
+                .collect::<Vec<_>>()
         );
 
         // The top-level sub foo should exist and contain bar as a nested sub
@@ -212,19 +272,28 @@ fn test_recovery_on_sub_keyword_in_unclosed_block() {
         assert!(
             has_foo,
             "Should have subroutine 'foo'. Got: {:?}",
-            statements.iter().map(|s| s.kind.kind_name()).collect::<Vec<_>>()
+            statements
+                .iter()
+                .map(|s| s.kind.kind_name())
+                .collect::<Vec<_>>()
         );
 
         // foo's body should contain bar as a nested named sub
         if let NodeKind::Subroutine { body, .. } = &statements[0].kind {
-            if let NodeKind::Block { statements: body_stmts } = &body.kind {
+            if let NodeKind::Block {
+                statements: body_stmts,
+            } = &body.kind
+            {
                 let has_bar = body_stmts.iter().any(|s| {
                     matches!(&s.kind, NodeKind::Subroutine { name, .. } if name.as_deref() == Some("bar"))
                 });
                 assert!(
                     has_bar,
                     "foo's body should contain nested sub bar. Got: {:?}",
-                    body_stmts.iter().map(|s| s.kind.kind_name()).collect::<Vec<_>>()
+                    body_stmts
+                        .iter()
+                        .map(|s| s.kind.kind_name())
+                        .collect::<Vec<_>>()
                 );
             }
         }
@@ -232,7 +301,10 @@ fn test_recovery_on_sub_keyword_in_unclosed_block() {
         panic!("Expected Program node");
     }
 
-    assert!(!parser.errors().is_empty(), "Should have errors about unclosed block in foo");
+    assert!(
+        !parser.errors().is_empty(),
+        "Should have errors about unclosed block in foo"
+    );
 }
 
 /// Unclosed C-style for loop body should recover at EOF.
@@ -242,20 +314,29 @@ fn test_unclosed_c_for_loop_body() {
     let mut parser = Parser::new(code);
     let result = parser.parse();
 
-    assert!(result.is_ok(), "Parser should recover from unclosed C-style for loop body");
+    assert!(
+        result.is_ok(),
+        "Parser should recover from unclosed C-style for loop body"
+    );
     let ast = must(result);
 
     if let NodeKind::Program { statements } = &ast.kind {
         assert!(
             !statements.is_empty(),
             "Should have at least one statement (the for loop). Got: {:?}",
-            statements.iter().map(|s| s.kind.kind_name()).collect::<Vec<_>>()
+            statements
+                .iter()
+                .map(|s| s.kind.kind_name())
+                .collect::<Vec<_>>()
         );
     } else {
         panic!("Expected Program node");
     }
 
-    assert!(!parser.errors().is_empty(), "Should have errors about unclosed for loop body");
+    assert!(
+        !parser.errors().is_empty(),
+        "Should have errors about unclosed for loop body"
+    );
 }
 
 /// Unclosed foreach body should recover at EOF.
@@ -265,20 +346,29 @@ fn test_unclosed_foreach_body() {
     let mut parser = Parser::new(code);
     let result = parser.parse();
 
-    assert!(result.is_ok(), "Parser should recover from unclosed foreach body");
+    assert!(
+        result.is_ok(),
+        "Parser should recover from unclosed foreach body"
+    );
     let ast = must(result);
 
     if let NodeKind::Program { statements } = &ast.kind {
         assert!(
             !statements.is_empty(),
             "Should have at least one statement (the foreach). Got: {:?}",
-            statements.iter().map(|s| s.kind.kind_name()).collect::<Vec<_>>()
+            statements
+                .iter()
+                .map(|s| s.kind.kind_name())
+                .collect::<Vec<_>>()
         );
     } else {
         panic!("Expected Program node");
     }
 
-    assert!(!parser.errors().is_empty(), "Should have errors about unclosed foreach body");
+    assert!(
+        !parser.errors().is_empty(),
+        "Should have errors about unclosed foreach body"
+    );
 }
 
 /// Unclosed unless block should recover at EOF.
@@ -288,20 +378,29 @@ fn test_unclosed_unless_block() {
     let mut parser = Parser::new(code);
     let result = parser.parse();
 
-    assert!(result.is_ok(), "Parser should recover from unclosed unless block");
+    assert!(
+        result.is_ok(),
+        "Parser should recover from unclosed unless block"
+    );
     let ast = must(result);
 
     if let NodeKind::Program { statements } = &ast.kind {
         assert!(
             !statements.is_empty(),
             "Should have at least one statement (the unless). Got: {:?}",
-            statements.iter().map(|s| s.kind.kind_name()).collect::<Vec<_>>()
+            statements
+                .iter()
+                .map(|s| s.kind.kind_name())
+                .collect::<Vec<_>>()
         );
     } else {
         panic!("Expected Program node");
     }
 
-    assert!(!parser.errors().is_empty(), "Should have errors about unclosed unless block");
+    assert!(
+        !parser.errors().is_empty(),
+        "Should have errors about unclosed unless block"
+    );
 }
 
 /// Unclosed BEGIN phase block should recover at EOF.
@@ -311,7 +410,10 @@ fn test_unclosed_begin_phase_block() {
     let mut parser = Parser::new(code);
     let result = parser.parse();
 
-    assert!(result.is_ok(), "Parser should recover from unclosed BEGIN block");
+    assert!(
+        result.is_ok(),
+        "Parser should recover from unclosed BEGIN block"
+    );
     let ast = must(result);
 
     if let NodeKind::Program { statements } = &ast.kind {
@@ -323,13 +425,19 @@ fn test_unclosed_begin_phase_block() {
         assert!(
             has_phase,
             "Should have a PhaseBlock or Error for BEGIN. Got: {:?}",
-            statements.iter().map(|s| s.kind.kind_name()).collect::<Vec<_>>()
+            statements
+                .iter()
+                .map(|s| s.kind.kind_name())
+                .collect::<Vec<_>>()
         );
     } else {
         panic!("Expected Program node");
     }
 
-    assert!(!parser.errors().is_empty(), "Should have errors about unclosed BEGIN block");
+    assert!(
+        !parser.errors().is_empty(),
+        "Should have errors about unclosed BEGIN block"
+    );
 }
 
 /// Doubly-nested unclosed blocks (inner and outer both unclosed) should recover at EOF.
@@ -339,20 +447,29 @@ fn test_doubly_nested_unclosed_blocks() {
     let mut parser = Parser::new(code);
     let result = parser.parse();
 
-    assert!(result.is_ok(), "Parser should recover from doubly-nested unclosed blocks");
+    assert!(
+        result.is_ok(),
+        "Parser should recover from doubly-nested unclosed blocks"
+    );
     let ast = must(result);
 
     if let NodeKind::Program { statements } = &ast.kind {
         assert!(
             !statements.is_empty(),
             "Should have at least one statement. Got: {:?}",
-            statements.iter().map(|s| s.kind.kind_name()).collect::<Vec<_>>()
+            statements
+                .iter()
+                .map(|s| s.kind.kind_name())
+                .collect::<Vec<_>>()
         );
     } else {
         panic!("Expected Program node");
     }
 
-    assert!(!parser.errors().is_empty(), "Should have errors about doubly-nested unclosed blocks");
+    assert!(
+        !parser.errors().is_empty(),
+        "Should have errors about doubly-nested unclosed blocks"
+    );
 }
 
 /// Unclosed nested block inside sub (two levels missing) should recover.
@@ -362,14 +479,20 @@ fn test_unclosed_nested_block_inside_sub() {
     let mut parser = Parser::new(code);
     let result = parser.parse();
 
-    assert!(result.is_ok(), "Parser should recover from unclosed nested block inside sub");
+    assert!(
+        result.is_ok(),
+        "Parser should recover from unclosed nested block inside sub"
+    );
     let ast = must(result);
 
     if let NodeKind::Program { statements } = &ast.kind {
         assert!(
             !statements.is_empty(),
             "Should have at least one statement. Got: {:?}",
-            statements.iter().map(|s| s.kind.kind_name()).collect::<Vec<_>>()
+            statements
+                .iter()
+                .map(|s| s.kind.kind_name())
+                .collect::<Vec<_>>()
         );
         let has_sub = statements.iter().any(|s| {
             matches!(&s.kind, NodeKind::Subroutine { name, .. } if name.as_deref() == Some("foo"))
@@ -378,7 +501,10 @@ fn test_unclosed_nested_block_inside_sub() {
         assert!(
             has_sub,
             "Should have a (possibly partial) subroutine node for 'foo'. Got: {:?}",
-            statements.iter().map(|s| s.kind.kind_name()).collect::<Vec<_>>()
+            statements
+                .iter()
+                .map(|s| s.kind.kind_name())
+                .collect::<Vec<_>>()
         );
     } else {
         panic!("Expected Program node");
@@ -398,20 +524,29 @@ fn test_unclosed_until_loop_body() {
     let mut parser = Parser::new(code);
     let result = parser.parse();
 
-    assert!(result.is_ok(), "Parser should recover from unclosed until loop body");
+    assert!(
+        result.is_ok(),
+        "Parser should recover from unclosed until loop body"
+    );
     let ast = must(result);
 
     if let NodeKind::Program { statements } = &ast.kind {
         assert!(
             !statements.is_empty(),
             "Should have at least one statement (the until loop). Got: {:?}",
-            statements.iter().map(|s| s.kind.kind_name()).collect::<Vec<_>>()
+            statements
+                .iter()
+                .map(|s| s.kind.kind_name())
+                .collect::<Vec<_>>()
         );
     } else {
         panic!("Expected Program node");
     }
 
-    assert!(!parser.errors().is_empty(), "Should have errors about unclosed until loop body");
+    assert!(
+        !parser.errors().is_empty(),
+        "Should have errors about unclosed until loop body"
+    );
 }
 
 /// Unclosed `eval { }` block should recover at EOF.
@@ -423,20 +558,29 @@ fn test_unclosed_eval_block_at_eof() {
     let mut parser = Parser::new(code);
     let result = parser.parse();
 
-    assert!(result.is_ok(), "Parser should recover from unclosed eval block");
+    assert!(
+        result.is_ok(),
+        "Parser should recover from unclosed eval block"
+    );
     let ast = must(result);
 
     if let NodeKind::Program { statements } = &ast.kind {
         assert!(
             !statements.is_empty(),
             "Should have at least one statement (the eval). Got: {:?}",
-            statements.iter().map(|s| s.kind.kind_name()).collect::<Vec<_>>()
+            statements
+                .iter()
+                .map(|s| s.kind.kind_name())
+                .collect::<Vec<_>>()
         );
     } else {
         panic!("Expected Program node");
     }
 
-    assert!(!parser.errors().is_empty(), "Should have errors about unclosed eval block");
+    assert!(
+        !parser.errors().is_empty(),
+        "Should have errors about unclosed eval block"
+    );
 }
 
 /// Unclosed `do { }` block should recover at EOF.
@@ -447,20 +591,29 @@ fn test_unclosed_do_block_at_eof() {
     let mut parser = Parser::new(code);
     let result = parser.parse();
 
-    assert!(result.is_ok(), "Parser should recover from unclosed do block");
+    assert!(
+        result.is_ok(),
+        "Parser should recover from unclosed do block"
+    );
     let ast = must(result);
 
     if let NodeKind::Program { statements } = &ast.kind {
         assert!(
             !statements.is_empty(),
             "Should have at least one statement. Got: {:?}",
-            statements.iter().map(|s| s.kind.kind_name()).collect::<Vec<_>>()
+            statements
+                .iter()
+                .map(|s| s.kind.kind_name())
+                .collect::<Vec<_>>()
         );
     } else {
         panic!("Expected Program node");
     }
 
-    assert!(!parser.errors().is_empty(), "Should have errors about unclosed do block");
+    assert!(
+        !parser.errors().is_empty(),
+        "Should have errors about unclosed do block"
+    );
 }
 
 /// A bare open brace at EOF (empty unclosed block) should not crash the parser.
@@ -471,18 +624,27 @@ fn test_bare_open_brace_at_eof() {
     let mut parser = Parser::new(code);
     let result = parser.parse();
 
-    assert!(result.is_ok(), "Parser should recover from a bare open brace at EOF");
+    assert!(
+        result.is_ok(),
+        "Parser should recover from a bare open brace at EOF"
+    );
     let ast = must(result);
 
     if let NodeKind::Program { statements } = &ast.kind {
         assert!(
             !statements.is_empty(),
             "Should have at least one statement. Got: {:?}",
-            statements.iter().map(|s| s.kind.kind_name()).collect::<Vec<_>>()
+            statements
+                .iter()
+                .map(|s| s.kind.kind_name())
+                .collect::<Vec<_>>()
         );
     } else {
         panic!("Expected Program node");
     }
 
-    assert!(!parser.errors().is_empty(), "Should have errors about unclosed bare block");
+    assert!(
+        !parser.errors().is_empty(),
+        "Should have errors about unclosed bare block"
+    );
 }

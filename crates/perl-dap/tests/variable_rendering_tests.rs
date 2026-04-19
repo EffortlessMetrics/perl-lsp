@@ -53,9 +53,18 @@ fn test_scopes_hierarchy() -> Result<(), Box<dyn std::error::Error>> {
 
         // Should have 3 scopes: Locals, Package, Globals
         assert_eq!(scopes.len(), 3);
-        assert_eq!(scopes[0].get("name").ok_or("Expected name field")?.as_str(), Some("Locals"));
-        assert_eq!(scopes[1].get("name").ok_or("Expected name field")?.as_str(), Some("Package"));
-        assert_eq!(scopes[2].get("name").ok_or("Expected name field")?.as_str(), Some("Globals"));
+        assert_eq!(
+            scopes[0].get("name").ok_or("Expected name field")?.as_str(),
+            Some("Locals")
+        );
+        assert_eq!(
+            scopes[1].get("name").ok_or("Expected name field")?.as_str(),
+            Some("Package")
+        );
+        assert_eq!(
+            scopes[2].get("name").ok_or("Expected name field")?.as_str(),
+            Some("Globals")
+        );
 
         // Verify unique variable references
         let ref0 = scopes[0]
@@ -100,7 +109,10 @@ fn test_variables_lazy_expansion_indicators() -> Result<(), Box<dyn std::error::
             .iter()
             .find(|v| v.get("name").and_then(|n| n.as_str()) == Some("@_"))
             .ok_or("Expected @_ variable")?;
-        assert_eq!(array_var.get("type").ok_or("Expected type field")?.as_str(), Some("array"));
+        assert_eq!(
+            array_var.get("type").ok_or("Expected type field")?.as_str(),
+            Some("array")
+        );
         assert!(array_var.get("indexedVariables").is_some());
 
         // Find $self hash
@@ -108,7 +120,10 @@ fn test_variables_lazy_expansion_indicators() -> Result<(), Box<dyn std::error::
             .iter()
             .find(|v| v.get("name").and_then(|n| n.as_str()) == Some("$self"))
             .ok_or("Expected $self variable")?;
-        assert_eq!(hash_var.get("type").ok_or("Expected type field")?.as_str(), Some("hash"));
+        assert_eq!(
+            hash_var.get("type").ok_or("Expected type field")?.as_str(),
+            Some("hash")
+        );
         assert!(hash_var.get("namedVariables").is_some());
     }
     Ok(())
@@ -130,7 +145,10 @@ fn test_variables_globals_scope() -> Result<(), Box<dyn std::error::Error>> {
             .ok_or("Expected variables array")?;
 
         // Should contain standard globals like $_
-        assert!(vars.iter().any(|v| v.get("name").and_then(|n| n.as_str()) == Some("$_")));
+        assert!(
+            vars.iter()
+                .any(|v| v.get("name").and_then(|n| n.as_str()) == Some("$_"))
+        );
     }
     Ok(())
 }
@@ -188,7 +206,10 @@ fn test_variable_type_indicators() -> Result<(), Box<dyn std::error::Error>> {
             .collect::<Vec<_>>();
 
         for array in arrays {
-            assert!(array.get("indexedVariables").is_some(), "Array should have indexedVariables");
+            assert!(
+                array.get("indexedVariables").is_some(),
+                "Array should have indexedVariables"
+            );
             assert!(
                 array
                     .get("variablesReference")
@@ -206,7 +227,10 @@ fn test_variable_type_indicators() -> Result<(), Box<dyn std::error::Error>> {
             .collect::<Vec<_>>();
 
         for hash in hashes {
-            assert!(hash.get("namedVariables").is_some(), "Hash should have namedVariables");
+            assert!(
+                hash.get("namedVariables").is_some(),
+                "Hash should have namedVariables"
+            );
             assert!(
                 hash.get("variablesReference")
                     .and_then(|r| r.as_i64())
@@ -236,7 +260,10 @@ fn test_package_scope_variables() -> Result<(), Box<dyn std::error::Error>> {
             .ok_or("Expected variables array")?;
 
         // Package scope should have at least VERSION
-        assert!(vars.iter().any(|v| v.get("name").and_then(|n| n.as_str()) == Some("$VERSION")));
+        assert!(
+            vars.iter()
+                .any(|v| v.get("name").and_then(|n| n.as_str()) == Some("$VERSION"))
+        );
     }
     Ok(())
 }
@@ -265,7 +292,11 @@ fn test_lazy_expansion_references() -> Result<(), Box<dyn std::error::Error>> {
 
         // Check uniqueness of non-zero references
         let unique_refs: std::collections::HashSet<_> = refs.iter().collect();
-        assert_eq!(refs.len(), unique_refs.len(), "All lazy expansion references should be unique");
+        assert_eq!(
+            refs.len(),
+            unique_refs.len(),
+            "All lazy expansion references should be unique"
+        );
     }
     Ok(())
 }
@@ -327,7 +358,10 @@ fn test_variables_placeholder_pagination() -> Result<(), Box<dyn std::error::Err
             .ok_or("Expected variables array")?;
 
         assert_eq!(vars.len(), 1);
-        assert_eq!(vars[0].get("name").and_then(|name| name.as_str()), Some("@_"));
+        assert_eq!(
+            vars[0].get("name").and_then(|name| name.as_str()),
+            Some("@_")
+        );
     }
     Ok(())
 }

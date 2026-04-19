@@ -18,7 +18,10 @@ fn static_receiver_module(prefix: &str) -> Option<&str> {
     if !receiver.starts_with('$')
         && !receiver.starts_with('@')
         && !receiver.starts_with('%')
-        && receiver.chars().next().is_some_and(|c| c.is_ascii_uppercase())
+        && receiver
+            .chars()
+            .next()
+            .is_some_and(|c| c.is_ascii_uppercase())
     {
         Some(receiver)
     } else {
@@ -32,9 +35,18 @@ pub const DBI_DB_METHODS: &[(&str, &str)] = &[
     ("prepare", "Prepare a SQL statement"),
     ("prepare_cached", "Prepare and cache a SQL statement"),
     ("selectrow_array", "Execute and fetch a single row as array"),
-    ("selectrow_arrayref", "Execute and fetch a single row as arrayref"),
-    ("selectrow_hashref", "Execute and fetch a single row as hashref"),
-    ("selectall_arrayref", "Execute and fetch all rows as arrayref"),
+    (
+        "selectrow_arrayref",
+        "Execute and fetch a single row as arrayref",
+    ),
+    (
+        "selectrow_hashref",
+        "Execute and fetch a single row as hashref",
+    ),
+    (
+        "selectall_arrayref",
+        "Execute and fetch all rows as arrayref",
+    ),
     ("selectall_hashref", "Execute and fetch all rows as hashref"),
     ("begin_work", "Begin a database transaction"),
     ("commit", "Commit the current transaction"),
@@ -56,7 +68,10 @@ pub const DBI_ST_METHODS: &[(&str, &str)] = &[
     ("fetchrow_arrayref", "Fetch the next row as arrayref"),
     ("fetchrow_hashref", "Fetch the next row as hashref"),
     ("fetchall_arrayref", "Fetch all remaining rows as arrayref"),
-    ("fetchall_hashref", "Fetch all remaining rows as hashref of hashrefs"),
+    (
+        "fetchall_hashref",
+        "Fetch all remaining rows as hashref of hashrefs",
+    ),
     ("finish", "Finish the statement handle"),
     ("rows", "Get the number of rows affected"),
 ];
@@ -65,8 +80,16 @@ pub const DBI_ST_METHODS: &[(&str, &str)] = &[
 ///
 /// Each entry is `(name, signature, description)`.
 pub const DBI_DB_METHOD_SIGS: &[(&str, &str, &str)] = &[
-    ("do", "do($statement, \\@attr?, @bind_values?)", "Execute a single SQL statement"),
-    ("prepare", "prepare($statement, \\@attr?)", "Prepare a SQL statement for execution"),
+    (
+        "do",
+        "do($statement, \\@attr?, @bind_values?)",
+        "Execute a single SQL statement",
+    ),
+    (
+        "prepare",
+        "prepare($statement, \\@attr?)",
+        "Prepare a SQL statement for execution",
+    ),
     (
         "prepare_cached",
         "prepare_cached($statement, \\@attr?, $if_active?)",
@@ -106,9 +129,21 @@ pub const DBI_DB_METHOD_SIGS: &[(&str, &str, &str)] = &[
         "last_insert_id($catalog, $schema, $table, $field, \\@attr?)",
         "Get the last inserted row ID",
     ),
-    ("quote", "quote($value, $data_type?)", "Quote a string value for use in SQL"),
-    ("quote_identifier", "quote_identifier($name)", "Quote an identifier for SQL"),
-    ("ping", "ping()", "Check if the database connection is still alive"),
+    (
+        "quote",
+        "quote($value, $data_type?)",
+        "Quote a string value for use in SQL",
+    ),
+    (
+        "quote_identifier",
+        "quote_identifier($name)",
+        "Quote an identifier for SQL",
+    ),
+    (
+        "ping",
+        "ping()",
+        "Check if the database connection is still alive",
+    ),
 ];
 
 /// Parameter signatures for DBI statement-handle methods.
@@ -125,11 +160,31 @@ pub const DBI_ST_METHOD_SIGS: &[(&str, &str, &str)] = &[
         "bind_param_inout($param_num, \\$bind_value, $max_len)",
         "Bind an in/out parameter",
     ),
-    ("execute", "execute(@bind_values?)", "Execute the prepared statement"),
-    ("fetch", "fetch()", "Fetch the next row as arrayref (alias for fetchrow_arrayref)"),
-    ("fetchrow_array", "fetchrow_array()", "Fetch the next row as a list"),
-    ("fetchrow_arrayref", "fetchrow_arrayref()", "Fetch the next row as an arrayref"),
-    ("fetchrow_hashref", "fetchrow_hashref($name?)", "Fetch the next row as a hashref"),
+    (
+        "execute",
+        "execute(@bind_values?)",
+        "Execute the prepared statement",
+    ),
+    (
+        "fetch",
+        "fetch()",
+        "Fetch the next row as arrayref (alias for fetchrow_arrayref)",
+    ),
+    (
+        "fetchrow_array",
+        "fetchrow_array()",
+        "Fetch the next row as a list",
+    ),
+    (
+        "fetchrow_arrayref",
+        "fetchrow_arrayref()",
+        "Fetch the next row as an arrayref",
+    ),
+    (
+        "fetchrow_hashref",
+        "fetchrow_hashref($name?)",
+        "Fetch the next row as a hashref",
+    ),
     (
         "fetchall_arrayref",
         "fetchall_arrayref($slice?, $max_rows?)",
@@ -140,8 +195,16 @@ pub const DBI_ST_METHOD_SIGS: &[(&str, &str, &str)] = &[
         "fetchall_hashref($key_field)",
         "Fetch all remaining rows as hashref of hashrefs",
     ),
-    ("finish", "finish()", "Indicate no more rows will be fetched"),
-    ("rows", "rows()", "Return the number of rows affected or returned"),
+    (
+        "finish",
+        "finish()",
+        "Indicate no more rows will be fetched",
+    ),
+    (
+        "rows",
+        "rows()",
+        "Return the number of rows affected or returned",
+    ),
 ];
 
 /// Look up DBI method documentation by receiver hint and method name.
@@ -165,13 +228,19 @@ pub fn get_dbi_method_documentation(
         DBI_ST_METHOD_SIGS
     } else {
         // Unknown receiver — check db table first, then st table
-        if let Some(entry) = DBI_DB_METHOD_SIGS.iter().find(|(n, _, _)| *n == method_name) {
+        if let Some(entry) = DBI_DB_METHOD_SIGS
+            .iter()
+            .find(|(n, _, _)| *n == method_name)
+        {
             return Some((entry.1, entry.2));
         }
         DBI_ST_METHOD_SIGS
     };
 
-    table.iter().find(|(n, _, _)| *n == method_name).map(|(_, sig, desc)| (*sig, *desc))
+    table
+        .iter()
+        .find(|(n, _, _)| *n == method_name)
+        .map(|(_, sig, desc)| (*sig, *desc))
 }
 
 /// Infer receiver type from context (for DBI method completion)
@@ -334,7 +403,10 @@ fn moo_accessor_method_name(
 }
 
 fn moo_is_truthy(value: &str) -> bool {
-    matches!(value.trim().to_ascii_lowercase().as_str(), "1" | "true" | "yes")
+    matches!(
+        value.trim().to_ascii_lowercase().as_str(),
+        "1" | "true" | "yes"
+    )
 }
 
 /// Add method completions
@@ -347,7 +419,11 @@ pub fn add_method_completions(
     let mut seen: HashSet<&str> = HashSet::new();
 
     // Prefer discovered in-file methods first (including synthesized framework accessors).
-    let method_prefix = context.prefix.rsplit("->").next().unwrap_or(&context.prefix);
+    let method_prefix = context
+        .prefix
+        .rsplit("->")
+        .next()
+        .unwrap_or(&context.prefix);
     for (name, symbols) in &symbol_table.symbols {
         let is_callable = symbols
             .iter()
@@ -365,14 +441,22 @@ pub fn add_method_completions(
             .iter()
             .find(|symbol| matches!(symbol.kind, SymbolKind::Subroutine | SymbolKind::Method));
 
-        let is_moo_accessor =
-            callable_symbol.and_then(|s| s.declaration.as_deref()).is_some_and(|d| d == "has");
+        let is_moo_accessor = callable_symbol
+            .and_then(|s| s.declaration.as_deref())
+            .is_some_and(|d| d == "has");
 
         let (detail, documentation) = if is_moo_accessor {
-            let attrs = callable_symbol.map(|s| s.attributes.as_slice()).unwrap_or(&[]);
-            ("Moo/Moose accessor".to_string(), Some(moo_accessor_documentation(name, attrs)))
+            let attrs = callable_symbol
+                .map(|s| s.attributes.as_slice())
+                .unwrap_or(&[]);
+            (
+                "Moo/Moose accessor".to_string(),
+                Some(moo_accessor_documentation(name, attrs)),
+            )
         } else {
-            let doc = symbols.iter().find_map(|symbol| symbol.documentation.clone());
+            let doc = symbols
+                .iter()
+                .find_map(|symbol| symbol.documentation.clone());
             ("method".to_string(), doc)
         };
 
@@ -426,8 +510,10 @@ pub fn add_method_completions(
 
     for (method, desc) in methods {
         if seen.insert(method) {
-            let additional_edits =
-                auto_import_edit.as_ref().map(|e| vec![e.clone()]).unwrap_or_default();
+            let additional_edits = auto_import_edit
+                .as_ref()
+                .map(|e| vec![e.clone()])
+                .unwrap_or_default();
             completions.push(CompletionItem {
                 label: method.to_string(),
                 kind: crate::completion::items::CompletionItemKind::Function,
@@ -450,8 +536,10 @@ pub fn add_method_completions(
             ("can", "Check if object can call method"),
         ] {
             if seen.insert(method) {
-                let additional_edits =
-                    auto_import_edit.as_ref().map(|e| vec![e.clone()]).unwrap_or_default();
+                let additional_edits = auto_import_edit
+                    .as_ref()
+                    .map(|e| vec![e.clone()])
+                    .unwrap_or_default();
                 completions.push(CompletionItem {
                     label: method.to_string(),
                     kind: crate::completion::items::CompletionItemKind::Function,

@@ -32,8 +32,9 @@ fn fuzz_resolution_inputs_never_panic_and_emit_valid_uri_shape() {
     for _ in 0..2000 {
         let module_name = fuzz_string(&mut seed, 40);
 
-        let open_docs: Vec<String> =
-            (0..3).map(|_| format!("file:///{}", fuzz_string(&mut seed, 24))).collect();
+        let open_docs: Vec<String> = (0..3)
+            .map(|_| format!("file:///{}", fuzz_string(&mut seed, 24)))
+            .collect();
         let workspace_folders: Vec<String> = (0..3)
             .map(|_| {
                 if (next_u64(&mut seed) & 1) == 0 {
@@ -44,8 +45,9 @@ fn fuzz_resolution_inputs_never_panic_and_emit_valid_uri_shape() {
             })
             .collect();
         let include_paths: Vec<String> = (0..4).map(|_| fuzz_string(&mut seed, 12)).collect();
-        let system_inc: Vec<PathBuf> =
-            (0..2).map(|_| PathBuf::from(fuzz_string(&mut seed, 20))).collect();
+        let system_inc: Vec<PathBuf> = (0..2)
+            .map(|_| PathBuf::from(fuzz_string(&mut seed, 20)))
+            .collect();
 
         let result = resolve_module_uri(
             &module_name,

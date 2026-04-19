@@ -14,8 +14,10 @@ fn main() {
             if count > 10 {
                 break;
             }
-            if !matches!(t.token_type, TokenType::EOF | TokenType::Whitespace | TokenType::Newline)
-            {
+            if !matches!(
+                t.token_type,
+                TokenType::EOF | TokenType::Whitespace | TokenType::Newline
+            ) {
                 println!(
                     "  Token #{}: {:?}: {:?} [{},{}]",
                     non_ws_count,

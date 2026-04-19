@@ -102,7 +102,10 @@ fn test_capability_shapes_lsp_318_contract() -> Result<(), Box<dyn std::error::E
 
     // Test code lens shape (object with resolve boolean)
     if build.code_lens {
-        assert!(caps_json["codeLensProvider"].is_object(), "codeLensProvider must be an object");
+        assert!(
+            caps_json["codeLensProvider"].is_object(),
+            "codeLensProvider must be an object"
+        );
         assert!(caps_json["codeLensProvider"]["resolveProvider"].is_boolean());
     }
 

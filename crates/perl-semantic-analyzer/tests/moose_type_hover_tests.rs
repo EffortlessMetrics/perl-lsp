@@ -136,7 +136,10 @@ fn moose_type_doc_unknown_returns_none() {
 fn moose_type_doc_arrayref_int_resolves_base() {
     // "ArrayRef[Int]" should resolve to the ArrayRef documentation
     let doc = get_moose_type_documentation("ArrayRef[Int]");
-    assert!(doc.is_some(), "ArrayRef[Int] should resolve to ArrayRef documentation");
+    assert!(
+        doc.is_some(),
+        "ArrayRef[Int] should resolve to ArrayRef documentation"
+    );
     let doc = must_some(doc);
     assert!(
         doc.description.to_lowercase().contains("array")
@@ -150,7 +153,10 @@ fn moose_type_doc_arrayref_int_resolves_base() {
 fn moose_type_doc_maybe_str_resolves_base() {
     // "Maybe[Str]" should resolve to Maybe documentation
     let doc = get_moose_type_documentation("Maybe[Str]");
-    assert!(doc.is_some(), "Maybe[Str] should resolve to Maybe documentation");
+    assert!(
+        doc.is_some(),
+        "Maybe[Str] should resolve to Maybe documentation"
+    );
     let doc = must_some(doc);
     assert!(
         doc.description.to_lowercase().contains("undef")
@@ -165,7 +171,10 @@ fn moose_type_doc_maybe_str_resolves_base() {
 fn moose_type_doc_hashref_str_str_resolves_base() {
     // "HashRef[Str]" should resolve to HashRef documentation
     let doc = get_moose_type_documentation("HashRef[Str]");
-    assert!(doc.is_some(), "HashRef[Str] should resolve to HashRef documentation");
+    assert!(
+        doc.is_some(),
+        "HashRef[Str] should resolve to HashRef documentation"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -176,7 +185,10 @@ fn moose_type_doc_hashref_str_str_resolves_base() {
 fn moose_type_doc_str_signature_not_empty() {
     let doc = get_moose_type_documentation("Str");
     let doc = must_some(doc);
-    assert!(!doc.signature.is_empty(), "Str signature should not be empty");
+    assert!(
+        !doc.signature.is_empty(),
+        "Str signature should not be empty"
+    );
 }
 
 #[test]

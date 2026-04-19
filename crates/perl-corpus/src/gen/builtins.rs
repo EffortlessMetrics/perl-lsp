@@ -24,19 +24,35 @@ fn string_literal() -> impl Strategy<Value = String> {
 
 /// Generate a pack template
 fn pack_template() -> impl Strategy<Value = &'static str> {
-    prop_oneof![Just("C*"), Just("A*"), Just("Z*"), Just("n"), Just("N"), Just("v"), Just("V"),]
+    prop_oneof![
+        Just("C*"),
+        Just("A*"),
+        Just("Z*"),
+        Just("n"),
+        Just("N"),
+        Just("v"),
+        Just("V"),
+    ]
 }
 
 fn pack_unpack() -> impl Strategy<Value = String> {
-    (identifier(), identifier(), pack_template(), prop::collection::vec(byte_val(), 1..5)).prop_map(
-        |(packed, bytes, template, vals)| {
-            let vals_str = vals.iter().map(|v| v.to_string()).collect::<Vec<_>>().join(", ");
+    (
+        identifier(),
+        identifier(),
+        pack_template(),
+        prop::collection::vec(byte_val(), 1..5),
+    )
+        .prop_map(|(packed, bytes, template, vals)| {
+            let vals_str = vals
+                .iter()
+                .map(|v| v.to_string())
+                .collect::<Vec<_>>()
+                .join(", ");
             format!(
                 "my ${} = pack(\"{}\", {});\nmy @{} = unpack(\"{}\", ${});\n",
                 packed, template, vals_str, bytes, template, packed
             )
-        },
-    )
+        })
 }
 
 fn split_join() -> impl Strategy<Value = String> {
@@ -94,36 +110,51 @@ fn chomp_line() -> impl Strategy<Value = String> {
 }
 
 fn keys_values() -> impl Strategy<Value = String> {
-    (identifier(), identifier(), identifier(), small_int(), small_int()).prop_map(
-        |(map, keys, vals, v1, v2)| {
+    (
+        identifier(),
+        identifier(),
+        identifier(),
+        small_int(),
+        small_int(),
+    )
+        .prop_map(|(map, keys, vals, v1, v2)| {
             format!(
                 "my %{} = (a => {}, b => {});\nmy @{} = keys %{};\nmy @{} = values %{};\n",
                 map, v1, v2, keys, map, vals, map
             )
-        },
-    )
+        })
 }
 
 fn each_delete() -> impl Strategy<Value = String> {
-    (identifier(), identifier(), identifier(), small_int(), small_int()).prop_map(
-        |(map, k, v, v1, v2)| {
+    (
+        identifier(),
+        identifier(),
+        identifier(),
+        small_int(),
+        small_int(),
+    )
+        .prop_map(|(map, k, v, v1, v2)| {
             format!(
                 "my %{} = (a => {}, b => {});\nmy (${}, ${}) = each %{};\ndelete ${}{{${}}};\n",
                 map, v1, v2, k, v, map, map, k
             )
-        },
-    )
+        })
 }
 
 fn substr_ops() -> impl Strategy<Value = String> {
-    (identifier(), identifier(), string_literal(), 0i32..5, 1i32..4).prop_map(
-        |(text, chunk, val, start, len)| {
+    (
+        identifier(),
+        identifier(),
+        string_literal(),
+        0i32..5,
+        1i32..4,
+    )
+        .prop_map(|(text, chunk, val, start, len)| {
             format!(
                 "my ${} = {};\nmy ${} = substr(${}, {}, {});\nsubstr(${}, 0, 1) = \"X\";\n",
                 text, val, chunk, text, start, len, text
             )
-        },
-    )
+        })
 }
 
 fn index_ops() -> impl Strategy<Value = String> {
@@ -148,13 +179,19 @@ fn pos_study() -> impl Strategy<Value = String> {
 
 fn length_chop() -> impl Strategy<Value = String> {
     (identifier(), identifier(), string_literal()).prop_map(|(text, len, val)| {
-        format!("my ${} = {};\nmy ${} = length ${};\nchop ${};\n", text, val, len, text, text)
+        format!(
+            "my ${} = {};\nmy ${} = length ${};\nchop ${};\n",
+            text, val, len, text, text
+        )
     })
 }
 
 fn quotemeta_op() -> impl Strategy<Value = String> {
     (identifier(), identifier()).prop_map(|(text, quoted)| {
-        format!("my ${} = \"a.b*c\";\nmy ${} = quotemeta ${};\n", text, quoted, text)
+        format!(
+            "my ${} = \"a.b*c\";\nmy ${} = quotemeta ${};\n",
+            text, quoted, text
+        )
     })
 }
 
@@ -171,7 +208,10 @@ fn bless_ref() -> impl Strategy<Value = String> {
 
 fn caller_wantarray() -> impl Strategy<Value = String> {
     (identifier(), identifier()).prop_map(|(caller_var, context)| {
-        format!("my @{} = caller;\nmy ${} = wantarray();\n", caller_var, context)
+        format!(
+            "my @{} = caller;\nmy ${} = wantarray();\n",
+            caller_var, context
+        )
     })
 }
 
@@ -181,27 +221,43 @@ fn warn_die() -> impl Strategy<Value = String> {
 }
 
 fn push_pop() -> impl Strategy<Value = String> {
-    (identifier(), identifier(), prop::collection::vec(small_int(), 1..5), small_int()).prop_map(
-        |(stack, last, init, push_val)| {
-            let init_str = init.iter().map(|v| v.to_string()).collect::<Vec<_>>().join(", ");
+    (
+        identifier(),
+        identifier(),
+        prop::collection::vec(small_int(), 1..5),
+        small_int(),
+    )
+        .prop_map(|(stack, last, init, push_val)| {
+            let init_str = init
+                .iter()
+                .map(|v| v.to_string())
+                .collect::<Vec<_>>()
+                .join(", ");
             format!(
                 "my @{} = ({});\npush @{}, {};\nmy ${} = pop @{};\n",
                 stack, init_str, stack, push_val, last, stack
             )
-        },
-    )
+        })
 }
 
 fn shift_unshift() -> impl Strategy<Value = String> {
-    (identifier(), identifier(), prop::collection::vec(small_int(), 1..5), small_int()).prop_map(
-        |(queue, first, init, unshift_val)| {
-            let init_str = init.iter().map(|v| v.to_string()).collect::<Vec<_>>().join(", ");
+    (
+        identifier(),
+        identifier(),
+        prop::collection::vec(small_int(), 1..5),
+        small_int(),
+    )
+        .prop_map(|(queue, first, init, unshift_val)| {
+            let init_str = init
+                .iter()
+                .map(|v| v.to_string())
+                .collect::<Vec<_>>()
+                .join(", ");
             format!(
                 "my @{} = ({});\nunshift @{}, {};\nmy ${} = shift @{};\n",
                 queue, init_str, queue, unshift_val, first, queue
             )
-        },
-    )
+        })
 }
 
 fn splice_replace() -> impl Strategy<Value = String> {
@@ -215,7 +271,11 @@ fn splice_replace() -> impl Strategy<Value = String> {
         small_int(),
     )
         .prop_map(|(items, removed, init, offset, length, r1, r2)| {
-            let init_str = init.iter().map(|v| v.to_string()).collect::<Vec<_>>().join(", ");
+            let init_str = init
+                .iter()
+                .map(|v| v.to_string())
+                .collect::<Vec<_>>()
+                .join(", ");
             format!(
                 "my @{} = ({});\nmy @{} = splice @{}, {}, {}, ({}, {});\n",
                 items, init_str, removed, items, offset, length, r1, r2
@@ -224,12 +284,18 @@ fn splice_replace() -> impl Strategy<Value = String> {
 }
 
 fn reverse_list() -> impl Strategy<Value = String> {
-    (identifier(), identifier(), prop::collection::vec(string_literal(), 2..5)).prop_map(
-        |(items, rev, init)| {
-            let init_str = init.join(", ");
-            format!("my @{} = ({});\nmy @{} = reverse @{};\n", items, init_str, rev, items)
-        },
+    (
+        identifier(),
+        identifier(),
+        prop::collection::vec(string_literal(), 2..5),
     )
+        .prop_map(|(items, rev, init)| {
+            let init_str = init.join(", ");
+            format!(
+                "my @{} = ({});\nmy @{} = reverse @{};\n",
+                items, init_str, rev, items
+            )
+        })
 }
 
 fn uc_lc() -> impl Strategy<Value = String> {
@@ -244,7 +310,10 @@ fn uc_lc() -> impl Strategy<Value = String> {
 
 fn chr_ord() -> impl Strategy<Value = String> {
     (identifier(), identifier(), byte_val()).prop_map(|(letter, code, val)| {
-        format!("my ${} = chr {};\nmy ${} = ord ${};\n", letter, val, code, letter)
+        format!(
+            "my ${} = chr {};\nmy ${} = ord ${};\n",
+            letter, val, code, letter
+        )
     })
 }
 
@@ -300,19 +369,28 @@ fn sleep_alarm() -> impl Strategy<Value = String> {
 
 fn chdir_mkdir() -> impl Strategy<Value = String> {
     (identifier(), identifier()).prop_map(|(ok, dir)| {
-        format!("my ${} = chdir \"/tmp\";\nmkdir \"{}\";\nrmdir \"{}\";\n", ok, dir, dir)
+        format!(
+            "my ${} = chdir \"/tmp\";\nmkdir \"{}\";\nrmdir \"{}\";\n",
+            ok, dir, dir
+        )
     })
 }
 
 fn rename_unlink() -> impl Strategy<Value = String> {
     (identifier(), identifier()).prop_map(|(old, new)| {
-        format!("rename \"{}.log\", \"{}.log\";\nunlink \"{}.log\";\n", old, new, old)
+        format!(
+            "rename \"{}.log\", \"{}.log\";\nunlink \"{}.log\";\n",
+            old, new, old
+        )
     })
 }
 
 fn chmod_chown() -> impl Strategy<Value = String> {
     (identifier(), 0o644i32..0o755i32, 1000i32..2000).prop_map(|(file, mode, uid)| {
-        format!("chmod 0{:o}, \"{}.txt\";\nchown {}, {}, \"{}.txt\";\n", mode, file, uid, uid, file)
+        format!(
+            "chmod 0{:o}, \"{}.txt\";\nchown {}, {}, \"{}.txt\";\n",
+            mode, file, uid, uid, file
+        )
     })
 }
 
@@ -327,7 +405,10 @@ fn link_ops() -> impl Strategy<Value = String> {
 
 fn truncate_umask() -> impl Strategy<Value = String> {
     (identifier(), identifier(), 0o022i32..0o077i32).prop_map(|(old, file, mask)| {
-        format!("my ${} = umask 0{:o};\ntruncate \"{}.txt\", 0;\n", old, mask, file)
+        format!(
+            "my ${} = umask 0{:o};\ntruncate \"{}.txt\", 0;\n",
+            old, mask, file
+        )
     })
 }
 
@@ -366,11 +447,16 @@ fn fileno_close() -> impl Strategy<Value = String> {
 }
 
 fn readline_eof() -> impl Strategy<Value = String> {
-    (identifier(), prop_oneof![Just("STDIN"), Just("ARGV"), Just("DATA")]).prop_map(
-        |(line, handle)| {
-            format!("my ${} = <{}>;\nif (eof {}) {{ warn \"eof\"; }}\n", line, handle, handle)
-        },
+    (
+        identifier(),
+        prop_oneof![Just("STDIN"), Just("ARGV"), Just("DATA")],
     )
+        .prop_map(|(line, handle)| {
+            format!(
+                "my ${} = <{}>;\nif (eof {}) {{ warn \"eof\"; }}\n",
+                line, handle, handle
+            )
+        })
 }
 
 fn formline_statement() -> impl Strategy<Value = String> {

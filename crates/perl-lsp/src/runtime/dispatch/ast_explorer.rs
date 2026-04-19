@@ -35,13 +35,15 @@ impl LspServer {
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
         // Extract the `uri` string from params
-        let uri = params.as_ref().and_then(|p| p.get("uri")).and_then(|u| u.as_str()).ok_or_else(
-            || JsonRpcError {
+        let uri = params
+            .as_ref()
+            .and_then(|p| p.get("uri"))
+            .and_then(|u| u.as_str())
+            .ok_or_else(|| JsonRpcError {
                 code: INVALID_PARAMS,
                 message: "Missing required 'uri' parameter".to_string(),
                 data: None,
-            },
-        )?;
+            })?;
 
         let docs = self.documents_guard();
 

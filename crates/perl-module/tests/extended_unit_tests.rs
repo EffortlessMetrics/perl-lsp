@@ -75,7 +75,10 @@ fn normalize_very_long_package_with_ticks() -> Result<(), Box<dyn std::error::Er
 
 #[test]
 fn name_to_path_underscore_in_segment() -> Result<(), Box<dyn std::error::Error>> {
-    assert_eq!(module_name_to_path("My_Module::Sub_Module"), "My_Module/Sub_Module.pm");
+    assert_eq!(
+        module_name_to_path("My_Module::Sub_Module"),
+        "My_Module/Sub_Module.pm"
+    );
     Ok(())
 }
 
@@ -102,7 +105,10 @@ fn name_to_path_lowercase_module() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn name_to_path_uppercase_single_char() -> Result<(), Box<dyn std::error::Error>> {
-    assert_eq!(module_name_to_path("A::B::C::D::E::F::G::H"), "A/B/C/D/E/F/G/H.pm");
+    assert_eq!(
+        module_name_to_path("A::B::C::D::E::F::G::H"),
+        "A/B/C/D/E/F/G/H.pm"
+    );
     Ok(())
 }
 
@@ -194,19 +200,28 @@ fn path_to_name_numbers_in_path() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn path_to_name_underscores_in_path() -> Result<(), Box<dyn std::error::Error>> {
-    assert_eq!(module_path_to_name("foo_bar/baz_qux.pm"), "foo_bar::baz_qux");
+    assert_eq!(
+        module_path_to_name("foo_bar/baz_qux.pm"),
+        "foo_bar::baz_qux"
+    );
     Ok(())
 }
 
 #[test]
 fn path_to_name_hyphens_in_path() -> Result<(), Box<dyn std::error::Error>> {
-    assert_eq!(module_path_to_name("my-module/sub-module.pm"), "my-module::sub-module");
+    assert_eq!(
+        module_path_to_name("my-module/sub-module.pm"),
+        "my-module::sub-module"
+    );
     Ok(())
 }
 
 #[test]
 fn path_to_name_very_deep_path() -> Result<(), Box<dyn std::error::Error>> {
-    assert_eq!(module_path_to_name("A/B/C/D/E/F/G/H/I/J.pm"), "A::B::C::D::E::F::G::H::I::J");
+    assert_eq!(
+        module_path_to_name("A/B/C/D/E/F/G/H/I/J.pm"),
+        "A::B::C::D::E::F::G::H::I::J"
+    );
     Ok(())
 }
 
@@ -241,20 +256,29 @@ fn file_path_lib_in_middle_of_filename() -> Result<(), Box<dyn std::error::Error
 #[test]
 fn file_path_libing_as_segment() -> Result<(), Box<dyn std::error::Error>> {
     // "libing" or similar should not match /lib/
-    assert_eq!(file_path_to_module_name("/project/libing/Module.pm"), "Module");
+    assert_eq!(
+        file_path_to_module_name("/project/libing/Module.pm"),
+        "Module"
+    );
     Ok(())
 }
 
 #[test]
 fn file_path_libfoo_directory() -> Result<(), Box<dyn std::error::Error>> {
     // /libfoo/ should not match /lib/
-    assert_eq!(file_path_to_module_name("/project/libfoo/Module.pm"), "Module");
+    assert_eq!(
+        file_path_to_module_name("/project/libfoo/Module.pm"),
+        "Module"
+    );
     Ok(())
 }
 
 #[test]
 fn file_path_three_lib_segments_uses_last() -> Result<(), Box<dyn std::error::Error>> {
-    assert_eq!(file_path_to_module_name("/a/lib/b/lib/c/lib/Foo/Bar.pm"), "Foo::Bar");
+    assert_eq!(
+        file_path_to_module_name("/a/lib/b/lib/c/lib/Foo/Bar.pm"),
+        "Foo::Bar"
+    );
     Ok(())
 }
 
@@ -267,47 +291,68 @@ fn file_path_lib_at_end() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn file_path_windows_drive_with_lib() -> Result<(), Box<dyn std::error::Error>> {
-    assert_eq!(file_path_to_module_name(r"D:\project\lib\My\Module.pm"), "My::Module");
+    assert_eq!(
+        file_path_to_module_name(r"D:\project\lib\My\Module.pm"),
+        "My::Module"
+    );
     Ok(())
 }
 
 #[test]
 fn file_path_windows_drive_without_lib() -> Result<(), Box<dyn std::error::Error>> {
-    assert_eq!(file_path_to_module_name(r"D:\project\bin\script.pl"), "script");
+    assert_eq!(
+        file_path_to_module_name(r"D:\project\bin\script.pl"),
+        "script"
+    );
     Ok(())
 }
 
 #[test]
 fn file_path_unc_path_with_lib() -> Result<(), Box<dyn std::error::Error>> {
     // UNC paths like //server/share, converted to forward slashes
-    assert_eq!(file_path_to_module_name(r"\\server\share\lib\Foo\Bar.pm"), "Foo::Bar");
+    assert_eq!(
+        file_path_to_module_name(r"\\server\share\lib\Foo\Bar.pm"),
+        "Foo::Bar"
+    );
     Ok(())
 }
 
 #[test]
 fn file_path_lib_relative_path() -> Result<(), Box<dyn std::error::Error>> {
     // lib as the first segment
-    assert_eq!(file_path_to_module_name("lib/Foo/Bar/Baz.pm"), "Foo::Bar::Baz");
+    assert_eq!(
+        file_path_to_module_name("lib/Foo/Bar/Baz.pm"),
+        "Foo::Bar::Baz"
+    );
     Ok(())
 }
 
 #[test]
 fn file_path_absolute_with_multiple_dots_in_name() -> Result<(), Box<dyn std::error::Error>> {
     // Dots in the filename before extension
-    assert_eq!(file_path_to_module_name("/project/lib/Foo.Bar.Baz.pm"), "Foo.Bar.Baz");
+    assert_eq!(
+        file_path_to_module_name("/project/lib/Foo.Bar.Baz.pm"),
+        "Foo.Bar.Baz"
+    );
     Ok(())
 }
 
 #[test]
 fn file_path_hidden_file_with_lib() -> Result<(), Box<dyn std::error::Error>> {
     // Hidden files (starting with .) in lib/ directory
-    assert_eq!(file_path_to_module_name("/project/lib/.hidden.pm"), ".hidden");
+    assert_eq!(
+        file_path_to_module_name("/project/lib/.hidden.pm"),
+        ".hidden"
+    );
     Ok(())
 }
 
 #[test]
 fn file_path_deeply_nested_within_lib() -> Result<(), Box<dyn std::error::Error>> {
-    assert_eq!(file_path_to_module_name("/a/b/c/lib/d/e/f/g/h/Module.pm"), "d::e::f::g::h::Module");
+    assert_eq!(
+        file_path_to_module_name("/a/b/c/lib/d/e/f/g/h/Module.pm"),
+        "d::e::f::g::h::Module"
+    );
     Ok(())
 }
 
@@ -390,10 +435,16 @@ fn name_to_path_max_segment_length() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn path_to_name_max_path_length() -> Result<(), Box<dyn std::error::Error>> {
-    let long_path = (0..100).map(|i| format!("Seg{}", i)).collect::<Vec<_>>().join("/");
+    let long_path = (0..100)
+        .map(|i| format!("Seg{}", i))
+        .collect::<Vec<_>>()
+        .join("/");
     let input = format!("{}.pm", long_path);
     let result = module_path_to_name(&input);
-    let expected = (0..100).map(|i| format!("Seg{}", i)).collect::<Vec<_>>().join("::");
+    let expected = (0..100)
+        .map(|i| format!("Seg{}", i))
+        .collect::<Vec<_>>()
+        .join("::");
     assert_eq!(result, expected);
     Ok(())
 }
@@ -428,7 +479,10 @@ fn normalize_unicode_package() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn name_to_path_japanese_chars() -> Result<(), Box<dyn std::error::Error>> {
-    assert_eq!(module_name_to_path("日本語::モジュール"), "日本語/モジュール.pm");
+    assert_eq!(
+        module_name_to_path("日本語::モジュール"),
+        "日本語/モジュール.pm"
+    );
     Ok(())
 }
 
@@ -440,7 +494,10 @@ fn path_to_name_emoji_in_segment() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn file_path_emoji_in_filename() -> Result<(), Box<dyn std::error::Error>> {
-    assert_eq!(file_path_to_module_name("/lib/Test🦀/Module.pm"), "Test🦀::Module");
+    assert_eq!(
+        file_path_to_module_name("/lib/Test🦀/Module.pm"),
+        "Test🦀::Module"
+    );
     Ok(())
 }
 
@@ -461,7 +518,10 @@ fn path_to_name_spaces_preserved() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn file_path_spaces_in_directory() -> Result<(), Box<dyn std::error::Error>> {
-    assert_eq!(file_path_to_module_name("/my project/lib/My Module/Class.pm"), "My Module::Class");
+    assert_eq!(
+        file_path_to_module_name("/my project/lib/My Module/Class.pm"),
+        "My Module::Class"
+    );
     Ok(())
 }
 
@@ -590,6 +650,9 @@ fn path_to_name_repeated_segments() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn file_path_repeated_lib_segments_uses_last() -> Result<(), Box<dyn std::error::Error>> {
-    assert_eq!(file_path_to_module_name("/lib/foo/lib/bar/lib/Module.pm"), "Module");
+    assert_eq!(
+        file_path_to_module_name("/lib/foo/lib/bar/lib/Module.pm"),
+        "Module"
+    );
     Ok(())
 }

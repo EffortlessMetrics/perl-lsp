@@ -39,16 +39,31 @@ pub(super) fn count_dap_tests(root: &Path) -> DapTestCounts {
                             .file_name()
                             .to_string_lossy()
                             .starts_with("breakpoints_file_boundaries")
-                        && !e.file_name().to_string_lossy().starts_with("breakpoints_comments")
-                        && !e.file_name().to_string_lossy().starts_with("breakpoints_heredocs")
-                        && !e.file_name().to_string_lossy().starts_with("breakpoints_multiline")
-                        && !e.file_name().to_string_lossy().starts_with("breakpoints_pod")
+                        && !e
+                            .file_name()
+                            .to_string_lossy()
+                            .starts_with("breakpoints_comments")
+                        && !e
+                            .file_name()
+                            .to_string_lossy()
+                            .starts_with("breakpoints_heredocs")
+                        && !e
+                            .file_name()
+                            .to_string_lossy()
+                            .starts_with("breakpoints_multiline")
+                        && !e
+                            .file_name()
+                            .to_string_lossy()
+                            .starts_with("breakpoints_pod")
                 })
                 .count()
         })
         .unwrap_or(0);
 
-    DapTestCounts { integration_test_targets, scorecard_fixtures }
+    DapTestCounts {
+        integration_test_targets,
+        scorecard_fixtures,
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -103,15 +118,24 @@ mod tests {
 
     #[test]
     fn test_generate_dap_status_roundtrip() -> Result<()> {
-        let counts = DapTestCounts { integration_test_targets: 20, scorecard_fixtures: 5 };
+        let counts = DapTestCounts {
+            integration_test_targets: 20,
+            scorecard_fixtures: 5,
+        };
         let template = "# DAP\n\
                         <!-- BEGIN: DAP_TEST_COUNTS -->\n\
                         old content\n\
                         <!-- END: DAP_TEST_COUNTS -->\n\
                         tail\n";
         let result = generate_dap_status(&counts, template)?;
-        assert!(result.contains("20 test targets"), "expected '20 test targets' in output");
-        assert!(result.contains("| Scorecard fixtures | 5 |"), "expected scorecard fixture count");
+        assert!(
+            result.contains("20 test targets"),
+            "expected '20 test targets' in output"
+        );
+        assert!(
+            result.contains("| Scorecard fixtures | 5 |"),
+            "expected scorecard fixture count"
+        );
         assert!(result.contains("tail"), "suffix text should be preserved");
         Ok(())
     }

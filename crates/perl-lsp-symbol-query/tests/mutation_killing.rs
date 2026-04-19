@@ -18,22 +18,40 @@ use perl_lsp_symbol_query::{compare_names_by_query, matches_query};
 #[test]
 fn matches_query_case_insensitive_exact_match() {
     // A mutation removing .to_lowercase() would make "FOO" != "foo"
-    assert!(matches_query("FOO", "foo"), "exact match must be case-insensitive");
-    assert!(matches_query("foo", "FOO"), "exact match must be case-insensitive (reversed)");
-    assert!(matches_query("FoO", "fOo"), "mixed-case exact must still match");
+    assert!(
+        matches_query("FOO", "foo"),
+        "exact match must be case-insensitive"
+    );
+    assert!(
+        matches_query("foo", "FOO"),
+        "exact match must be case-insensitive (reversed)"
+    );
+    assert!(
+        matches_query("FoO", "fOo"),
+        "mixed-case exact must still match"
+    );
 }
 
 #[test]
 fn matches_query_case_insensitive_prefix_match() {
     // A mutation removing .to_lowercase() would make prefix check case-sensitive
-    assert!(matches_query("FooBar", "foo"), "prefix must be case-insensitive");
-    assert!(matches_query("FOOBAR", "Foo"), "prefix must be case-insensitive (upper name)");
+    assert!(
+        matches_query("FooBar", "foo"),
+        "prefix must be case-insensitive"
+    );
+    assert!(
+        matches_query("FOOBAR", "Foo"),
+        "prefix must be case-insensitive (upper name)"
+    );
 }
 
 #[test]
 fn matches_query_case_insensitive_contains_match() {
     // A mutation removing .to_lowercase() would miss contains match
-    assert!(matches_query("get_LOG_line", "log"), "contains match must be case-insensitive");
+    assert!(
+        matches_query("get_LOG_line", "log"),
+        "contains match must be case-insensitive"
+    );
     assert!(
         matches_query("get_log_line", "LOG"),
         "contains match must be case-insensitive (upper query)"
@@ -60,19 +78,28 @@ fn matches_query_case_insensitive_fuzzy_match() {
 #[test]
 fn matches_query_returns_false_when_no_strategy_matches() {
     // "zqwx" has no relationship to "foo" under any strategy
-    assert!(!matches_query("foo", "zqwx"), "non-matching query must return false");
+    assert!(
+        !matches_query("foo", "zqwx"),
+        "non-matching query must return false"
+    );
 }
 
 #[test]
 fn matches_query_returns_false_when_query_longer_than_name() {
     // Subsequence can't match if query is longer than name
-    assert!(!matches_query("ab", "abcdef"), "query longer than name must not match");
+    assert!(
+        !matches_query("ab", "abcdef"),
+        "query longer than name must not match"
+    );
 }
 
 #[test]
 fn matches_query_single_char_exact() {
     assert!(matches_query("a", "a"), "single char exact must match");
-    assert!(!matches_query("b", "a"), "single char exact mismatch must return false");
+    assert!(
+        !matches_query("b", "a"),
+        "single char exact mismatch must return false"
+    );
 }
 
 #[test]
@@ -83,7 +110,10 @@ fn matches_query_single_char_prefix() {
 #[test]
 fn matches_query_single_char_contains() {
     // 'l' is contained in "alpha" but not a prefix
-    assert!(matches_query("alpha", "l"), "single char contains must match");
+    assert!(
+        matches_query("alpha", "l"),
+        "single char contains must match"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -97,29 +127,44 @@ fn matches_query_subsequence_requires_order() {
     // "fa": f must come before a, but in "alfa" f is at index 2, a is at 3 → IS a subsequence
     // let's use a clearer case: "ba" in "abc" → b at 1, a must be after but no 'a' after index 1
     // "abc": a(0) b(1) c(2) — for query "ba": b at pos 1, then need 'a' after pos 1 → not found
-    assert!(!matches_query("abc", "ba"), "subsequence requires chars in order");
+    assert!(
+        !matches_query("abc", "ba"),
+        "subsequence requires chars in order"
+    );
 }
 
 #[test]
 fn matches_query_subsequence_empty_query_edge_case() {
     // Empty query is already handled at the top, before is_subsequence is called
     assert!(matches_query("anything", ""), "empty query always matches");
-    assert!(matches_query("", ""), "empty name, empty query always matches");
+    assert!(
+        matches_query("", ""),
+        "empty name, empty query always matches"
+    );
 }
 
 #[test]
 fn matches_query_subsequence_query_equals_name_length() {
     // When query == name, it's caught by the exact-match branch first
     // but let's verify that case works
-    assert!(matches_query("abc", "abc"), "query same as name = exact match");
+    assert!(
+        matches_query("abc", "abc"),
+        "query same as name = exact match"
+    );
 }
 
 #[test]
 fn matches_query_subsequence_consumes_all_query_chars() {
     // "aceg" is subsequence of "abcdefgh" (a,c,e,g all present in order)
-    assert!(matches_query("abcdefgh", "aceg"), "full subsequence must match");
+    assert!(
+        matches_query("abcdefgh", "aceg"),
+        "full subsequence must match"
+    );
     // "aeg" is NOT a subsequence of "aec" because 'g' is absent
-    assert!(!matches_query("aec", "aeg"), "partial subsequence must fail when char missing");
+    assert!(
+        !matches_query("aec", "aeg"),
+        "partial subsequence must fail when char missing"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -133,7 +178,10 @@ fn compare_prefix_match_is_tier1_not_tier2() {
     // If tier boundary mutated: prefix becomes tier 2 = same as contains → wrong ordering
     let mut names = ["get_log", "logger"];
     names.sort_by(|a, b| compare_names_by_query(a, b, "log"));
-    assert_eq!(names[0], "logger", "prefix match (tier 1) must rank above contains (tier 2)");
+    assert_eq!(
+        names[0], "logger",
+        "prefix match (tier 1) must rank above contains (tier 2)"
+    );
     assert_eq!(names[1], "get_log");
 }
 
@@ -182,7 +230,10 @@ fn compare_within_same_tier_equal_length_uses_lexicographic_order() {
     // Lexicographic: "abc_x" < "abc_y"
     let mut names = ["abc_y", "abc_x"];
     names.sort_by(|a, b| compare_names_by_query(a, b, "abc"));
-    assert_eq!(names[0], "abc_x", "equal-length same-tier uses lexicographic order");
+    assert_eq!(
+        names[0], "abc_x",
+        "equal-length same-tier uses lexicographic order"
+    );
     assert_eq!(names[1], "abc_y");
 }
 

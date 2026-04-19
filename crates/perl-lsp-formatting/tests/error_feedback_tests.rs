@@ -34,7 +34,9 @@ impl SubprocessRuntime for ErrorRuntime {
         _args: &[&str],
         _stdin: Option<&[u8]>,
     ) -> Result<perl_lsp_tooling::SubprocessOutput, perl_lsp_tooling::SubprocessError> {
-        Err(perl_lsp_tooling::SubprocessError::new("command not found: perltidy"))
+        Err(perl_lsp_tooling::SubprocessError::new(
+            "command not found: perltidy",
+        ))
     }
 }
 
@@ -148,7 +150,11 @@ fn test_error_kind_execution_error() {
 #[test]
 fn test_error_kind_io_error() {
     let err = FormattingError::IoError("disk full".to_string());
-    assert_eq!(err.error_kind(), "io_error", "IoError should return error_kind 'io_error'");
+    assert_eq!(
+        err.error_kind(),
+        "io_error",
+        "IoError should return error_kind 'io_error'"
+    );
 }
 
 // ---------------------------------------------------------------------------

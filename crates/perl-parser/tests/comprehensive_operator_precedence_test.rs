@@ -276,10 +276,26 @@ fn test_word_operator_precedence_comprehensive() {
     }
 
     let test_cases = vec![
-        TestCase { name: "simple_or", input: "$a or $b", description: "Simple OR expression" },
-        TestCase { name: "simple_and", input: "$a and $b", description: "Simple AND expression" },
-        TestCase { name: "simple_not", input: "not $a", description: "Simple NOT expression" },
-        TestCase { name: "simple_xor", input: "$a xor $b", description: "Simple XOR expression" },
+        TestCase {
+            name: "simple_or",
+            input: "$a or $b",
+            description: "Simple OR expression",
+        },
+        TestCase {
+            name: "simple_and",
+            input: "$a and $b",
+            description: "Simple AND expression",
+        },
+        TestCase {
+            name: "simple_not",
+            input: "not $a",
+            description: "Simple NOT expression",
+        },
+        TestCase {
+            name: "simple_xor",
+            input: "$a xor $b",
+            description: "Simple XOR expression",
+        },
         TestCase {
             name: "or_with_assignment",
             input: "$a = 1 or $b = 2",
@@ -345,7 +361,10 @@ fn test_word_operator_precedence_comprehensive() {
                 // AST successfully parsed
             }
             Err(e) => {
-                unreachable!("Failed to parse {}: {} - Error: {:?}", test.name, test.input, e);
+                unreachable!(
+                    "Failed to parse {}: {} - Error: {:?}",
+                    test.name, test.input, e
+                );
             }
         }
     }

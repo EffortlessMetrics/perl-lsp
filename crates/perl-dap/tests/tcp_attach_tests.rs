@@ -74,8 +74,10 @@ fn test_tcp_attach_session_event_sender() {
     session.set_event_sender(tx.clone());
 
     // Send an event and verify it's received
-    let event =
-        DapEvent::Output { category: "stdout".to_string(), output: "test output".to_string() };
+    let event = DapEvent::Output {
+        category: "stdout".to_string(),
+        output: "test output".to_string(),
+    };
     must(tx.send(event));
 
     let received = must(rx.recv_timeout(Duration::from_millis(100)));
@@ -94,7 +96,10 @@ fn test_tcp_attach_event_variants() {
     let (tx, rx) = channel::<DapEvent>();
 
     // Test Output event
-    must(tx.send(DapEvent::Output { category: "stdout".to_string(), output: "test".to_string() }));
+    must(tx.send(DapEvent::Output {
+        category: "stdout".to_string(),
+        output: "test".to_string(),
+    }));
     if let DapEvent::Output { .. } = must(rx.recv_timeout(Duration::from_millis(100))) {
         // Success
     } else {
@@ -102,7 +107,10 @@ fn test_tcp_attach_event_variants() {
     }
 
     // Test Stopped event
-    must(tx.send(DapEvent::Stopped { reason: "breakpoint".to_string(), thread_id: 1 }));
+    must(tx.send(DapEvent::Stopped {
+        reason: "breakpoint".to_string(),
+        thread_id: 1,
+    }));
     if let DapEvent::Stopped { .. } = must(rx.recv_timeout(Duration::from_millis(100))) {
         // Success
     } else {
@@ -118,7 +126,9 @@ fn test_tcp_attach_event_variants() {
     }
 
     // Test Terminated event
-    must(tx.send(DapEvent::Terminated { reason: "normal".to_string() }));
+    must(tx.send(DapEvent::Terminated {
+        reason: "normal".to_string(),
+    }));
     if let DapEvent::Terminated { .. } = must(rx.recv_timeout(Duration::from_millis(100))) {
         // Success
     } else {
@@ -126,7 +136,9 @@ fn test_tcp_attach_event_variants() {
     }
 
     // Test Error event
-    must(tx.send(DapEvent::Error { message: "test error".to_string() }));
+    must(tx.send(DapEvent::Error {
+        message: "test error".to_string(),
+    }));
     if let DapEvent::Error { .. } = must(rx.recv_timeout(Duration::from_millis(100))) {
         // Success
     } else {
@@ -200,8 +212,10 @@ fn test_tcp_attach_event_serialization() {
     // Test that events can be cloned and sent through channels
     let (tx, rx) = channel::<DapEvent>();
 
-    let original =
-        DapEvent::Output { category: "stderr".to_string(), output: "error message".to_string() };
+    let original = DapEvent::Output {
+        category: "stderr".to_string(),
+        output: "error message".to_string(),
+    };
 
     // Clone and send
     must(tx.send(original.clone()));
@@ -266,15 +280,23 @@ fn test_tcp_attach_reader_handles_concatenated_frames() {
             assert_eq!(category, "stdout");
             assert_eq!(output, "hello");
         }
-        other => must(Err::<(), _>(format!("Expected Output event, got {other:?}"))),
+        other => must(Err::<(), _>(format!(
+            "Expected Output event, got {other:?}"
+        ))),
     }
 
     match second {
         DapEvent::Continued { thread_id } => {
             assert_eq!(thread_id, 7);
         }
-        other => must(Err::<(), _>(format!("Expected Continued event, got {other:?}"))),
+        other => must(Err::<(), _>(format!(
+            "Expected Continued event, got {other:?}"
+        ))),
     }
 
-    must(server_handle.join().map_err(|_| "Server thread panicked".to_string()));
+    must(
+        server_handle
+            .join()
+            .map_err(|_| "Server thread panicked".to_string()),
+    );
 }

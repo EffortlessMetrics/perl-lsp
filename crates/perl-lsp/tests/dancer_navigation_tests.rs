@@ -32,7 +32,10 @@ mod dancer_navigation_tests {
             .ok_or("Expected goto-definition to resolve the Dancer route target")?;
 
         assert_eq!(def_uri, uri, "Definition should stay in the same file");
-        assert_eq!(def_line, 2, "Definition should point to the named sub handler");
+        assert_eq!(
+            def_line, 2,
+            "Definition should point to the named sub handler"
+        );
         Ok(())
     }
 
@@ -47,7 +50,10 @@ mod dancer_navigation_tests {
             .ok_or("Expected goto-definition to resolve the Dancer2 route target")?;
 
         assert_eq!(def_uri, uri, "Definition should stay in the same file");
-        assert_eq!(def_line, 2, "Definition should point to the named sub handler");
+        assert_eq!(
+            def_line, 2,
+            "Definition should point to the named sub handler"
+        );
         Ok(())
     }
 }

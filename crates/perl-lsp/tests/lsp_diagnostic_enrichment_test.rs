@@ -61,7 +61,10 @@ fn get_diagnostics(
         .ok_or("No response from textDocument/diagnostic")?;
 
     let result = response.result.ok_or("Response missing result")?;
-    let items = result["items"].as_array().ok_or("Expected items array")?.clone();
+    let items = result["items"]
+        .as_array()
+        .ok_or("Expected items array")?
+        .clone();
     Ok(items)
 }
 
@@ -81,10 +84,19 @@ fn test_data_field_populated_via_jsonrpc_path() -> Result<(), Box<dyn std::error
         .ok_or("Expected at least one PL-coded diagnostic")?;
 
     let data = &diag_with_code["data"];
-    assert!(data.is_object(), "data must be a JSON object when code is present");
+    assert!(
+        data.is_object(),
+        "data must be a JSON object when code is present"
+    );
     assert!(data["code"].is_string(), "data.code must be a string");
-    assert!(data["category"].is_string(), "data.category must be a string");
-    assert!(data["fixable"].is_boolean(), "data.fixable must be a boolean");
+    assert!(
+        data["category"].is_string(),
+        "data.category must be a string"
+    );
+    assert!(
+        data["fixable"].is_boolean(),
+        "data.fixable must be a boolean"
+    );
     assert!(data["tags"].is_array(), "data.tags must be an array");
 
     Ok(())
@@ -104,7 +116,10 @@ fn test_pl100_data_fields_correct() -> Result<(), Box<dyn std::error::Error>> {
         .ok_or("Expected PL100 (MissingStrict) diagnostic")?;
 
     let data = &diag["data"];
-    assert_eq!(data["code"], "PL100", "data.code must match the diagnostic code");
+    assert_eq!(
+        data["code"], "PL100",
+        "data.code must match the diagnostic code"
+    );
     assert_eq!(
         data["category"], "StrictWarnings",
         "data.category must be StrictWarnings for PL100"
@@ -127,8 +142,15 @@ fn test_pl105_has_fixable_true_after_adding_quick_fix() -> Result<(), Box<dyn st
     for d in &items {
         if d["code"].is_string() {
             let data = &d["data"];
-            assert!(data.is_object(), "data must be an object when code is present, got: {}", data);
-            assert!(data["fixable"].is_boolean(), "data.fixable must be a boolean");
+            assert!(
+                data.is_object(),
+                "data must be an object when code is present, got: {}",
+                data
+            );
+            assert!(
+                data["fixable"].is_boolean(),
+                "data.fixable must be a boolean"
+            );
         }
     }
 
@@ -139,7 +161,10 @@ fn test_pl105_has_fixable_true_after_adding_quick_fix() -> Result<(), Box<dyn st
         .find(|d| d["code"].as_str() == Some("PL105"))
         .ok_or("Expected PL105 (VariableRedeclaration) to fire for double-declare input")?;
     let data = &diag["data"];
-    assert_eq!(data["fixable"], true, "PL105 now has a quick-fix (remove duplicate 'my')");
+    assert_eq!(
+        data["fixable"], true,
+        "PL105 now has a quick-fix (remove duplicate 'my')"
+    );
 
     Ok(())
 }
@@ -161,7 +186,9 @@ fn test_suggestion_appended_to_message() -> Result<(), Box<dyn std::error::Error
         .find(|d| d["code"].as_str() == Some("PL100"))
         .ok_or("Expected PL100 (MissingStrict) diagnostic to fire")?;
 
-    let msg = pl100["message"].as_str().ok_or("message must be a string")?;
+    let msg = pl100["message"]
+        .as_str()
+        .ok_or("message must be a string")?;
     assert!(
         msg.contains("Suggestion:"),
         "PL100 message must include appended suggestion text; got: {:?}",
@@ -188,7 +215,9 @@ fn test_workspace_diagnostic_data_populated() -> Result<(), Box<dyn std::error::
         })
         .ok_or("No response from workspace/diagnostic")?;
 
-    let result = response.result.ok_or("workspace/diagnostic response missing result")?;
+    let result = response
+        .result
+        .ok_or("workspace/diagnostic response missing result")?;
     let reports = result["items"].as_array().ok_or("Expected items array")?;
 
     // Find the full-kind report for our URI
@@ -197,7 +226,9 @@ fn test_workspace_diagnostic_data_populated() -> Result<(), Box<dyn std::error::
         .find(|r| r["uri"].as_str() == Some(uri) && r["kind"] == "full")
         .ok_or("Expected a full-kind report for our document")?;
 
-    let diag_items = our_report["items"].as_array().ok_or("Expected items in full report")?;
+    let diag_items = our_report["items"]
+        .as_array()
+        .ok_or("Expected items in full report")?;
 
     // Verify every coded diagnostic in the workspace report has data populated
     for d in diag_items {
@@ -209,8 +240,14 @@ fn test_workspace_diagnostic_data_populated() -> Result<(), Box<dyn std::error::
                 d
             );
             assert!(data["code"].is_string(), "data.code must be a string");
-            assert!(data["category"].is_string(), "data.category must be a string");
-            assert!(data["fixable"].is_boolean(), "data.fixable must be a boolean");
+            assert!(
+                data["category"].is_string(),
+                "data.category must be a string"
+            );
+            assert!(
+                data["fixable"].is_boolean(),
+                "data.fixable must be a boolean"
+            );
             assert!(data["tags"].is_array(), "data.tags must be an array");
         }
     }
@@ -285,8 +322,13 @@ fn test_markup_message_support_populates_message_markup() -> Result<(), Box<dyn 
         "data.messageMarkup must be present when client sends markupMessageSupport: true, got: {}",
         markup
     );
-    assert_eq!(markup["kind"], "markdown", "messageMarkup.kind must be 'markdown'");
-    let value = markup["value"].as_str().ok_or("messageMarkup.value must be a string")?;
+    assert_eq!(
+        markup["kind"], "markdown",
+        "messageMarkup.kind must be 'markdown'"
+    );
+    let value = markup["value"]
+        .as_str()
+        .ok_or("messageMarkup.value must be a string")?;
     assert!(
         value.contains("PL100"),
         "messageMarkup.value must include the diagnostic code; got: {:?}",
@@ -331,10 +373,16 @@ fn test_related_information_forwarded() -> Result<(), Box<dyn std::error::Error>
         .as_array()
         .ok_or("PL600 must have relatedInformation array in LSP response")?;
 
-    assert!(!ri_arr.is_empty(), "PL600 relatedInformation must be non-empty");
+    assert!(
+        !ri_arr.is_empty(),
+        "PL600 relatedInformation must be non-empty"
+    );
 
     for ri in ri_arr {
-        assert!(ri["location"].is_object(), "relatedInformation[].location must be an object");
+        assert!(
+            ri["location"].is_object(),
+            "relatedInformation[].location must be an object"
+        );
         assert!(
             ri["location"]["uri"].is_string(),
             "relatedInformation[].location.uri must be a string"
@@ -343,7 +391,10 @@ fn test_related_information_forwarded() -> Result<(), Box<dyn std::error::Error>
             ri["location"]["range"].is_object(),
             "relatedInformation[].location.range must be an object"
         );
-        assert!(ri["message"].is_string(), "relatedInformation[].message must be a string");
+        assert!(
+            ri["message"].is_string(),
+            "relatedInformation[].message must be a string"
+        );
     }
 
     Ok(())

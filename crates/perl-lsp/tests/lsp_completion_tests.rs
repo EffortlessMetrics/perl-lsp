@@ -38,7 +38,11 @@ $cou
         }),
     );
     // Wait for the async document parse to complete before requesting completion
-    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_millis(2000));
+    drain_until_quiet(
+        &server,
+        Duration::from_millis(100),
+        Duration::from_millis(2000),
+    );
 
     // Request completion at position after "$cou"
     let response = send_request(
@@ -58,7 +62,12 @@ $cou
     // Check that both $count and $counter are suggested
     let labels: Vec<String> = items
         .iter()
-        .map(|item| item["label"].as_str().ok_or("Missing label field").map(|s| s.to_string()))
+        .map(|item| {
+            item["label"]
+                .as_str()
+                .ok_or("Missing label field")
+                .map(|s| s.to_string())
+        })
         .collect::<Result<_, _>>()?;
 
     assert!(labels.contains(&"$count".to_string()));
@@ -96,7 +105,11 @@ my @data = qw(a b c);
             }
         }),
     );
-    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_millis(2000));
+    drain_until_quiet(
+        &server,
+        Duration::from_millis(100),
+        Duration::from_millis(2000),
+    );
 
     let response = send_request(
         &server,
@@ -114,7 +127,12 @@ my @data = qw(a b c);
 
     let labels: Vec<String> = items
         .iter()
-        .map(|item| item["label"].as_str().ok_or("Missing label field").map(|s| s.to_string()))
+        .map(|item| {
+            item["label"]
+                .as_str()
+                .ok_or("Missing label field")
+                .map(|s| s.to_string())
+        })
         .collect::<Result<_, _>>()?;
 
     assert!(labels.contains(&"@items".to_string()));
@@ -151,7 +169,11 @@ my %settings = ();
             }
         }),
     );
-    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_millis(2000));
+    drain_until_quiet(
+        &server,
+        Duration::from_millis(100),
+        Duration::from_millis(2000),
+    );
 
     let response = send_request(
         &server,
@@ -170,7 +192,12 @@ my %settings = ();
 
     let labels: Vec<String> = items
         .iter()
-        .map(|item| item["label"].as_str().ok_or("Missing label field").map(|s| s.to_string()))
+        .map(|item| {
+            item["label"]
+                .as_str()
+                .ok_or("Missing label field")
+                .map(|s| s.to_string())
+        })
         .collect::<Result<_, _>>()?;
 
     assert!(labels.contains(&"%config".to_string()));
@@ -213,7 +240,11 @@ proc
             }
         }),
     );
-    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_millis(2000));
+    drain_until_quiet(
+        &server,
+        Duration::from_millis(100),
+        Duration::from_millis(2000),
+    );
 
     let response = send_request(
         &server,
@@ -232,7 +263,12 @@ proc
 
     let labels: Vec<String> = items
         .iter()
-        .map(|item| item["label"].as_str().ok_or("Missing label field").map(|s| s.to_string()))
+        .map(|item| {
+            item["label"]
+                .as_str()
+                .ok_or("Missing label field")
+                .map(|s| s.to_string())
+        })
         .collect::<Result<_, _>>()?;
 
     assert!(labels.contains(&"process_data".to_string()));
@@ -263,7 +299,11 @@ fn test_builtin_completion() -> Result<(), Box<dyn std::error::Error>> {
         }
         }),
     );
-    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_millis(2000));
+    drain_until_quiet(
+        &server,
+        Duration::from_millis(100),
+        Duration::from_millis(2000),
+    );
 
     let response = send_request(
         &server,
@@ -282,7 +322,12 @@ fn test_builtin_completion() -> Result<(), Box<dyn std::error::Error>> {
 
     let labels: Vec<String> = items
         .iter()
-        .map(|item| item["label"].as_str().ok_or("Missing label field").map(|s| s.to_string()))
+        .map(|item| {
+            item["label"]
+                .as_str()
+                .ok_or("Missing label field")
+                .map(|s| s.to_string())
+        })
         .collect::<Result<_, _>>()?;
 
     assert!(labels.contains(&"print".to_string()));
@@ -313,7 +358,11 @@ fn test_keyword_completion() -> Result<(), Box<dyn std::error::Error>> {
         }
         }),
     );
-    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_millis(2000));
+    drain_until_quiet(
+        &server,
+        Duration::from_millis(100),
+        Duration::from_millis(2000),
+    );
 
     let response = send_request(
         &server,
@@ -339,7 +388,12 @@ fn test_keyword_completion() -> Result<(), Box<dyn std::error::Error>> {
 
     let labels: Vec<String> = items
         .iter()
-        .map(|item| item["label"].as_str().ok_or("Missing label field").map(|s| s.to_string()))
+        .map(|item| {
+            item["label"]
+                .as_str()
+                .ok_or("Missing label field")
+                .map(|s| s.to_string())
+        })
         .collect::<Result<_, _>>()?;
 
     assert!(labels.contains(&"for".to_string()));
@@ -370,7 +424,11 @@ fn test_special_variable_completion() -> Result<(), Box<dyn std::error::Error>> 
         }
         }),
     );
-    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_millis(2000));
+    drain_until_quiet(
+        &server,
+        Duration::from_millis(100),
+        Duration::from_millis(2000),
+    );
 
     let response = send_request(
         &server,
@@ -398,7 +456,12 @@ fn test_special_variable_completion() -> Result<(), Box<dyn std::error::Error>> 
 
     let labels: Vec<String> = items
         .iter()
-        .map(|item| item["label"].as_str().ok_or("Missing label field").map(|s| s.to_string()))
+        .map(|item| {
+            item["label"]
+                .as_str()
+                .ok_or("Missing label field")
+                .map(|s| s.to_string())
+        })
         .collect::<Result<_, _>>()?;
 
     // Check if we got special variables or keywords (both are acceptable)
@@ -406,7 +469,10 @@ fn test_special_variable_completion() -> Result<(), Box<dyn std::error::Error>> 
         labels.contains(&"$^O".to_string()) && labels.contains(&"$^V".to_string());
     let has_keywords = labels.contains(&"print".to_string()) || labels.contains(&"my".to_string());
 
-    assert!(has_special_vars || has_keywords, "Should have either special variables or keywords");
+    assert!(
+        has_special_vars || has_keywords,
+        "Should have either special variables or keywords"
+    );
 
     Ok(())
 }
@@ -433,7 +499,11 @@ fn test_method_completion() -> Result<(), Box<dyn std::error::Error>> {
         }
         }),
     );
-    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_millis(2000));
+    drain_until_quiet(
+        &server,
+        Duration::from_millis(100),
+        Duration::from_millis(2000),
+    );
 
     let response = send_request(
         &server,
@@ -459,11 +529,19 @@ fn test_method_completion() -> Result<(), Box<dyn std::error::Error>> {
 
     let labels: Vec<String> = items
         .iter()
-        .map(|item| item["label"].as_str().ok_or("Missing label field").map(|s| s.to_string()))
+        .map(|item| {
+            item["label"]
+                .as_str()
+                .ok_or("Missing label field")
+                .map(|s| s.to_string())
+        })
         .collect::<Result<_, _>>()?;
 
     // Check that we have some method completions
-    assert!(!labels.is_empty(), "Should have at least some method completions");
+    assert!(
+        !labels.is_empty(),
+        "Should have at least some method completions"
+    );
 
     Ok(())
 }
@@ -499,7 +577,11 @@ va
         }
         }),
     );
-    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_millis(2000));
+    drain_until_quiet(
+        &server,
+        Duration::from_millis(100),
+        Duration::from_millis(2000),
+    );
 
     // Request completion at position after "va"
     let response = send_request(
@@ -519,7 +601,12 @@ va
 
     let labels: Vec<String> = items
         .iter()
-        .map(|item| item["label"].as_str().ok_or("Missing label field").map(|s| s.to_string()))
+        .map(|item| {
+            item["label"]
+                .as_str()
+                .ok_or("Missing label field")
+                .map(|s| s.to_string())
+        })
         .collect::<Result<_, _>>()?;
 
     // Should suggest both variables and the function
@@ -552,7 +639,11 @@ fn test_completion_details() -> Result<(), Box<dyn std::error::Error>> {
         }
         }),
     );
-    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_millis(2000));
+    drain_until_quiet(
+        &server,
+        Duration::from_millis(100),
+        Duration::from_millis(2000),
+    );
 
     let response = send_request(
         &server,
@@ -569,8 +660,10 @@ fn test_completion_details() -> Result<(), Box<dyn std::error::Error>> {
     let items = completion_items(&response);
 
     // Find @ARGV in completions
-    let argv_item =
-        items.iter().find(|item| item["label"] == "@ARGV").ok_or("Should have @ARGV completion")?;
+    let argv_item = items
+        .iter()
+        .find(|item| item["label"] == "@ARGV")
+        .ok_or("Should have @ARGV completion")?;
 
     // Check it has details
     assert!(argv_item["detail"].is_string());
@@ -609,7 +702,11 @@ fn test_empty_prefix_completion() -> Result<(), Box<dyn std::error::Error>> {
             }
         }),
     );
-    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_millis(2000));
+    drain_until_quiet(
+        &server,
+        Duration::from_millis(100),
+        Duration::from_millis(2000),
+    );
 
     let response = send_request(
         &server,
@@ -624,12 +721,20 @@ fn test_empty_prefix_completion() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     let items = completion_items(&response);
-    assert!(items.len() > 10, "Should have many completions for empty prefix");
+    assert!(
+        items.len() > 10,
+        "Should have many completions for empty prefix"
+    );
 
     // Should include keywords, built-ins, and defined items
     let labels: Vec<String> = items
         .iter()
-        .map(|item| item["label"].as_str().ok_or("Missing label field").map(|s| s.to_string()))
+        .map(|item| {
+            item["label"]
+                .as_str()
+                .ok_or("Missing label field")
+                .map(|s| s.to_string())
+        })
         .collect::<Result<_, _>>()?;
 
     assert!(labels.iter().any(|l| l.starts_with("if")));
@@ -662,7 +767,11 @@ fn test_no_completion_in_comments() -> Result<(), Box<dyn std::error::Error>> {
         }
         }),
     );
-    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_millis(2000));
+    drain_until_quiet(
+        &server,
+        Duration::from_millis(100),
+        Duration::from_millis(2000),
+    );
 
     let response = send_request(
         &server,
@@ -711,7 +820,11 @@ MyModule::"#
         }
         }),
     );
-    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_millis(2000));
+    drain_until_quiet(
+        &server,
+        Duration::from_millis(100),
+        Duration::from_millis(2000),
+    );
 
     // Test package member completion (qualified name after ::)
     let response = send_request(
@@ -728,8 +841,14 @@ MyModule::"#
 
     let items = completion_items(&response);
     // Package member completion should return available subroutines
-    assert!(!items.is_empty(), "Package member completion should not be empty");
-    assert!(items.iter().any(|i| i["label"] == "public_method"), "Should suggest public_method");
+    assert!(
+        !items.is_empty(),
+        "Package member completion should not be empty"
+    );
+    assert!(
+        items.iter().any(|i| i["label"] == "public_method"),
+        "Should suggest public_method"
+    );
     let public_method = items
         .iter()
         .find(|i| i["label"] == "public_method")
@@ -769,7 +888,11 @@ List::Util::"#
             }
         }),
     );
-    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_millis(2000));
+    drain_until_quiet(
+        &server,
+        Duration::from_millis(100),
+        Duration::from_millis(2000),
+    );
 
     let response = send_request(
         &server,
@@ -784,9 +907,18 @@ List::Util::"#
     );
 
     let items = completion_items(&response);
-    assert!(items.iter().any(|i| i["label"] == "max"), "Should suggest List::Util::max");
-    assert!(items.iter().any(|i| i["label"] == "min"), "Should suggest List::Util::min");
-    assert!(items.iter().any(|i| i["label"] == "sum"), "Should suggest List::Util::sum");
+    assert!(
+        items.iter().any(|i| i["label"] == "max"),
+        "Should suggest List::Util::max"
+    );
+    assert!(
+        items.iter().any(|i| i["label"] == "min"),
+        "Should suggest List::Util::min"
+    );
+    assert!(
+        items.iter().any(|i| i["label"] == "sum"),
+        "Should suggest List::Util::sum"
+    );
 
     let max_item = items
         .iter()
@@ -832,7 +964,11 @@ Cwd::"#
             }
         }),
     );
-    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_millis(2000));
+    drain_until_quiet(
+        &server,
+        Duration::from_millis(100),
+        Duration::from_millis(2000),
+    );
 
     let response = send_request(
         &server,
@@ -847,8 +983,14 @@ Cwd::"#
     );
 
     let items = completion_items(&response);
-    assert!(items.iter().any(|i| i["label"] == "getcwd"), "Should suggest Cwd::getcwd");
-    assert!(items.iter().any(|i| i["label"] == "abs_path"), "Should suggest Cwd::abs_path");
+    assert!(
+        items.iter().any(|i| i["label"] == "getcwd"),
+        "Should suggest Cwd::getcwd"
+    );
+    assert!(
+        items.iter().any(|i| i["label"] == "abs_path"),
+        "Should suggest Cwd::abs_path"
+    );
 
     Ok(())
 }
@@ -875,7 +1017,11 @@ fn test_snippet_completion() -> Result<(), Box<dyn std::error::Error>> {
         }
         }),
     );
-    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_millis(2000));
+    drain_until_quiet(
+        &server,
+        Duration::from_millis(100),
+        Duration::from_millis(2000),
+    );
 
     let response = send_request(
         &server,
@@ -890,7 +1036,10 @@ fn test_snippet_completion() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     // Check if response has items
-    assert!(response["result"].get("items").is_some(), "Response should have items field");
+    assert!(
+        response["result"].get("items").is_some(),
+        "Response should have items field"
+    );
     let items = completion_items(&response);
 
     // Allow empty completions in this case (partial keyword)
@@ -927,7 +1076,10 @@ fn test_snippet_completion() -> Result<(), Box<dyn std::error::Error>> {
     // Check if it's a snippet kind (15) or keyword kind (14)
     if let Some(kind) = sub_item.get("kind") {
         let kind_num = kind.as_i64().ok_or("Invalid kind field")?;
-        assert!(kind_num == 14 || kind_num == 15, "Should be keyword or snippet kind");
+        assert!(
+            kind_num == 14 || kind_num == 15,
+            "Should be keyword or snippet kind"
+        );
     }
 
     Ok(())
@@ -959,7 +1111,11 @@ $arr"#
             }
         }),
     );
-    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_millis(2000));
+    drain_until_quiet(
+        &server,
+        Duration::from_millis(100),
+        Duration::from_millis(2000),
+    );
 
     let response = send_request(
         &server,
@@ -978,7 +1134,12 @@ $arr"#
     // Should suggest $array[...] for array element access
     let labels: Vec<String> = items
         .iter()
-        .map(|item| item["label"].as_str().ok_or("Missing label field").map(|s| s.to_string()))
+        .map(|item| {
+            item["label"]
+                .as_str()
+                .ok_or("Missing label field")
+                .map(|s| s.to_string())
+        })
         .collect::<Result<_, _>>()?;
 
     // The provider might need enhancement to handle this case
@@ -1009,7 +1170,11 @@ fn test_completion_ranking() -> Result<(), Box<dyn std::error::Error>> {
         }
         }),
     );
-    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_millis(2000));
+    drain_until_quiet(
+        &server,
+        Duration::from_millis(100),
+        Duration::from_millis(2000),
+    );
 
     let response = send_request(
         &server,
@@ -1029,11 +1194,20 @@ fn test_completion_ranking() -> Result<(), Box<dyn std::error::Error>> {
     let first_items: Vec<String> = items
         .iter()
         .take(5)
-        .map(|item| item["label"].as_str().ok_or("Missing label field").map(|s| s.to_string()))
+        .map(|item| {
+            item["label"]
+                .as_str()
+                .ok_or("Missing label field")
+                .map(|s| s.to_string())
+        })
         .collect::<Result<_, _>>()?;
 
     // Check that special variables are prioritized
-    assert!(first_items.iter().any(|l| l == "$_" || l == "$$" || l == "$@"));
+    assert!(
+        first_items
+            .iter()
+            .any(|l| l == "$_" || l == "$$" || l == "$@")
+    );
 
     Ok(())
 }
@@ -1067,7 +1241,11 @@ $p"#
         }
         }),
     );
-    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_millis(2000));
+    drain_until_quiet(
+        &server,
+        Duration::from_millis(100),
+        Duration::from_millis(2000),
+    );
 
     // First completion request with "$p"
     let response1 = send_request(
@@ -1082,9 +1260,14 @@ $p"#
         }),
     );
 
-    let items1 =
-        response1["result"]["items"].as_array().ok_or("Expected items array in response")?;
-    assert_eq!(items1.len(), 3, "Should have all three variables starting with 'p'");
+    let items1 = response1["result"]["items"]
+        .as_array()
+        .ok_or("Expected items array in response")?;
+    assert_eq!(
+        items1.len(),
+        3,
+        "Should have all three variables starting with 'p'"
+    );
 
     // Update document to narrow down
     send_notification(
@@ -1108,7 +1291,11 @@ $pre"#
         }
         }),
     );
-    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_millis(2000));
+    drain_until_quiet(
+        &server,
+        Duration::from_millis(100),
+        Duration::from_millis(2000),
+    );
 
     // Second completion request with "$pre"
     let response2 = send_request(
@@ -1123,8 +1310,9 @@ $pre"#
         }),
     );
 
-    let items2 =
-        response2["result"]["items"].as_array().ok_or("Expected items array in response")?;
+    let items2 = response2["result"]["items"]
+        .as_array()
+        .ok_or("Expected items array in response")?;
     assert_eq!(items2.len(), 3, "Should still have all three");
 
     // Update to be more specific
@@ -1149,7 +1337,11 @@ $prefi"#
         }
         }),
     );
-    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_millis(2000));
+    drain_until_quiet(
+        &server,
+        Duration::from_millis(100),
+        Duration::from_millis(2000),
+    );
 
     // Third completion request with "$prefi"
     let response3 = send_request(
@@ -1164,13 +1356,19 @@ $prefi"#
         }),
     );
 
-    let items3 =
-        response3["result"]["items"].as_array().ok_or("Expected items array in response")?;
+    let items3 = response3["result"]["items"]
+        .as_array()
+        .ok_or("Expected items array in response")?;
     assert_eq!(items3.len(), 2, "Should have only prefix and prefixed_var");
 
     let labels3: Vec<String> = items3
         .iter()
-        .map(|item| item["label"].as_str().ok_or("Missing label field").map(|s| s.to_string()))
+        .map(|item| {
+            item["label"]
+                .as_str()
+                .ok_or("Missing label field")
+                .map(|s| s.to_string())
+        })
         .collect::<Result<_, _>>()?;
 
     assert!(labels3.contains(&"$prefix".to_string()));
@@ -1202,7 +1400,11 @@ fn test_function_completion_has_commit_characters() -> Result<(), Box<dyn std::e
             }
         }),
     );
-    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_millis(2000));
+    drain_until_quiet(
+        &server,
+        Duration::from_millis(100),
+        Duration::from_millis(2000),
+    );
 
     let response = send_request(
         &server,
@@ -1225,8 +1427,14 @@ fn test_function_completion_has_commit_characters() -> Result<(), Box<dyn std::e
         .as_array()
         .ok_or("Function completions must have commitCharacters")?;
 
-    assert!(commit_chars.iter().any(|c| c == "("), "Function commit chars should include '('");
-    assert!(commit_chars.iter().any(|c| c == ";"), "Function commit chars should include ';'");
+    assert!(
+        commit_chars.iter().any(|c| c == "("),
+        "Function commit chars should include '('"
+    );
+    assert!(
+        commit_chars.iter().any(|c| c == ";"),
+        "Function commit chars should include ';'"
+    );
 
     // Verify each entry is exactly one character per LSP spec
     for ch in commit_chars {
@@ -1263,7 +1471,11 @@ fn test_variable_completion_has_commit_characters() -> Result<(), Box<dyn std::e
             }
         }),
     );
-    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_millis(2000));
+    drain_until_quiet(
+        &server,
+        Duration::from_millis(100),
+        Duration::from_millis(2000),
+    );
 
     let response = send_request(
         &server,
@@ -1286,9 +1498,18 @@ fn test_variable_completion_has_commit_characters() -> Result<(), Box<dyn std::e
         .as_array()
         .ok_or("Variable completions must have commitCharacters")?;
 
-    assert!(commit_chars.iter().any(|c| c == "["), "Variable commit chars should include '['");
-    assert!(commit_chars.iter().any(|c| c == "{"), "Variable commit chars should include '{{'");
-    assert!(commit_chars.iter().any(|c| c == ";"), "Variable commit chars should include ';'");
+    assert!(
+        commit_chars.iter().any(|c| c == "["),
+        "Variable commit chars should include '['"
+    );
+    assert!(
+        commit_chars.iter().any(|c| c == "{"),
+        "Variable commit chars should include '{{'"
+    );
+    assert!(
+        commit_chars.iter().any(|c| c == ";"),
+        "Variable commit chars should include ';'"
+    );
 
     // Verify each entry is exactly one character per LSP spec
     for ch in commit_chars {
@@ -1331,7 +1552,11 @@ fn test_keyword_completion_has_no_commit_characters() -> Result<(), Box<dyn std:
             }
         }),
     );
-    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_millis(2000));
+    drain_until_quiet(
+        &server,
+        Duration::from_millis(100),
+        Duration::from_millis(2000),
+    );
 
     let response = send_request(
         &server,
@@ -1352,7 +1577,10 @@ fn test_keyword_completion_has_no_commit_characters() -> Result<(), Box<dyn std:
         .iter()
         .filter(|item| {
             item["kind"] == 14
-                && item["label"].as_str().map(|l| l.starts_with("retur")).unwrap_or(false)
+                && item["label"]
+                    .as_str()
+                    .map(|l| l.starts_with("retur"))
+                    .unwrap_or(false)
         })
         .collect();
 

@@ -43,7 +43,10 @@ mod moniker_export_import_tests {
 
     /// Create a Program node containing multiple Use statements
     fn create_program_with_uses(uses: Vec<Node>) -> Node {
-        Node::new(NodeKind::Program { statements: uses }, SourceLocation { start: 0, end: 0 })
+        Node::new(
+            NodeKind::Program { statements: uses },
+            SourceLocation { start: 0, end: 0 },
+        )
     }
 
     // ========================================================================
@@ -113,7 +116,10 @@ package MyModule;
 
         if let NodeKind::Program { statements } = &ast.kind {
             // Should have package + 2 export assignments
-            assert!(statements.len() >= 2, "Expected at least package and exports");
+            assert!(
+                statements.len() >= 2,
+                "Expected at least package and exports"
+            );
         }
     }
 
@@ -173,7 +179,12 @@ package MyModule;
             let program = create_program_with_uses(vec![use_node]);
 
             if let NodeKind::Program { statements } = &program.kind {
-                assert_eq!(statements.len(), 1, "Expected 1 statement for {}", module_name);
+                assert_eq!(
+                    statements.len(),
+                    1,
+                    "Expected 1 statement for {}",
+                    module_name
+                );
                 let is_use = matches!(statements[0].kind, NodeKind::Use { .. });
                 assert!(is_use, "Expected Use node for {}", module_name);
                 if let NodeKind::Use { module, args, .. } = &statements[0].kind {
@@ -230,18 +241,25 @@ package MyModule;
         // Tests feature spec: PR #262 - Use statements within nested blocks
         let use_node = create_use_node("warnings", vec![]);
         let block = Node::new(
-            NodeKind::Block { statements: vec![use_node] },
+            NodeKind::Block {
+                statements: vec![use_node],
+            },
             SourceLocation { start: 0, end: 0 },
         );
         let program = Node::new(
-            NodeKind::Program { statements: vec![block] },
+            NodeKind::Program {
+                statements: vec![block],
+            },
             SourceLocation { start: 0, end: 0 },
         );
 
         // Verify nested structure
         if let NodeKind::Program { statements } = &program.kind {
             assert_eq!(statements.len(), 1);
-            if let NodeKind::Block { statements: block_stmts } = &statements[0].kind {
+            if let NodeKind::Block {
+                statements: block_stmts,
+            } = &statements[0].kind
+            {
                 assert_eq!(block_stmts.len(), 1);
                 if let NodeKind::Use { module, .. } = &block_stmts[0].kind {
                     assert_eq!(module, "warnings");
@@ -304,8 +322,10 @@ package MyModule;
         {
             assert_eq!(module, "List::Util");
             // The find_import_source logic would split on whitespace
-            let content =
-                args[0].trim_start_matches("qw").trim_start_matches('<').trim_end_matches('>');
+            let content = args[0]
+                .trim_start_matches("qw")
+                .trim_start_matches('<')
+                .trim_end_matches('>');
             assert!(content.split_whitespace().any(|w| w == "first"));
         }
     }
@@ -410,7 +430,10 @@ sub validate_date { }
 
         // Verify structure for workspace navigation
         if let NodeKind::Program { statements } = &ast.kind {
-            assert!(statements.len() >= 3, "Expected package, use, and export declarations");
+            assert!(
+                statements.len() >= 3,
+                "Expected package, use, and export declarations"
+            );
         }
     }
 

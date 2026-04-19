@@ -68,7 +68,10 @@ fn given_a_failing_operation_sequence_when_failure_rates_are_recorded_then_error
 #[test]
 fn given_a_mix_of_operation_types_when_tracking_across_the_tracker_then_all_statistics_are_isolated()
  {
-    let tracker = SloTracker::new(SloConfig { sample_window_size: 16, ..SloConfig::default() });
+    let tracker = SloTracker::new(SloConfig {
+        sample_window_size: 16,
+        ..SloConfig::default()
+    });
 
     let operation_types = [
         OperationType::IndexInitialization,
@@ -127,8 +130,16 @@ fn given_all_statistics_are_collected_when_reset_is_called_then_tracker_state_is
         OperationResult::Success,
     );
     let before_reset = tracker.all_statistics();
-    assert!(before_reset.values().next().is_some(), "at least one statistic should exist");
+    assert!(
+        before_reset.values().next().is_some(),
+        "at least one statistic should exist"
+    );
 
     tracker.reset();
-    assert!(tracker.all_statistics().values().all(|stats| stats.total_count == 0));
+    assert!(
+        tracker
+            .all_statistics()
+            .values()
+            .all(|stats| stats.total_count == 0)
+    );
 }

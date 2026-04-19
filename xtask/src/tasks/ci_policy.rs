@@ -53,7 +53,8 @@ fn is_disallowed_from_raw_line(line: &str, disallow_re: &Regex, allowed_re: &Reg
 }
 
 fn should_skip_dir(path: &Path) -> bool {
-    path.file_name().is_some_and(|name| matches!(name.to_str(), Some("target" | "generated")))
+    path.file_name()
+        .is_some_and(|name| matches!(name.to_str(), Some("target" | "generated")))
 }
 
 fn collect_candidate_lines(root: &Path, disallow_re: &Regex) -> Result<Vec<String>> {
@@ -131,7 +132,11 @@ mod tests {
         let allowed_re = Regex::new(ALLOWED_FROM_RAW_PATTERN).expect("valid regex");
         let line = "xtask/src/main.rs:371:    /// Check for disallowed direct `ExitStatus::from_raw()` usage.";
 
-        assert!(!is_disallowed_from_raw_line(line, &disallow_re, &allowed_re));
+        assert!(!is_disallowed_from_raw_line(
+            line,
+            &disallow_re,
+            &allowed_re
+        ));
     }
 
     #[test]
@@ -140,7 +145,11 @@ mod tests {
         let allowed_re = Regex::new(ALLOWED_FROM_RAW_PATTERN).expect("valid regex");
         let line = "xtask/src/tasks/ci_policy.rs:56:    bail!(\"CI policy check found disallowed ExitStatus::from_raw() usage\");";
 
-        assert!(!is_disallowed_from_raw_line(line, &disallow_re, &allowed_re));
+        assert!(!is_disallowed_from_raw_line(
+            line,
+            &disallow_re,
+            &allowed_re
+        ));
     }
 
     #[test]
@@ -159,6 +168,10 @@ mod tests {
         let line =
             "src/lib.rs:10:    let status = std::process::ExitStatus::from_raw(raw_exit(signal));";
 
-        assert!(!is_disallowed_from_raw_line(line, &disallow_re, &allowed_re));
+        assert!(!is_disallowed_from_raw_line(
+            line,
+            &disallow_re,
+            &allowed_re
+        ));
     }
 }

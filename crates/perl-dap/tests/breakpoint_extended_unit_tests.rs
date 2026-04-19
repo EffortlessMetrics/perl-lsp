@@ -37,7 +37,11 @@ fn validation_reason_all_variants_have_distinct_display() -> Result<(), Box<dyn 
 
     let strings: Vec<_> = reasons.iter().map(|r| r.to_string()).collect();
     let unique: std::collections::HashSet<_> = strings.iter().collect();
-    assert_eq!(unique.len(), strings.len(), "all reason variants should have unique Display");
+    assert_eq!(
+        unique.len(),
+        strings.len(),
+        "all reason variants should have unique Display"
+    );
     Ok(())
 }
 
@@ -180,7 +184,9 @@ fn comment_without_space_after_hash() -> Result<(), Box<dyn std::error::Error>> 
 
 #[test]
 fn comment_with_multiple_hashes() -> Result<(), Box<dyn std::error::Error>> {
-    let v = must(AstBreakpointValidator::new("### deep comment\nmy $x = 1;\n"));
+    let v = must(AstBreakpointValidator::new(
+        "### deep comment\nmy $x = 1;\n",
+    ));
     let result = v.validate(1);
     assert!(!result.verified);
     assert_eq!(result.reason, Some(ValidationReason::CommentLine));
@@ -189,7 +195,9 @@ fn comment_with_multiple_hashes() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn comment_with_special_characters() -> Result<(), Box<dyn std::error::Error>> {
-    let v = must(AstBreakpointValidator::new("# !@#$%^&*()_+-=[]{}|;:',.<>?/\nmy $x = 1;\n"));
+    let v = must(AstBreakpointValidator::new(
+        "# !@#$%^&*()_+-=[]{}|;:',.<>?/\nmy $x = 1;\n",
+    ));
     let result = v.validate(1);
     assert!(!result.verified);
     assert_eq!(result.reason, Some(ValidationReason::CommentLine));
@@ -198,7 +206,9 @@ fn comment_with_special_characters() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn comment_with_unicode() -> Result<(), Box<dyn std::error::Error>> {
-    let v = must(AstBreakpointValidator::new("# こんにちは 世界 🌍\nmy $x = 1;\n"));
+    let v = must(AstBreakpointValidator::new(
+        "# こんにちは 世界 🌍\nmy $x = 1;\n",
+    ));
     let result = v.validate(1);
     assert!(!result.verified);
     assert_eq!(result.reason, Some(ValidationReason::CommentLine));
@@ -686,7 +696,9 @@ fn integration_find_nearest_both_then_validate() -> Result<(), Box<dyn std::erro
 
 #[test]
 fn validator_trait_object_multiple_calls() -> Result<(), Box<dyn std::error::Error>> {
-    let v = must(AstBreakpointValidator::new("my $x = 1;\n# comment\nmy $y = 2;\n"));
+    let v = must(AstBreakpointValidator::new(
+        "my $x = 1;\n# comment\nmy $y = 2;\n",
+    ));
     let trait_obj: &dyn BreakpointValidator = &v;
 
     assert!(trait_obj.is_executable_line(1));

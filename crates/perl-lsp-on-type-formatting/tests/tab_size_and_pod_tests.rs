@@ -114,7 +114,10 @@ fn pod_head1_suppresses_close_brace() {
     // `}` typed on line 2, which is inside a POD block.
     let text = "=head1 NAME\n\n}\n\n=cut\n";
     let edits = compute_on_type_edit(text, 2, 1, '}', 2);
-    assert!(edits.is_none(), "typing `}}` inside POD should be suppressed");
+    assert!(
+        edits.is_none(),
+        "typing `}}` inside POD should be suppressed"
+    );
 }
 
 #[test]
@@ -122,7 +125,10 @@ fn pod_head1_suppresses_newline() {
     // `\n` typed while inside POD — must not produce indent edits.
     let text = "=head1 NAME\nSome description {\n\n=cut\n";
     let edits = compute_on_type_edit(text, 2, 0, '\n', 2);
-    assert!(edits.is_none(), "pressing Enter inside POD should be suppressed");
+    assert!(
+        edits.is_none(),
+        "pressing Enter inside POD should be suppressed"
+    );
 }
 
 #[test]
@@ -130,7 +136,10 @@ fn pod_body_suppresses_semicolon() {
     // `;` inside POD — must return None (same as heredoc behavior).
     let text = "=pod\n\nsome text;\n\n=cut\n";
     let edits = compute_on_type_edit(text, 2, 10, ';', 2);
-    assert!(edits.is_none(), "typing `;` inside POD should be suppressed");
+    assert!(
+        edits.is_none(),
+        "typing `;` inside POD should be suppressed"
+    );
 }
 
 #[test]
@@ -141,7 +150,10 @@ fn after_cut_formatting_resumes() {
     let edits = compute_on_type_edit(text, 3, 5, '}', 2);
     // After POD ends, formatting resumes. No opener, falls back to
     // current_indent.saturating_sub(indent_step) = 4 - 2 = 2.
-    assert!(edits.is_some(), "after =cut, formatting should resume (not be suppressed)");
+    assert!(
+        edits.is_some(),
+        "after =cut, formatting should resume (not be suppressed)"
+    );
 }
 
 #[test]
@@ -149,7 +161,10 @@ fn pod_begin_end_suppresses_content() {
     // =begin / =end also delimit a POD block.
     let text = "=begin html\n\n<b>bold</b> {\n\n=end html\n\n=cut\n";
     let edits = compute_on_type_edit(text, 2, 13, '}', 2);
-    assert!(edits.is_none(), "typing `}}` inside =begin..=end block should be suppressed");
+    assert!(
+        edits.is_none(),
+        "typing `}}` inside =begin..=end block should be suppressed"
+    );
 }
 
 #[test]
@@ -157,7 +172,10 @@ fn pod_at_file_start_line_zero() {
     // POD that starts immediately at line 0 (no preceding code).
     let text = "=head1 Overview\n}\n=cut\n";
     let edits = compute_on_type_edit(text, 1, 1, '}', 2);
-    assert!(edits.is_none(), "POD starting at line 0 should still suppress formatting on line 1");
+    assert!(
+        edits.is_none(),
+        "POD starting at line 0 should still suppress formatting on line 1"
+    );
 }
 
 #[test]

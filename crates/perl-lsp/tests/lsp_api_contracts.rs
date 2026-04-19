@@ -18,9 +18,13 @@ type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 fn is_range(v: &Value) -> bool {
     v.pointer("/start/line").and_then(|x| x.as_u64()).is_some()
-        && v.pointer("/start/character").and_then(|x| x.as_u64()).is_some()
+        && v.pointer("/start/character")
+            .and_then(|x| x.as_u64())
+            .is_some()
         && v.pointer("/end/line").and_then(|x| x.as_u64()).is_some()
-        && v.pointer("/end/character").and_then(|x| x.as_u64()).is_some()
+        && v.pointer("/end/character")
+            .and_then(|x| x.as_u64())
+            .is_some()
 }
 
 #[allow(dead_code)]
@@ -47,7 +51,9 @@ fn test_initialization_contract() -> TestResult {
     })))?;
 
     // The harness returns the 'result' field directly, which contains 'capabilities'
-    let caps = response.get("capabilities").ok_or("initialize response must have capabilities")?;
+    let caps = response
+        .get("capabilities")
+        .ok_or("initialize response must have capabilities")?;
 
     // CRITICAL CONTRACT: Trigger characters must match the advertised
     // single-character completion triggers used for sigils, arrow methods,
@@ -61,13 +67,23 @@ fn test_initialization_contract() -> TestResult {
 
     // Must have exactly these single-character triggers
     for trigger in ["$", "@", "%", ">", ":", "-"] {
-        assert!(trigger_set.contains(trigger), "Missing required trigger character: {}", trigger);
+        assert!(
+            trigger_set.contains(trigger),
+            "Missing required trigger character: {}",
+            trigger
+        );
     }
 
     // LSP trigger characters must be one character each, so multi-character
     // operator strings should not be advertised directly.
-    assert!(!trigger_set.contains("->"), "Must not advertise '->' as a multi-character trigger");
-    assert!(!trigger_set.contains("::"), "Must not advertise '::' as a multi-character trigger");
+    assert!(
+        !trigger_set.contains("->"),
+        "Must not advertise '->' as a multi-character trigger"
+    );
+    assert!(
+        !trigger_set.contains("::"),
+        "Must not advertise '::' as a multi-character trigger"
+    );
 
     // Text document sync must be Full (1) — the server fully reparses on every edit
     let sync = caps.get("textDocumentSync");
@@ -214,7 +230,9 @@ fn test_hover_response_shape() -> TestResult {
     if let Ok(hover) = response {
         if !hover.is_null() {
             // Check for contents field (required by LSP)
-            let contents = hover.get("contents").ok_or("Hover must have contents field")?;
+            let contents = hover
+                .get("contents")
+                .ok_or("Hover must have contents field")?;
 
             // Contents can be string, MarkupContent, or MarkedString[]
             if contents.is_string() {
@@ -301,7 +319,10 @@ fn test_error_response_contract() -> TestResult {
             // Null or empty result is valid for non-existent document
             let is_empty_array = result.is_array() && result.as_array().ok_or("array")?.is_empty();
             let is_empty_list = result.is_object()
-                && result.get("items").and_then(|v| v.as_array()).is_some_and(|a| a.is_empty());
+                && result
+                    .get("items")
+                    .and_then(|v| v.as_array())
+                    .is_some_and(|a| a.is_empty());
 
             assert!(
                 result.is_null() || is_empty_array || is_empty_list,
@@ -413,7 +434,10 @@ fn test_apply_edit_with_version() -> TestResult {
         }),
     );
 
-    assert!(response.is_ok(), "Server must handle version conflicts gracefully");
+    assert!(
+        response.is_ok(),
+        "Server must handle version conflicts gracefully"
+    );
 
     Ok(())
 }
@@ -443,12 +467,19 @@ fn test_bounded_definition_timeout() -> TestResult {
     let elapsed = start.elapsed();
 
     // Should return quickly even for missing modules
-    assert!(elapsed < Duration::from_millis(500), "Definition lookup took too long: {:?}", elapsed);
+    assert!(
+        elapsed < Duration::from_millis(500),
+        "Definition lookup took too long: {:?}",
+        elapsed
+    );
 
     // Result should be null or empty array
     if let Ok(result) = response {
         let is_empty_array = result.is_array() && result.as_array().ok_or("array")?.is_empty();
-        assert!(result.is_null() || is_empty_array, "Missing module should return null or empty");
+        assert!(
+            result.is_null() || is_empty_array,
+            "Missing module should return null or empty"
+        );
     }
 
     Ok(())
@@ -516,7 +547,10 @@ fn test_idempotent_operations() -> TestResult {
     )?;
 
     // Results should be identical
-    assert_eq!(response1, response2, "Idempotent operations must produce same results");
+    assert_eq!(
+        response1, response2,
+        "Idempotent operations must produce same results"
+    );
 
     Ok(())
 }

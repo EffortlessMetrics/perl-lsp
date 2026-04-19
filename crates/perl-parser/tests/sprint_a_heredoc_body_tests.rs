@@ -4,7 +4,14 @@ use perl_parser::ast::{Node, NodeKind};
 /// Depth-first traversal using for_each_child_mut to collect all heredoc nodes
 fn collect_heredocs(node: &mut Node, out: &mut Vec<(String, String, bool, bool)>) {
     // Check if current node is a heredoc and collect its data
-    if let NodeKind::Heredoc { delimiter, content, interpolated, indented, .. } = &node.kind {
+    if let NodeKind::Heredoc {
+        delimiter,
+        content,
+        interpolated,
+        indented,
+        ..
+    } = &node.kind
+    {
         out.push((delimiter.clone(), content.clone(), *interpolated, *indented));
     }
 
@@ -16,10 +23,22 @@ fn collect_heredocs(node: &mut Node, out: &mut Vec<(String, String, bool, bool)>
 
 /// Extended helper that also captures the `command` flag for backtick heredocs
 fn collect_heredocs_full(node: &mut Node, out: &mut Vec<(String, String, bool, bool, bool)>) {
-    if let NodeKind::Heredoc { delimiter, content, interpolated, indented, command, .. } =
-        &node.kind
+    if let NodeKind::Heredoc {
+        delimiter,
+        content,
+        interpolated,
+        indented,
+        command,
+        ..
+    } = &node.kind
     {
-        out.push((delimiter.clone(), content.clone(), *interpolated, *indented, *command));
+        out.push((
+            delimiter.clone(),
+            content.clone(),
+            *interpolated,
+            *indented,
+            *command,
+        ));
     }
 
     node.for_each_child_mut(|child| {
@@ -39,7 +58,10 @@ fn heredoc_body_basic() -> Result<(), Box<dyn std::error::Error>> {
     assert_eq!(heredocs.len(), 1, "Expected exactly one heredoc node");
     let (delimiter, content, interpolated, indented) = &heredocs[0];
     assert_eq!(delimiter, "EOT");
-    assert_eq!(content, "hello\nworld", "Content should be normalized with \\n");
+    assert_eq!(
+        content, "hello\nworld",
+        "Content should be normalized with \\n"
+    );
     assert!(*interpolated, "Default heredoc should be interpolated");
     assert!(!*indented);
     Ok(())
@@ -59,7 +81,10 @@ fn heredoc_body_indented_crlf() -> Result<(), Box<dyn std::error::Error>> {
     assert_eq!(heredocs.len(), 1);
     let (delimiter, content, _interpolated, indented) = &heredocs[0];
     assert_eq!(delimiter, "EOF");
-    assert_eq!(content, "a\nb", "Indented heredoc strips terminator's indent from content");
+    assert_eq!(
+        content, "a\nb",
+        "Indented heredoc strips terminator's indent from content"
+    );
     assert!(*indented);
     Ok(())
 }
@@ -76,7 +101,10 @@ fn heredoc_body_single_quoted() -> Result<(), Box<dyn std::error::Error>> {
     assert_eq!(heredocs.len(), 1);
     let (_delimiter, content, interpolated, _indented) = &heredocs[0];
     assert_eq!(content, "No $interpolation here");
-    assert!(!*interpolated, "Single-quoted heredoc should not be interpolated");
+    assert!(
+        !*interpolated,
+        "Single-quoted heredoc should not be interpolated"
+    );
     Ok(())
 }
 
@@ -220,8 +248,14 @@ fn heredoc_body_indented_single_quoted() -> Result<(), Box<dyn std::error::Error
     assert_eq!(heredocs.len(), 1, "Expected exactly one heredoc node");
     let (delimiter, content, interpolated, indented) = &heredocs[0];
     assert_eq!(delimiter, "END");
-    assert_eq!(content, "indented content", "Content should have indent stripped");
-    assert!(!*interpolated, "Single-quoted heredoc should not be interpolated");
+    assert_eq!(
+        content, "indented content",
+        "Content should have indent stripped"
+    );
+    assert!(
+        !*interpolated,
+        "Single-quoted heredoc should not be interpolated"
+    );
     assert!(*indented, "<<~ heredoc should be marked as indented");
     Ok(())
 }
@@ -275,6 +309,9 @@ fn heredoc_body_content_contains_terminator_string() -> Result<(), Box<dyn std::
         content, "The word END appears here but is not a terminator",
         "Line containing the terminator word should be body content, not terminate the heredoc"
     );
-    assert!(!*interpolated, "Single-quoted heredoc should not be interpolated");
+    assert!(
+        !*interpolated,
+        "Single-quoted heredoc should not be interpolated"
+    );
     Ok(())
 }

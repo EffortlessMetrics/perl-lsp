@@ -74,12 +74,18 @@ fn from_str_name_unknown_returns_none() {
 
 #[test]
 fn from_ga_lock_enabled_true() {
-    assert_eq!(FeatureProfileKind::from_ga_lock_enabled(true), FeatureProfileKind::GaLock);
+    assert_eq!(
+        FeatureProfileKind::from_ga_lock_enabled(true),
+        FeatureProfileKind::GaLock
+    );
 }
 
 #[test]
 fn from_ga_lock_enabled_false() {
-    assert_eq!(FeatureProfileKind::from_ga_lock_enabled(false), FeatureProfileKind::Production);
+    assert_eq!(
+        FeatureProfileKind::from_ga_lock_enabled(false),
+        FeatureProfileKind::Production
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -236,14 +242,22 @@ fn feature_profile_specs_canonical_names() {
 #[test]
 fn feature_profile_specs_descriptions_non_empty() {
     for spec in FEATURE_PROFILE_SPECS {
-        assert!(!spec.description.is_empty(), "description empty for {}", spec.canonical);
+        assert!(
+            !spec.description.is_empty(),
+            "description empty for {}",
+            spec.canonical
+        );
     }
 }
 
 #[test]
 fn feature_profile_specs_aliases_non_empty() {
     for spec in FEATURE_PROFILE_SPECS {
-        assert!(!spec.aliases.is_empty(), "aliases empty for {}", spec.canonical);
+        assert!(
+            !spec.aliases.is_empty(),
+            "aliases empty for {}",
+            spec.canonical
+        );
     }
 }
 
@@ -336,8 +350,16 @@ fn all_features_have_required_fields() {
         assert!(!f.id.is_empty(), "feature has empty id");
         assert!(!f.spec.is_empty(), "feature {} has empty spec", f.id);
         assert!(!f.area.is_empty(), "feature {} has empty area", f.id);
-        assert!(!f.maturity.is_empty(), "feature {} has empty maturity", f.id);
-        assert!(!f.description.is_empty(), "feature {} has empty description", f.id);
+        assert!(
+            !f.maturity.is_empty(),
+            "feature {} has empty maturity",
+            f.id
+        );
+        assert!(
+            !f.description.is_empty(),
+            "feature {} has empty description",
+            f.id
+        );
     }
 }
 
@@ -367,7 +389,10 @@ fn bdd_feature_rows_non_empty() {
 fn bdd_feature_rows_sorted_by_area_then_id() {
     let rows = bdd_feature_rows();
     for pair in rows.windows(2) {
-        let ordering = pair[0].area.cmp(pair[1].area).then(pair[0].id.cmp(pair[1].id));
+        let ordering = pair[0]
+            .area
+            .cmp(pair[1].area)
+            .then(pair[0].id.cmp(pair[1].id));
         assert!(
             ordering.is_le(),
             "BDD rows not sorted: {} {} vs {} {}",
@@ -426,10 +451,18 @@ fn trackable_feature_count_positive() {
 
 #[test]
 fn trackable_excludes_planned() {
-    let planned_count =
-        all_features().iter().filter(|f| f.maturity == "planned" && f.counts_in_coverage).count();
-    let total_countable = all_features().iter().filter(|f| f.counts_in_coverage).count();
-    assert_eq!(trackable_feature_count_for_grid(), total_countable - planned_count);
+    let planned_count = all_features()
+        .iter()
+        .filter(|f| f.maturity == "planned" && f.counts_in_coverage)
+        .count();
+    let total_countable = all_features()
+        .iter()
+        .filter(|f| f.counts_in_coverage)
+        .count();
+    assert_eq!(
+        trackable_feature_count_for_grid(),
+        total_countable - planned_count
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -475,7 +508,10 @@ fn compliance_percent_for_grid_matches_manual_calculation() {
         (advertised as f64 / trackable as f64 * 100.0).round() as f32
     };
     let actual = compliance_percent_for_grid();
-    assert!((actual - expected).abs() < f32::EPSILON, "expected {expected}, got {actual}");
+    assert!(
+        (actual - expected).abs() < f32::EPSILON,
+        "expected {expected}, got {actual}"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -518,11 +554,19 @@ fn caps_roundtrip_hover() {
 #[test]
 fn caps_roundtrip_multiple_features() {
     use perl_lsp_feature_contracts::{caps_from_feature_ids, feature_ids_from_caps};
-    let input = &["lsp.completion", "lsp.hover", "lsp.definition", "lsp.references"];
+    let input = &[
+        "lsp.completion",
+        "lsp.hover",
+        "lsp.definition",
+        "lsp.references",
+    ];
     let caps = caps_from_feature_ids(input);
     let ids = feature_ids_from_caps(&caps);
     for &feat in input {
-        assert!(ids.contains(&feat), "missing feature {feat} after roundtrip");
+        assert!(
+            ids.contains(&feat),
+            "missing feature {feat} after roundtrip"
+        );
     }
 }
 
@@ -533,7 +577,9 @@ fn caps_roundtrip_multiple_features() {
 #[test]
 fn spec_canonical_matches_kind_as_str() {
     for &kind in FeatureProfileKind::all() {
-        let spec = FEATURE_PROFILE_SPECS.iter().find(|s| s.canonical == kind.as_str());
+        let spec = FEATURE_PROFILE_SPECS
+            .iter()
+            .find(|s| s.canonical == kind.as_str());
         assert!(spec.is_some(), "no spec found for profile {:?}", kind);
     }
 }
@@ -541,7 +587,9 @@ fn spec_canonical_matches_kind_as_str() {
 #[test]
 fn spec_aliases_match_kind_aliases() {
     for &kind in FeatureProfileKind::all() {
-        let spec = FEATURE_PROFILE_SPECS.iter().find(|s| s.canonical == kind.as_str());
+        let spec = FEATURE_PROFILE_SPECS
+            .iter()
+            .find(|s| s.canonical == kind.as_str());
         if let Some(spec) = spec {
             let kind_aliases = kind.aliases();
             for &alias in spec.aliases {
@@ -592,7 +640,10 @@ fn all_variants_are_distinct() {
 
 #[test]
 fn all_variants_have_distinct_as_str() {
-    let strs: Vec<&str> = FeatureProfileKind::all().iter().map(|k| k.as_str()).collect();
+    let strs: Vec<&str> = FeatureProfileKind::all()
+        .iter()
+        .map(|k| k.as_str())
+        .collect();
     let mut deduped = strs.clone();
     deduped.sort();
     deduped.dedup();
@@ -607,14 +658,20 @@ fn all_variants_have_distinct_as_str() {
 fn advertised_features_subset_of_all_features() {
     let all_ids: Vec<&str> = all_features().iter().map(|f| f.id).collect();
     for &feat in catalog::advertised_features() {
-        assert!(all_ids.contains(&feat), "advertised feature '{feat}' not in all_features()");
+        assert!(
+            all_ids.contains(&feat),
+            "advertised feature '{feat}' not in all_features()"
+        );
     }
 }
 
 #[test]
 fn advertised_features_match_advertised_flag() {
-    let advertised_from_flag: Vec<&str> =
-        all_features().iter().filter(|f| f.advertised).map(|f| f.id).collect();
+    let advertised_from_flag: Vec<&str> = all_features()
+        .iter()
+        .filter(|f| f.advertised)
+        .map(|f| f.id)
+        .collect();
     let advertised = catalog::advertised_features();
     assert_eq!(
         advertised.len(),
@@ -646,7 +703,11 @@ fn bdd_rows_preserve_all_feature_fields() {
         if let Some(row) = row {
             assert_eq!(row.spec, feature.spec, "spec mismatch for {}", feature.id);
             assert_eq!(row.area, feature.area, "area mismatch for {}", feature.id);
-            assert_eq!(row.maturity, feature.maturity, "maturity mismatch for {}", feature.id);
+            assert_eq!(
+                row.maturity, feature.maturity,
+                "maturity mismatch for {}",
+                feature.id
+            );
             assert_eq!(
                 row.advertised, feature.advertised,
                 "advertised mismatch for {}",
@@ -662,7 +723,11 @@ fn bdd_rows_preserve_all_feature_fields() {
                 "description mismatch for {}",
                 feature.id
             );
-            assert_eq!(row.tests, feature.tests, "tests mismatch for {}", feature.id);
+            assert_eq!(
+                row.tests, feature.tests,
+                "tests mismatch for {}",
+                feature.id
+            );
         }
     }
 }
@@ -921,10 +986,18 @@ fn caps_roundtrip_all_advertised_features() {
 
 #[test]
 fn trackable_plus_planned_equals_countable_total() {
-    let total_countable = all_features().iter().filter(|f| f.counts_in_coverage).count();
-    let planned_countable =
-        all_features().iter().filter(|f| f.maturity == "planned" && f.counts_in_coverage).count();
-    assert_eq!(trackable_feature_count_for_grid(), total_countable - planned_countable);
+    let total_countable = all_features()
+        .iter()
+        .filter(|f| f.counts_in_coverage)
+        .count();
+    let planned_countable = all_features()
+        .iter()
+        .filter(|f| f.maturity == "planned" && f.counts_in_coverage)
+        .count();
+    assert_eq!(
+        trackable_feature_count_for_grid(),
+        total_countable - planned_countable
+    );
 }
 
 #[test]
@@ -961,7 +1034,10 @@ fn catalog_version_looks_like_semver() {
 #[test]
 fn catalog_lsp_version_has_dot_separator() {
     let v = catalog::LSP_VERSION;
-    assert!(v.contains('.'), "LSP_VERSION '{v}' should contain a dot separator");
+    assert!(
+        v.contains('.'),
+        "LSP_VERSION '{v}' should contain a dot separator"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -988,5 +1064,9 @@ fn supported_cli_profiles_no_duplicates() {
     let mut deduped = cli.to_vec();
     deduped.sort();
     deduped.dedup();
-    assert_eq!(cli.len(), deduped.len(), "duplicate entries in supported_cli_profiles");
+    assert_eq!(
+        cli.len(),
+        deduped.len(),
+        "duplicate entries in supported_cli_profiles"
+    );
 }

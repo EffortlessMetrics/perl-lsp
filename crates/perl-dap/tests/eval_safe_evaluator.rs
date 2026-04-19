@@ -131,11 +131,14 @@ fn safe_complex_expressions() -> Result<(), ValidationError> {
 
 #[test]
 fn dangerous_state_mutation_ops() {
-    for op in
-        &["push", "pop", "shift", "unshift", "splice", "delete", "undef", "srand", "bless", "reset"]
-    {
+    for op in &[
+        "push", "pop", "shift", "unshift", "splice", "delete", "undef", "srand", "bless", "reset",
+    ] {
         let expr = format!("{op}($x)");
-        assert!(eval().validate(&expr).is_err(), "expected {op} to be blocked");
+        assert!(
+            eval().validate(&expr).is_err(),
+            "expected {op} to be blocked"
+        );
     }
 }
 
@@ -158,7 +161,10 @@ fn dangerous_process_control_ops() {
         "lock",
     ] {
         let expr = format!("{op}()");
-        assert!(eval().validate(&expr).is_err(), "expected {op} to be blocked");
+        assert!(
+            eval().validate(&expr).is_err(),
+            "expected {op} to be blocked"
+        );
     }
 }
 
@@ -198,7 +204,10 @@ fn dangerous_io_ops() {
         "socketpair",
     ] {
         let expr = format!("{op}()");
-        assert!(eval().validate(&expr).is_err(), "expected {op} to be blocked");
+        assert!(
+            eval().validate(&expr).is_err(),
+            "expected {op} to be blocked"
+        );
     }
 }
 
@@ -209,7 +218,10 @@ fn dangerous_filesystem_ops() {
         "utime", "symlink", "link",
     ] {
         let expr = format!("{op}('path')");
-        assert!(eval().validate(&expr).is_err(), "expected {op} to be blocked");
+        assert!(
+            eval().validate(&expr).is_err(),
+            "expected {op} to be blocked"
+        );
     }
 }
 
@@ -217,7 +229,10 @@ fn dangerous_filesystem_ops() {
 fn dangerous_code_loading_ops() {
     for op in &["eval", "require", "do"] {
         let expr = format!("{op}('code')");
-        assert!(eval().validate(&expr).is_err(), "expected {op} to be blocked");
+        assert!(
+            eval().validate(&expr).is_err(),
+            "expected {op} to be blocked"
+        );
     }
 }
 
@@ -229,11 +244,22 @@ fn dangerous_tie_ops() {
 
 #[test]
 fn dangerous_network_ops() {
-    for op in
-        &["socket", "connect", "bind", "listen", "accept", "send", "recv", "shutdown", "setsockopt"]
-    {
+    for op in &[
+        "socket",
+        "connect",
+        "bind",
+        "listen",
+        "accept",
+        "send",
+        "recv",
+        "shutdown",
+        "setsockopt",
+    ] {
         let expr = format!("{op}()");
-        assert!(eval().validate(&expr).is_err(), "expected {op} to be blocked");
+        assert!(
+            eval().validate(&expr).is_err(),
+            "expected {op} to be blocked"
+        );
     }
 }
 
@@ -244,7 +270,10 @@ fn dangerous_ipc_ops() {
         "shmdt", "shmctl",
     ] {
         let expr = format!("{op}()");
-        assert!(eval().validate(&expr).is_err(), "expected {op} to be blocked");
+        assert!(
+            eval().validate(&expr).is_err(),
+            "expected {op} to be blocked"
+        );
     }
 }
 

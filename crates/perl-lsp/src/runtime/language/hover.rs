@@ -45,7 +45,9 @@ mod tests {
 
         let hover = LspServer::get_special_variable_hover("$PL_sv_yes")
             .expect("hover should exist for $PL_sv_yes");
-        let value = hover["contents"]["value"].as_str().expect("markdown hover text");
+        let value = hover["contents"]["value"]
+            .as_str()
+            .expect("markdown hover text");
         assert!(
             value.contains("true scalar"),
             "hover should describe the shared true scalar: {value}"
@@ -81,8 +83,9 @@ impl LspServer {
             let (line, character) = req_position(&params)?;
 
             // Reject stale requests
-            let req_version =
-                params["textDocument"]["version"].as_i64().and_then(|n| i32::try_from(n).ok());
+            let req_version = params["textDocument"]["version"]
+                .as_i64()
+                .and_then(|n| i32::try_from(n).ok());
             self.ensure_latest(uri, req_version)?;
 
             // Phase 1: Extract hover info under document lock
@@ -185,10 +188,13 @@ impl LspServer {
 
         let analyzer = self.get_or_build_analyzer(uri, text, ast);
 
-        if let Some(symbol_info) =
-            analyzer.symbol_at(crate::SourceLocation { start: offset, end: offset })
-            && let Some(modifier_kind) =
-                symbol_info.attributes.iter().find_map(|a| a.strip_prefix("modifier="))
+        if let Some(symbol_info) = analyzer.symbol_at(crate::SourceLocation {
+            start: offset,
+            end: offset,
+        }) && let Some(modifier_kind) = symbol_info
+            .attributes
+            .iter()
+            .find_map(|a| a.strip_prefix("modifier="))
         {
             let method_name = &symbol_info.name;
             let kind_label = match modifier_kind {
@@ -229,8 +235,10 @@ impl LspServer {
 
             // Detect method modifier symbols (before/after/around/override/augment) early and render
             // a dedicated card instead of the generic "Subroutine" label.
-            if let Some(modifier_kind) =
-                symbol_info.attributes.iter().find_map(|a| a.strip_prefix("modifier="))
+            if let Some(modifier_kind) = symbol_info
+                .attributes
+                .iter()
+                .find_map(|a| a.strip_prefix("modifier="))
             {
                 let method_name = &symbol_info.name;
                 let kind_label = match modifier_kind {
@@ -279,7 +287,12 @@ impl LspServer {
                 let mut params = Vec::new();
                 let mut complexity = String::new();
                 if let Some(sub_node) = self.find_subroutine_definition(ast, &symbol_info.name) {
-                    if let NodeKind::Subroutine { signature: sub_sig, body, .. } = &sub_node.kind {
+                    if let NodeKind::Subroutine {
+                        signature: sub_sig,
+                        body,
+                        ..
+                    } = &sub_node.kind
+                    {
                         if let Some(sig) = sub_sig {
                             if let NodeKind::Signature { parameters } = &sig.kind {
                                 for param in parameters {
@@ -289,7 +302,11 @@ impl LspServer {
                         } else {
                             self.extract_params_from_body(body, &mut params);
                         }
-                    } else if let NodeKind::Method { signature: method_sig, .. } = &sub_node.kind {
+                    } else if let NodeKind::Method {
+                        signature: method_sig,
+                        ..
+                    } = &sub_node.kind
+                    {
                         if let Some(sig) = method_sig {
                             if let NodeKind::Signature { parameters } = &sig.kind {
                                 for param in parameters {
@@ -626,7 +643,10 @@ impl LspServer {
         let lazy = Self::moo_attribute_value(attributes, "lazy").map(Self::describe_truthy);
         let default = Self::moo_attribute_value(attributes, "default");
 
-        let mut lines = vec!["**Moo/Moose Attribute Accessor**".to_string(), String::new()];
+        let mut lines = vec![
+            "**Moo/Moose Attribute Accessor**".to_string(),
+            String::new(),
+        ];
         lines.push(format!("**Attribute**: `{name}`"));
 
         if let Some(isa) = isa {
@@ -734,7 +754,10 @@ impl LspServer {
     }
 
     fn is_truthy(value: &str) -> bool {
-        matches!(value.trim().to_ascii_lowercase().as_str(), "1" | "true" | "yes")
+        matches!(
+            value.trim().to_ascii_lowercase().as_str(),
+            "1" | "true" | "yes"
+        )
     }
 
     /// Get a token using the same simple fallback as rename, without requiring `&self`.
@@ -803,7 +826,11 @@ impl LspServer {
 
         // Trim any trailing `::` (e.g. cursor right after the separator).
         let candidate = text[start..end].trim_end_matches(':');
-        if candidate.contains("::") { Some(candidate.to_string()) } else { None }
+        if candidate.contains("::") {
+            Some(candidate.to_string())
+        } else {
+            None
+        }
     }
 
     fn extract_xs_api_hover(uri: &str, text: &str, offset: usize) -> Option<Value> {
@@ -965,8 +992,9 @@ impl LspServer {
                         if let NodeKind::Identifier { name } = &expression.kind {
                             if matches!(name.as_str(), "with" | "extends") {
                                 if let Some(next) = statements.get(idx + 1) {
-                                    if let NodeKind::ExpressionStatement { expression: next_expr } =
-                                        &next.kind
+                                    if let NodeKind::ExpressionStatement {
+                                        expression: next_expr,
+                                    } = &next.kind
                                     {
                                         if let Some(role) =
                                             Self::role_name_at_offset(next_expr, offset)
@@ -1187,9 +1215,13 @@ impl LspServer {
             doc_offset,
         ) {
             let display_path = uri.strip_prefix("file://").unwrap_or(&uri);
-            let fs_path = url::Url::parse(&uri).ok().and_then(|u| u.to_file_path().ok());
-            let pod_section =
-                fs_path.as_deref().map(|p| self.format_pod_for_hover(p)).unwrap_or_default();
+            let fs_path = url::Url::parse(&uri)
+                .ok()
+                .and_then(|u| u.to_file_path().ok());
+            let pod_section = fs_path
+                .as_deref()
+                .map(|p| self.format_pod_for_hover(p))
+                .unwrap_or_default();
             return json!({
                 "contents": {
                     "kind": "markdown",
@@ -1251,8 +1283,10 @@ impl LspServer {
     fn build_pragma_hover(module_name: &str) -> Option<Value> {
         let doc = crate::semantic::get_pragma_documentation(module_name)?;
 
-        let version_line =
-            doc.version_required.map(|v| format!("\n\n**Requires**: Perl {v}")).unwrap_or_default();
+        let version_line = doc
+            .version_required
+            .map(|v| format!("\n\n**Requires**: Perl {v}"))
+            .unwrap_or_default();
 
         let perldoc_link =
             format!("[perldoc {module_name}](https://perldoc.perl.org/{module_name})");
@@ -1331,14 +1365,16 @@ impl LspServer {
         if let Some(params) = params {
             // Create or get cancellation token for this request
             let token = if let Some(req_id) = request_id {
-                GLOBAL_CANCELLATION_REGISTRY.get_token(req_id).unwrap_or_else(|| {
-                    let token = PerlLspCancellationToken::new(
-                        req_id.clone(),
-                        "textDocument/hover".to_string(),
-                    );
-                    let _ = GLOBAL_CANCELLATION_REGISTRY.register_token(token.clone());
-                    token
-                })
+                GLOBAL_CANCELLATION_REGISTRY
+                    .get_token(req_id)
+                    .unwrap_or_else(|| {
+                        let token = PerlLspCancellationToken::new(
+                            req_id.clone(),
+                            "textDocument/hover".to_string(),
+                        );
+                        let _ = GLOBAL_CANCELLATION_REGISTRY.register_token(token.clone());
+                        token
+                    })
             } else {
                 PerlLspCancellationToken::new(
                     serde_json::Value::Null,
@@ -1633,8 +1669,11 @@ impl LspServer {
         let full_name: String = chars[start..end].iter().collect();
 
         // Extract just the function name (strip package prefix if present)
-        let func_name =
-            if let Some(pos) = full_name.rfind("::") { &full_name[pos + 2..] } else { &full_name };
+        let func_name = if let Some(pos) = full_name.rfind("::") {
+            &full_name[pos + 2..]
+        } else {
+            &full_name
+        };
 
         // Count commas at depth 0 to determine active parameter
         let mut comma_count = 0;
@@ -1675,7 +1714,12 @@ impl LspServer {
 
         // Extract parameters from the subroutine
         let mut params = Vec::new();
-        if let NodeKind::Subroutine { signature: sub_signature, body, .. } = &sub_node.kind {
+        if let NodeKind::Subroutine {
+            signature: sub_signature,
+            body,
+            ..
+        } = &sub_node.kind
+        {
             if let Some(sig) = sub_signature {
                 if let NodeKind::Signature { parameters } = &sig.kind {
                     for param in parameters {
@@ -1722,7 +1766,9 @@ impl LspServer {
                     }
                 }
             }
-            NodeKind::Method { name: method_name, .. } if method_name == name => {
+            NodeKind::Method {
+                name: method_name, ..
+            } if method_name == name => {
                 return Some(node);
             }
             NodeKind::Class { body, .. } => {
@@ -1747,10 +1793,14 @@ impl LspServer {
     /// Handles the first tie encountered for the given name; retie sequences are a known limitation.
     fn find_tied_class(node: &Node, sigil: &str, var_name: &str) -> Option<String> {
         match &node.kind {
-            NodeKind::Tie { variable, package, .. } => {
+            NodeKind::Tie {
+                variable, package, ..
+            } => {
                 let matched = match &variable.kind {
                     NodeKind::Variable { sigil: s, name: n } => s == sigil && n == var_name,
-                    NodeKind::VariableDeclaration { variable: inner, .. } => {
+                    NodeKind::VariableDeclaration {
+                        variable: inner, ..
+                    } => {
                         matches!(&inner.kind, NodeKind::Variable { sigil: s, name: n } if s == sigil && n == var_name)
                     }
                     _ => false,
@@ -1762,9 +1812,9 @@ impl LspServer {
                 }
                 None
             }
-            NodeKind::Program { statements } | NodeKind::Block { statements } => {
-                statements.iter().find_map(|s| Self::find_tied_class(s, sigil, var_name))
-            }
+            NodeKind::Program { statements } | NodeKind::Block { statements } => statements
+                .iter()
+                .find_map(|s| Self::find_tied_class(s, sigil, var_name)),
             NodeKind::ExpressionStatement { expression } => {
                 Self::find_tied_class(expression, sigil, var_name)
             }
@@ -1799,8 +1849,11 @@ impl LspServer {
         if let NodeKind::Block { statements } = &body.kind {
             if let Some(first_stmt) = statements.first() {
                 // Look for my (...) = @_ pattern
-                if let NodeKind::VariableListDeclaration { variables, initializer, .. } =
-                    &first_stmt.kind
+                if let NodeKind::VariableListDeclaration {
+                    variables,
+                    initializer,
+                    ..
+                } = &first_stmt.kind
                 {
                     // Check if initializer is @_
                     if let Some(init) = initializer {
@@ -1808,8 +1861,10 @@ impl LspServer {
                             if sigil == "@" && name == "_" {
                                 // Extract params from variables
                                 for var in variables {
-                                    if let NodeKind::Variable { sigil: var_sigil, name: var_name } =
-                                        &var.kind
+                                    if let NodeKind::Variable {
+                                        sigil: var_sigil,
+                                        name: var_name,
+                                    } = &var.kind
                                     {
                                         params.push(format!("{}{}", var_sigil, var_name));
                                     }
@@ -1859,15 +1914,20 @@ impl LspServer {
             4..=8 => "Medium",
             _ => "High",
         };
-        format!("**Complexity**: {} | Lines: {} | Branches: {}", complexity, lines, branches)
+        format!(
+            "**Complexity**: {} | Lines: {} | Branches: {}",
+            complexity, lines, branches
+        )
     }
 
     /// Recursively count branch points in an AST subtree.
     fn count_branches(node: &Node) -> usize {
         let mut count = match &node.kind {
-            NodeKind::If { elsif_branches, else_branch, .. } => {
-                1 + elsif_branches.len() + usize::from(else_branch.is_some())
-            }
+            NodeKind::If {
+                elsif_branches,
+                else_branch,
+                ..
+            } => 1 + elsif_branches.len() + usize::from(else_branch.is_some()),
             NodeKind::Ternary { .. } => 1,
             NodeKind::When { .. } => 1,
             NodeKind::Default { .. } => 1,
@@ -1901,7 +1961,10 @@ impl LspServer {
         let signature = match function_name {
             "print" => Some(("print LIST", vec!["LIST"])),
             "printf" => Some(("printf FORMAT, LIST", vec!["FORMAT", "LIST"])),
-            "open" => Some(("open FILEHANDLE, MODE, EXPR", vec!["FILEHANDLE", "MODE", "EXPR"])),
+            "open" => Some((
+                "open FILEHANDLE, MODE, EXPR",
+                vec!["FILEHANDLE", "MODE", "EXPR"],
+            )),
             "close" => Some(("close FILEHANDLE", vec!["FILEHANDLE"])),
             "read" => Some((
                 "read FILEHANDLE, SCALAR, LENGTH, OFFSET",
@@ -1915,11 +1978,20 @@ impl LspServer {
                 vec!["EXPR", "OFFSET", "LENGTH", "REPLACEMENT"],
             )),
             "length" => Some(("length EXPR", vec!["EXPR"])),
-            "index" => Some(("index STR, SUBSTR, POSITION", vec!["STR", "SUBSTR", "POSITION"])),
-            "rindex" => Some(("rindex STR, SUBSTR, POSITION", vec!["STR", "SUBSTR", "POSITION"])),
+            "index" => Some((
+                "index STR, SUBSTR, POSITION",
+                vec!["STR", "SUBSTR", "POSITION"],
+            )),
+            "rindex" => Some((
+                "rindex STR, SUBSTR, POSITION",
+                vec!["STR", "SUBSTR", "POSITION"],
+            )),
             "sprintf" => Some(("sprintf FORMAT, LIST", vec!["FORMAT", "LIST"])),
             "join" => Some(("join EXPR, LIST", vec!["EXPR", "LIST"])),
-            "split" => Some(("split /PATTERN/, EXPR, LIMIT", vec!["/PATTERN/", "EXPR", "LIMIT"])),
+            "split" => Some((
+                "split /PATTERN/, EXPR, LIMIT",
+                vec!["/PATTERN/", "EXPR", "LIMIT"],
+            )),
             "push" => Some(("push ARRAY, LIST", vec!["ARRAY", "LIST"])),
             "pop" => Some(("pop ARRAY", vec!["ARRAY"])),
             "shift" => Some(("shift ARRAY", vec!["ARRAY"])),
@@ -2012,9 +2084,10 @@ impl LspServer {
             "setpgrp" => Some(("setpgrp PID, PGRP", vec!["PID", "PGRP"])),
             "getppid" => Some(("getppid", vec![])),
             "getpriority" => Some(("getpriority WHICH, WHO", vec!["WHICH", "WHO"])),
-            "setpriority" => {
-                Some(("setpriority WHICH, WHO, PRIORITY", vec!["WHICH", "WHO", "PRIORITY"]))
-            }
+            "setpriority" => Some((
+                "setpriority WHICH, WHO, PRIORITY",
+                vec!["WHICH", "WHO", "PRIORITY"],
+            )),
 
             // Time functions
             "time" => Some(("time", vec![])),
@@ -2036,11 +2109,15 @@ impl LspServer {
             )),
             "bind" => Some(("bind SOCKET, NAME", vec!["SOCKET", "NAME"])),
             "listen" => Some(("listen SOCKET, QUEUESIZE", vec!["SOCKET", "QUEUESIZE"])),
-            "accept" => {
-                Some(("accept NEWSOCKET, GENERICSOCKET", vec!["NEWSOCKET", "GENERICSOCKET"]))
-            }
+            "accept" => Some((
+                "accept NEWSOCKET, GENERICSOCKET",
+                vec!["NEWSOCKET", "GENERICSOCKET"],
+            )),
             "connect" => Some(("connect SOCKET, NAME", vec!["SOCKET", "NAME"])),
-            "send" => Some(("send SOCKET, MSG, FLAGS, TO", vec!["SOCKET", "MSG", "FLAGS", "TO"])),
+            "send" => Some((
+                "send SOCKET, MSG, FLAGS, TO",
+                vec!["SOCKET", "MSG", "FLAGS", "TO"],
+            )),
             "recv" => Some((
                 "recv SOCKET, SCALAR, LENGTH, FLAGS",
                 vec!["SOCKET", "SCALAR", "LENGTH", "FLAGS"],
@@ -2061,7 +2138,10 @@ impl LspServer {
             "redo" => Some(("redo LABEL", vec!["LABEL"])),
 
             // Misc functions
-            "tie" => Some(("tie VARIABLE, CLASSNAME, LIST", vec!["VARIABLE", "CLASSNAME", "LIST"])),
+            "tie" => Some((
+                "tie VARIABLE, CLASSNAME, LIST",
+                vec!["VARIABLE", "CLASSNAME", "LIST"],
+            )),
             "untie" => Some(("untie VARIABLE", vec!["VARIABLE"])),
             "tied" => Some(("tied VARIABLE", vec!["VARIABLE"])),
             "dbmopen" => Some(("dbmopen HASH, DBNAME, MODE", vec!["HASH", "DBNAME", "MODE"])),
@@ -2704,7 +2784,10 @@ impl LspServer {
                         b'D' => (r"\D", "Any non-digit character"),
                         b'w' => (r"\w", "Any word character (alphanumeric + underscore)"),
                         b'W' => (r"\W", "Any non-word character"),
-                        b's' => (r"\s", "Any whitespace character (space, tab, newline, etc.)"),
+                        b's' => (
+                            r"\s",
+                            "Any whitespace character (space, tab, newline, etc.)",
+                        ),
                         b'S' => (r"\S", "Any non-whitespace character"),
                         b'b' => (r"\b", "Word boundary"),
                         b'B' => (r"\B", "Non-word boundary"),
@@ -2790,7 +2873,11 @@ impl LspServer {
                                 3,
                             ),
                             b'>' => ("(?>", "Atomic group (no backtracking into this group)", 3),
-                            _ => ("(?", "Special group (inline modifier or other extension)", 2),
+                            _ => (
+                                "(?",
+                                "Special group (inline modifier or other extension)",
+                                2,
+                            ),
                         };
                         // Advance past the full group-open prefix so we don't
                         // re-process `?`, `:`, `=`, etc. as standalone tokens.
@@ -2839,8 +2926,10 @@ impl LspServer {
                 }
                 b'?' => {
                     i += 1;
-                    entries
-                        .push(("?".to_string(), "Quantifier: zero or one (optional)".to_string()));
+                    entries.push((
+                        "?".to_string(),
+                        "Quantifier: zero or one (optional)".to_string(),
+                    ));
                 }
                 b'|' => {
                     i += 1;
@@ -2929,7 +3018,10 @@ impl LspServer {
                 };
                 // All bytes in {…} are ASCII so from_utf8 is infallible here.
                 let range = std::str::from_utf8(&bytes[brace_start..brace_end]).unwrap_or("{n}");
-                return (format!("{}{}", tok, range), format!("{}{}", desc, counted_suffix));
+                return (
+                    format!("{}{}", tok, range),
+                    format!("{}{}", desc, counted_suffix),
+                );
             }
             _ => return (tok, desc),
         };

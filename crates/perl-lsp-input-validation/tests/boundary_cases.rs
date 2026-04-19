@@ -24,7 +24,10 @@ fn validate_file_content_at_exactly_max_size_is_ok() -> anyhow::Result<()> {
     let line = "x\n";
     let lines = max / line.len();
     let content = line.repeat(lines);
-    assert!(content.len() <= max, "content must not exceed max in this test");
+    assert!(
+        content.len() <= max,
+        "content must not exceed max in this test"
+    );
     validate_file_content(&content, Path::new("test.pl"))?;
     Ok(())
 }
@@ -39,7 +42,10 @@ fn validate_file_content_one_byte_over_max_errors() {
     // content.len() > max here
     assert!(content.len() > max);
     let result = validate_file_content(&content, Path::new("test.pl"));
-    assert!(result.is_err(), "content over max_file_size_bytes must be rejected");
+    assert!(
+        result.is_err(),
+        "content over max_file_size_bytes must be rejected"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -139,7 +145,10 @@ fn validate_file_content_case_insensitive_script_tag() {
     // Detection uses `.to_lowercase()` so uppercase variants must also be caught
     let content = "# <SCRIPT>alert(1)</SCRIPT>";
     let result = validate_file_content(content, Path::new("test.pl"));
-    assert!(result.is_err(), "uppercase <SCRIPT> must be rejected (case-insensitive check)");
+    assert!(
+        result.is_err(),
+        "uppercase <SCRIPT> must be rejected (case-insensitive check)"
+    );
 }
 
 #[test]
@@ -184,7 +193,10 @@ fn validate_lsp_request_unknown_method_with_javascript_in_params_errors() {
     let method = "someOther/Method";
     let params = serde_json::json!({ "url": "javascript:void(0)" });
     let result = validate_lsp_request(method, &params);
-    assert!(result.is_err(), "unknown method with javascript: in params must be rejected");
+    assert!(
+        result.is_err(),
+        "unknown method with javascript: in params must be rejected"
+    );
 }
 
 #[test]
@@ -192,7 +204,10 @@ fn validate_lsp_request_unknown_method_with_script_tag_in_params_errors() {
     let method = "someOther/Method";
     let params = serde_json::json!({ "text": "<script>alert(1)</script>" });
     let result = validate_lsp_request(method, &params);
-    assert!(result.is_err(), "unknown method with <script> in params must be rejected");
+    assert!(
+        result.is_err(),
+        "unknown method with <script> in params must be rejected"
+    );
 }
 
 #[test]
@@ -205,7 +220,10 @@ fn validate_lsp_request_text_document_with_invalid_uri_scheme_errors() {
         }
     });
     let result = validate_lsp_request(method, &params);
-    assert!(result.is_err(), "non-file:// URI scheme must be rejected for textDocument requests");
+    assert!(
+        result.is_err(),
+        "non-file:// URI scheme must be rejected for textDocument requests"
+    );
 }
 
 #[test]
@@ -262,7 +280,11 @@ fn sanitize_string_keeps_carriage_return() {
 #[test]
 fn sanitize_string_keeps_printable_ascii() {
     let printable = " !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~";
-    assert_eq!(sanitize_string(printable), printable, "all printable ASCII must be kept");
+    assert_eq!(
+        sanitize_string(printable),
+        printable,
+        "all printable ASCII must be kept"
+    );
 }
 
 #[test]
@@ -296,5 +318,9 @@ fn sanitize_string_empty_input_returns_empty() {
 #[test]
 fn sanitize_string_all_safe_returns_unchanged() {
     let input = "sub foo { return 42; }";
-    assert_eq!(sanitize_string(input), input, "safe Perl code must be unchanged");
+    assert_eq!(
+        sanitize_string(input),
+        input,
+        "safe Perl code must be unchanged"
+    );
 }

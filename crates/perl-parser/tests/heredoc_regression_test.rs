@@ -129,7 +129,10 @@ real data"#;
 
     // Fake __DATA__ in heredoc should be consumed
     assert!(!sexp.contains("(identifier not)"));
-    assert!(!sexp.contains("(identifier real)"), "Should not parse 'real' from heredoc body");
+    assert!(
+        !sexp.contains("(identifier real)"),
+        "Should not parse 'real' from heredoc body"
+    );
     // Real __DATA__ section should exist
     assert!(sexp.contains("data_section"));
     Ok(())

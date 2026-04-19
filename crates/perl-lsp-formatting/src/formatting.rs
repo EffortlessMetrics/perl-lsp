@@ -13,7 +13,9 @@ pub use perl_lsp_perltidy::PerlTidyConfig;
 /// Characters in the Basic Multilingual Plane (U+0000–U+FFFF) count as 1 unit;
 /// supplementary-plane characters (U+10000 and above) count as 2 units.
 fn utf16_len(s: &str) -> usize {
-    s.chars().map(|c| if c as u32 >= 0x10000 { 2 } else { 1 }).sum()
+    s.chars()
+        .map(|c| if c as u32 >= 0x10000 { 2 } else { 1 })
+        .sum()
 }
 
 /// Formatting error.
@@ -65,7 +67,11 @@ pub struct FormattingProvider<R> {
 impl<R> FormattingProvider<R> {
     /// Create a new formatting provider with the given runtime.
     pub fn new(runtime: R) -> Self {
-        Self { runtime, perltidy_path: None, perltidy_config: None }
+        Self {
+            runtime,
+            perltidy_path: None,
+            perltidy_config: None,
+        }
     }
 
     /// Set a custom perltidy path.
@@ -91,7 +97,10 @@ impl<R: perl_lsp_tooling::SubprocessRuntime> FormattingProvider<R> {
         let formatted = self.run_perltidy(content, options)?;
 
         if formatted == content {
-            return Ok(FormattedDocument { text: formatted, edits: vec![] });
+            return Ok(FormattedDocument {
+                text: formatted,
+                edits: vec![],
+            });
         }
 
         Ok(FormattedDocument {
@@ -115,18 +124,27 @@ impl<R: perl_lsp_tooling::SubprocessRuntime> FormattingProvider<R> {
         let end_line = (range.end.line as usize).min(lines.len().saturating_sub(1));
 
         if start_line >= lines.len() {
-            return Ok(FormattedDocument { text: content.to_string(), edits: vec![] });
+            return Ok(FormattedDocument {
+                text: content.to_string(),
+                edits: vec![],
+            });
         }
 
         if end_line < start_line {
-            return Ok(FormattedDocument { text: content.to_string(), edits: vec![] });
+            return Ok(FormattedDocument {
+                text: content.to_string(),
+                edits: vec![],
+            });
         }
 
         let text_to_format = lines[start_line..=end_line].join("\n");
         let formatted = self.run_perltidy(&text_to_format, options)?;
 
         if formatted == text_to_format {
-            return Ok(FormattedDocument { text: content.to_string(), edits: vec![] });
+            return Ok(FormattedDocument {
+                text: content.to_string(),
+                edits: vec![],
+            });
         }
 
         let start_char = 0;

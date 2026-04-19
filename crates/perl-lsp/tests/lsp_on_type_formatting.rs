@@ -51,8 +51,12 @@ fn on_type_braces_indent() -> Result<(), Box<dyn std::error::Error>> {
             "options": {"tabSize": 4, "insertSpaces": true}
         })),
     };
-    let res = srv.handle_request(req).ok_or("onTypeFormatting request failed")?;
-    let edits = res.result.ok_or("onTypeFormatting response missing result")?;
+    let res = srv
+        .handle_request(req)
+        .ok_or("onTypeFormatting request failed")?;
+    let edits = res
+        .result
+        .ok_or("onTypeFormatting response missing result")?;
 
     // Should return edits or null
     if !edits.is_null() {
@@ -116,8 +120,12 @@ fn on_type_closing_brace_dedent() -> Result<(), Box<dyn std::error::Error>> {
             "options": {"tabSize": 4, "insertSpaces": true}
         })),
     };
-    let res = srv.handle_request(req).ok_or("onTypeFormatting request failed")?;
-    let edits = res.result.ok_or("onTypeFormatting response missing result")?;
+    let res = srv
+        .handle_request(req)
+        .ok_or("onTypeFormatting request failed")?;
+    let edits = res
+        .result
+        .ok_or("onTypeFormatting response missing result")?;
 
     // Should return edits for dedent or null if already properly formatted
     if !edits.is_null() {
@@ -176,8 +184,12 @@ fn on_type_newline_after_open_brace_indents() -> Result<(), Box<dyn std::error::
             "options": {"tabSize": 4, "insertSpaces": true}
         })),
     };
-    let res = srv.handle_request(req).ok_or("onTypeFormatting newline request failed")?;
-    let edits = res.result.ok_or("onTypeFormatting newline response missing result")?;
+    let res = srv
+        .handle_request(req)
+        .ok_or("onTypeFormatting newline request failed")?;
+    let edits = res
+        .result
+        .ok_or("onTypeFormatting newline response missing result")?;
 
     // The \n handler should return non-null edits for indentation after open brace
     assert!(
@@ -185,7 +197,10 @@ fn on_type_newline_after_open_brace_indents() -> Result<(), Box<dyn std::error::
         "onTypeFormatting with ch='\\n' after open brace should return edits, got null"
     );
     let edits_array = edits.as_array().ok_or("edits result is not an array")?;
-    assert!(!edits_array.is_empty(), "should return indent edits after open brace newline");
+    assert!(
+        !edits_array.is_empty(),
+        "should return indent edits after open brace newline"
+    );
     Ok(())
 }
 
@@ -239,14 +254,24 @@ fn on_type_tab_size_4_produces_four_space_indent() -> Result<(), Box<dyn std::er
             "options": {"tabSize": 4, "insertSpaces": true}
         })),
     };
-    let res = srv.handle_request(req).ok_or("onTypeFormatting tabSize:4 request failed")?;
-    let edits = res.result.ok_or("onTypeFormatting tabSize:4 response missing result")?;
+    let res = srv
+        .handle_request(req)
+        .ok_or("onTypeFormatting tabSize:4 request failed")?;
+    let edits = res
+        .result
+        .ok_or("onTypeFormatting tabSize:4 response missing result")?;
 
     let edits_array = edits.as_array().ok_or("edits result is not an array")?;
     assert!(!edits_array.is_empty(), "should return indent edit");
 
-    let new_text =
-        edits_array[0].get("newText").and_then(|v| v.as_str()).ok_or("edit missing newText")?;
-    assert_eq!(new_text, "    ", "tabSize:4 should produce 4 spaces, got {:?}", new_text);
+    let new_text = edits_array[0]
+        .get("newText")
+        .and_then(|v| v.as_str())
+        .ok_or("edit missing newText")?;
+    assert_eq!(
+        new_text, "    ",
+        "tabSize:4 should produce 4 spaces, got {:?}",
+        new_text
+    );
     Ok(())
 }

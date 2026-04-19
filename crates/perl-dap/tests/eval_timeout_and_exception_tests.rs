@@ -43,7 +43,10 @@ fn validator_returns_promptly_on_very_long_safe_expression() -> Result<(), Valid
     ok(&expr)?;
     let elapsed = start.elapsed();
     // Should complete well under 2 seconds on any reasonable machine
-    assert!(elapsed.as_secs() < 2, "Validator took too long on long safe expression: {elapsed:?}");
+    assert!(
+        elapsed.as_secs() < 2,
+        "Validator took too long on long safe expression: {elapsed:?}"
+    );
     Ok(())
 }
 
@@ -81,7 +84,10 @@ fn validator_handles_repeated_backtick_detection_quickly() {
     let e = err(&expr);
     let elapsed = start.elapsed();
     assert!(matches!(e, ValidationError::Backticks));
-    assert!(elapsed.as_secs() < 2, "Backtick detection took too long: {elapsed:?}");
+    assert!(
+        elapsed.as_secs() < 2,
+        "Backtick detection took too long: {elapsed:?}"
+    );
 }
 
 #[test]
@@ -91,7 +97,10 @@ fn validator_handles_repeated_newline_detection_quickly() {
     let e = err(&expr);
     let elapsed = start.elapsed();
     assert!(matches!(e, ValidationError::ContainsNewlines));
-    assert!(elapsed.as_secs() < 2, "Newline detection took too long: {elapsed:?}");
+    assert!(
+        elapsed.as_secs() < 2,
+        "Newline detection took too long: {elapsed:?}"
+    );
 }
 
 // ===========================================================================
@@ -234,8 +243,14 @@ fn error_message_includes_op_name_regardless_of_expression_length() {
     let expr = format!("{padding}fork()");
     let e = err(&expr);
     let msg = format!("{e}");
-    assert!(msg.contains("fork"), "Error message should contain the operation name 'fork'");
-    assert!(msg.contains("allowSideEffects"), "Error message should mention allowSideEffects");
+    assert!(
+        msg.contains("fork"),
+        "Error message should contain the operation name 'fork'"
+    );
+    assert!(
+        msg.contains("allowSideEffects"),
+        "Error message should mention allowSideEffects"
+    );
 }
 
 // ===========================================================================

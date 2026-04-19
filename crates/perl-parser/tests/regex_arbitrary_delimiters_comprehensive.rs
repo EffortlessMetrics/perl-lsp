@@ -8,7 +8,10 @@ fn ac1_m_operator_exclamation_delimiter() -> Result<(), Box<dyn std::error::Erro
     let mut parser = Parser::new(code);
     let ast = parser.parse()?;
     let s = format!("{:?}", ast);
-    assert!(s.contains("Regex") || s.contains("Match"), "AC1 Failed: m!pattern! not recognized");
+    assert!(
+        s.contains("Regex") || s.contains("Match"),
+        "AC1 Failed: m!pattern! not recognized"
+    );
     Ok(())
 }
 
@@ -52,7 +55,10 @@ fn ac4_modifiers_after_arbitrary_delimiters() -> Result<(), Box<dyn std::error::
     // Verify modifiers are captured (not leaked as separate token)
     let identifier_count = s.matches("Identifier").count();
     // Should have $text but not 'i' as separate identifier
-    assert!(identifier_count <= 1, "AC4 Failed: Modifier 'i' leaked as identifier");
+    assert!(
+        identifier_count <= 1,
+        "AC4 Failed: Modifier 'i' leaked as identifier"
+    );
     Ok(())
 }
 
@@ -242,7 +248,10 @@ fn complex_nested_braces() -> Result<(), Box<dyn std::error::Error>> {
     let mut parser = Parser::new(code);
     let ast = parser.parse()?;
     let s = format!("{:?}", ast);
-    assert!(s.contains("Regex") || s.contains("Match"), "Complex nested braces not handled");
+    assert!(
+        s.contains("Regex") || s.contains("Match"),
+        "Complex nested braces not handled"
+    );
     Ok(())
 }
 

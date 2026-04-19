@@ -49,7 +49,11 @@ fn test_maximum_file_size_handling() {
         let parse_time = start_time.elapsed();
 
         // Verify parsing completed (may have errors but shouldn't crash)
-        assert!(result.is_ok(), "Parser should handle {} byte file without crashing", size);
+        assert!(
+            result.is_ok(),
+            "Parser should handle {} byte file without crashing",
+            size
+        );
 
         // Check performance is within reasonable bounds
         let size_kb = size as f64 / 1024.0;
@@ -85,13 +89,20 @@ fn test_maximum_token_count_handling() {
         let result = parser.parse();
         let parse_time = start_time.elapsed();
 
-        assert!(result.is_ok(), "Parser should handle {} tokens without crashing", target_tokens);
+        assert!(
+            result.is_ok(),
+            "Parser should handle {} tokens without crashing",
+            target_tokens
+        );
 
         use perl_tdd_support::must;
         let ast = must(result);
         let actual_tokens = count_ast_tokens(&ast);
 
-        println!("  ✓ Generated {} tokens, parsed in {:?}", actual_tokens, parse_time);
+        println!(
+            "  ✓ Generated {} tokens, parsed in {:?}",
+            actual_tokens, parse_time
+        );
 
         // Verify token count is in expected range
         assert!(
@@ -138,7 +149,10 @@ fn test_maximum_ast_depth_handling() {
             );
         } else {
             // Should fail gracefully with recursion limit error
-            println!("  ✓ Hit recursion limit at depth {} in {:?}", depth, parse_time);
+            println!(
+                "  ✓ Hit recursion limit at depth {} in {:?}",
+                depth, parse_time
+            );
         }
     }
 }
@@ -192,7 +206,11 @@ fn test_memory_usage_limits() {
         let memory_after = get_memory_usage();
         let memory_used = memory_after.saturating_sub(memory_before);
 
-        assert!(result.is_ok(), "Parser should handle {} characters without crashing", size);
+        assert!(
+            result.is_ok(),
+            "Parser should handle {} characters without crashing",
+            size
+        );
 
         // Check memory usage is reasonable
         let size_kb = size as f64 / 1024.0;
@@ -266,7 +284,11 @@ fn test_concurrent_parsing_performance() {
         assert_eq!(results.len(), thread_count, "All threads should complete");
 
         for (thread_id, result, thread_time) in results.iter() {
-            assert!(result.is_ok(), "Thread {} should parse successfully", thread_id);
+            assert!(
+                result.is_ok(),
+                "Thread {} should parse successfully",
+                thread_id
+            );
             println!("    Thread {} completed in {:?}", thread_id, thread_time);
         }
 
@@ -290,7 +312,11 @@ fn test_garbage_collection_pressure() {
         let mut parser = Parser::new(&code);
         let result = parser.parse();
 
-        assert!(result.is_ok(), "Parser should handle iteration {} without crashing", i);
+        assert!(
+            result.is_ok(),
+            "Parser should handle iteration {} without crashing",
+            i
+        );
 
         // Drop parser explicitly to trigger cleanup
         drop(parser);
@@ -329,7 +355,10 @@ fn test_performance_edge_cases() {
         ("Very long identifier", generate_long_identifier_code()),
         ("Deeply nested arrays", generate_deep_array_code()),
         ("Complex regex patterns", generate_complex_regex_code()),
-        ("Massive string concatenation", generate_string_concat_code()),
+        (
+            "Massive string concatenation",
+            generate_string_concat_code(),
+        ),
         ("Huge hash structure", generate_huge_hash_code()),
     ];
 
@@ -347,7 +376,11 @@ fn test_performance_edge_cases() {
             Err(_) => false,
         };
 
-        assert!(handled_gracefully, "Parser should handle {} without crashing", name);
+        assert!(
+            handled_gracefully,
+            "Parser should handle {} without crashing",
+            name
+        );
 
         // Should complete within reasonable time
         assert!(
@@ -525,7 +558,10 @@ fn generate_memory_intensive_code(size: usize) -> String {
         let array_def = format!(
             "my @array{} = ({});\n",
             var_counter,
-            (0..100).map(|i| i.to_string()).collect::<Vec<_>>().join(", ")
+            (0..100)
+                .map(|i| i.to_string())
+                .collect::<Vec<_>>()
+                .join(", ")
         );
         code.push_str(&array_def);
 
@@ -533,7 +569,10 @@ fn generate_memory_intensive_code(size: usize) -> String {
         let hash_def = format!(
             "my %hash{} = ({});\n",
             var_counter,
-            (0..50).map(|i| format!("'key{}' => 'value{}'", i, i)).collect::<Vec<_>>().join(", ")
+            (0..50)
+                .map(|i| format!("'key{}' => 'value{}'", i, i))
+                .collect::<Vec<_>>()
+                .join(", ")
         );
         code.push_str(&hash_def);
 
@@ -660,7 +699,11 @@ fn generate_huge_hash_code() -> String {
         for j in 0..10 {
             code.push_str(&format!("        'subkey{}' => {{\n", j));
             for k in 0..5 {
-                code.push_str(&format!("            'deepkey{}' => 'value{}',\n", k, i * j * k));
+                code.push_str(&format!(
+                    "            'deepkey{}' => 'value{}',\n",
+                    k,
+                    i * j * k
+                ));
             }
             code.push_str("        },\n");
         }

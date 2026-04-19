@@ -105,9 +105,18 @@ fn launch_config_serializes_camel_case_field_names() -> Result<(), Box<dyn std::
 
     let json = serde_json::to_string(&config)?;
     assert!(json.contains("perlPath"), "Should use camelCase: {json}");
-    assert!(json.contains("includePaths"), "Should use camelCase: {json}");
-    assert!(!json.contains("perl_path"), "Should not use snake_case: {json}");
-    assert!(!json.contains("include_paths"), "Should not use snake_case: {json}");
+    assert!(
+        json.contains("includePaths"),
+        "Should use camelCase: {json}"
+    );
+    assert!(
+        !json.contains("perl_path"),
+        "Should not use snake_case: {json}"
+    );
+    assert!(
+        !json.contains("include_paths"),
+        "Should not use snake_case: {json}"
+    );
     Ok(())
 }
 
@@ -123,7 +132,10 @@ fn launch_config_omits_none_fields() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     let json = serde_json::to_string(&config)?;
-    assert!(!json.contains("perlPath"), "None perlPath should be omitted: {json}");
+    assert!(
+        !json.contains("perlPath"),
+        "None perlPath should be omitted: {json}"
+    );
     assert!(!json.contains("cwd"), "None cwd should be omitted: {json}");
     Ok(())
 }
@@ -143,7 +155,10 @@ fn launch_config_resolve_paths_no_cwd() -> Result<(), Box<dyn std::error::Error>
     config.resolve_paths(&workspace)?;
 
     assert_eq!(config.program, workspace.join("script.pl"));
-    assert!(config.cwd.is_none(), "cwd should remain None after resolve_paths");
+    assert!(
+        config.cwd.is_none(),
+        "cwd should remain None after resolve_paths"
+    );
     assert_eq!(config.include_paths[0], workspace.join("lib"));
     Ok(())
 }
@@ -206,7 +221,10 @@ fn attach_config_round_trip_no_timeout() -> Result<(), Box<dyn std::error::Error
     };
 
     let json = serde_json::to_string(&config)?;
-    assert!(!json.contains("timeoutMs"), "None timeoutMs should be omitted: {json}");
+    assert!(
+        !json.contains("timeoutMs"),
+        "None timeoutMs should be omitted: {json}"
+    );
 
     let back: AttachConfiguration = serde_json::from_str(&json)?;
     assert!(back.timeout_ms.is_none());

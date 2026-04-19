@@ -112,7 +112,9 @@ my $result = JSON::encode_json({key => 'value'});
     // This might be in a different action or in organize imports
     assert!(
         has_import_action
-            || actions.iter().any(|a| matches!(a.kind, CodeActionKind::SourceOrganizeImports)),
+            || actions
+                .iter()
+                .any(|a| matches!(a.kind, CodeActionKind::SourceOrganizeImports)),
         "Expected import-related action"
     );
 
@@ -135,13 +137,16 @@ print "Hello\n";
     let provider = CodeActionsProvider::new(source.to_string());
     let actions = provider.get_code_actions(&ast, (0, source.len()), &[]);
 
-    let organize_action =
-        actions.iter().find(|a| matches!(a.kind, CodeActionKind::SourceOrganizeImports));
+    let organize_action = actions
+        .iter()
+        .find(|a| matches!(a.kind, CodeActionKind::SourceOrganizeImports));
 
     // Organize imports should be available even for well-formed imports
     assert!(
         organize_action.is_some()
-            || actions.iter().any(|a| a.title.to_lowercase().contains("import")),
+            || actions
+                .iter()
+                .any(|a| a.title.to_lowercase().contains("import")),
         "Should have import-related actions"
     );
 
@@ -159,8 +164,9 @@ fn lsp_no_organize_imports_when_no_imports() -> TestResult {
     let actions = provider.get_code_actions(&ast, (0, source.len()), &[]);
 
     // Should not have organize imports action when there are no imports
-    let has_organize =
-        actions.iter().any(|a| matches!(a.kind, CodeActionKind::SourceOrganizeImports));
+    let has_organize = actions
+        .iter()
+        .any(|a| matches!(a.kind, CodeActionKind::SourceOrganizeImports));
 
     // It's okay to not have the action when there are no imports to organize
     // But if there IS one, it should handle the empty case gracefully
@@ -219,7 +225,10 @@ fn lsp_organize_imports_sort_order_in_edit() -> TestResult {
     let strict_pos = lines.iter().position(|l| l.contains("strict"));
     let json_pos = lines.iter().position(|l| l.contains("JSON"));
 
-    assert!(strict_pos < json_pos, "Pragmas should sort before CPAN modules. Got: {new_text}");
+    assert!(
+        strict_pos < json_pos,
+        "Pragmas should sort before CPAN modules. Got: {new_text}"
+    );
 
     Ok(())
 }

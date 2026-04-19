@@ -459,7 +459,10 @@ impl FormatStatementGenerator {
 
     /// Return format statement cases with a matching tag.
     pub fn by_tag(tag: &str) -> Vec<&'static FormatStatementCase> {
-        format_statement_cases().iter().filter(|case| case.tags.contains(&tag)).collect()
+        format_statement_cases()
+            .iter()
+            .filter(|case| case.tags.contains(&tag))
+            .collect()
     }
 
     /// Return format statement cases that match any of the provided tags.
@@ -493,8 +496,10 @@ impl FormatStatementGenerator {
 
     /// Return sorted unique format statement tags.
     pub fn tags() -> Vec<&'static str> {
-        let mut tags: Vec<&'static str> =
-            format_statement_cases().iter().flat_map(|case| case.tags.iter().copied()).collect();
+        let mut tags: Vec<&'static str> = format_statement_cases()
+            .iter()
+            .flat_map(|case| case.tags.iter().copied())
+            .collect();
         tags.sort();
         tags.dedup();
         tags
@@ -509,29 +514,49 @@ mod tests {
 
     #[test]
     fn format_cases_have_ids() {
-        assert!(format_statement_cases().iter().all(|case| !case.id.is_empty()));
+        assert!(
+            format_statement_cases()
+                .iter()
+                .all(|case| !case.id.is_empty())
+        );
     }
 
     #[test]
     fn format_cases_have_descriptions() {
-        assert!(format_statement_cases().iter().all(|case| !case.description.is_empty()));
+        assert!(
+            format_statement_cases()
+                .iter()
+                .all(|case| !case.description.is_empty())
+        );
     }
 
     #[test]
     fn format_cases_have_tags() {
-        assert!(format_statement_cases().iter().all(|case| !case.tags.is_empty()));
+        assert!(
+            format_statement_cases()
+                .iter()
+                .all(|case| !case.tags.is_empty())
+        );
     }
 
     #[test]
     fn format_cases_have_source() {
-        assert!(format_statement_cases().iter().all(|case| !case.source.is_empty()));
+        assert!(
+            format_statement_cases()
+                .iter()
+                .all(|case| !case.source.is_empty())
+        );
     }
 
     #[test]
     fn format_case_ids_are_unique() {
         let mut seen = HashSet::new();
         for case in format_statement_cases() {
-            assert!(seen.insert(case.id), "Duplicate format case id: {}", case.id);
+            assert!(
+                seen.insert(case.id),
+                "Duplicate format case id: {}",
+                case.id
+            );
         }
     }
 

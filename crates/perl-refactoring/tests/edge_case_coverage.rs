@@ -67,7 +67,10 @@ sub outer {
         RefactoringType::SymbolRename {
             old_name: "$x".to_string(),
             new_name: "$val".to_string(),
-            scope: RefactoringScope::Function { file: path.clone(), name: "outer".to_string() },
+            scope: RefactoringScope::Function {
+                file: path.clone(),
+                name: "outer".to_string(),
+            },
         },
         vec![path.clone()],
     )?;
@@ -76,12 +79,18 @@ sub outer {
     let new_code = std::fs::read_to_string(&path)?;
 
     // Both occurrences of $x within outer() should be renamed
-    assert!(new_code.contains("my $val = 10"), "Outer $x should become $val");
+    assert!(
+        new_code.contains("my $val = 10"),
+        "Outer $x should become $val"
+    );
     // The function body should not contain $x anymore
     // (the inner closure's $x is also within the function scope)
     let outer_fn_start = new_code.find("sub outer").ok_or("sub outer not found")?;
     let outer_fn_body = &new_code[outer_fn_start..];
-    assert!(!outer_fn_body.contains("$x"), "No $x should remain inside sub outer after rename");
+    assert!(
+        !outer_fn_body.contains("$x"),
+        "No $x should remain inside sub outer after rename"
+    );
     Ok(())
 }
 
@@ -105,7 +114,11 @@ my $greet = sub { return $name; };
         RefactoringType::SymbolRename {
             old_name: "$name".to_string(),
             new_name: "$label".to_string(),
-            scope: RefactoringScope::Block { file: path.clone(), start: (3, 0), end: (5, 10) },
+            scope: RefactoringScope::Block {
+                file: path.clone(),
+                start: (3, 0),
+                end: (5, 10),
+            },
         },
         vec![path.clone()],
     )?;
@@ -114,9 +127,15 @@ my $greet = sub { return $name; };
     let new_code = std::fs::read_to_string(&path)?;
 
     // Inside the block, $name should be renamed to $label
-    assert!(new_code.contains("my $label = \"block\""), "Block variable should be renamed");
+    assert!(
+        new_code.contains("my $label = \"block\""),
+        "Block variable should be renamed"
+    );
     // The outer $name and the closure's $name should remain
-    assert!(new_code.contains("my $name = \"world\""), "Outer $name should be unchanged");
+    assert!(
+        new_code.contains("my $name = \"world\""),
+        "Outer $name should be unchanged"
+    );
     // The closure referencing outer $name should remain
     assert!(
         new_code.contains("return $name"),
@@ -156,9 +175,15 @@ print '$msg is not interpolated here';
     let new_code = std::fs::read_to_string(&path)?;
 
     // Declaration and bare usage should be renamed
-    assert!(new_code.contains("my $greeting"), "Variable declaration should be renamed");
+    assert!(
+        new_code.contains("my $greeting"),
+        "Variable declaration should be renamed"
+    );
     // The double-quoted string should have $greeting (regex-based rename)
-    assert!(new_code.contains("$greeting"), "Interpolated usage should be renamed");
+    assert!(
+        new_code.contains("$greeting"),
+        "Interpolated usage should be renamed"
+    );
     Ok(())
 }
 
@@ -188,9 +213,15 @@ print $user;
     assert!(result.success, "Rename should succeed");
     let new_code = std::fs::read_to_string(&path)?;
 
-    assert!(new_code.contains("my $username"), "Declaration should be renamed");
+    assert!(
+        new_code.contains("my $username"),
+        "Declaration should be renamed"
+    );
     // The heredoc body should also reflect the rename
-    assert!(new_code.contains("$username"), "Variable in heredoc should be renamed");
+    assert!(
+        new_code.contains("$username"),
+        "Variable in heredoc should be renamed"
+    );
     Ok(())
 }
 
@@ -221,8 +252,14 @@ my $count = scalar @items;
     assert!(result.success, "Rename should succeed");
     let new_code = std::fs::read_to_string(&path)?;
 
-    assert!(new_code.contains("my @elements"), "Array declaration should be renamed");
-    assert!(new_code.contains("push @elements"), "Array usage should be renamed");
+    assert!(
+        new_code.contains("my @elements"),
+        "Array declaration should be renamed"
+    );
+    assert!(
+        new_code.contains("push @elements"),
+        "Array usage should be renamed"
+    );
     Ok(())
 }
 
@@ -249,8 +286,14 @@ my @keys = keys %config;
     assert!(result.success, "Rename should succeed");
     let new_code = std::fs::read_to_string(&path)?;
 
-    assert!(new_code.contains("my %settings"), "Hash declaration should be renamed");
-    assert!(new_code.contains("keys %settings"), "Hash usage with % sigil should be renamed");
+    assert!(
+        new_code.contains("my %settings"),
+        "Hash declaration should be renamed"
+    );
+    assert!(
+        new_code.contains("keys %settings"),
+        "Hash usage with % sigil should be renamed"
+    );
     Ok(())
 }
 
@@ -276,7 +319,10 @@ fn rename_rejects_sigil_change_dollar_to_at() -> Result<(), Box<dyn std::error::
         vec![path.clone()],
     );
 
-    assert!(result.is_err(), "Sigil change should be rejected by validation");
+    assert!(
+        result.is_err(),
+        "Sigil change should be rejected by validation"
+    );
     Ok(())
 }
 
@@ -298,7 +344,10 @@ fn rename_rejects_sigil_change_percent_to_dollar() -> Result<(), Box<dyn std::er
         vec![path.clone()],
     );
 
-    assert!(result.is_err(), "Sigil change should be rejected by validation");
+    assert!(
+        result.is_err(),
+        "Sigil change should be rejected by validation"
+    );
     Ok(())
 }
 
@@ -378,7 +427,10 @@ sub bar { 1 }
         );
     }
     // The import itself should be detected
-    assert!(analysis.imports.iter().any(|i| i.module == "base"), "base import should be detected");
+    assert!(
+        analysis.imports.iter().any(|i| i.module == "base"),
+        "base import should be detected"
+    );
     Ok(())
 }
 
@@ -399,7 +451,10 @@ say "hello";
     // as a word, but "signatures" does not, so it gets flagged. This documents
     // a known limitation: pragma feature strings are not actual function imports
     // but the optimizer still checks them against code usage.
-    let feature_unused = analysis.unused_imports.iter().find(|u| u.module == "feature");
+    let feature_unused = analysis
+        .unused_imports
+        .iter()
+        .find(|u| u.module == "feature");
     if let Some(unused) = feature_unused {
         // "signatures" should be flagged, "say" should not (it appears in code)
         assert!(
@@ -430,7 +485,10 @@ my $dir = dirname("/foo/bar");
     let analysis = optimizer.analyze_content(content)?;
 
     assert!(
-        analysis.imports.iter().any(|i| i.module == "File::Basename"),
+        analysis
+            .imports
+            .iter()
+            .any(|i| i.module == "File::Basename"),
         "File::Basename should be detected as an import"
     );
     Ok(())
@@ -451,7 +509,10 @@ my $m = max(1, 2, 3);
 
     // The commented-out use should not appear in imports
     assert!(
-        !analysis.imports.iter().any(|i| i.module == "Unused::Module"),
+        !analysis
+            .imports
+            .iter()
+            .any(|i| i.module == "Unused::Module"),
         "Commented-out use should not be detected"
     );
     // The actual import should be there
@@ -493,7 +554,11 @@ fn import_optimizer_generates_edits_for_consolidation() -> Result<(), Box<dyn st
     let analysis = optimizer.analyze_content(content)?;
 
     // Should detect duplicate
-    assert_eq!(analysis.duplicate_imports.len(), 1, "Should detect 1 duplicate");
+    assert_eq!(
+        analysis.duplicate_imports.len(),
+        1,
+        "Should detect 1 duplicate"
+    );
 
     // Generate edits
     let edits = optimizer.generate_edits(content, &analysis);
@@ -533,8 +598,14 @@ fn extract_method_from_single_statement() -> Result<(), Box<dyn std::error::Erro
     assert_eq!(result.changes_made, 2, "Should have call + sub");
 
     let new_code = std::fs::read_to_string(&path)?;
-    assert!(new_code.contains("sub compute_sum"), "New subroutine should be created");
-    assert!(new_code.contains("compute_sum("), "Call site should reference the new sub");
+    assert!(
+        new_code.contains("sub compute_sum"),
+        "New subroutine should be created"
+    );
+    assert!(
+        new_code.contains("compute_sum("),
+        "Call site should reference the new sub"
+    );
     Ok(())
 }
 
@@ -558,9 +629,18 @@ fn extract_method_preserves_surrounding_code() -> Result<(), Box<dyn std::error:
     let new_code = std::fs::read_to_string(&path)?;
 
     // Surrounding code should be preserved
-    assert!(new_code.contains("# Header comment"), "Header should be preserved");
-    assert!(new_code.contains("# Footer comment"), "Footer should be preserved");
-    assert!(new_code.contains("my $x = 1"), "Code before extraction should be preserved");
+    assert!(
+        new_code.contains("# Header comment"),
+        "Header should be preserved"
+    );
+    assert!(
+        new_code.contains("# Footer comment"),
+        "Footer should be preserved"
+    );
+    assert!(
+        new_code.contains("my $x = 1"),
+        "Code before extraction should be preserved"
+    );
     Ok(())
 }
 
@@ -576,7 +656,10 @@ fn inline_variable_not_found_reports_gracefully() -> Result<(), Box<dyn std::err
     engine.index_file(&path, code)?;
 
     let result = engine.refactor(
-        RefactoringType::Inline { symbol_name: "$nonexistent".to_string(), all_occurrences: true },
+        RefactoringType::Inline {
+            symbol_name: "$nonexistent".to_string(),
+            all_occurrences: true,
+        },
         vec![path.clone()],
     )?;
 
@@ -596,14 +679,23 @@ fn inline_subroutine_name_rejected() -> Result<(), Box<dyn std::error::Error>> {
     engine.index_file(&path, code)?;
 
     let result = engine.refactor(
-        RefactoringType::Inline { symbol_name: "helper".to_string(), all_occurrences: true },
+        RefactoringType::Inline {
+            symbol_name: "helper".to_string(),
+            all_occurrences: true,
+        },
         vec![path.clone()],
     )?;
 
     // Subroutine inlining is not supported (only variables with sigils)
-    assert!(!result.success, "Inlining a bare subroutine name should not succeed");
     assert!(
-        result.warnings.iter().any(|w| w.contains("not implemented")),
+        !result.success,
+        "Inlining a bare subroutine name should not succeed"
+    );
+    assert!(
+        result
+            .warnings
+            .iter()
+            .any(|w| w.contains("not implemented")),
         "Should warn about unsupported inline type"
     );
     Ok(())
@@ -653,7 +745,11 @@ fn sequential_renames_in_same_file() -> Result<(), Box<dyn std::error::Error>> {
     assert!(!final_code.contains("$bar"), "Original $bar should be gone");
 
     // Operation history should have 2 entries
-    assert_eq!(engine.get_operation_history().len(), 2, "Should have 2 operations in history");
+    assert_eq!(
+        engine.get_operation_history().len(),
+        2,
+        "Should have 2 operations in history"
+    );
     Ok(())
 }
 
@@ -685,9 +781,18 @@ fn move_code_to_empty_target() -> Result<(), Box<dyn std::error::Error>> {
     let new_source = std::fs::read_to_string(&source_path)?;
     let new_target = std::fs::read_to_string(&target_path)?;
 
-    assert!(!new_source.contains("sub greet"), "greet should be removed from source");
-    assert!(new_source.contains("sub farewell"), "farewell should remain in source");
-    assert!(new_target.contains("sub greet"), "greet should appear in target");
+    assert!(
+        !new_source.contains("sub greet"),
+        "greet should be removed from source"
+    );
+    assert!(
+        new_source.contains("sub farewell"),
+        "farewell should remain in source"
+    );
+    assert!(
+        new_target.contains("sub greet"),
+        "greet should appear in target"
+    );
     Ok(())
 }
 
@@ -755,7 +860,9 @@ open(FH, 'file.txt');
     let suggestions = modernizer.analyze(code);
 
     assert!(
-        suggestions.iter().any(|s| s.description.contains("three-argument open")),
+        suggestions
+            .iter()
+            .any(|s| s.description.contains("three-argument open")),
         "Should detect exact two-arg open pattern: {:?}",
         suggestions
     );
@@ -773,7 +880,9 @@ close FH;
     let suggestions = modernizer.analyze(code);
 
     assert!(
-        suggestions.iter().any(|s| s.description.contains("lexical filehandle")),
+        suggestions
+            .iter()
+            .any(|s| s.description.contains("lexical filehandle")),
         "Should detect bareword filehandle FH: {:?}",
         suggestions
     );
@@ -808,7 +917,10 @@ fn engine_with_custom_config_respects_max_files() -> Result<(), Box<dyn std::err
         vec![p1, p2, p3],
     );
 
-    assert!(result.is_err(), "Should reject operation exceeding max_files_per_operation");
+    assert!(
+        result.is_err(),
+        "Should reject operation exceeding max_files_per_operation"
+    );
     Ok(())
 }
 
@@ -841,7 +953,11 @@ fn engine_clear_history_resets() -> Result<(), Box<dyn std::error::Error>> {
 
     // Clear history
     let cleanup = engine.clear_history()?;
-    assert_eq!(engine.get_operation_history().len(), 0, "History should be empty after clear");
+    assert_eq!(
+        engine.get_operation_history().len(),
+        0,
+        "History should be empty after clear"
+    );
     // cleanup.directories_removed can be 0 since we disabled backups
     let _ = cleanup;
     Ok(())
@@ -869,8 +985,14 @@ fn rename_variable_with_underscores() -> Result<(), Box<dyn std::error::Error>> 
 
     assert!(result.success, "Rename should succeed");
     let new_code = std::fs::read_to_string(&path)?;
-    assert!(new_code.contains("$short_name"), "Renamed variable should appear");
-    assert!(!new_code.contains("$long_variable_name"), "Original variable name should be gone");
+    assert!(
+        new_code.contains("$short_name"),
+        "Renamed variable should appear"
+    );
+    assert!(
+        !new_code.contains("$long_variable_name"),
+        "Original variable name should be gone"
+    );
     Ok(())
 }
 
@@ -894,7 +1016,10 @@ fn rename_validates_numeric_start_identifier() -> Result<(), Box<dyn std::error:
         vec![path.clone()],
     );
 
-    assert!(result.is_err(), "Should reject identifier starting with a digit");
+    assert!(
+        result.is_err(),
+        "Should reject identifier starting with a digit"
+    );
     Ok(())
 }
 
@@ -924,7 +1049,10 @@ fn import_optimizer_edits_have_correct_byte_ranges() -> Result<(), Box<dyn std::
             edit.range.1,
             content.len()
         );
-        assert!(edit.range.0 <= edit.range.1, "Edit start should not exceed end");
+        assert!(
+            edit.range.0 <= edit.range.1,
+            "Edit start should not exceed end"
+        );
     }
     Ok(())
 }
@@ -972,7 +1100,10 @@ fn backup_and_rollback_restores_original() -> Result<(), Box<dyn std::error::Err
 
     assert!(result.success, "Rename should succeed");
     let modified_code = std::fs::read_to_string(&path)?;
-    assert!(modified_code.contains("$changed"), "File should be modified");
+    assert!(
+        modified_code.contains("$changed"),
+        "File should be modified"
+    );
 
     // Rollback using the operation_id
     if let Some(op_id) = &result.operation_id {
@@ -980,7 +1111,10 @@ fn backup_and_rollback_restores_original() -> Result<(), Box<dyn std::error::Err
         assert!(rollback_result.success, "Rollback should succeed");
 
         let restored_code = std::fs::read_to_string(&path)?;
-        assert!(restored_code.contains("$original"), "File should be restored to original");
+        assert!(
+            restored_code.contains("$original"),
+            "File should be restored to original"
+        );
         assert!(
             !restored_code.contains("$changed"),
             "Modified content should be gone after rollback"
@@ -1012,7 +1146,10 @@ sub inc { $count++ }
         RefactoringType::SymbolRename {
             old_name: "$count".to_string(),
             new_name: "$tally".to_string(),
-            scope: RefactoringScope::Package { file: path.clone(), name: "Alpha".to_string() },
+            scope: RefactoringScope::Package {
+                file: path.clone(),
+                name: "Alpha".to_string(),
+            },
         },
         vec![path.clone()],
     )?;
@@ -1026,8 +1163,14 @@ sub inc { $count++ }
     let alpha_section = &new_code[alpha_pos..beta_pos];
     let beta_section = &new_code[beta_pos..];
 
-    assert!(alpha_section.contains("$tally"), "Alpha section should contain $tally");
-    assert!(beta_section.contains("$count"), "Beta section should still contain $count");
+    assert!(
+        alpha_section.contains("$tally"),
+        "Alpha section should contain $tally"
+    );
+    assert!(
+        beta_section.contains("$count"),
+        "Beta section should still contain $count"
+    );
     Ok(())
 }
 
@@ -1077,6 +1220,9 @@ fn extract_method_rejects_reversed_range() -> Result<(), Box<dyn std::error::Err
         vec![path.clone()],
     );
 
-    assert!(result.is_err(), "Reversed range should be rejected by validation");
+    assert!(
+        result.is_err(),
+        "Reversed range should be rejected by validation"
+    );
     Ok(())
 }

@@ -229,7 +229,12 @@ fn test_various_non_standard_delimiters() {
             delim_name,
             tokens[0].token_type
         );
-        assert_eq!(tokens[0].text.as_ref(), code, "Text mismatch for {}", delim_name);
+        assert_eq!(
+            tokens[0].text.as_ref(),
+            code,
+            "Text mismatch for {}",
+            delim_name
+        );
     }
 }
 

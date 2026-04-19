@@ -133,13 +133,23 @@ fn canon_order_mods(run: &str, charset: Option<&str>) -> String {
 
 /// Choose at most one of the charset class: "", "a", "aa", "d", "l", or "u".
 fn charset_flag() -> impl Strategy<Value = Option<&'static str>> {
-    prop::sample::select(vec![None, Some("a"), Some("aa"), Some("d"), Some("l"), Some("u")])
+    prop::sample::select(vec![
+        None,
+        Some("a"),
+        Some("aa"),
+        Some("d"),
+        Some("l"),
+        Some("u"),
+    ])
 }
 
 /// `qr//` modifiers: a subset of `i m s x p n` plus one charset.
 pub fn qr_modifiers() -> impl Strategy<Value = String> {
     (
-        prop::collection::vec(prop::sample::select(vec!['i', 'm', 's', 'x', 'p', 'n']), 0..=4),
+        prop::collection::vec(
+            prop::sample::select(vec!['i', 'm', 's', 'x', 'p', 'n']),
+            0..=4,
+        ),
         charset_flag(),
     )
         .prop_map(|(v, cs)| {
@@ -151,7 +161,10 @@ pub fn qr_modifiers() -> impl Strategy<Value = String> {
 /// `m//` modifiers: `i m s x p n` + optional `g`/`c` + one charset.
 pub fn m_modifiers() -> impl Strategy<Value = String> {
     (
-        prop::collection::vec(prop::sample::select(vec!['i', 'm', 's', 'x', 'p', 'n']), 0..=4),
+        prop::collection::vec(
+            prop::sample::select(vec!['i', 'm', 's', 'x', 'p', 'n']),
+            0..=4,
+        ),
         prop::collection::vec(prop::sample::select(vec!['g', 'c']), 0..=2),
         charset_flag(),
     )
@@ -165,7 +178,10 @@ pub fn m_modifiers() -> impl Strategy<Value = String> {
 /// `s///` modifiers: `i m s x p n` + optional `e`/`r` + one charset.
 pub fn s_modifiers() -> impl Strategy<Value = String> {
     (
-        prop::collection::vec(prop::sample::select(vec!['i', 'm', 's', 'x', 'p', 'n']), 0..=4),
+        prop::collection::vec(
+            prop::sample::select(vec!['i', 'm', 's', 'x', 'p', 'n']),
+            0..=4,
+        ),
         prop::collection::vec(prop::sample::select(vec!['e', 'r']), 0..=2),
         charset_flag(),
     )
@@ -217,7 +233,10 @@ pub fn shape(root: &Node) -> Vec<String> {
 fn push_variant_name(n: &Node, out: &mut Vec<String>) {
     // Variant name from Debug up to '(' or '{'
     let s = format!("{:?}", n.kind);
-    let name = s.split(['(', '{']).next().map_or_else(|| s.clone(), |n| n.to_string());
+    let name = s
+        .split(['(', '{'])
+        .next()
+        .map_or_else(|| s.clone(), |n| n.to_string());
     out.push(name);
 }
 
@@ -232,14 +251,22 @@ fn extract_shape_rec(node: &Node, out: &mut Vec<String>) {
             }
         }
 
-        VariableDeclaration { variable, initializer, .. } => {
+        VariableDeclaration {
+            variable,
+            initializer,
+            ..
+        } => {
             extract_shape_rec(variable, out);
             if let Some(init) = initializer {
                 extract_shape_rec(init, out);
             }
         }
 
-        VariableListDeclaration { variables, initializer, .. } => {
+        VariableListDeclaration {
+            variables,
+            initializer,
+            ..
+        } => {
             for v in variables {
                 extract_shape_rec(v, out);
             }
@@ -262,7 +289,11 @@ fn extract_shape_rec(node: &Node, out: &mut Vec<String>) {
             extract_shape_rec(operand, out);
         }
 
-        Ternary { condition, then_expr, else_expr } => {
+        Ternary {
+            condition,
+            then_expr,
+            else_expr,
+        } => {
             extract_shape_rec(condition, out);
             extract_shape_rec(then_expr, out);
             extract_shape_rec(else_expr, out);
@@ -274,7 +305,12 @@ fn extract_shape_rec(node: &Node, out: &mut Vec<String>) {
             }
         }
 
-        If { condition, then_branch, elsif_branches, else_branch } => {
+        If {
+            condition,
+            then_branch,
+            elsif_branches,
+            else_branch,
+        } => {
             extract_shape_rec(condition, out);
             extract_shape_rec(then_branch, out);
             for (cond, br) in elsif_branches {
@@ -286,7 +322,12 @@ fn extract_shape_rec(node: &Node, out: &mut Vec<String>) {
             }
         }
 
-        While { condition, body, continue_block, .. } => {
+        While {
+            condition,
+            body,
+            continue_block,
+            ..
+        } => {
             extract_shape_rec(condition, out);
             extract_shape_rec(body, out);
             if let Some(cont) = continue_block {
@@ -294,13 +335,24 @@ fn extract_shape_rec(node: &Node, out: &mut Vec<String>) {
             }
         }
 
-        Foreach { variable, list, body, continue_block: _continue_block } => {
+        Foreach {
+            variable,
+            list,
+            body,
+            continue_block: _continue_block,
+        } => {
             extract_shape_rec(variable, out);
             extract_shape_rec(list, out);
             extract_shape_rec(body, out);
         }
 
-        For { init, condition, update, body, continue_block } => {
+        For {
+            init,
+            condition,
+            update,
+            body,
+            continue_block,
+        } => {
             if let Some(i) = init {
                 extract_shape_rec(i, out);
             }
@@ -489,7 +541,9 @@ pub fn pair_breakable(left: &CoreTok, right: &CoreTok) -> bool {
     // Also check if the left token is a contextual token that loses meaning when isolated
     let left_alone = lex_core_spans(&left.text);
     if left_alone.len() != 1
-        || left_alone.first().is_none_or(|t| t.text != left.text || t.kind != left.kind)
+        || left_alone
+            .first()
+            .is_none_or(|t| t.text != left.text || t.kind != left.kind)
     {
         // The left token behaves differently when lexed alone vs in context
         return false;
@@ -498,8 +552,12 @@ pub fn pair_breakable(left: &CoreTok, right: &CoreTok) -> bool {
     let joined = format!("{}{}", left.text, right.text);
     let re = lex_core_spans(&joined);
     re.len() == 2
-        && re.first().is_some_and(|t| t.kind == left.kind && t.text == left.text)
-        && re.get(1).is_some_and(|t| t.kind == right.kind && t.text == right.text)
+        && re
+            .first()
+            .is_some_and(|t| t.kind == left.kind && t.text == left.text)
+        && re
+            .get(1)
+            .is_some_and(|t| t.kind == right.kind && t.text == right.text)
 }
 
 /// Neighbor-aware: would inserting `ws` between toks[i] and toks[i+1]
@@ -512,8 +570,16 @@ pub fn insertion_safe(original: &str, toks: &[CoreTok], i: usize, ws: &str) -> b
     }
 
     // Build a local window [start..end) spanning the neighbor on the left and right if they exist.
-    let start = if i > 0 { toks[i - 1].start } else { toks[i].start };
-    let end = if i + 2 < toks.len() { toks[i + 2].end } else { toks[i + 1].end };
+    let start = if i > 0 {
+        toks[i - 1].start
+    } else {
+        toks[i].start
+    };
+    let end = if i + 2 < toks.len() {
+        toks[i + 2].end
+    } else {
+        toks[i + 1].end
+    };
 
     let window_orig = &original[start..end];
 
@@ -523,10 +589,14 @@ pub fn insertion_safe(original: &str, toks: &[CoreTok], i: usize, ws: &str) -> b
     window_with.push_str(ws); // inserted ws
     window_with.push_str(&original[toks[i + 1].start..end]); // rest
 
-    let orig_pairs: Vec<_> =
-        lex_core_spans(window_orig).into_iter().map(|t| (t.kind, t.text)).collect();
-    let with_pairs: Vec<_> =
-        lex_core_spans(&window_with).into_iter().map(|t| (t.kind, t.text)).collect();
+    let orig_pairs: Vec<_> = lex_core_spans(window_orig)
+        .into_iter()
+        .map(|t| (t.kind, t.text))
+        .collect();
+    let with_pairs: Vec<_> = lex_core_spans(&window_with)
+        .into_iter()
+        .map(|t| (t.kind, t.text))
+        .collect();
 
     orig_pairs == with_pairs
 }

@@ -143,7 +143,10 @@ mod tests {
         let mut names = ["baz_art", "get_bar"];
         names.sort_by(|a, b| compare_names_by_query(a, b, "bar"));
 
-        assert_eq!(names[0], "get_bar", "substring match should rank above fuzzy");
+        assert_eq!(
+            names[0], "get_bar",
+            "substring match should rank above fuzzy"
+        );
     }
 
     #[test]

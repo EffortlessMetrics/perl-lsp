@@ -29,7 +29,9 @@ fn syntax_error_display() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn lexer_error_display() -> Result<(), Box<dyn std::error::Error>> {
-    let err = CatastrophicParseError::LexerError { message: "bad char".to_string() };
+    let err = CatastrophicParseError::LexerError {
+        message: "bad char".to_string(),
+    };
     let msg = format!("{}", err);
     assert!(msg.contains("bad char"));
     Ok(())
@@ -45,7 +47,9 @@ fn recursion_limit_display() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn invalid_number_display() -> Result<(), Box<dyn std::error::Error>> {
-    let err = CatastrophicParseError::InvalidNumber { literal: "0xZZ".to_string() };
+    let err = CatastrophicParseError::InvalidNumber {
+        literal: "0xZZ".to_string(),
+    };
     let msg = format!("{}", err);
     assert!(msg.contains("0xZZ"));
     Ok(())
@@ -69,7 +73,9 @@ fn unclosed_delimiter_display() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn invalid_regex_display() -> Result<(), Box<dyn std::error::Error>> {
-    let err = CatastrophicParseError::InvalidRegex { message: "unterminated group".to_string() };
+    let err = CatastrophicParseError::InvalidRegex {
+        message: "unterminated group".to_string(),
+    };
     let msg = format!("{}", err);
     assert!(msg.contains("unterminated group"));
     Ok(())
@@ -77,7 +83,10 @@ fn invalid_regex_display() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn nesting_too_deep_display() -> Result<(), Box<dyn std::error::Error>> {
-    let err = CatastrophicParseError::NestingTooDeep { depth: 300, max_depth: 256 };
+    let err = CatastrophicParseError::NestingTooDeep {
+        depth: 300,
+        max_depth: 256,
+    };
     let msg = format!("{}", err);
     assert!(msg.contains("300"));
     assert!(msg.contains("256"));
@@ -99,7 +108,13 @@ fn location_none_for_unpositioned_errors() -> Result<(), Box<dyn std::error::Err
     assert_eq!(CatastrophicParseError::UnexpectedEof.location(), None);
     assert_eq!(CatastrophicParseError::RecursionLimit.location(), None);
     assert_eq!(CatastrophicParseError::InvalidString.location(), None);
-    assert_eq!(CatastrophicParseError::LexerError { message: "x".to_string() }.location(), None);
+    assert_eq!(
+        CatastrophicParseError::LexerError {
+            message: "x".to_string()
+        }
+        .location(),
+        None
+    );
     Ok(())
 }
 
@@ -122,7 +137,11 @@ fn suggestion_for_unclosed_delimiter() -> Result<(), Box<dyn std::error::Error>>
 #[test]
 fn suggestion_none_for_generic_errors() -> Result<(), Box<dyn std::error::Error>> {
     assert!(CatastrophicParseError::UnexpectedEof.suggestion().is_none());
-    assert!(CatastrophicParseError::RecursionLimit.suggestion().is_none());
+    assert!(
+        CatastrophicParseError::RecursionLimit
+            .suggestion()
+            .is_none()
+    );
     Ok(())
 }
 

@@ -128,7 +128,11 @@ fn normalize_bootstrap_module(token: &str, current_package: &str) -> Option<Stri
 
     let normalized = normalize_package_separator(trimmed).into_owned();
     let first = normalized.chars().next()?;
-    if normalized.contains("::") || first.is_ascii_uppercase() { Some(normalized) } else { None }
+    if normalized.contains("::") || first.is_ascii_uppercase() {
+        Some(normalized)
+    } else {
+        None
+    }
 }
 
 fn parse_bootstrap_argument(
@@ -289,11 +293,16 @@ fn extract_xs_bootstrap_target(text: &str, cursor: usize, current_package: &str)
 }
 
 fn xs_boot_symbol_name(module_name: &str) -> String {
-    format!("boot_{}", normalize_package_separator(module_name).replace("::", "__"))
+    format!(
+        "boot_{}",
+        normalize_package_separator(module_name).replace("::", "__")
+    )
 }
 
 fn xs_bootstrap_location(path: &Path, module_name: &str) -> Value {
-    let uri = Url::from_file_path(path).map(|url| url.to_string()).unwrap_or_default();
+    let uri = Url::from_file_path(path)
+        .map(|url| url.to_string())
+        .unwrap_or_default();
     let boot_symbol = xs_boot_symbol_name(module_name);
 
     if let Ok(text) = std::fs::read_to_string(path)
@@ -501,7 +510,11 @@ fn normalize_mojolicious_controller_name(raw: &str) -> Option<String> {
         segments.push(normalized_segment);
     }
 
-    if segments.is_empty() { None } else { Some(segments.join("::")) }
+    if segments.is_empty() {
+        None
+    } else {
+        Some(segments.join("::"))
+    }
 }
 
 #[cfg(feature = "workspace")]
@@ -714,10 +727,17 @@ fn lookup_workspace_definition(
     for symbol in ranked_symbols {
         // Check if this symbol matches our package
         if symbol.container_name.as_deref() == Some(pkg)
-            || symbol.qualified_name.as_ref().map(|q| q.starts_with(pkg)).unwrap_or(false)
+            || symbol
+                .qualified_name
+                .as_ref()
+                .map(|q| q.starts_with(pkg))
+                .unwrap_or(false)
         {
             if let Some(lsp_location) = crate::workspace_index::lsp_adapter::to_lsp_location(
-                &crate::workspace_index::Location { uri: symbol.uri.clone(), range: symbol.range },
+                &crate::workspace_index::Location {
+                    uri: symbol.uri.clone(),
+                    range: symbol.range,
+                },
             ) {
                 return Some(json!([lsp_location]));
             }
@@ -764,8 +784,9 @@ impl LspServer {
             let (line, character) = req_position(&params)?;
 
             // Reject stale requests (parity with hover.rs:51-53 and completion.rs:312)
-            let req_version =
-                params["textDocument"]["version"].as_i64().and_then(|n| i32::try_from(n).ok());
+            let req_version = params["textDocument"]["version"]
+                .as_i64()
+                .and_then(|n| i32::try_from(n).ok());
             self.ensure_latest(uri, req_version)?;
 
             let documents = self.documents_guard();
@@ -893,8 +914,9 @@ impl LspServer {
             let (line, character) = req_position(&params)?;
 
             // Reject stale requests (parity with hover.rs:51-53 and completion.rs:312)
-            let req_version =
-                params["textDocument"]["version"].as_i64().and_then(|n| i32::try_from(n).ok());
+            let req_version = params["textDocument"]["version"]
+                .as_i64()
+                .and_then(|n| i32::try_from(n).ok());
             self.ensure_latest(uri, req_version)?;
 
             // First, extract module reference info while holding the document lock briefly
@@ -923,7 +945,11 @@ impl LspServer {
                     } else if let Some(module_name) =
                         self.extract_module_reference_extended(&text_around, cursor_in_text)
                     {
-                        Some((EarlyDefinitionTarget::Module(module_name), doc.text.clone(), offset))
+                        Some((
+                            EarlyDefinitionTarget::Module(module_name),
+                            doc.text.clone(),
+                            offset,
+                        ))
                     } else {
                         // Also check if we're on a package name followed by ->
                         let mut package_name_result = None;
@@ -1375,14 +1401,16 @@ impl LspServer {
         if let Some(params) = params {
             // Create or get cancellation token for this request
             let token = if let Some(req_id) = request_id {
-                GLOBAL_CANCELLATION_REGISTRY.get_token(req_id).unwrap_or_else(|| {
-                    let token = PerlLspCancellationToken::new(
-                        req_id.clone(),
-                        "textDocument/definition".to_string(),
-                    );
-                    let _ = GLOBAL_CANCELLATION_REGISTRY.register_token(token.clone());
-                    token
-                })
+                GLOBAL_CANCELLATION_REGISTRY
+                    .get_token(req_id)
+                    .unwrap_or_else(|| {
+                        let token = PerlLspCancellationToken::new(
+                            req_id.clone(),
+                            "textDocument/definition".to_string(),
+                        );
+                        let _ = GLOBAL_CANCELLATION_REGISTRY.register_token(token.clone());
+                        token
+                    })
             } else {
                 PerlLspCancellationToken::new(
                     serde_json::Value::Null,
@@ -1500,10 +1528,18 @@ impl LspServer {
         &self,
         params: serde_json::Value,
     ) -> Result<serde_json::Value, JsonRpcError> {
-        let uri = params.pointer("/textDocument/uri").and_then(|v| v.as_str()).unwrap_or("");
-        let line = params.pointer("/position/line").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
-        let ch =
-            params.pointer("/position/character").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
+        let uri = params
+            .pointer("/textDocument/uri")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+        let line = params
+            .pointer("/position/line")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0) as usize;
+        let ch = params
+            .pointer("/position/character")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0) as usize;
 
         let text = self.buffer_text(uri).unwrap_or_default();
         let module = token_under_cursor(&text, line, ch).filter(|s| s.contains("::"));

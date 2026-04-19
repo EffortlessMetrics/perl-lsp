@@ -33,8 +33,14 @@ fn when_given_variable_declaration_then_parser_emits_variable_declaration_node()
 fn when_given_if_statement_then_parser_emits_if_statement_shape() {
     let sexp = parse_to_sexp("if ($ready) { print $ready; }");
 
-    assert!(sexp.contains("(if_statement"), "expected if_statement; got: {sexp}");
-    assert!(sexp.contains("(block"), "expected then block in output; got: {sexp}");
+    assert!(
+        sexp.contains("(if_statement"),
+        "expected if_statement; got: {sexp}"
+    );
+    assert!(
+        sexp.contains("(block"),
+        "expected then block in output; got: {sexp}"
+    );
 }
 
 #[test]
@@ -73,7 +79,10 @@ fn when_assignment_uses_space_tilde_form_then_normalization_allows_parse() {
 fn when_if_block_assigns_percent_string_then_parser_keeps_string_assignment_shape() {
     let sexp = parse_to_sexp(r#"if ($a > 0) { $a = "%"; }"#);
 
-    assert!(sexp.contains("(if_statement"), "expected if_statement; got: {sexp}");
+    assert!(
+        sexp.contains("(if_statement"),
+        "expected if_statement; got: {sexp}"
+    );
     assert!(
         sexp.contains("(assignment") && sexp.contains("(string_literal %)"),
         "expected percent-string assignment inside block; got: {sexp}"
@@ -100,7 +109,10 @@ fn when_input_has_valid_then_invalid_then_recovery_returns_partial_program() -> 
         return Err("expected recovery to return Program".to_string());
     };
 
-    assert!(!nodes.is_empty(), "expected recovery parse to preserve at least one statement");
+    assert!(
+        !nodes.is_empty(),
+        "expected recovery parse to preserve at least one statement"
+    );
     Ok(())
 }
 

@@ -9,7 +9,10 @@ pub(super) fn extract_quoted_value(message: &str) -> Option<String> {
 }
 
 pub(super) fn find_declaration_position(provider: &CodeActionsProvider, near: usize) -> usize {
-    provider.source()[..near].rfind('\n').map(|idx| idx + 1).unwrap_or(0)
+    provider.source()[..near]
+        .rfind('\n')
+        .map(|idx| idx + 1)
+        .unwrap_or(0)
 }
 
 pub(super) fn find_declaration_range(
@@ -20,7 +23,10 @@ pub(super) fn find_declaration_range(
     let search_pattern = format!("my {}", var_name);
     let source = provider.source();
     let line_start = source[..near].rfind('\n').map(|idx| idx + 1).unwrap_or(0);
-    let line_end = source[near..].find('\n').map(|offset| near + offset).unwrap_or(source.len());
+    let line_end = source[near..]
+        .find('\n')
+        .map(|offset| near + offset)
+        .unwrap_or(source.len());
 
     if let Some(pos) = source[line_start..line_end]
         .match_indices(&search_pattern)

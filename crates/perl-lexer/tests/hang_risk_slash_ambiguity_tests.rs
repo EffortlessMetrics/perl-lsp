@@ -99,7 +99,10 @@ fn lexer_slash_ambiguity_division_after_subscript() -> TestResult {
         // Tokenize until we find RBracket or RBrace
         loop {
             let tok = lexer.next_token().ok_or("Expected token")?;
-            if matches!(tok.token_type, TokenType::RightBracket | TokenType::RightBrace) {
+            if matches!(
+                tok.token_type,
+                TokenType::RightBracket | TokenType::RightBrace
+            ) {
                 break;
             }
         }
@@ -389,7 +392,10 @@ fn lexer_slash_ambiguity_division_complex_expression() -> TestResult {
         }
     }
 
-    assert!(found_div, "Expected to find division operator in complex expression");
+    assert!(
+        found_div,
+        "Expected to find division operator in complex expression"
+    );
     Ok(())
 }
 
@@ -398,7 +404,11 @@ fn lexer_slash_ambiguity_division_complex_expression() -> TestResult {
 /// Tests feature spec: ROADMAP.md#slash-ambiguity
 #[test]
 fn lexer_slash_ambiguity_regex_with_modifiers() -> TestResult {
-    let test_cases = vec!["$x =~ /pattern/i", "$x =~ /pattern/gi", "$x =~ /pattern/imsx"];
+    let test_cases = vec![
+        "$x =~ /pattern/i",
+        "$x =~ /pattern/gi",
+        "$x =~ /pattern/imsx",
+    ];
 
     for code in test_cases {
         let mut lexer = PerlLexer::new(code);
@@ -476,7 +486,11 @@ fn lexer_slash_ambiguity_division_after_postfix_op() {
             }
         }
 
-        assert!(found_div, "Expected to find division operator after variable in '{}'", code);
+        assert!(
+            found_div,
+            "Expected to find division operator after variable in '{}'",
+            code
+        );
     }
 }
 
@@ -611,7 +625,10 @@ fn lexer_slash_ambiguity_no_hang_on_pathological_input() {
     let _timeout = Duration::from_secs(2);
     let completed = handle.join().is_ok();
 
-    assert!(completed, "Lexer should complete within timeout on pathological slash input");
+    assert!(
+        completed,
+        "Lexer should complete within timeout on pathological slash input"
+    );
 }
 
 /// Test regex vs division after keyword
@@ -661,7 +678,10 @@ fn lexer_slash_ambiguity_real_world_division_in_conditional() -> TestResult {
         }
     }
 
-    assert!(found_div, "Expected to find division in conditional expression");
+    assert!(
+        found_div,
+        "Expected to find division in conditional expression"
+    );
     Ok(())
 }
 
@@ -692,7 +712,11 @@ fn lexer_slash_ambiguity_real_world_regex_in_map_grep() -> TestResult {
             }
         }
 
-        assert!(found_regex, "Expected to find regex in map/grep: '{}'", code);
+        assert!(
+            found_regex,
+            "Expected to find regex in map/grep: '{}'",
+            code
+        );
     }
     Ok(())
 }
@@ -723,7 +747,9 @@ fn lexer_slash_split_regex_comma_separator() -> TestResult {
     );
 
     // Next token should be a regex match (the /,/ pattern)
-    let tok = lexer.next_token().ok_or("Expected regex token after split")?;
+    let tok = lexer
+        .next_token()
+        .ok_or("Expected regex token after split")?;
     assert!(
         matches!(tok.token_type, TokenType::RegexMatch),
         "Expected regex after split, got {:?}",
@@ -746,7 +772,9 @@ fn lexer_slash_split_regex_whitespace_quantifier() -> TestResult {
     let _ = lexer.next_token();
 
     // Next should be a regex
-    let tok = lexer.next_token().ok_or("Expected regex token after split")?;
+    let tok = lexer
+        .next_token()
+        .ok_or("Expected regex token after split")?;
     assert!(
         matches!(tok.token_type, TokenType::RegexMatch),
         "Expected regex with quantifier after split, got {:?}",
@@ -773,7 +801,9 @@ fn lexer_slash_join_regex_separator() -> TestResult {
         tok.token_type
     );
 
-    let tok = lexer.next_token().ok_or("Expected regex token after join")?;
+    let tok = lexer
+        .next_token()
+        .ok_or("Expected regex token after join")?;
     assert!(
         matches!(tok.token_type, TokenType::RegexMatch),
         "Expected regex after join, got {:?}",
@@ -807,7 +837,9 @@ fn lexer_slash_grep_regex_without_block() -> TestResult {
     );
 
     // Next token should be a regex match
-    let tok = lexer.next_token().ok_or("Expected regex token after grep")?;
+    let tok = lexer
+        .next_token()
+        .ok_or("Expected regex token after grep")?;
     assert!(
         matches!(tok.token_type, TokenType::RegexMatch),
         "Expected regex after grep (expression form), got {:?}",
@@ -865,7 +897,9 @@ fn lexer_slash_sort_regex() -> TestResult {
     );
 
     // Since sort sets ExpectTerm, the slash should be a regex
-    let tok = lexer.next_token().ok_or("Expected regex token after sort")?;
+    let tok = lexer
+        .next_token()
+        .ok_or("Expected regex token after sort")?;
     assert!(
         matches!(tok.token_type, TokenType::RegexMatch),
         "Expected regex after sort, got {:?}",

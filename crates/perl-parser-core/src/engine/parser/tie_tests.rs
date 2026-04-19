@@ -13,7 +13,10 @@ mod tests {
             Node::new(NodeKind::UnknownRest, SourceLocation { start: 0, end: 0 })
         });
         let sexp = ast.to_sexp();
-        assert!(!sexp.contains("ERROR"), "unexpected ERROR while parsing `{input}`: {sexp}");
+        assert!(
+            !sexp.contains("ERROR"),
+            "unexpected ERROR while parsing `{input}`: {sexp}"
+        );
         ast
     }
 
@@ -29,7 +32,12 @@ mod tests {
         if let NodeKind::Program { statements } = &ast.kind {
             let stmt = &statements[0];
             if let NodeKind::ExpressionStatement { expression } = &stmt.kind {
-                if let NodeKind::Tie { variable, package, args } = &expression.kind {
+                if let NodeKind::Tie {
+                    variable,
+                    package,
+                    args,
+                } = &expression.kind
+                {
                     if let NodeKind::Variable { sigil, name } = &variable.kind {
                         assert_eq!(sigil, "%");
                         assert_eq!(name, "hash");
@@ -103,7 +111,12 @@ mod tests {
         if let NodeKind::Program { statements } = &ast.kind {
             let stmt = &statements[0];
             if let NodeKind::ExpressionStatement { expression } = &stmt.kind {
-                if let NodeKind::Tie { variable, package, args } = &expression.kind {
+                if let NodeKind::Tie {
+                    variable,
+                    package,
+                    args,
+                } = &expression.kind
+                {
                     if let NodeKind::VariableDeclaration { declarator, .. } = &variable.kind {
                         assert_eq!(declarator, "my");
                     } else {
@@ -131,7 +144,12 @@ mod tests {
         if let NodeKind::Program { statements } = &ast.kind {
             let stmt = &statements[0];
             if let NodeKind::ExpressionStatement { expression } = &stmt.kind {
-                if let NodeKind::Tie { variable, package, args } = &expression.kind {
+                if let NodeKind::Tie {
+                    variable,
+                    package,
+                    args,
+                } = &expression.kind
+                {
                     if let NodeKind::VariableDeclaration { declarator, .. } = &variable.kind {
                         assert_eq!(declarator, "my");
                     }
@@ -179,7 +197,12 @@ mod tests {
         if let NodeKind::Program { statements } = &ast.kind {
             let stmt = &statements[0];
             if let NodeKind::ExpressionStatement { expression } = &stmt.kind {
-                if let NodeKind::Tie { variable, package, args } = &expression.kind {
+                if let NodeKind::Tie {
+                    variable,
+                    package,
+                    args,
+                } = &expression.kind
+                {
                     if let NodeKind::Variable { sigil, name } = &variable.kind {
                         assert_eq!(sigil, "%");
                         assert_eq!(name, "hash");

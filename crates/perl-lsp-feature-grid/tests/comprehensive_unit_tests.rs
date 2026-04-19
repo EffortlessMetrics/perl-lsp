@@ -38,7 +38,10 @@ fn lsp_version_constant_is_non_empty() {
 
 #[test]
 fn feature_grid_columns_has_expected_entries() {
-    assert!(FEATURE_GRID_COLUMNS.len() >= 7, "Expected at least 7 grid columns");
+    assert!(
+        FEATURE_GRID_COLUMNS.len() >= 7,
+        "Expected at least 7 grid columns"
+    );
     assert!(FEATURE_GRID_COLUMNS.contains(&"id"));
     assert!(FEATURE_GRID_COLUMNS.contains(&"area"));
     assert!(FEATURE_GRID_COLUMNS.contains(&"spec"));
@@ -64,7 +67,10 @@ fn feature_grid_columns_are_unique() {
 #[test]
 fn all_features_returns_non_empty() {
     let features = all_features();
-    assert!(!features.is_empty(), "all_features must return at least one feature");
+    assert!(
+        !features.is_empty(),
+        "all_features must return at least one feature"
+    );
 }
 
 #[test]
@@ -87,14 +93,20 @@ fn all_feature_ids_are_unique() {
 fn advertised_features_is_subset_of_all() {
     let all_ids: Vec<&str> = all_features().iter().map(|f| f.id).collect();
     for id in advertised_features() {
-        assert!(all_ids.contains(id), "advertised feature '{id}' not found in all_features");
+        assert!(
+            all_ids.contains(id),
+            "advertised feature '{id}' not found in all_features"
+        );
     }
 }
 
 #[test]
 fn has_feature_returns_true_for_advertised() {
     for id in advertised_features() {
-        assert!(has_feature(id), "has_feature should be true for advertised '{id}'");
+        assert!(
+            has_feature(id),
+            "has_feature should be true for advertised '{id}'"
+        );
     }
 }
 
@@ -109,18 +121,27 @@ fn has_feature_returns_false_for_unknown() {
 #[test]
 fn compliance_percent_is_bounded() {
     let pct = compliance_percent();
-    assert!((0.0..=100.0).contains(&pct), "compliance_percent out of range: {pct}");
+    assert!(
+        (0.0..=100.0).contains(&pct),
+        "compliance_percent out of range: {pct}"
+    );
 }
 
 #[test]
 fn compliance_percent_for_grid_is_bounded() {
     let pct = compliance_percent_for_grid();
-    assert!((0.0..=100.0).contains(&pct), "compliance_percent_for_grid out of range: {pct}");
+    assert!(
+        (0.0..=100.0).contains(&pct),
+        "compliance_percent_for_grid out of range: {pct}"
+    );
 }
 
 #[test]
 fn trackable_feature_count_is_positive() {
-    assert!(trackable_feature_count_for_grid() > 0, "expected at least one trackable feature");
+    assert!(
+        trackable_feature_count_for_grid() > 0,
+        "expected at least one trackable feature"
+    );
 }
 
 #[test]
@@ -145,7 +166,11 @@ fn bdd_feature_rows_non_empty() {
 fn bdd_rows_have_required_fields() {
     for row in bdd_feature_rows() {
         assert!(!row.id.is_empty(), "BddFeatureRow.id must not be empty");
-        assert!(!row.area.is_empty(), "BddFeatureRow.area must not be empty for {}", row.id);
+        assert!(
+            !row.area.is_empty(),
+            "BddFeatureRow.area must not be empty for {}",
+            row.id
+        );
         assert!(
             !row.description.is_empty(),
             "BddFeatureRow.description must not be empty for {}",
@@ -158,7 +183,11 @@ fn bdd_rows_have_required_fields() {
 fn bdd_rows_ids_match_all_features() {
     let all_ids: Vec<&str> = all_features().iter().map(|f| f.id).collect();
     for row in bdd_feature_rows() {
-        assert!(all_ids.contains(&row.id), "BddFeatureRow id '{}' not in all_features", row.id);
+        assert!(
+            all_ids.contains(&row.id),
+            "BddFeatureRow id '{}' not in all_features",
+            row.id
+        );
     }
 }
 
@@ -176,13 +205,19 @@ fn bdd_rows_trackable_count_matches() {
 #[test]
 fn feature_profile_contracts_non_empty() {
     let contracts = feature_profile_contracts();
-    assert!(!contracts.is_empty(), "feature_profile_contracts must return at least one spec");
+    assert!(
+        !contracts.is_empty(),
+        "feature_profile_contracts must return at least one spec"
+    );
 }
 
 #[test]
 fn feature_profile_specs_have_canonical_names() {
     for spec in feature_profile_contracts() {
-        assert!(!spec.canonical.is_empty(), "FeatureProfileSpec.canonical must not be empty");
+        assert!(
+            !spec.canonical.is_empty(),
+            "FeatureProfileSpec.canonical must not be empty"
+        );
         assert!(
             !spec.description.is_empty(),
             "FeatureProfileSpec.description must not be empty for '{}'",
@@ -193,7 +228,10 @@ fn feature_profile_specs_have_canonical_names() {
 
 #[test]
 fn profile_contracts_include_known_profiles() {
-    let names: Vec<&str> = feature_profile_contracts().iter().map(|s| s.canonical).collect();
+    let names: Vec<&str> = feature_profile_contracts()
+        .iter()
+        .map(|s| s.canonical)
+        .collect();
     assert!(names.contains(&"ga-lock"), "missing ga-lock profile");
     assert!(names.contains(&"production"), "missing production profile");
     assert!(names.contains(&"all"), "missing all profile");
@@ -235,7 +273,10 @@ fn feature_profile_all_str() {
 #[test]
 fn catalog_advertised_feature_ids_non_empty_for_all() {
     let ids = catalog_advertised_feature_ids(FeatureProfile::All);
-    assert!(!ids.is_empty(), "All profile should advertise at least one feature");
+    assert!(
+        !ids.is_empty(),
+        "All profile should advertise at least one feature"
+    );
 }
 
 #[test]
@@ -243,7 +284,10 @@ fn catalog_advertised_ga_lock_subset_of_all() {
     let all = catalog_advertised_feature_ids(FeatureProfile::All);
     let ga = catalog_advertised_feature_ids(FeatureProfile::GaLock);
     for id in &ga {
-        assert!(all.contains(id), "ga-lock feature '{id}' should also be in 'all' profile");
+        assert!(
+            all.contains(id),
+            "ga-lock feature '{id}' should also be in 'all' profile"
+        );
     }
 }
 
@@ -252,7 +296,10 @@ fn catalog_advertised_production_subset_of_all() {
     let all = catalog_advertised_feature_ids(FeatureProfile::All);
     let prod = catalog_advertised_feature_ids(FeatureProfile::Production);
     for id in &prod {
-        assert!(all.contains(id), "production feature '{id}' should also be in 'all' profile");
+        assert!(
+            all.contains(id),
+            "production feature '{id}' should also be in 'all' profile"
+        );
     }
 }
 
@@ -285,14 +332,20 @@ fn compliance_percent_for_each_profile_is_bounded() {
 fn compliance_all_ge_ga_lock() {
     let all = compliance_percent_for_profile(FeatureProfile::All);
     let ga = compliance_percent_for_profile(FeatureProfile::GaLock);
-    assert!(all >= ga, "All compliance ({all}) should be >= ga-lock ({ga})");
+    assert!(
+        all >= ga,
+        "All compliance ({all}) should be >= ga-lock ({ga})"
+    );
 }
 
 #[test]
 fn compliance_all_ge_production() {
     let all = compliance_percent_for_profile(FeatureProfile::All);
     let prod = compliance_percent_for_profile(FeatureProfile::Production);
-    assert!(all >= prod, "All compliance ({all}) should be >= production ({prod})");
+    assert!(
+        all >= prod,
+        "All compliance ({all}) should be >= production ({prod})"
+    );
 }
 
 // ===================================================================
@@ -329,7 +382,10 @@ fn to_json_contains_required_top_level_keys() -> Result<(), Box<dyn std::error::
 #[test]
 fn to_json_does_not_include_profile_key() -> Result<(), Box<dyn std::error::Error>> {
     let value = parse_json(&to_json())?;
-    assert!(value.get("profile").is_none(), "to_json() should not set a single 'profile' key");
+    assert!(
+        value.get("profile").is_none(),
+        "to_json() should not set a single 'profile' key"
+    );
     Ok(())
 }
 
@@ -377,14 +433,20 @@ fn to_json_grid_rows_count_matches_all_features() -> Result<(), Box<dyn std::err
 #[test]
 fn to_json_advertised_is_array() -> Result<(), Box<dyn std::error::Error>> {
     let value = parse_json(&to_json())?;
-    assert!(value["advertised"].is_array(), "'advertised' should be an array");
+    assert!(
+        value["advertised"].is_array(),
+        "'advertised' should be an array"
+    );
     Ok(())
 }
 
 #[test]
 fn to_json_compliance_percent_is_number() -> Result<(), Box<dyn std::error::Error>> {
     let value = parse_json(&to_json())?;
-    assert!(value["compliance_percent"].is_number(), "'compliance_percent' should be a number");
+    assert!(
+        value["compliance_percent"].is_number(),
+        "'compliance_percent' should be a number"
+    );
     Ok(())
 }
 
@@ -427,7 +489,11 @@ fn to_json_for_profile_has_single_profile_in_profiles_array()
 -> Result<(), Box<dyn std::error::Error>> {
     let value = parse_json(&to_json_for_profile(FeatureProfile::Production))?;
     let profiles = must_some(value["profiles"].as_array());
-    assert_eq!(profiles.len(), 1, "single-profile JSON should have exactly 1 profile summary");
+    assert_eq!(
+        profiles.len(),
+        1,
+        "single-profile JSON should have exactly 1 profile summary"
+    );
     Ok(())
 }
 
@@ -450,8 +516,10 @@ fn to_json_for_profile_compliance_matches_function() -> Result<(), Box<dyn std::
 fn to_json_for_profile_advertised_matches_catalog() -> Result<(), Box<dyn std::error::Error>> {
     for &profile in FeatureProfile::all() {
         let value = parse_json(&to_json_for_profile(profile))?;
-        let json_advertised: Vec<&str> =
-            must_some(value["advertised"].as_array()).iter().filter_map(|v| v.as_str()).collect();
+        let json_advertised: Vec<&str> = must_some(value["advertised"].as_array())
+            .iter()
+            .filter_map(|v| v.as_str())
+            .collect();
         let catalog_ids = catalog_advertised_feature_ids(profile);
         assert_eq!(
             json_advertised.len(),
@@ -471,7 +539,10 @@ fn to_json_for_profile_advertised_matches_catalog() -> Result<(), Box<dyn std::e
 fn to_json_for_profiles_with_empty_slice() -> Result<(), Box<dyn std::error::Error>> {
     let value = parse_json(&to_json_for_profiles(&[]))?;
     let profiles = must_some(value["profiles"].as_array());
-    assert!(profiles.is_empty(), "empty input should yield empty profiles array");
+    assert!(
+        profiles.is_empty(),
+        "empty input should yield empty profiles array"
+    );
     Ok(())
 }
 
@@ -501,7 +572,10 @@ fn to_json_for_profiles_includes_all_requested() -> Result<(), Box<dyn std::erro
     let value = parse_json(&to_json_for_profiles(requested))?;
     let profiles = must_some(value["profiles"].as_array());
     assert_eq!(profiles.len(), requested.len());
-    let names: Vec<&str> = profiles.iter().filter_map(|p| p["profile"].as_str()).collect();
+    let names: Vec<&str> = profiles
+        .iter()
+        .filter_map(|p| p["profile"].as_str())
+        .collect();
     assert!(names.contains(&"ga-lock"));
     assert!(names.contains(&"all"));
     Ok(())
@@ -516,7 +590,10 @@ fn to_json_for_all_profiles_includes_every_canonical_profile()
 -> Result<(), Box<dyn std::error::Error>> {
     let value = parse_json(&to_json_for_all_profiles())?;
     let profiles = must_some(value["profiles"].as_array());
-    let names: Vec<&str> = profiles.iter().filter_map(|p| p["profile"].as_str()).collect();
+    let names: Vec<&str> = profiles
+        .iter()
+        .filter_map(|p| p["profile"].as_str())
+        .collect();
     for &profile in FeatureProfile::all() {
         assert!(
             names.contains(&profile.as_str()),
@@ -531,7 +608,10 @@ fn to_json_for_all_profiles_includes_every_canonical_profile()
 fn to_json_for_all_profiles_is_deterministic() -> Result<(), Box<dyn std::error::Error>> {
     let first = to_json_for_all_profiles();
     let second = to_json_for_all_profiles();
-    assert_eq!(first, second, "to_json_for_all_profiles should be deterministic");
+    assert_eq!(
+        first, second,
+        "to_json_for_all_profiles should be deterministic"
+    );
     Ok(())
 }
 
@@ -553,7 +633,10 @@ fn profile_summaries_contain_required_keys() -> Result<(), Box<dyn std::error::E
     ];
     for profile in profiles {
         for key in required {
-            assert!(profile.get(key).is_some(), "profile summary missing key '{key}'");
+            assert!(
+                profile.get(key).is_some(),
+                "profile summary missing key '{key}'"
+            );
         }
     }
     Ok(())
@@ -581,7 +664,10 @@ fn profile_summary_advertised_count_matches_array_len() -> Result<(), Box<dyn st
     for p in profiles {
         let arr_len = must_some(p["advertised"].as_array()).len() as u64;
         let count = must_some(p["advertised_feature_count"].as_u64());
-        assert_eq!(arr_len, count, "advertised array length should match advertised_feature_count");
+        assert_eq!(
+            arr_len, count,
+            "advertised array length should match advertised_feature_count"
+        );
     }
     Ok(())
 }
@@ -597,8 +683,14 @@ fn json_grid_rows_have_expected_structure() -> Result<(), Box<dyn std::error::Er
     for row in rows {
         assert!(row.get("id").is_some(), "grid row missing 'id'");
         assert!(row.get("area").is_some(), "grid row missing 'area'");
-        assert!(row.get("advertised").is_some(), "grid row missing 'advertised'");
-        assert!(row.get("counts_in_coverage").is_some(), "grid row missing 'counts_in_coverage'");
+        assert!(
+            row.get("advertised").is_some(),
+            "grid row missing 'advertised'"
+        );
+        assert!(
+            row.get("counts_in_coverage").is_some(),
+            "grid row missing 'counts_in_coverage'"
+        );
     }
     Ok(())
 }
@@ -632,7 +724,10 @@ fn default_json_advertised_trackable_matches_grid_function()
 -> Result<(), Box<dyn std::error::Error>> {
     let value = parse_json(&to_json())?;
     let json_adv = must_some(value["advertised_trackable_feature_count"].as_u64());
-    assert_eq!(json_adv as usize, advertised_trackable_feature_count_for_grid());
+    assert_eq!(
+        json_adv as usize,
+        advertised_trackable_feature_count_for_grid()
+    );
     Ok(())
 }
 

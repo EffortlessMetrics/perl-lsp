@@ -49,7 +49,10 @@ fn record_error_saturating() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn begin_recovery_increments_and_returns_true() -> Result<(), Box<dyn std::error::Error>> {
-    let budget = ParseBudget { max_recoveries: 3, ..ParseBudget::default() };
+    let budget = ParseBudget {
+        max_recoveries: 3,
+        ..ParseBudget::default()
+    };
     let mut tracker = BudgetTracker::new();
     assert!(tracker.begin_recovery(&budget));
     assert_eq!(tracker.recoveries_attempted, 1);

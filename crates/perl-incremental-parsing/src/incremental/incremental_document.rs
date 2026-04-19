@@ -139,8 +139,10 @@ impl IncrementalDocument {
         }
 
         // Find all affected ranges
-        let affected_ranges: Vec<_> =
-            sorted_edits.iter().map(|e| (e.start_byte, e.old_end_byte)).collect();
+        let affected_ranges: Vec<_> = sorted_edits
+            .iter()
+            .map(|e| (e.start_byte, e.old_end_byte))
+            .collect();
 
         // Collect reusable subtrees outside affected ranges
         let reusable = self.find_reusable_for_ranges(&affected_ranges);
@@ -182,7 +184,10 @@ impl IncrementalDocument {
             result.push_str(&source[end..]);
         } else {
             // Fallback: if boundaries are invalid, use the original source
-            debug!("Invalid UTF-8 boundaries in edit: start={}, end={}", start, end);
+            debug!(
+                "Invalid UTF-8 boundaries in edit: start={}, end={}",
+                start, end
+            );
             result.push_str(source);
         }
 
@@ -290,7 +295,11 @@ impl IncrementalDocument {
         let mut new_root = (*self.root).clone();
 
         // Find and update the affected token
-        if self.update_token_in_tree(&mut new_root, source, edit) { Some(new_root) } else { None }
+        if self.update_token_in_tree(&mut new_root, source, edit) {
+            Some(new_root)
+        } else {
+            None
+        }
     }
 
     /// Update a single token in the tree
@@ -311,7 +320,9 @@ impl IncrementalDocument {
                         node.location.end = new_end;
                         let new_text = &source[node.location.start..node.location.end];
                         if let Ok(value) = new_text.parse::<f64>() {
-                            node.kind = NodeKind::Number { value: value.to_string() };
+                            node.kind = NodeKind::Number {
+                                value: value.to_string(),
+                            };
                             return true;
                         }
                     }
@@ -373,7 +384,11 @@ impl IncrementalDocument {
                 }
             }
             NodeKind::Binary { left, right, .. }
-            | NodeKind::Assignment { lhs: left, rhs: right, .. } => {
+            | NodeKind::Assignment {
+                lhs: left,
+                rhs: right,
+                ..
+            } => {
                 if self.update_token_in_tree(left, source, edit) {
                     return true;
                 }
@@ -391,7 +406,11 @@ impl IncrementalDocument {
                     return true;
                 }
             }
-            NodeKind::VariableDeclaration { variable, initializer, .. } => {
+            NodeKind::VariableDeclaration {
+                variable,
+                initializer,
+                ..
+            } => {
                 if self.update_token_in_tree(variable, source, edit) {
                     return true;
                 }
@@ -401,7 +420,12 @@ impl IncrementalDocument {
                     }
                 }
             }
-            NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
+            NodeKind::If {
+                condition,
+                then_branch,
+                elsif_branches,
+                else_branch,
+            } => {
                 if self.update_token_in_tree(condition, source, edit) {
                     return true;
                 }
@@ -422,7 +446,9 @@ impl IncrementalDocument {
                     }
                 }
             }
-            NodeKind::While { condition, body, .. } => {
+            NodeKind::While {
+                condition, body, ..
+            } => {
                 if self.update_token_in_tree(condition, source, edit) {
                     return true;
                 }
@@ -460,8 +486,9 @@ impl IncrementalDocument {
         }
 
         // Update metrics based on reused nodes
-        self.metrics.nodes_reparsed =
-            self.count_nodes(&root).saturating_sub(self.metrics.nodes_reused);
+        self.metrics.nodes_reparsed = self
+            .count_nodes(&root)
+            .saturating_sub(self.metrics.nodes_reused);
 
         Ok(root)
     }
@@ -502,7 +529,12 @@ impl IncrementalDocument {
                     return true;
                 }
             }
-            NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
+            NodeKind::If {
+                condition,
+                then_branch,
+                elsif_branches,
+                else_branch,
+            } => {
                 if self.insert_reusable(condition, reusable) {
                     return true;
                 }
@@ -523,7 +555,9 @@ impl IncrementalDocument {
                     }
                 }
             }
-            NodeKind::While { condition, body, .. } => {
+            NodeKind::While {
+                condition, body, ..
+            } => {
                 if self.insert_reusable(condition, reusable) {
                     return true;
                 }
@@ -531,7 +565,13 @@ impl IncrementalDocument {
                     return true;
                 }
             }
-            NodeKind::For { init, condition, update, body, .. } => {
+            NodeKind::For {
+                init,
+                condition,
+                update,
+                body,
+                ..
+            } => {
                 if let Some(i) = init {
                     if self.insert_reusable(i, reusable) {
                         return true;
@@ -551,7 +591,11 @@ impl IncrementalDocument {
                     return true;
                 }
             }
-            NodeKind::VariableDeclaration { variable, initializer, .. } => {
+            NodeKind::VariableDeclaration {
+                variable,
+                initializer,
+                ..
+            } => {
                 if self.insert_reusable(variable, reusable) {
                     return true;
                 }
@@ -609,7 +653,12 @@ impl IncrementalDocument {
             NodeKind::ExpressionStatement { expression } => {
                 **expression = self.adjust_node_position(expression, delta)?;
             }
-            NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
+            NodeKind::If {
+                condition,
+                then_branch,
+                elsif_branches,
+                else_branch,
+            } => {
                 **condition = self.adjust_node_position(condition, delta)?;
                 **then_branch = self.adjust_node_position(then_branch, delta)?;
                 for (cond, branch) in elsif_branches {
@@ -620,11 +669,19 @@ impl IncrementalDocument {
                     **else_b = self.adjust_node_position(else_b, delta)?;
                 }
             }
-            NodeKind::While { condition, body, .. } => {
+            NodeKind::While {
+                condition, body, ..
+            } => {
                 **condition = self.adjust_node_position(condition, delta)?;
                 **body = self.adjust_node_position(body, delta)?;
             }
-            NodeKind::For { init, condition, update, body, .. } => {
+            NodeKind::For {
+                init,
+                condition,
+                update,
+                body,
+                ..
+            } => {
                 if let Some(i) = init {
                     **i = self.adjust_node_position(i, delta)?;
                 }
@@ -636,7 +693,11 @@ impl IncrementalDocument {
                 }
                 **body = self.adjust_node_position(body, delta)?;
             }
-            NodeKind::VariableDeclaration { variable, initializer, .. } => {
+            NodeKind::VariableDeclaration {
+                variable,
+                initializer,
+                ..
+            } => {
                 **variable = self.adjust_node_position(variable, delta)?;
                 if let Some(init) = initializer {
                     **init = self.adjust_node_position(init, delta)?;
@@ -669,7 +730,11 @@ impl IncrementalDocument {
                     }
                 }
                 NodeKind::Binary { left, right, .. }
-                | NodeKind::Assignment { lhs: left, rhs: right, .. } => {
+                | NodeKind::Assignment {
+                    lhs: left,
+                    rhs: right,
+                    ..
+                } => {
                     if let Some(found) = self.find_in_node(left, pos) {
                         return Some(found);
                     }
@@ -687,7 +752,11 @@ impl IncrementalDocument {
                         return Some(found);
                     }
                 }
-                NodeKind::VariableDeclaration { variable, initializer, .. } => {
+                NodeKind::VariableDeclaration {
+                    variable,
+                    initializer,
+                    ..
+                } => {
                     if let Some(found) = self.find_in_node(variable, pos) {
                         return Some(found);
                     }
@@ -697,7 +766,12 @@ impl IncrementalDocument {
                         }
                     }
                 }
-                NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
+                NodeKind::If {
+                    condition,
+                    then_branch,
+                    elsif_branches,
+                    else_branch,
+                } => {
                     if let Some(found) = self.find_in_node(condition, pos) {
                         return Some(found);
                     }
@@ -718,7 +792,9 @@ impl IncrementalDocument {
                         }
                     }
                 }
-                NodeKind::While { condition, body, .. } => {
+                NodeKind::While {
+                    condition, body, ..
+                } => {
                     if let Some(found) = self.find_in_node(condition, pos) {
                         return Some(found);
                     }
@@ -758,13 +834,17 @@ impl IncrementalDocument {
     fn cache_node(&mut self, node: &Node) {
         // Cache this subtree by range
         let range = (node.location.start, node.location.end);
-        self.subtree_cache.by_range.insert(range, Arc::new(node.clone()));
+        self.subtree_cache
+            .by_range
+            .insert(range, Arc::new(node.clone()));
 
         // Cache by content hash for common patterns
         let hash = self.hash_node(node);
         let priority = self.get_symbol_priority(node);
 
-        self.subtree_cache.by_content.insert(hash, Arc::new(node.clone()));
+        self.subtree_cache
+            .by_content
+            .insert(hash, Arc::new(node.clone()));
         self.subtree_cache.critical_symbols.insert(hash, priority);
         self.subtree_cache.lru.push_back(hash);
         self.subtree_cache.evict_if_needed();
@@ -786,7 +866,12 @@ impl IncrementalDocument {
             NodeKind::ExpressionStatement { expression } => {
                 self.cache_node(expression);
             }
-            NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
+            NodeKind::If {
+                condition,
+                then_branch,
+                elsif_branches,
+                else_branch,
+            } => {
                 self.cache_node(condition);
                 self.cache_node(then_branch);
                 for (cond, branch) in elsif_branches {
@@ -797,11 +882,19 @@ impl IncrementalDocument {
                     self.cache_node(else_b);
                 }
             }
-            NodeKind::While { condition, body, .. } => {
+            NodeKind::While {
+                condition, body, ..
+            } => {
                 self.cache_node(condition);
                 self.cache_node(body);
             }
-            NodeKind::For { init, condition, update, body, .. } => {
+            NodeKind::For {
+                init,
+                condition,
+                update,
+                body,
+                ..
+            } => {
                 if let Some(i) = init {
                     self.cache_node(i);
                 }
@@ -813,7 +906,12 @@ impl IncrementalDocument {
                 }
                 self.cache_node(body);
             }
-            NodeKind::Foreach { variable, list, body, continue_block } => {
+            NodeKind::Foreach {
+                variable,
+                list,
+                body,
+                continue_block,
+            } => {
                 self.cache_node(variable);
                 self.cache_node(list);
                 self.cache_node(body);
@@ -821,13 +919,21 @@ impl IncrementalDocument {
                     self.cache_node(cb);
                 }
             }
-            NodeKind::VariableDeclaration { variable, initializer, .. } => {
+            NodeKind::VariableDeclaration {
+                variable,
+                initializer,
+                ..
+            } => {
                 self.cache_node(variable);
                 if let Some(init) = initializer {
                     self.cache_node(init);
                 }
             }
-            NodeKind::VariableListDeclaration { variables, initializer, .. } => {
+            NodeKind::VariableListDeclaration {
+                variables,
+                initializer,
+                ..
+            } => {
                 for var in variables {
                     self.cache_node(var);
                 }
@@ -884,7 +990,12 @@ impl IncrementalDocument {
             NodeKind::ExpressionStatement { expression } => {
                 count += self.count_nodes(expression);
             }
-            NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
+            NodeKind::If {
+                condition,
+                then_branch,
+                elsif_branches,
+                else_branch,
+            } => {
                 count += self.count_nodes(condition);
                 count += self.count_nodes(then_branch);
                 for (cond, branch) in elsif_branches {
@@ -895,11 +1006,19 @@ impl IncrementalDocument {
                     count += self.count_nodes(else_b);
                 }
             }
-            NodeKind::While { condition, body, .. } => {
+            NodeKind::While {
+                condition, body, ..
+            } => {
                 count += self.count_nodes(condition);
                 count += self.count_nodes(body);
             }
-            NodeKind::For { init, condition, update, body, .. } => {
+            NodeKind::For {
+                init,
+                condition,
+                update,
+                body,
+                ..
+            } => {
                 if let Some(i) = init {
                     count += self.count_nodes(i);
                 }
@@ -911,7 +1030,12 @@ impl IncrementalDocument {
                 }
                 count += self.count_nodes(body);
             }
-            NodeKind::Foreach { variable, list, body, continue_block } => {
+            NodeKind::Foreach {
+                variable,
+                list,
+                body,
+                continue_block,
+            } => {
                 count += self.count_nodes(variable);
                 count += self.count_nodes(list);
                 count += self.count_nodes(body);
@@ -919,13 +1043,21 @@ impl IncrementalDocument {
                     count += self.count_nodes(cb);
                 }
             }
-            NodeKind::VariableDeclaration { variable, initializer, .. } => {
+            NodeKind::VariableDeclaration {
+                variable,
+                initializer,
+                ..
+            } => {
                 count += self.count_nodes(variable);
                 if let Some(init) = initializer {
                     count += self.count_nodes(init);
                 }
             }
-            NodeKind::VariableListDeclaration { variables, initializer, .. } => {
+            NodeKind::VariableListDeclaration {
+                variables,
+                initializer,
+                ..
+            } => {
                 for var in variables {
                     count += self.count_nodes(var);
                 }
@@ -1025,7 +1157,10 @@ impl SubtreeCache {
                 debug!(
                     "Evicting cache entry with hash {} (priority: {:?})",
                     hash,
-                    self.critical_symbols.get(&hash).copied().unwrap_or(SymbolPriority::Low)
+                    self.critical_symbols
+                        .get(&hash)
+                        .copied()
+                        .unwrap_or(SymbolPriority::Low)
                 );
                 self.by_content.remove(&hash);
                 self.critical_symbols.remove(&hash);
@@ -1052,7 +1187,11 @@ impl SubtreeCache {
         let mut best: Option<(u64, SymbolPriority)> = None;
 
         for &hash in &self.lru {
-            let priority = self.critical_symbols.get(&hash).copied().unwrap_or(SymbolPriority::Low);
+            let priority = self
+                .critical_symbols
+                .get(&hash)
+                .copied()
+                .unwrap_or(SymbolPriority::Low);
 
             match best {
                 None => best = Some((hash, priority)),
@@ -1091,10 +1230,12 @@ mod tests {
         let mut doc = IncrementalDocument::new(source.to_string())?;
 
         // Change 42 to 43
-        let pos = source.find("42").ok_or_else(|| crate::error::ParseError::SyntaxError {
-            message: "test source should contain '42'".to_string(),
-            location: 0,
-        })?;
+        let pos = source
+            .find("42")
+            .ok_or_else(|| crate::error::ParseError::SyntaxError {
+                message: "test source should contain '42'".to_string(),
+                location: 0,
+            })?;
         let edit = IncrementalEdit::new(pos + 1, pos + 2, "3".to_string());
 
         doc.apply_edit(edit)?;
@@ -1122,17 +1263,21 @@ mod tests {
         let mut edits = IncrementalEditSet::new();
 
         // Change 10 to 15
-        let pos_10 = source.find("10").ok_or_else(|| crate::error::ParseError::SyntaxError {
-            message: "test source should contain '10'".to_string(),
-            location: 0,
-        })?;
+        let pos_10 = source
+            .find("10")
+            .ok_or_else(|| crate::error::ParseError::SyntaxError {
+                message: "test source should contain '10'".to_string(),
+                location: 0,
+            })?;
         edits.add(IncrementalEdit::new(pos_10, pos_10 + 2, "15".to_string()));
 
         // Change 20 to 25
-        let pos_20 = source.find("20").ok_or_else(|| crate::error::ParseError::SyntaxError {
-            message: "test source should contain '20'".to_string(),
-            location: 0,
-        })?;
+        let pos_20 = source
+            .find("20")
+            .ok_or_else(|| crate::error::ParseError::SyntaxError {
+                message: "test source should contain '20'".to_string(),
+                location: 0,
+            })?;
         edits.add(IncrementalEdit::new(pos_20, pos_20 + 2, "25".to_string()));
 
         doc.apply_edits(&edits)?;
@@ -1144,12 +1289,18 @@ mod tests {
             .values()
             .filter(|&p| *p == SymbolPriority::Critical)
             .count();
-        assert!(critical_count > 0, "Should preserve critical symbols during batch edits");
+        assert!(
+            critical_count > 0,
+            "Should preserve critical symbols during batch edits"
+        );
 
         // Verify metrics
         // Assertions enabled for Issue #255 (Incremental parsing metrics).
         // threshold relaxed to 10.0ms for CI environment stability.
-        assert!(doc.metrics.nodes_reused > 0, "Incremental parsing should reuse nodes");
+        assert!(
+            doc.metrics.nodes_reused > 0,
+            "Incremental parsing should reuse nodes"
+        );
         assert!(
             doc.metrics.last_parse_time_ms < 10.0,
             "Incremental parse time was {:.2}ms, which exceeds 10.0ms threshold",
@@ -1187,8 +1338,12 @@ mod tests {
         let doc = IncrementalDocument::new(source.to_string())?;
 
         // Verify we have different priority levels in cache
-        let priorities: std::collections::HashSet<_> =
-            doc.subtree_cache.critical_symbols.values().cloned().collect();
+        let priorities: std::collections::HashSet<_> = doc
+            .subtree_cache
+            .critical_symbols
+            .values()
+            .cloned()
+            .collect();
 
         // Should have critical symbols (package, use, sub)
         assert!(
@@ -1223,10 +1378,12 @@ mod tests {
         assert!(doc.subtree_cache.by_content.len() <= 1);
 
         // Applying an edit should not grow the cache beyond max_size
-        let pos = source.find('1').ok_or_else(|| crate::error::ParseError::SyntaxError {
-            message: "test source should contain '1'".to_string(),
-            location: 0,
-        })?;
+        let pos = source
+            .find('1')
+            .ok_or_else(|| crate::error::ParseError::SyntaxError {
+                message: "test source should contain '1'".to_string(),
+                location: 0,
+            })?;
         let edit = IncrementalEdit::new(pos, pos + 1, "10".to_string());
         doc.apply_edit(edit)?;
         assert!(doc.subtree_cache.by_content.len() <= 1);
@@ -1264,13 +1421,18 @@ mod tests {
             .values()
             .cloned()
             .any(|p| p == SymbolPriority::Critical);
-        assert!(has_critical_symbols, "Should preserve critical symbols like package/use/sub");
+        assert!(
+            has_critical_symbols,
+            "Should preserve critical symbols like package/use/sub"
+        );
 
         // Apply edit and verify critical symbols remain
-        let pos = source.find("42").ok_or_else(|| crate::error::ParseError::SyntaxError {
-            message: "test source should contain '42'".to_string(),
-            location: 0,
-        })?;
+        let pos = source
+            .find("42")
+            .ok_or_else(|| crate::error::ParseError::SyntaxError {
+                message: "test source should contain '42'".to_string(),
+                location: 0,
+            })?;
         let edit = IncrementalEdit::new(pos, pos + 2, "100".to_string());
         doc.apply_edit(edit)?;
         assert!(doc.subtree_cache.by_content.len() <= 3);
@@ -1282,7 +1444,10 @@ mod tests {
             .values()
             .cloned()
             .any(|p| p == SymbolPriority::Critical);
-        assert!(has_critical_after_edit, "Should preserve critical symbols after edit");
+        assert!(
+            has_critical_after_edit,
+            "Should preserve critical symbols after edit"
+        );
 
         Ok(())
     }
@@ -1308,7 +1473,10 @@ mod tests {
             .by_content
             .values()
             .any(|node| matches!(node.kind, NodeKind::Package { .. }));
-        assert!(package_preserved, "Package declaration should be preserved for workspace symbols");
+        assert!(
+            package_preserved,
+            "Package declaration should be preserved for workspace symbols"
+        );
 
         Ok(())
     }
@@ -1347,7 +1515,10 @@ mod tests {
             .by_content
             .values()
             .any(|node| matches!(node.kind, NodeKind::Subroutine { .. }));
-        assert!(function_preserved, "Function definitions should be preserved for completion");
+        assert!(
+            function_preserved,
+            "Function definitions should be preserved for completion"
+        );
 
         Ok(())
     }
@@ -1378,10 +1549,16 @@ mod tests {
             .by_content
             .values()
             .filter(|node| {
-                matches!(node.kind, NodeKind::Package { .. } | NodeKind::Subroutine { .. })
+                matches!(
+                    node.kind,
+                    NodeKind::Package { .. } | NodeKind::Subroutine { .. }
+                )
             })
             .count();
-        assert!(critical_nodes >= 2, "Should preserve package and key subroutines for code lens");
+        assert!(
+            critical_nodes >= 2,
+            "Should preserve package and key subroutines for code lens"
+        );
 
         Ok(())
     }

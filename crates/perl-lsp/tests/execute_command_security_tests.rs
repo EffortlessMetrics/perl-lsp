@@ -29,12 +29,18 @@ fn test_run_test_sub_file_path_injection() -> Result<(), Box<dyn Error>> {
 
     let result = provider.execute_command(
         "perl.runTestSub",
-        vec![Value::String(malicious_file_path.to_string()), Value::String("somesub".to_string())],
+        vec![
+            Value::String(malicious_file_path.to_string()),
+            Value::String("somesub".to_string()),
+        ],
     );
 
     // With secure path resolution, non-existent files are rejected early
     // BEFORE any shell command or Perl code is executed
-    assert!(result.is_err(), "Malicious path should be rejected during path resolution");
+    assert!(
+        result.is_err(),
+        "Malicious path should be rejected during path resolution"
+    );
     let err = result.err().ok_or("Expected error but got Ok")?;
 
     // The error should be about path resolution (file not found/canonicalize failure)
@@ -101,7 +107,10 @@ fn test_run_test_sub_subname_injection() -> Result<(), Box<dyn Error>> {
 
     // 3. The command should have failed because no subroutine with that literal name exists
     let success = val["success"].as_bool().ok_or("Missing 'success' field")?;
-    assert!(!success, "Command should have failed (subroutine not found)");
+    assert!(
+        !success,
+        "Command should have failed (subroutine not found)"
+    );
     Ok(())
 }
 
@@ -117,11 +126,16 @@ fn test_run_file_argument_injection() -> Result<(), Box<dyn Error>> {
     // `-e print 'INJECTED'` would execute arbitrary code
     let malicious_file_path = "-e";
 
-    let result = provider
-        .execute_command("perl.runFile", vec![Value::String(malicious_file_path.to_string())]);
+    let result = provider.execute_command(
+        "perl.runFile",
+        vec![Value::String(malicious_file_path.to_string())],
+    );
 
     // With secure path resolution, non-existent files are rejected early
-    assert!(result.is_err(), "Malicious path '-e' should be rejected during path resolution");
+    assert!(
+        result.is_err(),
+        "Malicious path '-e' should be rejected during path resolution"
+    );
     let err = result.err().ok_or("Expected error but got Ok")?;
 
     // The error should be about path validation
@@ -142,11 +156,16 @@ fn test_run_tests_argument_injection() -> Result<(), Box<dyn Error>> {
     // Similar test for run_tests
     let malicious_file_path = "-e";
 
-    let result = provider
-        .execute_command("perl.runTests", vec![Value::String(malicious_file_path.to_string())]);
+    let result = provider.execute_command(
+        "perl.runTests",
+        vec![Value::String(malicious_file_path.to_string())],
+    );
 
     // With secure path resolution, non-existent files are rejected early
-    assert!(result.is_err(), "Malicious path '-e' should be rejected during path resolution");
+    assert!(
+        result.is_err(),
+        "Malicious path '-e' should be rejected during path resolution"
+    );
     let err = result.err().ok_or("Expected error but got Ok")?;
 
     // The error should be about path validation
@@ -182,7 +201,11 @@ fn test_shell_metacharacter_safety() -> Result<(), Box<dyn Error>> {
             provider.execute_command("perl.runFile", vec![Value::String(path.to_string())]);
 
         // Non-existent paths should be rejected during path resolution
-        assert!(result.is_err(), "Non-existent path should be rejected: {}", path);
+        assert!(
+            result.is_err(),
+            "Non-existent path should be rejected: {}",
+            path
+        );
         let err = result.err().ok_or("Expected error but got Ok")?;
 
         // Error should be about path validation, not shell execution
@@ -215,7 +238,11 @@ fn test_valid_file_execution() -> Result<(), Box<dyn Error>> {
     let val = result?;
     let output = val["output"].as_str().ok_or("Missing 'output' field")?;
 
-    assert!(output.contains("VALID_OUTPUT"), "Output should contain expected result: {}", output);
+    assert!(
+        output.contains("VALID_OUTPUT"),
+        "Output should contain expected result: {}",
+        output
+    );
     Ok(())
 }
 
@@ -238,7 +265,10 @@ fn test_empty_workspace_roots_enforces_cwd_boundary() -> Result<(), Box<dyn Erro
         vec![Value::String(outside_file.to_string_lossy().to_string())],
     );
 
-    assert!(result.is_err(), "Should reject paths outside CWD when workspace_roots is empty");
+    assert!(
+        result.is_err(),
+        "Should reject paths outside CWD when workspace_roots is empty"
+    );
     Ok(())
 }
 
@@ -247,8 +277,10 @@ fn test_empty_workspace_roots_enforces_cwd_boundary() -> Result<(), Box<dyn Erro
 fn test_path_traversal_with_dot_dot() -> Result<(), Box<dyn Error>> {
     let provider = ExecuteCommandProvider::new();
 
-    let result = provider
-        .execute_command("perl.runCritic", vec![Value::String("../../../etc/passwd".to_string())]);
+    let result = provider.execute_command(
+        "perl.runCritic",
+        vec![Value::String("../../../etc/passwd".to_string())],
+    );
 
     assert!(result.is_err(), "Path traversal with .. should be rejected");
     let err = result.err().ok_or("Expected error")?;
@@ -268,7 +300,10 @@ fn test_argument_length_cap() -> Result<(), Box<dyn Error>> {
     let long_path = "a".repeat(5000);
     let result = provider.execute_command("perl.runCritic", vec![Value::String(long_path)]);
 
-    assert!(result.is_err(), "Extremely long arguments should be rejected");
+    assert!(
+        result.is_err(),
+        "Extremely long arguments should be rejected"
+    );
     let err = result.err().ok_or("Expected error")?;
     assert!(
         err.contains("too long") || err.contains("4096"),
@@ -293,7 +328,10 @@ fn test_command_injection_semicolon() -> Result<(), Box<dyn Error>> {
     match result {
         Err(_) => {} // Rejected outright - good
         Ok(val) => {
-            assert_eq!(val["status"], "error", "Should report error status for malicious path");
+            assert_eq!(
+                val["status"], "error",
+                "Should report error status for malicious path"
+            );
         }
     }
     Ok(())
@@ -311,7 +349,10 @@ fn test_command_injection_backticks() -> Result<(), Box<dyn Error>> {
     match result {
         Err(_) => {} // Rejected outright - good
         Ok(val) => {
-            assert_eq!(val["status"], "error", "Should report error status for backtick injection");
+            assert_eq!(
+                val["status"], "error",
+                "Should report error status for backtick injection"
+            );
         }
     }
     Ok(())
@@ -329,7 +370,10 @@ fn test_command_injection_dollar_paren() -> Result<(), Box<dyn Error>> {
     match result {
         Err(_) => {} // Rejected outright - good
         Ok(val) => {
-            assert_eq!(val["status"], "error", "Should report error status for $() injection");
+            assert_eq!(
+                val["status"], "error",
+                "Should report error status for $() injection"
+            );
         }
     }
     Ok(())
@@ -347,7 +391,10 @@ fn test_command_injection_pipe() -> Result<(), Box<dyn Error>> {
     match result {
         Err(_) => {} // Rejected outright - good
         Ok(val) => {
-            assert_eq!(val["status"], "error", "Should report error status for pipe injection");
+            assert_eq!(
+                val["status"], "error",
+                "Should report error status for pipe injection"
+            );
         }
     }
     Ok(())

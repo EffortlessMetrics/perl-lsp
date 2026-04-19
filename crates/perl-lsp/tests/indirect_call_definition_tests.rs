@@ -26,9 +26,11 @@ mod indirect_definition_tests {
             .to_string();
         let range = first.get("range").ok_or("missing range field")?;
         let start = &range["start"];
-        let line =
-            start.get("line").ok_or("missing line field")?.as_u64().ok_or("line is not a number")?
-                as u32;
+        let line = start
+            .get("line")
+            .ok_or("missing line field")?
+            .as_u64()
+            .ok_or("line is not a number")? as u32;
         let character = start
             .get("character")
             .ok_or("missing character field")?
@@ -88,7 +90,10 @@ move $obj 10, 20;
 
         assert_eq!(def_uri, uri, "definition should be in same file");
         // Line 7 (0-indexed) is where "sub move" is defined
-        assert_eq!(def_line, 7, "Should point to line where 'sub move' is defined");
+        assert_eq!(
+            def_line, 7,
+            "Should point to line where 'sub move' is defined"
+        );
 
         Ok(())
     }
@@ -146,7 +151,10 @@ my $player = new Player "Alice";
 
         assert_eq!(def_uri, uri, "definition should be in same file");
         // Line 2 (0-indexed) is where "sub new" is defined
-        assert_eq!(def_line, 2, "Should point to line where 'sub new' is defined");
+        assert_eq!(
+            def_line, 2,
+            "Should point to line where 'sub new' is defined"
+        );
 
         Ok(())
     }

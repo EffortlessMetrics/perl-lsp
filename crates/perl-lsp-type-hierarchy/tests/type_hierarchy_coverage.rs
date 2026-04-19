@@ -263,12 +263,24 @@ fn type_hierarchy_item_serializes_to_json() {
         kind: TypeHierarchySymbolKind::Class,
         uri: "file:///foo.pm".to_string(),
         range: WireRange {
-            start: WirePosition { line: 0, character: 0 },
-            end: WirePosition { line: 5, character: 1 },
+            start: WirePosition {
+                line: 0,
+                character: 0,
+            },
+            end: WirePosition {
+                line: 5,
+                character: 1,
+            },
         },
         selection_range: WireRange {
-            start: WirePosition { line: 0, character: 8 },
-            end: WirePosition { line: 0, character: 16 },
+            start: WirePosition {
+                line: 0,
+                character: 8,
+            },
+            end: WirePosition {
+                line: 0,
+                character: 16,
+            },
         },
         detail: Some("Perl Package".to_string()),
         data: None,
@@ -506,7 +518,12 @@ use parent 'Left', 'Right';\n";
     assert!(base_pos > left_pos, "Base must come after Left");
     assert!(base_pos > right_pos, "Base must come after Right");
     // Base appears exactly once
-    assert_eq!(mro.iter().filter(|n: &&String| n.as_str() == "Base").count(), 1);
+    assert_eq!(
+        mro.iter()
+            .filter(|n: &&String| n.as_str() == "Base")
+            .count(),
+        1
+    );
 }
 
 /// Class with no parents: MRO is just itself.
@@ -565,7 +582,11 @@ fn supertypes_via_moose_extends_single() {
     let provider = TypeHierarchyProvider::new();
 
     let supertypes = provider.find_supertypes(&ast, &make_item("MyClass"));
-    assert_eq!(supertypes.len(), 1, "expected one supertype; got {supertypes:?}");
+    assert_eq!(
+        supertypes.len(),
+        1,
+        "expected one supertype; got {supertypes:?}"
+    );
     assert_eq!(supertypes[0].name, "ParentClass");
     assert_eq!(supertypes[0].detail.as_deref(), Some("Parent Class"));
 }
@@ -625,7 +646,12 @@ fn supertypes_via_moose_with_multiple_roles() {
     assert!(names.contains(&"Role2"), "expected Role2 in {names:?}");
     // All role items carry "Role" detail
     for s in &supertypes {
-        assert_eq!(s.detail.as_deref(), Some("Role"), "role detail mismatch for {}", s.name);
+        assert_eq!(
+            s.detail.as_deref(),
+            Some("Role"),
+            "role detail mismatch for {}",
+            s.name
+        );
     }
 }
 
@@ -638,7 +664,10 @@ fn supertypes_extends_and_with_combined() {
 
     let supertypes = provider.find_supertypes(&ast, &make_item("Combined"));
     let names: Vec<&str> = supertypes.iter().map(|s| s.name.as_str()).collect();
-    assert!(names.contains(&"BaseClass"), "expected BaseClass in {names:?}");
+    assert!(
+        names.contains(&"BaseClass"),
+        "expected BaseClass in {names:?}"
+    );
     assert!(names.contains(&"RoleA"), "expected RoleA in {names:?}");
 }
 
@@ -669,7 +698,10 @@ fn supertypes_via_use_base_qw_list() {
     let supertypes = provider.find_supertypes(&ast, &make_item("OldStyle"));
     let names: Vec<&str> = supertypes.iter().map(|s| s.name.as_str()).collect();
     assert!(names.contains(&"OldBase"), "expected OldBase in {names:?}");
-    assert!(names.contains(&"AnotherOld"), "expected AnotherOld in {names:?}");
+    assert!(
+        names.contains(&"AnotherOld"),
+        "expected AnotherOld in {names:?}"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -692,7 +724,10 @@ our @ISA = ('B');\n";
     let c_supers = provider.find_supertypes(&ast, &make_item("C"));
     let c_names: Vec<&str> = c_supers.iter().map(|s| s.name.as_str()).collect();
     assert!(c_names.contains(&"B"), "expected B in {c_names:?}");
-    assert!(!c_names.contains(&"A"), "A should not appear as direct super of C; got {c_names:?}");
+    assert!(
+        !c_names.contains(&"A"),
+        "A should not appear as direct super of C; got {c_names:?}"
+    );
 
     // B's immediate supertype is A
     let b_supers = provider.find_supertypes(&ast, &make_item("B"));
@@ -701,7 +736,10 @@ our @ISA = ('B');\n";
 
     // A has no supertypes
     let a_supers = provider.find_supertypes(&ast, &make_item("A"));
-    assert!(a_supers.is_empty(), "A should have no supertypes; got {a_supers:?}");
+    assert!(
+        a_supers.is_empty(),
+        "A should have no supertypes; got {a_supers:?}"
+    );
 }
 
 /// C3 MRO for a three-level @ISA chain: C -> B -> A gives [C, B, A].
@@ -735,7 +773,9 @@ my @arr = (1, 2, 3);\n";
     let provider = TypeHierarchyProvider::new();
 
     assert!(
-        provider.find_supertypes(&ast, &make_item("main")).is_empty(),
+        provider
+            .find_supertypes(&ast, &make_item("main"))
+            .is_empty(),
         "non-OOP code should yield no supertypes"
     );
 }
@@ -749,7 +789,10 @@ fn non_oop_code_prepare_returns_none() {
 
     // offset 4 is inside "add" — an identifier inside a sub decl, not a package
     let result = provider.prepare(&ast, code, 4);
-    assert!(result.is_none(), "sub identifier should not produce a type hierarchy item");
+    assert!(
+        result.is_none(),
+        "sub identifier should not produce a type hierarchy item"
+    );
 }
 
 /// File with only subs — subtypes returns empty.

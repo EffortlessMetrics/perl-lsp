@@ -17,7 +17,12 @@ fn qr_paren_mods_are_attached() -> Result<(), Box<dyn std::error::Error>> {
 
     // Should NOT have a separate identifier for modifiers
     let count = s.matches("Identifier").count();
-    assert!(count <= 1, "Modifiers leaked as identifier (found {} identifiers): {}", count, s);
+    assert!(
+        count <= 1,
+        "Modifiers leaked as identifier (found {} identifiers): {}",
+        count,
+        s
+    );
     Ok(())
 }
 
@@ -33,7 +38,12 @@ fn qr_hash_mods_are_attached() -> Result<(), Box<dyn std::error::Error>> {
 
     // Should NOT have a separate identifier for modifiers
     let count = s.matches("Identifier").count();
-    assert!(count <= 1, "Modifiers leaked as identifier (found {} identifiers): {}", count, s);
+    assert!(
+        count <= 1,
+        "Modifiers leaked as identifier (found {} identifiers): {}",
+        count,
+        s
+    );
     Ok(())
 }
 
@@ -60,7 +70,11 @@ fn qr_different_delimiters_same_shape() -> Result<(), Box<dyn std::error::Error>
     // All shapes should be identical
     let first_shape = &shapes[0].1;
     for (code, shape) in &shapes[1..] {
-        assert_eq!(shape, first_shape, "Shape mismatch for '{}' vs '{}'", code, shapes[0].0);
+        assert_eq!(
+            shape, first_shape,
+            "Shape mismatch for '{}' vs '{}'",
+            code, shapes[0].0
+        );
     }
     Ok(())
 }
@@ -88,7 +102,11 @@ fn m_different_delimiters_same_shape() -> Result<(), Box<dyn std::error::Error>>
     // All shapes should be identical
     let first_shape = &shapes[0].1;
     for (code, shape) in &shapes[1..] {
-        assert_eq!(shape, first_shape, "Shape mismatch for '{}' vs '{}'", code, shapes[0].0);
+        assert_eq!(
+            shape, first_shape,
+            "Shape mismatch for '{}' vs '{}'",
+            code, shapes[0].0
+        );
     }
     Ok(())
 }
@@ -116,7 +134,11 @@ fn s_different_delimiters_same_shape() -> Result<(), Box<dyn std::error::Error>>
     // All shapes should be identical
     let first_shape = &shapes[0].1;
     for (code, shape) in &shapes[1..] {
-        assert_eq!(shape, first_shape, "Shape mismatch for '{}' vs '{}'", code, shapes[0].0);
+        assert_eq!(
+            shape, first_shape,
+            "Shape mismatch for '{}' vs '{}'",
+            code, shapes[0].0
+        );
     }
     Ok(())
 }
@@ -134,7 +156,10 @@ fn tr_y_alias_same_shape() -> Result<(), Box<dyn std::error::Error>> {
     let y_ast = y_parser.parse()?;
     let y_shape = extract_shape(&y_ast);
 
-    assert_eq!(tr_shape, y_shape, "tr and y should produce identical shapes");
+    assert_eq!(
+        tr_shape, y_shape,
+        "tr and y should produce identical shapes"
+    );
     Ok(())
 }
 
@@ -142,7 +167,13 @@ fn tr_y_alias_same_shape() -> Result<(), Box<dyn std::error::Error>> {
 fn q_qq_different_delimiters_same_shape() -> Result<(), Box<dyn std::error::Error>> {
     let q_codes = vec!["q(hello)", "q{hello}", "q[hello]", "q<hello>", "q#hello#"];
 
-    let qq_codes = vec!["qq(hello)", "qq{hello}", "qq[hello]", "qq<hello>", "qq#hello#"];
+    let qq_codes = vec![
+        "qq(hello)",
+        "qq{hello}",
+        "qq[hello]",
+        "qq<hello>",
+        "qq#hello#",
+    ];
 
     // Check q variants
     let mut q_shapes = Vec::new();
@@ -155,7 +186,11 @@ fn q_qq_different_delimiters_same_shape() -> Result<(), Box<dyn std::error::Erro
 
     let first_q_shape = &q_shapes[0].1;
     for (code, shape) in &q_shapes[1..] {
-        assert_eq!(shape, first_q_shape, "q shape mismatch for '{}' vs '{}'", code, q_shapes[0].0);
+        assert_eq!(
+            shape, first_q_shape,
+            "q shape mismatch for '{}' vs '{}'",
+            code, q_shapes[0].0
+        );
     }
 
     // Check qq variants
@@ -193,12 +228,22 @@ fn q_word_comparison_operators_parse() {
         let code = format!("if (q($_) {} 'test') {{ }}", op);
         let mut parser = Parser::new(&code);
         let ast = parser.parse();
-        assert!(ast.is_ok(), "Failed to parse 'q($_) {} 'test'': {:?}", op, ast);
+        assert!(
+            ast.is_ok(),
+            "Failed to parse 'q($_) {} 'test'': {:?}",
+            op,
+            ast
+        );
 
         let code = format!("(q(x) {} q(y))", op);
         let mut parser = Parser::new(&code);
         let ast = parser.parse();
-        assert!(ast.is_ok(), "Failed to parse '(q(x) {} q(y))': {:?}", op, ast);
+        assert!(
+            ast.is_ok(),
+            "Failed to parse '(q(x) {} q(y))': {:?}",
+            op,
+            ast
+        );
     }
 }
 

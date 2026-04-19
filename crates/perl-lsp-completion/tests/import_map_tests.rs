@@ -81,10 +81,15 @@ fn extract_import_map_parses_qw_list() {
     let items = provider.get_completions(source, pos);
 
     let sum_item = must_some(
-        items.iter().find(|i| i.label == "sum" || i.insert_text.as_deref() == Some("sum")),
+        items
+            .iter()
+            .find(|i| i.label == "sum" || i.insert_text.as_deref() == Some("sum")),
     );
     assert!(
-        sum_item.sort_text.as_deref().is_some_and(|s| s.starts_with("2_")),
+        sum_item
+            .sort_text
+            .as_deref()
+            .is_some_and(|s| s.starts_with("2_")),
         "sum should be promoted (sort_text starts with '2_') because it is imported; got: {:?}",
         sum_item.sort_text
     );
@@ -104,10 +109,15 @@ fn extract_import_map_unions_multiple_use_stmts() {
     let items_su = provider_su.get_completions(source_su, source_su.len());
 
     let sum_item = must_some(
-        items_su.iter().find(|i| i.label == "sum" || i.insert_text.as_deref() == Some("sum")),
+        items_su
+            .iter()
+            .find(|i| i.label == "sum" || i.insert_text.as_deref() == Some("sum")),
     );
     assert!(
-        sum_item.sort_text.as_deref().is_some_and(|s| s.starts_with("2_")),
+        sum_item
+            .sort_text
+            .as_deref()
+            .is_some_and(|s| s.starts_with("2_")),
         "sum should be promoted after union; got: {:?}",
         sum_item.sort_text
     );
@@ -118,10 +128,15 @@ fn extract_import_map_unions_multiple_use_stmts() {
     let items_mi = provider_mi.get_completions(source_mi, source_mi.len());
 
     let min_item = must_some(
-        items_mi.iter().find(|i| i.label == "min" || i.insert_text.as_deref() == Some("min")),
+        items_mi
+            .iter()
+            .find(|i| i.label == "min" || i.insert_text.as_deref() == Some("min")),
     );
     assert!(
-        min_item.sort_text.as_deref().is_some_and(|s| s.starts_with("2_")),
+        min_item
+            .sort_text
+            .as_deref()
+            .is_some_and(|s| s.starts_with("2_")),
         "min should be promoted after union; got: {:?}",
         min_item.sort_text
     );
@@ -143,11 +158,15 @@ fn extract_import_map_skips_pragmas() {
     // must NOT be promoted (no import_map entry for List::Util).
     let items = provider.get_completions(source, source.len());
 
-    if let Some(sum_item) =
-        items.iter().find(|i| i.label == "sum" || i.insert_text.as_deref() == Some("sum"))
+    if let Some(sum_item) = items
+        .iter()
+        .find(|i| i.label == "sum" || i.insert_text.as_deref() == Some("sum"))
     {
         assert!(
-            !sum_item.sort_text.as_deref().is_some_and(|s| s.starts_with("2_")),
+            !sum_item
+                .sort_text
+                .as_deref()
+                .is_some_and(|s| s.starts_with("2_")),
             "sum should NOT be promoted when module is not used; got: {:?}",
             sum_item.sort_text
         );
@@ -170,15 +189,23 @@ fn workspace_completion_promotes_imported_symbols() {
     let items = provider.get_completions(source, pos);
 
     let sum_item = must_some(
-        items.iter().find(|i| i.label == "sum" || i.insert_text.as_deref() == Some("sum")),
+        items
+            .iter()
+            .find(|i| i.label == "sum" || i.insert_text.as_deref() == Some("sum")),
     );
     assert!(
-        sum_item.sort_text.as_deref().is_some_and(|s| s.starts_with("2_")),
+        sum_item
+            .sort_text
+            .as_deref()
+            .is_some_and(|s| s.starts_with("2_")),
         "sum (imported) should have sort_text starting '2_'; got: {:?}",
         sum_item.sort_text
     );
     assert!(
-        sum_item.detail.as_deref().is_some_and(|d| d.contains("List::Util")),
+        sum_item
+            .detail
+            .as_deref()
+            .is_some_and(|d| d.contains("List::Util")),
         "sum detail should reference 'List::Util'; got: {:?}",
         sum_item.detail
     );
@@ -204,16 +231,23 @@ fn workspace_completion_downranks_explicit_empty_import() {
     // sum may appear but should be downranked to "5_" with detail "not imported".
     // Tier 5 is the lowest priority tier: symbols explicitly not imported via
     // `use Module qw()` should appear after everything else (keywords are also 5_).
-    if let Some(sum_item) =
-        items.iter().find(|i| i.label == "sum" || i.insert_text.as_deref() == Some("sum"))
+    if let Some(sum_item) = items
+        .iter()
+        .find(|i| i.label == "sum" || i.insert_text.as_deref() == Some("sum"))
     {
         assert!(
-            sum_item.sort_text.as_deref().is_some_and(|s| s.starts_with("5_")),
+            sum_item
+                .sort_text
+                .as_deref()
+                .is_some_and(|s| s.starts_with("5_")),
             "sum with explicit empty import should be downranked (sort_text '5_'); got: {:?}",
             sum_item.sort_text
         );
         assert!(
-            sum_item.detail.as_deref().is_some_and(|d| d.contains("not imported")),
+            sum_item
+                .detail
+                .as_deref()
+                .is_some_and(|d| d.contains("not imported")),
             "sum detail should say 'not imported'; got: {:?}",
             sum_item.detail
         );
@@ -238,18 +272,25 @@ fn workspace_completion_non_imported_stays_normal_priority() {
 
     let items = provider.get_completions(source, pos);
 
-    if let Some(max_item) =
-        items.iter().find(|i| i.label == "max" || i.insert_text.as_deref() == Some("max"))
+    if let Some(max_item) = items
+        .iter()
+        .find(|i| i.label == "max" || i.insert_text.as_deref() == Some("max"))
     {
         // Should NOT be boosted to tier 2_ (only explicitly imported symbols get 2_)
         assert!(
-            !max_item.sort_text.as_deref().is_some_and(|s| s.starts_with("2_")),
+            !max_item
+                .sort_text
+                .as_deref()
+                .is_some_and(|s| s.starts_with("2_")),
             "max (not imported) should NOT be promoted to 2_; got: {:?}",
             max_item.sort_text
         );
         // Should be at tier 4_ (workspace, not imported with explicit list)
         assert!(
-            max_item.sort_text.as_deref().is_some_and(|s| s.starts_with("4_")),
+            max_item
+                .sort_text
+                .as_deref()
+                .is_some_and(|s| s.starts_with("4_")),
             "max (not in explicit import list) should be at tier 4_; got: {:?}",
             max_item.sort_text
         );
@@ -278,10 +319,15 @@ fn extract_import_map_parses_alternate_qw_delimiters() {
         let items = provider.get_completions(source, source.len());
 
         let sum_item = must_some(
-            items.iter().find(|i| i.label == "sum" || i.insert_text.as_deref() == Some("sum")),
+            items
+                .iter()
+                .find(|i| i.label == "sum" || i.insert_text.as_deref() == Some("sum")),
         );
         assert!(
-            sum_item.sort_text.as_deref().is_some_and(|s| s.starts_with("2_")),
+            sum_item
+                .sort_text
+                .as_deref()
+                .is_some_and(|s| s.starts_with("2_")),
             "sum with {} delimiters should be promoted; got: {:?}",
             description,
             sum_item.sort_text
@@ -302,7 +348,9 @@ fn require_import_promotes_symbol() {
             .find(|i| i.label == "load_data" || i.insert_text.as_deref() == Some("load_data")),
     );
     assert!(
-        item.sort_text.as_deref().is_some_and(|s| s.starts_with("2_")),
+        item.sort_text
+            .as_deref()
+            .is_some_and(|s| s.starts_with("2_")),
         "load_data should be promoted by require+import; got: {:?}",
         item.sort_text
     );
@@ -321,7 +369,9 @@ fn module_runtime_alias_import_promotes_symbol() {
             .find(|i| i.label == "load_data" || i.insert_text.as_deref() == Some("load_data")),
     );
     assert!(
-        item.sort_text.as_deref().is_some_and(|s| s.starts_with("2_")),
+        item.sort_text
+            .as_deref()
+            .is_some_and(|s| s.starts_with("2_")),
         "load_data should be promoted by $mod->import after static use_module; got: {:?}",
         item.sort_text
     );
@@ -340,7 +390,10 @@ fn extract_import_map_expands_known_posix_tag() {
             .find(|i| i.label == "finddepth" || i.insert_text.as_deref() == Some("finddepth")),
     );
     assert!(
-        wifexited.sort_text.as_deref().is_some_and(|s| s.starts_with("2_")),
+        wifexited
+            .sort_text
+            .as_deref()
+            .is_some_and(|s| s.starts_with("2_")),
         "finddepth should be promoted as imported via :find; got: {:?}",
         wifexited.sort_text
     );
@@ -354,10 +407,15 @@ fn extract_import_map_supports_mixed_tag_and_symbol_imports() {
     let items = provider.get_completions(source, source.len());
 
     let seek_set = must_some(
-        items.iter().find(|i| i.label == "find" || i.insert_text.as_deref() == Some("find")),
+        items
+            .iter()
+            .find(|i| i.label == "find" || i.insert_text.as_deref() == Some("find")),
     );
     assert!(
-        seek_set.sort_text.as_deref().is_some_and(|s| s.starts_with("2_")),
+        seek_set
+            .sort_text
+            .as_deref()
+            .is_some_and(|s| s.starts_with("2_")),
         "find should be promoted when mixed with tags; got: {:?}",
         seek_set.sort_text
     );

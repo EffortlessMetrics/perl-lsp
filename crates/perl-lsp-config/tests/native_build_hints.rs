@@ -77,7 +77,11 @@ fn commented_or_quoted_native_build_hints_are_ignored() -> TestResult {
 #[test]
 fn workspace_config_refresh_native_build_hints_leaves_include_paths_untouched() -> TestResult {
     let dir = tempfile::tempdir()?;
-    write_script(&dir, "Makefile.PL", "WriteMakefile( INC => '-Iinclude' );\n")?;
+    write_script(
+        &dir,
+        "Makefile.PL",
+        "WriteMakefile( INC => '-Iinclude' );\n",
+    )?;
 
     let mut cfg = WorkspaceConfig::default();
     let include_paths_before = cfg.include_paths.clone();

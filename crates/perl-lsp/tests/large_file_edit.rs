@@ -7,7 +7,10 @@ use std::time::Instant;
 #[test]
 fn large_file_edit() -> Result<(), Box<dyn std::error::Error>> {
     let initial = "a".repeat(100_000);
-    let mut doc = Doc { rope: Rope::from_str(&initial), version: 1 };
+    let mut doc = Doc {
+        rope: Rope::from_str(&initial),
+        version: 1,
+    };
     let change = TextDocumentContentChangeEvent {
         range: None,
         range_length: None,
@@ -15,7 +18,12 @@ fn large_file_edit() -> Result<(), Box<dyn std::error::Error>> {
     };
     apply_changes(&mut doc, &[change], PosEnc::Utf16);
     assert_eq!(doc.rope.len_bytes(), 100_000);
-    let first_char = doc.rope.to_string().chars().next().ok_or("Empty rope after edit")?;
+    let first_char = doc
+        .rope
+        .to_string()
+        .chars()
+        .next()
+        .ok_or("Empty rope after edit")?;
     assert_eq!(first_char, 'b');
 
     Ok(())
@@ -31,7 +39,10 @@ fn large_file_incremental_edits() {
         content.push_str(&format!("# Line {}: Hello World\n", i));
     }
 
-    let mut doc = Doc { rope: Rope::from_str(&content), version: 1 };
+    let mut doc = Doc {
+        rope: Rope::from_str(&content),
+        version: 1,
+    };
     let original_len = doc.rope.len_bytes();
 
     // Test simple incremental edits with safe positions
@@ -99,7 +110,11 @@ fn large_file_utf16_position_accuracy() {
 
         // Position conversion should be accurate within the line
         // (character position might differ due to Unicode width, but should be consistent)
-        assert_eq!(pos.line, converted_back.line, "Line mismatch at position {:?}", pos);
+        assert_eq!(
+            pos.line, converted_back.line,
+            "Line mismatch at position {:?}",
+            pos
+        );
 
         // Character position should be within reasonable bounds
         let char_diff = converted_back.character.abs_diff(pos.character);
@@ -131,7 +146,10 @@ fn rope_vs_string_performance() {
     let string_duration = start.elapsed();
 
     // Rope should be significantly faster for large insertions
-    println!("Rope edit: {:?}, String edit: {:?}", rope_duration, string_duration);
+    println!(
+        "Rope edit: {:?}, String edit: {:?}",
+        rope_duration, string_duration
+    );
 
     // Verify content is the same
     assert_eq!(rope.to_string(), string_content);

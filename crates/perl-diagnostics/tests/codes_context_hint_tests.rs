@@ -13,7 +13,10 @@ use perl_diagnostics::codes::DiagnosticCode;
 #[test]
 fn parse_error_has_context_hint() {
     let hint = DiagnosticCode::ParseError.context_hint();
-    assert!(hint.is_some(), "ParseError (PL001) must have a context hint");
+    assert!(
+        hint.is_some(),
+        "ParseError (PL001) must have a context hint"
+    );
     if let Some(text) = hint {
         assert!(!text.is_empty(), "context hint must not be empty");
     }
@@ -22,13 +25,19 @@ fn parse_error_has_context_hint() {
 #[test]
 fn syntax_error_has_context_hint() {
     let hint = DiagnosticCode::SyntaxError.context_hint();
-    assert!(hint.is_some(), "SyntaxError (PL002) must have a context hint");
+    assert!(
+        hint.is_some(),
+        "SyntaxError (PL002) must have a context hint"
+    );
 }
 
 #[test]
 fn unexpected_eof_has_context_hint() {
     let hint = DiagnosticCode::UnexpectedEof.context_hint();
-    assert!(hint.is_some(), "UnexpectedEof (PL003) must have a context hint");
+    assert!(
+        hint.is_some(),
+        "UnexpectedEof (PL003) must have a context hint"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -38,7 +47,10 @@ fn unexpected_eof_has_context_hint() {
 #[test]
 fn missing_strict_has_context_hint() {
     let hint = DiagnosticCode::MissingStrict.context_hint();
-    assert!(hint.is_some(), "MissingStrict (PL100) must have a context hint");
+    assert!(
+        hint.is_some(),
+        "MissingStrict (PL100) must have a context hint"
+    );
     if let Some(text) = hint {
         assert!(
             text.to_lowercase().contains("strict"),
@@ -50,7 +62,10 @@ fn missing_strict_has_context_hint() {
 #[test]
 fn missing_warnings_has_context_hint() {
     let hint = DiagnosticCode::MissingWarnings.context_hint();
-    assert!(hint.is_some(), "MissingWarnings (PL101) must have a context hint");
+    assert!(
+        hint.is_some(),
+        "MissingWarnings (PL101) must have a context hint"
+    );
     if let Some(text) = hint {
         assert!(
             text.to_lowercase().contains("warn"),
@@ -66,13 +81,19 @@ fn missing_warnings_has_context_hint() {
 #[test]
 fn unused_variable_has_context_hint() {
     let hint = DiagnosticCode::UnusedVariable.context_hint();
-    assert!(hint.is_some(), "UnusedVariable (PL102) must have a context hint");
+    assert!(
+        hint.is_some(),
+        "UnusedVariable (PL102) must have a context hint"
+    );
 }
 
 #[test]
 fn undefined_variable_has_context_hint() {
     let hint = DiagnosticCode::UndefinedVariable.context_hint();
-    assert!(hint.is_some(), "UndefinedVariable (PL103) must have a context hint");
+    assert!(
+        hint.is_some(),
+        "UndefinedVariable (PL103) must have a context hint"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -82,13 +103,19 @@ fn undefined_variable_has_context_hint() {
 #[test]
 fn missing_package_declaration_has_context_hint() {
     let hint = DiagnosticCode::MissingPackageDeclaration.context_hint();
-    assert!(hint.is_some(), "MissingPackageDeclaration (PL200) must have a context hint");
+    assert!(
+        hint.is_some(),
+        "MissingPackageDeclaration (PL200) must have a context hint"
+    );
 }
 
 #[test]
 fn duplicate_package_has_context_hint() {
     let hint = DiagnosticCode::DuplicatePackage.context_hint();
-    assert!(hint.is_some(), "DuplicatePackage (PL201) must have a context hint");
+    assert!(
+        hint.is_some(),
+        "DuplicatePackage (PL201) must have a context hint"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -98,13 +125,19 @@ fn duplicate_package_has_context_hint() {
 #[test]
 fn duplicate_subroutine_has_context_hint() {
     let hint = DiagnosticCode::DuplicateSubroutine.context_hint();
-    assert!(hint.is_some(), "DuplicateSubroutine (PL300) must have a context hint");
+    assert!(
+        hint.is_some(),
+        "DuplicateSubroutine (PL300) must have a context hint"
+    );
 }
 
 #[test]
 fn missing_return_has_context_hint() {
     let hint = DiagnosticCode::MissingReturn.context_hint();
-    assert!(hint.is_some(), "MissingReturn (PL301) must have a context hint");
+    assert!(
+        hint.is_some(),
+        "MissingReturn (PL301) must have a context hint"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -114,19 +147,28 @@ fn missing_return_has_context_hint() {
 #[test]
 fn bareword_filehandle_has_context_hint() {
     let hint = DiagnosticCode::BarewordFilehandle.context_hint();
-    assert!(hint.is_some(), "BarewordFilehandle (PL400) must have a context hint");
+    assert!(
+        hint.is_some(),
+        "BarewordFilehandle (PL400) must have a context hint"
+    );
 }
 
 #[test]
 fn two_arg_open_has_context_hint() {
     let hint = DiagnosticCode::TwoArgOpen.context_hint();
-    assert!(hint.is_some(), "TwoArgOpen (PL401) must have a context hint");
+    assert!(
+        hint.is_some(),
+        "TwoArgOpen (PL401) must have a context hint"
+    );
 }
 
 #[test]
 fn implicit_return_has_context_hint() {
     let hint = DiagnosticCode::ImplicitReturn.context_hint();
-    assert!(hint.is_some(), "ImplicitReturn (PL402) must have a context hint");
+    assert!(
+        hint.is_some(),
+        "ImplicitReturn (PL402) must have a context hint"
+    );
 }
 
 // ---------------------------------------------------------------------------

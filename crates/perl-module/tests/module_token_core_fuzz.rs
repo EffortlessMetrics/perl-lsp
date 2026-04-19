@@ -46,7 +46,11 @@ fn gen_valid_module_token(seed: &mut u64) -> String {
     let segments = ((next_u64(seed) as usize) % 4).saturating_add(1);
     let mut token = gen_identifier(seed, 16);
     for _ in 1..segments {
-        let sep = if next_u64(seed).is_multiple_of(2) { "::" } else { "'" };
+        let sep = if next_u64(seed).is_multiple_of(2) {
+            "::"
+        } else {
+            "'"
+        };
         token.push_str(sep);
         token.push_str(&gen_identifier(seed, 16));
     }
@@ -71,7 +75,11 @@ fn fuzz_token_core_does_not_panic_on_random_inputs() {
         }
 
         let end = (next_u64(&mut state) as usize) % (line.len() + 1);
-        let (start, end) = if start <= end { (start, end) } else { (end, start) };
+        let (start, end) = if start <= end {
+            (start, end)
+        } else {
+            (end, start)
+        };
         let _ = has_standalone_module_token_boundaries(&line, start, end);
     }
 }
@@ -90,7 +98,10 @@ fn fuzz_valid_module_tokens_are_parsed_to_expected_span() {
         let expected_end = start + token.len();
 
         let parsed = parse_module_token(&line, start);
-        assert!(parsed.is_some(), "expected token parse for {token:?} in {line:?}");
+        assert!(
+            parsed.is_some(),
+            "expected token parse for {token:?} in {line:?}"
+        );
         let parsed = parsed.unwrap_or_else(|| unreachable!("checked is_some"));
         assert_eq!(parsed.start, start);
         assert_eq!(parsed.end, expected_end);
@@ -108,15 +119,27 @@ fn fuzz_boundary_detection_for_standalone_vs_embedded_tokens() {
         let safe_left = SAFE_CONTEXT[(next_u64(&mut state) as usize) % SAFE_CONTEXT.len()];
         let safe_right = SAFE_CONTEXT[(next_u64(&mut state) as usize) % SAFE_CONTEXT.len()];
         let safe_line = format!("{safe_left}{token}{safe_right}");
-        assert!(has_standalone_module_token_boundaries(&safe_line, 1, 1 + token.len()));
+        assert!(has_standalone_module_token_boundaries(
+            &safe_line,
+            1,
+            1 + token.len()
+        ));
 
         let embed_left = EMBED_CONTEXT[(next_u64(&mut state) as usize) % EMBED_CONTEXT.len()];
         let embed_right = EMBED_CONTEXT[(next_u64(&mut state) as usize) % EMBED_CONTEXT.len()];
 
         let left_embedded = format!("{embed_left}{token} ");
-        assert!(!has_standalone_module_token_boundaries(&left_embedded, 1, 1 + token.len()));
+        assert!(!has_standalone_module_token_boundaries(
+            &left_embedded,
+            1,
+            1 + token.len()
+        ));
 
         let right_embedded = format!(" {token}{embed_right}");
-        assert!(!has_standalone_module_token_boundaries(&right_embedded, 1, 1 + token.len()));
+        assert!(!has_standalone_module_token_boundaries(
+            &right_embedded,
+            1,
+            1 + token.len()
+        ));
     }
 }

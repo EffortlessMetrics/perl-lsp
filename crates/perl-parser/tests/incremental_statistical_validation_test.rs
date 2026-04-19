@@ -51,8 +51,12 @@ impl StatisticalAnalyzer {
         let max = self.samples.last().copied().unwrap_or(0) as f64;
 
         // Calculate variance and standard deviation
-        let variance =
-            self.samples.iter().map(|&x| (x as f64 - mean).powi(2)).sum::<f64>() / count as f64;
+        let variance = self
+            .samples
+            .iter()
+            .map(|&x| (x as f64 - mean).powi(2))
+            .sum::<f64>()
+            / count as f64;
         let std_dev = variance.sqrt();
 
         // Calculate percentiles
@@ -126,7 +130,10 @@ impl PerformanceStatistics {
         println!("  Mean: {:.1}µs", self.mean);
         println!("  Median: {:.1}µs", self.median);
         println!("  Range: {:.1}µs - {:.1}µs", self.min, self.max);
-        println!("  Std Dev: {:.1}µs (CV: {:.3})", self.std_dev, self.coefficient_of_variation);
+        println!(
+            "  Std Dev: {:.1}µs (CV: {:.3})",
+            self.std_dev, self.coefficient_of_variation
+        );
 
         if !self.percentiles.is_empty() {
             println!("  Percentiles:");
@@ -184,7 +191,11 @@ impl PerformanceStatistics {
             ));
         }
 
-        ValidationResult { passed: violations.is_empty(), violations, warnings }
+        ValidationResult {
+            passed: violations.is_empty(),
+            violations,
+            warnings,
+        }
     }
 }
 
@@ -269,7 +280,11 @@ fn test_statistical_validation_simple_edits() -> Result<(), Box<dyn std::error::
 
         // Verify correctness
         assert!(result.success, "Simple edit {} should succeed", i);
-        assert!(result.nodes_reused >= 3, "Simple edit {} should reuse ≥3 nodes", i);
+        assert!(
+            result.nodes_reused >= 3,
+            "Simple edit {} should reuse ≥3 nodes",
+            i
+        );
     }
 
     // Analyze statistics
@@ -283,7 +298,10 @@ fn test_statistical_validation_simple_edits() -> Result<(), Box<dyn std::error::
 
     // Assert key requirements
     assert!(stats.mean < 1000.0, "Simple edits should average <1ms");
-    assert!(stats.coefficient_of_variation < 1.5, "Simple edits should be reasonably consistent");
+    assert!(
+        stats.coefficient_of_variation < 1.5,
+        "Simple edits should be reasonably consistent"
+    );
     assert!(
         validation.passed || validation.violations.len() <= 1,
         "Simple edits should meet most performance criteria"
@@ -528,8 +546,14 @@ fn test_performance_distribution_analysis() -> Result<(), Box<dyn std::error::Er
     }
 
     // Validate distribution sanity
-    assert!(skewness.abs() < 5.0, "Extreme skewness indicates performance issues");
-    assert!(kurtosis.abs() < 10.0, "Extreme kurtosis indicates performance issues");
+    assert!(
+        skewness.abs() < 5.0,
+        "Extreme skewness indicates performance issues"
+    );
+    assert!(
+        kurtosis.abs() < 10.0,
+        "Extreme kurtosis indicates performance issues"
+    );
 
     Ok(())
 }
@@ -569,8 +593,16 @@ fn test_sustained_load_performance() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         // Individual sustained load operations should remain fast
-        assert!(parse_time.as_millis() < 20, "Sustained load iteration {} too slow", i);
-        assert!(result.success, "Sustained load iteration {} should succeed", i);
+        assert!(
+            parse_time.as_millis() < 20,
+            "Sustained load iteration {} too slow",
+            i
+        );
+        assert!(
+            result.success,
+            "Sustained load iteration {} should succeed",
+            i
+        );
     }
 
     let load_stats = load_analyzer.calculate_statistics();
@@ -579,24 +611,35 @@ fn test_sustained_load_performance() -> Result<(), Box<dyn std::error::Error>> {
     // Analyze efficiency consistency under load
     let avg_efficiency = efficiency_samples.iter().sum::<f64>() / efficiency_samples.len() as f64;
     let efficiency_std_dev = {
-        let variance =
-            efficiency_samples.iter().map(|&x| (x - avg_efficiency).powi(2)).sum::<f64>()
-                / efficiency_samples.len() as f64;
+        let variance = efficiency_samples
+            .iter()
+            .map(|&x| (x - avg_efficiency).powi(2))
+            .sum::<f64>()
+            / efficiency_samples.len() as f64;
         variance.sqrt()
     };
 
     println!("  Efficiency analysis:");
     println!("    Average efficiency: {:.1}%", avg_efficiency);
     println!("    Efficiency std dev: {:.1}%", efficiency_std_dev);
-    println!("    Efficiency consistency: {:.3}", efficiency_std_dev / avg_efficiency);
+    println!(
+        "    Efficiency consistency: {:.3}",
+        efficiency_std_dev / avg_efficiency
+    );
 
     // Sustained load should maintain performance characteristics
-    assert!(load_stats.mean < 2000.0, "Sustained load should maintain <2ms average");
+    assert!(
+        load_stats.mean < 2000.0,
+        "Sustained load should maintain <2ms average"
+    );
     assert!(
         load_stats.coefficient_of_variation < 2.0,
         "Sustained load should be reasonably consistent"
     );
-    assert!(avg_efficiency > 60.0, "Sustained load should maintain >60% efficiency");
+    assert!(
+        avg_efficiency > 60.0,
+        "Sustained load should maintain >60% efficiency"
+    );
 
     println!("  ✅ Sustained load test completed successfully");
 
@@ -611,8 +654,10 @@ fn calculate_skewness(samples: &[u128], mean: f64, std_dev: f64) -> f64 {
     }
 
     let n = samples.len() as f64;
-    let sum_cubed_deviations =
-        samples.iter().map(|&x| ((x as f64 - mean) / std_dev).powi(3)).sum::<f64>();
+    let sum_cubed_deviations = samples
+        .iter()
+        .map(|&x| ((x as f64 - mean) / std_dev).powi(3))
+        .sum::<f64>();
 
     sum_cubed_deviations / n
 }
@@ -623,8 +668,10 @@ fn calculate_kurtosis(samples: &[u128], mean: f64, std_dev: f64) -> f64 {
     }
 
     let n = samples.len() as f64;
-    let sum_fourth_deviations =
-        samples.iter().map(|&x| ((x as f64 - mean) / std_dev).powi(4)).sum::<f64>();
+    let sum_fourth_deviations = samples
+        .iter()
+        .map(|&x| ((x as f64 - mean) / std_dev).powi(4))
+        .sum::<f64>();
 
     (sum_fourth_deviations / n) - 3.0 // Excess kurtosis (normal distribution = 0)
 }

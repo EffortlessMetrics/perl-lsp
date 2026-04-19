@@ -14,18 +14,31 @@ fn loc(start: usize, end: usize) -> SourceLocation {
 }
 
 fn num_node(value: &str) -> Node {
-    Node::new(NodeKind::Number { value: value.to_string() }, loc(0, value.len()))
+    Node::new(
+        NodeKind::Number {
+            value: value.to_string(),
+        },
+        loc(0, value.len()),
+    )
 }
 
 fn var_node(sigil: &str, name: &str) -> Node {
     Node::new(
-        NodeKind::Variable { sigil: sigil.to_string(), name: name.to_string() },
+        NodeKind::Variable {
+            sigil: sigil.to_string(),
+            name: name.to_string(),
+        },
         loc(0, sigil.len() + name.len()),
     )
 }
 
 fn ident_node(name: &str) -> Node {
-    Node::new(NodeKind::Identifier { name: name.to_string() }, loc(0, name.len()))
+    Node::new(
+        NodeKind::Identifier {
+            name: name.to_string(),
+        },
+        loc(0, name.len()),
+    )
 }
 
 fn block_node(statements: Vec<Node>) -> Node {
@@ -43,7 +56,12 @@ fn program_node(statements: Vec<Node>) -> Node {
 #[test]
 fn node_new_preserves_kind_and_location() -> Result<(), Box<dyn std::error::Error>> {
     let l = loc(5, 10);
-    let node = Node::new(NodeKind::Number { value: "42".to_string() }, l);
+    let node = Node::new(
+        NodeKind::Number {
+            value: "42".to_string(),
+        },
+        l,
+    );
     assert_eq!(node.location.start, 5);
     assert_eq!(node.location.end, 10);
     assert_eq!(node.kind.kind_name(), "Number");
@@ -65,14 +83,29 @@ fn variable_node_stores_sigil_and_name() -> Result<(), Box<dyn std::error::Error
 
 #[test]
 fn string_node_interpolation_flag() -> Result<(), Box<dyn std::error::Error>> {
-    let interp =
-        Node::new(NodeKind::String { value: "hi".to_string(), interpolated: true }, loc(0, 4));
-    let literal =
-        Node::new(NodeKind::String { value: "hi".to_string(), interpolated: false }, loc(0, 4));
+    let interp = Node::new(
+        NodeKind::String {
+            value: "hi".to_string(),
+            interpolated: true,
+        },
+        loc(0, 4),
+    );
+    let literal = Node::new(
+        NodeKind::String {
+            value: "hi".to_string(),
+            interpolated: false,
+        },
+        loc(0, 4),
+    );
     match (&interp.kind, &literal.kind) {
         (
-            NodeKind::String { interpolated: true, .. },
-            NodeKind::String { interpolated: false, .. },
+            NodeKind::String {
+                interpolated: true, ..
+            },
+            NodeKind::String {
+                interpolated: false,
+                ..
+            },
         ) => {}
         _ => return Err("interpolation flags wrong".into()),
     }
@@ -105,7 +138,11 @@ fn variable_declaration_with_initializer() -> Result<(), Box<dyn std::error::Err
         loc(0, 11),
     );
     match &decl.kind {
-        NodeKind::VariableDeclaration { declarator, initializer, .. } => {
+        NodeKind::VariableDeclaration {
+            declarator,
+            initializer,
+            ..
+        } => {
             assert_eq!(declarator, "my");
             assert!(initializer.is_some());
         }
@@ -132,9 +169,11 @@ fn variable_list_declaration() -> Result<(), Box<dyn std::error::Error>> {
             assert_eq!(variables.len(), 2);
         }
         other => {
-            return Err(
-                format!("expected VariableListDeclaration, got {}", other.kind_name()).into()
-            );
+            return Err(format!(
+                "expected VariableListDeclaration, got {}",
+                other.kind_name()
+            )
+            .into());
         }
     }
     Ok(())
@@ -171,7 +210,10 @@ fn ternary_expression() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn unary_expression() -> Result<(), Box<dyn std::error::Error>> {
     let expr = Node::new(
-        NodeKind::Unary { op: "-".to_string(), operand: Box::new(num_node("5")) },
+        NodeKind::Unary {
+            op: "-".to_string(),
+            operand: Box::new(num_node("5")),
+        },
         loc(0, 2),
     );
     assert_eq!(expr.kind.kind_name(), "Unary");
@@ -298,7 +340,11 @@ fn package_with_and_without_block() -> Result<(), Box<dyn std::error::Error>> {
         loc(0, 30),
     );
     let without = Node::new(
-        NodeKind::Package { name: "Foo".to_string(), name_span: loc(8, 11), block: None },
+        NodeKind::Package {
+            name: "Foo".to_string(),
+            name_span: loc(8, 11),
+            block: None,
+        },
         loc(0, 12),
     );
     assert_eq!(with_block.kind.kind_name(), "Package");
@@ -326,16 +372,26 @@ fn sexp_variable() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn sexp_string_plain() -> Result<(), Box<dyn std::error::Error>> {
-    let s =
-        Node::new(NodeKind::String { value: "hello".to_string(), interpolated: false }, loc(0, 7));
+    let s = Node::new(
+        NodeKind::String {
+            value: "hello".to_string(),
+            interpolated: false,
+        },
+        loc(0, 7),
+    );
     assert_eq!(s.to_sexp(), "(string \"hello\")");
     Ok(())
 }
 
 #[test]
 fn sexp_string_interpolated() -> Result<(), Box<dyn std::error::Error>> {
-    let s =
-        Node::new(NodeKind::String { value: "hi $x".to_string(), interpolated: true }, loc(0, 7));
+    let s = Node::new(
+        NodeKind::String {
+            value: "hi $x".to_string(),
+            interpolated: true,
+        },
+        loc(0, 7),
+    );
     assert_eq!(s.to_sexp(), "(string_interpolated \"hi $x\")");
     Ok(())
 }
@@ -373,7 +429,10 @@ fn sexp_binary_addition() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn sexp_unary_negation() -> Result<(), Box<dyn std::error::Error>> {
     let expr = Node::new(
-        NodeKind::Unary { op: "-".to_string(), operand: Box::new(num_node("5")) },
+        NodeKind::Unary {
+            op: "-".to_string(),
+            operand: Box::new(num_node("5")),
+        },
         loc(0, 2),
     );
     assert_eq!(expr.to_sexp(), "(unary_- (number 5))");
@@ -383,7 +442,10 @@ fn sexp_unary_negation() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn sexp_unary_not() -> Result<(), Box<dyn std::error::Error>> {
     let expr = Node::new(
-        NodeKind::Unary { op: "!".to_string(), operand: Box::new(var_node("$", "x")) },
+        NodeKind::Unary {
+            op: "!".to_string(),
+            operand: Box::new(var_node("$", "x")),
+        },
         loc(0, 3),
     );
     assert_eq!(expr.to_sexp(), "(unary_not (variable $ x))");
@@ -564,31 +626,56 @@ fn sexp_error_nodes() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn sexp_missing_variants() -> Result<(), Box<dyn std::error::Error>> {
-    assert_eq!(Node::new(NodeKind::MissingExpression, loc(0, 0)).to_sexp(), "(missing_expression)");
-    assert_eq!(Node::new(NodeKind::MissingStatement, loc(0, 0)).to_sexp(), "(missing_statement)");
-    assert_eq!(Node::new(NodeKind::MissingIdentifier, loc(0, 0)).to_sexp(), "(missing_identifier)");
-    assert_eq!(Node::new(NodeKind::MissingBlock, loc(0, 0)).to_sexp(), "(missing_block)");
+    assert_eq!(
+        Node::new(NodeKind::MissingExpression, loc(0, 0)).to_sexp(),
+        "(missing_expression)"
+    );
+    assert_eq!(
+        Node::new(NodeKind::MissingStatement, loc(0, 0)).to_sexp(),
+        "(missing_statement)"
+    );
+    assert_eq!(
+        Node::new(NodeKind::MissingIdentifier, loc(0, 0)).to_sexp(),
+        "(missing_identifier)"
+    );
+    assert_eq!(
+        Node::new(NodeKind::MissingBlock, loc(0, 0)).to_sexp(),
+        "(missing_block)"
+    );
     Ok(())
 }
 
 #[test]
 fn sexp_unknown_rest() -> Result<(), Box<dyn std::error::Error>> {
-    assert_eq!(Node::new(NodeKind::UnknownRest, loc(0, 0)).to_sexp(), "(UNKNOWN_REST)");
+    assert_eq!(
+        Node::new(NodeKind::UnknownRest, loc(0, 0)).to_sexp(),
+        "(UNKNOWN_REST)"
+    );
     Ok(())
 }
 
 #[test]
 fn sexp_diamond_ellipsis_undef() -> Result<(), Box<dyn std::error::Error>> {
-    assert_eq!(Node::new(NodeKind::Diamond, loc(0, 2)).to_sexp(), "(diamond)");
-    assert_eq!(Node::new(NodeKind::Ellipsis, loc(0, 3)).to_sexp(), "(ellipsis)");
+    assert_eq!(
+        Node::new(NodeKind::Diamond, loc(0, 2)).to_sexp(),
+        "(diamond)"
+    );
+    assert_eq!(
+        Node::new(NodeKind::Ellipsis, loc(0, 3)).to_sexp(),
+        "(ellipsis)"
+    );
     assert_eq!(Node::new(NodeKind::Undef, loc(0, 5)).to_sexp(), "(undef)");
     Ok(())
 }
 
 #[test]
 fn sexp_readline_with_and_without_fh() -> Result<(), Box<dyn std::error::Error>> {
-    let with_fh =
-        Node::new(NodeKind::Readline { filehandle: Some("STDIN".to_string()) }, loc(0, 7));
+    let with_fh = Node::new(
+        NodeKind::Readline {
+            filehandle: Some("STDIN".to_string()),
+        },
+        loc(0, 7),
+    );
     let without = Node::new(NodeKind::Readline { filehandle: None }, loc(0, 2));
     assert_eq!(with_fh.to_sexp(), "(readline STDIN)");
     assert_eq!(without.to_sexp(), "(readline)");
@@ -597,8 +684,18 @@ fn sexp_readline_with_and_without_fh() -> Result<(), Box<dyn std::error::Error>>
 
 #[test]
 fn sexp_glob_and_typeglob() -> Result<(), Box<dyn std::error::Error>> {
-    let g = Node::new(NodeKind::Glob { pattern: "*.pl".to_string() }, loc(0, 6));
-    let tg = Node::new(NodeKind::Typeglob { name: "foo".to_string() }, loc(0, 4));
+    let g = Node::new(
+        NodeKind::Glob {
+            pattern: "*.pl".to_string(),
+        },
+        loc(0, 6),
+    );
+    let tg = Node::new(
+        NodeKind::Typeglob {
+            name: "foo".to_string(),
+        },
+        loc(0, 4),
+    );
     assert_eq!(g.to_sexp(), "(glob *.pl)");
     assert_eq!(tg.to_sexp(), "(typeglob foo)");
     Ok(())
@@ -607,7 +704,9 @@ fn sexp_glob_and_typeglob() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn sexp_array_literal() -> Result<(), Box<dyn std::error::Error>> {
     let arr = Node::new(
-        NodeKind::ArrayLiteral { elements: vec![num_node("1"), num_node("2")] },
+        NodeKind::ArrayLiteral {
+            elements: vec![num_node("1"), num_node("2")],
+        },
         loc(0, 6),
     );
     assert_eq!(arr.to_sexp(), "(array (number 1) (number 2))");
@@ -617,7 +716,9 @@ fn sexp_array_literal() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn sexp_hash_literal() -> Result<(), Box<dyn std::error::Error>> {
     let h = Node::new(
-        NodeKind::HashLiteral { pairs: vec![(ident_node("key"), num_node("1"))] },
+        NodeKind::HashLiteral {
+            pairs: vec![(ident_node("key"), num_node("1"))],
+        },
         loc(0, 10),
     );
     let sexp = h.to_sexp();
@@ -658,8 +759,12 @@ fn sexp_ternary() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn sexp_return_with_and_without_value() -> Result<(), Box<dyn std::error::Error>> {
-    let with_val =
-        Node::new(NodeKind::Return { value: Some(Box::new(num_node("42"))) }, loc(0, 10));
+    let with_val = Node::new(
+        NodeKind::Return {
+            value: Some(Box::new(num_node("42"))),
+        },
+        loc(0, 10),
+    );
     let bare = Node::new(NodeKind::Return { value: None }, loc(0, 6));
     assert_eq!(with_val.to_sexp(), "(return (number 42))");
     assert_eq!(bare.to_sexp(), "(return)");
@@ -668,9 +773,18 @@ fn sexp_return_with_and_without_value() -> Result<(), Box<dyn std::error::Error>
 
 #[test]
 fn sexp_loop_control() -> Result<(), Box<dyn std::error::Error>> {
-    let next = Node::new(NodeKind::LoopControl { op: "next".to_string(), label: None }, loc(0, 4));
+    let next = Node::new(
+        NodeKind::LoopControl {
+            op: "next".to_string(),
+            label: None,
+        },
+        loc(0, 4),
+    );
     let last_labeled = Node::new(
-        NodeKind::LoopControl { op: "last".to_string(), label: Some("OUTER".to_string()) },
+        NodeKind::LoopControl {
+            op: "last".to_string(),
+            label: Some("OUTER".to_string()),
+        },
         loc(0, 10),
     );
     assert_eq!(next.to_sexp(), "(next)");
@@ -681,7 +795,11 @@ fn sexp_loop_control() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn sexp_use_and_no() -> Result<(), Box<dyn std::error::Error>> {
     let use_stmt = Node::new(
-        NodeKind::Use { module: "strict".to_string(), args: vec![], has_filter_risk: false },
+        NodeKind::Use {
+            module: "strict".to_string(),
+            args: vec![],
+            has_filter_risk: false,
+        },
         loc(0, 11),
     );
     let no_stmt = Node::new(
@@ -700,7 +818,11 @@ fn sexp_use_and_no() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn sexp_use_with_filter_risk() -> Result<(), Box<dyn std::error::Error>> {
     let risky = Node::new(
-        NodeKind::Use { module: "Filter::Simple".to_string(), args: vec![], has_filter_risk: true },
+        NodeKind::Use {
+            module: "Filter::Simple".to_string(),
+            args: vec![],
+            has_filter_risk: true,
+        },
         loc(0, 20),
     );
     let sexp = risky.to_sexp();
@@ -711,7 +833,11 @@ fn sexp_use_with_filter_risk() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn sexp_package() -> Result<(), Box<dyn std::error::Error>> {
     let pkg = Node::new(
-        NodeKind::Package { name: "Foo".to_string(), name_span: loc(8, 11), block: None },
+        NodeKind::Package {
+            name: "Foo".to_string(),
+            name_span: loc(8, 11),
+            block: None,
+        },
         loc(0, 12),
     );
     assert_eq!(pkg.to_sexp(), "(package Foo)");
@@ -736,8 +862,18 @@ fn sexp_package_with_block() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn sexp_eval_and_do() -> Result<(), Box<dyn std::error::Error>> {
-    let eval = Node::new(NodeKind::Eval { block: Box::new(block_node(vec![])) }, loc(0, 10));
-    let do_node = Node::new(NodeKind::Do { block: Box::new(block_node(vec![])) }, loc(0, 10));
+    let eval = Node::new(
+        NodeKind::Eval {
+            block: Box::new(block_node(vec![])),
+        },
+        loc(0, 10),
+    );
+    let do_node = Node::new(
+        NodeKind::Do {
+            block: Box::new(block_node(vec![])),
+        },
+        loc(0, 10),
+    );
     assert_eq!(eval.to_sexp(), "(eval (block ))");
     assert_eq!(do_node.to_sexp(), "(do (block ))");
     Ok(())
@@ -766,7 +902,10 @@ fn sexp_function_call_builtin() -> Result<(), Box<dyn std::error::Error>> {
         NodeKind::FunctionCall {
             name: "print".to_string(),
             args: vec![Node::new(
-                NodeKind::String { value: "hi".to_string(), interpolated: false },
+                NodeKind::String {
+                    value: "hi".to_string(),
+                    interpolated: false,
+                },
                 loc(0, 4),
             )],
         },
@@ -780,7 +919,10 @@ fn sexp_function_call_builtin() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn sexp_function_call_user() -> Result<(), Box<dyn std::error::Error>> {
     let call = Node::new(
-        NodeKind::FunctionCall { name: "my_func".to_string(), args: vec![num_node("1")] },
+        NodeKind::FunctionCall {
+            name: "my_func".to_string(),
+            args: vec![num_node("1")],
+        },
         loc(0, 12),
     );
     let sexp = call.to_sexp();
@@ -871,20 +1013,33 @@ fn sexp_heredoc_variants() -> Result<(), Box<dyn std::error::Error>> {
         },
         loc(0, 10),
     );
-    assert!(plain.to_sexp().starts_with("(heredoc "), "got: {}", plain.to_sexp());
     assert!(
-        indented_interp.to_sexp().starts_with("(heredoc_indented_interpolated"),
+        plain.to_sexp().starts_with("(heredoc "),
+        "got: {}",
+        plain.to_sexp()
+    );
+    assert!(
+        indented_interp
+            .to_sexp()
+            .starts_with("(heredoc_indented_interpolated"),
         "got: {}",
         indented_interp.to_sexp()
     );
-    assert!(cmd.to_sexp().starts_with("(heredoc_command"), "got: {}", cmd.to_sexp());
+    assert!(
+        cmd.to_sexp().starts_with("(heredoc_command"),
+        "got: {}",
+        cmd.to_sexp()
+    );
     Ok(())
 }
 
 #[test]
 fn sexp_data_section() -> Result<(), Box<dyn std::error::Error>> {
     let ds = Node::new(
-        NodeKind::DataSection { marker: "__DATA__".to_string(), body: Some("stuff".to_string()) },
+        NodeKind::DataSection {
+            marker: "__DATA__".to_string(),
+            body: Some("stuff".to_string()),
+        },
         loc(0, 20),
     );
     let sexp = ds.to_sexp();
@@ -947,14 +1102,25 @@ fn sexp_labeled_statement() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn sexp_given_when_default() -> Result<(), Box<dyn std::error::Error>> {
     let g = Node::new(
-        NodeKind::Given { expr: Box::new(var_node("$", "x")), body: Box::new(block_node(vec![])) },
+        NodeKind::Given {
+            expr: Box::new(var_node("$", "x")),
+            body: Box::new(block_node(vec![])),
+        },
         loc(0, 20),
     );
     let w = Node::new(
-        NodeKind::When { condition: Box::new(num_node("1")), body: Box::new(block_node(vec![])) },
+        NodeKind::When {
+            condition: Box::new(num_node("1")),
+            body: Box::new(block_node(vec![])),
+        },
         loc(0, 15),
     );
-    let d = Node::new(NodeKind::Default { body: Box::new(block_node(vec![])) }, loc(0, 10));
+    let d = Node::new(
+        NodeKind::Default {
+            body: Box::new(block_node(vec![])),
+        },
+        loc(0, 10),
+    );
     assert!(g.to_sexp().starts_with("(given"), "got: {}", g.to_sexp());
     assert!(w.to_sexp().starts_with("(when"), "got: {}", w.to_sexp());
     assert!(d.to_sexp().starts_with("(default"), "got: {}", d.to_sexp());
@@ -964,7 +1130,9 @@ fn sexp_given_when_default() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn sexp_expression_statement() -> Result<(), Box<dyn std::error::Error>> {
     let es = Node::new(
-        NodeKind::ExpressionStatement { expression: Box::new(num_node("42")) },
+        NodeKind::ExpressionStatement {
+            expression: Box::new(num_node("42")),
+        },
         loc(0, 3),
     );
     assert_eq!(es.to_sexp(), "(expression_statement (number 42))");
@@ -1017,16 +1185,28 @@ fn sexp_tie_and_untie() -> Result<(), Box<dyn std::error::Error>> {
         },
         loc(0, 20),
     );
-    let untie = Node::new(NodeKind::Untie { variable: Box::new(var_node("%", "h")) }, loc(0, 10));
+    let untie = Node::new(
+        NodeKind::Untie {
+            variable: Box::new(var_node("%", "h")),
+        },
+        loc(0, 10),
+    );
     assert!(tie.to_sexp().starts_with("(tie"), "got: {}", tie.to_sexp());
-    assert!(untie.to_sexp().starts_with("(untie"), "got: {}", untie.to_sexp());
+    assert!(
+        untie.to_sexp().starts_with("(untie"),
+        "got: {}",
+        untie.to_sexp()
+    );
     Ok(())
 }
 
 #[test]
 fn sexp_format() -> Result<(), Box<dyn std::error::Error>> {
     let f = Node::new(
-        NodeKind::Format { name: "STDOUT".to_string(), body: "@<<<".to_string() },
+        NodeKind::Format {
+            name: "STDOUT".to_string(),
+            body: "@<<<".to_string(),
+        },
         loc(0, 20),
     );
     let sexp = f.to_sexp();
@@ -1115,7 +1295,9 @@ fn sexp_signature_parameters() -> Result<(), Box<dyn std::error::Error>> {
         NodeKind::Signature {
             parameters: vec![
                 Node::new(
-                    NodeKind::MandatoryParameter { variable: Box::new(var_node("$", "x")) },
+                    NodeKind::MandatoryParameter {
+                        variable: Box::new(var_node("$", "x")),
+                    },
                     loc(0, 2),
                 ),
                 Node::new(
@@ -1126,7 +1308,9 @@ fn sexp_signature_parameters() -> Result<(), Box<dyn std::error::Error>> {
                     loc(0, 6),
                 ),
                 Node::new(
-                    NodeKind::SlurpyParameter { variable: Box::new(var_node("@", "rest")) },
+                    NodeKind::SlurpyParameter {
+                        variable: Box::new(var_node("@", "rest")),
+                    },
                     loc(0, 5),
                 ),
             ],
@@ -1147,8 +1331,12 @@ fn sexp_signature_parameters() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn sexp_inner_unwraps_expression_statement() -> Result<(), Box<dyn std::error::Error>> {
-    let es =
-        Node::new(NodeKind::ExpressionStatement { expression: Box::new(num_node("7")) }, loc(0, 2));
+    let es = Node::new(
+        NodeKind::ExpressionStatement {
+            expression: Box::new(num_node("7")),
+        },
+        loc(0, 2),
+    );
     // to_sexp_inner should unwrap non-anon-sub expression statements
     let inner = es.to_sexp_inner();
     assert_eq!(inner, "(number 7)");
@@ -1168,8 +1356,12 @@ fn sexp_inner_keeps_anon_sub_wrapped() -> Result<(), Box<dyn std::error::Error>>
         },
         loc(0, 10),
     );
-    let es =
-        Node::new(NodeKind::ExpressionStatement { expression: Box::new(anon_sub) }, loc(0, 10));
+    let es = Node::new(
+        NodeKind::ExpressionStatement {
+            expression: Box::new(anon_sub),
+        },
+        loc(0, 10),
+    );
     let inner = es.to_sexp_inner();
     assert!(inner.contains("expression_statement"), "got: {inner}");
     Ok(())
@@ -1224,7 +1416,10 @@ fn children_of_binary() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn children_of_unary() -> Result<(), Box<dyn std::error::Error>> {
     let u = Node::new(
-        NodeKind::Unary { op: "-".to_string(), operand: Box::new(num_node("3")) },
+        NodeKind::Unary {
+            op: "-".to_string(),
+            operand: Box::new(num_node("3")),
+        },
         loc(0, 2),
     );
     assert_eq!(u.children().len(), 1);
@@ -1420,7 +1615,10 @@ fn for_each_child_visits_method_call() -> Result<(), Box<dyn std::error::Error>>
 fn for_each_child_visits_hash_literal() -> Result<(), Box<dyn std::error::Error>> {
     let h = Node::new(
         NodeKind::HashLiteral {
-            pairs: vec![(ident_node("a"), num_node("1")), (ident_node("b"), num_node("2"))],
+            pairs: vec![
+                (ident_node("a"), num_node("1")),
+                (ident_node("b"), num_node("2")),
+            ],
         },
         loc(0, 20),
     );
@@ -1435,11 +1633,15 @@ fn for_each_child_visits_signature_params() -> Result<(), Box<dyn std::error::Er
         NodeKind::Signature {
             parameters: vec![
                 Node::new(
-                    NodeKind::MandatoryParameter { variable: Box::new(var_node("$", "a")) },
+                    NodeKind::MandatoryParameter {
+                        variable: Box::new(var_node("$", "a")),
+                    },
                     loc(0, 2),
                 ),
                 Node::new(
-                    NodeKind::SlurpyParameter { variable: Box::new(var_node("@", "rest")) },
+                    NodeKind::SlurpyParameter {
+                        variable: Box::new(var_node("@", "rest")),
+                    },
                     loc(0, 5),
                 ),
             ],
@@ -1512,7 +1714,11 @@ fn kind_name_covers_all_variants() -> Result<(), Box<dyn std::error::Error>> {
         v.sort();
         v
     };
-    assert_eq!(NodeKind::ALL_KIND_NAMES, sorted.as_slice(), "ALL_KIND_NAMES should be sorted");
+    assert_eq!(
+        NodeKind::ALL_KIND_NAMES,
+        sorted.as_slice(),
+        "ALL_KIND_NAMES should be sorted"
+    );
     Ok(())
 }
 
@@ -1526,14 +1732,39 @@ fn kind_name_specific_variants() -> Result<(), Box<dyn std::error::Error>> {
     assert_eq!(NodeKind::MissingIdentifier.kind_name(), "MissingIdentifier");
     assert_eq!(NodeKind::MissingBlock.kind_name(), "MissingBlock");
     assert_eq!(NodeKind::UnknownRest.kind_name(), "UnknownRest");
-    assert_eq!(NodeKind::Number { value: "1".to_string() }.kind_name(), "Number");
     assert_eq!(
-        NodeKind::String { value: "".to_string(), interpolated: false }.kind_name(),
+        NodeKind::Number {
+            value: "1".to_string()
+        }
+        .kind_name(),
+        "Number"
+    );
+    assert_eq!(
+        NodeKind::String {
+            value: "".to_string(),
+            interpolated: false
+        }
+        .kind_name(),
         "String"
     );
-    assert_eq!(NodeKind::Readline { filehandle: None }.kind_name(), "Readline");
-    assert_eq!(NodeKind::Glob { pattern: "".to_string() }.kind_name(), "Glob");
-    assert_eq!(NodeKind::Typeglob { name: "".to_string() }.kind_name(), "Typeglob");
+    assert_eq!(
+        NodeKind::Readline { filehandle: None }.kind_name(),
+        "Readline"
+    );
+    assert_eq!(
+        NodeKind::Glob {
+            pattern: "".to_string()
+        }
+        .kind_name(),
+        "Glob"
+    );
+    assert_eq!(
+        NodeKind::Typeglob {
+            name: "".to_string()
+        }
+        .kind_name(),
+        "Typeglob"
+    );
     Ok(())
 }
 
@@ -1633,13 +1864,19 @@ fn zero_length_location() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn string_with_special_chars_in_sexp() -> Result<(), Box<dyn std::error::Error>> {
     let s = Node::new(
-        NodeKind::String { value: "he said \"hi\"".to_string(), interpolated: false },
+        NodeKind::String {
+            value: "he said \"hi\"".to_string(),
+            interpolated: false,
+        },
         loc(0, 14),
     );
     let sexp = s.to_sexp();
     // Escaping should handle quotes
     assert!(sexp.contains("string"), "got: {sexp}");
-    assert!(sexp.contains("\\\""), "quotes should be escaped, got: {sexp}");
+    assert!(
+        sexp.contains("\\\""),
+        "quotes should be escaped, got: {sexp}"
+    );
     Ok(())
 }
 
@@ -1675,9 +1912,25 @@ fn leaf_nodes_have_no_children() -> Result<(), Box<dyn std::error::Error>> {
         Node::new(NodeKind::MissingBlock, loc(0, 0)),
         Node::new(NodeKind::UnknownRest, loc(0, 0)),
         Node::new(NodeKind::Readline { filehandle: None }, loc(0, 2)),
-        Node::new(NodeKind::Glob { pattern: "*.pl".to_string() }, loc(0, 6)),
-        Node::new(NodeKind::Typeglob { name: "foo".to_string() }, loc(0, 4)),
-        Node::new(NodeKind::String { value: "hi".to_string(), interpolated: false }, loc(0, 4)),
+        Node::new(
+            NodeKind::Glob {
+                pattern: "*.pl".to_string(),
+            },
+            loc(0, 6),
+        ),
+        Node::new(
+            NodeKind::Typeglob {
+                name: "foo".to_string(),
+            },
+            loc(0, 4),
+        ),
+        Node::new(
+            NodeKind::String {
+                value: "hi".to_string(),
+                interpolated: false,
+            },
+            loc(0, 4),
+        ),
         Node::new(
             NodeKind::Heredoc {
                 delimiter: "EOF".to_string(),
@@ -1699,24 +1952,56 @@ fn leaf_nodes_have_no_children() -> Result<(), Box<dyn std::error::Error>> {
             loc(0, 3),
         ),
         Node::new(
-            NodeKind::Use { module: "strict".to_string(), args: vec![], has_filter_risk: false },
+            NodeKind::Use {
+                module: "strict".to_string(),
+                args: vec![],
+                has_filter_risk: false,
+            },
             loc(0, 11),
         ),
         Node::new(
-            NodeKind::No { module: "warnings".to_string(), args: vec![], has_filter_risk: false },
+            NodeKind::No {
+                module: "warnings".to_string(),
+                args: vec![],
+                has_filter_risk: false,
+            },
             loc(0, 13),
         ),
-        Node::new(NodeKind::Prototype { content: "$".to_string() }, loc(0, 3)),
-        Node::new(NodeKind::DataSection { marker: "__END__".to_string(), body: None }, loc(0, 7)),
         Node::new(
-            NodeKind::Format { name: "STDOUT".to_string(), body: "@<<<".to_string() },
+            NodeKind::Prototype {
+                content: "$".to_string(),
+            },
+            loc(0, 3),
+        ),
+        Node::new(
+            NodeKind::DataSection {
+                marker: "__END__".to_string(),
+                body: None,
+            },
+            loc(0, 7),
+        ),
+        Node::new(
+            NodeKind::Format {
+                name: "STDOUT".to_string(),
+                body: "@<<<".to_string(),
+            },
             loc(0, 15),
         ),
-        Node::new(NodeKind::LoopControl { op: "next".to_string(), label: None }, loc(0, 4)),
+        Node::new(
+            NodeKind::LoopControl {
+                op: "next".to_string(),
+                label: None,
+            },
+            loc(0, 4),
+        ),
     ];
 
     for leaf in &leaves {
-        assert!(leaf.children().is_empty(), "{} should have no children", leaf.kind.kind_name());
+        assert!(
+            leaf.children().is_empty(),
+            "{} should have no children",
+            leaf.kind.kind_name()
+        );
     }
     Ok(())
 }
@@ -1732,7 +2017,13 @@ fn v2_node_creation() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut id_gen = NodeIdGenerator::new();
     let range = Range::new(Position::new(0, 1, 1), Position::new(5, 1, 6));
-    let node = V2Node::new(id_gen.next_id(), V2Kind::Number { value: "42".to_string() }, range);
+    let node = V2Node::new(
+        id_gen.next_id(),
+        V2Kind::Number {
+            value: "42".to_string(),
+        },
+        range,
+    );
     assert_eq!(node.id, 0);
     assert_eq!(node.to_sexp(), "(number 42)");
     Ok(())
@@ -1766,7 +2057,10 @@ fn v2_missing_kind_sexp() -> Result<(), Box<dyn std::error::Error>> {
     assert_eq!(V2Kind::MissingStatement.to_sexp(), "(MISSING_STATEMENT)");
     assert_eq!(V2Kind::MissingIdentifier.to_sexp(), "(MISSING_IDENTIFIER)");
     assert_eq!(V2Kind::MissingBlock.to_sexp(), "(MISSING_BLOCK)");
-    assert_eq!(V2Kind::Missing(MissingKind::Semicolon).to_sexp(), "(MISSING Semicolon)");
+    assert_eq!(
+        V2Kind::Missing(MissingKind::Semicolon).to_sexp(),
+        "(MISSING Semicolon)"
+    );
     assert_eq!(
         V2Kind::Missing(MissingKind::ClosingDelimiter(')')).to_sexp(),
         "(MISSING ClosingDelimiter(')'))"
@@ -1789,8 +2083,20 @@ fn v2_program_sexp() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut id_gen = NodeIdGenerator::new();
     let range = Range::new(Position::new(0, 1, 1), Position::new(10, 1, 11));
-    let child = V2Node::new(id_gen.next_id(), V2Kind::Number { value: "1".to_string() }, range);
-    let prog = V2Node::new(id_gen.next_id(), V2Kind::Program { statements: vec![child] }, range);
+    let child = V2Node::new(
+        id_gen.next_id(),
+        V2Kind::Number {
+            value: "1".to_string(),
+        },
+        range,
+    );
+    let prog = V2Node::new(
+        id_gen.next_id(),
+        V2Kind::Program {
+            statements: vec![child],
+        },
+        range,
+    );
     let sexp = prog.to_sexp();
     assert!(sexp.starts_with("(source_file"), "got: {sexp}");
     assert!(sexp.contains("(number 1)"), "got: {sexp}");
@@ -1801,7 +2107,11 @@ fn v2_program_sexp() -> Result<(), Box<dyn std::error::Error>> {
 fn v2_variable_sexp() -> Result<(), Box<dyn std::error::Error>> {
     use perl_ast::v2::NodeKind as V2Kind;
 
-    let sexp = V2Kind::Variable { sigil: "$".to_string(), name: "foo".to_string() }.to_sexp();
+    let sexp = V2Kind::Variable {
+        sigil: "$".to_string(),
+        name: "foo".to_string(),
+    }
+    .to_sexp();
     assert_eq!(sexp, "(variable $ foo)");
     Ok(())
 }
@@ -1811,11 +2121,19 @@ fn v2_string_sexp() -> Result<(), Box<dyn std::error::Error>> {
     use perl_ast::v2::NodeKind as V2Kind;
 
     assert_eq!(
-        V2Kind::String { value: "hi".to_string(), interpolated: false }.to_sexp(),
+        V2Kind::String {
+            value: "hi".to_string(),
+            interpolated: false
+        }
+        .to_sexp(),
         "(string \"hi\")"
     );
     assert_eq!(
-        V2Kind::String { value: "hi".to_string(), interpolated: true }.to_sexp(),
+        V2Kind::String {
+            value: "hi".to_string(),
+            interpolated: true
+        }
+        .to_sexp(),
         "(string_interpolated \"hi\")"
     );
     Ok(())
@@ -1828,9 +2146,25 @@ fn v2_binary_sexp() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut id_gen = NodeIdGenerator::new();
     let range = Range::new(Position::new(0, 1, 1), Position::new(5, 1, 6));
-    let left = V2Node::new(id_gen.next_id(), V2Kind::Number { value: "1".to_string() }, range);
-    let right = V2Node::new(id_gen.next_id(), V2Kind::Number { value: "2".to_string() }, range);
-    let bin = V2Kind::Binary { op: "+".to_string(), left: Box::new(left), right: Box::new(right) };
+    let left = V2Node::new(
+        id_gen.next_id(),
+        V2Kind::Number {
+            value: "1".to_string(),
+        },
+        range,
+    );
+    let right = V2Node::new(
+        id_gen.next_id(),
+        V2Kind::Number {
+            value: "2".to_string(),
+        },
+        range,
+    );
+    let bin = V2Kind::Binary {
+        op: "+".to_string(),
+        left: Box::new(left),
+        right: Box::new(right),
+    };
     assert_eq!(bin.to_sexp(), "(binary_+ (number 1) (number 2))");
     Ok(())
 }

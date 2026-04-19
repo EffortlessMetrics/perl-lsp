@@ -439,13 +439,24 @@ mod tests {
         let ids = BuildFlags::all().to_feature_ids();
         let known_ids: std::collections::HashSet<_> =
             all_features().iter().map(|feature| feature.id).collect();
-        let unknown: Vec<_> = ids.iter().copied().filter(|id| !known_ids.contains(id)).collect();
-        assert!(unknown.is_empty(), "non-catalog feature IDs emitted: {:?}", unknown);
+        let unknown: Vec<_> = ids
+            .iter()
+            .copied()
+            .filter(|id| !known_ids.contains(id))
+            .collect();
+        assert!(
+            unknown.is_empty(),
+            "non-catalog feature IDs emitted: {:?}",
+            unknown
+        );
     }
 
     #[test]
     fn document_color_uses_bdd_catalog_id() {
-        let flags = BuildFlags { document_color: true, ..Default::default() };
+        let flags = BuildFlags {
+            document_color: true,
+            ..Default::default()
+        };
         assert_eq!(flags.to_feature_ids(), vec![LSP_DOCUMENT_COLOR]);
     }
 
@@ -505,7 +516,10 @@ mod tests {
         assert!(ga.hover);
         assert!(ga.definition);
         assert!(ga.formatting, "ga-lock should include formatting");
-        assert!(ga.range_formatting, "ga-lock should include range_formatting");
+        assert!(
+            ga.range_formatting,
+            "ga-lock should include range_formatting"
+        );
         assert!(!ga.inline_values, "ga-lock should exclude inline_values");
     }
 
@@ -556,7 +570,10 @@ mod tests {
     #[test]
     fn default_flags_are_all_false() {
         let default = BuildFlags::default();
-        assert!(default.to_feature_ids().is_empty(), "default flags should yield no features");
+        assert!(
+            default.to_feature_ids().is_empty(),
+            "default flags should yield no features"
+        );
     }
 
     // ── all() produces strictly more IDs than ga_lock() ─────────────
@@ -566,7 +583,10 @@ mod tests {
         let all_ids = BuildFlags::all().to_feature_ids();
         let ga_ids = BuildFlags::ga_lock().to_feature_ids();
         for id in &ga_ids {
-            assert!(all_ids.contains(id), "'all' profile should contain ga-lock feature '{id}'");
+            assert!(
+                all_ids.contains(id),
+                "'all' profile should contain ga-lock feature '{id}'"
+            );
         }
         assert!(all_ids.len() >= ga_ids.len());
     }
@@ -575,7 +595,10 @@ mod tests {
 
     #[test]
     fn to_advertised_features_maps_completion() {
-        let flags = BuildFlags { completion: true, ..Default::default() };
+        let flags = BuildFlags {
+            completion: true,
+            ..Default::default()
+        };
         let adv = flags.to_advertised_features();
         assert!(adv.completion);
         assert!(!adv.hover);
@@ -583,7 +606,10 @@ mod tests {
 
     #[test]
     fn to_advertised_features_maps_code_actions_to_code_action() {
-        let flags = BuildFlags { code_actions: true, ..Default::default() };
+        let flags = BuildFlags {
+            code_actions: true,
+            ..Default::default()
+        };
         let adv = flags.to_advertised_features();
         assert!(
             adv.code_action,
@@ -593,7 +619,10 @@ mod tests {
 
     #[test]
     fn to_advertised_features_maps_pull_diagnostics_to_diagnostic_provider() {
-        let flags = BuildFlags { pull_diagnostics: true, ..Default::default() };
+        let flags = BuildFlags {
+            pull_diagnostics: true,
+            ..Default::default()
+        };
         let adv = flags.to_advertised_features();
         assert!(
             adv.diagnostic_provider,
@@ -603,7 +632,10 @@ mod tests {
 
     #[test]
     fn to_advertised_features_maps_selection_ranges_to_selection_range() {
-        let flags = BuildFlags { selection_ranges: true, ..Default::default() };
+        let flags = BuildFlags {
+            selection_ranges: true,
+            ..Default::default()
+        };
         let adv = flags.to_advertised_features();
         assert!(
             adv.selection_range,
@@ -631,14 +663,62 @@ mod tests {
     #[test]
     fn single_flag_produces_single_id() {
         let cases: Vec<(&str, BuildFlags)> = vec![
-            ("completion", BuildFlags { completion: true, ..Default::default() }),
-            ("hover", BuildFlags { hover: true, ..Default::default() }),
-            ("definition", BuildFlags { definition: true, ..Default::default() }),
-            ("references", BuildFlags { references: true, ..Default::default() }),
-            ("rename", BuildFlags { rename: true, ..Default::default() }),
-            ("formatting", BuildFlags { formatting: true, ..Default::default() }),
-            ("signature_help", BuildFlags { signature_help: true, ..Default::default() }),
-            ("declaration", BuildFlags { declaration: true, ..Default::default() }),
+            (
+                "completion",
+                BuildFlags {
+                    completion: true,
+                    ..Default::default()
+                },
+            ),
+            (
+                "hover",
+                BuildFlags {
+                    hover: true,
+                    ..Default::default()
+                },
+            ),
+            (
+                "definition",
+                BuildFlags {
+                    definition: true,
+                    ..Default::default()
+                },
+            ),
+            (
+                "references",
+                BuildFlags {
+                    references: true,
+                    ..Default::default()
+                },
+            ),
+            (
+                "rename",
+                BuildFlags {
+                    rename: true,
+                    ..Default::default()
+                },
+            ),
+            (
+                "formatting",
+                BuildFlags {
+                    formatting: true,
+                    ..Default::default()
+                },
+            ),
+            (
+                "signature_help",
+                BuildFlags {
+                    signature_help: true,
+                    ..Default::default()
+                },
+            ),
+            (
+                "declaration",
+                BuildFlags {
+                    declaration: true,
+                    ..Default::default()
+                },
+            ),
         ];
         for (label, flags) in cases {
             let ids = flags.to_feature_ids();

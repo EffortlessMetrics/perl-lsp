@@ -14,7 +14,10 @@ fn create_test_directory() -> Result<TempDir, Box<dyn std::error::Error>> {
     let base_path = temp_dir.path();
 
     // Create various file types
-    fs::write(base_path.join("test.pl"), "#!/usr/bin/perl\nprint 'hello';\n")?;
+    fs::write(
+        base_path.join("test.pl"),
+        "#!/usr/bin/perl\nprint 'hello';\n",
+    )?;
     fs::write(base_path.join("module.pm"), "package Module;\n1;\n")?;
     fs::write(base_path.join("script.t"), "use Test::More;\nok(1);\n")?;
     fs::write(base_path.join("config.json"), "{}")?;
@@ -55,8 +58,16 @@ fn test_basic_file_completion() -> TestResult {
     let completions = provider.get_completions_with_path(code, pos, Some("."));
 
     // Should find test.pl
-    assert!(completions.iter().any(|c| c.label == "test.pl" && c.kind == CompletionItemKind::File));
-    assert!(completions.iter().any(|c| c.label == "tests/" && c.kind == CompletionItemKind::File));
+    assert!(
+        completions
+            .iter()
+            .any(|c| c.label == "test.pl" && c.kind == CompletionItemKind::File)
+    );
+    assert!(
+        completions
+            .iter()
+            .any(|c| c.label == "tests/" && c.kind == CompletionItemKind::File)
+    );
 
     // Should not find hidden files
     assert!(!completions.iter().any(|c| c.label.starts_with('.')));
@@ -94,7 +105,10 @@ fn test_security_path_traversal_blocked() -> TestResult {
     let mut parser = Parser::new(code);
     let ast = parser.parse()?;
     let provider = CompletionProvider::new_with_index(&ast, None);
-    let pos = code.find("passwd").ok_or("Failed to find 'passwd' in code")? + "passwd".len();
+    let pos = code
+        .find("passwd")
+        .ok_or("Failed to find 'passwd' in code")?
+        + "passwd".len();
     let completions = provider.get_completions_with_path(code, pos, Some("."));
 
     // Should not return any completions for path traversal attempts
@@ -109,7 +123,10 @@ fn test_security_absolute_paths_blocked() -> TestResult {
     let mut parser = Parser::new(code);
     let ast = parser.parse()?;
     let provider = CompletionProvider::new_with_index(&ast, None);
-    let pos = code.find("passwd").ok_or("Failed to find 'passwd' in code")? + "passwd".len();
+    let pos = code
+        .find("passwd")
+        .ok_or("Failed to find 'passwd' in code")?
+        + "passwd".len();
     let completions = provider.get_completions_with_path(code, pos, Some("."));
 
     // Should not return completions for absolute paths (except root)
@@ -167,14 +184,20 @@ fn test_file_type_detection() -> TestResult {
     let mut parser = Parser::new(code);
     let ast = parser.parse()?;
     let provider = CompletionProvider::new_with_index(&ast, None);
-    let pos = code.find("test.p").ok_or("Failed to find 'test.p' in code")? + "test.p".len();
+    let pos = code
+        .find("test.p")
+        .ok_or("Failed to find 'test.p' in code")?
+        + "test.p".len();
     let completions = provider.get_completions_with_path(code, pos, Some("."));
 
     // Should find Perl file with appropriate detail
     let perl_completion = completions.iter().find(|c| c.label == "test.pl");
     assert!(perl_completion.is_some());
     let perl_completion = perl_completion.ok_or("No test.pl completion found")?;
-    let detail = perl_completion.detail.as_ref().ok_or("No detail in completion")?;
+    let detail = perl_completion
+        .detail
+        .as_ref()
+        .ok_or("No detail in completion")?;
     assert_eq!(detail, "Perl file");
 
     std::env::set_current_dir(old_cwd).ok();
@@ -198,7 +221,9 @@ fn test_directory_completion_with_slash() -> TestResult {
 
     // Should find lib directory with trailing slash
     assert!(
-        completions.iter().any(|c| c.label == "lib/" && c.detail.as_deref() == Some("directory"))
+        completions
+            .iter()
+            .any(|c| c.label == "lib/" && c.detail.as_deref() == Some("directory"))
     );
 
     std::env::set_current_dir(old_cwd).ok();
@@ -343,7 +368,11 @@ fn test_windows_reserved_names_blocked() -> TestResult {
         let completions = provider.get_completions_with_path(code, pos, Some("."));
 
         // Should not suggest Windows reserved names
-        assert!(!completions.iter().any(|c| c.label.to_uppercase().contains("CON")));
+        assert!(
+            !completions
+                .iter()
+                .any(|c| c.label.to_uppercase().contains("CON"))
+        );
     }
 
     std::env::set_current_dir(old_cwd).ok();
@@ -362,13 +391,18 @@ fn test_completion_text_edit_range() -> TestResult {
     let mut parser = Parser::new(code);
     let ast = parser.parse()?;
     let provider = CompletionProvider::new_with_index(&ast, None);
-    let pos = code.find("test.p").ok_or("Failed to find 'test.p' in code")? + "test.p".len();
+    let pos = code
+        .find("test.p")
+        .ok_or("Failed to find 'test.p' in code")?
+        + "test.p".len();
     let completions = provider.get_completions_with_path(code, pos, Some("."));
 
     // Check that text_edit_range is correctly set
     if let Some(completion) = completions.iter().find(|c| c.label == "test.pl") {
         assert!(completion.text_edit_range.is_some());
-        let (start, end) = completion.text_edit_range.ok_or("No text_edit_range in completion")?;
+        let (start, end) = completion
+            .text_edit_range
+            .ok_or("No text_edit_range in completion")?;
         assert_eq!(start, 1); // Start of path in string
         assert_eq!(end, pos); // Current position
     }
@@ -397,8 +431,10 @@ fn test_no_symlink_following() -> TestResult {
         let mut parser = Parser::new(code);
         let ast = parser.parse()?;
         let provider = CompletionProvider::new_with_index(&ast, None);
-        let pos =
-            code.find("dangerous").ok_or("Failed to find 'dangerous' in code")? + "dangerous".len();
+        let pos = code
+            .find("dangerous")
+            .ok_or("Failed to find 'dangerous' in code")?
+            + "dangerous".len();
         let completions = provider.get_completions_with_path(code, pos, Some("."));
 
         // Should not follow symlinks (walkdir configured with follow_links(false))

@@ -116,13 +116,21 @@ impl EnhancedCodeActionsProvider {
             NodeKind::ExpressionStatement { expression } => {
                 self.collect_signature_actions(expression, ast_root, range, actions);
             }
-            NodeKind::VariableDeclaration { initializer: Some(init), .. } => {
+            NodeKind::VariableDeclaration {
+                initializer: Some(init),
+                ..
+            } => {
                 self.collect_signature_actions(init, ast_root, range, actions);
             }
             NodeKind::Subroutine { body, .. } => {
                 self.collect_signature_actions(body, ast_root, range, actions);
             }
-            NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
+            NodeKind::If {
+                condition,
+                then_branch,
+                elsif_branches,
+                else_branch,
+            } => {
                 self.collect_signature_actions(condition, ast_root, range, actions);
                 self.collect_signature_actions(then_branch, ast_root, range, actions);
                 for (cond, branch) in elsif_branches {
@@ -229,7 +237,12 @@ impl EnhancedCodeActionsProvider {
             NodeKind::ExpressionStatement { expression } => {
                 self.collect_actions_for_range(expression, range, false, actions, extract_var_seen);
             }
-            NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
+            NodeKind::If {
+                condition,
+                then_branch,
+                elsif_branches,
+                else_branch,
+            } => {
                 self.collect_actions_for_range(condition, range, false, actions, extract_var_seen);
                 self.collect_actions_for_range(
                     then_branch,
@@ -259,13 +272,23 @@ impl EnhancedCodeActionsProvider {
                 self.collect_actions_for_range(lhs, range, false, actions, extract_var_seen);
                 self.collect_actions_for_range(rhs, range, false, actions, extract_var_seen);
             }
-            NodeKind::VariableDeclaration { variable, initializer, .. } => {
+            NodeKind::VariableDeclaration {
+                variable,
+                initializer,
+                ..
+            } => {
                 self.collect_actions_for_range(variable, range, false, actions, extract_var_seen);
                 if let Some(init) = initializer {
                     self.collect_actions_for_range(init, range, false, actions, extract_var_seen);
                 }
             }
-            NodeKind::For { init, condition, update, body, .. } => {
+            NodeKind::For {
+                init,
+                condition,
+                update,
+                body,
+                ..
+            } => {
                 if let Some(init) = init {
                     self.collect_actions_for_range(init, range, false, actions, extract_var_seen);
                 }
@@ -289,7 +312,12 @@ impl EnhancedCodeActionsProvider {
                     extract_var_seen,
                 );
             }
-            NodeKind::Foreach { variable, list, body, continue_block } => {
+            NodeKind::Foreach {
+                variable,
+                list,
+                body,
+                continue_block,
+            } => {
                 self.collect_actions_for_range(variable, range, false, actions, extract_var_seen);
                 self.collect_actions_for_range(list, range, false, actions, extract_var_seen);
                 self.collect_actions_for_range(body, range, true, actions, extract_var_seen);
@@ -297,7 +325,9 @@ impl EnhancedCodeActionsProvider {
                     self.collect_actions_for_range(cb, range, false, actions, extract_var_seen);
                 }
             }
-            NodeKind::While { condition, body, .. } => {
+            NodeKind::While {
+                condition, body, ..
+            } => {
                 self.collect_actions_for_range(condition, range, false, actions, extract_var_seen);
                 self.collect_actions_for_range(
                     body,
@@ -313,7 +343,12 @@ impl EnhancedCodeActionsProvider {
                     self.collect_actions_for_range(arg, range, false, actions, extract_var_seen);
                 }
             }
-            NodeKind::Subroutine { body, prototype, signature, .. } => {
+            NodeKind::Subroutine {
+                body,
+                prototype,
+                signature,
+                ..
+            } => {
                 self.collect_actions_for_range(
                     body,
                     range,
@@ -399,7 +434,10 @@ impl EnhancedCodeActionsProvider {
                 diagnostics: Vec::new(),
                 edit: CodeActionEdit {
                     changes: vec![TextEdit {
-                        location: SourceLocation { start: insert_pos, end: insert_pos },
+                        location: SourceLocation {
+                            start: insert_pos,
+                            end: insert_pos,
+                        },
                         new_text: format!("{}\n", pragmas.join("\n")),
                     }],
                 },
@@ -417,7 +455,10 @@ impl EnhancedCodeActionsProvider {
                 diagnostics: Vec::new(),
                 edit: CodeActionEdit {
                     changes: vec![TextEdit {
-                        location: SourceLocation { start: insert_pos, end: insert_pos },
+                        location: SourceLocation {
+                            start: insert_pos,
+                            end: insert_pos,
+                        },
                         new_text: "use utf8;\nuse open qw(:std :utf8);\n".to_string(),
                     }],
                 },
@@ -499,8 +540,10 @@ mod extract_variable_tests {
         // Select the range covering $hash{$key} (bytes 8..19)
         let actions = provider.get_enhanced_refactoring_actions(&ast, (8, 19));
 
-        let extract_actions: Vec<_> =
-            actions.iter().filter(|a| a.title.contains("Extract")).collect();
+        let extract_actions: Vec<_> = actions
+            .iter()
+            .filter(|a| a.title.contains("Extract"))
+            .collect();
 
         assert!(
             !extract_actions.is_empty(),
@@ -528,8 +571,10 @@ mod extract_variable_tests {
         // Select the range covering $obj->method()
         let actions = provider.get_enhanced_refactoring_actions(&ast, (6, 20));
 
-        let extract_actions: Vec<_> =
-            actions.iter().filter(|a| a.title.contains("Extract")).collect();
+        let extract_actions: Vec<_> = actions
+            .iter()
+            .filter(|a| a.title.contains("Extract"))
+            .collect();
 
         assert!(
             !extract_actions.is_empty(),
@@ -564,8 +609,10 @@ mod extract_variable_tests {
         let provider = EnhancedCodeActionsProvider::new(source.to_string());
         let actions = provider.get_enhanced_refactoring_actions(&ast, (8, 18));
 
-        let extract_actions: Vec<_> =
-            actions.iter().filter(|a| a.title.contains("Extract")).collect();
+        let extract_actions: Vec<_> = actions
+            .iter()
+            .filter(|a| a.title.contains("Extract"))
+            .collect();
 
         assert!(
             !extract_actions.is_empty(),
@@ -592,13 +639,22 @@ mod extract_variable_tests {
         let provider = EnhancedCodeActionsProvider::new(source.to_string());
         let actions = provider.get_enhanced_refactoring_actions(&ast, (8, 19));
 
-        let extract_actions: Vec<_> =
-            actions.iter().filter(|a| a.title.contains("Extract")).collect();
+        let extract_actions: Vec<_> = actions
+            .iter()
+            .filter(|a| a.title.contains("Extract"))
+            .collect();
 
-        assert!(!extract_actions.is_empty(), "Expected at least one extract action");
+        assert!(
+            !extract_actions.is_empty(),
+            "Expected at least one extract action"
+        );
 
         let action = &extract_actions[0];
-        assert_eq!(action.edit.changes.len(), 2, "Expected exactly 2 edits (insert + replace)");
+        assert_eq!(
+            action.edit.changes.len(),
+            2,
+            "Expected exactly 2 edits (insert + replace)"
+        );
 
         // First edit: insertion of variable declaration
         let insert_edit = &action.edit.changes[0];
@@ -606,7 +662,10 @@ mod extract_variable_tests {
             insert_edit.new_text.starts_with("my $"),
             "First edit should be a variable declaration"
         );
-        assert!(insert_edit.new_text.ends_with(";\n"), "Declaration should end with semicolon");
+        assert!(
+            insert_edit.new_text.ends_with(";\n"),
+            "Declaration should end with semicolon"
+        );
 
         // Second edit: replacement of expression with variable reference
         let replace_edit = &action.edit.changes[1];

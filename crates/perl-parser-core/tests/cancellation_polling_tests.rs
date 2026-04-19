@@ -87,7 +87,9 @@ fn test_concurrent_cancellation_from_background_thread() {
 
     // 10 000 statements — large enough that the parse takes well over 1 ms,
     // giving the setter thread a reliable window to fire.
-    let statements: Vec<String> = (0..10_000).map(|i| format!("my $x{} = {};", i, i)).collect();
+    let statements: Vec<String> = (0..10_000)
+        .map(|i| format!("my $x{} = {};", i, i))
+        .collect();
     let source = statements.join("\n");
 
     // Barrier: parse thread signals when it has started; setter fires immediately after.
@@ -127,7 +129,10 @@ fn test_short_program_with_flag_set_after_start_succeeds() {
     let flag_for_thread = Arc::clone(&flag);
 
     // Only 10 statements — fewer than 64, so no polling boundary is ever hit.
-    let source = (0..10).map(|i| format!("my $x{} = {};", i, i)).collect::<Vec<_>>().join("\n");
+    let source = (0..10)
+        .map(|i| format!("my $x{} = {};", i, i))
+        .collect::<Vec<_>>()
+        .join("\n");
 
     // Start a background thread that will set the flag, but the parse should
     // complete before the thread even runs (tiny program = essentially instant).
@@ -142,7 +147,11 @@ fn test_short_program_with_flag_set_after_start_succeeds() {
     let _ = setter.join();
 
     // The parse must succeed: 10 statements never hit the 64-statement check boundary.
-    assert!(result.is_ok(), "expected Ok for short program but got: {:?}", result);
+    assert!(
+        result.is_ok(),
+        "expected Ok for short program but got: {:?}",
+        result
+    );
 }
 
 /// parse_with_recovery() must NOT silently swallow ParseError::Cancelled.
@@ -174,7 +183,10 @@ fn test_parse_with_recovery_documents_cancelled_becomes_error_in_output() {
 
     // Cancelled is recorded in diagnostics so callers can detect it if needed.
     assert!(
-        output.diagnostics.iter().any(|e| matches!(e, ParseError::Cancelled)),
+        output
+            .diagnostics
+            .iter()
+            .any(|e| matches!(e, ParseError::Cancelled)),
         "expected ParseError::Cancelled in diagnostics but got: {:?}",
         output.diagnostics
     );

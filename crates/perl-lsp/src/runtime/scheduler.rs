@@ -120,12 +120,21 @@ pub(crate) fn extract_dedup_key(
     }
 
     let params = params?;
-    let uri = params.get("textDocument")?.get("uri")?.as_str()?.to_string();
+    let uri = params
+        .get("textDocument")?
+        .get("uri")?
+        .as_str()?
+        .to_string();
     let position = params.get("position")?;
     let line = position.get("line")?.as_u64()?;
     let character = position.get("character")?.as_u64()?;
 
-    Some(RequestDedupKey { method: method.to_string(), uri, line, character })
+    Some(RequestDedupKey {
+        method: method.to_string(),
+        uri,
+        line,
+        character,
+    })
 }
 
 // =========================================================================
@@ -341,10 +350,13 @@ impl Scheduler {
     /// Returns `Err(())` if the mutation worker has exited (channel closed).
     pub async fn send_mutation(&self, request: JsonRpcRequest) -> Result<(), ()> {
         let seq = self.mutation_seq_next.fetch_add(1, Ordering::SeqCst) + 1;
-        self.mutation_tx.send(QueuedMutation { request, seq }).await.map_err(|_| {
-            self.mutation_seq_done.store(seq, Ordering::SeqCst);
-            self.mutation_notify.notify_waiters();
-        })
+        self.mutation_tx
+            .send(QueuedMutation { request, seq })
+            .await
+            .map_err(|_| {
+                self.mutation_seq_done.store(seq, Ordering::SeqCst);
+                self.mutation_notify.notify_waiters();
+            })
     }
 
     /// Send a read-only request to the priority read pool.
@@ -359,7 +371,13 @@ impl Scheduler {
         let dedup_key = extract_dedup_key(&request.method, request.params.as_ref(), priority);
         let arrival_seq = READ_ARRIVAL_SEQ.fetch_add(1, Ordering::Relaxed);
         self.read_tx
-            .send(QueuedRead { request, wait_for_seq, priority, arrival_seq, dedup_key })
+            .send(QueuedRead {
+                request,
+                wait_for_seq,
+                priority,
+                arrival_seq,
+                dedup_key,
+            })
             .await
             .map_err(|_| ())
     }
@@ -596,7 +614,10 @@ mod tests {
     #[test]
     fn cancel_is_control() {
         assert_eq!(classify("$/cancelRequest"), RequestClass::Control);
-        assert_eq!(classify("window/workDoneProgress/cancel"), RequestClass::Control);
+        assert_eq!(
+            classify("window/workDoneProgress/cancel"),
+            RequestClass::Control
+        );
     }
 
     #[test]
@@ -614,20 +635,35 @@ mod tests {
         assert_eq!(classify("textDocument/didClose"), RequestClass::Mutation);
         assert_eq!(classify("textDocument/didSave"), RequestClass::Mutation);
         assert_eq!(classify("textDocument/willSave"), RequestClass::Mutation);
-        assert_eq!(classify("textDocument/willSaveWaitUntil"), RequestClass::Mutation);
-        assert_eq!(classify("workspace/didChangeConfiguration"), RequestClass::Mutation);
+        assert_eq!(
+            classify("textDocument/willSaveWaitUntil"),
+            RequestClass::Mutation
+        );
+        assert_eq!(
+            classify("workspace/didChangeConfiguration"),
+            RequestClass::Mutation
+        );
         assert_eq!(classify("workspace/didCreateFiles"), RequestClass::Mutation);
         assert_eq!(classify("workspace/didDeleteFiles"), RequestClass::Mutation);
         assert_eq!(classify("workspace/didRenameFiles"), RequestClass::Mutation);
-        assert_eq!(classify("workspace/didChangeWorkspaceFolders"), RequestClass::Mutation);
+        assert_eq!(
+            classify("workspace/didChangeWorkspaceFolders"),
+            RequestClass::Mutation
+        );
     }
 
     #[test]
     fn notebook_mutation_methods() {
         assert_eq!(classify("notebookDocument/didOpen"), RequestClass::Mutation);
-        assert_eq!(classify("notebookDocument/didChange"), RequestClass::Mutation);
+        assert_eq!(
+            classify("notebookDocument/didChange"),
+            RequestClass::Mutation
+        );
         assert_eq!(classify("notebookDocument/didSave"), RequestClass::Mutation);
-        assert_eq!(classify("notebookDocument/didClose"), RequestClass::Mutation);
+        assert_eq!(
+            classify("notebookDocument/didClose"),
+            RequestClass::Mutation
+        );
     }
 
     #[test]
@@ -655,7 +691,10 @@ mod tests {
 
     #[test]
     fn hover_has_highest_priority() {
-        assert_eq!(request_priority("textDocument/hover"), RequestPriority::Hover);
+        assert_eq!(
+            request_priority("textDocument/hover"),
+            RequestPriority::Hover
+        );
         assert!(
             RequestPriority::Hover.value() < RequestPriority::Completion.value(),
             "hover must outrank completion"
@@ -664,23 +703,47 @@ mod tests {
 
     #[test]
     fn completion_priority() {
-        assert_eq!(request_priority("textDocument/completion"), RequestPriority::Completion);
-        assert_eq!(request_priority("completionItem/resolve"), RequestPriority::Completion);
+        assert_eq!(
+            request_priority("textDocument/completion"),
+            RequestPriority::Completion
+        );
+        assert_eq!(
+            request_priority("completionItem/resolve"),
+            RequestPriority::Completion
+        );
     }
 
     #[test]
     fn references_priority() {
-        assert_eq!(request_priority("textDocument/references"), RequestPriority::References);
-        assert_eq!(request_priority("textDocument/definition"), RequestPriority::References);
-        assert_eq!(request_priority("textDocument/declaration"), RequestPriority::References);
-        assert_eq!(request_priority("textDocument/typeDefinition"), RequestPriority::References);
-        assert_eq!(request_priority("textDocument/implementation"), RequestPriority::References);
+        assert_eq!(
+            request_priority("textDocument/references"),
+            RequestPriority::References
+        );
+        assert_eq!(
+            request_priority("textDocument/definition"),
+            RequestPriority::References
+        );
+        assert_eq!(
+            request_priority("textDocument/declaration"),
+            RequestPriority::References
+        );
+        assert_eq!(
+            request_priority("textDocument/typeDefinition"),
+            RequestPriority::References
+        );
+        assert_eq!(
+            request_priority("textDocument/implementation"),
+            RequestPriority::References
+        );
     }
 
     #[test]
     fn workspace_symbol_is_other() {
         assert_eq!(request_priority("workspace/symbol"), RequestPriority::Other);
-        assert_eq!(request_priority("workspace/diagnostic"), RequestPriority::Other);
+        assert_eq!(
+            request_priority("workspace/diagnostic"),
+            RequestPriority::Other
+        );
         assert_eq!(request_priority("custom/unknown"), RequestPriority::Other);
     }
 
@@ -690,21 +753,30 @@ mod tests {
         // We want hover > completion, so hover must be Ord-greater than completion.
         let hover = make_queued_read("textDocument/hover", 0);
         let completion = make_queued_read("textDocument/completion", 1);
-        assert!(hover > completion, "hover must be ordered before completion");
+        assert!(
+            hover > completion,
+            "hover must be ordered before completion"
+        );
     }
 
     #[test]
     fn priority_ordering_completion_beats_references() {
         let completion = make_queued_read("textDocument/completion", 0);
         let references = make_queued_read("textDocument/references", 1);
-        assert!(completion > references, "completion must be ordered before references");
+        assert!(
+            completion > references,
+            "completion must be ordered before references"
+        );
     }
 
     #[test]
     fn priority_ordering_references_beats_other() {
         let references = make_queued_read("textDocument/references", 0);
         let other = make_queued_read("workspace/symbol", 1);
-        assert!(references > other, "references must be ordered before workspace/symbol");
+        assert!(
+            references > other,
+            "references must be ordered before workspace/symbol"
+        );
     }
 
     #[test]
@@ -712,7 +784,10 @@ mod tests {
         // Two hover requests: the one with higher arrival_seq should pop first.
         let older = make_queued_read_with_seq("textDocument/hover", 0, 1);
         let newer = make_queued_read_with_seq("textDocument/hover", 0, 5);
-        assert!(newer > older, "newer arrival should pop before older within the same priority");
+        assert!(
+            newer > older,
+            "newer arrival should pop before older within the same priority"
+        );
     }
 
     #[test]
@@ -725,8 +800,14 @@ mod tests {
 
         // Pop order must be: hover, completion, references, workspace/symbol
         assert_eq!(heap.pop().unwrap().request.method, "textDocument/hover");
-        assert_eq!(heap.pop().unwrap().request.method, "textDocument/completion");
-        assert_eq!(heap.pop().unwrap().request.method, "textDocument/references");
+        assert_eq!(
+            heap.pop().unwrap().request.method,
+            "textDocument/completion"
+        );
+        assert_eq!(
+            heap.pop().unwrap().request.method,
+            "textDocument/references"
+        );
         assert_eq!(heap.pop().unwrap().request.method, "workspace/symbol");
     }
 
@@ -879,7 +960,10 @@ mod tests {
 
     #[test]
     fn inline_completion_gets_completion_priority() {
-        assert_eq!(request_priority("textDocument/inlineCompletion"), RequestPriority::Completion);
+        assert_eq!(
+            request_priority("textDocument/inlineCompletion"),
+            RequestPriority::Completion
+        );
     }
 
     #[test]

@@ -13,8 +13,13 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 use walkdir::{DirEntry, WalkDir};
 
-const GIT_LS_FILES_ARGS: [&str; 5] =
-    ["ls-files", "-z", "--cached", "--others", "--exclude-standard"];
+const GIT_LS_FILES_ARGS: [&str; 5] = [
+    "ls-files",
+    "-z",
+    "--cached",
+    "--others",
+    "--exclude-standard",
+];
 
 /// How files were discovered.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -63,13 +68,16 @@ pub fn discover_perl_files(root: &Path) -> DiscoveryResult {
 #[must_use]
 pub fn is_perl_discovery_path(path: &Path) -> bool {
     is_perl_source_path(path)
-        || path.extension().and_then(|ext| ext.to_str()).is_some_and(|ext| {
-            ext.eq_ignore_ascii_case("i")
-                || ext.eq_ignore_ascii_case("xs")
-                || ext.eq_ignore_ascii_case("ep")
-                || ext.eq_ignore_ascii_case("tt")
-                || ext.eq_ignore_ascii_case("tt2")
-        })
+        || path
+            .extension()
+            .and_then(|ext| ext.to_str())
+            .is_some_and(|ext| {
+                ext.eq_ignore_ascii_case("i")
+                    || ext.eq_ignore_ascii_case("xs")
+                    || ext.eq_ignore_ascii_case("ep")
+                    || ext.eq_ignore_ascii_case("tt")
+                    || ext.eq_ignore_ascii_case("tt2")
+            })
 }
 
 fn try_git_discovery(root: &Path, start: Instant) -> Result<DiscoveryResult, std::io::Error> {
@@ -213,9 +221,15 @@ mod tests {
 
     #[test]
     fn skipped_component_detection_is_consistent() {
-        assert!(path_contains_skipped_component(Path::new("/repo/node_modules/pkg.pm")));
-        assert!(path_contains_skipped_component(Path::new("/repo/target/build/generated.pm")));
-        assert!(!path_contains_skipped_component(Path::new("/repo/lib/My/Module.pm")));
+        assert!(path_contains_skipped_component(Path::new(
+            "/repo/node_modules/pkg.pm"
+        )));
+        assert!(path_contains_skipped_component(Path::new(
+            "/repo/target/build/generated.pm"
+        )));
+        assert!(!path_contains_skipped_component(Path::new(
+            "/repo/lib/My/Module.pm"
+        )));
     }
 
     #[test]
@@ -261,7 +275,11 @@ mod tests {
         let mut seen_node_modules = false;
         let mut seen_src = false;
 
-        for entry in walkdir::WalkDir::new(root).max_depth(1).into_iter().flatten() {
+        for entry in walkdir::WalkDir::new(root)
+            .max_depth(1)
+            .into_iter()
+            .flatten()
+        {
             if entry.path() == root {
                 continue;
             }
@@ -400,7 +418,9 @@ mod tests {
 
     #[test]
     fn skipped_component_deeply_nested() {
-        assert!(path_contains_skipped_component(Path::new("a/b/c/node_modules/d/e/f.pm")));
+        assert!(path_contains_skipped_component(Path::new(
+            "a/b/c/node_modules/d/e/f.pm"
+        )));
     }
 
     // --- Additional coverage: walk_discovery edge cases ---
@@ -530,7 +550,11 @@ mod tests {
         // Create a file (not a directory)
         fs::write(root.join("target.txt"), "data")?;
 
-        for entry in walkdir::WalkDir::new(root).max_depth(1).into_iter().flatten() {
+        for entry in walkdir::WalkDir::new(root)
+            .max_depth(1)
+            .into_iter()
+            .flatten()
+        {
             if entry.path() == root {
                 continue;
             }
@@ -554,7 +578,11 @@ mod tests {
         }
 
         let mut matched = 0usize;
-        for entry in walkdir::WalkDir::new(root).max_depth(1).into_iter().flatten() {
+        for entry in walkdir::WalkDir::new(root)
+            .max_depth(1)
+            .into_iter()
+            .flatten()
+        {
             if entry.path() == root {
                 continue;
             }

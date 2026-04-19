@@ -5,7 +5,9 @@ fn parse_clean(src: &str) -> Result<(), String> {
     let ast = parser.parse().map_err(|e| format!("parse error: {e:?}"))?;
     let sexp = ast.to_sexp();
     if sexp.contains("ERROR") {
-        return Err(format!("expected clean parse, got ERROR nodes in: {sexp}\nsource: {src}"));
+        return Err(format!(
+            "expected clean parse, got ERROR nodes in: {sexp}\nsource: {src}"
+        ));
     }
     Ok(())
 }

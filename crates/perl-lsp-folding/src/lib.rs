@@ -149,7 +149,11 @@ impl FoldingRangeExtractor {
                 }
             }
 
-            NodeKind::Package { name: _, block, name_span: _ } => {
+            NodeKind::Package {
+                name: _,
+                block,
+                name_span: _,
+            } => {
                 // Package with block is foldable
                 if let Some(block_node) = block {
                     self.add_range_from_node(node, None);
@@ -161,8 +165,19 @@ impl FoldingRangeExtractor {
                 }
             }
 
-            NodeKind::Subroutine { name: _, prototype: _, signature: _, body, .. }
-            | NodeKind::Method { name: _, signature: _, body, .. } => {
+            NodeKind::Subroutine {
+                name: _,
+                prototype: _,
+                signature: _,
+                body,
+                ..
+            }
+            | NodeKind::Method {
+                name: _,
+                signature: _,
+                body,
+                ..
+            } => {
                 // Subroutines and methods are foldable
                 self.add_range_from_node(node, None);
                 self.visit_node(body);
@@ -178,7 +193,12 @@ impl FoldingRangeExtractor {
                 }
             }
 
-            NodeKind::If { condition: _, then_branch, elsif_branches, else_branch } => {
+            NodeKind::If {
+                condition: _,
+                then_branch,
+                elsif_branches,
+                else_branch,
+            } => {
                 // If statements with blocks are foldable
                 self.add_range_from_node(node, None);
                 self.visit_node(then_branch);
@@ -190,7 +210,11 @@ impl FoldingRangeExtractor {
                 }
             }
 
-            NodeKind::While { condition: _, body, continue_block } => {
+            NodeKind::While {
+                condition: _,
+                body,
+                continue_block,
+            } => {
                 self.add_range_from_node(node, None);
                 self.visit_node(body);
                 if let Some(cont) = continue_block {
@@ -198,8 +222,19 @@ impl FoldingRangeExtractor {
                 }
             }
 
-            NodeKind::For { init: _, condition: _, update: _, body, continue_block: _ }
-            | NodeKind::Foreach { variable: _, list: _, body, continue_block: _ } => {
+            NodeKind::For {
+                init: _,
+                condition: _,
+                update: _,
+                body,
+                continue_block: _,
+            }
+            | NodeKind::Foreach {
+                variable: _,
+                list: _,
+                body,
+                continue_block: _,
+            } => {
                 self.add_range_from_node(node, None);
                 self.visit_node(body);
             }
@@ -209,7 +244,11 @@ impl FoldingRangeExtractor {
                 self.visit_node(block);
             }
 
-            NodeKind::Try { body, catch_blocks, finally_block } => {
+            NodeKind::Try {
+                body,
+                catch_blocks,
+                finally_block,
+            } => {
                 self.add_range_from_node(node, None);
                 self.visit_node(body);
                 for (_, catch_block) in catch_blocks {
@@ -225,7 +264,11 @@ impl FoldingRangeExtractor {
                 self.visit_node(body);
             }
 
-            NodeKind::PhaseBlock { phase: _, phase_span: _, block } => {
+            NodeKind::PhaseBlock {
+                phase: _,
+                phase_span: _,
+                block,
+            } => {
                 // BEGIN, END, CHECK, INIT blocks
                 self.add_range_from_node(node, None);
                 self.visit_node(block);
@@ -242,7 +285,11 @@ impl FoldingRangeExtractor {
                 self.add_range_from_node(node, Some(FoldingRangeKind::Region));
             }
 
-            NodeKind::StatementModifier { statement, modifier: _, condition } => {
+            NodeKind::StatementModifier {
+                statement,
+                modifier: _,
+                condition,
+            } => {
                 self.visit_node(statement);
                 self.visit_node(condition);
             }
@@ -270,7 +317,10 @@ impl FoldingRangeExtractor {
             }
 
             // ArrayRef and HashRef don't exist as separate NodeKinds, they're handled via references
-            NodeKind::VariableDeclaration { initializer: Some(init), .. } => {
+            NodeKind::VariableDeclaration {
+                initializer: Some(init),
+                ..
+            } => {
                 self.visit_node(init);
             }
 
@@ -281,7 +331,10 @@ impl FoldingRangeExtractor {
                 }
             }
 
-            NodeKind::LabeledStatement { label: _, statement } => {
+            NodeKind::LabeledStatement {
+                label: _,
+                statement,
+            } => {
                 // Labeled loops (LABEL: while/for/foreach) fold the inner statement
                 self.add_range_from_node(node, None);
                 self.visit_node(statement);
@@ -292,7 +345,11 @@ impl FoldingRangeExtractor {
                 self.add_range_from_node(node, Some(FoldingRangeKind::Region));
             }
 
-            NodeKind::Tie { variable, package, args } => {
+            NodeKind::Tie {
+                variable,
+                package,
+                args,
+            } => {
                 // Tie expressions with arguments are foldable when multi-line
                 self.add_range_from_node(node, None);
                 self.visit_node(variable);
@@ -315,7 +372,11 @@ impl FoldingRangeExtractor {
 
         // Only add if it's not trivial
         if end_offset > start_offset + 1 {
-            self.ranges.push(FoldingRange { start_offset, end_offset, kind });
+            self.ranges.push(FoldingRange {
+                start_offset,
+                end_offset,
+                kind,
+            });
         }
     }
 
@@ -330,7 +391,11 @@ impl FoldingRangeExtractor {
         let end_offset = end.end;
 
         if end_offset > start_offset + 1 {
-            self.ranges.push(FoldingRange { start_offset, end_offset, kind });
+            self.ranges.push(FoldingRange {
+                start_offset,
+                end_offset,
+                kind,
+            });
         }
     }
 }

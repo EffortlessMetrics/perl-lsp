@@ -49,19 +49,32 @@ fn test_autoload_name_span() -> Result<(), Box<dyn std::error::Error>> {
 
     let sub_node = find_subroutine(&ast).ok_or("No Subroutine node found")?;
 
-    if let NodeKind::Subroutine { name, name_span, .. } = &sub_node.kind {
-        assert_eq!(name, &Some("AUTOLOAD".to_string()), "Subroutine name should be AUTOLOAD");
+    if let NodeKind::Subroutine {
+        name, name_span, ..
+    } = &sub_node.kind
+    {
+        assert_eq!(
+            name,
+            &Some("AUTOLOAD".to_string()),
+            "Subroutine name should be AUTOLOAD"
+        );
 
         let span = name_span.ok_or("name_span should be Some for AUTOLOAD")?;
 
         // Verify the span points to "AUTOLOAD" in the source
         // "sub AUTOLOAD" - AUTOLOAD starts at position 4 and ends at 12
-        assert_eq!(span.start, 4, "AUTOLOAD name_span should start at position 4");
+        assert_eq!(
+            span.start, 4,
+            "AUTOLOAD name_span should start at position 4"
+        );
         assert_eq!(span.end, 12, "AUTOLOAD name_span should end at position 12");
 
         // Verify we can extract the name from source using the span
         let extracted = &code[span.start..span.end];
-        assert_eq!(extracted, "AUTOLOAD", "Extracted text should match AUTOLOAD");
+        assert_eq!(
+            extracted, "AUTOLOAD",
+            "Extracted text should match AUTOLOAD"
+        );
     } else {
         return Err(format!("Expected Subroutine node, got {:?}", sub_node.kind).into());
     }
@@ -76,14 +89,24 @@ fn test_destroy_name_span() -> Result<(), Box<dyn std::error::Error>> {
 
     let sub_node = find_subroutine(&ast).ok_or("No Subroutine node found")?;
 
-    if let NodeKind::Subroutine { name, name_span, .. } = &sub_node.kind {
-        assert_eq!(name, &Some("DESTROY".to_string()), "Subroutine name should be DESTROY");
+    if let NodeKind::Subroutine {
+        name, name_span, ..
+    } = &sub_node.kind
+    {
+        assert_eq!(
+            name,
+            &Some("DESTROY".to_string()),
+            "Subroutine name should be DESTROY"
+        );
 
         let span = name_span.ok_or("name_span should be Some for DESTROY")?;
 
         // Verify the span points to "DESTROY" in the source
         // "sub DESTROY" - DESTROY starts at position 4 and ends at 11
-        assert_eq!(span.start, 4, "DESTROY name_span should start at position 4");
+        assert_eq!(
+            span.start, 4,
+            "DESTROY name_span should start at position 4"
+        );
         assert_eq!(span.end, 11, "DESTROY name_span should end at position 11");
 
         // Verify we can extract the name from source using the span
@@ -103,7 +126,10 @@ fn test_begin_phase_span() -> Result<(), Box<dyn std::error::Error>> {
 
     let phase_node = find_phase_block(&ast).ok_or("No PhaseBlock node found")?;
 
-    if let NodeKind::PhaseBlock { phase, phase_span, .. } = &phase_node.kind {
+    if let NodeKind::PhaseBlock {
+        phase, phase_span, ..
+    } = &phase_node.kind
+    {
         assert_eq!(phase, "BEGIN", "Phase should be BEGIN");
 
         let span = phase_span.ok_or("phase_span should be Some for BEGIN")?;
@@ -130,7 +156,10 @@ fn test_end_phase_span() -> Result<(), Box<dyn std::error::Error>> {
 
     let phase_node = find_phase_block(&ast).ok_or("No PhaseBlock node found")?;
 
-    if let NodeKind::PhaseBlock { phase, phase_span, .. } = &phase_node.kind {
+    if let NodeKind::PhaseBlock {
+        phase, phase_span, ..
+    } = &phase_node.kind
+    {
         assert_eq!(phase, "END", "Phase should be END");
 
         let span = phase_span.ok_or("phase_span should be Some for END")?;
@@ -157,7 +186,10 @@ fn test_check_phase_span() -> Result<(), Box<dyn std::error::Error>> {
 
     let phase_node = find_phase_block(&ast).ok_or("No PhaseBlock node found")?;
 
-    if let NodeKind::PhaseBlock { phase, phase_span, .. } = &phase_node.kind {
+    if let NodeKind::PhaseBlock {
+        phase, phase_span, ..
+    } = &phase_node.kind
+    {
         assert_eq!(phase, "CHECK", "Phase should be CHECK");
 
         let span = phase_span.ok_or("phase_span should be Some for CHECK")?;
@@ -183,7 +215,10 @@ fn test_init_phase_span() -> Result<(), Box<dyn std::error::Error>> {
 
     let phase_node = find_phase_block(&ast).ok_or("No PhaseBlock node found")?;
 
-    if let NodeKind::PhaseBlock { phase, phase_span, .. } = &phase_node.kind {
+    if let NodeKind::PhaseBlock {
+        phase, phase_span, ..
+    } = &phase_node.kind
+    {
         assert_eq!(phase, "INIT", "Phase should be INIT");
 
         let span = phase_span.ok_or("phase_span should be Some for INIT")?;
@@ -209,18 +244,27 @@ fn test_unitcheck_phase_span() -> Result<(), Box<dyn std::error::Error>> {
 
     let phase_node = find_phase_block(&ast).ok_or("No PhaseBlock node found")?;
 
-    if let NodeKind::PhaseBlock { phase, phase_span, .. } = &phase_node.kind {
+    if let NodeKind::PhaseBlock {
+        phase, phase_span, ..
+    } = &phase_node.kind
+    {
         assert_eq!(phase, "UNITCHECK", "Phase should be UNITCHECK");
 
         let span = phase_span.ok_or("phase_span should be Some for UNITCHECK")?;
 
         // Verify the span points to "UNITCHECK" in the source
-        assert_eq!(span.start, 0, "UNITCHECK phase_span should start at position 0");
+        assert_eq!(
+            span.start, 0,
+            "UNITCHECK phase_span should start at position 0"
+        );
         assert_eq!(span.end, 9, "UNITCHECK phase_span should end at position 9");
 
         // Verify we can extract the phase name from source using the span
         let extracted = &code[span.start..span.end];
-        assert_eq!(extracted, "UNITCHECK", "Extracted text should match UNITCHECK");
+        assert_eq!(
+            extracted, "UNITCHECK",
+            "Extracted text should match UNITCHECK"
+        );
     } else {
         return Err(format!("Expected PhaseBlock node, got {:?}", phase_node.kind).into());
     }
@@ -251,7 +295,10 @@ CHECK { print 'check'; }
 
     // Verify each phase block has proper span
     for phase_node in phase_blocks {
-        if let NodeKind::PhaseBlock { phase, phase_span, .. } = &phase_node.kind {
+        if let NodeKind::PhaseBlock {
+            phase, phase_span, ..
+        } = &phase_node.kind
+        {
             let span = phase_span.ok_or("phase_span should be Some")?;
             let extracted = &code[span.start..span.end];
             assert_eq!(extracted, phase, "Extracted text should match phase name");
@@ -283,7 +330,10 @@ sub DESTROY { print 'destroy'; }
 
     // Verify both have proper name_span
     for sub_node in subroutines {
-        if let NodeKind::Subroutine { name, name_span, .. } = &sub_node.kind {
+        if let NodeKind::Subroutine {
+            name, name_span, ..
+        } = &sub_node.kind
+        {
             let span = name_span.ok_or("name_span should be Some")?;
             let extracted = &code[span.start..span.end];
             assert_eq!(
@@ -318,8 +368,14 @@ fn test_name_span_not_entire_block() -> Result<(), Box<dyn std::error::Error>> {
         // Verify the extracted text is just the identifier
         let extracted = &code[span.start..span.end];
         assert_eq!(extracted, "AUTOLOAD");
-        assert!(!extracted.contains('{'), "name_span should not include block delimiter");
-        assert!(!extracted.contains("print"), "name_span should not include block body");
+        assert!(
+            !extracted.contains('{'),
+            "name_span should not include block delimiter"
+        );
+        assert!(
+            !extracted.contains("print"),
+            "name_span should not include block body"
+        );
     }
     Ok(())
 }
@@ -346,8 +402,14 @@ fn test_phase_span_not_entire_block() -> Result<(), Box<dyn std::error::Error>> 
         // Verify the extracted text is just the keyword
         let extracted = &code[span.start..span.end];
         assert_eq!(extracted, "BEGIN");
-        assert!(!extracted.contains('{'), "phase_span should not include block delimiter");
-        assert!(!extracted.contains("print"), "phase_span should not include block body");
+        assert!(
+            !extracted.contains('{'),
+            "phase_span should not include block delimiter"
+        );
+        assert!(
+            !extracted.contains("print"),
+            "phase_span should not include block body"
+        );
     }
     Ok(())
 }

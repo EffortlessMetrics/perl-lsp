@@ -65,7 +65,10 @@ mod tests {
     #[test]
     fn normalizes_uri_keys() {
         assert_eq!(uri_key("file:///tmp/test.pl"), "file:///tmp/test.pl");
-        assert_eq!(uri_key("file:///C:/Users/test.pl"), "file:///c:/Users/test.pl");
+        assert_eq!(
+            uri_key("file:///C:/Users/test.pl"),
+            "file:///c:/Users/test.pl"
+        );
     }
 
     #[test]

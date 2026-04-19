@@ -51,7 +51,9 @@ pub struct SubprocessError {
 impl SubprocessError {
     /// Create a new subprocess error with the given message
     pub fn new(message: impl Into<String>) -> Self {
-        Self { message: message.into() }
+        Self {
+            message: message.into(),
+        }
     }
 }
 
@@ -108,7 +110,9 @@ impl OsSubprocessRuntime {
     /// every command immediately and is almost certainly a caller bug).
     pub fn with_timeout(timeout_secs: u64) -> Self {
         assert!(timeout_secs > 0, "timeout_secs must be greater than zero");
-        Self { timeout_secs: Some(timeout_secs) }
+        Self {
+            timeout_secs: Some(timeout_secs),
+        }
     }
 }
 
@@ -222,12 +226,18 @@ fn resolve_command_invocation(program: &str, args: &[&str]) -> (String, Vec<Stri
             return ("cmd.exe".to_string(), shell_args);
         }
 
-        (resolved_program, args.iter().map(|arg| (*arg).to_string()).collect())
+        (
+            resolved_program,
+            args.iter().map(|arg| (*arg).to_string()).collect(),
+        )
     }
 
     #[cfg(not(windows))]
     {
-        (program.to_string(), args.iter().map(|arg| (*arg).to_string()).collect())
+        (
+            program.to_string(),
+            args.iter().map(|arg| (*arg).to_string()).collect(),
+        )
     }
 }
 
@@ -323,12 +333,20 @@ pub mod mock {
     impl MockResponse {
         /// Create a successful mock response with the given stdout.
         pub fn success(stdout: impl Into<Vec<u8>>) -> Self {
-            Self { stdout: stdout.into(), stderr: Vec::new(), status_code: 0 }
+            Self {
+                stdout: stdout.into(),
+                stderr: Vec::new(),
+                status_code: 0,
+            }
         }
 
         /// Create a failed mock response with the given stderr.
         pub fn failure(stderr: impl Into<Vec<u8>>, status_code: i32) -> Self {
-            Self { stdout: Vec::new(), stderr: stderr.into(), status_code }
+            Self {
+                stdout: Vec::new(),
+                stderr: stderr.into(),
+                status_code,
+            }
         }
     }
 
@@ -413,13 +431,21 @@ mod tests {
 
     #[test]
     fn test_subprocess_output_success() {
-        let output = SubprocessOutput { stdout: vec![1, 2, 3], stderr: vec![], status_code: 0 };
+        let output = SubprocessOutput {
+            stdout: vec![1, 2, 3],
+            stderr: vec![],
+            status_code: 0,
+        };
         assert!(output.success());
     }
 
     #[test]
     fn test_subprocess_output_failure() {
-        let output = SubprocessOutput { stdout: vec![], stderr: b"error".to_vec(), status_code: 1 };
+        let output = SubprocessOutput {
+            stdout: vec![],
+            stderr: b"error".to_vec(),
+            status_code: 1,
+        };
         assert!(!output.success());
         assert_eq!(output.stderr_lossy(), "error");
     }
@@ -514,7 +540,10 @@ mod tests {
         ];
         candidates.sort_by_key(|candidate| windows_program_priority(candidate));
 
-        assert_eq!(candidates.last().map(String::as_str), Some(r"C:\tools\perltidy.exe"));
+        assert_eq!(
+            candidates.last().map(String::as_str),
+            Some(r"C:\tools\perltidy.exe")
+        );
         assert!(
             windows_program_priority(r"C:\Strawberry\perl\bin\perltidy.bat")
                 > windows_program_priority(r"C:\Strawberry\perl\bin\perltidy")

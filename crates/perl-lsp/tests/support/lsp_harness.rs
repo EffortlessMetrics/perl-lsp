@@ -244,8 +244,11 @@ impl LspHarness {
 
         let is_ci = std::env::var("CI").is_ok() || std::env::var("GITHUB_ACTIONS").is_ok();
         let is_windows = cfg!(windows);
-        let init_timeout =
-            if is_ci || is_windows { Duration::from_secs(5) } else { Duration::from_secs(2) };
+        let init_timeout = if is_ci || is_windows {
+            Duration::from_secs(5)
+        } else {
+            Duration::from_secs(2)
+        };
         let init_timeout = if Self::is_coverage_instrumented() {
             init_timeout.max(Duration::from_secs(6))
         } else {
@@ -409,13 +412,25 @@ impl LspHarness {
         // Adjust timing based on environment
         let (max_wait, required_idle_count, poll_interval) = if is_performance_test {
             // Performance tests: very fast polling
-            (duration.min(Duration::from_millis(100)), 2, Duration::from_millis(2))
+            (
+                duration.min(Duration::from_millis(100)),
+                2,
+                Duration::from_millis(2),
+            )
         } else if is_ci {
             // CI: more patient waiting for reliability
-            (duration.min(Duration::from_millis(500)), 5, Duration::from_millis(10))
+            (
+                duration.min(Duration::from_millis(500)),
+                5,
+                Duration::from_millis(10),
+            )
         } else {
             // Local development: balanced approach
-            (duration.min(Duration::from_millis(200)), 3, Duration::from_millis(5))
+            (
+                duration.min(Duration::from_millis(200)),
+                3,
+                Duration::from_millis(5),
+            )
         };
 
         let start = Instant::now();
@@ -572,16 +587,17 @@ impl LspHarness {
             self.next_request_id += 1;
 
             // Use send_request_full_response to get the complete JSON-RPC response
-            self.send_request_with_timeout_full_response(req, timeout).unwrap_or_else(|e| {
-                json!({
-                    "jsonrpc": "2.0",
-                    "id": null,
-                    "error": {
-                        "code": -32603,
-                        "message": e
-                    }
+            self.send_request_with_timeout_full_response(req, timeout)
+                .unwrap_or_else(|e| {
+                    json!({
+                        "jsonrpc": "2.0",
+                        "id": null,
+                        "error": {
+                            "code": -32603,
+                            "message": e
+                        }
+                    })
                 })
-            })
         } else {
             // This shouldn't happen, but handle gracefully
             json!({
@@ -698,7 +714,8 @@ impl LspHarness {
 
             // Wait for the TestWriter to signal new data.
             let mut guard = self.output_buffer.lock();
-            self.output_signal.wait_for(&mut guard, remaining.min(Duration::from_millis(50)));
+            self.output_signal
+                .wait_for(&mut guard, remaining.min(Duration::from_millis(50)));
         }
     }
 
@@ -855,7 +872,8 @@ impl LspHarness {
             if remaining.is_zero() {
                 break;
             }
-            self.output_signal.wait_for(&mut guard, remaining.min(Duration::from_millis(100)));
+            self.output_signal
+                .wait_for(&mut guard, remaining.min(Duration::from_millis(100)));
         }
 
         Err("No response received".to_string())
@@ -914,7 +932,8 @@ impl LspHarness {
             if remaining.is_zero() {
                 break;
             }
-            self.output_signal.wait_for(&mut guard, remaining.min(Duration::from_millis(100)));
+            self.output_signal
+                .wait_for(&mut guard, remaining.min(Duration::from_millis(100)));
         }
 
         Err("No response received".to_string())
@@ -998,7 +1017,11 @@ impl LspHarness {
                 if output_str.contains(&format!("\"id\":{}", request_id))
                     || output_str.contains(&format!("\"id\": {}", request_id))
                 {
-                    assert!(false, "Received response for canceled request ID {}", request_id);
+                    assert!(
+                        false,
+                        "Received response for canceled request ID {}",
+                        request_id
+                    );
                 }
             }
 
@@ -1069,10 +1092,14 @@ impl LspHarness {
                 break;
             }
             let mut guard = self.output_buffer.lock();
-            self.output_signal.wait_for(&mut guard, remaining.min(Duration::from_millis(100)));
+            self.output_signal
+                .wait_for(&mut guard, remaining.min(Duration::from_millis(100)));
         }
 
-        Err(format!("Notification '{}' not received within {:?}", method, timeout))
+        Err(format!(
+            "Notification '{}' not received within {:?}",
+            method, timeout
+        ))
     }
 
     /// Synchronization barrier - wait for all pending server operations to complete
@@ -1080,14 +1107,20 @@ impl LspHarness {
     pub fn barrier(&mut self) {
         // Send a dummy request that forces the server to process all pending work
         // We use workspace/symbol with empty query as it's lightweight
-        let timeout =
-            if cfg!(windows) { Duration::from_millis(1500) } else { Duration::from_millis(500) };
+        let timeout = if cfg!(windows) {
+            Duration::from_millis(1500)
+        } else {
+            Duration::from_millis(500)
+        };
         let _ =
             self.request_with_timeout("workspace/symbol", json!({"query": "__barrier__"}), timeout);
 
         // Drain any notifications that arrived
-        let idle_budget =
-            if cfg!(windows) { Duration::from_millis(200) } else { Duration::from_millis(100) };
+        let idle_budget = if cfg!(windows) {
+            Duration::from_millis(200)
+        } else {
+            Duration::from_millis(100)
+        };
         self.wait_for_idle(idle_budget);
     }
 }
@@ -1362,7 +1395,11 @@ macro_rules! assert_highlights {
 macro_rules! assert_no_diags {
     ($harness:expr) => {{
         let diags = $harness.drain_notifications(Some("textDocument/publishDiagnostics"), 100);
-        assert!(diags.is_empty(), "Expected no diagnostics, got: {:?}", diags);
+        assert!(
+            diags.is_empty(),
+            "Expected no diagnostics, got: {:?}",
+            diags
+        );
     }};
 }
 

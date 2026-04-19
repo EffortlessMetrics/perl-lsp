@@ -141,7 +141,10 @@ fn benchmark_symbol_extraction_with_interpolation() {
     let mut code = String::from("sub test {\n");
     for i in 0..10000 {
         code.push_str(&format!("    my $var_{} = \"Hello $name_{}\";\n", i, i));
-        code.push_str(&format!("    my $msg_{} = \"Value: ${{value_{}}}\";\n", i, i));
+        code.push_str(&format!(
+            "    my $msg_{} = \"Value: ${{value_{}}}\";\n",
+            i, i
+        ));
     }
     code.push_str("}\n");
 

@@ -209,7 +209,10 @@ impl SymbolKind {
     /// Returns true if this is a namespace type (package, class, or role).
     #[inline]
     pub const fn is_namespace(self) -> bool {
-        matches!(self, SymbolKind::Package | SymbolKind::Class | SymbolKind::Role)
+        matches!(
+            self,
+            SymbolKind::Package | SymbolKind::Class | SymbolKind::Role
+        )
     }
 
     /// Create a scalar variable symbol kind.
@@ -272,9 +275,18 @@ mod tests {
         assert_eq!(SymbolKind::Subroutine.to_lsp_kind_document_symbol(), 12);
 
         // Variable types get richer distinctions
-        assert_eq!(SymbolKind::Variable(VarKind::Scalar).to_lsp_kind_document_symbol(), 13); // Variable
-        assert_eq!(SymbolKind::Variable(VarKind::Array).to_lsp_kind_document_symbol(), 18); // Array
-        assert_eq!(SymbolKind::Variable(VarKind::Hash).to_lsp_kind_document_symbol(), 19); // Object
+        assert_eq!(
+            SymbolKind::Variable(VarKind::Scalar).to_lsp_kind_document_symbol(),
+            13
+        ); // Variable
+        assert_eq!(
+            SymbolKind::Variable(VarKind::Array).to_lsp_kind_document_symbol(),
+            18
+        ); // Array
+        assert_eq!(
+            SymbolKind::Variable(VarKind::Hash).to_lsp_kind_document_symbol(),
+            19
+        ); // Object
     }
 
     #[test]

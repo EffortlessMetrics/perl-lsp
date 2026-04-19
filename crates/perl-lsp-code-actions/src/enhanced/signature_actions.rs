@@ -15,13 +15,19 @@ use perl_parser_core::ast::{Node, NodeKind, SourceLocation};
 pub fn add_parameter_action(source: &str, node: &Node, ast: &Node) -> Option<CodeAction> {
     // Only named subroutines with a signature
     let (sub_name, signature) = match &node.kind {
-        NodeKind::Subroutine { name: Some(n), signature: Some(sig), .. } => (n.clone(), sig),
+        NodeKind::Subroutine {
+            name: Some(n),
+            signature: Some(sig),
+            ..
+        } => (n.clone(), sig),
         _ => return None,
     };
 
     // Reject if the last parameter is slurpy (adding after @rest / %opts is invalid)
     if let NodeKind::Signature { parameters } = &signature.kind
-        && parameters.last().is_some_and(|p| matches!(p.kind, NodeKind::SlurpyParameter { .. }))
+        && parameters
+            .last()
+            .is_some_and(|p| matches!(p.kind, NodeKind::SlurpyParameter { .. }))
     {
         return None;
     }
@@ -45,14 +51,20 @@ pub fn add_parameter_action(source: &str, node: &Node, ast: &Node) -> Option<Cod
 
     // Edit 1: Insert new parameter before the closing `)` of the signature.
     changes.push(TextEdit {
-        location: SourceLocation { start: sig_close_paren, end: sig_close_paren },
+        location: SourceLocation {
+            start: sig_close_paren,
+            end: sig_close_paren,
+        },
         new_text: new_param_text.to_string(),
     });
 
     // Edits 2..N: Insert default value before the closing `)` of each call.
     for call_close_paren in call_sites {
         changes.push(TextEdit {
-            location: SourceLocation { start: call_close_paren, end: call_close_paren },
+            location: SourceLocation {
+                start: call_close_paren,
+                end: call_close_paren,
+            },
             new_text: call_default_text.to_string(),
         });
     }
@@ -88,10 +100,14 @@ fn find_signature_close_paren(
     let sub_end = subroutine_node.location.end.min(source.len());
 
     // Find the first `{` in the subroutine span (body opener).
-    let body_open = source[sub_start..sub_end].find('{').map(|p| sub_start + p)?;
+    let body_open = source[sub_start..sub_end]
+        .find('{')
+        .map(|p| sub_start + p)?;
 
     // Find the first `(` before the body opener — that's the signature opener.
-    let sig_open = source[sub_start..body_open].find('(').map(|p| sub_start + p)?;
+    let sig_open = source[sub_start..body_open]
+        .find('(')
+        .map(|p| sub_start + p)?;
 
     // Now find the matching `)` using paren depth counting.
     let bytes = source.as_bytes();
@@ -115,7 +131,9 @@ fn find_signature_close_paren(
     let sig_end = signature.location.end.min(source.len());
     let search_start = signature.location.start;
     if sig_end > search_start {
-        source[search_start..sig_end].rfind(')').map(|rel| search_start + rel)
+        source[search_start..sig_end]
+            .rfind(')')
+            .map(|rel| search_start + rel)
     } else {
         None
     }
@@ -159,7 +177,11 @@ fn is_call_to(call_name: &str, sub_name: &str) -> bool {
 /// position to place the new argument before the `)`.
 fn find_call_close_paren(call_node: &Node, _args: &[Node]) -> Option<usize> {
     let node_end = call_node.location.end;
-    if node_end > 0 { Some(node_end - 1) } else { None }
+    if node_end > 0 {
+        Some(node_end - 1)
+    } else {
+        None
+    }
 }
 
 /// Visit immediate children of a node with a callback.
@@ -181,7 +203,11 @@ where
             }
         }
         NodeKind::ExpressionStatement { expression } => f(expression),
-        NodeKind::VariableDeclaration { variable, initializer, .. } => {
+        NodeKind::VariableDeclaration {
+            variable,
+            initializer,
+            ..
+        } => {
             f(variable);
             if let Some(init) = initializer {
                 f(init);
@@ -210,7 +236,12 @@ where
         NodeKind::Return { value } => {
             value.as_deref().into_iter().for_each(&mut f);
         }
-        NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
+        NodeKind::If {
+            condition,
+            then_branch,
+            elsif_branches,
+            else_branch,
+        } => {
             f(condition);
             f(then_branch);
             for (cond, branch) in elsif_branches {
@@ -221,11 +252,19 @@ where
                 f(b);
             }
         }
-        NodeKind::While { condition, body, .. } => {
+        NodeKind::While {
+            condition, body, ..
+        } => {
             f(condition);
             f(body);
         }
-        NodeKind::For { init, condition, update, body, .. } => {
+        NodeKind::For {
+            init,
+            condition,
+            update,
+            body,
+            ..
+        } => {
             if let Some(init) = init {
                 f(init);
             }
@@ -237,7 +276,12 @@ where
             }
             f(body);
         }
-        NodeKind::Foreach { variable, list, body, continue_block } => {
+        NodeKind::Foreach {
+            variable,
+            list,
+            body,
+            continue_block,
+        } => {
             f(variable);
             f(list);
             f(body);
@@ -248,7 +292,11 @@ where
         NodeKind::Subroutine { body, .. } => {
             f(body);
         }
-        NodeKind::Ternary { condition, then_expr, else_expr } => {
+        NodeKind::Ternary {
+            condition,
+            then_expr,
+            else_expr,
+        } => {
             f(condition);
             f(then_expr);
             f(else_expr);

@@ -61,7 +61,11 @@ impl SignatureHelpProvider {
         let symbol_table = SymbolExtractor::new_with_source(source).extract(ast);
         let builtin_signatures = create_builtin_signatures();
 
-        SignatureHelpProvider { ast: ast.clone(), symbol_table, builtin_signatures }
+        SignatureHelpProvider {
+            ast: ast.clone(),
+            symbol_table,
+            builtin_signatures,
+        }
     }
 
     /// Check if a built-in function exists
@@ -118,7 +122,10 @@ impl SignatureHelpProvider {
 
         // Find our position in the char array
         // Handle the case where position is beyond the end of the string (valid cursor position)
-        let pos_idx = chars.iter().position(|(idx, _)| *idx >= position).unwrap_or(chars.len() - 1);
+        let pos_idx = chars
+            .iter()
+            .position(|(idx, _)| *idx >= position)
+            .unwrap_or(chars.len() - 1);
 
         // Search backwards
         for i in (0..=pos_idx).rev() {
@@ -144,7 +151,11 @@ impl SignatureHelpProvider {
         let before_paren = &source[..call_start];
         let function_name = self.extract_function_name(before_paren)?;
 
-        Some(CallContext { function_name, call_start, position })
+        Some(CallContext {
+            function_name,
+            call_start,
+            position,
+        })
     }
 
     /// Extract function name from text before parenthesis
@@ -168,7 +179,11 @@ impl SignatureHelpProvider {
             .rev()
             .collect::<String>();
 
-        if word_chars.is_empty() { None } else { Some(word_chars) }
+        if word_chars.is_empty() {
+            None
+        } else {
+            Some(word_chars)
+        }
     }
 
     /// Get signatures for a function
@@ -231,14 +246,18 @@ impl SignatureHelpProvider {
             | NodeKind::SlurpyParameter { variable }
             | NodeKind::NamedParameter { variable } => {
                 if let NodeKind::Variable { sigil, name } = &variable.kind {
-                    Some(ParameterInfo { label: format!("{}{}", sigil, name), documentation: None })
+                    Some(ParameterInfo {
+                        label: format!("{}{}", sigil, name),
+                        documentation: None,
+                    })
                 } else {
                     None
                 }
             }
-            NodeKind::Variable { sigil, name } => {
-                Some(ParameterInfo { label: format!("{}{}", sigil, name), documentation: None })
-            }
+            NodeKind::Variable { sigil, name } => Some(ParameterInfo {
+                label: format!("{}{}", sigil, name),
+                documentation: None,
+            }),
             _ => None,
         }
     }
@@ -305,7 +324,11 @@ impl SignatureHelpProvider {
 
         // Try to extract parameters from the AST signature node first (modern Perl syntax)
         if let Some(sub_node) = self.find_subroutine_definition(&self.ast, &symbol.name) {
-            if let NodeKind::Subroutine { signature: Some(sig), .. } = &sub_node.kind {
+            if let NodeKind::Subroutine {
+                signature: Some(sig),
+                ..
+            } = &sub_node.kind
+            {
                 if let NodeKind::Signature { parameters } = &sig.kind {
                     for param in parameters {
                         if let Some(info) = self.param_info_from_node(param) {
@@ -318,10 +341,10 @@ impl SignatureHelpProvider {
 
         // If no AST signature found, fall back to extended prototype parsing
         if params.is_empty() {
-            let prototype = symbol
-                .attributes
-                .iter()
-                .find_map(|attr| attr.strip_prefix("prototype(").and_then(|s| s.strip_suffix(")")));
+            let prototype = symbol.attributes.iter().find_map(|attr| {
+                attr.strip_prefix("prototype(")
+                    .and_then(|s| s.strip_suffix(")"))
+            });
 
             if let Some(proto) = prototype {
                 label.push_str(proto);

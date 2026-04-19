@@ -21,8 +21,9 @@ fn send_request(
         params: Some(params),
     };
 
-    let response =
-        server.handle_request(request).ok_or_else(|| "Should get response".to_string())?;
+    let response = server
+        .handle_request(request)
+        .ok_or_else(|| "Should get response".to_string())?;
     if let Some(error) = response.error {
         return Err(error.message);
     }
@@ -31,7 +32,9 @@ fn send_request(
 
 /// Create a test server
 fn setup_server() -> LspServer {
-    let output = Arc::new(Mutex::new(Box::new(Vec::new()) as Box<dyn std::io::Write + Send>));
+    let output = Arc::new(Mutex::new(
+        Box::new(Vec::new()) as Box<dyn std::io::Write + Send>
+    ));
     let server = LspServer::with_output(output);
 
     // Initialize the server
@@ -106,7 +109,10 @@ fn lsp_virtual_perldoc_invalid_module() -> Result<(), Box<dyn std::error::Error>
     );
 
     // Should return error for non-existent module
-    assert!(result.is_err(), "Should return error for non-existent module");
+    assert!(
+        result.is_err(),
+        "Should return error for non-existent module"
+    );
     Ok(())
 }
 
@@ -123,7 +129,10 @@ fn lsp_virtual_unsupported_scheme() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     // Should return error for unsupported scheme
-    assert!(result.is_err(), "Should return error for unsupported scheme");
+    assert!(
+        result.is_err(),
+        "Should return error for unsupported scheme"
+    );
     let error = result.err().ok_or("Expected error result")?;
     assert!(
         error.contains("Unsupported") || error.contains("not found"),
@@ -161,7 +170,11 @@ fn lsp_virtual_perldoc_common_modules() -> Result<(), Box<dyn std::error::Error>
         match result {
             Ok(content) => {
                 let text = content["text"].as_str().ok_or("Should have text field")?;
-                assert!(text.len() > 100, "Module {} should have substantial content", module);
+                assert!(
+                    text.len() > 100,
+                    "Module {} should have substantial content",
+                    module
+                );
             }
             Err(_) => {
                 // If perldoc is not available, skip this test

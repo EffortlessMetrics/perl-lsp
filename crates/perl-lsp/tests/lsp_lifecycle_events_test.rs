@@ -20,7 +20,10 @@ fn setup_server_with_document() -> (LspServer, String) {
         })),
     };
     let init_response = server.handle_request(init_request);
-    assert!(init_response.is_some(), "Initialize should return a response");
+    assert!(
+        init_response.is_some(),
+        "Initialize should return a response"
+    );
 
     // 2. CRITICAL: Send initialized notification
     let initialized_notification = JsonRpcRequest {
@@ -75,7 +78,10 @@ fn test_did_save_notification() {
     let response = server.handle_request(request);
 
     // Notifications should not return a response
-    assert!(response.is_none(), "Notifications should not return a response");
+    assert!(
+        response.is_none(),
+        "Notifications should not return a response"
+    );
 }
 
 #[test]
@@ -97,7 +103,10 @@ fn test_did_save_with_text() {
     };
     let response = server.handle_request(request);
 
-    assert!(response.is_none(), "Notifications should not return a response");
+    assert!(
+        response.is_none(),
+        "Notifications should not return a response"
+    );
 }
 
 #[test]
@@ -117,7 +126,10 @@ fn test_will_save_notification() {
         })),
     };
     let response = server.handle_request(request);
-    assert!(response.is_none(), "willSave notification should not return a response");
+    assert!(
+        response.is_none(),
+        "willSave notification should not return a response"
+    );
 
     // Test AfterDelay reason
     let request = JsonRpcRequest {
@@ -168,12 +180,18 @@ fn test_will_save_wait_until_returns_valid_edits() -> Result<(), Box<dyn std::er
     };
     let response = server.handle_request(request);
 
-    assert!(response.is_some(), "willSaveWaitUntil should return a response");
+    assert!(
+        response.is_some(),
+        "willSaveWaitUntil should return a response"
+    );
     let edits = get_result(response);
     assert!(edits.is_some(), "Response should have a result");
 
     let edits = edits.ok_or("Failed to get edits from response")?;
-    assert!(edits.is_array(), "Response should be an array of text edits");
+    assert!(
+        edits.is_array(),
+        "Response should be an array of text edits"
+    );
 
     // The server may return formatting edits if perltidy is available
     // We verify the structure is valid
@@ -227,12 +245,18 @@ fn test_will_save_wait_until_with_formatting() -> Result<(), Box<dyn std::error:
     };
     let response = server.handle_request(request);
 
-    assert!(response.is_some(), "willSaveWaitUntil should return a response");
+    assert!(
+        response.is_some(),
+        "willSaveWaitUntil should return a response"
+    );
     let edits = get_result(response);
     assert!(edits.is_some(), "Response should have a result");
 
     let edits = edits.ok_or("Failed to get edits from response")?;
-    assert!(edits.is_array(), "Response should be an array of text edits");
+    assert!(
+        edits.is_array(),
+        "Response should be an array of text edits"
+    );
 
     // The server may return formatting edits if configured
     // We're just checking the structure is correct
@@ -282,7 +306,10 @@ fn test_did_close_after_save() {
     };
     let response = server.handle_request(close_notification);
 
-    assert!(response.is_none(), "didClose notification should not return a response");
+    assert!(
+        response.is_none(),
+        "didClose notification should not return a response"
+    );
 }
 
 #[test]

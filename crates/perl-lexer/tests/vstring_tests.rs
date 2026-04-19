@@ -13,7 +13,10 @@ fn significant(input: &str) -> Vec<perl_lexer::Token> {
         .collect_tokens()
         .into_iter()
         .filter(|t| {
-            !matches!(t.token_type, TokenType::Whitespace | TokenType::Newline | TokenType::EOF)
+            !matches!(
+                t.token_type,
+                TokenType::Whitespace | TokenType::Newline | TokenType::EOF
+            )
         })
         .collect()
 }
@@ -70,11 +73,15 @@ fn test_vstring_in_use_statement() -> R {
     let toks = significant("use v5.26;");
     // Should have: use, v5.26, ;  -- but v5.26 needs a dot, so it qualifies
     // Actually "use" is a keyword, "v5.26" is a v-string, ";" is semicolon
-    let version_tok = toks.iter().find(|t| matches!(&t.token_type, TokenType::Version(_)));
+    let version_tok = toks
+        .iter()
+        .find(|t| matches!(&t.token_type, TokenType::Version(_)));
     assert!(
         version_tok.is_some(),
         "expected a Version token in 'use v5.26;', got: {:?}",
-        toks.iter().map(|t| format!("{:?}", t.token_type)).collect::<Vec<_>>()
+        toks.iter()
+            .map(|t| format!("{:?}", t.token_type))
+            .collect::<Vec<_>>()
     );
     let vt = version_tok.ok_or("no version token")?;
     assert!(
@@ -88,11 +95,15 @@ fn test_vstring_in_use_statement() -> R {
 #[test]
 fn test_vstring_in_require_statement() -> R {
     let toks = significant("require v5.10.0;");
-    let version_tok = toks.iter().find(|t| matches!(&t.token_type, TokenType::Version(_)));
+    let version_tok = toks
+        .iter()
+        .find(|t| matches!(&t.token_type, TokenType::Version(_)));
     assert!(
         version_tok.is_some(),
         "expected a Version token in 'require v5.10.0;', got: {:?}",
-        toks.iter().map(|t| format!("{:?}", t.token_type)).collect::<Vec<_>>()
+        toks.iter()
+            .map(|t| format!("{:?}", t.token_type))
+            .collect::<Vec<_>>()
     );
     Ok(())
 }
@@ -101,11 +112,15 @@ fn test_vstring_in_require_statement() -> R {
 fn test_vstring_in_assignment() -> R {
     // $VERSION = v1.2.3;
     let toks = significant("$VERSION = v1.2.3;");
-    let version_tok = toks.iter().find(|t| matches!(&t.token_type, TokenType::Version(_)));
+    let version_tok = toks
+        .iter()
+        .find(|t| matches!(&t.token_type, TokenType::Version(_)));
     assert!(
         version_tok.is_some(),
         "expected a Version token in '$VERSION = v1.2.3;', got: {:?}",
-        toks.iter().map(|t| format!("{:?}", t.token_type)).collect::<Vec<_>>()
+        toks.iter()
+            .map(|t| format!("{:?}", t.token_type))
+            .collect::<Vec<_>>()
     );
     Ok(())
 }
@@ -120,7 +135,10 @@ fn test_bare_v_is_identifier() -> R {
     let toks = significant("v");
     assert_eq!(toks.len(), 1);
     assert!(
-        matches!(&toks[0].token_type, TokenType::Identifier(_) | TokenType::Keyword(_)),
+        matches!(
+            &toks[0].token_type,
+            TokenType::Identifier(_) | TokenType::Keyword(_)
+        ),
         "expected identifier for bare 'v', got: {:?}",
         toks[0].token_type
     );
@@ -133,7 +151,10 @@ fn test_v_followed_by_alpha_is_identifier() -> R {
     let toks = significant("var");
     assert_eq!(toks.len(), 1);
     assert!(
-        matches!(&toks[0].token_type, TokenType::Identifier(_) | TokenType::Keyword(_)),
+        matches!(
+            &toks[0].token_type,
+            TokenType::Identifier(_) | TokenType::Keyword(_)
+        ),
         "expected identifier for 'var', got: {:?}",
         toks[0].token_type
     );
@@ -146,7 +167,10 @@ fn test_v_digits_no_dot_is_identifier() -> R {
     let toks = significant("v5");
     assert_eq!(toks.len(), 1);
     assert!(
-        matches!(&toks[0].token_type, TokenType::Identifier(_) | TokenType::Keyword(_)),
+        matches!(
+            &toks[0].token_type,
+            TokenType::Identifier(_) | TokenType::Keyword(_)
+        ),
         "expected identifier for 'v5', got: {:?}",
         toks[0].token_type
     );
@@ -159,7 +183,10 @@ fn test_v_digits_underscore_is_identifier() -> R {
     let toks = significant("v5_test");
     assert_eq!(toks.len(), 1);
     assert!(
-        matches!(&toks[0].token_type, TokenType::Identifier(_) | TokenType::Keyword(_)),
+        matches!(
+            &toks[0].token_type,
+            TokenType::Identifier(_) | TokenType::Keyword(_)
+        ),
         "expected identifier for 'v5_test', got: {:?}",
         toks[0].token_type
     );
@@ -172,7 +199,10 @@ fn test_v_digits_alpha_is_identifier() -> R {
     let toks = significant("v5x");
     assert_eq!(toks.len(), 1);
     assert!(
-        matches!(&toks[0].token_type, TokenType::Identifier(_) | TokenType::Keyword(_)),
+        matches!(
+            &toks[0].token_type,
+            TokenType::Identifier(_) | TokenType::Keyword(_)
+        ),
         "expected identifier for 'v5x', got: {:?}",
         toks[0].token_type
     );
@@ -206,11 +236,15 @@ fn test_vstring_trailing_dot_not_consumed() -> R {
     // "v5.26." -- the trailing dot (not followed by digit) should NOT be part of v-string
     let toks = significant("v5.26.");
     // Should get: Version("v5.26"), then some token for "."
-    let version_tok = toks.iter().find(|t| matches!(&t.token_type, TokenType::Version(_)));
+    let version_tok = toks
+        .iter()
+        .find(|t| matches!(&t.token_type, TokenType::Version(_)));
     assert!(
         version_tok.is_some(),
         "expected Version token for 'v5.26.', got: {:?}",
-        toks.iter().map(|t| format!("{:?}", t.token_type)).collect::<Vec<_>>()
+        toks.iter()
+            .map(|t| format!("{:?}", t.token_type))
+            .collect::<Vec<_>>()
     );
     let vt = version_tok.ok_or("no version token")?;
     assert!(

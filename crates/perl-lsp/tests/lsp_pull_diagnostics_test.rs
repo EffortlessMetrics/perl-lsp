@@ -63,17 +63,23 @@ print $y;  # Undefined variable
         })),
     };
 
-    let response = server.handle_request(request).ok_or("Failed to get response from server")?;
+    let response = server
+        .handle_request(request)
+        .ok_or("Failed to get response from server")?;
     let result = response.result.ok_or("Response missing result field")?;
 
     assert_eq!(result["kind"], "full");
     assert!(result["resultId"].is_string(), "Should have a result ID");
 
-    let items = result["items"].as_array().ok_or("Expected items to be an array")?;
+    let items = result["items"]
+        .as_array()
+        .ok_or("Expected items to be an array")?;
     assert!(!items.is_empty(), "Should have at least one diagnostic");
 
     // Check first diagnostic structure
-    let first = items.first().ok_or("Expected at least one diagnostic item")?;
+    let first = items
+        .first()
+        .ok_or("Expected at least one diagnostic item")?;
     assert!(first["range"].is_object());
     assert!(first["severity"].is_number());
     assert_eq!(first["source"], "perl-lsp");
@@ -141,8 +147,12 @@ print "Hello, World!\n";
     let response1 = server
         .handle_request(request1)
         .ok_or("Failed to get response from first diagnostic request")?;
-    let result1 = response1.result.ok_or("First response missing result field")?;
-    let result_id = result1["resultId"].as_str().ok_or("Expected resultId to be a string")?;
+    let result1 = response1
+        .result
+        .ok_or("First response missing result field")?;
+    let result_id = result1["resultId"]
+        .as_str()
+        .ok_or("Expected resultId to be a string")?;
 
     // Second request with previous result ID - should be unchanged
     let request2 = JsonRpcRequest {
@@ -158,7 +168,9 @@ print "Hello, World!\n";
     let response2 = server
         .handle_request(request2)
         .ok_or("Failed to get response from second diagnostic request")?;
-    let result2 = response2.result.ok_or("Second response missing result field")?;
+    let result2 = response2
+        .result
+        .ok_or("Second response missing result field")?;
 
     assert_eq!(result2["kind"], "unchanged");
     assert_eq!(result2["resultId"], result_id);
@@ -243,11 +255,16 @@ print "OK\n";
         params: Some(json!({})),
     };
 
-    let response =
-        server.handle_request(request).ok_or("Failed to get workspace diagnostic response")?;
-    let result = response.result.ok_or("Workspace diagnostic response missing result field")?;
+    let response = server
+        .handle_request(request)
+        .ok_or("Failed to get workspace diagnostic response")?;
+    let result = response
+        .result
+        .ok_or("Workspace diagnostic response missing result field")?;
 
-    let items = result["items"].as_array().ok_or("Expected items to be an array")?;
+    let items = result["items"]
+        .as_array()
+        .ok_or("Expected items to be an array")?;
     assert_eq!(items.len(), 2, "Should have diagnostics for both documents");
 
     // Check structure of workspace diagnostic reports
@@ -277,14 +294,20 @@ fn test_diagnostic_provider_capability() -> Result<(), Box<dyn std::error::Error
         })),
     };
 
-    let response =
-        server.handle_request(init_request).ok_or("Failed to get initialize response")?;
-    let result = response.result.ok_or("Initialize response missing result field")?;
+    let response = server
+        .handle_request(init_request)
+        .ok_or("Failed to get initialize response")?;
+    let result = response
+        .result
+        .ok_or("Initialize response missing result field")?;
     let caps = &result["capabilities"];
 
     // Diagnostic provider should be advertised in non-lock mode
     if !cfg!(feature = "lsp-ga-lock") {
-        assert!(caps["diagnosticProvider"].is_object(), "diagnosticProvider should be advertised");
+        assert!(
+            caps["diagnosticProvider"].is_object(),
+            "diagnosticProvider should be advertised"
+        );
         let diag_provider = &caps["diagnosticProvider"];
         assert_eq!(diag_provider["interFileDependencies"], json!(false));
         assert_eq!(diag_provider["workspaceDiagnostics"], json!(true));
@@ -348,10 +371,12 @@ fn test_workspace_diagnostic_with_previous_ids() -> Result<(), Box<dyn std::erro
     let response1 = server
         .handle_request(request1)
         .ok_or("Failed to get first workspace diagnostic response")?;
-    let result1 =
-        response1.result.ok_or("First workspace diagnostic response missing result field")?;
-    let items1 =
-        result1["items"].as_array().ok_or("Expected first response items to be an array")?;
+    let result1 = response1
+        .result
+        .ok_or("First workspace diagnostic response missing result field")?;
+    let items1 = result1["items"]
+        .as_array()
+        .ok_or("Expected first response items to be an array")?;
 
     // Get result IDs from first request
     let mut previous_ids = Vec::new();
@@ -377,10 +402,12 @@ fn test_workspace_diagnostic_with_previous_ids() -> Result<(), Box<dyn std::erro
     let response2 = server
         .handle_request(request2)
         .ok_or("Failed to get second workspace diagnostic response")?;
-    let result2 =
-        response2.result.ok_or("Second workspace diagnostic response missing result field")?;
-    let items2 =
-        result2["items"].as_array().ok_or("Expected second response items to be an array")?;
+    let result2 = response2
+        .result
+        .ok_or("Second workspace diagnostic response missing result field")?;
+    let items2 = result2["items"]
+        .as_array()
+        .ok_or("Expected second response items to be an array")?;
 
     // At least one should be unchanged
     let has_unchanged = items2.iter().any(|item| item["kind"] == "unchanged");

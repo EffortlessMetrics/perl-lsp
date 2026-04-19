@@ -17,7 +17,9 @@ use tempfile::TempDir;
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 fn temp_workspace() -> Result<TempDir, Box<dyn std::error::Error>> {
-    Ok(tempfile::Builder::new().prefix("perl-dap-security-").tempdir()?)
+    Ok(tempfile::Builder::new()
+        .prefix("perl-dap-security-")
+        .tempdir()?)
 }
 
 // ===== Path Validation Tests =====
@@ -48,8 +50,11 @@ fn test_path_validation_parent_traversal_attempts() {
     let workspace = must(temp_workspace());
 
     // Malicious paths with parent directory references
-    let malicious_paths =
-        vec!["../../../etc/passwd", "../../.ssh/id_rsa", "../../../../../../../etc/shadow"];
+    let malicious_paths = vec![
+        "../../../etc/passwd",
+        "../../.ssh/id_rsa",
+        "../../../../../../../etc/shadow",
+    ];
 
     for path_str in malicious_paths {
         let path = PathBuf::from(path_str);
@@ -129,7 +134,13 @@ fn test_path_validation_null_byte_injection() {
 
 #[test]
 fn test_expression_validation_valid_expressions() -> TestResult {
-    let valid_exprs = vec!["$x + 1", "$hash{key}", "my_function()", "defined($var)", "$array[0]"];
+    let valid_exprs = vec![
+        "$x + 1",
+        "$hash{key}",
+        "my_function()",
+        "defined($var)",
+        "$array[0]",
+    ];
 
     for expr in valid_exprs {
         validate_expression(expr)?;
@@ -140,7 +151,11 @@ fn test_expression_validation_valid_expressions() -> TestResult {
 
 #[test]
 fn test_expression_validation_newline_injection() {
-    let malicious_exprs = vec!["1\nprint 'hacked'", "$x\nsystem('rm -rf /')", "valid\rmalicious"];
+    let malicious_exprs = vec![
+        "1\nprint 'hacked'",
+        "$x\nsystem('rm -rf /')",
+        "valid\rmalicious",
+    ];
 
     for expr in malicious_exprs {
         let result = validate_expression(expr);
@@ -180,7 +195,11 @@ fn test_condition_validation_protocol_injection() {
 
     for cond in malicious_conditions {
         let result = validate_condition(cond);
-        assert!(result.is_err(), "Malicious condition '{}' should be rejected", cond);
+        assert!(
+            result.is_err(),
+            "Malicious condition '{}' should be rejected",
+            cond
+        );
     }
 }
 
@@ -191,18 +210,31 @@ fn test_timeout_validation_within_bounds() {
     assert_eq!(validate_timeout(1000).unwrap(), 1000);
     assert_eq!(validate_timeout(5000).unwrap(), 5000);
     assert_eq!(validate_timeout(100_000).unwrap(), 100_000);
-    assert_eq!(validate_timeout(DEFAULT_TIMEOUT_MS).unwrap(), DEFAULT_TIMEOUT_MS);
+    assert_eq!(
+        validate_timeout(DEFAULT_TIMEOUT_MS).unwrap(),
+        DEFAULT_TIMEOUT_MS
+    );
 }
 
 #[test]
 fn test_timeout_validation_zero_clamped() {
-    assert_eq!(validate_timeout(0).unwrap(), 1, "Zero timeout should be clamped to 1ms");
+    assert_eq!(
+        validate_timeout(0).unwrap(),
+        1,
+        "Zero timeout should be clamped to 1ms"
+    );
 }
 
 #[test]
 fn test_timeout_validation_excessive_returns_error() {
-    assert!(validate_timeout(500_000).is_err(), "Excessive timeout should be an error");
-    assert!(validate_timeout(1_000_000).is_err(), "Million ms timeout should be an error");
+    assert!(
+        validate_timeout(500_000).is_err(),
+        "Excessive timeout should be an error"
+    );
+    assert!(
+        validate_timeout(1_000_000).is_err(),
+        "Million ms timeout should be an error"
+    );
 }
 
 // ===== Integration Tests =====
@@ -226,7 +258,11 @@ fn test_security_comprehensive_path_traversal_matrix() {
         let result = validate_path(&path, workspace.path());
 
         if should_reject {
-            assert!(result.is_err(), "Path '{}' should be rejected but was allowed", path_str);
+            assert!(
+                result.is_err(),
+                "Path '{}' should be rejected but was allowed",
+                path_str
+            );
         } else {
             // For non-rejecting paths, they should pass (we're validating structure, not existence)
             assert!(

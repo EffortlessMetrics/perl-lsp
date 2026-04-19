@@ -282,14 +282,25 @@ fn test_syntax_highlighting(_test_dir: &Path) -> Result<()> {
         .stderr(Stdio::piped())
         .spawn()?;
 
-    let stdin = child.stdin.as_mut().ok_or_else(|| eyre!("Failed to open stdin"))?;
-    let stdout = child.stdout.as_mut().ok_or_else(|| eyre!("Failed to open stdout"))?;
+    let stdin = child
+        .stdin
+        .as_mut()
+        .ok_or_else(|| eyre!("Failed to open stdin"))?;
+    let stdout = child
+        .stdout
+        .as_mut()
+        .ok_or_else(|| eyre!("Failed to open stdout"))?;
     let mut reader = BufReader::new(stdout);
 
     // Helper to send message
     let mut send_msg = |msg: serde_json::Value| -> Result<()> {
         let msg_str = msg.to_string();
-        write!(stdin, "Content-Length: {}\r\n\r\n{}", msg_str.len(), msg_str)?;
+        write!(
+            stdin,
+            "Content-Length: {}\r\n\r\n{}",
+            msg_str.len(),
+            msg_str
+        )?;
         stdin.flush()?;
         Ok(())
     };
@@ -397,8 +408,10 @@ fn test_syntax_highlighting(_test_dir: &Path) -> Result<()> {
     let tokens_resp = wait_for_response(2)?;
 
     // 5. Verify tokens
-    if let Some(data) =
-        tokens_resp.get("result").and_then(|r| r.get("data")).and_then(|d| d.as_array())
+    if let Some(data) = tokens_resp
+        .get("result")
+        .and_then(|r| r.get("data"))
+        .and_then(|d| d.as_array())
     {
         if !data.is_empty() {
             println!("   ✓ Received {} semantic tokens", data.len());

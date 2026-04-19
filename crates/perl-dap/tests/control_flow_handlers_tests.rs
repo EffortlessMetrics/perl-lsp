@@ -19,7 +19,13 @@ fn test_continue_handler() {
     let response = adapter.handle_request(1, "continue", None);
 
     match response {
-        DapMessage::Response { success, command, body, message, .. } => {
+        DapMessage::Response {
+            success,
+            command,
+            body,
+            message,
+            ..
+        } => {
             assert!(success, "Continue request should succeed");
             assert_eq!(command, "continue");
             assert!(message.is_none(), "Continue should not have error message");
@@ -32,7 +38,9 @@ fn test_continue_handler() {
                     "Continue response should indicate all threads continued"
                 );
             } else {
-                must(Err::<(), _>("Continue response should have body with allThreadsContinued"));
+                must(Err::<(), _>(
+                    "Continue response should have body with allThreadsContinued",
+                ));
                 unreachable!()
             }
         }
@@ -52,7 +60,12 @@ fn test_next_handler() {
     let response = adapter.handle_request(1, "next", None);
 
     match response {
-        DapMessage::Response { success, command, message, .. } => {
+        DapMessage::Response {
+            success,
+            command,
+            message,
+            ..
+        } => {
             assert!(success, "Next request should succeed");
             assert_eq!(command, "next");
             assert!(message.is_none(), "Next should not have error message");
@@ -73,7 +86,12 @@ fn test_step_in_handler() {
     let response = adapter.handle_request(1, "stepIn", None);
 
     match response {
-        DapMessage::Response { success, command, message, .. } => {
+        DapMessage::Response {
+            success,
+            command,
+            message,
+            ..
+        } => {
             assert!(success, "StepIn request should succeed");
             assert_eq!(command, "stepIn");
             assert!(message.is_none(), "StepIn should not have error message");
@@ -94,7 +112,12 @@ fn test_step_out_handler() {
     let response = adapter.handle_request(1, "stepOut", None);
 
     match response {
-        DapMessage::Response { success, command, message, .. } => {
+        DapMessage::Response {
+            success,
+            command,
+            message,
+            ..
+        } => {
             assert!(success, "StepOut request should succeed");
             assert_eq!(command, "stepOut");
             assert!(message.is_none(), "StepOut should not have error message");
@@ -115,11 +138,19 @@ fn test_pause_handler_no_session() {
     let response = adapter.handle_request(1, "pause", None);
 
     match response {
-        DapMessage::Response { success, command, message, .. } => {
+        DapMessage::Response {
+            success,
+            command,
+            message,
+            ..
+        } => {
             // Without an active session, pause should fail gracefully
             assert!(!success, "Pause should fail without active session");
             assert_eq!(command, "pause");
-            assert!(message.is_some(), "Pause without session should provide error message");
+            assert!(
+                message.is_some(),
+                "Pause without session should provide error message"
+            );
 
             if let Some(msg) = message {
                 assert!(
@@ -146,16 +177,28 @@ fn test_control_flow_state_transitions() {
     // (they handle missing session gracefully)
 
     let continue_response = adapter.handle_request(1, "continue", None);
-    assert!(matches!(continue_response, DapMessage::Response { success: true, .. }));
+    assert!(matches!(
+        continue_response,
+        DapMessage::Response { success: true, .. }
+    ));
 
     let next_response = adapter.handle_request(2, "next", None);
-    assert!(matches!(next_response, DapMessage::Response { success: true, .. }));
+    assert!(matches!(
+        next_response,
+        DapMessage::Response { success: true, .. }
+    ));
 
     let step_in_response = adapter.handle_request(3, "stepIn", None);
-    assert!(matches!(step_in_response, DapMessage::Response { success: true, .. }));
+    assert!(matches!(
+        step_in_response,
+        DapMessage::Response { success: true, .. }
+    ));
 
     let step_out_response = adapter.handle_request(4, "stepOut", None);
-    assert!(matches!(step_out_response, DapMessage::Response { success: true, .. }));
+    assert!(matches!(
+        step_out_response,
+        DapMessage::Response { success: true, .. }
+    ));
 }
 
 // AC9.4: Test that responses have correct sequence numbers
@@ -167,7 +210,9 @@ fn test_control_flow_sequence_numbers() {
     let response = adapter.handle_request(42, "continue", None);
 
     match response {
-        DapMessage::Response { seq, request_seq, .. } => {
+        DapMessage::Response {
+            seq, request_seq, ..
+        } => {
             assert!(seq > 0, "Response sequence should be positive");
             assert_eq!(request_seq, 42, "Request sequence should match");
         }
@@ -191,12 +236,16 @@ fn test_continue_with_thread_id() {
     let response = adapter.handle_request(1, "continue", Some(args));
 
     match response {
-        DapMessage::Response { success, command, .. } => {
+        DapMessage::Response {
+            success, command, ..
+        } => {
             assert!(success, "Continue with threadId should succeed");
             assert_eq!(command, "continue");
         }
         _ => {
-            must(Err::<(), _>("Expected Response message for continue with threadId"));
+            must(Err::<(), _>(
+                "Expected Response message for continue with threadId",
+            ));
             unreachable!()
         }
     }
@@ -215,12 +264,16 @@ fn test_next_with_thread_id() {
     let response = adapter.handle_request(1, "next", Some(args));
 
     match response {
-        DapMessage::Response { success, command, .. } => {
+        DapMessage::Response {
+            success, command, ..
+        } => {
             assert!(success, "Next with threadId should succeed");
             assert_eq!(command, "next");
         }
         _ => {
-            must(Err::<(), _>("Expected Response message for next with threadId"));
+            must(Err::<(), _>(
+                "Expected Response message for next with threadId",
+            ));
             unreachable!()
         }
     }
@@ -240,12 +293,16 @@ fn test_step_in_with_target_id() {
     let response = adapter.handle_request(1, "stepIn", Some(args));
 
     match response {
-        DapMessage::Response { success, command, .. } => {
+        DapMessage::Response {
+            success, command, ..
+        } => {
             assert!(success, "StepIn with targetId should succeed");
             assert_eq!(command, "stepIn");
         }
         _ => {
-            must(Err::<(), _>("Expected Response message for stepIn with targetId"));
+            must(Err::<(), _>(
+                "Expected Response message for stepIn with targetId",
+            ));
             unreachable!()
         }
     }
@@ -264,12 +321,16 @@ fn test_step_out_with_thread_id() {
     let response = adapter.handle_request(1, "stepOut", Some(args));
 
     match response {
-        DapMessage::Response { success, command, .. } => {
+        DapMessage::Response {
+            success, command, ..
+        } => {
             assert!(success, "StepOut with threadId should succeed");
             assert_eq!(command, "stepOut");
         }
         _ => {
-            must(Err::<(), _>("Expected Response message for stepOut with threadId"));
+            must(Err::<(), _>(
+                "Expected Response message for stepOut with threadId",
+            ));
             unreachable!()
         }
     }
@@ -293,7 +354,9 @@ fn test_pause_with_thread_id() {
             // Success depends on whether there's an active session
         }
         _ => {
-            must(Err::<(), _>("Expected Response message for pause with threadId"));
+            must(Err::<(), _>(
+                "Expected Response message for pause with threadId",
+            ));
             unreachable!()
         }
     }
@@ -319,11 +382,18 @@ fn test_sequential_control_flow_operations() {
         let response = adapter.handle_request((idx + 1) as i64, command, Some(args.clone()));
 
         match response {
-            DapMessage::Response { success, command: resp_cmd, .. } => {
+            DapMessage::Response {
+                success,
+                command: resp_cmd,
+                ..
+            } => {
                 assert!(success, "Operation {} should succeed", command);
                 assert_eq!(&resp_cmd, command, "Command should match");
             }
-            _ => must(Err::<(), _>(format!("Expected Response for command {}", command))),
+            _ => must(Err::<(), _>(format!(
+                "Expected Response for command {}",
+                command
+            ))),
         }
     }
 }
@@ -339,7 +409,9 @@ fn test_continue_missing_thread_id() {
     let response = adapter.handle_request(1, "continue", Some(args));
 
     match response {
-        DapMessage::Response { success, command, .. } => {
+        DapMessage::Response {
+            success, command, ..
+        } => {
             assert!(success, "Continue without threadId should still succeed");
             assert_eq!(command, "continue");
         }
@@ -388,7 +460,13 @@ fn test_control_flow_response_format() {
         let response = adapter.handle_request(1, command, None);
 
         match response {
-            DapMessage::Response { seq, request_seq, success, command: cmd, .. } => {
+            DapMessage::Response {
+                seq,
+                request_seq,
+                success,
+                command: cmd,
+                ..
+            } => {
                 assert!(seq > 0, "Sequence number should be positive");
                 assert_eq!(request_seq, 1, "Request sequence should match");
                 assert!(success, "{} should succeed", command);
@@ -443,7 +521,12 @@ fn test_pause_without_active_session_returns_failure() {
     let response = adapter.handle_request(1, "pause", None);
 
     match response {
-        DapMessage::Response { success, command, message, .. } => {
+        DapMessage::Response {
+            success,
+            command,
+            message,
+            ..
+        } => {
             assert_eq!(command, "pause");
             assert!(!success, "Pause without session should fail");
             assert!(message.is_some(), "Failure should include error message");
@@ -497,9 +580,16 @@ fn test_all_control_flow_operations_exist() {
         // Verify the operation is recognized (not unknown command)
         match response {
             DapMessage::Response { command, .. } => {
-                assert_eq!(command, operation, "Operation {} should be recognized", operation);
+                assert_eq!(
+                    command, operation,
+                    "Operation {} should be recognized",
+                    operation
+                );
             }
-            _ => must(Err::<(), _>(format!("Operation {} should return Response", operation))),
+            _ => must(Err::<(), _>(format!(
+                "Operation {} should return Response",
+                operation
+            ))),
         }
     }
 }
@@ -513,9 +603,14 @@ fn test_unknown_control_flow_command() {
     let response = adapter.handle_request(1, "unknownCommand", None);
 
     match response {
-        DapMessage::Response { success, message, .. } => {
+        DapMessage::Response {
+            success, message, ..
+        } => {
             assert!(!success, "Unknown command should fail");
-            assert!(message.is_some(), "Unknown command should have error message");
+            assert!(
+                message.is_some(),
+                "Unknown command should have error message"
+            );
 
             if let Some(msg) = message {
                 assert!(
@@ -545,7 +640,10 @@ fn test_control_flow_handlers_thread_safe() {
             DapMessage::Response { success, .. } => {
                 assert!(success, "Handler should work on iteration {}", i);
             }
-            _ => must(Err::<(), _>(format!("Expected Response on iteration {}", i))),
+            _ => must(Err::<(), _>(format!(
+                "Expected Response on iteration {}",
+                i
+            ))),
         }
     }
 }
@@ -569,7 +667,9 @@ fn test_step_in_with_granularity() {
             assert!(success, "StepIn with granularity should succeed");
         }
         _ => {
-            must(Err::<(), _>("Expected Response for stepIn with granularity"));
+            must(Err::<(), _>(
+                "Expected Response for stepIn with granularity",
+            ));
             unreachable!()
         }
     }
@@ -617,7 +717,9 @@ fn test_step_out_with_granularity() {
             assert!(success, "StepOut with granularity should succeed");
         }
         _ => {
-            must(Err::<(), _>("Expected Response for stepOut with granularity"));
+            must(Err::<(), _>(
+                "Expected Response for stepOut with granularity",
+            ));
             unreachable!()
         }
     }

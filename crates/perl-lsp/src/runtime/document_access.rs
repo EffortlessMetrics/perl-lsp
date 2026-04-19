@@ -180,7 +180,9 @@ impl LspServer {
     /// Iterate over all open buffers (for reference search)
     pub(crate) fn iter_open_buffers(&self) -> Vec<(String, String)> {
         let docs = self.documents.lock();
-        docs.iter().map(|(uri, doc)| (uri.clone(), doc.text.clone())).collect()
+        docs.iter()
+            .map(|(uri, doc)| (uri.clone(), doc.text.clone()))
+            .collect()
     }
 
     /// Get or compute a `SemanticAnalyzer` for the given document text and AST.
@@ -218,7 +220,9 @@ impl LspServer {
         }
 
         // Cache miss: build the analyzer outside the lock.
-        let analyzer = Arc::new(crate::semantic::SemanticAnalyzer::analyze_with_source(ast, text));
+        let analyzer = Arc::new(crate::semantic::SemanticAnalyzer::analyze_with_source(
+            ast, text,
+        ));
 
         // Write path: insert, evicting all entries when the cache is full.
         {

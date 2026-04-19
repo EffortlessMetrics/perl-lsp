@@ -66,7 +66,10 @@ fn single_canonical_module_in_use_statement() -> Result<(), Box<dyn std::error::
 
 #[test]
 fn contains_detects_canonical_module() -> Result<(), Box<dyn std::error::Error>> {
-    assert!(contains_standalone_module_token("use Foo::Bar;", "Foo::Bar"));
+    assert!(contains_standalone_module_token(
+        "use Foo::Bar;",
+        "Foo::Bar"
+    ));
     Ok(())
 }
 
@@ -93,7 +96,10 @@ fn deeply_nested_canonical_module() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn rejects_prefix_match_extending_right_with_colons() -> Result<(), Box<dyn std::error::Error>> {
     let r = ranges("use Foo::Bar::Baz;", "Foo::Bar");
-    assert!(r.is_empty(), "should reject when module continues right with ::");
+    assert!(
+        r.is_empty(),
+        "should reject when module continues right with ::"
+    );
     Ok(())
 }
 
@@ -108,7 +114,10 @@ fn rejects_suffix_match_extending_left_with_colons() -> Result<(), Box<dyn std::
 fn rejects_when_followed_by_identifier_char() -> Result<(), Box<dyn std::error::Error>> {
     let r = ranges("use Foo::Barista;", "Foo::Bar");
     assert!(r.is_empty());
-    assert!(!contains_standalone_module_token("use Foo::Barista;", "Foo::Bar"));
+    assert!(!contains_standalone_module_token(
+        "use Foo::Barista;",
+        "Foo::Bar"
+    ));
     Ok(())
 }
 
@@ -488,8 +497,14 @@ fn contains_is_consistent_with_iterator() -> Result<(), Box<dyn std::error::Erro
     for (line, module, expected) in &cases {
         let has_match = !ranges(line, module).is_empty();
         let contains = contains_standalone_module_token(line, module);
-        assert_eq!(has_match, *expected, "ranges mismatch for ({line:?}, {module:?})");
-        assert_eq!(contains, *expected, "contains mismatch for ({line:?}, {module:?})");
+        assert_eq!(
+            has_match, *expected,
+            "ranges mismatch for ({line:?}, {module:?})"
+        );
+        assert_eq!(
+            contains, *expected,
+            "contains mismatch for ({line:?}, {module:?})"
+        );
         assert_eq!(
             has_match, contains,
             "ranges vs contains inconsistent for ({line:?}, {module:?})"
@@ -531,6 +546,10 @@ fn whitespace_only_line() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn comment_line_with_module() -> Result<(), Box<dyn std::error::Error>> {
     let r = ranges("# use Foo::Bar;", "Foo::Bar");
-    assert_eq!(r.len(), 1, "boundary crate is syntax-unaware, should match in comments");
+    assert_eq!(
+        r.len(),
+        1,
+        "boundary crate is syntax-unaware, should match in comments"
+    );
     Ok(())
 }

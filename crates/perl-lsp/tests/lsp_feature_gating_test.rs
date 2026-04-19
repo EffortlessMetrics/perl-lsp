@@ -50,10 +50,16 @@ fn test_non_advertised_features_hidden() -> Result<(), Box<dyn std::error::Error
     let caps: ServerCapabilities = serde_json::from_value(init_result["capabilities"].clone())?;
 
     // Code lens is now advertised (v0.8.9)
-    assert!(caps.code_lens_provider.is_some(), "Code lens should be advertised");
+    assert!(
+        caps.code_lens_provider.is_some(),
+        "Code lens should be advertised"
+    );
 
     // Call hierarchy is fully implemented and should be advertised (v0.8.9)
-    assert!(caps.call_hierarchy_provider.is_some(), "Call hierarchy should be advertised");
+    assert!(
+        caps.call_hierarchy_provider.is_some(),
+        "Call hierarchy should be advertised"
+    );
     Ok(())
 }
 

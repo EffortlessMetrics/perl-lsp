@@ -40,11 +40,17 @@ fn test_stack_trace_placeholder_frame() -> Result<(), Box<dyn std::error::Error>
     // Should have placeholder frame
     assert_eq!(frames.len(), 1);
     let frame = &frames[0];
-    assert_eq!(frame.get("name").and_then(|v| v.as_str()), Some("main::hello"));
+    assert_eq!(
+        frame.get("name").and_then(|v| v.as_str()),
+        Some("main::hello")
+    );
     assert_eq!(frame.get("line").and_then(|v| v.as_i64()), Some(10));
 
     let source = frame.get("source").ok_or("Expected source")?;
-    let path = source.get("path").and_then(|v| v.as_str()).ok_or("Expected path")?;
+    let path = source
+        .get("path")
+        .and_then(|v| v.as_str())
+        .ok_or("Expected path")?;
     assert!(path.contains("hello.pl"));
 
     Ok(())
@@ -76,7 +82,13 @@ fn test_stack_trace_filtering_logic() -> Result<(), Box<dyn std::error::Error>> 
     let mut adapter = create_test_adapter();
     let response = adapter.handle_request(1, "stackTrace", None);
 
-    let DapMessage::Response { success, body, command, .. } = response else {
+    let DapMessage::Response {
+        success,
+        body,
+        command,
+        ..
+    } = response
+    else {
         return Err("Expected Response message".into());
     };
 
@@ -84,13 +96,29 @@ fn test_stack_trace_filtering_logic() -> Result<(), Box<dyn std::error::Error>> 
     assert_eq!(command, "stackTrace");
 
     let body = body.ok_or("Expected body")?;
-    assert!(body.get("stackFrames").is_some(), "Response must include stackFrames");
-    assert!(body.get("totalFrames").is_some(), "Response must include totalFrames");
+    assert!(
+        body.get("stackFrames").is_some(),
+        "Response must include stackFrames"
+    );
+    assert!(
+        body.get("totalFrames").is_some(),
+        "Response must include totalFrames"
+    );
 
     // Verify totalFrames matches stackFrames array length
-    let frames = body.get("stackFrames").and_then(|v| v.as_array()).ok_or("Expected array")?;
-    let total = body.get("totalFrames").and_then(|v| v.as_u64()).ok_or("Expected number")?;
-    assert_eq!(frames.len() as u64, total, "totalFrames must match stackFrames.len()");
+    let frames = body
+        .get("stackFrames")
+        .and_then(|v| v.as_array())
+        .ok_or("Expected array")?;
+    let total = body
+        .get("totalFrames")
+        .and_then(|v| v.as_u64())
+        .ok_or("Expected number")?;
+    assert_eq!(
+        frames.len() as u64,
+        total,
+        "totalFrames must match stackFrames.len()"
+    );
 
     Ok(())
 }
@@ -108,8 +136,10 @@ fn test_stack_trace_frame_structure() -> Result<(), Box<dyn std::error::Error>> 
 
     assert!(success);
     let body = body.ok_or("Expected body")?;
-    let frames =
-        body.get("stackFrames").and_then(|v| v.as_array()).ok_or("Expected stackFrames array")?;
+    let frames = body
+        .get("stackFrames")
+        .and_then(|v| v.as_array())
+        .ok_or("Expected stackFrames array")?;
 
     for frame in frames {
         // Required DAP fields
@@ -135,11 +165,19 @@ fn test_stack_trace_response_sequence_numbers() -> Result<(), Box<dyn std::error
     let request_seq = 42;
     let response = adapter.handle_request(request_seq, "stackTrace", None);
 
-    let DapMessage::Response { request_seq: resp_req_seq, command, .. } = response else {
+    let DapMessage::Response {
+        request_seq: resp_req_seq,
+        command,
+        ..
+    } = response
+    else {
         return Err("Expected Response message".into());
     };
 
-    assert_eq!(resp_req_seq, request_seq, "Response request_seq must match request");
+    assert_eq!(
+        resp_req_seq, request_seq,
+        "Response request_seq must match request"
+    );
     assert_eq!(command, "stackTrace");
 
     Ok(())

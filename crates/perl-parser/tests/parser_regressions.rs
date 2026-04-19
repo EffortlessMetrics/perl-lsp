@@ -12,7 +12,11 @@ fn assert_parses(code: &str) {
 fn assert_parse_fails(code: &str) {
     let mut parser = Parser::new(code);
     let result = parser.parse();
-    assert!(result.is_err(), "Expected parse to fail but got AST:\n{:?}", result.ok());
+    assert!(
+        result.is_err(),
+        "Expected parse to fail but got AST:\n{:?}",
+        result.ok()
+    );
 }
 
 #[test]
@@ -275,7 +279,10 @@ fn statement_modifier_unless_and_while() -> Result<(), Box<dyn std::error::Error
     let mut parser = Parser::new(code);
     let ast = parser.parse()?;
     let sexp = ast.to_sexp();
-    assert!(sexp.contains("statement_modifier"), "expected statement_modifier nodes in output");
+    assert!(
+        sexp.contains("statement_modifier"),
+        "expected statement_modifier nodes in output"
+    );
     Ok(())
 }
 

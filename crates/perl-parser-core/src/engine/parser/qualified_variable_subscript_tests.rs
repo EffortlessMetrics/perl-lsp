@@ -17,7 +17,12 @@ mod tests {
     fn assert_no_errors(code: &str) {
         let ast = parse_program(code);
         let sexp = ast.to_sexp();
-        assert!(!sexp.contains("ERROR"), "Parse of `{}` produced ERROR nodes: {}", code, sexp,);
+        assert!(
+            !sexp.contains("ERROR"),
+            "Parse of `{}` produced ERROR nodes: {}",
+            code,
+            sexp,
+        );
     }
 
     /// Helper: parse code and return the first statement's expression node.
@@ -192,7 +197,10 @@ mod tests {
                 match &left.kind {
                     NodeKind::Variable { sigil, name } => {
                         assert_eq!(sigil, "%", "Expected % sigil on hash-slice target");
-                        assert_eq!(name, "$href", "Expected scalar-ref hash target, got: {name}");
+                        assert_eq!(
+                            name, "$href",
+                            "Expected scalar-ref hash target, got: {name}"
+                        );
                     }
                     _ => panic!(
                         "Expected Variable node as hash-slice target, got: {}",
@@ -229,7 +237,10 @@ mod tests {
                 match &left.kind {
                     NodeKind::Variable { sigil, name } => {
                         assert_eq!(sigil, "@", "Expected @ sigil on hash-slice target");
-                        assert_eq!(name, "$href", "Expected scalar-ref hash target, got: {name}");
+                        assert_eq!(
+                            name, "$href",
+                            "Expected scalar-ref hash target, got: {name}"
+                        );
                     }
                     _ => panic!(
                         "Expected Variable node as hash-slice target, got: {}",
@@ -298,7 +309,11 @@ mod tests {
             NodeKind::Binary { op, left, .. } => {
                 assert_eq!(op, "[]", "Expected outer [] subscript");
                 match &left.kind {
-                    NodeKind::Binary { op: inner_op, left: inner_left, .. } => {
+                    NodeKind::Binary {
+                        op: inner_op,
+                        left: inner_left,
+                        ..
+                    } => {
                         assert_eq!(inner_op, "{}", "Expected inner {{}} subscript");
                         match &inner_left.kind {
                             NodeKind::Variable { sigil, name } => {
@@ -311,7 +326,10 @@ mod tests {
                             ),
                         }
                     }
-                    _ => panic!("Expected inner Binary subscript, got: {}", left.kind.kind_name()),
+                    _ => panic!(
+                        "Expected inner Binary subscript, got: {}",
+                        left.kind.kind_name()
+                    ),
                 }
             }
             _ => panic!(
@@ -428,7 +446,10 @@ mod tests {
                         assert_eq!(sigil, "$");
                         assert_eq!(name, "Pkg::Var");
                     }
-                    _ => panic!("Expected Variable as target, got: {}", left.kind.kind_name()),
+                    _ => panic!(
+                        "Expected Variable as target, got: {}",
+                        left.kind.kind_name()
+                    ),
                 }
                 // The key should be a variable $key
                 match &right.kind {
@@ -463,7 +484,11 @@ mod tests {
                 assert_eq!(op, "->{}", "Expected ->{{}} arrow deref, got: {op}");
                 // Left should be the [] subscript
                 match &left.kind {
-                    NodeKind::Binary { op: inner_op, left: inner_left, .. } => {
+                    NodeKind::Binary {
+                        op: inner_op,
+                        left: inner_left,
+                        ..
+                    } => {
                         assert_eq!(inner_op, "[]");
                         match &inner_left.kind {
                             NodeKind::Variable { sigil, name } => {
@@ -505,7 +530,10 @@ mod tests {
                 // Right: $Pkg::Var{key}
                 match &right.kind {
                     NodeKind::Binary { op: r_op, .. } => assert_eq!(r_op, "{}"),
-                    _ => panic!("Expected Binary {{}} on right, got: {}", right.kind.kind_name()),
+                    _ => panic!(
+                        "Expected Binary {{}} on right, got: {}",
+                        right.kind.kind_name()
+                    ),
                 }
             }
             _ => panic!(

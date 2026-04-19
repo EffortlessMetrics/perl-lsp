@@ -86,7 +86,13 @@ fn emit_event_safe(
 ) -> bool {
     let mut seq_lock = lock_or_recover(seq, "emit_event_safe.seq");
     *seq_lock += 1;
-    sender.send(DapMessage::Event { seq: *seq_lock, event: event.to_string(), body }).is_ok()
+    sender
+        .send(DapMessage::Event {
+            seq: *seq_lock,
+            event: event.to_string(),
+            body,
+        })
+        .is_ok()
 }
 
 /// Compiled regex patterns for debugger output parsing
@@ -131,7 +137,10 @@ fn context_re() -> Option<&'static Regex> {
 }
 
 fn prompt_re() -> Option<&'static Regex> {
-    PROMPT_RE.get_or_init(|| Regex::new(r"^\s*DB<?\d*>?\s*$")).as_ref().ok()
+    PROMPT_RE
+        .get_or_init(|| Regex::new(r"^\s*DB<?\d*>?\s*$"))
+        .as_ref()
+        .ok()
 }
 
 fn stack_frame_re() -> Option<&'static Regex> {
@@ -337,17 +346,26 @@ fn assignment_ops_re() -> Option<&'static Regex> {
 
 /// Regex to match dynamic subroutine dereferencing: &{...}
 fn deref_re() -> Option<&'static Regex> {
-    DEREF_RE.get_or_init(|| Regex::new(r"&[\s]*\{")).as_ref().ok()
+    DEREF_RE
+        .get_or_init(|| Regex::new(r"&[\s]*\{"))
+        .as_ref()
+        .ok()
 }
 
 /// Regex to match glob operations: <*...>
 fn glob_re() -> Option<&'static Regex> {
-    GLOB_RE.get_or_init(|| Regex::new(r"<\*[^>]*>")).as_ref().ok()
+    GLOB_RE
+        .get_or_init(|| Regex::new(r"<\*[^>]*>"))
+        .as_ref()
+        .ok()
 }
 
 /// Regex for matching ANSI escape sequences in debugger output.
 fn ansi_escape_re() -> Option<&'static Regex> {
-    ANSI_ESCAPE_RE.get_or_init(|| Regex::new(r"\x1B\[[0-9;]*[A-Za-z]")).as_ref().ok()
+    ANSI_ESCAPE_RE
+        .get_or_init(|| Regex::new(r"\x1B\[[0-9;]*[A-Za-z]"))
+        .as_ref()
+        .ok()
 }
 
 /// Regex for validating setVariable variable names to avoid debugger command injection.
@@ -377,7 +395,10 @@ fn is_valid_function_breakpoint_name(name: &str) -> bool {
 }
 
 fn inc_re() -> Option<&'static Regex> {
-    INC_RE.get_or_init(|| Regex::new(r"'([^']+)'\s*=>\s*'([^']+)'")).as_ref().ok()
+    INC_RE
+        .get_or_init(|| Regex::new(r"'([^']+)'\s*=>\s*'([^']+)'"))
+        .as_ref()
+        .ok()
 }
 
 /// Stored data breakpoint record for watchpoint management
@@ -593,7 +614,11 @@ impl DebugAdapter {
     fn send_event(&self, event: &str, body: Option<Value>) {
         if let Some(ref sender) = self.event_sender {
             let seq = self.next_seq();
-            let msg = DapMessage::Event { seq, event: event.to_string(), body };
+            let msg = DapMessage::Event {
+                seq,
+                event: event.to_string(),
+                body,
+            };
             let _ = sender.send(msg);
         }
     }
@@ -611,8 +636,12 @@ impl DebugAdapter {
 
     /// Write a debugger command and flush immediately so output framing remains ordered.
     fn write_debugger_command(stdin: &mut impl Write, command: &str) -> Result<(), String> {
-        stdin.write_all(command.as_bytes()).map_err(|e| format!("write debugger command: {e}"))?;
-        stdin.flush().map_err(|e| format!("flush debugger command: {e}"))?;
+        stdin
+            .write_all(command.as_bytes())
+            .map_err(|e| format!("write debugger command: {e}"))?;
+        stdin
+            .flush()
+            .map_err(|e| format!("flush debugger command: {e}"))?;
         Ok(())
     }
 
@@ -659,11 +688,14 @@ impl DebugAdapter {
             }
 
             let lines = self.snapshot_recent_output_lines();
-            let normalized_lines: Vec<String> =
-                lines.iter().map(|line| Self::normalize_debugger_output_line(line)).collect();
+            let normalized_lines: Vec<String> = lines
+                .iter()
+                .map(|line| Self::normalize_debugger_output_line(line))
+                .collect();
 
-            if let Some(begin_idx) =
-                normalized_lines.iter().rposition(|line| line.contains(begin_marker))
+            if let Some(begin_idx) = normalized_lines
+                .iter()
+                .rposition(|line| line.contains(begin_marker))
                 && let Some(end_rel) = normalized_lines[begin_idx + 1..]
                     .iter()
                     .position(|line| line.contains(end_marker))
@@ -728,7 +760,13 @@ mod tests {
     #[test]
     fn test_debug_adapter_creation() {
         let adapter = DebugAdapter::new();
-        assert!(adapter.session.lock().ok().is_some_and(|guard| guard.is_none()));
+        assert!(
+            adapter
+                .session
+                .lock()
+                .ok()
+                .is_some_and(|guard| guard.is_none())
+        );
         assert!(adapter.breakpoints.is_empty());
     }
 
@@ -746,7 +784,12 @@ mod tests {
         let response = adapter.handle_request(1, "initialize", None);
 
         match response {
-            DapMessage::Response { success, command, body, .. } => {
+            DapMessage::Response {
+                success,
+                command,
+                body,
+                ..
+            } => {
                 assert!(success);
                 assert_eq!(command, "initialize");
                 assert!(body.is_some());
@@ -763,20 +806,28 @@ mod tests {
         let init = adapter.handle_request(1, "initialize", None);
 
         let capabilities = match init {
-            DapMessage::Response { success: true, command, body: Some(body), .. }
-                if command == "initialize" =>
-            {
-                body
-            }
+            DapMessage::Response {
+                success: true,
+                command,
+                body: Some(body),
+                ..
+            } if command == "initialize" => body,
             _ => return Err("Expected successful initialize response".into()),
         };
 
-        let capability_map =
-            capabilities.as_object().ok_or("Initialize response body must be a JSON object")?;
+        let capability_map = capabilities
+            .as_object()
+            .ok_or("Initialize response body must be a JSON object")?;
 
         let expectations = [
-            ("supportsConfigurationDoneRequest", crate::feature_catalog::has_feature("dap.core")),
-            ("supportsFunctionBreakpoints", crate::feature_catalog::has_feature("dap.core")),
+            (
+                "supportsConfigurationDoneRequest",
+                crate::feature_catalog::has_feature("dap.core"),
+            ),
+            (
+                "supportsFunctionBreakpoints",
+                crate::feature_catalog::has_feature("dap.core"),
+            ),
             (
                 "supportsConditionalBreakpoints",
                 crate::feature_catalog::has_feature("dap.breakpoints.basic"),
@@ -785,11 +836,26 @@ mod tests {
                 "supportsHitConditionalBreakpoints",
                 crate::feature_catalog::has_feature("dap.breakpoints.hit_condition"),
             ),
-            ("supportsEvaluateForHovers", crate::feature_catalog::has_feature("dap.core")),
-            ("supportsSetVariable", crate::feature_catalog::has_feature("dap.core")),
-            ("supportsValueFormattingOptions", crate::feature_catalog::has_feature("dap.core")),
-            ("supportTerminateDebuggee", crate::feature_catalog::has_feature("dap.core")),
-            ("supportsLogPoints", crate::feature_catalog::has_feature("dap.breakpoints.logpoints")),
+            (
+                "supportsEvaluateForHovers",
+                crate::feature_catalog::has_feature("dap.core"),
+            ),
+            (
+                "supportsSetVariable",
+                crate::feature_catalog::has_feature("dap.core"),
+            ),
+            (
+                "supportsValueFormattingOptions",
+                crate::feature_catalog::has_feature("dap.core"),
+            ),
+            (
+                "supportTerminateDebuggee",
+                crate::feature_catalog::has_feature("dap.core"),
+            ),
+            (
+                "supportsLogPoints",
+                crate::feature_catalog::has_feature("dap.breakpoints.logpoints"),
+            ),
             (
                 "supportsExceptionOptions",
                 crate::feature_catalog::has_feature("dap.exceptions.die")
@@ -800,13 +866,31 @@ mod tests {
                 crate::feature_catalog::has_feature("dap.exceptions.die")
                     || crate::feature_catalog::has_feature("dap.exceptions.warn"),
             ),
-            ("supportsInlineValues", crate::feature_catalog::has_feature("dap.inline_values")),
-            ("supportsTerminateRequest", crate::feature_catalog::has_feature("dap.core")),
-            ("supportsCompletionsRequest", crate::feature_catalog::has_feature("dap.completions")),
-            ("supportsModulesRequest", crate::feature_catalog::has_feature("dap.modules")),
-            ("supportsDataBreakpoints", crate::feature_catalog::has_feature("dap.watchpoints")),
+            (
+                "supportsInlineValues",
+                crate::feature_catalog::has_feature("dap.inline_values"),
+            ),
+            (
+                "supportsTerminateRequest",
+                crate::feature_catalog::has_feature("dap.core"),
+            ),
+            (
+                "supportsCompletionsRequest",
+                crate::feature_catalog::has_feature("dap.completions"),
+            ),
+            (
+                "supportsModulesRequest",
+                crate::feature_catalog::has_feature("dap.modules"),
+            ),
+            (
+                "supportsDataBreakpoints",
+                crate::feature_catalog::has_feature("dap.watchpoints"),
+            ),
             ("supportsTerminateThreadsRequest", false),
-            ("supportsGotoTargetsRequest", crate::feature_catalog::has_feature("dap.core")),
+            (
+                "supportsGotoTargetsRequest",
+                crate::feature_catalog::has_feature("dap.core"),
+            ),
         ];
 
         for (capability, expected) in expectations {
@@ -826,7 +910,9 @@ mod tests {
             .ok_or("exceptionBreakpointFilters must be present as an array")?;
 
         let has_filter = |id: &str| -> bool {
-            exception_filters.iter().any(|f| f.get("filter").and_then(Value::as_str) == Some(id))
+            exception_filters
+                .iter()
+                .any(|f| f.get("filter").and_then(Value::as_str) == Some(id))
         };
 
         let die_enabled = crate::feature_catalog::has_feature("dap.exceptions.die");
@@ -865,16 +951,18 @@ mod tests {
         let init = adapter.handle_request(1, "initialize", None);
 
         let capabilities = match init {
-            DapMessage::Response { success: true, command, body: Some(body), .. }
-                if command == "initialize" =>
-            {
-                body
-            }
+            DapMessage::Response {
+                success: true,
+                command,
+                body: Some(body),
+                ..
+            } if command == "initialize" => body,
             _ => return Err("Expected successful initialize response".into()),
         };
 
-        let capability_map =
-            capabilities.as_object().ok_or("Initialize response body must be a JSON object")?;
+        let capability_map = capabilities
+            .as_object()
+            .ok_or("Initialize response body must be a JSON object")?;
 
         let capability_to_command = [
             ("supportsConfigurationDoneRequest", "configurationDone"),
@@ -972,7 +1060,11 @@ mod tests {
             request_seq += 1;
 
             match response {
-                DapMessage::Response { command: actual, message, .. } => {
+                DapMessage::Response {
+                    command: actual,
+                    message,
+                    ..
+                } => {
                     assert_eq!(
                         actual, command,
                         "Capability-mapped command `{command}` must route to its handler"
@@ -989,7 +1081,9 @@ mod tests {
 
         // supportsTerminateThreadsRequest must be false (Perl limitation)
         assert_eq!(
-            capability_map.get("supportsTerminateThreadsRequest").and_then(|v| v.as_bool()),
+            capability_map
+                .get("supportsTerminateThreadsRequest")
+                .and_then(|v| v.as_bool()),
             Some(false),
             "supportsTerminateThreadsRequest must be false — Perl has no thread termination"
         );
@@ -1018,7 +1112,11 @@ mod tests {
             })),
         );
         match response {
-            DapMessage::Response { success: true, command, .. } => {
+            DapMessage::Response {
+                success: true,
+                command,
+                ..
+            } => {
                 assert_eq!(command, "setExceptionBreakpoints");
             }
             _ => return Err("Expected successful setExceptionBreakpoints response".into()),
@@ -1040,7 +1138,11 @@ mod tests {
             })),
         );
         match disable {
-            DapMessage::Response { success: true, command, .. } => {
+            DapMessage::Response {
+                success: true,
+                command,
+                ..
+            } => {
                 assert_eq!(command, "setExceptionBreakpoints");
             }
             _ => return Err("Expected successful setExceptionBreakpoints response".into()),
@@ -1063,7 +1165,12 @@ mod tests {
         let response = adapter.handle_request(1, "attach", None);
 
         match response {
-            DapMessage::Response { success, command, message, .. } => {
+            DapMessage::Response {
+                success,
+                command,
+                message,
+                ..
+            } => {
                 assert!(!success);
                 assert_eq!(command, "attach");
                 assert!(message.is_some());
@@ -1086,7 +1193,12 @@ mod tests {
         let response = adapter.handle_request(1, "attach", Some(args));
 
         match response {
-            DapMessage::Response { success, command, message, .. } => {
+            DapMessage::Response {
+                success,
+                command,
+                message,
+                ..
+            } => {
                 assert!(!success); // Not yet implemented, but validates correctly
                 assert_eq!(command, "attach");
                 assert!(message.is_some());
@@ -1108,7 +1220,13 @@ mod tests {
         let response = adapter.handle_request(1, "attach", Some(args));
 
         match response {
-            DapMessage::Response { success, command, body, message, .. } => {
+            DapMessage::Response {
+                success,
+                command,
+                body,
+                message,
+                ..
+            } => {
                 assert!(success);
                 assert_eq!(command, "attach");
                 assert!(body.is_some());
@@ -1133,7 +1251,12 @@ mod tests {
         let response = adapter.handle_request(1, "attach", Some(args));
 
         match response {
-            DapMessage::Response { success, command, message, .. } => {
+            DapMessage::Response {
+                success,
+                command,
+                message,
+                ..
+            } => {
                 assert!(!success);
                 assert_eq!(command, "attach");
                 assert!(message.is_some());
@@ -1155,7 +1278,12 @@ mod tests {
         let response = adapter.handle_request(1, "attach", Some(args));
 
         match response {
-            DapMessage::Response { success, command, message, .. } => {
+            DapMessage::Response {
+                success,
+                command,
+                message,
+                ..
+            } => {
                 assert!(!success);
                 assert_eq!(command, "attach");
                 assert!(message.is_some());
@@ -1177,7 +1305,12 @@ mod tests {
         let response = adapter.handle_request(1, "attach", Some(args));
 
         match response {
-            DapMessage::Response { success, command, message, .. } => {
+            DapMessage::Response {
+                success,
+                command,
+                message,
+                ..
+            } => {
                 assert!(!success);
                 assert_eq!(command, "attach");
                 assert!(message.is_some());
@@ -1200,7 +1333,12 @@ mod tests {
         let response = adapter.handle_request(1, "attach", Some(args));
 
         match response {
-            DapMessage::Response { success, command, message, .. } => {
+            DapMessage::Response {
+                success,
+                command,
+                message,
+                ..
+            } => {
                 assert!(!success);
                 assert_eq!(command, "attach");
                 assert!(message.is_some());
@@ -1223,7 +1361,12 @@ mod tests {
         let response = adapter.handle_request(1, "attach", Some(args));
 
         match response {
-            DapMessage::Response { success, command, message, .. } => {
+            DapMessage::Response {
+                success,
+                command,
+                message,
+                ..
+            } => {
                 assert!(!success);
                 assert_eq!(command, "attach");
                 assert!(message.is_some());
@@ -1243,7 +1386,12 @@ mod tests {
         let response = adapter.handle_request(1, "attach", Some(args));
 
         match response {
-            DapMessage::Response { success, command, message, .. } => {
+            DapMessage::Response {
+                success,
+                command,
+                message,
+                ..
+            } => {
                 assert!(!success);
                 assert_eq!(command, "attach");
                 assert!(message.is_some());
@@ -1266,7 +1414,12 @@ mod tests {
         let response = adapter.handle_request(1, "attach", Some(args));
 
         match response {
-            DapMessage::Response { success, command, message, .. } => {
+            DapMessage::Response {
+                success,
+                command,
+                message,
+                ..
+            } => {
                 assert!(!success); // Not yet implemented
                 assert_eq!(command, "attach");
                 assert!(message.is_some());
@@ -1288,10 +1441,17 @@ mod tests {
         }
         let response = adapter.handle_threads(1, 1);
         match response {
-            DapMessage::Response { success, body: Some(body), .. } => {
+            DapMessage::Response {
+                success,
+                body: Some(body),
+                ..
+            } => {
                 assert!(success);
                 let threads = body["threads"].as_array().ok_or("threads must be array")?;
-                assert!(!threads.is_empty(), "TCP attach should return non-empty threads");
+                assert!(
+                    !threads.is_empty(),
+                    "TCP attach should return non-empty threads"
+                );
                 assert_eq!(threads[0]["id"], 1);
                 assert_eq!(threads[0]["name"], "TCP Attached Thread");
             }
@@ -1310,7 +1470,9 @@ mod tests {
             let args = json!({ "port": port });
             let response = adapter.handle_request(2, "attach", Some(args));
             match response {
-                DapMessage::Response { success, message, .. } => {
+                DapMessage::Response {
+                    success, message, ..
+                } => {
                     assert!(!success, "port {port} should be rejected");
                     assert!(
                         message.as_ref().is_some_and(|m| m.contains("out of range")),
@@ -1347,7 +1509,12 @@ mod tests {
         let mut adapter = DebugAdapter::new();
         let response = adapter.handle_request(1, "goto", None);
         match response {
-            DapMessage::Response { success, command, message, .. } => {
+            DapMessage::Response {
+                success,
+                command,
+                message,
+                ..
+            } => {
                 assert!(!success);
                 assert_eq!(command, "goto");
                 assert_eq!(message.as_deref(), Some("Missing or invalid arguments"));
@@ -1363,7 +1530,12 @@ mod tests {
         let response =
             adapter.handle_request(1, "goto", Some(json!({"threadId": 1, "targetId": -1})));
         match response {
-            DapMessage::Response { success, command, message, .. } => {
+            DapMessage::Response {
+                success,
+                command,
+                message,
+                ..
+            } => {
                 assert!(!success);
                 assert_eq!(command, "goto");
                 // With target mapping, unknown IDs produce "Unknown goto target id"
@@ -1389,7 +1561,12 @@ mod tests {
         let response =
             adapter.handle_request(1, "goto", Some(json!({"threadId": 1, "targetId": 10})));
         match response {
-            DapMessage::Response { success, command, message, .. } => {
+            DapMessage::Response {
+                success,
+                command,
+                message,
+                ..
+            } => {
                 assert!(!success);
                 assert_eq!(command, "goto");
                 assert_eq!(message.as_deref(), Some("No active debug session"));
@@ -1404,12 +1581,18 @@ mod tests {
         let mut adapter = DebugAdapter::new();
         let init = adapter.handle_request(1, "initialize", None);
         let capabilities = match init {
-            DapMessage::Response { success: true, body: Some(body), .. } => body,
+            DapMessage::Response {
+                success: true,
+                body: Some(body),
+                ..
+            } => body,
             _ => return Err("Expected successful initialize response".into()),
         };
         let cap_map = capabilities.as_object().ok_or("body must be object")?;
         assert_eq!(
-            cap_map.get("supportsTerminateThreadsRequest").and_then(|v| v.as_bool()),
+            cap_map
+                .get("supportsTerminateThreadsRequest")
+                .and_then(|v| v.as_bool()),
             Some(false),
             "supportsTerminateThreadsRequest must be false"
         );
@@ -1427,12 +1610,20 @@ mod tests {
             Some(json!({"source": {"path": "/tmp/nonexistent.pl"}, "line": 1})),
         );
         match gt_response {
-            DapMessage::Response { success, command, message, .. } => {
+            DapMessage::Response {
+                success,
+                command,
+                message,
+                ..
+            } => {
                 assert!(success, "gotoTargets should succeed");
                 assert_eq!(command, "gotoTargets");
                 // Must NOT say "does not support"
                 assert!(
-                    !message.as_deref().unwrap_or("").contains("does not support"),
+                    !message
+                        .as_deref()
+                        .unwrap_or("")
+                        .contains("does not support"),
                     "gotoTargets must not claim lack of support"
                 );
             }
@@ -1443,7 +1634,12 @@ mod tests {
         let goto_response =
             adapter.handle_request(2, "goto", Some(json!({"threadId": 1, "targetId": 999})));
         match goto_response {
-            DapMessage::Response { success, command, message, .. } => {
+            DapMessage::Response {
+                success,
+                command,
+                message,
+                ..
+            } => {
                 assert!(!success, "goto with unknown target should fail");
                 assert_eq!(command, "goto");
                 let msg = message.as_deref().unwrap_or("");
@@ -1486,7 +1682,11 @@ mod tests {
 
         // Verify the response contains targets with monotonic IDs (not line numbers)
         match response {
-            DapMessage::Response { success, body: Some(body), .. } => {
+            DapMessage::Response {
+                success,
+                body: Some(body),
+                ..
+            } => {
                 assert!(success, "gotoTargets should succeed");
                 let targets = body
                     .get("targets")
@@ -1529,7 +1729,12 @@ mod tests {
         let response =
             adapter.handle_request(2, "goto", Some(json!({"threadId": 1, "targetId": 42})));
         match response {
-            DapMessage::Response { success, command, message, .. } => {
+            DapMessage::Response {
+                success,
+                command,
+                message,
+                ..
+            } => {
                 assert!(!success, "goto without session should fail");
                 assert_eq!(command, "goto");
                 // It should NOT say "Unknown goto target" — the mapping was found
@@ -1544,7 +1749,10 @@ mod tests {
 
         // Verify the consumed entry was removed from the map
         let goto_map = lock_or_recover(&adapter.goto_targets, "test.goto_targets");
-        assert!(!goto_map.contains_key(&42), "consumed goto target should be removed from map");
+        assert!(
+            !goto_map.contains_key(&42),
+            "consumed goto target should be removed from map"
+        );
         Ok(())
     }
 
@@ -1567,7 +1775,12 @@ mod tests {
             })),
         );
         match response {
-            DapMessage::Response { success, command, message, .. } => {
+            DapMessage::Response {
+                success,
+                command,
+                message,
+                ..
+            } => {
                 assert!(!success, "source with traversal path should fail");
                 assert_eq!(command, "source");
                 let msg = message.as_deref().unwrap_or("");
@@ -1599,8 +1812,16 @@ mod tests {
             })),
         );
         match response {
-            DapMessage::Response { success, command, message, .. } => {
-                assert!(!success, "breakpointLocations with traversal path should fail");
+            DapMessage::Response {
+                success,
+                command,
+                message,
+                ..
+            } => {
+                assert!(
+                    !success,
+                    "breakpointLocations with traversal path should fail"
+                );
                 assert_eq!(command, "breakpointLocations");
                 let msg = message.as_deref().unwrap_or("");
                 assert!(
@@ -1631,7 +1852,12 @@ mod tests {
             })),
         );
         match response {
-            DapMessage::Response { success, command, message, .. } => {
+            DapMessage::Response {
+                success,
+                command,
+                message,
+                ..
+            } => {
                 assert!(!success, "gotoTargets with traversal path should fail");
                 assert_eq!(command, "gotoTargets");
                 let msg = message.as_deref().unwrap_or("");
@@ -1693,17 +1919,24 @@ mod tests {
     fn apply_context_re(line: &str) -> Option<(String, String)> {
         let re = context_re()?;
         let caps = re.captures(line)?;
-        let file =
-            caps.name("file").or_else(|| caps.name("file2")).map(|m| m.as_str().to_string())?;
-        let line_num =
-            caps.name("line").or_else(|| caps.name("line2")).map(|m| m.as_str().to_string())?;
+        let file = caps
+            .name("file")
+            .or_else(|| caps.name("file2"))
+            .map(|m| m.as_str().to_string())?;
+        let line_num = caps
+            .name("line")
+            .or_else(|| caps.name("line2"))
+            .map(|m| m.as_str().to_string())?;
         Some((file, line_num))
     }
 
     #[test]
     fn test_context_re_unix_path() {
         let result = apply_context_re("main::(/path/to/file.pl:42):");
-        assert_eq!(result, Some(("/path/to/file.pl".to_string(), "42".to_string())));
+        assert_eq!(
+            result,
+            Some(("/path/to/file.pl".to_string(), "42".to_string()))
+        );
     }
 
     #[test]
@@ -1711,35 +1944,50 @@ mod tests {
         // Windows drive-letter path: colon followed by backslash must be captured
         // as part of the file path, not treated as a line-number separator.
         let result = apply_context_re(r"main::(C:\Users\name\file.pl:42):");
-        assert_eq!(result, Some((r"C:\Users\name\file.pl".to_string(), "42".to_string())));
+        assert_eq!(
+            result,
+            Some((r"C:\Users\name\file.pl".to_string(), "42".to_string()))
+        );
     }
 
     #[test]
     fn test_context_re_windows_drive_letter_forward_slash() {
         // Forward-slash Windows path from Git Bash / cross-platform tools.
         let result = apply_context_re("main::(C:/Users/file.pl:7):");
-        assert_eq!(result, Some(("C:/Users/file.pl".to_string(), "7".to_string())));
+        assert_eq!(
+            result,
+            Some(("C:/Users/file.pl".to_string(), "7".to_string()))
+        );
     }
 
     #[test]
     fn test_context_re_unc_path() {
         // UNC path (Windows network share).
         let result = apply_context_re(r"main::(\\server\share\file.pl:5):");
-        assert_eq!(result, Some((r"\\server\share\file.pl".to_string(), "5".to_string())));
+        assert_eq!(
+            result,
+            Some((r"\\server\share\file.pl".to_string(), "5".to_string()))
+        );
     }
 
     #[test]
     fn test_context_re_named_function() {
         // Func::Name context line.
         let result = apply_context_re("Foo::Bar::(/path/script.pl:10):");
-        assert_eq!(result, Some(("/path/script.pl".to_string(), "10".to_string())));
+        assert_eq!(
+            result,
+            Some(("/path/script.pl".to_string(), "10".to_string()))
+        );
     }
 
     #[test]
     fn test_context_re_windows_path_named_function() {
         // Func::Name context line with Windows path.
         let result = apply_context_re(r"Foo::Bar::(C:\path\script.pl:10):");
-        assert_eq!(result, Some((r"C:\path\script.pl".to_string(), "10".to_string())));
+        assert_eq!(
+            result,
+            Some((r"C:\path\script.pl".to_string(), "10".to_string()))
+        );
     }
 
     #[test]
@@ -1754,6 +2002,9 @@ mod tests {
         // Colon followed by digit is the line-number separator, not a path component.
         // "/path/file.pl:42" should yield file="/path/file.pl", line="42".
         let result = apply_context_re("main::(/path/file.pl:42):");
-        assert_eq!(result, Some(("/path/file.pl".to_string(), "42".to_string())));
+        assert_eq!(
+            result,
+            Some(("/path/file.pl".to_string(), "42".to_string()))
+        );
     }
 }

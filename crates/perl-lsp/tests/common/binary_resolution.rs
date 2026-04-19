@@ -65,8 +65,10 @@ pub(crate) fn resolve_perl_lsp_cmds() -> impl Iterator<Item = Command> {
     if let Ok(manifest_dir) = std::env::var("CARGO_MANIFEST_DIR") {
         let crate_dir = std::path::Path::new(&manifest_dir);
         // Walk up to find workspace root (contains Cargo.toml with [workspace])
-        let workspace_root =
-            crate_dir.ancestors().find(|p| p.join("Cargo.lock").exists()).unwrap_or(crate_dir);
+        let workspace_root = crate_dir
+            .ancestors()
+            .find(|p| p.join("Cargo.lock").exists())
+            .unwrap_or(crate_dir);
 
         // Try DEBUG binary first (this is what `cargo test` builds by default)
         let debug_binary = workspace_root.join("target/debug/perllsp");

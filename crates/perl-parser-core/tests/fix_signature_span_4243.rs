@@ -30,14 +30,16 @@ fn test_signature_span_covers_parens() -> Result<(), Box<dyn std::error::Error>>
     let sig = find_node_by_kind(&ast, "Signature").ok_or("no Signature node found in AST")?;
 
     let expected = "($x, $y)";
-    let sliced = source.get(sig.location.start..sig.location.end).ok_or_else(|| {
-        format!(
-            "span {}..{} out of bounds for source len {}",
-            sig.location.start,
-            sig.location.end,
-            source.len()
-        )
-    })?;
+    let sliced = source
+        .get(sig.location.start..sig.location.end)
+        .ok_or_else(|| {
+            format!(
+                "span {}..{} out of bounds for source len {}",
+                sig.location.start,
+                sig.location.end,
+                source.len()
+            )
+        })?;
 
     assert_eq!(
         sliced, expected,
@@ -70,9 +72,14 @@ fn test_signature_span_with_default_value() -> Result<(), Box<dyn std::error::Er
     let sig = find_node_by_kind(&ast, "Signature").ok_or("no Signature node found in AST")?;
 
     let expected = "($x, $y = 0, @rest)";
-    let sliced = source.get(sig.location.start..sig.location.end).ok_or_else(|| {
-        format!("span {}..{} out of bounds", sig.location.start, sig.location.end)
-    })?;
+    let sliced = source
+        .get(sig.location.start..sig.location.end)
+        .ok_or_else(|| {
+            format!(
+                "span {}..{} out of bounds",
+                sig.location.start, sig.location.end
+            )
+        })?;
 
     assert_eq!(
         sliced, expected,
@@ -92,11 +99,20 @@ fn test_method_signature_span_covers_parens() -> Result<(), Box<dyn std::error::
         find_node_by_kind(&ast, "Signature").ok_or("no Signature node found in method AST")?;
 
     let expected = "($name)";
-    let sliced = source.get(sig.location.start..sig.location.end).ok_or_else(|| {
-        format!("span {}..{} out of bounds", sig.location.start, sig.location.end)
-    })?;
+    let sliced = source
+        .get(sig.location.start..sig.location.end)
+        .ok_or_else(|| {
+            format!(
+                "span {}..{} out of bounds",
+                sig.location.start, sig.location.end
+            )
+        })?;
 
-    assert_eq!(sliced, expected, "Method Signature span should cover '($name)', got {:?}", sliced);
+    assert_eq!(
+        sliced, expected,
+        "Method Signature span should cover '($name)', got {:?}",
+        sliced
+    );
     Ok(())
 }
 
@@ -109,11 +125,20 @@ fn test_prototype_span_covers_parens() -> Result<(), Box<dyn std::error::Error>>
     let proto = find_node_by_kind(&ast, "Prototype").ok_or("no Prototype node found in AST")?;
 
     let expected = "($$)";
-    let sliced = source.get(proto.location.start..proto.location.end).ok_or_else(|| {
-        format!("span {}..{} out of bounds", proto.location.start, proto.location.end)
-    })?;
+    let sliced = source
+        .get(proto.location.start..proto.location.end)
+        .ok_or_else(|| {
+            format!(
+                "span {}..{} out of bounds",
+                proto.location.start, proto.location.end
+            )
+        })?;
 
-    assert_eq!(sliced, expected, "Prototype span should cover '($$)', got {:?}", sliced);
+    assert_eq!(
+        sliced, expected,
+        "Prototype span should cover '($$)', got {:?}",
+        sliced
+    );
     Ok(())
 }
 

@@ -498,7 +498,10 @@ impl DapServer {
     ///
     /// Currently always succeeds. Phase 2 will add validation and initialization errors.
     pub fn new(config: DapConfig) -> anyhow::Result<Self> {
-        Ok(Self { config, adapter: DebugAdapter::new() })
+        Ok(Self {
+            config,
+            adapter: DebugAdapter::new(),
+        })
     }
 
     /// Run the DAP server

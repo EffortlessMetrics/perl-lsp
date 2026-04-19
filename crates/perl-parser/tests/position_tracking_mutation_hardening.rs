@@ -31,8 +31,16 @@ fn test_range_overlaps_logical_operator_mutations() {
     // Test cases that MUST return true (kill false-return mutations from && → ||)
     // These cases satisfy: self.start.byte < other.end.byte && other.start.byte < self.end.byte
     let overlap_cases = [
-        (&range1, &range2, "Overlapping ranges [0,5) and [3,8) should overlap"),
-        (&range2, &range1, "Overlapping ranges [3,8) and [0,5) should overlap (symmetric)"),
+        (
+            &range1,
+            &range2,
+            "Overlapping ranges [0,5) and [3,8) should overlap",
+        ),
+        (
+            &range2,
+            &range1,
+            "Overlapping ranges [3,8) and [0,5) should overlap (symmetric)",
+        ),
     ];
 
     for (r1, r2, description) in overlap_cases {
@@ -47,18 +55,54 @@ fn test_range_overlaps_logical_operator_mutations() {
     // These cases fail at least one condition in the && expression
     let non_overlap_cases = [
         // Adjacent ranges - fail the overlap test
-        (&range1, &range4, "Adjacent ranges [0,5) and [5,6) should NOT overlap"),
-        (&range4, &range1, "Adjacent ranges [5,6) and [0,5) should NOT overlap (symmetric)"),
+        (
+            &range1,
+            &range4,
+            "Adjacent ranges [0,5) and [5,6) should NOT overlap",
+        ),
+        (
+            &range4,
+            &range1,
+            "Adjacent ranges [5,6) and [0,5) should NOT overlap (symmetric)",
+        ),
         // Separated ranges - fail both conditions
-        (&range1, &range3, "Separated ranges [0,5) and [6,10) should NOT overlap"),
-        (&range3, &range1, "Separated ranges [6,10) and [0,5) should NOT overlap (symmetric)"),
+        (
+            &range1,
+            &range3,
+            "Separated ranges [0,5) and [6,10) should NOT overlap",
+        ),
+        (
+            &range3,
+            &range1,
+            "Separated ranges [6,10) and [0,5) should NOT overlap (symmetric)",
+        ),
         // Empty ranges - fail various conditions
-        (&range5, &range1, "Empty range [0,0) should NOT overlap with [0,5)"),
-        (&range1, &range5, "Range [0,5) should NOT overlap with empty range [0,0)"),
-        (&range5, &range6, "Empty ranges [0,0) and [1,1) should NOT overlap"),
-        (&range6, &range5, "Empty ranges [1,1) and [0,0) should NOT overlap (symmetric)"),
+        (
+            &range5,
+            &range1,
+            "Empty range [0,0) should NOT overlap with [0,5)",
+        ),
+        (
+            &range1,
+            &range5,
+            "Range [0,5) should NOT overlap with empty range [0,0)",
+        ),
+        (
+            &range5,
+            &range6,
+            "Empty ranges [0,0) and [1,1) should NOT overlap",
+        ),
+        (
+            &range6,
+            &range5,
+            "Empty ranges [1,1) and [0,0) should NOT overlap (symmetric)",
+        ),
         // Same position empty ranges - edge case
-        (&range5, &range5, "Same empty range [0,0) should NOT overlap with itself"),
+        (
+            &range5,
+            &range5,
+            "Same empty range [0,0) should NOT overlap with itself",
+        ),
     ];
 
     for (r1, r2, description) in non_overlap_cases {
@@ -199,16 +243,32 @@ fn test_position_arithmetic_boundary_conditions() {
 
     // Test position calculations don't overflow
     let (line, col) = offset_to_utf16_line_col(&large_text, 500);
-    assert_eq!(line, 0, "MUTATION KILL: Large text line calculation should be accurate");
-    assert_eq!(col, 500, "MUTATION KILL: Large text column calculation should be accurate");
+    assert_eq!(
+        line, 0,
+        "MUTATION KILL: Large text line calculation should be accurate"
+    );
+    assert_eq!(
+        col, 500,
+        "MUTATION KILL: Large text column calculation should be accurate"
+    );
 
     let (line, col) = offset_to_utf16_line_col(&large_text, 1500);
-    assert_eq!(line, 1, "MUTATION KILL: Large text second line calculation should be accurate");
-    assert_eq!(col, 499, "MUTATION KILL: Large text second line column should be accurate");
+    assert_eq!(
+        line, 1,
+        "MUTATION KILL: Large text second line calculation should be accurate"
+    );
+    assert_eq!(
+        col, 499,
+        "MUTATION KILL: Large text second line column should be accurate"
+    );
 
     // Test zero offset edge case
     let (line, col) = offset_to_utf16_line_col("test\nmore", 0);
-    assert_eq!((line, col), (0, 0), "MUTATION KILL: Zero offset should return (0, 0)");
+    assert_eq!(
+        (line, col),
+        (0, 0),
+        "MUTATION KILL: Zero offset should return (0, 0)"
+    );
 
     // Test offset at end of text
     let text = "short\ntext";
@@ -219,7 +279,11 @@ fn test_position_arithmetic_boundary_conditions() {
 
     // Test offset beyond end of text (should handle gracefully)
     let (line, col) = offset_to_utf16_line_col("test", 10);
-    assert_eq!((line, col), (0, 4), "MUTATION KILL: Beyond-end offset should clamp to end");
+    assert_eq!(
+        (line, col),
+        (0, 4),
+        "MUTATION KILL: Beyond-end offset should clamp to end"
+    );
 }
 
 /// Test Position::advance with various character types to kill arithmetic mutations
@@ -229,33 +293,78 @@ fn test_position_advance_arithmetic_mutations() {
     // Test advancing through ASCII characters
     let mut pos = Position::new(0, 1, 1); // Start at line 1, column 1 (1-based)
     pos.advance("a");
-    assert_eq!(pos.line, 1, "MUTATION KILL: ASCII advance should not change line");
-    assert_eq!(pos.column, 2, "MUTATION KILL: ASCII advance should increment column");
-    assert_eq!(pos.byte, 1, "MUTATION KILL: ASCII advance should increment byte by 1");
+    assert_eq!(
+        pos.line, 1,
+        "MUTATION KILL: ASCII advance should not change line"
+    );
+    assert_eq!(
+        pos.column, 2,
+        "MUTATION KILL: ASCII advance should increment column"
+    );
+    assert_eq!(
+        pos.byte, 1,
+        "MUTATION KILL: ASCII advance should increment byte by 1"
+    );
 
     // Test advancing through newline
     pos.advance("\n");
-    assert_eq!(pos.line, 2, "MUTATION KILL: Newline advance should increment line");
-    assert_eq!(pos.column, 1, "MUTATION KILL: Newline advance should reset column to 1");
-    assert_eq!(pos.byte, 2, "MUTATION KILL: Newline advance should increment byte");
+    assert_eq!(
+        pos.line, 2,
+        "MUTATION KILL: Newline advance should increment line"
+    );
+    assert_eq!(
+        pos.column, 1,
+        "MUTATION KILL: Newline advance should reset column to 1"
+    );
+    assert_eq!(
+        pos.byte, 2,
+        "MUTATION KILL: Newline advance should increment byte"
+    );
 
     // Test advancing through multi-byte UTF-8 character
     pos.advance("é"); // 2-byte UTF-8
-    assert_eq!(pos.line, 2, "MUTATION KILL: UTF-8 advance should not change line");
-    assert_eq!(pos.column, 2, "MUTATION KILL: UTF-8 advance should increment column by 1");
-    assert_eq!(pos.byte, 4, "MUTATION KILL: UTF-8 advance should increment byte by 2");
+    assert_eq!(
+        pos.line, 2,
+        "MUTATION KILL: UTF-8 advance should not change line"
+    );
+    assert_eq!(
+        pos.column, 2,
+        "MUTATION KILL: UTF-8 advance should increment column by 1"
+    );
+    assert_eq!(
+        pos.byte, 4,
+        "MUTATION KILL: UTF-8 advance should increment byte by 2"
+    );
 
     // Test advancing through emoji (4-byte UTF-8)
     pos.advance("🎉"); // 4-byte UTF-8
-    assert_eq!(pos.line, 2, "MUTATION KILL: Emoji advance should not change line");
-    assert_eq!(pos.column, 3, "MUTATION KILL: Emoji advance should increment column by 1");
-    assert_eq!(pos.byte, 8, "MUTATION KILL: Emoji advance should increment byte by 4");
+    assert_eq!(
+        pos.line, 2,
+        "MUTATION KILL: Emoji advance should not change line"
+    );
+    assert_eq!(
+        pos.column, 3,
+        "MUTATION KILL: Emoji advance should increment column by 1"
+    );
+    assert_eq!(
+        pos.byte, 8,
+        "MUTATION KILL: Emoji advance should increment byte by 4"
+    );
 
     // Test carriage return - note: advance doesn't handle \r specially
     pos.advance("\r");
-    assert_eq!(pos.line, 2, "MUTATION KILL: Carriage return should not change line");
-    assert_eq!(pos.column, 4, "MUTATION KILL: Carriage return should increment column");
-    assert_eq!(pos.byte, 9, "MUTATION KILL: Carriage return should increment byte");
+    assert_eq!(
+        pos.line, 2,
+        "MUTATION KILL: Carriage return should not change line"
+    );
+    assert_eq!(
+        pos.column, 4,
+        "MUTATION KILL: Carriage return should increment column"
+    );
+    assert_eq!(
+        pos.byte, 9,
+        "MUTATION KILL: Carriage return should increment byte"
+    );
 }
 
 /// Test range operations with extreme values to kill arithmetic mutations
@@ -288,9 +397,18 @@ fn test_range_extreme_values_mutations() {
     );
 
     // Test is_empty with various ranges
-    assert!(max_range.is_empty(), "MUTATION KILL: Zero-width range should be empty");
-    assert!(min_range.is_empty(), "MUTATION KILL: Zero-width range should be empty");
-    assert!(!normal_range.is_empty(), "MUTATION KILL: Normal range should not be empty");
+    assert!(
+        max_range.is_empty(),
+        "MUTATION KILL: Zero-width range should be empty"
+    );
+    assert!(
+        min_range.is_empty(),
+        "MUTATION KILL: Zero-width range should be empty"
+    );
+    assert!(
+        !normal_range.is_empty(),
+        "MUTATION KILL: Normal range should not be empty"
+    );
 
     // Test contains with extreme values
     assert!(
@@ -352,7 +470,13 @@ print $x;
         "MUTATION KILL: Non-overlapping ranges should not overlap"
     );
 
-    assert!(!test_range.is_empty(), "MUTATION KILL: Range should have positive length");
+    assert!(
+        !test_range.is_empty(),
+        "MUTATION KILL: Range should have positive length"
+    );
 
-    assert!(!other_range.is_empty(), "MUTATION KILL: Other range should have positive length");
+    assert!(
+        !other_range.is_empty(),
+        "MUTATION KILL: Other range should have positive length"
+    );
 }

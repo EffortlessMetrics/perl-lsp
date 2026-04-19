@@ -212,7 +212,10 @@ mod tests {
             LSP_FOLDING_RANGE_REFRESH,
         ];
         for id in lsp_ids {
-            assert!(id.starts_with("lsp."), "LSP feature ID '{id}' should start with 'lsp.'");
+            assert!(
+                id.starts_with("lsp."),
+                "LSP feature ID '{id}' should start with 'lsp.'"
+            );
         }
     }
 
@@ -220,7 +223,10 @@ mod tests {
     fn all_dap_ids_start_with_dap_prefix() {
         let dap_ids: &[&str] = &[DAP_CORE, DAP_INLINE_VALUES, DAP_BREAKPOINTS_BASIC];
         for id in dap_ids {
-            assert!(id.starts_with("dap."), "DAP feature ID '{id}' should start with 'dap.'");
+            assert!(
+                id.starts_with("dap."),
+                "DAP feature ID '{id}' should start with 'dap.'"
+            );
         }
     }
 
@@ -292,7 +298,11 @@ mod tests {
         let mut sorted = all_ids.to_vec();
         sorted.sort_unstable();
         for window in sorted.windows(2) {
-            assert_ne!(window[0], window[1], "duplicate feature ID constant: '{}'", window[0]);
+            assert_ne!(
+                window[0], window[1],
+                "duplicate feature ID constant: '{}'",
+                window[0]
+            );
         }
     }
 
@@ -307,7 +317,10 @@ mod tests {
             LSP_WORKSPACE_SYMBOL_RESOLVE,
         ];
         for id in resolve_ids {
-            assert!(id.ends_with("_resolve"), "resolve route ID '{id}' should end with '_resolve'");
+            assert!(
+                id.ends_with("_resolve"),
+                "resolve route ID '{id}' should end with '_resolve'"
+            );
         }
     }
 
@@ -322,7 +335,10 @@ mod tests {
             LSP_FOLDING_RANGE_REFRESH,
         ];
         for id in refresh_ids {
-            assert!(id.ends_with("_refresh"), "refresh route ID '{id}' should end with '_refresh'");
+            assert!(
+                id.ends_with("_refresh"),
+                "refresh route ID '{id}' should end with '_refresh'"
+            );
         }
     }
 }

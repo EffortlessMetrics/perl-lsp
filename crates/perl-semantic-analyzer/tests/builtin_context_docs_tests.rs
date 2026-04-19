@@ -135,7 +135,10 @@ fn test_file_test_operator_docs() {
             "{op} description should mention {expected}: {}",
             doc.description
         );
-        assert!(!doc.signature.is_empty(), "{op} should have a non-empty signature");
+        assert!(
+            !doc.signature.is_empty(),
+            "{op} should have a non-empty signature"
+        );
     }
 }
 

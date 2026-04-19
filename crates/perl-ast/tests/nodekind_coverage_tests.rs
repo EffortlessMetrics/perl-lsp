@@ -5,14 +5,33 @@ fn loc() -> SourceLocation {
 }
 
 fn leaf(name: &str) -> Node {
-    Node::new(NodeKind::Identifier { name: name.to_string() }, loc())
+    Node::new(
+        NodeKind::Identifier {
+            name: name.to_string(),
+        },
+        loc(),
+    )
 }
 
 fn build_cases() -> Vec<(Node, &'static str, usize)> {
     vec![
-        (Node::new(NodeKind::Program { statements: vec![leaf("stmt")] }, loc()), "Program", 1),
         (
-            Node::new(NodeKind::ExpressionStatement { expression: Box::new(leaf("expr")) }, loc()),
+            Node::new(
+                NodeKind::Program {
+                    statements: vec![leaf("stmt")],
+                },
+                loc(),
+            ),
+            "Program",
+            1,
+        ),
+        (
+            Node::new(
+                NodeKind::ExpressionStatement {
+                    expression: Box::new(leaf("expr")),
+                },
+                loc(),
+            ),
             "ExpressionStatement",
             1,
         ),
@@ -43,7 +62,13 @@ fn build_cases() -> Vec<(Node, &'static str, usize)> {
             3,
         ),
         (
-            Node::new(NodeKind::Variable { sigil: "$".to_string(), name: "x".to_string() }, loc()),
+            Node::new(
+                NodeKind::Variable {
+                    sigil: "$".to_string(),
+                    name: "x".to_string(),
+                },
+                loc(),
+            ),
             "Variable",
             0,
         ),
@@ -96,7 +121,10 @@ fn build_cases() -> Vec<(Node, &'static str, usize)> {
         ),
         (
             Node::new(
-                NodeKind::Unary { op: "!".to_string(), operand: Box::new(leaf("operand")) },
+                NodeKind::Unary {
+                    op: "!".to_string(),
+                    operand: Box::new(leaf("operand")),
+                },
                 loc(),
             ),
             "Unary",
@@ -106,15 +134,53 @@ fn build_cases() -> Vec<(Node, &'static str, usize)> {
         (Node::new(NodeKind::Ellipsis, loc()), "Ellipsis", 0),
         (Node::new(NodeKind::Undef, loc()), "Undef", 0),
         (
-            Node::new(NodeKind::Readline { filehandle: Some("STDIN".to_string()) }, loc()),
+            Node::new(
+                NodeKind::Readline {
+                    filehandle: Some("STDIN".to_string()),
+                },
+                loc(),
+            ),
             "Readline",
             0,
         ),
-        (Node::new(NodeKind::Glob { pattern: "*.pl".to_string() }, loc()), "Glob", 0),
-        (Node::new(NodeKind::Typeglob { name: "main::foo".to_string() }, loc()), "Typeglob", 0),
-        (Node::new(NodeKind::Number { value: "42".to_string() }, loc()), "Number", 0),
         (
-            Node::new(NodeKind::String { value: "value".to_string(), interpolated: true }, loc()),
+            Node::new(
+                NodeKind::Glob {
+                    pattern: "*.pl".to_string(),
+                },
+                loc(),
+            ),
+            "Glob",
+            0,
+        ),
+        (
+            Node::new(
+                NodeKind::Typeglob {
+                    name: "main::foo".to_string(),
+                },
+                loc(),
+            ),
+            "Typeglob",
+            0,
+        ),
+        (
+            Node::new(
+                NodeKind::Number {
+                    value: "42".to_string(),
+                },
+                loc(),
+            ),
+            "Number",
+            0,
+        ),
+        (
+            Node::new(
+                NodeKind::String {
+                    value: "value".to_string(),
+                    interpolated: true,
+                },
+                loc(),
+            ),
             "String",
             0,
         ),
@@ -134,19 +200,65 @@ fn build_cases() -> Vec<(Node, &'static str, usize)> {
             0,
         ),
         (
-            Node::new(NodeKind::ArrayLiteral { elements: vec![leaf("one"), leaf("two")] }, loc()),
+            Node::new(
+                NodeKind::ArrayLiteral {
+                    elements: vec![leaf("one"), leaf("two")],
+                },
+                loc(),
+            ),
             "ArrayLiteral",
             2,
         ),
         (
-            Node::new(NodeKind::HashLiteral { pairs: vec![(leaf("key"), leaf("value"))] }, loc()),
+            Node::new(
+                NodeKind::HashLiteral {
+                    pairs: vec![(leaf("key"), leaf("value"))],
+                },
+                loc(),
+            ),
             "HashLiteral",
             2,
         ),
-        (Node::new(NodeKind::Block { statements: vec![leaf("stmt")] }, loc()), "Block", 1),
-        (Node::new(NodeKind::Eval { block: Box::new(leaf("block")) }, loc()), "Eval", 1),
-        (Node::new(NodeKind::Do { block: Box::new(leaf("block")) }, loc()), "Do", 1),
-        (Node::new(NodeKind::Defer { block: Box::new(leaf("block")) }, loc()), "Defer", 1),
+        (
+            Node::new(
+                NodeKind::Block {
+                    statements: vec![leaf("stmt")],
+                },
+                loc(),
+            ),
+            "Block",
+            1,
+        ),
+        (
+            Node::new(
+                NodeKind::Eval {
+                    block: Box::new(leaf("block")),
+                },
+                loc(),
+            ),
+            "Eval",
+            1,
+        ),
+        (
+            Node::new(
+                NodeKind::Do {
+                    block: Box::new(leaf("block")),
+                },
+                loc(),
+            ),
+            "Do",
+            1,
+        ),
+        (
+            Node::new(
+                NodeKind::Defer {
+                    block: Box::new(leaf("block")),
+                },
+                loc(),
+            ),
+            "Defer",
+            1,
+        ),
         (
             Node::new(
                 NodeKind::Try {
@@ -210,7 +322,16 @@ fn build_cases() -> Vec<(Node, &'static str, usize)> {
             "Tie",
             3,
         ),
-        (Node::new(NodeKind::Untie { variable: Box::new(leaf("var")) }, loc()), "Untie", 1),
+        (
+            Node::new(
+                NodeKind::Untie {
+                    variable: Box::new(leaf("var")),
+                },
+                loc(),
+            ),
+            "Untie",
+            1,
+        ),
         (
             Node::new(
                 NodeKind::For {
@@ -240,7 +361,10 @@ fn build_cases() -> Vec<(Node, &'static str, usize)> {
         ),
         (
             Node::new(
-                NodeKind::Given { expr: Box::new(leaf("expr")), body: Box::new(leaf("body")) },
+                NodeKind::Given {
+                    expr: Box::new(leaf("expr")),
+                    body: Box::new(leaf("body")),
+                },
                 loc(),
             ),
             "Given",
@@ -248,13 +372,25 @@ fn build_cases() -> Vec<(Node, &'static str, usize)> {
         ),
         (
             Node::new(
-                NodeKind::When { condition: Box::new(leaf("cond")), body: Box::new(leaf("body")) },
+                NodeKind::When {
+                    condition: Box::new(leaf("cond")),
+                    body: Box::new(leaf("body")),
+                },
                 loc(),
             ),
             "When",
             2,
         ),
-        (Node::new(NodeKind::Default { body: Box::new(leaf("body")) }, loc()), "Default", 1),
+        (
+            Node::new(
+                NodeKind::Default {
+                    body: Box::new(leaf("body")),
+                },
+                loc(),
+            ),
+            "Default",
+            1,
+        ),
         (
             Node::new(
                 NodeKind::StatementModifier {
@@ -273,13 +409,17 @@ fn build_cases() -> Vec<(Node, &'static str, usize)> {
                     name: Some("helper".to_string()),
                     name_span: Some(loc()),
                     prototype: Some(Box::new(Node::new(
-                        NodeKind::Prototype { content: "$".to_string() },
+                        NodeKind::Prototype {
+                            content: "$".to_string(),
+                        },
                         loc(),
                     ))),
                     signature: Some(Box::new(Node::new(
                         NodeKind::Signature {
                             parameters: vec![Node::new(
-                                NodeKind::MandatoryParameter { variable: Box::new(leaf("param")) },
+                                NodeKind::MandatoryParameter {
+                                    variable: Box::new(leaf("param")),
+                                },
                                 loc(),
                             )],
                         },
@@ -293,12 +433,23 @@ fn build_cases() -> Vec<(Node, &'static str, usize)> {
             "Subroutine",
             3,
         ),
-        (Node::new(NodeKind::Prototype { content: "$$".to_string() }, loc()), "Prototype", 0),
+        (
+            Node::new(
+                NodeKind::Prototype {
+                    content: "$$".to_string(),
+                },
+                loc(),
+            ),
+            "Prototype",
+            0,
+        ),
         (
             Node::new(
                 NodeKind::Signature {
                     parameters: vec![Node::new(
-                        NodeKind::MandatoryParameter { variable: Box::new(leaf("param")) },
+                        NodeKind::MandatoryParameter {
+                            variable: Box::new(leaf("param")),
+                        },
                         loc(),
                     )],
                 },
@@ -308,7 +459,12 @@ fn build_cases() -> Vec<(Node, &'static str, usize)> {
             1,
         ),
         (
-            Node::new(NodeKind::MandatoryParameter { variable: Box::new(leaf("var")) }, loc()),
+            Node::new(
+                NodeKind::MandatoryParameter {
+                    variable: Box::new(leaf("var")),
+                },
+                loc(),
+            ),
             "MandatoryParameter",
             1,
         ),
@@ -324,12 +480,22 @@ fn build_cases() -> Vec<(Node, &'static str, usize)> {
             2,
         ),
         (
-            Node::new(NodeKind::SlurpyParameter { variable: Box::new(leaf("var")) }, loc()),
+            Node::new(
+                NodeKind::SlurpyParameter {
+                    variable: Box::new(leaf("var")),
+                },
+                loc(),
+            ),
             "SlurpyParameter",
             1,
         ),
         (
-            Node::new(NodeKind::NamedParameter { variable: Box::new(leaf("var")) }, loc()),
+            Node::new(
+                NodeKind::NamedParameter {
+                    variable: Box::new(leaf("var")),
+                },
+                loc(),
+            ),
             "NamedParameter",
             1,
         ),
@@ -349,16 +515,37 @@ fn build_cases() -> Vec<(Node, &'static str, usize)> {
             "Method",
             2,
         ),
-        (Node::new(NodeKind::Return { value: Some(Box::new(leaf("value"))) }, loc()), "Return", 1),
         (
             Node::new(
-                NodeKind::LoopControl { op: "next".to_string(), label: Some("OUTER".to_string()) },
+                NodeKind::Return {
+                    value: Some(Box::new(leaf("value"))),
+                },
+                loc(),
+            ),
+            "Return",
+            1,
+        ),
+        (
+            Node::new(
+                NodeKind::LoopControl {
+                    op: "next".to_string(),
+                    label: Some("OUTER".to_string()),
+                },
                 loc(),
             ),
             "LoopControl",
             0,
         ),
-        (Node::new(NodeKind::Goto { target: Box::new(leaf("target")) }, loc()), "Goto", 1),
+        (
+            Node::new(
+                NodeKind::Goto {
+                    target: Box::new(leaf("target")),
+                },
+                loc(),
+            ),
+            "Goto",
+            1,
+        ),
         (
             Node::new(
                 NodeKind::MethodCall {
@@ -373,7 +560,10 @@ fn build_cases() -> Vec<(Node, &'static str, usize)> {
         ),
         (
             Node::new(
-                NodeKind::FunctionCall { name: "say".to_string(), args: vec![leaf("arg")] },
+                NodeKind::FunctionCall {
+                    name: "say".to_string(),
+                    args: vec![leaf("arg")],
+                },
                 loc(),
             ),
             "FunctionCall",
@@ -520,13 +710,25 @@ fn build_cases() -> Vec<(Node, &'static str, usize)> {
         ),
         (
             Node::new(
-                NodeKind::Format { name: "STDOUT".to_string(), body: "body".to_string() },
+                NodeKind::Format {
+                    name: "STDOUT".to_string(),
+                    body: "body".to_string(),
+                },
                 loc(),
             ),
             "Format",
             0,
         ),
-        (Node::new(NodeKind::Identifier { name: "name".to_string() }, loc()), "Identifier", 0),
+        (
+            Node::new(
+                NodeKind::Identifier {
+                    name: "name".to_string(),
+                },
+                loc(),
+            ),
+            "Identifier",
+            0,
+        ),
         (
             Node::new(
                 NodeKind::Error {
@@ -540,9 +742,21 @@ fn build_cases() -> Vec<(Node, &'static str, usize)> {
             "Error",
             1,
         ),
-        (Node::new(NodeKind::MissingExpression, loc()), "MissingExpression", 0),
-        (Node::new(NodeKind::MissingStatement, loc()), "MissingStatement", 0),
-        (Node::new(NodeKind::MissingIdentifier, loc()), "MissingIdentifier", 0),
+        (
+            Node::new(NodeKind::MissingExpression, loc()),
+            "MissingExpression",
+            0,
+        ),
+        (
+            Node::new(NodeKind::MissingStatement, loc()),
+            "MissingStatement",
+            0,
+        ),
+        (
+            Node::new(NodeKind::MissingIdentifier, loc()),
+            "MissingIdentifier",
+            0,
+        ),
         (Node::new(NodeKind::MissingBlock, loc()), "MissingBlock", 0),
         (Node::new(NodeKind::UnknownRest, loc()), "UnknownRest", 0),
     ]
@@ -567,7 +781,10 @@ fn nodekind_cases_cover_kind_names_and_child_shapes() -> Result<(), Box<dyn std:
                 "{expected_name} unexpectedly had a first child"
             ),
             _ => {
-                assert!(node.first_child().is_some(), "{expected_name} should expose a first child")
+                assert!(
+                    node.first_child().is_some(),
+                    "{expected_name} should expose a first child"
+                )
             }
         }
     }

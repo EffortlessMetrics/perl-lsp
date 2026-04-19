@@ -270,13 +270,18 @@ impl ProductionIndexCoordinator {
     ///
     /// `Ok(())` if initialization succeeded, otherwise an error.
     pub fn initialize(&self) -> Result<(), String> {
-        let start = self.slo_tracker.start_operation(OperationType::IndexInitialization);
+        let start = self
+            .slo_tracker
+            .start_operation(OperationType::IndexInitialization);
 
         // Transition to Initializing
         match self.state_machine.transition_to_initializing() {
             TransitionResult::Success => {}
             result => {
-                return Err(format!("Failed to transition to Initializing: {:?}", result));
+                return Err(format!(
+                    "Failed to transition to Initializing: {:?}",
+                    result
+                ));
             }
         }
 
@@ -319,7 +324,9 @@ impl ProductionIndexCoordinator {
     ///
     /// `Ok(())` if indexing succeeded, otherwise an error.
     pub fn index_file(&self, uri: Url, text: String) -> Result<(), String> {
-        let start = self.slo_tracker.start_operation(OperationType::FileIndexing);
+        let start = self
+            .slo_tracker
+            .start_operation(OperationType::FileIndexing);
         let cache_key = uri.to_string();
         let content_fingerprint = Self::fingerprint_file_content(&text);
 
@@ -367,7 +374,9 @@ impl ProductionIndexCoordinator {
     ///
     /// Definition location if found.
     pub fn find_definition(&self, symbol_name: &str) -> Option<super::workspace_index::Location> {
-        let start = self.slo_tracker.start_operation(OperationType::DefinitionLookup);
+        let start = self
+            .slo_tracker
+            .start_operation(OperationType::DefinitionLookup);
 
         // Check cache first
         let cache_key = format!("def:{}", symbol_name);
@@ -409,7 +418,9 @@ impl ProductionIndexCoordinator {
     ///
     /// All reference locations found.
     pub fn find_references(&self, symbol_name: &str) -> Vec<super::workspace_index::Location> {
-        let start = self.slo_tracker.start_operation(OperationType::FindReferences);
+        let start = self
+            .slo_tracker
+            .start_operation(OperationType::FindReferences);
 
         // Check cache first
         let cache_key = format!("ref:{}", symbol_name);
@@ -502,7 +513,11 @@ impl ProductionIndexCoordinator {
                         line: parts[1].parse().ok()?,
                         column: parts[2].parse().ok()?,
                     },
-                    end: Position { byte: 0, line: parts[3].parse().ok()?, column: 0 },
+                    end: Position {
+                        byte: 0,
+                        line: parts[3].parse().ok()?,
+                        column: 0,
+                    },
                 },
             })
         } else {
@@ -513,7 +528,10 @@ impl ProductionIndexCoordinator {
     /// Serialize locations for caching.
     fn serialize_locations(&self, locations: &[super::workspace_index::Location]) -> Vec<u8> {
         // Simple serialization
-        locations.iter().flat_map(|loc| self.serialize_location(loc)).collect()
+        locations
+            .iter()
+            .flat_map(|loc| self.serialize_location(loc))
+            .collect()
     }
 
     /// Deserialize locations from cache.
@@ -629,8 +647,10 @@ mod tests {
         assert_eq!(coordinator.index().file_count(), 1);
 
         let stats = coordinator.statistics();
-        let ast_stats =
-            stats.cache_stats.get("ast").ok_or_else(|| "missing ast cache stats".to_string())?;
+        let ast_stats = stats
+            .cache_stats
+            .get("ast")
+            .ok_or_else(|| "missing ast cache stats".to_string())?;
         assert!(ast_stats.hits > 0);
 
         Ok(())

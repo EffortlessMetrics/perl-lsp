@@ -58,13 +58,18 @@ my $result = $obj->process_data("  hello world  ", {trim => 1, uppercase => 1});
         assert!(statements.len() >= 4);
 
         // Find the class declaration
-        let class_nodes: Vec<_> =
-            statements.iter().filter(|s| matches!(s.kind, NodeKind::Class { .. })).collect();
+        let class_nodes: Vec<_> = statements
+            .iter()
+            .filter(|s| matches!(s.kind, NodeKind::Class { .. }))
+            .collect();
         assert_eq!(class_nodes.len(), 1, "Should have exactly one class");
 
         // Verify class has methods
         if let NodeKind::Class { body, .. } = &class_nodes[0].kind {
-            if let NodeKind::Block { statements: class_statements } = &body.kind {
+            if let NodeKind::Block {
+                statements: class_statements,
+            } = &body.kind
+            {
                 let method_nodes: Vec<_> = class_statements
                     .iter()
                     .filter(|s| matches!(s.kind, NodeKind::Method { .. }))
@@ -188,7 +193,10 @@ sub process_item {
 
     // Verify dereferencing operations
     let binary_ops = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::Binary { .. }));
-    assert!(!binary_ops.is_empty(), "Should have binary operations for dereferencing");
+    assert!(
+        !binary_ops.is_empty(),
+        "Should have binary operations for dereferencing"
+    );
 }
 
 /// Test class/method with inheritance, roles, and attributes
@@ -256,20 +264,27 @@ my $data = $rect->serialize();
 
     // Verify class with inheritance
     let class_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::Class { .. }));
-    let shape_class: Vec<_> =
-        class_nodes
-            .iter()
-            .filter(|n| {
-                if let NodeKind::Class { name, .. } = &n.kind { name == "Shape" } else { false }
-            })
-            .collect();
+    let shape_class: Vec<_> = class_nodes
+        .iter()
+        .filter(|n| {
+            if let NodeKind::Class { name, .. } = &n.kind {
+                name == "Shape"
+            } else {
+                false
+            }
+        })
+        .collect();
     assert_eq!(shape_class.len(), 1, "Should have Shape class");
 
     // Verify class with roles
     let rect_class: Vec<_> = class_nodes
         .iter()
         .filter(|n| {
-            if let NodeKind::Class { name, .. } = &n.kind { name == "Rectangle" } else { false }
+            if let NodeKind::Class { name, .. } = &n.kind {
+                name == "Rectangle"
+            } else {
+                false
+            }
         })
         .collect();
     assert_eq!(rect_class.len(), 1, "Should have Rectangle class");
@@ -281,7 +296,10 @@ my $data = $rect->serialize();
 
     // Verify role metadata is represented in structured return values
     let array_literals = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::ArrayLiteral { .. }));
-    assert!(!array_literals.is_empty(), "Should have role metadata arrays");
+    assert!(
+        !array_literals.is_empty(),
+        "Should have role metadata arrays"
+    );
 
     // Verify methods
     let method_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::Method { .. }));
@@ -353,14 +371,21 @@ my $complex3 = complex_signature('scalar', undef, (1, 2, 3), named_flag => 1);
     let named_signed_subs: Vec<_> = sub_nodes
         .iter()
         .filter(|sub| {
-            if let NodeKind::Subroutine { name, signature, .. } = &sub.kind {
+            if let NodeKind::Subroutine {
+                name, signature, ..
+            } = &sub.kind
+            {
                 name.is_some() && signature.is_some()
             } else {
                 false
             }
         })
         .collect();
-    assert_eq!(named_signed_subs.len(), 2, "Named subroutines should keep their signatures");
+    assert_eq!(
+        named_signed_subs.len(),
+        2,
+        "Named subroutines should keep their signatures"
+    );
 
     // Verify signature parameters
     let sig_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::Signature { .. }));
@@ -373,8 +398,14 @@ my $complex3 = complex_signature('scalar', undef, (1, 2, 3), named_flag => 1);
         find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::OptionalParameter { .. }));
     let slurpy_params = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::SlurpyParameter { .. }));
 
-    assert!(!mandatory_params.is_empty(), "Should have mandatory parameters");
-    assert!(!optional_params.is_empty(), "Should have optional parameters");
+    assert!(
+        !mandatory_params.is_empty(),
+        "Should have mandatory parameters"
+    );
+    assert!(
+        !optional_params.is_empty(),
+        "Should have optional parameters"
+    );
     assert!(!slurpy_params.is_empty(), "Should have slurpy parameters");
 
     // Verify function calls with various argument patterns
@@ -443,12 +474,21 @@ where
         NodeKind::Unary { operand, .. } => {
             find_nodes_recursive(operand, predicate, results);
         }
-        NodeKind::Ternary { condition, then_expr, else_expr } => {
+        NodeKind::Ternary {
+            condition,
+            then_expr,
+            else_expr,
+        } => {
             find_nodes_recursive(condition, predicate, results);
             find_nodes_recursive(then_expr, predicate, results);
             find_nodes_recursive(else_expr, predicate, results);
         }
-        NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
+        NodeKind::If {
+            condition,
+            then_branch,
+            elsif_branches,
+            else_branch,
+        } => {
             find_nodes_recursive(condition, predicate, results);
             find_nodes_recursive(then_branch, predicate, results);
             for (_, branch) in elsif_branches {
@@ -458,14 +498,24 @@ where
                 find_nodes_recursive(else_branch, predicate, results);
             }
         }
-        NodeKind::While { condition, body, continue_block } => {
+        NodeKind::While {
+            condition,
+            body,
+            continue_block,
+        } => {
             find_nodes_recursive(condition, predicate, results);
             find_nodes_recursive(body, predicate, results);
             if let Some(cont) = continue_block {
                 find_nodes_recursive(cont, predicate, results);
             }
         }
-        NodeKind::For { init, condition, update, body, continue_block } => {
+        NodeKind::For {
+            init,
+            condition,
+            update,
+            body,
+            continue_block,
+        } => {
             if let Some(init) = init {
                 find_nodes_recursive(init, predicate, results);
             }
@@ -480,7 +530,12 @@ where
                 find_nodes_recursive(cont, predicate, results);
             }
         }
-        NodeKind::Foreach { variable, list, body, continue_block } => {
+        NodeKind::Foreach {
+            variable,
+            list,
+            body,
+            continue_block,
+        } => {
             find_nodes_recursive(variable, predicate, results);
             find_nodes_recursive(list, predicate, results);
             find_nodes_recursive(body, predicate, results);
@@ -488,7 +543,11 @@ where
                 find_nodes_recursive(cont, predicate, results);
             }
         }
-        NodeKind::Try { body, catch_blocks, finally_block } => {
+        NodeKind::Try {
+            body,
+            catch_blocks,
+            finally_block,
+        } => {
             find_nodes_recursive(body, predicate, results);
             for (_, catch_body) in catch_blocks {
                 find_nodes_recursive(catch_body, predicate, results);
@@ -508,7 +567,12 @@ where
         NodeKind::Default { body } => {
             find_nodes_recursive(body, predicate, results);
         }
-        NodeKind::Subroutine { prototype, signature, body, .. } => {
+        NodeKind::Subroutine {
+            prototype,
+            signature,
+            body,
+            ..
+        } => {
             if let Some(proto) = prototype {
                 find_nodes_recursive(proto, predicate, results);
             }
@@ -517,7 +581,9 @@ where
             }
             find_nodes_recursive(body, predicate, results);
         }
-        NodeKind::Method { signature, body, .. } => {
+        NodeKind::Method {
+            signature, body, ..
+        } => {
             if let Some(sig) = signature {
                 find_nodes_recursive(sig, predicate, results);
             }
@@ -548,7 +614,11 @@ where
                 find_nodes_recursive(value, predicate, results);
             }
         }
-        NodeKind::StatementModifier { statement, condition, .. } => {
+        NodeKind::StatementModifier {
+            statement,
+            condition,
+            ..
+        } => {
             find_nodes_recursive(statement, predicate, results);
             find_nodes_recursive(condition, predicate, results);
         }
@@ -567,7 +637,11 @@ where
         NodeKind::Goto { target } => {
             find_nodes_recursive(target, predicate, results);
         }
-        NodeKind::Tie { variable, package, args } => {
+        NodeKind::Tie {
+            variable,
+            package,
+            args,
+        } => {
             find_nodes_recursive(variable, predicate, results);
             find_nodes_recursive(package, predicate, results);
             for arg in args {
@@ -622,7 +696,10 @@ where
         NodeKind::MandatoryParameter { variable } => {
             find_nodes_recursive(variable, predicate, results);
         }
-        NodeKind::OptionalParameter { variable, default_value } => {
+        NodeKind::OptionalParameter {
+            variable,
+            default_value,
+        } => {
             find_nodes_recursive(variable, predicate, results);
             find_nodes_recursive(default_value, predicate, results);
         }

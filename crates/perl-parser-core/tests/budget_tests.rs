@@ -77,7 +77,10 @@ fn tracker_record_skip() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn tracker_errors_exhausted() -> Result<(), Box<dyn std::error::Error>> {
-    let budget = ParseBudget { max_errors: 2, ..ParseBudget::default() };
+    let budget = ParseBudget {
+        max_errors: 2,
+        ..ParseBudget::default()
+    };
     let mut tracker = BudgetTracker::new();
 
     assert!(!tracker.errors_exhausted(&budget));
@@ -90,7 +93,10 @@ fn tracker_errors_exhausted() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn tracker_depth_would_exceed() -> Result<(), Box<dyn std::error::Error>> {
-    let budget = ParseBudget { max_depth: 2, ..ParseBudget::default() };
+    let budget = ParseBudget {
+        max_depth: 2,
+        ..ParseBudget::default()
+    };
     let mut tracker = BudgetTracker::new();
 
     assert!(!tracker.depth_would_exceed(&budget));
@@ -103,7 +109,10 @@ fn tracker_depth_would_exceed() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn tracker_skip_would_exceed() -> Result<(), Box<dyn std::error::Error>> {
-    let budget = ParseBudget { max_tokens_skipped: 10, ..ParseBudget::default() };
+    let budget = ParseBudget {
+        max_tokens_skipped: 10,
+        ..ParseBudget::default()
+    };
     let tracker = BudgetTracker::new();
 
     assert!(!tracker.skip_would_exceed(&budget, 5));
@@ -114,17 +123,29 @@ fn tracker_skip_would_exceed() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn tracker_begin_recovery_checks_budget() -> Result<(), Box<dyn std::error::Error>> {
-    let budget = ParseBudget { max_recoveries: 1, ..ParseBudget::default() };
+    let budget = ParseBudget {
+        max_recoveries: 1,
+        ..ParseBudget::default()
+    };
     let mut tracker = BudgetTracker::new();
 
-    assert!(tracker.begin_recovery(&budget), "first recovery should succeed");
-    assert!(!tracker.begin_recovery(&budget), "second recovery should fail");
+    assert!(
+        tracker.begin_recovery(&budget),
+        "first recovery should succeed"
+    );
+    assert!(
+        !tracker.begin_recovery(&budget),
+        "second recovery should fail"
+    );
     Ok(())
 }
 
 #[test]
 fn tracker_can_skip_more() -> Result<(), Box<dyn std::error::Error>> {
-    let budget = ParseBudget { max_tokens_skipped: 5, ..ParseBudget::default() };
+    let budget = ParseBudget {
+        max_tokens_skipped: 5,
+        ..ParseBudget::default()
+    };
     let tracker = BudgetTracker::new();
 
     assert!(tracker.can_skip_more(&budget, 3));

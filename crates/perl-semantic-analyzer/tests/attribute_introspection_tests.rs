@@ -106,7 +106,10 @@ fn attribute_doc_unknown_returns_none() {
 fn attribute_doc_colon_stripped_lvalue() {
     // The non-colon form must work
     let without = get_attribute_documentation("lvalue");
-    assert!(without.is_some(), "lvalue (no colon) should have documentation");
+    assert!(
+        without.is_some(),
+        "lvalue (no colon) should have documentation"
+    );
 }
 
 #[test]
@@ -114,9 +117,17 @@ fn attribute_doc_covers_all_known_builtins() {
     let known_attrs = ["lvalue", "method", "prototype", "const", "shared", "locked"];
     for attr in &known_attrs {
         let doc = get_attribute_documentation(attr);
-        assert!(doc.is_some(), "Expected documentation for attribute '{}' but got None", attr);
+        assert!(
+            doc.is_some(),
+            "Expected documentation for attribute '{}' but got None",
+            attr
+        );
         let doc = must_some(doc);
-        assert!(!doc.description.is_empty(), "Documentation for '{}' has empty description", attr);
+        assert!(
+            !doc.description.is_empty(),
+            "Documentation for '{}' has empty description",
+            attr
+        );
     }
 }
 

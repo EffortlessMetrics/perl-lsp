@@ -34,18 +34,29 @@ my $x = FOO;
             }
 
             // Check for my $qwerty = 1
-            if let NodeKind::VariableDeclaration { variable, initializer, .. } = &stmt.kind {
+            if let NodeKind::VariableDeclaration {
+                variable,
+                initializer,
+                ..
+            } = &stmt.kind
+            {
                 if let NodeKind::Variable { sigil, name } = &variable.kind {
                     if sigil == "$" && name == "qwerty" {
                         found_qwerty_var = true;
-                        assert!(initializer.is_some(), "Expected $qwerty to have an initializer");
+                        assert!(
+                            initializer.is_some(),
+                            "Expected $qwerty to have an initializer"
+                        );
                     }
                 }
             }
         }
 
         assert!(found_use, "Failed to find use constant statement");
-        assert!(found_qwerty_var, "Failed to find $qwerty variable declaration");
+        assert!(
+            found_qwerty_var,
+            "Failed to find $qwerty variable declaration"
+        );
     } else {
         return Err("Expected Program node".into());
     }
@@ -63,7 +74,10 @@ fn test_real_qw_operator() -> TestResult {
     if let NodeKind::Program { statements } = &ast.kind {
         if let Some(stmt) = statements.first() {
             if let NodeKind::VariableDeclaration { initializer, .. } = &stmt.kind {
-                assert!(initializer.is_some(), "Expected initializer for qw() assignment");
+                assert!(
+                    initializer.is_some(),
+                    "Expected initializer for qw() assignment"
+                );
                 // The qw() should produce some kind of list/array
                 return Ok(());
             }
@@ -95,9 +109,18 @@ my $question = "What?";
             }
         }
 
-        assert!(found_vars.contains(&"query".to_string()), "Expected to find $query");
-        assert!(found_vars.contains(&"quick".to_string()), "Expected to find $quick");
-        assert!(found_vars.contains(&"question".to_string()), "Expected to find $question");
+        assert!(
+            found_vars.contains(&"query".to_string()),
+            "Expected to find $query"
+        );
+        assert!(
+            found_vars.contains(&"quick".to_string()),
+            "Expected to find $quick"
+        );
+        assert!(
+            found_vars.contains(&"question".to_string()),
+            "Expected to find $question"
+        );
     }
     Ok(())
 }

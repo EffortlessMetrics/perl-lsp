@@ -290,7 +290,11 @@ fn first_token_with_range(input: &str) -> Option<(&str, usize, usize)> {
     }
 
     if let Some(start) = token_start {
-        if start < input.len() { Some((&input[start..], start, input.len())) } else { None }
+        if start < input.len() {
+            Some((&input[start..], start, input.len()))
+        } else {
+            None
+        }
     } else {
         None
     }

@@ -27,16 +27,25 @@ fn empty_include_paths_produces_no_env_vars() {
 fn single_path_sets_perl5lib_exactly() {
     let env = setup_environment(&[PathBuf::from("/home/user/lib")]);
     assert_eq!(env.len(), 1);
-    assert_eq!(env.get("PERL5LIB").map(String::as_str), Some("/home/user/lib"));
+    assert_eq!(
+        env.get("PERL5LIB").map(String::as_str),
+        Some("/home/user/lib")
+    );
 }
 
 // ── Multiple paths ──────────────────────────────────────────────────
 
 #[test]
 fn multiple_paths_joined_with_platform_separator() -> Result<(), String> {
-    let env = setup_environment(&[PathBuf::from("/a"), PathBuf::from("/b"), PathBuf::from("/c")]);
+    let env = setup_environment(&[
+        PathBuf::from("/a"),
+        PathBuf::from("/b"),
+        PathBuf::from("/c"),
+    ]);
 
-    let perl5lib = env.get("PERL5LIB").ok_or_else(|| "PERL5LIB should be set".to_string())?;
+    let perl5lib = env
+        .get("PERL5LIB")
+        .ok_or_else(|| "PERL5LIB should be set".to_string())?;
 
     #[cfg(not(windows))]
     assert_eq!(perl5lib, "/a:/b:/c");
@@ -49,12 +58,19 @@ fn multiple_paths_joined_with_platform_separator() -> Result<(), String> {
 
 #[test]
 fn path_order_is_preserved() -> Result<(), String> {
-    let paths: Vec<PathBuf> = (0..10).map(|i| PathBuf::from(format!("/path{i}"))).collect();
+    let paths: Vec<PathBuf> = (0..10)
+        .map(|i| PathBuf::from(format!("/path{i}")))
+        .collect();
     let env = setup_environment(&paths);
-    let perl5lib = env.get("PERL5LIB").ok_or_else(|| "PERL5LIB should be set".to_string())?;
+    let perl5lib = env
+        .get("PERL5LIB")
+        .ok_or_else(|| "PERL5LIB should be set".to_string())?;
 
-    let parts: Vec<&str> =
-        if cfg!(windows) { perl5lib.split(';').collect() } else { perl5lib.split(':').collect() };
+    let parts: Vec<&str> = if cfg!(windows) {
+        perl5lib.split(';').collect()
+    } else {
+        perl5lib.split(':').collect()
+    };
 
     assert_eq!(parts.len(), 10);
     for (i, part) in parts.iter().enumerate() {
@@ -69,23 +85,35 @@ fn path_order_is_preserved() -> Result<(), String> {
 #[test]
 fn unicode_path_is_preserved() -> Result<(), String> {
     let env = setup_environment(&[PathBuf::from("/home/\u{00fc}ser/lib")]);
-    let perl5lib = env.get("PERL5LIB").ok_or_else(|| "PERL5LIB should be set".to_string())?;
-    assert!(perl5lib.contains("\u{00fc}ser"), "Unicode character preserved");
+    let perl5lib = env
+        .get("PERL5LIB")
+        .ok_or_else(|| "PERL5LIB should be set".to_string())?;
+    assert!(
+        perl5lib.contains("\u{00fc}ser"),
+        "Unicode character preserved"
+    );
     Ok(())
 }
 
 #[test]
 fn cjk_path_is_preserved() -> Result<(), String> {
     let env = setup_environment(&[PathBuf::from("/\u{6d4b}\u{8bd5}/lib")]);
-    let perl5lib = env.get("PERL5LIB").ok_or_else(|| "PERL5LIB should be set".to_string())?;
-    assert!(perl5lib.contains("\u{6d4b}\u{8bd5}"), "CJK characters preserved");
+    let perl5lib = env
+        .get("PERL5LIB")
+        .ok_or_else(|| "PERL5LIB should be set".to_string())?;
+    assert!(
+        perl5lib.contains("\u{6d4b}\u{8bd5}"),
+        "CJK characters preserved"
+    );
     Ok(())
 }
 
 #[test]
 fn emoji_in_path_is_preserved() -> Result<(), String> {
     let env = setup_environment(&[PathBuf::from("/\u{1f4c1}/lib")]);
-    let perl5lib = env.get("PERL5LIB").ok_or_else(|| "PERL5LIB should be set".to_string())?;
+    let perl5lib = env
+        .get("PERL5LIB")
+        .ok_or_else(|| "PERL5LIB should be set".to_string())?;
     assert!(perl5lib.contains('\u{1f4c1}'), "Emoji in path preserved");
     Ok(())
 }
@@ -95,7 +123,9 @@ fn emoji_in_path_is_preserved() -> Result<(), String> {
 #[test]
 fn path_with_spaces_is_included_as_is() -> Result<(), String> {
     let env = setup_environment(&[PathBuf::from("/path with spaces/lib")]);
-    let perl5lib = env.get("PERL5LIB").ok_or_else(|| "PERL5LIB should be set".to_string())?;
+    let perl5lib = env
+        .get("PERL5LIB")
+        .ok_or_else(|| "PERL5LIB should be set".to_string())?;
     assert_eq!(perl5lib, "/path with spaces/lib");
     Ok(())
 }
@@ -103,7 +133,9 @@ fn path_with_spaces_is_included_as_is() -> Result<(), String> {
 #[test]
 fn path_with_equals_sign_is_included() -> Result<(), String> {
     let env = setup_environment(&[PathBuf::from("/opt/perl=5.36/lib")]);
-    let perl5lib = env.get("PERL5LIB").ok_or_else(|| "PERL5LIB should be set".to_string())?;
+    let perl5lib = env
+        .get("PERL5LIB")
+        .ok_or_else(|| "PERL5LIB should be set".to_string())?;
     assert!(perl5lib.contains("perl=5.36"));
     Ok(())
 }
@@ -122,9 +154,13 @@ fn only_perl5lib_key_present() {
 
 #[test]
 fn many_paths_all_included() -> Result<(), String> {
-    let paths: Vec<PathBuf> = (0..500).map(|i| PathBuf::from(format!("/path/{i}"))).collect();
+    let paths: Vec<PathBuf> = (0..500)
+        .map(|i| PathBuf::from(format!("/path/{i}")))
+        .collect();
     let env = setup_environment(&paths);
-    let perl5lib = env.get("PERL5LIB").ok_or_else(|| "PERL5LIB should be set".to_string())?;
+    let perl5lib = env
+        .get("PERL5LIB")
+        .ok_or_else(|| "PERL5LIB should be set".to_string())?;
 
     let sep = if cfg!(windows) { ';' } else { ':' };
     let parts: Vec<&str> = perl5lib.split(sep).collect();
@@ -200,8 +236,11 @@ fn environment_and_args_work_together() {
     // This test verifies both functions can be used together in a
     // typical DAP launch scenario.
     let env = setup_environment(&[PathBuf::from("/workspace/lib")]);
-    let args =
-        format_command_args(&["perl".to_string(), "-d".to_string(), "my script.pl".to_string()]);
+    let args = format_command_args(&[
+        "perl".to_string(),
+        "-d".to_string(),
+        "my script.pl".to_string(),
+    ]);
 
     assert!(env.contains_key("PERL5LIB"));
     assert_eq!(args.len(), 3);

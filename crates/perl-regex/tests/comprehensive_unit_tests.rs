@@ -538,7 +538,10 @@ fn validate_deep_branch_reset_nesting_rejected() -> Result<(), Box<dyn std::erro
 fn validate_branch_reset_too_many_branches() -> Result<(), Box<dyn std::error::Error>> {
     let v = RegexValidator::new();
     // 51 branches in a branch reset (exceeds max of 50)
-    let branches: String = (0..51).map(|i| format!("a{i}")).collect::<Vec<_>>().join("|");
+    let branches: String = (0..51)
+        .map(|i| format!("a{i}"))
+        .collect::<Vec<_>>()
+        .join("|");
     let pattern = format!("(?|{branches})");
     let result = v.validate(&pattern, 0);
     assert!(result.is_err());
@@ -552,7 +555,10 @@ fn validate_branch_reset_at_limit_ok() -> Result<(), Box<dyn std::error::Error>>
     let v = RegexValidator::new();
     // Exactly 50 branches (at limit), the group starts with one branch and | adds more
     // So 50 pipes = 51 branches total. We need 49 pipes for 50 branches.
-    let branches: String = (0..50).map(|i| format!("a{i}")).collect::<Vec<_>>().join("|");
+    let branches: String = (0..50)
+        .map(|i| format!("a{i}"))
+        .collect::<Vec<_>>()
+        .join("|");
     let pattern = format!("(?|{branches})");
     v.validate(&pattern, 0)?;
     Ok(())
@@ -622,7 +628,10 @@ fn validate_alternation_in_branch_reset() -> Result<(), Box<dyn std::error::Erro
 fn validate_pipe_outside_branch_reset_ok() -> Result<(), Box<dyn std::error::Error>> {
     let v = RegexValidator::new();
     // Many alternations in a normal group should not trigger branch limit
-    let branches: String = (0..100).map(|i| format!("x{i}")).collect::<Vec<_>>().join("|");
+    let branches: String = (0..100)
+        .map(|i| format!("x{i}"))
+        .collect::<Vec<_>>()
+        .join("|");
     let pattern = format!("({branches})");
     v.validate(&pattern, 0)?;
     Ok(())

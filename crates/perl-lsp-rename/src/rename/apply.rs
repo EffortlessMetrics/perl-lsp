@@ -44,10 +44,16 @@ pub fn find_occurrences_in_text(
         if (in_comment && options.rename_in_comments) || (in_string && options.rename_in_strings) {
             // Make sure it's a whole word
             let before_ok = absolute_pos == 0
-                || source.chars().nth(absolute_pos - 1).is_none_or(|c| !c.is_alphanumeric());
+                || source
+                    .chars()
+                    .nth(absolute_pos - 1)
+                    .is_none_or(|c| !c.is_alphanumeric());
             let after_pos = absolute_pos + pattern.len();
             let after_ok = after_pos >= source.len()
-                || source.chars().nth(after_pos).is_none_or(|c| !c.is_alphanumeric());
+                || source
+                    .chars()
+                    .nth(after_pos)
+                    .is_none_or(|c| !c.is_alphanumeric());
 
             if before_ok && after_ok {
                 let start = if let Some(sigil) = kind.sigil() {
@@ -57,7 +63,10 @@ pub fn find_occurrences_in_text(
                 };
 
                 edits.push(TextEdit {
-                    location: SourceLocation { start, end: start + name.len() },
+                    location: SourceLocation {
+                        start,
+                        end: start + name.len(),
+                    },
                     new_text: name.to_string(),
                 });
             }
@@ -71,8 +80,11 @@ pub fn find_occurrences_in_text(
 
 /// Check if position is in a comment
 pub fn is_in_comment(position: usize, source: &str) -> bool {
-    let line_start =
-        if position == 0 { 0 } else { source[..position].rfind('\n').map_or(0, |p| p + 1) };
+    let line_start = if position == 0 {
+        0
+    } else {
+        source[..position].rfind('\n').map_or(0, |p| p + 1)
+    };
     let line = &source[line_start..];
 
     if let Some(comment_pos) = line.find('#') {

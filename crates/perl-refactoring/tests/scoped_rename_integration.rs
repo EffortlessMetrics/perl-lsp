@@ -29,7 +29,10 @@ sub bar {
     must(write!(file, "{}", code));
     let path = file.path().to_path_buf();
 
-    let config = RefactoringConfig { safe_mode: false, ..Default::default() };
+    let config = RefactoringConfig {
+        safe_mode: false,
+        ..Default::default()
+    };
     let mut engine = RefactoringEngine::with_config(config);
     must(engine.index_file(&path, code));
 
@@ -38,7 +41,10 @@ sub bar {
         RefactoringType::SymbolRename {
             old_name: "$x".to_string(),
             new_name: "$renamed".to_string(),
-            scope: RefactoringScope::Function { file: path.clone(), name: "foo".to_string() },
+            scope: RefactoringScope::Function {
+                file: path.clone(),
+                name: "foo".to_string(),
+            },
         },
         vec![path.clone()],
     ));
@@ -48,11 +54,17 @@ sub bar {
 
     // $x in foo should be renamed to $renamed
     assert!(new_code.contains("sub foo"), "Function foo should exist");
-    assert!(new_code.contains("my $renamed = 1"), "Variable in foo should be renamed");
+    assert!(
+        new_code.contains("my $renamed = 1"),
+        "Variable in foo should be renamed"
+    );
 
     // $x in bar should remain unchanged
     assert!(new_code.contains("sub bar"), "Function bar should exist");
-    assert!(new_code.contains("my $x = 2"), "Variable in bar should be unchanged");
+    assert!(
+        new_code.contains("my $x = 2"),
+        "Variable in bar should be unchanged"
+    );
 }
 
 #[test]
@@ -71,7 +83,10 @@ print $outer;
     must(write!(file, "{}", code));
     let path = file.path().to_path_buf();
 
-    let config = RefactoringConfig { safe_mode: false, ..Default::default() };
+    let config = RefactoringConfig {
+        safe_mode: false,
+        ..Default::default()
+    };
     let mut engine = RefactoringEngine::with_config(config);
     must(engine.index_file(&path, code));
 
@@ -93,12 +108,24 @@ print $outer;
     let new_code = must(std::fs::read_to_string(&path));
 
     // $inner in block should be renamed
-    assert!(new_code.contains("my $block_var = 2"), "Block variable should be renamed");
-    assert!(new_code.contains("print $block_var"), "Block variable usage should be renamed");
+    assert!(
+        new_code.contains("my $block_var = 2"),
+        "Block variable should be renamed"
+    );
+    assert!(
+        new_code.contains("print $block_var"),
+        "Block variable usage should be renamed"
+    );
 
     // $outer should remain unchanged
-    assert!(new_code.contains("my $outer = 1"), "Outer variable should be unchanged");
-    assert!(new_code.contains("print $outer"), "Outer variable usage should be unchanged");
+    assert!(
+        new_code.contains("my $outer = 1"),
+        "Outer variable should be unchanged"
+    );
+    assert!(
+        new_code.contains("print $outer"),
+        "Outer variable usage should be unchanged"
+    );
 }
 
 #[test]
@@ -117,7 +144,10 @@ print $var;
     must(write!(file, "{}", code));
     let path = file.path().to_path_buf();
 
-    let config = RefactoringConfig { safe_mode: false, ..Default::default() };
+    let config = RefactoringConfig {
+        safe_mode: false,
+        ..Default::default()
+    };
     let mut engine = RefactoringEngine::with_config(config);
     must(engine.index_file(&path, code));
 
@@ -126,7 +156,10 @@ print $var;
         RefactoringType::SymbolRename {
             old_name: "$var".to_string(),
             new_name: "$foo_var".to_string(),
-            scope: RefactoringScope::Package { file: path.clone(), name: "Foo".to_string() },
+            scope: RefactoringScope::Package {
+                file: path.clone(),
+                name: "Foo".to_string(),
+            },
         },
         vec![path.clone()],
     ));
@@ -136,11 +169,17 @@ print $var;
 
     // $var in Foo should be renamed
     assert!(new_code.contains("package Foo"), "Package Foo should exist");
-    assert!(new_code.contains("our $foo_var = 1"), "Variable in Foo should be renamed");
+    assert!(
+        new_code.contains("our $foo_var = 1"),
+        "Variable in Foo should be renamed"
+    );
 
     // $var in Bar should remain unchanged
     assert!(new_code.contains("package Bar"), "Package Bar should exist");
-    assert!(new_code.contains("our $var = 2"), "Variable in Bar should be unchanged");
+    assert!(
+        new_code.contains("our $var = 2"),
+        "Variable in Bar should be unchanged"
+    );
 }
 
 #[test]
@@ -158,7 +197,10 @@ fn test_file_scope_preserves_external_files() {
     let path1 = file1.path().to_path_buf();
     let path2 = file2.path().to_path_buf();
 
-    let config = RefactoringConfig { safe_mode: false, ..Default::default() };
+    let config = RefactoringConfig {
+        safe_mode: false,
+        ..Default::default()
+    };
     let mut engine = RefactoringEngine::with_config(config);
     must(engine.index_file(&path1, code1));
     must(engine.index_file(&path2, code2));
@@ -180,12 +222,24 @@ fn test_file_scope_preserves_external_files() {
     let new_code2 = must(std::fs::read_to_string(&path2));
 
     // file1 should have renamed variable
-    assert!(new_code1.contains("$renamed"), "Variable in file1 should be renamed");
-    assert!(!new_code1.contains("$shared"), "Old name should not exist in file1");
+    assert!(
+        new_code1.contains("$renamed"),
+        "Variable in file1 should be renamed"
+    );
+    assert!(
+        !new_code1.contains("$shared"),
+        "Old name should not exist in file1"
+    );
 
     // file2 should remain unchanged
-    assert!(new_code2.contains("$shared"), "Variable in file2 should be unchanged");
-    assert!(!new_code2.contains("$renamed"), "Renamed variable should not exist in file2");
+    assert!(
+        new_code2.contains("$shared"),
+        "Variable in file2 should be unchanged"
+    );
+    assert!(
+        !new_code2.contains("$renamed"),
+        "Renamed variable should not exist in file2"
+    );
 }
 
 #[test]
@@ -200,7 +254,10 @@ sub foo {
     must(write!(file, "{}", code));
     let path = file.path().to_path_buf();
 
-    let config = RefactoringConfig { safe_mode: false, ..Default::default() };
+    let config = RefactoringConfig {
+        safe_mode: false,
+        ..Default::default()
+    };
     let mut engine = RefactoringEngine::with_config(config);
     must(engine.index_file(&path, code));
 
@@ -219,7 +276,10 @@ sub foo {
 
     // This should either succeed with 0 changes or fail gracefully
     if let Ok(res) = result {
-        assert_eq!(res.changes_made, 0, "No changes should be made for non-existent scope");
+        assert_eq!(
+            res.changes_made, 0,
+            "No changes should be made for non-existent scope"
+        );
     }
 }
 
@@ -239,7 +299,10 @@ print $x;
     must(write!(file, "{}", code));
     let path = file.path().to_path_buf();
 
-    let config = RefactoringConfig { safe_mode: false, ..Default::default() };
+    let config = RefactoringConfig {
+        safe_mode: false,
+        ..Default::default()
+    };
     let mut engine = RefactoringEngine::with_config(config);
     must(engine.index_file(&path, code));
 
@@ -248,7 +311,11 @@ print $x;
         RefactoringType::SymbolRename {
             old_name: "$x".to_string(),
             new_name: "$inner".to_string(),
-            scope: RefactoringScope::Block { file: path.clone(), start: (4, 0), end: (6, 10) },
+            scope: RefactoringScope::Block {
+                file: path.clone(),
+                start: (4, 0),
+                end: (6, 10),
+            },
         },
         vec![path.clone()],
     ));
@@ -258,10 +325,16 @@ print $x;
 
     // Outer $x should remain unchanged
     let lines: Vec<&str> = new_code.lines().collect();
-    assert!(lines.iter().any(|l| l.contains("my $x = 1")), "Outer declaration should be unchanged");
+    assert!(
+        lines.iter().any(|l| l.contains("my $x = 1")),
+        "Outer declaration should be unchanged"
+    );
 
     // Inner $x should be renamed
-    assert!(new_code.contains("my $inner = 2"), "Inner declaration should be renamed");
+    assert!(
+        new_code.contains("my $inner = 2"),
+        "Inner declaration should be renamed"
+    );
     assert!(
         lines.iter().filter(|l| l.contains("print $x")).count() == 2,
         "Outer usages should remain"
@@ -283,7 +356,10 @@ print $global;
     must(write!(file, "{}", code));
     let path = file.path().to_path_buf();
 
-    let config = RefactoringConfig { safe_mode: false, ..Default::default() };
+    let config = RefactoringConfig {
+        safe_mode: false,
+        ..Default::default()
+    };
     let mut engine = RefactoringEngine::with_config(config);
     must(engine.index_file(&path, code));
 
@@ -292,7 +368,10 @@ print $global;
         RefactoringType::SymbolRename {
             old_name: "$global".to_string(),
             new_name: "$localized".to_string(),
-            scope: RefactoringScope::Function { file: path.clone(), name: "foo".to_string() },
+            scope: RefactoringScope::Function {
+                file: path.clone(),
+                name: "foo".to_string(),
+            },
         },
         vec![path.clone()],
     ));

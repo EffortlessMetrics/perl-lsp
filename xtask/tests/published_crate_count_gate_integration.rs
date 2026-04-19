@@ -38,9 +38,12 @@ fn load_gate_policy_yaml() -> Value {
 
 /// Finds a gate entry by name in the gates list, returning `None` if not found.
 fn find_gate<'a>(gates: &'a [Value], name: &str) -> Option<&'a Value> {
-    gates
-        .iter()
-        .find(|g| g.get("name").and_then(|n| n.as_str()).map(|n| n == name).unwrap_or(false))
+    gates.iter().find(|g| {
+        g.get("name")
+            .and_then(|n| n.as_str())
+            .map(|n| n == name)
+            .unwrap_or(false)
+    })
 }
 
 /// Test that `published_crate_count` gate exists in gate-policy.yaml.
@@ -84,7 +87,10 @@ fn published_crate_count_gate_is_in_merge_gate_tier() {
     let gate = find_gate(gates, GATE_NAME)
         .expect("published_crate_count gate must exist - see test_gate_exists_in_policy");
 
-    let tier = gate.get("tier").and_then(|t| t.as_str()).expect("gate must have tier field");
+    let tier = gate
+        .get("tier")
+        .and_then(|t| t.as_str())
+        .expect("gate must have tier field");
 
     assert_eq!(
         tier, EXPECTED_TIER,
@@ -109,8 +115,10 @@ fn published_crate_count_gate_has_correct_command() {
     let gate = find_gate(gates, GATE_NAME)
         .expect("published_crate_count gate must exist - see test_gate_exists_in_policy");
 
-    let command =
-        gate.get("command").and_then(|c| c.as_str()).expect("gate must have command field");
+    let command = gate
+        .get("command")
+        .and_then(|c| c.as_str())
+        .expect("gate must have command field");
 
     assert_eq!(
         command, EXPECTED_COMMAND,
@@ -138,7 +146,10 @@ fn published_crate_count_gate_has_quarantine_enabled() {
     let gate = find_gate(gates, GATE_NAME)
         .expect("published_crate_count gate must exist - see test_gate_exists_in_policy");
 
-    let quarantine = gate.get("quarantine").and_then(|q| q.as_bool()).unwrap_or(false); // defaults to false if not present
+    let quarantine = gate
+        .get("quarantine")
+        .and_then(|q| q.as_bool())
+        .unwrap_or(false); // defaults to false if not present
 
     assert!(
         quarantine,
@@ -190,7 +201,10 @@ fn published_crate_count_gate_is_required() {
     let gate = find_gate(gates, GATE_NAME)
         .expect("published_crate_count gate must exist - see test_gate_exists_in_policy");
 
-    let required = gate.get("required").and_then(|r| r.as_bool()).unwrap_or(true); // defaults to true
+    let required = gate
+        .get("required")
+        .and_then(|r| r.as_bool())
+        .unwrap_or(true); // defaults to true
 
     assert!(
         required,
@@ -213,7 +227,10 @@ fn published_crate_count_gate_has_ratchet_tags() {
     let gate = find_gate(gates, GATE_NAME)
         .expect("published_crate_count gate must exist - see test_gate_exists_in_policy");
 
-    let tags = gate.get("tags").and_then(|t| t.as_sequence()).expect("gate must have tags field");
+    let tags = gate
+        .get("tags")
+        .and_then(|t| t.as_sequence())
+        .expect("gate must have tags field");
 
     let tag_names: Vec<&str> = tags.iter().filter_map(|t| t.as_str()).collect();
 
@@ -259,7 +276,9 @@ fn published_crate_count_gate_is_in_ci_gate_job_mapping() {
         .get("job_mapping")
         .expect("job_mapping not found in workflow_integration section");
 
-    let ci_gate = job_mapping.get("ci-gate").expect("ci-gate job not found in job_mapping");
+    let ci_gate = job_mapping
+        .get("ci-gate")
+        .expect("ci-gate job not found in job_mapping");
 
     let gates = ci_gate
         .get("gates")
@@ -302,7 +321,10 @@ fn published_crate_count_gate_placement_in_merge_gate_tier() {
     let published_crate_idx = gates
         .iter()
         .position(|g| {
-            g.get("name").and_then(|n| n.as_str()).map(|n| n == GATE_NAME).unwrap_or(false)
+            g.get("name")
+                .and_then(|n| n.as_str())
+                .map(|n| n == GATE_NAME)
+                .unwrap_or(false)
         })
         .expect("published_crate_count gate must exist - see test_gate_exists_in_policy");
 

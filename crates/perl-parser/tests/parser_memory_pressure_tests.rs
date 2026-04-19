@@ -154,7 +154,10 @@ fn test_memory_fragmentation_scenarios() {
     let fragmentation_scenarios = vec![
         ("Fragmented allocations", generate_fragmented_allocations()),
         ("Variable sized objects", generate_variable_sized_objects()),
-        ("Frequent allocations/deallocations", generate_frequent_allocations()),
+        (
+            "Frequent allocations/deallocations",
+            generate_frequent_allocations(),
+        ),
         ("Memory churn", generate_memory_churn()),
     ];
 
@@ -186,7 +189,11 @@ fn test_memory_fragmentation_scenarios() {
         let memory_used = memory_after.saturating_sub(memory_before);
 
         // Should handle fragmented memory gracefully
-        assert!(result.is_ok(), "Should handle {} scenario with fragmented memory", scenario_name);
+        assert!(
+            result.is_ok(),
+            "Should handle {} scenario with fragmented memory",
+            scenario_name
+        );
 
         // Memory usage should be reasonable even with fragmentation
         let memory_ratio = memory_used as f64 / code.len() as f64;
@@ -240,7 +247,12 @@ fn test_cleanup_and_resource_release() {
             let mut parser = Parser::new(&code);
             let result = parser.parse();
 
-            assert!(result.is_ok(), "Parse {} iteration {} should succeed", scenario_name, i);
+            assert!(
+                result.is_ok(),
+                "Parse {} iteration {} should succeed",
+                scenario_name,
+                i
+            );
 
             // Explicitly drop parser
             drop(parser);
@@ -284,7 +296,11 @@ fn test_cleanup_and_resource_release() {
         );
 
         // Memory usage should be relatively stable
-        let memory_variance = if max_memory > min_memory { max_memory - min_memory } else { 0 };
+        let memory_variance = if max_memory > min_memory {
+            max_memory - min_memory
+        } else {
+            0
+        };
 
         assert!(
             memory_variance <= avg_memory * 2,
@@ -399,7 +415,10 @@ fn test_memory_pressure_incremental_parsing() {
     let modifications = vec![
         ("Add variable", add_variable_modification()),
         ("Add function", add_function_modification()),
-        ("Add complex structure", add_complex_structure_modification()),
+        (
+            "Add complex structure",
+            add_complex_structure_modification(),
+        ),
         ("Add large block", add_large_block_modification()),
     ];
 
@@ -411,8 +430,10 @@ fn test_memory_pressure_incremental_parsing() {
 
         // Apply incremental modifications
         for iteration in 0..20 {
-            current_code
-                .push_str(&format!("\n# Iteration {} - {}\n", iteration, modification_name));
+            current_code.push_str(&format!(
+                "\n# Iteration {} - {}\n",
+                iteration, modification_name
+            ));
             current_code.push_str(&modification_code);
 
             let memory_before = estimate_memory_usage();
@@ -452,7 +473,10 @@ fn test_memory_pressure_incremental_parsing() {
             );
         }
 
-        println!("  ✓ {}: incremental parsing completed successfully", modification_name);
+        println!(
+            "  ✓ {}: incremental parsing completed successfully",
+            modification_name
+        );
     }
 }
 
@@ -520,7 +544,11 @@ fn test_memory_pressure_recovery() {
         let final_memory = estimate_memory_usage();
         let total_growth = final_memory.saturating_sub(baseline_memory);
 
-        println!("  ✓ {}: total memory growth: {}KB", scenario_name, total_growth / 1024);
+        println!(
+            "  ✓ {}: total memory growth: {}KB",
+            scenario_name,
+            total_growth / 1024
+        );
 
         // Should not have excessive memory growth
         assert!(
@@ -539,8 +567,14 @@ fn test_extreme_memory_pressure() {
 
     let extreme_scenarios = vec![
         ("Massive single file", generate_massive_single_file()),
-        ("Thousands of tiny objects", generate_thousands_of_tiny_objects()),
-        ("Deep recursive structures", generate_deep_recursive_structures()),
+        (
+            "Thousands of tiny objects",
+            generate_thousands_of_tiny_objects(),
+        ),
+        (
+            "Deep recursive structures",
+            generate_deep_recursive_structures(),
+        ),
         ("Memory bomb pattern", generate_memory_bomb_pattern()),
     ];
 
@@ -603,7 +637,12 @@ fn test_extreme_memory_pressure() {
             parse_time
         );
 
-        println!("  {}: used {}KB memory in {:?}", scenario_name, memory_used / 1024, parse_time);
+        println!(
+            "  {}: used {}KB memory in {:?}",
+            scenario_name,
+            memory_used / 1024,
+            parse_time
+        );
 
         // Cleanup
         drop(_system_pressure);
@@ -751,7 +790,10 @@ fn generate_mixed_allocations(count: usize) -> String {
                 code.push_str(&format!(
                     "my @array_{} = ({});\n",
                     i,
-                    (0..20).map(|j| j.to_string()).collect::<Vec<_>>().join(", ")
+                    (0..20)
+                        .map(|j| j.to_string())
+                        .collect::<Vec<_>>()
+                        .join(", ")
                 ));
             }
             2 => {

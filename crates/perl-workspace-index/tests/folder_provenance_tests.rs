@@ -46,7 +46,11 @@ fn test_files_in_folder_query() {
 
     // Query for files in a folder (returns empty for now)
     let files = index.files_in_folder("file:///folder");
-    assert_eq!(files.len(), 0, "Should return empty for non-existent folder");
+    assert_eq!(
+        files.len(),
+        0,
+        "Should return empty for non-existent folder"
+    );
 }
 
 #[test]
@@ -60,7 +64,11 @@ fn test_symbols_in_folder_query() {
 
     // Query for symbols in a folder (returns empty for now)
     let symbols = index.symbols_in_folder("file:///folder");
-    assert_eq!(symbols.len(), 0, "Should return empty for non-existent folder");
+    assert_eq!(
+        symbols.len(),
+        0,
+        "Should return empty for non-existent folder"
+    );
 }
 
 #[test]
@@ -201,7 +209,10 @@ fn test_rank_symbols_no_folder_context() {
 
     // Without folder context, all symbols should be treated as different folder
     // Results should be sorted by name for stability
-    assert!(ranked[0].name <= ranked[1].name, "Should be sorted by name for stability");
+    assert!(
+        ranked[0].name <= ranked[1].name,
+        "Should be sorted by name for stability"
+    );
 }
 
 #[test]
@@ -233,7 +244,10 @@ fn test_same_package() {
     let index = WorkspaceIndex::new();
 
     // Test same package detection using container_name
-    assert!(index.same_package_by_container("Foo::Bar", "Foo::Bar"), "Same package should match");
+    assert!(
+        index.same_package_by_container("Foo::Bar", "Foo::Bar"),
+        "Same package should match"
+    );
 
     assert!(
         !index.same_package_by_container("Foo::Bar", "Other::Package"),

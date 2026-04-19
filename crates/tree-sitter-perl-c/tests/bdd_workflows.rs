@@ -41,8 +41,9 @@ impl Scenario {
 }
 
 fn unique_temp_file(name: &str) -> PathBuf {
-    let nanos =
-        SystemTime::now().duration_since(UNIX_EPOCH).map_or(0_u128, |duration| duration.as_nanos());
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0_u128, |duration| duration.as_nanos());
 
     std::env::temp_dir().join(format!("tree_sitter_perl_c_{name}_{nanos}.pl"))
 }
@@ -138,9 +139,15 @@ fn bdd_injections_query_matches_inline_cpp_heredoc_content() -> Result<(), Box<d
     let mut matches = cursor.matches(&query, tree.root_node(), source.as_bytes());
     while let Some(m) = matches.next() {
         for capture in m.captures {
-            let capture_name =
-                query.capture_names().get(capture.index as usize).copied().unwrap_or_default();
-            let text = capture.node.utf8_text(source.as_bytes()).unwrap_or_default();
+            let capture_name = query
+                .capture_names()
+                .get(capture.index as usize)
+                .copied()
+                .unwrap_or_default();
+            let text = capture
+                .node
+                .utf8_text(source.as_bytes())
+                .unwrap_or_default();
 
             match capture_name {
                 "inline.package" => saw_inline_package = text == "Inline",
@@ -180,9 +187,15 @@ fn bdd_injections_query_matches_inline_c_heredoc_content() -> Result<(), Box<dyn
     let mut matches = cursor.matches(&query, tree.root_node(), source.as_bytes());
     while let Some(m) = matches.next() {
         for capture in m.captures {
-            let capture_name =
-                query.capture_names().get(capture.index as usize).copied().unwrap_or_default();
-            let text = capture.node.utf8_text(source.as_bytes()).unwrap_or_default();
+            let capture_name = query
+                .capture_names()
+                .get(capture.index as usize)
+                .copied()
+                .unwrap_or_default();
+            let text = capture
+                .node
+                .utf8_text(source.as_bytes())
+                .unwrap_or_default();
 
             match capture_name {
                 "inline.package" => saw_inline_package = text == "Inline",

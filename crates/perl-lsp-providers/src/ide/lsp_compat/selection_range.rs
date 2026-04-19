@@ -42,7 +42,12 @@ fn synthetic_ranges(node: &Node) -> Vec<(usize, usize)> {
     match &node.kind {
         // Subroutine: emit name_span, then signature span, then body span
         // so the expansion goes: name -> signature -> body -> full sub
-        NodeKind::Subroutine { name_span, signature, body, .. } => {
+        NodeKind::Subroutine {
+            name_span,
+            signature,
+            body,
+            ..
+        } => {
             if let Some(span) = name_span {
                 extras.push((span.start, span.end));
             }
@@ -53,7 +58,9 @@ fn synthetic_ranges(node: &Node) -> Vec<(usize, usize)> {
         }
         // Method: name is a String, but we don't have a span for it — use
         // signature and body.
-        NodeKind::Method { signature, body, .. } => {
+        NodeKind::Method {
+            signature, body, ..
+        } => {
             if let Some(sig) = signature {
                 extras.push((sig.location.start, sig.location.end));
             }
@@ -102,8 +109,10 @@ pub fn selection_chain(
         if first {
             let synthetics = synthetic_ranges(node);
             // Filter to synthetics that contain the offset, smallest first
-            let mut applicable: Vec<(usize, usize)> =
-                synthetics.into_iter().filter(|&(s, e)| offset >= s && offset <= e).collect();
+            let mut applicable: Vec<(usize, usize)> = synthetics
+                .into_iter()
+                .filter(|&(s, e)| offset >= s && offset <= e)
+                .collect();
             applicable.sort_by_key(|&(s, e)| e - s);
             for synth in applicable {
                 ranges.push(synth);
@@ -119,8 +128,10 @@ pub fn selection_chain(
         if let Some(&parent_ptr) = parent_map.get(&current_ptr) {
             if let Some(parent_node) = node_lookup.get(&parent_ptr).copied() {
                 let synthetics = synthetic_ranges(parent_node);
-                let mut applicable: Vec<(usize, usize)> =
-                    synthetics.into_iter().filter(|&(s, e)| offset >= s && offset <= e).collect();
+                let mut applicable: Vec<(usize, usize)> = synthetics
+                    .into_iter()
+                    .filter(|&(s, e)| offset >= s && offset <= e)
+                    .collect();
                 applicable.sort_by_key(|&(s, e)| e - s);
                 for synth in applicable {
                     ranges.push(synth);

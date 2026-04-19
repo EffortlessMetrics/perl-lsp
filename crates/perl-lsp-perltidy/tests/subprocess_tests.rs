@@ -15,7 +15,9 @@ impl SubprocessRuntime for MissingBinaryRuntime {
         _args: &[&str],
         _stdin: Option<&[u8]>,
     ) -> Result<SubprocessOutput, SubprocessError> {
-        Err(SubprocessError::new(format!("Failed to start {program}: No such file or directory")))
+        Err(SubprocessError::new(format!(
+            "Failed to start {program}: No such file or directory"
+        )))
     }
 }
 

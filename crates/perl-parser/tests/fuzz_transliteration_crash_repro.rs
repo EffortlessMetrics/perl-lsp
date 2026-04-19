@@ -45,7 +45,10 @@ fn fuzz_transliteration_regression_suite() {
         let (search, replace, modifiers) = extract_transliteration_parts(input);
         let actual = (search.as_str(), replace.as_str(), modifiers.as_str());
 
-        println!("Testing: {} -> expected {:?}, got {:?}", input, expected, actual);
+        println!(
+            "Testing: {} -> expected {:?}, got {:?}",
+            input, expected, actual
+        );
 
         if actual != expected {
             println!("  BUG CONFIRMED in variant: {}", input);

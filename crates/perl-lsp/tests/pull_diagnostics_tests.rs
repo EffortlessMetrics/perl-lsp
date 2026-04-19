@@ -39,8 +39,9 @@ fn pull_diagnostics_unused_variable_emits_pl102() -> Result<(), Box<dyn std::err
     }
 
     // At least one PL102 must mention $unused
-    let mentions_unused =
-        pl102_diags.iter().any(|d| d.message.contains("$unused") || d.message.contains("unused"));
+    let mentions_unused = pl102_diags
+        .iter()
+        .any(|d| d.message.contains("$unused") || d.message.contains("unused"));
     if !mentions_unused {
         return Err(format!(
             "Expected a PL102 diagnostic mentioning '$unused', got: {pl102_diags:#?}"
@@ -49,8 +50,9 @@ fn pull_diagnostics_unused_variable_emits_pl102() -> Result<(), Box<dyn std::err
     }
 
     // No PL102 should mention $used (it is referenced)
-    let false_positive =
-        pl102_diags.iter().any(|d| d.message.contains("$used") && !d.message.contains("$unused"));
+    let false_positive = pl102_diags
+        .iter()
+        .any(|d| d.message.contains("$used") && !d.message.contains("$unused"));
     if false_positive {
         return Err(format!(
             "Unexpected PL102 diagnostic for '$used' (it is referenced): {pl102_diags:#?}"
@@ -75,7 +77,9 @@ fn pull_diagnostics_unused_variable_severity_is_warning() -> Result<(), Box<dyn 
         .find(|d| has_code(d, "PL102"))
         .ok_or("Expected PL102 diagnostic for unused variable $never_used")?;
 
-    let severity = pl102.severity.ok_or("PL102 diagnostic must have a severity")?;
+    let severity = pl102
+        .severity
+        .ok_or("PL102 diagnostic must have a severity")?;
     if severity != lsp_types::DiagnosticSeverity::WARNING {
         return Err(format!("Expected WARNING severity for PL102, got {:?}", severity).into());
     }
@@ -92,7 +96,9 @@ fn pull_diagnostics_interpolated_variable_counts_as_used() -> Result<(), Box<dyn
 
     let items = items_from_report(provider.get_document_diagnostics(&uri, content, None))?;
 
-    let msg_unused = items.iter().any(|d| has_code(d, "PL102") && d.message.contains("$msg"));
+    let msg_unused = items
+        .iter()
+        .any(|d| has_code(d, "PL102") && d.message.contains("$msg"));
     if msg_unused {
         return Err(format!(
             "Interpolated variable $msg must not be flagged unused.\nDiagnostics: {items:#?}"
@@ -156,8 +162,9 @@ fn pull_diagnostics_underscore_prefix_suppresses_unused_warning()
 
     let items = items_from_report(provider.get_document_diagnostics(&uri, content, None))?;
 
-    let pl102_for_underscore =
-        items.iter().find(|d| has_code(d, "PL102") && d.message.contains("_intentionally_unused"));
+    let pl102_for_underscore = items
+        .iter()
+        .find(|d| has_code(d, "PL102") && d.message.contains("_intentionally_unused"));
 
     if pl102_for_underscore.is_some() {
         return Err(
@@ -179,9 +186,15 @@ fn pull_diagnostics_full_then_unchanged() -> Result<(), Box<dyn std::error::Erro
     let result_id = match &first {
         DocumentDiagnosticReport::Full(full) => {
             let report = &full.full_document_diagnostic_report;
-            assert!(!report.items.is_empty(), "expected diagnostics for parse error");
             assert!(
-                report.items.iter().all(|item| item.source.as_deref() == Some("perl-lsp")),
+                !report.items.is_empty(),
+                "expected diagnostics for parse error"
+            );
+            assert!(
+                report
+                    .items
+                    .iter()
+                    .all(|item| item.source.as_deref() == Some("perl-lsp")),
                 "expected deterministic diagnostic source"
             );
             report.result_id.clone().ok_or("result id missing")?

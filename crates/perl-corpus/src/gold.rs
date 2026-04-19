@@ -52,7 +52,11 @@ pub fn load_gold_fixture<P: AsRef<Path>>(
     dir: P,
 ) -> Result<GoldFixture, Box<dyn std::error::Error>> {
     let dir = dir.as_ref();
-    let name = dir.file_name().ok_or("No directory name")?.to_string_lossy().to_string();
+    let name = dir
+        .file_name()
+        .ok_or("No directory name")?
+        .to_string_lossy()
+        .to_string();
 
     let fixture_path = dir.join("fixture.pl");
     let expected_path = dir.join("expected.json");
@@ -67,7 +71,11 @@ pub fn load_gold_fixture<P: AsRef<Path>>(
     let expected_json = fs::read_to_string(&expected_path)?;
     let expected: GoldExpected = serde_json::from_str(&expected_json)?;
 
-    Ok(GoldFixture { name, fixture_path, expected })
+    Ok(GoldFixture {
+        name,
+        fixture_path,
+        expected,
+    })
 }
 
 /// Load all gold fixtures from a directory
@@ -188,7 +196,11 @@ pub fn load_hover_gold_fixtures<P: AsRef<Path>>(
             continue; // not a hover fixture
         }
 
-        let name = path.file_name().ok_or("No directory name")?.to_string_lossy().to_string();
+        let name = path
+            .file_name()
+            .ok_or("No directory name")?
+            .to_string_lossy()
+            .to_string();
         let json = fs::read_to_string(&hover_path)?;
         let expected: HoverGoldExpected = serde_json::from_str(&json)
             .map_err(|e| format!("Parsing {}: {e}", hover_path.display()))?;
@@ -275,12 +287,20 @@ pub fn load_goto_gold_fixtures<P: AsRef<Path>>(
             continue;
         }
 
-        let name = path.file_name().ok_or("No directory name")?.to_string_lossy().to_string();
+        let name = path
+            .file_name()
+            .ok_or("No directory name")?
+            .to_string_lossy()
+            .to_string();
         let json = fs::read_to_string(&goto_path)?;
         let expected: GotoGoldExpected = serde_json::from_str(&json)
             .map_err(|e| format!("Parsing {}: {e}", goto_path.display()))?;
 
-        fixtures.push(GotoGoldFixture { name, fixture_path, goto_assertions: expected.assertions });
+        fixtures.push(GotoGoldFixture {
+            name,
+            fixture_path,
+            goto_assertions: expected.assertions,
+        });
     }
 
     fixtures.sort_by(|a, b| a.name.cmp(&b.name));
@@ -362,7 +382,11 @@ pub fn load_completion_gold_fixtures<P: AsRef<Path>>(
             continue;
         }
 
-        let name = path.file_name().ok_or("No directory name")?.to_string_lossy().to_string();
+        let name = path
+            .file_name()
+            .ok_or("No directory name")?
+            .to_string_lossy()
+            .to_string();
         let json = fs::read_to_string(&completion_path)?;
         let expected: CompletionGoldExpected = serde_json::from_str(&json)
             .map_err(|e| format!("Parsing {}: {e}", completion_path.display()))?;
@@ -418,7 +442,10 @@ mod tests {
         // Malformed expected.json must produce a serde error, not panic
         let bad_json = r#"{"diagnostics": [{"assertion": "unknown_variant"}]}"#;
         let result: Result<GoldExpected, _> = serde_json::from_str(bad_json);
-        assert!(result.is_err(), "unknown assertion variant should fail to deserialize");
+        assert!(
+            result.is_err(),
+            "unknown assertion variant should fail to deserialize"
+        );
     }
 
     #[test]

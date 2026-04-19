@@ -83,7 +83,10 @@ fn checksum_for<'a>(
     checksums: &'a BTreeMap<String, String>,
 ) -> Result<String> {
     let filename = format!("{}-{}-{}", config.prefix, config.version, artifact_suffix);
-    checksums.get(&filename).cloned().ok_or_else(|| eyre!("missing checksum for {}", filename))
+    checksums
+        .get(&filename)
+        .cloned()
+        .ok_or_else(|| eyre!("missing checksum for {}", filename))
 }
 
 struct AssetShaMap<'a> {
@@ -176,16 +179,22 @@ fn build_asset_map(config: &InjectShaAssetsConfig, assets: &AssetShaMap<'_>) -> 
         "linux-arm64".to_string(),
         json!({ "url": url(&linux_arm), "sha256": assets.lin_arm }),
     );
-    payload
-        .insert("macos-x64".to_string(), json!({ "url": url(&mac_x64), "sha256": assets.mac_x64 }));
+    payload.insert(
+        "macos-x64".to_string(),
+        json!({ "url": url(&mac_x64), "sha256": assets.mac_x64 }),
+    );
     payload.insert(
         "macos-arm64".to_string(),
         json!({ "url": url(&mac_arm), "sha256": assets.mac_arm }),
     );
-    payload
-        .insert("win-x64".to_string(), json!({ "url": url(&win_x64), "sha256": assets.win_x64 }));
-    payload
-        .insert("win-arm64".to_string(), json!({ "url": url(&win_arm), "sha256": assets.win_arm }));
+    payload.insert(
+        "win-x64".to_string(),
+        json!({ "url": url(&win_x64), "sha256": assets.win_x64 }),
+    );
+    payload.insert(
+        "win-arm64".to_string(),
+        json!({ "url": url(&win_arm), "sha256": assets.win_arm }),
+    );
     let payload = Value::Object(payload);
     serde_json::to_string_pretty(&payload).map_err(Into::into)
 }
@@ -204,7 +213,10 @@ fn artifact_filename(prefix: &str, version: &str, artifact_suffix: &str) -> Stri
 fn write_output(path: Option<&Path>, content: &str, name: &str) -> Result<()> {
     let content = content.trim_end_matches('\n');
     if let Some(path) = path {
-        if let Some(parent) = path.parent().filter(|parent| !parent.as_os_str().is_empty()) {
+        if let Some(parent) = path
+            .parent()
+            .filter(|parent| !parent.as_os_str().is_empty())
+        {
             fs::create_dir_all(parent)
                 .with_context(|| format!("failed to create directory for {}", path.display()))?;
         }

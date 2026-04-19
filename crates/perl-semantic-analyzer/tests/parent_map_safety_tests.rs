@@ -42,9 +42,24 @@ fn loc(start: usize, end: usize) -> SourceLocation {
 ///     ExpressionStatement
 ///       Number
 fn minimal_ast() -> Arc<Node> {
-    let num = Node::new(NodeKind::Number { value: "42".to_string() }, loc(0, 2));
-    let stmt = Node::new(NodeKind::ExpressionStatement { expression: Box::new(num) }, loc(0, 3));
-    let program = Node::new(NodeKind::Program { statements: vec![stmt] }, loc(0, 3));
+    let num = Node::new(
+        NodeKind::Number {
+            value: "42".to_string(),
+        },
+        loc(0, 2),
+    );
+    let stmt = Node::new(
+        NodeKind::ExpressionStatement {
+            expression: Box::new(num),
+        },
+        loc(0, 3),
+    );
+    let program = Node::new(
+        NodeKind::Program {
+            statements: vec![stmt],
+        },
+        loc(0, 3),
+    );
     Arc::new(program)
 }
 
@@ -53,8 +68,13 @@ fn minimal_ast() -> Arc<Node> {
 ///     VariableDeclaration
 ///       Variable ($x)
 fn var_decl_ast() -> Arc<Node> {
-    let var =
-        Node::new(NodeKind::Variable { sigil: "$".to_string(), name: "x".to_string() }, loc(3, 5));
+    let var = Node::new(
+        NodeKind::Variable {
+            sigil: "$".to_string(),
+            name: "x".to_string(),
+        },
+        loc(3, 5),
+    );
     let decl = Node::new(
         NodeKind::VariableDeclaration {
             declarator: "my".to_string(),
@@ -64,13 +84,21 @@ fn var_decl_ast() -> Arc<Node> {
         },
         loc(0, 10),
     );
-    let program = Node::new(NodeKind::Program { statements: vec![decl] }, loc(0, 10));
+    let program = Node::new(
+        NodeKind::Program {
+            statements: vec![decl],
+        },
+        loc(0, 10),
+    );
     Arc::new(program)
 }
 
 /// Returns the total number of nodes in an AST by recursive counting.
 fn count_nodes(node: &Node) -> usize {
-    1 + children_of(node).into_iter().map(count_nodes).sum::<usize>()
+    1 + children_of(node)
+        .into_iter()
+        .map(count_nodes)
+        .sum::<usize>()
 }
 
 /// Get children of a node using the same static method the provider uses.
@@ -80,7 +108,11 @@ fn children_of(node: &Node) -> Vec<&Node> {
     match &node.kind {
         NodeKind::Program { statements } => statements.iter().collect(),
         NodeKind::ExpressionStatement { expression } => vec![expression.as_ref()],
-        NodeKind::VariableDeclaration { variable, initializer, .. } => {
+        NodeKind::VariableDeclaration {
+            variable,
+            initializer,
+            ..
+        } => {
             let mut v: Vec<&Node> = vec![variable.as_ref()];
             if let Some(init) = initializer {
                 v.push(init.as_ref());
@@ -102,7 +134,10 @@ fn parent_map_root_has_no_parent() {
     DeclarationProvider::build_parent_map(&ast, &mut map, None);
 
     let root_ptr: *const Node = &*ast as *const _;
-    assert!(!map.contains_key(&root_ptr), "Root node must NOT appear as a key in the parent map");
+    assert!(
+        !map.contains_key(&root_ptr),
+        "Root node must NOT appear as a key in the parent map"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -144,13 +179,19 @@ fn parent_map_child_points_to_correct_parent() {
     let root_ptr: *const Node = &*ast as *const _;
 
     let program_children = children_of(&ast);
-    assert!(!program_children.is_empty(), "minimal_ast must have at least one child");
+    assert!(
+        !program_children.is_empty(),
+        "minimal_ast must have at least one child"
+    );
 
     let stmt = program_children[0];
     let stmt_ptr: *const Node = stmt as *const _;
 
     let parent_ptr = map.get(&stmt_ptr).copied();
-    assert!(parent_ptr.is_some(), "ExpressionStatement must have a parent entry");
+    assert!(
+        parent_ptr.is_some(),
+        "ExpressionStatement must have a parent entry"
+    );
     assert_eq!(
         parent_ptr.unwrap(),
         root_ptr,
@@ -179,14 +220,23 @@ fn parent_map_grandchild_chain_terminates_at_root() {
 
     // var → decl
     let var_parent = must_some(map.get(&var_ptr).copied());
-    assert_eq!(var_parent, decl_ptr, "Variable's parent must be the VariableDeclaration");
+    assert_eq!(
+        var_parent, decl_ptr,
+        "Variable's parent must be the VariableDeclaration"
+    );
 
     // decl → root
     let decl_parent = must_some(map.get(&decl_ptr).copied());
-    assert_eq!(decl_parent, root_ptr, "VariableDeclaration's parent must be the Program root");
+    assert_eq!(
+        decl_parent, root_ptr,
+        "VariableDeclaration's parent must be the Program root"
+    );
 
     // Root itself is not in the map (already tested above; guard here too)
-    assert!(!map.contains_key(&root_ptr), "Root must not be in the parent map");
+    assert!(
+        !map.contains_key(&root_ptr),
+        "Root must not be in the parent map"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -255,11 +305,30 @@ fn parent_map_no_cycles_simple() {
 #[test]
 fn parent_map_deep_nesting_four_levels() {
     // Program → Block → ExpressionStatement → Number
-    let num = Node::new(NodeKind::Number { value: "1".to_string() }, loc(10, 11));
-    let expr_stmt =
-        Node::new(NodeKind::ExpressionStatement { expression: Box::new(num) }, loc(9, 12));
-    let block = Node::new(NodeKind::Block { statements: vec![expr_stmt] }, loc(8, 13));
-    let program = Node::new(NodeKind::Program { statements: vec![block] }, loc(0, 14));
+    let num = Node::new(
+        NodeKind::Number {
+            value: "1".to_string(),
+        },
+        loc(10, 11),
+    );
+    let expr_stmt = Node::new(
+        NodeKind::ExpressionStatement {
+            expression: Box::new(num),
+        },
+        loc(9, 12),
+    );
+    let block = Node::new(
+        NodeKind::Block {
+            statements: vec![expr_stmt],
+        },
+        loc(8, 13),
+    );
+    let program = Node::new(
+        NodeKind::Program {
+            statements: vec![block],
+        },
+        loc(0, 14),
+    );
     let ast = Arc::new(program);
 
     let mut map: ParentMap = ParentMap::default();
@@ -310,7 +379,11 @@ fn parent_map_stable_across_two_builds() {
     // Every key/value in map1 must appear identically in map2.
     for (&key, &val) in &map1 {
         let val2 = must_some(map2.get(&key).copied());
-        assert_eq!(val, val2, "Same key {:p} must map to same parent in both builds", key);
+        assert_eq!(
+            val, val2,
+            "Same key {:p} must map to same parent in both builds",
+            key
+        );
     }
 }
 
@@ -331,7 +404,10 @@ fn parent_map_built_from_real_parsed_code() {
     DeclarationProvider::build_parent_map(&ast, &mut map, None);
 
     // The map must be non-empty for any non-trivial program.
-    assert!(!map.is_empty(), "ParentMap must be non-empty for a multi-statement program");
+    assert!(
+        !map.is_empty(),
+        "ParentMap must be non-empty for a multi-statement program"
+    );
 
     // Root must not be in the map.
     let root_ptr: *const Node = &*ast as *const _;
@@ -423,9 +499,12 @@ fn declaration_provider_accepts_valid_parent_map() {
     DeclarationProvider::build_parent_map(&ast, &mut map, None);
 
     // Building a provider with the valid map must not panic.
-    let _provider =
-        DeclarationProvider::new(Arc::clone(&ast), code.to_string(), "file:///test.pl".to_string())
-            .with_parent_map(&map);
+    let _provider = DeclarationProvider::new(
+        Arc::clone(&ast),
+        code.to_string(),
+        "file:///test.pl".to_string(),
+    )
+    .with_parent_map(&map);
 
     // Arc kept alive past the provider to satisfy the lifetime invariant.
     drop(_provider);

@@ -78,7 +78,10 @@ EOF
     // 1. my $x = <<EOF; (lines 2-4)
     // 2. say $x; (line 5)
     let block_stmt_count = count_block_statements(&root);
-    assert!(block_stmt_count.is_some(), "Should find a block node in the AST");
+    assert!(
+        block_stmt_count.is_some(),
+        "Should find a block node in the AST"
+    );
     assert_eq!(
         block_stmt_count.ok_or("No block found")?,
         2,
@@ -103,7 +106,10 @@ EOF
     let sexp = root.to_sexp();
 
     // The say statement should be present and separate
-    assert!(sexp.contains("say"), "say statement should be present and not consumed by heredoc");
+    assert!(
+        sexp.contains("say"),
+        "say statement should be present and not consumed by heredoc"
+    );
 
     // Heredoc body should be consumed (not parsed as identifier)
     assert!(
@@ -135,14 +141,23 @@ EOF2
     // Collect heredocs
     let heredocs = collect_heredocs(&root);
     assert_eq!(heredocs.len(), 2, "Expected exactly two heredoc nodes");
-    assert_eq!(&heredocs[0], "EOF1", "First heredoc delimiter should be EOF1");
-    assert_eq!(&heredocs[1], "EOF2", "Second heredoc delimiter should be EOF2");
+    assert_eq!(
+        &heredocs[0], "EOF1",
+        "First heredoc delimiter should be EOF1"
+    );
+    assert_eq!(
+        &heredocs[1], "EOF2",
+        "Second heredoc delimiter should be EOF2"
+    );
 
     // Check AST structure: the block should contain 2 statements
     // 1. my $x = <<EOF1; (lines 2-4)
     // 2. my $y = <<EOF2; (lines 5-7)
     let block_stmt_count = count_block_statements(&root);
-    assert!(block_stmt_count.is_some(), "Should find a block node in the AST");
+    assert!(
+        block_stmt_count.is_some(),
+        "Should find a block node in the AST"
+    );
     assert_eq!(
         block_stmt_count.ok_or("No block found")?,
         2,
@@ -169,12 +184,24 @@ EOF2
     let sexp = root.to_sexp();
 
     // Both variables should be present
-    assert!(sexp.contains("(variable $ x)"), "Variable $x should be present");
-    assert!(sexp.contains("(variable $ y)"), "Variable $y should be present");
+    assert!(
+        sexp.contains("(variable $ x)"),
+        "Variable $x should be present"
+    );
+    assert!(
+        sexp.contains("(variable $ y)"),
+        "Variable $y should be present"
+    );
 
     // Heredoc bodies should be consumed
-    assert!(!sexp.contains("(identifier foo)"), "First heredoc body should be consumed");
-    assert!(!sexp.contains("(identifier bar)"), "Second heredoc body should be consumed");
+    assert!(
+        !sexp.contains("(identifier foo)"),
+        "First heredoc body should be consumed"
+    );
+    assert!(
+        !sexp.contains("(identifier bar)"),
+        "Second heredoc body should be consumed"
+    );
     Ok(())
 }
 
@@ -197,11 +224,18 @@ EOF
 
     // Collect heredocs
     let heredocs = collect_heredocs(&root);
-    assert_eq!(heredocs.len(), 1, "Expected exactly one heredoc node in eval block");
+    assert_eq!(
+        heredocs.len(),
+        1,
+        "Expected exactly one heredoc node in eval block"
+    );
 
     // Check that eval block has 2 statements (heredoc + say)
     let sexp = root.to_sexp();
-    assert!(sexp.contains("say"), "say statement should be present after heredoc");
+    assert!(
+        sexp.contains("say"),
+        "say statement should be present after heredoc"
+    );
     assert!(
         !sexp.contains("(identifier content)"),
         "Heredoc body should be consumed in eval block"
@@ -240,7 +274,13 @@ EOF2
 
     // Bodies should be consumed correctly
     let sexp = root.to_sexp();
-    assert!(!sexp.contains("(identifier first)"), "First heredoc body should be consumed");
-    assert!(!sexp.contains("(identifier second)"), "Second heredoc body should be consumed");
+    assert!(
+        !sexp.contains("(identifier first)"),
+        "First heredoc body should be consumed"
+    );
+    assert!(
+        !sexp.contains("(identifier second)"),
+        "Second heredoc body should be consumed"
+    );
     Ok(())
 }

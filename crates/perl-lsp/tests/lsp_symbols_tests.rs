@@ -42,7 +42,11 @@ sub farewell {
         }),
     )?;
 
-    assert!(response.is_array(), "documentSymbol should return an array, got: {:?}", response);
+    assert!(
+        response.is_array(),
+        "documentSymbol should return an array, got: {:?}",
+        response
+    );
 
     let symbols = response.as_array().ok_or("response is not an array")?;
     assert!(!symbols.is_empty(), "Should return at least one symbol");
@@ -54,16 +58,24 @@ sub farewell {
     // Function kind = 12
     assert_eq!(greet["kind"], 12, "greet should have kind 12 (Function)");
     // Must have range and selectionRange
-    assert!(greet["range"].is_object(), "greet should have a range object");
+    assert!(
+        greet["range"].is_object(),
+        "greet should have a range object"
+    );
     assert!(
         greet["selectionRange"].is_object() || greet["range"].is_object(),
         "greet should have selectionRange or range"
     );
 
-    let farewell = symbols.iter().find(|s| s["name"].as_str() == Some("farewell"));
+    let farewell = symbols
+        .iter()
+        .find(|s| s["name"].as_str() == Some("farewell"));
     assert!(farewell.is_some(), "Should find 'farewell' symbol");
     let farewell = farewell.ok_or("farewell symbol not found")?;
-    assert_eq!(farewell["kind"], 12, "farewell should have kind 12 (Function)");
+    assert_eq!(
+        farewell["kind"], 12,
+        "farewell should have kind 12 (Function)"
+    );
 
     Ok(())
 }
@@ -116,7 +128,10 @@ sub load {
     assert!(
         util_pkg.is_some(),
         "Should find MyApp::Util package symbol. Symbols: {:?}",
-        symbols.iter().map(|s| s["name"].as_str().unwrap_or("?")).collect::<Vec<_>>()
+        symbols
+            .iter()
+            .map(|s| s["name"].as_str().unwrap_or("?"))
+            .collect::<Vec<_>>()
     );
     let util_pkg = util_pkg.ok_or("MyApp::Util not found")?;
     // Package kind is 4 or Module kind is 2
@@ -132,10 +147,15 @@ sub load {
         let name = s["name"].as_str().unwrap_or("");
         name == "MyApp::Config" || name == "MyApp/Config" || name.contains("Config")
     });
-    assert!(config_pkg.is_some(), "Should find MyApp::Config package symbol");
+    assert!(
+        config_pkg.is_some(),
+        "Should find MyApp::Config package symbol"
+    );
 
     // Check for subroutines
-    let helper = symbols.iter().find(|s| s["name"].as_str() == Some("helper"));
+    let helper = symbols
+        .iter()
+        .find(|s| s["name"].as_str() == Some("helper"));
     assert!(helper.is_some(), "Should find 'helper' sub symbol");
 
     let load = symbols.iter().find(|s| s["name"].as_str() == Some("load"));
@@ -160,7 +180,10 @@ fn test_document_symbol_empty_file() -> TestResult {
         }),
     )?;
 
-    assert!(response.is_array(), "documentSymbol should return an array for empty file");
+    assert!(
+        response.is_array(),
+        "documentSymbol should return an array for empty file"
+    );
     let symbols = response.as_array().ok_or("response is not an array")?;
     assert!(symbols.is_empty(), "Empty file should yield no symbols");
 
@@ -216,28 +239,36 @@ sub compute {
     let symbols = response.as_array().ok_or("response is not an array")?;
 
     // Check for scalar variable (kind 13 = Variable)
-    let scalar = symbols.iter().find(|s| s["name"].as_str() == Some("$scalar_var"));
+    let scalar = symbols
+        .iter()
+        .find(|s| s["name"].as_str() == Some("$scalar_var"));
     assert!(scalar.is_some(), "Should find $scalar_var symbol");
     if let Some(sv) = scalar {
         assert_eq!(sv["kind"], 13, "$scalar_var should have kind 13 (Variable)");
     }
 
     // Check for array variable (kind 18 = Array)
-    let array = symbols.iter().find(|s| s["name"].as_str() == Some("@array_var"));
+    let array = symbols
+        .iter()
+        .find(|s| s["name"].as_str() == Some("@array_var"));
     assert!(array.is_some(), "Should find @array_var symbol");
     if let Some(av) = array {
         assert_eq!(av["kind"], 18, "@array_var should have kind 18 (Array)");
     }
 
     // Check for hash variable (kind 19 = Object, closest to hash)
-    let hash = symbols.iter().find(|s| s["name"].as_str() == Some("%hash_var"));
+    let hash = symbols
+        .iter()
+        .find(|s| s["name"].as_str() == Some("%hash_var"));
     assert!(hash.is_some(), "Should find %hash_var symbol");
     if let Some(hv) = hash {
         assert_eq!(hv["kind"], 19, "%hash_var should have kind 19 (Object)");
     }
 
     // Check for the compute subroutine
-    let compute = symbols.iter().find(|s| s["name"].as_str() == Some("compute"));
+    let compute = symbols
+        .iter()
+        .find(|s| s["name"].as_str() == Some("compute"));
     assert!(compute.is_some(), "Should find 'compute' sub symbol");
 
     Ok(())
@@ -297,7 +328,9 @@ sub multiply {
     let add = symbols.iter().find(|s| s["name"].as_str() == Some("add"));
     assert!(add.is_some(), "Should find 'add' symbol");
 
-    let multiply = symbols.iter().find(|s| s["name"].as_str() == Some("multiply"));
+    let multiply = symbols
+        .iter()
+        .find(|s| s["name"].as_str() == Some("multiply"));
     assert!(multiply.is_some(), "Should find 'multiply' symbol");
 
     // Verify each symbol has a valid range

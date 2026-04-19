@@ -58,11 +58,18 @@ pub fn find_standalone_module_token_ranges<'a>(
     line: &'a str,
     module_name: &'a str,
 ) -> ModuleTokenRangeIter<'a> {
-    ModuleTokenRangeIter { line, module_name, search_start: 0, done: false }
+    ModuleTokenRangeIter {
+        line,
+        module_name,
+        search_start: 0,
+        done: false,
+    }
 }
 
 /// Return `true` when `line` contains `module_name` as a standalone module token.
 #[must_use]
 pub fn contains_standalone_module_token(line: &str, module_name: &str) -> bool {
-    find_standalone_module_token_ranges(line, module_name).next().is_some()
+    find_standalone_module_token_ranges(line, module_name)
+        .next()
+        .is_some()
 }

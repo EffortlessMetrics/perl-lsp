@@ -22,7 +22,11 @@ impl ErrorRecovery for ParserContext {
 
         Node::new(
             self.id_generator.next_id(),
-            NodeKind::Error { message, expected, partial: partial.map(Box::new) },
+            NodeKind::Error {
+                message,
+                expected,
+                partial: partial.map(Box::new),
+            },
             range,
         )
     }
@@ -40,7 +44,11 @@ impl ErrorRecovery for ParserContext {
         let error_node = self.create_error_node(error.message, error.expected, None);
 
         // Try to synchronize
-        let sync_points = vec![SyncPoint::Semicolon, SyncPoint::CloseBrace, SyncPoint::Keyword];
+        let sync_points = vec![
+            SyncPoint::Semicolon,
+            SyncPoint::CloseBrace,
+            SyncPoint::Keyword,
+        ];
         self.synchronize(&sync_points);
 
         error_node

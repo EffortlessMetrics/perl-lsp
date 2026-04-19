@@ -149,7 +149,9 @@ pub struct ScaleReport {
 impl ScaleReport {
     /// Create an empty scale report.
     pub fn new() -> Self {
-        Self { checkpoints: Vec::new() }
+        Self {
+            checkpoints: Vec::new(),
+        }
     }
 
     /// Add a checkpoint with the nominal file count and its snapshot.

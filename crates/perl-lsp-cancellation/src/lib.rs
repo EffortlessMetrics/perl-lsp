@@ -70,9 +70,10 @@ pub struct PerlLspCancellationToken {
 impl PerlLspCancellationToken {
     /// Create a new cancellation token
     pub fn new(request_id: Value, provider: String) -> Self {
-        let timestamp =
-            SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or(Duration::ZERO).as_millis()
-                as u64;
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or(Duration::ZERO)
+            .as_millis() as u64;
 
         Self {
             cancelled: Arc::new(AtomicBool::new(false)),
@@ -148,7 +149,12 @@ pub struct ProviderCleanupContext {
 impl ProviderCleanupContext {
     /// Create new cleanup context
     pub fn new(provider_type: String, request_params: Option<Value>) -> Self {
-        Self { provider_type, request_params, cleanup_callback: None, cancelled_at: Instant::now() }
+        Self {
+            provider_type,
+            request_params,
+            cleanup_callback: None,
+            cancelled_at: Instant::now(),
+        }
     }
 
     /// Add cleanup callback
@@ -209,7 +215,9 @@ impl CancellationRegistry {
             self.metrics.increment_registered();
             Ok(())
         } else {
-            Err(CancellationError::LockError("Failed to acquire write lock".into()))
+            Err(CancellationError::LockError(
+                "Failed to acquire write lock".into(),
+            ))
         }
     }
 
@@ -225,7 +233,9 @@ impl CancellationRegistry {
             contexts.insert(key, context);
             Ok(())
         } else {
-            Err(CancellationError::LockError("Failed to acquire cleanup lock".into()))
+            Err(CancellationError::LockError(
+                "Failed to acquire cleanup lock".into(),
+            ))
         }
     }
 
@@ -253,7 +263,9 @@ impl CancellationRegistry {
                 Ok(None)
             }
         } else {
-            Err(CancellationError::LockError("Failed to acquire cleanup lock".into()))
+            Err(CancellationError::LockError(
+                "Failed to acquire cleanup lock".into(),
+            ))
         }
     }
 
@@ -304,7 +316,11 @@ impl CancellationRegistry {
 
         // Fallback: Check main storage
         if let Ok(tokens) = self.tokens.try_read() {
-            if let Some(token) = tokens.get(&key) { token.is_cancelled_relaxed() } else { false }
+            if let Some(token) = tokens.get(&key) {
+                token.is_cancelled_relaxed()
+            } else {
+                false
+            }
         } else {
             false
         }
@@ -332,7 +348,11 @@ impl CancellationRegistry {
 
     /// Get active request count
     pub fn active_count(&self) -> usize {
-        if let Ok(tokens) = self.tokens.read() { tokens.len() } else { 0 }
+        if let Ok(tokens) = self.tokens.read() {
+            tokens.len()
+        } else {
+            0
+        }
     }
 }
 
@@ -451,7 +471,9 @@ pub trait CancellableProvider {
 macro_rules! check_cancellation {
     ($token:expr) => {
         if $token.is_cancelled() {
-            return Err($crate::CancellationError::InvalidRequest("Request was cancelled".into()));
+            return Err($crate::CancellationError::InvalidRequest(
+                "Request was cancelled".into(),
+            ));
         }
     };
 }
@@ -484,7 +506,9 @@ impl RequestCleanupGuard {
     /// This is a convenience method for the common pattern of
     /// `RequestCleanupGuard::new(request_id.cloned())`.
     pub fn from_ref(request_id: Option<&Value>) -> Self {
-        Self { request_id: request_id.cloned() }
+        Self {
+            request_id: request_id.cloned(),
+        }
     }
 }
 
@@ -640,7 +664,10 @@ mod tests {
 
         // Verify the guard has the request_id
         assert!(guard.request_id.is_some());
-        assert_eq!(guard.request_id.as_ref().ok_or("expected request_id")?, &req_id);
+        assert_eq!(
+            guard.request_id.as_ref().ok_or("expected request_id")?,
+            &req_id
+        );
 
         // Let it drop - this exercises the Drop impl even if nothing is registered
         drop(guard);

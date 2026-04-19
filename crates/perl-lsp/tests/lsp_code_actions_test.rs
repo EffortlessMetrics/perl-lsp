@@ -34,7 +34,11 @@ fn test_undefined_variable_quick_fix() -> Result<(), Box<dyn std::error::Error>>
     let actions = provider.get_code_actions(undefined_diag.range, &diagnostics);
 
     // Should have at least 2 actions (my and our)
-    assert!(actions.len() >= 2, "Should have at least 2 actions, got {}", actions.len());
+    assert!(
+        actions.len() >= 2,
+        "Should have at least 2 actions, got {}",
+        actions.len()
+    );
 
     // Check first action (declare with 'my')
     assert_eq!(actions[0].title, "Declare '$x' with 'my'");
@@ -75,8 +79,10 @@ fn test_unused_variable_quick_fix() -> Result<(), Box<dyn std::error::Error>> {
     assert!(actions.len() >= 2, "Should have at least 2 actions");
 
     // Check rename action
-    let rename_action =
-        actions.iter().find(|a| a.title.contains("$_unused")).ok_or("Should have rename action")?;
+    let rename_action = actions
+        .iter()
+        .find(|a| a.title.contains("$_unused"))
+        .ok_or("Should have rename action")?;
     assert_eq!(rename_action.kind, CodeActionKindV2::QuickFix);
 
     Ok(())
@@ -135,7 +141,10 @@ fn test_parse_error_semicolon_fix() -> Result<(), Box<dyn std::error::Error>> {
         // Create error node for test
         perl_parser::Node {
             kind: perl_parser::NodeKind::Program { statements: vec![] },
-            location: perl_parser::SourceLocation { start: 0, end: source.len() },
+            location: perl_parser::SourceLocation {
+                start: 0,
+                end: source.len(),
+            },
         }
     });
 
@@ -190,12 +199,18 @@ fn test_multiple_diagnostics_multiple_actions() -> Result<(), Box<dyn std::error
     let actions = provider.get_code_actions((0, source.len()), &diagnostics);
 
     // Should have actions for undeclared variable
-    assert!(actions.len() >= 2, "Should have at least 2 actions for undeclared variable");
+    assert!(
+        actions.len() >= 2,
+        "Should have at least 2 actions for undeclared variable"
+    );
 
     // Check we have declare actions
     let has_declare_action = actions.iter().any(|a| a.title.contains("Declare"));
 
-    assert!(has_declare_action, "Should have declare action for undeclared variable");
+    assert!(
+        has_declare_action,
+        "Should have declare action for undeclared variable"
+    );
 
     Ok(())
 }

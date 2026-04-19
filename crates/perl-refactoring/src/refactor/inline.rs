@@ -124,12 +124,16 @@ pub fn analyze_sub_for_inlining(
     source: &str,
     sub_name: &str,
 ) -> Result<InlineAbility, InlineError> {
-    let parsed = parse_sub_definition(source, sub_name)
-        .ok_or_else(|| InlineError::SubNotFound { name: sub_name.to_string() })?;
+    let parsed =
+        parse_sub_definition(source, sub_name).ok_or_else(|| InlineError::SubNotFound {
+            name: sub_name.to_string(),
+        })?;
 
     // Recursion check
     if body_calls_self(&parsed.body, sub_name) {
-        return Err(InlineError::Recursive { name: sub_name.to_string() });
+        return Err(InlineError::Recursive {
+            name: sub_name.to_string(),
+        });
     }
 
     // Size check
@@ -170,7 +174,9 @@ pub struct SubInliner {
 impl SubInliner {
     /// Create a new inliner from Perl source text.
     pub fn new(source: &str) -> Self {
-        Self { source: source.to_string() }
+        Self {
+            source: source.to_string(),
+        }
     }
 
     /// Inline a single call to `sub_name`.
@@ -216,7 +222,11 @@ impl SubInliner {
         outer_vars: &[String],
     ) -> Result<(String, Vec<String>), InlineError> {
         let ability = analyze_sub_for_inlining(&self.source, sub_name)?;
-        let InlineAbility::Ok { params, body, has_side_effects } = ability;
+        let InlineAbility::Ok {
+            params,
+            body,
+            has_side_effects,
+        } = ability;
 
         let mut warnings = Vec::new();
         if has_side_effects {
@@ -282,7 +292,10 @@ fn parse_sub_definition(source: &str, sub_name: &str) -> Option<ParsedSub> {
     // Extract parameter line: "my ($a, $b) = @_;"
     let (params, body_without_params) = extract_params_line(&body_raw);
 
-    Some(ParsedSub { params, body: body_without_params })
+    Some(ParsedSub {
+        params,
+        body: body_without_params,
+    })
 }
 
 /// Find the byte offset of `sub NAME` followed by `{` in `source`.
@@ -295,8 +308,10 @@ fn find_sub_start(source: &str, sub_name: &str) -> Option<usize> {
             let trimmed = after_sub.trim_start();
             if let Some(after_name) = trimmed.strip_prefix(sub_name) {
                 // Verify it's a word boundary (not "sub foobar" when looking for "foo")
-                let boundary_ok =
-                    after_name.chars().next().is_none_or(|c| !c.is_alphanumeric() && c != '_');
+                let boundary_ok = after_name
+                    .chars()
+                    .next()
+                    .is_none_or(|c| !c.is_alphanumeric() && c != '_');
                 if boundary_ok && after_name.trim_start().starts_with('{') {
                     return Some(pos + idx);
                 }
@@ -506,9 +521,11 @@ fn body_calls_self(body: &str, sub_name: &str) -> bool {
 
 /// Extract the argument list from a call expression like `foo(1, 2, "bar")`.
 fn extract_call_args(call_expr: &str, sub_name: &str) -> Result<Vec<String>, InlineError> {
-    let sub_pos = call_expr.find(sub_name).ok_or_else(|| InlineError::CallSiteParseFailed {
-        message: format!("call expression does not contain sub name '{}'", sub_name),
-    })?;
+    let sub_pos = call_expr
+        .find(sub_name)
+        .ok_or_else(|| InlineError::CallSiteParseFailed {
+            message: format!("call expression does not contain sub name '{}'", sub_name),
+        })?;
 
     let after_name_pos = sub_pos + sub_name.len();
     let rest = call_expr[after_name_pos..].trim_start();
@@ -665,8 +682,10 @@ fn replace_whole_var(text: &str, var: &str, replacement: &str) -> String {
     while pos < text.len() {
         if text[pos..].starts_with(var) {
             let after = pos + var.len();
-            let next_is_alphanum =
-                text[after..].chars().next().is_some_and(|c| c.is_alphanumeric() || c == '_');
+            let next_is_alphanum = text[after..]
+                .chars()
+                .next()
+                .is_some_and(|c| c.is_alphanumeric() || c == '_');
             if !next_is_alphanum {
                 result.push_str(replacement);
                 pos = after;
@@ -687,7 +706,10 @@ fn extract_return_expr(body: &str) -> String {
     for line in body.lines() {
         let trimmed = line.trim();
         if trimmed.starts_with("return ") {
-            let expr = trimmed.trim_start_matches("return ").trim_end_matches(';').trim();
+            let expr = trimmed
+                .trim_start_matches("return ")
+                .trim_end_matches(';')
+                .trim();
             return format!("({})", expr);
         }
     }

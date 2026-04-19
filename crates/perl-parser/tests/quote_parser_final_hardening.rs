@@ -28,11 +28,27 @@ mod final_function_return_kills {
             let (actual_pattern, _body, actual_mods) = extract_regex_parts(input);
 
             // Explicit assertions to kill the mutation
-            assert_ne!(actual_pattern, "", "Pattern should not be String::new() for '{}'", input);
-            assert_ne!(actual_mods, "xyzzy", "Modifiers should not be 'xyzzy' for '{}'", input);
+            assert_ne!(
+                actual_pattern, "",
+                "Pattern should not be String::new() for '{}'",
+                input
+            );
+            assert_ne!(
+                actual_mods, "xyzzy",
+                "Modifiers should not be 'xyzzy' for '{}'",
+                input
+            );
 
-            assert_eq!(actual_pattern, expected_pattern, "Pattern mismatch for '{}'", input);
-            assert_eq!(actual_mods, expected_mods, "Modifiers mismatch for '{}'", input);
+            assert_eq!(
+                actual_pattern, expected_pattern,
+                "Pattern mismatch for '{}'",
+                input
+            );
+            assert_eq!(
+                actual_mods, expected_mods,
+                "Modifiers mismatch for '{}'",
+                input
+            );
         }
     }
 
@@ -48,7 +64,11 @@ mod final_function_return_kills {
             let (actual_pattern, _body, actual_mods) = extract_regex_parts(input);
 
             // Kill the specific mutation - pattern should never be "xyzzy"
-            assert_ne!(actual_pattern, "xyzzy", "Pattern should not be 'xyzzy' for '{}'", input);
+            assert_ne!(
+                actual_pattern, "xyzzy",
+                "Pattern should not be 'xyzzy' for '{}'",
+                input
+            );
             // Only check that mods aren't empty when we expect non-empty mods
             if !expected_mods.is_empty() {
                 assert_ne!(
@@ -58,8 +78,16 @@ mod final_function_return_kills {
                 );
             }
 
-            assert_eq!(actual_pattern, expected_pattern, "Pattern mismatch for '{}'", input);
-            assert_eq!(actual_mods, expected_mods, "Modifiers mismatch for '{}'", input);
+            assert_eq!(
+                actual_pattern, expected_pattern,
+                "Pattern mismatch for '{}'",
+                input
+            );
+            assert_eq!(
+                actual_mods, expected_mods,
+                "Modifiers mismatch for '{}'",
+                input
+            );
         }
     }
 
@@ -80,13 +108,29 @@ mod final_function_return_kills {
             let (actual_search, actual_replace, actual_mods) = extract_transliteration_parts(input);
 
             // Kill all "xyzzy" mutations
-            assert_ne!(actual_search, "xyzzy", "Search should not be 'xyzzy' for '{}'", input);
-            assert_ne!(actual_replace, "xyzzy", "Replace should not be 'xyzzy' for '{}'", input);
-            assert_ne!(actual_mods, "xyzzy", "Modifiers should not be 'xyzzy' for '{}'", input);
+            assert_ne!(
+                actual_search, "xyzzy",
+                "Search should not be 'xyzzy' for '{}'",
+                input
+            );
+            assert_ne!(
+                actual_replace, "xyzzy",
+                "Replace should not be 'xyzzy' for '{}'",
+                input
+            );
+            assert_ne!(
+                actual_mods, "xyzzy",
+                "Modifiers should not be 'xyzzy' for '{}'",
+                input
+            );
 
             // Kill String::new() mutations when we expect content
             if !expected_search.is_empty() {
-                assert_ne!(actual_search, "", "Search should not be String::new() for '{}'", input);
+                assert_ne!(
+                    actual_search, "",
+                    "Search should not be String::new() for '{}'",
+                    input
+                );
             }
             if !expected_replace.is_empty() {
                 assert_ne!(
@@ -96,9 +140,21 @@ mod final_function_return_kills {
                 );
             }
 
-            assert_eq!(actual_search, expected_search, "Search mismatch for '{}'", input);
-            assert_eq!(actual_replace, expected_replace, "Replace mismatch for '{}'", input);
-            assert_eq!(actual_mods, expected_mods, "Modifiers mismatch for '{}'", input);
+            assert_eq!(
+                actual_search, expected_search,
+                "Search mismatch for '{}'",
+                input
+            );
+            assert_eq!(
+                actual_replace, expected_replace,
+                "Replace mismatch for '{}'",
+                input
+            );
+            assert_eq!(
+                actual_mods, expected_mods,
+                "Modifiers mismatch for '{}'",
+                input
+            );
         }
     }
 }
@@ -118,8 +174,14 @@ mod final_arithmetic_kills {
 
         // With correct +: Should properly extract
         // With * mutation: Would likely give wrong position and break parsing
-        assert_eq!(pattern, "test", "Pattern parsing should work with + arithmetic");
-        assert_eq!(replacement, "replacement", "Replacement parsing should work with + arithmetic");
+        assert_eq!(
+            pattern, "test",
+            "Pattern parsing should work with + arithmetic"
+        );
+        assert_eq!(
+            replacement, "replacement",
+            "Replacement parsing should work with + arithmetic"
+        );
 
         // Additional specific test for position arithmetic
         let input2 = "s/a/b/"; // Simple case where i=1, ch.len_utf8()=1
@@ -128,7 +190,10 @@ mod final_arithmetic_kills {
         // With +: end_pos = 1 + 1 = 2 (correct)
         // With *: end_pos = 1 * 1 = 1 (wrong, would not advance)
         assert_eq!(pattern2, "a", "Simple arithmetic should work correctly");
-        assert_eq!(replacement2, "b", "Simple replacement should work correctly");
+        assert_eq!(
+            replacement2, "b",
+            "Simple replacement should work correctly"
+        );
     }
 
     /// Kill mutation: > → >= in length check (line 12:23)
@@ -147,7 +212,10 @@ mod final_arithmetic_kills {
 
         // With > 1: len()=1 > 1 is false, should use text directly -> "mm"
         // With >= 1: len()=1 >= 1 is true, would try other logic
-        assert_eq!(pattern_single, "mm", "Single 'm' should use > 1 check correctly");
+        assert_eq!(
+            pattern_single, "mm",
+            "Single 'm' should use > 1 check correctly"
+        );
 
         // Verify the >= mutation would behave differently
         assert_eq!(pattern, "mxm", "Two char should also work correctly");
@@ -162,7 +230,10 @@ mod final_arithmetic_kills {
 
         // With +=: depth increments correctly (1 -> 2 -> 1 -> 0)
         // With -=: depth would decrement (1 -> 0 immediately, breaking parsing)
-        assert_eq!(pattern, "a{inner}b", "Nested parsing should work with += depth tracking");
+        assert_eq!(
+            pattern, "a{inner}b",
+            "Nested parsing should work with += depth tracking"
+        );
         assert_eq!(
             replacement, "replacement",
             "Replacement should be extracted with correct depth tracking"
@@ -171,7 +242,10 @@ mod final_arithmetic_kills {
         // Test deeper nesting to ensure proper increment
         let deep_nested = "s{{{test}}}{repl}";
         let (deep_pattern, deep_replacement, _) = extract_substitution_parts(deep_nested);
-        assert_eq!(deep_pattern, "{{test}}", "Deep nesting should work with += depth tracking");
+        assert_eq!(
+            deep_pattern, "{{test}}",
+            "Deep nesting should work with += depth tracking"
+        );
         assert_eq!(deep_replacement, "repl", "Deep replacement should work");
     }
 }
@@ -205,7 +279,10 @@ mod final_boolean_logic_kills {
 
         // With &&: true && true && false = false, use text directly
         // With ||: true || true || false = true, would try [1..]
-        assert_eq!(pattern_alpha, "mam", "Alphabetic case should work with && logic");
+        assert_eq!(
+            pattern_alpha, "mam",
+            "Alphabetic case should work with && logic"
+        );
     }
 
     /// Kill mutation: != → == in extract_transliteration_parts (line 137:31)
@@ -219,7 +296,10 @@ mod final_boolean_logic_kills {
         // With !=: '{' != '}' is true (paired delimiters)
         // With ==: '{' == '}' is false (would treat as non-paired)
         assert_eq!(search, "abc", "Paired delimiter search should work with !=");
-        assert_eq!(replace, "xyz", "Paired delimiter replace should work with !=");
+        assert_eq!(
+            replace, "xyz",
+            "Paired delimiter replace should work with !="
+        );
 
         // Test non-paired (symmetric) delimiter to ensure correct behavior
         let non_paired = "tr/abc/xyz/";
@@ -247,7 +327,10 @@ mod final_match_arm_kills {
         // Test '{' arm deletion (line 164:9)
         let brace_input = "s{pattern}{replacement}";
         let (pattern, replacement, _) = extract_substitution_parts(brace_input);
-        assert_eq!(pattern, "pattern", "Brace delimiter should work (match arm must exist)");
+        assert_eq!(
+            pattern, "pattern",
+            "Brace delimiter should work (match arm must exist)"
+        );
         assert_eq!(replacement, "replacement", "Brace replacement should work");
 
         // Test '[' arm deletion (line 163:9)
@@ -257,13 +340,22 @@ mod final_match_arm_kills {
             bracket_pattern, "pattern",
             "Bracket delimiter should work (match arm must exist)"
         );
-        assert_eq!(bracket_replacement, "replacement", "Bracket replacement should work");
+        assert_eq!(
+            bracket_replacement, "replacement",
+            "Bracket replacement should work"
+        );
 
         // Test '<' arm deletion (line 165:9)
         let angle_input = "s<pattern><replacement>";
         let (angle_pattern, angle_replacement, _) = extract_substitution_parts(angle_input);
-        assert_eq!(angle_pattern, "pattern", "Angle delimiter should work (match arm must exist)");
-        assert_eq!(angle_replacement, "replacement", "Angle replacement should work");
+        assert_eq!(
+            angle_pattern, "pattern",
+            "Angle delimiter should work (match arm must exist)"
+        );
+        assert_eq!(
+            angle_replacement, "replacement",
+            "Angle replacement should work"
+        );
 
         // Test through regex parsing as well
         let regex_cases = vec![
@@ -274,7 +366,11 @@ mod final_match_arm_kills {
 
         for (input, (expected_pattern, expected_mods)) in regex_cases {
             let (actual_pattern, _body, actual_mods) = extract_regex_parts(input);
-            assert_eq!(actual_pattern, expected_pattern, "Regex delimiter {} should work", input);
+            assert_eq!(
+                actual_pattern, expected_pattern,
+                "Regex delimiter {} should work",
+                input
+            );
             assert_eq!(actual_mods, expected_mods, "Regex modifiers for {}", input);
         }
     }
@@ -291,11 +387,17 @@ fn debug_actual_behavior() {
 
     for input in cases {
         let (search, replace, mods) = extract_transliteration_parts(input);
-        println!("{} -> search:'{}', replace:'{}', mods:'{}'", input, search, replace, mods);
+        println!(
+            "{} -> search:'{}', replace:'{}', mods:'{}'",
+            input, search, replace, mods
+        );
     }
 
     // Test substitution with braces
-    let sub_cases = vec!["s{pattern}{replacement}", "s{old{nested}path}{new{nested}path}gi"];
+    let sub_cases = vec![
+        "s{pattern}{replacement}",
+        "s{old{nested}path}{new{nested}path}gi",
+    ];
 
     for input in sub_cases {
         let (pattern, replacement, mods) = extract_substitution_parts(input);
@@ -329,14 +431,20 @@ fn test_comprehensive_integration_final_push() {
     // - Correct match arms (all delimiters supported)
     // - Correct function returns (not "xyzzy" variants)
     assert_eq!(pattern, "old{nested}path", "Complex pattern extraction");
-    assert_eq!(replacement, "new{nested}path", "Complex replacement extraction");
+    assert_eq!(
+        replacement, "new{nested}path",
+        "Complex replacement extraction"
+    );
     assert_eq!(modifiers, "gi", "Complex modifiers extraction");
 
     // Case 2: Edge arithmetic case
     let arithmetic_edge = "s/🦀/🔥/"; // Unicode chars to stress arithmetic
     let (a_pattern, a_replacement, _) = extract_substitution_parts(arithmetic_edge);
     assert_eq!(a_pattern, "🦀", "Unicode arithmetic should work");
-    assert_eq!(a_replacement, "🔥", "Unicode replacement arithmetic should work");
+    assert_eq!(
+        a_replacement, "🔥",
+        "Unicode replacement arithmetic should work"
+    );
 
     // Case 3: All delimiter types
     let delimiter_test_cases = vec![
@@ -351,6 +459,10 @@ fn test_comprehensive_integration_final_push() {
     for (input, (exp_pattern, exp_replacement)) in delimiter_test_cases {
         let (pattern, replacement, _) = extract_substitution_parts(input);
         assert_eq!(pattern, exp_pattern, "Delimiter test pattern for {}", input);
-        assert_eq!(replacement, exp_replacement, "Delimiter test replacement for {}", input);
+        assert_eq!(
+            replacement, exp_replacement,
+            "Delimiter test replacement for {}",
+            input
+        );
     }
 }

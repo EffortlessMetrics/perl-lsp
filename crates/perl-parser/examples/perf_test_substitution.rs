@@ -109,16 +109,26 @@ sub process_text {
         let duration = start.elapsed();
         let avg_time = duration.as_nanos() as f64 / iterations as f64;
         let success_rate = (successful_parses as f64 / iterations as f64) * 100.0;
-        let avg_nodes = if successful_parses > 0 { total_nodes / successful_parses } else { 0 };
+        let avg_nodes = if successful_parses > 0 {
+            total_nodes / successful_parses
+        } else {
+            0
+        };
 
         println!(
             "  Time: {:.2} µs/parse (total: {:.2} ms)",
             avg_time / 1000.0,
             duration.as_millis()
         );
-        println!("  Success rate: {:.1}% ({}/{})", success_rate, successful_parses, iterations);
+        println!(
+            "  Success rate: {:.1}% ({}/{})",
+            success_rate, successful_parses, iterations
+        );
         println!("  Avg AST nodes: {}", avg_nodes);
-        println!("  Performance: {:.0} parses/sec\n", 1_000_000_000.0 / avg_time);
+        println!(
+            "  Performance: {:.0} parses/sec\n",
+            1_000_000_000.0 / avg_time
+        );
     }
 
     // Delimiter-specific performance test
@@ -147,7 +157,12 @@ sub process_text {
         let avg_time = duration.as_nanos() as f64 / iterations as f64;
         let success_rate = (successful as f64 / iterations as f64) * 100.0;
 
-        println!("{}: {:.2} µs/parse, {:.1}% success", name, avg_time / 1000.0, success_rate);
+        println!(
+            "{}: {:.2} µs/parse, {:.1}% success",
+            name,
+            avg_time / 1000.0,
+            success_rate
+        );
     }
 
     // Memory usage estimation (rough)
@@ -158,7 +173,10 @@ sub process_text {
         Ok(ast) => {
             let sexp = ast.to_sexp();
             println!("AST S-expression length: {} characters", sexp.len());
-            println!("Estimated memory per substitution: ~{} bytes", sexp.len() / 4);
+            println!(
+                "Estimated memory per substitution: ~{} bytes",
+                sexp.len() / 4
+            );
         }
         Err(e) => {
             println!("Failed to parse complex substitution: {:?}", e);

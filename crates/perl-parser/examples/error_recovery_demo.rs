@@ -15,7 +15,10 @@ fn main() {
         ("Missing semicolons", "my $x = 42 my $y = 99"),
         ("Unclosed block", "if ($condition) { my $x = 42"),
         ("Multiple errors", "my $x = \nif { \nmy $y ="),
-        ("Incomplete variable declaration", "my = 42; our $valid = 99;"),
+        (
+            "Incomplete variable declaration",
+            "my = 42; our $valid = 99;",
+        ),
     ];
 
     for (description, code) in test_cases {
@@ -36,7 +39,9 @@ fn main() {
             // Show error nodes
             for (i, stmt) in statements.iter().enumerate() {
                 match &stmt.kind {
-                    NodeKind::Error { message, expected, .. } => {
+                    NodeKind::Error {
+                        message, expected, ..
+                    } => {
                         println!("  Statement {}: ERROR - {}", i + 1, message);
                         if !expected.is_empty() {
                             let names: Vec<String> =
@@ -119,13 +124,22 @@ print "Done";
                 *valid += 1;
                 // Count children recursively
                 match &node.kind {
-                    NodeKind::VariableDeclaration { variable, initializer, .. } => {
+                    NodeKind::VariableDeclaration {
+                        variable,
+                        initializer,
+                        ..
+                    } => {
                         count_nodes(variable, valid, error, missing);
                         if let Some(init) = initializer {
                             count_nodes(init, valid, error, missing);
                         }
                     }
-                    NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
+                    NodeKind::If {
+                        condition,
+                        then_branch,
+                        elsif_branches,
+                        else_branch,
+                    } => {
                         count_nodes(condition, valid, error, missing);
                         count_nodes(then_branch, valid, error, missing);
                         for (cond, branch) in elsif_branches {
@@ -142,7 +156,12 @@ print "Done";
         }
     }
 
-    count_nodes(&output.ast, &mut valid_count, &mut error_count, &mut missing_count);
+    count_nodes(
+        &output.ast,
+        &mut valid_count,
+        &mut error_count,
+        &mut missing_count,
+    );
 
     println!("Complex code parsing results:");
     println!("  Valid nodes: {}", valid_count);

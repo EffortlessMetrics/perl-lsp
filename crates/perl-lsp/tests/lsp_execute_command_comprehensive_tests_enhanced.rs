@@ -86,10 +86,18 @@ fn create_enhanced_execute_command_server()
     let workspace = TempWorkspace::new()?;
 
     // Write test files to workspace
-    workspace
-        .write("syntax_errors.pl", enhanced_execute_command_fixtures::SYNTAX_ERROR_WITH_CONTEXT)?;
-    workspace.write("empty_file.pl", enhanced_execute_command_fixtures::EMPTY_FILE)?;
-    workspace.write("comments_only.pl", enhanced_execute_command_fixtures::COMMENTS_ONLY_FILE)?;
+    workspace.write(
+        "syntax_errors.pl",
+        enhanced_execute_command_fixtures::SYNTAX_ERROR_WITH_CONTEXT,
+    )?;
+    workspace.write(
+        "empty_file.pl",
+        enhanced_execute_command_fixtures::EMPTY_FILE,
+    )?;
+    workspace.write(
+        "comments_only.pl",
+        enhanced_execute_command_fixtures::COMMENTS_ONLY_FILE,
+    )?;
 
     let harness = LspHarness::new_raw();
 
@@ -107,8 +115,9 @@ fn test_enhanced_execute_command_server_capabilities() -> TestResult {
     // Get server capabilities with detailed validation
     let init_result = harness.initialize_default()?;
 
-    let capabilities =
-        init_result.get("capabilities").ok_or("Initialize result should contain capabilities")?;
+    let capabilities = init_result
+        .get("capabilities")
+        .ok_or("Initialize result should contain capabilities")?;
 
     // AC1: Verify executeCommandProvider is advertised with proper structure
     ensure!(
@@ -243,7 +252,10 @@ fn test_enhanced_perl_run_critic_syntax_error_handling() -> TestResult {
     // - errors field present (analyzer reported errors)
     // - error status (analyzer unavailable or failed)
     // - success with empty violations (perlcritic installed but no policy violations)
-    let has_violations = result["violations"].as_array().map(|v| !v.is_empty()).unwrap_or(false);
+    let has_violations = result["violations"]
+        .as_array()
+        .map(|v| !v.is_empty())
+        .unwrap_or(false);
 
     let has_errors = result.get("errors").is_some();
     let has_error_status = result["status"].as_str() == Some("error");
@@ -255,7 +267,9 @@ fn test_enhanced_perl_run_critic_syntax_error_handling() -> TestResult {
     );
 
     // AC2: Validate analyzer fallback indication
-    let analyzer_used = result["analyzerUsed"].as_str().ok_or("Should indicate analyzer type")?;
+    let analyzer_used = result["analyzerUsed"]
+        .as_str()
+        .ok_or("Should indicate analyzer type")?;
     ensure!(
         analyzer_used == "builtin" || analyzer_used == "external",
         "Should use either 'builtin' or 'external' analyzer per dual strategy"
@@ -288,9 +302,15 @@ fn test_enhanced_empty_file_handling() -> TestResult {
     )?;
 
     // AC4: Edge case - empty files should succeed with minimal violations
-    ensure_eq!(result["status"], "success", "Empty files should be handled successfully");
+    ensure_eq!(
+        result["status"],
+        "success",
+        "Empty files should be handled successfully"
+    );
 
-    let violations = result["violations"].as_array().ok_or("Should return violations array")?;
+    let violations = result["violations"]
+        .as_array()
+        .ok_or("Should return violations array")?;
 
     // Empty files might have basic violations (missing pragmas)
     ensure!(
@@ -319,8 +339,10 @@ fn test_enhanced_performance_validation() -> TestResult {
     harness.open_document(&workspace.uri("large_performance.pl"), &large_file_content)?;
 
     // AC5: Revolutionary performance preservation - adaptive timeout
-    let thread_count =
-        std::env::var("RUST_TEST_THREADS").ok().and_then(|s| s.parse::<usize>().ok()).unwrap_or(8);
+    let thread_count = std::env::var("RUST_TEST_THREADS")
+        .ok()
+        .and_then(|s| s.parse::<usize>().ok())
+        .unwrap_or(8);
 
     let timeout_secs = match thread_count {
         n if n <= 2 => 10, // High contention - more time needed
@@ -352,11 +374,20 @@ fn test_enhanced_performance_validation() -> TestResult {
         duration
     );
 
-    ensure_eq!(result["status"], "success", "Should succeed for large files");
+    ensure_eq!(
+        result["status"],
+        "success",
+        "Should succeed for large files"
+    );
 
     // Should detect violations but complete quickly
-    let violations = result["violations"].as_array().ok_or("Should return violations")?;
-    ensure!(!violations.is_empty(), "Should detect violations in large file");
+    let violations = result["violations"]
+        .as_array()
+        .ok_or("Should return violations")?;
+    ensure!(
+        !violations.is_empty(),
+        "Should detect violations in large file"
+    );
 
     Ok(())
 }
@@ -372,9 +403,21 @@ fn test_enhanced_uri_handling() -> TestResult {
 
     // Test various URI formats
     let test_cases = vec![
-        (workspace.uri("comments_only.pl"), true, "Valid workspace URI"),
-        ("file:///nonexistent/file.pl".to_string(), false, "Non-existent file URI"),
-        ("invalid_uri_format".to_string(), false, "Invalid URI format"),
+        (
+            workspace.uri("comments_only.pl"),
+            true,
+            "Valid workspace URI",
+        ),
+        (
+            "file:///nonexistent/file.pl".to_string(),
+            false,
+            "Non-existent file URI",
+        ),
+        (
+            "invalid_uri_format".to_string(),
+            false,
+            "Invalid URI format",
+        ),
         ("".to_string(), false, "Empty URI"),
     ];
 
@@ -451,10 +494,18 @@ fn test_enhanced_concurrent_handling() -> TestResult {
 
     // Validate all results
     for (result, description) in results {
-        ensure!(result.is_ok(), "Concurrent request should succeed: {}", description);
+        ensure!(
+            result.is_ok(),
+            "Concurrent request should succeed: {}",
+            description
+        );
 
         if let Ok(response) = result {
-            ensure!(response.get("status").is_some(), "Should have status: {}", description);
+            ensure!(
+                response.get("status").is_some(),
+                "Should have status: {}",
+                description
+            );
             ensure!(
                 response.get("analyzerUsed").is_some(),
                 "Should indicate analyzer: {}",
@@ -476,8 +527,10 @@ fn test_revolutionary_performance_integration() -> TestResult {
     harness.initialize_default()?;
 
     // AC5: Revolutionary performance with thread-aware scaling
-    let thread_count =
-        std::env::var("RUST_TEST_THREADS").ok().and_then(|s| s.parse::<usize>().ok()).unwrap_or(8);
+    let thread_count = std::env::var("RUST_TEST_THREADS")
+        .ok()
+        .and_then(|s| s.parse::<usize>().ok())
+        .unwrap_or(8);
 
     // Adaptive performance expectations
     let (expected_max_ms, timeout_secs) = match thread_count {
@@ -508,7 +561,11 @@ fn test_revolutionary_performance_integration() -> TestResult {
         thread_count
     );
 
-    ensure_eq!(result["status"], "success", "Revolutionary performance: should succeed");
+    ensure_eq!(
+        result["status"],
+        "success",
+        "Revolutionary performance: should succeed"
+    );
 
     Ok(())
 }

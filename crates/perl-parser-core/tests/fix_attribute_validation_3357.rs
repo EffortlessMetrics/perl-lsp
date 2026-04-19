@@ -98,7 +98,9 @@ fn invalid_lvalue_misspelled_warns() {
         !errors.is_empty(),
         "Expected a warning for unknown attribute :lvaluE, but errors was empty"
     );
-    let has_attr_warning = errors.iter().any(|e| format!("{e}").to_lowercase().contains("lvalue"));
+    let has_attr_warning = errors
+        .iter()
+        .any(|e| format!("{e}").to_lowercase().contains("lvalue"));
     assert!(
         has_attr_warning,
         "Expected warning mentioning 'lvalue' for :lvaluE, got: {:?}",
@@ -119,7 +121,9 @@ fn unknown_foobar_attr_warns() {
         !errors.is_empty(),
         "Expected a warning for unknown attribute :foobar, but errors was empty"
     );
-    let has_attr_warning = errors.iter().any(|e| format!("{e}").to_lowercase().contains("foobar"));
+    let has_attr_warning = errors
+        .iter()
+        .any(|e| format!("{e}").to_lowercase().contains("foobar"));
     assert!(
         has_attr_warning,
         "Expected warning mentioning 'foobar' for :foobar, got: {:?}",

@@ -134,7 +134,11 @@ fn bench_cache_cleanup(c: &mut Criterion) {
             || {
                 let cache = AstCache::new(100, 1); // Short TTL
                 for i in 0..50 {
-                    cache.put(format!("file_{}.pl", i), &format!("content_{}", i), ast.clone());
+                    cache.put(
+                        format!("file_{}.pl", i),
+                        &format!("content_{}", i),
+                        ast.clone(),
+                    );
                 }
                 std::thread::sleep(std::time::Duration::from_millis(1100));
                 cache

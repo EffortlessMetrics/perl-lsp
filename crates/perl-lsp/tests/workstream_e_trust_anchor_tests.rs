@@ -77,7 +77,9 @@ sub another_function { }
 
         // Should return results from open documents even in Building state
         if let Some(result) = result {
-            let symbols = result.as_array().ok_or("Expected array for workspace symbols result")?;
+            let symbols = result
+                .as_array()
+                .ok_or("Expected array for workspace symbols result")?;
             // Should find symbols containing "function" from the open document
             assert!(
                 !symbols.is_empty(),
@@ -115,7 +117,9 @@ $counter = $counter + 1;
         })))?;
 
         if let Some(result) = result {
-            let refs = result.as_array().ok_or("Expected array for references result")?;
+            let refs = result
+                .as_array()
+                .ok_or("Expected array for references result")?;
             // Should find multiple references even without full index
             assert!(
                 refs.len() >= 2,
@@ -157,8 +161,10 @@ sub main {
 
         if let Some(result) = result {
             // Completion should return something - either items array or object with items
-            let items =
-                result.get("items").and_then(|i| i.as_array()).or_else(|| result.as_array());
+            let items = result
+                .get("items")
+                .and_then(|i| i.as_array())
+                .or_else(|| result.as_array());
 
             assert!(
                 items.is_some_and(|arr| !arr.is_empty()) || !result.is_null(),
@@ -195,7 +201,9 @@ greet("World");
         })))?;
 
         if let Some(result) = result {
-            let defs = result.as_array().ok_or("Expected array for definition result")?;
+            let defs = result
+                .as_array()
+                .ok_or("Expected array for definition result")?;
             // Should find the local definition
             assert!(
                 !defs.is_empty(),
@@ -278,7 +286,9 @@ sub method_two {
         })))?;
 
         if let Some(result) = result {
-            let symbols = result.as_array().ok_or("Expected array for document symbols result")?;
+            let symbols = result
+                .as_array()
+                .ok_or("Expected array for document symbols result")?;
             // Should find package, methods, and variable
             assert!(
                 symbols.len() >= 2,
@@ -347,7 +357,9 @@ mod caps_enforcement_tests {
         })))?;
 
         if let Some(result) = result {
-            let symbols = result.as_array().ok_or("Expected array for workspace symbols result")?;
+            let symbols = result
+                .as_array()
+                .ok_or("Expected array for workspace symbols result")?;
             // Default cap is 200, so we should never exceed that
             assert!(
                 symbols.len() <= 200,
@@ -384,9 +396,15 @@ mod caps_enforcement_tests {
         })))?;
 
         if let Some(result) = result {
-            let refs = result.as_array().ok_or("Expected array for references result")?;
+            let refs = result
+                .as_array()
+                .ok_or("Expected array for references result")?;
             // Default cap is 500, so we should never exceed that
-            assert!(refs.len() <= 500, "References should respect cap (500), got {}", refs.len());
+            assert!(
+                refs.len() <= 500,
+                "References should respect cap (500), got {}",
+                refs.len()
+            );
         }
         Ok(())
     }
@@ -419,8 +437,10 @@ mod caps_enforcement_tests {
         })))?;
 
         if let Some(result) = result {
-            let items =
-                result.get("items").and_then(|i| i.as_array()).or_else(|| result.as_array());
+            let items = result
+                .get("items")
+                .and_then(|i| i.as_array())
+                .or_else(|| result.as_array());
 
             if let Some(items) = items {
                 // Default cap is 100 (from completion.rs), but server may also have its own
@@ -481,7 +501,10 @@ mod deadline_enforcement_tests {
         // Create a file with enough content to potentially stress deadlines
         let mut content = String::from("my $target = 'x';\n");
         for i in 0..100 {
-            content.push_str(&format!("my $other_{} = $target; $target = $other_{};\n", i, i));
+            content.push_str(&format!(
+                "my $other_{} = $target; $target = $other_{};\n",
+                i, i
+            ));
         }
 
         let uri = "file:///test/deadline.pm";
@@ -496,7 +519,10 @@ mod deadline_enforcement_tests {
 
         // The result should be a valid response (array of locations)
         if let Some(result) = result {
-            assert!(result.is_array(), "References result should be an array, not an error");
+            assert!(
+                result.is_array(),
+                "References result should be an array, not an error"
+            );
         }
         Ok(())
     }
@@ -694,7 +720,10 @@ mod windows_uri_path_tests {
         {
             let uri = "file:///C:/Users/test/script.pl";
             let path = uri_to_fs_path(uri).ok_or("Should convert Windows file URI")?;
-            assert!(path.to_string_lossy().contains("Users"), "Should have correct path");
+            assert!(
+                path.to_string_lossy().contains("Users"),
+                "Should have correct path"
+            );
         }
 
         // On Unix, Windows-style paths won't convert but shouldn't crash
@@ -758,8 +787,13 @@ sub process {
         })))?;
 
         if let Some(result) = result {
-            let symbols = result.as_array().ok_or("Expected array for symbols result")?;
-            assert!(!symbols.is_empty(), "Should find symbols regardless of path format");
+            let symbols = result
+                .as_array()
+                .ok_or("Expected array for symbols result")?;
+            assert!(
+                !symbols.is_empty(),
+                "Should find symbols regardless of path format"
+            );
         }
         Ok(())
     }
@@ -829,10 +863,15 @@ mod workspace_index_unit_tests {
         let coordinator = IndexCoordinator::new();
         // Coordinator starts in Building state
 
-        let result =
-            coordinator.query(|_index| "full_query_result", |_index| "partial_query_result");
+        let result = coordinator.query(
+            |_index| "full_query_result",
+            |_index| "partial_query_result",
+        );
 
-        assert_eq!(result, "partial_query_result", "Building state should use partial query");
+        assert_eq!(
+            result, "partial_query_result",
+            "Building state should use partial query"
+        );
     }
 
     #[test]
@@ -840,22 +879,34 @@ mod workspace_index_unit_tests {
         let coordinator = IndexCoordinator::new();
         coordinator.transition_to_ready(10, 100);
 
-        let result =
-            coordinator.query(|_index| "full_query_result", |_index| "partial_query_result");
+        let result = coordinator.query(
+            |_index| "full_query_result",
+            |_index| "partial_query_result",
+        );
 
-        assert_eq!(result, "full_query_result", "Ready state should use full query");
+        assert_eq!(
+            result, "full_query_result",
+            "Ready state should use full query"
+        );
     }
 
     #[test]
     fn test_coordinator_query_dispatch_degraded_state() {
         let coordinator = IndexCoordinator::new();
         coordinator.transition_to_ready(10, 100);
-        coordinator.transition_to_degraded(DegradationReason::IoError { message: "test".into() });
+        coordinator.transition_to_degraded(DegradationReason::IoError {
+            message: "test".into(),
+        });
 
-        let result =
-            coordinator.query(|_index| "full_query_result", |_index| "partial_query_result");
+        let result = coordinator.query(
+            |_index| "full_query_result",
+            |_index| "partial_query_result",
+        );
 
-        assert_eq!(result, "partial_query_result", "Degraded state should use partial query");
+        assert_eq!(
+            result, "partial_query_result",
+            "Degraded state should use partial query"
+        );
     }
 
     // =========================================================================
@@ -881,10 +932,16 @@ mod workspace_index_unit_tests {
         coordinator.enforce_limits();
 
         match coordinator.state() {
-            IndexState::Degraded { reason: DegradationReason::ResourceLimit { kind }, .. } => {
+            IndexState::Degraded {
+                reason: DegradationReason::ResourceLimit { kind },
+                ..
+            } => {
                 assert_eq!(kind, ResourceKind::MaxFiles);
             }
-            other => must(Err::<(), _>(format!("Expected MaxFiles degradation, got {:?}", other))),
+            other => must(Err::<(), _>(format!(
+                "Expected MaxFiles degradation, got {:?}",
+                other
+            ))),
         }
         Ok(())
     }
@@ -912,12 +969,16 @@ sub f { } sub g { } sub h { } sub i { } sub j { }
         coordinator.enforce_limits();
 
         match coordinator.state() {
-            IndexState::Degraded { reason: DegradationReason::ResourceLimit { kind }, .. } => {
+            IndexState::Degraded {
+                reason: DegradationReason::ResourceLimit { kind },
+                ..
+            } => {
                 assert_eq!(kind, ResourceKind::MaxSymbols);
             }
-            other => {
-                must(Err::<(), _>(format!("Expected MaxSymbols degradation, got {:?}", other)))
-            }
+            other => must(Err::<(), _>(format!(
+                "Expected MaxSymbols degradation, got {:?}",
+                other
+            ))),
         }
         Ok(())
     }
@@ -942,9 +1003,10 @@ sub f { } sub g { } sub h { } sub i { } sub j { }
             } => {
                 assert!(pending_parses > 10);
             }
-            other => {
-                must(Err::<(), _>(format!("Expected ParseStorm degradation, got {:?}", other)))
-            }
+            other => must(Err::<(), _>(format!(
+                "Expected ParseStorm degradation, got {:?}",
+                other
+            ))),
         }
     }
 

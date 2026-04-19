@@ -17,31 +17,82 @@ fn test_complex_unicode_scripts() {
 
     let test_cases = vec![
         // Right-to-left scripts
-        ("Arabic identifiers", r#"my $متغير_عربي = 42; print "$متغير_عربي\n";"#),
-        ("Hebrew identifiers", r#"my $משתנה_עברי = 42; print "$משתנה_עברי\n";"#),
-        ("Persian identifiers", r#"my $متغیر_فارسی = 42; print "$متغیر_فارسی\n";"#),
-        ("Urdu identifiers", r#"my $متغیر_اردو = 42; print "$متغیر_اردو\n";"#),
+        (
+            "Arabic identifiers",
+            r#"my $متغير_عربي = 42; print "$متغير_عربي\n";"#,
+        ),
+        (
+            "Hebrew identifiers",
+            r#"my $משתנה_עברי = 42; print "$משתנה_עברי\n";"#,
+        ),
+        (
+            "Persian identifiers",
+            r#"my $متغیر_فارسی = 42; print "$متغیر_فارسی\n";"#,
+        ),
+        (
+            "Urdu identifiers",
+            r#"my $متغیر_اردو = 42; print "$متغیر_اردو\n";"#,
+        ),
         // CJK scripts
-        ("Chinese identifiers", r#"my $中文变量 = 42; print "$中文变量\n";"#),
-        ("Japanese identifiers", r#"my $日本語変数 = 42; print "$日本語変数\n";"#),
-        ("Korean identifiers", r#"my $한국어_변수 = 42; print "$한국어_변수\n";"#),
+        (
+            "Chinese identifiers",
+            r#"my $中文变量 = 42; print "$中文变量\n";"#,
+        ),
+        (
+            "Japanese identifiers",
+            r#"my $日本語変数 = 42; print "$日本語変数\n";"#,
+        ),
+        (
+            "Korean identifiers",
+            r#"my $한국어_변수 = 42; print "$한국어_변수\n";"#,
+        ),
         // Indic scripts
-        ("Hindi identifiers", r#"my $हिंदी_चर = 42; print "$हिंदी_चर\n";"#),
-        ("Thai identifiers", r#"my $ตัวแปร_ไทย = 42; print "$ตัวแปร_ไทย\n";"#),
-        ("Tamil identifiers", r#"my $தமிழ்_மாறி = 42; print "$தமிழ்_மாறி\n";"#),
+        (
+            "Hindi identifiers",
+            r#"my $हिंदी_चर = 42; print "$हिंदी_चर\n";"#,
+        ),
+        (
+            "Thai identifiers",
+            r#"my $ตัวแปร_ไทย = 42; print "$ตัวแปร_ไทย\n";"#,
+        ),
+        (
+            "Tamil identifiers",
+            r#"my $தமிழ்_மாறி = 42; print "$தமிழ்_மாறி\n";"#,
+        ),
         // Other complex scripts
-        ("Cyrillic identifiers", r#"my $переменная = 42; print "$переменная\n";"#),
-        ("Greek identifiers", r#"my $μεταβλητή = 42; print "$μεταβλητή\n";"#),
-        ("Armenian identifiers", r#"my $փոփխական = 42; print "$փոփխական\n";"#),
-        ("Georgian identifiers", r#"my $ცვლადი = 42; print "$ცვლადი\n";"#),
-        ("Ethiopic identifiers", r#"my $ተለዋዋጭ = 42; print "$ተለዋዋጭ\n";"#),
+        (
+            "Cyrillic identifiers",
+            r#"my $переменная = 42; print "$переменная\n";"#,
+        ),
+        (
+            "Greek identifiers",
+            r#"my $μεταβλητή = 42; print "$μεταβλητή\n";"#,
+        ),
+        (
+            "Armenian identifiers",
+            r#"my $փոփխական = 42; print "$փոփխական\n";"#,
+        ),
+        (
+            "Georgian identifiers",
+            r#"my $ცვლადი = 42; print "$ცვლადი\n";"#,
+        ),
+        (
+            "Ethiopic identifiers",
+            r#"my $ተለዋዋጭ = 42; print "$ተለዋዋጭ\n";"#,
+        ),
         // Mixed script identifiers
         (
             "Mixed LTR/RTL",
             r#"my $english_العربية_variable = 42; print "$english_العربية_variable\n";"#,
         ),
-        ("Mixed CJK/Latin", r#"my $mixed_中文变量 = 42; print "$mixed_中文变量\n";"#),
-        ("Complex mixed", r#"my $a_العربية_中文_עברית = 42; print "$a_العربية_中文_עברית\n";"#),
+        (
+            "Mixed CJK/Latin",
+            r#"my $mixed_中文变量 = 42; print "$mixed_中文变量\n";"#,
+        ),
+        (
+            "Complex mixed",
+            r#"my $a_العربية_中文_עברית = 42; print "$a_العربية_中文_עברית\n";"#,
+        ),
     ];
 
     for (name, code) in test_cases {
@@ -63,7 +114,11 @@ fn test_complex_unicode_scripts() {
 
                 // Verify Unicode identifiers are preserved
                 let sexp = ast.to_sexp();
-                assert!(sexp.contains("variable"), "Variable not found in AST for {}", name);
+                assert!(
+                    sexp.contains("variable"),
+                    "Variable not found in AST for {}",
+                    name
+                );
             }
             Err(e) => {
                 println!("  ✗ Failed to parse: {}", e);
@@ -85,30 +140,75 @@ fn test_bidirectional_and_combining_characters() {
 
     let test_cases = vec![
         // Bidirectional text in strings
-        ("Bidi string LTR", r#"my $text = "Hello العربية World"; print "$text\n";"#),
-        ("Bidi string RTL", r#"my $text = "العربية Hello World"; print "$text\n";"#),
-        ("Mixed bidi", r#"my $text = "Hello العربية עברית World"; print "$text\n";"#),
+        (
+            "Bidi string LTR",
+            r#"my $text = "Hello العربية World"; print "$text\n";"#,
+        ),
+        (
+            "Bidi string RTL",
+            r#"my $text = "العربية Hello World"; print "$text\n";"#,
+        ),
+        (
+            "Mixed bidi",
+            r#"my $text = "Hello العربية עברית World"; print "$text\n";"#,
+        ),
         // Combining characters
-        ("Combining diacritics", r#"my $text = "café"; print "$text\n";"#),
-        ("Complex combining", r#"my $text = "Z̵̧̢A̴L̸G̵O̴"; print "$text\n";"#),
-        ("Arabic diacritics", r#"my $text = "الْعَرَبِيَّةُ"; print "$text\n";"#),
+        (
+            "Combining diacritics",
+            r#"my $text = "café"; print "$text\n";"#,
+        ),
+        (
+            "Complex combining",
+            r#"my $text = "Z̵̧̢A̴L̸G̵O̴"; print "$text\n";"#,
+        ),
+        (
+            "Arabic diacritics",
+            r#"my $text = "الْعَرَبِيَّةُ"; print "$text\n";"#,
+        ),
         ("Hebrew niqqud", r#"my $text = "עִבְרִית"; print "$text\n";"#),
-        ("Devanagari diacritics", r#"my $text = "हिन्दी"; print "$text\n";"#),
+        (
+            "Devanagari diacritics",
+            r#"my $text = "हिन्दी"; print "$text\n";"#,
+        ),
         // Unicode control characters
-        ("RTL marks", r#"my $text = "Hello \u200F العربية \u200F World"; print "$text\n";"#),
-        ("LTR marks", r#"my $text = "العربية \u200E Hello \u200E World"; print "$text\n";"#),
-        ("Directional overrides", r#"my $text = "\u202BHello\u202C"; print "$text\n";"#),
+        (
+            "RTL marks",
+            r#"my $text = "Hello \u200F العربية \u200F World"; print "$text\n";"#,
+        ),
+        (
+            "LTR marks",
+            r#"my $text = "العربية \u200E Hello \u200E World"; print "$text\n";"#,
+        ),
+        (
+            "Directional overrides",
+            r#"my $text = "\u202BHello\u202C"; print "$text\n";"#,
+        ),
         // Zero-width characters
-        ("Zero-width joiner", r#"my $text = "a\u200Db"; print "$text\n";"#),
-        ("Zero-width non-joiner", r#"my $text = "a\u200Cb"; print "$text\n";"#),
-        ("Zero-width space", r#"my $text = "a\u200Bb"; print "$text\n";"#),
+        (
+            "Zero-width joiner",
+            r#"my $text = "a\u200Db"; print "$text\n";"#,
+        ),
+        (
+            "Zero-width non-joiner",
+            r#"my $text = "a\u200Cb"; print "$text\n";"#,
+        ),
+        (
+            "Zero-width space",
+            r#"my $text = "a\u200Bb"; print "$text\n";"#,
+        ),
         // Complex Unicode in regex
         (
             "Unicode regex class",
             r#"my $text = "العربية"; if ($text =~ /\p{Arabic}/) { print "Arabic\n"; }"#,
         ),
-        ("Script regex", r#"my $text = "café"; if ($text =~ /\p{Latin}/) { print "Latin\n"; }"#),
-        ("Unicode property", r#"my $text = "café"; if ($text =~ /\w+/u) { print "Word\n"; }"#),
+        (
+            "Script regex",
+            r#"my $text = "café"; if ($text =~ /\p{Latin}/) { print "Latin\n"; }"#,
+        ),
+        (
+            "Unicode property",
+            r#"my $text = "café"; if ($text =~ /\w+/u) { print "Word\n"; }"#,
+        ),
     ];
 
     for (name, code) in test_cases {
@@ -160,22 +260,43 @@ fn test_unicode_normalization() {
         ("NFC composed", r#"my $text = "é"; print "$text\n";"#),
         ("NFC sequence", r#"my $text = "café"; print "$text\n";"#),
         // NFD (Normalization Form D - canonical decomposition)
-        ("NFD decomposed", r#"my $text = "e\u0301"; print "$text\n";"#), // e + combining acute accent
-        ("NFD sequence", r#"my $text = "cafe\u0301"; print "$text\n";"#),
+        (
+            "NFD decomposed",
+            r#"my $text = "e\u0301"; print "$text\n";"#,
+        ), // e + combining acute accent
+        (
+            "NFD sequence",
+            r#"my $text = "cafe\u0301"; print "$text\n";"#,
+        ),
         // NFKC (Normalization Form KC - compatibility composition)
         ("NFKC compatibility", r#"my $text = "ﬁ"; print "$text\n";"#), // fi ligature
         ("NFKC superscript", r#"my $text = "²"; print "$text\n";"#),   // superscript 2
         // NFKD (Normalization Form KD - compatibility decomposition)
-        ("NFKD decomposed", r#"my $text = "f\u0301"; print "$text\n";"#), // f + combining acute accent
-        ("NFKD superscript", r#"my $text = "2"; print "$text\n";"#),      // regular 2
+        (
+            "NFKD decomposed",
+            r#"my $text = "f\u0301"; print "$text\n";"#,
+        ), // f + combining acute accent
+        ("NFKD superscript", r#"my $text = "2"; print "$text\n";"#), // regular 2
         // Mixed normalization
-        ("Mixed NFC/NFD", r#"my $text = "café\u0301"; print "$text\n";"#),
-        ("Mixed NFKC/NFKD", r#"my $text = "ﬁ\u0301"; print "$text\n";"#),
+        (
+            "Mixed NFC/NFD",
+            r#"my $text = "café\u0301"; print "$text\n";"#,
+        ),
+        (
+            "Mixed NFKC/NFKD",
+            r#"my $text = "ﬁ\u0301"; print "$text\n";"#,
+        ),
         // Complex normalization cases
         ("Hangul", r#"my $text = "한"; print "$text\n";"#),
-        ("Hangul decomposed", r#"my $text = "\u110B\u1161"; print "$text\n";"#),
+        (
+            "Hangul decomposed",
+            r#"my $text = "\u110B\u1161"; print "$text\n";"#,
+        ),
         ("Arabic ligatures", r#"my $text = "لا"; print "$text\n";"#),
-        ("Arabic decomposed", r#"my $text = "\u0644\u0627"; print "$text\n";"#),
+        (
+            "Arabic decomposed",
+            r#"my $text = "\u0644\u0627"; print "$text\n";"#,
+        ),
     ];
 
     for (name, code) in test_cases {
@@ -229,21 +350,51 @@ fn test_invalid_utf8_sequences() {
         // Overlong encodings
         ("Overlong ASCII", r#"my $text = "Hello"; print "$text\n";"#),
         // Invalid continuation bytes (simulated through escape sequences)
-        ("Invalid continuation", r#"my $text = "Hello\x80World"; print "$text\n";"#),
-        ("Invalid continuation 2", r#"my $text = "Hello\xC0World"; print "$text\n";"#),
+        (
+            "Invalid continuation",
+            r#"my $text = "Hello\x80World"; print "$text\n";"#,
+        ),
+        (
+            "Invalid continuation 2",
+            r#"my $text = "Hello\xC0World"; print "$text\n";"#,
+        ),
         // Surrogate pairs (invalid in UTF-8)
-        ("High surrogate", r#"my $text = "Hello\uD800World"; print "$text\n";"#),
-        ("Low surrogate", r#"my $text = "Hello\uDC00World"; print "$text\n";"#),
+        (
+            "High surrogate",
+            r#"my $text = "Hello\uD800World"; print "$text\n";"#,
+        ),
+        (
+            "Low surrogate",
+            r#"my $text = "Hello\uDC00World"; print "$text\n";"#,
+        ),
         // Code points beyond Unicode range
-        ("Beyond Unicode", r#"my $text = "Hello\u110000World"; print "$text\n";"#),
+        (
+            "Beyond Unicode",
+            r#"my $text = "Hello\u110000World"; print "$text\n";"#,
+        ),
         // Isolated continuation bytes
-        ("Isolated continuation", r#"my $text = "Hello\x80\x81\x82World"; print "$text\n";"#),
+        (
+            "Isolated continuation",
+            r#"my $text = "Hello\x80\x81\x82World"; print "$text\n";"#,
+        ),
         // Invalid start bytes
-        ("Invalid start", r#"my $text = "Hello\xF5World"; print "$text\n";"#),
+        (
+            "Invalid start",
+            r#"my $text = "Hello\xF5World"; print "$text\n";"#,
+        ),
         // Incomplete sequences
-        ("Incomplete 2-byte", r#"my $text = "Hello\xC2World"; print "$text\n";"#),
-        ("Incomplete 3-byte", r#"my $text = "Hello\xE0\xA0World"; print "$text\n";"#),
-        ("Incomplete 4-byte", r#"my $text = "Hello\xF0\x90\x80World"; print "$text\n";"#),
+        (
+            "Incomplete 2-byte",
+            r#"my $text = "Hello\xC2World"; print "$text\n";"#,
+        ),
+        (
+            "Incomplete 3-byte",
+            r#"my $text = "Hello\xE0\xA0World"; print "$text\n";"#,
+        ),
+        (
+            "Incomplete 4-byte",
+            r#"my $text = "Hello\xF0\x90\x80World"; print "$text\n";"#,
+        ),
     ];
 
     for (name, code) in test_cases {
@@ -291,13 +442,19 @@ fn test_unicode_in_perl_constructs() {
 
     let test_cases = vec![
         // Unicode in package names
-        ("Unicode package", r#"package العربية; sub new { bless {} } my $obj = العربية->new();"#),
+        (
+            "Unicode package",
+            r#"package العربية; sub new { bless {} } my $obj = العربية->new();"#,
+        ),
         (
             "Unicode module",
             r#"package 中文模块; sub test { return "测试"; } print 中文模块::test();"#,
         ),
         // Unicode in subroutine names
-        ("Unicode sub", r#"sub العربية_دالة { return "العربية"; } print العربية_دالة();"#),
+        (
+            "Unicode sub",
+            r#"sub العربية_دالة { return "العربية"; } print العربية_دالة();"#,
+        ),
         (
             "Unicode method",
             r#"package 中文类; sub 中文方法 { return "方法"; } my $obj = 中文类->new(); print $obj->中文方法();"#,
@@ -318,7 +475,10 @@ fn test_unicode_in_perl_constructs() {
         ),
         // Unicode in format strings
         ("Unicode printf", r#"printf "العربية: %s\n", "test";"#),
-        ("Unicode sprintf", r#"my $text = sprintf "中文: %d", 42; print "$text\n";"#),
+        (
+            "Unicode sprintf",
+            r#"my $text = sprintf "中文: %d", 42; print "$text\n";"#,
+        ),
         // Unicode in regex patterns
         (
             "Unicode regex match",
@@ -343,11 +503,23 @@ END
 print "$text\n";"#,
         ),
         // Unicode in quote-like operators
-        ("Unicode qq", r#"my $text = qq{العربية 中文}; print "$text\n";"#),
-        ("Unicode qr", r#"my $pattern = qr{العربية}; print "$pattern\n";"#),
-        ("Unicode qw", r#"my @words = qw(العربية 中文 עברית); print "$words[0]\n";"#),
+        (
+            "Unicode qq",
+            r#"my $text = qq{العربية 中文}; print "$text\n";"#,
+        ),
+        (
+            "Unicode qr",
+            r#"my $pattern = qr{العربية}; print "$pattern\n";"#,
+        ),
+        (
+            "Unicode qw",
+            r#"my @words = qw(العربية 中文 עברית); print "$words[0]\n";"#,
+        ),
         // Unicode in tr/// operators
-        ("Unicode tr", r#"my $text = "café"; $text =~ tr/éèêë/eeee/; print "$text\n";"#),
+        (
+            "Unicode tr",
+            r#"my $text = "café"; $text =~ tr/éèêë/eeee/; print "$text\n";"#,
+        ),
         // Unicode in pack/unpack
         (
             "Unicode pack",
@@ -400,15 +572,36 @@ fn test_unicode_special_variables() {
 
     let test_cases = vec![
         // Unicode in variable names (not special variables, but testing edge cases)
-        ("Unicode scalar", r#"my $العربية_متغير = 42; print "$العربية_متغير\n";"#),
-        ("Unicode array", r#"my @中文_数组 = (1, 2, 3); print "@中文_数组\n";"#),
-        ("Unicode hash", r#"my %עברית_האש = ('key' => 'value'); print "%עברית_האש\n";"#),
+        (
+            "Unicode scalar",
+            r#"my $العربية_متغير = 42; print "$العربية_متغير\n";"#,
+        ),
+        (
+            "Unicode array",
+            r#"my @中文_数组 = (1, 2, 3); print "@中文_数组\n";"#,
+        ),
+        (
+            "Unicode hash",
+            r#"my %עברית_האש = ('key' => 'value'); print "%עברית_האש\n";"#,
+        ),
         // Unicode with special variables
-        ("Unicode with $_", r#"for my $العربية (1..3) { $_ *= 2; print "$العربية: $_\n"; }"#),
-        ("Unicode with $@", r#"eval { die "العربية error" }; if ($@) { print "$@\n"; }"#),
-        ("Unicode with $!", r#"open my $fh, '<', 'nonexistent' or die "العربية: $!";"#),
+        (
+            "Unicode with $_",
+            r#"for my $العربية (1..3) { $_ *= 2; print "$العربية: $_\n"; }"#,
+        ),
+        (
+            "Unicode with $@",
+            r#"eval { die "العربية error" }; if ($@) { print "$@\n"; }"#,
+        ),
+        (
+            "Unicode with $!",
+            r#"open my $fh, '<', 'nonexistent' or die "العربية: $!";"#,
+        ),
         // Unicode in glob assignments
-        ("Unicode glob", r#"*العربية = *STDOUT; print العربية "Hello\n";"#),
+        (
+            "Unicode glob",
+            r#"*العربية = *STDOUT; print العربية "Hello\n";"#,
+        ),
         // Unicode in typeglob operations
         ("Unicode typeglob", r#"my $العربية_ref = *STDOUT{IO};"#),
         // Unicode in format statements
@@ -494,8 +687,14 @@ fn test_unicode_file_operations() {
             r#"opendir my $العربية_دليل, '.' or die $!; while (readdir $العربية_دليل) { print "$_\n"; } closedir $العربية_دليل;"#,
         ),
         // Unicode in file tests
-        ("Unicode file test", r#"if (-f 'العربية.txt') { print "File exists\n"; }"#),
-        ("Unicode directory test", r#"if (-d 'العربية_دليل') { print "Directory exists\n"; }"#),
+        (
+            "Unicode file test",
+            r#"if (-f 'العربية.txt') { print "File exists\n"; }"#,
+        ),
+        (
+            "Unicode directory test",
+            r#"if (-d 'العربية_دليل') { print "Directory exists\n"; }"#,
+        ),
         // Unicode in require/use
         ("Unicode require", r#"require 'العربية模块.pm';"#),
         ("Unicode use", r#"use 中文模块; print "Loaded\n";"#),
@@ -504,7 +703,10 @@ fn test_unicode_file_operations() {
         // Unicode in system calls
         ("Unicode system", r#"system 'echo', 'العربية';"#),
         ("Unicode exec", r#"exec 'echo', '中文' if 0;"#),
-        ("Unicode backticks", r#"my $result = `echo العربية`; print "$result\n";"#),
+        (
+            "Unicode backticks",
+            r#"my $result = `echo العربية`; print "$result\n";"#,
+        ),
     ];
 
     for (name, code) in test_cases {
@@ -560,14 +762,20 @@ fn test_unicode_advanced_features() {
             "Unicode bless",
             r#"package العربية_فئة; sub new { bless {} } my $obj = bless {}, 'العربية_فئة';"#,
         ),
-        ("Unicode isa", r#"use base 'العربية_فئة'; sub test { return "test"; }"#),
+        (
+            "Unicode isa",
+            r#"use base 'العربية_فئة'; sub test { return "test"; }"#,
+        ),
         // Unicode in prototypes
         (
             "Unicode prototype",
             r#"sub العربية_دالة ($) { return $_[0] * 2; } print العربية_دالة(21);"#,
         ),
         // Unicode in attributes
-        ("Unicode attribute", r#"sub العربية_دالة :lvalue { return $العربية_متغير; }"#),
+        (
+            "Unicode attribute",
+            r#"sub العربية_دالة :lvalue { return $العربية_متغير; }"#,
+        ),
         // Unicode in try/catch
         (
             "Unicode try/catch",

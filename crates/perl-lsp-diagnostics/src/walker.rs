@@ -28,7 +28,12 @@ where
                 walk_node(stmt, func);
             }
         }
-        NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
+        NodeKind::If {
+            condition,
+            then_branch,
+            elsif_branches,
+            else_branch,
+        } => {
             walk_node(condition, func);
             walk_node(then_branch, func);
             for (cond, branch) in elsif_branches {
@@ -39,7 +44,9 @@ where
                 walk_node(branch, func);
             }
         }
-        NodeKind::While { condition, body, .. } => {
+        NodeKind::While {
+            condition, body, ..
+        } => {
             walk_node(condition, func);
             walk_node(body, func);
         }
@@ -65,10 +72,16 @@ where
             walk_node(lhs, func);
             walk_node(rhs, func);
         }
-        NodeKind::VariableDeclaration { initializer: Some(init), .. } => {
+        NodeKind::VariableDeclaration {
+            initializer: Some(init),
+            ..
+        } => {
             walk_node(init, func);
         }
-        NodeKind::VariableListDeclaration { initializer: Some(init), .. } => {
+        NodeKind::VariableListDeclaration {
+            initializer: Some(init),
+            ..
+        } => {
             walk_node(init, func);
         }
         NodeKind::PhaseBlock { block, .. } => {
@@ -80,7 +93,11 @@ where
         NodeKind::Class { body, .. } => {
             walk_node(body, func);
         }
-        NodeKind::Try { body, catch_blocks, finally_block } => {
+        NodeKind::Try {
+            body,
+            catch_blocks,
+            finally_block,
+        } => {
             walk_node(body, func);
             for (_, catch_body) in catch_blocks {
                 walk_node(catch_body, func);
@@ -103,7 +120,9 @@ where
         NodeKind::Unary { operand, .. } => {
             walk_node(operand, func);
         }
-        NodeKind::Package { block: Some(blk), .. } => {
+        NodeKind::Package {
+            block: Some(blk), ..
+        } => {
             walk_node(blk, func);
         }
         NodeKind::Subroutine { body, .. } | NodeKind::Method { body, .. } => {
@@ -118,7 +137,11 @@ where
                 walk_node(arg, func);
             }
         }
-        NodeKind::Ternary { condition, then_expr, else_expr } => {
+        NodeKind::Ternary {
+            condition,
+            then_expr,
+            else_expr,
+        } => {
             walk_node(condition, func);
             walk_node(then_expr, func);
             walk_node(else_expr, func);

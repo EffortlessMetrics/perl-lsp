@@ -76,7 +76,10 @@ fn test_document_color_3_17() -> TestResult {
 fn test_folding_range_3_17() -> TestResult {
     let mut harness = LspHarness::new();
     harness.initialize(None)?;
-    harness.open("file:///test.pl", "sub test {\n    my $x = 1;\n    return $x;\n}")?;
+    harness.open(
+        "file:///test.pl",
+        "sub test {\n    my $x = 1;\n    return $x;\n}",
+    )?;
 
     let response = harness.request(
         "textDocument/foldingRange",

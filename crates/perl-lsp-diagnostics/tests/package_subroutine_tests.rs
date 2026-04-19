@@ -28,7 +28,10 @@ fn diagnostics_for(source: &str) -> Vec<Diagnostic> {
 }
 
 fn codes_for(source: &str) -> Vec<String> {
-    diagnostics_for(source).into_iter().filter_map(|d| d.code).collect()
+    diagnostics_for(source)
+        .into_iter()
+        .filter_map(|d| d.code)
+        .collect()
 }
 
 fn has_code(source: &str, code: &str) -> bool {
@@ -36,7 +39,10 @@ fn has_code(source: &str, code: &str) -> bool {
 }
 
 fn count_code(source: &str, code: &str) -> usize {
-    codes_for(source).iter().filter(|c| c.as_str() == code).count()
+    codes_for(source)
+        .iter()
+        .filter(|c| c.as_str() == code)
+        .count()
 }
 
 // =========================================================================

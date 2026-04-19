@@ -60,11 +60,19 @@ fn test_extremely_large_identifiers() {
         match result {
             Ok(ast) => {
                 println!("  ✓ Parsed successfully in {:?}", parse_time);
-                assert!(parse_time < max_parse_time(), "Parse time exceeded limit for {}", name);
+                assert!(
+                    parse_time < max_parse_time(),
+                    "Parse time exceeded limit for {}",
+                    name
+                );
 
                 // Verify the identifier is present in the AST
                 let sexp = ast.to_sexp();
-                assert!(sexp.contains("variable"), "Variable not found in AST for {}", name);
+                assert!(
+                    sexp.contains("variable"),
+                    "Variable not found in AST for {}",
+                    name
+                );
             }
             Err(e) => {
                 println!("  ✗ Failed to parse: {}", e);
@@ -104,11 +112,20 @@ fn test_extreme_nesting_depth() {
         match result {
             Ok(ast) => {
                 println!("  ✓ Parsed successfully in {:?}", parse_time);
-                assert!(parse_time < max_parse_time(), "Parse time exceeded limit for {}", name);
+                assert!(
+                    parse_time < max_parse_time(),
+                    "Parse time exceeded limit for {}",
+                    name
+                );
 
                 // Verify the AST depth is reasonable
                 let depth = calculate_ast_depth(&ast);
-                assert!(depth < 1000, "AST depth {} seems unreasonable for {}", depth, name);
+                assert!(
+                    depth < 1000,
+                    "AST depth {} seems unreasonable for {}",
+                    depth,
+                    name
+                );
             }
             Err(e) => {
                 println!("  ✗ Failed to parse: {}", e);
@@ -156,7 +173,11 @@ fn test_extremely_large_strings() {
         match result {
             Ok(ast) => {
                 println!("  ✓ Parsed successfully in {:?}", parse_time);
-                assert!(parse_time < max_parse_time(), "Parse time exceeded limit for {}", name);
+                assert!(
+                    parse_time < max_parse_time(),
+                    "Parse time exceeded limit for {}",
+                    name
+                );
 
                 // Verify the string is present in the AST
                 let sexp = ast.to_sexp();
@@ -202,7 +223,11 @@ fn test_extremely_large_data_structures() {
         match result {
             Ok(ast) => {
                 println!("  ✓ Parsed successfully in {:?}", parse_time);
-                assert!(parse_time < max_parse_time(), "Parse time exceeded limit for {}", name);
+                assert!(
+                    parse_time < max_parse_time(),
+                    "Parse time exceeded limit for {}",
+                    name
+                );
 
                 // Verify the structure is present in the AST
                 let sexp = ast.to_sexp();
@@ -239,17 +264,32 @@ fn test_extremely_complex_regex() {
     println!("Testing extremely complex regular expressions...");
 
     let test_cases = vec![
-        ("Catastrophic backtracking".to_string(), r"/^(a+)+b$/".to_string()),
+        (
+            "Catastrophic backtracking".to_string(),
+            r"/^(a+)+b$/".to_string(),
+        ),
         ("Nested quantifiers".to_string(), r"/^(a*)*b$/".to_string()),
-        ("Excessive alternation".to_string(), generate_excessive_alternation(1000)),
-        ("Deeply nested groups".to_string(), generate_nested_regex_groups(100)),
+        (
+            "Excessive alternation".to_string(),
+            generate_excessive_alternation(1000),
+        ),
+        (
+            "Deeply nested groups".to_string(),
+            generate_nested_regex_groups(100),
+        ),
         (
             "Unicode character classes".to_string(),
             r"/[\p{L}\p{N}\p{P}\p{S}\p{Z}\p{C}\p{M}]+/".to_string(),
         ),
-        ("Complex lookarounds".to_string(), r"/(?=(?<!a)b)(?<!c)(?!d)/".to_string()),
+        (
+            "Complex lookarounds".to_string(),
+            r"/(?=(?<!a)b)(?<!c)(?!d)/".to_string(),
+        ),
         ("Recursive patterns".to_string(), r"/(?R)/".to_string()),
-        ("Backreference hell".to_string(), generate_backreference_hell(50)),
+        (
+            "Backreference hell".to_string(),
+            generate_backreference_hell(50),
+        ),
     ];
 
     for (name, pattern) in &test_cases {
@@ -265,7 +305,11 @@ fn test_extremely_complex_regex() {
         match result {
             Ok(ast) => {
                 println!("  ✓ Parsed successfully in {:?}", parse_time);
-                assert!(parse_time < max_parse_time(), "Parse time exceeded limit for {}", name);
+                assert!(
+                    parse_time < max_parse_time(),
+                    "Parse time exceeded limit for {}",
+                    name
+                );
 
                 // Regex node naming can vary; ensure parse succeeds and AST is populated.
                 let sexp = ast.to_sexp();
@@ -292,7 +336,10 @@ fn test_extremely_large_files() {
     let test_cases = vec![
         ("100K line file", generate_large_file(100_000)),
         ("1M line file", generate_large_file(1_000_000)),
-        ("10M character file", generate_large_character_file(10_000_000)),
+        (
+            "10M character file",
+            generate_large_character_file(10_000_000),
+        ),
     ];
 
     for (name, code) in test_cases {
@@ -306,7 +353,11 @@ fn test_extremely_large_files() {
         match result {
             Ok(ast) => {
                 println!("  ✓ Parsed successfully in {:?}", parse_time);
-                assert!(parse_time < max_parse_time(), "Parse time exceeded limit for {}", name);
+                assert!(
+                    parse_time < max_parse_time(),
+                    "Parse time exceeded limit for {}",
+                    name
+                );
 
                 // Verify the AST is reasonable for the input size
                 let sexp = ast.to_sexp();
@@ -333,8 +384,14 @@ fn test_extremely_complex_expressions() {
     let test_cases = vec![
         ("Deeply nested ternary", generate_nested_ternary(50)),
         ("Massive method chain", generate_massive_method_chain(100)),
-        ("Complex dereference chain", generate_complex_dereference(50)),
-        ("Huge operator precedence", generate_operator_precedence_mess(100)),
+        (
+            "Complex dereference chain",
+            generate_complex_dereference(50),
+        ),
+        (
+            "Huge operator precedence",
+            generate_operator_precedence_mess(100),
+        ),
     ];
 
     for (name, code) in test_cases {
@@ -348,7 +405,11 @@ fn test_extremely_complex_expressions() {
         match result {
             Ok(ast) => {
                 println!("  ✓ Parsed successfully in {:?}", parse_time);
-                assert!(parse_time < max_parse_time(), "Parse time exceeded limit for {}", name);
+                assert!(
+                    parse_time < max_parse_time(),
+                    "Parse time exceeded limit for {}",
+                    name
+                );
 
                 // Verify the expression is present in the AST
                 let sexp = ast.to_sexp();
@@ -420,7 +481,11 @@ fn test_concurrent_extreme_inputs() {
     let results = results.lock().unwrap();
     let error_count = *error_count.lock().unwrap();
 
-    println!("Completed {} concurrent parses with {} errors", results.len(), error_count);
+    println!(
+        "Completed {} concurrent parses with {} errors",
+        results.len(),
+        error_count
+    );
 
     // Verify no parse took too long
     for (thread_id, iteration, case_index, parse_time, _success) in results.iter() {
@@ -435,7 +500,10 @@ fn test_concurrent_extreme_inputs() {
     }
 
     // At least some parses should succeed even with extreme inputs
-    let success_count = results.iter().filter(|(_, _, _, _, success)| *success).count();
+    let success_count = results
+        .iter()
+        .filter(|(_, _, _, _, success)| *success)
+        .count();
     assert!(success_count > 0, "At least some parses should succeed");
 }
 
@@ -453,7 +521,11 @@ fn test_memory_pressure_with_extreme_inputs() {
     ];
 
     for (i, code) in test_cases.iter().enumerate() {
-        println!("Testing memory pressure case {} (size: {} bytes)", i, code.len());
+        println!(
+            "Testing memory pressure case {} (size: {} bytes)",
+            i,
+            code.len()
+        );
 
         let start_time = Instant::now();
         let mut parser = Parser::new(code);
@@ -463,7 +535,11 @@ fn test_memory_pressure_with_extreme_inputs() {
         match result {
             Ok(ast) => {
                 println!("  ✓ Parsed successfully in {:?}", parse_time);
-                assert!(parse_time < max_parse_time(), "Parse time exceeded limit for case {}", i);
+                assert!(
+                    parse_time < max_parse_time(),
+                    "Parse time exceeded limit for case {}",
+                    i
+                );
 
                 // Verify the AST is reasonable
                 let sexp = ast.to_sexp();

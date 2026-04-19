@@ -22,7 +22,11 @@ impl FileCompletionContext {
     /// Create a new file completion context.
     #[must_use]
     pub fn new(prefix: impl Into<String>, prefix_start: usize, position: usize) -> Self {
-        Self { prefix: prefix.into(), prefix_start, position }
+        Self {
+            prefix: prefix.into(),
+            prefix_start,
+            position,
+        }
     }
 }
 
@@ -61,8 +65,11 @@ pub fn complete_file_paths(
     let mut completions = Vec::new();
     let mut entries_examined = 0usize;
 
-    for entry in
-        WalkDir::new(&base_dir).max_depth(1).follow_links(false).into_iter().filter_entry(|entry| {
+    for entry in WalkDir::new(&base_dir)
+        .max_depth(1)
+        .follow_links(false)
+        .into_iter()
+        .filter_entry(|entry| {
             !is_hidden_or_forbidden_entry_name(entry.file_name().to_string_lossy().as_ref())
         })
     {
@@ -131,7 +138,11 @@ fn file_completion_metadata(entry: &walkdir::DirEntry) -> (String, Option<String
     if file_type.is_dir() {
         ("directory".to_string(), Some("Directory".to_string()))
     } else if file_type.is_file() {
-        let extension = entry.path().extension().and_then(|ext| ext.to_str()).unwrap_or("");
+        let extension = entry
+            .path()
+            .extension()
+            .and_then(|ext| ext.to_str())
+            .unwrap_or("");
         let file_type_desc = match extension.to_ascii_lowercase().as_str() {
             "pl" | "pm" | "t" => "Perl file",
             "rs" => "Rust source file",

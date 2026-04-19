@@ -13,7 +13,9 @@ impl LspServer {
         // Parse test ID to get URI and test name
         let parts: Vec<&str> = test_id.split("::").collect();
         if parts.len() < 2 {
-            return Ok(Some(json!({"status": "error", "message": "Invalid test ID"})));
+            return Ok(Some(
+                json!({"status": "error", "message": "Invalid test ID"}),
+            ));
         }
 
         let uri = parts[0];

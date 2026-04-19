@@ -278,7 +278,10 @@ pub fn lint_with_config(sections: &[Section], config: &LintConfig) -> Result<()>
 
 /// Check sections and return lint results
 pub fn check_sections(sections: &[Section], config: &LintConfig) -> LintResult {
-    let mut result = LintResult { errors: Vec::new(), warnings: Vec::new() };
+    let mut result = LintResult {
+        errors: Vec::new(),
+        warnings: Vec::new(),
+    };
 
     // Regex for valid ID format - pattern is a compile-time constant, so parsing cannot fail
     static ID_RE: once_cell::sync::Lazy<Option<Regex>> =
@@ -297,7 +300,10 @@ pub fn check_sections(sections: &[Section], config: &LintConfig) -> LintResult {
     for section in sections {
         // Check ID format
         if section.id.is_empty() {
-            result.errors.push(format!("Missing @id in {}: {}", section.file, section.title));
+            result.errors.push(format!(
+                "Missing @id in {}: {}",
+                section.file, section.title
+            ));
         } else if !ID_RE.as_ref().is_some_and(|re| re.is_match(&section.id)) {
             result.errors.push(format!(
                 "Invalid @id format '{}' in {}: {} (must match [a-z0-9._-]+)",
@@ -307,7 +313,10 @@ pub fn check_sections(sections: &[Section], config: &LintConfig) -> LintResult {
 
         // Check for duplicate IDs
         if !section.id.is_empty() && !seen_ids.insert(&section.id) {
-            result.errors.push(format!("Duplicate @id '{}' in {}", section.id, section.file));
+            result.errors.push(format!(
+                "Duplicate @id '{}' in {}",
+                section.id, section.file
+            ));
         }
 
         // Count sections per file
@@ -317,9 +326,10 @@ pub fn check_sections(sections: &[Section], config: &LintConfig) -> LintResult {
         if config.check_unknown_tags {
             for tag in &section.tags {
                 if !known_tags.contains(tag.as_str()) {
-                    result
-                        .warnings
-                        .push(format!("Unknown tag '{}' in {}: {}", tag, section.file, section.id));
+                    result.warnings.push(format!(
+                        "Unknown tag '{}' in {}: {}",
+                        tag, section.file, section.id
+                    ));
                 }
             }
         }
@@ -338,14 +348,17 @@ pub fn check_sections(sections: &[Section], config: &LintConfig) -> LintResult {
 
         // Check perl version if required
         if config.require_perl_version && section.perl.is_none() {
-            result
-                .warnings
-                .push(format!("Missing @perl version in {}: {}", section.file, section.id));
+            result.warnings.push(format!(
+                "Missing @perl version in {}: {}",
+                section.file, section.id
+            ));
         }
 
         // Check for empty body
         if section.body.trim().is_empty() {
-            result.warnings.push(format!("Empty body in {}: {}", section.file, section.id));
+            result
+                .warnings
+                .push(format!("Empty body in {}: {}", section.file, section.id));
         }
     }
 

@@ -40,12 +40,20 @@ fn all_var_kinds() -> Vec<VarKind> {
 
 #[test]
 fn varkind_sigil_starts_with_expected_char() -> Result<(), String> {
-    let pairs = [(VarKind::Scalar, '$'), (VarKind::Array, '@'), (VarKind::Hash, '%')];
+    let pairs = [
+        (VarKind::Scalar, '$'),
+        (VarKind::Array, '@'),
+        (VarKind::Hash, '%'),
+    ];
     for (vk, ch) in pairs {
         let sigil = vk.sigil();
         match sigil.chars().next() {
             Some(c) if c == ch => {}
-            other => return Err(format!("{vk:?}.sigil() first char = {other:?}, expected '{ch}'")),
+            other => {
+                return Err(format!(
+                    "{vk:?}.sigil() first char = {other:?}, expected '{ch}'"
+                ));
+            }
         }
     }
     Ok(())
@@ -226,7 +234,9 @@ fn lsp_kind_values_are_positive() -> Result<(), String> {
             return Err(format!("{sk:?}.to_lsp_kind() is 0, expected positive"));
         }
         if sk.to_lsp_kind_document_symbol() == 0 {
-            return Err(format!("{sk:?}.to_lsp_kind_document_symbol() is 0, expected positive"));
+            return Err(format!(
+                "{sk:?}.to_lsp_kind_document_symbol() is 0, expected positive"
+            ));
         }
     }
     Ok(())
@@ -279,7 +289,9 @@ fn lsp_kind_document_symbol_stability() -> Result<(), String> {
     for (sk, exp) in expected {
         let got = sk.to_lsp_kind_document_symbol();
         if got != exp {
-            return Err(format!("{sk:?}.to_lsp_kind_document_symbol() = {got}, expected {exp}"));
+            return Err(format!(
+                "{sk:?}.to_lsp_kind_document_symbol() = {got}, expected {exp}"
+            ));
         }
     }
     Ok(())
@@ -301,7 +313,9 @@ fn lsp_kind_workspace_and_doc_differ_only_for_array_hash() -> Result<(), String>
                 ));
             }
         } else if ws != ds {
-            return Err(format!("{sk:?}: workspace={ws} != doc-symbol={ds}, expected equal"));
+            return Err(format!(
+                "{sk:?}: workspace={ws} != doc-symbol={ds}, expected equal"
+            ));
         }
     }
     Ok(())
@@ -312,7 +326,9 @@ fn doc_sym_array_and_hash_differ() -> Result<(), String> {
     let arr = SymbolKind::Variable(VarKind::Array).to_lsp_kind_document_symbol();
     let hash = SymbolKind::Variable(VarKind::Hash).to_lsp_kind_document_symbol();
     if arr == hash {
-        return Err(format!("Array and Hash doc-symbol kinds should differ: both are {arr}"));
+        return Err(format!(
+            "Array and Hash doc-symbol kinds should differ: both are {arr}"
+        ));
     }
     Ok(())
 }
@@ -353,7 +369,10 @@ fn no_symbol_is_both_variable_and_namespace() -> Result<(), String> {
 
 #[test]
 fn exactly_two_callables() -> Result<(), String> {
-    let count = all_symbol_kinds().iter().filter(|sk| sk.is_callable()).count();
+    let count = all_symbol_kinds()
+        .iter()
+        .filter(|sk| sk.is_callable())
+        .count();
     if count != 2 {
         return Err(format!("expected 2 callables, got {count}"));
     }
@@ -362,7 +381,10 @@ fn exactly_two_callables() -> Result<(), String> {
 
 #[test]
 fn exactly_three_namespaces() -> Result<(), String> {
-    let count = all_symbol_kinds().iter().filter(|sk| sk.is_namespace()).count();
+    let count = all_symbol_kinds()
+        .iter()
+        .filter(|sk| sk.is_namespace())
+        .count();
     if count != 3 {
         return Err(format!("expected 3 namespaces, got {count}"));
     }
@@ -371,7 +393,10 @@ fn exactly_three_namespaces() -> Result<(), String> {
 
 #[test]
 fn exactly_three_variables() -> Result<(), String> {
-    let count = all_symbol_kinds().iter().filter(|sk| sk.is_variable()).count();
+    let count = all_symbol_kinds()
+        .iter()
+        .filter(|sk| sk.is_variable())
+        .count();
     if count != 3 {
         return Err(format!("expected 3 variables, got {count}"));
     }
@@ -406,7 +431,9 @@ fn uncategorized_kinds_exist() -> Result<(), String> {
 fn constructor_scalar_has_correct_sigil() -> Result<(), String> {
     match SymbolKind::scalar().sigil() {
         Some("$") => Ok(()),
-        other => Err(format!("scalar().sigil() = {other:?}, expected Some(\"$\")")),
+        other => Err(format!(
+            "scalar().sigil() = {other:?}, expected Some(\"$\")"
+        )),
     }
 }
 
@@ -447,7 +474,10 @@ fn constructors_lsp_doc_symbol_distinct() -> Result<(), String> {
     .into_iter()
     .collect();
     if vals.len() != 3 {
-        return Err(format!("expected 3 distinct doc-symbol values, got {}", vals.len()));
+        return Err(format!(
+            "expected 3 distinct doc-symbol values, got {}",
+            vals.len()
+        ));
     }
     Ok(())
 }
@@ -478,7 +508,10 @@ fn symbolkind_hashmap_overwrite() -> Result<(), String> {
     map.insert(SymbolKind::Subroutine, "first");
     map.insert(SymbolKind::Subroutine, "second");
     if map.len() != 1 {
-        return Err(format!("expected 1 entry after overwrite, got {}", map.len()));
+        return Err(format!(
+            "expected 1 entry after overwrite, got {}",
+            map.len()
+        ));
     }
     match map.get(&SymbolKind::Subroutine) {
         Some(&"second") => Ok(()),
@@ -638,8 +671,10 @@ fn symbolkind_debug_variable_includes_varkind() -> Result<(), String> {
 
 #[test]
 fn symbolkind_debug_all_variants_distinct() -> Result<(), String> {
-    let debug_strings: Vec<String> =
-        all_symbol_kinds().iter().map(|sk| format!("{sk:?}")).collect();
+    let debug_strings: Vec<String> = all_symbol_kinds()
+        .iter()
+        .map(|sk| format!("{sk:?}"))
+        .collect();
     let unique: HashSet<&String> = debug_strings.iter().collect();
     if unique.len() != debug_strings.len() {
         return Err("some SymbolKind variants have identical Debug output".into());
@@ -690,15 +725,27 @@ fn group_by_lsp_kind_workspace() -> Result<(), String> {
     // Variable(13) has all three variable types
     match groups.get(&2) {
         Some(v) if v.len() >= 2 => {}
-        other => return Err(format!("LSP kind 2 (Module) should have ≥2 variants: {other:?}")),
+        other => {
+            return Err(format!(
+                "LSP kind 2 (Module) should have ≥2 variants: {other:?}"
+            ));
+        }
     }
     match groups.get(&12) {
         Some(v) if v.len() >= 2 => {}
-        other => return Err(format!("LSP kind 12 (Function) should have ≥2 variants: {other:?}")),
+        other => {
+            return Err(format!(
+                "LSP kind 12 (Function) should have ≥2 variants: {other:?}"
+            ));
+        }
     }
     match groups.get(&13) {
         Some(v) if v.len() == 3 => {}
-        other => return Err(format!("LSP kind 13 (Variable) should have 3 variants: {other:?}")),
+        other => {
+            return Err(format!(
+                "LSP kind 13 (Variable) should have 3 variants: {other:?}"
+            ));
+        }
     }
     Ok(())
 }
@@ -715,7 +762,10 @@ fn group_by_predicate_partitions_correctly() -> Result<(), String> {
         .collect();
     let total = variables.len() + callables.len() + namespaces.len() + other.len();
     if total != kinds.len() {
-        return Err(format!("partition sizes sum to {total}, expected {}", kinds.len()));
+        return Err(format!(
+            "partition sizes sum to {total}, expected {}",
+            kinds.len()
+        ));
     }
     Ok(())
 }
@@ -728,7 +778,9 @@ fn group_by_predicate_partitions_correctly() -> Result<(), String> {
 fn total_variant_count_is_thirteen() -> Result<(), String> {
     let count = all_symbol_kinds().len();
     if count != 13 {
-        return Err(format!("expected 13 total symbol kind variants, got {count}"));
+        return Err(format!(
+            "expected 13 total symbol kind variants, got {count}"
+        ));
     }
     Ok(())
 }
@@ -756,7 +808,9 @@ fn symbolkind_is_small() -> Result<(), String> {
     let size = std::mem::size_of::<SymbolKind>();
     // Should be 1-2 bytes (enum with small discriminant + optional VarKind)
     if size > 4 {
-        return Err(format!("SymbolKind is {size} bytes — expected ≤4 for efficient Copy"));
+        return Err(format!(
+            "SymbolKind is {size} bytes — expected ≤4 for efficient Copy"
+        ));
     }
     Ok(())
 }
@@ -765,7 +819,9 @@ fn symbolkind_is_small() -> Result<(), String> {
 fn varkind_is_small() -> Result<(), String> {
     let size = std::mem::size_of::<VarKind>();
     if size > 2 {
-        return Err(format!("VarKind is {size} bytes — expected ≤2 for efficient Copy"));
+        return Err(format!(
+            "VarKind is {size} bytes — expected ≤2 for efficient Copy"
+        ));
     }
     Ok(())
 }
@@ -807,8 +863,14 @@ fn sigil_consistency_across_all_constructors() -> Result<(), String> {
 
 #[test]
 fn sigil_none_count_matches_non_variable_count() -> Result<(), String> {
-    let none_count = all_symbol_kinds().iter().filter(|sk| sk.sigil().is_none()).count();
-    let non_var_count = all_symbol_kinds().iter().filter(|sk| !sk.is_variable()).count();
+    let none_count = all_symbol_kinds()
+        .iter()
+        .filter(|sk| sk.sigil().is_none())
+        .count();
+    let non_var_count = all_symbol_kinds()
+        .iter()
+        .filter(|sk| !sk.is_variable())
+        .count();
     if none_count != non_var_count {
         return Err(format!(
             "sigil None count ({none_count}) != non-variable count ({non_var_count})"

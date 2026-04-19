@@ -264,7 +264,12 @@ impl ImplementationProvider {
                     }
                 }
             }
-            NodeKind::VariableDeclaration { declarator, variable, initializer, .. } => {
+            NodeKind::VariableDeclaration {
+                declarator,
+                variable,
+                initializer,
+                ..
+            } => {
                 if declarator == "our" {
                     if let NodeKind::Variable { sigil, name } = &variable.kind {
                         if sigil == "@" && name == "ISA" {
@@ -315,7 +320,9 @@ impl ImplementationProvider {
         results: &mut Vec<LocationLink>,
     ) {
         match &node.kind {
-            NodeKind::Subroutine { name: Some(name), .. } if name == method_name => {
+            NodeKind::Subroutine {
+                name: Some(name), ..
+            } if name == method_name => {
                 let target_uri = parse_uri(uri);
                 results.push(LocationLink {
                     origin_selection_range: None,
@@ -373,7 +380,11 @@ impl ImplementationProvider {
         if let NodeKind::Program { statements } | NodeKind::Block { statements } = &node.kind {
             for stmt in statements {
                 match &stmt.kind {
-                    NodeKind::Package { name, block: Some(inner), .. } => {
+                    NodeKind::Package {
+                        name,
+                        block: Some(inner),
+                        ..
+                    } => {
                         let previous_package = current_package.clone();
                         *current_package = Some(name.clone());
                         self.find_method_in_package_with_scope(
@@ -390,7 +401,10 @@ impl ImplementationProvider {
                     NodeKind::Package { name, .. } => {
                         *current_package = Some(name.clone());
                     }
-                    NodeKind::Subroutine { name: Some(sub_name), .. } => {
+                    NodeKind::Subroutine {
+                        name: Some(sub_name),
+                        ..
+                    } => {
                         if current_package.as_deref() == Some(package_name)
                             && *sub_name == method_name
                         {
@@ -419,7 +433,12 @@ impl ImplementationProvider {
             return;
         }
 
-        if let NodeKind::Package { name, block: Some(inner), .. } = &node.kind {
+        if let NodeKind::Package {
+            name,
+            block: Some(inner),
+            ..
+        } = &node.kind
+        {
             let previous_package = current_package.clone();
             *current_package = Some(name.clone());
             self.find_method_in_package_with_scope(
@@ -447,7 +466,9 @@ impl ImplementationProvider {
     ) -> Option<ImplementationTarget> {
         match &node.kind {
             NodeKind::Package { name, .. } => Some(ImplementationTarget::Package(name.clone())),
-            NodeKind::Subroutine { name: Some(method), .. } => Some(ImplementationTarget::Method {
+            NodeKind::Subroutine {
+                name: Some(method), ..
+            } => Some(ImplementationTarget::Method {
                 package: current_package.to_string(),
                 method: method.clone(),
             }),
@@ -459,7 +480,9 @@ impl ImplementationProvider {
                         method: parts[1].to_string(),
                     })
                 } else if parts.len() > 2 {
-                    Some(ImplementationTarget::Package(parts[..parts.len() - 1].join("::")))
+                    Some(ImplementationTarget::Package(
+                        parts[..parts.len() - 1].join("::"),
+                    ))
                 } else {
                     None
                 }

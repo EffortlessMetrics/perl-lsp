@@ -33,7 +33,9 @@ my $♥ = 'love';  # Heart variable
 my $π = 3.14159;  # Greek letter pi
 "#;
 
-        index.index_file(url::Url::parse(uri)?, code.to_string()).map_err(|e| anyhow!(e))?;
+        index
+            .index_file(url::Url::parse(uri)?, code.to_string())
+            .map_err(|e| anyhow!(e))?;
 
         let symbols = index.file_symbols(uri);
 
@@ -91,13 +93,17 @@ my $😀 = 2;  # Emoji at column 3, takes 2 UTF-16 units
 my $世 = 3;  # CJK at column 3, takes 1 UTF-16 unit
 "#;
 
-        index.index_file(url::Url::parse(uri)?, code.to_string()).map_err(|e| anyhow!(e))?;
+        index
+            .index_file(url::Url::parse(uri)?, code.to_string())
+            .map_err(|e| anyhow!(e))?;
 
         let symbols = index.file_symbols(uri);
 
         // Check each variable's position
-        let var_a =
-            symbols.iter().find(|s| s.name == "$a").ok_or_else(|| anyhow!("Should find $a"))?;
+        let var_a = symbols
+            .iter()
+            .find(|s| s.name == "$a")
+            .ok_or_else(|| anyhow!("Should find $a"))?;
         assert_eq!(var_a.range.start.column, 3); // "my " = 3 units
 
         let var_emoji = symbols
@@ -139,33 +145,56 @@ sub third_sub {
 }
 "#;
 
-        index.index_file(url::Url::parse(uri)?, code.to_string()).map_err(|e| anyhow!(e))?;
+        index
+            .index_file(url::Url::parse(uri)?, code.to_string())
+            .map_err(|e| anyhow!(e))?;
 
         let symbols = index.file_symbols(uri);
 
         // Should have all three packages
-        assert!(symbols.iter().any(|s| s.name == "First" && s.kind == SymbolKind::Package));
-        assert!(symbols.iter().any(|s| s.name == "Second" && s.kind == SymbolKind::Package));
-        assert!(symbols.iter().any(|s| s.name == "Third::Nested" && s.kind == SymbolKind::Package));
+        assert!(
+            symbols
+                .iter()
+                .any(|s| s.name == "First" && s.kind == SymbolKind::Package)
+        );
+        assert!(
+            symbols
+                .iter()
+                .any(|s| s.name == "Second" && s.kind == SymbolKind::Package)
+        );
+        assert!(
+            symbols
+                .iter()
+                .any(|s| s.name == "Third::Nested" && s.kind == SymbolKind::Package)
+        );
 
         // Subroutines should be qualified with their package
         let first_sub = symbols
             .iter()
             .find(|s| s.name == "first_sub" && s.kind == SymbolKind::Subroutine)
             .ok_or_else(|| anyhow!("Should find first_sub"))?;
-        assert_eq!(first_sub.qualified_name, Some("First::first_sub".to_string()));
+        assert_eq!(
+            first_sub.qualified_name,
+            Some("First::first_sub".to_string())
+        );
 
         let second_sub = symbols
             .iter()
             .find(|s| s.name == "second_sub" && s.kind == SymbolKind::Subroutine)
             .ok_or_else(|| anyhow!("Should find second_sub"))?;
-        assert_eq!(second_sub.qualified_name, Some("Second::second_sub".to_string()));
+        assert_eq!(
+            second_sub.qualified_name,
+            Some("Second::second_sub".to_string())
+        );
 
         let third_sub = symbols
             .iter()
             .find(|s| s.name == "third_sub" && s.kind == SymbolKind::Subroutine)
             .ok_or_else(|| anyhow!("Should find third_sub"))?;
-        assert_eq!(third_sub.qualified_name, Some("Third::Nested::third_sub".to_string()));
+        assert_eq!(
+            third_sub.qualified_name,
+            Some("Third::Nested::third_sub".to_string())
+        );
 
         Ok(())
     }
@@ -182,7 +211,9 @@ my $y = $x + 1;  # Read $x
 print $x;        # Read
 "#;
 
-        index.index_file(url::Url::parse(uri)?, code.to_string()).map_err(|e| anyhow!(e))?;
+        index
+            .index_file(url::Url::parse(uri)?, code.to_string())
+            .map_err(|e| anyhow!(e))?;
 
         let refs = index.find_references("$x");
 
@@ -191,10 +222,22 @@ print $x;        # Read
 
         // Check that we found references at different positions
         let lines: Vec<_> = refs.iter().map(|r| r.range.start.line).collect();
-        assert!(lines.contains(&0), "Should have reference on line 0 (definition)");
-        assert!(lines.contains(&1), "Should have reference on line 1 (assignment)");
-        assert!(lines.contains(&3), "Should have reference on line 3 (read in expression)");
-        assert!(lines.contains(&4), "Should have reference on line 4 (print)");
+        assert!(
+            lines.contains(&0),
+            "Should have reference on line 0 (definition)"
+        );
+        assert!(
+            lines.contains(&1),
+            "Should have reference on line 1 (assignment)"
+        );
+        assert!(
+            lines.contains(&3),
+            "Should have reference on line 3 (read in expression)"
+        );
+        assert!(
+            lines.contains(&4),
+            "Should have reference on line 4 (print)"
+        );
 
         Ok(())
     }
@@ -209,7 +252,9 @@ print $x;        # Read
     return 42;
 }"#;
 
-        index.index_file(url::Url::parse(uri)?, code_v1.to_string()).map_err(|e| anyhow!(e))?;
+        index
+            .index_file(url::Url::parse(uri)?, code_v1.to_string())
+            .map_err(|e| anyhow!(e))?;
 
         let symbols_v1 = index.file_symbols(uri);
         assert!(symbols_v1.iter().any(|s| s.name == "old_name"));
@@ -220,11 +265,19 @@ print $x;        # Read
     return 42;
 }"#;
 
-        index.index_file(url::Url::parse(uri)?, code_v2.to_string()).map_err(|e| anyhow!(e))?;
+        index
+            .index_file(url::Url::parse(uri)?, code_v2.to_string())
+            .map_err(|e| anyhow!(e))?;
 
         let symbols_v2 = index.file_symbols(uri);
-        assert!(!symbols_v2.iter().any(|s| s.name == "old_name"), "old_name should be gone");
-        assert!(symbols_v2.iter().any(|s| s.name == "new_name"), "new_name should exist");
+        assert!(
+            !symbols_v2.iter().any(|s| s.name == "old_name"),
+            "old_name should be gone"
+        );
+        assert!(
+            symbols_v2.iter().any(|s| s.name == "new_name"),
+            "new_name should exist"
+        );
 
         Ok(())
     }
@@ -237,7 +290,9 @@ print $x;        # Read
         let code = r#"package Test;
 sub test_sub { }"#;
 
-        index.index_file(url::Url::parse(uri)?, code.to_string()).map_err(|e| anyhow!(e))?;
+        index
+            .index_file(url::Url::parse(uri)?, code.to_string())
+            .map_err(|e| anyhow!(e))?;
 
         // Verify symbols exist
         let symbols = index.file_symbols(uri);

@@ -68,8 +68,12 @@ mod tests {
             if let NodeKind::ExpressionStatement { expression } = &stmt.kind {
                 if let NodeKind::Binary { op, right, .. } = &expression.kind {
                     assert_eq!(op, "=~");
-                    if let NodeKind::Substitution { pattern, replacement, modifiers, .. } =
-                        &right.kind
+                    if let NodeKind::Substitution {
+                        pattern,
+                        replacement,
+                        modifiers,
+                        ..
+                    } = &right.kind
                     {
                         assert_eq!(pattern, "old");
                         assert_eq!(replacement, "new");
@@ -113,7 +117,10 @@ mod tests {
         if let NodeKind::Program { statements } = &ast.kind {
             let stmt = &statements[0];
             if let NodeKind::ExpressionStatement { expression } = &stmt.kind {
-                if let NodeKind::Regex { pattern, modifiers, .. } = &expression.kind {
+                if let NodeKind::Regex {
+                    pattern, modifiers, ..
+                } = &expression.kind
+                {
                     assert_eq!(pattern, "/pattern/");
                     assert_eq!(modifiers, "i");
                 }

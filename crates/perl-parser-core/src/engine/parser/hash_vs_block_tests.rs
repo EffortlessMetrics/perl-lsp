@@ -46,7 +46,11 @@ sub my_sub {
         // However, `+` is often used to disambiguate: `+{ key => value }` forces hash ref.
         // Without `+` or assignment, it's a block.
 
-        assert!(sexp.contains("(block"), "Should parse as block in statement context: {}", sexp);
+        assert!(
+            sexp.contains("(block"),
+            "Should parse as block in statement context: {}",
+            sexp
+        );
     }
 
     #[test]

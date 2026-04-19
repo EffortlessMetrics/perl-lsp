@@ -22,8 +22,16 @@ print %hash;
 "#;
 
     let issues = analyze_code(code);
-    assert!(!issues.iter().any(|i| matches!(i.kind, IssueKind::UndeclaredVariable)));
-    assert!(!issues.iter().any(|i| matches!(i.kind, IssueKind::UninitializedVariable)));
+    assert!(
+        !issues
+            .iter()
+            .any(|i| matches!(i.kind, IssueKind::UndeclaredVariable))
+    );
+    assert!(
+        !issues
+            .iter()
+            .any(|i| matches!(i.kind, IssueKind::UninitializedVariable))
+    );
 }
 
 #[test]
@@ -36,8 +44,16 @@ print %hash;
 "#;
 
     let issues = analyze_code(code);
-    assert!(!issues.iter().any(|i| matches!(i.kind, IssueKind::UndeclaredVariable)));
-    assert!(!issues.iter().any(|i| matches!(i.kind, IssueKind::UninitializedVariable)));
+    assert!(
+        !issues
+            .iter()
+            .any(|i| matches!(i.kind, IssueKind::UndeclaredVariable))
+    );
+    assert!(
+        !issues
+            .iter()
+            .any(|i| matches!(i.kind, IssueKind::UninitializedVariable))
+    );
 }
 
 #[test]
@@ -50,7 +66,11 @@ untie %hash;
 "#;
 
     let issues = analyze_code(code);
-    assert!(!issues.iter().any(|i| matches!(i.kind, IssueKind::UndeclaredVariable)));
+    assert!(
+        !issues
+            .iter()
+            .any(|i| matches!(i.kind, IssueKind::UndeclaredVariable))
+    );
 }
 
 #[test]
@@ -81,5 +101,9 @@ if (tied %hash) {
 }
 "#;
     let issues = analyze_code(code);
-    assert!(!issues.iter().any(|i| matches!(i.kind, IssueKind::UndeclaredVariable)));
+    assert!(
+        !issues
+            .iter()
+            .any(|i| matches!(i.kind, IssueKind::UndeclaredVariable))
+    );
 }

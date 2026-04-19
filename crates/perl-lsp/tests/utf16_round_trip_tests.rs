@@ -35,11 +35,18 @@ mod utf16_round_trip_tests {
         // Test position at \r (should map to same as start of \n)
         let offset_at_cr = server.position_to_offset(text, 0, 10); // At \r
         let offset_at_lf = server.position_to_offset(text, 1, 0); // At start of next line
-        assert_eq!(offset_at_cr, offset_at_lf - 1, "\\r maps to position before \\n");
+        assert_eq!(
+            offset_at_cr,
+            offset_at_lf - 1,
+            "\\r maps to position before \\n"
+        );
 
         // Test round-trip at various positions
         assert!(test_round_trip(&server, text, 0, 5), "Middle of first line");
-        assert!(test_round_trip(&server, text, 1, 3), "Middle of second line");
+        assert!(
+            test_round_trip(&server, text, 1, 3),
+            "Middle of second line"
+        );
         assert!(test_round_trip(&server, text, 2, 8), "End of third line");
 
         // CRLF clamp assertion: position at huge column should map to EOL
@@ -58,8 +65,14 @@ mod utf16_round_trip_tests {
 
         // Test positions before, at, and after the emoji
         assert!(test_round_trip(&server, text, 0, 0), "Start of line");
-        assert!(test_round_trip(&server, text, 0, 8), "Before emoji (after opening quote)");
-        assert!(test_round_trip(&server, text, 0, 10), "After emoji (before closing quote)");
+        assert!(
+            test_round_trip(&server, text, 0, 8),
+            "Before emoji (after opening quote)"
+        );
+        assert!(
+            test_round_trip(&server, text, 0, 10),
+            "After emoji (before closing quote)"
+        );
         assert!(test_round_trip(&server, text, 0, 11), "After closing quote");
         assert!(test_round_trip(&server, text, 0, 12), "At semicolon");
 
@@ -71,7 +84,11 @@ mod utf16_round_trip_tests {
         // Verify the character difference is 2 (surrogate pair)
         let (_, char_before) = server.offset_to_position(text, offset_before);
         let (_, char_after) = server.offset_to_position(text, offset_after);
-        assert_eq!(char_after - char_before, 2, "Emoji counts as 2 UTF-16 units");
+        assert_eq!(
+            char_after - char_before,
+            2,
+            "Emoji counts as 2 UTF-16 units"
+        );
 
         // Surrogate pair fence assertion: positions at boundaries map correctly
         let text_just_emoji = "🐍";
@@ -102,8 +119,14 @@ mod utf16_round_trip_tests {
         assert!(test_round_trip(&server, text, 0, 4), "After π");
         assert!(test_round_trip(&server, text, 0, 16), "End of first line");
         assert!(test_round_trip(&server, text, 1, 0), "Start of second line");
-        assert!(test_round_trip(&server, text, 1, 1), "After $ on second line");
-        assert!(test_round_trip(&server, text, 1, 2), "After π on second line");
+        assert!(
+            test_round_trip(&server, text, 1, 1),
+            "After $ on second line"
+        );
+        assert!(
+            test_round_trip(&server, text, 1, 2),
+            "After π on second line"
+        );
 
         // Verify π counts as 1 UTF-16 unit but is 2 bytes
         let offset_before = server.position_to_offset(text, 0, 3);
@@ -180,15 +203,22 @@ mod utf16_round_trip_tests {
 
         // Position after the complex emoji (it's many UTF-16 units)
         let _offset_start = server.position_to_offset(text, 0, 0);
-        let offset_after_emoji = text.find(" family").ok_or("Could not find ' family' in text")?;
+        let offset_after_emoji = text
+            .find(" family")
+            .ok_or("Could not find ' family' in text")?;
         let (line, char) = server.offset_to_position(text, offset_after_emoji);
         assert_eq!(line, 0, "Still on first line");
         assert!(char > 0, "Character position advanced past emoji");
 
         // Test round-trip at "family" text
-        let family_start = text.find("family").ok_or("Could not find 'family' in text")?;
+        let family_start = text
+            .find("family")
+            .ok_or("Could not find 'family' in text")?;
         let (line, char) = server.offset_to_position(text, family_start);
-        assert!(test_round_trip(&server, text, line, char), "At 'family' text");
+        assert!(
+            test_round_trip(&server, text, line, char),
+            "At 'family' text"
+        );
 
         Ok(())
     }

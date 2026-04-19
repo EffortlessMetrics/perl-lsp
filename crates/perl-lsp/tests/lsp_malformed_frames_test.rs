@@ -65,7 +65,11 @@ fn test_edge_case_malformed_frame_recovery() -> Result<(), Box<dyn std::error::E
     // matters here is that the process does not crash the test harness or spin forever.
     std::thread::sleep(Duration::from_millis(200));
 
-    let status = server.process.lock().unwrap_or_else(|e| e.into_inner()).try_wait()?;
+    let status = server
+        .process
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .try_wait()?;
 
     if let Some(exit_status) = status {
         assert!(
@@ -131,8 +135,11 @@ fn test_server_specific_header_parsing() -> Result<(), Box<dyn std::error::Error
 
     // Send duplicate Content-Length headers
     let body = json!({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}}).to_string();
-    let header =
-        format!("Content-Length: {}\r\nContent-Length: {}\r\n\r\n", body.len(), body.len());
+    let header = format!(
+        "Content-Length: {}\r\nContent-Length: {}\r\n\r\n",
+        body.len(),
+        body.len()
+    );
 
     {
         server.stdin_writer().write_all(header.as_bytes())?;

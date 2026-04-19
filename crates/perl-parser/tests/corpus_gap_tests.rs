@@ -78,7 +78,12 @@ mod corpus_gap_tests {
         let mut parser = Parser::new(&content);
         let result = parser.parse();
 
-        assert!(result.is_ok(), "Failed to parse {}: {:?}", filename, result.err());
+        assert!(
+            result.is_ok(),
+            "Failed to parse {}: {:?}",
+            filename,
+            result.err()
+        );
         Ok(())
     }
 

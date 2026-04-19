@@ -18,7 +18,10 @@ mod builtin_empty_blocks_tests {
 
     #[test]
     fn test_sort_empty_block() {
-        parse_and_check("sort {} @array", "(call sort ((block ) (variable @ array)))");
+        parse_and_check(
+            "sort {} @array",
+            "(call sort ((block ) (variable @ array)))",
+        );
     }
 
     #[test]
@@ -28,7 +31,10 @@ mod builtin_empty_blocks_tests {
 
     #[test]
     fn test_grep_empty_block() {
-        parse_and_check("grep {} @array", "(call grep ((block ) (variable @ array)))");
+        parse_and_check(
+            "grep {} @array",
+            "(call grep ((block ) (variable @ array)))",
+        );
     }
 
     #[test]

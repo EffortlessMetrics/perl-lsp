@@ -52,13 +52,18 @@ use walkdir::WalkDir;
 fn validate_output_path(output_path: &Path) -> Result<()> {
     // Prevent path traversal attacks
     if output_path.to_string_lossy().contains("..") {
-        return Err(color_eyre::eyre::eyre!("Path traversal not allowed in output path"));
+        return Err(color_eyre::eyre::eyre!(
+            "Path traversal not allowed in output path"
+        ));
     }
 
     // Ensure the filename has a reasonable extension for text output
     if let Some(extension) = output_path.extension() {
         let ext_str = extension.to_string_lossy();
-        if !matches!(ext_str.as_ref(), "txt" | "log" | "out" | "bench" | "json" | "md") {
+        if !matches!(
+            ext_str.as_ref(),
+            "txt" | "log" | "out" | "bench" | "json" | "md"
+        ) {
             return Err(color_eyre::eyre::eyre!(
                 "Unsupported file extension '{}'. Use txt, log, out, bench, json, or md",
                 ext_str
@@ -105,7 +110,10 @@ pub fn run(name: Option<String>, save: bool, output: Option<PathBuf>) -> Result<
         spinner.finish_with_message("✅ Benchmarks completed");
     } else {
         spinner.finish_with_message("❌ Benchmarks failed");
-        return Err(color_eyre::eyre::eyre!("Benchmarks failed with status: {}", result.status));
+        return Err(color_eyre::eyre::eyre!(
+            "Benchmarks failed with status: {}",
+            result.status
+        ));
     }
 
     if save {
@@ -125,7 +133,10 @@ pub fn run(name: Option<String>, save: bool, output: Option<PathBuf>) -> Result<
 
             // Write benchmark results to file
             fs::write(&output_path, &result.stdout).with_context(|| {
-                format!("Failed to write benchmark results to: {}", output_path.display())
+                format!(
+                    "Failed to write benchmark results to: {}",
+                    output_path.display()
+                )
             })?;
 
             spinner.finish_with_message(format!(
@@ -138,7 +149,10 @@ pub fn run(name: Option<String>, save: bool, output: Option<PathBuf>) -> Result<
             let default_path = PathBuf::from(format!("benchmark_results_{}.txt", timestamp));
 
             fs::write(&default_path, &result.stdout).with_context(|| {
-                format!("Failed to write benchmark results to: {}", default_path.display())
+                format!(
+                    "Failed to write benchmark results to: {}",
+                    default_path.display()
+                )
             })?;
 
             spinner.finish_with_message(format!(
@@ -192,18 +206,25 @@ fn run_c_benchmarks() -> Result<CBenchmarkResult> {
 
 /// Extract the mean time from the latest Criterion benchmark output
 fn extract_rust_mean() -> Result<f64> {
-    for entry in WalkDir::new("target/criterion").into_iter().filter_map(|e| e.ok()) {
+    for entry in WalkDir::new("target/criterion")
+        .into_iter()
+        .filter_map(|e| e.ok())
+    {
         if entry.file_name() == "estimates.json" {
             let data = fs::read_to_string(entry.path())?;
             let json: serde_json::Value = serde_json::from_str(&data)?;
-            if let Some(mean) =
-                json.get("mean").and_then(|m| m.get("point_estimate")).and_then(|v| v.as_f64())
+            if let Some(mean) = json
+                .get("mean")
+                .and_then(|m| m.get("point_estimate"))
+                .and_then(|v| v.as_f64())
             {
                 return Ok(mean);
             }
         }
     }
-    Err(color_eyre::eyre::eyre!("No Criterion benchmark estimates found"))
+    Err(color_eyre::eyre::eyre!(
+        "No Criterion benchmark estimates found"
+    ))
 }
 
 /// Comparison between C and Rust benchmark results
@@ -217,7 +238,11 @@ struct BenchmarkComparison {
 /// Compare benchmark results and calculate relative performance
 fn compare_implementations(rust_avg: f64, c_avg: f64) -> BenchmarkComparison {
     let speedup = c_avg / rust_avg;
-    BenchmarkComparison { rust_avg, c_avg, speedup }
+    BenchmarkComparison {
+        rust_avg,
+        c_avg,
+        speedup,
+    }
 }
 
 /// Detect simple regressions based on a 10% slowdown threshold
@@ -252,7 +277,11 @@ mod tests {
 
         for ext in &valid_extensions {
             let path = PathBuf::from(format!("test.{}", ext));
-            assert!(validate_output_path(&path).is_ok(), "Extension {} should be valid", ext);
+            assert!(
+                validate_output_path(&path).is_ok(),
+                "Extension {} should be valid",
+                ext
+            );
         }
     }
 
@@ -327,12 +356,21 @@ mod tests {
     #[test]
     fn test_validate_output_path_with_special_characters() {
         // Test various special characters that should be allowed
-        let valid_paths =
-            ["test_file.txt", "test-file.txt", "test file.txt", "test.file.txt", "test123.txt"];
+        let valid_paths = [
+            "test_file.txt",
+            "test-file.txt",
+            "test file.txt",
+            "test.file.txt",
+            "test123.txt",
+        ];
 
         for path_str in &valid_paths {
             let path = PathBuf::from(path_str);
-            assert!(validate_output_path(&path).is_ok(), "Path should be valid: {}", path_str);
+            assert!(
+                validate_output_path(&path).is_ok(),
+                "Path should be valid: {}",
+                path_str
+            );
         }
     }
 

@@ -317,7 +317,9 @@ fn all_ids_use_lowercase_with_underscores_or_dots() -> Result<(), String> {
     for (name, value) in all_ids() {
         for ch in value.chars() {
             if !(ch.is_ascii_lowercase() || ch == '_' || ch == '.') {
-                return Err(format!("{name} = \"{value}\" contains invalid character '{ch}'"));
+                return Err(format!(
+                    "{name} = \"{value}\" contains invalid character '{ch}'"
+                ));
             }
         }
     }
@@ -338,7 +340,9 @@ fn no_id_is_empty() -> Result<(), String> {
 fn no_id_has_leading_or_trailing_whitespace() -> Result<(), String> {
     for (name, value) in all_ids() {
         if value != value.trim() {
-            return Err(format!("{name} = \"{value}\" has leading/trailing whitespace"));
+            return Err(format!(
+                "{name} = \"{value}\" has leading/trailing whitespace"
+            ));
         }
     }
     Ok(())
@@ -358,7 +362,9 @@ fn no_id_contains_consecutive_dots() -> Result<(), String> {
 fn no_id_ends_with_dot_or_underscore() -> Result<(), String> {
     for (name, value) in all_ids() {
         if value.ends_with('.') || value.ends_with('_') {
-            return Err(format!("{name} = \"{value}\" ends with a dot or underscore"));
+            return Err(format!(
+                "{name} = \"{value}\" ends with a dot or underscore"
+            ));
         }
     }
     Ok(())
@@ -396,7 +402,10 @@ fn lsp_color_is_legacy_alias_of_document_color() -> Result<(), String> {
         return Err(format!("LSP_COLOR unexpected value: {}", LSP_COLOR));
     }
     if LSP_DOCUMENT_COLOR != "lsp.document_color" {
-        return Err(format!("LSP_DOCUMENT_COLOR unexpected value: {}", LSP_DOCUMENT_COLOR));
+        return Err(format!(
+            "LSP_DOCUMENT_COLOR unexpected value: {}",
+            LSP_DOCUMENT_COLOR
+        ));
     }
     Ok(())
 }
@@ -521,8 +530,12 @@ fn ids_can_be_collected_into_set() -> Result<(), String> {
 
 #[test]
 fn formatting_ids_contain_formatting_substring() -> Result<(), String> {
-    let formatting_ids =
-        [LSP_FORMATTING, LSP_RANGE_FORMATTING, LSP_RANGES_FORMATTING, LSP_ON_TYPE_FORMATTING];
+    let formatting_ids = [
+        LSP_FORMATTING,
+        LSP_RANGE_FORMATTING,
+        LSP_RANGES_FORMATTING,
+        LSP_ON_TYPE_FORMATTING,
+    ];
     for id in &formatting_ids {
         if !id.contains("formatting") {
             return Err(format!("\"{id}\" should contain \"formatting\""));
@@ -562,7 +575,10 @@ fn dap_breakpoints_basic_uses_dot_separator() -> Result<(), String> {
     // DAP_BREAKPOINTS_BASIC uses a nested dot namespace (dap.breakpoints.basic)
     let parts: Vec<&str> = DAP_BREAKPOINTS_BASIC.split('.').collect();
     if parts.len() != 3 {
-        return Err(format!("expected 3 dot-separated segments, got {}", parts.len()));
+        return Err(format!(
+            "expected 3 dot-separated segments, got {}",
+            parts.len()
+        ));
     }
     if parts[0] != "dap" || parts[1] != "breakpoints" || parts[2] != "basic" {
         return Err(format!("unexpected segments: {:?}", parts));
@@ -624,13 +640,17 @@ fn first_segment_matches_protocol_family() -> Result<(), String> {
     for (name, value) in all_lsp_ids() {
         let first = value.split('.').next().unwrap_or("");
         if first != "lsp" {
-            return Err(format!("{name}: first segment is \"{first}\", expected \"lsp\""));
+            return Err(format!(
+                "{name}: first segment is \"{first}\", expected \"lsp\""
+            ));
         }
     }
     for (name, value) in all_dap_ids() {
         let first = value.split('.').next().unwrap_or("");
         if first != "dap" {
-            return Err(format!("{name}: first segment is \"{first}\", expected \"dap\""));
+            return Err(format!(
+                "{name}: first segment is \"{first}\", expected \"dap\""
+            ));
         }
     }
     Ok(())

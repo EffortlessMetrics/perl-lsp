@@ -124,7 +124,10 @@ fn test_side_effect_sub_returns_warning() {
     let inliner = SubInliner::new(source);
     let result = inliner.inline_call_with_warnings("greet", "greet(\"World\")");
     let (_, warnings) = must(result);
-    assert!(!warnings.is_empty(), "side-effect sub should produce warnings");
+    assert!(
+        !warnings.is_empty(),
+        "side-effect sub should produce warnings"
+    );
 }
 
 // ---------------------------------------------------------------------------

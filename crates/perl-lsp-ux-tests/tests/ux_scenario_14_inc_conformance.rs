@@ -52,8 +52,14 @@ fn wait_diagnostics(harness: &UxHarness, file: &str) -> Vec<serde_json::Value> {
 /// Check whether any diagnostic in `diags` is a PL701 missing-module error.
 fn has_pl701(diags: &[serde_json::Value]) -> bool {
     diags.iter().any(|d| {
-        d.get("code").and_then(|c| c.as_str()).map(|c| c == PL701).unwrap_or(false)
-            || d.get("code").and_then(|c| c.as_u64()).map(|c| c == 701).unwrap_or(false)
+        d.get("code")
+            .and_then(|c| c.as_str())
+            .map(|c| c == PL701)
+            .unwrap_or(false)
+            || d.get("code")
+                .and_then(|c| c.as_u64())
+                .map(|c| c == 701)
+                .unwrap_or(false)
     })
 }
 
@@ -150,16 +156,21 @@ fn scenario_14_relative_include_path() {
     }
 
     let harness = UxHarness::new(
-        ScenarioConfig { timeout: Duration::from_secs(20), ..Default::default() }
-            .with_file("fixture.pl", RELATIVE_INCLUDE_SOURCE)
-            .with_file("lib/GreetModule.pm", RELATIVE_INCLUDE_MODULE),
+        ScenarioConfig {
+            timeout: Duration::from_secs(20),
+            ..Default::default()
+        }
+        .with_file("fixture.pl", RELATIVE_INCLUDE_SOURCE)
+        .with_file("lib/GreetModule.pm", RELATIVE_INCLUDE_MODULE),
     )
     .expect("Failed to create UX harness");
 
     // Configure server: lib/ is an include path.
     send_include_paths(&harness, &["lib"]);
 
-    harness.open_file("fixture.pl", RELATIVE_INCLUDE_SOURCE).expect("didOpen should succeed");
+    harness
+        .open_file("fixture.pl", RELATIVE_INCLUDE_SOURCE)
+        .expect("didOpen should succeed");
     std::thread::sleep(Duration::from_millis(500));
 
     let diags = wait_diagnostics(&harness, "fixture.pl");
@@ -167,15 +178,24 @@ fn scenario_14_relative_include_path() {
     let pl701_absent = !has_pl701(&diags);
 
     // goto-definition on `use GreetModule` — line 2, col 4 (start of "GreetModule").
-    let defs = harness.definition("fixture.pl", 2, 4).expect("definition must not error");
+    let defs = harness
+        .definition("fixture.pl", 2, 4)
+        .expect("definition must not error");
     let def_resolves = !defs.is_empty();
 
     // hover on same position.
-    let hover_result = harness.hover("fixture.pl", 2, 4).expect("hover must not error");
+    let hover_result = harness
+        .hover("fixture.pl", 2, 4)
+        .expect("hover must not error");
     // Hover resolving = either non-null result, or at minimum no error.
     let hover_ok = true; // hover returning null is acceptable in degraded mode
 
-    print_conformance("relative_include_path", pl701_absent, def_resolves, hover_ok);
+    print_conformance(
+        "relative_include_path",
+        pl701_absent,
+        def_resolves,
+        hover_ok,
+    );
 
     // Consistency check: PL701 and definition must agree.
     // If definition resolves, PL701 must not fire (and vice versa).
@@ -249,25 +269,34 @@ fn scenario_14_use_lib_lexical() {
     }
 
     let harness = UxHarness::new(
-        ScenarioConfig { timeout: Duration::from_secs(20), ..Default::default() }
-            .with_file("fixture.pl", USE_LIB_LEXICAL_SOURCE)
-            .with_file("lib/LexicalModule.pm", LEXICAL_MODULE),
+        ScenarioConfig {
+            timeout: Duration::from_secs(20),
+            ..Default::default()
+        }
+        .with_file("fixture.pl", USE_LIB_LEXICAL_SOURCE)
+        .with_file("lib/LexicalModule.pm", LEXICAL_MODULE),
     )
     .expect("Failed to create UX harness");
 
     // No server-side includePaths config — resolution must come entirely from
     // the in-source `use lib 'lib'` pragma.
-    harness.open_file("fixture.pl", USE_LIB_LEXICAL_SOURCE).expect("didOpen should succeed");
+    harness
+        .open_file("fixture.pl", USE_LIB_LEXICAL_SOURCE)
+        .expect("didOpen should succeed");
     std::thread::sleep(Duration::from_millis(500));
 
     let diags = wait_diagnostics(&harness, "fixture.pl");
     let pl701_absent = !has_pl701(&diags);
 
     // `use LexicalModule` is at line 3, col 4.
-    let defs = harness.definition("fixture.pl", 3, 4).expect("definition must not error");
+    let defs = harness
+        .definition("fixture.pl", 3, 4)
+        .expect("definition must not error");
     let def_resolves = !defs.is_empty();
 
-    let hover_result = harness.hover("fixture.pl", 3, 4).expect("hover must not error");
+    let hover_result = harness
+        .hover("fixture.pl", 3, 4)
+        .expect("hover must not error");
     let hover_ok = true; // degraded null is acceptable
 
     print_conformance("lexical_use_lib", pl701_absent, def_resolves, hover_ok);
@@ -296,7 +325,11 @@ fn scenario_14_use_lib_lexical() {
     );
 
     if let Some(hover) = hover_result {
-        assert!(hover.get("contents").is_some(), "Hover result must have 'contents': {:?}", hover);
+        assert!(
+            hover.get("contents").is_some(),
+            "Hover result must have 'contents': {:?}",
+            hover
+        );
     }
 
     harness.assert_no_crash();
@@ -336,28 +369,42 @@ fn scenario_14_absolute_include_path() {
         .expect("Failed to write AbsoluteModule.pm");
 
     let harness = UxHarness::new(
-        ScenarioConfig { timeout: Duration::from_secs(20), ..Default::default() }
-            .with_file("fixture.pl", ABSOLUTE_INCLUDE_SOURCE),
+        ScenarioConfig {
+            timeout: Duration::from_secs(20),
+            ..Default::default()
+        }
+        .with_file("fixture.pl", ABSOLUTE_INCLUDE_SOURCE),
     )
     .expect("Failed to create UX harness");
 
     let abs_root_string = abs_root.path().to_string_lossy().to_string();
     send_include_paths(&harness, &[abs_root_string.as_str()]);
 
-    harness.open_file("fixture.pl", ABSOLUTE_INCLUDE_SOURCE).expect("didOpen should succeed");
+    harness
+        .open_file("fixture.pl", ABSOLUTE_INCLUDE_SOURCE)
+        .expect("didOpen should succeed");
     std::thread::sleep(Duration::from_millis(500));
 
     let diags = wait_diagnostics(&harness, "fixture.pl");
     let pl701_absent = !has_pl701(&diags);
 
     // `use AbsoluteModule` at line 2, col 4.
-    let defs = harness.definition("fixture.pl", 2, 4).expect("definition must not error");
+    let defs = harness
+        .definition("fixture.pl", 2, 4)
+        .expect("definition must not error");
     let def_resolves = !defs.is_empty();
 
-    let hover_result = harness.hover("fixture.pl", 2, 4).expect("hover must not error");
+    let hover_result = harness
+        .hover("fixture.pl", 2, 4)
+        .expect("hover must not error");
     let hover_ok = true;
 
-    print_conformance("absolute_include_path", pl701_absent, def_resolves, hover_ok);
+    print_conformance(
+        "absolute_include_path",
+        pl701_absent,
+        def_resolves,
+        hover_ok,
+    );
 
     if def_resolves && !pl701_absent {
         panic!(
@@ -382,7 +429,11 @@ fn scenario_14_absolute_include_path() {
     );
 
     if let Some(hover) = hover_result {
-        assert!(hover.get("contents").is_some(), "Hover result must have 'contents': {:?}", hover);
+        assert!(
+            hover.get("contents").is_some(),
+            "Hover result must have 'contents': {:?}",
+            hover
+        );
     }
 
     harness.assert_no_crash();
@@ -424,13 +475,18 @@ fn scenario_14_no_lib_cancellation() {
     }
 
     let harness = UxHarness::new(
-        ScenarioConfig { timeout: Duration::from_secs(20), ..Default::default() }
-            .with_file("fixture.pl", NO_LIB_CANCEL_SOURCE)
-            .with_file("lib/GoneModule.pm", GONE_MODULE),
+        ScenarioConfig {
+            timeout: Duration::from_secs(20),
+            ..Default::default()
+        }
+        .with_file("fixture.pl", NO_LIB_CANCEL_SOURCE)
+        .with_file("lib/GoneModule.pm", GONE_MODULE),
     )
     .expect("Failed to create UX harness");
 
-    harness.open_file("fixture.pl", NO_LIB_CANCEL_SOURCE).expect("didOpen should succeed");
+    harness
+        .open_file("fixture.pl", NO_LIB_CANCEL_SOURCE)
+        .expect("didOpen should succeed");
     std::thread::sleep(Duration::from_millis(500));
 
     let diags = wait_diagnostics(&harness, "fixture.pl");
@@ -438,10 +494,14 @@ fn scenario_14_no_lib_cancellation() {
     let pl701_fires = has_pl701(&diags);
 
     // goto-definition on `use GoneModule` at line 4, col 4.
-    let defs = harness.definition("fixture.pl", 4, 4).expect("definition must not error");
+    let defs = harness
+        .definition("fixture.pl", 4, 4)
+        .expect("definition must not error");
     let def_empty = defs.is_empty();
 
-    let hover_result = harness.hover("fixture.pl", 4, 4).expect("hover must not error");
+    let hover_result = harness
+        .hover("fixture.pl", 4, 4)
+        .expect("hover must not error");
 
     print_conformance(
         "no_lib_cancellation",
@@ -521,23 +581,32 @@ fn scenario_14_findbin_relative() {
     // The harness workspace root acts as $FindBin::Bin.
     // lib/FindBinModule.pm must be at <workspace>/lib/FindBinModule.pm.
     let harness = UxHarness::new(
-        ScenarioConfig { timeout: Duration::from_secs(20), ..Default::default() }
-            .with_file("fixture.pl", FINDBIN_SOURCE)
-            .with_file("lib/FindBinModule.pm", FINDBIN_MODULE),
+        ScenarioConfig {
+            timeout: Duration::from_secs(20),
+            ..Default::default()
+        }
+        .with_file("fixture.pl", FINDBIN_SOURCE)
+        .with_file("lib/FindBinModule.pm", FINDBIN_MODULE),
     )
     .expect("Failed to create UX harness");
 
-    harness.open_file("fixture.pl", FINDBIN_SOURCE).expect("didOpen should succeed");
+    harness
+        .open_file("fixture.pl", FINDBIN_SOURCE)
+        .expect("didOpen should succeed");
     std::thread::sleep(Duration::from_millis(500));
 
     let diags = wait_diagnostics(&harness, "fixture.pl");
     let pl701_absent = !has_pl701(&diags);
 
     // `use FindBinModule` at line 4, col 4.
-    let defs = harness.definition("fixture.pl", 4, 4).expect("definition must not error");
+    let defs = harness
+        .definition("fixture.pl", 4, 4)
+        .expect("definition must not error");
     let def_resolves = !defs.is_empty();
 
-    let hover_result = harness.hover("fixture.pl", 4, 4).expect("hover must not error");
+    let hover_result = harness
+        .hover("fixture.pl", 4, 4)
+        .expect("hover must not error");
     let hover_ok = true;
 
     print_conformance("findbin_relative", pl701_absent, def_resolves, hover_ok);
@@ -563,7 +632,11 @@ fn scenario_14_findbin_relative() {
     // We assert consistency but tolerate FindBin not resolving end-to-end in the
     // UX harness (it's environment-dependent). What we MUST NOT see is divergence.
     if let Some(hover) = hover_result {
-        assert!(hover.get("contents").is_some(), "Hover result must have 'contents': {:?}", hover);
+        assert!(
+            hover.get("contents").is_some(),
+            "Hover result must have 'contents': {:?}",
+            hover
+        );
     }
 
     harness.assert_no_crash();
@@ -611,26 +684,35 @@ fn scenario_14_system_inc() {
     let perl5lib_value = system_dir.path().to_string_lossy().to_string();
 
     let harness = UxHarness::new(
-        ScenarioConfig { timeout: Duration::from_secs(20), ..Default::default() }
-            .with_file("fixture.pl", SYSTEM_INC_SOURCE)
-            .env("PERL5LIB", &perl5lib_value),
+        ScenarioConfig {
+            timeout: Duration::from_secs(20),
+            ..Default::default()
+        }
+        .with_file("fixture.pl", SYSTEM_INC_SOURCE)
+        .env("PERL5LIB", &perl5lib_value),
     )
     .expect("Failed to create UX harness");
 
     // Enable PERL5LIB consumption.
     send_use_system_inc(&harness, true);
 
-    harness.open_file("fixture.pl", SYSTEM_INC_SOURCE).expect("didOpen should succeed");
+    harness
+        .open_file("fixture.pl", SYSTEM_INC_SOURCE)
+        .expect("didOpen should succeed");
     std::thread::sleep(Duration::from_millis(500));
 
     let diags = wait_diagnostics(&harness, "fixture.pl");
     let pl701_absent = !has_pl701(&diags);
 
     // `use SystemModule` at line 2, col 4.
-    let defs = harness.definition("fixture.pl", 2, 4).expect("definition must not error");
+    let defs = harness
+        .definition("fixture.pl", 2, 4)
+        .expect("definition must not error");
     let def_resolves = !defs.is_empty();
 
-    let hover_result = harness.hover("fixture.pl", 2, 4).expect("hover must not error");
+    let hover_result = harness
+        .hover("fixture.pl", 2, 4)
+        .expect("hover must not error");
     let hover_ok = true;
 
     print_conformance("system_inc", pl701_absent, def_resolves, hover_ok);
@@ -656,7 +738,11 @@ fn scenario_14_system_inc() {
     }
 
     if let Some(hover) = hover_result {
-        assert!(hover.get("contents").is_some(), "Hover result must have 'contents': {:?}", hover);
+        assert!(
+            hover.get("contents").is_some(),
+            "Hover result must have 'contents': {:?}",
+            hover
+        );
     }
 
     harness.assert_no_crash();

@@ -44,7 +44,10 @@ pub struct TestContext {
 impl TestContext {
     /// Create a new test context with uninitialized harness
     pub fn new() -> Self {
-        Self { harness: LspHarness::new_raw(), version_counter: 1 }
+        Self {
+            harness: LspHarness::new_raw(),
+            version_counter: 1,
+        }
     }
 
     /// Initialize the LSP server and wait for it to be fully ready
@@ -67,7 +70,9 @@ impl TestContext {
     pub fn initialize_with(&mut self, root_uri: &str, capabilities: Option<Value>) -> Value {
         match self.harness.initialize_ready(root_uri, capabilities) {
             Ok(v) => v,
-            Err(e) => must(Err::<Value, _>(format!("initialization should succeed: {e}"))),
+            Err(e) => must(Err::<Value, _>(format!(
+                "initialization should succeed: {e}"
+            ))),
         }
     }
 

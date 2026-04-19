@@ -70,7 +70,10 @@ mod tests {
         let result = analyzer.analyze_file(Path::new("test.pl"));
         let violations = must(result);
         assert_eq!(violations.len(), 1);
-        assert_eq!(violations[0].policy, "TestingAndDebugging::RequireUseStrict");
+        assert_eq!(
+            violations[0].policy,
+            "TestingAndDebugging::RequireUseStrict"
+        );
         assert_eq!(violations[0].range.start.line, 4);
 
         let invocations = runtime.invocations();
@@ -80,7 +83,10 @@ mod tests {
         assert!(invocations[0].args.contains(&"--".to_string()));
         let sep_pos = must_some(invocations[0].args.iter().position(|a| a == "--"));
         let file_pos = must_some(invocations[0].args.iter().position(|a| a == "test.pl"));
-        assert!(sep_pos < file_pos, "-- separator must come before file path");
+        assert!(
+            sep_pos < file_pos,
+            "-- separator must come before file path"
+        );
     }
 
     #[test]
@@ -124,9 +130,21 @@ mod tests {
         let invocations = runtime.invocations();
         assert_eq!(invocations.len(), 1);
         assert!(invocations[0].args.contains(&"--severity=1".to_string()));
-        assert!(invocations[0].args.contains(&"--profile=/path/to/.perlcriticrc".to_string()));
+        assert!(
+            invocations[0]
+                .args
+                .contains(&"--profile=/path/to/.perlcriticrc".to_string())
+        );
         assert!(invocations[0].args.contains(&"--theme=pbp".to_string()));
-        assert!(invocations[0].args.contains(&"--include=RequireUseStrict".to_string()));
-        assert!(invocations[0].args.contains(&"--exclude=ProhibitMagicNumbers".to_string()));
+        assert!(
+            invocations[0]
+                .args
+                .contains(&"--include=RequireUseStrict".to_string())
+        );
+        assert!(
+            invocations[0]
+                .args
+                .contains(&"--exclude=ProhibitMagicNumbers".to_string())
+        );
     }
 }

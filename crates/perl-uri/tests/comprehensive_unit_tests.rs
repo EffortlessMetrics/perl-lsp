@@ -14,7 +14,10 @@ fn uri_key_preserves_unix_file_uri() {
 
 #[test]
 fn uri_key_lowercases_windows_drive_letter() {
-    assert_eq!(uri_key("file:///C:/Users/test.pl"), "file:///c:/Users/test.pl");
+    assert_eq!(
+        uri_key("file:///C:/Users/test.pl"),
+        "file:///c:/Users/test.pl"
+    );
 }
 
 #[test]
@@ -30,7 +33,10 @@ fn uri_key_lowercases_various_drive_letters() {
 
 #[test]
 fn uri_key_already_lowercase_drive_is_noop() {
-    assert_eq!(uri_key("file:///c:/Users/test.pl"), "file:///c:/Users/test.pl");
+    assert_eq!(
+        uri_key("file:///c:/Users/test.pl"),
+        "file:///c:/Users/test.pl"
+    );
 }
 
 #[test]
@@ -378,13 +384,21 @@ mod roundtrip_tests {
             if back.ends_with(Path::new(&expected_suffix)) {
                 return Ok(());
             }
-            return Err(format!("roundtrip mismatch: {} vs {}", back.display(), original));
+            return Err(format!(
+                "roundtrip mismatch: {} vs {}",
+                back.display(),
+                original
+            ));
         }
 
         if back == Path::new(original) {
             Ok(())
         } else {
-            Err(format!("roundtrip mismatch: {} vs {}", back.display(), original))
+            Err(format!(
+                "roundtrip mismatch: {} vs {}",
+                back.display(),
+                original
+            ))
         }
     }
 
@@ -446,7 +460,10 @@ mod normalize_uri_tests {
     #[test]
     fn absolute_path_becomes_file_uri() {
         let result = normalize_uri("/tmp/test.pl");
-        assert!(result.starts_with("file:///"), "expected file:// URI, got: {result}");
+        assert!(
+            result.starts_with("file:///"),
+            "expected file:// URI, got: {result}"
+        );
         assert!(result.contains("test.pl"));
     }
 
@@ -539,8 +556,12 @@ mod edge_case_tests {
 
     #[test]
     fn special_scheme_is_not_file_uri() {
-        let uris =
-            ["untitled:Untitled-1", "git:/foo/bar", "vscode-notebook:cell", "https://example.com"];
+        let uris = [
+            "untitled:Untitled-1",
+            "git:/foo/bar",
+            "vscode-notebook:cell",
+            "https://example.com",
+        ];
         for uri in &uris {
             assert!(!is_file_uri(uri), "{uri} should not be a file URI");
             assert!(is_special_scheme(uri), "{uri} should be a special scheme");

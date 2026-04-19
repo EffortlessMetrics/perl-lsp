@@ -27,7 +27,10 @@ fn test_stack_space_exhaustion() {
         ("Deeply nested brackets", generate_deep_brackets(200)),
         ("Deeply nested braces", generate_deep_braces(200)),
         ("Deeply nested subroutines", generate_deep_subroutines(200)),
-        ("Deeply nested conditionals", generate_deep_conditionals(200)),
+        (
+            "Deeply nested conditionals",
+            generate_deep_conditionals(200),
+        ),
     ];
 
     for (name, code) in stack_exhaustion_cases {
@@ -79,11 +82,26 @@ fn test_circular_reference_scenarios() {
     println!("Testing circular reference scenarios...");
 
     let circular_cases = vec![
-        ("Self-referencing package", generate_self_referencing_package()),
-        ("Circular package references", generate_circular_package_references()),
-        ("Recursive function calls", generate_recursive_function_calls()),
-        ("Circular data structures", generate_circular_data_structures()),
-        ("Infinite loop constructs", generate_infinite_loop_constructs()),
+        (
+            "Self-referencing package",
+            generate_self_referencing_package(),
+        ),
+        (
+            "Circular package references",
+            generate_circular_package_references(),
+        ),
+        (
+            "Recursive function calls",
+            generate_recursive_function_calls(),
+        ),
+        (
+            "Circular data structures",
+            generate_circular_data_structures(),
+        ),
+        (
+            "Infinite loop constructs",
+            generate_infinite_loop_constructs(),
+        ),
     ];
 
     for (name, code) in circular_cases {
@@ -95,7 +113,11 @@ fn test_circular_reference_scenarios() {
         let parse_time = start_time.elapsed();
 
         // Should parse without infinite loops
-        assert!(result.is_ok(), "Should parse {} without infinite loops", name);
+        assert!(
+            result.is_ok(),
+            "Should parse {} without infinite loops",
+            name
+        );
 
         // Should complete within reasonable time
         assert!(
@@ -114,9 +136,15 @@ fn test_pathological_regex_patterns() {
     println!("Testing pathological regex patterns...");
 
     let regex_cases = vec![
-        ("Catastrophic backtracking", generate_catastrophic_backtracking_regex()),
+        (
+            "Catastrophic backtracking",
+            generate_catastrophic_backtracking_regex(),
+        ),
         ("Nested quantifiers", generate_nested_quantifiers_regex()),
-        ("Excessive alternation", generate_excessive_alternation_regex()),
+        (
+            "Excessive alternation",
+            generate_excessive_alternation_regex(),
+        ),
         ("Complex lookarounds", generate_complex_lookaround_regex()),
         ("Recursive patterns", generate_recursive_patterns()),
     ];
@@ -151,9 +179,18 @@ fn test_massive_data_structures() {
     let structure_cases = vec![
         ("Huge array literal", generate_huge_array_literal(10000)),
         ("Massive hash literal", generate_massive_hash_literal(5000)),
-        ("Deep nested structures", generate_deep_nested_structures(50)),
-        ("Large string concatenation", generate_large_string_concatenation(1000)),
-        ("Massive function calls", generate_massive_function_calls(1000)),
+        (
+            "Deep nested structures",
+            generate_deep_nested_structures(50),
+        ),
+        (
+            "Large string concatenation",
+            generate_large_string_concatenation(1000),
+        ),
+        (
+            "Massive function calls",
+            generate_massive_function_calls(1000),
+        ),
     ];
 
     for (name, code) in structure_cases {
@@ -172,7 +209,11 @@ fn test_massive_data_structures() {
             Err(_) => false,
         };
 
-        assert!(handled_gracefully, "Should parse {} without memory exhaustion", name);
+        assert!(
+            handled_gracefully,
+            "Should parse {} without memory exhaustion",
+            name
+        );
 
         // Should complete within reasonable time
         assert!(
@@ -194,8 +235,14 @@ fn test_heredoc_exhaustion_scenarios() {
         ("Maximum heredoc depth", generate_maximum_heredoc_depth()),
         ("Nested heredocs", generate_nested_heredocs()),
         ("Large heredoc content", generate_large_heredoc_content()),
-        ("Complex heredoc delimiters", generate_complex_heredoc_delimiters()),
-        ("Heredoc with interpolation", generate_heredoc_with_interpolation()),
+        (
+            "Complex heredoc delimiters",
+            generate_complex_heredoc_delimiters(),
+        ),
+        (
+            "Heredoc with interpolation",
+            generate_heredoc_with_interpolation(),
+        ),
     ];
 
     for (name, code) in heredoc_cases {
@@ -239,11 +286,20 @@ fn test_memory_exhaustion_scenarios() {
     println!("Testing memory exhaustion scenarios...");
 
     let memory_cases = vec![
-        ("Massive variable declarations", generate_massive_variable_declarations(10000)),
+        (
+            "Massive variable declarations",
+            generate_massive_variable_declarations(10000),
+        ),
         ("Huge symbol table", generate_huge_symbol_table(5000)),
-        ("Excessive string literals", generate_excessive_string_literals(1000)),
+        (
+            "Excessive string literals",
+            generate_excessive_string_literals(1000),
+        ),
         ("Large comment blocks", generate_large_comment_blocks(100)),
-        ("Massive import statements", generate_massive_import_statements(1000)),
+        (
+            "Massive import statements",
+            generate_massive_import_statements(1000),
+        ),
     ];
 
     for (name, code) in memory_cases {
@@ -255,7 +311,11 @@ fn test_memory_exhaustion_scenarios() {
         let parse_time = start_time.elapsed();
 
         // Should parse without memory exhaustion
-        assert!(result.is_ok(), "Should parse {} without memory exhaustion", name);
+        assert!(
+            result.is_ok(),
+            "Should parse {} without memory exhaustion",
+            name
+        );
 
         // Should complete within reasonable time
         assert!(
@@ -360,7 +420,11 @@ fn test_concurrent_resource_exhaustion() {
     );
 
     // Should have reasonable success rate
-    assert!(success_rate > 0.5, "Success rate {:.1}% should be > 50%", success_rate * 100.0);
+    assert!(
+        success_rate > 0.5,
+        "Success rate {:.1}% should be > 50%",
+        success_rate * 100.0
+    );
 }
 
 /// Test parser recovery from resource exhaustion
@@ -391,7 +455,10 @@ print "Hello, world!\n";
     let mut parser2 = Parser::new(normal_code);
     let result2 = parser2.parse();
 
-    assert!(result2.is_ok(), "Parser should recover and handle normal code");
+    assert!(
+        result2.is_ok(),
+        "Parser should recover and handle normal code"
+    );
     println!("  ✓ Parser recovered and handled normal code");
 
     // Test multiple cycles of exhaustion and recovery
@@ -405,7 +472,10 @@ print "Hello, world!\n";
         assert!(result.is_ok(), "Parser should recover in cycle {}", cycle);
     }
 
-    println!("  ✓ Parser recovered through {} exhaustion/recovery cycles", 5);
+    println!(
+        "  ✓ Parser recovered through {} exhaustion/recovery cycles",
+        5
+    );
 }
 
 // Helper functions for generating test code
@@ -932,7 +1002,10 @@ fn generate_massive_variable_declarations(count: usize) -> String {
         code.push_str(&format!(
             "my @arr{} = ({});\n",
             i,
-            (0..10).map(|j| j.to_string()).collect::<Vec<_>>().join(", ")
+            (0..10)
+                .map(|j| j.to_string())
+                .collect::<Vec<_>>()
+                .join(", ")
         ));
         code.push_str(&format!("my %hash{} = ('key' => 'value{}');\n", i, i));
     }
@@ -984,8 +1057,14 @@ fn generate_excessive_string_literals(count: usize) -> String {
             "my $str{} = 'This is string number {} with some content';\n",
             i, i
         ));
-        code.push_str(&format!("my $quoted{} = \"This is quoted string number {}\";\n", i, i));
-        code.push_str(&format!("my $backtick{} = `echo backtick string {}`;\n", i, i));
+        code.push_str(&format!(
+            "my $quoted{} = \"This is quoted string number {}\";\n",
+            i, i
+        ));
+        code.push_str(&format!(
+            "my $backtick{} = `echo backtick string {}`;\n",
+            i, i
+        ));
     }
 
     code

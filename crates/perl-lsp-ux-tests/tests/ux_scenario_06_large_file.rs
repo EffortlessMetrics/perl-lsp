@@ -21,7 +21,9 @@ fn generate_source(line_count: usize) -> String {
     let mut buf = String::with_capacity(line_count * 40);
     buf.push_str("use strict;\nuse warnings;\n\n");
     for i in 0..line_count {
-        buf.push_str(&format!("sub func_{i} {{ my $x_{i} = {i}; return $x_{i}; }}\n"));
+        buf.push_str(&format!(
+            "sub func_{i} {{ my $x_{i} = {i}; return $x_{i}; }}\n"
+        ));
     }
     buf
 }
@@ -35,14 +37,22 @@ fn scenario_06_medium_file_open_and_hover() {
     }
 
     let source = generate_source(1_000);
-    let harness =
-        UxHarness::new(ScenarioConfig { timeout: Duration::from_secs(20), ..Default::default() })
-            .expect("Failed to create UX harness");
+    let harness = UxHarness::new(ScenarioConfig {
+        timeout: Duration::from_secs(20),
+        ..Default::default()
+    })
+    .expect("Failed to create UX harness");
 
-    harness.open_file("medium.pl", &source).expect("didOpen should succeed for 1k-line file");
+    harness
+        .open_file("medium.pl", &source)
+        .expect("didOpen should succeed for 1k-line file");
 
     let hover = harness.hover("medium.pl", 5, 5);
-    assert!(hover.is_ok(), "Server hung or crashed on 1k-line file — UX regression: {:?}", hover);
+    assert!(
+        hover.is_ok(),
+        "Server hung or crashed on 1k-line file — UX regression: {:?}",
+        hover
+    );
 
     harness.assert_no_crash();
 }
@@ -56,11 +66,15 @@ fn scenario_06_large_file_open_does_not_hang() {
     }
 
     let source = generate_source(10_000);
-    let harness =
-        UxHarness::new(ScenarioConfig { timeout: Duration::from_secs(30), ..Default::default() })
-            .expect("Failed to create UX harness for large file");
+    let harness = UxHarness::new(ScenarioConfig {
+        timeout: Duration::from_secs(30),
+        ..Default::default()
+    })
+    .expect("Failed to create UX harness for large file");
 
-    harness.open_file("large.pl", &source).expect("didOpen should accept a 10k-line file");
+    harness
+        .open_file("large.pl", &source)
+        .expect("didOpen should accept a 10k-line file");
 
     let hover = harness.hover("large.pl", 5, 5);
     assert!(

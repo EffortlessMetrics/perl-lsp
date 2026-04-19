@@ -2,7 +2,11 @@
 //!
 //! Covers: CLI arg parsing, transport modes, launch actions, feature profiles,
 //! error handling, edge cases, help text, and LaunchConfig API.
-#![allow(clippy::assertions_on_constants, clippy::absurd_extreme_comparisons, unused_comparisons)]
+#![allow(
+    clippy::assertions_on_constants,
+    clippy::absurd_extreme_comparisons,
+    unused_comparisons
+)]
 
 use perl_lsp_launcher::{
     DEFAULT_LSP_PORT, FeatureProfile, LaunchConfig, LaunchParseError, TransportMode,
@@ -98,16 +102,24 @@ fn transport_mode_socket_is_socket() {
 
 #[test]
 fn transport_mode_socket_preserves_exact_port() {
-    let mode = TransportMode::Socket { port: DEFAULT_LSP_PORT };
+    let mode = TransportMode::Socket {
+        port: DEFAULT_LSP_PORT,
+    };
     assert_eq!(mode.port(), Some(DEFAULT_LSP_PORT));
 }
 
 #[test]
 fn transport_mode_equality() {
     assert_eq!(TransportMode::Stdio, TransportMode::Stdio);
-    assert_eq!(TransportMode::Socket { port: 100 }, TransportMode::Socket { port: 100 });
+    assert_eq!(
+        TransportMode::Socket { port: 100 },
+        TransportMode::Socket { port: 100 }
+    );
     assert_ne!(TransportMode::Stdio, TransportMode::Socket { port: 100 });
-    assert_ne!(TransportMode::Socket { port: 100 }, TransportMode::Socket { port: 200 });
+    assert_ne!(
+        TransportMode::Socket { port: 100 },
+        TransportMode::Socket { port: 200 }
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -144,7 +156,10 @@ fn launch_config_features_json_is_valid_json() {
 fn launch_config_advertised_feature_ids_nonempty() {
     let config = LaunchConfig::new(FeatureProfile::current());
     let ids = config.advertised_feature_ids();
-    assert!(!ids.is_empty(), "expected at least one advertised feature ID");
+    assert!(
+        !ids.is_empty(),
+        "expected at least one advertised feature ID"
+    );
 }
 
 #[test]
@@ -170,8 +185,9 @@ fn should_enable_logging_uses_rust_log_environment() {
 
 #[test]
 fn should_enable_logging_uses_perl_lsp_log_environment() {
-    let enabled =
-        with_env_var("PERL_LSP_LOG", Some("perl_lsp=debug"), || should_enable_logging(false));
+    let enabled = with_env_var("PERL_LSP_LOG", Some("perl_lsp=debug"), || {
+        should_enable_logging(false)
+    });
     assert!(enabled);
 }
 
@@ -250,7 +266,12 @@ fn parse_log_flag_off_by_default() {
 #[test]
 fn parse_socket_flag_uses_default_port() {
     let plan = must(parse_args(["perl-lsp", "--socket"]));
-    assert_eq!(plan.config.transport, TransportMode::Socket { port: DEFAULT_LSP_PORT });
+    assert_eq!(
+        plan.config.transport,
+        TransportMode::Socket {
+            port: DEFAULT_LSP_PORT
+        }
+    );
 }
 
 #[test]
@@ -378,7 +399,12 @@ fn parse_health_with_log_flag() {
 
 #[test]
 fn parse_features_json_with_profile() {
-    let plan = must(parse_args(["perl-lsp", "--features-json", "--feature-profile", "all"]));
+    let plan = must(parse_args([
+        "perl-lsp",
+        "--features-json",
+        "--feature-profile",
+        "all",
+    ]));
     assert_eq!(plan.action, perl_lsp_launcher::LaunchAction::FeaturesJson);
     assert_eq!(plan.config.feature_profile.as_str(), "all");
 }
@@ -454,14 +480,18 @@ fn parse_empty_feature_profile_returns_error() {
 
 #[test]
 fn error_display_unknown_option() {
-    let err = LaunchParseError::UnknownOption { option: "--bad".to_string() };
+    let err = LaunchParseError::UnknownOption {
+        option: "--bad".to_string(),
+    };
     let msg = format!("{err}");
     assert!(msg.contains("--bad"), "display should contain the option");
 }
 
 #[test]
 fn error_display_missing_value() {
-    let err = LaunchParseError::MissingValue { option: "--port".to_string() };
+    let err = LaunchParseError::MissingValue {
+        option: "--port".to_string(),
+    };
     let msg = format!("{err}");
     assert!(msg.contains("--port"));
     assert!(msg.contains("Missing value"));
@@ -469,7 +499,9 @@ fn error_display_missing_value() {
 
 #[test]
 fn error_display_invalid_feature_profile() {
-    let err = LaunchParseError::InvalidFeatureProfile { raw_profile: "nope".to_string() };
+    let err = LaunchParseError::InvalidFeatureProfile {
+        raw_profile: "nope".to_string(),
+    };
     let msg = format!("{err}");
     assert!(msg.contains("nope"));
     assert!(msg.contains("Supported"));
@@ -488,7 +520,9 @@ fn error_display_invalid_port() {
 
 #[test]
 fn error_implements_std_error() {
-    let err = LaunchParseError::UnknownOption { option: "x".to_string() };
+    let err = LaunchParseError::UnknownOption {
+        option: "x".to_string(),
+    };
     // Verify Error trait is implemented by calling source()
     let _source: Option<&dyn std::error::Error> = std::error::Error::source(&err);
 }
@@ -563,7 +597,10 @@ fn catalog_advertised_ids_for_ga_lock_nonempty() {
 fn to_json_for_profile_returns_valid_json() {
     let json = to_json_for_profile(FeatureProfile::current());
     let first = json.trim().chars().next().unwrap_or(' ');
-    assert!(first == '{' || first == '[', "expected JSON object or array, got: {first}");
+    assert!(
+        first == '{' || first == '[',
+        "expected JSON object or array, got: {first}"
+    );
 }
 
 #[test]
@@ -605,7 +642,9 @@ fn launch_action_variants_are_distinct() {
         LaunchAction::Health,
         LaunchAction::Info,
         LaunchAction::Check,
-        LaunchAction::Completion { shell: "bash".to_string() },
+        LaunchAction::Completion {
+            shell: "bash".to_string(),
+        },
         LaunchAction::Version,
         LaunchAction::FeaturesJson,
         LaunchAction::Help,

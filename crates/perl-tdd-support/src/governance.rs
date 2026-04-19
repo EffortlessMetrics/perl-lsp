@@ -270,7 +270,13 @@ impl IgnoredTestGuardian {
             }
         }
 
-        if self.governance.quality_gates.pre_commit.documentation_requirements.require_timeline {
+        if self
+            .governance
+            .quality_gates
+            .pre_commit
+            .documentation_requirements
+            .require_timeline
+        {
             if test_info.target_timeline.as_secs() == 0 {
                 errors.push("target implementation timeline must be specified".to_string());
             }
@@ -315,11 +321,17 @@ impl IgnoredTestGuardian {
     pub fn check_baseline_regression(&self, current_count: usize) -> RegressionResult {
         let baseline = self.baseline_tracker.current_baseline;
         let max_deviation = self.governance.baseline_management.max_deviation;
-        let threshold_percent = self.governance.baseline_management.deviation_threshold_percent;
+        let threshold_percent = self
+            .governance
+            .baseline_management
+            .deviation_threshold_percent;
 
         let absolute_increase = current_count.saturating_sub(baseline);
-        let percentage_increase =
-            if baseline > 0 { (absolute_increase as f64 / baseline as f64) * 100.0 } else { 0.0 };
+        let percentage_increase = if baseline > 0 {
+            (absolute_increase as f64 / baseline as f64) * 100.0
+        } else {
+            0.0
+        };
 
         let is_regression =
             absolute_increase > max_deviation || percentage_increase > threshold_percent;
@@ -358,7 +370,10 @@ impl IgnoredTestGuardian {
             .historical_data
             .iter()
             .filter(|(timestamp, _)| {
-                current_time.duration_since(*timestamp).unwrap_or(Duration::MAX) <= window_duration
+                current_time
+                    .duration_since(*timestamp)
+                    .unwrap_or(Duration::MAX)
+                    <= window_duration
             })
             .cloned()
             .collect();
@@ -378,7 +393,10 @@ impl IgnoredTestGuardian {
         };
 
         let average_count = if !recent_data.is_empty() {
-            recent_data.iter().map(|(_, count)| *count as f64).sum::<f64>()
+            recent_data
+                .iter()
+                .map(|(_, count)| *count as f64)
+                .sum::<f64>()
                 / recent_data.len() as f64
         } else {
             0.0
@@ -479,7 +497,9 @@ impl IgnoredTestGuardian {
         }
 
         let mean = data.iter().map(|(_, count)| *count as f64).sum::<f64>() / data.len() as f64;
-        data.iter().map(|(_, count)| (*count as f64 - mean).powi(2)).sum::<f64>()
+        data.iter()
+            .map(|(_, count)| (*count as f64 - mean).powi(2))
+            .sum::<f64>()
             / data.len() as f64
     }
 

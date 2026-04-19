@@ -67,11 +67,13 @@ fn blocks_workspace_traversal_include_paths() -> Result<(), Box<dyn std::error::
 
 #[test]
 fn reports_timeout_for_large_search_space() {
-    let workspace_folders: Vec<String> =
-        (0..10_000).map(|i| format!("file:///workspace-{i}")).collect();
+    let workspace_folders: Vec<String> = (0..10_000)
+        .map(|i| format!("file:///workspace-{i}"))
+        .collect();
     let include_paths: Vec<String> = (0..128).map(|i| format!("inc-{i}")).collect();
-    let system_inc: Vec<std::path::PathBuf> =
-        (0..128).map(|i| std::path::PathBuf::from(format!("/inc/{i}"))).collect();
+    let system_inc: Vec<std::path::PathBuf> = (0..128)
+        .map(|i| std::path::PathBuf::from(format!("/inc/{i}")))
+        .collect();
 
     let result = resolve_module_uri(
         "Never::Found",

@@ -38,8 +38,9 @@ my $json = encode_json({ max => $max });
     }
 
     // Find the organize imports action
-    if let Some(organize_action) =
-        actions.iter().find(|a| matches!(a.kind, CodeActionKind::SourceOrganizeImports))
+    if let Some(organize_action) = actions
+        .iter()
+        .find(|a| matches!(a.kind, CodeActionKind::SourceOrganizeImports))
     {
         println!("\n{}\n", "=".repeat(70));
         println!("Organize Imports Action:");

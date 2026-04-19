@@ -22,8 +22,14 @@ pub fn run_three_way(verbose: bool, format: &str) -> Result<()> {
 }
 
 fn run_table_format(_verbose: bool) -> Result<()> {
-    println!("\n{}", "=== Three-Way Parser Comparison ===".bright_blue().bold());
-    println!("{}", "Comparing: Pure Rust vs Legacy C vs Modern Parser".yellow());
+    println!(
+        "\n{}",
+        "=== Three-Way Parser Comparison ===".bright_blue().bold()
+    );
+    println!(
+        "{}",
+        "Comparing: Pure Rust vs Legacy C vs Modern Parser".yellow()
+    );
 
     // Test cases
     let test_cases = vec![
@@ -106,34 +112,69 @@ sub new {
         println!(
             "  - Modern is {:.1}x {} than Pure Rust",
             modern_vs_rust,
-            if modern_vs_rust > 1.0 { "faster" } else { "slower" }
+            if modern_vs_rust > 1.0 {
+                "faster"
+            } else {
+                "slower"
+            }
         );
         println!(
             "  - Modern is {:.1}x {} than Legacy C",
             modern_vs_c,
-            if modern_vs_c < 1.0 { "faster" } else { "slower" }
+            if modern_vs_c < 1.0 {
+                "faster"
+            } else {
+                "slower"
+            }
         );
     }
 
     // Summary
     println!("\n{}", "=== Summary ===".bright_blue().bold());
 
-    let avg_pure_rust: f64 =
-        results.iter().map(|(_, pr, _, _)| pr.as_secs_f64()).sum::<f64>() / results.len() as f64;
-    let avg_legacy_c: f64 =
-        results.iter().map(|(_, _, lc, _)| lc.as_secs_f64()).sum::<f64>() / results.len() as f64;
-    let avg_modern: f64 =
-        results.iter().map(|(_, _, _, m)| m.as_secs_f64()).sum::<f64>() / results.len() as f64;
+    let avg_pure_rust: f64 = results
+        .iter()
+        .map(|(_, pr, _, _)| pr.as_secs_f64())
+        .sum::<f64>()
+        / results.len() as f64;
+    let avg_legacy_c: f64 = results
+        .iter()
+        .map(|(_, _, lc, _)| lc.as_secs_f64())
+        .sum::<f64>()
+        / results.len() as f64;
+    let avg_modern: f64 = results
+        .iter()
+        .map(|(_, _, _, m)| m.as_secs_f64())
+        .sum::<f64>()
+        / results.len() as f64;
 
     println!("\n{}", "Average Parse Times:".underline());
-    println!("  {} {:>8.2} µs", "Pure Rust:".bright_yellow(), avg_pure_rust * 1_000_000.0);
-    println!("  {} {:>8.2} µs", "Legacy C: ".bright_cyan(), avg_legacy_c * 1_000_000.0);
-    println!("  {} {:>8.2} µs", "Modern:   ".bright_green(), avg_modern * 1_000_000.0);
+    println!(
+        "  {} {:>8.2} µs",
+        "Pure Rust:".bright_yellow(),
+        avg_pure_rust * 1_000_000.0
+    );
+    println!(
+        "  {} {:>8.2} µs",
+        "Legacy C: ".bright_cyan(),
+        avg_legacy_c * 1_000_000.0
+    );
+    println!(
+        "  {} {:>8.2} µs",
+        "Modern:   ".bright_green(),
+        avg_modern * 1_000_000.0
+    );
 
     println!("\n{}", "Performance Characteristics:".underline());
-    println!("  - Pure Rust: {} with rich error messages", "Feature-complete".green());
+    println!(
+        "  - Pure Rust: {} with rich error messages",
+        "Feature-complete".green()
+    );
     println!("  - Legacy C:  {} but limited features", "Fastest".cyan());
-    println!("  - Modern:    {} between speed and features", "Best balance".bright_green());
+    println!(
+        "  - Modern:    {} between speed and features",
+        "Best balance".bright_green()
+    );
 
     Ok(())
 }
@@ -222,7 +263,10 @@ fn run_json_format(verbose: bool) -> Result<()> {
 
 fn run_markdown_format(verbose: bool) -> Result<()> {
     println!("# Three-Way Parser Comparison Report\n");
-    println!("**Generated:** {}\n", chrono::Utc::now().format("%Y-%m-%d %H:%M:%S UTC"));
+    println!(
+        "**Generated:** {}\n",
+        chrono::Utc::now().format("%Y-%m-%d %H:%M:%S UTC")
+    );
 
     let test_cases = get_test_cases();
     let mut all_results = Vec::new();
@@ -276,9 +320,17 @@ fn run_markdown_format(verbose: bool) -> Result<()> {
     println!("\n## Summary\n");
     println!("| Parser | Average Time (µs) | Relative to C |");
     println!("|--------|-------------------|---------------|");
-    println!("| Pure Rust | {:.2} | {:.1}x |", avg_pure_rust, avg_pure_rust / avg_legacy_c);
+    println!(
+        "| Pure Rust | {:.2} | {:.1}x |",
+        avg_pure_rust,
+        avg_pure_rust / avg_legacy_c
+    );
     println!("| Legacy C | {:.2} | 1.0x |", avg_legacy_c);
-    println!("| Modern | {:.2} | {:.1}x |", avg_modern, avg_modern / avg_legacy_c);
+    println!(
+        "| Modern | {:.2} | {:.1}x |",
+        avg_modern,
+        avg_modern / avg_legacy_c
+    );
 
     println!("\n## Analysis\n");
     println!("- **Pure Rust**: Full-featured parser with comprehensive error handling");

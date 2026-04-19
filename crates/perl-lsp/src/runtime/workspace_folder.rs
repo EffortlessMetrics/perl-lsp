@@ -142,7 +142,10 @@ mod tests {
         let workspace_config = WorkspaceConfig::default();
         let folder = WorkspaceFolderState::new("file:///test/path".to_string())
             .with_effective_workspace_config(workspace_config.clone());
-        assert_eq!(folder.effective_workspace_config.include_paths, workspace_config.include_paths);
+        assert_eq!(
+            folder.effective_workspace_config.include_paths,
+            workspace_config.include_paths
+        );
     }
 
     #[test]

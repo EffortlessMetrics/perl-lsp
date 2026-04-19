@@ -49,7 +49,11 @@ fn extract_grid_rows(value: &Value) -> Option<Vec<Value>> {
 
 #[test]
 fn version_constant_no_leading_trailing_whitespace() {
-    assert_eq!(VERSION, VERSION.trim(), "VERSION should not have leading/trailing whitespace");
+    assert_eq!(
+        VERSION,
+        VERSION.trim(),
+        "VERSION should not have leading/trailing whitespace"
+    );
 }
 
 #[test]
@@ -63,7 +67,11 @@ fn lsp_version_constant_no_leading_trailing_whitespace() {
 
 #[test]
 fn feature_grid_columns_exactly_eight_columns() {
-    assert_eq!(FEATURE_GRID_COLUMNS.len(), 8, "Expected exactly 8 grid columns");
+    assert_eq!(
+        FEATURE_GRID_COLUMNS.len(),
+        8,
+        "Expected exactly 8 grid columns"
+    );
 }
 
 #[test]
@@ -95,13 +103,20 @@ fn all_features_maintains_stable_order() {
     let features2 = all_features();
     let ids1: Vec<&str> = features1.iter().map(|f| f.id).collect();
     let ids2: Vec<&str> = features2.iter().map(|f| f.id).collect();
-    assert_eq!(ids1, ids2, "all_features should return consistent ordering across calls");
+    assert_eq!(
+        ids1, ids2,
+        "all_features should return consistent ordering across calls"
+    );
 }
 
 #[test]
 fn all_features_areas_are_non_empty_strings() {
     for feature in all_features() {
-        assert!(!feature.area.is_empty(), "feature {} area must not be empty", feature.id);
+        assert!(
+            !feature.area.is_empty(),
+            "feature {} area must not be empty",
+            feature.id
+        );
     }
 }
 
@@ -158,7 +173,10 @@ fn trackable_features_are_subset_of_all() {
 fn advertised_trackable_count_le_all_trackable() {
     let all_trackable = trackable_feature_count_for_grid();
     let adv_trackable = advertised_trackable_feature_count_for_grid();
-    assert!(adv_trackable <= all_trackable, "advertised trackable must not exceed total trackable");
+    assert!(
+        adv_trackable <= all_trackable,
+        "advertised trackable must not exceed total trackable"
+    );
 }
 
 // ===================================================================
@@ -176,16 +194,28 @@ fn has_feature_returns_false_for_unknown_ids() {
 #[test]
 fn has_feature_case_sensitive() {
     if has_feature("completion") {
-        assert!(!has_feature("Completion"), "has_feature should be case-sensitive");
-        assert!(!has_feature("COMPLETION"), "has_feature should be case-sensitive");
+        assert!(
+            !has_feature("Completion"),
+            "has_feature should be case-sensitive"
+        );
+        assert!(
+            !has_feature("COMPLETION"),
+            "has_feature should be case-sensitive"
+        );
     }
 }
 
 #[test]
 fn has_feature_whitespace_sensitive() {
     if has_feature("completion") {
-        assert!(!has_feature(" completion"), "has_feature should reject leading whitespace");
-        assert!(!has_feature("completion "), "has_feature should reject trailing whitespace");
+        assert!(
+            !has_feature(" completion"),
+            "has_feature should reject leading whitespace"
+        );
+        assert!(
+            !has_feature("completion "),
+            "has_feature should reject trailing whitespace"
+        );
     }
 }
 
@@ -208,26 +238,38 @@ fn compliance_percent_is_non_negative() {
 #[test]
 fn compliance_percent_for_grid_never_exceeds_100() {
     let pct = compliance_percent_for_grid();
-    assert!(pct <= 100.0, "compliance_percent_for_grid must not exceed 100%");
+    assert!(
+        pct <= 100.0,
+        "compliance_percent_for_grid must not exceed 100%"
+    );
 }
 
 #[test]
 fn compliance_percent_for_grid_is_non_negative() {
     let pct = compliance_percent_for_grid();
-    assert!(pct >= 0.0, "compliance_percent_for_grid must be non-negative");
+    assert!(
+        pct >= 0.0,
+        "compliance_percent_for_grid must be non-negative"
+    );
 }
 
 #[test]
 fn compliance_percent_for_all_profile_is_reasonable() {
     let pct = compliance_percent_for_profile(FeatureProfile::All);
-    assert!(pct > 50.0, "All profile compliance should be substantial (>50%)");
+    assert!(
+        pct > 50.0,
+        "All profile compliance should be substantial (>50%)"
+    );
 }
 
 #[test]
 fn compliance_for_ga_lock_le_compliance_for_all() {
     let ga_pct = compliance_percent_for_profile(FeatureProfile::GaLock);
     let all_pct = compliance_percent_for_profile(FeatureProfile::All);
-    assert!(ga_pct <= all_pct + f32::EPSILON, "GaLock compliance should be <= All compliance");
+    assert!(
+        ga_pct <= all_pct + f32::EPSILON,
+        "GaLock compliance should be <= All compliance"
+    );
 }
 
 #[test]
@@ -248,7 +290,11 @@ fn compliance_for_production_le_compliance_for_all() {
 fn bdd_rows_count_equals_all_features_count() {
     let rows = bdd_feature_rows();
     let features = all_features();
-    assert_eq!(rows.len(), features.len(), "bdd rows must match feature count");
+    assert_eq!(
+        rows.len(),
+        features.len(),
+        "bdd rows must match feature count"
+    );
 }
 
 #[test]
@@ -257,7 +303,10 @@ fn bdd_rows_maintains_stable_order() {
     let rows2 = bdd_feature_rows();
     let ids1: Vec<&str> = rows1.iter().map(|r| r.id).collect();
     let ids2: Vec<&str> = rows2.iter().map(|r| r.id).collect();
-    assert_eq!(ids1, ids2, "bdd_feature_rows should return consistent ordering across calls");
+    assert_eq!(
+        ids1, ids2,
+        "bdd_feature_rows should return consistent ordering across calls"
+    );
 }
 
 #[test]
@@ -277,7 +326,11 @@ fn bdd_rows_all_specs_non_empty() {
 #[test]
 fn bdd_rows_all_descriptions_non_empty() {
     for row in bdd_feature_rows() {
-        assert!(!row.description.is_empty(), "bdd row {} has empty description", row.id);
+        assert!(
+            !row.description.is_empty(),
+            "bdd row {} has empty description",
+            row.id
+        );
     }
 }
 
@@ -285,7 +338,11 @@ fn bdd_rows_all_descriptions_non_empty() {
 fn bdd_rows_advertised_field_consistency() {
     for row in bdd_feature_rows() {
         let is_advertised = advertised_features().contains(&row.id);
-        assert_eq!(row.advertised, is_advertised, "bdd row {} advertised field mismatch", row.id);
+        assert_eq!(
+            row.advertised, is_advertised,
+            "bdd row {} advertised field mismatch",
+            row.id
+        );
     }
 }
 
@@ -296,7 +353,10 @@ fn bdd_rows_advertised_field_consistency() {
 #[test]
 fn all_profile_returns_all_available_profiles() {
     let profiles = FeatureProfile::all();
-    assert!(profiles.len() >= 3, "should have at least ga-lock, production, and all");
+    assert!(
+        profiles.len() >= 3,
+        "should have at least ga-lock, production, and all"
+    );
     let profile_strs: Vec<_> = profiles.iter().map(|p| p.as_str()).collect();
     assert!(profile_strs.contains(&"ga-lock"));
     assert!(profile_strs.contains(&"production"));
@@ -361,9 +421,16 @@ fn to_json_for_profile_returns_single_profile_key() -> Result<(), Box<dyn std::e
     for profile in FeatureProfile::all() {
         let payload = to_json_for_profile(*profile);
         let value = serde_json::from_str::<Value>(&payload)?;
-        assert!(value.get("profile").is_some(), "to_json_for_profile should include profile key");
+        assert!(
+            value.get("profile").is_some(),
+            "to_json_for_profile should include profile key"
+        );
         let profile_val = must_some(value.get("profile").and_then(|p| p.as_str()));
-        assert_eq!(profile_val, profile.as_str(), "profile key should match requested profile");
+        assert_eq!(
+            profile_val,
+            profile.as_str(),
+            "profile key should match requested profile"
+        );
     }
     Ok(())
 }
@@ -384,7 +451,10 @@ fn to_json_for_profiles_with_single_profile_structure_matches()
             single_val.get("feature_grid").is_some(),
             "single payload should have feature_grid"
         );
-        assert!(multi_val.get("feature_grid").is_some(), "multi payload should have feature_grid");
+        assert!(
+            multi_val.get("feature_grid").is_some(),
+            "multi payload should have feature_grid"
+        );
 
         // Both should have trackable feature counts
         assert!(
@@ -417,7 +487,10 @@ fn to_json_for_profiles_deterministic() {
     let profiles = FeatureProfile::all();
     let payload1 = to_json_for_profiles(profiles);
     let payload2 = to_json_for_profiles(profiles);
-    assert_eq!(payload1, payload2, "to_json_for_profiles should be deterministic");
+    assert_eq!(
+        payload1, payload2,
+        "to_json_for_profiles should be deterministic"
+    );
 }
 
 // ===================================================================
@@ -430,7 +503,10 @@ fn json_payload_feature_count_matches_actual_features() -> Result<(), Box<dyn st
     let value = serde_json::from_str::<Value>(&payload)?;
     let json_count = must_some(value["feature_count"].as_u64());
     let actual_count = all_features().len() as u64;
-    assert_eq!(json_count, actual_count, "feature_count in JSON should match actual features");
+    assert_eq!(
+        json_count, actual_count,
+        "feature_count in JSON should match actual features"
+    );
     Ok(())
 }
 
@@ -440,7 +516,11 @@ fn json_payload_grid_rows_count_matches_feature_count() -> Result<(), Box<dyn st
     let value = serde_json::from_str::<Value>(&payload)?;
     let rows = extract_grid_rows(&value).ok_or("grid rows not found")?;
     let feature_count = must_some(value["feature_count"].as_u64());
-    assert_eq!(rows.len() as u64, feature_count, "grid rows count should match feature count");
+    assert_eq!(
+        rows.len() as u64,
+        feature_count,
+        "grid rows count should match feature count"
+    );
     Ok(())
 }
 
@@ -467,13 +547,20 @@ fn json_profile_summaries_consistency() -> Result<(), Box<dyn std::error::Error>
         assert!(profile_summary.get("advertised").is_some());
         assert!(profile_summary.get("compliance_percent").is_some());
         assert!(profile_summary.get("trackable_feature_count").is_some());
-        assert!(profile_summary.get("advertised_trackable_feature_count").is_some());
+        assert!(
+            profile_summary
+                .get("advertised_trackable_feature_count")
+                .is_some()
+        );
 
         // Check consistency: advertised array length should match advertised_feature_count
         let advertised_arr =
             must_some(profile_summary.get("advertised").and_then(|a| a.as_array()));
-        let advertised_count =
-            must_some(profile_summary.get("advertised_feature_count").and_then(|c| c.as_u64()));
+        let advertised_count = must_some(
+            profile_summary
+                .get("advertised_feature_count")
+                .and_then(|c| c.as_u64()),
+        );
         assert_eq!(
             advertised_arr.len() as u64,
             advertised_count,
@@ -513,7 +600,10 @@ fn all_profiles_json_includes_production_profile() -> Result<(), Box<dyn std::er
 fn all_profiles_json_includes_all_profile() -> Result<(), Box<dyn std::error::Error>> {
     let payload = to_json_for_all_profiles();
     let value = serde_json::from_str::<Value>(&payload)?;
-    assert!(get_profile_from_json(&value, "all").is_some(), "all profiles should include all");
+    assert!(
+        get_profile_from_json(&value, "all").is_some(),
+        "all profiles should include all"
+    );
     Ok(())
 }
 
@@ -531,7 +621,10 @@ fn feature_grid_is_same_across_all_payloads() -> Result<(), Box<dyn std::error::
     let grid2 = value2["feature_grid"]["rows"].to_string();
     let grid3 = value3["feature_grid"]["rows"].to_string();
 
-    assert_eq!(grid1, grid2, "feature grid should be same in to_json and to_json_for_profile");
+    assert_eq!(
+        grid1, grid2,
+        "feature grid should be same in to_json and to_json_for_profile"
+    );
     assert_eq!(grid1, grid3, "feature grid should be same in all payloads");
     Ok(())
 }
@@ -553,7 +646,10 @@ fn profile_compliance_matches_advertised_count() -> Result<(), Box<dyn std::erro
         let trackable_advertised = advertised
             .iter()
             .filter(|&&id| {
-                has_feature(id) && all_features().iter().any(|f| f.id == id && f.counts_in_coverage)
+                has_feature(id)
+                    && all_features()
+                        .iter()
+                        .any(|f| f.id == id && f.counts_in_coverage)
             })
             .count();
 
@@ -588,7 +684,11 @@ fn advertised_features_no_duplicates() {
     let advertised = advertised_features();
     let mut seen = HashSet::new();
     for id in advertised {
-        assert!(seen.insert(*id), "advertised features contains duplicate: {}", id);
+        assert!(
+            seen.insert(*id),
+            "advertised features contains duplicate: {}",
+            id
+        );
     }
 }
 
@@ -602,7 +702,10 @@ fn json_advertised_array_is_array_of_strings() -> Result<(), Box<dyn std::error:
     let value = serde_json::from_str::<Value>(&payload)?;
     let advertised = must_some(value["advertised"].as_array());
     for item in advertised {
-        assert!(item.is_string(), "advertised array should contain only strings");
+        assert!(
+            item.is_string(),
+            "advertised array should contain only strings"
+        );
     }
     Ok(())
 }
@@ -611,7 +714,11 @@ fn json_advertised_array_is_array_of_strings() -> Result<(), Box<dyn std::error:
 fn json_feature_grid_columns_is_array_of_strings() -> Result<(), Box<dyn std::error::Error>> {
     let payload = to_json();
     let value = serde_json::from_str::<Value>(&payload)?;
-    let columns = must_some(value["feature_grid"].get("columns").and_then(|c| c.as_array()));
+    let columns = must_some(
+        value["feature_grid"]
+            .get("columns")
+            .and_then(|c| c.as_array()),
+    );
     for col in columns {
         assert!(col.is_string(), "columns should be strings");
     }
@@ -623,7 +730,10 @@ fn json_lsp_version_format_is_semver_like() {
     // Should be something like "1.19.0-rc.1" or "1.19.0"
     assert!(!LSP_VERSION.is_empty());
     let parts: Vec<&str> = LSP_VERSION.split('.').collect();
-    assert!(parts.len() >= 2, "LSP_VERSION should have at least major.minor format");
+    assert!(
+        parts.len() >= 2,
+        "LSP_VERSION should have at least major.minor format"
+    );
 }
 
 // ===================================================================
@@ -651,7 +761,10 @@ fn duplicate_profiles_in_to_json_for_profiles_handled() -> Result<(), Box<dyn st
 #[test]
 fn feature_with_missing_description_cannot_exist() {
     for feature in all_features() {
-        assert!(!feature.description.is_empty(), "all features must have descriptions");
+        assert!(
+            !feature.description.is_empty(),
+            "all features must have descriptions"
+        );
     }
 }
 
@@ -660,6 +773,9 @@ fn trackable_feature_count_never_zero_if_any_feature_is_trackable() {
     let trackable_count = trackable_feature_count_for_grid();
     let has_trackable = all_features().iter().any(|f| f.counts_in_coverage);
     if has_trackable {
-        assert!(trackable_count > 0, "trackable count must be > 0 if features are trackable");
+        assert!(
+            trackable_count > 0,
+            "trackable count must be > 0 if features are trackable"
+        );
     }
 }

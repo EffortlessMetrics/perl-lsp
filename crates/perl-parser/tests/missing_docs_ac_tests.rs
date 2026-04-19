@@ -54,7 +54,9 @@ mod doc_validation_helpers {
         };
 
         // Check for module-level documentation
-        analysis.has_module_docs = lines.iter().any(|line| line.trim_start().starts_with("//!"));
+        analysis.has_module_docs = lines
+            .iter()
+            .any(|line| line.trim_start().starts_with("//!"));
 
         // Check for code examples
         analysis.code_examples_present = content.contains("```rust") || content.contains("```");
@@ -117,7 +119,9 @@ mod doc_validation_helpers {
                     || content_lower.contains("throughput"));
 
             if !has_perf_docs {
-                analysis.missing_performance_docs.push(file_path.to_string());
+                analysis
+                    .missing_performance_docs
+                    .push(file_path.to_string());
             }
         }
 
@@ -168,7 +172,9 @@ mod doc_validation_helpers {
             "performance.rs",
         ];
 
-        performance_critical_modules.iter().any(|module| file_path.ends_with(module))
+        performance_critical_modules
+            .iter()
+            .any(|module| file_path.ends_with(module))
     }
 
     /// Checks for documentation style violations
@@ -317,8 +323,10 @@ mod doc_validation_helpers {
         }
 
         if in_rust_block {
-            malformed
-                .push(format!("Unclosed doctest block starting at line {}", block_start_line + 1));
+            malformed.push(format!(
+                "Unclosed doctest block starting at line {}",
+                block_start_line + 1
+            ));
         }
 
         malformed
@@ -473,16 +481,28 @@ mod doc_validation_helpers {
             || lower_content.contains("speed");
 
         if !has_memory_complexity {
-            incomplete.push(format!("{}: Missing time/space complexity documentation", file_path));
+            incomplete.push(format!(
+                "{}: Missing time/space complexity documentation",
+                file_path
+            ));
         }
         if !has_scaling_info {
-            incomplete.push(format!("{}: Missing large-scale processing documentation", file_path));
+            incomplete.push(format!(
+                "{}: Missing large-scale processing documentation",
+                file_path
+            ));
         }
         if !has_optimization_notes {
-            incomplete.push(format!("{}: Missing optimization strategy documentation", file_path));
+            incomplete.push(format!(
+                "{}: Missing optimization strategy documentation",
+                file_path
+            ));
         }
         if !has_benchmark_info {
-            incomplete.push(format!("{}: Missing performance benchmark information", file_path));
+            incomplete.push(format!(
+                "{}: Missing performance benchmark information",
+                file_path
+            ));
         }
 
         incomplete
@@ -597,8 +617,14 @@ mod missing_docs_tests {
     fn source_roots() -> Vec<SourceRoot> {
         let root = workspace_root();
         vec![
-            SourceRoot { name: "perl-parser", path: root.join("crates/perl-parser/src") },
-            SourceRoot { name: "perl-parser-core", path: root.join("crates/perl-parser-core/src") },
+            SourceRoot {
+                name: "perl-parser",
+                path: root.join("crates/perl-parser/src"),
+            },
+            SourceRoot {
+                name: "perl-parser-core",
+                path: root.join("crates/perl-parser-core/src"),
+            },
             SourceRoot {
                 name: "perl-semantic-analyzer",
                 path: root.join("crates/perl-semantic-analyzer/src"),
@@ -607,13 +633,22 @@ mod missing_docs_tests {
                 name: "perl-workspace",
                 path: root.join("crates/perl-workspace-index/src"),
             },
-            SourceRoot { name: "perl-refactoring", path: root.join("crates/perl-refactoring/src") },
+            SourceRoot {
+                name: "perl-refactoring",
+                path: root.join("crates/perl-refactoring/src"),
+            },
             SourceRoot {
                 name: "perl-incremental-parsing",
                 path: root.join("crates/perl-incremental-parsing/src"),
             },
-            SourceRoot { name: "perl-tdd-support", path: root.join("crates/perl-tdd-support/src") },
-            SourceRoot { name: "perl-lsp-tooling", path: root.join("crates/perl-lsp-tooling/src") },
+            SourceRoot {
+                name: "perl-tdd-support",
+                path: root.join("crates/perl-tdd-support/src"),
+            },
+            SourceRoot {
+                name: "perl-lsp-tooling",
+                path: root.join("crates/perl-lsp-tooling/src"),
+            },
             SourceRoot {
                 name: "perl-lsp-providers",
                 path: root.join("crates/perl-lsp-providers/src"),
@@ -725,7 +760,10 @@ mod missing_docs_tests {
             build_ac2_error_message(&all_missing_docs, &all_missing_workflow_integration);
         }
 
-        assert!(all_missing_docs.is_empty(), "All public structs should have documentation");
+        assert!(
+            all_missing_docs.is_empty(),
+            "All public structs should have documentation"
+        );
         assert!(
             all_missing_workflow_integration.is_empty(),
             "All public structs should document workflow integration"
@@ -781,7 +819,10 @@ mod missing_docs_tests {
             "AC3 NOT IMPLEMENTED: Missing source modules: {:?}",
             missing_modules
         );
-        assert!(missing_docs.is_empty(), "All public functions should have documentation");
+        assert!(
+            missing_docs.is_empty(),
+            "All public functions should have documentation"
+        );
         assert!(
             incomplete_docs.is_empty(),
             "All public functions should have comprehensive documentation sections"
@@ -810,7 +851,11 @@ mod missing_docs_tests {
             }
         }
 
-        (missing_function_docs, incomplete_function_docs, missing_modules)
+        (
+            missing_function_docs,
+            incomplete_function_docs,
+            missing_modules,
+        )
     }
 
     /// Analyzes function documentation within a single file
@@ -1022,8 +1067,10 @@ mod missing_docs_tests {
 
     /// Analyzes performance-related documentation indicators
     fn analyze_performance_indicators(content: &str) -> PerformanceIndicators {
-        let comment_lines: Vec<&str> =
-            content.lines().filter(|line| line.trim_start().starts_with("//")).collect();
+        let comment_lines: Vec<&str> = content
+            .lines()
+            .filter(|line| line.trim_start().starts_with("//"))
+            .collect();
 
         let comment_content = comment_lines.join(" ").to_lowercase();
 
@@ -1106,8 +1153,14 @@ mod missing_docs_tests {
             "AC5 NOT IMPLEMENTED: Missing source modules: {:?}",
             missing_modules
         );
-        assert!(missing_docs.is_empty(), "All modules should have //! documentation");
-        assert!(incomplete_docs.is_empty(), "All modules should have comprehensive documentation");
+        assert!(
+            missing_docs.is_empty(),
+            "All modules should have //! documentation"
+        );
+        assert!(
+            incomplete_docs.is_empty(),
+            "All modules should have comprehensive documentation"
+        );
     }
 
     /// Analyzes module-level documentation across multiple modules
@@ -1147,7 +1200,11 @@ mod missing_docs_tests {
         let missing_sections = identify_missing_module_sections(&module_doc_text);
 
         if !missing_sections.is_empty() {
-            Some(format!("{}: Missing {}", module, missing_sections.join(", ")))
+            Some(format!(
+                "{}: Missing {}",
+                module,
+                missing_sections.join(", ")
+            ))
         } else {
             None
         }
@@ -1246,7 +1303,10 @@ mod missing_docs_tests {
             "AC6 NOT IMPLEMENTED: Missing source modules: {:?}",
             missing_modules
         );
-        assert!(modules_without_examples.is_empty(), "Complex APIs should include usage examples");
+        assert!(
+            modules_without_examples.is_empty(),
+            "Complex APIs should include usage examples"
+        );
     }
 
     /// Finds modules that are missing usage examples
@@ -1393,8 +1453,14 @@ mod missing_docs_tests {
             "AC8 NOT IMPLEMENTED: Missing source modules: {:?}",
             missing_modules
         );
-        assert!(undocumented_errors.is_empty(), "All error types should be documented");
-        assert!(missing_workflow_context.is_empty(), "All errors should include workflow context");
+        assert!(
+            undocumented_errors.is_empty(),
+            "All error types should be documented"
+        );
+        assert!(
+            missing_workflow_context.is_empty(),
+            "All errors should include workflow context"
+        );
     }
 
     /// Analyzes error documentation across error-related files
@@ -1419,7 +1485,11 @@ mod missing_docs_tests {
             }
         }
 
-        (undocumented_errors, missing_workflow_context, missing_modules)
+        (
+            undocumented_errors,
+            missing_workflow_context,
+            missing_modules,
+        )
     }
 
     /// Analyzes error documentation within a single file
@@ -1607,7 +1677,10 @@ mod missing_docs_tests {
             "AC10 NOT IMPLEMENTED: Missing source modules: {:?}",
             missing_modules
         );
-        assert!(style_violations.is_empty(), "Documentation should follow Rust best practices");
+        assert!(
+            style_violations.is_empty(),
+            "Documentation should follow Rust best practices"
+        );
     }
 
     /// Finds documentation style violations across modules
@@ -1817,8 +1890,10 @@ mod missing_docs_tests {
         for (stage, count) in coverage {
             error_msg.push_str(&format!("  - {}: {} modules\n", stage, count));
         }
-        error_msg
-            .push_str(&format!("\nTotal coverage: {}, Expected minimum: {}\n", total, expected));
+        error_msg.push_str(&format!(
+            "\nTotal coverage: {}, Expected minimum: {}\n",
+            total, expected
+        ));
         error_msg.push_str("All core modules should document their role in LSP workflow stages\n");
 
         unreachable!("{}", error_msg);
@@ -1864,7 +1939,10 @@ pub fn unbalanced_function() {}
                 || s.contains("Unclosed doctest")),
             "Should detect various types of malformed doctests"
         );
-        assert!(malformed.len() >= 2, "Should detect multiple issues in the test content");
+        assert!(
+            malformed.len() >= 2,
+            "Should detect multiple issues in the test content"
+        );
     }
 
     #[test]
@@ -1886,7 +1964,10 @@ pub fn fixme_function() {}
         let lines: Vec<&str> = empty_doc_content.lines().collect();
         let empty_docs = doc_validation_helpers::find_empty_doc_strings(&lines);
 
-        assert!(!empty_docs.is_empty(), "Should detect trivial documentation");
+        assert!(
+            !empty_docs.is_empty(),
+            "Should detect trivial documentation"
+        );
         assert!(
             empty_docs
                 .iter()
@@ -1911,13 +1992,20 @@ pub fn spaced_ref_function() {}
         let lines: Vec<&str> = invalid_ref_content.lines().collect();
         let invalid_refs = doc_validation_helpers::find_invalid_cross_references(&lines);
 
-        assert!(!invalid_refs.is_empty(), "Should detect invalid cross-references");
         assert!(
-            invalid_refs.iter().any(|s| s.contains("Malformed cross-reference")),
+            !invalid_refs.is_empty(),
+            "Should detect invalid cross-references"
+        );
+        assert!(
+            invalid_refs
+                .iter()
+                .any(|s| s.contains("Malformed cross-reference")),
             "Should detect nested references"
         );
         assert!(
-            invalid_refs.iter().any(|s| s.contains("Empty cross-reference")),
+            invalid_refs
+                .iter()
+                .any(|s| s.contains("Empty cross-reference")),
             "Should detect empty references"
         );
         assert!(
@@ -1943,7 +2031,10 @@ pub fn parse_fast() -> Result<Ast, Error> { todo!() }
             &lines,
         );
 
-        assert!(!incomplete.is_empty(), "Should detect incomplete performance docs");
+        assert!(
+            !incomplete.is_empty(),
+            "Should detect incomplete performance docs"
+        );
         assert!(
             incomplete.iter().any(|s| s.contains("complexity")),
             "Should require complexity documentation"
@@ -1971,7 +2062,10 @@ pub fn another_risky() -> Result<(), Box<dyn std::error::Error>> {
         let lines: Vec<&str> = error_handling_content.lines().collect();
         let missing_recovery = doc_validation_helpers::find_missing_error_recovery_docs(&lines);
 
-        assert!(!missing_recovery.is_empty(), "Should detect missing error recovery docs");
+        assert!(
+            !missing_recovery.is_empty(),
+            "Should detect missing error recovery docs"
+        );
         assert!(
             missing_recovery
                 .iter()
@@ -2486,9 +2580,15 @@ pub fn bad_refs() {}
         ];
 
         let all_rust_files: Vec<SourceFile> = if std::env::var("PERL_FAST_DOC_CHECK").is_ok() {
-            critical_files.into_iter().flat_map(|path| find_source_files(path, &roots)).collect()
+            critical_files
+                .into_iter()
+                .flat_map(|path| find_source_files(path, &roots))
+                .collect()
         } else {
-            roots.iter().flat_map(|root| collect_rs_files(&root.path, root.name)).collect()
+            roots
+                .iter()
+                .flat_map(|root| collect_rs_files(&root.path, root.name))
+                .collect()
         };
 
         let mut quality_metrics = HashMap::new();

@@ -99,7 +99,9 @@ print $x;  # Should resolve to outer $x"#;
 
     let locations = result.ok_or("Expected declaration result for inner $x")?;
     assert!(locations.is_array());
-    let locations = locations.as_array().ok_or("Expected locations array for inner $x")?;
+    let locations = locations
+        .as_array()
+        .ok_or("Expected locations array for inner $x")?;
     assert_eq!(locations.len(), 1);
 
     // Should point to line 2 (inner declaration)
@@ -118,7 +120,9 @@ print $x;  # Should resolve to outer $x"#;
 
     let locations = result.ok_or("Expected declaration result for outer $x")?;
     assert!(locations.is_array());
-    let locations = locations.as_array().ok_or("Expected locations array for outer $x")?;
+    let locations = locations
+        .as_array()
+        .ok_or("Expected locations array for outer $x")?;
     assert_eq!(locations.len(), 1);
 
     // Should point to line 0 (outer declaration)
@@ -162,7 +166,9 @@ my $result = foo();"#;
 
     let locations = result.ok_or("Expected declaration result for subroutine")?;
     assert!(locations.is_array());
-    let locations = locations.as_array().ok_or("Expected locations array for subroutine")?;
+    let locations = locations
+        .as_array()
+        .ok_or("Expected locations array for subroutine")?;
     assert_eq!(locations.len(), 1);
 
     // Should point to line 0 (sub declaration)
@@ -208,8 +214,9 @@ my $result = Foo::bar();"#;
 
     let locations = result.ok_or("Expected declaration result for cross-package subroutine")?;
     assert!(locations.is_array());
-    let locations =
-        locations.as_array().ok_or("Expected locations array for cross-package subroutine")?;
+    let locations = locations
+        .as_array()
+        .ok_or("Expected locations array for cross-package subroutine")?;
     assert_eq!(locations.len(), 1);
 
     // Should point to line 1 (sub bar in package Foo)
@@ -254,7 +261,9 @@ my $x = FOO;"#;
 
     let locations = result.ok_or("Expected declaration result for constant")?;
     assert!(locations.is_array());
-    let locations = locations.as_array().ok_or("Expected locations array for constant")?;
+    let locations = locations
+        .as_array()
+        .ok_or("Expected locations array for constant")?;
     assert_eq!(locations.len(), 1);
 
     // Should point to line 0 (constant declaration)
@@ -296,7 +305,9 @@ print $π;"#;
 
     let locations = result.ok_or("Expected declaration result for unicode variable")?;
     assert!(locations.is_array());
-    let locations = locations.as_array().ok_or("Expected locations array for unicode variable")?;
+    let locations = locations
+        .as_array()
+        .ok_or("Expected locations array for unicode variable")?;
     assert_eq!(locations.len(), 1);
 
     // Should point to line 0 (declaration)
@@ -306,7 +317,11 @@ print $π;"#;
     } else if let Some(target_range) = location.get("targetRange") {
         assert_eq!(target_range["start"]["line"], 0);
     } else {
-        return Err(format!("Unknown location format for unicode variable: {:?}", location).into());
+        return Err(format!(
+            "Unknown location format for unicode variable: {:?}",
+            location
+        )
+        .into());
     }
 
     Ok(())

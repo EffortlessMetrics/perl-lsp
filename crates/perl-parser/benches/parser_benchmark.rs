@@ -91,7 +91,9 @@ fn benchmark_complex_parsing(c: &mut Criterion) {
 
 fn benchmark_ast_generation(c: &mut Criterion) {
     let mut parser = Parser::new(COMPLEX_SCRIPT);
-    let ast = parser.parse().expect("COMPLEX_SCRIPT must parse for benchmark");
+    let ast = parser
+        .parse()
+        .expect("COMPLEX_SCRIPT must parse for benchmark");
 
     c.bench_function("ast_to_sexp", |b| {
         b.iter(|| {
@@ -126,13 +128,19 @@ fn benchmark_isolated_components(c: &mut Criterion) {
 
 fn benchmark_scope_analysis(c: &mut Criterion) {
     let mut parser = Parser::new(COMPLEX_SCRIPT);
-    let ast = parser.parse().expect("COMPLEX_SCRIPT must parse for benchmark");
+    let ast = parser
+        .parse()
+        .expect("COMPLEX_SCRIPT must parse for benchmark");
     let analyzer = ScopeAnalyzer::new();
     let pragma_map = vec![];
 
     c.bench_function("scope_analysis", |b| {
         b.iter(|| {
-            analyzer.analyze(black_box(&ast), black_box(COMPLEX_SCRIPT), black_box(&pragma_map));
+            analyzer.analyze(
+                black_box(&ast),
+                black_box(COMPLEX_SCRIPT),
+                black_box(&pragma_map),
+            );
         });
     });
 }

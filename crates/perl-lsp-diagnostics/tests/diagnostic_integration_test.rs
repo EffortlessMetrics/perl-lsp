@@ -32,7 +32,12 @@ fn diagnostics_for(source: &str) -> Vec<Diagnostic> {
 fn parse_error_diags(diags: &[Diagnostic]) -> Vec<&Diagnostic> {
     diags
         .iter()
-        .filter(|d| matches!(d.code.as_deref(), Some("PL001") | Some("PL002") | Some("PL003")))
+        .filter(|d| {
+            matches!(
+                d.code.as_deref(),
+                Some("PL001") | Some("PL002") | Some("PL003")
+            )
+        })
         .collect()
 }
 
@@ -70,7 +75,10 @@ fn test_parse_error_mapping_missing_semicolon() -> Result<(), Box<dyn std::error
     // produces valid diagnostics.
     for d in &diags {
         assert!(d.code.is_some(), "Every diagnostic should have a code");
-        assert!(d.range.0 <= source.len(), "Offset should be within source bounds");
+        assert!(
+            d.range.0 <= source.len(),
+            "Offset should be within source bounds"
+        );
     }
     Ok(())
 }
@@ -81,7 +89,10 @@ fn test_parse_error_mapping_unclosed_brace() -> Result<(), Box<dyn std::error::E
     let diags = diagnostics_for(source);
     let pe = parse_error_diags(&diags);
 
-    assert!(!pe.is_empty(), "Unclosed brace should produce parse-error diagnostics: got {diags:?}");
+    assert!(
+        !pe.is_empty(),
+        "Unclosed brace should produce parse-error diagnostics: got {diags:?}"
+    );
     Ok(())
 }
 
@@ -92,7 +103,10 @@ fn test_parse_error_mapping_unexpected_token() -> Result<(), Box<dyn std::error:
     let diags = diagnostics_for(source);
     let pe = parse_error_diags(&diags);
 
-    assert!(!pe.is_empty(), "Unexpected token should produce parse-error diagnostics");
+    assert!(
+        !pe.is_empty(),
+        "Unexpected token should produce parse-error diagnostics"
+    );
     for d in &pe {
         assert_eq!(d.severity, DiagnosticSeverity::Error);
     }
@@ -105,7 +119,10 @@ fn test_parse_error_mapping_valid_perl_no_parse_errors() -> Result<(), Box<dyn s
     let diags = diagnostics_for(source);
     let pe = parse_error_diags(&diags);
 
-    assert!(pe.is_empty(), "Valid Perl should produce zero parse-error diagnostics, got: {pe:?}");
+    assert!(
+        pe.is_empty(),
+        "Valid Perl should produce zero parse-error diagnostics, got: {pe:?}"
+    );
     Ok(())
 }
 
@@ -141,7 +158,10 @@ fn test_unknown_subroutine_attribute_is_warning() -> Result<(), Box<dyn std::err
 
     let unknown_attr: Vec<_> = diags
         .iter()
-        .filter(|d| d.message.contains("unknown subroutine attribute ':Private'"))
+        .filter(|d| {
+            d.message
+                .contains("unknown subroutine attribute ':Private'")
+        })
         .collect();
 
     assert_eq!(
@@ -160,8 +180,10 @@ fn test_severity_missing_strict_is_information() -> Result<(), Box<dyn std::erro
     let source = "my $x = 1;\n";
     let diags = diagnostics_for(source);
 
-    let missing_strict: Vec<_> =
-        diags.iter().filter(|d| d.code.as_deref() == Some("PL100")).collect();
+    let missing_strict: Vec<_> = diags
+        .iter()
+        .filter(|d| d.code.as_deref() == Some("PL100"))
+        .collect();
 
     // If the linter fires missing-strict, it should be Information
     for d in &missing_strict {
@@ -180,7 +202,10 @@ fn test_severity_unused_variable_is_warning() -> Result<(), Box<dyn std::error::
     let source = "use strict;\nuse warnings;\nmy $unused = 1;\n";
     let diags = diagnostics_for(source);
 
-    let unused: Vec<_> = diags.iter().filter(|d| d.code.as_deref() == Some("PL102")).collect();
+    let unused: Vec<_> = diags
+        .iter()
+        .filter(|d| d.code.as_deref() == Some("PL102"))
+        .collect();
 
     for d in &unused {
         assert_eq!(
@@ -212,8 +237,10 @@ try {
     let catch_var_diags: Vec<_> = diags
         .iter()
         .filter(|d| {
-            matches!(d.code.as_deref(), Some("PL102") | Some("PL103") | Some("PL110"))
-                && d.message.contains("$e")
+            matches!(
+                d.code.as_deref(),
+                Some("PL102") | Some("PL103") | Some("PL110")
+            ) && d.message.contains("$e")
         })
         .collect();
 
@@ -323,7 +350,10 @@ fn test_range_accuracy_parse_error_near_correct_position() -> Result<(), Box<dyn
     if let Some(first) = pe.first() {
         // The error should be somewhere in the source, not at 0 (which would be wrong
         // for this specific case -- the issue is at the semicolon, not the beginning)
-        assert!(first.range.0 <= source.len(), "Error offset should be within source bounds");
+        assert!(
+            first.range.0 <= source.len(),
+            "Error offset should be within source bounds"
+        );
     }
     Ok(())
 }
@@ -387,7 +417,10 @@ fn test_range_accuracy_eof_offset() -> Result<(), Box<dyn std::error::Error>> {
     let source = "short";
     let ast = Arc::new(perl_parser_core::Node::new(
         perl_parser_core::NodeKind::Program { statements: vec![] },
-        perl_parser_core::SourceLocation { start: 0, end: source.len() },
+        perl_parser_core::SourceLocation {
+            start: 0,
+            end: source.len(),
+        },
     ));
     let errors = vec![ParseError::UnexpectedEof];
     let provider = DiagnosticsProvider::new(&ast, source.to_string());
@@ -395,7 +428,11 @@ fn test_range_accuracy_eof_offset() -> Result<(), Box<dyn std::error::Error>> {
 
     let pe = parse_error_diags(&diags);
     if let Some(d) = pe.first() {
-        assert_eq!(d.range.0, source.len(), "EOF error should point to end of source");
+        assert_eq!(
+            d.range.0,
+            source.len(),
+            "EOF error should point to end of source"
+        );
     }
     Ok(())
 }
@@ -411,14 +448,23 @@ fn test_multiple_diagnostics_mixed_categories() -> Result<(), Box<dyn std::error
     let source = "my $x = ;\nmy $y = 2;\n";
     let ast = Arc::new(perl_parser_core::Node::new(
         perl_parser_core::NodeKind::Program { statements: vec![] },
-        perl_parser_core::SourceLocation { start: 0, end: source.len() },
+        perl_parser_core::SourceLocation {
+            start: 0,
+            end: source.len(),
+        },
     ));
-    let errors = vec![ParseError::SyntaxError { location: 8, message: "bad syntax".to_string() }];
+    let errors = vec![ParseError::SyntaxError {
+        location: 8,
+        message: "bad syntax".to_string(),
+    }];
     let provider = DiagnosticsProvider::new(&ast, source.to_string());
     let diags = provider.get_diagnostics(&ast, &errors, source, None);
 
     let pe = parse_error_diags(&diags);
-    assert!(!pe.is_empty(), "Should have parse-error diagnostics from synthetic error");
+    assert!(
+        !pe.is_empty(),
+        "Should have parse-error diagnostics from synthetic error"
+    );
 
     // The provider also runs scope analysis and lint checks.
     // With an empty Program AST, strict/warnings lint is suppressed (no executable content).
@@ -432,7 +478,9 @@ fn test_multiple_diagnostics_mixed_categories() -> Result<(), Box<dyn std::error
     );
 
     // Verify we have at least Error-level diagnostics from the parse error
-    let has_error = diags.iter().any(|d| d.severity == DiagnosticSeverity::Error);
+    let has_error = diags
+        .iter()
+        .any(|d| d.severity == DiagnosticSeverity::Error);
     assert!(has_error, "Should contain Error-level diagnostics");
     Ok(())
 }
@@ -445,7 +493,10 @@ fn test_multiple_diagnostics_multiple_parse_errors() -> Result<(), Box<dyn std::
     let pe = parse_error_diags(&diags);
 
     // At least one parse error should be reported (parser may recover and find more)
-    assert!(!pe.is_empty(), "Multiple broken statements should produce parse-error diagnostics");
+    assert!(
+        !pe.is_empty(),
+        "Multiple broken statements should produce parse-error diagnostics"
+    );
     Ok(())
 }
 
@@ -457,12 +508,24 @@ fn test_multiple_diagnostics_each_has_distinct_range() -> Result<(), Box<dyn std
     let source = "aaa_long_token_here; bbb_long_token_there; ccc_long_token_final;";
     let ast = Arc::new(perl_parser_core::Node::new(
         perl_parser_core::NodeKind::Program { statements: vec![] },
-        perl_parser_core::SourceLocation { start: 0, end: source.len() },
+        perl_parser_core::SourceLocation {
+            start: 0,
+            end: source.len(),
+        },
     ));
     let errors = vec![
-        ParseError::SyntaxError { location: 0, message: "error at aaa".to_string() },
-        ParseError::SyntaxError { location: 21, message: "error at bbb".to_string() },
-        ParseError::SyntaxError { location: 43, message: "error at ccc".to_string() },
+        ParseError::SyntaxError {
+            location: 0,
+            message: "error at aaa".to_string(),
+        },
+        ParseError::SyntaxError {
+            location: 21,
+            message: "error at bbb".to_string(),
+        },
+        ParseError::SyntaxError {
+            location: 43,
+            message: "error at ccc".to_string(),
+        },
     ];
     let provider = DiagnosticsProvider::new(&ast, source.to_string());
     let diags = provider.get_diagnostics(&ast, &errors, source, None);
@@ -490,13 +553,19 @@ fn test_clearing_on_fix_broken_then_fixed() -> Result<(), Box<dyn std::error::Er
     let broken = "my $x = ;\n";
     let diags_broken = diagnostics_for(broken);
     let pe_broken = parse_error_diags(&diags_broken);
-    assert!(!pe_broken.is_empty(), "Broken source should produce parse-error diagnostics");
+    assert!(
+        !pe_broken.is_empty(),
+        "Broken source should produce parse-error diagnostics"
+    );
 
     // Step 2: Fix the source -- should have zero parse errors
     let fixed = "my $x = 1;\n";
     let diags_fixed = diagnostics_for(fixed);
     let pe_fixed = parse_error_diags(&diags_fixed);
-    assert!(pe_fixed.is_empty(), "Fixed source should produce zero parse-error diagnostics");
+    assert!(
+        pe_fixed.is_empty(),
+        "Fixed source should produce zero parse-error diagnostics"
+    );
     Ok(())
 }
 
@@ -506,7 +575,10 @@ fn test_clearing_on_fix_synthetic_error_then_none() -> Result<(), Box<dyn std::e
     let broken = "my $x = 42\nprint $x;\n";
     let ast = Arc::new(perl_parser_core::Node::new(
         perl_parser_core::NodeKind::Program { statements: vec![] },
-        perl_parser_core::SourceLocation { start: 0, end: broken.len() },
+        perl_parser_core::SourceLocation {
+            start: 0,
+            end: broken.len(),
+        },
     ));
     let errors = vec![ParseError::UnexpectedToken {
         location: 10,
@@ -516,13 +588,19 @@ fn test_clearing_on_fix_synthetic_error_then_none() -> Result<(), Box<dyn std::e
     let provider = DiagnosticsProvider::new(&ast, broken.to_string());
     let diags_broken = provider.get_diagnostics(&ast, &errors, broken, None);
     let pe_broken = parse_error_diags(&diags_broken);
-    assert!(!pe_broken.is_empty(), "Broken source with explicit error should produce diagnostics");
+    assert!(
+        !pe_broken.is_empty(),
+        "Broken source with explicit error should produce diagnostics"
+    );
 
     // Step 2: Fixed source with no parse errors
     let fixed = "my $x = 42;\nprint $x;\n";
     let diags_fixed = diagnostics_for(fixed);
     let pe_fixed = parse_error_diags(&diags_fixed);
-    assert!(pe_fixed.is_empty(), "Fixed source should produce zero parse-error diagnostics");
+    assert!(
+        pe_fixed.is_empty(),
+        "Fixed source should produce zero parse-error diagnostics"
+    );
     Ok(())
 }
 
@@ -531,12 +609,18 @@ fn test_clearing_on_fix_unclosed_brace_then_closed() -> Result<(), Box<dyn std::
     let broken = "sub foo {\n    my $x = 1;\n";
     let diags_broken = diagnostics_for(broken);
     let pe_broken = parse_error_diags(&diags_broken);
-    assert!(!pe_broken.is_empty(), "Unclosed brace should produce errors");
+    assert!(
+        !pe_broken.is_empty(),
+        "Unclosed brace should produce errors"
+    );
 
     let fixed = "sub foo {\n    my $x = 1;\n}\n";
     let diags_fixed = diagnostics_for(fixed);
     let pe_fixed = parse_error_diags(&diags_fixed);
-    assert!(pe_fixed.is_empty(), "Closing brace should clear parse errors, got: {pe_fixed:?}");
+    assert!(
+        pe_fixed.is_empty(),
+        "Closing brace should clear parse errors, got: {pe_fixed:?}"
+    );
     Ok(())
 }
 
@@ -551,14 +635,19 @@ fn test_clearing_on_fix_lint_diagnostics_also_clear() -> Result<(), Box<dyn std:
     let stmt = Node::new(
         NodeKind::ExpressionStatement {
             expression: Box::new(Node::new(
-                NodeKind::Variable { sigil: "$".to_string(), name: "x".to_string() },
+                NodeKind::Variable {
+                    sigil: "$".to_string(),
+                    name: "x".to_string(),
+                },
                 SourceLocation { start: 0, end: 2 },
             )),
         },
         SourceLocation { start: 0, end: 3 },
     );
     let without = Node::new(
-        NodeKind::Program { statements: vec![stmt] },
+        NodeKind::Program {
+            statements: vec![stmt],
+        },
         SourceLocation { start: 0, end: 10 },
     );
     let mut diags1 = Vec::new();
@@ -567,19 +656,32 @@ fn test_clearing_on_fix_lint_diagnostics_also_clear() -> Result<(), Box<dyn std:
         .iter()
         .filter(|d| matches!(d.code.as_deref(), Some("PL100") | Some("PL101")))
         .collect();
-    assert!(!lint1.is_empty(), "Should have missing-pragma diagnostics without pragmas");
+    assert!(
+        !lint1.is_empty(),
+        "Should have missing-pragma diagnostics without pragmas"
+    );
 
     // With strict and warnings: both present
     let use_strict = Node::new(
-        NodeKind::Use { module: "strict".to_string(), args: vec![], has_filter_risk: false },
+        NodeKind::Use {
+            module: "strict".to_string(),
+            args: vec![],
+            has_filter_risk: false,
+        },
         SourceLocation { start: 0, end: 12 },
     );
     let use_warnings = Node::new(
-        NodeKind::Use { module: "warnings".to_string(), args: vec![], has_filter_risk: false },
+        NodeKind::Use {
+            module: "warnings".to_string(),
+            args: vec![],
+            has_filter_risk: false,
+        },
         SourceLocation { start: 13, end: 27 },
     );
     let with = Node::new(
-        NodeKind::Program { statements: vec![use_strict, use_warnings] },
+        NodeKind::Program {
+            statements: vec![use_strict, use_warnings],
+        },
         SourceLocation { start: 0, end: 28 },
     );
     let mut diags2 = Vec::new();
@@ -588,7 +690,10 @@ fn test_clearing_on_fix_lint_diagnostics_also_clear() -> Result<(), Box<dyn std:
         .iter()
         .filter(|d| matches!(d.code.as_deref(), Some("PL100") | Some("PL101")))
         .collect();
-    assert!(lint2.is_empty(), "Adding pragmas should clear missing-pragma diagnostics");
+    assert!(
+        lint2.is_empty(),
+        "Adding pragmas should clear missing-pragma diagnostics"
+    );
     Ok(())
 }
 
@@ -636,7 +741,10 @@ fn test_suggestion_present_for_eof_error() -> Result<(), Box<dyn std::error::Err
     let source = "my $x = ";
     let ast = Arc::new(perl_parser_core::Node::new(
         perl_parser_core::NodeKind::Program { statements: vec![] },
-        perl_parser_core::SourceLocation { start: 0, end: source.len() },
+        perl_parser_core::SourceLocation {
+            start: 0,
+            end: source.len(),
+        },
     ));
     let errors = vec![ParseError::UnexpectedEof];
     let provider = DiagnosticsProvider::new(&ast, source.to_string());
@@ -644,7 +752,10 @@ fn test_suggestion_present_for_eof_error() -> Result<(), Box<dyn std::error::Err
     let pe = parse_error_diags(&diags);
 
     if let Some(d) = pe.first() {
-        assert!(d.suggestion.is_some(), "EOF error should carry a suggestion");
+        assert!(
+            d.suggestion.is_some(),
+            "EOF error should carry a suggestion"
+        );
     }
     Ok(())
 }
@@ -654,7 +765,10 @@ fn test_suggestion_present_for_unclosed_delimiter() -> Result<(), Box<dyn std::e
     let source = "my @a = (1, 2";
     let ast = Arc::new(perl_parser_core::Node::new(
         perl_parser_core::NodeKind::Program { statements: vec![] },
-        perl_parser_core::SourceLocation { start: 0, end: source.len() },
+        perl_parser_core::SourceLocation {
+            start: 0,
+            end: source.len(),
+        },
     ));
     let errors = vec![ParseError::UnclosedDelimiter { delimiter: ')' }];
     let provider = DiagnosticsProvider::new(&ast, source.to_string());
@@ -662,9 +776,15 @@ fn test_suggestion_present_for_unclosed_delimiter() -> Result<(), Box<dyn std::e
     let pe = parse_error_diags(&diags);
 
     if let Some(d) = pe.first() {
-        assert!(d.suggestion.is_some(), "UnclosedDelimiter should carry a suggestion");
+        assert!(
+            d.suggestion.is_some(),
+            "UnclosedDelimiter should carry a suggestion"
+        );
         let s = d.suggestion.as_deref().unwrap_or_default();
-        assert!(s.contains(')'), "Suggestion should mention the closing delimiter");
+        assert!(
+            s.contains(')'),
+            "Suggestion should mention the closing delimiter"
+        );
     }
     Ok(())
 }
@@ -681,7 +801,10 @@ fn test_full_pipeline_complex_perl_file() -> Result<(), Box<dyn std::error::Erro
 
     // Should produce NO parse errors for valid Perl
     let pe = parse_error_diags(&diags);
-    assert!(pe.is_empty(), "Valid Perl should have no parse errors, got: {pe:?}");
+    assert!(
+        pe.is_empty(),
+        "Valid Perl should have no parse errors, got: {pe:?}"
+    );
 
     // All diagnostics should have valid ranges
     for d in &diags {
@@ -692,7 +815,11 @@ fn test_full_pipeline_complex_perl_file() -> Result<(), Box<dyn std::error::Erro
             d.message
         );
         // Every diagnostic should have a code
-        assert!(d.code.is_some(), "Diagnostic should have a code: {}", d.message);
+        assert!(
+            d.code.is_some(),
+            "Diagnostic should have a code: {}",
+            d.message
+        );
     }
     Ok(())
 }
@@ -708,7 +835,10 @@ fn test_full_pipeline_empty_source() -> Result<(), Box<dyn std::error::Error>> {
         .iter()
         .filter(|d| matches!(d.code.as_deref(), Some("PL100") | Some("PL101")))
         .collect();
-    assert!(lint.is_empty(), "Empty source should not produce strict/warnings lint, got: {lint:?}");
+    assert!(
+        lint.is_empty(),
+        "Empty source should not produce strict/warnings lint, got: {lint:?}"
+    );
     Ok(())
 }
 
@@ -725,7 +855,10 @@ fn test_full_pipeline_clean_perl_minimal_diagnostics() -> Result<(), Box<dyn std
         .iter()
         .filter(|d| matches!(d.code.as_deref(), Some("PL100") | Some("PL101")))
         .collect();
-    assert!(missing_pragmas.is_empty(), "Clean Perl should not have missing-pragma diagnostics");
+    assert!(
+        missing_pragmas.is_empty(),
+        "Clean Perl should not have missing-pragma diagnostics"
+    );
     Ok(())
 }
 
@@ -781,26 +914,39 @@ fn test_deprecated_tag_for_deprecated_syntax() -> Result<(), Box<dyn std::error:
 
     // Build AST with defined(@array) -- deprecated
     let arr = Node::new(
-        NodeKind::Variable { sigil: "@".to_string(), name: "data".to_string() },
+        NodeKind::Variable {
+            sigil: "@".to_string(),
+            name: "data".to_string(),
+        },
         SourceLocation { start: 20, end: 25 },
     );
     let call = Node::new(
-        NodeKind::FunctionCall { name: "defined".to_string(), args: vec![arr] },
+        NodeKind::FunctionCall {
+            name: "defined".to_string(),
+            args: vec![arr],
+        },
         SourceLocation { start: 10, end: 30 },
     );
     let stmt = Node::new(
-        NodeKind::ExpressionStatement { expression: Box::new(call) },
+        NodeKind::ExpressionStatement {
+            expression: Box::new(call),
+        },
         SourceLocation { start: 10, end: 31 },
     );
     let root = Node::new(
-        NodeKind::Program { statements: vec![stmt] },
+        NodeKind::Program {
+            statements: vec![stmt],
+        },
         SourceLocation { start: 0, end: 100 },
     );
 
     let mut diagnostics = Vec::new();
     perl_lsp_diagnostics::deprecated::check_deprecated_syntax(&root, &mut diagnostics);
 
-    let dep: Vec<_> = diagnostics.iter().filter(|d| d.code.as_deref() == Some("PL500")).collect();
+    let dep: Vec<_> = diagnostics
+        .iter()
+        .filter(|d| d.code.as_deref() == Some("PL500"))
+        .collect();
     assert!(!dep.is_empty(), "Should detect deprecated defined(@array)");
     assert!(dep[0].tags.contains(&DiagnosticTag::Deprecated));
     assert_eq!(dep[0].severity, DiagnosticSeverity::Warning);
@@ -816,7 +962,10 @@ fn test_edge_case_single_character_source() -> Result<(), Box<dyn std::error::Er
     let diags = diagnostics_for(";");
     // Should not panic; diagnostics are all within bounds
     for d in &diags {
-        assert!(d.range.0 <= 2, "Range start should be within single-char source");
+        assert!(
+            d.range.0 <= 2,
+            "Range start should be within single-char source"
+        );
     }
     Ok(())
 }
@@ -825,7 +974,10 @@ fn test_edge_case_single_character_source() -> Result<(), Box<dyn std::error::Er
 fn test_edge_case_only_whitespace() -> Result<(), Box<dyn std::error::Error>> {
     let diags = diagnostics_for("   \n\n   \n");
     let pe = parse_error_diags(&diags);
-    assert!(pe.is_empty(), "Whitespace-only source should not produce parse errors");
+    assert!(
+        pe.is_empty(),
+        "Whitespace-only source should not produce parse errors"
+    );
     Ok(())
 }
 
@@ -839,7 +991,10 @@ fn test_edge_case_very_long_line() -> Result<(), Box<dyn std::error::Error>> {
 
     // Should not panic; may or may not have parse errors depending on parser limits
     for d in &pe {
-        assert!(d.range.0 <= source.len(), "Offset should be within source bounds");
+        assert!(
+            d.range.0 <= source.len(),
+            "Offset should be within source bounds"
+        );
     }
     Ok(())
 }
@@ -850,7 +1005,10 @@ fn test_edge_case_unicode_source() -> Result<(), Box<dyn std::error::Error>> {
     let diags = diagnostics_for(source);
     let pe = parse_error_diags(&diags);
 
-    assert!(pe.is_empty(), "Valid Perl with unicode should have no parse errors, got: {pe:?}");
+    assert!(
+        pe.is_empty(),
+        "Valid Perl with unicode should have no parse errors, got: {pe:?}"
+    );
 
     // Verify offset-to-position works with multibyte chars
     let (line, _col) = offset_to_line_col(source, 0);
@@ -885,7 +1043,10 @@ fn whitespace_only_file_produces_no_strict_warnings_diagnostics()
         .iter()
         .filter(|d| matches!(d.code.as_deref(), Some("PL100") | Some("PL101")))
         .collect();
-    assert!(noisy.is_empty(), "whitespace-only file should produce no strict/warnings diagnostics");
+    assert!(
+        noisy.is_empty(),
+        "whitespace-only file should produce no strict/warnings diagnostics"
+    );
     Ok(())
 }
 
@@ -897,6 +1058,9 @@ fn comment_only_file_produces_no_strict_warnings_diagnostics()
         .iter()
         .filter(|d| matches!(d.code.as_deref(), Some("PL100") | Some("PL101")))
         .collect();
-    assert!(noisy.is_empty(), "comment-only file should produce no strict/warnings diagnostics");
+    assert!(
+        noisy.is_empty(),
+        "comment-only file should produce no strict/warnings diagnostics"
+    );
     Ok(())
 }

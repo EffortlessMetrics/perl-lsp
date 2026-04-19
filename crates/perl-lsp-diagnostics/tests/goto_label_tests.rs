@@ -23,7 +23,9 @@ fn goto_to_missing_label_warns() {
     let source = "use v5.40;\ngoto MISSING;\n";
     let messages = pl409_messages(source);
     assert!(
-        messages.iter().any(|m| m.contains("not defined in this file")),
+        messages
+            .iter()
+            .any(|m| m.contains("not defined in this file")),
         "expected PL409 for missing goto label, got: {messages:?}"
     );
 }
@@ -32,7 +34,10 @@ fn goto_to_missing_label_warns() {
 fn goto_to_existing_label_is_allowed() {
     let source = "use v5.40;\nSTART: goto START;\n";
     let messages = pl409_messages(source);
-    assert!(messages.is_empty(), "goto to an existing label should not warn, got: {messages:?}");
+    assert!(
+        messages.is_empty(),
+        "goto to an existing label should not warn, got: {messages:?}"
+    );
 }
 
 #[test]

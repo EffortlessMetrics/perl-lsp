@@ -159,7 +159,12 @@ pub struct MethodInfo {
 impl MethodInfo {
     /// Construct a regular declared method.
     pub fn new(name: String, location: SourceLocation) -> Self {
-        Self { name, location, synthetic: false, accessor_mode: None }
+        Self {
+            name,
+            location,
+            synthetic: false,
+            accessor_mode: None,
+        }
     }
 
     /// Construct a synthetic method generated from framework metadata.
@@ -168,7 +173,12 @@ impl MethodInfo {
         location: SourceLocation,
         accessor_mode: Option<ClassAccessorMode>,
     ) -> Self {
-        Self { name, location, synthetic: true, accessor_mode }
+        Self {
+            name,
+            location,
+            synthetic: true,
+            accessor_mode,
+        }
     }
 }
 
@@ -209,7 +219,10 @@ impl ClassModel {
 
     /// Return the names of Object::Pad fields that participate in constructor parameters.
     pub fn object_pad_param_field_names(&self) -> impl Iterator<Item = &str> {
-        self.fields.iter().filter(|field| field.param).map(|field| field.name.as_str())
+        self.fields
+            .iter()
+            .filter(|field| field.param)
+            .map(|field| field.name.as_str())
     }
 }
 
@@ -323,8 +336,11 @@ impl ClassModelBuilder {
                 self.flush_current_package();
 
                 self.current_package = name.clone();
-                self.current_framework =
-                    self.framework_map.get(name).copied().unwrap_or(Framework::None);
+                self.current_framework = self
+                    .framework_map
+                    .get(name)
+                    .copied()
+                    .unwrap_or(Framework::None);
                 self.current_mro = MethodResolutionOrder::Dfs;
 
                 if let Some(block) = block {
@@ -338,7 +354,8 @@ impl ClassModelBuilder {
 
             NodeKind::Subroutine { name, body, .. } => {
                 if let Some(sub_name) = name {
-                    self.current_methods.push(MethodInfo::new(sub_name.clone(), node.location));
+                    self.current_methods
+                        .push(MethodInfo::new(sub_name.clone(), node.location));
                 }
                 self.visit_node(body);
             }
@@ -352,7 +369,11 @@ impl ClassModelBuilder {
             }
 
             // `our @ISA = qw(Parent1 Parent2);` / `our @EXPORT = qw(...);` / `our @EXPORT_OK = qw(...);`
-            NodeKind::VariableDeclaration { variable, initializer, .. } => {
+            NodeKind::VariableDeclaration {
+                variable,
+                initializer,
+                ..
+            } => {
                 if let NodeKind::Variable { sigil, name } = &variable.kind {
                     if sigil == "$"
                         && let Some(init) = initializer
@@ -404,7 +425,10 @@ impl ClassModelBuilder {
                     && name == "push"
                 {
                     if let Some(first_arg) = args.first() {
-                        if let NodeKind::Variable { sigil, name: var_name } = &first_arg.kind
+                        if let NodeKind::Variable {
+                            sigil,
+                            name: var_name,
+                        } = &first_arg.kind
                             && sigil == "@"
                             && var_name == "ISA"
                         {
@@ -419,7 +443,11 @@ impl ClassModelBuilder {
                 self.visit_node(expression);
             }
 
-            NodeKind::Class { name, parents, body } => {
+            NodeKind::Class {
+                name,
+                parents,
+                body,
+            } => {
                 self.flush_current_package();
                 self.current_package = name.clone();
                 self.current_framework = if self.current_framework == Framework::ObjectPad {
@@ -428,7 +456,8 @@ impl ClassModelBuilder {
                     Framework::NativeClass
                 };
                 self.current_mro = MethodResolutionOrder::Dfs;
-                self.framework_map.insert(name.clone(), self.current_framework);
+                self.framework_map
+                    .insert(name.clone(), self.current_framework);
                 self.current_package_aliases.clear();
                 // Populate parent classes from `:isa(Parent)` attributes
                 self.current_parents.extend(parents.iter().cloned());
@@ -436,7 +465,8 @@ impl ClassModelBuilder {
             }
 
             NodeKind::Method { name, body, .. } => {
-                self.current_methods.push(MethodInfo::new(name.clone(), node.location));
+                self.current_methods
+                    .push(MethodInfo::new(name.clone(), node.location));
                 self.visit_node(body);
             }
 
@@ -461,7 +491,12 @@ impl ClassModelBuilder {
             NodeKind::Block { statements, .. } => {
                 self.visit_statement_list(statements);
             }
-            NodeKind::If { condition, then_branch, else_branch, .. } => {
+            NodeKind::If {
+                condition,
+                then_branch,
+                else_branch,
+                ..
+            } => {
                 self.visit_node(condition);
                 self.visit_node(then_branch);
                 if let Some(else_node) = else_branch {
@@ -571,7 +606,8 @@ impl ClassModelBuilder {
         };
 
         self.current_framework = framework;
-        self.framework_map.insert(self.current_package.clone(), framework);
+        self.framework_map
+            .insert(self.current_package.clone(), framework);
     }
 
     /// Detect `use mro 'c3'` / `use mro 'dfs'` for the current package.
@@ -620,8 +656,10 @@ impl ClassModelBuilder {
 
             if is_has_marker {
                 if let NodeKind::ExpressionStatement { expression } = &second.kind {
-                    let has_location =
-                        SourceLocation { start: first.location.start, end: second.location.end };
+                    let has_location = SourceLocation {
+                        start: first.location.start,
+                        end: second.location.end,
+                    };
 
                     match &expression.kind {
                         NodeKind::HashLiteral { pairs } => {
@@ -629,8 +667,10 @@ impl ClassModelBuilder {
                             return Some(2);
                         }
                         NodeKind::ArrayLiteral { elements } => {
-                            if let Some(Node { kind: NodeKind::HashLiteral { pairs }, .. }) =
-                                elements.last()
+                            if let Some(Node {
+                                kind: NodeKind::HashLiteral { pairs },
+                                ..
+                            }) = elements.last()
                             {
                                 let mut names = Vec::new();
                                 for el in elements.iter().take(elements.len() - 1) {
@@ -674,12 +714,15 @@ impl ClassModelBuilder {
             && !args.is_empty()
         {
             // The last arg that is a HashLiteral holds the options.
-            let options_hash_idx =
-                args.iter().rposition(|a| matches!(a.kind, NodeKind::HashLiteral { .. }));
+            let options_hash_idx = args
+                .iter()
+                .rposition(|a| matches!(a.kind, NodeKind::HashLiteral { .. }));
             if let Some(opts_idx) = options_hash_idx {
                 if let NodeKind::HashLiteral { pairs } = &args[opts_idx].kind {
-                    let names: Vec<String> =
-                        args[..opts_idx].iter().flat_map(collect_symbol_names).collect();
+                    let names: Vec<String> = args[..opts_idx]
+                        .iter()
+                        .flat_map(collect_symbol_names)
+                        .collect();
                     if !names.is_empty() {
                         self.extract_has_with_names(&names, pairs, first.location);
                         return Some(1);
@@ -715,7 +758,10 @@ impl ClassModelBuilder {
                 continue;
             }
 
-            if let NodeKind::HashLiteral { pairs: option_pairs } = &options_expr.kind {
+            if let NodeKind::HashLiteral {
+                pairs: option_pairs,
+            } = &options_expr.kind
+            {
                 self.extract_has_with_names(&names, option_pairs, location);
             }
         }
@@ -742,30 +788,49 @@ impl ClassModelBuilder {
         let default = options.contains_key("default")
             || options.contains_key("builder")
             || is == Some(AccessorType::Lazy);
-        let required = options.get("required").is_some_and(|v| v == "1" || v == "true");
-        let coerce = options.get("coerce").is_some_and(|v| v == "1" || v == "true");
+        let required = options
+            .get("required")
+            .is_some_and(|v| v == "1" || v == "true");
+        let coerce = options
+            .get("coerce")
+            .is_some_and(|v| v == "1" || v == "true");
         let trigger = options.contains_key("trigger");
 
         // Determine accessor name: explicit accessor/reader overrides default
-        let explicit_accessor = options.get("accessor").or_else(|| options.get("reader")).cloned();
+        let explicit_accessor = options
+            .get("accessor")
+            .or_else(|| options.get("reader"))
+            .cloned();
 
         for name in names {
             let accessor_name = explicit_accessor.clone().unwrap_or_else(|| name.clone());
 
             // builder => 1 derives `_build_<attr>`; a string value names the method directly
-            let builder = options
-                .get("builder")
-                .map(|v| if v == "1" { format!("_build_{name}") } else { v.clone() });
+            let builder = options.get("builder").map(|v| {
+                if v == "1" {
+                    format!("_build_{name}")
+                } else {
+                    v.clone()
+                }
+            });
 
             // predicate => 1 derives `has_<attr>`; a string value is used directly
-            let predicate = options
-                .get("predicate")
-                .map(|v| if v == "1" { format!("has_{name}") } else { v.clone() });
+            let predicate = options.get("predicate").map(|v| {
+                if v == "1" {
+                    format!("has_{name}")
+                } else {
+                    v.clone()
+                }
+            });
 
             // clearer => 1 derives `clear_<attr>`; a string value is used directly
-            let clearer = options
-                .get("clearer")
-                .map(|v| if v == "1" { format!("clear_{name}") } else { v.clone() });
+            let clearer = options.get("clearer").map(|v| {
+                if v == "1" {
+                    format!("clear_{name}")
+                } else {
+                    v.clone()
+                }
+            });
 
             self.current_attributes.push(Attribute {
                 name: name.clone(),
@@ -835,7 +900,10 @@ impl ClassModelBuilder {
             return None;
         };
 
-        let location = SourceLocation { start: first.location.start, end: second.location.end };
+        let location = SourceLocation {
+            start: first.location.start,
+            end: second.location.end,
+        };
 
         for (key_node, _) in pairs {
             let method_names = collect_symbol_names(key_node);
@@ -920,7 +988,12 @@ impl ClassModelBuilder {
             return None;
         };
 
-        let NodeKind::MethodCall { object, method, args } = &expression.kind else {
+        let NodeKind::MethodCall {
+            object,
+            method,
+            args,
+        } = &expression.kind
+        else {
             return None;
         };
 
@@ -976,16 +1049,20 @@ impl ClassModelBuilder {
             self.current_fields.push(field);
 
             if let Some(reader) = Self::object_pad_reader_name(&field_name, &traits) {
-                self.current_methods.push(MethodInfo::synthetic(reader, location, None));
+                self.current_methods
+                    .push(MethodInfo::synthetic(reader, location, None));
             }
             if let Some(writer) = Self::object_pad_writer_name(&field_name, &traits) {
-                self.current_methods.push(MethodInfo::synthetic(writer, location, None));
+                self.current_methods
+                    .push(MethodInfo::synthetic(writer, location, None));
             }
             if let Some(accessor) = Self::object_pad_accessor_name(&field_name, &traits) {
-                self.current_methods.push(MethodInfo::synthetic(accessor, location, None));
+                self.current_methods
+                    .push(MethodInfo::synthetic(accessor, location, None));
             }
             if let Some(mutator) = Self::object_pad_mutator_name(&field_name, &traits) {
-                self.current_methods.push(MethodInfo::synthetic(mutator, location, None));
+                self.current_methods
+                    .push(MethodInfo::synthetic(mutator, location, None));
             }
 
             return Some(1);
@@ -1009,12 +1086,17 @@ impl ClassModelBuilder {
     }
 
     fn record_object_pad_adjust(&mut self, location: SourceLocation) {
-        self.current_adjusts.push(MethodInfo::synthetic("ADJUST".to_string(), location, None));
+        self.current_adjusts
+            .push(MethodInfo::synthetic("ADJUST".to_string(), location, None));
     }
 
     fn object_pad_field_from_statement(statement: &Node) -> Option<FieldInfo> {
-        let NodeKind::VariableDeclaration { declarator, variable, attributes, initializer } =
-            &statement.kind
+        let NodeKind::VariableDeclaration {
+            declarator,
+            variable,
+            attributes,
+            initializer,
+        } = &statement.kind
         else {
             return None;
         };
@@ -1116,7 +1198,8 @@ impl ClassModelBuilder {
             // Promote to PlainOO if no stronger framework is already set
             if self.current_framework == Framework::None {
                 self.current_framework = Framework::PlainOO;
-                self.framework_map.insert(self.current_package.clone(), Framework::PlainOO);
+                self.framework_map
+                    .insert(self.current_package.clone(), Framework::PlainOO);
             }
             self.current_parents.extend(parents);
         }
@@ -1187,7 +1270,11 @@ fn modifier_kind_from_name(name: &str) -> Option<ModifierKind> {
 
 fn normalize_symbol_name(raw: &str) -> Option<String> {
     let trimmed = raw.trim().trim_matches('\'').trim_matches('"').trim();
-    if trimmed.is_empty() { None } else { Some(trimmed.to_string()) }
+    if trimmed.is_empty() {
+        None
+    } else {
+        Some(trimmed.to_string())
+    }
 }
 
 fn expand_symbol_list(raw: &str) -> Vec<String> {
@@ -1479,17 +1566,37 @@ $package->mk_wo_accessors([qw(token)]);
 
         let accessors = find_model(&models, "Example::Accessors")
             .expect("expected ClassModel for Example::Accessors");
-        assert!(has_method(accessors, "foo", true, Some(ClassAccessorMode::Rw)));
-        assert!(has_method(accessors, "bar", true, Some(ClassAccessorMode::Rw)));
+        assert!(has_method(
+            accessors,
+            "foo",
+            true,
+            Some(ClassAccessorMode::Rw)
+        ));
+        assert!(has_method(
+            accessors,
+            "bar",
+            true,
+            Some(ClassAccessorMode::Rw)
+        ));
         assert!(has_method(accessors, "other_method", false, None));
 
         let read_only = find_model(&models, "Example::ReadOnly")
             .expect("expected ClassModel for Example::ReadOnly");
-        assert!(has_method(read_only, "id", true, Some(ClassAccessorMode::Ro)));
+        assert!(has_method(
+            read_only,
+            "id",
+            true,
+            Some(ClassAccessorMode::Ro)
+        ));
 
         let write_only = find_model(&models, "Example::WriteOnly")
             .expect("expected ClassModel for Example::WriteOnly");
-        assert!(has_method(write_only, "token", true, Some(ClassAccessorMode::Wo)));
+        assert!(has_method(
+            write_only,
+            "token",
+            true,
+            Some(ClassAccessorMode::Wo)
+        ));
     }
 
     #[test]
@@ -1525,7 +1632,11 @@ sub helper { 1 }
 "#,
         );
 
-        assert_eq!(models.len(), 2, "expected 2 ClassModels (User + Admin, not Utils)");
+        assert_eq!(
+            models.len(),
+            2,
+            "expected 2 ClassModels (User + Admin, not Utils)"
+        );
         assert!(find_model(&models, "MyApp::User").is_some());
         assert!(find_model(&models, "MyApp::Admin").is_some());
         assert!(find_model(&models, "MyApp::Utils").is_none());
@@ -1600,7 +1711,10 @@ has 'config' => (is => 'ro', builder => 1);
         );
 
         let model = &models[0];
-        assert!(model.attributes[0].default, "builder option implies default");
+        assert!(
+            model.attributes[0].default,
+            "builder option implies default"
+        );
     }
 
     #[test]
@@ -1805,7 +1919,11 @@ use Moo;
 has 'name' => (is => 'ro');
 "#,
         );
-        assert_eq!(models.len(), 2, "expected 2 ClassModels: Native::Point and Moo::User");
+        assert_eq!(
+            models.len(),
+            2,
+            "expected 2 ClassModels: Native::Point and Moo::User"
+        );
         let native = models.iter().find(|m| m.name == "Native::Point");
         assert!(native.is_some(), "expected Native::Point model");
         let native = native.unwrap();
@@ -1834,7 +1952,10 @@ class Point {
         assert!(
             !models.is_empty(),
             "expected at least one model, got {:?}",
-            models.iter().map(|m| (&m.name, m.framework)).collect::<Vec<_>>()
+            models
+                .iter()
+                .map(|m| (&m.name, m.framework))
+                .collect::<Vec<_>>()
         );
         let model = find_model(&models, "Point").expect("Point model");
         assert_eq!(model.framework, Framework::ObjectPad);
@@ -1875,7 +1996,10 @@ class Config {
         assert_eq!(model.framework, Framework::ObjectPad);
         assert_eq!(model.adjusts.len(), 1, "expected one ADJUST block");
         assert_eq!(model.adjusts[0].name, "ADJUST");
-        assert!(model.adjusts[0].synthetic, "ADJUST should be modeled as synthetic");
+        assert!(
+            model.adjusts[0].synthetic,
+            "ADJUST should be modeled as synthetic"
+        );
     }
 
     #[test]
@@ -1909,7 +2033,11 @@ class Defaults {
         );
 
         let model = find_model(&models, "Defaults").expect("Defaults model");
-        let field = model.fields.iter().find(|field| field.name == "_secret").unwrap();
+        let field = model
+            .fields
+            .iter()
+            .find(|field| field.name == "_secret")
+            .unwrap();
 
         assert_eq!(field.reader.as_deref(), Some("secret"));
         assert_eq!(field.writer.as_deref(), Some("set_secret"));
@@ -1954,7 +2082,10 @@ has 'status' => (
         let models = build_models(code);
         let model = find_model(&models, "Child").expect("Child model");
         assert_eq!(model.framework, Framework::PlainOO);
-        assert!(model.parents.contains(&"Parent".to_string()), "parents should contain 'Parent'");
+        assert!(
+            model.parents.contains(&"Parent".to_string()),
+            "parents should contain 'Parent'"
+        );
     }
 
     #[test]
@@ -1963,8 +2094,14 @@ has 'status' => (
         let models = build_models(code);
         let model = find_model(&models, "Child").expect("Child model");
         assert_eq!(model.framework, Framework::PlainOO);
-        assert!(model.parents.contains(&"Base1".to_string()), "parents should contain Base1");
-        assert!(model.parents.contains(&"Base2".to_string()), "parents should contain Base2");
+        assert!(
+            model.parents.contains(&"Base1".to_string()),
+            "parents should contain Base1"
+        );
+        assert!(
+            model.parents.contains(&"Base2".to_string()),
+            "parents should contain Base2"
+        );
     }
 
     #[test]
@@ -2047,7 +2184,10 @@ has 'level' => (is => 'ro');
         let code = "package MyLib;\n@EXPORT_OK = qw(util_a util_b);\n1;";
         let models = build_models(code);
         let model = find_model(&models, "MyLib").expect("MyLib model");
-        assert_eq!(model.export_ok, vec!["util_a".to_string(), "util_b".to_string()]);
+        assert_eq!(
+            model.export_ok,
+            vec!["util_a".to_string(), "util_b".to_string()]
+        );
     }
 
     #[test]
@@ -2056,7 +2196,10 @@ has 'level' => (is => 'ro');
         let code = "package MyLib;\n@EXPORT = qw(func_a func_b);\n1;";
         let models = build_models(code);
         let model = find_model(&models, "MyLib").expect("MyLib model");
-        assert_eq!(model.exports, vec!["func_a".to_string(), "func_b".to_string()]);
+        assert_eq!(
+            model.exports,
+            vec!["func_a".to_string(), "func_b".to_string()]
+        );
     }
 
     // ---- Gap 2: push @ISA ----
@@ -2066,7 +2209,10 @@ has 'level' => (is => 'ro');
         let code = "package Child;\npush @ISA, 'Parent';\n1;";
         let models = build_models(code);
         let model = find_model(&models, "Child").expect("Child model");
-        assert!(model.parents.contains(&"Parent".to_string()), "push @ISA must capture parent");
+        assert!(
+            model.parents.contains(&"Parent".to_string()),
+            "push @ISA must capture parent"
+        );
         assert_eq!(model.framework, Framework::PlainOO);
     }
 
@@ -2085,7 +2231,11 @@ has 'level' => (is => 'ro');
         let code = "package Child;\nuse Moose;\nextends 'Base';\npush @ISA, 'Extra';\n1;";
         let models = build_models(code);
         let model = find_model(&models, "Child").expect("Child model");
-        assert_eq!(model.framework, Framework::Moose, "Moose must not be downgraded to PlainOO");
+        assert_eq!(
+            model.framework,
+            Framework::Moose,
+            "Moose must not be downgraded to PlainOO"
+        );
         assert!(
             model.parents.contains(&"Extra".to_string()),
             "push @ISA parent must still be captured"
@@ -2192,7 +2342,10 @@ class Standalone {
 }
 "#,
         );
-        let standalone = models.iter().find(|m| m.name == "Standalone").expect("Standalone model");
+        let standalone = models
+            .iter()
+            .find(|m| m.name == "Standalone")
+            .expect("Standalone model");
         assert!(
             standalone.parents.is_empty(),
             "Standalone class must have no parents, but got {:?}",

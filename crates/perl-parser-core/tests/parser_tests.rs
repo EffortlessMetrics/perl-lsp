@@ -13,7 +13,10 @@ fn parse_simple_assignment() -> Result<(), Box<dyn std::error::Error>> {
 
     match &ast.kind {
         V1NodeKind::Program { statements } => {
-            assert!(!statements.is_empty(), "should parse at least one statement");
+            assert!(
+                !statements.is_empty(),
+                "should parse at least one statement"
+            );
         }
         other => return Err(format!("expected Program, got {:?}", other).into()),
     }
@@ -27,7 +30,10 @@ fn parse_empty_input() -> Result<(), Box<dyn std::error::Error>> {
 
     match &ast.kind {
         V1NodeKind::Program { statements } => {
-            assert!(statements.is_empty(), "empty source should yield no statements");
+            assert!(
+                statements.is_empty(),
+                "empty source should yield no statements"
+            );
         }
         other => return Err(format!("expected Program, got {:?}", other).into()),
     }
@@ -67,7 +73,10 @@ fn parse_with_recovery_empty() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn parser_errors_initially_empty() -> Result<(), Box<dyn std::error::Error>> {
     let parser = Parser::new("my $x = 1;");
-    assert!(parser.errors().is_empty(), "should have no errors before parsing");
+    assert!(
+        parser.errors().is_empty(),
+        "should have no errors before parsing"
+    );
     Ok(())
 }
 
@@ -113,7 +122,11 @@ fn parse_namespaced_class_declaration() -> Result<(), Box<dyn std::error::Error>
         other => return Err(format!("expected Program, got {:?}", other).into()),
     }
 
-    assert!(parser.errors().is_empty(), "unexpected parser errors: {:?}", parser.errors());
+    assert!(
+        parser.errors().is_empty(),
+        "unexpected parser errors: {:?}",
+        parser.errors()
+    );
     Ok(())
 }
 

@@ -27,10 +27,16 @@ fn scenario_08_shebang_file_without_pl_extension() {
                   my $answer = 42;\nprint \"Answer: $answer\\n\";\n";
     let harness = UxHarness::new(ScenarioConfig::default()).expect("Failed to create UX harness");
 
-    harness.open_file("deploy_script", source).expect("didOpen should succeed for shebang file");
+    harness
+        .open_file("deploy_script", source)
+        .expect("didOpen should succeed for shebang file");
 
     let hover = harness.hover("deploy_script", 4, 3);
-    assert!(hover.is_ok(), "hover crashed on non-.pl file — UX regression: {:?}", hover);
+    assert!(
+        hover.is_ok(),
+        "hover crashed on non-.pl file — UX regression: {:?}",
+        hover
+    );
 
     harness.assert_no_crash();
 }
@@ -45,10 +51,16 @@ fn scenario_08_no_extension_file_completion_does_not_crash() {
     let source = "#!/usr/bin/perl\nmy $va\n";
     let harness = UxHarness::new(ScenarioConfig::default()).expect("Failed to create UX harness");
 
-    harness.open_file("run_tests", source).expect("didOpen should succeed");
+    harness
+        .open_file("run_tests", source)
+        .expect("didOpen should succeed");
 
     let result = harness.completion("run_tests", 1, 7);
-    assert!(result.is_ok(), "completion crashed on non-.pl file — UX regression: {:?}", result);
+    assert!(
+        result.is_ok(),
+        "completion crashed on non-.pl file — UX regression: {:?}",
+        result
+    );
 }
 
 #[test]
@@ -61,8 +73,14 @@ fn scenario_08_test_file_t_extension() {
     let source = "use Test::More;\nuse strict;\n\nok(1, 'basic');\ndone_testing();\n";
     let harness = UxHarness::new(ScenarioConfig::default()).expect("Failed to create UX harness");
 
-    harness.open_file("basic.t", source).expect("didOpen should succeed for .t extension");
+    harness
+        .open_file("basic.t", source)
+        .expect("didOpen should succeed for .t extension");
 
     let hover = harness.hover("basic.t", 3, 1);
-    assert!(hover.is_ok(), "hover crashed on .t test file — UX regression: {:?}", hover);
+    assert!(
+        hover.is_ok(),
+        "hover crashed on .t test file — UX regression: {:?}",
+        hover
+    );
 }

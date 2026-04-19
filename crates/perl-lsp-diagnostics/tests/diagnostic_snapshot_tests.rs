@@ -45,9 +45,17 @@ fn codes(diags: &[Diagnostic]) -> Vec<&str> {
 fn assert_no_parse_errors(diags: &[Diagnostic], label: &str) {
     let parse_errors: Vec<_> = diags
         .iter()
-        .filter(|d| matches!(d.code.as_deref(), Some("PL001") | Some("PL002") | Some("PL003")))
+        .filter(|d| {
+            matches!(
+                d.code.as_deref(),
+                Some("PL001") | Some("PL002") | Some("PL003")
+            )
+        })
         .collect();
-    assert!(parse_errors.is_empty(), "{label}: expected zero parse errors, got {parse_errors:?}");
+    assert!(
+        parse_errors.is_empty(),
+        "{label}: expected zero parse errors, got {parse_errors:?}"
+    );
 }
 
 /// Assert there are no scope-error diagnostics (undeclared-variable,
@@ -65,7 +73,10 @@ fn assert_no_scope_errors(diags: &[Diagnostic], label: &str) {
             )
         })
         .collect();
-    assert!(scope_errors.is_empty(), "{label}: expected zero scope errors, got {scope_errors:?}");
+    assert!(
+        scope_errors.is_empty(),
+        "{label}: expected zero scope errors, got {scope_errors:?}"
+    );
 }
 
 /// Assert no false-positive Warning or Error diagnostics beyond the known
@@ -75,8 +86,10 @@ fn assert_no_unexpected_warnings(diags: &[Diagnostic], allowed_codes: &[&str], l
     let unexpected: Vec<_> = diags
         .iter()
         .filter(|d| {
-            let severity_is_warn_or_error =
-                matches!(d.severity, DiagnosticSeverity::Warning | DiagnosticSeverity::Error);
+            let severity_is_warn_or_error = matches!(
+                d.severity,
+                DiagnosticSeverity::Warning | DiagnosticSeverity::Error
+            );
             let code = d.code.as_deref().unwrap_or("");
             severity_is_warn_or_error && !allowed_codes.contains(&code)
         })
@@ -110,7 +123,10 @@ fn snapshot_basic_strict_warnings() -> Result<(), Box<dyn std::error::Error>> {
     // No scope errors
     assert_no_scope_errors(&diags, "basic strict/warnings");
     // No unused-variable false positive (PL102) — $x is printed
-    let unused_var: Vec<_> = diags.iter().filter(|d| d.code.as_deref() == Some("PL102")).collect();
+    let unused_var: Vec<_> = diags
+        .iter()
+        .filter(|d| d.code.as_deref() == Some("PL102"))
+        .collect();
     assert!(
         unused_var.is_empty(),
         "Used variable $x must not be flagged as unused: {unused_var:?}"
@@ -125,8 +141,15 @@ fn snapshot_basic_strict_warnings() -> Result<(), Box<dyn std::error::Error>> {
         "strict+warnings present; must not get PL100/PL101: {missing_pragmas:?}"
     );
     // PL200 is expected for a script buffer with no package declaration
-    let pl200: Vec<_> = diags.iter().filter(|d| d.code.as_deref() == Some("PL200")).collect();
-    assert_eq!(pl200.len(), 1, "Expected exactly one PL200 for script without package");
+    let pl200: Vec<_> = diags
+        .iter()
+        .filter(|d| d.code.as_deref() == Some("PL200"))
+        .collect();
+    assert_eq!(
+        pl200.len(),
+        1,
+        "Expected exactly one PL200 for script without package"
+    );
     // Only PL200 may appear as a Warning/Error
     assert_no_unexpected_warnings(&diags, &["PL200"], "basic strict/warnings");
 
@@ -169,11 +192,20 @@ fn snapshot_oop_pattern() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     // No missing-package (has `package Foo;`)
-    let pl200: Vec<_> = diags.iter().filter(|d| d.code.as_deref() == Some("PL200")).collect();
-    assert!(pl200.is_empty(), "OOP module with package declaration must not get PL200: {pl200:?}");
+    let pl200: Vec<_> = diags
+        .iter()
+        .filter(|d| d.code.as_deref() == Some("PL200"))
+        .collect();
+    assert!(
+        pl200.is_empty(),
+        "OOP module with package declaration must not get PL200: {pl200:?}"
+    );
 
     // No unused-variable diagnostics for the constructor/accessor args
-    let unused_var: Vec<_> = diags.iter().filter(|d| d.code.as_deref() == Some("PL102")).collect();
+    let unused_var: Vec<_> = diags
+        .iter()
+        .filter(|d| d.code.as_deref() == Some("PL102"))
+        .collect();
     assert!(
         unused_var.is_empty(),
         "Constructor/accessor args must not be flagged unused: {unused_var:?}"
@@ -207,8 +239,10 @@ fn snapshot_file_io() -> Result<(), Box<dyn std::error::Error>> {
     assert_no_scope_errors(&diags, "file I/O");
 
     // 3-arg open must NOT produce PL401 (security-two-arg-open)
-    let two_arg_open: Vec<_> =
-        diags.iter().filter(|d| d.code.as_deref() == Some("PL401")).collect();
+    let two_arg_open: Vec<_> = diags
+        .iter()
+        .filter(|d| d.code.as_deref() == Some("PL401"))
+        .collect();
     assert!(
         two_arg_open.is_empty(),
         "3-arg open must not trigger PL401 (security-two-arg-open): {two_arg_open:?}"
@@ -219,7 +253,10 @@ fn snapshot_file_io() -> Result<(), Box<dyn std::error::Error>> {
         .iter()
         .filter(|d| matches!(d.code.as_deref(), Some("PL100") | Some("PL101")))
         .collect();
-    assert!(missing_pragmas.is_empty(), "file I/O with strict+warnings must not get PL100/PL101");
+    assert!(
+        missing_pragmas.is_empty(),
+        "file I/O with strict+warnings must not get PL100/PL101"
+    );
 
     // No unexpected warnings beyond PL200 (script without package)
     assert_no_unexpected_warnings(&diags, &["PL200"], "file I/O");
@@ -241,8 +278,14 @@ fn snapshot_open_my_readline_no_pl102() -> Result<(), Box<dyn std::error::Error>
 
     assert_no_parse_errors(&diags, "open-my/readline regression");
 
-    let pl102: Vec<_> = diags.iter().filter(|d| d.code.as_deref() == Some("PL102")).collect();
-    assert!(pl102.is_empty(), "open my/readline must not trigger PL102: {pl102:?}");
+    let pl102: Vec<_> = diags
+        .iter()
+        .filter(|d| d.code.as_deref() == Some("PL102"))
+        .collect();
+    assert!(
+        pl102.is_empty(),
+        "open my/readline must not trigger PL102: {pl102:?}"
+    );
 
     Ok(())
 }
@@ -270,15 +313,20 @@ fn snapshot_hash_array_operations() -> Result<(), Box<dyn std::error::Error>> {
     assert_no_scope_errors(&diags, "hash/array operations");
 
     // $a and $b in sort block must not be flagged as undeclared or unused
-    let undeclared: Vec<_> =
-        diags.iter().filter(|d| d.code.as_deref() == Some("undeclared-variable")).collect();
+    let undeclared: Vec<_> = diags
+        .iter()
+        .filter(|d| d.code.as_deref() == Some("undeclared-variable"))
+        .collect();
     assert!(
         undeclared.is_empty(),
         "$a/$b must not be flagged undeclared in sort block: {undeclared:?}"
     );
 
     // @sorted and %lookup are used in print — must not be flagged unused
-    let unused_var: Vec<_> = diags.iter().filter(|d| d.code.as_deref() == Some("PL102")).collect();
+    let unused_var: Vec<_> = diags
+        .iter()
+        .filter(|d| d.code.as_deref() == Some("PL102"))
+        .collect();
     assert!(
         unused_var.is_empty(),
         "Used collections must not be flagged as unused: {unused_var:?}"
@@ -310,13 +358,24 @@ fn snapshot_regex_pattern() -> Result<(), Box<dyn std::error::Error>> {
     assert_no_scope_errors(&diags, "regex pattern");
 
     // $1 and $2 are regex capture variables — must not be undeclared
-    let undeclared: Vec<_> =
-        diags.iter().filter(|d| d.code.as_deref() == Some("undeclared-variable")).collect();
-    assert!(undeclared.is_empty(), "Regex capture vars must not be undeclared: {undeclared:?}");
+    let undeclared: Vec<_> = diags
+        .iter()
+        .filter(|d| d.code.as_deref() == Some("undeclared-variable"))
+        .collect();
+    assert!(
+        undeclared.is_empty(),
+        "Regex capture vars must not be undeclared: {undeclared:?}"
+    );
 
     // $str is used in the regex — must not be flagged unused
-    let unused_var: Vec<_> = diags.iter().filter(|d| d.code.as_deref() == Some("PL102")).collect();
-    assert!(unused_var.is_empty(), "Used $str must not be flagged unused: {unused_var:?}");
+    let unused_var: Vec<_> = diags
+        .iter()
+        .filter(|d| d.code.as_deref() == Some("PL102"))
+        .collect();
+    assert!(
+        unused_var.is_empty(),
+        "Used $str must not be flagged unused: {unused_var:?}"
+    );
 
     // No unexpected warnings beyond PL200
     assert_no_unexpected_warnings(&diags, &["PL200"], "regex pattern");
@@ -345,16 +404,24 @@ fn snapshot_error_handling() -> Result<(), Box<dyn std::error::Error>> {
     assert_no_scope_errors(&diags, "error handling");
 
     // Block eval must NOT trigger PL600 (security-string-eval)
-    let string_eval: Vec<_> = diags.iter().filter(|d| d.code.as_deref() == Some("PL600")).collect();
+    let string_eval: Vec<_> = diags
+        .iter()
+        .filter(|d| d.code.as_deref() == Some("PL600"))
+        .collect();
     assert!(
         string_eval.is_empty(),
         "Block eval must not trigger PL600 (security-string-eval): {string_eval:?}"
     );
 
     // $@ must not be flagged as undeclared — it is a Perl special variable
-    let undeclared: Vec<_> =
-        diags.iter().filter(|d| d.code.as_deref() == Some("undeclared-variable")).collect();
-    assert!(undeclared.is_empty(), "$@ must not be flagged as undeclared variable: {undeclared:?}");
+    let undeclared: Vec<_> = diags
+        .iter()
+        .filter(|d| d.code.as_deref() == Some("undeclared-variable"))
+        .collect();
+    assert!(
+        undeclared.is_empty(),
+        "$@ must not be flagged as undeclared variable: {undeclared:?}"
+    );
 
     // No unexpected warnings beyond PL200
     assert_no_unexpected_warnings(&diags, &["PL200"], "error handling");
@@ -382,8 +449,10 @@ fn snapshot_module_usage_carp() -> Result<(), Box<dyn std::error::Error>> {
     assert_no_scope_errors(&diags, "module usage (Carp)");
 
     // Carp must not produce PL700 (unused-import) — it is in the implicit-export skip list
-    let unused_import: Vec<_> =
-        diags.iter().filter(|d| d.code.as_deref() == Some("PL700")).collect();
+    let unused_import: Vec<_> = diags
+        .iter()
+        .filter(|d| d.code.as_deref() == Some("PL700"))
+        .collect();
     assert!(
         unused_import.is_empty(),
         "Carp must not be flagged as unused import (PL700): {unused_import:?}"
@@ -394,7 +463,10 @@ fn snapshot_module_usage_carp() -> Result<(), Box<dyn std::error::Error>> {
         .iter()
         .filter(|d| matches!(d.code.as_deref(), Some("PL100") | Some("PL101")))
         .collect();
-    assert!(missing_pragmas.is_empty(), "Carp snippet must not get PL100/PL101");
+    assert!(
+        missing_pragmas.is_empty(),
+        "Carp snippet must not get PL100/PL101"
+    );
 
     // No unexpected warnings beyond PL200
     assert_no_unexpected_warnings(&diags, &["PL200"], "module usage (Carp)");
@@ -433,15 +505,20 @@ fn snapshot_modern_perl_v536() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     // No version-compat warning — say and signatures are enabled at v5.36
-    let version_compat: Vec<_> =
-        diags.iter().filter(|d| d.code.as_deref() == Some("PL900")).collect();
+    let version_compat: Vec<_> = diags
+        .iter()
+        .filter(|d| d.code.as_deref() == Some("PL900"))
+        .collect();
     assert!(
         version_compat.is_empty(),
         "say/signatures at v5.36 must not trigger PL900: {version_compat:?}"
     );
 
     // PL200 is expected (no package declaration; v5.36 doesn't suppress it)
-    let pl200: Vec<_> = diags.iter().filter(|d| d.code.as_deref() == Some("PL200")).collect();
+    let pl200: Vec<_> = diags
+        .iter()
+        .filter(|d| d.code.as_deref() == Some("PL200"))
+        .collect();
     assert_eq!(
         pl200.len(),
         1,
@@ -469,8 +546,10 @@ fn snapshot_missing_strict_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = "my $x = 1;\nprint $x;\n";
     let diags = diagnostics_for(source);
 
-    let missing_strict: Vec<_> =
-        diags.iter().filter(|d| d.code.as_deref() == Some("PL100")).collect();
+    let missing_strict: Vec<_> = diags
+        .iter()
+        .filter(|d| d.code.as_deref() == Some("PL100"))
+        .collect();
     assert!(
         !missing_strict.is_empty(),
         "Code without 'use strict' must emit PL100 (missing-strict), got codes: {:?}",
@@ -494,7 +573,10 @@ fn snapshot_unused_variable_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = "use strict;\nuse warnings;\nmy $unused = 1;\n";
     let diags = diagnostics_for(source);
 
-    let unused_var: Vec<_> = diags.iter().filter(|d| d.code.as_deref() == Some("PL102")).collect();
+    let unused_var: Vec<_> = diags
+        .iter()
+        .filter(|d| d.code.as_deref() == Some("PL102"))
+        .collect();
     assert!(
         !unused_var.is_empty(),
         "Declared-but-never-used variable must emit PL102 (unused-variable), got codes: {:?}",
@@ -516,10 +598,17 @@ fn snapshot_unused_variable_fires() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn snapshot_string_eval_fires() -> Result<(), Box<dyn std::error::Error>> {
     // eval("...") with a string literal — the security checker must flag this
-    let source = concat!("use strict;\n", "use warnings;\n", "eval(\"system('rm -rf /');\");\n",);
+    let source = concat!(
+        "use strict;\n",
+        "use warnings;\n",
+        "eval(\"system('rm -rf /');\");\n",
+    );
     let diags = diagnostics_for(source);
 
-    let string_eval: Vec<_> = diags.iter().filter(|d| d.code.as_deref() == Some("PL600")).collect();
+    let string_eval: Vec<_> = diags
+        .iter()
+        .filter(|d| d.code.as_deref() == Some("PL600"))
+        .collect();
     assert!(
         !string_eval.is_empty(),
         "String eval must emit PL600 (SecurityStringEval), got codes: {:?}",
@@ -552,37 +641,59 @@ fn snapshot_two_arg_open_fires() -> Result<(), Box<dyn std::error::Error>> {
 
     // Build a minimal 2-arg open AST: open(FH, ">file.txt")
     let fh_node = Node::new(
-        NodeKind::Identifier { name: "FH".to_string() },
+        NodeKind::Identifier {
+            name: "FH".to_string(),
+        },
         SourceLocation { start: 5, end: 7 },
     );
     let file_node = Node::new(
-        NodeKind::String { value: ">file.txt".to_string(), interpolated: false },
+        NodeKind::String {
+            value: ">file.txt".to_string(),
+            interpolated: false,
+        },
         SourceLocation { start: 9, end: 20 },
     );
     let open_call = Node::new(
-        NodeKind::FunctionCall { name: "open".to_string(), args: vec![fh_node, file_node] },
+        NodeKind::FunctionCall {
+            name: "open".to_string(),
+            args: vec![fh_node, file_node],
+        },
         SourceLocation { start: 0, end: 21 },
     );
     let stmt = Node::new(
-        NodeKind::ExpressionStatement { expression: Box::new(open_call) },
+        NodeKind::ExpressionStatement {
+            expression: Box::new(open_call),
+        },
         SourceLocation { start: 0, end: 22 },
     );
     let root = Node::new(
-        NodeKind::Program { statements: vec![stmt] },
+        NodeKind::Program {
+            statements: vec![stmt],
+        },
         SourceLocation { start: 0, end: 100 },
     );
 
     let mut diags = Vec::new();
     perl_lsp_diagnostics::security::check_security(&root, &mut diags);
 
-    let two_arg: Vec<_> = diags.iter().filter(|d| d.code.as_deref() == Some("PL401")).collect();
+    let two_arg: Vec<_> = diags
+        .iter()
+        .filter(|d| d.code.as_deref() == Some("PL401"))
+        .collect();
     assert!(
         !two_arg.is_empty(),
         "2-arg open must emit PL401 (TwoArgOpen) from check_security, got: {:?}",
         diags
     );
-    assert_eq!(two_arg[0].severity, DiagnosticSeverity::Warning, "PL401 must be Warning severity");
-    assert!(two_arg[0].suggestion.is_some(), "PL401 must carry a suggestion for the developer");
+    assert_eq!(
+        two_arg[0].severity,
+        DiagnosticSeverity::Warning,
+        "PL401 must be Warning severity"
+    );
+    assert!(
+        two_arg[0].suggestion.is_some(),
+        "PL401 must carry a suggestion for the developer"
+    );
 
     Ok(())
 }

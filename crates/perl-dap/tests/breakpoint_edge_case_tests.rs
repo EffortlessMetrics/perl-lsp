@@ -307,7 +307,10 @@ fn hit_condition_with_zero_value() -> Result<(), Box<dyn std::error::Error>> {
     assert!(result.verified, "<= 0 should parse");
 
     let result = v.validate_condition(1, "$x % 0");
-    assert!(result.verified, "modulo 0 expression should parse (runtime error, not syntax)");
+    assert!(
+        result.verified,
+        "modulo 0 expression should parse (runtime error, not syntax)"
+    );
     Ok(())
 }
 
@@ -652,7 +655,10 @@ fn same_line_different_operator_conditions() -> Result<(), Box<dyn std::error::E
 
     for cond in &operators {
         let result = v.validate_condition(1, cond);
-        assert!(result.verified, "condition '{cond}' should be valid on line 1");
+        assert!(
+            result.verified,
+            "condition '{cond}' should be valid on line 1"
+        );
     }
     Ok(())
 }

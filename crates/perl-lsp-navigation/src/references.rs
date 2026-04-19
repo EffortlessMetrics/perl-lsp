@@ -53,7 +53,9 @@ pub fn find_references_single_file(ast: &Node, offset: usize) -> Option<Vec<(usi
             let bare = bare.to_string();
             ("sub", pkg, bare, None)
         }
-        NodeKind::Subroutine { name: Some(name), .. } => {
+        NodeKind::Subroutine {
+            name: Some(name), ..
+        } => {
             let (pkg, bare) = split_qualified_name(name);
             let pkg = pkg.unwrap_or("main").to_string();
             let bare = bare.to_string();
@@ -87,7 +89,9 @@ pub fn find_references_single_file(ast: &Node, offset: usize) -> Option<Vec<(usi
                     out.push((location.start, location.end));
                 }
             }
-            NodeKind::Subroutine { name: Some(name), .. } if want_kind == "sub" => {
+            NodeKind::Subroutine {
+                name: Some(name), ..
+            } if want_kind == "sub" => {
                 if name == want_name {
                     out.push((location.start, location.end));
                 }

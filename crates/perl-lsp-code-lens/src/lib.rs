@@ -70,7 +70,10 @@ pub struct CodeLensProvider {
 impl CodeLensProvider {
     /// Create a new code lens provider
     pub fn new(source: String) -> Self {
-        Self { source, file_path: None }
+        Self {
+            source,
+            file_path: None,
+        }
     }
 
     /// Set the file path for test file detection
@@ -126,7 +129,11 @@ impl CodeLensProvider {
                 self.visit_node(body, lenses);
             }
 
-            NodeKind::Package { name, block, name_span: _ } => {
+            NodeKind::Package {
+                name,
+                block,
+                name_span: _,
+            } => {
                 self.add_references_lens(node, name, lenses);
                 if let Some(block) = block {
                     self.visit_node(block, lenses);
@@ -355,7 +362,12 @@ mod tests {
         assert!(lenses.len() >= 5);
         let run_test_lenses: Vec<_> = lenses
             .iter()
-            .filter(|l| l.command.as_ref().map(|c| c.command == "perl.runTest").unwrap_or(false))
+            .filter(|l| {
+                l.command
+                    .as_ref()
+                    .map(|c| c.command == "perl.runTest")
+                    .unwrap_or(false)
+            })
             .collect();
         assert_eq!(run_test_lenses.len(), 2);
         Ok(())
@@ -400,11 +412,17 @@ mod tests {
         let reference_lens = lenses
             .iter()
             .find(|lens| {
-                lens.data.as_ref().and_then(|data| data.get("name")).and_then(|name| name.as_str())
+                lens.data
+                    .as_ref()
+                    .and_then(|data| data.get("name"))
+                    .and_then(|name| name.as_str())
                     == Some("first_function")
             })
             .ok_or("missing reference lens for first_function")?;
-        assert_eq!(reference_lens.range, WireRange::empty(WirePosition::new(2, 0)));
+        assert_eq!(
+            reference_lens.range,
+            WireRange::empty(WirePosition::new(2, 0))
+        );
         assert_eq!(
             reference_lens.range.start.to_byte_offset(source),
             source.find("sub first_function").unwrap_or(usize::MAX)
@@ -453,7 +471,11 @@ mod tests {
         let lenses = extract_lenses_with_path(source, "t/basic.t")?;
         let run_all = lenses
             .iter()
-            .find(|l| l.command.as_ref().is_some_and(|c| c.command == "perl.runTestFile"))
+            .find(|l| {
+                l.command
+                    .as_ref()
+                    .is_some_and(|c| c.command == "perl.runTestFile")
+            })
             .ok_or("missing Run All Tests lens for .t file")?;
         let cmd = run_all.command.as_ref().ok_or("missing command")?;
         assert_eq!(cmd.title, "\u{25b6} Run All Tests");
@@ -467,9 +489,11 @@ mod tests {
     fn test_no_run_all_tests_for_pm_file() -> Result<(), String> {
         let source = "package Foo;\nsub bar { 1 }\n1;\n";
         let lenses = extract_lenses_with_path(source, "lib/Foo.pm")?;
-        let run_all = lenses
-            .iter()
-            .any(|l| l.command.as_ref().is_some_and(|c| c.command == "perl.runTestFile"));
+        let run_all = lenses.iter().any(|l| {
+            l.command
+                .as_ref()
+                .is_some_and(|c| c.command == "perl.runTestFile")
+        });
         assert!(!run_all, "should not have Run All Tests for .pm file");
         Ok(())
     }
@@ -478,9 +502,11 @@ mod tests {
     fn test_no_run_all_tests_without_file_path() -> Result<(), String> {
         let source = "use Test::More;\nok(1);\n";
         let lenses = extract_lenses(source)?;
-        let run_all = lenses
-            .iter()
-            .any(|l| l.command.as_ref().is_some_and(|c| c.command == "perl.runTestFile"));
+        let run_all = lenses.iter().any(|l| {
+            l.command
+                .as_ref()
+                .is_some_and(|c| c.command == "perl.runTestFile")
+        });
         assert!(!run_all, "should not have Run All Tests without file path");
         Ok(())
     }
@@ -491,14 +517,21 @@ mod tests {
         let lenses = extract_lenses_with_path(source, "t/math.t")?;
         let subtest_lenses: Vec<_> = lenses
             .iter()
-            .filter(|l| l.command.as_ref().is_some_and(|c| c.command == "perl.runSubtest"))
+            .filter(|l| {
+                l.command
+                    .as_ref()
+                    .is_some_and(|c| c.command == "perl.runSubtest")
+            })
             .collect();
         assert_eq!(
             subtest_lenses.len(),
             2,
             "expected 2 subtest lenses, got {}: {:?}",
             subtest_lenses.len(),
-            subtest_lenses.iter().map(|l| l.command.as_ref().map(|c| &c.title)).collect::<Vec<_>>()
+            subtest_lenses
+                .iter()
+                .map(|l| l.command.as_ref().map(|c| &c.title))
+                .collect::<Vec<_>>()
         );
         let titles: Vec<_> = subtest_lenses
             .iter()
@@ -521,9 +554,17 @@ mod tests {
         let lenses = extract_lenses(source)?;
         let subtest_lenses: Vec<_> = lenses
             .iter()
-            .filter(|l| l.command.as_ref().is_some_and(|c| c.command == "perl.runSubtest"))
+            .filter(|l| {
+                l.command
+                    .as_ref()
+                    .is_some_and(|c| c.command == "perl.runSubtest")
+            })
             .collect();
-        assert_eq!(subtest_lenses.len(), 1, "subtest detection should work without .t path");
+        assert_eq!(
+            subtest_lenses.len(),
+            1,
+            "subtest detection should work without .t path"
+        );
         Ok(())
     }
 
@@ -549,7 +590,11 @@ mod tests {
         let lenses = extract_lenses(source)?;
         let subtest_lenses: Vec<_> = lenses
             .iter()
-            .filter(|l| l.command.as_ref().is_some_and(|c| c.command == "perl.runSubtest"))
+            .filter(|l| {
+                l.command
+                    .as_ref()
+                    .is_some_and(|c| c.command == "perl.runSubtest")
+            })
             .collect();
         assert_eq!(
             subtest_lenses.len(),

@@ -23,7 +23,10 @@ fn empty_workspace_search_returns_empty() {
     let provider = WorkspaceSymbolsProvider::new();
     let source_map = HashMap::new();
     let results = provider.search("anything", &source_map);
-    assert!(results.is_empty(), "empty workspace should return no results");
+    assert!(
+        results.is_empty(),
+        "empty workspace should return no results"
+    );
 }
 
 #[test]
@@ -51,7 +54,11 @@ fn empty_query_returns_all_symbols() {
 
     // Empty query should match everything
     let results = provider.search("", &source_map);
-    assert!(results.len() >= 3, "empty query should return all symbols, got {}", results.len());
+    assert!(
+        results.len() >= 3,
+        "empty query should return all symbols, got {}",
+        results.len()
+    );
 }
 
 // ---- No results ------------------------------------------------------------
@@ -63,7 +70,10 @@ fn query_with_no_match_returns_empty() {
     let source_map = parse_and_index(&mut provider, "file:///real.pl", source);
 
     let results = provider.search("zzz_nonexistent_zzz", &source_map);
-    assert!(results.is_empty(), "query with no match should return empty");
+    assert!(
+        results.is_empty(),
+        "query with no match should return empty"
+    );
 }
 
 // ---- Case sensitivity ------------------------------------------------------
@@ -80,8 +90,14 @@ fn search_is_case_insensitive_for_prefix() {
     let results_exact = provider.search("MyFunction", &source_map);
 
     assert!(!results_exact.is_empty(), "exact case should match");
-    assert!(!results_lower.is_empty(), "lowercase query should match mixed-case symbol");
-    assert!(!results_upper.is_empty(), "uppercase query should match mixed-case symbol");
+    assert!(
+        !results_lower.is_empty(),
+        "lowercase query should match mixed-case symbol"
+    );
+    assert!(
+        !results_upper.is_empty(),
+        "uppercase query should match mixed-case symbol"
+    );
 }
 
 // ---- Special characters in symbol names ------------------------------------
@@ -93,7 +109,10 @@ fn symbol_with_double_colon_separator_is_found() {
     let source_map = parse_and_index(&mut provider, "file:///ns.pm", source);
 
     let results = provider.search("handler", &source_map);
-    assert!(!results.is_empty(), "should find handler in namespaced package");
+    assert!(
+        !results.is_empty(),
+        "should find handler in namespaced package"
+    );
 }
 
 #[test]
@@ -104,7 +123,10 @@ fn underscore_in_symbol_name_matches() {
 
     let results = provider.search("_private", &source_map);
     let names: Vec<&str> = results.iter().map(|s| s.name.as_str()).collect();
-    assert!(names.contains(&"_private_helper"), "underscore-prefixed symbol should match");
+    assert!(
+        names.contains(&"_private_helper"),
+        "underscore-prefixed symbol should match"
+    );
 }
 
 // ---- WorkspaceSymbol response shape ----------------------------------------
@@ -121,7 +143,10 @@ fn workspace_symbol_has_required_fields() {
     let sym = &results[0];
     assert!(!sym.name.is_empty(), "name must be non-empty");
     assert!(sym.kind > 0, "kind must be positive LSP symbol kind");
-    assert!(!sym.location.uri.is_empty(), "location.uri must be non-empty");
+    assert!(
+        !sym.location.uri.is_empty(),
+        "location.uri must be non-empty"
+    );
     assert_eq!(sym.location.uri, "file:///shape.pl");
 }
 
@@ -168,7 +193,10 @@ fn workspace_symbol_without_container_omits_container_name_field() {
 
     let json = must(serde_json::to_string(&sym));
     // skip_serializing_if = "Option::is_none" means absent when None
-    assert!(!json.contains("containerName"), "containerName should be absent when None");
+    assert!(
+        !json.contains("containerName"),
+        "containerName should be absent when None"
+    );
 }
 
 // ---- Re-indexing replaces old symbols --------------------------------------
@@ -195,8 +223,14 @@ fn re_indexing_document_replaces_old_symbols() {
     provider.index_document(uri, &ast, source_v2);
     source_map.insert(uri.to_string(), source_v2.to_string());
 
-    assert!(provider.search("old_name", &source_map).is_empty(), "old symbol should be gone");
-    assert!(!provider.search("new_name", &source_map).is_empty(), "new symbol should appear");
+    assert!(
+        provider.search("old_name", &source_map).is_empty(),
+        "old symbol should be gone"
+    );
+    assert!(
+        !provider.search("new_name", &source_map).is_empty(),
+        "new symbol should appear"
+    );
 }
 
 // ---- get_all_symbols -------------------------------------------------------
@@ -233,5 +267,8 @@ fn search_skips_documents_not_in_source_map() {
     // Don't include the file in source_map
     let empty_map = HashMap::new();
     let results = provider.search("missing_src", &empty_map);
-    assert!(results.is_empty(), "should skip documents without source_map entry");
+    assert!(
+        results.is_empty(),
+        "should skip documents without source_map entry"
+    );
 }

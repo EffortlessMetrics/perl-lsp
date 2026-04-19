@@ -179,22 +179,37 @@ my $chunks = read_large_file_efficiently('largefile.dat', 16384);
     let ast = must(parser.parse());
 
     // Verify readline operations
-    assert!(has_node_kind(&ast, "Readline"), "Should have readline operations");
+    assert!(
+        has_node_kind(&ast, "Readline"),
+        "Should have readline operations"
+    );
 
     // Verify file operations (open, close)
-    assert!(has_node_kind(&ast, "FunctionCall"), "Should have function calls for file operations");
+    assert!(
+        has_node_kind(&ast, "FunctionCall"),
+        "Should have function calls for file operations"
+    );
 
     // Verify error handling (die, warn)
-    assert!(has_node_kind(&ast, "Unary"), "Should have unary operations for die/warn");
+    assert!(
+        has_node_kind(&ast, "Unary"),
+        "Should have unary operations for die/warn"
+    );
 
     // Verify conditional statements
-    assert!(has_node_kind(&ast, "If"), "Should have conditional statements");
+    assert!(
+        has_node_kind(&ast, "If"),
+        "Should have conditional statements"
+    );
 
     // Verify regex operations
     assert!(has_node_kind(&ast, "Match"), "Should have match operations");
 
     // Verify substitution operations
-    assert!(has_node_kind(&ast, "Substitution"), "Should have substitution operations");
+    assert!(
+        has_node_kind(&ast, "Substitution"),
+        "Should have substitution operations"
+    );
 }
 
 /// Test diamond operator in various contexts
@@ -418,19 +433,31 @@ sub process_input {
     let ast = must(parser.parse());
 
     // Verify diamond operator usage
-    assert!(has_node_kind(&ast, "Diamond"), "Should have diamond operator usage");
+    assert!(
+        has_node_kind(&ast, "Diamond"),
+        "Should have diamond operator usage"
+    );
 
     // Verify while loops with diamond operator
     assert!(has_node_kind(&ast, "While"), "Should have while loops");
 
     // Verify subroutine declarations
-    assert!(has_node_kind(&ast, "Subroutine"), "Should have subroutine declarations");
+    assert!(
+        has_node_kind(&ast, "Subroutine"),
+        "Should have subroutine declarations"
+    );
 
     // Verify method calls
-    assert!(has_node_kind(&ast, "MethodCall"), "Should have method calls");
+    assert!(
+        has_node_kind(&ast, "MethodCall"),
+        "Should have method calls"
+    );
 
     // Verify array literals
-    assert!(has_node_kind(&ast, "ArrayLiteral"), "Should have array literals");
+    assert!(
+        has_node_kind(&ast, "ArrayLiteral"),
+        "Should have array literals"
+    );
 }
 
 /// Test filehandle operations with different modes and error conditions
@@ -643,22 +670,37 @@ temp_file_operations([
     let ast = must(parser.parse());
 
     // Verify function calls for file operations
-    assert!(has_node_kind(&ast, "FunctionCall"), "Should have function calls for file operations");
+    assert!(
+        has_node_kind(&ast, "FunctionCall"),
+        "Should have function calls for file operations"
+    );
 
     // Verify error handling (die, warn)
-    assert!(has_node_kind(&ast, "Unary"), "Should have unary operations for error handling");
+    assert!(
+        has_node_kind(&ast, "Unary"),
+        "Should have unary operations for error handling"
+    );
 
     // Verify conditional statements
-    assert!(has_node_kind(&ast, "If"), "Should have conditional statements");
+    assert!(
+        has_node_kind(&ast, "If"),
+        "Should have conditional statements"
+    );
 
     // Verify eval blocks for error handling
     assert!(has_node_kind(&ast, "Eval"), "Should have eval blocks");
 
     // Verify subroutine declarations
-    assert!(has_node_kind(&ast, "Subroutine"), "Should have subroutine declarations");
+    assert!(
+        has_node_kind(&ast, "Subroutine"),
+        "Should have subroutine declarations"
+    );
 
     // Verify method calls
-    assert!(has_node_kind(&ast, "MethodCall"), "Should have method calls");
+    assert!(
+        has_node_kind(&ast, "MethodCall"),
+        "Should have method calls"
+    );
 }
 
 /// Test complex I/O combinations with multiple streams
@@ -895,20 +937,35 @@ sub process_buffer {
     let ast = must(parser.parse());
 
     // Verify file operations
-    assert!(has_node_kind(&ast, "FunctionCall"), "Should have function calls");
+    assert!(
+        has_node_kind(&ast, "FunctionCall"),
+        "Should have function calls"
+    );
 
     // Verify readline operations
-    assert!(has_node_kind(&ast, "Readline"), "Should have readline operations");
+    assert!(
+        has_node_kind(&ast, "Readline"),
+        "Should have readline operations"
+    );
 
     // Verify typeglob operations for STDIN/STDOUT/STDERR
-    assert!(has_node_kind(&ast, "Typeglob"), "Should have typeglob operations");
+    assert!(
+        has_node_kind(&ast, "Typeglob"),
+        "Should have typeglob operations"
+    );
 
     // Verify subroutine declarations
-    assert!(has_node_kind(&ast, "Subroutine"), "Should have subroutine declarations");
+    assert!(
+        has_node_kind(&ast, "Subroutine"),
+        "Should have subroutine declarations"
+    );
 
     // Verify eval blocks for error handling
     assert!(has_node_kind(&ast, "Eval"), "Should have eval blocks");
 
     // Verify method calls
-    assert!(has_node_kind(&ast, "MethodCall"), "Should have method calls");
+    assert!(
+        has_node_kind(&ast, "MethodCall"),
+        "Should have method calls"
+    );
 }

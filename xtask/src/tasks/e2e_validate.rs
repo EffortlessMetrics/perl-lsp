@@ -62,7 +62,10 @@ pub fn run(config: E2eConfig) -> Result<()> {
     let mut results = Vec::new();
 
     // ── Phase 1: Release-mode core-crate tests ──────────────────────────
-    println!("\n{}", bold.apply_to("Phase 1: Release-mode core crate tests"));
+    println!(
+        "\n{}",
+        bold.apply_to("Phase 1: Release-mode core crate tests")
+    );
     for crate_name in CORE_CRATES {
         let outcome = run_crate_test(crate_name, config.verbose)?;
         results.push(outcome);
@@ -77,7 +80,10 @@ pub fn run(config: E2eConfig) -> Result<()> {
 
     // ── Phase 3: Benchmark compilation ──────────────────────────────────
     if !config.skip_bench {
-        println!("\n{}", bold.apply_to("Phase 3: Benchmark compilation check"));
+        println!(
+            "\n{}",
+            bold.apply_to("Phase 3: Benchmark compilation check")
+        );
         let outcome = run_bench_compile_check()?;
         results.push(outcome);
     }
@@ -96,7 +102,11 @@ pub fn run(config: E2eConfig) -> Result<()> {
     let failures: Vec<&StepOutcome> = results.iter().filter(|r| !r.passed).collect();
     if !failures.is_empty() {
         let names: Vec<&str> = failures.iter().map(|f| f.name.as_str()).collect();
-        Err(color_eyre::eyre::eyre!("{} step(s) failed: {}", failures.len(), names.join(", ")))
+        Err(color_eyre::eyre::eyre!(
+            "{} step(s) failed: {}",
+            failures.len(),
+            names.join(", ")
+        ))
     } else {
         Ok(())
     }
@@ -135,7 +145,12 @@ fn run_crate_test(crate_name: &str, verbose: bool) -> Result<StepOutcome> {
 
     let label = format!("{} release tests", crate_name);
     print_step_result(&spinner, &label, passed, elapsed);
-    Ok(StepOutcome { name: label, passed, duration: elapsed, detail })
+    Ok(StepOutcome {
+        name: label,
+        passed,
+        duration: elapsed,
+        detail,
+    })
 }
 
 /// Generate N Perl files in a temp directory, start the LSP binary,
@@ -182,7 +197,10 @@ fn run_workspace_smoke_test(
                     if bin.exists() {
                         run_lsp_smoke(&bin, tmp_path)?
                     } else {
-                        (false, Some("perllsp binary not found after build".to_string()))
+                        (
+                            false,
+                            Some("perllsp binary not found after build".to_string()),
+                        )
                     }
                 }
                 Ok(output) => (
@@ -204,7 +222,12 @@ fn run_workspace_smoke_test(
     // Clean up
     drop(tmp_dir);
 
-    Ok(StepOutcome { name: label, passed, duration: elapsed, detail })
+    Ok(StepOutcome {
+        name: label,
+        passed,
+        duration: elapsed,
+        detail,
+    })
 }
 
 /// Verify that benchmarks compile (without running them).
@@ -213,7 +236,10 @@ fn run_bench_compile_check() -> Result<StepOutcome> {
     spinner.set_message("Checking benchmark compilation...");
 
     let start = Instant::now();
-    let result = cmd("cargo", &["bench", "--no-run"]).stderr_to_stdout().unchecked().run();
+    let result = cmd("cargo", &["bench", "--no-run"])
+        .stderr_to_stdout()
+        .unchecked()
+        .run();
 
     let elapsed = start.elapsed();
     let (passed, detail) = match result {
@@ -231,7 +257,12 @@ fn run_bench_compile_check() -> Result<StepOutcome> {
 
     let label = "Benchmark compilation".to_string();
     print_step_result(&spinner, &label, passed, elapsed);
-    Ok(StepOutcome { name: label, passed, duration: elapsed, detail })
+    Ok(StepOutcome {
+        name: label,
+        passed,
+        duration: elapsed,
+        detail,
+    })
 }
 
 // =============================================================================
@@ -268,7 +299,11 @@ fn make_spinner() -> Result<ProgressBar> {
 
 fn print_step_result(spinner: &ProgressBar, label: &str, passed: bool, duration: Duration) {
     let icon = if passed { "PASS" } else { "FAIL" };
-    let style = if passed { Style::new().green() } else { Style::new().red() };
+    let style = if passed {
+        Style::new().green()
+    } else {
+        Style::new().red()
+    };
     spinner.finish_with_message(format!(
         "[{}] {} ({:.1}s)",
         style.apply_to(icon),
@@ -323,7 +358,8 @@ fn write_report(results: &[StepOutcome], total: Duration, path: &std::path::Path
     let mut file =
         fs::File::create(path).with_context(|| format!("Failed to create {}", path.display()))?;
     let json_bytes = serde_json::to_vec_pretty(&report).context("Failed to serialize report")?;
-    file.write_all(&json_bytes).with_context(|| format!("Failed to write {}", path.display()))?;
+    file.write_all(&json_bytes)
+        .with_context(|| format!("Failed to write {}", path.display()))?;
 
     Ok(())
 }
@@ -380,7 +416,10 @@ fn run_lsp_smoke(
             } else {
                 Ok((
                     false,
-                    Some(format!("LSP server exited with status {}: {}", status, stderr_output)),
+                    Some(format!(
+                        "LSP server exited with status {}: {}",
+                        status, stderr_output
+                    )),
                 ))
             }
         }

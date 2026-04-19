@@ -69,7 +69,10 @@ fn test_find_definition_bare_name() -> Result<(), Box<dyn std::error::Error>> {
 fn test_find_definition_qualified_name() -> Result<(), Box<dyn std::error::Error>> {
     let index = WorkspaceIndex::new();
     let uri = file_url("/lib/Greeter.pm")?;
-    index.index_file(uri, "package Greeter;\nsub say_hello { return 1; }".to_string())?;
+    index.index_file(
+        uri,
+        "package Greeter;\nsub say_hello { return 1; }".to_string(),
+    )?;
 
     let def = must_some(index.find_definition("Greeter::say_hello"));
     assert!(def.uri.contains("Greeter.pm"));
@@ -94,7 +97,10 @@ fn test_find_definition_returns_none_for_unknown() -> Result<(), Box<dyn std::er
 fn test_dual_indexing_find_refs_qualified() -> Result<(), Box<dyn std::error::Error>> {
     let index = WorkspaceIndex::new();
     let uri = file_url("/utils.pm")?;
-    index.index_file(uri, "package Utils;\nsub process_data { 1 }\nprocess_data();".to_string())?;
+    index.index_file(
+        uri,
+        "package Utils;\nsub process_data { 1 }\nprocess_data();".to_string(),
+    )?;
 
     let refs = index.find_references("Utils::process_data");
     // Should find at least the bare call
@@ -237,7 +243,10 @@ fn test_find_symbols_alias() -> Result<(), Box<dyn std::error::Error>> {
 fn test_all_symbols() -> Result<(), Box<dyn std::error::Error>> {
     let index = WorkspaceIndex::new();
     let uri = file_url("/all.pl")?;
-    index.index_file(uri, "package Pkg;\nsub one { 1 }\nsub two { 2 }".to_string())?;
+    index.index_file(
+        uri,
+        "package Pkg;\nsub one { 1 }\nsub two { 2 }".to_string(),
+    )?;
 
     let all = index.all_symbols();
     // At minimum: package Pkg + sub one + sub two
@@ -265,7 +274,10 @@ fn test_file_symbols() -> Result<(), Box<dyn std::error::Error>> {
 fn test_get_package_members() -> Result<(), Box<dyn std::error::Error>> {
     let index = WorkspaceIndex::new();
     let uri = file_url("/members.pm")?;
-    index.index_file(uri, "package Animals;\nsub cat { 1 }\nsub dog { 2 }".to_string())?;
+    index.index_file(
+        uri,
+        "package Animals;\nsub cat { 1 }\nsub dog { 2 }".to_string(),
+    )?;
 
     let members = index.get_package_members("Animals");
     assert!(members.len() >= 2);
@@ -297,7 +309,10 @@ fn test_file_dependencies() -> Result<(), Box<dyn std::error::Error>> {
 fn test_find_def_with_symbol_key() -> Result<(), Box<dyn std::error::Error>> {
     let index = WorkspaceIndex::new();
     let uri = file_url("/key_def.pm")?;
-    index.index_file(uri, "package MyPkg;\nsub example { return 42; }".to_string())?;
+    index.index_file(
+        uri,
+        "package MyPkg;\nsub example { return 42; }".to_string(),
+    )?;
 
     let key = SymbolKey {
         pkg: Arc::from("MyPkg"),
@@ -314,7 +329,10 @@ fn test_find_def_with_symbol_key() -> Result<(), Box<dyn std::error::Error>> {
 fn test_find_refs_with_symbol_key() -> Result<(), Box<dyn std::error::Error>> {
     let index = WorkspaceIndex::new();
     let uri = file_url("/key_ref.pm")?;
-    index.index_file(uri, "package Svc;\nsub handler { 1 }\nhandler();".to_string())?;
+    index.index_file(
+        uri,
+        "package Svc;\nsub handler { 1 }\nhandler();".to_string(),
+    )?;
 
     let key = SymbolKey {
         pkg: Arc::from("Svc"),
@@ -368,7 +386,10 @@ fn test_index_file_str() -> Result<(), Box<dyn std::error::Error>> {
 fn test_variable_declaration_indexed() -> Result<(), Box<dyn std::error::Error>> {
     let index = WorkspaceIndex::new();
     let uri = file_url("/vars.pl")?;
-    index.index_file(uri, "my $count = 0;\nmy @items = ();\nmy %lookup;".to_string())?;
+    index.index_file(
+        uri,
+        "my $count = 0;\nmy @items = ();\nmy %lookup;".to_string(),
+    )?;
 
     let syms = index.all_symbols();
     let var_names: Vec<&str> = syms.iter().map(|s| s.name.as_str()).collect();
@@ -509,7 +530,11 @@ fn test_cache_miss_returns_none() {
 
 #[test]
 fn test_cache_lru_eviction() {
-    let config = CacheConfig { max_items: 2, max_bytes: 1024, ttl: None };
+    let config = CacheConfig {
+        max_items: 2,
+        max_bytes: 1024,
+        ttl: None,
+    };
     let cache = BoundedLruCache::<String, String>::new(config);
 
     cache.insert("a".to_string(), "1".to_string());
@@ -674,14 +699,20 @@ fn test_state_machine_invalid_transition() {
 #[test]
 fn test_state_machine_to_error() {
     let sm = IndexStateMachine::new();
-    assert_eq!(sm.transition_to_error("boom".to_string()), TransitionResult::Success);
+    assert_eq!(
+        sm.transition_to_error("boom".to_string()),
+        TransitionResult::Success
+    );
     assert!(sm.state().is_error());
 }
 
 #[test]
 fn test_state_machine_error_recovery() {
     let sm = IndexStateMachine::new();
-    assert_eq!(sm.transition_to_error("fail".to_string()), TransitionResult::Success);
+    assert_eq!(
+        sm.transition_to_error("fail".to_string()),
+        TransitionResult::Success
+    );
     // Can recover from Error → Initializing
     assert_eq!(sm.transition_to_initializing(), TransitionResult::Success);
 }
@@ -710,7 +741,9 @@ fn test_state_machine_degraded() {
     let sm = IndexStateMachine::new();
     // Idle is not Error, so degradation should succeed
     assert_eq!(
-        sm.transition_to_degraded(DegradationReason::IoError { message: "disk full".to_string() }),
+        sm.transition_to_degraded(DegradationReason::IoError {
+            message: "disk full".to_string()
+        }),
         TransitionResult::Success
     );
     assert!(matches!(sm.state(), IndexState::Degraded { .. }));
@@ -751,8 +784,14 @@ fn test_build_phase_variants() {
 
 #[test]
 fn test_invalidation_reason_eq() {
-    assert_eq!(InvalidationReason::ManualRequest, InvalidationReason::ManualRequest);
-    assert_ne!(InvalidationReason::CacheCorruption, InvalidationReason::ConfigurationChanged);
+    assert_eq!(
+        InvalidationReason::ManualRequest,
+        InvalidationReason::ManualRequest
+    );
+    assert_ne!(
+        InvalidationReason::CacheCorruption,
+        InvalidationReason::ConfigurationChanged
+    );
 }
 
 #[test]
@@ -933,7 +972,10 @@ fn test_index_coordinator_transition_to_ready() {
 
 #[test]
 fn test_index_coordinator_with_limits() {
-    let limits = IndexResourceLimits { max_files: 100, ..IndexResourceLimits::default() };
+    let limits = IndexResourceLimits {
+        max_files: 100,
+        ..IndexResourceLimits::default()
+    };
     let coord = IndexCoordinator::with_limits(limits);
     assert_eq!(coord.limits().max_files, 100);
 }
@@ -1021,7 +1063,10 @@ fn test_count_usages() -> Result<(), Box<dyn std::error::Error>> {
 fn test_find_unused_symbols() -> Result<(), Box<dyn std::error::Error>> {
     let index = WorkspaceIndex::new();
     let uri = file_url("/unused.pl")?;
-    index.index_file(uri, "sub used_fn { 1 }\nsub unused_fn { 2 }\nused_fn();".to_string())?;
+    index.index_file(
+        uri,
+        "sub used_fn { 1 }\nsub unused_fn { 2 }\nused_fn();".to_string(),
+    )?;
 
     let unused = index.find_unused_symbols();
     let unused_names: Vec<&str> = unused.iter().map(|s| s.name.as_str()).collect();
@@ -1051,8 +1096,11 @@ fn test_cache_ttl_expiration() {
     use std::thread;
     use std::time::Duration;
 
-    let config =
-        CacheConfig { max_items: 100, max_bytes: 1024, ttl: Some(Duration::from_millis(50)) };
+    let config = CacheConfig {
+        max_items: 100,
+        max_bytes: 1024,
+        ttl: Some(Duration::from_millis(50)),
+    };
     let cache = BoundedLruCache::<String, String>::new(config);
     cache.insert("ttl_key".to_string(), "val".to_string());
 
@@ -1156,7 +1204,10 @@ fn test_index_coordinator_recovery_from_parse_storm() {
 fn test_index_coordinator_enforce_limits_file_count() {
     use perl_workspace::workspace::workspace_index::{IndexPerformanceCaps, IndexStateKind};
 
-    let limits = IndexResourceLimits { max_files: 2, ..IndexResourceLimits::default() };
+    let limits = IndexResourceLimits {
+        max_files: 2,
+        ..IndexResourceLimits::default()
+    };
     let coord = IndexCoordinator::with_limits_and_caps(limits, IndexPerformanceCaps::default());
     coord.transition_to_ready(0, 0);
 
@@ -1195,13 +1246,17 @@ fn test_index_coordinator_check_limits_prefers_file_count_over_symbol_count()
 
     for i in 0..2 {
         let uri = Url::parse(&format!("file:///limit_priority_{}.pl", i))?;
-        coord.index().index_file(uri, format!("sub f{} {{ 1 }}", i))?;
+        coord
+            .index()
+            .index_file(uri, format!("sub f{} {{ 1 }}", i))?;
     }
 
     let reason = coord.check_limits().expect("limits should be exceeded");
     assert!(matches!(
         reason,
-        IxDegradationReason::ResourceLimit { kind: IxResourceKind::MaxFiles }
+        IxDegradationReason::ResourceLimit {
+            kind: IxResourceKind::MaxFiles
+        }
     ));
     Ok(())
 }
@@ -1241,8 +1296,14 @@ fn test_index_coordinator_performance_caps_default() {
 fn test_index_coordinator_with_limits_and_caps() {
     use perl_workspace::workspace::workspace_index::IndexPerformanceCaps;
 
-    let limits = IndexResourceLimits { max_files: 42, ..IndexResourceLimits::default() };
-    let caps = IndexPerformanceCaps { initial_scan_budget_ms: 200, incremental_budget_ms: 20 };
+    let limits = IndexResourceLimits {
+        max_files: 42,
+        ..IndexResourceLimits::default()
+    };
+    let caps = IndexPerformanceCaps {
+        initial_scan_budget_ms: 200,
+        incremental_budget_ms: 20,
+    };
     let coord = IndexCoordinator::with_limits_and_caps(limits, caps);
     assert_eq!(coord.limits().max_files, 42);
     assert_eq!(coord.performance_caps().initial_scan_budget_ms, 200);
@@ -1668,8 +1729,9 @@ fn test_state_machine_cannot_invalidate_from_transitional() {
 fn test_state_machine_cannot_degrade_from_error() {
     let sm = IndexStateMachine::new();
     sm.transition_to_error("fatal".to_string());
-    let result =
-        sm.transition_to_degraded(DegradationReason::IoError { message: "disk".to_string() });
+    let result = sm.transition_to_degraded(DegradationReason::IoError {
+        message: "disk".to_string(),
+    });
     assert!(matches!(result, TransitionResult::InvalidTransition { .. }));
 }
 
@@ -1681,7 +1743,12 @@ fn test_state_machine_ready_to_ready_updates() {
     sm.transition_to_ready(10, 100);
     // Ready → Ready (update stats) should succeed
     assert_eq!(sm.transition_to_ready(20, 200), TransitionResult::Success);
-    if let IndexState::Ready { file_count, symbol_count, .. } = sm.state() {
+    if let IndexState::Ready {
+        file_count,
+        symbol_count,
+        ..
+    } = sm.state()
+    {
         assert_eq!(file_count, 20);
         assert_eq!(symbol_count, 200);
     }
@@ -1706,7 +1773,10 @@ fn test_state_machine_update_init_progress_wrong_state() {
 fn test_state_machine_init_progress_clamped_to_100() {
     let sm = IndexStateMachine::new();
     sm.transition_to_initializing();
-    assert_eq!(sm.update_initialization_progress(255), TransitionResult::Success);
+    assert_eq!(
+        sm.update_initialization_progress(255),
+        TransitionResult::Success
+    );
     if let IndexState::Initializing { progress, .. } = sm.state() {
         assert_eq!(progress, 100);
     }
@@ -1720,7 +1790,10 @@ fn test_state_machine_degraded_preserves_symbol_count() {
     sm.transition_to_ready(10, 500);
     sm.transition_to_degraded(DegradationReason::ScanTimeout { elapsed_ms: 5000 });
 
-    if let IndexState::Degraded { available_symbols, .. } = sm.state() {
+    if let IndexState::Degraded {
+        available_symbols, ..
+    } = sm.state()
+    {
         assert_eq!(available_symbols, 500);
     }
 }
@@ -1742,7 +1815,9 @@ fn test_state_machine_degraded_to_building() {
 #[test]
 fn test_state_machine_degraded_to_updating() {
     let sm = IndexStateMachine::new();
-    sm.transition_to_degraded(DegradationReason::IoError { message: "err".to_string() });
+    sm.transition_to_degraded(DegradationReason::IoError {
+        message: "err".to_string(),
+    });
     assert_eq!(sm.transition_to_updating(3), TransitionResult::Success);
 }
 
@@ -1752,7 +1827,9 @@ fn test_state_machine_degraded_to_updating() {
 
 #[test]
 fn test_transition_result_guard_failed() {
-    let result = TransitionResult::GuardFailed { condition: "test guard".to_string() };
+    let result = TransitionResult::GuardFailed {
+        condition: "test guard".to_string(),
+    };
     assert!(matches!(result, TransitionResult::GuardFailed { .. }));
 }
 
@@ -1762,20 +1839,28 @@ fn test_transition_result_guard_failed() {
 
 #[test]
 fn test_degradation_reason_resource_limit() {
-    let reason = DegradationReason::ResourceLimit { kind: ResourceKind::MaxFiles };
+    let reason = DegradationReason::ResourceLimit {
+        kind: ResourceKind::MaxFiles,
+    };
     assert!(matches!(reason, DegradationReason::ResourceLimit { .. }));
 }
 
 #[test]
 fn test_degradation_reason_parse_storm() {
     let reason = DegradationReason::ParseStorm { pending_parses: 42 };
-    assert!(matches!(reason, DegradationReason::ParseStorm { pending_parses: 42 }));
+    assert!(matches!(
+        reason,
+        DegradationReason::ParseStorm { pending_parses: 42 }
+    ));
 }
 
 #[test]
 fn test_degradation_reason_scan_timeout() {
     let reason = DegradationReason::ScanTimeout { elapsed_ms: 31000 };
-    assert!(matches!(reason, DegradationReason::ScanTimeout { elapsed_ms: 31000 }));
+    assert!(matches!(
+        reason,
+        DegradationReason::ScanTimeout { elapsed_ms: 31000 }
+    ));
 }
 
 // =========================================================================
@@ -1806,7 +1891,11 @@ fn test_cache_remove_nonexistent() {
 
 #[test]
 fn test_cache_insert_with_size_too_large() {
-    let config = CacheConfig { max_items: 10, max_bytes: 5, ttl: None };
+    let config = CacheConfig {
+        max_items: 10,
+        max_bytes: 5,
+        ttl: None,
+    };
     let cache = BoundedLruCache::<String, String>::new(config);
     let inserted = cache.insert_with_size("k".to_string(), "v".to_string(), 100);
     assert!(!inserted);
@@ -1814,7 +1903,11 @@ fn test_cache_insert_with_size_too_large() {
 
 #[test]
 fn test_cache_config_accessor() {
-    let config = CacheConfig { max_items: 42, max_bytes: 9999, ttl: None };
+    let config = CacheConfig {
+        max_items: 42,
+        max_bytes: 9999,
+        ttl: None,
+    };
     let cache = BoundedLruCache::<String, String>::new(config);
     assert_eq!(cache.config().max_items, 42);
     assert_eq!(cache.config().max_bytes, 9999);
@@ -1822,7 +1915,11 @@ fn test_cache_config_accessor() {
 
 #[test]
 fn test_cache_lru_order_update_on_get() {
-    let config = CacheConfig { max_items: 2, max_bytes: 1024, ttl: None };
+    let config = CacheConfig {
+        max_items: 2,
+        max_bytes: 1024,
+        ttl: None,
+    };
     let cache = BoundedLruCache::<String, String>::new(config);
 
     cache.insert("a".to_string(), "1".to_string());
@@ -2014,7 +2111,9 @@ fn test_index_coordinator_degrade_from_building() {
 
     let coord = IndexCoordinator::new();
     // Starts in Building
-    coord.transition_to_degraded(IxDegReason::IoError { message: "err".to_string() });
+    coord.transition_to_degraded(IxDegReason::IoError {
+        message: "err".to_string(),
+    });
     assert!(matches!(coord.state().kind(), IxStateKind::Degraded));
 }
 
@@ -2072,7 +2171,8 @@ fn test_concurrent_index_and_search() -> Result<(), Box<dyn std::error::Error>> 
                 let _ = idx.find_definition("conc_fn_0");
                 let _ = idx.all_symbols();
                 let uri = Url::parse(&format!("file:///conc_extra_{}.pl", i)).ok()?;
-                idx.index_file(uri, format!("sub extra_{} {{ 1 }}", i)).ok()?;
+                idx.index_file(uri, format!("sub extra_{} {{ 1 }}", i))
+                    .ok()?;
                 Some(())
             })
         })
@@ -2098,7 +2198,10 @@ fn test_find_dependents_via_use_parent() -> Result<(), Box<dyn std::error::Error
     let index = WorkspaceIndex::new();
     let uri = file_url("/child.pm")?;
     // Only use parent, no direct use My::Base
-    index.index_file(uri, "package Child;\nuse parent 'My::Base';\n1;\n".to_string())?;
+    index.index_file(
+        uri,
+        "package Child;\nuse parent 'My::Base';\n1;\n".to_string(),
+    )?;
 
     let dependents = index.find_dependents("My::Base");
     assert!(
@@ -2113,10 +2216,16 @@ fn test_find_dependents_via_use_parent() -> Result<(), Box<dyn std::error::Error
 fn test_find_dependents_via_use_base() -> Result<(), Box<dyn std::error::Error>> {
     let index = WorkspaceIndex::new();
     let uri = file_url("/derived.pm")?;
-    index.index_file(uri, "package Derived;\nuse base 'My::Root';\n1;\n".to_string())?;
+    index.index_file(
+        uri,
+        "package Derived;\nuse base 'My::Root';\n1;\n".to_string(),
+    )?;
 
     let dependents = index.find_dependents("My::Root");
-    assert!(!dependents.is_empty(), "use base 'My::Root' should register My::Root as a dependency");
+    assert!(
+        !dependents.is_empty(),
+        "use base 'My::Root' should register My::Root as a dependency"
+    );
     Ok(())
 }
 
@@ -2131,9 +2240,15 @@ fn test_find_dependents_via_use_parent_qw() -> Result<(), Box<dyn std::error::Er
     )?;
 
     let foo_deps = index.find_dependents("Foo::Bar");
-    assert!(!foo_deps.is_empty(), "Foo::Bar should be a registered dependency");
+    assert!(
+        !foo_deps.is_empty(),
+        "Foo::Bar should be a registered dependency"
+    );
 
     let other_deps = index.find_dependents("Other::Base");
-    assert!(!other_deps.is_empty(), "Other::Base should be a registered dependency");
+    assert!(
+        !other_deps.is_empty(),
+        "Other::Base should be a registered dependency"
+    );
     Ok(())
 }

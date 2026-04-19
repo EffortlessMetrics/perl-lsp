@@ -89,7 +89,11 @@ pub fn feature_ids_from_caps(c: &ServerCapabilities) -> Vec<&'static str> {
     }
     // lsp-types 0.97 lacks a `type_hierarchy_provider` field; detect it via
     // the `experimental` object where `capabilities_for()` advertises it.
-    if c.experimental.as_ref().and_then(|e| e.get("typeHierarchyProvider")).is_some() {
+    if c.experimental
+        .as_ref()
+        .and_then(|e| e.get("typeHierarchyProvider"))
+        .is_some()
+    {
         v.push(LSP_TYPE_HIERARCHY);
     }
     if c.inline_value_provider.is_some() {
@@ -154,7 +158,9 @@ pub fn caps_from_feature_ids(features: &[&str]) -> ServerCapabilities {
                 caps.notebook_document_sync = Some(OneOf::Left(NotebookDocumentSyncOptions {
                     notebook_selector: vec![NotebookSelector::ByNotebook {
                         notebook: Notebook::String("jupyter-notebook".to_string()),
-                        cells: Some(vec![NotebookCellSelector { language: "perl".to_string() }]),
+                        cells: Some(vec![NotebookCellSelector {
+                            language: "perl".to_string(),
+                        }]),
                     }],
                     save: Some(true),
                 }));
@@ -239,7 +245,9 @@ pub fn caps_from_feature_ids(features: &[&str]) -> ServerCapabilities {
                 caps.document_highlight_provider = Some(OneOf::Left(true));
             }
             LSP_CODE_LENS => {
-                caps.code_lens_provider = Some(CodeLensOptions { resolve_provider: Some(true) });
+                caps.code_lens_provider = Some(CodeLensOptions {
+                    resolve_provider: Some(true),
+                });
             }
             LSP_DOCUMENT_LINK => {
                 caps.document_link_provider = Some(DocumentLinkOptions {
@@ -268,10 +276,11 @@ pub fn caps_from_feature_ids(features: &[&str]) -> ServerCapabilities {
                 caps.call_hierarchy_provider = Some(CallHierarchyServerCapability::Simple(true));
             }
             LSP_MONIKER => {
-                caps.moniker_provider =
-                    Some(OneOf::Right(MonikerServerCapabilities::Options(MonikerOptions {
+                caps.moniker_provider = Some(OneOf::Right(MonikerServerCapabilities::Options(
+                    MonikerOptions {
                         work_done_progress_options: WorkDoneProgressOptions::default(),
-                    })));
+                    },
+                )));
             }
             LSP_INLINE_VALUE => {
                 caps.inline_value_provider = Some(OneOf::Right(
@@ -279,11 +288,12 @@ pub fn caps_from_feature_ids(features: &[&str]) -> ServerCapabilities {
                 ));
             }
             LSP_INLAY_HINT => {
-                caps.inlay_hint_provider =
-                    Some(OneOf::Right(InlayHintServerCapabilities::Options(InlayHintOptions {
+                caps.inlay_hint_provider = Some(OneOf::Right(
+                    InlayHintServerCapabilities::Options(InlayHintOptions {
                         resolve_provider: Some(true),
                         ..Default::default()
-                    })));
+                    }),
+                ));
             }
             LSP_PULL_DIAGNOSTICS => {
                 caps.diagnostic_provider =
@@ -397,7 +407,10 @@ mod tests {
         let extracted = feature_ids_from_caps(&caps);
 
         for &feature in all_mappable {
-            assert!(extracted.contains(&feature), "round-trip lost feature '{feature}'");
+            assert!(
+                extracted.contains(&feature),
+                "round-trip lost feature '{feature}'"
+            );
         }
     }
 

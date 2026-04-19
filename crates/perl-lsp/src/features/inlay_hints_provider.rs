@@ -54,19 +54,30 @@ pub struct InlayHintConfig {
 
 impl Default for InlayHintConfig {
     fn default() -> Self {
-        Self { parameter_hints: true, type_hints: true, chained_hints: true, max_length: 30 }
+        Self {
+            parameter_hints: true,
+            type_hints: true,
+            chained_hints: true,
+            max_length: 30,
+        }
     }
 }
 
 impl InlayHintsProvider {
     /// Creates a new `InlayHintsProvider` with default configuration.
     pub fn new(source: String) -> Self {
-        Self { source, enabled_hints: InlayHintConfig::default() }
+        Self {
+            source,
+            enabled_hints: InlayHintConfig::default(),
+        }
     }
 
     /// Creates a new `InlayHintsProvider` with the given configuration.
     pub fn with_config(source: String, config: InlayHintConfig) -> Self {
-        Self { source, enabled_hints: config }
+        Self {
+            source,
+            enabled_hints: config,
+        }
     }
 
     /// Extract inlay hints from the AST
@@ -111,7 +122,11 @@ impl InlayHintsProvider {
             }
 
             // Method calls - show parameter hints
-            NodeKind::MethodCall { object, method, args } => {
+            NodeKind::MethodCall {
+                object,
+                method,
+                args,
+            } => {
                 if self.enabled_hints.parameter_hints {
                     self.add_parameter_hints(method, args, node, hints, range);
                 }
@@ -124,7 +139,11 @@ impl InlayHintsProvider {
             }
 
             // Variable declarations - show type hints
-            NodeKind::VariableDeclaration { variable, initializer, .. } => {
+            NodeKind::VariableDeclaration {
+                variable,
+                initializer,
+                ..
+            } => {
                 if self.enabled_hints.type_hints {
                     if let Some(init) = initializer {
                         self.add_type_hint(variable, init, hints, range);
@@ -181,8 +200,11 @@ impl InlayHintsProvider {
 
             // Filter by range if specified
             if let Some(filter_range) = range {
-                let lsp_pos =
-                    LspPosition::new(arg.location.start, position.line + 1, position.character + 1);
+                let lsp_pos = LspPosition::new(
+                    arg.location.start,
+                    position.line + 1,
+                    position.character + 1,
+                );
                 if !filter_range.contains(lsp_pos) {
                     continue;
                 }
@@ -278,9 +300,17 @@ impl InlayHintsProvider {
         // Fallback for functions not in builtin_signatures_phf
         match function_name {
             // Custom functions from symbol table
-            "open" => vec!["FILEHANDLE".to_string(), "mode".to_string(), "filename".to_string()],
+            "open" => vec![
+                "FILEHANDLE".to_string(),
+                "mode".to_string(),
+                "filename".to_string(),
+            ],
             "print" => vec!["filehandle".to_string(), "list".to_string()],
-            "printf" => vec!["filehandle".to_string(), "format".to_string(), "list".to_string()],
+            "printf" => vec![
+                "filehandle".to_string(),
+                "format".to_string(),
+                "list".to_string(),
+            ],
             "push" => vec!["ARRAY".to_string(), "list".to_string()],
             "unshift" => vec!["array".to_string(), "list".to_string()],
             "splice" => vec![
@@ -295,9 +325,17 @@ impl InlayHintsProvider {
                 "length".to_string(),
                 "replacement".to_string(),
             ],
-            "index" => vec!["string".to_string(), "substring".to_string(), "position".to_string()],
+            "index" => vec![
+                "string".to_string(),
+                "substring".to_string(),
+                "position".to_string(),
+            ],
             "join" => vec!["separator".to_string(), "list".to_string()],
-            "split" => vec!["pattern".to_string(), "string".to_string(), "limit".to_string()],
+            "split" => vec![
+                "pattern".to_string(),
+                "string".to_string(),
+                "limit".to_string(),
+            ],
             "grep" => vec!["block".to_string(), "list".to_string()],
             "map" => vec!["block".to_string(), "list".to_string()],
             "sort" => vec!["block".to_string(), "list".to_string()],
@@ -310,7 +348,10 @@ impl InlayHintsProvider {
         match &arg.kind {
             // String literals with clear content
             NodeKind::String { value, .. } => {
-                value.len() < 20 && value.chars().all(|c| c.is_alphanumeric() || c.is_whitespace())
+                value.len() < 20
+                    && value
+                        .chars()
+                        .all(|c| c.is_alphanumeric() || c.is_whitespace())
             }
             // Simple variable names
             NodeKind::Variable { name, .. } => {
@@ -367,7 +408,12 @@ impl InlayHintsProvider {
     /// Visit children nodes
     fn visit_children(&self, node: &Node, hints: &mut Vec<InlayHint>, range: Option<Range>) {
         match &node.kind {
-            NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
+            NodeKind::If {
+                condition,
+                then_branch,
+                elsif_branches,
+                else_branch,
+            } => {
                 self.visit_node(condition, hints, range);
                 self.visit_node(then_branch, hints, range);
                 for (cond, body) in elsif_branches {
@@ -378,11 +424,19 @@ impl InlayHintsProvider {
                     self.visit_node(else_b, hints, range);
                 }
             }
-            NodeKind::While { condition, body, .. } => {
+            NodeKind::While {
+                condition, body, ..
+            } => {
                 self.visit_node(condition, hints, range);
                 self.visit_node(body, hints, range);
             }
-            NodeKind::For { init, condition, update, body, .. } => {
+            NodeKind::For {
+                init,
+                condition,
+                update,
+                body,
+                ..
+            } => {
                 if let Some(i) = init {
                     self.visit_node(i, hints, range);
                 }
@@ -394,7 +448,12 @@ impl InlayHintsProvider {
                 }
                 self.visit_node(body, hints, range);
             }
-            NodeKind::Foreach { variable, list, body, continue_block } => {
+            NodeKind::Foreach {
+                variable,
+                list,
+                body,
+                continue_block,
+            } => {
                 self.visit_node(variable, hints, range);
                 if let Some(cb) = continue_block {
                     self.visit_node(cb, hints, range);
@@ -504,7 +563,10 @@ open(FH, "<", "file.txt");
             // Check basic structure if hints are generated
             if !hints.is_empty() {
                 assert!(hints[0].label.contains("ARRAY") || hints[0].label.contains(":"));
-                assert!(matches!(hints[0].kind, InlayHintKind::Parameter | InlayHintKind::Type));
+                assert!(matches!(
+                    hints[0].kind,
+                    InlayHintKind::Parameter | InlayHintKind::Type
+                ));
             }
         }
     }
@@ -523,8 +585,10 @@ my $result = split(/,/, $input);
             let hints = provider.extract(&ast);
 
             // Should have type hints for variables
-            let type_hints: Vec<_> =
-                hints.iter().filter(|h| h.kind == InlayHintKind::Type).collect();
+            let type_hints: Vec<_> = hints
+                .iter()
+                .filter(|h| h.kind == InlayHintKind::Type)
+                .collect();
 
             assert!(type_hints.len() >= 3);
 
@@ -548,8 +612,10 @@ print("Hello, World!");
 
             // Note: Inlay hints may not work with new AST structure yet
             // For now just ensure it doesn't crash - behavior is flexible
-            let _param_hints: Vec<_> =
-                hints.iter().filter(|h| h.kind == InlayHintKind::Parameter).collect();
+            let _param_hints: Vec<_> = hints
+                .iter()
+                .filter(|h| h.kind == InlayHintKind::Parameter)
+                .collect();
 
             // Test passes if no crash occurs - actual hint behavior is flexible
         }

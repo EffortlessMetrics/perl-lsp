@@ -40,8 +40,13 @@ fn test_launch_rejects_missing_semicolon() -> Result<(), Box<dyn std::error::Err
     let response = adapter.handle_request(1, "launch", Some(args));
 
     match response {
-        DapMessage::Response { success, message, .. } => {
-            assert!(!success, "Launch should fail: script has a missing semicolon");
+        DapMessage::Response {
+            success, message, ..
+        } => {
+            assert!(
+                !success,
+                "Launch should fail: script has a missing semicolon"
+            );
             let msg = must_some(message);
             assert!(
                 msg.to_lowercase().contains("syntax") || msg.contains("line"),
@@ -74,7 +79,9 @@ fn test_launch_rejects_unclosed_brace() -> Result<(), Box<dyn std::error::Error>
     let response = adapter.handle_request(1, "launch", Some(args));
 
     match response {
-        DapMessage::Response { success, message, .. } => {
+        DapMessage::Response {
+            success, message, ..
+        } => {
             assert!(!success, "Launch should fail: script has an unclosed brace");
             let msg = must_some(message);
             assert!(
@@ -109,8 +116,13 @@ fn test_launch_rejects_simple_syntax_error() -> Result<(), Box<dyn std::error::E
     let response = adapter.handle_request(1, "launch", Some(args));
 
     match response {
-        DapMessage::Response { success, message, .. } => {
-            assert!(!success, "Launch should fail: script has a syntax error under strict");
+        DapMessage::Response {
+            success, message, ..
+        } => {
+            assert!(
+                !success,
+                "Launch should fail: script has a syntax error under strict"
+            );
             let msg = must_some(message);
             assert!(
                 msg.to_lowercase().contains("syntax") || msg.contains("line"),
@@ -147,7 +159,9 @@ fn test_launch_allows_syntactically_valid_script() -> Result<(), Box<dyn std::er
     let response = adapter.handle_request(1, "launch", Some(args));
 
     match response {
-        DapMessage::Response { success, message, .. } => {
+        DapMessage::Response {
+            success, message, ..
+        } => {
             if !success {
                 let msg = message.unwrap_or_default();
                 assert!(
@@ -170,7 +184,11 @@ fn test_syntax_error_message_contains_line_number() -> Result<(), Box<dyn std::e
     let tmp = tempfile::tempdir()?;
 
     // Assignment with no right-hand side on line 2
-    let script = write_script(&tmp, "line_number_test.pl", "my $a = 1;\nmy $b = ;\nmy $c = 3;\n");
+    let script = write_script(
+        &tmp,
+        "line_number_test.pl",
+        "my $a = 1;\nmy $b = ;\nmy $c = 3;\n",
+    );
 
     let args = json!({
         "program": must_some(script.to_str()),
@@ -181,8 +199,13 @@ fn test_syntax_error_message_contains_line_number() -> Result<(), Box<dyn std::e
     let response = adapter.handle_request(1, "launch", Some(args));
 
     match response {
-        DapMessage::Response { success, message, .. } => {
-            assert!(!success, "Launch should fail: assignment with no right-hand side");
+        DapMessage::Response {
+            success, message, ..
+        } => {
+            assert!(
+                !success,
+                "Launch should fail: assignment with no right-hand side"
+            );
             let msg = must_some(message);
             assert!(
                 msg.contains("line") || msg.contains("Line"),
@@ -225,7 +248,9 @@ fn test_launch_syntax_check_honors_perl5lib_env_override() -> Result<(), Box<dyn
     let response = adapter.handle_request(1, "launch", Some(args));
 
     match response {
-        DapMessage::Response { success, message, .. } => {
+        DapMessage::Response {
+            success, message, ..
+        } => {
             if !success {
                 let msg = message.unwrap_or_default();
                 assert!(
@@ -246,7 +271,11 @@ fn test_launch_reports_missing_module_with_install_hint() -> Result<(), Box<dyn 
     let mut adapter = DebugAdapter::new();
     let tmp = tempfile::tempdir()?;
 
-    for module_name in ["Some::Missing::Module", "Optional::Dep", "Tied::Hash::With::Spaces"] {
+    for module_name in [
+        "Some::Missing::Module",
+        "Optional::Dep",
+        "Tied::Hash::With::Spaces",
+    ] {
         let script = write_script(
             &tmp,
             "missing_module.pl",
@@ -262,8 +291,13 @@ fn test_launch_reports_missing_module_with_install_hint() -> Result<(), Box<dyn 
         let response = adapter.handle_request(1, "launch", Some(args));
 
         match response {
-            DapMessage::Response { success, message, .. } => {
-                assert!(!success, "Launch should fail for missing module {module_name}");
+            DapMessage::Response {
+                success, message, ..
+            } => {
+                assert!(
+                    !success,
+                    "Launch should fail for missing module {module_name}"
+                );
                 let msg = must_some(message);
                 assert!(
                     msg.contains(&format!("Module {module_name} not found")),

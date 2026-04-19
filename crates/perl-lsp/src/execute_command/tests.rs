@@ -30,7 +30,10 @@ fn test_go_to_test_basic_mapping() -> Result<(), Box<dyn std::error::Error>> {
 
     assert!(result.is_ok(), "perl.goToTest should execute successfully");
     let value = result?;
-    assert!(value["found"].as_bool().unwrap_or(false), "Should find the test file");
+    assert!(
+        value["found"].as_bool().unwrap_or(false),
+        "Should find the test file"
+    );
     let test_path = value["path"].as_str().ok_or("expected path string")?;
     assert!(
         test_path.ends_with("foo-bar.t"),
@@ -56,9 +59,15 @@ fn test_go_to_test_not_found() -> Result<(), Box<dyn std::error::Error>> {
         vec![Value::String(pm_file.to_string_lossy().to_string())],
     );
 
-    assert!(result.is_ok(), "perl.goToTest should not error when test not found");
+    assert!(
+        result.is_ok(),
+        "perl.goToTest should not error when test not found"
+    );
     let value = result?;
-    assert!(!value["found"].as_bool().unwrap_or(true), "Should report not found");
+    assert!(
+        !value["found"].as_bool().unwrap_or(true),
+        "Should report not found"
+    );
     Ok(())
 }
 
@@ -83,9 +92,15 @@ fn test_go_to_test_underscore_variant() -> Result<(), Box<dyn std::error::Error>
         vec![Value::String(pm_file.to_string_lossy().to_string())],
     );
 
-    assert!(result.is_ok(), "perl.goToTest should find underscore variant");
+    assert!(
+        result.is_ok(),
+        "perl.goToTest should find underscore variant"
+    );
     let value = result?;
-    assert!(value["found"].as_bool().unwrap_or(false), "Should find the underscore test file");
+    assert!(
+        value["found"].as_bool().unwrap_or(false),
+        "Should find the underscore test file"
+    );
     Ok(())
 }
 
@@ -100,7 +115,10 @@ fn test_go_to_implementation_basic() -> Result<(), Box<dyn std::error::Error>> {
 
     let pm_file = lib_dir.join("Bar.pm");
     let t_file = t_dir.join("foo-bar.t");
-    fs::write(&pm_file, "package Foo::Bar;\nsub new { bless {}, shift }\n1;\n")?;
+    fs::write(
+        &pm_file,
+        "package Foo::Bar;\nsub new { bless {}, shift }\n1;\n",
+    )?;
     fs::write(
         &t_file,
         "use strict;\nuse warnings;\nuse Foo::Bar;\nuse Test::More;\ndone_testing;\n",
@@ -113,11 +131,20 @@ fn test_go_to_implementation_basic() -> Result<(), Box<dyn std::error::Error>> {
         vec![Value::String(t_file.to_string_lossy().to_string())],
     );
 
-    assert!(result.is_ok(), "perl.goToImplementation should execute successfully");
+    assert!(
+        result.is_ok(),
+        "perl.goToImplementation should execute successfully"
+    );
     let value = result?;
-    assert!(value["found"].as_bool().unwrap_or(false), "Should find the implementation file");
+    assert!(
+        value["found"].as_bool().unwrap_or(false),
+        "Should find the implementation file"
+    );
     let impl_path = value["path"].as_str().ok_or("expected path string")?;
-    assert!(impl_path.ends_with("Bar.pm"), "Should navigate to Bar.pm, got: {impl_path}");
+    assert!(
+        impl_path.ends_with("Bar.pm"),
+        "Should navigate to Bar.pm, got: {impl_path}"
+    );
     Ok(())
 }
 
@@ -138,9 +165,15 @@ fn test_go_to_implementation_no_use_statement() -> Result<(), Box<dyn std::error
         vec![Value::String(t_file.to_string_lossy().to_string())],
     );
 
-    assert!(result.is_ok(), "perl.goToImplementation should not error on no use");
+    assert!(
+        result.is_ok(),
+        "perl.goToImplementation should not error on no use"
+    );
     let value = result?;
-    assert!(!value["found"].as_bool().unwrap_or(true), "Should report not found");
+    assert!(
+        !value["found"].as_bool().unwrap_or(true),
+        "Should report not found"
+    );
     Ok(())
 }
 
@@ -151,7 +184,10 @@ fn test_go_to_test_module_mapping_conversion() {
 
     // Foo::Bar -> foo-bar (hyphen form)
     let hyphen = provider.module_to_test_stem("Foo::Bar");
-    assert_eq!(hyphen, "foo-bar", "Should produce hyphen-separated lowercase stem");
+    assert_eq!(
+        hyphen, "foo-bar",
+        "Should produce hyphen-separated lowercase stem"
+    );
 
     // My::Very::Deep::Module -> my-very-deep-module
     let deep = provider.module_to_test_stem("My::Very::Deep::Module");
@@ -183,7 +219,10 @@ fn test_go_to_test_deeply_nested_module() -> Result<(), Box<dyn std::error::Erro
     let pm_file = lib_dir.join("Baz.pm");
     let t_file = t_dir.join("foo-bar-baz.t");
     fs::write(&pm_file, "package Foo::Bar::Baz;\n1;\n")?;
-    fs::write(&t_file, "use Test::More;\nuse Foo::Bar::Baz;\ndone_testing;\n")?;
+    fs::write(
+        &t_file,
+        "use Test::More;\nuse Foo::Bar::Baz;\ndone_testing;\n",
+    )?;
 
     let provider =
         ExecuteCommandProvider::with_workspace_roots(vec![temp_dir.path().to_path_buf()]);
@@ -192,9 +231,15 @@ fn test_go_to_test_deeply_nested_module() -> Result<(), Box<dyn std::error::Erro
         vec![Value::String(pm_file.to_string_lossy().to_string())],
     );
 
-    assert!(result.is_ok(), "perl.goToTest should handle deeply nested modules");
+    assert!(
+        result.is_ok(),
+        "perl.goToTest should handle deeply nested modules"
+    );
     let value = result?;
-    assert!(value["found"].as_bool().unwrap_or(false), "Should find t/foo-bar-baz.t");
+    assert!(
+        value["found"].as_bool().unwrap_or(false),
+        "Should find t/foo-bar-baz.t"
+    );
     let test_path = value["path"].as_str().ok_or("expected path string")?;
     assert!(
         test_path.ends_with("foo-bar-baz.t"),
@@ -224,14 +269,20 @@ fn test_go_to_test_t_lib_mirror() -> Result<(), Box<dyn std::error::Error>> {
         vec![Value::String(pm_file.to_string_lossy().to_string())],
     );
 
-    assert!(result.is_ok(), "perl.goToTest should handle t/lib/ mirror layout");
+    assert!(
+        result.is_ok(),
+        "perl.goToTest should handle t/lib/ mirror layout"
+    );
     let value = result?;
     assert!(
         value["found"].as_bool().unwrap_or(false),
         "Should find t/lib/Foo/Bar.t (mirror layout)"
     );
     let test_path = value["path"].as_str().ok_or("expected path string")?;
-    assert!(test_path.contains("Bar.t"), "Should navigate to Bar.t, got: {test_path}");
+    assert!(
+        test_path.contains("Bar.t"),
+        "Should navigate to Bar.t, got: {test_path}"
+    );
     Ok(())
 }
 
@@ -259,14 +310,20 @@ fn test_go_to_implementation_skips_test2_modules() -> Result<(), Box<dyn std::er
         vec![Value::String(t_file.to_string_lossy().to_string())],
     );
 
-    assert!(result.is_ok(), "perl.goToImplementation should skip Test2 modules");
+    assert!(
+        result.is_ok(),
+        "perl.goToImplementation should skip Test2 modules"
+    );
     let value = result?;
     assert!(
         value["found"].as_bool().unwrap_or(false),
         "Should find Foo::Bar after skipping Test2::* modules"
     );
     let impl_path = value["path"].as_str().ok_or("expected path string")?;
-    assert!(impl_path.ends_with("Bar.pm"), "Should navigate to Bar.pm, got: {impl_path}");
+    assert!(
+        impl_path.ends_with("Bar.pm"),
+        "Should navigate to Bar.pm, got: {impl_path}"
+    );
     Ok(())
 }
 
@@ -294,14 +351,20 @@ fn test_go_to_implementation_skips_moosex_modules() -> Result<(), Box<dyn std::e
         vec![Value::String(t_file.to_string_lossy().to_string())],
     );
 
-    assert!(result.is_ok(), "perl.goToImplementation should skip MooseX and namespace modules");
+    assert!(
+        result.is_ok(),
+        "perl.goToImplementation should skip MooseX and namespace modules"
+    );
     let value = result?;
     assert!(
         value["found"].as_bool().unwrap_or(false),
         "Should find My::Class after skipping MooseX::Types and namespace::autoclean"
     );
     let impl_path = value["path"].as_str().ok_or("expected path string")?;
-    assert!(impl_path.ends_with("Class.pm"), "Should navigate to Class.pm, got: {impl_path}");
+    assert!(
+        impl_path.ends_with("Class.pm"),
+        "Should navigate to Class.pm, got: {impl_path}"
+    );
     Ok(())
 }
 
@@ -317,7 +380,10 @@ fn test_go_to_implementation_skips_version_pragma() -> Result<(), Box<dyn std::e
     let pm_file = lib_dir.join("Module.pm");
     let t_file = t_dir.join("my-module.t");
     fs::write(&pm_file, "package My::Module;\n1;\n")?;
-    fs::write(&t_file, "use v5.20;\nuse 5.010;\nuse strict;\nuse My::Module;\ndone_testing;\n")?;
+    fs::write(
+        &t_file,
+        "use v5.20;\nuse 5.010;\nuse strict;\nuse My::Module;\ndone_testing;\n",
+    )?;
 
     let provider =
         ExecuteCommandProvider::with_workspace_roots(vec![temp_dir.path().to_path_buf()]);
@@ -326,7 +392,10 @@ fn test_go_to_implementation_skips_version_pragma() -> Result<(), Box<dyn std::e
         vec![Value::String(t_file.to_string_lossy().to_string())],
     );
 
-    assert!(result.is_ok(), "perl.goToImplementation should skip version pragmas");
+    assert!(
+        result.is_ok(),
+        "perl.goToImplementation should skip version pragmas"
+    );
     let value = result?;
     assert!(
         value["found"].as_bool().unwrap_or(false),
@@ -372,7 +441,10 @@ fn test_go_to_test_module_mapping_conversion_single_component() {
     // A single-component module (no ::) should produce just the lowercased name.
     let provider = ExecuteCommandProvider::new();
     let stem = provider.module_to_test_stem("MyModule");
-    assert_eq!(stem, "mymodule", "Single-component module: lowercase, no separator");
+    assert_eq!(
+        stem, "mymodule",
+        "Single-component module: lowercase, no separator"
+    );
 }
 
 #[test]
@@ -400,19 +472,32 @@ print "Value: $variable\n";
 
     let provider =
         ExecuteCommandProvider::with_workspace_roots(vec![temp_dir.path().to_path_buf()]);
-    let result = provider
-        .execute_command("perl.runCritic", vec![Value::String(temp_file.display().to_string())]);
+    let result = provider.execute_command(
+        "perl.runCritic",
+        vec![Value::String(temp_file.display().to_string())],
+    );
 
     // Verify result
-    assert!(result.is_ok(), "perl.runCritic command should execute successfully");
+    assert!(
+        result.is_ok(),
+        "perl.runCritic command should execute successfully"
+    );
 
     let result_value = result?;
     assert_eq!(result_value["status"], "success", "Command should succeed");
-    assert!(result_value["violations"].is_array(), "Should return violations array");
-    assert!(result_value["analyzerUsed"].is_string(), "Should indicate which analyzer was used");
+    assert!(
+        result_value["violations"].is_array(),
+        "Should return violations array"
+    );
+    assert!(
+        result_value["analyzerUsed"].is_string(),
+        "Should indicate which analyzer was used"
+    );
 
     // Should detect missing 'use strict' and 'use warnings'
-    let violations = result_value["violations"].as_array().ok_or("expected violations array")?;
+    let violations = result_value["violations"]
+        .as_array()
+        .ok_or("expected violations array")?;
     assert!(!violations.is_empty(), "Should detect policy violations");
 
     // Check for specific violations
@@ -431,7 +516,10 @@ print "Value: $variable\n";
     });
 
     assert!(has_strict_violation, "Should detect missing 'use strict'");
-    assert!(has_warnings_violation, "Should detect missing 'use warnings'");
+    assert!(
+        has_warnings_violation,
+        "Should detect missing 'use warnings'"
+    );
     Ok(())
 }
 
@@ -440,20 +528,31 @@ fn test_execute_command_invalid_command() {
     let provider = ExecuteCommandProvider::new();
     let result = provider.execute_command("perl.invalidCommand", vec![]);
     assert!(result.is_err(), "Invalid command should return error");
-    assert!(result.unwrap_err().contains("Unknown command"), "Should indicate unknown command");
+    assert!(
+        result.unwrap_err().contains("Unknown command"),
+        "Should indicate unknown command"
+    );
 }
 
 #[test]
 fn test_execute_command_run_critic_missing_file() -> Result<(), Box<dyn std::error::Error>> {
     let provider = ExecuteCommandProvider::new();
-    let result = provider
-        .execute_command("perl.runCritic", vec![Value::String("/tmp/nonexistent.pl".to_string())]);
+    let result = provider.execute_command(
+        "perl.runCritic",
+        vec![Value::String("/tmp/nonexistent.pl".to_string())],
+    );
 
     assert!(result.is_ok(), "Should handle missing files gracefully");
     let result_value = result?;
-    assert_eq!(result_value["status"], "error", "Should report error status");
+    assert_eq!(
+        result_value["status"], "error",
+        "Should report error status"
+    );
     assert!(
-        result_value["error"].as_str().ok_or("expected error string")?.contains("File not found"),
+        result_value["error"]
+            .as_str()
+            .ok_or("expected error string")?
+            .contains("File not found"),
         "Should indicate file not found"
     );
     Ok(())
@@ -473,15 +572,26 @@ fn test_command_routing_perl_run_tests() -> Result<(), Box<dyn std::error::Error
 
     let provider =
         ExecuteCommandProvider::with_workspace_roots(vec![temp_dir.path().to_path_buf()]);
-    let result = provider
-        .execute_command("perl.runTests", vec![Value::String(temp_file.display().to_string())]);
+    let result = provider.execute_command(
+        "perl.runTests",
+        vec![Value::String(temp_file.display().to_string())],
+    );
 
     // Verify the command was routed correctly and executed
     assert!(result.is_ok(), "perl.runTests should execute successfully");
     let result_value = result?;
-    assert!(result_value.is_object(), "Should return a structured result");
-    assert!(result_value["success"].is_boolean(), "Should have success field");
-    assert!(result_value["output"].is_string(), "Should have output field");
+    assert!(
+        result_value.is_object(),
+        "Should return a structured result"
+    );
+    assert!(
+        result_value["success"].is_boolean(),
+        "Should have success field"
+    );
+    assert!(
+        result_value["output"].is_string(),
+        "Should have output field"
+    );
     Ok(())
 }
 
@@ -496,15 +606,26 @@ fn test_command_routing_perl_run_file() -> Result<(), Box<dyn std::error::Error>
 
     let provider =
         ExecuteCommandProvider::with_workspace_roots(vec![temp_dir.path().to_path_buf()]);
-    let result = provider
-        .execute_command("perl.runFile", vec![Value::String(temp_file.display().to_string())]);
+    let result = provider.execute_command(
+        "perl.runFile",
+        vec![Value::String(temp_file.display().to_string())],
+    );
 
     // Verify the command was routed correctly
     assert!(result.is_ok(), "perl.runFile should execute successfully");
     let result_value = result?;
-    assert!(result_value.is_object(), "Should return a structured result");
-    assert!(result_value["success"].is_boolean(), "Should have success field");
-    assert!(result_value["output"].is_string(), "Should have output field");
+    assert!(
+        result_value.is_object(),
+        "Should return a structured result"
+    );
+    assert!(
+        result_value["success"].is_boolean(),
+        "Should have success field"
+    );
+    assert!(
+        result_value["output"].is_string(),
+        "Should have output field"
+    );
     Ok(())
 }
 
@@ -522,15 +643,30 @@ fn test_command_routing_perl_run_test_sub() -> Result<(), Box<dyn std::error::Er
         ExecuteCommandProvider::with_workspace_roots(vec![temp_dir.path().to_path_buf()]);
     let result = provider.execute_command(
         "perl.runTestSub",
-        vec![Value::String(temp_file.display().to_string()), Value::String("test_sub".to_string())],
+        vec![
+            Value::String(temp_file.display().to_string()),
+            Value::String("test_sub".to_string()),
+        ],
     );
 
     // Verify the command was routed correctly
-    assert!(result.is_ok(), "perl.runTestSub should execute successfully");
+    assert!(
+        result.is_ok(),
+        "perl.runTestSub should execute successfully"
+    );
     let result_value = result?;
-    assert!(result_value.is_object(), "Should return a structured result");
-    assert!(result_value["success"].is_boolean(), "Should have success field");
-    assert!(result_value["subroutine"].is_string(), "Should have subroutine field");
+    assert!(
+        result_value.is_object(),
+        "Should return a structured result"
+    );
+    assert!(
+        result_value["success"].is_boolean(),
+        "Should have success field"
+    );
+    assert!(
+        result_value["subroutine"].is_string(),
+        "Should have subroutine field"
+    );
     Ok(())
 }
 
@@ -542,15 +678,29 @@ fn test_command_routing_perl_debug_tests() -> Result<(), Box<dyn std::error::Err
 
     let provider =
         ExecuteCommandProvider::with_workspace_roots(vec![temp_dir.path().to_path_buf()]);
-    let result = provider
-        .execute_command("perl.debugTests", vec![Value::String(temp_file.display().to_string())]);
+    let result = provider.execute_command(
+        "perl.debugTests",
+        vec![Value::String(temp_file.display().to_string())],
+    );
 
     // Verify the command was routed correctly
-    assert!(result.is_ok(), "perl.debugTests should execute successfully");
+    assert!(
+        result.is_ok(),
+        "perl.debugTests should execute successfully"
+    );
     let result_value = result?;
-    assert!(result_value.is_object(), "Should return a structured result");
-    assert_eq!(result_value["success"], false, "Debug should indicate not implemented");
-    assert!(result_value["output"].is_string(), "Should have output field");
+    assert!(
+        result_value.is_object(),
+        "Should return a structured result"
+    );
+    assert_eq!(
+        result_value["success"], false,
+        "Debug should indicate not implemented"
+    );
+    assert!(
+        result_value["output"].is_string(),
+        "Should have output field"
+    );
     Ok(())
 }
 
@@ -569,8 +719,10 @@ fn test_parameter_validation_missing_file_path() {
     assert!(result.unwrap_err().contains("Missing file path argument"));
 
     // Test with number instead of string
-    let result = provider
-        .execute_command("perl.runTests", vec![Value::Number(serde_json::Number::from(123))]);
+    let result = provider.execute_command(
+        "perl.runTests",
+        vec![Value::Number(serde_json::Number::from(123))],
+    );
     assert!(result.is_err(), "Should fail with non-string argument");
     assert!(result.unwrap_err().contains("Missing file path argument"));
 }
@@ -594,8 +746,10 @@ fn test_parameter_validation_missing_subroutine_name() -> Result<(), Box<dyn std
     assert!(err.contains("Missing subroutine name argument"));
 
     // Test with null second argument
-    let result =
-        provider.execute_command("perl.runTestSub", vec![Value::String(file_arg), Value::Null]);
+    let result = provider.execute_command(
+        "perl.runTestSub",
+        vec![Value::String(file_arg), Value::Null],
+    );
 
     assert!(result.is_err(), "Should fail with null subroutine name");
     let err = result.err().ok_or("expected error")?;
@@ -614,7 +768,10 @@ fn test_normalize_file_path_uri_handling() {
 
     // Test regular path (no URI scheme)
     let normalized = provider.normalize_file_path("/tmp/test.pl");
-    assert_eq!(normalized, "/tmp/test.pl", "Should leave regular paths unchanged");
+    assert_eq!(
+        normalized, "/tmp/test.pl",
+        "Should leave regular paths unchanged"
+    );
 
     // Test empty string
     let normalized = provider.normalize_file_path("");
@@ -627,18 +784,36 @@ fn test_is_test_file_logic() {
 
     // Test .t extension
     assert!(provider.is_test_file("test.t"), "Should recognize .t files");
-    assert!(provider.is_test_file("path/to/test.t"), "Should recognize .t files in paths");
+    assert!(
+        provider.is_test_file("path/to/test.t"),
+        "Should recognize .t files in paths"
+    );
 
     // Test /t/ directory
-    assert!(provider.is_test_file("/path/t/test.pl"), "Should recognize files in t/ directory");
+    assert!(
+        provider.is_test_file("/path/t/test.pl"),
+        "Should recognize files in t/ directory"
+    );
 
     // Test 'test' in name
-    assert!(provider.is_test_file("test_file.pl"), "Should recognize files with 'test' in name");
-    assert!(provider.is_test_file("my_test.pl"), "Should recognize files with 'test' in name");
+    assert!(
+        provider.is_test_file("test_file.pl"),
+        "Should recognize files with 'test' in name"
+    );
+    assert!(
+        provider.is_test_file("my_test.pl"),
+        "Should recognize files with 'test' in name"
+    );
 
     // Test non-test files
-    assert!(!provider.is_test_file("regular.pl"), "Should not recognize regular files");
-    assert!(!provider.is_test_file("module.pm"), "Should not recognize modules");
+    assert!(
+        !provider.is_test_file("regular.pl"),
+        "Should not recognize regular files"
+    );
+    assert!(
+        !provider.is_test_file("module.pm"),
+        "Should not recognize modules"
+    );
 }
 
 #[test]
@@ -655,7 +830,11 @@ fn test_format_command_result_structure() {
     let result = provider.format_command_result(output, None);
     assert_eq!(result["success"], true, "Should indicate success");
     assert_eq!(result["output"], "test output", "Should include stdout");
-    assert_eq!(result["error"], Value::Null, "Should have null error for success");
+    assert_eq!(
+        result["error"],
+        Value::Null,
+        "Should have null error for success"
+    );
 
     // Test with extra field
     let output = std::process::Output {
@@ -683,7 +862,10 @@ fn test_format_command_result_failure() {
     let result = provider.format_command_result(output, None);
     assert_eq!(result["success"], false, "Should indicate failure");
     assert_eq!(result["output"], "partial output", "Should include stdout");
-    assert_eq!(result["error"], "error message", "Should include stderr as error");
+    assert_eq!(
+        result["error"], "error message",
+        "Should include stderr as error"
+    );
 }
 
 #[test]
@@ -733,12 +915,21 @@ fn test_run_critic_file_exists_check() -> Result<(), Box<dyn std::error::Error>>
     assert!(result.is_ok(), "Should handle missing files gracefully");
 
     let result_value = result?;
-    assert_eq!(result_value["status"], "error", "Should report error status");
+    assert_eq!(
+        result_value["status"], "error",
+        "Should report error status"
+    );
     assert!(
-        result_value["error"].as_str().ok_or("expected error string")?.contains("File not found"),
+        result_value["error"]
+            .as_str()
+            .ok_or("expected error string")?
+            .contains("File not found"),
         "Should indicate file not found"
     );
-    assert_eq!(result_value["analyzerUsed"], "none", "Should indicate no analyzer used");
+    assert_eq!(
+        result_value["analyzerUsed"], "none",
+        "Should indicate no analyzer used"
+    );
     Ok(())
 }
 
@@ -754,7 +945,10 @@ fn test_run_builtin_critic_with_valid_file() -> Result<(), Box<dyn std::error::E
 
     let result = provider.run_builtin_critic(&temp_file);
 
-    assert!(result.is_ok(), "Built-in critic should execute successfully");
+    assert!(
+        result.is_ok(),
+        "Built-in critic should execute successfully"
+    );
     let result_value = result?;
     assert_eq!(result_value["status"], "success");
     assert!(result_value["violations"].is_array());
@@ -798,7 +992,10 @@ fn test_all_command_routing_paths() {
 
     for command in commands_to_test {
         let args = if command == "perl.runTestSub" || command == "perl.runSubtest" {
-            vec![Value::String("/tmp/test.pl".to_string()), Value::String("test_sub".to_string())]
+            vec![
+                Value::String("/tmp/test.pl".to_string()),
+                Value::String("test_sub".to_string()),
+            ]
         } else {
             vec![Value::String("/tmp/test.pl".to_string())]
         };
@@ -833,8 +1030,10 @@ fn test_execute_command_return_value_mutations() -> Result<(), Box<dyn std::erro
 
     // This test ensures that execute_command cannot return Ok(Default::default())
     // when it should return meaningful data
-    let result = provider
-        .execute_command("perl.debugTests", vec![Value::String(temp_file.display().to_string())]);
+    let result = provider.execute_command(
+        "perl.debugTests",
+        vec![Value::String(temp_file.display().to_string())],
+    );
 
     assert!(result.is_ok(), "Should return Ok");
     let result_value = result?;
@@ -842,16 +1041,26 @@ fn test_execute_command_return_value_mutations() -> Result<(), Box<dyn std::erro
     // Verify it's not just a default empty object
     assert!(result_value.is_object(), "Should return an object");
     assert!(
-        result_value.as_object().ok_or("expected object")?.contains_key("success"),
+        result_value
+            .as_object()
+            .ok_or("expected object")?
+            .contains_key("success"),
         "Should have success field"
     );
     assert!(
-        result_value.as_object().ok_or("expected object")?.contains_key("output"),
+        result_value
+            .as_object()
+            .ok_or("expected object")?
+            .contains_key("output"),
         "Should have output field"
     );
 
     // The result should be meaningful, not just Default::default()
-    assert_ne!(result_value, Value::Object(serde_json::Map::new()), "Should not be empty object");
+    assert_ne!(
+        result_value,
+        Value::Object(serde_json::Map::new()),
+        "Should not be empty object"
+    );
     Ok(())
 }
 
@@ -871,15 +1080,27 @@ fn test_run_tests_logic_operators() -> Result<(), Box<dyn std::error::Error>> {
     let result = provider.run_tests(&test_file_t);
     assert!(result.is_ok(), "Should handle .t files");
     let result_value = result?;
-    assert!(result_value["success"].is_boolean(), "Should have boolean success");
-    assert!(result_value["output"].is_string(), "Should have string output");
+    assert!(
+        result_value["success"].is_boolean(),
+        "Should have boolean success"
+    );
+    assert!(
+        result_value["output"].is_string(),
+        "Should have string output"
+    );
 
     // Test with non-test file (should use perl directly)
     let result = provider.run_tests(&non_test_file);
     assert!(result.is_ok(), "Should handle .pl files");
     let result_value = result?;
-    assert!(result_value["success"].is_boolean(), "Should have boolean success");
-    assert!(result_value["output"].is_string(), "Should have string output");
+    assert!(
+        result_value["success"].is_boolean(),
+        "Should have boolean success"
+    );
+    assert!(
+        result_value["output"].is_string(),
+        "Should have string output"
+    );
 
     Ok(())
 }
@@ -960,14 +1181,24 @@ fn test_run_builtin_critic_arithmetic_mutations() -> Result<(), Box<dyn std::err
     let result_value = result?;
 
     // Verify that line/column arithmetic is correct
-    let violations = result_value["violations"].as_array().ok_or("expected violations array")?;
+    let violations = result_value["violations"]
+        .as_array()
+        .ok_or("expected violations array")?;
     for violation in violations {
         let line = violation["line"].as_u64().ok_or("expected line number")?;
-        let column = violation["column"].as_u64().ok_or("expected column number")?;
+        let column = violation["column"]
+            .as_u64()
+            .ok_or("expected column number")?;
 
         // Line and column should be positive (+ 1 conversions work)
-        assert!(line > 0, "Line numbers should be positive (not result of - or * mutations)");
-        assert!(column > 0, "Column numbers should be positive (not result of - or * mutations)");
+        assert!(
+            line > 0,
+            "Line numbers should be positive (not result of - or * mutations)"
+        );
+        assert!(
+            column > 0,
+            "Column numbers should be positive (not result of - or * mutations)"
+        );
 
         // Should be reasonable values for a short file
         assert!(line <= 10, "Line numbers should be reasonable");
@@ -988,8 +1219,15 @@ fn test_format_command_result_negation_mutation() {
     };
 
     let result = provider.format_command_result(success_output, None);
-    assert_eq!(result["success"], true, "Success status should not be negated");
-    assert_eq!(result["error"], Value::Null, "Success should have null error");
+    assert_eq!(
+        result["success"], true,
+        "Success status should not be negated"
+    );
+    assert_eq!(
+        result["error"],
+        Value::Null,
+        "Success should have null error"
+    );
 
     // Test failure status - should properly indicate failure
     let failure_output = std::process::Output {
@@ -1008,11 +1246,19 @@ fn test_format_command_result_negation_mutation() {
 #[test]
 fn test_exit_status_roundtrip() {
     let ok = mock_status(0);
-    assert_eq!(ok.code(), Some(0), "Exit code 0 should round-trip correctly");
+    assert_eq!(
+        ok.code(),
+        Some(0),
+        "Exit code 0 should round-trip correctly"
+    );
     assert!(ok.success(), "Exit code 0 should be success");
 
     let fail = mock_status(1);
-    assert_eq!(fail.code(), Some(1), "Exit code 1 should round-trip correctly");
+    assert_eq!(
+        fail.code(),
+        Some(1),
+        "Exit code 1 should round-trip correctly"
+    );
     assert!(!fail.success(), "Exit code 1 should be failure");
 }
 
@@ -1031,16 +1277,30 @@ fn test_format_functions_not_default() -> Result<(), Box<dyn std::error::Error>>
         "/tmp/test.pl",
     );
 
-    assert_ne!(violation, Value::Object(serde_json::Map::new()), "Should not return empty object");
+    assert_ne!(
+        violation,
+        Value::Object(serde_json::Map::new()),
+        "Should not return empty object"
+    );
     assert!(violation.is_object(), "Should return structured object");
-    assert!(!violation.as_object().ok_or("expected object")?.is_empty(), "Should have content");
+    assert!(
+        !violation.as_object().ok_or("expected object")?.is_empty(),
+        "Should have content"
+    );
 
     // Test format_critic_error doesn't return Default::default()
     let error = provider.format_critic_error("Test error".to_string(), "test");
 
-    assert_ne!(error, Value::Object(serde_json::Map::new()), "Should not return empty object");
+    assert_ne!(
+        error,
+        Value::Object(serde_json::Map::new()),
+        "Should not return empty object"
+    );
     assert!(error.is_object(), "Should return structured object");
-    assert!(!error.as_object().ok_or("expected object")?.is_empty(), "Should have content");
+    assert!(
+        !error.as_object().ok_or("expected object")?.is_empty(),
+        "Should have content"
+    );
     Ok(())
 }
 
@@ -1052,7 +1312,10 @@ fn test_normalize_file_path_not_hardcoded() {
     // Test that normalize_file_path returns actual processed values, not hardcoded ones
     let file_uri = "file:///home/user/test.pl";
     let result = provider.normalize_file_path(file_uri);
-    assert_eq!(result, "/home/user/test.pl", "Should properly strip file:// prefix");
+    assert_eq!(
+        result, "/home/user/test.pl",
+        "Should properly strip file:// prefix"
+    );
     assert_ne!(result, "", "Should not return empty string");
     assert_ne!(result, "xyzzy", "Should not return hardcoded value");
 
@@ -1074,7 +1337,10 @@ fn test_command_exists_not_hardcoded_true() {
     // The mutant that returns hardcoded true would fail this test
     // Note: We can't always assert false due to environment differences,
     // but we can verify the function actually runs the check
-    assert!(matches!(exists, true | false), "Should return boolean result");
+    assert!(
+        matches!(exists, true | false),
+        "Should return boolean result"
+    );
 
     // Test multiple times to catch inconsistencies from mutations
     let exists2 = provider.command_exists("definitely_nonexistent_command_xyz_12345");
@@ -1091,9 +1357,15 @@ fn test_run_critic_file_existence_logic() -> Result<(), Box<dyn std::error::Erro
 
     assert!(result.is_ok(), "Should handle gracefully");
     let result_value = result?;
-    assert_eq!(result_value["status"], "error", "Should detect missing file");
+    assert_eq!(
+        result_value["status"], "error",
+        "Should detect missing file"
+    );
     assert!(
-        result_value["error"].as_str().ok_or("expected error string")?.contains("File not found"),
+        result_value["error"]
+            .as_str()
+            .ok_or("expected error string")?
+            .contains("File not found"),
         "Should indicate file not found"
     );
 
@@ -1117,13 +1389,21 @@ fn test_method_return_values_not_defaults() -> Result<(), Box<dyn std::error::Er
     let result = provider.run_file(&temp_file);
     assert!(result.is_ok(), "run_file should succeed");
     let result_value = result?;
-    assert_ne!(result_value, Value::Object(serde_json::Map::new()), "Should not be empty object");
+    assert_ne!(
+        result_value,
+        Value::Object(serde_json::Map::new()),
+        "Should not be empty object"
+    );
 
     // Test run_tests doesn't return Ok(Default::default())
     let result = provider.run_tests(&temp_file);
     assert!(result.is_ok(), "run_tests should succeed");
     let result_value = result?;
-    assert_ne!(result_value, Value::Object(serde_json::Map::new()), "Should not be empty object");
+    assert_ne!(
+        result_value,
+        Value::Object(serde_json::Map::new()),
+        "Should not be empty object"
+    );
 
     // Test run_test_sub doesn't return Ok(Default::default())
     let sub_content = "#!/usr/bin/perl\nuse strict;\nsub test_func { print 'test'; }\n";
@@ -1133,7 +1413,11 @@ fn test_method_return_values_not_defaults() -> Result<(), Box<dyn std::error::Er
     let result = provider.run_test_sub(&sub_file, "test_func");
     assert!(result.is_ok(), "run_test_sub should succeed");
     let result_value = result?;
-    assert_ne!(result_value, Value::Object(serde_json::Map::new()), "Should not be empty object");
+    assert_ne!(
+        result_value,
+        Value::Object(serde_json::Map::new()),
+        "Should not be empty object"
+    );
 
     Ok(())
 }
@@ -1191,13 +1475,17 @@ fn test_execute_command_multi_root_security() -> Result<(), Box<dyn std::error::
     ]);
 
     // 1. Should succeed for file in workspace 1
-    let result1 = provider
-        .execute_command("perl.runFile", vec![Value::String(file1.to_string_lossy().to_string())]);
+    let result1 = provider.execute_command(
+        "perl.runFile",
+        vec![Value::String(file1.to_string_lossy().to_string())],
+    );
     assert!(result1.is_ok(), "Should allow execution in workspace 1");
 
     // 2. Should succeed for file in workspace 2
-    let result2 = provider
-        .execute_command("perl.runFile", vec![Value::String(file2.to_string_lossy().to_string())]);
+    let result2 = provider.execute_command(
+        "perl.runFile",
+        vec![Value::String(file2.to_string_lossy().to_string())],
+    );
     assert!(result2.is_ok(), "Should allow execution in workspace 2");
 
     // 3. Should fail for outside file
@@ -1205,7 +1493,10 @@ fn test_execute_command_multi_root_security() -> Result<(), Box<dyn std::error::
         "perl.runFile",
         vec![Value::String(outside_file.to_string_lossy().to_string())],
     );
-    assert!(result3.is_err(), "Should fail execution outside both workspaces");
+    assert!(
+        result3.is_err(),
+        "Should fail execution outside both workspaces"
+    );
     let error3 = result3.err().ok_or("expected error")?;
     assert!(
         error3.contains("Path traversal") || error3.contains("outside workspace roots"),
@@ -1228,8 +1519,13 @@ fn test_execute_command_multi_root_security() -> Result<(), Box<dyn std::error::
 #[test]
 fn test_supported_commands_includes_all_advertised() {
     let commands = get_supported_commands();
-    let required =
-        ["perl.runTest", "perl.runTestFile", "perl.runSubtest", "perl.debugFile", "perl.debugTest"];
+    let required = [
+        "perl.runTest",
+        "perl.runTestFile",
+        "perl.runSubtest",
+        "perl.debugFile",
+        "perl.debugTest",
+    ];
     for cmd in &required {
         assert!(
             commands.contains(&cmd.to_string()),
@@ -1274,10 +1570,15 @@ fn test_command_routing_perl_run_test() -> Result<(), Box<dyn std::error::Error>
 
     let provider =
         ExecuteCommandProvider::with_workspace_roots(vec![temp_dir.path().to_path_buf()]);
-    let result = provider
-        .execute_command("perl.runTest", vec![Value::String(temp_file.display().to_string())]);
+    let result = provider.execute_command(
+        "perl.runTest",
+        vec![Value::String(temp_file.display().to_string())],
+    );
 
-    assert!(result.is_ok(), "perl.runTest should dispatch without Unknown command error");
+    assert!(
+        result.is_ok(),
+        "perl.runTest should dispatch without Unknown command error"
+    );
     let value = result?;
     assert!(value.is_object(), "Should return a structured result");
     assert!(value["success"].is_boolean(), "Should have success field");
@@ -1293,10 +1594,15 @@ fn test_command_routing_perl_run_test_file() -> Result<(), Box<dyn std::error::E
 
     let provider =
         ExecuteCommandProvider::with_workspace_roots(vec![temp_dir.path().to_path_buf()]);
-    let result = provider
-        .execute_command("perl.runTestFile", vec![Value::String(temp_file.display().to_string())]);
+    let result = provider.execute_command(
+        "perl.runTestFile",
+        vec![Value::String(temp_file.display().to_string())],
+    );
 
-    assert!(result.is_ok(), "perl.runTestFile should dispatch without Unknown command error");
+    assert!(
+        result.is_ok(),
+        "perl.runTestFile should dispatch without Unknown command error"
+    );
     let value = result?;
     assert!(value.is_object(), "Should return a structured result");
     assert!(value["success"].is_boolean(), "Should have success field");
@@ -1323,11 +1629,17 @@ fn test_command_routing_perl_run_subtest() -> Result<(), Box<dyn std::error::Err
         ],
     );
 
-    assert!(result.is_ok(), "perl.runSubtest should dispatch without Unknown command error");
+    assert!(
+        result.is_ok(),
+        "perl.runSubtest should dispatch without Unknown command error"
+    );
     let value = result?;
     assert!(value.is_object(), "Should return a structured result");
     assert!(value["success"].is_boolean(), "Should have success field");
-    assert!(value["subroutine"].is_string(), "Should have subroutine field");
+    assert!(
+        value["subroutine"].is_string(),
+        "Should have subroutine field"
+    );
     Ok(())
 }
 
@@ -1339,13 +1651,21 @@ fn test_command_routing_perl_debug_file() -> Result<(), Box<dyn std::error::Erro
 
     let provider =
         ExecuteCommandProvider::with_workspace_roots(vec![temp_dir.path().to_path_buf()]);
-    let result = provider
-        .execute_command("perl.debugFile", vec![Value::String(temp_file.display().to_string())]);
+    let result = provider.execute_command(
+        "perl.debugFile",
+        vec![Value::String(temp_file.display().to_string())],
+    );
 
-    assert!(result.is_ok(), "perl.debugFile should dispatch without Unknown command error");
+    assert!(
+        result.is_ok(),
+        "perl.debugFile should dispatch without Unknown command error"
+    );
     let value = result?;
     assert!(value.is_object(), "Should return a structured result");
-    assert_eq!(value["success"], false, "Debug should indicate not yet implemented");
+    assert_eq!(
+        value["success"], false,
+        "Debug should indicate not yet implemented"
+    );
     assert!(value["output"].is_string(), "Should have output field");
     Ok(())
 }
@@ -1358,13 +1678,21 @@ fn test_command_routing_perl_debug_test() -> Result<(), Box<dyn std::error::Erro
 
     let provider =
         ExecuteCommandProvider::with_workspace_roots(vec![temp_dir.path().to_path_buf()]);
-    let result = provider
-        .execute_command("perl.debugTest", vec![Value::String(temp_file.display().to_string())]);
+    let result = provider.execute_command(
+        "perl.debugTest",
+        vec![Value::String(temp_file.display().to_string())],
+    );
 
-    assert!(result.is_ok(), "perl.debugTest should dispatch without Unknown command error");
+    assert!(
+        result.is_ok(),
+        "perl.debugTest should dispatch without Unknown command error"
+    );
     let value = result?;
     assert!(value.is_object(), "Should return a structured result");
-    assert_eq!(value["success"], false, "Debug should indicate not yet implemented");
+    assert_eq!(
+        value["success"], false,
+        "Debug should indicate not yet implemented"
+    );
     assert!(value["output"].is_string(), "Should have output field");
     Ok(())
 }
@@ -1377,10 +1705,15 @@ fn test_perl_run_subtest_missing_subroutine_arg() -> Result<(), Box<dyn std::err
 
     let provider =
         ExecuteCommandProvider::with_workspace_roots(vec![temp_dir.path().to_path_buf()]);
-    let result = provider
-        .execute_command("perl.runSubtest", vec![Value::String(temp_file.display().to_string())]);
+    let result = provider.execute_command(
+        "perl.runSubtest",
+        vec![Value::String(temp_file.display().to_string())],
+    );
 
-    assert!(result.is_err(), "perl.runSubtest should fail without subroutine name");
+    assert!(
+        result.is_err(),
+        "perl.runSubtest should fail without subroutine name"
+    );
     let err = result.err().ok_or("expected error")?;
     assert!(
         err.contains("Missing subroutine name"),

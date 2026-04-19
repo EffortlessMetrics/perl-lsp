@@ -81,7 +81,10 @@ fn extract_definition_locations(response: &serde_json::Value) -> Vec<(String, u3
                 let start = &range["start"];
                 let end = &range["end"];
                 if let (Some(line), Some(start_char), Some(end_char)) = (
-                    start.get("line").and_then(|v| v.as_u64()).and_then(|v| u32::try_from(v).ok()),
+                    start
+                        .get("line")
+                        .and_then(|v| v.as_u64())
+                        .and_then(|v| u32::try_from(v).ok()),
                     start
                         .get("character")
                         .and_then(|v| v.as_u64())
@@ -386,7 +389,10 @@ my $length = length($greeting);
     let expected_utf16_len = utf16_len(mixed_string);
     let actual_byte_len = mixed_string.len();
 
-    assert_eq!(expected_utf16_len, 12, "Mixed string should be 12 UTF-16 units");
+    assert_eq!(
+        expected_utf16_len, 12,
+        "Mixed string should be 12 UTF-16 units"
+    );
     assert_eq!(actual_byte_len, 18, "Mixed string should be 18 bytes");
 
     // Request hover at $length on line 1
@@ -408,7 +414,10 @@ my $length = length($greeting);
 
         // The $length variable should have correct UTF-16 positions
         // regardless of what was on line 0
-        assert_eq!(start_char, expected_length_start, "Start position should be UTF-16 position 3");
+        assert_eq!(
+            start_char, expected_length_start,
+            "Start position should be UTF-16 position 3"
+        );
 
         let expected_length_end = expected_length_start + utf16_len("$length");
         assert_eq!(

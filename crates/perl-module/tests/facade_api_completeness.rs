@@ -164,8 +164,14 @@ fn test_token_parser_function() {
 /// Verify import_match functions work correctly.
 #[test]
 fn test_import_match_module_function() {
-    assert!(line_references_module_import("use My::Module;", "My::Module"));
-    assert!(!line_references_module_import("my $var = 'My::Module';", "My::Module"));
+    assert!(line_references_module_import(
+        "use My::Module;",
+        "My::Module"
+    ));
+    assert!(!line_references_module_import(
+        "my $var = 'My::Module';",
+        "My::Module"
+    ));
 }
 
 /// Verify reference module functions work end-to-end.
@@ -185,7 +191,10 @@ fn test_rename_module_functions() {
     let source = "use My::Module;\n";
 
     let edits = plan_module_rename_edits(source, "My::Module", "Your::Module");
-    assert!(!edits.is_empty(), "should produce rename edits for import line");
+    assert!(
+        !edits.is_empty(),
+        "should produce rename edits for import line"
+    );
 
     let rewritten = apply_module_rename_edits(source, &edits);
     assert_eq!(rewritten, "use Your::Module;\n");
@@ -194,14 +203,26 @@ fn test_rename_module_functions() {
 /// Verify line predicate functions in rename module.
 #[test]
 fn test_rename_module_predicates() {
-    assert!(line_references_isa_assignment("@ISA = qw(My::Module);", "My::Module"));
+    assert!(line_references_isa_assignment(
+        "@ISA = qw(My::Module);",
+        "My::Module"
+    ));
     assert!(!line_references_isa_assignment("my $x = 1;", "My::Module"));
 
-    assert!(line_references_package_declaration("package My::Module;", "My::Module"));
-    assert!(!line_references_package_declaration("use My::Module;", "My::Module"));
+    assert!(line_references_package_declaration(
+        "package My::Module;",
+        "My::Module"
+    ));
+    assert!(!line_references_package_declaration(
+        "use My::Module;",
+        "My::Module"
+    ));
 
     // Note: qualified_call is known to have false positives (pre-existing bug tracked separately)
-    assert!(line_references_qualified_call("My::Module::func();", "My::Module"));
+    assert!(line_references_qualified_call(
+        "My::Module::func();",
+        "My::Module"
+    ));
 }
 
 /// Verify resolution module types can be constructed.
@@ -222,7 +243,10 @@ fn test_empty_module_name_handling() {
     assert!(!contains_module_token("use My::Module;", ""));
     assert!(!contains_standalone_module_token("use My::Module;", ""));
     let edits = plan_module_rename_edits("use My::Module;", "", "Your::Module");
-    assert!(edits.is_empty(), "should not generate edits with empty old module");
+    assert!(
+        edits.is_empty(),
+        "should not generate edits with empty old module"
+    );
 }
 
 /// Edge case: same old and new module names should produce no edits.
@@ -230,7 +254,10 @@ fn test_empty_module_name_handling() {
 fn test_identical_rename_produces_no_edits() {
     let source = "use My::Module;\n";
     let edits = plan_module_rename_edits(source, "My::Module", "My::Module");
-    assert!(edits.is_empty(), "renaming to same name should produce no edits");
+    assert!(
+        edits.is_empty(),
+        "renaming to same name should produce no edits"
+    );
 }
 
 /// Edge case: module names with numbers and underscores.

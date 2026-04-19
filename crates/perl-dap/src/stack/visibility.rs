@@ -13,14 +13,20 @@ pub fn is_internal_frame_name_and_path(name: &str, path: Option<&str>) -> bool {
 pub fn is_internal_frame(frame: &StackFrame) -> bool {
     is_internal_frame_name_and_path(
         &frame.name,
-        frame.source.as_ref().and_then(|source| source.path.as_deref()),
+        frame
+            .source
+            .as_ref()
+            .and_then(|source| source.path.as_deref()),
     )
 }
 
 /// Filter out internal debugger and shim frames from user-visible stack traces.
 #[must_use]
 pub fn filter_user_visible_frames(frames: Vec<StackFrame>) -> Vec<StackFrame> {
-    frames.into_iter().filter(|frame| !is_internal_frame(frame)).collect()
+    frames
+        .into_iter()
+        .filter(|frame| !is_internal_frame(frame))
+        .collect()
 }
 
 #[cfg(test)]
@@ -35,19 +41,36 @@ mod tests {
     #[test]
     fn internal_frame_by_name_prefix() {
         assert!(is_internal_frame(&frame(1, "DB::sub", "/app/main.pl")));
-        assert!(is_internal_frame(&frame(2, "Devel::TSPerlDAP::shim", "/app/main.pl")));
+        assert!(is_internal_frame(&frame(
+            2,
+            "Devel::TSPerlDAP::shim",
+            "/app/main.pl"
+        )));
     }
 
     #[test]
     fn internal_frame_by_perl5db_path() {
-        assert!(is_internal_frame(&frame(3, "helper", "/usr/lib/perl5/perl5db.pl")));
+        assert!(is_internal_frame(&frame(
+            3,
+            "helper",
+            "/usr/lib/perl5/perl5db.pl"
+        )));
     }
 
     #[test]
     fn classification_from_name_and_path() {
-        assert!(is_internal_frame_name_and_path("DB::sub", Some("/app/main.pl")));
-        assert!(is_internal_frame_name_and_path("helper", Some("/usr/lib/perl5/perl5db.pl")));
-        assert!(!is_internal_frame_name_and_path("main::run", Some("/app/main.pl")));
+        assert!(is_internal_frame_name_and_path(
+            "DB::sub",
+            Some("/app/main.pl")
+        ));
+        assert!(is_internal_frame_name_and_path(
+            "helper",
+            Some("/usr/lib/perl5/perl5db.pl")
+        ));
+        assert!(!is_internal_frame_name_and_path(
+            "main::run",
+            Some("/app/main.pl")
+        ));
     }
 
     #[test]

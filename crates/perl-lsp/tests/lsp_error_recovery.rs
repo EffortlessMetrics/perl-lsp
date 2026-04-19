@@ -17,7 +17,10 @@ fn hover_text(result: &Value) -> Option<String> {
     }
 
     if let Some(obj) = contents.as_object() {
-        return obj.get("value").and_then(|v| v.as_str()).map(|s| s.to_string());
+        return obj
+            .get("value")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
     }
 
     None
@@ -84,8 +87,14 @@ fn test_recover_from_parse_errors() -> Result<(), Box<dyn std::error::Error>> {
             }
         }),
     );
-    assert!(response["result"].is_array(), "Response was not an array: {}", response);
-    let symbols = response["result"].as_array().ok_or("Expected 'result' to be an array")?;
+    assert!(
+        response["result"].is_array(),
+        "Response was not an array: {}",
+        response
+    );
+    let symbols = response["result"]
+        .as_array()
+        .ok_or("Expected 'result' to be an array")?;
     assert!(!symbols.is_empty());
     shutdown_and_exit(&server);
     Ok(())
@@ -146,11 +155,16 @@ sub another_valid {
         }),
     );
     assert!(response["result"].is_array());
-    let symbols = response["result"].as_array().ok_or("Expected 'result' to be an array")?;
+    let symbols = response["result"]
+        .as_array()
+        .ok_or("Expected 'result' to be an array")?;
 
     // Should find at least the valid functions
-    let function_names: Vec<String> =
-        symbols.iter().filter_map(|s| s["name"].as_str()).map(|s| s.to_string()).collect();
+    let function_names: Vec<String> = symbols
+        .iter()
+        .filter_map(|s| s["name"].as_str())
+        .map(|s| s.to_string())
+        .collect();
 
     assert!(function_names.contains(&"valid_function".to_string()));
     assert!(function_names.contains(&"another_valid".to_string()));
@@ -317,11 +331,17 @@ fn test_workspace_recovery_after_error() -> Result<(), Box<dyn std::error::Error
         }),
     );
     assert!(response["result"].is_array());
-    let symbols = response["result"].as_array().ok_or("Expected 'result' to be an array")?;
+    let symbols = response["result"]
+        .as_array()
+        .ok_or("Expected 'result' to be an array")?;
     // Note: workspace symbols requires the 'workspace' feature to be enabled
     // Without it, an empty array is returned which is valid behavior
     if !symbols.is_empty() {
-        assert!(symbols.iter().any(|s| s["name"] == "foo"), "Workspace symbols: {:?}", symbols);
+        assert!(
+            symbols.iter().any(|s| s["name"] == "foo"),
+            "Workspace symbols: {:?}",
+            symbols
+        );
     }
     shutdown_and_exit(&server);
     Ok(())
@@ -384,10 +404,16 @@ print $var;  # Another valid reference
         }),
     );
     assert!(response["result"].is_array());
-    let refs = response["result"].as_array().ok_or("Expected 'result' to be an array")?;
+    let refs = response["result"]
+        .as_array()
+        .ok_or("Expected 'result' to be an array")?;
     // When there are syntax errors, references might not be found
     // The important thing is that the server doesn't crash and returns a valid response
-    eprintln!("Found {} references (may be 0 due to parse errors): {:?}", refs.len(), refs);
+    eprintln!(
+        "Found {} references (may be 0 due to parse errors): {:?}",
+        refs.len(),
+        refs
+    );
     shutdown_and_exit(&server);
     Ok(())
 }
@@ -496,10 +522,13 @@ pri
             }
         }),
     );
-    let symbols =
-        symbol_response["result"].as_array().ok_or("documentSymbol should return an array")?;
+    let symbols = symbol_response["result"]
+        .as_array()
+        .ok_or("documentSymbol should return an array")?;
     assert!(
-        symbols.iter().any(|symbol| symbol["name"] == "usable_feature"),
+        symbols
+            .iter()
+            .any(|symbol| symbol["name"] == "usable_feature"),
         "partial AST should still include the valid subroutine after the syntax error: {symbols:?}"
     );
 
@@ -533,8 +562,10 @@ pri
         }),
     );
     let items = completion_items(&completion_response);
-    let labels: Vec<String> =
-        items.iter().filter_map(|item| item["label"].as_str().map(|s| s.to_string())).collect();
+    let labels: Vec<String> = items
+        .iter()
+        .filter_map(|item| item["label"].as_str().map(|s| s.to_string()))
+        .collect();
     assert!(
         labels.iter().any(|label| label == "print"),
         "completion after the syntax error should still suggest valid keywords, got: {labels:?}"
@@ -559,7 +590,9 @@ pri
         "go-to-definition should still resolve the valid call after the syntax error"
     );
     assert!(
-        definitions[0]["uri"].as_str().is_some_and(|actual| actual == uri),
+        definitions[0]["uri"]
+            .as_str()
+            .is_some_and(|actual| actual == uri),
         "definition should point back to the same file, got: {definitions:?}"
     );
 
@@ -816,7 +849,9 @@ fn test_diagnostic_recovery() -> Result<(), Box<dyn std::error::Error>> {
         }),
     );
     assert!(response["result"].is_array());
-    let symbols = response["result"].as_array().ok_or("Expected 'result' to be an array")?;
+    let symbols = response["result"]
+        .as_array()
+        .ok_or("Expected 'result' to be an array")?;
 
     // #307: Under CI load, incremental didChange notifications may not all be
     // processed before the documentSymbol request. Retry with a convergence
@@ -825,11 +860,26 @@ fn test_diagnostic_recovery() -> Result<(), Box<dyn std::error::Error>> {
     let max_attempts = 5;
     let mut final_count = symbols.len();
     let summarize_symbol = |s: &serde_json::Value| -> String {
-        let name = s.get("name").and_then(|v| v.as_str()).unwrap_or("<unnamed>");
-        let sl = s.pointer("/range/start/line").and_then(|v| v.as_u64()).unwrap_or(0);
-        let sc = s.pointer("/range/start/character").and_then(|v| v.as_u64()).unwrap_or(0);
-        let el = s.pointer("/range/end/line").and_then(|v| v.as_u64()).unwrap_or(0);
-        let ec = s.pointer("/range/end/character").and_then(|v| v.as_u64()).unwrap_or(0);
+        let name = s
+            .get("name")
+            .and_then(|v| v.as_str())
+            .unwrap_or("<unnamed>");
+        let sl = s
+            .pointer("/range/start/line")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0);
+        let sc = s
+            .pointer("/range/start/character")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0);
+        let el = s
+            .pointer("/range/end/line")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0);
+        let ec = s
+            .pointer("/range/end/character")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0);
         format!("{name} [{sl}:{sc}-{el}:{ec}]")
     };
     let mut last_summaries: Vec<String> = symbols.iter().map(&summarize_symbol).collect();

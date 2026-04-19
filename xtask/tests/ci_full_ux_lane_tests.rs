@@ -18,8 +18,9 @@ fn test_ci_full_runs_ux_tests() -> Result<(), Box<dyn std::error::Error>> {
     let root = project_root();
     let justfile = fs::read_to_string(root.join("justfile"))?;
 
-    let ci_full_start =
-        justfile.find("\nci-full:\n").ok_or("ci-full recipe must exist in justfile")?;
+    let ci_full_start = justfile
+        .find("\nci-full:\n")
+        .ok_or("ci-full recipe must exist in justfile")?;
     let ci_full_body = &justfile[ci_full_start..];
     let next_recipe = ci_full_body
         .find("\n# Local CI parity")
@@ -42,8 +43,9 @@ fn test_ux_tests_recipe_builds_and_exports_binary() -> Result<(), Box<dyn std::e
     let root = project_root();
     let justfile = fs::read_to_string(root.join("justfile"))?;
 
-    let ux_tests_start =
-        justfile.find("\nux-tests:\n").ok_or("ux-tests recipe must exist in justfile")?;
+    let ux_tests_start = justfile
+        .find("\nux-tests:\n")
+        .ok_or("ux-tests recipe must exist in justfile")?;
     let ux_tests_body = &justfile[ux_tests_start..];
     let next_recipe = ux_tests_body
         .find("\n# @INC consumer-consistency conformance harness.")

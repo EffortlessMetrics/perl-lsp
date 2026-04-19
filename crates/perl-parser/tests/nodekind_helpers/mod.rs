@@ -34,7 +34,9 @@ pub fn collect_node_kinds_labeled(
     label: &str,
     out: &mut BTreeMap<&'static str, BTreeSet<String>>,
 ) {
-    out.entry(node.kind.kind_name()).or_default().insert(label.to_string());
+    out.entry(node.kind.kind_name())
+        .or_default()
+        .insert(label.to_string());
     node.for_each_child(|child| collect_node_kinds_labeled(child, label, out));
 }
 
@@ -88,5 +90,9 @@ pub fn find_first_node_of_kind<'a>(node: &'a Node, expected: &str) -> Option<&'a
 /// (all kinds minus synthetic/recovery kinds).
 #[allow(dead_code)]
 pub fn corpus_required_kinds() -> BTreeSet<&'static str> {
-    ALL_NODE_KIND_NAMES.iter().copied().filter(|k| !SYNTHETIC_NODE_KIND_NAMES.contains(k)).collect()
+    ALL_NODE_KIND_NAMES
+        .iter()
+        .copied()
+        .filter(|k| !SYNTHETIC_NODE_KIND_NAMES.contains(k))
+        .collect()
 }

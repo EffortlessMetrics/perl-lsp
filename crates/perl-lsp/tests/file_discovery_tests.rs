@@ -32,13 +32,24 @@ fn discovers_perl_extensions() -> Result<(), Box<dyn std::error::Error>> {
 
     let result = discover_perl_files(root);
 
-    assert_eq!(result.files.len(), 4, "Should discover exactly 4 Perl files");
-    assert!(result.duration.as_secs() < 10, "Discovery should complete quickly");
+    assert_eq!(
+        result.files.len(),
+        4,
+        "Should discover exactly 4 Perl files"
+    );
+    assert!(
+        result.duration.as_secs() < 10,
+        "Discovery should complete quickly"
+    );
 
     // Verify all discovered files have Perl extensions
     for file in &result.files {
         let ext = file.extension().and_then(|e| e.to_str()).unwrap_or("");
-        assert!(matches!(ext, "pl" | "pm" | "t" | "psgi"), "Unexpected extension: {}", ext);
+        assert!(
+            matches!(ext, "pl" | "pm" | "t" | "psgi"),
+            "Unexpected extension: {}",
+            ext
+        );
     }
 
     Ok(())
@@ -56,10 +67,18 @@ fn skips_node_modules_directory() -> Result<(), Box<dyn std::error::Error>> {
 
     // Only app.pl should be found; node_modules/some_pkg/lib.pm should be skipped
     // With git strategy, node_modules may or may not exist in git, so check both cases
-    let perl_in_node_modules =
-        result.files.iter().any(|f| f.to_string_lossy().contains("node_modules"));
-    assert!(!perl_in_node_modules, "Files inside node_modules should not be discovered");
-    assert!(!result.files.is_empty(), "Should discover at least the root app.pl");
+    let perl_in_node_modules = result
+        .files
+        .iter()
+        .any(|f| f.to_string_lossy().contains("node_modules"));
+    assert!(
+        !perl_in_node_modules,
+        "Files inside node_modules should not be discovered"
+    );
+    assert!(
+        !result.files.is_empty(),
+        "Should discover at least the root app.pl"
+    );
 
     Ok(())
 }
@@ -74,7 +93,10 @@ fn skips_dot_git_directory() -> Result<(), Box<dyn std::error::Error>> {
 
     let result = discover_perl_files(root);
 
-    let perl_in_git = result.files.iter().any(|f| f.to_string_lossy().contains(".git"));
+    let perl_in_git = result
+        .files
+        .iter()
+        .any(|f| f.to_string_lossy().contains(".git"));
     assert!(!perl_in_git, "Files inside .git should not be discovered");
 
     Ok(())
@@ -96,7 +118,10 @@ fn returns_valid_discovery_result() -> Result<(), Box<dyn std::error::Error>> {
         "Method should be Git or Walk"
     );
     // Duration should be non-negative (always true for Duration, but validates field is populated)
-    assert!(result.duration.as_nanos() > 0, "Duration should be positive");
+    assert!(
+        result.duration.as_nanos() > 0,
+        "Duration should be positive"
+    );
 
     Ok(())
 }
@@ -136,7 +161,10 @@ fn empty_directory_returns_no_files() -> Result<(), Box<dyn std::error::Error>> 
 
     let result = discover_perl_files(root);
 
-    assert!(result.files.is_empty(), "Empty directory should yield no files");
+    assert!(
+        result.files.is_empty(),
+        "Empty directory should yield no files"
+    );
 
     Ok(())
 }
@@ -156,7 +184,10 @@ fn skips_target_and_cache_directories() -> Result<(), Box<dyn std::error::Error>
         let s = f.to_string_lossy();
         s.contains("target") || s.contains(".cache")
     });
-    assert!(!in_excluded, "Files inside target/ and .cache/ should not be discovered");
+    assert!(
+        !in_excluded,
+        "Files inside target/ and .cache/ should not be discovered"
+    );
 
     Ok(())
 }

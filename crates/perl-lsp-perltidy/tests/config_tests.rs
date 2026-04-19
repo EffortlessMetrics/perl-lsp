@@ -68,7 +68,10 @@ fn gnu_preset_opens_brace_on_new_line() {
 
 #[test]
 fn config_tabs_true_generates_tabs_flag() {
-    let config = PerlTidyConfig { tabs: Some(true), ..PerlTidyConfig::default() };
+    let config = PerlTidyConfig {
+        tabs: Some(true),
+        ..PerlTidyConfig::default()
+    };
     let args = config.to_args();
     assert!(args.contains(&"--tabs".to_string()));
     assert!(!args.contains(&"--notabs".to_string()));
@@ -76,28 +79,40 @@ fn config_tabs_true_generates_tabs_flag() {
 
 #[test]
 fn config_cuddled_else_false_generates_nocuddled() {
-    let config = PerlTidyConfig { cuddled_else: Some(false), ..PerlTidyConfig::default() };
+    let config = PerlTidyConfig {
+        cuddled_else: Some(false),
+        ..PerlTidyConfig::default()
+    };
     let args = config.to_args();
     assert!(args.contains(&"--nocuddled-else".to_string()));
 }
 
 #[test]
 fn config_space_after_keyword_false() {
-    let config = PerlTidyConfig { space_after_keyword: Some(false), ..PerlTidyConfig::default() };
+    let config = PerlTidyConfig {
+        space_after_keyword: Some(false),
+        ..PerlTidyConfig::default()
+    };
     let args = config.to_args();
     assert!(args.contains(&"--nospace-after-keyword".to_string()));
 }
 
 #[test]
 fn config_add_trailing_commas_true() {
-    let config = PerlTidyConfig { add_trailing_commas: Some(true), ..PerlTidyConfig::default() };
+    let config = PerlTidyConfig {
+        add_trailing_commas: Some(true),
+        ..PerlTidyConfig::default()
+    };
     let args = config.to_args();
     assert!(args.contains(&"--add-trailing-commas".to_string()));
 }
 
 #[test]
 fn config_vertical_alignment_false() {
-    let config = PerlTidyConfig { vertical_alignment: Some(false), ..PerlTidyConfig::default() };
+    let config = PerlTidyConfig {
+        vertical_alignment: Some(false),
+        ..PerlTidyConfig::default()
+    };
     let args = config.to_args();
     assert!(args.contains(&"--no-vertical-alignment".to_string()));
 }
@@ -157,7 +172,11 @@ fn config_profile_path_passed_to_perltidy() {
     let _ = must(formatter.format("code"));
 
     let invocations = runtime.invocations();
-    assert!(invocations[0].args.contains(&"--profile=/project/.perltidyrc".to_string()));
+    assert!(
+        invocations[0]
+            .args
+            .contains(&"--profile=/project/.perltidyrc".to_string())
+    );
 }
 
 // --- Built-in formatter tests ---
@@ -203,7 +222,10 @@ fn builtin_formatter_preserves_empty_lines() {
 
 #[test]
 fn builtin_formatter_uses_tabs_when_configured() {
-    let config = PerlTidyConfig { tabs: Some(true), ..PerlTidyConfig::default() };
+    let config = PerlTidyConfig {
+        tabs: Some(true),
+        ..PerlTidyConfig::default()
+    };
     let formatter = BuiltInFormatter::new(config);
     let formatted = formatter.format("sub foo {\nreturn 1;\n}\n");
 
@@ -212,7 +234,10 @@ fn builtin_formatter_uses_tabs_when_configured() {
 
 #[test]
 fn builtin_formatter_respects_indent_columns() {
-    let config = PerlTidyConfig { indent_columns: Some(2), ..PerlTidyConfig::default() };
+    let config = PerlTidyConfig {
+        indent_columns: Some(2),
+        ..PerlTidyConfig::default()
+    };
     let formatter = BuiltInFormatter::new(config);
     let formatted = formatter.format("if (1) {\nprint;\n}\n");
 

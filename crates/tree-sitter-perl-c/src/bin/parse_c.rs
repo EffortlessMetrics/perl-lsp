@@ -19,10 +19,12 @@ fn main() {
     };
 
     let mut parser = tree_sitter::Parser::new();
-    parser.set_language(&tree_sitter_perl_c::language()).unwrap_or_else(|e| {
-        eprintln!("Error loading Perl C grammar: {:?}", e);
-        process::exit(1);
-    });
+    parser
+        .set_language(&tree_sitter_perl_c::language())
+        .unwrap_or_else(|e| {
+            eprintln!("Error loading Perl C grammar: {:?}", e);
+            process::exit(1);
+        });
 
     match parser.parse(&source_code, None) {
         Some(_tree) => {

@@ -109,8 +109,9 @@ fn special_perl_variables_are_not_keywords() {
 
 #[test]
 fn perl_operators_are_not_keywords() {
-    for op in ["=~", "!~", "->", "=>", "::", "&&", "||", "//", "**", "..", "...", "~~", "<=>", "<>"]
-    {
+    for op in [
+        "=~", "!~", "->", "=>", "::", "&&", "||", "//", "**", "..", "...", "~~", "<=>", "<>",
+    ] {
         assert!(!is_keyword(op), "operator {op:?} should not be a keyword");
     }
 }
@@ -150,14 +151,20 @@ fn phase_blocks_not_in_dap_keywords() {
 #[test]
 fn modern_perl_not_in_dap_keywords() {
     for kw in ["try", "catch", "finally", "class", "method"] {
-        assert!(!is_dap_completion_keyword(kw), "{kw:?} should not be in DAP_COMPLETION_KEYWORDS");
+        assert!(
+            !is_dap_completion_keyword(kw),
+            "{kw:?} should not be in DAP_COMPLETION_KEYWORDS"
+        );
     }
 }
 
 #[test]
 fn logical_operators_not_in_dap_keywords() {
     for kw in ["and", "or", "not", "xor"] {
-        assert!(!is_dap_completion_keyword(kw), "{kw:?} should not be in DAP_COMPLETION_KEYWORDS");
+        assert!(
+            !is_dap_completion_keyword(kw),
+            "{kw:?} should not be in DAP_COMPLETION_KEYWORDS"
+        );
     }
 }
 
@@ -168,14 +175,20 @@ fn logical_operators_not_in_dap_keywords() {
 #[test]
 fn io_builtins_not_in_rename_keywords() {
     for kw in ["open", "close", "read", "print", "printf", "say", "write"] {
-        assert!(!is_rename_keyword(kw), "{kw:?} should not be in RENAME_KEYWORDS");
+        assert!(
+            !is_rename_keyword(kw),
+            "{kw:?} should not be in RENAME_KEYWORDS"
+        );
     }
 }
 
 #[test]
 fn comparison_operators_not_in_rename_keywords() {
     for kw in ["cmp", "ge", "gt", "le", "lt"] {
-        assert!(!is_rename_keyword(kw), "{kw:?} should not be in RENAME_KEYWORDS");
+        assert!(
+            !is_rename_keyword(kw),
+            "{kw:?} should not be in RENAME_KEYWORDS"
+        );
     }
 }
 
@@ -210,14 +223,22 @@ fn dunder_tokens_not_in_runtime_completion() {
 #[test]
 fn phase_blocks_not_in_parser_lsp() {
     for kw in ["BEGIN", "CHECK", "INIT", "END", "UNITCHECK"] {
-        assert!(!is_parser_lsp_keyword(kw), "{kw:?} should not be in PARSER_LSP_KEYWORDS");
+        assert!(
+            !is_parser_lsp_keyword(kw),
+            "{kw:?} should not be in PARSER_LSP_KEYWORDS"
+        );
     }
 }
 
 #[test]
 fn string_builtins_not_in_parser_lsp() {
-    for kw in ["chomp", "chop", "chr", "hex", "index", "lc", "length", "oct", "ord", "substr"] {
-        assert!(!is_parser_lsp_keyword(kw), "{kw:?} should not be in PARSER_LSP_KEYWORDS");
+    for kw in [
+        "chomp", "chop", "chr", "hex", "index", "lc", "length", "oct", "ord", "substr",
+    ] {
+        assert!(
+            !is_parser_lsp_keyword(kw),
+            "{kw:?} should not be in PARSER_LSP_KEYWORDS"
+        );
     }
 }
 
@@ -228,14 +249,20 @@ fn string_builtins_not_in_parser_lsp() {
 #[test]
 fn comparison_operators_not_in_lexer_keywords() {
     for kw in ["eq", "ne", "ge", "gt", "le", "lt"] {
-        assert!(!is_lexer_keyword(kw), "{kw:?} should not be in LEXER_KEYWORDS");
+        assert!(
+            !is_lexer_keyword(kw),
+            "{kw:?} should not be in LEXER_KEYWORDS"
+        );
     }
 }
 
 #[test]
 fn io_builtins_not_in_lexer_keywords() {
     for kw in ["open", "close", "read", "write"] {
-        assert!(!is_lexer_keyword(kw), "{kw:?} should not be in LEXER_KEYWORDS");
+        assert!(
+            !is_lexer_keyword(kw),
+            "{kw:?} should not be in LEXER_KEYWORDS"
+        );
     }
 }
 
@@ -249,7 +276,10 @@ fn specialized_lists_are_proper_subsets() {
     let lists: &[(&str, &[&str])] = &[
         ("LSP_COMPLETION_KEYWORDS", LSP_COMPLETION_KEYWORDS),
         ("DAP_COMPLETION_KEYWORDS", DAP_COMPLETION_KEYWORDS),
-        ("LSP_RUNTIME_COMPLETION_KEYWORDS", LSP_RUNTIME_COMPLETION_KEYWORDS),
+        (
+            "LSP_RUNTIME_COMPLETION_KEYWORDS",
+            LSP_RUNTIME_COMPLETION_KEYWORDS,
+        ),
         ("RENAME_KEYWORDS", RENAME_KEYWORDS),
         ("PARSER_LSP_KEYWORDS", PARSER_LSP_KEYWORDS),
         ("LEXER_KEYWORDS", LEXER_KEYWORDS),
@@ -335,7 +365,10 @@ fn specialized_lists_differ_from_each_other() {
         for j in (i + 1)..lists.len() {
             let (name_a, list_a) = lists[i];
             let (name_b, list_b) = lists[j];
-            assert!(list_a != list_b, "{name_a} and {name_b} should not be identical");
+            assert!(
+                list_a != list_b,
+                "{name_a} and {name_b} should not be identical"
+            );
         }
     }
 }
@@ -349,7 +382,10 @@ fn all_keywords_are_valid_perl_identifiers_or_special_tokens() {
     for &kw in KEYWORDS {
         // Special tokens start with __
         if kw.starts_with("__") {
-            assert!(kw.ends_with("__"), "dunder keyword {kw:?} should end with __");
+            assert!(
+                kw.ends_with("__"),
+                "dunder keyword {kw:?} should end with __"
+            );
             continue;
         }
         // Single-char operators: m, s, q, y
@@ -374,7 +410,15 @@ fn all_keywords_are_valid_perl_identifiers_or_special_tokens() {
 
 #[test]
 fn phase_blocks_are_all_uppercase() {
-    for kw in ["BEGIN", "CHECK", "END", "INIT", "UNITCHECK", "AUTOLOAD", "DESTROY"] {
+    for kw in [
+        "BEGIN",
+        "CHECK",
+        "END",
+        "INIT",
+        "UNITCHECK",
+        "AUTOLOAD",
+        "DESTROY",
+    ] {
         if is_keyword(kw) {
             assert!(
                 kw.chars().all(|c| c.is_ascii_uppercase()),

@@ -57,7 +57,10 @@ impl Sandbox {
             let temp_dir =
                 std::env::temp_dir().join(format!("perl-lsp-sandbox-{}", uuid::Uuid::new_v4()));
             std::fs::create_dir_all(&temp_dir).with_context(|| {
-                format!("failed to create sandbox temp dir at {}", temp_dir.display())
+                format!(
+                    "failed to create sandbox temp dir at {}",
+                    temp_dir.display()
+                )
             })?;
             Some(temp_dir)
         } else {
@@ -219,7 +222,10 @@ impl Sandbox {
                 .ok_or_else(|| anyhow!("sandbox temp dir missing when applying macOS sandbox"))?
                 .join("sandbox.sb");
             std::fs::write(&profile_path, &sandbox_profile).with_context(|| {
-                format!("failed to write sandbox profile to {}", profile_path.display())
+                format!(
+                    "failed to write sandbox profile to {}",
+                    profile_path.display()
+                )
             })?;
 
             let mut sandbox_cmd = Command::new("sandbox-exec");
@@ -246,7 +252,10 @@ impl Sandbox {
     /// calling this function.
     #[cfg(any(target_os = "macos", test))]
     fn sandbox_escape_path(path: &std::path::Path) -> String {
-        path.display().to_string().replace('\\', "\\\\").replace('"', "\\\"")
+        path.display()
+            .to_string()
+            .replace('\\', "\\\\")
+            .replace('"', "\\\"")
     }
 
     /// Generate macOS sandbox profile
@@ -298,7 +307,10 @@ impl Sandbox {
     /// Create a sandbox with no temp dir, for use in unit tests only.
     #[cfg(test)]
     fn new_for_test(config: SandboxConfig) -> Self {
-        Self { config, temp_dir: None }
+        Self {
+            config,
+            temp_dir: None,
+        }
     }
 
     /// Clean up sandbox resources
@@ -307,7 +319,10 @@ impl Sandbox {
             // Clean up temporary directory
             if temp_dir.exists() {
                 std::fs::remove_dir_all(temp_dir).with_context(|| {
-                    format!("failed to remove sandbox temp dir at {}", temp_dir.display())
+                    format!(
+                        "failed to remove sandbox temp dir at {}",
+                        temp_dir.display()
+                    )
                 })?;
             }
         }
@@ -367,12 +382,16 @@ pub struct SafeExecutor {
 impl SafeExecutor {
     /// Create a new safe executor with default configuration
     pub fn new() -> Self {
-        Self { default_config: SandboxConfig::default() }
+        Self {
+            default_config: SandboxConfig::default(),
+        }
     }
 
     /// Create a new safe executor with custom configuration
     pub fn with_config(config: SandboxConfig) -> Self {
-        Self { default_config: config }
+        Self {
+            default_config: config,
+        }
     }
 
     /// Execute a command safely
@@ -441,7 +460,10 @@ mod tests {
     fn echo_command(message: &str) -> (&'static str, Vec<String>) {
         #[cfg(windows)]
         {
-            ("cmd", vec!["/C".to_string(), "echo".to_string(), message.to_string()])
+            (
+                "cmd",
+                vec!["/C".to_string(), "echo".to_string(), message.to_string()],
+            )
         }
 
         #[cfg(not(windows))]
@@ -463,7 +485,10 @@ mod tests {
     fn test_sandbox_escape_path_double_quote() {
         // A path with a double-quote must be escaped to prevent DSL injection
         let path = std::path::Path::new("/home/user/my\"project");
-        assert_eq!(Sandbox::sandbox_escape_path(path), "/home/user/my\\\"project");
+        assert_eq!(
+            Sandbox::sandbox_escape_path(path),
+            "/home/user/my\\\"project"
+        );
     }
 
     #[test]
@@ -481,7 +506,10 @@ mod tests {
         // itself get doubled, producing \\" instead of the correct \".
         let path = std::path::Path::new("/home/user/my\\\"path");
         // Expected: /home/user/my\\"path (\ -> \\, then " -> \")
-        assert_eq!(Sandbox::sandbox_escape_path(path), "/home/user/my\\\\\\\"path");
+        assert_eq!(
+            Sandbox::sandbox_escape_path(path),
+            "/home/user/my\\\\\\\"path"
+        );
     }
 
     #[test]
@@ -521,7 +549,10 @@ mod tests {
     #[test]
     fn test_unsandboxed_execution() {
         use perl_tdd_support::must;
-        let config = SandboxConfig { enabled: false, ..Default::default() };
+        let config = SandboxConfig {
+            enabled: false,
+            ..Default::default()
+        };
         let sandbox = must(Sandbox::new(config));
 
         let (command, args) = echo_command("hello");
@@ -535,7 +566,10 @@ mod tests {
     fn test_safe_executor_disabled() {
         use perl_tdd_support::must;
         // Test with sandbox disabled (default config has enabled=true which fails closed without firejail)
-        let config = SandboxConfig { enabled: false, ..Default::default() };
+        let config = SandboxConfig {
+            enabled: false,
+            ..Default::default()
+        };
         let executor = SafeExecutor::with_config(config);
         let (command, args) = echo_command("test");
         let arg_refs: Vec<&str> = args.iter().map(String::as_str).collect();
@@ -605,14 +639,20 @@ mod tests {
             return;
         }
 
-        let config = SandboxConfig { enabled: true, ..SandboxConfig::default() };
+        let config = SandboxConfig {
+            enabled: true,
+            ..SandboxConfig::default()
+        };
         let sandbox = must(Sandbox::new(config));
 
         // Without firejail the new code must return Err (not silently succeed
         // with inert RLIMIT_* env vars as the old code did).
         let result = sandbox.execute("echo", &["test"]);
 
-        assert!(result.is_err(), "Expected fail-closed error when firejail is absent");
+        assert!(
+            result.is_err(),
+            "Expected fail-closed error when firejail is absent"
+        );
         let err_msg = format!("{}", result.unwrap_err());
         assert!(
             err_msg.contains("firejail") || err_msg.contains("sandbox.enabled"),
@@ -630,12 +670,18 @@ mod tests {
     #[cfg(target_os = "windows")]
     fn test_windows_sandbox_fails_closed() {
         use perl_tdd_support::must;
-        let config = SandboxConfig { enabled: true, ..SandboxConfig::default() };
+        let config = SandboxConfig {
+            enabled: true,
+            ..SandboxConfig::default()
+        };
         let sandbox = must(Sandbox::new(config));
 
         let result = sandbox.execute("cmd", &["/C", "echo", "test"]);
 
-        assert!(result.is_err(), "Expected fail-closed error on Windows with sandbox enabled");
+        assert!(
+            result.is_err(),
+            "Expected fail-closed error on Windows with sandbox enabled"
+        );
         let err_msg = format!("{}", result.unwrap_err());
         assert!(
             err_msg.contains("Windows job objects") || err_msg.contains("sandbox.enabled"),
@@ -668,7 +714,10 @@ if (${^TAINT}) {
 
         // Use sandbox disabled so the test reaches Perl on all platforms,
         // including Linux without firejail and Windows (which fail-close).
-        let config = SandboxConfig { enabled: false, ..Default::default() };
+        let config = SandboxConfig {
+            enabled: false,
+            ..Default::default()
+        };
         let executor = SafeExecutor::with_config(config);
         let result = executor.execute_perl_script(&script_path, &[]);
 
@@ -712,7 +761,10 @@ if ($@) {
 "#;
         must(fs::write(&script_path, script));
 
-        let config = SandboxConfig { enabled: false, ..Default::default() };
+        let config = SandboxConfig {
+            enabled: false,
+            ..Default::default()
+        };
         let executor = SafeExecutor::with_config(config);
         let result = executor.execute_perl_script(&script_path, &[]);
 

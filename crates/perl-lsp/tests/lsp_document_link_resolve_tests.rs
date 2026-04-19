@@ -62,7 +62,9 @@ fn test_document_link_resolve_module() -> TestResult {
 
     // Should have a target now (either local file or MetaCPAN)
     assert!(result.get("target").is_some());
-    let target = result["target"].as_str().ok_or("Expected target to be a string")?;
+    let target = result["target"]
+        .as_str()
+        .ok_or("Expected target to be a string")?;
 
     // Should be either a file:// URI or https://metacpan.org
     assert!(target.starts_with("file://") || target.starts_with("https://metacpan.org"));
@@ -127,7 +129,9 @@ fn test_document_link_resolve_file() -> TestResult {
 
     // Should have a target now
     assert!(result.get("target").is_some());
-    let target = result["target"].as_str().ok_or("Expected target to be a string")?;
+    let target = result["target"]
+        .as_str()
+        .ok_or("Expected target to be a string")?;
 
     // Should be a file:// URI
     assert!(target.starts_with("file://"));
@@ -466,7 +470,9 @@ require Foo::Bar;
     let link_resp = link_response.ok_or("Expected response from documentLink")?;
     assert!(link_resp.result.is_some());
 
-    let links = link_resp.result.ok_or("Expected result field in link response")?;
+    let links = link_resp
+        .result
+        .ok_or("Expected result field in link response")?;
     let links_array = links.as_array().ok_or("Expected links to be an array")?;
 
     // Should have links for Data::Dumper, JSON::XS, and Foo::Bar
@@ -475,7 +481,12 @@ require Foo::Bar;
     // All links should have data field (deferred resolution)
     for link in links_array {
         assert!(link.get("data").is_some());
-        assert!(link.get("data").ok_or("Expected data field")?.get("type").is_some());
+        assert!(
+            link.get("data")
+                .ok_or("Expected data field")?
+                .get("type")
+                .is_some()
+        );
 
         // Resolve each link
         let resolve_response = server.handle_request(JsonRpcRequest {
@@ -489,7 +500,9 @@ require Foo::Bar;
         let resolve_resp = resolve_response.ok_or("Expected response from documentLink/resolve")?;
         assert!(resolve_resp.result.is_some());
 
-        let resolved = resolve_resp.result.ok_or("Expected result field in resolve response")?;
+        let resolved = resolve_resp
+            .result
+            .ok_or("Expected result field in resolve response")?;
 
         // Should now have a target
         assert!(resolved.get("target").is_some());

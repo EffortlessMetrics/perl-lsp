@@ -76,8 +76,16 @@ fn completes_scalar_variable_names_after_dollar() {
     let code = "my $username = 'alice';\nmy $user_id = 1;\n$us";
     let items = completions_at_end(code);
 
-    assert!(has_label(&items, "$username"), "should suggest $username, got: {:?}", labels(&items));
-    assert!(has_label(&items, "$user_id"), "should suggest $user_id, got: {:?}", labels(&items));
+    assert!(
+        has_label(&items, "$username"),
+        "should suggest $username, got: {:?}",
+        labels(&items)
+    );
+    assert!(
+        has_label(&items, "$user_id"),
+        "should suggest $user_id, got: {:?}",
+        labels(&items)
+    );
 }
 
 #[test]
@@ -85,7 +93,11 @@ fn completes_array_variable_names_after_at() {
     let code = "my @items = ();\nmy @inventory = ();\n@i";
     let items = completions_at_end(code);
 
-    assert!(has_label(&items, "@items"), "should suggest @items, got: {:?}", labels(&items));
+    assert!(
+        has_label(&items, "@items"),
+        "should suggest @items, got: {:?}",
+        labels(&items)
+    );
     assert!(
         has_label(&items, "@inventory"),
         "should suggest @inventory, got: {:?}",
@@ -98,8 +110,16 @@ fn completes_hash_variable_names_after_percent() {
     let code = "my %config = ();\nmy %cache = ();\n%c";
     let items = completions_at_end(code);
 
-    assert!(has_label(&items, "%config"), "should suggest %config, got: {:?}", labels(&items));
-    assert!(has_label(&items, "%cache"), "should suggest %cache, got: {:?}", labels(&items));
+    assert!(
+        has_label(&items, "%config"),
+        "should suggest %config, got: {:?}",
+        labels(&items)
+    );
+    assert!(
+        has_label(&items, "%cache"),
+        "should suggest %cache, got: {:?}",
+        labels(&items)
+    );
 }
 
 #[test]
@@ -136,7 +156,9 @@ $calc->
 
     // Should include user-defined methods
     assert!(
-        items.iter().any(|c| c.label == "add" || c.label == "subtract" || c.label == "multiply"),
+        items
+            .iter()
+            .any(|c| c.label == "add" || c.label == "subtract" || c.label == "multiply"),
         "should suggest defined methods after ->, got: {:?}",
         labels(&items)
     );
@@ -210,7 +232,9 @@ fn completes_keywords_for_partial_input() {
     let items = completions_at_end(code);
 
     assert!(
-        items.iter().any(|c| c.label == "for" || c.label == "foreach"),
+        items
+            .iter()
+            .any(|c| c.label == "for" || c.label == "foreach"),
         "should suggest for/foreach keywords, got: {:?}",
         labels(&items)
     );
@@ -221,7 +245,11 @@ fn completes_sub_keyword() {
     let code = "su";
     let items = completions_at_end(code);
 
-    assert!(has_label(&items, "sub"), "should suggest 'sub' keyword, got: {:?}", labels(&items));
+    assert!(
+        has_label(&items, "sub"),
+        "should suggest 'sub' keyword, got: {:?}",
+        labels(&items)
+    );
 }
 
 // ===========================================================================
@@ -233,8 +261,16 @@ fn completes_builtin_print_functions() {
     let code = "pri";
     let items = completions_at_end(code);
 
-    assert!(has_label(&items, "print"), "should suggest print, got: {:?}", labels(&items));
-    assert!(has_label(&items, "printf"), "should suggest printf, got: {:?}", labels(&items));
+    assert!(
+        has_label(&items, "print"),
+        "should suggest print, got: {:?}",
+        labels(&items)
+    );
+    assert!(
+        has_label(&items, "printf"),
+        "should suggest printf, got: {:?}",
+        labels(&items)
+    );
 }
 
 #[test]
@@ -242,7 +278,11 @@ fn completes_builtin_open_function() {
     let code = "ope";
     let items = completions_at_end(code);
 
-    assert!(has_label(&items, "open"), "should suggest open, got: {:?}", labels(&items));
+    assert!(
+        has_label(&items, "open"),
+        "should suggest open, got: {:?}",
+        labels(&items)
+    );
 }
 
 #[test]
@@ -250,8 +290,16 @@ fn completes_builtin_chomp_and_chop() {
     let code = "cho";
     let items = completions_at_end(code);
 
-    assert!(has_label(&items, "chomp"), "should suggest chomp, got: {:?}", labels(&items));
-    assert!(has_label(&items, "chop"), "should suggest chop, got: {:?}", labels(&items));
+    assert!(
+        has_label(&items, "chomp"),
+        "should suggest chomp, got: {:?}",
+        labels(&items)
+    );
+    assert!(
+        has_label(&items, "chop"),
+        "should suggest chop, got: {:?}",
+        labels(&items)
+    );
 }
 
 // ===========================================================================
@@ -292,7 +340,9 @@ fn completes_test_more_functions_in_test_file() {
     let items = completions_with_path(code, code.len(), "/project/t/basic.t");
 
     assert!(
-        items.iter().any(|c| c.label == "is" || c.label == "is_deeply"),
+        items
+            .iter()
+            .any(|c| c.label == "is" || c.label == "is_deeply"),
         "should suggest Test::More functions in .t files, got: {:?}",
         labels(&items)
     );
@@ -448,7 +498,10 @@ fn returns_empty_when_immediately_cancelled() {
         &|| true, // always cancelled
     );
 
-    assert!(items.is_empty(), "should return empty when cancelled immediately");
+    assert!(
+        items.is_empty(),
+        "should return empty when cancelled immediately"
+    );
 }
 
 // ===========================================================================
@@ -461,7 +514,10 @@ fn empty_source_returns_only_keywords_or_nothing() {
     // Empty source may still yield keyword completions; verify each item
     // has a non-empty label (structural validity check).
     for item in &items {
-        assert!(!item.label.is_empty(), "completion labels must be non-empty");
+        assert!(
+            !item.label.is_empty(),
+            "completion labels must be non-empty"
+        );
     }
 }
 
@@ -471,7 +527,10 @@ fn position_at_zero_returns_valid_completions_or_empty() {
     let items = completions(code, 0);
     // Position zero is before any typed text; completions may include keywords.
     for item in &items {
-        assert!(!item.label.is_empty(), "completion labels must be non-empty at position 0");
+        assert!(
+            !item.label.is_empty(),
+            "completion labels must be non-empty at position 0"
+        );
     }
 }
 
@@ -479,7 +538,10 @@ fn position_at_zero_returns_valid_completions_or_empty() {
 fn position_beyond_source_returns_empty() {
     let code = "my $x = 1;";
     let items = completions(code, code.len() + 100);
-    assert!(items.is_empty(), "out-of-bounds position should return empty");
+    assert!(
+        items.is_empty(),
+        "out-of-bounds position should return empty"
+    );
 }
 
 #[test]
@@ -553,7 +615,10 @@ fn use_module_strict_ranks_before_workspace_package() {
     let strict_item = must_some(find_item(&items, "strict"));
     let zzz_item = must_some(find_item(&items, "ZzzWorkspaceOnly"));
 
-    let strict_sort = strict_item.sort_text.as_deref().unwrap_or(&strict_item.label);
+    let strict_sort = strict_item
+        .sort_text
+        .as_deref()
+        .unwrap_or(&strict_item.label);
     let zzz_sort = zzz_item.sort_text.as_deref().unwrap_or(&zzz_item.label);
 
     assert!(
@@ -576,7 +641,10 @@ fn no_keyword_completions_inside_die_string() {
     assert!(
         !items.iter().any(|i| i.kind == CompletionItemKind::Keyword),
         "no Keyword completions inside a die string; got: {:?}",
-        items.iter().map(|i| (&i.label, &i.kind)).collect::<Vec<_>>()
+        items
+            .iter()
+            .map(|i| (&i.label, &i.kind))
+            .collect::<Vec<_>>()
     );
 }
 
@@ -630,7 +698,11 @@ fn own_class_methods_rank_before_inherited_methods() {
     let items = completions_with_index(code, pos, index);
 
     // Both own and inherited methods must appear
-    assert!(has_label(&items, "zoom"), "should include own method zoom; got: {:?}", labels(&items));
+    assert!(
+        has_label(&items, "zoom"),
+        "should include own method zoom; got: {:?}",
+        labels(&items)
+    );
     assert!(
         has_label(&items, "abstract_method"),
         "should include inherited method abstract_method; got: {:?}",
@@ -640,10 +712,17 @@ fn own_class_methods_rank_before_inherited_methods() {
     // Own methods must sort before inherited methods via sort_text tier prefix.
     // zoom (own, tier-2) must beat abstract_method (inherited, tier-3) even though
     // 'z' > 'a' alphabetically — the tier prefix must be the decisive factor.
-    let zoom_sort =
-        must_some(items.iter().find(|c| c.label == "zoom").and_then(|c| c.sort_text.as_deref()));
+    let zoom_sort = must_some(
+        items
+            .iter()
+            .find(|c| c.label == "zoom")
+            .and_then(|c| c.sort_text.as_deref()),
+    );
     let inherited_sort = must_some(
-        items.iter().find(|c| c.label == "abstract_method").and_then(|c| c.sort_text.as_deref()),
+        items
+            .iter()
+            .find(|c| c.label == "abstract_method")
+            .and_then(|c| c.sort_text.as_deref()),
     );
 
     assert!(

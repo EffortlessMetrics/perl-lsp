@@ -206,7 +206,10 @@ fn validate_extract_method_ampersand_sigil() -> Result<(), Box<dyn std::error::E
         },
         vec![p],
     );
-    assert!(result.is_err(), "Leading & should be rejected for extract method");
+    assert!(
+        result.is_err(),
+        "Leading & should be rejected for extract method"
+    );
     Ok(())
 }
 
@@ -245,7 +248,10 @@ fn validate_extract_method_no_file() -> Result<(), Box<dyn std::error::Error>> {
         },
         vec![],
     );
-    assert!(result.is_err(), "No file should be rejected for extract method");
+    assert!(
+        result.is_err(),
+        "No file should be rejected for extract method"
+    );
     Ok(())
 }
 
@@ -266,7 +272,10 @@ fn validate_extract_method_multiple_files() -> Result<(), Box<dyn std::error::Er
         },
         vec![p1, p2],
     );
-    assert!(result.is_err(), "Multiple files should be rejected for extract method");
+    assert!(
+        result.is_err(),
+        "Multiple files should be rejected for extract method"
+    );
     Ok(())
 }
 
@@ -304,7 +313,11 @@ fn validate_move_code_empty_elements() -> Result<(), Box<dyn std::error::Error>>
         ..Default::default()
     });
     let result = engine.refactor(
-        RefactoringType::MoveCode { source_file: p1.clone(), target_file: p2, elements: vec![] },
+        RefactoringType::MoveCode {
+            source_file: p1.clone(),
+            target_file: p2,
+            elements: vec![],
+        },
         vec![p1],
     );
     assert!(result.is_err(), "Empty elements should be rejected");
@@ -340,7 +353,10 @@ fn validate_inline_no_files() -> Result<(), Box<dyn std::error::Error>> {
         ..Default::default()
     });
     let result = engine.refactor(
-        RefactoringType::Inline { symbol_name: "$x".to_string(), all_occurrences: false },
+        RefactoringType::Inline {
+            symbol_name: "$x".to_string(),
+            all_occurrences: false,
+        },
         vec![],
     );
     assert!(result.is_err(), "Inline with no files should be rejected");
@@ -392,7 +408,10 @@ fn validate_max_files_exceeded() -> Result<(), Box<dyn std::error::Error>> {
         },
         vec![p1, p2],
     );
-    assert!(result.is_err(), "Exceeding max_files_per_operation should be rejected");
+    assert!(
+        result.is_err(),
+        "Exceeding max_files_per_operation should be rejected"
+    );
     Ok(())
 }
 
@@ -418,7 +437,10 @@ fn extract_method_basic() -> Result<(), Box<dyn std::error::Error>> {
     assert!(result.success);
     assert_eq!(result.files_modified, 1);
     let new_code = std::fs::read_to_string(&p)?;
-    assert!(new_code.contains("sub compute"), "Extracted sub should be present");
+    assert!(
+        new_code.contains("sub compute"),
+        "Extracted sub should be present"
+    );
     assert!(new_code.contains("compute("), "Call site should be present");
     Ok(())
 }
@@ -447,8 +469,14 @@ fn move_code_basic() -> Result<(), Box<dyn std::error::Error>> {
     assert!(result.success);
     let new_source = std::fs::read_to_string(&p1)?;
     let new_target = std::fs::read_to_string(&p2)?;
-    assert!(!new_source.contains("sub helper"), "helper should be removed from source");
-    assert!(new_target.contains("sub helper"), "helper should appear in target");
+    assert!(
+        !new_source.contains("sub helper"),
+        "helper should be removed from source"
+    );
+    assert!(
+        new_target.contains("sub helper"),
+        "helper should appear in target"
+    );
     Ok(())
 }
 
@@ -469,7 +497,10 @@ fn move_code_element_not_found() -> Result<(), Box<dyn std::error::Error>> {
         vec![p1],
     )?;
 
-    assert!(!result.success, "Move should report failure when element not found");
+    assert!(
+        !result.success,
+        "Move should report failure when element not found"
+    );
     Ok(())
 }
 
@@ -507,7 +538,9 @@ fn modernize_via_engine() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut engine = engine_no_safe();
     let result = engine.refactor(
-        RefactoringType::Modernize { patterns: vec![ModernizationPattern::StrictWarnings] },
+        RefactoringType::Modernize {
+            patterns: vec![ModernizationPattern::StrictWarnings],
+        },
         vec![p],
     )?;
 
@@ -523,7 +556,10 @@ fn modernize_via_engine() -> Result<(), Box<dyn std::error::Error>> {
 fn rollback_missing_operation_id() -> Result<(), Box<dyn std::error::Error>> {
     let mut engine = engine_no_safe();
     let result = engine.rollback("nonexistent_id");
-    assert!(result.is_err(), "Rollback should fail for unknown operation_id");
+    assert!(
+        result.is_err(),
+        "Rollback should fail for unknown operation_id"
+    );
     Ok(())
 }
 
@@ -555,13 +591,19 @@ fn backup_and_rollback_roundtrip() -> Result<(), Box<dyn std::error::Error>> {
     )?;
 
     assert!(result.success);
-    let op_id = result.operation_id.as_deref().ok_or("Expected operation_id")?;
+    let op_id = result
+        .operation_id
+        .as_deref()
+        .ok_or("Expected operation_id")?;
 
     // Rollback
     let rb = engine.rollback(op_id)?;
     assert!(rb.success);
     let restored = std::fs::read_to_string(&p)?;
-    assert!(restored.contains("$x"), "Original content should be restored");
+    assert!(
+        restored.contains("$x"),
+        "Original content should be restored"
+    );
     Ok(())
 }
 
@@ -588,12 +630,17 @@ fn clear_history_succeeds() -> Result<(), Box<dyn std::error::Error>> {
 fn import_optimizer_basic_analysis() -> Result<(), Box<dyn std::error::Error>> {
     let optimizer = ImportOptimizer::new();
     let content = "use strict;\nuse warnings;\nuse Data::Dumper qw(Dumper);\nprint Dumper({});\n";
-    let analysis = optimizer.analyze_content(content).map_err(|e| e.to_string())?;
+    let analysis = optimizer
+        .analyze_content(content)
+        .map_err(|e| e.to_string())?;
 
     assert!(!analysis.imports.is_empty());
     // strict and warnings are pragmas – should not be flagged unused
     assert!(
-        analysis.unused_imports.iter().all(|u| u.module != "strict" && u.module != "warnings"),
+        analysis
+            .unused_imports
+            .iter()
+            .all(|u| u.module != "strict" && u.module != "warnings"),
         "Pragmas should not be flagged unused"
     );
     Ok(())
@@ -603,10 +650,19 @@ fn import_optimizer_basic_analysis() -> Result<(), Box<dyn std::error::Error>> {
 fn import_optimizer_detects_unused_symbol() -> Result<(), Box<dyn std::error::Error>> {
     let optimizer = ImportOptimizer::new();
     let content = "use List::Util qw(first max);\nmy $m = max(1,2);\n";
-    let analysis = optimizer.analyze_content(content).map_err(|e| e.to_string())?;
+    let analysis = optimizer
+        .analyze_content(content)
+        .map_err(|e| e.to_string())?;
 
-    let unused: Vec<_> = analysis.unused_imports.iter().flat_map(|u| u.symbols.iter()).collect();
-    assert!(unused.iter().any(|s| s.as_str() == "first"), "'first' should be unused");
+    let unused: Vec<_> = analysis
+        .unused_imports
+        .iter()
+        .flat_map(|u| u.symbols.iter())
+        .collect();
+    assert!(
+        unused.iter().any(|s| s.as_str() == "first"),
+        "'first' should be unused"
+    );
     Ok(())
 }
 
@@ -614,10 +670,15 @@ fn import_optimizer_detects_unused_symbol() -> Result<(), Box<dyn std::error::Er
 fn import_optimizer_detects_duplicates() -> Result<(), Box<dyn std::error::Error>> {
     let optimizer = ImportOptimizer::new();
     let content = "use strict;\nuse warnings;\nuse strict;\n";
-    let analysis = optimizer.analyze_content(content).map_err(|e| e.to_string())?;
+    let analysis = optimizer
+        .analyze_content(content)
+        .map_err(|e| e.to_string())?;
 
     assert!(
-        analysis.duplicate_imports.iter().any(|d| d.module == "strict"),
+        analysis
+            .duplicate_imports
+            .iter()
+            .any(|d| d.module == "strict"),
         "Duplicate strict should be detected"
     );
     Ok(())
@@ -627,10 +688,15 @@ fn import_optimizer_detects_duplicates() -> Result<(), Box<dyn std::error::Error
 fn import_optimizer_detects_missing_import() -> Result<(), Box<dyn std::error::Error>> {
     let optimizer = ImportOptimizer::new();
     let content = "use strict;\nFoo::Bar::baz();\n";
-    let analysis = optimizer.analyze_content(content).map_err(|e| e.to_string())?;
+    let analysis = optimizer
+        .analyze_content(content)
+        .map_err(|e| e.to_string())?;
 
     assert!(
-        analysis.missing_imports.iter().any(|m| m.module == "Foo::Bar"),
+        analysis
+            .missing_imports
+            .iter()
+            .any(|m| m.module == "Foo::Bar"),
         "Missing Foo::Bar import should be detected"
     );
     Ok(())
@@ -641,10 +707,15 @@ fn import_optimizer_organization_suggestions() -> Result<(), Box<dyn std::error:
     let optimizer = ImportOptimizer::new();
     // Imports not sorted alphabetically
     let content = "use warnings;\nuse strict;\nprint 1;\n";
-    let analysis = optimizer.analyze_content(content).map_err(|e| e.to_string())?;
+    let analysis = optimizer
+        .analyze_content(content)
+        .map_err(|e| e.to_string())?;
 
     assert!(
-        analysis.organization_suggestions.iter().any(|s| s.description.contains("Sort")),
+        analysis
+            .organization_suggestions
+            .iter()
+            .any(|s| s.description.contains("Sort")),
         "Should suggest sorting imports"
     );
     Ok(())
@@ -654,15 +725,23 @@ fn import_optimizer_organization_suggestions() -> Result<(), Box<dyn std::error:
 fn import_optimizer_generate_optimized_imports() -> Result<(), Box<dyn std::error::Error>> {
     let optimizer = ImportOptimizer::new();
     let content = "use warnings;\nuse strict;\nuse List::Util qw(first max);\nmy $m = max(1,2);\n";
-    let analysis = optimizer.analyze_content(content).map_err(|e| e.to_string())?;
+    let analysis = optimizer
+        .analyze_content(content)
+        .map_err(|e| e.to_string())?;
     let optimized = optimizer.generate_optimized_imports(&analysis);
 
     // Should keep used symbols, drop unused ones
     assert!(optimized.contains("use strict;"), "strict should be kept");
-    assert!(optimized.contains("use warnings;"), "warnings should be kept");
+    assert!(
+        optimized.contains("use warnings;"),
+        "warnings should be kept"
+    );
     assert!(optimized.contains("max"), "Used symbol max should be kept");
     // 'first' is unused – should be removed
-    assert!(!optimized.contains("first"), "Unused symbol first should be removed");
+    assert!(
+        !optimized.contains("first"),
+        "Unused symbol first should be removed"
+    );
     Ok(())
 }
 
@@ -670,7 +749,9 @@ fn import_optimizer_generate_optimized_imports() -> Result<(), Box<dyn std::erro
 fn import_optimizer_generate_edits() -> Result<(), Box<dyn std::error::Error>> {
     let optimizer = ImportOptimizer::new();
     let content = "use strict;\nuse warnings;\n";
-    let analysis = optimizer.analyze_content(content).map_err(|e| e.to_string())?;
+    let analysis = optimizer
+        .analyze_content(content)
+        .map_err(|e| e.to_string())?;
     let edits = optimizer.generate_edits(content, &analysis);
 
     // At minimum we should get an edit that replaces the import block
@@ -692,7 +773,9 @@ fn import_optimizer_empty_content() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn import_optimizer_default_trait() -> Result<(), Box<dyn std::error::Error>> {
     let optimizer = ImportOptimizer;
-    let analysis = optimizer.analyze_content("use strict;").map_err(|e| e.to_string())?;
+    let analysis = optimizer
+        .analyze_content("use strict;")
+        .map_err(|e| e.to_string())?;
     assert_eq!(analysis.imports.len(), 1);
     Ok(())
 }
@@ -736,7 +819,9 @@ fn legacy_modernizer_detects_two_arg_open() -> Result<(), Box<dyn std::error::Er
     let m = LegacyModernizer::new();
     let suggestions = m.analyze("open(FH, 'file.txt')");
     assert!(
-        suggestions.iter().any(|s| s.description.contains("three-argument open")),
+        suggestions
+            .iter()
+            .any(|s| s.description.contains("three-argument open")),
         "Should detect two-argument open"
     );
     Ok(())
@@ -747,7 +832,9 @@ fn legacy_modernizer_detects_defined_array() -> Result<(), Box<dyn std::error::E
     let m = LegacyModernizer::new();
     let suggestions = m.analyze("if (defined @array) { }");
     assert!(
-        suggestions.iter().any(|s| s.old_pattern.contains("defined @array")),
+        suggestions
+            .iter()
+            .any(|s| s.old_pattern.contains("defined @array")),
         "Should detect deprecated defined(@array)"
     );
     Ok(())
@@ -780,7 +867,9 @@ fn legacy_modernizer_detects_each_array() -> Result<(), Box<dyn std::error::Erro
     let m = LegacyModernizer::new();
     let suggestions = m.analyze("while (my ($i, $val) = each @array) { }");
     assert!(
-        suggestions.iter().any(|s| s.old_pattern.contains("each @array")),
+        suggestions
+            .iter()
+            .any(|s| s.old_pattern.contains("each @array")),
         "Should detect each(@array)"
     );
     Ok(())
@@ -812,7 +901,10 @@ fn legacy_modernizer_detects_print_newline() -> Result<(), Box<dyn std::error::E
 fn legacy_modernizer_apply_bareword() -> Result<(), Box<dyn std::error::Error>> {
     let m = LegacyModernizer::new();
     let result = m.apply("open FH, '<', 'file.txt';");
-    assert!(result.contains("open my $fh"), "Should replace bareword filehandle");
+    assert!(
+        result.contains("open my $fh"),
+        "Should replace bareword filehandle"
+    );
     Ok(())
 }
 
@@ -822,7 +914,10 @@ fn legacy_modernizer_apply_skips_manual_review() -> Result<(), Box<dyn std::erro
     let code = "eval \"print 1\";";
     let result = m.apply(code);
     // String eval requires manual review, so should not be changed
-    assert!(result.contains("eval \""), "String eval should not be auto-applied");
+    assert!(
+        result.contains("eval \""),
+        "String eval should not be auto-applied"
+    );
     Ok(())
 }
 
@@ -839,7 +934,10 @@ fn legacy_modernizer_apply_adds_pragmas() -> Result<(), Box<dyn std::error::Erro
 fn legacy_modernizer_no_suggestions_for_clean_code() -> Result<(), Box<dyn std::error::Error>> {
     let m = LegacyModernizer::new();
     let suggestions = m.analyze("use strict;\nuse warnings;\nmy $x = 1;\n");
-    assert!(suggestions.is_empty(), "Clean modern code should have no suggestions");
+    assert!(
+        suggestions.is_empty(),
+        "Clean modern code should have no suggestions"
+    );
     Ok(())
 }
 
@@ -870,7 +968,10 @@ fn refactored_modernizer_detects_missing_pragmas() -> Result<(), Box<dyn std::er
 fn refactored_modernizer_detects_bareword_filehandle() -> Result<(), Box<dyn std::error::Error>> {
     let m = RefactoredModernizer::new();
     let suggestions = m.analyze("open FH, '<', 'file.txt';");
-    assert!(suggestions.iter().any(|s| s.old_pattern == "open FH"), "Should detect bareword FH");
+    assert!(
+        suggestions.iter().any(|s| s.old_pattern == "open FH"),
+        "Should detect bareword FH"
+    );
     Ok(())
 }
 
@@ -879,7 +980,9 @@ fn refactored_modernizer_detects_two_arg_open() -> Result<(), Box<dyn std::error
     let m = RefactoredModernizer::new();
     let suggestions = m.analyze("open(FH, 'file.txt')");
     assert!(
-        suggestions.iter().any(|s| s.description.contains("three-argument open")),
+        suggestions
+            .iter()
+            .any(|s| s.description.contains("three-argument open")),
         "Should detect two-argument open"
     );
     Ok(())
@@ -890,10 +993,18 @@ fn refactored_modernizer_detects_deprecated_patterns() -> Result<(), Box<dyn std
     let m = RefactoredModernizer::new();
 
     let suggestions = m.analyze("defined @array");
-    assert!(suggestions.iter().any(|s| s.old_pattern.contains("defined @array")));
+    assert!(
+        suggestions
+            .iter()
+            .any(|s| s.old_pattern.contains("defined @array"))
+    );
 
     let suggestions = m.analyze("each @array");
-    assert!(suggestions.iter().any(|s| s.old_pattern.contains("each @array")));
+    assert!(
+        suggestions
+            .iter()
+            .any(|s| s.old_pattern.contains("each @array"))
+    );
     Ok(())
 }
 
@@ -902,7 +1013,9 @@ fn refactored_modernizer_detects_indirect_notation() -> Result<(), Box<dyn std::
     let m = RefactoredModernizer::new();
     let suggestions = m.analyze("new MyClass()");
     assert!(
-        suggestions.iter().any(|s| s.old_pattern.contains("new MyClass")),
+        suggestions
+            .iter()
+            .any(|s| s.old_pattern.contains("new MyClass")),
         "Should detect indirect object notation"
     );
     Ok(())
@@ -940,7 +1053,10 @@ fn refactored_modernizer_apply_adds_pragmas() -> Result<(), Box<dyn std::error::
 fn refactored_modernizer_apply_skips_manual_review() -> Result<(), Box<dyn std::error::Error>> {
     let m = RefactoredModernizer::new();
     let result = m.apply("eval \"1\";");
-    assert!(result.contains("eval \""), "Manual-review items should not be auto-applied");
+    assert!(
+        result.contains("eval \""),
+        "Manual-review items should not be auto-applied"
+    );
     Ok(())
 }
 
@@ -1058,7 +1174,10 @@ fn validate_invalid_identifier_in_rename() -> Result<(), Box<dyn std::error::Err
         },
         vec![p],
     );
-    assert!(result.is_err(), "Identifier starting with digit should be rejected");
+    assert!(
+        result.is_err(),
+        "Identifier starting with digit should be rejected"
+    );
     Ok(())
 }
 
@@ -1071,11 +1190,16 @@ fn import_optimizer_qualified_call_not_flagged_as_missing() -> Result<(), Box<dy
 {
     let optimizer = ImportOptimizer::new();
     let content = "use File::Basename;\nmy $name = File::Basename::basename('/foo/bar');\n";
-    let analysis = optimizer.analyze_content(content).map_err(|e| e.to_string())?;
+    let analysis = optimizer
+        .analyze_content(content)
+        .map_err(|e| e.to_string())?;
 
     // File::Basename is already imported, so shouldn't be in missing
     assert!(
-        !analysis.missing_imports.iter().any(|m| m.module == "File::Basename"),
+        !analysis
+            .missing_imports
+            .iter()
+            .any(|m| m.module == "File::Basename"),
         "Already-imported module should not be flagged as missing"
     );
     Ok(())
@@ -1089,12 +1213,17 @@ fn import_optimizer_qualified_call_not_flagged_as_missing() -> Result<(), Box<dy
 fn import_optimizer_edits_for_missing_imports() -> Result<(), Box<dyn std::error::Error>> {
     let optimizer = ImportOptimizer::new();
     let content = "Some::Module::func();\n";
-    let analysis = optimizer.analyze_content(content).map_err(|e| e.to_string())?;
+    let analysis = optimizer
+        .analyze_content(content)
+        .map_err(|e| e.to_string())?;
     let edits = optimizer.generate_edits(content, &analysis);
 
     // When there are only missing imports (no existing use lines), we should get an insert edit
     if !analysis.missing_imports.is_empty() {
-        assert!(!edits.is_empty(), "Should produce edits for missing imports");
+        assert!(
+            !edits.is_empty(),
+            "Should produce edits for missing imports"
+        );
     }
     Ok(())
 }
@@ -1133,7 +1262,10 @@ fn inline_basic_no_crash() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut engine = engine_no_safe();
     let result = engine.refactor(
-        RefactoringType::Inline { symbol_name: "$x".to_string(), all_occurrences: true },
+        RefactoringType::Inline {
+            symbol_name: "$x".to_string(),
+            all_occurrences: true,
+        },
         vec![p],
     )?;
 
@@ -1176,7 +1308,9 @@ fn legacy_modernizer_modernize_file_nonexistent() -> Result<(), Box<dyn std::err
 fn import_optimizer_known_module_not_flagged_when_used() -> Result<(), Box<dyn std::error::Error>> {
     let optimizer = ImportOptimizer::new();
     let content = "use JSON;\nmy $j = encode_json({});\n";
-    let analysis = optimizer.analyze_content(content).map_err(|e| e.to_string())?;
+    let analysis = optimizer
+        .analyze_content(content)
+        .map_err(|e| e.to_string())?;
 
     // JSON's known export encode_json is used – should not be flagged unused
     assert!(
@@ -1190,10 +1324,15 @@ fn import_optimizer_known_module_not_flagged_when_used() -> Result<(), Box<dyn s
 fn import_optimizer_data_dumper_special_case() -> Result<(), Box<dyn std::error::Error>> {
     let optimizer = ImportOptimizer::new();
     let content = "use Data::Dumper;\nprint Dumper({});\n";
-    let analysis = optimizer.analyze_content(content).map_err(|e| e.to_string())?;
+    let analysis = optimizer
+        .analyze_content(content)
+        .map_err(|e| e.to_string())?;
 
     assert!(
-        !analysis.unused_imports.iter().any(|u| u.module == "Data::Dumper"),
+        !analysis
+            .unused_imports
+            .iter()
+            .any(|u| u.module == "Data::Dumper"),
         "Data::Dumper with Dumper() usage should not be unused"
     );
     Ok(())
@@ -1207,7 +1346,9 @@ fn import_optimizer_data_dumper_special_case() -> Result<(), Box<dyn std::error:
 fn import_optimizer_suggests_symbol_dedup() -> Result<(), Box<dyn std::error::Error>> {
     let optimizer = ImportOptimizer::new();
     let content = "use List::Util qw(max max min);\nmy $m = max(1,2);\nmy $n = min(1,2);\n";
-    let analysis = optimizer.analyze_content(content).map_err(|e| e.to_string())?;
+    let analysis = optimizer
+        .analyze_content(content)
+        .map_err(|e| e.to_string())?;
 
     assert!(
         analysis

@@ -43,13 +43,23 @@ pub enum CheckpointContext {
     /// Normal lexing
     Normal,
     /// Inside a heredoc (tracks the terminator)
-    Heredoc { terminator: String, is_interpolated: bool },
+    Heredoc {
+        terminator: String,
+        is_interpolated: bool,
+    },
     /// Inside a format body
     Format { start_position: usize },
     /// Inside a regex or substitution
-    Regex { delimiter: char, flags_position: Option<usize> },
+    Regex {
+        delimiter: char,
+        flags_position: Option<usize>,
+    },
     /// Inside a quote-like operator
-    QuoteLike { operator: String, delimiter: char, is_paired: bool },
+    QuoteLike {
+        operator: String,
+        delimiter: char,
+        is_paired: bool,
+    },
 }
 
 impl LexerCheckpoint {
@@ -73,7 +83,10 @@ impl LexerCheckpoint {
 
     /// Create a checkpoint at a specific position
     pub fn at_position(position: usize) -> Self {
-        Self { position, ..Self::new() }
+        Self {
+            position,
+            ..Self::new()
+        }
     }
 
     /// Check if this checkpoint is at the start of input
@@ -199,7 +212,10 @@ pub struct CheckpointCache {
 impl CheckpointCache {
     /// Create a new checkpoint cache
     pub fn new(max_checkpoints: usize) -> Self {
-        Self { checkpoints: Vec::new(), max_checkpoints }
+        Self {
+            checkpoints: Vec::new(),
+            max_checkpoints,
+        }
     }
 
     /// Add a checkpoint to the cache
@@ -240,8 +256,14 @@ impl CheckpointCache {
         // `partition_point` returns the index of the first element for which the
         // predicate is false (i.e. the first entry with pos > position).
         // The entry just before that index is the last one with pos <= position.
-        let idx = self.checkpoints.partition_point(|(pos, _)| *pos <= position);
-        if idx == 0 { None } else { self.checkpoints.get(idx - 1).map(|(_, cp)| cp) }
+        let idx = self
+            .checkpoints
+            .partition_point(|(pos, _)| *pos <= position);
+        if idx == 0 {
+            None
+        } else {
+            self.checkpoints.get(idx - 1).map(|(_, cp)| cp)
+        }
     }
 
     /// Find the nearest checkpoint at or after a given position.
@@ -367,7 +389,9 @@ mod tests {
         assert_eq!(cache.checkpoints.len(), 3);
 
         // Find nearest before position 25
-        let cp = cache.find_before(25).ok_or("Expected checkpoint before position 25")?;
+        let cp = cache
+            .find_before(25)
+            .ok_or("Expected checkpoint before position 25")?;
         assert_eq!(cp.position, 20);
         Ok(())
     }
@@ -392,12 +416,17 @@ mod tests {
         assert_eq!(cp.position, 20, "between 20 and 30 should return 20");
 
         // After all entries: should return the last
-        let cp = cache.find_before(100).ok_or("find_before(100) should hit")?;
+        let cp = cache
+            .find_before(100)
+            .ok_or("find_before(100) should hit")?;
         assert_eq!(cp.position, 50, "after last entry should return 50");
 
         // Before first entry: should return None
         let cp = cache.find_before(5);
-        assert!(cp.is_none(), "before first entry (5 < 10) should return None");
+        assert!(
+            cp.is_none(),
+            "before first entry (5 < 10) should return None"
+        );
 
         Ok(())
     }

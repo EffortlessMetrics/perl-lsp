@@ -10,13 +10,22 @@ fn completions_request(
     text: &str,
     column: i64,
 ) -> Result<serde_json::Value, String> {
-    let response =
-        adapter.handle_request(2, "completions", Some(json!({ "text": text, "column": column })));
+    let response = adapter.handle_request(
+        2,
+        "completions",
+        Some(json!({ "text": text, "column": column })),
+    );
     match response {
-        DapMessage::Response { success: true, body: Some(body), .. } => Ok(body),
-        DapMessage::Response { success: false, message, .. } => {
-            Err(message.unwrap_or_else(|| "unknown error".to_string()))
-        }
+        DapMessage::Response {
+            success: true,
+            body: Some(body),
+            ..
+        } => Ok(body),
+        DapMessage::Response {
+            success: false,
+            message,
+            ..
+        } => Err(message.unwrap_or_else(|| "unknown error".to_string())),
         _ => Err("unexpected response type".to_string()),
     }
 }
@@ -40,8 +49,14 @@ fn test_completions_basic_keyword_match() -> TestResult {
     let body = completions_request(&mut adapter, "pr", 2).map_err(|e| e.to_string())?;
     let labels = extract_labels(&body);
 
-    assert!(labels.contains(&"print".to_string()), "Expected 'print' in {labels:?}");
-    assert!(labels.contains(&"printf".to_string()), "Expected 'printf' in {labels:?}");
+    assert!(
+        labels.contains(&"print".to_string()),
+        "Expected 'print' in {labels:?}"
+    );
+    assert!(
+        labels.contains(&"printf".to_string()),
+        "Expected 'printf' in {labels:?}"
+    );
 
     // All results should start with "pr"
     for label in &labels {
@@ -60,7 +75,11 @@ fn test_completions_empty_prefix() -> TestResult {
     let labels = extract_labels(&body);
 
     // Empty prefix should return all keywords
-    assert!(labels.len() > 50, "Expected many keywords, got {}", labels.len());
+    assert!(
+        labels.len() > 50,
+        "Expected many keywords, got {}",
+        labels.len()
+    );
     assert!(labels.contains(&"my".to_string()));
     assert!(labels.contains(&"sub".to_string()));
     assert!(labels.contains(&"use".to_string()));
@@ -76,7 +95,10 @@ fn test_completions_no_match() -> TestResult {
     let body = completions_request(&mut adapter, "zzz", 3).map_err(|e| e.to_string())?;
     let labels = extract_labels(&body);
 
-    assert!(labels.is_empty(), "Expected no matches for 'zzz', got {labels:?}");
+    assert!(
+        labels.is_empty(),
+        "Expected no matches for 'zzz', got {labels:?}"
+    );
 
     Ok(())
 }
@@ -89,7 +111,9 @@ fn test_completions_missing_arguments() {
     let response = adapter.handle_request(2, "completions", None);
 
     match response {
-        DapMessage::Response { success, message, .. } => {
+        DapMessage::Response {
+            success, message, ..
+        } => {
             assert!(!success, "Expected failure for missing arguments");
             assert!(message.is_some(), "Expected error message");
         }
@@ -106,8 +130,14 @@ fn test_completions_mid_word() -> TestResult {
     let body = completions_request(&mut adapter, "my $x = pri", 11).map_err(|e| e.to_string())?;
     let labels = extract_labels(&body);
 
-    assert!(labels.contains(&"print".to_string()), "Expected 'print' in {labels:?}");
-    assert!(labels.contains(&"printf".to_string()), "Expected 'printf' in {labels:?}");
+    assert!(
+        labels.contains(&"print".to_string()),
+        "Expected 'print' in {labels:?}"
+    );
+    assert!(
+        labels.contains(&"printf".to_string()),
+        "Expected 'printf' in {labels:?}"
+    );
 
     Ok(())
 }
@@ -137,8 +167,14 @@ fn test_completions_column_equals_length() -> TestResult {
         completions_request(&mut adapter, text, text.len() as i64).map_err(|e| e.to_string())?;
     let labels = extract_labels(&body);
 
-    assert!(labels.contains(&"print".to_string()), "Expected exact match 'print' in {labels:?}");
-    assert!(labels.contains(&"printf".to_string()), "Expected 'printf' in {labels:?}");
+    assert!(
+        labels.contains(&"print".to_string()),
+        "Expected exact match 'print' in {labels:?}"
+    );
+    assert!(
+        labels.contains(&"printf".to_string()),
+        "Expected 'printf' in {labels:?}"
+    );
 
     Ok(())
 }
@@ -153,7 +189,10 @@ fn test_completions_column_beyond_length() -> TestResult {
     let labels = extract_labels(&body);
 
     // Should still work (clamped to text length)
-    assert!(labels.contains(&"print".to_string()), "Expected 'print' in {labels:?}");
+    assert!(
+        labels.contains(&"print".to_string()),
+        "Expected 'print' in {labels:?}"
+    );
 
     Ok(())
 }
@@ -166,10 +205,22 @@ fn test_completions_underscore_prefix() -> TestResult {
     let body = completions_request(&mut adapter, "un", 2).map_err(|e| e.to_string())?;
     let labels = extract_labels(&body);
 
-    assert!(labels.contains(&"unless".to_string()), "Expected 'unless' in {labels:?}");
-    assert!(labels.contains(&"unshift".to_string()), "Expected 'unshift' in {labels:?}");
-    assert!(labels.contains(&"untie".to_string()), "Expected 'untie' in {labels:?}");
-    assert!(labels.contains(&"unpack".to_string()), "Expected 'unpack' in {labels:?}");
+    assert!(
+        labels.contains(&"unless".to_string()),
+        "Expected 'unless' in {labels:?}"
+    );
+    assert!(
+        labels.contains(&"unshift".to_string()),
+        "Expected 'unshift' in {labels:?}"
+    );
+    assert!(
+        labels.contains(&"untie".to_string()),
+        "Expected 'untie' in {labels:?}"
+    );
+    assert!(
+        labels.contains(&"unpack".to_string()),
+        "Expected 'unpack' in {labels:?}"
+    );
 
     Ok(())
 }
@@ -180,7 +231,10 @@ fn test_completions_all_targets_have_keyword_type() -> TestResult {
     adapter.handle_request(1, "initialize", None);
 
     let body = completions_request(&mut adapter, "s", 1).map_err(|e| e.to_string())?;
-    let targets = body.get("targets").and_then(|v| v.as_array()).ok_or("missing targets")?;
+    let targets = body
+        .get("targets")
+        .and_then(|v| v.as_array())
+        .ok_or("missing targets")?;
 
     for target in targets {
         let type_val = target.get("type").and_then(|v| v.as_str());
@@ -205,7 +259,9 @@ fn test_completions_response_is_success() {
         adapter.handle_request(2, "completions", Some(json!({ "text": "my", "column": 2 })));
 
     match response {
-        DapMessage::Response { success, command, .. } => {
+        DapMessage::Response {
+            success, command, ..
+        } => {
             assert!(success);
             assert_eq!(command, "completions");
         }

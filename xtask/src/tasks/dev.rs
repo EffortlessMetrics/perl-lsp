@@ -72,7 +72,11 @@ pub fn run(watch: bool, port: u16) -> Result<()> {
     spinner.finish_with_message(format!(
         "✅ Development server listening on 127.0.0.1:{}. {}",
         port,
-        if watch { "Watching for changes." } else { "Not watching for changes." }
+        if watch {
+            "Watching for changes."
+        } else {
+            "Not watching for changes."
+        }
     ));
 
     println!("Connect your editor to this TCP port to use the dev server.");

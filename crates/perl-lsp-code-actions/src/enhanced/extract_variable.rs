@@ -20,18 +20,27 @@ pub fn create_extract_variable_action(
     let indent = helpers.get_indent_at(stmt_start);
 
     CodeAction {
-        title: format!("Extract '{}' to variable", helpers.truncate_expr(expr_text, 30)),
+        title: format!(
+            "Extract '{}' to variable",
+            helpers.truncate_expr(expr_text, 30)
+        ),
         kind: CodeActionKind::RefactorExtract,
         diagnostics: Vec::new(),
         edit: CodeActionEdit {
             changes: vec![
                 // Insert variable declaration
                 TextEdit {
-                    location: SourceLocation { start: stmt_start, end: stmt_start },
+                    location: SourceLocation {
+                        start: stmt_start,
+                        end: stmt_start,
+                    },
                     new_text: format!("{}my ${} = {};\n", indent, var_name, expr_text),
                 },
                 // Replace expression with variable
-                TextEdit { location: node.location, new_text: format!("${}", var_name) },
+                TextEdit {
+                    location: node.location,
+                    new_text: format!("${}", var_name),
+                },
             ],
         },
         is_preferred: false,

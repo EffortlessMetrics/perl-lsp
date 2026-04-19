@@ -171,7 +171,10 @@ impl Default for AiCompletionConfig {
 
 impl Default for AiStreamingConfig {
     fn default() -> Self {
-        Self { enabled: true, update_debounce_ms: 60 }
+        Self {
+            enabled: true,
+            update_debounce_ms: 60,
+        }
     }
 }
 
@@ -238,8 +241,10 @@ impl ServerConfig {
                 self.test_runner_command = cmd.to_string();
             }
             if let Some(args) = test.get("args").and_then(|v| v.as_array()) {
-                self.test_runner_args =
-                    args.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect();
+                self.test_runner_args = args
+                    .iter()
+                    .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                    .collect();
             }
             if let Some(timeout) = test.get("timeout").and_then(|v| v.as_u64()) {
                 self.test_runner_timeout = timeout;
@@ -282,28 +287,44 @@ impl ServerConfig {
             if let Some(tabs) = formatting.get("tabs").and_then(|v| v.as_bool()) {
                 self.perltidy_tabs = Some(tabs);
             }
-            if let Some(brace) = formatting.get("openingBraceOnNewLine").and_then(|v| v.as_bool()) {
+            if let Some(brace) = formatting
+                .get("openingBraceOnNewLine")
+                .and_then(|v| v.as_bool())
+            {
                 self.perltidy_opening_brace_on_new_line = Some(brace);
             }
             if let Some(cuddle) = formatting.get("cuddledElse").and_then(|v| v.as_bool()) {
                 self.perltidy_cuddled_else = Some(cuddle);
             }
-            if let Some(space) = formatting.get("spaceAfterKeyword").and_then(|v| v.as_bool()) {
+            if let Some(space) = formatting
+                .get("spaceAfterKeyword")
+                .and_then(|v| v.as_bool())
+            {
                 self.perltidy_space_after_keyword = Some(space);
             }
-            if let Some(comma) = formatting.get("addTrailingCommas").and_then(|v| v.as_bool()) {
+            if let Some(comma) = formatting
+                .get("addTrailingCommas")
+                .and_then(|v| v.as_bool())
+            {
                 self.perltidy_add_trailing_commas = Some(comma);
             }
-            if let Some(align) = formatting.get("verticalAlignment").and_then(|v| v.as_bool()) {
+            if let Some(align) = formatting
+                .get("verticalAlignment")
+                .and_then(|v| v.as_bool())
+            {
                 self.perltidy_vertical_alignment = Some(align);
             }
-            if let Some(block) = formatting.get("blockCommentIndentation").and_then(|v| v.as_u64())
+            if let Some(block) = formatting
+                .get("blockCommentIndentation")
+                .and_then(|v| v.as_u64())
             {
                 self.perltidy_block_comment_indentation = Some(block as u32);
             }
             if let Some(args) = formatting.get("extraArgs").and_then(|v| v.as_array()) {
-                self.perltidy_extra_args =
-                    args.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect();
+                self.perltidy_extra_args = args
+                    .iter()
+                    .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                    .collect();
             }
             if let Some(timeout) = formatting.get("timeoutSecs").and_then(|v| v.as_u64()) {
                 self.perltidy_timeout_secs = timeout;
@@ -418,7 +439,11 @@ pub struct WorkspaceConfig {
 impl Default for WorkspaceConfig {
     fn default() -> Self {
         Self {
-            include_paths: vec!["lib".to_string(), ".".to_string(), "local/lib/perl5".to_string()],
+            include_paths: vec![
+                "lib".to_string(),
+                ".".to_string(),
+                "local/lib/perl5".to_string(),
+            ],
             use_system_inc: false,
             system_inc_cache: None,
             perl_path: None,
@@ -442,7 +467,11 @@ impl WorkspaceConfig {
         const SEP: char = ';';
         #[cfg(not(windows))]
         const SEP: char = ':';
-        value.split(SEP).filter(|s| !s.is_empty()).map(|s| s.to_string()).collect()
+        value
+            .split(SEP)
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_string())
+            .collect()
     }
 
     /// Return the effective module-search-path, merging `PERL5LIB` paths with
@@ -480,8 +509,10 @@ impl WorkspaceConfig {
     pub fn update_from_value(&mut self, settings: &serde_json::Value) {
         if let Some(workspace) = settings.get("workspace") {
             if let Some(paths) = workspace.get("includePaths").and_then(|v| v.as_array()) {
-                self.include_paths =
-                    paths.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect();
+                self.include_paths = paths
+                    .iter()
+                    .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                    .collect();
             }
             if let Some(use_inc) = workspace.get("useSystemInc").and_then(|v| v.as_bool()) {
                 if use_inc != self.use_system_inc {
@@ -497,8 +528,10 @@ impl WorkspaceConfig {
                 self.perl_path = next;
             }
             if let Some(perl_args) = workspace.get("perlArgs").and_then(|v| v.as_array()) {
-                let next: Vec<String> =
-                    perl_args.iter().filter_map(|v| v.as_str().map(str::to_string)).collect();
+                let next: Vec<String> = perl_args
+                    .iter()
+                    .filter_map(|v| v.as_str().map(str::to_string))
+                    .collect();
                 if next != self.perl_args {
                     self.system_inc_cache = None;
                 }
@@ -529,8 +562,10 @@ impl WorkspaceConfig {
         }
 
         if self.system_inc_cache.is_none() {
-            self.system_inc_cache =
-                Some(Self::fetch_perl_inc(self.perl_path.as_deref(), &self.perl_args));
+            self.system_inc_cache = Some(Self::fetch_perl_inc(
+                self.perl_path.as_deref(),
+                &self.perl_args,
+            ));
         }
 
         self.system_inc_cache.as_deref().unwrap_or(&[])
@@ -797,9 +832,18 @@ mod tests {
     fn server_config_default_inlay_hints_enabled() {
         let config = ServerConfig::default();
         assert!(config.inlay_hints_enabled, "inlay hints enabled by default");
-        assert!(config.inlay_hints_parameter_hints, "parameter hints enabled by default");
-        assert!(config.inlay_hints_type_hints, "type hints enabled by default");
-        assert!(!config.inlay_hints_chained_hints, "chained hints disabled by default");
+        assert!(
+            config.inlay_hints_parameter_hints,
+            "parameter hints enabled by default"
+        );
+        assert!(
+            config.inlay_hints_type_hints,
+            "type hints enabled by default"
+        );
+        assert!(
+            !config.inlay_hints_chained_hints,
+            "chained hints disabled by default"
+        );
         assert_eq!(config.inlay_hints_max_length, 30);
     }
 
@@ -808,7 +852,10 @@ mod tests {
         let config = ServerConfig::default();
         assert!(config.test_runner_enabled, "test runner enabled by default");
         assert_eq!(config.test_runner_command, "perl");
-        assert!(config.test_runner_args.is_empty(), "no default test runner args");
+        assert!(
+            config.test_runner_args.is_empty(),
+            "no default test runner args"
+        );
         assert_eq!(config.test_runner_timeout, 60000);
     }
 
@@ -821,7 +868,10 @@ mod tests {
     #[test]
     fn server_config_default_perlcritic_disabled() {
         let config = ServerConfig::default();
-        assert!(!config.perlcritic_enabled, "perlcritic disabled by default (opt-in)");
+        assert!(
+            !config.perlcritic_enabled,
+            "perlcritic disabled by default (opt-in)"
+        );
     }
 
     #[test]
@@ -860,9 +910,18 @@ mod tests {
             "inlayHints": { "enabled": false }
         }));
         assert!(!config.inlay_hints_enabled, "updated field changes");
-        assert!(config.inlay_hints_parameter_hints, "unspecified field unchanged");
-        assert_eq!(config.inlay_hints_max_length, 30, "unspecified field unchanged");
-        assert_eq!(config.test_runner_command, "perl", "unrelated section unchanged");
+        assert!(
+            config.inlay_hints_parameter_hints,
+            "unspecified field unchanged"
+        );
+        assert_eq!(
+            config.inlay_hints_max_length, 30,
+            "unspecified field unchanged"
+        );
+        assert_eq!(
+            config.test_runner_command, "perl",
+            "unrelated section unchanged"
+        );
     }
 
     #[test]
@@ -888,13 +947,19 @@ mod tests {
     #[test]
     fn server_config_default_perlcritic_severity_is_three() {
         let config = ServerConfig::default();
-        assert_eq!(config.perlcritic_severity, 3, "default severity should be 3 (Harsh)");
+        assert_eq!(
+            config.perlcritic_severity, 3,
+            "default severity should be 3 (Harsh)"
+        );
     }
 
     #[test]
     fn server_config_default_perlcritic_profile_is_none() {
         let config = ServerConfig::default();
-        assert!(config.perlcritic_profile.is_none(), "profile is None by default");
+        assert!(
+            config.perlcritic_profile.is_none(),
+            "profile is None by default"
+        );
     }
 
     #[test]
@@ -922,7 +987,10 @@ mod tests {
     fn server_config_perlcritic_profile_updated_via_settings() {
         let mut config = ServerConfig::default();
         config.update_from_value(&json!({ "perlcritic": { "profile": "/path/to/.perlcriticrc" } }));
-        assert_eq!(config.perlcritic_profile, Some("/path/to/.perlcriticrc".to_string()));
+        assert_eq!(
+            config.perlcritic_profile,
+            Some("/path/to/.perlcriticrc".to_string())
+        );
     }
 
     #[test]
@@ -945,7 +1013,10 @@ mod tests {
         }));
         assert!(config.perlcritic_enabled);
         assert_eq!(config.perlcritic_severity, 2);
-        assert_eq!(config.perlcritic_profile, Some("/workspace/.perlcriticrc".to_string()));
+        assert_eq!(
+            config.perlcritic_profile,
+            Some("/workspace/.perlcriticrc".to_string())
+        );
     }
 
     #[test]
@@ -1017,7 +1088,10 @@ mod tests {
         let mut config = WorkspaceConfig::default();
         // use_system_inc = false (default)
         let inc = config.get_system_inc();
-        assert!(inc.is_empty(), "system inc is empty when use_system_inc=false");
+        assert!(
+            inc.is_empty(),
+            "system inc is empty when use_system_inc=false"
+        );
     }
 
     // ── AiCompletionConfig ──────────────────────────────────────
@@ -1025,7 +1099,10 @@ mod tests {
     #[test]
     fn server_config_default_ai_completion_disabled() {
         let config = ServerConfig::default();
-        assert!(!config.ai_completion.enabled, "AI completion disabled by default");
+        assert!(
+            !config.ai_completion.enabled,
+            "AI completion disabled by default"
+        );
         assert_eq!(config.ai_completion.provider, "openai_compat");
         assert!(config.ai_completion.endpoint.is_empty());
         assert_eq!(config.ai_completion.timeout_ms, 1800);
@@ -1057,7 +1134,10 @@ mod tests {
             }
         }));
         assert!(config.ai_completion.enabled);
-        assert_eq!(config.ai_completion.endpoint, "https://api.openai.com/v1/chat/completions");
+        assert_eq!(
+            config.ai_completion.endpoint,
+            "https://api.openai.com/v1/chat/completions"
+        );
         assert_eq!(config.ai_completion.model, "gpt-4o");
         assert_eq!(config.ai_completion.api_key_env, "MY_KEY");
         assert_eq!(config.ai_completion.timeout_ms, 3000);

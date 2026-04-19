@@ -163,8 +163,12 @@ fn lsp_protocol_edge_case_concurrent_writes() -> Result<(), Box<dyn std::error::
     });
 
     // Wait for both threads
-    handle1.join().map_err(|e| format!("Thread 1 panicked: {:?}", e))?;
-    handle2.join().map_err(|e| format!("Thread 2 panicked: {:?}", e))?;
+    handle1
+        .join()
+        .map_err(|e| format!("Thread 1 panicked: {:?}", e))?;
+    handle2
+        .join()
+        .map_err(|e| format!("Thread 2 panicked: {:?}", e))?;
 
     // The Arc<Mutex<...>> should have prevented any race conditions
     Ok(())

@@ -161,13 +161,19 @@ mod method_modifier_definition_tests {
         let resp_create = goto_def(code, uri, "create", 4)?;
         let (_, create_line, _) = semantic::first_location(&resp_create)
             .ok_or("Expected goto-definition on 'create' in before modifier")?;
-        assert_eq!(create_line, 2, "before 'create' should go to line 2, got {create_line}");
+        assert_eq!(
+            create_line, 2,
+            "before 'create' should go to line 2, got {create_line}"
+        );
 
         // Test after 'update'
         let resp_update = goto_def(code, uri, "update", 5)?;
         let (_, update_line, _) = semantic::first_location(&resp_update)
             .ok_or("Expected goto-definition on 'update' in after modifier")?;
-        assert_eq!(update_line, 3, "after 'update' should go to line 3, got {update_line}");
+        assert_eq!(
+            update_line, 3,
+            "after 'update' should go to line 3, got {update_line}"
+        );
 
         Ok(())
     }

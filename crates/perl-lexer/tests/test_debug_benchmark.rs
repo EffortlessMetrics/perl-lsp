@@ -33,7 +33,10 @@ fn test_format_termination() -> TestResult {
 
     let token = lexer.next_token().ok_or("Expected token")?;
     assert!(
-        matches!(token.token_type, TokenType::FormatBody(_) | TokenType::Error(_)),
+        matches!(
+            token.token_type,
+            TokenType::FormatBody(_) | TokenType::Error(_)
+        ),
         "Expected FormatBody or Error, got {:?}",
         token.token_type
     );

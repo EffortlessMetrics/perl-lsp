@@ -32,7 +32,9 @@ fn scope_issues_strict(code: &str) -> Vec<ScopeIssue> {
 }
 
 fn has_issue(issues: &[ScopeIssue], kind: IssueKind, var_name: &str) -> bool {
-    issues.iter().any(|i| i.kind == kind && i.variable_name.contains(var_name))
+    issues
+        .iter()
+        .any(|i| i.kind == kind && i.variable_name.contains(var_name))
 }
 
 fn no_diagnostic_for(issues: &[ScopeIssue], var_name: &str) -> bool {
@@ -60,7 +62,10 @@ while (<STDIN>) {
     assert!(
         no_diagnostic_for(&issues, "_"),
         "chomp; should not produce any diagnostic about $_; issues: {:?}",
-        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+        issues
+            .iter()
+            .map(|i| (&i.kind, &i.variable_name))
+            .collect::<Vec<_>>()
     );
     Ok(())
 }
@@ -79,7 +84,10 @@ while (my $line = <STDIN>) {
     assert!(
         !has_issue(&issues, IssueKind::UninitializedVariable, "_"),
         "chomp; should not produce UninitializedVariable for $_; issues: {:?}",
-        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+        issues
+            .iter()
+            .map(|i| (&i.kind, &i.variable_name))
+            .collect::<Vec<_>>()
     );
     Ok(())
 }
@@ -102,7 +110,10 @@ for (@ARGV) {
     assert!(
         no_diagnostic_for(&issues, "_"),
         "chop; should not produce any diagnostic about $_; issues: {:?}",
-        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+        issues
+            .iter()
+            .map(|i| (&i.kind, &i.variable_name))
+            .collect::<Vec<_>>()
     );
     Ok(())
 }
@@ -125,7 +136,10 @@ for (@ARGV) {
     assert!(
         no_diagnostic_for(&issues, "_"),
         "length with no args should not produce any diagnostic about $_; issues: {:?}",
-        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+        issues
+            .iter()
+            .map(|i| (&i.kind, &i.variable_name))
+            .collect::<Vec<_>>()
     );
     Ok(())
 }
@@ -149,7 +163,10 @@ for (@ARGV) {
     assert!(
         no_diagnostic_for(&issues, "_"),
         "lc/uc with no args should not produce any diagnostic about $_; issues: {:?}",
-        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+        issues
+            .iter()
+            .map(|i| (&i.kind, &i.variable_name))
+            .collect::<Vec<_>>()
     );
     Ok(())
 }
@@ -173,7 +190,10 @@ chomp;
     assert!(
         !has_issue(&issues, IssueKind::UnusedVariable, "_"),
         "chomp; on explicit my $_ should mark it used (no explicit $_ reference); issues: {:?}",
-        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+        issues
+            .iter()
+            .map(|i| (&i.kind, &i.variable_name))
+            .collect::<Vec<_>>()
     );
     Ok(())
 }
@@ -189,7 +209,10 @@ chop;
     assert!(
         !has_issue(&issues, IssueKind::UnusedVariable, "_"),
         "chop; on explicit my $_ should mark it used; issues: {:?}",
-        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+        issues
+            .iter()
+            .map(|i| (&i.kind, &i.variable_name))
+            .collect::<Vec<_>>()
     );
     Ok(())
 }
@@ -209,7 +232,10 @@ print $_;
     assert!(
         !has_issue(&issues, IssueKind::UninitializedVariable, "_"),
         "after chomp; $_ should not be reported as uninitialized; issues: {:?}",
-        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+        issues
+            .iter()
+            .map(|i| (&i.kind, &i.variable_name))
+            .collect::<Vec<_>>()
     );
     Ok(())
 }
@@ -232,12 +258,18 @@ print $line;
     assert!(
         !has_issue(&issues, IssueKind::UnusedVariable, "line"),
         "chomp $line should mark $line used; issues: {:?}",
-        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+        issues
+            .iter()
+            .map(|i| (&i.kind, &i.variable_name))
+            .collect::<Vec<_>>()
     );
     assert!(
         !has_issue(&issues, IssueKind::UninitializedVariable, "line"),
         "chomp $line should not report $line as uninitialized; issues: {:?}",
-        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+        issues
+            .iter()
+            .map(|i| (&i.kind, &i.variable_name))
+            .collect::<Vec<_>>()
     );
     Ok(())
 }
@@ -263,11 +295,17 @@ while (<STDIN>) {
 }
 "#;
     let issues = scope_issues_strict(code);
-    let topic_issues: Vec<_> = issues.iter().filter(|i| i.variable_name.contains('_')).collect();
+    let topic_issues: Vec<_> = issues
+        .iter()
+        .filter(|i| i.variable_name.contains('_'))
+        .collect();
     assert!(
         topic_issues.is_empty(),
         "idiomatic IO loop should produce no $_ diagnostics; found: {:?}",
-        topic_issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+        topic_issues
+            .iter()
+            .map(|i| (&i.kind, &i.variable_name))
+            .collect::<Vec<_>>()
     );
     Ok(())
 }
@@ -295,7 +333,10 @@ for (@ARGV) {
     assert!(
         no_diagnostic_for(&issues, "_"),
         "numeric builtins with no args should not produce any diagnostic about $_; issues: {:?}",
-        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+        issues
+            .iter()
+            .map(|i| (&i.kind, &i.variable_name))
+            .collect::<Vec<_>>()
     );
     Ok(())
 }

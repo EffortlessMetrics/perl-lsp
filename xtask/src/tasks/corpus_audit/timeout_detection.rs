@@ -219,9 +219,15 @@ pub fn parse_with_timeout(
         }));
 
         let outcome = match result {
-            Ok(Ok(_)) => ParseOutcome::Ok { duration_ms: start.elapsed().as_millis() as u64 },
-            Ok(Err(e)) => ParseOutcome::Error { message: e.to_string() },
-            Err(_) => ParseOutcome::Panic { message: "Parser panicked".to_string() },
+            Ok(Ok(_)) => ParseOutcome::Ok {
+                duration_ms: start.elapsed().as_millis() as u64,
+            },
+            Ok(Err(e)) => ParseOutcome::Error {
+                message: e.to_string(),
+            },
+            Err(_) => ParseOutcome::Panic {
+                message: "Parser panicked".to_string(),
+            },
         };
 
         let _ = tx.send(outcome);
@@ -235,9 +241,13 @@ pub fn parse_with_timeout(
         }
         Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
             // DO NOT join - thread may be stuck
-            ParseOutcome::Timeout { timeout_ms: timeout.as_millis() as u64 }
+            ParseOutcome::Timeout {
+                timeout_ms: timeout.as_millis() as u64,
+            }
         }
-        Err(_) => ParseOutcome::Error { message: "Channel disconnected unexpectedly".to_string() },
+        Err(_) => ParseOutcome::Error {
+            message: "Channel disconnected unexpectedly".to_string(),
+        },
     }
 }
 
@@ -311,7 +321,10 @@ fn check_deep_nesting(lines: &[&str], path: &Path) -> Vec<TimeoutRisk> {
                 description: format!("Deep nesting detected (depth {})", max_depth),
                 file_path: path.to_path_buf(),
                 line_number: Some(i + 1),
-                mitigation: format!("Refactor to reduce nesting depth below {}", MAX_NESTING_DEPTH),
+                mitigation: format!(
+                    "Refactor to reduce nesting depth below {}",
+                    MAX_NESTING_DEPTH
+                ),
             });
             break;
         }
@@ -487,7 +500,10 @@ fn check_excessive_interpolation(lines: &[&str], path: &Path) -> Vec<TimeoutRisk
     if interp_count > 100 {
         risks.push(TimeoutRisk {
             priority: RiskPriority::P2,
-            description: format!("High interpolation count overall ({} occurrences)", interp_count),
+            description: format!(
+                "High interpolation count overall ({} occurrences)",
+                interp_count
+            ),
             file_path: path.to_path_buf(),
             line_number: None,
             mitigation: "Consider reducing string interpolation complexity".to_string(),
@@ -504,15 +520,34 @@ mod tests {
     #[test]
     fn test_parse_outcome_is_ok() {
         assert!(ParseOutcome::Ok { duration_ms: 100 }.is_ok());
-        assert!(!ParseOutcome::Error { message: "error".to_string() }.is_ok());
+        assert!(
+            !ParseOutcome::Error {
+                message: "error".to_string()
+            }
+            .is_ok()
+        );
         assert!(!ParseOutcome::Timeout { timeout_ms: 1000 }.is_ok());
-        assert!(!ParseOutcome::Panic { message: "panic".to_string() }.is_ok());
+        assert!(
+            !ParseOutcome::Panic {
+                message: "panic".to_string()
+            }
+            .is_ok()
+        );
     }
 
     #[test]
     fn test_parse_outcome_duration_ms() {
-        assert_eq!(ParseOutcome::Ok { duration_ms: 100 }.duration_ms(), Some(100));
-        assert_eq!(ParseOutcome::Error { message: "error".to_string() }.duration_ms(), None);
+        assert_eq!(
+            ParseOutcome::Ok { duration_ms: 100 }.duration_ms(),
+            Some(100)
+        );
+        assert_eq!(
+            ParseOutcome::Error {
+                message: "error".to_string()
+            }
+            .duration_ms(),
+            None
+        );
     }
 
     #[test]
@@ -559,8 +594,14 @@ mod tests {
 
     #[test]
     fn test_categorize_error_regex() {
-        assert_eq!(categorize_error("invalid regex", "my $r = qr/test/;"), ErrorCategory::Regex);
-        assert_eq!(categorize_error("pattern error", "$x =~ /test/;"), ErrorCategory::Regex);
+        assert_eq!(
+            categorize_error("invalid regex", "my $r = qr/test/;"),
+            ErrorCategory::Regex
+        );
+        assert_eq!(
+            categorize_error("pattern error", "$x =~ /test/;"),
+            ErrorCategory::Regex
+        );
     }
 
     #[test]
@@ -577,7 +618,10 @@ mod tests {
 
     #[test]
     fn test_categorize_error_general() {
-        assert_eq!(categorize_error("unexpected token", "my $x = 1;"), ErrorCategory::General);
+        assert_eq!(
+            categorize_error("unexpected token", "my $x = 1;"),
+            ErrorCategory::General
+        );
     }
 
     #[test]

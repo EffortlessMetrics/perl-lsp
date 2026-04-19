@@ -196,7 +196,10 @@ fn pragma_vmsish_emits_no_link() {
 fn non_pragma_module_emits_link() {
     // "Strict" (capital S) is NOT the pragma "strict" → must emit a link
     let links = compute_links(URI, "use Strict::More;\n", &[]);
-    assert!(!links.is_empty(), "Strict::More is not a pragma and must emit a link");
+    assert!(
+        !links.is_empty(),
+        "Strict::More is not a pragma and must emit a link"
+    );
 }
 
 #[test]
@@ -208,5 +211,8 @@ fn empty_document_emits_no_links() {
 #[test]
 fn document_with_only_code_emits_no_links() {
     let links = compute_links(URI, "my $x = 1;\nprint $x;\n", &[]);
-    assert!(links.is_empty(), "document with no imports must produce no links");
+    assert!(
+        links.is_empty(),
+        "document with no imports must produce no links"
+    );
 }

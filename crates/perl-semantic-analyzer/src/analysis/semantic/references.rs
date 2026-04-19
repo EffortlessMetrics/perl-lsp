@@ -46,10 +46,12 @@ impl SemanticAnalyzer {
                 }
                 results
             } else {
-                self.symbol_table.find_symbol(name, reference.scope_id, reference.kind)
+                self.symbol_table
+                    .find_symbol(name, reference.scope_id, reference.kind)
             }
         } else {
-            self.symbol_table.find_symbol(&reference.name, reference.scope_id, reference.kind)
+            self.symbol_table
+                .find_symbol(&reference.name, reference.scope_id, reference.kind)
         }
     }
 

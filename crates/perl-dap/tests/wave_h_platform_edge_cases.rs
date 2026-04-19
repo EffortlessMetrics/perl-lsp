@@ -12,7 +12,11 @@ use std::path::PathBuf;
 fn test_normalize_path_with_empty_string() {
     // Edge case: empty path
     let result = normalize_path(&PathBuf::from(""));
-    assert_eq!(result, PathBuf::from(""), "normalize_path should handle empty PathBuf");
+    assert_eq!(
+        result,
+        PathBuf::from(""),
+        "normalize_path should handle empty PathBuf"
+    );
 }
 
 #[test]
@@ -119,7 +123,10 @@ fn test_setup_environment_with_many_paths() {
 
     // Should handle large number of paths
     // Check that PERL5LIB was set (it should be the main effect)
-    assert!(!env.is_empty(), "setup_environment should set environment variables");
+    assert!(
+        !env.is_empty(),
+        "setup_environment should set environment variables"
+    );
 }
 
 #[test]

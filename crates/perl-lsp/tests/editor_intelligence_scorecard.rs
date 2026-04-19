@@ -56,7 +56,11 @@ fn hover_content_from_response(resp: &Value) -> Option<String> {
     }
     let contents = result.get("contents")?;
     let value = contents.get("value")?.as_str()?;
-    if value.is_empty() { None } else { Some(value.to_string()) }
+    if value.is_empty() {
+        None
+    } else {
+        Some(value.to_string())
+    }
 }
 
 fn completion_labels_from_response(resp: &Value) -> Vec<String> {
@@ -67,7 +71,10 @@ fn completion_labels_from_response(resp: &Value) -> Vec<String> {
             None => return Vec::new(),
         },
     };
-    items.iter().filter_map(|item| item["label"].as_str().map(|s| s.to_string())).collect()
+    items
+        .iter()
+        .filter_map(|item| item["label"].as_str().map(|s| s.to_string()))
+        .collect()
 }
 
 fn first_goto_line(resp: &Value) -> Option<u32> {
@@ -103,7 +110,10 @@ fn test_hover_gold_corpus() {
 
     for fixture in &fixtures {
         let code = std::fs::read_to_string(&fixture.fixture_path).unwrap_or_else(|e| {
-            panic!("Cannot read fixture {}: {e}", fixture.fixture_path.display())
+            panic!(
+                "Cannot read fixture {}: {e}",
+                fixture.fixture_path.display()
+            )
         });
 
         let uri = format!("file:///gold/{}.pl", fixture.name);
@@ -117,12 +127,12 @@ fn test_hover_gold_corpus() {
             let ok = match &assertion.kind {
                 HoverAssertionKind::HoverNonNull => content.is_some(),
                 HoverAssertionKind::HoverNull => content.is_none(),
-                HoverAssertionKind::HoverContains { needle } => {
-                    content.as_deref().is_some_and(|c| c.contains(needle.as_str()))
-                }
-                HoverAssertionKind::HoverAbsent { needle } => {
-                    content.as_deref().map_or(true, |c| !c.contains(needle.as_str()))
-                }
+                HoverAssertionKind::HoverContains { needle } => content
+                    .as_deref()
+                    .is_some_and(|c| c.contains(needle.as_str())),
+                HoverAssertionKind::HoverAbsent { needle } => content
+                    .as_deref()
+                    .map_or(true, |c| !c.contains(needle.as_str())),
             };
 
             if ok {
@@ -140,7 +150,11 @@ fn test_hover_gold_corpus() {
         "\nHover gold corpus: {}/{} assertions passed ({:.0}%)",
         passed,
         total,
-        if total > 0 { passed as f64 / total as f64 * 100.0 } else { 100.0 }
+        if total > 0 {
+            passed as f64 / total as f64 * 100.0
+        } else {
+            100.0
+        }
     );
     for f in &failures {
         println!("{f}");
@@ -180,7 +194,10 @@ fn test_goto_gold_corpus() {
 
     for fixture in &fixtures {
         let code = std::fs::read_to_string(&fixture.fixture_path).unwrap_or_else(|e| {
-            panic!("Cannot read fixture {}: {e}", fixture.fixture_path.display())
+            panic!(
+                "Cannot read fixture {}: {e}",
+                fixture.fixture_path.display()
+            )
         });
 
         let uri = format!("file:///gold/{}.pl", fixture.name);
@@ -212,7 +229,11 @@ fn test_goto_gold_corpus() {
         "\nGoto gold corpus: {}/{} assertions passed ({:.0}%)",
         passed,
         total,
-        if total > 0 { passed as f64 / total as f64 * 100.0 } else { 100.0 }
+        if total > 0 {
+            passed as f64 / total as f64 * 100.0
+        } else {
+            100.0
+        }
     );
     for f in &failures {
         println!("{f}");
@@ -239,7 +260,10 @@ fn test_completion_gold_corpus() {
     let fixtures: Vec<CompletionGoldFixture> = match load_completion_gold_fixtures(&root) {
         Ok(f) if !f.is_empty() => f,
         Ok(_) => {
-            eprintln!("SKIP: no completion gold fixtures found in {}", root.display());
+            eprintln!(
+                "SKIP: no completion gold fixtures found in {}",
+                root.display()
+            );
             return;
         }
         Err(e) => panic!("Failed to load completion gold fixtures: {e}"),
@@ -253,7 +277,10 @@ fn test_completion_gold_corpus() {
 
     for fixture in &fixtures {
         let code = std::fs::read_to_string(&fixture.fixture_path).unwrap_or_else(|e| {
-            panic!("Cannot read fixture {}: {e}", fixture.fixture_path.display())
+            panic!(
+                "Cannot read fixture {}: {e}",
+                fixture.fixture_path.display()
+            )
         });
 
         let uri = format!("file:///gold/{}.pl", fixture.name);
@@ -299,7 +326,11 @@ fn test_completion_gold_corpus() {
         "\nCompletion gold corpus: {}/{} assertions passed ({:.0}%)",
         passed,
         total,
-        if total > 0 { passed as f64 / total as f64 * 100.0 } else { 100.0 }
+        if total > 0 {
+            passed as f64 / total as f64 * 100.0
+        } else {
+            100.0
+        }
     );
     for f in &failures {
         println!("{f}");

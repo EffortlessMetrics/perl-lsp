@@ -51,7 +51,10 @@ mod tests {
         }))?);
 
         // Extract result array
-        Ok(res.and_then(|r| r.result).and_then(|r| r.as_array().cloned()).unwrap_or_default())
+        Ok(res
+            .and_then(|r| r.result)
+            .and_then(|r| r.as_array().cloned())
+            .unwrap_or_default())
     }
 
     /// Assert that a hint with `label` is anchored at (line, char) where `needle`
@@ -65,8 +68,13 @@ mod tests {
         needle: &str,
     ) -> Result<(), Box<dyn std::error::Error>> {
         // find column of `needle` in the given line
-        let line_str = text.lines().nth(expected_line).ok_or("line does not exist")?;
-        let col = line_str.find(needle).ok_or("needle not present on expected line")?;
+        let line_str = text
+            .lines()
+            .nth(expected_line)
+            .ok_or("line does not exist")?;
+        let col = line_str
+            .find(needle)
+            .ok_or("needle not present on expected line")?;
         let want_line = expected_line as u32;
         let want_char = col as u32;
 

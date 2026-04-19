@@ -235,7 +235,10 @@ impl VariableParser {
                 "HASH" => PerlValue::Hash(vec![]),
                 _ => PerlValue::Scalar(String::new()),
             };
-            return Ok(PerlValue::Object { class, value: Box::new(inner) });
+            return Ok(PerlValue::Object {
+                class,
+                value: Box::new(inner),
+            });
         }
 
         // Check for glob
@@ -281,8 +284,10 @@ impl VariableParser {
         }
 
         let elements = self.split_elements(inner)?;
-        let parsed: Result<Vec<PerlValue>, _> =
-            elements.iter().map(|e| self.parse_value(e, depth + 1)).collect();
+        let parsed: Result<Vec<PerlValue>, _> = elements
+            .iter()
+            .map(|e| self.parse_value(e, depth + 1))
+            .collect();
 
         Ok(PerlValue::Array(parsed?))
     }
@@ -474,7 +479,10 @@ impl VariableParser {
     ///
     /// A vector of (name, value) pairs for successfully parsed variables.
     pub fn parse_variables(&self, output: &str) -> Vec<(String, PerlValue)> {
-        output.lines().filter_map(|line| self.parse_assignment(line).ok()).collect()
+        output
+            .lines()
+            .filter_map(|line| self.parse_assignment(line).ok())
+            .collect()
     }
 }
 
@@ -628,7 +636,10 @@ mod tests {
 
         // Create deeply nested structure
         let result = parser.parse_value("(((1)))", 0);
-        assert!(matches!(result, Err(VariableParseError::MaxDepthExceeded(_))));
+        assert!(matches!(
+            result,
+            Err(VariableParseError::MaxDepthExceeded(_))
+        ));
     }
 
     #[test]

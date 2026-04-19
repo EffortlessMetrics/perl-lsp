@@ -15,7 +15,10 @@ fn snippet_file_path() -> Result<std::path::PathBuf, String> {
     let manifest_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let mut dir = manifest_dir.as_path();
     loop {
-        let candidate = dir.join("vscode-extension").join("snippets").join("perl.json");
+        let candidate = dir
+            .join("vscode-extension")
+            .join("snippets")
+            .join("perl.json");
         if candidate.exists() {
             return Ok(candidate);
         }
@@ -83,7 +86,10 @@ fn test_snippet_control_flow_coverage() -> Result<(), String> {
     let prefixes = all_prefixes(&snippets);
     let required = ["if", "unless", "while", "until", "for", "foreach"];
     for p in required {
-        assert!(prefixes.contains(p), "missing control-flow snippet prefix: '{p}'");
+        assert!(
+            prefixes.contains(p),
+            "missing control-flow snippet prefix: '{p}'"
+        );
     }
     Ok(())
 }
@@ -174,11 +180,18 @@ fn test_snippet_deref_patterns_present() -> Result<(), String> {
 #[test]
 fn test_each_snippet_has_required_fields() -> Result<(), String> {
     let snippets = load_snippets()?;
-    let map =
-        snippets.as_object().ok_or_else(|| "snippets root is not a JSON object".to_string())?;
+    let map = snippets
+        .as_object()
+        .ok_or_else(|| "snippets root is not a JSON object".to_string())?;
     for (name, snippet) in map {
-        assert!(!snippet["prefix"].is_null(), "snippet '{name}' is missing 'prefix' field");
-        assert!(!snippet["body"].is_null(), "snippet '{name}' is missing 'body' field");
+        assert!(
+            !snippet["prefix"].is_null(),
+            "snippet '{name}' is missing 'prefix' field"
+        );
+        assert!(
+            !snippet["body"].is_null(),
+            "snippet '{name}' is missing 'body' field"
+        );
         assert!(
             !snippet["description"].is_null(),
             "snippet '{name}' is missing 'description' field"
@@ -190,18 +203,24 @@ fn test_each_snippet_has_required_fields() -> Result<(), String> {
 #[test]
 fn test_snippet_body_non_empty() -> Result<(), String> {
     let snippets = load_snippets()?;
-    let map =
-        snippets.as_object().ok_or_else(|| "snippets root is not a JSON object".to_string())?;
+    let map = snippets
+        .as_object()
+        .ok_or_else(|| "snippets root is not a JSON object".to_string())?;
     for (name, snippet) in map {
         match &snippet["body"] {
             serde_json::Value::Array(lines) => {
-                assert!(!lines.is_empty(), "snippet '{name}' has an empty body array");
+                assert!(
+                    !lines.is_empty(),
+                    "snippet '{name}' has an empty body array"
+                );
             }
             serde_json::Value::String(s) => {
                 assert!(!s.is_empty(), "snippet '{name}' has an empty body string");
             }
             other => {
-                return Err(format!("snippet '{name}' has unexpected body type: {other:?}"));
+                return Err(format!(
+                    "snippet '{name}' has unexpected body type: {other:?}"
+                ));
             }
         }
     }

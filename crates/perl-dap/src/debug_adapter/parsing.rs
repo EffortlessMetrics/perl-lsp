@@ -67,8 +67,10 @@ impl DebugAdapter {
             2 => name.contains("::"),
             // Globals/specials
             3 => {
-                matches!(name, "$_" | "@ARGV" | "%ENV" | "$!" | "$@" | "$/" | "$|" | "$0" | "$^W")
-                    || name.starts_with("$^")
+                matches!(
+                    name,
+                    "$_" | "@ARGV" | "%ENV" | "$!" | "$@" | "$/" | "$|" | "$0" | "$^W"
+                ) || name.starts_with("$^")
             }
             _ => true,
         }
@@ -92,7 +94,11 @@ impl DebugAdapter {
                 StackFrame {
                     id: Self::i64_to_i32_saturating(frame.id),
                     name: frame.name,
-                    source: Source { name, path, source_reference: None },
+                    source: Source {
+                        name,
+                        path,
+                        source_reference: None,
+                    },
                     line: Self::i64_to_i32_saturating(frame.line),
                     column: Self::i64_to_i32_saturating(frame.column),
                     end_line: frame.end_line.map(Self::i64_to_i32_saturating),
@@ -150,9 +156,12 @@ impl DebugAdapter {
         let mut top_level = Vec::new();
         let mut child_cache = HashMap::new();
         for (idx, (name, value)) in parsed.into_iter().skip(start).take(count).enumerate() {
-            let child_ref = variables_ref.saturating_mul(1000).saturating_add(
-                Self::i64_to_i32_saturating(i64::try_from(idx + 1).unwrap_or(i64::from(i32::MAX))),
-            );
+            let child_ref =
+                variables_ref
+                    .saturating_mul(1000)
+                    .saturating_add(Self::i64_to_i32_saturating(
+                        i64::try_from(idx + 1).unwrap_or(i64::from(i32::MAX)),
+                    ));
             let rendered = if value.is_expandable() {
                 renderer.render_with_reference(&name, &value, i64::from(child_ref))
             } else {
@@ -313,8 +322,10 @@ impl DebugAdapter {
                 if let Some(caps) = re.captures(line) {
                     let func = caps.name("func").map(|m| m.as_str()).unwrap_or("main");
                     let file = caps.name("file").map(|m| m.as_str()).unwrap_or("<unknown>");
-                    let line_num =
-                        caps.name("line").and_then(|m| m.as_str().parse::<i32>().ok()).unwrap_or(1);
+                    let line_num = caps
+                        .name("line")
+                        .and_then(|m| m.as_str().parse::<i32>().ok())
+                        .unwrap_or(1);
 
                     // Extract file name from path for display
                     let file_name = file.split(['/', '\\'].as_ref()).next_back().unwrap_or(file);
@@ -351,8 +362,10 @@ mod tests {
     -> Result<(), Box<dyn std::error::Error>> {
         let adapter = DebugAdapter::new();
         {
-            let mut output =
-                lock_or_recover(&adapter.recent_output, "test_parse_scope_variables.recent_output");
+            let mut output = lock_or_recover(
+                &adapter.recent_output,
+                "test_parse_scope_variables.recent_output",
+            );
             output.push_back("$foo = 42".to_string());
             output.push_back("@arr = (1, 2, 3)".to_string());
             output.push_back("%hash = {a => 1}".to_string());
@@ -363,14 +376,21 @@ mod tests {
         assert!(names.contains(&"$foo"));
         assert!(names.contains(&"@arr"));
         assert!(names.contains(&"%hash"));
-        assert!(!child_cache.is_empty(), "expected child cache entries for expandable values");
+        assert!(
+            !child_cache.is_empty(),
+            "expected child cache entries for expandable values"
+        );
         Ok(())
     }
 
     #[test]
     pub(super) fn test_parse_scope_variables_are_sorted_for_stability()
     -> Result<(), Box<dyn std::error::Error>> {
-        let lines = vec!["$zeta = 1".to_string(), "$alpha = 2".to_string(), "$mid = 3".to_string()];
+        let lines = vec![
+            "$zeta = 1".to_string(),
+            "$alpha = 2".to_string(),
+            "$mid = 3".to_string(),
+        ];
 
         let (vars, _child_cache) =
             DebugAdapter::parse_scope_variables_from_lines(&lines, 11, 0, 20);
@@ -442,8 +462,10 @@ mod tests {
     -> Result<(), Box<dyn std::error::Error>> {
         let adapter = DebugAdapter::new();
         {
-            let mut output =
-                lock_or_recover(&adapter.recent_output, "test_parse_evaluate_result.recent_output");
+            let mut output = lock_or_recover(
+                &adapter.recent_output,
+                "test_parse_evaluate_result.recent_output",
+            );
             output.push_back("$result = 123".to_string());
         }
 
@@ -498,7 +520,12 @@ mod tests {
         let frames = vec![
             make_test_frame(1, "Devel::TSPerlDAP::init", "/shim/TSPerlDAP.pm", 50),
             make_test_frame(2, "main::run", "/app/script.pl", 5),
-            make_test_frame(3, "Devel::TSPerlDAP::handle_break", "/shim/TSPerlDAP.pm", 200),
+            make_test_frame(
+                3,
+                "Devel::TSPerlDAP::handle_break",
+                "/shim/TSPerlDAP.pm",
+                200,
+            ),
             make_test_frame(4, "Utils::process", "/app/lib/Utils.pm", 42),
         ];
 
@@ -548,7 +575,12 @@ mod tests {
         let filtered = filter_internal_frames(frames);
 
         // Should only have user frames: main::hello, Foo::bar, Baz::qux
-        assert_eq!(filtered.len(), 3, "Expected 3 user frames, got {}", filtered.len());
+        assert_eq!(
+            filtered.len(),
+            3,
+            "Expected 3 user frames, got {}",
+            filtered.len()
+        );
         assert_eq!(filtered[0].name, "main::hello");
         assert_eq!(filtered[1].name, "Foo::bar");
         assert_eq!(filtered[2].name, "Baz::qux");
@@ -584,7 +616,10 @@ mod tests {
 
         let filtered = filter_internal_frames(frames);
 
-        assert!(filtered.is_empty(), "Expected empty stack after filtering all internal frames");
+        assert!(
+            filtered.is_empty(),
+            "Expected empty stack after filtering all internal frames"
+        );
     }
 
     #[test]

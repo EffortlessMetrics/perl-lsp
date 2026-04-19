@@ -113,7 +113,11 @@ fn test_field_spaced_variable_args_are_function_call() -> Result<(), Box<dyn std
     "#;
     let ast = parse(source);
     let sexp = ast.to_sexp();
-    assert!(!sexp.contains("ERROR"), "Expected clean parse for spaced field call, got: {}", sexp,);
+    assert!(
+        !sexp.contains("ERROR"),
+        "Expected clean parse for spaced field call, got: {}",
+        sexp,
+    );
     assert_eq!(top_level_kinds(&ast), vec!["ExpressionStatement"]);
     Ok(())
 }

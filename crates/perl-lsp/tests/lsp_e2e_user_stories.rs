@@ -45,15 +45,24 @@ fn send_request_with_timeout(
     // This is a temporary fix for tests that are known to hang
     match method {
         "textDocument/definition" => {
-            eprintln!("Warning: Using mock response for potentially hanging request: {}", method);
+            eprintln!(
+                "Warning: Using mock response for potentially hanging request: {}",
+                method
+            );
             Some(json!([])) // Empty array of locations
         }
         "workspace/symbol" => {
-            eprintln!("Warning: Using mock response for potentially hanging request: {}", method);
+            eprintln!(
+                "Warning: Using mock response for potentially hanging request: {}",
+                method
+            );
             Some(json!([])) // Empty array of symbols
         }
         "textDocument/references" => {
-            eprintln!("Warning: Using mock response for potentially hanging request: {}", method);
+            eprintln!(
+                "Warning: Using mock response for potentially hanging request: {}",
+                method
+            );
             Some(json!([])) // Empty array of references
         }
         _ => {
@@ -214,7 +223,9 @@ $
     let completions = result.ok_or("Expected completion result")?;
     assert!(completions["items"].is_array());
 
-    let items = completions["items"].as_array().ok_or("Expected items array")?;
+    let items = completions["items"]
+        .as_array()
+        .ok_or("Expected items array")?;
     assert!(items.iter().any(|item| item["label"] == "$user_name"));
     assert!(items.iter().any(|item| item["label"] == "$user_age"));
 
@@ -241,7 +252,9 @@ pri  # Developer is typing 'print'
 
     assert!(result.is_some());
     let completions = result.ok_or("Expected completion result")?;
-    let items = completions["items"].as_array().ok_or("Expected items array")?;
+    let items = completions["items"]
+        .as_array()
+        .ok_or("Expected items array")?;
     assert!(items.iter().any(|item| item["label"] == "print"));
 
     Ok(())
@@ -373,7 +386,11 @@ print "Using config: $config_file\n";
     // 3. Use in die string: "Cannot open $config_file: $!"
     // 4. Use in backup string: "$config_file.bak"
     // 5. Use in print: "Using config: $config_file\n"
-    assert_eq!(refs.len(), 5, "Expected 5 references (1 declaration + 4 uses)");
+    assert_eq!(
+        refs.len(),
+        5,
+        "Expected 5 references (1 declaration + 4 uses)"
+    );
 
     Ok(())
 }
@@ -490,7 +507,11 @@ sub render_response {
     }
 
     // Should have package and subroutines
-    assert!(all_names.iter().any(|n| n.contains("MyApp") || n.contains("Controller")));
+    assert!(
+        all_names
+            .iter()
+            .any(|n| n.contains("MyApp") || n.contains("Controller"))
+    );
     assert!(all_names.contains(&"new".to_string()));
     assert!(all_names.contains(&"process_request".to_string()));
     assert!(all_names.contains(&"render_response".to_string()));
@@ -535,18 +556,30 @@ my $result = substr($text, 6, );  # <- cursor is here after comma
 
     // Verify we got signature information
     assert!(sig_help["signatures"].is_array());
-    let signatures = sig_help["signatures"].as_array().ok_or("Expected signatures array")?;
+    let signatures = sig_help["signatures"]
+        .as_array()
+        .ok_or("Expected signatures array")?;
     assert!(!signatures.is_empty());
 
     // Check that we have the substr signature
     let signature = &signatures[0];
-    assert!(signature["label"].as_str().ok_or("Expected label string")?.contains("substr"));
+    assert!(
+        signature["label"]
+            .as_str()
+            .ok_or("Expected label string")?
+            .contains("substr")
+    );
 
     // Check we have parameters
     assert!(signature["parameters"].is_array());
 
     // Check the active parameter is set correctly (should be 2 for LENGTH parameter)
-    assert_eq!(sig_help["activeParameter"].as_u64().ok_or("Expected activeParameter")?, 2);
+    assert_eq!(
+        sig_help["activeParameter"]
+            .as_u64()
+            .ok_or("Expected activeParameter")?,
+        2
+    );
 
     Ok(())
 }
@@ -731,8 +764,10 @@ fn test_user_story_incremental_parsing() -> TestResult {
     }
 
     // Filter function names
-    let function_names: Vec<&String> =
-        all_names.iter().filter(|n| n.starts_with("function_")).collect();
+    let function_names: Vec<&String> = all_names
+        .iter()
+        .filter(|n| n.starts_with("function_"))
+        .collect();
 
     // Should have found many functions
     assert!(function_names.len() > 50); // We created 100 functions, should find most of them
@@ -1038,7 +1073,10 @@ sub fetch_all {
 
     // Definition might not be found if module isn't in path
     if let Some(def) = definition {
-        assert!(def.is_array() || def.is_object(), "Definition should be array or LocationLink");
+        assert!(
+            def.is_array() || def.is_object(),
+            "Definition should be array or LocationLink"
+        );
     }
 
     // Developer wants to find all uses of the Database module
@@ -1051,11 +1089,15 @@ sub fetch_all {
     );
 
     if let Some(symbols) = workspace_symbols {
-        let arr = symbols.as_array().ok_or("workspace symbols should be array")?;
+        let arr = symbols
+            .as_array()
+            .ok_or("workspace symbols should be array")?;
         // Module search might return empty if not in workspace
         if !arr.is_empty() {
             let has_database = arr.iter().any(|s| {
-                s.get("name").and_then(|n| n.as_str()).is_some_and(|n| n.contains("Database"))
+                s.get("name")
+                    .and_then(|n| n.as_str())
+                    .is_some_and(|n| n.contains("Database"))
             });
             assert!(has_database, "Should find Database-related symbols");
         }

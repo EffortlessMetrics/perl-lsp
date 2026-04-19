@@ -59,18 +59,27 @@ require Module::Load;
         }),
     );
 
-    let links = response["result"].as_array().ok_or("Expected result to be an array")?;
-    assert!(links.len() >= 3, "Should have links for Data::Dumper, File::Path, and Module::Load");
+    let links = response["result"]
+        .as_array()
+        .ok_or("Expected result to be an array")?;
+    assert!(
+        links.len() >= 3,
+        "Should have links for Data::Dumper, File::Path, and Module::Load"
+    );
 
-    let resolved_links: Vec<_> =
-        links.iter().filter_map(|link| resolve_link(&server, link)).collect();
+    let resolved_links: Vec<_> = links
+        .iter()
+        .filter_map(|link| resolve_link(&server, link))
+        .collect();
 
     // Check Data::Dumper link
     let dumper_link = resolved_links
         .iter()
         .find(|l| l["target"].as_str().unwrap_or("").contains("Data::Dumper"))
         .ok_or("Should have Data::Dumper link")?;
-    let target = dumper_link["target"].as_str().ok_or("Expected target to be a string")?;
+    let target = dumper_link["target"]
+        .as_str()
+        .ok_or("Expected target to be a string")?;
     assert!(target.contains("metacpan.org"));
     Ok(())
 }
@@ -115,13 +124,17 @@ do "config/settings.pl";
         }),
     );
 
-    let links = response["result"].as_array().ok_or("Expected result to be an array")?;
+    let links = response["result"]
+        .as_array()
+        .ok_or("Expected result to be an array")?;
     if links.is_empty() {
         return Ok(());
     }
 
-    let resolved_links: Vec<_> =
-        links.iter().filter_map(|link| resolve_link(&server, link)).collect();
+    let resolved_links: Vec<_> = links
+        .iter()
+        .filter_map(|link| resolve_link(&server, link))
+        .collect();
     if resolved_links.is_empty() {
         return Ok(());
     }
@@ -129,7 +142,10 @@ do "config/settings.pl";
     // Check that links are file:// URIs
     for link in resolved_links {
         let target = link["target"].as_str().unwrap_or("");
-        assert!(target.starts_with("file://"), "Local file links should use file:// protocol");
+        assert!(
+            target.starts_with("file://"),
+            "Local file links should use file:// protocol"
+        );
     }
     Ok(())
 }
@@ -180,7 +196,9 @@ sub process_data {
         }),
     );
 
-    let ranges = response["result"].as_array().ok_or("Expected result to be an array")?;
+    let ranges = response["result"]
+        .as_array()
+        .ok_or("Expected result to be an array")?;
     assert!(!ranges.is_empty(), "Should have selection ranges");
 
     let first_range = ranges.first().ok_or("Expected at least one range")?;
@@ -193,7 +211,10 @@ sub process_data {
         current = parent;
         depth += 1;
     }
-    assert!(depth >= 2, "Should have at least 2 levels of selection hierarchy");
+    assert!(
+        depth >= 2,
+        "Should have at least 2 levels of selection hierarchy"
+    );
     Ok(())
 }
 
@@ -334,7 +355,10 @@ fn test_file_watcher_registration() -> Result<(), Box<dyn std::error::Error>> {
         }),
     );
 
-    assert!(response.get("result").is_some(), "Initialize should succeed");
+    assert!(
+        response.get("result").is_some(),
+        "Initialize should succeed"
+    );
 
     // Send initialized notification - this should trigger file watcher registration
     send_notification(
@@ -392,7 +416,9 @@ fn test_selection_ranges_edge_cases() -> Result<(), Box<dyn std::error::Error>> 
         }),
     );
 
-    let ranges = response["result"].as_array().ok_or("Expected result to be an array")?;
+    let ranges = response["result"]
+        .as_array()
+        .ok_or("Expected result to be an array")?;
     assert_eq!(ranges.len(), 2, "Should return a range for each position");
     Ok(())
 }
@@ -500,8 +526,9 @@ fn test_document_links_windows_path_with_space() -> Result<(), Box<dyn std::erro
             "params": links.first().ok_or("Expected at least one link")?
         }),
     );
-    let target =
-        resolved["result"]["target"].as_str().ok_or("Expected target uri to be a string")?;
+    let target = resolved["result"]["target"]
+        .as_str()
+        .ok_or("Expected target uri to be a string")?;
 
     // Percent-encoded space must be preserved; path join must be forward-slash normalized
     assert!(

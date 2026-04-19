@@ -16,7 +16,10 @@ use color_eyre::eyre::Result;
 /// normal-dep violations. Should succeed on master (no violations).
 #[test]
 fn publish_closure_passes_on_master() -> Result<()> {
-    Command::cargo_bin("xtask")?.args(["publish-closure"]).assert().success();
+    Command::cargo_bin("xtask")?
+        .args(["publish-closure"])
+        .assert()
+        .success();
     Ok(())
 }
 

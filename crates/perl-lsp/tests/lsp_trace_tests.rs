@@ -28,7 +28,9 @@ fn test_set_trace_off() -> TestResult {
     );
 
     // Server must remain responsive after receiving setTrace
-    let _result = harness.request("workspace/symbol", json!({"query": ""})).unwrap_or(json!(null));
+    let _result = harness
+        .request("workspace/symbol", json!({"query": ""}))
+        .unwrap_or(json!(null));
     Ok(())
 }
 
@@ -46,7 +48,9 @@ fn test_set_trace_messages() -> TestResult {
     );
 
     // Verify server is still responsive
-    let _result = harness.request("workspace/symbol", json!({"query": ""})).unwrap_or(json!(null));
+    let _result = harness
+        .request("workspace/symbol", json!({"query": ""}))
+        .unwrap_or(json!(null));
     Ok(())
 }
 
@@ -64,7 +68,9 @@ fn test_set_trace_verbose() -> TestResult {
     );
 
     // Verify server is still responsive
-    let _result = harness.request("workspace/symbol", json!({"query": ""})).unwrap_or(json!(null));
+    let _result = harness
+        .request("workspace/symbol", json!({"query": ""}))
+        .unwrap_or(json!(null));
     Ok(())
 }
 
@@ -93,7 +99,10 @@ fn test_log_trace_notification_contract() -> TestResult {
     });
 
     // Basic: "message" is required
-    assert!(log_trace_basic["params"]["message"].is_string(), "logTrace must have a message field");
+    assert!(
+        log_trace_basic["params"]["message"].is_string(),
+        "logTrace must have a message field"
+    );
     assert!(
         log_trace_basic["params"].get("verbose").is_none(),
         "basic logTrace should not have verbose field"
@@ -110,8 +119,14 @@ fn test_log_trace_notification_contract() -> TestResult {
     );
 
     // Verify no "id" field (notifications never have an id)
-    assert!(log_trace_basic.get("id").is_none(), "notifications must not have an id");
-    assert!(log_trace_verbose.get("id").is_none(), "notifications must not have an id");
+    assert!(
+        log_trace_basic.get("id").is_none(),
+        "notifications must not have an id"
+    );
+    assert!(
+        log_trace_verbose.get("id").is_none(),
+        "notifications must not have an id"
+    );
 
     Ok(())
 }

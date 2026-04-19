@@ -101,7 +101,10 @@ mod system_inc_resolution {
 
         match result {
             ModuleUriResolution::Resolved(uri) => {
-                assert!(uri.contains("site_perl"), "first @INC entry should win, got: {uri}");
+                assert!(
+                    uri.contains("site_perl"),
+                    "first @INC entry should win, got: {uri}"
+                );
             }
             other => return Err(format!("expected Resolved, got {other:?}").into()),
         }
@@ -128,7 +131,9 @@ mod workspace_include_path_resolution {
 
         // This simulates the effect of `use lib 'lib'` -- the 'lib' directory
         // is configured as an include path
-        let ws_uri = url::Url::from_file_path(&workspace).map_err(|()| "bad URI")?.to_string();
+        let ws_uri = url::Url::from_file_path(&workspace)
+            .map_err(|()| "bad URI")?
+            .to_string();
 
         let result = resolve_module_uri(
             "MyApp::Model",
@@ -142,7 +147,10 @@ mod workspace_include_path_resolution {
 
         match result {
             ModuleUriResolution::Resolved(uri) => {
-                assert!(uri.ends_with("MyApp/Model.pm"), "expected MyApp/Model.pm, got: {uri}");
+                assert!(
+                    uri.ends_with("MyApp/Model.pm"),
+                    "expected MyApp/Model.pm, got: {uri}"
+                );
             }
             other => return Err(format!("expected Resolved, got {other:?}").into()),
         }
@@ -154,12 +162,17 @@ mod workspace_include_path_resolution {
         let temp = tempfile::tempdir()?;
         let workspace = temp.path().join("project");
         // Module lives in a custom path, not the standard 'lib'
-        let module_file = workspace.join("local_modules").join("MyApp").join("Model.pm");
+        let module_file = workspace
+            .join("local_modules")
+            .join("MyApp")
+            .join("Model.pm");
 
         std::fs::create_dir_all(module_file.parent().ok_or("no parent")?)?;
         std::fs::write(&module_file, "package MyApp::Model; 1;")?;
 
-        let ws_uri = url::Url::from_file_path(&workspace).map_err(|()| "bad URI")?.to_string();
+        let ws_uri = url::Url::from_file_path(&workspace)
+            .map_err(|()| "bad URI")?
+            .to_string();
 
         let result = resolve_module_uri(
             "MyApp::Model",
@@ -198,7 +211,9 @@ mod workspace_include_path_resolution {
         std::fs::write(&vendor_file, "# vendor version")?;
         std::fs::write(&lib_file, "# lib version")?;
 
-        let ws_uri = url::Url::from_file_path(&workspace).map_err(|()| "bad URI")?.to_string();
+        let ws_uri = url::Url::from_file_path(&workspace)
+            .map_err(|()| "bad URI")?
+            .to_string();
 
         let result = resolve_module_uri(
             "MyApp::Model",
@@ -212,7 +227,10 @@ mod workspace_include_path_resolution {
 
         match result {
             ModuleUriResolution::Resolved(uri) => {
-                assert!(uri.contains("vendor"), "first include path should win, got: {uri}");
+                assert!(
+                    uri.contains("vendor"),
+                    "first include path should win, got: {uri}"
+                );
             }
             other => return Err(format!("expected Resolved, got {other:?}").into()),
         }
@@ -253,9 +271,14 @@ mod parent_base_module_resolution {
         let module_file = workspace.join("lib").join("Base").join("Class.pm");
 
         std::fs::create_dir_all(module_file.parent().ok_or("no parent")?)?;
-        std::fs::write(&module_file, "package Base::Class;\nsub new { bless {}, shift }\n1;")?;
+        std::fs::write(
+            &module_file,
+            "package Base::Class;\nsub new { bless {}, shift }\n1;",
+        )?;
 
-        let ws_uri = url::Url::from_file_path(&workspace).map_err(|()| "bad URI")?.to_string();
+        let ws_uri = url::Url::from_file_path(&workspace)
+            .map_err(|()| "bad URI")?
+            .to_string();
 
         let result = resolve_module_uri(
             "Base::Class",
@@ -269,7 +292,10 @@ mod parent_base_module_resolution {
 
         match result {
             ModuleUriResolution::Resolved(uri) => {
-                assert!(uri.ends_with("Base/Class.pm"), "expected Base/Class.pm, got: {uri}");
+                assert!(
+                    uri.ends_with("Base/Class.pm"),
+                    "expected Base/Class.pm, got: {uri}"
+                );
             }
             other => return Err(format!("expected Resolved, got {other:?}").into()),
         }
@@ -298,7 +324,10 @@ mod parent_base_module_resolution {
 
         match result {
             ModuleUriResolution::Resolved(uri) => {
-                assert!(uri.ends_with("Exporter.pm"), "expected Exporter.pm, got: {uri}");
+                assert!(
+                    uri.ends_with("Exporter.pm"),
+                    "expected Exporter.pm, got: {uri}"
+                );
             }
             other => return Err(format!("expected Resolved, got {other:?}").into()),
         }
@@ -349,7 +378,9 @@ mod graceful_error_handling {
         let workspace = temp.path().join("project");
         std::fs::create_dir_all(workspace.join("lib"))?;
 
-        let ws_uri = url::Url::from_file_path(&workspace).map_err(|()| "bad URI")?.to_string();
+        let ws_uri = url::Url::from_file_path(&workspace)
+            .map_err(|()| "bad URI")?
+            .to_string();
 
         let result = resolve_module_uri(
             "Missing::Module",
@@ -438,8 +469,9 @@ mod graceful_error_handling {
     #[test]
     fn timeout_returns_timed_out_not_panic() {
         // Create a scenario that will definitely time out
-        let workspace_folders: Vec<String> =
-            (0..10_000).map(|i| format!("file:///workspace-{i}")).collect();
+        let workspace_folders: Vec<String> = (0..10_000)
+            .map(|i| format!("file:///workspace-{i}"))
+            .collect();
 
         let result = resolve_module_uri(
             "Never::Found",

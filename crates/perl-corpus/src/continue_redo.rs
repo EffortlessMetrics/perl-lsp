@@ -445,17 +445,26 @@ pub fn find_case(id: &str) -> Option<&'static ContinueRedoCase> {
 
 /// Get all cases matching a specific tag.
 pub fn cases_by_tag(tag: &str) -> Vec<&'static ContinueRedoCase> {
-    CONTINUE_REDO_CASES.iter().filter(|case| case.tags.contains(&tag)).collect()
+    CONTINUE_REDO_CASES
+        .iter()
+        .filter(|case| case.tags.contains(&tag))
+        .collect()
 }
 
 /// Get all cases that should parse successfully.
 pub fn valid_cases() -> Vec<&'static ContinueRedoCase> {
-    CONTINUE_REDO_CASES.iter().filter(|case| case.should_parse).collect()
+    CONTINUE_REDO_CASES
+        .iter()
+        .filter(|case| case.should_parse)
+        .collect()
 }
 
 /// Get all cases that should fail to parse.
 pub fn invalid_cases() -> Vec<&'static ContinueRedoCase> {
-    CONTINUE_REDO_CASES.iter().filter(|case| !case.should_parse).collect()
+    CONTINUE_REDO_CASES
+        .iter()
+        .filter(|case| !case.should_parse)
+        .collect()
 }
 
 #[cfg(test)]
@@ -471,12 +480,20 @@ mod tests {
 
     #[test]
     fn all_cases_have_descriptions() {
-        assert!(continue_redo_cases().iter().all(|case| !case.description.is_empty()));
+        assert!(
+            continue_redo_cases()
+                .iter()
+                .all(|case| !case.description.is_empty())
+        );
     }
 
     #[test]
     fn all_cases_have_source() {
-        assert!(continue_redo_cases().iter().all(|case| !case.source.is_empty()));
+        assert!(
+            continue_redo_cases()
+                .iter()
+                .all(|case| !case.source.is_empty())
+        );
     }
 
     #[test]
@@ -491,7 +508,11 @@ mod tests {
     fn can_filter_by_tag() {
         let continue_cases = cases_by_tag("continue");
         assert!(!continue_cases.is_empty());
-        assert!(continue_cases.iter().all(|case| case.tags.contains(&"continue")));
+        assert!(
+            continue_cases
+                .iter()
+                .all(|case| case.tags.contains(&"continue"))
+        );
     }
 
     #[test]
@@ -548,10 +569,16 @@ mod tests {
     fn edge_cases_marked_correctly() {
         let bare_block = find_case("continue.bare.block");
         must_some(bare_block);
-        assert!(!must_some(bare_block).should_parse, "continue on bare block should be invalid");
+        assert!(
+            !must_some(bare_block).should_parse,
+            "continue on bare block should be invalid"
+        );
 
         let redo_bare = find_case("redo.bare.block");
         must_some(redo_bare);
-        assert!(!must_some(redo_bare).should_parse, "redo in bare block should be invalid");
+        assert!(
+            !must_some(redo_bare).should_parse,
+            "redo in bare block should be invalid"
+        );
     }
 }

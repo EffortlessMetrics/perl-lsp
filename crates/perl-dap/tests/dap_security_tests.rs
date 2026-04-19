@@ -33,7 +33,10 @@ fn test_safe_evaluation_defaults() {
     if !allow_side_effects {
         // Mock validation
         let is_safe = !expr.contains("system") && !expr.contains("exec");
-        assert!(!is_safe, "Dangerous expression should be rejected in safe mode");
+        assert!(
+            !is_safe,
+            "Dangerous expression should be rejected in safe mode"
+        );
     }
 }
 
@@ -47,7 +50,10 @@ fn test_timeout_configuration() {
 
     let effective_timeout = std::cmp::min(configured_timeout, max_timeout_ms);
 
-    assert_eq!(effective_timeout, 30000, "Timeout should be capped at max allowed");
+    assert_eq!(
+        effective_timeout, 30000,
+        "Timeout should be capped at max allowed"
+    );
     assert!(effective_timeout >= default_timeout_ms);
 }
 

@@ -18,12 +18,16 @@ impl Default for CommandExecutor {
 impl CommandExecutor {
     /// Create a new command executor.
     pub fn new() -> Self {
-        Self { provider: ExecuteCommandProvider::new() }
+        Self {
+            provider: ExecuteCommandProvider::new(),
+        }
     }
 
     /// Create a command executor with workspace root enforcement.
     pub fn with_workspace_roots(workspace_roots: Vec<PathBuf>) -> Self {
-        Self { provider: ExecuteCommandProvider::with_workspace_roots(workspace_roots) }
+        Self {
+            provider: ExecuteCommandProvider::with_workspace_roots(workspace_roots),
+        }
     }
 
     /// Execute a command and map failures to JSON-RPC errors.

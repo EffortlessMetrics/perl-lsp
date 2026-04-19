@@ -24,7 +24,10 @@ fn count_perl_files(dir: &Path) -> usize {
         .filter_map(|e| e.ok())
         .filter(|e| {
             e.file_type().is_file()
-                && e.path().extension().map(|ext| ext == "pl" || ext == "pm").unwrap_or(false)
+                && e.path()
+                    .extension()
+                    .map(|ext| ext == "pl" || ext == "pm")
+                    .unwrap_or(false)
         })
         .count()
 }
@@ -32,7 +35,9 @@ fn count_perl_files(dir: &Path) -> usize {
 /// Count the number of `#[test]` annotated functions in the workspace scorecard test file.
 fn count_scorecard_tests(root: &Path) -> usize {
     let path = root.join("crates/perl-workspace-index/tests/workspace_scorecard.rs");
-    let Ok(content) = fs::read_to_string(&path) else { return 0 };
+    let Ok(content) = fs::read_to_string(&path) else {
+        return 0;
+    };
     content.matches("#[test]").count()
 }
 
@@ -145,13 +150,24 @@ mod tests {
             "WORKSPACE_METRICS_BULLETS",
         ] {
             assert!(
-                !result.contains(&format!("<!-- BEGIN: {block} -->\nold\n<!-- END: {block} -->")),
+                !result.contains(&format!(
+                    "<!-- BEGIN: {block} -->\nold\n<!-- END: {block} -->"
+                )),
                 "workspace status block {block} was not replaced"
             );
         }
-        assert!(result.contains("perl-workspace-index-slo"), "SLO table must reference slo crate");
-        assert!(result.contains("small"), "fixtures table must list small workspace");
-        assert!(result.contains("xlarge"), "fixtures table must list xlarge workspace");
+        assert!(
+            result.contains("perl-workspace-index-slo"),
+            "SLO table must reference slo crate"
+        );
+        assert!(
+            result.contains("small"),
+            "fixtures table must list small workspace"
+        );
+        assert!(
+            result.contains("xlarge"),
+            "fixtures table must list xlarge workspace"
+        );
         Ok(())
     }
 
@@ -161,8 +177,14 @@ mod tests {
         let workspaces = root.join("test_corpus/workspaces");
         for scale in &["small", "medium", "large", "xlarge"] {
             let dir = workspaces.join(scale);
-            assert!(dir.exists(), "fixture workspace '{scale}' directory is missing");
-            assert!(dir.is_dir(), "fixture workspace '{scale}' is not a directory");
+            assert!(
+                dir.exists(),
+                "fixture workspace '{scale}' directory is missing"
+            );
+            assert!(
+                dir.is_dir(),
+                "fixture workspace '{scale}' is not a directory"
+            );
         }
         Ok(())
     }

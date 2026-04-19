@@ -66,11 +66,19 @@ pub fn run_receipt(
     }
 
     let artifacts = root.join(ARTIFACTS_DIR);
-    fs::create_dir_all(&artifacts)
-        .with_context(|| format!("Failed to create artifacts directory {}", artifacts.display()))?;
+    fs::create_dir_all(&artifacts).with_context(|| {
+        format!(
+            "Failed to create artifacts directory {}",
+            artifacts.display()
+        )
+    })?;
 
     let mut output_path = if let Some(output) = output {
-        if output.is_absolute() { output } else { root.join(output) }
+        if output.is_absolute() {
+            output
+        } else {
+            root.join(output)
+        }
     } else {
         artifacts.join(TIMING_RECEIPT_FILE)
     };
@@ -181,8 +189,14 @@ pub fn run_compare(baseline: PathBuf, current: PathBuf) -> Result<()> {
     println!("## Metadata");
     println!("| Property | Baseline | Current |");
     println!("|----------|----------|---------|");
-    println!("| Timestamp | {} | {} |", baseline.timestamp, current.timestamp);
-    println!("| Toolchain | {} | {} |", baseline.toolchain, current.toolchain);
+    println!(
+        "| Timestamp | {} | {} |",
+        baseline.timestamp, current.timestamp
+    );
+    println!(
+        "| Toolchain | {} | {} |",
+        baseline.toolchain, current.toolchain
+    );
     println!();
     println!("## Build Timing Results");
     println!();
@@ -228,10 +242,16 @@ pub fn run_compare(baseline: PathBuf, current: PathBuf) -> Result<()> {
                 );
             }
             (Some(base), None) => {
-                println!("| {key} | {} | N/A | N/A | N/A |", format_seconds(base.duration_seconds));
+                println!(
+                    "| {key} | {} | N/A | N/A | N/A |",
+                    format_seconds(base.duration_seconds)
+                );
             }
             (None, Some(curr)) => {
-                println!("| {key} | N/A | {} | N/A | N/A |", format_seconds(curr.duration_seconds));
+                println!(
+                    "| {key} | N/A | {} | N/A | N/A |",
+                    format_seconds(curr.duration_seconds)
+                );
             }
             _ => {}
         }
@@ -250,8 +270,14 @@ pub fn run_compare(baseline: PathBuf, current: PathBuf) -> Result<()> {
 
     print_target_validation(
         "Full Workspace Build (Target: 40% faster)",
-        baseline.measurements.get("clean_build_workspace").map(|m| m.duration_seconds),
-        current.measurements.get("clean_build_workspace").map(|m| m.duration_seconds),
+        baseline
+            .measurements
+            .get("clean_build_workspace")
+            .map(|m| m.duration_seconds),
+        current
+            .measurements
+            .get("clean_build_workspace")
+            .map(|m| m.duration_seconds),
         Some(40.0),
     );
 
@@ -260,14 +286,20 @@ pub fn run_compare(baseline: PathBuf, current: PathBuf) -> Result<()> {
         .get("incremental_build_providers")
         .map(|m| m.duration_seconds)
         .or_else(|| {
-            baseline.measurements.get("incremental_build_parser").map(|m| m.duration_seconds)
+            baseline
+                .measurements
+                .get("incremental_build_parser")
+                .map(|m| m.duration_seconds)
         });
     let current_incremental = current
         .measurements
         .get("incremental_build_providers")
         .map(|m| m.duration_seconds)
         .or_else(|| {
-            current.measurements.get("incremental_build_parser").map(|m| m.duration_seconds)
+            current
+                .measurements
+                .get("incremental_build_parser")
+                .map(|m| m.duration_seconds)
         });
 
     print_target_validation(
@@ -279,8 +311,14 @@ pub fn run_compare(baseline: PathBuf, current: PathBuf) -> Result<()> {
 
     print_target_validation_no_target(
         "Test Build",
-        baseline.measurements.get("test_build_workspace").map(|m| m.duration_seconds),
-        current.measurements.get("test_build_workspace").map(|m| m.duration_seconds),
+        baseline
+            .measurements
+            .get("test_build_workspace")
+            .map(|m| m.duration_seconds),
+        current
+            .measurements
+            .get("test_build_workspace")
+            .map(|m| m.duration_seconds),
     );
 
     Ok(())
@@ -288,7 +326,11 @@ pub fn run_compare(baseline: PathBuf, current: PathBuf) -> Result<()> {
 
 fn resolve_path(path: &PathBuf) -> Result<PathBuf> {
     let root = project_root()?;
-    let candidate = if path.is_absolute() { path.clone() } else { root.join(path) };
+    let candidate = if path.is_absolute() {
+        path.clone()
+    } else {
+        root.join(path)
+    };
     Ok(candidate)
 }
 
@@ -308,7 +350,11 @@ fn print_target_validation(
 ) {
     match (baseline, current) {
         (Some(base), Some(cur)) => {
-            let improvement = if base != 0.0 { (base - cur) / base * 100.0 } else { 0.0 };
+            let improvement = if base != 0.0 {
+                (base - cur) / base * 100.0
+            } else {
+                0.0
+            };
 
             println!("### {label}");
             println!("- Baseline: {}", format_seconds(base));
@@ -334,7 +380,11 @@ fn print_target_validation(
 fn print_target_validation_no_target(label: &str, baseline: Option<f64>, current: Option<f64>) {
     match (baseline, current) {
         (Some(base), Some(cur)) => {
-            let improvement = if base != 0.0 { (base - cur) / base * 100.0 } else { 0.0 };
+            let improvement = if base != 0.0 {
+                (base - cur) / base * 100.0
+            } else {
+                0.0
+            };
 
             println!("### {label}");
             println!("- Baseline: {}", format_seconds(base));
@@ -381,7 +431,10 @@ fn parse_memory_from_free() -> Option<u64> {
     let output = command_output(&["free", "-g"])?;
     for line in output.lines() {
         if line.starts_with("Mem:") {
-            return line.split_whitespace().nth(1).and_then(|value| value.parse::<u64>().ok());
+            return line
+                .split_whitespace()
+                .nth(1)
+                .and_then(|value| value.parse::<u64>().ok());
         }
     }
     None
@@ -408,7 +461,10 @@ fn command_output(command: &[&str]) -> Option<String> {
     if !output.status.success() {
         return None;
     }
-    String::from_utf8(output.stdout).ok().map(|s| s.trim().to_string()).filter(|s| !s.is_empty())
+    String::from_utf8(output.stdout)
+        .ok()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
 }
 
 fn touch_file(path: &Path) -> Result<()> {
@@ -440,7 +496,10 @@ fn measure_command(
     println!("Duration: {duration:.4}s");
     println!();
 
-    BuildMeasurement { duration_seconds: duration, command: command_to_string(command) }
+    BuildMeasurement {
+        duration_seconds: duration,
+        command: command_to_string(command),
+    }
 }
 
 fn run_command_silently(root: &Path, command: &[&str]) -> f64 {
@@ -458,7 +517,10 @@ fn run_command_silently(root: &Path, command: &[&str]) -> f64 {
             println!("⚠️ Command exited with status {status}");
         }
     } else {
-        println!("⚠️ Command failed to launch: {}", command_to_string(command));
+        println!(
+            "⚠️ Command failed to launch: {}",
+            command_to_string(command)
+        );
     }
 
     start.elapsed().as_secs_f64()

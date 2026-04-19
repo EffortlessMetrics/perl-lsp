@@ -18,7 +18,11 @@ fn parse_single_initializer(source: &str) -> Result<Node, Box<dyn std::error::Er
             .into());
         }
 
-        if let NodeKind::VariableDeclaration { initializer: Some(init), .. } = &statements[0].kind {
+        if let NodeKind::VariableDeclaration {
+            initializer: Some(init),
+            ..
+        } = &statements[0].kind
+        {
             return Ok(*init.clone());
         }
     }
@@ -34,7 +38,10 @@ fn hash_literal_with_fat_arrow_is_not_parsed_as_block() -> Result<(), Box<dyn st
         assert_eq!(pairs.len(), 2, "expected two hash pairs");
         // Fat arrow auto-quotes barewords: `foo =>` produces a String node
         assert!(
-            matches!(pairs[0].0.kind, NodeKind::Identifier { .. } | NodeKind::String { .. }),
+            matches!(
+                pairs[0].0.kind,
+                NodeKind::Identifier { .. } | NodeKind::String { .. }
+            ),
             "first key should be an identifier or auto-quoted string"
         );
         assert!(
@@ -54,7 +61,9 @@ fn hash_literal_with_comma_pairs_stays_hash_literal() -> Result<(), Box<dyn std:
     if let NodeKind::HashLiteral { pairs } = initializer.kind {
         assert_eq!(pairs.len(), 2, "expected two hash pairs");
         assert!(
-            pairs.iter().all(|(_, value)| matches!(value.kind, NodeKind::Number { .. })),
+            pairs
+                .iter()
+                .all(|(_, value)| matches!(value.kind, NodeKind::Number { .. })),
             "all values should be numbers"
         );
         return Ok(());

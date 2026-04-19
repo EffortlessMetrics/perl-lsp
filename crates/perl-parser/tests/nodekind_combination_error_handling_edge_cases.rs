@@ -176,10 +176,16 @@ my $hash_deref = %$undefined_ref;  # Hash dereference of undefined
     assert!(has_node_kind(&ast, "Eval"), "Should have eval blocks");
 
     // Verify die/warn operations
-    assert!(has_node_kind(&ast, "FunctionCall"), "Should have function calls for die/warn");
+    assert!(
+        has_node_kind(&ast, "FunctionCall"),
+        "Should have function calls for die/warn"
+    );
 
     // Verify conditional statements with error conditions
-    assert!(has_node_kind(&ast, "If"), "Should have conditional statements");
+    assert!(
+        has_node_kind(&ast, "If"),
+        "Should have conditional statements"
+    );
 }
 
 /// Test parser recovery with various malformed inputs
@@ -330,13 +336,22 @@ print "Recovered: $recovered\n";
     // recovery continued past malformed input.
 
     // Verify that some valid structures still parse
-    assert!(has_node_kind(&ast, "Subroutine"), "Should have some valid subroutine nodes");
+    assert!(
+        has_node_kind(&ast, "Subroutine"),
+        "Should have some valid subroutine nodes"
+    );
 
     // Verify variable declarations
-    assert!(has_node_kind(&ast, "VariableDeclaration"), "Should have variable declarations");
+    assert!(
+        has_node_kind(&ast, "VariableDeclaration"),
+        "Should have variable declarations"
+    );
 
     // Verify function calls
-    assert!(has_node_kind(&ast, "FunctionCall"), "Should have function calls");
+    assert!(
+        has_node_kind(&ast, "FunctionCall"),
+        "Should have function calls"
+    );
 }
 
 // /// Test behavior with incomplete or ambiguous syntax
@@ -732,15 +747,27 @@ my $boundary_results = test_boundaries("test_input");
     let ast = must(parser.parse());
 
     // Verify that large structures are parsed
-    assert!(has_node_kind(&ast, "HashLiteral"), "Should have hash literals");
+    assert!(
+        has_node_kind(&ast, "HashLiteral"),
+        "Should have hash literals"
+    );
 
-    assert!(has_node_kind(&ast, "ArrayLiteral"), "Should have array literals");
+    assert!(
+        has_node_kind(&ast, "ArrayLiteral"),
+        "Should have array literals"
+    );
 
     // Verify complex expressions
-    assert!(has_node_kind(&ast, "Binary"), "Should have binary operations");
+    assert!(
+        has_node_kind(&ast, "Binary"),
+        "Should have binary operations"
+    );
 
     // Verify subroutine declarations with many parameters
-    assert!(has_node_kind(&ast, "Subroutine"), "Should have subroutine declarations");
+    assert!(
+        has_node_kind(&ast, "Subroutine"),
+        "Should have subroutine declarations"
+    );
 
     // Verify try-catch blocks
     assert!(has_node_kind(&ast, "Try"), "Should have try-catch blocks");
@@ -939,7 +966,10 @@ my $complex_shift = shift @$array_ref;
     let ast = must(parser.parse());
 
     // Verify that edge case constructs are parsed
-    assert!(has_node_kind(&ast, "Subroutine"), "Should have subroutine nodes");
+    assert!(
+        has_node_kind(&ast, "Subroutine"),
+        "Should have subroutine nodes"
+    );
 
     // Verify format declarations
     assert!(has_node_kind(&ast, "Format"), "Should have format nodes");
@@ -951,10 +981,16 @@ my $complex_shift = shift @$array_ref;
     assert!(has_node_kind(&ast, "Regex"), "Should have regex nodes");
 
     // Verify substitution operations
-    assert!(has_node_kind(&ast, "Substitution"), "Should have substitution nodes");
+    assert!(
+        has_node_kind(&ast, "Substitution"),
+        "Should have substitution nodes"
+    );
 
     // Verify transliteration operations
-    assert!(has_node_kind(&ast, "Transliteration"), "Should have transliteration nodes");
+    assert!(
+        has_node_kind(&ast, "Transliteration"),
+        "Should have transliteration nodes"
+    );
 
     // Verify package declarations
     assert!(has_node_kind(&ast, "Package"), "Should have package nodes");

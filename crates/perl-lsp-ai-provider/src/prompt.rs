@@ -19,7 +19,10 @@ pub fn build_fim_prompt(context: &PreparedInlineCompletionContext) -> (String, S
         system.push_str(&format!("\nInside subroutine: {func}"));
     }
     if !context.imports.is_empty() {
-        system.push_str(&format!("\nImported modules: {}", context.imports.join(", ")));
+        system.push_str(&format!(
+            "\nImported modules: {}",
+            context.imports.join(", ")
+        ));
     }
 
     // Build the user message with the code context

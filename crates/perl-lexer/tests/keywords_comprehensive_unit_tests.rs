@@ -41,7 +41,10 @@ fn all_keyword_lists_are_non_empty() {
 
 #[test]
 fn keywords_is_sorted() {
-    assert!(is_strictly_sorted(KEYWORDS), "KEYWORDS must be strictly sorted");
+    assert!(
+        is_strictly_sorted(KEYWORDS),
+        "KEYWORDS must be strictly sorted"
+    );
 }
 
 #[test]
@@ -70,17 +73,26 @@ fn lsp_runtime_completion_keywords_is_sorted() {
 
 #[test]
 fn rename_keywords_is_sorted() {
-    assert!(is_strictly_sorted(RENAME_KEYWORDS), "RENAME_KEYWORDS must be strictly sorted");
+    assert!(
+        is_strictly_sorted(RENAME_KEYWORDS),
+        "RENAME_KEYWORDS must be strictly sorted"
+    );
 }
 
 #[test]
 fn parser_lsp_keywords_is_sorted() {
-    assert!(is_strictly_sorted(PARSER_LSP_KEYWORDS), "PARSER_LSP_KEYWORDS must be strictly sorted");
+    assert!(
+        is_strictly_sorted(PARSER_LSP_KEYWORDS),
+        "PARSER_LSP_KEYWORDS must be strictly sorted"
+    );
 }
 
 #[test]
 fn lexer_keywords_is_sorted() {
-    assert!(is_strictly_sorted(LEXER_KEYWORDS), "LEXER_KEYWORDS must be strictly sorted");
+    assert!(
+        is_strictly_sorted(LEXER_KEYWORDS),
+        "LEXER_KEYWORDS must be strictly sorted"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -90,14 +102,20 @@ fn lexer_keywords_is_sorted() {
 #[test]
 fn lsp_completion_keywords_subset_of_keywords() {
     for &kw in LSP_COMPLETION_KEYWORDS {
-        assert!(is_keyword(kw), "LSP_COMPLETION_KEYWORDS entry {kw:?} missing from KEYWORDS");
+        assert!(
+            is_keyword(kw),
+            "LSP_COMPLETION_KEYWORDS entry {kw:?} missing from KEYWORDS"
+        );
     }
 }
 
 #[test]
 fn dap_completion_keywords_subset_of_keywords() {
     for &kw in DAP_COMPLETION_KEYWORDS {
-        assert!(is_keyword(kw), "DAP_COMPLETION_KEYWORDS entry {kw:?} missing from KEYWORDS");
+        assert!(
+            is_keyword(kw),
+            "DAP_COMPLETION_KEYWORDS entry {kw:?} missing from KEYWORDS"
+        );
     }
 }
 
@@ -114,21 +132,30 @@ fn lsp_runtime_completion_keywords_subset_of_keywords() {
 #[test]
 fn rename_keywords_subset_of_keywords() {
     for &kw in RENAME_KEYWORDS {
-        assert!(is_keyword(kw), "RENAME_KEYWORDS entry {kw:?} missing from KEYWORDS");
+        assert!(
+            is_keyword(kw),
+            "RENAME_KEYWORDS entry {kw:?} missing from KEYWORDS"
+        );
     }
 }
 
 #[test]
 fn parser_lsp_keywords_subset_of_keywords() {
     for &kw in PARSER_LSP_KEYWORDS {
-        assert!(is_keyword(kw), "PARSER_LSP_KEYWORDS entry {kw:?} missing from KEYWORDS");
+        assert!(
+            is_keyword(kw),
+            "PARSER_LSP_KEYWORDS entry {kw:?} missing from KEYWORDS"
+        );
     }
 }
 
 #[test]
 fn lexer_keywords_subset_of_keywords() {
     for &kw in LEXER_KEYWORDS {
-        assert!(is_keyword(kw), "LEXER_KEYWORDS entry {kw:?} missing from KEYWORDS");
+        assert!(
+            is_keyword(kw),
+            "LEXER_KEYWORDS entry {kw:?} missing from KEYWORDS"
+        );
     }
 }
 
@@ -144,15 +171,30 @@ fn has_no_duplicates(items: &[&str]) -> bool {
 #[test]
 fn no_duplicates_in_any_keyword_list() {
     assert!(has_no_duplicates(KEYWORDS), "KEYWORDS has duplicates");
-    assert!(has_no_duplicates(LSP_COMPLETION_KEYWORDS), "LSP_COMPLETION_KEYWORDS has duplicates");
-    assert!(has_no_duplicates(DAP_COMPLETION_KEYWORDS), "DAP_COMPLETION_KEYWORDS has duplicates");
+    assert!(
+        has_no_duplicates(LSP_COMPLETION_KEYWORDS),
+        "LSP_COMPLETION_KEYWORDS has duplicates"
+    );
+    assert!(
+        has_no_duplicates(DAP_COMPLETION_KEYWORDS),
+        "DAP_COMPLETION_KEYWORDS has duplicates"
+    );
     assert!(
         has_no_duplicates(LSP_RUNTIME_COMPLETION_KEYWORDS),
         "LSP_RUNTIME_COMPLETION_KEYWORDS has duplicates"
     );
-    assert!(has_no_duplicates(RENAME_KEYWORDS), "RENAME_KEYWORDS has duplicates");
-    assert!(has_no_duplicates(PARSER_LSP_KEYWORDS), "PARSER_LSP_KEYWORDS has duplicates");
-    assert!(has_no_duplicates(LEXER_KEYWORDS), "LEXER_KEYWORDS has duplicates");
+    assert!(
+        has_no_duplicates(RENAME_KEYWORDS),
+        "RENAME_KEYWORDS has duplicates"
+    );
+    assert!(
+        has_no_duplicates(PARSER_LSP_KEYWORDS),
+        "PARSER_LSP_KEYWORDS has duplicates"
+    );
+    assert!(
+        has_no_duplicates(LEXER_KEYWORDS),
+        "LEXER_KEYWORDS has duplicates"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -170,8 +212,12 @@ fn first_and_last_keywords_are_found() -> Result<(), String> {
 
 #[test]
 fn first_and_last_lsp_completion_keywords_are_found() -> Result<(), String> {
-    let first = LSP_COMPLETION_KEYWORDS.first().ok_or("LSP_COMPLETION_KEYWORDS empty")?;
-    let last = LSP_COMPLETION_KEYWORDS.last().ok_or("LSP_COMPLETION_KEYWORDS empty")?;
+    let first = LSP_COMPLETION_KEYWORDS
+        .first()
+        .ok_or("LSP_COMPLETION_KEYWORDS empty")?;
+    let last = LSP_COMPLETION_KEYWORDS
+        .last()
+        .ok_or("LSP_COMPLETION_KEYWORDS empty")?;
     assert!(is_lsp_completion_keyword(first));
     assert!(is_lsp_completion_keyword(last));
     Ok(())
@@ -179,8 +225,12 @@ fn first_and_last_lsp_completion_keywords_are_found() -> Result<(), String> {
 
 #[test]
 fn first_and_last_dap_completion_keywords_are_found() -> Result<(), String> {
-    let first = DAP_COMPLETION_KEYWORDS.first().ok_or("DAP_COMPLETION_KEYWORDS empty")?;
-    let last = DAP_COMPLETION_KEYWORDS.last().ok_or("DAP_COMPLETION_KEYWORDS empty")?;
+    let first = DAP_COMPLETION_KEYWORDS
+        .first()
+        .ok_or("DAP_COMPLETION_KEYWORDS empty")?;
+    let last = DAP_COMPLETION_KEYWORDS
+        .last()
+        .ok_or("DAP_COMPLETION_KEYWORDS empty")?;
     assert!(is_dap_completion_keyword(first));
     assert!(is_dap_completion_keyword(last));
     Ok(())
@@ -188,10 +238,12 @@ fn first_and_last_dap_completion_keywords_are_found() -> Result<(), String> {
 
 #[test]
 fn first_and_last_lsp_runtime_keywords_are_found() -> Result<(), String> {
-    let first =
-        LSP_RUNTIME_COMPLETION_KEYWORDS.first().ok_or("LSP_RUNTIME_COMPLETION_KEYWORDS empty")?;
-    let last =
-        LSP_RUNTIME_COMPLETION_KEYWORDS.last().ok_or("LSP_RUNTIME_COMPLETION_KEYWORDS empty")?;
+    let first = LSP_RUNTIME_COMPLETION_KEYWORDS
+        .first()
+        .ok_or("LSP_RUNTIME_COMPLETION_KEYWORDS empty")?;
+    let last = LSP_RUNTIME_COMPLETION_KEYWORDS
+        .last()
+        .ok_or("LSP_RUNTIME_COMPLETION_KEYWORDS empty")?;
     assert!(is_lsp_runtime_completion_keyword(first));
     assert!(is_lsp_runtime_completion_keyword(last));
     Ok(())
@@ -208,8 +260,12 @@ fn first_and_last_rename_keywords_are_found() -> Result<(), String> {
 
 #[test]
 fn first_and_last_parser_lsp_keywords_are_found() -> Result<(), String> {
-    let first = PARSER_LSP_KEYWORDS.first().ok_or("PARSER_LSP_KEYWORDS empty")?;
-    let last = PARSER_LSP_KEYWORDS.last().ok_or("PARSER_LSP_KEYWORDS empty")?;
+    let first = PARSER_LSP_KEYWORDS
+        .first()
+        .ok_or("PARSER_LSP_KEYWORDS empty")?;
+    let last = PARSER_LSP_KEYWORDS
+        .last()
+        .ok_or("PARSER_LSP_KEYWORDS empty")?;
     assert!(is_parser_lsp_keyword(first));
     assert!(is_parser_lsp_keyword(last));
     Ok(())
@@ -245,21 +301,30 @@ fn dunder_tokens_are_keywords() {
 #[test]
 fn single_char_keywords_are_present() {
     for kw in ["m", "q", "s", "y"] {
-        assert!(is_keyword(kw), "single-char keyword {kw:?} missing from KEYWORDS");
+        assert!(
+            is_keyword(kw),
+            "single-char keyword {kw:?} missing from KEYWORDS"
+        );
     }
 }
 
 #[test]
 fn quote_like_operators_are_keywords() {
     for kw in ["q", "qq", "qr", "qw", "qx"] {
-        assert!(is_keyword(kw), "quote-like operator {kw:?} missing from KEYWORDS");
+        assert!(
+            is_keyword(kw),
+            "quote-like operator {kw:?} missing from KEYWORDS"
+        );
     }
 }
 
 #[test]
 fn comparison_operators_are_keywords() {
     for kw in ["cmp", "eq", "ge", "gt", "le", "lt", "ne"] {
-        assert!(is_keyword(kw), "comparison operator {kw:?} missing from KEYWORDS");
+        assert!(
+            is_keyword(kw),
+            "comparison operator {kw:?} missing from KEYWORDS"
+        );
     }
 }
 
@@ -269,14 +334,20 @@ fn control_flow_keywords_present() {
         "if", "elsif", "else", "unless", "while", "until", "for", "foreach", "last", "next",
         "redo", "return", "goto",
     ] {
-        assert!(is_keyword(kw), "control-flow keyword {kw:?} missing from KEYWORDS");
+        assert!(
+            is_keyword(kw),
+            "control-flow keyword {kw:?} missing from KEYWORDS"
+        );
     }
 }
 
 #[test]
 fn variable_declaration_keywords_present() {
     for kw in ["my", "our", "local", "state"] {
-        assert!(is_keyword(kw), "variable-declaration keyword {kw:?} missing from KEYWORDS");
+        assert!(
+            is_keyword(kw),
+            "variable-declaration keyword {kw:?} missing from KEYWORDS"
+        );
     }
 }
 
@@ -290,14 +361,20 @@ fn oop_keywords_present() {
 #[test]
 fn modern_perl_keywords_present() {
     for kw in ["try", "catch", "finally", "class", "method"] {
-        assert!(is_keyword(kw), "modern Perl keyword {kw:?} missing from KEYWORDS");
+        assert!(
+            is_keyword(kw),
+            "modern Perl keyword {kw:?} missing from KEYWORDS"
+        );
     }
 }
 
 #[test]
 fn regex_and_transliteration_keywords_present() {
     for kw in ["m", "s", "tr", "y", "qr"] {
-        assert!(is_keyword(kw), "regex/transliteration keyword {kw:?} missing from KEYWORDS");
+        assert!(
+            is_keyword(kw),
+            "regex/transliteration keyword {kw:?} missing from KEYWORDS"
+        );
     }
 }
 
@@ -402,28 +479,40 @@ fn keywords_with_extra_chars_are_not_keywords() {
 #[test]
 fn is_keyword_consistent_with_keywords_constant() {
     for &kw in KEYWORDS {
-        assert!(is_keyword(kw), "is_keyword({kw:?}) should be true for every KEYWORDS entry");
+        assert!(
+            is_keyword(kw),
+            "is_keyword({kw:?}) should be true for every KEYWORDS entry"
+        );
     }
 }
 
 #[test]
 fn is_lexer_keyword_consistent_with_constant() {
     for &kw in LEXER_KEYWORDS {
-        assert!(is_lexer_keyword(kw), "is_lexer_keyword({kw:?}) should be true");
+        assert!(
+            is_lexer_keyword(kw),
+            "is_lexer_keyword({kw:?}) should be true"
+        );
     }
 }
 
 #[test]
 fn is_lsp_completion_keyword_consistent_with_constant() {
     for &kw in LSP_COMPLETION_KEYWORDS {
-        assert!(is_lsp_completion_keyword(kw), "is_lsp_completion_keyword({kw:?}) should be true");
+        assert!(
+            is_lsp_completion_keyword(kw),
+            "is_lsp_completion_keyword({kw:?}) should be true"
+        );
     }
 }
 
 #[test]
 fn is_dap_completion_keyword_consistent_with_constant() {
     for &kw in DAP_COMPLETION_KEYWORDS {
-        assert!(is_dap_completion_keyword(kw), "is_dap_completion_keyword({kw:?}) should be true");
+        assert!(
+            is_dap_completion_keyword(kw),
+            "is_dap_completion_keyword({kw:?}) should be true"
+        );
     }
 }
 
@@ -440,14 +529,20 @@ fn is_lsp_runtime_completion_keyword_consistent_with_constant() {
 #[test]
 fn is_rename_keyword_consistent_with_constant() {
     for &kw in RENAME_KEYWORDS {
-        assert!(is_rename_keyword(kw), "is_rename_keyword({kw:?}) should be true");
+        assert!(
+            is_rename_keyword(kw),
+            "is_rename_keyword({kw:?}) should be true"
+        );
     }
 }
 
 #[test]
 fn is_parser_lsp_keyword_consistent_with_constant() {
     for &kw in PARSER_LSP_KEYWORDS {
-        assert!(is_parser_lsp_keyword(kw), "is_parser_lsp_keyword({kw:?}) should be true");
+        assert!(
+            is_parser_lsp_keyword(kw),
+            "is_parser_lsp_keyword({kw:?}) should be true"
+        );
     }
 }
 
@@ -464,7 +559,10 @@ fn autoload_and_destroy_not_in_dap_keywords() {
 #[test]
 fn modern_perl_not_in_rename_keywords() {
     for kw in ["try", "catch", "finally", "class", "method"] {
-        assert!(!is_rename_keyword(kw), "{kw:?} should not be a rename keyword");
+        assert!(
+            !is_rename_keyword(kw),
+            "{kw:?} should not be a rename keyword"
+        );
     }
 }
 
@@ -491,7 +589,10 @@ fn autoload_not_in_runtime_completion() {
 #[test]
 fn quote_operators_not_in_rename_keywords() {
     for kw in ["q", "qq", "qr", "qw", "qx", "m", "s", "tr", "y"] {
-        assert!(!is_rename_keyword(kw), "{kw:?} should not be a rename keyword");
+        assert!(
+            !is_rename_keyword(kw),
+            "{kw:?} should not be a rename keyword"
+        );
     }
 }
 
@@ -502,7 +603,11 @@ fn quote_operators_not_in_rename_keywords() {
 #[test]
 fn keywords_has_reasonable_count() {
     // The canonical list should have at least 100 entries.
-    assert!(KEYWORDS.len() >= 100, "KEYWORDS too small: {}", KEYWORDS.len());
+    assert!(
+        KEYWORDS.len() >= 100,
+        "KEYWORDS too small: {}",
+        KEYWORDS.len()
+    );
 }
 
 #[test]
@@ -533,14 +638,21 @@ fn no_keyword_has_leading_or_trailing_whitespace() {
         ("KEYWORDS", KEYWORDS),
         ("LSP_COMPLETION_KEYWORDS", LSP_COMPLETION_KEYWORDS),
         ("DAP_COMPLETION_KEYWORDS", DAP_COMPLETION_KEYWORDS),
-        ("LSP_RUNTIME_COMPLETION_KEYWORDS", LSP_RUNTIME_COMPLETION_KEYWORDS),
+        (
+            "LSP_RUNTIME_COMPLETION_KEYWORDS",
+            LSP_RUNTIME_COMPLETION_KEYWORDS,
+        ),
         ("RENAME_KEYWORDS", RENAME_KEYWORDS),
         ("PARSER_LSP_KEYWORDS", PARSER_LSP_KEYWORDS),
         ("LEXER_KEYWORDS", LEXER_KEYWORDS),
     ];
     for &(name, list) in all_lists {
         for &kw in list {
-            assert_eq!(kw, kw.trim(), "{name} entry {kw:?} has leading/trailing whitespace");
+            assert_eq!(
+                kw,
+                kw.trim(),
+                "{name} entry {kw:?} has leading/trailing whitespace"
+            );
         }
     }
 }
@@ -555,7 +667,10 @@ fn no_keyword_is_empty_string() {
         ("KEYWORDS", KEYWORDS),
         ("LSP_COMPLETION_KEYWORDS", LSP_COMPLETION_KEYWORDS),
         ("DAP_COMPLETION_KEYWORDS", DAP_COMPLETION_KEYWORDS),
-        ("LSP_RUNTIME_COMPLETION_KEYWORDS", LSP_RUNTIME_COMPLETION_KEYWORDS),
+        (
+            "LSP_RUNTIME_COMPLETION_KEYWORDS",
+            LSP_RUNTIME_COMPLETION_KEYWORDS,
+        ),
         ("RENAME_KEYWORDS", RENAME_KEYWORDS),
         ("PARSER_LSP_KEYWORDS", PARSER_LSP_KEYWORDS),
         ("LEXER_KEYWORDS", LEXER_KEYWORDS),
@@ -574,7 +689,10 @@ fn no_keyword_is_empty_string() {
 #[test]
 fn all_keywords_are_ascii() {
     for &kw in KEYWORDS {
-        assert!(kw.is_ascii(), "keyword {kw:?} contains non-ASCII characters");
+        assert!(
+            kw.is_ascii(),
+            "keyword {kw:?} contains non-ASCII characters"
+        );
     }
 }
 
@@ -653,7 +771,10 @@ fn string_builtins_are_keywords() {
         "chomp", "chop", "chr", "hex", "index", "lc", "lcfirst", "length", "oct", "ord", "rindex",
         "substr", "uc", "ucfirst",
     ] {
-        assert!(is_keyword(kw), "string builtin {kw:?} missing from KEYWORDS");
+        assert!(
+            is_keyword(kw),
+            "string builtin {kw:?} missing from KEYWORDS"
+        );
     }
 }
 
@@ -674,7 +795,10 @@ fn list_builtins_are_keywords() {
 #[test]
 fn logical_operators_are_keywords() {
     for kw in ["and", "or", "not", "xor"] {
-        assert!(is_keyword(kw), "logical operator {kw:?} missing from KEYWORDS");
+        assert!(
+            is_keyword(kw),
+            "logical operator {kw:?} missing from KEYWORDS"
+        );
     }
 }
 
@@ -685,7 +809,10 @@ fn logical_operators_are_keywords() {
 #[test]
 fn switch_keywords_present() {
     for kw in ["given", "when", "default"] {
-        assert!(is_keyword(kw), "switch keyword {kw:?} missing from KEYWORDS");
+        assert!(
+            is_keyword(kw),
+            "switch keyword {kw:?} missing from KEYWORDS"
+        );
     }
 }
 

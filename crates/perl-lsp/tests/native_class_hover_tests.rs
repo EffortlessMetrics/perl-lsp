@@ -48,7 +48,10 @@ mod native_class_hover_tests {
             !content.contains("sub bar"),
             "hover on native method should NOT show 'sub bar', got: {content}"
         );
-        assert!(content.contains("bar"), "hover should include method name, got: {content}");
+        assert!(
+            content.contains("bar"),
+            "hover should include method name, got: {content}"
+        );
         Ok(())
     }
 
@@ -61,7 +64,10 @@ mod native_class_hover_tests {
 
         let content =
             semantic::hover_content(&resp).ok_or("expected hover content for method 'add'")?;
-        assert!(content.contains("add"), "hover should include method name 'add', got: {content}");
+        assert!(
+            content.contains("add"),
+            "hover should include method name 'add', got: {content}"
+        );
         // Parameters should be extracted from the method signature
         assert!(
             content.contains("$x") || content.contains("$y"),

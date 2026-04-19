@@ -84,7 +84,12 @@ pub fn read_response(server: &LspServer) -> Value {
 
 /// Try to receive a response within `dur`. Returns None on timeout.
 pub fn read_response_timeout(server: &LspServer, dur: Duration) -> Option<Value> {
-    server.rx.lock().unwrap_or_else(|e| e.into_inner()).recv_timeout(dur).ok()
+    server
+        .rx
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .recv_timeout(dur)
+        .ok()
 }
 
 /// Try to receive a JSON-RPC response within `dur`, buffering notifications and
@@ -135,7 +140,12 @@ pub fn read_response_only_timeout(server: &LspServer, dur: Duration) -> Option<V
 
 /// Try to receive a notification (message without id) within `dur`. Returns None on timeout or if a response is received.
 pub fn read_notification_timeout(server: &LspServer, dur: Duration) -> Option<Value> {
-    match server.rx.lock().unwrap_or_else(|e| e.into_inner()).recv_timeout(dur) {
+    match server
+        .rx
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .recv_timeout(dur)
+    {
         Ok(val) if val.get("id").is_none() => Some(val),
         Ok(_) => None,  // Got a response, not a notification
         Err(_) => None, // Timeout or disconnected
@@ -267,14 +277,18 @@ pub fn drain_until_quiet(server: &LspServer, quiet: Duration, ceiling: Duration)
 /// Send raw message to server (for testing malformed input)
 pub fn send_raw_message(server: &LspServer, content: &str) {
     // Ignore write errors - BrokenPipe during teardown is expected
-    let _ =
-        send_message_inner(&mut *server.writer.lock().unwrap_or_else(|e| e.into_inner()), content);
+    let _ = send_message_inner(
+        &mut *server.writer.lock().unwrap_or_else(|e| e.into_inner()),
+        content,
+    );
 }
 
 /// Send request without waiting for response
 pub fn send_request_no_wait(server: &LspServer, req: Value) {
     let body = req.to_string();
     // Ignore write errors - BrokenPipe during teardown is expected
-    let _ =
-        send_message_inner(&mut *server.writer.lock().unwrap_or_else(|e| e.into_inner()), &body);
+    let _ = send_message_inner(
+        &mut *server.writer.lock().unwrap_or_else(|e| e.into_inner()),
+        &body,
+    );
 }

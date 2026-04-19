@@ -45,7 +45,11 @@ fn test_concurrent_request_processing_ac3() {
     assert_eq!(responses.len(), concurrent_requests);
 
     for (i, response) in responses.iter().enumerate() {
-        assert!(response.is_object(), "Response {} should be valid JSON object", i);
+        assert!(
+            response.is_object(),
+            "Response {} should be valid JSON object",
+            i
+        );
     }
 }
 
@@ -83,7 +87,11 @@ fn test_lsp_workflow_stage_tracking_ac4() {
         let duration = start_time.elapsed();
 
         // Validate response structure
-        assert!(response.is_object(), "Workflow stage '{}' should return valid response", method);
+        assert!(
+            response.is_object(),
+            "Workflow stage '{}' should return valid response",
+            method
+        );
 
         // Performance validation
         assert!(
@@ -150,7 +158,10 @@ fn test_request_timeout_cancellation_integration_ac3_ac4() {
         }),
     );
 
-    assert!(health_response.is_object(), "Server should remain responsive after cancellation");
+    assert!(
+        health_response.is_object(),
+        "Server should remain responsive after cancellation"
+    );
 }
 
 #[test]
@@ -196,7 +207,11 @@ fn test_performance_metrics_collection_ac3() {
     }
 
     // Validate collected metrics
-    assert_eq!(metrics.len(), request_types.len(), "Should collect metrics for all request types");
+    assert_eq!(
+        metrics.len(),
+        request_types.len(),
+        "Should collect metrics for all request types"
+    );
 
     // Performance validation
     for (method, duration, size) in &metrics {
@@ -205,7 +220,11 @@ fn test_performance_metrics_collection_ac3() {
             "Request '{}' should complete within 1 second",
             method
         );
-        assert!(*size > 0, "Request '{}' should have non-zero response size", method);
+        assert!(
+            *size > 0,
+            "Request '{}' should have non-zero response size",
+            method
+        );
     }
 
     // Calculate average metrics

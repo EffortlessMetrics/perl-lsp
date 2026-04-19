@@ -96,16 +96,33 @@ fn test_selection_range_on_variable() -> TestResult {
         }),
     )?;
 
-    assert!(response.is_array(), "selectionRange should return an array, got: {:?}", response);
+    assert!(
+        response.is_array(),
+        "selectionRange should return an array, got: {:?}",
+        response
+    );
 
     let ranges = response.as_array().ok_or("response is not an array")?;
-    assert_eq!(ranges.len(), 1, "Should return one SelectionRange for one position");
+    assert_eq!(
+        ranges.len(),
+        1,
+        "Should return one SelectionRange for one position"
+    );
 
     let sel = &ranges[0];
     // The innermost range should cover the variable or its immediate context
-    assert!(sel["range"].is_object(), "SelectionRange should have a 'range' field");
-    assert!(sel["range"]["start"]["line"].is_number(), "Range start line should be a number");
-    assert!(sel["range"]["end"]["line"].is_number(), "Range end line should be a number");
+    assert!(
+        sel["range"].is_object(),
+        "SelectionRange should have a 'range' field"
+    );
+    assert!(
+        sel["range"]["start"]["line"].is_number(),
+        "Range start line should be a number"
+    );
+    assert!(
+        sel["range"]["end"]["line"].is_number(),
+        "Range end line should be a number"
+    );
 
     Ok(())
 }
@@ -142,13 +159,19 @@ fn test_selection_range_on_sub_body() -> TestResult {
     assert_eq!(ranges.len(), 1, "Should return one SelectionRange");
 
     let sel = &ranges[0];
-    assert!(sel["range"].is_object(), "SelectionRange should have a range");
+    assert!(
+        sel["range"].is_object(),
+        "SelectionRange should have a range"
+    );
 
     // Verify parent chain exists (expanding outward from statement -> block -> sub -> file)
     // The parent field is optional but if present should be a nested SelectionRange
     if sel.get("parent").is_some() && !sel["parent"].is_null() {
         let parent = &sel["parent"];
-        assert!(parent["range"].is_object(), "Parent SelectionRange should also have a range");
+        assert!(
+            parent["range"].is_object(),
+            "Parent SelectionRange should also have a range"
+        );
         // Parent range should be at least as large as the inner range
         let inner_start = sel["range"]["start"]["line"].as_u64().unwrap_or(0);
         let inner_end = sel["range"]["end"]["line"].as_u64().unwrap_or(0);
@@ -220,7 +243,11 @@ sub method {
     }
 
     // We expect at least 2 levels: the variable context and some outer scope
-    assert!(depth >= 2, "Should have at least 2 levels of nesting, got {}", depth);
+    assert!(
+        depth >= 2,
+        "Should have at least 2 levels of nesting, got {}",
+        depth
+    );
 
     Ok(())
 }
@@ -255,7 +282,10 @@ fn test_selection_range_empty_file() -> TestResult {
     // or an empty array. Both are acceptable.
     if !ranges.is_empty() {
         let sel = &ranges[0];
-        assert!(sel["range"].is_object(), "Even for empty file, range should be an object");
+        assert!(
+            sel["range"].is_object(),
+            "Even for empty file, range should be an object"
+        );
     }
 
     Ok(())
@@ -303,7 +333,11 @@ sub total {
 
     // Each result should have a valid range
     for (i, sel) in ranges.iter().enumerate() {
-        assert!(sel["range"].is_object(), "SelectionRange at index {} should have a range", i);
+        assert!(
+            sel["range"].is_object(),
+            "SelectionRange at index {} should have a range",
+            i
+        );
     }
 
     Ok(())
@@ -525,7 +559,11 @@ fn test_selection_range_no_duplicate_ranges() -> TestResult {
 
     // No two consecutive levels should have the exact same range
     for w in chain.windows(2) {
-        assert_ne!(w[0], w[1], "consecutive selection ranges should not be identical: {:?}", w[0]);
+        assert_ne!(
+            w[0], w[1],
+            "consecutive selection ranges should not be identical: {:?}",
+            w[0]
+        );
     }
 
     Ok(())

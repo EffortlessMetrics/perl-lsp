@@ -79,8 +79,14 @@ fn fallback_perl_paths() -> Vec<(PathBuf, &'static str)> {
     #[cfg(windows)]
     {
         vec![
-            (PathBuf::from(r"C:\Strawberry\perl\bin\perl.exe"), "Strawberry Perl"),
-            (PathBuf::from(r"C:\Perl64\bin\perl.exe"), "ActiveState Perl (64-bit)"),
+            (
+                PathBuf::from(r"C:\Strawberry\perl\bin\perl.exe"),
+                "Strawberry Perl",
+            ),
+            (
+                PathBuf::from(r"C:\Perl64\bin\perl.exe"),
+                "ActiveState Perl (64-bit)",
+            ),
             (
                 {
                     let pf = env::var("ProgramFiles")
@@ -94,8 +100,14 @@ fn fallback_perl_paths() -> Vec<(PathBuf, &'static str)> {
     #[cfg(target_os = "macos")]
     {
         vec![
-            (PathBuf::from("/opt/homebrew/bin/perl"), "Homebrew Perl (Apple Silicon)"),
-            (PathBuf::from("/usr/local/bin/perl"), "Homebrew Perl (Intel)"),
+            (
+                PathBuf::from("/opt/homebrew/bin/perl"),
+                "Homebrew Perl (Apple Silicon)",
+            ),
+            (
+                PathBuf::from("/usr/local/bin/perl"),
+                "Homebrew Perl (Intel)",
+            ),
             (PathBuf::from("/usr/bin/perl"), "macOS system Perl"),
         ]
     }
@@ -165,7 +177,10 @@ pub fn find_perl_interpreter(configured_path: Option<&str>) -> PerlInterpreterRe
     for (path, label) in fallback_perl_paths() {
         searched.push(path.to_string_lossy().to_string());
         if path.exists() && path.is_file() {
-            return PerlInterpreterResult::FoundViaFallback { path, label: label.to_string() };
+            return PerlInterpreterResult::FoundViaFallback {
+                path,
+                label: label.to_string(),
+            };
         }
     }
 
@@ -224,8 +239,16 @@ pub fn detect_perlbrew_perl() -> Option<PathBuf> {
         return None;
     }
     let root = perlbrew_root();
-    let perl_bin = root.join("perls").join(&version).join("bin").join(PERL_EXECUTABLE);
-    if perl_bin.exists() && perl_bin.is_file() { Some(perl_bin) } else { None }
+    let perl_bin = root
+        .join("perls")
+        .join(&version)
+        .join("bin")
+        .join(PERL_EXECUTABLE);
+    if perl_bin.exists() && perl_bin.is_file() {
+        Some(perl_bin)
+    } else {
+        None
+    }
 }
 
 /// Detect the active Perl interpreter managed by plenv.
@@ -240,8 +263,16 @@ pub fn detect_plenv_perl() -> Option<PathBuf> {
         return None;
     }
     let root = plenv_root();
-    let perl_bin = root.join("versions").join(&version).join("bin").join(PERL_EXECUTABLE);
-    if perl_bin.exists() && perl_bin.is_file() { Some(perl_bin) } else { None }
+    let perl_bin = root
+        .join("versions")
+        .join(&version)
+        .join("bin")
+        .join(PERL_EXECUTABLE);
+    if perl_bin.exists() && perl_bin.is_file() {
+        Some(perl_bin)
+    } else {
+        None
+    }
 }
 
 /// Return the perlbrew root directory (`PERLBREW_ROOT` or `~/perl5/perlbrew`).
@@ -293,8 +324,11 @@ pub fn normalize_path(path: &std::path::Path) -> PathBuf {
         {
             let drive_letter = &path_str[5..6];
             let rest = &path_str[6..];
-            let windows_path =
-                format!("{}:{}", drive_letter.to_uppercase(), rest.replace('/', "\\"));
+            let windows_path = format!(
+                "{}:{}",
+                drive_letter.to_uppercase(),
+                rest.replace('/', "\\")
+            );
             return PathBuf::from(windows_path);
         }
     }
@@ -372,8 +406,10 @@ mod tests {
 
     #[test]
     fn test_setup_environment_with_paths() {
-        let env =
-            setup_environment(&[PathBuf::from("/workspace/lib"), PathBuf::from("/custom/lib")]);
+        let env = setup_environment(&[
+            PathBuf::from("/workspace/lib"),
+            PathBuf::from("/custom/lib"),
+        ]);
         assert!(env.contains_key("PERL5LIB"));
     }
 
@@ -559,6 +595,9 @@ mod tests {
             result, expected,
             "home_dir() fallback should be std::env::temp_dir(), got {result:?}"
         );
-        assert!(!result.as_os_str().is_empty(), "home_dir() must return a non-empty path");
+        assert!(
+            !result.as_os_str().is_empty(),
+            "home_dir() must return a non-empty path"
+        );
     }
 }

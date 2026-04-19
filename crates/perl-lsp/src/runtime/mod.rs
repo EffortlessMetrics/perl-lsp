@@ -120,13 +120,20 @@ use perl_position_tracking::{WireLocation, WirePosition, WireRange};
 use crate::fallback::text::extract_text_based_symbols;
 
 pub(super) fn source_path_from_uri(uri: &str) -> Option<PathBuf> {
-    Url::parse(uri)
-        .ok()
-        .and_then(|value| if value.scheme() == "file" { value.to_file_path().ok() } else { None })
+    Url::parse(uri).ok().and_then(|value| {
+        if value.scheme() == "file" {
+            value.to_file_path().ok()
+        } else {
+            None
+        }
+    })
 }
 
 fn workspace_folder_path(folder: &WorkspaceFolderState) -> Option<PathBuf> {
-    folder.path.clone().or_else(|| source_path_from_uri(&folder.uri))
+    folder
+        .path
+        .clone()
+        .or_else(|| source_path_from_uri(&folder.uri))
 }
 
 fn workspace_folder_matches_doc_uri(folder: &WorkspaceFolderState, doc_uri: &str) -> bool {
@@ -137,7 +144,9 @@ fn workspace_folder_matches_doc_uri(folder: &WorkspaceFolderState, doc_uri: &str
             let folder_uri = folder.uri.trim_end_matches('/');
             doc_uri == folder.uri
                 || doc_uri == folder_uri
-                || doc_uri.strip_prefix(folder_uri).is_some_and(|suffix| suffix.starts_with('/'))
+                || doc_uri
+                    .strip_prefix(folder_uri)
+                    .is_some_and(|suffix| suffix.starts_with('/'))
         }
     }
 }
@@ -486,8 +495,9 @@ impl LspServer {
         let folders = self.workspace_folders.lock();
 
         // Add current folder's include paths first
-        if let Some(current_folder) =
-            folders.iter().find(|folder| workspace_folder_matches_doc_uri(folder, doc_uri))
+        if let Some(current_folder) = folders
+            .iter()
+            .find(|folder| workspace_folder_matches_doc_uri(folder, doc_uri))
         {
             for include_path in &current_folder.effective_workspace_config.include_paths {
                 // Resolve relative paths against the folder path
@@ -542,8 +552,9 @@ impl LspServer {
     #[must_use]
     pub fn search_scopes_for_doc(&self, doc_uri: &str) -> Vec<WorkspaceFolderState> {
         let folders = self.workspace_folders.lock();
-        if let Some(current_folder) =
-            folders.iter().find(|folder| workspace_folder_matches_doc_uri(folder, doc_uri))
+        if let Some(current_folder) = folders
+            .iter()
+            .find(|folder| workspace_folder_matches_doc_uri(folder, doc_uri))
         {
             let mut scopes = vec![current_folder.clone()];
             for folder in folders.iter() {
@@ -598,7 +609,10 @@ impl LspServer {
             }
         }
 
-        ResolutionContext { doc_uri: doc_uri.map(|u| u.to_string()), search_scopes }
+        ResolutionContext {
+            doc_uri: doc_uri.map(|u| u.to_string()),
+            search_scopes,
+        }
     }
 
     /// Get all workspace folder URIs (for backward compatibility).
@@ -607,7 +621,11 @@ impl LspServer {
     /// of URI strings rather than the full `WorkspaceFolderState` objects.
     #[must_use]
     pub fn workspace_folder_uris(&self) -> Vec<String> {
-        self.workspace_folders.lock().iter().map(|f| f.uri.clone()).collect()
+        self.workspace_folders
+            .lock()
+            .iter()
+            .map(|f| f.uri.clone())
+            .collect()
     }
 
     /// Get all workspace folders as a cloned vector.
@@ -655,7 +673,9 @@ impl LspServer {
     #[inline]
     pub(crate) fn documents_text_snapshot(&self) -> Vec<(String, String)> {
         let docs = self.documents_guard();
-        docs.iter().map(|(k, v)| (k.clone(), v.text.clone())).collect()
+        docs.iter()
+            .map(|(k, v)| (k.clone(), v.text.clone()))
+            .collect()
     }
 
     /// Create a snapshot for scan operations that may need AST access
@@ -764,7 +784,8 @@ impl LspServer {
     /// Intended for tests that need to observe the async-indexing behaviour
     /// introduced by issue #2352.
     pub fn pending_index_tasks(&self) -> usize {
-        self.pending_index_task_count.load(std::sync::atomic::Ordering::SeqCst)
+        self.pending_index_task_count
+            .load(std::sync::atomic::Ordering::SeqCst)
     }
 
     /// Install the diagnostic debouncer (called from Scheduler::new after Arc wrapping).
@@ -818,7 +839,9 @@ impl LspServer {
 
 pub(crate) fn location_from_path(p: &Path) -> serde_json::Value {
     // Try to convert path to URI, fall back to empty string if conversion fails
-    let uri = Url::from_file_path(p).map(|u| u.to_string()).unwrap_or_default();
+    let uri = Url::from_file_path(p)
+        .map(|u| u.to_string())
+        .unwrap_or_default();
     // Jump to start of file or try to find 'package' later if you prefer
     serde_json::json!({
         "uri": uri,

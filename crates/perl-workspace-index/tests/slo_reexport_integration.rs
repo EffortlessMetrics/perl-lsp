@@ -47,7 +47,10 @@ fn integration_given_workspace_index_reexports_are_used_when_api_is_exercised_th
     {
         let stats = tracker.statistics(*operation_type);
         assert_eq!(stats.total_count, (index + 1) as u64);
-        assert_eq!(stats.success_count, if index == 7 { 0 } else { (index + 1) as u64 });
+        assert_eq!(
+            stats.success_count,
+            if index == 7 { 0 } else { (index + 1) as u64 }
+        );
         assert_eq!(stats.failure_count, if index == 7 { 8 } else { 0 });
     }
 

@@ -122,12 +122,18 @@ fn write_snapshots(snapshots_dir: &Path) -> Result<(), Box<dyn std::error::Error
     // Generate production snapshot
     let production_caps = capabilities_json(BuildFlags::production());
     let production_json = serde_json::to_string_pretty(&production_caps)?;
-    fs::write(snapshots_dir.join("production_capabilities.json"), production_json)?;
+    fs::write(
+        snapshots_dir.join("production_capabilities.json"),
+        production_json,
+    )?;
 
     // Generate GA lock snapshot
     let ga_lock_caps = capabilities_json(BuildFlags::ga_lock());
     let ga_lock_json = serde_json::to_string_pretty(&ga_lock_caps)?;
-    fs::write(snapshots_dir.join("ga_lock_capabilities.json"), ga_lock_json)?;
+    fs::write(
+        snapshots_dir.join("ga_lock_capabilities.json"),
+        ga_lock_json,
+    )?;
 
     // Generate all-features snapshot
     let all_caps = capabilities_json(BuildFlags::all());
@@ -136,7 +142,10 @@ fn write_snapshots(snapshots_dir: &Path) -> Result<(), Box<dyn std::error::Error
 
     // Generate feature-id coverage snapshot
     let feature_ids_json = serde_json::to_string_pretty(&capability_profile_feature_ids())?;
-    fs::write(snapshots_dir.join("capability_profile_feature_ids.json"), feature_ids_json)?;
+    fs::write(
+        snapshots_dir.join("capability_profile_feature_ids.json"),
+        feature_ids_json,
+    )?;
 
     Ok(())
 }

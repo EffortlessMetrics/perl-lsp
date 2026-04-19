@@ -55,7 +55,10 @@ pub fn check_role_conflicts(
             };
 
             for method_name in provided_method_names(role_model) {
-                method_providers.entry(method_name).or_default().push(role_name.clone());
+                method_providers
+                    .entry(method_name)
+                    .or_default()
+                    .push(role_name.clone());
             }
         }
 
@@ -85,14 +88,23 @@ pub fn check_role_conflicts(
 }
 
 fn package_kind(symbol_table: &SymbolTable, package_name: &str) -> Option<SymbolKind> {
-    symbol_table.symbols.get(package_name)?.iter().find_map(|symbol| match symbol.kind {
-        SymbolKind::Class | SymbolKind::Role => Some(symbol.kind),
-        _ => None,
-    })
+    symbol_table
+        .symbols
+        .get(package_name)?
+        .iter()
+        .find_map(|symbol| match symbol.kind {
+            SymbolKind::Class | SymbolKind::Role => Some(symbol.kind),
+            _ => None,
+        })
 }
 
 fn provided_method_names(model: &ClassModel) -> HashSet<String> {
-    model.methods.iter().chain(model.adjusts.iter()).map(|method| method.name.clone()).collect()
+    model
+        .methods
+        .iter()
+        .chain(model.adjusts.iter())
+        .map(|method| method.name.clone())
+        .collect()
 }
 
 fn role_anchor_location(
@@ -100,9 +112,15 @@ fn role_anchor_location(
     role_names: &[String],
 ) -> Option<(usize, usize)> {
     for role_name in role_names {
-        if let Some(reference) = symbol_table.references.get(role_name).and_then(|references| {
-            references.iter().find(|reference| reference.kind == SymbolKind::Role)
-        }) {
+        if let Some(reference) = symbol_table
+            .references
+            .get(role_name)
+            .and_then(|references| {
+                references
+                    .iter()
+                    .find(|reference| reference.kind == SymbolKind::Role)
+            })
+        {
             return Some((reference.location.start, reference.location.end));
         }
     }
@@ -112,7 +130,11 @@ fn role_anchor_location(
 
 fn build_message(class_name: &str, method_name: &str, role_names: &[String]) -> String {
     let role_list = format_role_list(role_names);
-    let provider_verb = if role_names.len() == 2 { "both provide" } else { "all provide" };
+    let provider_verb = if role_names.len() == 2 {
+        "both provide"
+    } else {
+        "all provide"
+    };
     format!("Roles {role_list} {provider_verb} method `{method_name}` consumed by `{class_name}`")
 }
 
@@ -122,8 +144,10 @@ fn format_role_list(role_names: &[String]) -> String {
         [single] => format!("`{single}`"),
         [first, second] => format!("`{first}` and `{second}`"),
         many => {
-            let mut parts: Vec<String> =
-                many[..many.len() - 1].iter().map(|name| format!("`{name}`")).collect();
+            let mut parts: Vec<String> = many[..many.len() - 1]
+                .iter()
+                .map(|name| format!("`{name}`"))
+                .collect();
             parts.push(format!("and `{}`", many[many.len() - 1]));
             parts.join(", ")
         }

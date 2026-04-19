@@ -40,5 +40,9 @@ fn test_unicode_regression_case() {
     // This should not panic anymore
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| lexer.next_token()));
 
-    assert!(result.is_ok(), "Lexer should not panic on Unicode input: {:?}", input);
+    assert!(
+        result.is_ok(),
+        "Lexer should not panic on Unicode input: {:?}",
+        input
+    );
 }

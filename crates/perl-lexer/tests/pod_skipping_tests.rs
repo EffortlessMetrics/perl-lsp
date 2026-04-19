@@ -18,7 +18,10 @@ fn significant(input: &str) -> Vec<Token> {
     tokens(input)
         .into_iter()
         .filter(|t| {
-            !matches!(t.token_type, TokenType::Whitespace | TokenType::Newline | TokenType::EOF)
+            !matches!(
+                t.token_type,
+                TokenType::Whitespace | TokenType::Newline | TokenType::EOF
+            )
         })
         .collect()
 }
@@ -33,13 +36,18 @@ fn pod_between_statements_is_skipped() -> R {
     let toks = significant(code);
     // Should have tokens for both `my $x = 1;` and `my $y = 2;`
     let texts: Vec<&str> = toks.iter().map(|t| t.text.as_ref()).collect();
-    assert!(texts.contains(&"my"), "Should contain 'my' keyword: {texts:?}");
+    assert!(
+        texts.contains(&"my"),
+        "Should contain 'my' keyword: {texts:?}"
+    );
     // Should have two 'my' keywords (one for each statement)
     let my_count = texts.iter().filter(|&&t| t == "my").count();
     assert_eq!(my_count, 2, "Should have two 'my' keywords, got: {texts:?}");
     // Should NOT contain any POD-related tokens
     assert!(
-        !texts.iter().any(|t| t.starts_with("=head") || t.starts_with("=cut")),
+        !texts
+            .iter()
+            .any(|t| t.starts_with("=head") || t.starts_with("=cut")),
         "Should not contain POD tokens: {texts:?}"
     );
     Ok(())
@@ -56,7 +64,9 @@ fn pod_at_start_of_file_is_skipped() -> R {
     let texts: Vec<&str> = toks.iter().map(|t| t.text.as_ref()).collect();
     assert!(texts.contains(&"my"), "Should contain 'my': {texts:?}");
     assert!(
-        !texts.iter().any(|t| t.starts_with("=head") || t.starts_with("=cut")),
+        !texts
+            .iter()
+            .any(|t| t.starts_with("=head") || t.starts_with("=cut")),
         "Should not contain POD tokens: {texts:?}"
     );
     Ok(())
@@ -90,7 +100,10 @@ fn multiple_pod_sections_are_skipped() -> R {
     let toks = significant(code);
     let texts: Vec<&str> = toks.iter().map(|t| t.text.as_ref()).collect();
     let my_count = texts.iter().filter(|&&t| t == "my").count();
-    assert_eq!(my_count, 3, "Should have three 'my' keywords, got: {texts:?}");
+    assert_eq!(
+        my_count, 3,
+        "Should have three 'my' keywords, got: {texts:?}"
+    );
     assert!(
         !texts
             .iter()
@@ -110,8 +123,14 @@ fn non_pod_equals_at_line_start_not_skipped() -> R {
     let code = "$x\n= 1;";
     let toks = significant(code);
     let texts: Vec<&str> = toks.iter().map(|t| t.text.as_ref()).collect();
-    assert!(texts.contains(&"="), "Assignment '=' should be preserved: {texts:?}");
-    assert!(texts.contains(&"1"), "Number '1' should be present: {texts:?}");
+    assert!(
+        texts.contains(&"="),
+        "Assignment '=' should be preserved: {texts:?}"
+    );
+    assert!(
+        texts.contains(&"1"),
+        "Number '1' should be present: {texts:?}"
+    );
     Ok(())
 }
 
@@ -121,7 +140,10 @@ fn non_pod_equals_equals_at_line_start_not_skipped() -> R {
     let code = "$x\n== $y;";
     let toks = significant(code);
     let texts: Vec<&str> = toks.iter().map(|t| t.text.as_ref()).collect();
-    assert!(texts.contains(&"=="), "Equality '==' should be preserved: {texts:?}");
+    assert!(
+        texts.contains(&"=="),
+        "Equality '==' should be preserved: {texts:?}"
+    );
     Ok(())
 }
 
@@ -148,7 +170,10 @@ fn pod_directive_types_are_all_skipped() -> R {
         let toks = significant(&code);
         let texts: Vec<&str> = toks.iter().map(|t| t.text.as_ref()).collect();
         let my_count = texts.iter().filter(|&&t| t == "my").count();
-        assert_eq!(my_count, 2, "Directive '{directive}' should be skipped; tokens: {texts:?}");
+        assert_eq!(
+            my_count, 2,
+            "Directive '{directive}' should be skipped; tokens: {texts:?}"
+        );
     }
     Ok(())
 }
@@ -164,7 +189,9 @@ fn pod_with_cut_at_eof_no_trailing_newline() -> R {
     let texts: Vec<&str> = toks.iter().map(|t| t.text.as_ref()).collect();
     assert!(texts.contains(&"my"), "Should contain 'my': {texts:?}");
     assert!(
-        !texts.iter().any(|t| t.starts_with("=head") || t.starts_with("=cut")),
+        !texts
+            .iter()
+            .any(|t| t.starts_with("=head") || t.starts_with("=cut")),
         "Should not contain POD tokens: {texts:?}"
     );
     Ok(())
@@ -179,7 +206,10 @@ fn code_immediately_after_cut_line() -> R {
     let code = "=head1 NAME\nFoo\n=cut\nprint 42;";
     let toks = significant(code);
     let texts: Vec<&str> = toks.iter().map(|t| t.text.as_ref()).collect();
-    assert!(texts.contains(&"print"), "Should contain 'print': {texts:?}");
+    assert!(
+        texts.contains(&"print"),
+        "Should contain 'print': {texts:?}"
+    );
     assert!(texts.contains(&"42"), "Should contain '42': {texts:?}");
     Ok(())
 }

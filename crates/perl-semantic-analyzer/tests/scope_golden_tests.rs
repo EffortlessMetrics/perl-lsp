@@ -69,7 +69,9 @@ $closure->();
     assert!(
         fp.is_empty(),
         "nested closure capturing outer variable should produce zero false positives; got: {:?}",
-        fp.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+        fp.iter()
+            .map(|i| (&i.kind, &i.variable_name))
+            .collect::<Vec<_>>()
     );
     Ok(())
 }
@@ -94,7 +96,9 @@ print $middle->();
     assert!(
         fp.is_empty(),
         "doubly nested closure should produce zero false positives; got: {:?}",
-        fp.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+        fp.iter()
+            .map(|i| (&i.kind, &i.variable_name))
+            .collect::<Vec<_>>()
     );
     Ok(())
 }
@@ -118,7 +122,9 @@ for my $item (@items) {
     assert!(
         fp.is_empty(),
         "for-my loop variable should produce zero false positives; got: {:?}",
-        fp.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+        fp.iter()
+            .map(|i| (&i.kind, &i.variable_name))
+            .collect::<Vec<_>>()
     );
     Ok(())
 }
@@ -137,7 +143,9 @@ foreach my $x (1..10) {
     assert!(
         fp.is_empty(),
         "foreach-my loop variable should produce zero false positives; got: {:?}",
-        fp.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+        fp.iter()
+            .map(|i| (&i.kind, &i.variable_name))
+            .collect::<Vec<_>>()
     );
     Ok(())
 }
@@ -161,7 +169,10 @@ for (1..10) {
         undeclared_topic,
         0,
         "topic variable $_ inside for loop must not be undeclared; issues: {:?}",
-        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+        issues
+            .iter()
+            .map(|i| (&i.kind, &i.variable_name))
+            .collect::<Vec<_>>()
     );
     Ok(())
 }
@@ -186,7 +197,9 @@ print $count;
     assert!(
         fp.is_empty(),
         "while loop with declared condition variable should produce zero false positives; got: {:?}",
-        fp.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+        fp.iter()
+            .map(|i| (&i.kind, &i.variable_name))
+            .collect::<Vec<_>>()
     );
     Ok(())
 }
@@ -207,7 +220,9 @@ print $count;
     assert!(
         fp.is_empty(),
         "until loop with declared condition variable should produce zero false positives; got: {:?}",
-        fp.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+        fp.iter()
+            .map(|i| (&i.kind, &i.variable_name))
+            .collect::<Vec<_>>()
     );
     Ok(())
 }
@@ -236,7 +251,9 @@ if ($x > 0) {
     assert!(
         fp.is_empty(),
         "if/elsif/else with declared variables should produce zero false positives; got: {:?}",
-        fp.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+        fp.iter()
+            .map(|i| (&i.kind, &i.variable_name))
+            .collect::<Vec<_>>()
     );
     Ok(())
 }
@@ -260,7 +277,9 @@ print $result;
     assert!(
         fp.is_empty(),
         "ternary expression variables should produce zero false positives; got: {:?}",
-        fp.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+        fp.iter()
+            .map(|i| (&i.kind, &i.variable_name))
+            .collect::<Vec<_>>()
     );
     Ok(())
 }
@@ -286,7 +305,9 @@ print "$upper has $len chars";
     assert!(
         fp.is_empty(),
         "string-operation variables used in interpolation should produce zero false positives; got: {:?}",
-        fp.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+        fp.iter()
+            .map(|i| (&i.kind, &i.variable_name))
+            .collect::<Vec<_>>()
     );
     Ok(())
 }
@@ -311,7 +332,9 @@ print @arr;
     assert!(
         fp.is_empty(),
         "array push/shift operations should produce zero false positives; got: {:?}",
-        fp.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+        fp.iter()
+            .map(|i| (&i.kind, &i.variable_name))
+            .collect::<Vec<_>>()
     );
     Ok(())
 }
@@ -331,7 +354,9 @@ print %hash;
     assert!(
         fp.is_empty(),
         "hash assignment and delete should produce zero false positives; got: {:?}",
-        fp.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+        fp.iter()
+            .map(|i| (&i.kind, &i.variable_name))
+            .collect::<Vec<_>>()
     );
     Ok(())
 }
@@ -376,10 +401,12 @@ if ($text =~ /(\d{4})-(\d{2})-(\d{2})/) {
     let fp_named: Vec<_> = issues
         .iter()
         .filter(|i| {
-            matches!(i.kind, IssueKind::UnusedVariable | IssueKind::UninitializedVariable)
-                && (i.variable_name.contains("year")
-                    || i.variable_name.contains("month")
-                    || i.variable_name.contains("day"))
+            matches!(
+                i.kind,
+                IssueKind::UnusedVariable | IssueKind::UninitializedVariable
+            ) && (i.variable_name.contains("year")
+                || i.variable_name.contains("month")
+                || i.variable_name.contains("day"))
         })
         .collect();
     assert!(
@@ -413,7 +440,9 @@ print classify(5);
     assert!(
         fp.is_empty(),
         "sub with multiple return paths should produce zero false positives; got: {:?}",
-        fp.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+        fp.iter()
+            .map(|i| (&i.kind, &i.variable_name))
+            .collect::<Vec<_>>()
     );
     Ok(())
 }
@@ -436,7 +465,9 @@ print add(1, 2);
     assert!(
         fp.is_empty(),
         "sub parameter destructuring should produce zero false positives; got: {:?}",
-        fp.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+        fp.iter()
+            .map(|i| (&i.kind, &i.variable_name))
+            .collect::<Vec<_>>()
     );
     Ok(())
 }
@@ -490,8 +521,10 @@ print $result;
     let fp_result: Vec<_> = issues
         .iter()
         .filter(|i| {
-            matches!(i.kind, IssueKind::UndeclaredVariable | IssueKind::UninitializedVariable)
-                && i.variable_name.contains("result")
+            matches!(
+                i.kind,
+                IssueKind::UndeclaredVariable | IssueKind::UninitializedVariable
+            ) && i.variable_name.contains("result")
         })
         .collect();
     assert!(
@@ -522,7 +555,9 @@ print $greeting, " ", $name, "\n";
     assert!(
         fp.is_empty(),
         "variables in print comma-separated arg list must be marked as used; got: {:?}",
-        fp.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+        fp.iter()
+            .map(|i| (&i.kind, &i.variable_name))
+            .collect::<Vec<_>>()
     );
     Ok(())
 }
@@ -542,7 +577,9 @@ say $a, $b, $c;
     assert!(
         fp.is_empty(),
         "variables in say comma-separated arg list must be marked as used; got: {:?}",
-        fp.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+        fp.iter()
+            .map(|i| (&i.kind, &i.variable_name))
+            .collect::<Vec<_>>()
     );
     Ok(())
 }

@@ -131,7 +131,10 @@ impl TestGenerator {
     /// // Generator ready for Perl parsing workflow test generation
     /// ```
     pub fn new(framework: TestFramework) -> Self {
-        Self { framework, options: TestGeneratorOptions::default() }
+        Self {
+            framework,
+            options: TestGeneratorOptions::default(),
+        }
     }
 
     /// Create a new test generator with custom options
@@ -188,7 +191,9 @@ impl TestGenerator {
 
     fn find_subroutines_recursive(&self, node: &Node, subs: &mut Vec<SubroutineInfo>) {
         match &node.kind {
-            NodeKind::Subroutine { name, signature, .. } => {
+            NodeKind::Subroutine {
+                name, signature, ..
+            } => {
                 if let Some(name) = name {
                     let is_private = name.starts_with('_');
                     if !is_private || self.options.test_private {
@@ -223,7 +228,12 @@ impl TestGenerator {
             TestFramework::TestClass => self.generate_test_class_basic(&sub.name, &sub.params),
         };
 
-        TestCase { name: test_name, description, code, is_todo: false }
+        TestCase {
+            name: test_name,
+            description,
+            code,
+            is_todo: false,
+        }
     }
 
     fn generate_test_more_basic(&self, name: &str, params: &Option<Vec<String>>) -> String {
@@ -240,7 +250,10 @@ impl TestGenerator {
         }
 
         if let Some(expected) = self.options.expected_values.get(name) {
-            code.push_str(&format!("    is($result, {}, 'Returns expected value');\n", expected));
+            code.push_str(&format!(
+                "    is($result, {}, 'Returns expected value');\n",
+                expected
+            ));
         } else {
             code.push_str("    ok(defined $result, 'Function returns defined value');\n");
         }
@@ -342,7 +355,12 @@ impl TestGenerator {
             _ => String::new(), // Simplified for other frameworks
         };
 
-        TestCase { name: test_name, description, code, is_todo: false }
+        TestCase {
+            name: test_name,
+            description,
+            code,
+            is_todo: false,
+        }
     }
 
     fn generate_empty_test(&self, sub: &SubroutineInfo) -> TestCase {
@@ -363,7 +381,12 @@ impl TestGenerator {
             _ => String::new(),
         };
 
-        TestCase { name: test_name, description, code, is_todo: false }
+        TestCase {
+            name: test_name,
+            description,
+            code,
+            is_todo: false,
+        }
     }
 
     fn generate_type_test(&self, sub: &SubroutineInfo) -> TestCase {
@@ -388,7 +411,12 @@ impl TestGenerator {
             _ => String::new(),
         };
 
-        TestCase { name: test_name, description, code, is_todo: false }
+        TestCase {
+            name: test_name,
+            description,
+            code,
+            is_todo: false,
+        }
     }
 
     /// Generate data-driven test
@@ -455,7 +483,12 @@ impl TestGenerator {
             _ => String::new(),
         };
 
-        TestCase { name: test_name, description, code, is_todo: true }
+        TestCase {
+            name: test_name,
+            description,
+            code,
+            is_todo: true,
+        }
     }
 
     /// Generate module-level tests
@@ -551,7 +584,12 @@ impl TestGenerator {
             _ => String::new(),
         };
 
-        TestCase { name: test_name, description, code, is_todo: false }
+        TestCase {
+            name: test_name,
+            description,
+            code,
+            is_todo: false,
+        }
     }
 
     fn generate_export_test(&self, package: &str) -> TestCase {
@@ -570,7 +608,12 @@ impl TestGenerator {
             _ => String::new(),
         };
 
-        TestCase { name: test_name, description, code, is_todo: false }
+        TestCase {
+            name: test_name,
+            description,
+            code,
+            is_todo: false,
+        }
     }
 
     fn generate_constructor_test(&self, package: &str) -> TestCase {
@@ -593,7 +636,12 @@ impl TestGenerator {
             _ => String::new(),
         };
 
-        TestCase { name: test_name, description, code, is_todo: false }
+        TestCase {
+            name: test_name,
+            description,
+            code,
+            is_todo: false,
+        }
     }
 
     fn generate_sample_args(&self, count: usize) -> String {
@@ -617,7 +665,11 @@ impl TestGenerator {
                         _ => {}
                     }
                 }
-                if param_names.is_empty() { None } else { Some(param_names) }
+                if param_names.is_empty() {
+                    None
+                } else {
+                    Some(param_names)
+                }
             } else {
                 None
             }
@@ -661,7 +713,11 @@ impl TestRunner {
     ///
     /// Uses "prove -l" as the default test command.
     pub fn new() -> Self {
-        Self { test_command: "prove -l".to_string(), watch_mode: false, coverage: false }
+        Self {
+            test_command: "prove -l".to_string(),
+            watch_mode: false,
+            coverage: false,
+        }
     }
 
     /// Create a new test runner with a custom command
@@ -670,7 +726,11 @@ impl TestRunner {
     ///
     /// * `command` - The shell command to execute tests (e.g., "prove -v -l")
     pub fn with_command(command: String) -> Self {
-        Self { test_command: command, watch_mode: false, coverage: false }
+        Self {
+            test_command: command,
+            watch_mode: false,
+            coverage: false,
+        }
     }
 
     /// Run tests and return results
@@ -818,7 +878,9 @@ impl Default for RefactoringSuggester {
 impl RefactoringSuggester {
     /// Create a new refactoring suggester
     pub fn new() -> Self {
-        Self { suggestions: Vec::new() }
+        Self {
+            suggestions: Vec::new(),
+        }
     }
 
     /// Analyze code and generate refactoring suggestions
@@ -923,7 +985,11 @@ impl RefactoringSuggester {
                             "Method has {} lines. Consider breaking into smaller functions.",
                             lines
                         ),
-                        priority: if lines > 100 { Priority::High } else { Priority::Medium },
+                        priority: if lines > 100 {
+                            Priority::High
+                        } else {
+                            Priority::Medium
+                        },
                         category: RefactoringCategory::LongMethod,
                         code_action: Some("extract_method".to_string()),
                     });
@@ -951,7 +1017,9 @@ impl RefactoringSuggester {
 
     fn check_parameter_count_recursive(&mut self, node: &Node) {
         match &node.kind {
-            NodeKind::Subroutine { name, signature, .. } => {
+            NodeKind::Subroutine {
+                name, signature, ..
+            } => {
                 let params = self.extract_parameters(signature.as_deref());
                 if let Some(params) = &params {
                     if params.len() > 5 {
@@ -985,7 +1053,9 @@ impl RefactoringSuggester {
 
     fn check_naming_recursive(&mut self, node: &Node) {
         match &node.kind {
-            NodeKind::Subroutine { name: Some(name), .. } => {
+            NodeKind::Subroutine {
+                name: Some(name), ..
+            } => {
                 if !self.is_good_name(name) {
                     self.suggestions.push(RefactoringSuggestion {
                         title: format!("Poor naming: {}", name),
@@ -1068,7 +1138,11 @@ impl RefactoringSuggester {
                         _ => {}
                     }
                 }
-                if param_names.is_empty() { None } else { Some(param_names) }
+                if param_names.is_empty() {
+                    None
+                } else {
+                    Some(param_names)
+                }
             } else {
                 None
             }
@@ -1201,7 +1275,11 @@ mod tests {
         let suggestions = suggester.analyze(&ast, "sub complex_function { }");
 
         // Should suggest parameter object for too many params
-        assert!(suggestions.iter().any(|s| s.category == RefactoringCategory::TooManyParameters));
+        assert!(
+            suggestions
+                .iter()
+                .any(|s| s.category == RefactoringCategory::TooManyParameters)
+        );
     }
 
     #[test]
@@ -1214,7 +1292,10 @@ mod tests {
                 statements: vec![Node::new(
                     NodeKind::If {
                         condition: Box::new(Node::new(
-                            NodeKind::Variable { name: "$x".to_string(), sigil: "$".to_string() },
+                            NodeKind::Variable {
+                                name: "$x".to_string(),
+                                sigil: "$".to_string(),
+                            },
                             crate::ast::SourceLocation { start: 0, end: 0 },
                         )),
                         then_branch: Box::new(Node::new(

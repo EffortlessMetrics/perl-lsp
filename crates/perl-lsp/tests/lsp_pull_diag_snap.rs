@@ -14,7 +14,10 @@ fn scrub_result_ids(value: &mut Value) {
     match value {
         Value::Object(map) => {
             if map.contains_key("resultId") {
-                map.insert("resultId".to_string(), Value::String("<stable-result-id>".into()));
+                map.insert(
+                    "resultId".to_string(),
+                    Value::String("<stable-result-id>".into()),
+                );
             }
             for nested in map.values_mut() {
                 scrub_result_ids(nested);
@@ -114,9 +117,14 @@ print "OK\\n";
 
     let mut workspace_result = harness.request("workspace/diagnostic", json!({}))?;
 
-    if let Some(items) = workspace_result.get_mut("items").and_then(Value::as_array_mut) {
+    if let Some(items) = workspace_result
+        .get_mut("items")
+        .and_then(Value::as_array_mut)
+    {
         items.sort_by(|left, right| {
-            left.get("uri").and_then(Value::as_str).cmp(&right.get("uri").and_then(Value::as_str))
+            left.get("uri")
+                .and_then(Value::as_str)
+                .cmp(&right.get("uri").and_then(Value::as_str))
         });
     }
 

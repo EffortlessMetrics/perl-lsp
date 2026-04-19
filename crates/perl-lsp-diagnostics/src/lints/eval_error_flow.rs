@@ -33,13 +33,20 @@ fn visit_node(node: &Node, diagnostics: &mut Vec<Diagnostic>, state: FlowState) 
         NodeKind::Class { body, .. } => {
             visit_node(body, diagnostics, FlowState::default());
         }
-        NodeKind::Package { block: Some(block), .. } => {
+        NodeKind::Package {
+            block: Some(block), ..
+        } => {
             visit_node(block, diagnostics, FlowState::default());
         }
         NodeKind::PhaseBlock { block, .. } => {
             visit_node(block, diagnostics, FlowState::default());
         }
-        NodeKind::If { then_branch, elsif_branches, else_branch, .. } => {
+        NodeKind::If {
+            then_branch,
+            elsif_branches,
+            else_branch,
+            ..
+        } => {
             visit_node(then_branch, diagnostics, state);
             for (_, branch) in elsif_branches {
                 visit_node(branch, diagnostics, FlowState::default());
@@ -48,7 +55,11 @@ fn visit_node(node: &Node, diagnostics: &mut Vec<Diagnostic>, state: FlowState) 
                 visit_node(branch, diagnostics, FlowState::default());
             }
         }
-        NodeKind::While { body, continue_block, .. } => {
+        NodeKind::While {
+            body,
+            continue_block,
+            ..
+        } => {
             visit_node(body, diagnostics, state);
             if let Some(block) = continue_block {
                 visit_node(block, diagnostics, state);
@@ -81,9 +92,10 @@ fn check_statement_list(
     for statement in statements {
         let entry_state = state;
         let facts = inspect_statement(statement);
-        let is_handler_block =
-            matches!(&statement.kind, NodeKind::If { .. } | NodeKind::While { .. })
-                && facts.reads_error_var;
+        let is_handler_block = matches!(
+            &statement.kind,
+            NodeKind::If { .. } | NodeKind::While { .. }
+        ) && facts.reads_error_var;
 
         if facts.reads_error_var && !facts.has_source && !entry_state.immediate_after_source {
             diagnostics.push(make_diagnostic(statement, entry_state.source_seen));
@@ -127,7 +139,11 @@ fn inspect_node(node: &Node, facts: &mut StatementFacts) {
         NodeKind::Variable { sigil, name } if is_error_variable(sigil, name) => {
             facts.reads_error_var = true;
         }
-        NodeKind::StatementModifier { statement, condition, .. } => {
+        NodeKind::StatementModifier {
+            statement,
+            condition,
+            ..
+        } => {
             inspect_node(statement, facts);
             inspect_node(condition, facts);
         }
@@ -154,7 +170,11 @@ fn inspect_node(node: &Node, facts: &mut StatementFacts) {
         NodeKind::Unary { operand, .. } => {
             inspect_node(operand, facts);
         }
-        NodeKind::Ternary { condition, then_expr, else_expr } => {
+        NodeKind::Ternary {
+            condition,
+            then_expr,
+            else_expr,
+        } => {
             inspect_node(condition, facts);
             inspect_node(then_expr, facts);
             inspect_node(else_expr, facts);
@@ -179,10 +199,16 @@ fn inspect_node(node: &Node, facts: &mut StatementFacts) {
         NodeKind::ExpressionStatement { expression } => {
             inspect_node(expression, facts);
         }
-        NodeKind::VariableDeclaration { initializer: Some(init), .. } => {
+        NodeKind::VariableDeclaration {
+            initializer: Some(init),
+            ..
+        } => {
             inspect_node(init, facts);
         }
-        NodeKind::VariableListDeclaration { initializer: Some(init), .. } => {
+        NodeKind::VariableListDeclaration {
+            initializer: Some(init),
+            ..
+        } => {
             inspect_node(init, facts);
         }
         NodeKind::Return { value: Some(value) } => {

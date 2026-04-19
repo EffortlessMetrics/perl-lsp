@@ -211,8 +211,9 @@ fn test_string_function_signatures() -> TestResult {
 
     // Test chomp signature
     let code = "chomp(";
-    let help =
-        provider.get_signature_help(code, code.len() - 1).ok_or("No signature help for chomp")?;
+    let help = provider
+        .get_signature_help(code, code.len() - 1)
+        .ok_or("No signature help for chomp")?;
     assert!(!help.signatures.is_empty());
     let sig = &help.signatures[0];
     assert!(sig.label.contains("chomp"));
@@ -220,8 +221,9 @@ fn test_string_function_signatures() -> TestResult {
 
     // Test substr with multiple parameters
     let code = "substr($str, 5, ";
-    let help =
-        provider.get_signature_help(code, code.len() - 1).ok_or("No signature help for substr")?;
+    let help = provider
+        .get_signature_help(code, code.len() - 1)
+        .ok_or("No signature help for substr")?;
     assert_eq!(help.active_parameter, Some(2)); // Third parameter
     Ok(())
 }
@@ -233,15 +235,17 @@ fn test_io_function_signatures() -> TestResult {
 
     // Test say (Perl 5.10+)
     let code = "say(";
-    let help =
-        provider.get_signature_help(code, code.len() - 1).ok_or("No signature help for say")?;
+    let help = provider
+        .get_signature_help(code, code.len() - 1)
+        .ok_or("No signature help for say")?;
     assert!(!help.signatures.is_empty());
     assert!(help.signatures[0].label.contains("say"));
 
     // Test sysread
     let code = "sysread($fh, $buf, ";
-    let help =
-        provider.get_signature_help(code, code.len() - 1).ok_or("No signature help for sysread")?;
+    let help = provider
+        .get_signature_help(code, code.len() - 1)
+        .ok_or("No signature help for sysread")?;
     assert_eq!(help.active_parameter, Some(2));
     Ok(())
 }
@@ -253,8 +257,9 @@ fn test_math_function_signatures() -> TestResult {
 
     // Test atan2 which takes two parameters
     let code = "atan2($y, ";
-    let help =
-        provider.get_signature_help(code, code.len() - 1).ok_or("No signature help for atan2")?;
+    let help = provider
+        .get_signature_help(code, code.len() - 1)
+        .ok_or("No signature help for atan2")?;
     assert!(!help.signatures.is_empty());
     assert!(help.signatures[0].label.contains("atan2"));
     assert_eq!(help.active_parameter, Some(1));
@@ -268,8 +273,9 @@ fn test_socket_function_signatures() -> TestResult {
 
     // Test socket function
     let code = "socket($sock, $domain, ";
-    let help =
-        provider.get_signature_help(code, code.len() - 1).ok_or("No signature help for socket")?;
+    let help = provider
+        .get_signature_help(code, code.len() - 1)
+        .ok_or("No signature help for socket")?;
     assert!(!help.signatures.is_empty());
     assert!(help.signatures[0].label.contains("socket"));
     Ok(())
@@ -282,8 +288,9 @@ fn test_tied_variable_signatures() -> TestResult {
 
     // Test tie function
     let code = "tie(%hash, 'Tie::File', ";
-    let help =
-        provider.get_signature_help(code, code.len() - 1).ok_or("No signature help for tie")?;
+    let help = provider
+        .get_signature_help(code, code.len() - 1)
+        .ok_or("No signature help for tie")?;
     assert!(!help.signatures.is_empty());
     assert!(help.signatures[0].label.contains("tie"));
     Ok(())
@@ -335,15 +342,17 @@ fn test_io_control_function_signatures() -> TestResult {
 
     // Test pipe
     let code = "pipe($read, ";
-    let help =
-        provider.get_signature_help(code, code.len() - 1).ok_or("No signature help for pipe")?;
+    let help = provider
+        .get_signature_help(code, code.len() - 1)
+        .ok_or("No signature help for pipe")?;
     assert!(!help.signatures.is_empty());
     assert!(help.signatures[0].label.contains("pipe"));
 
     // Test flock
     let code = "flock($fh, ";
-    let help =
-        provider.get_signature_help(code, code.len() - 1).ok_or("No signature help for flock")?;
+    let help = provider
+        .get_signature_help(code, code.len() - 1)
+        .ok_or("No signature help for flock")?;
     assert!(!help.signatures.is_empty());
     assert!(help.signatures[0].label.contains("flock"));
     Ok(())

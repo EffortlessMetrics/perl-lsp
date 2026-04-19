@@ -71,7 +71,10 @@ fn parse_context_non_numeric_line_returns_none() {
     // This is expected regex behavior -- only fully non-numeric values are rejected.
     let partial = parser.parse_context("main::(file.pm):12.5:");
     if let Some((_, _, line)) = partial {
-        assert_eq!(line, 12, "regex captures leading digits from partial numeric");
+        assert_eq!(
+            line, 12,
+            "regex captures leading digits from partial numeric"
+        );
     }
 }
 
@@ -453,7 +456,11 @@ fn parse_frame_eval_with_very_high_eval_number() {
 #[test]
 fn classify_eval_frames_all_get_eval_category() {
     let classifier = PerlFrameClassifier::new();
-    let eval_paths = ["(eval 1)", "(eval 50)[/script.pl:5]", "(eval 999)[/deep/nested.pm:100]"];
+    let eval_paths = [
+        "(eval 1)",
+        "(eval 50)[/script.pl:5]",
+        "(eval 999)[/deep/nested.pm:100]",
+    ];
 
     for path in &eval_paths {
         let frame = StackFrame::new(1, "test", Some(Source::new(*path)), 1);
@@ -499,9 +506,19 @@ fn classify_all_mixed_with_include_external_false() {
     let classifier = PerlFrameClassifier::new();
     let frames = vec![
         StackFrame::new(1, "main::run", Some(Source::new("/app/main.pl")), 10),
-        StackFrame::new(2, "strict::import", Some(Source::new("/usr/lib/perl5/strict.pm")), 1),
+        StackFrame::new(
+            2,
+            "strict::import",
+            Some(Source::new("/usr/lib/perl5/strict.pm")),
+            1,
+        ),
         StackFrame::new(3, "eval_code", Some(Source::new("(eval 5)")), 1),
-        StackFrame::new(4, "Moose::new", Some(Source::new("/home/user/.cpanm/work/Moose.pm")), 50),
+        StackFrame::new(
+            4,
+            "Moose::new",
+            Some(Source::new("/home/user/.cpanm/work/Moose.pm")),
+            50,
+        ),
     ];
 
     let result = classifier.classify_all(frames, false);
@@ -509,7 +526,10 @@ fn classify_all_mixed_with_include_external_false() {
     // eval is not "external" per is_external(), so it's included
     let user_names: Vec<&str> = result.iter().map(|f| f.name.as_str()).collect();
     // User: main::run; Eval frames are not external but not user_code either
-    assert!(user_names.contains(&"main::run"), "main::run should be in user-only results");
+    assert!(
+        user_names.contains(&"main::run"),
+        "main::run should be in user-only results"
+    );
 }
 
 #[test]
@@ -517,12 +537,26 @@ fn classify_all_mixed_with_include_external_true() {
     let classifier = PerlFrameClassifier::new();
     let frames = vec![
         StackFrame::new(1, "main::run", Some(Source::new("/app/main.pl")), 10),
-        StackFrame::new(2, "strict::import", Some(Source::new("/usr/lib/perl5/strict.pm")), 1),
-        StackFrame::new(3, "Moose::new", Some(Source::new("/home/user/.cpanm/work/Moose.pm")), 50),
+        StackFrame::new(
+            2,
+            "strict::import",
+            Some(Source::new("/usr/lib/perl5/strict.pm")),
+            1,
+        ),
+        StackFrame::new(
+            3,
+            "Moose::new",
+            Some(Source::new("/home/user/.cpanm/work/Moose.pm")),
+            50,
+        ),
     ];
 
     let result = classifier.classify_all(frames, true);
-    assert_eq!(result.len(), 3, "All frames included when include_external=true");
+    assert_eq!(
+        result.len(),
+        3,
+        "All frames included when include_external=true"
+    );
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -563,8 +597,12 @@ fn looks_like_frame_perl_code_statements_negative() {
     assert!(!PerlStackParser::looks_like_frame("use warnings;"));
     assert!(!PerlStackParser::looks_like_frame("sub my_function {"));
     assert!(!PerlStackParser::looks_like_frame("return $result;"));
-    assert!(!PerlStackParser::looks_like_frame("print \"hello world\\n\";"));
-    assert!(!PerlStackParser::looks_like_frame("die \"error occurred\";"));
+    assert!(!PerlStackParser::looks_like_frame(
+        "print \"hello world\\n\";"
+    ));
+    assert!(!PerlStackParser::looks_like_frame(
+        "die \"error occurred\";"
+    ));
 }
 
 #[test]
@@ -572,15 +610,23 @@ fn looks_like_frame_debugger_prompts_negative() {
     // Perl debugger prompt lines that are NOT stack frames
     assert!(!PerlStackParser::looks_like_frame("  DB<1>"));
     assert!(!PerlStackParser::looks_like_frame("  DB<42> p $x"));
-    assert!(!PerlStackParser::looks_like_frame("Loading DB routines from perl5db.pl version 1.60"));
+    assert!(!PerlStackParser::looks_like_frame(
+        "Loading DB routines from perl5db.pl version 1.60"
+    ));
 }
 
 #[test]
 fn looks_like_frame_error_messages_negative() {
     // Error messages that might look similar but aren't frames
-    assert!(!PerlStackParser::looks_like_frame("Can't locate Foo.pm in @INC"));
-    assert!(!PerlStackParser::looks_like_frame("Compilation failed in require"));
-    assert!(!PerlStackParser::looks_like_frame("syntax error near \"unexpected\""));
+    assert!(!PerlStackParser::looks_like_frame(
+        "Can't locate Foo.pm in @INC"
+    ));
+    assert!(!PerlStackParser::looks_like_frame(
+        "Compilation failed in require"
+    ));
+    assert!(!PerlStackParser::looks_like_frame(
+        "syntax error near \"unexpected\""
+    ));
 }
 
 #[test]
@@ -593,7 +639,9 @@ fn looks_like_frame_empty_and_whitespace_negative() {
 
 #[test]
 fn looks_like_frame_positive_standard_format() {
-    assert!(PerlStackParser::looks_like_frame("  #0  main::foo at script.pl line 10"));
+    assert!(PerlStackParser::looks_like_frame(
+        "  #0  main::foo at script.pl line 10"
+    ));
     assert!(PerlStackParser::looks_like_frame(
         "  #99  Deeply::Nested::Package::method at /long/path.pm line 999"
     ));
@@ -601,11 +649,15 @@ fn looks_like_frame_positive_standard_format() {
 
 #[test]
 fn looks_like_frame_positive_verbose_format() {
-    assert!(PerlStackParser::looks_like_frame("$ = Foo::bar() called from file `/app.pm' line 1"));
+    assert!(PerlStackParser::looks_like_frame(
+        "$ = Foo::bar() called from file `/app.pm' line 1"
+    ));
     assert!(PerlStackParser::looks_like_frame(
         "@ = List::process() called from file `/lib.pm' line 50"
     ));
-    assert!(PerlStackParser::looks_like_frame(". = main::init() called from '-e' line 1"));
+    assert!(PerlStackParser::looks_like_frame(
+        ". = main::init() called from '-e' line 1"
+    ));
 }
 
 #[test]

@@ -17,13 +17,19 @@ fn test_semantic_token_basic_generation() -> Result<(), Box<dyn std::error::Erro
     let tokens = provider.extract(&ast);
 
     // Should generate semantic tokens
-    assert!(!tokens.is_empty(), "Should generate semantic tokens for variable declaration");
+    assert!(
+        !tokens.is_empty(),
+        "Should generate semantic tokens for variable declaration"
+    );
 
     // All tokens should have positive length
     for token in &tokens {
         assert!(token.length > 0, "All tokens should have positive length");
         assert!(token.line < 100, "Line numbers should be reasonable");
-        assert!(token.start_char < 1000, "Character positions should be reasonable");
+        assert!(
+            token.start_char < 1000,
+            "Character positions should be reasonable"
+        );
     }
 
     // Verify no overlaps exist in token list
@@ -42,7 +48,10 @@ fn test_semantic_token_complex_code_generation() -> Result<(), Box<dyn std::erro
     let tokens = provider.extract(&ast);
 
     // Should generate tokens for complex code
-    assert!(!tokens.is_empty(), "Should generate semantic tokens for complex code");
+    assert!(
+        !tokens.is_empty(),
+        "Should generate semantic tokens for complex code"
+    );
 
     // Test that we have tokens for different constructs
     let has_namespace = tokens.iter().any(|token| {
@@ -90,7 +99,10 @@ fn test_semantic_token_utf8_handling() -> Result<(), Box<dyn std::error::Error>>
     // All tokens should have reasonable positions and lengths
     for token in &tokens {
         assert!(token.length > 0, "All tokens should have positive length");
-        assert!(token.length < 100, "Token lengths should be reasonable for UTF-8");
+        assert!(
+            token.length < 100,
+            "Token lengths should be reasonable for UTF-8"
+        );
     }
 
     // Verify no overlaps with UTF-8 characters
@@ -143,17 +155,33 @@ fn test_semantic_token_idempotence() -> Result<(), Box<dyn std::error::Error>> {
     let tokens2 = provider.extract(&ast);
 
     // Should be identical
-    assert_eq!(tokens1.len(), tokens2.len(), "Token count should be identical across runs");
+    assert_eq!(
+        tokens1.len(),
+        tokens2.len(),
+        "Token count should be identical across runs"
+    );
 
     for (i, (token1, token2)) in tokens1.iter().zip(tokens2.iter()).enumerate() {
-        assert_eq!(token1.line, token2.line, "Token {} line should be identical", i);
+        assert_eq!(
+            token1.line, token2.line,
+            "Token {} line should be identical",
+            i
+        );
         assert_eq!(
             token1.start_char, token2.start_char,
             "Token {} start_char should be identical",
             i
         );
-        assert_eq!(token1.length, token2.length, "Token {} length should be identical", i);
-        assert_eq!(token1.token_type, token2.token_type, "Token {} type should be identical", i);
+        assert_eq!(
+            token1.length, token2.length,
+            "Token {} length should be identical",
+            i
+        );
+        assert_eq!(
+            token1.token_type, token2.token_type,
+            "Token {} type should be identical",
+            i
+        );
     }
 
     // Verify both results have no overlaps
@@ -186,7 +214,10 @@ fn test_semantic_token_performance_characteristics() -> Result<(), Box<dyn std::
     );
 
     // Should generate reasonable number of tokens
-    assert!(tokens.len() >= 50, "Should generate at least 50 tokens for 50 variables");
+    assert!(
+        tokens.len() >= 50,
+        "Should generate at least 50 tokens for 50 variables"
+    );
 
     // All tokens should be valid
     verify_no_semantic_token_overlaps(&tokens)?;
@@ -194,7 +225,10 @@ fn test_semantic_token_performance_characteristics() -> Result<(), Box<dyn std::
     // Memory usage should be reasonable
     let total_token_size = tokens.len()
         * std::mem::size_of::<perl_lsp::features::semantic_tokens_provider::SemanticToken>();
-    assert!(total_token_size < 100_000, "Token memory usage should be reasonable");
+    assert!(
+        total_token_size < 100_000,
+        "Token memory usage should be reasonable"
+    );
     Ok(())
 }
 
@@ -237,7 +271,11 @@ fn verify_no_semantic_token_overlaps(
 ) -> Result<(), Box<dyn std::error::Error>> {
     // Sort tokens by position for overlap checking
     let mut sorted_tokens: Vec<_> = tokens.iter().collect();
-    sorted_tokens.sort_by(|a, b| a.line.cmp(&b.line).then_with(|| a.start_char.cmp(&b.start_char)));
+    sorted_tokens.sort_by(|a, b| {
+        a.line
+            .cmp(&b.line)
+            .then_with(|| a.start_char.cmp(&b.start_char))
+    });
 
     for i in 1..sorted_tokens.len() {
         let prev_token = sorted_tokens[i - 1];

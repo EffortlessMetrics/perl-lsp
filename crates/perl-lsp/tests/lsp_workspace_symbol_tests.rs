@@ -203,7 +203,9 @@ sub target_function {
     });
 
     // Resolve the symbol for additional detail
-    let response = harness.request("workspaceSymbol/resolve", basic_symbol).unwrap_or(json!(null));
+    let response = harness
+        .request("workspaceSymbol/resolve", basic_symbol)
+        .unwrap_or(json!(null));
 
     if !response.is_null() {
         // Resolved symbol should retain the original fields
@@ -212,13 +214,20 @@ sub target_function {
             Some("target_function"),
             "Resolved symbol should keep its name"
         );
-        assert_eq!(response["kind"].as_i64(), Some(12), "Resolved symbol should keep its kind");
+        assert_eq!(
+            response["kind"].as_i64(),
+            Some(12),
+            "Resolved symbol should keep its kind"
+        );
 
         // May have additional detail
         if let Some(detail) = response.get("detail") {
             if detail.is_string() {
                 let detail_str = detail.as_str().ok_or("detail should be a string")?;
-                assert!(!detail_str.is_empty(), "detail should not be empty if provided");
+                assert!(
+                    !detail_str.is_empty(),
+                    "detail should not be empty if provided"
+                );
             }
         }
 
@@ -322,7 +331,9 @@ sub shared_utility {
             let uris: Vec<&str> = symbols
                 .iter()
                 .filter_map(|s| {
-                    s.get("location").and_then(|loc| loc.get("uri")).and_then(|u| u.as_str())
+                    s.get("location")
+                        .and_then(|loc| loc.get("uri"))
+                        .and_then(|u| u.as_str())
                 })
                 .collect();
 
@@ -351,8 +362,9 @@ fn test_workspace_symbol_finds_native_class_and_method() -> TestResult {
     )?;
 
     // Search for "get_" — should match both native methods
-    let response =
-        harness.request("workspace/symbol", json!({ "query": "get_" })).unwrap_or(json!(null));
+    let response = harness
+        .request("workspace/symbol", json!({ "query": "get_" }))
+        .unwrap_or(json!(null));
 
     if !response.is_null() && response.is_array() {
         let symbols = response.as_array().ok_or("response is not an array")?;
@@ -379,8 +391,9 @@ fn test_workspace_symbol_finds_native_class_and_method() -> TestResult {
     }
 
     // Search for "MyPoint" — should find the class declaration
-    let response2 =
-        harness.request("workspace/symbol", json!({ "query": "MyPoint" })).unwrap_or(json!(null));
+    let response2 = harness
+        .request("workspace/symbol", json!({ "query": "MyPoint" }))
+        .unwrap_or(json!(null));
 
     if !response2.is_null() && response2.is_array() {
         let symbols2 = response2.as_array().ok_or("response2 is not an array")?;
@@ -435,7 +448,11 @@ sub build {
         .request("workspace/symbol", json!({ "query": "build" }))
         .map_err(|e| format!("workspace/symbol request failed: {e}"))?;
 
-    assert!(response.is_array(), "workspace/symbol should return an array, got: {:?}", response);
+    assert!(
+        response.is_array(),
+        "workspace/symbol should return an array, got: {:?}",
+        response
+    );
 
     let symbols = response.as_array().ok_or("response is not an array")?;
     let build_sym = symbols.iter().find(|s| s["name"].as_str() == Some("build"));

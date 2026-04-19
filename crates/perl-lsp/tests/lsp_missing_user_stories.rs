@@ -31,7 +31,8 @@ impl MissingStoryTestContext {
     }
 
     fn open_document(&mut self, uri: &str, content: &str) {
-        self.open_documents.insert(uri.to_string(), content.to_string());
+        self.open_documents
+            .insert(uri.to_string(), content.to_string());
         println!("Document opened: {}", uri);
     }
 
@@ -192,7 +193,10 @@ sub validate_email {
     );
 
     // Should navigate to Database.pm
-    assert!(definition_result.is_some(), "Should find Database module definition");
+    assert!(
+        definition_result.is_some(),
+        "Should find Database module definition"
+    );
     println!("✓ Module definition lookup works");
 
     // TEST 2: Find references across files
@@ -206,7 +210,10 @@ sub validate_email {
         })),
     );
 
-    assert!(references_result.is_some(), "Should find method references across files");
+    assert!(
+        references_result.is_some(),
+        "Should find method references across files"
+    );
     println!("✓ Cross-file reference finding works");
 
     // TEST 3: Workspace symbol search
@@ -218,7 +225,10 @@ sub validate_email {
         })),
     );
 
-    assert!(symbol_search.is_some(), "Should find symbols across workspace");
+    assert!(
+        symbol_search.is_some(),
+        "Should find symbols across workspace"
+    );
     println!("✓ Workspace symbol search works");
 
     // TEST 4: Import completion
@@ -231,7 +241,10 @@ sub validate_email {
         })),
     );
 
-    assert!(import_completion.is_some(), "Should provide module completion");
+    assert!(
+        import_completion.is_some(),
+        "Should provide module completion"
+    );
     println!("✓ Import completion works");
 
     println!("✅ Multi-file navigation user story test complete");
@@ -379,7 +392,10 @@ done_testing();
         })),
     );
 
-    assert!(test_discovery.is_some(), "Should discover test files and test cases");
+    assert!(
+        test_discovery.is_some(),
+        "Should discover test files and test cases"
+    );
     println!("✓ Test discovery works");
 
     // TEST 2: Run Single Test
@@ -463,7 +479,10 @@ done_testing();
         })),
     );
 
-    assert!(test_hover.is_some(), "Should provide hover info for test functions");
+    assert!(
+        test_hover.is_some(),
+        "Should provide hover info for test functions"
+    );
     println!("✓ Test function hover works");
 
     println!("✅ Test integration user story test complete");
@@ -791,7 +810,10 @@ sub validate_and_parse_data {
         })),
     );
 
-    assert!(named_groups_completion.is_some(), "Should complete named capture groups");
+    assert!(
+        named_groups_completion.is_some(),
+        "Should complete named capture groups"
+    );
     println!("✓ Named capture group completion works");
 
     println!("✅ Regex support user story test complete");
@@ -843,7 +865,10 @@ fn test_user_story_performance_monitoring() -> Result<(), Box<dyn std::error::Er
             "package Module{};\nuse strict;\nuse warnings;\n\nsub process {{ return 'module_{}'; }}\n1;\n",
             i, i
         );
-        ctx.open_document(&format!("file:///workspace/lib/Module{}.pm", i), &small_module);
+        ctx.open_document(
+            &format!("file:///workspace/lib/Module{}.pm", i),
+            &small_module,
+        );
     }
 
     // Workspace symbol search should still be fast
@@ -879,7 +904,10 @@ sub inefficient_function {
 }
 "#;
 
-    ctx.open_document("file:///workspace/lib/Performance.pm", performance_warning_code);
+    ctx.open_document(
+        "file:///workspace/lib/Performance.pm",
+        performance_warning_code,
+    );
 
     // Should provide performance diagnostics
     let _perf_diagnostics = ctx.send_request("textDocument/publishDiagnostics", Some(json!({
@@ -907,7 +935,10 @@ sub inefficient_function {
 
     // Memory monitoring might not be implemented yet
     if let Some(response) = memory_usage {
-        assert!(response.is_array(), "Code lens should be array for memory hints");
+        assert!(
+            response.is_array(),
+            "Code lens should be array for memory hints"
+        );
     }
     println!("✓ Memory usage monitoring available");
 

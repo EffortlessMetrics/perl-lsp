@@ -85,7 +85,11 @@ pub fn has_parse_error(code: &str) -> bool {
 /// assert_parse_error("sub ( { }");       // Malformed signature
 /// ```
 pub fn assert_parse_error(code: &str) {
-    assert!(has_parse_error(code), "Expected error (Err or ERROR node) for: {}", code);
+    assert!(
+        has_parse_error(code),
+        "Expected error (Err or ERROR node) for: {}",
+        code
+    );
 }
 
 /// Assert that parsing the given code does NOT produce an error signal.

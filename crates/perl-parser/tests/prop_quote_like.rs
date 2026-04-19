@@ -3,8 +3,10 @@
 // Include the utilities module
 include!("prop_test_utils.rs");
 
-const REGRESS_DIR: &str =
-    concat!(env!("CARGO_MANIFEST_DIR"), "/tests/_proptest-regressions/prop_quote_like");
+const REGRESS_DIR: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/tests/_proptest-regressions/prop_quote_like"
+);
 
 #[cfg(test)]
 mod tests {

@@ -35,7 +35,10 @@ print \"$value\\n\";\n\
 ";
 
 fn symbol_names(symbols: &[Value]) -> Vec<&str> {
-    symbols.iter().filter_map(|symbol| symbol["name"].as_str()).collect()
+    symbols
+        .iter()
+        .filter_map(|symbol| symbol["name"].as_str())
+        .collect()
 }
 
 #[test]
@@ -46,14 +49,19 @@ fn scenario_17_deleted_module_evicted_from_symbols_and_definition() {
     }
 
     let harness = UxHarness::new(
-        ScenarioConfig { timeout: Duration::from_secs(20), ..Default::default() }
-            .env("PERL_LSP_WORKSPACE", "1")
-            .with_file("main.pl", SCRIPT_SOURCE)
-            .with_file("lib/ModuleGone.pm", MODULE_SOURCE),
+        ScenarioConfig {
+            timeout: Duration::from_secs(20),
+            ..Default::default()
+        }
+        .env("PERL_LSP_WORKSPACE", "1")
+        .with_file("main.pl", SCRIPT_SOURCE)
+        .with_file("lib/ModuleGone.pm", MODULE_SOURCE),
     )
     .expect("Failed to create UX harness");
 
-    harness.open_file("main.pl", SCRIPT_SOURCE).expect("didOpen should succeed");
+    harness
+        .open_file("main.pl", SCRIPT_SOURCE)
+        .expect("didOpen should succeed");
 
     let before_deadline = Instant::now() + Duration::from_secs(10);
     let mut symbols_before = Vec::new();
@@ -62,8 +70,9 @@ fn scenario_17_deleted_module_evicted_from_symbols_and_definition() {
         symbols_before = harness
             .workspace_symbols("gone_value_4068")
             .expect("workspace/symbol must not error before delete");
-        defs_before =
-            harness.definition("main.pl", 5, 25).expect("definition must not error before delete");
+        defs_before = harness
+            .definition("main.pl", 5, 25)
+            .expect("definition must not error before delete");
 
         if !symbols_before.is_empty() && !defs_before.is_empty() {
             break;
@@ -82,7 +91,10 @@ fn scenario_17_deleted_module_evicted_from_symbols_and_definition() {
         defs_before
     );
 
-    harness.workspace.delete("lib/ModuleGone.pm").expect("module delete should succeed");
+    harness
+        .workspace
+        .delete("lib/ModuleGone.pm")
+        .expect("module delete should succeed");
     harness
         .notify_watched_files(&[("lib/ModuleGone.pm", 3)])
         .expect("didChangeWatchedFiles Deleted notification must not fail");
@@ -94,8 +106,9 @@ fn scenario_17_deleted_module_evicted_from_symbols_and_definition() {
         symbols_after = harness
             .workspace_symbols("gone_value_4068")
             .expect("workspace/symbol must not error after delete");
-        defs_after =
-            harness.definition("main.pl", 5, 25).expect("definition must not error after delete");
+        defs_after = harness
+            .definition("main.pl", 5, 25)
+            .expect("definition must not error after delete");
 
         if symbols_after.is_empty() && defs_after.is_empty() {
             break;

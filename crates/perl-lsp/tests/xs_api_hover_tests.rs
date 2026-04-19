@@ -40,7 +40,10 @@ fn hover_shows_xs_api_docs_in_xs_sources() -> TestResult {
         .unwrap_or(json!(null));
 
     let val = hover_value(&result).ok_or("Expected hover content for XS API symbol")?;
-    assert!(val.contains("XS / Perl C API"), "hover should identify the XS API docs, got: {val}");
+    assert!(
+        val.contains("XS / Perl C API"),
+        "hover should identify the XS API docs, got: {val}"
+    );
     assert!(
         val.contains("newSVpv(pv, len)"),
         "hover should include the XS API signature, got: {val}"

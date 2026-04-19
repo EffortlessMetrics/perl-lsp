@@ -13,7 +13,10 @@ fn extract_symbols(code: &str) -> SymbolTable {
 }
 
 fn has_symbol(table: &SymbolTable, name: &str, kind: SymbolKind) -> bool {
-    table.symbols.get(name).is_some_and(|symbols| symbols.iter().any(|symbol| symbol.kind == kind))
+    table
+        .symbols
+        .get(name)
+        .is_some_and(|symbols| symbols.iter().any(|symbol| symbol.kind == kind))
 }
 
 fn symbol_attrs(table: &SymbolTable, name: &str, kind: SymbolKind) -> Vec<String> {
@@ -93,7 +96,12 @@ my $other = AnyEvent::CondVar->new;
 
     let table = extract_symbols(code);
 
-    for name in ["AnyEvent", "AnyEvent::CondVar", "AnyEvent::Timer", "AnyEvent::IO"] {
+    for name in [
+        "AnyEvent",
+        "AnyEvent::CondVar",
+        "AnyEvent::Timer",
+        "AnyEvent::IO",
+    ] {
         assert!(
             has_symbol(&table, name, SymbolKind::Class),
             "expected synthetic AnyEvent class symbol `{name}`"
@@ -325,7 +333,9 @@ Future->needs_any($future);
             "expected `framework=Future` on `{name}`, got {attrs:?}"
         );
         assert!(
-            attrs.iter().any(|attr| attr == &format!("future_api={name}")),
+            attrs
+                .iter()
+                .any(|attr| attr == &format!("future_api={name}")),
             "expected `future_api={name}` on `{name}`, got {attrs:?}"
         );
     }
@@ -393,7 +403,9 @@ Future::XS->needs_any($future);
             "expected `framework=Future::XS` on `{name}`, got {attrs:?}"
         );
         assert!(
-            attrs.iter().any(|attr| attr == &format!("future_api={name}")),
+            attrs
+                .iter()
+                .any(|attr| attr == &format!("future_api={name}")),
             "expected `future_api={name}` on `{name}`, got {attrs:?}"
         );
     }
@@ -495,7 +507,9 @@ Promise->any($promise);
 
     let table = extract_symbols(code);
 
-    for name in ["new", "then", "catch", "finally", "resolve", "reject", "all", "race", "any"] {
+    for name in [
+        "new", "then", "catch", "finally", "resolve", "reject", "all", "race", "any",
+    ] {
         assert!(
             has_symbol(&table, name, SymbolKind::Subroutine),
             "expected synthetic Promise API symbol `{name}`"
@@ -506,7 +520,9 @@ Promise->any($promise);
             "expected `framework=Promise` on `{name}`, got {attrs:?}"
         );
         assert!(
-            attrs.iter().any(|attr| attr == &format!("future_api={name}")),
+            attrs
+                .iter()
+                .any(|attr| attr == &format!("future_api={name}")),
             "expected `future_api={name}` on `{name}`, got {attrs:?}"
         );
     }
@@ -551,7 +567,9 @@ Promise::XS->any($promise);
 
     let table = extract_symbols(code);
 
-    for name in ["new", "then", "catch", "finally", "resolve", "reject", "all", "race", "any"] {
+    for name in [
+        "new", "then", "catch", "finally", "resolve", "reject", "all", "race", "any",
+    ] {
         assert!(
             has_symbol(&table, name, SymbolKind::Subroutine),
             "expected synthetic Promise::XS API symbol `{name}`"
@@ -562,7 +580,9 @@ Promise::XS->any($promise);
             "expected `framework=Promise::XS` on `{name}`, got {attrs:?}"
         );
         assert!(
-            attrs.iter().any(|attr| attr == &format!("future_api={name}")),
+            attrs
+                .iter()
+                .any(|attr| attr == &format!("future_api={name}")),
             "expected `future_api={name}` on `{name}`, got {attrs:?}"
         );
     }
@@ -594,7 +614,11 @@ my $component = POE::Component::Client::TCP->new;
 
     let table = extract_symbols(code);
 
-    for name in ["POE::Session", "POE::Wheel::ReadWrite", "POE::Component::Client::TCP"] {
+    for name in [
+        "POE::Session",
+        "POE::Wheel::ReadWrite",
+        "POE::Component::Client::TCP",
+    ] {
         assert!(
             has_symbol(&table, name, SymbolKind::Class),
             "expected synthetic POE class symbol `{name}`"

@@ -47,7 +47,10 @@ fn bdd_rename_symbol_with_function_scope() -> Result<(), Box<dyn std::error::Err
         RefactoringType::SymbolRename {
             old_name: "$value".to_string(),
             new_name: "$result".to_string(),
-            scope: RefactoringScope::Function { file: path.clone(), name: "transform".to_string() },
+            scope: RefactoringScope::Function {
+                file: path.clone(),
+                name: "transform".to_string(),
+            },
         },
         vec![path.clone()],
     )?;
@@ -126,13 +129,18 @@ fn bdd_modernize_adds_strict_and_warnings() -> Result<(), Box<dyn std::error::Er
 
     // When we run modernize with StrictWarnings enabled.
     let result = engine.refactor(
-        RefactoringType::Modernize { patterns: vec![ModernizationPattern::StrictWarnings] },
+        RefactoringType::Modernize {
+            patterns: vec![ModernizationPattern::StrictWarnings],
+        },
         vec![path.clone()],
     )?;
 
     // Then the operation reports success and preserves a valid file payload.
     assert!(result.success, "modernization should succeed");
     let rewritten = std::fs::read_to_string(&path)?;
-    assert!(!rewritten.is_empty(), "file should remain readable after modernize");
+    assert!(
+        !rewritten.is_empty(),
+        "file should remain readable after modernize"
+    );
     Ok(())
 }

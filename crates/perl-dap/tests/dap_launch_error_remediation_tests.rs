@@ -24,7 +24,11 @@ fn launch_error_names_perl_lsp_perl_path_setting() {
     );
 
     match response {
-        DapMessage::Response { success: false, message: Some(msg), .. } => {
+        DapMessage::Response {
+            success: false,
+            message: Some(msg),
+            ..
+        } => {
             assert!(
                 msg.contains("perl-lsp.perl.path"),
                 "error message must name the `perl-lsp.perl.path` setting verbatim, got: {msg}"
@@ -56,7 +60,11 @@ fn launch_error_includes_perl_detection_info() {
     );
 
     match response {
-        DapMessage::Response { success: false, message: Some(msg), .. } => {
+        DapMessage::Response {
+            success: false,
+            message: Some(msg),
+            ..
+        } => {
             let msg_lower = msg.to_lowercase();
             let has_perl_found = msg_lower.contains("found perl") || msg_lower.contains("perl at");
             let has_perl_not_found = msg_lower.contains("not found")
@@ -99,7 +107,11 @@ fn launch_error_on_windows_links_strawberry_perl_when_perl_absent() {
         );
 
         match response {
-            DapMessage::Response { success: false, message: Some(msg), .. } => {
+            DapMessage::Response {
+                success: false,
+                message: Some(msg),
+                ..
+            } => {
                 assert!(
                     msg.contains("strawberryperl.com"),
                     "Windows not-found error message should link to strawberryperl.com, got: {msg}"

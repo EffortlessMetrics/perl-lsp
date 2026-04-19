@@ -18,7 +18,7 @@
 //! Related: #4416, ADR-0041 (#4413), parent collapse #4410.
 
 use crate::utils::{project_root, run_cargo_metadata};
-use color_eyre::eyre::{bail, eyre, Result};
+use color_eyre::eyre::{Result, bail, eyre};
 use serde::Deserialize;
 use std::fs;
 use std::path::Path;
@@ -91,7 +91,9 @@ pub enum CountStatus {
 pub fn check_count(current: u32, baseline: u32) -> CountStatus {
     match current.cmp(&baseline) {
         std::cmp::Ordering::Greater => CountStatus::Fail,
-        std::cmp::Ordering::Less => CountStatus::Ratchet { new_baseline: current },
+        std::cmp::Ordering::Less => CountStatus::Ratchet {
+            new_baseline: current,
+        },
         std::cmp::Ordering::Equal => CountStatus::Pass,
     }
 }
@@ -175,7 +177,10 @@ mod tests {
 
     #[test]
     fn check_count_ratchets_when_current_is_lower() {
-        assert_eq!(check_count(29, 30), CountStatus::Ratchet { new_baseline: 29 });
+        assert_eq!(
+            check_count(29, 30),
+            CountStatus::Ratchet { new_baseline: 29 }
+        );
         assert_eq!(check_count(0, 5), CountStatus::Ratchet { new_baseline: 0 });
     }
 
@@ -224,7 +229,12 @@ mod tests {
     fn property_idempotent_pass() {
         for baseline in 0u32..500 {
             let result = check_count(baseline, baseline);
-            assert_eq!(result, CountStatus::Pass, "baseline={} should always Pass", baseline);
+            assert_eq!(
+                result,
+                CountStatus::Pass,
+                "baseline={} should always Pass",
+                baseline
+            );
             for current in 0u32..500 {
                 if current == baseline {
                     assert_eq!(
@@ -288,7 +298,9 @@ mod tests {
                 let first_result = check_count(current, original_baseline);
                 assert_eq!(
                     first_result,
-                    CountStatus::Ratchet { new_baseline: current },
+                    CountStatus::Ratchet {
+                        new_baseline: current
+                    },
                     "First check should Ratchet: current={}, baseline={}",
                     current,
                     original_baseline
@@ -313,7 +325,9 @@ mod tests {
                 let cmp = current.cmp(&baseline);
                 let expected = match cmp {
                     std::cmp::Ordering::Greater => CountStatus::Fail,
-                    std::cmp::Ordering::Less => CountStatus::Ratchet { new_baseline: current },
+                    std::cmp::Ordering::Less => CountStatus::Ratchet {
+                        new_baseline: current,
+                    },
                     std::cmp::Ordering::Equal => CountStatus::Pass,
                 };
                 assert_eq!(
@@ -328,8 +342,19 @@ mod tests {
     /// Property: parse_baseline roundtrip with newlines
     #[test]
     fn property_parse_write_roundtrip() {
-        let test_values =
-            [0u32, 1, 42, 98, 100, 1000, 9999, 100000, u32::MAX, u32::MAX - 1, 1 << 20];
+        let test_values = [
+            0u32,
+            1,
+            42,
+            98,
+            100,
+            1000,
+            9999,
+            100000,
+            u32::MAX,
+            u32::MAX - 1,
+            1 << 20,
+        ];
         for value in test_values {
             let written = format!("{}\n", value);
             let parsed = parse_baseline(&written);
@@ -447,12 +472,25 @@ mod tests {
     fn property_read_baseline_fails_for_various_invalid() {
         let temp_dir = std::env::temp_dir();
         let temp_path = temp_dir.join("prop_invalid_baseline.txt");
-        let invalid_contents =
-            ["", "   \t\n", "not-a-number", "12.34", "-1", "abc", "12abc", "\x00"];
+        let invalid_contents = [
+            "",
+            "   \t\n",
+            "not-a-number",
+            "12.34",
+            "-1",
+            "abc",
+            "12abc",
+            "\x00",
+        ];
         for content in invalid_contents {
             std::fs::write(&temp_path, content).expect("write should succeed");
             let result = read_baseline(&temp_path);
-            assert!(result.is_err(), "read_baseline({:?}) should fail, got {:?}", content, result);
+            assert!(
+                result.is_err(),
+                "read_baseline({:?}) should fail, got {:?}",
+                content,
+                result
+            );
         }
     }
 }

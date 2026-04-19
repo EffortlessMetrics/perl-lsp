@@ -163,5 +163,9 @@ fn test_all_mandatory_no_diagnostics() {
 #[test]
 fn test_empty_signature_no_diagnostics() {
     let errors = parse_and_collect_errors("sub foo () { }");
-    assert!(errors.is_empty(), "Unexpected diagnostics for empty signature, got: {:?}", errors);
+    assert!(
+        errors.is_empty(),
+        "Unexpected diagnostics for empty signature, got: {:?}",
+        errors
+    );
 }

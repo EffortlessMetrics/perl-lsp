@@ -23,12 +23,16 @@ fn test_formatting_capability_advertised() -> Result<(), Box<dyn std::error::Err
         })),
     };
 
-    let response =
-        srv.handle_request(init_req).ok_or("Failed to get response from initialize request")?;
+    let response = srv
+        .handle_request(init_req)
+        .ok_or("Failed to get response from initialize request")?;
 
-    let result = response.result.ok_or("Expected result in initialize response")?;
-    let capabilities =
-        result.get("capabilities").ok_or("Expected capabilities in initialize result")?;
+    let result = response
+        .result
+        .ok_or("Expected result in initialize response")?;
+    let capabilities = result
+        .get("capabilities")
+        .ok_or("Expected capabilities in initialize result")?;
 
     // Verify formatting is advertised
     if let Some(formatting_provider) = capabilities.get("documentFormattingProvider") {
@@ -121,10 +125,13 @@ print Dumper($data);
         })),
     };
 
-    let response =
-        srv.handle_request(actions_req).ok_or("Failed to get response from code action request")?;
+    let response = srv
+        .handle_request(actions_req)
+        .ok_or("Failed to get response from code action request")?;
 
-    let result = response.result.ok_or("Expected result in code action response")?;
+    let result = response
+        .result
+        .ok_or("Expected result in code action response")?;
 
     // Check that we got some response (even if it's an empty array)
     // The actual implementation of organize imports may vary
@@ -148,16 +155,23 @@ fn test_perlcritic_execute_command_available() -> Result<(), Box<dyn std::error:
         })),
     };
 
-    let response =
-        srv.handle_request(init_req).ok_or("Failed to get response from initialize request")?;
+    let response = srv
+        .handle_request(init_req)
+        .ok_or("Failed to get response from initialize request")?;
 
-    let result = response.result.ok_or("Expected result in initialize response")?;
-    let capabilities =
-        result.get("capabilities").ok_or("Expected capabilities in initialize result")?;
+    let result = response
+        .result
+        .ok_or("Expected result in initialize response")?;
+    let capabilities = result
+        .get("capabilities")
+        .ok_or("Expected capabilities in initialize result")?;
 
     // Verify execute command provider is present
     let execute_command_provider = capabilities.get("executeCommandProvider");
-    assert!(execute_command_provider.is_some(), "executeCommandProvider should be advertised");
+    assert!(
+        execute_command_provider.is_some(),
+        "executeCommandProvider should be advertised"
+    );
 
     // Verify that perlcritic command is in the list
     if let Some(provider) = execute_command_provider {
@@ -166,9 +180,14 @@ fn test_perlcritic_execute_command_available() -> Result<(), Box<dyn std::error:
             .and_then(|c| c.as_array())
             .ok_or("Expected commands array in executeCommandProvider")?;
 
-        let has_critic_command = commands.iter().any(|cmd| cmd.as_str() == Some("perl.runCritic"));
+        let has_critic_command = commands
+            .iter()
+            .any(|cmd| cmd.as_str() == Some("perl.runCritic"));
 
-        assert!(has_critic_command, "perl.runCritic command should be available");
+        assert!(
+            has_critic_command,
+            "perl.runCritic command should be available"
+        );
     }
 
     Ok(())
@@ -228,14 +247,20 @@ fn test_builtin_diagnostics_work() -> Result<(), Box<dyn std::error::Error>> {
         })),
     };
 
-    let response =
-        srv.handle_request(diag_req).ok_or("Failed to get response from diagnostic request")?;
+    let response = srv
+        .handle_request(diag_req)
+        .ok_or("Failed to get response from diagnostic request")?;
 
-    let result = response.result.ok_or("Expected result in diagnostic response")?;
+    let result = response
+        .result
+        .ok_or("Expected result in diagnostic response")?;
 
     // Verify we got some diagnostic information
     // The exact structure may vary, but it should be present
-    assert!(result.is_object() || result.is_array(), "Expected diagnostic result");
+    assert!(
+        result.is_object() || result.is_array(),
+        "Expected diagnostic result"
+    );
 
     Ok(())
 }
@@ -267,12 +292,16 @@ fn test_server_capabilities_complete() -> Result<(), Box<dyn std::error::Error>>
         })),
     };
 
-    let response =
-        srv.handle_request(init_req).ok_or("Failed to get response from initialize request")?;
+    let response = srv
+        .handle_request(init_req)
+        .ok_or("Failed to get response from initialize request")?;
 
-    let result = response.result.ok_or("Expected result in initialize response")?;
-    let capabilities =
-        result.get("capabilities").ok_or("Expected capabilities in initialize result")?;
+    let result = response
+        .result
+        .ok_or("Expected result in initialize response")?;
+    let capabilities = result
+        .get("capabilities")
+        .ok_or("Expected capabilities in initialize result")?;
 
     // Verify core LSP capabilities are present
     let expected_capabilities = [
@@ -287,7 +316,11 @@ fn test_server_capabilities_complete() -> Result<(), Box<dyn std::error::Error>>
     ];
 
     for capability in &expected_capabilities {
-        assert!(capabilities.get(capability).is_some(), "Missing capability: {}", capability);
+        assert!(
+            capabilities.get(capability).is_some(),
+            "Missing capability: {}",
+            capability
+        );
     }
 
     Ok(())
@@ -355,7 +388,10 @@ fn test_formatting_graceful_degradation() -> Result<(), Box<dyn std::error::Erro
 
     // Formatting should either succeed or return a helpful error
     // It should NOT crash or panic
-    assert!(response.is_some(), "Formatting should return a response (success or error)");
+    assert!(
+        response.is_some(),
+        "Formatting should return a response (success or error)"
+    );
 
     Ok(())
 }

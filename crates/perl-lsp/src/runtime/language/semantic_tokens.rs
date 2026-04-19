@@ -24,11 +24,13 @@ impl LspServer {
         if let Some(p) = params {
             let uri = req_uri(&p)?;
             let documents = self.documents_guard();
-            let doc = self.get_document(&documents, uri).ok_or_else(|| JsonRpcError {
-                code: INVALID_REQUEST,
-                message: format!("Document not open: {}", uri),
-                data: None,
-            })?;
+            let doc = self
+                .get_document(&documents, uri)
+                .ok_or_else(|| JsonRpcError {
+                    code: INVALID_REQUEST,
+                    message: format!("Document not open: {}", uri),
+                    data: None,
+                })?;
             if let Some(ref ast) = doc.ast {
                 let data =
                     crate::semantic_tokens::collect_semantic_tokens(ast, &doc.text, &|off| {
@@ -92,7 +94,12 @@ impl LspServer {
             let uri = req_uri(&params)?;
             let ((start_line, _start_char), (end_line, _end_char)) = req_range(&params)?;
 
-            tracing::debug!(uri, start_line, end_line, "Getting semantic tokens for range");
+            tracing::debug!(
+                uri,
+                start_line,
+                end_line,
+                "Getting semantic tokens for range"
+            );
 
             let documents = self.documents_guard();
             if let Some(doc) = self.get_document(&documents, uri) {

@@ -271,7 +271,11 @@ fn test_progress_percentage_monotonic() {
             valid_percentages[i],
             valid_percentages[i - 1]
         );
-        assert!(valid_percentages[i] <= 100, "Percentage must be <= 100: {}", valid_percentages[i]);
+        assert!(
+            valid_percentages[i] <= 100,
+            "Percentage must be <= 100: {}",
+            valid_percentages[i]
+        );
     }
 }
 

@@ -189,7 +189,11 @@ impl PerlTidyFormatter {
     /// Creates a new formatter with the given configuration and runtime.
     #[must_use]
     pub fn new(config: PerlTidyConfig, runtime: Arc<dyn SubprocessRuntime>) -> Self {
-        Self { config, cache: HashMap::new(), runtime }
+        Self {
+            config,
+            cache: HashMap::new(),
+            runtime,
+        }
     }
 
     /// Creates a new formatter with the OS subprocess runtime (non-WASM only).
@@ -233,8 +237,10 @@ impl PerlTidyFormatter {
         args.push(file_path.to_string_lossy().into_owned());
         let args_refs: Vec<&str> = args.iter().map(String::as_str).collect();
 
-        let output =
-            self.runtime.run_command("perltidy", &args_refs, None).map_err(|e| e.message)?;
+        let output = self
+            .runtime
+            .run_command("perltidy", &args_refs, None)
+            .map_err(|e| e.message)?;
 
         if !output.success() {
             return Err(format!("Perltidy failed: {}", output.stderr_lossy()));

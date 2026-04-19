@@ -88,7 +88,10 @@ pub fn run() -> Result<()> {
 
 fn check_command(program: &str, label: &str, missing_required: &mut bool) {
     if has_command(program) {
-        pass(&format!("{label}: found ({})", command_path(program).unwrap_or(program.to_string())));
+        pass(&format!(
+            "{label}: found ({})",
+            command_path(program).unwrap_or(program.to_string())
+        ));
     } else {
         warn(&format!("{label}: not found"));
         *missing_required = true;
@@ -97,7 +100,10 @@ fn check_command(program: &str, label: &str, missing_required: &mut bool) {
 
 fn check_command_optional(program: &str, label: &str) {
     if has_command(program) {
-        pass(&format!("{label}: found ({})", command_path(program).unwrap_or(program.to_string())));
+        pass(&format!(
+            "{label}: found ({})",
+            command_path(program).unwrap_or(program.to_string())
+        ));
     } else {
         warn(&format!("{label}: not found"));
     }
@@ -144,7 +150,10 @@ fn command_path(program: &str) -> Option<String> {
 }
 
 fn is_component_installed(component: &str) -> bool {
-    let output = match Command::new("rustup").args(["component", "list", "--installed"]).output() {
+    let output = match Command::new("rustup")
+        .args(["component", "list", "--installed"])
+        .output()
+    {
         Ok(output) if output.status.success() => output,
         _ => return false,
     };

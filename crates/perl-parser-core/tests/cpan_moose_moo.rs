@@ -116,9 +116,21 @@ __PACKAGE__->meta->make_immutable;
     let kinds = top_level_kinds(&ast);
     // Should contain Package, Use, Subroutine, and ExpressionStatements
     // (has/around/make_immutable/1; are all expression statements)
-    assert!(kinds.contains(&"Package"), "expected Package node, got: {:?}", kinds);
-    assert!(kinds.contains(&"Use"), "expected Use node, got: {:?}", kinds);
-    assert!(kinds.contains(&"Subroutine"), "expected Subroutine node, got: {:?}", kinds);
+    assert!(
+        kinds.contains(&"Package"),
+        "expected Package node, got: {:?}",
+        kinds
+    );
+    assert!(
+        kinds.contains(&"Use"),
+        "expected Use node, got: {:?}",
+        kinds
+    );
+    assert!(
+        kinds.contains(&"Subroutine"),
+        "expected Subroutine node, got: {:?}",
+        kinds
+    );
     assert!(
         kinds.contains(&"ExpressionStatement"),
         "expected ExpressionStatement nodes for has/around/1;, got: {:?}",

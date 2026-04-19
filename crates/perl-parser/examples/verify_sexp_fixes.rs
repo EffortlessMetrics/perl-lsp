@@ -6,15 +6,27 @@ fn main() {
     let test_cases = vec![
         // Originally failing cases
         ("if ($x > 10) { print $x; }", vec!["binary_>", "if"]),
-        ("while ($i < 10) { $i++; }", vec!["binary_<", "while", "unary_++"]),
-        ("$result = ($a + $b) * $c;", vec!["binary_*", "binary_+", "assignment"]),
+        (
+            "while ($i < 10) { $i++; }",
+            vec!["binary_<", "while", "unary_++"],
+        ),
+        (
+            "$result = ($a + $b) * $c;",
+            vec!["binary_*", "binary_+", "assignment"],
+        ),
         // Additional verification cases
         ("$x and $y or $z", vec!["binary_and", "binary_or"]),
         ("!$flag", vec!["unary_not"]),
         ("-$number", vec!["unary_-"]),
         ("$ref->@*", vec!["unary_->@*"]),
-        ("open FILE, \"test\" or die", vec!["call open", "call die", "binary_or"]),
-        ("print \"Hello $name\"", vec!["call print", "string_interpolated"]),
+        (
+            "open FILE, \"test\" or die",
+            vec!["call open", "call die", "binary_or"],
+        ),
+        (
+            "print \"Hello $name\"",
+            vec!["call print", "string_interpolated"],
+        ),
         ("print 'Hello world'", vec!["call print", "string"]),
     ];
 

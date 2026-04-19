@@ -9,7 +9,11 @@ use support::lsp_client::LspClient;
 
 fn document_formatting_with_perltidy() -> Result<(), Box<dyn std::error::Error>> {
     // Skip test if perltidy is not available
-    if std::process::Command::new("perltidy").arg("--version").output().is_err() {
+    if std::process::Command::new("perltidy")
+        .arg("--version")
+        .output()
+        .is_err()
+    {
         eprintln!("Skipping test: perltidy not installed");
         return Ok(());
     }
@@ -31,13 +35,16 @@ fn document_formatting_with_perltidy() -> Result<(), Box<dyn std::error::Error>>
         }),
     )?;
 
-    let edits =
-        response["result"].as_array().ok_or("formatting should return an array of edits")?;
+    let edits = response["result"]
+        .as_array()
+        .ok_or("formatting should return an array of edits")?;
 
     assert!(!edits.is_empty(), "Should return formatting edits");
 
     // The server typically returns a single edit that replaces the whole document
-    let edit_text = edits.first().ok_or("edits array should have at least one element")?["newText"]
+    let edit_text = edits
+        .first()
+        .ok_or("edits array should have at least one element")?["newText"]
         .as_str()
         .ok_or("Edit should have newText")?;
 
@@ -48,8 +55,14 @@ fn document_formatting_with_perltidy() -> Result<(), Box<dyn std::error::Error>>
         "Should format subroutine declaration, got: {}",
         edit_text
     );
-    assert!(edit_text.contains("my $x = 1"), "Should add spaces around operators");
-    assert!(edit_text.contains("return $x"), "Should format return statement");
+    assert!(
+        edit_text.contains("my $x = 1"),
+        "Should add spaces around operators"
+    );
+    assert!(
+        edit_text.contains("return $x"),
+        "Should format return statement"
+    );
     assert!(
         edit_text.contains("sub another") && edit_text.contains("{"),
         "Should format second subroutine"
@@ -63,7 +76,11 @@ fn document_formatting_with_perltidy() -> Result<(), Box<dyn std::error::Error>>
 
 fn range_formatting() -> Result<(), Box<dyn std::error::Error>> {
     // Skip test if perltidy is not available
-    if std::process::Command::new("perltidy").arg("--version").output().is_err() {
+    if std::process::Command::new("perltidy")
+        .arg("--version")
+        .output()
+        .is_err()
+    {
         eprintln!("Skipping test: perltidy not installed");
         return Ok(());
     }
@@ -98,17 +115,21 @@ sub second{my$b=2;return$b;}
     if let Some(result) = response.get("result") {
         if let Some(edits) = result.as_array() {
             if !edits.is_empty() {
-                let edit_text =
-                    edits.first().ok_or("edits array should have at least one element")?["newText"]
-                        .as_str()
-                        .ok_or("Edit should have newText")?;
+                let edit_text = edits
+                    .first()
+                    .ok_or("edits array should have at least one element")?["newText"]
+                    .as_str()
+                    .ok_or("Edit should have newText")?;
 
                 // Check that only the first sub was formatted
                 assert!(
                     edit_text.contains("sub first") && edit_text.contains("{"),
                     "Should format first subroutine"
                 );
-                assert!(edit_text.contains("my $a = 1"), "Should format first sub's content");
+                assert!(
+                    edit_text.contains("my $a = 1"),
+                    "Should format first sub's content"
+                );
             }
         }
     }
@@ -121,7 +142,11 @@ sub second{my$b=2;return$b;}
 
 fn formatting_preserves_comments() -> Result<(), Box<dyn std::error::Error>> {
     // Skip test if perltidy is not available
-    if std::process::Command::new("perltidy").arg("--version").output().is_err() {
+    if std::process::Command::new("perltidy")
+        .arg("--version")
+        .output()
+        .is_err()
+    {
         eprintln!("Skipping test: perltidy not installed");
         return Ok(());
     }
@@ -151,24 +176,44 @@ return$x;
         }),
     )?;
 
-    let edits =
-        response["result"].as_array().ok_or("formatting should return an array of edits")?;
+    let edits = response["result"]
+        .as_array()
+        .ok_or("formatting should return an array of edits")?;
 
     if !edits.is_empty() {
-        let edit_text =
-            edits.first().ok_or("edits array should have at least one element")?["newText"]
-                .as_str()
-                .ok_or("Edit should have newText")?;
+        let edit_text = edits
+            .first()
+            .ok_or("edits array should have at least one element")?["newText"]
+            .as_str()
+            .ok_or("Edit should have newText")?;
 
         // Check that comments are preserved
-        assert!(edit_text.contains("# Main script comment"), "Should preserve main comment");
-        assert!(edit_text.contains("# Function comment"), "Should preserve function comment");
-        assert!(edit_text.contains("# Inner comment"), "Should preserve inner comment");
-        assert!(edit_text.contains("# Inline comment"), "Should preserve inline comment");
+        assert!(
+            edit_text.contains("# Main script comment"),
+            "Should preserve main comment"
+        );
+        assert!(
+            edit_text.contains("# Function comment"),
+            "Should preserve function comment"
+        );
+        assert!(
+            edit_text.contains("# Inner comment"),
+            "Should preserve inner comment"
+        );
+        assert!(
+            edit_text.contains("# Inline comment"),
+            "Should preserve inline comment"
+        );
 
         // Check that code is still formatted
-        assert!(edit_text.contains("use strict"), "Should format use statements");
-        assert!(edit_text.contains("use warnings"), "Should separate use statements");
+        assert!(
+            edit_text.contains("use strict"),
+            "Should format use statements"
+        );
+        assert!(
+            edit_text.contains("use warnings"),
+            "Should separate use statements"
+        );
         assert!(
             edit_text.contains("sub test") && edit_text.contains("{"),
             "Should format subroutine"
@@ -183,7 +228,11 @@ return$x;
 
 fn formatting_with_custom_config() -> Result<(), Box<dyn std::error::Error>> {
     // Skip test if perltidy is not available
-    if std::process::Command::new("perltidy").arg("--version").output().is_err() {
+    if std::process::Command::new("perltidy")
+        .arg("--version")
+        .output()
+        .is_err()
+    {
         eprintln!("Skipping test: perltidy not installed");
         return Ok(());
     }
@@ -217,18 +266,26 @@ fn formatting_with_custom_config() -> Result<(), Box<dyn std::error::Error>> {
         }),
     )?;
 
-    let edits =
-        response["result"].as_array().ok_or("formatting should return an array of edits")?;
+    let edits = response["result"]
+        .as_array()
+        .ok_or("formatting should return an array of edits")?;
 
     if !edits.is_empty() {
-        let edit_text =
-            edits.first().ok_or("edits array should have at least one element")?["newText"]
-                .as_str()
-                .ok_or("Edit should have newText")?;
+        let edit_text = edits
+            .first()
+            .ok_or("edits array should have at least one element")?["newText"]
+            .as_str()
+            .ok_or("Edit should have newText")?;
 
         // Check for some formatting (exact format depends on perltidy version)
-        assert!(edit_text.contains("sub test"), "Should contain formatted subroutine");
-        assert!(edit_text.contains("@array"), "Should contain array variable");
+        assert!(
+            edit_text.contains("sub test"),
+            "Should contain formatted subroutine"
+        );
+        assert!(
+            edit_text.contains("@array"),
+            "Should contain array variable"
+        );
     }
 
     // Clean up
@@ -242,7 +299,11 @@ fn formatting_with_custom_config() -> Result<(), Box<dyn std::error::Error>> {
 
 fn ranges_formatting() -> Result<(), Box<dyn std::error::Error>> {
     // Skip test if perltidy is not available
-    if std::process::Command::new("perltidy").arg("--version").output().is_err() {
+    if std::process::Command::new("perltidy")
+        .arg("--version")
+        .output()
+        .is_err()
+    {
         eprintln!("Skipping test: perltidy not installed");
         return Ok(());
     }
@@ -285,7 +346,10 @@ sub third{my$c=3;return$c;}
 
     if let Some(result) = response.get("result") {
         if let Some(edits) = result.as_array() {
-            assert!(!edits.is_empty(), "Should return formatting edits for multiple ranges");
+            assert!(
+                !edits.is_empty(),
+                "Should return formatting edits for multiple ranges"
+            );
 
             // Verify that we got edits (exact number depends on perltidy behavior)
             let edit_count = edits.len();
@@ -300,7 +364,10 @@ sub third{my$c=3;return$c;}
                     false
                 }
             });
-            assert!(has_formatted, "Should contain formatted code for first or third subroutine");
+            assert!(
+                has_formatted,
+                "Should contain formatted code for first or third subroutine"
+            );
         }
     }
 

@@ -271,7 +271,10 @@ fn find_regex_prefix_start(line_prefix: &str) -> Option<usize> {
         if candidate.is_empty() {
             continue;
         }
-        if regex_suggestions().iter().any(|suggestion| suggestion.label.starts_with(candidate)) {
+        if regex_suggestions()
+            .iter()
+            .any(|suggestion| suggestion.label.starts_with(candidate))
+        {
             return Some(start);
         }
     }
@@ -296,7 +299,9 @@ pub fn add_regex_flag_completions(
     context: &CompletionContext,
     source: &str,
 ) {
-    let flag_chars: &[char] = &['g', 'i', 'm', 's', 'x', 'e', 'r', 'a', 'd', 'u', 'p', 'l', 'c'];
+    let flag_chars: &[char] = &[
+        'g', 'i', 'm', 's', 'x', 'e', 'r', 'a', 'd', 'u', 'p', 'l', 'c',
+    ];
     let before = &source[..context.position];
     let without_flags = before.trim_end_matches(|c: char| flag_chars.contains(&c));
     let already_typed: &str = &before[without_flags.len()..];
@@ -354,7 +359,10 @@ pub fn add_regex_completions(
     context: &CompletionContext,
     source: &str,
 ) {
-    let line_start = source[..context.position].rfind('\n').map(|idx| idx + 1).unwrap_or(0);
+    let line_start = source[..context.position]
+        .rfind('\n')
+        .map(|idx| idx + 1)
+        .unwrap_or(0);
     let line_prefix = &source[line_start..context.position];
     let regex_prefix_start = find_regex_prefix_start(line_prefix);
     let (prefix, replace_start) = match regex_prefix_start {

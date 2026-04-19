@@ -130,9 +130,14 @@ fn uri_set_contains(uris: &BTreeSet<String>, target_uri: &str) -> bool {
 
 fn first_location_uri(response: &Value) -> Option<String> {
     if let Some(arr) = response.as_array() {
-        arr.first().and_then(|v| v.get("uri").and_then(Value::as_str)).map(ToOwned::to_owned)
+        arr.first()
+            .and_then(|v| v.get("uri").and_then(Value::as_str))
+            .map(ToOwned::to_owned)
     } else {
-        response.get("uri").and_then(Value::as_str).map(ToOwned::to_owned)
+        response
+            .get("uri")
+            .and_then(Value::as_str)
+            .map(ToOwned::to_owned)
     }
 }
 
@@ -195,7 +200,10 @@ fn wait_for_references_uris(
         ) {
             Ok(response) => {
                 let uris = ref_uris(&response);
-                if want_uris.iter().all(|want_uri| uri_set_contains(&uris, want_uri)) {
+                if want_uris
+                    .iter()
+                    .all(|want_uri| uri_set_contains(&uris, want_uri))
+                {
                     return Ok(response);
                 }
                 last_response = Some(response);
@@ -238,7 +246,10 @@ fn wait_for_rename_edit_uris(
         ) {
             Ok(response) => {
                 let uris = workspace_edit_uris(&response);
-                if want_uris.iter().all(|want_uri| uri_set_contains(&uris, want_uri)) {
+                if want_uris
+                    .iter()
+                    .all(|want_uri| uri_set_contains(&uris, want_uri))
+                {
                     return Ok(response);
                 }
                 last_response = Some(response);
@@ -258,15 +269,21 @@ fn wait_for_rename_edit_uris(
 
 fn location_start_line(response: &Value) -> Option<u64> {
     if let Some(arr) = response.as_array() {
-        arr.first().and_then(|v| v.pointer("/range/start/line").and_then(Value::as_u64))
+        arr.first()
+            .and_then(|v| v.pointer("/range/start/line").and_then(Value::as_u64))
     } else {
-        response.pointer("/range/start/line").and_then(Value::as_u64)
+        response
+            .pointer("/range/start/line")
+            .and_then(Value::as_u64)
     }
 }
 
 fn completion_labels(response: &Value) -> BTreeSet<String> {
     let mut labels = BTreeSet::new();
-    let items = response.get("items").and_then(Value::as_array).or_else(|| response.as_array());
+    let items = response
+        .get("items")
+        .and_then(Value::as_array)
+        .or_else(|| response.as_array());
 
     if let Some(items) = items {
         for item in items {
@@ -292,9 +309,11 @@ fn hover_text(hover: &Value) -> String {
         let combined = arr
             .iter()
             .filter_map(|item| {
-                item.as_str()
-                    .map(ToOwned::to_owned)
-                    .or_else(|| item.get("value").and_then(Value::as_str).map(ToOwned::to_owned))
+                item.as_str().map(ToOwned::to_owned).or_else(|| {
+                    item.get("value")
+                        .and_then(Value::as_str)
+                        .map(ToOwned::to_owned)
+                })
             })
             .collect::<Vec<_>>()
             .join("\n");
@@ -305,7 +324,10 @@ fn hover_text(hover: &Value) -> String {
 }
 
 fn diagnostic_items(report: &Value) -> &[Value] {
-    report.get("items").and_then(Value::as_array).map_or(&[], Vec::as_slice)
+    report
+        .get("items")
+        .and_then(Value::as_array)
+        .map_or(&[], Vec::as_slice)
 }
 
 fn highlight_items(response: &Value) -> &[Value] {
@@ -367,7 +389,10 @@ fn code_action_titles(actions: &Value) -> Vec<String> {
         .map(|arr| {
             arr.iter()
                 .filter_map(|action| {
-                    action.get("title").and_then(Value::as_str).map(ToOwned::to_owned)
+                    action
+                        .get("title")
+                        .and_then(Value::as_str)
+                        .map(ToOwned::to_owned)
                 })
                 .collect()
         })
@@ -388,7 +413,10 @@ fn highlight_kinds(response: &Value) -> Vec<u64> {
     response
         .as_array()
         .map(|items| {
-            items.iter().filter_map(|item| item.get("kind").and_then(Value::as_u64)).collect()
+            items
+                .iter()
+                .filter_map(|item| item.get("kind").and_then(Value::as_u64))
+                .collect()
         })
         .unwrap_or_default()
 }
@@ -399,7 +427,11 @@ fn inlay_labels(response: &Value) -> Vec<String> {
         .map(|items| {
             items
                 .iter()
-                .filter_map(|item| item.get("label").and_then(Value::as_str).map(ToOwned::to_owned))
+                .filter_map(|item| {
+                    item.get("label")
+                        .and_then(Value::as_str)
+                        .map(ToOwned::to_owned)
+                })
                 .collect()
         })
         .unwrap_or_default()
@@ -488,8 +520,14 @@ my $also = process_data();
 
     scenario.then("references include both module and script locations");
     let uris = ref_uris(&references);
-    assert!(uris.contains(&module_uri), "references should include module file");
-    assert!(uris.contains(&main_uri), "references should include main script file");
+    assert!(
+        uris.contains(&module_uri),
+        "references should include module file"
+    );
+    assert!(
+        uris.contains(&main_uri),
+        "references should include main script file"
+    );
 
     Ok(())
 }
@@ -546,17 +584,24 @@ my $also = process_data();
     scenario.then("the workspace edit touches both files");
     let uris = workspace_edit_uris(&edit);
     assert!(uris.contains(&module_uri), "rename should edit module file");
-    assert!(uris.contains(&main_uri), "rename should edit main script file");
+    assert!(
+        uris.contains(&main_uri),
+        "rename should edit main script file"
+    );
 
     scenario.then("rename edits include the new symbol text in both files");
     let module_texts = workspace_edit_new_texts_for_uri(&edit, &module_uri);
     let main_texts = workspace_edit_new_texts_for_uri(&edit, &main_uri);
     assert!(
-        module_texts.iter().any(|text| text.contains("process_records")),
+        module_texts
+            .iter()
+            .any(|text| text.contains("process_records")),
         "module edits should contain new function name; got {module_texts:?}"
     );
     assert!(
-        main_texts.iter().any(|text| text.contains("process_records")),
+        main_texts
+            .iter()
+            .any(|text| text.contains("process_records")),
         "main edits should contain new function name; got {main_texts:?}"
     );
 
@@ -585,7 +630,9 @@ sub transform {
     let module_uri = workspace.uri("lib/Toolkit.pm");
     harness.open(&module_uri, module)?;
 
-    harness.wait_for_symbol("transform", Some(&module_uri), Duration::from_secs(2)).ok();
+    harness
+        .wait_for_symbol("transform", Some(&module_uri), Duration::from_secs(2))
+        .ok();
 
     scenario.when("searching workspace symbols for the function name");
     let result = harness.request(
@@ -606,7 +653,9 @@ sub transform {
     };
 
     assert!(
-        names.iter().any(|n| n == "transform" || n.ends_with("transform")),
+        names
+            .iter()
+            .any(|n| n == "transform" || n.ends_with("transform")),
         "workspace symbols should include 'transform'"
     );
 
@@ -636,7 +685,9 @@ is(calculate_total(1, 2), 3, 'adds values');
     let uri = workspace.uri("t/calculator.t");
     harness.open(&uri, test_file)?;
 
-    harness.wait_for_symbol("calculate_total", Some(&uri), Duration::from_secs(2)).ok();
+    harness
+        .wait_for_symbol("calculate_total", Some(&uri), Duration::from_secs(2))
+        .ok();
 
     scenario.when("requesting completion at a partially typed function name");
     let (completion_line, completion_col) = find_position(test_file, "my $value = calc");
@@ -654,7 +705,9 @@ is(calculate_total(1, 2), 3, 'adds values');
     scenario.then("completion includes the local helper function");
     let labels = completion_labels(&completion);
     assert!(
-        labels.iter().any(|label| label == "calculate_total" || label.ends_with("calculate_total")),
+        labels
+            .iter()
+            .any(|label| label == "calculate_total" || label.ends_with("calculate_total")),
         "completion should include calculate_total; got {labels:?}"
     );
 
@@ -669,7 +722,10 @@ is(calculate_total(1, 2), 3, 'adds values');
     )?;
 
     scenario.then("hover returns non-empty content");
-    assert!(!hover_text(&hover).is_empty(), "hover content should be non-empty");
+    assert!(
+        !hover_text(&hover).is_empty(),
+        "hover content should be non-empty"
+    );
 
     scenario.when("requesting signature help while editing function arguments");
     let signature_help = harness.request(
@@ -684,9 +740,15 @@ is(calculate_total(1, 2), 3, 'adds values');
     )?;
 
     scenario.then("signature help includes at least one signature");
-    let signatures =
-        signature_help.get("signatures").and_then(Value::as_array).cloned().unwrap_or_default();
-    assert!(!signatures.is_empty(), "signature help should include signatures");
+    let signatures = signature_help
+        .get("signatures")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    assert!(
+        !signatures.is_empty(),
+        "signature help should include signatures"
+    );
 
     Ok(())
 }
@@ -735,7 +797,10 @@ sub compute_value {
 
     scenario.then("diagnostics include parse issues");
     let broken_item_count = diagnostic_items(&broken_report).len();
-    assert!(broken_item_count > 0, "broken file should produce diagnostics");
+    assert!(
+        broken_item_count > 0,
+        "broken file should produce diagnostics"
+    );
 
     scenario.when("fixing the syntax error with an incremental didChange");
     harness.change_full(&uri, 2, fixed)?;
@@ -755,7 +820,10 @@ sub compute_value {
         fixed_item_count < broken_item_count,
         "fixed code should reduce diagnostics (broken={broken_item_count}, fixed={fixed_item_count})"
     );
-    assert_eq!(fixed_errors, 0, "fixed code should have no error diagnostics");
+    assert_eq!(
+        fixed_errors, 0,
+        "fixed code should have no error diagnostics"
+    );
 
     Ok(())
 }
@@ -791,7 +859,10 @@ $value = $result;
 
     scenario.then("the declaration resolves to the original lexical binding");
     let declaration_uri = first_location_uri(&declaration).unwrap_or_default();
-    assert_eq!(declaration_uri, uri, "declaration should stay within the same file");
+    assert_eq!(
+        declaration_uri, uri,
+        "declaration should stay within the same file"
+    );
 
     let declaration_line = declaration
         .as_array()
@@ -800,7 +871,10 @@ $value = $result;
         .and_then(|location| location.pointer("/range/start/line"))
         .and_then(Value::as_u64)
         .ok_or("declaration should include a start line")?;
-    assert_eq!(declaration_line, 3, "declaration should point to `my $value = 41;`");
+    assert_eq!(
+        declaration_line, 3,
+        "declaration should point to `my $value = 41;`"
+    );
 
     scenario.when("requesting document highlights for the same variable");
     let highlights = harness.request(
@@ -956,7 +1030,11 @@ my $result = Foo::process_records();
     harness.change_full(&module_uri, 2, module_v2)?;
     harness.change_full(&main_uri, 2, main_v2)?;
     harness.barrier();
-    harness.wait_for_symbol("process_records", Some(&module_uri), Duration::from_secs(10))?;
+    harness.wait_for_symbol(
+        "process_records",
+        Some(&module_uri),
+        Duration::from_secs(10),
+    )?;
     harness.barrier();
 
     scenario.then("go-to-definition resolves the updated symbol across files");
@@ -970,7 +1048,10 @@ my $result = Foo::process_records();
         Duration::from_secs(10),
     )?;
     let def_uri = first_location_uri(&definition).unwrap_or_default();
-    assert_eq!(def_uri, module_uri, "definition should resolve to updated module symbol");
+    assert_eq!(
+        def_uri, module_uri,
+        "definition should resolve to updated module symbol"
+    );
 
     scenario.when("searching workspace symbols for the updated function");
     let symbols = harness.request(
@@ -983,7 +1064,9 @@ my $result = Foo::process_records();
     scenario.then("workspace symbols include the updated function name");
     let names = symbol_names(&symbols);
     assert!(
-        names.iter().any(|name| name == "process_records" || name.ends_with("process_records")),
+        names
+            .iter()
+            .any(|name| name == "process_records" || name.ends_with("process_records")),
         "workspace symbols should include process_records; got {names:?}"
     );
 
@@ -1037,7 +1120,10 @@ my $result = Foo::process_data();
     )?;
 
     scenario.then("prepareRename returns a valid range");
-    assert!(has_lsp_range(&prepare), "prepareRename should return a range-compatible payload");
+    assert!(
+        has_lsp_range(&prepare),
+        "prepareRename should return a range-compatible payload"
+    );
 
     scenario.when("renaming the symbol from the same call site");
     let edit = wait_for_rename_edit_uris(
@@ -1052,7 +1138,10 @@ my $result = Foo::process_data();
 
     scenario.then("rename returns edits affecting both declaration and usage files");
     let uris = workspace_edit_uris(&edit);
-    assert!(uris.contains(&module_uri), "rename should edit declaration file");
+    assert!(
+        uris.contains(&module_uri),
+        "rename should edit declaration file"
+    );
     assert!(uris.contains(&main_uri), "rename should edit usage file");
 
     Ok(())
@@ -1090,7 +1179,10 @@ print $count;
     scenario
         .then("the server returns highlights covering declaration, write, and read occurrences");
     let kinds = highlight_kinds(&highlights);
-    assert!(kinds.len() >= 3, "expected at least 3 highlights; got {highlights:?}");
+    assert!(
+        kinds.len() >= 3,
+        "expected at least 3 highlights; got {highlights:?}"
+    );
     assert!(
         kinds.contains(&2),
         "highlights should include a read occurrence (kind=2); got {kinds:?}"
@@ -1148,7 +1240,10 @@ sub healthy_sub {
     )?;
 
     scenario.then("the server replies with an unchanged report");
-    assert_eq!(second.get("kind").and_then(Value::as_str), Some("unchanged"));
+    assert_eq!(
+        second.get("kind").and_then(Value::as_str),
+        Some("unchanged")
+    );
     assert_eq!(
         second.get("resultId").and_then(Value::as_str),
         Some(result_id.as_str()),
@@ -1211,7 +1306,10 @@ sub score {
     )?;
 
     scenario.then("the server reports unchanged diagnostics");
-    assert_eq!(unchanged.get("kind").and_then(Value::as_str), Some("unchanged"));
+    assert_eq!(
+        unchanged.get("kind").and_then(Value::as_str),
+        Some("unchanged")
+    );
 
     scenario.when("introducing a syntax error via didChange");
     harness.change_full(&uri, 2, broken)?;
@@ -1302,11 +1400,15 @@ print $name;
         "every highlight should include an LSP range; got {highlight_items:?}"
     );
     assert!(
-        highlight_items.iter().any(|item| item.get("kind").and_then(Value::as_u64) == Some(3)),
+        highlight_items
+            .iter()
+            .any(|item| item.get("kind").and_then(Value::as_u64) == Some(3)),
         "expected at least one write highlight; got {highlight_items:?}"
     );
     assert!(
-        highlight_items.iter().any(|item| item.get("kind").and_then(Value::as_u64) == Some(2)),
+        highlight_items
+            .iter()
+            .any(|item| item.get("kind").and_then(Value::as_u64) == Some(2)),
         "expected at least one read highlight; got {highlight_items:?}"
     );
 
@@ -1360,7 +1462,10 @@ return$x*2}
         if let Some(edits) = result.as_array()
             && let Some(first_edit) = edits.first()
         {
-            assert!(has_lsp_range(first_edit), "text edits should include an LSP range structure");
+            assert!(
+                has_lsp_range(first_edit),
+                "text edits should include an LSP range structure"
+            );
             assert!(
                 first_edit.get("newText").and_then(Value::as_str).is_some(),
                 "text edits should include newText"
@@ -1377,15 +1482,24 @@ return$x*2}
             .get("message")
             .and_then(Value::as_str)
             .ok_or("formatting error should include a message")?;
-        assert!(!message.is_empty(), "formatting error message should not be empty");
+        assert!(
+            !message.is_empty(),
+            "formatting error message should not be empty"
+        );
 
-        let error_kind =
-            error.get("data").and_then(|d| d.get("error_kind")).and_then(Value::as_str).ok_or(
+        let error_kind = error
+            .get("data")
+            .and_then(|d| d.get("error_kind"))
+            .and_then(Value::as_str)
+            .ok_or(
                 "formatting error should carry a structured data.error_kind field \
                  (expected one of: perltidy_not_found, perltidy_error, io_error)",
             )?;
         assert!(
-            matches!(error_kind, "perltidy_not_found" | "perltidy_error" | "io_error"),
+            matches!(
+                error_kind,
+                "perltidy_not_found" | "perltidy_error" | "io_error"
+            ),
             "data.error_kind should be a known tooling-error kind, got: {error_kind:?}"
         );
     } else {
@@ -1430,7 +1544,9 @@ print $value;
     let (mut harness, workspace) = setup_workspace(&[("navigation.pl", code)])?;
     let uri = workspace.uri("navigation.pl");
     harness.open(&uri, code)?;
-    harness.wait_for_symbol("calculate_total", Some(&uri), Duration::from_secs(2)).ok();
+    harness
+        .wait_for_symbol("calculate_total", Some(&uri), Duration::from_secs(2))
+        .ok();
 
     scenario.when("requesting document highlights on the local variable inside the subroutine");
     let (highlight_line, highlight_col) = find_position(code, "$total =");
@@ -1443,9 +1559,14 @@ print $value;
     )?;
 
     scenario.then("the server highlights the declaration, mutation, and return usage sites");
-    let highlight_items =
-        highlights.as_array().ok_or("documentHighlight should return an array")?;
-    assert_eq!(highlight_items.len(), 3, "expected three highlights for $total");
+    let highlight_items = highlights
+        .as_array()
+        .ok_or("documentHighlight should return an array")?;
+    assert_eq!(
+        highlight_items.len(),
+        3,
+        "expected three highlights for $total"
+    );
     assert!(
         highlight_items.iter().all(has_lsp_range),
         "all highlights should include valid ranges"
@@ -1465,11 +1586,19 @@ print $value;
     )?;
 
     scenario.then("the server returns a nested selection hierarchy for editor expand-selection");
-    let ranges = selection_ranges.as_array().ok_or("selectionRange should return an array")?;
+    let ranges = selection_ranges
+        .as_array()
+        .ok_or("selectionRange should return an array")?;
     assert_eq!(ranges.len(), 1, "expected one selection range result");
     let depth = selection_range_depth(&ranges[0]);
-    assert!(depth >= 2, "selection range should provide nested expansion, got depth {depth}");
-    assert!(has_lsp_range(&ranges[0]), "selection range should include a valid range");
+    assert!(
+        depth >= 2,
+        "selection range should provide nested expansion, got depth {depth}"
+    );
+    assert!(
+        has_lsp_range(&ranges[0]),
+        "selection range should include a valid range"
+    );
 
     Ok(())
 }
@@ -1492,7 +1621,9 @@ print $x;
     let (mut harness, workspace) = setup_workspace(&[("script.pl", script)])?;
     let uri = workspace.uri("script.pl");
     harness.open(&uri, script)?;
-    harness.wait_for_symbol("x", Some(&uri), std::time::Duration::from_secs(5)).ok();
+    harness
+        .wait_for_symbol("x", Some(&uri), std::time::Duration::from_secs(5))
+        .ok();
     harness.barrier();
 
     scenario.when("requesting definition on the inner variable usage");
@@ -1513,7 +1644,10 @@ print $x;
     let locations = response_inner.as_array().unwrap_or(&empty_vec);
     assert_eq!(locations.len(), 1);
     let inner_def_line = location_start_line(&locations[0]).unwrap();
-    assert_eq!(inner_def_line, 5, "Expected inner $x declaration at line 5 (0-indexed)");
+    assert_eq!(
+        inner_def_line, 5,
+        "Expected inner $x declaration at line 5 (0-indexed)"
+    );
 
     scenario.when("requesting definition on the outer variable usage");
     // find the *last* instance of "print $x;"
@@ -1536,7 +1670,10 @@ print $x;
     let locations_outer = response_outer.as_array().unwrap_or(&empty_vec_outer);
     assert_eq!(locations_outer.len(), 1);
     let outer_def_line = location_start_line(&locations_outer[0]).unwrap();
-    assert_eq!(outer_def_line, 3, "Expected outer $x declaration at line 3 (0-indexed)");
+    assert_eq!(
+        outer_def_line, 3,
+        "Expected outer $x declaration at line 3 (0-indexed)"
+    );
 
     Ok(())
 }
@@ -1577,7 +1714,13 @@ Foo::do_foo();
 
     harness.open(&module_uri, module)?;
     harness.open(&main_uri, main)?;
-    harness.wait_for_symbol("do_foo", Some(&module_uri), std::time::Duration::from_secs(5)).ok();
+    harness
+        .wait_for_symbol(
+            "do_foo",
+            Some(&module_uri),
+            std::time::Duration::from_secs(5),
+        )
+        .ok();
     harness.barrier();
 
     scenario.when("requesting hover on the module name");
@@ -1667,7 +1810,10 @@ sub main_func {}
 
     assert!(find_symbol(symbols, "Outer"), "Expected Outer package");
     assert!(find_symbol(symbols, "outer_func"), "Expected outer_func");
-    assert!(find_symbol(symbols, "Outer::Inner"), "Expected Outer::Inner package");
+    assert!(
+        find_symbol(symbols, "Outer::Inner"),
+        "Expected Outer::Inner package"
+    );
     assert!(find_symbol(symbols, "inner_func"), "Expected inner_func");
     assert!(find_symbol(symbols, "main"), "Expected main package");
     assert!(find_symbol(symbols, "main_func"), "Expected main_func");
@@ -1928,7 +2074,9 @@ print $value;
         "prepareRename should return a range-compatible result; got {response:?}"
     );
     assert_eq!(
-        response.pointer("/result/placeholder").and_then(Value::as_str),
+        response
+            .pointer("/result/placeholder")
+            .and_then(Value::as_str),
         Some("print"),
         "prepareRename should surface the touched token as placeholder"
     );
@@ -1996,7 +2144,9 @@ $total += 2;
         without_decl_items.len()
     );
     assert!(
-        without_decl_items.iter().all(|item| item.get("uri").is_some() && has_lsp_range(item)),
+        without_decl_items
+            .iter()
+            .all(|item| item.get("uri").is_some() && has_lsp_range(item)),
         "reference entries should preserve uri + range fields; got {without_decl_items:?}"
     );
 
@@ -2036,8 +2186,13 @@ sub render {
     )?;
 
     scenario.then("the server returns foldable structural ranges");
-    let folding_ranges = folding.as_array().ok_or("foldingRange should return an array payload")?;
-    assert!(!folding_ranges.is_empty(), "expected at least one folding range");
+    let folding_ranges = folding
+        .as_array()
+        .ok_or("foldingRange should return an array payload")?;
+    assert!(
+        !folding_ranges.is_empty(),
+        "expected at least one folding range"
+    );
     assert!(
         folding_ranges
             .iter()
@@ -2058,16 +2213,22 @@ sub render {
     )?;
 
     scenario.then("inlay hints return a valid payload shape for the requested range");
-    let hints = inlay.as_array().ok_or("inlayHint should return an array payload")?;
+    let hints = inlay
+        .as_array()
+        .ok_or("inlayHint should return an array payload")?;
     assert!(
-        hints.iter().all(|hint| hint.get("position").is_some() && hint.get("label").is_some()),
+        hints
+            .iter()
+            .all(|hint| hint.get("position").is_some() && hint.get("label").is_some()),
         "every inlay hint should include position and label when present"
     );
 
     let labels = inlay_labels(&inlay);
     if !labels.is_empty() {
         assert!(
-            labels.iter().any(|label| matches!(label.as_str(), "expr:" | "offset:" | "length:")),
+            labels
+                .iter()
+                .any(|label| matches!(label.as_str(), "expr:" | "offset:" | "length:")),
             "expected substr-style parameter hints in {labels:?}"
         );
     }
@@ -2108,15 +2269,21 @@ sub compute_total {
     )?;
 
     scenario.then("the server returns nested parent ranges to allow expansion");
-    let ranges = response.as_array().ok_or("selectionRange response should be an array")?;
-    let first = ranges.first().ok_or("selectionRange response should contain one item")?;
+    let ranges = response
+        .as_array()
+        .ok_or("selectionRange response should be an array")?;
+    let first = ranges
+        .first()
+        .ok_or("selectionRange response should contain one item")?;
     let depth = selection_range_depth(first);
     assert!(
         depth >= 2,
         "selection range should provide at least one parent expansion; got depth {depth}"
     );
     let child_span = line_span(first).ok_or("selection range should include child line span")?;
-    let parent = first.get("parent").ok_or("selection range should include parent")?;
+    let parent = first
+        .get("parent")
+        .ok_or("selection range should include parent")?;
     let parent_span = line_span(parent).ok_or("selection range parent should include line span")?;
     assert!(
         parent_span.0 <= child_span.0 && parent_span.1 >= child_span.1,
@@ -2147,7 +2314,13 @@ sub collect_metrics {
     let (mut harness, workspace) = setup_workspace(&[("lib/SymbolHub.pm", module)])?;
     let module_uri = workspace.uri("lib/SymbolHub.pm");
     harness.open(&module_uri, module)?;
-    harness.wait_for_symbol("collect_metrics", Some(&module_uri), Duration::from_secs(10)).ok();
+    harness
+        .wait_for_symbol(
+            "collect_metrics",
+            Some(&module_uri),
+            Duration::from_secs(10),
+        )
+        .ok();
     harness.barrier();
 
     scenario.when("searching workspace symbols using a package-oriented query");
@@ -2160,11 +2333,18 @@ sub collect_metrics {
 
     scenario.then("the symbol list includes both package and subroutine entries");
     let items = result.as_array().cloned().unwrap_or_default();
-    assert!(!items.is_empty(), "workspace/symbol should return entries for SymbolHub query");
+    assert!(
+        !items.is_empty(),
+        "workspace/symbol should return entries for SymbolHub query"
+    );
 
     let names: Vec<String> = items
         .iter()
-        .filter_map(|item| item.get("name").and_then(Value::as_str).map(ToOwned::to_owned))
+        .filter_map(|item| {
+            item.get("name")
+                .and_then(Value::as_str)
+                .map(ToOwned::to_owned)
+        })
         .collect();
 
     assert!(
@@ -2172,7 +2352,9 @@ sub collect_metrics {
         "workspace symbols should include package name SymbolHub; got {names:?}"
     );
     assert!(
-        names.iter().any(|name| name == "collect_metrics" || name.ends_with("collect_metrics")),
+        names
+            .iter()
+            .any(|name| name == "collect_metrics" || name.ends_with("collect_metrics")),
         "workspace symbols should include collect_metrics; got {names:?}"
     );
 
@@ -2220,7 +2402,9 @@ sub beta {
     )?;
 
     scenario.then("the server returns multiline folding regions for major code blocks");
-    let ranges = response.as_array().ok_or("foldingRange should return an array")?;
+    let ranges = response
+        .as_array()
+        .ok_or("foldingRange should return an array")?;
     assert!(!ranges.is_empty(), "expected at least one folding range");
     assert!(
         ranges.iter().any(|range| {
@@ -2269,8 +2453,13 @@ done_testing();
     )?;
 
     scenario.then("code lenses include runnable test actions with valid ranges");
-    let lenses = response.as_array().ok_or("codeLens should return an array")?;
-    assert!(!lenses.is_empty(), "expected code lenses for test subroutines");
+    let lenses = response
+        .as_array()
+        .ok_or("codeLens should return an array")?;
+    assert!(
+        !lenses.is_empty(),
+        "expected code lenses for test subroutines"
+    );
     assert!(
         lenses.iter().all(has_lsp_range),
         "all code lenses should include a valid range; got {lenses:?}"
@@ -2308,7 +2497,9 @@ my $y = helper();
     let (mut harness, workspace) = setup_workspace(&[("refs.pl", script)])?;
     let uri = workspace.uri("refs.pl");
     harness.open(&uri, script)?;
-    harness.wait_for_symbol("helper", Some(&uri), Duration::from_secs(5)).ok();
+    harness
+        .wait_for_symbol("helper", Some(&uri), Duration::from_secs(5))
+        .ok();
 
     let (line, character) = find_position(script, "helper()");
 

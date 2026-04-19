@@ -11,10 +11,18 @@ use perl_parser_core::{
 #[test]
 fn create_error_node_at_token() -> Result<(), Box<dyn std::error::Error>> {
     let mut ctx = ParserContext::new("my $x;".to_string());
-    let node = ctx.create_error_node("test error".to_string(), vec!["something".to_string()], None);
+    let node = ctx.create_error_node(
+        "test error".to_string(),
+        vec!["something".to_string()],
+        None,
+    );
 
     match &node.kind {
-        V2NodeKind::Error { message, expected, partial } => {
+        V2NodeKind::Error {
+            message,
+            expected,
+            partial,
+        } => {
             assert_eq!(message, "test error");
             assert_eq!(expected, &["something"]);
             assert!(partial.is_none());
@@ -133,7 +141,10 @@ fn skip_until_with_budget_reaches_eof() -> Result<(), Box<dyn std::error::Error>
 
 #[test]
 fn skip_until_with_budget_exhaustion() -> Result<(), Box<dyn std::error::Error>> {
-    let budget = ParseBudget { max_tokens_skipped: 1, ..ParseBudget::strict() };
+    let budget = ParseBudget {
+        max_tokens_skipped: 1,
+        ..ParseBudget::strict()
+    };
     let mut ctx = ParserContext::new("foo bar baz qux ;".to_string());
     let mut tracker = BudgetTracker::new();
 

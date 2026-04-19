@@ -643,7 +643,9 @@ mod tests {
                 let is_var_decl =
                     matches!(statements[0].kind, NodeKind::VariableDeclaration { .. });
                 assert!(is_var_decl, "Expected VariableDeclaration for: {}", code);
-                if let NodeKind::VariableDeclaration { declarator: decl, .. } = &statements[0].kind
+                if let NodeKind::VariableDeclaration {
+                    declarator: decl, ..
+                } = &statements[0].kind
                 {
                     assert_eq!(decl, declarator);
                 }
@@ -670,7 +672,11 @@ mod tests {
 
             let ast = must(result);
             if let NodeKind::Program { statements } = &ast.kind {
-                assert!(!statements.is_empty(), "No statements found in AST for: {}", code);
+                assert!(
+                    !statements.is_empty(),
+                    "No statements found in AST for: {}",
+                    code
+                );
 
                 // Find the binary node, which might be wrapped in an ExpressionStatement
                 let binary_node = match &statements[0].kind {
@@ -727,7 +733,11 @@ mod tests {
 
             let ast = must(result);
             if let NodeKind::Program { statements } = &ast.kind {
-                assert!(!statements.is_empty(), "No statements found in AST for: {}", code);
+                assert!(
+                    !statements.is_empty(),
+                    "No statements found in AST for: {}",
+                    code
+                );
 
                 // Find the binary node, which might be wrapped in an ExpressionStatement
                 let binary_node = match &statements[0].kind {
@@ -861,7 +871,11 @@ mod tests {
             let result = parser.parse();
 
             // With error recovery, parse() succeeds but collects errors
-            assert!(result.is_ok(), "Parser should recover from errors for: {}", code);
+            assert!(
+                result.is_ok(),
+                "Parser should recover from errors for: {}",
+                code
+            );
 
             // Check that errors were recorded
             let errors = parser.errors();

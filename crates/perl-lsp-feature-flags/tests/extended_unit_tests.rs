@@ -264,7 +264,10 @@ fn advertised_features_partial_initialization() -> Result<(), Box<dyn std::error
 
 #[test]
 fn advertised_features_clone_independence() -> Result<(), Box<dyn std::error::Error>> {
-    let af1 = AdvertisedFeatures { completion: true, ..Default::default() };
+    let af1 = AdvertisedFeatures {
+        completion: true,
+        ..Default::default()
+    };
     let mut af2 = af1.clone();
     af2.completion = false;
     assert!(af1.completion);
@@ -362,7 +365,12 @@ fn build_flags_ga_lock_and_all_differ_on_inline_values() -> Result<(), Box<dyn s
 
 #[test]
 fn build_flags_partial_initialization() -> Result<(), Box<dyn std::error::Error>> {
-    let bf = BuildFlags { completion: true, hover: true, definition: true, ..Default::default() };
+    let bf = BuildFlags {
+        completion: true,
+        hover: true,
+        definition: true,
+        ..Default::default()
+    };
     assert!(bf.completion);
     assert!(bf.hover);
     assert!(bf.definition);
@@ -373,7 +381,10 @@ fn build_flags_partial_initialization() -> Result<(), Box<dyn std::error::Error>
 
 #[test]
 fn build_flags_clone_independence() -> Result<(), Box<dyn std::error::Error>> {
-    let bf1 = BuildFlags { completion: true, ..Default::default() };
+    let bf1 = BuildFlags {
+        completion: true,
+        ..Default::default()
+    };
     let mut bf2 = bf1.clone();
     bf2.completion = false;
     assert!(bf1.completion);
@@ -383,16 +394,30 @@ fn build_flags_clone_independence() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn build_flags_equality() -> Result<(), Box<dyn std::error::Error>> {
-    let bf1 = BuildFlags { completion: true, hover: true, ..Default::default() };
-    let bf2 = BuildFlags { completion: true, hover: true, ..Default::default() };
+    let bf1 = BuildFlags {
+        completion: true,
+        hover: true,
+        ..Default::default()
+    };
+    let bf2 = BuildFlags {
+        completion: true,
+        hover: true,
+        ..Default::default()
+    };
     assert_eq!(bf1, bf2);
     Ok(())
 }
 
 #[test]
 fn build_flags_inequality() -> Result<(), Box<dyn std::error::Error>> {
-    let bf1 = BuildFlags { completion: true, ..Default::default() };
-    let bf2 = BuildFlags { hover: true, ..Default::default() };
+    let bf1 = BuildFlags {
+        completion: true,
+        ..Default::default()
+    };
+    let bf2 = BuildFlags {
+        hover: true,
+        ..Default::default()
+    };
     assert_ne!(bf1, bf2);
     Ok(())
 }
@@ -440,7 +465,10 @@ fn build_flags_empty_to_advertised_features() -> Result<(), Box<dyn std::error::
 
 #[test]
 fn build_flags_code_actions_maps_to_code_action() -> Result<(), Box<dyn std::error::Error>> {
-    let bf = BuildFlags { code_actions: true, ..Default::default() };
+    let bf = BuildFlags {
+        code_actions: true,
+        ..Default::default()
+    };
     let af = bf.to_advertised_features();
     assert!(af.code_action);
     Ok(())
@@ -449,7 +477,10 @@ fn build_flags_code_actions_maps_to_code_action() -> Result<(), Box<dyn std::err
 #[test]
 fn build_flags_selection_ranges_maps_to_selection_range() -> Result<(), Box<dyn std::error::Error>>
 {
-    let bf = BuildFlags { selection_ranges: true, ..Default::default() };
+    let bf = BuildFlags {
+        selection_ranges: true,
+        ..Default::default()
+    };
     let af = bf.to_advertised_features();
     assert!(af.selection_range);
     Ok(())
@@ -458,7 +489,10 @@ fn build_flags_selection_ranges_maps_to_selection_range() -> Result<(), Box<dyn 
 #[test]
 fn build_flags_pull_diagnostics_maps_to_diagnostic_provider()
 -> Result<(), Box<dyn std::error::Error>> {
-    let bf = BuildFlags { pull_diagnostics: true, ..Default::default() };
+    let bf = BuildFlags {
+        pull_diagnostics: true,
+        ..Default::default()
+    };
     let af = bf.to_advertised_features();
     assert!(af.diagnostic_provider);
     Ok(())
@@ -494,7 +528,10 @@ fn build_flags_default_to_feature_ids_is_empty() -> Result<(), Box<dyn std::erro
 
 #[test]
 fn build_flags_single_feature_to_feature_ids() -> Result<(), Box<dyn std::error::Error>> {
-    let bf = BuildFlags { completion: true, ..Default::default() };
+    let bf = BuildFlags {
+        completion: true,
+        ..Default::default()
+    };
     let ids = bf.to_feature_ids();
     assert_eq!(ids.len(), 1);
     assert_eq!(ids[0], LSP_COMPLETION);
@@ -503,7 +540,11 @@ fn build_flags_single_feature_to_feature_ids() -> Result<(), Box<dyn std::error:
 
 #[test]
 fn build_flags_completion_and_hover_to_feature_ids() -> Result<(), Box<dyn std::error::Error>> {
-    let bf = BuildFlags { completion: true, hover: true, ..Default::default() };
+    let bf = BuildFlags {
+        completion: true,
+        hover: true,
+        ..Default::default()
+    };
     let ids = bf.to_feature_ids();
     assert_eq!(ids.len(), 2);
     assert!(ids.contains(&LSP_COMPLETION));
@@ -558,7 +599,10 @@ fn build_flags_ga_lock_to_feature_ids() -> Result<(), Box<dyn std::error::Error>
 
 #[test]
 fn build_flags_type_definition_to_feature_ids() -> Result<(), Box<dyn std::error::Error>> {
-    let bf = BuildFlags { type_definition: true, ..Default::default() };
+    let bf = BuildFlags {
+        type_definition: true,
+        ..Default::default()
+    };
     let ids = bf.to_feature_ids();
     assert!(ids.contains(&LSP_TYPE_DEFINITION));
     Ok(())
@@ -566,7 +610,10 @@ fn build_flags_type_definition_to_feature_ids() -> Result<(), Box<dyn std::error
 
 #[test]
 fn build_flags_implementation_to_feature_ids() -> Result<(), Box<dyn std::error::Error>> {
-    let bf = BuildFlags { implementation: true, ..Default::default() };
+    let bf = BuildFlags {
+        implementation: true,
+        ..Default::default()
+    };
     let ids = bf.to_feature_ids();
     assert!(ids.contains(&LSP_IMPLEMENTATION));
     Ok(())
@@ -575,7 +622,10 @@ fn build_flags_implementation_to_feature_ids() -> Result<(), Box<dyn std::error:
 #[test]
 fn build_flags_workspace_symbol_resolve_excluded_from_feature_ids()
 -> Result<(), Box<dyn std::error::Error>> {
-    let bf = BuildFlags { workspace_symbol_resolve: true, ..Default::default() };
+    let bf = BuildFlags {
+        workspace_symbol_resolve: true,
+        ..Default::default()
+    };
     let ids = bf.to_feature_ids();
     assert!(ids.is_empty());
     Ok(())
@@ -583,7 +633,10 @@ fn build_flags_workspace_symbol_resolve_excluded_from_feature_ids()
 
 #[test]
 fn build_flags_execute_command_to_feature_ids() -> Result<(), Box<dyn std::error::Error>> {
-    let bf = BuildFlags { execute_command: true, ..Default::default() };
+    let bf = BuildFlags {
+        execute_command: true,
+        ..Default::default()
+    };
     let ids = bf.to_feature_ids();
     assert!(ids.contains(&LSP_EXECUTE_COMMAND));
     Ok(())
@@ -591,7 +644,10 @@ fn build_flags_execute_command_to_feature_ids() -> Result<(), Box<dyn std::error
 
 #[test]
 fn build_flags_document_links_to_feature_ids() -> Result<(), Box<dyn std::error::Error>> {
-    let bf = BuildFlags { document_links: true, ..Default::default() };
+    let bf = BuildFlags {
+        document_links: true,
+        ..Default::default()
+    };
     let ids = bf.to_feature_ids();
     assert!(ids.contains(&LSP_DOCUMENT_LINK));
     Ok(())
@@ -599,7 +655,10 @@ fn build_flags_document_links_to_feature_ids() -> Result<(), Box<dyn std::error:
 
 #[test]
 fn build_flags_on_type_formatting_to_feature_ids() -> Result<(), Box<dyn std::error::Error>> {
-    let bf = BuildFlags { on_type_formatting: true, ..Default::default() };
+    let bf = BuildFlags {
+        on_type_formatting: true,
+        ..Default::default()
+    };
     let ids = bf.to_feature_ids();
     assert!(ids.contains(&LSP_ON_TYPE_FORMATTING));
     Ok(())
@@ -607,7 +666,10 @@ fn build_flags_on_type_formatting_to_feature_ids() -> Result<(), Box<dyn std::er
 
 #[test]
 fn build_flags_inline_completion_to_feature_ids() -> Result<(), Box<dyn std::error::Error>> {
-    let bf = BuildFlags { inline_completion: true, ..Default::default() };
+    let bf = BuildFlags {
+        inline_completion: true,
+        ..Default::default()
+    };
     let ids = bf.to_feature_ids();
     assert!(ids.contains(&LSP_INLINE_COMPLETION));
     Ok(())
@@ -615,7 +677,10 @@ fn build_flags_inline_completion_to_feature_ids() -> Result<(), Box<dyn std::err
 
 #[test]
 fn build_flags_inline_values_to_feature_ids() -> Result<(), Box<dyn std::error::Error>> {
-    let bf = BuildFlags { inline_values: true, ..Default::default() };
+    let bf = BuildFlags {
+        inline_values: true,
+        ..Default::default()
+    };
     let ids = bf.to_feature_ids();
     assert!(ids.contains(&LSP_INLINE_VALUE));
     Ok(())
@@ -623,7 +688,10 @@ fn build_flags_inline_values_to_feature_ids() -> Result<(), Box<dyn std::error::
 
 #[test]
 fn build_flags_moniker_to_feature_ids() -> Result<(), Box<dyn std::error::Error>> {
-    let bf = BuildFlags { moniker: true, ..Default::default() };
+    let bf = BuildFlags {
+        moniker: true,
+        ..Default::default()
+    };
     let ids = bf.to_feature_ids();
     assert!(ids.contains(&LSP_MONIKER));
     Ok(())
@@ -632,7 +700,10 @@ fn build_flags_moniker_to_feature_ids() -> Result<(), Box<dyn std::error::Error>
 #[test]
 fn build_flags_source_organize_imports_excluded_from_feature_ids()
 -> Result<(), Box<dyn std::error::Error>> {
-    let bf = BuildFlags { source_organize_imports: true, ..Default::default() };
+    let bf = BuildFlags {
+        source_organize_imports: true,
+        ..Default::default()
+    };
     let ids = bf.to_feature_ids();
     assert!(ids.is_empty());
     Ok(())

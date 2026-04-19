@@ -87,7 +87,9 @@ fn workspace_root_for_doc(workspace_folders: &[String], doc_uri: Option<&str>) -
         }
     }
 
-    workspace_folders.first().and_then(|u| super::super::source_path_from_uri(u))
+    workspace_folders
+        .first()
+        .and_then(|u| super::super::source_path_from_uri(u))
 }
 
 fn workspace_config_for_doc(
@@ -575,7 +577,10 @@ mod tests {
 
         let matched = workspace_root_for_doc(&workspace_folders, Some(doc_uri.as_str()))
             .ok_or("expected a matching workspace root")?;
-        assert_eq!(matched, app, "nested workspace root should prefer most specific folder");
+        assert_eq!(
+            matched, app,
+            "nested workspace root should prefer most specific folder"
+        );
         Ok(())
     }
 
@@ -699,7 +704,11 @@ mod tests {
     fn test_resolve_module_path_use_lib_qw_multiple_paths() -> TestResult {
         let temp = tempfile::tempdir()?;
         let workspace = temp.path().join("workspace");
-        let module_file = workspace.join("t").join("lib").join("Test").join("Helper.pm");
+        let module_file = workspace
+            .join("t")
+            .join("lib")
+            .join("Test")
+            .join("Helper.pm");
         fs::create_dir_all(module_file.parent().ok_or("no parent")?)?;
         fs::write(&module_file, "package Test::Helper; 1;")?;
 
@@ -778,7 +787,10 @@ mod tests {
             config.include_paths = vec![];
         }
 
-        let doc_uri = format!("file://{}/main.pl", workspace.to_string_lossy().replace('\\', "/"));
+        let doc_uri = format!(
+            "file://{}/main.pl",
+            workspace.to_string_lossy().replace('\\', "/")
+        );
         let doc_text = "use lib 'custom';
 no lib 'custom';
 use Overlay::Live;
@@ -1089,7 +1101,10 @@ use Overlay::Live;
         // Place a file outside the workspace that should never be reachable.
         let outside = temp.path().join("secret");
         fs::create_dir_all(outside.join("Evil"))?;
-        fs::write(outside.join("Evil").join("Secrets.pm"), "package Evil::Secrets; 1;")?;
+        fs::write(
+            outside.join("Evil").join("Secrets.pm"),
+            "package Evil::Secrets; 1;",
+        )?;
 
         let server = LspServer::new();
         *server.root_path.lock() = Some(workspace.clone());

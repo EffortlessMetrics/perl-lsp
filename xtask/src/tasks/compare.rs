@@ -97,7 +97,11 @@ where
 
     // Use the more accurate measurement or fallback to peak allocator
     let memory_delta = memory_after - memory_before;
-    let memory_mb = if memory_delta > 0.0 { memory_delta } else { peak_memory_mb };
+    let memory_mb = if memory_delta > 0.0 {
+        memory_delta
+    } else {
+        peak_memory_mb
+    };
 
     (result, memory_mb)
 }
@@ -239,7 +243,9 @@ fn get_corpus_files() -> Result<Vec<String>> {
     // Use actual Perl benchmark test files instead of tree-sitter test format
     let benchmark_dir = PathBuf::from("benchmark_tests");
     if !benchmark_dir.exists() {
-        return Err(color_eyre::eyre::eyre!("Benchmark test directory not found"));
+        return Err(color_eyre::eyre::eyre!(
+            "Benchmark test directory not found"
+        ));
     }
 
     let mut files = Vec::new();
@@ -300,7 +306,12 @@ fn test_implementation(
     let mut parse_error_count = 0;
 
     for (i, test_case) in test_cases.iter().enumerate() {
-        spinner.set_message(format!("  [{}/{}] Testing: {}", i + 1, test_cases.len(), test_case));
+        spinner.set_message(format!(
+            "  [{}/{}] Testing: {}",
+            i + 1,
+            test_cases.len(),
+            test_case
+        ));
 
         let test_result = run_single_test(impl_type, test_case, iterations)?;
 
@@ -432,8 +443,9 @@ fn run_single_test(
 }
 
 fn test_c_implementation(file_path: &str) -> Result<(bool, f64)> {
-    let output =
-        std::process::Command::new("./target/debug/bench_parser_c").arg(file_path).output()?;
+    let output = std::process::Command::new("./target/debug/bench_parser_c")
+        .arg(file_path)
+        .output()?;
     let stdout = String::from_utf8_lossy(&output.stdout);
     let mut has_error = false;
     let mut duration = 0.0;
@@ -453,15 +465,19 @@ fn test_c_implementation(file_path: &str) -> Result<(bool, f64)> {
     // Only return an error if the binary itself failed (non-zero exit code)
     // Parse errors (error=true) are valid results to be compared
     if !output.status.success() {
-        return Err(color_eyre::eyre::eyre!("C implementation failed: {}", stdout));
+        return Err(color_eyre::eyre::eyre!(
+            "C implementation failed: {}",
+            stdout
+        ));
     }
     // Return the actual parse result (has_error indicates parse errors, not binary failure)
     Ok((!has_error, duration))
 }
 
 fn test_rust_implementation(file_path: &str) -> Result<(bool, f64)> {
-    let output =
-        std::process::Command::new("./target/debug/bench_parser").arg(file_path).output()?;
+    let output = std::process::Command::new("./target/debug/bench_parser")
+        .arg(file_path)
+        .output()?;
     let stdout = String::from_utf8_lossy(&output.stdout);
     let mut has_error = false;
     let mut duration = 0.0;
@@ -481,7 +497,10 @@ fn test_rust_implementation(file_path: &str) -> Result<(bool, f64)> {
     // Only return an error if the binary itself failed (non-zero exit code)
     // Parse errors (error=true) are valid results to be compared
     if !output.status.success() {
-        return Err(color_eyre::eyre::eyre!("Rust implementation failed: {}", stdout));
+        return Err(color_eyre::eyre::eyre!(
+            "Rust implementation failed: {}",
+            stdout
+        ));
     }
     // Return the actual parse result (has_error indicates parse errors, not binary failure)
     Ok((!has_error, duration))
@@ -552,10 +571,16 @@ fn generate_markdown_report(report: &serde_json::Value) -> Result<String> {
     // Summary
     markdown.push_str("## Summary\n\n");
 
-    let time_diff = comparison["time_difference_percent"].as_f64().unwrap_or(0.0);
-    let memory_diff = comparison["memory_difference_percent"].as_f64().unwrap_or(0.0);
+    let time_diff = comparison["time_difference_percent"]
+        .as_f64()
+        .unwrap_or(0.0);
+    let memory_diff = comparison["memory_difference_percent"]
+        .as_f64()
+        .unwrap_or(0.0);
     let rust_faster = comparison["rust_faster"].as_bool().unwrap_or(false);
-    let rust_uses_less_memory = comparison["rust_uses_less_memory"].as_bool().unwrap_or(false);
+    let rust_uses_less_memory = comparison["rust_uses_less_memory"]
+        .as_bool()
+        .unwrap_or(false);
 
     markdown.push_str(&format!(
         "- **Time Performance:** Rust implementation is {:.1}% {} than C implementation\n",
@@ -566,7 +591,11 @@ fn generate_markdown_report(report: &serde_json::Value) -> Result<String> {
     markdown.push_str(&format!(
         "- **Memory Usage:** Rust implementation uses {:.1}% {} memory than C implementation\n",
         memory_diff.abs(),
-        if rust_uses_less_memory { "less" } else { "more" }
+        if rust_uses_less_memory {
+            "less"
+        } else {
+            "more"
+        }
     ));
 
     let c_success = comparison["success_rate"]["c"].as_u64().unwrap_or(0);
@@ -586,10 +615,18 @@ fn generate_markdown_report(report: &serde_json::Value) -> Result<String> {
     // Detailed Results
     markdown.push_str("\n## Detailed Results\n\n");
 
-    let c_avg_time = c_results["summary"]["avg_time_per_test"].as_f64().unwrap_or(0.0);
-    let rust_avg_time = rust_results["summary"]["avg_time_per_test"].as_f64().unwrap_or(0.0);
-    let c_avg_memory = c_results["summary"]["avg_memory_per_test"].as_f64().unwrap_or(0.0);
-    let rust_avg_memory = rust_results["summary"]["avg_memory_per_test"].as_f64().unwrap_or(0.0);
+    let c_avg_time = c_results["summary"]["avg_time_per_test"]
+        .as_f64()
+        .unwrap_or(0.0);
+    let rust_avg_time = rust_results["summary"]["avg_time_per_test"]
+        .as_f64()
+        .unwrap_or(0.0);
+    let c_avg_memory = c_results["summary"]["avg_memory_per_test"]
+        .as_f64()
+        .unwrap_or(0.0);
+    let rust_avg_memory = rust_results["summary"]["avg_memory_per_test"]
+        .as_f64()
+        .unwrap_or(0.0);
 
     markdown.push_str("| Metric | C Implementation | Rust Implementation | Difference |\n");
     markdown.push_str("|--------|------------------|---------------------|------------|\n");
@@ -604,9 +641,13 @@ fn generate_markdown_report(report: &serde_json::Value) -> Result<String> {
     ));
 
     let c_total_time = c_results["summary"]["total_time"].as_f64().unwrap_or(0.0);
-    let rust_total_time = rust_results["summary"]["total_time"].as_f64().unwrap_or(0.0);
+    let rust_total_time = rust_results["summary"]["total_time"]
+        .as_f64()
+        .unwrap_or(0.0);
     let c_total_memory = c_results["summary"]["total_memory"].as_f64().unwrap_or(0.0);
-    let rust_total_memory = rust_results["summary"]["total_memory"].as_f64().unwrap_or(0.0);
+    let rust_total_memory = rust_results["summary"]["total_memory"]
+        .as_f64()
+        .unwrap_or(0.0);
 
     markdown.push_str(&format!(
         "| Total Time (μs) | {:.2} | {:.2} | {:.1}% |\n",
@@ -645,10 +686,16 @@ fn generate_markdown_report(report: &serde_json::Value) -> Result<String> {
             c_result["avg_memory"].as_f64(),
             rust_result["avg_memory"].as_f64(),
         ) {
-            let time_diff =
-                if c_time > 0.0 { ((rust_time - c_time) / c_time) * 100.0 } else { 0.0 };
-            let memory_diff =
-                if c_memory > 0.0 { ((rust_memory - c_memory) / c_memory) * 100.0 } else { 0.0 };
+            let time_diff = if c_time > 0.0 {
+                ((rust_time - c_time) / c_time) * 100.0
+            } else {
+                0.0
+            };
+            let memory_diff = if c_memory > 0.0 {
+                ((rust_memory - c_memory) / c_memory) * 100.0
+            } else {
+                0.0
+            };
 
             markdown.push_str(&format!(
                 "| {} | {:.2} | {:.2} | {:.2} | {:.2} | {:.1}% | {:.1}% |\n",
@@ -662,10 +709,16 @@ fn generate_markdown_report(report: &serde_json::Value) -> Result<String> {
 
 fn print_summary(report: &serde_json::Value) {
     let comparison = &report["comparison"];
-    let time_diff = comparison["time_difference_percent"].as_f64().unwrap_or(0.0);
-    let memory_diff = comparison["memory_difference_percent"].as_f64().unwrap_or(0.0);
+    let time_diff = comparison["time_difference_percent"]
+        .as_f64()
+        .unwrap_or(0.0);
+    let memory_diff = comparison["memory_difference_percent"]
+        .as_f64()
+        .unwrap_or(0.0);
     let rust_faster = comparison["rust_faster"].as_bool().unwrap_or(false);
-    let rust_uses_less_memory = comparison["rust_uses_less_memory"].as_bool().unwrap_or(false);
+    let rust_uses_less_memory = comparison["rust_uses_less_memory"]
+        .as_bool()
+        .unwrap_or(false);
 
     println!("\n📈 Comparison Summary");
     println!("===================");
@@ -677,7 +730,11 @@ fn print_summary(report: &serde_json::Value) {
     println!(
         "🧠 Memory: Rust uses {:.1}% {} memory than C",
         memory_diff.abs(),
-        if rust_uses_less_memory { "less" } else { "more" }
+        if rust_uses_less_memory {
+            "less"
+        } else {
+            "more"
+        }
     );
 
     let c_success = comparison["success_rate"]["c"].as_u64().unwrap_or(0);
@@ -810,18 +867,31 @@ fn generate_scanner_comparison_report(
     let mut report = std::fs::File::create(&report_path)?;
 
     writeln!(report, "# Scanner Performance Comparison Report\n")?;
-    writeln!(report, "Generated: {}\n", chrono::Utc::now().format("%Y-%m-%d %H:%M:%S UTC"))?;
+    writeln!(
+        report,
+        "Generated: {}\n",
+        chrono::Utc::now().format("%Y-%m-%d %H:%M:%S UTC")
+    )?;
 
     // Summary table
     writeln!(report, "## Summary\n")?;
-    writeln!(report, "| Benchmark | Rust Scanner | C Scanner | Difference |")?;
-    writeln!(report, "|-----------|--------------|-----------|------------|")?;
+    writeln!(
+        report,
+        "| Benchmark | Rust Scanner | C Scanner | Difference |"
+    )?;
+    writeln!(
+        report,
+        "|-----------|--------------|-----------|------------|"
+    )?;
 
     let benchmarks = [
         ("scanner_basic/case_0", "Basic Variable Assignment"),
         ("scanner_basic/case_1", "Print Statement"),
         ("scanner_basic/case_2", "Function Definition"),
-        ("scanner_large_file/large_perl_file", "Large File Processing"),
+        (
+            "scanner_large_file/large_perl_file",
+            "Large File Processing",
+        ),
         ("scanner_throughput/100_bytes", "100 Byte Input"),
         ("scanner_throughput/1000_bytes", "1KB Input"),
         ("scanner_throughput/10000_bytes", "10KB Input"),
@@ -854,21 +924,45 @@ fn generate_scanner_comparison_report(
 
     // Performance analysis
     writeln!(report, "### Performance Analysis\n")?;
-    writeln!(report, "- **Rust Scanner**: Native Rust implementation with zero-cost abstractions")?;
-    writeln!(report, "- **C Scanner**: Legacy C implementation with FFI overhead")?;
-    writeln!(report, "- **Measurement**: Median time across multiple runs\n")?;
+    writeln!(
+        report,
+        "- **Rust Scanner**: Native Rust implementation with zero-cost abstractions"
+    )?;
+    writeln!(
+        report,
+        "- **C Scanner**: Legacy C implementation with FFI overhead"
+    )?;
+    writeln!(
+        report,
+        "- **Measurement**: Median time across multiple runs\n"
+    )?;
 
     // Memory analysis
     writeln!(report, "### Memory Analysis\n")?;
-    writeln!(report, "- **Rust Scanner**: Better memory safety, potential for optimizations")?;
-    writeln!(report, "- **C Scanner**: Manual memory management, potential for memory leaks\n")?;
+    writeln!(
+        report,
+        "- **Rust Scanner**: Better memory safety, potential for optimizations"
+    )?;
+    writeln!(
+        report,
+        "- **C Scanner**: Manual memory management, potential for memory leaks\n"
+    )?;
 
     // Recommendations
     writeln!(report, "### Recommendations\n")?;
-    writeln!(report, "1. **Use Rust Scanner** for new projects (better safety, maintainability)")?;
-    writeln!(report, "2. **Consider C Scanner** only for legacy compatibility")?;
+    writeln!(
+        report,
+        "1. **Use Rust Scanner** for new projects (better safety, maintainability)"
+    )?;
+    writeln!(
+        report,
+        "2. **Consider C Scanner** only for legacy compatibility"
+    )?;
     writeln!(report, "3. **Monitor performance** in production workloads")?;
-    writeln!(report, "4. **Profile specific use cases** to determine optimal choice\n")?;
+    writeln!(
+        report,
+        "4. **Profile specific use cases** to determine optimal choice\n"
+    )?;
 
     // Raw data
     writeln!(report, "## Raw Data\n")?;
@@ -882,7 +976,10 @@ fn generate_scanner_comparison_report(
     writeln!(report, "{}", serde_json::to_string_pretty(c_results)?)?;
     writeln!(report, "```")?;
 
-    println!("Scanner comparison report written to: {}", report_path.display());
+    println!(
+        "Scanner comparison report written to: {}",
+        report_path.display()
+    );
     Ok(())
 }
 
@@ -910,7 +1007,10 @@ pub fn validate_memory_profiling() -> Result<()> {
         });
 
         memories.push(memory);
-        println!("🔬 Run {}: Memory used: {:.4}MB, Result: {:?}", i, memory, result);
+        println!(
+            "🔬 Run {}: Memory used: {:.4}MB, Result: {:?}",
+            i, memory, result
+        );
     }
 
     // Test procfs memory measurement directly
@@ -949,7 +1049,11 @@ pub fn validate_memory_profiling() -> Result<()> {
 }
 
 fn extract_median_time(results: &serde_json::Value, bench_name: &str) -> Option<f64> {
-    results.get(bench_name)?.get("median")?.get("estimate")?.as_f64()
+    results
+        .get(bench_name)?
+        .get("median")?
+        .get("estimate")?
+        .as_f64()
 }
 
 #[allow(dead_code)]
@@ -971,7 +1075,11 @@ fn validate_results(
     if !missing_files.is_empty() {
         return Err(color_eyre::eyre::eyre!(
             "Missing result files: {}",
-            missing_files.iter().map(|p| p.display().to_string()).collect::<Vec<_>>().join(", ")
+            missing_files
+                .iter()
+                .map(|p| p.display().to_string())
+                .collect::<Vec<_>>()
+                .join(", ")
         ));
     }
 
@@ -1015,8 +1123,10 @@ fn check_performance_gates(
     let mut improvements = 0;
 
     for test in tests {
-        if let Some(status) =
-            test.get("comparison").and_then(|c| c.get("status")).and_then(|s| s.as_str())
+        if let Some(status) = test
+            .get("comparison")
+            .and_then(|c| c.get("status"))
+            .and_then(|s| s.as_str())
         {
             match status {
                 "regression" => regressions += 1,
@@ -1027,7 +1137,10 @@ fn check_performance_gates(
     }
 
     if regressions > 0 {
-        spinner.finish_with_message(format!("⚠️  Found {} performance regression(s)", regressions));
+        spinner.finish_with_message(format!(
+            "⚠️  Found {} performance regression(s)",
+            regressions
+        ));
         return Err(color_eyre::eyre::eyre!(
             "Performance gates failed: {} regressions detected",
             regressions
@@ -1073,8 +1186,9 @@ fn display_summary(output_dir: &std::path::Path, _spinner: &ProgressBar) -> Resu
     {
         println!("\n📈 Key Metrics:");
         if let Some(overall) = summary.get("overall_performance") {
-            if let Some(mean_diff) =
-                overall.get("mean_time_difference_percent").and_then(|v| v.as_f64())
+            if let Some(mean_diff) = overall
+                .get("mean_time_difference_percent")
+                .and_then(|v| v.as_f64())
             {
                 println!("  Mean Time Difference: {:.2}%", mean_diff);
             }
@@ -1118,7 +1232,10 @@ mod tests {
             }
             Err(e) => {
                 // Should not fail on supported platforms
-                must(Err::<(), _>(format!("get_current_memory_usage failed: {}", e)));
+                must(Err::<(), _>(format!(
+                    "get_current_memory_usage failed: {}",
+                    e
+                )));
             }
         }
     }

@@ -588,10 +588,18 @@ impl LspServer {
         &self,
         params: serde_json::Value,
     ) -> Result<serde_json::Value, JsonRpcError> {
-        let uri = params.pointer("/textDocument/uri").and_then(|v| v.as_str()).unwrap_or("");
-        let line = params.pointer("/position/line").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
-        let ch =
-            params.pointer("/position/character").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
+        let uri = params
+            .pointer("/textDocument/uri")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+        let line = params
+            .pointer("/position/line")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0) as usize;
+        let ch = params
+            .pointer("/position/character")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0) as usize;
 
         let text = self.buffer_text(uri).unwrap_or_default();
         let needle = token_under_cursor(&text, line, ch).unwrap_or_default();

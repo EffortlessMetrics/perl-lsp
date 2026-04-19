@@ -50,7 +50,10 @@ pub fn run() -> Result<()> {
             continue;
         }
 
-        let workflow_name = path.file_name().and_then(|p| p.to_str()).unwrap_or("<unknown>");
+        let workflow_name = path
+            .file_name()
+            .and_then(|p| p.to_str())
+            .unwrap_or("<unknown>");
         if ALLOWED_WORKFLOWS.contains(&workflow_name) {
             continue;
         }
@@ -118,9 +121,9 @@ fn has_pr_trigger(workflow: &Value) -> bool {
     };
 
     match on {
-        Value::Sequence(values) => {
-            values.iter().any(|value| value.as_str() == Some("pull_request"))
-        }
+        Value::Sequence(values) => values
+            .iter()
+            .any(|value| value.as_str() == Some("pull_request")),
         Value::Mapping(values) => values.contains_key(Value::String("pull_request".to_string())),
         Value::String(value) => value == "pull_request",
         _ => false,

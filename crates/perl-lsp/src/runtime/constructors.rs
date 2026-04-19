@@ -301,10 +301,18 @@ mod tests {
     #[test]
     fn drop_waits_for_writer_flush_after_closing_sender() {
         let output = Arc::new(Mutex::new(Vec::new()));
-        let writer = SlowVecWriter { inner: Arc::clone(&output), pause: Duration::from_millis(60) };
+        let writer = SlowVecWriter {
+            inner: Arc::clone(&output),
+            pause: Duration::from_millis(60),
+        };
         let server = LspServer::with_io(Box::new(Cursor::new(Vec::<u8>::new())), Box::new(writer));
 
-        server.notify("window/logMessage", json!({"type": 4, "message": "flush me"})).unwrap();
+        server
+            .notify(
+                "window/logMessage",
+                json!({"type": 4, "message": "flush me"}),
+            )
+            .unwrap();
 
         let start = Instant::now();
         drop(server);

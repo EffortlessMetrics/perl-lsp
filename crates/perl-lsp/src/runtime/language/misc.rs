@@ -92,11 +92,13 @@ impl LspServer {
             };
 
             let documents = self.documents_guard();
-            let doc = self.get_document(&documents, uri).ok_or_else(|| JsonRpcError {
-                code: INVALID_REQUEST,
-                message: format!("Document not open: {}", uri),
-                data: None,
-            })?;
+            let doc = self
+                .get_document(&documents, uri)
+                .ok_or_else(|| JsonRpcError {
+                    code: INVALID_REQUEST,
+                    message: format!("Document not open: {}", uri),
+                    data: None,
+                })?;
             if let Some(ref ast) = doc.ast {
                 let mut hints = Vec::new();
                 hints.extend(crate::inlay_hints::parameter_hints(
@@ -159,7 +161,11 @@ impl LspServer {
             }
 
             // Extract hint properties for tooltip and label location generation
-            let label = hint.get("label").and_then(|l| l.as_str()).unwrap_or("").to_string();
+            let label = hint
+                .get("label")
+                .and_then(|l| l.as_str())
+                .unwrap_or("")
+                .to_string();
             let kind = hint.get("kind").and_then(|k| k.as_u64()).unwrap_or(0);
 
             // Add tooltip if not already present.
@@ -172,7 +178,9 @@ impl LspServer {
                     .map(String::from)
                     .or_else(|| {
                         // Check for deferred tooltip embedded in data
-                        hint.pointer("/data/tooltip").and_then(|v| v.as_str()).map(String::from)
+                        hint.pointer("/data/tooltip")
+                            .and_then(|v| v.as_str())
+                            .map(String::from)
                     })
                     .unwrap_or_else(|| match kind {
                         1 => {
@@ -297,22 +305,26 @@ impl LspServer {
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
         if let Some(p) = params {
-            let uri = p["textDocument"]["uri"].as_str().ok_or_else(|| JsonRpcError {
-                code: INVALID_PARAMS,
-                message: "Missing textDocument.uri".into(),
-                data: None,
-            })?;
+            let uri = p["textDocument"]["uri"]
+                .as_str()
+                .ok_or_else(|| JsonRpcError {
+                    code: INVALID_PARAMS,
+                    message: "Missing textDocument.uri".into(),
+                    data: None,
+                })?;
             // Snapshot document text under lock, then release before acquiring
             // workspace_folders via workspace_roots() to prevent ABBA deadlock.
             // Path A (here): documents -> workspace_folders
             // Path B (workspace.rs): workspace_folders -> documents
             let doc_text = {
                 let documents = self.documents_guard();
-                let doc = self.get_document(&documents, uri).ok_or_else(|| JsonRpcError {
-                    code: INVALID_REQUEST,
-                    message: format!("Document not open: {}", uri),
-                    data: None,
-                })?;
+                let doc = self
+                    .get_document(&documents, uri)
+                    .ok_or_else(|| JsonRpcError {
+                        code: INVALID_REQUEST,
+                        message: format!("Document not open: {}", uri),
+                        data: None,
+                    })?;
                 doc.text.clone()
             };
             // documents lock released here
@@ -371,13 +383,14 @@ impl LspServer {
                     Some("file") => {
                         // File reference - resolve to absolute path
                         let file_path =
-                            data_obj.get("path").and_then(|p| p.as_str()).ok_or_else(|| {
-                                JsonRpcError {
+                            data_obj
+                                .get("path")
+                                .and_then(|p| p.as_str())
+                                .ok_or_else(|| JsonRpcError {
                                     code: INVALID_PARAMS,
                                     message: "Missing file path in data".into(),
                                     data: None,
-                                }
-                            })?;
+                                })?;
                         let normalized_file_path = normalize_document_link_file_path(file_path);
 
                         let base_uri = data_obj
@@ -477,11 +490,13 @@ impl LspServer {
                 .ok_or_else(|| invalid_params("Missing required parameter: positions"))?;
 
             let documents = self.documents_guard();
-            let doc = self.get_document(&documents, uri).ok_or_else(|| JsonRpcError {
-                code: INVALID_REQUEST,
-                message: format!("Document not open: {}", uri),
-                data: None,
-            })?;
+            let doc = self
+                .get_document(&documents, uri)
+                .ok_or_else(|| JsonRpcError {
+                    code: INVALID_REQUEST,
+                    message: format!("Document not open: {}", uri),
+                    data: None,
+                })?;
 
             // Use the text-based provider so selection expansion still works for
             // hash access, strings, and function signatures even when the AST
@@ -489,10 +504,14 @@ impl LspServer {
             let requested_positions: Vec<lsp_types::Position> = positions
                 .iter()
                 .map(|pos| {
-                    let line =
-                        pos["line"].as_u64().and_then(|v| u32::try_from(v).ok()).unwrap_or(0);
-                    let col =
-                        pos["character"].as_u64().and_then(|v| u32::try_from(v).ok()).unwrap_or(0);
+                    let line = pos["line"]
+                        .as_u64()
+                        .and_then(|v| u32::try_from(v).ok())
+                        .unwrap_or(0);
+                    let col = pos["character"]
+                        .as_u64()
+                        .and_then(|v| u32::try_from(v).ok())
+                        .unwrap_or(0);
                     lsp_types::Position::new(line, col)
                 })
                 .collect();
@@ -600,8 +619,9 @@ impl LspServer {
                 // Fast path: use workspace index if available (more accurate,
                 // excludes references in comments/strings)
                 #[cfg(feature = "workspace")]
-                let index_count =
-                    self.coordinator().map(|coord| coord.index().count_usages(symbol_name));
+                let index_count = self
+                    .coordinator()
+                    .map(|coord| coord.index().count_usages(symbol_name));
                 #[cfg(not(feature = "workspace"))]
                 let index_count: Option<usize> = None;
 
@@ -640,7 +660,11 @@ impl LspServer {
             }
         }
 
-        Err(JsonRpcError { code: -32602, message: "Invalid parameters".to_string(), data: None })
+        Err(JsonRpcError {
+            code: -32602,
+            message: "Invalid parameters".to_string(),
+            data: None,
+        })
     }
 
     /// Handle textDocument/inlineCompletion request.
@@ -956,7 +980,11 @@ impl LspServer {
                 }
             }
             crate::workspace_index::SymKind::Var => {
-                if self.is_our_variable(ast, &key.name, key.sigil) { "project" } else { "document" }
+                if self.is_our_variable(ast, &key.name, key.sigil) {
+                    "project"
+                } else {
+                    "document"
+                }
             }
         };
 
@@ -989,7 +1017,10 @@ impl LspServer {
                 NodeKind::Assignment { lhs, rhs, .. } => {
                     // Check if lhs is @EXPORT or @EXPORT_OK
                     let is_export_var = match &lhs.kind {
-                        NodeKind::Variable { name: var_name, sigil } => {
+                        NodeKind::Variable {
+                            name: var_name,
+                            sigil,
+                        } => {
                             sigil.starts_with('@')
                                 && (var_name == "EXPORT" || var_name == "EXPORT_OK")
                         }
@@ -1092,7 +1123,11 @@ impl LspServer {
         if let Some(re) = export_re {
             for cap in re.captures_iter(text) {
                 if let Some(content) = cap.get(1) {
-                    if content.as_str().split_whitespace().any(|w| w == symbol_name) {
+                    if content
+                        .as_str()
+                        .split_whitespace()
+                        .any(|w| w == symbol_name)
+                    {
                         return true;
                     }
                 }
@@ -1153,7 +1188,11 @@ impl LspServer {
                     };
                     (name.as_str(), rhs.as_ref())
                 }
-                NodeKind::VariableDeclaration { variable, initializer: Some(rhs), .. } => {
+                NodeKind::VariableDeclaration {
+                    variable,
+                    initializer: Some(rhs),
+                    ..
+                } => {
                     let NodeKind::Variable { name, .. } = &variable.kind else {
                         return None;
                     };
@@ -1211,9 +1250,9 @@ impl LspServer {
                     }
                     false
                 }
-                NodeKind::ArrayLiteral { elements } => {
-                    elements.iter().any(|el| arg_matches_symbol(module, el, symbol))
-                }
+                NodeKind::ArrayLiteral { elements } => elements
+                    .iter()
+                    .any(|el| arg_matches_symbol(module, el, symbol)),
                 _ => false,
             }
         }
@@ -1224,7 +1263,12 @@ impl LspServer {
             symbol: &str,
             aliases: &std::collections::HashMap<String, String>,
         ) -> bool {
-            let NodeKind::MethodCall { object, method, args } = &expr.kind else {
+            let NodeKind::MethodCall {
+                object,
+                method,
+                args,
+            } = &expr.kind
+            else {
                 return false;
             };
             if method != "import" {
@@ -1244,7 +1288,8 @@ impl LspServer {
             if args.is_empty() {
                 return true;
             }
-            args.iter().any(|arg| arg_matches_symbol(module, arg, symbol))
+            args.iter()
+                .any(|arg| arg_matches_symbol(module, arg, symbol))
         }
 
         fn inner_expr(node: &crate::ast::Node) -> &crate::ast::Node {
@@ -1330,9 +1375,11 @@ impl LspServer {
 
         fn check(node: &crate::ast::Node, name: &str, sigil: Option<char>) -> bool {
             match &node.kind {
-                NodeKind::VariableDeclaration { declarator, variable, .. }
-                    if declarator == "our" =>
-                {
+                NodeKind::VariableDeclaration {
+                    declarator,
+                    variable,
+                    ..
+                } if declarator == "our" => {
                     if let NodeKind::Variable { name: n, sigil: s } = &variable.kind {
                         if n == name {
                             return match sigil {
@@ -1342,9 +1389,11 @@ impl LspServer {
                         }
                     }
                 }
-                NodeKind::VariableListDeclaration { declarator, variables, .. }
-                    if declarator == "our" =>
-                {
+                NodeKind::VariableListDeclaration {
+                    declarator,
+                    variables,
+                    ..
+                } if declarator == "our" => {
                     for var in variables {
                         if let NodeKind::Variable { name: n, sigil: s } = &var.kind {
                             if n == name {
@@ -1390,11 +1439,13 @@ impl LspServer {
         let uri = req_uri(&params)?;
 
         let documents = self.documents_guard();
-        let doc = self.get_document(&documents, uri).ok_or_else(|| JsonRpcError {
-            code: -32602,
-            message: format!("Document not found: {}", uri),
-            data: None,
-        })?;
+        let doc = self
+            .get_document(&documents, uri)
+            .ok_or_else(|| JsonRpcError {
+                code: -32602,
+                message: format!("Document not found: {}", uri),
+                data: None,
+            })?;
 
         // Detect colors in the document text
         let color_infos = super::colors::detect_colors(&doc.text);
@@ -1440,7 +1491,9 @@ impl LspServer {
         let params = params.ok_or_else(|| invalid_params("Missing params"))?;
 
         // Extract color from params
-        let color_obj = params.get("color").ok_or_else(|| invalid_params("Missing color field"))?;
+        let color_obj = params
+            .get("color")
+            .ok_or_else(|| invalid_params("Missing color field"))?;
 
         let red = color_obj
             .get("red")
@@ -1454,9 +1507,17 @@ impl LspServer {
             .get("blue")
             .and_then(|v| v.as_f64())
             .ok_or_else(|| invalid_params("Invalid blue value"))?;
-        let alpha = color_obj.get("alpha").and_then(|v| v.as_f64()).unwrap_or(1.0);
+        let alpha = color_obj
+            .get("alpha")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(1.0);
 
-        let color = super::colors::Color { red, green, blue, alpha };
+        let color = super::colors::Color {
+            red,
+            green,
+            blue,
+            alpha,
+        };
 
         // Generate color presentations
         let presentations = super::colors::color_to_presentations(&color);
@@ -1583,7 +1644,11 @@ impl LspServer {
                 .ok_or_else(|| invalid_params("Missing required parameter: command"))?;
 
             // LSP 3.17 compliance: arguments field is required even if empty
-            if !params.as_object().unwrap_or(&serde_json::Map::new()).contains_key("arguments") {
+            if !params
+                .as_object()
+                .unwrap_or(&serde_json::Map::new())
+                .contains_key("arguments")
+            {
                 return Err(JsonRpcError {
                     code: -32602, // InvalidParams
                     message: "Missing required 'arguments' field in executeCommand request"
@@ -1704,11 +1769,13 @@ impl LspServer {
 
                     // Security: use the same workspace-rooted path resolution
                     let resolved =
-                        provider.resolve_debug_file_path(file_path).map_err(|e| JsonRpcError {
-                            code: -32603,
-                            message: format!("Path validation failed: {}", e),
-                            data: Some(json!({"file": file_path})),
-                        })?;
+                        provider
+                            .resolve_debug_file_path(file_path)
+                            .map_err(|e| JsonRpcError {
+                                code: -32603,
+                                message: format!("Path validation failed: {}", e),
+                                data: Some(json!({"file": file_path})),
+                            })?;
 
                     // Strip \\?\ extended-length prefix so perl.exe can accept the path.
                     // resolve_debug_file_path calls canonicalize() which on Windows returns
@@ -1868,8 +1935,10 @@ mod tests {
 
     /// Build a minimal test server with custom capabilities applied.
     fn make_server_with_caps(caps: ClientCapabilities) -> LspServer {
-        let server =
-            LspServer::with_io(Box::new(Cursor::new(Vec::<u8>::new())), Box::new(Vec::<u8>::new()));
+        let server = LspServer::with_io(
+            Box::new(Cursor::new(Vec::<u8>::new())),
+            Box::new(Vec::<u8>::new()),
+        );
         *server.client_capabilities.lock() = caps;
         server
     }
@@ -1948,8 +2017,10 @@ mod tests {
     /// Verify that the initialize handler parses resolveSupport.properties correctly.
     #[test]
     fn initialize_parses_inlay_hint_resolve_support_properties() {
-        let server =
-            LspServer::with_io(Box::new(Cursor::new(Vec::<u8>::new())), Box::new(Vec::<u8>::new()));
+        let server = LspServer::with_io(
+            Box::new(Cursor::new(Vec::<u8>::new())),
+            Box::new(Vec::<u8>::new()),
+        );
 
         let params = json!({
             "capabilities": {
@@ -1963,22 +2034,29 @@ mod tests {
             }
         });
 
-        server.handle_initialize(Some(params)).expect("initialize must not error");
+        server
+            .handle_initialize(Some(params))
+            .expect("initialize must not error");
 
         let caps = server.client_capabilities.lock();
         let props = caps
             .inlay_hint_resolve_support
             .as_ref()
             .expect("inlay_hint_resolve_support must be Some after initialize with resolveSupport");
-        assert!(props.contains("label.location"), "must contain 'label.location'");
+        assert!(
+            props.contains("label.location"),
+            "must contain 'label.location'"
+        );
         assert!(props.contains("tooltip"), "must contain 'tooltip'");
     }
 
     /// When the client sends no resolveSupport entry, inlay_hint_resolve_support is None.
     #[test]
     fn initialize_no_resolve_support_leaves_field_none() {
-        let server =
-            LspServer::with_io(Box::new(Cursor::new(Vec::<u8>::new())), Box::new(Vec::<u8>::new()));
+        let server = LspServer::with_io(
+            Box::new(Cursor::new(Vec::<u8>::new())),
+            Box::new(Vec::<u8>::new()),
+        );
 
         let params = json!({
             "capabilities": {
@@ -1988,7 +2066,9 @@ mod tests {
             }
         });
 
-        server.handle_initialize(Some(params)).expect("initialize must not error");
+        server
+            .handle_initialize(Some(params))
+            .expect("initialize must not error");
 
         let caps = server.client_capabilities.lock();
         assert!(
@@ -2001,8 +2081,10 @@ mod tests {
     fn find_import_source_supports_require_manual_import() -> Result<(), Box<dyn std::error::Error>>
     {
         use crate::Parser;
-        let server =
-            LspServer::with_io(Box::new(Cursor::new(Vec::<u8>::new())), Box::new(Vec::<u8>::new()));
+        let server = LspServer::with_io(
+            Box::new(Cursor::new(Vec::<u8>::new())),
+            Box::new(Vec::<u8>::new()),
+        );
         let source = "require List::Util;\nList::Util->import('sum');\nmy $x = sum();\n";
         let mut parser = Parser::new(source);
         let ast = parser.parse()?;
@@ -2020,8 +2102,10 @@ mod tests {
     fn find_import_source_supports_require_default_import() -> Result<(), Box<dyn std::error::Error>>
     {
         use crate::Parser;
-        let server =
-            LspServer::with_io(Box::new(Cursor::new(Vec::<u8>::new())), Box::new(Vec::<u8>::new()));
+        let server = LspServer::with_io(
+            Box::new(Cursor::new(Vec::<u8>::new())),
+            Box::new(Vec::<u8>::new()),
+        );
         let source = "require List::Util;\nList::Util->import();\nmy $x = sum();\n";
         let mut parser = Parser::new(source);
         let ast = parser.parse()?;
@@ -2039,8 +2123,10 @@ mod tests {
     fn find_import_source_supports_module_runtime_alias() -> Result<(), Box<dyn std::error::Error>>
     {
         use crate::Parser;
-        let server =
-            LspServer::with_io(Box::new(Cursor::new(Vec::<u8>::new())), Box::new(Vec::<u8>::new()));
+        let server = LspServer::with_io(
+            Box::new(Cursor::new(Vec::<u8>::new())),
+            Box::new(Vec::<u8>::new()),
+        );
         let source = "my $mod = use_module('Foo::Bar');\n$mod->import('baz');\nbaz();\n";
         let mut parser = Parser::new(source);
         let ast = parser.parse()?;
@@ -2056,9 +2142,18 @@ mod tests {
 
     #[test]
     fn normalize_document_link_file_path_collapses_windows_separators() {
-        assert_eq!(normalize_document_link_file_path(r"lib\\Thing.pm"), "lib/Thing.pm");
-        assert_eq!(normalize_document_link_file_path(r"lib\Thing.pm"), "lib/Thing.pm");
-        assert_eq!(normalize_document_link_file_path("lib/Thing.pm"), "lib/Thing.pm");
+        assert_eq!(
+            normalize_document_link_file_path(r"lib\\Thing.pm"),
+            "lib/Thing.pm"
+        );
+        assert_eq!(
+            normalize_document_link_file_path(r"lib\Thing.pm"),
+            "lib/Thing.pm"
+        );
+        assert_eq!(
+            normalize_document_link_file_path("lib/Thing.pm"),
+            "lib/Thing.pm"
+        );
     }
 
     #[test]

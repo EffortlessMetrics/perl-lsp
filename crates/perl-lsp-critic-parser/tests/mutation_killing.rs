@@ -30,8 +30,14 @@ use perl_lsp_critic_parser::{parse_perlcritic_line, parse_perlcritic_output};
 
 #[test]
 fn parse_whitespace_only_line_returns_none() {
-    assert!(parse_perlcritic_line("   ").is_none(), "whitespace-only must return None");
-    assert!(parse_perlcritic_line("\t").is_none(), "tab-only must return None");
+    assert!(
+        parse_perlcritic_line("   ").is_none(),
+        "whitespace-only must return None"
+    );
+    assert!(
+        parse_perlcritic_line("\t").is_none(),
+        "tab-only must return None"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -42,7 +48,10 @@ fn parse_whitespace_only_line_returns_none() {
 fn parse_line_with_invalid_policy_digit_first_returns_none() {
     // Policy segment starts with digit → is_valid_policy returns false
     let line = "test.pl:1:1:3:1InvalidPolicy:message here";
-    assert!(parse_perlcritic_line(line).is_none(), "policy starting with digit must be rejected");
+    assert!(
+        parse_perlcritic_line(line).is_none(),
+        "policy starting with digit must be rejected"
+    );
 }
 
 #[test]
@@ -50,7 +59,10 @@ fn parse_line_with_policy_starting_with_underscore_is_valid() {
     // First char of a segment can be '_' per is_valid_policy
     let line = "test.pl:1:1:3:_Private::Rule:some message";
     let result = parse_perlcritic_line(line);
-    assert!(result.is_some(), "policy starting with underscore must be accepted");
+    assert!(
+        result.is_some(),
+        "policy starting with underscore must be accepted"
+    );
     let parsed = result.unwrap();
     assert_eq!(parsed.policy, "_Private::Rule");
     assert_eq!(parsed.message, "some message");
@@ -60,7 +72,10 @@ fn parse_line_with_policy_starting_with_underscore_is_valid() {
 fn parse_line_with_policy_containing_special_chars_returns_none() {
     // '!' in policy segment name → is_valid_policy returns false
     let line = "test.pl:1:1:3:Bad!Policy:message";
-    assert!(parse_perlcritic_line(line).is_none(), "policy with special char must be rejected");
+    assert!(
+        parse_perlcritic_line(line).is_none(),
+        "policy with special char must be rejected"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -71,7 +86,10 @@ fn parse_line_with_policy_containing_special_chars_returns_none() {
 fn parse_line_without_file_part_returns_none() {
     // Line starts with digits directly → file part is empty
     let line = ":5:1:3:SomePolicy:message";
-    assert!(parse_perlcritic_line(line).is_none(), "empty file path must return None");
+    assert!(
+        parse_perlcritic_line(line).is_none(),
+        "empty file path must return None"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -129,7 +147,10 @@ fn parse_line_with_severity_5_parses_correctly() {
 #[test]
 fn parse_line_with_severity_non_numeric_returns_none() {
     let line = "test.pl:1:1:bad:SomePolicy:message";
-    assert!(parse_perlcritic_line(line).is_none(), "non-numeric severity must return None");
+    assert!(
+        parse_perlcritic_line(line).is_none(),
+        "non-numeric severity must return None"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -139,13 +160,19 @@ fn parse_line_with_severity_non_numeric_returns_none() {
 #[test]
 fn parse_line_with_non_numeric_line_number_returns_none() {
     let line = "test.pl:abc:1:3:SomePolicy:message";
-    assert!(parse_perlcritic_line(line).is_none(), "non-numeric line number must return None");
+    assert!(
+        parse_perlcritic_line(line).is_none(),
+        "non-numeric line number must return None"
+    );
 }
 
 #[test]
 fn parse_line_with_non_numeric_column_returns_none() {
     let line = "test.pl:1:abc:3:SomePolicy:message";
-    assert!(parse_perlcritic_line(line).is_none(), "non-numeric column must return None");
+    assert!(
+        parse_perlcritic_line(line).is_none(),
+        "non-numeric column must return None"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -180,7 +207,10 @@ fn parse_output_empty_string_returns_empty() {
 fn parse_output_only_invalid_lines_returns_empty() {
     let output = "not valid\nalsoinvalid\n  \n";
     let result = parse_perlcritic_output(output);
-    assert!(result.is_empty(), "all-invalid lines must produce empty vec");
+    assert!(
+        result.is_empty(),
+        "all-invalid lines must produce empty vec"
+    );
 }
 
 #[test]
@@ -213,5 +243,8 @@ fn parsed_critic_line_implements_debug() {
     let line = "test.pl:1:1:3:SomePolicy:message";
     let parsed = parse_perlcritic_line(line).unwrap();
     let debug = format!("{:?}", parsed);
-    assert!(debug.contains("SomePolicy"), "Debug output must contain policy name");
+    assert!(
+        debug.contains("SomePolicy"),
+        "Debug output must contain policy name"
+    );
 }

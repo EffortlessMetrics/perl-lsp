@@ -336,8 +336,9 @@ fn is_inside_heredoc(lines: &[&str], target_line: usize) -> bool {
 }
 
 /// POD keyword prefixes that open a POD block when at column 0.
-const POD_OPENERS: &[&str] =
-    &["=pod", "=head1", "=head2", "=head3", "=head4", "=over", "=begin", "=item"];
+const POD_OPENERS: &[&str] = &[
+    "=pod", "=head1", "=head2", "=head3", "=head4", "=over", "=begin", "=item",
+];
 
 /// Determine whether `target_line` falls inside a POD block.
 ///

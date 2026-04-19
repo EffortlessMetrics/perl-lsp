@@ -214,7 +214,10 @@ fn file_uri(path: &Path) -> String {
 
 /// Return an ISO-8601 UTC timestamp string using std::time only.
 fn utc_now_iso8601() -> String {
-    let secs = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or(Duration::ZERO).as_secs();
+    let secs = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or(Duration::ZERO)
+        .as_secs();
     // Manual breakdown into date/time components
     let s = secs % 60;
     let m = (secs / 60) % 60;
@@ -559,10 +562,16 @@ fn measure_project(fixture: &ProjectFixture) -> ProjectMetrics {
 
     let entry = entry_file_path(fixture);
     let entry_content = read_file_or_empty(&entry);
-    assert!(!entry_content.is_empty(), "Fixture entry file is empty or missing: {entry:?}");
+    assert!(
+        !entry_content.is_empty(),
+        "Fixture entry file is empty or missing: {entry:?}"
+    );
 
     let file_count = count_perl_files(&path);
-    eprintln!("[{name}] measuring (file_count={file_count})", name = fixture.name);
+    eprintln!(
+        "[{name}] measuring (file_count={file_count})",
+        name = fixture.name
+    );
 
     let cold_start = summarise(measure_cold_start_to_hover(fixture, &entry_content));
     let completion = summarise(measure_first_completion(fixture, &entry_content));
@@ -591,7 +600,11 @@ fn test_real_project_fixtures_exist() {
     let root = workspace_root();
     let base = root.join(FIXTURE_BASE);
 
-    for dir in &["mojolicious_skeleton", "dancer2_skeleton", "catalyst_skeleton"] {
+    for dir in &[
+        "mojolicious_skeleton",
+        "dancer2_skeleton",
+        "catalyst_skeleton",
+    ] {
         let path = base.join(dir);
         assert!(
             path.exists(),
@@ -607,7 +620,11 @@ fn test_real_project_fixtures_exist() {
 fn test_real_project_entry_files_are_valid_perl() {
     for fixture in &[&MOJOLICIOUS_FIXTURE, &DANCER2_FIXTURE, &CATALYST_FIXTURE] {
         let entry = entry_file_path(fixture);
-        assert!(entry.exists(), "Entry file missing for fixture '{}': {entry:?}", fixture.name);
+        assert!(
+            entry.exists(),
+            "Entry file missing for fixture '{}': {entry:?}",
+            fixture.name
+        );
         let content = fs::read_to_string(&entry)
             .unwrap_or_else(|e| panic!("Cannot read entry file {entry:?}: {e}"));
         assert!(
@@ -648,11 +665,17 @@ fn test_real_project_latency_baseline_schema() {
         "Baseline must have schema_version=1"
     );
 
-    assert!(parsed.get("projects").is_some(), "Baseline must have a 'projects' key");
+    assert!(
+        parsed.get("projects").is_some(),
+        "Baseline must have a 'projects' key"
+    );
 
     let projects = &parsed["projects"];
     for name in &["mojolicious", "dancer2", "catalyst"] {
-        assert!(projects.get(name).is_some(), "Baseline missing project '{name}'");
+        assert!(
+            projects.get(name).is_some(),
+            "Baseline missing project '{name}'"
+        );
         let proj = &projects[name];
         let metrics = proj
             .get("metrics")
@@ -668,10 +691,22 @@ fn test_real_project_latency_baseline_schema() {
             let m = metrics.get(metric).unwrap_or_else(|| {
                 panic!("Project '{name}' missing metric '{metric}' in baseline")
             });
-            assert!(m.get("p50_ms").is_some(), "'{name}.{metric}' missing p50_ms");
-            assert!(m.get("p95_ms").is_some(), "'{name}.{metric}' missing p95_ms");
-            assert!(m.get("p99_ms").is_some(), "'{name}.{metric}' missing p99_ms");
-            assert!(m.get("samples").is_some(), "'{name}.{metric}' missing samples");
+            assert!(
+                m.get("p50_ms").is_some(),
+                "'{name}.{metric}' missing p50_ms"
+            );
+            assert!(
+                m.get("p95_ms").is_some(),
+                "'{name}.{metric}' missing p95_ms"
+            );
+            assert!(
+                m.get("p99_ms").is_some(),
+                "'{name}.{metric}' missing p99_ms"
+            );
+            assert!(
+                m.get("samples").is_some(),
+                "'{name}.{metric}' missing samples"
+            );
         }
     }
 }

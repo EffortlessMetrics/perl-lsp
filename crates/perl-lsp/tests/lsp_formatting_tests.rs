@@ -114,8 +114,14 @@ sub another_clean {
         );
         let edits = response.as_array().ok_or("response is not an array")?;
         for edit in edits {
-            assert!(edit["range"].is_object(), "Each TextEdit should have a range");
-            assert!(edit["newText"].is_string(), "Each TextEdit should have newText");
+            assert!(
+                edit["range"].is_object(),
+                "Each TextEdit should have a range"
+            );
+            assert!(
+                edit["newText"].is_string(),
+                "Each TextEdit should have newText"
+            );
         }
     }
 
@@ -203,7 +209,9 @@ fn test_formatting_capability_advertised() -> TestResult {
     );
 
     // Check for documentRangeFormattingProvider
-    let has_range_formatting = capabilities.get("documentRangeFormattingProvider").is_some();
+    let has_range_formatting = capabilities
+        .get("documentRangeFormattingProvider")
+        .is_some();
     assert!(
         has_range_formatting,
         "Server should advertise documentRangeFormattingProvider capability. Capabilities: {:?}",

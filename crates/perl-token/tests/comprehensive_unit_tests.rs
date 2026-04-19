@@ -820,8 +820,9 @@ fn token_with_null_byte() {
 
 #[test]
 fn many_tokens_in_vec() {
-    let tokens: Vec<Token> =
-        (0..1000).map(|i| Token::new(TokenKind::Number, i.to_string(), i * 4, i * 4 + 3)).collect();
+    let tokens: Vec<Token> = (0..1000)
+        .map(|i| Token::new(TokenKind::Number, i.to_string(), i * 4, i * 4 + 3))
+        .collect();
 
     assert_eq!(tokens.len(), 1000);
     assert_eq!(&*tokens[0].text, "0");

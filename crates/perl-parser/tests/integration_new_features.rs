@@ -47,7 +47,12 @@ fn test_substitution_integration() {
         let ast = must(parser.parse());
         let sexp = ast.to_sexp();
 
-        assert!(sexp.contains("substitution"), "{}: Expected substitution in: {}", desc, sexp);
+        assert!(
+            sexp.contains("substitution"),
+            "{}: Expected substitution in: {}",
+            desc,
+            sexp
+        );
     }
 }
 
@@ -93,7 +98,12 @@ fn test_qw_integration() {
         let ast = must(parser.parse());
         let sexp = ast.to_sexp();
 
-        assert!(sexp.contains("array"), "{}: Expected array in: {}", desc, sexp);
+        assert!(
+            sexp.contains("array"),
+            "{}: Expected array in: {}",
+            desc,
+            sexp
+        );
     }
 }
 
@@ -124,8 +134,12 @@ fn test_statement_modifiers_integration() {
 
 #[test]
 fn test_isa_operator_integration() {
-    let tests =
-        vec!["$x ISA 'Class'", "$obj ISA $class", "ref($x) ISA 'ARRAY'", "$self ISA My::Class"];
+    let tests = vec![
+        "$x ISA 'Class'",
+        "$obj ISA $class",
+        "ref($x) ISA 'ARRAY'",
+        "$self ISA My::Class",
+    ];
 
     for code in tests {
         use perl_tdd_support::must;
@@ -133,14 +147,19 @@ fn test_isa_operator_integration() {
         let ast = must(parser.parse());
         let sexp = ast.to_sexp();
 
-        assert!(sexp.contains("binary_ISA"), "Expected ISA operator in: {}", sexp);
+        assert!(
+            sexp.contains("binary_ISA"),
+            "Expected ISA operator in: {}",
+            sexp
+        );
     }
 }
 
 #[test]
 fn test_file_test_operators_integration() {
-    let tests =
-        vec!["-f $file", "-d $dir", "-e $path", "-r $file", "-w $file", "-x $file", "-s $file"];
+    let tests = vec![
+        "-f $file", "-d $dir", "-e $path", "-r $file", "-w $file", "-x $file", "-s $file",
+    ];
 
     for code in tests {
         use perl_tdd_support::must;
@@ -148,13 +167,22 @@ fn test_file_test_operators_integration() {
         let ast = must(parser.parse());
         let sexp = ast.to_sexp();
 
-        assert!(sexp.contains("unary_-"), "Expected unary file test in: {}", sexp);
+        assert!(
+            sexp.contains("unary_-"),
+            "Expected unary file test in: {}",
+            sexp
+        );
     }
 }
 
 #[test]
 fn test_smart_match_integration() {
-    let tests = vec!["$x ~~ $y", "$x ~~ @array", "$x ~~ /pattern/", "$x ~~ 'string'"];
+    let tests = vec![
+        "$x ~~ $y",
+        "$x ~~ @array",
+        "$x ~~ /pattern/",
+        "$x ~~ 'string'",
+    ];
 
     for code in tests {
         use perl_tdd_support::must;
@@ -162,7 +190,11 @@ fn test_smart_match_integration() {
         let ast = must(parser.parse());
         let sexp = ast.to_sexp();
 
-        assert!(sexp.contains("~~"), "Expected smart match operator in: {}", sexp);
+        assert!(
+            sexp.contains("~~"),
+            "Expected smart match operator in: {}",
+            sexp
+        );
     }
 }
 
@@ -182,7 +214,12 @@ fn test_special_blocks_integration() {
         let ast = must(parser.parse());
         let sexp = ast.to_sexp();
 
-        assert!(sexp.contains(block_type), "Expected {} block in: {}", block_type, sexp);
+        assert!(
+            sexp.contains(block_type),
+            "Expected {} block in: {}",
+            block_type,
+            sexp
+        );
     }
 }
 

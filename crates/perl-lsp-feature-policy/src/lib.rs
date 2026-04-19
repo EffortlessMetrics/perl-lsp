@@ -64,7 +64,9 @@ impl FeatureProfile {
     /// This API is intended for CLI and editor integration where users may provide
     /// explicit profile controls at runtime.
     pub fn from_cli_argument(raw_profile: &str) -> Self {
-        parse_profile_token(raw_profile).map(Self::from_kind).unwrap_or_else(Self::current)
+        parse_profile_token(raw_profile)
+            .map(Self::from_kind)
+            .unwrap_or_else(Self::current)
     }
 
     /// Parse a CLI argument using the same normalization rules as editor and CLI inputs.
@@ -177,33 +179,54 @@ mod tests {
 
     #[test]
     fn from_kind_preserves_all_variants() {
-        assert_eq!(FeatureProfile::from_kind(FeatureProfileKind::GaLock), FeatureProfile::GaLock,);
+        assert_eq!(
+            FeatureProfile::from_kind(FeatureProfileKind::GaLock),
+            FeatureProfile::GaLock,
+        );
         assert_eq!(
             FeatureProfile::from_kind(FeatureProfileKind::Production),
             FeatureProfile::Production,
         );
-        assert_eq!(FeatureProfile::from_kind(FeatureProfileKind::All), FeatureProfile::All,);
+        assert_eq!(
+            FeatureProfile::from_kind(FeatureProfileKind::All),
+            FeatureProfile::All,
+        );
     }
 
     // ── from_ga_lock_enabled ────────────────────────────────────────
 
     #[test]
     fn from_ga_lock_enabled_true_is_ga_lock() {
-        assert_eq!(FeatureProfile::from_ga_lock_enabled(true), FeatureProfile::GaLock);
+        assert_eq!(
+            FeatureProfile::from_ga_lock_enabled(true),
+            FeatureProfile::GaLock
+        );
     }
 
     #[test]
     fn from_ga_lock_enabled_false_is_production() {
-        assert_eq!(FeatureProfile::from_ga_lock_enabled(false), FeatureProfile::Production);
+        assert_eq!(
+            FeatureProfile::from_ga_lock_enabled(false),
+            FeatureProfile::Production
+        );
     }
 
     // ── from_cli_argument ───────────────────────────────────────────
 
     #[test]
     fn from_cli_argument_resolves_known_tokens() {
-        assert_eq!(FeatureProfile::from_cli_argument("ga-lock"), FeatureProfile::GaLock);
-        assert_eq!(FeatureProfile::from_cli_argument(" Prod "), FeatureProfile::Production);
-        assert_eq!(FeatureProfile::from_cli_argument("all"), FeatureProfile::All);
+        assert_eq!(
+            FeatureProfile::from_cli_argument("ga-lock"),
+            FeatureProfile::GaLock
+        );
+        assert_eq!(
+            FeatureProfile::from_cli_argument(" Prod "),
+            FeatureProfile::Production
+        );
+        assert_eq!(
+            FeatureProfile::from_cli_argument("all"),
+            FeatureProfile::All
+        );
     }
 
     #[test]
@@ -221,8 +244,14 @@ mod tests {
 
     #[test]
     fn parse_profile_returns_some_for_valid() {
-        assert_eq!(FeatureProfile::parse_profile("all"), Some(FeatureProfile::All));
-        assert_eq!(FeatureProfile::parse_profile("  GA_LOCK  "), Some(FeatureProfile::GaLock));
+        assert_eq!(
+            FeatureProfile::parse_profile("all"),
+            Some(FeatureProfile::All)
+        );
+        assert_eq!(
+            FeatureProfile::parse_profile("  GA_LOCK  "),
+            Some(FeatureProfile::GaLock)
+        );
     }
 
     // ── build_flags and profile shapes ──────────────────────────────
@@ -253,15 +282,27 @@ mod tests {
     #[test]
     fn runtime_flags_enables_formatting_when_perltidy_available() {
         let flags = FeatureProfile::Production.runtime_flags(true);
-        assert!(flags.formatting, "formatting should be enabled with perltidy");
-        assert!(flags.range_formatting, "range_formatting should be enabled with perltidy");
+        assert!(
+            flags.formatting,
+            "formatting should be enabled with perltidy"
+        );
+        assert!(
+            flags.range_formatting,
+            "range_formatting should be enabled with perltidy"
+        );
     }
 
     #[test]
     fn runtime_flags_disables_formatting_without_perltidy() {
         let flags = FeatureProfile::Production.runtime_flags(false);
-        assert!(!flags.formatting, "formatting should be off without perltidy");
-        assert!(!flags.range_formatting, "range_formatting should be off without perltidy");
+        assert!(
+            !flags.formatting,
+            "formatting should be off without perltidy"
+        );
+        assert!(
+            !flags.range_formatting,
+            "range_formatting should be off without perltidy"
+        );
     }
 
     // ── flags_for_profile / flags_for_runtime ───────────────────────
@@ -303,7 +344,10 @@ mod tests {
     #[test]
     fn runtime_advertised_features_with_perltidy() {
         let adv = FeatureProfile::Production.runtime_advertised_features(true);
-        assert!(adv.formatting, "production should advertise formatting with perltidy");
+        assert!(
+            adv.formatting,
+            "production should advertise formatting with perltidy"
+        );
     }
 
     // ── catalog_advertised_feature_ids ──────────────────────────────
@@ -325,7 +369,10 @@ mod tests {
         let all_ids = catalog_advertised_feature_ids(FeatureProfile::All);
         let ga_ids = catalog_advertised_feature_ids(FeatureProfile::GaLock);
         for id in &ga_ids {
-            assert!(all_ids.contains(id), "'all' advertised IDs should contain ga-lock ID '{id}'");
+            assert!(
+                all_ids.contains(id),
+                "'all' advertised IDs should contain ga-lock ID '{id}'"
+            );
         }
     }
 
@@ -363,7 +410,11 @@ mod tests {
 
     #[test]
     fn feature_ids_from_flags_partial_enables_only_selected() {
-        let flags = BuildFlags { completion: true, hover: true, ..Default::default() };
+        let flags = BuildFlags {
+            completion: true,
+            hover: true,
+            ..Default::default()
+        };
         let ids = feature_ids_from_flags(&flags);
         assert!(ids.contains(&"lsp.completion"));
         assert!(ids.contains(&"lsp.hover"));
@@ -374,7 +425,10 @@ mod tests {
 
     #[test]
     fn feature_ids_from_flags_single_flag_produces_one_id() {
-        let flags = BuildFlags { rename: true, ..Default::default() };
+        let flags = BuildFlags {
+            rename: true,
+            ..Default::default()
+        };
         let ids = feature_ids_from_flags(&flags);
         assert_eq!(ids.len(), 1);
         assert_eq!(ids[0], "lsp.rename");
@@ -392,7 +446,10 @@ mod tests {
     fn production_profile_enables_formatting() {
         let flags = FeatureProfile::Production.build_flags();
         assert!(flags.formatting, "production must enable formatting");
-        assert!(flags.range_formatting, "production must enable range_formatting");
+        assert!(
+            flags.range_formatting,
+            "production must enable range_formatting"
+        );
     }
 
     #[test]
@@ -408,7 +465,10 @@ mod tests {
         let all_ids = feature_ids_from_flags(&FeatureProfile::All.build_flags());
         let ga_ids = feature_ids_from_flags(&FeatureProfile::GaLock.build_flags());
         for id in &ga_ids {
-            assert!(all_ids.contains(id), "'all' must contain ga-lock feature '{id}'");
+            assert!(
+                all_ids.contains(id),
+                "'all' must contain ga-lock feature '{id}'"
+            );
         }
         assert!(
             all_ids.len() > ga_ids.len(),
@@ -421,7 +481,10 @@ mod tests {
         let all_ids = feature_ids_from_flags(&FeatureProfile::All.build_flags());
         let prod_ids = feature_ids_from_flags(&FeatureProfile::Production.build_flags());
         for id in &prod_ids {
-            assert!(all_ids.contains(id), "'all' must contain production feature '{id}'");
+            assert!(
+                all_ids.contains(id),
+                "'all' must contain production feature '{id}'"
+            );
         }
     }
 
@@ -447,10 +510,21 @@ mod tests {
         let prod_ids = catalog_advertised_feature_ids(FeatureProfile::Production);
         let ga_ids = catalog_advertised_feature_ids(FeatureProfile::GaLock);
         // Both profiles should share core features
-        let core_features = ["lsp.completion", "lsp.hover", "lsp.definition", "lsp.references"];
+        let core_features = [
+            "lsp.completion",
+            "lsp.hover",
+            "lsp.definition",
+            "lsp.references",
+        ];
         for id in &core_features {
-            assert!(prod_ids.contains(id), "production should contain core feature '{id}'");
-            assert!(ga_ids.contains(id), "ga-lock should contain core feature '{id}'");
+            assert!(
+                prod_ids.contains(id),
+                "production should contain core feature '{id}'"
+            );
+            assert!(
+                ga_ids.contains(id),
+                "ga-lock should contain core feature '{id}'"
+            );
         }
     }
 
@@ -459,8 +533,14 @@ mod tests {
         let prod_ids = catalog_advertised_feature_ids(FeatureProfile::Production);
         let ga_ids = catalog_advertised_feature_ids(FeatureProfile::GaLock);
         // Both GA-lock and production include formatting
-        assert!(ga_ids.contains(&"lsp.formatting"), "ga-lock should include formatting");
-        assert!(prod_ids.contains(&"lsp.formatting"), "production should include formatting");
+        assert!(
+            ga_ids.contains(&"lsp.formatting"),
+            "ga-lock should include formatting"
+        );
+        assert!(
+            prod_ids.contains(&"lsp.formatting"),
+            "production should include formatting"
+        );
     }
 
     // ── Feature enablement/disablement ──────────────────────────────
@@ -487,14 +567,23 @@ mod tests {
         let base = FeatureProfile::Production.build_flags();
         let runtime = FeatureProfile::Production.runtime_flags(false);
         assert!(base.formatting, "build_flags should enable formatting");
-        assert!(!runtime.formatting, "runtime(false) should disable formatting");
-        assert!(!runtime.range_formatting, "runtime(false) should disable range_formatting");
+        assert!(
+            !runtime.formatting,
+            "runtime(false) should disable formatting"
+        );
+        assert!(
+            !runtime.range_formatting,
+            "runtime(false) should disable range_formatting"
+        );
     }
 
     #[test]
     fn runtime_advertised_features_without_perltidy_disables_formatting() {
         let adv = FeatureProfile::Production.runtime_advertised_features(false);
-        assert!(!adv.formatting, "production without perltidy should not advertise formatting");
+        assert!(
+            !adv.formatting,
+            "production without perltidy should not advertise formatting"
+        );
         assert!(
             !adv.range_formatting,
             "production without perltidy should not advertise range_formatting"
@@ -504,8 +593,14 @@ mod tests {
     #[test]
     fn runtime_advertised_features_with_perltidy_enables_formatting() {
         let adv = FeatureProfile::Production.runtime_advertised_features(true);
-        assert!(adv.formatting, "production with perltidy should advertise formatting");
-        assert!(adv.range_formatting, "production with perltidy should advertise range_formatting");
+        assert!(
+            adv.formatting,
+            "production with perltidy should advertise formatting"
+        );
+        assert!(
+            adv.range_formatting,
+            "production with perltidy should advertise range_formatting"
+        );
     }
 
     #[test]
@@ -531,7 +626,11 @@ mod tests {
     fn current_profile_is_production_or_ga_lock() {
         let current = FeatureProfile::current();
         let valid = current == FeatureProfile::Production || current == FeatureProfile::GaLock;
-        assert!(valid, "current() must be Production or GaLock, got {:?}", current);
+        assert!(
+            valid,
+            "current() must be Production or GaLock, got {:?}",
+            current
+        );
     }
 
     #[test]
@@ -549,7 +648,10 @@ mod tests {
     #[test]
     fn from_str_name_resolves_canonical_names() {
         assert_eq!(from_str_name("ga-lock"), Some(FeatureProfile::GaLock));
-        assert_eq!(from_str_name("production"), Some(FeatureProfile::Production));
+        assert_eq!(
+            from_str_name("production"),
+            Some(FeatureProfile::Production)
+        );
         assert_eq!(from_str_name("all"), Some(FeatureProfile::All));
     }
 
@@ -577,7 +679,10 @@ mod tests {
     #[test]
     fn feature_profile_debug_is_human_readable() {
         let debug_str = format!("{:?}", FeatureProfile::Production);
-        assert!(debug_str.contains("Production"), "Debug output should contain variant name");
+        assert!(
+            debug_str.contains("Production"),
+            "Debug output should contain variant name"
+        );
     }
 
     #[test]

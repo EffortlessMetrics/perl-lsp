@@ -120,7 +120,10 @@ impl RenameProvider {
     /// Create a new rename provider
     pub fn new(ast: &Node, source: String) -> Self {
         let symbol_table = SymbolExtractor::new_with_source(&source).extract(ast);
-        RenameProvider { symbol_table, source }
+        RenameProvider {
+            symbol_table,
+            source,
+        }
     }
 
     /// Prepare rename at a position (check if rename is possible)
@@ -132,7 +135,10 @@ impl RenameProvider {
         if !can_rename_symbol(&symbol, kind) {
             return None;
         }
-        Some((get_symbol_range_at_position(position, &self.source)?, symbol))
+        Some((
+            get_symbol_range_at_position(position, &self.source)?,
+            symbol,
+        ))
     }
 
     /// Perform rename operation (renames all occurrences regardless of scope)
@@ -152,7 +158,11 @@ impl RenameProvider {
         if options.validate_new_name
             && let Err(error) = validate_name(new_name, kind, &self.symbol_table)
         {
-            return RenameResult { edits: vec![], is_valid: false, error: Some(error) };
+            return RenameResult {
+                edits: vec![],
+                is_valid: false,
+                error: Some(error),
+            };
         }
 
         if !can_rename_symbol(&old_name, kind) {
@@ -196,7 +206,11 @@ impl RenameProvider {
         edits.sort_by_key(|edit| edit.location.start);
         edits.dedup();
 
-        RenameResult { edits, is_valid: true, error: None }
+        RenameResult {
+            edits,
+            is_valid: true,
+            error: None,
+        }
     }
 
     /// Perform scope-aware rename operation.
@@ -225,7 +239,11 @@ impl RenameProvider {
         if options.validate_new_name
             && let Err(error) = validate_name(new_name, kind, &self.symbol_table)
         {
-            return RenameResult { edits: vec![], is_valid: false, error: Some(error) };
+            return RenameResult {
+                edits: vec![],
+                is_valid: false,
+                error: Some(error),
+            };
         }
 
         if !can_rename_symbol(&old_name, kind) {
@@ -284,7 +302,11 @@ impl RenameProvider {
         edits.sort_by_key(|edit| edit.location.start);
         edits.dedup();
 
-        RenameResult { edits, is_valid: true, error: None }
+        RenameResult {
+            edits,
+            is_valid: true,
+            error: None,
+        }
     }
 
     /// Find the scope where the symbol at `position` is declared.
@@ -335,7 +357,11 @@ impl RenameProvider {
                     }
                 }
             }
-            current = self.symbol_table.scopes.get(&scope_id).and_then(|s| s.parent);
+            current = self
+                .symbol_table
+                .scopes
+                .get(&scope_id)
+                .and_then(|s| s.parent);
         }
         None
     }
@@ -397,12 +423,20 @@ impl RenameProvider {
         if shadowing_scopes.contains(&scope_id) {
             return true;
         }
-        let mut current = self.symbol_table.scopes.get(&scope_id).and_then(|s| s.parent);
+        let mut current = self
+            .symbol_table
+            .scopes
+            .get(&scope_id)
+            .and_then(|s| s.parent);
         while let Some(parent_id) = current {
             if shadowing_scopes.contains(&parent_id) {
                 return true;
             }
-            current = self.symbol_table.scopes.get(&parent_id).and_then(|s| s.parent);
+            current = self
+                .symbol_table
+                .scopes
+                .get(&parent_id)
+                .and_then(|s| s.parent);
         }
         false
     }
@@ -589,11 +623,23 @@ mod tests {
         // Position of the declaration $x (after 'my ')
         let pos = must_some(code.find("my $x")) + 4;
         let result = provider.scoped_rename(pos, "y", &RenameOptions::default());
-        assert!(result.is_valid, "scoped_rename must succeed on 50-deep nesting");
+        assert!(
+            result.is_valid,
+            "scoped_rename must succeed on 50-deep nesting"
+        );
         let new_code = apply_rename_edits(&code, &result.edits);
-        assert!(new_code.contains("my $y = 1"), "declaration should be renamed");
-        assert!(new_code.contains("$y = 2"), "deep reference should be renamed");
-        assert!(new_code.contains("print $y"), "outer reference should be renamed");
+        assert!(
+            new_code.contains("my $y = 1"),
+            "declaration should be renamed"
+        );
+        assert!(
+            new_code.contains("$y = 2"),
+            "deep reference should be renamed"
+        );
+        assert!(
+            new_code.contains("print $y"),
+            "outer reference should be renamed"
+        );
         assert!(!new_code.contains("$x"), "no original name should remain");
     }
 
@@ -652,12 +698,18 @@ mod tests {
         // Must terminate (not infinite loop) and return child_id (direct child of root)
         // cyclic_id has parent==cyclic_id, not root, so it's NOT a descendant of root
         let descendants = provider.collect_descendant_scopes(root_id);
-        assert!(descendants.contains(&child_id), "direct child must be in descendants");
+        assert!(
+            descendants.contains(&child_id),
+            "direct child must be in descendants"
+        );
         assert!(
             !descendants.contains(&cyclic_id),
             "self-referential scope with unrelated parent not in descendants"
         );
-        assert!(!descendants.contains(&root_id), "root itself must not be in descendants");
+        assert!(
+            !descendants.contains(&root_id),
+            "root itself must not be in descendants"
+        );
     }
 
     /// Performance: a synthetic 1000-scope linear chain must complete in under 10ms.
@@ -681,7 +733,10 @@ mod tests {
                 id: root_id,
                 parent: None,
                 kind: ScopeKind::Global,
-                location: SourceLocation { start: 0, end: 10000 },
+                location: SourceLocation {
+                    start: 0,
+                    end: 10000,
+                },
                 symbols: ScopeSymbolSet::new(),
             },
         );
@@ -692,7 +747,10 @@ mod tests {
                     id: i,
                     parent: Some(i - 1),
                     kind: ScopeKind::Block,
-                    location: SourceLocation { start: i * 10, end: i * 10 + 9 },
+                    location: SourceLocation {
+                        start: i * 10,
+                        end: i * 10 + 9,
+                    },
                     symbols: ScopeSymbolSet::new(),
                 },
             );
@@ -707,7 +765,11 @@ mod tests {
         let descendants = provider.collect_descendant_scopes(root_id);
         let elapsed = start.elapsed();
 
-        assert_eq!(descendants.len(), CHAIN_LEN - 1, "all non-root scopes should be descendants");
+        assert_eq!(
+            descendants.len(),
+            CHAIN_LEN - 1,
+            "all non-root scopes should be descendants"
+        );
         assert!(
             elapsed.as_millis() < 10,
             "collect_descendant_scopes on 1000-scope chain took {}ms, expected <10ms",

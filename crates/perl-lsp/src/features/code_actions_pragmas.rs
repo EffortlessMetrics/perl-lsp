@@ -15,11 +15,21 @@ pub fn missing_pragmas_actions(uri: &str, text: &str) -> Vec<Value> {
     let insert_at = find_pragma_insertion_point(text);
 
     if !has_strict {
-        actions.push(make_action(uri, "Add use strict;", insert_at, "use strict;\n"));
+        actions.push(make_action(
+            uri,
+            "Add use strict;",
+            insert_at,
+            "use strict;\n",
+        ));
     }
 
     if !has_warnings {
-        actions.push(make_action(uri, "Add use warnings;", insert_at, "use warnings;\n"));
+        actions.push(make_action(
+            uri,
+            "Add use warnings;",
+            insert_at,
+            "use warnings;\n",
+        ));
     }
 
     actions
@@ -123,8 +133,10 @@ sub hello {
         let actions = missing_pragmas_actions("file:///test.pl", text);
         assert_eq!(actions.len(), 2);
 
-        let titles: Vec<String> =
-            actions.iter().filter_map(|a| a["title"].as_str().map(|s| s.to_string())).collect();
+        let titles: Vec<String> = actions
+            .iter()
+            .filter_map(|a| a["title"].as_str().map(|s| s.to_string()))
+            .collect();
 
         assert!(titles.contains(&"Add use strict;".to_string()));
         assert!(titles.contains(&"Add use warnings;".to_string()));

@@ -9,8 +9,10 @@ use std::str;
 pub fn cleanup() -> Result<()> {
     let root = project_root()?;
 
-    let prune_status =
-        Command::new("git").current_dir(&root).args(["worktree", "prune"]).status()?;
+    let prune_status = Command::new("git")
+        .current_dir(&root)
+        .args(["worktree", "prune"])
+        .status()?;
     if !prune_status.success() {
         bail!("failed to prune git worktrees");
     }
@@ -28,7 +30,11 @@ pub fn cleanup() -> Result<()> {
     let stale = list
         .lines()
         .filter_map(|line| {
-            if line.contains(".claude/worktrees/") { line.split_whitespace().next() } else { None }
+            if line.contains(".claude/worktrees/") {
+                line.split_whitespace().next()
+            } else {
+                None
+            }
         })
         .collect::<Vec<_>>();
 
@@ -51,8 +57,10 @@ pub fn cleanup() -> Result<()> {
         }
     }
 
-    let final_prune_status =
-        Command::new("git").current_dir(&root).args(["worktree", "prune"]).status()?;
+    let final_prune_status = Command::new("git")
+        .current_dir(&root)
+        .args(["worktree", "prune"])
+        .status()?;
     if !final_prune_status.success() {
         bail!("failed to prune git worktrees after cleanup");
     }

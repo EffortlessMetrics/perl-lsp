@@ -36,7 +36,12 @@ mod utf8_boundary_arithmetic {
             // Edge case: empty pattern with UTF-8 in replacement
             ("s//❤️/", "", "❤️", ""),
             // Edge case: UTF-8 at string boundaries
-            ("s/❤️pattern❤️/💚replacement💚/gi", "❤️pattern❤️", "💚replacement💚", "gi"),
+            (
+                "s/❤️pattern❤️/💚replacement💚/gi",
+                "❤️pattern❤️",
+                "💚replacement💚",
+                "gi",
+            ),
         ];
 
         for (input, expected_pattern, expected_replacement, expected_mods) in utf8_cases {
@@ -122,7 +127,11 @@ mod utf8_boundary_arithmetic {
         let depth_test_cases = vec![
             // Single level nesting
             ("s{a{b}c}{repl}", "a{b}c", "repl"),
-            ("s[test[inner]more][replacement]", "test[inner]more", "replacement"),
+            (
+                "s[test[inner]more][replacement]",
+                "test[inner]more",
+                "replacement",
+            ),
             ("s(open(nested)close)(new)", "open(nested)close", "new"),
             ("s<angle<nested>tag><result>", "angle<nested>tag", "result"),
             // Multiple level nesting (3+ levels)
@@ -252,9 +261,18 @@ $var =~ tr/abc/xyz/;
         let tokens3 = collect_semantic_tokens(&ast, test_code, &to_pos16);
 
         // Idempotence: multiple calls should return identical results
-        assert_eq!(tokens1, tokens2, "Semantic tokens generation is not idempotent (call 1 vs 2)");
-        assert_eq!(tokens2, tokens3, "Semantic tokens generation is not idempotent (call 2 vs 3)");
-        assert_eq!(tokens1, tokens3, "Semantic tokens generation is not idempotent (call 1 vs 3)");
+        assert_eq!(
+            tokens1, tokens2,
+            "Semantic tokens generation is not idempotent (call 1 vs 2)"
+        );
+        assert_eq!(
+            tokens2, tokens3,
+            "Semantic tokens generation is not idempotent (call 2 vs 3)"
+        );
+        assert_eq!(
+            tokens1, tokens3,
+            "Semantic tokens generation is not idempotent (call 1 vs 3)"
+        );
 
         Ok(())
     }
@@ -262,8 +280,11 @@ $var =~ tr/abc/xyz/;
     /// Test semantic tokens permutation stability (order independence)
     #[test]
     fn test_semantic_tokens_permutation_stability() -> Result<(), Box<dyn std::error::Error>> {
-        let test_cases =
-            vec!["my $a = 1; my $b = 2;", "sub func1 {} sub func2 {}", "package A; package B;"];
+        let test_cases = vec![
+            "my $a = 1; my $b = 2;",
+            "sub func1 {} sub func2 {}",
+            "package A; package B;",
+        ];
 
         for test_code in test_cases {
             let mut parser = Parser::new(test_code);
@@ -287,7 +308,11 @@ $var =~ tr/abc/xyz/;
                 let delta_col = token[1];
 
                 let current_line = prev_line + delta_line;
-                let current_col = if delta_line > 0 { delta_col } else { prev_col + delta_col };
+                let current_col = if delta_line > 0 {
+                    delta_col
+                } else {
+                    prev_col + delta_col
+                };
 
                 // Validate ordering
                 assert!(
@@ -314,8 +339,14 @@ $var =~ tr/abc/xyz/;
     fn test_semantic_tokens_priority_precedence() -> Result<(), Box<dyn std::error::Error>> {
         // Test cases where multiple token types could apply
         let priority_test_cases = vec![
-            ("my $special_var;", "variable declarations should have priority"),
-            ("sub special_func {}", "function declarations should have priority"),
+            (
+                "my $special_var;",
+                "variable declarations should have priority",
+            ),
+            (
+                "sub special_func {}",
+                "function declarations should have priority",
+            ),
             ("'string content';", "string literals should have priority"),
             ("my $x = /regex/;", "regex patterns should have priority"),
         ];
@@ -381,7 +412,11 @@ mod paired_delimiter_comprehensive {
             let simple = format!("s{}pattern{}{open}replacement{close}", open, close);
             let (pattern, replacement, _) = extract_substitution_parts(&simple);
             assert_eq!(pattern, "pattern", "Simple {} delimiter failed", open);
-            assert_eq!(replacement, "replacement", "Simple {} replacement failed", open);
+            assert_eq!(
+                replacement, "replacement",
+                "Simple {} replacement failed",
+                open
+            );
 
             // Nested same delimiter
             let nested_same = format!(
@@ -390,8 +425,16 @@ mod paired_delimiter_comprehensive {
             );
             let (pattern, replacement, _) = extract_substitution_parts(&nested_same);
             let expected_pattern = format!("outer{}inner{}{}outer", open, close, close);
-            assert_eq!(pattern, expected_pattern, "Nested same {} delimiter failed", open);
-            assert_eq!(replacement, "result", "Nested same {} replacement failed", open);
+            assert_eq!(
+                pattern, expected_pattern,
+                "Nested same {} delimiter failed",
+                open
+            );
+            assert_eq!(
+                replacement, "result",
+                "Nested same {} replacement failed",
+                open
+            );
 
             // Mixed nesting with different delimiters
             for (inner_open, inner_close) in &delimiter_pairs {
@@ -489,7 +532,11 @@ mod paired_delimiter_comprehensive {
             let test_input = format!("s{}{{{}}}", pattern, "repl");
             let (actual_pattern, replacement, _) = extract_substitution_parts(&test_input);
 
-            assert_eq!(replacement, "repl", "Deep nesting level {} replacement failed", depth);
+            assert_eq!(
+                replacement, "repl",
+                "Deep nesting level {} replacement failed",
+                depth
+            );
 
             // Should handle deep nesting without panicking
             assert!(
@@ -625,13 +672,25 @@ mod property_based_mutation_tests {
         for input in edge_inputs {
             // All parsing should complete without panic/overflow
             let _regex_result = std::panic::catch_unwind(|| extract_regex_parts(input));
-            assert!(_regex_result.is_ok(), "extract_regex_parts panicked on '{}'", input);
+            assert!(
+                _regex_result.is_ok(),
+                "extract_regex_parts panicked on '{}'",
+                input
+            );
 
             let _sub_result = std::panic::catch_unwind(|| extract_substitution_parts(input));
-            assert!(_sub_result.is_ok(), "extract_substitution_parts panicked on '{}'", input);
+            assert!(
+                _sub_result.is_ok(),
+                "extract_substitution_parts panicked on '{}'",
+                input
+            );
 
             let _tr_result = std::panic::catch_unwind(|| extract_transliteration_parts(input));
-            assert!(_tr_result.is_ok(), "extract_transliteration_parts panicked on '{}'", input);
+            assert!(
+                _tr_result.is_ok(),
+                "extract_transliteration_parts panicked on '{}'",
+                input
+            );
         }
     }
 

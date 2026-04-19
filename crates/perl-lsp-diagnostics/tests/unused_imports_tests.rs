@@ -10,7 +10,11 @@ fn loc(start: usize, end: usize) -> SourceLocation {
 
 fn use_node(module: &str, start: usize, end: usize) -> Node {
     Node::new(
-        NodeKind::Use { module: module.to_string(), args: vec![], has_filter_risk: false },
+        NodeKind::Use {
+            module: module.to_string(),
+            args: vec![],
+            has_filter_risk: false,
+        },
         loc(start, end),
     )
 }
@@ -158,5 +162,9 @@ fn substring_match_does_not_count() {
     let ast = program(vec![use_node("Foo", 0, 8)]);
     let mut diags: Vec<Diagnostic> = Vec::new();
     check_unused_imports(&ast, source, &mut diags);
-    assert_eq!(diags.len(), 1, "substring match should not suppress diagnostic");
+    assert_eq!(
+        diags.len(),
+        1,
+        "substring match should not suppress diagnostic"
+    );
 }

@@ -47,7 +47,11 @@ pub struct TcpAttachConfig {
 impl TcpAttachConfig {
     /// Create a new TCP attach configuration
     pub fn new(host: String, port: u16) -> Self {
-        Self { host, port, timeout_ms: None }
+        Self {
+            host,
+            port,
+            timeout_ms: None,
+        }
     }
 
     /// Set the connection timeout
@@ -69,7 +73,10 @@ impl TcpAttachConfig {
                 anyhow::bail!("Timeout must be greater than 0 milliseconds");
             }
             if timeout > MAX_TIMEOUT_MS {
-                anyhow::bail!("Timeout cannot exceed {} milliseconds (5 minutes)", MAX_TIMEOUT_MS);
+                anyhow::bail!(
+                    "Timeout cannot exceed {} milliseconds (5 minutes)",
+                    MAX_TIMEOUT_MS
+                );
             }
         }
         Ok(())
@@ -111,7 +118,11 @@ pub enum DapEvent {
 impl TcpAttachSession {
     /// Create a new TCP attach session
     pub fn new() -> Self {
-        Self { stream: None, connected: Arc::new(Mutex::new(false)), event_sender: None }
+        Self {
+            stream: None,
+            connected: Arc::new(Mutex::new(false)),
+            event_sender: None,
+        }
     }
 
     /// Set the event sender
@@ -161,7 +172,9 @@ impl TcpAttachSession {
     pub fn send_message(&mut self, message: &str) -> Result<()> {
         let stream = self.stream.as_mut().context("Not connected to debugger")?;
         let framed = frame(message.as_bytes());
-        stream.write_all(&framed).context("Failed to write to debugger")?;
+        stream
+            .write_all(&framed)
+            .context("Failed to write to debugger")?;
 
         stream.flush().context("Failed to flush stream")?;
         Ok(())
@@ -231,8 +244,10 @@ impl TcpAttachSession {
                         && let Some(event_type) = value.get("type").and_then(|t| t.as_str())
                         && event_type == "event"
                     {
-                        let event_name =
-                            value.get("event").and_then(|e| e.as_str()).unwrap_or("unknown");
+                        let event_name = value
+                            .get("event")
+                            .and_then(|e| e.as_str())
+                            .unwrap_or("unknown");
 
                         match event_name {
                             "output" => {
@@ -349,7 +364,10 @@ mod tests {
     #[test]
     fn test_tcp_attach_timeout_duration() {
         let config = TcpAttachConfig::new("localhost".to_string(), 13603);
-        assert_eq!(config.timeout_duration(), Duration::from_millis(DEFAULT_TIMEOUT_MS as u64));
+        assert_eq!(
+            config.timeout_duration(),
+            Duration::from_millis(DEFAULT_TIMEOUT_MS as u64)
+        );
 
         let config = TcpAttachConfig::new("localhost".to_string(), 13603).with_timeout(10000);
         assert_eq!(config.timeout_duration(), Duration::from_millis(10000));

@@ -115,8 +115,14 @@ fn modern_keywords_case_sensitivity() {
             }
         };
         let uppercased = kw.to_uppercase();
-        assert!(!is_keyword(&capitalized), "{capitalized} should not be a keyword");
-        assert!(!is_keyword(&uppercased), "{uppercased} should not be a keyword");
+        assert!(
+            !is_keyword(&capitalized),
+            "{capitalized} should not be a keyword"
+        );
+        assert!(
+            !is_keyword(&uppercased),
+            "{uppercased} should not be a keyword"
+        );
     }
 }
 
@@ -169,13 +175,22 @@ fn try_catch_finally_cross_list_membership() {
     }
     // But not in completion or rename lists
     for kw in ["try", "catch", "finally"] {
-        assert!(!is_lsp_completion_keyword(kw), "{kw} should not be in LSP_COMPLETION_KEYWORDS");
-        assert!(!is_dap_completion_keyword(kw), "{kw} should not be in DAP_COMPLETION_KEYWORDS");
+        assert!(
+            !is_lsp_completion_keyword(kw),
+            "{kw} should not be in LSP_COMPLETION_KEYWORDS"
+        );
+        assert!(
+            !is_dap_completion_keyword(kw),
+            "{kw} should not be in DAP_COMPLETION_KEYWORDS"
+        );
         assert!(
             !is_lsp_runtime_completion_keyword(kw),
             "{kw} should not be in LSP_RUNTIME_COMPLETION_KEYWORDS"
         );
-        assert!(!is_rename_keyword(kw), "{kw} should not be in RENAME_KEYWORDS");
+        assert!(
+            !is_rename_keyword(kw),
+            "{kw} should not be in RENAME_KEYWORDS"
+        );
     }
 }
 
@@ -190,14 +205,20 @@ fn all_control_flow_keywords_in_parser_lsp() {
         "if", "elsif", "else", "unless", "while", "until", "for", "foreach", "last", "next",
         "redo", "return", "goto",
     ] {
-        assert!(is_parser_lsp_keyword(kw), "control-flow {kw} should be in PARSER_LSP_KEYWORDS");
+        assert!(
+            is_parser_lsp_keyword(kw),
+            "control-flow {kw} should be in PARSER_LSP_KEYWORDS"
+        );
     }
 }
 
 #[test]
 fn all_declaration_keywords_in_rename() {
     for kw in ["my", "our", "local", "state"] {
-        assert!(is_rename_keyword(kw), "declaration {kw} should be in RENAME_KEYWORDS");
+        assert!(
+            is_rename_keyword(kw),
+            "declaration {kw} should be in RENAME_KEYWORDS"
+        );
     }
 }
 
@@ -211,7 +232,10 @@ fn common_perl_module_names_are_not_keywords() {
         "strict", "warnings", "Carp", "Data", "Dumper", "File", "Path", "Moose", "Moo", "DBI",
         "CGI", "LWP", "JSON", "YAML", "Test", "Exporter",
     ] {
-        assert!(!is_keyword(name), "module name {name} should not be a keyword");
+        assert!(
+            !is_keyword(name),
+            "module name {name} should not be a keyword"
+        );
     }
 }
 
@@ -241,7 +265,10 @@ fn common_perl_builtins_not_in_keywords_are_rejected() {
         "flock",
         "fork",
     ] {
-        assert!(!is_keyword(name), "builtin {name} is not in KEYWORDS (by design)");
+        assert!(
+            !is_keyword(name),
+            "builtin {name} is not in KEYWORDS (by design)"
+        );
     }
 }
 
@@ -268,7 +295,10 @@ fn all_keywords_start_with_letter_or_underscore() {
 fn every_keyword_entry_roundtrips_through_is_keyword() {
     let mut count = 0;
     for &kw in KEYWORDS {
-        assert!(is_keyword(kw), "KEYWORDS entry {kw:?} not found by is_keyword");
+        assert!(
+            is_keyword(kw),
+            "KEYWORDS entry {kw:?} not found by is_keyword"
+        );
         count += 1;
     }
     // Sanity: we actually iterated over a non-trivial number of entries
@@ -294,7 +324,10 @@ fn not_every_keyword_is_in_every_specialized_list() {
     ];
     for &(name, lookup) in specialized {
         let missing_count = KEYWORDS.iter().filter(|&&kw| !lookup(kw)).count();
-        assert!(missing_count > 0, "{name} should not contain every KEYWORDS entry");
+        assert!(
+            missing_count > 0,
+            "{name} should not contain every KEYWORDS entry"
+        );
     }
 }
 
@@ -332,7 +365,10 @@ fn phase_blocks_are_disjoint_from_declaration_keywords() {
     let declarations = ["my", "our", "local", "state"];
     for pb in phase_blocks {
         for decl in &declarations {
-            assert_ne!(pb, *decl, "phase blocks and declarations should be disjoint");
+            assert_ne!(
+                pb, *decl,
+                "phase blocks and declarations should be disjoint"
+            );
         }
     }
 }
@@ -345,7 +381,10 @@ fn comparison_operators_are_disjoint_from_control_flow() {
         "redo", "return", "goto",
     ];
     for comp in comparisons {
-        assert!(!control_flow.contains(&comp), "{comp} should not be in control flow");
+        assert!(
+            !control_flow.contains(&comp),
+            "{comp} should not be in control flow"
+        );
     }
 }
 
@@ -355,7 +394,15 @@ fn comparison_operators_are_disjoint_from_control_flow() {
 
 #[test]
 fn uppercase_keywords_are_phase_blocks_or_dunders() {
-    let phase_blocks = ["AUTOLOAD", "BEGIN", "CHECK", "DESTROY", "END", "INIT", "UNITCHECK"];
+    let phase_blocks = [
+        "AUTOLOAD",
+        "BEGIN",
+        "CHECK",
+        "DESTROY",
+        "END",
+        "INIT",
+        "UNITCHECK",
+    ];
     for &kw in KEYWORDS {
         if kw.starts_with("__") {
             continue; // dunder tokens handled separately
@@ -411,7 +458,10 @@ fn each_specialized_list_has_unique_content() -> Result<(), String> {
 
     for &(name, list) in lists {
         let first = list.first().ok_or(format!("{name} is empty"))?;
-        assert!(is_keyword(first), "{name} first entry should be in KEYWORDS");
+        assert!(
+            is_keyword(first),
+            "{name} first entry should be in KEYWORDS"
+        );
     }
 
     // The lists differ in content — verify pairwise differences

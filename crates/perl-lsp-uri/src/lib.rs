@@ -4,7 +4,12 @@
 use lsp_types::Uri;
 
 fn fallback_uri() -> Uri {
-    for candidate in ["file:///unknown", "file:///", "about:blank", "urn:perl-lsp:unknown"] {
+    for candidate in [
+        "file:///unknown",
+        "file:///",
+        "about:blank",
+        "urn:perl-lsp:unknown",
+    ] {
         if let Ok(uri) = candidate.parse::<Uri>() {
             return uri;
         }

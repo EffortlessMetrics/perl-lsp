@@ -161,8 +161,9 @@ fn read_message_preserves_params() -> io::Result<()> {
 
     let req = read_message(&mut reader)?
         .ok_or_else(|| io::Error::new(io::ErrorKind::UnexpectedEof, "expected request"))?;
-    let params =
-        req.params.ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "expected params"))?;
+    let params = req
+        .params
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "expected params"))?;
     assert_eq!(params["key"], "val");
     assert_eq!(params["num"], 42);
     Ok(())
@@ -219,8 +220,9 @@ fn read_message_with_unicode_body() -> io::Result<()> {
 
     let req = read_message(&mut reader)?
         .ok_or_else(|| io::Error::new(io::ErrorKind::UnexpectedEof, "expected request"))?;
-    let params =
-        req.params.ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "expected params"))?;
+    let params = req
+        .params
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "expected params"))?;
     assert_eq!(params["text"], "héllo wörld 🦀");
     Ok(())
 }
@@ -237,8 +239,9 @@ fn read_message_replaces_invalid_utf8_in_json_strings() -> io::Result<()> {
 
     let req = read_message(&mut reader)?
         .ok_or_else(|| io::Error::new(io::ErrorKind::UnexpectedEof, "expected request"))?;
-    let params =
-        req.params.ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "expected params"))?;
+    let params = req
+        .params
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "expected params"))?;
     assert_eq!(params["text"], "abc\u{FFFD}");
     Ok(())
 }
@@ -246,8 +249,10 @@ fn read_message_replaces_invalid_utf8_in_json_strings() -> io::Result<()> {
 #[test]
 fn read_message_large_body() -> io::Result<()> {
     let big_value = "x".repeat(100_000);
-    let body =
-        format!(r#"{{"jsonrpc":"2.0","id":1,"method":"big","params":{{"data":"{}"}}}}"#, big_value);
+    let body = format!(
+        r#"{{"jsonrpc":"2.0","id":1,"method":"big","params":{{"data":"{}"}}}}"#,
+        big_value
+    );
     let mut frame = format!("Content-Length: {}\r\n\r\n", body.len()).into_bytes();
     frame.extend_from_slice(body.as_bytes());
     let mut reader = BufReader::new(Cursor::new(frame));
@@ -388,7 +393,13 @@ fn stateful_reader_three_frames() -> io::Result<()> {
     let mut reader = ContentLengthMessageReader::new();
 
     let methods: Vec<String> = (0..3)
-        .filter_map(|_| reader.read_next(&mut cursor).ok().flatten().map(|r| r.method))
+        .filter_map(|_| {
+            reader
+                .read_next(&mut cursor)
+                .ok()
+                .flatten()
+                .map(|r| r.method)
+        })
         .collect();
     assert_eq!(methods, vec!["a", "b", "c"]);
     Ok(())
@@ -406,7 +417,10 @@ fn stateful_reader_many_frames() -> io::Result<()> {
 
     for i in 0..count {
         let req = reader.read_next(&mut cursor)?.ok_or_else(|| {
-            io::Error::new(io::ErrorKind::UnexpectedEof, format!("expected request {i}"))
+            io::Error::new(
+                io::ErrorKind::UnexpectedEof,
+                format!("expected request {i}"),
+            )
         })?;
         assert_eq!(req.method, format!("method_{i}"));
     }
@@ -441,8 +455,9 @@ fn stateful_reader_with_params() -> io::Result<()> {
     let req = reader
         .read_next(&mut cursor)?
         .ok_or_else(|| io::Error::new(io::ErrorKind::UnexpectedEof, "expected request"))?;
-    let params =
-        req.params.ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "expected params"))?;
+    let params = req
+        .params
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "expected params"))?;
     assert_eq!(params["uri"], "file:///test.pl");
     assert_eq!(params["position"]["line"], 0);
     assert_eq!(params["position"]["character"], 5);
@@ -671,8 +686,10 @@ fn log_response_null_response() {
 
 #[test]
 fn log_response_success_response() {
-    let response =
-        JsonRpcResponse::success(Some(serde_json::json!(10)), serde_json::json!({"data": true}));
+    let response = JsonRpcResponse::success(
+        Some(serde_json::json!(10)),
+        serde_json::json!({"data": true}),
+    );
     log_response(&response);
 }
 
@@ -712,8 +729,9 @@ fn roundtrip_write_then_read_via_read_message() -> io::Result<()> {
     })?;
     assert_eq!(req.method, "roundtrip");
 
-    let params =
-        req.params.ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "expected params"))?;
+    let params = req
+        .params
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "expected params"))?;
     assert_eq!(params["key"], "value");
     Ok(())
 }
@@ -829,7 +847,10 @@ fn multiple_write_messages_to_same_buffer() -> io::Result<()> {
 
     let output =
         String::from_utf8(buf).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
-    let frames: Vec<&str> = output.split("Content-Length: ").filter(|s| !s.is_empty()).collect();
+    let frames: Vec<&str> = output
+        .split("Content-Length: ")
+        .filter(|s| !s.is_empty())
+        .collect();
     assert_eq!(frames.len(), 2);
     Ok(())
 }
@@ -877,8 +898,9 @@ fn read_message_array_params() -> io::Result<()> {
 
     let req = read_message(&mut reader)?
         .ok_or_else(|| io::Error::new(io::ErrorKind::UnexpectedEof, "expected request"))?;
-    let params =
-        req.params.ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "expected params"))?;
+    let params = req
+        .params
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "expected params"))?;
     assert!(params.is_array());
     assert_eq!(params.as_array().map(|a| a.len()), Some(3));
     Ok(())
@@ -953,9 +975,11 @@ fn read_message_content_length_with_extra_whitespace() -> io::Result<()> {
 #[test]
 fn read_message_content_length_last_header() -> io::Result<()> {
     let body = r#"{"jsonrpc":"2.0","id":1,"method":"test","params":{}}"#;
-    let mut frame =
-        format!("X-Custom-A: foo\r\nX-Custom-B: bar\r\nContent-Length: {}\r\n\r\n", body.len())
-            .into_bytes();
+    let mut frame = format!(
+        "X-Custom-A: foo\r\nX-Custom-B: bar\r\nContent-Length: {}\r\n\r\n",
+        body.len()
+    )
+    .into_bytes();
     frame.extend_from_slice(body.as_bytes());
     let mut reader = BufReader::new(Cursor::new(frame));
 
@@ -999,8 +1023,9 @@ fn read_message_deeply_nested_params() -> io::Result<()> {
 
     let req = read_message(&mut reader)?
         .ok_or_else(|| io::Error::new(io::ErrorKind::UnexpectedEof, "expected request"))?;
-    let params =
-        req.params.ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "expected params"))?;
+    let params = req
+        .params
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "expected params"))?;
     assert_eq!(params["a"]["b"]["c"]["d"], "deep");
     Ok(())
 }
@@ -1026,7 +1051,10 @@ fn stateful_reader_byte_at_a_time_delivery() -> io::Result<()> {
             Ok(1)
         }
     }
-    let mut source = OneByteReader { data: full_frame, pos: 0 };
+    let mut source = OneByteReader {
+        data: full_frame,
+        pos: 0,
+    };
     let mut reader = ContentLengthMessageReader::new();
 
     let req = reader
@@ -1039,8 +1067,10 @@ fn stateful_reader_byte_at_a_time_delivery() -> io::Result<()> {
 #[test]
 fn stateful_reader_large_message() -> io::Result<()> {
     let big_value = "z".repeat(100_000);
-    let body =
-        format!(r#"{{"jsonrpc":"2.0","id":1,"method":"big","params":{{"data":"{}"}}}}"#, big_value);
+    let body = format!(
+        r#"{{"jsonrpc":"2.0","id":1,"method":"big","params":{{"data":"{}"}}}}"#,
+        big_value
+    );
     let mut payload = format!("Content-Length: {}\r\n\r\n", body.len()).into_bytes();
     payload.extend_from_slice(body.as_bytes());
 
@@ -1068,7 +1098,10 @@ fn stateful_reader_multiple_malformed_then_valid() -> io::Result<()> {
     let mut reader = ContentLengthMessageReader::new();
 
     let req = reader.read_next(&mut cursor)?.ok_or_else(|| {
-        io::Error::new(io::ErrorKind::UnexpectedEof, "expected request after malformed")
+        io::Error::new(
+            io::ErrorKind::UnexpectedEof,
+            "expected request after malformed",
+        )
     })?;
     assert_eq!(req.method, "valid_after_errors");
     Ok(())
@@ -1187,8 +1220,10 @@ fn write_message_result_is_array() -> io::Result<()> {
 
 #[test]
 fn write_message_result_is_string() -> io::Result<()> {
-    let response =
-        JsonRpcResponse::success(Some(serde_json::json!(1)), serde_json::json!("just a string"));
+    let response = JsonRpcResponse::success(
+        Some(serde_json::json!(1)),
+        serde_json::json!("just a string"),
+    );
     let mut buf = Vec::new();
     write_message(&mut buf, &response)?;
 

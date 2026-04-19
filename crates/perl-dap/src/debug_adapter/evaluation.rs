@@ -165,8 +165,11 @@ impl DebugAdapter {
             };
         };
 
-        let eval_body =
-            EvaluateResponseBody { result, type_: Some(result_type), variables_reference: 0 };
+        let eval_body = EvaluateResponseBody {
+            result,
+            type_: Some(result_type),
+            variables_reference: 0,
+        };
 
         DapMessage::Response {
             seq,
@@ -263,7 +266,10 @@ impl DebugAdapter {
             *lock_or_recover(&self.session, "debug_adapter.session")
         {
             if let Some(stdin) = session.process.stdin.as_mut() {
-                let commands = vec![format!("p {expression} = {value}"), format!("p {expression}")];
+                let commands = vec![
+                    format!("p {expression} = {value}"),
+                    format!("p {expression}"),
+                ];
                 match self.send_framed_debugger_commands(stdin, &commands) {
                     Ok(markers) => Some(markers),
                     Err(error) => {

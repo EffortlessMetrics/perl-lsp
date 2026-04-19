@@ -33,7 +33,10 @@ impl SymbolIndex {
     /// Create a new empty symbol index.
     #[must_use]
     pub fn new() -> Self {
-        Self { trie: SymbolTrie::new(), inverted_index: HashMap::new() }
+        Self {
+            trie: SymbolTrie::new(),
+            inverted_index: HashMap::new(),
+        }
     }
 
     /// Add a symbol to the index.
@@ -52,7 +55,10 @@ impl SymbolIndex {
         // Add to inverted index for fuzzy matching
         let tokens = Self::tokenize(&symbol);
         for token in tokens {
-            self.inverted_index.entry(token).or_default().push(symbol.clone());
+            self.inverted_index
+                .entry(token)
+                .or_default()
+                .push(symbol.clone());
         }
     }
 
@@ -119,7 +125,10 @@ impl SymbolIndex {
 
 impl SymbolTrie {
     fn new() -> Self {
-        Self { children: HashMap::new(), symbols: Vec::new() }
+        Self {
+            children: HashMap::new(),
+            symbols: Vec::new(),
+        }
     }
 
     /// Insert `symbol` into the trie.
@@ -131,7 +140,10 @@ impl SymbolTrie {
         let mut node = self;
 
         for ch in symbol.chars() {
-            node = node.children.entry(ch).or_insert_with(|| Box::new(SymbolTrie::new()));
+            node = node
+                .children
+                .entry(ch)
+                .or_insert_with(|| Box::new(SymbolTrie::new()));
         }
 
         // Deduplicate: workspace indexing may call add_symbol for the same

@@ -24,8 +24,16 @@ pub const fn feature_profile_contracts() -> &'static [FeatureProfileSpec] {
 }
 
 /// Stable BDD grid column order used by reporting tools.
-pub const FEATURE_GRID_COLUMNS: &[&str] =
-    &["area", "id", "spec", "maturity", "advertised", "counts_in_coverage", "description", "tests"];
+pub const FEATURE_GRID_COLUMNS: &[&str] = &[
+    "area",
+    "id",
+    "spec",
+    "maturity",
+    "advertised",
+    "counts_in_coverage",
+    "description",
+    "tests",
+];
 
 /// Get the global feature catalog as JSON.
 ///
@@ -93,7 +101,10 @@ fn feature_grid_payload(
                 advertised_trackable_feature_count(&advertised);
             (advertised, advertised_trackable_feature_count)
         }
-        None => (advertised_features().to_vec(), advertised_trackable_feature_count_for_grid()),
+        None => (
+            advertised_features().to_vec(),
+            advertised_trackable_feature_count_for_grid(),
+        ),
     };
     let trackable_feature_count = trackable_feature_count_for_grid();
     let compliance_percent = if trackable_feature_count == 0 {
@@ -167,7 +178,11 @@ mod tests {
         assert!(value.get("profiles").is_some());
         assert!(value["feature_grid"].get("columns").is_some());
         assert!(value["feature_grid"].get("rows").is_some());
-        let profiles = must_some(value.get("profiles").and_then(|profiles| profiles.as_array()));
+        let profiles = must_some(
+            value
+                .get("profiles")
+                .and_then(|profiles| profiles.as_array()),
+        );
         assert!(!profiles.is_empty());
         let rows = must_some(
             value
@@ -196,8 +211,12 @@ mod tests {
         assert!((json_all_compliance - all_compliance as f64).abs() < f32::EPSILON as f64);
         assert!((json_ga_compliance - ga_compliance as f64).abs() < f32::EPSILON as f64);
 
-        let all_count = all_value["advertised_trackable_feature_count"].as_u64().unwrap_or(0);
-        let ga_count = ga_lock_value["advertised_trackable_feature_count"].as_u64().unwrap_or(0);
+        let all_count = all_value["advertised_trackable_feature_count"]
+            .as_u64()
+            .unwrap_or(0);
+        let ga_count = ga_lock_value["advertised_trackable_feature_count"]
+            .as_u64()
+            .unwrap_or(0);
         assert!(all_count >= ga_count);
     }
 
@@ -236,7 +255,10 @@ mod tests {
     fn all_profile_compliance_gte_ga_lock_compliance() {
         let all_pct = compliance_percent_for_profile(FeatureProfile::All);
         let ga_pct = compliance_percent_for_profile(FeatureProfile::GaLock);
-        assert!(all_pct >= ga_pct, "'all' compliance ({all_pct}) should be >= ga-lock ({ga_pct})");
+        assert!(
+            all_pct >= ga_pct,
+            "'all' compliance ({all_pct}) should be >= ga-lock ({ga_pct})"
+        );
     }
 
     // ── feature_profile_contracts ───────────────────────────────────
@@ -283,8 +305,14 @@ mod tests {
         let value: serde_json::Value = must(serde_json::from_str(&payload));
         let profiles = must_some(value.get("profiles").and_then(|v| v.as_array()));
         for profile_value in profiles {
-            assert!(profile_value.get("profile").is_some(), "missing 'profile' key");
-            assert!(profile_value.get("advertised").is_some(), "missing 'advertised' key");
+            assert!(
+                profile_value.get("profile").is_some(),
+                "missing 'profile' key"
+            );
+            assert!(
+                profile_value.get("advertised").is_some(),
+                "missing 'advertised' key"
+            );
             assert!(
                 profile_value.get("compliance_percent").is_some(),
                 "missing 'compliance_percent'"
@@ -294,7 +322,9 @@ mod tests {
                 "missing 'trackable_feature_count'"
             );
             assert!(
-                profile_value.get("advertised_trackable_feature_count").is_some(),
+                profile_value
+                    .get("advertised_trackable_feature_count")
+                    .is_some(),
                 "missing 'advertised_trackable_feature_count'"
             );
             assert!(

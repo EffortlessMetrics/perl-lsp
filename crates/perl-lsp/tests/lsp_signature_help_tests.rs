@@ -213,12 +213,20 @@ my $output = $fmt->format("Hello %s, you have %d items", $name, $count);
     // Method signature help may or may not be supported
     if !result.is_null() {
         let signatures = result.get("signatures");
-        assert!(signatures.is_some(), "Method signature help must have 'signatures' field");
+        assert!(
+            signatures.is_some(),
+            "Method signature help must have 'signatures' field"
+        );
 
-        let sigs = signatures.and_then(|s| s.as_array()).ok_or("Expected signatures array")?;
+        let sigs = signatures
+            .and_then(|s| s.as_array())
+            .ok_or("Expected signatures array")?;
 
         for sig in sigs {
-            assert!(sig.get("label").is_some(), "Each method signature must have a label");
+            assert!(
+                sig.get("label").is_some(),
+                "Each method signature must have a label"
+            );
         }
     }
 
@@ -287,7 +295,11 @@ fn test_signature_help_on_empty_file() -> TestResult {
         .unwrap_or(json!(null));
 
     // Empty file should return null
-    assert!(result.is_null(), "Signature help on empty file should return null, got: {:?}", result);
+    assert!(
+        result.is_null(),
+        "Signature help on empty file should return null, got: {:?}",
+        result
+    );
 
     Ok(())
 }
@@ -304,7 +316,10 @@ fn test_signature_help_capability_advertised() -> TestResult {
 
     // Signature help should be advertised
     let has_capability = capabilities.get("signatureHelpProvider").is_some();
-    assert!(has_capability, "signatureHelpProvider should be advertised in capabilities");
+    assert!(
+        has_capability,
+        "signatureHelpProvider should be advertised in capabilities"
+    );
 
     // If present, it should be an object with trigger characters
     let provider = &capabilities["signatureHelpProvider"];
@@ -317,7 +332,9 @@ fn test_signature_help_capability_advertised() -> TestResult {
     // Trigger characters should include '(' and ','
     if let Some(triggers) = provider.get("triggerCharacters") {
         assert!(triggers.is_array(), "triggerCharacters should be an array");
-        let trigger_arr = triggers.as_array().ok_or("Expected array for triggerCharacters")?;
+        let trigger_arr = triggers
+            .as_array()
+            .ok_or("Expected array for triggerCharacters")?;
         let trigger_strs: Vec<&str> = trigger_arr.iter().filter_map(|t| t.as_str()).collect();
 
         assert!(
@@ -329,9 +346,13 @@ fn test_signature_help_capability_advertised() -> TestResult {
 
     // Retrigger characters should include ',', '@', '%', '{', '['
     if let Some(retriggers) = provider.get("retriggerCharacters") {
-        assert!(retriggers.is_array(), "retriggerCharacters should be an array");
-        let retrigger_arr =
-            retriggers.as_array().ok_or("Expected array for retriggerCharacters")?;
+        assert!(
+            retriggers.is_array(),
+            "retriggerCharacters should be an array"
+        );
+        let retrigger_arr = retriggers
+            .as_array()
+            .ok_or("Expected array for retriggerCharacters")?;
         let retrigger_strs: Vec<&str> = retrigger_arr.iter().filter_map(|t| t.as_str()).collect();
 
         assert!(

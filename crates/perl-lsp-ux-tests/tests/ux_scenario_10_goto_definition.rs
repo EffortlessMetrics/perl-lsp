@@ -42,12 +42,17 @@ fn scenario_10_definition_request_does_not_error() {
     }
 
     let harness = UxHarness::new(
-        ScenarioConfig { timeout: Duration::from_secs(15), ..Default::default() }
-            .with_file("greet.pl", GOTO_SOURCE),
+        ScenarioConfig {
+            timeout: Duration::from_secs(15),
+            ..Default::default()
+        }
+        .with_file("greet.pl", GOTO_SOURCE),
     )
     .expect("Failed to create UX harness");
 
-    harness.open_file("greet.pl", GOTO_SOURCE).expect("didOpen should succeed");
+    harness
+        .open_file("greet.pl", GOTO_SOURCE)
+        .expect("didOpen should succeed");
 
     // Allow the server to index the file.
     std::thread::sleep(Duration::from_millis(500));
@@ -71,16 +76,23 @@ fn scenario_10_definition_result_is_location_or_empty() {
     }
 
     let harness = UxHarness::new(
-        ScenarioConfig { timeout: Duration::from_secs(15), ..Default::default() }
-            .with_file("greet.pl", GOTO_SOURCE),
+        ScenarioConfig {
+            timeout: Duration::from_secs(15),
+            ..Default::default()
+        }
+        .with_file("greet.pl", GOTO_SOURCE),
     )
     .expect("Failed to create UX harness");
 
-    harness.open_file("greet.pl", GOTO_SOURCE).expect("didOpen should succeed");
+    harness
+        .open_file("greet.pl", GOTO_SOURCE)
+        .expect("didOpen should succeed");
 
     std::thread::sleep(Duration::from_millis(500));
 
-    let defs = harness.definition("greet.pl", 8, 0).expect("definition must not error");
+    let defs = harness
+        .definition("greet.pl", 8, 0)
+        .expect("definition must not error");
 
     // If results are returned they must be well-formed Location objects.
     for loc in &defs {
@@ -112,7 +124,9 @@ fn scenario_10_definition_on_unknown_position_returns_empty() {
     let harness = UxHarness::new(ScenarioConfig::default().with_file("simple.pl", source))
         .expect("Failed to create UX harness");
 
-    harness.open_file("simple.pl", source).expect("didOpen should succeed");
+    harness
+        .open_file("simple.pl", source)
+        .expect("didOpen should succeed");
 
     // Position in middle of `strict` string literal — no definition expected.
     let defs = harness

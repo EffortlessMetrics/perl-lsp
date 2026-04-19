@@ -3,7 +3,10 @@ use assert_cmd::cargo::cargo_bin_cmd;
 #[test]
 fn health_prints_ok() {
     let mut cmd = cargo_bin_cmd!("perl-lsp");
-    cmd.arg("--health").assert().success().stdout(predicates::str::contains("ok"));
+    cmd.arg("--health")
+        .assert()
+        .success()
+        .stdout(predicates::str::contains("ok"));
 }
 
 #[test]
@@ -19,7 +22,10 @@ fn version_shows_git_tag() {
 #[test]
 fn help_prints_to_stdout() {
     let mut cmd = cargo_bin_cmd!("perl-lsp");
-    cmd.arg("--help").assert().success().stdout(predicates::str::contains("Usage: perl-lsp"));
+    cmd.arg("--help")
+        .assert()
+        .success()
+        .stdout(predicates::str::contains("Usage: perl-lsp"));
 }
 
 #[test]
@@ -36,7 +42,10 @@ fn info_shows_version_and_features() {
 #[test]
 fn check_no_files_exits_with_error() {
     let mut cmd = cargo_bin_cmd!("perl-lsp");
-    cmd.arg("--check").assert().failure().stderr(predicates::str::contains("No files specified"));
+    cmd.arg("--check")
+        .assert()
+        .failure()
+        .stderr(predicates::str::contains("No files specified"));
 }
 
 #[test]
@@ -46,7 +55,11 @@ fn check_valid_perl_file() -> Result<(), Box<dyn std::error::Error>> {
     std::fs::write(&file, "use strict;\nprint \"hello\\n\";\n")?;
     let file_str = file.to_str().ok_or("non-UTF-8 temp path")?;
     let mut cmd = cargo_bin_cmd!("perl-lsp");
-    cmd.arg("--check").arg(file_str).assert().success().stdout(predicates::str::contains("ok"));
+    cmd.arg("--check")
+        .arg(file_str)
+        .assert()
+        .success()
+        .stdout(predicates::str::contains("ok"));
     Ok(())
 }
 
@@ -90,7 +103,9 @@ fn completion_fish_produces_output() {
 #[test]
 fn completion_unknown_shell_fails() {
     let mut cmd = cargo_bin_cmd!("perl-lsp");
-    cmd.args(["--completion", "unknown-shell"]).assert().failure();
+    cmd.args(["--completion", "unknown-shell"])
+        .assert()
+        .failure();
 }
 
 #[test]
@@ -100,7 +115,10 @@ fn help_mentions_new_flags() -> Result<(), Box<dyn std::error::Error>> {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("--info"), "help should mention --info");
     assert!(stdout.contains("--check"), "help should mention --check");
-    assert!(stdout.contains("--completion"), "help should mention --completion");
+    assert!(
+        stdout.contains("--completion"),
+        "help should mention --completion"
+    );
     Ok(())
 }
 

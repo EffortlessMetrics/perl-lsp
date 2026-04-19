@@ -41,7 +41,12 @@ fn count_all_nodes(node: &Node) -> usize {
         NodeKind::ExpressionStatement { expression } => {
             count += count_all_nodes(expression);
         }
-        NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
+        NodeKind::If {
+            condition,
+            then_branch,
+            elsif_branches,
+            else_branch,
+        } => {
             count += count_all_nodes(condition);
             count += count_all_nodes(then_branch);
             for (cond, branch) in elsif_branches {
@@ -52,11 +57,17 @@ fn count_all_nodes(node: &Node) -> usize {
                 count += count_all_nodes(else_b);
             }
         }
-        NodeKind::While { condition, body, .. } => {
+        NodeKind::While {
+            condition, body, ..
+        } => {
             count += count_all_nodes(condition);
             count += count_all_nodes(body);
         }
-        NodeKind::VariableDeclaration { variable, initializer, .. } => {
+        NodeKind::VariableDeclaration {
+            variable,
+            initializer,
+            ..
+        } => {
             count += count_all_nodes(variable);
             if let Some(init) = initializer {
                 count += count_all_nodes(init);
@@ -92,26 +103,37 @@ fn small_char_edit_reuses_most_ast_nodes() -> Result<(), Box<dyn std::error::Err
     let initial_source = doc.text().to_string();
 
     // Find "42" and change last digit to "43"
-    let pos = initial_source.find("42").ok_or("source should contain '42'")?;
+    let pos = initial_source
+        .find("42")
+        .ok_or("source should contain '42'")?;
     let edit = IncrementalEdit::new(pos + 1, pos + 2, "3".to_string());
 
     doc.apply_edit(edit)?;
 
     // The document text should reflect the change
-    assert!(doc.text().contains("43"), "should contain the edited value '43'");
+    assert!(
+        doc.text().contains("43"),
+        "should contain the edited value '43'"
+    );
     assert!(!doc.text().contains("42"), "should no longer contain '42'");
 
     // Verify the AST is valid (program with statements)
     match &doc.tree().kind {
         NodeKind::Program { statements } => {
-            assert!(!statements.is_empty(), "program should still have statements");
+            assert!(
+                !statements.is_empty(),
+                "program should still have statements"
+            );
         }
         _ => return Err("expected Program node at root".into()),
     }
 
     // Metrics should show significant reuse
     let metrics = doc.metrics();
-    assert!(metrics.nodes_reused > 0, "small edit should reuse some AST nodes, got 0 reused");
+    assert!(
+        metrics.nodes_reused > 0,
+        "small edit should reuse some AST nodes, got 0 reused"
+    );
 
     Ok(())
 }
@@ -178,7 +200,10 @@ fn insert_line_updates_offsets_correctly() -> Result<(), Box<dyn std::error::Err
     let result = apply_edits(&mut state, &[edit])?;
 
     // Source should contain the new line
-    assert!(state.source.contains("my $w = 99;"), "inserted line should be present");
+    assert!(
+        state.source.contains("my $w = 99;"),
+        "inserted line should be present"
+    );
 
     // Line offsets should be correct
     let (line_of_w, _) = state.line_index.byte_to_position(11);
@@ -214,8 +239,14 @@ fn insert_line_via_incremental_document() -> Result<(), Box<dyn std::error::Erro
 
     doc.apply_edit(edit)?;
 
-    assert!(doc.text().contains("my $mid = 15;"), "inserted line present");
-    assert!(doc.text().contains("my $b = 20;"), "original second line preserved");
+    assert!(
+        doc.text().contains("my $mid = 15;"),
+        "inserted line present"
+    );
+    assert!(
+        doc.text().contains("my $b = 20;"),
+        "original second line preserved"
+    );
 
     // Parse tree should still be valid
     match &doc.tree().kind {
@@ -264,7 +295,10 @@ fn delete_function_bounded_reparse() -> Result<(), Box<dyn std::error::Error>> {
     let result = apply_edits(&mut state, &[edit])?;
 
     // The function should be gone
-    assert!(!state.source.contains("sub to_delete"), "deleted function should be gone");
+    assert!(
+        !state.source.contains("sub to_delete"),
+        "deleted function should be gone"
+    );
 
     // Header and footer should survive
     assert!(state.source.contains("$header"), "header should survive");
@@ -285,7 +319,11 @@ fn delete_function_bounded_reparse() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn delete_function_via_incremental_document() -> Result<(), Box<dyn std::error::Error>> {
-    let source = concat!("my $before = 1;\n", "sub helper { return 42; }\n", "my $after = 2;\n",);
+    let source = concat!(
+        "my $before = 1;\n",
+        "sub helper { return 42; }\n",
+        "my $after = 2;\n",
+    );
 
     let mut doc = IncrementalDocument::new(source.to_string())?;
 
@@ -297,7 +335,10 @@ fn delete_function_via_incremental_document() -> Result<(), Box<dyn std::error::
     doc.apply_edit(edit)?;
 
     // Verify the function is removed
-    assert!(!doc.text().contains("sub helper"), "function should be deleted");
+    assert!(
+        !doc.text().contains("sub helper"),
+        "function should be deleted"
+    );
 
     // Surrounding code should be preserved
     assert!(doc.text().contains("$before"), "code before should survive");
@@ -306,7 +347,10 @@ fn delete_function_via_incremental_document() -> Result<(), Box<dyn std::error::
     // Parse tree should be valid
     match &doc.tree().kind {
         NodeKind::Program { statements } => {
-            assert!(statements.len() >= 2, "should have at least 2 statements after deletion");
+            assert!(
+                statements.len() >= 2,
+                "should have at least 2 statements after deletion"
+            );
         }
         _ => return Err("expected Program node".into()),
     }
@@ -452,7 +496,11 @@ fn token_sync_stops_relexing_early() -> Result<(), Box<dyn std::error::Error>> {
 
     // All subsequent variables should still be present
     for i in 1..20 {
-        assert!(state.source.contains(&format!("$v{}", i)), "variable $v{} should be present", i);
+        assert!(
+            state.source.contains(&format!("$v{}", i)),
+            "variable $v{} should be present",
+            i
+        );
     }
 
     // Tokens should still be present and valid
@@ -521,7 +569,10 @@ fn cache_eviction_preserves_critical_over_low() -> Result<(), Box<dyn std::error
         p == perl_incremental_parsing::incremental::incremental_document::SymbolPriority::Critical
     });
 
-    assert!(has_critical, "critical symbols should survive aggressive cache eviction");
+    assert!(
+        has_critical,
+        "critical symbols should survive aggressive cache eviction"
+    );
 
     Ok(())
 }
@@ -554,7 +605,10 @@ fn simple_parser_incremental_value_edit() -> Result<(), Box<dyn std::error::Erro
     let _ = parser.parse(source2)?;
 
     // Should reuse some nodes
-    assert!(parser.reused_nodes > 0, "incremental parse should reuse nodes for value edit");
+    assert!(
+        parser.reused_nodes > 0,
+        "incremental parse should reuse nodes for value edit"
+    );
 
     Ok(())
 }

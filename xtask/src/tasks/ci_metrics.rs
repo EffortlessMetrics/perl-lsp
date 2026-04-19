@@ -175,7 +175,11 @@ pub fn run_cost_monitor(days: u64, json_output: bool) -> Result<()> {
 
             let elapsed_seconds = end.and_then(|end_ts| {
                 let elapsed = (end_ts - start).num_seconds();
-                if elapsed > 0 { u64::try_from(elapsed).ok() } else { None }
+                if elapsed > 0 {
+                    u64::try_from(elapsed).ok()
+                } else {
+                    None
+                }
             });
 
             let elapsed_seconds = elapsed_seconds.unwrap_or(0);
@@ -236,8 +240,11 @@ pub fn run_cost_monitor(days: u64, json_output: bool) -> Result<()> {
 
     let mut workflow_payloads = Vec::with_capacity(sorted_workflows.len());
     for (name, counters) in sorted_workflows {
-        let average_minutes =
-            if counters.runs > 0 { counters.minutes as f64 / counters.runs as f64 } else { 0.0 };
+        let average_minutes = if counters.runs > 0 {
+            counters.minutes as f64 / counters.runs as f64
+        } else {
+            0.0
+        };
 
         workflow_payloads.push(CiCostWorkflow {
             name,
@@ -249,8 +256,11 @@ pub fn run_cost_monitor(days: u64, json_output: bool) -> Result<()> {
     }
 
     let monthly_minutes = (total_minutes as f64) * 30.0 / (days as f64);
-    let monthly_minutes =
-        if monthly_minutes.is_sign_negative() { 0 } else { monthly_minutes.round() as u64 };
+    let monthly_minutes = if monthly_minutes.is_sign_negative() {
+        0
+    } else {
+        monthly_minutes.round() as u64
+    };
     let monthly_cost = round_two_decimals(monthly_minutes as f64 * COST_PER_MINUTE);
     let annual_cost = round_two_decimals(monthly_cost * 12.0);
     let total_cost = round_two_decimals(total_minutes as f64 * COST_PER_MINUTE);
@@ -311,15 +321,24 @@ pub fn run_cost_monitor(days: u64, json_output: bool) -> Result<()> {
         report.failed_runs,
         percent(report.failed_runs, report.total_runs)
     );
-    println!("{:<30} {:>10} minutes", "Total CI time:", report.total_minutes);
+    println!(
+        "{:<30} {:>10} minutes",
+        "Total CI time:", report.total_minutes
+    );
     println!("{:<30} ${:.2}", "Total cost:", report.total_cost);
 
     println!("===============================================================================");
     println!("                     Monthly Projection");
     println!("===============================================================================");
-    println!("{:<30} {:>10} minutes", "Estimated monthly usage:", monthly_minutes);
+    println!(
+        "{:<30} {:>10} minutes",
+        "Estimated monthly usage:", monthly_minutes
+    );
     println!("{:<30} ${:.2}", "Estimated monthly cost:", monthly_cost);
-    println!("{:<30} ${:.0}", "Monthly budget target:", MONTHLY_BUDGET_TARGET);
+    println!(
+        "{:<30} ${:.0}",
+        "Monthly budget target:", MONTHLY_BUDGET_TARGET
+    );
     println!("{:<30} {:.1}%", "Budget utilization:", budget_percentage);
     if monthly_cost <= MONTHLY_BUDGET_TARGET {
         println!("Budget utilization: within budget");
@@ -331,7 +350,10 @@ pub fn run_cost_monitor(days: u64, json_output: bool) -> Result<()> {
     println!("                      Annual Projection");
     println!("===============================================================================");
     println!("{:<30} ${:.2}", "Estimated annual cost:", annual_cost);
-    println!("{:<30} ${:.0}", "Annual budget target:", ANNUAL_BUDGET_TARGET);
+    println!(
+        "{:<30} ${:.0}",
+        "Annual budget target:", ANNUAL_BUDGET_TARGET
+    );
     if annual_cost <= ANNUAL_BUDGET_TARGET {
         println!("Annual projection within budget");
     } else {
@@ -363,11 +385,11 @@ pub fn run_cost_monitor(days: u64, json_output: bool) -> Result<()> {
     println!("===============================================================================");
     println!();
 
-    if let Some(most_expensive) = report
-        .workflows
-        .iter()
-        .max_by(|a, b| a.cost.partial_cmp(&b.cost).unwrap_or(std::cmp::Ordering::Equal))
-    {
+    if let Some(most_expensive) = report.workflows.iter().max_by(|a, b| {
+        a.cost
+            .partial_cmp(&b.cost)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    }) {
         let share = if total_cost > 0.0 {
             round_one_decimal(most_expensive.cost * 100.0 / total_cost)
         } else {
@@ -456,8 +478,14 @@ pub fn run_ci_baseline(branch: String, days: u64, limit: usize, output_dir: Path
     println!("Branch:              {}", report.branch);
     println!("Analysis period:     Last {} days", report.days_analyzed);
     println!("Total runs:          {}", report.summary.total_runs);
-    println!("Total billable:      {}m", report.summary.total_billable_minutes);
-    println!("Overall success:     {:.1}%", report.summary.overall_success_rate_percent);
+    println!(
+        "Total billable:      {}m",
+        report.summary.total_billable_minutes
+    );
+    println!(
+        "Overall success:     {:.1}%",
+        report.summary.overall_success_rate_percent
+    );
     println!("Output JSON:         {}", json_path.display());
     println!("Output markdown:     {}", md_path.display());
     println!("======================================");
@@ -569,12 +597,20 @@ fn build_baseline_report(
         );
     }
 
-    let total_runs: u64 = workflow_reports.values().map(|workflow| workflow.total_runs).sum();
+    let total_runs: u64 = workflow_reports
+        .values()
+        .map(|workflow| workflow.total_runs)
+        .sum();
 
-    let total_billable: u64 =
-        workflow_reports.values().map(|workflow| workflow.billable_minutes).sum();
+    let total_billable: u64 = workflow_reports
+        .values()
+        .map(|workflow| workflow.billable_minutes)
+        .sum();
 
-    let total_success: u64 = workflow_reports.values().map(|workflow| workflow.success_count).sum();
+    let total_success: u64 = workflow_reports
+        .values()
+        .map(|workflow| workflow.success_count)
+        .sum();
     let total_completed: u64 = workflow_reports
         .values()
         .map(|workflow| workflow.success_count + workflow.failure_count)
@@ -636,7 +672,10 @@ fn run_gh_command(root: &Path, action: &str, args: Vec<String>) -> Result<String
         .with_context(|| format!("failed to execute gh command while {action}"))?;
 
     if !output.status.success() {
-        bail!("gh command failed while {action}: {}", String::from_utf8_lossy(&output.stderr));
+        bail!(
+            "gh command failed while {action}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
     }
 
     String::from_utf8(output.stdout).context("gh output was not valid UTF-8")
@@ -664,7 +703,11 @@ fn round_one_decimal(value: f64) -> f64 {
 }
 
 fn percent(part: u64, total: u64) -> f64 {
-    if total == 0 { 0.0 } else { round_one_decimal((part as f64 * 100.0) / (total as f64)) }
+    if total == 0 {
+        0.0
+    } else {
+        round_one_decimal((part as f64 * 100.0) / (total as f64))
+    }
 }
 
 fn percentile(values: &[u64], percentile: f64) -> u64 {
@@ -686,15 +729,25 @@ fn workflow_key(name: &str) -> String {
         }
     }
 
-    if key.is_empty() { "workflow".to_string() } else { key }
+    if key.is_empty() {
+        "workflow".to_string()
+    } else {
+        key
+    }
 }
 
 fn build_baseline_markdown(report: &BaselineReport) -> Result<String> {
     let mut out = String::new();
     out.push_str("# CI Baseline Metrics Report\n\n");
-    out.push_str(&format!("**Generated:** {}\n", report.generated_at.replace('T', " ")));
+    out.push_str(&format!(
+        "**Generated:** {}\n",
+        report.generated_at.replace('T', " ")
+    ));
     out.push_str(&format!("**Branch:** {}\n", report.branch));
-    out.push_str(&format!("**Analysis Period:** Last {} days\n\n", report.days_analyzed));
+    out.push_str(&format!(
+        "**Analysis Period:** Last {} days\n\n",
+        report.days_analyzed
+    ));
 
     out.push_str("## Summary\n\n");
     out.push_str("| Metric | Value |\n|--------|-------|\n");
@@ -793,8 +846,10 @@ mod tests {
 
         let report = build_baseline_report("master", 1, generated_at, cutoff, &runs)
             .ok_or_else(|| eyre!("expected baseline report"))?;
-        let workflow =
-            report.workflows.get("CI").ok_or_else(|| eyre!("expected workflow report"))?;
+        let workflow = report
+            .workflows
+            .get("CI")
+            .ok_or_else(|| eyre!("expected workflow report"))?;
 
         assert_eq!(workflow.total_runs, 3);
         assert_eq!(workflow.completed_runs, 2);

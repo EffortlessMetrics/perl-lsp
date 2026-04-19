@@ -146,7 +146,9 @@ fn benchmark_mixed_without_substitution(c: &mut Criterion) {
 
 fn benchmark_ast_creation_substitution(c: &mut Criterion) {
     let mut parser = Parser::new(COMPLEX_SUBSTITUTION_CODE);
-    let ast = parser.parse().expect("COMPLEX_SUBSTITUTION_CODE must parse for benchmark");
+    let ast = parser
+        .parse()
+        .expect("COMPLEX_SUBSTITUTION_CODE must parse for benchmark");
 
     c.bench_function("ast_creation_with_substitution", |b| {
         b.iter(|| {

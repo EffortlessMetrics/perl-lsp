@@ -128,7 +128,11 @@ impl RefreshController {
     /// # Errors
     /// Returns IO error if sending request fails
     pub(crate) fn refresh_semantic_tokens(&self, server: &super::LspServer) -> io::Result<()> {
-        if !server.client_capabilities.lock().semantic_tokens_refresh_support {
+        if !server
+            .client_capabilities
+            .lock()
+            .semantic_tokens_refresh_support
+        {
             return Ok(());
         }
 
@@ -170,7 +174,11 @@ impl RefreshController {
     /// # Errors
     /// Returns IO error if sending request fails
     pub(crate) fn refresh_inline_values(&self, server: &super::LspServer) -> io::Result<()> {
-        if !server.client_capabilities.lock().inline_value_refresh_support {
+        if !server
+            .client_capabilities
+            .lock()
+            .inline_value_refresh_support
+        {
             return Ok(());
         }
 
@@ -214,7 +222,11 @@ impl RefreshController {
     /// # Errors
     /// Returns IO error if sending request fails
     pub(crate) fn refresh_folding_ranges(&self, server: &super::LspServer) -> io::Result<()> {
-        if !server.client_capabilities.lock().folding_range_refresh_support {
+        if !server
+            .client_capabilities
+            .lock()
+            .folding_range_refresh_support
+        {
             return Ok(());
         }
 
@@ -302,7 +314,10 @@ mod tests {
     #[test]
     fn controller_creates_with_default_debounce() {
         let controller = RefreshController::new();
-        assert_eq!(controller.debounce_duration, Duration::from_millis(DEBOUNCE_MS));
+        assert_eq!(
+            controller.debounce_duration,
+            Duration::from_millis(DEBOUNCE_MS)
+        );
     }
 
     #[test]

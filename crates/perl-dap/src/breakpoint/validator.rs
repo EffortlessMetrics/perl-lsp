@@ -62,19 +62,37 @@ pub struct BreakpointValidation {
 impl BreakpointValidation {
     /// Create a successful validation result
     pub fn verified(line: i64, column: Option<i64>) -> Self {
-        Self { verified: true, line, column, reason: None, message: None }
+        Self {
+            verified: true,
+            line,
+            column,
+            reason: None,
+            message: None,
+        }
     }
 
     /// Create a failed validation result
     pub fn rejected(line: i64, reason: ValidationReason) -> Self {
         let message = Some(reason.to_string());
-        Self { verified: false, line, column: None, reason: Some(reason), message }
+        Self {
+            verified: false,
+            line,
+            column: None,
+            reason: Some(reason),
+            message,
+        }
     }
 
     /// Create a validation result with an adjusted line
     pub fn adjusted(new_line: i64, reason: ValidationReason) -> Self {
         let message = Some(format!("{}, adjusted to line {}", reason, new_line));
-        Self { verified: true, line: new_line, column: None, reason: Some(reason), message }
+        Self {
+            verified: true,
+            line: new_line,
+            column: None,
+            reason: Some(reason),
+            message,
+        }
     }
 }
 
@@ -130,10 +148,17 @@ impl AstBreakpointValidator {
     /// Returns an error if the source cannot be parsed.
     pub fn new(source: &str) -> Result<Self, BreakpointError> {
         let mut parser = Parser::new(source);
-        let ast = parser.parse().map_err(|e| BreakpointError::ParseError(format!("{:?}", e)))?;
+        let ast = parser
+            .parse()
+            .map_err(|e| BreakpointError::ParseError(format!("{:?}", e)))?;
         let rope = Rope::from_str(source);
         let pod_regions = Self::find_pod_regions(source);
-        Ok(Self { ast, rope, source: source.to_string(), pod_regions })
+        Ok(Self {
+            ast,
+            rope,
+            source: source.to_string(),
+            pod_regions,
+        })
     }
 
     /// Scan source text for POD documentation regions.
@@ -164,7 +189,10 @@ impl AstBreakpointValidator {
 
         // If POD was never closed, extend to EOF
         if let Some(start) = pod_start {
-            regions.push(ByteRange { start, end: source.len() });
+            regions.push(ByteRange {
+                start,
+                end: source.len(),
+            });
         }
 
         regions
@@ -185,7 +213,9 @@ impl AstBreakpointValidator {
 
     /// Check if a byte offset falls inside any POD region
     fn is_inside_pod_region(&self, byte_offset: usize) -> bool {
-        self.pod_regions.iter().any(|r| byte_offset >= r.start && byte_offset < r.end)
+        self.pod_regions
+            .iter()
+            .any(|r| byte_offset >= r.start && byte_offset < r.end)
     }
 
     /// Get the line range (start byte, end byte) for a given 1-based line number
@@ -262,7 +292,11 @@ impl AstBreakpointValidator {
     #[allow(clippy::only_used_in_recursion)]
     fn is_inside_heredoc_interior_node(&self, node: &Node, byte_offset: usize) -> bool {
         // Check if this is a heredoc with a body span containing the offset
-        if let NodeKind::Heredoc { body_span: Some(span), .. } = &node.kind {
+        if let NodeKind::Heredoc {
+            body_span: Some(span),
+            ..
+        } = &node.kind
+        {
             if byte_offset >= span.start && byte_offset < span.end {
                 return true;
             }
@@ -533,11 +567,23 @@ mod tests {
         let validator = must(AstBreakpointValidator::new(source));
 
         assert!(validator.is_executable_line(1)); // my $a = 1;
-        assert_eq!(validator.validate(3).reason, Some(ValidationReason::PodLine)); // =head1
-        assert_eq!(validator.validate(5).reason, Some(ValidationReason::PodLine)); // First section
-        assert_eq!(validator.validate(7).reason, Some(ValidationReason::PodLine)); // =cut
+        assert_eq!(
+            validator.validate(3).reason,
+            Some(ValidationReason::PodLine)
+        ); // =head1
+        assert_eq!(
+            validator.validate(5).reason,
+            Some(ValidationReason::PodLine)
+        ); // First section
+        assert_eq!(
+            validator.validate(7).reason,
+            Some(ValidationReason::PodLine)
+        ); // =cut
         assert!(validator.is_executable_line(9)); // my $b = 2;
-        assert_eq!(validator.validate(11).reason, Some(ValidationReason::PodLine)); // =head2
+        assert_eq!(
+            validator.validate(11).reason,
+            Some(ValidationReason::PodLine)
+        ); // =head2
         assert!(validator.is_executable_line(17)); // my $c = 3;
     }
 

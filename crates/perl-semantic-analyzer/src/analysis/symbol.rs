@@ -252,8 +252,13 @@ impl SymbolTable {
         let scope_id = self.next_scope_id;
         self.next_scope_id += 1;
 
-        let scope =
-            Scope { id: scope_id, parent: Some(parent), kind, location, symbols: HashSet::new() };
+        let scope = Scope {
+            id: scope_id,
+            parent: Some(parent),
+            kind,
+            location,
+            symbols: HashSet::new(),
+        };
 
         self.scopes.insert(scope_id, scope);
         self.scope_stack.push(scope_id);
@@ -477,7 +482,12 @@ impl SymbolExtractor {
                 self.visit_statement_list(statements);
             }
 
-            NodeKind::VariableDeclaration { declarator, variable, attributes, initializer } => {
+            NodeKind::VariableDeclaration {
+                declarator,
+                variable,
+                attributes,
+                initializer,
+            } => {
                 let doc = self.extract_leading_comment(node.location.start);
                 self.handle_variable_declaration(
                     declarator,
@@ -539,8 +549,10 @@ impl SymbolExtractor {
                 body,
                 name_span: _,
             } => {
-                let sub_name =
-                    name.as_ref().map(|n| n.to_string()).unwrap_or_else(|| "<anon>".to_string());
+                let sub_name = name
+                    .as_ref()
+                    .map(|n| n.to_string())
+                    .unwrap_or_else(|| "<anon>".to_string());
 
                 if name.is_some() {
                     let documentation = self.extract_leading_comment(node.location.start);
@@ -602,7 +614,11 @@ impl SymbolExtractor {
                 self.table.pop_scope();
             }
 
-            NodeKind::Package { name, block, name_span: _ } => {
+            NodeKind::Package {
+                name,
+                block,
+                name_span: _,
+            } => {
                 let old_package = self.table.current_package.clone();
                 self.table.current_package = name.clone();
                 if Self::is_catalyst_controller_package_name(name) {
@@ -640,10 +656,16 @@ impl SymbolExtractor {
                 self.table.pop_scope();
             }
 
-            NodeKind::If { condition, then_branch, elsif_branches: _, else_branch } => {
+            NodeKind::If {
+                condition,
+                then_branch,
+                elsif_branches: _,
+                else_branch,
+            } => {
                 self.visit_node(condition);
 
-                self.table.push_scope(ScopeKind::Block, then_branch.location);
+                self.table
+                    .push_scope(ScopeKind::Block, then_branch.location);
                 self.visit_node(then_branch);
                 self.table.pop_scope();
 
@@ -654,7 +676,11 @@ impl SymbolExtractor {
                 }
             }
 
-            NodeKind::While { condition, body, continue_block: _ } => {
+            NodeKind::While {
+                condition,
+                body,
+                continue_block: _,
+            } => {
                 self.visit_node(condition);
 
                 self.table.push_scope(ScopeKind::Block, body.location);
@@ -662,7 +688,13 @@ impl SymbolExtractor {
                 self.table.pop_scope();
             }
 
-            NodeKind::For { init, condition, update, body, .. } => {
+            NodeKind::For {
+                init,
+                condition,
+                update,
+                body,
+                ..
+            } => {
                 self.table.push_scope(ScopeKind::Block, node.location);
 
                 if let Some(init_node) = init {
@@ -679,7 +711,12 @@ impl SymbolExtractor {
                 self.table.pop_scope();
             }
 
-            NodeKind::Foreach { variable, list, body, continue_block: _ } => {
+            NodeKind::Foreach {
+                variable,
+                list,
+                body,
+                continue_block: _,
+            } => {
                 self.table.push_scope(ScopeKind::Block, node.location);
 
                 // The loop variable is implicitly declared
@@ -739,7 +776,11 @@ impl SymbolExtractor {
                 }
             }
 
-            NodeKind::MethodCall { object, method, args } => {
+            NodeKind::MethodCall {
+                object,
+                method,
+                args,
+            } => {
                 // Track method call sites so semantic definition/hover can resolve generated
                 // accessors (Moo/Moose/Class::Accessor) from usage points.
                 let location = self.method_reference_location(node, object, method);
@@ -773,7 +814,11 @@ impl SymbolExtractor {
                 }
             }
 
-            NodeKind::Ternary { condition, then_expr, else_expr } => {
+            NodeKind::Ternary {
+                condition,
+                then_expr,
+                else_expr,
+            } => {
                 self.visit_node(condition);
                 self.visit_node(then_expr);
                 self.visit_node(else_expr);
@@ -799,7 +844,10 @@ impl SymbolExtractor {
             }
 
             // Handle interpolated strings specially to extract variable references
-            NodeKind::String { value, interpolated } => {
+            NodeKind::String {
+                value,
+                interpolated,
+            } => {
                 if *interpolated {
                     // Extract variable references from interpolated strings
                     self.extract_vars_from_string(value, node.location);
@@ -819,11 +867,17 @@ impl SymbolExtractor {
                 }
             }
 
-            NodeKind::No { module: _, args: _, .. } => {
+            NodeKind::No {
+                module: _, args: _, ..
+            } => {
                 // We don't currently track framework deactivation via `no`.
             }
 
-            NodeKind::PhaseBlock { phase, phase_span: _, block } => {
+            NodeKind::PhaseBlock {
+                phase,
+                phase_span: _,
+                block,
+            } => {
                 // BEGIN, END, CHECK, INIT, UNITCHECK blocks — expose as named symbols
                 // so they appear in document outline / Outline View (#3464).
                 let symbol = Symbol {
@@ -843,7 +897,11 @@ impl SymbolExtractor {
                 self.table.pop_scope();
             }
 
-            NodeKind::StatementModifier { statement, modifier: _, condition } => {
+            NodeKind::StatementModifier {
+                statement,
+                modifier: _,
+                condition,
+            } => {
                 self.visit_node(statement);
                 self.visit_node(condition);
             }
@@ -852,10 +910,15 @@ impl SymbolExtractor {
                 self.visit_node(block);
             }
 
-            NodeKind::Try { body, catch_blocks, finally_block } => {
+            NodeKind::Try {
+                body,
+                catch_blocks,
+                finally_block,
+            } => {
                 self.visit_node(body);
                 for (catch_var, catch_block) in catch_blocks {
-                    self.table.push_scope(ScopeKind::Block, catch_block.location);
+                    self.table
+                        .push_scope(ScopeKind::Block, catch_block.location);
                     if let Some(full_name) = catch_var.as_deref() {
                         self.register_catch_variable(full_name, catch_block.location);
                     }
@@ -881,10 +944,16 @@ impl SymbolExtractor {
                 self.visit_node(body);
             }
 
-            NodeKind::Class { name, parents, body } => {
+            NodeKind::Class {
+                name,
+                parents,
+                body,
+            } => {
                 let documentation = self.extract_leading_comment(node.location.start);
                 if Self::is_catalyst_controller_package_name(name)
-                    || parents.iter().any(|parent| parent == "Catalyst::Controller")
+                    || parents
+                        .iter()
+                        .any(|parent| parent == "Catalyst::Controller")
                 {
                     self.mark_catalyst_controller_package(name);
                 }
@@ -905,7 +974,12 @@ impl SymbolExtractor {
                 self.table.pop_scope();
             }
 
-            NodeKind::Method { name, signature, attributes, body } => {
+            NodeKind::Method {
+                name,
+                signature,
+                attributes,
+                body,
+            } => {
                 let documentation = self.extract_leading_comment(node.location.start);
                 let mut symbol_attributes = Vec::with_capacity(attributes.len() + 1);
                 symbol_attributes.push("method".to_string());
@@ -953,7 +1027,11 @@ impl SymbolExtractor {
                 }
             }
 
-            NodeKind::Tie { variable, package, args } => {
+            NodeKind::Tie {
+                variable,
+                package,
+                args,
+            } => {
                 self.visit_node(variable);
                 self.visit_node(package);
                 for arg in args {
@@ -977,7 +1055,11 @@ impl SymbolExtractor {
                 self.visit_node(expr);
             }
 
-            NodeKind::IndirectCall { method, object, args } => {
+            NodeKind::IndirectCall {
+                method,
+                object,
+                args,
+            } => {
                 self.table.add_reference(SymbolReference {
                     name: method.clone(),
                     kind: SymbolKind::Subroutine,
@@ -1063,7 +1145,10 @@ impl SymbolExtractor {
         statements: &[Node],
         idx: usize,
     ) -> Option<usize> {
-        let flags = self.framework_flags.get(&self.table.current_package).cloned();
+        let flags = self
+            .framework_flags
+            .get(&self.table.current_package)
+            .cloned();
         let flags = flags.as_ref();
 
         let is_moo = flags.is_some_and(|f| f.moo);
@@ -1126,8 +1211,10 @@ impl SymbolExtractor {
 
             if is_has_marker {
                 if let NodeKind::ExpressionStatement { expression } = &second.kind {
-                    let has_location =
-                        SourceLocation { start: first.location.start, end: second.location.end };
+                    let has_location = SourceLocation {
+                        start: first.location.start,
+                        end: second.location.end,
+                    };
 
                     match &expression.kind {
                         NodeKind::HashLiteral { pairs } => {
@@ -1136,8 +1223,10 @@ impl SymbolExtractor {
                             return Some(2);
                         }
                         NodeKind::ArrayLiteral { elements } => {
-                            if let Some(Node { kind: NodeKind::HashLiteral { pairs }, .. }) =
-                                elements.last()
+                            if let Some(Node {
+                                kind: NodeKind::HashLiteral { pairs },
+                                ..
+                            }) = elements.last()
                             {
                                 // Extract the names from the preceding elements
                                 let mut names = Vec::new();
@@ -1188,12 +1277,15 @@ impl SymbolExtractor {
             && name == "has"
             && !args.is_empty()
         {
-            let options_hash_idx =
-                args.iter().rposition(|a| matches!(a.kind, NodeKind::HashLiteral { .. }));
+            let options_hash_idx = args
+                .iter()
+                .rposition(|a| matches!(a.kind, NodeKind::HashLiteral { .. }));
             if let Some(opts_idx) = options_hash_idx {
                 if let NodeKind::HashLiteral { pairs } = &args[opts_idx].kind {
-                    let names: Vec<String> =
-                        args[..opts_idx].iter().flat_map(Self::collect_symbol_names).collect();
+                    let names: Vec<String> = args[..opts_idx]
+                        .iter()
+                        .flat_map(Self::collect_symbol_names)
+                        .collect();
                     if !names.is_empty() {
                         self.synthesize_moo_has_attrs_with_options(&names, pairs, first.location);
                         self.visit_node(first);
@@ -1222,8 +1314,10 @@ impl SymbolExtractor {
             && Self::is_moose_method_modifier(name)
         {
             let modifier_name = name.as_str();
-            let method_names: Vec<String> =
-                args.first().map(Self::collect_symbol_names).unwrap_or_default();
+            let method_names: Vec<String> = args
+                .first()
+                .map(Self::collect_symbol_names)
+                .unwrap_or_default();
             if !method_names.is_empty() {
                 let scope_id = self.table.current_scope();
                 let package = self.table.current_package.clone();
@@ -1270,8 +1364,10 @@ impl SymbolExtractor {
             return None;
         };
 
-        let modifier_location =
-            SourceLocation { start: first.location.start, end: second.location.end };
+        let modifier_location = SourceLocation {
+            start: first.location.start,
+            end: second.location.end,
+        };
         let scope_id = self.table.current_scope();
         let package = self.table.current_package.clone();
 
@@ -1325,8 +1421,11 @@ impl SymbolExtractor {
                     let package = self.table.current_package.clone();
                     self.mark_catalyst_controller_package(&package);
                 }
-                let ref_kind =
-                    if keyword == "extends" { SymbolKind::Class } else { SymbolKind::Role };
+                let ref_kind = if keyword == "extends" {
+                    SymbolKind::Class
+                } else {
+                    SymbolKind::Role
+                };
                 for ref_name in names {
                     self.table.add_reference(SymbolReference {
                         name: ref_name,
@@ -1372,9 +1471,16 @@ impl SymbolExtractor {
             self.mark_catalyst_controller_package(&package);
         }
 
-        let ref_location = SourceLocation { start: first.location.start, end: second.location.end };
+        let ref_location = SourceLocation {
+            start: first.location.start,
+            end: second.location.end,
+        };
 
-        let ref_kind = if keyword == "extends" { SymbolKind::Class } else { SymbolKind::Role };
+        let ref_kind = if keyword == "extends" {
+            SymbolKind::Class
+        } else {
+            SymbolKind::Role
+        };
 
         for name in names {
             self.table.add_reference(SymbolReference {
@@ -1450,7 +1556,10 @@ impl SymbolExtractor {
             return None;
         }
 
-        let location = SourceLocation { start: first.location.start, end: second.location.end };
+        let location = SourceLocation {
+            start: first.location.start,
+            end: second.location.end,
+        };
         let scope_id = self.table.current_scope();
         let package = self.table.current_package.clone();
 
@@ -1488,7 +1597,10 @@ impl SymbolExtractor {
                 continue;
             }
 
-            if let NodeKind::HashLiteral { pairs: option_pairs } = &options_expr.kind {
+            if let NodeKind::HashLiteral {
+                pairs: option_pairs,
+            } = &options_expr.kind
+            {
                 self.synthesize_moo_has_attrs_with_options(
                     &attribute_names,
                     option_pairs,
@@ -1511,7 +1623,9 @@ impl SymbolExtractor {
         // Create a dummy options_expr Node to pass to existing helpers
         // (a bit hacky, but avoids rewriting the helpers that take Node)
         let options_expr = Node {
-            kind: NodeKind::HashLiteral { pairs: option_pairs.to_vec() },
+            kind: NodeKind::HashLiteral {
+                pairs: option_pairs.to_vec(),
+            },
             location: has_location,
         };
 
@@ -1559,7 +1673,11 @@ impl SymbolExtractor {
             return Some(right.as_ref());
         }
 
-        if require_embedded_marker { None } else { Some(attr_expr) }
+        if require_embedded_marker {
+            None
+        } else {
+            Some(attr_expr)
+        }
     }
 
     /// Detect Dancer/Dancer2/Mojolicious::Lite route declarations and synthesize route symbols.
@@ -1584,7 +1702,10 @@ impl SymbolExtractor {
         // FunctionCall form: `get '/path' => sub { }` parsed as a bare call.
         if let NodeKind::ExpressionStatement { expression } = &first.kind
             && let NodeKind::FunctionCall { name, args } = &expression.kind
-            && matches!(name.as_str(), "get" | "post" | "put" | "del" | "delete" | "patch" | "any")
+            && matches!(
+                name.as_str(),
+                "get" | "post" | "put" | "del" | "delete" | "patch" | "any"
+            )
         {
             let method_name = name.as_str();
             // args[0] is the route path (String), rest is the handler
@@ -1684,8 +1805,10 @@ impl SymbolExtractor {
             _ => method_name,
         };
 
-        let route_location =
-            SourceLocation { start: first.location.start, end: second.location.end };
+        let route_location = SourceLocation {
+            start: first.location.start,
+            end: second.location.end,
+        };
         let scope_id = self.table.current_scope();
 
         self.table.add_symbol(Symbol {
@@ -1728,7 +1851,10 @@ impl SymbolExtractor {
             let NodeKind::ExpressionStatement { expression } = &statement.kind else {
                 continue;
             };
-            let NodeKind::FunctionCall { name: stmt_name, args: stmt_args } = &expression.kind
+            let NodeKind::FunctionCall {
+                name: stmt_name,
+                args: stmt_args,
+            } = &expression.kind
             else {
                 continue;
             };
@@ -1767,16 +1893,21 @@ impl SymbolExtractor {
             return;
         }
 
-        if self.table.symbols.get(&middleware_name).is_some_and(|symbols| {
-            symbols.iter().any(|symbol| {
-                symbol.kind == SymbolKind::Package
-                    && symbol.declaration.as_deref() == Some("enable")
-                    && symbol
-                        .attributes
-                        .iter()
-                        .any(|attr| attr == &format!("middleware={middleware_name}"))
+        if self
+            .table
+            .symbols
+            .get(&middleware_name)
+            .is_some_and(|symbols| {
+                symbols.iter().any(|symbol| {
+                    symbol.kind == SymbolKind::Package
+                        && symbol.declaration.as_deref() == Some("enable")
+                        && symbol
+                            .attributes
+                            .iter()
+                            .any(|attr| attr == &format!("middleware={middleware_name}"))
+                })
             })
-        }) {
+        {
             return;
         }
 
@@ -1822,7 +1953,10 @@ impl SymbolExtractor {
             symbols.iter().any(|symbol| {
                 symbol.kind == SymbolKind::Subroutine
                     && symbol.declaration.as_deref() == Some("mount")
-                    && symbol.attributes.iter().any(|attr| attr == &format!("mount_path={path}"))
+                    && symbol
+                        .attributes
+                        .iter()
+                        .any(|attr| attr == &format!("mount_path={path}"))
             })
         }) {
             return;
@@ -2091,7 +2225,10 @@ impl SymbolExtractor {
             symbols.iter().any(|symbol| {
                 symbol.kind == SymbolKind::Subroutine
                     && symbol.declaration.as_deref() == Some(&format!("framework={framework_name}"))
-                    && symbol.attributes.iter().any(|attr| attr == &format!("future_api={method}"))
+                    && symbol
+                        .attributes
+                        .iter()
+                        .any(|attr| attr == &format!("future_api={method}"))
             })
         });
         if already_synthesized {
@@ -2106,7 +2243,10 @@ impl SymbolExtractor {
             scope_id: self.table.current_scope(),
             declaration: Some(format!("framework={framework_name}")),
             documentation: Some(format!("Synthetic {framework_name} API `{method}`")),
-            attributes: vec![format!("framework={framework_name}"), format!("future_api={method}")],
+            attributes: vec![
+                format!("framework={framework_name}"),
+                format!("future_api={method}"),
+            ],
         });
 
         true
@@ -2132,7 +2272,10 @@ impl SymbolExtractor {
         }
 
         if module == "Class::Accessor" {
-            self.framework_flags.entry(pkg.clone()).or_default().class_accessor = true;
+            self.framework_flags
+                .entry(pkg.clone())
+                .or_default()
+                .class_accessor = true;
             return;
         }
 
@@ -2144,67 +2287,90 @@ impl SymbolExtractor {
             _ => None,
         };
         if let Some(kind) = web_kind {
-            self.framework_flags.entry(pkg.clone()).or_default().web_framework = Some(kind);
+            self.framework_flags
+                .entry(pkg.clone())
+                .or_default()
+                .web_framework = Some(kind);
             return;
         }
 
         if module == "IO::Async" || module.starts_with("IO::Async::") {
-            self.framework_flags.entry(pkg.clone()).or_default().async_framework =
-                Some(AsyncFrameworkKind::IOAsync);
+            self.framework_flags
+                .entry(pkg.clone())
+                .or_default()
+                .async_framework = Some(AsyncFrameworkKind::IOAsync);
             return;
         }
 
         if module == "AnyEvent" {
-            self.framework_flags.entry(pkg.clone()).or_default().async_framework =
-                Some(AsyncFrameworkKind::AnyEvent);
+            self.framework_flags
+                .entry(pkg.clone())
+                .or_default()
+                .async_framework = Some(AsyncFrameworkKind::AnyEvent);
             return;
         }
 
         if module == "EV" {
-            self.framework_flags.entry(pkg.clone()).or_default().async_framework =
-                Some(AsyncFrameworkKind::EV);
+            self.framework_flags
+                .entry(pkg.clone())
+                .or_default()
+                .async_framework = Some(AsyncFrameworkKind::EV);
             return;
         }
 
         if module == "Future" {
-            self.framework_flags.entry(pkg.clone()).or_default().async_framework =
-                Some(AsyncFrameworkKind::Future);
+            self.framework_flags
+                .entry(pkg.clone())
+                .or_default()
+                .async_framework = Some(AsyncFrameworkKind::Future);
             return;
         }
 
         if module == "Future::XS" {
-            self.framework_flags.entry(pkg.clone()).or_default().async_framework =
-                Some(AsyncFrameworkKind::FutureXS);
+            self.framework_flags
+                .entry(pkg.clone())
+                .or_default()
+                .async_framework = Some(AsyncFrameworkKind::FutureXS);
             return;
         }
 
         if module == "Promise" {
-            self.framework_flags.entry(pkg.clone()).or_default().async_framework =
-                Some(AsyncFrameworkKind::Promise);
+            self.framework_flags
+                .entry(pkg.clone())
+                .or_default()
+                .async_framework = Some(AsyncFrameworkKind::Promise);
             return;
         }
 
         if module == "Promise::XS" {
-            self.framework_flags.entry(pkg.clone()).or_default().async_framework =
-                Some(AsyncFrameworkKind::PromiseXS);
+            self.framework_flags
+                .entry(pkg.clone())
+                .or_default()
+                .async_framework = Some(AsyncFrameworkKind::PromiseXS);
             return;
         }
 
         if module == "POE" || module.starts_with("POE::") {
-            self.framework_flags.entry(pkg.clone()).or_default().async_framework =
-                Some(AsyncFrameworkKind::POE);
+            self.framework_flags
+                .entry(pkg.clone())
+                .or_default()
+                .async_framework = Some(AsyncFrameworkKind::POE);
             return;
         }
 
         if module == "Mojo::Redis" {
-            self.framework_flags.entry(pkg.clone()).or_default().async_framework =
-                Some(AsyncFrameworkKind::MojoRedis);
+            self.framework_flags
+                .entry(pkg.clone())
+                .or_default()
+                .async_framework = Some(AsyncFrameworkKind::MojoRedis);
             return;
         }
 
         if module == "Mojo::Pg" {
-            self.framework_flags.entry(pkg.clone()).or_default().async_framework =
-                Some(AsyncFrameworkKind::MojoPg);
+            self.framework_flags
+                .entry(pkg.clone())
+                .or_default()
+                .async_framework = Some(AsyncFrameworkKind::MojoPg);
             return;
         }
 
@@ -2214,7 +2380,10 @@ impl SymbolExtractor {
                 .filter_map(|arg| Self::normalize_symbol_name(arg))
                 .any(|arg| arg == "Class::Accessor");
             if has_class_accessor_parent {
-                self.framework_flags.entry(pkg.clone()).or_default().class_accessor = true;
+                self.framework_flags
+                    .entry(pkg.clone())
+                    .or_default()
+                    .class_accessor = true;
             }
             let has_catalyst_controller_parent = args
                 .iter()
@@ -2227,7 +2396,10 @@ impl SymbolExtractor {
     }
 
     fn mark_catalyst_controller_package(&mut self, package: &str) {
-        self.framework_flags.entry(package.to_string()).or_default().catalyst_controller = true;
+        self.framework_flags
+            .entry(package.to_string())
+            .or_default()
+            .catalyst_controller = true;
     }
 
     fn current_package_is_catalyst_controller(&self) -> bool {
@@ -2255,7 +2427,10 @@ impl SymbolExtractor {
             if kind.is_none()
                 || matches!(kind.as_deref(), Some("Args" | "CaptureArgs" | "PathPart"))
             {
-                if matches!(attr_name.as_str(), "Path" | "Local" | "Global" | "Regex" | "Chained") {
+                if matches!(
+                    attr_name.as_str(),
+                    "Path" | "Local" | "Global" | "Regex" | "Chained"
+                ) {
                     kind = Some(attr_name.clone());
                 } else if kind.is_none() {
                     kind = Some(attr_name.clone());
@@ -2268,7 +2443,10 @@ impl SymbolExtractor {
         }
 
         if let Some(action_kind) = kind.as_deref()
-            && matches!(action_kind, "Path" | "Local" | "Global" | "Regex" | "Chained")
+            && matches!(
+                action_kind,
+                "Path" | "Local" | "Global" | "Regex" | "Chained"
+            )
         {
             details.retain(|attr| Self::attribute_base_name(attr) != action_kind);
         }
@@ -2369,7 +2547,14 @@ impl SymbolExtractor {
         let mut methods = Vec::new();
         let mut seen = HashSet::new();
 
-        for key in ["accessor", "reader", "writer", "predicate", "clearer", "builder"] {
+        for key in [
+            "accessor",
+            "reader",
+            "writer",
+            "predicate",
+            "clearer",
+            "builder",
+        ] {
             for name in Self::option_method_names(options_expr, key, attribute_names) {
                 if seen.insert(name.clone()) {
                     methods.push(name);
@@ -2436,9 +2621,18 @@ impl SymbolExtractor {
         }
 
         match key {
-            "predicate" => attribute_names.iter().map(|name| format!("has_{name}")).collect(),
-            "clearer" => attribute_names.iter().map(|name| format!("clear_{name}")).collect(),
-            "builder" => attribute_names.iter().map(|name| format!("_build_{name}")).collect(),
+            "predicate" => attribute_names
+                .iter()
+                .map(|name| format!("has_{name}"))
+                .collect(),
+            "clearer" => attribute_names
+                .iter()
+                .map(|name| format!("clear_{name}"))
+                .collect(),
+            "builder" => attribute_names
+                .iter()
+                .map(|name| format!("_build_{name}"))
+                .collect(),
             _ => Vec::new(),
         }
     }
@@ -2512,7 +2706,11 @@ impl SymbolExtractor {
     /// Normalize a symbol-like literal into a plain name.
     fn normalize_symbol_name(raw: &str) -> Option<String> {
         let trimmed = raw.trim().trim_matches('\'').trim_matches('"').trim();
-        if trimmed.is_empty() { None } else { Some(trimmed.to_string()) }
+        if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed.to_string())
+        }
     }
 
     /// Produce a short textual value summary for hover metadata.
@@ -2600,12 +2798,18 @@ impl SymbolExtractor {
         let suffix = &window[idx..];
         if suffix.starts_with(method_name) {
             let method_start = search_start + idx;
-            return SourceLocation { start: method_start, end: method_start + method_name.len() };
+            return SourceLocation {
+                start: method_start,
+                end: method_start + method_name.len(),
+            };
         }
 
         if let Some(rel_idx) = suffix.find(method_name) {
             let method_start = search_start + idx + rel_idx;
-            return SourceLocation { start: method_start, end: method_start + method_name.len() };
+            return SourceLocation {
+                start: method_start,
+                end: method_start + method_name.len(),
+            };
         }
 
         call_node.location
@@ -2784,7 +2988,11 @@ impl SymbolExtractor {
 
         for arg in args {
             match &arg.kind {
-                NodeKind::VariableDeclaration { declarator, variable, .. } => {
+                NodeKind::VariableDeclaration {
+                    declarator,
+                    variable,
+                    ..
+                } => {
                     if self.add_constant_wrapper_symbol(
                         variable,
                         &[],
@@ -2795,7 +3003,12 @@ impl SymbolExtractor {
                         matched = true;
                     }
                 }
-                NodeKind::VariableListDeclaration { declarator, variables, attributes, .. } => {
+                NodeKind::VariableListDeclaration {
+                    declarator,
+                    variables,
+                    attributes,
+                    ..
+                } => {
                     let mut saw_decl = false;
                     for variable in variables {
                         if self.add_constant_wrapper_symbol(
@@ -2822,7 +3035,12 @@ impl SymbolExtractor {
 
         for arg in args {
             match &arg.kind {
-                NodeKind::VariableDeclaration { declarator, variable, attributes, .. } => {
+                NodeKind::VariableDeclaration {
+                    declarator,
+                    variable,
+                    attributes,
+                    ..
+                } => {
                     if self.add_constant_wrapper_symbol(
                         variable,
                         attributes,
@@ -2833,7 +3051,12 @@ impl SymbolExtractor {
                         matched = true;
                     }
                 }
-                NodeKind::VariableListDeclaration { declarator, variables, attributes, .. } => {
+                NodeKind::VariableListDeclaration {
+                    declarator,
+                    variables,
+                    attributes,
+                    ..
+                } => {
                     let mut saw_decl = false;
                     for variable in variables {
                         if self.add_constant_wrapper_symbol(
@@ -2881,7 +3104,10 @@ impl SymbolExtractor {
                 });
                 true
             }
-            NodeKind::VariableWithAttributes { variable, attributes: inner_attributes } => {
+            NodeKind::VariableWithAttributes {
+                variable,
+                attributes: inner_attributes,
+            } => {
                 let mut merged = attributes.to_vec();
                 merged.extend(inner_attributes.iter().cloned());
                 self.add_constant_wrapper_symbol(
@@ -2976,7 +3202,11 @@ impl SymbolExtractor {
         };
 
         // The value includes quotes, so strip them
-        let content = if value.len() >= 2 { &value[1..value.len() - 1] } else { value };
+        let content = if value.len() >= 2 {
+            &value[1..value.len() - 1]
+        } else {
+            value
+        };
 
         for cap in scalar_re.captures_iter(content) {
             if let Some(m) = cap.get(0) {
@@ -2996,7 +3226,10 @@ impl SymbolExtractor {
                 let reference = SymbolReference {
                     name: var_name.to_string(),
                     kind: SymbolKind::scalar(),
-                    location: SourceLocation { start: start_offset, end: end_offset },
+                    location: SourceLocation {
+                        start: start_offset,
+                        end: end_offset,
+                    },
                     scope_id: self.table.current_scope(),
                     is_write: false,
                 };
@@ -3011,7 +3244,12 @@ fn split_variable_name(full_name: &str) -> (&str, &str) {
     full_name
         .char_indices()
         .next()
-        .map(|(idx, ch)| (&full_name[idx..idx + ch.len_utf8()], &full_name[idx + ch.len_utf8()..]))
+        .map(|(idx, ch)| {
+            (
+                &full_name[idx..idx + ch.len_utf8()],
+                &full_name[idx + ch.len_utf8()..],
+            )
+        })
         .unwrap_or(("", ""))
 }
 
@@ -3076,7 +3314,10 @@ class MyClass {
         let extractor = SymbolExtractor::new_with_source(code);
         let table = extractor.extract(&ast);
 
-        assert!(table.symbols.contains_key("greet"), "expected 'greet' in symbol table");
+        assert!(
+            table.symbols.contains_key("greet"),
+            "expected 'greet' in symbol table"
+        );
         let greet_symbols = &table.symbols["greet"];
         assert_eq!(greet_symbols.len(), 1);
         assert_eq!(
@@ -3230,7 +3471,10 @@ sub foo () {
         let table = extractor.extract(&ast);
 
         // Sub `foo` is registered as a symbol
-        assert!(table.symbols.contains_key("foo"), "sub foo should be in the symbol table");
+        assert!(
+            table.symbols.contains_key("foo"),
+            "sub foo should be in the symbol table"
+        );
         // No spurious variable symbols from an empty signature
         assert_eq!(
             table.symbols.len(),

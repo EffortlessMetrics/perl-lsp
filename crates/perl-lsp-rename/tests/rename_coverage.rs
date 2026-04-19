@@ -41,14 +41,34 @@ fn test_rename_local_scalar_all_occurrences_replaced() -> Result<(), String> {
     let new_code = apply_rename_edits(code, &result.edits);
 
     // Every occurrence of "count" should be gone
-    assert!(!new_code.contains("count"), "old name 'count' still present in: {}", new_code);
+    assert!(
+        !new_code.contains("count"),
+        "old name 'count' still present in: {}",
+        new_code
+    );
     // Every occurrence should now be "total"
-    assert!(new_code.contains("my $total"), "declaration not renamed: {}", new_code);
-    assert!(new_code.contains("$total += 1"), "usage not renamed: {}", new_code);
-    assert!(new_code.contains("print $total"), "reference not renamed: {}", new_code);
+    assert!(
+        new_code.contains("my $total"),
+        "declaration not renamed: {}",
+        new_code
+    );
+    assert!(
+        new_code.contains("$total += 1"),
+        "usage not renamed: {}",
+        new_code
+    );
+    assert!(
+        new_code.contains("print $total"),
+        "reference not renamed: {}",
+        new_code
+    );
 
     // Verify the edit count matches the number of occurrences
-    assert!(result.edits.len() >= 3, "expected at least 3 edits but got {}", result.edits.len());
+    assert!(
+        result.edits.len() >= 3,
+        "expected at least 3 edits but got {}",
+        result.edits.len()
+    );
     Ok(())
 }
 
@@ -64,7 +84,11 @@ fn test_rename_local_array_all_occurrences_replaced() -> Result<(), String> {
     }
 
     let new_code = apply_rename_edits(code, &result.edits);
-    assert!(new_code.contains("@elements"), "array not renamed in: {}", new_code);
+    assert!(
+        new_code.contains("@elements"),
+        "array not renamed in: {}",
+        new_code
+    );
     Ok(())
 }
 
@@ -103,9 +127,17 @@ fn test_rename_function_definition_is_updated() -> Result<(), String> {
 
     let new_code = apply_rename_edits(code, &result.edits);
     // The rename should replace the function name; the new code should contain "compute"
-    assert!(new_code.contains("compute"), "function name not renamed in: {}", new_code);
+    assert!(
+        new_code.contains("compute"),
+        "function name not renamed in: {}",
+        new_code
+    );
     // Old name should not appear
-    assert!(!new_code.contains("calculate"), "old function name still present in: {}", new_code);
+    assert!(
+        !new_code.contains("calculate"),
+        "old function name still present in: {}",
+        new_code
+    );
     Ok(())
 }
 
@@ -122,9 +154,17 @@ fn test_rename_function_call_site_is_updated() -> Result<(), String> {
 
     let new_code = apply_rename_edits(code, &result.edits);
     // At minimum the call site reference should be renamed
-    assert!(new_code.contains("compute"), "call site not renamed in: {}", new_code);
+    assert!(
+        new_code.contains("compute"),
+        "call site not renamed in: {}",
+        new_code
+    );
     // Verify that the old name is completely gone
-    assert!(!new_code.contains("calculate"), "old name 'calculate' still present in: {}", new_code);
+    assert!(
+        !new_code.contains("calculate"),
+        "old name 'calculate' still present in: {}",
+        new_code
+    );
     Ok(())
 }
 
@@ -141,7 +181,11 @@ fn test_rename_function_multiple_call_sites() -> Result<(), String> {
 
     let new_code = apply_rename_edits(code, &result.edits);
     // The new name should appear in the result
-    assert!(new_code.contains("util"), "new name 'util' not present in: {}", new_code);
+    assert!(
+        new_code.contains("util"),
+        "new name 'util' not present in: {}",
+        new_code
+    );
     // Original name should be gone
     let helper_count = new_code.matches("helper").count();
     assert_eq!(
@@ -165,8 +209,16 @@ fn test_rename_function_preserves_other_subs() -> Result<(), String> {
 
     let new_code = apply_rename_edits(code, &result.edits);
     // beta should be untouched
-    assert!(new_code.contains("sub beta"), "other sub was modified: {}", new_code);
-    assert!(new_code.contains("beta()"), "other call was modified: {}", new_code);
+    assert!(
+        new_code.contains("sub beta"),
+        "other sub was modified: {}",
+        new_code
+    );
+    assert!(
+        new_code.contains("beta()"),
+        "other call was modified: {}",
+        new_code
+    );
     Ok(())
 }
 
@@ -180,8 +232,18 @@ fn test_prepare_rename_range_covers_identifier() -> Result<(), String> {
     let (range, name) = must_some(provider.prepare_rename(pos));
 
     // The range should cover the identifier text at a minimum
-    assert!(range.start <= pos, "range start {} is after cursor position {}", range.start, pos);
-    assert!(range.end >= pos, "range end {} is before cursor position {}", range.end, pos);
+    assert!(
+        range.start <= pos,
+        "range start {} is after cursor position {}",
+        range.start,
+        pos
+    );
+    assert!(
+        range.end >= pos,
+        "range end {} is before cursor position {}",
+        range.end,
+        pos
+    );
     assert!(!name.is_empty(), "prepare_rename returned an empty name");
     Ok(())
 }
@@ -194,11 +256,20 @@ fn test_prepare_rename_range_for_subroutine() -> Result<(), String> {
     let (range, name) = must_some(provider.prepare_rename(pos));
 
     // Range should span the subroutine name
-    assert!(range.start <= pos, "range start {} is after cursor {}", range.start, pos);
+    assert!(
+        range.start <= pos,
+        "range start {} is after cursor {}",
+        range.start,
+        pos
+    );
     // Name length should match the range
     let range_len = range.end - range.start;
     assert!(range_len > 0, "range has zero length");
-    assert!(name.contains("my_func"), "returned name '{}' does not contain 'my_func'", name);
+    assert!(
+        name.contains("my_func"),
+        "returned name '{}' does not contain 'my_func'",
+        name
+    );
     Ok(())
 }
 
@@ -209,7 +280,10 @@ fn test_prepare_rename_none_for_special_var() {
     // Position on the _ character after $
     let dollar_pos = must_some(code.find("$_"));
     let result = provider.prepare_rename(dollar_pos + 1);
-    assert!(result.is_none(), "special variable $_ should not be renameable");
+    assert!(
+        result.is_none(),
+        "special variable $_ should not be renameable"
+    );
 }
 
 #[test]
@@ -260,9 +334,16 @@ fn test_rename_subroutine_to_existing_name_fails() {
     let pos = must_some(code.find("foo"));
     let result = provider.rename(pos, "bar", &default_opts());
 
-    assert!(!result.is_valid, "rename to existing subroutine name should fail");
+    assert!(
+        !result.is_valid,
+        "rename to existing subroutine name should fail"
+    );
     let err_msg = must_some(result.error.as_deref());
-    assert!(err_msg.contains("already exists"), "error should mention name conflict: {}", err_msg);
+    assert!(
+        err_msg.contains("already exists"),
+        "error should mention name conflict: {}",
+        err_msg
+    );
 }
 
 #[test]
@@ -274,7 +355,11 @@ fn test_rename_subroutine_to_keyword_fails() {
 
     assert!(!result.is_valid, "rename to keyword should fail");
     let err_msg = must_some(result.error.as_deref());
-    assert!(err_msg.contains("keyword"), "error should mention keyword: {}", err_msg);
+    assert!(
+        err_msg.contains("keyword"),
+        "error should mention keyword: {}",
+        err_msg
+    );
 }
 
 #[test]
@@ -306,9 +391,16 @@ fn test_validate_name_subroutine_conflict_via_symbol_table() -> Result<(), Strin
     let table = SymbolExtractor::new_with_source(code).extract(&ast);
 
     let result = validate_name("existing", SymbolKind::Subroutine, &table);
-    assert!(result.is_err(), "should reject name that conflicts with existing sub");
+    assert!(
+        result.is_err(),
+        "should reject name that conflicts with existing sub"
+    );
     let err = result.err().ok_or("expected Err")?;
-    assert!(err.contains("already exists"), "error message should say 'already exists': {}", err);
+    assert!(
+        err.contains("already exists"),
+        "error message should say 'already exists': {}",
+        err
+    );
     Ok(())
 }
 
@@ -342,9 +434,17 @@ fn test_rename_variable_used_in_nested_block() -> Result<(), String> {
     }
 
     let new_code = apply_rename_edits(code, &result.edits);
-    assert!(new_code.contains("my $amount"), "declaration not renamed: {}", new_code);
+    assert!(
+        new_code.contains("my $amount"),
+        "declaration not renamed: {}",
+        new_code
+    );
     // The reference inside the if-block should also be renamed
-    assert!(new_code.contains("print $amount"), "nested reference not renamed: {}", new_code);
+    assert!(
+        new_code.contains("print $amount"),
+        "nested reference not renamed: {}",
+        new_code
+    );
     Ok(())
 }
 
@@ -361,8 +461,16 @@ fn test_rename_variable_in_while_loop_body() -> Result<(), String> {
 
     let new_code = apply_rename_edits(code, &result.edits);
     // All occurrences of "counter" should be replaced
-    assert!(!new_code.contains("counter"), "old name 'counter' still present in: {}", new_code);
-    assert!(new_code.contains("$idx"), "new name not present in: {}", new_code);
+    assert!(
+        !new_code.contains("counter"),
+        "old name 'counter' still present in: {}",
+        new_code
+    );
+    assert!(
+        new_code.contains("$idx"),
+        "new name not present in: {}",
+        new_code
+    );
     Ok(())
 }
 
@@ -379,9 +487,17 @@ fn test_rename_function_called_from_nested_scope() -> Result<(), String> {
 
     let new_code = apply_rename_edits(code, &result.edits);
     // New name should appear for both definition and call site
-    assert!(new_code.contains("handle"), "new name not present in: {}", new_code);
+    assert!(
+        new_code.contains("handle"),
+        "new name not present in: {}",
+        new_code
+    );
     // Old name should be completely gone
-    assert!(!new_code.contains("process"), "old name 'process' still present in: {}", new_code);
+    assert!(
+        !new_code.contains("process"),
+        "old name 'process' still present in: {}",
+        new_code
+    );
     Ok(())
 }
 
@@ -398,7 +514,11 @@ fn test_rename_variable_in_for_loop() -> Result<(), String> {
     }
 
     let new_code = apply_rename_edits(code, &result.edits);
-    assert!(new_code.contains("$elem"), "loop variable not renamed: {}", new_code);
+    assert!(
+        new_code.contains("$elem"),
+        "loop variable not renamed: {}",
+        new_code
+    );
     Ok(())
 }
 
@@ -417,8 +537,16 @@ fn test_rename_outer_variable_not_affected_by_inner_scope() -> Result<(), String
 
     let new_code = apply_rename_edits(code, &result.edits);
     // $y should be untouched
-    assert!(new_code.contains("$y"), "unrelated variable was modified: {}", new_code);
-    assert!(new_code.contains("$z"), "target variable not renamed: {}", new_code);
+    assert!(
+        new_code.contains("$y"),
+        "unrelated variable was modified: {}",
+        new_code
+    );
+    assert!(
+        new_code.contains("$z"),
+        "target variable not renamed: {}",
+        new_code
+    );
     Ok(())
 }
 
@@ -438,9 +566,17 @@ fn test_rename_top_level_variable_referenced_in_sub_body() -> Result<(), String>
     }
 
     let new_code = apply_rename_edits(code, &result.edits);
-    assert!(new_code.contains("$common"), "variable not renamed in: {}", new_code);
+    assert!(
+        new_code.contains("$common"),
+        "variable not renamed in: {}",
+        new_code
+    );
     // sub name should be untouched
-    assert!(new_code.contains("work"), "sub name was modified in: {}", new_code);
+    assert!(
+        new_code.contains("work"),
+        "sub name was modified in: {}",
+        new_code
+    );
     Ok(())
 }
 
@@ -457,7 +593,11 @@ fn test_rename_does_not_rename_in_unrelated_sub() -> Result<(), String> {
 
     let new_code = apply_rename_edits(code, &result.edits);
     // $w in sub bbb should be untouched
-    assert!(new_code.contains("$w"), "unrelated variable in other sub was modified: {}", new_code);
+    assert!(
+        new_code.contains("$w"),
+        "unrelated variable in other sub was modified: {}",
+        new_code
+    );
     Ok(())
 }
 
@@ -476,7 +616,10 @@ fn test_rename_with_validation_disabled_accepts_keyword() -> Result<(), String> 
     let result = provider.rename(pos, "my", &opts);
 
     // With validation disabled, the rename should succeed even with a keyword
-    assert!(result.is_valid, "rename with validation disabled should succeed");
+    assert!(
+        result.is_valid,
+        "rename with validation disabled should succeed"
+    );
     Ok(())
 }
 
@@ -531,6 +674,9 @@ fn test_prepare_rename_and_rename_agree_on_builtins() {
 
     // Both should agree: if prepare says no, rename should also fail
     if prepare.is_none() {
-        assert!(!result.is_valid, "prepare_rename said not renameable but rename() succeeded");
+        assert!(
+            !result.is_valid,
+            "prepare_rename said not renameable but rename() succeeded"
+        );
     }
 }

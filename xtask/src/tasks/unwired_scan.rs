@@ -53,7 +53,11 @@ pub struct UnwiredScanConfig {
 
 impl Default for UnwiredScanConfig {
     fn default() -> Self {
-        Self { lsp_crate: "perl-lsp-rs".to_string(), json: false, check: false }
+        Self {
+            lsp_crate: "perl-lsp-rs".to_string(),
+            json: false,
+            check: false,
+        }
     }
 }
 
@@ -143,7 +147,9 @@ pub fn scan(workspace_root: &Path, lsp_crate: &str) -> Result<ScanReport> {
     let crates_dir = workspace_root.join("crates");
 
     let workspace_crates = load_workspace_crates(&crates_dir);
-    let lsp_package = workspace_crates.iter().find(|package| package.name == lsp_crate);
+    let lsp_package = workspace_crates
+        .iter()
+        .find(|package| package.name == lsp_crate);
     let Some(lsp_package) = lsp_package else {
         color_eyre::eyre::bail!(
             "LSP crate package not found: {lsp_crate} — pass the correct package name via --lsp-crate"
@@ -182,8 +188,11 @@ pub fn scan(workspace_root: &Path, lsp_crate: &str) -> Result<ScanReport> {
     // Sort for stable output.
     crate_reports.sort_by(|a, b| a.name.cmp(&b.name));
 
-    let flagged: Vec<String> =
-        crate_reports.iter().filter(|r| r.is_flagged()).map(|r| r.name.clone()).collect();
+    let flagged: Vec<String> = crate_reports
+        .iter()
+        .filter(|r| r.is_flagged())
+        .map(|r| r.name.clone())
+        .collect();
 
     let total_crates = crate_reports.len();
     let total_flagged = flagged.len();
@@ -267,7 +276,11 @@ fn load_workspace_crates(crates_dir: &Path) -> Vec<WorkspaceCrate> {
             }
 
             let name = parse_package_name(&manifest_path)?;
-            Some(WorkspaceCrate { name, dir: crate_dir, manifest_path })
+            Some(WorkspaceCrate {
+                name,
+                dir: crate_dir,
+                manifest_path,
+            })
         })
         .collect()
 }
@@ -318,7 +331,10 @@ pub fn scan_wiring_comments(src_dir: &Path, workspace_root: &Path) -> Vec<Wiring
                             .strip_prefix(workspace_root)
                             .map(|p| p.display().to_string())
                             .unwrap_or_else(|_| path.display().to_string());
-                        results.push(WiringComment { file: rel, line: line.trim().to_string() });
+                        results.push(WiringComment {
+                            file: rel,
+                            line: line.trim().to_string(),
+                        });
                         break;
                     }
                 }
@@ -366,7 +382,10 @@ fn print_report(report: &ScanReport) {
         .collect();
 
     if !all_wiring.is_empty() {
-        println!("[INFO] Wiring TODO/FIXME comments ({} total):", all_wiring.len());
+        println!(
+            "[INFO] Wiring TODO/FIXME comments ({} total):",
+            all_wiring.len()
+        );
         for (cr, wc) in &all_wiring {
             println!("  [{}] {} — {}", cr.name, wc.file, wc.line);
         }
@@ -379,7 +398,10 @@ fn print_report(report: &ScanReport) {
             report.total_flagged, report.lsp_crate
         );
     } else {
-        println!("[SUMMARY] All tested crates are directly wired into {}.", report.lsp_crate);
+        println!(
+            "[SUMMARY] All tested crates are directly wired into {}.",
+            report.lsp_crate
+        );
     }
 }
 
@@ -406,7 +428,11 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let src = dir.path().join("src");
         fs::create_dir_all(&src).unwrap();
-        fs::write(src.join("lib.rs"), "#[test]\nfn a() {}\n#[test]\nfn b() {}\n").unwrap();
+        fs::write(
+            src.join("lib.rs"),
+            "#[test]\nfn a() {}\n#[test]\nfn b() {}\n",
+        )
+        .unwrap();
         assert_eq!(count_tests_in_dir(&src), 2);
     }
 
@@ -448,8 +474,11 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let src = dir.path().join("src");
         fs::create_dir_all(&src).unwrap();
-        fs::write(src.join("lib.rs"), "// TODO: wire this into diagnostics\npub fn f() {}\n")
-            .unwrap();
+        fs::write(
+            src.join("lib.rs"),
+            "// TODO: wire this into diagnostics\npub fn f() {}\n",
+        )
+        .unwrap();
         let hits = scan_wiring_comments(&src, dir.path());
         assert_eq!(hits.len(), 1);
         assert!(hits[0].line.contains("TODO: wire"));
@@ -460,8 +489,11 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let src = dir.path().join("src");
         fs::create_dir_all(&src).unwrap();
-        fs::write(src.join("lib.rs"), "// FIXME: not called from anywhere\npub fn g() {}\n")
-            .unwrap();
+        fs::write(
+            src.join("lib.rs"),
+            "// FIXME: not called from anywhere\npub fn g() {}\n",
+        )
+        .unwrap();
         let hits = scan_wiring_comments(&src, dir.path());
         assert_eq!(hits.len(), 1);
     }
@@ -523,7 +555,11 @@ mod tests {
             "crates/perl-wired/Cargo.toml",
             "[package]\nname = \"perl-wired\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
         );
-        write(root, "crates/perl-wired/src/lib.rs", "pub fn f() {}\n#[test]\nfn t() {}\n");
+        write(
+            root,
+            "crates/perl-wired/src/lib.rs",
+            "pub fn f() {}\n#[test]\nfn t() {}\n",
+        );
 
         write(
             root,
@@ -559,7 +595,11 @@ mod tests {
     fn test_scan_counts_correctly() {
         let workspace = fake_workspace();
         let report = scan(workspace.path(), "perl-lsp-rs").unwrap();
-        let unwired = report.crates.iter().find(|r| r.name == "perl-unwired").unwrap();
+        let unwired = report
+            .crates
+            .iter()
+            .find(|r| r.name == "perl-unwired")
+            .unwrap();
         assert_eq!(unwired.test_count, 2);
         assert!(!unwired.is_direct_dep_of_lsp);
     }

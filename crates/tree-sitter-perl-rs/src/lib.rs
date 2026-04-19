@@ -104,7 +104,11 @@ impl Parser {
     pub fn parse(&mut self, source: &str) -> Option<Tree> {
         let mut core = CoreParser::new(source);
         match core.parse() {
-            Ok(root) => Some(Tree { root, source: source.to_string(), pending_edits: Vec::new() }),
+            Ok(root) => Some(Tree {
+                root,
+                source: source.to_string(),
+                pending_edits: Vec::new(),
+            }),
             Err(_) => None,
         }
     }
@@ -179,7 +183,9 @@ pub fn language() -> PerlLanguage {
 }
 
 /// The [`PerlLanguage`] descriptor as a constant.
-pub static LANGUAGE: PerlLanguage = PerlLanguage { kind_names: perl_ast::NodeKind::ALL_KIND_NAMES };
+pub static LANGUAGE: PerlLanguage = PerlLanguage {
+    kind_names: perl_ast::NodeKind::ALL_KIND_NAMES,
+};
 
 /// The result of a successful parse: an owned syntax tree and the source text.
 ///
@@ -194,7 +200,10 @@ pub struct Tree {
 impl Tree {
     /// Returns the root node of the syntax tree.
     pub fn root_node(&self) -> Node<'_> {
-        Node { inner: &self.root, tree_source: &self.source }
+        Node {
+            inner: &self.root,
+            tree_source: &self.source,
+        }
     }
 
     /// Returns the source text this tree was built from.
@@ -307,7 +316,10 @@ impl<'tree> Node<'tree> {
             }
             idx += 1;
         });
-        found.map(|child| Node { inner: child, tree_source: self.tree_source })
+        found.map(|child| Node {
+            inner: child,
+            tree_source: self.tree_source,
+        })
     }
 
     /// Returns an iterator over direct children.
@@ -317,7 +329,10 @@ impl<'tree> Node<'tree> {
         // Collect into a Vec so we can own the references. The lifetimes are valid
         // because all child nodes are part of the same owned tree (Tree::root).
         let kids = ast_children(self.inner);
-        kids.into_iter().map(move |child| Node { inner: child, tree_source: self.tree_source })
+        kids.into_iter().map(move |child| Node {
+            inner: child,
+            tree_source: self.tree_source,
+        })
     }
 
     /// Returns the start byte offset in the source text (inclusive).
@@ -458,7 +473,10 @@ mod tests {
         assert!(text.is_ok(), "utf8_text should succeed");
         // The root node spans the whole source — verify the actual content, not just Ok.
         let extracted = text.unwrap();
-        assert_eq!(extracted, source, "utf8_text should return the full source for the root node");
+        assert_eq!(
+            extracted, source,
+            "utf8_text should return the full source for the root node"
+        );
     }
 
     #[test]
@@ -484,7 +502,10 @@ mod tests {
         // A shorter slice — would panic without the start.min(source.len()) guard.
         let short = b"my";
         let result = root.utf8_text(short);
-        assert!(result.is_ok(), "utf8_text should not panic with short source slice");
+        assert!(
+            result.is_ok(),
+            "utf8_text should not panic with short source slice"
+        );
     }
 
     #[test]
@@ -493,7 +514,10 @@ mod tests {
         // produce a partial tree (Some), not None. None is only returned on cancellation.
         let mut p = Parser::new();
         let tree = p.parse("sub { @@@@invalid{{{{");
-        assert!(tree.is_some(), "invalid Perl should still yield an error-recovery tree");
+        assert!(
+            tree.is_some(),
+            "invalid Perl should still yield an error-recovery tree"
+        );
     }
 
     #[test]
@@ -553,7 +577,10 @@ mod tests {
 
     #[test]
     fn test_pascal_to_snake_helper() {
-        assert_eq!(pascal_to_snake("VariableWithAttributes"), "variable_with_attributes");
+        assert_eq!(
+            pascal_to_snake("VariableWithAttributes"),
+            "variable_with_attributes"
+        );
         assert_eq!(pascal_to_snake("Program"), "program");
         assert_eq!(pascal_to_snake("FunctionCall"), "function_call");
         assert_eq!(pascal_to_snake("If"), "if");
@@ -596,7 +623,10 @@ mod tests {
         let root = tree.root_node();
         let sexp = root.to_sexp();
         // Verify the structure includes a my_declaration.
-        assert!(sexp.contains("my_declaration"), "sexp should include my_declaration");
+        assert!(
+            sexp.contains("my_declaration"),
+            "sexp should include my_declaration"
+        );
     }
 
     // Tests for PerlLanguage descriptor
@@ -604,18 +634,27 @@ mod tests {
     #[test]
     fn test_language_returns_descriptor_with_nonzero_kind_count() {
         let lang = language();
-        assert!(lang.node_kind_count() > 0, "language should report at least one node kind");
+        assert!(
+            lang.node_kind_count() > 0,
+            "language should report at least one node kind"
+        );
     }
 
     #[test]
     fn test_language_constant_has_nonzero_kind_count() {
-        assert!(LANGUAGE.node_kind_count() > 0, "LANGUAGE should have at least one node kind");
+        assert!(
+            LANGUAGE.node_kind_count() > 0,
+            "LANGUAGE should have at least one node kind"
+        );
     }
 
     #[test]
     fn test_language_reports_program_as_named_kind() {
         let lang = language();
-        assert!(lang.node_kind_is_named("Program"), "'Program' should be a named kind");
+        assert!(
+            lang.node_kind_is_named("Program"),
+            "'Program' should be a named kind"
+        );
     }
 
     #[test]
@@ -631,7 +670,10 @@ mod tests {
     fn test_language_kind_names_contains_program() {
         let lang = language();
         let names = lang.node_kind_names();
-        assert!(names.contains(&"Program"), "kind names should include 'Program'");
+        assert!(
+            names.contains(&"Program"),
+            "kind names should include 'Program'"
+        );
     }
 
     #[test]
@@ -660,6 +702,9 @@ mod tests {
     #[test]
     fn test_language_is_named_with_empty_string_returns_false() {
         // Empty string is not a valid kind name and must not be found.
-        assert!(!language().node_kind_is_named(""), "empty kind name must return false");
+        assert!(
+            !language().node_kind_is_named(""),
+            "empty kind name must return false"
+        );
     }
 }

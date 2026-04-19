@@ -181,7 +181,10 @@ fn code_as_str_strict_warnings_range() -> Result<(), Box<dyn std::error::Error>>
     assert_eq!(DiagnosticCode::MissingWarnings.as_str(), "PL101");
     assert_eq!(DiagnosticCode::UnusedVariable.as_str(), "PL102");
     assert_eq!(DiagnosticCode::UndefinedVariable.as_str(), "PL103");
-    assert_eq!(DiagnosticCode::CaptureVarWithoutRegexMatch.as_str(), "PL112");
+    assert_eq!(
+        DiagnosticCode::CaptureVarWithoutRegexMatch.as_str(),
+        "PL112"
+    );
     Ok(())
 }
 
@@ -246,7 +249,12 @@ fn code_display_matches_as_str() -> Result<(), Box<dyn std::error::Error>> {
 fn parse_code_round_trip_all_variants() -> Result<(), Box<dyn std::error::Error>> {
     for code in ALL_CODES {
         let parsed = DiagnosticCode::parse_code(code.as_str());
-        assert_eq!(parsed, Some(*code), "round-trip failed for {}", code.as_str());
+        assert_eq!(
+            parsed,
+            Some(*code),
+            "round-trip failed for {}",
+            code.as_str()
+        );
     }
     Ok(())
 }
@@ -372,7 +380,11 @@ fn documentation_url_pl_codes_have_urls() -> Result<(), Box<dyn std::error::Erro
     ];
     for (code, expected_suffix) in &pl_codes {
         let url = code.documentation_url();
-        assert!(url.is_some(), "{} should have a documentation URL", code.as_str());
+        assert!(
+            url.is_some(),
+            "{} should have a documentation URL",
+            code.as_str()
+        );
         let url_str = url.ok_or("missing url")?;
         assert!(
             url_str.ends_with(expected_suffix),
@@ -445,8 +457,11 @@ fn tags_all_other_codes_empty() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn category_parser() -> Result<(), Box<dyn std::error::Error>> {
-    let parser_codes =
-        [DiagnosticCode::ParseError, DiagnosticCode::SyntaxError, DiagnosticCode::UnexpectedEof];
+    let parser_codes = [
+        DiagnosticCode::ParseError,
+        DiagnosticCode::SyntaxError,
+        DiagnosticCode::UnexpectedEof,
+    ];
     for code in &parser_codes {
         assert_eq!(
             code.category(),
@@ -482,7 +497,10 @@ fn category_strict_warnings() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn category_package_module() -> Result<(), Box<dyn std::error::Error>> {
-    let pm_codes = [DiagnosticCode::MissingPackageDeclaration, DiagnosticCode::DuplicatePackage];
+    let pm_codes = [
+        DiagnosticCode::MissingPackageDeclaration,
+        DiagnosticCode::DuplicatePackage,
+    ];
     for code in &pm_codes {
         assert_eq!(
             code.category(),
@@ -622,7 +640,10 @@ fn from_message_two_arg_open() -> Result<(), Box<dyn std::error::Error>> {
         DiagnosticCode::from_message("Two-argument open() used"),
         Some(DiagnosticCode::TwoArgOpen)
     );
-    assert_eq!(DiagnosticCode::from_message("Found 2-arg open"), Some(DiagnosticCode::TwoArgOpen));
+    assert_eq!(
+        DiagnosticCode::from_message("Found 2-arg open"),
+        Some(DiagnosticCode::TwoArgOpen)
+    );
     Ok(())
 }
 
@@ -642,8 +663,14 @@ fn from_message_parse_error() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn from_message_returns_none_for_unrecognized() -> Result<(), Box<dyn std::error::Error>> {
     assert_eq!(DiagnosticCode::from_message(""), None);
-    assert_eq!(DiagnosticCode::from_message("something else entirely"), None);
-    assert_eq!(DiagnosticCode::from_message("implicit return detected"), None);
+    assert_eq!(
+        DiagnosticCode::from_message("something else entirely"),
+        None
+    );
+    assert_eq!(
+        DiagnosticCode::from_message("implicit return detected"),
+        None
+    );
     Ok(())
 }
 
@@ -738,7 +765,12 @@ fn all_code_strings_are_unique() -> Result<(), Box<dyn std::error::Error>> {
     let mut seen = HashSet::new();
     for code in ALL_CODES {
         let s = code.as_str();
-        assert!(seen.insert(s), "Duplicate code string: {} (variant {:?})", s, code,);
+        assert!(
+            seen.insert(s),
+            "Duplicate code string: {} (variant {:?})",
+            s,
+            code,
+        );
     }
     Ok(())
 }
@@ -785,7 +817,12 @@ fn parse_code_as_str_bijection() -> Result<(), Box<dyn std::error::Error>> {
     for s in &code_strings {
         let parsed = DiagnosticCode::parse_code(s);
         assert!(parsed.is_some(), "parse_code should accept {}", s);
-        assert_eq!(parsed.ok_or("missing")?.as_str(), *s, "round-trip mismatch for {}", s,);
+        assert_eq!(
+            parsed.ok_or("missing")?.as_str(),
+            *s,
+            "round-trip mismatch for {}",
+            s,
+        );
     }
     Ok(())
 }
@@ -800,7 +837,10 @@ fn parse_code_as_str_bijection() -> Result<(), Box<dyn std::error::Error>> {
 fn severity_equality_same_variant() {
     assert_eq!(DiagnosticSeverity::Error, DiagnosticSeverity::Error);
     assert_eq!(DiagnosticSeverity::Warning, DiagnosticSeverity::Warning);
-    assert_eq!(DiagnosticSeverity::Information, DiagnosticSeverity::Information);
+    assert_eq!(
+        DiagnosticSeverity::Information,
+        DiagnosticSeverity::Information
+    );
     assert_eq!(DiagnosticSeverity::Hint, DiagnosticSeverity::Hint);
 }
 
@@ -856,19 +896,31 @@ fn tag_equality_and_inequality() {
 
 #[test]
 fn tag_lsp_values_are_distinct() {
-    assert_ne!(DiagnosticTag::Unnecessary.to_lsp_value(), DiagnosticTag::Deprecated.to_lsp_value());
+    assert_ne!(
+        DiagnosticTag::Unnecessary.to_lsp_value(),
+        DiagnosticTag::Deprecated.to_lsp_value()
+    );
 }
 
 // --- DiagnosticCode: code string prefix validation ---
 
 #[test]
 fn parser_codes_start_with_pl_and_are_below_100() -> Result<(), Box<dyn std::error::Error>> {
-    let parser_codes =
-        [DiagnosticCode::ParseError, DiagnosticCode::SyntaxError, DiagnosticCode::UnexpectedEof];
+    let parser_codes = [
+        DiagnosticCode::ParseError,
+        DiagnosticCode::SyntaxError,
+        DiagnosticCode::UnexpectedEof,
+    ];
     for code in &parser_codes {
         let s = code.as_str();
-        assert!(s.starts_with("PL"), "parser code should start with PL: {}", s);
-        let num: u32 = s[2..].parse().map_err(|e: std::num::ParseIntError| e.to_string())?;
+        assert!(
+            s.starts_with("PL"),
+            "parser code should start with PL: {}",
+            s
+        );
+        let num: u32 = s[2..]
+            .parse()
+            .map_err(|e: std::num::ParseIntError| e.to_string())?;
         assert!((1..=99).contains(&num), "parser code out of range: {}", s);
     }
     Ok(())
@@ -884,19 +936,34 @@ fn strict_warnings_codes_are_in_100_199_range() -> Result<(), Box<dyn std::error
     ];
     for code in &codes {
         let s = code.as_str();
-        let num: u32 = s[2..].parse().map_err(|e: std::num::ParseIntError| e.to_string())?;
-        assert!((100..200).contains(&num), "strict/warnings code out of range: {}", s);
+        let num: u32 = s[2..]
+            .parse()
+            .map_err(|e: std::num::ParseIntError| e.to_string())?;
+        assert!(
+            (100..200).contains(&num),
+            "strict/warnings code out of range: {}",
+            s
+        );
     }
     Ok(())
 }
 
 #[test]
 fn package_module_codes_are_in_200_299_range() -> Result<(), Box<dyn std::error::Error>> {
-    let codes = [DiagnosticCode::MissingPackageDeclaration, DiagnosticCode::DuplicatePackage];
+    let codes = [
+        DiagnosticCode::MissingPackageDeclaration,
+        DiagnosticCode::DuplicatePackage,
+    ];
     for code in &codes {
         let s = code.as_str();
-        let num: u32 = s[2..].parse().map_err(|e: std::num::ParseIntError| e.to_string())?;
-        assert!((200..300).contains(&num), "package/module code out of range: {}", s);
+        let num: u32 = s[2..]
+            .parse()
+            .map_err(|e: std::num::ParseIntError| e.to_string())?;
+        assert!(
+            (200..300).contains(&num),
+            "package/module code out of range: {}",
+            s
+        );
     }
     Ok(())
 }
@@ -910,8 +977,14 @@ fn subroutine_codes_are_in_300_399_range() -> Result<(), Box<dyn std::error::Err
     ];
     for code in &codes {
         let s = code.as_str();
-        let num: u32 = s[2..].parse().map_err(|e: std::num::ParseIntError| e.to_string())?;
-        assert!((300..400).contains(&num), "subroutine code out of range: {}", s);
+        let num: u32 = s[2..]
+            .parse()
+            .map_err(|e: std::num::ParseIntError| e.to_string())?;
+        assert!(
+            (300..400).contains(&num),
+            "subroutine code out of range: {}",
+            s
+        );
     }
     Ok(())
 }
@@ -925,8 +998,14 @@ fn best_practices_codes_are_in_400_499_range() -> Result<(), Box<dyn std::error:
     ];
     for code in &codes {
         let s = code.as_str();
-        let num: u32 = s[2..].parse().map_err(|e: std::num::ParseIntError| e.to_string())?;
-        assert!((400..500).contains(&num), "best practices code out of range: {}", s);
+        let num: u32 = s[2..]
+            .parse()
+            .map_err(|e: std::num::ParseIntError| e.to_string())?;
+        assert!(
+            (400..500).contains(&num),
+            "best practices code out of range: {}",
+            s
+        );
     }
     Ok(())
 }
@@ -1118,13 +1197,18 @@ fn information_severity_codes_are_explicitly_tracked() {
         .iter()
         .filter(|code| code.severity() == DiagnosticSeverity::Information)
         .collect();
-    assert_eq!(info_codes, vec![&DiagnosticCode::CaptureVarWithoutRegexMatch]);
+    assert_eq!(
+        info_codes,
+        vec![&DiagnosticCode::CaptureVarWithoutRegexMatch]
+    );
 }
 
 #[test]
 fn hint_codes_are_only_critic_3_4_5() {
-    let hint_codes: Vec<&DiagnosticCode> =
-        ALL_CODES.iter().filter(|c| c.severity() == DiagnosticSeverity::Hint).collect();
+    let hint_codes: Vec<&DiagnosticCode> = ALL_CODES
+        .iter()
+        .filter(|c| c.severity() == DiagnosticSeverity::Hint)
+        .collect();
     assert_eq!(hint_codes.len(), 3);
     for code in &hint_codes {
         assert_eq!(code.category(), DiagnosticCategory::PerlCritic);
@@ -1152,18 +1236,42 @@ fn display_used_in_format_string() {
 #[test]
 fn category_equality() {
     assert_eq!(DiagnosticCategory::Parser, DiagnosticCategory::Parser);
-    assert_eq!(DiagnosticCategory::StrictWarnings, DiagnosticCategory::StrictWarnings);
-    assert_eq!(DiagnosticCategory::PackageModule, DiagnosticCategory::PackageModule);
-    assert_eq!(DiagnosticCategory::Subroutine, DiagnosticCategory::Subroutine);
-    assert_eq!(DiagnosticCategory::BestPractices, DiagnosticCategory::BestPractices);
-    assert_eq!(DiagnosticCategory::PerlCritic, DiagnosticCategory::PerlCritic);
+    assert_eq!(
+        DiagnosticCategory::StrictWarnings,
+        DiagnosticCategory::StrictWarnings
+    );
+    assert_eq!(
+        DiagnosticCategory::PackageModule,
+        DiagnosticCategory::PackageModule
+    );
+    assert_eq!(
+        DiagnosticCategory::Subroutine,
+        DiagnosticCategory::Subroutine
+    );
+    assert_eq!(
+        DiagnosticCategory::BestPractices,
+        DiagnosticCategory::BestPractices
+    );
+    assert_eq!(
+        DiagnosticCategory::PerlCritic,
+        DiagnosticCategory::PerlCritic
+    );
 }
 
 #[test]
 fn category_inequality_across_variants() {
-    assert_ne!(DiagnosticCategory::Parser, DiagnosticCategory::StrictWarnings);
-    assert_ne!(DiagnosticCategory::PackageModule, DiagnosticCategory::Subroutine);
-    assert_ne!(DiagnosticCategory::BestPractices, DiagnosticCategory::PerlCritic);
+    assert_ne!(
+        DiagnosticCategory::Parser,
+        DiagnosticCategory::StrictWarnings
+    );
+    assert_ne!(
+        DiagnosticCategory::PackageModule,
+        DiagnosticCategory::Subroutine
+    );
+    assert_ne!(
+        DiagnosticCategory::BestPractices,
+        DiagnosticCategory::PerlCritic
+    );
 }
 
 // --- DiagnosticCategory: coverage of all codes ---
@@ -1215,7 +1323,11 @@ fn parse_code_all_valid_pl_codes() {
         "PL301", "PL302", "PL303", "PL400", "PL401", "PL402", "PL602", "PL502", "PL503",
     ];
     for s in &valid_pl {
-        assert!(DiagnosticCode::parse_code(s).is_some(), "expected valid parse for {}", s);
+        assert!(
+            DiagnosticCode::parse_code(s).is_some(),
+            "expected valid parse for {}",
+            s
+        );
     }
 }
 
@@ -1223,7 +1335,11 @@ fn parse_code_all_valid_pl_codes() {
 fn parse_code_all_valid_pc_codes() {
     let valid_pc = ["PC001", "PC002", "PC003", "PC004", "PC005"];
     for s in &valid_pc {
-        assert!(DiagnosticCode::parse_code(s).is_some(), "expected valid parse for {}", s);
+        assert!(
+            DiagnosticCode::parse_code(s).is_some(),
+            "expected valid parse for {}",
+            s
+        );
     }
 }
 
@@ -1237,7 +1353,11 @@ fn parse_code_gaps_return_none() {
         "PL699", "PL702", "PL799", "PL807", "PL899", "PC006", "PC010",
     ];
     for s in &gaps {
-        assert!(DiagnosticCode::parse_code(s).is_none(), "expected None for unassigned code {}", s);
+        assert!(
+            DiagnosticCode::parse_code(s).is_none(),
+            "expected None for unassigned code {}",
+            s
+        );
     }
 }
 

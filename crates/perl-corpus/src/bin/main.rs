@@ -7,7 +7,11 @@ use perl_corpus::{index::write_indices, parse_dir};
 use std::path::PathBuf;
 
 #[derive(Parser)]
-#[command(name = "perl-corpus", version, about = "Perl test corpus management tool")]
+#[command(
+    name = "perl-corpus",
+    version,
+    about = "Perl test corpus management tool"
+)]
 struct Cli {
     /// Path to test_corpus directory
     #[arg(short, long, default_value = "test_corpus")]
@@ -110,7 +114,11 @@ fn main() -> Result<()> {
     let args = Cli::parse();
 
     match args.cmd {
-        Command::Lint { max_sections, check_tags, check_flags } => {
+        Command::Lint {
+            max_sections,
+            check_tags,
+            check_flags,
+        } => {
             let sections = parse_dir(&args.corpus)?;
 
             let config = perl_corpus::lint::LintConfig {
@@ -189,7 +197,11 @@ fn main() -> Result<()> {
             }
         }
 
-        Command::Gen { generator, count, seed } => {
+        Command::Gen {
+            generator,
+            count,
+            seed,
+        } => {
             use proptest::prelude::*;
             use proptest::strategy::ValueTree;
             use proptest::test_runner::{Config, TestRunner};
@@ -211,7 +223,10 @@ fn main() -> Result<()> {
                 }
             };
 
-            let config = Config { cases: count as u32, ..Config::default() };
+            let config = Config {
+                cases: count as u32,
+                ..Config::default()
+            };
 
             let mut runner = TestRunner::new_with_rng(
                 config,

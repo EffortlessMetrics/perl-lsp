@@ -33,7 +33,9 @@ fn test_did_change_configuration_notification() -> TestResult {
 
     // Notifications have no response; the server should accept it without crashing.
     // Verify server is still responsive after the notification by sending a request.
-    let _result = harness.request("workspace/symbol", json!({"query": ""})).unwrap_or(json!(null));
+    let _result = harness
+        .request("workspace/symbol", json!({"query": ""}))
+        .unwrap_or(json!(null));
     Ok(())
 }
 
@@ -51,7 +53,9 @@ fn test_did_change_configuration_empty_settings() -> TestResult {
     );
 
     // Verify server is still responsive
-    let _result = harness.request("workspace/symbol", json!({"query": ""})).unwrap_or(json!(null));
+    let _result = harness
+        .request("workspace/symbol", json!({"query": ""}))
+        .unwrap_or(json!(null));
     Ok(())
 }
 
@@ -76,7 +80,9 @@ fn test_did_change_watched_files_created() -> TestResult {
     );
 
     // Verify server is still responsive
-    let _result = harness.request("workspace/symbol", json!({"query": ""})).unwrap_or(json!(null));
+    let _result = harness
+        .request("workspace/symbol", json!({"query": ""}))
+        .unwrap_or(json!(null));
     Ok(())
 }
 
@@ -103,7 +109,9 @@ fn test_did_change_watched_files_changed_and_deleted() -> TestResult {
     );
 
     // Verify server is still responsive
-    let _result = harness.request("workspace/symbol", json!({"query": ""})).unwrap_or(json!(null));
+    let _result = harness
+        .request("workspace/symbol", json!({"query": ""}))
+        .unwrap_or(json!(null));
     Ok(())
 }
 
@@ -134,7 +142,9 @@ fn test_did_change_workspace_folders_added() -> TestResult {
     );
 
     // Verify server is still responsive
-    let _result = harness.request("workspace/symbol", json!({"query": ""})).unwrap_or(json!(null));
+    let _result = harness
+        .request("workspace/symbol", json!({"query": ""}))
+        .unwrap_or(json!(null));
     Ok(())
 }
 
@@ -163,7 +173,9 @@ fn test_did_change_workspace_folders_removed() -> TestResult {
     );
 
     // Verify server is still responsive
-    let _result = harness.request("workspace/symbol", json!({"query": ""})).unwrap_or(json!(null));
+    let _result = harness
+        .request("workspace/symbol", json!({"query": ""}))
+        .unwrap_or(json!(null));
     Ok(())
 }
 
@@ -197,8 +209,12 @@ fn test_apply_edit_request_contract() -> TestResult {
     });
 
     // Validate required fields
-    let params = apply_edit_request.get("params").ok_or("applyEdit request must have params")?;
-    let edit = params.get("edit").ok_or("params must contain an edit field")?;
+    let params = apply_edit_request
+        .get("params")
+        .ok_or("applyEdit request must have params")?;
+    let edit = params
+        .get("edit")
+        .ok_or("params must contain an edit field")?;
     assert!(
         edit.get("changes").is_some() || edit.get("documentChanges").is_some(),
         "edit must contain changes or documentChanges"
@@ -253,7 +269,9 @@ fn test_workspace_configuration_request_contract() -> TestResult {
         }
     });
 
-    let items = config_request["params"]["items"].as_array().ok_or("items must be an array")?;
+    let items = config_request["params"]["items"]
+        .as_array()
+        .ok_or("items must be an array")?;
     assert_eq!(items.len(), 2);
 
     // First item has both scopeUri and section
@@ -280,8 +298,14 @@ fn test_workspace_configuration_request_contract() -> TestResult {
         ]
     });
 
-    let results = config_response["result"].as_array().ok_or("result must be an array")?;
-    assert_eq!(results.len(), items.len(), "response array length must match items array length");
+    let results = config_response["result"]
+        .as_array()
+        .ok_or("result must be an array")?;
+    assert_eq!(
+        results.len(),
+        items.len(),
+        "response array length must match items array length"
+    );
 
     Ok(())
 }

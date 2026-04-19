@@ -22,7 +22,10 @@ fn test_crash_reproducer_b6dd6f9afe3c18f3efa0b5bb8454be7744f2a458() {
         parser.parse()
     });
 
-    assert!(result.is_ok(), "Crash reproducer should not panic after boundary fix");
+    assert!(
+        result.is_ok(),
+        "Crash reproducer should not panic after boundary fix"
+    );
 }
 
 #[test]
@@ -45,6 +48,11 @@ fn test_related_heredoc_edge_cases() {
             parser.parse()
         });
 
-        assert!(result.is_ok(), "Edge case {} should not panic: {}", i + 1, case);
+        assert!(
+            result.is_ok(),
+            "Edge case {} should not panic: {}",
+            i + 1,
+            case
+        );
     }
 }

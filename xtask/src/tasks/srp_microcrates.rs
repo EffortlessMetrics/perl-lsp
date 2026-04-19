@@ -86,8 +86,10 @@ pub fn run(output: Option<PathBuf>) -> Result<()> {
         .filter(|m| m.loc > 0 && m.loc <= 700 && m.rust_files <= 3 && m.total_deps <= 8)
         .collect();
 
-    let split_candidates: Vec<_> =
-        metrics.iter().filter(|m| m.loc > 2000 || m.total_deps > 20 || m.rust_files > 20).collect();
+    let split_candidates: Vec<_> = metrics
+        .iter()
+        .filter(|m| m.loc > 2000 || m.total_deps > 20 || m.rust_files > 20)
+        .collect();
 
     let mut families: BTreeMap<&str, usize> = BTreeMap::new();
     for metric in &metrics {

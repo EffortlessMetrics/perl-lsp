@@ -37,7 +37,10 @@ fn has_kind(ranges: &[FoldingRange], kind: &FoldingRangeKind) -> bool {
 fn subroutine_produces_at_least_one_fold() -> Result<(), ParseError> {
     let code = "sub greet {\n    my $name = shift;\n    return \"Hello, $name\";\n}\n";
     let ranges = extract(code)?;
-    assert!(!ranges.is_empty(), "subroutine body should produce at least one fold");
+    assert!(
+        !ranges.is_empty(),
+        "subroutine body should produce at least one fold"
+    );
     Ok(())
 }
 
@@ -45,10 +48,16 @@ fn subroutine_produces_at_least_one_fold() -> Result<(), ParseError> {
 fn subroutine_fold_spans_body() -> Result<(), ParseError> {
     let code = "sub greet {\n    return 1;\n}\n";
     let ranges = extract(code)?;
-    assert!(!ranges.is_empty(), "subroutine should produce a fold spanning its body");
+    assert!(
+        !ranges.is_empty(),
+        "subroutine should produce a fold spanning its body"
+    );
     // All folds must be non-trivial
     for r in &ranges {
-        assert!(r.end_offset > r.start_offset, "every fold must have non-empty span");
+        assert!(
+            r.end_offset > r.start_offset,
+            "every fold must have non-empty span"
+        );
     }
     Ok(())
 }
@@ -57,7 +66,10 @@ fn subroutine_fold_spans_body() -> Result<(), ParseError> {
 fn anonymous_sub_with_body_is_foldable() -> Result<(), ParseError> {
     let code = "my $fn = sub {\n    return 42;\n};\n";
     let ranges = extract(code)?;
-    assert!(!ranges.is_empty(), "anonymous sub with body should produce a fold");
+    assert!(
+        !ranges.is_empty(),
+        "anonymous sub with body should produce a fold"
+    );
     Ok(())
 }
 
@@ -77,7 +89,10 @@ fn if_block_produces_fold() -> Result<(), ParseError> {
 fn if_else_block_produces_multiple_folds() -> Result<(), ParseError> {
     let code = "if ($x > 0) {\n    print \"pos\";\n} else {\n    print \"non-pos\";\n}\n";
     let ranges = extract(code)?;
-    assert!(!ranges.is_empty(), "if/else should produce at least one fold");
+    assert!(
+        !ranges.is_empty(),
+        "if/else should produce at least one fold"
+    );
     Ok(())
 }
 
@@ -139,12 +154,17 @@ fn single_use_statement_does_not_produce_imports_fold() -> Result<(), ParseError
 fn imports_fold_spans_from_first_to_last_use() -> Result<(), ParseError> {
     let code = "use strict;\nuse warnings;\nuse Carp;\n\nmy $x = 1;\n";
     let ranges = extract(code)?;
-    let import_folds: Vec<_> =
-        ranges.iter().filter(|r| matches!(r.kind, Some(FoldingRangeKind::Imports))).collect();
+    let import_folds: Vec<_> = ranges
+        .iter()
+        .filter(|r| matches!(r.kind, Some(FoldingRangeKind::Imports)))
+        .collect();
     assert_eq!(import_folds.len(), 1, "should be exactly one Imports fold");
     let fold = import_folds[0];
     // The fold should start at offset 0 (first 'use') and end after 'use Carp;'
-    assert_eq!(fold.start_offset, 0, "imports fold should start at beginning of file");
+    assert_eq!(
+        fold.start_offset, 0,
+        "imports fold should start at beginning of file"
+    );
     Ok(())
 }
 
@@ -199,7 +219,10 @@ fn empty_program_produces_no_folds() -> Result<(), ParseError> {
 fn single_statement_produces_no_folds() -> Result<(), ParseError> {
     let code = "my $x = 1;\n";
     let ranges = extract(code)?;
-    assert!(ranges.is_empty(), "single statement should produce no folds");
+    assert!(
+        ranges.is_empty(),
+        "single statement should produce no folds"
+    );
     Ok(())
 }
 
@@ -210,7 +233,10 @@ fn empty_block_produces_no_folds() -> Result<(), ParseError> {
     // An empty sub body {} has start == end (or span <= 1) so should be filtered
     // The subroutine node itself may produce a fold but only if non-trivial
     for r in &ranges {
-        assert!(r.end_offset > r.start_offset + 1, "trivial folds should be filtered out");
+        assert!(
+            r.end_offset > r.start_offset + 1,
+            "trivial folds should be filtered out"
+        );
     }
     Ok(())
 }
@@ -223,7 +249,10 @@ fn empty_block_produces_no_folds() -> Result<(), ParseError> {
 fn extract_heredoc_ranges_returns_empty_for_no_heredoc() {
     let code = "my $x = 42;\n";
     let ranges = FoldingRangeExtractor::extract_heredoc_ranges(code);
-    assert!(ranges.is_empty(), "source without heredocs should return empty heredoc ranges");
+    assert!(
+        ranges.is_empty(),
+        "source without heredocs should return empty heredoc ranges"
+    );
 }
 
 #[test]
@@ -237,7 +266,10 @@ fn extract_heredoc_ranges_any_returned_folds_are_region_kind() {
             matches!(r.kind, Some(FoldingRangeKind::Region)),
             "all lexer-based heredoc ranges must be Region kind"
         );
-        assert!(r.end_offset > r.start_offset, "every range must have end > start");
+        assert!(
+            r.end_offset > r.start_offset,
+            "every range must have end > start"
+        );
     }
 }
 
@@ -258,7 +290,10 @@ fn all_extracted_folds_have_nontrivial_spans() -> Result<(), ParseError> {
     let code = "use strict;\nuse warnings;\n\nsub process {\n    foreach my $item (@_) {\n        if ($item > 0) {\n            print $item;\n        }\n    }\n}\n";
     let ranges = extract(code)?;
     for r in &ranges {
-        assert!(r.end_offset > r.start_offset, "every fold must be non-trivial (end > start)");
+        assert!(
+            r.end_offset > r.start_offset,
+            "every fold must be non-trivial (end > start)"
+        );
     }
     Ok(())
 }
@@ -271,7 +306,10 @@ fn all_extracted_folds_have_nontrivial_spans() -> Result<(), ParseError> {
 fn labeled_loop_produces_fold() -> Result<(), ParseError> {
     let code = "OUTER: while (1) {\n    INNER: for my $i (1..10) {\n        last OUTER if $i > 5;\n    }\n}\n";
     let ranges = extract(code)?;
-    assert!(!ranges.is_empty(), "labeled loop should produce at least one fold");
+    assert!(
+        !ranges.is_empty(),
+        "labeled loop should produce at least one fold"
+    );
     Ok(())
 }
 
@@ -279,7 +317,10 @@ fn labeled_loop_produces_fold() -> Result<(), ParseError> {
 fn labeled_foreach_produces_fold() -> Result<(), ParseError> {
     let code = "LINE: foreach my $line (@lines) {\n    next LINE if $line =~ /^#/;\n    process($line);\n}\n";
     let ranges = extract(code)?;
-    assert!(!ranges.is_empty(), "labeled foreach loop should produce a fold");
+    assert!(
+        !ranges.is_empty(),
+        "labeled foreach loop should produce a fold"
+    );
     Ok(())
 }
 
@@ -291,7 +332,10 @@ fn labeled_foreach_produces_fold() -> Result<(), ParseError> {
 fn format_declaration_produces_region_fold() -> Result<(), ParseError> {
     let code = "format STDOUT =\n@<<<<<<<<<<<<  @>>>>>>\n$name,         $salary\n.\n";
     let ranges = extract(code)?;
-    assert!(!ranges.is_empty(), "format declaration should produce a fold");
+    assert!(
+        !ranges.is_empty(),
+        "format declaration should produce a fold"
+    );
     Ok(())
 }
 
@@ -317,7 +361,10 @@ fn tie_with_multiple_args_produces_fold() -> Result<(), ParseError> {
     // Tie is only foldable if multi-line (end_offset > start_offset + 1)
     // This test verifies the visitor does not panic and produces correct output
     for r in &ranges {
-        assert!(r.end_offset > r.start_offset, "every fold must be non-trivial");
+        assert!(
+            r.end_offset > r.start_offset,
+            "every fold must be non-trivial"
+        );
     }
     Ok(())
 }

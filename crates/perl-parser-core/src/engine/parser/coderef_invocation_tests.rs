@@ -28,7 +28,12 @@ mod tests {
     fn assert_no_errors(code: &str) {
         let ast = parse_program(code);
         let sexp = ast.to_sexp();
-        assert!(!sexp.contains("ERROR"), "Parse of `{}` produced ERROR nodes: {}", code, sexp,);
+        assert!(
+            !sexp.contains("ERROR"),
+            "Parse of `{}` produced ERROR nodes: {}",
+            code,
+            sexp,
+        );
     }
 
     /// Helper: extract expression from an ExpressionStatement.
@@ -54,16 +59,27 @@ mod tests {
         let expr = unwrap_expr_stmt(parse_first_stmt(code));
         match &expr.kind {
             NodeKind::FunctionCall { name, args } => {
-                assert_eq!(name, "->()", "Expected ->() coderef call, got name={}", name);
+                assert_eq!(
+                    name, "->()",
+                    "Expected ->() coderef call, got name={}",
+                    name
+                );
                 // First arg is the callee ($code)
-                assert!(!args.is_empty(), "Expected at least 1 arg (the callee expression)",);
+                assert!(
+                    !args.is_empty(),
+                    "Expected at least 1 arg (the callee expression)",
+                );
                 assert_eq!(
                     args[0].kind.kind_name(),
                     "Variable",
                     "First arg should be the Variable node for $code",
                 );
                 // No additional args beyond the callee
-                assert_eq!(args.len(), 1, "Expected exactly 1 arg (callee only) for empty arglist");
+                assert_eq!(
+                    args.len(),
+                    1,
+                    "Expected exactly 1 arg (callee only) for empty arglist"
+                );
             }
             _ => panic!(
                 "Expected FunctionCall for $code->(), got {} (sexp: {})",
@@ -86,7 +102,11 @@ mod tests {
             NodeKind::FunctionCall { name, args } => {
                 assert_eq!(name, "->()");
                 // First arg is callee, then $x and $y
-                assert!(args.len() >= 3, "Expected callee + 2 args, got {} args", args.len());
+                assert!(
+                    args.len() >= 3,
+                    "Expected callee + 2 args, got {} args",
+                    args.len()
+                );
             }
             _ => panic!(
                 "Expected FunctionCall for $code->($x, $y), got {} (sexp: {})",
@@ -244,7 +264,12 @@ mod tests {
             NodeKind::FunctionCall { name, args } => {
                 assert_eq!(name, "->()");
                 // callee + one string arg
-                assert_eq!(args.len(), 2, "Expected callee + 1 arg, got {} args", args.len());
+                assert_eq!(
+                    args.len(),
+                    2,
+                    "Expected callee + 1 arg, got {} args",
+                    args.len()
+                );
             }
             _ => panic!(
                 "Expected FunctionCall for $handler->(\"hello\"), got {} (sexp: {})",
@@ -270,7 +295,9 @@ mod tests {
                 assert!(!args.is_empty(), "Expected callee arg");
                 // The inner callee should also be a ->() FunctionCall
                 match &args[0].kind {
-                    NodeKind::FunctionCall { name: inner_name, .. } => {
+                    NodeKind::FunctionCall {
+                        name: inner_name, ..
+                    } => {
                         assert_eq!(inner_name, "->()");
                     }
                     _ => panic!(
@@ -301,7 +328,10 @@ mod tests {
         let mut found = false;
         if let NodeKind::Program { ref statements } = ast.kind {
             if let Some(stmt) = statements.first() {
-                if let NodeKind::VariableDeclaration { initializer: Some(ref init), .. } = stmt.kind
+                if let NodeKind::VariableDeclaration {
+                    initializer: Some(ref init),
+                    ..
+                } = stmt.kind
                 {
                     if let NodeKind::FunctionCall { ref name, ref args } = init.kind {
                         assert_eq!(name, "->()");

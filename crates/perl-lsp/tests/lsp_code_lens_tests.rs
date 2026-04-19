@@ -64,10 +64,16 @@ my $diff = subtract(10, 4);
         )
         .unwrap_or(json!(null));
 
-    assert!(result.is_array(), "codeLens should return an array of lenses");
+    assert!(
+        result.is_array(),
+        "codeLens should return an array of lenses"
+    );
 
     let lenses = result.as_array().ok_or("Expected array of lenses")?;
-    assert!(!lenses.is_empty(), "Should have code lenses for subroutines and package");
+    assert!(
+        !lenses.is_empty(),
+        "Should have code lenses for subroutines and package"
+    );
 
     // Verify structure of returned lenses
     for lens in lenses {
@@ -81,7 +87,10 @@ my $diff = subtract(10, 4);
         // Either command or data should be present
         let has_command = lens.get("command").is_some();
         let has_data = lens.get("data").is_some();
-        assert!(has_command || has_data, "Lens should have either command or data for resolution");
+        assert!(
+            has_command || has_data,
+            "Lens should have either command or data for resolution"
+        );
     }
 
     Ok(())
@@ -127,7 +136,10 @@ sub method {
     let lenses = result.as_array().ok_or("Expected array of lenses")?;
 
     // Should have lenses for package, new, and method
-    assert!(lenses.len() >= 3, "Should have lenses for package and subroutines");
+    assert!(
+        lenses.len() >= 3,
+        "Should have lenses for package and subroutines"
+    );
 
     // Find the package lens
     let package_lens = lenses.iter().find(|lens| {
@@ -138,7 +150,10 @@ sub method {
             .unwrap_or(false)
     });
 
-    assert!(package_lens.is_some(), "Should have a lens for the package declaration");
+    assert!(
+        package_lens.is_some(),
+        "Should have a lens for the package declaration"
+    );
 
     Ok(())
 }
@@ -212,7 +227,10 @@ done_testing();
             Some("perl.runTest"),
             "Run Test lens should have perl.runTest command"
         );
-        assert!(command.get("arguments").is_some(), "Run Test command should have arguments");
+        assert!(
+            command.get("arguments").is_some(),
+            "Run Test command should have arguments"
+        );
     }
 
     Ok(())
@@ -251,20 +269,32 @@ my $c = calculate(6, 7);
     let lenses = lenses_result.as_array().ok_or("Expected array of lenses")?;
 
     // Find unresolved reference lens (has data, no command)
-    let unresolved_lens =
-        lenses.iter().find(|lens| lens.get("data").is_some() && lens.get("command").is_none());
+    let unresolved_lens = lenses
+        .iter()
+        .find(|lens| lens.get("data").is_some() && lens.get("command").is_none());
 
-    assert!(unresolved_lens.is_some(), "Should have at least one unresolved reference lens");
+    assert!(
+        unresolved_lens.is_some(),
+        "Should have at least one unresolved reference lens"
+    );
 
     // Resolve the lens
     let resolved = harness
-        .request("codeLens/resolve", unresolved_lens.ok_or("Expected unresolved lens")?.clone())
+        .request(
+            "codeLens/resolve",
+            unresolved_lens.ok_or("Expected unresolved lens")?.clone(),
+        )
         .unwrap_or(json!(null));
 
     // After resolution, should have a command
-    assert!(resolved.get("command").is_some(), "Resolved lens should have a command");
+    assert!(
+        resolved.get("command").is_some(),
+        "Resolved lens should have a command"
+    );
 
-    let command = resolved.get("command").ok_or("Expected command in resolved lens")?;
+    let command = resolved
+        .get("command")
+        .ok_or("Expected command in resolved lens")?;
     let title = command.get("title").and_then(|t| t.as_str()).unwrap_or("");
 
     // Should contain reference count
@@ -323,15 +353,24 @@ my $value = used_function();
             .unwrap_or(false)
     });
 
-    assert!(unused_lens.is_some(), "Should have lens for unused_function");
+    assert!(
+        unused_lens.is_some(),
+        "Should have lens for unused_function"
+    );
 
     // Resolve it
     let resolved = harness
-        .request("codeLens/resolve", unused_lens.ok_or("Expected unused lens")?.clone())
+        .request(
+            "codeLens/resolve",
+            unused_lens.ok_or("Expected unused lens")?.clone(),
+        )
         .unwrap_or(json!(null));
 
-    let title =
-        resolved.get("command").and_then(|c| c.get("title")).and_then(|t| t.as_str()).unwrap_or("");
+    let title = resolved
+        .get("command")
+        .and_then(|c| c.get("title"))
+        .and_then(|t| t.as_str())
+        .unwrap_or("");
 
     assert!(
         title.contains("0 reference"),
@@ -379,10 +418,16 @@ my $total = Σ(1, 2, 3);
         )
         .unwrap_or(json!(null));
 
-    assert!(result.is_array(), "Should successfully return lenses for Unicode identifiers");
+    assert!(
+        result.is_array(),
+        "Should successfully return lenses for Unicode identifiers"
+    );
 
     let lenses = result.as_array().ok_or("Expected array of lenses")?;
-    assert!(!lenses.is_empty(), "Should have code lenses for Unicode identifiers");
+    assert!(
+        !lenses.is_empty(),
+        "Should have code lenses for Unicode identifiers"
+    );
 
     // Verify all lenses have valid ranges
     for lens in lenses {
@@ -431,10 +476,16 @@ fn test_code_lens_crlf_line_endings() -> TestResult {
         )
         .unwrap_or(json!(null));
 
-    assert!(result.is_array(), "Should handle CRLF line endings correctly");
+    assert!(
+        result.is_array(),
+        "Should handle CRLF line endings correctly"
+    );
 
     let lenses = result.as_array().ok_or("Expected array of lenses")?;
-    assert!(!lenses.is_empty(), "Should have code lenses with CRLF endings");
+    assert!(
+        !lenses.is_empty(),
+        "Should have code lenses with CRLF endings"
+    );
 
     // Verify positions are reasonable (no negative or extreme values)
     for lens in lenses {
@@ -450,8 +501,16 @@ fn test_code_lens_crlf_line_endings() -> TestResult {
             .and_then(|c| c.as_u64())
             .unwrap_or(u64::MAX);
 
-        assert!(start_line < 100, "Line number should be reasonable: {}", start_line);
-        assert!(start_char < 1000, "Character offset should be reasonable: {}", start_char);
+        assert!(
+            start_line < 100,
+            "Line number should be reasonable: {}",
+            start_line
+        );
+        assert!(
+            start_char < 1000,
+            "Character offset should be reasonable: {}",
+            start_char
+        );
     }
 
     Ok(())
@@ -521,7 +580,10 @@ print "Hello, World\n";
     // May have 0 lenses or minimal lenses depending on implementation
     let lenses = result.as_array().ok_or("Expected array of lenses")?;
     // This is acceptable - no subroutines means no lenses
-    assert!(lenses.len() < 2, "File with no subroutines should have minimal lenses");
+    assert!(
+        lenses.len() < 2,
+        "File with no subroutines should have minimal lenses"
+    );
 
     Ok(())
 }
@@ -556,7 +618,10 @@ fn test_code_lens_large_file() -> TestResult {
     assert!(result.is_array(), "Should handle large files");
 
     let lenses = result.as_array().ok_or("Expected array of lenses")?;
-    assert!(lenses.len() >= 100, "Should have lenses for all 100+ functions");
+    assert!(
+        lenses.len() >= 100,
+        "Should have lenses for all 100+ functions"
+    );
 
     // Performance check - should complete in reasonable time
     assert!(
@@ -609,7 +674,10 @@ sub helper {
             .unwrap_or(false)
     });
 
-    assert!(run_script_lens.is_some(), "Script with shebang should have 'Run Script' lens");
+    assert!(
+        run_script_lens.is_some(),
+        "Script with shebang should have 'Run Script' lens"
+    );
 
     if let Some(lens) = run_script_lens {
         let command = lens.get("command").ok_or("Expected command in lens")?;
@@ -666,7 +734,10 @@ sub method_three {
     let lenses = result.as_array().ok_or("Expected array of lenses")?;
 
     // Should have lenses for 3 packages and 3 methods (at least 6 lenses)
-    assert!(lenses.len() >= 6, "Should have lenses for multiple packages and their methods");
+    assert!(
+        lenses.len() >= 6,
+        "Should have lenses for multiple packages and their methods"
+    );
 
     // Count package lenses
     let package_lenses: Vec<_> = lenses
@@ -680,7 +751,11 @@ sub method_three {
         })
         .collect();
 
-    assert_eq!(package_lenses.len(), 3, "Should have exactly 3 package lenses");
+    assert_eq!(
+        package_lenses.len(),
+        3,
+        "Should have exactly 3 package lenses"
+    );
 
     Ok(())
 }
@@ -720,7 +795,10 @@ my $result = outer();
     let lenses = result.as_array().ok_or("Expected array of lenses")?;
 
     // Should at least have lens for outer subroutine
-    assert!(!lenses.is_empty(), "Should have lenses for nested subroutines");
+    assert!(
+        !lenses.is_empty(),
+        "Should have lenses for nested subroutines"
+    );
 
     Ok(())
 }
@@ -814,7 +892,11 @@ sub second_function {
             .unwrap_or(u64::MAX);
 
         // first_function is on line 2 (0-indexed)
-        assert!(start_line == 2, "first_function lens should be on line 2, got {}", start_line);
+        assert!(
+            start_line == 2,
+            "first_function lens should be on line 2, got {}",
+            start_line
+        );
     }
 
     Ok(())
@@ -888,7 +970,10 @@ fn test_run_test_lens_execute_command_round_trip() -> TestResult {
 
     // Get code lenses
     let lenses_result = harness
-        .request("textDocument/codeLens", json!({ "textDocument": {"uri": "file:///t/basic.t"} }))
+        .request(
+            "textDocument/codeLens",
+            json!({ "textDocument": {"uri": "file:///t/basic.t"} }),
+        )
         .unwrap_or(json!(null));
 
     let lenses = lenses_result.as_array().ok_or("Expected array of lenses")?;
@@ -902,15 +987,28 @@ fn test_run_test_lens_execute_command_round_trip() -> TestResult {
             .unwrap_or(false)
     });
 
-    assert!(run_test_lens.is_some(), "Should have a perl.runTest lens for test_basic");
+    assert!(
+        run_test_lens.is_some(),
+        "Should have a perl.runTest lens for test_basic"
+    );
 
     let lens = run_test_lens.ok_or("Expected run test lens")?;
     let cmd = lens.get("command").ok_or("Expected command")?;
-    let args = cmd.get("arguments").and_then(|a| a.as_array()).ok_or("Expected arguments array")?;
+    let args = cmd
+        .get("arguments")
+        .and_then(|a| a.as_array())
+        .ok_or("Expected arguments array")?;
 
     // The argument must contain "::" (uri::sub_name format)
-    let arg0 = args.first().and_then(|v| v.as_str()).ok_or("Expected first argument as string")?;
-    assert!(arg0.contains("::"), "Run Test argument must be 'uri::sub_name', got: {}", arg0);
+    let arg0 = args
+        .first()
+        .and_then(|v| v.as_str())
+        .ok_or("Expected first argument as string")?;
+    assert!(
+        arg0.contains("::"),
+        "Run Test argument must be 'uri::sub_name', got: {}",
+        arg0
+    );
 
     // Execute the command — must NOT return {status: "error"}
     let exec_result = harness
@@ -923,7 +1021,10 @@ fn test_run_test_lens_execute_command_round_trip() -> TestResult {
         )
         .unwrap_or(json!(null));
 
-    let status = exec_result.get("status").and_then(|s| s.as_str()).unwrap_or("ok");
+    let status = exec_result
+        .get("status")
+        .and_then(|s| s.as_str())
+        .unwrap_or("ok");
     assert_ne!(
         status, "error",
         "Run Test execute command must not return error status, got: {}",
@@ -951,8 +1052,15 @@ fn test_debug_test_execute_command_stub() -> TestResult {
 
     // Must not return method-not-found or unknown-command error
     // A stub returning {status: "success", ...} is acceptable
-    let status = result.get("status").and_then(|s| s.as_str()).unwrap_or("ok");
-    assert_ne!(status, "error", "perl.debugTest stub should return success, got: {}", result);
+    let status = result
+        .get("status")
+        .and_then(|s| s.as_str())
+        .unwrap_or("ok");
+    assert_ne!(
+        status, "error",
+        "perl.debugTest stub should return success, got: {}",
+        result
+    );
 
     Ok(())
 }
@@ -968,7 +1076,10 @@ fn test_is_prefix_no_run_test_lens_in_pm_file() -> TestResult {
     harness.open_document("file:///lib/Foo.pm", doc)?;
 
     let result = harness
-        .request("textDocument/codeLens", json!({ "textDocument": {"uri": "file:///lib/Foo.pm"} }))
+        .request(
+            "textDocument/codeLens",
+            json!({ "textDocument": {"uri": "file:///lib/Foo.pm"} }),
+        )
         .unwrap_or(json!(null));
 
     let lenses = result.as_array().ok_or("Expected array of lenses")?;

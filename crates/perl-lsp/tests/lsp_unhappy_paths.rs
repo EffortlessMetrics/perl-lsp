@@ -31,7 +31,12 @@ fn test_malformed_json_request() -> Result<(), Box<dyn std::error::Error>> {
 
     // Server must remain alive
     assert!(
-        server.process.lock().unwrap_or_else(|e| e.into_inner()).try_wait()?.is_none(),
+        server
+            .process
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .try_wait()?
+            .is_none(),
         "server crashed"
     );
     shutdown_and_exit(&server);
@@ -55,7 +60,10 @@ fn test_invalid_method() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     // Check for error response
-    assert!(response.get("error").is_some(), "expected error for invalid method");
+    assert!(
+        response.get("error").is_some(),
+        "expected error for invalid method"
+    );
     assert_eq!(response["error"]["code"], -32601); // Method not found
     shutdown_and_exit(&server);
     Ok(())
@@ -96,7 +104,10 @@ fn test_missing_required_params() -> Result<(), Box<dyn std::error::Error>> {
         // This is also valid behavior
         if let Some(items) = result.get("items") {
             let items_array = items.as_array().ok_or("items should be an array")?;
-            assert!(items_array.is_empty(), "Expected empty items array for missing params");
+            assert!(
+                items_array.is_empty(),
+                "Expected empty items array for missing params"
+            );
         }
     } else {
         must(Err::<(), _>(format!(
@@ -222,10 +233,16 @@ fn test_document_not_found() -> Result<(), Box<dyn std::error::Error>> {
         // LSP specification allows returning empty completion for missing documents
         if let Some(items) = result.get("items") {
             let items_array = items.as_array().ok_or("items should be an array")?;
-            assert!(items_array.is_empty(), "Expected empty completion items for missing document");
+            assert!(
+                items_array.is_empty(),
+                "Expected empty completion items for missing document"
+            );
         } else {
             // Some servers return null result for missing documents
-            assert!(result.is_null(), "Expected null or items array for completion result");
+            assert!(
+                result.is_null(),
+                "Expected null or items array for completion result"
+            );
         }
     } else {
         must(Err::<(), _>(
@@ -299,7 +316,10 @@ fn test_out_of_bounds_position() -> Result<(), Box<dyn std::error::Error>> {
             assert!(items.is_array(), "Completion items should be an array");
         } else {
             // Some servers return null result for invalid positions
-            assert!(result.is_null(), "Expected null or items array for completion result");
+            assert!(
+                result.is_null(),
+                "Expected null or items array for completion result"
+            );
         }
     } else {
         must(Err::<(), _>(
@@ -716,7 +736,10 @@ fn test_binary_frame() -> Result<(), Box<dyn std::error::Error>> {
     initialize_lsp(&server);
 
     // Send actual binary junk as a frame body; behavior is implementation-defined
-    send_raw(&server, b"Content-Length: 8\r\n\r\n\x00\x01\x02\x03\x04\x05\x06\x07");
+    send_raw(
+        &server,
+        b"Content-Length: 8\r\n\r\n\x00\x01\x02\x03\x04\x05\x06\x07",
+    );
 
     // Enhanced timeout for binary frame handling with adaptive scaling
     let binary_timeout = std::cmp::max(short_timeout(), Duration::from_millis(200));
@@ -728,8 +751,11 @@ fn test_binary_frame() -> Result<(), Box<dyn std::error::Error>> {
 
     // Enhanced error handling: server may crash on malformed binary frames
     // This is acceptable behavior for LSP servers when receiving non-UTF8 content
-    if let Ok(Some(_exit_status)) =
-        server.process.lock().unwrap_or_else(|e| e.into_inner()).try_wait()
+    if let Ok(Some(_exit_status)) = server
+        .process
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .try_wait()
     {
         // Server crashed - this is acceptable for binary frame input
         eprintln!("Server crashed on binary frame (acceptable behavior)");
@@ -750,7 +776,10 @@ fn test_binary_frame() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     // Accept any valid response format
-    assert!(ping_response.is_object(), "Server should respond to requests after binary frame");
+    assert!(
+        ping_response.is_object(),
+        "Server should respond to requests after binary frame"
+    );
     shutdown_and_exit(&server);
     Ok(())
 }
@@ -795,7 +824,12 @@ fn test_cancel_request() -> Result<(), Box<dyn std::error::Error>> {
     let request_str = serde_json::to_string(&request_json)?;
     send_raw(
         &server,
-        format!("Content-Length: {}\r\n\r\n{}", request_str.len(), request_str).as_bytes(),
+        format!(
+            "Content-Length: {}\r\n\r\n{}",
+            request_str.len(),
+            request_str
+        )
+        .as_bytes(),
     );
 
     // Immediately send cancellation request

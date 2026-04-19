@@ -5,8 +5,17 @@
 
 use std::path::{Component, Path};
 
-const SKIPPED_DIRS: [&str; 9] =
-    [".git", ".hg", ".svn", "target", "node_modules", ".cache", "blib", "local", "vendor"];
+const SKIPPED_DIRS: [&str; 9] = [
+    ".git",
+    ".hg",
+    ".svn",
+    "target",
+    "node_modules",
+    ".cache",
+    "blib",
+    "local",
+    "vendor",
+];
 
 /// Returns true when `name` matches one of the canonical workspace noise directories.
 #[must_use]
@@ -161,7 +170,9 @@ mod tests {
 
     #[test]
     fn test_path_skipped_component_git_nested() {
-        assert!(path_contains_skipped_component(Path::new("repo/.git/objects/pack")));
+        assert!(path_contains_skipped_component(Path::new(
+            "repo/.git/objects/pack"
+        )));
     }
 
     #[test]
@@ -191,17 +202,23 @@ mod tests {
 
     #[test]
     fn test_path_clean_lib_path_not_skipped() {
-        assert!(!path_contains_skipped_component(Path::new("repo/lib/My/Module.pm")));
+        assert!(!path_contains_skipped_component(Path::new(
+            "repo/lib/My/Module.pm"
+        )));
     }
 
     #[test]
     fn test_path_clean_src_path_not_skipped() {
-        assert!(!path_contains_skipped_component(Path::new("crates/perl-parser/src/lib.rs")));
+        assert!(!path_contains_skipped_component(Path::new(
+            "crates/perl-parser/src/lib.rs"
+        )));
     }
 
     #[test]
     fn test_path_clean_deep_nesting_not_skipped() {
-        assert!(!path_contains_skipped_component(Path::new("a/b/c/d/e/f/g/h/file.pm")));
+        assert!(!path_contains_skipped_component(Path::new(
+            "a/b/c/d/e/f/g/h/file.pm"
+        )));
     }
 
     // ── path_contains_skipped_component: nested / multiple skipped ─────
@@ -209,17 +226,23 @@ mod tests {
     #[test]
     fn test_path_multiple_skipped_components() {
         // Both .git and node_modules present
-        assert!(path_contains_skipped_component(Path::new(".git/node_modules/something")));
+        assert!(path_contains_skipped_component(Path::new(
+            ".git/node_modules/something"
+        )));
     }
 
     #[test]
     fn test_path_skipped_inside_skipped() {
-        assert!(path_contains_skipped_component(Path::new("target/.cache/build")));
+        assert!(path_contains_skipped_component(Path::new(
+            "target/.cache/build"
+        )));
     }
 
     #[test]
     fn test_path_deeply_nested_skipped() {
-        assert!(path_contains_skipped_component(Path::new("a/b/c/d/e/.svn/f/g")));
+        assert!(path_contains_skipped_component(Path::new(
+            "a/b/c/d/e/.svn/f/g"
+        )));
     }
 
     // ── path_contains_skipped_component: edge cases ────────────────────
@@ -246,12 +269,16 @@ mod tests {
 
     #[test]
     fn test_path_absolute_with_skipped() {
-        assert!(path_contains_skipped_component(Path::new("/home/user/project/.git/config")));
+        assert!(path_contains_skipped_component(Path::new(
+            "/home/user/project/.git/config"
+        )));
     }
 
     #[test]
     fn test_path_absolute_without_skipped() {
-        assert!(!path_contains_skipped_component(Path::new("/home/user/project/lib/Module.pm")));
+        assert!(!path_contains_skipped_component(Path::new(
+            "/home/user/project/lib/Module.pm"
+        )));
     }
 
     #[test]
@@ -262,24 +289,32 @@ mod tests {
 
     #[test]
     fn test_path_dotdot_before_skipped() {
-        assert!(path_contains_skipped_component(Path::new("../other/node_modules/pkg")));
+        assert!(path_contains_skipped_component(Path::new(
+            "../other/node_modules/pkg"
+        )));
     }
 
     #[test]
     fn test_path_dot_before_skipped() {
-        assert!(path_contains_skipped_component(Path::new("./target/debug/binary")));
+        assert!(path_contains_skipped_component(Path::new(
+            "./target/debug/binary"
+        )));
     }
 
     #[test]
     fn test_path_skipped_name_as_file_extension_not_matched() {
         // "file.target" is a single component; not equal to "target"
-        assert!(!path_contains_skipped_component(Path::new("dir/file.target")));
+        assert!(!path_contains_skipped_component(Path::new(
+            "dir/file.target"
+        )));
     }
 
     #[test]
     fn test_path_skipped_name_substring_in_component() {
         // "my_target_dir" contains "target" as a substring but is not equal
-        assert!(!path_contains_skipped_component(Path::new("project/my_target_dir/file.rs")));
+        assert!(!path_contains_skipped_component(Path::new(
+            "project/my_target_dir/file.rs"
+        )));
     }
 
     #[test]
@@ -297,12 +332,18 @@ mod tests {
 
     #[test]
     fn test_path_unicode_component_not_skipped() {
-        assert!(!path_contains_skipped_component(Path::new("repo/\u{00e9}t\u{00e9}/Module.pm")));
+        assert!(!path_contains_skipped_component(Path::new(
+            "repo/\u{00e9}t\u{00e9}/Module.pm"
+        )));
     }
 
     #[test]
     fn test_path_case_sensitive_git_in_path() {
-        assert!(!path_contains_skipped_component(Path::new("repo/.Git/config")));
-        assert!(!path_contains_skipped_component(Path::new("repo/.GIT/config")));
+        assert!(!path_contains_skipped_component(Path::new(
+            "repo/.Git/config"
+        )));
+        assert!(!path_contains_skipped_component(Path::new(
+            "repo/.GIT/config"
+        )));
     }
 }

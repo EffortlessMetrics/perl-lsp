@@ -73,7 +73,12 @@ fn discovers_files_via_git_and_honors_gitignore() -> TestResult {
 
     assert_eq!(result.method, DiscoveryMethod::Git);
     assert!(result.files.iter().any(|path| path.ends_with("lib/One.pm")));
-    assert!(!result.files.iter().any(|path| path.to_string_lossy().contains("/target/")));
+    assert!(
+        !result
+            .files
+            .iter()
+            .any(|path| path.to_string_lossy().contains("/target/"))
+    );
 
     Ok(())
 }

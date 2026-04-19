@@ -20,7 +20,9 @@ fn test_signature_at_various_positions() -> Result<(), Box<dyn std::error::Error
     ];
 
     for (code, position, expected_param) in test_cases {
-        let ast = Parser::new(code).parse().or_else(|_| Parser::new("").parse())?;
+        let ast = Parser::new(code)
+            .parse()
+            .or_else(|_| Parser::new("").parse())?;
         let provider = SignatureHelpProvider::new(&ast);
 
         if let Some(help) = provider.get_signature_help(code, position) {
@@ -47,7 +49,9 @@ fn test_nested_function_calls() -> Result<(), Box<dyn std::error::Error>> {
     ];
 
     for (code, position, expected_func) in test_cases {
-        let ast = Parser::new(code).parse().or_else(|_| Parser::new("").parse())?;
+        let ast = Parser::new(code)
+            .parse()
+            .or_else(|_| Parser::new("").parse())?;
         let provider = SignatureHelpProvider::new(&ast);
 
         if let Some(help) = provider.get_signature_help(code, position) {
@@ -79,11 +83,17 @@ fn test_ambiguous_functions() -> Result<(), Box<dyn std::error::Error>> {
         let code3 = format!("{}()", func);
 
         for code in [code1, code2, code3] {
-            let ast = Parser::new(&code).parse().or_else(|_| Parser::new("").parse())?;
+            let ast = Parser::new(&code)
+                .parse()
+                .or_else(|_| Parser::new("").parse())?;
             let provider = SignatureHelpProvider::new(&ast);
 
             // Should provide signatures for all forms
-            assert!(provider.has_builtin(func), "Missing signatures for {}", func);
+            assert!(
+                provider.has_builtin(func),
+                "Missing signatures for {}",
+                func
+            );
         }
     }
     Ok(())
@@ -107,7 +117,9 @@ fn test_filehandle_functions() -> Result<(), Box<dyn std::error::Error>> {
     ];
 
     for (code, position) in test_cases {
-        let ast = Parser::new(code).parse().or_else(|_| Parser::new("").parse())?;
+        let ast = Parser::new(code)
+            .parse()
+            .or_else(|_| Parser::new("").parse())?;
         let provider = SignatureHelpProvider::new(&ast);
 
         // Should recognize filehandle context
@@ -140,11 +152,17 @@ fn test_special_variables_in_signatures() -> Result<(), Box<dyn std::error::Erro
         let provider = SignatureHelpProvider::new(&ast);
 
         if let Some(sig) = provider.get_builtin_signature(func) {
-            let has_no_arg_form =
-                sig.signatures.iter().any(|s| s.contains(&format!("{} ", func)) || *s == func);
+            let has_no_arg_form = sig
+                .signatures
+                .iter()
+                .any(|s| s.contains(&format!("{} ", func)) || *s == func);
 
             if should_have_default {
-                assert!(has_no_arg_form, "{} should have a form that works on $_", func);
+                assert!(
+                    has_no_arg_form,
+                    "{} should have a form that works on $_",
+                    func
+                );
             }
         }
     }
@@ -160,7 +178,11 @@ fn test_list_operators() -> Result<(), Box<dyn std::error::Error>> {
         ("sort", "sort BLOCK LIST", "sort LIST"),
         ("reverse", "reverse LIST", ""),
         ("join", "join EXPR, LIST", ""),
-        ("split", "split /PATTERN/, EXPR, LIMIT", "split /PATTERN/, EXPR"),
+        (
+            "split",
+            "split /PATTERN/, EXPR, LIMIT",
+            "split /PATTERN/, EXPR",
+        ),
     ];
 
     for (func, sig1, sig2) in list_ops {
@@ -255,7 +277,10 @@ fn test_pack_unpack_signatures() -> Result<(), Box<dyn std::error::Error>> {
     // Check unpack
     if let Some(unpack_sigs) = provider.get_builtin_signature("unpack") {
         assert!(
-            unpack_sigs.signatures.iter().any(|s| s.contains("TEMPLATE")),
+            unpack_sigs
+                .signatures
+                .iter()
+                .any(|s| s.contains("TEMPLATE")),
             "unpack should mention TEMPLATE"
         );
     }
@@ -306,7 +331,11 @@ fn test_socket_functions() -> Result<(), Box<dyn std::error::Error>> {
         let ast = Parser::new("").parse()?;
         let provider = SignatureHelpProvider::new(&ast);
 
-        assert!(provider.has_builtin(func), "Missing socket function: {}", func);
+        assert!(
+            provider.has_builtin(func),
+            "Missing socket function: {}",
+            func
+        );
     }
     Ok(())
 }
@@ -348,14 +377,21 @@ fn test_math_functions() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn test_context_functions() -> Result<(), Box<dyn std::error::Error>> {
     // Test functions that depend on context
-    let context_funcs =
-        vec![("wantarray", "wantarray"), ("caller", "caller EXPR"), ("scalar", "scalar EXPR")];
+    let context_funcs = vec![
+        ("wantarray", "wantarray"),
+        ("caller", "caller EXPR"),
+        ("scalar", "scalar EXPR"),
+    ];
 
     for (func, _sig) in context_funcs {
         let ast = Parser::new("").parse()?;
         let provider = SignatureHelpProvider::new(&ast);
 
-        assert!(provider.has_builtin(func), "Missing context function: {}", func);
+        assert!(
+            provider.has_builtin(func),
+            "Missing context function: {}",
+            func
+        );
     }
     Ok(())
 }
@@ -375,7 +411,11 @@ fn test_deprecated_functions() -> Result<(), Box<dyn std::error::Error>> {
         let provider = SignatureHelpProvider::new(&ast);
 
         // Should still have signatures for compatibility
-        assert!(provider.has_builtin(func), "Missing deprecated function: {}", func);
+        assert!(
+            provider.has_builtin(func),
+            "Missing deprecated function: {}",
+            func
+        );
     }
     Ok(())
 }
@@ -393,7 +433,11 @@ fn test_prototype_preservation() -> Result<(), Box<dyn std::error::Error>> {
         let ast = Parser::new("").parse()?;
         let provider = SignatureHelpProvider::new(&ast);
 
-        assert!(provider.has_builtin(func), "Missing prototype-related function: {}", func);
+        assert!(
+            provider.has_builtin(func),
+            "Missing prototype-related function: {}",
+            func
+        );
     }
     Ok(())
 }
@@ -482,7 +526,11 @@ fn test_comprehensive_coverage() -> Result<(), Box<dyn std::error::Error>> {
     ];
 
     for func in critical {
-        assert!(provider.has_builtin(func), "Missing critical function: {}", func);
+        assert!(
+            provider.has_builtin(func),
+            "Missing critical function: {}",
+            func
+        );
     }
     Ok(())
 }
@@ -508,11 +556,19 @@ fn test_socket_functions_coverage() -> Result<(), Box<dyn std::error::Error>> {
     ];
 
     for func in socket_functions {
-        assert!(provider.has_builtin(func), "Missing socket function: {}", func);
+        assert!(
+            provider.has_builtin(func),
+            "Missing socket function: {}",
+            func
+        );
 
         // AC4: Verify functions have documentation
         let sig = provider.get_builtin_signature(func);
-        assert!(sig.is_some(), "Missing signature for socket function: {}", func);
+        assert!(
+            sig.is_some(),
+            "Missing signature for socket function: {}",
+            func
+        );
 
         let sig = sig.unwrap();
         assert!(
@@ -539,11 +595,19 @@ fn test_deprecated_functions_coverage() -> Result<(), Box<dyn std::error::Error>
     let deprecated_functions = vec!["dump", "reset"];
 
     for func in deprecated_functions {
-        assert!(provider.has_builtin(func), "Missing deprecated function: {}", func);
+        assert!(
+            provider.has_builtin(func),
+            "Missing deprecated function: {}",
+            func
+        );
 
         // AC4: Verify functions have documentation
         let sig = provider.get_builtin_signature(func);
-        assert!(sig.is_some(), "Missing signature for deprecated function: {}", func);
+        assert!(
+            sig.is_some(),
+            "Missing signature for deprecated function: {}",
+            func
+        );
 
         let sig = sig.unwrap();
         assert!(
@@ -568,7 +632,11 @@ fn test_builtin_count_threshold() -> Result<(), Box<dyn std::error::Error>> {
     let provider = SignatureHelpProvider::new(&ast);
 
     let count = provider.builtin_count();
-    assert!(count >= 150, "Built-in function count ({}) below threshold (150)", count);
+    assert!(
+        count >= 150,
+        "Built-in function count ({}) below threshold (150)",
+        count
+    );
 
     // Document actual count for visibility
     eprintln!("Total built-in function signatures: {}", count);
@@ -579,11 +647,14 @@ fn test_builtin_count_threshold() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn test_socket_signature_help_docs_quality() -> Result<(), Box<dyn std::error::Error>> {
     let code = "socket($sock, ";
-    let ast = Parser::new(code).parse().or_else(|_| Parser::new("").parse())?;
+    let ast = Parser::new(code)
+        .parse()
+        .or_else(|_| Parser::new("").parse())?;
     let provider = SignatureHelpProvider::new(&ast);
 
-    let help =
-        provider.get_signature_help(code, code.len()).ok_or("No signature help for socket")?;
+    let help = provider
+        .get_signature_help(code, code.len())
+        .ok_or("No signature help for socket")?;
     let signature = help.signatures.first().ok_or("Missing socket signature")?;
 
     assert!(
@@ -593,7 +664,10 @@ fn test_socket_signature_help_docs_quality() -> Result<(), Box<dyn std::error::E
             .is_some_and(|doc| doc.contains("Returns") && doc.contains("perldoc -f socket")),
         "socket documentation should include return details and perldoc reference"
     );
-    assert_eq!(signature.parameters.first().map(|p| p.label.as_str()), Some("SOCKET"));
+    assert_eq!(
+        signature.parameters.first().map(|p| p.label.as_str()),
+        Some("SOCKET")
+    );
     assert!(
         signature
             .parameters
@@ -602,7 +676,10 @@ fn test_socket_signature_help_docs_quality() -> Result<(), Box<dyn std::error::E
             .is_some_and(|doc| doc.contains("Socket handle")),
         "socket parameter documentation should describe the socket handle"
     );
-    assert_eq!(signature.parameters.get(1).map(|p| p.label.as_str()), Some("DOMAIN"));
+    assert_eq!(
+        signature.parameters.get(1).map(|p| p.label.as_str()),
+        Some("DOMAIN")
+    );
     assert!(
         signature
             .parameters
@@ -620,7 +697,9 @@ fn test_deprecated_signature_help_docs_quality() -> Result<(), Box<dyn std::erro
     let ast = Parser::new("").parse()?;
     let provider = SignatureHelpProvider::new(&ast);
 
-    let dump_sig = provider.get_builtin_signature("dump").ok_or("Missing dump signature")?;
+    let dump_sig = provider
+        .get_builtin_signature("dump")
+        .ok_or("Missing dump signature")?;
     assert!(
         dump_sig.documentation.contains("Does not return normally")
             && dump_sig.documentation.contains("perldoc -f dump"),
@@ -628,10 +707,13 @@ fn test_deprecated_signature_help_docs_quality() -> Result<(), Box<dyn std::erro
     );
 
     let code = "reset($pattern";
-    let reset_ast = Parser::new(code).parse().or_else(|_| Parser::new("").parse())?;
+    let reset_ast = Parser::new(code)
+        .parse()
+        .or_else(|_| Parser::new("").parse())?;
     let reset_provider = SignatureHelpProvider::new(&reset_ast);
-    let help =
-        reset_provider.get_signature_help(code, code.len()).ok_or("No signature help for reset")?;
+    let help = reset_provider
+        .get_signature_help(code, code.len())
+        .ok_or("No signature help for reset")?;
     let signature = help.signatures.first().ok_or("Missing reset signature")?;
 
     assert!(
@@ -641,7 +723,10 @@ fn test_deprecated_signature_help_docs_quality() -> Result<(), Box<dyn std::erro
             .is_some_and(|doc| doc.contains("Returns") && doc.contains("perldoc -f reset")),
         "reset documentation should include return details and perldoc reference"
     );
-    assert_eq!(signature.parameters.first().map(|p| p.label.as_str()), Some("EXPR"));
+    assert_eq!(
+        signature.parameters.first().map(|p| p.label.as_str()),
+        Some("EXPR")
+    );
     assert!(
         signature
             .parameters

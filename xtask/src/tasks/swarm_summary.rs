@@ -256,7 +256,10 @@ fn parse_since_spec(spec: Option<&str>) -> Result<Option<DateTime<Utc>>> {
 }
 
 fn pick_string(value: &Value, names: &[&str]) -> Option<String> {
-    names.iter().find_map(|name| value.get(*name).and_then(Value::as_str)).map(ToOwned::to_owned)
+    names
+        .iter()
+        .find_map(|name| value.get(*name).and_then(Value::as_str))
+        .map(ToOwned::to_owned)
 }
 
 fn print_counts(label: &str, counts: &HashMap<String, usize>, limit: usize) {
@@ -282,7 +285,10 @@ fn sorted_counts(counts: &HashMap<String, usize>, limit: usize) -> Vec<CountRow>
 
     rows.into_iter()
         .take(limit)
-        .map(|(key, count)| CountRow { key: key.clone(), count: *count })
+        .map(|(key, count)| CountRow {
+            key: key.clone(),
+            count: *count,
+        })
         .collect()
 }
 
@@ -384,7 +390,10 @@ mod tests {
         assert_eq!(parsed["entries_in_file"], 2);
         assert_eq!(parsed["entries_matched"], 2);
         assert_eq!(parsed["counts"]["by_event"][0]["key"], "subagent_stop");
-        assert_eq!(parsed["recent_entries"].as_array().map(|a| a.len()), Some(2));
+        assert_eq!(
+            parsed["recent_entries"].as_array().map(|a| a.len()),
+            Some(2)
+        );
         Ok(())
     }
 

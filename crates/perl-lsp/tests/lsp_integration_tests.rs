@@ -23,7 +23,9 @@ fn send_request(server: &LspServer, method: &str, params: Option<Value>) -> Opti
         params,
     };
 
-    server.handle_request(request).and_then(|response| response.result)
+    server
+        .handle_request(request)
+        .and_then(|response| response.result)
 }
 
 /// Helper to send the initialized notification (required after initialize request)
@@ -69,7 +71,10 @@ fn test_lsp_initialization() -> TestResult {
         }
         other => return Err(format!("unexpected workspaceSymbolProvider: {:?}", other).into()),
     }
-    assert_eq!(capabilities["capabilities"]["codeLensProvider"]["resolveProvider"], true);
+    assert_eq!(
+        capabilities["capabilities"]["codeLensProvider"]["resolveProvider"],
+        true
+    );
     Ok(())
 }
 
@@ -259,7 +264,9 @@ fn test_code_lens_resolve() -> TestResult {
 
     let resolved = result.ok_or("Failed to resolve code lens")?;
     assert!(resolved["command"].is_object());
-    let title = resolved["command"]["title"].as_str().ok_or("Expected title string")?;
+    let title = resolved["command"]["title"]
+        .as_str()
+        .ok_or("Expected title string")?;
     assert!(title.contains("reference"));
     Ok(())
 }
@@ -421,7 +428,9 @@ fn test_document_updates() -> TestResult {
         })),
     )
     .ok_or("Failed to search for stale symbols")?;
-    let stale_symbols = stale_result.as_array().ok_or("Expected stale symbols array")?;
+    let stale_symbols = stale_result
+        .as_array()
+        .ok_or("Expected stale symbols array")?;
     assert!(
         stale_symbols.is_empty(),
         "Expected no stale symbols after didChange, found: {stale_symbols:?}"
@@ -539,9 +548,11 @@ package MyPkg;
         assert!(lenses.len() >= 3);
 
         // Find the test lens
-        let test_lens = lenses
-            .iter()
-            .find(|l| l.command.as_ref().is_some_and(|c| c.title.contains("Run Test")));
+        let test_lens = lenses.iter().find(|l| {
+            l.command
+                .as_ref()
+                .is_some_and(|c| c.title.contains("Run Test"))
+        });
         assert!(test_lens.is_some());
     }
 }
@@ -980,7 +991,11 @@ sub helper {
     // Check called function names
     let called_names: Vec<&str> = calls_array
         .iter()
-        .map(|c| c["to"]["name"].as_str().ok_or("Expected called function name"))
+        .map(|c| {
+            c["to"]["name"]
+                .as_str()
+                .ok_or("Expected called function name")
+        })
         .collect::<Result<Vec<_>, _>>()?;
     assert!(called_names.contains(&"helper"));
     assert!(called_names.contains(&"process_data"));
@@ -1056,7 +1071,10 @@ my $result = split(/,/, $input);
         .filter(|h| h["kind"] == 1) // Type
         .collect();
     assert!(type_hints.len() >= 2);
-    let labels: Vec<_> = type_hints.iter().filter_map(|h| h["label"].as_str()).collect();
+    let labels: Vec<_> = type_hints
+        .iter()
+        .filter_map(|h| h["label"].as_str())
+        .collect();
     assert!(labels.iter().any(|label| label.contains("Array")));
     assert!(labels.iter().any(|label| label.contains("Hash")));
     Ok(())
@@ -1125,7 +1143,9 @@ push(@array4, "value4");  # Line 4
 
     // Should only have hints for lines 2-3
     for hint in hints_array {
-        let line = hint["position"]["line"].as_u64().ok_or("Expected line number")?;
+        let line = hint["position"]["line"]
+            .as_u64()
+            .ok_or("Expected line number")?;
         assert!((2..=3).contains(&line));
     }
     Ok(())
@@ -1184,7 +1204,10 @@ my @all = glob "**/*.pm";
     assert!(symbols.is_array());
 
     let symbols_array = symbols.as_array().ok_or("Expected symbols array")?;
-    assert!(!symbols_array.is_empty(), "Should find symbols in document with glob expressions");
+    assert!(
+        !symbols_array.is_empty(),
+        "Should find symbols in document with glob expressions"
+    );
 
     Ok(())
 }
@@ -1239,7 +1262,10 @@ fn test_glob_expression_hover() -> TestResult {
 
     if hover.is_object() {
         let hover_obj = hover.as_object().ok_or("Expected hover object")?;
-        assert!(hover_obj.contains_key("contents"), "Hover should have contents");
+        assert!(
+            hover_obj.contains_key("contents"),
+            "Hover should have contents"
+        );
     }
 
     Ok(())
@@ -1289,7 +1315,10 @@ fn test_glob_expression_completion() -> TestResult {
         })),
     );
 
-    assert!(result.is_some(), "Completion should work in documents with glob expressions");
+    assert!(
+        result.is_some(),
+        "Completion should work in documents with glob expressions"
+    );
 
     Ok(())
 }
@@ -1342,7 +1371,10 @@ my @modules = <lib/**/*.pm>;
     assert!(symbols.is_array());
 
     let symbols_array = symbols.as_array().ok_or("Expected symbols array")?;
-    assert!(!symbols_array.is_empty(), "Should parse angle bracket glob expressions");
+    assert!(
+        !symbols_array.is_empty(),
+        "Should parse angle bracket glob expressions"
+    );
 
     Ok(())
 }
@@ -1398,7 +1430,10 @@ my $content = <$fh>;
     assert!(symbols.is_array());
 
     let symbols_array = symbols.as_array().ok_or("Expected symbols array")?;
-    assert!(!symbols_array.is_empty(), "Should distinguish glob from readline correctly");
+    assert!(
+        !symbols_array.is_empty(),
+        "Should distinguish glob from readline correctly"
+    );
 
     Ok(())
 }
@@ -1455,7 +1490,10 @@ my @mixed = glob "/tmp/[abc]*{.txt,.log}";
     assert!(symbols.is_array());
 
     let symbols_array = symbols.as_array().ok_or("Expected symbols array")?;
-    assert!(!symbols_array.is_empty(), "Should parse complex glob patterns");
+    assert!(
+        !symbols_array.is_empty(),
+        "Should parse complex glob patterns"
+    );
 
     Ok(())
 }

@@ -63,7 +63,9 @@ impl BridgeAdapter {
     /// let adapter = BridgeAdapter::new();
     /// ```
     pub fn new() -> Self {
-        Self { child_process: None }
+        Self {
+            child_process: None,
+        }
     }
 
     /// Spawn Perl::LanguageServer in DAP mode
@@ -145,8 +147,14 @@ impl BridgeAdapter {
         };
 
         // Get handles to child stdin/stdout
-        let mut child_stdin = child.stdin.take().context("Failed to capture child stdin")?;
-        let mut child_stdout = child.stdout.take().context("Failed to capture child stdout")?;
+        let mut child_stdin = child
+            .stdin
+            .take()
+            .context("Failed to capture child stdin")?;
+        let mut child_stdout = child
+            .stdout
+            .take()
+            .context("Failed to capture child stdout")?;
 
         // Get handles to current process stdin/stdout
         let mut parent_stdin = tokio::io::stdin();
@@ -172,7 +180,10 @@ impl BridgeAdapter {
             tokio::io::copy(&mut child_stdout, &mut parent_stdout)
                 .await
                 .context("Error copying from server to client")?;
-            parent_stdout.flush().await.context("Error flushing to client")?;
+            parent_stdout
+                .flush()
+                .await
+                .context("Error flushing to client")?;
             Ok::<(), anyhow::Error>(())
         };
 

@@ -126,37 +126,58 @@ fn test_cluck_doc_mentions_stack_trace() {
 
 #[test]
 fn test_die_is_exception_function() {
-    assert!(is_exception_function("die"), "die must be an exception function");
+    assert!(
+        is_exception_function("die"),
+        "die must be an exception function"
+    );
 }
 
 #[test]
 fn test_warn_is_exception_function() {
-    assert!(is_exception_function("warn"), "warn must be an exception function");
+    assert!(
+        is_exception_function("warn"),
+        "warn must be an exception function"
+    );
 }
 
 #[test]
 fn test_croak_is_exception_function() {
-    assert!(is_exception_function("croak"), "croak must be an exception function");
+    assert!(
+        is_exception_function("croak"),
+        "croak must be an exception function"
+    );
 }
 
 #[test]
 fn test_carp_is_exception_function() {
-    assert!(is_exception_function("carp"), "carp must be an exception function");
+    assert!(
+        is_exception_function("carp"),
+        "carp must be an exception function"
+    );
 }
 
 #[test]
 fn test_confess_is_exception_function() {
-    assert!(is_exception_function("confess"), "confess must be an exception function");
+    assert!(
+        is_exception_function("confess"),
+        "confess must be an exception function"
+    );
 }
 
 #[test]
 fn test_cluck_is_exception_function() {
-    assert!(is_exception_function("cluck"), "cluck must be an exception function");
+    assert!(
+        is_exception_function("cluck"),
+        "cluck must be an exception function"
+    );
 }
 
 #[test]
 fn test_print_is_not_exception_function() {
-    assert!(!is_exception_function("print"), "print must not be an exception function");
+    assert!(
+        !is_exception_function("print"),
+        "print must not be an exception function"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -168,9 +189,16 @@ fn test_die_exception_context_has_alternative() {
     let ctx = get_exception_context("die");
     assert!(ctx.is_some(), "die must have exception context");
     let ctx = must_some(ctx);
-    assert!(ctx.preferred_alternative.is_some(), "die should have a preferred alternative (croak)");
+    assert!(
+        ctx.preferred_alternative.is_some(),
+        "die should have a preferred alternative (croak)"
+    );
     let alt = ctx.preferred_alternative.as_deref().unwrap_or("");
-    assert!(alt.contains("croak"), "die preferred alternative should be croak, got: {}", alt);
+    assert!(
+        alt.contains("croak"),
+        "die preferred alternative should be croak, got: {}",
+        alt
+    );
 }
 
 #[test]
@@ -178,7 +206,11 @@ fn test_die_exception_context_has_error_variable() {
     let ctx = get_exception_context("die");
     assert!(ctx.is_some(), "die must have exception context");
     let ctx = must_some(ctx);
-    assert_eq!(ctx.error_variable.as_deref(), Some("$@"), "die error variable should be $@");
+    assert_eq!(
+        ctx.error_variable.as_deref(),
+        Some("$@"),
+        "die error variable should be $@"
+    );
 }
 
 #[test]
@@ -186,9 +218,16 @@ fn test_warn_exception_context_has_alternative() {
     let ctx = get_exception_context("warn");
     assert!(ctx.is_some(), "warn must have exception context");
     let ctx = must_some(ctx);
-    assert!(ctx.preferred_alternative.is_some(), "warn should have a preferred alternative (carp)");
+    assert!(
+        ctx.preferred_alternative.is_some(),
+        "warn should have a preferred alternative (carp)"
+    );
     let alt = ctx.preferred_alternative.as_deref().unwrap_or("");
-    assert!(alt.contains("carp"), "warn preferred alternative should be carp, got: {}", alt);
+    assert!(
+        alt.contains("carp"),
+        "warn preferred alternative should be carp, got: {}",
+        alt
+    );
 }
 
 #[test]

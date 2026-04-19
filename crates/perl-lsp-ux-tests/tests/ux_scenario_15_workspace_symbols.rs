@@ -37,7 +37,10 @@ sub run {\n\
 ";
 
 fn matching_run_symbols(symbols: &[Value]) -> Vec<&Value> {
-    symbols.iter().filter(|symbol| symbol["name"].as_str() == Some("run")).collect()
+    symbols
+        .iter()
+        .filter(|symbol| symbol["name"].as_str() == Some("run"))
+        .collect()
 }
 
 #[test]
@@ -48,12 +51,15 @@ fn scenario_15_workspace_symbol_multi_root_disambiguation() {
     }
 
     let harness = UxHarness::new(
-        ScenarioConfig { timeout: Duration::from_secs(20), ..Default::default() }
-            .env("PERL_LSP_WORKSPACE", "1")
-            .with_workspace_folder("svc-a", "svc-a")
-            .with_workspace_folder("svc-b", "svc-b")
-            .with_file("svc-a/lib/Runner.pm", RUNNER_A)
-            .with_file("svc-b/lib/Runner.pm", RUNNER_B),
+        ScenarioConfig {
+            timeout: Duration::from_secs(20),
+            ..Default::default()
+        }
+        .env("PERL_LSP_WORKSPACE", "1")
+        .with_workspace_folder("svc-a", "svc-a")
+        .with_workspace_folder("svc-b", "svc-b")
+        .with_file("svc-a/lib/Runner.pm", RUNNER_A)
+        .with_file("svc-b/lib/Runner.pm", RUNNER_B),
     )
     .expect("Failed to create UX harness");
 
@@ -68,7 +74,11 @@ fn scenario_15_workspace_symbol_multi_root_disambiguation() {
         let run_symbols = matching_run_symbols(&latest_symbols);
         let folder_uris: BTreeSet<&str> = run_symbols
             .iter()
-            .filter_map(|symbol| symbol.get("workspaceFolderUri").and_then(|uri| uri.as_str()))
+            .filter_map(|symbol| {
+                symbol
+                    .get("workspaceFolderUri")
+                    .and_then(|uri| uri.as_str())
+            })
             .collect();
 
         if run_symbols.len() >= 2
@@ -92,7 +102,11 @@ fn scenario_15_workspace_symbol_multi_root_disambiguation() {
 
     let folder_uris: BTreeSet<&str> = run_symbols
         .iter()
-        .filter_map(|symbol| symbol.get("workspaceFolderUri").and_then(|uri| uri.as_str()))
+        .filter_map(|symbol| {
+            symbol
+                .get("workspaceFolderUri")
+                .and_then(|uri| uri.as_str())
+        })
         .collect();
 
     assert!(

@@ -24,7 +24,12 @@ impl Document {
     /// Create a new document
     pub fn new(uri: String, version: i32, text: String) -> Self {
         let line_index = LineIndex::new(text.clone());
-        Self { uri, version, text, line_index }
+        Self {
+            uri,
+            version,
+            text,
+            line_index,
+        }
     }
 
     /// Update the document content
@@ -44,7 +49,9 @@ pub struct DocumentStore {
 impl DocumentStore {
     /// Create a new empty store
     pub fn new() -> Self {
-        Self { documents: Arc::new(RwLock::new(HashMap::new())) }
+        Self {
+            documents: Arc::new(RwLock::new(HashMap::new())),
+        }
     }
 
     /// Normalize a URI to a consistent key

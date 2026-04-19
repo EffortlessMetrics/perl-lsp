@@ -44,7 +44,10 @@ fn test_attach_config_validation_valid() {
         stop_on_entry: None,
     };
 
-    assert!(config.validate().is_ok(), "Valid config should pass validation");
+    assert!(
+        config.validate().is_ok(),
+        "Valid config should pass validation"
+    );
 }
 
 #[test]
@@ -59,7 +62,13 @@ fn test_attach_config_validation_empty_host() -> Result<(), Box<dyn std::error::
 
     let result = config.validate();
     assert!(result.is_err(), "Empty host should fail validation");
-    assert!(result.err().ok_or("Expected an error")?.to_string().contains("Host"));
+    assert!(
+        result
+            .err()
+            .ok_or("Expected an error")?
+            .to_string()
+            .contains("Host")
+    );
     Ok(())
 }
 
@@ -89,7 +98,13 @@ fn test_attach_config_validation_zero_port() -> Result<(), Box<dyn std::error::E
 
     let result = config.validate();
     assert!(result.is_err(), "Port 0 should fail validation");
-    assert!(result.err().ok_or("Expected an error")?.to_string().contains("Port"));
+    assert!(
+        result
+            .err()
+            .ok_or("Expected an error")?
+            .to_string()
+            .contains("Port")
+    );
     Ok(())
 }
 
@@ -105,7 +120,13 @@ fn test_attach_config_validation_zero_timeout() -> Result<(), Box<dyn std::error
 
     let result = config.validate();
     assert!(result.is_err(), "Zero timeout should fail validation");
-    assert!(result.err().ok_or("Expected an error")?.to_string().contains("Timeout"));
+    assert!(
+        result
+            .err()
+            .ok_or("Expected an error")?
+            .to_string()
+            .contains("Timeout")
+    );
     Ok(())
 }
 
@@ -133,7 +154,10 @@ fn test_attach_config_validation_no_timeout() {
         stop_on_entry: None,
     };
 
-    assert!(config.validate().is_ok(), "Config without timeout should be valid");
+    assert!(
+        config.validate().is_ok(),
+        "Config without timeout should be valid"
+    );
 }
 
 #[test]

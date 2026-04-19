@@ -77,7 +77,10 @@ fn stack_frame_with_end() {
 fn stack_frame_with_presentation_hint() {
     let frame =
         StackFrame::new(1, "f", None, 1).with_presentation_hint(StackFramePresentationHint::Label);
-    assert_eq!(frame.presentation_hint, Some(StackFramePresentationHint::Label));
+    assert_eq!(
+        frame.presentation_hint,
+        Some(StackFramePresentationHint::Label)
+    );
 }
 
 #[test]
@@ -97,7 +100,10 @@ fn stack_frame_builder_chaining() {
     assert_eq!(frame.column, 5);
     assert_eq!(frame.end_line, Some(15));
     assert_eq!(frame.end_column, Some(1));
-    assert_eq!(frame.presentation_hint, Some(StackFramePresentationHint::Normal));
+    assert_eq!(
+        frame.presentation_hint,
+        Some(StackFramePresentationHint::Normal)
+    );
     assert_eq!(frame.module_id, Some("Test".to_string()));
 }
 
@@ -207,7 +213,10 @@ fn source_with_origin() {
 #[test]
 fn source_with_presentation_hint() {
     let source = Source::new("/file.pl").with_presentation_hint(SourcePresentationHint::Emphasize);
-    assert_eq!(source.presentation_hint, Some(SourcePresentationHint::Emphasize));
+    assert_eq!(
+        source.presentation_hint,
+        Some(SourcePresentationHint::Emphasize)
+    );
 }
 
 // ─── Source::is_eval ────────────────────────────────────────────────────────
@@ -300,7 +309,9 @@ fn stack_frame_serde_skips_none_fields() -> Result<(), serde_json::Error> {
 
 #[test]
 fn stack_frame_serde_uses_camel_case() -> Result<(), serde_json::Error> {
-    let frame = StackFrame::new(1, "f", None, 1).with_end(10, 5).with_module("mod");
+    let frame = StackFrame::new(1, "f", None, 1)
+        .with_end(10, 5)
+        .with_module("mod");
 
     let json = serde_json::to_string(&frame)?;
 
@@ -553,10 +564,18 @@ fn parser_parse_context_returns_none_for_garbage() {
 
 #[test]
 fn parser_looks_like_frame_positive() {
-    assert!(PerlStackParser::looks_like_frame("  #0  main::foo at script.pl line 10"));
-    assert!(PerlStackParser::looks_like_frame("$ = foo() called from file 'x' line 1"));
-    assert!(PerlStackParser::looks_like_frame("@ = bar() called from file 'y' line 2"));
-    assert!(PerlStackParser::looks_like_frame(". = baz() called from file 'z' line 3"));
+    assert!(PerlStackParser::looks_like_frame(
+        "  #0  main::foo at script.pl line 10"
+    ));
+    assert!(PerlStackParser::looks_like_frame(
+        "$ = foo() called from file 'x' line 1"
+    ));
+    assert!(PerlStackParser::looks_like_frame(
+        "@ = bar() called from file 'y' line 2"
+    ));
+    assert!(PerlStackParser::looks_like_frame(
+        ". = baz() called from file 'z' line 3"
+    ));
 }
 
 #[test]
@@ -570,11 +589,26 @@ fn parser_looks_like_frame_negative() {
 
 #[test]
 fn frame_category_presentation_hints() {
-    assert_eq!(FrameCategory::User.presentation_hint(), StackFramePresentationHint::Normal);
-    assert_eq!(FrameCategory::Library.presentation_hint(), StackFramePresentationHint::Subtle);
-    assert_eq!(FrameCategory::Core.presentation_hint(), StackFramePresentationHint::Subtle);
-    assert_eq!(FrameCategory::Eval.presentation_hint(), StackFramePresentationHint::Label);
-    assert_eq!(FrameCategory::Unknown.presentation_hint(), StackFramePresentationHint::Subtle);
+    assert_eq!(
+        FrameCategory::User.presentation_hint(),
+        StackFramePresentationHint::Normal
+    );
+    assert_eq!(
+        FrameCategory::Library.presentation_hint(),
+        StackFramePresentationHint::Subtle
+    );
+    assert_eq!(
+        FrameCategory::Core.presentation_hint(),
+        StackFramePresentationHint::Subtle
+    );
+    assert_eq!(
+        FrameCategory::Eval.presentation_hint(),
+        StackFramePresentationHint::Label
+    );
+    assert_eq!(
+        FrameCategory::Unknown.presentation_hint(),
+        StackFramePresentationHint::Subtle
+    );
 }
 
 #[test]
@@ -608,8 +642,14 @@ fn classifier_user_code_default() {
         classifier.classify(&frame_with_path("/home/user/project/lib/App.pm")),
         FrameCategory::User
     );
-    assert_eq!(classifier.classify(&frame_with_path("./script.pl")), FrameCategory::User);
-    assert_eq!(classifier.classify(&frame_with_path("bin/myapp")), FrameCategory::User);
+    assert_eq!(
+        classifier.classify(&frame_with_path("./script.pl")),
+        FrameCategory::User
+    );
+    assert_eq!(
+        classifier.classify(&frame_with_path("bin/myapp")),
+        FrameCategory::User
+    );
 }
 
 #[test]
@@ -637,7 +677,10 @@ fn classifier_core_modules() {
         classifier.classify(&frame_with_path("/usr/share/perl5/base.pm")),
         FrameCategory::Core
     );
-    assert_eq!(classifier.classify(&frame_with_path("/opt/perl5/parent.pm")), FrameCategory::Core);
+    assert_eq!(
+        classifier.classify(&frame_with_path("/opt/perl5/parent.pm")),
+        FrameCategory::Core
+    );
 
     // site_perl and vendor_perl are core paths
     assert_eq!(
@@ -663,7 +706,9 @@ fn classifier_library_code() {
         FrameCategory::Library
     );
     assert_eq!(
-        classifier.classify(&frame_with_path("/home/user/project/local/lib/perl5/Moo.pm")),
+        classifier.classify(&frame_with_path(
+            "/home/user/project/local/lib/perl5/Moo.pm"
+        )),
         FrameCategory::Core // local/lib/perl5 matches core pattern
     );
     assert_eq!(
@@ -680,7 +725,10 @@ fn classifier_library_code() {
 fn classifier_eval_code() {
     let classifier = PerlFrameClassifier::new();
 
-    assert_eq!(classifier.classify(&frame_with_path("(eval 42)")), FrameCategory::Eval);
+    assert_eq!(
+        classifier.classify(&frame_with_path("(eval 42)")),
+        FrameCategory::Eval
+    );
     assert_eq!(
         classifier.classify(&frame_with_path("(eval 10)[script.pl:5]")),
         FrameCategory::Eval
@@ -723,8 +771,14 @@ fn classifier_multiple_custom_paths() {
         .with_user_path("/project/lib/")
         .with_library_path("/project/vendor/");
 
-    assert_eq!(classifier.classify(&frame_with_path("/project/src/App.pm")), FrameCategory::User);
-    assert_eq!(classifier.classify(&frame_with_path("/project/lib/Util.pm")), FrameCategory::User);
+    assert_eq!(
+        classifier.classify(&frame_with_path("/project/src/App.pm")),
+        FrameCategory::User
+    );
+    assert_eq!(
+        classifier.classify(&frame_with_path("/project/lib/Util.pm")),
+        FrameCategory::User
+    );
     assert_eq!(
         classifier.classify(&frame_with_path("/project/vendor/External.pm")),
         FrameCategory::Library
@@ -737,11 +791,17 @@ fn classifier_apply_classification_sets_hint() {
 
     let core_frame = frame_with_path("/usr/lib/perl5/strict.pm");
     let classified = classifier.apply_classification(core_frame);
-    assert_eq!(classified.presentation_hint, Some(StackFramePresentationHint::Subtle));
+    assert_eq!(
+        classified.presentation_hint,
+        Some(StackFramePresentationHint::Subtle)
+    );
 
     let user_frame = frame_with_path("/project/app.pl");
     let classified = classifier.apply_classification(user_frame);
-    assert_eq!(classified.presentation_hint, Some(StackFramePresentationHint::Normal));
+    assert_eq!(
+        classified.presentation_hint,
+        Some(StackFramePresentationHint::Normal)
+    );
 }
 
 #[test]
@@ -781,14 +841,23 @@ fn is_internal_frame_db_prefix() {
 
 #[test]
 fn is_internal_frame_devel_tsperlap() {
-    let frame = StackFrame::new(1, "Devel::TSPerlDAP::handler", Some(Source::new("/shim.pm")), 1);
+    let frame = StackFrame::new(
+        1,
+        "Devel::TSPerlDAP::handler",
+        Some(Source::new("/shim.pm")),
+        1,
+    );
     assert!(is_internal_frame(&frame));
 }
 
 #[test]
 fn is_internal_frame_perl5db_path() {
-    let frame =
-        StackFrame::new(1, "helper_func", Some(Source::new("/usr/lib/perl5/perl5db.pl")), 1);
+    let frame = StackFrame::new(
+        1,
+        "helper_func",
+        Some(Source::new("/usr/lib/perl5/perl5db.pl")),
+        1,
+    );
     assert!(is_internal_frame(&frame));
 }
 
@@ -808,9 +877,18 @@ fn is_not_internal_frame_no_source() {
 fn is_internal_frame_name_and_path_combinations() {
     assert!(is_internal_frame_name_and_path("DB::sub", Some("/app.pl")));
     assert!(is_internal_frame_name_and_path("DB::anything", None));
-    assert!(is_internal_frame_name_and_path("Devel::TSPerlDAP::x", Some("/a.pl")));
-    assert!(is_internal_frame_name_and_path("some_func", Some("/usr/perl5db.pl")));
-    assert!(!is_internal_frame_name_and_path("main::run", Some("/app.pl")));
+    assert!(is_internal_frame_name_and_path(
+        "Devel::TSPerlDAP::x",
+        Some("/a.pl")
+    ));
+    assert!(is_internal_frame_name_and_path(
+        "some_func",
+        Some("/usr/perl5db.pl")
+    ));
+    assert!(!is_internal_frame_name_and_path(
+        "main::run",
+        Some("/app.pl")
+    ));
     assert!(!is_internal_frame_name_and_path("main::run", None));
 }
 
@@ -819,8 +897,18 @@ fn filter_user_visible_frames_removes_internal() {
     let frames = vec![
         StackFrame::new(1, "main::start", Some(Source::new("/app.pl")), 1),
         StackFrame::new(2, "DB::sub", Some(Source::new("/perl5db.pl")), 50),
-        StackFrame::new(3, "App::Util::helper", Some(Source::new("/lib/Util.pm")), 20),
-        StackFrame::new(4, "Devel::TSPerlDAP::shim", Some(Source::new("/shim.pm")), 1),
+        StackFrame::new(
+            3,
+            "App::Util::helper",
+            Some(Source::new("/lib/Util.pm")),
+            20,
+        ),
+        StackFrame::new(
+            4,
+            "Devel::TSPerlDAP::shim",
+            Some(Source::new("/shim.pm")),
+            1,
+        ),
     ];
 
     let visible = filter_user_visible_frames(frames);
@@ -989,7 +1077,10 @@ fn stack_frame_deserialize_with_all_fields() -> Result<(), serde_json::Error> {
     assert_eq!(frame.end_line, Some(110));
     assert_eq!(frame.end_column, Some(1));
     assert_eq!(frame.can_restart, Some(true));
-    assert_eq!(frame.presentation_hint, Some(StackFramePresentationHint::Subtle));
+    assert_eq!(
+        frame.presentation_hint,
+        Some(StackFramePresentationHint::Subtle)
+    );
     assert_eq!(frame.module_id, Some("My::Module".to_string()));
     assert!(!frame.is_user_code());
 

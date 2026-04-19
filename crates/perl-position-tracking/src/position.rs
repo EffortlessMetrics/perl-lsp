@@ -36,7 +36,11 @@ impl Position {
 
     /// Create a position at the start of a file
     pub fn start() -> Self {
-        Position { byte: 0, line: 1, column: 1 }
+        Position {
+            byte: 0,
+            line: 1,
+            column: 1,
+        }
     }
 
     /// Advance the position by the given text
@@ -89,7 +93,10 @@ impl Range {
 
     /// Create an empty range at a position
     pub fn empty(pos: Position) -> Self {
-        Range { start: pos, end: pos }
+        Range {
+            start: pos,
+            end: pos,
+        }
     }
 
     /// Check if the range contains a byte offset
@@ -130,8 +137,16 @@ impl Range {
     /// Create a range that spans from this range to another
     pub fn span_to(&self, other: &Range) -> Range {
         Range {
-            start: if self.start.byte < other.start.byte { self.start } else { other.start },
-            end: if self.end.byte > other.end.byte { self.end } else { other.end },
+            start: if self.start.byte < other.start.byte {
+                self.start
+            } else {
+                other.start
+            },
+            end: if self.end.byte > other.end.byte {
+                self.end
+            } else {
+                other.end
+            },
         }
     }
 }
@@ -147,8 +162,16 @@ impl From<crate::SourceLocation> for Range {
     fn from(loc: crate::SourceLocation) -> Self {
         // For migration, we'll need to calculate line/column later
         Range {
-            start: Position { byte: loc.start, line: 0, column: 0 },
-            end: Position { byte: loc.end, line: 0, column: 0 },
+            start: Position {
+                byte: loc.start,
+                line: 0,
+                column: 0,
+            },
+            end: Position {
+                byte: loc.end,
+                line: 0,
+                column: 0,
+            },
         }
     }
 }
@@ -160,16 +183,44 @@ mod tests {
     #[test]
     fn test_position_advance() {
         let mut pos = Position::start();
-        assert_eq!(pos, Position { byte: 0, line: 1, column: 1 });
+        assert_eq!(
+            pos,
+            Position {
+                byte: 0,
+                line: 1,
+                column: 1
+            }
+        );
 
         pos.advance("hello");
-        assert_eq!(pos, Position { byte: 5, line: 1, column: 6 });
+        assert_eq!(
+            pos,
+            Position {
+                byte: 5,
+                line: 1,
+                column: 6
+            }
+        );
 
         pos.advance("\n");
-        assert_eq!(pos, Position { byte: 6, line: 2, column: 1 });
+        assert_eq!(
+            pos,
+            Position {
+                byte: 6,
+                line: 2,
+                column: 1
+            }
+        );
 
         pos.advance("世界"); // UTF-8 multibyte
-        assert_eq!(pos, Position { byte: 12, line: 2, column: 3 });
+        assert_eq!(
+            pos,
+            Position {
+                byte: 12,
+                line: 2,
+                column: 3
+            }
+        );
     }
 
     #[test]

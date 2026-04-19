@@ -30,7 +30,11 @@ fn token_span_length_matches_text_len() {
     ];
     for (text, kind) in cases {
         let tok = Token::new(*kind, *text, 10, 10 + text.len());
-        assert_eq!(tok.end - tok.start, tok.text.len(), "span mismatch for {text:?}");
+        assert_eq!(
+            tok.end - tok.start,
+            tok.text.len(),
+            "span mismatch for {text:?}"
+        );
     }
 }
 
@@ -286,7 +290,10 @@ fn token_debug_alternate_format() {
     let t = Token::new(TokenKind::My, "my", 0, 2);
     let dbg = format!("{t:#?}");
     // Alternate format should be multi-line
-    assert!(dbg.contains('\n'), "alternate debug should be multi-line: {dbg}");
+    assert!(
+        dbg.contains('\n'),
+        "alternate debug should be multi-line: {dbg}"
+    );
     assert!(dbg.contains("My"), "missing kind in: {dbg}");
 }
 
@@ -605,7 +612,10 @@ fn token_sequence_chained_arrow_deref() {
         Token::new(TokenKind::Arrow, "->", 12, 14),
         Token::new(TokenKind::Identifier, "field", 14, 19),
     ];
-    let arrows: Vec<_> = tokens.iter().filter(|t| t.kind == TokenKind::Arrow).collect();
+    let arrows: Vec<_> = tokens
+        .iter()
+        .filter(|t| t.kind == TokenKind::Arrow)
+        .collect();
     assert_eq!(arrows.len(), 2);
 }
 
@@ -865,8 +875,15 @@ fn find_first_identifier() {
         Token::new(TokenKind::Identifier, "first_id", 4, 12),
         Token::new(TokenKind::Identifier, "second_id", 13, 22),
     ];
-    let first = tokens.iter().find(|t| t.kind == TokenKind::Identifier).map(|t| t.text.as_ref());
-    assert_eq!(first, Some("first_id"), "should have found identifier 'first_id'");
+    let first = tokens
+        .iter()
+        .find(|t| t.kind == TokenKind::Identifier)
+        .map(|t| t.text.as_ref());
+    assert_eq!(
+        first,
+        Some("first_id"),
+        "should have found identifier 'first_id'"
+    );
 }
 
 #[test]
@@ -879,7 +896,10 @@ fn count_semicolons() {
         Token::new(TokenKind::Identifier, "c", 6, 7),
         Token::new(TokenKind::Semicolon, ";", 7, 8),
     ];
-    let count = tokens.iter().filter(|t| t.kind == TokenKind::Semicolon).count();
+    let count = tokens
+        .iter()
+        .filter(|t| t.kind == TokenKind::Semicolon)
+        .count();
     assert_eq!(count, 3);
 }
 
@@ -937,8 +957,13 @@ fn word_xor_has_no_symbolic_counterpart() {
 
 #[test]
 fn phase_blocks_are_all_distinct() {
-    let phases =
-        [TokenKind::Begin, TokenKind::End, TokenKind::Check, TokenKind::Init, TokenKind::Unitcheck];
+    let phases = [
+        TokenKind::Begin,
+        TokenKind::End,
+        TokenKind::Check,
+        TokenKind::Init,
+        TokenKind::Unitcheck,
+    ];
     for (i, a) in phases.iter().enumerate() {
         for b in &phases[i + 1..] {
             assert_ne!(a, b);
@@ -986,7 +1011,11 @@ fn format_body_token() {
 fn option_token_some() {
     let maybe: Option<Token> = Some(Token::new(TokenKind::Number, "42", 0, 2));
     assert!(maybe.is_some(), "expected Some");
-    assert_eq!(maybe.as_ref().map(|t| t.kind), Some(TokenKind::Number), "expected Number token");
+    assert_eq!(
+        maybe.as_ref().map(|t| t.kind),
+        Some(TokenKind::Number),
+        "expected Number token"
+    );
 }
 
 #[test]

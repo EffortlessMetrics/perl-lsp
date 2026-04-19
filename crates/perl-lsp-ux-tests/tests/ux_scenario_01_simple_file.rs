@@ -29,7 +29,9 @@ fn scenario_01_server_starts_and_accepts_open() {
 
     let harness = UxHarness::new(ScenarioConfig::default()).expect("Failed to create UX harness");
 
-    harness.open_file("hello.pl", source).expect("textDocument/didOpen should succeed");
+    harness
+        .open_file("hello.pl", source)
+        .expect("textDocument/didOpen should succeed");
 
     harness.assert_no_crash();
 }
@@ -46,7 +48,9 @@ fn scenario_01_hover_on_simple_variable() {
     let harness = UxHarness::new(ScenarioConfig::default().with_file("test.pl", source))
         .expect("Failed to create UX harness");
 
-    harness.open_file("test.pl", source).expect("textDocument/didOpen should not fail");
+    harness
+        .open_file("test.pl", source)
+        .expect("textDocument/didOpen should not fail");
 
     // Hover on `$x` (line 3, character 3).
     let hover_result = harness.hover("test.pl", 3, 3);
@@ -63,7 +67,10 @@ fn scenario_01_hover_on_simple_variable() {
             eprintln!("INFO scenario_01: hover returned null (degraded mode acceptable)");
         }
         Err(e) => {
-            panic!("Hover returned a JSON-RPC error — this is a UX regression: {}", e);
+            panic!(
+                "Hover returned a JSON-RPC error — this is a UX regression: {}",
+                e
+            );
         }
     }
 
@@ -80,7 +87,9 @@ fn scenario_01_completion_on_keyword_does_not_crash() {
     let source = "use str\n";
     let harness = UxHarness::new(ScenarioConfig::default()).expect("Failed to create UX harness");
 
-    harness.open_file("complete.pl", source).expect("didOpen should succeed");
+    harness
+        .open_file("complete.pl", source)
+        .expect("didOpen should succeed");
 
     let result = harness.completion("complete.pl", 0, 7);
     assert!(result.is_ok(), "completion should not crash: {:?}", result);

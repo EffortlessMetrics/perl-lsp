@@ -69,16 +69,20 @@ fn test_must_ok_with_nested_result() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 #[should_panic(expected = "unexpected Err")]
 fn test_must_panics_with_io_error() {
-    let val: Result<(), std::io::Error> =
-        Err(std::io::Error::new(std::io::ErrorKind::NotFound, "file missing"));
+    let val: Result<(), std::io::Error> = Err(std::io::Error::new(
+        std::io::ErrorKind::NotFound,
+        "file missing",
+    ));
     must(val);
 }
 
 #[test]
 #[should_panic(expected = "file missing")]
 fn test_must_panic_message_contains_error_debug_repr() {
-    let val: Result<(), std::io::Error> =
-        Err(std::io::Error::new(std::io::ErrorKind::NotFound, "file missing"));
+    let val: Result<(), std::io::Error> = Err(std::io::Error::new(
+        std::io::ErrorKind::NotFound,
+        "file missing",
+    ));
     must(val);
 }
 
@@ -148,8 +152,10 @@ fn test_must_err_with_unit_error() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn test_must_err_with_io_error() -> Result<(), Box<dyn std::error::Error>> {
-    let val: Result<(), std::io::Error> =
-        Err(std::io::Error::new(std::io::ErrorKind::PermissionDenied, "access denied"));
+    let val: Result<(), std::io::Error> = Err(std::io::Error::new(
+        std::io::ErrorKind::PermissionDenied,
+        "access denied",
+    ));
     let err = must_err(val);
     assert_eq!(err.kind(), std::io::ErrorKind::PermissionDenied);
     Ok(())
@@ -324,8 +330,10 @@ fn test_tdd_workflow_repeated_cycles() -> Result<(), Box<dyn std::error::Error>>
 #[test]
 fn test_refactoring_analyzer_empty_program() -> Result<(), Box<dyn std::error::Error>> {
     let analyzer = RefactoringAnalyzer::default();
-    let ast =
-        Node::new(NodeKind::Program { statements: vec![] }, SourceLocation { start: 0, end: 0 });
+    let ast = Node::new(
+        NodeKind::Program { statements: vec![] },
+        SourceLocation { start: 0, end: 0 },
+    );
     let suggestions = analyzer.analyze(&ast, "");
     assert!(suggestions.is_empty());
     Ok(())
@@ -340,7 +348,10 @@ fn test_refactoring_analyzer_exactly_at_param_limit() -> Result<(), Box<dyn std:
             Node::new(
                 NodeKind::MandatoryParameter {
                     variable: Box::new(Node::new(
-                        NodeKind::Variable { sigil: "$".to_string(), name: format!("p{}", i) },
+                        NodeKind::Variable {
+                            sigil: "$".to_string(),
+                            name: format!("p{}", i),
+                        },
                         SourceLocation { start: 0, end: 0 },
                     )),
                 },
@@ -385,7 +396,10 @@ fn test_refactoring_analyzer_one_over_param_limit() -> Result<(), Box<dyn std::e
             Node::new(
                 NodeKind::MandatoryParameter {
                     variable: Box::new(Node::new(
-                        NodeKind::Variable { sigil: "$".to_string(), name: format!("p{}", i) },
+                        NodeKind::Variable {
+                            sigil: "$".to_string(),
+                            name: format!("p{}", i),
+                        },
                         SourceLocation { start: 0, end: 0 },
                     )),
                 },
@@ -432,7 +446,10 @@ fn test_refactoring_analyzer_anonymous_sub() -> Result<(), Box<dyn std::error::E
             Node::new(
                 NodeKind::MandatoryParameter {
                     variable: Box::new(Node::new(
-                        NodeKind::Variable { sigil: "$".to_string(), name: format!("x{}", i) },
+                        NodeKind::Variable {
+                            sigil: "$".to_string(),
+                            name: format!("x{}", i),
+                        },
                         SourceLocation { start: 0, end: 0 },
                     )),
                 },
@@ -495,15 +512,34 @@ fn test_full_tdd_workflow_coverage_threshold_no_data() -> Result<(), Box<dyn std
 
 #[test]
 fn test_full_tdd_workflow_coverage_threshold_met() -> Result<(), Box<dyn std::error::Error>> {
-    let config = TddConfig { coverage_threshold: 50.0, ..TddConfig::default() };
+    let config = TddConfig {
+        coverage_threshold: 50.0,
+        ..TddConfig::default()
+    };
     let mut wf = FullTddWorkflow::new(config);
 
     // 3 covered out of 4 lines = 75% > 50% threshold
     let coverage = vec![
-        LineCoverage { line: 1, hits: 1, covered: true },
-        LineCoverage { line: 2, hits: 5, covered: true },
-        LineCoverage { line: 3, hits: 0, covered: false },
-        LineCoverage { line: 4, hits: 2, covered: true },
+        LineCoverage {
+            line: 1,
+            hits: 1,
+            covered: true,
+        },
+        LineCoverage {
+            line: 2,
+            hits: 5,
+            covered: true,
+        },
+        LineCoverage {
+            line: 3,
+            hits: 0,
+            covered: false,
+        },
+        LineCoverage {
+            line: 4,
+            hits: 2,
+            covered: true,
+        },
     ];
     wf.update_coverage(PathBuf::from("test.pl"), coverage);
     assert!(wf.check_coverage_threshold());
@@ -512,15 +548,34 @@ fn test_full_tdd_workflow_coverage_threshold_met() -> Result<(), Box<dyn std::er
 
 #[test]
 fn test_full_tdd_workflow_coverage_threshold_not_met() -> Result<(), Box<dyn std::error::Error>> {
-    let config = TddConfig { coverage_threshold: 90.0, ..TddConfig::default() };
+    let config = TddConfig {
+        coverage_threshold: 90.0,
+        ..TddConfig::default()
+    };
     let mut wf = FullTddWorkflow::new(config);
 
     // 1 covered out of 4 = 25% < 90%
     let coverage = vec![
-        LineCoverage { line: 1, hits: 0, covered: false },
-        LineCoverage { line: 2, hits: 0, covered: false },
-        LineCoverage { line: 3, hits: 0, covered: false },
-        LineCoverage { line: 4, hits: 1, covered: true },
+        LineCoverage {
+            line: 1,
+            hits: 0,
+            covered: false,
+        },
+        LineCoverage {
+            line: 2,
+            hits: 0,
+            covered: false,
+        },
+        LineCoverage {
+            line: 3,
+            hits: 0,
+            covered: false,
+        },
+        LineCoverage {
+            line: 4,
+            hits: 1,
+            covered: true,
+        },
     ];
     wf.update_coverage(PathBuf::from("test.pl"), coverage);
     assert!(!wf.check_coverage_threshold());
@@ -534,10 +589,26 @@ fn test_full_tdd_workflow_inline_coverage_uncovered_lines() -> Result<(), Box<dy
     let mut wf = FullTddWorkflow::new(config);
 
     let coverage = vec![
-        LineCoverage { line: 1, hits: 3, covered: true },
-        LineCoverage { line: 2, hits: 0, covered: false },
-        LineCoverage { line: 3, hits: 0, covered: false },
-        LineCoverage { line: 4, hits: 1, covered: true },
+        LineCoverage {
+            line: 1,
+            hits: 3,
+            covered: true,
+        },
+        LineCoverage {
+            line: 2,
+            hits: 0,
+            covered: false,
+        },
+        LineCoverage {
+            line: 3,
+            hits: 0,
+            covered: false,
+        },
+        LineCoverage {
+            line: 4,
+            hits: 1,
+            covered: true,
+        },
     ];
     let path = PathBuf::from("my_module.pm");
     wf.update_coverage(path.clone(), coverage);
@@ -575,9 +646,21 @@ fn test_full_tdd_workflow_coverage_diagnostics_for_file() -> Result<(), Box<dyn 
     let mut wf = FullTddWorkflow::new(config);
 
     let coverage = vec![
-        LineCoverage { line: 10, hits: 0, covered: false },
-        LineCoverage { line: 11, hits: 5, covered: true },
-        LineCoverage { line: 12, hits: 0, covered: false },
+        LineCoverage {
+            line: 10,
+            hits: 0,
+            covered: false,
+        },
+        LineCoverage {
+            line: 11,
+            hits: 5,
+            covered: true,
+        },
+        LineCoverage {
+            line: 12,
+            hits: 0,
+            covered: false,
+        },
     ];
     let path = PathBuf::from("target.pl");
     wf.update_coverage(path.clone(), coverage);
@@ -902,7 +985,10 @@ fn test_trend_report_stable_trend() -> Result<(), Box<dyn std::error::Error>> {
 
     let now = SystemTime::now();
     // Two data points with very similar values -> stable
-    guardian.set_historical_data(vec![(now - Duration::from_secs(5 * 24 * 3600), 50), (now, 50)]);
+    guardian.set_historical_data(vec![
+        (now - Duration::from_secs(5 * 24 * 3600), 50),
+        (now, 50),
+    ]);
     let report = guardian.generate_trend_report();
     assert_eq!(report.trend_direction, TrendDirection::Stable);
     Ok(())
@@ -915,7 +1001,11 @@ fn test_trend_report_stable_trend() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn test_validation_requires_issue_reference_with_hash() -> Result<(), Box<dyn std::error::Error>> {
     let mut governance = make_minimal_governance();
-    governance.quality_gates.pre_commit.documentation_requirements.require_issue_reference = true;
+    governance
+        .quality_gates
+        .pre_commit
+        .documentation_requirements
+        .require_issue_reference = true;
     let guardian = IgnoredTestGuardian::new(governance);
 
     // Reason contains '#' -> passes issue reference check
@@ -930,7 +1020,11 @@ fn test_validation_requires_issue_reference_with_hash() -> Result<(), Box<dyn st
 #[test]
 fn test_validation_requires_issue_reference_with_word() -> Result<(), Box<dyn std::error::Error>> {
     let mut governance = make_minimal_governance();
-    governance.quality_gates.pre_commit.documentation_requirements.require_issue_reference = true;
+    governance
+        .quality_gates
+        .pre_commit
+        .documentation_requirements
+        .require_issue_reference = true;
     let guardian = IgnoredTestGuardian::new(governance);
 
     // Reason contains 'issue' -> passes issue reference check
@@ -938,14 +1032,21 @@ fn test_validation_requires_issue_reference_with_word() -> Result<(), Box<dyn st
     metadata.success_criteria = vec!["criterion".to_string()];
     let result = guardian.validate_new_ignored_test(&metadata);
     let has_issue_error = result.errors.iter().any(|e| e.contains("issue"));
-    assert!(!has_issue_error, "Should accept 'issue' keyword as reference");
+    assert!(
+        !has_issue_error,
+        "Should accept 'issue' keyword as reference"
+    );
     Ok(())
 }
 
 #[test]
 fn test_validation_fails_without_issue_reference() -> Result<(), Box<dyn std::error::Error>> {
     let mut governance = make_minimal_governance();
-    governance.quality_gates.pre_commit.documentation_requirements.require_issue_reference = true;
+    governance
+        .quality_gates
+        .pre_commit
+        .documentation_requirements
+        .require_issue_reference = true;
     let guardian = IgnoredTestGuardian::new(governance);
 
     // Reason has neither '#' nor 'issue'
@@ -1008,7 +1109,10 @@ fn test_lsp_workflow_stage_equality() -> Result<(), Box<dyn std::error::Error>> 
     assert_eq!(LspWorkflowStage::Navigate, LspWorkflowStage::Navigate);
     assert_eq!(LspWorkflowStage::Complete, LspWorkflowStage::Complete);
     assert_eq!(LspWorkflowStage::Analyze, LspWorkflowStage::Analyze);
-    assert_eq!(LspWorkflowStage::CrossCutting, LspWorkflowStage::CrossCutting);
+    assert_eq!(
+        LspWorkflowStage::CrossCutting,
+        LspWorkflowStage::CrossCutting
+    );
     assert_ne!(LspWorkflowStage::Parse, LspWorkflowStage::Analyze);
     Ok(())
 }
@@ -1094,7 +1198,9 @@ fn test_find_subroutines_in_if_branch() -> Result<(), Box<dyn std::error::Error>
             statements: vec![Node::new(
                 NodeKind::If {
                     condition: Box::new(Node::new(
-                        NodeKind::Number { value: "1".to_string() },
+                        NodeKind::Number {
+                            value: "1".to_string(),
+                        },
                         SourceLocation { start: 0, end: 0 },
                     )),
                     then_branch: Box::new(Node::new(

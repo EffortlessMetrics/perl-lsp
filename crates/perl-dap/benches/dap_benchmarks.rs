@@ -245,7 +245,11 @@ fn benchmark_arg_formatting(c: &mut Criterion) {
     });
 
     group.bench_function("arg_formatting_with_spaces", |b| {
-        let args = vec!["simple".to_string(), "with space".to_string(), "another arg".to_string()];
+        let args = vec![
+            "simple".to_string(),
+            "with space".to_string(),
+            "another arg".to_string(),
+        ];
         b.iter(|| {
             black_box(format_command_args(black_box(&args)));
         })
@@ -348,6 +352,10 @@ fn benchmark_dap_dispatch(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(session_benches, benchmark_dap_initialization, benchmark_dap_dispatch);
+criterion_group!(
+    session_benches,
+    benchmark_dap_initialization,
+    benchmark_dap_dispatch
+);
 
 criterion_main!(configuration_benches, platform_benches, session_benches);

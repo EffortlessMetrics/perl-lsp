@@ -97,7 +97,10 @@ fn consume_returns_false_on_mismatch() -> Result<(), Box<dyn std::error::Error>>
 fn expect_returns_error_on_mismatch() -> Result<(), Box<dyn std::error::Error>> {
     let mut ctx = ParserContext::new("42".to_string());
     let result = ctx.expect(perl_lexer::TokenType::Semicolon);
-    assert!(result.is_err(), "expect should fail when token doesn't match");
+    assert!(
+        result.is_err(),
+        "expect should fail when token doesn't match"
+    );
 
     let err = result.err();
     assert!(err.is_some());
@@ -163,7 +166,10 @@ fn current_position_at_eof_uses_last_token() -> Result<(), Box<dyn std::error::E
 
     let pos = ctx.current_position();
     // Should use end of last token, not zero
-    assert!(pos.byte > 0, "at EOF, position should be at end of last token");
+    assert!(
+        pos.byte > 0,
+        "at EOF, position should be at end of last token"
+    );
     Ok(())
 }
 
@@ -189,7 +195,10 @@ fn with_budget_sets_custom_budget() -> Result<(), Box<dyn std::error::Error>> {
 fn depth_tracking() -> Result<(), Box<dyn std::error::Error>> {
     let mut ctx = ParserContext::new("test".to_string());
 
-    assert!(!ctx.depth_would_exceed(), "fresh context should not exceed depth");
+    assert!(
+        !ctx.depth_would_exceed(),
+        "fresh context should not exceed depth"
+    );
     assert!(ctx.enter_depth(), "should be able to enter depth");
     ctx.exit_depth();
     Ok(())
@@ -197,7 +206,10 @@ fn depth_tracking() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn errors_exhausted_respects_budget() -> Result<(), Box<dyn std::error::Error>> {
-    let budget = ParseBudget { max_errors: 1, ..ParseBudget::default() };
+    let budget = ParseBudget {
+        max_errors: 1,
+        ..ParseBudget::default()
+    };
     let mut ctx = ParserContext::with_budget("test".to_string(), budget);
 
     assert!(!ctx.errors_exhausted());
@@ -205,19 +217,28 @@ fn errors_exhausted_respects_budget() -> Result<(), Box<dyn std::error::Error>> 
     let e = RecoveryParseError::new("err".to_string(), ctx.current_position_range());
     ctx.add_error(e);
 
-    assert!(ctx.errors_exhausted(), "should be exhausted after max_errors reached");
+    assert!(
+        ctx.errors_exhausted(),
+        "should be exhausted after max_errors reached"
+    );
     Ok(())
 }
 
 #[test]
 fn add_error_returns_false_when_budget_exhausted() -> Result<(), Box<dyn std::error::Error>> {
-    let budget = ParseBudget { max_errors: 1, ..ParseBudget::default() };
+    let budget = ParseBudget {
+        max_errors: 1,
+        ..ParseBudget::default()
+    };
     let mut ctx = ParserContext::with_budget("test".to_string(), budget);
 
     let e1 = RecoveryParseError::new("err1".to_string(), ctx.current_position_range());
     assert!(ctx.add_error(e1), "first error should be added");
 
     let e2 = RecoveryParseError::new("err2".to_string(), ctx.current_position_range());
-    assert!(!ctx.add_error(e2), "second error should be rejected (budget exhausted)");
+    assert!(
+        !ctx.add_error(e2),
+        "second error should be rejected (budget exhausted)"
+    );
     Ok(())
 }

@@ -106,12 +106,18 @@ fn test_ignored_test_guardian_validation() -> Result<()> {
     };
 
     let validation_result = guardian.validate_new_ignored_test(&good_test);
-    assert!(validation_result.is_valid, "Well-documented test should pass validation");
+    assert!(
+        validation_result.is_valid,
+        "Well-documented test should pass validation"
+    );
     assert!(
         validation_result.quality_score >= 70.0,
         "Quality score should be high for well-documented test"
     );
-    assert!(validation_result.errors.is_empty(), "Should have no validation errors");
+    assert!(
+        validation_result.errors.is_empty(),
+        "Should have no validation errors"
+    );
 
     // Test validation of poorly documented ignored test
     let poor_test = IgnoredTestMetadata {
@@ -131,12 +137,18 @@ fn test_ignored_test_guardian_validation() -> Result<()> {
     };
 
     let poor_validation = guardian.validate_new_ignored_test(&poor_test);
-    assert!(!poor_validation.is_valid, "Poorly documented test should fail validation");
+    assert!(
+        !poor_validation.is_valid,
+        "Poorly documented test should fail validation"
+    );
     assert!(
         poor_validation.quality_score < 50.0,
         "Quality score should be low for poorly documented test"
     );
-    assert!(!poor_validation.errors.is_empty(), "Should have validation errors");
+    assert!(
+        !poor_validation.errors.is_empty(),
+        "Should have validation errors"
+    );
 
     // Verify specific validation errors
     assert!(
@@ -144,11 +156,17 @@ fn test_ignored_test_guardian_validation() -> Result<()> {
         "Should require issue reference"
     );
     assert!(
-        poor_validation.errors.iter().any(|e| e.contains("timeline")),
+        poor_validation
+            .errors
+            .iter()
+            .any(|e| e.contains("timeline")),
         "Should require timeline"
     );
     assert!(
-        poor_validation.errors.iter().any(|e| e.contains("success criteria")),
+        poor_validation
+            .errors
+            .iter()
+            .any(|e| e.contains("success criteria")),
         "Should require success criteria"
     );
 
@@ -210,7 +228,11 @@ fn test_baseline_regression_detection() -> Result<()> {
     let test_cases = vec![
         // (current_count, should_be_regression, description)
         (49, false, "Same count as baseline - no regression"),
-        (52, false, "Small increase within absolute limit - no regression"),
+        (
+            52,
+            false,
+            "Small increase within absolute limit - no regression",
+        ),
         (54, false, "At absolute limit - no regression"),
         (55, true, "Exceeds absolute limit - regression"),
         (60, true, "Significant increase - regression"),
@@ -341,9 +363,15 @@ fn test_ignored_test_trend_reporting() -> Result<()> {
         "Should detect decreasing trend from 60 to 49 tests"
     );
 
-    assert!(!trend_report.data_points.is_empty(), "Should have data points in trend report");
+    assert!(
+        !trend_report.data_points.is_empty(),
+        "Should have data points in trend report"
+    );
 
-    assert!(trend_report.average_count > 0.0, "Should calculate average count");
+    assert!(
+        trend_report.average_count > 0.0,
+        "Should calculate average count"
+    );
 
     // Average should be around 54.7 for the given data
     assert!(
@@ -352,10 +380,16 @@ fn test_ignored_test_trend_reporting() -> Result<()> {
     );
 
     // Validate recommendations for decreasing trend
-    assert!(!trend_report.recommendations.is_empty(), "Should provide recommendations");
+    assert!(
+        !trend_report.recommendations.is_empty(),
+        "Should provide recommendations"
+    );
 
     assert!(
-        trend_report.recommendations.iter().any(|r| r.contains("progress")),
+        trend_report
+            .recommendations
+            .iter()
+            .any(|r| r.contains("progress")),
         "Should recommend acknowledging progress for decreasing trend"
     );
 
@@ -378,7 +412,10 @@ fn test_ignored_test_trend_reporting() -> Result<()> {
     );
 
     assert!(
-        increasing_trend_report.recommendations.iter().any(|r| r.contains("systematic")),
+        increasing_trend_report
+            .recommendations
+            .iter()
+            .any(|r| r.contains("systematic")),
         "Should recommend systematic approach for increasing trend"
     );
 
@@ -521,7 +558,11 @@ fn test_test_quality_validation() -> Result<()> {
 
         // High quality tests should pass CI validation
         if validation_result.quality_score
-            >= guardian.governance.quality_gates.ci_validation.min_quality_score
+            >= guardian
+                .governance
+                .quality_gates
+                .ci_validation
+                .min_quality_score
         {
             assert!(
                 validation_result.is_valid || validation_result.errors.is_empty(),

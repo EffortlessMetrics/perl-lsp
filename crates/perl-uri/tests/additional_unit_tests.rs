@@ -212,7 +212,10 @@ fn uri_extension_bare_filename() {
 
 #[test]
 fn uri_extension_with_both_query_and_fragment_complex() {
-    assert_eq!(uri_extension("file:///tmp/test.pm?a=1&b=2#section"), Some("pm"));
+    assert_eq!(
+        uri_extension("file:///tmp/test.pm?a=1&b=2#section"),
+        Some("pm")
+    );
 }
 
 #[test]
@@ -582,7 +585,11 @@ mod consistency_tests {
             ("git:/foo", false, true),
         ];
         for (uri, expect_file, expect_special) in &test_uris {
-            assert_eq!(is_file_uri(uri), *expect_file, "is_file_uri({uri}) unexpected");
+            assert_eq!(
+                is_file_uri(uri),
+                *expect_file,
+                "is_file_uri({uri}) unexpected"
+            );
             assert_eq!(
                 is_special_scheme(uri),
                 *expect_special,
@@ -620,15 +627,21 @@ mod consistency_tests {
             return Err(format!("fs_path_to_uri result is not a file URI: {uri}"));
         }
         if is_special_scheme(&uri) {
-            return Err(format!("fs_path_to_uri result should not be special: {uri}"));
+            return Err(format!(
+                "fs_path_to_uri result should not be special: {uri}"
+            ));
         }
         Ok(())
     }
 
     #[test]
     fn uri_key_idempotent() {
-        let uris =
-            ["file:///tmp/test.pl", "file:///C:/Users/test.pl", "https://example.com", "not-a-uri"];
+        let uris = [
+            "file:///tmp/test.pl",
+            "file:///C:/Users/test.pl",
+            "https://example.com",
+            "not-a-uri",
+        ];
         for uri in &uris {
             let once = uri_key(uri);
             let twice = uri_key(&once);
@@ -683,7 +696,11 @@ mod consistency_tests {
             let uri = fs_path_to_uri(&p)?;
             let back = uri_to_fs_path(&uri).ok_or("roundtrip None")?;
             if back != p {
-                return Err(format!("mismatch for {name}: {} vs {}", back.display(), p.display()));
+                return Err(format!(
+                    "mismatch for {name}: {} vs {}",
+                    back.display(),
+                    p.display()
+                ));
             }
         }
         Ok(())

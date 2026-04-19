@@ -38,7 +38,16 @@ pub(super) fn collect_per_crate_mutation(root: &Path) -> BTreeMap<String, usize>
 pub(super) fn collect_per_crate_test_counts(root: &Path) -> BTreeMap<String, usize> {
     let output = run_cmd(
         root,
-        &["cargo", "test", "--workspace", "--lib", "--exclude", "tree-sitter-perl", "--", "--list"],
+        &[
+            "cargo",
+            "test",
+            "--workspace",
+            "--lib",
+            "--exclude",
+            "tree-sitter-perl",
+            "--",
+            "--list",
+        ],
         Duration::from_secs(180),
     );
     if output.is_empty() {
@@ -95,8 +104,12 @@ pub(super) fn format_crate_quality_table(
         "|-------|---------------|-------------|".to_string(),
     ];
     for crate_name in crates {
-        let mutants = mutation.get(crate_name).map_or_else(|| "—".to_string(), |n| n.to_string());
-        let test_count = tests.get(crate_name).map_or_else(|| "—".to_string(), |n| n.to_string());
+        let mutants = mutation
+            .get(crate_name)
+            .map_or_else(|| "—".to_string(), |n| n.to_string());
+        let test_count = tests
+            .get(crate_name)
+            .map_or_else(|| "—".to_string(), |n| n.to_string());
         lines.push(format!("| {crate_name} | {mutants} | {test_count} |"));
     }
     lines.join("\n")
@@ -228,8 +241,16 @@ mod tests {
         ]"#;
         fs::write(out_dir.join("mutants.json"), json)?;
         let result = collect_per_crate_mutation(dir.path());
-        assert_eq!(result.get("perl-quote"), Some(&2), "expected 2 mutants for perl-quote");
-        assert_eq!(result.get("perl-parser"), Some(&1), "expected 1 mutant for perl-parser");
+        assert_eq!(
+            result.get("perl-quote"),
+            Some(&2),
+            "expected 2 mutants for perl-quote"
+        );
+        assert_eq!(
+            result.get("perl-parser"),
+            Some(&1),
+            "expected 1 mutant for perl-parser"
+        );
         Ok(())
     }
 
@@ -249,7 +270,10 @@ mod tests {
     #[test]
     fn test_format_crate_quality_table_empty_maps() {
         let table = format_crate_quality_table(&BTreeMap::new(), &BTreeMap::new());
-        assert!(table.contains("no data yet"), "expected 'no data yet' for empty maps");
+        assert!(
+            table.contains("no data yet"),
+            "expected 'no data yet' for empty maps"
+        );
     }
 
     #[test]
@@ -269,7 +293,11 @@ mod tests {
             .as_array()
             .ok_or_else(|| eyre!("top_line_metrics must be an array"))?
             .iter()
-            .map(|row| row["name"].as_str().ok_or_else(|| eyre!("top_line metric name missing")))
+            .map(|row| {
+                row["name"]
+                    .as_str()
+                    .ok_or_else(|| eyre!("top_line metric name missing"))
+            })
             .collect::<Result<std::collections::BTreeSet<_>>>()?;
         assert_eq!(
             top_line_names,

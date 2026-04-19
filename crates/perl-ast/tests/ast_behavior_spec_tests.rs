@@ -10,11 +10,21 @@ fn loc(start: usize, end: usize) -> SourceLocation {
 }
 
 fn number(value: &str) -> Node {
-    Node::new(NodeKind::Number { value: value.to_string() }, loc(0, value.len()))
+    Node::new(
+        NodeKind::Number {
+            value: value.to_string(),
+        },
+        loc(0, value.len()),
+    )
 }
 
 fn ident(name: &str) -> Node {
-    Node::new(NodeKind::Identifier { name: name.to_string() }, loc(0, name.len()))
+    Node::new(
+        NodeKind::Identifier {
+            name: name.to_string(),
+        },
+        loc(0, name.len()),
+    )
 }
 
 fn block(statements: Vec<Node>) -> Node {
@@ -23,12 +33,23 @@ fn block(statements: Vec<Node>) -> Node {
 
 #[test]
 fn when_serializing_a_program_then_output_uses_source_file_root() {
-    let node = Node::new(NodeKind::Program { statements: vec![number("42")] }, loc(0, 2));
+    let node = Node::new(
+        NodeKind::Program {
+            statements: vec![number("42")],
+        },
+        loc(0, 2),
+    );
 
     let sexp = node.to_sexp();
 
-    assert!(sexp.starts_with("(source_file"), "expected source_file root, got: {sexp}");
-    assert!(sexp.contains("(number 42)"), "expected nested number, got: {sexp}");
+    assert!(
+        sexp.starts_with("(source_file"),
+        "expected source_file root, got: {sexp}"
+    );
+    assert!(
+        sexp.contains("(number 42)"),
+        "expected nested number, got: {sexp}"
+    );
 }
 
 #[test]
@@ -37,7 +58,10 @@ fn when_serializing_variable_declaration_with_initializer_then_both_parts_are_em
         NodeKind::VariableDeclaration {
             declarator: "my".to_string(),
             variable: Box::new(Node::new(
-                NodeKind::Variable { sigil: "$".to_string(), name: "x".to_string() },
+                NodeKind::Variable {
+                    sigil: "$".to_string(),
+                    name: "x".to_string(),
+                },
                 loc(3, 5),
             )),
             attributes: vec![],
@@ -48,9 +72,18 @@ fn when_serializing_variable_declaration_with_initializer_then_both_parts_are_em
 
     let sexp = decl.to_sexp();
 
-    assert!(sexp.contains("(my_declaration"), "expected declarator tag, got: {sexp}");
-    assert!(sexp.contains("(variable $ x)"), "expected declared variable, got: {sexp}");
-    assert!(sexp.contains("(number 1)"), "expected initializer number, got: {sexp}");
+    assert!(
+        sexp.contains("(my_declaration"),
+        "expected declarator tag, got: {sexp}"
+    );
+    assert!(
+        sexp.contains("(variable $ x)"),
+        "expected declared variable, got: {sexp}"
+    );
+    assert!(
+        sexp.contains("(number 1)"),
+        "expected initializer number, got: {sexp}"
+    );
 }
 
 #[test]
@@ -67,7 +100,11 @@ fn when_calling_children_on_if_with_elsif_and_else_then_all_direct_children_are_
 
     let children = node.children();
 
-    assert_eq!(children.len(), 5, "expected condition + then + elsif(cond/body) + else");
+    assert_eq!(
+        children.len(),
+        5,
+        "expected condition + then + elsif(cond/body) + else"
+    );
     assert_eq!(children[0].kind.kind_name(), "Identifier");
     assert_eq!(children[1].kind.kind_name(), "Block");
 }
@@ -115,7 +152,9 @@ fn when_counting_nodes_in_nested_tree_then_total_includes_all_descendants() {
                     loc(0, 3),
                 ),
                 Node::new(
-                    NodeKind::ExpressionStatement { expression: Box::new(number("3")) },
+                    NodeKind::ExpressionStatement {
+                        expression: Box::new(number("3")),
+                    },
                     loc(4, 5),
                 ),
             ],
@@ -128,8 +167,12 @@ fn when_counting_nodes_in_nested_tree_then_total_includes_all_descendants() {
 
 #[test]
 fn when_mutating_children_with_for_each_child_mut_then_changes_are_persisted() {
-    let mut array =
-        Node::new(NodeKind::ArrayLiteral { elements: vec![number("1"), number("2")] }, loc(0, 5));
+    let mut array = Node::new(
+        NodeKind::ArrayLiteral {
+            elements: vec![number("1"), number("2")],
+        },
+        loc(0, 5),
+    );
 
     array.for_each_child_mut(|child| {
         if let NodeKind::Number { value } = &mut child.kind {

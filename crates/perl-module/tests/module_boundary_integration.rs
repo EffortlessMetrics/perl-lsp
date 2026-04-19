@@ -25,7 +25,10 @@ fn module_variant_pairs_remain_scannable_for_canonical_and_legacy_forms() {
     assert!(!variants.is_empty());
     let canonical_old = &variants[0].0;
     let canonical_line = format!("use {canonical_old};");
-    assert!(contains_standalone_module_token(&canonical_line, canonical_old));
+    assert!(contains_standalone_module_token(
+        &canonical_line,
+        canonical_old
+    ));
 
     if variants.len() == 2 {
         let legacy_old = &variants[1].0;

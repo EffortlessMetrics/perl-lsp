@@ -33,7 +33,10 @@ fn fuzz_boundary_scanner_never_panics_and_emits_valid_ranges() {
         let module_name = fuzz_string(&mut seed, 24);
 
         let ranges = find_standalone_module_token_ranges(&line, &module_name).collect::<Vec<_>>();
-        assert_eq!(contains_standalone_module_token(&line, &module_name), !ranges.is_empty());
+        assert_eq!(
+            contains_standalone_module_token(&line, &module_name),
+            !ranges.is_empty()
+        );
 
         let mut prev_end = 0usize;
         for range in ranges {

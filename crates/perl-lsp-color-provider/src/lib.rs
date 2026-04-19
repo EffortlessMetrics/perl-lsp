@@ -58,12 +58,15 @@ fn byte_to_utf16_col(line_text: &str, byte_pos: usize) -> u32 {
 /// Look up a named color (case-insensitive) and return its Color
 fn lookup_named_color(name: &str) -> Option<Color> {
     let lower = name.to_ascii_lowercase();
-    NAMED_COLORS.iter().find(|(n, _, _, _)| *n == lower).map(|(_, r, g, b)| Color {
-        red: *r as f64 / 255.0,
-        green: *g as f64 / 255.0,
-        blue: *b as f64 / 255.0,
-        alpha: 1.0,
-    })
+    NAMED_COLORS
+        .iter()
+        .find(|(n, _, _, _)| *n == lower)
+        .map(|(_, r, g, b)| Color {
+            red: *r as f64 / 255.0,
+            green: *g as f64 / 255.0,
+            blue: *b as f64 / 255.0,
+            alpha: 1.0,
+        })
 }
 
 /// Color information with range and RGBA values
@@ -243,23 +246,103 @@ fn parse_ansi_color(code: &str) -> Option<Color> {
 
     // Basic ANSI color codes (30-37 foreground)
     match code {
-        "30" | "0;30" => Some(Color { red: 0.0, green: 0.0, blue: 0.0, alpha: 1.0 }), // Black
-        "31" | "0;31" => Some(Color { red: 0.8, green: 0.0, blue: 0.0, alpha: 1.0 }), // Red
-        "32" | "0;32" => Some(Color { red: 0.0, green: 0.8, blue: 0.0, alpha: 1.0 }), // Green
-        "33" | "0;33" => Some(Color { red: 0.8, green: 0.8, blue: 0.0, alpha: 1.0 }), // Yellow
-        "34" | "0;34" => Some(Color { red: 0.0, green: 0.0, blue: 0.8, alpha: 1.0 }), // Blue
-        "35" | "0;35" => Some(Color { red: 0.8, green: 0.0, blue: 0.8, alpha: 1.0 }), // Magenta
-        "36" | "0;36" => Some(Color { red: 0.0, green: 0.8, blue: 0.8, alpha: 1.0 }), // Cyan
-        "37" | "0;37" => Some(Color { red: 0.8, green: 0.8, blue: 0.8, alpha: 1.0 }), // White
+        "30" | "0;30" => Some(Color {
+            red: 0.0,
+            green: 0.0,
+            blue: 0.0,
+            alpha: 1.0,
+        }), // Black
+        "31" | "0;31" => Some(Color {
+            red: 0.8,
+            green: 0.0,
+            blue: 0.0,
+            alpha: 1.0,
+        }), // Red
+        "32" | "0;32" => Some(Color {
+            red: 0.0,
+            green: 0.8,
+            blue: 0.0,
+            alpha: 1.0,
+        }), // Green
+        "33" | "0;33" => Some(Color {
+            red: 0.8,
+            green: 0.8,
+            blue: 0.0,
+            alpha: 1.0,
+        }), // Yellow
+        "34" | "0;34" => Some(Color {
+            red: 0.0,
+            green: 0.0,
+            blue: 0.8,
+            alpha: 1.0,
+        }), // Blue
+        "35" | "0;35" => Some(Color {
+            red: 0.8,
+            green: 0.0,
+            blue: 0.8,
+            alpha: 1.0,
+        }), // Magenta
+        "36" | "0;36" => Some(Color {
+            red: 0.0,
+            green: 0.8,
+            blue: 0.8,
+            alpha: 1.0,
+        }), // Cyan
+        "37" | "0;37" => Some(Color {
+            red: 0.8,
+            green: 0.8,
+            blue: 0.8,
+            alpha: 1.0,
+        }), // White
         // Bright colors (90-97)
-        "90" | "1;30" => Some(Color { red: 0.5, green: 0.5, blue: 0.5, alpha: 1.0 }), // Bright Black
-        "91" | "1;31" => Some(Color { red: 1.0, green: 0.0, blue: 0.0, alpha: 1.0 }), // Bright Red
-        "92" | "1;32" => Some(Color { red: 0.0, green: 1.0, blue: 0.0, alpha: 1.0 }), // Bright Green
-        "93" | "1;33" => Some(Color { red: 1.0, green: 1.0, blue: 0.0, alpha: 1.0 }), // Bright Yellow
-        "94" | "1;34" => Some(Color { red: 0.0, green: 0.0, blue: 1.0, alpha: 1.0 }), // Bright Blue
-        "95" | "1;35" => Some(Color { red: 1.0, green: 0.0, blue: 1.0, alpha: 1.0 }), // Bright Magenta
-        "96" | "1;36" => Some(Color { red: 0.0, green: 1.0, blue: 1.0, alpha: 1.0 }), // Bright Cyan
-        "97" | "1;37" => Some(Color { red: 1.0, green: 1.0, blue: 1.0, alpha: 1.0 }), // Bright White
+        "90" | "1;30" => Some(Color {
+            red: 0.5,
+            green: 0.5,
+            blue: 0.5,
+            alpha: 1.0,
+        }), // Bright Black
+        "91" | "1;31" => Some(Color {
+            red: 1.0,
+            green: 0.0,
+            blue: 0.0,
+            alpha: 1.0,
+        }), // Bright Red
+        "92" | "1;32" => Some(Color {
+            red: 0.0,
+            green: 1.0,
+            blue: 0.0,
+            alpha: 1.0,
+        }), // Bright Green
+        "93" | "1;33" => Some(Color {
+            red: 1.0,
+            green: 1.0,
+            blue: 0.0,
+            alpha: 1.0,
+        }), // Bright Yellow
+        "94" | "1;34" => Some(Color {
+            red: 0.0,
+            green: 0.0,
+            blue: 1.0,
+            alpha: 1.0,
+        }), // Bright Blue
+        "95" | "1;35" => Some(Color {
+            red: 1.0,
+            green: 0.0,
+            blue: 1.0,
+            alpha: 1.0,
+        }), // Bright Magenta
+        "96" | "1;36" => Some(Color {
+            red: 0.0,
+            green: 1.0,
+            blue: 1.0,
+            alpha: 1.0,
+        }), // Bright Cyan
+        "97" | "1;37" => Some(Color {
+            red: 1.0,
+            green: 1.0,
+            blue: 1.0,
+            alpha: 1.0,
+        }), // Bright White
         _ => None,
     }
 }
@@ -299,7 +382,12 @@ fn color_from_256(n: u8) -> Color {
             (val, val, val)
         }
     };
-    Color { red: r as f64 / 255.0, green: g as f64 / 255.0, blue: b as f64 / 255.0, alpha: 1.0 }
+    Color {
+        red: r as f64 / 255.0,
+        green: g as f64 / 255.0,
+        blue: b as f64 / 255.0,
+        alpha: 1.0,
+    }
 }
 
 /// Find quoted string regions (both single and double quotes) in a line.
@@ -354,8 +442,9 @@ fn detect_named_colors(text: &str) -> Vec<ColorInformation> {
             let match_end = mat.end();
 
             // Only accept matches inside a quoted region
-            let in_string =
-                quoted_regions.iter().any(|(qs, qe)| match_start >= *qs && match_end <= *qe);
+            let in_string = quoted_regions
+                .iter()
+                .any(|(qs, qe)| match_start >= *qs && match_end <= *qe);
             if !in_string {
                 continue;
             }
@@ -482,7 +571,11 @@ fn rgb_to_hsl(r: f64, g: f64, b: f64) -> (u32, u32, u32) {
 
     let l = (max + min) / 2.0;
 
-    let s = if delta == 0.0 { 0.0 } else { delta / (1.0 - (2.0 * l - 1.0).abs()) };
+    let s = if delta == 0.0 {
+        0.0
+    } else {
+        delta / (1.0 - (2.0 * l - 1.0).abs())
+    };
 
     let h = if delta == 0.0 {
         0.0
@@ -496,7 +589,11 @@ fn rgb_to_hsl(r: f64, g: f64, b: f64) -> (u32, u32, u32) {
 
     let h = if h < 0.0 { h + 360.0 } else { h };
 
-    ((h.round() as u32), (s * 100.0).round() as u32, (l * 100.0).round() as u32)
+    (
+        (h.round() as u32),
+        (s * 100.0).round() as u32,
+        (l * 100.0).round() as u32,
+    )
 }
 
 #[cfg(test)]
@@ -540,7 +637,12 @@ mod tests {
 
     #[test]
     fn parser_color_presentations() {
-        let color = Color { red: 1.0, green: 0.0, blue: 0.0, alpha: 1.0 };
+        let color = Color {
+            red: 1.0,
+            green: 0.0,
+            blue: 0.0,
+            alpha: 1.0,
+        };
         let presentations = color_to_presentations(&color);
         assert!(presentations.len() >= 3);
 
@@ -666,13 +768,22 @@ mod tests {
 
     #[test]
     fn test_named_color_presentation() {
-        let color = Color { red: 1.0, green: 0.0, blue: 0.0, alpha: 1.0 };
+        let color = Color {
+            red: 1.0,
+            green: 0.0,
+            blue: 0.0,
+            alpha: 1.0,
+        };
         let presentations = color_to_presentations(&color);
         let labels: Vec<String> = presentations
             .iter()
             .filter_map(|p| p["label"].as_str().map(|s| s.to_string()))
             .collect();
         // Should include a named color label "red"
-        assert!(labels.iter().any(|l| l == "red"), "Expected 'red' in labels: {:?}", labels);
+        assert!(
+            labels.iter().any(|l| l == "red"),
+            "Expected 'red' in labels: {:?}",
+            labels
+        );
     }
 }

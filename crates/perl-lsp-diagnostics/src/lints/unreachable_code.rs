@@ -77,7 +77,12 @@ fn visit_node(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
         }
 
         // If/unless: each branch is an independent scope
-        NodeKind::If { then_branch, elsif_branches, else_branch, .. } => {
+        NodeKind::If {
+            then_branch,
+            elsif_branches,
+            else_branch,
+            ..
+        } => {
             visit_node(then_branch, diagnostics);
             for (_, branch_body) in elsif_branches {
                 visit_node(branch_body, diagnostics);
@@ -115,7 +120,11 @@ fn visit_node(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
         }
 
         // Try body and catch blocks: each is an independent scope
-        NodeKind::Try { body, catch_blocks, finally_block } => {
+        NodeKind::Try {
+            body,
+            catch_blocks,
+            finally_block,
+        } => {
             visit_node(body, diagnostics);
             for (_, catch_body) in catch_blocks {
                 visit_node(catch_body, diagnostics);
@@ -132,8 +141,14 @@ fn visit_node(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
         }
 
         // Variable declarations with initializers may contain anonymous subs
-        NodeKind::VariableDeclaration { initializer: Some(init), .. }
-        | NodeKind::VariableListDeclaration { initializer: Some(init), .. } => {
+        NodeKind::VariableDeclaration {
+            initializer: Some(init),
+            ..
+        }
+        | NodeKind::VariableListDeclaration {
+            initializer: Some(init),
+            ..
+        } => {
             visit_expr(init, diagnostics);
         }
 
@@ -173,7 +188,11 @@ fn visit_expr(expr: &Node, diagnostics: &mut Vec<Diagnostic>) {
         NodeKind::Unary { operand, .. } => {
             visit_expr(operand, diagnostics);
         }
-        NodeKind::Ternary { condition, then_expr, else_expr } => {
+        NodeKind::Ternary {
+            condition,
+            then_expr,
+            else_expr,
+        } => {
             visit_expr(condition, diagnostics);
             visit_expr(then_expr, diagnostics);
             visit_expr(else_expr, diagnostics);
@@ -265,5 +284,8 @@ fn is_unconditional_exit(node: &Node) -> bool {
 
 /// Returns true if the function name is one of the known unconditional-exit functions.
 fn is_exit_function(name: &str) -> bool {
-    matches!(name, "die" | "exit" | "croak" | "Carp::croak" | "confess" | "Carp::confess")
+    matches!(
+        name,
+        "die" | "exit" | "croak" | "Carp::croak" | "confess" | "Carp::confess"
+    )
 }

@@ -18,7 +18,9 @@ pub fn find_data_marker_byte_lexed(s: &str) -> Option<usize> {
 
 /// Helper to get the code portion of text (before __DATA__/__END__)
 pub fn code_slice(text: &str) -> &str {
-    find_data_marker_byte_lexed(text).map(|i| &text[..i]).unwrap_or(text)
+    find_data_marker_byte_lexed(text)
+        .map(|i| &text[..i])
+        .unwrap_or(text)
 }
 
 /// Find the byte offset of a __DATA__ or __END__ marker in the source text.

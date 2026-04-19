@@ -7,8 +7,10 @@ use proptest::test_runner::{Config as ProptestConfig, FileFailurePersistence};
 // Pull in the shared helpers (includes CoreTok, TokenType, and whitespace functions)
 include!("prop_test_utils.rs");
 
-const REGRESS_DIR: &str =
-    concat!(env!("CARGO_MANIFEST_DIR"), "/tests/_proptest-regressions/prop_whitespace");
+const REGRESS_DIR: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/tests/_proptest-regressions/prop_whitespace"
+);
 
 // The whitespace manipulation functions are now in prop_test_utils.rs:
 // - CoreTok struct

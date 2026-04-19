@@ -41,8 +41,14 @@ mod deep_truncation_tests {
         println!("  indexed_variables: {:?}", rendered.indexed_variables);
 
         // Should show truncation marker
-        assert!(rendered.value.contains("..."), "should have truncation marker");
-        assert!(rendered.value.contains("500 total"), "should show total count");
+        assert!(
+            rendered.value.contains("..."),
+            "should have truncation marker"
+        );
+        assert!(
+            rendered.value.contains("500 total"),
+            "should show total count"
+        );
         assert!(rendered.indexed_variables.is_some());
         assert!(rendered.value.len() < 500, "preview should be bounded");
     }
@@ -77,8 +83,10 @@ mod deep_truncation_tests {
         // Simulate a self-referential hash: my %c; $c{self} = \%c;
         // In reality, PerlValue uses Box (no Rc), so true cycles can't exist.
         // The debugger would emit a Truncated marker instead.
-        let truncated_marker =
-            PerlValue::Truncated { summary: "HASH(0x7f1234567890)".to_string(), total_count: None };
+        let truncated_marker = PerlValue::Truncated {
+            summary: "HASH(0x7f1234567890)".to_string(),
+            total_count: None,
+        };
         let value = PerlValue::Hash(vec![(
             "self".to_string(),
             PerlValue::Reference(Box::new(truncated_marker)),
@@ -104,7 +112,11 @@ mod deep_truncation_tests {
         let result = parser.parse_assignment(text);
 
         // Should parse successfully with default max_depth=50
-        assert!(result.is_ok(), "parser should accept 7-level nested hash: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "parser should accept 7-level nested hash: {:?}",
+            result.err()
+        );
         if let Ok((name, value)) = result {
             println!("Parsed 7-level nested hash:");
             println!("  name: {}", name);
@@ -143,7 +155,10 @@ mod deep_truncation_tests {
         println!("  root_value: {}", rendered.value);
         println!("  children_count: {}", children.len());
         if !children.is_empty() {
-            println!("  first_child: name={}, value={}", children[0].name, children[0].value);
+            println!(
+                "  first_child: name={}, value={}",
+                children[0].name, children[0].value
+            );
         }
 
         assert_eq!(children.len(), 1, "root should have 1 child");

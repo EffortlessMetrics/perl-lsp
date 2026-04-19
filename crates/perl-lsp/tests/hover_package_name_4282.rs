@@ -47,7 +47,13 @@ fn test_hover_package_name_file_path_richer_than_bare_token() -> TestResult {
         !val.starts_with("**Perl**: `"),
         "hover for File::Path should not be bare token fallback, got: {val}"
     );
-    assert!(val.contains("File::Path"), "hover should mention the package name, got: {val}");
-    assert!(val.contains("metacpan.org"), "hover should include MetaCPAN link, got: {val}");
+    assert!(
+        val.contains("File::Path"),
+        "hover should mention the package name, got: {val}"
+    );
+    assert!(
+        val.contains("metacpan.org"),
+        "hover should include MetaCPAN link, got: {val}"
+    );
     Ok(())
 }

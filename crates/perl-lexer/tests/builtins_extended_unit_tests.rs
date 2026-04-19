@@ -46,7 +46,11 @@ fn phf_map_get_returns_same_as_iteration_for_known_keys() -> Result<(), String> 
                     return Err(format!("Mismatch for {key}: iteration vs get"));
                 }
             }
-            None => return Err(format!("get({key}) returned None but key exists in entries")),
+            None => {
+                return Err(format!(
+                    "get({key}) returned None but key exists in entries"
+                ));
+            }
         }
     }
     Ok(())
@@ -67,7 +71,9 @@ fn io_functions_have_filehandle_as_first_param() -> Result<(), String> {
         let params = get_param_names(name);
         if let Some(first) = params.first() {
             if *first != "FILEHANDLE" {
-                return Err(format!("{name} first param should be FILEHANDLE, got {first}"));
+                return Err(format!(
+                    "{name} first param should be FILEHANDLE, got {first}"
+                ));
             }
         } else {
             return Err(format!("{name} should have at least one param"));
@@ -78,12 +84,21 @@ fn io_functions_have_filehandle_as_first_param() -> Result<(), String> {
 
 #[test]
 fn directory_functions_have_dirhandle_param() -> Result<(), String> {
-    let dir_funcs = ["opendir", "readdir", "closedir", "rewinddir", "seekdir", "telldir"];
+    let dir_funcs = [
+        "opendir",
+        "readdir",
+        "closedir",
+        "rewinddir",
+        "seekdir",
+        "telldir",
+    ];
     for name in &dir_funcs {
         let params = get_param_names(name);
         if let Some(first) = params.first() {
             if *first != "DIRHANDLE" {
-                return Err(format!("{name} first param should be DIRHANDLE, got {first}"));
+                return Err(format!(
+                    "{name} first param should be DIRHANDLE, got {first}"
+                ));
             }
         } else {
             return Err(format!("{name} should have at least one param"));
@@ -112,7 +127,9 @@ fn socket_functions_have_socket_param() -> Result<(), String> {
         let params = get_param_names(name);
         if let Some(first) = params.first() {
             if !first.contains("SOCKET") {
-                return Err(format!("{name} first param should contain SOCKET, got {first}"));
+                return Err(format!(
+                    "{name} first param should contain SOCKET, got {first}"
+                ));
             }
         } else {
             return Err(format!("{name} should have at least one param"));
@@ -130,7 +147,10 @@ fn all_file_test_operators_have_single_file_param() -> Result<(), String> {
     for op in &ops {
         let params = get_param_names(op);
         if params.len() != 1 {
-            return Err(format!("{op} should have exactly 1 param, got {}", params.len()));
+            return Err(format!(
+                "{op} should have exactly 1 param, got {}",
+                params.len()
+            ));
         }
         if params[0] != "FILE" {
             return Err(format!("{op} param should be FILE, got {}", params[0]));
@@ -204,8 +224,9 @@ fn every_phf_io_entry_exists_in_hashmap() -> Result<(), String> {
 #[test]
 fn every_phf_math_entry_exists_in_hashmap() -> Result<(), String> {
     let hashmap_sigs = create_builtin_signatures();
-    let math_funcs =
-        ["abs", "atan2", "cos", "exp", "hex", "int", "log", "oct", "rand", "sin", "sqrt", "srand"];
+    let math_funcs = [
+        "abs", "atan2", "cos", "exp", "hex", "int", "log", "oct", "rand", "sin", "sqrt", "srand",
+    ];
     for name in &math_funcs {
         if !hashmap_sigs.contains_key(name) {
             return Err(format!("{name} in PHF but missing from HashMap signatures"));
@@ -252,7 +273,9 @@ fn full_sigs_open_starts_with_three_arg_form() -> Result<(), String> {
     if let Some(sigs) = BUILTIN_FULL_SIGS.get("open") {
         if let Some(first) = sigs.first() {
             if !first.contains("MODE") || !first.contains("FILENAME") {
-                return Err(format!("open first full sig should be 3-arg form, got {first}"));
+                return Err(format!(
+                    "open first full sig should be 3-arg form, got {first}"
+                ));
             }
         }
     }
@@ -264,7 +287,9 @@ fn full_sigs_split_starts_with_three_arg_form() -> Result<(), String> {
     if let Some(sigs) = BUILTIN_FULL_SIGS.get("split") {
         if let Some(first) = sigs.first() {
             if !first.contains("LIMIT") {
-                return Err(format!("split first full sig should include LIMIT, got {first}"));
+                return Err(format!(
+                    "split first full sig should include LIMIT, got {first}"
+                ));
             }
         }
     }
@@ -310,7 +335,9 @@ fn hashmap_open_variants_ordered_most_specific_first() -> Result<(), String> {
 
 #[test]
 fn is_builtin_rejects_whitespace_variations() {
-    let whitespace_names = [" print", "print ", " print ", "\tprint", "print\n", "\nprint"];
+    let whitespace_names = [
+        " print", "print ", " print ", "\tprint", "print\n", "\nprint",
+    ];
     for name in &whitespace_names {
         if is_builtin(name) {
             panic!("{name:?} with whitespace should not be a builtin");
@@ -393,7 +420,9 @@ fn all_hashmap_docs_are_ascii_printable() -> Result<(), String> {
     let sigs = create_builtin_signatures();
     for (name, sig) in sigs.iter() {
         if !sig.documentation.is_ascii() {
-            return Err(format!("{name} documentation contains non-ASCII characters"));
+            return Err(format!(
+                "{name} documentation contains non-ASCII characters"
+            ));
         }
     }
     Ok(())
@@ -447,7 +476,9 @@ fn hashmap_signature_count_is_substantial() -> Result<(), String> {
 fn phf_params_crypt_has_plaintext_salt() -> Result<(), String> {
     let params = get_param_names("crypt");
     if params != ["PLAINTEXT", "SALT"] {
-        return Err(format!("crypt params should be [PLAINTEXT, SALT], got {params:?}"));
+        return Err(format!(
+            "crypt params should be [PLAINTEXT, SALT], got {params:?}"
+        ));
     }
     Ok(())
 }
@@ -456,7 +487,9 @@ fn phf_params_crypt_has_plaintext_salt() -> Result<(), String> {
 fn phf_params_chmod_has_mode_list() -> Result<(), String> {
     let params = get_param_names("chmod");
     if params != ["MODE", "LIST"] {
-        return Err(format!("chmod params should be [MODE, LIST], got {params:?}"));
+        return Err(format!(
+            "chmod params should be [MODE, LIST], got {params:?}"
+        ));
     }
     Ok(())
 }
@@ -465,7 +498,9 @@ fn phf_params_chmod_has_mode_list() -> Result<(), String> {
 fn phf_params_chown_has_uid_gid_list() -> Result<(), String> {
     let params = get_param_names("chown");
     if params != ["UID", "GID", "LIST"] {
-        return Err(format!("chown params should be [UID, GID, LIST], got {params:?}"));
+        return Err(format!(
+            "chown params should be [UID, GID, LIST], got {params:?}"
+        ));
     }
     Ok(())
 }
@@ -474,7 +509,9 @@ fn phf_params_chown_has_uid_gid_list() -> Result<(), String> {
 fn phf_params_kill_has_signal_list() -> Result<(), String> {
     let params = get_param_names("kill");
     if params != ["SIGNAL", "LIST"] {
-        return Err(format!("kill params should be [SIGNAL, LIST], got {params:?}"));
+        return Err(format!(
+            "kill params should be [SIGNAL, LIST], got {params:?}"
+        ));
     }
     Ok(())
 }
@@ -483,7 +520,9 @@ fn phf_params_kill_has_signal_list() -> Result<(), String> {
 fn phf_params_waitpid_has_pid_flags() -> Result<(), String> {
     let params = get_param_names("waitpid");
     if params != ["PID", "FLAGS"] {
-        return Err(format!("waitpid params should be [PID, FLAGS], got {params:?}"));
+        return Err(format!(
+            "waitpid params should be [PID, FLAGS], got {params:?}"
+        ));
     }
     Ok(())
 }
@@ -510,7 +549,9 @@ fn phf_params_send_has_four_params() -> Result<(), String> {
 fn phf_params_split_has_pattern_expr_limit() -> Result<(), String> {
     let params = get_param_names("split");
     if params != ["PATTERN", "EXPR", "LIMIT"] {
-        return Err(format!("split params should be [PATTERN, EXPR, LIMIT], got {params:?}"));
+        return Err(format!(
+            "split params should be [PATTERN, EXPR, LIMIT], got {params:?}"
+        ));
     }
     Ok(())
 }
@@ -519,7 +560,9 @@ fn phf_params_split_has_pattern_expr_limit() -> Result<(), String> {
 fn phf_params_index_has_str_substr_position() -> Result<(), String> {
     let params = get_param_names("index");
     if params != ["STR", "SUBSTR", "POSITION"] {
-        return Err(format!("index params should be [STR, SUBSTR, POSITION], got {params:?}"));
+        return Err(format!(
+            "index params should be [STR, SUBSTR, POSITION], got {params:?}"
+        ));
     }
     Ok(())
 }
@@ -598,7 +641,10 @@ fn hashmap_chomp_has_three_variants() -> Result<(), String> {
     let sigs = create_builtin_signatures();
     if let Some(sig) = sigs.get("chomp") {
         if sig.signatures.len() != 3 {
-            return Err(format!("chomp should have 3 variants, got {}", sig.signatures.len()));
+            return Err(format!(
+                "chomp should have 3 variants, got {}",
+                sig.signatures.len()
+            ));
         }
     } else {
         return Err("chomp missing from HashMap".into());
@@ -611,7 +657,10 @@ fn hashmap_bless_has_two_variants() -> Result<(), String> {
     let sigs = create_builtin_signatures();
     if let Some(sig) = sigs.get("bless") {
         if sig.signatures.len() != 2 {
-            return Err(format!("bless should have 2 variants, got {}", sig.signatures.len()));
+            return Err(format!(
+                "bless should have 2 variants, got {}",
+                sig.signatures.len()
+            ));
         }
     } else {
         return Err("bless missing from HashMap".into());
@@ -624,7 +673,10 @@ fn hashmap_eval_has_two_variants() -> Result<(), String> {
     let sigs = create_builtin_signatures();
     if let Some(sig) = sigs.get("eval") {
         if sig.signatures.len() != 2 {
-            return Err(format!("eval should have 2 variants, got {}", sig.signatures.len()));
+            return Err(format!(
+                "eval should have 2 variants, got {}",
+                sig.signatures.len()
+            ));
         }
     } else {
         return Err("eval missing from HashMap".into());
@@ -637,7 +689,10 @@ fn hashmap_grep_has_two_variants() -> Result<(), String> {
     let sigs = create_builtin_signatures();
     if let Some(sig) = sigs.get("grep") {
         if sig.signatures.len() != 2 {
-            return Err(format!("grep should have 2 variants, got {}", sig.signatures.len()));
+            return Err(format!(
+                "grep should have 2 variants, got {}",
+                sig.signatures.len()
+            ));
         }
     } else {
         return Err("grep missing from HashMap".into());
@@ -650,7 +705,10 @@ fn hashmap_map_has_two_variants() -> Result<(), String> {
     let sigs = create_builtin_signatures();
     if let Some(sig) = sigs.get("map") {
         if sig.signatures.len() != 2 {
-            return Err(format!("map should have 2 variants, got {}", sig.signatures.len()));
+            return Err(format!(
+                "map should have 2 variants, got {}",
+                sig.signatures.len()
+            ));
         }
     } else {
         return Err("map missing from HashMap".into());
@@ -663,7 +721,10 @@ fn hashmap_sort_has_three_variants() -> Result<(), String> {
     let sigs = create_builtin_signatures();
     if let Some(sig) = sigs.get("sort") {
         if sig.signatures.len() != 3 {
-            return Err(format!("sort should have 3 variants, got {}", sig.signatures.len()));
+            return Err(format!(
+                "sort should have 3 variants, got {}",
+                sig.signatures.len()
+            ));
         }
     } else {
         return Err("sort missing from HashMap".into());
@@ -676,7 +737,10 @@ fn hashmap_split_has_four_variants() -> Result<(), String> {
     let sigs = create_builtin_signatures();
     if let Some(sig) = sigs.get("split") {
         if sig.signatures.len() != 4 {
-            return Err(format!("split should have 4 variants, got {}", sig.signatures.len()));
+            return Err(format!(
+                "split should have 4 variants, got {}",
+                sig.signatures.len()
+            ));
         }
     } else {
         return Err("split missing from HashMap".into());
@@ -692,8 +756,9 @@ fn hashmap_split_has_four_variants() -> Result<(), String> {
 fn single_expr_functions_in_both_modules() -> Result<(), String> {
     let hashmap_sigs = create_builtin_signatures();
     // Functions that take a single EXPR and default to $_
-    let defaulting_funcs =
-        ["chomp", "chop", "chr", "lc", "lcfirst", "length", "ord", "uc", "ucfirst"];
+    let defaulting_funcs = [
+        "chomp", "chop", "chr", "lc", "lcfirst", "length", "ord", "uc", "ucfirst",
+    ];
     for name in &defaulting_funcs {
         if !is_builtin(name) {
             return Err(format!("{name} missing from PHF"));
@@ -725,7 +790,10 @@ fn full_sigs_close_has_two_variants() -> Result<(), String> {
 fn full_sigs_printf_has_two_variants() -> Result<(), String> {
     if let Some(sigs) = BUILTIN_FULL_SIGS.get("printf") {
         if sigs.len() != 2 {
-            return Err(format!("printf should have 2 full sigs, got {}", sigs.len()));
+            return Err(format!(
+                "printf should have 2 full sigs, got {}",
+                sigs.len()
+            ));
         }
     } else {
         return Err("printf missing from BUILTIN_FULL_SIGS".into());
