@@ -37,8 +37,7 @@ fn project_root() -> PathBuf {
 /// - perl-lsp-document-links
 /// - perl-lsp-workspace-symbols
 #[test]
-fn test_all_15_old_provider_crates_directories_removed() -> Result<(), Box<dyn std::error::Error>>
-{
+fn test_all_15_old_provider_crates_directories_removed() -> Result<(), Box<dyn std::error::Error>> {
     let root = project_root();
     let crates_dir = root.join("crates");
 
@@ -73,11 +72,7 @@ fn test_all_15_old_provider_crates_directories_removed() -> Result<(), Box<dyn s
         "G1a collapse: the following 15 provider crates must be deleted but still exist:\n{}\n\n\
          Expected: all 15 crate directories removed from crates/\n\
          See .spec/4500-wave-g1a-providers/acceptance.md line 13",
-        still_present
-            .iter()
-            .map(|s| format!("  - crates/{}/", s))
-            .collect::<Vec<_>>()
-            .join("\n")
+        still_present.iter().map(|s| format!("  - crates/{}/", s)).collect::<Vec<_>>().join("\n")
     );
     Ok(())
 }
@@ -164,11 +159,7 @@ fn test_providers_mod_rs_file_exists_with_all_submodules() -> Result<(), Box<dyn
         missing.is_empty(),
         "G1a collapse: providers/mod.rs must declare all 15 submodules but is missing:\n{}\n\n\
          See .spec/4500-wave-g1a-providers/acceptance.md line 10",
-        missing
-            .iter()
-            .map(|s| format!("  - pub mod {};", s))
-            .collect::<Vec<_>>()
-            .join("\n")
+        missing.iter().map(|s| format!("  - pub mod {};", s)).collect::<Vec<_>>().join("\n")
     );
     Ok(())
 }
@@ -177,8 +168,8 @@ fn test_providers_mod_rs_file_exists_with_all_submodules() -> Result<(), Box<dyn
 /// to use the new perl_lsp_rs_core::providers::* imports.
 /// This test checks for absence of old crate names and presence of new imports.
 #[test]
-fn test_wired_crates_integration_uses_new_provider_imports(
-) -> Result<(), Box<dyn std::error::Error>> {
+fn test_wired_crates_integration_uses_new_provider_imports()
+-> Result<(), Box<dyn std::error::Error>> {
     let root = project_root();
     let test_path = root.join("crates/perl-lsp/tests/wired_crates_integration_test.rs");
 
@@ -207,11 +198,7 @@ fn test_wired_crates_integration_uses_new_provider_imports(
         "G1a collapse: wired_crates_integration_test.rs must be updated to use new provider imports.\n\
          The following old import names must be replaced with perl_lsp_rs_core::providers::*:\n{}\n\n\
          See .spec/4500-wave-g1a-providers/acceptance.md line 53-59",
-        still_present
-            .iter()
-            .map(|s| format!("  - {}", s))
-            .collect::<Vec<_>>()
-            .join("\n")
+        still_present.iter().map(|s| format!("  - {}", s)).collect::<Vec<_>>().join("\n")
     );
     Ok(())
 }
@@ -219,8 +206,8 @@ fn test_wired_crates_integration_uses_new_provider_imports(
 /// Verify that new provider imports DO appear in wired_crates_integration_test.rs.
 /// This test checks for at least 6 lines using perl_lsp_rs_core::providers::.
 #[test]
-fn test_wired_crates_integration_has_new_provider_imports(
-) -> Result<(), Box<dyn std::error::Error>> {
+fn test_wired_crates_integration_has_new_provider_imports() -> Result<(), Box<dyn std::error::Error>>
+{
     let root = project_root();
     let test_path = root.join("crates/perl-lsp/tests/wired_crates_integration_test.rs");
 

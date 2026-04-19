@@ -70,10 +70,7 @@ fn test_providers_symbol_query_module_exists() -> Result<(), Box<dyn std::error:
 fn test_providers_file_completion_module_exists() -> Result<(), Box<dyn std::error::Error>> {
     use perl_lsp_rs_core::providers::file_completion;
     // Verify the type is reachable.
-    let _ = file_completion::FileCompletionOptions {
-        enabled: true,
-        max_items: 100,
-    };
+    let _ = file_completion::FileCompletionOptions { enabled: true, max_items: 100 };
     Ok(())
 }
 
@@ -145,11 +142,7 @@ fn test_providers_type_hierarchy_module_exists() -> Result<(), Box<dyn std::erro
 #[test]
 fn test_providers_formatting_types_module_exists() -> Result<(), Box<dyn std::error::Error>> {
     use perl_lsp_rs_core::providers::formatting_types;
-    let _ = formatting_types::FormatRange {
-        start: 0,
-        end: 0,
-        indent: 0,
-    };
+    let _ = formatting_types::FormatRange { start: 0, end: 0, indent: 0 };
     Ok(())
 }
 
