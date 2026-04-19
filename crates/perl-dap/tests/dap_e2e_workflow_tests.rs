@@ -475,3 +475,166 @@ fn test_e2e_globals_scope_inspection() -> TestResult {
 
     Ok(())
 }
+
+// ─── Test 8: hover evaluation for variable inspection ──────────────────────────
+
+/// Validates DAP hover evaluation (context="hover") for variable inspection.
+///
+/// This test closes issue #3481 which reported that DAP hover evaluation was untested.
+/// It performs an end-to-end test with a real `perl -d` session:
+///
+/// 1. Launch perl -d with a script declaring $scalar, @array, %hash, $ref
+/// 2. Set breakpoint after variable declarations
+/// 3. configurationDone → continue → wait_stopped
+/// 4. For each variable, send evaluate request with context="hover"
+/// 5. Assert success, non-empty result, and variables_reference==0
+///
+/// Key behavioral facts verified:
+/// - variables_reference is ALWAYS 0 for evaluate responses (hardcoded in evaluation.rs:171)
+/// - frame_id is accepted but unused by handle_evaluate()
+/// - context is accepted but unused by handle_evaluate()
+#[test]
+fn test_e2e_hover_evaluation() -> TestResult {
+    if !perl_available() {
+        eprintln!("Skipping test_e2e_hover_evaluation - perl not available");
+        return Ok(());
+    }
+
+    let workspace = tempdir()?;
+    let script = workspace.path().join("workflow_hover_eval.pl");
+
+    // Minimal script for hover evaluation testing.
+    // All variables are declared before the breakpoint line.
+    let content = "use strict;\nuse warnings;\n\nmy $scalar = 42;\nmy @array = (1,2,3);\nmy %hash = (a=>1,b=>2);\nmy $ref = \\$scalar;\nprint \"done\n\";\n";
+    write(&script, content)?;
+
+    let script_str = script.to_str().ok_or("script path is not valid UTF-8")?.to_string();
+
+    let timeout = workflow_timeout();
+    let mut session = DapWorkflowSession::new(timeout)?;
+
+    session.launch(&script_str)?;
+
+    // Set breakpoint at line 7 (print statement, after all variables declared).
+    const EVAL_LINE: u64 = 7; // print "done\n";
+    session.set_breakpoints(&script_str, &[EVAL_LINE])?;
+    session.configuration_done()?;
+
+    let stopped = session.wait_stopped()?;
+    assert_eq!(
+        stopped.reason, "breakpoint",
+        "stopped reason must be `breakpoint`, got `{}`",
+        stopped.reason
+    );
+
+    let thread_id = stopped.thread_id;
+
+    // Get frame_id (required by DAP even though handle_evaluate() currently ignores it)
+    let (frame_id, _, _) = session.stack_trace(thread_id)?;
+
+    // ── Hover evaluate $scalar ────────────────────────────────────────────────
+    let scalar_body = session.evaluate("$scalar", "hover", Some(frame_id))?;
+    {
+        let result = scalar_body
+            .get("result")
+            .and_then(|v| v.as_str())
+            .ok_or("evaluate response missing `result` field")?;
+        assert!(
+            !result.is_empty(),
+            "scalar evaluation result must be non-empty, got empty string"
+        );
+        assert!(
+            result.contains("42"),
+            "scalar evaluation result should contain '42', got `{}`",
+            result
+        );
+
+        let variables_reference = scalar_body
+            .get("variablesReference")
+            .and_then(|v| v.as_i64())
+            .ok_or("evaluate response missing `variablesReference` field")?;
+        assert_eq!(
+            variables_reference, 0,
+            "evaluate response variablesReference must be 0 (hardcoded at evaluation.rs:171), got {}",
+            variables_reference
+        );
+    }
+
+    // ── Hover evaluate @array ─────────────────────────────────────────────────
+    let array_body = session.evaluate("@array", "hover", Some(frame_id))?;
+    {
+        let result = array_body
+            .get("result")
+            .and_then(|v| v.as_str())
+            .ok_or("evaluate response missing `result` field")?;
+        assert!(
+            !result.is_empty(),
+            "array evaluation result must be non-empty, got empty string"
+        );
+        assert!(
+            result.chars().any(|c| c.is_numeric()),
+            "array evaluation result should contain numeric values, got `{}`",
+            result
+        );
+
+        let variables_reference = array_body
+            .get("variablesReference")
+            .and_then(|v| v.as_i64())
+            .ok_or("evaluate response missing `variablesReference` field")?;
+        assert_eq!(
+            variables_reference, 0,
+            "evaluate response variablesReference must be 0, got {}",
+            variables_reference
+        );
+    }
+
+    // ── Hover evaluate %hash ──────────────────────────────────────────────────
+    let hash_body = session.evaluate("%hash", "hover", Some(frame_id))?;
+    {
+        let result = hash_body
+            .get("result")
+            .and_then(|v| v.as_str())
+            .ok_or("evaluate response missing `result` field")?;
+        assert!(
+            !result.is_empty(),
+            "hash evaluation result must be non-empty, got empty string"
+        );
+
+        let variables_reference = hash_body
+            .get("variablesReference")
+            .and_then(|v| v.as_i64())
+            .ok_or("evaluate response missing `variablesReference` field")?;
+        assert_eq!(
+            variables_reference, 0,
+            "evaluate response variablesReference must be 0, got {}",
+            variables_reference
+        );
+    }
+
+    // ── Hover evaluate $ref (scalar reference) ────────────────────────────────
+    let ref_body = session.evaluate("$ref", "hover", Some(frame_id))?;
+    {
+        let result = ref_body
+            .get("result")
+            .and_then(|v| v.as_str())
+            .ok_or("evaluate response missing `result` field")?;
+        assert!(
+            !result.is_empty(),
+            "ref evaluation result must be non-empty, got empty string"
+        );
+
+        let variables_reference = ref_body
+            .get("variablesReference")
+            .and_then(|v| v.as_i64())
+            .ok_or("evaluate response missing `variablesReference` field")?;
+        assert_eq!(
+            variables_reference, 0,
+            "evaluate response variablesReference must be 0, got {}",
+            variables_reference
+        );
+    }
+
+    session.disconnect()?;
+
+    Ok(())
+}

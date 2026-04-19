@@ -263,6 +263,33 @@ impl DapWorkflowSession {
         Ok(vars)
     }
 
+    /// Send `evaluate` request with `expression`, `context`, and optional `frame_id`.
+    ///
+    /// Returns the full response body as a `Value`. The caller extracts
+    /// `result`, `type`, and `variablesReference` fields as needed.
+    ///
+    /// # Arguments
+    /// * `expression` — the Perl expression to evaluate (e.g. `"$scalar"`, `"@array"`)
+    /// * `context` — evaluation context string (e.g. `"hover"`, `"watch"`, `"repl"`, `"clipboard"`)
+    /// * `frame_id` — optional stack frame id; currently accepted but unused by `handle_evaluate()`
+    pub fn evaluate(
+        &mut self,
+        expression: &str,
+        context: &str,
+        frame_id: Option<i64>,
+    ) -> Result<Value, String> {
+        let mut args = json!({
+            "expression": expression,
+            "context": context
+        });
+        if let Some(fid) = frame_id {
+            args["frameId"] = serde_json::json!(fid);
+        }
+        let resp = self.request("evaluate", Some(args));
+        let body = self.expect_success(&resp, "evaluate")?;
+        body.ok_or_else(|| "evaluate response had no body".to_string())
+    }
+
     /// Send `continue` for `thread_id`.
     pub fn continue_exec(&mut self, thread_id: i64) -> Result<(), String> {
         let args = json!({"threadId": thread_id});
