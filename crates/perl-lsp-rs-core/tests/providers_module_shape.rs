@@ -30,21 +30,15 @@ fn test_providers_completion_item_module_exists() -> Result<(), Box<dyn std::err
     // That's covered by the migrated test suite in provider_completion_item_*.rs
     let _ = completion_item::CompletionItem {
         label: "test".to_string(),
-        kind: 1,
+        kind: completion_item::CompletionItemKind::Function,
         detail: None,
         documentation: None,
         sort_text: None,
         filter_text: None,
         insert_text: Some("test".to_string()),
-        insert_text_format: None,
-        text_edit: None,
-        additional_text_edits: None,
+        additional_edits: Vec::new(),
+        text_edit_range: None,
         commit_characters: None,
-        command: None,
-        data: None,
-        tags: None,
-        deprecated: None,
-        preselect: None,
     };
     Ok(())
 }
@@ -142,7 +136,11 @@ fn test_providers_type_hierarchy_module_exists() -> Result<(), Box<dyn std::erro
 #[test]
 fn test_providers_formatting_types_module_exists() -> Result<(), Box<dyn std::error::Error>> {
     use perl_lsp_rs_core::providers::formatting_types;
-    let _ = formatting_types::FormatRange { start: 0, end: 0, indent: 0 };
+    // Verify FormatRange and its whole_document constructor are accessible.
+    let content = "line1\nline2\nline3";
+    let range = formatting_types::FormatRange::whole_document(content);
+    assert_eq!(range.start.line, 0, "whole_document range must start at line 0");
+    assert_eq!(range.end.line, 2, "whole_document range must end at line 2");
     Ok(())
 }
 
@@ -174,7 +172,9 @@ fn test_providers_import_management_module_exists() -> Result<(), Box<dyn std::e
 #[test]
 fn test_providers_document_links_module_exists() -> Result<(), Box<dyn std::error::Error>> {
     use perl_lsp_rs_core::providers::document_links;
-    let links = document_links::compute_links("", &Default::default());
+    // Verify compute_links is accessible with its correct signature: (uri, text, roots).
+    let roots: Vec<url::Url> = vec![];
+    let links = document_links::compute_links("", "", &roots);
     assert!(links.is_empty(), "empty source should return no links");
     Ok(())
 }

@@ -23,37 +23,37 @@ members = [
     "crates/perl-lsp-protocol",
     "crates/perl-lsp-rs-core",
     "crates/perl-lsp-transport",
-    "crates/perl-lsp-on-type-formatting",
+    # (perl-lsp-on-type-formatting absorbed into perl-lsp-rs-core::providers — Wave G1a)
     "crates/perl-lsp-tooling",
     "crates/perl-lsp-perltidy",
-    "crates/perl-lsp-symbol-query",
+    # (perl-lsp-symbol-query absorbed into perl-lsp-rs-core::providers — Wave G1a)
     "crates/perl-lsp-performance",
     "crates/perl-lsp-critic-parser",
     "crates/perl-subprocess-runtime",
     "crates/perl-lsp-formatting",
-    "crates/perl-lsp-formatting-types",
+    # (perl-lsp-formatting-types absorbed into perl-lsp-rs-core::providers — Wave G1a)
     "crates/perl-lsp-diagnostics",
     "crates/perl-lsp-semantic-tokens",
-    "crates/perl-lsp-inlay-hints",
-    "crates/perl-lsp-code-lens",
+    # (perl-lsp-inlay-hints absorbed into perl-lsp-rs-core::providers — Wave G1a)
+    # (perl-lsp-code-lens absorbed into perl-lsp-rs-core::providers — Wave G1a)
     "crates/perl-lsp-feature-governance",
     "crates/perl-lsp-launcher",
     "crates/perl-lsp-navigation",
-    "crates/perl-lsp-type-hierarchy",
-    "crates/perl-lsp-document-links",
-    "crates/perl-lsp-workspace-symbols",
+    # (perl-lsp-type-hierarchy absorbed into perl-lsp-rs-core::providers — Wave G1a)
+    # (perl-lsp-document-links absorbed into perl-lsp-rs-core::providers — Wave G1a)
+    # (perl-lsp-workspace-symbols absorbed into perl-lsp-rs-core::providers — Wave G1a)
     "crates/perl-lsp-completion",
-    "crates/perl-lsp-file-completion",
-    "crates/perl-lsp-completion-item",
+    # (perl-lsp-file-completion absorbed into perl-lsp-rs-core::providers — Wave G1a)
+    # (perl-lsp-completion-item absorbed into perl-lsp-rs-core::providers — Wave G1a)
     "crates/perl-lsp-inline-completion",
     "crates/perl-lsp-ai-provider",
     "crates/perl-lsp-code-actions",
-    "crates/perl-lsp-document-highlight",
-    "crates/perl-lsp-folding",
-    "crates/perl-lsp-selection-range",
-    "crates/perl-lsp-import-management",
+    # (perl-lsp-document-highlight absorbed into perl-lsp-rs-core::providers — Wave G1a)
+    # (perl-lsp-folding absorbed into perl-lsp-rs-core::providers — Wave G1a)
+    # (perl-lsp-selection-range absorbed into perl-lsp-rs-core::providers — Wave G1a)
+    # (perl-lsp-import-management absorbed into perl-lsp-rs-core::providers — Wave G1a)
     "crates/perl-lsp-text-utils",
-    "crates/perl-lsp-color-provider",
+    # (perl-lsp-color-provider absorbed into perl-lsp-rs-core::providers — Wave G1a)
     "crates/perl-lsp-cancellation",
     "crates/perl-lsp-input-validation",
     "crates/perl-lsp-limits",
@@ -98,7 +98,7 @@ allow = [
     # (perl-percentile absorbed into perl-parser — Wave D)
     "perl-subprocess-runtime",
     "perl-lsp-protocol",
-    "perl-lsp-symbol-query",
+    # (perl-lsp-symbol-query absorbed into perl-lsp-rs-core::providers — Wave G1a)
     "perl-regex",
     "perl-pod",
     "tree-sitter-perl-c",
@@ -132,37 +132,37 @@ allow = [
     "perl-lsp-text-utils",
     "perl-lsp-rename",
     "perl-lsp-code-actions",
-    "perl-lsp-folding",
-    "perl-lsp-selection-range",
+    # (perl-lsp-folding absorbed into perl-lsp-rs-core::providers — Wave G1a)
+    # (perl-lsp-selection-range absorbed into perl-lsp-rs-core::providers — Wave G1a)
     "perl-lsp-completion",
-    "perl-lsp-file-completion",
-    "perl-lsp-completion-item",
+    # (perl-lsp-file-completion absorbed into perl-lsp-rs-core::providers — Wave G1a)
+    # (perl-lsp-completion-item absorbed into perl-lsp-rs-core::providers — Wave G1a)
     "perl-lsp-inline-completion",
     "perl-lsp-ai-provider",
-    "perl-lsp-inlay-hints",
-    "perl-lsp-code-lens",
-    "perl-lsp-color-provider",
+    # (perl-lsp-inlay-hints absorbed into perl-lsp-rs-core::providers — Wave G1a)
+    # (perl-lsp-code-lens absorbed into perl-lsp-rs-core::providers — Wave G1a)
+    # (perl-lsp-color-provider absorbed into perl-lsp-rs-core::providers — Wave G1a)
 
     # Tier 3 — Module resolution chain (unified facade; absorbs perl-module-* in Wave 1)
     "perl-module",
 
     # Tier 4 — LSP providers
     "perl-lsp-navigation",
-    "perl-lsp-type-hierarchy",
-    "perl-lsp-document-highlight",
-    "perl-lsp-document-links",
-    "perl-lsp-workspace-symbols",
+    # (perl-lsp-type-hierarchy absorbed into perl-lsp-rs-core::providers — Wave G1a)
+    # (perl-lsp-document-highlight absorbed into perl-lsp-rs-core::providers — Wave G1a)
+    # (perl-lsp-document-links absorbed into perl-lsp-rs-core::providers — Wave G1a)
+    # (perl-lsp-workspace-symbols absorbed into perl-lsp-rs-core::providers — Wave G1a)
     "perl-lsp-tooling",
     "perl-lsp-perltidy",
     "perl-lsp-performance",
     "perl-lsp-critic-parser",
-    "perl-lsp-formatting-types",
+    # (perl-lsp-formatting-types absorbed into perl-lsp-rs-core::providers — Wave G1a)
     "perl-lsp-formatting",
-    "perl-lsp-on-type-formatting",
+    # (perl-lsp-on-type-formatting absorbed into perl-lsp-rs-core::providers — Wave G1a)
     "perl-lsp-semantic-tokens",
     "perl-lsp-providers",
     # (perl-ast-utils, perl-qualified-name absorbed into perl-parser — Wave D)
-    "perl-lsp-import-management",
+    # (perl-lsp-import-management absorbed into perl-lsp-rs-core::providers — Wave G1a)
     "perl-refactoring",
 
     # Tier 5 — Application crates
@@ -230,16 +230,16 @@ perl-line-index = { path = "crates/perl-line-index", version = "0.12.4" }
 # Wave D absorbed: perl-text-line → perl-parser-core::text_line
 perl-content-length-framing = { path = "crates/perl-content-length-framing", version = "0.12.4" }
 perl-subprocess-runtime = { path = "crates/perl-subprocess-runtime", version = "0.12.4" }
-perl-lsp-document-highlight = { path = "crates/perl-lsp-document-highlight", version = "0.12.4" }
-perl-lsp-document-links = { path = "crates/perl-lsp-document-links", version = "0.12.4" }
+# (perl-lsp-document-highlight absorbed into perl-lsp-rs-core::providers — Wave G1a)
+# (perl-lsp-document-links absorbed into perl-lsp-rs-core::providers — Wave G1a)
 perl-lsp-performance = { path = "crates/perl-lsp-performance", version = "0.12.4" }
-perl-lsp-symbol-query = { path = "crates/perl-lsp-symbol-query", version = "0.12.4" }
+# (perl-lsp-symbol-query absorbed into perl-lsp-rs-core::providers — Wave G1a)
 # Wave D absorbed: perl-ast-utils → perl-parser::ast_utils
 perl-lsp-input-validation = { path = "crates/perl-lsp-input-validation", version = "0.12.4" }
 perl-lsp-text-utils = { path = "crates/perl-lsp-text-utils", version = "0.12.4" }
 perl-uri = { path = "crates/perl-uri", version = "0.12.4" }
 # Wave D absorbed: perl-percentile → perl-parser::percentile
-perl-lsp-import-management = { path = "crates/perl-lsp-import-management", version = "0.12.4" }
+# (perl-lsp-import-management absorbed into perl-lsp-rs-core::providers — Wave G1a)
 perl-lsp-critic-parser = { path = "crates/perl-lsp-critic-parser", version = "0.12.4" }
 perl-lsp-protocol = { path = "crates/perl-lsp-protocol", version = "0.12.4" }
 # Wave D absorbed: perl-path-normalize → perl-parser-core::path_normalize
@@ -255,16 +255,16 @@ perl-parser-core = { path = "crates/perl-parser-core", version = "0.12.4" }
 perl-lsp-transport = { path = "crates/perl-lsp-transport", version = "0.12.4" }
 perl-lsp-tooling = { path = "crates/perl-lsp-tooling", version = "0.12.4" }
 perl-lsp-perltidy = { path = "crates/perl-lsp-perltidy", version = "0.12.4" }
-perl-lsp-on-type-formatting = { path = "crates/perl-lsp-on-type-formatting", version = "0.12.4" }
-perl-lsp-formatting-types = { path = "crates/perl-lsp-formatting-types", version = "0.12.4" }
+# (perl-lsp-on-type-formatting absorbed into perl-lsp-rs-core::providers — Wave G1a)
+# (perl-lsp-formatting-types absorbed into perl-lsp-rs-core::providers — Wave G1a)
 perl-lsp-formatting = { path = "crates/perl-lsp-formatting", version = "0.12.4" }
 perl-tdd-support = { path = "crates/perl-tdd-support", version = "0.12.4" }
 perl-test-must = { path = "crates/perl-test-must", version = "0.12.4" }
 perl-lsp-diagnostics = { path = "crates/perl-lsp-diagnostics", version = "0.12.4" }
 perl-lsp-semantic-tokens = { path = "crates/perl-lsp-semantic-tokens", version = "0.12.4" }
-perl-lsp-inlay-hints = { path = "crates/perl-lsp-inlay-hints", version = "0.12.4" }
-perl-lsp-code-lens = { path = "crates/perl-lsp-code-lens", version = "0.12.4" }
-perl-lsp-color-provider = { path = "crates/perl-lsp-color-provider", version = "0.12.4" }
+# (perl-lsp-inlay-hints absorbed into perl-lsp-rs-core::providers — Wave G1a)
+# (perl-lsp-code-lens absorbed into perl-lsp-rs-core::providers — Wave G1a)
+# (perl-lsp-color-provider absorbed into perl-lsp-rs-core::providers — Wave G1a)
 perl-lsp-cancellation = { path = "crates/perl-lsp-cancellation", version = "0.12.4" }
 perl-lsp-limits = { path = "crates/perl-lsp-limits", version = "0.12.4" }
 perl-lsp-uri = { path = "crates/perl-lsp-uri", version = "0.12.4" }
@@ -272,17 +272,17 @@ perl-lsp-config = { path = "crates/perl-lsp-config", version = "0.12.4" }
 perl-lsp-feature-governance = { path = "crates/perl-lsp-feature-governance", version = "0.12.4" }
 perl-lsp-launcher = { path = "crates/perl-lsp-launcher", version = "0.12.4" }
 perl-lsp-navigation = { path = "crates/perl-lsp-navigation", version = "0.12.4" }
-perl-lsp-type-hierarchy = { path = "crates/perl-lsp-type-hierarchy", version = "0.12.4" }
-perl-lsp-workspace-symbols = { path = "crates/perl-lsp-workspace-symbols", version = "0.12.4" }
+# (perl-lsp-type-hierarchy absorbed into perl-lsp-rs-core::providers — Wave G1a)
+# (perl-lsp-workspace-symbols absorbed into perl-lsp-rs-core::providers — Wave G1a)
 perl-lsp-rename = { path = "crates/perl-lsp-rename", version = "0.12.4" }
 perl-lsp-completion = { path = "crates/perl-lsp-completion", version = "0.12.4" }
-perl-lsp-file-completion = { path = "crates/perl-lsp-file-completion", version = "0.12.4" }
-perl-lsp-completion-item = { path = "crates/perl-lsp-completion-item", version = "0.12.4" }
+# (perl-lsp-file-completion absorbed into perl-lsp-rs-core::providers — Wave G1a)
+# (perl-lsp-completion-item absorbed into perl-lsp-rs-core::providers — Wave G1a)
 perl-lsp-inline-completion = { path = "crates/perl-lsp-inline-completion", version = "0.12.4" }
 perl-lsp-ai-provider = { path = "crates/perl-lsp-ai-provider", version = "0.12.4" }
 perl-lsp-code-actions = { path = "crates/perl-lsp-code-actions", version = "0.12.4" }
-perl-lsp-folding = { path = "crates/perl-lsp-folding", version = "0.12.4" }
-perl-lsp-selection-range = { path = "crates/perl-lsp-selection-range", version = "0.12.4" }
+# (perl-lsp-folding absorbed into perl-lsp-rs-core::providers — Wave G1a)
+# (perl-lsp-selection-range absorbed into perl-lsp-rs-core::providers — Wave G1a)
 perl-diagnostics = { path = "crates/perl-diagnostics", version = "0.12.4" }
 # Tier 3: Two-level dependencies
 perl-workspace = { path = "crates/perl-workspace-index", version = "0.12.4" }

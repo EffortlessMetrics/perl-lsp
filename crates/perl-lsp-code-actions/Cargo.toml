@@ -23,7 +23,7 @@ perl-parser-core = { workspace = true }
 perl-parser = { workspace = true }
 perl-lsp-text-utils = { workspace = true }
 perl-lsp-rename = { workspace = true }
-perl-lsp-import-management = { workspace = true }
+perl-lsp-rs-core = { workspace = true }
 perl-lsp-diagnostics = { workspace = true }
 
 [dev-dependencies]

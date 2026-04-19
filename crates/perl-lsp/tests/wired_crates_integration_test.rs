@@ -85,7 +85,7 @@ fn test_wired_inline_completion_multiline_document() {
 /// WorkspaceSymbolsProvider must be reachable as a direct dependency.
 #[test]
 fn test_wired_workspace_symbols_provider_accessible() {
-    use perl_lsp_workspace_symbols::WorkspaceSymbolsProvider;
+    use perl_lsp_rs_core::providers::workspace_symbols::WorkspaceSymbolsProvider;
     let provider = WorkspaceSymbolsProvider::new();
     // Empty provider returns no symbols — just confirm it compiles and runs.
     let results = provider.search("anything", &std::collections::HashMap::new());
@@ -99,7 +99,7 @@ fn test_wired_workspace_symbols_provider_accessible() {
 /// Symbol query helpers must be reachable.
 #[test]
 fn test_wired_symbol_query_matches() {
-    use perl_lsp_symbol_query::matches_query;
+    use perl_lsp_rs_core::providers::symbol_query::matches_query;
     assert!(matches_query("process_data", "proc"));
     assert!(!matches_query("unrelated", "proc"));
 }
@@ -111,7 +111,9 @@ fn test_wired_symbol_query_matches() {
 /// Completion item domain types must be reachable.
 #[test]
 fn test_wired_completion_item_dedup() {
-    use perl_lsp_completion_item::{CompletionItem, CompletionItemKind, deduplicate_and_sort};
+    use perl_lsp_rs_core::providers::completion_item::{
+        CompletionItem, CompletionItemKind, deduplicate_and_sort,
+    };
     let make = |label: &str| CompletionItem {
         label: label.to_string(),
         kind: CompletionItemKind::Function,
@@ -150,7 +152,7 @@ fn test_wired_ast_utils_find_function_insert_position() {
 /// Formatting types must be reachable.
 #[test]
 fn test_wired_formatting_types_accessible() {
-    use perl_lsp_formatting_types::FormatRange;
+    use perl_lsp_rs_core::providers::formatting_types::FormatRange;
     // FormatRange::whole_document parses the content to find the last line.
     // For a 3-line file the end line must be 2, not 0.
     let content = "line1\nline2\nline3";
@@ -182,7 +184,7 @@ fn test_wired_critic_parser_parses_output() {
 /// Import management helpers must be reachable.
 #[test]
 fn test_wired_import_management_collect_imports() {
-    use perl_lsp_import_management::collect_imports;
+    use perl_lsp_rs_core::providers::import_management::collect_imports;
     let lines: Vec<String> = vec![
         "use strict;".to_string(),
         "use warnings;".to_string(),
@@ -354,7 +356,7 @@ fn test_wired_perltidy_config_accessible() {
 /// Document links function must be reachable.
 #[test]
 fn test_wired_document_links_compute_links() {
-    use perl_lsp_document_links::compute_links;
+    use perl_lsp_rs_core::providers::document_links::compute_links;
     use url::Url;
     let uri = "file:///test.pl";
     let text = "use Scalar::Util qw(looks_like_number);\n";

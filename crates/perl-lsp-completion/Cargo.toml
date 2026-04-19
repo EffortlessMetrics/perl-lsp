@@ -17,8 +17,7 @@ categories = ["development-tools", "text-editors"]
 doctest = false
 
 [dependencies]
-perl-lsp-completion-item = { workspace = true }
-perl-lsp-file-completion = { workspace = true }
+perl-lsp-rs-core = { workspace = true }
 perl-parser-core = { workspace = true }
 perl-semantic-analyzer = { workspace = true }
 perl-workspace = { workspace = true }

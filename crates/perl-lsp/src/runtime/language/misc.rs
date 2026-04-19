@@ -525,8 +525,8 @@ impl LspServer {
             let documents = self.documents_guard();
             if let Some(doc) = self.get_document(&documents, uri) {
                 if let Some(ref ast) = doc.ast {
-                    let provider =
-                        CodeLensProvider::new(doc.text.clone()).with_file_path(uri.to_string());
+                    let provider = CodeLensProvider::with_source(doc.text.clone())
+                        .with_file_path(uri.to_string());
                     let mut lenses = provider.extract(ast);
 
                     // Add shebang lens if applicable

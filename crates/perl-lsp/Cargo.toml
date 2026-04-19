@@ -36,7 +36,6 @@ perl-parser = { workspace = true, features = ["test-performance"] }
 perl-lsp-providers = { workspace = true, features = ["lsp-compat"] }
 perl-lsp-formatting = { workspace = true }
 perl-lsp-cancellation = { workspace = true }
-perl-lsp-color-provider = { workspace = true }
 perl-lsp-input-validation = { workspace = true }
 perl-lsp-limits = { workspace = true }
 perl-lsp-uri = { workspace = true }
@@ -52,26 +51,15 @@ perl-lsp-ai-provider = { workspace = true }
 perl-lsp-completion = { workspace = true }
 perl-lsp-diagnostics = { workspace = true }
 perl-diagnostics = { workspace = true }
-perl-lsp-document-highlight = { workspace = true }
-perl-lsp-inlay-hints = { workspace = true }
-perl-lsp-code-lens = { workspace = true }
 perl-lsp-navigation = { workspace = true, features = ["lsp-compat"] }
-perl-lsp-type-hierarchy = { workspace = true }
 perl-lsp-rename = { workspace = true }
-perl-lsp-selection-range = { workspace = true }
 perl-lsp-semantic-tokens = { workspace = true }
 perl-lsp-launcher = { workspace = true }
-# Wired provider crates (#2756) — formerly built but unused in this binary
-perl-lsp-workspace-symbols = { workspace = true }
-perl-lsp-symbol-query = { workspace = true }
-perl-lsp-completion-item = { workspace = true }
-perl-lsp-formatting-types = { workspace = true }
+# Provider crates absorbed into perl-lsp-rs-core (Wave G1a)
 perl-lsp-critic-parser = { workspace = true }
-perl-lsp-import-management = { workspace = true }
 perl-lsp-rs-core = { workspace = true }
 perl-lsp-performance = { workspace = true }
 perl-lsp-perltidy = { workspace = true }
-perl-lsp-document-links = { workspace = true }
 perl-position-tracking = { workspace = true, features = ["lsp-compat"] }
 perl-symbol = { workspace = true }
 perl-module = { workspace = true }

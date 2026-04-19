@@ -88,9 +88,9 @@ pub mod semantic_tokens {
     pub use perl_lsp_semantic_tokens::*;
 }
 
-/// Re-exports from `perl_lsp_inlay_hints` for backward compatibility.
+/// Re-exports from `perl_lsp_rs_core::providers::inlay_hints` for backward compatibility.
 pub mod inlay_hints {
-    pub use perl_lsp_inlay_hints::*;
+    pub use perl_lsp_rs_core::providers::inlay_hints::*;
 }
 
 /// Re-exports from `perl_lsp_rename` for backward compatibility.
@@ -113,7 +113,7 @@ pub mod navigation {
     pub use perl_lsp_navigation::*;
 }
 
-/// Re-exports from `perl_lsp_folding` for backward compatibility.
+/// Re-exports from `perl_lsp_rs_core::providers::folding` for backward compatibility.
 pub mod folding {
-    pub use perl_lsp_folding::*;
+    pub use perl_lsp_rs_core::providers::folding::*;
 }

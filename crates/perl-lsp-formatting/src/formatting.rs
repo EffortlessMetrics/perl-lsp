@@ -1,6 +1,6 @@
 //! Code formatting support using Perl::Tidy for Perl parsing workflow pipeline.
 
-pub use perl_lsp_formatting_types::{
+pub use perl_lsp_rs_core::providers::formatting_types::{
     FormatPosition, FormatRange, FormatTextEdit, FormattedDocument, FormattingOptions,
 };
 

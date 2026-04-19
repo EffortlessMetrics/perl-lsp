@@ -15,4 +15,4 @@
 //! use perl_lsp_code_lens::{CodeLensProvider, get_shebang_lens, resolve_code_lens};
 //! ```
 
-pub use perl_lsp_code_lens::*;
+pub use perl_lsp_rs_core::providers::code_lens::*;
