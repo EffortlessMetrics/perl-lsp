@@ -12,6 +12,9 @@
 //! 6. Integration: all 10 G1b providers importable together
 //! 7. Cycle-free module structure verification
 
+// Test-only: .expect() is acceptable in test code for known-good invariants.
+#![allow(clippy::expect_used, clippy::panic)]
+
 use std::path::Path;
 
 // ============================================================================
@@ -161,7 +164,7 @@ fn test_snapshot_migration_byte_identity() -> Result<(), Box<dyn std::error::Err
             snap_path.exists(),
             "Snapshot file must exist at {}: {}",
             snap_path.display(),
-            if !snap_path.exists() { format!("file not found") } else { format!("exists") }
+            if !snap_path.exists() { "file not found" } else { "exists" }
         );
 
         // Verify the file is non-empty (sanity check for complete migration).
@@ -243,7 +246,7 @@ fn test_no_old_g1b_crate_imports_in_perl_lsp_src() -> Result<(), Box<dyn std::er
 
     // Grep for old imports in perl-lsp/src.
     let output = Command::new("grep")
-        .args(&[
+        .args([
             "-r",
             "use perl_lsp_rename\\|use perl_lsp_diagnostics\\|use perl_lsp_semantic_tokens\\|use perl_lsp_formatting\\|use perl_lsp_ai_provider\\|use perl_lsp_completion\\|use perl_lsp_navigation\\|use perl_lsp_code_actions\\|use perl_lsp_inline_completion\\|use perl_lsp_providers[^_rs_core]",
             "crates/perl-lsp/src/",
@@ -319,7 +322,7 @@ fn test_no_old_g1b_crate_imports_in_perl_lsp_tests() -> Result<(), Box<dyn std::
             let entry = entry.map_err(|e| format!("Failed to read entry: {}", e))?;
             let path = entry.path();
 
-            if path.extension().map_or(false, |ext| ext == "rs") {
+            if path.extension().is_some_and(|ext| ext == "rs") {
                 let content = std::fs::read_to_string(&path)
                     .map_err(|e| format!("Failed to read test file {}: {}", path.display(), e))?;
 
