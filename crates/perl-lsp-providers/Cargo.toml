@@ -26,17 +26,14 @@ doctest = false
 perl-parser-core = { workspace = true }
 perl-semantic-analyzer = { workspace = true }
 perl-lsp-tooling = { workspace = true }
-perl-lsp-on-type-formatting = { workspace = true }
+perl-lsp-rs-core = { workspace = true }
 perl-lsp-formatting = { workspace = true }
 perl-lsp-diagnostics = { workspace = true }
 perl-lsp-semantic-tokens = { workspace = true }
-perl-lsp-inlay-hints = { workspace = true }
 perl-lsp-rename = { workspace = true }
 perl-lsp-navigation = { workspace = true }
 perl-lsp-completion = { workspace = true }
 perl-lsp-code-actions = { workspace = true }
-perl-lsp-code-lens = { workspace = true }
-perl-lsp-folding = { workspace = true }
 perl-lsp-uri = { workspace = true }
 rustc-hash = "2.1.2"
 serde_json.workspace = true

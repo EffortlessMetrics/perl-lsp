@@ -463,7 +463,8 @@ impl LspServer {
 
         // Build source map and index documents with WorkspaceSymbolsProvider.
         let cap = workspace_symbol_cap();
-        let mut provider = perl_lsp_workspace_symbols::WorkspaceSymbolsProvider::new();
+        let mut provider =
+            perl_lsp_rs_core::providers::workspace_symbols::WorkspaceSymbolsProvider::new();
         let mut source_map = std::collections::HashMap::new();
         for (uri, text, ast) in docs_snapshot.iter() {
             if let Some(ast) = ast {

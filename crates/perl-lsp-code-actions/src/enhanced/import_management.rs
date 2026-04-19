@@ -1,10 +1,10 @@
 //! Import management code actions
 
 use crate::types::{CodeAction, CodeActionEdit, CodeActionKind};
-use perl_lsp_import_management::{
+use perl_lsp_rename::TextEdit;
+use perl_lsp_rs_core::providers::import_management::{
     collect_imports, find_imports_range, guess_module_for_function, sort_imports,
 };
-use perl_lsp_rename::TextEdit;
 use perl_parser_core::ast::{Node, SourceLocation};
 
 use super::helpers::Helpers;
@@ -90,7 +90,7 @@ pub fn organize_imports(_ast: &Node, source: &str, helpers: &Helpers<'_>) -> Opt
 ///   map to an already-used module via `guess_module_for_function` are not flagged
 pub fn find_undefined_functions(ast: &Node) -> Vec<String> {
     use perl_lexer::is_builtin;
-    use perl_lsp_import_management::guess_module_for_function;
+    use perl_lsp_rs_core::providers::import_management::guess_module_for_function;
     use perl_parser_core::ast::NodeKind;
     use std::collections::HashSet;
 

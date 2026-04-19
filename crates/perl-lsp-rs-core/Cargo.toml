@@ -28,6 +28,18 @@ lsp-types.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 
+# Provider crate dependencies (Wave G1a: 15 providers absorbed)
+perl-parser-core.workspace = true
+perl-module.workspace = true
+perl-position-tracking.workspace = true
+perl-semantic-analyzer.workspace = true
+perl-lexer.workspace = true
+perl-ast.workspace = true
+walkdir.workspace = true
+once_cell.workspace = true
+regex.workspace = true
+url.workspace = true
+
 [build-dependencies]
 perl-feature-catalog.workspace = true
 
@@ -38,6 +50,8 @@ lsp-ga-lock = []
 perl-tdd-support.workspace = true
 serde_json.workspace = true
 perl-lsp-rs.workspace = true
+perl-parser.workspace = true
+tempfile.workspace = true
 
 [package.metadata.docs.rs]
 all-features = true

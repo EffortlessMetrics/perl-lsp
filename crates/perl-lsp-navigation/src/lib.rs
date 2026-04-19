@@ -33,11 +33,13 @@ mod type_definition;
 // Re-export key types and functions
 pub use self::references::find_references_single_file;
 pub use self::type_definition::TypeDefinitionProvider;
-pub use perl_lsp_document_links::compute_links;
-pub use perl_lsp_type_hierarchy::{
+pub use perl_lsp_rs_core::providers::document_links::compute_links;
+pub use perl_lsp_rs_core::providers::type_hierarchy::{
     TypeHierarchyItem, TypeHierarchyProvider, TypeHierarchySymbolKind,
 };
-pub use perl_lsp_workspace_symbols::{WorkspaceSymbol, WorkspaceSymbolsProvider};
+pub use perl_lsp_rs_core::providers::workspace_symbols::{
+    WorkspaceSymbol, WorkspaceSymbolsProvider,
+};
 
 // Re-export Location type for convenience
 pub use lsp_types::Location;

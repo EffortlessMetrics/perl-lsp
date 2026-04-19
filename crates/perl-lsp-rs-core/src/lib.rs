@@ -4,3 +4,4 @@
 
 pub mod capability_map;
 pub mod features;
+pub mod providers;
