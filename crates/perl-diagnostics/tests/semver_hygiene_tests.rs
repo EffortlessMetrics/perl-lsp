@@ -19,18 +19,18 @@ use perl_diagnostics::codes::DiagnosticCode;
 #[test]
 fn unreachable_code_is_at_end_of_enum_not_mid_enum() {
     // In the buggy state (UnreachableCode mid-enum):
-    //   CriticSeverity5 has discriminant 57 (at end)
+    //   CriticSeverity5 has discriminant 56 (at end)
     //   UnreachableCode has discriminant 28 (mid-enum, after PrintfFormatMismatch)
     //
     // After fix (UnreachableCode at END):
-    //   CriticSeverity5 has discriminant 57
-    //   UnreachableCode has discriminant 58 (after CriticSeverity5)
+    //   CriticSeverity5 has discriminant 56
+    //   UnreachableCode has discriminant 57 (after CriticSeverity5)
     //
     // The key invariant: CriticSeverity5 (last variant) must have
     // a LOWER discriminant than UnreachableCode (which should be at end).
     //
-    // This test FAILS in the buggy state (28 > 57 is false).
-    // This test PASSES after the fix (58 > 57 is true).
+    // This test FAILS in the buggy state (28 > 56 is false).
+    // This test PASSES after the fix (57 > 56 is true).
 
     let critic_severity_5_discriminant = DiagnosticCode::CriticSeverity5 as isize;
     let unreachable_code_discriminant = DiagnosticCode::UnreachableCode as isize;
@@ -86,24 +86,24 @@ fn unreachable_code_has_correct_pl406_string_code() {
 #[test]
 fn critic_severity5_has_v0121_baseline_discriminant() {
     // In v0.12.1 (before UnreachableCode was added):
-    //   CriticSeverity5 had discriminant 57 (last variant at end)
+    //   CriticSeverity5 had discriminant 56 (last variant at end, 57th variant = index 56)
     //
     // In buggy state (UnreachableCode mid-enum):
-    //   CriticSeverity5 has discriminant 57 (still at end, but one position earlier
-    //   relative to the enum because UnreachableCode was inserted before it)
+    //   CriticSeverity5 has discriminant 56 (still at end, because the shift from
+    //   mid-enum insertion only affects variants BETWEEN insertion point and end)
     //
     // After fix (UnreachableCode moved to end):
-    //   CriticSeverity5 has discriminant 57 (back at end where it belongs)
-    //   UnreachableCode is at 58 (after CriticSeverity5)
+    //   CriticSeverity5 has discriminant 56 (back at end where it belongs)
+    //   UnreachableCode is at 57 (after CriticSeverity5)
     //
-    // Note: CriticSeverity5's discriminant is 57 in both states because it's
+    // Note: CriticSeverity5's discriminant is 56 in all states because it's
     // at the END of the enum. The shift from mid-enum insertion only affects
     // variants BETWEEN the insertion point and the end, but CriticSeverity5 is
     // after all those variants.
 
     let critic_severity_5_discriminant = DiagnosticCode::CriticSeverity5 as isize;
-    // After fix, CriticSeverity5 should be at discriminant 57 (verified by test output)
-    let expected_v0121_discriminant = 57isize;
+    // After fix, CriticSeverity5 should be at discriminant 56 (verified by test output)
+    let expected_v0121_discriminant = 56isize;
 
     assert_eq!(
         critic_severity_5_discriminant, expected_v0121_discriminant,
