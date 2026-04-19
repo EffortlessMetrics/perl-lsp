@@ -3,6 +3,8 @@ use std::collections::HashMap;
 use std::fmt;
 use std::sync::Arc;
 
+use super::dbix_class_parser::ResultClassInfo;
+
 /// Represents a Perl type
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum PerlType {
@@ -36,6 +38,15 @@ pub enum PerlType {
     Any,
     /// Void/no return value
     Void,
+    /// Typed hash with known column names and types (from `# type: DBI::Row[...]` annotations)
+    TypedHash {
+        /// Column names and their types
+        keys: Vec<(String, PerlType)>,
+    },
+    /// DBIx::Class ResultSet type
+    ResultSet(Box<PerlType>),
+    /// DBIx::Class single Result type
+    Result(Box<PerlType>),
 }
 
 /// Represents specific scalar types in Perl
@@ -96,6 +107,15 @@ impl fmt::Display for PerlType {
             }
             PerlType::Any => write!(f, "Any"),
             PerlType::Void => write!(f, "Void"),
+            PerlType::TypedHash { keys } => {
+                write!(f, "HashRef {{ ")?;
+                let pairs: Vec<String> =
+                    keys.iter().map(|(name, ty)| format!("{}: {}", name, ty)).collect();
+                write!(f, "{}", pairs.join(", "))?;
+                write!(f, " }}")
+            }
+            PerlType::ResultSet(inner) => write!(f, "ResultSet[{}]", inner),
+            PerlType::Result(inner) => write!(f, "Result[{}]", inner),
         }
     }
 }
@@ -191,6 +211,10 @@ pub struct TypeInferenceEngine {
     builtins: HashMap<String, PerlType>,
     /// Type aliases from use statements
     _type_aliases: HashMap<String, PerlType>,
+    /// DBIx::Class result class information (package name -> ResultClassInfo)
+    result_classes: HashMap<String, ResultClassInfo>,
+    /// Source code for annotation parsing
+    _source_code: Option<String>,
 }
 
 impl Default for TypeInferenceEngine {
@@ -207,6 +231,8 @@ impl TypeInferenceEngine {
             constraints: Vec::new(),
             builtins: HashMap::new(),
             _type_aliases: HashMap::new(),
+            result_classes: HashMap::new(),
+            _source_code: None,
         };
 
         // Initialize built-in function types
@@ -873,6 +899,11 @@ impl TypeInferenceEngine {
             .cloned()
             .collect()
     }
+
+    /// Gets the ResultClassInfo for a result class by package name
+    pub fn get_type_for_result_class(&self, package_name: &str) -> Option<ResultClassInfo> {
+        self.result_classes.get(package_name).cloned()
+    }
 }
 
 /// Type-based code completion suggestions
@@ -979,6 +1010,29 @@ impl TypeBasedCompletion {
                         detail: format!("${}->can($method)", var_name),
                         documentation: "Check if object has method".to_string(),
                     });
+                }
+                PerlType::TypedHash { keys } => {
+                    // Typed hash columns (from DBI::Row annotations)
+                    for (name, ty) in keys {
+                        completions.push(CompletionItem {
+                            label: name.clone(),
+                            detail: format!("{}: {}", name, ty),
+                            documentation: format!("Column '{}' of type {}", name, ty),
+                        });
+                    }
+                }
+                PerlType::Result(inner) => {
+                    // DBIx::Class single result - column accessors as methods
+                    if let PerlType::Object(class_name) = inner.as_ref() {
+                        // For DBIx::Class results, column names become accessor methods
+                        // We would look these up from the result class info
+                        // For now, just provide common accessor patterns
+                        completions.push(CompletionItem {
+                            label: "id".to_string(),
+                            detail: format!("${{var}}->id() - {}", class_name),
+                            documentation: format!("Column accessor for {}", class_name),
+                        });
+                    }
                 }
                 _ => {}
             }

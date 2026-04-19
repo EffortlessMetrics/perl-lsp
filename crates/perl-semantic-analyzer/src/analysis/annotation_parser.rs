@@ -24,11 +24,10 @@ use super::type_inference::{PerlType, ScalarType};
 /// ```
 pub fn parse_dbi_row_annotation(comment: &str) -> Option<Vec<(String, PerlType)>> {
     // Pattern: # type: DBI::Row[...]
-    static ANNOTATION_PATTERN: once_cell::sync::Lazy<Regex> =
-        once_cell::sync::Lazy::new(|| Regex::new(r#"#\s*type:\s*DBI::Row\[(.*)\]"#).unwrap());
+    let pattern = Regex::new(r#"#\s*type:\s*DBI::Row\[(.*)\]"#).ok()?;
 
     // Extract the content inside DBI::Row[...]
-    let captures = ANNOTATION_PATTERN.captures(comment)?;
+    let captures = pattern.captures(comment)?;
     let content = captures.get(1)?.as_str();
 
     // Parse key=>Type pairs

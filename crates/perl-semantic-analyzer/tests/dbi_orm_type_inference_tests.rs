@@ -237,7 +237,7 @@ my $users = $schema->resultset('User')->search({});
     let ty = must_some(ty);
     // ResultSet wrapping Object("User") or similar
     match ty {
-        PerlType::ResultSet(inner) => {
+        PerlType::ResultSet(ref inner) => {
             // The inner type should be related to User
             let inner_str = inner.to_string();
             assert!(inner_str.contains("User"), "Expected ResultSet[User], got: {:?}", ty);
@@ -273,7 +273,7 @@ my $user = $schema->resultset('User')->first();
 
     let ty = must_some(ty);
     match ty {
-        PerlType::Result(inner) => {
+        PerlType::Result(ref inner) => {
             let inner_str = inner.to_string();
             assert!(inner_str.contains("User"), "Expected Result[User], got: {:?}", ty);
         }
@@ -308,7 +308,7 @@ my $user = $schema->resultset('User')->find(1);
 
     let ty = must_some(ty);
     match ty {
-        PerlType::Result(inner) => {
+        PerlType::Result(ref inner) => {
             let inner_str = inner.to_string();
             assert!(inner_str.contains("User"), "Expected Result[User], got: {:?}", ty);
         }
