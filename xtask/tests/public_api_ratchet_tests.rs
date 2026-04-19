@@ -136,10 +136,13 @@ fn ci_nightly_workflow_has_public_api_check_job() -> Result<(), Box<dyn std::err
         );
     }
 
-    // Verify --simplified flag is present (critical for baseline stability)
+    // Verify --simplified flag is present in the justfile recipe (critical for baseline stability).
+    // The CI job delegates to `just public-api-check`, so the flag lives in the justfile, not the
+    // workflow YAML itself. Check there instead to avoid asserting on a comment.
+    let justfile = fs::read_to_string(root.join("justfile"))?;
     assert!(
-        workflow.contains("--simplified"),
-        "ci-nightly.yml must use '--simplified' flag for cargo public-api"
+        justfile.contains("--simplified"),
+        "justfile public-api recipes must use '--simplified' flag for cargo public-api"
     );
 
     // Verify NO continue-on-error on public-api-check (hard-fail only)
@@ -221,23 +224,62 @@ fn contributing_md_documents_public_api_workflow() -> Result<(), Box<dyn std::er
     Ok(())
 }
 
-/// Test G (regression guard): just public-api-check exits cleanly on valid baselines
+/// Test G (regression guard): public-api-check script body has correct hard-fail behaviour
 ///
-/// This test verifies that once baselines are captured and committed,
-/// running `just public-api-check` exits 0 with no drift.
+/// Specifically verifies:
+/// 1. `set -euo pipefail` is present so the script aborts on errors.
+/// 2. The grep pipeline uses `|| true` so that an empty match (e.g., from a compile error
+///    silenced by `2>/dev/null`) does NOT abort the script early via set -e, allowing the
+///    FAILED counter and the final exit-1 to report the real problem instead.
+/// 3. The `diff -u` comparison runs and FAILED is set on non-zero diff exit.
 #[test]
-fn public_api_check_passes_on_clean_tree() -> Result<(), Box<dyn std::error::Error>> {
-    // This test runs: just public-api-check
-    // Expected: exit 0 (no API drift against committed baselines)
-    //
-    // This naturally only passes once baselines exist and recipes are implemented.
-    // Uncomment after implementation to verify the check works.
-
+fn public_api_check_script_has_correct_fail_semantics() -> Result<(), Box<dyn std::error::Error>> {
     let root = project_root();
     let justfile = fs::read_to_string(root.join("justfile"))?;
 
-    // For now, just verify the recipe exists (same as Test C)
-    assert!(justfile.contains("public-api-check:"), "public-api-check recipe must exist");
+    // Extract the public-api-check recipe body (up to the next recipe header)
+    let check_body = justfile
+        .split("public-api-check:")
+        .nth(1)
+        .ok_or("Could not find public-api-check recipe in justfile")?
+        .split("\npublic-api-update:")
+        .next()
+        .ok_or("Could not delimit public-api-check recipe body")?;
+
+    assert!(
+        check_body.contains("set -euo pipefail"),
+        "public-api-check must use 'set -euo pipefail'"
+    );
+
+    // The grep invocation must have '|| true' to avoid aborting the loop when
+    // cargo-public-api produces empty output (e.g., due to a compile error silenced
+    // by `2>/dev/null`).  Without it, grep exits 1 on zero matches and set -e kills
+    // the script before the FAILED counter is evaluated.
+    assert!(
+        check_body.contains("grep \"^pub \"") || check_body.contains("grep '^pub '"),
+        "public-api-check must grep for '^pub ' items"
+    );
+    assert!(
+        check_body.contains("grep \"^pub \" > \"/tmp/${crate}-current.txt\" || true")
+            || check_body.contains("grep \"^pub \" > \"/tmp/${crate}-current.txt\"  || true")
+            || (check_body.contains("grep \"^pub \"") && check_body.contains("|| true")),
+        "public-api-check grep pipeline must end with '|| true' to prevent set -e abort on empty output"
+    );
+
+    assert!(
+        check_body.contains("diff -u"),
+        "public-api-check must use 'diff -u' to compare baseline vs current"
+    );
+
+    assert!(
+        check_body.contains("FAILED=1"),
+        "public-api-check must set FAILED=1 on diff mismatch"
+    );
+
+    assert!(
+        check_body.contains("exit 1"),
+        "public-api-check must exit 1 when FAILED > 0"
+    );
 
     Ok(())
 }

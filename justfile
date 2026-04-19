@@ -1816,7 +1816,7 @@ public-api-check:
             FAILED=1
             continue
         fi
-        cargo public-api -p "$crate" --simplified 2>/dev/null | grep "^pub " > "/tmp/${crate}-current.txt"
+        cargo public-api -p "$crate" --simplified 2>/dev/null | grep "^pub " > "/tmp/${crate}-current.txt" || true
         if ! diff -u "$BASELINE" "/tmp/${crate}-current.txt" > "/tmp/${crate}-diff.txt" 2>&1; then
             echo "FAIL Public API changed in ${crate}:"
             cat "/tmp/${crate}-diff.txt"
@@ -1836,7 +1836,7 @@ public-api-update:
     mkdir -p .ci/public-api-baselines
     for crate in perl-lsp-rs perl-parser perl-uri perl-dap perllsp; do
         cargo public-api -p "$crate" --simplified 2>/dev/null | grep "^pub " \
-            > ".ci/public-api-baselines/${crate}.txt"
+            > ".ci/public-api-baselines/${crate}.txt" || true
         echo "Updated ${crate}: $(wc -l < .ci/public-api-baselines/${crate}.txt) lines"
     done
     echo "Commit .ci/public-api-baselines/ with your PR."
