@@ -113,7 +113,7 @@ Files OUT of scope:
 ## Flags for builder
 
 1. **Check lib.rs first**: Run `ls xtask/src/lib.rs`. If absent, create minimal one before writing tests.
-2. **Windows path separator**: `resolve_package_names` uses `strip_prefix('/')`. On Windows manifest paths may use backslash. Check the existing function for Windows compat; normalize with `.replace('\', '/')` if needed before stripping.
+2. **Windows path separator**: `resolve_package_names` uses `strip_prefix('/')`. On Windows manifest paths may use backslash. Check the existing function for Windows compat; normalize with `.replace('\\', '/')` if needed before stripping.
 3. **tempfile in dev-deps**: Confirmed `tempfile.workspace = true` in xtask/Cargo.toml `[dependencies]`. It may already be available for tests. Do NOT add a duplicate.
 4. **Do NOT use cargo_metadata crate**: The existing serde_json shell-out pattern is what to follow. No new crate dep needed.
 5. **Fallback in hook is intentional**: The `|| printf '%s' "$SINGLE_CRATE_DIR"` fallback in Step 3 gracefully degrades. Keep it.

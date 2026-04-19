@@ -17,8 +17,8 @@ fn project_root() -> PathBuf {
 }
 
 // Helper: workspace where dir name differs from package name
-fn make_mismatched_workspace() -> TempDir {
-    let dir = TempDir::new().expect("create tempdir");
+fn make_mismatched_workspace() -> Result<TempDir> {
+    let dir = TempDir::new()?;
     let root = dir.path();
     fs::write(
         root.join("Cargo.toml"),
@@ -26,10 +26,9 @@ fn make_mismatched_workspace() -> TempDir {
 members = ["crates/my-dir"]
 resolver = "2"
 "#,
-    )
-    .expect("write workspace Cargo.toml");
+    )?;
     let crate_dir = root.join("crates/my-dir/src");
-    fs::create_dir_all(&crate_dir).expect("create crate src");
+    fs::create_dir_all(&crate_dir)?;
     fs::write(
         root.join("crates/my-dir/Cargo.toml"),
         r#"[package]
@@ -37,15 +36,14 @@ name = "my-package"
 version = "0.1.0"
 edition = "2021"
 "#,
-    )
-    .expect("write crate Cargo.toml");
-    fs::write(crate_dir.join("lib.rs"), "").expect("write lib.rs");
-    dir
+    )?;
+    fs::write(crate_dir.join("lib.rs"), "")?;
+    Ok(dir)
 }
 
 // Helper: workspace where dir and package name match
-fn make_matching_workspace() -> TempDir {
-    let dir = TempDir::new().expect("create tempdir");
+fn make_matching_workspace() -> Result<TempDir> {
+    let dir = TempDir::new()?;
     let root = dir.path();
     fs::write(
         root.join("Cargo.toml"),
@@ -53,10 +51,9 @@ fn make_matching_workspace() -> TempDir {
 members = ["crates/perl-parser"]
 resolver = "2"
 "#,
-    )
-    .expect("write workspace Cargo.toml");
+    )?;
     let crate_dir = root.join("crates/perl-parser/src");
-    fs::create_dir_all(&crate_dir).expect("create crate src");
+    fs::create_dir_all(&crate_dir)?;
     fs::write(
         root.join("crates/perl-parser/Cargo.toml"),
         r#"[package]
@@ -64,15 +61,14 @@ name = "perl-parser"
 version = "0.1.0"
 edition = "2021"
 "#,
-    )
-    .expect("write crate Cargo.toml");
-    fs::write(crate_dir.join("lib.rs"), "").expect("write lib.rs");
-    dir
+    )?;
+    fs::write(crate_dir.join("lib.rs"), "")?;
+    Ok(dir)
 }
 
 // Helper: workspace with no members (for unknown-dir tests)
-fn make_empty_workspace() -> TempDir {
-    let dir = TempDir::new().expect("create tempdir");
+fn make_empty_workspace() -> Result<TempDir> {
+    let dir = TempDir::new()?;
     let root = dir.path();
     fs::write(
         root.join("Cargo.toml"),
@@ -80,9 +76,8 @@ fn make_empty_workspace() -> TempDir {
 members = []
 resolver = "2"
 "#,
-    )
-    .expect("write workspace Cargo.toml");
-    dir
+    )?;
+    Ok(dir)
 }
 
 // ---------------------------------------------------------------------------
@@ -115,7 +110,7 @@ fn resolve_package_name_subcommand_help_exists() -> Result<()> {
 
 #[test]
 fn resolve_uses_cargo_toml_name_not_dir_basename() -> Result<()> {
-    let ws = make_mismatched_workspace();
+    let ws = make_mismatched_workspace()?;
     let output = Command::cargo_bin("xtask")?
         .current_dir(ws.path())
         .args(["resolve-package-name", "crates/my-dir"])
@@ -169,7 +164,7 @@ fn resolve_perl_lsp_dir_to_perl_lsp_rs_package() -> Result<()> {
 
 #[test]
 fn resolve_when_dir_and_name_match() -> Result<()> {
-    let ws = make_matching_workspace();
+    let ws = make_matching_workspace()?;
     let output = Command::cargo_bin("xtask")?
         .current_dir(ws.path())
         .args(["resolve-package-name", "crates/perl-parser"])
@@ -191,7 +186,7 @@ fn resolve_when_dir_and_name_match() -> Result<()> {
 
 #[test]
 fn resolve_returns_error_for_unknown_dir() -> Result<()> {
-    let ws = make_empty_workspace();
+    let ws = make_empty_workspace()?;
     let output = Command::cargo_bin("xtask")?
         .current_dir(ws.path())
         .args(["resolve-package-name", "crates/nonexistent"])
@@ -211,7 +206,7 @@ fn resolve_returns_error_for_unknown_dir() -> Result<()> {
 
 #[test]
 fn resolve_outputs_single_clean_line() -> Result<()> {
-    let ws = make_mismatched_workspace();
+    let ws = make_mismatched_workspace()?;
     let output = Command::cargo_bin("xtask")?
         .current_dir(ws.path())
         .args(["resolve-package-name", "crates/my-dir"])
@@ -237,7 +232,7 @@ fn resolve_outputs_single_clean_line() -> Result<()> {
 
 #[test]
 fn resolve_trailing_slash_normalized() -> Result<()> {
-    let ws = make_mismatched_workspace();
+    let ws = make_mismatched_workspace()?;
     let output = Command::cargo_bin("xtask")?
         .current_dir(ws.path())
         .args(["resolve-package-name", "crates/my-dir/"])
@@ -264,7 +259,7 @@ fn resolve_trailing_slash_normalized() -> Result<()> {
 
 #[test]
 fn resolve_multiple_trailing_slashes_normalized() -> Result<()> {
-    let ws = make_mismatched_workspace();
+    let ws = make_mismatched_workspace()?;
     let output = Command::cargo_bin("xtask")?
         .current_dir(ws.path())
         .args(["resolve-package-name", "crates/my-dir///"])
@@ -300,7 +295,7 @@ fn resolve_multiple_trailing_slashes_normalized() -> Result<()> {
 
 #[test]
 fn resolve_empty_crate_dir_errors() -> Result<()> {
-    let ws = make_mismatched_workspace();
+    let ws = make_mismatched_workspace()?;
     let output = Command::cargo_bin("xtask")?
         .current_dir(ws.path())
         .args(["resolve-package-name", ""])
@@ -321,7 +316,7 @@ fn resolve_empty_crate_dir_errors() -> Result<()> {
 
 #[test]
 fn resolve_workspace_root_dot_errors() -> Result<()> {
-    let ws = make_mismatched_workspace();
+    let ws = make_mismatched_workspace()?;
     let output = Command::cargo_bin("xtask")?
         .current_dir(ws.path())
         .args(["resolve-package-name", "."])
@@ -379,7 +374,7 @@ fn resolve_windows_path_separator_compat_via_real_workspace() -> Result<()> {
 
 #[test]
 fn resolve_stdout_contains_only_package_name_on_success() -> Result<()> {
-    let ws = make_mismatched_workspace();
+    let ws = make_mismatched_workspace()?;
     let output = Command::cargo_bin("xtask")?
         .current_dir(ws.path())
         .args(["resolve-package-name", "crates/my-dir"])
