@@ -301,6 +301,19 @@ If a breaking change is necessary:
 
 See [STABILITY.md](docs/reference/STABILITY.md) for our API stability policy.
 
+### Public API Surface Ratchet
+
+The five user-facing facade crates (`perl-lsp-rs`, `perl-parser`, `perl-uri`, `perl-dap`, `perllsp`) have their public API surface locked in text baselines at `.ci/public-api-baselines/`. The nightly CI job fails if the surface changes without a baseline update.
+
+When you intentionally add or remove items from a facade crate's public API:
+
+1. Run `just public-api-update` to regenerate all 5 baselines.
+2. Include the updated `.ci/public-api-baselines/*.txt` files in your PR.
+3. In your PR description, describe what changed and why.
+4. Add the `ci:public-api` label to trigger the surface check in CI.
+
+The check uses `cargo public-api -p <crate> --simplified` (omits blanket-impl noise).
+
 ## Release Workflow
 
 ### Version Bump
