@@ -3,10 +3,12 @@
 //! These tests complement the existing BDD and property tests by covering
 //! edge cases, concurrency, error formatting, caching, and macro behavior.
 
-use perl_lsp_cancellation::{
+use perl_lsp_rs_core::runtime::cancellation::{
     CancellableProvider, CancellationError, CancellationRegistry, PerlLspCancellationToken,
-    ProviderCleanupContext, RequestCleanupGuard, check_cancellation,
+    ProviderCleanupContext, RequestCleanupGuard,
 };
+// NOTE(G2-API-fix): check_cancellation! is #[macro_export] so lives at crate root after absorption.
+use perl_lsp_rs_core::check_cancellation;
 use serde_json::{Value, json};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -319,7 +321,7 @@ fn registry_metrics_memory_overhead_under_1mb() {
 
 #[test]
 fn metrics_default_is_equivalent_to_new() {
-    use perl_lsp_cancellation::CancellationMetrics;
+    use perl_lsp_rs_core::runtime::cancellation::CancellationMetrics;
     let m = CancellationMetrics::default();
     assert_eq!(m.registered_count(), 0);
     assert_eq!(m.cancelled_count(), 0);
@@ -328,7 +330,7 @@ fn metrics_default_is_equivalent_to_new() {
 
 #[test]
 fn metrics_increments_are_independent() {
-    use perl_lsp_cancellation::CancellationMetrics;
+    use perl_lsp_rs_core::runtime::cancellation::CancellationMetrics;
     let m = CancellationMetrics::new();
 
     for _ in 0..5 {

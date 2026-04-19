@@ -4,7 +4,7 @@
 //! error handling, edge cases, help text, and LaunchConfig API.
 #![allow(clippy::assertions_on_constants, clippy::absurd_extreme_comparisons, unused_comparisons)]
 
-use perl_lsp_launcher::{
+use perl_lsp_rs_core::runtime::launcher::{
     DEFAULT_LSP_PORT, FeatureProfile, LaunchConfig, LaunchParseError, TransportMode,
     catalog_advertised_feature_ids, help_text, logging_filter, parse_args, should_enable_logging,
     to_json_for_profile,
@@ -187,7 +187,11 @@ fn should_enable_logging_is_false_without_flag_or_env() {
 fn logging_filter_uses_implicit_default_without_env() {
     let filter = with_env_var("PERL_LSP_LOG", None, || {
         with_env_var("RUST_LOG", None, || {
-            logging_filter(false, "perl_lsp=info,perl_lsp_launcher=info,info", "warn")
+            logging_filter(
+                false,
+                "perl_lsp=info,perl_lsp_rs_core::runtime::launcher=info,info",
+                "warn",
+            )
         })
     });
     assert_eq!(filter, "warn");
@@ -197,17 +201,25 @@ fn logging_filter_uses_implicit_default_without_env() {
 fn logging_filter_uses_explicit_default_without_env() {
     let filter = with_env_var("PERL_LSP_LOG", None, || {
         with_env_var("RUST_LOG", None, || {
-            logging_filter(true, "perl_lsp=info,perl_lsp_launcher=info,info", "warn")
+            logging_filter(
+                true,
+                "perl_lsp=info,perl_lsp_rs_core::runtime::launcher=info,info",
+                "warn",
+            )
         })
     });
-    assert_eq!(filter, "perl_lsp=info,perl_lsp_launcher=info,info");
+    assert_eq!(filter, "perl_lsp=info,perl_lsp_rs_core::runtime::launcher=info,info");
 }
 
 #[test]
 fn logging_filter_prefers_perl_lsp_log_over_rust_log() {
     let filter = with_env_var("RUST_LOG", Some("warn"), || {
         with_env_var("PERL_LSP_LOG", Some("perl_lsp=trace"), || {
-            logging_filter(false, "perl_lsp=info,perl_lsp_launcher=info,info", "warn")
+            logging_filter(
+                false,
+                "perl_lsp=info,perl_lsp_rs_core::runtime::launcher=info,info",
+                "warn",
+            )
         })
     });
     assert_eq!(filter, "perl_lsp=trace");
@@ -220,7 +232,7 @@ fn logging_filter_prefers_perl_lsp_log_over_rust_log() {
 #[test]
 fn parse_bare_invocation_is_run_stdio() {
     let plan = must(parse_args(["perl-lsp"]));
-    assert_eq!(plan.action, perl_lsp_launcher::LaunchAction::Run);
+    assert_eq!(plan.action, perl_lsp_rs_core::runtime::launcher::LaunchAction::Run);
     assert_eq!(plan.config.transport, TransportMode::Stdio);
     assert!(!plan.config.enable_logging);
 }
@@ -285,25 +297,25 @@ fn parse_socket_port_max_boundary() {
 #[test]
 fn parse_health_flag_sets_health_action() {
     let plan = must(parse_args(["perl-lsp", "--health"]));
-    assert_eq!(plan.action, perl_lsp_launcher::LaunchAction::Health);
+    assert_eq!(plan.action, perl_lsp_rs_core::runtime::launcher::LaunchAction::Health);
 }
 
 #[test]
 fn parse_features_json_flag() {
     let plan = must(parse_args(["perl-lsp", "--features-json"]));
-    assert_eq!(plan.action, perl_lsp_launcher::LaunchAction::FeaturesJson);
+    assert_eq!(plan.action, perl_lsp_rs_core::runtime::launcher::LaunchAction::FeaturesJson);
 }
 
 #[test]
 fn parse_help_flag_produces_help_action() {
     let plan = must(parse_args(["perl-lsp", "--help"]));
-    assert_eq!(plan.action, perl_lsp_launcher::LaunchAction::Help);
+    assert_eq!(plan.action, perl_lsp_rs_core::runtime::launcher::LaunchAction::Help);
 }
 
 #[test]
 fn parse_version_flag_produces_version_action() {
     let plan = must(parse_args(["perl-lsp", "--version"]));
-    assert_eq!(plan.action, perl_lsp_launcher::LaunchAction::Version);
+    assert_eq!(plan.action, perl_lsp_rs_core::runtime::launcher::LaunchAction::Version);
 }
 
 // ---------------------------------------------------------------------------
@@ -372,14 +384,14 @@ fn parse_log_with_socket_transport() {
 #[test]
 fn parse_health_with_log_flag() {
     let plan = must(parse_args(["perl-lsp", "--health", "--log"]));
-    assert_eq!(plan.action, perl_lsp_launcher::LaunchAction::Health);
+    assert_eq!(plan.action, perl_lsp_rs_core::runtime::launcher::LaunchAction::Health);
     assert!(plan.config.enable_logging);
 }
 
 #[test]
 fn parse_features_json_with_profile() {
     let plan = must(parse_args(["perl-lsp", "--features-json", "--feature-profile", "all"]));
-    assert_eq!(plan.action, perl_lsp_launcher::LaunchAction::FeaturesJson);
+    assert_eq!(plan.action, perl_lsp_rs_core::runtime::launcher::LaunchAction::FeaturesJson);
     assert_eq!(plan.config.feature_profile.as_str(), "all");
 }
 
@@ -599,7 +611,7 @@ fn default_port_is_expected_value() {
 
 #[test]
 fn launch_action_variants_are_distinct() {
-    use perl_lsp_launcher::LaunchAction;
+    use perl_lsp_rs_core::runtime::launcher::LaunchAction;
     let actions: Vec<LaunchAction> = vec![
         LaunchAction::Run,
         LaunchAction::Health,
@@ -623,7 +635,7 @@ fn launch_action_variants_are_distinct() {
 
 #[test]
 fn launch_action_debug_output() {
-    let debug = format!("{:?}", perl_lsp_launcher::LaunchAction::Run);
+    let debug = format!("{:?}", perl_lsp_rs_core::runtime::launcher::LaunchAction::Run);
     assert!(debug.contains("Run"));
 }
 

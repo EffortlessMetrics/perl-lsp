@@ -7,8 +7,10 @@
 //! - sanitize_string: exactly which characters are kept vs removed
 //! - validate_file_path: extension filtering
 
-use perl_lsp_input_validation::{sanitize_string, validate_file_content, validate_lsp_request};
-use perl_lsp_limits::max_file_size_bytes;
+use perl_lsp_rs_core::runtime::input_validation::{
+    sanitize_string, validate_file_content, validate_lsp_request,
+};
+use perl_lsp_rs_core::runtime::limits::max_file_size_bytes;
 use std::path::Path;
 
 // ---------------------------------------------------------------------------

@@ -6,6 +6,11 @@ use perl_parser_core::path_security::validate_workspace_path;
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 
+// NOTE(G2-API-fix): After absorption, input_validation no longer depends on the
+// external perl-lsp-limits crate. It instead accesses the sibling limits module
+// through the super::limits path within perl-lsp-rs-core::runtime.
+use crate::runtime::limits::max_file_size_bytes as limits_max_file_size_bytes;
+
 /// Maximum allowed path length.
 const MAX_PATH_LENGTH: usize = 4096;
 
@@ -38,10 +43,10 @@ pub fn validate_file_path<P: AsRef<Path>>(path: P, workspace_root: &Path) -> Res
 
 /// Validates file content before parsing to prevent resource exhaustion.
 ///
-/// The file size limit is sourced from [`perl_lsp_limits::max_file_size_bytes`],
+/// The file size limit is sourced from [`crate::runtime::limits::max_file_size_bytes`],
 /// which defaults to 1MB and is configurable via `perl.limits.maxFileSizeBytes`.
 pub fn validate_file_content(content: &str, file_path: &Path) -> Result<()> {
-    let max_file_size = perl_lsp_limits::max_file_size_bytes();
+    let max_file_size = limits_max_file_size_bytes();
     if content.len() > max_file_size {
         return Err(anyhow!(
             "File {} too large: {} bytes (max: {} bytes) — adjust perl.limits.maxFileSizeBytes to increase",
@@ -225,7 +230,7 @@ mod tests {
 
     #[test]
     fn test_validate_file_content_too_large() {
-        let max = perl_lsp_limits::max_file_size_bytes();
+        let max = crate::runtime::limits::max_file_size_bytes();
         let mut content = String::new();
         content.reserve(max + 1);
         content.extend(std::iter::repeat_n('x', max + 1));
@@ -304,7 +309,7 @@ mod tests {
     fn test_file_size_limit_sourced_from_lsp_limits() {
         // The file size limit must come from perl-lsp-limits, not a local constant.
         // This test documents the expected single source of truth.
-        let expected_limit = perl_lsp_limits::max_file_size_bytes();
+        let expected_limit = crate::runtime::limits::max_file_size_bytes();
         // Default is 1MB per LspLimits::default()
         assert_eq!(
             expected_limit,

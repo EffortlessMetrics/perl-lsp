@@ -1,4 +1,4 @@
-use perl_lsp_text_utils::TextEditHelpers;
+use perl_lsp_rs_core::runtime::text_utils::TextEditHelpers;
 
 #[test]
 fn find_statement_start_does_not_break_on_newline() {

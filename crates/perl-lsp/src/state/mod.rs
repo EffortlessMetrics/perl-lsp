@@ -11,4 +11,4 @@ mod document;
 
 pub use config::*;
 pub use document::*;
-pub use perl_lsp_limits::*;
+pub use perl_lsp_rs_core::runtime::limits::*;

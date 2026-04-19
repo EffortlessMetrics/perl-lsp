@@ -15,11 +15,10 @@ use std::sync::{Once, OnceLock};
 
 use clap::{Args, Parser};
 pub mod timing;
-pub use perl_lsp_feature_governance::{
-    FeatureProfile, catalog_advertised_feature_ids, compliance_percent_for_profile,
-    to_json_for_profile, trackable_feature_count_for_grid,
-};
-use perl_lsp_feature_governance::{feature_profile_supported_tokens, parse_feature_profile_arg};
+pub use crate::features::contracts::trackable_feature_count_for_grid;
+pub use crate::features::grid::{compliance_percent_for_profile, to_json_for_profile};
+pub use crate::features::policy::{FeatureProfile, catalog_advertised_feature_ids};
+use crate::features::profile_cli::{feature_profile_supported_tokens, parse_feature_profile_arg};
 pub use timing::{StartupReport, StartupTimer};
 use tracing_subscriber::prelude::*;
 use tracing_subscriber::{EnvFilter, fmt as tracing_fmt};

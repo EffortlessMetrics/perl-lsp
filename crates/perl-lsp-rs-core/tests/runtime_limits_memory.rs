@@ -3,7 +3,7 @@
 //! Covers: MemoryBudget defaults, MemoryPressure levels, MemoryMonitor
 //! accounting, LspLimits memory fields, and degradation thresholds.
 
-use perl_lsp_limits::{
+use perl_lsp_rs_core::runtime::limits::{
     LspLimits, MemoryBudget, MemoryMonitor, MemoryPressure, ast_cache_max_memory_bytes,
     memory_critical_threshold_bytes, memory_warning_threshold_bytes,
 };

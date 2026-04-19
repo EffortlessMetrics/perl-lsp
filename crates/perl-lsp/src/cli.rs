@@ -5,7 +5,7 @@
 #![allow(clippy::print_stderr, clippy::print_stdout)]
 
 use crate::LspServer;
-use perl_lsp_launcher::{
+use perl_lsp_rs_core::runtime::launcher::{
     LaunchAction, LaunchConfig, StartupTimer, TransportMode, format_health_output,
     format_info_output, format_startup_banner, help_text, init_logging, log_server_startup,
     logging_filter, parse_args, port_in_use_message, shell_completion, should_enable_logging,
@@ -323,7 +323,7 @@ fn run_server(command_name: &str, launch_config: LaunchConfig) {
     if logging_enabled {
         init_logging(&logging_filter(
             launch_config.enable_logging,
-            "perl_lsp=info,perl_lsp_launcher=info,info",
+            "perl_lsp=info,perl_lsp_rs_core=info,info",
             "warn",
         ));
     }

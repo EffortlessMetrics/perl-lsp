@@ -6,7 +6,7 @@
 
 use std::time::Duration;
 
-use perl_lsp_limits::{
+use perl_lsp_rs_core::runtime::limits::{
     LspLimits, code_lens_cap, code_lens_resolve_deadline, completion_cap, completion_deadline,
     diagnostics_per_file_cap, document_symbol_cap, inlay_hints_cap, reference_search_deadline,
     references_cap, regex_scan_deadline, semantic_tokens_deadline, workspace_symbol_cap,
@@ -518,7 +518,7 @@ fn clone_preserves_all_fields() -> Result<(), Box<dyn std::error::Error>> {
         completion_deadline: Duration::from_millis(500),
         return_partial_on_timeout: true,
         include_open_docs_when_degraded: false,
-        memory_budget: perl_lsp_limits::MemoryBudget::default(),
+        memory_budget: perl_lsp_rs_core::runtime::limits::MemoryBudget::default(),
     };
 
     let cloned = original.clone();

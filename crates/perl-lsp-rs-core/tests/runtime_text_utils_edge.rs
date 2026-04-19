@@ -4,7 +4,7 @@
 //! targeting zero/boundary positions, missing delimiters, and the truncation
 //! boundary at max_len == 3.
 
-use perl_lsp_text_utils::TextEditHelpers;
+use perl_lsp_rs_core::runtime::text_utils::TextEditHelpers;
 
 fn helpers<'a>(source: &'a str, lines: &'a [String]) -> TextEditHelpers<'a> {
     TextEditHelpers::new(source, lines)

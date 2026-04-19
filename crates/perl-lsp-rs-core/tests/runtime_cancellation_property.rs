@@ -1,4 +1,4 @@
-use perl_lsp_cancellation::CancellationRegistry;
+use perl_lsp_rs_core::runtime::cancellation::CancellationRegistry;
 use proptest::collection::vec;
 use proptest::prelude::*;
 use serde_json::Value;
@@ -10,7 +10,7 @@ proptest! {
 
     for id in &ids {
             let request_id = Value::from(*id);
-            let token = perl_lsp_cancellation::PerlLspCancellationToken::new(
+            let token = perl_lsp_rs_core::runtime::cancellation::PerlLspCancellationToken::new(
                 request_id,
                 "prop".to_string(),
             );

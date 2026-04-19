@@ -451,7 +451,9 @@ pub trait CancellableProvider {
 macro_rules! check_cancellation {
     ($token:expr) => {
         if $token.is_cancelled() {
-            return Err($crate::CancellationError::InvalidRequest("Request was cancelled".into()));
+            return Err($crate::runtime::cancellation::CancellationError::InvalidRequest(
+                "Request was cancelled".into(),
+            ));
         }
     };
 }

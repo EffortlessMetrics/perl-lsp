@@ -1,4 +1,4 @@
-use perl_lsp_cancellation::{
+use perl_lsp_rs_core::runtime::cancellation::{
     CancellationRegistry, GLOBAL_CANCELLATION_REGISTRY, PerlLspCancellationToken,
     RequestCleanupGuard,
 };

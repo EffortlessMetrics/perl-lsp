@@ -6,7 +6,7 @@
 
 use std::time::Duration;
 
-use perl_lsp_limits::{
+use perl_lsp_rs_core::runtime::limits::{
     LspLimits, code_lens_cap, code_lens_resolve_deadline, completion_cap, completion_deadline,
     diagnostics_per_file_cap, document_symbol_cap, inlay_hints_cap, reference_search_deadline,
     references_cap, regex_scan_deadline, semantic_tokens_deadline, workspace_symbol_cap,
