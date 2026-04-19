@@ -680,8 +680,16 @@ impl DiagnosticCode {
     }
 
     /// Try to infer a diagnostic code from a message.
+    ///
+    /// This is a heuristic-based inference using case-insensitive substring matching.
+    /// The order of pattern checks matters: **more specific patterns must precede
+    /// general ones** to avoid false positives. For example, the message
+    /// "inside a begin block does not enable strict" contains "use strict" as a
+    /// substring, so the more specific phase-scoped check must be evaluated first.
     pub fn from_message(msg: &str) -> Option<Self> {
         let msg_lower = msg.to_lowercase();
+        // Specific "phase scoped" patterns must be checked before general "use strict"
+        // because the former message contains the latter as a substring.
         if msg_lower.contains("inside a begin block does not enable strict")
             || msg_lower.contains("inside a phase block does not enable strict")
         {
