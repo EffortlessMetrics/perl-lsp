@@ -241,3 +241,221 @@ fn public_api_check_passes_on_clean_tree() -> Result<(), Box<dyn std::error::Err
 
     Ok(())
 }
+
+/// Test H (edge case): Facade crate list is in sync across justfile, CI, and baseline directory
+///
+/// This test verifies that the set of 5 facade crates is consistent in:
+/// - justfile `public-api-check` and `public-api-update` recipes
+/// - CI workflow `.github/workflows/ci-nightly.yml` public-api-check job
+/// - baseline directory `.ci/public-api-baselines/`
+///
+/// If the crate list drifts (e.g., someone adds a 6th facade but forgets to update justfile),
+/// the check might miss that crate and CI would silently allow API breakage.
+#[test]
+fn facade_crate_list_consistency() -> Result<(), Box<dyn std::error::Error>> {
+    let root = project_root();
+    let expected_crates = vec!["perl-lsp-rs", "perl-parser", "perl-uri", "perl-dap", "perllsp"];
+
+    // Read justfile and verify all 5 crates appear in public-api recipes
+    let justfile = fs::read_to_string(root.join("justfile"))?;
+    let public_api_section = justfile
+        .split("public-api-check:")
+        .nth(1)
+        .ok_or("Could not find public-api-check recipe in justfile")?
+        .split("public-api-update:") // End at next recipe
+        .next()
+        .ok_or("Could not parse public-api-check recipe")?;
+
+    for crate_name in &expected_crates {
+        assert!(
+            public_api_section.contains(crate_name),
+            "Justfile public-api-check recipe must reference facade crate: {}",
+            crate_name
+        );
+    }
+
+    // Read CI workflow and verify all 5 crates appear in the job description
+    let workflow = fs::read_to_string(root.join(".github/workflows/ci-nightly.yml"))?;
+    let ci_check_section = workflow
+        .split("public-api-check:")
+        .nth(1)
+        .ok_or("Could not find public-api-check job in CI workflow")?
+        .split('\n')
+        .take_while(|line| !line.starts_with("  ") || line.starts_with("    "))
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    for crate_name in &expected_crates {
+        assert!(
+            ci_check_section.contains(crate_name),
+            "CI workflow public-api-check job must reference facade crate: {}",
+            crate_name
+        );
+    }
+
+    // Verify baseline directory has exactly 5 baseline files
+    let baselines_dir = root.join(".ci/public-api-baselines");
+    let baseline_files: Vec<_> = fs::read_dir(&baselines_dir)?
+        .filter_map(|entry| {
+            entry
+                .ok()
+                .and_then(|e| e.file_name().into_string().ok())
+                .filter(|name| name.ends_with(".txt"))
+        })
+        .collect();
+
+    assert_eq!(
+        baseline_files.len(),
+        5,
+        "Expected 5 baseline files (.txt) in .ci/public-api-baselines/, found {}",
+        baseline_files.len()
+    );
+
+    for crate_name in &expected_crates {
+        let expected_file = format!("{}.txt", crate_name);
+        assert!(
+            baseline_files.contains(&expected_file),
+            "Baseline file missing for facade crate: {}/{}",
+            baselines_dir.display(),
+            expected_file
+        );
+    }
+
+    Ok(())
+}
+
+/// Test I (edge case): Non-facade crates do not have baselines
+///
+/// This test verifies that the public API ratchet only applies to the 5 primary
+/// facades and does not create baseline files for internal support crates like
+/// `perl-tdd-support`, `perl-corpus`, or other internal satellites.
+///
+/// If baselines leak to internal crates, it creates unnecessary maintenance burden
+/// and suggests the scope has drifted from "facade-only".
+#[test]
+fn non_facade_crates_have_no_baselines() -> Result<(), Box<dyn std::error::Error>> {
+    let root = project_root();
+    let baselines_dir = root.join(".ci/public-api-baselines");
+
+    // List of internal crates that should NOT have baselines
+    let internal_crates = vec![
+        "perl-tdd-support",
+        "perl-corpus",
+        "perl-lexer",
+        "perl-lexer-core",
+        "perl-parser-core",
+    ];
+
+    for crate_name in &internal_crates {
+        let baseline_path = baselines_dir.join(format!("{}.txt", crate_name));
+        assert!(
+            !baseline_path.exists(),
+            "Internal crate {} should NOT have a baseline file (only 5 facades should)",
+            crate_name
+        );
+    }
+
+    Ok(())
+}
+
+/// Test J (edge case & regression): perllsp baseline has exactly 2 lines (mod + re-export)
+///
+/// `perllsp` is a thin binary wrapper that re-exports from `perl-lsp-rs`.
+/// Its public API surface should be minimal: just the module declaration and
+/// the re-export statement. This test verifies the format is preserved as expected.
+///
+/// If perllsp's baseline grows significantly, it may indicate:
+/// - Additional public API was accidentally added to the lib target
+/// - The re-export pattern changed
+/// - The baseline was regenerated incorrectly
+#[test]
+fn perllsp_baseline_has_expected_reexport_format() -> Result<(), Box<dyn std::error::Error>> {
+    let root = project_root();
+    let perllsp_baseline = root.join(".ci/public-api-baselines/perllsp.txt");
+
+    let content = fs::read_to_string(&perllsp_baseline)
+        .map_err(|e| format!("Failed to read perllsp baseline: {}", e))?;
+
+    let lines: Vec<&str> = content.lines().filter(|l| !l.trim().is_empty()).collect();
+
+    assert_eq!(
+        lines.len(),
+        2,
+        "perllsp baseline should have exactly 2 lines (mod + re-export), got {}. Content:\n{}",
+        lines.len(),
+        content
+    );
+
+    // Verify first line is the module declaration
+    assert!(
+        lines[0].starts_with("pub mod perllsp"),
+        "perllsp baseline first line should be module declaration, got: {}",
+        lines[0]
+    );
+
+    // Verify second line is a re-export (uses pub use and contains <<...>>)
+    assert!(
+        lines[1].contains("pub use") && lines[1].contains("<<"),
+        "perllsp baseline second line should be a re-export pattern, got: {}",
+        lines[1]
+    );
+
+    Ok(())
+}
+
+/// Test K (regression guard): Tool version is pinned consistently
+///
+/// This test verifies that `cargo-public-api` version is specified identically in:
+/// - justfile `_public-api-install` recipe
+/// - CI workflow `.github/workflows/ci-nightly.yml` install step
+///
+/// Version drift between local and CI could cause baselines to diverge if the tool
+/// changes its output format between versions. This test catches silent mismatches.
+#[test]
+fn tool_version_pinned_consistently() -> Result<(), Box<dyn std::error::Error>> {
+    let root = project_root();
+
+    // Extract version from justfile (looks like: --version 0.50.1;)
+    let justfile = fs::read_to_string(root.join("justfile"))?;
+    let justfile_version_line = justfile
+        .lines()
+        .find(|line| line.contains("cargo-public-api") && line.contains("--version"))
+        .ok_or("Could not find cargo-public-api version in justfile")?;
+
+    // Parse version: extract digits.digits.digits pattern
+    let justfile_version_num = justfile_version_line
+        .split("--version")
+        .nth(1)
+        .and_then(|s| {
+            // Extract version like "0.50.1" from strings like " 0.50.1; \" or " 0.50.1"
+            s.trim()
+                .split(|c: char| !c.is_numeric() && c != '.')
+                .find(|s| !s.is_empty() && s.chars().next().is_some_and(|c| c.is_numeric()))
+        })
+        .ok_or("Could not parse version from justfile")?;
+
+    // Extract version from CI workflow (looks like: --version 0.50.1)
+    let workflow = fs::read_to_string(root.join(".github/workflows/ci-nightly.yml"))?;
+    let ci_version_line = workflow
+        .lines()
+        .find(|line| line.contains("cargo-public-api") && line.contains("--version"))
+        .ok_or("Could not find cargo-public-api version in CI workflow")?;
+
+    let ci_version_num = ci_version_line
+        .split("--version")
+        .nth(1)
+        .and_then(|s| {
+            s.trim()
+                .split(|c: char| !c.is_numeric() && c != '.')
+                .find(|s| !s.is_empty() && s.chars().next().is_some_and(|c| c.is_numeric()))
+        })
+        .ok_or("Could not parse version from CI workflow")?;
+
+    assert_eq!(
+        justfile_version_num, ci_version_num,
+        "cargo-public-api version mismatch: justfile={}, CI={}. Both must be identical.",
+        justfile_version_num, ci_version_num
+    );
+
+    Ok(())
+}
