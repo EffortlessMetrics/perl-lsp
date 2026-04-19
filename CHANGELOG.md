@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Internal
+
+- **`cargo xtask published-crate-count`** — new ratchet gate that monitors the
+  count of entries in `[workspace.metadata.publish.allow]` and prevents accidental
+  regression during the microcrate collapse (ADR-0041). Fails if the count exceeds
+  the baseline in `xtask/published-crate-baseline.txt`; auto-tightens the baseline
+  when count decreases. Run via `just ci-published-crate-count` or directly as
+  `cargo xtask published-crate-count`. (#4416)
+
 ## [0.12.4] - 2026-04-12
 
 Release notes: [v0.12.4](docs/releases/v0.12.4.md) · [GitHub Release](https://github.com/EffortlessMetrics/perl-lsp/releases/tag/v0.12.4)
