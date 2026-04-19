@@ -225,10 +225,7 @@ fn contributing_md_documents_public_api_workflow() -> Result<(), Box<dyn std::er
 ///
 /// This test verifies that once baselines are captured and committed,
 /// running `just public-api-check` exits 0 with no drift.
-///
-/// Remove #[ignore] after builder lands baselines and recipes.
 #[test]
-#[ignore]
 fn public_api_check_passes_on_clean_tree() -> Result<(), Box<dyn std::error::Error>> {
     // This test runs: just public-api-check
     // Expected: exit 0 (no API drift against committed baselines)

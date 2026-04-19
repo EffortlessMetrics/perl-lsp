@@ -1794,6 +1794,53 @@ _semver-check-install:
         cargo install cargo-semver-checks --locked; \
     fi
 
+# Private helper: install cargo-public-api if not present
+[private]
+_public-api-install:
+    @if ! command -v cargo-public-api >/dev/null 2>&1; then \
+        echo "Installing cargo-public-api..."; \
+        cargo install cargo-public-api --locked --version 0.50.1; \
+    fi
+
+# Check public API surface of facade crates against committed baselines
+public-api-check:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    just _public-api-install
+    echo "Checking public API surface for facade crates..."
+    FAILED=0
+    for crate in perl-lsp-rs perl-parser perl-uri perl-dap perllsp; do
+        BASELINE=".ci/public-api-baselines/${crate}.txt"
+        if [ ! -f "$BASELINE" ]; then
+            echo "FAIL Missing baseline: $BASELINE (run: just public-api-update)"
+            FAILED=1
+            continue
+        fi
+        cargo public-api -p "$crate" --simplified 2>/dev/null | grep "^pub " > "/tmp/${crate}-current.txt"
+        if ! diff -u "$BASELINE" "/tmp/${crate}-current.txt" > "/tmp/${crate}-diff.txt" 2>&1; then
+            echo "FAIL Public API changed in ${crate}:"
+            cat "/tmp/${crate}-diff.txt"
+            FAILED=1
+        else
+            echo "OK ${crate}: API surface unchanged"
+        fi
+    done
+    [ $FAILED -eq 0 ] || { echo "Run 'just public-api-update' to regenerate baselines if the change is intentional."; exit 1; }
+
+# Regenerate all public API baselines from current workspace state
+public-api-update:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    just _public-api-install
+    echo "Regenerating public API baselines..."
+    mkdir -p .ci/public-api-baselines
+    for crate in perl-lsp-rs perl-parser perl-uri perl-dap perllsp; do
+        cargo public-api -p "$crate" --simplified 2>/dev/null | grep "^pub " \
+            > ".ci/public-api-baselines/${crate}.txt"
+        echo "Updated ${crate}: $(wc -l < .ci/public-api-baselines/${crate}.txt) lines"
+    done
+    echo "Commit .ci/public-api-baselines/ with your PR."
+
 # Private helper: run semver checks on core packages
 [private]
 _semver-check-run:
