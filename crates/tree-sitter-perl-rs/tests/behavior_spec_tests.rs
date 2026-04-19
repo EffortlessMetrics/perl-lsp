@@ -4,7 +4,7 @@
 //! parser ergonomics, traversal, source extraction, and resilience on malformed input.
 
 use perl_tdd_support::{must, must_some};
-use tree_sitter_perl_rs::Parser;
+use tree_sitter_perl_rs::{LANGUAGE, Parser, language};
 
 fn parse(source: &str) -> tree_sitter_perl_rs::Tree {
     let mut parser = Parser::new();
@@ -145,4 +145,44 @@ fn when_requesting_grammar_kind_of_variable_with_attributes_then_snake_case_fall
         );
         assert_eq!(gk, "variable_with_attributes", "expected snake_case fallback; got {gk}");
     }
+}
+
+#[test]
+fn when_querying_language_node_kind_count_then_nonzero_count_is_returned() {
+    let lang = language();
+
+    assert!(
+        lang.node_kind_count() > 0,
+        "node_kind_count() should return a non-zero value, got {}",
+        lang.node_kind_count()
+    );
+}
+
+#[test]
+fn when_querying_language_node_kind_names_then_program_is_included() {
+    let lang = LANGUAGE;
+
+    let kind_names = lang.node_kind_names();
+    assert!(
+        kind_names.contains(&"Program"),
+        "node_kind_names() should contain 'Program', got {:?}",
+        kind_names
+    );
+}
+
+#[test]
+fn when_querying_language_node_kind_is_named_then_it_correctly_distinguishes() {
+    let lang = language();
+
+    // "Program" is a named node kind and should return true
+    assert!(
+        lang.node_kind_is_named("Program"),
+        "node_kind_is_named(\"Program\") should return true"
+    );
+
+    // A nonexistent kind should return false
+    assert!(
+        !lang.node_kind_is_named("__nonexistent_kind__"),
+        "node_kind_is_named(\"__nonexistent_kind__\") should return false"
+    );
 }
