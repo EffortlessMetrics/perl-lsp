@@ -249,7 +249,7 @@ has 'id' => (is => 'ro', isa => UserID);
     documents.insert(types_uri.to_string(), types_code.to_string());
     documents.insert(user_uri.to_string(), user_code.to_string());
 
-    let provider = perl_lsp_navigation::TypeDefinitionProvider::new();
+    let provider = perl_lsp_rs_core::providers::navigation::TypeDefinitionProvider::new();
     let locations = provider
         .find_type_definition(&user_ast, line as u32, character as u32, user_uri, &documents)
         .ok_or("Expected array from type definition")?;
