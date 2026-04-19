@@ -51,6 +51,7 @@ pr-fast: _check-tools-basic
     just _timed "clippy-core" "just clippy-core" && \
     just _timed "test-core" "just test-core" && \
     just _timed "publish-closure" "just ci-publish-closure" && \
+    just _timed "publish-manifest-check" "just ci-publish-manifest-check" && \
     just _timed "layer-check" "just ci-layer-check" && \
     just _timed "published-crate-count" "just ci-published-crate-count"
     RC=$?
@@ -765,6 +766,7 @@ ci-gate:
     just hook-registry-check && \
     just hook-tests && \
     just ci-publish-closure && \
+    just ci-publish-manifest-check && \
     just ci-layer-check && \
     just ci-published-crate-count
     # @START=$$(date +%s); \
@@ -880,6 +882,12 @@ ci-published-crate-count:
     @echo "🧮 Checking published-crate count ratchet..."
     @cargo xtask published-crate-count
     @echo "✅ Published-crate count ratchet passed"
+
+# Offline manifest validation: allowlist drift + LICENSE present (see #4499)
+ci-publish-manifest-check:
+    @echo "Checking publish manifest (allowlist drift + LICENSE)..."
+    @cargo xtask publish-manifest-check
+    @echo "Publish manifest check passed"
 
 # Core tests (fast, essential)
 ci-test-core:
@@ -2177,8 +2185,7 @@ publish-new-crates:
 # matches the set of crates that cargo metadata considers publishable.
 # Run this after adding a new crate to catch drift before pushing.
 publish-allowlist-check:
-    cargo metadata --format-version=1 --no-deps \
-      | python3 scripts/publish-topo.py --check-drift
+    cargo xtask publish-manifest-check
 
 # Dry-run publish gate: package every allowlisted crate in topological order.
 # Mirrors the dev-dep strip and packaging steps from publish-crates.yml.

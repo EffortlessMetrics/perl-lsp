@@ -56,6 +56,7 @@ pub mod prep_crates_io_launch;
 pub mod publication_facts;
 pub mod publish;
 pub mod publish_closure;
+pub mod publish_manifest_check;
 pub mod publish_receipts;
 pub mod receipts;
 pub mod release;

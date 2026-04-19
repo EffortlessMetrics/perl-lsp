@@ -17,30 +17,13 @@
 //!
 //! Related: #4416, ADR-0041 (#4413), parent collapse #4410.
 
-use crate::utils::{project_root, run_cargo_metadata};
+use crate::utils::{load_publish_allowlist, project_root};
 use color_eyre::eyre::{Result, bail, eyre};
-use serde::Deserialize;
 use std::fs;
 use std::path::Path;
 
 /// Relative path (from project root) of the baseline file.
 const BASELINE_FILE: &str = "xtask/published-crate-baseline.txt";
-
-#[derive(Deserialize)]
-struct Metadata {
-    #[serde(rename = "metadata")]
-    workspace_metadata: Option<WorkspacePublishMeta>,
-}
-
-#[derive(Deserialize)]
-struct WorkspacePublishMeta {
-    publish: Option<AllowList>,
-}
-
-#[derive(Deserialize)]
-struct AllowList {
-    allow: Option<Vec<String>>,
-}
 
 /// Entry point for the `published-crate-count` xtask subcommand.
 pub fn run() -> Result<()> {
@@ -96,15 +79,7 @@ pub fn check_count(current: u32, baseline: u32) -> CountStatus {
 }
 
 fn current_count() -> Result<u32> {
-    let bytes = run_cargo_metadata(true)?;
-    let meta: Metadata =
-        serde_json::from_slice(&bytes).map_err(|e| eyre!("Failed to parse cargo metadata: {e}"))?;
-    let allowlist = meta
-        .workspace_metadata
-        .as_ref()
-        .and_then(|m| m.publish.as_ref())
-        .and_then(|p| p.allow.as_ref())
-        .ok_or_else(|| eyre!("No [workspace.metadata.publish.allow] found in root Cargo.toml"))?;
+    let allowlist = load_publish_allowlist()?;
     Ok(allowlist.len() as u32)
 }
 

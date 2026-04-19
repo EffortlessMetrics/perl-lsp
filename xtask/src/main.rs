@@ -731,6 +731,17 @@ enum Commands {
     /// When the count has decreased, the baseline is auto-tightened.
     PublishedCrateCount,
 
+    /// Offline manifest validation: allowlist drift + LICENSE present.
+    ///
+    /// Checks that every entry in `[workspace.metadata.publish.allow]` is a
+    /// publishable workspace member and vice versa (allowlist drift), and that
+    /// every allowlisted crate has a `license` or `license-file` field set.
+    /// Uses `cargo metadata --no-deps` — no network contact.
+    ///
+    /// Replaces the Python `--check-drift` step in `publish-dry-run.yml` and
+    /// is wired into `just pr-fast` and `just ci-gate`.
+    PublishManifestCheck,
+
     /// Sweep system Perl corpus for parser error rates
     ParserCorpusSweep {
         /// Comma-separated corpus root directories
@@ -1400,6 +1411,7 @@ fn main() -> Result<()> {
         Commands::PublishVscode { yes, token } => publish::publish_vscode(yes, token),
         Commands::PublishClosure { crate_name } => publish_closure::run(crate_name),
         Commands::PublishedCrateCount => count_ratchet::run(),
+        Commands::PublishManifestCheck => publish_manifest_check::run(),
         Commands::SmokeTestRelease { version } => publish::smoke_test_release(version),
         Commands::PublishReceipts { date } => publish_receipts::run(date),
         Commands::ParserCorpusSweep {
