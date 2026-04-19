@@ -678,7 +678,7 @@ impl LspServer {
                     let backend_result = self.try_ai_inline_completion(&context, &ai_config);
                     match backend_result {
                         Ok(ref items) if !items.is_empty() => {
-                            let list = perl_lsp_inline_completion::InlineCompletionList {
+                            let list = perl_lsp_rs_core::providers::inline_completion::InlineCompletionList {
                                 items: items.clone(),
                             };
                             return Ok(Some(serde_json::to_value(list).map_err(|e| {
@@ -723,11 +723,11 @@ impl LspServer {
     /// Returns `Ok(items)` on success, `Err` on any failure.
     fn try_ai_inline_completion(
         &self,
-        context: &perl_lsp_inline_completion::PreparedInlineCompletionContext,
+        context: &perl_lsp_rs_core::providers::inline_completion::PreparedInlineCompletionContext,
         ai_config: &perl_lsp_config::AiCompletionConfig,
     ) -> Result<
-        Vec<perl_lsp_inline_completion::InlineCompletionItem>,
-        perl_lsp_inline_completion::BackendError,
+        Vec<perl_lsp_rs_core::providers::inline_completion::InlineCompletionItem>,
+        perl_lsp_rs_core::providers::inline_completion::BackendError,
     > {
         // Get the backend from server state (if registered)
         let backend = self.ai_backend();
@@ -736,7 +736,7 @@ impl LspServer {
             None => return Ok(vec![]),
         };
 
-        let req = perl_lsp_inline_completion::BackendRequest {
+        let req = perl_lsp_rs_core::providers::inline_completion::BackendRequest {
             context: context.clone(),
             max_output_tokens: ai_config.max_output_tokens,
             timeout_ms: ai_config.timeout_ms,
@@ -745,7 +745,7 @@ impl LspServer {
         let texts = backend.complete(&req)?;
         let items = texts
             .into_iter()
-            .map(|text| perl_lsp_inline_completion::InlineCompletionItem {
+            .map(|text| perl_lsp_rs_core::providers::inline_completion::InlineCompletionItem {
                 insert_text: text,
                 filter_text: None,
                 range: None,

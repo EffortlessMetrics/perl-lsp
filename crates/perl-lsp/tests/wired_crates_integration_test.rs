@@ -18,7 +18,7 @@
 /// InlineCompletionProvider must be accessible.
 #[test]
 fn test_wired_inline_completion_provider_accessible() {
-    use perl_lsp_inline_completion::InlineCompletionProvider;
+    use perl_lsp_rs_core::providers::inline_completion::InlineCompletionProvider;
     let provider = InlineCompletionProvider::new();
     // Basic smoke: after `->` we should get a `new()` suggestion.
     let completions = provider.get_inline_completions("$obj->", 0, 6);
@@ -45,7 +45,7 @@ fn test_wired_inline_completion_provider_accessible() {
 /// We verify the crate API is reachable and returns the correct result.
 #[test]
 fn test_wired_inline_completion_utf16_position() {
-    use perl_lsp_inline_completion::InlineCompletionProvider;
+    use perl_lsp_rs_core::providers::inline_completion::InlineCompletionProvider;
     let source = "my $prefix = \"😀\"; $obj->";
     // UTF-16 code-unit count for the full string (end-of-line position)
     let utf16_len: u32 = source.encode_utf16().count() as u32;
@@ -63,7 +63,7 @@ fn test_wired_inline_completion_utf16_position() {
 /// within that line — not across the entire document.
 #[test]
 fn test_wired_inline_completion_multiline_document() {
-    use perl_lsp_inline_completion::InlineCompletionProvider;
+    use perl_lsp_rs_core::providers::inline_completion::InlineCompletionProvider;
     // Line 0: preamble; Line 1: the trigger line
     let source = "use strict;\nuse warnings;\n$obj->";
     let provider = InlineCompletionProvider::new();

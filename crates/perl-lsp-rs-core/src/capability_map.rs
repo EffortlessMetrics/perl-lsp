@@ -313,6 +313,7 @@ pub fn caps_from_feature_ids(features: &[&str]) -> ServerCapabilities {
 }
 
 #[cfg(test)]
+#[allow(clippy::field_reassign_with_default)]
 mod tests {
     use lsp_types::{ColorProviderCapability, ServerCapabilities};
 

@@ -68,14 +68,15 @@ impl LspServer {
         let session = self.stream_sessions().start_session(session_key);
 
         // Prepare context
-        let provider = perl_lsp_inline_completion::InlineCompletionProvider::new();
+        let provider =
+            perl_lsp_rs_core::providers::inline_completion::InlineCompletionProvider::new();
         let context = match provider.prepare_context(&text, line, character) {
             Some(ctx) => ctx,
             None => return Ok(Some(json!(null))),
         };
 
         // Build request
-        let req = perl_lsp_inline_completion::BackendRequest {
+        let req = perl_lsp_rs_core::providers::inline_completion::BackendRequest {
             context,
             max_output_tokens: ai_config.max_output_tokens,
             timeout_ms: ai_config.timeout_ms,
@@ -124,11 +125,12 @@ impl LspServer {
         let mut sent_final = false;
 
         // Stream from the backend -- each chunk carries cumulative text
-        let stream_result =
-            backend.stream(&req, &mut |chunk: perl_lsp_inline_completion::StreamChunk| {
+        let stream_result = backend.stream(
+            &req,
+            &mut |chunk: perl_lsp_rs_core::providers::inline_completion::StreamChunk| {
                 // Check cancellation before emitting
                 if session.is_cancelled() {
-                    return perl_lsp_inline_completion::StreamControl::Stop;
+                    return perl_lsp_rs_core::providers::inline_completion::StreamControl::Stop;
                 }
 
                 // Update session cumulative text
@@ -161,15 +163,16 @@ impl LspServer {
 
                 if let Err(e) = self.notify("$/progress", progress) {
                     tracing::debug!("streaming inline completion: failed to send progress: {}", e);
-                    return perl_lsp_inline_completion::StreamControl::Stop;
+                    return perl_lsp_rs_core::providers::inline_completion::StreamControl::Stop;
                 }
 
                 if is_final {
-                    perl_lsp_inline_completion::StreamControl::Stop
+                    perl_lsp_rs_core::providers::inline_completion::StreamControl::Stop
                 } else {
-                    perl_lsp_inline_completion::StreamControl::Continue
+                    perl_lsp_rs_core::providers::inline_completion::StreamControl::Continue
                 }
-            });
+            },
+        );
 
         // If the stream ended without sending a final chunk, send one now
         if !sent_final && !session.is_cancelled() {

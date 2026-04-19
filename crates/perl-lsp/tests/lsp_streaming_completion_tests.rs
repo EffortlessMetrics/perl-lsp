@@ -651,14 +651,15 @@ mod mock_streaming_completion_tests {
         delays_ms: Vec<u64>,
     }
 
-    impl perl_lsp_inline_completion::InlineCompletionBackend for MockChunkBackend {
+    impl perl_lsp_rs_core::providers::inline_completion::InlineCompletionBackend for MockChunkBackend {
         fn stream(
             &self,
-            _req: &perl_lsp_inline_completion::BackendRequest,
+            _req: &perl_lsp_rs_core::providers::inline_completion::BackendRequest,
             sink: &mut dyn FnMut(
-                perl_lsp_inline_completion::StreamChunk,
-            ) -> perl_lsp_inline_completion::StreamControl,
-        ) -> Result<(), perl_lsp_inline_completion::BackendError> {
+                perl_lsp_rs_core::providers::inline_completion::StreamChunk,
+            )
+                -> perl_lsp_rs_core::providers::inline_completion::StreamControl,
+        ) -> Result<(), perl_lsp_rs_core::providers::inline_completion::BackendError> {
             for (idx, chunk) in self.chunks.iter().enumerate() {
                 if let Some(delay_ms) = self.delays_ms.get(idx) {
                     if *delay_ms > 0 {
@@ -666,7 +667,7 @@ mod mock_streaming_completion_tests {
                     }
                 }
                 let is_final = idx + 1 == self.chunks.len();
-                let _ = sink(perl_lsp_inline_completion::StreamChunk {
+                let _ = sink(perl_lsp_rs_core::providers::inline_completion::StreamChunk {
                     text: (*chunk).to_string(),
                     is_final,
                 });
@@ -677,19 +678,24 @@ mod mock_streaming_completion_tests {
 
     struct MockErrorChunkBackend;
 
-    impl perl_lsp_inline_completion::InlineCompletionBackend for MockErrorChunkBackend {
+    impl perl_lsp_rs_core::providers::inline_completion::InlineCompletionBackend
+        for MockErrorChunkBackend
+    {
         fn stream(
             &self,
-            _req: &perl_lsp_inline_completion::BackendRequest,
+            _req: &perl_lsp_rs_core::providers::inline_completion::BackendRequest,
             sink: &mut dyn FnMut(
-                perl_lsp_inline_completion::StreamChunk,
-            ) -> perl_lsp_inline_completion::StreamControl,
-        ) -> Result<(), perl_lsp_inline_completion::BackendError> {
-            let _ = sink(perl_lsp_inline_completion::StreamChunk {
+                perl_lsp_rs_core::providers::inline_completion::StreamChunk,
+            )
+                -> perl_lsp_rs_core::providers::inline_completion::StreamControl,
+        ) -> Result<(), perl_lsp_rs_core::providers::inline_completion::BackendError> {
+            let _ = sink(perl_lsp_rs_core::providers::inline_completion::StreamChunk {
                 text: "find_".to_string(),
                 is_final: false,
             });
-            Err(perl_lsp_inline_completion::BackendError::Provider("mock stream error".into()))
+            Err(perl_lsp_rs_core::providers::inline_completion::BackendError::Provider(
+                "mock stream error".into(),
+            ))
         }
     }
 

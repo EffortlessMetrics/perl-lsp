@@ -91,7 +91,7 @@ fn when_parser_layering_is_correct_then_no_lsp_provider_deps_in_tree() {
 #[test]
 fn when_semantic_tokens_import_refactored_then_legend_accessible() {
     // This pattern matches the refactored import in ast_snap.rs after #4414
-    use perl_lsp_semantic_tokens as semantic_tokens_module;
+    use perl_lsp_rs_core::providers::semantic_tokens as semantic_tokens_module;
 
     let legend = semantic_tokens_module::legend();
     assert!(
