@@ -36,6 +36,7 @@ fn load_gate_policy_yaml() -> Value {
     serde_yaml_ng::from_str(&content).expect("Failed to parse gate-policy.yaml")
 }
 
+/// Finds a gate entry by name in the gates list, returning `None` if not found.
 fn find_gate<'a>(gates: &'a [Value], name: &str) -> Option<&'a Value> {
     gates
         .iter()

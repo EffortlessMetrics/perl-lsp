@@ -18,7 +18,7 @@
 //! Related: #4416, ADR-0041 (#4413), parent collapse #4410.
 
 use crate::utils::{project_root, run_cargo_metadata};
-use color_eyre::eyre::{Result, bail, eyre};
+use color_eyre::eyre::{bail, eyre, Result};
 use serde::Deserialize;
 use std::fs;
 use std::path::Path;
@@ -95,6 +95,15 @@ pub fn check_count(current: u32, baseline: u32) -> CountStatus {
     }
 }
 
+/// Queries `cargo metadata --no-deps` and returns the current count of entries
+/// in `[workspace.metadata.publish.allow]` from the root `Cargo.toml`.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - `cargo metadata` fails or exits non-zero
+/// - The metadata JSON cannot be parsed
+/// - The `workspace.metadata.publish.allow` key is missing from `Cargo.toml`
 fn current_count() -> Result<u32> {
     let bytes = run_cargo_metadata(true)?;
     let meta: Metadata =
@@ -108,6 +117,14 @@ fn current_count() -> Result<u32> {
     Ok(allowlist.len() as u32)
 }
 
+/// Reads the baseline integer from the given path.
+///
+/// The baseline file is expected to contain a single integer (possibly with
+/// trailing whitespace/newlines).
+///
+/// # Errors
+///
+/// Returns an error if the file cannot be read or the content is not a valid u32.
 fn read_baseline(path: &Path) -> Result<u32> {
     let raw = fs::read_to_string(path)
         .map_err(|e| eyre!("Failed to read baseline file {}: {e}", path.display()))?;
@@ -115,10 +132,22 @@ fn read_baseline(path: &Path) -> Result<u32> {
         .ok_or_else(|| eyre!("Invalid baseline value in {}: {:?}", path.display(), raw))
 }
 
+/// Parses a baseline value from a string.
+///
+/// Strips whitespace and newlines before parsing. Returns `None` if the content
+/// is not a valid non-negative integer.
 fn parse_baseline(raw: &str) -> Option<u32> {
     raw.trim().parse::<u32>().ok()
 }
 
+/// Writes the baseline value to the given path, followed by a newline.
+///
+/// The newline-terminated format matches typical text-file conventions and keeps
+/// `git diff` output clean.
+///
+/// # Errors
+///
+/// Returns an error if the file cannot be written.
 fn write_baseline(path: &Path, value: u32) -> Result<()> {
     // Newline-terminated to match typical text-file conventions and keep `git diff`
     // output clean.
