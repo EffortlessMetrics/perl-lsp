@@ -48,7 +48,7 @@ Pattern is roughly doubling per wave. Each fix was mechanical (wrong constructor
 
 **Root cause:** red-TDD reads the SPEC ("what should exist") rather than the CODE ("this is the actual `pub` surface"). When collapsing crates, specs describe targets but don't enumerate exact signatures. Red-TDD guesses idiomatic defaults; defaults don't always match reality.
 
-**Fix direction:** explicit "read actual API" step in red-TDD prompt. Plus spec-planner enumerating public surfaces in `context.md` for red-TDD to consume. Tracked as #[issue-number-after-filing].
+**Fix direction:** explicit "read actual API" step in red-TDD prompt. Plus spec-planner enumerating public surfaces in `context.md` for red-TDD to consume. Tracked as #4513.
 
 ### 4. CodeRabbit silently skips PRs > 150 files
 
@@ -66,7 +66,7 @@ Both G1a (258 files) and G1b (258 files) — the largest, most error-prone PRs �
 | Non-isolated agents switch main-checkout branch | Main-on-wrong-branch 2×; required explicit `git checkout master` cleanup |
 | Task-tool persistence broken (#4509, harness-backend) | 20+ TaskUpdate reports silently reverted |
 
-Individually each has a workaround. Collectively they suggest a **harness Windows-support audit** + migration of hook logic from `.claude/hooks/*.sh` into `xtask` (Rust, cross-platform, testable). Tracked as #[issue-number-after-filing].
+Individually each has a workaround. Collectively they suggest a **harness Windows-support audit** + migration of hook logic from `.claude/hooks/*.sh` into `xtask` (Rust, cross-platform, testable). Tracked as #4514.
 
 ### 6. External AI advisors were consistently stale
 

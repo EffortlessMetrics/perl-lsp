@@ -108,6 +108,6 @@ From this absorption:
 ## Related
 
 - [SRP_MICROCRATES.md](../SRP_MICROCRATES.md) — single-responsibility microcrate architecture (the pre-collapse state)
-- [project_wave_d_facade_pattern.md](../../memory/project_wave_d_facade_pattern.md) — the facade pattern this collapse fits into
+- Facade/core split pattern — see Wave D (#4486) and Wave F (#4493) merge history for the established pattern this collapse fits into
 - [forensics/2026-04-19-wave-g1-collapse-retrospective.md](../forensics/2026-04-19-wave-g1-collapse-retrospective.md) — full session, Wave G1b details
 - Pull request #4510 — the actual aggregator absorption diff
