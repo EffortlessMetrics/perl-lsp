@@ -372,6 +372,21 @@ gates:
       - lockfile
       - hygiene
 
+  - name: published_crate_count
+    tier: merge_gate
+    description: "Ratchet: published crate count must not exceed baseline"
+    required: true
+    command: cargo xtask published-crate-count
+    timeout_seconds: 30
+    retry_count: 0
+    budgets:
+      max_duration_ms: 5000
+    quarantine: true  # Until collapse completes (~30-31 crates)
+    tags:
+      - ratchet
+      - microcrate
+      - collapse
+
   # ===========================================================================
   # Tier: nightly
   # ===========================================================================
@@ -821,6 +836,7 @@ workflow_integration:
         - policy_checks
         - workflow_audit
         - nested_lock_check
+        - published_crate_count
       # Note: security_audit and docs_build run in separate jobs for caching
 
     release-gate:
