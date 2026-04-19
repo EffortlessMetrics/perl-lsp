@@ -97,13 +97,16 @@ struct MockSuccessBackend {
     response: String,
 }
 
-impl perl_lsp_rs_core::providers::inline_completion::InlineCompletionBackend for MockSuccessBackend {
+impl perl_lsp_rs_core::providers::inline_completion::InlineCompletionBackend
+    for MockSuccessBackend
+{
     fn stream(
         &self,
         _req: &perl_lsp_rs_core::providers::inline_completion::BackendRequest,
         sink: &mut dyn FnMut(
             perl_lsp_rs_core::providers::inline_completion::StreamChunk,
-        ) -> perl_lsp_rs_core::providers::inline_completion::StreamControl,
+        )
+            -> perl_lsp_rs_core::providers::inline_completion::StreamControl,
     ) -> Result<(), perl_lsp_rs_core::providers::inline_completion::BackendError> {
         sink(perl_lsp_rs_core::providers::inline_completion::StreamChunk {
             text: self.response.clone(),
@@ -116,13 +119,16 @@ impl perl_lsp_rs_core::providers::inline_completion::InlineCompletionBackend for
 /// Mock backend that always returns a timeout error.
 struct MockTimeoutBackend;
 
-impl perl_lsp_rs_core::providers::inline_completion::InlineCompletionBackend for MockTimeoutBackend {
+impl perl_lsp_rs_core::providers::inline_completion::InlineCompletionBackend
+    for MockTimeoutBackend
+{
     fn stream(
         &self,
         _req: &perl_lsp_rs_core::providers::inline_completion::BackendRequest,
         _sink: &mut dyn FnMut(
             perl_lsp_rs_core::providers::inline_completion::StreamChunk,
-        ) -> perl_lsp_rs_core::providers::inline_completion::StreamControl,
+        )
+            -> perl_lsp_rs_core::providers::inline_completion::StreamControl,
     ) -> Result<(), perl_lsp_rs_core::providers::inline_completion::BackendError> {
         Err(perl_lsp_rs_core::providers::inline_completion::BackendError::Timeout)
     }
@@ -131,13 +137,16 @@ impl perl_lsp_rs_core::providers::inline_completion::InlineCompletionBackend for
 /// Mock backend that always returns a rate-limited error.
 struct MockRateLimitedBackend;
 
-impl perl_lsp_rs_core::providers::inline_completion::InlineCompletionBackend for MockRateLimitedBackend {
+impl perl_lsp_rs_core::providers::inline_completion::InlineCompletionBackend
+    for MockRateLimitedBackend
+{
     fn stream(
         &self,
         _req: &perl_lsp_rs_core::providers::inline_completion::BackendRequest,
         _sink: &mut dyn FnMut(
             perl_lsp_rs_core::providers::inline_completion::StreamChunk,
-        ) -> perl_lsp_rs_core::providers::inline_completion::StreamControl,
+        )
+            -> perl_lsp_rs_core::providers::inline_completion::StreamControl,
     ) -> Result<(), perl_lsp_rs_core::providers::inline_completion::BackendError> {
         Err(perl_lsp_rs_core::providers::inline_completion::BackendError::RateLimited)
     }
@@ -152,9 +161,12 @@ impl perl_lsp_rs_core::providers::inline_completion::InlineCompletionBackend for
         _req: &perl_lsp_rs_core::providers::inline_completion::BackendRequest,
         _sink: &mut dyn FnMut(
             perl_lsp_rs_core::providers::inline_completion::StreamChunk,
-        ) -> perl_lsp_rs_core::providers::inline_completion::StreamControl,
+        )
+            -> perl_lsp_rs_core::providers::inline_completion::StreamControl,
     ) -> Result<(), perl_lsp_rs_core::providers::inline_completion::BackendError> {
-        Err(perl_lsp_rs_core::providers::inline_completion::BackendError::Provider("test error".into()))
+        Err(perl_lsp_rs_core::providers::inline_completion::BackendError::Provider(
+            "test error".into(),
+        ))
     }
 }
 
