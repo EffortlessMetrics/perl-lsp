@@ -99,7 +99,7 @@ fn extract_crate_dirs(files: &[String]) -> BTreeSet<String> {
 ///
 /// Uses `cargo metadata` to get authoritative package names and manifest paths,
 /// then matches them against the changed crate directories.
-pub fn resolve_package_names(
+pub(crate) fn resolve_package_names(
     project_root: &Path,
     crate_dirs: &BTreeSet<String>,
 ) -> Result<BTreeSet<String>> {

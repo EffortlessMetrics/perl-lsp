@@ -1578,7 +1578,7 @@ fn main() -> Result<()> {
             let root = std::env::current_dir()
                 .map_err(|e| eyre!("Failed to get current working directory: {e}"))?;
             let name = tasks::targeted_checks::resolve_single_package_name(&root, &crate_dir)?;
-            println!("{}", name);
+            println!("{name}");
             Ok(())
         }
         Commands::WorktreeCleanup => worktrees::cleanup(),
