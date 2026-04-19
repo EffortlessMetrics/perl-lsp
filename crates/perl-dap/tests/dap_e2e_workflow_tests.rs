@@ -11,7 +11,7 @@
 
 mod common;
 
-use common::{DapWorkflowSession, perl_available, workflow_timeout};
+use common::{assert_variables_have_names, DapWorkflowSession, perl_available, workflow_timeout};
 use std::fs::write;
 use tempfile::tempdir;
 
@@ -119,13 +119,7 @@ fn test_e2e_single_breakpoint_hit_inspect_continue() -> TestResult {
     );
 
     // All variable entries must have a non-empty name.
-    for var in &variables {
-        let name = var.get("name").and_then(|v| v.as_str()).unwrap_or("");
-        assert!(
-            !name.is_empty(),
-            "variable entry must have a non-empty `name` field: {var:?}"
-        );
-    }
+    assert_variables_have_names(&variables, "locals scope");
 
     // Continue to script exit.
     session.continue_exec(thread_id)?;
@@ -464,13 +458,7 @@ fn test_e2e_globals_scope_inspection() -> TestResult {
     );
 
     // Verify variable entries have non-empty names
-    for var in &globals {
-        let name = var.get("name").and_then(|v| v.as_str()).unwrap_or("");
-        assert!(
-            !name.is_empty(),
-            "global variable entry must have non-empty name: {var:?}"
-        );
-    }
+    assert_variables_have_names(&globals, "globals scope");
 
     session.disconnect()?;
 

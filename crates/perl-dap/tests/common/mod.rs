@@ -173,45 +173,24 @@ impl DapWorkflowSession {
 
     /// Retrieve the `variablesReference` for the `Globals` scope in `frame_id`.
     pub fn scopes_globals_ref(&mut self, frame_id: i64) -> Result<i64, String> {
-        let args = json!({"frameId": frame_id});
-        let resp = self.request("scopes", Some(args));
-        let body = self.expect_success(&resp, "scopes")?;
-
-        let body = body.ok_or("scopes response had no body")?;
-        let scopes = body
-            .get("scopes")
-            .and_then(Value::as_array)
-            .ok_or("scopes body missing `scopes` array")?;
-
-        // Find the "Globals" scope by presentation hint or name.
-        for scope in scopes {
-            let is_globals = scope
-                .get("presentationHint")
-                .and_then(Value::as_str)
-                .map(|h| h == "globals")
-                .unwrap_or(false)
-                || scope
-                    .get("name")
-                    .and_then(Value::as_str)
-                    .map(|n| n == "Globals")
-                    .unwrap_or(false);
-
-            if is_globals {
-                let vars_ref = scope
-                    .get("variablesReference")
-                    .and_then(Value::as_i64)
-                    .ok_or("Globals scope missing `variablesReference`")?;
-                return Ok(vars_ref);
-            }
-        }
-
-        Err("No Globals scope found in scopes response".to_string())
+        self.scope_ref_by_hint_or_name(frame_id, "globals", "Globals", "Globals")
     }
 
     /// Retrieve the `variablesReference` for the `Locals` scope in `frame_id`.
     ///
     /// Uses the `frame_id * 10 + 1` encoding from `frames.rs`.
     pub fn scopes_locals_ref(&mut self, frame_id: i64) -> Result<i64, String> {
+        self.scope_ref_by_hint_or_name(frame_id, "locals", "Locals", "Locals")
+    }
+
+    /// Internal helper: find a scope by presentation hint and/or name, returning its variablesReference.
+    fn scope_ref_by_hint_or_name(
+        &mut self,
+        frame_id: i64,
+        hint: &str,
+        name: &str,
+        scope_label: &str,
+    ) -> Result<i64, String> {
         let args = json!({"frameId": frame_id});
         let resp = self.request("scopes", Some(args));
         let body = self.expect_success(&resp, "scopes")?;
@@ -222,29 +201,28 @@ impl DapWorkflowSession {
             .and_then(Value::as_array)
             .ok_or("scopes body missing `scopes` array")?;
 
-        // Find the "Locals" scope by presentation hint or name.
         for scope in scopes {
-            let is_locals = scope
+            let matches_hint = scope
                 .get("presentationHint")
                 .and_then(Value::as_str)
-                .map(|h| h == "locals")
-                .unwrap_or(false)
-                || scope
-                    .get("name")
-                    .and_then(Value::as_str)
-                    .map(|n| n == "Locals")
-                    .unwrap_or(false);
+                .map(|h| h == hint)
+                .unwrap_or(false);
+            let matches_name = scope
+                .get("name")
+                .and_then(Value::as_str)
+                .map(|n| n == name)
+                .unwrap_or(false);
 
-            if is_locals {
+            if matches_hint || matches_name {
                 let vars_ref = scope
                     .get("variablesReference")
                     .and_then(Value::as_i64)
-                    .ok_or("Locals scope missing `variablesReference`")?;
+                    .ok_or_else(|| format!("{scope_label} scope missing `variablesReference`"))?;
                 return Ok(vars_ref);
             }
         }
 
-        Err("No Locals scope found in scopes response".to_string())
+        Err(format!("No {scope_label} scope found in scopes response"))
     }
 
     /// Retrieve variables for `variables_reference`.
@@ -410,4 +388,17 @@ pub fn perl_available() -> bool {
         .arg("--version")
         .output()
         .is_ok()
+}
+
+/// Assert that all variable entries in `vars` have non-empty `name` fields.
+///
+/// Common validation for locals and globals scope queries.
+pub fn assert_variables_have_names(vars: &[Value], context: &str) {
+    for var in vars {
+        let name = var.get("name").and_then(|v| v.as_str()).unwrap_or("");
+        assert!(
+            !name.is_empty(),
+            "variable entry must have a non-empty `name` field in {context}: {var:?}"
+        );
+    }
 }
