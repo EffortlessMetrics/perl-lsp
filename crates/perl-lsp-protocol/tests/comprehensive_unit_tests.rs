@@ -586,7 +586,8 @@ fn req_range_empty_params() {
 
 #[test]
 fn capabilities_for_production_has_core_features() {
-    let caps = capabilities::capabilities_for(perl_lsp_feature_flags::BuildFlags::production());
+    let caps =
+        capabilities::capabilities_for(perl_lsp_rs_core::features::flags::BuildFlags::production());
     // Production profile enables the core advertised navigation/editing surface.
     assert!(caps.text_document_sync.is_some());
     assert!(caps.hover_provider.is_some());
@@ -599,7 +600,8 @@ fn capabilities_for_production_has_core_features() {
 
 #[test]
 fn capabilities_for_ga_lock_has_core_features() {
-    let caps = capabilities::capabilities_for(perl_lsp_feature_flags::BuildFlags::ga_lock());
+    let caps =
+        capabilities::capabilities_for(perl_lsp_rs_core::features::flags::BuildFlags::ga_lock());
     assert!(caps.text_document_sync.is_some());
     assert!(caps.hover_provider.is_some());
     assert!(caps.completion_provider.is_some());
@@ -607,7 +609,7 @@ fn capabilities_for_ga_lock_has_core_features() {
 
 #[test]
 fn capabilities_for_all_enables_conditional_features() {
-    let flags = perl_lsp_feature_flags::BuildFlags::all();
+    let flags = perl_lsp_rs_core::features::flags::BuildFlags::all();
     let caps = capabilities::capabilities_for(flags);
     assert!(caps.document_highlight_provider.is_some());
     assert!(caps.signature_help_provider.is_some());
@@ -635,7 +637,7 @@ fn capabilities_for_all_enables_conditional_features() {
 #[test]
 fn capabilities_for_minimal_flags_omits_conditional() {
     // Default derives all-false for bool fields
-    let flags = perl_lsp_feature_flags::BuildFlags::default();
+    let flags = perl_lsp_rs_core::features::flags::BuildFlags::default();
     let caps = capabilities::capabilities_for(flags);
     // Only text sync is unconditional; feature-gated providers should stay off.
     assert!(caps.text_document_sync.is_some());
@@ -676,7 +678,7 @@ fn capabilities_for_minimal_flags_omits_conditional() {
 
 #[test]
 fn capabilities_json_returns_valid_json() {
-    let flags = perl_lsp_feature_flags::BuildFlags::production();
+    let flags = perl_lsp_rs_core::features::flags::BuildFlags::production();
     let v = capabilities::capabilities_json(flags);
     assert!(v.is_object());
     assert!(v.get("hoverProvider").is_some());
@@ -684,14 +686,14 @@ fn capabilities_json_returns_valid_json() {
 
 #[test]
 fn capabilities_json_includes_type_hierarchy_when_enabled() {
-    let flags = perl_lsp_feature_flags::BuildFlags::all();
+    let flags = perl_lsp_rs_core::features::flags::BuildFlags::all();
     let v = capabilities::capabilities_json(flags);
     assert!(v.get("typeHierarchyProvider").is_some());
 }
 
 #[test]
 fn capabilities_json_omits_type_hierarchy_when_disabled() {
-    let mut flags = perl_lsp_feature_flags::BuildFlags::all();
+    let mut flags = perl_lsp_rs_core::features::flags::BuildFlags::all();
     flags.type_hierarchy = false;
     let v = capabilities::capabilities_json(flags);
     assert!(v.get("typeHierarchyProvider").is_none());
@@ -790,7 +792,7 @@ fn default_capabilities_returns_valid_caps() {
 
 #[test]
 fn inline_completion_uses_experimental_field() {
-    let mut flags = perl_lsp_feature_flags::BuildFlags::all();
+    let mut flags = perl_lsp_rs_core::features::flags::BuildFlags::all();
     flags.inline_completion = true;
     let caps = capabilities::capabilities_for(flags);
     let exp = caps.experimental.as_ref();
@@ -801,7 +803,7 @@ fn inline_completion_uses_experimental_field() {
 
 #[test]
 fn no_inline_completion_when_disabled() {
-    let mut flags = perl_lsp_feature_flags::BuildFlags::all();
+    let mut flags = perl_lsp_rs_core::features::flags::BuildFlags::all();
     flags.inline_completion = false;
     let caps = capabilities::capabilities_for(flags);
     // experimental may still be None or may not have the key
@@ -816,7 +818,7 @@ fn no_inline_completion_when_disabled() {
 
 #[test]
 fn notebook_sync_advertised_when_enabled() {
-    let mut flags = perl_lsp_feature_flags::BuildFlags::all();
+    let mut flags = perl_lsp_rs_core::features::flags::BuildFlags::all();
     flags.notebook_document_sync = true;
     let caps = capabilities::capabilities_for(flags);
     assert!(caps.notebook_document_sync.is_some());
@@ -824,7 +826,7 @@ fn notebook_sync_advertised_when_enabled() {
 
 #[test]
 fn notebook_sync_not_advertised_when_disabled() {
-    let mut flags = perl_lsp_feature_flags::BuildFlags::all();
+    let mut flags = perl_lsp_rs_core::features::flags::BuildFlags::all();
     flags.notebook_document_sync = false;
     let caps = capabilities::capabilities_for(flags);
     assert!(caps.notebook_document_sync.is_none());
@@ -836,7 +838,7 @@ fn notebook_sync_not_advertised_when_disabled() {
 
 #[test]
 fn code_actions_include_refactor_extract() -> Result<(), Box<dyn std::error::Error>> {
-    let mut flags = perl_lsp_feature_flags::BuildFlags::all();
+    let mut flags = perl_lsp_rs_core::features::flags::BuildFlags::all();
     flags.code_actions = true;
     let caps = capabilities::capabilities_for(flags);
     let v = serde_json::to_value(&caps)?;
@@ -851,7 +853,7 @@ fn code_actions_include_refactor_extract() -> Result<(), Box<dyn std::error::Err
 #[test]
 fn code_actions_include_source_organize_imports_when_enabled()
 -> Result<(), Box<dyn std::error::Error>> {
-    let mut flags = perl_lsp_feature_flags::BuildFlags::all();
+    let mut flags = perl_lsp_rs_core::features::flags::BuildFlags::all();
     flags.code_actions = true;
     flags.source_organize_imports = true;
     let caps = capabilities::capabilities_for(flags);
