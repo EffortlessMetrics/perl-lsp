@@ -271,15 +271,9 @@ fn public_api_check_script_has_correct_fail_semantics() -> Result<(), Box<dyn st
         "public-api-check must use 'diff -u' to compare baseline vs current"
     );
 
-    assert!(
-        check_body.contains("FAILED=1"),
-        "public-api-check must set FAILED=1 on diff mismatch"
-    );
+    assert!(check_body.contains("FAILED=1"), "public-api-check must set FAILED=1 on diff mismatch");
 
-    assert!(
-        check_body.contains("exit 1"),
-        "public-api-check must exit 1 when FAILED > 0"
-    );
+    assert!(check_body.contains("exit 1"), "public-api-check must exit 1 when FAILED > 0");
 
     Ok(())
 }
