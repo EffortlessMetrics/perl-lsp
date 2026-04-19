@@ -184,16 +184,12 @@ fn master_has_no_false_positives_for_workspace_licenses() -> Result<()> {
 /// Verifies: Exit 0 and prints human-readable closure info.
 #[test]
 fn publish_closure_output_consistent_after_refactor() -> Result<()> {
-    let output =
-        Command::cargo_bin("xtask")?.args(["publish-closure"]).output()?;
+    let output = Command::cargo_bin("xtask")?.args(["publish-closure"]).output()?;
 
     assert!(output.status.success(), "publish-closure should exit 0 after refactor");
     let stdout = String::from_utf8(output.stdout)?;
     // Should print something readable (not binary or error)
-    assert!(
-        !stdout.is_empty(),
-        "publish-closure should print output after refactor"
-    );
+    assert!(!stdout.is_empty(), "publish-closure should print output after refactor");
     Ok(())
 }
 
@@ -206,8 +202,7 @@ fn publish_closure_output_consistent_after_refactor() -> Result<()> {
 /// Verifies: Exit 0 and reports a number (the crate count).
 #[test]
 fn published_crate_count_consistent_after_refactor() -> Result<()> {
-    let output =
-        Command::cargo_bin("xtask")?.args(["published-crate-count"]).output()?;
+    let output = Command::cargo_bin("xtask")?.args(["published-crate-count"]).output()?;
 
     assert!(output.status.success(), "published-crate-count should exit 0");
     let stdout = String::from_utf8(output.stdout)?;
