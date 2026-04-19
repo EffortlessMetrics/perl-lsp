@@ -21,7 +21,8 @@ use std::path::Path;
 /// Lock in RenameProvider::new signature from API-fix.
 /// Regression: If builder reverted to &Default::default() signature, this fails.
 #[test]
-fn test_regression_rename_provider_requires_node_not_default() -> Result<(), Box<dyn std::error::Error>> {
+fn test_regression_rename_provider_requires_node_not_default()
+-> Result<(), Box<dyn std::error::Error>> {
     use perl_lsp_rs_core::providers::rename;
     use perl_parser::Parser;
 
@@ -38,7 +39,8 @@ fn test_regression_rename_provider_requires_node_not_default() -> Result<(), Box
 /// Lock in FormattingProvider generic signature with OsSubprocessRuntime.
 /// Regression: If builder reverted to ::new() with no args, this fails.
 #[test]
-fn test_regression_formatting_provider_requires_runtime_generic() -> Result<(), Box<dyn std::error::Error>> {
+fn test_regression_formatting_provider_requires_runtime_generic()
+-> Result<(), Box<dyn std::error::Error>> {
     use perl_lsp_rs_core::providers::formatting;
 
     // This MUST instantiate with a concrete runtime type.
@@ -52,7 +54,8 @@ fn test_regression_formatting_provider_requires_runtime_generic() -> Result<(), 
 /// Lock in OpenAiConfig non-Default signature.
 /// Regression: If builder added Default impl or used ::default(), this catches it.
 #[test]
-fn test_regression_openai_config_does_not_implement_default() -> Result<(), Box<dyn std::error::Error>> {
+fn test_regression_openai_config_does_not_implement_default()
+-> Result<(), Box<dyn std::error::Error>> {
     use perl_lsp_rs_core::providers::ai;
 
     // Verify OpenAiConfig is NOT Default constructible.
@@ -68,7 +71,8 @@ fn test_regression_openai_config_does_not_implement_default() -> Result<(), Box<
 /// Lock in CompletionProvider constructor with index parameter.
 /// Regression: If builder reverted to ::new() with no args, this fails.
 #[test]
-fn test_regression_completion_provider_requires_index_param() -> Result<(), Box<dyn std::error::Error>> {
+fn test_regression_completion_provider_requires_index_param()
+-> Result<(), Box<dyn std::error::Error>> {
     use perl_lsp_rs_core::providers::completion;
     use perl_parser::Parser;
 
@@ -84,7 +88,8 @@ fn test_regression_completion_provider_requires_index_param() -> Result<(), Box<
 /// Lock in CodeActionsProvider constructor with source string parameter.
 /// Regression: If builder reverted to ::new() with no args, this fails.
 #[test]
-fn test_regression_code_actions_provider_requires_source_param() -> Result<(), Box<dyn std::error::Error>> {
+fn test_regression_code_actions_provider_requires_source_param()
+-> Result<(), Box<dyn std::error::Error>> {
     use perl_lsp_rs_core::providers::code_actions;
 
     // This MUST take a source string.
@@ -97,7 +102,8 @@ fn test_regression_code_actions_provider_requires_source_param() -> Result<(), B
 /// Lock in SignatureHelpProvider constructor with &Node parameter.
 /// Regression: If builder reverted to ::new() with no args in lsp_compat, this fails.
 #[test]
-fn test_regression_signature_help_provider_requires_node_param() -> Result<(), Box<dyn std::error::Error>> {
+fn test_regression_signature_help_provider_requires_node_param()
+-> Result<(), Box<dyn std::error::Error>> {
     use perl_lsp_rs_core::providers::lsp_compat::signature_help;
     use perl_parser::Parser;
 
@@ -113,7 +119,8 @@ fn test_regression_signature_help_provider_requires_node_param() -> Result<(), B
 /// Lock in linked_editing function signature with separate u32 args.
 /// Regression: If builder reverted to tuple (line, col) args, this fails.
 #[test]
-fn test_regression_linked_editing_requires_separate_u32_args() -> Result<(), Box<dyn std::error::Error>> {
+fn test_regression_linked_editing_requires_separate_u32_args()
+-> Result<(), Box<dyn std::error::Error>> {
     use perl_lsp_rs_core::providers::lsp_compat::linked_editing;
 
     // This MUST take separate u32 args, not a tuple (0, 0).
@@ -146,9 +153,7 @@ fn test_snapshot_migration_byte_identity() -> Result<(), Box<dyn std::error::Err
     ];
 
     // Get the snapshots directory relative to the crate.
-    let snapshots_dir = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("tests")
-        .join("snapshots");
+    let snapshots_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("snapshots");
 
     for snap_file in snapshot_files {
         let snap_path = snapshots_dir.join(snap_file);
@@ -156,11 +161,7 @@ fn test_snapshot_migration_byte_identity() -> Result<(), Box<dyn std::error::Err
             snap_path.exists(),
             "Snapshot file must exist at {}: {}",
             snap_path.display(),
-            if !snap_path.exists() {
-                format!("file not found")
-            } else {
-                format!("exists")
-            }
+            if !snap_path.exists() { format!("file not found") } else { format!("exists") }
         );
 
         // Verify the file is non-empty (sanity check for complete migration).
@@ -229,7 +230,6 @@ fn test_lsp_compat_code_lens_accessible() -> Result<(), Box<dyn std::error::Erro
     let _ = std::any::type_name::<code_lens_provider::CodeLensProvider>();
     Ok(())
 }
-
 
 // ============================================================================
 // SECTION 4: Consumer Import Sweep (perl-lsp crate cleanup)
@@ -552,14 +552,8 @@ fn test_diag_snap_regression_guard() -> Result<(), Box<dyn std::error::Error>> {
     // The actual snapshot verification happens in diag_snap.rs itself.
 
     // We verify the test module exists and would be runnable.
-    let test_path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("tests")
-        .join("diag_snap.rs");
-    assert!(
-        test_path.exists(),
-        "diag_snap.rs test module must exist at {}",
-        test_path.display()
-    );
+    let test_path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("diag_snap.rs");
+    assert!(test_path.exists(), "diag_snap.rs test module must exist at {}", test_path.display());
 
     Ok(())
 }
@@ -582,8 +576,9 @@ fn test_perl_lsp_cargo_toml_removed_g1b_imports() -> Result<(), Box<dyn std::err
         .join("perl-lsp")
         .join("Cargo.toml");
 
-    let content = std::fs::read_to_string(&cargo_path)
-        .map_err(|e| format!("Failed to read perl-lsp/Cargo.toml at {}: {}", cargo_path.display(), e))?;
+    let content = std::fs::read_to_string(&cargo_path).map_err(|e| {
+        format!("Failed to read perl-lsp/Cargo.toml at {}: {}", cargo_path.display(), e)
+    })?;
 
     // These 10 old imports MUST be removed from perl-lsp/Cargo.toml.
     // Check that they're gone (or commented as removed).
