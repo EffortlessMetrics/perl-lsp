@@ -568,7 +568,7 @@ fn dap_timeout_normal_values_unchanged() -> TestResult {
 #[test]
 fn dap_error_from_traversal() -> TestResult {
     let ws_err =
-        perl_path_security::WorkspacePathError::PathTraversalAttempt("test path".to_string());
+        perl_parser_core::path_security::WorkspacePathError::PathTraversalAttempt("test path".to_string());
     let sec_err: SecurityError = ws_err.into();
     match sec_err {
         SecurityError::PathTraversalAttempt(msg) => assert!(msg.contains("test path")),
@@ -580,7 +580,7 @@ fn dap_error_from_traversal() -> TestResult {
 #[test]
 fn dap_error_from_outside_workspace() -> TestResult {
     let ws_err =
-        perl_path_security::WorkspacePathError::PathOutsideWorkspace("outside path".to_string());
+        perl_parser_core::path_security::WorkspacePathError::PathOutsideWorkspace("outside path".to_string());
     let sec_err: SecurityError = ws_err.into();
     match sec_err {
         SecurityError::PathOutsideWorkspace(msg) => assert!(msg.contains("outside path")),
@@ -591,7 +591,7 @@ fn dap_error_from_outside_workspace() -> TestResult {
 
 #[test]
 fn dap_error_from_invalid_chars() {
-    let ws_err = perl_path_security::WorkspacePathError::InvalidPathCharacters;
+    let ws_err = perl_parser_core::path_security::WorkspacePathError::InvalidPathCharacters;
     let sec_err: SecurityError = ws_err.into();
     assert!(matches!(sec_err, SecurityError::InvalidPathCharacters));
 }
