@@ -46,9 +46,9 @@ existing test patterns.
       Then follow any `pub use` chains into sub-modules to locate the actual struct/fn/trait declarations.
    c. If the source crate has already been absorbed (file not found — prior wave merged it), read the destination module instead:
       ```bash
-      cat crates/<dest-crate>/src/providers/<module>.rs
+      cat crates/<dest-crate>/src/lib.rs  # or locate the module: grep -r "pub mod" crates/<dest-crate>/src/
       ```
-      Inspect its `pub struct`, `pub fn`, `pub trait`, and `pub use` items for exact signatures.
+      Follow `pub mod` and `pub use` declarations to locate the actual module file, then read it. Inspect `pub struct`, `pub fn`, `pub trait`, and `pub use` items for exact signatures.
    d. Record the exact signatures you will test against. Do not infer `Default`, no-arg `new()`, field types, or trait bounds — use only what you read.
    e. If a signature cannot be located after checking both source and destination, write the test stub with a prominent comment:
       ```rust

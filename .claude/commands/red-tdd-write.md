@@ -10,7 +10,7 @@ existing test patterns exactly.
 
 ## Steps
 
-> **Absorption issues — API-shape guard:** Before writing any test that references a symbol from an absorbed crate, confirm you read that crate's actual `pub struct` / `pub fn` / `pub trait` / `pub use` declarations in `/red-tdd-read` Step 5. Do not infer `Default`, no-arg `new()`, or field shapes. If you did not capture the exact signature during the read step, go back and read it now. If a signature cannot be located, use `// TODO: signature unclear — API shape TBD` and continue — do not block.
+> **Absorption issues — API-shape guard:** Before writing any test that references a symbol from an absorbed crate, confirm you read that crate's actual `pub struct` / `pub fn` / `pub trait` / `pub use` declarations in `/red-tdd-read` Step 5. Do not infer `Default`, no-arg `new()`, or field shapes. If you did not capture the exact signature during the read step, go back and read it now. If a signature cannot be located, use `// TODO: signature unclear — API shape TBD. Builder: verify before making this green.` and continue — do not block.
 
 1. For each acceptance criterion in `.spec/<issue#>-<specslug>/acceptance.md`, write one test function.
 
