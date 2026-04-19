@@ -122,7 +122,10 @@ pub(crate) fn check_metadata(meta: &NoDepsMetadata, allowlist: &[String]) -> Vec
     // LICENSE check for every allowlisted crate.
     for name in allowlist {
         let Some(pkg) = pkg_map.get(name.as_str()) else {
-            // Already flagged by drift check A.
+            // Name is not a workspace member at all — already flagged by drift
+            // check A as "not a workspace member".  A publish=false workspace
+            // member IS still in pkg_map (it is a workspace member; it just
+            // cannot be published), so it does NOT hit this branch.
             continue;
         };
         let has_license = pkg.license.as_deref().is_some_and(|l| !l.is_empty())
@@ -192,5 +195,47 @@ mod tests {
         let allowlist = vec!["perl-token".to_string()];
         let v = check_metadata(&meta, &allowlist);
         assert!(v.iter().any(|s| s.contains("license:")), "expected license violation, got: {v:?}");
+    }
+
+    /// A `publish=false` workspace crate in the allowlist generates a drift
+    /// violation but NOT a license violation — because the crate IS still in
+    /// pkg_map (workspace membership and publishability are orthogonal).
+    /// This test documents that a drift-A crate with a valid license only
+    /// produces exactly one violation (the drift, not the license).
+    #[test]
+    fn drift_a_crate_with_license_produces_only_drift_violation() {
+        let meta = make_meta(vec![
+            make_pkg("perl-token", true, Some("MIT OR Apache-2.0")), // publish=false, has license
+        ]);
+        let allowlist = vec!["perl-token".to_string()];
+        let v = check_metadata(&meta, &allowlist);
+        assert_eq!(v.len(), 1, "expected exactly 1 violation (drift), got: {v:?}");
+        assert!(v[0].contains("drift:"), "expected drift violation, got: {v:?}");
+    }
+
+    /// A stale allowlist entry (name not present as a workspace member at all)
+    /// generates a drift-A violation and the license check skips it via the
+    /// `continue` branch — no spurious license violation for a non-existent crate.
+    #[test]
+    fn stale_allowlist_entry_not_in_workspace_skips_license_check() {
+        // Workspace is empty; allowlist has a ghost crate
+        let meta = make_meta(vec![]);
+        let allowlist = vec!["deleted-crate".to_string()];
+        let v = check_metadata(&meta, &allowlist);
+        // Should get exactly one drift violation, not a license violation
+        assert_eq!(v.len(), 1, "expected exactly 1 (drift) violation, got: {v:?}");
+        assert!(v[0].contains("drift:"), "expected drift violation, got: {v:?}");
+        assert!(!v[0].contains("license:"), "should not have license violation for ghost crate");
+    }
+
+    /// `license_file` alone (without a `license` field) satisfies the license check.
+    #[test]
+    fn license_file_alone_satisfies_license_check() {
+        let mut pkg = make_pkg("perl-token", false, None); // no license field
+        pkg.license_file = Some("LICENSE-MIT".to_string());
+        let meta = make_meta(vec![pkg]);
+        let allowlist = vec!["perl-token".to_string()];
+        let v = check_metadata(&meta, &allowlist);
+        assert!(v.is_empty(), "license_file alone should satisfy license check, got: {v:?}");
     }
 }
