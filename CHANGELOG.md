@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`tree-sitter-perl-rs`: `PerlLanguage` descriptor, `language()` function, and `LANGUAGE`
+  constant** — a Rust-native language descriptor that exposes node kind metadata (via
+  `node_kind_count()`, `node_kind_names()`, and `node_kind_is_named()`) for tooling that
+  follows tree-sitter conventions. This is NOT a `tree_sitter::Language` substitute — it
+  cannot be used with `tree_sitter::Parser::set_language`. For drop-in tree-sitter C
+  compatibility, use `tree-sitter-perl-c` instead. The `language()` function and
+  `LANGUAGE` constant follow the tree-sitter ecosystem convention for discoverability.
+  (#4373)
+
 ### Internal
 
 - **`cargo xtask published-crate-count`** — new ratchet gate that monitors the

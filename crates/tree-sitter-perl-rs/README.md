@@ -48,6 +48,7 @@ if let Some(tree) = parser.parse("my $x = 42;") {
 | `Tree::root_node() -> Node<'_>` | Get the root of the syntax tree |
 | `Tree::source() -> &str` | Source text this tree was built from |
 | `Node::kind() -> &'static str` | Node type name (e.g. `"Program"`, `"Subroutine"`) |
+| `Node::grammar_kind() -> String` | Canonical tree-sitter grammar name (e.g. `"source_file"`, `"sub"`) |
 | `Node::to_sexp() -> String` | Tree-sitter-compatible S-expression for this subtree |
 | `Node::child_count() -> usize` | Number of direct children |
 | `Node::child(i: usize) -> Option<Node>` | `i`-th direct child |
@@ -57,6 +58,9 @@ if let Some(tree) = parser.parse("my $x = 42;") {
 | `Node::utf8_text<'a>(&self, source: &'a [u8]) -> Result<&'a str, Utf8Error>` | Source slice for this node |
 | `Node::is_leaf() -> bool` | `true` if the node has no children |
 | `Node::inner() -> &perl_ast::Node` | Escape hatch to the v3 AST |
+| `PerlLanguage` | Language descriptor struct with node kind metadata |
+| `language() -> PerlLanguage` | Returns the `LANGUAGE` singleton (tree-sitter convention) |
+| `LANGUAGE: PerlLanguage` | Static singleton language descriptor |
 | `PerlNodeKind` | Re-export of `perl_ast::NodeKind` for pattern matching |
 
 ## Error tolerance
@@ -72,7 +76,7 @@ This means you can pipe any Perl source through this parser and rely on getting 
 - `end_byte()` may return `source.len() + 1` for the root node on some inputs — clamp if needed.
 - `Node::children()` allocates a `Vec` internally on each call. Prefer iterating once over calling repeatedly.
 - `RecursionLimit` / `NestingTooDeep` parse errors produce `None` rather than a partial tree.
-- `Node::kind()` returns v3 internal names (e.g. `"Program"`) rather than tree-sitter grammar names (e.g. `"source_file"`). Use `Node::to_sexp()` for grammar-canonical output.
+- `Node::kind()` returns v3 internal names (e.g. `"Program"`). Use [`Node::grammar_kind()`][Node::grammar_kind] for canonical tree-sitter grammar names (e.g. `"source_file"`).
 
 ## Backlog roadmap
 
@@ -81,9 +85,7 @@ The following APIs are not yet implemented and remain on the backlog:
 - Tree cursor / walk API (streaming traversal without per-call allocation)
 - Edit / incremental parsing API
 - Field-name accessors (named children by field name, as in `node.child_by_field_name("body")`)
-- A `Language` constant compatible with the `tree_sitter::Language` shape
 - Predicate / query API (pattern matching over the AST)
-- `kind()` name remapping to canonical tree-sitter grammar names
 
 ## License
 
