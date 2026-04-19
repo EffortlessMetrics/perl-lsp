@@ -24,9 +24,8 @@ use color_eyre::eyre::Result;
 /// in the help output.
 #[test]
 fn subcommand_help_shows_drift_and_license() -> Result<()> {
-    let output = Command::cargo_bin("xtask")?
-        .args(["publish-manifest-check", "--help"])
-        .output()?;
+    let output =
+        Command::cargo_bin("xtask")?.args(["publish-manifest-check", "--help"]).output()?;
 
     assert!(output.status.success(), "Help should exit 0");
     let help_text = String::from_utf8(output.stdout)?;
@@ -54,10 +53,7 @@ fn subcommand_help_shows_drift_and_license() -> Result<()> {
 /// publishable set, all crates have licenses).
 #[test]
 fn publish_manifest_check_passes_on_master() -> Result<()> {
-    Command::cargo_bin("xtask")?
-        .args(["publish-manifest-check"])
-        .assert()
-        .success();
+    Command::cargo_bin("xtask")?.args(["publish-manifest-check"]).assert().success();
     Ok(())
 }
 
@@ -89,10 +85,7 @@ fn shared_helper_load_publish_allowlist_exists_and_returns_crates() -> Result<()
     // This test serves as a marker for the builder to verify the helper.
 
     // For now, verify the binary runs (which implies the helper exists):
-    Command::cargo_bin("xtask")?
-        .args(["publish-manifest-check"])
-        .assert()
-        .success();
+    Command::cargo_bin("xtask")?.args(["publish-manifest-check"]).assert().success();
     Ok(())
 }
 
@@ -107,10 +100,7 @@ fn shared_helper_load_publish_allowlist_exists_and_returns_crates() -> Result<()
 /// Should exit 0 on master (no violations).
 #[test]
 fn publish_closure_still_passes_after_refactor() -> Result<()> {
-    Command::cargo_bin("xtask")?
-        .args(["publish-closure"])
-        .assert()
-        .success();
+    Command::cargo_bin("xtask")?.args(["publish-closure"]).assert().success();
     Ok(())
 }
 
@@ -121,10 +111,7 @@ fn publish_closure_still_passes_after_refactor() -> Result<()> {
 /// Should exit 0 on master (outputs current count).
 #[test]
 fn published_crate_count_still_passes_after_refactor() -> Result<()> {
-    Command::cargo_bin("xtask")?
-        .args(["published-crate-count"])
-        .assert()
-        .success();
+    Command::cargo_bin("xtask")?.args(["published-crate-count"]).assert().success();
     Ok(())
 }
 
