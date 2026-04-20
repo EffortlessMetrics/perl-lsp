@@ -656,6 +656,68 @@ fn inherited_method_definition_location(
     None
 }
 
+/// Collect all module names from `use Module;` statements in the AST.
+///
+/// Excludes:
+/// - `use Module ();` (empty parens means "import nothing")
+/// - `use Module qw(...);` (explicit import list - not an auto-export)
+/// - `use constant ...` (constants are not auto-imported)
+#[cfg(feature = "workspace")]
+fn collect_auto_use_modules(ast: &crate::ast::Node) -> Vec<String> {
+    fn walk(node: &crate::ast::Node, results: &mut Vec<String>) {
+        if let crate::ast::NodeKind::Use { module, args, .. } = &node.kind {
+            // Only collect use statements with no arguments (use Module;)
+            // This means "import default exports" in Perl.
+            // Skip:
+            // - use Module (); (empty parens means "import nothing")
+            // - use Module qw(a b c); (explicit import list, not auto-export)
+            // Builtin modules like strict/warnings are filtered by find_export returning None
+            if args.is_empty() {
+                results.push(module.clone());
+            }
+        }
+        // Recurse into children
+        for child in crate::declaration::get_node_children(node) {
+            walk(child, results);
+        }
+    }
+    let mut modules = Vec::new();
+    walk(ast, &mut modules);
+    modules
+}
+
+/// Attempt to resolve a bareword function call to an exported symbol from a used module.
+///
+/// This is the fallback step after all local and workspace resolution fails.
+/// It looks for `use Module;` statements (not `use Module ()` which means "import nothing")
+/// and checks if any of those modules export the given symbol.
+///
+/// Returns `Some(Location)` if exactly one module exports the symbol, `None` otherwise.
+/// If multiple modules export the same symbol, returns `None` to avoid ambiguity.
+#[cfg(feature = "workspace")]
+fn resolve_export_definition_location(
+    workspace_index: &crate::workspace_index::WorkspaceIndex,
+    ast: &crate::ast::Node,
+    symbol_name: &str,
+) -> Option<crate::workspace_index::Location> {
+    // Collect all use'd modules that might auto-export this symbol
+    let modules = collect_auto_use_modules(ast);
+
+    // Try find_export for each module
+    let mut found_location = None;
+    for module in &modules {
+        if let Some(location) = workspace_index.find_export(module, symbol_name) {
+            // If we already found one, this is ambiguous - return None
+            if found_location.is_some() {
+                return None;
+            }
+            found_location = Some(location);
+        }
+    }
+
+    found_location
+}
+
 #[cfg(feature = "workspace")]
 fn find_symbol_key_definition_location(
     workspace_index: &crate::workspace_index::WorkspaceIndex,
@@ -1355,6 +1417,43 @@ impl LspServer {
                                 },
                             },
                         }])));
+                    }
+
+                    // Last resort: try to resolve via cross-module exports
+                    // This handles `use Module; foo();` where `foo` is exported via @EXPORT
+                    #[cfg(feature = "workspace")]
+                    {
+                        if let Some(coordinator) = self.coordinator() {
+                            let workspace_index = coordinator.index();
+                            let current_package =
+                                crate::declaration::current_package_at(ast, offset);
+                            if let Some(symbol_key) =
+                                crate::declaration::symbol_at_cursor(ast, offset, current_package)
+                            {
+                                // Only try export resolution for bareword subroutine calls
+                                // (no sigil, not qualified with ::)
+                                if symbol_key.kind == crate::workspace_index::SymKind::Sub
+                                    && symbol_key.sigil.is_none()
+                                    && !symbol_key.name.contains("::")
+                                {
+                                    if let Some(export_location) =
+                                        resolve_export_definition_location(
+                                            workspace_index,
+                                            ast,
+                                            &symbol_key.name,
+                                        )
+                                    {
+                                        if let Some(lsp_location) =
+                                            crate::workspace_index::lsp_adapter::to_lsp_location(
+                                                &export_location,
+                                            )
+                                        {
+                                            return Ok(Some(json!([lsp_location])));
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }

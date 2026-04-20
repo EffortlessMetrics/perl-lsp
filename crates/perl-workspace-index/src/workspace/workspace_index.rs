@@ -1091,6 +1091,41 @@ impl From<&WorkspaceSymbol> for LspWorkspaceSymbol {
     }
 }
 
+// ============================================================================
+// Export Symbol Table Types (Cross-Module Export Resolution)
+// ============================================================================
+
+/// Kind of export - how the symbol was exported from a module.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExportKind {
+    /// Symbol exported via `@EXPORT` - automatically imported with `use Module;`
+    Explicit,
+    /// Symbol exported via `@EXPORT_OK` - requires explicit `use Module qw(symbol);`
+    Ok,
+    /// Symbol exported via `%EXPORT_TAGS` - member of a named tag group
+    Tag,
+}
+
+/// An exported symbol entry in the workspace export table.
+///
+/// Tracks a single symbol that is exported by a module, including its location
+/// and how it was exported (via @EXPORT, @EXPORT_OK, or %EXPORT_TAGS).
+#[derive(Debug, Clone)]
+pub struct ExportEntry {
+    /// Name of the module that exports this symbol
+    pub module: String,
+    /// Symbol name (bare name without package qualifier)
+    pub symbol: String,
+    /// File URI and range where the symbol is defined
+    pub location: Location,
+    /// How this symbol was exported
+    pub kind: ExportKind,
+}
+
+// ============================================================================
+// File Index
+// ============================================================================
+
 /// File-level index data
 #[derive(Default, Clone)]
 pub struct FileIndex {
@@ -1104,6 +1139,9 @@ pub struct FileIndex {
     content_hash: u64,
     /// Workspace folder URI this file belongs to (for multi-root workspace support)
     folder_uri: Option<String>,
+    /// Exports from this file (symbol name -> export entry)
+    /// Keyed by symbol name for O(1) lookup during export resolution
+    exports: HashMap<String, ExportEntry>,
 }
 
 /// Thread-safe workspace index
@@ -1124,6 +1162,11 @@ pub struct WorkspaceIndex {
     /// Used to determine which workspace folder a file belongs to for
     /// proper folder attribution in multi-root workspaces.
     workspace_folders: Arc<RwLock<Vec<String>>>,
+    /// Global export table mapping module name to its exported symbols.
+    ///
+    /// Aggregated from per-file `FileIndex::exports` during `index_file()`.
+    /// Provides O(1) lookup for cross-module export resolution.
+    export_table: Arc<RwLock<HashMap<String, Vec<ExportEntry>>>>,
 }
 
 impl WorkspaceIndex {
@@ -1282,6 +1325,7 @@ impl WorkspaceIndex {
             global_references: Arc::new(RwLock::new(HashMap::new())),
             document_store: DocumentStore::new(),
             workspace_folders: Arc::new(RwLock::new(Vec::new())),
+            export_table: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 
@@ -1320,6 +1364,7 @@ impl WorkspaceIndex {
             global_references: Arc::new(RwLock::new(HashMap::with_capacity(ref_cap))),
             document_store: DocumentStore::new(),
             workspace_folders: Arc::new(RwLock::new(Vec::new())),
+            export_table: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 
@@ -1490,6 +1535,27 @@ impl WorkspaceIndex {
                     }
                 }
             }
+
+            // Update export table with exports from this file
+            {
+                let mut export_table = self.export_table.write();
+                // Remove old export entries for this file (if re-indexing)
+                export_table.retain(|_module, exports| {
+                    exports.retain(|e| e.location.uri != uri_str);
+                    !exports.is_empty()
+                });
+                // Add new export entries
+                if let Some(file_index) = files.get(&key) {
+                    // Group exports by module
+                    let mut module_exports: HashMap<String, Vec<ExportEntry>> = HashMap::new();
+                    for entry in file_index.exports.values() {
+                        module_exports.entry(entry.module.clone()).or_default().push(entry.clone());
+                    }
+                    for (module, exports) in module_exports {
+                        export_table.insert(module, exports);
+                    }
+                }
+            }
         }
 
         Ok(())
@@ -1542,6 +1608,13 @@ impl WorkspaceIndex {
             // Remove from global reference index
             let mut global_refs = self.global_references.write();
             Self::remove_file_global_refs(&mut global_refs, &file_index, &uri_str);
+
+            // Remove exports for this file from the export table
+            let mut export_table = self.export_table.write();
+            export_table.retain(|_module, exports| {
+                exports.retain(|e| e.location.uri != uri_str);
+                !exports.is_empty()
+            });
         }
     }
 
@@ -1977,6 +2050,72 @@ impl WorkspaceIndex {
         None
     }
 
+    // =========================================================================
+    // Export Symbol Table (Cross-Module Export Resolution)
+    // =========================================================================
+
+    /// Find the location of an exported symbol from a specific module.
+    ///
+    /// This is used during go-to-definition resolution when a bareword function call
+    /// (e.g., `foo()`) is not found in the local scope. The resolver looks up the
+    /// symbol in the export tables of all `use`d modules.
+    ///
+    /// # Arguments
+    ///
+    /// * `module` - Name of the module that should export the symbol
+    /// * `symbol` - Name of the symbol to find
+    ///
+    /// # Returns
+    ///
+    /// `Some(Location)` if the module exports the symbol, `None` otherwise.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,ignore
+    /// use perl_workspace::workspace::workspace_index::WorkspaceIndex;
+    ///
+    /// let index = WorkspaceIndex::new();
+    /// // ... index some files with exports ...
+    /// let location = index.find_export("MyModule", "foo");
+    /// ```
+    pub fn find_export(&self, module: &str, symbol: &str) -> Option<Location> {
+        let export_table = self.export_table.read();
+        export_table.get(module).and_then(|exports| {
+            exports.iter().find(|e| e.symbol == symbol).map(|e| e.location.clone())
+        })
+    }
+
+    /// Get all exported symbols from a specific module.
+    ///
+    /// Returns a list of all export entries for the given module, regardless of
+    /// whether they were exported via `@EXPORT`, `@EXPORT_OK`, or `%EXPORT_TAGS`.
+    ///
+    /// # Arguments
+    ///
+    /// * `module` - Name of the module whose exports to retrieve
+    ///
+    /// # Returns
+    ///
+    /// A vector of references to `ExportEntry` for all symbols exported by the module.
+    /// Returns an empty vector if the module is not found or exports nothing.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,ignore
+    /// use perl_workspace::workspace::workspace_index::WorkspaceIndex;
+    ///
+    /// let index = WorkspaceIndex::new();
+    /// // ... index some files with exports ...
+    /// let exports = index.get_exports_for_module("MyModule");
+    /// for export in exports {
+    ///     println!("{}::{} is exported", export.module, export.symbol);
+    /// }
+    /// ```
+    pub fn get_exports_for_module(&self, module: &str) -> Vec<ExportEntry> {
+        let export_table = self.export_table.read();
+        export_table.get(module).cloned().unwrap_or_default()
+    }
+
     /// Get all symbols in the workspace
     ///
     /// # Returns
@@ -2007,6 +2146,7 @@ impl WorkspaceIndex {
         self.files.write().clear();
         self.symbols.write().clear();
         self.global_references.write().clear();
+        self.export_table.write().clear();
     }
 
     /// Return the number of indexed files in the workspace
@@ -2646,6 +2786,31 @@ struct IndexVisitor {
     workspace_folder_uri: Option<String>,
 }
 
+/// Collect symbol names from an initializer expression.
+///
+/// This handles the common case of `qw()` arrays in export declarations like:
+/// - `our @EXPORT = qw(foo bar);`
+/// - `our @EXPORT_OK = qw(baz);`
+/// - `our %EXPORT_TAGS = (all => [qw(foo bar)]);`
+///
+/// Returns symbol names from `String`, `Identifier`, and `ArrayLiteral` nodes.
+fn collect_symbol_names(node: &Node) -> Vec<String> {
+    match &node.kind {
+        NodeKind::String { value, .. } => normalize_symbol_name(value).into_iter().collect(),
+        NodeKind::Identifier { name } => normalize_symbol_name(name).into_iter().collect(),
+        NodeKind::ArrayLiteral { elements } => {
+            elements.iter().flat_map(collect_symbol_names).collect()
+        }
+        _ => Vec::new(),
+    }
+}
+
+/// Normalize a symbol name by trimming whitespace and quotes.
+fn normalize_symbol_name(raw: &str) -> Option<String> {
+    let trimmed = raw.trim().trim_matches('\'').trim_matches('"').trim();
+    if trimmed.is_empty() { None } else { Some(trimmed.to_string()) }
+}
+
 fn is_interpolated_var_start(byte: u8) -> bool {
     byte.is_ascii_alphabetic() || byte == b'_'
 }
@@ -2695,6 +2860,95 @@ impl IndexVisitor {
 
     fn visit(&mut self, node: &Node, file_index: &mut FileIndex) {
         self.visit_node(node, file_index);
+    }
+
+    /// Extract exported symbol names from `@EXPORT`, `@EXPORT_OK`, or `%EXPORT_TAGS`.
+    ///
+    /// For `@EXPORT` and `@EXPORT_OK`, collects symbol names from the initializer.
+    /// For `%EXPORT_TAGS`, extracts tag names and their member symbols.
+    ///
+    /// # Arguments
+    ///
+    /// * `var_name` - The variable name (`EXPORT`, `EXPORT_OK`, or `EXPORT_TAGS`)
+    /// * `sigil` - The sigil (`@` or `%`)
+    /// * `initializer` - The node representing the initializer expression
+    /// * `file_index` - The file index to populate with export entries
+    fn extract_exports_from_node(
+        &mut self,
+        var_name: &str,
+        sigil: &str,
+        initializer: &Node,
+        file_index: &mut FileIndex,
+    ) {
+        // Extract package name first to avoid borrow conflicts
+        let package = match self.current_package.clone() {
+            Some(p) => p,
+            None => return,
+        };
+
+        let uri = self.uri.clone();
+        let range = self.node_to_range(initializer);
+
+        match (var_name, sigil) {
+            ("EXPORT", "@") => {
+                // our @EXPORT = qw(foo bar);
+                let symbols = collect_symbol_names(initializer);
+                for symbol in symbols {
+                    let location = Location { uri: uri.clone(), range: range.clone() };
+                    let entry = ExportEntry {
+                        module: package.clone(),
+                        symbol: symbol.clone(),
+                        location,
+                        kind: ExportKind::Explicit,
+                    };
+                    file_index.exports.insert(symbol, entry);
+                }
+            }
+            ("EXPORT_OK", "@") => {
+                // our @EXPORT_OK = qw(baz qux);
+                let symbols = collect_symbol_names(initializer);
+                for symbol in symbols {
+                    let location = Location { uri: uri.clone(), range: range.clone() };
+                    let entry = ExportEntry {
+                        module: package.clone(),
+                        symbol: symbol.clone(),
+                        location,
+                        kind: ExportKind::Ok,
+                    };
+                    file_index.exports.insert(symbol, entry);
+                }
+            }
+            ("EXPORT_TAGS", "%") => {
+                // our %EXPORT_TAGS = (all => [qw(foo bar)], helpers => [qw(baz)]);
+                // Hash entries: each key is a tag name, each value is an array of symbols
+                self.extract_export_tags(initializer, &package, file_index);
+            }
+            _ => {}
+        }
+    }
+
+    /// Extract export entries from a %EXPORT_TAGS hash.
+    ///
+    /// Each hash entry has a key (tag name) and a value (array of symbol names).
+    /// We create export entries for each symbol, marked with `ExportKind::Tag`.
+    fn extract_export_tags(&mut self, hash_node: &Node, package: &str, file_index: &mut FileIndex) {
+        if let NodeKind::HashLiteral { pairs } = &hash_node.kind {
+            for pair in pairs {
+                // Each pair is (Node, Node) - (key, value) where key is tag name and value is array of symbols
+                let tag_symbols = collect_symbol_names(&pair.1);
+                for symbol in tag_symbols {
+                    let location =
+                        Location { uri: self.uri.clone(), range: self.node_to_range(&pair.1) };
+                    let entry = ExportEntry {
+                        module: package.to_string(),
+                        symbol: symbol.clone(),
+                        location: location.clone(),
+                        kind: ExportKind::Tag,
+                    };
+                    file_index.exports.insert(symbol, entry);
+                }
+            }
+        }
     }
 
     fn record_interpolated_variable_references(
@@ -2847,6 +3101,13 @@ impl IndexVisitor {
                             kind: ReferenceKind::Definition,
                         },
                     );
+
+                    // Extract exports from @EXPORT, @EXPORT_OK, and %EXPORT_TAGS
+                    if sigil == "@" || sigil == "%" {
+                        if let Some(init) = initializer {
+                            self.extract_exports_from_node(name, sigil, init, file_index);
+                        }
+                    }
                 }
 
                 // Visit initializer
@@ -3004,11 +3265,19 @@ impl IndexVisitor {
                     }
 
                     // Then it's always a write
-                    file_index.references.entry(var_name).or_default().push(SymbolReference {
-                        uri: self.uri.clone(),
-                        range: self.node_to_range(lhs),
-                        kind: ReferenceKind::Write,
-                    });
+                    file_index.references.entry(var_name.clone()).or_default().push(
+                        SymbolReference {
+                            uri: self.uri.clone(),
+                            range: self.node_to_range(lhs),
+                            kind: ReferenceKind::Write,
+                        },
+                    );
+
+                    // Extract exports from bare @EXPORT = ..., @EXPORT_OK = ...,
+                    // and %EXPORT_TAGS = ... (without `our` declaration)
+                    if sigil == "@" || sigil == "%" {
+                        self.extract_exports_from_node(name, sigil, rhs, file_index);
+                    }
                 }
 
                 // Right side could have reads
