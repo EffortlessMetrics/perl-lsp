@@ -8,6 +8,7 @@
 //!
 //! Fix: add `TokenKind::Plus` to the unambiguous-prototype match arm in
 //! `is_likely_prototype` and the explicit arm in `parse_prototype`.
+#![allow(clippy::panic)]
 //!
 //! Perl spec reference (perlsub):
 //!   `+` in a prototype means "scalar, or a reference to an array or hash".
@@ -102,14 +103,16 @@ fn test_named_sub_attr_then_plus_proto() {
 #[test]
 fn test_proto_then_attr_correct_order() {
     let ast = parse("sub foo (+) : lvalue { $_[0] }");
+    let ast_kind = format!("{:?}", ast.kind);
     let NodeKind::Program { statements } = &ast.kind else {
-        panic!("expected program node, got: {:?}", ast.kind);
+        panic!("expected program node, got: {}", ast_kind);
     };
     let Some(first) = statements.first() else {
         panic!("expected a subroutine statement");
     };
+    let first_kind = format!("{:?}", first.kind);
     let NodeKind::Subroutine { prototype, attributes, .. } = &first.kind else {
-        panic!("expected subroutine node, got: {:?}", first.kind);
+        panic!("expected subroutine node, got: {}", first_kind);
     };
     assert!(prototype.is_some(), "expected prototype for sub foo (+)");
     assert_eq!(attributes, &vec!["lvalue".to_string()]);

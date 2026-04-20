@@ -13,9 +13,7 @@ use proptest::prelude::*;
 // ============================================================================
 
 /// Extract items from a full diagnostic report, returning an empty vec if Unchanged.
-fn items_from_report(
-    report: DocumentDiagnosticReport,
-) -> Vec<lsp_types::Diagnostic> {
+fn items_from_report(report: DocumentDiagnosticReport) -> Vec<lsp_types::Diagnostic> {
     match report {
         DocumentDiagnosticReport::Full(full) => full.full_document_diagnostic_report.items,
         _ => vec![],

@@ -28,14 +28,12 @@ mod dap_phase2_tests {
 
     #[allow(clippy::panic)]
     fn expect_response(msg: DapMessage, command: &str, expected_success: bool) -> Option<Value> {
-        match msg {
-            DapMessage::Response { success, command: c, body, .. } => {
-                assert_eq!(c, command, "unexpected command");
-                assert_eq!(success, expected_success, "unexpected success value");
-                body
-            }
-            _ => panic!("expected response for command {command}"),
-        }
+        let DapMessage::Response { success, command: c, body, .. } = msg else {
+            panic!("expected response for command {command}")
+        };
+        assert_eq!(c, command, "unexpected command");
+        assert_eq!(success, expected_success, "unexpected success value");
+        body
     }
 
     /// Tests feature spec: DAP_IMPLEMENTATION_SPECIFICATION.md#ac5-adapter-scaffolding

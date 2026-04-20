@@ -1,3 +1,5 @@
+#![allow(clippy::panic)]
+
 mod cpan_test_helpers;
 
 use cpan_test_helpers::*;
@@ -26,7 +28,7 @@ class Config {
     let class_stmt = statements
         .iter()
         .find(|statement| matches!(statement.kind, NodeKind::Class { .. }))
-        .expect("expected Object::Pad class statement");
+        .unwrap();
 
     let NodeKind::Class { body, .. } = &class_stmt.kind else {
         panic!("expected class node, got {}", class_stmt.kind.kind_name());

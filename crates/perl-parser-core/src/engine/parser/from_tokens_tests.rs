@@ -119,12 +119,8 @@ fn test_from_tokens_program_statement_count() {
     let mut parser = Parser::from_tokens(tokens, source);
     let ast = must(parser.parse());
 
-    match ast.kind {
-        NodeKind::Program { ref statements } => {
-            assert_eq!(statements.len(), 3, "expected 3 statements");
-        }
-        _ => panic!("expected Program node"),
-    }
+    let NodeKind::Program { ref statements } = ast.kind else { panic!("expected Program node") };
+    assert_eq!(statements.len(), 3, "expected 3 statements");
 }
 
 #[test]

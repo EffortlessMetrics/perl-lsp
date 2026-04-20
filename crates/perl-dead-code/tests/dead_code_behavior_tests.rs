@@ -2,6 +2,8 @@
 //!
 //! These tests focus on user-visible outcomes with a Given/When/Then structure.
 
+#![allow(clippy::panic)]
+
 use perl_dead_code::{DeadCodeDetector, DeadCodeType};
 use perl_workspace::workspace_index::WorkspaceIndex;
 use std::path::Path;

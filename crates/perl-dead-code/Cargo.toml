@@ -28,6 +28,7 @@ serde = { workspace = true }
 
 [dev-dependencies]
 serde_json = { workspace = true }
+perl-tdd-support = { workspace = true }
 
 [package.metadata.docs.rs]
 rustdoc-args = ["--cfg", "docsrs"]

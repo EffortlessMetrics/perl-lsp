@@ -40,13 +40,11 @@ fn test_method_attributes_parse() {
         panic!("Expected program node, got: {:?}", ast.kind);
     };
     let first = must_some(statements.first());
-    match &first.kind {
-        NodeKind::Method { signature, attributes, .. } => {
-            assert!(signature.is_some(), "Expected method signature");
-            assert_eq!(attributes, &vec!["lvalue".to_string(), "prototype($self)".to_string()]);
-        }
-        other => panic!("Expected method declaration, got: {:?}", other),
-    }
+    let NodeKind::Method { signature, attributes, .. } = &first.kind else {
+        panic!("Expected method declaration, got: {:?}", first.kind)
+    };
+    assert!(signature.is_some(), "Expected method signature");
+    assert_eq!(attributes, &vec!["lvalue".to_string(), "prototype($self)".to_string()]);
 }
 
 #[test]
@@ -58,13 +56,11 @@ fn test_method_attributes_without_signature_parse() {
         panic!("Expected program node, got: {:?}", ast.kind);
     };
     let first = must_some(statements.first());
-    match &first.kind {
-        NodeKind::Method { signature, attributes, .. } => {
-            assert!(signature.is_none(), "Did not expect method signature");
-            assert_eq!(attributes, &vec!["lvalue".to_string()]);
-        }
-        other => panic!("Expected method declaration, got: {:?}", other),
-    }
+    let NodeKind::Method { signature, attributes, .. } = &first.kind else {
+        panic!("Expected method declaration, got: {:?}", first.kind)
+    };
+    assert!(signature.is_none(), "Did not expect method signature");
+    assert_eq!(attributes, &vec!["lvalue".to_string()]);
 }
 
 #[test]

@@ -3,6 +3,8 @@
 //! These tests exercise the public API: DeadCodeDetector, DeadCodeAnalysis,
 //! DeadCodeStats, DeadCodeType, and generate_report.
 
+#![allow(clippy::panic)]
+
 use perl_dead_code::{
     DeadCode, DeadCodeAnalysis, DeadCodeDetector, DeadCodeStats, DeadCodeType, generate_report,
 };

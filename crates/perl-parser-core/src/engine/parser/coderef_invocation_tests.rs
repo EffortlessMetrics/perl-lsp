@@ -16,12 +16,14 @@ mod tests {
     /// Helper: parse code and return the first statement node.
     fn parse_first_stmt(code: &str) -> Node {
         let ast = parse_program(code);
-        match ast.kind {
-            NodeKind::Program { mut statements } if !statements.is_empty() => {
-                statements.swap_remove(0)
-            }
-            _ => panic!("Expected Program with statements, got: {}", ast.to_sexp()),
+        let ast_sexp = ast.to_sexp();
+        let NodeKind::Program { mut statements } = ast.kind else {
+            panic!("Expected Program with statements, got: {}", ast_sexp)
+        };
+        if statements.is_empty() {
+            panic!("Expected Program with statements, got: {}", ast_sexp);
         }
+        statements.swap_remove(0)
     }
 
     /// Helper: check that the AST sexp contains no ERROR nodes.
@@ -33,14 +35,14 @@ mod tests {
 
     /// Helper: extract expression from an ExpressionStatement.
     fn unwrap_expr_stmt(stmt: Node) -> Node {
-        match stmt.kind {
-            NodeKind::ExpressionStatement { expression } => *expression,
-            _ => panic!(
+        let NodeKind::ExpressionStatement { expression } = stmt.kind else {
+            panic!(
                 "Expected ExpressionStatement, got {} (sexp: {})",
                 stmt.kind.kind_name(),
                 stmt.to_sexp()
-            ),
-        }
+            )
+        };
+        *expression
     }
 
     // ---------------------------------------------------------------
@@ -52,25 +54,23 @@ mod tests {
         let code = "$code->();";
         assert_no_errors(code);
         let expr = unwrap_expr_stmt(parse_first_stmt(code));
-        match &expr.kind {
-            NodeKind::FunctionCall { name, args } => {
-                assert_eq!(name, "->()", "Expected ->() coderef call, got name={}", name);
-                // First arg is the callee ($code)
-                assert!(!args.is_empty(), "Expected at least 1 arg (the callee expression)",);
-                assert_eq!(
-                    args[0].kind.kind_name(),
-                    "Variable",
-                    "First arg should be the Variable node for $code",
-                );
-                // No additional args beyond the callee
-                assert_eq!(args.len(), 1, "Expected exactly 1 arg (callee only) for empty arglist");
-            }
-            _ => panic!(
+        let NodeKind::FunctionCall { name, args } = &expr.kind else {
+            panic!(
                 "Expected FunctionCall for $code->(), got {} (sexp: {})",
                 expr.kind.kind_name(),
                 expr.to_sexp()
-            ),
-        }
+            )
+        };
+        assert_eq!(name, "->()", "Expected ->() coderef call, got name={}", name);
+        // First arg is the callee ($code)
+        assert!(!args.is_empty(), "Expected at least 1 arg (the callee expression)",);
+        assert_eq!(
+            args[0].kind.kind_name(),
+            "Variable",
+            "First arg should be the Variable node for $code",
+        );
+        // No additional args beyond the callee
+        assert_eq!(args.len(), 1, "Expected exactly 1 arg (callee only) for empty arglist");
     }
 
     // ---------------------------------------------------------------
@@ -82,18 +82,16 @@ mod tests {
         let code = "$code->($x, $y);";
         assert_no_errors(code);
         let expr = unwrap_expr_stmt(parse_first_stmt(code));
-        match &expr.kind {
-            NodeKind::FunctionCall { name, args } => {
-                assert_eq!(name, "->()");
-                // First arg is callee, then $x and $y
-                assert!(args.len() >= 3, "Expected callee + 2 args, got {} args", args.len());
-            }
-            _ => panic!(
+        let NodeKind::FunctionCall { name, args } = &expr.kind else {
+            panic!(
                 "Expected FunctionCall for $code->($x, $y), got {} (sexp: {})",
                 expr.kind.kind_name(),
                 expr.to_sexp()
-            ),
-        }
+            )
+        };
+        assert_eq!(name, "->()");
+        // First arg is callee, then $x and $y
+        assert!(args.len() >= 3, "Expected callee + 2 args, got {} args", args.len());
     }
 
     // ---------------------------------------------------------------
@@ -105,24 +103,22 @@ mod tests {
         let code = "$hash{callback}->();";
         assert_no_errors(code);
         let expr = unwrap_expr_stmt(parse_first_stmt(code));
-        match &expr.kind {
-            NodeKind::FunctionCall { name, args } => {
-                assert_eq!(name, "->()");
-                // First arg should be the hash access expression $hash{callback}
-                assert!(!args.is_empty(), "Expected callee arg");
-                assert_eq!(
-                    args[0].kind.kind_name(),
-                    "Binary",
-                    "First arg should be Binary (hash access), got {}",
-                    args[0].kind.kind_name(),
-                );
-            }
-            _ => panic!(
+        let NodeKind::FunctionCall { name, args } = &expr.kind else {
+            panic!(
                 "Expected FunctionCall for $hash{{callback}}->(), got {} (sexp: {})",
                 expr.kind.kind_name(),
                 expr.to_sexp()
-            ),
-        }
+            )
+        };
+        assert_eq!(name, "->()");
+        // First arg should be the hash access expression $hash{callback}
+        assert!(!args.is_empty(), "Expected callee arg");
+        assert_eq!(
+            args[0].kind.kind_name(),
+            "Binary",
+            "First arg should be Binary (hash access), got {}",
+            args[0].kind.kind_name(),
+        );
     }
 
     // ---------------------------------------------------------------
@@ -134,23 +130,21 @@ mod tests {
         let code = "$arr[0]->();";
         assert_no_errors(code);
         let expr = unwrap_expr_stmt(parse_first_stmt(code));
-        match &expr.kind {
-            NodeKind::FunctionCall { name, args } => {
-                assert_eq!(name, "->()");
-                assert!(!args.is_empty(), "Expected callee arg");
-                assert_eq!(
-                    args[0].kind.kind_name(),
-                    "Binary",
-                    "First arg should be Binary (array access), got {}",
-                    args[0].kind.kind_name(),
-                );
-            }
-            _ => panic!(
+        let NodeKind::FunctionCall { name, args } = &expr.kind else {
+            panic!(
                 "Expected FunctionCall for $arr[0]->(), got {} (sexp: {})",
                 expr.kind.kind_name(),
                 expr.to_sexp()
-            ),
-        }
+            )
+        };
+        assert_eq!(name, "->()");
+        assert!(!args.is_empty(), "Expected callee arg");
+        assert_eq!(
+            args[0].kind.kind_name(),
+            "Binary",
+            "First arg should be Binary (array access), got {}",
+            args[0].kind.kind_name(),
+        );
     }
 
     // ---------------------------------------------------------------
@@ -162,24 +156,22 @@ mod tests {
         let code = "$obj->method->();";
         assert_no_errors(code);
         let expr = unwrap_expr_stmt(parse_first_stmt(code));
-        match &expr.kind {
-            NodeKind::FunctionCall { name, args } => {
-                assert_eq!(name, "->()");
-                // First arg should be the MethodCall node for $obj->method
-                assert!(!args.is_empty(), "Expected callee arg");
-                assert_eq!(
-                    args[0].kind.kind_name(),
-                    "MethodCall",
-                    "First arg should be MethodCall for $obj->method, got {}",
-                    args[0].kind.kind_name(),
-                );
-            }
-            _ => panic!(
+        let NodeKind::FunctionCall { name, args } = &expr.kind else {
+            panic!(
                 "Expected FunctionCall for $obj->method->(), got {} (sexp: {})",
                 expr.kind.kind_name(),
                 expr.to_sexp()
-            ),
-        }
+            )
+        };
+        assert_eq!(name, "->()");
+        // First arg should be the MethodCall node for $obj->method
+        assert!(!args.is_empty(), "Expected callee arg");
+        assert_eq!(
+            args[0].kind.kind_name(),
+            "MethodCall",
+            "First arg should be MethodCall for $obj->method, got {}",
+            args[0].kind.kind_name(),
+        );
     }
 
     // ---------------------------------------------------------------
@@ -191,24 +183,22 @@ mod tests {
         let code = "$self->can('method')->();";
         assert_no_errors(code);
         let expr = unwrap_expr_stmt(parse_first_stmt(code));
-        match &expr.kind {
-            NodeKind::FunctionCall { name, args } => {
-                assert_eq!(name, "->()");
-                assert!(!args.is_empty(), "Expected callee arg");
-                // The callee should be a MethodCall ($self->can('method'))
-                assert_eq!(
-                    args[0].kind.kind_name(),
-                    "MethodCall",
-                    "Expected MethodCall as callee, got {}",
-                    args[0].kind.kind_name(),
-                );
-            }
-            _ => panic!(
+        let NodeKind::FunctionCall { name, args } = &expr.kind else {
+            panic!(
                 "Expected FunctionCall for $self->can('method')->(), got {} (sexp: {})",
                 expr.kind.kind_name(),
                 expr.to_sexp()
-            ),
-        }
+            )
+        };
+        assert_eq!(name, "->()");
+        assert!(!args.is_empty(), "Expected callee arg");
+        // The callee should be a MethodCall ($self->can('method'))
+        assert_eq!(
+            args[0].kind.kind_name(),
+            "MethodCall",
+            "Expected MethodCall as callee, got {}",
+            args[0].kind.kind_name(),
+        );
     }
 
     // ---------------------------------------------------------------
@@ -240,18 +230,16 @@ mod tests {
         let code = r#"$handler->("hello");"#;
         assert_no_errors(code);
         let expr = unwrap_expr_stmt(parse_first_stmt(code));
-        match &expr.kind {
-            NodeKind::FunctionCall { name, args } => {
-                assert_eq!(name, "->()");
-                // callee + one string arg
-                assert_eq!(args.len(), 2, "Expected callee + 1 arg, got {} args", args.len());
-            }
-            _ => panic!(
+        let NodeKind::FunctionCall { name, args } = &expr.kind else {
+            panic!(
                 "Expected FunctionCall for $handler->(\"hello\"), got {} (sexp: {})",
                 expr.kind.kind_name(),
                 expr.to_sexp()
-            ),
-        }
+            )
+        };
+        assert_eq!(name, "->()");
+        // callee + one string arg
+        assert_eq!(args.len(), 2, "Expected callee + 1 arg, got {} args", args.len());
     }
 
     // ---------------------------------------------------------------
@@ -264,28 +252,24 @@ mod tests {
         assert_no_errors(code);
         let expr = unwrap_expr_stmt(parse_first_stmt(code));
         // The outer call should be a ->() wrapping another ->()
-        match &expr.kind {
-            NodeKind::FunctionCall { name, args } => {
-                assert_eq!(name, "->()");
-                assert!(!args.is_empty(), "Expected callee arg");
-                // The inner callee should also be a ->() FunctionCall
-                match &args[0].kind {
-                    NodeKind::FunctionCall { name: inner_name, .. } => {
-                        assert_eq!(inner_name, "->()");
-                    }
-                    _ => panic!(
-                        "Expected inner FunctionCall for $factory->()->(), got {} (sexp: {})",
-                        args[0].kind.kind_name(),
-                        args[0].to_sexp()
-                    ),
-                }
-            }
-            _ => panic!(
+        let NodeKind::FunctionCall { name, args } = &expr.kind else {
+            panic!(
                 "Expected FunctionCall for $factory->()->(), got {} (sexp: {})",
                 expr.kind.kind_name(),
                 expr.to_sexp()
-            ),
-        }
+            )
+        };
+        assert_eq!(name, "->()");
+        assert!(!args.is_empty(), "Expected callee arg");
+        // The inner callee should also be a ->() FunctionCall
+        let NodeKind::FunctionCall { name: inner_name, .. } = &args[0].kind else {
+            panic!(
+                "Expected inner FunctionCall for $factory->()->(), got {} (sexp: {})",
+                args[0].kind.kind_name(),
+                args[0].to_sexp()
+            )
+        };
+        assert_eq!(inner_name, "->()");
     }
 
     // ---------------------------------------------------------------

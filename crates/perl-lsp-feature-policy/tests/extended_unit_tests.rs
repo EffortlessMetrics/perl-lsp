@@ -3,6 +3,7 @@
 //! These tests provide comprehensive coverage of edge cases, error conditions,
 //! and detailed behavior verification across all public APIs.
 #![allow(clippy::expect_used)]
+#![allow(clippy::panic)]
 
 use perl_lsp_feature_policy::{
     FeatureProfile, catalog_advertised_feature_ids, feature_ids_from_flags, flags_for_profile,

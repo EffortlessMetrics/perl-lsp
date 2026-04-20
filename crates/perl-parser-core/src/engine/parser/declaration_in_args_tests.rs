@@ -23,12 +23,14 @@ mod tests {
     /// Helper: parse code and return the first statement node.
     fn first_stmt(code: &str) -> Node {
         let ast = parse_program(code);
-        match ast.kind {
-            NodeKind::Program { mut statements } if !statements.is_empty() => {
-                statements.swap_remove(0)
-            }
-            _ => panic!("Expected Program with statements, got: {}", ast.to_sexp()),
+        let ast_sexp = ast.to_sexp();
+        let NodeKind::Program { mut statements } = ast.kind else {
+            panic!("Expected Program with statements, got: {}", ast_sexp)
+        };
+        if statements.is_empty() {
+            panic!("Expected Program with statements, got: {}", ast_sexp);
         }
+        statements.swap_remove(0)
     }
 
     // ---------------------------------------------------------------

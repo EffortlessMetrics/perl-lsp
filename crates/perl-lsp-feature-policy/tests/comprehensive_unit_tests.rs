@@ -1,5 +1,7 @@
 //! Comprehensive unit tests for `perl-lsp-feature-policy`.
 
+#![allow(clippy::panic)]
+
 use perl_lsp_feature_policy::{
     FeatureProfile, catalog_advertised_feature_ids, feature_ids_from_flags, flags_for_profile,
     flags_for_runtime, from_str_name,

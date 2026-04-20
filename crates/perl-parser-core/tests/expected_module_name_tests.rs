@@ -1,3 +1,5 @@
+#![allow(clippy::panic)]
+
 mod cpan_test_helpers;
 use cpan_test_helpers::*;
 use perl_parser_core::NodeKind;

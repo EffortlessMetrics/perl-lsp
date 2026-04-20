@@ -1,3 +1,5 @@
+#![allow(clippy::panic)]
+
 mod cpan_test_helpers;
 
 use cpan_test_helpers::*;
@@ -21,7 +23,7 @@ fn async_named_subroutine_carries_async_attribute() {
     let sub = statements
         .iter()
         .find(|statement| matches!(statement.kind, NodeKind::Subroutine { .. }))
-        .expect("expected named subroutine statement");
+        .unwrap();
 
     let NodeKind::Subroutine { name, attributes, body, .. } = &sub.kind else {
         panic!("expected subroutine node, got {}", sub.kind.kind_name());
@@ -46,7 +48,7 @@ fn await_parses_as_unary_operator() {
         panic!("expected program node, got {}", ast.kind.kind_name());
     };
 
-    let decl = statements.first().expect("expected one statement");
+    let decl = statements.first().unwrap();
     let NodeKind::VariableDeclaration { initializer: Some(initializer), .. } = &decl.kind else {
         panic!("expected variable declaration with initializer, got {}", decl.kind.kind_name());
     };
@@ -70,7 +72,7 @@ fn async_block_stays_parseable_as_a_call() {
         panic!("expected program node, got {}", ast.kind.kind_name());
     };
 
-    let stmt = statements.first().expect("expected one statement");
+    let stmt = statements.first().unwrap();
     let NodeKind::ExpressionStatement { expression } = &stmt.kind else {
         panic!(
             "expected expression statement for `async {{ ... }}`, got {}",
@@ -95,7 +97,7 @@ fn package_qualified_await_stays_a_function_call() {
         panic!("expected program node, got {}", ast.kind.kind_name());
     };
 
-    let stmt = statements.first().expect("expected one statement");
+    let stmt = statements.first().unwrap();
     let NodeKind::ExpressionStatement { expression } = &stmt.kind else {
         panic!(
             "expected expression statement for `await::helper()`, got {}",

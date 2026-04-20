@@ -1568,6 +1568,7 @@ dependencies = [
 name = "perl-dead-code"
 version = "0.12.4"
 dependencies = [
+ "perl-tdd-support",
  "perl-workspace",
  "serde",
  "serde_json",
@@ -1859,6 +1860,7 @@ dependencies = [
  "perl-lsp-feature-contracts",
  "perl-lsp-feature-flags",
  "perl-lsp-feature-profile",
+ "perl-tdd-support",
 ]
 
 [[package]]
