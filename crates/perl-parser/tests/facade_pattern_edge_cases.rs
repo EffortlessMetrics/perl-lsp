@@ -133,7 +133,6 @@ fn test_text_line_facade_functional() -> Result<(), Box<dyn std::error::Error>> 
     use perl_parser_core::text_line::{is_keyword_boundary, line_bounds_at, skip_ascii_whitespace};
 
     let source = "my $x = 1;\nmy $y = 2;\n";
-    let bytes = source.as_bytes();
 
     // line_bounds_at: for a position in the second line, returns the line's byte range
     let second_line_pos = must_some(source.find("$y"));
@@ -447,17 +446,16 @@ fn test_incremental_parsing_facade() -> Result<(), Box<dyn std::error::Error>> {
     use perl_parser::{Edit, IncrementalState};
 
     let code = "my $x = 1;";
-    let mut state = IncrementalState::new(code);
-    let ast = state.parse()?;
+    let mut state = IncrementalState::new(code.to_string());
 
-    assert!(matches!(ast.kind, perl_parser::NodeKind::Program { .. }));
+    assert!(matches!(state.ast.kind, perl_parser::NodeKind::Program { .. }));
 
     // Apply an edit
-    let edit = Edit { start_byte: 3, old_end_byte: 5, new_end_byte: 5, text: "$y".to_string() };
-    perl_parser::apply_edits(&mut state, vec![edit]);
+    let edit = Edit { start_byte: 3, old_end_byte: 5, new_end_byte: 5, new_text: "$y".to_string() };
+    perl_parser::apply_edits(&mut state, &[edit])?;
 
-    // Re-parse should work
-    let _new_ast = state.parse()?;
+    // After apply_edits, the state's AST is updated
+    assert!(matches!(state.ast.kind, perl_parser::NodeKind::Program { .. }));
 
     Ok(())
 }
