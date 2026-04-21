@@ -107,10 +107,16 @@ fn g3_absorbed_modules_in_public_api() -> Result<(), Box<dyn std::error::Error>>
     ];
 
     for module in modules {
+        // Check for `pub mod <module>` (direct sub-module declaration).
+        // Note: `pub use` re-export paths use plain string matching on the module name;
+        // the `.*` form below is a literal string match, not a regex, so we check for
+        // the concrete patterns that actually appear in lib.rs.
+        let declared_as_mod = content.contains(&format!("pub mod {}", module));
+        let reexported = content.contains(&format!("pub use {}::", module))
+            || content.contains(&format!("pub use crate::{}::", module));
         assert!(
-            content.contains(&format!("pub mod {}", module))
-                || content.contains(&format!("pub use .*{}::", module)),
-            "Module {} should be publicly exported from perl_lsp_rs_core lib.rs",
+            declared_as_mod || reexported,
+            "Module {} should be publicly declared (pub mod) or re-exported (pub use) from perl_lsp_rs_core lib.rs",
             module
         );
     }

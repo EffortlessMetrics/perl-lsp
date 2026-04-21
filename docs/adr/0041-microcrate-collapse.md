@@ -480,7 +480,14 @@ Three consumers exist: `perl-dap`, `perl-lsp-transport` (absorbed in step 4), an
 
 The original G3 estimate of 44 → 36 assumed absorbing 8 crates. The `perl-lsp-config` deferral reduces absorptions to 7, and `perl-content-length-framing` is not absorbed, giving 44 − 7 = 37 published crates post-G3.
 
-**Feature flag routing (D5):**
-- `perl-lsp-rs-core` `[features]`: extend `lsp-compat = ["dep:lsp-types"]` (protocol and governance types are now rs-core's public API)
-- `perl-lsp-rs-core` `[dependencies]`: add `lsp-types = { workspace = true, optional = true }`
-- `perl-lsp/Cargo.toml`: remove dead `perl-lsp-protocol/lsp-ga-lock` and `perl-lsp-feature-governance/lsp-ga-lock` feature refs from `lsp-ga-lock` chain
+**Feature flag routing (D5) — original plan, superseded by orchestrator decision:**
+
+The original D5 plan was to gate `lsp-types` as an optional dep via `lsp-compat = ["dep:lsp-types"]`.
+After implementation, the builder found that `perl-lsp-rs-core` uses `lsp_types` unconditionally in
+five or more modules (`capability_map`, `protocol`, `providers`, `tooling`, `uri`), making the optional
+dep approach require invasive `#[cfg(feature = "lsp-compat")]` gating throughout. The orchestrator
+elected **Option A**: keep `lsp-types` as a required dep, keep `lsp-compat = []` as an empty signal
+feature for downstream consumers (PR #4539, commit 928cfe235). The `lsp-ga-lock` cleanup sub-part of D5
+was completed: dead refs to `perl-lsp-protocol/lsp-ga-lock` and `perl-lsp-feature-governance/lsp-ga-lock`
+were removed from `perl-lsp/Cargo.toml`; only `perl-lsp-rs-core/lsp-ga-lock` remains.
+Real optional-gating for WASM-style builds is tracked in follow-up #4540.
