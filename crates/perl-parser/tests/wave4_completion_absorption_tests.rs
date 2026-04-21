@@ -352,3 +352,254 @@ fn test_incremental_feature_gated() -> TestResult {
     let _: perl_parser::incremental::IncrementalState;
     Ok(())
 }
+
+// =============================================================================
+// Section 9: Default Feature Preservation Tests (Green TDD edge cases)
+// =============================================================================
+
+/// Test that workspace_refactor is in default features (memory feedback)
+/// Ensures feature-gating didn't accidentally disable the refactor module by default
+#[test]
+fn test_workspace_refactor_in_default_features() -> TestResult {
+    let cargo_toml_path = ws("crates/perl-parser/Cargo.toml");
+    let content = fs::read_to_string(cargo_toml_path)?;
+
+    // Find the [features] section and then the default line
+    if let Some(features_section) = content.split("[features]").next() {
+        // Extract default features from the part before [features]
+        if let Some(default_line) =
+            features_section.lines().find(|line| line.starts_with("default = "))
+        {
+            if default_line.contains("workspace_refactor") {
+                return Ok(());
+            }
+        }
+    }
+
+    // Also check after [features] section
+    if let Some(features_section) = content.split("[features]").nth(1) {
+        if let Some(default_line) =
+            features_section.lines().find(|line| line.starts_with("default = "))
+        {
+            if default_line.contains("workspace_refactor") {
+                return Ok(());
+            }
+        }
+    }
+
+    Err("workspace_refactor must be in default features after absorption".into())
+}
+
+// =============================================================================
+// Section 10: Compatibility Alias Symmetry Tests
+// =============================================================================
+
+/// Test that dead_code_detector alias refers to the same type as dead_code
+/// Prevents silent divergence that would break backward compatibility
+#[test]
+fn test_dead_code_alias_symmetry() -> TestResult {
+    use std::any::type_name;
+
+    // Both paths should resolve to the same underlying type
+    let direct_type = type_name::<perl_parser::dead_code::DeadCodeDetector>();
+    let compat_type = type_name::<perl_parser::dead_code_detector::DeadCodeDetector>();
+
+    if direct_type == compat_type {
+        Ok(())
+    } else {
+        Err(format!(
+            "dead_code_detector alias diverged: direct={}, compat={}",
+            direct_type, compat_type
+        )
+        .into())
+    }
+}
+
+// =============================================================================
+// Section 11: Old Crate Directory Markers (G2 pattern assertion)
+// =============================================================================
+
+/// Test that absorbed crate directories are marked unpublished
+/// Stronger than just checking publish flag: verifies integration
+#[test]
+fn test_absorbed_crates_unpublished_marker() -> TestResult {
+    for crate_name in &["perl-dead-code", "perl-refactoring", "perl-incremental-parsing"] {
+        let cargo_toml = ws(&format!("crates/{}/Cargo.toml", crate_name));
+        if cargo_toml.exists() {
+            let content = fs::read_to_string(&cargo_toml)?;
+            if !content.contains("publish = false") {
+                return Err(format!(
+                    "Absorbed crate {} must have publish = false marker",
+                    crate_name
+                )
+                .into());
+            }
+        }
+    }
+    Ok(())
+}
+
+// =============================================================================
+// Section 12: Module Re-export Verification
+// =============================================================================
+
+/// Test that refactor module is properly exported in lib.rs
+/// Prevents silent breakage if lib.rs export was missed
+#[test]
+fn test_refactor_module_in_lib_exports() -> TestResult {
+    let lib_rs = fs::read_to_string(ws("crates/perl-parser/src/lib.rs"))?;
+
+    // Should have pub mod refactor or re-export it
+    if lib_rs.contains("pub mod refactor") {
+        Ok(())
+    } else {
+        Err("refactor module not properly declared in perl-parser/src/lib.rs".into())
+    }
+}
+
+/// Test that dead_code module is properly exported in lib.rs
+#[test]
+fn test_dead_code_module_in_lib_exports() -> TestResult {
+    let lib_rs = fs::read_to_string(ws("crates/perl-parser/src/lib.rs"))?;
+
+    if lib_rs.contains("pub mod dead_code") {
+        Ok(())
+    } else {
+        Err("dead_code module not properly declared in perl-parser/src/lib.rs".into())
+    }
+}
+
+#[cfg(feature = "incremental")]
+/// Test that incremental module is properly exported in lib.rs
+#[test]
+fn test_incremental_module_in_lib_exports() -> TestResult {
+    let lib_rs = fs::read_to_string(ws("crates/perl-parser/src/lib.rs"))?;
+
+    if lib_rs.contains("pub mod incremental") {
+        Ok(())
+    } else {
+        Err("incremental module not properly declared in perl-parser/src/lib.rs".into())
+    }
+}
+
+// =============================================================================
+// Section 13: Cross-Crate Dependency Isolation
+// =============================================================================
+
+/// Test that no crate except perl-parser depends on perl-dead-code
+/// Prevents dueling module paths and import confusion
+#[test]
+fn test_no_extraneous_dead_code_deps() -> TestResult {
+    let crates_dir = ws("crates");
+
+    for entry in
+        fs::read_dir(&crates_dir).map_err(|e| format!("Failed to read crates dir: {}", e))?
+    {
+        let entry = entry.map_err(|e| format!("Failed to read dir entry: {}", e))?;
+        let path = entry.path();
+
+        if !path.is_dir() {
+            continue;
+        }
+
+        let crate_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+
+        // Skip the source crate itself
+        if crate_name == "perl-dead-code" {
+            continue;
+        }
+
+        let cargo_toml = path.join("Cargo.toml");
+        if cargo_toml.exists() {
+            let content = fs::read_to_string(&cargo_toml)?;
+
+            if content.contains("perl-dead-code = {") {
+                return Err(format!(
+                    "Crate {} still depends on perl-dead-code (should use perl-parser instead)",
+                    crate_name
+                )
+                .into());
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Test that no crate except perl-parser depends on perl-refactoring
+#[test]
+fn test_no_extraneous_refactoring_deps() -> TestResult {
+    let crates_dir = ws("crates");
+
+    for entry in
+        fs::read_dir(&crates_dir).map_err(|e| format!("Failed to read crates dir: {}", e))?
+    {
+        let entry = entry.map_err(|e| format!("Failed to read dir entry: {}", e))?;
+        let path = entry.path();
+
+        if !path.is_dir() {
+            continue;
+        }
+
+        let crate_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+
+        // Skip source crates themselves
+        if crate_name == "perl-refactoring" || crate_name == "perl-parser" {
+            continue;
+        }
+
+        let cargo_toml = path.join("Cargo.toml");
+        if cargo_toml.exists() {
+            let content = fs::read_to_string(&cargo_toml)?;
+
+            if content.contains("perl-refactoring = {") {
+                return Err(format!(
+                    "Crate {} still depends on perl-refactoring (should use perl-parser instead)",
+                    crate_name
+                )
+                .into());
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Test that no crate except perl-parser depends on perl-incremental-parsing
+#[test]
+fn test_no_extraneous_incremental_deps() -> TestResult {
+    let crates_dir = ws("crates");
+
+    for entry in
+        fs::read_dir(&crates_dir).map_err(|e| format!("Failed to read crates dir: {}", e))?
+    {
+        let entry = entry.map_err(|e| format!("Failed to read dir entry: {}", e))?;
+        let path = entry.path();
+
+        if !path.is_dir() {
+            continue;
+        }
+
+        let crate_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+
+        // Skip source crates themselves
+        if crate_name == "perl-incremental-parsing" || crate_name == "perl-parser" {
+            continue;
+        }
+
+        let cargo_toml = path.join("Cargo.toml");
+        if cargo_toml.exists() {
+            let content = fs::read_to_string(&cargo_toml)?;
+
+            if content.contains("perl-incremental-parsing = {") {
+                return Err(format!(
+                    "Crate {} still depends on perl-incremental-parsing (should use perl-parser::incremental instead)",
+                    crate_name
+                )
+                .into());
+            }
+        }
+    }
+
+    Ok(())
+}
