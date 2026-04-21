@@ -5,5 +5,6 @@
 pub mod capability_map;
 pub mod features;
 pub mod governance;
+pub mod protocol;
 pub mod providers;
 pub mod runtime;

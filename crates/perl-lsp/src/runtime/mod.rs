@@ -54,7 +54,8 @@ use perl_parser::{
 
 use crate::call_hierarchy_provider::CallHierarchyProvider;
 use crate::cancellation::{GLOBAL_CANCELLATION_REGISTRY, PerlLspCancellationToken};
-use perl_lsp_feature_governance::FeatureProfile;
+// Wave G3 (#4535): perl-lsp-feature-governance absorbed into perl-lsp-rs-core::governance
+use perl_lsp_rs_core::governance::FeatureProfile;
 
 // Import LSP providers from features (these moved from perl-parser to perl-lsp)
 use crate::features::{

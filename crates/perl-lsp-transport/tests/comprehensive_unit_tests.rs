@@ -4,7 +4,7 @@
 //! verifying framing, parsing, error handling, and round-trip behaviour
 //! without any real I/O.
 
-use perl_lsp_protocol::{JsonRpcError, JsonRpcResponse};
+use perl_lsp_rs_core::protocol::{JsonRpcError, JsonRpcResponse};
 use perl_lsp_transport::{
     ContentLengthMessageReader, log_response, read_message, write_message, write_notification,
 };

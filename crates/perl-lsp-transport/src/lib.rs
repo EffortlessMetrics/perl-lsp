@@ -24,7 +24,7 @@
 //! ```no_run
 //! use std::io::{BufReader, stdin, stdout};
 //! use perl_lsp_transport::{read_message, write_message};
-//! use perl_lsp_protocol::JsonRpcResponse;
+//! use perl_lsp_rs_core::protocol::JsonRpcResponse;
 //!
 //! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! let mut reader = BufReader::new(stdin());

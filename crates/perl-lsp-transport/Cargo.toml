@@ -21,7 +21,8 @@ include = [
 ]
 
 [dependencies]
-perl-lsp-protocol = { workspace = true }
+# perl-lsp-protocol absorbed into perl-lsp-rs-core::protocol (Wave G3 step 2)
+perl-lsp-rs-core = { workspace = true }
 perl-content-length-framing = { workspace = true }
 serde_json.workspace = true
 tracing.workspace = true

@@ -2,7 +2,7 @@
 
 use perl_content_length_framing::ContentLengthFramer;
 pub use perl_content_length_framing::frame;
-use perl_lsp_protocol::{JsonRpcRequest, JsonRpcResponse};
+use perl_lsp_rs_core::protocol::{JsonRpcRequest, JsonRpcResponse};
 use serde_json::{Value, json};
 use std::borrow::Cow;
 use std::io::{self, BufRead, Read, Write};
@@ -229,7 +229,7 @@ mod tests {
     use super::{
         ContentLengthMessageReader, log_response, read_message, write_message, write_notification,
     };
-    use perl_lsp_protocol::{JsonRpcError, JsonRpcResponse};
+    use perl_lsp_rs_core::protocol::{JsonRpcError, JsonRpcResponse};
     use std::io::{self, BufReader, Cursor};
 
     fn framed_request(id: u64, method: &str) -> Vec<u8> {

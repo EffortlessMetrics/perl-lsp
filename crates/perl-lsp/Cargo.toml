@@ -36,11 +36,11 @@ perl-parser = { workspace = true, features = ["test-performance"] }
 # (perl-lsp-providers absorbed into perl-lsp-rs-core::providers::lsp_compat — Wave G1b)
 # (perl-lsp-formatting absorbed into perl-lsp-rs-core::providers::formatting — Wave G1b)
 perl-lsp-uri = { workspace = true }
-perl-lsp-feature-governance = { workspace = true }
+# perl-lsp-feature-governance absorbed into perl-lsp-rs-core::governance (Wave G3 step 1)
 perl-lsp-tooling = { workspace = true }
 perl-subprocess-runtime = { workspace = true }
 perl-lsp-config = { workspace = true }
-perl-lsp-protocol = { workspace = true }
+# perl-lsp-protocol absorbed into perl-lsp-rs-core::protocol (Wave G3 step 2)
 perl-lsp-transport = { workspace = true }
 # NOTE(G2-defer): perl-lsp-transport dep kept here; deferred to G3 for full absorption.
 # (perl-lsp-code-actions absorbed into perl-lsp-rs-core::providers::code_actions — Wave G1b)
@@ -97,8 +97,8 @@ incremental = ["perl-parser/incremental", "perl-incremental-parsing"]  # Increme
 test-performance = []  # Performance optimizations for test environments
 # When enabled, advertise *only* the conservative GA set (for emergency point releases).
 lsp-ga-lock = [
-  "perl-lsp-protocol/lsp-ga-lock",
-  "perl-lsp-feature-governance/lsp-ga-lock",
+  # perl-lsp-protocol/lsp-ga-lock removed — absorbed into perl-lsp-rs-core::protocol (Wave G3 step 2)
+  # perl-lsp-feature-governance/lsp-ga-lock removed — absorbed into perl-lsp-rs-core::governance (Wave G3 step 1)
   "perl-lsp-rs-core/lsp-ga-lock",
 ]
 experimental-features = []  # Experimental LSP features for testing

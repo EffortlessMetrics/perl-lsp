@@ -18,6 +18,7 @@ include = [
   "LICENSE*",
   "README.md"
 ]
+publish = false
 
 [dependencies]
 serde = { workspace = true }
