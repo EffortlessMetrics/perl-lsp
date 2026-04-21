@@ -8,6 +8,31 @@ pub struct TextEditHelpers<'a> {
 }
 
 impl<'a> TextEditHelpers<'a> {
+    fn skip_line_ending(&self, pos: usize) -> usize {
+        match (self.source.as_bytes().get(pos), self.source.as_bytes().get(pos.saturating_add(1))) {
+            (Some(b'\r'), Some(b'\n')) => pos + 2,
+            (Some(b'\n' | b'\r'), _) => pos + 1,
+            _ => pos,
+        }
+    }
+
+    fn next_line_bounds(&self, start: usize) -> Option<(usize, usize)> {
+        if start >= self.source.len() {
+            return None;
+        }
+
+        let bytes = self.source.as_bytes();
+        let mut end = start;
+        while let Some(byte) = bytes.get(end) {
+            if *byte == b'\n' || *byte == b'\r' {
+                break;
+            }
+            end += 1;
+        }
+
+        Some((start, end))
+    }
+
     /// Create a new helper view.
     #[must_use]
     pub fn new(source: &'a str, lines: &'a [String]) -> Self {
@@ -44,11 +69,7 @@ impl<'a> TextEditHelpers<'a> {
             .unwrap_or(0);
         // Skip a single newline that immediately follows the semicolon so the
         // insertion point is the first real character of the next line.
-        if self.source.as_bytes().get(after_semi) == Some(&b'\n') {
-            after_semi + 1
-        } else {
-            after_semi
-        }
+        self.skip_line_ending(after_semi)
     }
 
     /// Find where to insert an extracted subroutine near `current_pos`.
@@ -62,9 +83,12 @@ impl<'a> TextEditHelpers<'a> {
     #[must_use]
     pub fn find_pragma_insert_position(&self) -> usize {
         if self.source.starts_with("#!")
-            && let Some(pos) = self.source.find('\n')
+            && let Some((_, line_end)) = self.next_line_bounds(0)
         {
-            return pos + 1;
+            let next = self.skip_line_ending(line_end);
+            if next > line_end {
+                return next;
+            }
         }
         0
     }
@@ -73,13 +97,21 @@ impl<'a> TextEditHelpers<'a> {
     #[must_use]
     pub fn find_import_insert_position(&self) -> usize {
         let mut pos = self.find_pragma_insert_position();
+        let mut cursor = pos;
 
-        for line in self.lines {
+        while let Some((line_start, line_end)) = self.next_line_bounds(cursor) {
+            let line = &self.source[line_start..line_end];
             if line.starts_with("use ") || line.starts_with("require ") {
-                pos = self.source.find(line).unwrap_or(0) + line.len() + 1;
+                pos = self.skip_line_ending(line_end);
             } else if !line.is_empty() && !line.starts_with('#') {
                 break;
             }
+
+            let next_cursor = self.skip_line_ending(line_end);
+            if next_cursor == cursor {
+                break;
+            }
+            cursor = next_cursor;
         }
 
         pos

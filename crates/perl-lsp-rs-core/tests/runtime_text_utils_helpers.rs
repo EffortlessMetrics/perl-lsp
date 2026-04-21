@@ -37,6 +37,16 @@ fn finds_statement_start_after_semicolon() {
 }
 
 #[test]
+fn finds_statement_start_after_semicolon_with_crlf() {
+    let source = "my $a = 1;\r\nmy $b = length($x);\r\n";
+    let lines: Vec<String> = source.lines().map(ToString::to_string).collect();
+    let helpers = TextEditHelpers::new(source, &lines);
+
+    let pos = source.find("length").unwrap_or(0);
+    assert_eq!(helpers.find_statement_start(pos), 12);
+}
+
+#[test]
 fn finds_pragma_and_import_insert_positions() {
     let source = "#!/usr/bin/env perl\nuse strict;\nuse warnings;\nmy $x = 1;\n";
     let lines: Vec<String> = source.lines().map(ToString::to_string).collect();
@@ -44,6 +54,16 @@ fn finds_pragma_and_import_insert_positions() {
 
     assert_eq!(helpers.find_pragma_insert_position(), 20);
     assert_eq!(helpers.find_import_insert_position(), 46);
+}
+
+#[test]
+fn finds_pragma_and_import_insert_positions_with_crlf() {
+    let source = "#!/usr/bin/env perl\r\nuse strict;\r\nuse warnings;\r\nmy $x = 1;\r\n";
+    let lines: Vec<String> = source.lines().map(ToString::to_string).collect();
+    let helpers = TextEditHelpers::new(source, &lines);
+
+    assert_eq!(helpers.find_pragma_insert_position(), 21);
+    assert_eq!(helpers.find_import_insert_position(), 49);
 }
 
 #[test]
