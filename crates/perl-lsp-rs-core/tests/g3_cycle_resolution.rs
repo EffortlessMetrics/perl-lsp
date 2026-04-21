@@ -38,13 +38,16 @@ fn g3_protocol_absorption_dissolves_transport_cycle() -> Result<(), Box<dyn std:
 fn g3_transport_reachable_from_rs_core() {
     // Verify that transport module is now accessible from rs-core (cycle is broken)
     // This is a compile-time regression guard - if transport isn't re-exported, this won't compile
-    use perl_lsp_rs_core::transport as _transport;
+    // Just checking that this import path compiles is the regression guard.
+    #[allow(unused_imports)]
+    use perl_lsp_rs_core::transport;
 }
 
 #[test]
 fn g3_protocol_reachable_from_rs_core() {
     // Verify that protocol module is now accessible from rs-core
-    use perl_lsp_rs_core::protocol as _protocol;
+    #[allow(unused_imports)]
+    use perl_lsp_rs_core::protocol;
 }
 
 #[test]
