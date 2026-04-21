@@ -54,10 +54,7 @@ fn test_baseline_updated_to_44() -> Result<(), Box<dyn std::error::Error>> {
     let baseline_path = repo_root().join("xtask/published-crate-baseline.txt");
     let baseline_content = fs::read_to_string(&baseline_path)?;
     let count: u32 = baseline_content.trim().parse()?;
-    assert!(
-        count <= 44,
-        "baseline should be ≤ 44 after absorbing G2 crates (49 - 5); got {count}"
-    );
+    assert!(count <= 44, "baseline should be ≤ 44 after absorbing G2 crates (49 - 5); got {count}");
     Ok(())
 }
 
