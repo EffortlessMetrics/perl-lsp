@@ -13,6 +13,7 @@ readme = "README.md"
 keywords = ["perl", "lsp", "features", "profile", "governance"]
 categories = ["development-tools", "development-tools::testing"]
 include = ["src/**", "Cargo.toml", "README.md", "LICENSE*"]
+publish = false
 
 [dependencies]
 perl-lsp-rs-core = { workspace = true }
