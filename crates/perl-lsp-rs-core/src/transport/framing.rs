@@ -1,11 +1,235 @@
 //! Message framing for the LSP base protocol.
+//!
+//! This module provides both the low-level `Content-Length` frame parsing
+//! (absorbed from `perl-content-length-framing` in Wave Final PR B, #4541)
+//! and the higher-level LSP message reader/writer utilities.
 
 use crate::protocol::{JsonRpcRequest, JsonRpcResponse};
-use perl_content_length_framing::ContentLengthFramer;
-pub use perl_content_length_framing::frame;
 use serde_json::{Value, json};
 use std::borrow::Cow;
+use std::fmt;
 use std::io::{self, BufRead, Read, Write};
+
+// ── Absorbed from perl-content-length-framing ─────────────────────────────────
+
+const HEADER_SENTINEL: &[u8] = b"Content-Length:";
+const HEADER_END: &[u8] = b"\r\n\r\n";
+const RESYNC_TAIL_BYTES: usize = 8 * 1024;
+const MAX_DESYNC_BUFFER_BYTES: usize = 64 * 1024;
+
+/// Maximum allowed message body size in bytes.
+pub const MAX_FRAME_SIZE: usize = 16 * 1024 * 1024;
+
+/// Framing errors for `Content-Length` transport parsing.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum FramingError {
+    /// Header bytes could not be interpreted as a valid frame header.
+    InvalidHeader,
+    /// Header bytes were not valid UTF-8.
+    InvalidHeaderUtf8,
+    /// `Content-Length` header was missing from a complete header block.
+    MissingContentLength,
+    /// `Content-Length` value was not a valid non-negative integer.
+    InvalidContentLength,
+    /// `Content-Length` exceeded [`MAX_FRAME_SIZE`].
+    FrameTooLarge {
+        /// The actual frame size that was too large.
+        len: usize,
+    },
+}
+
+impl fmt::Display for FramingError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::InvalidHeader => write!(f, "invalid Content-Length header"),
+            Self::InvalidHeaderUtf8 => write!(f, "header contains invalid UTF-8"),
+            Self::MissingContentLength => write!(f, "missing Content-Length header"),
+            Self::InvalidContentLength => write!(f, "invalid Content-Length value"),
+            Self::FrameTooLarge { len } => write!(f, "frame too large: {len} bytes"),
+        }
+    }
+}
+
+impl std::error::Error for FramingError {}
+
+/// Stateful extractor for `Content-Length` framed payloads.
+#[derive(Default, Debug, Clone, PartialEq)]
+pub struct ContentLengthFramer {
+    buf: Vec<u8>,
+}
+
+impl ContentLengthFramer {
+    /// Create a new empty framer.
+    #[must_use]
+    pub fn new() -> Self {
+        Self { buf: Vec::new() }
+    }
+
+    /// Append raw transport bytes.
+    pub fn push(&mut self, bytes: &[u8]) {
+        self.buf.extend_from_slice(bytes);
+        self.resync_if_needed();
+    }
+
+    /// Attempt to extract one complete message body.
+    ///
+    /// Returns:
+    /// - `Ok(Some(body))` when a complete frame is available
+    /// - `Ok(None)` when more bytes are needed
+    /// - `Err(...)` for malformed headers or disallowed sizes
+    pub fn try_next(&mut self) -> Result<Option<Vec<u8>>, FramingError> {
+        self.resync_if_needed();
+
+        let Some(start) = find_header_start(&self.buf) else {
+            if let Some(header_end) = find_subslice(&self.buf, HEADER_END) {
+                match std::str::from_utf8(&self.buf[..header_end]) {
+                    Ok(header) => {
+                        let has_header_shape = header
+                            .split("\r\n")
+                            .any(|line| !line.trim().is_empty() && line.contains(':'));
+                        self.consume_header_block(header_end);
+                        if has_header_shape {
+                            return Err(FramingError::MissingContentLength);
+                        }
+                        return Err(FramingError::InvalidHeader);
+                    }
+                    Err(_) => {
+                        self.consume_header_block(header_end);
+                        return Err(FramingError::InvalidHeaderUtf8);
+                    }
+                }
+            }
+            return Ok(None);
+        };
+        if start > 0 {
+            self.buf.drain(..start);
+        }
+
+        let Some(header_end) = find_subslice(&self.buf, HEADER_END) else {
+            return Ok(None);
+        };
+
+        let header_bytes = &self.buf[..header_end];
+        let header_str = match std::str::from_utf8(header_bytes) {
+            Ok(header) => header,
+            Err(_) => {
+                self.consume_header_block(header_end);
+                return Err(FramingError::InvalidHeaderUtf8);
+            }
+        };
+
+        let length = match parse_content_length(header_str) {
+            ContentLengthParse::Found(len) => len,
+            ContentLengthParse::Missing => {
+                self.consume_header_block(header_end);
+                return Err(FramingError::MissingContentLength);
+            }
+            ContentLengthParse::Invalid => {
+                self.consume_header_block(header_end);
+                return Err(FramingError::InvalidContentLength);
+            }
+            ContentLengthParse::MalformedHeader => {
+                self.consume_header_block(header_end);
+                return Err(FramingError::InvalidHeader);
+            }
+        };
+
+        if length > MAX_FRAME_SIZE {
+            self.consume_header_block(header_end);
+            return Err(FramingError::FrameTooLarge { len: length });
+        }
+
+        let body_start = header_end + HEADER_END.len();
+        let Some(body_end) = body_start.checked_add(length) else {
+            self.consume_header_block(header_end);
+            return Err(FramingError::InvalidContentLength);
+        };
+
+        if self.buf.len() < body_end {
+            return Ok(None);
+        }
+
+        let body = self.buf[body_start..body_end].to_vec();
+        self.buf.drain(..body_end);
+        self.resync_if_needed();
+        Ok(Some(body))
+    }
+
+    fn consume_header_block(&mut self, header_end: usize) {
+        let drain_to = (header_end + HEADER_END.len()).min(self.buf.len());
+        self.buf.drain(..drain_to);
+        self.resync_if_needed();
+    }
+
+    fn resync_if_needed(&mut self) {
+        match find_header_start(&self.buf) {
+            Some(0) => {}
+            Some(prefix_len) => {
+                self.buf.drain(..prefix_len);
+            }
+            None => {
+                if self.buf.len() > MAX_DESYNC_BUFFER_BYTES {
+                    let keep = RESYNC_TAIL_BYTES.min(self.buf.len());
+                    self.buf.drain(..self.buf.len() - keep);
+                }
+            }
+        }
+    }
+}
+
+/// Build a full `Content-Length` framed message from a payload body.
+#[must_use]
+pub fn frame(body: &[u8]) -> Vec<u8> {
+    let mut out = Vec::with_capacity(HEADER_SENTINEL.len() + 32 + HEADER_END.len() + body.len());
+    out.extend_from_slice(b"Content-Length: ");
+    out.extend_from_slice(body.len().to_string().as_bytes());
+    out.extend_from_slice(HEADER_END);
+    out.extend_from_slice(body);
+    out
+}
+
+enum ContentLengthParse {
+    Found(usize),
+    Missing,
+    Invalid,
+    MalformedHeader,
+}
+
+fn parse_content_length(header: &str) -> ContentLengthParse {
+    let mut found = None;
+    for line in header.split("\r\n") {
+        if line.is_empty() {
+            continue;
+        }
+
+        let Some((name, value)) = line.split_once(':') else {
+            return ContentLengthParse::MalformedHeader;
+        };
+
+        if name.trim().eq_ignore_ascii_case("Content-Length") {
+            match value.trim().parse::<usize>() {
+                Ok(length) => found = Some(length),
+                Err(_) => return ContentLengthParse::Invalid,
+            }
+        }
+    }
+
+    found.map_or(ContentLengthParse::Missing, ContentLengthParse::Found)
+}
+
+fn find_header_start(hay: &[u8]) -> Option<usize> {
+    hay.windows(HEADER_SENTINEL.len())
+        .position(|window| window.eq_ignore_ascii_case(HEADER_SENTINEL))
+}
+
+fn find_subslice(hay: &[u8], needle: &[u8]) -> Option<usize> {
+    if needle.is_empty() {
+        return Some(0);
+    }
+    hay.windows(needle.len()).position(|window| window == needle)
+}
+
+// ── LSP message reader/writer ─────────────────────────────────────────────────
 
 const LOG_PREVIEW_MAX_BYTES: usize = 160;
 

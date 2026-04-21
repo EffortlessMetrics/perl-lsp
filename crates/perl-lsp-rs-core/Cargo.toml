@@ -52,6 +52,7 @@ perl-symbol.workspace = true
 perl-parser.workspace = true
 rustc-hash = "2.1.2"
 thiserror.workspace = true
+toml = "1.1.2"
 ureq = { version = "3", features = ["json"] }
 # Wave G3 step 5: perl-lsp-performance absorbed
 moka = { version = "0.12", features = ["sync"] }
@@ -59,15 +60,15 @@ moka = { version = "0.12", features = ["sync"] }
 # Wave G2 runtime crate dependencies (6 runtime crates absorbed)
 anyhow.workspace = true
 clap = { workspace = true }
-# NOTE(G3): perl-content-length-framing kept published (shared with perl-dap);
-# added as direct dep of rs-core now that transport is absorbed (Wave G3 step 4).
-perl-content-length-framing.workspace = true
+# Wave Final PR B: perl-content-length-framing absorbed inline into transport::framing; dep removed
 tracing.workspace = true
 tracing-appender = "0.2"
 tracing-subscriber = { version = "0.3.22", features = ["env-filter"] }
 
 [build-dependencies]
-perl-feature-catalog.workspace = true
+# Wave Final PR B: feature-catalog absorbed into feature_catalog.rs; build.rs uses inline catalog code
+serde = { workspace = true, features = ["derive"] }
+toml = "1.1.2"
 
 [features]
 lsp-ga-lock = []

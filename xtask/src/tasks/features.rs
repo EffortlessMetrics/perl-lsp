@@ -1,5 +1,5 @@
 use color_eyre::eyre::{Context, Result, bail, eyre};
-use perl_feature_catalog::{Catalog, Maturity};
+use perl_lsp_rs_core::feature_catalog::{Catalog, Maturity};
 use perl_lsp_rs_core::governance::{FeatureProfile, catalog_advertised_feature_ids};
 use std::collections::{BTreeMap, BTreeSet};
 use std::env;
@@ -25,7 +25,7 @@ pub fn invariants() -> Result<()> {
 
 fn load_features() -> Result<Catalog> {
     let manifest_dir = env::current_dir().context("Failed to get current working directory")?;
-    let (catalog, _) = perl_feature_catalog::load_catalog_for_build(&manifest_dir)
+    let (catalog, _) = perl_lsp_rs_core::feature_catalog::load_catalog_for_build(&manifest_dir)
         .context("Failed to load features catalog from features.toml")?;
     Ok(catalog)
 }
@@ -132,7 +132,7 @@ fn sync_docs_impl() -> Result<()> {
 
 fn update_roadmap(
     catalog: &Catalog,
-    area_stats: &BTreeMap<String, perl_feature_catalog::AreaStats>,
+    area_stats: &BTreeMap<String, perl_lsp_rs_core::feature_catalog::AreaStats>,
 ) -> Result<()> {
     let roadmap_path = Path::new("ROADMAP.md");
     let mut content = fs::read_to_string(roadmap_path)?;
@@ -192,7 +192,8 @@ fn update_lsp_status(catalog: &Catalog) -> Result<()> {
         }
     }
 
-    let mut by_area: BTreeMap<String, Vec<&perl_feature_catalog::Feature>> = BTreeMap::new();
+    let mut by_area: BTreeMap<String, Vec<&perl_lsp_rs_core::feature_catalog::Feature>> =
+        BTreeMap::new();
     for feature in catalog.features() {
         by_area.entry(feature.area.clone()).or_default().push(feature);
     }

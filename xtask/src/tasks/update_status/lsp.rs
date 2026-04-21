@@ -25,7 +25,7 @@ pub(super) struct LspCoverage {
 
 pub(super) fn count_lsp_coverage(root: &Path) -> Result<LspCoverage> {
     let features_path = root.join("features.toml");
-    let catalog = perl_feature_catalog::read_catalog(&features_path)
+    let catalog = perl_lsp_rs_core::feature_catalog::read_catalog(&features_path)
         .with_context(|| format!("loading {}", features_path.display()))?;
 
     // UX Coverage: advertised=true, counts_in_coverage!=false, maturity!=planned
@@ -33,7 +33,7 @@ pub(super) fn count_lsp_coverage(root: &Path) -> Result<LspCoverage> {
         .feature
         .iter()
         .filter(|f| {
-            f.maturity != perl_feature_catalog::Maturity::Planned
+            f.maturity != perl_lsp_rs_core::feature_catalog::Maturity::Planned
                 && f.counts_in_coverage
                 && f.advertised
         })
@@ -44,7 +44,8 @@ pub(super) fn count_lsp_coverage(root: &Path) -> Result<LspCoverage> {
         .filter(|f| {
             matches!(
                 f.maturity,
-                perl_feature_catalog::Maturity::Ga | perl_feature_catalog::Maturity::Production
+                perl_lsp_rs_core::feature_catalog::Maturity::Ga
+                    | perl_lsp_rs_core::feature_catalog::Maturity::Production
             )
         })
         .collect();
@@ -59,7 +60,7 @@ pub(super) fn count_lsp_coverage(root: &Path) -> Result<LspCoverage> {
     let protocol_trackable: Vec<_> = catalog
         .feature
         .iter()
-        .filter(|f| f.maturity != perl_feature_catalog::Maturity::Planned)
+        .filter(|f| f.maturity != perl_lsp_rs_core::feature_catalog::Maturity::Planned)
         .collect();
 
     let protocol_implemented: Vec<_> = protocol_trackable
@@ -67,9 +68,9 @@ pub(super) fn count_lsp_coverage(root: &Path) -> Result<LspCoverage> {
         .filter(|f| {
             matches!(
                 f.maturity,
-                perl_feature_catalog::Maturity::Ga
-                    | perl_feature_catalog::Maturity::Production
-                    | perl_feature_catalog::Maturity::Preview
+                perl_lsp_rs_core::feature_catalog::Maturity::Ga
+                    | perl_lsp_rs_core::feature_catalog::Maturity::Production
+                    | perl_lsp_rs_core::feature_catalog::Maturity::Preview
             )
         })
         .collect();
@@ -97,7 +98,7 @@ pub(super) fn count_lsp_coverage(root: &Path) -> Result<LspCoverage> {
 
 pub(super) fn compute_compliance_table(root: &Path) -> Result<String> {
     let features_path = root.join("features.toml");
-    let catalog = perl_feature_catalog::read_catalog(&features_path)
+    let catalog = perl_lsp_rs_core::feature_catalog::read_catalog(&features_path)
         .with_context(|| format!("loading {}", features_path.display()))?;
 
     let mut by_area: BTreeMap<String, (usize, usize)> = BTreeMap::new(); // (implemented, total)
@@ -107,9 +108,9 @@ pub(super) fn compute_compliance_table(root: &Path) -> Result<String> {
         entry.1 += 1;
         if matches!(
             f.maturity,
-            perl_feature_catalog::Maturity::Ga
-                | perl_feature_catalog::Maturity::Production
-                | perl_feature_catalog::Maturity::Preview
+            perl_lsp_rs_core::feature_catalog::Maturity::Ga
+                | perl_lsp_rs_core::feature_catalog::Maturity::Production
+                | perl_lsp_rs_core::feature_catalog::Maturity::Preview
         ) {
             entry.0 += 1;
         }

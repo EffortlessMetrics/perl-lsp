@@ -57,7 +57,7 @@ thiserror.workspace = true
 ropey = "1.6.1"
 
 perl-module = { workspace = true }
-perl-content-length-framing = { workspace = true }
+# Wave Final PR B: perl-content-length-framing absorbed into perl-lsp-rs-core::transport::framing
 perl-lexer = { workspace = true }
 perl-lsp-rs-core = { workspace = true }
 
@@ -77,7 +77,9 @@ tempfile.workspace = true
 perl-tdd-support = { workspace = true }
 
 [build-dependencies]
-perl-feature-catalog = { workspace = true }
+# Wave Final PR B: perl-feature-catalog absorbed; build.rs uses inline catalog via include!()
+serde = { workspace = true, features = ["derive"] }
+toml = "1.1.2"
 
 [target.'cfg(unix)'.dependencies]
 nix = { version = "0.31.1", features = ["signal"] }  # For SIGINT handling (AC9)

@@ -1,7 +1,7 @@
 mod common;
 
 use common::{read_response_matching_i64, start_lsp_server};
-use perl_content_length_framing::frame;
+use perl_lsp_rs_core::transport::framing::frame;
 use serde_json::json;
 use std::io::Write;
 use std::time::Duration;

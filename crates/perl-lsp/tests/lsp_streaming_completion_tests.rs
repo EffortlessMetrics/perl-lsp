@@ -494,8 +494,8 @@ fn streaming_completion_progress_schema_validation() -> TestResult {
 #[cfg(feature = "expose_lsp_test_api")]
 mod mock_streaming_completion_tests {
     use parking_lot::Mutex;
-    use perl_content_length_framing::ContentLengthFramer;
     use perl_lsp::{JsonRpcRequest, LspServer};
+    use perl_lsp_rs_core::transport::framing::ContentLengthFramer;
     use serde_json::{Value, json};
     use std::io::Write;
     use std::sync::Arc;

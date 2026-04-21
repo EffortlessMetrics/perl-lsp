@@ -7,8 +7,8 @@
 #![allow(dead_code)]
 
 use parking_lot::{Condvar, Mutex};
-use perl_content_length_framing::ContentLengthFramer;
 use perl_lsp::LspServer;
+use perl_lsp_rs_core::transport::framing::ContentLengthFramer;
 use serde_json::Value;
 use std::collections::VecDeque;
 use std::io::Write;

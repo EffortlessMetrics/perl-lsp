@@ -724,7 +724,7 @@ impl LspServer {
     fn try_ai_inline_completion(
         &self,
         context: &perl_lsp_rs_core::providers::inline_completion::PreparedInlineCompletionContext,
-        ai_config: &perl_lsp_config::AiCompletionConfig,
+        ai_config: &perl_lsp_rs_core::config::AiCompletionConfig,
     ) -> Result<
         Vec<perl_lsp_rs_core::providers::inline_completion::InlineCompletionItem>,
         perl_lsp_rs_core::providers::inline_completion::BackendError,

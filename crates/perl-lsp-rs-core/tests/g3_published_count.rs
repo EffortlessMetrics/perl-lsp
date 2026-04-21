@@ -1,9 +1,10 @@
-//! Integration test: Verify published crate count is 34 after Wave 4-Completion absorption.
+//! Integration test: Verify published crate count is 31 after Wave Final PR B absorption.
 //!
 //! Wave G3 absorbs 7 crates: governance, protocol, uri, transport, performance,
 //! critic-parser, tooling. Reduces published count from 44 → 37.
 //! Config and content-length-framing remain published per D3/D4.
 //! Wave 4-Completion absorbs 3 parser satellites: dead-code, refactoring, incremental-parsing. 37 → 34.
+//! Wave Final PR B absorbs 3 remaining infra crates: feature-catalog, lsp-config, content-length-framing. 34 → 31.
 
 use std::fs;
 use std::path::PathBuf;
@@ -14,7 +15,7 @@ fn workspace_root() -> PathBuf {
 }
 
 #[test]
-fn g3_published_count_is_34() -> Result<(), Box<dyn std::error::Error>> {
+fn g3_published_count_is_31() -> Result<(), Box<dyn std::error::Error>> {
     let root = workspace_root();
 
     // Read xtask/published-crate-baseline.txt
@@ -27,7 +28,7 @@ fn g3_published_count_is_34() -> Result<(), Box<dyn std::error::Error>> {
     let content = fs::read_to_string(&baseline_path)?;
     let count: u32 = content.trim().parse().map_err(|_| "failed to parse baseline count as u32")?;
 
-    assert_eq!(count, 34, "published crate count should be 34 after Wave 4-Completion");
+    assert_eq!(count, 31, "published crate count should be 31 after Wave Final PR B");
 
     Ok(())
 }
@@ -47,6 +48,10 @@ fn g3_absorbed_crates_directories_deleted() -> Result<(), Box<dyn std::error::Er
         "crates/perl-lsp-performance",
         "crates/perl-lsp-critic-parser",
         "crates/perl-lsp-tooling",
+        // Wave Final PR B absorptions
+        "crates/perl-feature-catalog",
+        "crates/perl-lsp-config",
+        "crates/perl-content-length-framing",
     ];
 
     for crate_dir in absorbed {

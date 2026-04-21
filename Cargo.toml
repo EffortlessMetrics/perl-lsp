@@ -58,13 +58,13 @@ members = [
     # (perl-lsp-input-validation absorbed into perl-lsp-rs-core::runtime::input_validation — Wave G2)
     # (perl-lsp-limits absorbed into perl-lsp-rs-core::runtime::limits — Wave G2)
     # (perl-lsp-uri absorbed into perl-lsp-rs-core::uri — Wave G3 step 3)
-    "crates/perl-lsp-config",
+    # (perl-lsp-config absorbed into perl-lsp-rs-core::config — Wave Final PR B)
     "crates/perl-diagnostics",
     "crates/perl-position-tracking",
     "crates/perl-symbol",
     "crates/perl-module",
     "crates/perl-line-index",
-    "crates/perl-content-length-framing",
+    # (perl-content-length-framing absorbed into perl-lsp-rs-core::transport::framing — Wave Final PR B)
     "crates/perl-uri",
     "crates/perl-pod",
     "crates/perl-corpus",
@@ -73,7 +73,7 @@ members = [
     "crates/perllsp",
     "crates/perl-dap",
     "crates/perl-dead-code",
-    "crates/perl-feature-catalog",
+    # (perl-feature-catalog absorbed into perl-lsp-rs-core::feature_catalog — Wave Final PR B)
     "crates/tree-sitter-perl-c",
     "crates/tree-sitter-perl-rs",
     "crates/perl-ci-hygiene",
@@ -94,7 +94,7 @@ allow = [
     # Tier 1 — Leaf crates (no workspace deps)
     "perl-position-tracking",
     "perl-token",
-    "perl-content-length-framing",
+    # (perl-content-length-framing absorbed into perl-lsp-rs-core::transport::framing — Wave Final PR B)
     # (perl-percentile absorbed into perl-parser — Wave D)
     "perl-subprocess-runtime",
     # (perl-lsp-protocol absorbed into perl-lsp-rs-core::protocol — Wave G3 step 2)
@@ -174,7 +174,7 @@ allow = [
 
     # Tier 5 — DAP components (Wave H: satellites collapsed into perl-dap)
     # (perl-path-security absorbed into perl-parser-core — Wave D)
-    "perl-feature-catalog",
+    # (perl-feature-catalog absorbed into perl-lsp-rs-core::feature_catalog — Wave Final PR B)
     "perl-dap",
 
     # Tier 5 — LSP governance and infrastructure
@@ -186,7 +186,7 @@ allow = [
     # (perl-lsp-launcher absorbed into perl-lsp-rs-core::runtime::launcher — Wave G2)
     # (perl-lsp-limits absorbed into perl-lsp-rs-core::runtime::limits — Wave G2)
     # (perl-lsp-uri absorbed into perl-lsp-rs-core::uri — Wave G3 step 3)
-    "perl-lsp-config",
+    # (perl-lsp-config absorbed into perl-lsp-rs-core::config — Wave Final PR B)
     # (perl-lsp-transport absorbed into perl-lsp-rs-core::transport — Wave G3 step 4)
 
     # Tier 6 — Module resolution higher tiers
@@ -228,7 +228,7 @@ perl-module = { path = 'crates/perl-module', version = "0.12.4" }
 perl-line-index = { path = "crates/perl-line-index", version = "0.12.4" }
 # Wave D absorbed: perl-source-file → perl-parser::source_file
 # Wave D absorbed: perl-text-line → perl-parser-core::text_line
-perl-content-length-framing = { path = "crates/perl-content-length-framing", version = "0.12.4" }
+# (perl-content-length-framing absorbed into perl-lsp-rs-core::transport::framing — Wave Final PR B)
 perl-subprocess-runtime = { path = "crates/perl-subprocess-runtime", version = "0.12.4" }
 # (perl-lsp-document-highlight absorbed into perl-lsp-rs-core::providers — Wave G1a)
 # (perl-lsp-document-links absorbed into perl-lsp-rs-core::providers — Wave G1a)
@@ -249,7 +249,7 @@ perl-pod = { path = "crates/perl-pod", version = "0.12.4" }
 perl-corpus = { path = "crates/perl-corpus", version = "0.12.4" }
 perl-dap = { path = "crates/perl-dap", version = "0.12.4" }
 perl-dead-code = { path = "crates/perl-dead-code", version = "0.12.4" }
-perl-feature-catalog = { path = "crates/perl-feature-catalog", version = "0.12.4" }
+# (perl-feature-catalog absorbed into perl-lsp-rs-core::feature_catalog — Wave Final PR B)
 # Tier 2: Single-level dependencies
 perl-parser-core = { path = "crates/perl-parser-core", version = "0.12.4" }
 # (perl-lsp-transport absorbed into perl-lsp-rs-core::transport — Wave G3 step 4)
@@ -268,7 +268,7 @@ perl-test-must = { path = "crates/perl-test-must", version = "0.12.4" }
 # (perl-lsp-cancellation absorbed into perl-lsp-rs-core::runtime::cancellation — Wave G2)
 # (perl-lsp-limits absorbed into perl-lsp-rs-core::runtime::limits — Wave G2)
 # (perl-lsp-uri absorbed into perl-lsp-rs-core::uri — Wave G3 step 3)
-perl-lsp-config = { path = "crates/perl-lsp-config", version = "0.12.4" }
+# (perl-lsp-config absorbed into perl-lsp-rs-core::config — Wave Final PR B)
 # (perl-lsp-feature-governance absorbed into perl-lsp-rs-core::governance — Wave G3 step 1)
 # (perl-lsp-launcher absorbed into perl-lsp-rs-core::runtime::launcher — Wave G2)
 # (perl-lsp-navigation absorbed into perl-lsp-rs-core::providers::navigation — Wave G1b)

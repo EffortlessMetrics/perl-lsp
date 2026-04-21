@@ -9,8 +9,8 @@
 //! - Error recovery and timeout handling
 //! - Cross-platform compatibility
 
-use perl_content_length_framing::frame;
 use perl_dap::tcp_attach::{DapEvent, TcpAttachConfig, TcpAttachSession};
+use perl_lsp_rs_core::transport::framing::frame;
 use perl_tdd_support::must;
 use std::io::Write;
 use std::net::TcpListener;

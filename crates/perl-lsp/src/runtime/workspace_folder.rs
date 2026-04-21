@@ -9,7 +9,7 @@
 
 use std::path::PathBuf;
 
-use perl_lsp_config::{ProjectConfig, WorkspaceConfig};
+use perl_lsp_rs_core::config::{ProjectConfig, WorkspaceConfig};
 
 /// State for a single workspace folder.
 ///
