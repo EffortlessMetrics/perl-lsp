@@ -86,7 +86,7 @@ fn test_providers_formatting_module_exists() -> Result<(), Box<dyn std::error::E
     use perl_lsp_rs_core::providers::formatting;
     // Verify the type is reachable with a concrete runtime type.
     let _provider =
-        formatting::FormattingProvider::new(perl_lsp_tooling::OsSubprocessRuntime::new());
+        formatting::FormattingProvider::new(perl_subprocess_runtime::OsSubprocessRuntime::new());
     Ok(())
 }
 

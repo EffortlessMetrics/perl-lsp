@@ -41,8 +41,8 @@ pub use crate::protocol::{JsonRpcError, JsonRpcRequest, JsonRpcResponse};
 // Re-export window types for public API
 pub use window::{MessageType, ShowDocumentOptions};
 
-use perl_lsp_tooling::performance::{AstCache, SymbolIndex};
-use perl_lsp_tooling::perl_critic::BuiltInAnalyzer;
+use perl_lsp_rs_core::tooling::performance::{AstCache, SymbolIndex};
+use perl_lsp_rs_core::tooling::perl_critic::BuiltInAnalyzer;
 use perl_parser::{
     Parser,
     ast::{Node, NodeKind},
@@ -54,7 +54,8 @@ use perl_parser::{
 
 use crate::call_hierarchy_provider::CallHierarchyProvider;
 use crate::cancellation::{GLOBAL_CANCELLATION_REGISTRY, PerlLspCancellationToken};
-use perl_lsp_feature_governance::FeatureProfile;
+// Wave G3 (#4535): perl-lsp-feature-governance absorbed into perl-lsp-rs-core::governance
+use perl_lsp_rs_core::governance::FeatureProfile;
 
 // Import LSP providers from features (these moved from perl-parser to perl-lsp)
 use crate::features::{
@@ -424,8 +425,8 @@ impl LspServer {
     ///
     /// Returns a new `OsSubprocessRuntime` for executing external processes.
     /// This is used by formatting and linting providers.
-    pub fn subprocess_runtime(&self) -> perl_lsp_tooling::OsSubprocessRuntime {
-        perl_lsp_tooling::OsSubprocessRuntime::new()
+    pub fn subprocess_runtime(&self) -> perl_lsp_rs_core::tooling::OsSubprocessRuntime {
+        perl_lsp_rs_core::tooling::OsSubprocessRuntime::new()
     }
 
     /// Cancel any in-progress parse for `uri` and return a fresh token.

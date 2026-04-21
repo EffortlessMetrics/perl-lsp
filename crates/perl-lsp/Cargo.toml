@@ -35,14 +35,13 @@ perl-incremental-parsing = { workspace = true, optional = true }
 perl-parser = { workspace = true, features = ["test-performance"] }
 # (perl-lsp-providers absorbed into perl-lsp-rs-core::providers::lsp_compat — Wave G1b)
 # (perl-lsp-formatting absorbed into perl-lsp-rs-core::providers::formatting — Wave G1b)
-perl-lsp-uri = { workspace = true }
-perl-lsp-feature-governance = { workspace = true }
-perl-lsp-tooling = { workspace = true }
+# perl-lsp-uri absorbed into perl-lsp-rs-core::uri (Wave G3 step 3)
+# perl-lsp-feature-governance absorbed into perl-lsp-rs-core::governance (Wave G3 step 1)
+# perl-lsp-tooling absorbed into perl-lsp-rs-core::tooling (Wave G3 step 6)
 perl-subprocess-runtime = { workspace = true }
 perl-lsp-config = { workspace = true }
-perl-lsp-protocol = { workspace = true }
-perl-lsp-transport = { workspace = true }
-# NOTE(G2-defer): perl-lsp-transport dep kept here; deferred to G3 for full absorption.
+# perl-lsp-protocol absorbed into perl-lsp-rs-core::protocol (Wave G3 step 2)
+# perl-lsp-transport absorbed into perl-lsp-rs-core::transport (Wave G3 step 4)
 # (perl-lsp-code-actions absorbed into perl-lsp-rs-core::providers::code_actions — Wave G1b)
 # (perl-lsp-inline-completion absorbed into perl-lsp-rs-core::providers::inline_completion — Wave G1b)
 # (perl-lsp-ai-provider absorbed into perl-lsp-rs-core::providers::ai — Wave G1b)
@@ -53,9 +52,9 @@ perl-diagnostics = { workspace = true }
 # (perl-lsp-rename absorbed into perl-lsp-rs-core::providers::rename — Wave G1b)
 # (perl-lsp-semantic-tokens absorbed into perl-lsp-rs-core::providers::semantic_tokens — Wave G1b)
 # Provider crates absorbed into perl-lsp-rs-core (Wave G1a)
-perl-lsp-critic-parser = { workspace = true }
+# perl-lsp-critic-parser absorbed into perl-lsp-rs-core::critic_parser (Wave G3 step 7)
 perl-lsp-rs-core = { workspace = true, features = ["lsp-compat"] }
-perl-lsp-performance = { workspace = true }
+# perl-lsp-performance absorbed into perl-lsp-rs-core::performance (Wave G3 step 5)
 perl-lsp-perltidy = { workspace = true }
 perl-position-tracking = { workspace = true, features = ["lsp-compat"] }
 perl-symbol = { workspace = true }
@@ -97,8 +96,8 @@ incremental = ["perl-parser/incremental", "perl-incremental-parsing"]  # Increme
 test-performance = []  # Performance optimizations for test environments
 # When enabled, advertise *only* the conservative GA set (for emergency point releases).
 lsp-ga-lock = [
-  "perl-lsp-protocol/lsp-ga-lock",
-  "perl-lsp-feature-governance/lsp-ga-lock",
+  # perl-lsp-protocol/lsp-ga-lock removed — absorbed into perl-lsp-rs-core::protocol (Wave G3 step 2)
+  # perl-lsp-feature-governance/lsp-ga-lock removed — absorbed into perl-lsp-rs-core::governance (Wave G3 step 1)
   "perl-lsp-rs-core/lsp-ga-lock",
 ]
 experimental-features = []  # Experimental LSP features for testing

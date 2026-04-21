@@ -1,0 +1,45 @@
+//! Integration test: `perl-lsp-critic-parser` public API reachable via `perl_lsp_rs_core::critic_parser`.
+
+use perl_lsp_rs_core::critic_parser::*;
+
+#[test]
+fn critic_parser_module_exposes_parsed_critic_line_struct() {
+    // Verify that ParsedCriticLine is accessible post-absorption
+    let _: Option<ParsedCriticLine> = None;
+}
+
+#[test]
+fn critic_parser_module_exposes_parse_perlcritic_output() {
+    // Verify that parse_perlcritic_output is accessible post-absorption
+    let output = "lib/Foo.pm:10:5:2:ProhibitComplexMappings:Mapping blocks are not complex enough";
+    let lines = parse_perlcritic_output(output);
+    assert!(!lines.is_empty(), "parse_perlcritic_output should parse valid lines");
+}
+
+#[test]
+fn critic_parser_module_exposes_parse_perlcritic_line() {
+    // Verify that parse_perlcritic_line is accessible post-absorption
+    let line = "lib/Foo.pm:10:5:2:ProhibitComplexMappings:Mapping blocks are not complex enough";
+    let parsed = parse_perlcritic_line(line);
+    assert!(parsed.is_some(), "parse_perlcritic_line should parse valid lines");
+}
+
+#[test]
+fn critic_parser_parsed_critic_line_has_expected_fields() {
+    // Verify that ParsedCriticLine struct has all expected fields
+    let line = "lib/Foo.pm:10:5:2:ProhibitComplexMappings:Test message";
+    if let Some(parsed) = parse_perlcritic_line(line) {
+        assert!(!parsed.file.is_empty(), "file field should be present");
+        assert!(parsed.line > 0, "line field should be > 0");
+        assert!(parsed.column > 0, "column field should be > 0");
+        assert!(!parsed.policy.is_empty(), "policy field should be present");
+        assert!(!parsed.message.is_empty(), "message field should be present");
+    }
+}
+
+#[test]
+fn critic_parser_handles_empty_input() {
+    // Verify that parse_perlcritic_output gracefully handles empty input
+    let lines = parse_perlcritic_output("");
+    assert!(lines.is_empty(), "empty input should produce empty output");
+}

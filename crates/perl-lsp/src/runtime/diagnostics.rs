@@ -22,7 +22,7 @@ use perl_diagnostics::codes::DiagnosticCode;
 pub struct PullDiagnosticsOrchestrator {
     /// Cached CriticAnalyzer for external perlcritic
     #[cfg(not(target_arch = "wasm32"))]
-    critic_analyzer: Mutex<Option<perl_lsp_tooling::perl_critic::CriticAnalyzer>>,
+    critic_analyzer: Mutex<Option<perl_lsp_rs_core::tooling::perl_critic::CriticAnalyzer>>,
     /// Track warnings already emitted (deduplication)
     #[cfg(not(target_arch = "wasm32"))]
     warnings_sent: Mutex<std::collections::HashSet<String>>,
@@ -85,7 +85,7 @@ impl PullDiagnosticsOrchestrator {
         doc_text: &str,
         diagnostics: &mut Vec<InternalDiagnostic>,
     ) {
-        use perl_lsp_tooling::perl_critic::{CriticAnalyzer, CriticConfig};
+        use perl_lsp_rs_core::tooling::perl_critic::{CriticAnalyzer, CriticConfig};
 
         // Check config
         let (enabled, severity, profile) = {
@@ -191,17 +191,17 @@ impl PullDiagnosticsOrchestrator {
                 for v in violations {
                     // Map Perl::Critic severity to LSP severity
                     let internal_severity = match v.severity {
-                        perl_lsp_tooling::perl_critic::Severity::Gentle => {
+                        perl_lsp_rs_core::tooling::perl_critic::Severity::Gentle => {
                             InternalDiagnosticSeverity::Error
                         }
-                        perl_lsp_tooling::perl_critic::Severity::Stern
-                        | perl_lsp_tooling::perl_critic::Severity::Harsh => {
+                        perl_lsp_rs_core::tooling::perl_critic::Severity::Stern
+                        | perl_lsp_rs_core::tooling::perl_critic::Severity::Harsh => {
                             InternalDiagnosticSeverity::Warning
                         }
-                        perl_lsp_tooling::perl_critic::Severity::Cruel => {
+                        perl_lsp_rs_core::tooling::perl_critic::Severity::Cruel => {
                             InternalDiagnosticSeverity::Information
                         }
-                        perl_lsp_tooling::perl_critic::Severity::Brutal => {
+                        perl_lsp_rs_core::tooling::perl_critic::Severity::Brutal => {
                             InternalDiagnosticSeverity::Hint
                         }
                     };

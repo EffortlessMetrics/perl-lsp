@@ -1,21 +1,16 @@
-//! Green TDD: Verification that perl-lsp-transport is deferred to G3 (not absorbed in G2).
+//! Wave G2/G3 transport state verification.
 //!
-//! These tests codify the G2 scope exclusion: perl-lsp-transport remains
-//! a standalone crate and is NOT absorbed into perl-lsp-rs-core::runtime.
+//! At G2: transport was deferred (cycle block: protocol → rs-core, transport → protocol)
+//! At G3: transport IS absorbed into perl-lsp-rs-core::transport (cycle resolved by protocol absorption)
 //!
-//! Risk context: Transport absorption is blocked by a cycle:
-//! - perl-lsp-protocol depends on perl-lsp-rs-core
-//! - perl-lsp-transport depends on perl-lsp-protocol
-//! - If transport were absorbed into rs-core, rs-core would indirectly
-//!   depend on itself (cycle)
+//! This file documents the G2 → G3 transition and updates tests accordingly:
+//! - G2 tests verified transport remained standalone
+//! - G3 tests verify transport is now ABSORBED and DELETED from workspace
 //!
-//! These tests protect against accidental absorption in future waves
-//! before the cycle is properly resolved.
-//!
-//! All tests are green at HEAD (post-G2).
+//! NOTE: These tests were written for G2 (post-collapse, pre-G3 absorption).
+//! They have been updated to reflect G3 absorption per acceptance criteria.
 
-use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 fn repo_root() -> PathBuf {
     // Tests run from the workspace root
@@ -27,115 +22,127 @@ fn repo_root() -> PathBuf {
         .unwrap_or_else(|| PathBuf::from("."))
 }
 
-/// Test that the transport crate directory still exists (not deleted).
-/// Negative test: ensures transport wasn't absorbed in G2.
+/// Test that the transport crate directory is DELETED (absorbed in G3).
+/// Updated for G3: transport is now fully absorbed into perl-lsp-rs-core::transport
+/// and the standalone crate directory has been removed.
 #[test]
 fn test_transport_crate_directory_exists() -> Result<(), Box<dyn std::error::Error>> {
     let transport_path = repo_root().join("crates/perl-lsp-transport");
     assert!(
-        transport_path.exists(),
-        "perl-lsp-transport directory should still exist (deferred to G3)"
+        !transport_path.exists(),
+        "perl-lsp-transport directory should be DELETED (absorbed into rs-core in G3)"
     );
-    assert!(transport_path.is_dir(), "perl-lsp-transport should be a directory");
     Ok(())
 }
 
-/// Test that transport Cargo.toml still exists (standalone crate).
+/// Test that transport Cargo.toml is DELETED (absorbed in G3).
+/// Updated for G3: transport no longer exists as standalone published crate.
 #[test]
 fn test_transport_cargo_toml_exists() -> Result<(), Box<dyn std::error::Error>> {
     let cargo_toml = repo_root().join("crates/perl-lsp-transport/Cargo.toml");
-    assert!(cargo_toml.exists(), "perl-lsp-transport/Cargo.toml should still exist");
+    assert!(
+        !cargo_toml.exists(),
+        "perl-lsp-transport/Cargo.toml should be DELETED (crate absorbed in G3)"
+    );
     Ok(())
 }
 
-/// Test that transport src/lib.rs exists (not deleted).
+/// Test that transport src/lib.rs is DELETED (absorbed in G3).
+/// Updated for G3: transport source is now part of perl-lsp-rs-core.
 #[test]
 fn test_transport_lib_rs_exists() -> Result<(), Box<dyn std::error::Error>> {
     let lib_rs = repo_root().join("crates/perl-lsp-transport/src/lib.rs");
-    assert!(lib_rs.exists(), "perl-lsp-transport/src/lib.rs should still exist");
-    Ok(())
-}
-
-/// Test that the runtime module does NOT expose a transport submodule.
-/// This is the key negative assertion: transport is not absorbed.
-#[test]
-fn test_runtime_transport_not_absorbed() -> Result<(), Box<dyn std::error::Error>> {
-    // Try to access a hypothetical transport module in runtime.
-    // If this code were to compile, it would mean transport WAS absorbed —
-    // which would be a scope violation.
-    //
-    // We can't directly test this as a compile-time assertion from a runtime test,
-    // so we document the expectation: `use perl_lsp_rs_core::runtime::transport;`
-    // should NOT compile. To verify, we'd need a compile_fail test or a separate
-    // check. For now, we document this as a known fact from the spec.
-    //
-    // This test always passes but its presence documents the negative requirement.
-    Ok(())
-}
-
-/// Test that transport is still available as a separate published crate.
-/// Verifies the crate is present in workspace metadata.
-#[test]
-fn test_transport_in_workspace_metadata() -> Result<(), Box<dyn std::error::Error>> {
-    // Check that perl-lsp-transport is still listed in Cargo.toml workspace members
-    let workspace_toml = std::fs::read_to_string(repo_root().join("Cargo.toml"))?;
     assert!(
-        workspace_toml.contains("perl-lsp-transport"),
-        "perl-lsp-transport should be listed in workspace members"
+        !lib_rs.exists(),
+        "perl-lsp-transport/src/lib.rs should be DELETED (source absorbed into rs-core in G3)"
     );
     Ok(())
 }
 
-/// Test that transport tests/ directory still exists.
-/// Ensures transport's integration tests are preserved.
+/// Test that transport is NOW ABSORBED into perl-lsp-rs-core::transport (G3).
+/// Updated for G3: transport module is accessible from rs-core, not runtime.
+#[test]
+fn test_runtime_transport_not_absorbed() -> Result<(), Box<dyn std::error::Error>> {
+    // Regression guard: transport should be accessible from rs-core::transport.
+    // If this test compiles, it verifies the module is properly re-exported.
+    use perl_lsp_rs_core::transport as _transport;
+    Ok(())
+}
+
+/// Test that transport is REMOVED from workspace members (absorbed).
+/// Updated for G3: standalone transport crate no longer exists.
+#[test]
+fn test_transport_in_workspace_metadata() -> Result<(), Box<dyn std::error::Error>> {
+    let workspace_toml = std::fs::read_to_string(repo_root().join("Cargo.toml"))?;
+
+    // Filter out comments to check for actual workspace members
+    let lines_without_comments: Vec<&str> = workspace_toml
+        .lines()
+        .map(|line| if let Some(hash) = line.find('#') { &line[..hash] } else { line })
+        .collect();
+    let filtered = lines_without_comments.join("\n");
+
+    assert!(
+        !filtered.contains("perl-lsp-transport"),
+        "perl-lsp-transport should NOT be listed in workspace members (absorbed in G3)"
+    );
+    Ok(())
+}
+
+/// Test that transport tests/ directory is DELETED (absorbed in G3).
+/// Updated for G3: transport tests are now part of rs-core test suite.
 #[test]
 fn test_transport_tests_directory_exists() -> Result<(), Box<dyn std::error::Error>> {
     let tests_path = repo_root().join("crates/perl-lsp-transport/tests");
-    assert!(tests_path.exists(), "perl-lsp-transport/tests directory should exist");
-    Ok(())
-}
-
-/// Test that transport README still exists (documentation preserved).
-#[test]
-fn test_transport_readme_exists() -> Result<(), Box<dyn std::error::Error>> {
-    let readme = repo_root().join("crates/perl-lsp-transport/README.md");
-    assert!(readme.exists(), "perl-lsp-transport/README.md should still exist");
-    Ok(())
-}
-
-/// Test that transport src/framing.rs exists (key module preserved).
-/// Framing is the core of transport functionality.
-#[test]
-fn test_transport_framing_module_exists() -> Result<(), Box<dyn std::error::Error>> {
-    let framing = repo_root().join("crates/perl-lsp-transport/src/framing.rs");
-    assert!(framing.exists(), "perl-lsp-transport/src/framing.rs should still exist");
-    Ok(())
-}
-
-/// Test that transport is published (not excluded from publishing).
-/// Verifies the crate hasn't been silently abandoned.
-#[test]
-fn test_transport_is_published() -> Result<(), Box<dyn std::error::Error>> {
-    let cargo_toml =
-        std::fs::read_to_string(repo_root().join("crates/perl-lsp-transport/Cargo.toml"))?;
-    // If publish is not explicitly false, it's published
     assert!(
-        !cargo_toml.contains("publish = false"),
-        "perl-lsp-transport should be published (not marked with publish = false)"
+        !tests_path.exists(),
+        "perl-lsp-transport/tests directory should be DELETED (tests absorbed in G3)"
     );
     Ok(())
 }
 
-/// Test that transport depends on perl-lsp-protocol (external dependency chain).
-/// Guards against accidental absorption by verifying the external dependency
-/// that creates the cycle is still there.
+/// Test that transport README is DELETED (absorbed in G3).
+/// Updated for G3: documentation is now part of rs-core.
+#[test]
+fn test_transport_readme_exists() -> Result<(), Box<dyn std::error::Error>> {
+    let readme = repo_root().join("crates/perl-lsp-transport/README.md");
+    assert!(!readme.exists(), "perl-lsp-transport/README.md should be DELETED (absorbed in G3)");
+    Ok(())
+}
+
+/// Test that transport src/framing.rs is DELETED (absorbed in G3).
+/// Updated for G3: framing module is now part of perl-lsp-rs-core::transport.
+#[test]
+fn test_transport_framing_module_exists() -> Result<(), Box<dyn std::error::Error>> {
+    let framing = repo_root().join("crates/perl-lsp-transport/src/framing.rs");
+    assert!(
+        !framing.exists(),
+        "perl-lsp-transport/src/framing.rs should be DELETED (absorbed into rs-core in G3)"
+    );
+    Ok(())
+}
+
+/// Test that transport crate NO LONGER EXISTS (absorbed in G3).
+/// Updated for G3: transport has been fully absorbed into perl-lsp-rs-core.
+#[test]
+fn test_transport_is_published() -> Result<(), Box<dyn std::error::Error>> {
+    let cargo_toml_path = repo_root().join("crates/perl-lsp-transport/Cargo.toml");
+    assert!(
+        !cargo_toml_path.exists(),
+        "perl-lsp-transport/Cargo.toml should NOT exist (crate absorbed in G3)"
+    );
+    Ok(())
+}
+
+/// Test that transport no longer has external protocol dependency (absorbed in G3).
+/// Updated for G3: transport is now part of rs-core, so the external dependency is gone.
 #[test]
 fn test_transport_depends_on_protocol() -> Result<(), Box<dyn std::error::Error>> {
-    let cargo_toml =
-        std::fs::read_to_string(repo_root().join("crates/perl-lsp-transport/Cargo.toml"))?;
+    // Regression guard: after G3 absorption, transport crate doesn't exist anymore
+    let cargo_toml_path = repo_root().join("crates/perl-lsp-transport/Cargo.toml");
     assert!(
-        cargo_toml.contains("perl-lsp-protocol"),
-        "perl-lsp-transport should depend on perl-lsp-protocol (cycle blocker)"
+        !cargo_toml_path.exists(),
+        "perl-lsp-transport should NOT exist as standalone crate (absorbed in G3)"
     );
     Ok(())
 }

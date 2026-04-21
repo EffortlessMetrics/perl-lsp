@@ -3,6 +3,13 @@
 #![deny(unsafe_code)]
 
 pub mod capability_map;
+pub mod critic_parser;
 pub mod features;
+pub mod governance;
+pub mod performance;
+pub mod protocol;
 pub mod providers;
 pub mod runtime;
+pub mod tooling;
+pub mod transport;
+pub mod uri;

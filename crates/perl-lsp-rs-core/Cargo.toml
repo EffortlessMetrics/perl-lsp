@@ -41,9 +41,10 @@ regex.workspace = true
 url.workspace = true
 
 # Wave G1b additional dependencies (10 medium-risk providers absorbed)
-perl-lsp-tooling.workspace = true
+# perl-lsp-tooling absorbed into perl-lsp-rs-core::tooling (Wave G3 step 7)
+perl-subprocess-runtime.workspace = true
 perl-lsp-perltidy.workspace = true
-perl-lsp-uri.workspace = true
+# perl-lsp-uri absorbed into perl-lsp-rs-core::uri (Wave G3 step 3)
 perl-diagnostics.workspace = true
 perl-workspace.workspace = true
 perl-pragma.workspace = true
@@ -52,15 +53,15 @@ perl-parser.workspace = true
 rustc-hash = "2.1.2"
 thiserror.workspace = true
 ureq = { version = "3", features = ["json"] }
+# Wave G3 step 5: perl-lsp-performance absorbed
+moka = { version = "0.12", features = ["sync"] }
 
 # Wave G2 runtime crate dependencies (6 runtime crates absorbed)
 anyhow.workspace = true
 clap = { workspace = true }
-# NOTE(G2-cycle-fix): perl-lsp-feature-governance and perl-lsp-protocol cannot be
-# deps of perl-lsp-rs-core because they both depend on perl-lsp-rs-core (cyclic).
-# - launcher module uses crate::features::* directly instead of perl-lsp-feature-governance
-# NOTE(G2-defer): perl-lsp-transport deferred to G3; perl-content-length-framing not needed
-# - transport is kept as separate crate (perl-lsp-transport) until G3 resolves the cycle
+# NOTE(G3): perl-content-length-framing kept published (shared with perl-dap);
+# added as direct dep of rs-core now that transport is absorbed (Wave G3 step 4).
+perl-content-length-framing.workspace = true
 tracing.workspace = true
 tracing-appender = "0.2"
 tracing-subscriber = { version = "0.3.22", features = ["env-filter"] }
@@ -76,7 +77,7 @@ lsp-compat = []
 perl-tdd-support.workspace = true
 serde_json.workspace = true
 perl-lsp-rs.workspace = true
-perl-lsp-tooling.workspace = true
+perl-subprocess-runtime.workspace = true
 tempfile.workspace = true
 insta = { version = "1.47.2", features = ["yaml"] }
 proptest.workspace = true

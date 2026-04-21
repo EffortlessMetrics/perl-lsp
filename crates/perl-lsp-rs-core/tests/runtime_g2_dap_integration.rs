@@ -41,7 +41,7 @@ fn test_dap_transport_mode_socket_dap_port() -> Result<(), Box<dyn std::error::E
         TransportMode::Socket { port } => {
             assert_eq!(port, 13603, "DAP port should be 13603");
         }
-        _ => panic!("Expected Socket variant"),
+        other => return Err(format!("Expected Socket variant, got {other:?}").into()),
     }
     Ok(())
 }
@@ -66,7 +66,7 @@ fn test_dap_launch_config_stdio() -> Result<(), Box<dyn std::error::Error>> {
 
     match config.transport {
         TransportMode::Stdio => {}
-        _ => panic!("Expected Stdio transport"),
+        other => return Err(format!("Expected Stdio transport, got {other:?}").into()),
     }
     Ok(())
 }
@@ -84,7 +84,7 @@ fn test_dap_launch_config_socket() -> Result<(), Box<dyn std::error::Error>> {
         TransportMode::Socket { port } => {
             assert_eq!(port, 13603);
         }
-        _ => panic!("Expected Socket transport"),
+        other => return Err(format!("Expected Socket transport, got {other:?}").into()),
     }
     Ok(())
 }

@@ -950,7 +950,7 @@ pub fn command_exists(command: &str) -> bool {
 
 /// Return the supported executeCommand identifiers.
 pub fn get_supported_commands() -> Vec<String> {
-    // Keep in sync with perl_lsp_protocol::capabilities::get_supported_commands
+    // Keep in sync with perl_lsp_rs_core::protocol::capabilities::get_supported_commands
     vec![
         "perl.runTests".to_string(),
         "perl.runFile".to_string(),
