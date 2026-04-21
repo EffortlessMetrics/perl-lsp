@@ -36,10 +36,7 @@ fn test_transport_crate_directory_exists() -> Result<(), Box<dyn std::error::Err
         transport_path.exists(),
         "perl-lsp-transport directory should still exist (deferred to G3)"
     );
-    assert!(
-        transport_path.is_dir(),
-        "perl-lsp-transport should be a directory"
-    );
+    assert!(transport_path.is_dir(), "perl-lsp-transport should be a directory");
     Ok(())
 }
 
@@ -47,10 +44,7 @@ fn test_transport_crate_directory_exists() -> Result<(), Box<dyn std::error::Err
 #[test]
 fn test_transport_cargo_toml_exists() -> Result<(), Box<dyn std::error::Error>> {
     let cargo_toml = repo_root().join("crates/perl-lsp-transport/Cargo.toml");
-    assert!(
-        cargo_toml.exists(),
-        "perl-lsp-transport/Cargo.toml should still exist"
-    );
+    assert!(cargo_toml.exists(), "perl-lsp-transport/Cargo.toml should still exist");
     Ok(())
 }
 
@@ -58,10 +52,7 @@ fn test_transport_cargo_toml_exists() -> Result<(), Box<dyn std::error::Error>> 
 #[test]
 fn test_transport_lib_rs_exists() -> Result<(), Box<dyn std::error::Error>> {
     let lib_rs = repo_root().join("crates/perl-lsp-transport/src/lib.rs");
-    assert!(
-        lib_rs.exists(),
-        "perl-lsp-transport/src/lib.rs should still exist"
-    );
+    assert!(lib_rs.exists(), "perl-lsp-transport/src/lib.rs should still exist");
     Ok(())
 }
 
@@ -100,10 +91,7 @@ fn test_transport_in_workspace_metadata() -> Result<(), Box<dyn std::error::Erro
 #[test]
 fn test_transport_tests_directory_exists() -> Result<(), Box<dyn std::error::Error>> {
     let tests_path = repo_root().join("crates/perl-lsp-transport/tests");
-    assert!(
-        tests_path.exists(),
-        "perl-lsp-transport/tests directory should exist"
-    );
+    assert!(tests_path.exists(), "perl-lsp-transport/tests directory should exist");
     Ok(())
 }
 
@@ -111,10 +99,7 @@ fn test_transport_tests_directory_exists() -> Result<(), Box<dyn std::error::Err
 #[test]
 fn test_transport_readme_exists() -> Result<(), Box<dyn std::error::Error>> {
     let readme = repo_root().join("crates/perl-lsp-transport/README.md");
-    assert!(
-        readme.exists(),
-        "perl-lsp-transport/README.md should still exist"
-    );
+    assert!(readme.exists(), "perl-lsp-transport/README.md should still exist");
     Ok(())
 }
 
@@ -123,10 +108,7 @@ fn test_transport_readme_exists() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn test_transport_framing_module_exists() -> Result<(), Box<dyn std::error::Error>> {
     let framing = repo_root().join("crates/perl-lsp-transport/src/framing.rs");
-    assert!(
-        framing.exists(),
-        "perl-lsp-transport/src/framing.rs should still exist"
-    );
+    assert!(framing.exists(), "perl-lsp-transport/src/framing.rs should still exist");
     Ok(())
 }
 
@@ -134,7 +116,8 @@ fn test_transport_framing_module_exists() -> Result<(), Box<dyn std::error::Erro
 /// Verifies the crate hasn't been silently abandoned.
 #[test]
 fn test_transport_is_published() -> Result<(), Box<dyn std::error::Error>> {
-    let cargo_toml = std::fs::read_to_string(repo_root().join("crates/perl-lsp-transport/Cargo.toml"))?;
+    let cargo_toml =
+        std::fs::read_to_string(repo_root().join("crates/perl-lsp-transport/Cargo.toml"))?;
     // If publish is not explicitly false, it's published
     assert!(
         !cargo_toml.contains("publish = false"),
@@ -148,7 +131,8 @@ fn test_transport_is_published() -> Result<(), Box<dyn std::error::Error>> {
 /// that creates the cycle is still there.
 #[test]
 fn test_transport_depends_on_protocol() -> Result<(), Box<dyn std::error::Error>> {
-    let cargo_toml = std::fs::read_to_string(repo_root().join("crates/perl-lsp-transport/Cargo.toml"))?;
+    let cargo_toml =
+        std::fs::read_to_string(repo_root().join("crates/perl-lsp-transport/Cargo.toml"))?;
     assert!(
         cargo_toml.contains("perl-lsp-protocol"),
         "perl-lsp-transport should depend on perl-lsp-protocol (cycle blocker)"
@@ -160,7 +144,8 @@ fn test_transport_depends_on_protocol() -> Result<(), Box<dyn std::error::Error>
 /// Verifies the design decision is documented in code.
 #[test]
 fn test_runtime_mod_documents_transport_deferral() -> Result<(), Box<dyn std::error::Error>> {
-    let runtime_mod = std::fs::read_to_string(repo_root().join("crates/perl-lsp-rs-core/src/runtime/mod.rs"))?;
+    let runtime_mod =
+        std::fs::read_to_string(repo_root().join("crates/perl-lsp-rs-core/src/runtime/mod.rs"))?;
     assert!(
         runtime_mod.contains("Deferred")
             || runtime_mod.contains("G3")

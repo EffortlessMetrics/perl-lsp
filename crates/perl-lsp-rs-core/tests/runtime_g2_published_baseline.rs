@@ -53,10 +53,7 @@ fn test_baseline_updated_to_44() -> Result<(), Box<dyn std::error::Error>> {
     let baseline_path = repo_root().join("xtask/published-crate-baseline.txt");
     let baseline_content = fs::read_to_string(&baseline_path)?;
     let count: u32 = baseline_content.trim().parse()?;
-    assert_eq!(
-        count, 44,
-        "baseline should be 44 after absorbing 5 crates (49 - 5)"
-    );
+    assert_eq!(count, 44, "baseline should be 44 after absorbing 5 crates (49 - 5)");
     Ok(())
 }
 
@@ -67,10 +64,7 @@ fn test_baseline_not_old_value() -> Result<(), Box<dyn std::error::Error>> {
     let baseline_path = repo_root().join("xtask/published-crate-baseline.txt");
     let baseline_content = fs::read_to_string(&baseline_path)?;
     let count: u32 = baseline_content.trim().parse()?;
-    assert_ne!(
-        count, 49,
-        "baseline should be updated from 49 (old pre-G2 value)"
-    );
+    assert_ne!(count, 49, "baseline should be updated from 49 (old pre-G2 value)");
     Ok(())
 }
 
@@ -105,9 +99,6 @@ fn test_runtime_module_created() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn test_runtime_mod_rs_exists() -> Result<(), Box<dyn std::error::Error>> {
     let runtime_mod_rs = repo_root().join("crates/perl-lsp-rs-core/src/runtime/mod.rs");
-    assert!(
-        runtime_mod_rs.exists(),
-        "crates/perl-lsp-rs-core/src/runtime/mod.rs should exist"
-    );
+    assert!(runtime_mod_rs.exists(), "crates/perl-lsp-rs-core/src/runtime/mod.rs should exist");
     Ok(())
 }

@@ -43,10 +43,7 @@ fn test_launcher_logging_filter_json_mode() -> Result<(), Box<dyn std::error::Er
 #[test]
 fn test_launcher_should_enable_logging_explicit_true() -> Result<(), Box<dyn std::error::Error>> {
     let should_log = should_enable_logging(true);
-    assert!(
-        should_log,
-        "should_enable_logging(true) should return true"
-    );
+    assert!(should_log, "should_enable_logging(true) should return true");
     Ok(())
 }
 
@@ -77,10 +74,7 @@ fn test_launcher_feature_profile_enumeration() -> Result<(), Box<dyn std::error:
 fn test_launcher_catalog_advertised_feature_ids_nonempty() -> Result<(), Box<dyn std::error::Error>>
 {
     let ids = catalog_advertised_feature_ids(FeatureProfile::Production);
-    assert!(
-        !ids.is_empty(),
-        "advertised features should be non-empty for Production profile"
-    );
+    assert!(!ids.is_empty(), "advertised features should be non-empty for Production profile");
     Ok(())
 }
 

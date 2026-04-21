@@ -15,7 +15,7 @@
 //! All tests are green at HEAD (post-G2).
 
 use perl_lsp_rs_core::runtime::cancellation::{
-    CancellationError, CancellationRegistry, CancellableProvider, PerlLspCancellationToken,
+    CancellableProvider, CancellationError, CancellationRegistry, PerlLspCancellationToken,
 };
 use perl_lsp_rs_core::runtime::input_validation::{
     sanitize_string, validate_file_content, validate_file_path, validate_lsp_request,
@@ -25,7 +25,7 @@ use perl_lsp_rs_core::runtime::launcher::{
     TransportMode,
 };
 use perl_lsp_rs_core::runtime::limits::{
-    LspLimits, MemoryBudget, MemoryMonitor, MemoryPressure, LSP_LIMITS,
+    LSP_LIMITS, LspLimits, MemoryBudget, MemoryMonitor, MemoryPressure,
 };
 use perl_lsp_rs_core::runtime::text_utils::TextEditHelpers;
 use std::path::Path;
@@ -34,10 +34,8 @@ use std::path::Path;
 #[test]
 fn test_api_cancellation_token_public() -> Result<(), Box<dyn std::error::Error>> {
     // If this compiles, the type is public
-    let _token = PerlLspCancellationToken::new(
-        serde_json::json!({"id": 1}),
-        "test_provider".to_string(),
-    );
+    let _token =
+        PerlLspCancellationToken::new(serde_json::json!({"id": 1}), "test_provider".to_string());
     Ok(())
 }
 
@@ -179,10 +177,8 @@ fn test_api_text_edit_helpers_public() -> Result<(), Box<dyn std::error::Error>>
 /// Test that CancellationToken methods are publicly accessible and callable.
 #[test]
 fn test_api_cancellation_token_methods_public() -> Result<(), Box<dyn std::error::Error>> {
-    let token = PerlLspCancellationToken::new(
-        serde_json::json!({"id": 1}),
-        "test_provider".to_string(),
-    );
+    let token =
+        PerlLspCancellationToken::new(serde_json::json!({"id": 1}), "test_provider".to_string());
     let _is_cancelled = token.is_cancelled();
     let _is_cancelled_relaxed = token.is_cancelled_relaxed();
     Ok(())
