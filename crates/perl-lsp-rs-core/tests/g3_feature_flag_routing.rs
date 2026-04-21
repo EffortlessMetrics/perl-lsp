@@ -27,17 +27,18 @@ fn g3_lsp_compat_feature_extended_with_lsp_types() {
     let root = workspace_root();
     let core_toml = root.join("crates/perl-lsp-rs-core/Cargo.toml");
 
-    let content = fs::read_to_string(&core_toml)
-        .expect("should read core Cargo.toml");
+    let content = fs::read_to_string(&core_toml).expect("should read core Cargo.toml");
 
     // Check if lsp-compat = ["dep:lsp-types"] is present (D5 requirement)
-    let has_lsp_types_routing = content.contains(r#"lsp-compat = ["dep:lsp-types"]"#) ||
-                                 (content.contains("lsp-compat") && content.contains("dep:lsp-types"));
+    let has_lsp_types_routing = content.contains(r#"lsp-compat = ["dep:lsp-types"]"#)
+        || (content.contains("lsp-compat") && content.contains("dep:lsp-types"));
 
     if !has_lsp_types_routing {
         // This is a spec violation - D5 requires lsp-compat to route to lsp-types
-        panic!("SPEC VIOLATION D5: lsp-compat feature should route to dep:lsp-types. \
-                Per context.md D5, must change from 'lsp-compat = []' to 'lsp-compat = [\"dep:lsp-types\"]'");
+        panic!(
+            "SPEC VIOLATION D5: lsp-compat feature should route to dep:lsp-types. \
+                Per context.md D5, must change from 'lsp-compat = []' to 'lsp-compat = [\"dep:lsp-types\"]'"
+        );
     }
 }
 
@@ -55,13 +56,7 @@ fn g3_perl_lsp_binary_removed_dead_feature_refs() -> Result<(), Box<dyn std::err
     // Filter out comments when checking for feature refs
     let lines_without_comments: Vec<&str> = content
         .lines()
-        .map(|line| {
-            if let Some(hash) = line.find('#') {
-                &line[..hash]
-            } else {
-                line
-            }
-        })
+        .map(|line| if let Some(hash) = line.find('#') { &line[..hash] } else { line })
         .collect();
     let filtered_content = lines_without_comments.join("\n");
 

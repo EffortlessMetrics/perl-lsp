@@ -21,8 +21,8 @@ fn g3_baseline_file_has_37() -> Result<(), Box<dyn std::error::Error>> {
     let baseline_path = root.join("xtask/published-crate-baseline.txt");
 
     let content = fs::read_to_string(&baseline_path)?;
-    let baseline: u32 = content.trim().parse()
-        .map_err(|_| "baseline count should be parseable as u32")?;
+    let baseline: u32 =
+        content.trim().parse().map_err(|_| "baseline count should be parseable as u32")?;
 
     assert_eq!(baseline, 37, "baseline should be updated to 37 after G3");
 
@@ -55,7 +55,8 @@ fn g3_baseline_matches_cargo_metadata() -> Result<(), Box<dyn std::error::Error>
         .filter(|p| {
             let publish = &p["publish"];
             // If publish is not false and not an empty array, it's published
-            !(publish == false || (publish.is_array() && publish.as_array().map_or(false, |a| a.is_empty())))
+            !(publish == false
+                || (publish.is_array() && publish.as_array().map_or(false, |a| a.is_empty())))
         })
         .count();
 

@@ -50,10 +50,7 @@ fn g3_absorbed_crates_directories_deleted() -> Result<(), Box<dyn std::error::Er
 
     for crate_dir in absorbed {
         let dir_path = root.join(crate_dir);
-        assert!(
-            !dir_path.exists(),
-            "absorbed crate directory should be deleted: {crate_dir}"
-        );
+        assert!(!dir_path.exists(), "absorbed crate directory should be deleted: {crate_dir}");
     }
 
     Ok(())

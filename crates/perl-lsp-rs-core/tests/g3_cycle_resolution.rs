@@ -29,10 +29,7 @@ fn g3_protocol_absorption_dissolves_transport_cycle() -> Result<(), Box<dyn std:
 
     // Regression guard: perl-lsp-protocol should be DELETED (fully absorbed)
     let protocol_dir = root.join("crates/perl-lsp-protocol");
-    assert!(
-        !protocol_dir.exists(),
-        "perl-lsp-protocol directory should be deleted"
-    );
+    assert!(!protocol_dir.exists(), "perl-lsp-protocol directory should be deleted");
 
     Ok(())
 }
@@ -69,8 +66,8 @@ fn g3_no_external_perl_lsp_protocol_references() -> Result<(), Box<dyn std::erro
 
             // Verify old import is not present (should use rs-core instead)
             // Allow for comments about old paths, but actual imports should be gone
-            let has_old_import = content.contains("use perl_lsp_protocol") &&
-                                !content.trim_start().starts_with("//");
+            let has_old_import = content.contains("use perl_lsp_protocol")
+                && !content.trim_start().starts_with("//");
 
             if has_old_import {
                 // More lenient: check if it's in a comment
@@ -86,9 +83,11 @@ fn g3_no_external_perl_lsp_protocol_references() -> Result<(), Box<dyn std::erro
                         }
                     }
                 }
-                assert!(!found_active_import,
+                assert!(
+                    !found_active_import,
                     "File {} should not have active imports of perl_lsp_protocol (use perl_lsp_rs_core::protocol instead)",
-                    file);
+                    file
+                );
             }
         }
     }
