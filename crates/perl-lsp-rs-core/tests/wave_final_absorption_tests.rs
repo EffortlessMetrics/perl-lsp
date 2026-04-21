@@ -325,3 +325,252 @@ fn test_publish_allowlist_has_31_entries() {
         count
     );
 }
+
+// ============================================================================
+// Green TDD: Edge cases, boundary conditions, and regression guards
+// ============================================================================
+
+/// Test 19: EDGE CASE: perl-lsp-rs-core itself does NOT import perl-dap (cycle prevention)
+/// This guards against a subtle regression where config module might re-introduce the cycle.
+#[test]
+fn test_rs_core_has_no_dap_dependency() {
+    let root = workspace_root();
+    let rs_core_cargo = root.join("crates/perl-lsp-rs-core/Cargo.toml");
+    let content =
+        fs::read_to_string(&rs_core_cargo).expect("perl-lsp-rs-core/Cargo.toml should be readable");
+
+    // perl-dap should NOT be a direct dependency of perl-lsp-rs-core
+    // (it can be a dev-dependency for tests, but not a regular dependency)
+    let deps_section = content.split("[dev-dependencies]").next().unwrap_or(&content);
+    assert!(
+        !deps_section.contains("perl-dap"),
+        "perl-lsp-rs-core must NOT depend on perl-dap (cycle break requirement)"
+    );
+}
+
+/// Test 20: BOUNDARY: platform functions are truly public and accessible from external crates
+/// Verifies the function signatures are callable via the module path, not just present.
+#[test]
+fn test_platform_functions_are_public_and_callable() {
+    use perl_lsp_rs_core::platform;
+
+    // Verify each function is callable with no arguments
+    let _resolve_result = platform::resolve_perl_path_with_toolchain();
+    let _perlbrew_opt = platform::detect_perlbrew_perl();
+    let _plenv_opt = platform::detect_plenv_perl();
+
+    // Functions should be accessible without `crate::` prefix
+    // (the use statement above confirms this at compile time)
+}
+
+/// Test 21: REGRESSION: feature_catalog build module is correctly used by both perl-dap and perl-lsp-rs-core
+/// If the include!() pattern in perl-dap/build.rs fails, this would catch it.
+#[test]
+fn test_dap_build_includes_rs_core_catalog() {
+    let root = workspace_root();
+    let dap_build = root.join("crates/perl-dap/build.rs");
+    let content = fs::read_to_string(&dap_build).expect("perl-dap/build.rs should be readable");
+
+    // The build.rs should include the shared catalog from rs-core, not reference perl-feature-catalog crate
+    assert!(
+        content.contains("perl-lsp-rs-core/build_catalog.rs"),
+        "perl-dap/build.rs must include catalog from perl-lsp-rs-core (not standalone perl-feature-catalog)"
+    );
+
+    assert!(
+        !content.contains("perl_feature_catalog::"),
+        "perl-dap/build.rs should not import from perl-feature-catalog crate after absorption"
+    );
+
+    assert!(
+        !content.contains("extern crate perl_feature_catalog"),
+        "perl-dap/build.rs should not extern crate perl-feature-catalog after absorption"
+    );
+}
+
+/// Test 22: BOUNDARY: old three crates have publish = false
+/// Prevents accidental re-publication of absorbed crates.
+#[test]
+fn test_absorbed_crates_have_publish_false() {
+    let root = workspace_root();
+
+    let crates = vec![
+        "crates/perl-feature-catalog",
+        "crates/perl-lsp-config",
+        "crates/perl-content-length-framing",
+    ];
+
+    for crate_dir in &crates {
+        let cargo_toml = root.join(format!("{}/Cargo.toml", crate_dir));
+
+        if cargo_toml.exists() {
+            let content = fs::read_to_string(&cargo_toml).expect("should be readable");
+
+            assert!(
+                content.contains("publish = false"),
+                "{}/Cargo.toml must have publish = false to prevent re-publication",
+                crate_dir
+            );
+        }
+    }
+}
+
+/// Test 23: REGRESSION: ADR 0041 includes specific Wave Final details
+/// If someone edits the ADR without including the amendment, this catches the gap.
+#[test]
+fn test_adr_0041_has_wave_final_details() {
+    let root = workspace_root();
+    let adr = fs::read_to_string(root.join("docs/adr/0041-microcrate-collapse.md"))
+        .expect("ADR 0041 should exist");
+
+    // Should mention Amendment 9 specifically
+    assert!(adr.contains("Amendment 9"), "ADR 0041 missing Amendment 9 marker");
+
+    // Should mention the 31 end count
+    assert!(adr.contains("31"), "ADR 0041 should document the final 31 published count");
+
+    // Should mention Wave Final or Wave 4 or similar context
+    let mentions_wave =
+        adr.contains("Wave Final") || adr.contains("Wave 4") || adr.contains("wave 4");
+    assert!(mentions_wave, "ADR 0041 should mention Wave Final or Wave 4 in Amendment 9 context");
+
+    // Should document that 3 crates were absorbed
+    let mentions_three = adr.contains("3 crate") || adr.contains("three crate");
+    assert!(mentions_three, "ADR 0041 should document that 3 crates were absorbed in Wave Final");
+}
+
+/// Test 24: EDGE CASE: transport/framing module still exports ContentLengthFramer consistently
+/// Guards against accidental API change in the moved framing module.
+#[test]
+fn test_framing_module_api_stability() {
+    use perl_lsp_rs_core::transport::framing::ContentLengthFramer;
+
+    // Should be constructable with new()
+    let framer_new = ContentLengthFramer::new();
+
+    // Should be constructable with default()
+    let framer_default = ContentLengthFramer::default();
+
+    // Both should be equal (proves PartialEq impl is stable)
+    assert_eq!(framer_new, framer_default, "ContentLengthFramer::new() should equal default()");
+
+    // Should have frame() function available at module level
+    let test_body = b"hello";
+    let framed = perl_lsp_rs_core::transport::framing::frame(test_body);
+
+    // Framed output should contain Content-Length header
+    let framed_str = String::from_utf8_lossy(&framed);
+    assert!(
+        framed_str.contains("Content-Length:"),
+        "frame() output must include Content-Length header"
+    );
+
+    // Framed output should contain the original body
+    assert!(
+        framed.windows(test_body.len()).any(|w| w == test_body),
+        "frame() output must include original body"
+    );
+}
+
+/// Test 25: REGRESSION: config module types have stable defaults
+/// If someone modifies the defaults, this will catch non-backward-compatible changes.
+#[test]
+fn test_config_defaults_are_backward_compatible() {
+    use perl_lsp_rs_core::config::{ServerConfig, WorkspaceConfig};
+
+    // ServerConfig defaults should match spec
+    let server = ServerConfig::default();
+    assert!(
+        server.inlay_hints_enabled,
+        "ServerConfig::default() must have inlay_hints_enabled = true"
+    );
+    assert!(
+        server.test_runner_enabled,
+        "ServerConfig::default() must have test_runner_enabled = true"
+    );
+    assert_eq!(
+        server.test_runner_command, "perl",
+        "ServerConfig::default() must have test_runner_command = 'perl'"
+    );
+
+    // WorkspaceConfig defaults should match spec
+    let workspace = WorkspaceConfig::default();
+    assert!(
+        workspace.include_paths.contains(&"lib".to_string()),
+        "WorkspaceConfig::default() must include 'lib' in include_paths"
+    );
+    assert!(
+        !workspace.use_system_inc,
+        "WorkspaceConfig::default() must have use_system_inc = false"
+    );
+}
+
+/// Test 26: BOUNDARY: no lingering imports of old crate names in perl-lsp/tests/
+/// Guards against test files that still reference the absorbed crates by old names.
+#[test]
+fn test_perl_lsp_tests_no_old_crate_refs() {
+    let root = workspace_root();
+    let tests_dir = root.join("crates/perl-lsp/tests");
+
+    if tests_dir.exists() {
+        fn scan_for_old_crates(path: &Path) -> std::io::Result<()> {
+            for entry in fs::read_dir(path)? {
+                let entry = entry?;
+                let path = entry.path();
+                if path.is_dir() {
+                    let _ = scan_for_old_crates(&path);
+                } else if path.extension().map_or(false, |ext| ext == "rs") {
+                    let content = fs::read_to_string(&path).expect("readable");
+                    assert!(
+                        !content.contains("extern crate perl_lsp_config"),
+                        "Test file {} still references old perl_lsp_config crate",
+                        path.display()
+                    );
+                    assert!(
+                        !content.contains("extern crate perl_feature_catalog"),
+                        "Test file {} still references old perl_feature_catalog crate",
+                        path.display()
+                    );
+                    assert!(
+                        !content.contains("extern crate perl_content_length_framing"),
+                        "Test file {} still references old perl_content_length_framing crate",
+                        path.display()
+                    );
+                }
+            }
+            Ok(())
+        }
+
+        let _ = scan_for_old_crates(&tests_dir);
+    }
+}
+
+/// Test 27: REGRESSION: perl-lsp-rs-core/src/lib.rs properly re-exports absorbed modules
+/// If re-exports are missing, public API will be inaccessible.
+#[test]
+fn test_rs_core_lib_exports_absorbed_modules() {
+    let root = workspace_root();
+    let lib_rs = root.join("crates/perl-lsp-rs-core/src/lib.rs");
+    let content = fs::read_to_string(&lib_rs).expect("lib.rs should exist");
+
+    // Should declare or re-export the key modules
+    assert!(
+        content.contains("mod config") || content.contains("pub mod config"),
+        "lib.rs must declare/export config module"
+    );
+
+    assert!(
+        content.contains("mod transport") || content.contains("pub mod transport"),
+        "lib.rs must declare/export transport module (for framing)"
+    );
+
+    assert!(
+        content.contains("mod feature_catalog") || content.contains("pub mod feature_catalog"),
+        "lib.rs must declare/export feature_catalog module"
+    );
+
+    assert!(
+        content.contains("mod platform") || content.contains("pub mod platform"),
+        "lib.rs must declare/export platform module"
+    );
+}
