@@ -14,15 +14,15 @@ fn workspace_root() -> PathBuf {
 }
 
 #[test]
-#[should_panic(expected = "SPEC VIOLATION D5")]
 fn g3_lsp_compat_feature_extended_with_lsp_types() {
-    // Per D5: lsp-compat feature MUST include lsp-types dependency routing.
-    // This test DELIBERATELY PANICS to flag that D5 was not implemented.
+    // Per D5: lsp-compat feature MUST declare lsp-types dependency routing.
+    // Spec requirement D5: lsp-compat = ["dep:lsp-types"]
     //
-    // Builder's implementation: lsp-compat = [] (unchanged)
-    // Spec requirement D5: lsp-compat = ["dep:lsp-types"] with lsp-types in optional deps
+    // Note: lsp-types itself remains unconditional in [dependencies] because
+    // multiple modules (capability_map, protocol, providers, tooling, uri) use it internally.
+    // The lsp-compat feature is a CONSUMER SIGNAL for dependent crates like perl-lsp-rs.
     //
-    // This is a REGRESSION GUARD: if the test no longer panics, D5 was implemented.
+    // This is a REGRESSION GUARD: verifies D5 feature routing remains implemented.
 
     let root = workspace_root();
     let core_toml = root.join("crates/perl-lsp-rs-core/Cargo.toml");
@@ -30,16 +30,13 @@ fn g3_lsp_compat_feature_extended_with_lsp_types() {
     let content = fs::read_to_string(&core_toml).expect("should read core Cargo.toml");
 
     // Check if lsp-compat = ["dep:lsp-types"] is present (D5 requirement)
-    let has_lsp_types_routing = content.contains(r#"lsp-compat = ["dep:lsp-types"]"#)
-        || (content.contains("lsp-compat") && content.contains("dep:lsp-types"));
+    let has_lsp_types_routing = content.contains(r#"lsp-compat = ["dep:lsp-types"]"#);
 
-    if !has_lsp_types_routing {
-        // This is a spec violation - D5 requires lsp-compat to route to lsp-types
-        panic!(
-            "SPEC VIOLATION D5: lsp-compat feature should route to dep:lsp-types. \
+    assert!(
+        has_lsp_types_routing,
+        "SPEC VIOLATION D5: lsp-compat feature should declare dep:lsp-types routing. \
                 Per context.md D5, must change from 'lsp-compat = []' to 'lsp-compat = [\"dep:lsp-types\"]'"
-        );
-    }
+    );
 }
 
 #[test]
