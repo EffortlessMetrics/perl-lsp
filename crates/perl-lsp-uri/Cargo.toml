@@ -18,6 +18,7 @@ include = [
   "README.md",
   "LICENSE*"
 ]
+publish = false
 
 [dependencies]
 lsp-types.workspace = true

@@ -35,7 +35,7 @@ perl-incremental-parsing = { workspace = true, optional = true }
 perl-parser = { workspace = true, features = ["test-performance"] }
 # (perl-lsp-providers absorbed into perl-lsp-rs-core::providers::lsp_compat — Wave G1b)
 # (perl-lsp-formatting absorbed into perl-lsp-rs-core::providers::formatting — Wave G1b)
-perl-lsp-uri = { workspace = true }
+# perl-lsp-uri absorbed into perl-lsp-rs-core::uri (Wave G3 step 3)
 # perl-lsp-feature-governance absorbed into perl-lsp-rs-core::governance (Wave G3 step 1)
 perl-lsp-tooling = { workspace = true }
 perl-subprocess-runtime = { workspace = true }

@@ -43,7 +43,7 @@ url.workspace = true
 # Wave G1b additional dependencies (10 medium-risk providers absorbed)
 perl-lsp-tooling.workspace = true
 perl-lsp-perltidy.workspace = true
-perl-lsp-uri.workspace = true
+# perl-lsp-uri absorbed into perl-lsp-rs-core::uri (Wave G3 step 3)
 perl-diagnostics.workspace = true
 perl-workspace.workspace = true
 perl-pragma.workspace = true
