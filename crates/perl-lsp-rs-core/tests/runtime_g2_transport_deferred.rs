@@ -14,8 +14,7 @@
 //!
 //! All tests are green at HEAD (post-G2).
 
-use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 fn repo_root() -> PathBuf {
     // Tests run from the workspace root

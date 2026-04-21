@@ -3,6 +3,7 @@
 //! Covers: CLI arg parsing, transport modes, launch actions, feature profiles,
 //! error handling, edge cases, help text, and LaunchConfig API.
 #![allow(clippy::assertions_on_constants, clippy::absurd_extreme_comparisons, unused_comparisons)]
+#![allow(clippy::expect_used)]
 
 use perl_lsp_rs_core::runtime::launcher::{
     DEFAULT_LSP_PORT, FeatureProfile, LaunchConfig, LaunchParseError, TransportMode,
@@ -36,7 +37,7 @@ fn acquire_env_guard() -> EnvGuard {
         let current = depth.get();
         depth.set(current + 1);
         if current == 0 {
-            Some(ENV_GUARD.get_or_init(|| Mutex::new(())).lock().unwrap())
+            Some(ENV_GUARD.get_or_init(|| Mutex::new(())).lock().expect("env guard mutex should not be poisoned"))
         } else {
             None
         }

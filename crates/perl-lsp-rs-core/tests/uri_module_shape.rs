@@ -1,6 +1,5 @@
 //! Integration test: `perl-lsp-uri` public API reachable via `perl_lsp_rs_core::uri`.
 
-use lsp_types::Uri;
 use perl_lsp_rs_core::uri::*;
 
 #[test]

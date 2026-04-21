@@ -78,7 +78,7 @@ fn test_baseline_count_reasonable() -> Result<(), Box<dyn std::error::Error>> {
     let baseline_content = fs::read_to_string(&baseline_path)?;
     let count: u32 = baseline_content.trim().parse()?;
     assert!(
-        count >= 30 && count <= 50,
+        (30..=50).contains(&count),
         "baseline should be between 30 and 50 (was in reasonable range); got {count}"
     );
     Ok(())
