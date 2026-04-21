@@ -290,7 +290,7 @@ if ($condition) {
                 let new_source = source.replace("42", "9999");
                 let pos = match source.find("42") {
                     Some(p) => p,
-                    None => must(Err::<(), _>(format!("Test data should contain '42'"))),
+                    None => must(Err::<usize, _>(format!("Test data should contain '42'"))),
                 };
                 let edit = Edit::new(
                     pos,
@@ -387,7 +387,7 @@ if ($condition) {
                 let new_source = source.replace("42", "9999");
                 let pos = match source.find("42") {
                     Some(p) => p,
-                    None => must(Err::<(), _>(format!("Test data should contain '42'"))),
+                    None => must(Err::<usize, _>(format!("Test data should contain '42'"))),
                 };
                 let edit = Edit::new(
                     pos,

@@ -1,13 +1,12 @@
 //! Integration tests for CI Guardrail Ignored Test Monitoring
 
-use anyhow::Result;
 use perl_tdd_support::governance::*;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::time::{Duration, SystemTime};
 
 #[test]
-fn test_ignored_test_guardian_validation() -> Result<()> {
+fn test_ignored_test_guardian_validation() -> Result<(), Box<dyn std::error::Error>> {
     // Tests feature spec: SPEC_144_IGNORED_TESTS_ARCHITECTURAL_BLUEPRINT.md#ci-guardrail-system
 
     let governance = IgnoredTestGovernance {
@@ -156,7 +155,7 @@ fn test_ignored_test_guardian_validation() -> Result<()> {
 }
 
 #[test]
-fn test_baseline_regression_detection() -> Result<()> {
+fn test_baseline_regression_detection() -> Result<(), Box<dyn std::error::Error>> {
     // Tests feature spec: SPEC_144_IGNORED_TESTS_ARCHITECTURAL_BLUEPRINT.md#ci-guardrail-system
 
     let governance = IgnoredTestGovernance {
@@ -267,7 +266,7 @@ fn test_baseline_regression_detection() -> Result<()> {
 }
 
 #[test]
-fn test_ignored_test_trend_reporting() -> Result<()> {
+fn test_ignored_test_trend_reporting() -> Result<(), Box<dyn std::error::Error>> {
     // Tests feature spec: SPEC_144_IGNORED_TESTS_ARCHITECTURAL_BLUEPRINT.md#ci-guardrail-system
 
     let governance = IgnoredTestGovernance {
@@ -386,7 +385,7 @@ fn test_ignored_test_trend_reporting() -> Result<()> {
 }
 
 #[test]
-fn test_test_quality_validation() -> Result<()> {
+fn test_test_quality_validation() -> Result<(), Box<dyn std::error::Error>> {
     // Tests feature spec: SPEC_144_IGNORED_TESTS_ARCHITECTURAL_BLUEPRINT.md#ci-guardrail-system
 
     let governance = IgnoredTestGovernance {
