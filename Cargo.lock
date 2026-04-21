@@ -1635,30 +1635,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "perl-lsp-critic-parser"
-version = "0.12.4"
-dependencies = [
- "perl-tdd-support",
-]
-
-[[package]]
-name = "perl-lsp-feature-governance"
-version = "0.12.4"
-dependencies = [
- "perl-lsp-rs-core",
- "serde_json",
-]
-
-[[package]]
-name = "perl-lsp-performance"
-version = "0.12.4"
-dependencies = [
- "moka",
- "perl-parser-core",
- "perl-symbol",
-]
-
-[[package]]
 name = "perl-lsp-perltidy"
 version = "0.12.4"
 dependencies = [
@@ -1666,17 +1642,6 @@ dependencies = [
  "perl-tdd-support",
  "serde",
  "serde_json",
-]
-
-[[package]]
-name = "perl-lsp-protocol"
-version = "0.12.4"
-dependencies = [
- "lsp-types",
- "perl-lsp-rs-core",
- "serde",
- "serde_json",
- "tracing",
 ]
 
 [[package]]
@@ -1698,10 +1663,8 @@ dependencies = [
  "perl-incremental-parsing",
  "perl-lexer",
  "perl-lsp-config",
- "perl-lsp-critic-parser",
  "perl-lsp-perltidy",
  "perl-lsp-rs-core",
- "perl-lsp-tooling",
  "perl-module",
  "perl-parser",
  "perl-parser-core",
@@ -1767,39 +1730,6 @@ dependencies = [
  "ureq",
  "url",
  "walkdir",
-]
-
-[[package]]
-name = "perl-lsp-tooling"
-version = "0.12.4"
-dependencies = [
- "criterion",
- "lsp-types",
- "perl-lsp-critic-parser",
- "perl-lsp-perltidy",
- "perl-lsp-rs-core",
- "perl-parser-core",
- "perl-subprocess-runtime",
- "perl-tdd-support",
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "perl-lsp-transport"
-version = "0.12.4"
-dependencies = [
- "perl-content-length-framing",
- "perl-lsp-rs-core",
- "serde_json",
- "tracing",
-]
-
-[[package]]
-name = "perl-lsp-uri"
-version = "0.12.4"
-dependencies = [
- "lsp-types",
 ]
 
 [[package]]
@@ -3934,7 +3864,7 @@ dependencies = [
  "peak_alloc",
  "perl-corpus",
  "perl-feature-catalog",
- "perl-lsp-feature-governance",
+ "perl-lsp-rs-core",
  "perl-parser",
  "perl-parser-pest",
  "perl-tdd-support",

@@ -8,7 +8,7 @@ pub use perl_lsp_rs_core::providers::formatting::{
     FormatPosition, FormatRange, FormatTextEdit, FormattedDocument, FormattingError,
     FormattingOptions, FormattingProvider, PerlTidyConfig,
 };
-use perl_lsp_tooling::OsSubprocessRuntime;
+use perl_lsp_rs_core::tooling::OsSubprocessRuntime;
 
 /// Code formatter using the OS subprocess runtime
 ///

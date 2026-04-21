@@ -1,6 +1,6 @@
 use color_eyre::eyre::{Context, Result, bail, eyre};
 use perl_feature_catalog::{Catalog, Maturity};
-use perl_lsp_feature_governance::{FeatureProfile, catalog_advertised_feature_ids};
+use perl_lsp_rs_core::governance::{FeatureProfile, catalog_advertised_feature_ids};
 use std::collections::{BTreeMap, BTreeSet};
 use std::env;
 use std::fs;

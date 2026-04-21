@@ -869,7 +869,7 @@ print "Result: $result\n";
 #[test]
 fn test_provider_and_protocol_command_lists_are_in_sync() -> TestResult {
     let provider_cmds = get_supported_commands();
-    let protocol_cmds = perl_lsp_protocol::capabilities::get_supported_commands();
+    let protocol_cmds = perl_lsp_rs_core::protocol::capabilities::get_supported_commands();
 
     let mut sorted_provider = provider_cmds.clone();
     sorted_provider.sort();
@@ -878,7 +878,7 @@ fn test_provider_and_protocol_command_lists_are_in_sync() -> TestResult {
 
     assert_eq!(
         sorted_provider, sorted_protocol,
-        "provider.rs get_supported_commands() must match perl_lsp_protocol::capabilities::get_supported_commands(). \
+        "provider.rs get_supported_commands() must match perl_lsp_rs_core::protocol::capabilities::get_supported_commands(). \
          These lists were inlined in PR #2617 — keep them in sync."
     );
     Ok(())

@@ -37,7 +37,7 @@ perl-parser = { workspace = true, features = ["test-performance"] }
 # (perl-lsp-formatting absorbed into perl-lsp-rs-core::providers::formatting — Wave G1b)
 # perl-lsp-uri absorbed into perl-lsp-rs-core::uri (Wave G3 step 3)
 # perl-lsp-feature-governance absorbed into perl-lsp-rs-core::governance (Wave G3 step 1)
-perl-lsp-tooling = { workspace = true }
+# perl-lsp-tooling absorbed into perl-lsp-rs-core::tooling (Wave G3 step 6)
 perl-subprocess-runtime = { workspace = true }
 perl-lsp-config = { workspace = true }
 # perl-lsp-protocol absorbed into perl-lsp-rs-core::protocol (Wave G3 step 2)
@@ -52,7 +52,7 @@ perl-diagnostics = { workspace = true }
 # (perl-lsp-rename absorbed into perl-lsp-rs-core::providers::rename — Wave G1b)
 # (perl-lsp-semantic-tokens absorbed into perl-lsp-rs-core::providers::semantic_tokens — Wave G1b)
 # Provider crates absorbed into perl-lsp-rs-core (Wave G1a)
-perl-lsp-critic-parser = { workspace = true }
+# perl-lsp-critic-parser absorbed into perl-lsp-rs-core::critic_parser (Wave G3 step 7)
 perl-lsp-rs-core = { workspace = true, features = ["lsp-compat"] }
 # perl-lsp-performance absorbed into perl-lsp-rs-core::performance (Wave G3 step 5)
 perl-lsp-perltidy = { workspace = true }

@@ -168,7 +168,7 @@ fn test_wired_formatting_types_accessible() {
 /// Critic output parser must be reachable and parse valid output.
 #[test]
 fn test_wired_critic_parser_parses_output() {
-    use perl_lsp_critic_parser::parse_perlcritic_output;
+    use perl_lsp_rs_core::critic_parser::parse_perlcritic_output;
     // Canonical Perl::Critic colon-delimited format: file:line:col:severity:policy:message
     let output = "test.pl:1:1:5:TestingAndDebugging::RequireUseStrict:no strict\n";
     let lines = parse_perlcritic_output(output);
@@ -227,7 +227,7 @@ fn test_wired_capability_map_roundtrip() {
 /// Performance types must be reachable and AstCache must behave correctly.
 #[test]
 fn test_wired_performance_ast_cache_accessible() {
-    use perl_lsp_performance::AstCache;
+    use perl_lsp_rs_core::tooling::performance::AstCache;
     let cache = AstCache::new(100, 60);
     // A freshly constructed cache must return None for any lookup —
     // this verifies the get() API is callable and the initial state is empty.
