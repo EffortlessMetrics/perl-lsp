@@ -89,12 +89,16 @@ fn can_create_permission_denied() -> bool {
         Err(_) => return false,
     };
     perms.set_mode(0o000);
-    let _ = std::fs::set_permissions(&probe, &perms);
+    let _ = std::fs::set_permissions(&probe, perms);
     // If we can still read it, we're root
     let readable = std::fs::read_to_string(&probe).is_ok();
     // Restore so tempdir cleanup succeeds
+    let mut perms = match std::fs::metadata(&probe) {
+        Ok(m) => m.permissions(),
+        Err(_) => return false,
+    };
     perms.set_mode(0o644);
-    let _ = std::fs::set_permissions(&probe, &perms);
+    let _ = std::fs::set_permissions(&probe, perms);
     !readable
 }
 

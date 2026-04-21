@@ -2021,6 +2021,7 @@ dependencies = [
 name = "perl-tdd-support"
 version = "0.12.4"
 dependencies = [
+ "anyhow",
  "lsp-types",
  "perl-parser-core",
  "perl-test-must",

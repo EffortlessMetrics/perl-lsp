@@ -34,6 +34,9 @@ url = { workspace = true, optional = true }
 default = []
 lsp-compat = ["lsp-types", "url"]
 
+[dev-dependencies]
+anyhow = { workspace = true }
+
 [package.metadata.docs.rs]
 all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
