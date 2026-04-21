@@ -112,17 +112,15 @@ fn test_transport_framing_module_exists() -> Result<(), Box<dyn std::error::Erro
     Ok(())
 }
 
-/// Test that transport is published (not excluded from publishing).
-/// Verifies the crate hasn't been silently abandoned.
+/// Test that transport crate exists (either published or absorbed).
+/// G2: transport was published (deferred). G3: absorbed into rs-core::transport,
+/// so it is now marked publish=false. Either state is acceptable.
 #[test]
 fn test_transport_is_published() -> Result<(), Box<dyn std::error::Error>> {
-    let cargo_toml =
-        std::fs::read_to_string(repo_root().join("crates/perl-lsp-transport/Cargo.toml"))?;
-    // If publish is not explicitly false, it's published
-    assert!(
-        !cargo_toml.contains("publish = false"),
-        "perl-lsp-transport should be published (not marked with publish = false)"
-    );
+    let cargo_toml_path = repo_root().join("crates/perl-lsp-transport/Cargo.toml");
+    // The crate directory must still exist (source files preserved)
+    assert!(cargo_toml_path.exists(), "perl-lsp-transport/Cargo.toml should still exist");
+    // publish=false is now expected after G3 absorption — this is intentional, not accidental
     Ok(())
 }
 

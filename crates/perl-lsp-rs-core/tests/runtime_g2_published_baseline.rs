@@ -47,13 +47,17 @@ fn test_baseline_file_contains_number() -> Result<(), Box<dyn std::error::Error>
     Ok(())
 }
 
-/// Test that the baseline is updated to 44 (49 - 5 absorbed crates).
+/// Test that the baseline is updated from 49 (G2 absorbed 5 crates → 44;
+/// G3 subsequently absorbed 7 more → 37). Accept any value ≤ 44.
 #[test]
 fn test_baseline_updated_to_44() -> Result<(), Box<dyn std::error::Error>> {
     let baseline_path = repo_root().join("xtask/published-crate-baseline.txt");
     let baseline_content = fs::read_to_string(&baseline_path)?;
     let count: u32 = baseline_content.trim().parse()?;
-    assert_eq!(count, 44, "baseline should be 44 after absorbing 5 crates (49 - 5)");
+    assert!(
+        count <= 44,
+        "baseline should be ≤ 44 after absorbing G2 crates (49 - 5); got {count}"
+    );
     Ok(())
 }
 
@@ -68,16 +72,17 @@ fn test_baseline_not_old_value() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-/// Test that the baseline count is reasonable (between 40 and 50).
+/// Test that the baseline count is reasonable (between 30 and 50).
 /// Sanity check: ensures the count isn't wildly off.
+/// Range lowered to 30 after G3 absorbed 7 more crates (44 → 37).
 #[test]
 fn test_baseline_count_reasonable() -> Result<(), Box<dyn std::error::Error>> {
     let baseline_path = repo_root().join("xtask/published-crate-baseline.txt");
     let baseline_content = fs::read_to_string(&baseline_path)?;
     let count: u32 = baseline_content.trim().parse()?;
     assert!(
-        count >= 40 && count <= 50,
-        "baseline should be between 40 and 50 (was in reasonable range)"
+        count >= 30 && count <= 50,
+        "baseline should be between 30 and 50 (was in reasonable range); got {count}"
     );
     Ok(())
 }
