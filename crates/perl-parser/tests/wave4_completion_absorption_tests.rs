@@ -364,30 +364,27 @@ fn test_workspace_refactor_in_default_features() -> TestResult {
     let cargo_toml_path = ws("crates/perl-parser/Cargo.toml");
     let content = fs::read_to_string(cargo_toml_path)?;
 
-    // Find the [features] section and then the default line
-    if let Some(features_section) = content.split("[features]").next() {
-        // Extract default features from the part before [features]
-        if let Some(default_line) =
-            features_section.lines().find(|line| line.starts_with("default = "))
-        {
-            if default_line.contains("workspace_refactor") {
-                return Ok(());
-            }
-        }
-    }
+    // The `default = [...]` line lives inside the [features] section — split on
+    // "[features]" and search the text that follows the header.
+    let features_section = content
+        .split("[features]")
+        .nth(1)
+        .ok_or("No [features] section found in perl-parser/Cargo.toml")?;
 
-    // Also check after [features] section
-    if let Some(features_section) = content.split("[features]").nth(1) {
-        if let Some(default_line) =
-            features_section.lines().find(|line| line.starts_with("default = "))
-        {
-            if default_line.contains("workspace_refactor") {
-                return Ok(());
-            }
-        }
-    }
+    let default_line = features_section
+        .lines()
+        .find(|line| line.starts_with("default = "))
+        .ok_or("No `default = ` line found in [features] section")?;
 
-    Err("workspace_refactor must be in default features after absorption".into())
+    if default_line.contains("workspace_refactor") {
+        Ok(())
+    } else {
+        Err(format!(
+            "workspace_refactor must be in default features after absorption; got: {}",
+            default_line
+        )
+        .into())
+    }
 }
 
 // =============================================================================
