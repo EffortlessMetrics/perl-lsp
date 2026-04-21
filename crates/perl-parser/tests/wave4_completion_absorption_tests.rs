@@ -4,9 +4,19 @@
 //! into perl-parser as internal modules, with correct visibility and configuration.
 
 use std::fs;
-use std::path::Path;
+use std::path::PathBuf;
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
+
+/// Get workspace root from CARGO_MANIFEST_DIR (crates/perl-parser → workspace root).
+fn workspace_root() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..").join("..")
+}
+
+/// Join a workspace-relative path to the workspace root.
+fn ws(path: &str) -> PathBuf {
+    workspace_root().join(path)
+}
 
 // =============================================================================
 // Section 1: Module Accessibility Tests
@@ -76,8 +86,8 @@ fn test_incremental_submodules_accessible() -> TestResult {
 /// Test that perl-dead-code has publish = false set
 #[test]
 fn test_perl_dead_code_publish_false() -> TestResult {
-    let cargo_toml_path = "crates/perl-dead-code/Cargo.toml";
-    let content = fs::read_to_string(cargo_toml_path)?;
+    let cargo_toml_path = ws("crates/perl-dead-code/Cargo.toml");
+    let content = fs::read_to_string(&cargo_toml_path)?;
 
     // After absorption, this file should be marked as not publishable
     if content.contains("publish = false") {
@@ -90,8 +100,8 @@ fn test_perl_dead_code_publish_false() -> TestResult {
 /// Test that perl-refactoring has publish = false set
 #[test]
 fn test_perl_refactoring_publish_false() -> TestResult {
-    let cargo_toml_path = "crates/perl-refactoring/Cargo.toml";
-    let content = fs::read_to_string(cargo_toml_path)?;
+    let cargo_toml_path = ws("crates/perl-refactoring/Cargo.toml");
+    let content = fs::read_to_string(&cargo_toml_path)?;
 
     // After absorption, this file should be marked as not publishable
     if content.contains("publish = false") {
@@ -104,8 +114,8 @@ fn test_perl_refactoring_publish_false() -> TestResult {
 /// Test that perl-incremental-parsing has publish = false set
 #[test]
 fn test_perl_incremental_parsing_publish_false() -> TestResult {
-    let cargo_toml_path = "crates/perl-incremental-parsing/Cargo.toml";
-    let content = fs::read_to_string(cargo_toml_path)?;
+    let cargo_toml_path = ws("crates/perl-incremental-parsing/Cargo.toml");
+    let content = fs::read_to_string(&cargo_toml_path)?;
 
     // After absorption, this file should be marked as not publishable
     if content.contains("publish = false") {
@@ -122,7 +132,7 @@ fn test_perl_incremental_parsing_publish_false() -> TestResult {
 /// Test that perl-dead-code is NOT in the workspace publish allowlist
 #[test]
 fn test_perl_dead_code_not_in_allowlist() -> TestResult {
-    let root_cargo_toml = fs::read_to_string("Cargo.toml")?;
+    let root_cargo_toml = fs::read_to_string(ws("Cargo.toml"))?;
 
     // Find the [workspace.metadata.publish.allow] section
     if let Some(allow_section) = root_cargo_toml.split("[workspace.metadata.publish.allow]").nth(1)
@@ -141,7 +151,7 @@ fn test_perl_dead_code_not_in_allowlist() -> TestResult {
 /// Test that perl-refactoring is NOT in the workspace publish allowlist
 #[test]
 fn test_perl_refactoring_not_in_allowlist() -> TestResult {
-    let root_cargo_toml = fs::read_to_string("Cargo.toml")?;
+    let root_cargo_toml = fs::read_to_string(ws("Cargo.toml"))?;
 
     if let Some(allow_section) = root_cargo_toml.split("[workspace.metadata.publish.allow]").nth(1)
     {
@@ -158,7 +168,7 @@ fn test_perl_refactoring_not_in_allowlist() -> TestResult {
 /// Test that perl-incremental-parsing is NOT in the workspace publish allowlist
 #[test]
 fn test_perl_incremental_parsing_not_in_allowlist() -> TestResult {
-    let root_cargo_toml = fs::read_to_string("Cargo.toml")?;
+    let root_cargo_toml = fs::read_to_string(ws("Cargo.toml"))?;
 
     if let Some(allow_section) = root_cargo_toml.split("[workspace.metadata.publish.allow]").nth(1)
     {
@@ -181,8 +191,8 @@ fn test_perl_incremental_parsing_not_in_allowlist() -> TestResult {
 /// Test that published-crate-baseline.txt is updated to 34 (down from 37)
 #[test]
 fn test_published_count_baseline_is_34() -> TestResult {
-    let baseline_path = "xtask/published-crate-baseline.txt";
-    let content = fs::read_to_string(baseline_path)?;
+    let baseline_path = ws("xtask/published-crate-baseline.txt");
+    let content = fs::read_to_string(&baseline_path)?;
     let baseline_count = content.trim().parse::<u32>()?;
 
     if baseline_count == 34 {
@@ -200,8 +210,8 @@ fn test_published_count_baseline_is_34() -> TestResult {
 /// (all should be rewritten to perl_parser::incremental::)
 #[test]
 fn test_text_sync_imports_rewired() -> TestResult {
-    let text_sync_path = "crates/perl-lsp/src/runtime/text_sync.rs";
-    let content = fs::read_to_string(text_sync_path)?;
+    let text_sync_path = ws("crates/perl-lsp/src/runtime/text_sync.rs");
+    let content = fs::read_to_string(&text_sync_path)?;
 
     // Count occurrences of the old import
     let old_import_count = content.matches("perl_incremental_parsing::").count();
@@ -225,8 +235,8 @@ fn test_text_sync_imports_rewired() -> TestResult {
 /// Test that perl-parser/Cargo.toml no longer depends on perl-dead-code
 #[test]
 fn test_perl_parser_no_dead_code_dep() -> TestResult {
-    let cargo_toml_path = "crates/perl-parser/Cargo.toml";
-    let content = fs::read_to_string(cargo_toml_path)?;
+    let cargo_toml_path = ws("crates/perl-parser/Cargo.toml");
+    let content = fs::read_to_string(&cargo_toml_path)?;
 
     // Look for the dependency line (should be removed)
     if content.contains("perl-dead-code = { workspace = true }") {
@@ -239,8 +249,8 @@ fn test_perl_parser_no_dead_code_dep() -> TestResult {
 /// Test that perl-parser/Cargo.toml no longer depends on perl-refactoring
 #[test]
 fn test_perl_parser_no_refactoring_dep() -> TestResult {
-    let cargo_toml_path = "crates/perl-parser/Cargo.toml";
-    let content = fs::read_to_string(cargo_toml_path)?;
+    let cargo_toml_path = ws("crates/perl-parser/Cargo.toml");
+    let content = fs::read_to_string(&cargo_toml_path)?;
 
     if content.contains("perl-refactoring = { workspace = true }") {
         return Err("perl-parser Cargo.toml still depends on perl-refactoring".into());
@@ -252,8 +262,8 @@ fn test_perl_parser_no_refactoring_dep() -> TestResult {
 /// Test that perl-parser/Cargo.toml no longer optionally depends on perl-incremental-parsing
 #[test]
 fn test_perl_parser_no_incremental_dep() -> TestResult {
-    let cargo_toml_path = "crates/perl-parser/Cargo.toml";
-    let content = fs::read_to_string(cargo_toml_path)?;
+    let cargo_toml_path = ws("crates/perl-parser/Cargo.toml");
+    let content = fs::read_to_string(&cargo_toml_path)?;
 
     if content.contains("perl-incremental-parsing = { workspace = true, optional = true }") {
         return Err("perl-parser Cargo.toml still depends on perl-incremental-parsing".into());
@@ -265,8 +275,8 @@ fn test_perl_parser_no_incremental_dep() -> TestResult {
 /// Test that perl-lsp/Cargo.toml no longer depends on perl-incremental-parsing
 #[test]
 fn test_perl_lsp_no_incremental_dep() -> TestResult {
-    let cargo_toml_path = "crates/perl-lsp/Cargo.toml";
-    let content = fs::read_to_string(cargo_toml_path)?;
+    let cargo_toml_path = ws("crates/perl-lsp/Cargo.toml");
+    let content = fs::read_to_string(&cargo_toml_path)?;
 
     if content.contains("perl-incremental-parsing = {") {
         return Err("perl-lsp Cargo.toml still depends on perl-incremental-parsing".into());
@@ -283,7 +293,7 @@ fn test_perl_lsp_no_incremental_dep() -> TestResult {
 #[test]
 fn test_dead_code_module_structure() -> TestResult {
     // After absorption, the module should be a real directory with content
-    let dead_code_mod_path = Path::new("crates/perl-parser/src/dead_code");
+    let dead_code_mod_path = ws("crates/perl-parser/src/dead_code");
 
     if !dead_code_mod_path.exists() {
         return Err("perl-parser/src/dead_code/ directory must exist after absorption".into());
@@ -299,7 +309,7 @@ fn test_dead_code_module_structure() -> TestResult {
 /// Test that perl-parser/src/refactor/ is a real directory (not just a re-export shim file)
 #[test]
 fn test_refactor_module_structure() -> TestResult {
-    let refactor_path = Path::new("crates/perl-parser/src/refactor");
+    let refactor_path = ws("crates/perl-parser/src/refactor");
 
     if !refactor_path.exists() {
         return Err("perl-parser/src/refactor/ directory must exist after absorption".into());
@@ -316,7 +326,7 @@ fn test_refactor_module_structure() -> TestResult {
 /// Test that perl-parser/src/incremental/ is a real directory (not just a re-export shim file)
 #[test]
 fn test_incremental_module_structure() -> TestResult {
-    let incremental_path = Path::new("crates/perl-parser/src/incremental");
+    let incremental_path = ws("crates/perl-parser/src/incremental");
 
     if !incremental_path.exists() {
         return Err("perl-parser/src/incremental/ directory must exist after absorption".into());

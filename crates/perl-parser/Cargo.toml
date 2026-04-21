@@ -62,7 +62,7 @@ rustdoc-args = ["--cfg", "docsrs"]
 workspace = true
 
 [features]
-default = ["workspace", "lsp-compat"]  # Enable workspace indexing by default for cross-file features
+default = ["workspace", "lsp-compat", "workspace_refactor"]  # Enable workspace indexing by default for cross-file features
 cli = []
 incremental = ["anyhow", "perl-line-index", "tracing"]
 lsp-compat = [

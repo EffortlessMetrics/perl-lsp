@@ -16,6 +16,7 @@ mod tests {
 
         let config = crate::refactor::refactoring::RefactoringConfig {
             safe_mode: false,
+            create_backups: false, // Disable backups to avoid parallel test isolation issues
             ..Default::default()
         };
         let mut engine = RefactoringEngine::with_config(config);
@@ -48,6 +49,7 @@ mod tests {
 
         let config = crate::refactor::refactoring::RefactoringConfig {
             safe_mode: false,
+            create_backups: false, // Disable backups to avoid parallel test isolation issues
             ..Default::default()
         };
         let mut engine = RefactoringEngine::with_config(config);
@@ -82,6 +84,7 @@ mod tests {
 
         let config = crate::refactor::refactoring::RefactoringConfig {
             safe_mode: false,
+            create_backups: false, // Disable backups to avoid parallel test isolation issues
             ..Default::default()
         };
         let mut engine = RefactoringEngine::with_config(config);
