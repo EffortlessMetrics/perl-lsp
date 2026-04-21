@@ -1,0 +1,13 @@
+pub mod perl_uri
+pub mod perl_uri::classify
+pub fn perl_uri::classify::is_file_uri(uri: &str) -> bool
+pub fn perl_uri::classify::is_special_scheme(uri: &str) -> bool
+pub fn perl_uri::classify::uri_extension(uri: &str) -> core::option::Option<&str>
+pub fn perl_uri::classify::uri_key(uri: &str) -> alloc::string::String
+pub fn perl_uri::fs_path_to_uri<P: core::convert::AsRef<std::path::Path>>(path: P) -> core::result::Result<alloc::string::String, alloc::string::String>
+pub fn perl_uri::is_file_uri(uri: &str) -> bool
+pub fn perl_uri::is_special_scheme(uri: &str) -> bool
+pub fn perl_uri::normalize_uri(uri: &str) -> alloc::string::String
+pub fn perl_uri::uri_extension(uri: &str) -> core::option::Option<&str>
+pub fn perl_uri::uri_key(uri: &str) -> alloc::string::String
+pub fn perl_uri::uri_to_fs_path(uri: &str) -> core::option::Option<std::path::PathBuf>

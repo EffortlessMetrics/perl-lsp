@@ -18,7 +18,7 @@
 /// InlineCompletionProvider must be accessible.
 #[test]
 fn test_wired_inline_completion_provider_accessible() {
-    use perl_lsp_inline_completion::InlineCompletionProvider;
+    use perl_lsp_rs_core::providers::inline_completion::InlineCompletionProvider;
     let provider = InlineCompletionProvider::new();
     // Basic smoke: after `->` we should get a `new()` suggestion.
     let completions = provider.get_inline_completions("$obj->", 0, 6);
@@ -45,7 +45,7 @@ fn test_wired_inline_completion_provider_accessible() {
 /// We verify the crate API is reachable and returns the correct result.
 #[test]
 fn test_wired_inline_completion_utf16_position() {
-    use perl_lsp_inline_completion::InlineCompletionProvider;
+    use perl_lsp_rs_core::providers::inline_completion::InlineCompletionProvider;
     let source = "my $prefix = \"😀\"; $obj->";
     // UTF-16 code-unit count for the full string (end-of-line position)
     let utf16_len: u32 = source.encode_utf16().count() as u32;
@@ -63,7 +63,7 @@ fn test_wired_inline_completion_utf16_position() {
 /// within that line — not across the entire document.
 #[test]
 fn test_wired_inline_completion_multiline_document() {
-    use perl_lsp_inline_completion::InlineCompletionProvider;
+    use perl_lsp_rs_core::providers::inline_completion::InlineCompletionProvider;
     // Line 0: preamble; Line 1: the trigger line
     let source = "use strict;\nuse warnings;\n$obj->";
     let provider = InlineCompletionProvider::new();
@@ -85,7 +85,7 @@ fn test_wired_inline_completion_multiline_document() {
 /// WorkspaceSymbolsProvider must be reachable as a direct dependency.
 #[test]
 fn test_wired_workspace_symbols_provider_accessible() {
-    use perl_lsp_workspace_symbols::WorkspaceSymbolsProvider;
+    use perl_lsp_rs_core::providers::workspace_symbols::WorkspaceSymbolsProvider;
     let provider = WorkspaceSymbolsProvider::new();
     // Empty provider returns no symbols — just confirm it compiles and runs.
     let results = provider.search("anything", &std::collections::HashMap::new());
@@ -99,7 +99,7 @@ fn test_wired_workspace_symbols_provider_accessible() {
 /// Symbol query helpers must be reachable.
 #[test]
 fn test_wired_symbol_query_matches() {
-    use perl_lsp_symbol_query::matches_query;
+    use perl_lsp_rs_core::providers::symbol_query::matches_query;
     assert!(matches_query("process_data", "proc"));
     assert!(!matches_query("unrelated", "proc"));
 }
@@ -111,7 +111,9 @@ fn test_wired_symbol_query_matches() {
 /// Completion item domain types must be reachable.
 #[test]
 fn test_wired_completion_item_dedup() {
-    use perl_lsp_completion_item::{CompletionItem, CompletionItemKind, deduplicate_and_sort};
+    use perl_lsp_rs_core::providers::completion_item::{
+        CompletionItem, CompletionItemKind, deduplicate_and_sort,
+    };
     let make = |label: &str| CompletionItem {
         label: label.to_string(),
         kind: CompletionItemKind::Function,
@@ -150,7 +152,7 @@ fn test_wired_ast_utils_find_function_insert_position() {
 /// Formatting types must be reachable.
 #[test]
 fn test_wired_formatting_types_accessible() {
-    use perl_lsp_formatting_types::FormatRange;
+    use perl_lsp_rs_core::providers::formatting_types::FormatRange;
     // FormatRange::whole_document parses the content to find the last line.
     // For a 3-line file the end line must be 2, not 0.
     let content = "line1\nline2\nline3";
@@ -182,7 +184,7 @@ fn test_wired_critic_parser_parses_output() {
 /// Import management helpers must be reachable.
 #[test]
 fn test_wired_import_management_collect_imports() {
-    use perl_lsp_import_management::collect_imports;
+    use perl_lsp_rs_core::providers::import_management::collect_imports;
     let lines: Vec<String> = vec![
         "use strict;".to_string(),
         "use warnings;".to_string(),
@@ -198,14 +200,14 @@ fn test_wired_import_management_collect_imports() {
 }
 
 // ---------------------------------------------------------------------------
-// perl-lsp-capability-map
+// perl-lsp-rs-core::capability_map (absorbed from perl-lsp-capability-map)
 // ---------------------------------------------------------------------------
 
-/// Capability map helpers must be reachable.
+/// Capability map helpers must be reachable from perl-lsp-rs-core.
 #[test]
 fn test_wired_capability_map_roundtrip() {
     use lsp_types::ServerCapabilities;
-    use perl_lsp_capability_map::{caps_from_feature_ids, feature_ids_from_caps};
+    use perl_lsp_rs_core::capability_map::{caps_from_feature_ids, feature_ids_from_caps};
     // Default (empty) capabilities → empty feature list
     let empty_caps = ServerCapabilities::default();
     let ids = feature_ids_from_caps(&empty_caps);
@@ -234,26 +236,26 @@ fn test_wired_performance_ast_cache_accessible() {
 }
 
 // ---------------------------------------------------------------------------
-// perl-lsp-feature-flags
+// perl-lsp-rs-core::features::flags (absorbed from perl-lsp-feature-flags)
 // ---------------------------------------------------------------------------
 
-/// Feature-flags types must be reachable and BuildFlags must be constructible.
+/// Feature-flags types must be reachable from perl-lsp-rs-core and BuildFlags must be constructible.
 #[test]
 fn test_wired_feature_flags_accessible() {
-    use perl_lsp_feature_flags::BuildFlags;
+    use perl_lsp_rs_core::features::flags::BuildFlags;
     // Default BuildFlags has all capabilities disabled
     let flags = BuildFlags::default();
     assert!(!flags.completion, "default BuildFlags should have completion disabled");
 }
 
 // ---------------------------------------------------------------------------
-// perl-lsp-feature-policy
+// perl-lsp-rs-core::features::policy (absorbed from perl-lsp-feature-policy)
 // ---------------------------------------------------------------------------
 
-/// Feature-policy helpers must be reachable.
+/// Feature-policy helpers must be reachable from perl-lsp-rs-core.
 #[test]
 fn test_wired_feature_policy_accessible() {
-    use perl_lsp_feature_policy::{FeatureProfile, flags_for_profile};
+    use perl_lsp_rs_core::features::policy::{FeatureProfile, flags_for_profile};
     let flags = flags_for_profile(FeatureProfile::Production);
     // Production profile must have core capabilities enabled.
     assert!(flags.completion, "production profile must enable completion");
@@ -261,13 +263,13 @@ fn test_wired_feature_policy_accessible() {
 }
 
 // ---------------------------------------------------------------------------
-// perl-lsp-feature-contracts
+// perl-lsp-rs-core::features::contracts (absorbed from perl-lsp-feature-contracts)
 // ---------------------------------------------------------------------------
 
-/// Feature-contracts types must be reachable.
+/// Feature-contracts types must be reachable from perl-lsp-rs-core.
 #[test]
 fn test_wired_feature_contracts_accessible() {
-    use perl_lsp_feature_contracts::FEATURE_PROFILE_SPECS;
+    use perl_lsp_rs_core::features::contracts::FEATURE_PROFILE_SPECS;
     // The canonical profile names are load-bearing — check specific known values.
     let canonicals: Vec<&str> = FEATURE_PROFILE_SPECS.iter().map(|s| s.canonical).collect();
     assert!(canonicals.contains(&"ga-lock"), "FEATURE_PROFILE_SPECS must contain ga-lock profile");
@@ -278,13 +280,13 @@ fn test_wired_feature_contracts_accessible() {
 }
 
 // ---------------------------------------------------------------------------
-// perl-lsp-feature-grid
+// perl-lsp-rs-core::features::grid (absorbed from perl-lsp-feature-grid)
 // ---------------------------------------------------------------------------
 
-/// Feature-grid re-exports must be reachable.
+/// Feature-grid re-exports must be reachable from perl-lsp-rs-core.
 #[test]
 fn test_wired_feature_grid_accessible() {
-    use perl_lsp_feature_grid::feature_profile_specs;
+    use perl_lsp_rs_core::features::grid::feature_profile_specs;
     let specs = feature_profile_specs();
     // Verify the re-export returns the same data as the underlying contracts crate.
     let canonicals: Vec<&str> = specs.iter().map(|s| s.canonical).collect();
@@ -295,13 +297,13 @@ fn test_wired_feature_grid_accessible() {
 }
 
 // ---------------------------------------------------------------------------
-// perl-lsp-feature-profile
+// perl-lsp-rs-core::features::profile (absorbed from perl-lsp-feature-profile)
 // ---------------------------------------------------------------------------
 
-/// Feature-profile helpers must be reachable.
+/// Feature-profile helpers must be reachable from perl-lsp-rs-core.
 #[test]
 fn test_wired_feature_profile_accessible() {
-    use perl_lsp_feature_profile::supported_cli_profiles;
+    use perl_lsp_rs_core::features::profile::supported_cli_profiles;
     let profiles = supported_cli_profiles();
     // Check that canonical token values are present, not just that the list is non-empty.
     assert!(profiles.contains(&"production"), "supported profiles must include 'production'");
@@ -309,13 +311,13 @@ fn test_wired_feature_profile_accessible() {
 }
 
 // ---------------------------------------------------------------------------
-// perl-lsp-feature-profile-cli
+// perl-lsp-rs-core::features::profile_cli (absorbed from perl-lsp-feature-profile-cli)
 // ---------------------------------------------------------------------------
 
-/// Feature-profile-cli helpers must be reachable.
+/// Feature-profile-cli helpers must be reachable from perl-lsp-rs-core.
 #[test]
 fn test_wired_feature_profile_cli_accessible() {
-    use perl_lsp_feature_profile_cli::{
+    use perl_lsp_rs_core::features::profile_cli::{
         feature_profile_supported_tokens, parse_feature_profile_arg,
     };
     let tokens = feature_profile_supported_tokens();
@@ -354,7 +356,7 @@ fn test_wired_perltidy_config_accessible() {
 /// Document links function must be reachable.
 #[test]
 fn test_wired_document_links_compute_links() {
-    use perl_lsp_document_links::compute_links;
+    use perl_lsp_rs_core::providers::document_links::compute_links;
     use url::Url;
     let uri = "file:///test.pl";
     let text = "use Scalar::Util qw(looks_like_number);\n";

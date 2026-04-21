@@ -51,7 +51,7 @@ impl ImplementationProvider {
     /// # Examples
     ///
     /// ```rust,ignore
-    /// use perl_lsp_navigation::ImplementationProvider;
+    /// use perl_lsp_rs_core::providers::navigation::ImplementationProvider;
     ///
     /// // Without workspace indexing (single-file analysis)
     /// let provider = ImplementationProvider::new(None);

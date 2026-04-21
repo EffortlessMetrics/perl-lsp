@@ -353,6 +353,9 @@ pub use server::LspServer;
 #[cfg(feature = "dap-phase1")]
 pub use perl_dap::BridgeAdapter;
 
+// Wave F re-exports: absorbed capability-map crate
+pub use perl_lsp_rs_core::capability_map;
+
 // =============================================================================
 // Internal compatibility re-exports (crate-internal, not API surface)
 // =============================================================================

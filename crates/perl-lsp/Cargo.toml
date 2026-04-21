@@ -33,10 +33,9 @@ path = "src/main.rs"
 perl-dap = { workspace = true }
 perl-incremental-parsing = { workspace = true, optional = true }
 perl-parser = { workspace = true, features = ["test-performance"] }
-perl-lsp-providers = { workspace = true, features = ["lsp-compat"] }
-perl-lsp-formatting = { workspace = true }
+# (perl-lsp-providers absorbed into perl-lsp-rs-core::providers::lsp_compat — Wave G1b)
+# (perl-lsp-formatting absorbed into perl-lsp-rs-core::providers::formatting — Wave G1b)
 perl-lsp-cancellation = { workspace = true }
-perl-lsp-color-provider = { workspace = true }
 perl-lsp-input-validation = { workspace = true }
 perl-lsp-limits = { workspace = true }
 perl-lsp-uri = { workspace = true }
@@ -46,38 +45,21 @@ perl-subprocess-runtime = { workspace = true }
 perl-lsp-config = { workspace = true }
 perl-lsp-protocol = { workspace = true }
 perl-lsp-transport = { workspace = true }
-perl-lsp-code-actions = { workspace = true }
-perl-lsp-inline-completion = { workspace = true }
-perl-lsp-ai-provider = { workspace = true }
-perl-lsp-completion = { workspace = true }
-perl-lsp-diagnostics = { workspace = true }
+# (perl-lsp-code-actions absorbed into perl-lsp-rs-core::providers::code_actions — Wave G1b)
+# (perl-lsp-inline-completion absorbed into perl-lsp-rs-core::providers::inline_completion — Wave G1b)
+# (perl-lsp-ai-provider absorbed into perl-lsp-rs-core::providers::ai — Wave G1b)
+# (perl-lsp-completion absorbed into perl-lsp-rs-core::providers::completion — Wave G1b)
+# (perl-lsp-diagnostics absorbed into perl-lsp-rs-core::providers::diagnostics — Wave G1b)
 perl-diagnostics = { workspace = true }
-perl-lsp-document-highlight = { workspace = true }
-perl-lsp-inlay-hints = { workspace = true }
-perl-lsp-code-lens = { workspace = true }
-perl-lsp-navigation = { workspace = true, features = ["lsp-compat"] }
-perl-lsp-type-hierarchy = { workspace = true }
-perl-lsp-rename = { workspace = true }
-perl-lsp-selection-range = { workspace = true }
-perl-lsp-semantic-tokens = { workspace = true }
+# (perl-lsp-navigation absorbed into perl-lsp-rs-core::providers::navigation — Wave G1b)
+# (perl-lsp-rename absorbed into perl-lsp-rs-core::providers::rename — Wave G1b)
+# (perl-lsp-semantic-tokens absorbed into perl-lsp-rs-core::providers::semantic_tokens — Wave G1b)
 perl-lsp-launcher = { workspace = true }
-# Wired provider crates (#2756) — formerly built but unused in this binary
-perl-lsp-workspace-symbols = { workspace = true }
-perl-lsp-symbol-query = { workspace = true }
-perl-lsp-completion-item = { workspace = true }
-perl-lsp-formatting-types = { workspace = true }
+# Provider crates absorbed into perl-lsp-rs-core (Wave G1a)
 perl-lsp-critic-parser = { workspace = true }
-perl-lsp-import-management = { workspace = true }
-perl-lsp-capability-map = { workspace = true }
+perl-lsp-rs-core = { workspace = true, features = ["lsp-compat"] }
 perl-lsp-performance = { workspace = true }
-perl-lsp-feature-flags = { workspace = true }
-perl-lsp-feature-policy = { workspace = true }
-perl-lsp-feature-contracts = { workspace = true }
-perl-lsp-feature-grid = { workspace = true }
-perl-lsp-feature-profile = { workspace = true }
-perl-lsp-feature-profile-cli = { workspace = true }
 perl-lsp-perltidy = { workspace = true }
-perl-lsp-document-links = { workspace = true }
 perl-position-tracking = { workspace = true, features = ["lsp-compat"] }
 perl-symbol = { workspace = true }
 perl-module = { workspace = true }
@@ -121,6 +103,7 @@ lsp-ga-lock = [
   "perl-lsp-protocol/lsp-ga-lock",
   "perl-lsp-feature-governance/lsp-ga-lock",
   "perl-lsp-launcher/lsp-ga-lock",
+  "perl-lsp-rs-core/lsp-ga-lock",
 ]
 experimental-features = []  # Experimental LSP features for testing
 stress-tests = []  # Enable stress tests that are too slow for CI

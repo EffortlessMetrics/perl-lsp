@@ -306,7 +306,11 @@ impl LspServer {
     /// Pass `None` to clear the backend entirely.
     pub fn test_install_ai_backend(
         &self,
-        backend: Option<std::sync::Arc<dyn perl_lsp_inline_completion::InlineCompletionBackend>>,
+        backend: Option<
+            std::sync::Arc<
+                dyn perl_lsp_rs_core::providers::inline_completion::InlineCompletionBackend,
+            >,
+        >,
     ) {
         *self.ai_inline_backend.lock() = backend;
     }

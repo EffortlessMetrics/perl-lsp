@@ -1,0 +1,77 @@
+[package]
+name = "perl-lsp-rs-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license = "MIT OR Apache-2.0"
+repository.workspace = true
+homepage.workspace = true
+description = "Implementation core for perl-lsp-rs (Wave F: feature flags, contracts, capability mapping)"
+documentation = "https://docs.rs/perl-lsp-rs-core"
+readme = "README.md"
+keywords = ["perl", "lsp", "features", "contracts", "capabilities"]
+categories = ["development-tools", "development-tools::testing"]
+include = [
+  "src/**",
+  "build.rs",
+  "features_sot.toml",
+  "Cargo.toml",
+  "README.md"
+]
+
+[lib]
+doctest = false
+
+[dependencies]
+lsp-types.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+# Provider crate dependencies (Wave G1a: 15 providers absorbed)
+perl-parser-core.workspace = true
+perl-module.workspace = true
+perl-position-tracking.workspace = true
+perl-semantic-analyzer.workspace = true
+perl-lexer.workspace = true
+perl-ast.workspace = true
+walkdir.workspace = true
+once_cell.workspace = true
+regex.workspace = true
+url.workspace = true
+
+# Wave G1b additional dependencies (10 medium-risk providers absorbed)
+perl-lsp-tooling.workspace = true
+perl-lsp-perltidy.workspace = true
+perl-lsp-text-utils.workspace = true
+perl-lsp-uri.workspace = true
+perl-diagnostics.workspace = true
+perl-workspace.workspace = true
+perl-pragma.workspace = true
+perl-symbol.workspace = true
+perl-parser.workspace = true
+rustc-hash = "2.1.2"
+thiserror.workspace = true
+ureq = { version = "3", features = ["json"] }
+
+[build-dependencies]
+perl-feature-catalog.workspace = true
+
+[features]
+lsp-ga-lock = []
+lsp-compat = []
+
+[dev-dependencies]
+perl-tdd-support.workspace = true
+serde_json.workspace = true
+perl-lsp-rs.workspace = true
+perl-lsp-tooling.workspace = true
+tempfile.workspace = true
+insta = { version = "1.47.2", features = ["yaml"] }
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
+[lints]
+workspace = true

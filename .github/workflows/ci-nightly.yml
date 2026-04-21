@@ -328,6 +328,18 @@ jobs:
             --baseline-rev ${{ steps.baseline.outputs.baseline }} \
             || echo "::warning::Breaking changes detected in perl-parser-core"
 
+      - name: Check perl-lsp-rs API compatibility
+        run: |
+          cargo semver-checks check-release -p perl-lsp-rs \
+            --baseline-rev ${{ steps.baseline.outputs.baseline }} \
+            || echo "::warning::Breaking changes detected in perl-lsp-rs"
+
+      - name: Check perllsp API compatibility
+        run: |
+          cargo semver-checks check-release -p perllsp \
+            --baseline-rev ${{ steps.baseline.outputs.baseline }} \
+            || echo "::warning::Breaking changes detected in perllsp"
+
       - name: Generate breaking changes report
         if: always()
         run: |
@@ -343,6 +355,36 @@ jobs:
           name: semver-breaking-changes-report
           path: target/semver-reports/breaking-changes.json
           retention-days: 30
+
+  public-api-check:
+    name: Public API Surface Check
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'schedule' ||
+      (github.event_name == 'pull_request' &&
+       contains(github.event.pull_request.labels.*.name, 'ci:public-api'))
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9  # stable (master)
+        with:
+          toolchain: 1.92.0
+
+      - name: Cache cargo dependencies
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4  # v2.9.1
+        with:
+          key: public-api-${{ hashFiles('Cargo.lock') }}
+          cache-on-failure: true
+
+      - name: Install cargo-public-api
+        run: cargo install cargo-public-api --locked --version 0.50.1
+
+      - name: Check public API surface (perl-lsp-rs, perl-parser, perl-uri, perl-dap, perllsp)
+        # Uses cargo public-api --simplified to omit blanket-impl noise; baselines in .ci/public-api-baselines/
+        run: just public-api-check
 
   clippy-strict:
     name: Clippy (Strict)

@@ -51,6 +51,7 @@ pr-fast: _check-tools-basic
     just _timed "clippy-core" "just clippy-core" && \
     just _timed "test-core" "just test-core" && \
     just _timed "publish-closure" "just ci-publish-closure" && \
+    just _timed "publish-manifest-check" "just ci-publish-manifest-check" && \
     just _timed "layer-check" "just ci-layer-check" && \
     just _timed "published-crate-count" "just ci-published-crate-count"
     RC=$?
@@ -765,6 +766,7 @@ ci-gate:
     just hook-registry-check && \
     just hook-tests && \
     just ci-publish-closure && \
+    just ci-publish-manifest-check && \
     just ci-layer-check && \
     just ci-published-crate-count
     # @START=$$(date +%s); \
@@ -880,6 +882,12 @@ ci-published-crate-count:
     @echo "🧮 Checking published-crate count ratchet..."
     @cargo xtask published-crate-count
     @echo "✅ Published-crate count ratchet passed"
+
+# Offline manifest validation: allowlist drift + LICENSE present (see #4499)
+ci-publish-manifest-check:
+    @echo "Checking publish manifest (allowlist drift + LICENSE)..."
+    @cargo xtask publish-manifest-check
+    @echo "Publish manifest check passed"
 
 # Core tests (fast, essential)
 ci-test-core:
@@ -1794,6 +1802,53 @@ _semver-check-install:
         cargo install cargo-semver-checks --locked; \
     fi
 
+# Private helper: install cargo-public-api if not present
+[private]
+_public-api-install:
+    @if ! command -v cargo-public-api >/dev/null 2>&1; then \
+        echo "Installing cargo-public-api..."; \
+        cargo install cargo-public-api --locked --version 0.50.1; \
+    fi
+
+# Check public API surface of facade crates against committed baselines
+public-api-check:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    just _public-api-install
+    echo "Checking public API surface for facade crates..."
+    FAILED=0
+    for crate in perl-lsp-rs perl-parser perl-uri perl-dap perllsp; do
+        BASELINE=".ci/public-api-baselines/${crate}.txt"
+        if [ ! -f "$BASELINE" ]; then
+            echo "FAIL Missing baseline: $BASELINE (run: just public-api-update)"
+            FAILED=1
+            continue
+        fi
+        cargo public-api -p "$crate" --simplified 2>/dev/null | grep "^pub " > "/tmp/${crate}-current.txt" || true
+        if ! diff -u "$BASELINE" "/tmp/${crate}-current.txt" > "/tmp/${crate}-diff.txt" 2>&1; then
+            echo "FAIL Public API changed in ${crate}:"
+            cat "/tmp/${crate}-diff.txt"
+            FAILED=1
+        else
+            echo "OK ${crate}: API surface unchanged"
+        fi
+    done
+    [ $FAILED -eq 0 ] || { echo "Run 'just public-api-update' to regenerate baselines if the change is intentional."; exit 1; }
+
+# Regenerate all public API baselines from current workspace state
+public-api-update:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    just _public-api-install
+    echo "Regenerating public API baselines..."
+    mkdir -p .ci/public-api-baselines
+    for crate in perl-lsp-rs perl-parser perl-uri perl-dap perllsp; do
+        cargo public-api -p "$crate" --simplified 2>/dev/null | grep "^pub " \
+            > ".ci/public-api-baselines/${crate}.txt" || true
+        echo "Updated ${crate}: $(wc -l < .ci/public-api-baselines/${crate}.txt) lines"
+    done
+    echo "Commit .ci/public-api-baselines/ with your PR."
+
 # Private helper: run semver checks on core packages
 [private]
 _semver-check-run:
@@ -2130,8 +2185,7 @@ publish-new-crates:
 # matches the set of crates that cargo metadata considers publishable.
 # Run this after adding a new crate to catch drift before pushing.
 publish-allowlist-check:
-    cargo metadata --format-version=1 --no-deps \
-      | python3 scripts/publish-topo.py --check-drift
+    cargo xtask publish-manifest-check
 
 # Dry-run publish gate: package every allowlisted crate in topological order.
 # Mirrors the dev-dep strip and packaging steps from publish-crates.yml.

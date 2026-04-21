@@ -532,7 +532,7 @@ package MyPkg;
     let mut parser = Parser::new(test_code);
 
     if let Ok(ast) = parser.parse() {
-        let provider = CodeLensProvider::new(test_code.to_string());
+        let provider = CodeLensProvider::with_source(test_code.to_string());
         let lenses = provider.extract(&ast);
 
         // Should have lenses for test function and references

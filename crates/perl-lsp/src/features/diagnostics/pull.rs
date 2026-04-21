@@ -18,7 +18,7 @@ use serde::{Deserialize, Serialize};
 use crate::state::DocumentState;
 use crate::util::uri::parse_uri;
 use perl_diagnostics::codes::DiagnosticCode;
-use perl_lsp_diagnostics::{parse_error_code, parse_error_severity};
+use perl_lsp_rs_core::providers::diagnostics::{parse_error_code, parse_error_severity};
 use perl_parser::Parser;
 use perl_parser::error::ParseError;
 use perl_parser::position::offset_to_utf16_line_col;
@@ -404,12 +404,13 @@ impl PullDiagnosticsProvider {
             #[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
             {
                 if let Some(ref workspace_index) = context.workspace_index {
-                    let dead_code_diags = perl_lsp_diagnostics::detect_dead_code(
-                        workspace_index,
-                        &uri.to_string(),
-                        &doc_state.text,
-                        &doc_state.line_starts,
-                    );
+                    let dead_code_diags =
+                        perl_lsp_rs_core::providers::diagnostics::detect_dead_code(
+                            workspace_index,
+                            &uri.to_string(),
+                            &doc_state.text,
+                            &doc_state.line_starts,
+                        );
                     // Convert dead code diagnostics to LSP format
                     for d in dead_code_diags {
                         diagnostics.push(self.internal_to_lsp_diagnostic(
@@ -644,7 +645,7 @@ impl PullDiagnosticsProvider {
         &self,
         _uri: &Uri,
         text: &str,
-        diagnostic: perl_lsp_diagnostics::Diagnostic,
+        diagnostic: perl_lsp_rs_core::providers::diagnostics::Diagnostic,
         context: &PullDiagnosticsContext,
     ) -> LspDiagnostic {
         let range = lsp_range_from_offsets(text, diagnostic.range.0, diagnostic.range.1);
@@ -658,8 +659,12 @@ impl PullDiagnosticsProvider {
             .tags
             .iter()
             .map(|t| match t {
-                perl_lsp_diagnostics::DiagnosticTag::Unnecessary => "Unnecessary".to_string(),
-                perl_lsp_diagnostics::DiagnosticTag::Deprecated => "Deprecated".to_string(),
+                perl_lsp_rs_core::providers::diagnostics::DiagnosticTag::Unnecessary => {
+                    "Unnecessary".to_string()
+                }
+                perl_lsp_rs_core::providers::diagnostics::DiagnosticTag::Deprecated => {
+                    "Deprecated".to_string()
+                }
             })
             .collect();
 
@@ -742,7 +747,8 @@ impl PullDiagnosticsProvider {
 
         // Append the suggestion inline so users see actionable hints in the fallback path,
         // matching the behaviour of to_lsp_diagnostic for the AST-present path.
-        let suggestion = perl_lsp_diagnostics::build_parse_error_hint(error, &base_message);
+        let suggestion =
+            perl_lsp_rs_core::providers::diagnostics::build_parse_error_hint(error, &base_message);
         let message = match suggestion.as_deref() {
             Some(hint) => format!("{base_message}\nSuggestion: {hint}"),
             None => base_message,

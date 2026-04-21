@@ -4,7 +4,7 @@
 //! and maintaining the tree-sitter-perl project.
 
 use clap::{Parser, Subcommand, ValueEnum};
-use color_eyre::eyre::Result;
+use color_eyre::eyre::{Result, eyre};
 use std::path::PathBuf;
 
 mod tasks;
@@ -731,6 +731,17 @@ enum Commands {
     /// When the count has decreased, the baseline is auto-tightened.
     PublishedCrateCount,
 
+    /// Offline manifest validation: allowlist drift + LICENSE present.
+    ///
+    /// Checks that every entry in `[workspace.metadata.publish.allow]` is a
+    /// publishable workspace member and vice versa (allowlist drift), and that
+    /// every allowlisted crate has a `license` or `license-file` field set.
+    /// Uses `cargo metadata --no-deps` — no network contact.
+    ///
+    /// Replaces the Python `--check-drift` step in `publish-dry-run.yml` and
+    /// is wired into `just pr-fast` and `just ci-gate`.
+    PublishManifestCheck,
+
     /// Sweep system Perl corpus for parser error rates
     ParserCorpusSweep {
         /// Comma-separated corpus root directories
@@ -999,6 +1010,17 @@ enum Commands {
         /// Check mode: clippy, test, or all (default: all)
         #[arg(long, value_enum, default_value = "all")]
         mode: CheckMode,
+    },
+
+    /// Resolve the Cargo package name for a crate directory.
+    ///
+    /// Prints the package name from Cargo.toml to stdout (one line, no trailing noise).
+    /// Used by the pre-push hook to convert a directory basename into the correct -p argument.
+    ///
+    /// Example: `cargo xtask resolve-package-name crates/perl-lsp` outputs `perl-lsp-rs`
+    ResolvePackageName {
+        /// Crate directory path, relative to workspace root (e.g., "crates/perl-lsp")
+        crate_dir: String,
     },
 
     /// Remove stale `.claude/worktrees` entries and prune Git metadata.
@@ -1400,6 +1422,7 @@ fn main() -> Result<()> {
         Commands::PublishVscode { yes, token } => publish::publish_vscode(yes, token),
         Commands::PublishClosure { crate_name } => publish_closure::run(crate_name),
         Commands::PublishedCrateCount => count_ratchet::run(),
+        Commands::PublishManifestCheck => publish_manifest_check::run(),
         Commands::SmokeTestRelease { version } => publish::smoke_test_release(version),
         Commands::PublishReceipts { date } => publish_receipts::run(date),
         Commands::ParserCorpusSweep {
@@ -1549,6 +1572,15 @@ fn main() -> Result<()> {
             verbose,
         }),
         Commands::TargetedChecks { base, mode } => targeted_checks::run(base, mode),
+        Commands::ResolvePackageName { crate_dir } => {
+            // Use the current working directory as workspace root so this subcommand
+            // works correctly both in the main workspace and in test synthetic workspaces.
+            let root = std::env::current_dir()
+                .map_err(|e| eyre!("Failed to get current working directory: {e}"))?;
+            let name = tasks::targeted_checks::resolve_single_package_name(&root, &crate_dir)?;
+            println!("{name}");
+            Ok(())
+        }
         Commands::WorktreeCleanup => worktrees::cleanup(),
         Commands::SwarmSummary { ops_dir, since, limit, format } => {
             swarm_summary::run(swarm_summary::SwarmSummaryConfig { ops_dir, since, limit, format })

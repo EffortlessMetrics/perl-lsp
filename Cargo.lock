@@ -1624,90 +1624,11 @@ name = "perl-line-index"
 version = "0.12.4"
 
 [[package]]
-name = "perl-lsp-ai-provider"
-version = "0.12.4"
-dependencies = [
- "perl-lsp-inline-completion",
- "serde_json",
- "ureq",
-]
-
-[[package]]
 name = "perl-lsp-cancellation"
 version = "0.12.4"
 dependencies = [
  "proptest",
  "serde_json",
-]
-
-[[package]]
-name = "perl-lsp-capability-map"
-version = "0.12.4"
-dependencies = [
- "lsp-types",
- "perl-lsp-feature-ids",
- "serde_json",
-]
-
-[[package]]
-name = "perl-lsp-code-actions"
-version = "0.12.4"
-dependencies = [
- "perl-diagnostics",
- "perl-lexer",
- "perl-lsp-diagnostics",
- "perl-lsp-import-management",
- "perl-lsp-rename",
- "perl-lsp-text-utils",
- "perl-parser",
- "perl-parser-core",
- "perl-tdd-support",
-]
-
-[[package]]
-name = "perl-lsp-code-lens"
-version = "0.12.4"
-dependencies = [
- "perl-parser",
- "perl-parser-core",
- "perl-position-tracking",
- "perl-tdd-support",
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "perl-lsp-color-provider"
-version = "0.12.4"
-dependencies = [
- "once_cell",
- "perl-position-tracking",
- "regex",
- "serde_json",
-]
-
-[[package]]
-name = "perl-lsp-completion"
-version = "0.12.4"
-dependencies = [
- "criterion",
- "perl-lexer",
- "perl-lsp-completion-item",
- "perl-lsp-file-completion",
- "perl-module",
- "perl-parser-core",
- "perl-semantic-analyzer",
- "perl-tdd-support",
- "perl-workspace",
- "serde_json",
- "url",
-]
-
-[[package]]
-name = "perl-lsp-completion-item"
-version = "0.12.4"
-dependencies = [
- "perl-parser-core",
 ]
 
 [[package]]
@@ -1729,168 +1650,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "perl-lsp-diagnostics"
-version = "0.12.4"
-dependencies = [
- "insta",
- "perl-corpus",
- "perl-diagnostics",
- "perl-parser",
- "perl-parser-core",
- "perl-pragma",
- "perl-semantic-analyzer",
- "perl-tdd-support",
- "perl-workspace",
- "tempfile",
-]
-
-[[package]]
-name = "perl-lsp-document-highlight"
-version = "0.12.4"
-dependencies = [
- "perl-ast",
- "perl-parser",
-]
-
-[[package]]
-name = "perl-lsp-document-links"
-version = "0.12.4"
-dependencies = [
- "perl-module",
- "serde_json",
- "url",
-]
-
-[[package]]
-name = "perl-lsp-feature-contracts"
-version = "0.12.4"
-dependencies = [
- "lsp-types",
- "perl-feature-catalog",
- "perl-lsp-capability-map",
- "perl-tdd-support",
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "perl-lsp-feature-flags"
-version = "0.12.4"
-dependencies = [
- "perl-lsp-feature-contracts",
- "perl-lsp-feature-ids",
-]
-
-[[package]]
 name = "perl-lsp-feature-governance"
 version = "0.12.4"
 dependencies = [
- "perl-lsp-feature-contracts",
- "perl-lsp-feature-grid",
- "perl-lsp-feature-policy",
- "perl-lsp-feature-profile",
- "perl-lsp-feature-profile-cli",
+ "perl-lsp-rs-core",
  "serde_json",
-]
-
-[[package]]
-name = "perl-lsp-feature-grid"
-version = "0.12.4"
-dependencies = [
- "perl-lsp-feature-contracts",
- "perl-lsp-feature-policy",
- "perl-tdd-support",
- "serde_json",
-]
-
-[[package]]
-name = "perl-lsp-feature-ids"
-version = "0.12.4"
-
-[[package]]
-name = "perl-lsp-feature-policy"
-version = "0.12.4"
-dependencies = [
- "perl-lsp-feature-contracts",
- "perl-lsp-feature-flags",
- "perl-lsp-feature-profile",
-]
-
-[[package]]
-name = "perl-lsp-feature-profile"
-version = "0.12.4"
-dependencies = [
- "perl-lsp-feature-contracts",
-]
-
-[[package]]
-name = "perl-lsp-feature-profile-cli"
-version = "0.12.4"
-dependencies = [
- "perl-lsp-feature-policy",
- "perl-lsp-feature-profile",
- "perl-tdd-support",
-]
-
-[[package]]
-name = "perl-lsp-file-completion"
-version = "0.12.4"
-dependencies = [
- "perl-lsp-completion-item",
- "perl-parser-core",
- "tempfile",
- "walkdir",
-]
-
-[[package]]
-name = "perl-lsp-folding"
-version = "0.12.4"
-dependencies = [
- "perl-lexer",
- "perl-parser-core",
-]
-
-[[package]]
-name = "perl-lsp-formatting"
-version = "0.12.4"
-dependencies = [
- "perl-lsp-formatting-types",
- "perl-lsp-perltidy",
- "perl-lsp-tooling",
- "perl-tdd-support",
- "thiserror",
-]
-
-[[package]]
-name = "perl-lsp-formatting-types"
-version = "0.12.4"
-dependencies = [
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "perl-lsp-import-management"
-version = "0.12.4"
-
-[[package]]
-name = "perl-lsp-inlay-hints"
-version = "0.12.4"
-dependencies = [
- "perl-lexer",
- "perl-parser-core",
- "perl-position-tracking",
- "perl-semantic-analyzer",
- "serde_json",
-]
-
-[[package]]
-name = "perl-lsp-inline-completion"
-version = "0.12.4"
-dependencies = [
- "lsp-types",
- "perl-position-tracking",
- "serde",
 ]
 
 [[package]]
@@ -1925,28 +1689,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "perl-lsp-navigation"
-version = "0.12.4"
-dependencies = [
- "criterion",
- "lsp-types",
- "perl-lsp-document-links",
- "perl-lsp-type-hierarchy",
- "perl-lsp-workspace-symbols",
- "perl-parser-core",
- "perl-position-tracking",
- "perl-tdd-support",
- "serde_json",
-]
-
-[[package]]
-name = "perl-lsp-on-type-formatting"
-version = "0.12.4"
-dependencies = [
- "serde_json",
-]
-
-[[package]]
 name = "perl-lsp-performance"
 version = "0.12.4"
 dependencies = [
@@ -1970,47 +1712,10 @@ name = "perl-lsp-protocol"
 version = "0.12.4"
 dependencies = [
  "lsp-types",
- "perl-lsp-feature-contracts",
- "perl-lsp-feature-flags",
+ "perl-lsp-rs-core",
  "serde",
  "serde_json",
  "tracing",
-]
-
-[[package]]
-name = "perl-lsp-providers"
-version = "0.12.4"
-dependencies = [
- "lsp-types",
- "perl-lsp-code-actions",
- "perl-lsp-code-lens",
- "perl-lsp-completion",
- "perl-lsp-diagnostics",
- "perl-lsp-folding",
- "perl-lsp-formatting",
- "perl-lsp-inlay-hints",
- "perl-lsp-navigation",
- "perl-lsp-on-type-formatting",
- "perl-lsp-rename",
- "perl-lsp-semantic-tokens",
- "perl-lsp-tooling",
- "perl-lsp-uri",
- "perl-parser-core",
- "perl-semantic-analyzer",
- "perl-tdd-support",
- "rustc-hash",
- "serde_json",
-]
-
-[[package]]
-name = "perl-lsp-rename"
-version = "0.12.4"
-dependencies = [
- "perl-lexer",
- "perl-parser-core",
- "perl-semantic-analyzer",
- "perl-symbol",
- "perl-tdd-support",
 ]
 
 [[package]]
@@ -2031,48 +1736,20 @@ dependencies = [
  "perl-diagnostics",
  "perl-incremental-parsing",
  "perl-lexer",
- "perl-lsp-ai-provider",
  "perl-lsp-cancellation",
- "perl-lsp-capability-map",
- "perl-lsp-code-actions",
- "perl-lsp-code-lens",
- "perl-lsp-color-provider",
- "perl-lsp-completion",
- "perl-lsp-completion-item",
  "perl-lsp-config",
  "perl-lsp-critic-parser",
- "perl-lsp-diagnostics",
- "perl-lsp-document-highlight",
- "perl-lsp-document-links",
- "perl-lsp-feature-contracts",
- "perl-lsp-feature-flags",
  "perl-lsp-feature-governance",
- "perl-lsp-feature-grid",
- "perl-lsp-feature-policy",
- "perl-lsp-feature-profile",
- "perl-lsp-feature-profile-cli",
- "perl-lsp-formatting",
- "perl-lsp-formatting-types",
- "perl-lsp-import-management",
- "perl-lsp-inlay-hints",
- "perl-lsp-inline-completion",
  "perl-lsp-input-validation",
  "perl-lsp-launcher",
  "perl-lsp-limits",
- "perl-lsp-navigation",
  "perl-lsp-performance",
  "perl-lsp-perltidy",
  "perl-lsp-protocol",
- "perl-lsp-providers",
- "perl-lsp-rename",
- "perl-lsp-selection-range",
- "perl-lsp-semantic-tokens",
- "perl-lsp-symbol-query",
+ "perl-lsp-rs-core",
  "perl-lsp-tooling",
  "perl-lsp-transport",
- "perl-lsp-type-hierarchy",
  "perl-lsp-uri",
- "perl-lsp-workspace-symbols",
  "perl-module",
  "perl-parser",
  "perl-parser-core",
@@ -2099,26 +1776,40 @@ dependencies = [
 ]
 
 [[package]]
-name = "perl-lsp-selection-range"
+name = "perl-lsp-rs-core"
 version = "0.12.4"
 dependencies = [
+ "insta",
  "lsp-types",
-]
-
-[[package]]
-name = "perl-lsp-semantic-tokens"
-version = "0.12.4"
-dependencies = [
+ "once_cell",
+ "perl-ast",
+ "perl-diagnostics",
+ "perl-feature-catalog",
  "perl-lexer",
+ "perl-lsp-perltidy",
+ "perl-lsp-rs",
+ "perl-lsp-text-utils",
+ "perl-lsp-tooling",
+ "perl-lsp-uri",
+ "perl-module",
+ "perl-parser",
  "perl-parser-core",
+ "perl-position-tracking",
+ "perl-pragma",
+ "perl-semantic-analyzer",
+ "perl-symbol",
  "perl-tdd-support",
+ "perl-workspace",
  "regex",
  "rustc-hash",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror",
+ "ureq",
+ "url",
+ "walkdir",
 ]
-
-[[package]]
-name = "perl-lsp-symbol-query"
-version = "0.12.4"
 
 [[package]]
 name = "perl-lsp-text-utils"
@@ -2151,17 +1842,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "perl-lsp-type-hierarchy"
-version = "0.12.4"
-dependencies = [
- "perl-parser-core",
- "perl-position-tracking",
- "perl-tdd-support",
- "serde",
- "serde_json",
-]
-
-[[package]]
 name = "perl-lsp-uri"
 version = "0.12.4"
 dependencies = [
@@ -2177,20 +1857,6 @@ dependencies = [
  "tempfile",
  "url",
  "which",
-]
-
-[[package]]
-name = "perl-lsp-workspace-symbols"
-version = "0.12.4"
-dependencies = [
- "perl-lsp-symbol-query",
- "perl-module",
- "perl-parser-core",
- "perl-position-tracking",
- "perl-semantic-analyzer",
- "perl-tdd-support",
- "serde",
- "serde_json",
 ]
 
 [[package]]
@@ -2218,7 +1884,7 @@ dependencies = [
  "perl-dead-code",
  "perl-incremental-parsing",
  "perl-lexer",
- "perl-lsp-semantic-tokens",
+ "perl-lsp-rs-core",
  "perl-parser-core",
  "perl-refactoring",
  "perl-semantic-analyzer",

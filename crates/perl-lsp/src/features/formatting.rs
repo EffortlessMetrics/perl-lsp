@@ -4,7 +4,7 @@
 //! for backward compatibility with code that expects `CodeFormatter::new()`.
 
 use crate::convert::WireRange;
-pub use perl_lsp_formatting::{
+pub use perl_lsp_rs_core::providers::formatting::{
     FormatPosition, FormatRange, FormatTextEdit, FormattedDocument, FormattingError,
     FormattingOptions, FormattingProvider, PerlTidyConfig,
 };

@@ -36,6 +36,21 @@ These documents are polished prose ready for editorial review or direct publicat
 | [PARSER_WINS.md](PARSER_WINS.md) | "Perl Parsing Hall of Fame" | Hardest constructs handled: heredocs, slash ambiguity, fat arrows |
 | [THREE_LAYER_PRODUCT.md](THREE_LAYER_PRODUCT.md) | "The Three-Layer Product" — LSP + swarm OS + memory/evidence | Why the repo is three products in one |
 
+### Wave G1 Collapse Session (2026-04-19)
+
+Articles from the Wave G1 collapse session — 5 PRs merged, 74 → 49 published crates. Each is self-contained; [SCOPE_PIVOT_ON_DEFER.md](SCOPE_PIVOT_ON_DEFER.md), [LLM_READS_SPEC_NOT_CODE.md](LLM_READS_SPEC_NOT_CODE.md), and [VERIFICATION_LADDER_PER_LAYER_ROI.md](VERIFICATION_LADDER_PER_LAYER_ROI.md) are the strongest standalone pieces.
+
+| File | Title | Notes |
+|------|-------|-------|
+| [SCOPE_PIVOT_ON_DEFER.md](SCOPE_PIVOT_ON_DEFER.md) | "Scope-Pivot on DEFER" | Agent verdicts are hypotheses bound to scope; shrink scope and defer-rationale often evaporates. Two reversals = 30-40% productivity. |
+| [LLM_READS_SPEC_NOT_CODE.md](LLM_READS_SPEC_NOT_CODE.md) | "Your LLM Reads the Spec, Not the Code" | Red-TDD failure mode with growth data (G1a=3 fixes → G1b=6 fixes). Fix: explicit API-read step in agent prompt. |
+| [VERIFICATION_LADDER_PER_LAYER_ROI.md](VERIFICATION_LADDER_PER_LAYER_ROI.md) | "Verification Ladder ROI by Layer" | Concrete per-layer catch data: which agent caught what, cost per catch. 9 agents, ~16 unique bugs, 5 PRs. |
+| [VERIFY_BY_READING.md](VERIFY_BY_READING.md) | "Verify By Reading" | Prior comments are hypotheses; tool success reports ≠ state change. Verify-by-reading as a hardening principle. |
+| [AGGREGATOR_ABSORPTION_PATTERN.md](AGGREGATOR_ABSORPTION_PATTERN.md) | "The Aggregator Absorption Pattern" | Collapsing a 1,600-LOC aggregator crate into a module with deprecated alias preservation. |
+| [WINDOWS_HARNESS_GAPS.md](WINDOWS_HARNESS_GAPS.md) | "Five Windows Harness Gaps in One Session" | Five distinct platform-specific bugs; systemic fix via migration to `xtask`. |
+| [MEMORY_COMPOUNDS_WITHIN_SESSION.md](MEMORY_COMPOUNDS_WITHIN_SESSION.md) | "Memory Compounds Within a Session" | Memory writes as context-window extensions within a single long session. |
+| [CODERABBIT_INVERSE_SAFETY.md](CODERABBIT_INVERSE_SAFETY.md) | "CodeRabbit Skips Big PRs" | Inverse safety pattern — automated review thins out when human review should thicken. |
+
 ---
 
 ## 2. Research Documents
