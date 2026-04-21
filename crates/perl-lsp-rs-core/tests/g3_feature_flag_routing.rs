@@ -1,9 +1,12 @@
 //! Edge case test: Verify feature flag routing after G3 absorption.
 //!
-//! Decision D5 extends rs-core feature `lsp-compat = ["dep:lsp-types"]` and adds
-//! `lsp-types = { workspace = true, optional = true }` to dependencies.
+//! Decision D5 specified optional gating of lsp-types via lsp-compat feature.
+//! Orchestrator decision (Option A): Keep lsp-types as required, lsp-compat as signal feature.
+//! Rationale: rs-core uses lsp_types unconditionally in 5+ modules (capability_map, protocol,
+//! providers, tooling, uri), making conditional compilation invasive. Real optional-gating
+//! (WASM-style builds) is deferred as a follow-up issue.
 //!
-//! This test verifies that the feature flag is correctly configured and accessible.
+//! These tests verify the Option A approach: lsp-types required, lsp-compat empty but present.
 
 use std::fs;
 use std::path::PathBuf;
@@ -14,28 +17,38 @@ fn workspace_root() -> PathBuf {
 }
 
 #[test]
-fn g3_lsp_compat_feature_extended_with_lsp_types() {
-    // Per D5: lsp-compat feature MUST declare lsp-types dependency routing.
-    // Spec requirement D5: lsp-compat = ["dep:lsp-types"]
+fn g3_lsp_compat_feature_signal_not_gating() {
+    // Orchestrator decision (Option A) from PR #4539:
+    // Keep lsp-types as REQUIRED, not optional. Keep lsp-compat as an empty SIGNAL feature.
     //
-    // Note: lsp-types itself remains unconditional in [dependencies] because
-    // multiple modules (capability_map, protocol, providers, tooling, uri) use it internally.
-    // The lsp-compat feature is a CONSUMER SIGNAL for dependent crates like perl-lsp-rs.
+    // Rationale: capability_map, protocol, providers, tooling, and uri modules all use
+    // lsp_types unconditionally. Making it optional requires invasive per-module cfg gating.
+    // The lsp-compat feature is a consumer signal for dependent crates like perl-lsp-rs
+    // that need compatibility tracking. Real optional-gating for WASM-style builds is
+    // deferred as a follow-up issue.
     //
-    // This is a REGRESSION GUARD: verifies D5 feature routing remains implemented.
+    // This test is a REGRESSION GUARD: verifies that lsp-compat feature exists as a signal,
+    // and lsp-types is required (not optional).
 
     let root = workspace_root();
     let core_toml = root.join("crates/perl-lsp-rs-core/Cargo.toml");
 
     let content = fs::read_to_string(&core_toml).expect("should read core Cargo.toml");
 
-    // Check if lsp-compat = ["dep:lsp-types"] is present (D5 requirement)
-    let has_lsp_types_routing = content.contains(r#"lsp-compat = ["dep:lsp-types"]"#);
-
+    // Check that lsp-compat feature exists (as empty signal, not gating)
+    let has_lsp_compat = content.contains("lsp-compat = []");
     assert!(
-        has_lsp_types_routing,
-        "SPEC VIOLATION D5: lsp-compat feature should declare dep:lsp-types routing. \
-                Per context.md D5, must change from 'lsp-compat = []' to 'lsp-compat = [\"dep:lsp-types\"]'"
+        has_lsp_compat,
+        "lsp-compat feature should exist as a signal feature: 'lsp-compat = []'"
+    );
+
+    // Check that lsp-types is required (not optional)
+    let has_lsp_types_required = content.contains("lsp-types.workspace = true")
+        || (content.contains("lsp-types = { workspace = true }")
+            && !content.contains("lsp-types = { workspace = true, optional = true }"));
+    assert!(
+        has_lsp_types_required,
+        "lsp-types should be a required dependency (not optional). Follow-up: implement optional gating for WASM-style builds."
     );
 }
 

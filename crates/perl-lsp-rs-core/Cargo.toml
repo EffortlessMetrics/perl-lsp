@@ -24,7 +24,7 @@ include = [
 doctest = false
 
 [dependencies]
-lsp-types = { workspace = true, optional = true }
+lsp-types.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 
@@ -71,7 +71,7 @@ perl-feature-catalog.workspace = true
 
 [features]
 lsp-ga-lock = []
-lsp-compat = ["dep:lsp-types"]
+lsp-compat = []
 
 [dev-dependencies]
 perl-tdd-support.workspace = true
