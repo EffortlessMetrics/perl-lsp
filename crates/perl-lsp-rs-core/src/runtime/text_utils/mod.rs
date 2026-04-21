@@ -9,10 +9,7 @@ pub struct TextEditHelpers<'a> {
 
 impl<'a> TextEditHelpers<'a> {
     fn skip_line_ending(&self, pos: usize) -> usize {
-        match (
-            self.source.as_bytes().get(pos),
-            self.source.as_bytes().get(pos.saturating_add(1)),
-        ) {
+        match (self.source.as_bytes().get(pos), self.source.as_bytes().get(pos.saturating_add(1))) {
             (Some(b'\r'), Some(b'\n')) => pos + 2,
             (Some(b'\n' | b'\r'), _) => pos + 1,
             _ => pos,
