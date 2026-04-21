@@ -1,8 +1,9 @@
-//! Integration test: Verify published crate count is 37 after Wave G3 absorption.
+//! Integration test: Verify published crate count is 34 after Wave 4-Completion absorption.
 //!
 //! Wave G3 absorbs 7 crates: governance, protocol, uri, transport, performance,
 //! critic-parser, tooling. Reduces published count from 44 → 37.
 //! Config and content-length-framing remain published per D3/D4.
+//! Wave 4-Completion absorbs 3 parser satellites: dead-code, refactoring, incremental-parsing. 37 → 34.
 
 use std::fs;
 use std::path::PathBuf;
@@ -13,7 +14,7 @@ fn workspace_root() -> PathBuf {
 }
 
 #[test]
-fn g3_published_count_is_37() -> Result<(), Box<dyn std::error::Error>> {
+fn g3_published_count_is_34() -> Result<(), Box<dyn std::error::Error>> {
     let root = workspace_root();
 
     // Read xtask/published-crate-baseline.txt
@@ -26,7 +27,7 @@ fn g3_published_count_is_37() -> Result<(), Box<dyn std::error::Error>> {
     let content = fs::read_to_string(&baseline_path)?;
     let count: u32 = content.trim().parse().map_err(|_| "failed to parse baseline count as u32")?;
 
-    assert_eq!(count, 37, "published crate count should be 37 after Wave G3");
+    assert_eq!(count, 34, "published crate count should be 34 after Wave 4-Completion");
 
     Ok(())
 }
