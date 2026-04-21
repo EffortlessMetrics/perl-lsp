@@ -7,14 +7,20 @@
 //! This test verifies both amendments are documented.
 
 use std::fs;
-use std::path::Path;
+use std::path::PathBuf;
+
+fn adr_path() -> PathBuf {
+    // Tests run from the crate directory; navigate up to workspace root.
+    let manifest_dir = env!("CARGO_MANIFEST_DIR");
+    PathBuf::from(manifest_dir).join("../../docs/adr/0041-microcrate-collapse.md")
+}
 
 #[test]
 fn g3_adr_amendment_7_present() -> Result<(), Box<dyn std::error::Error>> {
-    let adr_path = "docs/adr/0041-microcrate-collapse.md";
-    assert!(Path::new(adr_path).exists(), "ADR 0041 file should exist");
+    let adr_path = adr_path();
+    assert!(adr_path.exists(), "ADR 0041 file should exist");
 
-    let content = fs::read_to_string(adr_path)?;
+    let content = fs::read_to_string(&adr_path)?;
 
     // Look for Amendment 7 header
     assert!(
@@ -37,10 +43,10 @@ fn g3_adr_amendment_7_present() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn g3_adr_amendment_8_present() -> Result<(), Box<dyn std::error::Error>> {
-    let adr_path = "docs/adr/0041-microcrate-collapse.md";
-    assert!(Path::new(adr_path).exists(), "ADR 0041 file should exist");
+    let adr_path = adr_path();
+    assert!(adr_path.exists(), "ADR 0041 file should exist");
 
-    let content = fs::read_to_string(adr_path)?;
+    let content = fs::read_to_string(&adr_path)?;
 
     // Look for Amendment 8 header
     assert!(
@@ -66,8 +72,8 @@ fn g3_adr_amendment_8_present() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn g3_adr_amendments_in_correct_order() -> Result<(), Box<dyn std::error::Error>> {
-    let adr_path = "docs/adr/0041-microcrate-collapse.md";
-    let content = fs::read_to_string(adr_path)?;
+    let adr_path = adr_path();
+    let content = fs::read_to_string(&adr_path)?;
 
     // Find positions of both amendments
     let amend_7_pos = content.find("Amendment 7");

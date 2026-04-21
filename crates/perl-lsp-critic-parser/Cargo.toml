@@ -12,6 +12,7 @@ readme = "README.md"
 documentation = "https://docs.rs/perl-lsp-critic-parser"
 keywords = ["perl", "lsp", "perlcritic", "diagnostics", "parsing"]
 categories = ["development-tools", "text-editors", "parsing"]
+publish = false
 
 [package.metadata.docs.rs]
 rustdoc-args = ["--cfg", "docsrs"]

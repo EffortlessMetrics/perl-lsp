@@ -133,9 +133,7 @@ impl IncrementalParser {
     ///
     /// Returns true if the node overlaps with any changed region.
     pub fn needs_reparse(&self, node_start: usize, node_end: usize) -> bool {
-        self.changed_regions.iter().any(|(start, end)| {
-            node_start < *end && node_end > *start
-        })
+        self.changed_regions.iter().any(|(start, end)| node_start < *end && node_end > *start)
     }
 
     /// Clear all changed regions.
@@ -171,10 +169,10 @@ impl IncrementalParser {
 
 /// Parallel processing utilities for large workspaces.
 pub mod parallel {
-    use std::sync::mpsc;
-    use std::thread;
     use super::Arc;
     use super::Mutex;
+    use std::sync::mpsc;
+    use std::thread;
 
     /// Parallel indexer for workspace-wide symbol indexing.
     pub struct ParallelIndexer;
@@ -235,4 +233,3 @@ pub mod parallel {
         rx.into_iter().collect()
     }
 }
-

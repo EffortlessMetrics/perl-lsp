@@ -12,6 +12,7 @@ homepage.workspace = true
 documentation = "https://docs.rs/perl-lsp-tooling"
 keywords = ["perl", "lsp", "perltidy", "perlcritic", "tooling"]
 categories = ["development-tools", "text-editors"]
+publish = false
 
 [lib]
 doctest = false
