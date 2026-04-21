@@ -210,7 +210,7 @@ impl LspServer {
             // code_slice is applied here to match what the full parser sees.
             #[cfg(feature = "incremental")]
             let incremental_doc = {
-                use perl_incremental_parsing::incremental::incremental_document::IncrementalDocument;
+                use perl_parser::incremental::incremental_document::IncrementalDocument;
                 let code_text = crate::util::code_slice(text);
                 match IncrementalDocument::new(code_text.to_string()) {
                     Ok(doc) => Some(doc),
@@ -230,7 +230,7 @@ impl LspServer {
             // nearest safe boundary rather than offset 0.
             #[cfg(feature = "incremental")]
             let incremental_state = {
-                use perl_incremental_parsing::incremental::IncrementalState;
+                use perl_parser::incremental::IncrementalState;
                 let code_text = crate::util::code_slice(text);
                 Some(IncrementalState::new(code_text.to_string()))
             };
@@ -469,9 +469,9 @@ impl LspServer {
                 // UTF-16 line/char → byte conversion must use the pre-change line index.
                 #[cfg(feature = "incremental")]
                 let incremental_edits_opt: Option<
-                    perl_incremental_parsing::incremental::incremental_edit::IncrementalEditSet,
+                    perl_parser::incremental::incremental_edit::IncrementalEditSet,
                 > = {
-                    use perl_incremental_parsing::incremental::incremental_edit::{
+                    use perl_parser::incremental::incremental_edit::{
                         IncrementalEdit, IncrementalEditSet,
                     };
                     let mut edit_set = IncrementalEditSet::new();
@@ -671,7 +671,7 @@ impl LspServer {
                 let incremental_edits_opt_clone = incremental_edits_opt.clone();
                 #[cfg(feature = "incremental")]
                 let incremental_doc = {
-                    use perl_incremental_parsing::incremental::incremental_document::IncrementalDocument;
+                    use perl_parser::incremental::incremental_document::IncrementalDocument;
                     let code_text = crate::util::code_slice(&text);
                     match (doc_state.incremental_doc.take(), incremental_edits_opt) {
                         (Some(mut inc), Some(edits)) => {
@@ -716,7 +716,7 @@ impl LspServer {
 
                 // Apply edits to the checkpoint-based IncrementalState (Gap A, #2080).
                 //
-                // On a ranged edit we try to apply via `perl_incremental_parsing::apply_edits`,
+                // On a ranged edit we try to apply via `perl_parser::incremental::apply_edits`,
                 // which re-lexes from the nearest checkpoint rather than offset 0. This speeds
                 // up the token stream used by downstream passes for large files. On failure
                 // (edit > 64 KB, > 10 changed lines, or no prior state) we reinitialize the
@@ -726,7 +726,7 @@ impl LspServer {
                 // `IncrementalState` speeds up the lexer pass only; the parser pass is unchanged.
                 #[cfg(feature = "incremental")]
                 let incremental_state = {
-                    use perl_incremental_parsing::incremental::{
+                    use perl_parser::incremental::{
                         Edit as IncEdit, IncrementalState, apply_edits as inc_apply_edits,
                     };
                     let code_text = crate::util::code_slice(&text);

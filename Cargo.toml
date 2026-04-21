@@ -120,7 +120,7 @@ allow = [
     # Tier 2+ — Rust-native tree-sitter facade (depends on perl-parser-core + perl-ast)
     "tree-sitter-perl-rs",
     "perl-test-generators",
-    "perl-incremental-parsing",
+    # (perl-incremental-parsing absorbed into perl-parser::incremental — Wave 4-Completion)
     "perl-symbol",
     "perl-uri",
     # (perl-path-normalize, perl-path-security, perl-text-line absorbed into perl-parser-core — Wave D)
@@ -163,10 +163,10 @@ allow = [
     # (perl-lsp-providers absorbed into perl-lsp-rs-core::providers::lsp_compat — Wave G1b)
     # (perl-ast-utils, perl-qualified-name absorbed into perl-parser — Wave D)
     # (perl-lsp-import-management absorbed into perl-lsp-rs-core::providers — Wave G1a)
-    "perl-refactoring",
+    # (perl-refactoring absorbed into perl-parser::refactor — Wave 4-Completion)
 
     # Tier 5 — Application crates
-    "perl-dead-code",
+    # (perl-dead-code absorbed into perl-parser::dead_code — Wave 4-Completion)
     "perl-parser",
     "perl-parser-bench",
     "perl-parser-pest",
