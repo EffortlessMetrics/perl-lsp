@@ -39,7 +39,7 @@ perl-parser = { workspace = true, features = ["test-performance"] }
 # perl-lsp-feature-governance absorbed into perl-lsp-rs-core::governance (Wave G3 step 1)
 # perl-lsp-tooling absorbed into perl-lsp-rs-core::tooling (Wave G3 step 6)
 perl-subprocess-runtime = { workspace = true }
-perl-lsp-config = { workspace = true }
+# Wave Final PR B: perl-lsp-config absorbed into perl-lsp-rs-core::config; use perl_lsp_rs_core::config::* instead
 # perl-lsp-protocol absorbed into perl-lsp-rs-core::protocol (Wave G3 step 2)
 # perl-lsp-transport absorbed into perl-lsp-rs-core::transport (Wave G3 step 4)
 # (perl-lsp-code-actions absorbed into perl-lsp-rs-core::providers::code_actions — Wave G1b)
@@ -124,7 +124,7 @@ serial_test = "3.4.0"
 tempfile.workspace = true
 proptest.workspace = true
 perl-tdd-support = { workspace = true }
-perl-content-length-framing = { workspace = true }
+# Wave Final PR B: perl-content-length-framing absorbed into perl-lsp-rs-core::transport::framing
 which = "8.0.2"
 parking_lot.workspace = true
 criterion.workspace = true

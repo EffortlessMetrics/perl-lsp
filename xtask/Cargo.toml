@@ -22,7 +22,7 @@ walkdir.workspace = true
 serde = { workspace = true }
 serde_json.workspace = true
 anyhow.workspace = true
-perl-feature-catalog = { workspace = true }
+# (perl-feature-catalog absorbed into perl-lsp-rs-core::feature_catalog — Wave Final PR B)
 perl-lsp-rs-core = { workspace = true }
 indicatif = "0.18.4"
 console = "0.16.2"

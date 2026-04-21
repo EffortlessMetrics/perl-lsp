@@ -1,12 +1,20 @@
 // Build script - panics are acceptable for build failures.
+// Wave Final PR B: perl-feature-catalog absorbed; catalog logic inlined via include!().
 #![allow(clippy::pedantic, clippy::panic)]
 
 use std::error::Error;
 use std::fs;
 use std::path::Path;
 
-use perl_feature_catalog::{
-    load_catalog_for_build, render_dap_fallback_module, render_dap_feature_catalog_module,
+// Import catalog helpers from the shared rs-core build_catalog.rs
+mod catalog {
+    #![allow(dead_code)] // LSP-specific helpers used only by perl-lsp-rs-core/build.rs
+    include!("../perl-lsp-rs-core/build_catalog.rs");
+}
+
+use catalog::{
+    DEFAULT_DAP_FEATURES, load_catalog_for_build, render_dap_fallback_module,
+    render_dap_feature_catalog_module,
 };
 
 fn generate_catalog_module() -> Result<(), Box<dyn Error>> {
@@ -31,7 +39,7 @@ fn generate_catalog_module() -> Result<(), Box<dyn Error>> {
         }
         Err(error) => {
             eprintln!("Warning: failed to load DAP feature catalog from features.toml: {error}");
-            render_dap_fallback_module(perl_feature_catalog::DEFAULT_DAP_FEATURES)
+            render_dap_fallback_module(DEFAULT_DAP_FEATURES)
         }
     };
 

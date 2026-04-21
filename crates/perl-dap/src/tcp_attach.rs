@@ -18,7 +18,7 @@
 //! - Cross-platform support (Windows, macOS, Linux)
 
 use anyhow::{Context, Result};
-use perl_content_length_framing::{ContentLengthFramer, frame};
+use perl_lsp_rs_core::transport::framing::{ContentLengthFramer, frame};
 use serde_json::Value;
 use std::io::{BufReader, Read, Write};
 use std::net::TcpStream;

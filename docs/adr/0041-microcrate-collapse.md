@@ -491,3 +491,30 @@ feature for downstream consumers (PR #4539, commit 928cfe235). The `lsp-ga-lock`
 was completed: dead refs to `perl-lsp-protocol/lsp-ga-lock` and `perl-lsp-feature-governance/lsp-ga-lock`
 were removed from `perl-lsp/Cargo.toml`; only `perl-lsp-rs-core/lsp-ga-lock` remains.
 Real optional-gating for WASM-style builds is tracked in follow-up #4540.
+
+
+---
+
+### Amendment 9 — 2026-04-21: Wave Final PR B — Last 3 infra crates absorbed; v0.13.0 target reached (34 → 31)
+
+**Context:** Wave Final PR B (#4541) absorbs the last 3 remaining infra crates into `perl-lsp-rs-core`, completing the v0.13.0 collapse target.
+
+**Absorbed crates:**
+- `perl-feature-catalog` → `perl-lsp-rs-core::feature_catalog` (runtime catalog types + functions)
+- `perl-lsp-config` → `perl-lsp-rs-core::config` (ServerConfig, WorkspaceConfig, etc.)
+- `perl-content-length-framing` → `perl-lsp-rs-core::transport::framing` (ContentLengthFramer inlined)
+
+**Cycle breaking (D6 confirmed):**
+
+The previously-discovered `perl-lsp-config → perl-dap` cycle was broken by:
+1. Extracting `resolve_perl_path_with_toolchain()` + perlbrew/plenv helpers from `perl-dap::platform` into `perl-lsp-rs-core::platform` (new module).
+2. Repointing `perl-lsp-config` to import from `crate::platform` (within rs-core) instead of `perl_dap::platform`.
+3. Then `perl-lsp-config` can be safely absorbed into rs-core without creating a cycle.
+
+**Build script architecture (D4 confirmed):**
+
+`perl-feature-catalog` was used in both `perl-lsp-rs-core/build.rs` and `perl-dap/build.rs`. Build scripts are separate compilation units that cannot use `crate::` imports from the main lib. Solution: create `crates/perl-lsp-rs-core/build_catalog.rs` as a standalone file shared via `include!()` macro in both build scripts. This avoids duplication without creating a new crate.
+
+**Published count: 34 → 31 (v0.13.0 target achieved)**
+
+All three crate directories deleted; workspace membership and publish allowlist updated accordingly.

@@ -1,7 +1,9 @@
 //! Shared feature catalog parsing and code-generation helpers.
 //!
-//! This crate centralizes `features.toml` parsing so LSP, DAP, and xtask all
-//! consume the same metadata, validation, and rendering behavior.
+//! Absorbed from `perl-feature-catalog` crate into `perl-lsp-rs-core`
+//! as part of Wave Final PR B (#4541). This module centralizes `features.toml`
+//! parsing so LSP, DAP, and xtask all consume the same metadata, validation,
+//! and rendering behavior.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::env;

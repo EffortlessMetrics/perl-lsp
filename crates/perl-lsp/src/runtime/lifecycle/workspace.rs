@@ -4,7 +4,7 @@
 
 use super::super::*;
 use perl_dap::platform::{PerlInterpreterResult, find_perl_interpreter};
-use perl_lsp_config::WorkspaceConfig;
+use perl_lsp_rs_core::config::WorkspaceConfig;
 use std::sync::Once;
 
 /// Fires at most once per LSP session, when Perl is not found anywhere.
@@ -100,7 +100,7 @@ impl LspServer {
         for folder in folders.iter_mut() {
             // Try to load .perl-lsp.toml from this folder
             if let Some(folder_path) = &folder.path {
-                match perl_lsp_config::load_project_config(folder_path) {
+                match perl_lsp_rs_core::config::load_project_config(folder_path) {
                     Ok(None) => {
                         // No .perl-lsp.toml found — normal, no action needed
                     }

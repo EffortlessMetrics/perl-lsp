@@ -1,9 +1,11 @@
 //! Regression test: Verify published-crate-baseline.txt matches actual published count.
 //!
-//! The baseline file is a ratchet: it can only increase, never decrease (unless Wave H
-//! absorbs more crates). G3 reduces the count from 44 to 37. Wave 4-Completion reduces
-//! from 37 to 34 (pearl-dead-code, perl-refactoring, perl-incremental-parsing). This test verifies:
-//! 1. Baseline file exists and has correct value (34)
+//! The baseline file is a ratchet: it can only decrease as crates are absorbed.
+//! G3 reduces the count from 44 to 37. Wave 4-Completion reduces from 37 to 34
+//! (perl-dead-code, perl-refactoring, perl-incremental-parsing).
+//! Wave Final PR B reduces from 34 to 31 (feature-catalog, lsp-config, content-length-framing).
+//! This test verifies:
+//! 1. Baseline file exists and has correct value (31)
 //! 2. Actual cargo metadata published count matches baseline
 //! 3. Baseline ratchet is enforced (no accidental regressions)
 
@@ -17,7 +19,7 @@ fn workspace_root() -> PathBuf {
 }
 
 #[test]
-fn g3_baseline_file_has_34() -> Result<(), Box<dyn std::error::Error>> {
+fn g3_baseline_file_has_31() -> Result<(), Box<dyn std::error::Error>> {
     let root = workspace_root();
     let baseline_path = root.join("xtask/published-crate-baseline.txt");
 
@@ -25,7 +27,7 @@ fn g3_baseline_file_has_34() -> Result<(), Box<dyn std::error::Error>> {
     let baseline: u32 =
         content.trim().parse().map_err(|_| "baseline count should be parseable as u32")?;
 
-    assert_eq!(baseline, 34, "baseline should be updated to 34 after Wave 4-Completion");
+    assert_eq!(baseline, 31, "baseline should be updated to 31 after Wave Final PR B");
 
     Ok(())
 }
@@ -63,8 +65,8 @@ fn g3_baseline_matches_cargo_metadata() -> Result<(), Box<dyn std::error::Error>
 
     // Allow a small margin for test setup artifacts
     assert!(
-        (published_count as i32 - 34).abs() <= 1,
-        "published count should be approximately 34 (got {})",
+        (published_count as i32 - 31).abs() <= 1,
+        "published count should be approximately 31 (got {})",
         published_count
     );
 
@@ -79,9 +81,12 @@ fn g3_baseline_not_regressed() -> Result<(), Box<dyn std::error::Error>> {
     let baseline_str = fs::read_to_string(&baseline_path)?;
     let baseline: u32 = baseline_str.trim().parse()?;
 
-    // Regression guard: baseline should never accidentally decrease below 34
-    // (If it does, it means crates were removed but baseline wasn't updated)
-    assert!(baseline >= 34, "baseline should not regress below Wave 4-Completion target (34)");
+    // Regression guard: baseline should never accidentally increase above 34
+    // (If it does, it means crates were accidentally re-added)
+    assert!(baseline <= 34, "baseline should not exceed Wave 4-Completion target (34)");
+
+    // Also verify it doesn't drop below the v0.13.0 final target
+    assert!(baseline >= 31, "baseline should not go below Wave Final PR B target (31)");
 
     Ok(())
 }

@@ -12,7 +12,7 @@
 #![allow(clippy::collapsible_if)]
 
 use parking_lot::{Condvar, Mutex};
-use perl_content_length_framing::{ContentLengthFramer, frame};
+use perl_lsp_rs_core::transport::framing::{ContentLengthFramer, frame};
 use serde_json::{Value, json};
 use std::collections::VecDeque;
 use std::io::{Cursor, Write};

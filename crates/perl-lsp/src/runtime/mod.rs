@@ -471,7 +471,10 @@ impl LspServer {
     /// Returns the effective workspace configuration for the folder containing
     /// the document, or `None` if the document is not in any workspace folder.
     #[must_use]
-    pub fn config_for_doc(&self, doc_uri: &str) -> Option<perl_lsp_config::WorkspaceConfig> {
+    pub fn config_for_doc(
+        &self,
+        doc_uri: &str,
+    ) -> Option<perl_lsp_rs_core::config::WorkspaceConfig> {
         self.workspace_folders
             .lock()
             .iter()

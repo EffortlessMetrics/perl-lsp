@@ -6,9 +6,9 @@
 //! Previously the standalone `perl-lsp-transport` crate; absorbed into
 //! `perl-lsp-rs-core::transport` in Wave G3 (#4535).
 
-mod framing;
+pub mod framing;
 
 pub use framing::{
-    ContentLengthMessageReader, frame, log_response, read_message, write_message,
-    write_notification,
+    ContentLengthFramer, ContentLengthMessageReader, FramingError, frame, log_response,
+    read_message, write_message, write_notification,
 };

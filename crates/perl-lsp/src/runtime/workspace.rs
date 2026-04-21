@@ -259,7 +259,7 @@ impl LspServer {
                 continue;
             };
 
-            let mut effective_config = perl_lsp_config::WorkspaceConfig::default();
+            let mut effective_config = perl_lsp_rs_core::config::WorkspaceConfig::default();
             if let Some(project_config) = &folder.project_config {
                 project_config.apply_to_workspace_config(&mut effective_config);
             }
@@ -766,7 +766,8 @@ impl LspServer {
                     {
                         let mut folders = self.workspace_folders.lock();
                         for folder in folders.iter_mut() {
-                            let mut effective_config = perl_lsp_config::WorkspaceConfig::default();
+                            let mut effective_config =
+                                perl_lsp_rs_core::config::WorkspaceConfig::default();
                             if let Some(project_config) = &folder.project_config {
                                 project_config.apply_to_workspace_config(&mut effective_config);
                             }

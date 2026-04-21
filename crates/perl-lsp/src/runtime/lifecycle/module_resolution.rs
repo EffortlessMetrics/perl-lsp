@@ -93,7 +93,7 @@ fn workspace_root_for_doc(workspace_folders: &[String], doc_uri: Option<&str>) -
 fn workspace_config_for_doc(
     server: &LspServer,
     doc_uri: Option<&str>,
-) -> perl_lsp_config::WorkspaceConfig {
+) -> perl_lsp_rs_core::config::WorkspaceConfig {
     if let Some(uri) = doc_uri
         && let Some(config) = server.config_for_doc(uri)
     {
@@ -193,7 +193,7 @@ impl LspServer {
 
         let config = workspace_config_for_doc(self, None);
         let perl5lib_paths = std::env::var("PERL5LIB")
-            .map(|v| perl_lsp_config::WorkspaceConfig::parse_perl5lib(&v))
+            .map(|v| perl_lsp_rs_core::config::WorkspaceConfig::parse_perl5lib(&v))
             .unwrap_or_default();
         let mut include_paths = config.effective_include_paths(&perl5lib_paths);
 
@@ -230,7 +230,7 @@ impl LspServer {
 
         let config = workspace_config_for_doc(self, doc_uri);
         let perl5lib_paths = std::env::var("PERL5LIB")
-            .map(|v| perl_lsp_config::WorkspaceConfig::parse_perl5lib(&v))
+            .map(|v| perl_lsp_rs_core::config::WorkspaceConfig::parse_perl5lib(&v))
             .unwrap_or_default();
         let mut include_paths = config.effective_include_paths(&perl5lib_paths);
 
@@ -335,7 +335,7 @@ impl LspServer {
     ) -> Option<String> {
         let mut config = workspace_config_for_doc(self, doc_uri);
         let perl5lib_paths = std::env::var("PERL5LIB")
-            .map(|v| perl_lsp_config::WorkspaceConfig::parse_perl5lib(&v))
+            .map(|v| perl_lsp_rs_core::config::WorkspaceConfig::parse_perl5lib(&v))
             .unwrap_or_default();
         let include_paths = config.effective_include_paths(&perl5lib_paths);
         let timeout_ms = config.resolution_timeout_ms;
@@ -938,9 +938,9 @@ use Overlay::Live;
         let server = LspServer::new();
         {
             let mut folders = server.workspace_folders.lock();
-            let mut config_a = perl_lsp_config::WorkspaceConfig::default();
+            let mut config_a = perl_lsp_rs_core::config::WorkspaceConfig::default();
             config_a.include_paths = vec!["lib".to_string()];
-            let mut config_b = perl_lsp_config::WorkspaceConfig::default();
+            let mut config_b = perl_lsp_rs_core::config::WorkspaceConfig::default();
             config_b.include_paths = vec!["vendor/lib".to_string()];
 
             folders.push(

@@ -1507,10 +1507,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "perl-content-length-framing"
-version = "0.12.4"
-
-[[package]]
 name = "perl-corpus"
 version = "0.12.4"
 dependencies = [
@@ -1537,8 +1533,6 @@ dependencies = [
  "criterion",
  "nix",
  "once_cell",
- "perl-content-length-framing",
- "perl-feature-catalog",
  "perl-lexer",
  "perl-lsp-rs-core",
  "perl-module",
@@ -1553,6 +1547,7 @@ dependencies = [
  "tempfile",
  "thiserror",
  "tokio",
+ "toml",
  "tracing",
  "winapi",
 ]
@@ -1573,17 +1568,6 @@ dependencies = [
  "perl-test-must",
  "serde",
  "serde_json",
-]
-
-[[package]]
-name = "perl-feature-catalog"
-version = "0.12.4"
-dependencies = [
- "perl-tdd-support",
- "serde",
- "tempfile",
- "thiserror",
- "toml",
 ]
 
 [[package]]
@@ -1624,17 +1608,6 @@ name = "perl-line-index"
 version = "0.12.4"
 
 [[package]]
-name = "perl-lsp-config"
-version = "0.12.4"
-dependencies = [
- "perl-dap",
- "serde",
- "serde_json",
- "tempfile",
- "toml",
-]
-
-[[package]]
 name = "perl-lsp-perltidy"
 version = "0.12.4"
 dependencies = [
@@ -1656,12 +1629,10 @@ dependencies = [
  "md5",
  "once_cell",
  "parking_lot",
- "perl-content-length-framing",
  "perl-corpus",
  "perl-dap",
  "perl-diagnostics",
  "perl-lexer",
- "perl-lsp-config",
  "perl-lsp-perltidy",
  "perl-lsp-rs-core",
  "perl-module",
@@ -1700,9 +1671,7 @@ dependencies = [
  "moka",
  "once_cell",
  "perl-ast",
- "perl-content-length-framing",
  "perl-diagnostics",
- "perl-feature-catalog",
  "perl-lexer",
  "perl-lsp-perltidy",
  "perl-lsp-rs",
@@ -1723,6 +1692,7 @@ dependencies = [
  "serde_json",
  "tempfile",
  "thiserror",
+ "toml",
  "tracing",
  "tracing-appender",
  "tracing-subscriber",
@@ -3863,7 +3833,6 @@ dependencies = [
  "notify",
  "peak_alloc",
  "perl-corpus",
- "perl-feature-catalog",
  "perl-lsp-rs-core",
  "perl-parser",
  "perl-parser-pest",
