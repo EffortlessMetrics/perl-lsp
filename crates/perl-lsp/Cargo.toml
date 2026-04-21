@@ -41,8 +41,7 @@ perl-lsp-tooling = { workspace = true }
 perl-subprocess-runtime = { workspace = true }
 perl-lsp-config = { workspace = true }
 # perl-lsp-protocol absorbed into perl-lsp-rs-core::protocol (Wave G3 step 2)
-perl-lsp-transport = { workspace = true }
-# NOTE(G2-defer): perl-lsp-transport dep kept here; deferred to G3 for full absorption.
+# perl-lsp-transport absorbed into perl-lsp-rs-core::transport (Wave G3 step 4)
 # (perl-lsp-code-actions absorbed into perl-lsp-rs-core::providers::code_actions — Wave G1b)
 # (perl-lsp-inline-completion absorbed into perl-lsp-rs-core::providers::inline_completion — Wave G1b)
 # (perl-lsp-ai-provider absorbed into perl-lsp-rs-core::providers::ai — Wave G1b)

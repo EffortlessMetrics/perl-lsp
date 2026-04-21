@@ -8,4 +8,5 @@ pub mod governance;
 pub mod protocol;
 pub mod providers;
 pub mod runtime;
+pub mod transport;
 pub mod uri;

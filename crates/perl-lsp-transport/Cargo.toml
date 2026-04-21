@@ -19,6 +19,7 @@ include = [
   "README.md",
   "CLAUDE.md",
 ]
+publish = false
 
 [dependencies]
 # perl-lsp-protocol absorbed into perl-lsp-rs-core::protocol (Wave G3 step 2)

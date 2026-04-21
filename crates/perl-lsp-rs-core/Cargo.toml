@@ -56,11 +56,9 @@ ureq = { version = "3", features = ["json"] }
 # Wave G2 runtime crate dependencies (6 runtime crates absorbed)
 anyhow.workspace = true
 clap = { workspace = true }
-# NOTE(G2-cycle-fix): perl-lsp-feature-governance and perl-lsp-protocol cannot be
-# deps of perl-lsp-rs-core because they both depend on perl-lsp-rs-core (cyclic).
-# - launcher module uses crate::features::* directly instead of perl-lsp-feature-governance
-# NOTE(G2-defer): perl-lsp-transport deferred to G3; perl-content-length-framing not needed
-# - transport is kept as separate crate (perl-lsp-transport) until G3 resolves the cycle
+# NOTE(G3): perl-content-length-framing kept published (shared with perl-dap);
+# added as direct dep of rs-core now that transport is absorbed (Wave G3 step 4).
+perl-content-length-framing.workspace = true
 tracing.workspace = true
 tracing-appender = "0.2"
 tracing-subscriber = { version = "0.3.22", features = ["env-filter"] }
