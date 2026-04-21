@@ -59,7 +59,7 @@ ropey = "1.6.1"
 perl-module = { workspace = true }
 perl-content-length-framing = { workspace = true }
 perl-lexer = { workspace = true }
-perl-lsp-launcher = { workspace = true }
+perl-lsp-rs-core = { workspace = true }
 
 # Process management
 # Note: tokio-process not needed (using tokio::process)

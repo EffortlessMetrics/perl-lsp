@@ -141,10 +141,11 @@ fn test_published_crate_baseline_updated() {
         .expect("Failed to read xtask/published-crate-baseline.txt");
     let trimmed = content.trim();
 
-    // After G1b, should be 49 (59 - 10 G1b crates)
+    // After G2: 49 - 5 absorbed crates = 44 (transport deferred to G3)
+    // History: G1b → 49 (59 - 10); G2 → 44 (49 - 5)
     assert_eq!(
-        trimmed, "49",
-        "published-crate-baseline.txt should be '49' (post-G1b), but found '{}'",
+        trimmed, "44",
+        "published-crate-baseline.txt should be '44' (post-G2), but found '{}'",
         trimmed
     );
 }
