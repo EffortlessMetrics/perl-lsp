@@ -28,8 +28,8 @@ perl-lexer = { workspace = true }
 perl-parser-core = { workspace = true }
 perl-semantic-analyzer = { workspace = true }
 perl-workspace = { workspace = true }
+perl-module = { workspace = true }
 serde = { workspace = true }
-perl-refactoring = { workspace = true }
 perl-incremental-parsing = { workspace = true, optional = true }
 perl-tdd-support = { workspace = true }
 # Wave D absorbed satellites need these:
@@ -80,8 +80,8 @@ package-qualified = []  # Package-qualified subroutine resolution
 error-classifier-v2 = []  # Next generation error classification
 lsp-advanced = []  # Advanced LSP features (profiling, git integration, etc.)
 expose_lsp_test_api = []  # Expose test helpers for integration tests
-workspace_refactor = ["perl-refactoring/workspace_refactor"]  # Workspace-wide refactoring capabilities
-modernize = ["perl-refactoring/modernize"]  # Code modernization transformations
+workspace_refactor = []  # Workspace-wide refactoring capabilities (absorbed from perl-refactoring)
+modernize = []  # Code modernization transformations (absorbed from perl-refactoring)
 substitution-advanced = []  # Advanced substitution operator parsing
 utf16-complete = []  # Complete UTF-16 round-trip support
 semantic-phase2 = []  # Semantic analyzer Phase 2+ features

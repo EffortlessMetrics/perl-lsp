@@ -163,7 +163,7 @@ allow = [
     # (perl-lsp-providers absorbed into perl-lsp-rs-core::providers::lsp_compat — Wave G1b)
     # (perl-ast-utils, perl-qualified-name absorbed into perl-parser — Wave D)
     # (perl-lsp-import-management absorbed into perl-lsp-rs-core::providers — Wave G1a)
-    "perl-refactoring",
+    # (perl-refactoring absorbed into perl-parser::refactor — Wave 4-Completion)
 
     # Tier 5 — Application crates
     # (perl-dead-code absorbed into perl-parser::dead_code — Wave 4-Completion)
