@@ -133,8 +133,6 @@ fn test_text_line_facade_functional() -> Result<(), Box<dyn std::error::Error>> 
     use perl_parser_core::text_line::{is_keyword_boundary, line_bounds_at, skip_ascii_whitespace};
 
     let source = "my $x = 1;\nmy $y = 2;\n";
-    let bytes = source.as_bytes();
-
     // line_bounds_at: for a position in the second line, returns the line's byte range
     let second_line_pos = must_some(source.find("$y"));
     let (line_start, line_end) = line_bounds_at(source, second_line_pos);
