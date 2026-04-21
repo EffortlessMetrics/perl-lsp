@@ -27,8 +27,8 @@ doctest = false
 perl-lexer = { workspace = true }
 perl-parser-core = { workspace = true }
 perl-semantic-analyzer = { workspace = true }
-perl-dead-code = { workspace = true }
 perl-workspace = { workspace = true }
+serde = { workspace = true }
 perl-refactoring = { workspace = true }
 perl-incremental-parsing = { workspace = true, optional = true }
 perl-tdd-support = { workspace = true }

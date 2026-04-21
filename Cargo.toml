@@ -166,7 +166,7 @@ allow = [
     "perl-refactoring",
 
     # Tier 5 — Application crates
-    "perl-dead-code",
+    # (perl-dead-code absorbed into perl-parser::dead_code — Wave 4-Completion)
     "perl-parser",
     "perl-parser-bench",
     "perl-parser-pest",
