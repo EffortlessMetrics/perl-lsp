@@ -54,7 +54,7 @@ perl-diagnostics = { workspace = true }
 # Provider crates absorbed into perl-lsp-rs-core (Wave G1a)
 perl-lsp-critic-parser = { workspace = true }
 perl-lsp-rs-core = { workspace = true, features = ["lsp-compat"] }
-perl-lsp-performance = { workspace = true }
+# perl-lsp-performance absorbed into perl-lsp-rs-core::performance (Wave G3 step 5)
 perl-lsp-perltidy = { workspace = true }
 perl-position-tracking = { workspace = true, features = ["lsp-compat"] }
 perl-symbol = { workspace = true }

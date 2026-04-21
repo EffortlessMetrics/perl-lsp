@@ -186,7 +186,7 @@ pub fn read_message(reader: &mut dyn BufRead) -> io::Result<Option<JsonRpcReques
 }
 
 /// Write an LSP response with `Content-Length` framing.
-pub fn write_message<W: Write>(writer: &mut W, response: &JsonRpcResponse) -> io::Result<()> {
+pub fn write_message(writer: &mut dyn Write, response: &JsonRpcResponse) -> io::Result<()> {
     let content = serde_json::to_vec(response)?;
     let framed = frame(&content);
     writer.write_all(&framed)?;
@@ -194,8 +194,8 @@ pub fn write_message<W: Write>(writer: &mut W, response: &JsonRpcResponse) -> io
 }
 
 /// Write an LSP notification with `Content-Length` framing.
-pub fn write_notification<W: Write>(
-    writer: &mut W,
+pub fn write_notification(
+    writer: &mut dyn Write,
     method: &str,
     params: serde_json::Value,
 ) -> io::Result<()> {

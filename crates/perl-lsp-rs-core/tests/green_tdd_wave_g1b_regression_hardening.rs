@@ -47,7 +47,7 @@ fn test_regression_formatting_provider_requires_runtime_generic()
     use perl_lsp_rs_core::providers::formatting;
 
     // This MUST instantiate with a concrete runtime type.
-    let runtime = perl_lsp_tooling::OsSubprocessRuntime::new();
+    let runtime = perl_subprocess_runtime::OsSubprocessRuntime::new();
     let _provider = formatting::FormattingProvider::new(runtime);
 
     // Compile test: If signature changed to ::new() with no args, this would fail.
@@ -448,8 +448,8 @@ fn test_linked_editing_empty_source() -> Result<(), Box<dyn std::error::Error>> 
 fn test_formatting_provider_multiple_instantiation() -> Result<(), Box<dyn std::error::Error>> {
     use perl_lsp_rs_core::providers::formatting;
 
-    let runtime1 = perl_lsp_tooling::OsSubprocessRuntime::new();
-    let runtime2 = perl_lsp_tooling::OsSubprocessRuntime::new();
+    let runtime1 = perl_subprocess_runtime::OsSubprocessRuntime::new();
+    let runtime2 = perl_subprocess_runtime::OsSubprocessRuntime::new();
 
     let _provider1 = formatting::FormattingProvider::new(runtime1);
     let _provider2 = formatting::FormattingProvider::new(runtime2);

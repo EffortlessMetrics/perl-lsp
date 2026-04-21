@@ -81,7 +81,7 @@ impl<R> FormattingProvider<R> {
     }
 }
 
-impl<R: perl_lsp_tooling::SubprocessRuntime> FormattingProvider<R> {
+impl<R: perl_subprocess_runtime::SubprocessRuntime> FormattingProvider<R> {
     /// Format the entire Perl script document with perltidy integration.
     pub fn format_document(
         &self,

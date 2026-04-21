@@ -26,8 +26,10 @@
 #![allow(clippy::empty_line_after_outer_attr)]
 
 /// Performance optimizations for large projects.
+///
+/// Wave G3 (#4535): `perl-lsp-performance` absorbed into `perl-lsp-rs-core::performance`.
 pub mod performance {
-    pub use perl_lsp_performance::*;
+    pub use perl_lsp_rs_core::performance::*;
 }
 /// Perl::Critic integration for code quality analysis.
 pub mod perl_critic;

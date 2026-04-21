@@ -12,6 +12,7 @@ readme = "README.md"
 documentation = "https://docs.rs/perl-lsp-performance"
 keywords = ["perl", "lsp", "performance", "cache", "indexing"]
 categories = ["development-tools", "caching"]
+publish = false
 
 [lib]
 doctest = false

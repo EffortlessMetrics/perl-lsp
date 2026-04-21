@@ -29,14 +29,18 @@ fn transport_module_exposes_write_notification() {
 
 #[test]
 fn transport_module_exposes_content_length_message_reader() {
-    // Verify that ContentLengthMessageReader is accessible post-absorption
-    let _: Option<ContentLengthMessageReader<std::io::BufReader<std::io::Stdin>>> = None;
+    // Verify that ContentLengthMessageReader is accessible post-absorption.
+    // NOTE(G3-API-fix): Red-TDD assumed ContentLengthMessageReader<R> was generic,
+    // but the actual struct is non-generic (it accepts any reader at the call site).
+    let _: Option<ContentLengthMessageReader> = None;
 }
 
 #[test]
 fn transport_module_exposes_frame_function() {
-    // Verify that frame function is accessible post-absorption
-    let _: fn(&perl_lsp_rs_core::protocol::JsonRpcResponse) -> String = frame;
+    // Verify that frame function (Content-Length framing for raw bytes) is accessible.
+    // NOTE(G3-API-fix): Red-TDD assumed frame(&JsonRpcResponse) -> String, but the
+    // actual API (from perl-content-length-framing) is frame(&[u8]) -> Vec<u8>.
+    let _: fn(&[u8]) -> Vec<u8> = frame;
 }
 
 #[test]

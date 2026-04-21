@@ -24,7 +24,8 @@ lsp-compat = ["dep:lsp-types"]
 perl-subprocess-runtime = { workspace = true }
 perl-lsp-perltidy = { workspace = true }
 perl-parser-core = { workspace = true }
-perl-lsp-performance = { workspace = true }
+# perl-lsp-performance absorbed into perl-lsp-rs-core::performance (Wave G3 step 5)
+perl-lsp-rs-core = { workspace = true }
 perl-lsp-critic-parser = { workspace = true }
 lsp-types = { workspace = true, optional = true }
 serde = { workspace = true }

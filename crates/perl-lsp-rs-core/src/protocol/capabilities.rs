@@ -17,6 +17,8 @@ use lsp_types::*;
 use serde_json::Value;
 
 pub use crate::features::flags::{AdvertisedFeatures, BuildFlags};
+/// Re-export `ServerCapabilities` from `lsp_types` for public access.
+pub use lsp_types::ServerCapabilities;
 /// Generate server capabilities from build flags
 #[allow(clippy::field_reassign_with_default)]
 pub fn capabilities_for(build: BuildFlags) -> ServerCapabilities {
