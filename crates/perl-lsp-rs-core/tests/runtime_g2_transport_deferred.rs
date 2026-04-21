@@ -78,13 +78,7 @@ fn test_transport_in_workspace_metadata() -> Result<(), Box<dyn std::error::Erro
     // Filter out comments to check for actual workspace members
     let lines_without_comments: Vec<&str> = workspace_toml
         .lines()
-        .map(|line| {
-            if let Some(hash) = line.find('#') {
-                &line[..hash]
-            } else {
-                line
-            }
-        })
+        .map(|line| if let Some(hash) = line.find('#') { &line[..hash] } else { line })
         .collect();
     let filtered = lines_without_comments.join("\n");
 
@@ -112,10 +106,7 @@ fn test_transport_tests_directory_exists() -> Result<(), Box<dyn std::error::Err
 #[test]
 fn test_transport_readme_exists() -> Result<(), Box<dyn std::error::Error>> {
     let readme = repo_root().join("crates/perl-lsp-transport/README.md");
-    assert!(
-        !readme.exists(),
-        "perl-lsp-transport/README.md should be DELETED (absorbed in G3)"
-    );
+    assert!(!readme.exists(), "perl-lsp-transport/README.md should be DELETED (absorbed in G3)");
     Ok(())
 }
 
