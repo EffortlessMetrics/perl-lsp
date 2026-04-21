@@ -49,8 +49,8 @@
 
 use super::refactoring::BackupInfo;
 use super::workspace_refactor::{FileEdit, TextEdit};
-use perl_workspace::workspace_index::WorkspaceIndex;
 use perl_parser_core::qualified_name::split_qualified_name;
+use perl_workspace::workspace_index::WorkspaceIndex;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
@@ -621,7 +621,8 @@ impl WorkspaceRename {
 
             if matches_bare || matches_qualified {
                 conflicts.push(ConflictLocation {
-                    file: perl_workspace::workspace_index::uri_to_fs_path(&symbol.uri).unwrap_or_default(),
+                    file: perl_workspace::workspace_index::uri_to_fs_path(&symbol.uri)
+                        .unwrap_or_default(),
                     line: symbol.range.start.line,
                     column: symbol.range.start.column,
                     existing_symbol: symbol
@@ -781,12 +782,10 @@ impl WorkspaceRename {
                 }
             })?;
 
-            let uri_str =
-                perl_workspace::workspace_index::fs_path_to_uri(&file_edit.file_path).map_err(|e| {
-                    WorkspaceRenameError::IndexUpdateFailed {
-                        error: format!("URI conversion failed: {}", e),
-                        affected_files: vec![file_edit.file_path.clone()],
-                    }
+            let uri_str = perl_workspace::workspace_index::fs_path_to_uri(&file_edit.file_path)
+                .map_err(|e| WorkspaceRenameError::IndexUpdateFailed {
+                    error: format!("URI conversion failed: {}", e),
+                    affected_files: vec![file_edit.file_path.clone()],
                 })?;
 
             // Remove old index entries and re-index with new content

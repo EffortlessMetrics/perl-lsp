@@ -7,9 +7,9 @@ pub use perl_line_index::LineIndex;
 use ropey::Rope;
 use std::ops::Range;
 
+use perl_lexer::{LexerMode, PerlLexer, Token, TokenType};
 use perl_parser_core::ast::{Node, NodeKind, SourceLocation};
 use perl_parser_core::parser::Parser;
-use perl_lexer::{LexerMode, PerlLexer, Token, TokenType};
 
 pub mod incremental_advanced_reuse;
 pub mod incremental_checkpoint;

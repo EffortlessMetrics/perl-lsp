@@ -53,6 +53,7 @@
 //! # Ok::<(), perl_parser::error::ParseError>(())
 //! ```
 
+use super::incremental_advanced_reuse::{AdvancedReuseAnalyzer, ReuseAnalysisResult, ReuseConfig};
 use perl_parser_core::{
     ast::{Node, NodeKind, SourceLocation},
     edit::{Edit, EditSet},
@@ -60,7 +61,6 @@ use perl_parser_core::{
     parser::Parser,
     position::Range,
 };
-use super::incremental_advanced_reuse::{AdvancedReuseAnalyzer, ReuseAnalysisResult, ReuseConfig};
 use std::collections::HashMap;
 
 /// Comprehensive performance metrics for incremental parsing analysis
@@ -1671,7 +1671,8 @@ if ($condition) {
         );
 
         // Edit nested value - should be challenging for incremental parser
-        let value_start = source1.find("42").ok_or(perl_parser_core::error::ParseError::UnexpectedEof)?;
+        let value_start =
+            source1.find("42").ok_or(perl_parser_core::error::ParseError::UnexpectedEof)?;
         parser.edit(Edit::new(
             value_start,
             value_start + 2,
@@ -1728,9 +1729,10 @@ if ($condition) {
         );
 
         // Edit in the middle of the document
-        let edit_pos =
-            large_source.find("my $var50 = 500").ok_or(perl_parser_core::error::ParseError::UnexpectedEof)?
-                + 13;
+        let edit_pos = large_source
+            .find("my $var50 = 500")
+            .ok_or(perl_parser_core::error::ParseError::UnexpectedEof)?
+            + 13;
         parser.edit(Edit::new(
             edit_pos,
             edit_pos + 3, // "500" -> "999"
@@ -1781,7 +1783,8 @@ if ($condition) {
         println!("Unicode document initial parse: {}µs", initial_time.as_micros());
 
         // Edit the unicode string content
-        let edit_start = source1.find("你好世界").ok_or(perl_parser_core::error::ParseError::UnexpectedEof)?;
+        let edit_start =
+            source1.find("你好世界").ok_or(perl_parser_core::error::ParseError::UnexpectedEof)?;
         let edit_end = edit_start + "你好世界".len();
         parser.edit(Edit::new(
             edit_start,
@@ -1827,7 +1830,8 @@ if ($condition) {
         parser.parse(source1)?;
 
         // Edit right at the boundary between number and semicolon
-        let number_end = source1.find("123").ok_or(perl_parser_core::error::ParseError::UnexpectedEof)? + 3;
+        let number_end =
+            source1.find("123").ok_or(perl_parser_core::error::ParseError::UnexpectedEof)? + 3;
         parser.edit(Edit::new(
             number_end - 1, // Edit last digit of number
             number_end,
@@ -1918,8 +1922,10 @@ if ($condition) {
 
         // Statistical analysis
         let avg_time = parse_times.iter().sum::<u128>() / parse_times.len() as u128;
-        let max_time = *parse_times.iter().max().ok_or(perl_parser_core::error::ParseError::UnexpectedEof)?;
-        let min_time = *parse_times.iter().min().ok_or(perl_parser_core::error::ParseError::UnexpectedEof)?;
+        let max_time =
+            *parse_times.iter().max().ok_or(perl_parser_core::error::ParseError::UnexpectedEof)?;
+        let min_time =
+            *parse_times.iter().min().ok_or(perl_parser_core::error::ParseError::UnexpectedEof)?;
 
         println!(
             "Performance statistics: avg={}µs, min={}µs, max={}µs",

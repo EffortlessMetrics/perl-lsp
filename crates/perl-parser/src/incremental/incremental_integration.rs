@@ -3,15 +3,11 @@
 //! This module provides the bridge between the existing LspServer and
 //! incremental parsing capabilities, controlled by feature flags.
 
-use perl_parser_core::{
-    ast::Node,
-    error::ParseResult,
-    parser::Parser,
-};
 use super::{
     incremental_document::{IncrementalDocument, ParseMetrics},
     incremental_edit::{IncrementalEdit, IncrementalEditSet},
 };
+use perl_parser_core::{ast::Node, error::ParseResult, parser::Parser};
 use ropey::Rope;
 use serde_json::Value;
 use std::sync::Arc;
@@ -54,8 +50,11 @@ pub fn lsp_change_to_edit(change: &Value, rope: &Rope) -> Option<IncrementalEdit
         let new_text = change["text"].as_str()?.to_string();
 
         // Create position objects
-        let start_position =
-            perl_parser_core::position::Position::new(start_byte, start_line as u32, start_char as u32);
+        let start_position = perl_parser_core::position::Position::new(
+            start_byte,
+            start_line as u32,
+            start_char as u32,
+        );
         let old_end_position =
             perl_parser_core::position::Position::new(end_byte, end_line as u32, end_char as u32);
 

@@ -3,12 +3,12 @@
 //! This module provides true incremental parsing that achieves <1ms updates
 //! by reusing unchanged subtrees and only reparsing affected regions.
 
+use super::incremental_edit::{IncrementalEdit, IncrementalEditSet};
 use perl_parser_core::{
     ast::{Node, NodeKind},
     error::ParseResult,
     parser::Parser,
 };
-use super::{incremental_edit::{IncrementalEdit, IncrementalEditSet}};
 use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 use std::time::Instant;
@@ -1077,8 +1077,8 @@ impl SubtreeCache {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::incremental_edit::IncrementalEdit;
+    use super::*;
 
     #[test]
     fn test_incremental_single_token_edit() -> ParseResult<()> {
@@ -1091,10 +1091,11 @@ mod tests {
         let mut doc = IncrementalDocument::new(source.to_string())?;
 
         // Change 42 to 43
-        let pos = source.find("42").ok_or_else(|| perl_parser_core::error::ParseError::SyntaxError {
-            message: "test source should contain '42'".to_string(),
-            location: 0,
-        })?;
+        let pos =
+            source.find("42").ok_or_else(|| perl_parser_core::error::ParseError::SyntaxError {
+                message: "test source should contain '42'".to_string(),
+                location: 0,
+            })?;
         let edit = IncrementalEdit::new(pos + 1, pos + 2, "3".to_string());
 
         doc.apply_edit(edit)?;
@@ -1122,17 +1123,19 @@ mod tests {
         let mut edits = IncrementalEditSet::new();
 
         // Change 10 to 15
-        let pos_10 = source.find("10").ok_or_else(|| perl_parser_core::error::ParseError::SyntaxError {
-            message: "test source should contain '10'".to_string(),
-            location: 0,
-        })?;
+        let pos_10 =
+            source.find("10").ok_or_else(|| perl_parser_core::error::ParseError::SyntaxError {
+                message: "test source should contain '10'".to_string(),
+                location: 0,
+            })?;
         edits.add(IncrementalEdit::new(pos_10, pos_10 + 2, "15".to_string()));
 
         // Change 20 to 25
-        let pos_20 = source.find("20").ok_or_else(|| perl_parser_core::error::ParseError::SyntaxError {
-            message: "test source should contain '20'".to_string(),
-            location: 0,
-        })?;
+        let pos_20 =
+            source.find("20").ok_or_else(|| perl_parser_core::error::ParseError::SyntaxError {
+                message: "test source should contain '20'".to_string(),
+                location: 0,
+            })?;
         edits.add(IncrementalEdit::new(pos_20, pos_20 + 2, "25".to_string()));
 
         doc.apply_edits(&edits)?;
@@ -1223,10 +1226,11 @@ mod tests {
         assert!(doc.subtree_cache.by_content.len() <= 1);
 
         // Applying an edit should not grow the cache beyond max_size
-        let pos = source.find('1').ok_or_else(|| perl_parser_core::error::ParseError::SyntaxError {
-            message: "test source should contain '1'".to_string(),
-            location: 0,
-        })?;
+        let pos =
+            source.find('1').ok_or_else(|| perl_parser_core::error::ParseError::SyntaxError {
+                message: "test source should contain '1'".to_string(),
+                location: 0,
+            })?;
         let edit = IncrementalEdit::new(pos, pos + 1, "10".to_string());
         doc.apply_edit(edit)?;
         assert!(doc.subtree_cache.by_content.len() <= 1);
@@ -1267,10 +1271,11 @@ mod tests {
         assert!(has_critical_symbols, "Should preserve critical symbols like package/use/sub");
 
         // Apply edit and verify critical symbols remain
-        let pos = source.find("42").ok_or_else(|| perl_parser_core::error::ParseError::SyntaxError {
-            message: "test source should contain '42'".to_string(),
-            location: 0,
-        })?;
+        let pos =
+            source.find("42").ok_or_else(|| perl_parser_core::error::ParseError::SyntaxError {
+                message: "test source should contain '42'".to_string(),
+                location: 0,
+            })?;
         let edit = IncrementalEdit::new(pos, pos + 2, "100".to_string());
         doc.apply_edit(edit)?;
         assert!(doc.subtree_cache.by_content.len() <= 3);

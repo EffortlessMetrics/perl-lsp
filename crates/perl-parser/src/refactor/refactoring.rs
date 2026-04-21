@@ -29,19 +29,19 @@
 //! - modernize: Code modernization and best practice application
 //! - import_optimizer: Import statement optimization and cleanup
 
-use perl_parser_core::error::{ParseError, ParseResult};
 use super::import_optimizer::ImportOptimizer;
 #[cfg(feature = "modernize")]
 use super::modernize::PerlModernizer as ModernizeEngine;
 #[cfg(feature = "workspace_refactor")]
-use perl_workspace::workspace_index::WorkspaceIndex;
-#[cfg(feature = "workspace_refactor")]
 use super::workspace_refactor::WorkspaceRefactor;
+use perl_parser_core::error::{ParseError, ParseResult};
 use perl_parser_core::line_index::LineIndex;
 use perl_parser_core::qualified_name::{
     is_valid_identifier_part, validate_perl_qualified_name as validate_package_name,
 };
 use perl_parser_core::{Node, NodeKind, Parser, SourceLocation};
+#[cfg(feature = "workspace_refactor")]
+use perl_workspace::workspace_index::WorkspaceIndex;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::fs;

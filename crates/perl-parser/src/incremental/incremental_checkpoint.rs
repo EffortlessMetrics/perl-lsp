@@ -59,9 +59,9 @@
 //! These metrics can be accessed via [`CheckpointedIncrementalParser::stats()`]
 //! and formatted using the `Display` implementation for debugging and monitoring.
 
-use perl_parser_core::{ast::Node, edit::Edit as OriginalEdit, error::ParseResult, parser::Parser};
 use perl_lexer::{CheckpointCache, Checkpointable, LexerCheckpoint, PerlLexer};
 use perl_parser_core::token_stream::{Token, TokenStream};
+use perl_parser_core::{ast::Node, edit::Edit as OriginalEdit, error::ParseResult, parser::Parser};
 
 /// Incremental parser with lexer checkpointing
 pub struct CheckpointedIncrementalParser {
