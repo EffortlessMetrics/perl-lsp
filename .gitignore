@@ -42,6 +42,8 @@ scripts/__pycache__/
 /.claude/agents/
 # Worktrees used by Claude agent isolation — ephemeral, never committed.
 /.claude/worktrees/
+# Codex worktree metadata — ephemeral agent artifacts, never committed.
+/.codex-worktrees/
 
 # Swarm ops — ignore the entire directory (contains repo mirror artifacts),
 # but force-track the specific knowledge files we need.
