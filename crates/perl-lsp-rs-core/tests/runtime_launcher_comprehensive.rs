@@ -37,7 +37,12 @@ fn acquire_env_guard() -> EnvGuard {
         let current = depth.get();
         depth.set(current + 1);
         if current == 0 {
-            Some(ENV_GUARD.get_or_init(|| Mutex::new(())).lock().expect("env guard mutex should not be poisoned"))
+            Some(
+                ENV_GUARD
+                    .get_or_init(|| Mutex::new(()))
+                    .lock()
+                    .expect("env guard mutex should not be poisoned"),
+            )
         } else {
             None
         }
