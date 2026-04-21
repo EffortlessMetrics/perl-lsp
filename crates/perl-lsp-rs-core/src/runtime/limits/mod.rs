@@ -15,7 +15,7 @@
 //! # Usage
 //!
 //! ```rust,ignore
-//! use perl_lsp_limits::LspLimits;
+//! use perl_lsp_rs_core::runtime::limits::LspLimits;
 //!
 //! let limits = LspLimits::default();
 //! let results = my_query().take(limits.references_result_cap);
@@ -83,7 +83,7 @@ impl MemoryPressure {
     /// Returns `true` if the server should degrade non-essential work.
     ///
     /// ```
-    /// use perl_lsp_limits::{MemoryBudget, MemoryMonitor, MemoryPressure};
+    /// use perl_lsp_rs_core::runtime::limits::{MemoryBudget, MemoryMonitor, MemoryPressure};
     ///
     /// let monitor = MemoryMonitor::new(MemoryBudget::default());
     /// if monitor.pressure().should_degrade() {
@@ -105,7 +105,7 @@ impl MemoryPressure {
 /// Lightweight approximate memory tracker. Thread-safe via lock-free atomics.
 ///
 /// ```
-/// use perl_lsp_limits::{MemoryBudget, MemoryMonitor};
+/// use perl_lsp_rs_core::runtime::limits::{MemoryBudget, MemoryMonitor};
 ///
 /// let monitor = MemoryMonitor::new(MemoryBudget::default());
 /// monitor.record_alloc(1024 * 1024);

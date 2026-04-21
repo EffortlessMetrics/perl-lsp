@@ -98,7 +98,7 @@ impl StartupReport {
     ///
     /// Individual phases are logged at `debug` level; the total is logged at
     /// `info` level. This keeps normal output clean while allowing detailed
-    /// profiling with `PERL_LSP_LOG=perl_lsp_launcher=debug`.
+    /// profiling with `PERL_LSP_LOG=perl_lsp_rs_core=debug`.
     pub fn log(&self) {
         for phase in &self.phases {
             tracing::debug!(
