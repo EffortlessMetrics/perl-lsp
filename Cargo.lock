@@ -1660,7 +1660,6 @@ dependencies = [
  "perl-corpus",
  "perl-dap",
  "perl-diagnostics",
- "perl-incremental-parsing",
  "perl-lexer",
  "perl-lsp-config",
  "perl-lsp-perltidy",
@@ -1765,8 +1764,8 @@ dependencies = [
  "lsp-types",
  "perl-ast",
  "perl-corpus",
- "perl-incremental-parsing",
  "perl-lexer",
+ "perl-line-index",
  "perl-lsp-rs-core",
  "perl-module",
  "perl-parser-core",
@@ -1783,6 +1782,7 @@ dependencies = [
  "serial_test",
  "tempfile",
  "thiserror",
+ "tracing",
  "url",
 ]
 

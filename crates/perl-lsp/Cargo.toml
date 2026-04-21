@@ -31,7 +31,7 @@ path = "src/main.rs"
 
 [dependencies]
 perl-dap = { workspace = true }
-perl-incremental-parsing = { workspace = true, optional = true }
+# perl-incremental-parsing absorbed into perl-parser::incremental (Wave 4-Completion)
 perl-parser = { workspace = true, features = ["test-performance"] }
 # (perl-lsp-providers absorbed into perl-lsp-rs-core::providers::lsp_compat — Wave G1b)
 # (perl-lsp-formatting absorbed into perl-lsp-rs-core::providers::formatting — Wave G1b)
@@ -92,7 +92,7 @@ workspace = true
 [features]
 default = ["workspace", "incremental"]  # Enable workspace indexing and incremental parsing by default
 workspace = []  # Workspace-wide indexing for cross-file features
-incremental = ["perl-parser/incremental", "perl-incremental-parsing"]  # Incremental parsing support
+incremental = ["perl-parser/incremental"]  # Incremental parsing support (perl-incremental-parsing absorbed into perl-parser)
 test-performance = []  # Performance optimizations for test environments
 # When enabled, advertise *only* the conservative GA set (for emergency point releases).
 lsp-ga-lock = [

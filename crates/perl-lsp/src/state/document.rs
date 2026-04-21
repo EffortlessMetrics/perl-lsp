@@ -140,12 +140,12 @@ pub struct DocumentState {
     /// `incremental` feature is enabled.
     #[cfg(feature = "incremental")]
     pub incremental_doc:
-        Option<perl_incremental_parsing::incremental::incremental_document::IncrementalDocument>,
+        Option<perl_parser::incremental::incremental_document::IncrementalDocument>,
 
     /// Checkpoint-based incremental lexer state for the didChange fast path.
     ///
     /// On every ranged edit, the LSP server first attempts to apply the edit
-    /// via `perl_incremental_parsing::incremental::apply_edits`, which resumes
+    /// via `perl_parser::incremental::apply_edits`, which resumes
     /// lexing from the nearest checkpoint before the edit site instead of
     /// re-lexing from offset 0. On success the updated AST replaces the full
     /// parse result. Falls back to a full `Parser::new` parse when:
@@ -155,7 +155,7 @@ pub struct DocumentState {
     ///
     /// Only compiled when the `incremental` feature is enabled.
     #[cfg(feature = "incremental")]
-    pub incremental_state: Option<perl_incremental_parsing::incremental::IncrementalState>,
+    pub incremental_state: Option<perl_parser::incremental::IncrementalState>,
 }
 
 impl DocumentState {
