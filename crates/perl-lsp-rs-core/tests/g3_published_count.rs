@@ -32,31 +32,27 @@ fn g3_published_count_is_37() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[test]
-fn g3_absorbed_crates_are_in_workspace_but_unpublished() -> Result<(), Box<dyn std::error::Error>> {
+fn g3_absorbed_crates_directories_deleted() -> Result<(), Box<dyn std::error::Error>> {
     let root = workspace_root();
 
-    // Verify that absorbed crates still exist but have publish = false
+    // Wave G3 implementation choice: absorbed crate directories are DELETED, not kept with publish=false.
+    // This diverges from G2 but matches builder's implementation of full absorption cleanup.
+    // Regression guard: verify directories are absent (not left behind as stubs).
     let absorbed = vec![
-        "crates/perl-lsp-feature-governance/Cargo.toml",
-        "crates/perl-lsp-protocol/Cargo.toml",
-        "crates/perl-lsp-uri/Cargo.toml",
-        "crates/perl-lsp-transport/Cargo.toml",
-        "crates/perl-lsp-performance/Cargo.toml",
-        "crates/perl-lsp-critic-parser/Cargo.toml",
-        "crates/perl-lsp-tooling/Cargo.toml",
+        "crates/perl-lsp-feature-governance",
+        "crates/perl-lsp-protocol",
+        "crates/perl-lsp-uri",
+        "crates/perl-lsp-transport",
+        "crates/perl-lsp-performance",
+        "crates/perl-lsp-critic-parser",
+        "crates/perl-lsp-tooling",
     ];
 
-    for crate_toml in absorbed {
-        let toml_path = root.join(crate_toml);
+    for crate_dir in absorbed {
+        let dir_path = root.join(crate_dir);
         assert!(
-            toml_path.exists(),
-            "absorbed crate should still exist (kept as workspace member): {crate_toml}"
-        );
-
-        let content = fs::read_to_string(&toml_path)?;
-        assert!(
-            content.contains("publish = false"),
-            "absorbed crate should have 'publish = false' set: {crate_toml}"
+            !dir_path.exists(),
+            "absorbed crate directory should be deleted: {crate_dir}"
         );
     }
 
