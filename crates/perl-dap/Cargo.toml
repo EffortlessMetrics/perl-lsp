@@ -349,6 +349,11 @@ name = "wave_h_security_edge_cases"
 path = "tests/wave_h_security_edge_cases.rs"
 # Green TDD: edge cases and boundary conditions for security module
 
+[[test]]
+name = "platform_dedup_verification"
+path = "tests/platform_dedup_verification.rs"
+# Verify perl-dap platform re-exports match perl-lsp-rs-core (#4545)
+
 [[bench]]
 name = "dap_benchmarks"
 path = "benches/dap_benchmarks.rs"
