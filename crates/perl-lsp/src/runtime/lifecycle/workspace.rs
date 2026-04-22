@@ -444,4 +444,28 @@ include_paths = ["other_lib"]
             );
         }
     }
+
+    #[test]
+    fn did_change_configuration_resets_pull_diagnostics_critic_cache() {
+        let server = LspServer::new();
+        server.test_configure_perlcritic(true, 5, None);
+        server.pull_diagnostics_orchestrator.test_insert_warning_key("stale-warning");
+        assert_eq!(server.pull_diagnostics_orchestrator.test_warning_count(), 1);
+
+        server.handle_did_change_configuration(Some(serde_json::json!({
+            "settings": {
+                "perl": {
+                    "perlcritic": {
+                        "severity": 4
+                    }
+                }
+            }
+        })));
+
+        assert_eq!(
+            server.pull_diagnostics_orchestrator.test_warning_count(),
+            0,
+            "pull-diagnostics warning cache must reset after perlcritic config changes"
+        );
+    }
 }
