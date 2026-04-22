@@ -268,9 +268,6 @@ impl PullDiagnosticsOrchestrator {
     fn emit_warning(&self, _server: &LspServer, _key: String, _message: &str) {}
 
     /// Reset the orchestrator state (e.g., on configuration change).
-    ///
-    /// TODO: Wire into `handle_did_change_configuration` so pull-diagnostics
-    /// CriticAnalyzer is also invalidated on config changes.
     #[cfg(not(target_arch = "wasm32"))]
     #[allow(dead_code)]
     pub fn reset(&self) {
@@ -281,6 +278,25 @@ impl PullDiagnosticsOrchestrator {
     /// No-op stub for WASM targets.
     #[cfg(target_arch = "wasm32")]
     pub fn reset(&self) {}
+
+    /// Test helper: pre-populate cached state to verify reset wiring.
+    #[cfg(all(test, not(target_arch = "wasm32")))]
+    pub(crate) fn test_seed_cached_state(&self) {
+        use perl_lsp_rs_core::tooling::perl_critic::{CriticAnalyzer, CriticConfig};
+
+        *self.critic_analyzer.lock() = Some(CriticAnalyzer::with_os_runtime(CriticConfig {
+            severity: 5,
+            profile: None,
+            ..Default::default()
+        }));
+        self.warnings_sent.lock().insert("seed-warning".to_string());
+    }
+
+    /// Test helper: report whether any cached state is currently present.
+    #[cfg(all(test, not(target_arch = "wasm32")))]
+    pub(crate) fn test_has_cached_state(&self) -> bool {
+        self.critic_analyzer.lock().is_some() || !self.warnings_sent.lock().is_empty()
+    }
 }
 
 impl Default for PullDiagnosticsOrchestrator {
