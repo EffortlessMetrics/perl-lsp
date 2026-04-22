@@ -268,9 +268,6 @@ impl PullDiagnosticsOrchestrator {
     fn emit_warning(&self, _server: &LspServer, _key: String, _message: &str) {}
 
     /// Reset the orchestrator state (e.g., on configuration change).
-    ///
-    /// TODO: Wire into `handle_did_change_configuration` so pull-diagnostics
-    /// CriticAnalyzer is also invalidated on config changes.
     #[cfg(not(target_arch = "wasm32"))]
     #[allow(dead_code)]
     pub fn reset(&self) {
@@ -1654,6 +1651,43 @@ mod tests {
             "fast path must not emit any bytes for pull-diagnostic clients; \
              buffer grew by {} bytes",
             len_after.saturating_sub(len_before)
+        );
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn did_change_configuration_resets_pull_perlcritic_warning_dedup() {
+        let server = LspServer::new();
+
+        {
+            let mut cfg = server.config.lock();
+            cfg.perlcritic_severity = 5;
+        }
+
+        server.critic_workspace_warnings_sent.lock().insert("push-warning".to_string());
+        server
+            .pull_diagnostics_orchestrator
+            .warnings_sent
+            .lock()
+            .insert("pull-warning".to_string());
+
+        server.handle_did_change_configuration(Some(json!({
+            "settings": {
+                "perl": {
+                    "perlcritic": {
+                        "severity": 3
+                    }
+                }
+            }
+        })));
+
+        assert!(
+            server.critic_workspace_warnings_sent.lock().is_empty(),
+            "push perlcritic warning dedup set should be cleared on perlcritic config changes"
+        );
+        assert!(
+            server.pull_diagnostics_orchestrator.warnings_sent.lock().is_empty(),
+            "pull perlcritic warning dedup set should be cleared on perlcritic config changes"
         );
     }
 
