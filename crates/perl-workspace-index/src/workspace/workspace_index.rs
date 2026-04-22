@@ -1219,6 +1219,7 @@ impl WorkspaceIndex {
     /// ```
     fn determine_folder_uri(&self, file_uri: &str) -> Option<String> {
         let folders = self.workspace_folders.read();
+        let mut best_match: Option<&String> = None;
         for folder_uri in folders.iter() {
             // Check if the file URI starts with the folder URI
             // We need to ensure proper URI matching (with or without trailing slash)
@@ -1228,10 +1229,13 @@ impl WorkspaceIndex {
                 format!("{}/", folder_uri)
             };
             if file_uri.starts_with(&folder_with_slash) || file_uri == folder_uri {
-                return Some(folder_uri.clone());
+                match best_match {
+                    Some(existing) if existing.len() >= folder_uri.len() => {}
+                    _ => best_match = Some(folder_uri),
+                }
             }
         }
-        None
+        best_match.cloned()
     }
 
     fn find_definition_in_files(
@@ -4825,6 +4829,24 @@ sub other_sub {
         // Test file not in any workspace folder
         let folder_none = index.determine_folder_uri("file:///other/project/Module.pm");
         assert_eq!(folder_none, None, "Should return None for file outside workspace folders");
+    }
+
+    #[test]
+    fn test_determine_folder_uri_prefers_most_specific_match() {
+        let index = WorkspaceIndex::new();
+
+        // Keep broad folder first to ensure we don't rely on insertion order.
+        index.set_workspace_folders(vec![
+            "file:///project".to_string(),
+            "file:///project/lib".to_string(),
+        ]);
+
+        let folder = index.determine_folder_uri("file:///project/lib/My/Module.pm");
+        assert_eq!(
+            folder,
+            Some("file:///project/lib".to_string()),
+            "Nested workspace folders should attribute files to the most specific folder"
+        );
     }
 
     #[test]
