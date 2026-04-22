@@ -1675,4 +1675,43 @@ mod tests {
         assert_eq!(diagnostic.severity, InternalDiagnosticSeverity::Error);
         assert_eq!(diagnostic.code.as_deref(), Some("GentlePolicy"));
     }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn did_change_configuration_resets_pull_diagnostics_orchestrator_state() {
+        let server = LspServer::new();
+
+        {
+            let mut analyzer = server.pull_diagnostics_orchestrator.critic_analyzer.lock();
+            *analyzer = Some(crate::perl_critic::CriticAnalyzer::new(
+                crate::perl_critic::CriticConfig { severity: 3, ..Default::default() },
+                std::sync::Arc::new(perl_subprocess_runtime::OsSubprocessRuntime::new()),
+            ));
+        }
+        server
+            .pull_diagnostics_orchestrator
+            .warnings_sent
+            .lock()
+            .insert("missing-binary".to_string());
+
+        server.handle_did_change_configuration(Some(json!({
+            "settings": {
+                "perl": {
+                    "perlcritic": {
+                        "enabled": true,
+                        "severity": 5
+                    }
+                }
+            }
+        })));
+
+        assert!(
+            server.pull_diagnostics_orchestrator.critic_analyzer.lock().is_none(),
+            "pull-diagnostics critic analyzer should be reset after perlcritic config changes"
+        );
+        assert!(
+            server.pull_diagnostics_orchestrator.warnings_sent.lock().is_empty(),
+            "pull-diagnostics warning dedupe set should be cleared after perlcritic config changes"
+        );
+    }
 }
