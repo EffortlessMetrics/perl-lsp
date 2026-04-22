@@ -162,6 +162,11 @@ fn test_custom_func_no_parens_ternary() {
 }
 
 #[test]
+fn test_custom_func_no_parens_or_fallback() {
+    assert_clean_parse(r#"is_ready $obj or die "not ready";"#);
+}
+
+#[test]
 fn test_ternary_after_not() {
     assert_clean_parse(r#"!$x ? 1 : 0;"#);
 }
