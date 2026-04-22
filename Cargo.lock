@@ -3947,6 +3947,7 @@ name = "tree-sitter-perl-c"
 version = "0.12.4"
 dependencies = [
  "cc",
+ "insta",
  "tree-sitter",
 ]
 
