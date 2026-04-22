@@ -268,11 +268,7 @@ impl PullDiagnosticsOrchestrator {
     fn emit_warning(&self, _server: &LspServer, _key: String, _message: &str) {}
 
     /// Reset the orchestrator state (e.g., on configuration change).
-    ///
-    /// TODO: Wire into `handle_did_change_configuration` so pull-diagnostics
-    /// CriticAnalyzer is also invalidated on config changes.
     #[cfg(not(target_arch = "wasm32"))]
-    #[allow(dead_code)]
     pub fn reset(&self) {
         *self.critic_analyzer.lock() = None;
         self.warnings_sent.lock().clear();
@@ -1674,5 +1670,27 @@ mod tests {
         let diagnostic = builtin_violation_to_diagnostic(&violation);
         assert_eq!(diagnostic.severity, InternalDiagnosticSeverity::Error);
         assert_eq!(diagnostic.code.as_deref(), Some("GentlePolicy"));
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn did_change_configuration_resets_pull_diagnostic_warning_dedup_state() {
+        let server = LspServer::new();
+        server.pull_diagnostics_orchestrator.warnings_sent.lock().insert("missing-binary".into());
+
+        server.handle_did_change_configuration(Some(json!({
+            "settings": {
+                "perl": {
+                    "perlcritic": {
+                        "enabled": true
+                    }
+                }
+            }
+        })));
+
+        assert!(
+            server.pull_diagnostics_orchestrator.warnings_sent.lock().is_empty(),
+            "pull diagnostics warning dedup cache should reset when perlcritic config changes"
+        );
     }
 }
