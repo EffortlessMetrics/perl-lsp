@@ -749,6 +749,7 @@ impl LspServer {
                     if critic_config_changed {
                         *self.critic_analyzer.lock() = None;
                         self.critic_workspace_warnings_sent.lock().clear();
+                        self.pull_diagnostics_orchestrator.reset();
                     }
 
                     // Update workspace config (include paths, @INC)
