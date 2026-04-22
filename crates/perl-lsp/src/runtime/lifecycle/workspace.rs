@@ -418,9 +418,15 @@ include_paths = ["other_lib"]
                 .with_path(folder2.clone()),
         );
 
+        server.pull_diagnostics_orchestrator.test_insert_warning_key("stale-warning");
+        assert_eq!(server.pull_diagnostics_orchestrator.test_warning_count(), 1);
+
         server.handle_did_change_configuration(Some(serde_json::json!({
             "settings": {
                 "perl": {
+                    "perlcritic": {
+                        "profile": ".perlcriticrc"
+                    },
                     "workspace": {
                         "includePaths": ["client_lib"],
                         "useSystemInc": true
@@ -443,5 +449,10 @@ include_paths = ["other_lib"]
                 folder.uri
             );
         }
+        assert_eq!(
+            server.pull_diagnostics_orchestrator.test_warning_count(),
+            0,
+            "pull diagnostics warning cache should reset after perlcritic config change"
+        );
     }
 }
