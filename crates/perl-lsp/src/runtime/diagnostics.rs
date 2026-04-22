@@ -268,9 +268,6 @@ impl PullDiagnosticsOrchestrator {
     fn emit_warning(&self, _server: &LspServer, _key: String, _message: &str) {}
 
     /// Reset the orchestrator state (e.g., on configuration change).
-    ///
-    /// TODO: Wire into `handle_did_change_configuration` so pull-diagnostics
-    /// CriticAnalyzer is also invalidated on config changes.
     #[cfg(not(target_arch = "wasm32"))]
     #[allow(dead_code)]
     pub fn reset(&self) {
@@ -281,6 +278,12 @@ impl PullDiagnosticsOrchestrator {
     /// No-op stub for WASM targets.
     #[cfg(target_arch = "wasm32")]
     pub fn reset(&self) {}
+
+    /// Test-only helper for validating warning deduplication behavior.
+    #[cfg(all(test, not(target_arch = "wasm32")))]
+    pub(crate) fn test_warning_count(&self) -> usize {
+        self.warnings_sent.lock().len()
+    }
 }
 
 impl Default for PullDiagnosticsOrchestrator {
@@ -1674,5 +1677,58 @@ mod tests {
         let diagnostic = builtin_violation_to_diagnostic(&violation);
         assert_eq!(diagnostic.severity, InternalDiagnosticSeverity::Error);
         assert_eq!(diagnostic.code.as_deref(), Some("GentlePolicy"));
+    }
+
+    #[test]
+    fn did_change_configuration_resets_pull_diagnostics_warning_dedup() {
+        let server = LspServer::new();
+        server.test_bypass_perlcritic_command_check();
+        server.test_configure_perlcritic(
+            true,
+            5,
+            Some("/definitely/missing/perlcriticrc".to_string()),
+        );
+
+        let uri = "file:///tmp/pull_diagnostics_reset_test.pl";
+        let mut diagnostics = Vec::new();
+        server.pull_diagnostics_orchestrator.collect_perlcritic_diagnostics(
+            &server,
+            uri,
+            "my $x = 1;\n",
+            &mut diagnostics,
+        );
+        server.pull_diagnostics_orchestrator.collect_perlcritic_diagnostics(
+            &server,
+            uri,
+            "my $x = 1;\n",
+            &mut diagnostics,
+        );
+        assert_eq!(
+            server.pull_diagnostics_orchestrator.test_warning_count(),
+            1,
+            "warning should be deduplicated before configuration reset"
+        );
+
+        server.handle_did_change_configuration(Some(json!({
+            "settings": {
+                "perl": {
+                    "perlcritic": {
+                        "severity": 4
+                    }
+                }
+            }
+        })));
+
+        server.pull_diagnostics_orchestrator.collect_perlcritic_diagnostics(
+            &server,
+            uri,
+            "my $x = 1;\n",
+            &mut diagnostics,
+        );
+        assert_eq!(
+            server.pull_diagnostics_orchestrator.test_warning_count(),
+            1,
+            "configuration reset should clear pull-diagnostics warning dedup state"
+        );
     }
 }
