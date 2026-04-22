@@ -280,6 +280,14 @@ impl LspServer {
         cfg.perlcritic_profile = profile;
     }
 
+    /// Test-only bridge for `workspace/didChangeConfiguration`.
+    ///
+    /// Allows integration tests to validate config-change side effects such as
+    /// analyzer cache invalidation.
+    pub fn test_handle_did_change_configuration(&self, params: Option<Value>) {
+        self.handle_did_change_configuration(params);
+    }
+
     /// Test-only entrypoint for LSP `textDocument/inlineCompletion`.
     ///
     /// Exercises inline completion functionality in tests.

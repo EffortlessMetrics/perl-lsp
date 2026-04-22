@@ -268,11 +268,7 @@ impl PullDiagnosticsOrchestrator {
     fn emit_warning(&self, _server: &LspServer, _key: String, _message: &str) {}
 
     /// Reset the orchestrator state (e.g., on configuration change).
-    ///
-    /// TODO: Wire into `handle_did_change_configuration` so pull-diagnostics
-    /// CriticAnalyzer is also invalidated on config changes.
     #[cfg(not(target_arch = "wasm32"))]
-    #[allow(dead_code)]
     pub fn reset(&self) {
         *self.critic_analyzer.lock() = None;
         self.warnings_sent.lock().clear();
