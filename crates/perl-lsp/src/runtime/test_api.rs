@@ -231,6 +231,14 @@ impl LspServer {
         self.handle_document_diagnostic(params)
     }
 
+    /// Test-only entrypoint for `workspace/didChangeConfiguration`.
+    ///
+    /// Applies configuration updates exactly as a client notification would,
+    /// including cache invalidation and follow-up workspace config refresh.
+    pub fn test_handle_did_change_configuration(&self, params: Option<Value>) {
+        self.handle_did_change_configuration(params);
+    }
+
     /// Install a mock subprocess runtime for the `CriticAnalyzer`.
     ///
     /// When set, the lazy-init path in `collect_external_perlcritic_diagnostics`

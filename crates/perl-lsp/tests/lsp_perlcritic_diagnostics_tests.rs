@@ -354,3 +354,56 @@ fn test_f_missing_configured_profile_skips_subprocess_and_diagnostics() {
         "subprocess should not run when configured profile path does not exist"
     );
 }
+
+#[test]
+fn test_g_did_change_configuration_resets_pull_perlcritic_analyzer() {
+    let server = LspServer::new();
+    server.test_configure_perlcritic(true, 3, None);
+
+    let runtime = Arc::new(MockSubprocessRuntime::new());
+    runtime.add_response(MockResponse::success(b"".to_vec()));
+    runtime.add_response(MockResponse::success(b"".to_vec()));
+    server.test_install_mock_critic_runtime(runtime.clone());
+    server.test_bypass_perlcritic_command_check();
+
+    #[cfg(windows)]
+    let uri = "file:///C:/tmp/test_reconfigure.pl";
+    #[cfg(not(windows))]
+    let uri = "file:///tmp/test_reconfigure.pl";
+
+    pull_diagnostics(&server, uri, "print \"first\";\n");
+
+    server.test_handle_did_change_configuration(Some(json!({
+        "settings": {
+            "perl": {
+                "perlcritic": {
+                    "enabled": true,
+                    "severity": 5
+                }
+            }
+        }
+    })));
+
+    pull_diagnostics(&server, uri, "print \"second\";\n");
+
+    let invocations = runtime.invocations();
+    assert_eq!(
+        invocations.len(),
+        4,
+        "expected exactly four perlcritic invocations (push+pull before and after config change); got {invocations:?}"
+    );
+    assert!(
+        invocations[0..2]
+            .iter()
+            .all(|invocation| invocation.args.iter().any(|arg| arg == "--severity=3")),
+        "first two invocations should use initial severity=3; invocations: {:?}",
+        &invocations[0..2]
+    );
+    assert!(
+        invocations[2..4]
+            .iter()
+            .all(|invocation| invocation.args.iter().any(|arg| arg == "--severity=5")),
+        "last two invocations should rebuild analyzer and use severity=5; invocations: {:?}",
+        &invocations[2..4]
+    );
+}
