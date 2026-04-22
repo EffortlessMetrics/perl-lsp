@@ -34,7 +34,6 @@ pub struct ModuleLineEdit {
 /// - Qualified function calls: `Module::Name::func()` → `NewName::func()`
 /// - Static method calls: `Module::Name->method()` → `NewName->method()`
 /// - `@ISA` array assignments
-/// - Package declarations: `package Module::Name;` → `package NewName;`
 ///
 /// Legacy package separators (`Foo'Bar`) are also handled.
 #[must_use]
@@ -93,18 +92,6 @@ pub fn plan_module_rename_edits(
                     }
                 }
             }
-
-            // Check package declarations
-            {
-                let current_line = rewritten.as_deref().unwrap_or(line);
-                if line_references_package_declaration(current_line, old_variant) {
-                    let (candidate, changed) =
-                        replace_module_token(current_line, old_variant, new_variant);
-                    if changed {
-                        rewritten = Some(candidate);
-                    }
-                }
-            }
         }
 
         if let Some(new_text) = rewritten {
@@ -140,6 +127,9 @@ pub fn line_references_qualified_call(line: &str, module_name: &str) -> bool {
     if line.is_empty() || module_name.is_empty() {
         return false;
     }
+    if line.trim_start().starts_with("package ") {
+        return false;
+    }
     let needle = format!("{}::", module_name);
     let needle_bytes = needle.as_bytes();
     let line_bytes = line.as_bytes();
@@ -167,13 +157,46 @@ pub fn line_references_qualified_call(line: &str, module_name: &str) -> bool {
             ch.is_alphabetic() || ch == '_'
         };
 
-        if before_ok && after_ok {
+        if before_ok && after_ok && !is_within_quoted_string(line, abs) {
             return true;
         }
         start = abs + 1;
     }
 
     false
+}
+
+fn is_within_quoted_string(line: &str, byte_idx: usize) -> bool {
+    let mut in_single = false;
+    let mut in_double = false;
+    let mut escaped = false;
+
+    for (idx, ch) in line.char_indices() {
+        if idx >= byte_idx {
+            break;
+        }
+
+        if escaped {
+            escaped = false;
+            continue;
+        }
+
+        if ch == '\\' && (in_single || in_double) {
+            escaped = true;
+            continue;
+        }
+
+        if ch == '\'' && !in_double {
+            in_single = !in_single;
+            continue;
+        }
+
+        if ch == '"' && !in_single {
+            in_double = !in_double;
+        }
+    }
+
+    in_single || in_double
 }
 
 /// Return `true` when `line` contains a package declaration referencing
@@ -226,7 +249,11 @@ pub fn replace_module_name_prefix(line: &str, old_module: &str, new_module: &str
             ch.is_alphabetic() || ch == '_'
         };
 
-        if before_ok && after_ok {
+        if before_ok
+            && after_ok
+            && !line.trim_start().starts_with("package ")
+            && !is_within_quoted_string(line, abs)
+        {
             out.push_str(&line[cursor..abs]);
             out.push_str(&replacement);
             cursor = after;
