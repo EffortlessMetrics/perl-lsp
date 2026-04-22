@@ -1128,12 +1128,7 @@ mod integration_mutation_tests {
     #[test]
     fn test_incremental_arithmetic_underflow_fixed() -> TestResult {
         let source = "package Test; sub test_function { }";
-        let mut doc = match IncrementalDocument::new(source.to_string()) {
-            Ok(d) => d,
-            Err(e) => {
-                must(Err::<IncrementalDocument, _>(format!("Should create document: {:?}", e)))
-            }
-        };
+        let mut doc = must(IncrementalDocument::new(source.to_string()));
 
         let edit = IncrementalEdit::with_positions(
             source.len(),
