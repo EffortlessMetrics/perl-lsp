@@ -354,3 +354,61 @@ fn test_f_missing_configured_profile_skips_subprocess_and_diagnostics() {
         "subprocess should not run when configured profile path does not exist"
     );
 }
+
+#[test]
+fn test_g_did_change_configuration_resets_pull_diagnostics_perlcritic_cache() {
+    use tempfile::TempDir;
+
+    let tmp = TempDir::new().expect("tempdir");
+    let module_path = tmp.path().join("SeverityConfig.pm");
+    std::fs::write(&module_path, "package SeverityConfig;\n1;\n").expect("write module");
+    let uri = url::Url::from_file_path(&module_path).expect("file url").to_string();
+
+    let server = LspServer::new();
+    server.test_configure_perlcritic(true, 5, None);
+
+    let runtime = Arc::new(MockSubprocessRuntime::new());
+    runtime.add_response(MockResponse::success(b"".to_vec()));
+    runtime.add_response(MockResponse::success(b"".to_vec()));
+    server.test_install_mock_critic_runtime(runtime.clone());
+    server.test_bypass_perlcritic_command_check();
+
+    pull_diagnostics(&server, &uri, "package SeverityConfig;\n1;\n");
+    let invocations_before_change = runtime.invocations();
+    assert!(
+        !invocations_before_change.is_empty(),
+        "Expected at least one perlcritic invocation before config change"
+    );
+    assert!(
+        invocations_before_change
+            .iter()
+            .all(|invocation| invocation.args.contains(&"--severity=5".to_string())),
+        "All invocations before config change should use severity=5; got: {invocations_before_change:?}"
+    );
+
+    server.test_handle_did_change_configuration(Some(json!({
+        "settings": {
+            "perl": {
+                "perlcritic": {
+                    "enabled": true,
+                    "severity": 1
+                }
+            }
+        }
+    })));
+
+    pull_diagnostics(&server, &uri, "package SeverityConfig;\n1;\n");
+
+    let invocations_after_change = runtime.invocations();
+    let new_invocations = &invocations_after_change[invocations_before_change.len()..];
+    assert!(
+        !new_invocations.is_empty(),
+        "Expected additional perlcritic invocations after config change; before={invocations_before_change:?}, after={invocations_after_change:?}"
+    );
+    assert!(
+        new_invocations
+            .iter()
+            .all(|invocation| invocation.args.contains(&"--severity=1".to_string())),
+        "All new invocations after didChangeConfiguration should use severity=1; got: {new_invocations:?}"
+    );
+}
