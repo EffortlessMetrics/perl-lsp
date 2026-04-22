@@ -9,11 +9,8 @@
 
 use tree_sitter_perl_c::parse_perl_code;
 
-/// Helper function that parses Perl code and returns the S-expression representation
-/// of the root node.
-fn sexp(code: &str) -> Result<String, Box<dyn std::error::Error>> {
-    Ok(parse_perl_code(code)?.root_node().to_sexp())
-}
+mod common;
+use common::sexp;
 
 #[test]
 fn snapshot_variable_declaration() -> Result<(), Box<dyn std::error::Error>> {
