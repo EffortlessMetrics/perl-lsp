@@ -308,6 +308,7 @@ impl<'a> Parser<'a> {
                                 | TokenKind::WordXor
                                 | TokenKind::WordNot
                                 | TokenKind::Semicolon
+                                | TokenKind::Question
                         ) {
                             return false;
                         }
