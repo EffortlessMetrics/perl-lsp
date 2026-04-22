@@ -2,7 +2,10 @@
 //!
 //! Covers: plan_module_rename_edits, apply_module_rename_edits, ModuleLineEdit
 
-use perl_module::rename::{ModuleLineEdit, apply_module_rename_edits, plan_module_rename_edits};
+use perl_module::rename::{
+    ModuleLineEdit, apply_module_rename_edits, line_references_qualified_call,
+    plan_module_rename_edits, replace_module_name_prefix,
+};
 
 // ──────────────────────────────────────────────────────────────
 // plan_module_rename_edits — early-return / empty-input guards
@@ -174,6 +177,34 @@ fn plan_ignores_plain_code_with_module_name() -> Result<(), Box<dyn std::error::
     let source = "my $obj = Foo::Bar->new();";
     let edits = plan_module_rename_edits(source, "Foo::Bar", "X::Y");
     assert!(edits.is_empty());
+    Ok(())
+}
+
+#[test]
+fn qualified_call_ignores_package_declaration_and_string_literals()
+-> Result<(), Box<dyn std::error::Error>> {
+    assert!(!line_references_qualified_call("package Foo::Bar;", "Foo::Bar"));
+    assert!(!line_references_qualified_call("'Foo::Bar::func()'", "Foo::Bar"));
+    assert!(!line_references_qualified_call("\"Foo::Bar::func()\"", "Foo::Bar"));
+    assert!(line_references_qualified_call("Foo::Bar::func()", "Foo::Bar"));
+    Ok(())
+}
+
+#[test]
+fn replace_prefix_skips_package_lines_and_quoted_occurrences()
+-> Result<(), Box<dyn std::error::Error>> {
+    assert_eq!(
+        replace_module_name_prefix("package Foo::Bar;", "Foo::Bar", "New::Mod"),
+        "package Foo::Bar;"
+    );
+    assert_eq!(
+        replace_module_name_prefix("'Foo::Bar::func()'", "Foo::Bar", "New::Mod"),
+        "'Foo::Bar::func()'"
+    );
+    assert_eq!(
+        replace_module_name_prefix("Foo::Bar::func()", "Foo::Bar", "New::Mod"),
+        "New::Mod::func()"
+    );
     Ok(())
 }
 
