@@ -268,9 +268,6 @@ impl PullDiagnosticsOrchestrator {
     fn emit_warning(&self, _server: &LspServer, _key: String, _message: &str) {}
 
     /// Reset the orchestrator state (e.g., on configuration change).
-    ///
-    /// TODO: Wire into `handle_did_change_configuration` so pull-diagnostics
-    /// CriticAnalyzer is also invalidated on config changes.
     #[cfg(not(target_arch = "wasm32"))]
     #[allow(dead_code)]
     pub fn reset(&self) {
@@ -281,6 +278,18 @@ impl PullDiagnosticsOrchestrator {
     /// No-op stub for WASM targets.
     #[cfg(target_arch = "wasm32")]
     pub fn reset(&self) {}
+
+    /// Test helper: seed warning-dedup state.
+    #[cfg(all(test, not(target_arch = "wasm32")))]
+    pub(crate) fn test_mark_warning_sent(&self, key: &str) {
+        self.warnings_sent.lock().insert(key.to_string());
+    }
+
+    /// Test helper: observe warning-dedup state size.
+    #[cfg(all(test, not(target_arch = "wasm32")))]
+    pub(crate) fn test_warning_count(&self) -> usize {
+        self.warnings_sent.lock().len()
+    }
 }
 
 impl Default for PullDiagnosticsOrchestrator {
