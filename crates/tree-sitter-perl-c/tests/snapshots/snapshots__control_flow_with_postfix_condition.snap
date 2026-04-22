@@ -1,0 +1,5 @@
+---
+source: crates/tree-sitter-perl-c/tests/snapshots.rs
+expression: sexp
+---
+(source_file (expression_statement (assignment_expression left: (variable_declaration variable: (scalar (varname))) right: (number))) (expression_statement (postfix_conditional_expression (ambiguous_function_call_expression function: (function) arguments: (interpolated_string_literal content: (string_content (escape_sequence)))) condition: (binary_expression left: (scalar (varname)) right: (number)))))

@@ -1,0 +1,5 @@
+---
+source: crates/tree-sitter-perl-c/tests/snapshots.rs
+expression: sexp
+---
+(source_file (expression_statement (assignment_expression left: (variable_declaration variable: (scalar (varname))) right: (binary_expression left: (hash_element_expression (hash_element_expression (scalar (varname)) key: (autoquoted_bareword)) key: (autoquoted_bareword)) right: (string_literal content: (string_content))))))

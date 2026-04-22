@@ -1,0 +1,5 @@
+---
+source: crates/tree-sitter-perl-c/tests/snapshots.rs
+expression: sexp
+---
+(source_file (subroutine_declaration_statement name: (bareword) body: (block (expression_statement (return_expression (binary_expression left: (array_element_expression array: (container_variable (varname)) index: (number)) right: (number)))))))
