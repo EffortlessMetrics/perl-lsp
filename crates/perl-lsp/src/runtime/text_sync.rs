@@ -412,6 +412,7 @@ impl LspServer {
                         if let Some(ref mut analyzer) = *self.critic_analyzer.lock() {
                             analyzer.invalidate_cache(&path_str);
                         }
+                        self.pull_diagnostics_orchestrator.invalidate_file_cache(&path);
                     }
                 }
 

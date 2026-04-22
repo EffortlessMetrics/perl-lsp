@@ -268,11 +268,7 @@ impl PullDiagnosticsOrchestrator {
     fn emit_warning(&self, _server: &LspServer, _key: String, _message: &str) {}
 
     /// Reset the orchestrator state (e.g., on configuration change).
-    ///
-    /// TODO: Wire into `handle_did_change_configuration` so pull-diagnostics
-    /// CriticAnalyzer is also invalidated on config changes.
     #[cfg(not(target_arch = "wasm32"))]
-    #[allow(dead_code)]
     pub fn reset(&self) {
         *self.critic_analyzer.lock() = None;
         self.warnings_sent.lock().clear();
@@ -281,6 +277,19 @@ impl PullDiagnosticsOrchestrator {
     /// No-op stub for WASM targets.
     #[cfg(target_arch = "wasm32")]
     pub fn reset(&self) {}
+
+    /// Invalidate cached perlcritic violations for a single file path.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn invalidate_file_cache(&self, file_path: &std::path::Path) {
+        let path_str = file_path.to_string_lossy().to_string();
+        if let Some(ref mut analyzer) = *self.critic_analyzer.lock() {
+            analyzer.invalidate_cache(&path_str);
+        }
+    }
+
+    /// No-op stub for WASM targets.
+    #[cfg(target_arch = "wasm32")]
+    pub fn invalidate_file_cache(&self, _file_path: &std::path::Path) {}
 }
 
 impl Default for PullDiagnosticsOrchestrator {

@@ -354,3 +354,89 @@ fn test_f_missing_configured_profile_skips_subprocess_and_diagnostics() {
         "subprocess should not run when configured profile path does not exist"
     );
 }
+
+#[test]
+fn test_g_did_change_configuration_resets_pull_perlcritic_analyzer() {
+    use std::fs;
+    use tempfile::TempDir;
+
+    let tmp = TempDir::new().expect("tempdir");
+    let root = tmp.path().to_path_buf();
+    let profile_a = root.join("profile-a.perlcriticrc");
+    let profile_b = root.join("profile-b.perlcriticrc");
+    fs::write(&profile_a, "severity = 3\n").expect("write profile-a");
+    fs::write(&profile_b, "severity = 3\n").expect("write profile-b");
+
+    let module_path = root.join("ConfigSwitch.pm");
+    fs::write(&module_path, "package ConfigSwitch;\n1;\n").expect("write module");
+
+    let server = LspServer::new();
+    server.test_set_root_path(root);
+    server.test_bypass_perlcritic_command_check();
+
+    let runtime = Arc::new(MockSubprocessRuntime::new());
+    runtime.add_response(MockResponse::success(b"".to_vec()));
+    runtime.add_response(MockResponse::success(b"".to_vec()));
+    server.test_install_mock_critic_runtime(runtime.clone());
+
+    let uri = url::Url::from_file_path(&module_path).expect("file url").to_string();
+    server
+        .test_handle_did_open(Some(json!({
+            "textDocument": {
+                "uri": uri,
+                "languageId": "perl",
+                "version": 1,
+                "text": "package ConfigSwitch;\n1;\n"
+            }
+        })))
+        .expect("didOpen should succeed");
+
+    server.test_handle_did_change_configuration(Some(json!({
+        "settings": {
+            "perl": {
+                "perlcritic": {
+                    "enabled": true,
+                    "severity": 3,
+                    "profile": profile_a.to_string_lossy().to_string()
+                }
+            }
+        }
+    })));
+    must(server.test_handle_document_diagnostic(Some(json!({
+        "textDocument": { "uri": uri }
+    }))));
+
+    server.test_handle_did_change_configuration(Some(json!({
+        "settings": {
+            "perl": {
+                "perlcritic": {
+                    "enabled": true,
+                    "severity": 3,
+                    "profile": profile_b.to_string_lossy().to_string()
+                }
+            }
+        }
+    })));
+    must(server.test_handle_document_diagnostic(Some(json!({
+        "textDocument": { "uri": uri }
+    }))));
+
+    let invocations = runtime.invocations();
+    assert_eq!(
+        invocations.len(),
+        2,
+        "expected two pull perlcritic invocations; got: {invocations:?}"
+    );
+    assert!(
+        invocations
+            .iter()
+            .any(|call| call.args.contains(&format!("--profile={}", profile_a.to_string_lossy()))),
+        "at least one invocation should use profile-a; invocations: {invocations:?}"
+    );
+    let last = invocations.last().expect("at least one invocation recorded");
+    assert!(
+        last.args.contains(&format!("--profile={}", profile_b.to_string_lossy())),
+        "last invocation should use profile-b after didChangeConfiguration; args: {:?}",
+        last.args
+    );
+}
