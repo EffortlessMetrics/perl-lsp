@@ -281,6 +281,18 @@ impl PullDiagnosticsOrchestrator {
     /// No-op stub for WASM targets.
     #[cfg(target_arch = "wasm32")]
     pub fn reset(&self) {}
+
+    /// Test helper: seed warning deduplication state.
+    #[cfg(test)]
+    pub(crate) fn test_seed_warning_key(&self, key: &str) {
+        self.warnings_sent.lock().insert(key.to_string());
+    }
+
+    /// Test helper: current warning deduplication cache size.
+    #[cfg(test)]
+    pub(crate) fn test_warning_key_count(&self) -> usize {
+        self.warnings_sent.lock().len()
+    }
 }
 
 impl Default for PullDiagnosticsOrchestrator {
