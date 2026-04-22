@@ -116,7 +116,9 @@ impl ExportSymbolExtractor {
             _ => {}
         }
 
-        // Walk children to find patterns in nested scopes
+        // If no pattern matched at this node, recurse into children.
+        // This handles cases where Exporter inheritance is declared in nested scopes
+        // or after other statements in the package body.
         for child in ast.children() {
             if let Some(detector) = Self::walk_for_exporter_detection(child) {
                 return Some(detector);
@@ -153,6 +155,10 @@ impl ExportSymbolExtractor {
     }
 
     /// Walk AST and extract export arrays.
+    ///
+    /// The `_detector` parameter is accepted but unused (marked with underscore prefix).
+    /// It is kept in the signature for API symmetry with the detection phase and to allow
+    /// future pattern-specific extraction logic without changing the interface.
     fn walk_and_extract_exports(ast: &Node, _detector: &ExporterDetector, info: &mut ExportInfo) {
         match &ast.kind {
             NodeKind::VariableDeclaration { variable, initializer: Some(init), .. } => {
