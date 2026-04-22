@@ -289,6 +289,17 @@ impl Default for PullDiagnosticsOrchestrator {
     }
 }
 
+#[cfg(test)]
+impl PullDiagnosticsOrchestrator {
+    pub(crate) fn test_insert_warning_key(&self, key: &str) {
+        self.warnings_sent.lock().insert(key.to_string());
+    }
+
+    pub(crate) fn test_warning_count(&self) -> usize {
+        self.warnings_sent.lock().len()
+    }
+}
+
 impl LspServer {
     /// Convert internal diagnostic tags to LSP tag values
     ///
