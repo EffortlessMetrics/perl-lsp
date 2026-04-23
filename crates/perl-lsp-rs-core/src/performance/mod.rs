@@ -15,22 +15,6 @@ use std::time::Duration;
 
 pub use perl_symbol::SymbolIndex;
 
-/// Assert that a value is `Some` and return it, panicking with `message` if `None`.
-///
-/// This is a test helper exported for integration tests that do `use performance::*`.
-///
-/// # Panics
-///
-/// Panics with `message` if `value` is `None`. Intended for tests only.
-#[allow(clippy::panic)]
-#[track_caller]
-pub fn assert_some<T>(value: Option<T>, message: &str) -> T {
-    match value {
-        Some(v) => v,
-        None => panic!("{message}"),
-    }
-}
-
 /// Cache for parsed ASTs with TTL.
 ///
 /// Stores parsed ASTs with content hashing to avoid re-parsing unchanged files.
