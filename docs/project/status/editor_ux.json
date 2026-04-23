@@ -28,24 +28,33 @@
     "release_lane": "just ux-tests-full",
     "status_update": "cargo xtask update-status --only quality"
   },
-  "receipt_kind": "planning_scaffold",
+  "receipt_kind": "tracked_scaffold",
   "schema_version": 1,
   "scorecard": "editor_ux",
+  "signals": {
+    "known_gap_issue_count": 4,
+    "known_gap_issue_urls": [
+      "https://github.com/EffortlessMetrics/perl-lsp/issues/3522",
+      "https://github.com/EffortlessMetrics/perl-lsp/issues/3476",
+      "https://github.com/EffortlessMetrics/perl-lsp/issues/4246",
+      "https://github.com/EffortlessMetrics/perl-lsp/issues/3515"
+    ]
+  },
   "top_line_metrics": [
     {
       "name": "workflow_pass_rate",
       "owner": "perl-lsp-ux-tests",
-      "state": "planned"
+      "state": "tracked"
     },
     {
       "name": "workflow_stability_rate",
       "owner": "perl-lsp-ux-tests",
-      "state": "planned"
+      "state": "tracked"
     },
     {
       "name": "p95_time_to_first_useful_result_ms",
       "owner": "perl-lsp-ux-tests",
-      "state": "planned"
+      "state": "tracked"
     }
   ]
 }

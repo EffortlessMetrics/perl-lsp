@@ -8,6 +8,7 @@
     "receipt_kind",
     "scorecard",
     "harness",
+    "signals",
     "top_line_metrics",
     "integration_points"
   ],
@@ -18,7 +19,7 @@
     },
     "receipt_kind": {
       "type": "string",
-      "const": "planning_scaffold"
+      "const": "tracked_scaffold"
     },
     "scorecard": {
       "type": "string",
@@ -40,6 +41,24 @@
           "type": "array",
           "items": {
             "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "signals": {
+      "type": "object",
+      "required": ["known_gap_issue_count", "known_gap_issue_urls"],
+      "properties": {
+        "known_gap_issue_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "known_gap_issue_urls": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^https://github\\.com/EffortlessMetrics/perl-lsp/issues/[0-9]+$"
           }
         }
       },
@@ -98,7 +117,7 @@
           },
           "state": {
             "type": "string",
-            "enum": ["planned", "measured"]
+            "enum": ["planned", "tracked", "measured"]
           },
           "owner": {
             "type": "string"

@@ -122,6 +122,55 @@ pub(super) fn count_ux_scenarios(root: &Path) -> usize {
     collect_ux_scenario_files(root).len()
 }
 
+fn collect_readme_known_gap_issue_urls(root: &Path) -> Vec<String> {
+    let readme_path = root.join("README.md");
+    let Ok(readme) = fs::read_to_string(readme_path) else {
+        return Vec::new();
+    };
+
+    let mut in_known_gap_section = false;
+    let mut in_shipped_section = false;
+    let mut urls = Vec::new();
+
+    for line in readme.lines() {
+        if line.starts_with("### Known gaps toward solid UX") {
+            in_known_gap_section = true;
+            in_shipped_section = false;
+            continue;
+        }
+        if in_known_gap_section && line.starts_with("## ") {
+            break;
+        }
+        if !in_known_gap_section {
+            continue;
+        }
+        if line.starts_with("#### What shipped this cycle") {
+            in_shipped_section = true;
+            continue;
+        }
+        if in_shipped_section {
+            continue;
+        }
+
+        let mut remaining = line;
+        while let Some(idx) = remaining.find("https://github.com/EffortlessMetrics/perl-lsp/issues/") {
+            let candidate = &remaining[idx..];
+            let Some(end) = candidate.find(')') else {
+                break;
+            };
+            let url = candidate[..end]
+                .trim_end_matches(|ch: char| ch == ',' || ch == '.')
+                .to_string();
+            if !urls.iter().any(|existing| existing == &url) {
+                urls.push(url);
+            }
+            remaining = &candidate[end + 1..];
+        }
+    }
+
+    urls
+}
+
 // ---------------------------------------------------------------------------
 // Generators
 // ---------------------------------------------------------------------------
@@ -142,7 +191,7 @@ pub(super) fn generate_quality_status(root: &Path, original: &str) -> Result<Str
         "- **Quality Metrics**: <50ms LSP response times, 931ns incremental parsing\n\
          - **UX workflow harness**: {ux_scenarios} scenario files in `perl-lsp-ux-tests`; \
            `just ux-tests` runs the default release-confidence lane and `just ux-tests-full` adds \
-           the integration-only 10k-line large-file case; planning scaffold at \
+           the integration-only 10k-line large-file case; tracked scorecard scaffold at \
            `docs/project/status/editor_ux.json`\n\
          - **Mutation testing**: {mutation_note}\n\
          - **Production Status**: LSP server public alpha (`just ci-gate` passing)"
@@ -169,30 +218,35 @@ pub(super) fn generate_quality_status(root: &Path, original: &str) -> Result<Str
 pub(super) fn generate_editor_ux_receipt(root: &Path) -> Result<String> {
     let scenario_files = collect_ux_scenario_files(root);
     let scenario_count = scenario_files.len();
+    let known_gap_issue_urls = collect_readme_known_gap_issue_urls(root);
 
     let receipt = serde_json::json!({
         "schema_version": 1,
-        "receipt_kind": "planning_scaffold",
+        "receipt_kind": "tracked_scaffold",
         "scorecard": "editor_ux",
         "harness": {
             "crate": "crates/perl-lsp-ux-tests",
             "scenario_count": scenario_count,
             "scenario_files": scenario_files,
         },
+        "signals": {
+            "known_gap_issue_count": known_gap_issue_urls.len(),
+            "known_gap_issue_urls": known_gap_issue_urls,
+        },
         "top_line_metrics": [
             {
                 "name": "workflow_pass_rate",
-                "state": "planned",
+                "state": "tracked",
                 "owner": "perl-lsp-ux-tests",
             },
             {
                 "name": "workflow_stability_rate",
-                "state": "planned",
+                "state": "tracked",
                 "owner": "perl-lsp-ux-tests",
             },
             {
                 "name": "p95_time_to_first_useful_result_ms",
-                "state": "planned",
+                "state": "tracked",
                 "owner": "perl-lsp-ux-tests",
             },
         ],
@@ -258,7 +312,7 @@ mod tests {
         let receipt_raw = generate_editor_ux_receipt(&root)?;
         let receipt: serde_json::Value = serde_json::from_str(&receipt_raw)?;
         assert_eq!(receipt["schema_version"], 1);
-        assert_eq!(receipt["receipt_kind"], "planning_scaffold");
+        assert_eq!(receipt["receipt_kind"], "tracked_scaffold");
         assert_eq!(receipt["scorecard"], "editor_ux");
         assert_eq!(receipt["harness"]["crate"], "crates/perl-lsp-ux-tests");
         assert_eq!(
@@ -279,7 +333,37 @@ mod tests {
                 "p95_time_to_first_useful_result_ms",
             ])
         );
+        assert_eq!(
+            receipt["signals"]["known_gap_issue_count"].as_u64(),
+            Some(4),
+            "expected README known gap issue inventory to stay tracked"
+        );
+        assert_eq!(receipt["top_line_metrics"][0]["state"], "tracked");
         assert_eq!(receipt["integration_points"]["ci_lane"], "just ux-tests");
+        Ok(())
+    }
+
+    #[test]
+    fn test_collect_readme_known_gap_issue_urls_excludes_shipped_section() -> Result<()> {
+        let dir = tempfile::tempdir()?;
+        let readme = r#"
+### Known gaps toward solid UX
+- item one ([#100](https://github.com/EffortlessMetrics/perl-lsp/issues/100))
+- item two ([#101](https://github.com/EffortlessMetrics/perl-lsp/issues/101), umbrella [#102](https://github.com/EffortlessMetrics/perl-lsp/issues/102))
+#### What shipped this cycle (v0.12.x)
+- historical closeout ([#90](https://github.com/EffortlessMetrics/perl-lsp/issues/90))
+## Security
+"#;
+        fs::write(dir.path().join("README.md"), readme)?;
+        let urls = collect_readme_known_gap_issue_urls(dir.path());
+        assert_eq!(
+            urls,
+            vec![
+                "https://github.com/EffortlessMetrics/perl-lsp/issues/100".to_string(),
+                "https://github.com/EffortlessMetrics/perl-lsp/issues/101".to_string(),
+                "https://github.com/EffortlessMetrics/perl-lsp/issues/102".to_string(),
+            ]
+        );
         Ok(())
     }
 }
