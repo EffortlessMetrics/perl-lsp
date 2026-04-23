@@ -7,6 +7,7 @@
 # Or with options via environment variables:
 #   VERSION=v0.12.0 INSTALL_DIR=/usr/local/bin bash scripts/install.sh
 #   PREFER_GNU=1 bash scripts/install.sh   # prefer glibc over musl on Linux
+#   BUILD_FROM_SOURCE=1 bash scripts/install.sh   # force cargo build/install
 #
 # Supported platforms:
 #   Linux x86_64 (musl/gnu), Linux aarch64 (musl/gnu), macOS x86_64, macOS aarch64
@@ -17,6 +18,7 @@ BIN_NAME="perllsp"
 DAP_BIN_NAME="perl-dap"
 VERSION="${VERSION:-latest}"
 PREFER_GNU="${PREFER_GNU:-0}"
+BUILD_FROM_SOURCE="${BUILD_FROM_SOURCE:-0}"
 
 # Determine install directory: user-local by default, system-wide if explicitly set
 if [ -z "${INSTALL_DIR:-}" ]; then
@@ -52,6 +54,8 @@ detect_platform() {
 
     _os="$(uname -s)"
     _arch="$(uname -m)"
+    SOURCE_TARGET=""
+    INSTALL_MODE="release"
 
     case "$_os" in
         Linux)
@@ -79,16 +83,46 @@ detect_platform() {
     case "$_arch" in
         x86_64|amd64)   _arch="x86_64" ;;
         aarch64|arm64)  _arch="aarch64" ;;
+        armv8l|armv7l|armv7*|armhf)
+            if [ "$_os" = "linux" ]; then
+                _arch="armv7"
+                SOURCE_TARGET="armv7-unknown-linux-gnueabihf"
+                INSTALL_MODE="source"
+            else
+                err "unsupported architecture: $_arch"
+            fi
+            ;;
+        armv6l|armv6*|arm)
+            if [ "$_os" = "linux" ]; then
+                _arch="armv6"
+                SOURCE_TARGET="arm-unknown-linux-gnueabihf"
+                INSTALL_MODE="source"
+            else
+                err "unsupported architecture: $_arch"
+            fi
+            ;;
         *)              err "unsupported architecture: $_arch" ;;
     esac
 
-    if [ "$_os" = "linux" ]; then
-        TARGET="${_arch}-unknown-linux-${_libc}"
-    else
-        TARGET="${_arch}-apple-darwin"
+    if [ "$BUILD_FROM_SOURCE" = "1" ]; then
+        INSTALL_MODE="source"
     fi
 
-    info "platform: $_os $_arch (target: $TARGET)"
+    if [ "$INSTALL_MODE" = "release" ]; then
+        if [ "$_os" = "linux" ]; then
+            TARGET="${_arch}-unknown-linux-${_libc}"
+        else
+            TARGET="${_arch}-apple-darwin"
+        fi
+        info "platform: $_os $_arch (target: $TARGET)"
+    else
+        TARGET="${SOURCE_TARGET:-}"
+        if [ -n "$TARGET" ]; then
+            info "platform: $_os $_arch (source build target: $TARGET)"
+        else
+            info "platform: $_os $_arch (source build mode)"
+        fi
+    fi
 }
 
 # ── Version resolution ─────────────────────────────────────────────────────────
@@ -129,10 +163,6 @@ download_and_verify() {
 
     ASSET_URL="${_base_url}/${_asset}"
     CHECKSUM_URL="${_base_url}/SHA256SUMS"
-
-    TMPDIR="$(mktemp -d)"
-    # shellcheck disable=SC2064
-    trap "rm -rf '$TMPDIR'" EXIT
 
     local _archive="${TMPDIR}/${_asset}"
 
@@ -193,6 +223,22 @@ extract_archive() {
         err "expected directory not found after extraction: $EXTRACT_DIR
 The release archive may have an unexpected layout."
     fi
+}
+
+# ── Source build ───────────────────────────────────────────────────────────────
+
+build_from_source() {
+    need_cmd cargo
+    need_cmd rustup
+
+    local _cargo_target
+    _cargo_target="${TARGET:-$(rustc -vV | awk -F': ' '/host:/ {print $2}')}"
+
+    info "building from source for target: $_cargo_target"
+    rustup target add "$_cargo_target"
+    cargo install perllsp --locked --target "$_cargo_target" --root "$TMPDIR/install-root"
+
+    EXTRACT_DIR="${TMPDIR}/install-root/bin"
 }
 
 # ── Install ────────────────────────────────────────────────────────────────────
@@ -275,8 +321,16 @@ main() {
 
     detect_platform
     resolve_version
-    download_and_verify
-    extract_archive
+    TMPDIR="$(mktemp -d)"
+    # shellcheck disable=SC2064
+    trap "rm -rf '$TMPDIR'" EXIT
+
+    if [ "$INSTALL_MODE" = "release" ]; then
+        download_and_verify
+        extract_archive
+    else
+        build_from_source
+    fi
     install_binaries
     verify_install
     check_path
