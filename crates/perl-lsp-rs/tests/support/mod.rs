@@ -8,6 +8,7 @@ pub mod message_framing;
 pub mod notification_queue;
 pub mod test_helpers;
 pub mod test_workspace;
+pub mod ux_bdd;
 
 // Re-export test helpers for convenience in test files that use `support::*`
 // NOTE: test_helpers module exists but may not be used in all test contexts
