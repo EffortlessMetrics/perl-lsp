@@ -5,11 +5,20 @@
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
+use std::sync::LazyLock;
 use std::time::Duration;
 
 use color_eyre::eyre::{Context, Result};
+use regex::Regex;
 
 use super::{replace_block, run_cmd};
+
+static RUNNING_UNITTESTS_RE: LazyLock<Option<Regex>> = LazyLock::new(|| {
+    Regex::new(r"Running unittests[^\(]*\(target[^\)]*deps[/\\]([a-zA-Z0-9_-]+)-[0-9a-f]+\)").ok()
+});
+static TEST_LINE_RE: LazyLock<Option<Regex>> = LazyLock::new(|| Regex::new(r":\s*test\s*$").ok());
+static README_ISSUE_LINK_RE: LazyLock<Option<Regex>> =
+    LazyLock::new(|| Regex::new(r"github\.com/[^/\s]+/[^/\s]+/issues/\d+").ok());
 
 // ---------------------------------------------------------------------------
 // Metric collectors
@@ -45,23 +54,16 @@ pub(super) fn collect_per_crate_test_counts(root: &Path) -> BTreeMap<String, usi
         return BTreeMap::new();
     }
 
-    let running_re = regex::Regex::new(
-        r"Running unittests[^\(]*\(target[^\)]*deps[/\\]([a-zA-Z0-9_-]+)-[0-9a-f]+\)",
-    )
-    .ok();
-    let test_re = regex::Regex::new(r":\s*test\s*$").ok();
-
     let mut by_crate: BTreeMap<String, usize> = BTreeMap::new();
     let mut current_crate: Option<String> = None;
 
     for line in output.lines() {
-        if let Some(caps) = running_re.as_ref().and_then(|r| r.captures(line)) {
+        if let Some(caps) = RUNNING_UNITTESTS_RE.as_ref().and_then(|re| re.captures(line)) {
             let name = caps[1].replace('_', "-");
             current_crate = Some(name);
             continue;
         }
-        if let Some(re) = test_re.as_ref()
-            && re.is_match(line)
+        if TEST_LINE_RE.as_ref().is_some_and(|re| re.is_match(line))
             && let Some(ref crate_name) = current_crate
         {
             *by_crate.entry(crate_name.clone()).or_default() += 1;
@@ -122,6 +124,33 @@ pub(super) fn count_ux_scenarios(root: &Path) -> usize {
     collect_ux_scenario_files(root).len()
 }
 
+pub(super) fn count_readme_known_gap_issue_links(root: &Path) -> usize {
+    let readme_path = root.join("README.md");
+    let Ok(readme) = fs::read_to_string(readme_path) else {
+        return 0;
+    };
+
+    let mut in_known_gap_section = false;
+    let mut issue_count = 0usize;
+
+    for line in readme.lines() {
+        if line.starts_with("### Known gaps toward solid UX") {
+            in_known_gap_section = true;
+            continue;
+        }
+        if in_known_gap_section && line.starts_with("### ") {
+            break;
+        }
+        if in_known_gap_section {
+            issue_count += README_ISSUE_LINK_RE
+                .as_ref()
+                .map_or(0, |issue_re| issue_re.find_iter(line).count());
+        }
+    }
+
+    issue_count
+}
+
 // ---------------------------------------------------------------------------
 // Generators
 // ---------------------------------------------------------------------------
@@ -130,6 +159,7 @@ pub(super) fn generate_quality_status(root: &Path, original: &str) -> Result<Str
     let mutation_by_crate = collect_per_crate_mutation(root);
     let tests_by_crate = collect_per_crate_test_counts(root);
     let ux_scenarios = count_ux_scenarios(root);
+    let known_gap_issue_links = count_readme_known_gap_issue_links(root);
 
     let has_mutation_data = !mutation_by_crate.is_empty();
     let mutation_note = if has_mutation_data {
@@ -144,6 +174,8 @@ pub(super) fn generate_quality_status(root: &Path, original: &str) -> Result<Str
            `just ux-tests` runs the default release-confidence lane and `just ux-tests-full` adds \
            the integration-only 10k-line large-file case; planning scaffold at \
            `docs/project/status/editor_ux.json`\n\
+         - **UX gap burn-down signal**: README tracks {known_gap_issue_links} linked UX-gap issues \
+           for the open-issue burn-down loop\n\
          - **Mutation testing**: {mutation_note}\n\
          - **Production Status**: LSP server public alpha (`just ci-gate` passing)"
     );
@@ -169,6 +201,7 @@ pub(super) fn generate_quality_status(root: &Path, original: &str) -> Result<Str
 pub(super) fn generate_editor_ux_receipt(root: &Path) -> Result<String> {
     let scenario_files = collect_ux_scenario_files(root);
     let scenario_count = scenario_files.len();
+    let known_gap_issue_links = count_readme_known_gap_issue_links(root);
 
     let receipt = serde_json::json!({
         "schema_version": 1,
@@ -202,6 +235,21 @@ pub(super) fn generate_editor_ux_receipt(root: &Path) -> Result<String> {
             "status_update": "cargo xtask update-status --only quality",
             "quality_surface": "docs/project/status/quality.md",
         },
+        "qualitative_signal_tracking": {
+            "manual_editor_smoke_workflows": {
+                "state": "documented",
+                "source": "docs/reference/UX_TESTING.md"
+            },
+            "first_5_minutes_harness": {
+                "scenario_count": scenario_count,
+                "source": "crates/perl-lsp-ux-tests/tests",
+                "ci_lane": "just ux-tests"
+            },
+            "open_issue_burn_down": {
+                "known_gap_issue_links": known_gap_issue_links,
+                "source": "README.md#known-gaps-toward-solid-ux"
+            }
+        }
     });
 
     serde_json::to_string_pretty(&receipt).context("serializing editor UX receipt")
@@ -280,6 +328,36 @@ mod tests {
             ])
         );
         assert_eq!(receipt["integration_points"]["ci_lane"], "just ux-tests");
+        assert_eq!(
+            receipt["qualitative_signal_tracking"]["manual_editor_smoke_workflows"]["state"],
+            "documented"
+        );
+        assert_eq!(
+            receipt["qualitative_signal_tracking"]["first_5_minutes_harness"]["scenario_count"]
+                .as_u64(),
+            Some(count_ux_scenarios(&root) as u64)
+        );
+        assert_eq!(
+            receipt["qualitative_signal_tracking"]["open_issue_burn_down"]["known_gap_issue_links"]
+                .as_u64(),
+            Some(count_readme_known_gap_issue_links(&root) as u64)
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_count_readme_known_gap_issue_links_from_mock_readme() -> Result<()> {
+        let dir = tempfile::tempdir()?;
+        let readme = r#"
+### Known gaps toward solid UX
+- foo ([#10](https://github.com/org/repo/issues/10))
+- bar ([#22](https://github.com/org/repo/issues/22))
+
+### What shipped this cycle (v0.12.x)
+- done
+"#;
+        fs::write(dir.path().join("README.md"), readme)?;
+        assert_eq!(count_readme_known_gap_issue_links(dir.path()), 2);
         Ok(())
     }
 }
