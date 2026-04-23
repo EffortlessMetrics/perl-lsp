@@ -261,4 +261,36 @@ mod tests {
         fs::remove_dir_all(&root)?;
         Ok(())
     }
+
+    #[test]
+    fn collect_files_matches_extensions_case_insensitively()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let root = temp_root("perl_corpus_case_insensitive_ext")?;
+        let fixtures = [
+            root.join("upper.PL"),
+            root.join("mixed.Pm"),
+            root.join("suite.T"),
+            root.join("app.PsGi"),
+            root.join("legacy.CgI"),
+        ];
+
+        for fixture in &fixtures {
+            fs::write(fixture, "print 1;\n")?;
+        }
+
+        let files = collect_files(&root, TEST_EXTENSIONS);
+        let mut names: Vec<_> = files
+            .iter()
+            .map(|path| {
+                path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default()
+            })
+            .collect();
+        names.sort();
+
+        let expected = vec!["app.PsGi", "legacy.CgI", "mixed.Pm", "suite.T", "upper.PL"];
+        assert_eq!(names, expected);
+
+        fs::remove_dir_all(&root)?;
+        Ok(())
+    }
 }
