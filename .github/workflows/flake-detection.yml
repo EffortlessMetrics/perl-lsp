@@ -50,7 +50,8 @@ jobs:
         run: |
           set -euo pipefail
           FILTER="${{ github.event.inputs.test_filter }}"
-          cargo test --workspace --lib --locked -Z unstable-options --format json \
+          # Intentionally include integration tests to avoid --lib-only blind spots.
+          cargo test --workspace --locked -Z unstable-options --format json \
             $FILTER > test-results.jsonl 2>&1 || true
 
           python3 .ci/scripts/extract-failed-tests.py \
@@ -80,7 +81,7 @@ jobs:
 
             for i in 1 2 3; do
               echo "::group::Retry $i/3 for $test_name"
-              if cargo test "$test_name" --lib --locked -- --test-threads=1 2>&1 | tee retry-run.log; then
+              if cargo test "$test_name" --locked -- --test-threads=1 2>&1 | tee retry-run.log; then
                 PASSED=true
                 RETRY_LOG=$(cat retry-run.log)
                 echo "::endgroup::"
