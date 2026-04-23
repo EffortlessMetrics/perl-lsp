@@ -204,7 +204,7 @@ fn edit_from_lsp_full_document_change() -> Result<(), Box<dyn std::error::Error>
     };
     let edit = Edit::from_lsp_change(&change, &li, old);
     assert!(edit.is_some());
-    let e = edit.unwrap();
+    let e = edit.ok_or("expected full document change to produce an edit")?;
     assert_eq!(e.start_byte, 0);
     assert_eq!(e.old_end_byte, old.len());
     assert_eq!(e.new_text, "my $x = 2;");
@@ -225,7 +225,7 @@ fn edit_from_lsp_range_change() -> Result<(), Box<dyn std::error::Error>> {
     };
     let edit = Edit::from_lsp_change(&change, &li, old);
     assert!(edit.is_some());
-    let e = edit.unwrap();
+    let e = edit.ok_or("expected range change to produce an edit")?;
     assert_eq!(e.start_byte, 8);
     assert_eq!(e.old_end_byte, 10);
     assert_eq!(e.new_text, "99");
