@@ -64,21 +64,57 @@ impl EnhancedCodeActionsProvider {
         range: (usize, usize),
     ) -> Vec<CodeAction> {
         let mut actions = Vec::new();
+        let normalized_range = self.normalize_range_for_refactors(range);
         // Track (stmt_start, var_name) pairs already emitted to prevent duplicate
         // extract-variable actions when both a parent and child node overlap the range.
         let mut extract_var_seen: HashSet<(usize, String)> = HashSet::new();
 
         // Find all nodes that overlap the range and collect actions
-        self.collect_actions_for_range(ast, range, false, &mut actions, &mut extract_var_seen);
+        self.collect_actions_for_range(
+            ast,
+            normalized_range,
+            false,
+            &mut actions,
+            &mut extract_var_seen,
+        );
 
         // Signature refactoring: collect add-parameter actions for any subroutine
         // node whose span overlaps the requested range.
-        self.collect_signature_actions(ast, ast, range, &mut actions);
+        self.collect_signature_actions(ast, ast, normalized_range, &mut actions);
 
         // Global actions (not node-specific)
         actions.extend(self.get_global_refactorings(ast));
 
         actions
+    }
+
+    /// Normalize a selected byte range so trailing statement punctuation does not
+    /// block expression-oriented refactor actions.
+    fn normalize_range_for_refactors(&self, range: (usize, usize)) -> (usize, usize) {
+        if self.source.is_empty() {
+            return (0, 0);
+        }
+
+        let start = range.0.min(self.source.len());
+        let mut end = range.1.min(self.source.len());
+
+        if start >= end {
+            return (start, end);
+        }
+
+        while end > start {
+            let Some(ch) = self.source[..end].chars().next_back() else {
+                break;
+            };
+
+            if ch.is_whitespace() || ch == ';' {
+                end -= ch.len_utf8();
+            } else {
+                break;
+            }
+        }
+
+        (start, end.max(start))
     }
 
     /// Walk the AST and emit signature refactoring actions for subroutine nodes
@@ -613,6 +649,22 @@ mod extract_variable_tests {
         assert!(
             replace_edit.new_text.starts_with('$'),
             "Second edit should be a variable reference"
+        );
+    }
+
+    #[test]
+    fn test_extract_variable_with_selection_including_semicolon() {
+        let source = "my $x = length($string);\n";
+        let mut parser = Parser::new(source);
+        let ast = must(parser.parse());
+
+        let provider = EnhancedCodeActionsProvider::new(source.to_string());
+        // Range includes trailing ';' and newline, as editors often do.
+        let actions = provider.get_enhanced_refactoring_actions(&ast, (8, 24));
+
+        assert!(
+            actions.iter().any(|a| a.title.contains("Extract")),
+            "Expected extract action even when selection includes trailing punctuation"
         );
     }
 }
