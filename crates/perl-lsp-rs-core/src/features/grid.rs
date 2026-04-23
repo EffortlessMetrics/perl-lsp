@@ -8,9 +8,8 @@
 
 pub use crate::features::contracts::{
     BddFeatureRow, Feature, FeatureProfileSpec, LSP_VERSION, VERSION, advertised_features,
-    advertised_trackable_feature_count_for_grid, all_features, bdd_feature_rows, catalog,
-    compliance_percent, compliance_percent_for_grid, feature_profile_specs, has_feature,
-    trackable_feature_count_for_grid,
+    all_features, bdd_feature_rows, catalog, compliance_percent, compliance_percent_for_grid,
+    feature_profile_specs, has_feature, trackable_feature_count_for_grid,
 };
 pub use crate::features::policy::{FeatureProfile, catalog_advertised_feature_ids};
 
@@ -43,6 +42,9 @@ pub fn to_json_for_profile(profile: FeatureProfile) -> String {
 }
 
 /// BDD-compatible feature catalog JSON for an explicit profile set.
+///
+/// The top-level advertised feature list and compliance math are scoped to the
+/// union of the provided profiles.
 pub fn to_json_for_profiles(profiles: &[FeatureProfile]) -> String {
     feature_grid_payload(profiles, None).to_string()
 }
@@ -78,6 +80,22 @@ fn advertised_trackable_feature_count(advertised: &[&'static str]) -> usize {
         .count()
 }
 
+fn advertised_for_profiles(profiles: &[FeatureProfile]) -> Vec<&'static str> {
+    if profiles.is_empty() {
+        return Vec::new();
+    }
+
+    let profile_sets: Vec<Vec<&'static str>> =
+        profiles.iter().copied().map(catalog_advertised_feature_ids).collect();
+
+    all_features()
+        .iter()
+        .filter_map(|feature| {
+            profile_sets.iter().any(|ids| ids.contains(&feature.id)).then_some(feature.id)
+        })
+        .collect()
+}
+
 fn feature_grid_payload(
     profiles: &[FeatureProfile],
     selected_profile: Option<FeatureProfile>,
@@ -91,7 +109,12 @@ fn feature_grid_payload(
                 advertised_trackable_feature_count(&advertised);
             (advertised, advertised_trackable_feature_count)
         }
-        None => (advertised_features().to_vec(), advertised_trackable_feature_count_for_grid()),
+        None => {
+            let advertised = advertised_for_profiles(profiles);
+            let advertised_trackable_feature_count =
+                advertised_trackable_feature_count(&advertised);
+            (advertised, advertised_trackable_feature_count)
+        }
     };
     let trackable_feature_count = trackable_feature_count_for_grid();
     let compliance_percent = if trackable_feature_count == 0 {
@@ -263,6 +286,32 @@ mod tests {
     }
 
     // ── to_json_for_profiles ────────────────────────────────────────
+
+    #[test]
+    fn to_json_for_profiles_scopes_top_level_advertised_to_profile_union() {
+        let payload = super::to_json_for_profiles(&[FeatureProfile::GaLock]);
+        let value: serde_json::Value = must(serde_json::from_str(&payload));
+
+        let top_level = must_some(value["advertised_trackable_feature_count"].as_u64());
+        let summary = must_some(
+            value["profiles"]
+                .as_array()
+                .and_then(|profiles| profiles.first())
+                .and_then(|profile| profile["advertised_trackable_feature_count"].as_u64()),
+        );
+
+        assert_eq!(top_level, summary);
+    }
+
+    #[test]
+    fn to_json_for_profiles_empty_input_has_zero_advertised_counts() {
+        let payload = super::to_json_for_profiles(&[]);
+        let value: serde_json::Value = must(serde_json::from_str(&payload));
+
+        assert_eq!(value["advertised_trackable_feature_count"].as_u64(), Some(0));
+        assert_eq!(value["advertised"].as_array().map(Vec::len), Some(0));
+        assert_eq!(value["compliance_percent"].as_f64(), Some(0.0));
+    }
 
     #[test]
     fn to_json_for_profiles_subset() {
