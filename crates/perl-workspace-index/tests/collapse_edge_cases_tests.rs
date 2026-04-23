@@ -293,11 +293,12 @@ fn test_cargo_toml_no_deleted_satellite_deps() {
 // Test 9: Workspace member count reduced after Wave A + Wave D collapse
 // =============================================================================
 
-/// Verify workspace member count has been reduced by satellite deletions.
+/// Verify workspace member count reflects post-collapse consolidation.
 ///
-/// Wave A (#4426) removed 6 perl-workspace-* satellites.
-/// Wave D (#4454) removed 13+ parser/AST satellites into perl-parser-core and perl-parser.
-/// Combined baseline was ~120, now ~83 members.
+/// We intentionally keep this as a coarse range check (instead of a fixed
+/// exact count) so normal workspace growth/shrink over time doesn't require a
+/// test rewrite, while still protecting against accidental large-scale member
+/// removals or regressions to the pre-collapse footprint.
 #[test]
 fn test_workspace_members_reduced_by_six() {
     let cargo_manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".to_string());
@@ -319,18 +320,36 @@ fn test_workspace_members_reduced_by_six() {
         })
         .collect();
 
-    // After Wave A (6 removed) and Wave D (13+ removed), expect ≤120 members.
-    // Allow flexibility for concurrent PR activity.
+    // Post-collapse we should be well below the historical ~120-member layout.
+    // Keep a generous ceiling for future additions.
     assert!(
-        members.len() <= 120,
-        "Workspace should have ≤120 members after Wave A+D satellite deletions, found {}",
+        members.len() <= 80,
+        "Workspace should have ≤80 members in the consolidated layout, found {}",
         members.len()
     );
+
+    // Keep a floor to catch accidental broad member removals.
     assert!(
-        members.len() >= 70,
-        "Workspace should have ≥70 members (check for inadvertent removals), found {}",
+        members.len() >= 30,
+        "Workspace should have ≥30 members (check for inadvertent removals), found {}",
         members.len()
     );
+
+    // Ensure key top-level deliverables remain part of the workspace.
+    let must_include = [
+        "crates/perl-lsp",
+        "crates/perl-dap",
+        "crates/perl-parser-core",
+        "crates/perl-parser",
+        "crates/perl-workspace-index",
+    ];
+    for required_member in must_include {
+        assert!(
+            members.contains(required_member),
+            "Workspace members should include '{}'",
+            required_member
+        );
+    }
 }
 
 // =============================================================================
