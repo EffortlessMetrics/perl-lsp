@@ -61,6 +61,14 @@ fn normalize_line_bounds(
 /// Bytes that belong to Perl comments (`# ...`) or single/double-quoted string
 /// literals are marked `false` and should be ignored by lightweight regex scans.
 fn code_byte_mask(line: &str) -> Vec<bool> {
+    fn is_ident_char(byte: u8) -> bool {
+        byte.is_ascii_alphanumeric() || byte == b'_'
+    }
+
+    fn is_ident_start(byte: u8) -> bool {
+        byte.is_ascii_alphabetic() || byte == b'_'
+    }
+
     let bytes = line.as_bytes();
     let mut mask = vec![true; bytes.len()];
     let mut in_single = false;
@@ -105,8 +113,15 @@ fn code_byte_mask(line: &str) -> Vec<bool> {
                 break;
             }
             b'\'' => {
-                mask[i] = false;
-                in_single = true;
+                let is_legacy_namespace_separator = i > 0
+                    && i + 1 < bytes.len()
+                    && is_ident_char(bytes[i - 1])
+                    && is_ident_start(bytes[i + 1]);
+
+                if !is_legacy_namespace_separator {
+                    mask[i] = false;
+                    in_single = true;
+                }
             }
             b'"' => {
                 mask[i] = false;
