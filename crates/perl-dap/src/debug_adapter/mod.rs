@@ -137,7 +137,7 @@ fn prompt_re() -> Option<&'static Regex> {
 fn stack_frame_re() -> Option<&'static Regex> {
     STACK_FRAME_RE
         .get_or_init(|| {
-            Regex::new(r"^\s*#?\s*(?P<frame>\d+)?\s+(?P<func>[A-Za-z_][\w:]*+?)(?:\s+called)?\s+at\s+(?P<file>[^\s]+)\s+line\s+(?P<line>\d+)")
+            Regex::new(r"^\s*#?\s*(?P<frame>\d+)?\s+(?P<func>[A-Za-z_][\w:]*+?)(?:\s+called)?\s+at\s+(?P<file>.+?)\s+line\s+(?P<line>\d+)")
         })
         .as_ref()
         .ok()
