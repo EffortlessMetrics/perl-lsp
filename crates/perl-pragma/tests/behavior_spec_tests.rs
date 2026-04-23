@@ -155,6 +155,28 @@ fn given_use_feature_qw_when_querying_state_then_requested_features_and_unicode_
 }
 
 #[test]
+fn given_use_if_feature_bundle_when_querying_state_then_bundle_features_are_recorded() {
+    let ast = program(vec![use_node("if", &["$]", ">=", "5.036", "feature", "':5.36'"], 0, 44)]);
+    let map = PragmaTracker::build(&ast);
+
+    let state = PragmaTracker::state_for_offset(&map, 20);
+    assert!(state.has_feature("say"));
+    assert!(state.has_feature("signatures"));
+    assert!(state.has_feature("isa"));
+}
+
+#[test]
+fn given_use_feature_signatures_when_querying_state_then_effective_strict_modes_are_enabled() {
+    let ast = program(vec![use_node("feature", &["'signatures'"], 0, 24)]);
+    let map = PragmaTracker::build(&ast);
+
+    let state = PragmaTracker::state_for_offset(&map, 12);
+    assert!(state.strict_vars);
+    assert!(state.strict_subs);
+    assert!(state.strict_refs);
+}
+
+#[test]
 fn given_use_v5_38_when_querying_state_then_switch_feature_is_not_available_but_modern_features_are()
  {
     let ast = program(vec![use_node("v5.38", &[], 0, 10)]);
