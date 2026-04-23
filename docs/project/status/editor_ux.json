@@ -28,7 +28,7 @@
     "release_lane": "just ux-tests-full",
     "status_update": "cargo xtask update-status --only quality"
   },
-  "receipt_kind": "planning_scaffold",
+  "receipt_kind": "tracking_receipt",
   "schema_version": 1,
   "scorecard": "editor_ux",
   "top_line_metrics": [
@@ -47,5 +47,15 @@
       "owner": "perl-lsp-ux-tests",
       "state": "planned"
     }
-  ]
+  ],
+  "ux_gap_burndown": {
+    "issue_reference_count": 4,
+    "issue_references": [
+      "https://github.com/EffortlessMetrics/perl-lsp/issues/3476",
+      "https://github.com/EffortlessMetrics/perl-lsp/issues/3515",
+      "https://github.com/EffortlessMetrics/perl-lsp/issues/3522",
+      "https://github.com/EffortlessMetrics/perl-lsp/issues/4246"
+    ],
+    "source": "README.md#known-gaps-toward-solid-ux"
+  }
 }

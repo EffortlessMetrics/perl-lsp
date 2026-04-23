@@ -9,6 +9,7 @@
     "scorecard",
     "harness",
     "top_line_metrics",
+    "ux_gap_burndown",
     "integration_points"
   ],
   "properties": {
@@ -18,7 +19,7 @@
     },
     "receipt_kind": {
       "type": "string",
-      "const": "planning_scaffold"
+      "const": "tracking_receipt"
     },
     "scorecard": {
       "type": "string",
@@ -122,6 +123,27 @@
         },
         "quality_surface": {
           "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "ux_gap_burndown": {
+      "type": "object",
+      "required": ["source", "issue_reference_count", "issue_references"],
+      "properties": {
+        "source": {
+          "type": "string"
+        },
+        "issue_reference_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "issue_references": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uri"
+          }
         }
       },
       "additionalProperties": false

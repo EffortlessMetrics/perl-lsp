@@ -5,11 +5,17 @@
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
+use std::sync::LazyLock;
 use std::time::Duration;
 
 use color_eyre::eyre::{Context, Result};
 
 use super::{replace_block, run_cmd};
+
+static KNOWN_UX_GAP_ISSUE_RE: LazyLock<std::result::Result<regex::Regex, regex::Error>> =
+    LazyLock::new(|| {
+        regex::Regex::new(r"https://github\.com/EffortlessMetrics/perl-lsp/issues/\d+")
+    });
 
 // ---------------------------------------------------------------------------
 // Metric collectors
@@ -122,6 +128,56 @@ pub(super) fn count_ux_scenarios(root: &Path) -> usize {
     collect_ux_scenario_files(root).len()
 }
 
+#[derive(Debug, serde::Deserialize)]
+struct EditorUxMetricsReceipt {
+    metrics: EditorUxMetricValues,
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct EditorUxMetricValues {
+    workflow_pass_rate: Option<f64>,
+    workflow_stability_rate: Option<f64>,
+    p95_time_to_first_useful_result_ms: Option<u64>,
+}
+
+fn read_editor_ux_metrics(root: &Path) -> Option<EditorUxMetricValues> {
+    let path = root.join(".ci").join("metrics").join("editor_ux.json");
+    let raw = fs::read_to_string(path).ok()?;
+    let receipt: EditorUxMetricsReceipt = serde_json::from_str(&raw).ok()?;
+    Some(receipt.metrics)
+}
+
+fn extract_known_ux_gap_issues(root: &Path) -> Vec<String> {
+    let readme_path = root.join("README.md");
+    let Ok(readme) = fs::read_to_string(readme_path) else {
+        return Vec::new();
+    };
+
+    let mut in_known_gaps_section = false;
+    let mut issues = std::collections::BTreeSet::new();
+    let Ok(issue_re) = &*KNOWN_UX_GAP_ISSUE_RE else {
+        return Vec::new();
+    };
+
+    for line in readme.lines() {
+        if line.starts_with("### Known gaps toward solid UX") {
+            in_known_gaps_section = true;
+            continue;
+        }
+        if in_known_gaps_section && line.starts_with("### ") {
+            break;
+        }
+        if !in_known_gaps_section {
+            continue;
+        }
+        for m in issue_re.find_iter(line) {
+            issues.insert(m.as_str().to_string());
+        }
+    }
+
+    issues.into_iter().collect()
+}
+
 // ---------------------------------------------------------------------------
 // Generators
 // ---------------------------------------------------------------------------
@@ -130,6 +186,7 @@ pub(super) fn generate_quality_status(root: &Path, original: &str) -> Result<Str
     let mutation_by_crate = collect_per_crate_mutation(root);
     let tests_by_crate = collect_per_crate_test_counts(root);
     let ux_scenarios = count_ux_scenarios(root);
+    let known_ux_gap_issues = extract_known_ux_gap_issues(root);
 
     let has_mutation_data = !mutation_by_crate.is_empty();
     let mutation_note = if has_mutation_data {
@@ -144,8 +201,11 @@ pub(super) fn generate_quality_status(root: &Path, original: &str) -> Result<Str
            `just ux-tests` runs the default release-confidence lane and `just ux-tests-full` adds \
            the integration-only 10k-line large-file case; planning scaffold at \
            `docs/project/status/editor_ux.json`\n\
+         - **Known UX gap burn-down**: {known_gap_count} tracked issue references from \
+           `README.md` “Known gaps toward solid UX” (must-land + nice-to-land + deferred)\n\
          - **Mutation testing**: {mutation_note}\n\
-         - **Production Status**: LSP server public alpha (`just ci-gate` passing)"
+         - **Production Status**: LSP server public alpha (`just ci-gate` passing)",
+        known_gap_count = known_ux_gap_issues.len()
     );
 
     let crate_table = format_crate_quality_table(&mutation_by_crate, &tests_by_crate);
@@ -169,10 +229,29 @@ pub(super) fn generate_quality_status(root: &Path, original: &str) -> Result<Str
 pub(super) fn generate_editor_ux_receipt(root: &Path) -> Result<String> {
     let scenario_files = collect_ux_scenario_files(root);
     let scenario_count = scenario_files.len();
+    let known_ux_gap_issues = extract_known_ux_gap_issues(root);
+    let measured = read_editor_ux_metrics(root);
+    let workflow_pass_state = if measured.as_ref().and_then(|m| m.workflow_pass_rate).is_some() {
+        "measured"
+    } else {
+        "planned"
+    };
+    let workflow_stability_state =
+        if measured.as_ref().and_then(|m| m.workflow_stability_rate).is_some() {
+            "measured"
+        } else {
+            "planned"
+        };
+    let p95_state =
+        if measured.as_ref().and_then(|m| m.p95_time_to_first_useful_result_ms).is_some() {
+            "measured"
+        } else {
+            "planned"
+        };
 
     let receipt = serde_json::json!({
         "schema_version": 1,
-        "receipt_kind": "planning_scaffold",
+        "receipt_kind": "tracking_receipt",
         "scorecard": "editor_ux",
         "harness": {
             "crate": "crates/perl-lsp-ux-tests",
@@ -182,20 +261,25 @@ pub(super) fn generate_editor_ux_receipt(root: &Path) -> Result<String> {
         "top_line_metrics": [
             {
                 "name": "workflow_pass_rate",
-                "state": "planned",
+                "state": workflow_pass_state,
                 "owner": "perl-lsp-ux-tests",
             },
             {
                 "name": "workflow_stability_rate",
-                "state": "planned",
+                "state": workflow_stability_state,
                 "owner": "perl-lsp-ux-tests",
             },
             {
                 "name": "p95_time_to_first_useful_result_ms",
-                "state": "planned",
+                "state": p95_state,
                 "owner": "perl-lsp-ux-tests",
             },
         ],
+        "ux_gap_burndown": {
+            "source": "README.md#known-gaps-toward-solid-ux",
+            "issue_reference_count": known_ux_gap_issues.len(),
+            "issue_references": known_ux_gap_issues,
+        },
         "integration_points": {
             "ci_lane": "just ux-tests",
             "release_lane": "just ux-tests-full",
@@ -258,7 +342,7 @@ mod tests {
         let receipt_raw = generate_editor_ux_receipt(&root)?;
         let receipt: serde_json::Value = serde_json::from_str(&receipt_raw)?;
         assert_eq!(receipt["schema_version"], 1);
-        assert_eq!(receipt["receipt_kind"], "planning_scaffold");
+        assert_eq!(receipt["receipt_kind"], "tracking_receipt");
         assert_eq!(receipt["scorecard"], "editor_ux");
         assert_eq!(receipt["harness"]["crate"], "crates/perl-lsp-ux-tests");
         assert_eq!(
@@ -279,7 +363,30 @@ mod tests {
                 "p95_time_to_first_useful_result_ms",
             ])
         );
+        assert!(
+            receipt["ux_gap_burndown"]["issue_reference_count"].as_u64().unwrap_or(0) > 0,
+            "expected at least one known UX gap issue reference"
+        );
         assert_eq!(receipt["integration_points"]["ci_lane"], "just ux-tests");
+        Ok(())
+    }
+
+    #[test]
+    fn test_extract_known_ux_gap_issues_reads_readme_section() -> Result<()> {
+        let root = crate::utils::project_root()?;
+        let issues = extract_known_ux_gap_issues(&root);
+        assert!(
+            issues.iter().any(|issue| issue.ends_with("/3522")),
+            "must-land issue should be tracked"
+        );
+        assert!(
+            issues.iter().any(|issue| issue.ends_with("/3476")),
+            "nice-to-land issue should be tracked"
+        );
+        assert!(
+            issues.iter().any(|issue| issue.ends_with("/3515")),
+            "deferred issue should be tracked"
+        );
         Ok(())
     }
 }
