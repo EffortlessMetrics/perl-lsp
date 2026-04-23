@@ -362,6 +362,31 @@
       "expected_outcomes": [
         "declaration request returns a location or clean empty result",
         "request does not error"
+      ],
+      "confidence_signals": [
+        "first_five_minutes_harness",
+        "manual_editor_smoke",
+        "issue_burndown_regression_guard"
+      ]
+    },
+    {
+      "id": "completion_quality_core",
+      "scenario_file": "ux_scenario_19_completion.rs",
+      "subsystem_owner": "editor_intelligence",
+      "ci_tier": "pr",
+      "user_journey": "type local variables and builtin prefixes in a fresh file and rely on completion",
+      "measures": [
+        "workflow_pass_rate",
+        "workflow_stability_rate"
+      ],
+      "expected_outcomes": [
+        "completion returns lexical suggestions for local symbols",
+        "completion items stay well-formed and include builtin suggestions"
+      ],
+      "confidence_signals": [
+        "first_five_minutes_harness",
+        "manual_editor_smoke",
+        "issue_burndown_regression_guard"
       ]
     }
   ],
