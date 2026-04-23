@@ -354,6 +354,12 @@ name = "platform_dedup_verification"
 path = "tests/platform_dedup_verification.rs"
 # Verify perl-dap platform re-exports match perl-lsp-rs-core (#4545)
 
+# Wave H RED external consumer tests
+[[test]]
+name = "wave_h_external_red_tests"
+path = "tests/wave_h_external_red_tests.rs"
+# RED tests: verify external consumers can still function after collapse
+
 [[bench]]
 name = "dap_benchmarks"
 path = "benches/dap_benchmarks.rs"
