@@ -674,6 +674,18 @@ sub add { 1 }
     }
 
     #[test]
+    fn test_extract_documentation_with_out_of_bounds_offset()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let code = "sub add { 1 }\n";
+        let mut parser = Parser::new(code);
+        let ast = parser.parse()?;
+        let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
+
+        assert_eq!(analyzer.extract_documentation(code.len() + 1), None);
+        Ok(())
+    }
+
+    #[test]
     fn test_cross_package_navigation() -> Result<(), Box<dyn std::error::Error>> {
         let code = r#"
 package Foo {
