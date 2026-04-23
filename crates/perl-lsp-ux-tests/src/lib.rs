@@ -154,6 +154,29 @@ pub struct UxHarness {
     config: ScenarioConfig,
 }
 
+/// Completion trigger mode for `textDocument/completion`.
+#[derive(Debug, Clone)]
+pub enum CompletionTrigger {
+    /// User explicitly invoked completion (`Ctrl+Space` style).
+    Invoked,
+    /// Completion triggered by a character typed in the editor.
+    TriggerCharacter(char),
+    /// Follow-up completion request for incomplete prior results.
+    TriggerForIncompleteCompletions,
+}
+
+impl CompletionTrigger {
+    fn context_value(&self) -> Value {
+        match self {
+            Self::Invoked => json!({ "triggerKind": 1 }),
+            Self::TriggerCharacter(character) => {
+                json!({ "triggerKind": 2, "triggerCharacter": character.to_string() })
+            }
+            Self::TriggerForIncompleteCompletions => json!({ "triggerKind": 3 }),
+        }
+    }
+}
+
 impl UxHarness {
     /// Spawn a fresh LSP server and set up a clean workspace.
     pub fn new(config: ScenarioConfig) -> Result<Self> {
@@ -207,13 +230,24 @@ impl UxHarness {
 
     /// Request completion at `(line, character)`.
     pub fn completion(&self, relative_path: &str, line: u32, character: u32) -> Result<Vec<Value>> {
+        self.completion_with_trigger(relative_path, line, character, CompletionTrigger::Invoked)
+    }
+
+    /// Request completion at `(line, character)` with explicit trigger context.
+    pub fn completion_with_trigger(
+        &self,
+        relative_path: &str,
+        line: u32,
+        character: u32,
+        trigger: CompletionTrigger,
+    ) -> Result<Vec<Value>> {
         let uri = self.workspace.uri(relative_path);
         let resp = self.client.request(
             "textDocument/completion",
             json!({
                 "textDocument": { "uri": uri },
                 "position": { "line": line, "character": character },
-                "context": { "triggerKind": 1 }
+                "context": trigger.context_value()
             }),
             self.config.timeout,
         )?;
@@ -227,6 +261,18 @@ impl UxHarness {
                 None => Ok(Vec::new()),
             },
         }
+    }
+
+    /// Apply a full-document edit and notify the server via `didChange`.
+    pub fn apply_full_change(
+        &self,
+        relative_path: &str,
+        updated_content: &str,
+        version: i32,
+    ) -> Result<()> {
+        self.workspace.write(relative_path, updated_content)?;
+        let uri = self.workspace.uri(relative_path);
+        self.client.did_change_full(&uri, updated_content, version)
     }
 
     /// Request document formatting.
