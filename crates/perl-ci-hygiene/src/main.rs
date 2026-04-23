@@ -3387,7 +3387,7 @@ fn cmd_check_todos(repo_root: &Path, list_mode: bool) -> Result<i32> {
             .join("complex_paren_args_tests.rs"),
     ];
 
-    let todo_re = Regex::new(r"\b(?:TODO|FIXME)\b")?;
+    let todo_re = Regex::new(r"(?i)\b(?:todo|fixme)\b")?;
     let entries = collect_todo_hits(repo_root, &exclude_dirs, &exclude_files, &todo_re)?;
 
     if list_mode {
@@ -3957,6 +3957,13 @@ fn has_unlinked_todo_in_perl_line(line: &str, token_re: &Regex) -> bool {
     has_unlinked_token(&line[idx + 1..], token_re)
 }
 
+#[derive(Clone, Copy)]
+struct PerlQuoteLikeState {
+    close_delimiter: char,
+    remaining_closures: u8,
+    escaped: bool,
+}
+
 fn find_hash_comment_start(line: &str, perl_mode: bool) -> Option<usize> {
     let mut in_single = false;
     let mut in_single_ansi_c = false;
@@ -3966,8 +3973,33 @@ fn find_hash_comment_start(line: &str, perl_mode: bool) -> Option<usize> {
     let mut prev_was_escape = false;
     let mut prev_was_escape_double = false;
     let mut prev_was_escape_single = false;
+    let mut perl_quote_like: Option<PerlQuoteLikeState> = None;
 
     for (idx, ch) in line.char_indices() {
+        if let Some(mut quote_like) = perl_quote_like {
+            if quote_like.escaped {
+                quote_like.escaped = false;
+                perl_quote_like = Some(quote_like);
+                continue;
+            }
+            if ch == '\\' {
+                quote_like.escaped = true;
+                perl_quote_like = Some(quote_like);
+                continue;
+            }
+            if ch == quote_like.close_delimiter {
+                quote_like.remaining_closures = quote_like.remaining_closures.saturating_sub(1);
+                if quote_like.remaining_closures == 0 {
+                    perl_quote_like = None;
+                } else {
+                    perl_quote_like = Some(quote_like);
+                }
+            } else {
+                perl_quote_like = Some(quote_like);
+            }
+            continue;
+        }
+
         if in_single {
             if prev_single_was_escape {
                 prev_single_was_escape = false;
@@ -4026,6 +4058,11 @@ fn find_hash_comment_start(line: &str, perl_mode: bool) -> Option<usize> {
             continue;
         }
 
+        if perl_mode && let Some(state) = perl_quote_like_state_at_delimiter(line, idx) {
+            perl_quote_like = Some(state);
+            continue;
+        }
+
         match ch {
             '\'' => {
                 in_single = true;
@@ -4067,6 +4104,58 @@ fn find_hash_comment_start(line: &str, perl_mode: bool) -> Option<usize> {
         }
     }
     None
+}
+
+fn perl_quote_like_state_at_delimiter(
+    line: &str,
+    delimiter_idx: usize,
+) -> Option<PerlQuoteLikeState> {
+    let delimiter = line[delimiter_idx..].chars().next()?;
+    if delimiter.is_ascii_alphanumeric() || delimiter.is_ascii_whitespace() || delimiter == '_' {
+        return None;
+    }
+
+    let prefix = &line[..delimiter_idx];
+    let mut op_end = prefix.len();
+
+    while op_end > 0 && prefix.as_bytes()[op_end - 1].is_ascii_whitespace() {
+        op_end -= 1;
+    }
+    if op_end == 0 {
+        return None;
+    }
+
+    let mut op_start = op_end;
+    while op_start > 0 && prefix.as_bytes()[op_start - 1].is_ascii_alphabetic() {
+        op_start -= 1;
+    }
+
+    if op_start == op_end {
+        return None;
+    }
+
+    if op_start > 0 {
+        let before = prefix.as_bytes()[op_start - 1];
+        if before.is_ascii_alphanumeric() || before == b'_' || matches!(before, b'$' | b'@' | b'%')
+        {
+            return None;
+        }
+    }
+
+    let op = &prefix[op_start..op_end];
+    let remaining_closures = if matches!(op, "s" | "tr" | "y") { 2 } else { 1 };
+    let close_delimiter = match delimiter {
+        '(' => ')',
+        '{' => '}',
+        '[' => ']',
+        '<' => '>',
+        other => other,
+    };
+    if matches!(op, "m" | "q" | "qq" | "qw" | "qx" | "qr" | "s" | "tr" | "y") {
+        Some(PerlQuoteLikeState { close_delimiter, remaining_closures, escaped: false })
+    } else {
+        None
+    }
 }
 
 fn is_url_like_hash_comment(line: &str, slash_idx: usize) -> bool {
@@ -4532,7 +4621,7 @@ mod tests {
 
     #[test]
     fn rust_todo_detection_ignores_linked_or_url_like_comments() -> Result<()> {
-        let todo_re = Regex::new(r"\b(?:TODO|FIXME)\b")?;
+        let todo_re = Regex::new(r"(?i)\b(?:todo|fixme)\b")?;
 
         assert!(has_unlinked_todo_in_rust_line("// TODO: investigate", &todo_re));
         assert!(has_unlinked_todo_in_rust_line("// todo: investigate", &todo_re));
@@ -4806,6 +4895,14 @@ mod tests {
         assert!(has_unlinked_todo_in_perl_line("print# TODO: perl comment", &todo_re));
         assert!(!has_unlinked_todo_in_perl_line("my $s = '# TODO in string';", &todo_re));
         assert!(!has_unlinked_todo_in_perl_line("print# TODO(#123): tracked", &todo_re));
+        assert!(!has_unlinked_todo_in_perl_line("my $re = m#TODO#;", &todo_re));
+        assert!(!has_unlinked_todo_in_perl_line("my $s = q#TODO#;", &todo_re));
+        assert!(!has_unlinked_todo_in_perl_line("my $s = qq #TODO#;", &todo_re));
+        assert!(!has_unlinked_todo_in_perl_line("my $s = s#foo#TODO#;", &todo_re));
+        assert!(has_unlinked_todo_in_perl_line(
+            "my $s = s#foo#bar#; # TODO: add edge-cases",
+            &todo_re
+        ));
 
         Ok(())
     }
