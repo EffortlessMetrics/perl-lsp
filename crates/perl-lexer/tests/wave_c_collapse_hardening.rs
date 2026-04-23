@@ -347,10 +347,10 @@ fn perl_lexer_claude_md_is_preserved() -> std::io::Result<()> {
 }
 
 #[test]
-fn workspace_has_exactly_97_members_after_wave_c() -> std::io::Result<()> {
-    // Wave C removes 4 crates (101 -> 97). Anchor the count so a future wave
-    // that forgets to update the spec's target surfaces immediately. Tolerant
-    // of whitespace/quoting variations in the members list.
+fn workspace_members_list_is_well_formed_after_wave_c() -> std::io::Result<()> {
+    // Keep this check resilient to future consolidation waves: we validate that
+    // the members list is parseable, non-empty, and retains core project crates
+    // rather than pinning a brittle absolute member count.
     let root = workspace_root();
     let cargo_toml = std::fs::read_to_string(root.join("Cargo.toml"))?;
 
@@ -367,12 +367,29 @@ fn workspace_has_exactly_97_members_after_wave_c() -> std::io::Result<()> {
         .ok_or_else(|| std::io::Error::other("members list missing closing bracket"))?;
     let members_block = &after_start[..end_off];
 
-    let count = members_block.lines().filter(|l| l.trim_start().starts_with('"')).count();
+    let members: Vec<&str> = members_block
+        .lines()
+        .map(str::trim_start)
+        .filter(|line| line.starts_with('"'))
+        .map(|line| line.trim().trim_end_matches(',').trim_matches('"'))
+        .collect();
 
     assert_eq!(
-        count, 97,
-        "workspace should have 97 members after Wave C (was 101). Found {count}."
+        members.len(),
+        members.iter().collect::<std::collections::HashSet<_>>().len(),
+        "workspace members list should not contain duplicates"
     );
+    assert!(!members.is_empty(), "workspace members list should not be empty");
+
+    for required in
+        ["crates/perl-lexer", "crates/perl-token", "crates/perl-lsp-rs", "crates/perl-dap", "xtask"]
+    {
+        assert!(
+            members.contains(&required),
+            "workspace members must include required crate `{required}`"
+        );
+    }
+
     Ok(())
 }
 

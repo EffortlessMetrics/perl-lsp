@@ -423,6 +423,26 @@ fn code_execution_double_question_without_brace() -> Result<(), Box<dyn std::err
 }
 
 #[test]
+fn code_execution_markers_inside_char_class_are_safe() -> Result<(), Box<dyn std::error::Error>> {
+    let v = RegexValidator::new();
+    assert!(!v.detects_code_execution(r"[(?{]"));
+    assert!(!v.detects_code_execution(r"[abc(??{xyz}]"));
+    Ok(())
+}
+
+#[test]
+fn code_execution_after_char_class_is_detected() -> Result<(), Box<dyn std::error::Error>> {
+    let v = RegexValidator::new();
+    // A clean char class followed by a real (?{ }) — only the code after the class is real.
+    // This is the discriminating case: pre-fix code would short-circuit on [a-z] contents
+    // spuriously; post-fix code skips the class and detects the real (?{ run() }).
+    assert!(v.detects_code_execution(r"[a-z](?{ run() })"));
+    // Original case: class content looks like a code marker but real (?{ }) follows it.
+    assert!(v.detects_code_execution(r"[(?{a-z}](?{ run() })"));
+    Ok(())
+}
+
+#[test]
 fn code_execution_multiple_code_blocks() -> Result<(), Box<dyn std::error::Error>> {
     let v = RegexValidator::new();
     // Returns true on first one found
