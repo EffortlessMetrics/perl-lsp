@@ -150,9 +150,11 @@ impl DebugAdapter {
         let mut top_level = Vec::new();
         let mut child_cache = HashMap::new();
         for (idx, (name, value)) in parsed.into_iter().skip(start).take(count).enumerate() {
-            let child_ref = variables_ref.saturating_mul(1000).saturating_add(
-                Self::i64_to_i32_saturating(i64::try_from(idx + 1).unwrap_or(i64::from(i32::MAX))),
-            );
+            let absolute_index = start.saturating_add(idx).saturating_add(1);
+            let child_ref =
+                variables_ref.saturating_mul(1000).saturating_add(Self::i64_to_i32_saturating(
+                    i64::try_from(absolute_index).unwrap_or(i64::from(i32::MAX)),
+                ));
             let rendered = if value.is_expandable() {
                 renderer.render_with_reference(&name, &value, i64::from(child_ref))
             } else {
@@ -376,6 +378,41 @@ mod tests {
             DebugAdapter::parse_scope_variables_from_lines(&lines, 11, 0, 20);
         let names = vars.iter().map(|v| v.name.as_str()).collect::<Vec<_>>();
         assert_eq!(names, vec!["$alpha", "$mid", "$zeta"]);
+        Ok(())
+    }
+
+    #[test]
+    pub(super) fn test_parse_scope_variables_child_refs_stable_across_pages()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let lines = vec![
+            "@alpha = (1, 2)".to_string(),
+            "@beta = (3, 4)".to_string(),
+            "@gamma = (5, 6)".to_string(),
+        ];
+
+        let (page_one, page_one_children) =
+            DebugAdapter::parse_scope_variables_from_lines(&lines, 11, 0, 1);
+        let (page_two, page_two_children) =
+            DebugAdapter::parse_scope_variables_from_lines(&lines, 11, 1, 1);
+
+        let first_ref = page_one
+            .first()
+            .map(|variable| variable.variables_reference)
+            .ok_or("expected first page variable")?;
+        let second_ref = page_two
+            .first()
+            .map(|variable| variable.variables_reference)
+            .ok_or("expected second page variable")?;
+
+        assert_ne!(first_ref, second_ref, "paged variables must not reuse child references");
+        assert!(
+            page_one_children.contains_key(&first_ref),
+            "expected first page child cache for first reference"
+        );
+        assert!(
+            page_two_children.contains_key(&second_ref),
+            "expected second page child cache for second reference"
+        );
         Ok(())
     }
 
