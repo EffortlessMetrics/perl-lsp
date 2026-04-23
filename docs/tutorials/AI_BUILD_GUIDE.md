@@ -2,6 +2,34 @@
 
 This guide helps AI tools (and humans) understand how to build and test this project correctly.
 
+## Codex CLI Workflow (Recommended)
+
+When using OpenAI Codex CLI in this repository:
+
+1. Keep `AGENTS.md` enabled (default behavior) so Codex sees the project guardrails.
+2. Start with a quick baseline command before making edits:
+
+```bash
+just pr-fast
+```
+
+3. Keep each session scoped to a single concern (one fix/feature/refactor).
+4. Before opening a PR, run the crate-level loop from `AGENTS.md`:
+
+```bash
+cargo test -p <crate>
+cargo check --all-targets -p <crate>
+cargo xtask fmt
+cargo clippy -p <crate>
+just pr-fast
+```
+
+5. Use conventional commit subjects with an issue suffix (placeholder is allowed):
+
+```text
+type(scope): description (#0000)
+```
+
 ## Default Build Configuration
 
 The project has automatic configuration in `.cargo/config.toml` that applies to all `cargo` commands:
