@@ -4,16 +4,18 @@
 **Context:** Third iteration continuing the 2026-04-22 Codex-review series.
 **Session framing:** After back-to-back Codex waves produced 100+ PRs across two iterations, this pass focused on (a) landing CI structural improvements (tier-wiring, bit-rot guard), (b) proving the "fix-forward" reviewer pattern at scale, and (c) draining deep-review on 18+ feature PRs.
 
-## Economics (since last forensic mark)
+## Economics — this session run
 
-| Measure | Iter-1 (2026-04-22) | Iter-2 (same day) | **Iter-3 (this session)** | Cumulative |
-|---|---|---|---|---|
-| Claude Code session % | ~31% | ~13% | **~18%** (15→33%) | ~62% of a 5h session |
-| Claude weekly % | ~5% | ~2% | **~3%** (76→79%) | ~10% weekly total |
-| Codex Pro session % | ~26% | ~10% | **~6%** (+Codex throttle) | ~42% session |
-| Codex weekly remaining | — | — | 82% remaining | Codex plan has not saturated |
+Plans: **Claude 20× Max** + **Codex Pro**. 5h sessions reset; weekly budget is the rollup. These are the numbers for the current 5h session window only — prior iterations (2026-04-22) covered in `docs/forensics/2026-04-22-continuous-codex-review-session.md`.
 
-**Budget interpretation.** Matched-intensity pattern held: when Codex dispatched 40+ PRs in a wave, Claude triaged/reviewed/merged at matching pace. Claude's ~18% session spend drove ~20 merges, ~18 deep-reviews, 8 issues filed, and 10+ dupe closes — roughly **1% Claude session per actionable outcome**. Same order of magnitude as iter-2 (both hovered near $0.05/outcome at retail 20× Max pricing).
+| Measure | Current session usage | Weekly total (after this session) | Weekly delta this session |
+|---|---|---|---|
+| Claude Code (20× Max) | **33%** of the 5h window | **79%** | **+3–4%** (from ~76%) |
+| Codex Pro | **41%** of the 5h window | (82% remaining) | **+6%** |
+
+**Per-outcome cost.** Claude's 33% session drove: ~20 merges, 18+ deep-reviews with fix-forward, 8 issues filed, 10+ dupe closes, 1 critical master bit-rot fix (#5018), 1 tier-wiring landing (#5005), 1 forensic + policy memory (this doc + `feedback_reviewer_deep_proactive_fixes.md`). **Roughly ~1% Claude session per actionable outcome** — consistent with prior sessions at ~$0.05 each at retail 20× Max pricing.
+
+**Matched intensity held.** When Codex dispatched 40+ PR waves, Claude triaged/reviewed/merged at matching pace. Claude 33% session ↔ Codex 41% session is within ~25% of each other — the spray-and-filter economics survives continued throughput increases.
 
 **What changed the cost shape.** The fix-forward policy (reviewer-deep pushes mechanical fixes directly) collapsed the typical find→file→build→review→merge pipeline into find→push→merge for narrow corrections. One-line and small fixes no longer pay a fresh-builder spawn.
 
