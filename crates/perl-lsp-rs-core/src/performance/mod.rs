@@ -205,8 +205,11 @@ pub mod parallel {
         // This preserves the API contract that every input file is processed once.
         let effective_workers = num_workers.max(1).min(files.len());
 
+        let file_count = files.len();
+        let indexed_files = files.into_iter().enumerate().collect::<Vec<_>>();
+
         let (tx, rx) = mpsc::channel();
-        let work_queue = Arc::new(Mutex::new(files));
+        let work_queue = Arc::new(Mutex::new(indexed_files));
         let processor = Arc::new(processor);
 
         let mut handles = vec![];
@@ -226,9 +229,9 @@ pub mod parallel {
                     };
 
                     match file {
-                        Some(f) => {
-                            let result = processor(f);
-                            if tx.send(result).is_err() {
+                        Some((idx, file)) => {
+                            let result = processor(file);
+                            if tx.send((idx, result)).is_err() {
                                 break;
                             }
                         }
@@ -246,6 +249,31 @@ pub mod parallel {
             let _ = handle.join();
         }
 
-        rx.into_iter().collect()
+        let mut ordered_results = Vec::with_capacity(file_count);
+        ordered_results.resize_with(file_count, || None);
+        for (idx, result) in rx {
+            ordered_results[idx] = Some(result);
+        }
+
+        ordered_results.into_iter().flatten().collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parallel::process_files_parallel;
+
+    #[test]
+    fn process_files_parallel_preserves_input_order() {
+        let files = vec!["a.pl".to_string(), "b.pl".to_string(), "c.pl".to_string()];
+        let results = process_files_parallel(files.clone(), 3, |file| file);
+        assert_eq!(results, files);
+    }
+
+    #[test]
+    fn process_files_parallel_handles_zero_workers() {
+        let files = vec!["first".to_string(), "second".to_string()];
+        let results = process_files_parallel(files.clone(), 0, |file| file.to_uppercase());
+        assert_eq!(results, vec!["FIRST".to_string(), "SECOND".to_string()]);
     }
 }
