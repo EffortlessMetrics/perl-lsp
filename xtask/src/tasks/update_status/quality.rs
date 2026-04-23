@@ -248,6 +248,38 @@ pub(super) fn collect_flaky_test_counts(root: &Path) -> (usize, usize) {
 // Generators
 // ---------------------------------------------------------------------------
 
+/// Format a combined per-crate markdown table showing mutation count and test count.
+pub(super) fn format_crate_quality_table(
+    mutation: &BTreeMap<String, usize>,
+    tests: &BTreeMap<String, usize>,
+) -> String {
+    let mut crates: std::collections::BTreeSet<&str> = std::collections::BTreeSet::new();
+    for k in mutation.keys() {
+        crates.insert(k.as_str());
+    }
+    for k in tests.keys() {
+        crates.insert(k.as_str());
+    }
+
+    if crates.is_empty() {
+        return "| Crate | Mutants listed | Tests (lib) |\n\
+                |-------|---------------|-------------|\n\
+                | — | no data yet | no data yet |"
+            .to_string();
+    }
+
+    let mut lines = vec![
+        "| Crate | Mutants listed | Tests (lib) |".to_string(),
+        "|-------|---------------|-------------|".to_string(),
+    ];
+    for crate_name in crates {
+        let mutants = mutation.get(crate_name).map_or_else(|| "—".to_string(), |n| n.to_string());
+        let test_count = tests.get(crate_name).map_or_else(|| "—".to_string(), |n| n.to_string());
+        lines.push(format!("| {crate_name} | {mutants} | {test_count} |"));
+    }
+    lines.join("\n")
+}
+
 pub(super) fn generate_quality_status(root: &Path, original: &str) -> Result<String> {
     let mutation_by_crate = collect_per_crate_mutation(root);
     let tests_by_crate = collect_per_crate_test_counts(root);
