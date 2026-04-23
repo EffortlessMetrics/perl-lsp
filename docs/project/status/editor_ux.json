@@ -24,6 +24,7 @@
   },
   "integration_points": {
     "ci_lane": "just ux-tests",
+    "metrics_receipt": ".ci/metrics/editor_ux.json",
     "quality_surface": "docs/project/status/quality.md",
     "release_lane": "just ux-tests-full",
     "status_update": "cargo xtask update-status --only quality"
@@ -31,6 +32,23 @@
   "receipt_kind": "planning_scaffold",
   "schema_version": 1,
   "scorecard": "editor_ux",
+  "signals": [
+    {
+      "name": "manual_editor_smoke_workflows",
+      "source": "human release checklist",
+      "tracking": "qualitative"
+    },
+    {
+      "name": "first_5_minutes_harness",
+      "source": "just ux-tests / just ux-tests-full",
+      "tracking": "quantitative"
+    },
+    {
+      "name": "open_issue_burndown",
+      "source": "issue triage backlog",
+      "tracking": "qualitative"
+    }
+  ],
   "top_line_metrics": [
     {
       "name": "workflow_pass_rate",

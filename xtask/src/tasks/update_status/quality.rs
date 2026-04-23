@@ -8,8 +8,21 @@ use std::path::Path;
 use std::time::Duration;
 
 use color_eyre::eyre::{Context, Result};
+use serde::Deserialize;
 
 use super::{replace_block, run_cmd};
+
+#[derive(Debug, Deserialize)]
+struct EditorUxMetricsReceipt {
+    metrics: Option<EditorUxMetricValues>,
+}
+
+#[derive(Debug, Deserialize)]
+struct EditorUxMetricValues {
+    workflow_pass_rate: Option<f64>,
+    workflow_stability_rate: Option<f64>,
+    p95_time_to_first_useful_result_ms: Option<u64>,
+}
 
 // ---------------------------------------------------------------------------
 // Metric collectors
@@ -169,6 +182,21 @@ pub(super) fn generate_quality_status(root: &Path, original: &str) -> Result<Str
 pub(super) fn generate_editor_ux_receipt(root: &Path) -> Result<String> {
     let scenario_files = collect_ux_scenario_files(root);
     let scenario_count = scenario_files.len();
+    let measured_metrics = load_measured_editor_ux_metrics(root)?;
+
+    let top_line_metrics = vec![
+        metric_row("workflow_pass_rate", measured_metrics.workflow_pass_rate, "perl-lsp-ux-tests"),
+        metric_row(
+            "workflow_stability_rate",
+            measured_metrics.workflow_stability_rate,
+            "perl-lsp-ux-tests",
+        ),
+        metric_row(
+            "p95_time_to_first_useful_result_ms",
+            measured_metrics.p95_time_to_first_useful_result_ms.map(|value| value as f64),
+            "perl-lsp-ux-tests",
+        ),
+    ];
 
     let receipt = serde_json::json!({
         "schema_version": 1,
@@ -179,32 +207,72 @@ pub(super) fn generate_editor_ux_receipt(root: &Path) -> Result<String> {
             "scenario_count": scenario_count,
             "scenario_files": scenario_files,
         },
-        "top_line_metrics": [
+        "signals": [
             {
-                "name": "workflow_pass_rate",
-                "state": "planned",
-                "owner": "perl-lsp-ux-tests",
+                "name": "manual_editor_smoke_workflows",
+                "tracking": "qualitative",
+                "source": "human release checklist",
             },
             {
-                "name": "workflow_stability_rate",
-                "state": "planned",
-                "owner": "perl-lsp-ux-tests",
+                "name": "first_5_minutes_harness",
+                "tracking": "quantitative",
+                "source": "just ux-tests / just ux-tests-full",
             },
             {
-                "name": "p95_time_to_first_useful_result_ms",
-                "state": "planned",
-                "owner": "perl-lsp-ux-tests",
-            },
+                "name": "open_issue_burndown",
+                "tracking": "qualitative",
+                "source": "issue triage backlog",
+            }
         ],
+        "top_line_metrics": top_line_metrics,
         "integration_points": {
             "ci_lane": "just ux-tests",
             "release_lane": "just ux-tests-full",
             "status_update": "cargo xtask update-status --only quality",
             "quality_surface": "docs/project/status/quality.md",
+            "metrics_receipt": ".ci/metrics/editor_ux.json",
         },
     });
 
     serde_json::to_string_pretty(&receipt).context("serializing editor UX receipt")
+}
+
+fn metric_row(name: &str, measured_value: Option<f64>, owner: &str) -> serde_json::Value {
+    match measured_value {
+        Some(value) => serde_json::json!({
+            "name": name,
+            "state": "measured",
+            "owner": owner,
+            "value": value,
+        }),
+        None => serde_json::json!({
+            "name": name,
+            "state": "planned",
+            "owner": owner,
+        }),
+    }
+}
+
+fn load_measured_editor_ux_metrics(root: &Path) -> Result<EditorUxMetricValues> {
+    let metrics_path = root.join(".ci/metrics/editor_ux.json");
+    if !metrics_path.exists() {
+        return Ok(EditorUxMetricValues {
+            workflow_pass_rate: None,
+            workflow_stability_rate: None,
+            p95_time_to_first_useful_result_ms: None,
+        });
+    }
+
+    let raw = fs::read_to_string(&metrics_path)
+        .with_context(|| format!("reading {}", metrics_path.display()))?;
+    let parsed: EditorUxMetricsReceipt = serde_json::from_str(&raw)
+        .with_context(|| format!("parsing {}", metrics_path.display()))?;
+
+    Ok(parsed.metrics.unwrap_or(EditorUxMetricValues {
+        workflow_pass_rate: None,
+        workflow_stability_rate: None,
+        p95_time_to_first_useful_result_ms: None,
+    }))
 }
 
 // ---------------------------------------------------------------------------
@@ -279,7 +347,22 @@ mod tests {
                 "p95_time_to_first_useful_result_ms",
             ])
         );
+        let signal_names = receipt["signals"]
+            .as_array()
+            .ok_or_else(|| eyre!("signals must be an array"))?
+            .iter()
+            .map(|row| row["name"].as_str().ok_or_else(|| eyre!("signal name missing")))
+            .collect::<Result<std::collections::BTreeSet<_>>>()?;
+        assert_eq!(
+            signal_names,
+            std::collections::BTreeSet::from([
+                "manual_editor_smoke_workflows",
+                "first_5_minutes_harness",
+                "open_issue_burndown",
+            ])
+        );
         assert_eq!(receipt["integration_points"]["ci_lane"], "just ux-tests");
+        assert_eq!(receipt["integration_points"]["metrics_receipt"], ".ci/metrics/editor_ux.json");
         Ok(())
     }
 }

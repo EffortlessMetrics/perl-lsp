@@ -8,6 +8,7 @@
     "receipt_kind",
     "scorecard",
     "harness",
+    "signals",
     "top_line_metrics",
     "integration_points"
   ],
@@ -44,6 +45,68 @@
         }
       },
       "additionalProperties": false
+    },
+    "signals": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "allOf": [
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "const": "manual_editor_smoke_workflows"
+              }
+            },
+            "required": ["name"]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "const": "first_5_minutes_harness"
+              }
+            },
+            "required": ["name"]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "const": "open_issue_burndown"
+              }
+            },
+            "required": ["name"]
+          }
+        }
+      ],
+      "items": {
+        "type": "object",
+        "required": ["name", "tracking", "source"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "enum": [
+              "manual_editor_smoke_workflows",
+              "first_5_minutes_harness",
+              "open_issue_burndown"
+            ]
+          },
+          "tracking": {
+            "type": "string",
+            "enum": ["qualitative", "quantitative"]
+          },
+          "source": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
     },
     "top_line_metrics": {
       "type": "array",
@@ -96,6 +159,10 @@
               "p95_time_to_first_useful_result_ms"
             ]
           },
+          "value": {
+            "type": "number",
+            "minimum": 0
+          },
           "state": {
             "type": "string",
             "enum": ["planned", "measured"]
@@ -109,7 +176,13 @@
     },
     "integration_points": {
       "type": "object",
-      "required": ["ci_lane", "release_lane", "status_update", "quality_surface"],
+      "required": [
+        "ci_lane",
+        "release_lane",
+        "status_update",
+        "quality_surface",
+        "metrics_receipt"
+      ],
       "properties": {
         "ci_lane": {
           "type": "string"
@@ -118,6 +191,9 @@
           "type": "string"
         },
         "status_update": {
+          "type": "string"
+        },
+        "metrics_receipt": {
           "type": "string"
         },
         "quality_surface": {
