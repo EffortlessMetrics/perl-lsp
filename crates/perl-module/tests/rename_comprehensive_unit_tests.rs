@@ -125,6 +125,23 @@ fn plan_rewrites_use_base_qw() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+#[test]
+fn plan_rewrites_moose_extends_single_quoted() -> Result<(), Box<dyn std::error::Error>> {
+    let edits = plan_module_rename_edits("extends 'Foo::Bar';", "Foo::Bar", "New::Mod");
+    assert_eq!(edits.len(), 1);
+    assert_eq!(edits[0].new_text, "extends 'New::Mod';");
+    Ok(())
+}
+
+#[test]
+fn plan_rewrites_moo_with_qw() -> Result<(), Box<dyn std::error::Error>> {
+    let source = "with qw(Foo::Bar Other::Role);";
+    let edits = plan_module_rename_edits(source, "Foo::Bar", "New::Role");
+    assert_eq!(edits.len(), 1);
+    assert_eq!(edits[0].new_text, "with qw(New::Role Other::Role);");
+    Ok(())
+}
+
 // ──────────────────────────────────────────────────────────────
 // plan_module_rename_edits — legacy separator (single-quote)
 // ──────────────────────────────────────────────────────────────

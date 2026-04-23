@@ -2980,6 +2980,14 @@ impl IndexVisitor {
                     kind: ReferenceKind::Usage,
                 });
 
+                if name == "extends" || name == "with" {
+                    for module_name in extract_module_names_from_call_args(args) {
+                        file_index
+                            .dependencies
+                            .insert(normalize_dependency_module_name(&module_name));
+                    }
+                }
+
                 // Visit arguments
                 for arg in args {
                     self.visit_node(arg, file_index);
@@ -3396,6 +3404,36 @@ fn extract_module_names_from_use_args(args: &[String]) -> Vec<String> {
             .map(str::to_string),
     );
 
+    modules
+}
+
+fn extract_module_names_from_call_args(args: &[Node]) -> Vec<String> {
+    fn collect_from_node(node: &Node, out: &mut Vec<String>) {
+        match &node.kind {
+            NodeKind::String { value, .. } => {
+                out.extend(extract_module_names_from_use_args(std::slice::from_ref(value)));
+            }
+            NodeKind::Identifier { name } => {
+                out.extend(extract_module_names_from_use_args(std::slice::from_ref(name)));
+            }
+            NodeKind::ArrayLiteral { elements } => {
+                for element in elements {
+                    collect_from_node(element, out);
+                }
+            }
+            NodeKind::FunctionCall { name, args, .. } if name == "qw" => {
+                for arg in args {
+                    collect_from_node(arg, out);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    let mut modules = Vec::new();
+    for arg in args {
+        collect_from_node(arg, &mut modules);
+    }
     modules
 }
 
@@ -4917,6 +4955,50 @@ Utils::process_data();
         let deps = index.file_dependencies(uri.as_str());
         assert!(deps.contains("My::Base"));
         assert!(!deps.contains("My'Base"));
+    }
+
+    #[test]
+    fn test_index_dependency_via_moose_extends_end_to_end() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let index = WorkspaceIndex::new();
+
+        let parent_url = must(url::Url::parse("file:///test/workspace/lib/My/App/Parent.pm"));
+        must(index.index_file(parent_url, "package My::App::Parent;\n1;\n".to_string()));
+
+        let child_url = must(url::Url::parse("file:///test/workspace/child-moose.pl"));
+        let child_src = "package Child;\nuse Moose;\nextends 'My::App::Parent';\n1;\n";
+        must(index.index_file(child_url, child_src.to_string()));
+
+        let dependents = index.find_dependents("My::App::Parent");
+        assert!(
+            dependents.contains(&"file:///test/workspace/child-moose.pl".to_string()),
+            "expected child-moose.pl in dependents, got: {dependents:?}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_index_dependency_via_moo_with_role_end_to_end()
+    -> Result<(), Box<dyn std::error::Error>>
+    {
+        let index = WorkspaceIndex::new();
+
+        let role_url = must(url::Url::parse("file:///test/workspace/lib/My/App/Role.pm"));
+        must(index.index_file(role_url, "package My::App::Role;\n1;\n".to_string()));
+
+        let consumer_url = must(url::Url::parse("file:///test/workspace/consumer-moo.pl"));
+        let consumer_src = "package Consumer;\nuse Moo;\nwith 'My::App::Role';\n1;\n";
+        must(index.index_file(consumer_url.clone(), consumer_src.to_string()));
+
+        let dependents = index.find_dependents("My::App::Role");
+        assert!(
+            dependents.contains(&"file:///test/workspace/consumer-moo.pl".to_string()),
+            "expected consumer-moo.pl in dependents, got: {dependents:?}"
+        );
+
+        let deps = index.file_dependencies(consumer_url.as_str());
+        assert!(deps.contains("My::App::Role"));
+        Ok(())
     }
 
     #[test]
