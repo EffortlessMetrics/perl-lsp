@@ -3827,13 +3827,13 @@ fn collect_todo_hits(
             continue;
         }
         let contents = read_lines(path)?;
-        let mut in_rust_block_comment = false;
+        let mut rust_block_comment_depth = 0usize;
         for (line_no, line) in contents.iter().enumerate() {
             let match_line = if is_rust {
                 has_unlinked_todo_in_rust_line_with_block_context(
                     line,
                     todo_re,
-                    &mut in_rust_block_comment,
+                    &mut rust_block_comment_depth,
                 )
             } else if path
                 .extension()
@@ -3853,73 +3853,75 @@ fn collect_todo_hits(
 }
 
 fn has_unlinked_todo_in_rust_line(line: &str, token_re: &Regex) -> bool {
-    let mut in_block_comment = false;
-    has_unlinked_todo_in_rust_line_with_block_context(line, token_re, &mut in_block_comment)
+    let mut block_comment_depth = 0;
+    has_unlinked_todo_in_rust_line_with_block_context(line, token_re, &mut block_comment_depth)
 }
 
 fn has_unlinked_todo_in_rust_line_with_block_context(
     line: &str,
     token_re: &Regex,
-    in_block_comment: &mut bool,
+    block_comment_depth: &mut usize,
 ) -> bool {
-    if *in_block_comment {
-        if let Some(end_idx) = find_block_comment_end(line, 0) {
-            if has_unlinked_token(&line[..end_idx], token_re) {
-                *in_block_comment = false;
-                return true;
+    let mut cursor = 0;
+
+    while cursor < line.len() {
+        if *block_comment_depth > 0 {
+            let next_start = find_next_comment_delim(line, cursor, "/*");
+            let next_end = find_next_comment_delim(line, cursor, "*/");
+            match (next_start, next_end) {
+                (Some(start_idx), Some(end_idx)) if start_idx < end_idx => {
+                    if has_unlinked_token(&line[cursor..start_idx], token_re) {
+                        return true;
+                    }
+                    *block_comment_depth += 1;
+                    cursor = start_idx + 2;
+                }
+                (_, Some(end_idx)) => {
+                    if has_unlinked_token(&line[cursor..end_idx], token_re) {
+                        return true;
+                    }
+                    *block_comment_depth = block_comment_depth.saturating_sub(1);
+                    cursor = end_idx + 2;
+                }
+                (Some(start_idx), None) => {
+                    if has_unlinked_token(&line[cursor..start_idx], token_re) {
+                        return true;
+                    }
+                    *block_comment_depth += 1;
+                    cursor = start_idx + 2;
+                }
+                (None, None) => return has_unlinked_token(&line[cursor..], token_re),
             }
-            *in_block_comment = false;
-            return has_unlinked_todo_in_rust_line_with_block_context(
-                &line[end_idx + 2..],
-                token_re,
-                in_block_comment,
-            );
+            continue;
         }
-        return has_unlinked_token(line, token_re);
+
+        let line_comment_start = find_next_comment_delim(line, cursor, "//").filter(|idx| {
+            !is_url_like_hash_comment(line, *idx)
+                && !is_likely_string_literal_comment_start(line, *idx)
+        });
+        let block_comment_start = find_next_comment_delim(line, cursor, "/*")
+            .filter(|idx| !is_likely_string_literal_comment_start(line, *idx));
+
+        match (line_comment_start, block_comment_start) {
+            (Some(line_idx), Some(block_idx)) if line_idx < block_idx => {
+                return has_unlinked_token(&line[line_idx + 2..], token_re);
+            }
+            (_, Some(block_idx)) => {
+                *block_comment_depth += 1;
+                cursor = block_idx + 2;
+            }
+            (Some(line_idx), None) => {
+                return has_unlinked_token(&line[line_idx + 2..], token_re);
+            }
+            (None, None) => return false,
+        }
     }
 
-    for (idx, _) in line.match_indices("//") {
-        if is_index_in_rust_literal(line, idx) {
-            continue;
-        }
-        if is_url_like_hash_comment(line, idx) {
-            continue;
-        }
-        if is_likely_string_literal_comment_start(line, idx) {
-            continue;
-        }
-        if has_unlinked_token(&line[idx + 2..], token_re) {
-            return true;
-        }
-    }
-    for (idx, _) in line.match_indices("/*") {
-        if is_index_in_rust_literal(line, idx) {
-            continue;
-        }
-        if is_likely_string_literal_comment_start(line, idx) {
-            continue;
-        }
-        if let Some(end_idx) = find_block_comment_end(line, idx + 2) {
-            if has_unlinked_token(&line[idx + 2..end_idx], token_re) {
-                return true;
-            }
-            continue;
-        }
-        if has_unlinked_token(&line[idx + 2..], token_re) {
-            *in_block_comment = true;
-            return true;
-        }
-        *in_block_comment = true;
-    }
-    let trimmed = line.trim_start();
-    if trimmed.starts_with('*') && has_unlinked_token(trimmed, token_re) {
-        return true;
-    }
     false
 }
 
-fn find_block_comment_end(line: &str, start_idx: usize) -> Option<usize> {
-    for (rel_idx, _) in line[start_idx..].match_indices("*/") {
+fn find_next_comment_delim(line: &str, start_idx: usize, delim: &str) -> Option<usize> {
+    for (rel_idx, _) in line[start_idx..].match_indices(delim) {
         let idx = start_idx + rel_idx;
         if is_index_in_rust_literal(line, idx) {
             continue;
@@ -4481,26 +4483,26 @@ mod tests {
     #[test]
     fn rust_todo_detection_tracks_multiline_block_comments_across_lines() -> Result<()> {
         let todo_re = Regex::new(r"TODO|FIXME")?;
-        let mut in_block_comment = false;
+        let mut block_comment_depth = 0usize;
 
         assert!(!has_unlinked_todo_in_rust_line_with_block_context(
             "/* context",
             &todo_re,
-            &mut in_block_comment,
+            &mut block_comment_depth,
         ));
-        assert!(in_block_comment);
+        assert_eq!(block_comment_depth, 1);
         assert!(has_unlinked_todo_in_rust_line_with_block_context(
             "  TODO: capture this follow-up",
             &todo_re,
-            &mut in_block_comment,
+            &mut block_comment_depth,
         ));
-        assert!(in_block_comment);
+        assert_eq!(block_comment_depth, 1);
         assert!(!has_unlinked_todo_in_rust_line_with_block_context(
             "*/ let x = 1;",
             &todo_re,
-            &mut in_block_comment,
+            &mut block_comment_depth,
         ));
-        assert!(!in_block_comment);
+        assert_eq!(block_comment_depth, 0);
 
         Ok(())
     }
@@ -4508,24 +4510,79 @@ mod tests {
     #[test]
     fn rust_todo_detection_ignores_linked_todos_inside_multiline_block_comments() -> Result<()> {
         let todo_re = Regex::new(r"TODO|FIXME")?;
-        let mut in_block_comment = false;
+        let mut block_comment_depth = 0usize;
 
         assert!(!has_unlinked_todo_in_rust_line_with_block_context(
             "/* header",
             &todo_re,
-            &mut in_block_comment,
+            &mut block_comment_depth,
         ));
         assert!(!has_unlinked_todo_in_rust_line_with_block_context(
             " * TODO(#123): tracked",
             &todo_re,
-            &mut in_block_comment,
+            &mut block_comment_depth,
         ));
         assert!(!has_unlinked_todo_in_rust_line_with_block_context(
             " */",
             &todo_re,
-            &mut in_block_comment,
+            &mut block_comment_depth,
         ));
-        assert!(!in_block_comment);
+        assert_eq!(block_comment_depth, 0);
+
+        Ok(())
+    }
+
+    #[test]
+    fn rust_todo_detection_supports_nested_block_comments_on_same_line() -> Result<()> {
+        let todo_re = Regex::new(r"TODO|FIXME")?;
+
+        assert!(has_unlinked_todo_in_rust_line(
+            "/* outer /* inner */ TODO: follow up */",
+            &todo_re,
+        ));
+        assert!(!has_unlinked_todo_in_rust_line(
+            "/* outer /* TODO(#77): tracked */ still tracked */",
+            &todo_re,
+        ));
+
+        Ok(())
+    }
+
+    #[test]
+    fn rust_todo_detection_tracks_nested_block_comment_depth_across_lines() -> Result<()> {
+        let todo_re = Regex::new(r"TODO|FIXME")?;
+        let mut block_comment_depth = 0usize;
+
+        assert!(!has_unlinked_todo_in_rust_line_with_block_context(
+            "/* outer",
+            &todo_re,
+            &mut block_comment_depth,
+        ));
+        assert_eq!(block_comment_depth, 1);
+        assert!(!has_unlinked_todo_in_rust_line_with_block_context(
+            "/* inner",
+            &todo_re,
+            &mut block_comment_depth,
+        ));
+        assert_eq!(block_comment_depth, 2);
+        assert!(!has_unlinked_todo_in_rust_line_with_block_context(
+            "*/",
+            &todo_re,
+            &mut block_comment_depth,
+        ));
+        assert_eq!(block_comment_depth, 1);
+        assert!(has_unlinked_todo_in_rust_line_with_block_context(
+            "TODO: follow up",
+            &todo_re,
+            &mut block_comment_depth,
+        ));
+        assert_eq!(block_comment_depth, 1);
+        assert!(!has_unlinked_todo_in_rust_line_with_block_context(
+            "*/",
+            &todo_re,
+            &mut block_comment_depth,
+        ));
+        assert_eq!(block_comment_depth, 0);
 
         Ok(())
     }
