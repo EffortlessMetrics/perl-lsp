@@ -268,18 +268,46 @@ fn extract_one_quoted(s: &str) -> Option<(String, bool, &str)> {
 }
 
 fn resolve_findbin_in_string(s: &str) -> (String, bool) {
-    let findbin_vars = [
-        "$FindBin::Bin",
-        "$FindBin::RealBin",
-        "${FindBin::Bin}",
-        "${FindBin::RealBin}",
-        "$Bin",
-        "$RealBin",
-        "${Bin}",
-        "${RealBin}",
-    ];
+    // Fully-qualified FindBin variables — no word-boundary ambiguity because `::` terminates
+    // the name and braced forms are unambiguous.
+    let qualified_vars =
+        ["$FindBin::Bin", "$FindBin::RealBin", "${FindBin::Bin}", "${FindBin::RealBin}"];
 
-    for var in &findbin_vars {
+    for var in &qualified_vars {
+        if let Some(rest) = s.strip_prefix(var) {
+            let path = rest.strip_prefix('/').unwrap_or(rest);
+            if path.is_empty() {
+                return (".".to_string(), true);
+            }
+            return (path.to_string(), true);
+        }
+    }
+
+    // Short exported forms: `$Bin`, `$RealBin`, `${Bin}`, `${RealBin}`.
+    // Braced forms (`${Bin}`) are always unambiguous.  Bare forms (`$Bin`,
+    // `$RealBin`) must be followed by `/`, end-of-string, or a non-identifier
+    // character to avoid false-positives on variables like `$BinDir` or
+    // `$RealBinPath`.
+    let bare_short = ["$Bin", "$RealBin"];
+    let braced_short = ["${Bin}", "${RealBin}"];
+
+    for var in &bare_short {
+        if let Some(rest) = s.strip_prefix(var) {
+            // Word-boundary check: the character after the variable name must
+            // not be a Perl identifier character (letter, digit, or `_`).
+            // This prevents `$BinDir` or `$RealBinPath` from matching `$Bin`/`$RealBin`.
+            let next = rest.chars().next();
+            if next.is_none() || next.is_some_and(|c| !c.is_alphanumeric() && c != '_') {
+                let path = rest.strip_prefix('/').unwrap_or(rest);
+                if path.is_empty() {
+                    return (".".to_string(), true);
+                }
+                return (path.to_string(), true);
+            }
+        }
+    }
+
+    for var in &braced_short {
         if let Some(rest) = s.strip_prefix(var) {
             let path = rest.strip_prefix('/').unwrap_or(rest);
             if path.is_empty() {
