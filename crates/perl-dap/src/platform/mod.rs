@@ -71,7 +71,8 @@ fn find_all_perl_on_path(path_env: &str) -> Vec<PathBuf> {
     #[allow(unused_mut)]
     let mut found: Vec<PathBuf> = path_env
         .split(PATH_SEPARATOR)
-        .map(|dir| PathBuf::from(dir).join(PERL_EXECUTABLE))
+        .filter_map(normalize_path_entry)
+        .map(|dir| dir.join(PERL_EXECUTABLE))
         .filter(|p| p.exists() && p.is_file())
         .collect();
 
@@ -79,6 +80,16 @@ fn find_all_perl_on_path(path_env: &str) -> Vec<PathBuf> {
     found.sort_by_key(|p| windows_perl_rank(p));
 
     found
+}
+
+/// Normalize a single PATH segment by trimming whitespace/quotes and dropping empties.
+fn normalize_path_entry(entry: &str) -> Option<PathBuf> {
+    let trimmed = entry.trim().trim_matches('"');
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    Some(PathBuf::from(trimmed))
 }
 
 /// Canonical OS-specific fallback paths to probe when Perl is not on PATH.
@@ -172,8 +183,8 @@ pub fn find_perl_interpreter(configured_path: Option<&str>) -> PerlInterpreterRe
 
 #[cfg(test)]
 fn resolve_perl_path_from_path_env(path_env: &str) -> anyhow::Result<PathBuf> {
-    for path_dir in path_env.split(PATH_SEPARATOR) {
-        let perl_path = PathBuf::from(path_dir).join(PERL_EXECUTABLE);
+    for path_dir in path_env.split(PATH_SEPARATOR).filter_map(normalize_path_entry) {
+        let perl_path = path_dir.join(PERL_EXECUTABLE);
         if perl_path.exists() && perl_path.is_file() {
             return Ok(perl_path);
         }
@@ -311,6 +322,38 @@ mod tests {
         let path_str = tempdir.path().to_string_lossy().to_string();
         let result = resolve_perl_path_from_path_env(&path_str);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn resolve_from_path_env_handles_quoted_path_segment() {
+        use std::fs;
+        let tempdir = must(tempfile::tempdir());
+        let bin = tempdir.path().join(PERL_EXECUTABLE);
+        must(fs::write(&bin, ""));
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mut perms = must(fs::metadata(&bin)).permissions();
+            perms.set_mode(0o755);
+            must(fs::set_permissions(&bin, perms));
+        }
+        let quoted_path = format!("\"{}\"", tempdir.path().to_string_lossy());
+        let result = resolve_perl_path_from_path_env(&quoted_path);
+        assert_eq!(must(result), bin);
+    }
+
+    #[test]
+    fn normalize_path_entry_trims_whitespace_and_quotes() {
+        let raw = "  \"/tmp/perl path\"  ";
+        let normalized = normalize_path_entry(raw);
+        assert_eq!(normalized, Some(PathBuf::from("/tmp/perl path")));
+    }
+
+    #[test]
+    fn normalize_path_entry_rejects_empty_segments() {
+        assert_eq!(normalize_path_entry(""), None);
+        assert_eq!(normalize_path_entry("   "), None);
+        assert_eq!(normalize_path_entry("\"\""), None);
     }
 
     #[test]
