@@ -28,6 +28,7 @@ perllsp --health
 | Emacs | use `lsp-mode` or `eglot` with `perllsp --stdio` | [docs/EDITORS/EMACS_SETUP.md](../EDITORS/EMACS_SETUP.md) |
 | Helix | add a `perllsp` language server entry | [docs/EDITORS/HELIX_SETUP.md](../EDITORS/HELIX_SETUP.md) |
 | Sublime Text | register `perllsp` in the LSP package settings | [docs/EDITORS/SUBLIME_SETUP.md](../EDITORS/SUBLIME_SETUP.md) |
+| Windsurf | use VS Code-compatible extension flow or generic LSP command | [docs/EDITORS/WINDSURF_SETUP.md](../EDITORS/WINDSURF_SETUP.md) |
 
 ## Minimal Configurations
 
@@ -63,6 +64,12 @@ args = ["--stdio"]
 
 Register a client whose command is `["perllsp", "--stdio"]` and scope it to
 Perl source files.
+
+### Windsurf
+
+Start with the VS Code-compatible extension path. If your extension catalog
+does not provide `perl-lsp`, configure a generic LSP client with
+`["perllsp", "--stdio"]` and Perl filetypes.
 
 ## When Setup Fails
 
