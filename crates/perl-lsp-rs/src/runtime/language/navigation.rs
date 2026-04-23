@@ -466,7 +466,7 @@ fn get_mojo_kv_route_regex() -> Result<&'static regex::Regex, JsonRpcError> {
     MOJO_KV_ROUTE_RE
         .get_or_init(|| {
             regex::Regex::new(
-                r"->\s*to\s*\(\s*controller\s*=>\s*'(?P<controller>[^']+)'\s*,\s*action\s*=>\s*'(?P<action>[^']+)'\s*\)",
+                r#"->\s*to\s*\(\s*controller\s*=>\s*['"](?P<controller>[^'"]+)['"]\s*,\s*action\s*=>\s*['"](?P<action>[^'"]+)['"]\s*\)"#,
             )
         })
         .as_ref()
@@ -511,7 +511,9 @@ fn normalize_mojolicious_controller_name(raw: &str) -> Option<String> {
     }
 
     let mut segments = Vec::new();
-    for segment in normalized.split("::").flat_map(|part| part.split('/')) {
+    for segment in
+        normalized.split("::").flat_map(|part| part.split('/')).flat_map(|part| part.split('-'))
+    {
         let segment = segment.trim();
         if segment.is_empty() {
             continue;
@@ -1351,6 +1353,28 @@ impl LspServer {
                                     {
                                         return Ok(Some(json!([lsp_location])));
                                     }
+                                }
+
+                                if symbol_key.kind == crate::workspace_index::SymKind::Sub
+                                    && symbol_key.sigil.is_none()
+                                    && let Some(import_source) =
+                                        self.find_import_source(ast, &symbol_key.name)
+                                    && let Some(def_location) = find_workspace_definition_location(
+                                        workspace_index,
+                                        &import_source,
+                                        &symbol_key.name,
+                                    )
+                                    && let Some(lsp_location) =
+                                        crate::workspace_index::lsp_adapter::to_lsp_location(
+                                            &def_location,
+                                        )
+                                {
+                                    tracing::debug!(
+                                        symbol = %symbol_key.name,
+                                        source_pkg = %import_source,
+                                        "resolved bare imported symbol through require/import source"
+                                    );
+                                    return Ok(Some(json!([lsp_location])));
                                 }
                             }
                         }
