@@ -2220,6 +2220,7 @@ impl WorkspaceIndex {
         let query_lower = query.to_lowercase();
         let files = self.files.read();
         let mut results = Vec::new();
+
         for file_index in files.values() {
             for symbol in &file_index.symbols {
                 if symbol.name.to_lowercase().contains(&query_lower)
@@ -2233,7 +2234,85 @@ impl WorkspaceIndex {
                 }
             }
         }
+
+        if !query_lower.is_empty() && results.is_empty() {
+            for file_index in files.values() {
+                for symbol in &file_index.symbols {
+                    let matches_name =
+                        Self::is_approximate_symbol_match(&symbol.name, &query_lower);
+                    let matches_qualified = symbol
+                        .qualified_name
+                        .as_ref()
+                        .map(|qualified_name| {
+                            Self::is_approximate_symbol_match(qualified_name, &query_lower)
+                        })
+                        .unwrap_or(false);
+
+                    if matches_name || matches_qualified {
+                        results.push(symbol.clone());
+                    }
+                }
+            }
+        }
+
         results
+    }
+
+    fn is_approximate_symbol_match(symbol_name: &str, query_lower: &str) -> bool {
+        let symbol_name_lower = symbol_name.to_lowercase();
+        if Self::is_edit_distance_leq_one(&symbol_name_lower, query_lower) {
+            return true;
+        }
+
+        symbol_name_lower
+            .split("::")
+            .any(|segment| Self::is_edit_distance_leq_one(segment, query_lower))
+    }
+
+    fn is_edit_distance_leq_one(lhs: &str, rhs: &str) -> bool {
+        if lhs == rhs {
+            return true;
+        }
+
+        let lhs_chars: Vec<char> = lhs.chars().collect();
+        let rhs_chars: Vec<char> = rhs.chars().collect();
+        let lhs_len = lhs_chars.len();
+        let rhs_len = rhs_chars.len();
+
+        if lhs_len.abs_diff(rhs_len) > 1 {
+            return false;
+        }
+
+        if lhs_len == rhs_len {
+            let mismatches = lhs_chars
+                .iter()
+                .zip(rhs_chars.iter())
+                .filter(|(left, right)| left != right)
+                .count();
+            return mismatches <= 1;
+        }
+
+        let (longer, shorter) =
+            if lhs_len > rhs_len { (&lhs_chars, &rhs_chars) } else { (&rhs_chars, &lhs_chars) };
+
+        let mut long_index = 0;
+        let mut short_index = 0;
+        let mut edits = 0;
+
+        while long_index < longer.len() && short_index < shorter.len() {
+            if longer[long_index] == shorter[short_index] {
+                long_index += 1;
+                short_index += 1;
+            } else {
+                edits += 1;
+                if edits > 1 {
+                    return false;
+                }
+                long_index += 1;
+            }
+        }
+
+        true
     }
 
     /// Find symbols by query (alias for search_symbols for compatibility)

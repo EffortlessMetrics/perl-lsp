@@ -222,6 +222,25 @@ fn test_search_symbols_case_insensitive() -> Result<(), Box<dyn std::error::Erro
 }
 
 #[test]
+fn test_search_symbols_fuzzy_typo_fallback() -> Result<(), Box<dyn std::error::Error>> {
+    let index = WorkspaceIndex::new();
+    let uri = file_url("/droid_factory.pm")?;
+    index.index_file(
+        uri,
+        "package Droid::Factory;
+sub build { 1 }"
+            .to_string(),
+    )?;
+
+    let results = index.search_symbols("Facxtory");
+    assert!(
+        results.iter().any(|symbol| symbol.qualified_name.as_deref() == Some("Droid::Factory")),
+        "expected fuzzy search to return Droid::Factory package"
+    );
+    Ok(())
+}
+
+#[test]
 fn test_find_symbols_alias() -> Result<(), Box<dyn std::error::Error>> {
     let index = WorkspaceIndex::new();
     let uri = file_url("/alias.pl")?;
