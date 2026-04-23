@@ -106,6 +106,9 @@ mod tests {
     #[test]
     fn detects_file_uris() {
         assert!(is_file_uri("file:///tmp/test.pl"));
+        assert!(is_file_uri("file://localhost/tmp/test.pl"));
+        assert!(!is_file_uri("FILE:///tmp/test.pl"));
+        assert!(!is_file_uri("file:test.pl"));
         assert!(!is_file_uri("https://example.com"));
     }
 
