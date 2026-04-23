@@ -529,6 +529,57 @@ fn apply_single_edit(state: &mut IncrementalState, edit: &Edit) -> Result<Range<
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::ops::Range;
+
+    const FUZZ_SEEDS: [u64; 6] = [
+        0xC0FF_EE12_3456_7890,
+        0xDEAD_BEEF_1234_5678,
+        0xA11C_E55E_F00D_BAAD,
+        0xFACE_FEED_0BAD_C0DE,
+        0x0123_4567_89AB_CDEF,
+        0xCAFE_D00D_55AA_55AA,
+    ];
+
+    fn next_u64(state: &mut u64) -> u64 {
+        *state ^= *state << 13;
+        *state ^= *state >> 7;
+        *state ^= *state << 17;
+        *state
+    }
+
+    fn random_ascii_program(rng: &mut u64, max_len: usize) -> String {
+        let target_len = (next_u64(rng) as usize % max_len) + 1;
+        let charset =
+            b" abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_$;=(){}[]+-*/\n";
+        let mut out = String::with_capacity(target_len);
+        for _ in 0..target_len {
+            let idx = next_u64(rng) as usize % charset.len();
+            out.push(charset[idx] as char);
+        }
+        out
+    }
+
+    fn random_edit_range(rng: &mut u64, source_len: usize) -> Range<usize> {
+        if source_len == 0 {
+            return 0..0;
+        }
+        let start = next_u64(rng) as usize % (source_len + 1);
+        let end = if start == source_len {
+            start
+        } else {
+            start + (next_u64(rng) as usize % (source_len - start + 1))
+        };
+        start..end
+    }
+
+    fn token_fingerprint(tokens: &[perl_lexer::Token]) -> Vec<(usize, usize, String, String)> {
+        tokens
+            .iter()
+            .map(|token| {
+                (token.start, token.end, format!("{:?}", token.token_type), token.text.to_string())
+            })
+            .collect()
+    }
 
     /// Verify that a small ranged edit re-lexes substantially fewer bytes than
     /// the total document length, confirming the checkpoint fast-path fires.
@@ -611,6 +662,50 @@ mod tests {
             state.source.len(),
             "large edit must trigger full reparse, reparsed_bytes should equal doc length"
         );
+
+        Ok(())
+    }
+
+    /// Fuzz random edit sequences against the incremental edit path and assert
+    /// the final document/tokens match a fresh parse ground truth.
+    #[test]
+    fn test_incremental_apply_edits_fuzz_matches_ground_truth() -> Result<()> {
+        const STEPS_PER_SEED: usize = 128;
+        const INSERT_MAX_LEN: usize = 48;
+
+        for initial_seed in FUZZ_SEEDS {
+            let mut rng = initial_seed;
+            let mut truth_source = random_ascii_program(&mut rng, 300);
+            let mut state = IncrementalState::new(truth_source.clone());
+
+            for _ in 0..STEPS_PER_SEED {
+                let edit_range = random_edit_range(&mut rng, truth_source.len());
+                let new_text = random_ascii_program(&mut rng, INSERT_MAX_LEN);
+
+                let edit = Edit {
+                    start_byte: edit_range.start,
+                    old_end_byte: edit_range.end,
+                    new_end_byte: edit_range.start + new_text.len(),
+                    new_text: new_text.clone(),
+                };
+
+                apply_edits(&mut state, &[edit])?;
+
+                truth_source.replace_range(edit_range, &new_text);
+            }
+
+            let reparsed = IncrementalState::new(truth_source.clone());
+
+            assert_eq!(
+                state.source, truth_source,
+                "incremental source drifted from edit-sequence ground truth for seed {initial_seed:#x}"
+            );
+            assert_eq!(
+                token_fingerprint(&state.tokens),
+                token_fingerprint(&reparsed.tokens),
+                "incremental token stream diverged from full reparse for seed {initial_seed:#x}"
+            );
+        }
 
         Ok(())
     }
