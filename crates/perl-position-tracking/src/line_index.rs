@@ -7,6 +7,15 @@ pub struct LineStartsCache {
     line_starts: Vec<usize>,
 }
 impl LineStartsCache {
+    /// Clamp `offset` into `text` and ensure it is on a UTF-8 char boundary.
+    fn normalize_text_offset(text: &str, offset: usize) -> usize {
+        let mut normalized = offset.min(text.len());
+        while normalized > 0 && !text.is_char_boundary(normalized) {
+            normalized -= 1;
+        }
+        normalized
+    }
+
     /// Builds a cache from UTF-8 source text.
     pub fn new(text: &str) -> Self {
         let mut ls = vec![0];
@@ -41,7 +50,7 @@ impl LineStartsCache {
 
     /// Converts a byte offset in `text` to `(line, column_utf16)`.
     pub fn offset_to_position(&self, text: &str, offset: usize) -> (u32, u32) {
-        let offset = offset.min(text.len());
+        let offset = Self::normalize_text_offset(text, offset);
         let line = self.line_starts.binary_search(&offset).unwrap_or_else(|i| i.saturating_sub(1));
         let ls = self.line_starts[line];
         (line as u32, text[ls..offset].chars().map(|c| c.len_utf16()).sum::<usize>() as u32)

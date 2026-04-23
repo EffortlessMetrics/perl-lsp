@@ -594,6 +594,17 @@ fn line_starts_cache_offset_clamped() {
     assert_eq!(col, 3);
 }
 
+#[test]
+fn line_starts_cache_offset_mid_utf8_char_clamps_to_boundary() {
+    let src = "a😀b";
+    let cache = LineStartsCache::new(src);
+
+    // Byte offset 2 is in the middle of 😀 (starts at 1, ends before 5).
+    let (line, col) = cache.offset_to_position(src, 2);
+    assert_eq!(line, 0);
+    assert_eq!(col, 1);
+}
+
 // ─── LineStartsCache: position_to_offset ─────────────────────────────────────
 
 #[test]
