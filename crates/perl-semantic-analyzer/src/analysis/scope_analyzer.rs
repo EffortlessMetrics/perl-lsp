@@ -1926,7 +1926,7 @@ fn is_builtin_global(sigil: &str, name: &str) -> bool {
             }
         },
         b'@' => matches!(name, "_" | "+" | "-" | "INC" | "ARGV" | "EXPORT" | "EXPORT_OK" | "ISA"),
-        b'%' => matches!(name, "_" | "+" | "ENV" | "INC" | "SIG" | "EXPORT_TAGS"),
+        b'%' => matches!(name, "_" | "+" | "-" | "!" | "ENV" | "INC" | "SIG" | "EXPORT_TAGS"),
         _ => false,
     }
 }
