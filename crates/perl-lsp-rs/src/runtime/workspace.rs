@@ -731,9 +731,15 @@ impl LspServer {
                             .and_then(|v| v.get("profile"))
                             .and_then(|v| v.as_str())
                             .map(|s| s.to_string());
+                        let new_theme = perl
+                            .get("perlcritic")
+                            .and_then(|v| v.get("theme"))
+                            .and_then(|v| v.as_str())
+                            .map(|s| s.to_string());
                         new_enabled != cfg.perlcritic_enabled
                             || new_severity != cfg.perlcritic_severity
                             || new_profile != cfg.perlcritic_profile
+                            || new_theme != cfg.perlcritic_theme
                     };
 
                     // Update server config (inlay hints, test runner)

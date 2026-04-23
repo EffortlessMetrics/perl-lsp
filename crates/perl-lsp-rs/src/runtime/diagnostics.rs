@@ -42,9 +42,14 @@ impl PullDiagnosticsOrchestrator {
     /// Build context from LspServer state.
     pub fn build_context(&self, server: &LspServer, uri: &str) -> PullDiagnosticsContext {
         // Get config values
-        let (perlcritic_enabled, perlcritic_severity, perlcritic_profile) = {
+        let (perlcritic_enabled, perlcritic_severity, perlcritic_profile, _perlcritic_theme) = {
             let cfg = server.config.lock();
-            (cfg.perlcritic_enabled, cfg.perlcritic_severity, cfg.perlcritic_profile.clone())
+            (
+                cfg.perlcritic_enabled,
+                cfg.perlcritic_severity,
+                cfg.perlcritic_profile.clone(),
+                cfg.perlcritic_theme.clone(),
+            )
         };
 
         let profile =
@@ -88,9 +93,14 @@ impl PullDiagnosticsOrchestrator {
         use perl_lsp_rs_core::tooling::perl_critic::{CriticAnalyzer, CriticConfig};
 
         // Check config
-        let (enabled, severity, profile) = {
+        let (enabled, severity, profile, theme) = {
             let cfg = server.config.lock();
-            (cfg.perlcritic_enabled, cfg.perlcritic_severity, cfg.perlcritic_profile.clone())
+            (
+                cfg.perlcritic_enabled,
+                cfg.perlcritic_severity,
+                cfg.perlcritic_profile.clone(),
+                cfg.perlcritic_theme.clone(),
+            )
         };
 
         if !enabled {
@@ -163,8 +173,12 @@ impl PullDiagnosticsOrchestrator {
                     None
                 });
 
-                let critic_config =
-                    CriticConfig { severity, profile: resolved_profile, ..Default::default() };
+                let critic_config = CriticConfig {
+                    severity,
+                    profile: resolved_profile,
+                    theme: theme.clone(),
+                    ..Default::default()
+                };
 
                 // Use injected test runtime if present, otherwise OS runtime
                 let analyzer = {
@@ -1253,9 +1267,14 @@ impl LspServer {
         diagnostics: &mut Vec<InternalDiagnostic>,
     ) {
         // Check config: perlcritic must be explicitly enabled (opt-in)
-        let (enabled, severity, profile) = {
+        let (enabled, severity, profile, theme) = {
             let cfg = self.config.lock();
-            (cfg.perlcritic_enabled, cfg.perlcritic_severity, cfg.perlcritic_profile.clone())
+            (
+                cfg.perlcritic_enabled,
+                cfg.perlcritic_severity,
+                cfg.perlcritic_profile.clone(),
+                cfg.perlcritic_theme.clone(),
+            )
         };
         if !enabled {
             return;
@@ -1340,6 +1359,7 @@ impl LspServer {
                 let critic_config = crate::perl_critic::CriticConfig {
                     severity,
                     profile: resolved_profile,
+                    theme: theme.clone(),
                     ..crate::perl_critic::CriticConfig::default()
                 };
                 // Use the injected test runtime when present; otherwise fall back

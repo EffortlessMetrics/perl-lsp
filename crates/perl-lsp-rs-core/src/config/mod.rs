@@ -67,6 +67,11 @@ pub struct ServerConfig {
     /// the auto-discovery logic looks for `.perlcriticrc` in the workspace root.
     pub perlcritic_profile: Option<String>,
 
+    /// Optional Perl::Critic theme expression.
+    ///
+    /// When `Some`, passes `--theme=<expr>` to perlcritic.
+    pub perlcritic_theme: Option<String>,
+
     /// Whether perltidy formatting is enabled.
     pub perltidy_enabled: bool,
 
@@ -193,6 +198,7 @@ impl Default for ServerConfig {
             perlcritic_enabled: false,
             perlcritic_severity: 3,
             perlcritic_profile: None,
+            perlcritic_theme: None,
             perltidy_enabled: true,
             perltidy_profile: None,
             perltidy_maximum_line_length: Some(80),
@@ -264,6 +270,10 @@ impl ServerConfig {
             if let Some(profile) = critic.get("profile").and_then(|v| v.as_str()) {
                 let profile = profile.trim();
                 self.perlcritic_profile = (!profile.is_empty()).then(|| profile.to_string());
+            }
+            if let Some(theme) = critic.get("theme").and_then(|v| v.as_str()) {
+                let theme = theme.trim();
+                self.perlcritic_theme = (!theme.is_empty()).then(|| theme.to_string());
             }
         }
 
