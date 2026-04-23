@@ -125,6 +125,14 @@ impl IncrementalParser {
     ///
     /// Overlapping regions are automatically merged.
     pub fn mark_changed(&mut self, start: usize, end: usize) {
+        let (start, end) = if start <= end { (start, end) } else { (end, start) };
+
+        // Ignore zero-length spans to keep the tracking set focused on
+        // meaningful byte ranges.
+        if start == end {
+            return;
+        }
+
         self.changed_regions.push((start, end));
         self.merge_overlapping_regions();
     }

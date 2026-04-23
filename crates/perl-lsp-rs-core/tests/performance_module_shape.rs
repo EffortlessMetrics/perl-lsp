@@ -36,3 +36,23 @@ fn performance_ast_cache_stores_and_retrieves() {
     // which is complex. This test verifies the cache is instantiable.
     assert_some(Some(cache), "AstCache should be constructible");
 }
+
+#[test]
+fn incremental_parser_given_reversed_change_range_when_marked_then_reparse_is_detected() {
+    let mut parser = IncrementalParser::new();
+
+    // Simulate a caller accidentally sending end/start in reverse order.
+    parser.mark_changed(20, 10);
+
+    assert!(parser.needs_reparse(12, 18));
+    assert!(!parser.needs_reparse(0, 9));
+}
+
+#[test]
+fn incremental_parser_given_zero_width_change_when_marked_then_no_nodes_require_reparse() {
+    let mut parser = IncrementalParser::new();
+
+    parser.mark_changed(10, 10);
+
+    assert!(!parser.needs_reparse(0, 100));
+}
