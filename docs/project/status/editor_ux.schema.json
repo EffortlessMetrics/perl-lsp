@@ -18,7 +18,7 @@
     },
     "receipt_kind": {
       "type": "string",
-      "const": "planning_scaffold"
+      "enum": ["planning_scaffold", "tracked_metrics"]
     },
     "scorecard": {
       "type": "string",
@@ -102,10 +102,16 @@
           },
           "owner": {
             "type": "string"
+          },
+          "observed_value": {
+            "type": ["number", "integer", "null"]
           }
         },
         "additionalProperties": false
       }
+    },
+    "measured_at": {
+      "type": ["string", "null"]
     },
     "integration_points": {
       "type": "object",

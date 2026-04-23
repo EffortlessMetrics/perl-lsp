@@ -28,22 +28,26 @@
     "release_lane": "just ux-tests-full",
     "status_update": "cargo xtask update-status --only quality"
   },
+  "measured_at": null,
   "receipt_kind": "planning_scaffold",
   "schema_version": 1,
   "scorecard": "editor_ux",
   "top_line_metrics": [
     {
       "name": "workflow_pass_rate",
+      "observed_value": null,
       "owner": "perl-lsp-ux-tests",
       "state": "planned"
     },
     {
       "name": "workflow_stability_rate",
+      "observed_value": null,
       "owner": "perl-lsp-ux-tests",
       "state": "planned"
     },
     {
       "name": "p95_time_to_first_useful_result_ms",
+      "observed_value": null,
       "owner": "perl-lsp-ux-tests",
       "state": "planned"
     }
