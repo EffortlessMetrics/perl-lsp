@@ -37,9 +37,8 @@ pub enum UseLibAction {
 pub fn extract_use_lib_paths(source: &str) -> Vec<UseLibPath> {
     let mut paths = Vec::new();
 
-    for line in source.lines() {
-        let trimmed = line.trim();
-        if let Some(rest) = strip_use_lib_prefix(trimmed) {
+    for statement in iter_perl_statements(source) {
+        if let Some(rest) = strip_use_lib_prefix(statement) {
             extract_paths_from_args(rest, &mut paths);
         }
     }
@@ -52,9 +51,8 @@ pub fn extract_use_lib_paths(source: &str) -> Vec<UseLibPath> {
 pub fn extract_use_lib_operations(source: &str) -> Vec<UseLibAction> {
     let mut ops = Vec::new();
 
-    for line in source.lines() {
-        let trimmed = line.trim();
-        if let Some(rest) = strip_use_lib_prefix(trimmed) {
+    for statement in iter_perl_statements(source) {
+        if let Some(rest) = strip_use_lib_prefix(statement) {
             let mut paths = Vec::new();
             extract_paths_from_args(rest, &mut paths);
             if !paths.is_empty() {
@@ -63,7 +61,7 @@ pub fn extract_use_lib_operations(source: &str) -> Vec<UseLibAction> {
             continue;
         }
 
-        if let Some(rest) = strip_no_lib_prefix(trimmed) {
+        if let Some(rest) = strip_no_lib_prefix(statement) {
             let mut paths = Vec::new();
             extract_paths_from_args(rest, &mut paths);
             if !paths.is_empty() {
@@ -160,6 +158,10 @@ pub fn resolve_use_lib_paths_from_source_at_offset(
         }
     }
     resolved
+}
+
+fn iter_perl_statements(source: &str) -> impl Iterator<Item = &str> {
+    source.split(';').map(str::trim).filter(|statement| !statement.is_empty())
 }
 
 fn strip_use_lib_prefix(trimmed: &str) -> Option<&str> {

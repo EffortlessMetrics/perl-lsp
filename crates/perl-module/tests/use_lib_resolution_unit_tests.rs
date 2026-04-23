@@ -83,3 +83,31 @@ use Lib::Thing;\n\
 
     assert_eq!(include_paths, vec!["second".to_string()]);
 }
+
+#[test]
+fn extracts_use_lib_from_multiple_statements_on_same_line() {
+    let source = "use lib 'first'; use lib 'second'; no lib 'first';";
+
+    let include_paths = resolve_use_lib_paths_from_source_at_offset(
+        source,
+        source.len(),
+        Path::new("/workspace"),
+        None,
+    );
+
+    assert_eq!(include_paths, vec!["second".to_string()]);
+}
+
+#[test]
+fn extracts_multiline_use_lib_statement() {
+    let source = "use lib
+  'multi_line';
+use App::Thing;
+";
+
+    let offset = source.find("use App::Thing;").unwrap_or(source.len());
+    let include_paths =
+        resolve_use_lib_paths_from_source_at_offset(source, offset, Path::new("/workspace"), None);
+
+    assert_eq!(include_paths, vec!["multi_line".to_string()]);
+}
