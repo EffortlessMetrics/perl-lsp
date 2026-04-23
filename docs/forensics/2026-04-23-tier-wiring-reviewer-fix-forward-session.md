@@ -8,19 +8,21 @@
 
 Plans: **Claude 20× Max** + **Codex Pro**. 5h sessions reset; weekly budget is the rollup. These are the numbers for the current 5h session window only — prior iterations (2026-04-22) covered in `docs/forensics/2026-04-22-continuous-codex-review-session.md`.
 
-### Mid-session checkpoint
+Each row is a **separate 5h session window** (sessions reset; weekly accumulates). Delta between windows = weekly-usage change during that window.
 
-| Measure | Session used | Weekly used | Weekly remaining |
-|---|---|---|---|
-| Claude Code (20× Max) | **33%** | **79%** | 21% |
-| Codex Pro | **41%** | ~18% | ~82% |
+### Window 1 (earlier today — pre-compaction tail + pre-Haiku-batch triage)
 
-### Later checkpoint (after Haiku+reviewer-deep parallel dispatch)
+| Measure | That window's session usage | Weekly @ end of window |
+|---|---|---|
+| Claude Code (20× Max) | **33%** of its 5h window | **79%** |
+| Codex Pro | **41%** of its 5h window | ~18% used |
 
-| Measure | Session used | Weekly used | Weekly remaining |
-|---|---|---|---|
-| Claude Code (20× Max) | **18%** (new 5h window) | **82%** | **18%** |
-| Codex Pro | **11%** (new window) | **~21%** | **~79%** |
+### Window 2 (current — after Haiku+reviewer-deep parallel dispatch, queue drain)
+
+| Measure | This window's session usage | Weekly @ end of window |
+|---|---|---|
+| Claude Code (20× Max) | **18%** of this 5h window | **82%** (+3% during this window) |
+| Codex Pro | **11%** of this 5h window | ~21% (+3% during this window) |
 
 **Key economic observation:** Codex Pro is ~4× more budget-efficient than Claude 20× Max this week by weekly consumption. Codex did the heavy generation (200+ PRs produced); Claude did high-leverage routing and review. The spray-and-filter pattern ALIGNS with this cost asymmetry — the cheap model sprays, the expensive model filters.
 
