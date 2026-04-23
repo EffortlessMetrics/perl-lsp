@@ -18,6 +18,7 @@
 mod code_actions;
 mod colors;
 mod completion;
+mod document_links;
 mod formatting;
 mod hierarchy;
 mod hover;
