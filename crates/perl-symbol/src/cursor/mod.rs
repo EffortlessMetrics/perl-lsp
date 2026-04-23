@@ -116,12 +116,27 @@ pub fn token_under_cursor(text: &str, line: usize, col_utf16: usize) -> Option<S
     let byte_pos = byte_offset_utf16(line_text, col_utf16);
     let bytes = line_text.as_bytes();
 
-    if byte_pos >= bytes.len() {
+    if bytes.is_empty() {
         return None;
     }
 
-    let mut start = byte_pos;
-    let mut end = byte_pos;
+    // Cursor positions reported by editors are often *between* characters.
+    // If the cursor is at end-of-line or on a delimiter right after a token,
+    // treat it as selecting the token immediately to the left.
+    let anchor = if byte_pos >= bytes.len() {
+        bytes.len() - 1
+    } else if !is_modchar(bytes[byte_pos]) && byte_pos > 0 && is_modchar(bytes[byte_pos - 1]) {
+        byte_pos - 1
+    } else {
+        byte_pos
+    };
+
+    if !is_modchar(bytes[anchor]) {
+        return None;
+    }
+
+    let mut start = anchor;
+    let mut end = anchor;
 
     while start > 0 && is_modchar(bytes[start - 1]) {
         start -= 1;
@@ -134,7 +149,11 @@ pub fn token_under_cursor(text: &str, line: usize, col_utf16: usize) -> Option<S
         end += 1;
     }
 
-    Some(line_text[start..end].to_string())
+    if start == end {
+        None
+    } else {
+        Some(line_text[start..end].to_string())
+    }
 }
 
 /// Check if a match at `pos..pos+word_len` is bounded by non-word chars.
@@ -165,6 +184,28 @@ mod tests {
     fn token_under_cursor_supports_sigils() {
         let text = "my $value = 1;\n";
         assert_eq!(token_under_cursor(text, 0, 5), Some("$value".to_string()));
+    }
+
+    #[test]
+    fn token_under_cursor_supports_cursor_after_token_boundary() {
+        let text = "use Demo::Worker;\n";
+        let cursor_after_token = "use Demo::Worker".len();
+        assert_eq!(
+            token_under_cursor(text, 0, cursor_after_token),
+            Some("Demo::Worker".to_string())
+        );
+    }
+
+    #[test]
+    fn token_under_cursor_supports_cursor_at_end_of_line() {
+        let text = "my $value";
+        assert_eq!(token_under_cursor(text, 0, text.len()), Some("$value".to_string()));
+    }
+
+    #[test]
+    fn token_under_cursor_returns_none_when_not_on_or_after_token() {
+        let text = "my $value = 1;\n";
+        assert_eq!(token_under_cursor(text, 0, 3), None);
     }
 
     #[test]
