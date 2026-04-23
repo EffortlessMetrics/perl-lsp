@@ -62,3 +62,55 @@ fn hash_literal_with_comma_pairs_stays_hash_literal() -> Result<(), Box<dyn std:
 
     Err("expected HashLiteral initializer".into())
 }
+
+#[test]
+fn parenthesized_chained_fat_arrow_preserves_autoquoted_chain() -> Result<(), Box<dyn std::error::Error>>
+{
+    let initializer = parse_single_initializer("my $h = (foo => bar => 1);")?;
+
+    if let NodeKind::ArrayLiteral { elements } = initializer.kind {
+        assert_eq!(elements.len(), 3, "odd chained fat-arrow list should remain a list");
+        assert!(
+            matches!(&elements[0].kind, NodeKind::String { value, .. } if value == "foo"),
+            "first chained key should be auto-quoted"
+        );
+        assert!(
+            matches!(&elements[1].kind, NodeKind::String { value, .. } if value == "bar"),
+            "intermediate identifier should be auto-quoted after chained fat arrow"
+        );
+        assert!(
+            matches!(elements[2].kind, NodeKind::Number { .. }),
+            "last chained value should be numeric"
+        );
+        return Ok(());
+    }
+
+    Err("expected ArrayLiteral initializer from odd chained fat-arrow list".into())
+}
+
+#[test]
+fn array_literal_chained_fat_arrow_remains_array_and_autoquotes_keys()
+-> Result<(), Box<dyn std::error::Error>> {
+    let initializer = parse_single_initializer("my $a = [foo => bar => 1];")?;
+
+    if let NodeKind::ArrayLiteral { elements } = initializer.kind {
+        assert_eq!(elements.len(), 3, "expected chained fat arrow to produce three elements");
+
+        assert!(
+            matches!(&elements[0].kind, NodeKind::String { value, .. } if value == "foo"),
+            "first element should be auto-quoted key 'foo'"
+        );
+        assert!(
+            matches!(&elements[1].kind, NodeKind::String { value, .. } if value == "bar"),
+            "second element should become auto-quoted key after chained fat arrow"
+        );
+        assert!(
+            matches!(elements[2].kind, NodeKind::Number { .. }),
+            "final element should be numeric value"
+        );
+
+        return Ok(());
+    }
+
+    Err("expected ArrayLiteral initializer".into())
+}
