@@ -3836,26 +3836,21 @@ fn collect_todo_hits(
 }
 
 fn has_unlinked_todo_in_rust_line(line: &str, token_re: &Regex) -> bool {
-    for (idx, _) in line.match_indices("//") {
+    let sanitized = sanitize_rust_line_for_comment_scan(line);
+    for (idx, _) in sanitized.match_indices("//") {
         if is_url_like_hash_comment(line, idx) {
             continue;
         }
-        if is_likely_string_literal_comment_start(line, idx) {
-            continue;
-        }
-        if has_unlinked_token(&line[idx + 2..], token_re) {
+        if has_unlinked_token(&sanitized[idx + 2..], token_re) {
             return true;
         }
     }
-    for (idx, _) in line.match_indices("/*") {
-        if is_likely_string_literal_comment_start(line, idx) {
-            continue;
-        }
-        if has_unlinked_token(&line[idx + 2..], token_re) {
+    for (idx, _) in sanitized.match_indices("/*") {
+        if has_unlinked_token(&sanitized[idx + 2..], token_re) {
             return true;
         }
     }
-    let trimmed = line.trim_start();
+    let trimmed = sanitized.trim_start();
     if trimmed.starts_with('*') && has_unlinked_token(trimmed, token_re) {
         return true;
     }
@@ -3884,11 +3879,141 @@ fn is_url_like_hash_comment(line: &str, slash_idx: usize) -> bool {
     matches!(before, b'/' | b':' | b'"')
 }
 
-fn is_likely_string_literal_comment_start(line: &str, comment_idx: usize) -> bool {
-    if comment_idx == 0 {
-        return false;
+fn sanitize_rust_line_for_comment_scan(line: &str) -> String {
+    #[derive(Clone, Copy)]
+    enum StringState {
+        Normal,
+        SingleQuoted,
+        DoubleQuoted,
+        RawDoubleQuoted(usize),
+        RawByteDoubleQuoted(usize),
     }
-    matches!(line.as_bytes()[comment_idx - 1], b'"' | b'\'' | b'#')
+
+    fn count_opening_raw_hashes(bytes: &[u8], idx: usize, prefix_len: usize) -> Option<usize> {
+        let mut j = idx + prefix_len;
+        while j < bytes.len() && bytes[j] == b'#' {
+            j += 1;
+        }
+        if j < bytes.len() && bytes[j] == b'"' { Some(j - (idx + prefix_len)) } else { None }
+    }
+
+    let bytes = line.as_bytes();
+    let mut out = String::with_capacity(line.len());
+    let mut state = StringState::Normal;
+    let mut i = 0;
+
+    while i < bytes.len() {
+        match state {
+            StringState::Normal => {
+                if bytes[i] == b'r'
+                    && let Some(hashes) = count_opening_raw_hashes(bytes, i, 1)
+                {
+                    out.push_str(&line[i..=i + hashes + 1]);
+                    i += hashes + 2;
+                    state = StringState::RawDoubleQuoted(hashes);
+                    continue;
+                }
+                if bytes[i] == b'b'
+                    && i + 1 < bytes.len()
+                    && bytes[i + 1] == b'r'
+                    && let Some(hashes) = count_opening_raw_hashes(bytes, i, 2)
+                {
+                    out.push_str(&line[i..=i + hashes + 2]);
+                    i += hashes + 3;
+                    state = StringState::RawByteDoubleQuoted(hashes);
+                    continue;
+                }
+                if bytes[i] == b'"' {
+                    out.push('"');
+                    i += 1;
+                    state = StringState::DoubleQuoted;
+                    continue;
+                }
+                if bytes[i] == b'\'' {
+                    out.push('\'');
+                    i += 1;
+                    state = StringState::SingleQuoted;
+                    continue;
+                }
+                out.push(bytes[i] as char);
+                i += 1;
+            }
+            StringState::SingleQuoted => {
+                if bytes[i] == b'\\' && i + 1 < bytes.len() {
+                    out.push_str("  ");
+                    i += 2;
+                    continue;
+                }
+                if bytes[i] == b'\'' {
+                    out.push('\'');
+                    i += 1;
+                    state = StringState::Normal;
+                    continue;
+                }
+                out.push(' ');
+                i += 1;
+            }
+            StringState::DoubleQuoted => {
+                if bytes[i] == b'\\' && i + 1 < bytes.len() {
+                    out.push_str("  ");
+                    i += 2;
+                    continue;
+                }
+                if bytes[i] == b'"' {
+                    out.push('"');
+                    i += 1;
+                    state = StringState::Normal;
+                    continue;
+                }
+                out.push(' ');
+                i += 1;
+            }
+            StringState::RawDoubleQuoted(hashes) => {
+                if bytes[i] == b'"' {
+                    let mut j = i + 1;
+                    let mut seen_hashes = 0;
+                    while j < bytes.len() && bytes[j] == b'#' && seen_hashes < hashes {
+                        seen_hashes += 1;
+                        j += 1;
+                    }
+                    if seen_hashes == hashes {
+                        out.push('"');
+                        for _ in 0..hashes {
+                            out.push('#');
+                        }
+                        i = j;
+                        state = StringState::Normal;
+                        continue;
+                    }
+                }
+                out.push(' ');
+                i += 1;
+            }
+            StringState::RawByteDoubleQuoted(hashes) => {
+                if bytes[i] == b'"' {
+                    let mut j = i + 1;
+                    let mut seen_hashes = 0;
+                    while j < bytes.len() && bytes[j] == b'#' && seen_hashes < hashes {
+                        seen_hashes += 1;
+                        j += 1;
+                    }
+                    if seen_hashes == hashes {
+                        out.push('"');
+                        for _ in 0..hashes {
+                            out.push('#');
+                        }
+                        i = j;
+                        state = StringState::Normal;
+                        continue;
+                    }
+                }
+                out.push(' ');
+                i += 1;
+            }
+        }
+    }
+
+    out
 }
 
 fn has_unlinked_token(comment: &str, token_re: &Regex) -> bool {
@@ -4160,6 +4285,30 @@ mod tests {
         assert!(!has_unlinked_todo_in_rust_line("let s = r#\"// TODO in literal\"#;", &todo_re));
         assert!(!has_unlinked_todo_in_rust_line(
             "let s = r#\"/* FIXME in literal */\"#;",
+            &todo_re
+        ));
+
+        Ok(())
+    }
+
+    #[test]
+    fn rust_todo_detection_ignores_comment_tokens_inside_literal_body() -> Result<()> {
+        let todo_re = Regex::new(r"TODO|FIXME")?;
+
+        assert!(!has_unlinked_todo_in_rust_line(
+            "let s = \"prefix text // TODO in string\";",
+            &todo_re
+        ));
+        assert!(!has_unlinked_todo_in_rust_line(
+            "let s = \"prefix /* FIXME in string */ suffix\";",
+            &todo_re
+        ));
+        assert!(!has_unlinked_todo_in_rust_line(
+            "let s = r##\"prefix // TODO in raw string\"##;",
+            &todo_re
+        ));
+        assert!(has_unlinked_todo_in_rust_line(
+            "let s = \"prefix // TODO in string\"; // TODO: follow up",
             &todo_re
         ));
 
