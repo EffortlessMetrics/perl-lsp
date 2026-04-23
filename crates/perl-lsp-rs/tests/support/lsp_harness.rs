@@ -936,6 +936,49 @@ impl LspHarness {
         )
     }
 
+    /// Request completion items at a position.
+    pub fn completion(&mut self, uri: &str, line: u32, character: u32) -> Result<Value, String> {
+        self.request(
+            "textDocument/completion",
+            json!({
+                "textDocument": { "uri": uri },
+                "position": { "line": line, "character": character }
+            }),
+        )
+    }
+
+    /// Request hover information at a position.
+    pub fn hover(&mut self, uri: &str, line: u32, character: u32) -> Result<Value, String> {
+        self.request(
+            "textDocument/hover",
+            json!({
+                "textDocument": { "uri": uri },
+                "position": { "line": line, "character": character }
+            }),
+        )
+    }
+
+    /// Request definition locations at a position.
+    pub fn definition(&mut self, uri: &str, line: u32, character: u32) -> Result<Value, String> {
+        self.request(
+            "textDocument/definition",
+            json!({
+                "textDocument": { "uri": uri },
+                "position": { "line": line, "character": character }
+            }),
+        )
+    }
+
+    /// Request pull diagnostics for a document.
+    pub fn document_diagnostic(&mut self, uri: &str) -> Result<Value, String> {
+        self.request(
+            "textDocument/diagnostic",
+            json!({
+                "textDocument": { "uri": uri }
+            }),
+        )
+    }
+
     /// Get implementation locations at a position
     pub fn implementation(
         &mut self,
