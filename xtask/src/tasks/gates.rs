@@ -1394,7 +1394,7 @@ fn compare_receipts(baseline: &Receipt, current: &Receipt) -> Result<DiffResult>
         }
     }
 
-    // Find metric changes
+    // Find metric changes across all tracked gate metrics.
     let mut metric_changes = Vec::new();
     for (name, current_gate) in &current_gates {
         if let (Some(_baseline_gate), Some(current_metrics), Some(baseline_metrics)) = (
@@ -1402,21 +1402,76 @@ fn compare_receipts(baseline: &Receipt, current: &Receipt) -> Result<DiffResult>
             &current_gate.metrics,
             baseline_gates.get(name).and_then(|g| g.metrics.as_ref()),
         ) {
-            // Compare tests_total
-            if let (Some(old), Some(new)) =
-                (baseline_metrics.tests_total, current_metrics.tests_total)
-                && old != new
-            {
-                let delta = ((new as f64 - old as f64) / old as f64) * 100.0;
-                metric_changes.push(MetricChange {
-                    gate_name: name.to_string(),
-                    metric_name: "tests_total".to_string(),
-                    old_value: old as f64,
-                    new_value: new as f64,
-                    delta_percent: delta,
-                    exceeds_threshold: delta.abs() > 10.0,
-                });
-            }
+            push_metric_change(
+                &mut metric_changes,
+                name,
+                "tests_total",
+                baseline_metrics.tests_total.map(f64::from),
+                current_metrics.tests_total.map(f64::from),
+            );
+            push_metric_change(
+                &mut metric_changes,
+                name,
+                "tests_passed",
+                baseline_metrics.tests_passed.map(f64::from),
+                current_metrics.tests_passed.map(f64::from),
+            );
+            push_metric_change(
+                &mut metric_changes,
+                name,
+                "tests_failed",
+                baseline_metrics.tests_failed.map(f64::from),
+                current_metrics.tests_failed.map(f64::from),
+            );
+            push_metric_change(
+                &mut metric_changes,
+                name,
+                "tests_skipped",
+                baseline_metrics.tests_skipped.map(f64::from),
+                current_metrics.tests_skipped.map(f64::from),
+            );
+            push_metric_change(
+                &mut metric_changes,
+                name,
+                "tests_ignored",
+                baseline_metrics.tests_ignored.map(f64::from),
+                current_metrics.tests_ignored.map(f64::from),
+            );
+            push_metric_change(
+                &mut metric_changes,
+                name,
+                "warnings_count",
+                baseline_metrics.warnings_count.map(f64::from),
+                current_metrics.warnings_count.map(f64::from),
+            );
+            push_metric_change(
+                &mut metric_changes,
+                name,
+                "errors_count",
+                baseline_metrics.errors_count.map(f64::from),
+                current_metrics.errors_count.map(f64::from),
+            );
+            push_metric_change(
+                &mut metric_changes,
+                name,
+                "coverage_percent",
+                baseline_metrics.coverage_percent,
+                current_metrics.coverage_percent,
+            );
+            push_metric_change(
+                &mut metric_changes,
+                name,
+                "memory_peak_mb",
+                baseline_metrics.memory_peak_mb,
+                current_metrics.memory_peak_mb,
+            );
+            push_metric_change(
+                &mut metric_changes,
+                name,
+                "files_checked",
+                baseline_metrics.files_checked.map(f64::from),
+                current_metrics.files_checked.map(f64::from),
+            );
         }
     }
 
@@ -1431,6 +1486,36 @@ fn compare_receipts(baseline: &Receipt, current: &Receipt) -> Result<DiffResult>
         metric_changes,
         overall_regression,
     })
+}
+
+fn push_metric_change(
+    metric_changes: &mut Vec<MetricChange>,
+    gate_name: &str,
+    metric_name: &str,
+    old: Option<f64>,
+    new: Option<f64>,
+) {
+    let (Some(old_value), Some(new_value)) = (old, new) else {
+        return;
+    };
+    if (old_value - new_value).abs() < f64::EPSILON {
+        return;
+    }
+
+    let delta_percent = if old_value.abs() < f64::EPSILON {
+        if new_value.abs() < f64::EPSILON { 0.0 } else { 100.0 }
+    } else {
+        ((new_value - old_value) / old_value) * 100.0
+    };
+
+    metric_changes.push(MetricChange {
+        gate_name: gate_name.to_string(),
+        metric_name: metric_name.to_string(),
+        old_value,
+        new_value,
+        delta_percent,
+        exceeds_threshold: delta_percent.abs() > 10.0,
+    });
 }
 
 /// Output diff results
@@ -1540,8 +1625,9 @@ fn determine_overall_status(failed: u32, blocking_failures: &[String]) -> &'stat
 #[cfg(test)]
 mod tests {
     use super::{
-        GateResult, blocking_failure_gate_names, determine_overall_status, failure_guidance,
-        is_blocking_gate_status,
+        DiffResult, GateMetrics, GateResult, MetricChange, Receipt, ReceiptMetadata,
+        ReceiptSummary, blocking_failure_gate_names, compare_receipts, determine_overall_status,
+        failure_guidance, is_blocking_gate_status,
     };
 
     fn gate_result(name: &str, status: &str, required: bool) -> GateResult {
@@ -1606,5 +1692,114 @@ mod tests {
                 "Reproduce and fix gate 'clippy' locally, then rerun: cargo xtask gates --gate clippy"
             ]
         );
+    }
+
+    fn test_receipt_with_metrics(metrics: GateMetrics) -> Receipt {
+        Receipt {
+            metadata: ReceiptMetadata {
+                timestamp: "2026-04-23T00:00:00Z".to_string(),
+                git_sha: "abc123".to_string(),
+                git_branch: "work".to_string(),
+                repository: "perl-lsp".to_string(),
+                trigger: "manual".to_string(),
+                actor: None,
+                workflow_name: None,
+                ci_run_url: None,
+                pr_number: None,
+                nix_shell: Some(false),
+            },
+            summary: ReceiptSummary {
+                total_gates: 1,
+                passed: 1,
+                failed: 0,
+                skipped: 0,
+                timeout: None,
+                error: None,
+                total_duration_ms: 10,
+                tier_results: None,
+                overall_status: "pass".to_string(),
+                blocking_failures: None,
+                aggregate_metrics: None,
+            },
+            results: vec![GateResult {
+                gate_name: "tests".to_string(),
+                tier: "pr_fast".to_string(),
+                status: "pass".to_string(),
+                required: Some(true),
+                duration_ms: 10,
+                command: "cargo test".to_string(),
+                exit_code: Some(0),
+                output_summary: None,
+                log_path: None,
+                metrics: Some(metrics),
+                artifacts: None,
+            }],
+            trigger: None,
+        }
+    }
+
+    fn metric_change_for<'a>(diff: &'a DiffResult, name: &str) -> Option<&'a MetricChange> {
+        diff.metric_changes.iter().find(|change| change.metric_name == name)
+    }
+
+    #[test]
+    fn compare_receipts_reports_multiple_metric_dimensions() {
+        let baseline = test_receipt_with_metrics(GateMetrics {
+            tests_total: Some(100),
+            tests_passed: Some(95),
+            tests_failed: Some(5),
+            warnings_count: Some(2),
+            coverage_percent: Some(80.0),
+            ..GateMetrics::default()
+        });
+        let current = test_receipt_with_metrics(GateMetrics {
+            tests_total: Some(110),
+            tests_passed: Some(108),
+            tests_failed: Some(2),
+            warnings_count: Some(1),
+            coverage_percent: Some(82.5),
+            ..GateMetrics::default()
+        });
+
+        let diff = compare_receipts(&baseline, &current).expect("compare receipts should succeed");
+        assert!(
+            metric_change_for(&diff, "tests_total").is_some(),
+            "tests_total change should be recorded"
+        );
+        assert!(
+            metric_change_for(&diff, "tests_passed").is_some(),
+            "tests_passed change should be recorded"
+        );
+        assert!(
+            metric_change_for(&diff, "tests_failed").is_some(),
+            "tests_failed change should be recorded"
+        );
+        assert!(
+            metric_change_for(&diff, "warnings_count").is_some(),
+            "warnings_count change should be recorded"
+        );
+        assert!(
+            metric_change_for(&diff, "coverage_percent").is_some(),
+            "coverage_percent change should be recorded"
+        );
+    }
+
+    #[test]
+    fn compare_receipts_handles_zero_baseline_delta_without_nan() {
+        let baseline = test_receipt_with_metrics(GateMetrics {
+            warnings_count: Some(0),
+            ..GateMetrics::default()
+        });
+        let current = test_receipt_with_metrics(GateMetrics {
+            warnings_count: Some(3),
+            ..GateMetrics::default()
+        });
+
+        let diff = compare_receipts(&baseline, &current).expect("compare receipts should succeed");
+        let warning_change =
+            metric_change_for(&diff, "warnings_count").expect("warnings_count metric should exist");
+        assert_eq!(warning_change.delta_percent, 100.0);
+        assert!(!warning_change.delta_percent.is_nan());
+        assert!(!warning_change.delta_percent.is_infinite());
     }
 }
