@@ -101,7 +101,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "unexpected None")]
     fn must_some_panics_on_none() {
-        must_some(Option::<i32>::None);
+        let _ = must_some(Option::<i32>::None);
     }
 
     #[test]
@@ -114,6 +114,6 @@ mod tests {
     #[should_panic(expected = "expected Err")]
     fn must_err_panics_on_ok() {
         let result: Result<i32, &str> = Ok(1);
-        must_err(result);
+        let _ = must_err(result);
     }
 }
