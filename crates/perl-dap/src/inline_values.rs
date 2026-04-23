@@ -101,6 +101,14 @@ fn code_byte_mask(line: &str) -> Vec<bool> {
             continue;
         }
 
+        if let Some(end_idx) = parse_quote_like_operator(bytes, i) {
+            for byte in mask.iter_mut().take(end_idx).skip(i) {
+                *byte = false;
+            }
+            i = end_idx;
+            continue;
+        }
+
         match b {
             b'#' => {
                 if is_perl_array_length_marker(bytes, i) {
@@ -117,6 +125,7 @@ fn code_byte_mask(line: &str) -> Vec<bool> {
                 let next_is_ident = (i + 1) < bytes.len() && is_ident_byte(bytes[i + 1]);
 
                 if prev_is_ident && next_is_ident {
+                    // Legacy Perl namespace separator (e.g. `$Foo'bar`).
                     i += 1;
                     continue;
                 }
@@ -142,6 +151,89 @@ fn is_perl_array_length_marker(bytes: &[u8], idx: usize) -> bool {
         return true;
     }
     idx > 1 && bytes[idx - 1] == b'{' && bytes[idx - 2] == b'$'
+}
+
+/// Parse Perl quote-like operators (`q`, `qq`, `qw`, `qr`, `qx`) at `start`.
+///
+/// Returns the end index (exclusive) of the full quote-like segment when found.
+fn parse_quote_like_operator(bytes: &[u8], start: usize) -> Option<usize> {
+    let prev_is_ident =
+        start > 0 && (bytes[start - 1].is_ascii_alphanumeric() || bytes[start - 1] == b'_');
+    if prev_is_ident {
+        return None;
+    }
+
+    let operators =
+        [b"qq".as_slice(), b"qw".as_slice(), b"qr".as_slice(), b"qx".as_slice(), b"q".as_slice()];
+    for op in operators {
+        let op_end = start + op.len();
+        if op_end > bytes.len() || &bytes[start..op_end] != op {
+            continue;
+        }
+
+        let mut idx = op_end;
+        while idx < bytes.len() && bytes[idx].is_ascii_whitespace() {
+            idx += 1;
+        }
+        if idx >= bytes.len() {
+            return None;
+        }
+
+        let open = bytes[idx];
+        if open.is_ascii_alphanumeric() || open == b'_' {
+            continue;
+        }
+        let (close, paired) = matching_delimiter(open);
+        idx += 1;
+        let mut escaped = false;
+        let mut depth = if paired { 1usize } else { 0usize };
+
+        while idx < bytes.len() {
+            let cur = bytes[idx];
+            if escaped {
+                escaped = false;
+                idx += 1;
+                continue;
+            }
+            if cur == b'\\' {
+                escaped = true;
+                idx += 1;
+                continue;
+            }
+
+            if paired {
+                if cur == open {
+                    depth += 1;
+                } else if cur == close {
+                    depth = depth.saturating_sub(1);
+                    if depth == 0 {
+                        return Some(idx + 1);
+                    }
+                }
+            } else if cur == close {
+                return Some(idx + 1);
+            }
+            idx += 1;
+        }
+
+        return Some(bytes.len());
+    }
+
+    None
+}
+
+fn matching_delimiter(open: u8) -> (u8, bool) {
+    match open {
+        b'(' => (b')', true),
+        b'[' => (b']', true),
+        b'{' => (b'}', true),
+        b'<' => (b'>', true),
+        _ => (open, false),
+    }
+}
+
+fn is_identifier_byte(b: u8) -> bool {
+    b.is_ascii_alphanumeric() || b == b'_'
 }
 
 /// Extract unique variable names from source code within a line range.
@@ -551,5 +643,28 @@ mod tests {
         let names = extract_variable_names(source, 1, 1);
         assert!(names.contains(&"$len".to_string()));
         assert!(names.contains(&"$next".to_string()));
+    }
+
+    #[test]
+    fn test_variable_like_tokens_in_quote_like_operators_are_ignored() {
+        let source = "my $real = 1; my $str = qq{$fake}; my $lit = q[$ghost];";
+        let names = extract_variable_names(source, 1, 1);
+        assert!(names.contains(&"$real".to_string()));
+        assert!(names.contains(&"$str".to_string()));
+        assert!(names.contains(&"$lit".to_string()));
+        assert!(!names.contains(&"$fake".to_string()));
+        assert!(!names.contains(&"$ghost".to_string()));
+    }
+
+    #[test]
+    fn test_inline_values_ignore_quote_like_operators() {
+        let source = "my $real = 1; my $str = qq($fake); my $lit = q/$ghost/;";
+        let values = collect_inline_values_with_runtime(source, 1, 1, None);
+        assert_eq!(values.len(), 3);
+        assert!(values.iter().any(|v| v.text == "$real = ?"));
+        assert!(values.iter().any(|v| v.text == "$str = ?"));
+        assert!(values.iter().any(|v| v.text == "$lit = ?"));
+        assert!(!values.iter().any(|v| v.text.contains("$fake")));
+        assert!(!values.iter().any(|v| v.text.contains("$ghost")));
     }
 }
