@@ -94,6 +94,9 @@ struct BaselineWorkflow {
     p95_duration_seconds: u64,
     avg_duration_seconds: u64,
     billable_minutes: u64,
+    unique_catches: u64,
+    unique_catch_rate_percent: f64,
+    signal_per_dollar: f64,
 }
 
 #[derive(Serialize)]
@@ -101,6 +104,8 @@ struct BaselineSummary {
     total_runs: u64,
     total_billable_minutes: u64,
     overall_success_rate_percent: f64,
+    total_unique_catches: u64,
+    overall_signal_per_dollar: f64,
 }
 
 #[derive(Serialize)]
@@ -416,7 +421,7 @@ pub fn run_ci_baseline(branch: String, days: u64, limit: usize, output_dir: Path
             "--branch".to_string(),
             branch.clone(),
             "--json".to_string(),
-            "name,conclusion,createdAt,updatedAt,databaseId,workflowName,status,startedAt"
+            "name,conclusion,createdAt,updatedAt,databaseId,workflowName,status,startedAt,headSha"
                 .to_string(),
         ],
     )?;
@@ -473,6 +478,7 @@ fn build_baseline_report(
     runs: &[Value],
 ) -> Option<BaselineReport> {
     let mut workflow_counters: BTreeMap<String, BaselineCounters> = BTreeMap::new();
+    let mut failed_workflows_by_sha: HashMap<String, Vec<String>> = HashMap::new();
 
     for run in runs {
         let created = match read_timestamp(run, &["createdAt", "created_at"]) {
@@ -488,6 +494,8 @@ fn build_baseline_report(
             .and_then(Value::as_str)
             .or_else(|| run.get("name").and_then(Value::as_str))
             .unwrap_or("(unknown workflow)");
+        let workflow_key = workflow_key(workflow_name);
+        let head_sha = run.get("headSha").and_then(Value::as_str).map(str::to_string);
 
         let conclusion = run.get("conclusion").and_then(Value::as_str).unwrap_or("");
         if conclusion.is_empty() {
@@ -505,8 +513,7 @@ fn build_baseline_report(
             }
         }
 
-        let key = workflow_key(workflow_name);
-        let counters = workflow_counters.entry(key).or_default();
+        let counters = workflow_counters.entry(workflow_key.clone()).or_default();
         counters.name = workflow_name.to_string();
         counters.total_runs += 1;
 
@@ -518,6 +525,12 @@ fn build_baseline_report(
 
         if conclusion == "skipped" {
             continue;
+        }
+
+        if conclusion != "success" {
+            if let Some(sha) = &head_sha {
+                failed_workflows_by_sha.entry(sha.clone()).or_default().push(workflow_key.clone());
+            }
         }
 
         if duration_seconds > 0 {
@@ -550,6 +563,20 @@ fn build_baseline_report(
         } else {
             0.0
         };
+        let unique_catches = failed_workflows_by_sha
+            .values()
+            .filter(|failed_workflows| {
+                failed_workflows.len() == 1 && failed_workflows.first() == Some(&key)
+            })
+            .count() as u64;
+        let unique_catch_rate_percent = if counters.failure_count > 0 {
+            (unique_catches as f64 * 100.0) / (counters.failure_count as f64)
+        } else {
+            0.0
+        };
+        let workflow_cost = counters.billable_minutes as f64 * COST_PER_MINUTE;
+        let signal_per_dollar =
+            if workflow_cost > 0.0 { unique_catches as f64 / workflow_cost } else { 0.0 };
 
         workflow_reports.insert(
             key,
@@ -565,6 +592,9 @@ fn build_baseline_report(
                 p95_duration_seconds: p95_seconds,
                 avg_duration_seconds: avg_seconds,
                 billable_minutes: counters.billable_minutes,
+                unique_catches,
+                unique_catch_rate_percent,
+                signal_per_dollar: round_two_decimals(signal_per_dollar),
             },
         );
     }
@@ -585,6 +615,11 @@ fn build_baseline_report(
     } else {
         0.0
     };
+    let total_unique_catches: u64 =
+        workflow_reports.values().map(|workflow| workflow.unique_catches).sum();
+    let total_cost = total_billable as f64 * COST_PER_MINUTE;
+    let overall_signal_per_dollar =
+        if total_cost > 0.0 { total_unique_catches as f64 / total_cost } else { 0.0 };
 
     Some(BaselineReport {
         generated_at: generated_at.to_rfc3339(),
@@ -595,6 +630,8 @@ fn build_baseline_report(
             total_runs,
             total_billable_minutes: total_billable,
             overall_success_rate_percent,
+            total_unique_catches,
+            overall_signal_per_dollar: round_two_decimals(overall_signal_per_dollar),
         },
     })
 }
@@ -707,20 +744,32 @@ fn build_baseline_markdown(report: &BaselineReport) -> Result<String> {
         "| Total Billable Minutes | {}m |\n\n",
         report.summary.total_billable_minutes
     ));
+    out.push_str(&format!("| Total Unique Catches | {} |\n", report.summary.total_unique_catches));
+    out.push_str(&format!(
+        "| Overall Signal per $ | {:.2} |\n\n",
+        report.summary.overall_signal_per_dollar
+    ));
 
     out.push_str("## Workflow Details\n\n");
-    out.push_str("| Workflow | Runs | Success Rate | Median | P95 | Billable |\n");
-    out.push_str("|----------|------|--------------|--------|-----|----------|\n");
+    out.push_str(
+        "| Workflow | Runs | Success Rate | Median | P95 | Billable | Unique Catches | Unique Catch Rate | Signal per $ |\n",
+    );
+    out.push_str(
+        "|----------|------|--------------|--------|-----|----------|----------------|-------------------|--------------|\n",
+    );
 
     for workflow in report.workflows.values() {
         out.push_str(&format!(
-            "| {} | {} | {:.1}% | {}s | {}s | {}m |\n",
+            "| {} | {} | {:.1}% | {}s | {}s | {}m | {} | {:.1}% | {:.2} |\n",
             workflow.name,
             workflow.total_runs,
             workflow.success_rate_percent,
             workflow.median_duration_seconds,
             workflow.p95_duration_seconds,
-            workflow.billable_minutes
+            workflow.billable_minutes,
+            workflow.unique_catches,
+            workflow.unique_catch_rate_percent,
+            workflow.signal_per_dollar
         ));
     }
 
@@ -731,6 +780,10 @@ fn build_baseline_markdown(report: &BaselineReport) -> Result<String> {
         "- Billable Minutes: Estimated billable time (each run rounded up to nearest minute)\n",
     );
     out.push_str("- Success Rate: Calculated excluding skipped runs\n\n");
+    out.push_str(
+        "- Unique Catches: Failed run SHAs where this workflow was the only failing workflow in the sample.\n",
+    );
+    out.push_str("- Signal per $: Unique catches per estimated CI dollar spent.\n\n");
 
     out.push_str("## Recommendations\n\n");
     out.push_str("1. Monitor P95 durations for workflow variance.\n");
@@ -774,20 +827,23 @@ mod tests {
                 "conclusion": "success",
                 "createdAt": "2026-03-25T11:00:00Z",
                 "startedAt": "2026-03-25T11:00:00Z",
-                "updatedAt": "2026-03-25T11:01:30Z"
+                "updatedAt": "2026-03-25T11:01:30Z",
+                "headSha": "sha-1"
             }),
             json!({
                 "workflowName": "CI",
                 "conclusion": "skipped",
                 "createdAt": "2026-03-25T10:00:00Z",
                 "startedAt": "2026-03-25T10:00:00Z",
-                "updatedAt": "2026-03-25T10:00:30Z"
+                "updatedAt": "2026-03-25T10:00:30Z",
+                "headSha": "sha-2"
             }),
             json!({
                 "workflowName": "CI",
                 "conclusion": "failure",
                 "createdAt": "2026-03-25T09:00:00Z",
-                "startedAt": "2026-03-25T09:00:00Z"
+                "startedAt": "2026-03-25T09:00:00Z",
+                "headSha": "sha-3"
             }),
         ];
 
@@ -802,12 +858,17 @@ mod tests {
         assert_eq!(workflow.failure_count, 1);
         assert_eq!(workflow.skipped_count, 1);
         assert_eq!(workflow.billable_minutes, 2);
+        assert_eq!(workflow.unique_catches, 1);
+        assert_eq!(workflow.unique_catch_rate_percent, 100.0);
+        assert_eq!(workflow.signal_per_dollar, 62.5);
         assert_eq!(report.summary.total_runs, 3);
         assert_eq!(report.summary.total_billable_minutes, 2);
         assert_eq!(report.summary.overall_success_rate_percent, 50.0);
+        assert_eq!(report.summary.total_unique_catches, 1);
+        assert_eq!(report.summary.overall_signal_per_dollar, 62.5);
 
         let markdown = build_baseline_markdown(&report)?;
-        assert!(markdown.contains("| CI | 3 | 50.0% | 90s | 90s | 2m |"));
+        assert!(markdown.contains("| CI | 3 | 50.0% | 90s | 90s | 2m | 1 | 100.0% | 62.50 |"));
 
         Ok(())
     }
