@@ -2440,4 +2440,56 @@ mod tests {
         assert_eq!(doc.text, "my $x = 2;\n", "didChange without version should apply content");
         Ok(())
     }
+
+    /// Legacy Windows URI forms (file://C:\...) should normalize to canonical file:///c:/...
+    /// so follow-up requests using standard URI syntax still resolve the open document.
+    #[test]
+    fn did_open_normalizes_legacy_windows_file_uri_form() -> Result<(), Box<dyn std::error::Error>> {
+        let server = LspServer::new();
+        let legacy_uri = r"file://C:\Users\dev\example.pl";
+        let canonical_uri = "file:///c:/Users/dev/example.pl";
+
+        server.did_open(json!({
+            "textDocument": {
+                "uri": legacy_uri,
+                "languageId": "perl",
+                "version": 1,
+                "text": "my $x = 1;\n"
+            }
+        }))?;
+
+        let docs = server.documents.lock();
+        assert!(
+            docs.contains_key(canonical_uri),
+            "legacy URI should normalize to canonical key; keys: {:?}",
+            docs.keys().collect::<Vec<_>>()
+        );
+        Ok(())
+    }
+
+    /// Plain Windows paths (C:\...) are non-standard in LSP, but some editors
+    /// still emit them. Normalize to file:///c:/... for resilient lookup keys.
+    #[test]
+    fn did_open_normalizes_plain_windows_path_uri() -> Result<(), Box<dyn std::error::Error>> {
+        let server = LspServer::new();
+        let plain_path = r"C:\Users\dev\plain_path.pl";
+        let canonical_uri = "file:///c:/Users/dev/plain_path.pl";
+
+        server.did_open(json!({
+            "textDocument": {
+                "uri": plain_path,
+                "languageId": "perl",
+                "version": 1,
+                "text": "my $y = 2;\n"
+            }
+        }))?;
+
+        let docs = server.documents.lock();
+        assert!(
+            docs.contains_key(canonical_uri),
+            "plain Windows path should normalize to canonical key; keys: {:?}",
+            docs.keys().collect::<Vec<_>>()
+        );
+        Ok(())
+    }
 }

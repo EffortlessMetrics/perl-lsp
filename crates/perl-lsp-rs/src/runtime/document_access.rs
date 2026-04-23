@@ -33,29 +33,14 @@ impl LspServer {
 
     /// Normalize URI key for consistent document lookup
     pub(crate) fn normalize_uri_key(&self, raw: &str) -> String {
+        if let Some(normalized) = normalize_file_uri_for_legacy_clients(raw) {
+            return normalized;
+        }
+
         // Parse to Url to canonicalize, then stringify the way we store it.
         // If parsing fails, return the raw key so we at least try the given string.
         if let Ok(u) = url::Url::parse(raw) {
-            // On Windows, lower-case the drive letter to match how many editors send it.
-            #[cfg(windows)]
-            {
-                let s = u.as_str().to_string();
-                if let Some(rest) = s.strip_prefix("file:///") {
-                    if rest.len() > 1
-                        && rest.as_bytes()[1] == b':'
-                        && rest.as_bytes()[0].is_ascii_alphabetic()
-                    {
-                        return format!(
-                            "file:///{}{}",
-                            rest[0..1].to_ascii_lowercase(),
-                            &rest[1..]
-                        );
-                    }
-                }
-                return s;
-            }
-            #[cfg(not(windows))]
-            return u.as_str().to_string();
+            return normalize_windows_drive_letter(u.as_str().to_string());
         }
         raw.to_string()
     }
@@ -231,4 +216,51 @@ impl LspServer {
 
         analyzer
     }
+}
+
+fn normalize_windows_drive_letter(uri: String) -> String {
+    if let Some(rest) = uri.strip_prefix("file:///") {
+        if rest.len() > 1 && rest.as_bytes()[1] == b':' && rest.as_bytes()[0].is_ascii_alphabetic()
+        {
+            return format!("file:///{}{}", rest[0..1].to_ascii_lowercase(), &rest[1..]);
+        }
+    }
+    uri
+}
+
+/// Best-effort normalization for legacy editors that may send malformed file URIs.
+///
+/// Notepad++ LSP clients can emit Windows paths as `C:\dir\file.pl`, or `file://C:\...`
+/// (missing the third slash and using backslashes). This converts those forms into
+/// canonical `file:///c:/dir/file.pl` so didOpen/didChange/request lookups share keys.
+fn normalize_file_uri_for_legacy_clients(raw: &str) -> Option<String> {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    if let Some(path) = trimmed.strip_prefix("file://") {
+        return normalize_windows_path_like(path).map(|normalized| format!("file:///{normalized}"));
+    }
+
+    normalize_windows_path_like(trimmed).map(|normalized| format!("file:///{normalized}"))
+}
+
+fn normalize_windows_path_like(path: &str) -> Option<String> {
+    let mut normalized = path.trim_start_matches('/').replace('\\', "/");
+    if normalized.len() < 3 {
+        return None;
+    }
+
+    let bytes = normalized.as_bytes();
+    if !bytes[0].is_ascii_alphabetic() || bytes[1] != b':' {
+        return None;
+    }
+
+    if bytes[2] != b'/' {
+        normalized.insert(2, '/');
+    }
+
+    let drive_letter = normalized[0..1].to_ascii_lowercase();
+    Some(format!("{drive_letter}{}", &normalized[1..]))
 }
