@@ -31,6 +31,35 @@
   "receipt_kind": "planning_scaffold",
   "schema_version": 1,
   "scorecard": "editor_ux",
+  "signal_tracking": {
+    "fixture_matrix_path": "crates/perl-lsp-ux-tests/fixtures/editor_ux_fixture_matrix.json",
+    "measured_top_line_metrics": [
+      {
+        "coverage_rate": 1.0,
+        "measured_workflow_count": 17,
+        "name": "workflow_pass_rate",
+        "state": "tracked"
+      },
+      {
+        "coverage_rate": 1.0,
+        "measured_workflow_count": 17,
+        "name": "workflow_stability_rate",
+        "state": "tracked"
+      },
+      {
+        "coverage_rate": 0.058823529411764705,
+        "measured_workflow_count": 1,
+        "name": "p95_time_to_first_useful_result_ms",
+        "state": "tracked"
+      }
+    ],
+    "workflow_count": 17,
+    "workflow_tier_counts": {
+      "nightly": 1,
+      "pr": 16,
+      "release": 0
+    }
+  },
   "top_line_metrics": [
     {
       "name": "workflow_pass_rate",

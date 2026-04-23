@@ -9,6 +9,7 @@
     "scorecard",
     "harness",
     "top_line_metrics",
+    "signal_tracking",
     "integration_points"
   ],
   "properties": {
@@ -122,6 +123,80 @@
         },
         "quality_surface": {
           "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "signal_tracking": {
+      "type": "object",
+      "required": [
+        "fixture_matrix_path",
+        "workflow_count",
+        "workflow_tier_counts",
+        "measured_top_line_metrics"
+      ],
+      "properties": {
+        "fixture_matrix_path": {
+          "type": "string"
+        },
+        "workflow_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "workflow_tier_counts": {
+          "type": "object",
+          "required": ["pr", "nightly", "release"],
+          "properties": {
+            "pr": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "nightly": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "release": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false
+        },
+        "measured_top_line_metrics": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "name",
+              "state",
+              "measured_workflow_count",
+              "coverage_rate"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "enum": [
+                  "workflow_pass_rate",
+                  "workflow_stability_rate",
+                  "p95_time_to_first_useful_result_ms"
+                ]
+              },
+              "state": {
+                "type": "string",
+                "enum": ["planned", "tracked"]
+              },
+              "measured_workflow_count": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "coverage_rate": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              }
+            },
+            "additionalProperties": false
+          }
         }
       },
       "additionalProperties": false

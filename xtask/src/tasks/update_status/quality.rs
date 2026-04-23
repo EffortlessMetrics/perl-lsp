@@ -11,9 +11,29 @@ use color_eyre::eyre::{Context, Result};
 
 use super::{replace_block, run_cmd};
 
-// ---------------------------------------------------------------------------
-// Metric collectors
-// ---------------------------------------------------------------------------
+const UX_FIXTURE_MATRIX_PATH: &str =
+    "crates/perl-lsp-ux-tests/fixtures/editor_ux_fixture_matrix.json";
+
+#[derive(Debug, serde::Deserialize)]
+struct EditorUxFixtureMatrix {
+    top_line_metrics: Vec<String>,
+    workflows: Vec<EditorUxWorkflow>,
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct EditorUxWorkflow {
+    ci_tier: String,
+    measures: Vec<String>,
+}
+
+#[derive(Debug)]
+struct UxSignalTracking {
+    workflow_count: usize,
+    pr_workflow_count: usize,
+    nightly_workflow_count: usize,
+    release_workflow_count: usize,
+    measured_top_line_metrics: Vec<serde_json::Value>,
+}
 
 /// Read `mutants.out/mutants.json` and group mutations by crate package name.
 pub(super) fn collect_per_crate_mutation(root: &Path) -> BTreeMap<String, usize> {
@@ -122,9 +142,67 @@ pub(super) fn count_ux_scenarios(root: &Path) -> usize {
     collect_ux_scenario_files(root).len()
 }
 
-// ---------------------------------------------------------------------------
-// Generators
-// ---------------------------------------------------------------------------
+fn collect_ux_signal_tracking(root: &Path) -> UxSignalTracking {
+    let path = root.join(UX_FIXTURE_MATRIX_PATH);
+    let Ok(raw) = fs::read_to_string(path) else {
+        return UxSignalTracking {
+            workflow_count: 0,
+            pr_workflow_count: 0,
+            nightly_workflow_count: 0,
+            release_workflow_count: 0,
+            measured_top_line_metrics: Vec::new(),
+        };
+    };
+
+    let Ok(matrix) = serde_json::from_str::<EditorUxFixtureMatrix>(&raw) else {
+        return UxSignalTracking {
+            workflow_count: 0,
+            pr_workflow_count: 0,
+            nightly_workflow_count: 0,
+            release_workflow_count: 0,
+            measured_top_line_metrics: Vec::new(),
+        };
+    };
+
+    let workflow_count = matrix.workflows.len();
+    let pr_workflow_count =
+        matrix.workflows.iter().filter(|workflow| workflow.ci_tier == "pr").count();
+    let nightly_workflow_count =
+        matrix.workflows.iter().filter(|workflow| workflow.ci_tier == "nightly").count();
+    let release_workflow_count =
+        matrix.workflows.iter().filter(|workflow| workflow.ci_tier == "release").count();
+
+    let measured_top_line_metrics = matrix
+        .top_line_metrics
+        .iter()
+        .map(|metric| {
+            let measured_workflow_count = matrix
+                .workflows
+                .iter()
+                .filter(|workflow| workflow.measures.iter().any(|measure| measure == metric))
+                .count();
+            let coverage_rate = if workflow_count == 0 {
+                0.0
+            } else {
+                measured_workflow_count as f64 / workflow_count as f64
+            };
+            serde_json::json!({
+                "name": metric,
+                "state": if measured_workflow_count == 0 { "planned" } else { "tracked" },
+                "measured_workflow_count": measured_workflow_count,
+                "coverage_rate": coverage_rate,
+            })
+        })
+        .collect();
+
+    UxSignalTracking {
+        workflow_count,
+        pr_workflow_count,
+        nightly_workflow_count,
+        release_workflow_count,
+        measured_top_line_metrics,
+    }
+}
 
 pub(super) fn generate_quality_status(root: &Path, original: &str) -> Result<String> {
     let mutation_by_crate = collect_per_crate_mutation(root);
@@ -142,7 +220,7 @@ pub(super) fn generate_quality_status(root: &Path, original: &str) -> Result<Str
         "- **Quality Metrics**: <50ms LSP response times, 931ns incremental parsing\n\
          - **UX workflow harness**: {ux_scenarios} scenario files in `perl-lsp-ux-tests`; \
            `just ux-tests` runs the default release-confidence lane and `just ux-tests-full` adds \
-           the integration-only 10k-line large-file case; planning scaffold at \
+           the integration-only 10k-line large-file case; tracked signal summary at \
            `docs/project/status/editor_ux.json`\n\
          - **Mutation testing**: {mutation_note}\n\
          - **Production Status**: LSP server public alpha (`just ci-gate` passing)"
@@ -169,6 +247,7 @@ pub(super) fn generate_quality_status(root: &Path, original: &str) -> Result<Str
 pub(super) fn generate_editor_ux_receipt(root: &Path) -> Result<String> {
     let scenario_files = collect_ux_scenario_files(root);
     let scenario_count = scenario_files.len();
+    let signal_tracking = collect_ux_signal_tracking(root);
 
     let receipt = serde_json::json!({
         "schema_version": 1,
@@ -196,6 +275,16 @@ pub(super) fn generate_editor_ux_receipt(root: &Path) -> Result<String> {
                 "owner": "perl-lsp-ux-tests",
             },
         ],
+        "signal_tracking": {
+            "fixture_matrix_path": UX_FIXTURE_MATRIX_PATH,
+            "workflow_count": signal_tracking.workflow_count,
+            "workflow_tier_counts": {
+                "pr": signal_tracking.pr_workflow_count,
+                "nightly": signal_tracking.nightly_workflow_count,
+                "release": signal_tracking.release_workflow_count,
+            },
+            "measured_top_line_metrics": signal_tracking.measured_top_line_metrics,
+        },
         "integration_points": {
             "ci_lane": "just ux-tests",
             "release_lane": "just ux-tests-full",
@@ -206,10 +295,6 @@ pub(super) fn generate_editor_ux_receipt(root: &Path) -> Result<String> {
 
     serde_json::to_string_pretty(&receipt).context("serializing editor UX receipt")
 }
-
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {
@@ -280,6 +365,20 @@ mod tests {
             ])
         );
         assert_eq!(receipt["integration_points"]["ci_lane"], "just ux-tests");
+        assert_eq!(receipt["signal_tracking"]["fixture_matrix_path"], UX_FIXTURE_MATRIX_PATH);
+        assert_eq!(receipt["signal_tracking"]["workflow_count"], 17);
+        assert_eq!(receipt["signal_tracking"]["workflow_tier_counts"]["pr"], 16);
+        assert_eq!(receipt["signal_tracking"]["workflow_tier_counts"]["nightly"], 1);
+        assert_eq!(receipt["signal_tracking"]["workflow_tier_counts"]["release"], 0);
+        let tracked_metrics = receipt["signal_tracking"]["measured_top_line_metrics"]
+            .as_array()
+            .ok_or_else(|| eyre!("measured_top_line_metrics must be an array"))?;
+        assert_eq!(tracked_metrics.len(), 3);
+        let first_latency_metric = tracked_metrics
+            .iter()
+            .find(|row| row["name"] == "p95_time_to_first_useful_result_ms")
+            .ok_or_else(|| eyre!("missing latency metric row"))?;
+        assert_eq!(first_latency_metric["measured_workflow_count"], 1);
         Ok(())
     }
 }
