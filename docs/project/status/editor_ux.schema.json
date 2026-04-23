@@ -9,6 +9,7 @@
     "scorecard",
     "harness",
     "top_line_metrics",
+    "signals",
     "integration_points"
   ],
   "properties": {
@@ -18,7 +19,7 @@
     },
     "receipt_kind": {
       "type": "string",
-      "const": "planning_scaffold"
+      "const": "tracking_snapshot"
     },
     "scorecard": {
       "type": "string",
@@ -26,7 +27,7 @@
     },
     "harness": {
       "type": "object",
-      "required": ["crate", "scenario_count", "scenario_files"],
+      "required": ["crate", "scenario_count", "scenario_files", "workflow_count"],
       "properties": {
         "crate": {
           "type": "string",
@@ -41,6 +42,10 @@
           "items": {
             "type": "string"
           }
+        },
+        "workflow_count": {
+          "type": "integer",
+          "minimum": 0
         }
       },
       "additionalProperties": false
@@ -98,18 +103,62 @@
           },
           "state": {
             "type": "string",
-            "enum": ["planned", "measured"]
+            "enum": ["tracked", "measured"]
           },
           "owner": {
             "type": "string"
+          },
+          "source": {
+            "type": "string"
+          },
+          "value": {
+            "type": "number",
+            "minimum": 0
           }
         },
         "additionalProperties": false
       }
     },
+    "signals": {
+      "type": "object",
+      "required": [
+        "automated_workflows",
+        "manual_smoke_actions",
+        "known_gap_issue_refs",
+        "ci_tier_workflow_counts"
+      ],
+      "properties": {
+        "automated_workflows": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "manual_smoke_actions": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "known_gap_issue_refs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "ci_tier_workflow_counts": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "additionalProperties": false
+    },
     "integration_points": {
       "type": "object",
-      "required": ["ci_lane", "release_lane", "status_update", "quality_surface"],
+      "required": [
+        "ci_lane",
+        "release_lane",
+        "status_update",
+        "quality_surface",
+        "measured_metrics_receipt"
+      ],
       "properties": {
         "ci_lane": {
           "type": "string"
@@ -121,6 +170,9 @@
           "type": "string"
         },
         "quality_surface": {
+          "type": "string"
+        },
+        "measured_metrics_receipt": {
           "type": "string"
         }
       },
