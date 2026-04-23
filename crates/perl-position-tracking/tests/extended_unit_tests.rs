@@ -605,6 +605,66 @@ fn line_starts_cache_offset_mid_utf8_char_clamps_to_boundary() {
     assert_eq!(col, 1);
 }
 
+#[test]
+fn line_starts_cache_offset_at_every_mid_byte_of_4byte_char_clamps_down() {
+    // 😀 (U+1F600) occupies bytes 1..5. Any in-the-middle offset (2, 3, 4)
+    // must clamp back to byte 1 (the start of the codepoint), not forward
+    // to byte 5 — clamping forward would bill the caller for 2 UTF-16 units
+    // for a character they never asked about.
+    let src = "a😀b";
+    let cache = LineStartsCache::new(src);
+    for mid_byte in [2usize, 3, 4] {
+        let (line, col) = cache.offset_to_position(src, mid_byte);
+        assert_eq!(line, 0, "offset={mid_byte} line");
+        assert_eq!(col, 1, "offset={mid_byte} should clamp back to start of 😀 (col=1)");
+    }
+
+    // Byte 5 is the start of 'b' and must give col=3 (a=1 + 😀=2).
+    let (line, col) = cache.offset_to_position(src, 5);
+    assert_eq!((line, col), (0, 3));
+}
+
+#[test]
+fn line_starts_cache_offset_mid_utf8_across_newline() {
+    // A multi-byte codepoint immediately after a newline: clamping must
+    // land on the start of the codepoint on the *new* line, not drift
+    // back across the newline into the previous line.
+    let src = "x\n😀y"; // newline at byte 1 → line 1 starts at byte 2
+    let cache = LineStartsCache::new(src);
+
+    // Byte 3 is one byte into 😀 (which begins at byte 2). Must clamp
+    // back to 2 and stay on line 1 (col 0), not leak to line 0.
+    let (line, col) = cache.offset_to_position(src, 3);
+    assert_eq!(line, 1, "must not drift back across newline");
+    assert_eq!(col, 0);
+}
+
+#[test]
+fn line_starts_cache_offset_mid_utf8_bom() {
+    // A BOM (U+FEFF, encoded as 0xEF 0xBB 0xBF — 3 bytes) at the very start
+    // is sometimes produced by editors. Any in-the-middle offset must clamp
+    // back to 0, not forward to 3.
+    let src = "\u{feff}fn";
+    let cache = LineStartsCache::new(src);
+    for mid_byte in [1usize, 2] {
+        let (line, col) = cache.offset_to_position(src, mid_byte);
+        assert_eq!(line, 0);
+        assert_eq!(col, 0, "mid-BOM offset {mid_byte} must clamp back to col 0");
+    }
+}
+
+#[test]
+fn line_starts_cache_offset_empty_text_any_offset() {
+    // Empty text: any offset (including beyond the text) must produce
+    // (0, 0), not panic on array indexing.
+    let src = "";
+    let cache = LineStartsCache::new(src);
+    for offset in [0usize, 1, 100, usize::MAX] {
+        let (line, col) = cache.offset_to_position(src, offset);
+        assert_eq!((line, col), (0, 0), "offset={offset}");
+    }
+}
+
 // ─── LineStartsCache: position_to_offset ─────────────────────────────────────
 
 #[test]
@@ -686,6 +746,34 @@ fn line_starts_cache_rope_beyond_end() {
     let cache = LineStartsCache::new_rope(&rope);
     let off = cache.position_to_offset_rope(&rope, 99, 0);
     assert_eq!(off, rope.len_bytes());
+}
+
+#[test]
+fn line_starts_cache_rope_offset_mid_utf8_char_clamps_to_boundary() {
+    // Rope byte_slice panics on mid-codepoint offsets; verify the rope
+    // variant snaps back to a char boundary just like the &str variant.
+    let src = "a😀b";
+    let rope = ropey::Rope::from_str(src);
+    let cache = LineStartsCache::new_rope(&rope);
+    for mid_byte in [2usize, 3, 4] {
+        let (line, col) = cache.offset_to_position_rope(&rope, mid_byte);
+        assert_eq!(line, 0, "offset={mid_byte}");
+        assert_eq!(col, 1, "mid-byte offset {mid_byte} must clamp back to col 1");
+    }
+    // Byte 5 is the start of 'b' — (line=0, col=3).
+    let (line, col) = cache.offset_to_position_rope(&rope, 5);
+    assert_eq!((line, col), (0, 3));
+}
+
+#[test]
+fn line_starts_cache_rope_offset_empty_rope_any_offset() {
+    // Empty rope: clamping must not panic for offsets at or beyond zero.
+    let rope = ropey::Rope::from_str("");
+    let cache = LineStartsCache::new_rope(&rope);
+    for offset in [0usize, 1, 100, usize::MAX] {
+        let (line, col) = cache.offset_to_position_rope(&rope, offset);
+        assert_eq!((line, col), (0, 0), "offset={offset}");
+    }
 }
 
 // ─── LineIndex ───────────────────────────────────────────────────────────────
