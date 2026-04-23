@@ -284,6 +284,7 @@ fn test_data_breakpoint_info_response_is_success() {
 
 mod proptest_watchpoints {
     use super::*;
+    use proptest::collection::vec;
     use proptest::prelude::*;
 
     proptest! {
@@ -307,6 +308,58 @@ mod proptest_watchpoints {
                     assert_eq!(command, "dataBreakpointInfo");
                 }
                 _ => must(Err::<(), _>("Expected response")),
+            }
+        }
+
+        #[test]
+        fn test_set_data_breakpoints_arbitrary_lists_preserve_shape(
+            breakpoints in vec(
+                (
+                    "\\PC{0,64}",
+                    proptest::option::of("read|write|readWrite"),
+                    proptest::option::of("\\PC{0,64}")
+                ),
+                0..40
+            )
+        ) {
+            let mut adapter = DebugAdapter::new();
+            adapter.handle_request(1, "initialize", None);
+
+            let request_breakpoints: Vec<serde_json::Value> = breakpoints
+                .iter()
+                .map(|(data_id, access_type, condition)| {
+                    let mut bp = json!({ "dataId": data_id });
+                    if let Some(access_type) = access_type {
+                        bp["accessType"] = json!(access_type);
+                    }
+                    if let Some(condition) = condition {
+                        bp["condition"] = json!(condition);
+                    }
+                    bp
+                })
+                .collect();
+
+            let body = set_data_breakpoints_request(&mut adapter, json!(request_breakpoints))
+                .map_err(|e| proptest::test_runner::TestCaseError::fail(e.to_string()))?;
+
+            let response_breakpoints = body
+                .get("breakpoints")
+                .and_then(|value| value.as_array())
+                .ok_or_else(|| {
+                    proptest::test_runner::TestCaseError::fail("missing response breakpoints")
+                })?;
+
+            prop_assert_eq!(response_breakpoints.len(), breakpoints.len());
+
+            for (index, breakpoint) in response_breakpoints.iter().enumerate() {
+                prop_assert_eq!(
+                    breakpoint.get("id").and_then(|value| value.as_i64()),
+                    Some((index as i64) + 1)
+                );
+                prop_assert_eq!(
+                    breakpoint.get("verified").and_then(|value| value.as_bool()),
+                    Some(true)
+                );
             }
         }
     }
