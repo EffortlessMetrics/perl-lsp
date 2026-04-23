@@ -549,14 +549,18 @@ impl WorkspaceConfig {
         };
         let mut command = Command::new(perl_path);
         command.args(perl_args);
-        let output = command.args(["-e", "print join(\"\\n\", @INC)"]).output();
+        let output = command
+            .args([
+                "-e",
+                "print join(\"\\n\", grep { defined($_) && !ref($_) && length($_) } @INC)",
+            ])
+            .output();
 
         match output {
-            Ok(out) if out.status.success() => String::from_utf8_lossy(&out.stdout)
-                .lines()
-                .filter(|line| !line.is_empty() && *line != ".")
-                .map(PathBuf::from)
-                .collect(),
+            Ok(out) if out.status.success() => {
+                let output = String::from_utf8_lossy(&out.stdout);
+                sanitize_system_inc_paths(output.lines())
+            }
             _ => Vec::new(),
         }
     }
@@ -564,6 +568,45 @@ impl WorkspaceConfig {
     #[cfg(target_arch = "wasm32")]
     fn fetch_perl_inc(_: Option<&str>, _: &[String]) -> Vec<PathBuf> {
         Vec::new()
+    }
+}
+
+fn sanitize_system_inc_paths<'a>(lines: impl IntoIterator<Item = &'a str>) -> Vec<PathBuf> {
+    let mut paths: Vec<PathBuf> = Vec::new();
+    for line in lines {
+        let trimmed = line.trim();
+        if trimmed.is_empty() || trimmed == "." {
+            continue;
+        }
+        let candidate = PathBuf::from(trimmed);
+        if !paths.contains(&candidate) {
+            paths.push(candidate);
+        }
+    }
+    paths
+}
+
+#[cfg(test)]
+mod tests {
+    use super::sanitize_system_inc_paths;
+    use std::path::PathBuf;
+
+    #[test]
+    fn sanitize_system_inc_paths_drops_empty_and_dot_entries() {
+        let paths =
+            sanitize_system_inc_paths(["", " ", ".", "\t.\t", "/usr/lib/perl5"].iter().copied());
+        assert_eq!(paths, vec![PathBuf::from("/usr/lib/perl5")]);
+    }
+
+    #[test]
+    fn sanitize_system_inc_paths_deduplicates_while_preserving_order() {
+        let paths = sanitize_system_inc_paths(
+            ["/a/lib", "/b/lib", "/a/lib", "  /b/lib  ", "/c/lib"].iter().copied(),
+        );
+        assert_eq!(
+            paths,
+            vec![PathBuf::from("/a/lib"), PathBuf::from("/b/lib"), PathBuf::from("/c/lib")]
+        );
     }
 }
 
