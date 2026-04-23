@@ -56,7 +56,7 @@ pub(crate) use cancellation::enhanced_cancelled_response;
 
 use super::*;
 use crate::cancellation::{
-    GLOBAL_CANCELLATION_REGISTRY, PerlLspCancellationToken, ProviderCleanupContext,
+    PerlLspCancellationToken, ProviderCleanupContext, GLOBAL_CANCELLATION_REGISTRY,
 };
 use std::time::Instant;
 
@@ -150,6 +150,16 @@ impl LspServer {
                     return Some(cancelled_response_with_method(request_id, &request.method));
                 }
             }
+        }
+
+        if !self.initialized.load(Ordering::Acquire)
+            && self.initialize_requested.load(Ordering::Acquire)
+            && request.method != "initialize"
+            && request.method != "initialized"
+            && request.method != "shutdown"
+            && request.method != "exit"
+        {
+            self.auto_initialize_for_compat(&request.method);
         }
 
         let result = match request.method.as_str() {
