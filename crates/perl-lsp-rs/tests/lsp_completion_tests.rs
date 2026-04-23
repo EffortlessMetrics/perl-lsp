@@ -3,10 +3,26 @@ use serde_json::json;
 
 mod common;
 use common::{
-    completion_items, drain_until_quiet, initialize_lsp, send_notification, send_request,
-    start_lsp_server,
+    completion_items, drain_until_quiet, initialize_lsp, initialize_lsp_with_capabilities,
+    send_notification, send_request, start_lsp_server,
 };
 use std::time::Duration;
+
+fn completion_item_caps(
+    snippet_support: bool,
+    commit_characters_support: bool,
+) -> serde_json::Value {
+    json!({
+        "textDocument": {
+            "completion": {
+                "completionItem": {
+                    "snippetSupport": snippet_support,
+                    "commitCharactersSupport": commit_characters_support
+                }
+            }
+        }
+    })
+}
 
 /// Test basic variable completion
 #[test]
@@ -857,7 +873,7 @@ Cwd::"#
 #[test]
 fn test_snippet_completion() -> Result<(), Box<dyn std::error::Error>> {
     let server = start_lsp_server();
-    initialize_lsp(&server);
+    initialize_lsp_with_capabilities(&server, completion_item_caps(true, true));
 
     let uri = "file:///test.pl";
     send_notification(
@@ -1184,7 +1200,7 @@ $prefi"#
 #[test]
 fn test_function_completion_has_commit_characters() -> Result<(), Box<dyn std::error::Error>> {
     let server = start_lsp_server();
-    initialize_lsp(&server);
+    initialize_lsp_with_capabilities(&server, completion_item_caps(true, true));
 
     let uri = "file:///test_commit_fn.pl";
     send_notification(
@@ -1245,7 +1261,7 @@ fn test_function_completion_has_commit_characters() -> Result<(), Box<dyn std::e
 #[test]
 fn test_variable_completion_has_commit_characters() -> Result<(), Box<dyn std::error::Error>> {
     let server = start_lsp_server();
-    initialize_lsp(&server);
+    initialize_lsp_with_capabilities(&server, completion_item_caps(true, true));
 
     let uri = "file:///test_commit_var.pl";
     send_notification(
@@ -1313,7 +1329,7 @@ fn test_variable_completion_has_commit_characters() -> Result<(), Box<dyn std::e
 #[test]
 fn test_keyword_completion_has_no_commit_characters() -> Result<(), Box<dyn std::error::Error>> {
     let server = start_lsp_server();
-    initialize_lsp(&server);
+    initialize_lsp_with_capabilities(&server, completion_item_caps(true, true));
 
     let uri = "file:///test_commit_kw.pl";
     send_notification(
@@ -1367,6 +1383,91 @@ fn test_keyword_completion_has_no_commit_characters() -> Result<(), Box<dyn std:
             "Keyword '{}' should not have commitCharacters",
             kw["label"]
         );
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_cross_editor_completion_capability_profiles() -> Result<(), Box<dyn std::error::Error>> {
+    let profiles = [
+        ("vscode", completion_item_caps(true, true), true, true),
+        ("zed", completion_item_caps(true, false), true, false),
+        ("neovim", completion_item_caps(false, false), false, false),
+        ("helix", completion_item_caps(false, false), false, false),
+    ];
+
+    for (name, capabilities, expect_snippet_format, expect_commit_chars) in profiles {
+        let server = start_lsp_server();
+        initialize_lsp_with_capabilities(&server, capabilities);
+
+        let uri = format!("file:///cross_editor_{name}.pl");
+        send_notification(
+            &server,
+            json!({
+                "jsonrpc": "2.0",
+                "method": "textDocument/didOpen",
+                "params": {
+                    "textDocument": {
+                        "uri": uri,
+                        "languageId": "perl",
+                        "version": 1,
+                        "text": "my $my_var = 1;\n$my_\nfo"
+                    }
+                }
+            }),
+        );
+        drain_until_quiet(&server, Duration::from_millis(100), Duration::from_millis(2000));
+
+        let variable_completion = send_request(
+            &server,
+            json!({
+                "jsonrpc": "2.0",
+                "method": "textDocument/completion",
+                "params": {
+                    "textDocument": { "uri": uri },
+                    "position": { "line": 1, "character": 4 }
+                }
+            }),
+        );
+        let variable_items = completion_items(&variable_completion);
+        let variable_item =
+            variable_items.iter().find(|item| item["kind"] == 6).ok_or_else(|| {
+                format!("profile '{name}' should return at least one variable completion")
+            })?;
+
+        let has_commit_chars =
+            variable_item.get("commitCharacters").and_then(|v| v.as_array()).is_some();
+        assert_eq!(
+            has_commit_chars, expect_commit_chars,
+            "profile '{name}' commitCharacters parity mismatch"
+        );
+
+        let snippet_completion = send_request(
+            &server,
+            json!({
+                "jsonrpc": "2.0",
+                "method": "textDocument/completion",
+                "params": {
+                    "textDocument": { "uri": uri },
+                    "position": { "line": 2, "character": 2 }
+                }
+            }),
+        );
+        let snippet_items = completion_items(&snippet_completion);
+        let foreach_item = snippet_items
+            .iter()
+            .find(|item| item["label"] == "foreach")
+            .ok_or_else(|| format!("profile '{name}' should return foreach snippet completion"))?;
+
+        let insert_text_format = foreach_item["insertTextFormat"]
+            .as_i64()
+            .ok_or_else(|| format!("profile '{name}' missing insertTextFormat"))?;
+        if expect_snippet_format {
+            assert_eq!(insert_text_format, 2, "profile '{name}' should keep snippet format");
+        } else {
+            assert_eq!(insert_text_format, 1, "profile '{name}' should degrade snippet format");
+        }
     }
 
     Ok(())
