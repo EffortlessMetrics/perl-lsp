@@ -362,6 +362,10 @@
       "expected_outcomes": [
         "declaration request returns a location or clean empty result",
         "request does not error"
+      ],
+      "confidence_signals": [
+        "manual_editor_smoke",
+        "issue_burndown_regression_guard"
       ]
     },
     {
@@ -378,6 +382,10 @@
         "didChange full-document edit succeeds",
         "publishDiagnostics republish occurs after edit",
         "updated diagnostic payload remains valid"
+      ],
+      "confidence_signals": [
+        "manual_editor_smoke",
+        "issue_burndown_regression_guard"
       ]
     },
     {
@@ -394,12 +402,11 @@
       "expected_outcomes": [
         "first publishDiagnostics arrives within 5 seconds",
         "real-repo fixture parsing remains crash-free"
+      ],
+      "confidence_signals": [
+        "manual_editor_smoke",
+        "issue_burndown_regression_guard"
       ]
     }
-  ],
-  "confidence_signals": [
-    "manual_editor_smoke",
-    "first_five_minutes_harness",
-    "issue_burndown_regression_guard"
   ]
 }
