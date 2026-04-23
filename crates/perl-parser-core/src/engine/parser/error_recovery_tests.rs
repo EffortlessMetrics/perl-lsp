@@ -425,3 +425,72 @@ fn test_451_ac10_comprehensive_scenarios() {
     let _result3 = parser3.parse();
     assert!(!parser3.errors().is_empty(), "AC10: Should handle different error types");
 }
+
+#[test]
+fn test_no_recovery_for_my_code_eq_anon_sub() {
+    // Regression test for #5017: `my $code = sub { ... }` must parse as a
+    // single VariableDeclaration with an AnonymousSubroutineExpression RHS.
+    // Before the fix, this produced MissingExpression + dangling anon-sub.
+    let code = "my $code = sub { my ($x) = @_; return $x * 2; };";
+    let mut parser = Parser::new(code);
+    let result = parser.parse();
+
+    assert!(result.is_ok(), "Parser should accept `my $var = sub { ... };`");
+    let ast = must(result);
+
+    if let NodeKind::Program { statements } = &ast.kind {
+        assert_eq!(
+            statements.len(),
+            1,
+            "my $code = sub {{...}} must be a single statement, not split in two"
+        );
+        // Verify no error nodes and no missing_expression
+        let sexp = ast.to_sexp();
+        assert!(
+            !sexp.contains("missing_expression"),
+            "RHS anonymous sub must not produce MissingExpression: {sexp}"
+        );
+        assert!(
+            !sexp.contains("error"),
+            "RHS anonymous sub must not produce Error nodes: {sexp}"
+        );
+    } else {
+        unreachable!("Expected program root");
+    }
+
+    assert!(
+        parser.errors().is_empty(),
+        "No recovery errors expected for valid anonymous sub assignment: {:?}",
+        parser.errors()
+    );
+}
+
+#[test]
+fn test_local_as_assignment_rhs() {
+    // `local` is a valid expression and must be allowed as an assignment RHS.
+    // Regression test: removing Local from is_infix_rhs_absent must not break
+    // recovery for genuine missing-RHS cases that happen to follow a `local` expr.
+    let code = "local(*RS) = local(*/);";
+    let mut parser = Parser::new(code);
+    let result = parser.parse();
+
+    assert!(result.is_ok(), "Parser should accept `local(x) = local(y);`");
+    let ast = must(result);
+
+    if let NodeKind::Program { statements } = &ast.kind {
+        assert_eq!(statements.len(), 1, "`local(x) = local(y)` must parse as a single statement");
+        let sexp = ast.to_sexp();
+        assert!(
+            !sexp.contains("missing_expression"),
+            "local-as-RHS must not produce MissingExpression: {sexp}"
+        );
+    } else {
+        unreachable!("Expected program root");
+    }
+
+    assert!(
+        parser.errors().is_empty(),
+        "No recovery errors expected for `local(x) = local(y)`: {:?}",
+        parser.errors()
+    );
+}
