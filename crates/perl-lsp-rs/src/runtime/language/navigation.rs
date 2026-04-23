@@ -511,7 +511,9 @@ fn normalize_mojolicious_controller_name(raw: &str) -> Option<String> {
     }
 
     let mut segments = Vec::new();
-    for segment in normalized.split("::").flat_map(|part| part.split('/')) {
+    for segment in
+        normalized.split("::").flat_map(|part| part.split('/')).flat_map(|part| part.split('-'))
+    {
         let segment = segment.trim();
         if segment.is_empty() {
             continue;
