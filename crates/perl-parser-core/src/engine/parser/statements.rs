@@ -214,13 +214,21 @@ impl<'a> Parser<'a> {
                 ));
             }
 
-            // Variable declarations
+            // Variable declarations (`my $x`, `our @y`, ...) and scoped sub declarations
+            // (`my sub helper { ... }`, `our sub helper { ... }`, `state sub memo { ... }`).
             TokenKind::My | TokenKind::Our | TokenKind::State => {
-                let decl = self.parse_variable_declaration()?;
-                if self.peek_kind() == Some(TokenKind::FatArrow) {
-                    self.finish_expression_from(decl)
+                if matches!(self.tokens.peek_second().map(|t| t.kind), Ok(TokenKind::Sub)) {
+                    let decl_token = self.consume_token()?;
+                    let mut sub_node = self.parse_subroutine()?;
+                    sub_node.location.start = decl_token.start;
+                    self.finish_subroutine_statement(sub_node)
                 } else {
-                    Ok(self.parse_word_or_expr(decl)?)
+                    let decl = self.parse_variable_declaration()?;
+                    if self.peek_kind() == Some(TokenKind::FatArrow) {
+                        self.finish_expression_from(decl)
+                    } else {
+                        Ok(self.parse_word_or_expr(decl)?)
+                    }
                 }
             }
             // `field` is a variable declarator only in Perl 5.38+ class bodies.
