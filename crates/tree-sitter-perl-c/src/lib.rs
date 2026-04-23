@@ -40,7 +40,7 @@
 //! [`tree-sitter-perl-rs`]: https://docs.rs/tree-sitter-perl-rs
 
 use std::path::Path;
-use tree_sitter::{Language, Parser};
+use tree_sitter::{Language, Parser, Tree};
 
 /// Returns the tree-sitter [`Language`] for Perl (C grammar).
 ///
@@ -128,10 +128,24 @@ pub fn create_parser() -> Parser {
 /// if tree-sitter returns `None` from `parse` (cancelled or timed out).
 pub fn parse_perl_bytes(code: &[u8]) -> Result<tree_sitter::Tree, Box<dyn std::error::Error>> {
     let mut parser = try_create_parser()?;
-    match parser.parse(code, None) {
-        Some(tree) => Ok(tree),
-        None => Err("Failed to parse code".into()),
-    }
+    parse_perl_bytes_with_parser(&mut parser, code)
+}
+
+/// Parses Perl source bytes with a caller-provided parser and returns a
+/// [`tree_sitter::Tree`].
+///
+/// Use this in hot paths where a single [`Parser`] is reused across multiple
+/// files or snippets to avoid repeatedly constructing parser state.
+///
+/// # Errors
+///
+/// Returns an error when tree-sitter returns `None` from `parse` (for example,
+/// if parsing is cancelled).
+pub fn parse_perl_bytes_with_parser(
+    parser: &mut Parser,
+    code: &[u8],
+) -> Result<Tree, Box<dyn std::error::Error>> {
+    parser.parse(code, None).ok_or_else(|| "Failed to parse code".into())
 }
 
 /// Parses a Perl source string and returns the resulting [`tree_sitter::Tree`].
@@ -151,6 +165,22 @@ pub fn parse_perl_bytes(code: &[u8]) -> Result<tree_sitter::Tree, Box<dyn std::e
 /// ```
 pub fn parse_perl_code(code: &str) -> Result<tree_sitter::Tree, Box<dyn std::error::Error>> {
     parse_perl_bytes(code.as_bytes())
+}
+
+/// Parses Perl source text with a caller-provided parser and returns a
+/// [`tree_sitter::Tree`].
+///
+/// This is a convenience wrapper over [`parse_perl_bytes_with_parser`].
+///
+/// # Errors
+///
+/// Returns an error when tree-sitter returns `None` from `parse` (for example,
+/// if parsing is cancelled).
+pub fn parse_perl_code_with_parser(
+    parser: &mut Parser,
+    code: &str,
+) -> Result<Tree, Box<dyn std::error::Error>> {
+    parse_perl_bytes_with_parser(parser, code.as_bytes())
 }
 
 /// Reads a file from `path` and parses it as Perl source.
@@ -214,6 +244,26 @@ mod tests {
     fn test_parse_bytes() -> Result<(), Box<dyn std::error::Error>> {
         let code = b"my $var = 'hello';";
         let tree = parse_perl_bytes(code)?;
+        assert!(!tree.root_node().has_error());
+        Ok(())
+    }
+
+    #[test]
+    fn test_parse_bytes_with_reused_parser() -> Result<(), Box<dyn std::error::Error>> {
+        let mut parser = try_create_parser()?;
+        let first = parse_perl_bytes_with_parser(&mut parser, b"my $x = 1;")?;
+        let second = parse_perl_bytes_with_parser(&mut parser, b"my $y = 2;")?;
+
+        assert_eq!(first.root_node().kind(), "source_file");
+        assert_eq!(second.root_node().kind(), "source_file");
+        assert!(!second.root_node().has_error());
+        Ok(())
+    }
+
+    #[test]
+    fn test_parse_code_with_reused_parser() -> Result<(), Box<dyn std::error::Error>> {
+        let mut parser = try_create_parser()?;
+        let tree = parse_perl_code_with_parser(&mut parser, "my $name = 'perl';")?;
         assert!(!tree.root_node().has_error());
         Ok(())
     }
