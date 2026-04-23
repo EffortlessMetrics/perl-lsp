@@ -275,7 +275,7 @@ Release notes: [v0.12.4](docs/releases/v0.12.4.md) · [GitHub Release](https://g
 
 - **Xtask `features verify` repaired** — catalog test paths are now
   resolved from repo root, the advertised-vs-caps snapshot is read from
-  `crates/perl-lsp/tests/snapshots/...`, the two-document Insta snapshot
+  `crates/perl-lsp-rs/tests/snapshots/...`, the two-document Insta snapshot
   format is parsed correctly, and the verifier compares against the
   capability-backed advertised LSP subset (#4033).
 
@@ -351,7 +351,7 @@ Release notes: [v0.12.4](docs/releases/v0.12.4.md) · [GitHub Release](https://g
 - **`cargo xtask check-test-wiring` CLI command wired** — PR #4119 added the
   `check_test_wiring` module but omitted the `use` import in `main.rs`; the
   subcommand was returning "unrecognized subcommand". Now fully wired; also fixes
-  one genuine orphan discovered by the guard: `crates/perl-lsp/tests/fixtures/integration_example.rs`.
+  one genuine orphan discovered by the guard: `crates/perl-lsp-rs/tests/fixtures/integration_example.rs`.
   (#4151)
 
 - **Cross-file `use constant` and parenthesized import lists** — `find_import_source()`
@@ -657,7 +657,7 @@ Release notes: [v0.12.3](docs/releases/v0.12.3.md) · [GitHub Release](https://g
   at the first `add_labels` call.
 
 - **`features.toml` dead test paths repaired**: 43 dead test paths corrected to
-  match the current `crates/perl-lsp/tests/` layout; the
+  match the current `crates/perl-lsp-rs/tests/` layout; the
   `experimental.perlInlineCompletionStream` feature row added (shipped in v0.12.2).
   (#3222, #3251)
 

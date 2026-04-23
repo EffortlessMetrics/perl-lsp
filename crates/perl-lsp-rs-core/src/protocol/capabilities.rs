@@ -221,7 +221,7 @@ pub fn capabilities_for(build: BuildFlags) -> ServerCapabilities {
 
         // SOURCE_FIX_ALL aggregates every safe `quickfix` action into a
         // single invocation. Implemented in
-        // `crates/perl-lsp/src/runtime/language/code_actions.rs`
+        // `crates/perl-lsp-rs/src/runtime/language/code_actions.rs`
         // (`build_source_fix_all`) so client "fix all" keybindings work
         // without an extra round-trip.
         kinds.push(CodeActionKind::SOURCE_FIX_ALL);

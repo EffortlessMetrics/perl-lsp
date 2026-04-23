@@ -12,7 +12,7 @@ Five PRs merged in ~11 hours. Published crate count `74 → 49` (−25, −34%).
 | `86ebc4571` | #4504 — facade-only `cargo public-api` ratchet | 0 | +5,100 (mostly captured baseline text) |
 | `e92f89cff` | #4503 — Wave F test bit-rot fix | 0 | +22/−18 |
 
-Follow-ups filed: #4507 (CI integration-tests gap), #4508 (residual bit-rot), #4509 (task-tool persistence), #4511 (rename crates/perl-lsp/ → perl-lsp-rs/), #4512 (pre-push hook package-name inference).
+Follow-ups filed: #4507 (CI integration-tests gap), #4508 (residual bit-rot), #4509 (task-tool persistence), #4511 (rename crates/perl-lsp-rs/ → perl-lsp-rs/), #4512 (pre-push hook package-name inference).
 
 ## Things worth remembering
 

@@ -161,11 +161,11 @@ fn test_published_crate_baseline_updated() {
 #[test]
 fn test_perl_lsp_cargo_toml_no_g1b_deps() {
     let root = get_workspace_root();
-    let cargo_path = root.join("crates/perl-lsp/Cargo.toml");
-    assert!(cargo_path.exists(), "crates/perl-lsp/Cargo.toml should exist");
+    let cargo_path = root.join("crates/perl-lsp-rs/Cargo.toml");
+    assert!(cargo_path.exists(), "crates/perl-lsp-rs/Cargo.toml should exist");
 
     let content =
-        fs::read_to_string(cargo_path).expect("Failed to read crates/perl-lsp/Cargo.toml");
+        fs::read_to_string(cargo_path).expect("Failed to read crates/perl-lsp-rs/Cargo.toml");
 
     // These 10 dependencies should be removed after G1b collapse
     let forbidden_deps = [
@@ -186,7 +186,7 @@ fn test_perl_lsp_cargo_toml_no_g1b_deps() {
         let pattern = format!("{} = {{", dep);
         assert!(
             !content.contains(&pattern),
-            "crates/perl-lsp/Cargo.toml should not contain '{}' after G1b collapse, but found it",
+            "crates/perl-lsp-rs/Cargo.toml should not contain '{}' after G1b collapse, but found it",
             pattern
         );
     }
@@ -196,16 +196,16 @@ fn test_perl_lsp_cargo_toml_no_g1b_deps() {
 #[test]
 fn test_perl_lsp_cargo_toml_has_core_dep() {
     let root = get_workspace_root();
-    let cargo_path = root.join("crates/perl-lsp/Cargo.toml");
-    assert!(cargo_path.exists(), "crates/perl-lsp/Cargo.toml should exist");
+    let cargo_path = root.join("crates/perl-lsp-rs/Cargo.toml");
+    assert!(cargo_path.exists(), "crates/perl-lsp-rs/Cargo.toml should exist");
 
     let content =
-        fs::read_to_string(cargo_path).expect("Failed to read crates/perl-lsp/Cargo.toml");
+        fs::read_to_string(cargo_path).expect("Failed to read crates/perl-lsp-rs/Cargo.toml");
 
     // perl-lsp-rs-core must remain
     assert!(
         content.contains("perl-lsp-rs-core"),
-        "crates/perl-lsp/Cargo.toml must contain perl-lsp-rs-core dependency after G1b collapse"
+        "crates/perl-lsp-rs/Cargo.toml must contain perl-lsp-rs-core dependency after G1b collapse"
     );
 }
 
@@ -217,7 +217,7 @@ fn test_perl_lsp_cargo_toml_has_core_dep() {
 #[test]
 fn test_perl_lsp_src_features_rename_migrated() {
     let root = get_workspace_root();
-    let file = root.join("crates/perl-lsp/src/features/rename.rs");
+    let file = root.join("crates/perl-lsp-rs/src/features/rename.rs");
     if file.exists() {
         let content = fs::read_to_string(file).expect("Failed to read features/rename.rs");
 
@@ -239,7 +239,7 @@ fn test_perl_lsp_src_features_rename_migrated() {
 #[test]
 fn test_perl_lsp_src_features_diagnostics_migrated() {
     let root = get_workspace_root();
-    let file = root.join("crates/perl-lsp/src/features/diagnostics/mod.rs");
+    let file = root.join("crates/perl-lsp-rs/src/features/diagnostics/mod.rs");
     if file.exists() {
         let content = fs::read_to_string(file).expect("Failed to read features/diagnostics/mod.rs");
 

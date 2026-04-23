@@ -68,7 +68,7 @@ members = [
     "crates/perl-uri",
     "crates/perl-pod",
     "crates/perl-corpus",
-    "crates/perl-lsp",
+    "crates/perl-lsp-rs",
     "crates/perl-lsp-ux-tests",
     "crates/perllsp",
     "crates/perl-dap",
@@ -295,7 +295,7 @@ perl-semantic-analyzer = { path = "crates/perl-semantic-analyzer", version = "0.
 
 # Tier 5: Application crates
 perl-parser = { path = "crates/perl-parser", version = "0.12.4" }
-perl-lsp-rs = { path = "crates/perl-lsp", version = "0.12.4" }
+perl-lsp-rs = { path = "crates/perl-lsp-rs", version = "0.12.4" }
 
 # Legacy/Compatibility crates
 perl-parser-pest = { path = "crates/perl-parser-pest", version = "0.12.4" }

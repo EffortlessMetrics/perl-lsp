@@ -143,7 +143,7 @@ until it passes through all three stages.
 
 The coding standard bans `unwrap()`, `expect()`, `panic!()`, `todo!()`,
 and `unimplemented!()` in all production code. The single exception is
-documented in `crates/perl-lsp/src/util/uri.rs`, which has an explicit
+documented in `crates/perl-lsp-rs/src/util/uri.rs`, which has an explicit
 `#[allow(clippy::expect_used)]`. Test code gets its own allowances, but
 in production, exactly one `expect()` has been deemed acceptable.
 

@@ -339,7 +339,7 @@ gracefully. The project uses:
 - Safety ratchets in CI: baseline counts of `unwrap=0`, `panic!=0`, `unsafe=0`
 
 **Exception:** One centralized `#[allow(clippy::expect_used)]` for
-`lsp_types::Uri` fallback in `crates/perl-lsp/src/util/uri.rs`.
+`lsp_types::Uri` fallback in `crates/perl-lsp-rs/src/util/uri.rs`.
 
 ### 6. SRP Microcrate Architecture
 

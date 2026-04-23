@@ -62,7 +62,7 @@ That is historically useful because it shows install trust moving away from
 
 The runtime path is also revealing.
 
-[`crates/perl-lsp/src/main.rs`](/home/steven/code/Rust/perl-lsp/tree-sitter-perl-rs/crates/perl-lsp/src/main.rs)
+[`crates/perl-lsp-rs/src/main.rs`](/home/steven/code/Rust/perl-lsp/tree-sitter-perl-rs/crates/perl-lsp-rs/src/main.rs)
 uses the launcher crate to decide between `--health`, `--info`, `--check`,
 and server startup. [`crates/perl-lsp-launcher/src/lib.rs`](/home/steven/code/Rust/perl-lsp/tree-sitter-perl-rs/crates/perl-lsp-launcher/src/lib.rs)
 shows that normal server startup only emits explicit startup logs when logging
@@ -160,6 +160,6 @@ same public-facing trust boundary as CI gates and receipts.
 - [`docs/EDITORS/NEOVIM_SETUP.md`](/home/steven/code/Rust/perl-lsp/tree-sitter-perl-rs/docs/EDITORS/NEOVIM_SETUP.md)
 - [`docs/EDITORS/HELIX_SETUP.md`](/home/steven/code/Rust/perl-lsp/tree-sitter-perl-rs/docs/EDITORS/HELIX_SETUP.md)
 - [`crates/perl-lsp-launcher/src/lib.rs`](/home/steven/code/Rust/perl-lsp/tree-sitter-perl-rs/crates/perl-lsp-launcher/src/lib.rs)
-- [`crates/perl-lsp/src/main.rs`](/home/steven/code/Rust/perl-lsp/tree-sitter-perl-rs/crates/perl-lsp/src/main.rs)
+- [`crates/perl-lsp-rs/src/main.rs`](/home/steven/code/Rust/perl-lsp/tree-sitter-perl-rs/crates/perl-lsp-rs/src/main.rs)
 - [`vscode-extension/src/extension.ts`](/home/steven/code/Rust/perl-lsp/tree-sitter-perl-rs/vscode-extension/src/extension.ts)
 - [`vscode-extension/src/downloader.ts`](/home/steven/code/Rust/perl-lsp/tree-sitter-perl-rs/vscode-extension/src/downloader.ts)

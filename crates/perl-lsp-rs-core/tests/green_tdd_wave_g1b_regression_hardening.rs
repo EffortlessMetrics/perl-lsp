@@ -249,7 +249,7 @@ fn test_no_old_g1b_crate_imports_in_perl_lsp_src() -> Result<(), Box<dyn std::er
         .args([
             "-r",
             "use perl_lsp_rename\\|use perl_lsp_diagnostics\\|use perl_lsp_semantic_tokens\\|use perl_lsp_formatting\\|use perl_lsp_ai_provider\\|use perl_lsp_completion\\|use perl_lsp_navigation\\|use perl_lsp_code_actions\\|use perl_lsp_inline_completion\\|use perl_lsp_providers[^_rs_core]",
-            "crates/perl-lsp/src/",
+            "crates/perl-lsp-rs/src/",
         ])
         .output()
         .map_err(|e| format!("Failed to run grep: {}", e))?;
@@ -267,7 +267,7 @@ fn test_no_old_g1b_crate_imports_in_perl_lsp_src() -> Result<(), Box<dyn std::er
             // Exclude perl_lsp_tooling (different namespace, OK to import).
             !line.contains("perl_lsp_tooling") &&
             // Exclude perl_lsp crate itself.
-            !line.contains("crates/perl-lsp/src/")
+            !line.contains("crates/perl-lsp-rs/src/")
         })
         .collect();
 

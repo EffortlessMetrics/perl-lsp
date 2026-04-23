@@ -1,5 +1,5 @@
 ---
-source: crates/perl-lsp/tests/lsp_pull_diagnostics_snapshot_test.rs
+source: crates/perl-lsp-rs/tests/lsp_pull_diagnostics_snapshot_test.rs
 expression: report
 ---
 items:

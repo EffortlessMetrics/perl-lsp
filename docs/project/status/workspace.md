@@ -59,7 +59,7 @@ This scorecard measures three properties of the index substrate:
 <!-- BEGIN: WORKSPACE_METRICS_BULLETS -->
 - **Stale-index defect rate**: 0 stale-symbol defects across 7 tested deletion/rename scenarios (unit tests in `crates/perl-workspace-index/tests/workspace_scorecard.rs`)
 - **Incremental reindex SLO**: P95 target = 100ms (from `perl-workspace-index-slo`); measured in `scorecard_incremental_reindex_latency_within_slo`
-- **Multi-root tests**: 8 integration tests in `crates/perl-lsp/tests/multi_root_workspace_tests.rs` activated in nightly CI gate via `just ci-workspace-multiroot` (PR #4137)
+- **Multi-root tests**: 8 integration tests in `crates/perl-lsp-rs/tests/multi_root_workspace_tests.rs` activated in nightly CI gate via `just ci-workspace-multiroot` (PR #4137)
 - **Fixture workspaces**: 4 scales at `test_corpus/workspaces/` (10 / 100 / 1000 committed + xlarge generated on demand)
 <!-- END: WORKSPACE_METRICS_BULLETS -->
 

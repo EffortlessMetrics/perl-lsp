@@ -3,7 +3,7 @@
 //! Reports fixture inventory and surfaces pass-rate metrics from the
 //! headless test suite.  The actual measurements are produced by the
 //! integration-test suite in
-//! `crates/perl-lsp/tests/editor_intelligence_scorecard.rs`; this command
+//! `crates/perl-lsp-rs/tests/editor_intelligence_scorecard.rs`; this command
 //! reads those results and emits `.ci/metrics/editor_ux.json`.
 //!
 //! ## Usage

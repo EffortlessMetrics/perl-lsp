@@ -55,7 +55,7 @@ fn g3_lsp_compat_feature_signal_not_gating() {
 #[test]
 fn g3_perl_lsp_binary_removed_dead_feature_refs() -> Result<(), Box<dyn std::error::Error>> {
     let root = workspace_root();
-    let binary_toml = root.join("crates/perl-lsp/Cargo.toml");
+    let binary_toml = root.join("crates/perl-lsp-rs/Cargo.toml");
 
     let content = fs::read_to_string(&binary_toml)?;
 

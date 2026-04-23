@@ -513,10 +513,10 @@ mod tests {
 
         write(
             root,
-            "crates/perl-lsp/Cargo.toml",
+            "crates/perl-lsp-rs/Cargo.toml",
             "[package]\nname = \"perl-lsp-rs\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[dependencies]\nperl-wired = { path = \"../perl-wired\" }\n",
         );
-        write(root, "crates/perl-lsp/src/lib.rs", "");
+        write(root, "crates/perl-lsp-rs/src/lib.rs", "");
 
         write(
             root,

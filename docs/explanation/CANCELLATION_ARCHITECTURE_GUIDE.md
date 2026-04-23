@@ -40,7 +40,7 @@ This guide defines the comprehensive cancellation architecture for the Perl LSP 
 
 **Target Crate Structure** (Based on `/crates/` analysis):
 - **perl-parser** (`/crates/perl-parser/`): Core cancellation infrastructure and parser integration
-- **perl-lsp** (`/crates/perl-lsp/`): LSP server binary with cancellation protocol handling
+- **perl-lsp** (`/crates/perl-lsp-rs/`): LSP server binary with cancellation protocol handling
 - **perl-lexer** (`/crates/perl-lexer/`): Tokenization cancellation integration points
 - **perl-corpus** (`/crates/perl-corpus/`): Enhanced test corpus with cancellation scenarios
 

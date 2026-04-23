@@ -210,7 +210,7 @@ fn test_published_count_baseline_is_34() -> TestResult {
 /// (all should be rewritten to perl_parser::incremental::)
 #[test]
 fn test_text_sync_imports_rewired() -> TestResult {
-    let text_sync_path = ws("crates/perl-lsp/src/runtime/text_sync.rs");
+    let text_sync_path = ws("crates/perl-lsp-rs/src/runtime/text_sync.rs");
     let content = fs::read_to_string(&text_sync_path)?;
 
     // Count occurrences of the old import
@@ -272,10 +272,10 @@ fn test_perl_parser_no_incremental_dep() -> TestResult {
     Ok(())
 }
 
-/// Test that perl-lsp/Cargo.toml no longer depends on perl-incremental-parsing
+/// Test that perl-lsp-rs/Cargo.toml no longer depends on perl-incremental-parsing
 #[test]
 fn test_perl_lsp_no_incremental_dep() -> TestResult {
-    let cargo_toml_path = ws("crates/perl-lsp/Cargo.toml");
+    let cargo_toml_path = ws("crates/perl-lsp-rs/Cargo.toml");
     let content = fs::read_to_string(&cargo_toml_path)?;
 
     if content.contains("perl-incremental-parsing = {") {

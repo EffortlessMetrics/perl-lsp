@@ -1346,7 +1346,7 @@ health:
     @echo ""
     @echo "📝 Ignored Tests by Crate:"
     @echo "  perl-parser: $(grep -r '#\[ignore' crates/perl-parser/tests/ 2>/dev/null | wc -l || echo 0)"
-    @echo "  perl-lsp:    $(grep -r '#\[ignore' crates/perl-lsp/tests/ 2>/dev/null | wc -l || echo 0)"
+    @echo "  perl-lsp:    $(grep -r '#\[ignore' crates/perl-lsp-rs/tests/ 2>/dev/null | wc -l || echo 0)"
     @echo "  perl-lexer:  $(grep -r '#\[ignore' crates/perl-lexer/tests/ 2>/dev/null | wc -l || echo 0)"
     @echo "  perl-dap:    $(grep -r '#\[ignore' crates/perl-dap/tests/ 2>/dev/null | wc -l || echo 0)"
     @echo ""
@@ -1363,8 +1363,8 @@ health:
     @echo "  pub struct: $(grep -r '^[[:space:]]*pub struct' crates/perl-parser/src/ --include='*.rs' 2>/dev/null | wc -l || echo 0)"
     @echo "  pub enum:   $(grep -r '^[[:space:]]*pub enum' crates/perl-parser/src/ --include='*.rs' 2>/dev/null | wc -l || echo 0)"
     @echo ""
-    @echo "🔧 LSP Crate Size (crates/perl-lsp/src/):"
-    @echo "  Lines:      $(find crates/perl-lsp/src -name '*.rs' | xargs wc -l | tail -n 1 | awk '{print $1}' || echo 'N/A')"
+    @echo "🔧 LSP Crate Size (crates/perl-lsp-rs/src/):"
+    @echo "  Lines:      $(find crates/perl-lsp-rs/src -name '*.rs' | xargs wc -l | tail -n 1 | awk '{print $1}' || echo 'N/A')"
     @echo ""
     @echo "🧹 Dead Code Metrics:"
     @echo "  Unused deps: $(cargo machete 2>&1 | grep -c 'Cargo.toml:' || echo 0) crates affected"
@@ -2313,7 +2313,7 @@ release-check: release-gate semver-check
       crates/*/src/ \
       --exclude-dir='tests' --exclude-dir='benches' \
       -- | grep -v '#\[allow' | grep -v '// allow' \
-           | grep -v 'crates/perl-lsp/src/util/uri.rs' \
+           | grep -v 'crates/perl-lsp-rs/src/util/uri.rs' \
            | grep -v '#\[cfg(test)\]' || true)
     if [ -n "$PANIC_HITS" ]; then
       echo "WARNING: Potential panic constructs found in production code:"

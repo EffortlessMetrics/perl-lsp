@@ -38,7 +38,7 @@
 //! ## Integration with Test Infrastructure
 //!
 //! These fixtures are designed to work seamlessly with the LSP test infrastructure
-//! in `crates/perl-lsp/tests/support/` and provide comprehensive coverage for:
+//! in `crates/perl-lsp-rs/tests/support/` and provide comprehensive coverage for:
 //!
 //! - JSON-RPC 2.0 protocol compliance validation
 //! - Performance requirements verification (<100μs, <50ms, <1MB)

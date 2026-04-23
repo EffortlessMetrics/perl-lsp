@@ -87,7 +87,7 @@ All checks must pass. Common failures and fixes:
 |---------|-----|
 | `cargo fmt --check` fails | `cargo fmt --all` then commit |
 | clippy error | Fix lint, commit |
-| stale `.snap.new` files | `cargo insta accept && git add crates/perl-lsp/tests/snapshots/ && git commit -m "test: accept snapshots"` |
+| stale `.snap.new` files | `cargo insta accept && git add crates/perl-lsp-rs/tests/snapshots/ && git commit -m "test: accept snapshots"` |
 | test failure | Fix the test, do not skip |
 
 ### 1.5 Run release-check gate (superset of ci-gate)

@@ -131,27 +131,27 @@ fn resolve_uses_cargo_toml_name_not_dir_basename() -> Result<()> {
 }
 
 // ---------------------------------------------------------------------------
-// B2. Actual fix: crates/perl-lsp resolves to perl-lsp-rs (real workspace).
-// RED: fails until subcommand is implemented.
+// B2. Real workspace: crates/perl-lsp-rs resolves to perl-lsp-rs.
+// (Previously tested the dir!=package mismatch; #4511 aligned the names.)
 // ---------------------------------------------------------------------------
 
 #[test]
-fn resolve_perl_lsp_dir_to_perl_lsp_rs_package() -> Result<()> {
+fn resolve_perl_lsp_rs_dir_to_perl_lsp_rs_package() -> Result<()> {
     let root = project_root();
     let output = Command::cargo_bin("xtask")?
         .current_dir(&root)
-        .args(["resolve-package-name", "crates/perl-lsp"])
+        .args(["resolve-package-name", "crates/perl-lsp-rs"])
         .output()?;
     assert!(
         output.status.success(),
-        "resolve-package-name crates/perl-lsp should exit 0; stderr: {}",
+        "resolve-package-name crates/perl-lsp-rs should exit 0; stderr: {}",
         String::from_utf8_lossy(&output.stderr)
     );
     let stdout = String::from_utf8(output.stdout)?;
     assert_eq!(
         stdout.trim(),
         "perl-lsp-rs",
-        "crates/perl-lsp must resolve to 'perl-lsp-rs', not '{}'. This is bug #4512.",
+        "crates/perl-lsp-rs must resolve to 'perl-lsp-rs', not '{}'.",
         stdout.trim()
     );
     Ok(())
@@ -338,7 +338,7 @@ fn resolve_workspace_root_dot_errors() -> Result<()> {
 //
 //    Strategy: use the real workspace (project_root) on the current host.
 //    The strip_prefix logic should work regardless of separator on the running OS.
-//    We verify that "crates/perl-lsp" resolves to "perl-lsp-rs" — if the
+//    We verify that "crates/perl-lsp-rs" resolves to "perl-lsp-rs" — if the
 //    normalization were broken on the host OS, this test would fail.
 // ---------------------------------------------------------------------------
 
@@ -350,7 +350,7 @@ fn resolve_windows_path_separator_compat_via_real_workspace() -> Result<()> {
     let root = project_root();
     let output = Command::cargo_bin("xtask")?
         .current_dir(&root)
-        .args(["resolve-package-name", "crates/perl-lsp"])
+        .args(["resolve-package-name", "crates/perl-lsp-rs"])
         .output()?;
     assert!(
         output.status.success(),
@@ -361,7 +361,7 @@ fn resolve_windows_path_separator_compat_via_real_workspace() -> Result<()> {
     assert_eq!(
         stdout.trim(),
         "perl-lsp-rs",
-        "Windows separator fix: crates/perl-lsp must resolve to perl-lsp-rs; got '{}'",
+        "Windows separator fix: crates/perl-lsp-rs must resolve to perl-lsp-rs; got '{}'",
         stdout.trim()
     );
     Ok(())

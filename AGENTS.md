@@ -22,7 +22,7 @@ This repository is a large Rust workspace that ships editor tooling, parser infr
 
 | Path | Purpose |
 | --- | --- |
-| `/crates/perl-lsp/` | LSP binary and server host |
+| `/crates/perl-lsp-rs/` | LSP binary and server host |
 | `/crates/perl-dap/` | Debug Adapter Protocol server |
 | `/crates/perl-parser/` | Native recursive-descent parser |
 | `/crates/perl-lexer/` | Context-aware tokenizer |
@@ -34,7 +34,7 @@ This repository is a large Rust workspace that ships editor tooling, parser infr
 ### Where to work
 
 1. Parser behavior: `/crates/perl-parser/`, `/crates/perl-parser-core/`, `/crates/perl-lexer/`
-2. LSP features: `/crates/perl-lsp/` and `/crates/perl-lsp-*/`
+2. LSP features: `/crates/perl-lsp-rs/` and `/crates/perl-lsp-*/`
 3. DAP features: `/crates/perl-dap/` and `/crates/perl-dap-*/`
 4. Semantic resolution: `/crates/perl-semantic-analyzer/`, `/crates/perl-workspace-index/`
 5. Corpus and regressions: `/crates/perl-corpus/`, `/crates/*/tests/`, `/test_corpus/`

@@ -212,7 +212,7 @@ fn test_perl_lsp_runtime_rewired_config_imports() {
         Ok(())
     }
 
-    let runtime_dir = root.join("crates/perl-lsp/src/runtime");
+    let runtime_dir = root.join("crates/perl-lsp-rs/src/runtime");
     if runtime_dir.exists() {
         let _ = scan_dir(&runtime_dir);
     }
@@ -510,7 +510,7 @@ fn test_config_defaults_are_backward_compatible() {
 #[test]
 fn test_perl_lsp_tests_no_old_crate_refs() {
     let root = workspace_root();
-    let tests_dir = root.join("crates/perl-lsp/tests");
+    let tests_dir = root.join("crates/perl-lsp-rs/tests");
 
     if tests_dir.exists() {
         fn scan_for_old_crates(path: &Path) -> std::io::Result<()> {

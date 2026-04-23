@@ -89,7 +89,7 @@ If any snapshot test fails and `.snap.new` files exist as untracked, accept them
 
 ```bash
 cargo insta accept
-git add crates/perl-lsp/tests/snapshots/
+git add crates/perl-lsp-rs/tests/snapshots/
 git commit -m "test: accept updated insta snapshots"
 ```
 
