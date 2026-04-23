@@ -111,7 +111,16 @@ pub fn create_parser() -> Parser {
 
 /// Parses Perl source bytes and returns the resulting [`tree_sitter::Tree`].
 ///
-/// This accepts arbitrary bytes so callers can parse non-UTF-8 source files.
+/// This accepts arbitrary bytes so callers can parse non-UTF-8 source files,
+/// for example Perl scripts with Latin-1 encoded strings or binary data
+/// embedded in `__DATA__` sections.
+///
+/// # Notes
+///
+/// The tree-sitter C grammar receives the raw bytes as-is. A UTF-8 BOM
+/// (`\xEF\xBB\xBF`) at the start of the file is not stripped automatically
+/// and may produce an error node in the resulting tree.  Strip it before
+/// calling this function if strict grammar compliance is required.
 ///
 /// # Errors
 ///
@@ -251,6 +260,27 @@ mod tests {
         }
 
         assert!(matched, "expected Inline::CPP heredoc to match the injection query");
+        Ok(())
+    }
+
+    /// Verify that `parse_perl_bytes` returns a tree (possibly with error nodes) for
+    /// input prefixed with a UTF-8 BOM.  The BOM is NOT stripped; callers are responsible
+    /// for removing it if the grammar produces undesired error nodes.
+    #[test]
+    fn test_parse_bytes_with_utf8_bom_returns_tree() -> Result<(), Box<dyn std::error::Error>> {
+        // UTF-8 BOM (\xEF\xBB\xBF) followed by valid Perl
+        let bom_source = b"\xEF\xBB\xBFmy $x = 1;";
+        let tree = parse_perl_bytes(bom_source)?;
+        // The tree must be returned even if the BOM causes an error node
+        assert_eq!(tree.root_node().kind(), "source_file");
+        Ok(())
+    }
+
+    /// Verify that `parse_perl_bytes` handles a completely empty input.
+    #[test]
+    fn test_parse_bytes_empty_source() -> Result<(), Box<dyn std::error::Error>> {
+        let tree = parse_perl_bytes(b"")?;
+        assert_eq!(tree.root_node().kind(), "source_file");
         Ok(())
     }
 }
