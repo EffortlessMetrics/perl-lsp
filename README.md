@@ -77,6 +77,23 @@ For a full walkthrough, see [docs/tutorials/GETTING_STARTED.md](docs/tutorials/G
 
 The native Rust parser stack is the architectural center of the workspace — the LSP server, diagnostics, hover, completion, and every other IDE feature read from it directly. Tree-sitter integration is an interop surface layered over that core, not a dependency of it.
 
+### Repository map (at a glance)
+
+If you're new to the repo, use this as a quick orientation map before diving into crate-level docs:
+
+| Path | What lives there |
+| --- | --- |
+| `crates/` | Rust workspace crates (LSP server, parser/lexer, semantic analysis, refactoring, DAP, UX tests, and supporting libraries) |
+| `docs/` | User guides, architecture docs, reference material, project status, ADRs, and roadmap docs |
+| `test_corpus/` | Regression fixtures, parser corpora, and workspace-scale test projects |
+| `vscode-extension/` | VS Code extension packaging and integration assets |
+| `xtask/` | Project maintenance automation (`cargo xtask ...`) for checks, reports, and release/status helpers |
+| `scripts/` | Contributor and CI helper scripts not bundled into `xtask` |
+| `features.toml` | Canonical LSP/DAP/extension capability catalog used by governance checks |
+| `Cargo.toml` | Workspace manifest (members, shared dependency policy, and release metadata) |
+
+For the full crate-by-crate map (with role explanations), start with [docs/README.md](docs/README.md) and then [docs/reference/CRATE_ARCHITECTURE_GUIDE.md](docs/reference/CRATE_ARCHITECTURE_GUIDE.md).
+
 ### Entry points for external consumers
 
 Different users walk in through different doors. Pick the one that matches your use case:
