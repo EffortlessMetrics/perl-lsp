@@ -23,7 +23,8 @@ Scenarios currently include:
 - diagnostics republish after in-editor full-document edits, and
 - multi-root `workspace/symbol` disambiguation via `workspaceFolderUri`, and
 - workspace-folder removal evicting stale symbols from search results, and
-- deleted-file churn evicting stale search results and definition targets.
+- deleted-file churn evicting stale search results and definition targets, and
+- cross-editor completion metadata parity (VS Code, Zed, Neovim, Helix capability probes).
 
 The harness is now also the source of truth for the workflow UX scorecard
 inventory:
