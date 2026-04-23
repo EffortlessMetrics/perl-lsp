@@ -3,6 +3,7 @@ use perl_workspace::folder::{
     workspace_folder_to_path,
 };
 use proptest::prelude::*;
+use proptest::test_runner::Config as ProptestConfig;
 use serde_json::{Value, json};
 
 fn plain_path_strategy() -> impl Strategy<Value = String> {
@@ -26,6 +27,11 @@ fn uri_entry_strategy() -> impl Strategy<Value = (Option<String>, Value)> {
 }
 
 proptest! {
+    #![proptest_config(ProptestConfig {
+        failure_persistence: None,
+        ..ProptestConfig::default()
+    })]
+
     #[test]
     fn prop_plain_paths_are_interpreted_as_filesystem_paths(folder in plain_path_strategy()) {
         let parsed = workspace_folder_to_path(&folder);
