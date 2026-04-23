@@ -363,11 +363,15 @@ jobs:
 
   # ── Compile All Targets: catch integration-test + bench bit-rot ───────
   check-all-targets:
-    name: Compile All Targets (bit-rot guard)
-    runs-on: ubuntu-24.04
+    name: Compile All Targets (${{ matrix.os }}) (bit-rot guard)
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 10
     needs: preflight-latest-check
     if: needs.preflight-latest-check.outputs.is_latest == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-latest]
     steps:
       - uses: actions/checkout@v6
         with:
@@ -379,7 +383,8 @@ jobs:
         with:
           toolchain: 1.92.0
 
-      - name: Install just
+      - name: Install just (Linux only)
+        if: runner.os != 'Windows'
         uses: taiki-e/install-action@cf39a74df4a72510be4e5b63348d61067f11e64a  # v2.75.0
         with:
           tool: just
@@ -391,5 +396,10 @@ jobs:
           cache-all-crates: true
           shared-key: ci-all-targets-${{ hashFiles('Cargo.lock') }}
 
-      - name: Compile all targets (catches integration-test + bench bit-rot)
+      - name: Compile all targets (Linux via just)
+        if: runner.os != 'Windows'
         run: just check-all-targets
+
+      - name: Compile all targets (Windows direct cargo check)
+        if: runner.os == 'Windows'
+        run: cargo check --workspace --all-targets --locked
