@@ -1039,9 +1039,9 @@ enum Commands {
     /// Prints the package name from Cargo.toml to stdout (one line, no trailing noise).
     /// Used by the pre-push hook to convert a directory basename into the correct -p argument.
     ///
-    /// Example: `cargo xtask resolve-package-name crates/perl-lsp` outputs `perl-lsp-rs`
+    /// Example: `cargo xtask resolve-package-name crates/perl-lsp-rs` outputs `perl-lsp-rs`
     ResolvePackageName {
-        /// Crate directory path, relative to workspace root (e.g., "crates/perl-lsp")
+        /// Crate directory path, relative to workspace root (e.g., "crates/perl-lsp-rs")
         crate_dir: String,
     },
 

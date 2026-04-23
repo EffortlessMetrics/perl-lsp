@@ -45,7 +45,7 @@ The workspace configuration excludes these crates from default builds:
 [workspace]
 members = [
     "crates/perl-parser",
-    "crates/perl-lsp",
+    "crates/perl-lsp-rs",
     "crates/perl-dap",
     "crates/perl-lexer",
     # ... other pure-Rust crates

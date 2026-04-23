@@ -16,8 +16,8 @@ The current implementation solves this by building a `ParentMap`:
 - `crates/perl-semantic-analyzer/src/analysis/declaration.rs` defines
   `ParentMap = FxHashMap<*const Node, *const Node>`
 - `DeclarationProvider::build_parent_map()` populates the map during AST traversal
-- `crates/perl-lsp/src/state/document.rs` stores the map alongside each parsed document
-- `crates/perl-lsp/src/runtime/mod.rs` provides manual `Send`/`Sync` impls for `LspServer`
+- `crates/perl-lsp-rs/src/state/document.rs` stores the map alongside each parsed document
+- `crates/perl-lsp-rs/src/runtime/mod.rs` provides manual `Send`/`Sync` impls for `LspServer`
   because `DocumentState` contains raw pointers through `ParentMap`
 
 This is an unusual design in a Rust codebase because the project deliberately accepts a narrow raw
@@ -168,5 +168,5 @@ Review this ADR if any of the following happen:
 ## References
 
 - `crates/perl-semantic-analyzer/src/analysis/declaration.rs`
-- `crates/perl-lsp/src/state/document.rs`
-- `crates/perl-lsp/src/runtime/mod.rs`
+- `crates/perl-lsp-rs/src/state/document.rs`
+- `crates/perl-lsp-rs/src/runtime/mod.rs`

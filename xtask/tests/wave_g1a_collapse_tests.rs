@@ -171,7 +171,7 @@ fn test_providers_mod_rs_file_exists_with_all_submodules() -> Result<(), Box<dyn
 fn test_wired_crates_integration_uses_new_provider_imports()
 -> Result<(), Box<dyn std::error::Error>> {
     let root = project_root();
-    let test_path = root.join("crates/perl-lsp/tests/wired_crates_integration_test.rs");
+    let test_path = root.join("crates/perl-lsp-rs/tests/wired_crates_integration_test.rs");
 
     let content = fs::read_to_string(&test_path)?;
 
@@ -209,7 +209,7 @@ fn test_wired_crates_integration_uses_new_provider_imports()
 fn test_wired_crates_integration_has_new_provider_imports() -> Result<(), Box<dyn std::error::Error>>
 {
     let root = project_root();
-    let test_path = root.join("crates/perl-lsp/tests/wired_crates_integration_test.rs");
+    let test_path = root.join("crates/perl-lsp-rs/tests/wired_crates_integration_test.rs");
 
     let content = fs::read_to_string(&test_path)?;
 

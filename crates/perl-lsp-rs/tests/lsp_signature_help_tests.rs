@@ -19,7 +19,7 @@
 //!
 //! Related Documentation:
 //! - docs/reference/LSP_IMPLEMENTATION_GUIDE.md#signature-help
-//! - crates/perl-lsp/src/features/signature_help.rs
+//! - crates/perl-lsp-rs/src/features/signature_help.rs
 
 mod support;
 

@@ -48,7 +48,7 @@ Example commit subject patterns:
 If the PR title is not conventional, convert it before merge (do not keep `Merge pull request` defaults).
 
 Optional: derive a clearer subject from files changed:
-- `scope=lsp` if files are in `crates/perl-lsp/**`
+- `scope=lsp` if files are in `crates/perl-lsp-rs/**`
 - `scope=dap` if files are in `crates/perl-dap/**`
 - `scope=parser` for `crates/perl-parser*`/`crates/perl-lexer*`/`crates/perl-parser-core*`
 - `scope=semantic` for `crates/perl-semantic-analyzer/**`/`crates/perl-workspace-index/**`

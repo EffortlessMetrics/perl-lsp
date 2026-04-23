@@ -59,7 +59,7 @@ When LSP Server terminates unexpectedly:
 The LSP test infrastructure uses stdio for JSON-RPC communication:
 
 ```rust
-// From crates/perl-lsp/tests/common/mod.rs
+// From crates/perl-lsp-rs/tests/common/mod.rs
 pub struct LspServer {
     pub process: Child,
     writer: BufWriter<ChildStdin>,  // Writes to server's stdin
@@ -139,7 +139,7 @@ T=5000ms  Test times out waiting for response
 The test infrastructure implements adaptive timeouts based on thread constraints:
 
 ```rust
-// From crates/perl-lsp/tests/lsp_encoding_edge_cases.rs
+// From crates/perl-lsp-rs/tests/lsp_encoding_edge_cases.rs
 fn compute_adaptive_timeout() -> std::time::Duration {
     let rust_test_threads = std::env::var("RUST_TEST_THREADS")
         .ok()
@@ -237,7 +237,7 @@ fn validate_thread_requirements() {
 
 ### 1. lsp_document_symbols_test
 
-**File**: `crates/perl-lsp/tests/lsp_document_symbols_test.rs`
+**File**: `crates/perl-lsp-rs/tests/lsp_document_symbols_test.rs`
 
 **Test Count**: 10+ tests
 
@@ -309,7 +309,7 @@ RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs --test lsp_document_symbols_test -
 
 ### 2. lsp_document_links_test
 
-**File**: `crates/perl-lsp/tests/lsp_document_links_test.rs`
+**File**: `crates/perl-lsp-rs/tests/lsp_document_links_test.rs`
 
 **Test Count**: 2 tests
 
@@ -402,7 +402,7 @@ RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs --test lsp_document_links_test -- 
 
 ### 3. lsp_encoding_edge_cases
 
-**File**: `crates/perl-lsp/tests/lsp_encoding_edge_cases.rs`
+**File**: `crates/perl-lsp-rs/tests/lsp_encoding_edge_cases.rs`
 
 **Test Count**: 15+ tests
 
@@ -543,7 +543,7 @@ LSP_TEST_ECHO_STDERR=1 RUST_TEST_THREADS=1 cargo test -p perl-lsp-rs --test lsp_
 
 ### 4. lsp_cancellation_infrastructure_tests (4 tests)
 
-**File**: `crates/perl-lsp/tests/lsp_cancellation_infrastructure_tests.rs`
+**File**: `crates/perl-lsp-rs/tests/lsp_cancellation_infrastructure_tests.rs`
 
 **Affected Tests**:
 - `test_infrastructure_cleanup_and_resource_management_ac9`
@@ -688,7 +688,7 @@ LSP_TEST_DEBUG_READER=1 LSP_TEST_ECHO_STDERR=1 RUST_TEST_THREADS=1 cargo test -p
 
 ### 5. lsp_cancellation_parser_integration_tests (5 tests)
 
-**File**: `crates/perl-lsp/tests/lsp_cancellation_parser_integration_tests.rs`
+**File**: `crates/perl-lsp-rs/tests/lsp_cancellation_parser_integration_tests.rs`
 
 **Affected Tests**:
 - `test_incremental_parsing_checkpoint_cancellation_ac6`

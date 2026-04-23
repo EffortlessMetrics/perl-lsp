@@ -386,7 +386,7 @@ sub example {
 
 ### Tier 2: LSP Integration Tests (E2E Validation)
 
-**Location**: `/crates/perl-lsp/tests/semantic_definition.rs`
+**Location**: `/crates/perl-lsp-rs/tests/semantic_definition.rs`
 
 **Purpose**: End-to-end validation of LSP `textDocument/definition` protocol with `SemanticModel` integration.
 

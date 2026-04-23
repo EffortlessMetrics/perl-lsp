@@ -3,7 +3,7 @@
 ## Crate Structure
 
 ### Production Crates
-- **`/crates/perl-lsp/`**: Standalone LSP server binary. This is what users install for IDE integration.
+- **`/crates/perl-lsp-rs/`**: Standalone LSP server binary. This is what users install for IDE integration.
 - **`/crates/perl-parser/`**: The core parsing library. It contains the parser itself, the AST definitions, and all the LSP feature implementations. Published as `perl-parser` on crates.io.
 
 - **`/crates/perl-lexer/`**: Context-aware tokenizer
@@ -134,7 +134,7 @@ See [WORKSPACE_TEST_REPORT.md](../WORKSPACE_TEST_REPORT.md) for current workspac
 4. **For Legacy Migration**: Migrate from `perl-parser-pest` to `perl-parser`
 
 ### Development Locations
-- **LSP Binary & CLI**: `/crates/perl-lsp/` - for changes to the command-line interface or server startup.
+- **LSP Binary & CLI**: `/crates/perl-lsp-rs/` - for changes to the command-line interface or server startup.
 - **LSP Feature Logic**: `/crates/perl-parser/` - for all core LSP features (diagnostics, completion, etc.). This is where most LSP development happens.
 - **LSP Microcrates**: `/crates/perl-lsp-*/` - for focused LSP features (code actions, formatting, type hierarchy, critic parsing, etc.).
 - **DAP Components**: `/crates/perl-dap-*/` - for debug adapter features (config, breakpoints, eval, etc.).

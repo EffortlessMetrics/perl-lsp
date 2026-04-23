@@ -178,7 +178,7 @@ These tests exhibit non-deterministic behavior requiring special execution confi
 #### P1-001: LSP Document Symbols Test
 
 **Status**: ⚠️ Mitigated  
-**File**: `crates/perl-lsp/tests/lsp_document_symbols_test.rs`  
+**File**: `crates/perl-lsp-rs/tests/lsp_document_symbols_test.rs`  
 **Symptoms**: BrokenPipe errors, intermittent timeouts
 
 **Root Cause**
@@ -199,7 +199,7 @@ RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs --test lsp_document_symbols_test -
 #### P1-002: LSP Document Links Test
 
 **Status**: ⚠️ Mitigated  
-**File**: `crates/perl-lsp/tests/lsp_document_links_test.rs`  
+**File**: `crates/perl-lsp-rs/tests/lsp_document_links_test.rs`  
 **Symptoms**: BrokenPipe errors when sending notifications
 
 **Root Cause**
@@ -220,7 +220,7 @@ RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs --test lsp_document_links_test -- 
 #### P1-003: LSP Encoding Edge Cases
 
 **Status**: ⚠️ Mitigated  
-**File**: `crates/perl-lsp/tests/lsp_encoding_edge_cases.rs`  
+**File**: `crates/perl-lsp-rs/tests/lsp_encoding_edge_cases.rs`  
 **Symptoms**: BrokenPipe, Timeout  
 **Tracking**: Issue #200
 
@@ -254,7 +254,7 @@ fn compute_adaptive_timeout() -> Duration {
 #### P1-004: LSP Cancellation Infrastructure Tests
 
 **Status**: ⚠️ Mitigated  
-**File**: `crates/perl-lsp/tests/lsp_cancellation_infrastructure_tests.rs`  
+**File**: `crates/perl-lsp-rs/tests/lsp_cancellation_infrastructure_tests.rs`  
 **Symptoms**: Timeout, Race conditions  
 **Tracking**: Issue #48
 
@@ -277,7 +277,7 @@ RUST_TEST_THREADS=1 cargo test -p perl-lsp-rs --test lsp_cancellation_infrastruc
 #### P1-005: LSP Cancellation Parser Integration Tests
 
 **Status**: ⚠️ Mitigated  
-**File**: `crates/perl-lsp/tests/lsp_cancellation_parser_integration_tests.rs`  
+**File**: `crates/perl-lsp-rs/tests/lsp_cancellation_parser_integration_tests.rs`  
 **Symptoms**: Timeout, Race conditions  
 **Tracking**: Issue #48
 

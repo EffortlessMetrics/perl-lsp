@@ -65,7 +65,7 @@ After the four panels come:
 | Directory | Files Changed | Lines Delta | Notes |
 | --------- | ------------- | ----------- | ----- |
 | `crates/perl-parser/src/` | N | +X/-Y | (e.g., "parser core changes") |
-| `crates/perl-lsp/src/` | N | +X/-Y | |
+| `crates/perl-lsp-rs/src/` | N | +X/-Y | |
 | `tests/` | N | +X/-Y | |
 | `docs/` | N | +X/-Y | |
 
@@ -76,7 +76,7 @@ Files touched most frequently or with highest line churn in this PR.
 | File Path | Commits | Delta | Notes |
 | --------- | ------- | ----- | ----- |
 | `crates/perl-parser/src/parser.rs` | 8 | +250/-120 | Core parsing logic |
-| `crates/perl-lsp/src/server.rs` | 3 | +80/-40 | LSP server impl |
+| `crates/perl-lsp-rs/src/server.rs` | 3 | +80/-40 | LSP server impl |
 
 ### Dependency Delta
 
@@ -108,7 +108,7 @@ Functions/types/traits added, removed, or changed in public crate APIs.
 
 **Priority files** (3-8 files requiring human review):
 1. `crates/perl-parser/src/parser.rs` - Core logic changes
-2. `crates/perl-lsp/src/index.rs` - New unsafe blocks
+2. `crates/perl-lsp-rs/src/index.rs` - New unsafe blocks
 
 **Integration points** (external surface changes):
 - LSP protocol: Added `textDocument/semanticTokens/full`
@@ -149,7 +149,7 @@ Functions/types/traits added, removed, or changed in public crate APIs.
 
 **Survivor list** (if applicable):
 - `crates/perl-parser/src/lexer.rs:234` - Boundary condition
-- `crates/perl-lsp/src/index.rs:567` - Error path
+- `crates/perl-lsp-rs/src/index.rs:567` - Error path
 
 ### Corpus/Fixtures Added
 
@@ -330,7 +330,7 @@ Each action item should include:
 | What | Where | Why | Evidence |
 | ---- | ----- | --- | -------- |
 | Split `parser.rs` into `parser/core.rs` and `parser/expressions.rs` | `crates/perl-parser/src/parser.rs` (800+ LOC) | Reduce churn frequency - file touched in 12/23 commits | File split complete, both <400 LOC, clippy passes |
-| Extract `IndexProvider` trait to separate module | `crates/perl-lsp/src/index.rs` | Clarify LSP provider boundaries | Trait in `lsp/providers/index.rs`, tests pass |
+| Extract `IndexProvider` trait to separate module | `crates/perl-lsp-rs/src/index.rs` | Clarify LSP provider boundaries | Trait in `lsp/providers/index.rs`, tests pass |
 
 ### 9.2 Verification Actions (Correctness)
 
@@ -505,7 +505,7 @@ Severity levels:
 | Directory | Files Changed | Lines Delta | Notes |
 | --------- | ------------- | ----------- | ----- |
 | crates/perl-parser/src/ | 8 | +450/-120 | UTF-16 safety, mutation-tested paths |
-| crates/perl-lsp/src/ | 3 | +80/-20 | LSP UTF-16 integration |
+| crates/perl-lsp-rs/src/ | 3 | +80/-20 | LSP UTF-16 integration |
 | tests/ | 12 | +600/-50 | Property tests, mutation fixtures |
 | docs/ | 2 | +120/-10 | Security documentation |
 
@@ -574,7 +574,7 @@ Severity levels:
 
 **Survivor list**:
 - crates/perl-parser/src/lexer.rs:234 - Comment parsing boundary
-- crates/perl-lsp/src/index.rs:567 - Error recovery path
+- crates/perl-lsp-rs/src/index.rs:567 - Error recovery path
 
 ### Corpus/Fixtures Added
 | Type | Count | Examples |

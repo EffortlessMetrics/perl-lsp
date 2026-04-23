@@ -211,7 +211,7 @@
             inherit buildInputs;
             nativeBuildInputs = with pkgs; [ pkg-config ];
 
-            buildAndTestSubdir = "crates/perl-lsp";
+            buildAndTestSubdir = "crates/perl-lsp-rs";
 
             # Skip tests during package build (run via checks)
             doCheck = false;

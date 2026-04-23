@@ -1434,7 +1434,7 @@ impl LspServer {
 
 /// Returns `true` when a quick-fix code action exists for the given diagnostic code.
 ///
-/// Mirrors the list in `crates/perl-lsp/src/features/diagnostics/pull.rs`.
+/// Mirrors the list in `crates/perl-lsp-rs/src/features/diagnostics/pull.rs`.
 /// The authoritative source is `crates/perl-lsp-code-actions/src/code_actions.rs`.
 fn is_fixable_diagnostic(code: &str) -> bool {
     is_fixable_perlcritic_policy(code)

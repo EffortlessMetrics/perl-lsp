@@ -57,9 +57,9 @@ fn g3_no_external_perl_lsp_protocol_references() -> Result<(), Box<dyn std::erro
     // Check that active crates don't reference the deleted perl-lsp-protocol directly
     // (they should use perl_lsp_rs_core::protocol instead)
     let key_source_files = vec![
-        "crates/perl-lsp/src/lib.rs",
-        "crates/perl-lsp/src/runtime/diagnostics.rs",
-        "crates/perl-lsp/src/runtime/mod.rs",
+        "crates/perl-lsp-rs/src/lib.rs",
+        "crates/perl-lsp-rs/src/runtime/diagnostics.rs",
+        "crates/perl-lsp-rs/src/runtime/mod.rs",
     ];
 
     for file in key_source_files {

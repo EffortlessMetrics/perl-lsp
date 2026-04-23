@@ -168,7 +168,7 @@ With typical workspaces having 10-100 open documents, total overhead is 30MB-300
 
 ## References
 
-- [crates/perl-lsp/src/state/document.rs](../../crates/perl-lsp/src/state/document.rs) - Document state implementation
+- [crates/perl-lsp-rs/src/state/document.rs](../../crates/perl-lsp-rs/src/state/document.rs) - Document state implementation
 - [ADR-0020: Rope Document Management](0020-rope-document-management.md) - Rope architecture decision
 - [ropey crate documentation](https://docs.rs/ropey/)
 - [LSP TextDocumentContentChangeEvent](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocumentContentChangeEvent)

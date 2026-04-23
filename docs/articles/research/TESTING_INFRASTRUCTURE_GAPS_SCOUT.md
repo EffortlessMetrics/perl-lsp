@@ -64,7 +64,7 @@ Testing infrastructure is partially mature but missing key regression tools, wea
 
 **Current State**:
 - ✓ Insta 1.46.1 available in perl-lsp, perl-parser
-- ✓ 5 capability snapshots stored in `crates/perl-lsp/tests/snapshots/`
+- ✓ 5 capability snapshots stored in `crates/perl-lsp-rs/tests/snapshots/`
 - ✗ **NO**: Snapshot-driven tests for AST structure
 - ✗ **NO**: Snapshot regression detection in CI
 - ✗ **NO**: Systematic use for error message validation

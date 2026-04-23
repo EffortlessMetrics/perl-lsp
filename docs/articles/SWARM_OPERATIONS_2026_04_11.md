@@ -350,7 +350,7 @@ systemic view emerges.**
 Two plan-reviewers running in parallel on overlapping scope — the metric-stack
 umbrella #4062 and the
 canonical gold-corpus planning work — independently chose different locations
-for the shared gold corpus. One proposed `crates/perl-lsp/tests/fixtures/gold/`;
+for the shared gold corpus. One proposed `crates/perl-lsp-rs/tests/fixtures/gold/`;
 the other proposed `test_corpus/gold/`. Both were defensible choices; neither
 reviewer was wrong about their own subsystem. But they were wrong about each
 other.

@@ -40,7 +40,7 @@ fn gold_corpus_root() -> PathBuf {
     // CARGO_MANIFEST_DIR is set to the crate directory during tests.
     let manifest = std::env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".to_string());
     let crate_dir = PathBuf::from(manifest);
-    // crates/perl-lsp → workspace root is two levels up
+    // crates/perl-lsp-rs → workspace root is two levels up
     let workspace_root = crate_dir
         .parent() // crates/
         .and_then(|p| p.parent()) // workspace root

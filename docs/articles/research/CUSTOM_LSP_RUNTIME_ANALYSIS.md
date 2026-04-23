@@ -559,7 +559,7 @@ With the custom runtime, these concerns are implemented directly in the dispatch
 ### Code Organization
 
 ```
-crates/perl-lsp/src/
+crates/perl-lsp-rs/src/
 ├── main.rs                          # Binary entrypoint
 ├── lib.rs                           # Library exports
 ├── dispatch.rs                      # Placeholder (see server_impl)
@@ -805,11 +805,11 @@ Feature Request (e.g., "textDocument/completion")
 
 | File | Purpose |
 |------|---------|
-| `crates/perl-lsp/src/main.rs` | Binary entrypoint, reader thread spawning, transport selection |
-| `crates/perl-lsp/src/runtime/serving.rs` | serve(), serve_async(), message loop |
-| `crates/perl-lsp/src/runtime/scheduler.rs` | RequestClass, classify(), Scheduler, worker queues |
-| `crates/perl-lsp/src/runtime/outbound.rs` | OutboundSender, writer thread, batching |
-| `crates/perl-lsp/src/runtime/dispatch/mod.rs` | Route to submodules |
+| `crates/perl-lsp-rs/src/main.rs` | Binary entrypoint, reader thread spawning, transport selection |
+| `crates/perl-lsp-rs/src/runtime/serving.rs` | serve(), serve_async(), message loop |
+| `crates/perl-lsp-rs/src/runtime/scheduler.rs` | RequestClass, classify(), Scheduler, worker queues |
+| `crates/perl-lsp-rs/src/runtime/outbound.rs` | OutboundSender, writer thread, batching |
+| `crates/perl-lsp-rs/src/runtime/dispatch/mod.rs` | Route to submodules |
 | `crates/perl-lsp-protocol/src/capabilities.rs` | Feature-gated capability building |
 | `crates/perl-lsp-cancellation/src/lib.rs` | Token system, registry, cleanup |
 

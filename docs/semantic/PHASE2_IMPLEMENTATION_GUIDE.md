@@ -331,14 +331,14 @@ cargo test -p perl-parser semantic::tests -- --nocapture
 
 ### Phase 2: LSP Integration Tests (Slower, Real Protocol)
 
-**Location**: `/crates/perl-lsp/tests/semantic_*.rs`
+**Location**: `/crates/perl-lsp-rs/tests/semantic_*.rs`
 
 **Goal**: Validate `textDocument/definition` works end-to-end over JSON-RPC.
 
 #### Template LSP Test Structure
 
 ```rust
-// File: /crates/perl-lsp/tests/semantic_use_statement_lsp_tests.rs
+// File: /crates/perl-lsp-rs/tests/semantic_use_statement_lsp_tests.rs
 
 use lsp_types::{Position, GotoDefinitionResponse};
 use perl_lsp_test_harness::{LspTestHarness, TestResult};
@@ -955,7 +955,7 @@ cargo test -p perl-parser --test semantic_use_statement_tests -- --nocapture
 #### Step 4: Write LSP Integration Test
 
 ```rust
-// File: /crates/perl-lsp/tests/semantic_use_statement_lsp_tests.rs
+// File: /crates/perl-lsp-rs/tests/semantic_use_statement_lsp_tests.rs
 
 #[test]
 fn definition_resolves_imported_symbol() -> TestResult {
@@ -1026,7 +1026,7 @@ Once all validations pass:
 
 - **Phase 1 Implementation**: `/crates/perl-parser/src/semantic.rs` (12 handlers)
 - **Phase 1 Tests**: `/crates/perl-parser/tests/semantic_*_tests.rs`
-- **LSP Integration**: `/crates/perl-lsp/tests/semantic_definition.rs`
+- **LSP Integration**: `/crates/perl-lsp-rs/tests/semantic_definition.rs`
 - **Issue Tracking**: GitHub Issue #188 (Semantic Analyzer Phases)
 - **Architecture**: `/docs/semantic/SEMANTIC_ANALYZER_ARCHITECTURE.md`
 - **Position Tracking**: `/docs/reference/POSITION_TRACKING_GUIDE.md`

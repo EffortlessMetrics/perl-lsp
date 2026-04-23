@@ -269,7 +269,7 @@ pub fn run(base: String, mode: CheckMode) -> Result<()> {
 
 /// Resolve the Cargo package name for a single crate directory.
 ///
-/// Returns the package name from Cargo.toml (e.g., `"perl-lsp-rs"` for `"crates/perl-lsp"`).
+/// Returns the package name from Cargo.toml (e.g., `"perl-lsp-rs"` for `"crates/perl-lsp-rs"`).
 /// Returns an error if the directory is not a workspace member.
 ///
 /// Used by the `resolve-package-name` CLI subcommand and the pre-push hook.
@@ -291,7 +291,7 @@ mod tests {
     fn test_extract_crate_dirs_basic() {
         let files = vec![
             "crates/perl-parser/src/lib.rs".to_string(),
-            "crates/perl-lsp/src/main.rs".to_string(),
+            "crates/perl-lsp-rs/src/main.rs".to_string(),
             "crates/perl-parser/tests/test.rs".to_string(),
             "README.md".to_string(),
             "scripts/something.sh".to_string(),
@@ -300,7 +300,7 @@ mod tests {
         let dirs = extract_crate_dirs(&files);
         assert_eq!(dirs.len(), 2);
         assert!(dirs.contains("crates/perl-parser"));
-        assert!(dirs.contains("crates/perl-lsp"));
+        assert!(dirs.contains("crates/perl-lsp-rs"));
     }
 
     #[test]

@@ -4425,7 +4425,7 @@ mod tests {
             r"crates\perl-parser\src\bin\perl-parse.rs:127:std::process::exit(0);"
         ));
         assert!(is_allowlisted_exit_hit(
-            "crates/perl-lsp/src/runtime/dispatch/lifecycle.rs:29:std::process::exit(exit_code);"
+            "crates/perl-lsp-rs/src/runtime/dispatch/lifecycle.rs:29:std::process::exit(exit_code);"
         ));
         assert!(!is_allowlisted_exit_hit(
             r#"crates\perl-ci-hygiene\src\main.rs:3196:println!("std::process::exit")"#

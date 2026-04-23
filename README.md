@@ -100,7 +100,7 @@ Different users walk in through different doors. Pick the one that matches your 
 
 | Layer | Crates | Role |
 | --- | --- | --- |
-| LSP server binary | `crates/perllsp`, `crates/perl-lsp` | Protocol loop, request dispatch |
+| LSP server binary | `crates/perllsp`, `crates/perl-lsp-rs` | Protocol loop, request dispatch |
 | Debug adapter | `crates/perl-dap` | DAP server for stepping, breakpoints, evaluate |
 | **Parser stack (center)** | `crates/perl-parser`, `crates/perl-lexer`, `crates/perl-parser-core` | Recursive-descent v3 parser and context-aware lexer — all IDE features read from this |
 | Semantic analysis | `crates/perl-semantic-analyzer` | Scope tracking, symbol resolution, Moose/Moo handling |

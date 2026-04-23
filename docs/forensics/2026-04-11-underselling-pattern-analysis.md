@@ -157,7 +157,7 @@ does not appear in the capability story at all.
 
 #### 2. Hover — 2,839 lines, generic "documentation" catalog entry
 
-Verified from `crates/perl-lsp/src/runtime/language/hover.rs`:
+Verified from `crates/perl-lsp-rs/src/runtime/language/hover.rs`:
 - **2,839 lines** of hover-generation logic
 - **41 functions** (`fn` definitions) in the file
 - Specialized renderers for POD markdown, XS::Typemap integration,
@@ -242,7 +242,7 @@ story entirely.
 
 ### 2c. The LSP 3.18 delta: 2 implemented features not catalogued
 
-Verified from `crates/perl-lsp/src/runtime/lifecycle/capabilities.rs:97`:
+Verified from `crates/perl-lsp-rs/src/runtime/lifecycle/capabilities.rs:97`:
 - The capabilities module consumes `markupMessageSupport` from
   `DiagnosticClientCapabilities`, which is an **LSP 3.18 delta feature**
 - The same file implements `filters.relativePatternSupport` (also 3.18)

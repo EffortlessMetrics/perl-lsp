@@ -37,7 +37,7 @@ These tests cover:
 - **Semantic token legend** (3 snapshots): Token type ordering, modifier ordering,
   and the full index-to-name mapping table.
 
-### LSP Capability Snapshots — `crates/perl-lsp/tests/`
+### LSP Capability Snapshots — `crates/perl-lsp-rs/tests/`
 
 | Test file | Snapshots directory | Coverage |
 |-----------|-------------------|----------|

@@ -389,7 +389,7 @@ The 30-crate published target and all other ADR content remain unchanged.
 
 **The decision:** Apply the same thin UX facade / implementation core pattern established by Wave D (`perl-parser` / `perl-parser-core`) to the LSP lane:
 
-- **`perl-lsp-rs`** — thin user-facing facade (re-exports, ergonomic wrappers, binary entry point in `crates/perl-lsp/src/main.rs`).
+- **`perl-lsp-rs`** — thin user-facing facade (re-exports, ergonomic wrappers, binary entry point in `crates/perl-lsp-rs/src/main.rs`).
 - **`perl-lsp-rs-core`** — implementation home for Wave F/G1/G2/G3 absorptions (features, providers, runtime, governance).
 
 Dependency direction: `perl-lsp-rs → perl-lsp-rs-core` (one-way; no cycle).

@@ -263,7 +263,7 @@ regression_coverage:
   missing_regression_tests: []
 
 hotspot_coverage:
-  - hotspot: "crates/perl-lsp/src/connection.rs"
+  - hotspot: "crates/perl-lsp-rs/src/connection.rs"
     tested: yes
     test_references:
       - test_graceful_shutdown_handles_broken_pipe
