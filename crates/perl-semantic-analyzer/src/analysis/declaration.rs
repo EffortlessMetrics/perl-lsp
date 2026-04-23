@@ -1780,6 +1780,19 @@ pub fn symbol_at_cursor(ast: &Node, offset: usize, current_pkg: &str) -> Option<
             };
             Some(SymbolKey { pkg: pkg.into(), name: bare.into(), sigil: None, kind: SymKind::Sub })
         }
+        NodeKind::Identifier { name } => {
+            let parent = path.get(path.len().saturating_sub(2)).map(|node| &node.kind);
+            if matches!(parent, Some(NodeKind::ExpressionStatement { .. })) {
+                let pkg = find_import_source(ast, name).unwrap_or_else(|| current_pkg.to_string());
+                return Some(SymbolKey {
+                    pkg: pkg.into(),
+                    name: name.clone().into(),
+                    sigil: None,
+                    kind: SymKind::Sub,
+                });
+            }
+            None
+        }
         NodeKind::Subroutine { name: Some(name), .. } => {
             let (pkg, bare) = if let Some(idx) = name.rfind("::") {
                 (&name[..idx], &name[idx + 2..])

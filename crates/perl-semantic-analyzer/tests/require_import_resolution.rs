@@ -28,6 +28,20 @@ my $x = load_data();
 }
 
 #[test]
+fn require_import_bareword_call_without_parens_resolves_pkg() {
+    let code = r#"require My::Loader;
+My::Loader->import('load_data');
+load_data;
+"#;
+    let pkg = parse_and_symbol_at(code, "load_data;\n");
+    assert_eq!(
+        pkg.as_deref(),
+        Some("My::Loader"),
+        "bareword load_data should resolve to My::Loader via require+import, got: {pkg:?}"
+    );
+}
+
+#[test]
 fn require_import_qw_list_resolves_pkg() {
     let code = r#"require My::Tools;
 My::Tools->import(qw(helper_func));
