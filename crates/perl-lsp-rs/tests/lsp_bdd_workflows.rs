@@ -279,6 +279,21 @@ fn completion_labels(response: &Value) -> BTreeSet<String> {
     labels
 }
 
+fn signature_labels(response: &Value) -> Vec<String> {
+    response
+        .get("signatures")
+        .and_then(Value::as_array)
+        .map(|signatures| {
+            signatures
+                .iter()
+                .filter_map(|signature| {
+                    signature.get("label").and_then(Value::as_str).map(ToOwned::to_owned)
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 fn hover_text(hover: &Value) -> String {
     if let Some(text) = hover.pointer("/contents/value").and_then(Value::as_str) {
         return text.to_string();
@@ -687,6 +702,51 @@ is(calculate_total(1, 2), 3, 'adds values');
     let signatures =
         signature_help.get("signatures").and_then(Value::as_array).cloned().unwrap_or_default();
     assert!(!signatures.is_empty(), "signature help should include signatures");
+
+    Ok(())
+}
+
+#[test]
+#[serial]
+fn bdd_signature_help_tracks_active_parameter() -> Result<(), Box<dyn std::error::Error>> {
+    let scenario = BddScenario::new("Signature help tracks active parameter");
+
+    let code = r#"use strict;
+use warnings;
+
+my $text = "Hello World";
+my $slice = substr($text, 6, );
+"#;
+
+    scenario.given("a workspace where the user is typing a built-in function call");
+    let (mut harness, workspace) = setup_workspace(&[("main.pl", code)])?;
+    let uri = workspace.uri("main.pl");
+    harness.open(&uri, code)?;
+
+    scenario.when("requesting signature help after typing the second comma in substr");
+    let (line, mut character) = find_position(code, "substr($text, 6,");
+    character += "substr($text, 6,".len() as u32;
+
+    let signature_help = harness.request(
+        "textDocument/signatureHelp",
+        json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": line, "character": character }
+        }),
+    )?;
+
+    scenario.then("signature help includes substr and marks the third parameter as active");
+    let labels = signature_labels(&signature_help);
+    assert!(
+        labels.iter().any(|label| label.contains("substr")),
+        "signature help should include substr label; got {labels:?}"
+    );
+
+    let active_parameter = signature_help
+        .get("activeParameter")
+        .and_then(Value::as_u64)
+        .ok_or("expected activeParameter in signature help response")?;
+    assert_eq!(active_parameter, 2, "expected LENGTH argument position");
 
     Ok(())
 }
