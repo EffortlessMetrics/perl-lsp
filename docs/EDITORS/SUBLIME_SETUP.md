@@ -120,7 +120,7 @@ perllsp --health
   "clients": {
     "perl-lsp": {
       "enabled": true,
-      "command": ["perl-lsp", "--stdio"],
+      "command": ["perllsp", "--stdio"],
       "selector": "source.perl",
       "initializationOptions": {
         "perl": {
@@ -168,7 +168,7 @@ Open LSP settings (`Preferences: LSP Settings`) and add:
   "clients": {
     "perl-lsp": {
       "enabled": true,
-      "command": ["perl-lsp", "--stdio"],
+      "command": ["perllsp", "--stdio"],
       "selector": "source.perl",
       "priority": 1,
       "initializationOptions": {
@@ -436,8 +436,8 @@ To customize keybindings, edit `Preferences: Key Bindings`:
 
 1. **Verify binary is in PATH**:
    - Open terminal
-   - Run: `which perl-lsp`
-   - Should output: `/usr/local/bin/perl-lsp` or similar
+   - Run: `which perllsp`
+   - Should output: `/usr/local/bin/perllsp` or similar
 
 2. **Check LSP status**:
    - Open Command Palette: `Ctrl+Shift+P`
@@ -739,7 +739,7 @@ Enable detailed logging for troubleshooting:
   "clients": {
     "perl-lsp": {
       "enabled": true,
-      "command": ["perl-lsp", "--stdio"],
+      "command": ["perllsp", "--stdio"],
       "selector": "source.perl",
       "priority": 1,
       "initializationOptions": {
