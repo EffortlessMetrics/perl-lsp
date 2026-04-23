@@ -85,6 +85,16 @@ If `--version` and `--health` work but your editor still cannot connect, jump to
 
 2. Open a `.pl` or `.pm` file - the server starts automatically.
 
+### Kilo Code
+
+Kilo Code is VS Code-compatible, so you can use the same extension and workflow:
+
+1. Install the `EffortlessMetrics.perl-lsp-rs` extension from the extensions UI.
+
+2. Open your Perl project in Kilo Code and confirm `perllsp --health` returns `ok` in an integrated terminal.
+
+3. If you prefer a generic LSP client setup, point it to `perllsp --stdio`.
+
 ### Neovim
 
 Add to your `init.lua`:

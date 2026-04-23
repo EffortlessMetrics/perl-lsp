@@ -28,6 +28,7 @@ perllsp --health
 | Emacs | use `lsp-mode` or `eglot` with `perllsp --stdio` | [docs/EDITORS/EMACS_SETUP.md](../EDITORS/EMACS_SETUP.md) |
 | Helix | add a `perllsp` language server entry | [docs/EDITORS/HELIX_SETUP.md](../EDITORS/HELIX_SETUP.md) |
 | Sublime Text | register `perllsp` in the LSP package settings | [docs/EDITORS/SUBLIME_SETUP.md](../EDITORS/SUBLIME_SETUP.md) |
+| Kilo Code | follow the VS Code flow; run `perllsp --stdio` | [docs/EDITORS/VS_CODE_SETUP.md](../EDITORS/VS_CODE_SETUP.md) |
 
 ## Minimal Configurations
 
@@ -63,6 +64,15 @@ args = ["--stdio"]
 
 Register a client whose command is `["perllsp", "--stdio"]` and scope it to
 Perl source files.
+
+### Kilo Code
+
+Kilo Code is VS Code-compatible, so the quickest path is the same as VS Code:
+install the `perl-lsp-rs` extension and ensure the workspace launches
+`perllsp --stdio`.
+
+If you use a generic LSP client inside Kilo Code, set its server command to
+`["perllsp", "--stdio"]` and scope it to Perl files.
 
 ## When Setup Fails
 
