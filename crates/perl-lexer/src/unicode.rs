@@ -1,8 +1,11 @@
+//! Unicode-aware identifier helpers for the Perl lexer.
+//!
+//! This module encapsulates character-class checks used by tokenization when
+//! lexing Perl symbols and barewords. It extends `unicode-ident` behavior with
+//! Perl-specific allowances such as emoji code points and join/variation
+//! characters used in modern identifier-like grapheme clusters.
+
 use std::sync::atomic::{AtomicU64, Ordering};
-/// Unicode character classification for Perl identifiers
-///
-/// Perl allows a wide range of Unicode characters in identifiers,
-/// including emoji and other symbols.
 use unicode_ident::{is_xid_continue, is_xid_start};
 
 // Performance tracking for Unicode operations

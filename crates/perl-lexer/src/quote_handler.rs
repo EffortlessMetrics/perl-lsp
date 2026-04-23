@@ -1,11 +1,12 @@
+//! Shared quote-operator parsing primitives used by the lexer.
+//!
+//! Perl has several quote-like operators (`q`, `qq`, `qw`, `qr`, `qx`, `m`,
+//! `s`, `tr`, `y`) with overlapping delimiter and modifier behavior. This
+//! module provides small reusable helpers for delimiter pairing, operator
+//! classification, and modifier-shape normalization so the core lexer loop can
+//! stay focused on token boundaries.
+
 use crate::TokenType;
-/// Quote operator handling with uniform delimiter processing and modifier attachment
-///
-/// This module provides consistent handling for all Perl quote-like operators:
-/// - q/qq/qw/qr/qx for quote operators
-/// - m for match operators  
-/// - s for substitution operators
-/// - tr/y for transliteration operators
 use std::sync::Arc;
 
 /// Specification for which modifiers are allowed for each operator

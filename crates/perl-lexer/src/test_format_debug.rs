@@ -1,3 +1,8 @@
+//! Regression test module for format-body lexer behavior.
+//!
+//! These tests ensure malformed `format` bodies fail fast with an error token
+//! instead of stalling tokenization.
+
 #[cfg(test)]
 mod tests {
     use crate::{PerlLexer, TokenType};
