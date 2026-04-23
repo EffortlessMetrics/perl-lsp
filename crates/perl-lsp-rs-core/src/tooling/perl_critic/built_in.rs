@@ -147,7 +147,7 @@ fn find_bareword_open_filehandles(content: &str) -> Vec<Range> {
     let bytes = content.as_bytes();
     let mut i = 0usize;
 
-    while i + 4 < bytes.len() {
+    while i + 4 <= bytes.len() {
         if &bytes[i..i + 4] != b"open" || !is_word_boundary(bytes, i, i + 4) {
             i += 1;
             continue;
