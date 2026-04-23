@@ -336,6 +336,46 @@ fn test_go_to_implementation_skips_version_pragma() -> Result<(), Box<dyn std::e
 }
 
 #[test]
+fn test_go_to_implementation_case_insensitive_module_path() -> Result<(), Box<dyn std::error::Error>>
+{
+    // Some distributions use mixed-case file paths (e.g. AntiGravity.pm) while tests may
+    // reference a normalized module spelling.
+    let temp_dir = tempdir()?;
+    let lib_dir = temp_dir.path().join("lib").join("Google");
+    let t_dir = temp_dir.path().join("t");
+    fs::create_dir_all(&lib_dir)?;
+    fs::create_dir_all(&t_dir)?;
+
+    let pm_file = lib_dir.join("AntiGravity.pm");
+    let t_file = t_dir.join("google-antigravity.t");
+    fs::write(&pm_file, "package Google::AntiGravity;\n1;\n")?;
+    fs::write(&t_file, "use strict;\nuse Google::Antigravity;\ndone_testing;\n")?;
+
+    let provider =
+        ExecuteCommandProvider::with_workspace_roots(vec![temp_dir.path().to_path_buf()]);
+    let result = provider.execute_command(
+        "perl.goToImplementation",
+        vec![Value::String(t_file.to_string_lossy().to_string())],
+    );
+
+    assert!(
+        result.is_ok(),
+        "perl.goToImplementation should support case-insensitive path fallback"
+    );
+    let value = result?;
+    assert!(
+        value["found"].as_bool().unwrap_or(false),
+        "Should resolve Google::Antigravity to AntiGravity.pm"
+    );
+    let impl_path = value["path"].as_str().ok_or("expected path string")?;
+    assert!(
+        impl_path.ends_with("AntiGravity.pm"),
+        "Should navigate to AntiGravity.pm, got: {impl_path}"
+    );
+    Ok(())
+}
+
+#[test]
 fn test_find_workspace_root_prefers_project_marker() -> Result<(), Box<dyn std::error::Error>> {
     // A directory with a cpanfile should be found as the workspace root when walking up.
     // We call go_to_test directly (bypassing execute_command security validation) so we can

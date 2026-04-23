@@ -75,6 +75,56 @@ impl Default for ExecuteCommandProvider {
 }
 
 impl ExecuteCommandProvider {
+    fn resolve_local_module_path(
+        workspace_root: &std::path::Path,
+        module_name: &str,
+    ) -> Option<std::path::PathBuf> {
+        let rel_path = module_name.replace("::", std::path::MAIN_SEPARATOR_STR) + ".pm";
+        let candidate = workspace_root.join("lib").join(&rel_path);
+        if candidate.exists() {
+            return Some(candidate);
+        }
+
+        let parts: Vec<&str> = module_name.split("::").filter(|part| !part.is_empty()).collect();
+        if parts.is_empty() {
+            return None;
+        }
+
+        let mut current = workspace_root.join("lib");
+        for part in &parts[..parts.len().saturating_sub(1)] {
+            current = Self::find_case_insensitive_child(&current, part, false)?;
+        }
+
+        let file_name = format!("{}.pm", parts[parts.len() - 1]);
+        Self::find_case_insensitive_child(&current, &file_name, true)
+    }
+
+    fn find_case_insensitive_child(
+        parent: &std::path::Path,
+        wanted_name: &str,
+        require_file: bool,
+    ) -> Option<std::path::PathBuf> {
+        let entries = std::fs::read_dir(parent).ok()?;
+        for entry in entries.flatten() {
+            let Ok(file_type) = entry.file_type() else {
+                continue;
+            };
+            if require_file && !file_type.is_file() {
+                continue;
+            }
+            if !require_file && !file_type.is_dir() {
+                continue;
+            }
+
+            let candidate_name = entry.file_name();
+            let candidate_name = candidate_name.to_string_lossy();
+            if candidate_name.eq_ignore_ascii_case(wanted_name) {
+                return Some(entry.path());
+            }
+        }
+        None
+    }
+
     /// Create a new execute command provider.
     pub fn new() -> Self {
         Self { workspace_roots: Vec::new() }
@@ -661,10 +711,9 @@ impl ExecuteCommandProvider {
                 continue;
             }
 
-            // Map Foo::Bar -> lib/Foo/Bar.pm
-            let rel_path = module_name.replace("::", std::path::MAIN_SEPARATOR_STR) + ".pm";
-            let candidate = workspace_root.join("lib").join(&rel_path);
-            if candidate.exists() {
+            // Map Foo::Bar -> lib/Foo/Bar.pm (with case-insensitive fallback).
+            if let Some(candidate) = Self::resolve_local_module_path(&workspace_root, &module_name)
+            {
                 return json!({
                     "found": true,
                     "path": candidate.to_string_lossy(),
