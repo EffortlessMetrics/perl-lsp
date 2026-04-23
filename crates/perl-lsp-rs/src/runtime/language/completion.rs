@@ -400,7 +400,9 @@ impl LspServer {
 
                 // Snapshot capability flag once before the loop to avoid
                 // acquiring client_capabilities lock per completion item
-                let snippet_support = self.client_capabilities.lock().snippet_support;
+                let client_caps = self.client_capabilities.lock();
+                let snippet_support = client_caps.snippet_support;
+                let commit_chars_support = client_caps.completion_commit_characters_support;
 
                 let items: Vec<Value> = completions
                     .into_iter()
@@ -450,7 +452,7 @@ impl LspServer {
                             });
                         }
 
-                        if let Some(chars) = commit_chars_for_kind(c.kind) {
+                        if commit_chars_support && let Some(chars) = commit_chars_for_kind(c.kind) {
                             item["commitCharacters"] = json!(chars);
                         }
 
@@ -611,6 +613,10 @@ impl LspServer {
                 );
 
                 // Convert to JSON format with highly optimized cancellation checks
+                let client_caps = self.client_capabilities.lock();
+                let commit_chars_support = client_caps.completion_commit_characters_support;
+                let snippet_support = client_caps.snippet_support;
+
                 let items: Vec<Value> = completions
                     .into_iter()
                     .enumerate()
@@ -633,11 +639,17 @@ impl LspServer {
                                 CompletionItemKind::Property => 7,
                             },
                         });
+                        let is_snippet = c.kind == CompletionItemKind::Snippet;
+                        let insert_text_format = if is_snippet && snippet_support { 2 } else { 1 };
+                        item["insertTextFormat"] = json!(insert_text_format);
 
                         if let Some(detail) = c.detail {
                             item["detail"] = json!(detail);
                         }
-                        if let Some(insert_text) = c.insert_text {
+                        if let Some(mut insert_text) = c.insert_text {
+                            if is_snippet && !snippet_support {
+                                insert_text = Self::degrade_snippet_to_plaintext(&insert_text);
+                            }
                             item["insertText"] = json!(insert_text);
                         }
                         if let Some(documentation) = c.documentation {
@@ -647,7 +659,7 @@ impl LspServer {
                             });
                         }
 
-                        if let Some(chars) = commit_chars_for_kind(c.kind) {
+                        if commit_chars_support && let Some(chars) = commit_chars_for_kind(c.kind) {
                             item["commitCharacters"] = json!(chars);
                         }
 
