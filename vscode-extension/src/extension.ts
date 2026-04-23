@@ -17,6 +17,7 @@ import { registerGherkinProviders } from './gherkinProviders';
 import { registerGherkinStepDefinitionSupport } from './gherkinStepDefinitions';
 import { selectTestCommandAtPosition } from './runTestAtCursor';
 import { StreamingCompletionController } from './streamingCompletion';
+import { registerMcpSupport } from './mcpSupport';
 import {
     classifyStartupError,
     formatStartupFailureDialog,
@@ -309,6 +310,7 @@ export async function setPerlCriticSeverity(
 
 export async function activate(context: vscode.ExtensionContext) {
     outputChannel = vscode.window.createOutputChannel('Perl Language Server');
+    const mcpDisposable = registerMcpSupport(outputChannel);
     statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
     statusBarItem.command = 'perl-lsp.showStatusMenu';
     statusBarItem.show();
@@ -903,6 +905,7 @@ export async function activate(context: vscode.ExtensionContext) {
         configurationWatcher,
         fileCreationWatcher,
         arrowCompletionWatcher,
+        ...(mcpDisposable ? [mcpDisposable] : []),
         ...registerGherkinProviders(),
         ...registerGherkinStepDefinitionSupport(),
         ...registerPodPreview(context),
