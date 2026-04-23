@@ -1893,6 +1893,27 @@ impl WorkspaceIndex {
                     }
                 }
             }
+        } else {
+            // If the symbol is bare, also collect qualified references that end
+            // with the same bare name, e.g. `Pkg::foo` when searching for `foo`.
+            for (name, refs) in global_refs.iter() {
+                if !Self::is_qualified_variant_of(name, symbol_name) {
+                    continue;
+                }
+
+                for loc in refs {
+                    let key = (
+                        loc.uri.clone(),
+                        loc.range.start.line,
+                        loc.range.start.column,
+                        loc.range.end.line,
+                        loc.range.end.column,
+                    );
+                    if seen.insert(key) {
+                        locations.push(Location { uri: loc.uri.clone(), range: loc.range });
+                    }
+                }
+            }
         }
 
         locations
@@ -1933,10 +1954,30 @@ impl WorkspaceIndex {
                         ));
                     }
                 }
+            } else {
+                for (name, refs) in &file_index.references {
+                    if !Self::is_qualified_variant_of(name, symbol_name) {
+                        continue;
+                    }
+
+                    for r in refs.iter().filter(|r| r.kind != ReferenceKind::Definition) {
+                        seen.insert((
+                            r.uri.clone(),
+                            r.range.start.line,
+                            r.range.start.column,
+                            r.range.end.line,
+                            r.range.end.column,
+                        ));
+                    }
+                }
             }
         }
 
         seen.len()
+    }
+
+    fn is_qualified_variant_of(candidate: &str, bare_symbol: &str) -> bool {
+        candidate.rsplit_once("::").is_some_and(|(_, candidate_bare)| candidate_bare == bare_symbol)
     }
 
     /// Find the definition of a symbol
@@ -3656,6 +3697,56 @@ sub test {
 
         let refs = index.find_references("$x");
         assert!(refs.len() >= 2); // Definition + at least one usage
+    }
+
+    #[test]
+    fn test_find_references_bare_name_includes_qualified_calls() {
+        let index = WorkspaceIndex::new();
+        let uri = "file:///refs.pl";
+        let code = r#"
+package RefDemo;
+sub helper {
+    return 1;
+}
+
+helper();
+RefDemo::helper();
+"#;
+
+        must(index.index_file(must(url::Url::parse(uri)), code.to_string()));
+
+        let bare_refs = index.find_references("helper");
+        let qualified_refs = index.find_references("RefDemo::helper");
+
+        assert!(
+            bare_refs.len() >= qualified_refs.len(),
+            "bare-name reference lookup should include qualified calls"
+        );
+    }
+
+    #[test]
+    fn test_count_usages_bare_name_includes_qualified_calls() {
+        let index = WorkspaceIndex::new();
+        let uri = "file:///usage.pl";
+        let code = r#"
+package UsageDemo;
+sub helper {
+    return 1;
+}
+
+helper();
+UsageDemo::helper();
+"#;
+
+        must(index.index_file(must(url::Url::parse(uri)), code.to_string()));
+
+        let bare_usage_count = index.count_usages("helper");
+        let qualified_usage_count = index.count_usages("UsageDemo::helper");
+
+        assert!(
+            bare_usage_count >= qualified_usage_count,
+            "bare-name usage count should include qualified call sites"
+        );
     }
 
     #[test]
