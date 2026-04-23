@@ -125,13 +125,21 @@ impl PullDiagnosticsProvider {
     }
 
     /// Handle textDocument/diagnostic request.
+    ///
+    /// The `include_paths` parameter allows specifying @INC search paths for PL701
+    /// (ModuleNotFound) diagnostics. When `None`, the context is created with empty
+    /// include_paths (backward compatible with existing call sites).
     pub fn get_document_diagnostics(
         &self,
         uri: &Uri,
         content: &str,
         previous_result_id: Option<String>,
+        include_paths: Option<Vec<String>>,
     ) -> DocumentDiagnosticReport {
-        let context = PullDiagnosticsContext::new();
+        let mut context = PullDiagnosticsContext::new();
+        if let Some(paths) = include_paths {
+            context.include_paths = paths;
+        }
         self.get_document_diagnostics_with_context(uri, content, previous_result_id, &context, None)
     }
 
@@ -940,7 +948,8 @@ mod tests {
     fn diagnostic_data_for_parse_error() -> Result<(), Box<dyn std::error::Error>> {
         let provider = PullDiagnosticsProvider::new();
         let uri: Uri = "file:///test.pl".parse()?;
-        let items = get_full_items(provider.get_document_diagnostics(&uri, "my $x = ;", None));
+        let items =
+            get_full_items(provider.get_document_diagnostics(&uri, "my $x = ;", None, None));
         assert!(!items.is_empty());
         // Find the PL001 (ParseError) diagnostic — ordering may vary depending on
         // which lints run first (e.g., PL100 MissingStrict may precede PL001).
@@ -961,7 +970,7 @@ mod tests {
     fn diagnostic_data_none_when_no_code() -> Result<(), Box<dyn std::error::Error>> {
         let provider = PullDiagnosticsProvider::new();
         let uri: Uri = "file:///test.pl".parse()?;
-        let report = provider.get_document_diagnostics(&uri, "my $x = 1;\n", None);
+        let report = provider.get_document_diagnostics(&uri, "my $x = 1;\n", None, None);
         let items = get_full_items(report);
         // Any diagnostic without a code must also have data: None
         assert!(items.iter().all(|d| d.code.is_some() || d.data.is_none()));
@@ -973,7 +982,7 @@ mod tests {
         let provider = PullDiagnosticsProvider::new();
         let uri: Uri = "file:///test.pl".parse()?;
         let code = "print 'hello';\n";
-        let items = get_full_items(provider.get_document_diagnostics(&uri, code, None));
+        let items = get_full_items(provider.get_document_diagnostics(&uri, code, None, None));
         let diag = items
             .iter()
             .find(|d| {
@@ -997,7 +1006,7 @@ mod tests {
         let uri: Uri = "file:///test.pl".parse()?;
         // Redeclare $x in the same scope to trigger PL105
         let code = "use strict; use warnings; my $x = 1; my $x = 2;\n";
-        let items = get_full_items(provider.get_document_diagnostics(&uri, code, None));
+        let items = get_full_items(provider.get_document_diagnostics(&uri, code, None, None));
         if let Some(diag) = items.iter().find(|d| {
             d.code.as_ref().map(|c| matches!(c, NumberOrString::String(s) if s == "PL105"))
                 == Some(true)
@@ -1020,7 +1029,8 @@ mod tests {
     fn diagnostic_data_is_valid_json_object() -> Result<(), Box<dyn std::error::Error>> {
         let provider = PullDiagnosticsProvider::new();
         let uri: Uri = "file:///test.pl".parse()?;
-        let items = get_full_items(provider.get_document_diagnostics(&uri, "my $x = ;", None));
+        let items =
+            get_full_items(provider.get_document_diagnostics(&uri, "my $x = ;", None, None));
         for diag in &items {
             if diag.code.is_some() {
                 let data = diag.data.as_ref().ok_or("data must be Some when code is Some")?;
