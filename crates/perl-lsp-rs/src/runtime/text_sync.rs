@@ -395,6 +395,20 @@ impl LspServer {
                 // Get current document state or create new one
                 let mut documents = self.documents.lock();
                 let normalized_uri = self.normalize_uri_key(uri);
+                if let Some(existing_doc) = self.get_document(&documents, uri) {
+                    // Some clients can deliver out-of-order notifications during
+                    // reconnects or transport retries. Ignore stale changes
+                    // before mutating caches or doing parse work.
+                    if version > 0 && existing_doc.version >= version {
+                        tracing::debug!(
+                            "Ignoring stale didChange for {} (incoming version {}, current version {})",
+                            uri,
+                            version,
+                            existing_doc.version
+                        );
+                        return Ok(());
+                    }
+                }
 
                 // Invalidate the SemanticAnalyzer cache for this URI — content is changing.
                 {
@@ -2089,5 +2103,33 @@ mod tests {
                 err.code
             );
         }
+    }
+
+    /// didChange notifications with stale versions should be ignored.
+    #[test]
+    fn handle_did_change_ignores_stale_version() -> Result<(), Box<dyn std::error::Error>> {
+        let server = LspServer::new();
+        let uri = "file:///stale_change.pl";
+        let initial = "my $value = 1;\n";
+
+        server.did_open(json!({
+            "textDocument": {
+                "uri": uri,
+                "languageId": "perl",
+                "version": 5,
+                "text": initial
+            }
+        }))?;
+
+        server.handle_did_change(Some(json!({
+            "textDocument": { "uri": uri, "version": 4 },
+            "contentChanges": [{ "text": "my $value = 999;\n" }]
+        })))?;
+
+        let docs = server.documents.lock();
+        let doc = docs.get(uri).ok_or("document missing after stale didChange")?;
+        assert_eq!(doc.version, 5, "stale didChange must not change version");
+        assert_eq!(doc.text, initial, "stale didChange must not change content");
+        Ok(())
     }
 }
