@@ -3824,9 +3824,18 @@ fn collect_todo_hits(
             continue;
         }
         let contents = read_lines(path)?;
+        let mut rust_block_comment_depth = 0usize;
         for (line_no, line) in contents.iter().enumerate() {
             let match_line = if is_rust {
-                has_unlinked_todo_in_rust_line(line, todo_re)
+                let inline_match = has_unlinked_todo_in_rust_line(line, todo_re);
+                let block_body_match = has_unlinked_todo_in_open_rust_block_comment(
+                    line,
+                    rust_block_comment_depth,
+                    todo_re,
+                );
+                rust_block_comment_depth =
+                    update_rust_block_comment_depth(line, rust_block_comment_depth);
+                inline_match || block_body_match
             } else {
                 has_unlinked_todo_in_hash_line(line, todo_re)
             };
@@ -3877,6 +3886,56 @@ fn has_unlinked_todo_in_hash_line(line: &str, token_re: &Regex) -> bool {
         return false;
     };
     has_unlinked_token(&line[idx + 1..], token_re)
+}
+
+fn has_unlinked_todo_in_open_rust_block_comment(
+    line: &str,
+    rust_block_comment_depth: usize,
+    token_re: &Regex,
+) -> bool {
+    if rust_block_comment_depth == 0 {
+        return false;
+    }
+    let Some(comment) = comment_prefix_within_open_rust_block(line) else {
+        return false;
+    };
+    has_unlinked_token(comment, token_re)
+}
+
+fn comment_prefix_within_open_rust_block(line: &str) -> Option<&str> {
+    let bytes = line.as_bytes();
+    let mut i = 0usize;
+    while i + 1 < bytes.len() {
+        if bytes[i] == b'*' && bytes[i + 1] == b'/' && !is_index_in_rust_literal(line, i) {
+            return Some(&line[..i]);
+        }
+        i += 1;
+    }
+    Some(line)
+}
+
+fn update_rust_block_comment_depth(line: &str, mut depth: usize) -> usize {
+    let bytes = line.as_bytes();
+    let mut i = 0usize;
+    while i + 1 < bytes.len() {
+        let idx = i;
+        let pair = (bytes[idx], bytes[idx + 1]);
+        if pair == (b'/', b'*')
+            && !is_index_in_rust_literal(line, idx)
+            && !is_likely_string_literal_comment_start(line, idx)
+        {
+            depth += 1;
+            i += 2;
+            continue;
+        }
+        if pair == (b'*', b'/') && !is_index_in_rust_literal(line, idx) {
+            depth = depth.saturating_sub(1);
+            i += 2;
+            continue;
+        }
+        i += 1;
+    }
+    depth
 }
 
 fn find_hash_comment_start(line: &str) -> Option<usize> {
@@ -4324,6 +4383,33 @@ mod tests {
             "let s = \"safe literal\"; // TODO: follow up",
             &todo_re
         ));
+
+        Ok(())
+    }
+
+    #[test]
+    fn rust_todo_detection_catches_block_comment_body_lines() -> Result<()> {
+        let todo_re = Regex::new(r"TODO|FIXME")?;
+
+        let mut depth = 0usize;
+        let lines = [
+            "/*",
+            "  TODO: follow-up in block body",
+            "*/",
+            "let todo_text = \"TODO in code string\";",
+        ];
+
+        let mut hits = Vec::new();
+        for line in lines {
+            let inline_match = has_unlinked_todo_in_rust_line(line, &todo_re);
+            let block_body_match =
+                has_unlinked_todo_in_open_rust_block_comment(line, depth, &todo_re);
+            depth = update_rust_block_comment_depth(line, depth);
+            hits.push(inline_match || block_body_match);
+        }
+
+        assert_eq!(hits, vec![false, true, false, false]);
+        assert_eq!(depth, 0);
 
         Ok(())
     }
