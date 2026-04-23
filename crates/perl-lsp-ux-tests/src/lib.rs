@@ -205,13 +205,30 @@ impl UxHarness {
 
     /// Request completion at `(line, character)`.
     pub fn completion(&self, relative_path: &str, line: u32, character: u32) -> Result<Vec<Value>> {
+        self.completion_with_context(relative_path, line, character, 1, None)
+    }
+
+    /// Request completion with explicit trigger context.
+    pub fn completion_with_context(
+        &self,
+        relative_path: &str,
+        line: u32,
+        character: u32,
+        trigger_kind: u32,
+        trigger_character: Option<&str>,
+    ) -> Result<Vec<Value>> {
         let uri = self.workspace.uri(relative_path);
+        let mut context = json!({ "triggerKind": trigger_kind });
+        if let Some(trigger_character) = trigger_character {
+            context["triggerCharacter"] = Value::String(trigger_character.to_string());
+        }
+
         let resp = self.client.request(
             "textDocument/completion",
             json!({
                 "textDocument": { "uri": uri },
                 "position": { "line": line, "character": character },
-                "context": { "triggerKind": 1 }
+                "context": context
             }),
             self.config.timeout,
         )?;

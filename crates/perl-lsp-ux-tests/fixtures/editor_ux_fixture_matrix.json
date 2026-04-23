@@ -269,6 +269,21 @@
         "deleted symbols disappear from workspace/symbol",
         "definition no longer resolves to deleted targets"
       ]
+    },
+    {
+      "id": "cross_editor_completion_parity",
+      "scenario_file": "ux_scenario_18_cross_editor_completion.rs",
+      "subsystem_owner": "editor_intelligence",
+      "ci_tier": "pr",
+      "user_journey": "request completion through representative VS Code, Zed, Neovim, and Helix trigger contexts",
+      "measures": [
+        "workflow_pass_rate",
+        "workflow_stability_rate"
+      ],
+      "expected_outcomes": [
+        "completion results remain non-empty across editor probe contexts",
+        "shared lexical completion payload shape stays aligned across editors"
+      ]
     }
   ]
 }
