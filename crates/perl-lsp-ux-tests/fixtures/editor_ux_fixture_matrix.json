@@ -379,6 +379,22 @@
         "publishDiagnostics republish occurs after edit",
         "updated diagnostic payload remains valid"
       ]
+    },
+    {
+      "id": "real_repo_first_diagnostics_budget",
+      "scenario_file": "ux_scenario_18_real_repo_perf.rs",
+      "subsystem_owner": "diagnostics",
+      "ci_tier": "nightly",
+      "user_journey": "open a representative 5000+ line Catalyst-like app fixture and observe first diagnostics latency",
+      "measures": [
+        "workflow_pass_rate",
+        "workflow_stability_rate",
+        "p95_time_to_first_useful_result_ms"
+      ],
+      "expected_outcomes": [
+        "first publishDiagnostics arrives within 5 seconds",
+        "real-repo fixture parsing remains crash-free"
+      ]
     }
   ],
   "confidence_signals": [
