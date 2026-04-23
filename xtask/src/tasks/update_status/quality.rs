@@ -122,6 +122,44 @@ pub(super) fn count_ux_scenarios(root: &Path) -> usize {
     collect_ux_scenario_files(root).len()
 }
 
+fn parse_known_ux_gaps_from_readme_text(readme: &str) -> (usize, usize) {
+    let mut in_known_gaps = false;
+    let mut gap_entries = 0usize;
+    let mut issue_refs = 0usize;
+
+    for line in readme.lines() {
+        if line.trim() == "### Known gaps toward solid UX" {
+            in_known_gaps = true;
+            continue;
+        }
+
+        if !in_known_gaps {
+            continue;
+        }
+
+        if line.trim_start().starts_with("#### What shipped this cycle") {
+            break;
+        }
+
+        let trimmed = line.trim_start();
+        if trimmed.starts_with("- **") {
+            gap_entries += 1;
+            issue_refs +=
+                trimmed.split("https://github.com/EffortlessMetrics/perl-lsp/issues/").count() - 1;
+        }
+    }
+
+    (gap_entries, issue_refs)
+}
+
+pub(super) fn collect_known_ux_gaps(root: &Path) -> (usize, usize) {
+    let readme_path = root.join("README.md");
+    let Ok(readme_text) = fs::read_to_string(readme_path) else {
+        return (0, 0);
+    };
+    parse_known_ux_gaps_from_readme_text(&readme_text)
+}
+
 // ---------------------------------------------------------------------------
 // Generators
 // ---------------------------------------------------------------------------
@@ -130,6 +168,7 @@ pub(super) fn generate_quality_status(root: &Path, original: &str) -> Result<Str
     let mutation_by_crate = collect_per_crate_mutation(root);
     let tests_by_crate = collect_per_crate_test_counts(root);
     let ux_scenarios = count_ux_scenarios(root);
+    let (known_gap_entries, known_gap_issue_refs) = collect_known_ux_gaps(root);
 
     let has_mutation_data = !mutation_by_crate.is_empty();
     let mutation_note = if has_mutation_data {
@@ -140,8 +179,9 @@ pub(super) fn generate_quality_status(root: &Path, original: &str) -> Result<Str
 
     let bullets_content = format!(
         "- **Quality Metrics**: <50ms LSP response times, 931ns incremental parsing\n\
-         - **UX workflow harness**: {ux_scenarios} scenario files in `perl-lsp-ux-tests`; \
-           `just ux-tests` runs the default release-confidence lane and `just ux-tests-full` adds \
+         - **UX confidence indicators**: {ux_scenarios} executable first-5-minutes scenarios in `perl-lsp-ux-tests`; \
+           README tracks {known_gap_entries} current known-gap items linked to {known_gap_issue_refs} issue references\n\
+         - **UX workflow harness**: `just ux-tests` runs the default release-confidence lane and `just ux-tests-full` adds \
            the integration-only 10k-line large-file case; planning scaffold at \
            `docs/project/status/editor_ux.json`\n\
          - **Mutation testing**: {mutation_note}\n\
@@ -281,5 +321,32 @@ mod tests {
         );
         assert_eq!(receipt["integration_points"]["ci_lane"], "just ux-tests");
         Ok(())
+    }
+
+    #[test]
+    fn test_parse_known_ux_gaps_from_readme_text_counts_bullets_and_issue_refs() {
+        let readme = r#"
+### Known gaps toward solid UX
+
+#### Must land for v0.13.0
+
+- **Workspace-wide rename slice** ([#3522](https://github.com/EffortlessMetrics/perl-lsp/issues/3522))
+
+#### Nice to land
+
+- **Dynamic require / literal import** ([#3476](https://github.com/EffortlessMetrics/perl-lsp/issues/3476), tracked by umbrella [#4246](https://github.com/EffortlessMetrics/perl-lsp/issues/4246))
+
+#### Deferred to v0.14.0
+
+- **Dynamic workspace configuration** ([#3515](https://github.com/EffortlessMetrics/perl-lsp/issues/3515))
+
+#### What shipped this cycle (v0.12.x)
+
+- closed item that should not be counted
+"#;
+
+        let (gap_entries, issue_refs) = parse_known_ux_gaps_from_readme_text(readme);
+        assert_eq!(gap_entries, 3, "expected 3 known-gap entries");
+        assert_eq!(issue_refs, 4, "expected 4 known-gap issue refs");
     }
 }
