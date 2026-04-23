@@ -206,10 +206,21 @@ pub struct AuditConfig {
 pub struct Receipt {
     pub schema_version: String,
     pub metadata: ReceiptMetadata,
+    pub scope: String,
+    pub selected_lanes: Vec<String>,
+    pub reasons: Vec<String>,
+    pub failures: ReceiptFailures,
+    pub baselines: Vec<String>,
+    pub next_actions: Vec<String>,
     pub gates: Vec<GateResult>,
     pub summary: ReceiptSummary,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub diff_config: Option<DiffConfig>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+pub struct ReceiptFailures {
+    pub repro: Vec<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -698,18 +709,66 @@ fn run_gates(
         blocking_failures: if blocking_failures.is_empty() {
             None
         } else {
-            Some(blocking_failures)
+            Some(blocking_failures.clone())
         },
         aggregate_metrics: None, // Could aggregate test counts etc.
     };
 
+    let failures = build_failures_summary(&results);
+    let selected_lanes: Vec<String> = gates.iter().map(|gate| gate.name.clone()).collect();
+    let reasons = selected_lanes
+        .iter()
+        .map(|gate_name| format!("selected gate '{gate_name}' from {} scope", config.tier))
+        .collect();
+    let baselines = receipt_baselines(config);
+    let next_actions = receipt_next_actions(&failures.repro, &blocking_failures);
+
     Ok(Receipt {
         schema_version: "1.0.0".to_string(),
         metadata,
+        scope: config.tier.to_string(),
+        selected_lanes,
+        reasons,
+        failures,
+        baselines,
+        next_actions,
         gates: results,
         summary,
         diff_config: None,
     })
+}
+
+fn build_failures_summary(results: &[GateResult]) -> ReceiptFailures {
+    let repro = results
+        .iter()
+        .filter(|result| is_blocking_gate_status(&result.status))
+        .map(|result| format!("[{}] {}", result.gate_name, result.command))
+        .collect();
+    ReceiptFailures { repro }
+}
+
+fn receipt_baselines(config: &GateRunnerConfig) -> Vec<String> {
+    let mut baselines = vec![".ci/gate-policy.yaml".to_string()];
+    if let Some(path) = &config.diff_baseline {
+        baselines.push(path.display().to_string());
+    }
+    baselines
+}
+
+fn receipt_next_actions(repro: &[String], blocking_failures: &[String]) -> Vec<String> {
+    if repro.is_empty() {
+        return vec!["No action required: all selected lanes passed.".to_string()];
+    }
+
+    let mut next_actions = vec![
+        "Reproduce locally by running failures.repro commands.".to_string(),
+        "Inspect target/receipts/logs/<gate>.log for full context.".to_string(),
+    ];
+    if !blocking_failures.is_empty() {
+        next_actions
+            .push(format!("Fix required blocking gates: {}.", blocking_failures.join(", ")));
+    }
+    next_actions
 }
 
 /// Run a single gate and capture its result
@@ -1361,7 +1420,9 @@ fn determine_overall_status(failed: u32, blocking_failures: &[String]) -> &'stat
 #[cfg(test)]
 mod tests {
     use super::{
-        GateResult, blocking_failure_gate_names, determine_overall_status, is_blocking_gate_status,
+        GateResult, GateRunnerConfig, GateTier, blocking_failure_gate_names,
+        build_failures_summary, determine_overall_status, is_blocking_gate_status,
+        receipt_baselines, receipt_next_actions,
     };
 
     fn gate_result(name: &str, status: &str, required: bool) -> GateResult {
@@ -1408,5 +1469,35 @@ mod tests {
     fn overall_status_is_fail_when_required_timeout_exists_even_without_fail_count() {
         let blocking_failures = vec!["req-timeout".to_string()];
         assert_eq!(determine_overall_status(0, &blocking_failures), "fail");
+    }
+
+    #[test]
+    fn failures_summary_includes_blocking_gate_repro_commands() {
+        let results = vec![
+            gate_result("fmt", "pass", true),
+            gate_result("clippy", "fail", true),
+            gate_result("optional", "fail", false),
+        ];
+        let failures = build_failures_summary(&results);
+        assert_eq!(failures.repro, vec!["[clippy] true", "[optional] true"]);
+    }
+
+    #[test]
+    fn baselines_include_gate_policy_and_optional_diff_baseline() {
+        let config = GateRunnerConfig {
+            tier: GateTier::PrFast,
+            diff_baseline: Some("target/baseline.json".into()),
+            ..Default::default()
+        };
+        let baselines = receipt_baselines(&config);
+        assert_eq!(baselines, vec![".ci/gate-policy.yaml", "target/baseline.json"]);
+    }
+
+    #[test]
+    fn next_actions_include_repro_guidance_when_failures_exist() {
+        let repro = vec!["[clippy] cargo clippy".to_string()];
+        let actions = receipt_next_actions(&repro, &["clippy".to_string()]);
+        assert!(actions.iter().any(|a| a.contains("failures.repro")));
+        assert!(actions.iter().any(|a| a.contains("clippy")));
     }
 }

@@ -4,7 +4,18 @@
   "title": "CI Gate Receipt",
   "description": "Machine-readable receipt for CI gate runs, supporting diffing, merge-blocking decisions, and historical tracking",
   "type": "object",
-  "required": ["schema_version", "metadata", "gates", "summary"],
+  "required": [
+    "schema_version",
+    "metadata",
+    "scope",
+    "selected_lanes",
+    "reasons",
+    "failures",
+    "baselines",
+    "next_actions",
+    "gates",
+    "summary"
+  ],
   "additionalProperties": false,
   "properties": {
     "schema_version": {
@@ -15,6 +26,42 @@
     },
     "metadata": {
       "$ref": "#/$defs/metadata"
+    },
+    "scope": {
+      "type": "string",
+      "description": "Scope used to select CI lanes for this run",
+      "examples": ["pr_fast", "merge_gate", "nightly", "all"]
+    },
+    "selected_lanes": {
+      "type": "array",
+      "description": "Selected CI lanes/gates included in this receipt",
+      "items": {
+        "type": "string"
+      }
+    },
+    "reasons": {
+      "type": "array",
+      "description": "Human-readable reasons for selected lanes",
+      "items": {
+        "type": "string"
+      }
+    },
+    "failures": {
+      "$ref": "#/$defs/failures"
+    },
+    "baselines": {
+      "type": "array",
+      "description": "Baseline policy or baseline receipt inputs used for this run",
+      "items": {
+        "type": "string"
+      }
+    },
+    "next_actions": {
+      "type": "array",
+      "description": "Suggested remediation actions for agents",
+      "items": {
+        "type": "string"
+      }
     },
     "gates": {
       "type": "array",
@@ -80,6 +127,21 @@
           "description": "What triggered this run",
           "enum": ["manual", "pre-push", "pre-commit", "ci-pr", "ci-merge", "ci-nightly", "ci-release"],
           "default": "manual"
+        }
+      }
+    },
+    "failures": {
+      "type": "object",
+      "description": "Failure-focused replay hints for agents",
+      "required": ["repro"],
+      "additionalProperties": false,
+      "properties": {
+        "repro": {
+          "type": "array",
+          "description": "Reproduction commands for failed gates",
+          "items": {
+            "type": "string"
+          }
         }
       }
     },
