@@ -25,6 +25,7 @@ perllsp --health
 | --- | --- | --- |
 | VS Code | install the extension or point it at `perllsp --stdio` | [docs/EDITORS/VS_CODE_SETUP.md](../EDITORS/VS_CODE_SETUP.md) |
 | Neovim | configure `cmd = { "perllsp", "--stdio" }` | [docs/EDITORS/NEOVIM_SETUP.md](../EDITORS/NEOVIM_SETUP.md) |
+| Vim / gVim | use coc.nvim with `"command": "perllsp"` | [docs/EDITORS/COC_NEOVIM_SETUP.md](../EDITORS/COC_NEOVIM_SETUP.md) |
 | Emacs | use `lsp-mode` or `eglot` with `perllsp --stdio` | [docs/EDITORS/EMACS_SETUP.md](../EDITORS/EMACS_SETUP.md) |
 | Helix | add a `perllsp` language server entry | [docs/EDITORS/HELIX_SETUP.md](../EDITORS/HELIX_SETUP.md) |
 | Sublime Text | register `perllsp` in the LSP package settings | [docs/EDITORS/SUBLIME_SETUP.md](../EDITORS/SUBLIME_SETUP.md) |
@@ -50,6 +51,11 @@ require('lspconfig').perl_lsp.setup({
 
 Use `lsp-mode` or `eglot` with the same `perllsp --stdio` command. The
 editor-specific guide has the full snippets for both.
+
+### Vim / gVim (coc.nvim)
+
+Use `coc.nvim` and register a `languageserver.perl` entry with
+`"command": "perllsp"` and `"args": ["--stdio"]`.
 
 ### Helix
 

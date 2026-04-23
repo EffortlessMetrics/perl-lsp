@@ -135,7 +135,7 @@ Create `~/.vim/coc-settings.json` (or `~/.config/nvim/coc-settings.json` for Neo
 {
   "languageserver": {
     "perl": {
-      "command": "perl-lsp",
+      "command": "perllsp",
       "args": ["--stdio"],
       "filetypes": ["perl"],
       "rootPatterns": ["Makefile.PL", "Build.PL", "cpanfile", "dist.ini", ".git"],
@@ -188,7 +188,7 @@ Add to `~/.vim/coc-settings.json`:
 {
   "languageserver": {
     "perl": {
-      "command": "perl-lsp",
+      "command": "perllsp",
       "args": ["--stdio"],
       "filetypes": ["perl"],
       "rootPatterns": ["Makefile.PL", "Build.PL", "cpanfile", "dist.ini", ".git"],
@@ -605,7 +605,7 @@ nnoremap <silent> <space>y  :<C-u>CocList -A --normal yank<cr>
 
 1. **Verify binary is in PATH**:
    ```vim
-   :!which perl-lsp
+   :!which perllsp
    ```
 
 2. **Check coc.nvim info**:
@@ -986,7 +986,7 @@ autocmd FileType perl :CocCommand workspace.toggleDiagnostics
 {
   "languageserver": {
     "perl": {
-      "command": "perl-lsp",
+      "command": "perllsp",
       "args": ["--stdio"],
       "filetypes": ["perl"],
       "rootPatterns": ["Makefile.PL", "Build.PL", "cpanfile", "dist.ini", ".git"],
