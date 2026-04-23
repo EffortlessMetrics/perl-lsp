@@ -154,13 +154,16 @@ Real GitHub-side CI spend for the month (as observed by user):
 | 2026-04-22 (prior day) | 680 | $230.52 | $0.339 |
 | 2026-04-23 (this session) | 1051 | $235.97 | $0.224 (cumulative) |
 
-**Delta analysis for this session's work:**
-- +371 PRs merged this session (mostly today)
-- +$5.45 in CI spend
-- **~$0.0147 per PR** for the session's merges
-- **~23× per-PR cost reduction** vs the prior cumulative average
+**Solid reading:** $0.2245/PR cumulative month-to-date is a real, measurable number.
 
-**What drove the efficiency:**
+**Tentative delta for this session's work** (subject to billing lag):
+- +371 PRs merged this session (mostly today)
+- +$5.45 in reported CI spend (~$0.0147/PR apparent marginal)
+- **Very likely understated** — GitHub Actions billing typically lags 24-48h. Actual marginal this session may be higher once the lag resolves. The cumulative number ($0.2245/PR) is the one to trust as floor.
+
+**Efficiency hypothesis to test against tomorrow's bill:** if the lag catches up and marginal-per-PR for today ends up close to the cumulative $0.224, the session didn't materially improve per-PR CI cost — just held the line at scale. If marginal comes in meaningfully below cumulative (say < $0.15), the tier-wiring + preflight-cancel + bit-rot-fix compounding hypothesis is validated empirically.
+
+**What would have plausibly driven improvement** (to evaluate tomorrow):
 1. **Tier-wiring (#5005)** — scope-aware PR Smoke skipped full workspace clippy+test on PRs whose scope didn't warrant it
 2. **Preflight latest-SHA check** — cancelled superseded CI runs on rapid-push cascades, saving runner-minutes on stale SHAs
 3. **Compile-all-targets as parallel job** — didn't serially block merge-gate
@@ -168,11 +171,9 @@ Real GitHub-side CI spend for the month (as observed by user):
 5. **Cascade-update pattern** — one master merge cascades to N PRs without N×(full-CI) cost
 6. **Dupes closed early** — ~60 closed-without-merge didn't consume merge-gate budget at all
 
-**Caveat:** GitHub billing often lags 24-48h, so actual CI consumption today may exceed the $5.45 delta. Even accounting for 2-3× lag, per-PR CI cost for the session is still measurably lower than prior baseline.
+Correlated with the session's structural work: #5005 tier-wiring + #4988 check-all-targets parallelization + #4977 coalesce-queue-tail preflight + 7 bit-rot fixes. Whether these compound into the per-PR savings the hypothesis predicts is an **open empirical question until the billing lag resolves**.
 
-**Correlated with the session's structural work:** #5005 tier-wiring + #4988 check-all-targets parallelization + #4977 coalesce-queue-tail preflight + 7 bit-rot fixes — all CI-shape improvements that compound into per-PR savings. This is the "CI as agent-consumable artifact" thesis paying out in hard dollars.
-
-**Billing context:** The agent-cost side (Claude + Codex) has been characterized throughout as ~1% session per outcome; the GitHub CI side is now measurably ~$0.0147 per PR this session. Combined with the per-outcome economics: **each merged PR this session represents ~$0.02-0.05 combined agent-compute + CI-runner cost** at steady-state, down from the ~$0.34 baseline.
+**Billing context:** Agent-compute (Claude + Codex) is characterized throughout as ~1% session per outcome. CI-runner side cumulative month-to-date is $0.2245/PR. Combined rough order-of-magnitude: **each merged PR this session represents ~$0.10-0.30 combined agent-compute + CI-runner cost** based on the current cumulative numbers — pending tomorrow's billing update to see if the marginal trend is actually downward.
 
 ---
 
