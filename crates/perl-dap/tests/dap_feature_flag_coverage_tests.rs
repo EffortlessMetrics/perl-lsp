@@ -357,6 +357,84 @@ fn test_functional_dap_breakpoints_hit_condition_modulo() -> TestResult {
     Ok(())
 }
 
+/// Functional test: setFunctionBreakpoints accepts condition field
+#[test]
+fn test_functional_dap_function_breakpoints_with_condition() -> TestResult {
+    if !has_feature("dap.breakpoints.function") {
+        return Ok(());
+    }
+
+    let mut adapter = initialize_adapter();
+    let response = adapter.handle_request(2, "setFunctionBreakpoints", Some(json!({
+        "breakpoints": [{
+            "name": "test_func",
+            "condition": "$debug_flag"
+        }]
+    })));
+
+    match response {
+        perl_dap::DapMessage::Response { success: true, command, body: Some(_), .. }
+            if command == "setFunctionBreakpoints" =>
+        {
+            Ok(())
+        }
+        perl_dap::DapMessage::Response { success: true, command, .. } if command == "setFunctionBreakpoints" => {
+            Ok(())
+        }
+        _ => Err("Expected setFunctionBreakpoints response".into()),
+    }
+}
+
+/// Functional test: setFunctionBreakpoints accepts scalar condition
+#[test]
+fn test_functional_dap_function_breakpoints_scalar_condition() -> TestResult {
+    if !has_feature("dap.breakpoints.function") {
+        return Ok(());
+    }
+
+    let mut adapter = initialize_adapter();
+    let response = adapter.handle_request(3, "setFunctionBreakpoints", Some(json!({
+        "breakpoints": [{
+            "name": "my_sub",
+            "condition": "$count"
+        }]
+    })));
+
+    match response {
+        perl_dap::DapMessage::Response { success: true, command, .. }
+            if command == "setFunctionBreakpoints" =>
+        {
+            Ok(())
+        }
+        _ => Err("Expected setFunctionBreakpoints response".into()),
+    }
+}
+
+/// Functional test: setFunctionBreakpoints accepts complex condition expressions
+#[test]
+fn test_functional_dap_function_breakpoints_complex_condition() -> TestResult {
+    if !has_feature("dap.breakpoints.function") {
+        return Ok(());
+    }
+
+    let mut adapter = initialize_adapter();
+    let response = adapter.handle_request(4, "setFunctionBreakpoints", Some(json!({
+        "breakpoints": [{
+            "name": "handler",
+            "condition": "defined($ENV{DEBUG}) && $ENV{DEBUG} > 0"
+        }]
+    })));
+
+    match response {
+        perl_dap::DapMessage::Response { success: true, command, .. }
+            if command == "setFunctionBreakpoints" =>
+        {
+            Ok(())
+        }
+        _ => Err("Expected setFunctionBreakpoints response".into()),
+    }
+}
+
 // ---------------------------------------------------------------------------
 // AC3: dap.breakpoints.logpoints
 // ---------------------------------------------------------------------------
