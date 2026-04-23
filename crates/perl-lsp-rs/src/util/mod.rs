@@ -469,7 +469,12 @@ pub fn offset_to_position(content: &str, offset: usize) -> Position {
 
 #[cfg(test)]
 mod tests {
-    use super::extract_module_reference;
+    use super::{
+        arg_starts_in_call_body, arg_starts_top_level, byte_to_utf16_col, extract_module_reference,
+        find_matching_paren, offset_to_position, position_to_offset, slice_until_stmt_end,
+        smart_arg_anchor,
+    };
+    use lsp_types::Position;
 
     #[test]
     fn extract_module_reference_detects_use_statement_token() {
@@ -485,5 +490,47 @@ mod tests {
         let cursor = line.find("Worker").unwrap_or(0);
 
         assert_eq!(extract_module_reference(line, cursor), Some("Demo::Worker".to_string()));
+    }
+
+    #[test]
+    fn find_matching_paren_ignores_parens_inside_quotes() {
+        let text = r#"call("ignored ) token", nested(1, 2)) more"#;
+        assert_eq!(find_matching_paren(text, 4), Some(36));
+    }
+
+    #[test]
+    fn slice_until_stmt_end_skips_nested_structures() {
+        let text = r#"my $x = foo(";", [1, 2], { k => ";" }); my $y = 1;"#;
+        assert_eq!(slice_until_stmt_end(text, 0), 38);
+    }
+
+    #[test]
+    fn arg_start_helpers_ignore_nested_commas() {
+        let text = r#" $a, fn(1,2), {k=>3}, "x,y" "#;
+        assert_eq!(arg_starts_top_level(text), vec![1, 5, 14, 22]);
+        assert_eq!(arg_starts_in_call_body(text), vec![1, 5, 14, 22]);
+    }
+
+    #[test]
+    fn smart_arg_anchor_skips_our_keyword() {
+        let body = "our $fh, @rest";
+        assert_eq!(smart_arg_anchor(body, 0), 4);
+    }
+
+    #[test]
+    fn byte_to_utf16_col_counts_surrogate_pairs() {
+        let line = "a😀z";
+        assert_eq!(byte_to_utf16_col(line, 0), 0);
+        assert_eq!(byte_to_utf16_col(line, 1), 1);
+        assert_eq!(byte_to_utf16_col(line, 5), 3);
+    }
+
+    #[test]
+    fn position_offset_roundtrip_handles_crlf_and_emoji() {
+        let content = "my 😀\r\nnext";
+        let pos_after_emoji = Position { line: 0, character: 5 };
+        let offset = position_to_offset(content, pos_after_emoji.line, pos_after_emoji.character);
+        assert_eq!(offset, Some(7));
+        assert_eq!(offset_to_position(content, 7), pos_after_emoji);
     }
 }
