@@ -361,11 +361,81 @@ impl<'tree> Node<'tree> {
     pub fn inner(&self) -> &'tree AstNode {
         self.inner
     }
+
+    /// Creates a [`TreeCursor`] rooted at this node.
+    ///
+    /// The cursor mirrors tree-sitter's cursor-style traversal API:
+    /// move to first child / next sibling / parent without allocating
+    /// an intermediate children vector.
+    pub fn walk(&self) -> TreeCursor<'tree> {
+        TreeCursor::new(self.inner, self.tree_source)
+    }
 }
 
 /// Re-export of [`perl_ast::NodeKind`] so callers can pattern-match node variants
 /// without a direct dependency on `perl-ast`.
 pub use perl_ast::NodeKind as PerlNodeKind;
+
+/// Cursor for efficient tree navigation without allocating child collections.
+///
+/// This mirrors the ergonomic shape of `tree_sitter::TreeCursor` for the
+/// subset of navigation operations used by editor integrations.
+pub struct TreeCursor<'tree> {
+    current: &'tree AstNode,
+    tree_source: &'tree str,
+    // Each frame stores (parent_node, current_index_within_parent).
+    path: Vec<(&'tree AstNode, usize)>,
+}
+
+impl<'tree> TreeCursor<'tree> {
+    fn new(root: &'tree AstNode, tree_source: &'tree str) -> Self {
+        Self { current: root, tree_source, path: Vec::new() }
+    }
+
+    /// Returns the node at the cursor's current position.
+    pub fn node(&self) -> Node<'tree> {
+        Node { inner: self.current, tree_source: self.tree_source }
+    }
+
+    /// Move to the first child of the current node.
+    ///
+    /// Returns `true` when a child exists and the cursor moved.
+    pub fn goto_first_child(&mut self) -> bool {
+        if let Some(child) = nth_ast_child(self.current, 0) {
+            self.path.push((self.current, 0));
+            self.current = child;
+            return true;
+        }
+        false
+    }
+
+    /// Move to the next sibling of the current node.
+    ///
+    /// Returns `true` when a sibling exists and the cursor moved.
+    pub fn goto_next_sibling(&mut self) -> bool {
+        let Some((parent, index)) = self.path.last_mut() else {
+            return false;
+        };
+        let next_index = *index + 1;
+        if let Some(sibling) = nth_ast_child(parent, next_index) {
+            *index = next_index;
+            self.current = sibling;
+            return true;
+        }
+        false
+    }
+
+    /// Move to the parent of the current node.
+    ///
+    /// Returns `true` when the cursor moved (i.e. it was not already at root).
+    pub fn goto_parent(&mut self) -> bool {
+        let Some((parent, _)) = self.path.pop() else {
+            return false;
+        };
+        self.current = parent;
+        true
+    }
+}
 
 // ---------------------------------------------------------------------------
 // Private helpers
@@ -378,6 +448,19 @@ pub use perl_ast::NodeKind as PerlNodeKind;
 #[inline]
 fn ast_children(node: &AstNode) -> Vec<&AstNode> {
     node.children()
+}
+
+#[inline]
+fn nth_ast_child<'a>(node: &'a AstNode, i: usize) -> Option<&'a AstNode> {
+    let mut idx = 0usize;
+    let mut found: Option<&'a AstNode> = None;
+    node.for_each_child(|child| {
+        if found.is_none() && idx == i {
+            found = Some(child);
+        }
+        idx += 1;
+    });
+    found
 }
 
 /// Convert a PascalCase kind name (e.g. `"VariableWithAttributes"`) to snake_case
@@ -661,5 +744,40 @@ mod tests {
     fn test_language_is_named_with_empty_string_returns_false() {
         // Empty string is not a valid kind name and must not be found.
         assert!(!language().node_kind_is_named(""), "empty kind name must return false");
+    }
+
+    #[test]
+    fn test_tree_cursor_walks_children_and_siblings() {
+        let mut p = Parser::new();
+        let tree = must_some(p.parse("my $x = 1; my $y = 2;"));
+        let root = tree.root_node();
+        let mut cursor = root.walk();
+
+        assert_eq!(cursor.node().grammar_kind(), "source_file");
+        assert!(cursor.goto_first_child(), "root should have first child");
+        let first_child_kind = cursor.node().grammar_kind();
+        assert!(!first_child_kind.is_empty(), "first child should have a grammar kind");
+
+        let had_sibling = cursor.goto_next_sibling();
+        if had_sibling {
+            assert_ne!(
+                cursor.node().start_byte(),
+                root.start_byte(),
+                "sibling should not point to root node"
+            );
+        }
+    }
+
+    #[test]
+    fn test_tree_cursor_parent_navigation() {
+        let mut p = Parser::new();
+        let tree = must_some(p.parse("my $x = 1;"));
+        let root = tree.root_node();
+        let mut cursor = root.walk();
+
+        assert!(!cursor.goto_parent(), "cursor at root should not move to parent");
+        assert!(cursor.goto_first_child(), "root should have first child");
+        assert!(cursor.goto_parent(), "child should move back to parent");
+        assert_eq!(cursor.node().grammar_kind(), "source_file");
     }
 }
