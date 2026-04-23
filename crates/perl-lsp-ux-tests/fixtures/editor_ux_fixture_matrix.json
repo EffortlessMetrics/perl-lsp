@@ -407,6 +407,26 @@
         "manual_editor_smoke",
         "issue_burndown_regression_guard"
       ]
+    },
+    {
+      "id": "incremental_edit_roundtrip",
+      "scenario_file": "ux_scenario_19_incremental_edit_roundtrip.rs",
+      "subsystem_owner": "diagnostics",
+      "ci_tier": "pr",
+      "user_journey": "edit a broken file into a fixed state and confirm diagnostics refresh with didChange",
+      "measures": [
+        "workflow_pass_rate",
+        "workflow_stability_rate"
+      ],
+      "expected_outcomes": [
+        "initial diagnostics are published for broken source",
+        "post-edit diagnostics are republished with improved signal"
+      ],
+      "confidence_signals": [
+        "first_five_minutes_harness",
+        "manual_editor_smoke",
+        "issue_burndown_regression_guard"
+      ]
     }
   ]
 }

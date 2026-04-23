@@ -419,6 +419,52 @@ impl UxHarness {
         Vec::new()
     }
 
+    /// Return how many diagnostics notifications have been seen for `relative_path`.
+    pub fn diagnostics_event_count(&self, relative_path: &str) -> usize {
+        let uri = self.workspace.uri(relative_path);
+        self.client
+            .peek_events()
+            .into_iter()
+            .filter(
+                |ev| matches!(ev, LspEvent::Diagnostics { uri: diag_uri, .. } if diag_uri == &uri),
+            )
+            .count()
+    }
+
+    /// Wait for a new diagnostics publication after `baseline_count`.
+    ///
+    /// Returns the most recent diagnostics payload once a new publication
+    /// arrives, or an empty vector on timeout.
+    pub fn wait_for_diagnostics_after(
+        &self,
+        relative_path: &str,
+        baseline_count: usize,
+        timeout: std::time::Duration,
+    ) -> Vec<Value> {
+        let uri = self.workspace.uri(relative_path);
+        let deadline = std::time::Instant::now() + timeout;
+        loop {
+            let mut seen_count = 0usize;
+            let mut latest: Option<Vec<Value>> = None;
+            for ev in self.client.peek_events() {
+                if let LspEvent::Diagnostics { uri: diag_uri, diagnostics } = ev {
+                    if diag_uri == uri {
+                        seen_count += 1;
+                        latest = Some(diagnostics);
+                    }
+                }
+            }
+
+            if seen_count > baseline_count {
+                return latest.unwrap_or_default();
+            }
+            if std::time::Instant::now() >= deadline {
+                return Vec::new();
+            }
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        }
+    }
+
     /// Request go-to-definition.
     pub fn definition(&self, relative_path: &str, line: u32, character: u32) -> Result<Vec<Value>> {
         let uri = self.workspace.uri(relative_path);
