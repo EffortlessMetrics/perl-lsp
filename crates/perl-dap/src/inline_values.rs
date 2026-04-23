@@ -168,9 +168,19 @@ fn parse_quote_like_operator(bytes: &[u8], start: usize) -> Option<usize> {
         return None;
     }
 
-    let operators =
-        [b"qq".as_slice(), b"qw".as_slice(), b"qr".as_slice(), b"qx".as_slice(), b"q".as_slice()];
-    for op in operators {
+    let operators = [
+        (b"qq".as_slice(), QuoteLikeKind::SingleSegment),
+        (b"qw".as_slice(), QuoteLikeKind::SingleSegment),
+        (b"qr".as_slice(), QuoteLikeKind::SingleSegment),
+        (b"qx".as_slice(), QuoteLikeKind::SingleSegment),
+        (b"q".as_slice(), QuoteLikeKind::SingleSegment),
+        (b"tr".as_slice(), QuoteLikeKind::DoubleSegment),
+        (b"y".as_slice(), QuoteLikeKind::DoubleSegment),
+        (b"s".as_slice(), QuoteLikeKind::DoubleSegment),
+        (b"m".as_slice(), QuoteLikeKind::SingleSegment),
+    ];
+
+    for (op, kind) in operators {
         let op_end = start + op.len();
         if op_end > bytes.len() || &bytes[start..op_end] != op {
             continue;
@@ -184,47 +194,82 @@ fn parse_quote_like_operator(bytes: &[u8], start: usize) -> Option<usize> {
             return None;
         }
 
-        let open = bytes[idx];
-        if open.is_ascii_alphanumeric() || open == b'_' {
+        let Some(after_first_segment) = consume_delimited_segment(bytes, idx) else {
             continue;
+        };
+
+        idx = after_first_segment;
+        if matches!(kind, QuoteLikeKind::DoubleSegment) {
+            while idx < bytes.len() && bytes[idx].is_ascii_whitespace() {
+                idx += 1;
+            }
+            let Some(after_second_segment) = consume_delimited_segment(bytes, idx) else {
+                continue;
+            };
+            idx = after_second_segment;
         }
-        let (close, paired) = matching_delimiter(open);
-        idx += 1;
-        let mut escaped = false;
-        let mut depth = if paired { 1usize } else { 0usize };
 
-        while idx < bytes.len() {
-            let cur = bytes[idx];
-            if escaped {
-                escaped = false;
-                idx += 1;
-                continue;
-            }
-            if cur == b'\\' {
-                escaped = true;
-                idx += 1;
-                continue;
-            }
-
-            if paired {
-                if cur == open {
-                    depth += 1;
-                } else if cur == close {
-                    depth = depth.saturating_sub(1);
-                    if depth == 0 {
-                        return Some(idx + 1);
-                    }
-                }
-            } else if cur == close {
-                return Some(idx + 1);
-            }
+        while idx < bytes.len() && bytes[idx].is_ascii_alphabetic() {
             idx += 1;
         }
 
-        return Some(bytes.len());
+        return Some(idx);
     }
 
     None
+}
+
+#[derive(Clone, Copy)]
+enum QuoteLikeKind {
+    SingleSegment,
+    DoubleSegment,
+}
+
+fn consume_delimited_segment(bytes: &[u8], start: usize) -> Option<usize> {
+    if start >= bytes.len() {
+        return None;
+    }
+
+    let open = bytes[start];
+    if open.is_ascii_alphanumeric() || open == b'_' {
+        return None;
+    }
+
+    let (close, paired) = matching_delimiter(open);
+    let mut idx = start + 1;
+    let mut escaped = false;
+    let mut depth = if paired { 1usize } else { 0usize };
+
+    while idx < bytes.len() {
+        let cur = bytes[idx];
+        if escaped {
+            escaped = false;
+            idx += 1;
+            continue;
+        }
+        if cur == b'\\' {
+            escaped = true;
+            idx += 1;
+            continue;
+        }
+
+        if paired {
+            if cur == open {
+                depth += 1;
+            } else if cur == close {
+                depth = depth.saturating_sub(1);
+                if depth == 0 {
+                    return Some(idx + 1);
+                }
+            }
+        } else if cur == close {
+            return Some(idx + 1);
+        }
+
+        idx += 1;
+    }
+
+    Some(bytes.len())
 }
 
 fn matching_delimiter(open: u8) -> (u8, bool) {
@@ -235,10 +280,6 @@ fn matching_delimiter(open: u8) -> (u8, bool) {
         b'<' => (b'>', true),
         _ => (open, false),
     }
-}
-
-fn is_identifier_byte(b: u8) -> bool {
-    b.is_ascii_alphanumeric() || b == b'_'
 }
 
 fn collect_line_variables(line: &str, include_non_scalars: bool) -> Vec<(usize, usize, String)> {
@@ -274,6 +315,7 @@ fn collect_line_variables(line: &str, include_non_scalars: bool) -> Vec<(usize, 
     matches.sort_by_key(|(start, _, _)| *start);
     matches
 }
+
 
 /// Extract unique variable names from source code within a line range.
 ///
@@ -510,7 +552,7 @@ mod tests {
     #[test]
     fn test_deduplication_per_line() {
         let source = "$x = $x + $x;";
-        let values = collect_inline_values_with_runtime(source, 1, 1, None);
+        let values = collect_inline_values_with_runtime(source, 1, 2, None);
         assert_eq!(values.len(), 1);
     }
 
@@ -723,5 +765,26 @@ mod tests {
         let values = collect_inline_values(source, 1, 1);
         assert_eq!(values.len(), 1);
         assert_eq!(values[0].text, "$scalar_name = ?");
+    }
+
+    #[test]
+    fn test_inline_values_ignore_regex_match_operator_body() {
+        let source = r"my $target = 1; if ($line =~ m/(\$regex_capture)/) { my $ok = 1; }";
+        let values = collect_inline_values_with_runtime(source, 1, 1, None);
+        assert!(values.iter().any(|v| v.text == "$target = ?"));
+        assert!(values.iter().any(|v| v.text == "$line = ?"));
+        assert!(values.iter().any(|v| v.text == "$ok = ?"));
+        assert!(!values.iter().any(|v| v.text.contains("$regex_capture")));
+    }
+
+    #[test]
+    fn test_inline_values_ignore_substitution_and_transliteration_bodies() {
+        let source = "my $line = 1; $line =~ s/$find/$replace/g; $line =~ tr/$from/$to/;";
+        let values = collect_inline_values_with_runtime(source, 1, 1, None);
+        assert!(values.iter().any(|v| v.text == "$line = ?"));
+        assert!(!values.iter().any(|v| v.text.contains("$find")));
+        assert!(!values.iter().any(|v| v.text.contains("$replace")));
+        assert!(!values.iter().any(|v| v.text.contains("$from")));
+        assert!(!values.iter().any(|v| v.text.contains("$to")));
     }
 }
