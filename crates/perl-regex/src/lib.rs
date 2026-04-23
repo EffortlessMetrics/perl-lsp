@@ -55,6 +55,18 @@ impl RegexValidator {
                 chars.next(); // skip escaped
                 continue;
             }
+            if ch == '[' {
+                // Skip character class content so literals like [(?{] are not
+                // misclassified as embedded code execution.
+                while let Some((_, class_ch)) = chars.next() {
+                    if class_ch == '\\' {
+                        chars.next(); // skip escaped char inside class
+                    } else if class_ch == ']' {
+                        break;
+                    }
+                }
+                continue;
+            }
             if ch == '(' {
                 if let Some((_, '?')) = chars.peek() {
                     chars.next(); // consume ?
