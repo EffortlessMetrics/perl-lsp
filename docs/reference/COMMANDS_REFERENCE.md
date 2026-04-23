@@ -61,10 +61,10 @@ just doctor         # Detects+fixes core.bare, worktree leaks, stale branches, e
 # Check the local environment (tools, Rust components)
 just devex          # Alias: just doctor-env
 
-# Fast validation while iterating
-just pr-fast
+# Pre-push preflight (doctor + fast gate)
+just ready
 
-# Canonical fast push guard
+# Fast validation while iterating
 just pr-fast
 
 # Canonical local merge gate

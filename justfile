@@ -346,6 +346,11 @@ doctor-env:
 # Short alias for the developer environment quick check
 devex: doctor-env
 
+# One-command pre-flight before pushing a branch:
+# 1) repair/report workspace state issues, then 2) run the fast PR gate.
+ready: doctor pr-fast
+    @echo "✅ Workspace is ready to push (doctor + pr-fast passed)"
+
 # Run before any agent-spawning session. Safe to run repeatedly (idempotent).
 # Checks: core.bare corruption (#3205), stale branches, worktree leaks, orphaned
 # worktree dirs, pre-push hook, workspace cleanliness, master fast-forward state.
