@@ -1722,8 +1722,9 @@ my %config = (key => "value");
     #[test]
     fn test_find_definition_redirects_method_modifier_to_target_method()
     -> Result<(), Box<dyn std::error::Error>> {
-        let code =
-            include_str!("../../../../perl-lsp-rs/tests/fixtures/frameworks/moo_method_modifiers.pl");
+        let code = include_str!(
+            "../../../../perl-lsp-rs/tests/fixtures/frameworks/moo_method_modifiers.pl"
+        );
         let mut parser = Parser::new(code);
         let ast = parser.parse()?;
 
