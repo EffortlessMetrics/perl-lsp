@@ -47,6 +47,30 @@ require('lspconfig').perl_ls.setup { cmd = { "perllsp", "--stdio" } }
              '((perl-mode cperl-mode) . ("perllsp" "--stdio")))
 ```
 
+```toml
+# Helix (~/.config/helix/languages.toml)
+[[language]]
+name = "perl"
+language-servers = ["perllsp"]
+
+[language-server.perllsp]
+command = "perllsp"
+args = ["--stdio"]
+```
+
+```json
+// Sublime Text LSP package settings
+{
+  "clients": {
+    "perllsp": {
+      "enabled": true,
+      "command": ["perllsp", "--stdio"],
+      "selector": "source.perl"
+    }
+  }
+}
+```
+
 ```text
 # Any generic LSP client
 perllsp --stdio
@@ -59,6 +83,7 @@ perllsp --health
 ```
 
 For a full walkthrough, see [docs/tutorials/GETTING_STARTED.md](docs/tutorials/GETTING_STARTED.md).
+For editor-specific setup (Neovim, Emacs, Helix, Sublime), see [docs/specs/PACKAGING_INSTALL_SPEC.md](docs/specs/PACKAGING_INSTALL_SPEC.md).
 
 > **Note:** Do not use `cargo install perl-lsp` — that name is owned by an unrelated project on crates.io. Use `cargo install --path crates/perllsp` to build from source.
 
