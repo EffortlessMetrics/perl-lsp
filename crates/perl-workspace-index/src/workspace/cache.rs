@@ -30,7 +30,7 @@
 //! ```
 
 use parking_lot::Mutex;
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::hash::Hash;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -136,7 +136,7 @@ where
     /// Cache entries (key -> entry)
     entries: Arc<Mutex<HashMap<K, CacheEntry<V>>>>,
     /// Access order for LRU tracking (oldest keys at front)
-    access_order: Arc<Mutex<Vec<K>>>,
+    access_order: Arc<Mutex<VecDeque<K>>>,
     /// Cache configuration
     config: CacheConfig,
     /// Cache statistics
@@ -172,7 +172,7 @@ where
     pub fn new(config: CacheConfig) -> Self {
         Self {
             entries: Arc::new(Mutex::new(HashMap::new())),
-            access_order: Arc::new(Mutex::new(Vec::new())),
+            access_order: Arc::new(Mutex::new(VecDeque::new())),
             config,
             stats: Arc::new(Mutex::new(CacheStats::default())),
         }
@@ -234,7 +234,7 @@ where
             if let Some(pos) = access_order.iter().position(|k| k == &key) {
                 access_order.remove(pos);
             }
-            access_order.push(key.clone());
+            access_order.push_back(key.clone());
 
             // Update stats incrementally
             stats.current_bytes = stats.current_bytes - old_size + size_bytes;
@@ -248,12 +248,11 @@ where
                 || stats.current_bytes + size_bytes > self.config.max_bytes)
         {
             // Evict least recently used (first in access_order)
-            if let Some(lru_key) = access_order.first() {
-                if let Some(entry) = entries.remove(lru_key) {
+            if let Some(lru_key) = access_order.pop_front() {
+                if let Some(entry) = entries.remove(&lru_key) {
                     stats.current_bytes -= entry.size_bytes;
                     stats.evictions += 1;
                 }
-                access_order.remove(0);
             } else {
                 break;
             }
@@ -269,7 +268,7 @@ where
 
         // Insert new entry
         entries.insert(key.clone(), CacheEntry::new(value, size_bytes));
-        access_order.push(key);
+        access_order.push_back(key);
 
         // Update stats incrementally
         stats.current_bytes += size_bytes;
@@ -359,7 +358,9 @@ where
             // Update access order (move to end = most recent)
             if let Some(pos) = access_order.iter().position(|k| k == key) {
                 let key_clone = access_order.remove(pos);
-                access_order.push(key_clone);
+                if let Some(key_clone) = key_clone {
+                    access_order.push_back(key_clone);
+                }
             }
 
             stats.hits += 1;
