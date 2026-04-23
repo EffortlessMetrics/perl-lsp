@@ -3955,7 +3955,7 @@ fn find_hash_comment_start(line: &str, perl_mode: bool) -> Option<usize> {
                 }
                 if let Some(prev) = line[..idx].chars().next_back() {
                     if prev.is_whitespace()
-                        || matches!(prev, ';' | '{' | '}' | '(' | ')' | '[' | ']')
+                        || matches!(prev, ';' | '{' | '}' | '(' | ')' | '[' | ']' | '&' | '|')
                     {
                         return Some(idx);
                     }
@@ -4432,6 +4432,8 @@ mod tests {
             &todo_re
         ));
         assert!(has_unlinked_todo_in_hash_line("echo hi # TODO: follow up", &todo_re));
+        assert!(has_unlinked_todo_in_hash_line("echo hi&&# TODO: follow up", &todo_re));
+        assert!(has_unlinked_todo_in_hash_line("echo hi||# TODO: follow up", &todo_re));
         assert!(!has_unlinked_todo_in_hash_line("echo hi # TODO(#77): tracked", &todo_re));
         assert!(!has_unlinked_todo_in_hash_line("echo `printf '# TODO in backticks'`", &todo_re));
         assert!(has_unlinked_todo_in_hash_line(
