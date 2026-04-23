@@ -9,6 +9,7 @@
     "scorecard",
     "harness",
     "top_line_metrics",
+    "confidence_signals",
     "integration_points"
   ],
   "properties": {
@@ -18,7 +19,7 @@
     },
     "receipt_kind": {
       "type": "string",
-      "const": "planning_scaffold"
+      "enum": ["planning_scaffold", "tracked_scorecard"]
     },
     "scorecard": {
       "type": "string",
@@ -102,10 +103,56 @@
           },
           "owner": {
             "type": "string"
+          },
+          "value": {
+            "type": ["number", "integer", "null"]
           }
         },
         "additionalProperties": false
       }
+    },
+    "confidence_signals": {
+      "type": "object",
+      "required": [
+        "manual_editor_smoke_workflows",
+        "first_5_minutes_harness",
+        "open_issue_burn_down"
+      ],
+      "properties": {
+        "manual_editor_smoke_workflows": {
+          "type": "object",
+          "required": ["kind", "status", "evidence"],
+          "properties": {
+            "kind": { "const": "qualitative" },
+            "status": { "const": "tracked" },
+            "evidence": { "type": "string" }
+          },
+          "additionalProperties": false
+        },
+        "first_5_minutes_harness": {
+          "type": "object",
+          "required": ["kind", "status", "scenario_count", "command"],
+          "properties": {
+            "kind": { "const": "quantitative" },
+            "status": { "const": "tracked" },
+            "scenario_count": { "type": "integer", "minimum": 0 },
+            "command": { "type": "string" }
+          },
+          "additionalProperties": false
+        },
+        "open_issue_burn_down": {
+          "type": "object",
+          "required": ["kind", "status", "source", "known_issues_count"],
+          "properties": {
+            "kind": { "const": "quantitative" },
+            "status": { "enum": ["tracked", "unavailable"] },
+            "source": { "type": "string" },
+            "known_issues_count": { "type": ["integer", "null"], "minimum": 0 }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
     },
     "integration_points": {
       "type": "object",

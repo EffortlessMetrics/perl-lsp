@@ -1,4 +1,23 @@
 {
+  "confidence_signals": {
+    "first_5_minutes_harness": {
+      "command": "just ux-tests",
+      "kind": "quantitative",
+      "scenario_count": 17,
+      "status": "tracked"
+    },
+    "manual_editor_smoke_workflows": {
+      "evidence": "Tier C: docs/project/protocols/verification.md",
+      "kind": "qualitative",
+      "status": "tracked"
+    },
+    "open_issue_burn_down": {
+      "kind": "quantitative",
+      "known_issues_count": 0,
+      "source": ".ci/debt-ledger.yaml",
+      "status": "tracked"
+    }
+  },
   "harness": {
     "crate": "crates/perl-lsp-ux-tests",
     "scenario_count": 17,
@@ -35,17 +54,20 @@
     {
       "name": "workflow_pass_rate",
       "owner": "perl-lsp-ux-tests",
-      "state": "planned"
+      "state": "planned",
+      "value": null
     },
     {
       "name": "workflow_stability_rate",
       "owner": "perl-lsp-ux-tests",
-      "state": "planned"
+      "state": "planned",
+      "value": null
     },
     {
       "name": "p95_time_to_first_useful_result_ms",
       "owner": "perl-lsp-ux-tests",
-      "state": "planned"
+      "state": "planned",
+      "value": null
     }
   ]
 }

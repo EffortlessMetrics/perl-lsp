@@ -169,31 +169,72 @@ pub(super) fn generate_quality_status(root: &Path, original: &str) -> Result<Str
 pub(super) fn generate_editor_ux_receipt(root: &Path) -> Result<String> {
     let scenario_files = collect_ux_scenario_files(root);
     let scenario_count = scenario_files.len();
+    let ux_metrics = load_editor_ux_metrics(root);
+    let known_issues = load_known_issues_count(root);
+
+    let workflow_pass_rate = ux_metrics
+        .as_ref()
+        .and_then(|metrics| metrics.get("workflow_pass_rate"))
+        .and_then(serde_json::Value::as_f64);
+    let workflow_stability_rate = ux_metrics
+        .as_ref()
+        .and_then(|metrics| metrics.get("workflow_stability_rate"))
+        .and_then(serde_json::Value::as_f64);
+    let p95_first_result_ms = ux_metrics
+        .as_ref()
+        .and_then(|metrics| metrics.get("p95_time_to_first_useful_result_ms"))
+        .and_then(serde_json::Value::as_u64);
 
     let receipt = serde_json::json!({
         "schema_version": 1,
-        "receipt_kind": "planning_scaffold",
+        "receipt_kind": if workflow_pass_rate.is_some() || workflow_stability_rate.is_some() || p95_first_result_ms.is_some() {
+            "tracked_scorecard"
+        } else {
+            "planning_scaffold"
+        },
         "scorecard": "editor_ux",
         "harness": {
             "crate": "crates/perl-lsp-ux-tests",
             "scenario_count": scenario_count,
             "scenario_files": scenario_files,
         },
+        "confidence_signals": {
+            "manual_editor_smoke_workflows": {
+                "kind": "qualitative",
+                "status": "tracked",
+                "evidence": "Tier C: docs/project/protocols/verification.md",
+            },
+            "first_5_minutes_harness": {
+                "kind": "quantitative",
+                "status": "tracked",
+                "scenario_count": scenario_count,
+                "command": "just ux-tests",
+            },
+            "open_issue_burn_down": {
+                "kind": "quantitative",
+                "status": if known_issues.is_some() { "tracked" } else { "unavailable" },
+                "source": ".ci/debt-ledger.yaml",
+                "known_issues_count": known_issues,
+            },
+        },
         "top_line_metrics": [
             {
                 "name": "workflow_pass_rate",
-                "state": "planned",
+                "state": if workflow_pass_rate.is_some() { "measured" } else { "planned" },
                 "owner": "perl-lsp-ux-tests",
+                "value": workflow_pass_rate,
             },
             {
                 "name": "workflow_stability_rate",
-                "state": "planned",
+                "state": if workflow_stability_rate.is_some() { "measured" } else { "planned" },
                 "owner": "perl-lsp-ux-tests",
+                "value": workflow_stability_rate,
             },
             {
                 "name": "p95_time_to_first_useful_result_ms",
-                "state": "planned",
+                "state": if p95_first_result_ms.is_some() { "measured" } else { "planned" },
                 "owner": "perl-lsp-ux-tests",
+                "value": p95_first_result_ms,
             },
         ],
         "integration_points": {
@@ -205,6 +246,20 @@ pub(super) fn generate_editor_ux_receipt(root: &Path) -> Result<String> {
     });
 
     serde_json::to_string_pretty(&receipt).context("serializing editor UX receipt")
+}
+
+fn load_editor_ux_metrics(root: &Path) -> Option<serde_json::Value> {
+    let path = root.join(".ci").join("metrics").join("editor_ux.json");
+    let raw = fs::read_to_string(path).ok()?;
+    let doc: serde_json::Value = serde_json::from_str(&raw).ok()?;
+    doc.get("metrics").cloned()
+}
+
+fn load_known_issues_count(root: &Path) -> Option<usize> {
+    let path = root.join(".ci").join("debt-ledger.yaml");
+    let raw = fs::read_to_string(path).ok()?;
+    let doc: serde_yaml_ng::Value = serde_yaml_ng::from_str(&raw).ok()?;
+    doc.get("known_issues").and_then(serde_yaml_ng::Value::as_sequence).map(std::vec::Vec::len)
 }
 
 // ---------------------------------------------------------------------------
@@ -258,7 +313,10 @@ mod tests {
         let receipt_raw = generate_editor_ux_receipt(&root)?;
         let receipt: serde_json::Value = serde_json::from_str(&receipt_raw)?;
         assert_eq!(receipt["schema_version"], 1);
-        assert_eq!(receipt["receipt_kind"], "planning_scaffold");
+        assert!(
+            receipt["receipt_kind"] == "planning_scaffold"
+                || receipt["receipt_kind"] == "tracked_scorecard"
+        );
         assert_eq!(receipt["scorecard"], "editor_ux");
         assert_eq!(receipt["harness"]["crate"], "crates/perl-lsp-ux-tests");
         assert_eq!(
@@ -279,7 +337,48 @@ mod tests {
                 "p95_time_to_first_useful_result_ms",
             ])
         );
+        let confidence = receipt["confidence_signals"]
+            .as_object()
+            .ok_or_else(|| eyre!("confidence_signals must be an object"))?;
+        assert!(confidence.contains_key("manual_editor_smoke_workflows"));
+        assert!(confidence.contains_key("first_5_minutes_harness"));
+        assert!(confidence.contains_key("open_issue_burn_down"));
         assert_eq!(receipt["integration_points"]["ci_lane"], "just ux-tests");
+        Ok(())
+    }
+
+    #[test]
+    fn test_editor_ux_receipt_uses_measured_metrics_when_present() -> Result<()> {
+        let dir = tempfile::tempdir()?;
+        fs::create_dir_all(dir.path().join(".ci/metrics"))?;
+        fs::create_dir_all(dir.path().join("crates/perl-lsp-ux-tests/tests"))?;
+        fs::write(
+            dir.path().join("crates/perl-lsp-ux-tests/tests/ux_scenario_01_example.rs"),
+            "#[test]\nfn sample() {}\n",
+        )?;
+        fs::write(
+            dir.path().join(".ci/metrics/editor_ux.json"),
+            r#"{
+              "schema_version": 1,
+              "subsystem": "editor_ux",
+              "metrics": {
+                "workflow_pass_rate": 0.92,
+                "workflow_stability_rate": 0.88,
+                "p95_time_to_first_useful_result_ms": 74
+              }
+            }"#,
+        )?;
+        fs::write(
+            dir.path().join(".ci/debt-ledger.yaml"),
+            "known_issues:\n  - name: sample issue\n",
+        )?;
+
+        let receipt_raw = generate_editor_ux_receipt(dir.path())?;
+        let receipt: serde_json::Value = serde_json::from_str(&receipt_raw)?;
+        assert_eq!(receipt["receipt_kind"], "tracked_scorecard");
+        assert_eq!(receipt["top_line_metrics"][0]["state"], "measured");
+        assert_eq!(receipt["top_line_metrics"][0]["value"], 0.92);
+        assert_eq!(receipt["confidence_signals"]["open_issue_burn_down"]["known_issues_count"], 1);
         Ok(())
     }
 }
