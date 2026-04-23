@@ -779,22 +779,26 @@ fn test_real_project_latency_baseline_schema() {
             assert!(m.get("samples").is_some(), "'{name}.{metric}' missing samples");
         }
         if *name == "catalyst" {
-            let m = metrics.get("first_pull_diagnostics_5000_catalyst").unwrap_or_else(|| {
-                panic!(
-                    "Project '{name}' missing metric 'first_pull_diagnostics_5000_catalyst' in baseline"
-                )
-            });
             assert!(
-                m.get("p95_ms").is_some(),
-                "'{name}.first_pull_diagnostics_5000_catalyst' missing p95_ms"
+                metrics.get("first_pull_diagnostics_5000_catalyst").is_some(),
+                "Project '{name}' missing metric 'first_pull_diagnostics_5000_catalyst' in baseline"
             );
-            let targets = proj
-                .get("targets")
-                .unwrap_or_else(|| panic!("Project '{name}' missing 'targets' in baseline"));
+            if let Some(m) = metrics.get("first_pull_diagnostics_5000_catalyst") {
+                assert!(
+                    m.get("p95_ms").is_some(),
+                    "'{name}.first_pull_diagnostics_5000_catalyst' missing p95_ms"
+                );
+            }
             assert!(
-                targets.get("first_diagnostics_5000_catalyst_p95_ms").is_some(),
-                "Project '{name}' missing first-diagnostics target threshold"
+                proj.get("targets").is_some(),
+                "Project '{name}' missing 'targets' in baseline"
             );
+            if let Some(targets) = proj.get("targets") {
+                assert!(
+                    targets.get("first_diagnostics_5000_catalyst_p95_ms").is_some(),
+                    "Project '{name}' missing first-diagnostics target threshold"
+                );
+            }
         }
     }
 }
