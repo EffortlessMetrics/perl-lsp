@@ -936,7 +936,12 @@ perltidy_extra_args = ["-noll"]
 
     #[test]
     fn parse_perl5lib_trims_and_dedupes_entries() {
-        let parsed = WorkspaceConfig::parse_perl5lib(" lib :local/lib::lib: ");
+        // Use the platform separator so the test works on both Unix and Windows.
+        #[cfg(windows)]
+        let input = " lib ;local/lib;;lib; ";
+        #[cfg(not(windows))]
+        let input = " lib :local/lib::lib: ";
+        let parsed = WorkspaceConfig::parse_perl5lib(input);
         assert_eq!(parsed, vec!["lib", "local/lib"]);
     }
 
