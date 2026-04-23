@@ -259,6 +259,9 @@ jobs:
       - name: Run full ci-gate with receipts
         run: just gates
 
+      - name: Release history drift check
+        run: bash scripts/check_release_history.sh
+
       - name: Upload gate receipt
         if: always()
         uses: actions/upload-artifact@v7
