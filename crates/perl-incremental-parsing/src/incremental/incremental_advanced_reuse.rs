@@ -288,8 +288,8 @@ impl AdvancedReuseAnalyzer {
 
     /// Identify nodes affected by edits
     fn identify_affected_nodes(&mut self, tree: &Node, edits: &EditSet) {
-        for edit in edits.edits() {
-            self.mark_affected_nodes_in_range(tree, edit.start_byte, edit.old_end_byte);
+        for range in edits.coalesced_affected_ranges() {
+            self.mark_affected_nodes_in_range(tree, range.start.byte, range.end.byte);
         }
     }
 
@@ -298,9 +298,10 @@ impl AdvancedReuseAnalyzer {
         let node_range = Range::from(node.location);
         let edit_range = Range::new(Position::new(start, 0, 0), Position::new(end, 0, 0));
 
-        if node_range.overlaps(&edit_range) {
-            self.affected_nodes.insert(node.location.start);
+        if !node_range.overlaps(&edit_range) {
+            return;
         }
+        self.affected_nodes.insert(node.location.start);
 
         // Recurse into children
         match &node.kind {
