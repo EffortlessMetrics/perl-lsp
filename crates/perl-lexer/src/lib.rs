@@ -3937,12 +3937,7 @@ mod tests {
         assert!(
             token_texts.iter().any(|t| t == "my" && {
                 // find the second 'my' (after the POD block)
-                token_texts
-                    .iter()
-                    .enumerate()
-                    .filter(|(_, t)| t.as_str() == "my")
-                    .nth(1)
-                    .is_some()
+                token_texts.iter().enumerate().filter(|(_, t)| t.as_str() == "my").nth(1).is_some()
             }),
             "lexer should produce tokens after CR-terminated =cut; got: {:?}",
             token_texts
