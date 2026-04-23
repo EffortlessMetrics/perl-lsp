@@ -688,7 +688,12 @@ impl<'a> Parser<'a> {
                             // sigil-starting argument is a bare function call.
                             // Handles `blessed $self`, `reftype $x`, `weaken $ref`, etc.
                             // (imported unary functions that look like builtins at the call site)
-                            let arg = self.parse_ternary()?;
+                            //
+                            // Parse only a high-precedence argument expression here so
+                            // lower-precedence operators remain outside the call.
+                            // Example: `is_ready $obj ? 1 : 0` must parse as
+                            // `(is_ready $obj) ? 1 : 0`, not `is_ready($obj ? 1 : 0)`.
+                            let arg = self.parse_shift()?;
                             let start = expr.location.start;
                             let end = arg.location.end;
                             expr = Node::new(
