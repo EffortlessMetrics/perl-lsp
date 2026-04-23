@@ -3828,9 +3828,15 @@ fn collect_todo_hits(
         }
         let contents = read_lines(path)?;
         let mut raw_string_state = None;
+        let mut in_block_comment = false;
         for (line_no, line) in contents.iter().enumerate() {
             let match_line = if is_rust {
-                has_unlinked_todo_in_rust_line_with_state(line, todo_re, &mut raw_string_state)
+                has_unlinked_todo_in_rust_line_with_context(
+                    line,
+                    todo_re,
+                    &mut raw_string_state,
+                    &mut in_block_comment,
+                )
             } else if path
                 .extension()
                 .is_some_and(|ext| matches!(ext.to_str(), Some("pl" | "pm" | "t")))
@@ -3849,7 +3855,14 @@ fn collect_todo_hits(
 }
 
 fn has_unlinked_todo_in_rust_line(line: &str, token_re: &Regex) -> bool {
-    has_unlinked_todo_in_rust_line_with_state(line, token_re, &mut None)
+    let mut raw_string_state = None;
+    let mut in_block_comment = false;
+    has_unlinked_todo_in_rust_line_with_context(
+        line,
+        token_re,
+        &mut raw_string_state,
+        &mut in_block_comment,
+    )
 }
 
 fn has_unlinked_todo_in_rust_line_with_block_context(
@@ -3857,10 +3870,13 @@ fn has_unlinked_todo_in_rust_line_with_block_context(
     token_re: &Regex,
     in_block_comment: &mut bool,
 ) -> bool {
-    let mut state: Option<usize> = if *in_block_comment { Some(0) } else { None };
-    let result = has_unlinked_todo_in_rust_line_with_state(line, token_re, &mut state);
-    *in_block_comment = state.is_some();
-    result
+    let mut raw_string_state = None;
+    has_unlinked_todo_in_rust_line_with_context(
+        line,
+        token_re,
+        &mut raw_string_state,
+        in_block_comment,
+    )
 }
 
 fn has_unlinked_todo_in_rust_line_with_state(
@@ -3868,6 +3884,36 @@ fn has_unlinked_todo_in_rust_line_with_state(
     token_re: &Regex,
     raw_string_state: &mut Option<usize>,
 ) -> bool {
+    let mut in_block_comment = false;
+    has_unlinked_todo_in_rust_line_with_context(
+        line,
+        token_re,
+        raw_string_state,
+        &mut in_block_comment,
+    )
+}
+
+fn has_unlinked_todo_in_rust_line_with_context(
+    line: &str,
+    token_re: &Regex,
+    raw_string_state: &mut Option<usize>,
+    in_block_comment: &mut bool,
+) -> bool {
+    if *in_block_comment {
+        if let Some(end_idx) = find_block_comment_end(line, 0) {
+            let mut found = has_unlinked_token(&line[..end_idx], token_re);
+            *in_block_comment = false;
+            found |= has_unlinked_todo_in_rust_line_with_context(
+                &line[end_idx + 2..],
+                token_re,
+                raw_string_state,
+                in_block_comment,
+            );
+            return found;
+        }
+        return has_unlinked_token(line, token_re);
+    }
+
     for (idx, _) in line.match_indices("//") {
         if is_index_in_rust_literal(line, idx, *raw_string_state) {
             continue;
@@ -3878,10 +3924,9 @@ fn has_unlinked_todo_in_rust_line_with_state(
         if is_likely_string_literal_comment_start(line, idx) {
             continue;
         }
-        if has_unlinked_token(&line[idx + 2..], token_re) {
-            return true;
-        }
+        return has_unlinked_token(&line[idx + 2..], token_re);
     }
+
     for (idx, _) in line.match_indices("/*") {
         if is_index_in_rust_literal(line, idx, *raw_string_state) {
             continue;
@@ -3895,10 +3940,10 @@ fn has_unlinked_todo_in_rust_line_with_state(
             }
             continue;
         }
-        if has_unlinked_token(&line[idx + 2..], token_re) {
-            return true;
-        }
+        *in_block_comment = true;
+        return has_unlinked_token(&line[idx + 2..], token_re);
     }
+
     *raw_string_state = rust_raw_string_state_after_line(line, *raw_string_state);
     false
 }
@@ -4353,7 +4398,27 @@ fn has_unlinked_token(comment: &str, token_re: &Regex) -> bool {
             return true;
         }
     }
+    let upper_comment = comment.to_ascii_uppercase();
+    for token in ["TODO", "FIXME"] {
+        for (idx, _) in upper_comment.match_indices(token) {
+            if !is_ascii_word_boundary(comment, idx, idx + token.len()) {
+                continue;
+            }
+            let suffix = &comment[idx + token.len()..];
+            if !linked_marker(suffix) {
+                return true;
+            }
+        }
+    }
     false
+}
+
+fn is_ascii_word_boundary(s: &str, start: usize, end: usize) -> bool {
+    let bytes = s.as_bytes();
+    let prev_ok =
+        start == 0 || !bytes[start - 1].is_ascii_alphanumeric() && bytes[start - 1] != b'_';
+    let next_ok = end >= bytes.len() || !bytes[end].is_ascii_alphanumeric() && bytes[end] != b'_';
+    prev_ok && next_ok
 }
 
 fn linked_marker(suffix: &str) -> bool {
