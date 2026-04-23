@@ -3863,17 +3863,46 @@ fn has_unlinked_todo_in_rust_line(line: &str, token_re: &Regex) -> bool {
 }
 
 fn has_unlinked_todo_in_hash_line(line: &str, token_re: &Regex) -> bool {
-    if let Some(idx) = line.find('#') {
-        if idx > 0 && line.as_bytes()[idx - 1] == b'!' {
-            return false;
+    let Some(idx) = find_hash_comment_start(line) else {
+        return false;
+    };
+    has_unlinked_token(&line[idx + 1..], token_re)
+}
+
+fn find_hash_comment_start(line: &str) -> Option<usize> {
+    let bytes = line.as_bytes();
+    let mut i = 0;
+    let mut in_single = false;
+    let mut in_double = false;
+    while i < bytes.len() {
+        let b = bytes[i];
+        if b == b'\\' && (in_single || in_double) {
+            i += 2;
+            continue;
         }
-        if idx > 0 && !line[..idx].chars().next_back().is_some_and(char::is_whitespace) {
-            return false;
+        if b == b'\'' && !in_double {
+            in_single = !in_single;
+            i += 1;
+            continue;
         }
-        has_unlinked_token(&line[idx + 1..], token_re)
-    } else {
-        false
+        if b == b'"' && !in_single {
+            in_double = !in_double;
+            i += 1;
+            continue;
+        }
+        if b == b'#' && !in_single && !in_double {
+            if i > 0 && bytes[i - 1] == b'!' {
+                return None;
+            }
+            if i > 0 && !line[..i].chars().next_back().is_some_and(char::is_whitespace) {
+                i += 1;
+                continue;
+            }
+            return Some(i);
+        }
+        i += 1;
     }
+    None
 }
 
 fn is_url_like_hash_comment(line: &str, slash_idx: usize) -> bool {
@@ -4172,6 +4201,12 @@ mod tests {
 
         assert!(!has_unlinked_todo_in_hash_line("#!/usr/bin/env bash", &todo_re));
         assert!(!has_unlinked_todo_in_hash_line("echo# TODO not a comment", &todo_re));
+        assert!(!has_unlinked_todo_in_hash_line("echo \"# TODO in string\"", &todo_re));
+        assert!(!has_unlinked_todo_in_hash_line("echo '# TODO in single string'", &todo_re));
+        assert!(has_unlinked_todo_in_hash_line(
+            "echo \"# TODO in string\" # TODO: follow up",
+            &todo_re
+        ));
         assert!(has_unlinked_todo_in_hash_line("echo hi # TODO: follow up", &todo_re));
         assert!(!has_unlinked_todo_in_hash_line("echo hi # TODO(#77): tracked", &todo_re));
 
