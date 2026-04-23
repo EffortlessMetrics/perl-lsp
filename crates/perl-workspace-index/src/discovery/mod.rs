@@ -10,6 +10,7 @@
 use crate::ignore::{is_skipped_dir_name, path_contains_skipped_component};
 use perl_parser_core::source_file::is_perl_source_path;
 use std::collections::HashSet;
+use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 use walkdir::{DirEntry, WalkDir};
@@ -98,17 +99,17 @@ fn try_git_discovery(root: &Path, start: Instant) -> Result<DiscoveryResult, std
 }
 
 fn parse_git_ls_files_output(root: &Path, stdout: &[u8]) -> (Vec<PathBuf>, usize) {
-    let stdout = String::from_utf8_lossy(stdout);
     let mut files = Vec::new();
     let mut seen = HashSet::new();
     let mut excluded_count: usize = 0;
 
-    for entry in stdout.split('\0') {
+    for entry in stdout.split(|byte| *byte == b'\0') {
         if entry.is_empty() {
             continue;
         }
 
-        let relative_path = Path::new(entry);
+        let relative_path = PathBuf::from(bytes_to_os_string(entry));
+        let relative_path = relative_path.as_path();
         if path_contains_skipped_component(relative_path) {
             excluded_count += 1;
             continue;
@@ -127,6 +128,17 @@ fn parse_git_ls_files_output(root: &Path, stdout: &[u8]) -> (Vec<PathBuf>, usize
     }
 
     (files, excluded_count)
+}
+
+#[cfg(unix)]
+fn bytes_to_os_string(bytes: &[u8]) -> OsString {
+    use std::os::unix::ffi::OsStringExt;
+    OsString::from_vec(bytes.to_vec())
+}
+
+#[cfg(not(unix))]
+fn bytes_to_os_string(bytes: &[u8]) -> OsString {
+    String::from_utf8_lossy(bytes).into_owned().into()
 }
 
 fn walk_discovery(root: &Path, start: Instant) -> DiscoveryResult {
@@ -398,6 +410,21 @@ mod tests {
         assert!(files.iter().any(|p| p.ends_with("script.pl")));
         // Two duplicate Perl paths + one non-Perl file.
         assert_eq!(excluded_count, 3);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn parse_git_output_handles_non_utf8_paths() {
+        use std::os::unix::ffi::OsStrExt;
+
+        let root = Path::new("/tmp/workspace");
+        let payload = b"lib/\xFFfoo.pm\0";
+
+        let (files, excluded_count) = parse_git_ls_files_output(root, payload);
+
+        assert_eq!(files.len(), 1);
+        assert_eq!(excluded_count, 0);
+        assert!(files[0].as_os_str().as_bytes().ends_with(b"lib/\xFFfoo.pm"));
     }
 
     // --- Additional coverage: path_contains_skipped_component ---
