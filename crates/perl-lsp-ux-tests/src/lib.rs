@@ -51,11 +51,11 @@ pub mod workspace;
 
 pub use client::{LspEvent, UxClient};
 pub use env::{PathGuard, RestrictedPath};
-pub use scorecard::{EditorUxScorecard, ScenarioScore, aggregate_editor_ux_scorecard};
+pub use scorecard::{aggregate_editor_ux_scorecard, EditorUxScorecard, ScenarioScore};
 pub use workspace::FakeWorkspace;
 
-use anyhow::{Context, Result, anyhow};
-use serde_json::{Value, json};
+use anyhow::{anyhow, Context, Result};
+use serde_json::{json, Value};
 use std::time::Duration;
 
 /// Configuration for a UX scenario.
@@ -307,6 +307,31 @@ impl UxHarness {
         }
     }
 
+    /// Poll `workspace/symbol` until `predicate` accepts the latest result or
+    /// `timeout` elapses.
+    ///
+    /// Returns the most recent symbol list observed.
+    pub fn wait_for_workspace_symbols_until<F>(
+        &self,
+        query: &str,
+        timeout: std::time::Duration,
+        mut predicate: F,
+    ) -> Result<Vec<Value>>
+    where
+        F: FnMut(&[Value]) -> bool,
+    {
+        let deadline = std::time::Instant::now() + timeout;
+        let mut latest_symbols = Vec::new();
+        while std::time::Instant::now() < deadline {
+            latest_symbols = self.workspace_symbols(query)?;
+            if predicate(&latest_symbols) {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(200));
+        }
+        Ok(latest_symbols)
+    }
+
     /// Notify the server that workspace folders changed.
     ///
     /// Each tuple is `(relative_path, name)` and is resolved relative to the
@@ -426,6 +451,29 @@ impl UxHarness {
                 }
             }
         }
+    }
+
+    /// Poll go-to-definition until at least one location is returned or
+    /// `timeout` elapses.
+    ///
+    /// Returns the most recent definition response.
+    pub fn wait_for_definition(
+        &self,
+        relative_path: &str,
+        line: u32,
+        character: u32,
+        timeout: std::time::Duration,
+    ) -> Result<Vec<Value>> {
+        let deadline = std::time::Instant::now() + timeout;
+        let mut latest = Vec::new();
+        while std::time::Instant::now() < deadline {
+            latest = self.definition(relative_path, line, character)?;
+            if !latest.is_empty() {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(200));
+        }
+        Ok(latest)
     }
 
     /// Request go-to-declaration.
@@ -573,7 +621,11 @@ impl FormatResult {
 
     /// Extract the error message string if this is an error.
     pub fn error_message(&self) -> Option<&str> {
-        if let Self::Error(v) = self { v["message"].as_str() } else { None }
+        if let Self::Error(v) = self {
+            v["message"].as_str()
+        } else {
+            None
+        }
     }
 
     /// True if there are text edits.
