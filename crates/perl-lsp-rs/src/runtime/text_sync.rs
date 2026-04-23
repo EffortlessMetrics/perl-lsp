@@ -14,6 +14,25 @@ use crate::state::DegradationTier;
 #[cfg(feature = "workspace")]
 use perl_parser::workspace_index::{IndexPhase, IndexState};
 use perl_parser_core::source_file::is_binary_content;
+use std::path::Path;
+
+const TEMPLATE_EXTENSIONS: [&str; 4] = ["ep", "tt", "tt2", "mason"];
+
+fn is_embedded_template_uri(uri: &str) -> bool {
+    let extension = url::Url::parse(uri)
+        .ok()
+        .and_then(|url| url.to_file_path().ok())
+        .and_then(|path| path.extension().and_then(|ext| ext.to_str()).map(str::to_owned))
+        .or_else(|| Path::new(uri).extension().and_then(|ext| ext.to_str()).map(str::to_owned));
+
+    extension.is_some_and(|ext| {
+        TEMPLATE_EXTENSIONS.iter().any(|candidate| candidate.eq_ignore_ascii_case(&ext))
+    })
+}
+
+fn is_perl_language_id(language_id: &str) -> bool {
+    matches!(language_id.to_ascii_lowercase().as_str(), "perl" | "perl5" | "perl-cpanfile")
+}
 
 impl LspServer {
     /// Handle textDocument/didOpen notification.
@@ -46,8 +65,55 @@ impl LspServer {
             let version_i64 =
                 params.pointer("/textDocument/version").and_then(|v| v.as_i64()).unwrap_or(0);
             let version = i32::try_from(version_i64).unwrap_or(0);
+            let language_id =
+                params.pointer("/textDocument/languageId").and_then(|v| v.as_str()).unwrap_or("");
 
             tracing::debug!("Document opened: {}", uri);
+
+            // Template guard: Mojolicious/TT template files are frequently opened
+            // with an HTML/template language mode. Parsing those as plain Perl
+            // creates noisy diagnostics and poor startup UX.
+            if is_embedded_template_uri(uri) && !is_perl_language_id(language_id) {
+                tracing::debug!(
+                    "Skipping parse for template-like document {} (languageId={})",
+                    uri,
+                    language_id
+                );
+
+                let rope = ropey::Rope::from_str(text);
+                let line_starts = LineStartsCache::new_rope(&rope);
+                let normalized_uri = self.normalize_uri_key(uri);
+                self.documents.lock().insert(
+                    normalized_uri.clone(),
+                    DocumentState {
+                        rope,
+                        text: text.to_string(),
+                        version,
+                        ast: None,
+                        parse_errors: vec![],
+                        parent_map: ParentMap::default(),
+                        line_starts,
+                        generation: Arc::new(AtomicU32::new(0)),
+                        degradation_tier: DegradationTier::Minimal,
+                        #[cfg(feature = "incremental")]
+                        incremental_doc: None,
+                        #[cfg(feature = "incremental")]
+                        incremental_state: None,
+                    },
+                );
+
+                if let Err(e) = self.notify(
+                    "textDocument/publishDiagnostics",
+                    json!({
+                        "uri": uri,
+                        "diagnostics": []
+                    }),
+                ) {
+                    tracing::warn!("Failed to publish diagnostics for {}: {}", uri, e);
+                }
+
+                return Ok(());
+            }
 
             // Large file guard: skip parsing for oversized files
             let file_size = text.len();
@@ -466,6 +532,8 @@ impl LspServer {
                 // handling of non-conforming clients in tests/custom integrations.
                 let version =
                     incoming_version.unwrap_or_else(|| doc_state.version.saturating_add(1));
+                let skip_template_parse = is_embedded_template_uri(uri)
+                    && doc_state.degradation_tier == DegradationTier::Minimal;
 
                 // Increment generation counter for this change
                 let next_gen = doc_state.generation.fetch_add(1, Ordering::SeqCst).wrapping_add(1);
@@ -545,6 +613,42 @@ impl LspServer {
 
                 let text = doc.rope.to_string();
                 tracing::debug!("Document changed: {} (version {})", uri, version);
+
+                // Keep template documents that were intentionally skipped on didOpen
+                // in no-parse mode across subsequent didChange notifications.
+                if skip_template_parse {
+                    let line_starts = LineStartsCache::new_rope(&doc.rope);
+                    let normalized_uri = self.normalize_uri_key(uri);
+                    doc_state = DocumentState {
+                        rope: doc.rope.clone(),
+                        text: text.to_string(),
+                        version,
+                        ast: None,
+                        parse_errors: vec![],
+                        parent_map: ParentMap::default(),
+                        line_starts,
+                        generation: doc_state.generation.clone(),
+                        degradation_tier: DegradationTier::Minimal,
+                        #[cfg(feature = "incremental")]
+                        incremental_doc: None,
+                        #[cfg(feature = "incremental")]
+                        incremental_state: None,
+                    };
+                    documents.insert(normalized_uri.clone(), doc_state);
+                    drop(documents);
+
+                    if let Err(e) = self.notify(
+                        "textDocument/publishDiagnostics",
+                        json!({
+                            "uri": uri,
+                            "diagnostics": []
+                        }),
+                    ) {
+                        tracing::warn!("Failed to publish diagnostics for {}: {}", uri, e);
+                    }
+
+                    return Ok(());
+                }
 
                 // Large file guard: skip parsing for oversized files
                 let file_size = text.len();
@@ -1848,6 +1952,63 @@ mod tests {
             "binary content via didChange should result in Minimal degradation tier"
         );
         assert!(doc.ast.is_none(), "parser must not be called on binary content via didChange");
+        Ok(())
+    }
+
+    #[test]
+    fn test_template_file_guard_skips_parse_for_non_perl_language_id()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let server = LspServer::new();
+        let uri = "file:///app/templates/welcome.html.ep";
+
+        server.did_open(json!({
+            "textDocument": {
+                "uri": uri,
+                "languageId": "html",
+                "version": 1,
+                "text": "<div><%= $name %></div>"
+            }
+        }))?;
+
+        let docs = server.documents.lock();
+        let doc = docs.get(uri).ok_or("template document not stored after didOpen")?;
+        assert_eq!(
+            doc.degradation_tier,
+            DegradationTier::Minimal,
+            "template with non-Perl language mode should stay in no-parse mode"
+        );
+        assert!(doc.ast.is_none(), "template with non-Perl languageId must skip parse");
+        Ok(())
+    }
+
+    #[test]
+    fn test_template_file_guard_persists_across_did_change()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let server = LspServer::new();
+        let uri = "file:///app/templates/welcome.html.ep";
+
+        server.did_open(json!({
+            "textDocument": {
+                "uri": uri,
+                "languageId": "html",
+                "version": 1,
+                "text": "<div><%= $name %></div>"
+            }
+        }))?;
+
+        server.handle_did_change(Some(json!({
+            "textDocument": { "uri": uri, "version": 2 },
+            "contentChanges": [{ "text": "<div><%= $title %></div>" }]
+        })))?;
+
+        let docs = server.documents.lock();
+        let doc = docs.get(uri).ok_or("template document not stored after didChange")?;
+        assert_eq!(
+            doc.degradation_tier,
+            DegradationTier::Minimal,
+            "template should remain in no-parse mode after didChange"
+        );
+        assert!(doc.ast.is_none(), "template should continue skipping parse on didChange");
         Ok(())
     }
 
