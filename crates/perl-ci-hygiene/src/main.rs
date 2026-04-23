@@ -2100,27 +2100,7 @@ fn cmd_install_githooks(repo_root: &Path) -> Result<i32> {
     let hooks_dir = resolve_git_hooks_dir(repo_root)?;
     fs::create_dir_all(&hooks_dir)?;
 
-    let pre_commit_hook = r#"#!/usr/bin/env bash
-set -euo pipefail
-
-GIT_USER_NAME="$(git config user.name 2>/dev/null || true)"
-GIT_USER_EMAIL="$(git config user.email 2>/dev/null || true)"
-
-if [ "$GIT_USER_NAME" = "Codex Release Validation" ] || \
-   [ "$GIT_USER_EMAIL" = "codex-release-validation@example.invalid" ] || \
-   [ "$GIT_USER_NAME" = "xtask hook tests" ] || \
-   [ "$GIT_USER_EMAIL" = "xtask@example.invalid" ]; then
-    echo "❌ Refusing commit with placeholder git identity"
-    echo "   user.name:  $GIT_USER_NAME"
-    echo "   user.email: $GIT_USER_EMAIL"
-    echo ""
-    echo "   Fix this repo-local override first:"
-    echo "   git config --local --unset-all user.name"
-    echo "   git config --local --unset-all user.email"
-    exit 1
-fi
-"#;
-    write_git_hook(&hooks_dir.join("pre-commit"), pre_commit_hook)?;
+    write_git_hook(&hooks_dir.join("pre-commit"), pre_commit_hook_script())?;
 
     write_git_hook(&hooks_dir.join("pre-push"), pre_push_hook_script())?;
 
@@ -2129,6 +2109,31 @@ fi
     println!("   The pre-push hook runs 'nix develop -c just pr-fast' before each push");
     println!("   Skip with: git commit --no-verify / git push --no-verify");
     Ok(0)
+}
+
+fn pre_commit_hook_script() -> &'static str {
+    r#"#!/usr/bin/env bash
+set -euo pipefail
+
+GIT_USER_NAME="$(git config user.name 2>/dev/null || true)"
+GIT_USER_EMAIL="$(git config user.email 2>/dev/null || true)"
+
+if [ "$GIT_USER_NAME" = "Codex Release Validation" ] || \
+   [ "$GIT_USER_EMAIL" = "codex-release-validation@example.invalid" ] || \
+   [ "$GIT_USER_NAME" = "xtask hook tests" ] || \
+   [ "$GIT_USER_EMAIL" = "xtask@example.invalid" ] || \
+   [ "$GIT_USER_NAME" = "codex" ] || \
+   [ "$GIT_USER_EMAIL" = "codex@openai.com" ]; then
+    echo "❌ Refusing commit with placeholder git identity"
+    echo "   user.name:  $GIT_USER_NAME"
+    echo "   user.email: $GIT_USER_EMAIL"
+    echo ""
+    echo "   Codex CLI default identity detected. Configure your own author:"
+    echo "   git config --local user.name 'Your Name'"
+    echo "   git config --local user.email 'you@example.com'"
+    exit 1
+fi
+"#
 }
 
 fn resolve_git_hooks_dir(repo_root: &Path) -> Result<PathBuf> {
@@ -5198,6 +5203,19 @@ mod tests {
         );
         assert!(hook.contains("OK to bypass"), "hook must list when bypass is acceptable");
         assert!(hook.contains("NOT OK to bypass"), "hook must list when bypass is unacceptable");
+    }
+
+    #[test]
+    fn install_githooks_blocks_codex_cli_default_identity() {
+        let hook = pre_commit_hook_script();
+        assert!(
+            hook.contains("\"codex@openai.com\""),
+            "pre-commit hook template should block Codex CLI default email"
+        );
+        assert!(
+            hook.contains("Codex CLI default identity detected"),
+            "pre-commit hook template should explain how to override Codex identity"
+        );
     }
 
     #[test]
