@@ -77,12 +77,13 @@ fn parse_context_non_numeric_line_returns_none() {
 
 #[test]
 fn parse_context_extra_whitespace_around_valid_format() {
+    use perl_tdd_support::must_some;
     let parser = PerlStackParser::new();
-    // Leading/trailing whitespace around valid context line
-    // The regex anchors to start of string so leading whitespace should fail
-    let result = parser.parse_context("  main::(file.pm):42:");
-    // Leading whitespace causes the anchored regex to not match
-    assert!(result.is_none());
+    // Leading/trailing whitespace around valid context line should be ignored.
+    let (func, file, line) = must_some(parser.parse_context("  main::(file.pm):42:   "));
+    assert_eq!(func, "main");
+    assert_eq!(file, "file.pm");
+    assert_eq!(line, 42);
 }
 
 #[test]
@@ -97,11 +98,12 @@ fn parse_context_valid_format_recognized() {
 
 #[test]
 fn parse_context_with_path_containing_spaces() {
+    use perl_tdd_support::must_some;
     let parser = PerlStackParser::new();
-    // Paths with spaces may or may not match depending on regex
-    let result = parser.parse_context("main::(my file.pm):10:");
-    // The regex uses [^:)\\s]+ for file2, so spaces will break the match
-    assert!(result.is_none());
+    let (func, file, line) = must_some(parser.parse_context("main::(my file.pm):10:"));
+    assert_eq!(func, "main");
+    assert_eq!(file, "my file.pm");
+    assert_eq!(line, 10);
 }
 
 #[test]
