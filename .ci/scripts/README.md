@@ -104,13 +104,18 @@ cargo xtask ci-baseline --branch master --days 30 --limit 200 --output .ci
       "median_duration_seconds": 120,
       "p95_duration_seconds": 300,
       "avg_duration_seconds": 150,
-      "billable_minutes": 200
+      "billable_minutes": 200,
+      "unique_catch_count": 3,
+      "unique_catch_rate_percent": 60.0,
+      "signal_per_dollar": 1.88
     }
   },
   "summary": {
     "total_runs": 500,
     "total_billable_minutes": 1500,
-    "overall_success_rate_percent": 92.5
+    "overall_success_rate_percent": 92.5,
+    "total_unique_catches": 9,
+    "overall_signal_per_dollar": 0.75
   }
 }
 ```
