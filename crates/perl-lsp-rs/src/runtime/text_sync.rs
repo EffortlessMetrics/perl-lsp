@@ -395,6 +395,17 @@ impl LspServer {
                 // Get current document state or create new one
                 let mut documents = self.documents.lock();
                 let normalized_uri = self.normalize_uri_key(uri);
+                let existing_doc =
+                    documents.get(&normalized_uri).or_else(|| documents.get(uri)).cloned();
+
+                // LSP requires didChange only for opened documents. If we don't
+                // have a document and receive ranged edits, applying them against
+                // an empty buffer can corrupt state. Ignore this notification and
+                // wait for didOpen (or a full-document replace change).
+                if existing_doc.is_none() && changes.iter().all(|c| c.get("range").is_some()) {
+                    tracing::warn!("Ignoring ranged didChange for unopened document {}", uri);
+                    return Ok(());
+                }
 
                 // Invalidate the SemanticAnalyzer cache for this URI — content is changing.
                 {
@@ -416,25 +427,21 @@ impl LspServer {
                     }
                 }
 
-                let mut doc_state = documents
-                    .get(&normalized_uri)
-                    .or_else(|| documents.get(uri))
-                    .cloned()
-                    .unwrap_or_else(|| DocumentState {
-                        rope: ropey::Rope::new(),
-                        text: String::new(),
-                        version,
-                        ast: None,
-                        parse_errors: vec![],
-                        parent_map: ParentMap::default(),
-                        line_starts: LineStartsCache::new(""),
-                        generation: Arc::new(AtomicU32::new(0)),
-                        degradation_tier: DegradationTier::Minimal,
-                        #[cfg(feature = "incremental")]
-                        incremental_doc: None,
-                        #[cfg(feature = "incremental")]
-                        incremental_state: None,
-                    });
+                let mut doc_state = existing_doc.unwrap_or_else(|| DocumentState {
+                    rope: ropey::Rope::new(),
+                    text: String::new(),
+                    version,
+                    ast: None,
+                    parse_errors: vec![],
+                    parent_map: ParentMap::default(),
+                    line_starts: LineStartsCache::new(""),
+                    generation: Arc::new(AtomicU32::new(0)),
+                    degradation_tier: DegradationTier::Minimal,
+                    #[cfg(feature = "incremental")]
+                    incremental_doc: None,
+                    #[cfg(feature = "incremental")]
+                    incremental_state: None,
+                });
 
                 // Increment generation counter for this change
                 let next_gen = doc_state.generation.fetch_add(1, Ordering::SeqCst).wrapping_add(1);
@@ -1296,6 +1303,28 @@ mod tests {
             doc.incremental_doc.is_some(),
             "incremental_doc must be present after no-op change"
         );
+        Ok(())
+    }
+
+    #[test]
+    fn test_did_change_ranged_edit_ignored_for_unopened_document()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let server = LspServer::new();
+        let uri = "file:///not-opened.pl";
+
+        server.handle_did_change(Some(json!({
+            "textDocument": { "uri": uri, "version": 1 },
+            "contentChanges": [{
+                "range": {
+                    "start": { "line": 0, "character": 0 },
+                    "end":   { "line": 0, "character": 0 }
+                },
+                "text": "my $x = 1;\n"
+            }]
+        })))?;
+
+        let docs = server.documents.lock();
+        assert!(docs.get(uri).is_none(), "ranged didChange for unopened docs must be ignored");
         Ok(())
     }
 
