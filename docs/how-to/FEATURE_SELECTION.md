@@ -159,7 +159,7 @@ args = ["--stdio", "--feature-profile", "production"]
 
 ```elisp
 (add-to-list 'eglot-server-programs
-  '((perl-mode cperl-mode) . ("perllsp" "--stdio" "--feature-profile" "production")))
+  '((perl-mode cperl-mode perl-ts-mode) . ("perllsp" "--stdio" "--feature-profile" "production")))
 ```
 
 ---
