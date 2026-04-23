@@ -99,6 +99,10 @@ fn code_byte_mask(line: &str) -> Vec<bool> {
 
         match b {
             b'#' => {
+                if is_perl_array_length_marker(bytes, i) {
+                    i += 1;
+                    continue;
+                }
                 for byte in mask.iter_mut().take(bytes.len()).skip(i) {
                     *byte = false;
                 }
@@ -119,6 +123,13 @@ fn code_byte_mask(line: &str) -> Vec<bool> {
     }
 
     mask
+}
+
+fn is_perl_array_length_marker(bytes: &[u8], idx: usize) -> bool {
+    if idx > 0 && bytes[idx - 1] == b'$' {
+        return true;
+    }
+    idx > 1 && bytes[idx - 1] == b'{' && bytes[idx - 2] == b'$'
 }
 
 /// Extract unique variable names from source code within a line range.
@@ -490,5 +501,27 @@ mod tests {
         let values = collect_inline_values_with_runtime(source, 1, 1, None);
         assert_eq!(values.len(), 1);
         assert_eq!(values[0].text, "$real = ?");
+    }
+
+    #[test]
+    fn test_array_length_marker_does_not_start_comment() {
+        let source = "my $len = $#arr; my $next = 1;";
+
+        let names = extract_variable_names(source, 1, 1);
+        assert!(names.contains(&"$len".to_string()));
+        assert!(names.contains(&"$next".to_string()));
+
+        let values = collect_inline_values_with_runtime(source, 1, 1, None);
+        assert!(values.iter().any(|v| v.text == "$len = ?"));
+        assert!(values.iter().any(|v| v.text == "$next = ?"));
+    }
+
+    #[test]
+    fn test_braced_array_length_marker_does_not_start_comment() {
+        let source = "my $len = ${#arr}; my $next = 1;";
+
+        let names = extract_variable_names(source, 1, 1);
+        assert!(names.contains(&"$len".to_string()));
+        assert!(names.contains(&"$next".to_string()));
     }
 }
