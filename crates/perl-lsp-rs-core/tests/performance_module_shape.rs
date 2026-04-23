@@ -58,6 +58,24 @@ fn incremental_parser_given_zero_width_change_when_marked_then_no_nodes_require_
 }
 
 #[test]
+fn incremental_parser_given_reversed_node_range_when_checked_then_overlap_is_detected() {
+    let mut parser = IncrementalParser::new();
+    parser.mark_changed(10, 20);
+
+    assert!(parser.needs_reparse(18, 12));
+    assert!(!parser.needs_reparse(9, 0));
+}
+
+#[test]
+fn incremental_parser_given_point_query_inside_change_when_checked_then_reparse_is_required() {
+    let mut parser = IncrementalParser::new();
+    parser.mark_changed(30, 40);
+
+    assert!(parser.needs_reparse(35, 35));
+    assert!(!parser.needs_reparse(40, 40));
+}
+
+#[test]
 fn parallel_given_zero_workers_when_processing_then_all_files_are_still_processed() {
     let files = vec!["a.pm".to_string(), "b.pm".to_string(), "c.pm".to_string()];
 

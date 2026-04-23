@@ -141,6 +141,16 @@ impl IncrementalParser {
     ///
     /// Returns true if the node overlaps with any changed region.
     pub fn needs_reparse(&self, node_start: usize, node_end: usize) -> bool {
+        let (node_start, node_end) =
+            if node_start <= node_end { (node_start, node_end) } else { (node_end, node_start) };
+
+        if node_start == node_end {
+            return self
+                .changed_regions
+                .iter()
+                .any(|(start, end)| node_start >= *start && node_start < *end);
+        }
+
         self.changed_regions.iter().any(|(start, end)| node_start < *end && node_end > *start)
     }
 
