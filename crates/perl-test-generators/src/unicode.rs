@@ -48,6 +48,14 @@ pub fn unicode_string() -> impl Strategy<Value = String> {
     ]
 }
 
+/// Generate a non-empty Unicode string.
+///
+/// Useful when call sites need at least one code point and should avoid
+/// separate assumptions/filters in their property tests.
+pub fn non_empty_unicode_string() -> impl Strategy<Value = String> {
+    unicode_string().prop_filter("string must be non-empty", |value| !value.is_empty())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -68,6 +76,11 @@ mod tests {
             let encoded: Vec<u16> = s.encode_utf16().collect();
             let from_utf16 = String::from_utf16_lossy(&encoded);
             prop_assert_eq!(s, from_utf16);
+        }
+
+        #[test]
+        fn non_empty_unicode_string_never_empty(s in non_empty_unicode_string()) {
+            prop_assert!(!s.is_empty(), "non-empty strategy produced an empty string");
         }
     }
 }
