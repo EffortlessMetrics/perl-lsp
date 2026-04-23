@@ -175,7 +175,10 @@ fn bdd_given_unclosed_quote_when_parsed_then_recovery_is_reported_without_panick
         Ok(ast) => {
             let sexp = ast.to_sexp();
             assert!(
-                sexp.contains("ERROR") || sexp.contains("unknown"),
+                sexp.contains("ERROR")
+                    || sexp.contains("(UNKNOWN_REST)")
+                    || sexp.contains("(missing_expression)")
+                    || sexp.contains("(missing_statement)"),
                 "Expected recovery marker for malformed quoted string: {sexp}"
             );
         }
@@ -227,11 +230,16 @@ fn bdd_given_partial_hashref_literal_when_parsed_then_parser_recovers_without_pa
     let result = parser.parse();
 
     // Then: parser should recover (ERROR node) or return a descriptive parse failure.
+    // Note: AST recovery node names are ERROR, (UNKNOWN_REST), (missing_expression),
+    // (missing_statement) — lowercase "unknown" is not a valid sexp token name.
     match result {
         Ok(ast) => {
             let sexp = ast.to_sexp();
             assert!(
-                sexp.contains("ERROR") || sexp.contains("unknown"),
+                sexp.contains("ERROR")
+                    || sexp.contains("(UNKNOWN_REST)")
+                    || sexp.contains("(missing_expression)")
+                    || sexp.contains("(missing_statement)"),
                 "Expected recovery marker for incomplete hashref literal: {sexp}"
             );
         }
