@@ -391,6 +391,147 @@ mod tests {
         Ok(())
     }
 
+    // CRLF + trim_final_newlines: trailing `\r\n\r\n` must fully drain.
+    // Regression guard for mixed-line-ending files saved by Windows editors
+    // when callers request `trim_final_newlines=true, insert_final_newline=false`.
+    #[test]
+    fn trim_final_newlines_drains_crlf_tail() -> Result<(), Box<dyn std::error::Error>> {
+        let runtime = MockSubprocessRuntime::new();
+        runtime.add_response(MockResponse::success("foo;\r\n\r\n\r\n"));
+        let provider = FormattingProvider::new(runtime);
+
+        let options = FormattingOptions {
+            tab_size: 4,
+            insert_spaces: true,
+            trim_trailing_whitespace: Some(false),
+            insert_final_newline: Some(false),
+            trim_final_newlines: Some(true),
+        };
+
+        let result = provider.format_document("foo;", &options)?;
+
+        assert_eq!(
+            result.text, "foo;",
+            "expected zero trailing CR/LF bytes; got {:?}",
+            result.text
+        );
+        Ok(())
+    }
+
+    // Document composed only of newlines. `trim_final_newlines=true` must
+    // reduce it to empty; `insert_final_newline=true` must not then re-add
+    // a newline (the `!formatted.is_empty()` guard protects this).
+    #[test]
+    fn only_newlines_document_becomes_empty() -> Result<(), Box<dyn std::error::Error>> {
+        let runtime = MockSubprocessRuntime::new();
+        runtime.add_response(MockResponse::success("\n\n\n"));
+        let provider = FormattingProvider::new(runtime);
+
+        let options = FormattingOptions {
+            tab_size: 4,
+            insert_spaces: true,
+            trim_trailing_whitespace: Some(true),
+            insert_final_newline: Some(true),
+            trim_final_newlines: Some(true),
+        };
+
+        let result = provider.format_document("\n\n\n", &options)?;
+
+        assert_eq!(
+            result.text, "",
+            "all-newline document must collapse to empty without insert-final-newline re-adding one"
+        );
+        Ok(())
+    }
+
+    // UTF-8 multibyte characters with trailing whitespace. `trim_trailing_whitespace`
+    // uses `trim_end_matches([' ', '\t', '\r'])` which is char-based (not byte-based),
+    // so multibyte chars must round-trip intact while trailing ASCII whitespace is
+    // removed.
+    #[test]
+    fn trim_trailing_whitespace_preserves_multibyte_content()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let runtime = MockSubprocessRuntime::new();
+        // Japanese text followed by tabs/spaces on each line.
+        runtime.add_response(MockResponse::success("my $msg = \"こんにちは\";\t  \nmy $x = \"café\"; \n"));
+        let provider = FormattingProvider::new(runtime);
+
+        let options = FormattingOptions {
+            tab_size: 4,
+            insert_spaces: true,
+            trim_trailing_whitespace: Some(true),
+            insert_final_newline: Some(true),
+            trim_final_newlines: Some(true),
+        };
+
+        let result =
+            provider.format_document("my $msg = \"こんにちは\";\nmy $x = \"café\";", &options)?;
+
+        assert_eq!(
+            result.text, "my $msg = \"こんにちは\";\nmy $x = \"café\";\n",
+            "multibyte characters must survive the whitespace pass"
+        );
+        assert!(result.text.contains("こんにちは"));
+        assert!(result.text.contains("café"));
+        Ok(())
+    }
+
+    // When `trim_final_newlines` is set but `insert_final_newline` is also set,
+    // the final newline re-inserted by `insert_final_newline` must be exactly
+    // one — i.e., order-of-operations must trim first, then insert.
+    #[test]
+    fn trim_then_insert_yields_single_trailing_newline()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let runtime = MockSubprocessRuntime::new();
+        runtime.add_response(MockResponse::success("my $x = 1;\n\n\n\n"));
+        let provider = FormattingProvider::new(runtime);
+
+        let options = FormattingOptions {
+            tab_size: 4,
+            insert_spaces: true,
+            trim_trailing_whitespace: Some(false),
+            insert_final_newline: Some(true),
+            trim_final_newlines: Some(true),
+        };
+
+        let result = provider.format_document("my $x = 1;", &options)?;
+
+        assert_eq!(result.text, "my $x = 1;\n", "expected exactly one trailing newline");
+        // Sanity: no CR present, no double LF.
+        assert!(!result.text.ends_with("\n\n"));
+        assert!(!result.text.contains('\r'));
+        Ok(())
+    }
+
+    // `format_range` must NOT apply `trim_final_newlines` or `insert_final_newline`
+    // (those are full-document-only per the LSP spec). Regression guard so future
+    // refactors don't accidentally widen the predicate.
+    #[test]
+    fn format_range_ignores_final_newline_flags() -> Result<(), Box<dyn std::error::Error>> {
+        let runtime = MockSubprocessRuntime::new();
+        // perltidy emits trailing newlines — the range formatter must preserve them.
+        runtime.add_response(MockResponse::success("sub test {\n    return $x;\n}\n\n"));
+        let provider = FormattingProvider::new(runtime);
+
+        let options = FormattingOptions {
+            tab_size: 4,
+            insert_spaces: true,
+            trim_trailing_whitespace: Some(false),
+            insert_final_newline: Some(true),
+            trim_final_newlines: Some(true),
+        };
+
+        let content = "my $x = 1;\nsub test{return$x;}\nmy $y = 2;";
+        let range = FormatRange::new(FormatPosition::new(1, 0), FormatPosition::new(1, 20));
+        let result = provider.format_range(content, &range, &options)?;
+
+        assert_eq!(result.edits.len(), 1);
+        // Range output retains perltidy's trailing newlines verbatim — neither
+        // trimmed nor forced to exactly one.
+        assert_eq!(result.edits[0].new_text, "sub test {\n    return $x;\n}\n\n");
+        Ok(())
+    }
+
     // Idempotence: applying the LSP whitespace pass twice must yield the same
     // output as applying it once. Catches accumulator-style bugs where repeated
     // application corrupts the text.
