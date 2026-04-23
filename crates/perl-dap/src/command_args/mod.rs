@@ -5,7 +5,7 @@
 pub fn format_command_args(args: &[String]) -> Vec<String> {
     args.iter()
         .map(|arg| {
-            if arg.contains(' ') {
+            if arg.chars().any(char::is_whitespace) {
                 #[cfg(windows)]
                 {
                     format!("\"{}\"", arg.replace('"', "\\\""))
@@ -43,6 +43,24 @@ mod tests {
         assert_eq!(formatted.len(), 1);
         assert!(formatted[0].contains("file with spaces.txt"));
         assert_ne!(formatted[0], "file with spaces.txt");
+    }
+
+    #[test]
+    fn quotes_args_with_tabs() {
+        let args = vec!["column\tseparated".to_string()];
+        let formatted = format_command_args(&args);
+        assert_eq!(formatted.len(), 1);
+        assert!(formatted[0].contains("column\tseparated"));
+        assert_ne!(formatted[0], "column\tseparated");
+    }
+
+    #[test]
+    fn quotes_args_with_newlines() {
+        let args = vec!["line1\nline2".to_string()];
+        let formatted = format_command_args(&args);
+        assert_eq!(formatted.len(), 1);
+        assert!(formatted[0].contains("line1\nline2"));
+        assert_ne!(formatted[0], "line1\nline2");
     }
 
     #[test]
