@@ -889,12 +889,11 @@ the workspace root (Zed does not send `workspace/didChangeConfiguration` by
 default, and `initializationOptions` only supports `disabledFeatures`):
 
 ```toml
-[workspace]
+[perl]
 include_paths = ["lib", ".", "local/lib/perl5"]
-use_system_inc = false
 
-[inlay_hints]
-enabled = true
+[features]
+inlay_hints = true
 ```
 
 #### Sublime Text (LSP package)
