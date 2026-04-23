@@ -13,11 +13,13 @@
 //! - semantic_tokens: Semantic tokens for syntax highlighting
 //! - colors: Document color detection and presentation
 //! - virtual_content: Virtual document content for perldoc:// URIs
-//! - misc: Inlay hints, document links, code lens, and other features
+//! - document_links: Document link discovery and resolution
+//! - misc: Inlay hints, code lens, and other features
 
 mod code_actions;
 mod colors;
 mod completion;
+mod document_links;
 mod formatting;
 mod hierarchy;
 mod hover;
