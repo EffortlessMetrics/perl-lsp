@@ -75,6 +75,14 @@ test = false
 doc = false
 bench = false
 
+
+[[bin]]
+name = "declaration_parsing"
+path = "fuzz_targets/declaration_parsing.rs"
+test = false
+doc = false
+bench = false
+
 [[bin]]
 name = "parser_integration"
 path = "fuzz_targets/fuzz_target_1.rs"
