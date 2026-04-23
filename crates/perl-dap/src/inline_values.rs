@@ -105,12 +105,23 @@ fn code_byte_mask(line: &str) -> Vec<bool> {
                 break;
             }
             b'\'' => {
-                mask[i] = false;
-                in_single = true;
+                if !is_legacy_namespace_separator(bytes, i) {
+                    mask[i] = false;
+                    in_single = true;
+                }
             }
             b'"' => {
                 mask[i] = false;
                 in_double = true;
+            }
+            b'q' => {
+                if let Some(end_idx) = quote_like_end(bytes, i) {
+                    for byte in mask.iter_mut().take(end_idx).skip(i) {
+                        *byte = false;
+                    }
+                    i = end_idx;
+                    continue;
+                }
             }
             _ => {}
         }
@@ -119,6 +130,88 @@ fn code_byte_mask(line: &str) -> Vec<bool> {
     }
 
     mask
+}
+
+/// Return the end offset (exclusive) for a Perl quote-like operator span starting at `i`.
+///
+/// Handles `q`, `qq`, `qw`, `qx`, and `qr` forms with optional whitespace before delimiters.
+fn quote_like_end(bytes: &[u8], i: usize) -> Option<usize> {
+    if i > 0 && (is_ident_char(bytes[i - 1]) || is_variable_sigil(bytes[i - 1])) {
+        return None;
+    }
+
+    let mut j = i + 1;
+    if j < bytes.len() && matches!(bytes[j], b'q' | b'w' | b'x' | b'r') {
+        j += 1;
+    }
+
+    if j < bytes.len() && is_ident_char(bytes[j]) {
+        return None;
+    }
+
+    while j < bytes.len() && bytes[j].is_ascii_whitespace() {
+        j += 1;
+    }
+    if j >= bytes.len() {
+        return None;
+    }
+
+    let open = bytes[j];
+    let close = match open {
+        b'(' => b')',
+        b'[' => b']',
+        b'{' => b'}',
+        b'<' => b'>',
+        _ => open,
+    };
+
+    let mut k = j + 1;
+    let mut depth = 1usize;
+    let mut escaped = false;
+    while k < bytes.len() {
+        let b = bytes[k];
+        if escaped {
+            escaped = false;
+            k += 1;
+            continue;
+        }
+        if b == b'\\' {
+            escaped = true;
+            k += 1;
+            continue;
+        }
+        if open != close && b == open {
+            depth += 1;
+            k += 1;
+            continue;
+        }
+        if b == close {
+            depth = depth.saturating_sub(1);
+            k += 1;
+            if depth == 0 {
+                return Some(k);
+            }
+            continue;
+        }
+        k += 1;
+    }
+
+    Some(bytes.len())
+}
+
+fn is_ident_char(b: u8) -> bool {
+    b.is_ascii_alphanumeric() || b == b'_'
+}
+
+fn is_variable_sigil(b: u8) -> bool {
+    matches!(b, b'$' | b'@' | b'%' | b'&')
+}
+
+fn is_legacy_namespace_separator(bytes: &[u8], i: usize) -> bool {
+    if i == 0 || i + 1 >= bytes.len() {
+        return false;
+    }
+    is_ident_char(bytes[i - 1]) && is_ident_char(bytes[i + 1])
 }
 
 /// Extract unique variable names from source code within a line range.
@@ -490,5 +583,19 @@ mod tests {
         let values = collect_inline_values_with_runtime(source, 1, 1, None);
         assert_eq!(values.len(), 1);
         assert_eq!(values[0].text, "$real = ?");
+    }
+
+    #[test]
+    fn test_quote_like_operators_are_ignored() {
+        let source =
+            r#"my $real = 1; my $s = q{$fake}; my $qq = qq($also_fake); my $rx = qr/$regex_fake/;"#;
+        let names = extract_variable_names(source, 1, 1);
+        assert!(names.contains(&"$real".to_string()));
+        assert!(names.contains(&"$s".to_string()));
+        assert!(names.contains(&"$qq".to_string()));
+        assert!(names.contains(&"$rx".to_string()));
+        assert!(!names.contains(&"$fake".to_string()));
+        assert!(!names.contains(&"$also_fake".to_string()));
+        assert!(!names.contains(&"$regex_fake".to_string()));
     }
 }
