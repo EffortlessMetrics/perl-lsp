@@ -483,3 +483,9 @@ gh release view vX.Y.Z --json tagName,assets --jq '{tag: .tagName, assets: [.ass
 # 6. GitHub Release body starts with the curated content (not a PR dump)
 gh release view vX.Y.Z --json body --jq '.body' | head -1   # should be "# vX.Y.Z"
 ```
+
+### Release PR template
+
+Use [`.github/pull_request_template_release.md`](.github/pull_request_template_release.md)
+when opening release-prep PRs so release-history surfaces are consistently
+updated and reviewed.
