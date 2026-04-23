@@ -1,0 +1,13 @@
+# Repository defaults for Aider sessions.
+# Keep this aligned with AGENTS.md and CONTRIBUTING.md.
+read:
+  - AGENTS.md
+  - CONTRIBUTING.md
+  - CLAUDE.md
+
+# Fast local verification loop for implementation PRs.
+test-cmd: just pr-fast
+
+# Optional narrower checks for quick iteration in a single crate.
+check-cmd: cargo check --all-targets -p perl-lsp-rs
+lint-cmd: cargo clippy -p perl-lsp-rs
