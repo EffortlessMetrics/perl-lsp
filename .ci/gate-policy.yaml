@@ -215,9 +215,9 @@ gates:
 
   - name: compile_all_targets
     tier: merge_gate
-    description: "Compile all workspace targets (lib/bin/tests/benches) to catch integration and bench bit-rot"
+    description: "Compile all workspace targets (lib/bin/tests/benches) to catch integration and bench bit-rot; also validates all-features paths"
     required: true
-    command: cargo check --workspace --all-targets --locked
+    command: just check-all-targets
     timeout_seconds: 240
     retry_count: 0
     budgets:
