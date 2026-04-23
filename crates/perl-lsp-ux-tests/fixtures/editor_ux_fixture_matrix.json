@@ -270,5 +270,24 @@
         "definition no longer resolves to deleted targets"
       ]
     }
-  ]
+  ],
+  "ux_confidence_signals": {
+    "manual_editor_smoke": {
+      "runbook": "docs/reference/UX_TESTING.md",
+      "cadence": "release_and_regression_triage"
+    },
+    "first_5_minutes_harness": {
+      "harness_crate": "crates/perl-lsp-ux-tests",
+      "scenario_prefix": "ux_scenario_"
+    },
+    "open_issue_burndown": {
+      "tracking_issues": [
+        3522,
+        3476,
+        4246,
+        3515
+      ],
+      "source": "README.md#known-gaps-toward-solid-ux"
+    }
+  }
 }

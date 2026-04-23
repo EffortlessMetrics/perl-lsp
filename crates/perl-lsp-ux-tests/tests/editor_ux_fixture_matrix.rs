@@ -47,15 +47,25 @@ fn editor_ux_fixture_matrix_covers_all_scenarios() -> Result<()> {
         matrix.get("component_metrics").context("component_metrics missing")?,
         "component_metrics",
     )?;
+    let confidence_signals =
+        matrix.get("ux_confidence_signals").context("ux_confidence_signals missing")?;
+    validate_confidence_signals(confidence_signals)?;
     let allowed_metrics =
         top_line_metrics.union(&component_metrics).cloned().collect::<BTreeSet<_>>();
 
     let workflows =
         matrix.get("workflows").and_then(Value::as_array).context("workflows missing")?;
 
+    let mut workflow_ids = BTreeSet::new();
     let mut scenarios_in_matrix = BTreeSet::new();
     let mut component_metrics_exercised = BTreeSet::new();
     for workflow in workflows {
+        let workflow_id =
+            workflow.get("id").and_then(Value::as_str).context("workflow missing id")?;
+        assert!(
+            workflow_ids.insert(workflow_id.to_string()),
+            "workflow id `{workflow_id}` is duplicated"
+        );
         let scenario_file = workflow
             .get("scenario_file")
             .and_then(Value::as_str)
@@ -124,4 +134,29 @@ fn collect_string_set(value: &Value, context_label: &str) -> Result<BTreeSet<Str
         out.insert(item.to_string());
     }
     Ok(out)
+}
+
+fn validate_confidence_signals(value: &Value) -> Result<()> {
+    let signals = value.as_object().context("ux_confidence_signals must be an object")?;
+    for signal_name in ["manual_editor_smoke", "first_5_minutes_harness", "open_issue_burndown"] {
+        assert!(signals.contains_key(signal_name), "missing confidence signal `{signal_name}`");
+    }
+
+    let runbook = signals["manual_editor_smoke"]
+        .get("runbook")
+        .and_then(Value::as_str)
+        .context("manual_editor_smoke.runbook missing")?;
+    assert_eq!(runbook, "docs/reference/UX_TESTING.md");
+
+    let tracking_issues = signals["open_issue_burndown"]
+        .get("tracking_issues")
+        .and_then(Value::as_array)
+        .context("open_issue_burndown.tracking_issues missing")?;
+    assert!(!tracking_issues.is_empty(), "tracking_issues must not be empty");
+    for issue in tracking_issues {
+        let issue_number = issue.as_u64().context("tracking issue IDs must be integers")?;
+        assert!(issue_number > 0, "tracking issue IDs must be positive");
+    }
+
+    Ok(())
 }

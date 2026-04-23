@@ -122,6 +122,39 @@ pub(super) fn count_ux_scenarios(root: &Path) -> usize {
     collect_ux_scenario_files(root).len()
 }
 
+#[derive(Debug, Default, PartialEq, Eq)]
+struct UxConfidenceSignals {
+    tracked_issue_count: usize,
+    has_manual_smoke_runbook: bool,
+}
+
+fn collect_ux_confidence_signals(root: &Path) -> UxConfidenceSignals {
+    let matrix_path = root.join("crates/perl-lsp-ux-tests/fixtures/editor_ux_fixture_matrix.json");
+    let Ok(raw) = fs::read_to_string(matrix_path) else {
+        return UxConfidenceSignals::default();
+    };
+    let Ok(matrix) = serde_json::from_str::<serde_json::Value>(&raw) else {
+        return UxConfidenceSignals::default();
+    };
+    let Some(signals) = matrix.get("ux_confidence_signals").and_then(|v| v.as_object()) else {
+        return UxConfidenceSignals::default();
+    };
+
+    let has_manual_smoke_runbook = signals
+        .get("manual_editor_smoke")
+        .and_then(|v| v.get("runbook"))
+        .and_then(|v| v.as_str())
+        .is_some();
+
+    let tracked_issue_count = signals
+        .get("open_issue_burndown")
+        .and_then(|v| v.get("tracking_issues"))
+        .and_then(|v| v.as_array())
+        .map_or(0, |issues| issues.iter().filter(|issue| issue.as_u64().is_some()).count());
+
+    UxConfidenceSignals { tracked_issue_count, has_manual_smoke_runbook }
+}
+
 // ---------------------------------------------------------------------------
 // Generators
 // ---------------------------------------------------------------------------
@@ -130,6 +163,12 @@ pub(super) fn generate_quality_status(root: &Path, original: &str) -> Result<Str
     let mutation_by_crate = collect_per_crate_mutation(root);
     let tests_by_crate = collect_per_crate_test_counts(root);
     let ux_scenarios = count_ux_scenarios(root);
+    let ux_signals = collect_ux_confidence_signals(root);
+    let manual_smoke_state = if ux_signals.has_manual_smoke_runbook {
+        "manual smoke runbook linked"
+    } else {
+        "manual smoke runbook missing"
+    };
 
     let has_mutation_data = !mutation_by_crate.is_empty();
     let mutation_note = if has_mutation_data {
@@ -144,8 +183,11 @@ pub(super) fn generate_quality_status(root: &Path, original: &str) -> Result<Str
            `just ux-tests` runs the default release-confidence lane and `just ux-tests-full` adds \
            the integration-only 10k-line large-file case; planning scaffold at \
            `docs/project/status/editor_ux.json`\n\
+         - **UX confidence signals**: {ux_scenarios} executable first-5-minutes workflows, \
+           {tracked_issues} tracked known-gap issues for burn-down, {manual_smoke_state} via fixture matrix\n\
          - **Mutation testing**: {mutation_note}\n\
-         - **Production Status**: LSP server public alpha (`just ci-gate` passing)"
+         - **Production Status**: LSP server public alpha (`just ci-gate` passing)",
+        tracked_issues = ux_signals.tracked_issue_count
     );
 
     let crate_table = format_crate_quality_table(&mutation_by_crate, &tests_by_crate);
@@ -280,6 +322,29 @@ mod tests {
             ])
         );
         assert_eq!(receipt["integration_points"]["ci_lane"], "just ux-tests");
+        Ok(())
+    }
+
+    #[test]
+    fn test_collect_ux_confidence_signals_from_matrix_shape() -> Result<()> {
+        let dir = tempfile::tempdir()?;
+        let fixture_dir = dir.path().join("crates/perl-lsp-ux-tests/fixtures");
+        fs::create_dir_all(&fixture_dir)?;
+        fs::write(
+            fixture_dir.join("editor_ux_fixture_matrix.json"),
+            r#"{
+              "ux_confidence_signals": {
+                "manual_editor_smoke": { "runbook": "docs/reference/UX_TESTING.md" },
+                "open_issue_burndown": { "tracking_issues": [3522, 3476, 4246] }
+              }
+            }"#,
+        )?;
+
+        let signals = collect_ux_confidence_signals(dir.path());
+        assert_eq!(
+            signals,
+            UxConfidenceSignals { tracked_issue_count: 3, has_manual_smoke_runbook: true }
+        );
         Ok(())
     }
 }
