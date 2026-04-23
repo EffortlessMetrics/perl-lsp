@@ -6,8 +6,10 @@
 - **Scope of analysis:** From session start (master HEAD `0fe9058f1`, 76 open PRs, master CI red on `ci-gate (unit_full)`) through session end (master HEAD `d148636c9`, 2 open PRs in final rebase, master CI recovering with RUSTSEC + fmt drift cleared and full merge-gate now running on every PR).
 - **Cost envelope (per user at session close):**
   - Claude Code (orchestrator + agents, 20× Max plan): **~31% of a 5-hour session budget** + **~5% of weekly budget**
-  - Codex Pro (input PR generation): **~7% of weekly budget**
+  - Codex Pro (input PR generation): **~26% of a 5-hour session budget** + **~7% of weekly budget**
   - Additional non-Codex PR tokens: modest
+
+  Both sides were near-simultaneous 5-hour session intensity (~26–31% each), with the weekly slices matching that ratio roughly 5:1 — i.e. a single session this intense runs ~5–6× a typical day's consumption for each tool.
 
 ---
 

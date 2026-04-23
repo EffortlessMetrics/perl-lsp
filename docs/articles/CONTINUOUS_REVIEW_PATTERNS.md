@@ -15,7 +15,12 @@ By the close of the 5-hour Claude session window (roughly 1.5 hours of effective
 - **236 dispositions total**
 - **31 tracking issues filed**, 22 closed
 
-Rate: ~150 dispositions per Claude-session-hour. Cost: ~31% of a 5-hour 20× Max window plus ~7% of the Codex Pro weekly budget on the generation side.
+Rate: ~150 dispositions per Claude-session-hour. Cost breakdown (per user at session close):
+
+- **Claude Code 20× Max**: ~31% of a 5-hour session window + ~5% of the weekly budget
+- **Codex Pro**: ~26% of a 5-hour session window + ~7% of the weekly budget
+
+Both sides ran at near-matched session intensity (~26–31%) — a session this intense burns roughly **5–6× a typical day's consumption on each tool simultaneously**, which is how 150 dispositions/hour becomes possible.
 
 The interesting parts aren't the numbers. They're the patterns that emerged for *staying ahead of* a queue that's being pushed to faster than any single reviewer can absorb.
 
@@ -167,11 +172,13 @@ The rule that should have been invoked: **when the user intervenes and the orche
 
 ## Economics snapshot
 
-| Side | Consumption | Output |
-|---|---|---|
-| **Claude Code (orchestrator + agents)** | ~31% of 5h session + ~5% of weekly (20× Max plan) | 116 merges, 120 closes, 31 issues filed |
-| **Codex Pro (generation)** | ~7% of weekly | ~150 PRs generated (50% useful, 50% dup/drift) |
-| **Master CI** | Many cancelled runs (concurrency group) + ~100 successful gate runs | Green master at session close |
+| Side | 5h session | Weekly | Output |
+|---|---|---|---|
+| **Claude Code (orchestrator + agents, 20× Max)** | ~31% | ~5% | 116 merges, 120 closes, 31 issues filed |
+| **Codex Pro (generation)** | ~26% | ~7% | ~150 PRs generated (50% useful, 50% dup/drift) |
+| **Master CI** | — | — | Many cancelled runs (concurrency group) + ~100 successful gate runs; green master at session close |
+
+Both sides ran at near-matched 5-hour session intensity (**~26–31% each**) and near-matched weekly share (**~5–7% each**), which is how 150 dispositions/hour became achievable. The balance is worth naming: a session that's only-Claude or only-Codex won't reach these rates; the **matched-intensity parallel burn on both tools** is what makes spray-and-filter work at this scale.
 
 The ratio that matters: **Codex is cheaper per attempt; Claude is cheaper per decision**. The orchestration pattern exploits this asymmetry by letting Codex spray variation attempts and letting Claude filter to the best one.
 
