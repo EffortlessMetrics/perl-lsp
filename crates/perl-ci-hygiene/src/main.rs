@@ -3863,17 +3863,18 @@ fn has_unlinked_todo_in_rust_line(line: &str, token_re: &Regex) -> bool {
 }
 
 fn has_unlinked_todo_in_hash_line(line: &str, token_re: &Regex) -> bool {
-    if let Some(idx) = line.find('#') {
-        if idx > 0 && line.as_bytes()[idx - 1] == b'!' {
+    for (idx, _) in line.match_indices('#') {
+        if idx == 0 && line.as_bytes().get(1) == Some(&b'!') {
             return false;
         }
         if idx > 0 && !line[..idx].chars().next_back().is_some_and(char::is_whitespace) {
-            return false;
+            continue;
         }
-        has_unlinked_token(&line[idx + 1..], token_re)
-    } else {
-        false
+        if has_unlinked_token(&line[idx + 1..], token_re) {
+            return true;
+        }
     }
+    false
 }
 
 fn is_url_like_hash_comment(line: &str, slash_idx: usize) -> bool {
@@ -4174,6 +4175,14 @@ mod tests {
         assert!(!has_unlinked_todo_in_hash_line("echo# TODO not a comment", &todo_re));
         assert!(has_unlinked_todo_in_hash_line("echo hi # TODO: follow up", &todo_re));
         assert!(!has_unlinked_todo_in_hash_line("echo hi # TODO(#77): tracked", &todo_re));
+        assert!(has_unlinked_todo_in_hash_line(
+            "echo \"# not comment\" # TODO: follow up",
+            &todo_re,
+        ));
+        assert!(!has_unlinked_todo_in_hash_line(
+            "echo \"# not comment\" # TODO(#77): tracked",
+            &todo_re,
+        ));
 
         Ok(())
     }
