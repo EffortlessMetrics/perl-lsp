@@ -529,6 +529,20 @@ fn apply_single_edit(state: &mut IncrementalState, edit: &Edit) -> Result<Range<
 #[cfg(test)]
 mod tests {
     use super::*;
+    use proptest::prelude::*;
+
+    #[derive(Clone, Debug)]
+    struct FuzzEdit {
+        start: usize,
+        delete_len: usize,
+        insert_text: String,
+    }
+
+    fn apply_edit_to_ground_truth(source: &mut String, edit: &FuzzEdit) {
+        let start = edit.start.min(source.len());
+        let old_end = (start + edit.delete_len).min(source.len());
+        source.replace_range(start..old_end, &edit.insert_text);
+    }
 
     /// Verify that a small ranged edit re-lexes substantially fewer bytes than
     /// the total document length, confirming the checkpoint fast-path fires.
@@ -613,6 +627,45 @@ mod tests {
         );
 
         Ok(())
+    }
+
+    proptest! {
+        #[test]
+        fn prop_incremental_apply_edits_matches_ground_truth(
+            edits in prop::collection::vec(
+                (
+                    0usize..900usize,
+                    0usize..80usize,
+                    "[a-zA-Z0-9_ \\n;\\$\\(\\)\\{\\}\\[\\],]{0,40}"
+                ),
+                1..60
+            )
+        ) {
+            let mut state = IncrementalState::new("my $seed = 0;\n".repeat(80));
+            let mut expected_source = state.source.clone();
+
+            for (start, delete_len, insert_text) in edits {
+                let fuzz_edit = FuzzEdit { start, delete_len, insert_text };
+                let start_byte = fuzz_edit.start.min(state.source.len());
+                let old_end_byte = (start_byte + fuzz_edit.delete_len).min(state.source.len());
+
+                apply_edit_to_ground_truth(&mut expected_source, &fuzz_edit);
+
+                let incremental_edit = Edit {
+                    start_byte,
+                    old_end_byte,
+                    new_end_byte: start_byte + fuzz_edit.insert_text.len(),
+                    new_text: fuzz_edit.insert_text,
+                };
+
+                let result = apply_edits(&mut state, &[incremental_edit]);
+                prop_assert!(result.is_ok());
+                prop_assert_eq!(&state.source, &expected_source);
+            }
+
+            let reparsed = IncrementalState::new(expected_source);
+            prop_assert_eq!(&state.source, &reparsed.source);
+        }
     }
 }
 
