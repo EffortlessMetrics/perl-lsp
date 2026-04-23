@@ -161,6 +161,16 @@ jobs:
         run: |
           cargo test --locked --lib ${{ steps.scope.outputs.crates_args }}
 
+      # ── Scoped integration-test compile guard ────────────────────────────
+      - name: Scoped integration-target check
+        if: |
+          steps.scope.outputs.scope_ok == 'true' &&
+          steps.scope.outputs.diff_class != 'prose_only' &&
+          steps.scope.outputs.diff_class != 'ci_config' &&
+          steps.scope.outputs.crates_args != ''
+        run: |
+          cargo check --locked --tests ${{ steps.scope.outputs.crates_args }}
+
       # ── Fallback: baseline clippy-core / test-core ────────────────────────
       # Runs when: ci-scope failed (scope_ok=false), OR ci-scope returned no
       # crates to check (empty crates_args on a non-prose diff — shouldn't
