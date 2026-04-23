@@ -3863,17 +3863,55 @@ fn has_unlinked_todo_in_rust_line(line: &str, token_re: &Regex) -> bool {
 }
 
 fn has_unlinked_todo_in_hash_line(line: &str, token_re: &Regex) -> bool {
-    if let Some(idx) = line.find('#') {
+    let Some(idx) = find_hash_comment_start(line) else {
+        return false;
+    };
+
+    has_unlinked_token(&line[idx + 1..], token_re)
+}
+
+fn find_hash_comment_start(line: &str) -> Option<usize> {
+    let mut in_single = false;
+    let mut in_double = false;
+    let mut escaped = false;
+
+    for (idx, ch) in line.char_indices() {
+        if escaped {
+            escaped = false;
+            continue;
+        }
+
+        if ch == '\\' && (in_single || in_double) {
+            escaped = true;
+            continue;
+        }
+
+        if ch == '\'' && !in_double {
+            in_single = !in_single;
+            continue;
+        }
+
+        if ch == '"' && !in_single {
+            in_double = !in_double;
+            continue;
+        }
+
+        if ch != '#' || in_single || in_double {
+            continue;
+        }
+
         if idx > 0 && line.as_bytes()[idx - 1] == b'!' {
-            return false;
+            continue;
         }
+
         if idx > 0 && !line[..idx].chars().next_back().is_some_and(char::is_whitespace) {
-            return false;
+            continue;
         }
-        has_unlinked_token(&line[idx + 1..], token_re)
-    } else {
-        false
+
+        return Some(idx);
     }
+
+    None
 }
 
 fn is_url_like_hash_comment(line: &str, slash_idx: usize) -> bool {
@@ -4174,6 +4212,22 @@ mod tests {
         assert!(!has_unlinked_todo_in_hash_line("echo# TODO not a comment", &todo_re));
         assert!(has_unlinked_todo_in_hash_line("echo hi # TODO: follow up", &todo_re));
         assert!(!has_unlinked_todo_in_hash_line("echo hi # TODO(#77): tracked", &todo_re));
+
+        Ok(())
+    }
+
+    #[test]
+    fn hash_comment_todo_detection_skips_hash_in_quotes_and_finds_real_comment() -> Result<()> {
+        let todo_re = Regex::new(r"TODO|FIXME")?;
+
+        assert!(has_unlinked_todo_in_hash_line(
+            "echo \"# not a comment\" # TODO: follow up",
+            &todo_re
+        ));
+        assert!(!has_unlinked_todo_in_hash_line(
+            "echo \"# not a comment\" # TODO(#91): tracked",
+            &todo_re
+        ));
 
         Ok(())
     }
