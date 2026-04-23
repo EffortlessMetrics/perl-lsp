@@ -11,6 +11,10 @@ use anyhow::Result;
 use perl_lsp_ux_tests::{ScenarioConfig, UxHarness};
 use std::time::Duration;
 
+fn binary_available() -> bool {
+    perl_lsp_ux_tests::resolve_binary().is_ok()
+}
+
 const UNDECLARED_SOURCE: &str = r#"use strict;
 use warnings;
 
@@ -38,6 +42,10 @@ fn has_global_symbol_diagnostic(diags: &[serde_json::Value], symbol: &str) -> bo
 
 #[test]
 fn given_undeclared_variable_when_opened_then_strict_diagnostic_is_published() -> Result<()> {
+    if !binary_available() {
+        eprintln!("SKIP scenario_24: perl-lsp binary not found");
+        return Ok(());
+    }
     let harness =
         UxHarness::new(ScenarioConfig::default().with_file("live_edit.pl", UNDECLARED_SOURCE))?;
 
@@ -56,6 +64,10 @@ fn given_undeclared_variable_when_opened_then_strict_diagnostic_is_published() -
 
 #[test]
 fn given_live_edit_when_variable_is_declared_then_navigation_remains_responsive() -> Result<()> {
+    if !binary_available() {
+        eprintln!("SKIP scenario_24: perl-lsp binary not found");
+        return Ok(());
+    }
     let harness =
         UxHarness::new(ScenarioConfig::default().with_file("live_edit.pl", UNDECLARED_SOURCE))?;
 
