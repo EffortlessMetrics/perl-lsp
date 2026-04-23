@@ -74,7 +74,7 @@ pub fn init_logging(default_filter: &str) {
             .or_else(|_| EnvFilter::try_new(default_filter))
             .unwrap_or_else(|_| EnvFilter::new("info"));
 
-        let use_ansi = std::env::var("NO_COLOR").is_err() && io::stderr().is_terminal();
+        let use_ansi = should_use_ansi_stderr();
 
         // If PERL_LSP_LOG_FILE is set, add a rolling file appender alongside stderr.
         if let Ok(log_path) = std::env::var("PERL_LSP_LOG_FILE") {
@@ -119,6 +119,45 @@ pub fn init_logging(default_filter: &str) {
             .with_target(true)
             .try_init();
     });
+}
+
+fn env_truthy(var_name: &str) -> Option<bool> {
+    std::env::var(var_name).ok().map(|value| {
+        let normalized = value.trim().to_ascii_lowercase();
+        !(normalized.is_empty() || normalized == "0" || normalized == "false" || normalized == "no")
+    })
+}
+
+fn is_warp_terminal() -> bool {
+    matches!(std::env::var("TERM_PROGRAM"), Ok(value) if value.eq_ignore_ascii_case("WarpTerminal"))
+}
+
+fn should_use_ansi(is_terminal: bool) -> bool {
+    if std::env::var("NO_COLOR").is_ok() {
+        return false;
+    }
+
+    if matches!(env_truthy("FORCE_COLOR"), Some(true))
+        || matches!(env_truthy("CLICOLOR_FORCE"), Some(true))
+    {
+        return true;
+    }
+
+    if matches!(env_truthy("CLICOLOR"), Some(false)) {
+        return false;
+    }
+
+    is_terminal || is_warp_terminal()
+}
+
+/// Returns whether ANSI color should be used for stdout output.
+pub fn should_use_ansi_stdout() -> bool {
+    should_use_ansi(io::stdout().is_terminal())
+}
+
+/// Returns whether ANSI color should be used for stderr output.
+pub fn should_use_ansi_stderr() -> bool {
+    should_use_ansi(io::stderr().is_terminal())
 }
 
 /// Emit a consistent startup log line for server binaries.
