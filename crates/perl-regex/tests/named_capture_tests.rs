@@ -101,6 +101,26 @@ fn test_extract_name_with_underscore() -> Result<(), Box<dyn std::error::Error>>
 }
 
 #[test]
+fn test_extract_single_named_capture_with_quote_syntax() -> Result<(), Box<dyn std::error::Error>> {
+    let captures = RegexAnalyzer::extract_named_captures("(?'id'\\d+)");
+    assert_eq!(captures.len(), 1);
+    assert_eq!(captures[0].name, "id");
+    assert_eq!(captures[0].index, 1);
+    Ok(())
+}
+
+#[test]
+fn test_extract_mixed_named_capture_syntaxes() -> Result<(), Box<dyn std::error::Error>> {
+    let captures = RegexAnalyzer::extract_named_captures("(?'prefix'\\w+)-(?<id>\\d+)");
+    assert_eq!(captures.len(), 2);
+    assert_eq!(captures[0].name, "prefix");
+    assert_eq!(captures[0].index, 1);
+    assert_eq!(captures[1].name, "id");
+    assert_eq!(captures[1].index, 2);
+    Ok(())
+}
+
+#[test]
 fn test_capture_group_has_pattern_field() -> Result<(), Box<dyn std::error::Error>> {
     let captures = RegexAnalyzer::extract_named_captures("(?<id>\\d+)");
     assert_eq!(captures[0].pattern, "\\d+");
