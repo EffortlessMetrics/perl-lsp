@@ -2346,3 +2346,166 @@ my $y = helper();
 
     Ok(())
 }
+
+#[test]
+#[serial]
+fn bdd_document_symbols_refresh_after_incremental_edit() -> Result<(), Box<dyn std::error::Error>> {
+    let scenario = BddScenario::new("Document symbols refresh after incremental edit");
+    scenario.given("an open document with one subroutine declaration");
+
+    let before = r#"use strict;
+use warnings;
+
+sub initial_task {
+    return 1;
+}
+"#;
+
+    let after = r#"use strict;
+use warnings;
+
+sub initial_task {
+    return 1;
+}
+
+sub followup_task {
+    return initial_task();
+}
+"#;
+
+    let (mut harness, workspace) = setup_workspace(&[("symbols_refresh.pl", before)])?;
+    let uri = workspace.uri("symbols_refresh.pl");
+    harness.open(&uri, before)?;
+    harness.barrier();
+
+    scenario.when("requesting document symbols before the edit");
+    let before_symbols = harness.request(
+        "textDocument/documentSymbol",
+        json!({
+            "textDocument": { "uri": uri }
+        }),
+    )?;
+    let before_names = symbol_names(&before_symbols);
+
+    scenario.when("applying a full-document edit that adds a new subroutine");
+    harness.change_full(&uri, 2, after)?;
+    harness.barrier();
+
+    let after_symbols = harness.request(
+        "textDocument/documentSymbol",
+        json!({
+            "textDocument": { "uri": uri }
+        }),
+    )?;
+    let after_names = symbol_names(&after_symbols);
+
+    scenario.then("the symbol list includes both the existing and newly added declarations");
+    assert!(
+        before_names.iter().any(|name| name == "initial_task"),
+        "baseline symbols should include initial_task; got {before_names:?}"
+    );
+    assert!(
+        !before_names.iter().any(|name| name == "followup_task"),
+        "baseline symbols should not include followup_task; got {before_names:?}"
+    );
+    assert!(
+        after_names.iter().any(|name| name == "initial_task"),
+        "symbols after edit should still include initial_task; got {after_names:?}"
+    );
+    assert!(
+        after_names.iter().any(|name| name == "followup_task"),
+        "symbols after edit should include followup_task; got {after_names:?}"
+    );
+
+    Ok(())
+}
+
+#[test]
+#[serial]
+fn bdd_signature_help_tracks_function_rename_after_change() -> Result<(), Box<dyn std::error::Error>>
+{
+    let scenario = BddScenario::new("Signature help tracks function rename after change");
+    scenario.given("a file with a function call that receives signature help");
+
+    let before = r#"use strict;
+use warnings;
+
+sub calculate_sum {
+    my ($left, $right) = @_;
+    return $left + $right;
+}
+
+my $total = calculate_sum(1, 2);
+"#;
+
+    let after = r#"use strict;
+use warnings;
+
+sub compute_sum {
+    my ($left, $right) = @_;
+    return $left + $right;
+}
+
+my $total = compute_sum(1, 2);
+"#;
+
+    let (mut harness, workspace) = setup_workspace(&[("signature_rename.pl", before)])?;
+    let uri = workspace.uri("signature_rename.pl");
+    harness.open(&uri, before)?;
+    harness.barrier();
+
+    let (before_line, before_col) = find_position(before, "calculate_sum(1, 2)");
+    scenario.when("requesting signature help before the rename");
+    let before_help = harness.request(
+        "textDocument/signatureHelp",
+        json!({
+            "textDocument": { "uri": uri },
+            "position": {
+                "line": before_line,
+                "character": before_col + "calculate_sum(1, ".len() as u32
+            }
+        }),
+    )?;
+    let before_text = before_help
+        .pointer("/signatures/0/label")
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .to_string();
+
+    scenario.when("editing the file to rename both declaration and callsite");
+    harness.change_full(&uri, 2, after)?;
+    harness.barrier();
+
+    let (after_line, after_col) = find_position(after, "compute_sum(1, 2)");
+    let after_help = harness.request(
+        "textDocument/signatureHelp",
+        json!({
+            "textDocument": { "uri": uri },
+            "position": {
+                "line": after_line,
+                "character": after_col + "compute_sum(1, ".len() as u32
+            }
+        }),
+    )?;
+    let after_text = after_help
+        .pointer("/signatures/0/label")
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .to_string();
+
+    scenario.then("signature help updates to the renamed function");
+    assert!(
+        before_text.contains("calculate_sum"),
+        "expected baseline signature help to mention calculate_sum; got {before_text:?}"
+    );
+    assert!(
+        after_text.contains("compute_sum"),
+        "expected updated signature help to mention compute_sum; got {after_text:?}"
+    );
+    assert!(
+        !after_text.contains("calculate_sum"),
+        "updated signature help should not retain calculate_sum; got {after_text:?}"
+    );
+
+    Ok(())
+}
