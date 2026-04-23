@@ -192,6 +192,11 @@ fn uri_extension_non_file_uri() {
 }
 
 #[test]
+fn uri_extension_windows_style_path() {
+    assert_eq!(uri_extension(r"C:\Users\dev\script.pl"), Some("pl"));
+}
+
+#[test]
 fn uri_extension_with_query_and_fragment() {
     assert_eq!(uri_extension("file:///tmp/test.pm?v=1#L5"), Some("pm"));
 }
