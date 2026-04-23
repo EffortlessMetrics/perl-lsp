@@ -256,6 +256,38 @@ any '/multi' => sub { return 'multi' };
 }
 
 #[test]
+fn droid_get_route_emits_subroutine_symbol() {
+    let code = r#"
+use Droid;
+
+get '/health' => sub { return 'ok' };
+"#;
+    let table = extract_symbols(code);
+    assert!(
+        has_symbol(&table, "/health", SymbolKind::Subroutine),
+        "expected route symbol `/health` for Droid `get '/health' => sub`"
+    );
+}
+
+#[test]
+fn droid_route_target_string_adds_subroutine_reference() {
+    let code = r#"
+use Droid;
+
+get '/status' => 'show_status';
+
+sub show_status {
+    return 'ok';
+}
+"#;
+    let table = extract_symbols(code);
+    assert!(
+        has_reference(&table, "show_status", SymbolKind::Subroutine),
+        "expected Droid route target string `show_status` to be recorded as a Subroutine reference"
+    );
+}
+
+#[test]
 fn dancer_route_target_string_adds_subroutine_reference() {
     let code = r#"
 use Dancer;

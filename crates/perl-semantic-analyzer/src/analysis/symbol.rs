@@ -348,6 +348,8 @@ pub enum WebFrameworkKind {
     Dancer,
     /// `use Dancer2;` or `use Dancer2::Core;`
     Dancer2,
+    /// `use Droid;`
+    Droid,
     /// `use Mojolicious::Lite;`
     MojoliciousLite,
     /// `use Plack::Builder;`
@@ -388,7 +390,7 @@ pub struct FrameworkFlags {
     pub class_accessor: bool,
     /// Which specific Moo/Moose variant was detected.
     pub kind: Option<FrameworkKind>,
-    /// Web framework variant, if any (Dancer, Dancer2, Mojolicious::Lite).
+    /// Web framework variant, if any (Dancer, Dancer2, Droid, Mojolicious::Lite).
     pub web_framework: Option<WebFrameworkKind>,
     /// Async framework variant, if any (IO::Async).
     pub async_framework: Option<AsyncFrameworkKind>,
@@ -1565,7 +1567,7 @@ impl SymbolExtractor {
         if require_embedded_marker { None } else { Some(attr_expr) }
     }
 
-    /// Detect Dancer/Dancer2/Mojolicious::Lite route declarations and synthesize route symbols.
+    /// Detect Dancer/Dancer2/Droid/Mojolicious::Lite route declarations and synthesize route symbols.
     ///
     /// Pattern (two statements):
     /// 1. `ExpressionStatement(Identifier("get"|"post"|"put"|"del"|"patch"|"any"))`
@@ -1617,7 +1619,11 @@ impl SymbolExtractor {
 
                         if matches!(
                             web_framework,
-                            Some(WebFrameworkKind::Dancer | WebFrameworkKind::Dancer2)
+                            Some(
+                                WebFrameworkKind::Dancer
+                                    | WebFrameworkKind::Dancer2
+                                    | WebFrameworkKind::Droid
+                            )
                         ) && let Some(target_node) = args.get(1)
                         {
                             if let Some(target_name) =
@@ -2142,6 +2148,7 @@ impl SymbolExtractor {
         let web_kind = match module {
             "Dancer" => Some(WebFrameworkKind::Dancer),
             "Dancer2" | "Dancer2::Core" => Some(WebFrameworkKind::Dancer2),
+            "Droid" => Some(WebFrameworkKind::Droid),
             "Mojolicious::Lite" => Some(WebFrameworkKind::MojoliciousLite),
             "Plack::Builder" => Some(WebFrameworkKind::PlackBuilder),
             _ => None,
