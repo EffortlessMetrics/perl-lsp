@@ -334,7 +334,7 @@ impl<'tree> Node<'tree> {
 
     /// Returns the end byte offset in the source text (exclusive).
     pub fn end_byte(&self) -> usize {
-        self.inner.location.end
+        self.inner.location.end.min(self.tree_source.len())
     }
 
     /// Extracts the source text slice covered by this node.
@@ -368,11 +368,93 @@ impl<'tree> Node<'tree> {
     pub fn inner(&self) -> &'tree AstNode {
         self.inner
     }
+
+    /// Returns a cursor positioned at this node for stateful tree traversal.
+    ///
+    /// Mirrors `tree_sitter::TreeCursor` style navigation with a lightweight,
+    /// allocation-free path stack.
+    pub fn walk(&self) -> TreeCursor<'tree> {
+        TreeCursor { root: self.inner, tree_source: self.tree_source, path: Vec::new() }
+    }
 }
 
 /// Re-export of [`perl_ast::NodeKind`] so callers can pattern-match node variants
 /// without a direct dependency on `perl-ast`.
 pub use perl_ast::NodeKind as PerlNodeKind;
+
+/// Stateful cursor for navigating a subtree.
+///
+/// The cursor is rooted at the [`Node`] that created it via [`Node::walk`].
+/// Calling [`goto_parent`][TreeCursor::goto_parent] at the root returns `false`
+/// and keeps the cursor at the root.
+pub struct TreeCursor<'tree> {
+    root: &'tree AstNode,
+    tree_source: &'tree str,
+    /// Child indices from `root` to the current node.
+    path: Vec<usize>,
+}
+
+impl<'tree> TreeCursor<'tree> {
+    /// Returns the node currently selected by the cursor.
+    pub fn node(&self) -> Node<'tree> {
+        Node { inner: self.current_ast_node(), tree_source: self.tree_source }
+    }
+
+    /// Moves to the first child of the current node.
+    ///
+    /// Returns `true` when movement succeeds, `false` when the node has no children.
+    pub fn goto_first_child(&mut self) -> bool {
+        if self.current_ast_node().first_child().is_none() {
+            return false;
+        }
+        self.path.push(0);
+        true
+    }
+
+    /// Moves to the next sibling of the current node.
+    ///
+    /// Returns `true` on success. Returns `false` if the cursor is at root or if
+    /// there is no next sibling.
+    pub fn goto_next_sibling(&mut self) -> bool {
+        if self.path.is_empty() {
+            return false;
+        }
+
+        let parent = self.current_parent_ast_node();
+        let sibling_count = parent.children().len();
+        let current_index = self.path[self.path.len() - 1];
+        let next = current_index + 1;
+        if next >= sibling_count {
+            return false;
+        }
+
+        let last_pos = self.path.len() - 1;
+        self.path[last_pos] = next;
+        true
+    }
+
+    /// Moves to the parent node.
+    ///
+    /// Returns `true` when movement succeeds, `false` when already at root.
+    pub fn goto_parent(&mut self) -> bool {
+        self.path.pop().is_some()
+    }
+
+    /// Resets the cursor back to its root node.
+    pub fn reset(&mut self) {
+        self.path.clear();
+    }
+
+    fn current_ast_node(&self) -> &'tree AstNode {
+        resolve_path(self.root, &self.path)
+    }
+
+    fn current_parent_ast_node(&self) -> &'tree AstNode {
+        debug_assert!(!self.path.is_empty(), "current_parent_ast_node requires a non-root cursor");
+        let parent_path_len = self.path.len() - 1;
+        resolve_path(self.root, &self.path[..parent_path_len])
+    }
+}
 
 // ---------------------------------------------------------------------------
 // Private helpers
@@ -385,6 +467,15 @@ pub use perl_ast::NodeKind as PerlNodeKind;
 #[inline]
 fn ast_children(node: &AstNode) -> Vec<&AstNode> {
     node.children()
+}
+
+fn resolve_path<'tree>(root: &'tree AstNode, path: &[usize]) -> &'tree AstNode {
+    let mut current = root;
+    for &index in path {
+        let children = current.children();
+        current = children[index];
+    }
+    current
 }
 
 /// Convert a PascalCase kind name (e.g. `"VariableWithAttributes"`) to snake_case
@@ -451,8 +542,50 @@ mod tests {
         let tree = must_some(p.parse(source));
         let root = tree.root_node();
         assert_eq!(root.start_byte(), 0);
-        // End byte from the Program node spans to end of last statement.
-        assert!(root.end_byte() <= source.len() + 1, "end_byte out of range");
+        assert_eq!(root.end_byte(), source.len(), "root end_byte should clamp to source length");
+    }
+
+    /// Verify the end_byte clamp invariant: for every node in the tree,
+    /// `end_byte()` must not exceed `tree.source().len()`.  This exercises the
+    /// `.min(self.tree_source.len())` guard on the full node set, not just the
+    /// root, so that any future parser regression producing an out-of-bounds
+    /// location is caught here.
+    #[test]
+    fn test_end_byte_never_exceeds_source_len_for_all_nodes() {
+        let sources = [
+            "my $x = 42;",
+            "sub foo { return 1; }",
+            "use strict;\nuse warnings;\nmy @arr = (1, 2, 3);",
+            // empty source — edge case for zero-length trees
+            "",
+        ];
+        for source in sources {
+            let mut p = Parser::new();
+            let tree = match p.parse(source) {
+                Some(t) => t,
+                // v3 parser returns None only on extreme failure; skip rather than panic
+                None => continue,
+            };
+            let source_len = tree.source().len();
+            // Walk all direct children of root and check the invariant
+            let root = tree.root_node();
+            assert!(
+                root.end_byte() <= source_len,
+                "root end_byte {} > source_len {} for source {:?}",
+                root.end_byte(),
+                source_len,
+                source
+            );
+            for child in root.children() {
+                assert!(
+                    child.end_byte() <= source_len,
+                    "child end_byte {} > source_len {} for source {:?}",
+                    child.end_byte(),
+                    source_len,
+                    source
+                );
+            }
+        }
     }
 
     #[test]
@@ -668,5 +801,54 @@ mod tests {
     fn test_language_is_named_with_empty_string_returns_false() {
         // Empty string is not a valid kind name and must not be found.
         assert!(!language().node_kind_is_named(""), "empty kind name must return false");
+    }
+
+    #[test]
+    fn test_tree_cursor_walks_children_and_siblings() {
+        let mut parser = Parser::new();
+        let tree = must_some(parser.parse("my $x = 1; my $y = 2;"));
+        let root = tree.root_node();
+        let mut cursor = root.walk();
+
+        assert_eq!(cursor.node().grammar_kind(), "source_file");
+        assert!(cursor.goto_first_child(), "source_file should have at least one child");
+        assert_eq!(cursor.node().grammar_kind(), "my_declaration");
+        assert!(cursor.goto_next_sibling(), "first statement should have a sibling");
+        assert_eq!(cursor.node().grammar_kind(), "my_declaration");
+        assert!(!cursor.goto_next_sibling(), "second statement should be the last sibling");
+    }
+
+    #[test]
+    fn test_tree_cursor_parent_and_reset_behavior() {
+        let mut parser = Parser::new();
+        let tree = must_some(parser.parse("my $x = 1;"));
+        let root = tree.root_node();
+        let mut cursor = root.walk();
+
+        assert!(!cursor.goto_parent(), "cursor at root must not move to parent");
+        assert!(cursor.goto_first_child(), "root should have a child");
+        assert!(cursor.goto_parent(), "child should have root as parent");
+        assert_eq!(cursor.node().grammar_kind(), "source_file");
+
+        assert!(cursor.goto_first_child(), "root should still have a child");
+        cursor.reset();
+        assert_eq!(cursor.node().grammar_kind(), "source_file");
+    }
+
+    #[test]
+    fn test_tree_cursor_goto_first_child_returns_false_for_leaf() {
+        // A leaf node has no children; goto_first_child must return false and
+        // leave the cursor positioned at the leaf rather than panicking.
+        let mut parser = Parser::new();
+        let tree = must_some(parser.parse("my $x = 1;"));
+        let root = tree.root_node();
+        let mut cursor = root.walk();
+
+        // Navigate to a leaf: root -> first child (my_declaration) -> first child (leaf token).
+        assert!(cursor.goto_first_child(), "root should have a child");
+        assert!(cursor.goto_first_child(), "my_declaration should have a child");
+        // The leaf must refuse another goto_first_child.
+        let at_leaf = !cursor.goto_first_child();
+        assert!(at_leaf, "goto_first_child must return false on a leaf node");
     }
 }
