@@ -1,48 +1,59 @@
-//! LSP wire types for Position and Range.
+//! LSP wire types and conversion helpers.
+//!
+//! This module defines the protocol-facing equivalents of internal span/position
+//! types. The wire types use:
+//!
+//! - 0-based line indexes
+//! - UTF-16 code unit character offsets (per LSP)
+//!
+//! Use [`WirePosition::from_byte_offset`] and [`WirePosition::to_byte_offset`]
+//! to convert between parser byte offsets and LSP-compatible coordinates.
 use crate::{offset_to_utf16_line_col, utf16_line_col_to_offset};
 use serde::{Deserialize, Serialize};
 
-/// LSP-compatible position measured as zero-based UTF-16 coordinates.
+/// A protocol-facing LSP position.
+///
+/// Both fields are 0-based. `character` is measured in UTF-16 code units.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct WirePosition {
     /// Zero-based line number.
     pub line: u32,
-    /// Zero-based UTF-16 column within the line.
+    /// Zero-based UTF-16 code-unit offset within the line.
     pub character: u32,
 }
 impl WirePosition {
-    /// Creates a new wire position.
+    /// Creates a new wire position from explicit line and character values.
     pub fn new(line: u32, character: u32) -> Self {
         Self { line, character }
     }
 
-    /// Converts a byte offset in `source` into a [`WirePosition`].
+    /// Converts a byte offset in `source` into an LSP wire position.
     pub fn from_byte_offset(source: &str, byte_offset: usize) -> Self {
         let (line, character) = offset_to_utf16_line_col(source, byte_offset);
         Self { line, character }
     }
 
-    /// Converts this position back into a byte offset for `source`.
+    /// Converts this LSP wire position back into a byte offset in `source`.
     pub fn to_byte_offset(&self, source: &str) -> usize {
         utf16_line_col_to_offset(source, self.line, self.character)
     }
 }
 
-/// LSP-compatible range using UTF-16 wire positions.
+/// A protocol-facing LSP range with inclusive start and exclusive end.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct WireRange {
-    /// Inclusive range start.
+    /// Start position of the range (inclusive).
     pub start: WirePosition,
-    /// Exclusive range end.
+    /// End position of the range (exclusive).
     pub end: WirePosition,
 }
 impl WireRange {
-    /// Creates a new wire range.
+    /// Creates a new range from start and end positions.
     pub fn new(start: WirePosition, end: WirePosition) -> Self {
         Self { start, end }
     }
 
-    /// Converts byte offsets in `source` to a [`WireRange`].
+    /// Builds a wire range from start/end byte offsets in `source`.
     pub fn from_byte_offsets(source: &str, start_byte: usize, end_byte: usize) -> Self {
         Self {
             start: WirePosition::from_byte_offset(source, start_byte),
@@ -50,12 +61,12 @@ impl WireRange {
         }
     }
 
-    /// Creates an empty range anchored at `pos`.
+    /// Creates an empty (cursor) range at `pos`.
     pub fn empty(pos: WirePosition) -> Self {
         Self { start: pos, end: pos }
     }
 
-    /// Creates a range spanning the entire `source` document.
+    /// Creates a range that spans the full document.
     pub fn whole_document(source: &str) -> Self {
         Self {
             start: WirePosition::new(0, 0),
@@ -64,12 +75,12 @@ impl WireRange {
     }
 }
 
-/// URI + range pair used in protocol payloads and snapshots.
+/// A protocol-facing location that combines a URI and a range.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct WireLocation {
-    /// Document URI as a string.
+    /// Document URI.
     pub uri: String,
-    /// Location range within the document.
+    /// Range within the referenced document.
     pub range: WireRange,
 }
 impl WireLocation {
