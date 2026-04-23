@@ -39,8 +39,41 @@
 //! [`perl-parser`]: https://docs.rs/perl-parser
 //! [`tree-sitter-perl-rs`]: https://docs.rs/tree-sitter-perl-rs
 
-use std::path::Path;
+use std::{fmt, path::Path};
 use tree_sitter::{Language, Parser};
+
+/// Typed parse/setup errors for the C tree-sitter Perl backend.
+#[derive(Debug)]
+pub enum ParseError {
+    /// The linked tree-sitter runtime is incompatible with this grammar.
+    Language(tree_sitter::LanguageError),
+    /// Tree-sitter returned `None` from parse (typically timeout/cancel).
+    ParseReturnedNone,
+    /// Source file I/O failed before parsing could begin.
+    Io(std::io::Error),
+}
+
+impl fmt::Display for ParseError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Language(error) => write!(f, "failed to configure parser language: {error}"),
+            Self::ParseReturnedNone => {
+                f.write_str("tree-sitter returned no parse tree (cancelled or timed out)")
+            }
+            Self::Io(error) => write!(f, "failed to read Perl source file: {error}"),
+        }
+    }
+}
+
+impl std::error::Error for ParseError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Language(error) => Some(error),
+            Self::Io(error) => Some(error),
+            Self::ParseReturnedNone => None,
+        }
+    }
+}
 
 /// Returns the tree-sitter [`Language`] for Perl (C grammar).
 ///
@@ -89,6 +122,22 @@ pub fn try_create_parser() -> Result<Parser, tree_sitter::LanguageError> {
     Ok(parser)
 }
 
+/// Parses a Perl source string and returns a typed error on failure.
+///
+/// This is the strongly typed variant of [`parse_perl_code`].
+pub fn try_parse_perl_code(code: &str) -> Result<tree_sitter::Tree, ParseError> {
+    let mut parser = try_create_parser().map_err(ParseError::Language)?;
+    parser.parse(code, None).ok_or(ParseError::ParseReturnedNone)
+}
+
+/// Reads a file from `path` and parses it as Perl source with typed errors.
+///
+/// This is the strongly typed variant of [`parse_perl_file`].
+pub fn try_parse_perl_file<P: AsRef<Path>>(path: P) -> Result<tree_sitter::Tree, ParseError> {
+    let code = std::fs::read_to_string(path).map_err(ParseError::Io)?;
+    try_parse_perl_code(&code)
+}
+
 /// Creates a [`tree_sitter::Parser`] configured for Perl, silently ignoring
 /// language-set errors.
 ///
@@ -125,11 +174,7 @@ pub fn create_parser() -> Parser {
 /// assert!(!tree.root_node().has_error());
 /// ```
 pub fn parse_perl_code(code: &str) -> Result<tree_sitter::Tree, Box<dyn std::error::Error>> {
-    let mut parser = try_create_parser()?;
-    match parser.parse(code, None) {
-        Some(tree) => Ok(tree),
-        None => Err("Failed to parse code".into()),
-    }
+    try_parse_perl_code(code).map_err(Into::into)
 }
 
 /// Reads a file from `path` and parses it as Perl source.
@@ -141,8 +186,7 @@ pub fn parse_perl_code(code: &str) -> Result<tree_sitter::Tree, Box<dyn std::err
 pub fn parse_perl_file<P: AsRef<Path>>(
     path: P,
 ) -> Result<tree_sitter::Tree, Box<dyn std::error::Error>> {
-    let code = std::fs::read_to_string(path)?;
-    parse_perl_code(&code)
+    try_parse_perl_file(path).map_err(Into::into)
 }
 
 /// Returns the scanner backend identifier for this crate.
@@ -193,6 +237,14 @@ mod tests {
     fn test_parser_creation() {
         let parser = create_parser();
         assert!(parser.language().is_some());
+    }
+
+    #[test]
+    fn test_try_parse_perl_file_returns_io_error_for_missing_file() {
+        let missing_path =
+            std::env::temp_dir().join("tree_sitter_perl_c_missing_file_please_ignore.pl");
+        let result = try_parse_perl_file(&missing_path);
+        assert!(matches!(result, Err(ParseError::Io(_))));
     }
 
     #[test]
