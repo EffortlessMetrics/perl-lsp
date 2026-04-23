@@ -1,0 +1,128 @@
+name: Perl Version Matrix
+
+on:
+  pull_request:
+    branches: [ main, master ]
+    # Keep label-gated runs alive after label is applied.
+    types: [opened, synchronize, reopened, labeled]
+  schedule:
+    # Weekly on Mondays at 04:30 UTC
+    - cron: '30 4 * * 1'
+  workflow_dispatch: {}
+
+concurrency:
+  group: perl-version-matrix-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  perl-version-matrix:
+    name: Perl compatibility (${{ matrix.perl }})
+    if: |
+      github.event_name != 'pull_request' ||
+      contains(github.event.pull_request.labels.*.name, 'ci:perl-matrix')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - perl: '5.8'
+            run_rust_smoke: true
+          - perl: '5.10'
+            run_rust_smoke: false
+          - perl: '5.12'
+            run_rust_smoke: false
+          - perl: '5.14'
+            run_rust_smoke: false
+          - perl: '5.16'
+            run_rust_smoke: false
+          - perl: '5.18'
+            run_rust_smoke: false
+          - perl: '5.20'
+            run_rust_smoke: false
+          - perl: '5.22'
+            run_rust_smoke: false
+          - perl: '5.24'
+            run_rust_smoke: false
+          - perl: '5.26'
+            run_rust_smoke: false
+          - perl: '5.28'
+            run_rust_smoke: false
+          - perl: '5.30'
+            run_rust_smoke: false
+          - perl: '5.32'
+            run_rust_smoke: false
+          - perl: '5.34'
+            run_rust_smoke: false
+          - perl: '5.36'
+            run_rust_smoke: false
+          - perl: '5.38'
+            run_rust_smoke: false
+          - perl: '5.40'
+            run_rust_smoke: true
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install Perl ${{ matrix.perl }}
+        uses: shogo82148/actions-setup-perl@v1
+        with:
+          perl-version: ${{ matrix.perl }}
+
+      - name: Record Perl runtime
+        run: |
+          perl -V:version
+          perl -e 'print "$^V\n"'
+
+      - name: Version-gated Perl syntax probes
+        run: |
+          perl -we '
+            use strict;
+            use warnings;
+
+            sub check_gate {
+              my ($name, $minimum, $code) = @_;
+              my $ok = eval $code;
+              my $err = $@;
+              my $supported = ($] >= $minimum) ? 1 : 0;
+
+              if ($supported && !$ok) {
+                die "$name expected to compile on Perl $], error: $err";
+              }
+              if (!$supported && $ok) {
+                die "$name unexpectedly compiled on Perl $] (minimum $minimum)";
+              }
+            }
+
+            check_gate(q{say}, 5.010, q{use feature q(say); say q(ok); 1;});
+            check_gate(q{state}, 5.010, q{use feature q(state); state $x = 1; $x++; 1;});
+            check_gate(
+              q{signatures},
+              5.036,
+              q{use feature q(signatures); no warnings q(experimental::signatures); sub f ($x) { $x }; 1;}
+            );
+            check_gate(q{class}, 5.038, q{use feature q(class); class Probe { }; 1;});
+
+            print qq{version-gated probes passed on $^V\n};
+          '
+
+      - name: Install Rust toolchain (smoke lanes)
+        if: matrix.run_rust_smoke
+        uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
+        with:
+          toolchain: 1.92.0
+
+      - name: Cache cargo dependencies (smoke lanes)
+        if: matrix.run_rust_smoke
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4
+        with:
+          cache-on-failure: true
+          key: ${{ runner.os }}-perl-matrix-smoke-${{ matrix.perl }}-${{ hashFiles('Cargo.lock') }}
+
+      - name: Rust smoke test with Perl on PATH
+        if: matrix.run_rust_smoke
+        run: |
+          cargo test --locked -p perl-lsp-rs runtime::lifecycle::workspace::tests::check_perl_interpreter_does_not_panic --lib
