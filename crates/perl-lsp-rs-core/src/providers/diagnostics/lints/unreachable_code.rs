@@ -87,10 +87,18 @@ fn visit_node(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
             }
         }
 
-        // Loop bodies: each body is an independent scope
-        NodeKind::While { body, .. }
-        | NodeKind::For { body, .. }
-        | NodeKind::Foreach { body, .. } => {
+        // Loop bodies: each body is an independent scope.
+        // For `While`, also check the `continue { }` block independently.
+        // In a continue block, `next`/`redo` are NOT unconditional exits — they
+        // re-enter the loop iteration; only `last`, `die`, `return`, `exit`,
+        // `croak`, and `confess` terminate the continue block's execution.
+        NodeKind::While { body, continue_block, .. } => {
+            visit_node(body, diagnostics);
+            if let Some(cb) = continue_block {
+                visit_continue_block(cb, diagnostics);
+            }
+        }
+        NodeKind::For { body, .. } | NodeKind::Foreach { body, .. } => {
             visit_node(body, diagnostics);
         }
 
@@ -266,4 +274,72 @@ fn is_unconditional_exit(node: &Node) -> bool {
 /// Returns true if the function name is one of the known unconditional-exit functions.
 fn is_exit_function(name: &str) -> bool {
     matches!(name, "die" | "exit" | "croak" | "Carp::croak" | "confess" | "Carp::confess")
+}
+
+/// Visit a `continue { }` block, applying continue-block-specific exit semantics.
+///
+/// Inside a `continue` block, `next` and `redo` are **not** unconditional exits:
+/// - `next` re-enters the next loop iteration (the continue block may still execute).
+/// - `redo` re-runs the loop body without re-evaluating the condition.
+///
+/// Only `last`, `die`, `return`, `exit`, `croak`, and `confess` terminate
+/// the continue block's execution unconditionally.
+fn visit_continue_block(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
+    match &node.kind {
+        NodeKind::Block { statements } => {
+            check_continue_block_statement_list(statements, diagnostics);
+        }
+        _ => {
+            // Non-block continue node: fall back to standard visit
+            visit_node(node, diagnostics);
+        }
+    }
+}
+
+/// Walk a continue-block statement slice with continue-block exit semantics.
+///
+/// Differs from `check_statement_list` in that `next` and `redo` are not
+/// treated as unconditional exits inside a continue block.
+fn check_continue_block_statement_list(stmts: &[Node], diagnostics: &mut Vec<Diagnostic>) {
+    let mut found_exit = false;
+
+    for stmt in stmts {
+        if found_exit {
+            diagnostics.push(Diagnostic {
+                range: (stmt.location.start, stmt.location.end),
+                severity: DiagnosticSeverity::Hint,
+                code: Some(DiagnosticCode::UnreachableCode.as_str().to_string()),
+                message: "Unreachable code: this statement cannot be executed".to_string(),
+                related_information: vec![],
+                tags: vec![DiagnosticTag::Unnecessary],
+                suggestion: Some("Remove unreachable code".to_string()),
+            });
+            visit_node(stmt, diagnostics);
+        } else {
+            visit_node(stmt, diagnostics);
+            if is_unconditional_exit_in_continue(stmt) {
+                found_exit = true;
+            }
+        }
+    }
+}
+
+/// Returns true if this node is an unconditional exit **within a continue block**.
+///
+/// `next` and `redo` are excluded here because inside a `continue { }` block
+/// they do not terminate the block — they jump to the next loop iteration or
+/// re-run the loop body respectively.
+fn is_unconditional_exit_in_continue(node: &Node) -> bool {
+    match &node.kind {
+        NodeKind::Return { .. } => true,
+        NodeKind::FunctionCall { name, .. } => is_exit_function(name),
+        NodeKind::ExpressionStatement { expression } => {
+            is_unconditional_exit_in_continue(expression)
+        }
+        // Only `last` exits the loop from a continue block; `next` and `redo`
+        // do NOT terminate continue-block execution.
+        NodeKind::LoopControl { op, .. } => op.as_str() == "last",
+        NodeKind::StatementModifier { .. } => false,
+        _ => false,
+    }
 }
