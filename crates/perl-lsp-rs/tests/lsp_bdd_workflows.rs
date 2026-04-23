@@ -9,30 +9,8 @@ use serde_json::{Value, json};
 use serial_test::serial;
 use std::collections::BTreeSet;
 use std::time::{Duration, Instant};
+use support::bdd_diagnostics::{BddScenario, DocumentDiagnosticFlow};
 use support::lsp_harness::{LspHarness, TempWorkspace};
-
-struct BddScenario {
-    name: &'static str,
-}
-
-impl BddScenario {
-    fn new(name: &'static str) -> Self {
-        eprintln!("Scenario: {}", name);
-        Self { name }
-    }
-
-    fn given(&self, msg: &str) {
-        eprintln!("[{}] Given {}", self.name, msg);
-    }
-
-    fn when(&self, msg: &str) {
-        eprintln!("[{}] When {}", self.name, msg);
-    }
-
-    fn then(&self, msg: &str) {
-        eprintln!("[{}] Then {}", self.name, msg);
-    }
-}
 
 fn find_position(text: &str, needle: &str) -> (u32, u32) {
     perl_tdd_support::must_some(
@@ -1122,33 +1100,20 @@ sub healthy_sub {
     let uri = workspace.uri("stable.pl");
     harness.open(&uri, code)?;
 
+    let mut diagnostics = DocumentDiagnosticFlow::new(&mut harness, uri.clone());
+
     scenario.when("requesting pull diagnostics for the first time");
-    let first = harness.request(
-        "textDocument/diagnostic",
-        json!({
-            "textDocument": { "uri": uri }
-        }),
-    )?;
+    let first = diagnostics.request(None)?;
 
     scenario.then("the server returns a full diagnostic report with resultId");
-    assert_eq!(first.get("kind").and_then(Value::as_str), Some("full"));
-    let result_id = first
-        .get("resultId")
-        .and_then(Value::as_str)
-        .ok_or("first diagnostic report missing resultId")?
-        .to_string();
+    assert_eq!(DocumentDiagnosticFlow::kind(&first), Some("full"));
+    let result_id = DocumentDiagnosticFlow::result_id(&first)?;
 
     scenario.when("requesting diagnostics again with previousResultId");
-    let second = harness.request(
-        "textDocument/diagnostic",
-        json!({
-            "textDocument": { "uri": uri },
-            "previousResultId": result_id
-        }),
-    )?;
+    let second = diagnostics.request(Some(result_id.as_str()))?;
 
     scenario.then("the server replies with an unchanged report");
-    assert_eq!(second.get("kind").and_then(Value::as_str), Some("unchanged"));
+    assert_eq!(DocumentDiagnosticFlow::kind(&second), Some("unchanged"));
     assert_eq!(
         second.get("resultId").and_then(Value::as_str),
         Some(result_id.as_str()),
@@ -1188,45 +1153,26 @@ sub score {
     harness.open(&uri, healthy)?;
 
     scenario.when("requesting pull diagnostics to establish a baseline resultId");
-    let first = harness.request(
-        "textDocument/diagnostic",
-        json!({
-            "textDocument": { "uri": uri }
-        }),
-    )?;
+    let first = DocumentDiagnosticFlow::new(&mut harness, uri.clone()).request(None)?;
 
-    let baseline_result_id = first
-        .get("resultId")
-        .and_then(Value::as_str)
-        .ok_or("first diagnostic report missing resultId")?
-        .to_string();
+    let baseline_result_id = DocumentDiagnosticFlow::result_id(&first)?;
 
     scenario.when("requesting diagnostics again with previousResultId without edits");
-    let unchanged = harness.request(
-        "textDocument/diagnostic",
-        json!({
-            "textDocument": { "uri": uri },
-            "previousResultId": baseline_result_id.clone()
-        }),
-    )?;
+    let unchanged = DocumentDiagnosticFlow::new(&mut harness, uri.clone())
+        .request(Some(baseline_result_id.as_str()))?;
 
     scenario.then("the server reports unchanged diagnostics");
-    assert_eq!(unchanged.get("kind").and_then(Value::as_str), Some("unchanged"));
+    assert_eq!(DocumentDiagnosticFlow::kind(&unchanged), Some("unchanged"));
 
     scenario.when("introducing a syntax error via didChange");
     harness.change_full(&uri, 2, broken)?;
     harness.barrier();
 
-    let changed = harness.request(
-        "textDocument/diagnostic",
-        json!({
-            "textDocument": { "uri": uri },
-            "previousResultId": baseline_result_id.clone()
-        }),
-    )?;
+    let changed = DocumentDiagnosticFlow::new(&mut harness, uri.clone())
+        .request(Some(baseline_result_id.as_str()))?;
 
     scenario.then("the server emits a full report with a fresh resultId and parse errors");
-    assert_eq!(changed.get("kind").and_then(Value::as_str), Some("full"));
+    assert_eq!(DocumentDiagnosticFlow::kind(&changed), Some("full"));
 
     let changed_result_id = changed
         .get("resultId")
@@ -1240,6 +1186,98 @@ sub score {
     assert!(
         diagnostic_error_count(&changed) > 0,
         "syntax regression should produce error diagnostics"
+    );
+
+    Ok(())
+}
+
+#[test]
+#[serial]
+fn bdd_pull_diagnostics_tracks_result_ids_per_document() -> Result<(), Box<dyn std::error::Error>> {
+    let scenario = BddScenario::new("Pull diagnostics keep per-document resultId caches isolated");
+
+    let healthy = r#"use strict;
+use warnings;
+
+sub ok {
+    return 1;
+}
+"#;
+
+    let broken = r#"use strict;
+use warnings;
+
+sub boom {
+    if (1 {
+        return 0;
+    }
+}
+"#;
+
+    scenario.given("a workspace with one healthy file and one file that later regresses");
+    let (mut harness, workspace) =
+        setup_workspace(&[("stable.pl", healthy), ("changing.pl", healthy)])?;
+    let stable_uri = workspace.uri("stable.pl");
+    let changing_uri = workspace.uri("changing.pl");
+    harness.open(&stable_uri, healthy)?;
+    harness.open(&changing_uri, healthy)?;
+
+    let (stable_id, changing_id) = {
+        let mut stable_diag = DocumentDiagnosticFlow::new(&mut harness, stable_uri.clone());
+        let stable_first = stable_diag.request(None)?;
+        let stable_id = DocumentDiagnosticFlow::result_id(&stable_first)?;
+
+        let mut changing_diag = DocumentDiagnosticFlow::new(&mut harness, changing_uri.clone());
+        let changing_first = changing_diag.request(None)?;
+        let changing_id = DocumentDiagnosticFlow::result_id(&changing_first)?;
+        (stable_id, changing_id)
+    };
+
+    scenario.when("requesting diagnostics with cached resultIds before any edits");
+    let (stable_unchanged, changing_unchanged) = {
+        let mut stable_diag = DocumentDiagnosticFlow::new(&mut harness, stable_uri.clone());
+        let stable_unchanged = stable_diag.request(Some(stable_id.as_str()))?;
+
+        let mut changing_diag = DocumentDiagnosticFlow::new(&mut harness, changing_uri.clone());
+        let changing_unchanged = changing_diag.request(Some(changing_id.as_str()))?;
+        (stable_unchanged, changing_unchanged)
+    };
+
+    scenario.then("both documents return unchanged reports");
+    assert_eq!(DocumentDiagnosticFlow::kind(&stable_unchanged), Some("unchanged"));
+    assert_eq!(DocumentDiagnosticFlow::kind(&changing_unchanged), Some("unchanged"));
+
+    scenario.when("introducing a syntax regression in only one document");
+    harness.change_full(&changing_uri, 2, broken)?;
+    harness.barrier();
+
+    let (stable_after_edit, changing_after_edit) = {
+        let mut stable_diag = DocumentDiagnosticFlow::new(&mut harness, stable_uri.clone());
+        let stable_after_edit = stable_diag.request(Some(stable_id.as_str()))?;
+
+        let mut changing_diag = DocumentDiagnosticFlow::new(&mut harness, changing_uri.clone());
+        let changing_after_edit = changing_diag.request(Some(changing_id.as_str()))?;
+        (stable_after_edit, changing_after_edit)
+    };
+
+    scenario
+        .then("the unchanged file stays unchanged while the edited file gets a new full report");
+    assert_eq!(DocumentDiagnosticFlow::kind(&stable_after_edit), Some("unchanged"));
+    assert_eq!(
+        stable_after_edit.get("resultId").and_then(Value::as_str),
+        Some(stable_id.as_str()),
+        "stable file should keep the same resultId"
+    );
+
+    assert_eq!(DocumentDiagnosticFlow::kind(&changing_after_edit), Some("full"));
+    let changed_result_id = DocumentDiagnosticFlow::result_id(&changing_after_edit)?;
+    assert_ne!(
+        changed_result_id, changing_id,
+        "edited file should receive a fresh diagnostic resultId"
+    );
+    assert!(
+        diagnostic_error_count(&changing_after_edit) > 0,
+        "edited file should report syntax errors"
     );
 
     Ok(())

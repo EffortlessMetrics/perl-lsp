@@ -1,5 +1,6 @@
 //! Test support utilities for LSP integration tests
 
+pub mod bdd_diagnostics;
 pub mod client_caps;
 pub mod env_guard;
 pub mod lsp_client;
