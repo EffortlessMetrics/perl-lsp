@@ -3,7 +3,7 @@
 //! This binary provides custom automation tasks for building, testing,
 //! and maintaining the tree-sitter-perl project.
 
-use clap::{Parser, Subcommand, ValueEnum};
+use clap::{CommandFactory, Parser, Subcommand, ValueEnum};
 use color_eyre::eyre::{Result, eyre};
 use std::path::PathBuf;
 
@@ -31,6 +31,10 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
+    /// Print all available top-level xtask commands.
+    #[command(name = "list-commands")]
+    List,
+
     /// Run lean CI suite (format, clippy, tests) for constrained environments
     Ci,
 
@@ -276,6 +280,13 @@ enum Commands {
         /// Check formatting without making changes
         #[arg(long)]
         check: bool,
+
+        /// Restrict formatting to one or more package names.
+        ///
+        /// Accepts repeated flags (`--package xtask --package perl-parser`) or
+        /// a comma-delimited list (`--package xtask,perl-parser`).
+        #[arg(long, short = 'p', value_delimiter = ',')]
+        package: Option<Vec<String>>,
     },
 
     /// Run corpus tests
@@ -1284,6 +1295,10 @@ fn main() -> Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
+        Commands::List => {
+            print_top_level_commands();
+            Ok(())
+        }
         Commands::Ci => ci::run(),
         Commands::CheckOnly => ci::check_only(),
         Commands::CheckToolchain { doctor } => check_toolchain::run(doctor),
@@ -1353,7 +1368,7 @@ fn main() -> Result<()> {
         ),
         Commands::Doc { open, all_features } => doc::run(open, all_features),
         Commands::Check { clippy, fmt, all } => check::run(clippy, fmt, all),
-        Commands::Fmt { check } => fmt::run(check),
+        Commands::Fmt { check, package } => fmt::run(check, package),
         #[cfg(feature = "legacy")]
         Commands::Corpus { path, scanner, diagnose, test } => {
             corpus::run(path, scanner, diagnose, test)
@@ -1638,5 +1653,17 @@ fn main() -> Result<()> {
         Commands::CompareBuildTiming { baseline, current } => {
             build_timing::run_compare(baseline, current)
         }
+    }
+}
+
+fn print_top_level_commands() {
+    let mut command_names = Cli::command()
+        .get_subcommands()
+        .map(|subcommand| subcommand.get_name().to_string())
+        .collect::<Vec<_>>();
+    command_names.sort_unstable();
+
+    for command_name in command_names {
+        println!("{command_name}");
     }
 }

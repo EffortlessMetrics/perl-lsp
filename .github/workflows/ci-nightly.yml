@@ -118,6 +118,12 @@ jobs:
         # Extract structured results from Criterion
         python3 ./benchmarks/scripts/extract-criterion.py --output benchmarks/results/latest.json
 
+    - name: Real-repo first-diagnostics perf gate (Catalyst 5000+ lines)
+      run: |
+        cargo test -p perl-lsp-rs --test real_project_latency \
+          real_project_first_diagnostics_catalyst_5000_lines_under_5s \
+          -- --include-ignored --nocapture
+
     - name: Compare against baseline
       id: compare
       continue-on-error: true
