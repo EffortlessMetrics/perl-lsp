@@ -20,8 +20,8 @@ This comprehensive guide helps you set up and configure the Perl Language Server
 
 ### Required
 
-- **Neovim** version 0.8 or later
-- **perl-lsp** server installed (see [Installation](#installation))
+- **Neovim** version 0.10 or later (0.8/0.9 work with legacy config shown below)
+- **perllsp** server installed (see [Installation](#installation))
 - **nvim-lspconfig** plugin
 - **nvim-cmp** (optional, for enhanced completion)
 
@@ -56,12 +56,12 @@ Download from [GitHub Releases](https://github.com/EffortlessMetrics/perl-lsp/re
 # Linux (x86_64)
 curl -LO https://github.com/EffortlessMetrics/perl-lsp/releases/latest/download/perl-lsp-linux-x86_64.tar.gz
 tar xzf perl-lsp-linux-x86_64.tar.gz
-sudo mv perl-lsp /usr/local/bin/
+sudo mv perllsp /usr/local/bin/
 
 # macOS (Apple Silicon)
 curl -LO https://github.com/EffortlessMetrics/perl-lsp/releases/latest/download/perl-lsp-darwin-aarch64.tar.gz
 tar xzf perl-lsp-darwin-aarch64.tar.gz
-sudo mv perl-lsp /usr/local/bin/
+sudo mv perllsp /usr/local/bin/
 ```
 
 #### Option 3: Build from Source
@@ -123,7 +123,7 @@ local configs = require('lspconfig.configs')
 if not configs.perl_lsp then
   configs.perl_lsp = {
     default_config = {
-      cmd = { 'perl-lsp', '--stdio' },
+      cmd = { 'perllsp', '--stdio' },
       filetypes = { 'perl' },
       root_dir = lspconfig.util.root_pattern('.git'),
       single_file_support = true,
@@ -135,6 +135,27 @@ end
 lspconfig.perl_lsp.setup({})
 ```
 
+### Neovim 0.11+ Configuration (Recommended)
+
+If you're on Neovim 0.11 or newer, prefer the built-in `vim.lsp.config` API:
+
+```lua
+vim.lsp.config('perllsp', {
+  cmd = { 'perllsp', '--stdio' },
+  filetypes = { 'perl' },
+  root_markers = { 'Makefile.PL', 'Build.PL', 'cpanfile', 'dist.ini', '.git' },
+  settings = {
+    perl = {
+      workspace = {
+        includePaths = { 'lib', '.', 'local/lib/perl5' },
+      },
+    },
+  },
+})
+
+vim.lsp.enable('perllsp')
+```
+
 ### Verify Setup
 
 1. Restart Neovim
@@ -143,7 +164,7 @@ lspconfig.perl_lsp.setup({})
    ```vim
    :LspInfo
    ```
-4. You should see perl-lsp listed under "Client: perl_lsp"
+4. You should see a running client for `perl_lsp` or `perllsp` (name depends on your config)
 
 ---
 
@@ -161,7 +182,7 @@ local configs = require('lspconfig.configs')
 if not configs.perl_lsp then
   configs.perl_lsp = {
     default_config = {
-      cmd = { 'perl-lsp', '--stdio' },
+      cmd = { 'perllsp', '--stdio' },
       filetypes = { 'perl' },
       root_dir = lspconfig.util.root_pattern(
         'Makefile.PL',
@@ -242,7 +263,7 @@ Create `.nvimrc` or `init.lua` in your project root:
 -- .nvimrc or lua/init.lua
 vim.lsp.start {
   name = 'perl-lsp',
-  cmd = { 'perl-lsp', '--stdio' },
+  cmd = { 'perllsp', '--stdio' },
   root_dir = vim.fn.getcwd(),
   settings = {
     perl = {
@@ -572,7 +593,7 @@ require('nvim-lightbulb').setup({
 
 1. **Verify binary is in PATH**:
    ```vim
-   :!which perl-lsp
+   :!which perllsp
    ```
 
 2. **Check LSP info**:
@@ -862,7 +883,7 @@ return {
       if not configs.perl_lsp then
         configs.perl_lsp = {
           default_config = {
-            cmd = { 'perl-lsp', '--stdio' },
+            cmd = { 'perllsp', '--stdio' },
             filetypes = { 'perl' },
             root_dir = lspconfig.util.root_pattern(
               'Makefile.PL',
