@@ -104,6 +104,8 @@ pub struct PerlStackParser {
     include_unknown_frames: bool,
     /// Whether to assign IDs automatically
     auto_assign_ids: bool,
+    /// Starting ID used to reset auto-assignment for each new trace.
+    starting_id: i64,
     /// Starting ID for auto-assignment
     next_id: i64,
 }
@@ -112,7 +114,7 @@ impl PerlStackParser {
     /// Creates a new stack parser with default settings.
     #[must_use]
     pub fn new() -> Self {
-        Self { include_unknown_frames: false, auto_assign_ids: true, next_id: 1 }
+        Self { include_unknown_frames: false, auto_assign_ids: true, starting_id: 1, next_id: 1 }
     }
 
     /// Sets whether to include frames with no source location.
@@ -132,6 +134,7 @@ impl PerlStackParser {
     /// Sets the starting ID for auto-assignment.
     #[must_use]
     pub fn with_starting_id(mut self, id: i64) -> Self {
+        self.starting_id = id;
         self.next_id = id;
         self
     }
@@ -288,7 +291,7 @@ impl PerlStackParser {
     pub fn parse_stack_trace(&mut self, output: &str) -> Vec<StackFrame> {
         // Reset auto-ID counter for new trace
         if self.auto_assign_ids {
-            self.next_id = 1;
+            self.next_id = self.starting_id;
         }
 
         let frames: Vec<StackFrame> = output
@@ -473,6 +476,29 @@ $ = main::run() called from file `script.pl' line 5
 
         assert_eq!(frame1.map(|f| f.id), Some(100));
         assert_eq!(frame2.map(|f| f.id), Some(101));
+    }
+
+    #[test]
+    fn test_parse_stack_trace_respects_custom_starting_id() {
+        let mut parser = PerlStackParser::new().with_starting_id(42);
+        let output = "  #0  main::foo at a.pl line 1\n  #1  main::bar at b.pl line 2";
+
+        let frames = parser.parse_stack_trace(output);
+
+        assert_eq!(frames.first().map(|f| f.id), Some(42));
+        assert_eq!(frames.get(1).map(|f| f.id), Some(43));
+    }
+
+    #[test]
+    fn test_parse_stack_trace_resets_to_custom_starting_id_between_calls() {
+        let mut parser = PerlStackParser::new().with_starting_id(7);
+        let output = "  #0  main::foo at a.pl line 1";
+
+        let first = parser.parse_stack_trace(output);
+        let second = parser.parse_stack_trace(output);
+
+        assert_eq!(first.first().map(|f| f.id), Some(7));
+        assert_eq!(second.first().map(|f| f.id), Some(7));
     }
 
     #[test]
