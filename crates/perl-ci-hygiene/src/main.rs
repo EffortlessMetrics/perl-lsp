@@ -3829,23 +3829,24 @@ fn collect_todo_hits(
 }
 
 fn has_unlinked_todo_in_rust_line(line: &str, token_re: &Regex) -> bool {
-    let mut has_hit = false;
-    if let Some(idx) = line.find("//")
-        && !is_url_like_hash_comment(line, idx)
-        && has_unlinked_token(&line[idx + 2..], token_re)
-    {
-        has_hit = true;
+    for (idx, _) in line.match_indices("//") {
+        if is_url_like_hash_comment(line, idx) {
+            continue;
+        }
+        if has_unlinked_token(&line[idx + 2..], token_re) {
+            return true;
+        }
     }
-    if let Some(idx) = line.find("/*")
-        && has_unlinked_token(&line[idx + 2..], token_re)
-    {
-        has_hit = true;
+    for (idx, _) in line.match_indices("/*") {
+        if has_unlinked_token(&line[idx + 2..], token_re) {
+            return true;
+        }
     }
     let trimmed = line.trim_start();
     if trimmed.starts_with('*') && has_unlinked_token(trimmed, token_re) {
-        has_hit = true;
+        return true;
     }
-    has_hit
+    false
 }
 
 fn has_unlinked_todo_in_hash_line(line: &str, token_re: &Regex) -> bool {
@@ -4123,6 +4124,10 @@ mod tests {
         assert!(has_unlinked_todo_in_rust_line("// TODO: investigate", &todo_re));
         assert!(!has_unlinked_todo_in_rust_line("// TODO(#123): tracked", &todo_re));
         assert!(!has_unlinked_todo_in_rust_line("let u = \"http://TODO\";", &todo_re));
+        assert!(has_unlinked_todo_in_rust_line(
+            "let u = \"http://TODO\"; // TODO: investigate",
+            &todo_re
+        ));
         assert!(has_unlinked_todo_in_rust_line("/* FIXME: needs fix */", &todo_re));
 
         Ok(())
