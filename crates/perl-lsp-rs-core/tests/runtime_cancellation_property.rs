@@ -104,4 +104,45 @@ proptest! {
             prop_assert!(!registry.is_cancelled(&request_id));
         }
     }
+
+    #[test]
+    fn prop_re_registered_request_never_appears_cancelled(ids in vec(0u16..64, 1..64)) {
+        // Regression: register → get_token (populates cache) → cancel →
+        // register again → is_cancelled must return false.
+        //
+        // Without evicting the cache in register_token, the old cancelled clone
+        // remains in token_cache and is_cancelled fast-paths to true even
+        // though a fresh token was just registered.
+        let registry = CancellationRegistry::new();
+
+        for id in &ids {
+            let request_id = Value::from(u64::from(*id));
+
+            // First registration
+            let token = PerlLspCancellationToken::new(request_id.clone(), "rereg".to_string());
+            let _ = registry.register_token(token);
+
+            // Prime the fast-path cache so the old token clone lands in token_cache.
+            let _ = registry.get_token(&request_id);
+
+            // Cancel the first token — marks the shared Arc<AtomicBool> as true.
+            let _ = registry.cancel_request(&request_id);
+            prop_assert!(registry.is_cancelled(&request_id));
+
+            // Re-register with a fresh token.
+            let fresh_token =
+                PerlLspCancellationToken::new(request_id.clone(), "rereg-fresh".to_string());
+            let _ = registry.register_token(fresh_token);
+
+            // The fresh token must not appear cancelled.
+            prop_assert!(
+                !registry.is_cancelled(&request_id),
+                "re-registered request must not appear cancelled (stale cache bug)"
+            );
+            prop_assert!(
+                registry.get_token(&request_id).is_some(),
+                "re-registered request must be visible via get_token"
+            );
+        }
+    }
 }
