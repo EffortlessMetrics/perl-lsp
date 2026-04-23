@@ -122,6 +122,75 @@ pub(super) fn count_ux_scenarios(root: &Path) -> usize {
     collect_ux_scenario_files(root).len()
 }
 
+fn count_workflows_for_metric_from_fixture_matrix(root: &Path, metric_name: &str) -> usize {
+    let matrix_path = root.join("crates/perl-lsp-ux-tests/fixtures/editor_ux_fixture_matrix.json");
+    let Ok(raw) = fs::read_to_string(matrix_path) else {
+        return 0;
+    };
+    let Ok(matrix) = serde_json::from_str::<serde_json::Value>(&raw) else {
+        return 0;
+    };
+
+    matrix["workflows"]
+        .as_array()
+        .map(|workflows| {
+            workflows
+                .iter()
+                .filter(|workflow| {
+                    workflow["measures"].as_array().is_some_and(|measures| {
+                        measures.iter().any(|measure| measure.as_str() == Some(metric_name))
+                    })
+                })
+                .count()
+        })
+        .unwrap_or(0)
+}
+
+fn collect_known_gap_issue_refs(root: &Path) -> Vec<u64> {
+    let readme_path = root.join("README.md");
+    let Ok(readme) = fs::read_to_string(readme_path) else {
+        return Vec::new();
+    };
+
+    let Some(section_start) = readme.find("### Known gaps toward solid UX") else {
+        return Vec::new();
+    };
+    let section = &readme[section_start..];
+    let section = section.split("\n## ").next().unwrap_or(section);
+
+    let Ok(issue_re) = regex::Regex::new(r"github\.com/[^/\s]+/[^/\s]+/issues/([0-9]+)") else {
+        return Vec::new();
+    };
+
+    let mut issue_refs: Vec<u64> = issue_re
+        .captures_iter(section)
+        .filter_map(|captures| captures.get(1).and_then(|m| m.as_str().parse::<u64>().ok()))
+        .collect();
+    issue_refs.sort_unstable();
+    issue_refs.dedup();
+    issue_refs
+}
+
+fn collect_manual_smoke_steps(root: &Path) -> Vec<String> {
+    let protocol_path = root.join("docs/project/protocols/verification.md");
+    let Ok(protocol) = fs::read_to_string(protocol_path) else {
+        return Vec::new();
+    };
+
+    protocol
+        .lines()
+        .find_map(|line| line.strip_prefix("Manual editor smoke test:"))
+        .map(|steps| {
+            steps
+                .split(',')
+                .map(str::trim)
+                .filter(|step| !step.is_empty())
+                .map(ToOwned::to_owned)
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 // ---------------------------------------------------------------------------
 // Generators
 // ---------------------------------------------------------------------------
@@ -130,6 +199,8 @@ pub(super) fn generate_quality_status(root: &Path, original: &str) -> Result<Str
     let mutation_by_crate = collect_per_crate_mutation(root);
     let tests_by_crate = collect_per_crate_test_counts(root);
     let ux_scenarios = count_ux_scenarios(root);
+    let known_gap_count = collect_known_gap_issue_refs(root).len();
+    let manual_smoke_steps = collect_manual_smoke_steps(root).len();
 
     let has_mutation_data = !mutation_by_crate.is_empty();
     let mutation_note = if has_mutation_data {
@@ -142,8 +213,9 @@ pub(super) fn generate_quality_status(root: &Path, original: &str) -> Result<Str
         "- **Quality Metrics**: <50ms LSP response times, 931ns incremental parsing\n\
          - **UX workflow harness**: {ux_scenarios} scenario files in `perl-lsp-ux-tests`; \
            `just ux-tests` runs the default release-confidence lane and `just ux-tests-full` adds \
-           the integration-only 10k-line large-file case; planning scaffold at \
-           `docs/project/status/editor_ux.json`\n\
+           the integration-only 10k-line large-file case; tracked scorecard at \
+           `docs/project/status/editor_ux.json` publishes harness coverage, manual smoke \
+           checklist ({manual_smoke_steps} steps), and known-gap issue tracking ({known_gap_count} refs)\n\
          - **Mutation testing**: {mutation_note}\n\
          - **Production Status**: LSP server public alpha (`just ci-gate` passing)"
     );
@@ -169,10 +241,18 @@ pub(super) fn generate_quality_status(root: &Path, original: &str) -> Result<Str
 pub(super) fn generate_editor_ux_receipt(root: &Path) -> Result<String> {
     let scenario_files = collect_ux_scenario_files(root);
     let scenario_count = scenario_files.len();
+    let pass_rate_workflows =
+        count_workflows_for_metric_from_fixture_matrix(root, "workflow_pass_rate");
+    let stability_workflows =
+        count_workflows_for_metric_from_fixture_matrix(root, "workflow_stability_rate");
+    let p95_workflows =
+        count_workflows_for_metric_from_fixture_matrix(root, "p95_time_to_first_useful_result_ms");
+    let known_gap_issues = collect_known_gap_issue_refs(root);
+    let manual_smoke_steps = collect_manual_smoke_steps(root);
 
     let receipt = serde_json::json!({
         "schema_version": 1,
-        "receipt_kind": "planning_scaffold",
+        "receipt_kind": "tracked_scorecard",
         "scorecard": "editor_ux",
         "harness": {
             "crate": "crates/perl-lsp-ux-tests",
@@ -182,20 +262,39 @@ pub(super) fn generate_editor_ux_receipt(root: &Path) -> Result<String> {
         "top_line_metrics": [
             {
                 "name": "workflow_pass_rate",
-                "state": "planned",
+                "state": "measured",
                 "owner": "perl-lsp-ux-tests",
+                "numerator": pass_rate_workflows,
+                "denominator": scenario_count,
+                "unit": "workflows_with_explicit_assertions",
             },
             {
                 "name": "workflow_stability_rate",
-                "state": "planned",
+                "state": "measured",
                 "owner": "perl-lsp-ux-tests",
+                "numerator": stability_workflows,
+                "denominator": scenario_count,
+                "unit": "workflows_with_explicit_assertions",
             },
             {
                 "name": "p95_time_to_first_useful_result_ms",
-                "state": "planned",
+                "state": "measured",
                 "owner": "perl-lsp-ux-tests",
+                "numerator": p95_workflows,
+                "denominator": scenario_count,
+                "unit": "workflows_with_latency_budget",
             },
         ],
+        "manual_smoke": {
+            "protocol": "docs/project/protocols/verification.md",
+            "step_count": manual_smoke_steps.len(),
+            "steps": manual_smoke_steps,
+        },
+        "known_gap_issues": {
+            "source": "README.md#known-gaps-toward-solid-ux",
+            "count": known_gap_issues.len(),
+            "issues": known_gap_issues,
+        },
         "integration_points": {
             "ci_lane": "just ux-tests",
             "release_lane": "just ux-tests-full",
@@ -258,7 +357,7 @@ mod tests {
         let receipt_raw = generate_editor_ux_receipt(&root)?;
         let receipt: serde_json::Value = serde_json::from_str(&receipt_raw)?;
         assert_eq!(receipt["schema_version"], 1);
-        assert_eq!(receipt["receipt_kind"], "planning_scaffold");
+        assert_eq!(receipt["receipt_kind"], "tracked_scorecard");
         assert_eq!(receipt["scorecard"], "editor_ux");
         assert_eq!(receipt["harness"]["crate"], "crates/perl-lsp-ux-tests");
         assert_eq!(
@@ -279,7 +378,66 @@ mod tests {
                 "p95_time_to_first_useful_result_ms",
             ])
         );
+        for metric in receipt["top_line_metrics"]
+            .as_array()
+            .ok_or_else(|| eyre!("top_line_metrics must be an array"))?
+        {
+            assert_eq!(metric["state"], "measured");
+            let numerator =
+                metric["numerator"].as_u64().ok_or_else(|| eyre!("numerator missing"))?;
+            let denominator =
+                metric["denominator"].as_u64().ok_or_else(|| eyre!("denominator missing"))?;
+            assert!(numerator <= denominator, "numerator cannot exceed denominator");
+        }
+        assert_eq!(
+            receipt["manual_smoke"]["step_count"].as_u64(),
+            Some(5),
+            "verification protocol should track the 5-step manual smoke checklist"
+        );
+        assert!(
+            receipt["known_gap_issues"]["count"].as_u64().unwrap_or_default() >= 1,
+            "known gap issue tracking must include at least one issue reference"
+        );
         assert_eq!(receipt["integration_points"]["ci_lane"], "just ux-tests");
+        Ok(())
+    }
+
+    #[test]
+    fn test_collect_known_gap_issue_refs_from_section() -> Result<()> {
+        let dir = tempfile::tempdir()?;
+        let readme = r#"
+## Status
+### Known gaps toward solid UX
+- See [#100](https://github.com/example/repo/issues/100)
+- Another reference [#200](https://github.com/example/repo/issues/200) and duplicate [#100](https://github.com/example/repo/issues/100)
+
+## Security
+"#;
+        fs::write(dir.path().join("README.md"), readme)?;
+        let issues = collect_known_gap_issue_refs(dir.path());
+        assert_eq!(issues, vec![100, 200]);
+        Ok(())
+    }
+
+    #[test]
+    fn test_collect_manual_smoke_steps_from_protocol_line() -> Result<()> {
+        let dir = tempfile::tempdir()?;
+        fs::create_dir_all(dir.path().join("docs/project/protocols"))?;
+        fs::write(
+            dir.path().join("docs/project/protocols/verification.md"),
+            "Manual editor smoke test: diagnostics, completion, hover, go-to-definition, rename\n",
+        )?;
+        let steps = collect_manual_smoke_steps(dir.path());
+        assert_eq!(
+            steps,
+            vec![
+                "diagnostics".to_string(),
+                "completion".to_string(),
+                "hover".to_string(),
+                "go-to-definition".to_string(),
+                "rename".to_string()
+            ]
+        );
         Ok(())
     }
 }

@@ -28,24 +28,49 @@
     "release_lane": "just ux-tests-full",
     "status_update": "cargo xtask update-status --only quality"
   },
-  "receipt_kind": "planning_scaffold",
+  "known_gap_issues": {
+    "count": 4,
+    "issues": [3476, 3515, 3522, 4246],
+    "source": "README.md#known-gaps-toward-solid-ux"
+  },
+  "manual_smoke": {
+    "protocol": "docs/project/protocols/verification.md",
+    "step_count": 5,
+    "steps": [
+      "diagnostics",
+      "completion",
+      "hover",
+      "go-to-definition",
+      "rename"
+    ]
+  },
+  "receipt_kind": "tracked_scorecard",
   "schema_version": 1,
   "scorecard": "editor_ux",
   "top_line_metrics": [
     {
+      "denominator": 17,
       "name": "workflow_pass_rate",
+      "numerator": 17,
       "owner": "perl-lsp-ux-tests",
-      "state": "planned"
+      "state": "measured",
+      "unit": "workflows_with_explicit_assertions"
     },
     {
+      "denominator": 17,
       "name": "workflow_stability_rate",
+      "numerator": 17,
       "owner": "perl-lsp-ux-tests",
-      "state": "planned"
+      "state": "measured",
+      "unit": "workflows_with_explicit_assertions"
     },
     {
+      "denominator": 17,
       "name": "p95_time_to_first_useful_result_ms",
+      "numerator": 1,
       "owner": "perl-lsp-ux-tests",
-      "state": "planned"
+      "state": "measured",
+      "unit": "workflows_with_latency_budget"
     }
   ]
 }

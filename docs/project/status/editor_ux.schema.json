@@ -9,6 +9,8 @@
     "scorecard",
     "harness",
     "top_line_metrics",
+    "manual_smoke",
+    "known_gap_issues",
     "integration_points"
   ],
   "properties": {
@@ -18,7 +20,7 @@
     },
     "receipt_kind": {
       "type": "string",
-      "const": "planning_scaffold"
+      "const": "tracked_scorecard"
     },
     "scorecard": {
       "type": "string",
@@ -87,6 +89,18 @@
       "items": {
         "type": "object",
         "required": ["name", "state", "owner"],
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "state": { "const": "measured" }
+              }
+            },
+            "then": {
+              "required": ["numerator", "denominator", "unit"]
+            }
+          }
+        ],
         "properties": {
           "name": {
             "type": "string",
@@ -102,10 +116,56 @@
           },
           "owner": {
             "type": "string"
+          },
+          "numerator": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "denominator": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "unit": {
+            "type": "string"
           }
         },
         "additionalProperties": false
       }
+    },
+    "manual_smoke": {
+      "type": "object",
+      "required": ["protocol", "step_count", "steps"],
+      "properties": {
+        "protocol": { "type": "string" },
+        "step_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "steps": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "known_gap_issues": {
+      "type": "object",
+      "required": ["source", "count", "issues"],
+      "properties": {
+        "source": { "type": "string" },
+        "count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "issues": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      },
+      "additionalProperties": false
     },
     "integration_points": {
       "type": "object",
