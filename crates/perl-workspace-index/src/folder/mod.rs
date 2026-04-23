@@ -76,7 +76,16 @@ pub fn extract_workspace_folder_uris(workspace_folders: &[Value]) -> Vec<String>
     workspace_folders
         .iter()
         .filter_map(|folder| {
-            folder.get("uri").and_then(Value::as_str).map(std::string::ToString::to_string)
+            folder
+                .get("uri")
+                .and_then(Value::as_str)
+                .map(std::string::ToString::to_string)
+                .or_else(|| {
+                    folder
+                        .get("path")
+                        .and_then(Value::as_str)
+                        .map(root_path_to_file_uri)
+                })
         })
         .collect()
 }
@@ -170,10 +179,11 @@ mod tests {
         let entries = vec![
             json!({"uri": "file:///one"}),
             json!({"uri": "file:///two"}),
+            json!({"path": "/three"}),
             json!({"name": "invalid"}),
         ];
         let uris = extract_workspace_folder_uris(&entries);
-        assert_eq!(uris, vec!["file:///one", "file:///two"]);
+        assert_eq!(uris, vec!["file:///one", "file:///two", "file:///three"]);
     }
 
     #[test]
