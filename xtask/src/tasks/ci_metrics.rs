@@ -427,7 +427,7 @@ pub fn run_ci_baseline(branch: String, days: u64, limit: usize, output_dir: Path
             "--branch".to_string(),
             branch.clone(),
             "--json".to_string(),
-            "name,conclusion,createdAt,updatedAt,databaseId,workflowName,status,startedAt,headSha,head_sha"
+            "name,conclusion,createdAt,updatedAt,databaseId,workflowName,status,startedAt,headSha"
                 .to_string(),
         ],
     )?;
@@ -522,11 +522,7 @@ fn build_baseline_report(
         counters.name = workflow_name.to_string();
         counters.total_runs += 1;
 
-        let head_sha = run
-            .get("headSha")
-            .and_then(Value::as_str)
-            .or_else(|| run.get("head_sha").and_then(Value::as_str))
-            .map(str::to_string);
+        let head_sha = run.get("headSha").and_then(Value::as_str).map(str::to_string);
         baseline_runs.push(BaselineRun {
             workflow_key: key.clone(),
             conclusion: conclusion.to_string(),
@@ -582,11 +578,8 @@ fn build_baseline_report(
             0.0
         };
         let estimated_cost = counters.billable_minutes as f64 * COST_PER_MINUTE;
-        let signal_per_dollar = if estimated_cost > 0.0 {
-            unique_failures as f64 / estimated_cost
-        } else {
-            0.0
-        };
+        let signal_per_dollar =
+            if estimated_cost > 0.0 { unique_failures as f64 / estimated_cost } else { 0.0 };
 
         workflow_reports.insert(
             key,
@@ -649,7 +642,9 @@ fn build_baseline_report(
 fn compute_unique_failures(runs: &[BaselineRun]) -> BTreeMap<String, u64> {
     let mut failing_lanes_by_sha: BTreeMap<&str, Vec<&str>> = BTreeMap::new();
     for run in runs {
-        if run.conclusion == "failure" && let Some(sha) = run.head_sha.as_deref() {
+        if run.conclusion == "failure"
+            && let Some(sha) = run.head_sha.as_deref()
+        {
             failing_lanes_by_sha.entry(sha).or_default().push(run.workflow_key.as_str());
         }
     }
@@ -940,8 +935,7 @@ mod tests {
         let report = build_baseline_report("master", 1, generated_at, cutoff, &runs)
             .ok_or_else(|| eyre!("expected baseline report"))?;
         let ci = report.workflows.get("CI").ok_or_else(|| eyre!("expected CI workflow"))?;
-        let lint =
-            report.workflows.get("Lint").ok_or_else(|| eyre!("expected Lint workflow"))?;
+        let lint = report.workflows.get("Lint").ok_or_else(|| eyre!("expected Lint workflow"))?;
 
         assert_eq!(ci.failure_count, 2);
         assert_eq!(ci.unique_failures, 1);
