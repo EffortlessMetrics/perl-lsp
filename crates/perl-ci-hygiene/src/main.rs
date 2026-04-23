@@ -3945,9 +3945,12 @@ fn has_unlinked_todo_in_perl_line(line: &str, token_re: &Regex) -> bool {
 
 fn find_hash_comment_start(line: &str, perl_mode: bool) -> Option<usize> {
     let mut in_single = false;
+    let mut in_single_ansi_c = false;
     let mut in_double = false;
     let mut in_backtick = false;
     let mut prev_was_escape = false;
+    let mut prev_was_escape_double = false;
+    let mut prev_was_escape_single = false;
 
     for (idx, ch) in line.char_indices() {
         if in_single {
@@ -3961,16 +3964,17 @@ fn find_hash_comment_start(line: &str, perl_mode: bool) -> Option<usize> {
             }
             if ch == '\'' {
                 in_single = false;
+                in_single_ansi_c = false;
             }
             continue;
         }
         if in_double {
-            if prev_was_escape {
-                prev_was_escape = false;
+            if prev_was_escape_double {
+                prev_was_escape_double = false;
                 continue;
             }
             if ch == '\\' {
-                prev_was_escape = true;
+                prev_was_escape_double = true;
                 continue;
             }
             if ch == '"' {
@@ -3996,11 +4000,12 @@ fn find_hash_comment_start(line: &str, perl_mode: bool) -> Option<usize> {
         match ch {
             '\'' => {
                 in_single = true;
-                prev_was_escape = false;
+                in_single_ansi_c = idx > 0 && line.as_bytes().get(idx - 1) == Some(&b'$');
+                prev_was_escape_single = false;
             }
             '"' => {
                 in_double = true;
-                prev_was_escape = false;
+                prev_was_escape_double = false;
             }
             '`' => in_backtick = true,
             '#' => {
@@ -4607,6 +4612,14 @@ mod tests {
         assert!(has_unlinked_todo_in_hash_line(
             "print 'it\\'s # TODO in string'; # TODO: follow up",
             &todo_re
+        ));
+        assert!(!has_unlinked_todo_in_hash_line(
+            "printf $'it\\'s # TODO in string' && true",
+            &todo_re,
+        ));
+        assert!(has_unlinked_todo_in_hash_line(
+            "printf $'it\\'s # TODO in string' # TODO: follow up",
+            &todo_re,
         ));
 
         Ok(())
