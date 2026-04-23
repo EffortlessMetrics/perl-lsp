@@ -1758,6 +1758,24 @@ print $unknown_var;
 }
 
 #[test]
+fn strict_hash_slice_marks_declared_hash_as_used() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict;
+my %h = (key1 => 1, key2 => 2);
+my @values = @h{qw(key1 key2)};
+print scalar @values;
+"#;
+    let issues = scope_issues_strict(code);
+
+    assert!(
+        !has_issue(&issues, IssueKind::UndeclaredVariable, "h"),
+        "@h{{...}} should resolve through declared %h under strict; issues: {:?}",
+        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+#[test]
 fn strict_vars_only_checks_undeclared_variables() -> Result<(), Box<dyn std::error::Error>> {
     let code = r#"
 use strict 'vars';

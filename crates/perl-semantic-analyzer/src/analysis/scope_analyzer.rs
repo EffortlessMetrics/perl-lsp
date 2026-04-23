@@ -1352,6 +1352,17 @@ impl ScopeAnalyzer {
             }
         }
 
+        // Hash slice syntax (`@hash{...}`) reads from `%hash`, not a lexical `@hash`.
+        // Bridge this so strict-vars and usage tracking resolve against the declared hash.
+        if sigil == "@"
+            && let Some(parent) = ancestors.last()
+            && let NodeKind::Binary { op, left, .. } = &parent.kind
+            && op == "{}"
+            && std::ptr::eq(left.as_ref(), node)
+        {
+            return Some(("%", name));
+        }
+
         // When the parser interprets `print $arr[0]` as indirect-object syntax, it produces
         // `IndirectCall { object: Variable($, "arr"), args: [ArrayLiteral([0])] }`.
         // Similarly, `print $hash{a}` produces
