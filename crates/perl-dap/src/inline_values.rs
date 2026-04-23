@@ -105,6 +105,10 @@ fn code_byte_mask(line: &str) -> Vec<bool> {
                 break;
             }
             b'\'' => {
+                if is_legacy_namespace_separator(bytes, i) {
+                    i += 1;
+                    continue;
+                }
                 mask[i] = false;
                 in_single = true;
             }
@@ -119,6 +123,45 @@ fn code_byte_mask(line: &str) -> Vec<bool> {
     }
 
     mask
+}
+
+fn is_identifier_continue_byte(b: u8) -> bool {
+    b.is_ascii_alphanumeric() || b == b'_'
+}
+
+fn is_identifier_start_byte(b: u8) -> bool {
+    b.is_ascii_alphabetic() || b == b'_'
+}
+
+fn is_sigil_byte(b: u8) -> bool {
+    b == b'$' || b == b'@' || b == b'%'
+}
+
+/// Detect apostrophes that act as legacy Perl namespace separators in variables.
+///
+/// Example: `$Foo'bar` should not be interpreted as the start of a string.
+fn is_legacy_namespace_separator(bytes: &[u8], apostrophe_idx: usize) -> bool {
+    if apostrophe_idx == 0 || apostrophe_idx + 1 >= bytes.len() {
+        return false;
+    }
+
+    let prev = bytes[apostrophe_idx - 1];
+    let next = bytes[apostrophe_idx + 1];
+    if !is_identifier_continue_byte(prev) || !is_identifier_start_byte(next) {
+        return false;
+    }
+
+    let mut token_start = apostrophe_idx - 1;
+    while token_start > 0 {
+        let candidate = bytes[token_start - 1];
+        if is_identifier_continue_byte(candidate) || candidate == b'\'' {
+            token_start -= 1;
+            continue;
+        }
+        break;
+    }
+
+    token_start > 0 && is_sigil_byte(bytes[token_start - 1])
 }
 
 /// Extract unique variable names from source code within a line range.
@@ -280,6 +323,7 @@ pub fn collect_inline_values(source: &str, start_line: i64, end_line: i64) -> Ve
         return Vec::new();
     };
     let mut inline_values = Vec::new();
+    let mut seen_on_line: HashSet<(usize, String)> = HashSet::new();
 
     for (idx, line) in lines.iter().enumerate().skip(start_idx).take(end_idx - start_idx + 1) {
         let code_mask = code_byte_mask(line);
@@ -289,6 +333,9 @@ pub fn collect_inline_values(source: &str, start_line: i64, end_line: i64) -> Ve
                     continue;
                 }
                 let var_text = m.as_str();
+                if !seen_on_line.insert((idx, var_text.to_string())) {
+                    continue;
+                }
                 let column = (m.start() + 1) as i64;
                 inline_values.push(InlineValueText {
                     line: (idx + 1) as i64,
@@ -367,6 +414,14 @@ mod tests {
         let source = "$x = $x + $x;";
         let values = collect_inline_values_with_runtime(source, 1, 1, None);
         assert_eq!(values.len(), 1);
+    }
+
+    #[test]
+    fn test_legacy_inline_values_deduplication_per_line() {
+        let source = "$x = $x + $x;";
+        let values = collect_inline_values(source, 1, 1);
+        assert_eq!(values.len(), 1);
+        assert_eq!(values[0].text, "$x = ?");
     }
 
     #[test]
@@ -490,5 +545,14 @@ mod tests {
         let values = collect_inline_values_with_runtime(source, 1, 1, None);
         assert_eq!(values.len(), 1);
         assert_eq!(values[0].text, "$real = ?");
+    }
+
+    #[test]
+    fn test_legacy_namespace_separator_does_not_start_single_quote_string() {
+        let source = "our $Foo'bar = 1; my $quoted = 'skip $inside';";
+        let names = extract_variable_names(source, 1, 1);
+        assert!(names.contains(&"$Foo'bar".to_string()));
+        assert!(names.contains(&"$quoted".to_string()));
+        assert!(!names.contains(&"$inside".to_string()));
     }
 }
