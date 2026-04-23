@@ -228,11 +228,7 @@ impl Catalog {
             }
         }
 
-        if issues.is_empty() {
-            Ok(())
-        } else {
-            Err(CatalogError::Validation(issues.join(", ")))
-        }
+        if issues.is_empty() { Ok(()) } else { Err(CatalogError::Validation(issues.join(", "))) }
     }
 }
 
