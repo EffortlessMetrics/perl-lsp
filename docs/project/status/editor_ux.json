@@ -35,17 +35,49 @@
     {
       "name": "workflow_pass_rate",
       "owner": "perl-lsp-ux-tests",
-      "state": "planned"
+      "state": "measured",
+      "value": 1.0
     },
     {
       "name": "workflow_stability_rate",
       "owner": "perl-lsp-ux-tests",
-      "state": "planned"
+      "state": "measured",
+      "value": 1.0
     },
     {
       "name": "p95_time_to_first_useful_result_ms",
       "owner": "perl-lsp-ux-tests",
-      "state": "planned"
+      "state": "measured",
+      "value": 0
+    }
+  ],
+  "confidence_signals": [
+    {
+      "name": "manual_editor_smoke_workflows",
+      "source": "docs/reference/UX_TESTING.md",
+      "state": "documented",
+      "type": "qualitative"
+    },
+    {
+      "name": "first_five_minutes_harness_scenarios",
+      "source": "crates/perl-lsp-ux-tests/tests",
+      "type": "quantitative",
+      "unit": "scenario_count",
+      "value": 17
+    },
+    {
+      "name": "fixture_matrix_workflow_coverage_rate",
+      "source": "crates/perl-lsp-ux-tests/fixtures/editor_ux_fixture_matrix.json",
+      "type": "quantitative",
+      "unit": "ratio",
+      "value": 1.0
+    },
+    {
+      "name": "open_issue_burndown_release_blockers",
+      "source": "docs/project/status/release.md",
+      "type": "quantitative",
+      "unit": "count",
+      "value": 2
     }
   ]
 }

@@ -9,6 +9,7 @@
     "scorecard",
     "harness",
     "top_line_metrics",
+    "confidence_signals",
     "integration_points"
   ],
   "properties": {
@@ -102,7 +103,28 @@
           },
           "owner": {
             "type": "string"
+          },
+          "value": {
+            "type": "number",
+            "minimum": 0
           }
+        },
+        "additionalProperties": false
+      }
+    },
+    "confidence_signals": {
+      "type": "array",
+      "minItems": 4,
+      "items": {
+        "type": "object",
+        "required": ["name", "type", "source"],
+        "properties": {
+          "name": { "type": "string" },
+          "type": { "type": "string", "enum": ["qualitative", "quantitative"] },
+          "state": { "type": "string" },
+          "value": { "type": "number", "minimum": 0 },
+          "unit": { "type": "string" },
+          "source": { "type": "string" }
         },
         "additionalProperties": false
       }
