@@ -374,6 +374,28 @@ doctor-env:
 # Short alias for the developer environment quick check
 devex: doctor-env
 
+# Agent-friendly preflight: print a recent commit log from the best available
+# base ref without assuming origin/master exists in this checkout.
+agent-preflight:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    ref=""
+    if git rev-parse --verify --quiet origin/master >/dev/null; then
+        ref="origin/master"
+    elif git rev-parse --verify --quiet origin/main >/dev/null; then
+        ref="origin/main"
+    elif git symbolic-ref --quiet --short refs/remotes/origin/HEAD >/dev/null 2>&1; then
+        ref="$(git symbolic-ref --quiet --short refs/remotes/origin/HEAD)"
+    elif git rev-parse --verify --quiet main >/dev/null; then
+        ref="main"
+    elif git rev-parse --verify --quiet master >/dev/null; then
+        ref="master"
+    else
+        ref="HEAD"
+    fi
+    echo "Showing last 20 commits from: $ref"
+    git log "$ref" --oneline -20
+
 # One-command pre-flight before pushing a branch:
 # 1) repair/report workspace state issues, then 2) run the fast PR gate.
 ready: doctor pr-fast
