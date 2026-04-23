@@ -117,6 +117,7 @@ Released 2026-03-30. Cleanup completed 2026-04-02.
 - Quality cleanup PRs land, version bump to 0.13.0
 - Seamless install story verified across all distribution channels
 - Announcement blog post / release notes
+- Dynamic workspace configuration remains scoped to per-folder `.perl-lsp.toml` for v0.13.0; fully dynamic per-folder scoping through the `workspace/configuration` reverse-request flow is deferred to v0.14.0 ([#3515](https://github.com/EffortlessMetrics/perl-lsp/issues/3515))
 
 ## Milestone Ladder
 
