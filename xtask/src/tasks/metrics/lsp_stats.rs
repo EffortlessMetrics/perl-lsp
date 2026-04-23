@@ -45,6 +45,8 @@ pub struct EditorUxMetrics {
     pub schema_version: u32,
     pub measured_at: String,
     pub subsystem: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_run: Option<LastRunMetrics>,
     pub metrics: UxMetrics,
 }
 
@@ -176,6 +178,7 @@ pub fn run_with_json(json: bool) -> Result<()> {
             schema_version: 1,
             measured_at: Utc::now().to_rfc3339(),
             subsystem: "editor_ux",
+            last_run: last_run.clone(),
             metrics,
         };
         write_json_receipt(&receipt_path, &output)
@@ -334,6 +337,14 @@ mod tests {
             schema_version: 1,
             measured_at: "2026-04-11T00:00:00Z".to_string(),
             subsystem: "editor_ux",
+            last_run: Some(LastRunMetrics {
+                hover_passed: 8,
+                hover_total: 10,
+                goto_passed: 5,
+                goto_total: 5,
+                completion_passed: 3,
+                completion_total: 4,
+            }),
             metrics: UxMetrics {
                 workflow_pass_rate: Some(0.91),
                 workflow_stability_rate: None,
@@ -356,6 +367,7 @@ mod tests {
             serde_json::from_str(&json).expect("must parse back to JSON");
         assert_eq!(parsed["schema_version"], 1);
         assert_eq!(parsed["subsystem"], "editor_ux");
+        assert_eq!(parsed["last_run"]["hover_passed"], 8);
         assert!((parsed["metrics"]["workflow_pass_rate"].as_f64().unwrap() - 0.91).abs() < 0.001);
         assert!(parsed["metrics"]["rename_success_rate"].is_null());
         // Verify new relevance fields serialize correctly
@@ -370,5 +382,36 @@ mod tests {
             (parsed["metrics"]["completion_top5_usefulness"].as_f64().unwrap() - 0.86).abs() < 0.001,
             "completion_top5_usefulness alias should still serialize"
         );
+    }
+
+    #[test]
+    fn test_load_last_run_from_current_schema() {
+        let temp = tempfile::NamedTempFile::new().expect("temp file should be created");
+        let receipt = serde_json::json!({
+            "schema_version": 1,
+            "measured_at": "2026-04-11T00:00:00Z",
+            "subsystem": "editor_ux",
+            "last_run": {
+                "hover_passed": 2,
+                "hover_total": 3,
+                "goto_passed": 1,
+                "goto_total": 2,
+                "completion_passed": 4,
+                "completion_total": 5
+            },
+            "metrics": {
+                "workflow_pass_rate": 0.7
+            }
+        });
+        fs::write(temp.path(), serde_json::to_string_pretty(&receipt).expect("serialize JSON"))
+            .expect("write receipt");
+
+        let loaded = load_last_run(temp.path()).expect("last_run should be parsed");
+        assert_eq!(loaded.hover_passed, 2);
+        assert_eq!(loaded.hover_total, 3);
+        assert_eq!(loaded.goto_passed, 1);
+        assert_eq!(loaded.goto_total, 2);
+        assert_eq!(loaded.completion_passed, 4);
+        assert_eq!(loaded.completion_total, 5);
     }
 }
