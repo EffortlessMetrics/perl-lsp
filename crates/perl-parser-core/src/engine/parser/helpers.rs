@@ -23,6 +23,10 @@ impl<'a> Parser<'a> {
         matches!(kind, Some(TokenKind::Or) | Some(TokenKind::DefinedOr))
     }
 
+    /// Returns true if the token kind is a postfix increment/decrement operator.
+    ///
+    /// These operators (`++` and `--`) can appear after an expression like `$x++`
+    /// unlike prefix operators which appear before.
     #[inline]
     fn is_postfix_op(kind: Option<TokenKind>) -> bool {
         matches!(kind, Some(TokenKind::Increment) | Some(TokenKind::Decrement))
