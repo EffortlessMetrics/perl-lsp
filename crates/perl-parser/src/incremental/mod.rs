@@ -354,6 +354,17 @@ impl Edit {
     }
 }
 
+impl Edit {
+    /// Returns the size of text touched by this edit (inserted or deleted).
+    ///
+    /// This is used for fallback heuristics so that large deletions are treated
+    /// the same as large insertions.
+    fn touched_bytes(&self) -> usize {
+        let replaced_len = self.old_end_byte.saturating_sub(self.start_byte);
+        replaced_len.max(self.new_text.len())
+    }
+}
+
 /// Result of incremental reparse
 #[derive(Debug)]
 pub struct ReparseResult {
@@ -370,7 +381,7 @@ pub fn apply_edits(state: &mut IncrementalState, edits: &[Edit]) -> Result<Repar
     sorted_edits.reverse(); // Apply from end to start to avoid offset shifts
 
     // Check if we should fall back to full reparse
-    let total_changed = sorted_edits.iter().map(|e| e.new_text.len()).sum::<usize>();
+    let total_changed = sorted_edits.iter().map(Edit::touched_bytes).sum::<usize>();
 
     // Fallback thresholds
     const MAX_EDIT_SIZE: usize = 64 * 1024; // 64KB
@@ -384,7 +395,7 @@ pub fn apply_edits(state: &mut IncrementalState, edits: &[Edit]) -> Result<Repar
         let edit = &sorted_edits[0];
 
         // Heuristic: if edit is large (>1KB) or crosses many lines, do full reparse
-        if edit.new_text.len() > 1024 || edit.new_text.matches('\n').count() > 10 {
+        if edit.touched_bytes() > 1024 || edit.new_text.matches('\n').count() > 10 {
             apply_single_edit(state, edit)?;
             return full_reparse(state);
         }
@@ -624,6 +635,33 @@ mod tests {
             result.reparsed_bytes,
             state.source.len(),
             "large edit must trigger full reparse, reparsed_bytes should equal doc length"
+        );
+
+        Ok(())
+    }
+
+    /// Verify large deletions trigger full-reparse fallback the same as large insertions.
+    #[test]
+    fn test_incremental_state_large_deletion_falls_back_to_full_reparse() -> Result<()> {
+        let source = "my $x = 1;\n".repeat(10_000);
+        let mut state = IncrementalState::new(source);
+
+        // Delete almost the entire document; this should use full-reparse fallback
+        // to keep incremental behavior predictable for large edits.
+        let old_end_byte = state.source.len().saturating_sub(1);
+        let edit = Edit {
+            start_byte: 0,
+            old_end_byte,
+            new_end_byte: 0,
+            new_text: String::new(),
+        };
+
+        let result = apply_edits(&mut state, &[edit])?;
+
+        assert_eq!(
+            result.reparsed_bytes,
+            state.source.len(),
+            "large deletion must trigger full reparse, reparsed_bytes should equal doc length"
         );
 
         Ok(())
