@@ -6,6 +6,9 @@
 //! place and remain stable across binaries.
 
 #![deny(unsafe_code)]
+// Lint enforcement: library code must use tracing, not direct stderr/stdout prints.
+#![deny(clippy::print_stderr, clippy::print_stdout)]
+#![cfg_attr(test, allow(clippy::print_stderr, clippy::print_stdout))]
 
 use std::error::Error;
 use std::fmt;
@@ -768,10 +771,10 @@ pub fn format_startup_banner(version: &str, profile: FeatureProfile, is_socket: 
 }
 
 /// Emit the process-start banner to stderr.
-///
 /// Fires before the LSP handshake begins. Writes directly to stderr, not through
 /// tracing, so it is visible regardless of whether `--log` is active.
 /// Suppressed when `PERL_LSP_QUIET` is set in the environment.
+#[allow(clippy::print_stderr)]
 pub fn startup_banner(version: &str, profile: FeatureProfile, transport: TransportMode) {
     if std::env::var("PERL_LSP_QUIET").is_ok() {
         return;
