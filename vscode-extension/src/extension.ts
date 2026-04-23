@@ -743,7 +743,8 @@ export async function activate(context: vscode.ExtensionContext) {
 
     const reportIssueCommand = vscode.commands.registerCommand('perl-lsp.reportIssue', async () => {
         const extensionVersion = context.extension.packageJSON.version as string ?? 'unknown';
-        const vscodeVersion = vscode.version;
+        const editorVersion = vscode.version;
+        const editorName = (vscode.env as unknown as { appName?: string }).appName;
         const platform = process.platform;
         const arch = process.arch;
 
@@ -765,12 +766,14 @@ export async function activate(context: vscode.ExtensionContext) {
 
         const serverVersion = await getServerVersion();
 
-        const diagnosticInfo = [
-            `perl-lsp server: ${serverVersion}`,
-            `Extension: ${extensionVersion}`,
-            `VS Code: ${vscodeVersion}`,
-            `Platform: ${platform}/${arch}`,
-        ].join('\n');
+        const diagnosticInfo = formatIssueDiagnosticInfo({
+            serverVersion,
+            extensionVersion,
+            editorVersion,
+            platform,
+            arch,
+            editorName,
+        });
 
         const selection = await vscode.window.showInformationMessage(
             'Open a GitHub issue to report a bug or request a feature.',
@@ -1329,6 +1332,23 @@ function getServerArgs(baseArgs: string[]): string[] {
 export function getLanguageServerLaunchArgs(enableLogging: boolean): string[] {
     const baseArgs = enableLogging ? ['--log'] : [];
     return getServerArgs(baseArgs);
+}
+
+export function formatIssueDiagnosticInfo(params: {
+    serverVersion: string;
+    extensionVersion: string;
+    editorVersion: string;
+    platform: string;
+    arch: string;
+    editorName?: string;
+}): string {
+    const editorName = (params.editorName ?? 'VS Code').trim() || 'VS Code';
+    return [
+        `perl-lsp server: ${params.serverVersion}`,
+        `Extension: ${params.extensionVersion}`,
+        `${editorName}: ${params.editorVersion}`,
+        `Platform: ${params.platform}/${params.arch}`,
+    ].join('\n');
 }
 
 function normalizeFeatureProfile(rawProfile: string): string | null {
