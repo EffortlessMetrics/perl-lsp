@@ -3994,6 +3994,10 @@ fn find_hash_comment_start(line: &str, perl_mode: bool) -> Option<usize> {
             }
             '`' => in_backtick = true,
             '#' => {
+                // Bash/Perl parameter-length expansion (`${#var}`) is not a comment.
+                if idx >= 2 && line.as_bytes().get(idx - 2..idx) == Some(b"${") {
+                    continue;
+                }
                 if idx == 0 && line.as_bytes().get(1) == Some(&b'!') {
                     return None;
                 }
@@ -4679,6 +4683,7 @@ mod tests {
 
         assert!(!has_unlinked_todo_in_hash_line("#!/usr/bin/env bash", &todo_re));
         assert!(!has_unlinked_todo_in_hash_line("echo# TODO not a comment", &todo_re));
+        assert!(!has_unlinked_todo_in_hash_line("len=${#TODO_COUNT}", &todo_re));
         assert!(has_unlinked_todo_in_hash_line("echo hi;# TODO: follow up", &todo_re));
         assert!(has_unlinked_todo_in_hash_line("echo hi;# fixme: follow up", &todo_re));
         assert!(has_unlinked_todo_in_hash_line(
@@ -4699,6 +4704,7 @@ mod tests {
         assert!(has_unlinked_todo_in_hash_line("echo ok||# TODO: follow up", &todo_re));
         assert!(has_unlinked_todo_in_hash_line("cat <# TODO: follow up", &todo_re));
         assert!(has_unlinked_todo_in_hash_line("cat ># TODO: follow up", &todo_re));
+        assert!(has_unlinked_todo_in_hash_line("len=${#value} # TODO: follow up", &todo_re));
         assert!(has_unlinked_todo_in_hash_line("echo hi # TODO: follow up", &todo_re));
         assert!(has_unlinked_todo_in_hash_line("echo hi&&# TODO: follow up", &todo_re));
         assert!(has_unlinked_todo_in_hash_line("echo hi||# TODO: follow up", &todo_re));
