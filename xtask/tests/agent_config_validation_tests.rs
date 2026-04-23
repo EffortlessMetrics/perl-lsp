@@ -20,7 +20,7 @@
 //! - Issue #156: Agent configuration validation gap
 //! - `.claude/agents/`: active swarm agent definitions for the Perl parser ecosystem
 
-use anyhow::{Context, Result, anyhow};
+use anyhow::{anyhow, Context, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
@@ -109,6 +109,12 @@ pub struct AgentConfigValidator {
 }
 
 impl AgentConfigValidator {
+    fn is_supported_model_name(model: &str) -> bool {
+        const STANDARD_MODELS: &[&str] =
+            &["sonnet", "opus", "haiku", "claude-sonnet", "claude-opus"];
+        STANDARD_MODELS.contains(&model) || model.starts_with("claude-")
+    }
+
     pub fn new() -> Result<Self> {
         // Try current directory first, then parent directory (for when running from xtask/)
         let candidates = vec![PathBuf::from(".claude/agents"), PathBuf::from("../.claude/agents")];
@@ -243,12 +249,11 @@ impl AgentConfigValidator {
         }
 
         // Validate model field
-        let valid_models = ["sonnet", "opus", "haiku", "claude-sonnet", "claude-opus"];
         if config.model.is_empty() {
             result.errors.push("model field is empty".to_string());
-        } else if !valid_models.contains(&config.model.as_str()) {
+        } else if !Self::is_supported_model_name(&config.model) {
             result.warnings.push(format!(
-                "model '{}' is not a standard value (expected: sonnet, opus, haiku)",
+                "model '{}' is not a standard value (expected: sonnet, opus, haiku, or claude-*)",
                 config.model
             ));
         }
@@ -497,10 +502,9 @@ mod tests {
         }
 
         // All agents should use valid model names
-        let valid_models = ["sonnet", "opus", "haiku", "claude-sonnet", "claude-opus"];
         for (model, count) in &model_counts {
             assert!(
-                valid_models.contains(&model.as_str()) || model.starts_with("claude-"),
+                AgentConfigValidator::is_supported_model_name(model),
                 "Invalid model name '{}' used by {} agents",
                 model,
                 count
