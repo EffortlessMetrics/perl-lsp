@@ -1,3 +1,5 @@
+//! Serializable execute-command request and response payload types.
+
 use serde::{Deserialize, Serialize};
 
 /// Commands supported by the Perl LSP server for test execution and code analysis.
