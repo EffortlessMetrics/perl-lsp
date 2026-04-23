@@ -94,7 +94,8 @@ describe('extension UX warnings', () => {
 
     expect(showWarningMessage).toHaveBeenCalledWith(
       expect.stringContaining('src/libx'),
-      'Open Settings'
+      'Open Settings',
+      'Create Missing Directories'
     );
     expect(globalState.update).toHaveBeenCalledWith(
       expect.stringContaining('perl-lsp.includePathsWarning.'),
@@ -109,7 +110,43 @@ describe('extension UX warnings', () => {
     await validateIncludePaths(context);
     expect(showWarningMessage).toHaveBeenCalledWith(
       expect.stringContaining('vendorx'),
-      'Open Settings'
+      'Open Settings',
+      'Create Missing Directories'
+    );
+  });
+
+  test('can create missing relative include paths directly from the warning', async () => {
+    const workspaceDir = fs.mkdtempSync(path.join(os.tmpdir(), 'perl-lsp-ux-create-'));
+    const context = makeContext();
+    context.globalState = {
+      get: jest.fn(() => undefined),
+      update: jest.fn(async () => undefined),
+    };
+
+    const getConfiguration = vscode.workspace.getConfiguration as jest.Mock;
+    getConfiguration.mockImplementation(() => ({
+      get: jest.fn(() => ['lib', 'vendor/perl']),
+    }));
+
+    (vscode.workspace as any).workspaceFolders = [
+      {
+        name: 'workspace',
+        uri: {
+          fsPath: workspaceDir,
+          toString: () => `file://${workspaceDir}`,
+        },
+      },
+    ];
+
+    const showWarningMessage = vscode.window.showWarningMessage as jest.Mock;
+    showWarningMessage.mockResolvedValue('Create Missing Directories');
+
+    await validateIncludePaths(context);
+
+    expect(fs.existsSync(path.join(workspaceDir, 'lib'))).toBe(true);
+    expect(fs.existsSync(path.join(workspaceDir, 'vendor/perl'))).toBe(true);
+    expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
+      expect.stringContaining('Created 2 include directories')
     );
   });
 
