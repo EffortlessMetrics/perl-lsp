@@ -9,6 +9,7 @@ use perl_lsp_rs_core::runtime::launcher::{
     LaunchAction, LaunchConfig, StartupTimer, TransportMode, format_health_output,
     format_info_output, format_startup_banner, help_text, init_logging, log_server_startup,
     logging_filter, parse_args, port_in_use_message, shell_completion, should_enable_logging,
+    should_use_ansi,
 };
 use std::env;
 use std::path::Path;
@@ -181,7 +182,7 @@ fn run_check(command_name: &str, files: &[String]) -> i32 {
 
 fn is_terminal_stdout() -> bool {
     use std::io::IsTerminal;
-    env::var("NO_COLOR").is_err() && std::io::stdout().is_terminal()
+    should_use_ansi(std::io::stdout().is_terminal())
 }
 
 struct FileError {

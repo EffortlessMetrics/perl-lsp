@@ -30,6 +30,27 @@ static LOG_FILE_GUARD: OnceLock<tracing_appender::non_blocking::WorkerGuard> = O
 /// Default port used by socket transport.
 pub const DEFAULT_LSP_PORT: u16 = 9257;
 
+/// Determine whether ANSI output should be enabled for terminal-facing output.
+///
+/// Color is disabled when `NO_COLOR` is set, enabled for real terminals, and
+/// also enabled for Warp (`TERM_PROGRAM=WarpTerminal`) because Warp shells can
+/// report non-terminal streams while still supporting ANSI styling.
+pub fn should_use_ansi(stream_is_terminal: bool) -> bool {
+    should_use_ansi_with_env(
+        stream_is_terminal,
+        std::env::var_os("NO_COLOR").is_some(),
+        std::env::var("TERM_PROGRAM").ok().as_deref(),
+    )
+}
+
+fn should_use_ansi_with_env(
+    stream_is_terminal: bool,
+    no_color_set: bool,
+    term_program: Option<&str>,
+) -> bool {
+    !no_color_set && (stream_is_terminal || term_program == Some("WarpTerminal"))
+}
+
 /// Returns whether runtime logging should be enabled.
 ///
 /// Logging activates when the CLI explicitly requests it or when
@@ -74,7 +95,7 @@ pub fn init_logging(default_filter: &str) {
             .or_else(|_| EnvFilter::try_new(default_filter))
             .unwrap_or_else(|_| EnvFilter::new("info"));
 
-        let use_ansi = std::env::var("NO_COLOR").is_err() && io::stderr().is_terminal();
+        let use_ansi = should_use_ansi(io::stderr().is_terminal());
 
         // If PERL_LSP_LOG_FILE is set, add a rolling file appender alongside stderr.
         if let Ok(log_path) = std::env::var("PERL_LSP_LOG_FILE") {
@@ -809,6 +830,23 @@ mod tests {
         // init_logging is guarded by Once, so calling it multiple times is safe.
         // This test verifies the stderr-only path does not panic.
         super::init_logging("warn");
+    }
+
+    #[test]
+    fn should_use_ansi_prefers_tty_without_no_color() {
+        assert!(super::should_use_ansi_with_env(true, false, None));
+        assert!(!super::should_use_ansi_with_env(false, false, None));
+    }
+
+    #[test]
+    fn should_use_ansi_enables_warp_even_without_tty() {
+        assert!(super::should_use_ansi_with_env(false, false, Some("WarpTerminal")));
+    }
+
+    #[test]
+    fn should_use_ansi_honors_no_color_for_warp() {
+        assert!(!super::should_use_ansi_with_env(true, true, Some("WarpTerminal")));
+        assert!(!super::should_use_ansi_with_env(false, true, Some("WarpTerminal")));
     }
 
     #[test]
