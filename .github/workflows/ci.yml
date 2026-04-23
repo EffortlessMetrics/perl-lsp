@@ -59,7 +59,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     needs: preflight-latest-check
-    if: needs.preflight-latest-check.outputs.is_latest == 'true'
+    # Skip expensive jobs for draft PRs; still run on push events.
+    if: needs.preflight-latest-check.outputs.is_latest == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.draft == false)
     steps:
       - uses: actions/checkout@v6
         with:
@@ -98,7 +99,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     needs: [pr-smoke, preflight-latest-check]
-    if: needs.preflight-latest-check.outputs.is_latest == 'true'
+    # Skip expensive jobs for draft PRs; still run on push events.
+    if: needs.preflight-latest-check.outputs.is_latest == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.draft == false)
     # Run on every PR push and on push to main/master
     # Earlier gating > label-gated gating (see #4675)
     # Frequent commits will queue; preflight skips superseded SHAs.
