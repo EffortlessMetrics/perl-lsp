@@ -26,8 +26,11 @@
 //!
 //! The crate root re-exports all public items via [`api`].
 
+/// Diagnostic metadata catalog and LSP-facing helpers.
 pub mod catalog;
+/// Canonical diagnostic codes, categories, severities, and tags.
 pub mod codes;
+/// Diagnostic payload data structures and related information types.
 pub mod types;
 
 mod api;
