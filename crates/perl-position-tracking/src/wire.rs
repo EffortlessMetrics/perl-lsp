@@ -106,3 +106,39 @@ impl From<WireLocation> for lsp_types::Location {
         Self { uri, range: l.range.into() }
     }
 }
+
+#[cfg(all(test, feature = "lsp-compat"))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn wire_location_to_lsp_location_preserves_valid_uri() {
+        let wire_location = WireLocation::new(
+            "file:///tmp/example.pl".to_string(),
+            WireRange::new(WirePosition::new(1, 2), WirePosition::new(3, 4)),
+        );
+
+        let location: lsp_types::Location = wire_location.into();
+
+        assert_eq!(location.uri.as_str(), "file:///tmp/example.pl");
+        assert_eq!(location.range.start.line, 1);
+        assert_eq!(location.range.start.character, 2);
+        assert_eq!(location.range.end.line, 3);
+        assert_eq!(location.range.end.character, 4);
+    }
+
+    #[test]
+    fn wire_location_to_lsp_location_uses_fallback_for_invalid_uri() {
+        let wire_location = WireLocation::new(
+            "not a uri".to_string(),
+            WireRange::new(WirePosition::new(0, 0), WirePosition::new(0, 1)),
+        );
+
+        let location: lsp_types::Location = wire_location.into();
+
+        assert_ne!(location.uri.as_str(), "not a uri");
+        assert!(!location.uri.as_str().is_empty());
+        assert_eq!(location.range.start.line, 0);
+        assert_eq!(location.range.end.character, 1);
+    }
+}
