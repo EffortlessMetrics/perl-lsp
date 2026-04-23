@@ -28,6 +28,7 @@ perllsp --health
 | Emacs | use `lsp-mode` or `eglot` with `perllsp --stdio` | [docs/EDITORS/EMACS_SETUP.md](../EDITORS/EMACS_SETUP.md) |
 | Helix | add a `perllsp` language server entry | [docs/EDITORS/HELIX_SETUP.md](../EDITORS/HELIX_SETUP.md) |
 | Sublime Text | register `perllsp` in the LSP package settings | [docs/EDITORS/SUBLIME_SETUP.md](../EDITORS/SUBLIME_SETUP.md) |
+| GNU nano | no native LSP client support; use CLI checks alongside editing | [docs/EDITORS/NANO_SETUP.md](../EDITORS/NANO_SETUP.md) |
 
 ## Minimal Configurations
 
@@ -63,6 +64,13 @@ args = ["--stdio"]
 
 Register a client whose command is `["perllsp", "--stdio"]` and scope it to
 Perl source files.
+
+### GNU nano
+
+`nano` does not implement the Language Server Protocol, so it cannot attach to
+`perllsp` for in-editor features (hover, completion, go-to-definition, etc.).
+Use the companion workflow in [docs/EDITORS/NANO_SETUP.md](../EDITORS/NANO_SETUP.md)
+to keep `nano` while running fast CLI validation with `perllsp --check`.
 
 ## When Setup Fails
 
