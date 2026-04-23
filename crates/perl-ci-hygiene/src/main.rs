@@ -3848,10 +3848,12 @@ fn collect_todo_hits(
     Ok(hits)
 }
 
+#[cfg(test)]
 fn has_unlinked_todo_in_rust_line(line: &str, token_re: &Regex) -> bool {
     has_unlinked_todo_in_rust_line_with_state(line, token_re, &mut None)
 }
 
+#[cfg(test)]
 fn has_unlinked_todo_in_rust_line_with_block_context(
     line: &str,
     token_re: &Regex,
@@ -3966,13 +3968,11 @@ struct PerlQuoteLikeState {
 
 fn find_hash_comment_start(line: &str, perl_mode: bool) -> Option<usize> {
     let mut in_single = false;
-    let mut in_single_ansi_c = false;
     let mut in_double = false;
     let mut in_backtick = false;
     let mut prev_single_was_escape = false;
-    let mut prev_was_escape = false;
+    let mut prev_backtick_was_escape = false;
     let mut prev_was_escape_double = false;
-    let mut prev_was_escape_single = false;
     let mut perl_quote_like: Option<PerlQuoteLikeState> = None;
 
     for (idx, ch) in line.char_indices() {
@@ -4015,21 +4015,6 @@ fn find_hash_comment_start(line: &str, perl_mode: bool) -> Option<usize> {
             continue;
         }
         if in_double {
-            if prev_was_escape {
-                prev_was_escape = false;
-                continue;
-            }
-            if ch == '\\' {
-                prev_was_escape = true;
-                continue;
-            }
-            if ch == '\'' {
-                in_single = false;
-                in_single_ansi_c = false;
-            }
-            continue;
-        }
-        if in_double {
             if prev_was_escape_double {
                 prev_was_escape_double = false;
                 continue;
@@ -4044,12 +4029,12 @@ fn find_hash_comment_start(line: &str, perl_mode: bool) -> Option<usize> {
             continue;
         }
         if in_backtick {
-            if prev_was_escape {
-                prev_was_escape = false;
+            if prev_backtick_was_escape {
+                prev_backtick_was_escape = false;
                 continue;
             }
             if ch == '\\' {
-                prev_was_escape = true;
+                prev_backtick_was_escape = true;
                 continue;
             }
             if ch == '`' {
@@ -4066,8 +4051,6 @@ fn find_hash_comment_start(line: &str, perl_mode: bool) -> Option<usize> {
         match ch {
             '\'' => {
                 in_single = true;
-                in_single_ansi_c = idx > 0 && line.as_bytes().get(idx - 1) == Some(&b'$');
-                prev_was_escape_single = false;
                 prev_single_was_escape = false;
             }
             '"' => {
