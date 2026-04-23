@@ -374,10 +374,15 @@ fn test_diagnostics_gold_corpus() {
                     } else if let Some(needle) = message_contains {
                         diagnostics["result"]["items"].as_array().is_some_and(|items| {
                             items.iter().any(|item| {
-                                let item_code_matches = item
-                                    .get("code")
-                                    .and_then(Value::as_str)
-                                    .is_some_and(|item_code| item_code == code);
+                                // Use the same normalization as diagnostic_codes_from_response:
+                                // accept both string and integer coded diagnostics.
+                                let item_code = item.get("code").and_then(|v| {
+                                    v.as_str()
+                                        .map(ToString::to_string)
+                                        .or_else(|| v.as_i64().map(|n| n.to_string()))
+                                });
+                                let item_code_matches =
+                                    item_code.as_deref().is_some_and(|c| c == code);
                                 let message_matches = item["message"]
                                     .as_str()
                                     .is_some_and(|message| message.contains(needle));
