@@ -104,7 +104,7 @@ indent = { tab-width = 4, unit = "    " }
 language-servers = ["perl-lsp"]
 
 [language-server.perl-lsp]
-command = "perl-lsp"
+command = "perllsp"
 args = ["--stdio"]
 ```
 
@@ -137,7 +137,7 @@ indent = { tab-width = 4, unit = "    " }
 language-servers = ["perl-lsp"]
 
 [language-server.perl-lsp]
-command = "perl-lsp"
+command = "perllsp"
 args = ["--stdio"]
 
 [language-server.perl-lsp.config.perl]
@@ -356,8 +356,8 @@ h = { i = ":inlay_hints" }
 
 1. **Verify binary is in PATH**:
    ```bash
-   which perl-lsp
-   # Should output: /usr/local/bin/perl-lsp or similar
+   which perllsp
+   # Should output: /usr/local/bin/perllsp or similar
    ```
 
 2. **Check LSP status**:
@@ -511,7 +511,7 @@ Set environment variables for the LSP server:
 ```toml
 [language-server.perl-lsp]
 command = "env"
-args = ["PERL5LIB=lib", "PERL_MB_OPT=--install_base local", "perl-lsp", "--stdio"]
+args = ["PERL5LIB=lib", "PERL_MB_OPT=--install_base local", "perllsp", "--stdio"]
 ```
 
 ### Custom Formatter
@@ -606,7 +606,7 @@ indent = { tab-width = 4, unit = "    " }
 language-servers = ["perl-lsp"]
 
 [language-server.perl-lsp]
-command = "perl-lsp"
+command = "perllsp"
 args = ["--stdio"]
 
 [language-server.perl-lsp.config.perl]
