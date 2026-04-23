@@ -86,6 +86,27 @@ fn test_recovery_missing_rhs_before_sub_declaration_keyword() {
 }
 
 #[test]
+fn test_no_recovery_for_anonymous_sub_assignment_rhs() {
+    let code = "local $SIG{__WARN__} = sub { };";
+    let mut parser = Parser::new(code);
+    let result = parser.parse();
+
+    assert!(result.is_ok(), "Parser should accept anonymous sub assignment RHS");
+    let ast = must(result);
+
+    if let NodeKind::Program { statements } = &ast.kind {
+        assert_eq!(statements.len(), 1, "Anonymous sub RHS should stay in a single statement");
+    } else {
+        unreachable!("Expected program root");
+    }
+
+    assert!(
+        !ast.to_sexp().contains("missing_expression"),
+        "Anonymous sub assignment should not create MissingExpression recovery nodes"
+    );
+}
+
+#[test]
 fn test_recovery_multiple_errors() {
     // Phase 2: `my $x = ;` now produces a VariableDeclaration with MissingExpression
     // instead of an Error node. Each missing RHS emits exactly 1 Recovered error.
