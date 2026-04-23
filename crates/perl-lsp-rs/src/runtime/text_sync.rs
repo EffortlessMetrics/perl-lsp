@@ -15,6 +15,29 @@ use crate::state::DegradationTier;
 use perl_parser::workspace_index::{IndexPhase, IndexState};
 use perl_parser_core::source_file::is_binary_content;
 
+#[cfg(feature = "incremental")]
+fn build_incremental_edits_from_lsp_changes(
+    rope: &ropey::Rope,
+    changes: &[lsp_types::TextDocumentContentChangeEvent],
+) -> Option<Vec<perl_parser::incremental::incremental_edit::IncrementalEdit>> {
+    use crate::textdoc::{Doc, PosEnc, apply_changes, range_to_bytes};
+    use perl_parser::incremental::incremental_edit::IncrementalEdit;
+
+    let mut doc = Doc { rope: rope.clone(), version: 0 };
+    let mut edits = Vec::with_capacity(changes.len());
+
+    for change in changes {
+        let Some(range) = &change.range else {
+            return None;
+        };
+        let (start_byte, old_end_byte) = range_to_bytes(&doc.rope, &range, PosEnc::Utf16);
+        edits.push(IncrementalEdit::new(start_byte, old_end_byte, change.text.clone()));
+        apply_changes(&mut doc, std::slice::from_ref(change), PosEnc::Utf16);
+    }
+
+    if edits.is_empty() { None } else { Some(edits) }
+}
+
 impl LspServer {
     /// Handle textDocument/didOpen notification.
     ///
@@ -469,45 +492,8 @@ impl LspServer {
                 // Build incremental edits from the OLD source BEFORE mutating the rope.
                 // UTF-16 line/char → byte conversion must use the pre-change line index.
                 #[cfg(feature = "incremental")]
-                let incremental_edits_opt: Option<
-                    perl_parser::incremental::incremental_edit::IncrementalEditSet,
-                > = {
-                    use perl_parser::incremental::incremental_edit::{
-                        IncrementalEdit, IncrementalEditSet,
-                    };
-                    let mut edit_set = IncrementalEditSet::new();
-                    let mut all_ranged = true;
-                    for change in &lsp_changes {
-                        if let Some(range) = change.range {
-                            // Convert UTF-16 line/char to byte offsets using the pre-change
-                            // line_starts (populated from the rope before apply_changes runs).
-                            let start_byte = doc_state.line_starts.position_to_offset_rope(
-                                &doc_state.rope,
-                                range.start.line,
-                                range.start.character,
-                            );
-                            let old_end_byte = doc_state.line_starts.position_to_offset_rope(
-                                &doc_state.rope,
-                                range.end.line,
-                                range.end.character,
-                            );
-                            edit_set.add(IncrementalEdit::new(
-                                start_byte,
-                                old_end_byte,
-                                change.text.clone(),
-                            ));
-                        } else {
-                            // Full-document replace — not a ranged edit; reset below
-                            tracing::trace!(
-                                "Full-document replace detected for {} — incremental edits not supported",
-                                uri
-                            );
-                            all_ranged = false;
-                            break;
-                        }
-                    }
-                    if all_ranged && !edit_set.is_empty() { Some(edit_set) } else { None }
-                };
+                let incremental_edits_opt =
+                    build_incremental_edits_from_lsp_changes(&doc_state.rope, &lsp_changes);
 
                 // Apply changes with UTF-16 encoding (as advertised in initialize)
                 apply_changes(&mut doc, &lsp_changes, PosEnc::Utf16);
@@ -676,28 +662,34 @@ impl LspServer {
                     let code_text = crate::util::code_slice(&text);
                     match (doc_state.incremental_doc.take(), incremental_edits_opt) {
                         (Some(mut inc), Some(edits)) => {
-                            // Try applying the incremental edits to the existing tree
-                            match inc.apply_edits(&edits) {
-                                Ok(()) => Some(inc),
-                                Err(e) => {
-                                    // Fallback: reinitialize from the post-change source
-                                    tracing::warn!(
-                                        "Incremental edit application failed for {}, reinitializing: {}",
-                                        uri,
-                                        e
-                                    );
-                                    match IncrementalDocument::new(code_text.to_string()) {
-                                        Ok(doc) => Some(doc),
-                                        Err(e2) => {
-                                            tracing::warn!(
-                                                "Incremental parsing reinit failed for {}, falling back to full parsing: {}",
-                                                uri,
-                                                e2
-                                            );
-                                            None
-                                        }
+                            // LSP applies changes in-order. Apply one incremental edit at a time
+                            // so byte ranges are interpreted against the correct intermediate text.
+                            let mut apply_err = None;
+                            for edit in edits {
+                                if let Err(e) = inc.apply_edit(edit) {
+                                    apply_err = Some(e);
+                                    break;
+                                }
+                            }
+                            if let Some(e) = apply_err {
+                                tracing::warn!(
+                                    "Incremental edit application failed for {}, reinitializing: {}",
+                                    uri,
+                                    e
+                                );
+                                match IncrementalDocument::new(code_text.to_string()) {
+                                    Ok(doc) => Some(doc),
+                                    Err(e2) => {
+                                        tracing::warn!(
+                                            "Incremental parsing reinit failed for {}, falling back to full parsing: {}",
+                                            uri,
+                                            e2
+                                        );
+                                        None
                                     }
                                 }
+                            } else {
+                                Some(inc)
                             }
                         }
                         // Full-document replace or no prior incremental state: reinitialize
@@ -733,36 +725,38 @@ impl LspServer {
                     let code_text = crate::util::code_slice(&text);
                     match (doc_state.incremental_state.take(), &incremental_edits_opt_clone) {
                         (Some(mut inc_state), Some(edit_set)) => {
-                            // Convert IncrementalEditSet -> Vec<IncEdit> for apply_edits
-                            let edits: Vec<IncEdit> = edit_set
-                                .edits
-                                .iter()
-                                .map(|e| IncEdit {
+                            let mut apply_failed = false;
+                            for e in edit_set {
+                                let edit = IncEdit {
                                     start_byte: e.start_byte,
                                     old_end_byte: e.old_end_byte,
                                     new_end_byte: e.start_byte + e.new_text.len(),
                                     new_text: e.new_text.clone(),
-                                })
-                                .collect();
-                            match inc_apply_edits(&mut inc_state, &edits) {
-                                Ok(result) => {
-                                    tracing::debug!(
-                                        "Incremental state fast-path for {}: reparsed {} of {} bytes",
-                                        uri,
-                                        result.reparsed_bytes,
-                                        inc_state.source.len()
-                                    );
-                                    Some(inc_state)
-                                }
-                                Err(e) => {
-                                    // Fast-path failed (e.g. large edit); reinitialize checkpoints
-                                    tracing::debug!(
-                                        "Incremental state apply_edits failed for {}, reinitializing: {}",
-                                        uri,
-                                        e
-                                    );
-                                    Some(IncrementalState::new(code_text.to_string()))
-                                }
+                                };
+                                match inc_apply_edits(&mut inc_state, std::slice::from_ref(&edit)) {
+                                    Ok(result) => {
+                                        tracing::debug!(
+                                            "Incremental state fast-path for {}: reparsed {} of {} bytes",
+                                            uri,
+                                            result.reparsed_bytes,
+                                            inc_state.source.len()
+                                        );
+                                    }
+                                    Err(e) => {
+                                        tracing::debug!(
+                                            "Incremental state apply_edits failed for {}, reinitializing: {}",
+                                            uri,
+                                            e
+                                        );
+                                        apply_failed = true;
+                                        break;
+                                    }
+                                };
+                            }
+                            if apply_failed {
+                                Some(IncrementalState::new(code_text.to_string()))
+                            } else {
+                                Some(inc_state)
                             }
                         }
                         // Full-document replace or no prior state: reinitialize checkpoints
@@ -1116,6 +1110,10 @@ impl LspServer {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(feature = "incremental")]
+    use lsp_types::{Position, Range, TextDocumentContentChangeEvent};
+    #[cfg(feature = "incremental")]
+    use ropey::Rope;
     use serde_json::json;
     use std::io::{self, Write};
     use std::sync::Arc as StdArc;
@@ -1143,6 +1141,53 @@ mod tests {
         let server =
             LspServer::with_io(Box::new(std::io::Cursor::new(Vec::<u8>::new())), Box::new(writer));
         (server, buf)
+    }
+
+    #[cfg(feature = "incremental")]
+    #[test]
+    fn incremental_edit_builder_tracks_sequential_change_coordinates() {
+        let rope = Rope::from_str("my $x = 1;\n");
+        let changes = vec![
+            TextDocumentContentChangeEvent {
+                range: Some(Range {
+                    start: Position { line: 0, character: 8 },
+                    end: Position { line: 0, character: 9 },
+                }),
+                range_length: None,
+                text: "10".to_string(),
+            },
+            TextDocumentContentChangeEvent {
+                // Second edit uses the document shape *after* first edit.
+                range: Some(Range {
+                    start: Position { line: 0, character: 10 },
+                    end: Position { line: 0, character: 11 },
+                }),
+                range_length: None,
+                text: "2".to_string(),
+            },
+        ];
+
+        let edits =
+            build_incremental_edits_from_lsp_changes(&rope, &changes).expect("expected edits");
+
+        assert_eq!(edits.len(), 2);
+        assert_eq!(edits[0].start_byte, 8);
+        assert_eq!(edits[0].old_end_byte, 9);
+        assert_eq!(edits[1].start_byte, 10);
+        assert_eq!(edits[1].old_end_byte, 11);
+    }
+
+    #[cfg(feature = "incremental")]
+    #[test]
+    fn incremental_edit_builder_disables_for_full_replace() {
+        let rope = Rope::from_str("my $x = 1;\n");
+        let changes = vec![TextDocumentContentChangeEvent {
+            range: None,
+            range_length: None,
+            text: "my $x = 2;\n".to_string(),
+        }];
+
+        assert!(build_incremental_edits_from_lsp_changes(&rope, &changes).is_none());
     }
 
     /// Verify that a ranged didChange initializes and preserves incremental_doc.
