@@ -48,6 +48,7 @@ pr-fast: _check-tools-basic
     echo "=============================================="
     START=$(date +%s)
     just _timed "fmt-check" "just fmt-check" && \
+    just _timed "release-history-check" "just ci-release-history" && \
     just _timed "readme-heading-check" "just readme-heading-check" && \
     just _timed "clippy-core" "just clippy-core" && \
     just _timed "test-core" "just test-core" && \
@@ -1266,6 +1267,10 @@ ci-publication-facts:
     @echo "📊 Checking publication facts (strict mode)..."
     @cargo xtask verify-publication-facts --strict
     @echo "✅ Publication facts check passed"
+
+# Verify release-history surfaces are in sync with git tags and changelog.
+ci-release-history:
+    @bash scripts/check_release_history.sh
 
 # Update derived metrics in docs/project/status/ subsystem files and ROADMAP.md.
 # Optionally pass a subsystem name to regenerate only that one (e.g. just status-update lsp).

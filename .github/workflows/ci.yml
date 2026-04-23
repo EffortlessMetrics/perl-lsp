@@ -80,6 +80,9 @@ jobs:
         with:
           tool: just
 
+      - name: Check release-history drift
+        run: just ci-release-history
+
       - name: Check formatting
         run: cargo xtask fmt --check
 
