@@ -4339,6 +4339,11 @@ mod tests {
             "echo \"#not-a-comment\" # TODO: follow up",
             &todo_re,
         ));
+        assert!(!has_unlinked_todo_in_hash_line("echo '# TODO in string' && true", &todo_re));
+        assert!(has_unlinked_todo_in_hash_line(
+            "echo '# TODO in string' # TODO: follow up",
+            &todo_re
+        ));
         assert!(has_unlinked_todo_in_hash_line("echo hi # TODO: follow up", &todo_re));
         assert!(!has_unlinked_todo_in_hash_line("echo hi # TODO(#77): tracked", &todo_re));
 
