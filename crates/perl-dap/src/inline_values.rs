@@ -30,6 +30,28 @@ fn is_special_variable_name(name: &str) -> bool {
     SPECIAL_VARS.contains(&name)
 }
 
+/// Convert 1-based line bounds into inclusive 0-based indexes.
+///
+/// Non-positive line inputs are clamped to line 1, and the end index is
+/// clamped to the final available line.
+fn normalize_line_bounds(
+    start_line: i64,
+    end_line: i64,
+    line_count: usize,
+) -> Option<(usize, usize)> {
+    if line_count == 0 {
+        return None;
+    }
+
+    let start_1_based = start_line.max(1) as usize;
+    let end_1_based = end_line.max(1) as usize;
+
+    let start_idx = start_1_based.saturating_sub(1).min(line_count.saturating_sub(1));
+    let end_idx = end_1_based.saturating_sub(1).min(line_count.saturating_sub(1));
+
+    (start_idx <= end_idx).then_some((start_idx, end_idx))
+}
+
 /// Extract unique variable names from source code within a line range.
 ///
 /// Lines are 1-based. Returns deduplicated variable names with their sigils.
@@ -42,11 +64,10 @@ pub fn extract_variable_names(source: &str, start_line: i64, end_line: i64) -> V
         return Vec::new();
     }
 
-    let start_idx = start_line.saturating_sub(1) as usize;
-    let end_idx = (end_line.saturating_sub(1) as usize).min(lines.len().saturating_sub(1));
-    if start_idx > end_idx {
+    let Some((start_idx, end_idx)) = normalize_line_bounds(start_line, end_line, lines.len())
+    else {
         return Vec::new();
-    }
+    };
 
     let mut seen = HashSet::new();
     let mut names = Vec::new();
@@ -132,14 +153,10 @@ pub fn collect_inline_values_with_runtime(
         return Vec::new();
     }
 
-    let start_idx = start_line.saturating_sub(1) as usize;
-    let mut end_idx = end_line.saturating_sub(1) as usize;
-    if end_idx >= lines.len() {
-        end_idx = lines.len() - 1;
-    }
-    if start_idx > end_idx {
+    let Some((start_idx, end_idx)) = normalize_line_bounds(start_line, end_line, lines.len())
+    else {
         return Vec::new();
-    }
+    };
 
     let mut inline_values = Vec::new();
     let mut seen_on_line: HashSet<(usize, String)> = HashSet::new();
@@ -177,15 +194,10 @@ pub fn collect_inline_values(source: &str, start_line: i64, end_line: i64) -> Ve
         return Vec::new();
     }
 
-    let start_idx = start_line.saturating_sub(1) as usize;
-    let mut end_idx = end_line.saturating_sub(1) as usize;
-    if end_idx >= lines.len() {
-        end_idx = lines.len() - 1;
-    }
-
-    if start_idx > end_idx {
+    let Some((start_idx, end_idx)) = normalize_line_bounds(start_line, end_line, lines.len())
+    else {
         return Vec::new();
-    }
+    };
 
     let Some(re) = SCALAR_VAR_RE.as_ref() else {
         return Vec::new();
@@ -312,5 +324,24 @@ mod tests {
         assert_eq!(values.len(), 1);
         assert!(values[0].text.starts_with("$name = "));
         assert!(values[0].text.ends_with("..."));
+    }
+
+    #[test]
+    fn test_non_positive_line_bounds_are_clamped() {
+        let source = "my $x = 1;\nmy $y = 2;";
+        let names = extract_variable_names(source, 0, 1);
+        assert_eq!(names, vec!["$x".to_string()]);
+
+        let values = collect_inline_values_with_runtime(source, 0, 0, None);
+        assert_eq!(values.len(), 1);
+        assert_eq!(values[0].text, "$x = ?");
+    }
+
+    #[test]
+    fn test_inverted_line_bounds_return_empty() {
+        let source = "my $x = 1;\nmy $y = 2;";
+        assert!(extract_variable_names(source, 2, 1).is_empty());
+        assert!(collect_inline_values_with_runtime(source, 2, 1, None).is_empty());
+        assert!(collect_inline_values(source, 2, 1).is_empty());
     }
 }
