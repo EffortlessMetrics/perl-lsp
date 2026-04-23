@@ -3226,7 +3226,7 @@ fn extract_qw_words(input: &str) -> (Vec<String>, String) {
 mod tests {
     use super::*;
     use crate::parser::Parser;
-    use perl_tdd_support::must;
+    use perl_tdd_support::{must, must_some};
 
     #[test]
     fn test_symbol_extraction() {
@@ -3508,7 +3508,7 @@ FINISH:
 
         let extractor = SymbolExtractor::new_with_source(code);
         let table = extractor.extract(&ast);
-        let references = table.references.get("FINISH").expect("expected FINISH references");
+        let references = must_some(table.references.get("FINISH"));
 
         assert!(
             references.iter().any(|reference| reference.kind == SymbolKind::Label),
@@ -3529,7 +3529,7 @@ sub jump {
 
         let extractor = SymbolExtractor::new_with_source(code);
         let table = extractor.extract(&ast);
-        let references = table.references.get("target").expect("expected target references");
+        let references = must_some(table.references.get("target"));
 
         assert!(
             references.iter().any(|reference| reference.kind == SymbolKind::Subroutine),
