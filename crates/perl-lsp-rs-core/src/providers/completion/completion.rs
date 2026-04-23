@@ -1918,7 +1918,9 @@ impl CompletionProvider {
         // Check user-defined functions
         for (name, symbols) in &self.symbol_table.symbols {
             for symbol in symbols {
-                if symbol.kind == SymbolKind::Subroutine && name.starts_with(prefix) {
+                if (symbol.kind == SymbolKind::Subroutine || symbol.kind == SymbolKind::Constant)
+                    && name.starts_with(prefix)
+                {
                     return true;
                 }
             }
@@ -2168,6 +2170,30 @@ proc
 
         assert!(completions.iter().any(|c| c.label == "process_data"));
         assert!(completions.iter().any(|c| c.label == "process_items"));
+    }
+
+    #[test]
+    fn test_use_constant_completion_from_visible_symbol_table() {
+        let code = r#"
+package My::Config;
+use constant PI => 3.14159;
+use constant qw(MAX_RETRIES TIMEOUT);
+
+P
+"#;
+
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+
+        let provider = CompletionProvider::new(&ast);
+        let completions = provider.get_completions(code, code.len() - 1);
+
+        let pi_completion = completions.iter().find(|c| c.label == "PI");
+        assert!(pi_completion.is_some(), "expected PI constant completion");
+        assert_eq!(
+            pi_completion.map(|c| c.kind),
+            Some(crate::providers::completion_item::CompletionItemKind::Constant)
+        );
     }
 
     #[test]
