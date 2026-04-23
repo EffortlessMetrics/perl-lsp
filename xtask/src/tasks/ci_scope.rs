@@ -731,7 +731,7 @@ pub fn run(config: CiScopeConfig) -> Result<()> {
     let workspace_root = root.to_string_lossy().replace('\\', "/");
 
     let mut output = classify_files(&changed_files, &metadata, &workspace_root)?;
-    output.base = config.base.clone();
+    output.base = base_ref.clone();
     output.head_sha = head_sha;
     output.changed_files = changed_files;
 
@@ -754,20 +754,33 @@ pub fn run(config: CiScopeConfig) -> Result<()> {
 // ---------------------------------------------------------------------------
 
 fn resolve_base_ref(base: &str, root: &Path) -> Result<String> {
-    let verify = cmd("git", &["rev-parse", "--verify", base])
-        .dir(root)
-        .stdout_null()
-        .stderr_null()
-        .unchecked()
-        .run()
-        .context("Failed to run git rev-parse")?;
+    fn ref_exists(candidate: &str, root: &Path) -> Result<bool> {
+        let verify = cmd("git", &["rev-parse", "--verify", candidate])
+            .dir(root)
+            .stdout_null()
+            .stderr_null()
+            .unchecked()
+            .run()
+            .context("Failed to run git rev-parse")?;
+        Ok(verify.status.success())
+    }
 
-    if verify.status.success() {
+    if ref_exists(base, root)? {
         return Ok(base.to_string());
     }
 
-    eprintln!("Warning: base ref '{}' not found; falling back to HEAD~1", base);
-    Ok("HEAD~1".to_string())
+    let fallback_candidates = ["origin/main", "origin/master", "main", "master", "HEAD~1", "HEAD"];
+    for candidate in fallback_candidates {
+        if ref_exists(candidate, root)? {
+            eprintln!("Warning: base ref '{}' not found; using fallback '{}'", base, candidate);
+            return Ok(candidate.to_string());
+        }
+    }
+
+    Err(color_eyre::eyre::eyre!(
+        "Could not resolve base ref '{}' and no fallback refs were available",
+        base
+    ))
 }
 
 fn get_head_sha(root: &Path) -> Result<String> {
