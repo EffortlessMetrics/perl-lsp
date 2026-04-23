@@ -352,6 +352,8 @@ pub enum WebFrameworkKind {
     MojoliciousLite,
     /// `use Plack::Builder;`
     PlackBuilder,
+    /// `use Fusion;` / `use Builder::IO::Fusion;`
+    BuilderIoFusion,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1617,7 +1619,11 @@ impl SymbolExtractor {
 
                         if matches!(
                             web_framework,
-                            Some(WebFrameworkKind::Dancer | WebFrameworkKind::Dancer2)
+                            Some(
+                                WebFrameworkKind::Dancer
+                                    | WebFrameworkKind::Dancer2
+                                    | WebFrameworkKind::BuilderIoFusion
+                            )
                         ) && let Some(target_node) = args.get(1)
                         {
                             if let Some(target_name) =
@@ -2144,6 +2150,9 @@ impl SymbolExtractor {
             "Dancer2" | "Dancer2::Core" => Some(WebFrameworkKind::Dancer2),
             "Mojolicious::Lite" => Some(WebFrameworkKind::MojoliciousLite),
             "Plack::Builder" => Some(WebFrameworkKind::PlackBuilder),
+            "Fusion" | "Builder::IO::Fusion" | "Builder::IO::Fusion::Lite" => {
+                Some(WebFrameworkKind::BuilderIoFusion)
+            }
             _ => None,
         };
         if let Some(kind) = web_kind {

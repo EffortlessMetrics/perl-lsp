@@ -291,6 +291,40 @@ sub show_status {
     );
 }
 
+#[test]
+fn fusion_route_emits_subroutine_symbol() {
+    let code = r#"
+use Fusion;
+
+get '/content' => sub {
+    return 'ok';
+};
+"#;
+    let table = extract_symbols(code);
+    assert!(
+        has_symbol(&table, "/content", SymbolKind::Subroutine),
+        "expected route symbol `/content` for Fusion `get` route"
+    );
+}
+
+#[test]
+fn fusion_route_target_string_adds_subroutine_reference() {
+    let code = r#"
+use Builder::IO::Fusion;
+
+get '/content' => 'render_content';
+
+sub render_content {
+    return 'ok';
+}
+"#;
+    let table = extract_symbols(code);
+    assert!(
+        has_reference(&table, "render_content", SymbolKind::Subroutine),
+        "expected Fusion route target string `render_content` to be recorded as a Subroutine reference"
+    );
+}
+
 // === Plack::Builder middleware chain detection ===
 
 #[test]
