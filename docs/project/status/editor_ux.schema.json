@@ -9,7 +9,8 @@
     "scorecard",
     "harness",
     "top_line_metrics",
-    "integration_points"
+    "integration_points",
+    "tracking_signals"
   ],
   "properties": {
     "schema_version": {
@@ -122,6 +123,58 @@
         },
         "quality_surface": {
           "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "tracking_signals": {
+      "type": "object",
+      "required": [
+        "fixture_matrix_path",
+        "workflow_count",
+        "ci_tier_counts",
+        "top_line_metric_coverage",
+        "component_metric_coverage"
+      ],
+      "properties": {
+        "fixture_matrix_path": {
+          "type": "string"
+        },
+        "workflow_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "ci_tier_counts": {
+          "type": "object",
+          "required": ["pr", "nightly", "release"],
+          "properties": {
+            "pr": { "type": "integer", "minimum": 0 },
+            "nightly": { "type": "integer", "minimum": 0 },
+            "release": { "type": "integer", "minimum": 0 }
+          },
+          "additionalProperties": false
+        },
+        "top_line_metric_coverage": {
+          "type": "object",
+          "required": [
+            "workflow_pass_rate",
+            "workflow_stability_rate",
+            "p95_time_to_first_useful_result_ms"
+          ],
+          "properties": {
+            "workflow_pass_rate": { "type": "number", "minimum": 0, "maximum": 1 },
+            "workflow_stability_rate": { "type": "number", "minimum": 0, "maximum": 1 },
+            "p95_time_to_first_useful_result_ms": { "type": "number", "minimum": 0, "maximum": 1 }
+          },
+          "additionalProperties": false
+        },
+        "component_metric_coverage": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          }
         }
       },
       "additionalProperties": false

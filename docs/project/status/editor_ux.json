@@ -28,6 +28,25 @@
     "release_lane": "just ux-tests-full",
     "status_update": "cargo xtask update-status --only quality"
   },
+  "tracking_signals": {
+    "ci_tier_counts": {
+      "nightly": 1,
+      "pr": 16,
+      "release": 0
+    },
+    "component_metric_coverage": {
+      "cross_file_definition_success_rate": 0.058823529411764705,
+      "module_resolution_workflow_success_rate": 0.058823529411764705,
+      "multi_root_workspace_navigation_success_rate": 0.11764705882352941
+    },
+    "fixture_matrix_path": "crates/perl-lsp-ux-tests/fixtures/editor_ux_fixture_matrix.json",
+    "top_line_metric_coverage": {
+      "p95_time_to_first_useful_result_ms": 0.058823529411764705,
+      "workflow_pass_rate": 1.0,
+      "workflow_stability_rate": 1.0
+    },
+    "workflow_count": 17
+  },
   "receipt_kind": "planning_scaffold",
   "schema_version": 1,
   "scorecard": "editor_ux",

@@ -122,6 +122,92 @@ pub(super) fn count_ux_scenarios(root: &Path) -> usize {
     collect_ux_scenario_files(root).len()
 }
 
+pub(super) fn collect_editor_ux_tracking_signals(root: &Path) -> serde_json::Value {
+    let matrix_path = root.join("crates/perl-lsp-ux-tests/fixtures/editor_ux_fixture_matrix.json");
+    let Ok(raw) = fs::read_to_string(&matrix_path) else {
+        return serde_json::json!({
+            "fixture_matrix_path": "crates/perl-lsp-ux-tests/fixtures/editor_ux_fixture_matrix.json",
+            "workflow_count": 0,
+            "ci_tier_counts": {"pr": 0, "nightly": 0, "release": 0},
+            "top_line_metric_coverage": {
+                "workflow_pass_rate": 0.0,
+                "workflow_stability_rate": 0.0,
+                "p95_time_to_first_useful_result_ms": 0.0
+            },
+            "component_metric_coverage": {}
+        });
+    };
+
+    let Ok(doc) = serde_json::from_str::<serde_json::Value>(&raw) else {
+        return serde_json::json!({
+            "fixture_matrix_path": "crates/perl-lsp-ux-tests/fixtures/editor_ux_fixture_matrix.json",
+            "workflow_count": 0,
+            "ci_tier_counts": {"pr": 0, "nightly": 0, "release": 0},
+            "top_line_metric_coverage": {
+                "workflow_pass_rate": 0.0,
+                "workflow_stability_rate": 0.0,
+                "p95_time_to_first_useful_result_ms": 0.0
+            },
+            "component_metric_coverage": {}
+        });
+    };
+
+    let workflows =
+        doc.get("workflows").and_then(serde_json::Value::as_array).cloned().unwrap_or_default();
+    let workflow_count = workflows.len();
+
+    let mut ci_tier_counts = BTreeMap::from([
+        ("pr".to_string(), 0usize),
+        ("nightly".to_string(), 0usize),
+        ("release".to_string(), 0usize),
+    ]);
+    let mut top_line_hits = BTreeMap::from([
+        ("workflow_pass_rate".to_string(), 0usize),
+        ("workflow_stability_rate".to_string(), 0usize),
+        ("p95_time_to_first_useful_result_ms".to_string(), 0usize),
+    ]);
+    let mut component_hits: BTreeMap<String, usize> = BTreeMap::new();
+
+    for workflow in workflows {
+        if let Some(tier) = workflow.get("ci_tier").and_then(serde_json::Value::as_str)
+            && let Some(count) = ci_tier_counts.get_mut(tier)
+        {
+            *count += 1;
+        }
+        if let Some(measures) = workflow.get("measures").and_then(serde_json::Value::as_array) {
+            for measure in measures {
+                if let Some(name) = measure.as_str() {
+                    if let Some(hit_count) = top_line_hits.get_mut(name) {
+                        *hit_count += 1;
+                    } else {
+                        *component_hits.entry(name.to_string()).or_default() += 1;
+                    }
+                }
+            }
+        }
+    }
+
+    let denominator = workflow_count as f64;
+    let coverage = |count: usize| -> f64 {
+        if workflow_count == 0 { 0.0 } else { count as f64 / denominator }
+    };
+
+    serde_json::json!({
+        "fixture_matrix_path": "crates/perl-lsp-ux-tests/fixtures/editor_ux_fixture_matrix.json",
+        "workflow_count": workflow_count,
+        "ci_tier_counts": ci_tier_counts,
+        "top_line_metric_coverage": {
+            "workflow_pass_rate": coverage(top_line_hits["workflow_pass_rate"]),
+            "workflow_stability_rate": coverage(top_line_hits["workflow_stability_rate"]),
+            "p95_time_to_first_useful_result_ms": coverage(top_line_hits["p95_time_to_first_useful_result_ms"])
+        },
+        "component_metric_coverage": component_hits
+            .into_iter()
+            .map(|(metric, hits)| (metric, coverage(hits)))
+            .collect::<BTreeMap<_, _>>()
+    })
+}
+
 // ---------------------------------------------------------------------------
 // Generators
 // ---------------------------------------------------------------------------
@@ -169,6 +255,7 @@ pub(super) fn generate_quality_status(root: &Path, original: &str) -> Result<Str
 pub(super) fn generate_editor_ux_receipt(root: &Path) -> Result<String> {
     let scenario_files = collect_ux_scenario_files(root);
     let scenario_count = scenario_files.len();
+    let tracking_signals = collect_editor_ux_tracking_signals(root);
 
     let receipt = serde_json::json!({
         "schema_version": 1,
@@ -202,6 +289,7 @@ pub(super) fn generate_editor_ux_receipt(root: &Path) -> Result<String> {
             "status_update": "cargo xtask update-status --only quality",
             "quality_surface": "docs/project/status/quality.md",
         },
+        "tracking_signals": tracking_signals,
     });
 
     serde_json::to_string_pretty(&receipt).context("serializing editor UX receipt")
@@ -280,6 +368,16 @@ mod tests {
             ])
         );
         assert_eq!(receipt["integration_points"]["ci_lane"], "just ux-tests");
+        assert_eq!(
+            receipt["tracking_signals"]["workflow_count"].as_u64(),
+            Some(receipt["harness"]["scenario_count"].as_u64().unwrap_or(0))
+        );
+        assert_eq!(receipt["tracking_signals"]["ci_tier_counts"]["pr"].as_u64(), Some(16));
+        assert_eq!(receipt["tracking_signals"]["ci_tier_counts"]["nightly"].as_u64(), Some(1));
+        assert_eq!(
+            receipt["tracking_signals"]["top_line_metric_coverage"]["workflow_pass_rate"].as_f64(),
+            Some(1.0)
+        );
         Ok(())
     }
 }
