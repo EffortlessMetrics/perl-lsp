@@ -12,9 +12,19 @@
 use super::super::*;
 use crate::protocol::{invalid_params, req_position, req_uri};
 #[cfg(feature = "workspace")]
-use crate::runtime::routing::{IndexAccessMode, route_index_access};
+use crate::runtime::routing::{route_index_access, IndexAccessMode};
 
 impl LspServer {
+    fn is_symbol_char(ch: char) -> bool {
+        ch.is_alphanumeric()
+            || ch == '_'
+            || ch == '$'
+            || ch == '@'
+            || ch == '%'
+            || ch == ':'
+            || ch == '\''
+    }
+
     /// Handle textDocument/prepareRename request
     pub(crate) fn handle_prepare_rename(
         &self,
@@ -292,24 +302,26 @@ impl LspServer {
     /// Get token at position (simple implementation)
     pub(crate) fn get_token_at_position(&self, content: &str, offset: usize) -> String {
         let chars: Vec<char> = content.chars().collect();
-        if offset >= chars.len() {
+        if chars.is_empty() {
             return String::new();
+        }
+        let mut pos = offset.min(chars.len() - 1);
+        if !Self::is_symbol_char(chars[pos]) {
+            if pos > 0 && Self::is_symbol_char(chars[pos - 1]) {
+                pos -= 1;
+            } else {
+                return String::new();
+            }
         }
 
         // Find word boundaries
-        let mut start = offset;
-        while start > 0
-            && (chars[start - 1].is_alphanumeric()
-                || chars[start - 1] == '_'
-                || chars[start - 1] == '$'
-                || chars[start - 1] == '@'
-                || chars[start - 1] == '%')
-        {
+        let mut start = pos;
+        while start > 0 && Self::is_symbol_char(chars[start - 1]) {
             start -= 1;
         }
 
-        let mut end = offset;
-        while end < chars.len() && (chars[end].is_alphanumeric() || chars[end] == '_') {
+        let mut end = pos;
+        while end < chars.len() && Self::is_symbol_char(chars[end]) {
             end += 1;
         }
 
@@ -319,27 +331,61 @@ impl LspServer {
     /// Get the bounds of the token at the given position
     pub(crate) fn get_token_bounds(&self, content: &str, offset: usize) -> (usize, usize) {
         let chars: Vec<char> = content.chars().collect();
-        if offset >= chars.len() {
+        if chars.is_empty() {
             return (offset, offset);
+        }
+        let mut pos = offset.min(chars.len() - 1);
+        if !Self::is_symbol_char(chars[pos]) {
+            if pos > 0 && Self::is_symbol_char(chars[pos - 1]) {
+                pos -= 1;
+            } else {
+                return (offset, offset);
+            }
         }
 
         // Find word boundaries
-        let mut start = offset;
-        while start > 0
-            && (chars[start - 1].is_alphanumeric()
-                || chars[start - 1] == '_'
-                || chars[start - 1] == '$'
-                || chars[start - 1] == '@'
-                || chars[start - 1] == '%')
-        {
+        let mut start = pos;
+        while start > 0 && Self::is_symbol_char(chars[start - 1]) {
             start -= 1;
         }
 
-        let mut end = offset;
-        while end < chars.len() && (chars[end].is_alphanumeric() || chars[end] == '_') {
+        let mut end = pos;
+        while end < chars.len() && Self::is_symbol_char(chars[end]) {
             end += 1;
         }
 
         (start, end)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn token_at_position_includes_sigil_when_cursor_on_sigil() {
+        let server = LspServer::new();
+        let content = "my $value = 1;";
+        let offset = content.find('$').unwrap_or(0);
+        let token = server.get_token_at_position(content, offset);
+        assert_eq!(token, "$value");
+    }
+
+    #[test]
+    fn token_bounds_include_sigil_when_cursor_on_sigil() {
+        let server = LspServer::new();
+        let content = "my $value = 1;";
+        let sigil_offset = content.find('$').unwrap_or(0);
+        let (start, end) = server.get_token_bounds(content, sigil_offset);
+        assert_eq!(&content[start..end], "$value");
+    }
+
+    #[test]
+    fn token_at_position_handles_qualified_package_symbols() {
+        let server = LspServer::new();
+        let content = "my $x = Foo::Bar::run();";
+        let offset = content.find("Bar").unwrap_or(0);
+        let token = server.get_token_at_position(content, offset);
+        assert_eq!(token, "Foo::Bar::run");
     }
 }
