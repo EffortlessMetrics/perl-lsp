@@ -496,6 +496,97 @@ my $also = process_data();
 
 #[test]
 #[serial]
+fn bdd_imported_subroutine_navigation_across_modules() -> Result<(), Box<dyn std::error::Error>> {
+    let scenario = BddScenario::new("Imported subroutine navigation across modules");
+
+    let utils_module = r#"package MyApp::Utils;
+use strict;
+use warnings;
+use Exporter 'import';
+
+our @EXPORT_OK = qw(format_date);
+
+sub format_date {
+    my ($value) = @_;
+    return $value;
+}
+
+1;
+"#;
+
+    let main_script = r#"use strict;
+use warnings;
+use lib './lib';
+use MyApp::Utils qw(format_date);
+
+my $result = format_date("2026-04-23");
+"#;
+
+    scenario.given("a workspace where a subroutine is imported from a module");
+    let (mut harness, workspace) =
+        setup_workspace(&[("lib/MyApp/Utils.pm", utils_module), ("bin/main.pl", main_script)])?;
+
+    let utils_uri = workspace.uri("lib/MyApp/Utils.pm");
+    let main_uri = workspace.uri("bin/main.pl");
+
+    harness.open(&utils_uri, utils_module)?;
+    harness.open(&main_uri, main_script)?;
+    harness.wait_for_symbol("format_date", Some(&utils_uri), Duration::from_secs(10))?;
+    harness.barrier();
+
+    scenario.when("requesting go-to-definition on the imported call site");
+    let (call_line, call_character) = find_position(main_script, "format_date(\"2026-04-23\")");
+    let definition = wait_for_definition_uri(
+        &mut harness,
+        &main_uri,
+        call_line,
+        call_character,
+        &utils_uri,
+        Duration::from_secs(10),
+    )?;
+
+    scenario.then("definition resolves to the exporter module");
+    assert_eq!(
+        first_location_uri(&definition),
+        Some(utils_uri.clone()),
+        "imported call should resolve to exporting module"
+    );
+
+    scenario.when("requesting workspace symbols for the imported function name");
+    let symbols = harness.request(
+        "workspace/symbol",
+        json!({
+            "query": "format_date"
+        }),
+    )?;
+
+    scenario.then("workspace symbols include the exporting module symbol");
+    let uris = ref_uris(&symbols);
+    assert!(
+        uri_set_contains(&uris, &utils_uri),
+        "workspace symbols should include exporter module; got {uris:?}"
+    );
+
+    scenario.when("requesting hover on the imported call site");
+    let hover = harness.request(
+        "textDocument/hover",
+        json!({
+            "textDocument": { "uri": main_uri },
+            "position": { "line": call_line, "character": call_character }
+        }),
+    )?;
+
+    scenario.then("hover provides non-empty imported symbol information");
+    assert!(
+        !hover_text(&hover).is_empty(),
+        "hover over imported subroutine should contain details"
+    );
+
+    Ok(())
+}
+
+#[test]
+#[serial]
 fn bdd_rename_updates_workspace_edits() -> Result<(), Box<dyn std::error::Error>> {
     let scenario = BddScenario::new("Rename propagates across workspace");
 
