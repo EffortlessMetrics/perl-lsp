@@ -1077,7 +1077,7 @@ impl SubtreeCache {
 
 #[cfg(test)]
 mod tests {
-    use super::incremental_edit::IncrementalEdit;
+    use super::super::incremental_edit::IncrementalEdit;
     use super::*;
 
     #[test]
