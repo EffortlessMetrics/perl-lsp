@@ -2,6 +2,19 @@
 
 This page is the documentation front door for the `perl-lsp` workspace.
 
+## Diátaxis Quick Chooser
+
+If you are unsure where to look (or where to place new docs), use this table:
+
+| Type | Core question | What belongs here | Avoid |
+|---|---|---|---|
+| Tutorial | "What should I do first to learn this?" | Step-by-step learning paths with expected outcomes | Exhaustive options and edge-case troubleshooting |
+| How-to | "How do I accomplish X right now?" | Goal-driven procedures for one concrete task | Background theory and broad conceptual history |
+| Reference | "What is the exact contract?" | Precise commands, flags, schemas, and capability behavior | Narrative walkthroughs and opinionated workflow advice |
+| Explanation | "Why does it work this way?" | Design rationale, tradeoffs, architecture context | Setup checklists and copy/paste operational recipes |
+
+When adding new content, first pick the user intent (learn, do, look up, or understand), then place the page in the matching section.
+
 ## Start Here
 
 Choose the path that matches what you are trying to do:
@@ -79,8 +92,8 @@ Decision records, project status, and planning documents.
 - [Latency Caps SLO Spec](specs/LATENCY_CAPS_SLO_SPEC.md)
 - [Release Candidate Baseline](specs/RELEASE_CANDIDATE_BASELINE.md)
 
-### Historical Analyses
-Long-form historical writing plus the supporting research notes that fed it.
+### Legacy / Historical (not Diátaxis primary)
+Long-form historical context and research material that supports project memory.
 
 - [Articles and Research Notes](articles/README.md)
 - [Five Eras of AI-Assisted Development](articles/FIVE_ERAS.md)
