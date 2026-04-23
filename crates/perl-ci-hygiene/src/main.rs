@@ -3836,22 +3836,8 @@ fn collect_todo_hits(
 }
 
 fn has_unlinked_todo_in_rust_line(line: &str, token_re: &Regex) -> bool {
-    for (idx, _) in line.match_indices("//") {
-        if is_url_like_hash_comment(line, idx) {
-            continue;
-        }
-        if is_likely_string_literal_comment_start(line, idx) {
-            continue;
-        }
-        if has_unlinked_token(&line[idx + 2..], token_re) {
-            return true;
-        }
-    }
-    for (idx, _) in line.match_indices("/*") {
-        if is_likely_string_literal_comment_start(line, idx) {
-            continue;
-        }
-        if has_unlinked_token(&line[idx + 2..], token_re) {
+    for comment in rust_comment_segments(line) {
+        if has_unlinked_token(comment, token_re) {
             return true;
         }
     }
@@ -3860,6 +3846,112 @@ fn has_unlinked_todo_in_rust_line(line: &str, token_re: &Regex) -> bool {
         return true;
     }
     false
+}
+
+fn rust_comment_segments(line: &str) -> Vec<&str> {
+    let bytes = line.as_bytes();
+    let mut comments = Vec::new();
+    let mut idx = 0usize;
+    let mut in_string = false;
+    let mut in_char = false;
+    let mut raw_hashes: Option<usize> = None;
+
+    while idx < bytes.len() {
+        if let Some(hash_count) = raw_hashes {
+            if bytes[idx] == b'"' && idx + hash_count < bytes.len() {
+                let mut close = true;
+                for hash_offset in 0..hash_count {
+                    if bytes[idx + 1 + hash_offset] != b'#' {
+                        close = false;
+                        break;
+                    }
+                }
+                if close {
+                    raw_hashes = None;
+                    idx += hash_count + 1;
+                }
+            }
+            idx += 1;
+            continue;
+        }
+
+        if in_string {
+            if bytes[idx] == b'\\' {
+                idx = (idx + 2).min(bytes.len());
+                continue;
+            }
+            if bytes[idx] == b'"' {
+                in_string = false;
+            }
+            idx += 1;
+            continue;
+        }
+
+        if in_char {
+            if bytes[idx] == b'\\' {
+                idx = (idx + 2).min(bytes.len());
+                continue;
+            }
+            if bytes[idx] == b'\'' {
+                in_char = false;
+            }
+            idx += 1;
+            continue;
+        }
+
+        if bytes[idx] == b'b' && idx + 1 < bytes.len() && bytes[idx + 1] == b'"' {
+            in_string = true;
+            idx += 2;
+            continue;
+        }
+
+        if bytes[idx] == b'r'
+            || (bytes[idx] == b'b' && idx + 1 < bytes.len() && bytes[idx + 1] == b'r')
+        {
+            let mut cursor = idx + 1;
+            if bytes[idx] == b'b' {
+                cursor += 1;
+            }
+            let mut hash_count = 0usize;
+            while cursor < bytes.len() && bytes[cursor] == b'#' {
+                hash_count += 1;
+                cursor += 1;
+            }
+            if cursor < bytes.len() && bytes[cursor] == b'"' {
+                raw_hashes = Some(hash_count);
+                idx = cursor + 1;
+                continue;
+            }
+        }
+
+        if bytes[idx] == b'"' {
+            in_string = true;
+            idx += 1;
+            continue;
+        }
+
+        if bytes[idx] == b'\'' {
+            in_char = true;
+            idx += 1;
+            continue;
+        }
+
+        if bytes[idx] == b'/' && idx + 1 < bytes.len() {
+            if bytes[idx + 1] == b'/' {
+                comments.push(&line[idx + 2..]);
+                break;
+            }
+            if bytes[idx + 1] == b'*' {
+                comments.push(&line[idx + 2..]);
+                idx += 2;
+                continue;
+            }
+        }
+
+        idx += 1;
+    }
+
+    comments
 }
 
 fn has_unlinked_todo_in_hash_line(line: &str, token_re: &Regex) -> bool {
@@ -3874,21 +3966,6 @@ fn has_unlinked_todo_in_hash_line(line: &str, token_re: &Regex) -> bool {
     } else {
         false
     }
-}
-
-fn is_url_like_hash_comment(line: &str, slash_idx: usize) -> bool {
-    if slash_idx == 0 {
-        return false;
-    }
-    let before = line.as_bytes()[slash_idx - 1];
-    matches!(before, b'/' | b':' | b'"')
-}
-
-fn is_likely_string_literal_comment_start(line: &str, comment_idx: usize) -> bool {
-    if comment_idx == 0 {
-        return false;
-    }
-    matches!(line.as_bytes()[comment_idx - 1], b'"' | b'\'' | b'#')
 }
 
 fn has_unlinked_token(comment: &str, token_re: &Regex) -> bool {
@@ -4160,6 +4237,25 @@ mod tests {
         assert!(!has_unlinked_todo_in_rust_line("let s = r#\"// TODO in literal\"#;", &todo_re));
         assert!(!has_unlinked_todo_in_rust_line(
             "let s = r#\"/* FIXME in literal */\"#;",
+            &todo_re
+        ));
+
+        Ok(())
+    }
+
+    #[test]
+    fn rust_todo_detection_ignores_comment_tokens_inside_string_and_char_literals() -> Result<()> {
+        let todo_re = Regex::new(r"TODO|FIXME")?;
+
+        assert!(!has_unlinked_todo_in_rust_line("let s = \"prefix // TODO suffix\";", &todo_re));
+        assert!(!has_unlinked_todo_in_rust_line(
+            "let s = \"prefix /* FIXME suffix */\";",
+            &todo_re
+        ));
+        assert!(!has_unlinked_todo_in_rust_line("let ch = '/';", &todo_re));
+        assert!(!has_unlinked_todo_in_rust_line("let s = br###\"// TODO in raw\"###;", &todo_re));
+        assert!(has_unlinked_todo_in_rust_line(
+            "let s = \"prefix // TODO suffix\"; // TODO: investigate",
             &todo_re
         ));
 
