@@ -48,6 +48,13 @@ fn number_node(value: &str, start: usize, end: usize) -> Node {
     Node { kind: NodeKind::Number { value: value.to_string() }, location: loc(start, end) }
 }
 
+fn string_node(value: &str, interpolated: bool, start: usize, end: usize) -> Node {
+    Node {
+        kind: NodeKind::String { value: value.to_string(), interpolated },
+        location: loc(start, end),
+    }
+}
+
 fn program(stmts: Vec<Node>) -> Node {
     let end = stmts.last().map_or(0, |n| n.location.end);
     Node { kind: NodeKind::Program { statements: stmts }, location: loc(0, end) }
@@ -214,6 +221,30 @@ fn use_if_strict_conditionally_enables_strict() -> Result<(), Box<dyn std::error
 #[test]
 fn use_if_version_target_applies_version_semantics() -> Result<(), Box<dyn std::error::Error>> {
     let ast = program(vec![use_node("if", &["$]", ">=", "5.034", "v5.40"], 0, 28)]);
+    let map = PragmaTracker::build(&ast);
+    let state = &map[0].1;
+
+    assert!(state.strict_vars, "v5.40 should imply strict");
+    assert!(state.warnings, "v5.40 should imply warnings");
+    assert!(state.has_feature("builtin"), "v5.40 should imply builtin feature bundle");
+    Ok(())
+}
+
+#[test]
+fn use_unless_strict_conditionally_enables_strict() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![use_node("unless", &["$already_strict", "'strict'"], 0, 38)]);
+    let map = PragmaTracker::build(&ast);
+    let state = &map[0].1;
+
+    assert!(state.strict_vars);
+    assert!(state.strict_subs);
+    assert!(state.strict_refs);
+    Ok(())
+}
+
+#[test]
+fn use_unless_version_target_applies_version_semantics() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![use_node("unless", &["$]", "<", "5.036", "v5.40"], 0, 31)]);
     let map = PragmaTracker::build(&ast);
     let state = &map[0].1;
 
@@ -1406,6 +1437,23 @@ fn do_node(body_node: Node, start: usize, end: usize) -> Node {
 
 fn defer_node(body_node: Node, start: usize, end: usize) -> Node {
     Node { kind: NodeKind::Defer { block: Box::new(body_node) }, location: loc(start, end) }
+}
+
+#[test]
+fn eval_string_is_conservative_and_does_not_enable_pragmas()
+-> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![
+        eval_node(string_node("use strict; use warnings;", false, 5, 33), 0, 33),
+        dummy_node(34, 40),
+    ]);
+    let map = PragmaTracker::build(&ast);
+
+    let state = PragmaTracker::state_for_offset(&map, 39);
+    assert!(!state.strict_vars, "eval STRING must not assume strict is enabled");
+    assert!(!state.strict_subs, "eval STRING must not assume strict is enabled");
+    assert!(!state.strict_refs, "eval STRING must not assume strict is enabled");
+    assert!(!state.warnings, "eval STRING must not assume warnings are enabled");
+    Ok(())
 }
 
 fn try_node(
