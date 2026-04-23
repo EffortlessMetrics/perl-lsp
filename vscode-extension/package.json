@@ -75,12 +75,9 @@
         ],
         "extensions": [
           ".pl",
-<<<<<<< HEAD
+          ".PL",
           ".cgi",
           ".fcgi",
-=======
-          ".PL",
->>>>>>> b31fdcec3 (feat(vscode): add .PL extension, filenames, perl5 activation event (#0000))
           ".pm",
           ".xs",
           ".xsi",
