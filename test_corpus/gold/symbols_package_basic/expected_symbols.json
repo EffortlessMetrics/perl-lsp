@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "fixture": "symbols_package_basic",
+  "assertions": [
+    {
+      "kind": "symbols_non_empty",
+      "rationale": "document with packages and subs should return non-empty symbol list"
+    },
+    {
+      "kind": "symbols_package_present",
+      "name": "My::Module",
+      "rationale": "package declaration should appear as a symbol"
+    },
+    {
+      "kind": "symbols_subroutine_present",
+      "name": "my_function",
+      "rationale": "named subroutine should appear as function symbol"
+    },
+    {
+      "kind": "symbols_subroutine_present",
+      "name": "another_method",
+      "rationale": "second subroutine should appear as function symbol"
+    },
+    {
+      "kind": "symbols_variable_present",
+      "name": "$scalar_var",
+      "rationale": "my scalar variable should appear as variable symbol"
+    },
+    {
+      "kind": "symbols_count_at_least",
+      "min": 5,
+      "rationale": "document should have at least 5 top-level symbols (1 package + 2 subs + 1 scalar + at least 1 more)"
+    }
+  ]
+}

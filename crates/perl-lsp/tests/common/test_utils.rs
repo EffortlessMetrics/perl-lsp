@@ -314,6 +314,33 @@ impl TestServer {
         )
     }
 
+    /// Request prepareRename at a position (LSP 3.12.0+)
+    ///
+    /// RED TEST STUB: Returns null until code-builder implements rename support.
+    pub fn prepare_rename(&self, uri: &str, line: u32, character: u32) -> Value {
+        self.request(
+            "textDocument/prepareRename",
+            json!({
+                "textDocument": { "uri": uri },
+                "position": { "line": line, "character": character }
+            }),
+        )
+    }
+
+    /// Request rename at a position with a new name
+    ///
+    /// RED TEST STUB: Returns null until code-builder implements rename support.
+    pub fn rename(&self, uri: &str, line: u32, character: u32, new_name: &str) -> Value {
+        self.request(
+            "textDocument/rename",
+            json!({
+                "textDocument": { "uri": uri },
+                "position": { "line": line, "character": character },
+                "newName": new_name
+            }),
+        )
+    }
+
     /// Shutdown the server gracefully
     pub fn shutdown(self) {
         super::shutdown_and_exit(&self.server);

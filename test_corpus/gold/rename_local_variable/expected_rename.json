@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "fixture": "rename_local_variable",
+  "assertions": [
+    {
+      "kind": "rename_prepare_valid",
+      "line": 5,
+      "character": 4,
+      "new_name": "new_counter",
+      "rationale": "prepareRename should return valid range at my declaration"
+    },
+    {
+      "kind": "rename_changes_contain_text",
+      "line": 5,
+      "character": 4,
+      "new_name": "new_counter",
+      "expected_text": "new_counter",
+      "rationale": "rename should produce WorkspaceEdit containing the new name"
+    },
+    {
+      "kind": "rename_changes_match_count",
+      "line": 5,
+      "character": 4,
+      "new_name": "new_counter",
+      "expected_count": 1,
+      "rationale": "my is local to calculate() so rename should only touch 1 file"
+    },
+    {
+      "kind": "rename_non_null",
+      "line": 5,
+      "character": 4,
+      "new_name": "new_counter",
+      "rationale": "rename of my declaration should return non-null WorkspaceEdit"
+    }
+  ]
+}

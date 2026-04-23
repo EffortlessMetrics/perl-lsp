@@ -378,6 +378,198 @@ pub fn load_completion_gold_fixtures<P: AsRef<Path>>(
     Ok(fixtures)
 }
 
+// ---------------------------------------------------------------------------
+// Editor Intelligence — Document Symbols (STUBS — RED TEST REQUIRED)
+// ---------------------------------------------------------------------------
+
+/// Assertion kind for document symbols gold corpus entries
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case", tag = "kind")]
+pub enum SymbolsAssertionKind {
+    /// Document symbols list must not be empty
+    SymbolsNonEmpty,
+    /// Document symbols list must be empty
+    SymbolsEmpty,
+    /// A symbol with the given name must be present
+    SymbolsContains { name: String },
+    /// A symbol with the given name must NOT be present
+    SymbolsAbsent { name: String },
+    /// A symbol with the given name must have the expected LSP SymbolKind
+    SymbolsKindMatches { name: String, expected_kind: i64 },
+    /// Document must have at least N top-level symbols
+    SymbolsCountAtLeast { min: usize },
+    /// Document must have at most N top-level symbols
+    SymbolsCountAtMost { max: usize },
+    /// A package symbol with the given name must be present (kind 4 or 2)
+    SymbolsPackagePresent { name: String },
+    /// A subroutine/function symbol with the given name must be present (kind 12)
+    SymbolsSubroutinePresent { name: String },
+    /// A variable symbol with the given name must be present (kind 13)
+    SymbolsVariablePresent { name: String },
+}
+
+/// A single document symbols assertion (no position needed — whole-document query)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(expecting = "a document symbols assertion")]
+pub struct SymbolsAssertion {
+    #[serde(flatten)]
+    pub kind: SymbolsAssertionKind,
+}
+
+/// On-disk representation of `expected_symbols.json`
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SymbolsGoldExpected {
+    pub version: u32,
+    pub fixture: String,
+    pub assertions: Vec<SymbolsAssertion>,
+}
+
+/// A document symbols gold fixture (fixture.pl + expected_symbols.json)
+#[derive(Debug, Clone)]
+pub struct SymbolsGoldFixture {
+    pub name: String,
+    pub fixture_path: PathBuf,
+    pub symbols_assertions: Vec<SymbolsAssertion>,
+}
+
+/// Load all document symbols gold fixtures from a directory.
+///
+/// Silently skips directories that lack `expected_symbols.json`.
+pub fn load_symbols_gold_fixtures<P: AsRef<Path>>(
+    root: P,
+) -> Result<Vec<SymbolsGoldFixture>, Box<dyn std::error::Error>> {
+    let root = root.as_ref();
+    let mut fixtures = Vec::new();
+
+    if !root.exists() {
+        return Err(format!("Gold fixtures directory not found: {}", root.display()).into());
+    }
+
+    for entry in fs::read_dir(root)? {
+        let entry = entry?;
+        let path = entry.path();
+
+        if !path.is_dir() {
+            continue;
+        }
+
+        let fixture_path = path.join("fixture.pl");
+        let symbols_path = path.join("expected_symbols.json");
+
+        if !fixture_path.exists() || !symbols_path.exists() {
+            continue;
+        }
+
+        let name = path.file_name().ok_or("No directory name")?.to_string_lossy().to_string();
+        let json = fs::read_to_string(&symbols_path)?;
+        let expected: SymbolsGoldExpected = serde_json::from_str(&json)
+            .map_err(|e| format!("Parsing {}: {e}", symbols_path.display()))?;
+
+        fixtures.push(SymbolsGoldFixture {
+            name,
+            fixture_path,
+            symbols_assertions: expected.assertions,
+        });
+    }
+
+    fixtures.sort_by(|a, b| a.name.cmp(&b.name));
+    Ok(fixtures)
+}
+
+// ---------------------------------------------------------------------------
+// Editor Intelligence — Rename (STUBS — RED TEST REQUIRED)
+// ---------------------------------------------------------------------------
+
+/// Assertion kind for rename gold corpus entries
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case", tag = "kind")]
+pub enum RenameAssertionKind {
+    /// Rename must return non-null WorkspaceEdit for renamable symbols
+    RenameNonNull,
+    /// Rename must return null for non-renamable positions
+    RenameNull,
+    /// prepareRename must return a valid range at renamable positions
+    RenamePrepareValid,
+    /// prepareRename must return null at non-renamable positions
+    RenamePrepareNull,
+    /// WorkspaceEdit changes must contain the expected text
+    RenameChangesContainText { expected_text: String },
+    /// WorkspaceEdit must touch the expected number of distinct file URIs
+    RenameChangesMatchCount { expected_count: usize },
+}
+
+/// A single rename assertion at a given (line, character) position
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RenameAssertion {
+    #[serde(flatten)]
+    pub kind: RenameAssertionKind,
+    pub line: u32,
+    pub character: u32,
+    pub new_name: String,
+    #[serde(default)]
+    pub rationale: String,
+}
+
+/// On-disk representation of `expected_rename.json`
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RenameGoldExpected {
+    pub version: u32,
+    pub fixture: String,
+    pub assertions: Vec<RenameAssertion>,
+}
+
+/// A rename gold fixture (fixture.pl + expected_rename.json)
+#[derive(Debug, Clone)]
+pub struct RenameGoldFixture {
+    pub name: String,
+    pub fixture_path: PathBuf,
+    pub rename_assertions: Vec<RenameAssertion>,
+}
+
+/// Load all rename gold fixtures from a directory.
+///
+/// Silently skips directories that lack `expected_rename.json`.
+pub fn load_rename_gold_fixtures<P: AsRef<Path>>(
+    root: P,
+) -> Result<Vec<RenameGoldFixture>, Box<dyn std::error::Error>> {
+    let root = root.as_ref();
+    let mut fixtures = Vec::new();
+
+    if !root.exists() {
+        return Err(format!("Gold fixtures directory not found: {}", root.display()).into());
+    }
+
+    for entry in fs::read_dir(root)? {
+        let entry = entry?;
+        let path = entry.path();
+
+        if !path.is_dir() {
+            continue;
+        }
+
+        let fixture_path = path.join("fixture.pl");
+        let rename_path = path.join("expected_rename.json");
+
+        if !fixture_path.exists() || !rename_path.exists() {
+            continue;
+        }
+
+        let name = path.file_name().ok_or("No directory name")?.to_string_lossy().to_string();
+        let json = fs::read_to_string(&rename_path)?;
+        let expected: RenameGoldExpected = serde_json::from_str(&json)
+            .map_err(|e| format!("Parsing {}: {e}", rename_path.display()))?;
+
+        fixtures.push(RenameGoldFixture {
+            name,
+            fixture_path,
+            rename_assertions: expected.assertions,
+        });
+    }
+
+    fixtures.sort_by(|a, b| a.name.cmp(&b.name));
+    Ok(fixtures)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
