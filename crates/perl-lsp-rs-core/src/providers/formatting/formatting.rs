@@ -9,8 +9,8 @@ pub use perl_lsp_perltidy::PerlTidyConfig;
 
 /// Count the number of UTF-16 code units in `s`.
 ///
-/// LSP positions use UTF-16 code units (see Language Server Protocol spec §3.1).
-/// Characters in the Basic Multilingual Plane (U+0000–U+FFFF) count as 1 unit;
+/// LSP positions use UTF-16 code units (see Language Server Protocol spec Â§3.1).
+/// Characters in the Basic Multilingual Plane (U+0000â€“U+FFFF) count as 1 unit;
 /// supplementary-plane characters (U+10000 and above) count as 2 units.
 fn utf16_len(s: &str) -> usize {
     s.chars().map(|c| if c as u32 >= 0x10000 { 2 } else { 1 }).sum()
@@ -27,7 +27,7 @@ pub enum FormattingError {
 
     /// Error occurred during perltidy execution.
     ///
-    /// This usually means perltidy ran but reported a problem — check that the
+    /// This usually means perltidy ran but reported a problem â€” check that the
     /// Perl code is syntactically valid, or inspect the perltidy output below.
     #[error("perltidy error (check Perl syntax): {0}")]
     PerltidyError(String),
@@ -235,7 +235,7 @@ fn apply_lsp_whitespace_options(content: &str, options: &FormattingOptions) -> S
     }
 
     if options.trim_final_newlines.unwrap_or(false) {
-        while output.ends_with("\n\n") {
+        while output.ends_with('\n') {
             output.pop();
         }
     }
@@ -311,4 +311,30 @@ mod tests {
         let result = provider.format_document("my $x = 1;\n", &options);
         assert!(matches!(result, Err(FormattingError::PerltidyNotFound(_))));
     }
-}
+    #[test]
+    fn apply_lsp_whitespace_options_trim_final_newlines_removes_all_trailing_newlines() {
+        // Regression: previous implementation used ends_with("
+
+") which left
+        // one trailing newline. LSP trimFinalNewlines must remove ALL trailing newlines.
+        let options = FormattingOptions {
+            tab_size: 4,
+            insert_spaces: true,
+            trim_trailing_whitespace: None,
+            insert_final_newline: None,
+            trim_final_newlines: Some(true),
+        };
+        let r = apply_lsp_whitespace_options("content
+", &options);
+        assert_eq!(r, "content");
+        let r = apply_lsp_whitespace_options("content
+
+", &options);
+        assert_eq!(r, "content");
+        let r = apply_lsp_whitespace_options("content
+
+
+", &options);
+        assert_eq!(r, "content");
+    }
+}}
