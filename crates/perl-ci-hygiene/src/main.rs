@@ -3904,13 +3904,42 @@ fn has_unlinked_todo_in_rust_line_with_state(
 }
 
 fn find_block_comment_end(line: &str, start_idx: usize) -> Option<usize> {
-    for (rel_idx, _) in line[start_idx..].match_indices("*/") {
-        let idx = start_idx + rel_idx;
-        if is_index_in_rust_literal(line, idx, None) {
-            continue;
+    let mut depth = 1usize;
+    let mut cursor = start_idx;
+
+    while cursor < line.len() {
+        let next_open = line[cursor..]
+            .match_indices("/*")
+            .map(|(rel_idx, _)| cursor + rel_idx)
+            .find(|&idx| !is_index_in_rust_literal(line, idx, None));
+        let next_close = line[cursor..]
+            .match_indices("*/")
+            .map(|(rel_idx, _)| cursor + rel_idx)
+            .find(|&idx| !is_index_in_rust_literal(line, idx, None));
+
+        match (next_open, next_close) {
+            (_, None) => return None,
+            (None, Some(close_idx)) => {
+                depth -= 1;
+                if depth == 0 {
+                    return Some(close_idx);
+                }
+                cursor = close_idx + 2;
+            }
+            (Some(open_idx), Some(close_idx)) if open_idx < close_idx => {
+                depth += 1;
+                cursor = open_idx + 2;
+            }
+            (_, Some(close_idx)) => {
+                depth -= 1;
+                if depth == 0 {
+                    return Some(close_idx);
+                }
+                cursor = close_idx + 2;
+            }
         }
-        return Some(idx);
     }
+
     None
 }
 
@@ -4689,6 +4718,22 @@ mod tests {
             &mut in_block_comment,
         ));
         assert!(!in_block_comment);
+
+        Ok(())
+    }
+
+    #[test]
+    fn rust_todo_detection_handles_nested_block_comments() -> Result<()> {
+        let todo_re = Regex::new(r"TODO|FIXME")?;
+
+        assert!(has_unlinked_todo_in_rust_line(
+            "let x = 1; /* outer /* nested */ TODO: follow up */",
+            &todo_re
+        ));
+        assert!(!has_unlinked_todo_in_rust_line(
+            "let x = 1; /* outer /* nested */ TODO(#42): tracked */",
+            &todo_re
+        ));
 
         Ok(())
     }
