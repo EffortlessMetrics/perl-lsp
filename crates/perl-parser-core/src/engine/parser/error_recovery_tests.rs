@@ -435,7 +435,7 @@ fn test_no_recovery_for_my_code_eq_anon_sub() {
     let mut parser = Parser::new(code);
     let result = parser.parse();
 
-    assert!(result.is_ok(), "Parser should accept `my $var = sub { ... };`");
+    assert!(result.is_ok(), "Parser should accept `my $var = sub {{...}};`");
     let ast = must(result);
 
     if let NodeKind::Program { statements } = &ast.kind {
@@ -450,10 +450,7 @@ fn test_no_recovery_for_my_code_eq_anon_sub() {
             !sexp.contains("missing_expression"),
             "RHS anonymous sub must not produce MissingExpression: {sexp}"
         );
-        assert!(
-            !sexp.contains("error"),
-            "RHS anonymous sub must not produce Error nodes: {sexp}"
-        );
+        assert!(!sexp.contains("error"), "RHS anonymous sub must not produce Error nodes: {sexp}");
     } else {
         unreachable!("Expected program root");
     }
