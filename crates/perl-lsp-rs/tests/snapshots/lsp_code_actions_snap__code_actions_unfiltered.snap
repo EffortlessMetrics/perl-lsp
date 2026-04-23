@@ -1,0 +1,44 @@
+---
+source: crates/perl-lsp-rs/tests/lsp_code_actions_snap.rs
+expression: normalized
+---
+- has_command: false
+  has_edit: true
+  kind: quickfix
+  title: "Add 'package main;' declaration"
+- has_command: false
+  has_edit: true
+  kind: quickfix
+  title: Remove unused variable
+- has_command: false
+  has_edit: true
+  kind: quickfix
+  title: "Remove unused variable '$fh'"
+- has_command: false
+  has_edit: true
+  kind: quickfix
+  title: "Rename to '$_fh' (mark as intentionally unused)"
+- has_command: false
+  has_edit: true
+  kind: quickfix
+  title: "Rename to '_$fh'"
+- has_command: false
+  has_edit: true
+  kind: refactor.rewrite
+  title: "Add error checking to 'open'"
+- has_command: false
+  has_edit: true
+  kind: refactor.rewrite
+  title: "Add error checking to 'open'"
+- has_command: false
+  has_edit: true
+  kind: source.fixAll
+  title: Fix all auto-fixable issues
+- has_command: false
+  has_edit: true
+  kind: source.organizeImports
+  title: Organize imports
+- has_command: false
+  has_edit: true
+  kind: source.organizeImports
+  title: Organize imports
