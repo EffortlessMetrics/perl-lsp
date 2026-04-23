@@ -117,7 +117,13 @@ impl Parser {
     /// versions will use it to skip unchanged regions.
     ///
     /// Returns `None` on complete parse failure (same semantics as `parse`).
-    pub fn parse_with_old_tree(&mut self, source: &str, _old_tree: &Tree) -> Option<Tree> {
+    pub fn parse_with_old_tree(&mut self, source: &str, old_tree: &Tree) -> Option<Tree> {
+        // Fast path: if source is unchanged and no edits were recorded, reuse the old tree
+        // instead of re-parsing. This mirrors tree-sitter's incremental no-op behavior.
+        if source == old_tree.source() && old_tree.pending_edits.is_empty() {
+            return Some(old_tree.clone());
+        }
+
         self.parse(source)
     }
 }
@@ -184,6 +190,7 @@ pub static LANGUAGE: PerlLanguage = PerlLanguage { kind_names: perl_ast::NodeKin
 /// The result of a successful parse: an owned syntax tree and the source text.
 ///
 /// Use [`root_node`][Tree::root_node] to begin traversal.
+#[derive(Debug, Clone, PartialEq)]
 pub struct Tree {
     root: AstNode,
     source: String,
@@ -457,7 +464,7 @@ mod tests {
         let text = root.utf8_text(source.as_bytes());
         assert!(text.is_ok(), "utf8_text should succeed");
         // The root node spans the whole source — verify the actual content, not just Ok.
-        let extracted = text.unwrap();
+        let extracted = must_some(text.ok());
         assert_eq!(extracted, source, "utf8_text should return the full source for the root node");
     }
 
