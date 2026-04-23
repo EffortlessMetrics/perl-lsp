@@ -5,8 +5,18 @@
 
 use std::path::{Component, Path};
 
-const SKIPPED_DIRS: [&str; 9] =
-    [".git", ".hg", ".svn", "target", "node_modules", ".cache", "blib", "local", "vendor"];
+const SKIPPED_DIRS: [&str; 10] = [
+    ".git",
+    ".hg",
+    ".svn",
+    "target",
+    "node_modules",
+    ".cache",
+    "blib",
+    "local",
+    "vendor",
+    ".hermes",
+];
 
 /// Returns true when `name` matches one of the canonical workspace noise directories.
 #[must_use]
@@ -75,6 +85,11 @@ mod tests {
     }
 
     #[test]
+    fn test_skipped_dir_name_hermes_matches() {
+        assert!(is_skipped_dir_name(".hermes"));
+    }
+
+    #[test]
     fn test_skipped_dir_name_all_canonical_patterns() {
         // Verify every entry in the constant is recognized
         for name in &SKIPPED_DIRS {
@@ -84,7 +99,7 @@ mod tests {
 
     #[test]
     fn test_skipped_dir_name_constant_has_expected_count() {
-        assert_eq!(SKIPPED_DIRS.len(), 9);
+        assert_eq!(SKIPPED_DIRS.len(), 10);
     }
 
     // ── is_skipped_dir_name: non-matching names ────────────────────────

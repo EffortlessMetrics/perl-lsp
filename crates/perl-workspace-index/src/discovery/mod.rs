@@ -229,14 +229,14 @@ mod tests {
     #[test]
     fn parses_git_output_and_filters_entries() {
         let root = Path::new("/tmp/workspace");
-        let payload = b"lib/Foo.pm\0README.md\0node_modules/pkg.pm\0script.pl\0";
+        let payload = b"lib/Foo.pm\0README.md\0node_modules/pkg.pm\0.hermes/scripts/tool.pl\0script.pl\0";
 
         let (files, excluded_count) = parse_git_ls_files_output(root, payload);
 
         assert_eq!(files.len(), 2);
         assert!(files.iter().any(|path| path.ends_with("lib/Foo.pm")));
         assert!(files.iter().any(|path| path.ends_with("script.pl")));
-        assert_eq!(excluded_count, 2);
+        assert_eq!(excluded_count, 3);
     }
 
     #[test]
@@ -550,7 +550,7 @@ mod tests {
     }
 
     #[test]
-    fn walk_discovery_skips_all_six_noise_directories() -> TestResult {
+    fn walk_discovery_skips_all_noise_directories() -> TestResult {
         let tmp = tempfile::tempdir()?;
         let root = tmp.path();
 
@@ -560,6 +560,7 @@ mod tests {
         create_file(root, "target/build/out.pm")?;
         create_file(root, "node_modules/dep.pm")?;
         create_file(root, ".cache/fast.pm")?;
+        create_file(root, ".hermes/conveyor/work-1/prompt.pl")?;
         create_file(root, "lib/Visible.pm")?;
 
         let result = walk_discovery(root, Instant::now());
