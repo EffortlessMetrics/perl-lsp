@@ -32,10 +32,10 @@ fn scenario_19_declaration_request_does_not_error() -> Result<()> {
         UxHarness::new(ScenarioConfig::default().with_file("declaration.pl", DECLARATION_FIXTURE))?;
 
     harness.open_file("declaration.pl", DECLARATION_FIXTURE)?;
-    // `inc` in `inc($value)`
-    let sub_result = harness.declaration("declaration.pl", 9, 13);
-    // `$value` in `inc($value)`
-    let variable_result = harness.declaration("declaration.pl", 9, 17);
+    // `inc` in `inc($value)` — line 10 (0-indexed), column 13 (`my $result = ` is 13 chars)
+    let sub_result = harness.declaration("declaration.pl", 10, 13);
+    // `$value` in `inc($value)` — line 10 (0-indexed), column 17 (`my $result = inc(` is 17 chars)
+    let variable_result = harness.declaration("declaration.pl", 10, 17);
 
     assert!(
         sub_result.is_ok(),
@@ -53,12 +53,13 @@ fn scenario_19_declaration_request_does_not_error() -> Result<()> {
 }
 
 #[test]
-fn scenario_18_declaration_result_is_location_or_empty() -> Result<()> {
+fn scenario_19_declaration_result_is_location_or_empty() -> Result<()> {
     let harness =
         UxHarness::new(ScenarioConfig::default().with_file("declaration.pl", DECLARATION_FIXTURE))?;
 
     harness.open_file("declaration.pl", DECLARATION_FIXTURE)?;
-    let declarations = harness.declaration("declaration.pl", 9, 13)?;
+    // `inc` in `inc($value)` — line 10 (0-indexed), column 13
+    let declarations = harness.declaration("declaration.pl", 10, 13)?;
 
     for entry in declarations {
         let is_link = entry.get("targetUri").is_some() && entry.get("targetRange").is_some();
