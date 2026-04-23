@@ -13,6 +13,12 @@ use serde_json::json;
 static PACKAGE_RE: Lazy<Option<Regex>> = Lazy::new(|| Regex::new(r"^\s*package\s+([\w:]+)").ok());
 /// Matches subroutine definitions: `sub foo`
 static SUB_RE: Lazy<Option<Regex>> = Lazy::new(|| Regex::new(r"^\s*sub\s+(\w+)").ok());
+/// Matches lexical/package variable declarations: `my $x`, `our @items`, `state %cache`
+static VAR_DECL_RE: Lazy<Option<Regex>> =
+    Lazy::new(|| Regex::new(r"^\s*(?:my|our|state)\s+([\$\@\%]\w+)").ok());
+/// Matches constant declarations: `use constant NAME => ...`
+static CONSTANT_RE: Lazy<Option<Regex>> =
+    Lazy::new(|| Regex::new(r"^\s*use\s+constant\s+([A-Z_]\w*)\b").ok());
 
 /// Extract code lenses from text when AST parsing fails
 pub fn extract_text_based_code_lenses(
@@ -151,6 +157,66 @@ pub fn extract_text_based_symbols(
         }
     }
 
+    // Find variable declarations
+    for (line_num, line) in text.lines().enumerate() {
+        if let Some(captures) = VAR_DECL_RE.as_ref().and_then(|re| re.captures(line)) {
+            if let Some(var_name) = captures.get(1) {
+                let name = var_name.as_str().to_string();
+                if name.to_lowercase().contains(&query_lower) {
+                    symbols.push(LspWorkspaceSymbol {
+                        name,
+                        kind: 13, // Variable
+                        location: WireLocation::new(
+                            uri.to_string(),
+                            WireRange::new(
+                                WirePosition::new(
+                                    line_num as u32,
+                                    byte_to_utf16_col(line, var_name.start()) as u32,
+                                ),
+                                WirePosition::new(
+                                    line_num as u32,
+                                    byte_to_utf16_col(line, var_name.end()) as u32,
+                                ),
+                            ),
+                        ),
+                        container_name: None,
+                        workspace_folder_uri: None,
+                    });
+                }
+            }
+        }
+    }
+
+    // Find constant declarations
+    for (line_num, line) in text.lines().enumerate() {
+        if let Some(captures) = CONSTANT_RE.as_ref().and_then(|re| re.captures(line)) {
+            if let Some(const_name) = captures.get(1) {
+                let name = const_name.as_str().to_string();
+                if name.to_lowercase().contains(&query_lower) {
+                    symbols.push(LspWorkspaceSymbol {
+                        name,
+                        kind: 14, // Constant
+                        location: WireLocation::new(
+                            uri.to_string(),
+                            WireRange::new(
+                                WirePosition::new(
+                                    line_num as u32,
+                                    byte_to_utf16_col(line, const_name.start()) as u32,
+                                ),
+                                WirePosition::new(
+                                    line_num as u32,
+                                    byte_to_utf16_col(line, const_name.end()) as u32,
+                                ),
+                            ),
+                        ),
+                        container_name: None,
+                        workspace_folder_uri: None,
+                    });
+                }
+            }
+        }
+    }
+
     symbols
 }
 
@@ -275,6 +341,26 @@ fn count_braces_in_line(line: &str) -> (usize, usize) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(feature = "workspace")]
+    #[test]
+    fn test_workspace_symbol_fallback_extracts_variables_and_constants() {
+        let src = r#"
+my $local_var = 1;
+our @global_items = ();
+state %cache = ();
+use constant MAX_RETRY => 3;
+sub helper {}
+"#;
+        let symbols = extract_text_based_symbols(src, "file:///test.pl", "");
+        let names: Vec<&str> = symbols.iter().map(|s| s.name.as_str()).collect();
+
+        assert!(names.contains(&"$local_var"));
+        assert!(names.contains(&"@global_items"));
+        assert!(names.contains(&"%cache"));
+        assert!(names.contains(&"MAX_RETRY"));
+        assert!(names.contains(&"helper"));
+    }
 
     #[test]
     fn test_folding_single_sub() {
