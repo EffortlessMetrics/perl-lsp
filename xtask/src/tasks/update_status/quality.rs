@@ -5,11 +5,18 @@
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
+use std::sync::LazyLock;
 use std::time::Duration;
 
 use color_eyre::eyre::{Context, Result};
+use regex::Regex;
 
 use super::{replace_block, run_cmd};
+
+static README_ISSUE_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"https://github\.com/EffortlessMetrics/perl-lsp/issues/(\d+)")
+        .expect("README issue link regex must compile")
+});
 
 // ---------------------------------------------------------------------------
 // Metric collectors
@@ -122,6 +129,24 @@ pub(super) fn count_ux_scenarios(root: &Path) -> usize {
     collect_ux_scenario_files(root).len()
 }
 
+pub(super) fn collect_ux_known_gap_issue_refs(readme: &str) -> Vec<String> {
+    let Some(known_gaps_start) = readme.find("### Known gaps toward solid UX") else {
+        return Vec::new();
+    };
+    let known_gaps = &readme[known_gaps_start..];
+    let section_end = known_gaps
+        .find("\n#### What shipped this cycle")
+        .or_else(|| known_gaps.find("\n## "))
+        .unwrap_or(known_gaps.len());
+    let known_gaps = &known_gaps[..section_end];
+
+    let mut refs = std::collections::BTreeSet::new();
+    for caps in README_ISSUE_RE.captures_iter(known_gaps) {
+        refs.insert(format!("#{}", &caps[1]));
+    }
+    refs.into_iter().collect()
+}
+
 // ---------------------------------------------------------------------------
 // Generators
 // ---------------------------------------------------------------------------
@@ -130,6 +155,8 @@ pub(super) fn generate_quality_status(root: &Path, original: &str) -> Result<Str
     let mutation_by_crate = collect_per_crate_mutation(root);
     let tests_by_crate = collect_per_crate_test_counts(root);
     let ux_scenarios = count_ux_scenarios(root);
+    let readme = fs::read_to_string(root.join("README.md")).unwrap_or_default();
+    let ux_known_gap_issues = collect_ux_known_gap_issue_refs(&readme);
 
     let has_mutation_data = !mutation_by_crate.is_empty();
     let mutation_note = if has_mutation_data {
@@ -144,8 +171,11 @@ pub(super) fn generate_quality_status(root: &Path, original: &str) -> Result<Str
            `just ux-tests` runs the default release-confidence lane and `just ux-tests-full` adds \
            the integration-only 10k-line large-file case; planning scaffold at \
            `docs/project/status/editor_ux.json`\n\
+         - **UX open-issue burn-down**: {} tracked README known-gap issue references \
+           (auto-extracted from `README.md`)\n\
          - **Mutation testing**: {mutation_note}\n\
-         - **Production Status**: LSP server public alpha (`just ci-gate` passing)"
+         - **Production Status**: LSP server public alpha (`just ci-gate` passing)",
+        ux_known_gap_issues.len()
     );
 
     let crate_table = format_crate_quality_table(&mutation_by_crate, &tests_by_crate);
@@ -169,6 +199,8 @@ pub(super) fn generate_quality_status(root: &Path, original: &str) -> Result<Str
 pub(super) fn generate_editor_ux_receipt(root: &Path) -> Result<String> {
     let scenario_files = collect_ux_scenario_files(root);
     let scenario_count = scenario_files.len();
+    let readme = fs::read_to_string(root.join("README.md")).unwrap_or_default();
+    let ux_known_gap_issues = collect_ux_known_gap_issue_refs(&readme);
 
     let receipt = serde_json::json!({
         "schema_version": 1,
@@ -201,6 +233,23 @@ pub(super) fn generate_editor_ux_receipt(root: &Path) -> Result<String> {
             "release_lane": "just ux-tests-full",
             "status_update": "cargo xtask update-status --only quality",
             "quality_surface": "docs/project/status/quality.md",
+        },
+        "confidence_signals": {
+            "manual_editor_smoke_workflows": {
+                "state": "tracked",
+                "source": "docs/reference/UX_TESTING.md",
+            },
+            "first_5_minutes_harness": {
+                "state": "measured",
+                "scenario_count": scenario_count,
+                "source": "crates/perl-lsp-ux-tests/tests",
+            },
+            "open_issue_burndown": {
+                "state": "tracked",
+                "known_gap_issue_count": ux_known_gap_issues.len(),
+                "known_gap_issue_refs": ux_known_gap_issues,
+                "source": "README.md#known-gaps-toward-solid-ux",
+            },
         },
     });
 
@@ -280,6 +329,32 @@ mod tests {
             ])
         );
         assert_eq!(receipt["integration_points"]["ci_lane"], "just ux-tests");
+        assert_eq!(
+            receipt["confidence_signals"]["manual_editor_smoke_workflows"]["source"],
+            "docs/reference/UX_TESTING.md"
+        );
+        assert_eq!(
+            receipt["confidence_signals"]["first_5_minutes_harness"]["scenario_count"].as_u64(),
+            Some(count_ux_scenarios(&root) as u64)
+        );
         Ok(())
+    }
+
+    #[test]
+    fn test_collect_ux_known_gap_issue_refs_dedupes_and_scopes_to_known_gaps() {
+        let readme = r#"
+### Known gaps toward solid UX
+- must land ([#1](https://github.com/EffortlessMetrics/perl-lsp/issues/1111))
+- nice to land ([#2](https://github.com/EffortlessMetrics/perl-lsp/issues/2222))
+- umbrella ([#2](https://github.com/EffortlessMetrics/perl-lsp/issues/2222))
+
+#### What shipped this cycle (v0.12.x)
+- closed [#9](https://github.com/EffortlessMetrics/perl-lsp/issues/9999)
+
+## Security
+- not in scope [#3](https://github.com/EffortlessMetrics/perl-lsp/issues/3333)
+"#;
+        let refs = collect_ux_known_gap_issue_refs(readme);
+        assert_eq!(refs, vec!["#1111".to_string(), "#2222".to_string()]);
     }
 }

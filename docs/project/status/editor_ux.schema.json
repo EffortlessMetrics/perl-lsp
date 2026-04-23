@@ -9,7 +9,8 @@
     "scorecard",
     "harness",
     "top_line_metrics",
-    "integration_points"
+    "integration_points",
+    "confidence_signals"
   ],
   "properties": {
     "schema_version": {
@@ -122,6 +123,74 @@
         },
         "quality_surface": {
           "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "confidence_signals": {
+      "type": "object",
+      "required": [
+        "manual_editor_smoke_workflows",
+        "first_5_minutes_harness",
+        "open_issue_burndown"
+      ],
+      "properties": {
+        "manual_editor_smoke_workflows": {
+          "type": "object",
+          "required": ["state", "source"],
+          "properties": {
+            "state": {
+              "type": "string",
+              "const": "tracked"
+            },
+            "source": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        "first_5_minutes_harness": {
+          "type": "object",
+          "required": ["state", "scenario_count", "source"],
+          "properties": {
+            "state": {
+              "type": "string",
+              "const": "measured"
+            },
+            "scenario_count": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "source": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        "open_issue_burndown": {
+          "type": "object",
+          "required": ["state", "known_gap_issue_count", "known_gap_issue_refs", "source"],
+          "properties": {
+            "state": {
+              "type": "string",
+              "const": "tracked"
+            },
+            "known_gap_issue_count": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "known_gap_issue_refs": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^#[0-9]+$"
+              }
+            },
+            "source": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
         }
       },
       "additionalProperties": false
