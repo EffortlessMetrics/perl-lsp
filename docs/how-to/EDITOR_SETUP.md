@@ -28,6 +28,7 @@ perllsp --health
 | Emacs | use `lsp-mode` or `eglot` with `perllsp --stdio` | [docs/EDITORS/EMACS_SETUP.md](../EDITORS/EMACS_SETUP.md) |
 | Helix | add a `perllsp` language server entry | [docs/EDITORS/HELIX_SETUP.md](../EDITORS/HELIX_SETUP.md) |
 | Sublime Text | register `perllsp` in the LSP package settings | [docs/EDITORS/SUBLIME_SETUP.md](../EDITORS/SUBLIME_SETUP.md) |
+| Firebase Studio | use the VS Code extension or generic `perllsp --stdio` wiring | [docs/EDITORS/FIREBASE_STUDIO_SETUP.md](../EDITORS/FIREBASE_STUDIO_SETUP.md) |
 
 ## Minimal Configurations
 
@@ -63,6 +64,11 @@ args = ["--stdio"]
 
 Register a client whose command is `["perllsp", "--stdio"]` and scope it to
 Perl source files.
+
+### Firebase Studio
+
+Use the same VS Code-family setup path: either install the Perl Language Server
+extension or configure a generic client with `perllsp --stdio`.
 
 ## When Setup Fails
 

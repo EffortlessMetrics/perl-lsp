@@ -70,6 +70,7 @@ Any editor with LSP client support works. Point it at `perllsp --stdio`:
 - **Emacs** — via `eglot` or `lsp-mode`
 - **Helix** — via `languages.toml`
 - **Sublime Text** — via the LSP package
+- **Firebase Studio** — VS Code-compatible; use the extension or `perllsp --stdio`
 - **Kate**, **Lapce**, **Kakoune** — any editor with a generic LSP client
 
 See [EDITOR_SETUP.md](../how-to/EDITOR_SETUP.md) for editor-specific configuration.
