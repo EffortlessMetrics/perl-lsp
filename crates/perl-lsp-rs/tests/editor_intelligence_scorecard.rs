@@ -23,9 +23,9 @@ mod common;
 
 use common::test_utils::TestServerBuilder;
 use perl_corpus::gold::{
-    CompletionAssertionKind, CompletionGoldFixture, GotoAssertionKind, GotoGoldFixture,
-    HoverAssertionKind, HoverGoldFixture, load_completion_gold_fixtures, load_goto_gold_fixtures,
-    load_hover_gold_fixtures,
+    CompletionAssertionKind, CompletionGoldFixture, GoldAssertion, GoldFixture, GotoAssertionKind,
+    GotoGoldFixture, HoverAssertionKind, HoverGoldFixture, load_completion_gold_fixtures,
+    load_gold_fixtures, load_goto_gold_fixtures, load_hover_gold_fixtures,
 };
 use serde_json::Value;
 use std::path::PathBuf;
@@ -75,6 +75,20 @@ fn first_goto_line(resp: &Value) -> Option<u32> {
     let first = arr.first()?;
     let line = first["range"]["start"]["line"].as_u64()? as u32;
     Some(line)
+}
+
+fn diagnostic_codes_from_response(resp: &Value) -> Vec<String> {
+    resp["result"]["items"].as_array().map_or_else(Vec::new, |items| {
+        items
+            .iter()
+            .filter_map(|item| {
+                let code = item.get("code")?;
+                code.as_str()
+                    .map(ToString::to_string)
+                    .or_else(|| code.as_i64().map(|n| n.to_string()))
+            })
+            .collect()
+    })
 }
 
 // ---------------------------------------------------------------------------
@@ -308,6 +322,101 @@ fn test_completion_gold_corpus() {
     assert!(
         failures.is_empty(),
         "Completion gold corpus: {} assertion(s) failed out of {}:\n{}",
+        failures.len(),
+        total,
+        failures.join("\n")
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Diagnostics correctness test
+// ---------------------------------------------------------------------------
+
+/// Run all diagnostics gold fixtures (`expected.json`) and assert every assertion passes.
+#[test]
+fn test_diagnostics_gold_corpus() {
+    let root = gold_corpus_root();
+    let fixtures: Vec<GoldFixture> = match load_gold_fixtures(&root) {
+        Ok(f) if !f.is_empty() => f,
+        Ok(_) => {
+            eprintln!("SKIP: no diagnostics gold fixtures found in {}", root.display());
+            return;
+        }
+        Err(e) => panic!("Failed to load diagnostics gold fixtures: {e}"),
+    };
+
+    let server = TestServerBuilder::new().build();
+
+    let mut total = 0usize;
+    let mut passed = 0usize;
+    let mut failures: Vec<String> = Vec::new();
+
+    for fixture in &fixtures {
+        let code = std::fs::read_to_string(&fixture.fixture_path).unwrap_or_else(|e| {
+            panic!("Cannot read fixture {}: {e}", fixture.fixture_path.display())
+        });
+
+        let uri = format!("file:///gold/{}.pl", fixture.name);
+        server.open_document(&uri, &code);
+
+        let diagnostics = server.get_diagnostics(&uri);
+        let diagnostic_codes = diagnostic_codes_from_response(&diagnostics);
+
+        for assertion in &fixture.expected.diagnostics {
+            total += 1;
+            let ok = match assertion {
+                GoldAssertion::NoDiagnostics => diagnostic_codes.is_empty(),
+                GoldAssertion::NoDiagnostic { code } => !diagnostic_codes.iter().any(|c| c == code),
+                GoldAssertion::DiagnosticPresent { code, message_contains, .. } => {
+                    let has_code = diagnostic_codes.iter().any(|c| c == code);
+                    if !has_code {
+                        false
+                    } else if let Some(needle) = message_contains {
+                        diagnostics["result"]["items"].as_array().is_some_and(|items| {
+                            items.iter().any(|item| {
+                                let item_code_matches = item
+                                    .get("code")
+                                    .and_then(Value::as_str)
+                                    .is_some_and(|item_code| item_code == code);
+                                let message_matches = item["message"]
+                                    .as_str()
+                                    .is_some_and(|message| message.contains(needle));
+                                item_code_matches && message_matches
+                            })
+                        })
+                    } else {
+                        true
+                    }
+                }
+                GoldAssertion::DiagnosticCount { code, count } => {
+                    diagnostic_codes.iter().filter(|c| *c == code).count() == *count
+                }
+            };
+
+            if ok {
+                passed += 1;
+            } else {
+                failures.push(format!(
+                    "  FAIL [{}] {:?} — diagnostic codes: {:?}",
+                    fixture.name, assertion, diagnostic_codes
+                ));
+            }
+        }
+    }
+
+    println!(
+        "\nDiagnostics gold corpus: {}/{} assertions passed ({:.0}%)",
+        passed,
+        total,
+        if total > 0 { passed as f64 / total as f64 * 100.0 } else { 100.0 }
+    );
+    for f in &failures {
+        println!("{f}");
+    }
+
+    assert!(
+        failures.is_empty(),
+        "Diagnostics gold corpus: {} assertion(s) failed out of {}:\n{}",
         failures.len(),
         total,
         failures.join("\n")
