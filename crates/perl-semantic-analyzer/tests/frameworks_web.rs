@@ -239,6 +239,36 @@ post '/submit' => sub { my $c = shift };
     );
 }
 
+#[test]
+fn fusion_route_emits_subroutine_symbol() {
+    let code = r#"
+use Builder::IO::Fusion;
+
+get '/fusion-health' => sub {
+    return 'ok';
+};
+"#;
+    let table = extract_symbols(code);
+    assert!(
+        has_symbol(&table, "/fusion-health", SymbolKind::Subroutine),
+        "expected route symbol `/fusion-health` for Builder::IO::Fusion `get` route"
+    );
+}
+
+#[test]
+fn fusion_route_without_use_is_not_synthesized() {
+    let code = r#"
+get '/fusion-health' => sub {
+    return 'ok';
+};
+"#;
+    let table = extract_symbols(code);
+    assert!(
+        !has_symbol(&table, "/fusion-health", SymbolKind::Subroutine),
+        "bare `get` without `use Builder::IO::Fusion` should NOT produce a route symbol"
+    );
+}
+
 // === any route (Dancer2) ===
 
 #[test]
