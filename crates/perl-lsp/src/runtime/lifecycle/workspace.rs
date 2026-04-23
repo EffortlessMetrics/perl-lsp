@@ -153,6 +153,34 @@ impl LspServer {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
+    use std::io::Write;
+    use std::sync::Arc as StdArc;
+    use std::time::Duration;
+
+    /// Shared-buffer writer for capturing outbound LSP notifications in tests.
+    struct SharedVecWriter {
+        inner: StdArc<parking_lot::Mutex<Vec<u8>>>,
+    }
+
+    impl Write for SharedVecWriter {
+        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+            self.inner.lock().extend_from_slice(buf);
+            Ok(buf.len())
+        }
+
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    fn make_server_with_capture() -> (LspServer, StdArc<parking_lot::Mutex<Vec<u8>>>) {
+        let buf = StdArc::new(parking_lot::Mutex::new(Vec::<u8>::new()));
+        let writer = SharedVecWriter { inner: StdArc::clone(&buf) };
+        let server =
+            LspServer::with_io(Box::new(std::io::Cursor::new(Vec::<u8>::new())), Box::new(writer));
+        (server, buf)
+    }
 
     #[test]
     fn check_perl_interpreter_does_not_panic() {
@@ -443,5 +471,72 @@ include_paths = ["other_lib"]
                 folder.uri
             );
         }
+    }
+
+    #[test]
+    fn did_change_configuration_resets_pull_diagnostic_perlcritic_warning_dedupe() {
+        let (server, buf) = make_server_with_capture();
+        let temp = tempfile::tempdir().expect("failed to create temp dir");
+        let file_path = temp.path().join("dedupe_reset_test.pl");
+        std::fs::write(&file_path, "my $x = 1;\n").expect("failed to write temp file");
+        let uri = url::Url::from_file_path(&file_path).expect("failed to create file uri");
+
+        server.test_bypass_perlcritic_command_check();
+        server.test_configure_perlcritic(
+            true,
+            5,
+            Some(temp.path().join("missing-profile.rc").to_string_lossy().to_string()),
+        );
+
+        let mut diagnostics = Vec::new();
+        server.pull_diagnostics_orchestrator.collect_perlcritic_diagnostics(
+            &server,
+            uri.as_str(),
+            "my $x = 1;\n",
+            &mut diagnostics,
+        );
+        server.pull_diagnostics_orchestrator.collect_perlcritic_diagnostics(
+            &server,
+            uri.as_str(),
+            "my $x = 1;\n",
+            &mut diagnostics,
+        );
+        std::thread::sleep(Duration::from_millis(50));
+        let first_pass_count = String::from_utf8(buf.lock().clone())
+            .unwrap_or_default()
+            .matches("window/showMessage")
+            .count();
+        assert_eq!(
+            first_pass_count, 1,
+            "pull-diagnostic orchestrator should dedupe repeated identical warnings"
+        );
+
+        server.handle_did_change_configuration(Some(json!({
+            "settings": {
+                "perl": {
+                    "perlcritic": {
+                        "severity": 4
+                    }
+                }
+            }
+        })));
+
+        server.pull_diagnostics_orchestrator.collect_perlcritic_diagnostics(
+            &server,
+            uri.as_str(),
+            "my $x = 1;\n",
+            &mut diagnostics,
+        );
+        drop(server);
+        std::thread::sleep(Duration::from_millis(50));
+
+        let second_pass_count = String::from_utf8(buf.lock().clone())
+            .unwrap_or_default()
+            .matches("window/showMessage")
+            .count();
+        assert_eq!(
+            second_pass_count, 2,
+            "didChangeConfiguration should reset pull-diagnostic perlcritic warning dedupe state"
+        );
     }
 }
