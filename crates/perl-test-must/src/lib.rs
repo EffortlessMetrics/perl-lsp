@@ -33,8 +33,12 @@
 ///
 /// This is a test-only replacement for `unwrap` that is compliant
 /// with the "no unwrap/expect" policy.
+///
+/// Note: `#[must_use]` is intentionally omitted. `must()` is frequently
+/// called as an assertion (`must(fs::write(...))`) where the caller intentionally
+/// discards the `()` return value. Adding `#[must_use]` would trigger ~373
+/// spurious warnings across the workspace for those valid use cases.
 #[track_caller]
-#[must_use]
 pub fn must<T, E: std::fmt::Debug>(r: Result<T, E>) -> T {
     match r {
         Ok(v) => v,
@@ -86,7 +90,7 @@ mod tests {
     #[should_panic(expected = "unexpected Err")]
     fn must_panics_on_err() {
         let result: Result<i32, &str> = Err("oops");
-        let _ = must(result);
+        must(result);
     }
 
     #[test]
@@ -97,7 +101,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "unexpected None")]
     fn must_some_panics_on_none() {
-        let _ = must_some(Option::<i32>::None);
+        must_some(Option::<i32>::None);
     }
 
     #[test]
@@ -110,6 +114,6 @@ mod tests {
     #[should_panic(expected = "expected Err")]
     fn must_err_panics_on_ok() {
         let result: Result<i32, &str> = Ok(1);
-        let _ = must_err(result);
+        must_err(result);
     }
 }
