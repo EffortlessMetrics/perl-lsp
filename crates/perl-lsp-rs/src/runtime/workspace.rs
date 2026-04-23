@@ -1474,6 +1474,11 @@ impl LspServer {
                     workspace_folders.retain(|f| !removed_uris.contains(&f.uri));
                 }
 
+                // Workspace folder membership changed, so any in-flight reverse
+                // request now has stale per-folder scoping. Drop pending entries
+                // before issuing a fresh `workspace/configuration` pull.
+                self.pending_workspace_configuration_requests.lock().clear();
+
                 // Load config for all folders after changes
                 self.load_and_apply_project_config();
 
@@ -2073,7 +2078,8 @@ pub(super) fn path_to_module_name(uri: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::module_name_appears_in_text;
+    use super::{LspServer, module_name_appears_in_text};
+    use serde_json::json;
 
     #[test]
     fn test_module_name_appears_exact_match() {
@@ -2125,5 +2131,30 @@ mod tests {
     fn test_module_name_unicode_letter_after_rejected() {
         // Unicode letters still extend identifiers; do not match inside "BaseΔ".
         assert!(!module_name_appears_in_text("use BaseΔ;", "Base"));
+    }
+
+    #[test]
+    fn did_change_workspace_folders_clears_pending_workspace_configuration_requests() {
+        let server = LspServer::new();
+        server.pending_workspace_configuration_requests.lock().insert(
+            7,
+            crate::runtime::PendingWorkspaceConfigurationRequest {
+                folder_uris: vec!["file:///tmp/folder-a".to_string()],
+                includes_global_item: true,
+                created_at: std::time::Instant::now(),
+            },
+        );
+
+        let result = server.handle_did_change_workspace_folders(Some(json!({
+            "event": {
+                "added": [
+                    { "uri": "file:///tmp/folder-b", "name": "folder-b" }
+                ],
+                "removed": []
+            }
+        })));
+
+        assert!(result.is_ok());
+        assert!(server.pending_workspace_configuration_requests.lock().is_empty());
     }
 }
