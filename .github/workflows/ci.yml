@@ -88,6 +88,9 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.ref_name }}
+          # Fetch enough history so ci-scope can diff against origin/master.
+          # 0 = full history; balances correctness vs. clone cost.
+          fetch-depth: 0
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9  # stable (master)
@@ -110,10 +113,96 @@ jobs:
           cache-all-crates: true
           shared-key: ci-gate-${{ hashFiles('Cargo.lock') }}
 
-      - name: Run PR smoke checks
+      # Compute CI scope: classify the diff and select lanes.
+      # Falls back gracefully — if ci-scope fails, SCOPE_OK=false and we
+      # fall through to the hardcoded clippy-core / test-core baseline.
+      - name: Compute CI scope
+        id: scope
         run: |
-          just clippy-core
-          just test-core
+          SCOPE_OK=true
+          SCOPE_JSON=$(cargo xtask ci-scope --base origin/master --format json 2>/dev/null) || SCOPE_OK=false
+
+          if [ "$SCOPE_OK" = "false" ] || [ -z "$SCOPE_JSON" ]; then
+            echo "::warning::ci-scope failed or emitted empty output — falling back to clippy-core / test-core"
+            echo "scope_ok=false" >> "$GITHUB_OUTPUT"
+            echo "diff_class=unknown" >> "$GITHUB_OUTPUT"
+            echo "crates_args=" >> "$GITHUB_OUTPUT"
+          else
+            echo "scope_ok=true" >> "$GITHUB_OUTPUT"
+
+            # Extract diff_class
+            DIFF_CLASS=$(echo "$SCOPE_JSON" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('diff_class','unknown'))")
+            echo "diff_class=$DIFF_CLASS" >> "$GITHUB_OUTPUT"
+
+            # Build -p args from direct_crates + architecture_wideners (unique, non-empty)
+            CRATES_ARGS=$(echo "$SCOPE_JSON" | python3 -c "
+          import sys, json
+          d = json.load(sys.stdin)
+          names = set()
+          for c in d.get('direct_crates', []):
+              n = c.get('name', '').strip()
+              if n: names.add(n)
+          for c in d.get('architecture_wideners', []):
+              n = c.get('name', '').strip()
+              if n: names.add(n)
+          print(' '.join('-p ' + n for n in sorted(names)))
+          ")
+            echo "crates_args=$CRATES_ARGS" >> "$GITHUB_OUTPUT"
+
+            # Log the scope decision for debugging
+            echo "::notice::ci-scope diff_class=$DIFF_CLASS crates=$CRATES_ARGS"
+          fi
+
+      # Skip heavy lanes entirely for prose-only or CI-config-only diffs.
+      - name: Skip notice (prose-only / CI-config diff)
+        if: |
+          steps.scope.outputs.scope_ok == 'true' &&
+          (steps.scope.outputs.diff_class == 'prose_only' ||
+           steps.scope.outputs.diff_class == 'ci_config')
+        run: |
+          echo "::notice::Prose-only / CI-config diff — skipping Rust build lanes (no code changed)"
+
+      # ── Scoped clippy (scope-aware path) ─────────────────────────────────
+      # Runs when ci-scope succeeded AND diff is not prose/CI-config AND
+      # there are crates to check.
+      - name: Scoped clippy
+        if: |
+          steps.scope.outputs.scope_ok == 'true' &&
+          steps.scope.outputs.diff_class != 'prose_only' &&
+          steps.scope.outputs.diff_class != 'ci_config' &&
+          steps.scope.outputs.crates_args != ''
+        run: |
+          cargo clippy --locked ${{ steps.scope.outputs.crates_args }} -- -D warnings -A missing_docs
+
+      # ── Scoped test (scope-aware path) ───────────────────────────────────
+      - name: Scoped test
+        if: |
+          steps.scope.outputs.scope_ok == 'true' &&
+          steps.scope.outputs.diff_class != 'prose_only' &&
+          steps.scope.outputs.diff_class != 'ci_config' &&
+          steps.scope.outputs.crates_args != ''
+        run: |
+          cargo test --locked --lib ${{ steps.scope.outputs.crates_args }}
+
+      # ── Fallback: baseline clippy-core / test-core ────────────────────────
+      # Runs when: ci-scope failed (scope_ok=false), OR ci-scope returned no
+      # crates to check (empty crates_args on a non-prose diff — shouldn't
+      # happen but guards against gaps in the classifier).
+      - name: Fallback clippy-core
+        if: |
+          steps.scope.outputs.scope_ok == 'false' ||
+          (steps.scope.outputs.diff_class != 'prose_only' &&
+           steps.scope.outputs.diff_class != 'ci_config' &&
+           steps.scope.outputs.crates_args == '')
+        run: just clippy-core
+
+      - name: Fallback test-core
+        if: |
+          steps.scope.outputs.scope_ok == 'false' ||
+          (steps.scope.outputs.diff_class != 'prose_only' &&
+           steps.scope.outputs.diff_class != 'ci_config' &&
+           steps.scope.outputs.crates_args == '')
+        run: just test-core
 
   # ── Merge Gate: full validation on every PR and push to main ─────────
   merge-gate:
