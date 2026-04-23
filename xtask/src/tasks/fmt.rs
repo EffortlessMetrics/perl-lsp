@@ -4,7 +4,7 @@ use color_eyre::eyre::{Context, Result, eyre};
 use duct::cmd;
 use indicatif::{ProgressBar, ProgressStyle};
 use serde::Deserialize;
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{HashMap, HashSet};
 
 #[derive(Deserialize)]
 struct CargoMetadata {
@@ -94,7 +94,9 @@ fn collect_workspace_manifest_paths(
             if let Some(manifest_path) = member_name_to_manifest.get(package_name.as_str()) {
                 selected.push(manifest_path.clone());
             } else {
-                let available: Vec<_> = member_name_to_manifest.keys().copied().collect();
+                // Sort the available list so the error message is stable across runs.
+                let mut available: Vec<_> = member_name_to_manifest.keys().copied().collect();
+                available.sort_unstable();
                 return Err(eyre!(
                     "Unknown package `{package_name}`. Available workspace packages: {}",
                     available.join(", ")
@@ -117,7 +119,7 @@ fn collect_workspace_manifest_paths(
 }
 
 fn dedup_preserve_order(paths: Vec<String>) -> Vec<String> {
-    let mut seen = BTreeSet::new();
+    let mut seen = HashSet::with_capacity(paths.len());
     let mut deduped = Vec::with_capacity(paths.len());
     for path in paths {
         if seen.insert(path.clone()) {
@@ -183,6 +185,23 @@ mod tests {
         };
         assert!(message.contains("missing-package"));
         assert!(message.contains("Available workspace packages"));
+        Ok(())
+    }
+
+    #[test]
+    fn package_filters_error_lists_packages_in_stable_sorted_order() -> Result<()> {
+        let metadata = sample_metadata();
+        let filters = vec!["nonexistent".to_string()];
+        let message = match collect_workspace_manifest_paths(&metadata, Some(&filters)) {
+            Ok(paths) => {
+                return Err(color_eyre::eyre::eyre!("expected error, got paths: {paths:?}"));
+            }
+            Err(err) => format!("{err}"),
+        };
+        // The available list must be sorted — both packages appear in alphabetical order.
+        let perl_pos = message.find("perl-parser").expect("perl-parser in error");
+        let xtask_pos = message.find("xtask").expect("xtask in error");
+        assert!(perl_pos < xtask_pos, "available packages must be listed in sorted order");
         Ok(())
     }
 }
