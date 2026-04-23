@@ -221,16 +221,26 @@ impl CheckpointCache {
 
         // Trim to max size
         if self.checkpoints.len() > self.max_checkpoints {
-            // Keep checkpoints evenly distributed
+            // Keep checkpoints evenly distributed while preserving boundaries.
+            // This ensures we retain both the earliest and latest checkpoint,
+            // which are useful anchors for incremental parsing windows.
             let total = self.checkpoints.len();
-            let step = total as f64 / self.max_checkpoints as f64;
-            let mut kept = Vec::new();
-            for i in 0..self.max_checkpoints {
-                let idx = (i as f64 * step) as usize;
-                if idx < total {
-                    kept.push(self.checkpoints[idx].clone());
+
+            if self.max_checkpoints == 1 {
+                // Prefer the most recent/highest position when we can only keep one.
+                if let Some(last) = self.checkpoints.last().cloned() {
+                    self.checkpoints = vec![last];
                 }
+                return;
             }
+
+            let denominator = self.max_checkpoints - 1;
+            let mut kept = Vec::with_capacity(self.max_checkpoints);
+            for i in 0..self.max_checkpoints {
+                let idx = i * (total - 1) / denominator;
+                kept.push(self.checkpoints[idx].clone());
+            }
+
             self.checkpoints = kept;
         }
     }
@@ -440,5 +450,33 @@ mod tests {
         );
         assert!(cache.find_before(100).is_none());
         assert!(cache.find_after(0).is_none());
+    }
+
+    #[test]
+    fn test_checkpoint_cache_trim_preserves_last_boundary()
+    -> std::result::Result<(), Box<dyn std::error::Error>> {
+        let mut cache = CheckpointCache::new(3);
+        for pos in [10usize, 20, 30, 40] {
+            cache.add(LexerCheckpoint::at_position(pos));
+        }
+
+        let last = cache
+            .find_after(40)
+            .ok_or("trimmed cache should retain highest-position checkpoint")?;
+        assert_eq!(last.position, 40);
+        Ok(())
+    }
+
+    #[test]
+    fn test_checkpoint_cache_capacity_one_keeps_latest()
+    -> std::result::Result<(), Box<dyn std::error::Error>> {
+        let mut cache = CheckpointCache::new(1);
+        cache.add(LexerCheckpoint::at_position(10));
+        cache.add(LexerCheckpoint::at_position(25));
+
+        let latest =
+            cache.find_before(usize::MAX).ok_or("capacity-1 cache should keep one checkpoint")?;
+        assert_eq!(latest.position, 25);
+        Ok(())
     }
 }
