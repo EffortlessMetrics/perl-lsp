@@ -162,6 +162,7 @@ describe('package.json contributes', () => {
       expect(exts).toContain('.t');
       expect(exts).toContain('.pod');
       expect(exts).toContain('.psgi');
+      expect(exts).toContain('.cgi');
       expect(exts).toContain('.mason');
       expect(exts).toContain('.mas');
       expect(exts).toContain('.tt');
