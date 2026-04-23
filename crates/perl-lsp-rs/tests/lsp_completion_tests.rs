@@ -1454,6 +1454,8 @@ fn test_cross_editor_completion_capability_profiles() -> Result<(), Box<dyn std:
         ("vscode", completion_item_caps(true, true), true, true),
         ("zed", completion_item_caps(true, false), true, false),
         ("neovim", completion_item_caps(false, false), false, false),
+        // coc.nvim on Vim/Neovim typically sends a conservative completion capability set.
+        ("vim-coc", completion_item_caps(false, false), false, false),
         ("helix", completion_item_caps(false, false), false, false),
     ];
 

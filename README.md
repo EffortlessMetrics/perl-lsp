@@ -41,6 +41,19 @@ The extension auto-downloads the matching `perllsp` binary for your platform.
 require('lspconfig').perl_ls.setup { cmd = { "perllsp", "--stdio" } }
 ```
 
+```json
+// Vim/Neovim (coc.nvim): ~/.vim/coc-settings.json or ~/.config/nvim/coc-settings.json
+{
+  "languageserver": {
+    "perl": {
+      "command": "perllsp",
+      "args": ["--stdio"],
+      "filetypes": ["perl"]
+    }
+  }
+}
+```
+
 ```elisp
 ;; Emacs (eglot)
 (add-to-list 'eglot-server-programs
@@ -59,6 +72,7 @@ perllsp --health
 ```
 
 For a full walkthrough, see [docs/tutorials/GETTING_STARTED.md](docs/tutorials/GETTING_STARTED.md).
+For Vim-specific setup details (keymaps, troubleshooting, and advanced coc.nvim config), see [docs/EDITORS/COC_NEOVIM_SETUP.md](docs/EDITORS/COC_NEOVIM_SETUP.md).
 
 > **Note:** Do not use `cargo install perl-lsp` — that name is owned by an unrelated project on crates.io. Use `cargo install --path crates/perllsp` to build from source.
 
