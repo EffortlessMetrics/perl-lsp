@@ -32,6 +32,7 @@ pub enum UseLibAction {
 /// - `use lib qw/path1 path2/;`
 /// - `use lib ("path1", "path2");`
 /// - `use lib '$FindBin::Bin/path'` and `"$FindBin::Bin/path"`
+/// - `use lib '$Bin/path'` and `"$RealBin/path"` (from `FindBin` exports)
 ///
 /// Returns extracted paths in order of appearance.
 pub fn extract_use_lib_paths(source: &str) -> Vec<UseLibPath> {
@@ -267,8 +268,16 @@ fn extract_one_quoted(s: &str) -> Option<(String, bool, &str)> {
 }
 
 fn resolve_findbin_in_string(s: &str) -> (String, bool) {
-    let findbin_vars =
-        ["$FindBin::Bin", "$FindBin::RealBin", "${FindBin::Bin}", "${FindBin::RealBin}"];
+    let findbin_vars = [
+        "$FindBin::Bin",
+        "$FindBin::RealBin",
+        "${FindBin::Bin}",
+        "${FindBin::RealBin}",
+        "$Bin",
+        "$RealBin",
+        "${Bin}",
+        "${RealBin}",
+    ];
 
     for var in &findbin_vars {
         if let Some(rest) = s.strip_prefix(var) {

@@ -83,3 +83,24 @@ use Lib::Thing;\n\
 
     assert_eq!(include_paths, vec!["second".to_string()]);
 }
+
+#[test]
+fn short_findbin_exports_are_treated_as_findbin_paths() {
+    let source = "\
+use lib '$Bin/../lib';\n\
+use lib \"$RealBin/../vendor\";\n\
+";
+
+    let ops = extract_use_lib_operations(source);
+
+    assert_eq!(
+        ops,
+        vec![
+            UseLibAction::Add(vec![UseLibPath { path: "../lib".to_string(), from_findbin: true }]),
+            UseLibAction::Add(vec![UseLibPath {
+                path: "../vendor".to_string(),
+                from_findbin: true,
+            }]),
+        ]
+    );
+}
