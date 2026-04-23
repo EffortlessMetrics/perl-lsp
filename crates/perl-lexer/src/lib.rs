@@ -3916,4 +3916,44 @@ mod tests {
         assert!(saw_second_my, "lexer should continue after CR-terminated comment line");
         Ok(())
     }
+
+    #[test]
+    fn test_pod_skipped_with_cr_only_line_endings() -> TestResult {
+        // CR-only line endings (classic Mac): =pod and =cut must be detected
+        // when preceded by \r instead of \n.
+        let input = "my $before = 1;\r=pod\rThis is documentation.\r=cut\rmy $after = 2;";
+        let mut lexer = PerlLexer::new(input);
+        let mut token_texts: Vec<String> = Vec::new();
+
+        while let Some(token) = lexer.next_token() {
+            if matches!(token.token_type, TokenType::EOF) {
+                break;
+            }
+            if matches!(token.token_type, TokenType::Keyword(_) | TokenType::Identifier(_)) {
+                token_texts.push(token.text.to_string());
+            }
+        }
+
+        assert!(
+            token_texts.iter().any(|t| t == "my" && {
+                // find the second 'my' (after the POD block)
+                token_texts
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, t)| t.as_str() == "my")
+                    .nth(1)
+                    .is_some()
+            }),
+            "lexer should produce tokens after CR-terminated =cut; got: {:?}",
+            token_texts
+        );
+
+        // Ensure POD body text is not present as an identifier token
+        assert!(
+            !token_texts.iter().any(|t| t == "documentation"),
+            "POD body should be consumed, not emitted as a token; got: {:?}",
+            token_texts
+        );
+        Ok(())
+    }
 }
