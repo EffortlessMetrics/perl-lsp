@@ -314,6 +314,9 @@ impl PerlStackParser {
     #[must_use]
     pub fn looks_like_frame(line: &str) -> bool {
         let line = line.trim();
+        let hash_frame_like = line
+            .strip_prefix('#')
+            .is_some_and(|rest| rest.chars().next().is_some_and(|c| c.is_ascii_digit()));
 
         // Check for common patterns
         line.contains(" at ") && line.contains(" line ")
@@ -321,7 +324,7 @@ impl PerlStackParser {
             || line.starts_with('$') && line.contains(" = ")
             || line.starts_with('@') && line.contains(" = ")
             || line.starts_with('.') && line.contains(" = ")
-            || line.starts_with('#')
+            || hash_frame_like
     }
 }
 
