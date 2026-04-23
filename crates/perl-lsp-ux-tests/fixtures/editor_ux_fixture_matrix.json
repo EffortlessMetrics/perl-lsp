@@ -362,6 +362,31 @@
       "expected_outcomes": [
         "declaration request returns a location or clean empty result",
         "request does not error"
+      ],
+      "confidence_signals": [
+        "first_five_minutes_harness",
+        "manual_editor_smoke",
+        "issue_burndown_regression_guard"
+      ]
+    },
+    {
+      "id": "live_diagnostics_refresh_after_edit",
+      "scenario_file": "ux_scenario_19_diagnostics_edit_refresh.rs",
+      "subsystem_owner": "diagnostics",
+      "ci_tier": "pr",
+      "user_journey": "fix strict diagnostics via in-editor edits and verify publishDiagnostics refreshes",
+      "measures": [
+        "workflow_pass_rate",
+        "workflow_stability_rate"
+      ],
+      "expected_outcomes": [
+        "diagnostics are present before edit",
+        "diagnostics clear after didChange-based fix without reopening file"
+      ],
+      "confidence_signals": [
+        "first_five_minutes_harness",
+        "manual_editor_smoke",
+        "issue_burndown_regression_guard"
       ]
     }
   ],

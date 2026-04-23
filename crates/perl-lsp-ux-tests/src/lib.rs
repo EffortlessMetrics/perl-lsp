@@ -56,6 +56,8 @@ pub use workspace::FakeWorkspace;
 
 use anyhow::{Context, Result, anyhow};
 use serde_json::{Value, json};
+use std::collections::HashMap;
+use std::sync::Mutex;
 use std::time::Duration;
 
 /// Configuration for a UX scenario.
@@ -152,6 +154,7 @@ pub struct UxHarness {
     pub client: UxClient,
     pub workspace: FakeWorkspace,
     config: ScenarioConfig,
+    file_versions: Mutex<HashMap<String, i32>>,
 }
 
 impl UxHarness {
@@ -173,7 +176,7 @@ impl UxHarness {
         let client = UxClient::spawn(&binary_path, &workspace, &config)
             .context("Failed to spawn LSP server")?;
 
-        Ok(Self { client, workspace, config })
+        Ok(Self { client, workspace, config, file_versions: Mutex::new(HashMap::new()) })
     }
 
     /// Open a file in the LSP server (textDocument/didOpen).
@@ -182,7 +185,20 @@ impl UxHarness {
     pub fn open_file(&self, relative_path: &str, content: &str) -> Result<()> {
         self.workspace.write(relative_path, content)?;
         let uri = self.workspace.uri(relative_path);
-        self.client.did_open(&uri, content)
+        self.client.did_open(&uri, content)?;
+        self.record_open_version(&uri);
+        Ok(())
+    }
+
+    /// Replace the full file contents and notify the server with `didChange`.
+    ///
+    /// This mirrors the common editor UX where users fix diagnostics and expect
+    /// `publishDiagnostics` to refresh quickly without reopening the file.
+    pub fn change_file(&self, relative_path: &str, new_content: &str) -> Result<()> {
+        self.workspace.write(relative_path, new_content)?;
+        let uri = self.workspace.uri(relative_path);
+        let next_version = self.bump_file_version(&uri)?;
+        self.client.did_change(&uri, next_version, new_content)
     }
 
     /// Request hover information at `(line, character)` (0-indexed UTF-16).
@@ -551,6 +567,25 @@ impl UxHarness {
     /// Returns the root URI of the workspace (useful for the `rootUri` initialize param).
     pub fn root_uri(&self) -> &str {
         &self.workspace.root_uri
+    }
+
+    fn record_open_version(&self, uri: &str) {
+        let mut guard = self.file_versions.lock().unwrap_or_else(|e| e.into_inner());
+        guard.insert(uri.to_string(), 1);
+    }
+
+    fn bump_file_version(&self, uri: &str) -> Result<i32> {
+        let mut guard = self.file_versions.lock().unwrap_or_else(|e| e.into_inner());
+        match guard.get_mut(uri) {
+            Some(version) => {
+                *version += 1;
+                Ok(*version)
+            }
+            None => Err(anyhow!(
+                "cannot send didChange for unopened file `{}`; call open_file first",
+                uri
+            )),
+        }
     }
 }
 
