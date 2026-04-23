@@ -33,6 +33,10 @@ The nightly workflow currently uses these labels:
 - `ci:strict`
 - `ci:mutation`
 
+Nightly benchmark runs also execute a real-repo LSP latency assertion:
+`real_project_first_diagnostics_catalyst_5000_lines_under_5s` in
+`crates/perl-lsp-rs/tests/real_project_latency.rs` (`cargo test -p perl-lsp-rs --test real_project_latency ... --include-ignored`).
+
 The broader label catalog lives in [`.github/ci-config.yml`](../../.github/ci-config.yml).
 Use that file as the source of truth when you add or rename labels.
 
