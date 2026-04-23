@@ -3966,13 +3966,11 @@ struct PerlQuoteLikeState {
 
 fn find_hash_comment_start(line: &str, perl_mode: bool) -> Option<usize> {
     let mut in_single = false;
-    let mut in_single_ansi_c = false;
     let mut in_double = false;
     let mut in_backtick = false;
-    let mut prev_single_was_escape = false;
-    let mut prev_was_escape = false;
-    let mut prev_was_escape_double = false;
     let mut prev_was_escape_single = false;
+    let mut prev_was_escape_double = false;
+    let mut prev_was_escape_backtick = false;
     let mut perl_quote_like: Option<PerlQuoteLikeState> = None;
 
     for (idx, ch) in line.char_indices() {
@@ -4001,31 +3999,17 @@ fn find_hash_comment_start(line: &str, perl_mode: bool) -> Option<usize> {
         }
 
         if in_single {
-            if prev_single_was_escape {
-                prev_single_was_escape = false;
+            if prev_was_escape_single {
+                prev_was_escape_single = false;
                 continue;
             }
             if ch == '\\' {
-                prev_single_was_escape = true;
+                prev_was_escape_single = true;
                 continue;
             }
             if ch == '\'' {
                 in_single = false;
-            }
-            continue;
-        }
-        if in_double {
-            if prev_was_escape {
-                prev_was_escape = false;
-                continue;
-            }
-            if ch == '\\' {
-                prev_was_escape = true;
-                continue;
-            }
-            if ch == '\'' {
-                in_single = false;
-                in_single_ansi_c = false;
+                prev_was_escape_single = false;
             }
             continue;
         }
@@ -4044,12 +4028,12 @@ fn find_hash_comment_start(line: &str, perl_mode: bool) -> Option<usize> {
             continue;
         }
         if in_backtick {
-            if prev_was_escape {
-                prev_was_escape = false;
+            if prev_was_escape_backtick {
+                prev_was_escape_backtick = false;
                 continue;
             }
             if ch == '\\' {
-                prev_was_escape = true;
+                prev_was_escape_backtick = true;
                 continue;
             }
             if ch == '`' {
@@ -4066,15 +4050,16 @@ fn find_hash_comment_start(line: &str, perl_mode: bool) -> Option<usize> {
         match ch {
             '\'' => {
                 in_single = true;
-                in_single_ansi_c = idx > 0 && line.as_bytes().get(idx - 1) == Some(&b'$');
                 prev_was_escape_single = false;
-                prev_single_was_escape = false;
             }
             '"' => {
                 in_double = true;
                 prev_was_escape_double = false;
             }
-            '`' => in_backtick = true,
+            '`' => {
+                in_backtick = true;
+                prev_was_escape_backtick = false;
+            }
             '#' => {
                 // Bash/Perl parameter-length expansion (`${#var}`) is not a comment.
                 if idx >= 2 && line.as_bytes().get(idx - 2..idx) == Some(b"${") {
@@ -4093,7 +4078,7 @@ fn find_hash_comment_start(line: &str, perl_mode: bool) -> Option<usize> {
                     if prev.is_whitespace()
                         || matches!(
                             prev,
-                            ';' | '{' | '}' | '(' | ')' | '[' | ']' | '&' | '|' | '<' | '>'
+                            ';' | '{' | '}' | '(' | ')' | '[' | ']' | '&' | '|' | '<' | '>' | ','
                         )
                     {
                         return Some(idx);
@@ -4906,6 +4891,22 @@ mod tests {
         assert!(has_unlinked_todo_in_hash_line(
             "printf $'it\\'s # TODO in string' # TODO: follow up",
             &todo_re,
+        ));
+
+        Ok(())
+    }
+
+    #[test]
+    fn hash_comment_todo_detection_handles_escaped_quotes_before_comment() -> Result<()> {
+        let todo_re = Regex::new(r"(?i)\b(?:todo|fixme)\b")?;
+
+        assert!(has_unlinked_todo_in_hash_line(
+            "echo \"quoted \\\"value\\\"\" # TODO: follow up",
+            &todo_re
+        ));
+        assert!(!has_unlinked_todo_in_hash_line(
+            "echo \"quoted # TODO in string\" && true",
+            &todo_re
         ));
 
         Ok(())
