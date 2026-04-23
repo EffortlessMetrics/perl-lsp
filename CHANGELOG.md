@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Performance
+
+- **`search_symbols()` now uses indexed lookup** — The workspace symbol search in
+  `perl-workspace-index` now uses a HashMap-based global name index instead of
+  iterating over all files and symbols. Search behavior is preserved: case-insensitive
+  substring matching on both bare symbol names and qualified names (`Package::function`).
+  For large workspaces (500K+ symbols), this significantly reduces search latency.
+
 ### Internal
 
 - **`cargo xtask published-crate-count`** — new ratchet gate that monitors the
@@ -15,6 +23,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the baseline in `xtask/published-crate-baseline.txt`; auto-tightens the baseline
   when count decreases. Run via `just ci-published-crate-count` or directly as
   `cargo xtask published-crate-count`. (#4416)
+- **`perl-workspace-index`**: Added `global_name_index` HashMap for O(1) average symbol
+  lookup. Symbols are indexed under both bare name and qualified name for comprehensive
+  cross-file resolution. Incremental updates on file add/update/remove keep the index
+  synchronized.
 
 ## [0.12.4] - 2026-04-12
 
