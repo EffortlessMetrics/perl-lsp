@@ -59,7 +59,22 @@ describe('BinaryDownloader.getPlatformTarget', () => {
 
   test('target contains platform component', () => {
     const target = getPlatformTarget(downloader);
-    expect(target).toMatch(/(apple-darwin|unknown-linux|pc-windows)/);
+    expect(target).toMatch(/(apple-darwin|unknown-linux|pc-windows|linux-android)/);
+  });
+
+  test('linux termux environments resolve to android target triples', () => {
+    if (process.platform !== 'linux') {
+      return;
+    }
+
+    const detectTermux = jest.spyOn(downloader as any, 'detectTermux').mockReturnValue(true);
+    const detectMusl = jest.spyOn(downloader as any, 'detectMusl').mockReturnValue(false);
+
+    const target = getPlatformTarget(downloader);
+    expect(target).toMatch(/-linux-android$/);
+
+    detectTermux.mockRestore();
+    detectMusl.mockRestore();
   });
 });
 

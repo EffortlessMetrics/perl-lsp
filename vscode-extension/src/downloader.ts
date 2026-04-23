@@ -574,12 +574,20 @@ export class BinaryDownloader {
     private getPlatformTarget(): string {
         const platform = process.platform;
         const arch = process.arch;
+
+        if (platform === 'android') {
+            const archPrefix = arch === 'arm64' ? 'aarch64' : 'x86_64';
+            return `${archPrefix}-linux-android`;
+        }
         
         // Map Node.js platform/arch to exact cargo-dist target triples
         if (platform === 'darwin') {
             return arch === 'arm64' ? 'aarch64-apple-darwin' : 'x86_64-apple-darwin';
         } else if (platform === 'linux') {
             const archPrefix = arch === 'arm64' ? 'aarch64' : 'x86_64';
+            if (this.detectTermux()) {
+                return `${archPrefix}-linux-android`;
+            }
             const libc = this.detectMusl() ? 'musl' : 'gnu';
             return `${archPrefix}-unknown-linux-${libc}`;
         } else if (platform === 'win32') {
@@ -619,6 +627,19 @@ export class BinaryDownloader {
         ];
         
         return muslLibs.some(lib => fs.existsSync(lib));
+    }
+
+    private detectTermux(): boolean {
+        const prefix = process.env.PREFIX ?? '';
+        if (prefix.startsWith('/data/data/com.termux/')) {
+            return true;
+        }
+
+        if ((process.env.TERMUX_VERSION ?? '').length > 0) {
+            return true;
+        }
+
+        return fs.existsSync('/data/data/com.termux/files/usr/bin/pkg');
     }
     
     private getLocalBinaryPath(): string {
