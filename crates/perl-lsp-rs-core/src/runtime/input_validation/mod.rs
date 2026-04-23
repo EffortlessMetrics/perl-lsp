@@ -252,6 +252,24 @@ mod tests {
     }
 
     #[test]
+    fn test_validate_file_content_line_too_long() {
+        let long_line = "x".repeat(100_001);
+        let file_path = Path::new("long_line.pl");
+
+        let result = validate_file_content(&long_line, file_path);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_validate_file_content_suspicious_patterns() {
+        let content = "print q{<script>alert('xss')</script>};";
+        let file_path = Path::new("suspicious.pl");
+
+        let result = validate_file_content(content, file_path);
+        assert!(result.is_err());
+    }
+
+    #[test]
     fn test_sanitize_string() {
         let input = "Hello\x00World<script>alert('xss')</script>";
         let expected = "HelloWorld<script>alert('xss')</script>";
@@ -306,6 +324,31 @@ mod tests {
     fn test_validate_lsp_request_invalid_method() {
         let method = "invalid<script>alert('xss')</script>";
         let params = serde_json::json!({});
+
+        let result = validate_lsp_request(method, &params);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_validate_lsp_request_invalid_text_document_uri_scheme() {
+        let method = "textDocument/didOpen";
+        let params = serde_json::json!({
+            "textDocument": {
+                "uri": "http://example.com/test.pl",
+                "text": "print 'Hello';"
+            }
+        });
+
+        let result = validate_lsp_request(method, &params);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_validate_lsp_request_rejects_script_in_unknown_method_params() {
+        let method = "workspace/symbol";
+        let params = serde_json::json!({
+            "query": "<script>alert('xss')</script>"
+        });
 
         let result = validate_lsp_request(method, &params);
         assert!(result.is_err());
@@ -368,6 +411,18 @@ mod tests {
 
         let result = validate_lsp_request(method, &params);
         assert!(result.is_ok(), "file:// URI must be accepted after scheme allowlist refactor");
+    }
+
+    #[test]
+    fn test_validate_file_path_rejects_disallowed_extension() {
+        use perl_tdd_support::must;
+        let temp_dir = must(TempDir::new());
+        let workspace_root = temp_dir.path();
+        let file_path = workspace_root.join("notes.txt");
+        must(fs::write(&file_path, "not perl"));
+
+        let result = validate_file_path(&file_path, workspace_root);
+        assert!(result.is_err());
     }
 
     #[test]
