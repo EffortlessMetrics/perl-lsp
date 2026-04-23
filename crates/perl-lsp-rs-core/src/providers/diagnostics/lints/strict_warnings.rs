@@ -44,6 +44,12 @@ struct PhaseScopedPragmaUse {
     phase_range: (usize, usize),
 }
 
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+struct ImplicitStrictUsage {
+    has_strict: bool,
+    has_warnings: bool,
+}
+
 /// Check for common strict/warnings issues
 ///
 /// This function checks if 'use strict' and 'use warnings' pragmas are present
@@ -83,18 +89,23 @@ pub fn check_strict_warnings(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
         "Mojo::Base",
     ];
 
-    // Detect OO implicit strict modules and misspelled pragmas.
-    // The strict/warnings arms are intentionally absent: state_for_offset above
-    // is the authoritative source of truth. Walking the full AST for strict/warnings
-    // would bypass lexical scoping (finding eval-block or sub-scoped pragmas).
+    // Detect misspelled pragmas everywhere, but only treat implicit strict/warnings
+    // framework imports as file-scope when they are observed at top-level scope.
+    // This keeps handling conservative for nested scopes (sub/eval/do/blocks),
+    // which must not suppress PL100/PL101 for the rest of the file.
+    let implicit_usage = collect_top_level_implicit_strict_usage(node, IMPLICIT_STRICT_MODULES);
+    if implicit_usage.has_strict {
+        has_strict = true;
+    }
+    if implicit_usage.has_warnings {
+        has_warnings = true;
+    }
+
     walk_node(node, &mut |n| {
         if let NodeKind::Use { module, .. } = &n.kind {
             if module.starts_with('v') || module.chars().next().is_some_and(|c| c.is_ascii_digit())
             {
                 // Version pragmas are already reflected in the shared pragma map.
-            } else if IMPLICIT_STRICT_MODULES.contains(&module.as_str()) {
-                has_strict = true;
-                has_warnings = true;
             } else if module != "strict" && module != "warnings" {
                 // Check for misspelled pragmas (strict/warnings are in pragma_map)
                 check_misspelled_pragma(module, n, diagnostics);
@@ -145,6 +156,99 @@ pub fn check_strict_warnings(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
             tags: Vec::new(),
             suggestion: Some("Add 'use warnings;' at the top of the file".to_string()),
         });
+    }
+}
+
+fn collect_top_level_implicit_strict_usage(
+    node: &Node,
+    implicit_modules: &[&str],
+) -> ImplicitStrictUsage {
+    let mut usage = ImplicitStrictUsage::default();
+    collect_top_level_implicit_strict_usage_inner(node, implicit_modules, 0, &mut usage);
+    usage
+}
+
+fn collect_top_level_implicit_strict_usage_inner(
+    node: &Node,
+    implicit_modules: &[&str],
+    scope_depth: usize,
+    usage: &mut ImplicitStrictUsage,
+) {
+    match &node.kind {
+        NodeKind::Use { module, .. }
+            if scope_depth == 0 && implicit_modules.contains(&module.as_str()) =>
+        {
+            usage.has_strict = true;
+            usage.has_warnings = true;
+        }
+        NodeKind::Program { statements } => {
+            for statement in statements {
+                collect_top_level_implicit_strict_usage_inner(
+                    statement,
+                    implicit_modules,
+                    scope_depth,
+                    usage,
+                );
+            }
+        }
+        NodeKind::LabeledStatement { statement, .. } => {
+            collect_top_level_implicit_strict_usage_inner(
+                statement,
+                implicit_modules,
+                scope_depth,
+                usage,
+            );
+        }
+        NodeKind::StatementModifier { statement, condition, .. } => {
+            collect_top_level_implicit_strict_usage_inner(
+                statement,
+                implicit_modules,
+                scope_depth,
+                usage,
+            );
+            collect_top_level_implicit_strict_usage_inner(
+                condition,
+                implicit_modules,
+                scope_depth,
+                usage,
+            );
+        }
+        NodeKind::Block { .. }
+        | NodeKind::Subroutine { .. }
+        | NodeKind::Method { .. }
+        | NodeKind::Class { .. }
+        | NodeKind::If { .. }
+        | NodeKind::While { .. }
+        | NodeKind::For { .. }
+        | NodeKind::Foreach { .. }
+        | NodeKind::Eval { .. }
+        | NodeKind::Do { .. }
+        | NodeKind::Defer { .. }
+        | NodeKind::Try { .. }
+        | NodeKind::Given { .. }
+        | NodeKind::When { .. }
+        | NodeKind::Default { .. }
+        | NodeKind::PhaseBlock { .. }
+        | NodeKind::Package { block: Some(_), .. } => {
+            for child in node.children() {
+                collect_top_level_implicit_strict_usage_inner(
+                    child,
+                    implicit_modules,
+                    scope_depth + 1,
+                    usage,
+                );
+            }
+        }
+        _ => {
+            for child in node.children() {
+                collect_top_level_implicit_strict_usage_inner(
+                    child,
+                    implicit_modules,
+                    scope_depth,
+                    usage,
+                );
+            }
+        }
     }
 }
 
@@ -566,20 +670,39 @@ mod tests {
     }
 
     #[test]
-    fn implicit_strict_module_inside_eval_suppresses_diagnostic_known_limitation() {
-        // use Moose inside eval { } — walk_node visits it scope-unaware and sets
-        // has_strict=true even though Moose is only in eval scope.  This is a
-        // pre-existing limitation (walk_node does not model lexical scoping for
-        // implicit-strict OO modules).  The fix in this PR restores correct
-        // behaviour for `use strict` / `use warnings` via PragmaTracker, but
-        // IMPLICIT_STRICT_MODULES remain scope-unaware in walk_node.
-        //
-        // Asserting the current (known-limited) behaviour so any future change is
-        // deliberate: PL100 currently does NOT fire even though Moose is eval-scoped.
+    fn implicit_strict_module_inside_eval_does_not_suppress_file_scope_diagnostics() {
+        // Conservative handling: a framework import inside eval scope must not
+        // suppress file-scope missing strict/warnings diagnostics.
         let diags = strict_warnings_diags("eval { use Moose; };\nmy $x = 1;\n");
         assert!(
-            diags.iter().all(|d| d.code.as_deref() != Some("PL100")),
-            "known limitation: Moose in eval suppresses PL100 (walk_node is scope-unaware for OO modules)"
+            diags.iter().any(|d| d.code.as_deref() == Some("PL100")),
+            "eval-scoped Moose must not suppress missing-strict (PL100)"
+        );
+        assert!(
+            diags.iter().any(|d| d.code.as_deref() == Some("PL101")),
+            "eval-scoped Moose must not suppress missing-warnings (PL101)"
+        );
+    }
+
+    #[test]
+    fn implicit_strict_module_at_top_level_suppresses_file_scope_diagnostics() {
+        let diags = strict_warnings_diags("use Moose;\nmy $x = 1;\n");
+        assert!(
+            diags.iter().all(|d| !matches!(d.code.as_deref(), Some("PL100") | Some("PL101"))),
+            "top-level Moose should suppress missing-strict/missing-warnings diagnostics"
+        );
+    }
+
+    #[test]
+    fn implicit_strict_module_inside_sub_does_not_suppress_file_scope_diagnostics() {
+        let diags = strict_warnings_diags("sub build { use Moose; }\nmy $x = 1;\n");
+        assert!(
+            diags.iter().any(|d| d.code.as_deref() == Some("PL100")),
+            "sub-scoped Moose must not suppress missing-strict (PL100)"
+        );
+        assert!(
+            diags.iter().any(|d| d.code.as_deref() == Some("PL101")),
+            "sub-scoped Moose must not suppress missing-warnings (PL101)"
         );
     }
 }
