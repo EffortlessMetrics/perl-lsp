@@ -38,3 +38,17 @@ fn uri_module_parse_uri_handles_percent_encoding() {
     let uri = parse_uri(input);
     assert!(uri.as_str() == input, "parse_uri should preserve percent-encoding");
 }
+
+#[test]
+fn uri_module_parse_uri_handles_utf8_file_path() {
+    let input = "file:///tmp/naïve/模块.pm";
+    let uri = parse_uri(input);
+    assert_eq!(uri.as_str(), "file:///tmp/na%C3%AFve/%E6%A8%A1%E5%9D%97.pm");
+}
+
+#[test]
+fn uri_module_parse_uri_preserves_encoded_utf8_path() {
+    let input = "file:///tmp/na%C3%AFve/%E6%A8%A1%E5%9D%97.pm";
+    let uri = parse_uri(input);
+    assert_eq!(uri.as_str(), input, "parse_uri should preserve valid UTF-8 percent encoding");
+}
