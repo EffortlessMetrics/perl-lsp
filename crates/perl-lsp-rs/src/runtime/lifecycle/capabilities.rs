@@ -4,7 +4,16 @@
 
 use super::super::*;
 use perl_workspace::folder::{extract_workspace_folder_uris, root_path_to_file_uri};
-use serde_json::{Value, json};
+use serde_json::{json, Value};
+
+fn is_opencode_client(params: &Value) -> bool {
+    params
+        .get("clientInfo")
+        .and_then(|info| info.get("name"))
+        .and_then(|name| name.as_str())
+        .map(|name| name.to_ascii_lowercase().contains("opencode"))
+        .unwrap_or(false)
+}
 
 impl LspServer {
     /// Handle initialize request
@@ -180,17 +189,27 @@ impl LspServer {
                 }
             } // caps lock released here
 
-            // Check if client supports pull diagnostics
+            // Check if client supports pull diagnostics.
+            //
+            // OpenCode currently relies on push diagnostics (publishDiagnostics)
+            // even when it advertises textDocument.diagnostic capability.
+            // Treat it as push-only to avoid suppressing diagnostics.
+            let is_opencode = is_opencode_client(params);
             let supports_pull = params
                 .get("capabilities")
                 .and_then(|c| c.get("textDocument"))
                 .and_then(|td| td.get("diagnostic"))
                 .is_some();
 
-            if supports_pull {
+            if supports_pull && !is_opencode {
                 self.client_supports_pull_diags.store(true, Ordering::Relaxed);
                 tracing::debug!(
                     "Client supports pull diagnostics - suppressing automatic publishing"
+                );
+            } else if supports_pull && is_opencode {
+                tracing::debug!(
+                    "OpenCode client detected - keeping push diagnostics enabled despite \
+                     textDocument.diagnostic capability"
                 );
             }
 
@@ -411,10 +430,11 @@ pub(crate) fn apply_disabled_feature_id(
 
 #[cfg(test)]
 mod tests {
-    use super::apply_disabled_feature_id;
-    use crate::LspServer;
+    use super::{apply_disabled_feature_id, is_opencode_client};
     use crate::protocol::capabilities::BuildFlags;
+    use crate::LspServer;
     use serde_json::json;
+    use std::sync::atomic::Ordering;
 
     #[test]
     fn apply_disabled_feature_id_zeros_correct_field() {
@@ -489,5 +509,59 @@ mod tests {
         let _ = server.handle_initialize(Some(params));
 
         assert!(server.client_capabilities.lock().workspace_configuration_support);
+    }
+
+    #[test]
+    fn opencode_client_detection_is_case_insensitive() {
+        let params = json!({
+            "clientInfo": {
+                "name": "OpenCode"
+            }
+        });
+        assert!(is_opencode_client(&params));
+    }
+
+    #[test]
+    fn initialize_keeps_push_diagnostics_for_opencode() {
+        let server = LspServer::new();
+        let params = json!({
+            "clientInfo": {
+                "name": "opencode"
+            },
+            "capabilities": {
+                "textDocument": {
+                    "diagnostic": {}
+                }
+            }
+        });
+
+        let _ = server.handle_initialize(Some(params));
+
+        assert!(
+            !server.client_supports_pull_diags.load(Ordering::Relaxed),
+            "opencode should keep push diagnostics enabled"
+        );
+    }
+
+    #[test]
+    fn initialize_enables_pull_diagnostics_for_non_opencode_clients() {
+        let server = LspServer::new();
+        let params = json!({
+            "clientInfo": {
+                "name": "vscode"
+            },
+            "capabilities": {
+                "textDocument": {
+                    "diagnostic": {}
+                }
+            }
+        });
+
+        let _ = server.handle_initialize(Some(params));
+
+        assert!(
+            server.client_supports_pull_diags.load(Ordering::Relaxed),
+            "non-opencode clients with textDocument.diagnostic should enable pull diagnostics"
+        );
     }
 }
