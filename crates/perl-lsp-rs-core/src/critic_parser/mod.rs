@@ -134,6 +134,129 @@ mod tests {
         assert_eq!(parsed.len(), 1);
         assert_eq!(parsed[0].line, 1);
     }
+
+    #[test]
+    fn parse_perlcritic_line_accepts_severity_boundaries() {
+        for sev in 1u8..=5 {
+            let line = format!("lib/Foo.pm:1:1:{sev}:TestingAndDebugging::RequireUseStrict:msg");
+            let parsed = parse_perlcritic_line(&line)
+                .unwrap_or_else(|| panic!("severity {sev} must parse"));
+            assert_eq!(parsed.severity, sev);
+        }
+    }
+
+    #[test]
+    fn parse_perlcritic_line_rejects_overflow_severity() {
+        // u8 max (255) is out of the 1..=5 range; u8 parse succeeds, range check rejects.
+        let line = "lib/Foo.pm:1:1:255:TestingAndDebugging::RequireUseStrict:msg";
+        assert!(parse_perlcritic_line(line).is_none());
+    }
+
+    #[test]
+    fn parse_perlcritic_line_rejects_u8_overflow_severity() {
+        // 256 overflows u8; parse fails → line skipped entirely (no partial record).
+        let line = "lib/Foo.pm:1:1:256:TestingAndDebugging::RequireUseStrict:msg";
+        assert!(parse_perlcritic_line(line).is_none());
+    }
+
+    #[test]
+    fn parse_perlcritic_line_handles_windows_path_with_crlf() {
+        // Windows drive path + CRLF line ending: the `\r` trim must run before
+        // parse, and the drive colon must still be treated as part of the file path.
+        let line = "C:\\project\\lib\\Foo.pm:10:4:2:TestingAndDebugging::RequireUseStrict:msg\r";
+        let parsed = parse_perlcritic_line(line).expect("windows+CRLF must parse");
+        assert_eq!(parsed.file, "C:\\project\\lib\\Foo.pm");
+        assert_eq!(parsed.line, 10);
+        assert_eq!(parsed.message, "msg");
+    }
+
+    #[test]
+    fn parse_perlcritic_output_handles_crlf_separated_input() {
+        // Whole output in CRLF — str::lines() already splits, but each line still
+        // carries a trailing `\r` that must be trimmed.
+        let output =
+            "lib/Foo.pm:1:1:5:TestingAndDebugging::RequireUseStrict:msg1\r\n\
+             lib/Bar.pm:2:2:3:TestingAndDebugging::RequireUseWarnings:msg2\r\n";
+        let parsed = parse_perlcritic_output(output);
+        assert_eq!(parsed.len(), 2);
+        assert_eq!(parsed[0].message, "msg1");
+        assert_eq!(parsed[1].message, "msg2");
+        assert!(!parsed[0].policy.contains('\r'));
+        assert!(!parsed[1].policy.contains('\r'));
+    }
+
+    #[test]
+    fn parse_perlcritic_line_rejects_empty_policy() {
+        // Empty policy segment (`::` with nothing in between) must not parse.
+        let line = "lib/Foo.pm:1:1:3::msg";
+        assert!(parse_perlcritic_line(line).is_none());
+    }
+
+    #[test]
+    fn parse_perlcritic_line_rejects_malformed_policy_starting_digit() {
+        // Policy segments must start with ASCII letter or `_`, not a digit.
+        let line = "lib/Foo.pm:1:1:3:2BadPolicy:msg";
+        assert!(parse_perlcritic_line(line).is_none());
+    }
+
+    #[test]
+    fn parse_perlcritic_line_accepts_underscore_policy() {
+        // Valid Perl package segment can start with underscore.
+        let line = "lib/Foo.pm:1:1:3:_Private::Policy:msg";
+        let parsed = parse_perlcritic_line(line).expect("underscore policy must parse");
+        assert_eq!(parsed.policy, "_Private::Policy");
+    }
+
+    #[test]
+    fn parse_perlcritic_line_preserves_colons_inside_message() {
+        // The message after the policy may contain colons (e.g. "line: 12").
+        // `tail[boundary + 1..]` should include them verbatim.
+        let line = "lib/Foo.pm:1:1:3:TestingAndDebugging::RequireUseStrict:found at offset: 42";
+        let parsed = parse_perlcritic_line(line).expect("message with colons must parse");
+        assert_eq!(parsed.message, "found at offset: 42");
+    }
+
+    #[test]
+    fn parse_perlcritic_line_handles_unicode_file_path() {
+        // Non-ASCII in file path (char-based iteration, not byte).
+        let line = "lib/日本/Foo.pm:1:1:3:TestingAndDebugging::RequireUseStrict:msg";
+        let parsed = parse_perlcritic_line(line).expect("unicode path must parse");
+        assert_eq!(parsed.file, "lib/日本/Foo.pm");
+    }
+
+    #[test]
+    fn parse_perlcritic_line_rejects_empty_string() {
+        assert!(parse_perlcritic_line("").is_none());
+    }
+
+    #[test]
+    fn parse_perlcritic_line_rejects_whitespace_only() {
+        assert!(parse_perlcritic_line("   ").is_none());
+        assert!(parse_perlcritic_line("\t\r").is_none());
+    }
+
+    #[test]
+    fn parse_perlcritic_line_rejects_truncated_line() {
+        // Missing message and/or policy.
+        assert!(parse_perlcritic_line("lib/Foo.pm:1:1:3").is_none());
+        assert!(parse_perlcritic_line("lib/Foo.pm:1:1:3:TestingAndDebugging::RequireUseStrict").is_none());
+        // Empty message.
+        assert!(parse_perlcritic_line("lib/Foo.pm:1:1:3:TestingAndDebugging::RequireUseStrict:").is_none());
+    }
+
+    #[test]
+    fn parse_perlcritic_line_rejects_negative_numbers() {
+        // `u32::from_str("-1")` fails → line skipped.
+        let line = "lib/Foo.pm:-1:1:3:TestingAndDebugging::RequireUseStrict:msg";
+        assert!(parse_perlcritic_line(line).is_none());
+    }
+
+    #[test]
+    fn parse_perlcritic_output_empty_input_returns_empty_vec() {
+        assert!(parse_perlcritic_output("").is_empty());
+        assert!(parse_perlcritic_output("\n\n\n").is_empty());
+        assert!(parse_perlcritic_output("\r\n\r\n").is_empty());
+    }
 }
 
 fn find_policy_message_boundary(tail: &str) -> Option<usize> {
