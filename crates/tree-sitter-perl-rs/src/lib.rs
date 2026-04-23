@@ -433,6 +433,25 @@ impl<'tree> TreeCursor<'tree> {
         true
     }
 
+    /// Moves to the previous sibling of the current node.
+    ///
+    /// Returns `true` on success. Returns `false` if the cursor is at root or if
+    /// there is no previous sibling.
+    pub fn goto_previous_sibling(&mut self) -> bool {
+        if self.path.is_empty() {
+            return false;
+        }
+
+        let current_index = self.path[self.path.len() - 1];
+        if current_index == 0 {
+            return false;
+        }
+
+        let last_pos = self.path.len() - 1;
+        self.path[last_pos] = current_index - 1;
+        true
+    }
+
     /// Moves to the parent node.
     ///
     /// Returns `true` when movement succeeds, `false` when already at root.
@@ -815,6 +834,13 @@ mod tests {
         assert_eq!(cursor.node().grammar_kind(), "my_declaration");
         assert!(cursor.goto_next_sibling(), "first statement should have a sibling");
         assert_eq!(cursor.node().grammar_kind(), "my_declaration");
+        assert!(cursor.goto_previous_sibling(), "second statement should have a previous sibling");
+        assert_eq!(cursor.node().grammar_kind(), "my_declaration");
+        assert!(
+            !cursor.goto_previous_sibling(),
+            "first statement should not have a previous sibling"
+        );
+        assert!(cursor.goto_next_sibling(), "should be able to move back to second statement");
         assert!(!cursor.goto_next_sibling(), "second statement should be the last sibling");
     }
 
