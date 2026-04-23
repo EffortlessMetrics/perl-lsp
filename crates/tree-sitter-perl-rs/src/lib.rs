@@ -60,6 +60,18 @@ use perl_parser_core::Parser as CoreParser;
 /// Mirrors `tree_sitter::InputEdit` field layout for drop-in compatibility.
 pub use perl_parser_core::edit::Edit as InputEdit;
 
+/// A tree-sitter-compatible source position.
+///
+/// `row` and `column` are both zero-based and `column` is measured in bytes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct Point {
+    /// Zero-based row number.
+    pub row: usize,
+    /// Zero-based byte column within `row`.
+    pub column: usize,
+}
+
 /// A Perl parser with tree-sitter-style ergonomics.
 ///
 /// Wraps the v3 recursive-descent Perl parser. Create one parser instance and call
@@ -336,6 +348,20 @@ impl<'tree> Node<'tree> {
         self.inner.location.end.min(self.tree_source.len())
     }
 
+    /// Returns the start position as a tree-sitter-compatible [`Point`].
+    ///
+    /// `row`/`column` are zero-based and `column` is measured in bytes.
+    pub fn start_position(&self) -> Point {
+        byte_to_point(self.tree_source, self.start_byte())
+    }
+
+    /// Returns the end position as a tree-sitter-compatible [`Point`].
+    ///
+    /// `row`/`column` are zero-based and `column` is measured in bytes.
+    pub fn end_position(&self) -> Point {
+        byte_to_point(self.tree_source, self.end_byte())
+    }
+
     /// Extracts the source text slice covered by this node.
     ///
     /// Returns `Err` only when the byte range contains invalid UTF-8, which is unlikely
@@ -514,6 +540,23 @@ fn pascal_to_snake(s: &str) -> String {
     out
 }
 
+fn byte_to_point(source: &str, byte: usize) -> Point {
+    let clamped = byte.min(source.len());
+    let mut row = 0usize;
+    let mut column = 0usize;
+
+    for b in source.as_bytes().iter().take(clamped) {
+        if *b == b'\n' {
+            row += 1;
+            column = 0;
+        } else {
+            column += 1;
+        }
+    }
+
+    Point { row, column }
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -565,6 +608,28 @@ mod tests {
         let root = tree.root_node();
         assert_eq!(root.start_byte(), 0);
         assert_eq!(root.end_byte(), source.len(), "root end_byte should clamp to source length");
+    }
+
+    #[test]
+    fn test_start_and_end_position_are_tree_sitter_compatible() {
+        let source = "my $x = 1;\nmy $y = 2;";
+        let mut p = Parser::new();
+        let tree = must_some(p.parse(source));
+        let root = tree.root_node();
+
+        assert_eq!(root.start_position(), Point { row: 0, column: 0 });
+        assert_eq!(root.end_position(), Point { row: 1, column: 10 });
+    }
+
+    #[test]
+    fn test_end_position_column_uses_bytes_not_chars() {
+        let source = "my $emoji = \"😀\";";
+        let mut p = Parser::new();
+        let tree = must_some(p.parse(source));
+        let root = tree.root_node();
+
+        assert_eq!(root.end_byte(), source.len());
+        assert_eq!(root.end_position(), Point { row: 0, column: source.len() });
     }
 
     /// Verify the end_byte clamp invariant: for every node in the tree,
