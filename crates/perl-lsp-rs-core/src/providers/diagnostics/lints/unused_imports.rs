@@ -72,6 +72,7 @@ const IMPLICIT_EXPORT_SKIP_LIST: &[&str] = &[
     "Mouse",
     "Mouse::Role",
     "Modern::Perl",
+    "Droid::Factory",
     "Dancer",
     "Dancer2",
     "Catalyst",

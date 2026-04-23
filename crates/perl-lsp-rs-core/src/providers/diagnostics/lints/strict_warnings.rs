@@ -77,6 +77,7 @@ pub fn check_strict_warnings(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
         "Moose",
         "MooseX::StrictConstructor",
         "Modern::Perl",
+        "Droid::Factory",
         "Dancer2",
         "Catalyst",
         "Mojolicious",
@@ -651,7 +652,7 @@ mod tests {
     fn all_implicit_strict_modules_suppress_at_top_level() {
         // Spot-check two more members of IMPLICIT_STRICT_MODULES to ensure
         // collect_file_scope_use_modules covers the full list, not just Moo.
-        for module in &["Moose", "Modern::Perl"] {
+        for module in &["Moose", "Modern::Perl", "Droid::Factory"] {
             let source = format!("use {};\nmy $x = 1;\n", module);
             let diags = strict_warnings_diags(&source);
             assert!(
