@@ -237,10 +237,6 @@ fn matching_delimiter(open: u8) -> (u8, bool) {
     }
 }
 
-fn is_identifier_byte(b: u8) -> bool {
-    b.is_ascii_alphanumeric() || b == b'_'
-}
-
 fn collect_line_variables(line: &str, include_non_scalars: bool) -> Vec<(usize, usize, String)> {
     let mut matches = Vec::new();
 
