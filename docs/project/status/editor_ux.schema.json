@@ -9,6 +9,7 @@
     "scorecard",
     "harness",
     "top_line_metrics",
+    "tracking_summary",
     "integration_points"
   ],
   "properties": {
@@ -18,7 +19,7 @@
     },
     "receipt_kind": {
       "type": "string",
-      "const": "planning_scaffold"
+      "enum": ["planning_scaffold", "measured_partial"]
     },
     "scorecard": {
       "type": "string",
@@ -102,10 +103,35 @@
           },
           "owner": {
             "type": "string"
+          },
+          "value": {
+            "type": ["number", "null"],
+            "minimum": 0
           }
         },
         "additionalProperties": false
       }
+    },
+    "tracking_summary": {
+      "type": "object",
+      "required": ["tracked_metrics_count", "total_metrics_count", "tracked_ratio"],
+      "properties": {
+        "tracked_metrics_count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 3
+        },
+        "total_metrics_count": {
+          "type": "integer",
+          "const": 3
+        },
+        "tracked_ratio": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      },
+      "additionalProperties": false
     },
     "integration_points": {
       "type": "object",
