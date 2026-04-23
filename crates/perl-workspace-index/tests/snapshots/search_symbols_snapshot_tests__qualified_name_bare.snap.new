@@ -1,0 +1,6 @@
+---
+source: crates/perl-workspace-index/tests/search_symbols_snapshot_tests.rs
+assertion_line: 134
+expression: serialize_results(&by_bare)
+---
+["(File::Find,file:///lib/File/Find.pm,File::Find,Package)", "(find,file:///lib/File/Find.pm,File::Find::find,Subroutine)", "(seek,file:///lib/File/Find.pm,File::Find::seek,Subroutine)"]

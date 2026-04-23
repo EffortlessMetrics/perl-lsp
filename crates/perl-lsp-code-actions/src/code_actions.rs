@@ -252,6 +252,256 @@ impl CodeActionsProvider {
 
         actions
     }
+
+    /// Get a "fix all" code action that aggregates all available quick fixes.
+    ///
+    /// This method iterates over ALL diagnostics (not range-filtered), generates
+    /// quick fixes for each, and merges only the preferred fixes into a single
+    /// `SourceFixAll` action. The returned action is suitable for editors that
+    /// support the LSP `source.fixAll` code action kind.
+    ///
+    /// # Arguments
+    /// * `_ast` - The parsed AST of the source file (unused, kept for API compatibility)
+    /// * `diagnostics` - All diagnostics in the file
+    ///
+    /// # Returns
+    /// A vector containing exactly one `SourceFixAll` action if fixes are available,
+    /// or an empty vector if no fixes exist or all edits would be redundant.
+    ///
+    /// # Key Behaviors
+    /// - Only preferred fixes are included (`is_preferred: true`)
+    /// - Edits are sorted by `location.start` in descending order to prevent offset shifting
+    /// - Duplicate pragmas (`use strict`, `use warnings`) are deduplicated
+    /// - Edits that would insert text already present at the target position are skipped
+    pub fn get_fix_all_actions(&self, _ast: &Node, diagnostics: &[Diagnostic]) -> Vec<CodeAction> {
+        use crate::types::CodeActionEdit;
+        use perl_lsp_rename::TextEdit;
+
+        // Collect all preferred fixes from all diagnostics
+        let mut all_edits: Vec<TextEdit> = Vec::new();
+        let mut diagnostic_codes: Vec<String> = Vec::new();
+        let mut inserted_use_strict = false;
+        let mut inserted_use_warnings = false;
+
+        // Helper to check if source contains a pragma at file scope
+        // (anywhere in the source before non-pragma code, not inside BEGIN block)
+        fn pragma_exists_at_file_scope(source: &str, pragma: &str) -> bool {
+            // Find the pragma in the source
+            if let Some(pos) = source.find(pragma) {
+                // Check if it's inside a BEGIN block by looking for "BEGIN {" before this position
+                let before = &source[..pos];
+                // If there's a "BEGIN {" without a matching "}" before this pragma, it's inside BEGIN
+                let begin_count = before.matches("BEGIN {").count();
+                let end_count = before.matches('}').count();
+                begin_count == end_count
+            } else {
+                false
+            }
+        }
+
+        for diagnostic in diagnostics {
+            let qf_diag = to_quick_fix_diagnostic(diagnostic);
+            let fixes = if let Some(code) = &diagnostic.code {
+                match code.as_str() {
+                    // PL103: Undefined/undeclared variable
+                    c if c == DiagnosticCode::UndefinedVariable.as_str() => {
+                        quick_fixes::fix_undefined_variable(&self.source, &qf_diag)
+                    }
+                    // PL102: Unused variable
+                    c if c == DiagnosticCode::UnusedVariable.as_str() => {
+                        quick_fixes::fix_unused_variable(&self.source, &qf_diag)
+                    }
+                    // PL403: Assignment in condition
+                    c if c == DiagnosticCode::AssignmentInCondition.as_str() => {
+                        quick_fixes::fix_assignment_in_condition(&self.source, &qf_diag)
+                    }
+                    // PL100: Missing use strict
+                    c if c == DiagnosticCode::MissingStrict.as_str() => {
+                        quick_fixes::add_use_strict()
+                    }
+                    // PL101: Missing use warnings
+                    c if c == DiagnosticCode::MissingWarnings.as_str() => {
+                        quick_fixes::add_use_warnings()
+                    }
+                    // PL502: Phase-scoped use strict misconception
+                    c if c == DiagnosticCode::PhaseScopedStrictPragma.as_str() => {
+                        quick_fixes::move_use_strict_to_file_scope(&self.source, &qf_diag)
+                    }
+                    // PL503: Phase-scoped use warnings misconception
+                    c if c == DiagnosticCode::PhaseScopedWarningsPragma.as_str() => {
+                        quick_fixes::move_use_warnings_to_file_scope(&self.source, &qf_diag)
+                    }
+                    // PL500: Deprecated defined()
+                    c if c == DiagnosticCode::DeprecatedDefined.as_str() => {
+                        quick_fixes::fix_deprecated_defined(&self.source, &qf_diag)
+                    }
+                    // PL404: Numeric comparison with undef
+                    c if c == DiagnosticCode::NumericComparisonWithUndef.as_str() => {
+                        quick_fixes::fix_numeric_undef(&self.source, &qf_diag)
+                    }
+                    // PL109: Unquoted bareword
+                    c if c == DiagnosticCode::UnquotedBareword.as_str() => {
+                        quick_fixes::fix_bareword(&self.source, &qf_diag)
+                    }
+                    // PL001/PL002: General parse errors
+                    c if c == DiagnosticCode::ParseError.as_str()
+                        || c == DiagnosticCode::SyntaxError.as_str() =>
+                    {
+                        quick_fixes::fix_parse_error(&self.source, &qf_diag, c)
+                    }
+                    // parse-error-* subcodes
+                    code if code.starts_with("parse-error-") => {
+                        quick_fixes::fix_parse_error(&self.source, &qf_diag, code)
+                    }
+                    // PL108: Unused parameter
+                    c if c == DiagnosticCode::UnusedParameter.as_str() => {
+                        quick_fixes::fix_unused_parameter(&qf_diag)
+                    }
+                    // PL104: Variable shadowing
+                    c if c == DiagnosticCode::VariableShadowing.as_str() => {
+                        quick_fixes::fix_variable_shadowing(&qf_diag)
+                    }
+                    // PL400: Bareword filehandle
+                    c if c == DiagnosticCode::BarewordFilehandle.as_str() => {
+                        quick_fixes::fix_bareword_filehandle(&qf_diag)
+                    }
+                    // Perl::Critic policy alias for bareword filehandle.
+                    "InputOutput::ProhibitBarewordFileHandles" => {
+                        quick_fixes::fix_bareword_filehandle(&qf_diag)
+                    }
+                    // PL401: Two-arg open
+                    c if c == DiagnosticCode::TwoArgOpen.as_str() => {
+                        quick_fixes::fix_two_arg_open(&qf_diag)
+                    }
+                    // Perl::Critic policy aliases for two-arg open.
+                    "InputOutput::RequireBriefOpen" | "InputOutput::RequireThreeArgOpen" => {
+                        quick_fixes::fix_two_arg_open(&qf_diag)
+                    }
+                    // Perl::Critic policies for missing strict/warnings.
+                    "TestingAndDebugging::RequireUseStrict" => quick_fixes::add_use_strict(),
+                    "TestingAndDebugging::RequireUseWarnings" => quick_fixes::add_use_warnings(),
+                    // Perl::Critic policy alias for unused variables.
+                    "Variables::ProhibitUnusedVariables" => {
+                        quick_fixes::fix_unused_variable(&self.source, &qf_diag)
+                    }
+                    // PL200: Missing package declaration
+                    c if c == DiagnosticCode::MissingPackageDeclaration.as_str() => {
+                        quick_fixes::fix_missing_package_declaration(&self.source)
+                    }
+                    // PL105: Variable redeclaration (duplicate my)
+                    c if c == DiagnosticCode::VariableRedeclaration.as_str() => {
+                        quick_fixes::fix_variable_redeclaration(&self.source, &qf_diag)
+                    }
+                    // PL111: Misspelled pragma
+                    c if c == DiagnosticCode::MisspelledPragma.as_str() => {
+                        quick_fixes::fix_misspelled_pragma(&self.source, &qf_diag)
+                    }
+                    // PL406: Unreachable code
+                    c if c == DiagnosticCode::UnreachableCode.as_str() => {
+                        quick_fixes::fix_unreachable_code(&self.source, &qf_diag)
+                    }
+                    // PL300: Duplicate subroutine
+                    c if c == DiagnosticCode::DuplicateSubroutine.as_str() => {
+                        quick_fixes::fix_duplicate_subroutine(&qf_diag)
+                    }
+                    // PL301: Missing return statement
+                    c if c == DiagnosticCode::MissingReturn.as_str() => {
+                        quick_fixes::fix_missing_return(&self.source, &qf_diag)
+                    }
+                    _ => Vec::new(),
+                }
+            } else {
+                Vec::new()
+            };
+
+            // Collect only the preferred fix for this diagnostic
+            for fix in fixes {
+                if fix.is_preferred {
+                    // Track diagnostic codes for the SourceFixAll action
+                    if let Some(code) = &diagnostic.code {
+                        if !diagnostic_codes.contains(code) {
+                            diagnostic_codes.push(code.clone());
+                        }
+                    }
+
+                    // Handle pragma deduplication
+                    // For PL502/PL503 (move operations), the first edit is a delete (empty new_text)
+                    // and the pragma text is in the second edit, so we check all edits
+                    let is_strict_pragma =
+                        fix.edit.changes.iter().any(|e| e.new_text.contains("use strict"));
+                    let is_warnings_pragma =
+                        fix.edit.changes.iter().any(|e| e.new_text.contains("use warnings"));
+
+                    // Check if pragma already exists at file scope (not inside BEGIN block)
+                    let strict_at_file_scope =
+                        pragma_exists_at_file_scope(&self.source, "use strict");
+                    let warnings_at_file_scope =
+                        pragma_exists_at_file_scope(&self.source, "use warnings");
+
+                    // Skip if we've already added this pragma type or it already exists at file scope
+                    if is_strict_pragma {
+                        if inserted_use_strict || strict_at_file_scope {
+                            continue;
+                        }
+                        inserted_use_strict = true;
+                    }
+                    if is_warnings_pragma {
+                        if inserted_use_warnings || warnings_at_file_scope {
+                            continue;
+                        }
+                        inserted_use_warnings = true;
+                    }
+
+                    // Add the edits from this preferred fix
+                    all_edits.extend(fix.edit.changes);
+                }
+            }
+        }
+
+        // If no edits were collected, return empty
+        if all_edits.is_empty() {
+            return Vec::new();
+        }
+
+        // Sort edits by descending start position to prevent offset shifting
+        // when applying edits from highest to lowest position
+        all_edits.sort_by(|a, b| b.location.start.cmp(&a.location.start));
+
+        // Deduplicate edits: skip if new_text already exists at location
+        let mut deduplicated_edits: Vec<TextEdit> = Vec::new();
+        for edit in all_edits {
+            let start = edit.location.start;
+            let end = edit.location.end;
+            let new_text = &edit.new_text;
+
+            // Check if this exact edit already exists at this position
+            let already_exists = if start == end {
+                // Insertion: check if new_text already exists at this position
+                self.source[start..].starts_with(new_text)
+            } else {
+                // Replacement: check if the text at this position already equals new_text
+                self.source.get(start..end).is_some_and(|existing| existing == new_text)
+            };
+
+            if !already_exists {
+                deduplicated_edits.push(edit);
+            }
+        }
+
+        // If no edits after deduplication, return empty
+        if deduplicated_edits.is_empty() {
+            return Vec::new();
+        }
+
+        // Create the SourceFixAll action with all merged edits
+        vec![CodeAction {
+            title: "Fix All".to_string(),
+            kind: CodeActionKind::SourceFixAll,
+            diagnostics: diagnostic_codes,
+            edit: CodeActionEdit { changes: deduplicated_edits },
+            is_preferred: false,
+        }]
+    }
 }
 
 #[cfg(test)]

@@ -1,0 +1,6 @@
+---
+source: crates/perl-workspace-index/tests/search_symbols_snapshot_tests.rs
+assertion_line: 155
+expression: serialize_results(&results)
+---
+["(abc,file:///lib/Test.pm,Test::abc,Subroutine)", "(abcd,file:///lib/Test.pm,Test::abcd,Subroutine)", "(abcdef,file:///lib/Test.pm,Test::abcdef,Subroutine)"]

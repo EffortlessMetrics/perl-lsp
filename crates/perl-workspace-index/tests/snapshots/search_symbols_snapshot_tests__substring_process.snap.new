@@ -1,0 +1,6 @@
+---
+source: crates/perl-workspace-index/tests/search_symbols_snapshot_tests.rs
+assertion_line: 111
+expression: serialize_results(&results)
+---
+["(PROCESS,file:///lib/Process.pm,Process::PROCESS,Subroutine)", "(Process,file:///lib/Process.pm,Process,Package)", "(data_processor,file:///lib/Process.pm,Process::data_processor,Subroutine)", "(process_data,file:///lib/Process.pm,Process::process_data,Subroutine)", "(process_file,file:///lib/Process.pm,Process::process_file,Subroutine)"]

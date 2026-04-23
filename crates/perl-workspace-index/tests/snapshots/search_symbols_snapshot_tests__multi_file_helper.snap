@@ -1,0 +1,5 @@
+---
+source: crates/perl-workspace-index/tests/search_symbols_snapshot_tests.rs
+expression: serialize_results(&results)
+---
+["(helper,file:///lib/ModuleA.pm,ModuleA::helper,Subroutine)", "(helper,file:///lib/ModuleB.pm,ModuleB::helper,Subroutine)"]
