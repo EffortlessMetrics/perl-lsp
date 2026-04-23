@@ -230,6 +230,55 @@ fn module_sort_tier(name: &str) -> &'static str {
     }
 }
 
+fn levenshtein_distance(left: &str, right: &str) -> usize {
+    if left == right {
+        return 0;
+    }
+    if left.is_empty() {
+        return right.chars().count();
+    }
+    if right.is_empty() {
+        return left.chars().count();
+    }
+
+    let right_chars: Vec<char> = right.chars().collect();
+    let mut prev: Vec<usize> = (0..=right_chars.len()).collect();
+    let mut curr: Vec<usize> = vec![0; right_chars.len() + 1];
+
+    for (i, left_char) in left.chars().enumerate() {
+        curr[0] = i + 1;
+        for (j, right_char) in right_chars.iter().enumerate() {
+            let cost = usize::from(left_char != *right_char);
+            curr[j + 1] = (curr[j] + 1).min(prev[j + 1] + 1).min(prev[j] + cost);
+        }
+        std::mem::swap(&mut prev, &mut curr);
+    }
+
+    prev[right_chars.len()]
+}
+
+fn likely_module_typo_match(prefix: &str, candidate: &str) -> bool {
+    if prefix.is_empty() {
+        return false;
+    }
+
+    // Keep typo matching scoped to similarly-namespaced modules to avoid
+    // unrelated noise in `use` completion fallback suggestions.
+    let same_namespace = match (prefix.split("::").next(), candidate.split("::").next()) {
+        (Some(a), Some(b)) => a.eq_ignore_ascii_case(b),
+        _ => false,
+    };
+    if !same_namespace {
+        return false;
+    }
+
+    let prefix_lower = prefix.to_ascii_lowercase();
+    let candidate_lower = candidate.to_ascii_lowercase();
+    let distance = levenshtein_distance(&prefix_lower, &candidate_lower);
+
+    distance <= 2
+}
+
 /// Add module name completions for `use` and `require` statements.
 ///
 /// When the cursor is after `use ` or `require `, suggests package names from the
@@ -251,22 +300,29 @@ pub fn add_use_module_completions(
 
     let mut seen: HashSet<String> = HashSet::new();
 
-    // Search for package symbols matching the prefix
-    let all_symbols = if context.prefix.is_empty() {
-        index.all_symbols()
-    } else {
-        index.find_symbols(&context.prefix)
-    };
+    // Search for package symbols matching the prefix.
+    let all_symbols = index.all_symbols();
+    let package_symbols: Vec<_> = all_symbols
+        .into_iter()
+        .filter(|symbol| symbol.kind == WsSymbolKind::Package)
+        .collect();
 
-    for symbol in all_symbols {
-        if symbol.kind != WsSymbolKind::Package {
-            continue;
-        }
+    let mut matched_symbols: Vec<_> = package_symbols
+        .iter()
+        .filter(|symbol| context.prefix.is_empty() || symbol.name.starts_with(&context.prefix))
+        .cloned()
+        .collect();
 
-        // Match against the module name prefix
-        if !context.prefix.is_empty() && !symbol.name.starts_with(&context.prefix) {
-            continue;
-        }
+    // Typo-tolerant fallback for module names in use/require statements.
+    if matched_symbols.is_empty() && !context.prefix.is_empty() {
+        matched_symbols = package_symbols
+            .iter()
+            .filter(|symbol| likely_module_typo_match(&context.prefix, &symbol.name))
+            .cloned()
+            .collect();
+    }
+
+    for symbol in matched_symbols {
 
         if !seen.insert(symbol.name.clone()) {
             continue;

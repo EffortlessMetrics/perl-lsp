@@ -3448,6 +3448,30 @@ sub helper { }
     }
 
     #[test]
+    fn test_use_statement_typo_still_suggests_workspace_module()
+    -> Result<(), Box<dyn std::error::Error>> {
+        // Typo in the module name should still suggest the intended workspace package.
+        let index = Arc::new(WorkspaceIndex::new());
+        index.index_file(
+            Url::parse("file:///lib/Droid/Factory.pm")?,
+            "package Droid::Factory;\n1;\n".to_string(),
+        )?;
+
+        let code = "use Droid::Facxtory";
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let provider = CompletionProvider::new_with_index(&ast, Some(index));
+        let completions = provider.get_completions(code, code.len());
+
+        assert!(
+            completions.iter().any(|c| c.label == "Droid::Factory" && c.kind == CompletionItemKind::Module),
+            "use Droid::Facxtory should suggest Droid::Factory; got: {:?}",
+            completions.iter().map(|c| (&c.label, &c.kind)).collect::<Vec<_>>()
+        );
+        Ok(())
+    }
+
+    #[test]
     fn test_require_statement_skips_file_path() -> Result<(), Box<dyn std::error::Error>> {
         let index = Arc::new(WorkspaceIndex::new());
         index
