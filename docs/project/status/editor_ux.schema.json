@@ -9,6 +9,7 @@
     "scorecard",
     "harness",
     "top_line_metrics",
+    "signal_sources",
     "integration_points"
   ],
   "properties": {
@@ -18,7 +19,7 @@
     },
     "receipt_kind": {
       "type": "string",
-      "const": "planning_scaffold"
+      "const": "tracking_receipt"
     },
     "scorecard": {
       "type": "string",
@@ -102,10 +103,37 @@
           },
           "owner": {
             "type": "string"
+          },
+          "value": {
+            "type": ["number", "integer", "null"]
           }
         },
         "additionalProperties": false
       }
+    },
+    "signal_sources": {
+      "type": "object",
+      "required": [
+        "ux_harness",
+        "metrics_receipt",
+        "manual_smoke_workflow",
+        "open_issue_burn_down"
+      ],
+      "properties": {
+        "ux_harness": {
+          "type": "string"
+        },
+        "metrics_receipt": {
+          "type": "string"
+        },
+        "manual_smoke_workflow": {
+          "type": "string"
+        },
+        "open_issue_burn_down": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
     },
     "integration_points": {
       "type": "object",

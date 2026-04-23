@@ -169,10 +169,12 @@ pub(super) fn generate_quality_status(root: &Path, original: &str) -> Result<Str
 pub(super) fn generate_editor_ux_receipt(root: &Path) -> Result<String> {
     let scenario_files = collect_ux_scenario_files(root);
     let scenario_count = scenario_files.len();
+    let metrics_path = root.join(".ci").join("metrics").join("editor_ux.json");
+    let measured_metrics = read_editor_ux_metrics(&metrics_path);
 
     let receipt = serde_json::json!({
         "schema_version": 1,
-        "receipt_kind": "planning_scaffold",
+        "receipt_kind": "tracking_receipt",
         "scorecard": "editor_ux",
         "harness": {
             "crate": "crates/perl-lsp-ux-tests",
@@ -182,20 +184,29 @@ pub(super) fn generate_editor_ux_receipt(root: &Path) -> Result<String> {
         "top_line_metrics": [
             {
                 "name": "workflow_pass_rate",
-                "state": "planned",
+                "state": measured_state(measured_metrics.workflow_pass_rate),
                 "owner": "perl-lsp-ux-tests",
+                "value": measured_metrics.workflow_pass_rate,
             },
             {
                 "name": "workflow_stability_rate",
-                "state": "planned",
+                "state": measured_state(measured_metrics.workflow_stability_rate),
                 "owner": "perl-lsp-ux-tests",
+                "value": measured_metrics.workflow_stability_rate,
             },
             {
                 "name": "p95_time_to_first_useful_result_ms",
-                "state": "planned",
+                "state": measured_state_u64(measured_metrics.p95_time_to_first_useful_result_ms),
                 "owner": "perl-lsp-ux-tests",
+                "value": measured_metrics.p95_time_to_first_useful_result_ms,
             },
         ],
+        "signal_sources": {
+            "ux_harness": "crates/perl-lsp-ux-tests/tests",
+            "metrics_receipt": metrics_path.to_string_lossy(),
+            "manual_smoke_workflow": "scripts/smoke-test.sh",
+            "open_issue_burn_down": "README.md#known-gaps-toward-solid-ux",
+        },
         "integration_points": {
             "ci_lane": "just ux-tests",
             "release_lane": "just ux-tests-full",
@@ -205,6 +216,43 @@ pub(super) fn generate_editor_ux_receipt(root: &Path) -> Result<String> {
     });
 
     serde_json::to_string_pretty(&receipt).context("serializing editor UX receipt")
+}
+
+#[derive(Default)]
+struct EditorUxTopLineMetrics {
+    workflow_pass_rate: Option<f64>,
+    workflow_stability_rate: Option<f64>,
+    p95_time_to_first_useful_result_ms: Option<u64>,
+}
+
+fn measured_state(value: Option<f64>) -> &'static str {
+    if value.is_some() { "measured" } else { "planned" }
+}
+
+fn measured_state_u64(value: Option<u64>) -> &'static str {
+    if value.is_some() { "measured" } else { "planned" }
+}
+
+fn read_editor_ux_metrics(path: &Path) -> EditorUxTopLineMetrics {
+    let Ok(raw) = fs::read_to_string(path) else {
+        return EditorUxTopLineMetrics::default();
+    };
+    let Ok(doc) = serde_json::from_str::<serde_json::Value>(&raw) else {
+        return EditorUxTopLineMetrics::default();
+    };
+    let Some(metrics) = doc.get("metrics") else {
+        return EditorUxTopLineMetrics::default();
+    };
+
+    EditorUxTopLineMetrics {
+        workflow_pass_rate: metrics.get("workflow_pass_rate").and_then(serde_json::Value::as_f64),
+        workflow_stability_rate: metrics
+            .get("workflow_stability_rate")
+            .and_then(serde_json::Value::as_f64),
+        p95_time_to_first_useful_result_ms: metrics
+            .get("p95_time_to_first_useful_result_ms")
+            .and_then(serde_json::Value::as_u64),
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -258,7 +306,7 @@ mod tests {
         let receipt_raw = generate_editor_ux_receipt(&root)?;
         let receipt: serde_json::Value = serde_json::from_str(&receipt_raw)?;
         assert_eq!(receipt["schema_version"], 1);
-        assert_eq!(receipt["receipt_kind"], "planning_scaffold");
+        assert_eq!(receipt["receipt_kind"], "tracking_receipt");
         assert_eq!(receipt["scorecard"], "editor_ux");
         assert_eq!(receipt["harness"]["crate"], "crates/perl-lsp-ux-tests");
         assert_eq!(
@@ -279,7 +327,36 @@ mod tests {
                 "p95_time_to_first_useful_result_ms",
             ])
         );
+        assert!(
+            receipt["signal_sources"]["manual_smoke_workflow"].is_string(),
+            "signal_sources.manual_smoke_workflow should be present"
+        );
         assert_eq!(receipt["integration_points"]["ci_lane"], "just ux-tests");
+        Ok(())
+    }
+
+    #[test]
+    fn test_read_editor_ux_metrics_from_metrics_receipt() -> Result<()> {
+        let dir = tempfile::tempdir()?;
+        let metrics_dir = dir.path().join(".ci/metrics");
+        fs::create_dir_all(&metrics_dir)?;
+        fs::write(
+            metrics_dir.join("editor_ux.json"),
+            r#"{
+  "schema_version": 1,
+  "subsystem": "editor_ux",
+  "metrics": {
+    "workflow_pass_rate": 0.95,
+    "workflow_stability_rate": 0.9,
+    "p95_time_to_first_useful_result_ms": 180
+  }
+}"#,
+        )?;
+
+        let parsed = read_editor_ux_metrics(&metrics_dir.join("editor_ux.json"));
+        assert_eq!(parsed.workflow_pass_rate, Some(0.95));
+        assert_eq!(parsed.workflow_stability_rate, Some(0.9));
+        assert_eq!(parsed.p95_time_to_first_useful_result_ms, Some(180));
         Ok(())
     }
 }

@@ -28,24 +28,33 @@
     "release_lane": "just ux-tests-full",
     "status_update": "cargo xtask update-status --only quality"
   },
-  "receipt_kind": "planning_scaffold",
+  "receipt_kind": "tracking_receipt",
   "schema_version": 1,
+  "signal_sources": {
+    "manual_smoke_workflow": "scripts/smoke-test.sh",
+    "metrics_receipt": "/workspace/perl-lsp/.ci/metrics/editor_ux.json",
+    "open_issue_burn_down": "README.md#known-gaps-toward-solid-ux",
+    "ux_harness": "crates/perl-lsp-ux-tests/tests"
+  },
   "scorecard": "editor_ux",
   "top_line_metrics": [
     {
       "name": "workflow_pass_rate",
       "owner": "perl-lsp-ux-tests",
-      "state": "planned"
+      "state": "planned",
+      "value": null
     },
     {
       "name": "workflow_stability_rate",
       "owner": "perl-lsp-ux-tests",
-      "state": "planned"
+      "state": "planned",
+      "value": null
     },
     {
       "name": "p95_time_to_first_useful_result_ms",
       "owner": "perl-lsp-ux-tests",
-      "state": "planned"
+      "state": "planned",
+      "value": null
     }
   ]
 }
