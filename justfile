@@ -49,6 +49,7 @@ pr-fast: _check-tools-basic
     START=$(date +%s)
     just _timed "fmt-check" "just fmt-check" && \
     just _timed "readme-heading-check" "just readme-heading-check" && \
+    just _timed "release-history" "just ci-release-history" && \
     just _timed "clippy-core" "just clippy-core" && \
     just _timed "test-core" "just test-core" && \
     just _timed "publish-closure" "just ci-publish-closure" && \
@@ -952,6 +953,13 @@ ci-layer-check:
     @echo "🧱 Checking crate layer constraints..."
     @cargo xtask layer-check
     @echo "✅ Layer-check passed"
+
+
+# Release-history drift gate: tags/notes/changelog/ledger must stay aligned
+ci-release-history:
+    @echo "📚 Checking release-history surface drift..."
+    @scripts/check_release_history.sh
+    @echo "✅ Release-history drift check passed"
 
 # Ratchet: published crate count must not increase above baseline (see #4416)
 ci-published-crate-count:
