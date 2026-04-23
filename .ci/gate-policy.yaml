@@ -7,7 +7,7 @@
 # when and how strictly they are enforced.
 #
 # Schema Version: 1
-# Last Updated: 2026-01-24
+# Last Updated: 2026-04-23
 # Related: justfile (ci-gate, ci-full), .github/workflows/ci.yml
 #
 # =============================================================================
@@ -211,6 +211,22 @@ gates:
     tags:
       - test
       - unit
+      - workspace
+
+  - name: compile_all_targets
+    tier: merge_gate
+    description: "Compile all workspace targets (lib/bin/tests/benches) to catch integration and bench bit-rot"
+    required: true
+    command: cargo check --workspace --all-targets --locked
+    timeout_seconds: 240
+    retry_count: 0
+    budgets:
+      max_duration_ms: 180000
+    quarantine: false
+    tags:
+      - compile
+      - integration
+      - benches
       - workspace
 
   - name: lsp_smoke
