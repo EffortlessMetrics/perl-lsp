@@ -814,6 +814,9 @@ impl SymbolExtractor {
                 if module == "Readonly" {
                     self.readonly_enabled = true;
                 }
+                if module == "constant" {
+                    self.add_use_constant_symbols(args, node.location);
+                }
                 if module == "EV" {
                     self.synthesize_ev_framework_symbol(node.location);
                 }
@@ -2894,6 +2897,114 @@ impl SymbolExtractor {
             }
             _ => false,
         }
+    }
+
+    fn add_use_constant_symbols(&mut self, args: &[String], declaration_location: SourceLocation) {
+        let scope_id = self.table.current_scope();
+        let package_name = self.table.current_package.clone();
+
+        for constant_name in Self::extract_constant_names_from_use_args(args) {
+            self.table.add_symbol(Symbol {
+                name: constant_name.clone(),
+                qualified_name: format!("{package_name}::{constant_name}"),
+                kind: SymbolKind::Constant,
+                location: declaration_location,
+                scope_id,
+                declaration: Some("use constant".to_string()),
+                documentation: Some("Compile-time constant via use constant".to_string()),
+                attributes: vec![],
+            });
+        }
+    }
+
+    fn extract_constant_names_from_use_args(args: &[String]) -> Vec<String> {
+        use std::collections::HashSet;
+
+        fn push_unique(out: &mut Vec<String>, seen: &mut HashSet<String>, candidate: &str) {
+            if seen.insert(candidate.to_string()) {
+                out.push(candidate.to_string());
+            }
+        }
+
+        fn normalize_name(token: &str) -> Option<&str> {
+            let trimmed = token.trim_matches(|c: char| {
+                matches!(c, '\'' | '"' | '(' | ')' | '[' | ']' | '{' | '}' | ',' | ';')
+            });
+            if trimmed.is_empty() || trimmed.starts_with('-') {
+                return None;
+            }
+            trimmed.chars().all(|c| c.is_ascii_alphanumeric() || c == '_').then_some(trimmed)
+        }
+
+        fn extract_qw_words(token: &str) -> Vec<String> {
+            let text = token.trim();
+            if !text.starts_with("qw") {
+                return Vec::new();
+            }
+
+            let rest = text[2..].trim_start();
+            let mut chars = rest.chars();
+            let Some(open) = chars.next() else {
+                return Vec::new();
+            };
+
+            let close = match open {
+                '(' => ')',
+                '[' => ']',
+                '{' => '}',
+                '<' => '>',
+                _ => open,
+            };
+
+            let mut body = String::new();
+            for ch in chars {
+                if ch == close {
+                    break;
+                }
+                body.push(ch);
+            }
+            body.split_whitespace().map(ToString::to_string).collect()
+        }
+
+        let mut names = Vec::new();
+        let mut seen = HashSet::new();
+
+        let Some(first) = args.first().map(String::as_str) else {
+            return names;
+        };
+
+        if first.starts_with("qw") {
+            for word in extract_qw_words(first) {
+                if let Some(candidate) = normalize_name(&word) {
+                    push_unique(&mut names, &mut seen, candidate);
+                }
+            }
+            return names;
+        }
+
+        let is_hash_form = first == "{"
+            || first == "+{"
+            || (first == "+" && args.get(1).map(String::as_str) == Some("{"));
+        if is_hash_form {
+            let mut iter = args.iter().peekable();
+            while let Some(token) = iter.next() {
+                if token == "+" || token == "+{" || token == "{" || token == "}" || token == "," {
+                    continue;
+                }
+                if let Some(candidate) = normalize_name(token)
+                    && iter.peek().map(|next| next.as_str()) == Some("=>")
+                {
+                    push_unique(&mut names, &mut seen, candidate);
+                }
+            }
+            return names;
+        }
+
+        if let Some(candidate) = normalize_name(first) {
+            push_unique(&mut names, &mut seen, candidate);
+        }
+
+        names
     }
 
     fn register_catch_variable(&mut self, full_name: &str, catch_block_location: SourceLocation) {

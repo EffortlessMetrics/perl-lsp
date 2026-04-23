@@ -156,13 +156,41 @@ sub bar { 1 }
 
 #[test]
 fn symbol_extraction_constant() -> Result<(), Box<dyn std::error::Error>> {
-    // `use constant` is a pragma call; the extractor may index the import
-    // rather than a named constant. Verify no crash and some symbols exist.
     let code = "use constant PI => 3.14159;";
     let table = parse_and_extract(code);
-    // The parser should at least produce something from this pragma
-    // (may index "constant" as an Import or not index "PI" at all)
-    let _ = table;
+    assert!(has_symbol(&table, "PI", SymbolKind::Constant));
+    let symbols = table.symbols.get("PI").ok_or("PI not found")?;
+    assert!(
+        symbols.iter().any(|symbol| symbol.qualified_name == "main::PI"),
+        "expected package-qualified constant, got: {:?}",
+        symbols.iter().map(|symbol| &symbol.qualified_name).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+#[test]
+fn symbol_extraction_constant_hash_form_tracks_all_constants()
+-> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+package My::Config;
+use constant {
+    MAX_RETRIES => 3,
+    TIMEOUT => 30,
+};
+"#;
+    let table = parse_and_extract(code);
+    assert!(has_symbol(&table, "MAX_RETRIES", SymbolKind::Constant));
+    assert!(has_symbol(&table, "TIMEOUT", SymbolKind::Constant));
+    Ok(())
+}
+
+#[test]
+fn symbol_extraction_constant_qw_form_tracks_all_constants()
+-> Result<(), Box<dyn std::error::Error>> {
+    let code = "use constant qw(FOO BAR);";
+    let table = parse_and_extract(code);
+    assert!(has_symbol(&table, "FOO", SymbolKind::Constant));
+    assert!(has_symbol(&table, "BAR", SymbolKind::Constant));
     Ok(())
 }
 
