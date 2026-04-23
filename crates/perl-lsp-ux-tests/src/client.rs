@@ -273,6 +273,20 @@ impl UxClient {
         self.did_open_with_language_id(uri, text, "perl")
     }
 
+    /// Send `textDocument/didChange` with explicit version and content changes.
+    pub fn did_change(&self, uri: &str, version: i32, content_changes: Vec<Value>) -> Result<()> {
+        self.notify(
+            "textDocument/didChange",
+            json!({
+                "textDocument": {
+                    "uri": uri,
+                    "version": version
+                },
+                "contentChanges": content_changes
+            }),
+        )
+    }
+
     /// Drain all buffered server-initiated events and decode them.
     ///
     /// After this call the internal queue is empty.  Use `peek_events` if you

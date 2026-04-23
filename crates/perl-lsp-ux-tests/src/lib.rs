@@ -418,7 +418,7 @@ impl UxHarness {
         loop {
             {
                 let events = self.client.peek_events();
-                for ev in &events {
+                for ev in events.iter().rev() {
                     if let LspEvent::Diagnostics { uri: diag_uri, diagnostics } = ev {
                         if diag_uri == &uri {
                             return diagnostics.clone();

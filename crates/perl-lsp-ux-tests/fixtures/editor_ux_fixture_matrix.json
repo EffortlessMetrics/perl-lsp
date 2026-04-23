@@ -456,6 +456,27 @@
         "manual_editor_smoke",
         "issue_burndown_regression_guard"
       ]
+    },
+    {
+      "id": "live_edit_feedback_loop",
+      "scenario_file": "ux_scenario_24_live_edit_feedback.rs",
+      "subsystem_owner": "text_sync",
+      "ci_tier": "pr",
+      "user_journey": "fix an undeclared variable during active editing and confirm diagnostics and navigation update",
+      "measures": [
+        "workflow_pass_rate",
+        "workflow_stability_rate",
+        "cross_file_definition_success_rate"
+      ],
+      "expected_outcomes": [
+        "undeclared variable diagnostic appears before edit",
+        "go-to-definition remains responsive after didChange"
+      ],
+      "confidence_signals": [
+        "first_five_minutes_harness",
+        "manual_editor_smoke",
+        "issue_burndown_regression_guard"
+      ]
     }
   ]
 }
