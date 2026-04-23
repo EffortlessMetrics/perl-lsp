@@ -149,6 +149,66 @@ fn is_permission_denied_error(e: &std::io::Error) -> bool {
     false
 }
 
+#[cfg(feature = "workspace")]
+fn decode_workspace_text_bytes(bytes: &[u8]) -> Result<String, std::io::Error> {
+    const UTF8_BOM: &[u8; 3] = b"\xEF\xBB\xBF";
+    const UTF16_BE_BOM: &[u8; 2] = b"\xFE\xFF";
+    const UTF16_LE_BOM: &[u8; 2] = b"\xFF\xFE";
+
+    if let Some(without_bom) = bytes.strip_prefix(UTF8_BOM) {
+        return std::str::from_utf8(without_bom).map(str::to_owned).map_err(|err| {
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                format!("Invalid UTF-8 BOM content: {err}"),
+            )
+        });
+    }
+
+    if let Some(utf16_le) = bytes.strip_prefix(UTF16_LE_BOM) {
+        return decode_utf16_bytes(utf16_le, true);
+    }
+
+    if let Some(utf16_be) = bytes.strip_prefix(UTF16_BE_BOM) {
+        return decode_utf16_bytes(utf16_be, false);
+    }
+
+    match std::str::from_utf8(bytes) {
+        Ok(utf8) => Ok(utf8.to_string()),
+        Err(_) => Ok(bytes.iter().map(|&byte| char::from(byte)).collect()),
+    }
+}
+
+#[cfg(feature = "workspace")]
+fn decode_utf16_bytes(bytes: &[u8], little_endian: bool) -> Result<String, std::io::Error> {
+    if !bytes.len().is_multiple_of(2) {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "UTF-16 data had an odd byte length",
+        ));
+    }
+
+    let words = bytes.chunks_exact(2).map(|chunk| {
+        if little_endian {
+            u16::from_le_bytes([chunk[0], chunk[1]])
+        } else {
+            u16::from_be_bytes([chunk[0], chunk[1]])
+        }
+    });
+
+    String::from_utf16(&words.collect::<Vec<u16>>()).map_err(|err| {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            format!("Invalid UTF-16 content: {err}"),
+        )
+    })
+}
+
+#[cfg(feature = "workspace")]
+fn read_workspace_text_file(path: &std::path::Path) -> Result<String, std::io::Error> {
+    let bytes = std::fs::read(path)?;
+    decode_workspace_text_bytes(&bytes)
+}
+
 /// RAII guard that clears the `indexing_in_progress` flag on drop.
 ///
 /// Ensures the flag is always cleared, even if the indexing thread panics.
@@ -897,7 +957,7 @@ impl LspServer {
             let workspace_index = coordinator.index();
             if is_perl_source_uri(uri) {
                 if let Some(path) = uri_to_fs_path(uri) {
-                    match std::fs::read_to_string(&path) {
+                    match read_workspace_text_file(&path) {
                         Ok(content) => {
                             if let Ok(url) = url::Url::parse(uri) {
                                 // Clear old index data before re-indexing
@@ -928,7 +988,7 @@ impl LspServer {
             let mut documents = self.documents.lock();
             if let Some(doc) = self.get_document_mut(&mut documents, uri) {
                 if let Some(path) = uri_to_fs_path(uri) {
-                    match std::fs::read_to_string(&path) {
+                    match read_workspace_text_file(&path) {
                         Ok(content) => {
                             doc.text = content;
                             doc.version += 1;
@@ -1046,7 +1106,7 @@ impl LspServer {
                         let workspace_index = coordinator.index();
                         workspace_index.remove_file(old_uri);
                         if let Some(path) = uri_to_fs_path(new_uri) {
-                            if let Ok(content) = std::fs::read_to_string(&path) {
+                            if let Ok(content) = read_workspace_text_file(&path) {
                                 if let Ok(url) = url::Url::parse(new_uri) {
                                     if let Err(e) = workspace_index.index_file(url, content.clone())
                                     {
@@ -1297,7 +1357,7 @@ impl LspServer {
                     if let Some(coordinator) = self.coordinator() {
                         if is_perl_source_uri(uri) {
                             if let Some(path) = uri_to_fs_path(uri) {
-                                match std::fs::read_to_string(&path) {
+                                match read_workspace_text_file(&path) {
                                     Ok(content) => {
                                         coordinator.notify_change(uri);
                                         if let Ok(url) = url::Url::parse(uri) {
@@ -1370,7 +1430,7 @@ impl LspServer {
                         // Index new file if it's a Perl file
                         if is_perl_source_uri(new_uri) {
                             if let Some(path) = uri_to_fs_path(new_uri) {
-                                match std::fs::read_to_string(&path) {
+                                match read_workspace_text_file(&path) {
                                     Ok(content) => {
                                         if let Ok(url) = url::Url::parse(new_uri) {
                                             match coordinator.index().index_file(url, content) {
@@ -1620,7 +1680,7 @@ impl LspServer {
                     break;
                 }
 
-                let content = match std::fs::read_to_string(&path) {
+                let content = match read_workspace_text_file(&path) {
                     Ok(c) => c,
                     Err(e) => {
                         if is_permission_denied_error(&e) {
@@ -1863,7 +1923,7 @@ impl LspServer {
             }
         }
 
-        uri_to_fs_path(uri).and_then(|path| std::fs::read_to_string(path).ok())
+        uri_to_fs_path(uri).and_then(|path| read_workspace_text_file(&path).ok())
     }
 }
 
@@ -2156,5 +2216,35 @@ mod tests {
 
         assert!(result.is_ok());
         assert!(server.pending_workspace_configuration_requests.lock().is_empty());
+    }
+
+    #[cfg(feature = "workspace")]
+    #[test]
+    fn decode_workspace_text_bytes_supports_utf16le_bom() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let bytes = [0xFF, 0xFE, 0x6D, 0x00, 0x79, 0x00];
+        let decoded = super::decode_workspace_text_bytes(&bytes)?;
+        assert_eq!(decoded, "my");
+        Ok(())
+    }
+
+    #[cfg(feature = "workspace")]
+    #[test]
+    fn decode_workspace_text_bytes_supports_utf16be_bom() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let bytes = [0xFE, 0xFF, 0x00, 0x6D, 0x00, 0x79];
+        let decoded = super::decode_workspace_text_bytes(&bytes)?;
+        assert_eq!(decoded, "my");
+        Ok(())
+    }
+
+    #[cfg(feature = "workspace")]
+    #[test]
+    fn decode_workspace_text_bytes_falls_back_to_latin1() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let bytes = [0x6D, 0x79, 0x20, 0xE9];
+        let decoded = super::decode_workspace_text_bytes(&bytes)?;
+        assert_eq!(decoded, "my é");
+        Ok(())
     }
 }
