@@ -55,6 +55,7 @@ pub fn is_special_scheme(uri: &str) -> bool {
         uri.starts_with("untitled:")
             || uri.starts_with("git:")
             || uri.starts_with("vscode-notebook:")
+            || uri.starts_with("vscode-notebook-cell:")
             || uri.starts_with("vscode-vfs:")
     }
 }
@@ -117,6 +118,7 @@ mod tests {
     fn detects_special_schemes() {
         assert!(is_special_scheme("untitled:Untitled-1"));
         assert!(is_special_scheme("git:/foo/bar"));
+        assert!(is_special_scheme("vscode-notebook-cell:/nb.ipynb#cell-id"));
         assert!(!is_special_scheme("file:///tmp/test.pl"));
     }
 
