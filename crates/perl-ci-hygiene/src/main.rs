@@ -3991,22 +3991,26 @@ fn is_index_in_rust_literal(line: &str, target_idx: usize) -> bool {
             continue;
         }
 
-        if bytes[i] == b'b' && i + 1 < bytes.len() && bytes[i + 1] == b'"' {
+        if (bytes[i] == b'b' || bytes[i] == b'c') && i + 1 < bytes.len() && bytes[i + 1] == b'"' {
             in_string = true;
             i += 2;
             continue;
         }
 
-        if bytes[i] == b'r' || (bytes[i] == b'b' && i + 1 < bytes.len() && bytes[i + 1] == b'r') {
+        if bytes[i] == b'r'
+            || ((bytes[i] == b'b' || bytes[i] == b'c')
+                && i + 1 < bytes.len()
+                && bytes[i + 1] == b'r')
+        {
             let mut j = i + 1;
-            if bytes[i] == b'b' {
+            if bytes[i] == b'b' || bytes[i] == b'c' {
                 j += 1;
             }
             while j < bytes.len() && bytes[j] == b'#' {
                 j += 1;
             }
             if j < bytes.len() && bytes[j] == b'"' {
-                raw_hashes = Some(j.saturating_sub(i + if bytes[i] == b'b' { 2 } else { 1 }));
+                raw_hashes = Some(j.saturating_sub(i + if bytes[i] == b'r' { 1 } else { 2 }));
                 i = j + 1;
                 continue;
             }
@@ -4324,6 +4328,20 @@ mod tests {
             "let s = \"safe literal\"; // TODO: follow up",
             &todo_re
         ));
+
+        Ok(())
+    }
+
+    #[test]
+    fn rust_todo_detection_ignores_c_string_literals() -> Result<()> {
+        let todo_re = Regex::new(r"TODO|FIXME")?;
+
+        assert!(!has_unlinked_todo_in_rust_line("let s = c\"// TODO in c string\";", &todo_re));
+        assert!(!has_unlinked_todo_in_rust_line(
+            "let s = cr#\"/* FIXME in raw c string */\"#;",
+            &todo_re
+        ));
+        assert!(has_unlinked_todo_in_rust_line("let s = c\"value\"; // TODO: follow up", &todo_re));
 
         Ok(())
     }
