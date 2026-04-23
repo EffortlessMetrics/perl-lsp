@@ -1693,6 +1693,22 @@ print "Hello, $name!\n";
 }
 
 #[test]
+fn unused_package_variable_used_in_string_interpolation() -> Result<(), Box<dyn std::error::Error>>
+{
+    let code = r#"
+our $Foo::name = "World";
+print "Hello, $Foo::name!\n";
+"#;
+    let issues = scope_issues(code);
+    let unused = issues
+        .iter()
+        .filter(|i| i.kind == IssueKind::UnusedVariable && i.variable_name.contains("Foo::name"))
+        .count();
+    assert_eq!(unused, 0, "$Foo::name used in interpolated string should not be unused");
+    Ok(())
+}
+
+#[test]
 fn escaped_interpolated_variable_is_still_unused() -> Result<(), Box<dyn std::error::Error>> {
     let code = r#"
 my $name = "World";
