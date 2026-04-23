@@ -65,6 +65,9 @@ pub fn uri_extension(uri: &str) -> Option<&str> {
         uri.split_once(['?', '#']).map_or(uri, |(path_prefix, _)| path_prefix);
     let path_part = path_without_query_or_fragment.rsplit('/').next()?;
     let dot_pos = path_part.rfind('.')?;
+    if dot_pos == 0 {
+        return None;
+    }
     let ext = &path_part[dot_pos + 1..];
     if ext.is_empty() { None } else { Some(ext) }
 }
@@ -116,6 +119,8 @@ mod tests {
         assert_eq!(uri_extension("file:///tmp/test.pl"), Some("pl"));
         assert_eq!(uri_extension("file:///tmp/file.pl?query=1"), Some("pl"));
         assert_eq!(uri_extension("file:///tmp/file.pl#L10/permalink"), Some("pl"));
+        assert_eq!(uri_extension("file:///tmp/archive.tar.gz"), Some("gz"));
+        assert_eq!(uri_extension("file:///tmp/.perlcriticrc"), None);
         assert_eq!(uri_extension("file:///tmp/no-extension"), None);
     }
 }
