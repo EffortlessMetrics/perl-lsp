@@ -1133,7 +1133,15 @@ impl CompletionProvider {
             first_char.is_none() || first_char.is_some_and(|c| c.is_ascii_uppercase())
         } else if let Some(rest) = line.strip_prefix("require ") {
             let rest = rest.trim_start();
-            !rest.contains(';')
+            if rest.contains(';') {
+                return false;
+            }
+            // `require` also accepts file paths and perl version numbers:
+            //   require "./file.pl";
+            //   require 5.010;
+            // Restrict module-name completions to empty/uppercase prefixes only.
+            let first_char = rest.chars().next();
+            first_char.is_none() || first_char.is_some_and(|c| c.is_ascii_uppercase())
         } else {
             false
         }
@@ -3273,6 +3281,42 @@ sub helper { }
         assert!(
             completions.iter().any(|c| c.label == "Utils" && c.kind == CompletionItemKind::Module),
             "require Ut should suggest Utils with Module kind; got: {:?}",
+            completions.iter().map(|c| (&c.label, &c.kind)).collect::<Vec<_>>()
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_require_statement_skips_file_path() -> Result<(), Box<dyn std::error::Error>> {
+        let index = Arc::new(WorkspaceIndex::new());
+        index
+            .index_file(Url::parse("file:///lib/Utils.pm")?, "package Utils;\n1;\n".to_string())?;
+        let code = "require './utils.pl'";
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let provider = CompletionProvider::new_with_index(&ast, Some(index));
+        let completions = provider.get_completions(code, code.len());
+        assert!(
+            !completions.iter().any(|c| c.kind == CompletionItemKind::Module),
+            "require './utils.pl' should not trigger module-name completions; got: {:?}",
+            completions.iter().map(|c| (&c.label, &c.kind)).collect::<Vec<_>>()
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_require_statement_skips_version_check() -> Result<(), Box<dyn std::error::Error>> {
+        let index = Arc::new(WorkspaceIndex::new());
+        index
+            .index_file(Url::parse("file:///lib/Utils.pm")?, "package Utils;\n1;\n".to_string())?;
+        let code = "require 5.010";
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let provider = CompletionProvider::new_with_index(&ast, Some(index));
+        let completions = provider.get_completions(code, code.len());
+        assert!(
+            !completions.iter().any(|c| c.kind == CompletionItemKind::Module),
+            "require 5.010 should not trigger module-name completions; got: {:?}",
             completions.iter().map(|c| (&c.label, &c.kind)).collect::<Vec<_>>()
         );
         Ok(())
