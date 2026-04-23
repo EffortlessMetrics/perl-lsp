@@ -461,7 +461,7 @@ impl WorkspaceConfig {
     /// `self.include_paths` according to `self.perl5lib_precedence`.
     ///
     /// If `self.use_perl5lib` is `false`, or `perl5lib_paths` is empty, the
-    /// returned list is identical to `self.include_paths`.
+    /// returned list contains only `self.include_paths` entries (trimmed and deduplicated).
     pub fn effective_include_paths(&self, perl5lib_paths: &[String]) -> Vec<String> {
         if !self.use_perl5lib || perl5lib_paths.is_empty() {
             return dedupe_preserve_order(
@@ -977,5 +977,24 @@ perltidy_extra_args = ["-noll"]
         ]);
 
         assert_eq!(paths, vec!["lib", "local/lib", "vendor/lib"]);
+    }
+
+    #[test]
+    fn effective_include_paths_filters_whitespace_only_entries() {
+        // Whitespace-only entries in include_paths must be silently dropped.
+        let config = WorkspaceConfig {
+            include_paths: vec![
+                "lib".to_string(),
+                "  ".to_string(),
+                "".to_string(),
+                "lib".to_string(),
+            ],
+            perl5lib_precedence: Perl5LibPrecedence::Prepend,
+            ..WorkspaceConfig::default()
+        };
+        // use_perl5lib is true by default but perl5lib_paths is empty → takes the
+        // early-return branch that also dedupes and trims include_paths.
+        let paths = config.effective_include_paths(&[]);
+        assert_eq!(paths, vec!["lib"]);
     }
 }
