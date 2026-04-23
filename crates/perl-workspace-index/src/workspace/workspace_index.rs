@@ -3357,43 +3357,44 @@ impl IndexVisitor {
 /// Returns the module names with surrounding quotes/qw wrappers stripped.
 /// Tokens starting with `-` or not matching `[\w::']+` are silently skipped.
 fn extract_module_names_from_use_args(args: &[String]) -> Vec<String> {
+    use std::collections::HashSet;
+
+    fn normalize_module_name(token: &str) -> Option<&str> {
+        let stripped = token.trim_matches(|c: char| {
+            matches!(c, '\'' | '"' | '(' | ')' | '[' | ']' | '{' | '}' | ',' | ';')
+        });
+
+        if stripped.is_empty() || stripped.starts_with('-') {
+            return None;
+        }
+
+        stripped
+            .chars()
+            .all(|c| c.is_alphanumeric() || c == '_' || c == ':' || c == '\'')
+            .then_some(stripped)
+    }
+
     let joined = args.join(" ");
 
     let (qw_words, remainder) = extract_qw_words(&joined);
     let mut modules = Vec::new();
-    modules.extend(qw_words);
-
-    modules.extend(remainder.split_whitespace().flat_map(|token| {
-        // Skip flags like -norequire and bare punctuation from qw() or parens
-        if token.starts_with('-') {
-            return Vec::new();
+    let mut seen = HashSet::new();
+    for word in qw_words {
+        if let Some(candidate) = normalize_module_name(&word)
+            && seen.insert(candidate.to_string())
+        {
+            modules.push(candidate.to_string());
         }
-        token
-            .split(',')
-            .filter_map(|piece| {
-                // Strip common wrapper punctuation from both ends (quotes, parens, commas,
-                // brackets, semicolons). This supports parser/tokenizer variants such as:
-                // - "'Foo::Bar',"   - trailing comma
-                // - "('Foo::Bar',"  - leading paren
-                // - "'Foo::Bar');"  - trailing paren+semicolon
-                let stripped = piece.trim_matches(|c: char| {
-                    matches!(c, '\'' | '"' | '(' | ')' | '[' | ']' | '{' | '}' | ',' | ';')
-                });
-                // Accept tokens containing only word characters, `::`, or `'` (legacy separator)
-                if stripped.is_empty() {
-                    return None;
-                }
-                if stripped
-                    .chars()
-                    .all(|c| c.is_alphanumeric() || c == '_' || c == ':' || c == '\'')
-                {
-                    Some(canonicalize_perl_module_name(stripped))
-                } else {
-                    None
-                }
-            })
-            .collect::<Vec<_>>()
-    }));
+    }
+
+    modules.extend(
+        remainder
+            .split_whitespace()
+            .flat_map(|token| token.split(','))
+            .filter_map(normalize_module_name)
+            .filter(|candidate| seen.insert((*candidate).to_string()))
+            .map(str::to_string),
+    );
 
     modules
 }
@@ -3437,12 +3438,12 @@ fn extract_qw_words(input: &str) -> (Vec<String>, String) {
             }
 
             let open = chars[j];
-            let close = match open {
-                '(' => ')',
-                '[' => ']',
-                '{' => '}',
-                '<' => '>',
-                _ => open,
+            let (close, is_paired_delimiter) = match open {
+                '(' => (')', true),
+                '[' => (']', true),
+                '{' => ('}', true),
+                '<' => ('>', true),
+                _ => (open, false),
             };
             if open.is_alphanumeric() || open == '_' || open == '\'' || open == '"' {
                 remainder.push(chars[i]);
@@ -3451,21 +3452,34 @@ fn extract_qw_words(input: &str) -> (Vec<String>, String) {
             }
 
             let mut k = j + 1;
-            while k < chars.len() && chars[k] != close {
-                k += 1;
-            }
-            if k >= chars.len() {
-                remainder.extend(chars[i..].iter());
-                break;
+            if is_paired_delimiter {
+                let mut depth = 1usize;
+                while k < chars.len() && depth > 0 {
+                    if chars[k] == open {
+                        depth += 1;
+                    } else if chars[k] == close {
+                        depth -= 1;
+                    }
+                    k += 1;
+                }
+                if depth != 0 {
+                    remainder.extend(chars[i..].iter());
+                    break;
+                }
+                k -= 1;
+            } else {
+                while k < chars.len() && chars[k] != close {
+                    k += 1;
+                }
+                if k >= chars.len() {
+                    remainder.extend(chars[i..].iter());
+                    break;
+                }
             }
 
             let content: String = chars[j + 1..k].iter().collect();
             for word in content.split_whitespace() {
-                if !word.is_empty()
-                    && word
-                        .chars()
-                        .all(|c| c.is_alphanumeric() || c == '_' || c == ':' || c == '\'')
-                {
+                if !word.is_empty() {
                     words.push(word.to_string());
                 }
             }
@@ -4980,6 +4994,13 @@ Utils::process_data();
     }
 
     #[test]
+    fn test_extract_module_names_qw_list_trims_wrapped_punctuation() {
+        let names =
+            extract_module_names_from_use_args(&["qw((Foo::Bar) [Other::Base],)".to_string()]);
+        assert_eq!(names, vec!["Foo::Bar", "Other::Base"]);
+    }
+
+    #[test]
     fn test_extract_module_names_norequire_flag() {
         let names = extract_module_names_from_use_args(&[
             "-norequire".to_string(),
@@ -5041,6 +5062,15 @@ Utils::process_data();
     fn test_extract_module_names_parenthesized_without_spaces() {
         let names = extract_module_names_from_use_args(&["('Foo::Bar','Other::Base')".to_string()]);
         assert_eq!(names, vec!["Foo::Bar", "Other::Base"]);
+    }
+
+    #[test]
+    fn test_extract_module_names_deduplicates_identical_entries() {
+        let names = extract_module_names_from_use_args(&[
+            "qw(Foo::Bar Foo::Bar)".to_string(),
+            "'Foo::Bar'".to_string(),
+        ]);
+        assert_eq!(names, vec!["Foo::Bar"]);
     }
 
     #[test]
