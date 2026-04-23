@@ -347,6 +347,33 @@ fn nested_quantifiers_group_without_outer_quantifier() -> Result<(), Box<dyn std
     Ok(())
 }
 
+#[test]
+fn nested_quantifiers_literal_brace_after_group_is_not_detected()
+-> Result<(), Box<dyn std::error::Error>> {
+    let v = RegexValidator::new();
+    // Literal brace after a grouped quantified expression should not be treated as {n}
+    assert!(!v.detect_nested_quantifiers("(a+){foo}"));
+    Ok(())
+}
+
+#[test]
+fn nested_quantifiers_invalid_brace_quantifier_is_not_detected()
+-> Result<(), Box<dyn std::error::Error>> {
+    let v = RegexValidator::new();
+    // Missing closing brace is not a valid quantifier marker.
+    assert!(!v.detect_nested_quantifiers("(a+){2,5"));
+    Ok(())
+}
+
+#[test]
+fn nested_quantifiers_open_ended_brace_is_detected()
+-> Result<(), Box<dyn std::error::Error>> {
+    let v = RegexValidator::new();
+    // Open-ended {n,} is a valid Perl quantifier — must still flag nested use.
+    assert!(v.detect_nested_quantifiers("(a+){2,}"));
+    Ok(())
+}
+
 // ── detects_code_execution() ────────────────────────────────────────────
 
 #[test]
