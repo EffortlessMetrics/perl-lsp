@@ -29,6 +29,25 @@ If a doc starts mixing multiple intents, split it and cross-link the parts.
 
 Rule: if a project metric appears outside [project/CURRENT_STATUS.md](project/CURRENT_STATUS.md), treat it as stale until reverified.
 
+## Repository Map (Quick Orientation)
+
+Use this map when you need to quickly find the right area of the workspace before
+opening architecture deep dives.
+
+| Path | What lives here | Start with |
+| --- | --- | --- |
+| `crates/perllsp/` | End-user binary entry point (`perllsp`) and CLI wiring | [`crates/perllsp/README.md`](../crates/perllsp/README.md) |
+| `crates/perl-lsp-rs/` | Language server host/runtime wiring used by the binary | [`reference/ARCHITECTURE_OVERVIEW.md`](reference/ARCHITECTURE_OVERVIEW.md) |
+| `crates/perl-dap/` | Debug Adapter Protocol server support | [`tutorials/DAP_USER_GUIDE.md`](tutorials/DAP_USER_GUIDE.md) |
+| `crates/perl-parser/`, `crates/perl-lexer/`, `crates/perl-parser-core/` | Native parser stack (tokenization + parse engine) | [`reference/CRATE_ARCHITECTURE_GUIDE.md`](reference/CRATE_ARCHITECTURE_GUIDE.md) |
+| `crates/perl-semantic-analyzer/` | Scope/symbol analysis over parsed ASTs | [`reference/ARCHITECTURE.md`](reference/ARCHITECTURE.md) |
+| `crates/perl-workspace-index/` | Cross-file indexing, search, and rename plumbing | [`reference/CRATE_ARCHITECTURE_GUIDE.md`](reference/CRATE_ARCHITECTURE_GUIDE.md) |
+| `crates/perl-lsp-rs-core/` | Shared LSP protocol/provider modules and compatibility surfaces | [`reference/LSP_FEATURES.md`](reference/LSP_FEATURES.md) |
+| `crates/tree-sitter-perl-c/`, `crates/tree-sitter-perl-rs/` | Tree-sitter compatibility/interoperability layers | [`reference/MODERN_ARCHITECTURE.md`](reference/MODERN_ARCHITECTURE.md) |
+| `docs/` | Tutorials/how-to/reference/project status docs | [`INDEX.md`](INDEX.md) |
+| `xtask/` | Project automation tasks (`cargo xtask ...`) | [`reference/COMMANDS_REFERENCE.md`](reference/COMMANDS_REFERENCE.md) |
+| `test_corpus/` | Golden fixtures and parser confidence corpus | [`project/CURRENT_STATUS.md`](project/CURRENT_STATUS.md) |
+
 ## Common Routes
 
 | If you need to... | Read this |
