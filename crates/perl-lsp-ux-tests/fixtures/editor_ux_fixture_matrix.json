@@ -371,7 +371,7 @@
     },
     {
       "id": "template_language_mode_resilience",
-      "scenario_file": "ux_scenario_19_template_language_mode.rs",
+      "scenario_file": "ux_scenario_22_template_language_mode.rs",
       "subsystem_owner": "editor_intelligence",
       "ci_tier": "pr",
       "user_journey": "open a template file in html mode and continue navigating in neighboring Perl files",

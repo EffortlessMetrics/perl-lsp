@@ -1,4 +1,4 @@
-//! Scenario 19 — Template language mode should not poison Perl UX flows.
+//! Scenario 22 — Template language mode should not poison Perl UX flows.
 //!
 //! Why this is high-impact:
 //! - Mojolicious/TT template files are frequently opened in HTML mode.
@@ -37,7 +37,7 @@ const TEMPLATE_SOURCE: &str = r#"% my $user = shift;
 "#;
 
 #[test]
-fn scenario_19_template_in_html_mode_preserves_neighboring_perl_navigation() -> Result<()> {
+fn scenario_22_template_in_html_mode_preserves_neighboring_perl_navigation() -> Result<()> {
     let harness = UxHarness::new(
         ScenarioConfig::default()
             .with_file("app.pl", APP_SOURCE)
