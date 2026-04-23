@@ -145,6 +145,15 @@ fn test_multiline_lf_position_to_byte_each_line_start() -> Result<(), Box<dyn st
     Ok(())
 }
 
+#[test]
+fn test_multiline_lf_position_to_byte_out_of_range_column() -> Result<(), Box<dyn std::error::Error>>
+{
+    let index = LineIndex::new("abc\ndef\nghi");
+    assert_eq!(index.position_to_byte(0, 4), None);
+    assert_eq!(index.position_to_byte(1, 4), None);
+    Ok(())
+}
+
 // ---------------------------------------------------------------------------
 // Multi-line with CRLF
 // ---------------------------------------------------------------------------
@@ -203,6 +212,15 @@ fn test_crlf_three_lines_positions() -> Result<(), Box<dyn std::error::Error>> {
     assert_eq!(index.byte_to_position(0), (0, 0)); // 'x'
     assert_eq!(index.byte_to_position(3), (1, 0)); // 'y'
     assert_eq!(index.byte_to_position(6), (2, 0)); // 'z'
+    Ok(())
+}
+
+#[test]
+fn test_position_to_byte_allows_newline_byte_but_not_next_line_start()
+-> Result<(), Box<dyn std::error::Error>> {
+    let index = LineIndex::new("ab\ncd");
+    assert_eq!(index.position_to_byte(0, 2), Some(2));
+    assert_eq!(index.position_to_byte(0, 3), None);
     Ok(())
 }
 
@@ -369,13 +387,10 @@ fn test_position_to_byte_line_out_of_range() -> Result<(), Box<dyn std::error::E
 }
 
 #[test]
-fn test_position_to_byte_large_column_returns_some() -> Result<(), Box<dyn std::error::Error>> {
-    // The implementation returns Some(start + column) without bounds checking
-    // the column against line length, so large columns just produce large offsets.
+fn test_position_to_byte_large_column_returns_none() -> Result<(), Box<dyn std::error::Error>> {
     let index = LineIndex::new("abc\ndef");
     let result = index.position_to_byte(0, 100);
-    // start of line 0 is 0, so 0 + 100 = 100
-    assert_eq!(result, Some(100));
+    assert_eq!(result, None);
     Ok(())
 }
 
