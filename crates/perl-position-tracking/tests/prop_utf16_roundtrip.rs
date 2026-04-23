@@ -25,6 +25,28 @@ proptest! {
         prop_assert_eq!(line, line2, "line mismatch: {} → ({},{}) → {} → ({},{})", offset, line, col, back, line2, _col2);
     }
 
+    /// Every UTF-8 character boundary should roundtrip exactly.
+    #[test]
+    fn char_boundary_roundtrip_is_exact(s in unicode_string()) {
+        let mut boundaries: Vec<usize> = s.char_indices().map(|(idx, _)| idx).collect();
+        boundaries.push(s.len());
+
+        for offset in boundaries {
+            let (line, col) = offset_to_utf16_line_col(&s, offset);
+            let back = utf16_line_col_to_offset(&s, line, col);
+            prop_assert_eq!(
+                back,
+                offset,
+                "char-boundary roundtrip mismatch: {} → ({},{}) → {} for {:?}",
+                offset,
+                line,
+                col,
+                back,
+                s
+            );
+        }
+    }
+
     /// For any string, every valid UTF-16 column on every line maps
     /// to a byte offset within bounds.
     #[test]
@@ -39,6 +61,44 @@ proptest! {
                 let offset = utf16_line_col_to_offset(&s, line, col);
                 prop_assert!(offset <= s.len(), "offset {} out of bounds for len {} (line={}, col={})", offset, s.len(), line, col);
             }
+        }
+    }
+
+    /// Offsets must be monotonic as UTF-16 columns increase within a line.
+    #[test]
+    fn utf16_columns_map_to_monotonic_offsets(s in unicode_string()) {
+        let mut line_start = 0usize;
+
+        for (line, line_text) in s.split_inclusive('\n').enumerate() {
+            let line = line as u32;
+            let line_content = line_text.trim_end_matches('\n');
+            let utf16_len = line_content.encode_utf16().count() as u32;
+            let line_end = line_start + line_content.len();
+
+            let mut previous = utf16_line_col_to_offset(&s, line, 0);
+            for col in 1..=(utf16_len + 2) {
+                let current = utf16_line_col_to_offset(&s, line, col);
+                prop_assert!(
+                    current >= previous,
+                    "non-monotonic offset mapping on line {} at col {}: {} -> {}",
+                    line,
+                    col,
+                    previous,
+                    current
+                );
+                prop_assert!(
+                    current >= line_start && current <= line_end,
+                    "offset {} escaped line bounds [{}, {}] on line {} col {}",
+                    current,
+                    line_start,
+                    line_end,
+                    line,
+                    col
+                );
+                previous = current;
+            }
+
+            line_start += line_text.len();
         }
     }
 
