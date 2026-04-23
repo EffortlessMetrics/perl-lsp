@@ -8,7 +8,7 @@ in each scenario — not just "didn't crash" but "returned a useful response."
 ## Quick Start
 
 ```bash
-# Run all default UX scenarios (currently 17 scenario files):
+# Run all default UX scenarios (currently 18 scenario files):
 just ux-tests
 
 # Run full suite including the integration-only 10k-line large-file scenario:
@@ -46,6 +46,7 @@ either a prebuilt binary or an explicit `PERL_LSP_BIN=/path/to/perl-lsp`.
 | 15 | Workspace symbols | `workspace/symbol` finds same-named symbols across workspace folders and carries `workspaceFolderUri` |
 | 16 | Folder removal | removing a workspace folder evicts its symbols from `workspace/symbol` results |
 | 17 | Deleted file churn | a `didChangeWatchedFiles` Deleted event removes stale symbols and definition targets |
+| 18 | Go-to-declaration | request succeeds end-to-end and returns location-or-empty without crashing |
 
 `just ux-tests` runs every default scenario above. `just ux-tests-full` adds the
 feature-gated 10k-line large-file case from Scenario 06.
@@ -132,6 +133,7 @@ let config = ScenarioConfig { path_restriction: Some(/*...*/), ..Default::defaul
 | `completion(path, line, char)` | `textDocument/completion` → `Vec<Value>` |
 | `format_document(path)` | `textDocument/formatting` → `FormatResult` |
 | `definition(path, line, char)` | `textDocument/definition` → `Vec<Value>` |
+| `declaration(path, line, char)` | `textDocument/declaration` → `Vec<Value>` |
 | `collect_notifications()` | Drain buffered server events (queue becomes empty) |
 | `peek_notifications()` | Clone buffered events without removing them |
 | `assert_no_crash()` | Assert no crash signatures — uses peek, queue intact |

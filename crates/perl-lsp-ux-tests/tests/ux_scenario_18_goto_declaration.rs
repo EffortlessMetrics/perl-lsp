@@ -26,8 +26,17 @@ my $result = inc($value);
 print "$result\n";
 "#;
 
+fn binary_available() -> bool {
+    perl_lsp_ux_tests::resolve_binary().is_ok()
+}
+
 #[test]
 fn scenario_18_declaration_request_does_not_error() -> Result<()> {
+    if !binary_available() {
+        eprintln!("SKIP scenario_18: perl-lsp binary not found");
+        return Ok(());
+    }
+
     let harness =
         UxHarness::new(ScenarioConfig::default().with_file("declaration.pl", DECLARATION_FIXTURE))?;
 
@@ -46,11 +55,43 @@ fn scenario_18_declaration_request_does_not_error() -> Result<()> {
 
 #[test]
 fn scenario_18_declaration_result_is_location_or_empty() -> Result<()> {
+    if !binary_available() {
+        eprintln!("SKIP scenario_18: perl-lsp binary not found");
+        return Ok(());
+    }
+
     let harness =
         UxHarness::new(ScenarioConfig::default().with_file("declaration.pl", DECLARATION_FIXTURE))?;
 
     harness.open_file("declaration.pl", DECLARATION_FIXTURE)?;
     let declarations = harness.declaration("declaration.pl", 9, 13)?;
+
+    for entry in declarations {
+        let is_link = entry.get("targetUri").is_some() && entry.get("targetRange").is_some();
+        let is_location = entry.get("uri").is_some() && entry.get("range").is_some();
+        assert!(
+            is_link || is_location,
+            "declaration result must be LocationLink or Location, got: {:?}",
+            entry
+        );
+    }
+
+    harness.assert_no_crash();
+    Ok(())
+}
+
+#[test]
+fn scenario_18_declaration_on_unknown_position_returns_empty_or_location() -> Result<()> {
+    if !binary_available() {
+        eprintln!("SKIP scenario_18: perl-lsp binary not found");
+        return Ok(());
+    }
+
+    let source = "use strict;\nmy $x = 1;\n";
+    let harness = UxHarness::new(ScenarioConfig::default().with_file("simple.pl", source))?;
+
+    harness.open_file("simple.pl", source)?;
+    let declarations = harness.declaration("simple.pl", 0, 5)?;
 
     for entry in declarations {
         let is_link = entry.get("targetUri").is_some() && entry.get("targetRange").is_some();
