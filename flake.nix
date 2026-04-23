@@ -204,7 +204,7 @@
 
           perl-lsp = pkgs.rustPlatform.buildRustPackage {
             pname = "perl-lsp";
-            version = "0.12.3";  # Keep in sync with CLAUDE.md
+            version = "0.12.4";  # Synced manually — see issue #4357 for structural fix
             src = self;
             cargoLock.lockFile = ./Cargo.lock;
 
