@@ -28,6 +28,23 @@
     "release_lane": "just ux-tests-full",
     "status_update": "cargo xtask update-status --only quality"
   },
+  "confidence_signals": {
+    "manual_editor_smoke_workflows": {
+      "tracked_by": "docs/project/protocols/verification.md#tier-c-real-user-confirmation",
+      "state": "tracked_protocol"
+    },
+    "first_5_minutes_harness": {
+      "tracked_by": "just ux-tests",
+      "state": "measured",
+      "scenario_count": 17
+    },
+    "open_issue_burn_down": {
+      "tracked_by": "github issues label triage (external source)",
+      "state": "external"
+    }
+  },
+  "measured_at": null,
+  "measured_source": null,
   "receipt_kind": "planning_scaffold",
   "schema_version": 1,
   "scorecard": "editor_ux",
@@ -35,17 +52,20 @@
     {
       "name": "workflow_pass_rate",
       "owner": "perl-lsp-ux-tests",
-      "state": "planned"
+      "state": "planned",
+      "value": null
     },
     {
       "name": "workflow_stability_rate",
       "owner": "perl-lsp-ux-tests",
-      "state": "planned"
+      "state": "planned",
+      "value": null
     },
     {
       "name": "p95_time_to_first_useful_result_ms",
       "owner": "perl-lsp-ux-tests",
-      "state": "planned"
+      "state": "planned",
+      "value": null
     }
   ]
 }

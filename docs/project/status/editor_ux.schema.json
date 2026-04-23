@@ -9,7 +9,8 @@
     "scorecard",
     "harness",
     "top_line_metrics",
-    "integration_points"
+    "integration_points",
+    "confidence_signals"
   ],
   "properties": {
     "schema_version": {
@@ -18,7 +19,7 @@
     },
     "receipt_kind": {
       "type": "string",
-      "const": "planning_scaffold"
+      "enum": ["planning_scaffold", "tracked"]
     },
     "scorecard": {
       "type": "string",
@@ -102,6 +103,10 @@
           },
           "owner": {
             "type": "string"
+          },
+          "value": {
+            "type": ["number", "null"],
+            "minimum": 0
           }
         },
         "additionalProperties": false
@@ -122,6 +127,53 @@
         },
         "quality_surface": {
           "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "confidence_signals": {
+      "type": "object",
+      "required": [
+        "manual_editor_smoke_workflows",
+        "first_5_minutes_harness",
+        "open_issue_burn_down"
+      ],
+      "properties": {
+        "manual_editor_smoke_workflows": {
+          "$ref": "#/$defs/signal"
+        },
+        "first_5_minutes_harness": {
+          "$ref": "#/$defs/signal"
+        },
+        "open_issue_burn_down": {
+          "$ref": "#/$defs/signal"
+        }
+      },
+      "additionalProperties": false
+    },
+    "measured_source": {
+      "type": ["string", "null"]
+    },
+    "measured_at": {
+      "type": ["string", "null"],
+      "format": "date-time"
+    }
+  },
+  "$defs": {
+    "signal": {
+      "type": "object",
+      "required": ["tracked_by", "state"],
+      "properties": {
+        "tracked_by": {
+          "type": "string"
+        },
+        "state": {
+          "type": "string",
+          "enum": ["tracked_protocol", "measured", "external"]
+        },
+        "scenario_count": {
+          "type": "integer",
+          "minimum": 0
         }
       },
       "additionalProperties": false
