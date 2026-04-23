@@ -243,12 +243,24 @@ impl AgentConfigValidator {
         }
 
         // Validate model field
-        let valid_models = ["sonnet", "opus", "haiku", "claude-sonnet", "claude-opus"];
+        let valid_models = [
+            "sonnet",
+            "opus",
+            "haiku",
+            "claude-sonnet",
+            "claude-opus",
+            "gemini",
+            "gemini-pro",
+            "gemini-flash",
+        ];
         if config.model.is_empty() {
             result.errors.push("model field is empty".to_string());
-        } else if !valid_models.contains(&config.model.as_str()) {
+        } else if !valid_models.contains(&config.model.as_str())
+            && !config.model.starts_with("claude-")
+            && !config.model.starts_with("gemini-")
+        {
             result.warnings.push(format!(
-                "model '{}' is not a standard value (expected: sonnet, opus, haiku)",
+                "model '{}' is not a standard value (expected: sonnet/opus/haiku, claude-*, gemini-*)",
                 config.model
             ));
         }
@@ -497,10 +509,21 @@ mod tests {
         }
 
         // All agents should use valid model names
-        let valid_models = ["sonnet", "opus", "haiku", "claude-sonnet", "claude-opus"];
+        let valid_models = [
+            "sonnet",
+            "opus",
+            "haiku",
+            "claude-sonnet",
+            "claude-opus",
+            "gemini",
+            "gemini-pro",
+            "gemini-flash",
+        ];
         for (model, count) in &model_counts {
             assert!(
-                valid_models.contains(&model.as_str()) || model.starts_with("claude-"),
+                valid_models.contains(&model.as_str())
+                    || model.starts_with("claude-")
+                    || model.starts_with("gemini-"),
                 "Invalid model name '{}' used by {} agents",
                 model,
                 count
