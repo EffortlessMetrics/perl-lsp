@@ -54,6 +54,8 @@ pub use workspace::FakeWorkspace;
 
 use anyhow::{Context, Result, anyhow};
 use serde_json::{Value, json};
+use std::collections::HashMap;
+use std::sync::Mutex;
 use std::time::Duration;
 
 /// Configuration for a UX scenario.
@@ -150,6 +152,7 @@ pub struct UxHarness {
     pub client: UxClient,
     pub workspace: FakeWorkspace,
     config: ScenarioConfig,
+    document_versions: Mutex<HashMap<String, i32>>,
 }
 
 impl UxHarness {
@@ -171,7 +174,7 @@ impl UxHarness {
         let client = UxClient::spawn(&binary_path, &workspace, &config)
             .context("Failed to spawn LSP server")?;
 
-        Ok(Self { client, workspace, config })
+        Ok(Self { client, workspace, config, document_versions: Mutex::new(HashMap::new()) })
     }
 
     /// Open a file in the LSP server (textDocument/didOpen).
@@ -180,7 +183,22 @@ impl UxHarness {
     pub fn open_file(&self, relative_path: &str, content: &str) -> Result<()> {
         self.workspace.write(relative_path, content)?;
         let uri = self.workspace.uri(relative_path);
-        self.client.did_open(&uri, content)
+        self.client.did_open(&uri, content)?;
+        self.document_versions.lock().unwrap_or_else(|e| e.into_inner()).insert(uri, 1);
+        Ok(())
+    }
+
+    /// Apply a full-document text replacement and send `textDocument/didChange`.
+    pub fn change_file_full(&self, relative_path: &str, updated_content: &str) -> Result<()> {
+        self.workspace.write(relative_path, updated_content)?;
+        let uri = self.workspace.uri(relative_path);
+        let version = {
+            let mut versions = self.document_versions.lock().unwrap_or_else(|e| e.into_inner());
+            let entry = versions.entry(uri.clone()).or_insert(1);
+            *entry += 1;
+            *entry
+        };
+        self.client.did_change_full(&uri, version, updated_content)
     }
 
     /// Request hover information at `(line, character)` (0-indexed UTF-16).

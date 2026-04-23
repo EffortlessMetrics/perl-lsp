@@ -245,6 +245,24 @@ impl UxClient {
         )
     }
 
+    /// Send `textDocument/didChange` with a full-document replacement.
+    pub fn did_change_full(&self, uri: &str, version: i32, text: &str) -> Result<()> {
+        self.notify(
+            "textDocument/didChange",
+            json!({
+                "textDocument": {
+                    "uri": uri,
+                    "version": version
+                },
+                "contentChanges": [
+                    {
+                        "text": text
+                    }
+                ]
+            }),
+        )
+    }
+
     /// Drain all buffered server-initiated events and decode them.
     ///
     /// After this call the internal queue is empty.  Use `peek_events` if you
