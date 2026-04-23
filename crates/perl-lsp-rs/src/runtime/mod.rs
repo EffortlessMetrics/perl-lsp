@@ -365,6 +365,32 @@ unsafe impl Sync for LspServer {}
 
 #[allow(dead_code)]
 impl LspServer {
+    fn resolve_ai_api_key(
+        ai_config: &perl_lsp_rs_core::config::AiCompletionConfig,
+    ) -> Option<String> {
+        Self::resolve_ai_api_key_with(ai_config, |name| {
+            std::env::var(name).ok().filter(|value| !value.is_empty())
+        })
+    }
+
+    fn resolve_ai_api_key_with<F>(
+        ai_config: &perl_lsp_rs_core::config::AiCompletionConfig,
+        mut read_env: F,
+    ) -> Option<String>
+    where
+        F: FnMut(&str) -> Option<String>,
+    {
+        let configured = read_env(&ai_config.api_key_env);
+        if configured.is_some() {
+            return configured;
+        }
+
+        // Compatibility fallback: many OpenAI-compatible clients (including Gemini CLI setups)
+        // export provider-specific key names instead of OPENAI_API_KEY.
+        const FALLBACK_API_KEY_ENVS: [&str; 2] = ["GEMINI_API_KEY", "GOOGLE_API_KEY"];
+        FALLBACK_API_KEY_ENVS.iter().find_map(|name| read_env(name))
+    }
+
     /// Active feature profile for this server instance.
     pub(crate) const fn feature_profile(&self) -> FeatureProfile {
         self.feature_profile
@@ -397,13 +423,13 @@ impl LspServer {
             return;
         }
 
-        // Resolve API key from environment variable
-        let api_key = std::env::var(&ai_config.api_key_env).unwrap_or_default();
-        if api_key.is_empty() {
-            tracing::warn!(env_var = %ai_config.api_key_env, "AI completion enabled but env var is empty or unset");
+        // Resolve API key from configured env var with compatibility aliases for
+        // common OpenAI-compatible providers.
+        let Some(api_key) = Self::resolve_ai_api_key(&ai_config) else {
+            tracing::warn!(env_var = %ai_config.api_key_env, "AI completion enabled but API key env var is empty or unset");
             *self.ai_inline_backend.lock() = None;
             return;
-        }
+        };
 
         let provider_config = perl_lsp_rs_core::providers::ai::OpenAiConfig {
             endpoint: ai_config.endpoint.clone(),
@@ -840,6 +866,7 @@ pub(crate) fn location_from_path(p: &Path) -> serde_json::Value {
 mod tests {
     use super::*;
     use crate::features::formatting::FormatRange;
+    use perl_lsp_rs_core::config::AiCompletionConfig;
 
     #[test]
     fn workspace_folder_matching_supports_non_file_uri_schemes() {
@@ -951,5 +978,29 @@ mod tests {
             assert_eq!(range.end.line, line as u32);
             assert_eq!(range.end.character, character as u32);
         }
+    }
+
+    #[test]
+    fn resolve_ai_api_key_prefers_configured_env_var() {
+        let config = AiCompletionConfig { api_key_env: "OPENAI_API_KEY".to_string(), ..AiCompletionConfig::default() };
+        let read_env = |name: &str| match name {
+            "OPENAI_API_KEY" => Some("openai-key".to_string()),
+            "GEMINI_API_KEY" => Some("gemini-key".to_string()),
+            _ => None,
+        };
+
+        assert_eq!(LspServer::resolve_ai_api_key_with(&config, read_env).as_deref(), Some("openai-key"));
+    }
+
+    #[test]
+    fn resolve_ai_api_key_uses_gemini_fallback_when_configured_var_missing() {
+        let config = AiCompletionConfig::default();
+        let read_env = |name: &str| match name {
+            "OPENAI_API_KEY" => None,
+            "GEMINI_API_KEY" => Some("gemini-key".to_string()),
+            _ => None,
+        };
+
+        assert_eq!(LspServer::resolve_ai_api_key_with(&config, read_env).as_deref(), Some("gemini-key"));
     }
 }
