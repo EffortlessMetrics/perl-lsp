@@ -299,22 +299,13 @@ impl<'tree> Node<'tree> {
 
     /// Returns the number of direct children.
     pub fn child_count(&self) -> usize {
-        let mut count = 0usize;
-        self.inner.for_each_child(|_| count += 1);
-        count
+        ast_child_count(self.inner)
     }
 
     /// Returns the `i`-th direct child, or `None` if out of range.
     pub fn child(&self, i: usize) -> Option<Node<'tree>> {
-        let mut idx = 0usize;
-        let mut found: Option<&'tree AstNode> = None;
-        self.inner.for_each_child(|child| {
-            if found.is_none() && idx == i {
-                found = Some(child);
-            }
-            idx += 1;
-        });
-        found.map(|child| Node { inner: child, tree_source: self.tree_source })
+        ast_child_at(self.inner, i)
+            .map(|child| Node { inner: child, tree_source: self.tree_source })
     }
 
     /// Returns an iterator over direct children.
@@ -421,7 +412,7 @@ impl<'tree> TreeCursor<'tree> {
         }
 
         let parent = self.current_parent_ast_node();
-        let sibling_count = parent.children().len();
+        let sibling_count = ast_child_count(parent);
         let current_index = self.path[self.path.len() - 1];
         let next = current_index + 1;
         if next >= sibling_count {
@@ -469,11 +460,31 @@ fn ast_children(node: &AstNode) -> Vec<&AstNode> {
     node.children()
 }
 
+#[inline]
+fn ast_child_count(node: &AstNode) -> usize {
+    let mut count = 0usize;
+    node.for_each_child(|_| count += 1);
+    count
+}
+
+#[inline]
+fn ast_child_at(node: &AstNode, index: usize) -> Option<&AstNode> {
+    let mut idx = 0usize;
+    let mut found = None;
+    node.for_each_child(|child| {
+        if found.is_none() && idx == index {
+            found = Some(child);
+        }
+        idx += 1;
+    });
+    found
+}
+
 fn resolve_path<'tree>(root: &'tree AstNode, path: &[usize]) -> &'tree AstNode {
     let mut current = root;
     for &index in path {
-        let children = current.children();
-        current = children[index];
+        current = ast_child_at(current, index)
+            .expect("TreeCursor path must always reference a valid child");
     }
     current
 }
