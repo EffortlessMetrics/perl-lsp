@@ -87,7 +87,12 @@ pub fn root_path_to_file_uri(root_path: &str) -> String {
             if root_path.starts_with('/') {
                 format!("file://{}", root_path)
             } else {
-                format!("file:///{}", root_path.replace('\\', "/"))
+                let normalized = root_path.replace('\\', "/");
+                // Preserve legacy behavior (force an absolute-looking file URI for
+                // non-absolute paths) while ensuring URI-safe percent encoding.
+                let pseudo_absolute = format!("/{normalized}");
+                url::Url::from_file_path(std::path::Path::new(&pseudo_absolute))
+                    .map_or_else(|_| format!("file:///{}", normalized), |uri| uri.to_string())
             }
         },
         |uri| uri.to_string(),
@@ -156,5 +161,11 @@ mod tests {
     fn preserves_file_uri_root_path_input() {
         let uri = root_path_to_file_uri("file:///already/uri");
         assert_eq!(uri, "file:///already/uri");
+    }
+
+    #[test]
+    fn encodes_spaces_in_windows_style_root_path() {
+        let uri = root_path_to_file_uri(r"C:\Users\me\My Project");
+        assert_eq!(uri, "file:///C:/Users/me/My%20Project");
     }
 }
