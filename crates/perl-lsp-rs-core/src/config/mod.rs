@@ -787,3 +787,122 @@ impl ProjectConfig {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    type TestResult = Result<(), Box<dyn std::error::Error>>;
+
+    #[test]
+    fn load_project_config_returns_none_when_missing() -> TestResult {
+        let temp = tempfile::tempdir()?;
+        let config = load_project_config(temp.path())?;
+        assert!(config.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn load_project_config_returns_parse_error_for_invalid_toml() -> TestResult {
+        let temp = tempfile::tempdir()?;
+        std::fs::write(temp.path().join(".perl-lsp.toml"), "[perl\ninclude_paths = [\"lib\"]")?;
+
+        let err = load_project_config(temp.path())
+            .err()
+            .ok_or("expected invalid TOML to return an error")?;
+        assert!(err.contains("syntax error"));
+        Ok(())
+    }
+
+    #[test]
+    fn load_project_config_parses_known_sections() -> TestResult {
+        let temp = tempfile::tempdir()?;
+        std::fs::write(
+            temp.path().join(".perl-lsp.toml"),
+            r#"
+[perl]
+include_paths = ["lib", "t/lib"]
+use_perl5lib = true
+perl5lib_precedence = "prepend"
+
+[diagnostics]
+perlcritic = true
+perlcritic_severity = 4
+
+[features]
+inlay_hints = false
+
+[formatting]
+enabled = true
+perltidy_maximum_line_length = 100
+perltidy_extra_args = ["-noll"]
+"#,
+        )?;
+
+        let config = load_project_config(temp.path())?.ok_or("expected parsed project config")?;
+
+        assert_eq!(config.perl.include_paths, vec!["lib", "t/lib"]);
+        assert_eq!(config.perl.use_perl5lib, Some(true));
+        assert!(matches!(config.perl.perl5lib_precedence, Some(Perl5LibPrecedence::Prepend)));
+        assert_eq!(config.diagnostics.perlcritic, Some(true));
+        assert_eq!(config.diagnostics.perlcritic_severity, Some(4));
+        assert_eq!(config.features.inlay_hints, Some(false));
+        assert_eq!(config.formatting.enabled, Some(true));
+        assert_eq!(config.formatting.perltidy_maximum_line_length, Some(100));
+        assert_eq!(config.formatting.perltidy_extra_args, vec!["-noll"]);
+        Ok(())
+    }
+
+    #[test]
+    fn apply_to_server_config_clamps_perlcritic_severity() {
+        let mut config = ServerConfig::default();
+        let mut project = ProjectConfig::default();
+        project.diagnostics.perlcritic_severity = Some(99);
+
+        project.apply_to_server_config(&mut config);
+
+        assert_eq!(config.perlcritic_severity, 5);
+    }
+
+    #[test]
+    fn apply_to_server_config_does_not_overwrite_unset_values() {
+        let mut config = ServerConfig {
+            perlcritic_enabled: true,
+            inlay_hints_enabled: true,
+            ..ServerConfig::default()
+        };
+        let project = ProjectConfig::default();
+
+        project.apply_to_server_config(&mut config);
+
+        assert!(config.perlcritic_enabled);
+        assert!(config.inlay_hints_enabled);
+    }
+
+    #[test]
+    fn apply_to_workspace_config_only_overrides_non_empty_include_paths() {
+        let mut workspace = WorkspaceConfig::default();
+        let baseline_include_paths = workspace.include_paths.clone();
+
+        let mut project = ProjectConfig::default();
+        project.apply_to_workspace_config(&mut workspace);
+        assert_eq!(workspace.include_paths, baseline_include_paths);
+
+        project.perl.include_paths = vec!["custom/lib".to_string()];
+        project.apply_to_workspace_config(&mut workspace);
+        assert_eq!(workspace.include_paths, vec!["custom/lib"]);
+    }
+
+    #[test]
+    fn apply_to_workspace_config_sets_perl5lib_toggles() {
+        let mut workspace = WorkspaceConfig::default();
+        let mut project = ProjectConfig::default();
+        project.perl.use_perl5lib = Some(false);
+        project.perl.perl5lib_precedence = Some(Perl5LibPrecedence::Append);
+
+        project.apply_to_workspace_config(&mut workspace);
+
+        assert!(!workspace.use_perl5lib);
+        assert!(matches!(workspace.perl5lib_precedence, Perl5LibPrecedence::Append));
+    }
+}
