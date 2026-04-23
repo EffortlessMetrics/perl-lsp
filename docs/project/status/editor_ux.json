@@ -28,9 +28,19 @@
     "release_lane": "just ux-tests-full",
     "status_update": "cargo xtask update-status --only quality"
   },
-  "receipt_kind": "planning_scaffold",
-  "schema_version": 1,
+  "receipt_kind": "tracking_receipt",
+  "schema_version": 2,
   "scorecard": "editor_ux",
+  "tracked_signals": {
+    "open_issue_burndown": {
+      "known_gap_issue_refs": 8,
+      "source": "README.md#known-gaps-toward-solid-ux"
+    },
+    "workflow_inventory": {
+      "nightly_lane_workflows": 1,
+      "pr_lane_workflows": 16
+    }
+  },
   "top_line_metrics": [
     {
       "name": "workflow_pass_rate",

@@ -5,9 +5,11 @@
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
+use std::sync::LazyLock;
 use std::time::Duration;
 
 use color_eyre::eyre::{Context, Result};
+use regex::Regex;
 
 use super::{replace_block, run_cmd};
 
@@ -45,23 +47,23 @@ pub(super) fn collect_per_crate_test_counts(root: &Path) -> BTreeMap<String, usi
         return BTreeMap::new();
     }
 
-    let running_re = regex::Regex::new(
-        r"Running unittests[^\(]*\(target[^\)]*deps[/\\]([a-zA-Z0-9_-]+)-[0-9a-f]+\)",
-    )
-    .ok();
-    let test_re = regex::Regex::new(r":\s*test\s*$").ok();
+    static RUNNING_RE: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r"Running unittests[^\(]*\(target[^\)]*deps[/\\]([a-zA-Z0-9_-]+)-[0-9a-f]+\)")
+            .expect("RUNNING_RE regex must compile")
+    });
+    static TEST_RE: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r":\s*test\s*$").expect("TEST_RE regex must compile"));
 
     let mut by_crate: BTreeMap<String, usize> = BTreeMap::new();
     let mut current_crate: Option<String> = None;
 
     for line in output.lines() {
-        if let Some(caps) = running_re.as_ref().and_then(|r| r.captures(line)) {
+        if let Some(caps) = RUNNING_RE.captures(line) {
             let name = caps[1].replace('_', "-");
             current_crate = Some(name);
             continue;
         }
-        if let Some(re) = test_re.as_ref()
-            && re.is_match(line)
+        if TEST_RE.is_match(line)
             && let Some(ref crate_name) = current_crate
         {
             *by_crate.entry(crate_name.clone()).or_default() += 1;
@@ -122,6 +124,51 @@ pub(super) fn count_ux_scenarios(root: &Path) -> usize {
     collect_ux_scenario_files(root).len()
 }
 
+pub(super) fn collect_ux_workflow_tier_counts(root: &Path) -> BTreeMap<String, usize> {
+    let matrix_path = root.join("crates/perl-lsp-ux-tests/fixtures/editor_ux_fixture_matrix.json");
+    let Ok(raw) = fs::read_to_string(matrix_path) else {
+        return BTreeMap::new();
+    };
+    let Ok(matrix) = serde_json::from_str::<serde_json::Value>(&raw) else {
+        return BTreeMap::new();
+    };
+    let Some(workflows) = matrix.get("workflows").and_then(serde_json::Value::as_array) else {
+        return BTreeMap::new();
+    };
+
+    let mut by_tier: BTreeMap<String, usize> = BTreeMap::new();
+    for workflow in workflows {
+        if let Some(ci_tier) = workflow.get("ci_tier").and_then(serde_json::Value::as_str) {
+            *by_tier.entry(ci_tier.to_string()).or_default() += 1;
+        }
+    }
+    by_tier
+}
+
+pub(super) fn collect_known_ux_gap_issue_count(root: &Path) -> usize {
+    let readme_path = root.join("README.md");
+    let Ok(readme) = fs::read_to_string(readme_path) else {
+        return 0;
+    };
+
+    let Some(gaps_start) = readme.find("### Known gaps toward solid UX") else {
+        return 0;
+    };
+    let gaps_section = &readme[gaps_start..];
+    let until_next_h2 = gaps_section.find("\n## ").unwrap_or(gaps_section.len());
+    let gaps_section = &gaps_section[..until_next_h2];
+
+    static ISSUE_RE: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r"/issues/(\d+)").expect("ISSUE_RE regex must compile"));
+
+    gaps_section
+        .lines()
+        .flat_map(|line| ISSUE_RE.captures_iter(line))
+        .filter_map(|caps| caps.get(1).map(|m| m.as_str().to_string()))
+        .collect::<std::collections::BTreeSet<_>>()
+        .len()
+}
+
 // ---------------------------------------------------------------------------
 // Generators
 // ---------------------------------------------------------------------------
@@ -130,6 +177,10 @@ pub(super) fn generate_quality_status(root: &Path, original: &str) -> Result<Str
     let mutation_by_crate = collect_per_crate_mutation(root);
     let tests_by_crate = collect_per_crate_test_counts(root);
     let ux_scenarios = count_ux_scenarios(root);
+    let ux_tiers = collect_ux_workflow_tier_counts(root);
+    let pr_lane = ux_tiers.get("pr").copied().unwrap_or(0);
+    let nightly_lane = ux_tiers.get("nightly").copied().unwrap_or(0);
+    let known_gap_count = collect_known_ux_gap_issue_count(root);
 
     let has_mutation_data = !mutation_by_crate.is_empty();
     let mutation_note = if has_mutation_data {
@@ -141,9 +192,12 @@ pub(super) fn generate_quality_status(root: &Path, original: &str) -> Result<Str
     let bullets_content = format!(
         "- **Quality Metrics**: <50ms LSP response times, 931ns incremental parsing\n\
          - **UX workflow harness**: {ux_scenarios} scenario files in `perl-lsp-ux-tests`; \
-           `just ux-tests` runs the default release-confidence lane and `just ux-tests-full` adds \
-           the integration-only 10k-line large-file case; planning scaffold at \
+           `{pr_lane}` run in PR lane and `{nightly_lane}` in nightly lane; `just ux-tests` runs \
+           the default release-confidence lane and `just ux-tests-full` adds the integration-only \
+           10k-line large-file case; tracked scorecard receipt at \
            `docs/project/status/editor_ux.json`\n\
+         - **UX gap burn-down**: {known_gap_count} open known-gap issue references in README \
+           tracked via `docs/project/status/editor_ux.json`\n\
          - **Mutation testing**: {mutation_note}\n\
          - **Production Status**: LSP server public alpha (`just ci-gate` passing)"
     );
@@ -169,15 +223,27 @@ pub(super) fn generate_quality_status(root: &Path, original: &str) -> Result<Str
 pub(super) fn generate_editor_ux_receipt(root: &Path) -> Result<String> {
     let scenario_files = collect_ux_scenario_files(root);
     let scenario_count = scenario_files.len();
+    let tier_counts = collect_ux_workflow_tier_counts(root);
+    let known_gap_issue_count = collect_known_ux_gap_issue_count(root);
 
     let receipt = serde_json::json!({
-        "schema_version": 1,
-        "receipt_kind": "planning_scaffold",
+        "schema_version": 2,
+        "receipt_kind": "tracking_receipt",
         "scorecard": "editor_ux",
         "harness": {
             "crate": "crates/perl-lsp-ux-tests",
             "scenario_count": scenario_count,
             "scenario_files": scenario_files,
+        },
+        "tracked_signals": {
+            "workflow_inventory": {
+                "pr_lane_workflows": tier_counts.get("pr").copied().unwrap_or(0),
+                "nightly_lane_workflows": tier_counts.get("nightly").copied().unwrap_or(0),
+            },
+            "open_issue_burndown": {
+                "known_gap_issue_refs": known_gap_issue_count,
+                "source": "README.md#known-gaps-toward-solid-ux",
+            },
         },
         "top_line_metrics": [
             {
@@ -257,13 +323,23 @@ mod tests {
         let root = crate::utils::project_root()?;
         let receipt_raw = generate_editor_ux_receipt(&root)?;
         let receipt: serde_json::Value = serde_json::from_str(&receipt_raw)?;
-        assert_eq!(receipt["schema_version"], 1);
-        assert_eq!(receipt["receipt_kind"], "planning_scaffold");
+        assert_eq!(receipt["schema_version"], 2);
+        assert_eq!(receipt["receipt_kind"], "tracking_receipt");
         assert_eq!(receipt["scorecard"], "editor_ux");
         assert_eq!(receipt["harness"]["crate"], "crates/perl-lsp-ux-tests");
         assert_eq!(
             receipt["harness"]["scenario_count"].as_u64(),
             Some(count_ux_scenarios(&root) as u64)
+        );
+        assert!(
+            receipt["tracked_signals"]["workflow_inventory"]["pr_lane_workflows"]
+                .as_u64()
+                .is_some()
+        );
+        assert!(
+            receipt["tracked_signals"]["open_issue_burndown"]["known_gap_issue_refs"]
+                .as_u64()
+                .is_some()
         );
         let top_line_names = receipt["top_line_metrics"]
             .as_array()

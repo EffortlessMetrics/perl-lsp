@@ -9,16 +9,17 @@
     "scorecard",
     "harness",
     "top_line_metrics",
+    "tracked_signals",
     "integration_points"
   ],
   "properties": {
     "schema_version": {
       "type": "integer",
-      "const": 1
+      "const": 2
     },
     "receipt_kind": {
       "type": "string",
-      "const": "planning_scaffold"
+      "const": "tracking_receipt"
     },
     "scorecard": {
       "type": "string",
@@ -106,6 +107,42 @@
         },
         "additionalProperties": false
       }
+    },
+    "tracked_signals": {
+      "type": "object",
+      "required": ["workflow_inventory", "open_issue_burndown"],
+      "properties": {
+        "workflow_inventory": {
+          "type": "object",
+          "required": ["pr_lane_workflows", "nightly_lane_workflows"],
+          "properties": {
+            "pr_lane_workflows": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "nightly_lane_workflows": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false
+        },
+        "open_issue_burndown": {
+          "type": "object",
+          "required": ["known_gap_issue_refs", "source"],
+          "properties": {
+            "known_gap_issue_refs": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "source": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
     },
     "integration_points": {
       "type": "object",
