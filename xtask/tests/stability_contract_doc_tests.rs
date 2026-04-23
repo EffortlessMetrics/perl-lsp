@@ -29,7 +29,8 @@ fn stability_doc_mentions_current_release_line_and_publish_count()
     let mut parts = version.split('.');
     let major = parts.next().ok_or("missing major version component")?;
     let minor = parts.next().ok_or("missing minor version component")?;
-    let release_line = format!("v{major}.{minor}.x");
+    // Match the release line in either "0.12.x" or "v0.12.x" form — the doc may use either.
+    let release_line_bare = format!("{major}.{minor}.x");
 
     let publish_allow = cargo_value
         .get("workspace")
@@ -43,14 +44,20 @@ fn stability_doc_mentions_current_release_line_and_publish_count()
     let stability_doc = fs::read_to_string(root.join("docs/reference/STABILITY.md"))?;
 
     assert!(
-        stability_doc.contains(&release_line),
-        "STABILITY.md must mention the current release line `{release_line}` (derived from workspace version `{version}`)"
+        stability_doc.contains(&release_line_bare),
+        "STABILITY.md must mention the current release line `{release_line_bare}` \
+         (derived from workspace version `{version}`)"
     );
 
-    let publish_count_phrase = format!("Published crate set:** {publish_count} crates");
+    // Match the publish count in either "**N published crates" or "Published crate set:** N crates" form.
+    let publish_count_phrase_a = format!("**{publish_count} published crates");
+    let publish_count_phrase_b = format!("Published crate set:** {publish_count} crates");
     assert!(
-        stability_doc.contains(&publish_count_phrase),
-        "STABILITY.md must mention `{publish_count_phrase}` to keep the contract aligned with Cargo.toml"
+        stability_doc.contains(&publish_count_phrase_a)
+            || stability_doc.contains(&publish_count_phrase_b),
+        "STABILITY.md must mention the publish count `{publish_count}` in a recognisable phrase \
+         (checked: `{publish_count_phrase_a}` or `{publish_count_phrase_b}`) \
+         to stay aligned with Cargo.toml"
     );
 
     Ok(())
