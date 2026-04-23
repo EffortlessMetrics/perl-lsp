@@ -8,6 +8,7 @@
     "receipt_kind",
     "scorecard",
     "harness",
+    "published_signals",
     "top_line_metrics",
     "integration_points"
   ],
@@ -41,6 +42,29 @@
           "items": {
             "type": "string"
           }
+        }
+      },
+      "additionalProperties": false
+    },
+    "published_signals": {
+      "type": "object",
+      "required": [
+        "fixture_workflow_count",
+        "documented_ux_gap_issue_count",
+        "scenario_to_fixture_workflow_delta"
+      ],
+      "properties": {
+        "fixture_workflow_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "documented_ux_gap_issue_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "scenario_to_fixture_workflow_delta": {
+          "type": "integer",
+          "minimum": 0
         }
       },
       "additionalProperties": false
