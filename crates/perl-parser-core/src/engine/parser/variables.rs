@@ -1,4 +1,61 @@
 impl<'a> Parser<'a> {
+    /// Consume an optional type prefix in variable declarations.
+    ///
+    /// Perl allows typed lexicals such as:
+    ///   - `my Class $obj`
+    ///   - `my Class::Name $obj`
+    ///
+    /// This parser currently does not model declaration types in the AST, but
+    /// consuming the prefix avoids spurious `Expected variable` recovery errors
+    /// on real-world corpora that use typed declarations.
+    fn consume_optional_declaration_type_prefix(&mut self) -> ParseResult<()> {
+        if self.peek_kind() != Some(TokenKind::Identifier) {
+            return Ok(());
+        }
+
+        // Only engage this path when a declaration-like pattern is visible:
+        // `Type $var` or `Type::Name $var`.
+        let second_token = self.tokens.peek_second().ok();
+        let second_kind = second_token.map(|t| t.kind);
+        let second_is_sigil_identifier = second_token.is_some_and(|t| {
+            t.kind == TokenKind::Identifier
+                && (t.text.starts_with('$')
+                    || t.text.starts_with('@')
+                    || t.text.starts_with('%')
+                    || t.text.starts_with('&')
+                    || t.text.starts_with('*'))
+        });
+        if !matches!(
+            second_kind,
+            Some(
+                TokenKind::DoubleColon
+                    | TokenKind::ScalarSigil
+                    | TokenKind::ArraySigil
+                    | TokenKind::HashSigil
+                    | TokenKind::SubSigil
+                    | TokenKind::GlobSigil
+            )
+        ) && !second_is_sigil_identifier
+        {
+            return Ok(());
+        }
+
+        // Consume leading type identifier.
+        self.consume_token()?;
+
+        // Consume `::Ident` segments for qualified type names.
+        while self.peek_kind() == Some(TokenKind::DoubleColon) {
+            self.consume_token()?; // consume ::
+            if self.peek_kind() == Some(TokenKind::Identifier) {
+                self.consume_token()?;
+            } else {
+                break;
+            }
+        }
+
+        Ok(())
+    }
+
     /// Parse variable declaration (my, our, local, state)
     fn parse_variable_declaration(&mut self) -> ParseResult<Node> {
         let start = self.current_position();
@@ -93,6 +150,7 @@ impl<'a> Parser<'a> {
                 // For local, parse a general lvalue expression
                 self.parse_assignment()?
             } else {
+                self.consume_optional_declaration_type_prefix()?;
                 // For my/our/state, parse a simple variable
                 let var = self.parse_variable()?;
                 // If -> follows the declared variable, treat it as an lvalue subscript chain

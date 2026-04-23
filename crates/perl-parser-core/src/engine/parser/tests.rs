@@ -127,6 +127,29 @@ fn test_list_declarations() {
 }
 
 #[test]
+fn test_typed_variable_declarations() {
+    let mut parser = Parser::new("my Debconf::Question $question = shift;");
+    let result = parser.parse();
+    assert!(result.is_ok());
+    let _ast = must(result);
+    assert!(
+        parser.errors().is_empty(),
+        "typed declaration should parse without recovery errors: {:?}",
+        parser.errors()
+    );
+
+    let mut parser = Parser::new("our IPC::Run::IO $io;");
+    let result = parser.parse();
+    assert!(result.is_ok());
+    let _ast = must(result);
+    assert!(
+        parser.errors().is_empty(),
+        "package-qualified typed declaration should parse cleanly: {:?}",
+        parser.errors()
+    );
+}
+
+#[test]
 fn test_qw_delimiters() {
     // Test qw with parentheses
     let mut parser = Parser::new("qw(one two three)");
