@@ -619,6 +619,14 @@ fn test_normalize_file_path_uri_handling() {
     // Test empty string
     let normalized = provider.normalize_file_path("");
     assert_eq!(normalized, "", "Should handle empty strings");
+
+    // Test file URI decoding
+    let normalized = provider.normalize_file_path("file:///tmp/path%20with%20spaces/test.pl");
+    assert_eq!(normalized, "/tmp/path with spaces/test.pl", "Should decode file URI path");
+
+    // Test localhost authority in file URI
+    let normalized = provider.normalize_file_path("file://localhost/tmp/test.pl");
+    assert_eq!(normalized, "/tmp/test.pl", "Should support localhost file URI");
 }
 
 #[test]
@@ -1061,6 +1069,10 @@ fn test_normalize_file_path_not_hardcoded() {
     assert_eq!(result, regular_path, "Should return input unchanged");
     assert_ne!(result, "", "Should not return empty string");
     assert_ne!(result, "xyzzy", "Should not return hardcoded value");
+
+    let encoded_file_uri = "file:///home/user/my%20test.pl";
+    let result = provider.normalize_file_path(encoded_file_uri);
+    assert_eq!(result, "/home/user/my test.pl", "Should decode URI escaped characters");
 }
 
 #[test]
