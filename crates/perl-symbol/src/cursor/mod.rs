@@ -116,12 +116,23 @@ pub fn token_under_cursor(text: &str, line: usize, col_utf16: usize) -> Option<S
     let byte_pos = byte_offset_utf16(line_text, col_utf16);
     let bytes = line_text.as_bytes();
 
-    if byte_pos >= bytes.len() {
+    if bytes.is_empty() {
         return None;
     }
 
-    let mut start = byte_pos;
-    let mut end = byte_pos;
+    // LSP cursors are often positioned *between* characters. Support both:
+    // - on-token cursors: `foo<cursor>`
+    // - boundary cursors: `foo<cursor>;`
+    let anchor = if byte_pos < bytes.len() && is_modchar(bytes[byte_pos]) {
+        byte_pos
+    } else if byte_pos > 0 && is_modchar(bytes[byte_pos - 1]) {
+        byte_pos - 1
+    } else {
+        return None;
+    };
+
+    let mut start = anchor;
+    let mut end = anchor;
 
     while start > 0 && is_modchar(bytes[start - 1]) {
         start -= 1;
@@ -132,6 +143,10 @@ pub fn token_under_cursor(text: &str, line: usize, col_utf16: usize) -> Option<S
 
     while end < bytes.len() && is_modchar(bytes[end]) {
         end += 1;
+    }
+
+    if start == end {
+        return None;
     }
 
     Some(line_text[start..end].to_string())
@@ -165,6 +180,19 @@ mod tests {
     fn token_under_cursor_supports_sigils() {
         let text = "my $value = 1;\n";
         assert_eq!(token_under_cursor(text, 0, 5), Some("$value".to_string()));
+    }
+
+    #[test]
+    fn token_under_cursor_supports_cursor_after_token() {
+        let text = "use Demo::Worker;\n";
+        // Cursor between "r" and ";"
+        assert_eq!(token_under_cursor(text, 0, 16), Some("Demo::Worker".to_string()));
+    }
+
+    #[test]
+    fn token_under_cursor_returns_none_on_punctuation() {
+        let text = "use Demo::Worker;\n";
+        assert_eq!(token_under_cursor(text, 0, 17), None);
     }
 
     #[test]
