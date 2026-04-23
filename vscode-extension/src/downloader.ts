@@ -117,10 +117,18 @@ export class BinaryDownloader {
                 // Architecture or OS not supported by the release
                 const platformMatch = /platform:\s*([^\s.]+)/.exec(errorMsg);
                 const platformStr = platformMatch ? platformMatch[1] : 'your platform';
-                message =
-                    `perl-lsp: No pre-built binary for ${platformStr}. ` +
-                    'Build from source or download a compatible binary manually. ' +
-                    manualInstallNote;
+                if (this.isAndroidEnvironment()) {
+                    message =
+                        `perl-lsp: Android environment detected (${platformStr}). ` +
+                        'Pre-built Android binaries are not published yet. ' +
+                        'Use Termux package tooling or build from source, then point perl-lsp.serverPath to the binary. ' +
+                        manualInstallNote;
+                } else {
+                    message =
+                        `perl-lsp: No pre-built binary for ${platformStr}. ` +
+                        'Build from source or download a compatible binary manually. ' +
+                        manualInstallNote;
+                }
                 buttons = ['Install Manually'];
             } else if (errorMsg.includes('HTTP 403')) {
                 // GitHub rate limit or auth failure
@@ -579,6 +587,15 @@ export class BinaryDownloader {
         if (platform === 'darwin') {
             return arch === 'arm64' ? 'aarch64-apple-darwin' : 'x86_64-apple-darwin';
         } else if (platform === 'linux') {
+            if (this.isAndroidEnvironment()) {
+                const androidArchMap: Record<string, string> = {
+                    arm64: 'aarch64-linux-android',
+                    x64: 'x86_64-linux-android',
+                    ia32: 'i686-linux-android',
+                    arm: 'armv7-linux-androideabi'
+                };
+                return androidArchMap[arch] ?? `${arch}-linux-android`;
+            }
             const archPrefix = arch === 'arm64' ? 'aarch64' : 'x86_64';
             const libc = this.detectMusl() ? 'musl' : 'gnu';
             return `${archPrefix}-unknown-linux-${libc}`;
@@ -602,6 +619,19 @@ export class BinaryDownloader {
         const rustArch = archMap[arch] || arch;
         
         return `${rustArch}-${rustPlatform}`;
+    }
+
+    private isAndroidEnvironment(): boolean {
+        if (process.platform !== 'linux') {
+            return false;
+        }
+
+        return (
+            typeof process.env.ANDROID_ROOT === 'string' ||
+            typeof process.env.ANDROID_DATA === 'string' ||
+            typeof process.env.TERMUX_VERSION === 'string' ||
+            os.release().toLowerCase().includes('android')
+        );
     }
     
     private detectMusl(): boolean {

@@ -10,6 +10,7 @@ use perl_module::resolution::{
     IncRoot, IncRootKind, ModuleUriResolution,
     resolve_module_path as resolve_workspace_module_path, resolve_module_uri_with_effective_inc,
 };
+use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::Once;
 use std::time::Duration;
@@ -116,6 +117,7 @@ fn build_effective_inc_roots(
     system_paths: &[PathBuf],
 ) -> Vec<IncRoot> {
     let mut roots = Vec::new();
+    let mut seen = HashSet::new();
     let mut precedence = 0usize;
 
     for path in lexical_paths {
@@ -125,6 +127,9 @@ fn build_effective_inc_roots(
         } else {
             IncRootKind::FileLocalLexical
         };
+        if !seen.insert(normalized_inc_key(&path_buf)) {
+            continue;
+        }
         roots.push(IncRoot {
             kind,
             path: path_buf,
@@ -141,6 +146,9 @@ fn build_effective_inc_roots(
         } else {
             IncRootKind::WorkspaceRelative
         };
+        if !seen.insert(normalized_inc_key(&path_buf)) {
+            continue;
+        }
         roots.push(IncRoot {
             kind,
             path: path_buf,
@@ -151,6 +159,9 @@ fn build_effective_inc_roots(
     }
 
     for path in system_paths {
+        if !seen.insert(normalized_inc_key(path)) {
+            continue;
+        }
         roots.push(IncRoot {
             kind: IncRootKind::InterpreterStartup,
             path: path.clone(),
@@ -177,6 +188,11 @@ fn append_system_inc_paths(
             include_paths.push(as_string);
         }
     }
+}
+
+fn normalized_inc_key(path: &std::path::Path) -> String {
+    let normalized = path.to_string_lossy().replace('\\', "/");
+    if normalized == "/" { normalized } else { normalized.trim_end_matches('/').to_string() }
 }
 
 impl LspServer {
@@ -482,6 +498,42 @@ mod tests {
                 "resolve_module_path must consistently return None when workspace root unset"
             );
         }
+    }
+
+    #[test]
+    fn build_effective_inc_roots_dedupes_with_normalized_separators() {
+        let include_paths = vec!["lib".to_string(), "lib/".to_string(), "other".to_string()];
+        let lexical_paths = vec!["lib\\".to_string()];
+        let system_paths = vec![PathBuf::from("other/"), PathBuf::from("syslib")];
+
+        let roots = build_effective_inc_roots(&include_paths, &lexical_paths, &system_paths);
+        let root_paths: Vec<String> =
+            roots.iter().map(|r| r.path.to_string_lossy().replace('\\', "/")).collect();
+
+        assert_eq!(root_paths, vec!["lib/".to_string(), "other".to_string(), "syslib".to_string()]);
+        assert_eq!(roots[0].source, "use-lib-lexical");
+        assert_eq!(roots[1].source, "workspace-include-paths");
+        assert_eq!(roots[2].source, "interpreter-startup-inc");
+    }
+
+    #[test]
+    fn build_effective_inc_roots_preserves_precedence_for_first_occurrence() {
+        let include_paths = vec!["dup".to_string(), "late".to_string()];
+        let lexical_paths = vec!["dup".to_string()];
+        let system_paths = vec![PathBuf::from("late"), PathBuf::from("sys")];
+
+        let roots = build_effective_inc_roots(&include_paths, &lexical_paths, &system_paths);
+
+        assert_eq!(roots.len(), 3);
+        assert_eq!(roots[0].path, PathBuf::from("dup"));
+        assert_eq!(roots[0].kind, IncRootKind::FileLocalLexical);
+        assert_eq!(roots[1].path, PathBuf::from("late"));
+        assert_eq!(roots[1].kind, IncRootKind::WorkspaceRelative);
+        assert_eq!(roots[2].path, PathBuf::from("sys"));
+        assert_eq!(roots[2].kind, IncRootKind::InterpreterStartup);
+        assert_eq!(roots[0].precedence, 0);
+        assert_eq!(roots[1].precedence, 1);
+        assert_eq!(roots[2].precedence, 2);
     }
 
     type TestResult = Result<(), Box<dyn std::error::Error>>;
