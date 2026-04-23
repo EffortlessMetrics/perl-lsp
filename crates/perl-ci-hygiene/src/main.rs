@@ -3886,6 +3886,14 @@ fn find_hash_comment_start(line: &str) -> Option<usize> {
 
     for (idx, ch) in line.char_indices() {
         if in_single {
+            if prev_was_escape {
+                prev_was_escape = false;
+                continue;
+            }
+            if ch == '\\' {
+                prev_was_escape = true;
+                continue;
+            }
             if ch == '\'' {
                 in_single = false;
             }
@@ -3907,8 +3915,14 @@ fn find_hash_comment_start(line: &str) -> Option<usize> {
         }
 
         match ch {
-            '\'' => in_single = true,
-            '"' => in_double = true,
+            '\'' => {
+                in_single = true;
+                prev_was_escape = false;
+            }
+            '"' => {
+                in_double = true;
+                prev_was_escape = false;
+            }
             '#' => {
                 if idx == 0 && line.as_bytes().get(1) == Some(&b'!') {
                     return None;
@@ -4346,6 +4360,8 @@ mod tests {
         ));
         assert!(has_unlinked_todo_in_hash_line("echo hi # TODO: follow up", &todo_re));
         assert!(!has_unlinked_todo_in_hash_line("echo hi # TODO(#77): tracked", &todo_re));
+        assert!(!has_unlinked_todo_in_hash_line(r#"print 'don\'t # TODO in literal';"#, &todo_re));
+        assert!(has_unlinked_todo_in_hash_line(r#"print 'don\'t'; # TODO: follow up"#, &todo_re));
 
         Ok(())
     }
