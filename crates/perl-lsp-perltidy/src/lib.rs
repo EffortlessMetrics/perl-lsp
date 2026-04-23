@@ -340,9 +340,8 @@ impl BuiltInFormatter {
 
         for line in code.lines() {
             let trimmed = line.trim();
-            if trimmed.starts_with('}') || trimmed.starts_with(')') || trimmed.starts_with(']') {
-                indent_level = indent_level.saturating_sub(1);
-            }
+            let leading_closers = count_leading_closers(trimmed) as i32;
+            indent_level = indent_level.saturating_sub(leading_closers);
 
             if !trimmed.is_empty() {
                 for _ in 0..indent_level {
@@ -352,11 +351,68 @@ impl BuiltInFormatter {
             }
             result.push('\n');
 
-            if trimmed.ends_with('{') || trimmed.ends_with('(') || trimmed.ends_with('[') {
-                indent_level += 1;
-            }
+            indent_level = (indent_level + net_delimiter_delta(trimmed)).max(0);
         }
 
         result
     }
+}
+
+fn count_leading_closers(line: &str) -> usize {
+    line.chars().take_while(|ch| matches!(ch, '}' | ')' | ']')).count()
+}
+
+fn net_delimiter_delta(line: &str) -> i32 {
+    let mut delta = 0_i32;
+    let mut in_single = false;
+    let mut in_double = false;
+    let mut escaped = false;
+
+    for ch in line.chars() {
+        if escaped {
+            escaped = false;
+            continue;
+        }
+
+        if ch == '\\' {
+            escaped = true;
+            continue;
+        }
+
+        if in_single {
+            if ch == '\'' {
+                in_single = false;
+            }
+            continue;
+        }
+
+        if in_double {
+            if ch == '"' {
+                in_double = false;
+            }
+            continue;
+        }
+
+        if ch == '\'' {
+            in_single = true;
+            continue;
+        }
+
+        if ch == '"' {
+            in_double = true;
+            continue;
+        }
+
+        if ch == '#' {
+            break;
+        }
+
+        match ch {
+            '{' | '(' | '[' => delta += 1,
+            '}' | ')' | ']' => delta -= 1,
+            _ => {}
+        }
+    }
+
+    delta
 }

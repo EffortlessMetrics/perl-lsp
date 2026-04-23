@@ -232,6 +232,30 @@ fn builtin_formatter_handles_parens_and_brackets() {
 }
 
 #[test]
+fn builtin_formatter_indents_multiline_function_arguments() {
+    let formatter = BuiltInFormatter::new(PerlTidyConfig::default());
+    let formatted = formatter.format("my $value = foo($a,\n$b,\n$c,\n);\n");
+
+    let lines: Vec<&str> = formatted.lines().collect();
+    assert_eq!(lines[0], "my $value = foo($a,");
+    assert_eq!(lines[1], "    $b,");
+    assert_eq!(lines[2], "    $c,");
+    assert_eq!(lines[3], ");");
+}
+
+#[test]
+fn builtin_formatter_ignores_delimiters_inside_strings_and_comments() {
+    let formatter = BuiltInFormatter::new(PerlTidyConfig::default());
+    let formatted = formatter.format("if ($ok) {\nprint \"literal ) ] }\"; # comment )\nprint \"done\";\n}\n");
+
+    let lines: Vec<&str> = formatted.lines().collect();
+    assert_eq!(lines[0], "if ($ok) {");
+    assert_eq!(lines[1], "    print \"literal ) ] }\"; # comment )");
+    assert_eq!(lines[2], "    print \"done\";");
+    assert_eq!(lines[3], "}");
+}
+
+#[test]
 fn builtin_formatter_handles_empty_input() {
     let formatter = BuiltInFormatter::new(PerlTidyConfig::default());
     let formatted = formatter.format("");
