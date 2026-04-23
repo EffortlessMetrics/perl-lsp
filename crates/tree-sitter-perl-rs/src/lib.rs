@@ -433,6 +433,25 @@ impl<'tree> TreeCursor<'tree> {
         true
     }
 
+    /// Moves to the previous sibling of the current node.
+    ///
+    /// Returns `true` on success. Returns `false` if the cursor is at root or if
+    /// there is no previous sibling.
+    pub fn goto_previous_sibling(&mut self) -> bool {
+        if self.path.is_empty() {
+            return false;
+        }
+
+        let current_index = self.path[self.path.len() - 1];
+        if current_index == 0 {
+            return false;
+        }
+
+        let last_pos = self.path.len() - 1;
+        self.path[last_pos] = current_index - 1;
+        true
+    }
+
     /// Moves to the parent node.
     ///
     /// Returns `true` when movement succeeds, `false` when already at root.
@@ -816,6 +835,34 @@ mod tests {
         assert!(cursor.goto_next_sibling(), "first statement should have a sibling");
         assert_eq!(cursor.node().grammar_kind(), "my_declaration");
         assert!(!cursor.goto_next_sibling(), "second statement should be the last sibling");
+    }
+
+    #[test]
+    fn test_tree_cursor_goto_previous_sibling_behavior() {
+        let mut parser = Parser::new();
+        let tree = must_some(parser.parse("my $x = 1; my $y = 2;"));
+        let root = tree.root_node();
+        let mut cursor = root.walk();
+
+        // Root has no siblings.
+        assert!(
+            !cursor.goto_previous_sibling(),
+            "cursor at root must not move to previous sibling"
+        );
+
+        // First child has no previous sibling.
+        assert!(cursor.goto_first_child(), "source_file should have at least one child");
+        assert_eq!(cursor.node().grammar_kind(), "my_declaration");
+        assert!(!cursor.goto_previous_sibling(), "first child must not have a previous sibling");
+
+        // Move to second child, then back to first via previous sibling.
+        assert!(cursor.goto_next_sibling(), "first declaration should have a next sibling");
+        assert_eq!(cursor.node().grammar_kind(), "my_declaration");
+        assert!(
+            cursor.goto_previous_sibling(),
+            "second declaration should have a previous sibling"
+        );
+        assert_eq!(cursor.node().grammar_kind(), "my_declaration");
     }
 
     #[test]
