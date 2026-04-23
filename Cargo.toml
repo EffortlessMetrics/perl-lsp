@@ -77,6 +77,7 @@ members = [
     "crates/tree-sitter-perl-c",
     "crates/tree-sitter-perl-rs",
     "crates/perl-ci-hygiene",
+    "crates/perl-dependency-metadata",
     "xtask",
 ]
 
@@ -284,6 +285,7 @@ perl-lsp-launcher = { path = "crates/perl-lsp-launcher", version = "0.12.4" }
 # (perl-lsp-folding absorbed into perl-lsp-rs-core::providers — Wave G1a)
 # (perl-lsp-selection-range absorbed into perl-lsp-rs-core::providers — Wave G1a)
 perl-diagnostics = { path = "crates/perl-diagnostics", version = "0.12.4" }
+perl-dependency-metadata = { path = "crates/perl-dependency-metadata", version = "0.12.4" }
 # Tier 3: Two-level dependencies
 perl-workspace = { path = "crates/perl-workspace-index", version = "0.12.4" }
 perl-incremental-parsing = { path = "crates/perl-incremental-parsing", version = "0.12.4" }
@@ -307,6 +309,7 @@ tree-sitter = "0.26.8"
 ropey = "1.6.1"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"
+serde_yaml = "0.9.34"
 regex = "1.12.2"
 thiserror = "2.0.18"
 tempfile = "3.24.0"
