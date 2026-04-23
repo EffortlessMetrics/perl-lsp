@@ -50,6 +50,7 @@ pr-fast: _check-tools-basic
     just _timed "fmt-check" "just fmt-check" && \
     just _timed "release-history" "just ci-release-history" && \
     just _timed "readme-heading-check" "just readme-heading-check" && \
+    just _timed "docs-as-code" "just docs-as-code" && \
     just _timed "clippy-core" "just clippy-core" && \
     just _timed "test-core" "just test-core" && \
     just _timed "publish-closure" "just ci-publish-closure" && \
@@ -1233,6 +1234,14 @@ ci-docs-check:
     @echo "📝 Checking missing docs baseline..."
     @cargo xtask ci-hygiene check-missing-docs
     @echo "✅ Missing docs check passed"
+
+# Docs-as-code hygiene checks (fast, content-focused)
+docs-as-code:
+    @echo "📚 Running docs-as-code checks..."
+    @just ci-docs-check
+    @just ci-doc-paths
+    @just ci-doc-claims
+    @echo "✅ Docs-as-code checks passed"
 
 # Policy and governance checks
 ci-policy:
