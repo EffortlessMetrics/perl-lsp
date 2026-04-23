@@ -161,8 +161,12 @@ pub struct TransportArgs {
     #[arg(long, default_value_t = false, conflicts_with = "socket")]
     pub stdio: bool,
 
+    /// MCP-compatible stdio mode (alias of --stdio)
+    #[arg(long, default_value_t = false, conflicts_with = "socket")]
+    pub mcp: bool,
+
     /// Use TCP socket for communication
-    #[arg(long, conflicts_with = "stdio")]
+    #[arg(long, conflicts_with_all = ["stdio", "mcp"])]
     pub socket: bool,
 
     /// Port to listen on (for socket mode)
@@ -547,6 +551,7 @@ pub fn help_text() -> String {
     out.push('\n');
     out.push_str("Server options:\n");
     out.push_str("  --stdio              Use stdio for communication (default)\n");
+    out.push_str("  --mcp                MCP-compatible stdio mode (alias of --stdio)\n");
     out.push_str("  --socket             Use TCP socket for communication\n");
     out.push_str(&format!(
         "  --port <port>        Port to listen on (default: {DEFAULT_LSP_PORT})\n"
@@ -569,6 +574,7 @@ pub fn help_text() -> String {
     out.push('\n');
     out.push_str("Examples:\n");
     out.push_str("  perl-lsp --stdio                        # stdio mode (default)\n");
+    out.push_str("  perl-lsp --mcp                          # MCP-compatible stdio mode\n");
     out.push_str("  perl-lsp --stdio --log                   # with logging\n");
     out.push_str("  perl-lsp --socket --port 9257            # TCP socket mode\n");
     out.push_str("  perl-lsp --stdio --feature-profile=prod  # production profile\n");
@@ -604,7 +610,7 @@ const BASH_COMPLETION: &str = r#"_perl_lsp() {
     COMPREPLY=()
     cur="${COMP_WORDS[COMP_CWORD]}"
     prev="${COMP_WORDS[COMP_CWORD-1]}"
-    opts="--stdio --socket --port --log --health --info --check --check-project --version --features-json --feature-profile --completion --help"
+    opts="--stdio --mcp --socket --port --log --health --info --check --check-project --version --features-json --feature-profile --completion --help"
 
     case "${prev}" in
         --port)
@@ -637,6 +643,7 @@ const ZSH_COMPLETION: &str = r#"#compdef perl-lsp
 _perl-lsp() {
     _arguments \
         '--stdio[Use stdio for communication (default)]' \
+        '--mcp[MCP-compatible stdio mode (alias of --stdio)]' \
         '--socket[Use TCP socket for communication]' \
         '--port[Port to listen on]:port:' \
         '--log[Enable logging to stderr]' \
@@ -656,6 +663,7 @@ _perl-lsp "$@"
 "#;
 
 const FISH_COMPLETION: &str = r#"complete -c perl-lsp -l stdio -d 'Use stdio for communication (default)'
+complete -c perl-lsp -l mcp -d 'MCP-compatible stdio mode (alias of --stdio)'
 complete -c perl-lsp -l socket -d 'Use TCP socket for communication'
 complete -c perl-lsp -l port -x -d 'Port to listen on'
 complete -c perl-lsp -l log -d 'Enable logging to stderr'
@@ -675,6 +683,7 @@ const POWERSHELL_COMPLETION: &str = r#"Register-ArgumentCompleter -Native -Comma
 
     $options = @(
         [CompletionResult]::new('--stdio', '--stdio', 'ParameterName', 'Use stdio for communication (default)')
+        [CompletionResult]::new('--mcp', '--mcp', 'ParameterName', 'MCP-compatible stdio mode (alias of --stdio)')
         [CompletionResult]::new('--socket', '--socket', 'ParameterName', 'Use TCP socket for communication')
         [CompletionResult]::new('--port', '--port', 'ParameterName', 'Port to listen on')
         [CompletionResult]::new('--log', '--log', 'ParameterName', 'Enable logging to stderr')
@@ -867,6 +876,12 @@ mod tests {
     }
 
     #[test]
+    fn parse_mcp_flag_uses_stdio_transport() {
+        let plan = must(parse_args(["perl-lsp", "--mcp"]));
+        assert_eq!(plan.config.transport, TransportMode::Stdio);
+    }
+
+    #[test]
     fn parse_feature_profile_aliases() {
         let plan = must(parse_args(["perl-lsp", "--feature-profile", "ga_lock"]));
         assert_eq!(plan.config.feature_profile.as_str(), "ga-lock");
@@ -1041,6 +1056,12 @@ mod tests {
     fn help_mentions_completion_flag() {
         let text = super::help_text();
         assert!(text.contains("--completion"));
+    }
+
+    #[test]
+    fn help_mentions_mcp_flag() {
+        let text = super::help_text();
+        assert!(text.contains("--mcp"));
     }
 
     // -- --check-project flag -----------------------------------------
