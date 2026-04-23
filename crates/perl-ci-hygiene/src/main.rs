@@ -3863,17 +3863,49 @@ fn has_unlinked_todo_in_rust_line(line: &str, token_re: &Regex) -> bool {
 }
 
 fn has_unlinked_todo_in_hash_line(line: &str, token_re: &Regex) -> bool {
-    if let Some(idx) = line.find('#') {
-        if idx > 0 && line.as_bytes()[idx - 1] == b'!' {
-            return false;
-        }
-        if idx > 0 && !line[..idx].chars().next_back().is_some_and(char::is_whitespace) {
-            return false;
-        }
-        has_unlinked_token(&line[idx + 1..], token_re)
-    } else {
-        false
+    let Some(idx) = find_hash_comment_start(line) else {
+        return false;
+    };
+    if idx == 0 && line[idx + 1..].starts_with('!') {
+        return false;
     }
+    has_unlinked_token(&line[idx + 1..], token_re)
+}
+
+fn find_hash_comment_start(line: &str) -> Option<usize> {
+    let mut in_single = false;
+    let mut in_double = false;
+    let mut escaped = false;
+
+    for (idx, ch) in line.char_indices() {
+        if escaped {
+            escaped = false;
+            continue;
+        }
+
+        match ch {
+            '\\' => {
+                escaped = true;
+            }
+            '\'' if !in_double => {
+                in_single = !in_single;
+            }
+            '"' if !in_single => {
+                in_double = !in_double;
+            }
+            '#' if !in_single && !in_double => {
+                if idx == 0 {
+                    return Some(idx);
+                }
+                if line[..idx].chars().next_back().is_some_and(char::is_whitespace) {
+                    return Some(idx);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    None
 }
 
 fn is_url_like_hash_comment(line: &str, slash_idx: usize) -> bool {
@@ -4174,6 +4206,20 @@ mod tests {
         assert!(!has_unlinked_todo_in_hash_line("echo# TODO not a comment", &todo_re));
         assert!(has_unlinked_todo_in_hash_line("echo hi # TODO: follow up", &todo_re));
         assert!(!has_unlinked_todo_in_hash_line("echo hi # TODO(#77): tracked", &todo_re));
+
+        Ok(())
+    }
+
+    #[test]
+    fn hash_comment_todo_detection_ignores_hashes_in_quoted_strings() -> Result<()> {
+        let todo_re = Regex::new(r"TODO|FIXME")?;
+
+        assert!(!has_unlinked_todo_in_hash_line("echo \"# TODO in string\"", &todo_re));
+        assert!(!has_unlinked_todo_in_hash_line("echo '# FIXME in string'", &todo_re));
+        assert!(has_unlinked_todo_in_hash_line(
+            "echo \"# TODO in string\" # TODO in comment",
+            &todo_re
+        ));
 
         Ok(())
     }
