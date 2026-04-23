@@ -270,7 +270,7 @@ static CLAUDE_RELEASE_RE: LazyLock<Regex> =
 static ROADMAP_WORKSPACE_RE: LazyLock<Regex> =
     LazyLock::new(|| compile_regex(r"Workspace version line:\s*`v(\d+\.\d+\.\d+)`"));
 static ROADMAP_PUBLISHED_RE: LazyLock<Regex> =
-    LazyLock::new(|| compile_regex(r"Latest published release:\s*`v(\d+\.\d+\.\d+)"));
+    LazyLock::new(|| compile_regex(r"Latest published release:\s*`v(\d+\.\d+\.\d+)`"));
 
 fn compile_regex(pattern: &str) -> Regex {
     match Regex::new(pattern) {
