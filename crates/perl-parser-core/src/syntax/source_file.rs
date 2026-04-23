@@ -33,9 +33,9 @@ pub fn is_binary_content(text: &str) -> bool {
 ///
 /// Includes core Perl script and module extensions as well as common embedded
 /// Perl template formats: `.ep` (Mojolicious), `.tt`/`.tt2` (Template Toolkit),
-/// and `.mason` (Mason/HTML::Mason).
-pub const PERL_SOURCE_EXTENSIONS: [&str; 9] =
-    ["pl", "pm", "t", "psgi", "cgi", "ep", "tt", "tt2", "mason"];
+/// and `.mason` (Mason/HTML::Mason), plus `.claw` (OpenClaw templates).
+pub const PERL_SOURCE_EXTENSIONS: [&str; 10] =
+    ["pl", "pm", "t", "psgi", "cgi", "ep", "tt", "tt2", "mason", "claw"];
 
 /// Returns `true` if `extension` is a recognized Perl source extension.
 ///
@@ -78,7 +78,7 @@ mod tests {
     fn exposes_expected_extension_set() {
         assert_eq!(
             PERL_SOURCE_EXTENSIONS,
-            ["pl", "pm", "t", "psgi", "cgi", "ep", "tt", "tt2", "mason"]
+            ["pl", "pm", "t", "psgi", "cgi", "ep", "tt", "tt2", "mason", "claw"]
         );
     }
 
@@ -100,6 +100,7 @@ mod tests {
         assert!(is_perl_source_path(Path::new("/workspace/app.psgi")));
         assert!(is_perl_source_path(Path::new("/var/www/cgi-bin/form.cgi")));
         assert!(is_perl_source_path(Path::new("/var/www/cgi-bin/upload.CGI")));
+        assert!(is_perl_source_path(Path::new("/workspace/views/layout.claw")));
         assert!(!is_perl_source_path(Path::new("/workspace/README.md")));
         assert!(!is_perl_source_path(Path::new("/workspace/no_extension")));
     }
@@ -112,6 +113,7 @@ mod tests {
         assert!(is_perl_source_uri("file:///workspace/app.psgi?version=1#section"));
         assert!(is_perl_source_uri("file:///var/www/cgi-bin/form.cgi"));
         assert!(is_perl_source_uri("file:///var/www/cgi-bin/search.cgi?q=perl#results"));
+        assert!(is_perl_source_uri("file:///workspace/views/layout.claw"));
         assert!(!is_perl_source_uri("file:///workspace/README.md"));
     }
 
@@ -159,6 +161,12 @@ mod tests {
         assert!(is_perl_source_extension("MASON"));
         assert!(is_perl_source_path(Path::new("/app/comp/header.mason")));
         assert!(is_perl_source_uri("file:///app/comp/header.mason"));
+
+        // .claw — OpenClaw embedded templates
+        assert!(is_perl_source_extension("claw"));
+        assert!(is_perl_source_extension("CLAW"));
+        assert!(is_perl_source_path(Path::new("/app/views/home.claw")));
+        assert!(is_perl_source_uri("file:///app/views/home.claw"));
 
         // Non-template extensions remain unrecognized
         assert!(!is_perl_source_extension("html"));
