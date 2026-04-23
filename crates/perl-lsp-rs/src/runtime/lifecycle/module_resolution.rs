@@ -163,6 +163,22 @@ fn build_effective_inc_roots(
     roots
 }
 
+fn append_system_inc_paths(
+    config: &mut perl_lsp_rs_core::config::WorkspaceConfig,
+    include_paths: &mut Vec<String>,
+) {
+    if !config.use_system_inc {
+        return;
+    }
+
+    for path in config.get_system_inc() {
+        let as_string = path.to_string_lossy().to_string();
+        if !include_paths.iter().any(|existing| existing == &as_string) {
+            include_paths.push(as_string);
+        }
+    }
+}
+
 impl LspServer {
     /// Enhanced module path resolver using workspace configuration and optional document text.
     ///
@@ -191,11 +207,12 @@ impl LspServer {
             }
         };
 
-        let config = workspace_config_for_doc(self, None);
+        let mut config = workspace_config_for_doc(self, None);
         let perl5lib_paths = std::env::var("PERL5LIB")
             .map(|v| perl_lsp_rs_core::config::WorkspaceConfig::parse_perl5lib(&v))
             .unwrap_or_default();
         let mut include_paths = config.effective_include_paths(&perl5lib_paths);
+        append_system_inc_paths(&mut config, &mut include_paths);
 
         if let Some(text) = doc_text {
             prepend_use_lib_paths(&mut include_paths, text, &root, None);
@@ -228,11 +245,12 @@ impl LspServer {
             }
         };
 
-        let config = workspace_config_for_doc(self, doc_uri);
+        let mut config = workspace_config_for_doc(self, doc_uri);
         let perl5lib_paths = std::env::var("PERL5LIB")
             .map(|v| perl_lsp_rs_core::config::WorkspaceConfig::parse_perl5lib(&v))
             .unwrap_or_default();
         let mut include_paths = config.effective_include_paths(&perl5lib_paths);
+        append_system_inc_paths(&mut config, &mut include_paths);
 
         if let Some(text) = doc_text {
             let file_dir = doc_uri
@@ -1149,6 +1167,57 @@ use Overlay::Live;
             // Must not panic
             let _result = server.resolve_module_path("Any::Module", Some(doc_text));
         }
+        Ok(())
+    }
+
+    #[test]
+    fn test_resolve_module_path_with_uri_honors_system_inc_opt_in() -> TestResult {
+        // This test shells out to `perl -I <path> -e 'print join("\n", @INC)'`.
+        // Skip gracefully on machines where perl is not installed.
+        let perl_available = std::process::Command::new("perl")
+            .arg("--version")
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false);
+        if !perl_available {
+            eprintln!("SKIP: test_resolve_module_path_with_uri_honors_system_inc_opt_in — perl not found on PATH");
+            return Ok(());
+        }
+
+        let temp = tempfile::tempdir()?;
+        let workspace = temp.path().join("workspace");
+        fs::create_dir_all(&workspace)?;
+
+        let external_inc = temp.path().join("external-inc");
+        let module_file = external_inc.join("System").join("Inc.pm");
+        fs::create_dir_all(module_file.parent().ok_or("missing module parent")?)?;
+        fs::write(&module_file, "package System::Inc; 1;")?;
+
+        let doc_uri = Url::from_file_path(workspace.join("main.pl"))
+            .map_err(|_| "failed to create doc uri")?
+            .to_string();
+
+        let server = LspServer::new();
+        *server.root_path.lock() = Some(workspace.clone());
+        {
+            let mut config = server.workspace_config.lock();
+            config.include_paths = Vec::new();
+            config.use_system_inc = true;
+            config.perl_path = Some("perl".to_string());
+            config.perl_args = vec!["-I".to_string(), external_inc.to_string_lossy().to_string()];
+        }
+
+        let resolved = server.resolve_module_path_with_uri(
+            "System::Inc",
+            Some("use System::Inc;\n"),
+            Some(&doc_uri),
+        );
+        assert_eq!(
+            resolved,
+            Some(module_file),
+            "opted-in system @INC should be searched by resolve_module_path_with_uri"
+        );
+
         Ok(())
     }
 }
