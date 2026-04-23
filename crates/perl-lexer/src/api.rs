@@ -25,5 +25,6 @@ pub use crate::builtins::phf_lookup::{
 // tokenizer module (AST-agnostic slice only; TokenStream lives in
 // perl-parser-core because it depends on perl-error)
 pub use crate::tokenizer::token_wrapper::{PositionTracker, TokenWithPosition};
+// Re-export deprecated helpers for downstream compatibility during tokenizer API migration.
 #[allow(deprecated)]
 pub use crate::tokenizer::util::{code_slice, find_data_marker_byte, find_data_marker_byte_lexed};
