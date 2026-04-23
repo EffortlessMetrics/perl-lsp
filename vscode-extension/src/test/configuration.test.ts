@@ -157,6 +157,8 @@ describe('package.json contributes', () => {
       const exts: string[] = perl.extensions;
       expect(exts).toContain('.pl');
       expect(exts).toContain('.pm');
+      expect(exts).toContain('.cgi');
+      expect(exts).toContain('.fcgi');
       expect(exts).toContain('.xs');
       expect(exts).toContain('.xsi');
       expect(exts).toContain('.t');

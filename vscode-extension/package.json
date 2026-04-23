@@ -72,6 +72,8 @@
         "extensions": [
           ".pl",
           ".pm",
+          ".cgi",
+          ".fcgi",
           ".xs",
           ".xsi",
           ".pod",
