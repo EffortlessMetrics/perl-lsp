@@ -16,9 +16,10 @@ All notable changes to the Perl Language Server extension will be documented in 
   `use warnings` placed inside phase blocks (`BEGIN`, `END`, etc.) where they
   have block scope rather than file scope, with quick-fixes that move them to
   file scope. (#4131)
-- **`workspace/configuration` live reload**: server re-fetches per-folder
-  configuration from the client on `workspace/didChangeConfiguration`, merging
-  returned overlays over `.perl-lsp.toml` without a restart. (#4093)
+- **Dynamic workspace configuration remains deferred**: per-folder
+  `.perl-lsp.toml` remains the supported v0.13 mechanism; fully dynamic
+  per-folder scoping via `workspace/configuration` reverse requests is tracked
+  as deferred follow-up work. (#3515)
 - **`workspace/willDeleteFiles` warnings**: deleting a file that is referenced
   by other files in the workspace now surfaces a `Warning` diagnostic before
   the delete completes. (#4056)

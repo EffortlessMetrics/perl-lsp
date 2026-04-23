@@ -66,17 +66,14 @@ Release notes: [v0.12.4](docs/releases/v0.12.4.md) · [GitHub Release](https://g
   Multi-file rename batches are merged per-URI via a new `append_workspace_edits`
   helper. (#4056, #4098)
 
-- **`workspace/configuration` reverse-request flow** — the server now parses
-  the client's `workspace.configuration` capability and, when advertised,
-  issues a `workspace/configuration` reverse request per folder after
-  `.perl-lsp.toml` is loaded, merging returned overlays into each folder's
-  `effective_workspace_config` (TOML stays the base layer). Re-fetched on
-  `workspace/didChangeConfiguration`. JSON-RPC responses without `method`
-  are routed as an internal `$/perl-lsp/clientResponse` pseudo-notification
-  through the existing dispatch system. Non-`file://` workspace folder URIs
-  (`vscode-remote://`, `untitled:`, etc.) are tolerated end-to-end —
-  `to_file_path()` calls are routed through a file-only URI helper and
-  non-filesystem folders are skipped during indexing scans. (#4093, #4059)
+- **Dynamic workspace configuration remains deferred** — v0.12.4 keeps
+  per-folder `.perl-lsp.toml` as the supported mechanism. Fully dynamic
+  per-folder scoping via the `workspace/configuration` reverse-request flow
+  remains deferred to follow-up work tracked in #3515. Non-`file://`
+  workspace folder URIs (`vscode-remote://`, `untitled:`, etc.) are still
+  tolerated end-to-end — `to_file_path()` calls are routed through a
+  file-only URI helper and non-filesystem folders are skipped during
+  indexing scans. (#3515, #4059)
 
 - **Windows extended-length path fix for external commands** — `Path::canonicalize`
   on Windows returns paths with the `\\?\` prefix, which Win32 APIs accept but
@@ -93,9 +90,9 @@ Release notes: [v0.12.4](docs/releases/v0.12.4.md) · [GitHub Release](https://g
 
 ### Added
 
-- **Workspace `workspace/configuration` reverse-request flow** with client
-  capability gating, per-folder scoping, and JSON-RPC response routing via
-  `$/perl-lsp/clientResponse` (#4093).
+- **Deferred:** fully dynamic workspace configuration via
+  `workspace/configuration` reverse-request flow remains tracked by #3515;
+  per-folder `.perl-lsp.toml` remains the supported mechanism in v0.12.4.
 
 - **`workspace/willRenameFiles` workspace-wide planning** — reads text from
   open-doc cache, workspace index, or filesystem, and merges multi-URI edits
