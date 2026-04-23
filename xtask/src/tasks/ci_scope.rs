@@ -141,7 +141,6 @@ pub fn classify_diff(files: &[String]) -> String {
 
 fn is_prose_file(file: &str) -> bool {
     PROSE_EXTENSIONS.iter().any(|ext| file.ends_with(ext))
-        || file.starts_with("docs/")
         || file.starts_with(".github/ISSUE_TEMPLATE/")
         || file == "LICENSE"
         || file == "CHANGELOG"
@@ -920,6 +919,12 @@ mod tests {
     }
 
     #[test]
+    fn test_classify_diff_docs_as_code_inside_docs_tree() {
+        let files = vec!["docs/reference/generated/schema.json".to_string()];
+        assert_eq!(classify_diff(&files), "docs_as_code");
+    }
+
+    #[test]
     fn test_classify_diff_empty_is_prose_only() {
         assert_eq!(classify_diff(&[]), "prose_only");
     }
@@ -941,6 +946,15 @@ mod tests {
         let files = vec![
             "crates/perl-parser/src/lib.rs".to_string(),
             "docs/reference/STABILITY.md".to_string(),
+        ];
+        assert_eq!(classify_diff(&files), "mixed");
+    }
+
+    #[test]
+    fn test_classify_diff_mixed_prose_and_docs_as_code() {
+        let files = vec![
+            "docs/reference/STABILITY.md".to_string(),
+            "docs/reference/generated/schema.json".to_string(),
         ];
         assert_eq!(classify_diff(&files), "mixed");
     }
