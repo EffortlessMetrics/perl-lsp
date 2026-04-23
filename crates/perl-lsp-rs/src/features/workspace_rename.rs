@@ -138,7 +138,7 @@ fn is_sub_declaration_line(line_text: &str, name: &str) -> bool {
 
     let tail = trimmed.trim_start_matches("sub ").trim_start();
     let declared_name = tail
-        .split(|ch: char| ch.is_whitespace() || ch == '(' || ch == '{')
+        .split(|ch: char| ch.is_whitespace() || ch == '(' || ch == '{' || ch == ';')
         .next()
         .unwrap_or_default();
 
@@ -158,18 +158,23 @@ fn is_non_target_package_declaration(
         return false;
     };
 
-    let Some(start_off) = doc.line_index.position_to_offset(start_line, start_char) else {
-        return false;
-    };
-    let Some(end_off) = doc.line_index.position_to_offset(end_line, end_char) else {
-        return false;
-    };
-    let Some(original) = doc.text.get(start_off..end_off) else {
-        return false;
-    };
+    // Try to read the original source span to detect a qualified name like "Bar::process_data".
+    // When the index returns an inverted range (end < start, a known indexer edge case), we fall
+    // through to the package-context check below rather than conservatively returning false.
+    let maybe_original = doc
+        .line_index
+        .position_to_offset(start_line, start_char)
+        .and_then(|start_off| {
+            doc.line_index
+                .position_to_offset(end_line, end_char)
+                .and_then(|end_off| doc.text.get(start_off..end_off))
+        });
 
-    if let Some((qualifier, _)) = original.rsplit_once("::") {
-        return qualifier != key.pkg.as_ref();
+    if let Some(original) = maybe_original {
+        if let Some((qualifier, _)) = original.rsplit_once("::") {
+            return qualifier != key.pkg.as_ref();
+        }
+        // Unqualified bare name — rely on package context below.
     }
 
     let package_at_line = package_name_for_line(&doc.text, start_line);
@@ -377,6 +382,57 @@ $var;
                 );
             }
         }
+
+        Ok(())
+    }
+
+    #[test]
+    fn is_sub_declaration_line_handles_forward_declaration() {
+        // "sub foo;" is a valid Perl forward declaration — semicolon must be treated
+        // as a delimiter so the name is extracted correctly.
+        assert!(
+            is_sub_declaration_line("sub process_data;", "process_data"),
+            "forward declaration 'sub process_data;' should match name 'process_data'"
+        );
+        assert!(
+            is_sub_declaration_line("sub process_data ;", "process_data"),
+            "forward declaration with space before semicolon should match"
+        );
+        // A declaration in another package must still not match a different name
+        assert!(
+            !is_sub_declaration_line("sub process_data;", "other_name"),
+            "forward decl with wrong name must not match"
+        );
+    }
+
+    #[test]
+    fn rename_skips_forward_decl_in_other_package() -> Result<(), Box<dyn std::error::Error>> {
+        // If package Bar has a forward declaration "sub process_data;" and we rename
+        // Foo::process_data, the forward decl in Bar must not be touched.
+        let idx = WorkspaceIndex::new();
+
+        let foo_text = "package Foo;\nsub process_data { return 1; }\n1;\n";
+        let bar_text = "package Bar;\nsub process_data;\nsub process_data { return 2; }\n1;\n";
+
+        index_text(&idx, "file:///Foo.pm", foo_text)?;
+        index_text(&idx, "file:///Bar.pm", bar_text)?;
+
+        let key = SymbolKey {
+            pkg: Arc::from("Foo"),
+            name: Arc::from("process_data"),
+            sigil: None,
+            kind: SymKind::Sub,
+        };
+
+        let edits = build_rename_edit(&idx, &key, "process_records");
+
+        // Bar.pm must not appear in the edit list
+        let bar_edit = edits.iter().find(|e| e.uri.contains("Bar.pm"));
+        assert!(
+            bar_edit.is_none(),
+            "renaming Foo::process_data must not touch Bar.pm; got edits: {:?}",
+            edits.iter().map(|e| (&e.uri, &e.edits)).collect::<Vec<_>>()
+        );
 
         Ok(())
     }
