@@ -16,6 +16,14 @@ static PERL_VAR_RE: Lazy<Option<Regex>> = Lazy::new(|| {
     Regex::new(r"[$@%][A-Za-z_][A-Za-z0-9_]*(?:(?:::|')[A-Za-z_][A-Za-z0-9_]*)*").ok()
 });
 
+/// Regex for braced Perl variables like `${foo}` and `%{Foo::bar}`.
+static BRACED_PERL_VAR_RE: Lazy<Option<Regex>> = Lazy::new(|| {
+    Regex::new(
+        r"(?P<sigil>[$@%])\{(?P<name>[A-Za-z_][A-Za-z0-9_]*(?:(?:::|')[A-Za-z_][A-Za-z0-9_]*)*)\}",
+    )
+    .ok()
+});
+
 /// Legacy regex for scalar-only matching (used by `DapDispatcher`).
 static SCALAR_VAR_RE: Lazy<Option<Regex>> =
     Lazy::new(|| Regex::new(r"\$[A-Za-z_][A-Za-z0-9_]*(?:(?:::|')[A-Za-z_][A-Za-z0-9_]*)*").ok());
@@ -232,8 +240,10 @@ fn matching_delimiter(open: u8) -> (u8, bool) {
     }
 }
 
-fn is_identifier_byte(b: u8) -> bool {
-    b.is_ascii_alphanumeric() || b == b'_'
+fn extract_canonical_braced_name(cap: &regex::Captures<'_>) -> Option<String> {
+    let sigil = cap.name("sigil")?.as_str();
+    let name = cap.name("name")?.as_str();
+    Some(format!("{sigil}{name}"))
 }
 
 /// Extract unique variable names from source code within a line range.
@@ -243,6 +253,7 @@ pub fn extract_variable_names(source: &str, start_line: i64, end_line: i64) -> V
     let Some(re) = PERL_VAR_RE.as_ref() else {
         return Vec::new();
     };
+    let braced_re = BRACED_PERL_VAR_RE.as_ref();
     let lines: Vec<&str> = source.lines().collect();
     if lines.is_empty() {
         return Vec::new();
@@ -266,6 +277,22 @@ pub fn extract_variable_names(source: &str, start_line: i64, end_line: i64) -> V
                 let name = m.as_str();
                 if !is_special_variable_name(name) && seen.insert(name.to_string()) {
                     names.push(name.to_string());
+                }
+            }
+        }
+
+        if let Some(braced_re) = braced_re {
+            for cap in braced_re.captures_iter(line) {
+                if let Some(m) = cap.get(0) {
+                    if !code_mask[m.start()..m.end()].iter().all(|is_code| *is_code) {
+                        continue;
+                    }
+                    let Some(name) = extract_canonical_braced_name(&cap) else {
+                        continue;
+                    };
+                    if !is_special_variable_name(&name) && seen.insert(name.clone()) {
+                        names.push(name);
+                    }
                 }
             }
         }
@@ -336,6 +363,7 @@ pub fn collect_inline_values_with_runtime(
     let Some(re) = PERL_VAR_RE.as_ref() else {
         return Vec::new();
     };
+    let braced_re = BRACED_PERL_VAR_RE.as_ref();
     let lines: Vec<&str> = source.lines().collect();
     if lines.is_empty() {
         return Vec::new();
@@ -368,6 +396,35 @@ pub fn collect_inline_values_with_runtime(
                     Some(rv) => format_inline_value(var_name, rv),
                     None => format!("{} = ?", var_name),
                 };
+                inline_values.push(InlineValueText { line: (idx + 1) as i64, column, text });
+            }
+        }
+
+        if let Some(braced_re) = braced_re {
+            for cap in braced_re.captures_iter(line) {
+                let Some(m) = cap.get(0) else {
+                    continue;
+                };
+                if !code_mask[m.start()..m.end()].iter().all(|is_code| *is_code) {
+                    continue;
+                }
+
+                let Some(var_name) = extract_canonical_braced_name(&cap) else {
+                    continue;
+                };
+                if is_special_variable_name(&var_name) {
+                    continue;
+                }
+                if !seen_on_line.insert((idx, var_name.clone())) {
+                    continue;
+                }
+
+                let column = (m.start() + 1) as i64;
+                let text = match runtime_values.and_then(|rv| rv.get(&var_name)) {
+                    Some(rv) => format_inline_value(&var_name, rv),
+                    None => format!("{} = ?", var_name),
+                };
+
                 inline_values.push(InlineValueText { line: (idx + 1) as i64, column, text });
             }
         }
@@ -666,5 +723,36 @@ mod tests {
         assert!(values.iter().any(|v| v.text == "$lit = ?"));
         assert!(!values.iter().any(|v| v.text.contains("$fake")));
         assert!(!values.iter().any(|v| v.text.contains("$ghost")));
+    }
+
+    #[test]
+    fn test_extract_variable_names_supports_braced_variables() {
+        let source = "my ${foo} = 1; my %{Config::opts} = (); my $next = 2;";
+        let names = extract_variable_names(source, 1, 1);
+        assert!(names.contains(&"$foo".to_string()));
+        assert!(names.contains(&"%Config::opts".to_string()));
+        assert!(names.contains(&"$next".to_string()));
+    }
+
+    #[test]
+    fn test_runtime_inline_value_for_braced_variable_uses_canonical_lookup() {
+        let source = "my ${foo} = 1;";
+        let mut rv = HashMap::new();
+        rv.insert("$foo".to_string(), "42".to_string());
+
+        let values = collect_inline_values_with_runtime(source, 1, 1, Some(&rv));
+        assert_eq!(values.len(), 1);
+        assert_eq!(values[0].text, "$foo = 42");
+        assert_eq!(values[0].column, 4);
+    }
+
+    #[test]
+    fn test_braced_variables_in_strings_and_comments_are_ignored() {
+        let source = "my ${real} = 1; my $s = \"${fake}\"; # ${commented}";
+        let names = extract_variable_names(source, 1, 1);
+
+        assert!(names.contains(&"$real".to_string()));
+        assert!(!names.contains(&"$fake".to_string()));
+        assert!(!names.contains(&"$commented".to_string()));
     }
 }
