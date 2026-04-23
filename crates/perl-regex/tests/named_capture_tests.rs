@@ -24,6 +24,16 @@ fn test_extract_single_named_capture() -> Result<(), Box<dyn std::error::Error>>
 }
 
 #[test]
+fn test_extract_single_named_capture_apostrophe_syntax() -> Result<(), Box<dyn std::error::Error>> {
+    let captures = RegexAnalyzer::extract_named_captures("(?'id'\\d+)");
+    assert_eq!(captures.len(), 1);
+    assert_eq!(captures[0].name, "id");
+    assert_eq!(captures[0].index, 1);
+    assert_eq!(captures[0].pattern, "\\d+");
+    Ok(())
+}
+
+#[test]
 fn test_extract_multiple_named_captures() -> Result<(), Box<dyn std::error::Error>> {
     let captures =
         RegexAnalyzer::extract_named_captures("(?<year>\\d{4})-(?<month>\\d{2})-(?<day>\\d{2})");
@@ -150,6 +160,13 @@ fn test_hover_text_no_captures_no_modifiers() -> Result<(), Box<dyn std::error::
 #[test]
 fn test_hover_text_single_named_capture_listed() -> Result<(), Box<dyn std::error::Error>> {
     let text = RegexAnalyzer::hover_text_for_regex("(?<id>\\d+)", "");
+    assert!(text.contains("id"));
+    Ok(())
+}
+
+#[test]
+fn test_hover_text_apostrophe_named_capture_listed() -> Result<(), Box<dyn std::error::Error>> {
+    let text = RegexAnalyzer::hover_text_for_regex("(?'id'\\d+)", "");
     assert!(text.contains("id"));
     Ok(())
 }

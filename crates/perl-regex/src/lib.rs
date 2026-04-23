@@ -312,9 +312,10 @@ pub struct RegexAnalyzer;
 impl RegexAnalyzer {
     /// Extract all named capture groups from a Perl regex pattern.
     ///
-    /// Scans the pattern for `(?<name>...)` groups and returns them in left-to-right
-    /// order. Non-capturing groups (`(?:...)`), lookaheads, and lookbehinds do not
-    /// increment the capture index. Escaped parentheses (`\(`) are skipped.
+    /// Scans the pattern for `(?<name>...)` and `(?'name'...)` groups and returns
+    /// them in left-to-right order. Non-capturing groups (`(?:...)`), lookaheads,
+    /// and lookbehinds do not increment the capture index. Escaped parentheses
+    /// (`\(`) are skipped.
     ///
     /// # Example
     /// ```
@@ -371,53 +372,33 @@ impl RegexAnalyzer {
                         }
 
                         // Named capture (?<name>...) — collect the name.
-                        capture_index += 1;
-                        let name_start = i;
-                        while i < len && chars[i] != '>' {
-                            i += 1;
+                        if let Some((name, sub_pattern, next_idx)) =
+                            parse_named_capture(chars.as_slice(), i, '>')
+                        {
+                            capture_index += 1;
+                            result.push(CaptureGroup {
+                                name,
+                                index: capture_index,
+                                pattern: sub_pattern,
+                            });
+                            i = next_idx;
                         }
-                        let name: String = chars[name_start..i].iter().collect();
-                        if i < len {
-                            i += 1; // consume '>'
-                        }
+                        continue;
+                    } else if i < len && chars[i] == '\'' {
+                        i += 1; // consume opening '
 
-                        // Collect the sub-pattern up to the matching ')'.
-                        let pattern_start = i;
-                        let mut depth = 1usize;
-                        while i < len && depth > 0 {
-                            if chars[i] == '\\' {
-                                i += 2;
-                                continue;
-                            }
-                            if chars[i] == '[' {
-                                i += 1;
-                                while i < len {
-                                    if chars[i] == '\\' {
-                                        i += 2;
-                                    } else if chars[i] == ']' {
-                                        i += 1;
-                                        break;
-                                    } else {
-                                        i += 1;
-                                    }
-                                }
-                                continue;
-                            }
-                            if chars[i] == '(' {
-                                depth += 1;
-                            } else if chars[i] == ')' {
-                                depth -= 1;
-                            }
-                            i += 1;
+                        // Named capture (?'name'...)
+                        if let Some((name, sub_pattern, next_idx)) =
+                            parse_named_capture(chars.as_slice(), i, '\'')
+                        {
+                            capture_index += 1;
+                            result.push(CaptureGroup {
+                                name,
+                                index: capture_index,
+                                pattern: sub_pattern,
+                            });
+                            i = next_idx;
                         }
-                        // The ')' was consumed above; sub-pattern ends before it.
-                        let sub: String = if i > 0 && pattern_start < i - 1 {
-                            chars[pattern_start..i - 1].iter().collect()
-                        } else {
-                            String::new()
-                        };
-
-                        result.push(CaptureGroup { name, index: capture_index, pattern: sub });
                         continue;
                     } else if i < len && matches!(chars[i], ':' | '=' | '!' | '>' | '|' | 'P' | '#')
                     {
@@ -496,4 +477,62 @@ impl RegexAnalyzer {
 
         parts.join("\n")
     }
+}
+
+fn parse_named_capture(
+    chars: &[char],
+    mut i: usize,
+    name_terminator: char,
+) -> Option<(String, String, usize)> {
+    let len = chars.len();
+    let name_start = i;
+    while i < len && chars[i] != name_terminator {
+        i += 1;
+    }
+
+    if i >= len {
+        return None;
+    }
+
+    let name: String = chars[name_start..i].iter().collect();
+    i += 1; // consume name terminator
+
+    // Collect the sub-pattern up to the matching ')'.
+    let pattern_start = i;
+    let mut depth = 1usize;
+    while i < len && depth > 0 {
+        if chars[i] == '\\' {
+            i += 2;
+            continue;
+        }
+        if chars[i] == '[' {
+            i += 1;
+            while i < len {
+                if chars[i] == '\\' {
+                    i += 2;
+                } else if chars[i] == ']' {
+                    i += 1;
+                    break;
+                } else {
+                    i += 1;
+                }
+            }
+            continue;
+        }
+        if chars[i] == '(' {
+            depth += 1;
+        } else if chars[i] == ')' {
+            depth -= 1;
+        }
+        i += 1;
+    }
+
+    // The ')' was consumed above; sub-pattern ends before it.
+    let sub_pattern = if i > 0 && pattern_start < i - 1 {
+        chars[pattern_start..i - 1].iter().collect()
+    } else {
+        String::new()
+    };
+
+    Some((name, sub_pattern, i))
 }
