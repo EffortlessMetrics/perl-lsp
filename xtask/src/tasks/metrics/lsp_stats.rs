@@ -358,5 +358,17 @@ mod tests {
         assert_eq!(parsed["subsystem"], "editor_ux");
         assert!((parsed["metrics"]["workflow_pass_rate"].as_f64().unwrap() - 0.91).abs() < 0.001);
         assert!(parsed["metrics"]["rename_success_rate"].is_null());
+        // Verify new relevance fields serialize correctly
+        assert!(parsed["metrics"]["completion_top1_relevance"].is_null(),
+            "completion_top1_relevance should be null (Phase 2)");
+        assert!(
+            (parsed["metrics"]["completion_top5_relevance"].as_f64().unwrap() - 0.86).abs() < 0.001,
+            "completion_top5_relevance should serialize to 0.86"
+        );
+        // Backward-compat alias should also be present
+        assert!(
+            (parsed["metrics"]["completion_top5_usefulness"].as_f64().unwrap() - 0.86).abs() < 0.001,
+            "completion_top5_usefulness alias should still serialize"
+        );
     }
 }
