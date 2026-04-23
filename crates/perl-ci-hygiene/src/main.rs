@@ -3930,22 +3930,20 @@ fn has_unlinked_todo_in_perl_line(line: &str, token_re: &Regex) -> bool {
 
 fn find_hash_comment_start(line: &str, perl_mode: bool) -> Option<usize> {
     let mut in_single = false;
-    let mut in_single_ansi_c = false;
     let mut in_double = false;
     let mut in_backtick = false;
-    let mut prev_single_was_escape = false;
-    let mut prev_was_escape = false;
-    let mut prev_was_escape_double = false;
-    let mut prev_was_escape_single = false;
+    let mut single_escape = false;
+    let mut double_escape = false;
+    let mut backtick_escape = false;
 
     for (idx, ch) in line.char_indices() {
         if in_single {
-            if prev_single_was_escape {
-                prev_single_was_escape = false;
+            if single_escape {
+                single_escape = false;
                 continue;
             }
             if ch == '\\' {
-                prev_single_was_escape = true;
+                single_escape = true;
                 continue;
             }
             if ch == '\'' {
@@ -3954,27 +3952,12 @@ fn find_hash_comment_start(line: &str, perl_mode: bool) -> Option<usize> {
             continue;
         }
         if in_double {
-            if prev_was_escape {
-                prev_was_escape = false;
+            if double_escape {
+                double_escape = false;
                 continue;
             }
             if ch == '\\' {
-                prev_was_escape = true;
-                continue;
-            }
-            if ch == '\'' {
-                in_single = false;
-                in_single_ansi_c = false;
-            }
-            continue;
-        }
-        if in_double {
-            if prev_was_escape_double {
-                prev_was_escape_double = false;
-                continue;
-            }
-            if ch == '\\' {
-                prev_was_escape_double = true;
+                double_escape = true;
                 continue;
             }
             if ch == '"' {
@@ -3983,12 +3966,12 @@ fn find_hash_comment_start(line: &str, perl_mode: bool) -> Option<usize> {
             continue;
         }
         if in_backtick {
-            if prev_was_escape {
-                prev_was_escape = false;
+            if backtick_escape {
+                backtick_escape = false;
                 continue;
             }
             if ch == '\\' {
-                prev_was_escape = true;
+                backtick_escape = true;
                 continue;
             }
             if ch == '`' {
@@ -4000,15 +3983,16 @@ fn find_hash_comment_start(line: &str, perl_mode: bool) -> Option<usize> {
         match ch {
             '\'' => {
                 in_single = true;
-                in_single_ansi_c = idx > 0 && line.as_bytes().get(idx - 1) == Some(&b'$');
-                prev_was_escape_single = false;
-                prev_single_was_escape = false;
+                single_escape = false;
             }
             '"' => {
                 in_double = true;
-                prev_was_escape_double = false;
+                double_escape = false;
             }
-            '`' => in_backtick = true,
+            '`' => {
+                in_backtick = true;
+                backtick_escape = false;
+            }
             '#' => {
                 // Bash/Perl parameter-length expansion (`${#var}`) is not a comment.
                 if idx >= 2 && line.as_bytes().get(idx - 2..idx) == Some(b"${") {
@@ -4027,7 +4011,18 @@ fn find_hash_comment_start(line: &str, perl_mode: bool) -> Option<usize> {
                     if prev.is_whitespace()
                         || matches!(
                             prev,
-                            ';' | '{' | '}' | '(' | ')' | '[' | ']' | '&' | '|' | '<' | '>'
+                            ';'
+                                | ','
+                                | '{'
+                                | '}'
+                                | '('
+                                | ')'
+                                | '['
+                                | ']'
+                                | '&'
+                                | '|'
+                                | '<'
+                                | '>'
                         )
                     {
                         return Some(idx);
@@ -4704,6 +4699,14 @@ mod tests {
         assert!(has_unlinked_todo_in_hash_line("echo hi;# fixme: follow up", &todo_re));
         assert!(has_unlinked_todo_in_hash_line(
             "echo \"#not-a-comment\" # TODO: follow up",
+            &todo_re,
+        ));
+        assert!(!has_unlinked_todo_in_hash_line(
+            "echo \"escaped \\\"# TODO in string\\\"\"",
+            &todo_re,
+        ));
+        assert!(has_unlinked_todo_in_hash_line(
+            "echo \"escaped \\\"# TODO in string\\\"\" # TODO: follow up",
             &todo_re,
         ));
         assert!(!has_unlinked_todo_in_hash_line("echo '# TODO in string' && true", &todo_re));
