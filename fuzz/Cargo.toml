@@ -12,11 +12,11 @@ libfuzzer-sys = "0.4"
 
 [dependencies.perl-parser]
 path = "../crates/perl-parser"
-[dependencies.perl-lsp-cancellation]
-path = "../crates/perl-lsp-cancellation"
 
 [dependencies.serde_json]
 version = "1.0.149"
+[dependencies.perl-lsp-rs-core]
+path = "../crates/perl-lsp-rs-core"
 
 [[bin]]
 name = "substitution_parsing"
@@ -78,6 +78,13 @@ bench = false
 [[bin]]
 name = "parser_integration"
 path = "fuzz_targets/fuzz_target_1.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "symbol_query_ranking"
+path = "fuzz_targets/symbol_query_ranking.rs"
 test = false
 doc = false
 bench = false
