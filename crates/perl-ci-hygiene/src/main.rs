@@ -3854,6 +3854,7 @@ fn collect_todo_hits(
     Ok(hits)
 }
 
+#[cfg(test)]
 fn has_unlinked_todo_in_rust_line(line: &str, token_re: &Regex) -> bool {
     let mut raw_string_state = None;
     let mut in_block_comment = false;
@@ -3865,6 +3866,7 @@ fn has_unlinked_todo_in_rust_line(line: &str, token_re: &Regex) -> bool {
     )
 }
 
+#[cfg(test)]
 fn has_unlinked_todo_in_rust_line_with_block_context(
     line: &str,
     token_re: &Regex,
@@ -3879,6 +3881,7 @@ fn has_unlinked_todo_in_rust_line_with_block_context(
     )
 }
 
+#[cfg(test)]
 fn has_unlinked_todo_in_rust_line_with_state(
     line: &str,
     token_re: &Regex,
