@@ -920,6 +920,79 @@ impl LspHarness {
         Err("No response received".to_string())
     }
 
+    /// Get definition locations at a position
+    pub fn definition(&mut self, uri: &str, line: u32, character: u32) -> Result<Value, String> {
+        self.request(
+            "textDocument/definition",
+            json!({
+                "textDocument": { "uri": uri },
+                "position": { "line": line, "character": character }
+            }),
+        )
+    }
+
+    /// Get references at a position
+    pub fn references(
+        &mut self,
+        uri: &str,
+        line: u32,
+        character: u32,
+        include_declaration: bool,
+    ) -> Result<Value, String> {
+        self.request(
+            "textDocument/references",
+            json!({
+                "textDocument": { "uri": uri },
+                "position": { "line": line, "character": character },
+                "context": { "includeDeclaration": include_declaration }
+            }),
+        )
+    }
+
+    /// Prepare rename at a position.
+    pub fn prepare_rename(
+        &mut self,
+        uri: &str,
+        line: u32,
+        character: u32,
+    ) -> Result<Value, String> {
+        self.request(
+            "textDocument/prepareRename",
+            json!({
+                "textDocument": { "uri": uri },
+                "position": { "line": line, "character": character }
+            }),
+        )
+    }
+
+    /// Request rename edits at a position.
+    pub fn rename(
+        &mut self,
+        uri: &str,
+        line: u32,
+        character: u32,
+        new_name: &str,
+    ) -> Result<Value, String> {
+        self.request(
+            "textDocument/rename",
+            json!({
+                "textDocument": { "uri": uri },
+                "position": { "line": line, "character": character },
+                "newName": new_name
+            }),
+        )
+    }
+
+    /// Get document symbols for a document URI.
+    pub fn document_symbols(&mut self, uri: &str) -> Result<Value, String> {
+        self.request(
+            "textDocument/documentSymbol",
+            json!({
+                "textDocument": { "uri": uri }
+            }),
+        )
+    }
+
     /// Get type definition at a position
     pub fn type_definition(
         &mut self,
