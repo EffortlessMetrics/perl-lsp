@@ -1,4 +1,13 @@
 //! UTF-8/UTF-16 position conversion functions.
+//!
+//! The helpers in this module follow Language Server Protocol (LSP) semantics,
+//! where lines and columns are zero-based and columns are measured in UTF-16
+//! code units.
+
+/// Converts a byte offset into `(line, column_utf16)` coordinates.
+///
+/// Offsets beyond the end of the document are clamped to the last valid
+/// position.
 pub fn offset_to_utf16_line_col(text: &str, offset: usize) -> (u32, u32) {
     if offset > text.len() {
         let lines: Vec<&str> = text.lines().collect();
@@ -34,6 +43,11 @@ pub fn offset_to_utf16_line_col(text: &str, offset: usize) -> (u32, u32) {
     let last_line = text.lines().count().saturating_sub(1) as u32;
     (last_line, text.lines().last().map(|l| l.encode_utf16().count()).unwrap_or(0) as u32)
 }
+
+/// Converts `(line, column_utf16)` coordinates into a byte offset.
+///
+/// If the provided line or column is out of bounds, the result is clamped to
+/// the nearest valid byte position in `text`.
 pub fn utf16_line_col_to_offset(text: &str, line: u32, col: u32) -> usize {
     let mut offset = 0;
     for (curr, lt) in text.split_inclusive('\n').enumerate() {

@@ -121,10 +121,11 @@ pub fn complete_file_paths(
             text_edit_range: Some((context.prefix_start, context.position)),
             commit_characters: None,
         });
+    }
 
-        if completions.len() >= 50 {
-            break;
-        }
+    completions.sort_by(|left, right| left.label.cmp(&right.label));
+    if completions.len() > 50 {
+        completions.truncate(50);
     }
 
     completions
@@ -162,5 +163,61 @@ fn file_completion_metadata(entry: &walkdir::DirEntry) -> (String, Option<String
         (file_type_desc.to_string(), None)
     } else {
         ("file".to_string(), None)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{FileCompletionContext, complete_file_paths};
+    use std::{
+        fs,
+        path::{Path, PathBuf},
+        sync::{LazyLock, Mutex},
+    };
+    use tempfile::tempdir;
+
+    static CWD_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
+
+    struct CurrentDirGuard {
+        previous: PathBuf,
+    }
+
+    impl CurrentDirGuard {
+        fn change_to(path: &Path) -> Result<Self, Box<dyn std::error::Error>> {
+            let previous = std::env::current_dir()?;
+            std::env::set_current_dir(path)?;
+            Ok(Self { previous })
+        }
+    }
+
+    impl Drop for CurrentDirGuard {
+        fn drop(&mut self) {
+            let _ = std::env::set_current_dir(&self.previous);
+        }
+    }
+
+    type TestResult = Result<(), Box<dyn std::error::Error>>;
+
+    #[test]
+    fn file_completion_labels_are_sorted() -> TestResult {
+        let _cwd_guard = CWD_LOCK.lock()?;
+        let temp = tempdir()?;
+        let _dir_guard = CurrentDirGuard::change_to(temp.path())?;
+
+        fs::create_dir_all("fixtures")?;
+        fs::write("fixtures/z-last.pm", "1;")?;
+        fs::write("fixtures/a-first.pm", "1;")?;
+        fs::create_dir_all("fixtures/m-middle-dir")?;
+
+        let context = FileCompletionContext::new("fixtures/", 0, "fixtures/".len());
+        let completions = complete_file_paths(&context, &|| false);
+        let labels: Vec<&str> = completions.iter().map(|item| item.label.as_str()).collect();
+
+        assert_eq!(
+            labels,
+            vec!["fixtures/a-first.pm", "fixtures/m-middle-dir/", "fixtures/z-last.pm"]
+        );
+
+        Ok(())
     }
 }
