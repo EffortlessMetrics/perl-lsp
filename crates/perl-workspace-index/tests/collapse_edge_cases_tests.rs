@@ -290,16 +290,16 @@ fn test_cargo_toml_no_deleted_satellite_deps() {
 }
 
 // =============================================================================
-// Test 9: Workspace member count reduced after Wave A + Wave D collapse
+// Test 9: Workspace members align with on-disk crate manifests
 // =============================================================================
 
-/// Verify workspace member count has been reduced by satellite deletions.
+/// Verify workspace members listed in root Cargo.toml align with crates on disk.
 ///
-/// Wave A (#4426) removed 6 perl-workspace-* satellites.
-/// Wave D (#4454) removed 13+ parser/AST satellites into perl-parser-core and perl-parser.
-/// Combined baseline was ~120, now ~83 members.
+/// This catches accidental drift (e.g. removing a member entry but leaving the crate,
+/// or adding a crate directory without wiring it into the workspace), while avoiding
+/// brittle hard-coded member count thresholds as the workspace evolves.
 #[test]
-fn test_workspace_members_reduced_by_six() {
+fn test_workspace_members_match_crates_directory() {
     let cargo_manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".to_string());
     let manifest_path = PathBuf::from(&cargo_manifest_dir);
     let workspace_root = manifest_path.parent().unwrap().parent().unwrap();
@@ -319,18 +319,38 @@ fn test_workspace_members_reduced_by_six() {
         })
         .collect();
 
-    // After Wave A (6 removed) and Wave D (13+ removed), expect ≤120 members.
-    // Allow flexibility for concurrent PR activity.
+    // Parse current workspace members from the manifest.
     assert!(
-        members.len() <= 120,
-        "Workspace should have ≤120 members after Wave A+D satellite deletions, found {}",
-        members.len()
+        !members.is_empty(),
+        "Workspace members list must not be empty"
     );
-    assert!(
-        members.len() >= 70,
-        "Workspace should have ≥70 members (check for inadvertent removals), found {}",
-        members.len()
+
+    // Discover crate directories that contain a Cargo.toml.
+    let crates_dir = workspace_root.join("crates");
+    let crate_dirs: HashSet<String> = std::fs::read_dir(&crates_dir)
+        .expect("Failed to read crates directory")
+        .filter_map(Result::ok)
+        .map(|entry| entry.path())
+        .filter(|path| path.is_dir() && path.join("Cargo.toml").exists())
+        .filter_map(|path| {
+            path.file_name()
+                .and_then(|name| name.to_str())
+                .map(|name| format!("crates/{name}"))
+        })
+        .collect();
+
+    assert_eq!(
+        members.len(),
+        crate_dirs.len(),
+        "Workspace member count should match on-disk crate count"
     );
+
+    for crate_dir in &crate_dirs {
+        assert!(
+            members.contains(crate_dir.as_str()),
+            "Workspace members should include {crate_dir}"
+        );
+    }
 }
 
 // =============================================================================
