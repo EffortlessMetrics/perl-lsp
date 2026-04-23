@@ -57,31 +57,33 @@ pub fn module_already_imported(source: &str, module: &str) -> bool {
 pub fn find_use_block_end(source: &str) -> usize {
     let mut last_use_line_end: Option<usize> = None;
     let mut offset = 0usize;
+    let mut in_preamble = true;
 
     for line in source.split_inclusive('\n') {
         let trimmed = line.trim();
         let line_byte_len = line.len();
 
-        let is_use_line = trimmed.starts_with("use ")
-            || trimmed.starts_with("require ")
-            || trimmed == "use strict"
-            || trimmed == "use warnings"
-            || trimmed == "use utf8"
-            || trimmed == "#!/usr/bin/perl"
+        let is_real_use = trimmed.starts_with("use ") || trimmed.starts_with("require ");
+        let is_preamble_line = trimmed == "#!/usr/bin/perl"
             || trimmed.starts_with('#')
-            || trimmed.is_empty();
+            || trimmed.is_empty()
+            || trimmed.starts_with("package ");
 
-        if is_use_line {
-            // We keep tracking: the actual `use`/`require` lines advance the
-            // insertion candidate; blank lines and comments extend the "preamble"
-            // window but we only commit if a real use statement has been seen.
-            let is_real_use = trimmed.starts_with("use ") || trimmed.starts_with("require ");
-            if is_real_use {
+        if is_real_use {
+            if in_preamble {
                 last_use_line_end = Some(offset + line_byte_len);
             }
+        } else if !is_preamble_line {
+            in_preamble = false;
         }
 
         offset += line_byte_len;
+
+        // Once real code starts, later `use` / `require` lines are not part of
+        // the import preamble and should not move the insertion point.
+        if !in_preamble {
+            break;
+        }
     }
 
     // Return the byte offset right after the last use/require line.
@@ -185,6 +187,19 @@ mod tests {
         let src = "use strict;";
         let offset = find_use_block_end(src);
         assert_eq!(offset, src.len());
+    }
+
+    #[test]
+    fn insert_offset_ignores_late_use_after_code() {
+        let src = "my $x = 1;\nuse DBI;\n";
+        assert_eq!(find_use_block_end(src), 0);
+    }
+
+    #[test]
+    fn insert_offset_tracks_use_after_package_header() {
+        let src = "package My::Module;\n\nuse strict;\nuse warnings;\nsub run { }\n";
+        let offset = find_use_block_end(src);
+        assert_eq!(&src[offset..], "sub run { }\n");
     }
 
     // ------------------------------------------------------------------
