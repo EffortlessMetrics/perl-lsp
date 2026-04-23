@@ -518,10 +518,25 @@ fn normalize_mojolicious_controller_name(raw: &str) -> Option<String> {
         if segment.is_empty() {
             continue;
         }
-        let mut chars = segment.chars();
-        let first = chars.next()?;
-        let mut normalized_segment = first.to_uppercase().collect::<String>();
-        normalized_segment.push_str(chars.as_str());
+        let mut normalized_segment = String::new();
+        let mut capitalize_next = true;
+        for ch in segment.chars() {
+            if ch == '_' || ch == '-' {
+                capitalize_next = true;
+                continue;
+            }
+
+            if capitalize_next {
+                normalized_segment.extend(ch.to_uppercase());
+                capitalize_next = false;
+            } else {
+                normalized_segment.push(ch);
+            }
+        }
+
+        if normalized_segment.is_empty() {
+            continue;
+        }
         segments.push(normalized_segment);
     }
 
