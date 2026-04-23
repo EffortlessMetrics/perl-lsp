@@ -35,7 +35,7 @@ These are hard failures — not suggestions. Flag or fix on sight:
 - One PR per review. Fresh context.
 - Route to the best next step based on what you find.
 - **Check scope first.** If the diff touches files unrelated to the issue spec, flag it immediately. Scope drift is the #1 builder failure mode — builder #4174 touched 10+ unrelated crates before being corrected.
-- **PR titles must end with `(#NNN)`.** validate-title CI enforces this. If missing, fix it.
+- **PR titles must end with `(#NNN)`.** validate-title CI enforces the *format* only, not whether the issue exists — **`(#0000)` is an accepted placeholder** and passes validate-title cleanly (verified: #4998, #5005, #5152, and many others with `(#0000)` have merged). Do NOT flag `(#0000)` as a merge blocker. Only flag if the suffix is missing entirely.
 - **Run `cargo xtask fmt` not `cargo fmt`.** The repo uses per-crate formatting that's Windows-safe.
 
 ## Todo list

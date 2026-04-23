@@ -428,7 +428,7 @@ jobs:
               cargo check --locked --all-targets
               -p perl-module
               -p perl-lsp-rs
-              -p perl-workspace-index
+              -p perl-workspace
           - name: module-separator-regressions
             command: >-
               cargo test --locked -p perl-module
