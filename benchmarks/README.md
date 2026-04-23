@@ -240,6 +240,10 @@ PRs labeled with `ci:bench` trigger benchmark runs:
 if: contains(github.event.pull_request.labels.*.name, 'ci:bench')
 ```
 
+That lane also runs the UX perf scenario `ux_scenario_18_real_repo_perf`, which
+checks first-`publishDiagnostics` latency against a 5000+ line Catalyst-like
+fixture assembled from `test_corpus/real_world`.
+
 ### Performance Regression Detection
 
 A regression is detected when:

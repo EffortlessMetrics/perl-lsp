@@ -29,6 +29,10 @@ pub struct ModuleLineEdit {
 /// - `use base 'Module::Name';`
 /// - `use base "Module::Name";`
 /// - `use base qw(Module::Name Other);`
+/// - `extends 'Module::Name';`
+/// - `extends qw(Module::Name Other::Parent);`
+/// - `with 'Module::Role';`
+/// - `with qw(Module::Role Other::Role);`
 ///
 /// Also rewrites:
 /// - Package declarations: `package Module::Name;` → `package NewName;`
@@ -62,6 +66,18 @@ pub fn plan_module_rename_edits(
             {
                 let current_line = rewritten.as_deref().unwrap_or(line);
                 if line_references_module_import(current_line, old_variant) {
+                    let (candidate, changed) =
+                        replace_module_token(current_line, old_variant, new_variant);
+                    if changed {
+                        rewritten = Some(candidate);
+                    }
+                }
+            }
+
+            // Check Moose/Moo inheritance/role composition forms.
+            {
+                let current_line = rewritten.as_deref().unwrap_or(line);
+                if line_references_moose_moo_dsl(current_line, old_variant) {
                     let (candidate, changed) =
                         replace_module_token(current_line, old_variant, new_variant);
                     if changed {
@@ -118,6 +134,20 @@ pub fn plan_module_rename_edits(
     }
 
     edits
+}
+
+fn line_references_moose_moo_dsl(line: &str, module_name: &str) -> bool {
+    if line.is_empty() || module_name.is_empty() {
+        return false;
+    }
+    let trimmed = line.trim_start();
+    let is_extends =
+        trimmed == "extends" || trimmed.starts_with("extends ") || trimmed.starts_with("extends(");
+    let is_with = trimmed == "with" || trimmed.starts_with("with ") || trimmed.starts_with("with(");
+    if !is_extends && !is_with {
+        return false;
+    }
+    crate::token::contains_module_token(line, module_name)
 }
 
 /// Return `true` when `line` contains an `@ISA` assignment that references
