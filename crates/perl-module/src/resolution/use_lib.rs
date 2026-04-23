@@ -3,7 +3,7 @@
 //! Scans Perl source text for `use lib` pragmas and recognizes common
 //! `FindBin` patterns to discover additional module include directories.
 
-use std::path::Path;
+use std::path::{Component, Path, PathBuf};
 
 /// A discovered include path from a `use lib` statement.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -92,7 +92,9 @@ pub fn resolve_use_lib_paths(
 
         if ulp.from_findbin {
             let base = file_dir.unwrap_or(workspace_root);
-            let resolved = base.join(path_str);
+            let Some(resolved) = normalize_findbin_path(base, path_str) else {
+                continue;
+            };
             if resolved.strip_prefix(workspace_root).is_err() {
                 continue;
             }
@@ -293,4 +295,21 @@ fn path_to_relative_string(path: &Path, workspace_root: &Path) -> Option<String>
 
 fn normalize_relative_path_string(path: &str) -> String {
     path.replace('\\', "/")
+}
+
+fn normalize_findbin_path(base: &Path, relative: &str) -> Option<PathBuf> {
+    let mut normalized = PathBuf::from(base);
+    for component in Path::new(relative).components() {
+        match component {
+            Component::CurDir => {}
+            Component::Normal(segment) => normalized.push(segment),
+            Component::ParentDir => {
+                if !normalized.pop() {
+                    return None;
+                }
+            }
+            Component::RootDir | Component::Prefix(_) => return None,
+        }
+    }
+    Some(normalized)
 }
