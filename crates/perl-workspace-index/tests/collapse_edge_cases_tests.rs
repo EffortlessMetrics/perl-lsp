@@ -12,6 +12,27 @@ use std::collections::HashSet;
 use std::env;
 use std::path::PathBuf;
 
+type TestResult = anyhow::Result<()>;
+
+fn crate_dir() -> anyhow::Result<PathBuf> {
+    let cargo_manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".to_string());
+    let manifest_path = PathBuf::from(&cargo_manifest_dir);
+    let parent = manifest_path
+        .parent()
+        .ok_or_else(|| anyhow::anyhow!("missing parent for CARGO_MANIFEST_DIR"))?;
+    Ok(parent.join("perl-workspace-index"))
+}
+
+fn workspace_root() -> anyhow::Result<PathBuf> {
+    let cargo_manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".to_string());
+    let manifest_path = PathBuf::from(&cargo_manifest_dir);
+    let parent =
+        manifest_path.parent().ok_or_else(|| anyhow::anyhow!("missing crate parent directory"))?;
+    let root =
+        parent.parent().ok_or_else(|| anyhow::anyhow!("missing workspace root directory"))?;
+    Ok(root.to_path_buf())
+}
+
 // =============================================================================
 // Test 1: Backward-compat path resolution — workspace::monitoring
 // =============================================================================
@@ -20,10 +41,8 @@ use std::path::PathBuf;
 /// (old-style) still resolve correctly. This is a regression guard for
 /// refactoring that might drop the backward-compat module.
 #[test]
-fn test_backward_compat_workspace_monitoring_path_complete() {
-    let cargo_manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".to_string());
-    let crate_dir =
-        PathBuf::from(&cargo_manifest_dir).parent().unwrap().join("perl-workspace-index");
+fn test_backward_compat_workspace_monitoring_path_complete() -> TestResult {
+    let crate_dir = crate_dir()?;
 
     // Check that workspace/monitoring.rs re-exports from the main monitoring module
     let workspace_monitoring = crate_dir.join("src/workspace/monitoring.rs");
@@ -32,8 +51,7 @@ fn test_backward_compat_workspace_monitoring_path_complete() {
         "workspace/monitoring.rs must exist for backward-compat path perl_workspace::workspace::monitoring::"
     );
 
-    let content = std::fs::read_to_string(&workspace_monitoring)
-        .expect("Failed to read workspace/monitoring.rs");
+    let content = std::fs::read_to_string(&workspace_monitoring)?;
 
     // Should have pub use statements re-exporting from crate::monitoring
     assert!(
@@ -51,6 +69,8 @@ fn test_backward_compat_workspace_monitoring_path_complete() {
             export
         );
     }
+
+    Ok(())
 }
 
 // =============================================================================
@@ -61,10 +81,8 @@ fn test_backward_compat_workspace_monitoring_path_complete() {
 /// The spec allows but doesn't require these for backward-compat as long as
 /// lib.rs declares pub mod workspace and workspace/mod.rs is accessible.
 #[test]
-fn test_backward_compat_modules_if_present_have_reexports() {
-    let cargo_manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".to_string());
-    let crate_dir =
-        PathBuf::from(&cargo_manifest_dir).parent().unwrap().join("perl-workspace-index");
+fn test_backward_compat_modules_if_present_have_reexports() -> TestResult {
+    let crate_dir = crate_dir()?;
 
     let backward_compat_modules = vec![
         ("workspace/monitoring.rs", "monitoring"),
@@ -79,8 +97,7 @@ fn test_backward_compat_modules_if_present_have_reexports() {
     for (module_path, module_name) in backward_compat_modules {
         let full_path = crate_dir.join("src").join(module_path);
         if full_path.exists() {
-            let content = std::fs::read_to_string(&full_path)
-                .expect(&format!("Failed to read {}", module_path));
+            let content = std::fs::read_to_string(&full_path)?;
 
             assert!(
                 content.contains(&format!("pub use crate::{}", module_name))
@@ -91,6 +108,8 @@ fn test_backward_compat_modules_if_present_have_reexports() {
             );
         }
     }
+
+    Ok(())
 }
 
 // =============================================================================
@@ -100,13 +119,11 @@ fn test_backward_compat_modules_if_present_have_reexports() {
 /// Verify that lib.rs declares all 6 new modules (discovery, folder, ignore,
 /// monitoring, slo, state_machine) without duplicates.
 #[test]
-fn test_lib_rs_module_declarations_unique() {
-    let cargo_manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".to_string());
-    let crate_dir =
-        PathBuf::from(&cargo_manifest_dir).parent().unwrap().join("perl-workspace-index");
+fn test_lib_rs_module_declarations_unique() -> TestResult {
+    let crate_dir = crate_dir()?;
 
     let lib_file = crate_dir.join("src/lib.rs");
-    let content = std::fs::read_to_string(&lib_file).expect("Failed to read lib.rs");
+    let content = std::fs::read_to_string(&lib_file)?;
 
     let modules = vec!["discovery", "folder", "ignore", "monitoring", "slo", "state_machine"];
 
@@ -120,6 +137,8 @@ fn test_lib_rs_module_declarations_unique() {
             module_name, count
         );
     }
+
+    Ok(())
 }
 
 // =============================================================================
@@ -129,13 +148,11 @@ fn test_lib_rs_module_declarations_unique() {
 /// Verify that workspace/mod.rs declares the backward-compat modules
 /// (monitoring, slo, state_machine, etc.) so they're accessible via pub mod.
 #[test]
-fn test_workspace_mod_rs_declares_backward_compat_modules() {
-    let cargo_manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".to_string());
-    let crate_dir =
-        PathBuf::from(&cargo_manifest_dir).parent().unwrap().join("perl-workspace-index");
+fn test_workspace_mod_rs_declares_backward_compat_modules() -> TestResult {
+    let crate_dir = crate_dir()?;
 
     let workspace_mod = crate_dir.join("src/workspace/mod.rs");
-    let content = std::fs::read_to_string(&workspace_mod).expect("Failed to read workspace/mod.rs");
+    let content = std::fs::read_to_string(&workspace_mod)?;
 
     // Should declare at least monitoring, slo, state_machine as pub mod
     // These are the backward-compat modules in workspace/
@@ -149,6 +166,8 @@ fn test_workspace_mod_rs_declares_backward_compat_modules() {
             module_name
         );
     }
+
+    Ok(())
 }
 
 // =============================================================================
@@ -158,10 +177,8 @@ fn test_workspace_mod_rs_declares_backward_compat_modules() {
 /// Verify that backward-compat modules don't create cyclic imports by importing
 /// from crate::workspace::* when they should import directly from crate::.
 #[test]
-fn test_no_cyclic_reexports_in_backward_compat_modules() {
-    let cargo_manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".to_string());
-    let crate_dir =
-        PathBuf::from(&cargo_manifest_dir).parent().unwrap().join("perl-workspace-index");
+fn test_no_cyclic_reexports_in_backward_compat_modules() -> TestResult {
+    let crate_dir = crate_dir()?;
 
     let backward_compat_files = vec![
         "src/workspace/monitoring.rs",
@@ -175,8 +192,7 @@ fn test_no_cyclic_reexports_in_backward_compat_modules() {
     for file_path in backward_compat_files {
         let full_path = crate_dir.join(file_path);
         if full_path.exists() {
-            let content = std::fs::read_to_string(&full_path)
-                .expect(&format!("Failed to read {}", file_path));
+            let content = std::fs::read_to_string(&full_path)?;
 
             // If the file exists, it should NOT create cycles
             // by importing from crate::workspace::* when it's in workspace/
@@ -187,6 +203,8 @@ fn test_no_cyclic_reexports_in_backward_compat_modules() {
             );
         }
     }
+
+    Ok(())
 }
 
 // =============================================================================
@@ -196,15 +214,13 @@ fn test_no_cyclic_reexports_in_backward_compat_modules() {
 /// Verify that api.rs (if it exists) contains explicit pub use statements
 /// and does NOT use wildcards for observability modules (monitoring, slo, state_machine).
 #[test]
-fn test_api_rs_explicit_reexports_no_wildcards() {
-    let cargo_manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".to_string());
-    let crate_dir =
-        PathBuf::from(&cargo_manifest_dir).parent().unwrap().join("perl-workspace-index");
+fn test_api_rs_explicit_reexports_no_wildcards() -> TestResult {
+    let crate_dir = crate_dir()?;
 
     let api_file = crate_dir.join("src/api.rs");
 
     if api_file.exists() {
-        let content = std::fs::read_to_string(&api_file).expect("Failed to read api.rs");
+        let content = std::fs::read_to_string(&api_file)?;
 
         // api.rs should NOT have wildcards for these modules
         let forbidden_wildcards =
@@ -229,6 +245,8 @@ fn test_api_rs_explicit_reexports_no_wildcards() {
             );
         }
     }
+
+    Ok(())
 }
 
 // =============================================================================
@@ -238,13 +256,11 @@ fn test_api_rs_explicit_reexports_no_wildcards() {
 /// Verify the package name in the crate's Cargo.toml is 'perl-workspace',
 /// not 'perl-workspace-index' (the directory name) or old satellite names.
 #[test]
-fn test_cargo_toml_package_name_is_perl_workspace() {
-    let cargo_manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".to_string());
-    let crate_dir =
-        PathBuf::from(&cargo_manifest_dir).parent().unwrap().join("perl-workspace-index");
+fn test_cargo_toml_package_name_is_perl_workspace() -> TestResult {
+    let crate_dir = crate_dir()?;
 
     let cargo_toml = crate_dir.join("Cargo.toml");
-    let content = std::fs::read_to_string(&cargo_toml).expect("Failed to read Cargo.toml");
+    let content = std::fs::read_to_string(&cargo_toml)?;
 
     // The package name line should contain perl-workspace
     // and NOT contain perl-workspace-index
@@ -254,6 +270,8 @@ fn test_cargo_toml_package_name_is_perl_workspace() {
     assert!(has_correct_name, "Cargo.toml [package] name should be 'perl-workspace'");
 
     assert!(!has_old_name, "Cargo.toml [package] name should NOT be 'perl-workspace-index'");
+
+    Ok(())
 }
 
 // =============================================================================
@@ -263,13 +281,11 @@ fn test_cargo_toml_package_name_is_perl_workspace() {
 /// Verify that Cargo.toml does NOT list any of the 6 deleted satellite crates
 /// as dependencies.
 #[test]
-fn test_cargo_toml_no_deleted_satellite_deps() {
-    let cargo_manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".to_string());
-    let crate_dir =
-        PathBuf::from(&cargo_manifest_dir).parent().unwrap().join("perl-workspace-index");
+fn test_cargo_toml_no_deleted_satellite_deps() -> TestResult {
+    let crate_dir = crate_dir()?;
 
     let cargo_toml = crate_dir.join("Cargo.toml");
-    let content = std::fs::read_to_string(&cargo_toml).expect("Failed to read Cargo.toml");
+    let content = std::fs::read_to_string(&cargo_toml)?;
 
     let deleted_crates = vec![
         "perl-workspace-discovery",
@@ -287,6 +303,8 @@ fn test_cargo_toml_no_deleted_satellite_deps() {
             crate_name
         );
     }
+
+    Ok(())
 }
 
 // =============================================================================
@@ -299,14 +317,11 @@ fn test_cargo_toml_no_deleted_satellite_deps() {
 /// or adding a crate directory without wiring it into the workspace), while avoiding
 /// brittle hard-coded member count thresholds as the workspace evolves.
 #[test]
-fn test_workspace_members_match_crates_directory() {
-    let cargo_manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".to_string());
-    let manifest_path = PathBuf::from(&cargo_manifest_dir);
-    let workspace_root = manifest_path.parent().unwrap().parent().unwrap();
+fn test_workspace_members_match_crates_directory() -> TestResult {
+    let workspace_root = workspace_root()?;
 
     let cargo_toml_path = workspace_root.join("Cargo.toml");
-    let content =
-        std::fs::read_to_string(&cargo_toml_path).expect("Failed to read workspace Cargo.toml");
+    let content = std::fs::read_to_string(&cargo_toml_path)?;
 
     // Count unique "crates/" entries (each workspace member)
     let members: HashSet<&str> = content
@@ -324,8 +339,7 @@ fn test_workspace_members_match_crates_directory() {
 
     // Discover crate directories that contain a Cargo.toml.
     let crates_dir = workspace_root.join("crates");
-    let crate_dirs: HashSet<String> = std::fs::read_dir(&crates_dir)
-        .expect("Failed to read crates directory")
+    let crate_dirs: HashSet<String> = std::fs::read_dir(&crates_dir)?
         .filter_map(Result::ok)
         .map(|entry| entry.path())
         .filter(|path| path.is_dir() && path.join("Cargo.toml").exists())
@@ -346,6 +360,8 @@ fn test_workspace_members_match_crates_directory() {
             "Workspace members should include {crate_dir}"
         );
     }
+
+    Ok(())
 }
 
 // =============================================================================
@@ -355,14 +371,11 @@ fn test_workspace_members_match_crates_directory() {
 /// Verify publish allowlist does NOT include old satellite crates.
 /// The baseline (before collapse) was 120, so target is 114 after removing 6.
 #[test]
-fn test_publish_allowlist_excludes_old_satellites() {
-    let cargo_manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".to_string());
-    let manifest_path = PathBuf::from(&cargo_manifest_dir);
-    let workspace_root = manifest_path.parent().unwrap().parent().unwrap();
+fn test_publish_allowlist_excludes_old_satellites() -> TestResult {
+    let workspace_root = workspace_root()?;
 
     let cargo_toml_path = workspace_root.join("Cargo.toml");
-    let content =
-        std::fs::read_to_string(&cargo_toml_path).expect("Failed to read workspace Cargo.toml");
+    let content = std::fs::read_to_string(&cargo_toml_path)?;
 
     // Extract the [workspace.metadata.publish] allowlist
     let allowlist_section = content.split("[workspace.metadata.publish]").nth(1).unwrap_or("");
@@ -390,6 +403,8 @@ fn test_publish_allowlist_excludes_old_satellites() {
         allowlist_section.contains("\"perl-workspace\""),
         "Publish allowlist should contain new crate name 'perl-workspace'"
     );
+
+    Ok(())
 }
 
 // =============================================================================
@@ -399,15 +414,12 @@ fn test_publish_allowlist_excludes_old_satellites() {
 /// Verify that hardcoded crate name references in perl-ci-hygiene have been
 /// updated to use 'perl-workspace' instead of 'perl-workspace-index' or satellite names.
 #[test]
-fn test_perl_ci_hygiene_crate_names_updated() {
-    let cargo_manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".to_string());
-    let manifest_path = PathBuf::from(&cargo_manifest_dir);
-    let workspace_root = manifest_path.parent().unwrap().parent().unwrap();
+fn test_perl_ci_hygiene_crate_names_updated() -> TestResult {
+    let workspace_root = workspace_root()?;
 
     let hygiene_main = workspace_root.join("crates/perl-ci-hygiene/src/main.rs");
     if hygiene_main.exists() {
-        let content =
-            std::fs::read_to_string(&hygiene_main).expect("Failed to read perl-ci-hygiene main.rs");
+        let content = std::fs::read_to_string(&hygiene_main)?;
 
         // Should not reference old crate names (except perl-workspace-index as directory name)
         // Note: perl-workspace-discovery is a valid Tier 6 crate (Wave E), so it's allowed
@@ -433,6 +445,8 @@ fn test_perl_ci_hygiene_crate_names_updated() {
             "perl-ci-hygiene should reference new crate name 'perl-workspace'"
         );
     }
+
+    Ok(())
 }
 
 // =============================================================================
@@ -442,16 +456,13 @@ fn test_perl_ci_hygiene_crate_names_updated() {
 /// Verify that test files in perl-parser that reference workspace crate names
 /// have been updated (lines 607-608 mentioned in builder notes).
 #[test]
-fn test_perl_parser_test_references_updated() {
-    let cargo_manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".to_string());
-    let manifest_path = PathBuf::from(&cargo_manifest_dir);
-    let workspace_root = manifest_path.parent().unwrap().parent().unwrap();
+fn test_perl_parser_test_references_updated() -> TestResult {
+    let workspace_root = workspace_root()?;
 
     let missing_docs_test =
         workspace_root.join("crates/perl-parser/tests/missing_docs_ac_tests.rs");
     if missing_docs_test.exists() {
-        let content = std::fs::read_to_string(&missing_docs_test)
-            .expect("Failed to read missing_docs_ac_tests.rs");
+        let content = std::fs::read_to_string(&missing_docs_test)?;
 
         // Should not have old satellite crate references in crate list
         let old_names = vec![
@@ -471,6 +482,8 @@ fn test_perl_parser_test_references_updated() {
             );
         }
     }
+
+    Ok(())
 }
 
 // =============================================================================
@@ -479,10 +492,8 @@ fn test_perl_parser_test_references_updated() {
 
 /// Verify that all 8 consumer crates import from perl_workspace, not old names.
 #[test]
-fn test_consumer_crates_import_from_perl_workspace() {
-    let cargo_manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".to_string());
-    let manifest_path = PathBuf::from(&cargo_manifest_dir);
-    let workspace_root = manifest_path.parent().unwrap().parent().unwrap();
+fn test_consumer_crates_import_from_perl_workspace() -> TestResult {
+    let workspace_root = workspace_root()?;
 
     let consumers = vec![
         "perl-dead-code",
@@ -498,8 +509,7 @@ fn test_consumer_crates_import_from_perl_workspace() {
     for consumer in consumers {
         let lib_rs = workspace_root.join(format!("crates/{}/src/lib.rs", consumer));
         if lib_rs.exists() {
-            let content = std::fs::read_to_string(&lib_rs)
-                .expect(&format!("Failed to read {}/src/lib.rs", consumer));
+            let content = std::fs::read_to_string(&lib_rs)?;
 
             // Check if the file imports from workspace at all
             if content.contains("workspace") {
@@ -528,6 +538,8 @@ fn test_consumer_crates_import_from_perl_workspace() {
             }
         }
     }
+
+    Ok(())
 }
 
 // =============================================================================
@@ -536,10 +548,8 @@ fn test_consumer_crates_import_from_perl_workspace() {
 
 /// Verify that all 6 new fold-modules have mod.rs and are non-empty.
 #[test]
-fn test_new_modules_have_complete_structure() {
-    let cargo_manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".to_string());
-    let crate_dir =
-        PathBuf::from(&cargo_manifest_dir).parent().unwrap().join("perl-workspace-index");
+fn test_new_modules_have_complete_structure() -> TestResult {
+    let crate_dir = crate_dir()?;
 
     let modules = vec![
         ("discovery", "Directory workspace discovery functionality"),
@@ -554,8 +564,7 @@ fn test_new_modules_have_complete_structure() {
         let mod_file = crate_dir.join(format!("src/{}/mod.rs", module_name));
         assert!(mod_file.exists(), "Module {} should have src/{}/mod.rs", module_name, module_name);
 
-        let content = std::fs::read_to_string(&mod_file)
-            .expect(&format!("Failed to read src/{}/mod.rs", module_name));
+        let content = std::fs::read_to_string(&mod_file)?;
 
         // File should not be empty
         assert!(
@@ -574,6 +583,8 @@ fn test_new_modules_have_complete_structure() {
             module_name
         );
     }
+
+    Ok(())
 }
 
 // =============================================================================
@@ -582,13 +593,11 @@ fn test_new_modules_have_complete_structure() {
 
 /// Verify lib.rs doesn't declare the same module twice (common refactoring error).
 #[test]
-fn test_no_duplicate_module_declarations_in_lib_rs() {
-    let cargo_manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".to_string());
-    let crate_dir =
-        PathBuf::from(&cargo_manifest_dir).parent().unwrap().join("perl-workspace-index");
+fn test_no_duplicate_module_declarations_in_lib_rs() -> TestResult {
+    let crate_dir = crate_dir()?;
 
     let lib_file = crate_dir.join("src/lib.rs");
-    let content = std::fs::read_to_string(&lib_file).expect("Failed to read lib.rs");
+    let content = std::fs::read_to_string(&lib_file)?;
 
     let modules =
         vec!["discovery", "folder", "ignore", "monitoring", "slo", "state_machine", "workspace"];
@@ -604,4 +613,6 @@ fn test_no_duplicate_module_declarations_in_lib_rs() {
             count
         );
     }
+
+    Ok(())
 }
