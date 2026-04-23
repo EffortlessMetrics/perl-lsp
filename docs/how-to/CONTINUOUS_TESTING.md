@@ -54,6 +54,9 @@ Use `just dev-watch-tests` if you want the repo defaults, or run
 `cargo nextest run --profile local-fast --workspace` when you want the smaller
 test loop.
 
+For end-to-end IntelliJ setup (including `perllsp --stdio` wiring), see
+[docs/EDITORS/INTELLIJ_IDEA_SETUP.md](../EDITORS/INTELLIJ_IDEA_SETUP.md).
+
 ## When To Use Each Tool
 
 - Use `bacon` when you want a fast feedback loop while editing.
