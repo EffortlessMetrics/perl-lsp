@@ -362,15 +362,17 @@ mod tests {
     #[test]
     fn find_perl_interpreter_configured_path_missing_returns_not_found() {
         let result = find_perl_interpreter(Some("/nonexistent/path/to/perl"));
-        match result {
-            PerlInterpreterResult::NotFound { searched } => {
-                assert!(
-                    searched.iter().any(|s| s.contains("configured")),
-                    "searched list should mention configured path: {searched:?}"
-                );
-            }
-            other => panic!("expected NotFound, got: {other:?}"),
-        }
+        assert!(
+            matches!(result, PerlInterpreterResult::NotFound { .. }),
+            "expected NotFound, got: {result:?}"
+        );
+        let PerlInterpreterResult::NotFound { searched } = result else {
+            return;
+        };
+        assert!(
+            searched.iter().any(|s| s.contains("configured")),
+            "searched list should mention configured path: {searched:?}"
+        );
     }
 
     #[test]
