@@ -3993,6 +3993,7 @@ fn collect_ignored_matches(crates_root: &Path, repo_root: &Path) -> Result<Vec<I
 fn categorize_ignore(reason: &str, context: &str) -> String {
     let reason = reason.trim().to_lowercase();
     let context = context.to_lowercase();
+    let reason_no_space = reason.replace(' ', "");
 
     if reason.starts_with("manual:")
         || reason.contains("manual ")
@@ -4032,6 +4033,7 @@ fn categorize_ignore(reason: &str, context: &str) -> String {
         return "bug".to_string();
     }
     if reason.starts_with("todo:")
+        || reason_no_space.starts_with("todo(#")
         || reason.starts_with("infra:")
         || reason.contains("infra ")
         || reason.contains("fixme")
@@ -4215,6 +4217,8 @@ mod tests {
     fn categorize_ignore_maps_reasons_to_expected_buckets() {
         assert_eq!(categorize_ignore("manual: run locally", ""), "manual");
         assert_eq!(categorize_ignore("TODO: requires CI setup", ""), "infra");
+        assert_eq!(categorize_ignore("TODO(#123): tracked follow-up", ""), "infra");
+        assert_eq!(categorize_ignore("TODO (#123): tracked follow-up", ""), "infra");
         assert_eq!(categorize_ignore("feature: not implemented", ""), "feature");
         assert_eq!(categorize_ignore("placeholder", "#[ignore] // AC: parser behavior"), "feature");
         assert_eq!(categorize_ignore("ignore", ""), "bare");
