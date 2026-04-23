@@ -19,6 +19,7 @@ use crate::state::DocumentState;
 use crate::util::uri::parse_uri;
 use perl_diagnostics::codes::DiagnosticCode;
 use perl_lsp_rs_core::providers::diagnostics::{parse_error_code, parse_error_severity};
+use perl_module::resolution::use_lib::resolve_use_lib_paths_from_source;
 use perl_parser::Parser;
 use perl_parser::error::ParseError;
 use perl_parser::position::offset_to_utf16_line_col;
@@ -264,17 +265,19 @@ impl PullDiagnosticsProvider {
                             tracing::warn!(uri = %uri_str, "pull diagnostics: URI is not a file path");
                         }).ok()
                     });
+                let include_paths = self.effective_include_paths(
+                    &context.include_paths,
+                    content,
+                    source_path.as_deref(),
+                    context,
+                );
 
                 // Build module resolver using context include_paths
                 let resolver = |module: &str| {
-                    self.resolve_module_with_paths(
-                        module,
-                        &context.include_paths,
-                        source_path.as_deref(),
-                    )
+                    self.resolve_module_with_paths(module, &include_paths, source_path.as_deref())
                 };
 
-                let search_paths: Vec<String> = context.include_paths.clone();
+                let search_paths: Vec<String> = include_paths.clone();
 
                 let mut diagnostics = provider
                     .get_diagnostics_with_path(
@@ -312,7 +315,17 @@ impl PullDiagnosticsProvider {
 
         // Check include paths
         for path in include_paths {
-            let full_path = std::path::Path::new(path).join(&module_path);
+            let include_root = {
+                let include_path = std::path::Path::new(path);
+                if include_path.is_absolute() {
+                    include_path.to_path_buf()
+                } else if let Some(source_parent) = source_path.and_then(std::path::Path::parent) {
+                    source_parent.join(include_path)
+                } else {
+                    include_path.to_path_buf()
+                }
+            };
+            let full_path = include_root.join(&module_path);
             if full_path.exists() {
                 return true;
             }
@@ -329,6 +342,30 @@ impl PullDiagnosticsProvider {
         }
 
         false
+    }
+
+    fn effective_include_paths(
+        &self,
+        include_paths: &[String],
+        content: &str,
+        source_path: Option<&std::path::Path>,
+        context: &PullDiagnosticsContext,
+    ) -> Vec<String> {
+        let mut effective_paths = include_paths.to_vec();
+        let workspace_root = context
+            .workspace_root
+            .as_deref()
+            .or_else(|| source_path.and_then(std::path::Path::parent))
+            .unwrap_or(std::path::Path::new("."));
+        let file_dir = source_path.and_then(std::path::Path::parent);
+
+        let dynamic_paths = resolve_use_lib_paths_from_source(content, workspace_root, file_dir);
+        for path in dynamic_paths.into_iter().rev() {
+            effective_paths.retain(|existing| existing != &path);
+            effective_paths.insert(0, path);
+        }
+
+        effective_paths
     }
 
     /// Add built-in Perl::Critic policy diagnostics.
@@ -380,17 +417,19 @@ impl PullDiagnosticsProvider {
             let provider = DiagnosticsProvider::new(ast, doc_state.text.clone());
             let source_path =
                 url::Url::parse(&uri.to_string()).ok().and_then(|value| value.to_file_path().ok());
+            let include_paths = self.effective_include_paths(
+                &context.include_paths,
+                &doc_state.text,
+                source_path.as_deref(),
+                context,
+            );
 
             // Build module resolver using context include_paths
             let resolver = |module: &str| {
-                self.resolve_module_with_paths(
-                    module,
-                    &context.include_paths,
-                    source_path.as_deref(),
-                )
+                self.resolve_module_with_paths(module, &include_paths, source_path.as_deref())
             };
 
-            let search_paths: Vec<String> = context.include_paths.clone();
+            let search_paths: Vec<String> = include_paths.clone();
 
             let mut diagnostics = provider
                 .get_diagnostics_with_path(
