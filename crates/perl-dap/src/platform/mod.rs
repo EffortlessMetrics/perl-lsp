@@ -190,7 +190,14 @@ fn resolve_perl_path_from_path_env(path_env: &str) -> anyhow::Result<PathBuf> {
         }
     }
 
-    anyhow::bail!("perl binary not found on PATH. Please install Perl or add it to PATH.")
+    anyhow::bail!(perl_not_found_install_message())
+}
+
+#[cfg(test)]
+/// End-user remediation guidance shown when no Perl interpreter is available.
+fn perl_not_found_install_message() -> &'static str {
+    "perl binary not found on PATH. Install Perl via https://strawberryperl.com (Windows), \
+`brew install perl` (macOS), or your distro package manager, then add it to PATH."
 }
 
 /// Normalize a file path for cross-platform compatibility.
@@ -313,6 +320,10 @@ mod tests {
         assert!(
             msg.contains("perl") || msg.contains("PATH"),
             "error should mention perl/PATH: {msg}"
+        );
+        assert!(
+            msg.contains("strawberryperl.com"),
+            "error should include install guidance: {msg}"
         );
     }
 

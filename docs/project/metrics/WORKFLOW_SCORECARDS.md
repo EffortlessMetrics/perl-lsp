@@ -26,6 +26,13 @@ the subsystem scorecards. It is intentionally narrow:
 - `workflow_stability_rate`
 - `p95_time_to_first_useful_result_ms`
 
+## Confidence Signals (tracked workflow counts)
+
+- `manual_editor_smoke` — PR-lane workflows that mirror the editor smoke path
+- `first_five_minutes_harness` — all fixture-backed first-5-minutes workflows
+- `issue_burndown_regression_guard` — workflows explicitly tagged as regression
+  guards for UX issue burn-down
+
 ## Current Component Rows
 
 - `cross_file_definition_success_rate`
