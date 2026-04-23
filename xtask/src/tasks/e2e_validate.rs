@@ -423,3 +423,107 @@ impl Drop for TempDir {
         let _ = fs::remove_dir_all(&self.0);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use color_eyre::Result;
+    use std::os::unix::fs::PermissionsExt;
+
+    fn unique_path(suffix: &str) -> PathBuf {
+        std::env::temp_dir().join(format!(
+            "perl-lsp-e2e-{}-{}-{suffix}",
+            std::process::id(),
+            Utc::now().timestamp_nanos_opt().unwrap_or(0)
+        ))
+    }
+
+    #[test]
+    fn find_lsp_binary_prefers_release() -> Result<()> {
+        let root = unique_path("bin-locate");
+        let release_dir = root.join("target/release");
+        let debug_dir = root.join("target/debug");
+        fs::create_dir_all(&release_dir)?;
+        fs::create_dir_all(&debug_dir)?;
+
+        fs::write(release_dir.join("perllsp"), "#!/bin/sh\nexit 0\n")?;
+        fs::write(debug_dir.join("perllsp"), "#!/bin/sh\nexit 0\n")?;
+
+        let found = find_lsp_binary(&root);
+        assert_eq!(found, Some(release_dir.join("perllsp")));
+
+        fs::remove_dir_all(root)?;
+        Ok(())
+    }
+
+    #[test]
+    fn write_report_persists_step_counts_and_details() -> Result<()> {
+        let report_path = unique_path("report").join("nested/report.json");
+        let steps = vec![
+            StepOutcome {
+                name: "step 1".to_string(),
+                passed: true,
+                duration: Duration::from_millis(500),
+                detail: None,
+            },
+            StepOutcome {
+                name: "step 2".to_string(),
+                passed: false,
+                duration: Duration::from_secs(1),
+                detail: Some("boom".to_string()),
+            },
+        ];
+
+        write_report(&steps, Duration::from_secs(2), &report_path)?;
+
+        let raw = fs::read_to_string(&report_path)?;
+        let report_json: serde_json::Value = serde_json::from_str(&raw)?;
+        assert_eq!(report_json["passed"].as_u64(), Some(1));
+        assert_eq!(report_json["failed"].as_u64(), Some(1));
+        assert_eq!(report_json["steps"][1]["detail"].as_str(), Some("boom"));
+
+        let parent = report_path
+            .parent()
+            .ok_or_else(|| color_eyre::eyre::eyre!("report path must have a parent"))?;
+        fs::remove_dir_all(parent)?;
+        Ok(())
+    }
+
+    #[test]
+    fn run_lsp_smoke_reports_nonzero_exit() -> Result<()> {
+        let temp_root = unique_path("nonzero");
+        fs::create_dir_all(&temp_root)?;
+        let script = temp_root.join("fake_perllsp.sh");
+        fs::write(&script, "#!/usr/bin/env bash\necho crash >&2\nexit 7\n")?;
+        let mut perms = fs::metadata(&script)?.permissions();
+        perms.set_mode(0o755);
+        fs::set_permissions(&script, perms)?;
+
+        let (passed, detail) = run_lsp_smoke(&script, &temp_root)?;
+        assert!(!passed);
+        let message = detail.unwrap_or_default();
+        assert!(message.contains("status"));
+        assert!(message.contains("crash"));
+
+        fs::remove_dir_all(temp_root)?;
+        Ok(())
+    }
+
+    #[test]
+    fn run_lsp_smoke_treats_running_process_as_success() -> Result<()> {
+        let temp_root = unique_path("long-running");
+        fs::create_dir_all(&temp_root)?;
+        let script = temp_root.join("fake_perllsp.sh");
+        fs::write(&script, "#!/usr/bin/env bash\nsleep 5\n")?;
+        let mut perms = fs::metadata(&script)?.permissions();
+        perms.set_mode(0o755);
+        fs::set_permissions(&script, perms)?;
+
+        let (passed, detail) = run_lsp_smoke(&script, &temp_root)?;
+        assert!(passed);
+        assert!(detail.is_none());
+
+        fs::remove_dir_all(temp_root)?;
+        Ok(())
+    }
+}
