@@ -17,15 +17,19 @@ perllsp --health
 
 ## Option 1: Install the perl-lsp extension (recommended)
 
-If Trae can access Open VSX, install:
+Trae supports extensions from its built-in Extension Store and the VS Code
+Marketplace. Install the Perl LSP extension:
 
-- `EffortlessMetrics.perl-lsp-rs`
+- Extension ID: `EffortlessMetrics.perl-lsp-rs`
 
-Then open Trae settings and confirm the extension is enabled for Perl files.
+Search for `perl-lsp` in Trae's Extensions panel, or install via the command
+palette. Then open Trae settings and confirm the extension is enabled for Perl
+files.
 
 ## Option 2: Generic LSP client configuration
 
-If you prefer manual wiring, configure a generic language server entry:
+If extension marketplace access is unavailable, configure a generic language
+server entry:
 
 - **Command**: `perllsp`
 - **Arguments**: `--stdio`
@@ -44,7 +48,7 @@ If you prefer manual wiring, configure a generic language server entry:
 2. If diagnostics/completion do not appear, verify the active document language
    is Perl and check the LSP output/log panel.
 3. If modules are unresolved, add include paths in `.perl-lsp.toml` (`include_paths`)
-   or editor settings (`perl.includePaths`).
+   or extension settings (`perl-lsp.includePaths`).
 
 See also:
 
