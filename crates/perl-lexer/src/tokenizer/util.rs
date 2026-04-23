@@ -9,6 +9,11 @@
 /// Uses the lexer to avoid false positives in heredocs/POD.
 /// Returns the byte offset of the start of the marker, or None if not found.
 pub fn find_data_marker_byte_lexed(s: &str) -> Option<usize> {
+    // Cheap prefilter: avoid constructing the lexer when marker substrings are absent.
+    if !s.contains("__DATA__") && !s.contains("__END__") {
+        return None;
+    }
+
     use crate::{PerlLexer, TokenType};
     let mut lx = PerlLexer::new(s);
     while let Some(tok) = lx.next_token() {
