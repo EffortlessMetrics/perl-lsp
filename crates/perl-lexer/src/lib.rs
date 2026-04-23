@@ -989,9 +989,9 @@ impl<'a> PerlLexer<'a> {
                     // Skip line comment using memchr for fast newline search
                     self.position += 1; // Skip # directly
 
-                    // Use memchr to find newline quickly
+                    // Use memchr2 to find CR/LF line endings quickly (supports LF, CRLF, and CR)
                     if let Some(newline_offset) =
-                        memchr::memchr(b'\n', &self.input_bytes[self.position..])
+                        memchr::memchr2(b'\n', b'\r', &self.input_bytes[self.position..])
                     {
                         self.position += newline_offset;
                     } else {
@@ -1000,7 +1000,8 @@ impl<'a> PerlLexer<'a> {
                     }
                 }
                 b'=' if self.position == 0
-                    || (self.position > 0 && self.input_bytes[self.position - 1] == b'\n') =>
+                    || (self.position > 0
+                        && matches!(self.input_bytes[self.position - 1], b'\n' | b'\r')) =>
                 {
                     // Check if this starts a POD section (=pod, =head, =over, etc.)
                     // Use byte-safe checks — avoid slicing &str at arbitrary byte positions
@@ -1022,15 +1023,21 @@ impl<'a> PerlLexer<'a> {
                         let mut i = search_start;
                         while i < bytes.len() {
                             // Look for =cut at the start of a line
-                            if (i == 0 || bytes[i - 1] == b'\n') && bytes[i..].starts_with(b"=cut")
+                            if (i == 0 || matches!(bytes[i - 1], b'\n' | b'\r'))
+                                && bytes[i..].starts_with(b"=cut")
                             {
                                 i += 4; // Skip "=cut"
                                 // Skip rest of the =cut line
-                                while i < bytes.len() && bytes[i] != b'\n' {
+                                while i < bytes.len() && bytes[i] != b'\n' && bytes[i] != b'\r' {
                                     i += 1;
                                 }
-                                // Consume the trailing newline if present
-                                if i < bytes.len() && bytes[i] == b'\n' {
+                                // Consume one line ending sequence if present
+                                if i < bytes.len() && bytes[i] == b'\r' {
+                                    i += 1;
+                                    if i < bytes.len() && bytes[i] == b'\n' {
+                                        i += 1;
+                                    }
+                                } else if i < bytes.len() && bytes[i] == b'\n' {
                                     i += 1;
                                 }
                                 self.position = i;
@@ -3886,6 +3893,62 @@ mod tests {
         assert!(matches!(peeked2.token_type, TokenType::Number(_)));
         assert_eq!(lexer.paren_depth, 1, "peek at number must not change paren_depth");
 
+        Ok(())
+    }
+
+    #[test]
+    fn test_comment_skipping_with_cr_line_endings() -> TestResult {
+        let mut lexer = PerlLexer::new("my $x = 1;# comment\rmy $y = 2;");
+        let mut saw_second_my = false;
+
+        while let Some(token) = lexer.next_token() {
+            if matches!(token.token_type, TokenType::EOF) {
+                break;
+            }
+
+            if matches!(token.token_type, TokenType::Keyword(ref kw) if kw.as_ref() == "my")
+                && token.start > 0
+            {
+                saw_second_my = true;
+            }
+        }
+
+        assert!(saw_second_my, "lexer should continue after CR-terminated comment line");
+        Ok(())
+    }
+
+    #[test]
+    fn test_pod_skipped_with_cr_only_line_endings() -> TestResult {
+        // CR-only line endings (classic Mac): =pod and =cut must be detected
+        // when preceded by \r instead of \n.
+        let input = "my $before = 1;\r=pod\rThis is documentation.\r=cut\rmy $after = 2;";
+        let mut lexer = PerlLexer::new(input);
+        let mut token_texts: Vec<String> = Vec::new();
+
+        while let Some(token) = lexer.next_token() {
+            if matches!(token.token_type, TokenType::EOF) {
+                break;
+            }
+            if matches!(token.token_type, TokenType::Keyword(_) | TokenType::Identifier(_)) {
+                token_texts.push(token.text.to_string());
+            }
+        }
+
+        assert!(
+            token_texts.iter().any(|t| t == "my" && {
+                // find the second 'my' (after the POD block)
+                token_texts.iter().enumerate().filter(|(_, t)| t.as_str() == "my").nth(1).is_some()
+            }),
+            "lexer should produce tokens after CR-terminated =cut; got: {:?}",
+            token_texts
+        );
+
+        // Ensure POD body text is not present as an identifier token
+        assert!(
+            !token_texts.iter().any(|t| t == "documentation"),
+            "POD body should be consumed, not emitted as a token; got: {:?}",
+            token_texts
+        );
         Ok(())
     }
 }
