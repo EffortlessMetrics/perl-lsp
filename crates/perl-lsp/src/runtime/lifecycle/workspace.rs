@@ -444,4 +444,33 @@ include_paths = ["other_lib"]
             );
         }
     }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn did_change_configuration_resets_pull_diagnostics_critic_warning_dedupe() {
+        let server = LspServer::new();
+        server.test_configure_perlcritic(true, 5, None);
+
+        server.pull_diagnostics_orchestrator.test_insert_warning_key("perlcritic-missing");
+        server
+            .critic_workspace_warnings_sent
+            .lock()
+            .insert("workspace-perlcritic-missing".to_string());
+
+        assert_eq!(server.pull_diagnostics_orchestrator.test_warning_count(), 1);
+        assert_eq!(server.critic_workspace_warnings_sent.lock().len(), 1);
+
+        server.handle_did_change_configuration(Some(serde_json::json!({
+            "settings": {
+                "perl": {
+                    "perlcritic": {
+                        "severity": 3
+                    }
+                }
+            }
+        })));
+
+        assert_eq!(server.pull_diagnostics_orchestrator.test_warning_count(), 0);
+        assert_eq!(server.critic_workspace_warnings_sent.lock().len(), 0);
+    }
 }
