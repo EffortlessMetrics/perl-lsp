@@ -2727,6 +2727,11 @@ has 'id' => (
         assert!(completions.iter().any(|c| c.label == "\\W"));
         assert!(completions.iter().any(|c| c.label == "\\s"));
         assert!(completions.iter().any(|c| c.label == "\\S"));
+        assert!(completions.iter().any(|c| c.label == "\\h"));
+        assert!(completions.iter().any(|c| c.label == "\\H"));
+        assert!(completions.iter().any(|c| c.label == "\\v"));
+        assert!(completions.iter().any(|c| c.label == "\\V"));
+        assert!(completions.iter().any(|c| c.label == "\\R"));
         assert!(completions.iter().any(|c| c.label == "[...]"));
         assert!(completions.iter().any(|c| c.label == "[^...]"));
 
@@ -2893,6 +2898,24 @@ has 'id' => (
             Some((code.len() - r"\d".len(), code.len())),
             "expected regex completion to replace the typed escape sequence"
         );
+    }
+
+    #[test]
+    fn test_regex_completion_offers_perl_whitespace_and_linebreak_classes() {
+        let code = r#"$x =~ /\"#;
+
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let provider = CompletionProvider::new(&ast);
+        let completions = provider.get_completions(code, code.len());
+        let labels: Vec<&str> = completions.iter().map(|c| c.label.as_str()).collect();
+
+        for label in &["\\h", "\\H", "\\v", "\\V", "\\R"] {
+            assert!(
+                labels.contains(label),
+                "expected Perl regex class completion '{label}', got: {labels:?}"
+            );
+        }
     }
 
     #[test]
