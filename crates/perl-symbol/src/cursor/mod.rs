@@ -116,12 +116,29 @@ pub fn token_under_cursor(text: &str, line: usize, col_utf16: usize) -> Option<S
     let byte_pos = byte_offset_utf16(line_text, col_utf16);
     let bytes = line_text.as_bytes();
 
-    if byte_pos >= bytes.len() {
+    if bytes.is_empty() {
         return None;
     }
 
-    let mut start = byte_pos;
-    let mut end = byte_pos;
+    // Prefer the character at the cursor. If the cursor is positioned at the
+    // end of a token (or line), snap to the previous byte when that byte is
+    // part of an identifier/module token or sigil.
+    let anchor = if byte_pos < bytes.len() {
+        byte_pos
+    } else {
+        bytes.len().saturating_sub(1)
+    };
+
+    let cursor = if is_modchar(bytes[anchor]) || matches!(bytes[anchor], b'$' | b'@' | b'%' | b'&' | b'*') {
+        anchor
+    } else if anchor > 0 && is_modchar(bytes[anchor - 1]) {
+        anchor - 1
+    } else {
+        return None;
+    };
+
+    let mut start = cursor;
+    let mut end = cursor;
 
     while start > 0 && is_modchar(bytes[start - 1]) {
         start -= 1;
@@ -132,6 +149,10 @@ pub fn token_under_cursor(text: &str, line: usize, col_utf16: usize) -> Option<S
 
     while end < bytes.len() && is_modchar(bytes[end]) {
         end += 1;
+    }
+
+    if end == start {
+        return None;
     }
 
     Some(line_text[start..end].to_string())
@@ -165,6 +186,18 @@ mod tests {
     fn token_under_cursor_supports_sigils() {
         let text = "my $value = 1;\n";
         assert_eq!(token_under_cursor(text, 0, 5), Some("$value".to_string()));
+    }
+
+    #[test]
+    fn token_under_cursor_supports_cursor_after_symbol() {
+        let text = "use Demo::Worker\n";
+        assert_eq!(token_under_cursor(text, 0, 16), Some("Demo::Worker".to_string()));
+    }
+
+    #[test]
+    fn token_under_cursor_returns_none_on_punctuation() {
+        let text = "my $value = 1;\n";
+        assert_eq!(token_under_cursor(text, 0, 11), None);
     }
 
     #[test]
