@@ -287,8 +287,9 @@ fn find_die_in_module(source: &str) -> Vec<CodeAction> {
     for (line_idx, line) in lines.iter().enumerate() {
         let trimmed = line.trim();
 
-        // Skip `or die` and `|| die` idioms — correct for system calls
-        if trimmed.contains(" or die") || trimmed.contains("|| die") {
+        // Skip `or die` and `|| die` idioms — correct for system calls.
+        // Only match these patterns in executable code (not inside strings/comments).
+        if contains_or_die_idiom(line) {
             continue;
         }
 
@@ -302,8 +303,7 @@ fn find_die_in_module(source: &str) -> Vec<CodeAction> {
 
         // Skip multi-line `or die` / `|| die` where `or` or `||` is at end of previous line
         if line_idx > 0 {
-            let prev_trimmed = lines[line_idx - 1].trim();
-            if prev_trimmed.ends_with(" or") || prev_trimmed.ends_with("||") {
+            if line_ends_with_or_operator(lines[line_idx - 1]) {
                 continue;
             }
         }
@@ -339,6 +339,116 @@ fn find_die_in_module(source: &str) -> Vec<CodeAction> {
 }
 
 // ---- helpers ----------------------------------------------------------------
+
+fn strip_strings_and_comments(line: &str) -> String {
+    let mut out = String::with_capacity(line.len());
+    let mut in_single = false;
+    let mut in_double = false;
+    let mut escaped = false;
+
+    for ch in line.chars() {
+        if in_single {
+            if ch == '\'' && !escaped {
+                in_single = false;
+            }
+            escaped = ch == '\\' && !escaped;
+            out.push(' ');
+            continue;
+        }
+
+        if in_double {
+            if ch == '"' && !escaped {
+                in_double = false;
+            }
+            escaped = ch == '\\' && !escaped;
+            out.push(' ');
+            continue;
+        }
+
+        escaped = false;
+
+        if ch == '#' {
+            break;
+        }
+        if ch == '\'' {
+            in_single = true;
+            out.push(' ');
+            continue;
+        }
+        if ch == '"' {
+            in_double = true;
+            out.push(' ');
+            continue;
+        }
+
+        out.push(ch);
+    }
+
+    out
+}
+
+fn is_identifier_char(ch: u8) -> bool {
+    ch.is_ascii_alphanumeric() || ch == b'_'
+}
+
+fn has_die_word_at(bytes: &[u8], idx: usize) -> bool {
+    if idx + 3 > bytes.len() || &bytes[idx..idx + 3] != b"die" {
+        return false;
+    }
+
+    if idx > 0 && is_identifier_char(bytes[idx - 1]) {
+        return false;
+    }
+
+    if idx + 3 < bytes.len() && is_identifier_char(bytes[idx + 3]) {
+        return false;
+    }
+
+    true
+}
+
+fn contains_or_die_idiom(line: &str) -> bool {
+    let stripped = strip_strings_and_comments(line);
+    let bytes = stripped.as_bytes();
+    let mut i = 0;
+
+    while i < bytes.len() {
+        // `|| die`
+        if i + 2 <= bytes.len() && &bytes[i..i + 2] == b"||" {
+            let mut j = i + 2;
+            while j < bytes.len() && bytes[j].is_ascii_whitespace() {
+                j += 1;
+            }
+            if has_die_word_at(bytes, j) {
+                return true;
+            }
+        }
+
+        // `or die` with token boundaries
+        if i + 2 <= bytes.len() && &bytes[i..i + 2] == b"or" {
+            if (i == 0 || !is_identifier_char(bytes[i - 1]))
+                && (i + 2 == bytes.len() || !is_identifier_char(bytes[i + 2]))
+            {
+                let mut j = i + 2;
+                while j < bytes.len() && bytes[j].is_ascii_whitespace() {
+                    j += 1;
+                }
+                if has_die_word_at(bytes, j) {
+                    return true;
+                }
+            }
+        }
+
+        i += 1;
+    }
+
+    false
+}
+
+fn line_ends_with_or_operator(line: &str) -> bool {
+    let stripped = strip_strings_and_comments(line);
+    matches!(stripped.split_whitespace().last(), Some("or" | "||"))
+}
 
 fn count_commas_outside_quotes(s: &str) -> usize {
     let mut count = 0;
@@ -629,25 +739,28 @@ mod tests {
 
     #[test]
     fn test_die_with_or_die_text_in_message_still_flagged() {
-        // Edge case: die with a message containing "or die" text (without leading space)
-        // WILL be flagged because the pattern checks for " or die" with a space.
-        // This is actually correct — the string "or die trying" contains no " or die" pattern.
+        // Edge case: quoted message text containing "or die" should still be flagged.
         let source = "package Foo;\ndie \"or die trying harder\";\n";
         let actions = find_die_in_module(source);
         assert!(!actions.is_empty(), "die even with 'or die' in message gets flagged (correct)");
     }
 
     #[test]
-    fn test_die_with_space_or_die_in_message_is_false_negative() {
-        // Known limitation: die with " or die" (space-prefixed) in message is NOT flagged.
-        // The pattern-matching approach looks for " or die" in the line, which matches
-        // string literals containing that phrase. This is a false negative, but acceptable.
+    fn test_die_with_space_or_die_in_message_is_flagged() {
+        // "or die" inside a quoted message should not suppress the modernization action.
         let source = "package Foo;\ndie \"message: or die trying\";\n";
         let actions = find_die_in_module(source);
         assert!(
-            actions.is_empty(),
-            "known limitation: die with ' or die' in message is not flagged"
+            !actions.is_empty(),
+            "quoted 'or die' text should not be treated as an or-die idiom"
         );
+    }
+
+    #[test]
+    fn test_die_with_or_die_only_in_comment_is_flagged() {
+        let source = "package Foo;\ndie \"message\"; # or die fallback\n";
+        let actions = find_die_in_module(source);
+        assert!(!actions.is_empty(), "comment text should not suppress bare die detection");
     }
 
     #[test]
