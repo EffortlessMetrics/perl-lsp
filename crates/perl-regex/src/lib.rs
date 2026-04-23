@@ -389,6 +389,20 @@ impl RegexAnalyzer {
                                 i += 2;
                                 continue;
                             }
+                            if chars[i] == '[' {
+                                i += 1;
+                                while i < len {
+                                    if chars[i] == '\\' {
+                                        i += 2;
+                                    } else if chars[i] == ']' {
+                                        i += 1;
+                                        break;
+                                    } else {
+                                        i += 1;
+                                    }
+                                }
+                                continue;
+                            }
                             if chars[i] == '(' {
                                 depth += 1;
                             } else if chars[i] == ')' {

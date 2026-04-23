@@ -372,6 +372,16 @@ fn print_error(error: &ParseError, source: &str) {
         ParseError::Cancelled => {
             writeln!(stderr, "Parse error: Parsing cancelled").ok();
         }
+        ParseError::Recovered { site, kind, location } => {
+            let (line, col) = position_to_line_col(source, *location);
+            writeln!(
+                stderr,
+                "Parse recovery: {:?} at {:?} (line {}, column {})",
+                kind, site, line, col
+            )
+            .ok();
+            print_error_context(source, *location, &mut stderr);
+        }
     }
 }
 

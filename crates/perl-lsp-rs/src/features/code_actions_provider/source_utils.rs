@@ -5,7 +5,11 @@ pub(super) fn ranges_overlap(r1: (usize, usize), r2: (usize, usize)) -> bool {
 }
 
 pub(super) fn extract_quoted_value(message: &str) -> Option<String> {
-    extract_between(message, '\'').or_else(|| extract_between(message, '`'))
+    ['\'', '`', '"']
+        .into_iter()
+        .filter_map(|delimiter| extract_between(message, delimiter))
+        .min_by_key(|(start, _)| *start)
+        .map(|(_, value)| value)
 }
 
 pub(super) fn find_declaration_position(provider: &CodeActionsProvider, near: usize) -> usize {
@@ -69,10 +73,10 @@ pub(super) fn split_sigil(name: &str) -> (&str, &str) {
     (&name[..sigil_len], bare)
 }
 
-fn extract_between(message: &str, delimiter: char) -> Option<String> {
+fn extract_between(message: &str, delimiter: char) -> Option<(usize, String)> {
     let start = message.find(delimiter)?;
     let end = message[start + 1..].find(delimiter)?;
-    Some(message[start + 1..start + 1 + end].to_string())
+    Some((start, message[start + 1..start + 1 + end].to_string()))
 }
 
 fn declaration_end(source: &str, pos: usize, search_pattern: &str) -> usize {

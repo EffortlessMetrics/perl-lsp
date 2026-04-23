@@ -383,18 +383,33 @@ impl LspServer {
                 .pointer("/textDocument/uri")
                 .and_then(|v| v.as_str())
                 .ok_or_else(|| invalid_params("Missing required parameter: textDocument.uri"))?;
-            let version_i64 =
-                params.pointer("/textDocument/version").and_then(|v| v.as_i64()).unwrap_or(0);
-            let version = i32::try_from(version_i64).unwrap_or(0);
+            let incoming_version_i64 =
+                params.pointer("/textDocument/version").and_then(|v| v.as_i64());
+            let incoming_version = incoming_version_i64.and_then(|v| i32::try_from(v).ok());
 
             // Cancel any active streaming inline completion sessions for this URI
             // that are older than the new document version.
-            self.stream_sessions().cancel_for_uri_version(uri, version_i64);
+            if let Some(version) = incoming_version_i64 {
+                self.stream_sessions().cancel_for_uri_version(uri, version);
+            } else {
+                self.stream_sessions().cancel_for_uri(uri);
+            }
 
             if let Some(changes) = params["contentChanges"].as_array() {
                 // Get current document state or create new one
                 let mut documents = self.documents.lock();
                 let normalized_uri = self.normalize_uri_key(uri);
+                let existing_doc =
+                    documents.get(&normalized_uri).or_else(|| documents.get(uri)).cloned();
+
+                // LSP requires didChange only for opened documents. If we don't
+                // have a document and receive ranged edits, applying them against
+                // an empty buffer can corrupt state. Ignore this notification and
+                // wait for didOpen (or a full-document replace change).
+                if existing_doc.is_none() && changes.iter().all(|c| c.get("range").is_some()) {
+                    tracing::warn!("Ignoring ranged didChange for unopened document {}", uri);
+                    return Ok(());
+                }
 
                 // Invalidate the SemanticAnalyzer cache for this URI — content is changing.
                 {
@@ -416,25 +431,41 @@ impl LspServer {
                     }
                 }
 
-                let mut doc_state = documents
-                    .get(&normalized_uri)
-                    .or_else(|| documents.get(uri))
-                    .cloned()
-                    .unwrap_or_else(|| DocumentState {
-                        rope: ropey::Rope::new(),
-                        text: String::new(),
-                        version,
-                        ast: None,
-                        parse_errors: vec![],
-                        parent_map: ParentMap::default(),
-                        line_starts: LineStartsCache::new(""),
-                        generation: Arc::new(AtomicU32::new(0)),
-                        degradation_tier: DegradationTier::Minimal,
-                        #[cfg(feature = "incremental")]
-                        incremental_doc: None,
-                        #[cfg(feature = "incremental")]
-                        incremental_state: None,
-                    });
+                let mut doc_state = existing_doc.unwrap_or_else(|| DocumentState {
+                    rope: ropey::Rope::new(),
+                    text: String::new(),
+                    version: incoming_version.unwrap_or(0),
+                    ast: None,
+                    parse_errors: vec![],
+                    parent_map: ParentMap::default(),
+                    line_starts: LineStartsCache::new(""),
+                    generation: Arc::new(AtomicU32::new(0)),
+                    degradation_tier: DegradationTier::Minimal,
+                    #[cfg(feature = "incremental")]
+                    incremental_doc: None,
+                    #[cfg(feature = "incremental")]
+                    incremental_state: None,
+                });
+
+                // Ignore stale didChange notifications that arrive out of order.
+                // We only gate on explicit client-provided versions; if a client omits
+                // the version field we preserve legacy behavior and treat the change as new.
+                if let Some(version) = incoming_version {
+                    if version <= doc_state.version {
+                        tracing::debug!(
+                            "Ignoring stale didChange for {} (incoming version {} <= current {})",
+                            uri,
+                            version,
+                            doc_state.version
+                        );
+                        return Ok(());
+                    }
+                }
+
+                // didChange version is required by LSP, but keep a fallback for tolerant
+                // handling of non-conforming clients in tests/custom integrations.
+                let version =
+                    incoming_version.unwrap_or_else(|| doc_state.version.saturating_add(1));
 
                 // Increment generation counter for this change
                 let next_gen = doc_state.generation.fetch_add(1, Ordering::SeqCst).wrapping_add(1);
@@ -1299,6 +1330,28 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn test_did_change_ranged_edit_ignored_for_unopened_document()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let server = LspServer::new();
+        let uri = "file:///not-opened.pl";
+
+        server.handle_did_change(Some(json!({
+            "textDocument": { "uri": uri, "version": 1 },
+            "contentChanges": [{
+                "range": {
+                    "start": { "line": 0, "character": 0 },
+                    "end":   { "line": 0, "character": 0 }
+                },
+                "text": "my $x = 1;\n"
+            }]
+        })))?;
+
+        let docs = server.documents.lock();
+        assert!(docs.get(uri).is_none(), "ranged didChange for unopened docs must be ignored");
+        Ok(())
+    }
+
     /// Verify that an edit at the very end of the document (zero-length insertion) is handled.
     /// This is the most common case for autocompletion triggers.
     #[cfg(feature = "incremental")]
@@ -2089,5 +2142,61 @@ mod tests {
                 err.code
             );
         }
+    }
+
+    /// didChange with an out-of-order version must be ignored to avoid document rollback.
+    #[test]
+    fn handle_did_change_ignores_stale_versions() -> Result<(), Box<dyn std::error::Error>> {
+        let server = LspServer::new();
+        let uri = "file:///stale_version.pl";
+
+        server.did_open(json!({
+            "textDocument": {
+                "uri": uri,
+                "languageId": "perl",
+                "version": 5,
+                "text": "my $x = 1;\n"
+            }
+        }))?;
+
+        // Incoming didChange version is older than current (4 < 5): ignore.
+        server.handle_did_change(Some(json!({
+            "textDocument": { "uri": uri, "version": 4 },
+            "contentChanges": [{ "text": "my $x = 999;\n" }]
+        })))?;
+
+        let docs = server.documents.lock();
+        let doc = docs.get(uri).ok_or("document missing after stale didChange")?;
+        assert_eq!(doc.version, 5, "stale didChange must not update document version");
+        assert_eq!(doc.text, "my $x = 1;\n", "stale didChange must not modify document text");
+        Ok(())
+    }
+
+    /// didChange without a version field should still be applied for compatibility.
+    #[test]
+    fn handle_did_change_without_version_uses_next_version()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let server = LspServer::new();
+        let uri = "file:///missing_version.pl";
+
+        server.did_open(json!({
+            "textDocument": {
+                "uri": uri,
+                "languageId": "perl",
+                "version": 1,
+                "text": "my $x = 1;\n"
+            }
+        }))?;
+
+        server.handle_did_change(Some(json!({
+            "textDocument": { "uri": uri },
+            "contentChanges": [{ "text": "my $x = 2;\n" }]
+        })))?;
+
+        let docs = server.documents.lock();
+        let doc = docs.get(uri).ok_or("document missing after didChange without version")?;
+        assert_eq!(doc.version, 2, "missing-version didChange should advance version by one");
+        assert_eq!(doc.text, "my $x = 2;\n", "didChange without version should apply content");
+        Ok(())
     }
 }

@@ -13,10 +13,11 @@ on:
     branches: [ main, master ]
   workflow_dispatch: {}
 
-# Cancel in-flight runs on new pushes (saves minutes)
+# Coalesce-queue-tail: let the running CI complete; skip superseded SHAs at a
+# preflight gate instead of cancelling in-flight work mid-run.
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 permissions:
   contents: write
@@ -28,11 +29,37 @@ env:
   RUST_BACKTRACE: 1
 
 jobs:
+  # ── Preflight: skip superseded SHAs to save cost ─────────────────────
+  preflight-latest-check:
+    name: Preflight — is this SHA latest?
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    outputs:
+      is_latest: ${{ steps.check.outputs.is_latest }}
+    steps:
+      - name: Check if this SHA is latest on the ref
+        id: check
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          BRANCH="${{ github.head_ref || github.ref_name }}"
+          CURRENT="${{ github.event.pull_request.head.sha || github.sha }}"
+          LATEST=$(git ls-remote "https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}.git" "refs/heads/${BRANCH}" | awk '{print $1}')
+          if [ -z "$LATEST" ] || [ "$LATEST" = "$CURRENT" ]; then
+            echo "is_latest=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::This SHA ($CURRENT) is latest on $BRANCH — running full CI"
+          else
+            echo "is_latest=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Superseded by $LATEST — skipping remaining jobs to save cost"
+          fi
+
   # ── PR Smoke: fast feedback for every PR (~1-2 min) ──────────────────
   pr-smoke:
     name: PR Smoke (Fast Feedback)
     runs-on: ubuntu-24.04
     timeout-minutes: 10
+    needs: preflight-latest-check
+    if: needs.preflight-latest-check.outputs.is_latest == 'true'
     steps:
       - uses: actions/checkout@v6
         with:
@@ -70,10 +97,11 @@ jobs:
     name: CI Gate (Merge-Blocking)
     runs-on: ubuntu-24.04
     timeout-minutes: 30
-    needs: pr-smoke
+    needs: [pr-smoke, preflight-latest-check]
+    if: needs.preflight-latest-check.outputs.is_latest == 'true'
     # Run on every PR push and on push to main/master
     # Earlier gating > label-gated gating (see #4675)
-    # Frequent commits will churn CI; concurrency group cancels in-flight runs.
+    # Frequent commits will queue; preflight skips superseded SHAs.
     steps:
       - uses: actions/checkout@v6
         with:
@@ -209,7 +237,8 @@ jobs:
     name: UX Regression Tests
     runs-on: ubuntu-24.04
     timeout-minutes: 15
-    needs: pr-smoke
+    needs: [pr-smoke, preflight-latest-check]
+    if: needs.preflight-latest-check.outputs.is_latest == 'true'
     # Run on every PR push — this is the regression prevention gate.
     steps:
       - uses: actions/checkout@v6
@@ -242,3 +271,36 @@ jobs:
           PERL_LSP_BIN: ${{ github.workspace }}/target/debug/perl-lsp
           RUST_TEST_THREADS: "1"
         run: just ux-tests
+
+  # ── Compile All Targets: catch integration-test + bench bit-rot ───────
+  check-all-targets:
+    name: Compile All Targets (bit-rot guard)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    needs: preflight-latest-check
+    if: needs.preflight-latest-check.outputs.is_latest == 'true'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.ref_name }}
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9  # stable (master)
+        with:
+          toolchain: 1.92.0
+
+      - name: Install just
+        uses: taiki-e/install-action@cf39a74df4a72510be4e5b63348d61067f11e64a  # v2.75.0
+        with:
+          tool: just
+
+      - name: Cache cargo dependencies
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4  # v2.9.1
+        with:
+          cache-on-failure: true
+          cache-all-crates: true
+          shared-key: ci-all-targets-${{ hashFiles('Cargo.lock') }}
+
+      - name: Compile all targets (catches integration-test + bench bit-rot)
+        run: just check-all-targets

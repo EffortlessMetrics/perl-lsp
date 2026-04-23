@@ -105,7 +105,10 @@ fn when_given_when_has_default_clause_then_parser_emits_given_shape() {
 
     assert!(sexp.contains("(given_statement"), "expected given_statement; got: {sexp}");
     assert!(sexp.contains("(when_clause"), "expected when_clause in given block; got: {sexp}");
-    assert!(sexp.contains("(default_clause"), "expected default_clause in given block; got: {sexp}");
+    assert!(
+        sexp.contains("(default_clause"),
+        "expected default_clause in given block; got: {sexp}"
+    );
 }
 
 #[test]

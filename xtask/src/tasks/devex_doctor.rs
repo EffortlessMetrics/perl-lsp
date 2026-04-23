@@ -37,8 +37,18 @@ pub fn run() -> Result<()> {
     println!("== Rust components ==");
     if has_command("rustup") {
         let installed_components = get_installed_rustup_components();
-        check_rust_component("rustfmt", true, &mut missing_required, installed_components.as_deref());
-        check_rust_component("clippy", true, &mut missing_required, installed_components.as_deref());
+        check_rust_component(
+            "rustfmt",
+            true,
+            &mut missing_required,
+            installed_components.as_deref(),
+        );
+        check_rust_component(
+            "clippy",
+            true,
+            &mut missing_required,
+            installed_components.as_deref(),
+        );
     } else {
         warn("rustup unavailable; cannot verify components");
     }
@@ -270,7 +280,9 @@ fn check_pre_commit_hook() {
     let hook_path = Path::new(&git_common_dir).join("hooks").join("pre-commit");
 
     if !hook_path.is_file() {
-        warn("pre-commit hook missing or not executable (run: cargo xtask ci-hygiene install-githooks)");
+        warn(
+            "pre-commit hook missing or not executable (run: cargo xtask ci-hygiene install-githooks)",
+        );
         return;
     }
 

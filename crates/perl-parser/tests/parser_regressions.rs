@@ -7,6 +7,17 @@ fn assert_parses(code: &str) {
     must(parser.parse());
 }
 
+fn assert_parses_without_recovery_errors(code: &str) {
+    use perl_tdd_support::must;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let sexp = ast.to_sexp();
+    assert!(
+        !sexp.contains("ERROR"),
+        "Expected clean parse without ERROR nodes for `{code}`, got: {sexp}"
+    );
+}
+
 /// Helper to assert code fails to parse
 #[allow(dead_code)]
 fn assert_parse_fails(code: &str) {
@@ -261,6 +272,78 @@ fn complex_foreach_with_modifiers() {
     }
     "#;
     assert_parses(code);
+}
+
+#[test]
+fn do_while_block_condition() {
+    // Perl supports do { ... } while/until CONDITION;
+    assert_parses_without_recovery_errors("do { $x++ } while $x < 10;");
+    assert_parses_without_recovery_errors("do { $x-- } until $x == 0;");
+}
+
+#[test]
+fn state_variable_declaration() {
+    assert_parses("use feature 'state'; sub counter { state $x = 0; return ++$x; }");
+}
+
+#[test]
+fn our_variable_list_declaration() {
+    assert_parses_without_recovery_errors("our ($foo, @bar, %baz);");
+}
+
+#[test]
+fn version_string_literal_expression() {
+    assert_parses("my $v = v5.38.0;");
+}
+
+#[test]
+fn probe_valid_constructs_for_clean_parse() {
+    let cases = [
+        "format STDOUT =\n@<<<\n$x\n.\n",
+        "my $x = ${^GLOBAL_PHASE};",
+        "my $x = do { 1 };",
+        "my $x = eval { 1 };",
+        "my $x = qx{echo hi};",
+        "my $x = qr/foo/i;",
+        "my $x = m{foo}i;",
+        "my $x = s{foo}{bar}r;",
+        "my $x = y/abc/xyz/;",
+        "my $x = tr/abc/xyz/;",
+        "my $x = <<'EOF';\nhello\nEOF\n",
+        "sub f ($x, $y = 1) { return $x + $y; }",
+        "my $x = bless {}, 'Pkg';",
+        "given ($x) { when (1) { say 'one'; } default { say 'other'; } }",
+        "my @x = map { $_ + 1 } @y;",
+        "my @x = grep { $_ % 2 } @y;",
+        "my $x :shared = 1;",
+        "our $x :shared;",
+        "local $\" = ',';",
+        "open my $fh, '<', $file or die $!;",
+        "my $n = scalar @{ $arr_ref };",
+        "my $n = $hash_ref->{k}->{nested};",
+        "my $v = $obj->${\\(\"foo\" . \"method\")};",
+        "use v5.36;",
+        "no feature 'indirect';",
+        "package Foo 1.23;",
+        "if ($x) { } elsif ($y) { } else { }",
+        "for (my $i = 0; $i < 10; $i++) { }",
+        "while (my $line = <STDIN>) { chomp $line; }",
+        "UNITCHECK { say 'unit'; }",
+        "CHECK { say 'check'; }",
+        "INIT { say 'init'; }",
+        "END { say 'end'; }",
+        "my $x = do FILE;",
+        "my $x = $#{ $array_ref };",
+        "my $x = $#array;",
+        "my $x = ${^WARNING_BITS};",
+        "my $x = prototype 'CORE::open';",
+        "my $x = __PACKAGE__;",
+        "my $x = __SUB__;",
+        "my $x = __FILE__ . __LINE__;",
+    ];
+    for case in cases {
+        assert_parses_without_recovery_errors(case);
+    }
 }
 
 #[test]

@@ -7,6 +7,7 @@ mod support;
 use serde_json::{Value, json};
 use std::fs;
 use std::path::Path;
+use std::sync::atomic::{AtomicI32, Ordering};
 use support::test_helpers::{
     assert_completion_has_items, assert_folding_ranges_valid, assert_hover_has_text,
 };
@@ -28,6 +29,7 @@ struct TestContext {
 
 /// Compile-time path to the perl-lsp binary, set by Cargo when building integration tests.
 const CARGO_BIN_EXE: Option<&str> = option_env!("CARGO_BIN_EXE_perl-lsp");
+static REQUEST_ID: AtomicI32 = AtomicI32::new(1);
 
 impl TestContext {
     /// Find the perl-lsp binary using multiple resolution strategies
@@ -126,12 +128,7 @@ impl TestContext {
     ) -> Result<Option<Value>, Box<dyn std::error::Error>> {
         use std::io::{BufRead, Read, Write};
 
-        static mut REQUEST_ID: i32 = 1;
-        let id = unsafe {
-            let current = REQUEST_ID;
-            REQUEST_ID += 1;
-            current
-        };
+        let id = REQUEST_ID.fetch_add(1, Ordering::Relaxed);
 
         let request = json!({
             "jsonrpc": "2.0",

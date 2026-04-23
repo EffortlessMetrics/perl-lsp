@@ -57,6 +57,7 @@ fn is_keyword(kind: TokenKind) -> bool {
             | TokenKind::Field
             | TokenKind::Format
             | TokenKind::Undef
+            | TokenKind::Defer
     )
 }
 
@@ -179,7 +180,7 @@ fn is_special(kind: TokenKind) -> bool {
 /// Every variant in TokenKind, including Field and Goto.
 fn all_kinds() -> Vec<TokenKind> {
     vec![
-        // Keywords (40)
+        // Keywords (41)
         TokenKind::My,
         TokenKind::Our,
         TokenKind::Local,
@@ -220,6 +221,7 @@ fn all_kinds() -> Vec<TokenKind> {
         TokenKind::Field,
         TokenKind::Format,
         TokenKind::Undef,
+        TokenKind::Defer,
         // Operators (56)
         TokenKind::Assign,
         TokenKind::Plus,
@@ -365,6 +367,7 @@ fn display_name_keywords() {
         (TokenKind::Field, "'field'"),
         (TokenKind::Format, "'format'"),
         (TokenKind::Undef, "'undef'"),
+        (TokenKind::Defer, "'defer'"),
     ];
     for (kind, expected) in cases {
         assert_eq!(kind.display_name(), *expected, "display_name mismatch for {kind:?}");
@@ -671,7 +674,7 @@ fn every_variant_has_exactly_one_category() {
 #[test]
 fn keyword_classification_count() {
     let count = all_kinds().iter().filter(|k| is_keyword(**k)).count();
-    assert_eq!(count, 40, "expected 40 keyword variants");
+    assert_eq!(count, 41, "expected 41 keyword variants");
 }
 
 #[test]
@@ -706,8 +709,8 @@ fn special_classification_count() {
 
 #[test]
 fn total_variant_count() {
-    // 40 keywords + 58 operators + 8 delimiters + 16 literals + 6 ident/sigil + 2 special = 130
-    assert_eq!(all_kinds().len(), 130, "expected 130 total TokenKind variants");
+    // 41 keywords + 58 operators + 8 delimiters + 16 literals + 6 ident/sigil + 2 special = 131
+    assert_eq!(all_kinds().len(), 131, "expected 131 total TokenKind variants");
 }
 
 // ===========================================================================
@@ -727,6 +730,11 @@ fn field_is_keyword() {
 #[test]
 fn goto_is_keyword() {
     assert!(is_keyword(TokenKind::Goto));
+}
+
+#[test]
+fn defer_is_keyword() {
+    assert!(is_keyword(TokenKind::Defer));
 }
 
 #[test]
@@ -1115,6 +1123,11 @@ fn goto_token_construction() {
 #[test]
 fn goto_display_name() {
     assert_eq!(TokenKind::Goto.display_name(), "'goto'");
+}
+
+#[test]
+fn defer_display_name() {
+    assert_eq!(TokenKind::Defer.display_name(), "'defer'");
 }
 
 // ===========================================================================

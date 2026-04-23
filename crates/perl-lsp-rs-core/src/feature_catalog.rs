@@ -519,3 +519,160 @@ pub fn render_lsp_fallback_module() -> String {
     code.push_str("pub fn compliance_percent() -> f32 { 0.0 }\n");
     code
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use perl_tdd_support::{must, must_some};
+    use tempfile::TempDir;
+
+    fn sample_catalog() -> Catalog {
+        Catalog {
+            meta: Meta {
+                version: "0.42.0".to_string(),
+                lsp_version: "3.18".to_string(),
+                compliance_percent: None,
+            },
+            feature: vec![
+                Feature {
+                    id: "lsp.completion".to_string(),
+                    spec: "LSP 3.18".to_string(),
+                    area: "text_document".to_string(),
+                    maturity: Maturity::Ga,
+                    advertised: true,
+                    tests: vec!["crates/perl-lsp-rs/tests/completion.rs".to_string()],
+                    counts_in_coverage: true,
+                    description: "Completion support".to_string(),
+                },
+                Feature {
+                    id: "lsp.semanticTokens".to_string(),
+                    spec: "LSP 3.18".to_string(),
+                    area: "text_document".to_string(),
+                    maturity: Maturity::Preview,
+                    advertised: true,
+                    tests: vec!["crates/perl-lsp-rs/tests/semantic_tokens.rs".to_string()],
+                    counts_in_coverage: true,
+                    description: "Semantic token support".to_string(),
+                },
+                Feature {
+                    id: "lsp.codeAction".to_string(),
+                    spec: "LSP 3.18".to_string(),
+                    area: "workspace".to_string(),
+                    maturity: Maturity::Planned,
+                    advertised: true,
+                    tests: vec![],
+                    counts_in_coverage: false,
+                    description: "Code actions".to_string(),
+                },
+                Feature {
+                    id: "lsp.references".to_string(),
+                    spec: "LSP 3.18".to_string(),
+                    area: "workspace".to_string(),
+                    maturity: Maturity::Production,
+                    advertised: true,
+                    tests: vec!["crates/perl-lsp-rs/tests/references.rs".to_string()],
+                    counts_in_coverage: true,
+                    description: "References".to_string(),
+                },
+            ],
+        }
+    }
+
+    #[test]
+    fn advertised_ids_are_sorted_and_filter_preview_and_planned() {
+        let catalog = sample_catalog();
+        assert_eq!(catalog.advertised_feature_ids(), vec!["lsp.completion", "lsp.references"]);
+    }
+
+    #[test]
+    fn compliance_math_uses_trackable_features_only() {
+        let catalog = sample_catalog();
+        assert_eq!(catalog.trackable_feature_count(), 3);
+        assert_eq!(catalog.advertised_trackable_count(), 2);
+        assert_eq!(catalog.compliance_percent(), 67.0);
+        assert_eq!(catalog.trackable_feature_count_for_grid(), 3);
+        assert_eq!(catalog.advertised_trackable_count_for_grid(), 2);
+        assert_eq!(catalog.compliance_percent_for_grid(), 67.0);
+    }
+
+    #[test]
+    fn area_stats_include_maturity_breakdown() {
+        let catalog = sample_catalog();
+        let stats = catalog.area_statistics();
+
+        let text_doc = must_some(stats.get("text_document"));
+        assert_eq!(text_doc.total, 2);
+        assert_eq!(text_doc.advertised, 2);
+        assert_eq!(text_doc.ga, 1);
+        assert_eq!(text_doc.preview, 1);
+        assert_eq!(text_doc.production, 0);
+        assert_eq!(text_doc.trackable_coverage_percent(), 100);
+
+        let workspace = must_some(stats.get("workspace"));
+        assert_eq!(workspace.total, 2);
+        assert_eq!(workspace.production, 1);
+        assert_eq!(workspace.planned, 1);
+        assert_eq!(workspace.trackable(), 1);
+        assert_eq!(workspace.trackable_coverage_percent(), 200);
+    }
+
+    #[test]
+    fn validation_rejects_duplicate_feature_ids() {
+        let mut catalog = sample_catalog();
+        catalog.feature.push(Feature {
+            id: "lsp.completion".to_string(),
+            spec: "LSP 3.18".to_string(),
+            area: "text_document".to_string(),
+            maturity: Maturity::Ga,
+            advertised: true,
+            tests: vec![],
+            counts_in_coverage: true,
+            description: "duplicate row".to_string(),
+        });
+
+        let err = catalog.validate().expect_err("duplicate id must fail validation");
+        let message = err.to_string();
+        assert!(message.contains("duplicate feature id: lsp.completion"));
+    }
+
+    #[test]
+    fn resolve_catalog_source_prefers_workspace_then_vendored() {
+        let temp = must(TempDir::new());
+        let manifest_dir = temp.path().join("crates/perl-lsp-rs-core");
+        must(std::fs::create_dir_all(&manifest_dir));
+
+        let parent_workspace = temp.path().join("features.toml");
+        must(std::fs::write(&parent_workspace, "[meta]\nversion='0.1.0'\nlsp_version='3.18'\n"));
+        let source = must(resolve_catalog_source(&manifest_dir));
+        assert!(matches!(source.kind, CatalogSourceKind::Workspace));
+        assert_eq!(source.path, parent_workspace);
+
+        must(std::fs::remove_file(temp.path().join("features.toml")));
+        let vendored = manifest_dir.join("features_sot.toml");
+        must(std::fs::write(&vendored, "[meta]\nversion='0.1.0'\nlsp_version='3.18'\n"));
+        let source = must(resolve_catalog_source(&manifest_dir));
+        assert!(matches!(source.kind, CatalogSourceKind::Vendored));
+        assert_eq!(source.path, vendored);
+    }
+
+    #[test]
+    fn render_lsp_module_sorts_features_and_emits_expected_constants() {
+        let catalog = sample_catalog();
+        let rendered = render_lsp_feature_catalog_module(&catalog, "// source: test\n");
+
+        assert!(rendered.contains("pub const VERSION: &str = \"0.42.0\";"));
+        assert!(rendered.contains("pub const LSP_VERSION: &str = \"3.18\";"));
+        assert!(rendered.contains("pub const COMPLIANCE_PERCENT: f32 = 67.00;"));
+        assert!(
+            rendered.contains("pub const ADVERTISED_LSP_FEATURES: &[&str] = &[\n    \"lsp.completion\",\n    \"lsp.references\",\n];")
+        );
+
+        let code_action_idx = must_some(rendered.find("id: \"lsp.codeAction\""));
+        let completion_idx = must_some(rendered.find("id: \"lsp.completion\""));
+        let references_idx = must_some(rendered.find("id: \"lsp.references\""));
+        let semantic_idx = must_some(rendered.find("id: \"lsp.semanticTokens\""));
+        assert!(completion_idx < semantic_idx);
+        assert!(semantic_idx < code_action_idx);
+        assert!(code_action_idx < references_idx);
+    }
+}
