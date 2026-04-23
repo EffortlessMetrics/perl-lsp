@@ -394,23 +394,23 @@ impl PatternDetector for TiedHandleDetector {
 
             // Look for usage of this handle with heredoc
             let usage_pattern = format!(r"print\s+{}\s+<<", regex::escape(handle_to_search));
-            if let Ok(re) = Regex::new(&usage_pattern)
-                && let Some(usage_match) = re.find(code)
-            {
-                let location = Location {
-                    line: code[..usage_match.start()].lines().count(),
-                    column: usage_match.start()
-                        - code[..usage_match.start()].rfind('\n').unwrap_or(0),
-                    offset: offset + usage_match.start(),
-                };
+            if let Ok(re) = Regex::new(&usage_pattern) {
+                for usage_match in re.find_iter(code) {
+                    let location = Location {
+                        line: code[..usage_match.start()].lines().count(),
+                        column: usage_match.start()
+                            - code[..usage_match.start()].rfind('\n').unwrap_or(0),
+                        offset: offset + usage_match.start(),
+                    };
 
-                results.push((
-                    AntiPattern::TiedHandleHeredoc {
-                        location: location.clone(),
-                        handle_name: handle_to_search.to_string(),
-                    },
-                    location,
-                ));
+                    results.push((
+                        AntiPattern::TiedHandleHeredoc {
+                            location: location.clone(),
+                            handle_name: handle_to_search.to_string(),
+                        },
+                        location,
+                    ));
+                }
             }
         }
 
@@ -659,5 +659,26 @@ DATA
         let diagnostics = detector.detect_all(code);
         assert_eq!(diagnostics.len(), 1);
         assert!(matches!(diagnostics[0].pattern, AntiPattern::TiedHandleHeredoc { .. }));
+    }
+
+    #[test]
+    fn test_tied_handle_reports_multiple_writes() {
+        let detector = AntiPatternDetector::new();
+        let code = r###"
+tie *FH, 'Tie::Handle';
+print FH <<'FIRST';
+One
+FIRST
+print FH <<'SECOND';
+Two
+SECOND
+"###;
+
+        let diagnostics = detector.detect_all(code);
+        let tied_handle_count = diagnostics
+            .iter()
+            .filter(|diag| matches!(diag.pattern, AntiPattern::TiedHandleHeredoc { .. }))
+            .count();
+        assert_eq!(tied_handle_count, 2);
     }
 }
