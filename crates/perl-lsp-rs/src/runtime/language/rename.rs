@@ -12,7 +12,7 @@
 use super::super::*;
 use crate::protocol::{invalid_params, req_position, req_uri};
 #[cfg(feature = "workspace")]
-use crate::runtime::routing::{IndexAccessMode, route_index_access};
+use crate::runtime::routing::{route_index_access, IndexAccessMode};
 
 impl LspServer {
     /// Handle textDocument/prepareRename request
@@ -264,29 +264,7 @@ impl LspServer {
     /// Validate if a string is a valid Perl identifier
     #[allow(dead_code)] // Used by handle_rename which is currently not dispatched
     pub(crate) fn is_valid_identifier(&self, name: &str) -> bool {
-        if name.is_empty() {
-            return false;
-        }
-
-        let chars: Vec<char> = name.chars().collect();
-
-        // First character must be letter or underscore
-        let first_char = match chars.first() {
-            Some(c) => c,
-            None => return false, // Empty string is not a valid identifier
-        };
-        if !first_char.is_alphabetic() && *first_char != '_' {
-            return false;
-        }
-
-        // Rest must be alphanumeric or underscore
-        for ch in &chars[1..] {
-            if !ch.is_alphanumeric() && *ch != '_' {
-                return false;
-            }
-        }
-
-        true
+        is_valid_perl_identifier(name)
     }
 
     /// Get token at position (simple implementation)
@@ -341,5 +319,59 @@ impl LspServer {
         }
 
         (start, end)
+    }
+}
+
+fn is_valid_perl_identifier(name: &str) -> bool {
+    if name.is_empty() {
+        return false;
+    }
+
+    let rest = match name.chars().next() {
+        Some('$' | '@' | '%') => &name[1..],
+        Some(_) => name,
+        None => return false,
+    };
+
+    if rest.is_empty() {
+        return false;
+    }
+
+    for segment in rest.split("::") {
+        if segment.is_empty() {
+            return false;
+        }
+        let mut chars = segment.chars();
+        let Some(first) = chars.next() else {
+            return false;
+        };
+        if !first.is_alphabetic() && first != '_' {
+            return false;
+        }
+        if !chars.all(|ch| ch.is_alphanumeric() || ch == '_') {
+            return false;
+        }
+    }
+
+    true
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_valid_perl_identifier;
+
+    #[test]
+    fn validate_perl_identifier_for_rename_supports_sigils_and_namespaces() {
+        assert!(is_valid_perl_identifier("$total"));
+        assert!(is_valid_perl_identifier("My::Module"));
+        assert!(is_valid_perl_identifier("$My::Package::value"));
+        assert!(is_valid_perl_identifier("rename_target"));
+
+        assert!(!is_valid_perl_identifier(""));
+        assert!(!is_valid_perl_identifier("$"));
+        assert!(!is_valid_perl_identifier("1bad"));
+        assert!(!is_valid_perl_identifier("Bad::"));
+        assert!(!is_valid_perl_identifier("Bad:::Name"));
+        assert!(!is_valid_perl_identifier("with-hyphen"));
     }
 }
