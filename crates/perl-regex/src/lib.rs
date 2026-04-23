@@ -128,9 +128,10 @@ impl RegexValidator {
                     if last_type == 2 {
                         // Check if it's really a quantifier or literal {
                         if ch == '{' {
-                            // Only count as quantifier if it looks like {n} or {n,m}
-                            // peek ahead... (simplified for now)
-                            return true; // Assume { is quantifier for safety heuristic
+                            // Only count as quantifier if it looks like {n} or {n,m}.
+                            if Self::is_brace_quantifier(&mut chars) {
+                                return true;
+                            }
                         } else {
                             return true;
                         }
@@ -148,6 +149,37 @@ impl RegexValidator {
             }
         }
         false
+    }
+
+    fn is_brace_quantifier(chars: &mut std::iter::Peekable<std::str::CharIndices<'_>>) -> bool {
+        // Require at least one digit after '{'
+        let mut saw_digit = false;
+        while let Some((_, next)) = chars.peek() {
+            if next.is_ascii_digit() {
+                saw_digit = true;
+                chars.next();
+            } else {
+                break;
+            }
+        }
+
+        if !saw_digit {
+            return false;
+        }
+
+        // Optional range suffix: {n,m}
+        if let Some((_, ',')) = chars.peek() {
+            chars.next();
+            while let Some((_, next)) = chars.peek() {
+                if next.is_ascii_digit() {
+                    chars.next();
+                } else {
+                    break;
+                }
+            }
+        }
+
+        matches!(chars.peek(), Some((_, '}')))
     }
 
     fn check_complexity(&self, pattern: &str, start_pos: usize) -> Result<(), RegexError> {
