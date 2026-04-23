@@ -1693,18 +1693,49 @@ print "Hello, $name!\n";
 }
 
 #[test]
-fn unused_package_variable_used_in_string_interpolation() -> Result<(), Box<dyn std::error::Error>>
+fn qualified_var_in_string_interpolation_registers_reference() -> Result<(), Box<dyn std::error::Error>>
 {
+    // Verify that the SymbolExtractor records a reference for $Foo::name when it
+    // appears inside a double-quoted string.  The old scalar-interpolation regex
+    // only matched bare names (\w+) and silently dropped package-qualified forms.
     let code = r#"
-our $Foo::name = "World";
-print "Hello, $Foo::name!\n";
+my $greeting = "Hello, $Foo::name!";
 "#;
-    let issues = scope_issues(code);
-    let unused = issues
-        .iter()
-        .filter(|i| i.kind == IssueKind::UnusedVariable && i.variable_name.contains("Foo::name"))
-        .count();
-    assert_eq!(unused, 0, "$Foo::name used in interpolated string should not be unused");
+    let table = parse_and_extract(code);
+    assert!(
+        table.references.contains_key("Foo::name"),
+        "$Foo::name inside a double-quoted string should register a reference in the symbol table",
+    );
+    Ok(())
+}
+
+#[test]
+fn nested_qualified_var_in_string_interpolation_registers_reference() -> Result<(), Box<dyn std::error::Error>>
+{
+    // Three-level package qualifier: $Foo::Bar::x.
+    let code = r#"
+my $msg = "value: $Foo::Bar::x";
+"#;
+    let table = parse_and_extract(code);
+    assert!(
+        table.references.contains_key("Foo::Bar::x"),
+        "$Foo::Bar::x inside a double-quoted string should register a reference",
+    );
+    Ok(())
+}
+
+#[test]
+fn braced_qualified_var_in_string_interpolation_registers_reference() -> Result<(), Box<dyn std::error::Error>>
+{
+    // Braced form: ${Foo::name}.
+    let code = r#"
+my $msg = "value: ${Foo::name}";
+"#;
+    let table = parse_and_extract(code);
+    assert!(
+        table.references.contains_key("Foo::name"),
+        "${Foo::name} inside a double-quoted string should register a reference",
+    );
     Ok(())
 }
 
