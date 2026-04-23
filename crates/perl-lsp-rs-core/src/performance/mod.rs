@@ -256,7 +256,9 @@ pub mod parallel {
         drop(tx);
 
         for handle in handles {
-            let _ = handle.join();
+            if let Err(payload) = handle.join() {
+                std::panic::resume_unwind(payload);
+            }
         }
 
         let mut ordered_results = Vec::with_capacity(file_count);
@@ -271,6 +273,7 @@ pub mod parallel {
 
 #[cfg(test)]
 mod tests {
+    use super::IncrementalParser;
     use super::parallel::process_files_parallel;
 
     #[test]
@@ -285,5 +288,26 @@ mod tests {
         let files = vec!["first".to_string(), "second".to_string()];
         let results = process_files_parallel(files.clone(), 0, |file| file.to_uppercase());
         assert_eq!(results, vec!["FIRST".to_string(), "SECOND".to_string()]);
+    }
+
+    #[test]
+    fn incremental_parser_needs_reparse_handles_reversed_node_ranges() {
+        let mut parser = IncrementalParser::new();
+        parser.mark_changed(10, 20);
+
+        assert!(parser.needs_reparse(18, 12));
+        assert!(!parser.needs_reparse(9, 3));
+    }
+
+    #[test]
+    fn process_files_parallel_propagates_worker_panics() {
+        let result = std::panic::catch_unwind(|| {
+            process_files_parallel(vec!["ok".to_string(), "boom".to_string()], 2, |file| {
+                assert_ne!(file, "boom", "boom");
+                file
+            })
+        });
+
+        assert!(result.is_err(), "worker panic should propagate to caller");
     }
 }
