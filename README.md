@@ -16,6 +16,8 @@
   <a href="https://open-vsx.org/extension/EffortlessMetrics/perl-lsp-rs"><img src="https://img.shields.io/open-vsx/dt/EffortlessMetrics/perl-lsp-rs" alt="Open VSX Downloads" /></a>
 </p>
 
+> **⚠️ Deprecation Notice:** The VS Marketplace listing is deprecated. Please use the [Open VSX Registry](https://open-vsx.org/extension/EffortlessMetrics/perl-lsp-rs) for VSCodium and open-source VS Code derivatives.
+
 ---
 
 Perl has lacked a proper modern LSP implementation. Other languages — Rust, TypeScript, Go, Python — have mature language servers with fast completions, reliable navigation, and full debugger integration. Perl's existing options were slow, incomplete, or required a working Perl runtime just to get basic editor features. `perl-lsp` fills that gap: a native Rust implementation of the Language Server Protocol and Debug Adapter Protocol for Perl 5, with its own parser and lexer, no Perl runtime required for IDE features.
