@@ -25,20 +25,40 @@ fn build_incremental_edit_set(
 
     let mut working_rope = original_rope.clone();
     let mut edit_set = IncrementalEditSet::new();
+    // Track the cumulative byte shift introduced by all prior edits so we can
+    // map evolving-document byte offsets back to original-document space.
+    //
+    // `apply_edits` / `apply_to_string` sort edits in *reverse* `start_byte`
+    // order and apply them against the *original* source string.  All byte
+    // offsets stored in `IncrementalEditSet` must therefore be in
+    // original-document space, not in the space of the progressively-mutated
+    // working rope.
+    let mut cumulative_shift: isize = 0;
 
     for change in lsp_changes {
         let range = change.range.as_ref()?;
-        // LSP applies content changes in order. Later ranges are relative to the
-        // text after earlier edits in the same notification, so we must map
-        // offsets against the evolving rope, not only the original document.
-        let (start_byte, old_end_byte) = range_to_bytes(&working_rope, range, PosEnc::Utf16);
-        edit_set.add(IncrementalEdit::new(start_byte, old_end_byte, change.text.clone()));
+        // Measure byte positions against the evolving rope so that the
+        // character-to-byte mapping for this edit is correct (the working rope
+        // already reflects all preceding edits in this notification batch).
+        let (evolving_start, evolving_end) = range_to_bytes(&working_rope, range, PosEnc::Utf16);
 
+        // Map back to original-document space by undoing the byte shift that
+        // prior edits introduced into the working rope.
+        let orig_start = (evolving_start as isize - cumulative_shift) as usize;
+        let orig_end = (evolving_end as isize - cumulative_shift) as usize;
+        edit_set.add(IncrementalEdit::new(orig_start, orig_end, change.text.clone()));
+
+        // Apply this edit to the working rope so the next iteration's
+        // `range_to_bytes` / `range_to_chars` calls see the correct document.
         let (start_char, end_char) = range_to_chars(&working_rope, range, PosEnc::Utf16);
         if start_char <= end_char {
             working_rope.remove(start_char..end_char);
             working_rope.insert(start_char, &change.text);
         }
+
+        // Accumulate the byte delta: positive for insertions, negative for deletions.
+        cumulative_shift +=
+            change.text.len() as isize - (evolving_end as isize - evolving_start as isize);
     }
 
     if edit_set.is_empty() { None } else { Some(edit_set) }
@@ -1174,9 +1194,12 @@ mod tests {
     fn test_build_incremental_edits_uses_evolving_document_ranges() {
         use lsp_types::{Position, Range, TextDocumentContentChangeEvent};
 
-        let original = ropey::Rope::from_str("abcde");
+        // Original text: "abcde" (all ASCII — one byte per character)
+        let original_str = "abcde";
+        let original = ropey::Rope::from_str(original_str);
         let changes = vec![
-            // Insert one character near the start.
+            // Edit 0: insert "X" at char 1 (between 'a' and 'b').
+            // After this edit the working document becomes "aXbcde".
             TextDocumentContentChangeEvent {
                 range: Some(Range {
                     start: Position { line: 0, character: 1 },
@@ -1185,7 +1208,9 @@ mod tests {
                 range_length: None,
                 text: "X".to_string(),
             },
-            // Replace trailing "de"; positions are relative to the post-insert text.
+            // Edit 1: replace chars 4..6 on the *post-insert* document "aXbcde".
+            // Characters 4..6 of "aXbcde" are "de".  In original-doc space that
+            // maps to bytes 3..5 (we subtract the +1 shift from the prior insert).
             TextDocumentContentChangeEvent {
                 range: Some(Range {
                     start: Position { line: 0, character: 4 },
@@ -1199,11 +1224,36 @@ mod tests {
         let edit_set =
             build_incremental_edit_set(&original, &changes).expect("expected ranged edit set");
         assert_eq!(edit_set.edits.len(), 2);
-        assert_eq!(edit_set.edits[0].start_byte, 1);
-        assert_eq!(edit_set.edits[0].old_end_byte, 1);
-        // The second edit must be measured on the evolving document after the first insert.
-        assert_eq!(edit_set.edits[1].start_byte, 4);
-        assert_eq!(edit_set.edits[1].old_end_byte, 6);
+
+        // Edit 0 is a pure insertion — original-space offsets are 1..1.
+        assert_eq!(edit_set.edits[0].start_byte, 1, "edit[0] start_byte must be in original space");
+        assert_eq!(
+            edit_set.edits[0].old_end_byte, 1,
+            "edit[0] old_end_byte must be in original space (insertion)"
+        );
+
+        // Edit 1 in evolving space was 4..6, but the prior insert added 1 byte,
+        // so in original-document space the range is 3..5 (the "de" suffix).
+        assert_eq!(
+            edit_set.edits[1].start_byte, 3,
+            "edit[1] start_byte must be mapped back to original-doc space"
+        );
+        assert_eq!(
+            edit_set.edits[1].old_end_byte, 5,
+            "edit[1] old_end_byte must be mapped back to original-doc space"
+        );
+
+        // Crucially, applying the edit set to the original source must produce
+        // the same document that the LSP client intended.  `apply_to_string`
+        // sorts edits in reverse start_byte order and applies them against the
+        // original string — this only works when all offsets are in
+        // original-document space.
+        //
+        // Expected sequence:
+        //   1. apply edit[1] (highest start_byte=3): "abcde"[3..5] → "YZ"  ⟹ "abcYZ"
+        //   2. apply edit[0] (start_byte=1):         "abcYZ"[1..1] ← "X"   ⟹ "aXbcYZ"
+        let result = edit_set.apply_to_string(original_str);
+        assert_eq!(result, "aXbcYZ", "apply_to_string must reproduce the client-intended document");
     }
 
     /// Verify that a ranged didChange initializes and preserves incremental_doc.
