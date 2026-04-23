@@ -95,7 +95,7 @@ enum CliCommand {
     ///
     /// This walks Cargo.toml (workspace + per-crate), features.toml, the
     /// VSCode extension manifest, and the doc surface (README, CLAUDE.md,
-    /// ROADMAP) and fails if any site drifts from the canonical workspace
+    /// AGENTS.md, ROADMAP) and fails if any site drifts from the canonical workspace
     /// version.
     CheckVersionSync,
 

@@ -98,7 +98,7 @@ pub fn collect_sites(repo_root: &Path) -> Result<Vec<VersionSite>> {
     // 4. vscode-extension/package.json (and package-lock.json).
     collect_vscode_sites(repo_root, &mut sites)?;
 
-    // 5. Doc surface: README.md, CLAUDE.md, docs/project/ROADMAP.md.
+    // 5. Doc surface: README.md, CLAUDE.md, AGENTS.md, docs/project/ROADMAP.md.
     collect_doc_sites(repo_root, &mut sites)?;
 
     Ok(sites)
@@ -285,6 +285,8 @@ static LOCKFILE_SELF_VERSION_RE: LazyLock<Regex> =
 static README_RELEASE_RE: LazyLock<Regex> =
     LazyLock::new(|| compile_regex(r"\*\*Current release:\s*v(\d+\.\d+\.\d+)\*\*"));
 static CLAUDE_RELEASE_RE: LazyLock<Regex> =
+    LazyLock::new(|| compile_regex(r"\*\*Latest Release\*\*:\s*(\d+\.\d+\.\d+)"));
+static AGENTS_RELEASE_RE: LazyLock<Regex> =
     LazyLock::new(|| compile_regex(r"\*\*Latest Release\*\*:\s*(\d+\.\d+\.\d+)"));
 static ROADMAP_WORKSPACE_RE: LazyLock<Regex> =
     LazyLock::new(|| compile_regex(r"Workspace version line:\s*`v(\d+\.\d+\.\d+)`"));
@@ -565,6 +567,15 @@ fn collect_doc_sites(repo_root: &Path, sites: &mut Vec<VersionSite>) -> Result<(
         sites,
     )?;
 
+    // AGENTS.md: "**Latest Release**: <version>"
+    collect_single_line_doc_site(
+        repo_root,
+        "AGENTS.md",
+        "AGENTS.md latest release line",
+        &AGENTS_RELEASE_RE,
+        sites,
+    )?;
+
     // docs/project/ROADMAP.md: "Workspace version line: `v<version>`"
     collect_single_line_doc_site(
         repo_root,
@@ -765,5 +776,13 @@ perl-token = { path = "../perl-token", version = "0.42.0" }
         fs::remove_dir_all(&repo_root)
             .map_err(|e| eyre!("cleanup {}: {e}", repo_root.display()))?;
         Ok(())
+    }
+
+    #[test]
+    fn agents_release_regex_captures_semver() {
+        let line = "**Latest Release**: 0.12.4";
+        let captures = AGENTS_RELEASE_RE.captures(line);
+        assert!(captures.is_some());
+        assert_eq!(&captures.expect("regex capture exists")[1], "0.12.4");
     }
 }

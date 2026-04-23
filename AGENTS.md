@@ -1,5 +1,7 @@
 # AGENTS.md — Implementation Agent Operating Manual
 
+**Latest Release**: 0.12.4 | **Orchestrator Guide**: [CLAUDE.md](CLAUDE.md)
+
 You are an **implementation agent** (Codex, Jules, or similar). Your job is to make a
 scoped change, test it, and open a PR. You are not the orchestrator. You will not be
 routing work or reading CI pipelines — just implement the thing you were asked to implement.
