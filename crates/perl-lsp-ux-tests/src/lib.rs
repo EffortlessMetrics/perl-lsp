@@ -185,6 +185,26 @@ impl UxHarness {
         self.client.did_open(&uri, content)
     }
 
+    /// Replace file contents via `textDocument/didChange` full-sync semantics.
+    ///
+    /// The helper updates the on-disk fixture file and notifies the server in
+    /// the same call so scenarios can model a real editor save/change loop.
+    pub fn change_file_full(
+        &self,
+        relative_path: &str,
+        new_content: &str,
+        version: i32,
+    ) -> Result<()> {
+        self.workspace.write(relative_path, new_content)?;
+        let uri = self.workspace.uri(relative_path);
+        self.client.did_change_full(&uri, version, new_content)
+    }
+
+    /// Close a previously opened file (`textDocument/didClose`).
+    pub fn close_file(&self, relative_path: &str) -> Result<()> {
+        let uri = self.workspace.uri(relative_path);
+        self.client.did_close(&uri)
+    }
     /// Request hover information at `(line, character)` (0-indexed UTF-16).
     ///
     /// Returns `None` if the server returned a null/empty result (degraded mode is OK).

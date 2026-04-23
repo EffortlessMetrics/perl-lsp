@@ -245,6 +245,35 @@ impl UxClient {
         )
     }
 
+    /// Send `textDocument/didChange` with full document content.
+    pub fn did_change_full(&self, uri: &str, version: i32, text: &str) -> Result<()> {
+        self.notify(
+            "textDocument/didChange",
+            json!({
+                "textDocument": {
+                    "uri": uri,
+                    "version": version
+                },
+                "contentChanges": [
+                    {
+                        "text": text
+                    }
+                ]
+            }),
+        )
+    }
+
+    /// Send `textDocument/didClose`.
+    pub fn did_close(&self, uri: &str) -> Result<()> {
+        self.notify(
+            "textDocument/didClose",
+            json!({
+                "textDocument": {
+                    "uri": uri
+                }
+            }),
+        )
+    }
     /// Drain all buffered server-initiated events and decode them.
     ///
     /// After this call the internal queue is empty.  Use `peek_events` if you
