@@ -5,9 +5,9 @@
 //! options for editors.
 
 use once_cell::sync::Lazy;
-use perl_position_tracking::{WirePosition, WireRange, offset_to_utf16_line_col};
+use perl_position_tracking::{offset_to_utf16_line_col, WirePosition, WireRange};
 use regex::Regex;
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 
 /// Regex for hex color codes: #RGB, #RRGGBB, #RRGGBBAA
 static HEX_COLOR_RE: Lazy<Option<Regex>> =
@@ -216,10 +216,15 @@ fn detect_ansi_colors(text: &str) -> Vec<ColorInformation> {
     colors
 }
 
-/// Parse ANSI color code to RGBA
+/// Parse ANSI color code to RGBA.
+///
+/// Supports foreground and background forms:
+/// - Basic/bright codes: 30-37, 90-97, 40-47, 100-107
+/// - 256-color: 38;5;N, 48;5;N
+/// - 24-bit: 38;2;R;G;B, 48;2;R;G;B
 fn parse_ansi_color(code: &str) -> Option<Color> {
-    // 24-bit true color: 38;2;R;G;B
-    if let Some(rest) = code.strip_prefix("38;2;") {
+    // 24-bit true color: 38;2;R;G;B / 48;2;R;G;B
+    if let Some(rest) = code.strip_prefix("38;2;").or_else(|| code.strip_prefix("48;2;")) {
         let parts: Vec<&str> = rest.splitn(3, ';').collect();
         if parts.len() == 3 {
             let r: u8 = parts[0].parse().ok()?;
@@ -235,13 +240,13 @@ fn parse_ansi_color(code: &str) -> Option<Color> {
         return None;
     }
 
-    // 256-color: 38;5;N
-    if let Some(rest) = code.strip_prefix("38;5;") {
+    // 256-color: 38;5;N / 48;5;N
+    if let Some(rest) = code.strip_prefix("38;5;").or_else(|| code.strip_prefix("48;5;")) {
         let n: u8 = rest.parse().ok()?;
         return Some(color_from_256(n));
     }
 
-    // Basic ANSI color codes (30-37 foreground)
+    // Basic ANSI color codes.
     match code {
         "30" | "0;30" => Some(Color { red: 0.0, green: 0.0, blue: 0.0, alpha: 1.0 }), // Black
         "31" | "0;31" => Some(Color { red: 0.8, green: 0.0, blue: 0.0, alpha: 1.0 }), // Red
@@ -260,6 +265,23 @@ fn parse_ansi_color(code: &str) -> Option<Color> {
         "95" | "1;35" => Some(Color { red: 1.0, green: 0.0, blue: 1.0, alpha: 1.0 }), // Bright Magenta
         "96" | "1;36" => Some(Color { red: 0.0, green: 1.0, blue: 1.0, alpha: 1.0 }), // Bright Cyan
         "97" | "1;37" => Some(Color { red: 1.0, green: 1.0, blue: 1.0, alpha: 1.0 }), // Bright White
+        // Background colors (40-47) and bright backgrounds (100-107)
+        "40" | "0;40" => Some(Color { red: 0.0, green: 0.0, blue: 0.0, alpha: 1.0 }),
+        "41" | "0;41" => Some(Color { red: 0.8, green: 0.0, blue: 0.0, alpha: 1.0 }),
+        "42" | "0;42" => Some(Color { red: 0.0, green: 0.8, blue: 0.0, alpha: 1.0 }),
+        "43" | "0;43" => Some(Color { red: 0.8, green: 0.8, blue: 0.0, alpha: 1.0 }),
+        "44" | "0;44" => Some(Color { red: 0.0, green: 0.0, blue: 0.8, alpha: 1.0 }),
+        "45" | "0;45" => Some(Color { red: 0.8, green: 0.0, blue: 0.8, alpha: 1.0 }),
+        "46" | "0;46" => Some(Color { red: 0.0, green: 0.8, blue: 0.8, alpha: 1.0 }),
+        "47" | "0;47" => Some(Color { red: 0.8, green: 0.8, blue: 0.8, alpha: 1.0 }),
+        "100" => Some(Color { red: 0.5, green: 0.5, blue: 0.5, alpha: 1.0 }),
+        "101" => Some(Color { red: 1.0, green: 0.0, blue: 0.0, alpha: 1.0 }),
+        "102" => Some(Color { red: 0.0, green: 1.0, blue: 0.0, alpha: 1.0 }),
+        "103" => Some(Color { red: 1.0, green: 1.0, blue: 0.0, alpha: 1.0 }),
+        "104" => Some(Color { red: 0.0, green: 0.0, blue: 1.0, alpha: 1.0 }),
+        "105" => Some(Color { red: 1.0, green: 0.0, blue: 1.0, alpha: 1.0 }),
+        "106" => Some(Color { red: 0.0, green: 1.0, blue: 1.0, alpha: 1.0 }),
+        "107" => Some(Color { red: 1.0, green: 1.0, blue: 1.0, alpha: 1.0 }),
         _ => None,
     }
 }
@@ -396,10 +418,11 @@ fn detect_term_ansicolor(text: &str) -> Vec<ColorInformation> {
 
     for (line_num, line) in text.lines().enumerate() {
         for cap in re.captures_iter(line) {
-            if let (Some(mat), Some(name_match)) = (cap.get(0), cap.get(1)) {
+            if let Some(name_match) = cap.get(1) {
                 if let Some(color) = lookup_named_color(name_match.as_str()) {
-                    let start_char = byte_to_utf16_col(line, mat.start());
-                    let end_char = byte_to_utf16_col(line, mat.end());
+                    // Highlight only the color literal, not the full function call.
+                    let start_char = byte_to_utf16_col(line, name_match.start());
+                    let end_char = byte_to_utf16_col(line, name_match.end());
 
                     colors.push(ColorInformation {
                         range: WireRange {
@@ -674,6 +697,32 @@ mod tests {
     }
 
     #[test]
+    fn test_detect_24bit_background_color_ansi() {
+        let text = r"\e[48;2;12;34;56m";
+        let colors = detect_ansi_colors(text);
+        assert_eq!(colors.len(), 1);
+        assert!((colors[0].color.red - 12.0 / 255.0).abs() < 0.01);
+        assert!((colors[0].color.green - 34.0 / 255.0).abs() < 0.01);
+        assert!((colors[0].color.blue - 56.0 / 255.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_detect_256_background_color_ansi() {
+        let text = r"\e[48;5;17m";
+        let colors = detect_ansi_colors(text);
+        assert_eq!(colors.len(), 1);
+        assert!((colors[0].color.blue - 95.0 / 255.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_detect_basic_background_color_ansi() {
+        let text = r"\e[44m";
+        let colors = detect_ansi_colors(text);
+        assert_eq!(colors.len(), 1);
+        assert!((colors[0].color.blue - 0.8).abs() < 0.01);
+    }
+
+    #[test]
     fn test_detect_term_ansicolor() {
         let text = "print color('red'), 'hello';";
         let colors = detect_term_ansicolor(text);
@@ -681,6 +730,17 @@ mod tests {
         assert!((colors[0].color.red - 1.0).abs() < 0.01);
         assert!((colors[0].color.green - 0.0).abs() < 0.01);
         assert!((colors[0].color.blue - 0.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_detect_term_ansicolor_range_targets_color_name() {
+        let text = "print color('red'), 'hello';";
+        let colors = detect_term_ansicolor(text);
+        assert_eq!(colors.len(), 1);
+
+        // "print color('" is 13 chars, then "red" (3 chars)
+        assert_eq!(colors[0].range.start.character, 13);
+        assert_eq!(colors[0].range.end.character, 16);
     }
 
     #[test]
