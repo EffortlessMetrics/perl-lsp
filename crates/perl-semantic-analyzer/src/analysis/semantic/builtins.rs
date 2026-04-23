@@ -10,10 +10,20 @@ pub struct BuiltinDoc {
     pub description: &'static str,
 }
 
+/// Normalize a built-in name for lookup.
+///
+/// Perl allows calling built-ins with a `CORE::` prefix (for example
+/// `CORE::length`). The semantic analyzer stores the function call text as-is,
+/// so normalize here to keep builtin classification and hover docs consistent.
+fn normalized_builtin_name(name: &str) -> &str {
+    name.strip_prefix("CORE::").unwrap_or(name)
+}
+
 /// Check if a function name is a Perl control-flow keyword.
 ///
 /// Returns `true` if the name is a control-flow keyword like `next`, `last`, etc.
 pub(super) fn is_control_keyword(name: &str) -> bool {
+    let name = normalized_builtin_name(name);
     matches!(name, "next" | "last" | "redo" | "goto" | "return" | "exit" | "die")
 }
 
@@ -21,6 +31,7 @@ pub(super) fn is_control_keyword(name: &str) -> bool {
 ///
 /// Returns `true` if the name matches a known Perl built-in function.
 pub(super) fn is_builtin_function(name: &str) -> bool {
+    let name = normalized_builtin_name(name);
     matches!(
         name,
         "print"
@@ -227,6 +238,7 @@ pub fn get_operator_documentation(op: &str) -> Option<BuiltinDoc> {
 /// semantic analyzer has no symbol-level hit (e.g. bare-word builtins in
 /// fallback path).
 pub fn get_builtin_documentation(name: &str) -> Option<BuiltinDoc> {
+    let name = normalized_builtin_name(name);
     match name {
         // I/O
         "print" => Some(BuiltinDoc {
@@ -1207,7 +1219,10 @@ pub fn get_pragma_documentation(name: &str) -> Option<PragmaDoc> {
 
 #[cfg(test)]
 mod tests {
-    use super::{get_builtin_documentation, get_pragma_documentation};
+    use super::{
+        get_builtin_documentation, get_pragma_documentation, is_builtin_function,
+        is_control_keyword,
+    };
 
     #[test]
     fn test_get_builtin_documentation_begin() -> Result<(), Box<dyn std::error::Error>> {
@@ -1260,6 +1275,21 @@ mod tests {
             doc.description.contains("compilation unit") || doc.description.contains("unit"),
             "UNITCHECK doc should mention compilation unit scope, got: {}",
             doc.description
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_core_prefixed_builtin_lookups() -> Result<(), Box<dyn std::error::Error>> {
+        assert!(is_builtin_function("CORE::length"), "CORE::length should be recognized");
+        assert!(is_control_keyword("CORE::die"), "CORE::die should be recognized as control");
+
+        let doc =
+            get_builtin_documentation("CORE::length").ok_or("CORE::length should have docs")?;
+        assert!(
+            doc.signature.contains("length"),
+            "CORE::length should resolve to length docs, got: {}",
+            doc.signature
         );
         Ok(())
     }

@@ -14,17 +14,12 @@ use super::{
     LspServer, adaptive_timeout, max_concurrent_threads, next_id, send_notification, send_request,
 };
 
-pub fn initialize_lsp(server: &LspServer) -> Value {
+fn initialize_lsp_with_params(server: &LspServer, params: Value) -> Value {
     let init = json!({
         "jsonrpc": "2.0",
         "id": 1,
         "method": "initialize",
-        "params": {
-            "capabilities": {},
-            "clientInfo": {"name":"perl-parser-tests","version":"0"},
-            "rootUri": null,
-            "workspaceFolders": null
-        }
+        "params": params
     });
 
     // write without reading
@@ -108,6 +103,30 @@ pub fn initialize_lsp(server: &LspServer) -> Value {
     await_index_ready(server);
 
     resp
+}
+
+pub fn initialize_lsp(server: &LspServer) -> Value {
+    initialize_lsp_with_params(
+        server,
+        json!({
+            "capabilities": {},
+            "clientInfo": {"name":"perl-parser-tests","version":"0"},
+            "rootUri": null,
+            "workspaceFolders": null
+        }),
+    )
+}
+
+pub fn initialize_lsp_with_capabilities(server: &LspServer, capabilities: Value) -> Value {
+    initialize_lsp_with_params(
+        server,
+        json!({
+            "capabilities": capabilities,
+            "clientInfo": {"name":"perl-parser-tests","version":"0"},
+            "rootUri": null,
+            "workspaceFolders": null
+        }),
+    )
 }
 
 /// Wait for the index-ready notification from the server
