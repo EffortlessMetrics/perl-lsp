@@ -264,3 +264,27 @@ fn inline_pod_in_anonymous_sub_is_surfaced() -> TestResult {
     assert!(found, "expected anonymous sub hover to carry inline POD");
     Ok(())
 }
+
+/// Windows-style CRLF line endings should not prevent inline POD detection.
+#[test]
+fn inline_pod_with_crlf_line_endings_is_surfaced() -> TestResult {
+    let code = "sub windows_doc {\r\n\
+=pod\r\n\
+CRLF inline pod docs\r\n\
+=cut\r\n\
+    return 1;\r\n\
+}\r\n";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
+
+    let symbols = analyzer.symbol_table().find_symbol("windows_doc", 0, SymbolKind::Subroutine);
+    let symbol = symbols.first().ok_or("windows_doc should be in the symbol table")?;
+    let hover = analyzer.hover_at(symbol.location).ok_or("expected hover for windows_doc")?;
+    let doc = hover.documentation.as_deref().unwrap_or("");
+    assert!(
+        doc.contains("CRLF inline pod docs"),
+        "expected inline POD docs with CRLF endings, got: {doc:?}"
+    );
+    Ok(())
+}

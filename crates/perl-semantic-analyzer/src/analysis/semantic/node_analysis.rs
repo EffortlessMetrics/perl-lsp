@@ -933,7 +933,7 @@ impl SemanticAnalyzer {
 
         // Check for POD blocks ending with =cut, anchored at end of string.
         let pod_re = POD_RE
-            .get_or_init(|| Regex::new(r"(?s)(=[a-zA-Z0-9].*?\n=cut\n?)\s*\z"))
+            .get_or_init(|| Regex::new(r"(?s)(=[a-zA-Z0-9].*?\r?\n=cut(?:\r?\n)?)\s*\z"))
             .as_ref()
             .ok()?;
         if let Some(caps) = pod_re.captures(before) {
@@ -944,7 +944,7 @@ impl SemanticAnalyzer {
 
         // Check for consecutive comment lines, anchored at end of string.
         let comment_re =
-            COMMENT_RE.get_or_init(|| Regex::new(r"(?m)(#.*\n)+[\t ]*\z")).as_ref().ok()?;
+            COMMENT_RE.get_or_init(|| Regex::new(r"(?m)(#.*\r?\n)+[\t ]*\z")).as_ref().ok()?;
         if let Some(caps) = comment_re.captures(before) {
             if let Some(comment_match) = caps.get(0) {
                 // Strip the # prefix from each comment line
@@ -1003,7 +1003,7 @@ impl SemanticAnalyzer {
         let body_src = &self.source[start..end];
 
         let pod_re = BODY_POD_RE
-            .get_or_init(|| Regex::new(r"(?ms)^\s*(=[a-zA-Z0-9].*?\n=cut)\b"))
+            .get_or_init(|| Regex::new(r"(?ms)^\s*(=[a-zA-Z0-9].*?\r?\n=cut)\b"))
             .as_ref()
             .ok()?;
         let caps = pod_re.captures(body_src)?;
