@@ -191,13 +191,10 @@ jobs:
            steps.scope.outputs.crates_args == '')
         run: just test-core
 
-      - name: Fallback integration-test compile
-        if: |
-          steps.scope.outputs.scope_ok == 'false' ||
-          (steps.scope.outputs.diff_class != 'prose_only' &&
-           steps.scope.outputs.diff_class != 'ci_config' &&
-           steps.scope.outputs.crates_args == '')
-        run: cargo check --workspace --tests --locked
+      # Note: workspace-wide integration-test compilation is covered by the
+      # parallel check-all-targets job (just check-all-targets), which runs
+      # cargo check --workspace --all-targets --locked independently of pr-smoke.
+      # Adding a redundant fallback here would duplicate that work without gain.
 
   # ── Merge Gate: full validation on every PR and push to main ─────────
   merge-gate:
