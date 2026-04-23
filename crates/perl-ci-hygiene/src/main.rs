@@ -3840,11 +3840,17 @@ fn has_unlinked_todo_in_rust_line(line: &str, token_re: &Regex) -> bool {
         if is_url_like_hash_comment(line, idx) {
             continue;
         }
+        if is_likely_string_literal_comment_start(line, idx) {
+            continue;
+        }
         if has_unlinked_token(&line[idx + 2..], token_re) {
             return true;
         }
     }
     for (idx, _) in line.match_indices("/*") {
+        if is_likely_string_literal_comment_start(line, idx) {
+            continue;
+        }
         if has_unlinked_token(&line[idx + 2..], token_re) {
             return true;
         }
@@ -3876,6 +3882,13 @@ fn is_url_like_hash_comment(line: &str, slash_idx: usize) -> bool {
     }
     let before = line.as_bytes()[slash_idx - 1];
     matches!(before, b'/' | b':' | b'"')
+}
+
+fn is_likely_string_literal_comment_start(line: &str, comment_idx: usize) -> bool {
+    if comment_idx == 0 {
+        return false;
+    }
+    matches!(line.as_bytes()[comment_idx - 1], b'"' | b'\'' | b'#')
 }
 
 fn has_unlinked_token(comment: &str, token_re: &Regex) -> bool {
@@ -4136,6 +4149,19 @@ mod tests {
             &todo_re
         ));
         assert!(has_unlinked_todo_in_rust_line("/* FIXME: needs fix */", &todo_re));
+
+        Ok(())
+    }
+
+    #[test]
+    fn rust_todo_detection_ignores_raw_string_comment_markers() -> Result<()> {
+        let todo_re = Regex::new(r"TODO|FIXME")?;
+
+        assert!(!has_unlinked_todo_in_rust_line("let s = r#\"// TODO in literal\"#;", &todo_re));
+        assert!(!has_unlinked_todo_in_rust_line(
+            "let s = r#\"/* FIXME in literal */\"#;",
+            &todo_re
+        ));
 
         Ok(())
     }
