@@ -47,12 +47,16 @@ The example includes two tasks:
 ## IntelliJ Rust Plugin
 
 IntelliJ and the Rust plugin do not need a perl-lsp-specific integration point
-for this workflow. Configure an external tool or file watcher that runs one of
-the commands above.
+for this workflow, but they benefit from a concrete reusable setup.
 
-Use `just dev-watch-tests` if you want the repo defaults, or run
-`cargo nextest run --profile local-fast --workspace` when you want the smaller
-test loop.
+Use the IntelliJ example at
+[docs/examples/intellij/README.md](../examples/intellij/README.md) for:
+
+- an External Tool profile running `just dev-watch-tests` (recommended)
+- a narrower Cargo `nextest` run configuration
+
+These mirror the same repo-native loops described above while keeping setup
+steps copy-paste friendly for JetBrains IDE users.
 
 ## When To Use Each Tool
 
