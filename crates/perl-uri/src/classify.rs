@@ -42,7 +42,8 @@ pub fn uri_key(uri: &str) -> String {
 /// Check if a URI uses the `file://` scheme.
 #[must_use]
 pub fn is_file_uri(uri: &str) -> bool {
-    uri.starts_with("file://")
+    uri.get(..7)
+        .is_some_and(|prefix| prefix.eq_ignore_ascii_case("file://"))
 }
 
 /// Check if a URI uses a special scheme (not `file://`).
@@ -107,7 +108,7 @@ mod tests {
     fn detects_file_uris() {
         assert!(is_file_uri("file:///tmp/test.pl"));
         assert!(is_file_uri("file://localhost/tmp/test.pl"));
-        assert!(!is_file_uri("FILE:///tmp/test.pl"));
+        assert!(is_file_uri("FILE:///tmp/test.pl"));
         assert!(!is_file_uri("file:test.pl"));
         assert!(!is_file_uri("https://example.com"));
     }
