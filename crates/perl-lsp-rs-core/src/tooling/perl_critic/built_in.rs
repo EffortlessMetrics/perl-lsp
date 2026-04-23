@@ -1,4 +1,4 @@
-use super::{QuickFix, Severity, Violation, built_in_quick_fix, insertion_range};
+use super::{built_in_quick_fix, insertion_range, QuickFix, Severity, Violation};
 use perl_parser_core::Node;
 
 /// Built-in policy analyzer that works without external perlcritic
@@ -94,7 +94,7 @@ fn missing_use_statement_violation(
     feature: &str,
     explanation: &str,
 ) -> Vec<Violation> {
-    if content.contains(&format!("use {feature}")) {
+    if pragma_is_enabled(content, feature) {
         return Vec::new();
     }
 
@@ -106,4 +106,98 @@ fn missing_use_statement_violation(
         range: insertion_range(),
         file: String::new(),
     }]
+}
+
+fn pragma_is_enabled(content: &str, feature: &str) -> bool {
+    let mut enabled = false;
+    let mut in_pod = false;
+
+    for line in content.lines() {
+        let trimmed = line.trim_start();
+
+        if in_pod {
+            if trimmed.starts_with("=cut") {
+                in_pod = false;
+            }
+            continue;
+        }
+
+        if trimmed.starts_with("=pod")
+            || trimmed.starts_with("=head")
+            || trimmed.starts_with("=over")
+            || trimmed.starts_with("=item")
+            || trimmed.starts_with("=begin")
+            || trimmed.starts_with("=for")
+        {
+            in_pod = true;
+            continue;
+        }
+
+        if trimmed.starts_with("__DATA__") || trimmed.starts_with("__END__") {
+            break;
+        }
+
+        let code_segment = line.split('#').next().unwrap_or_default();
+        let code_segment = code_segment.trim();
+        if code_segment.is_empty() {
+            continue;
+        }
+
+        let mut parts = code_segment.split_whitespace();
+        let Some(directive) = parts.next() else { continue };
+        if directive != "use" && directive != "no" {
+            continue;
+        }
+
+        let Some(pragma_name) = parts.next() else { continue };
+        let pragma_name = pragma_name.trim_end_matches(';');
+        if pragma_name != "strict" && pragma_name != "warnings" {
+            continue;
+        }
+
+        if pragma_name != feature {
+            continue;
+        }
+
+        enabled = directive == "use";
+    }
+
+    enabled
+}
+
+#[cfg(test)]
+mod tests {
+    use super::pragma_is_enabled;
+
+    #[test]
+    fn detects_enabled_pragma() {
+        let content = "use strict;\nuse warnings;\nmy $x = 1;\n";
+        assert!(pragma_is_enabled(content, "strict"));
+        assert!(pragma_is_enabled(content, "warnings"));
+    }
+
+    #[test]
+    fn ignores_comments_and_pod_mentions() {
+        let content = r#"
+# use strict;
+=head1 NAME
+This module mentions use warnings; in docs.
+=cut
+my $x = 1;
+"#;
+        assert!(!pragma_is_enabled(content, "strict"));
+        assert!(!pragma_is_enabled(content, "warnings"));
+    }
+
+    #[test]
+    fn respects_no_directive_over_use() {
+        let content = "use strict;\nno strict;\n";
+        assert!(!pragma_is_enabled(content, "strict"));
+    }
+
+    #[test]
+    fn ignores_data_section() {
+        let content = "my $x = 1;\n__DATA__\nuse strict;\n";
+        assert!(!pragma_is_enabled(content, "strict"));
+    }
 }
