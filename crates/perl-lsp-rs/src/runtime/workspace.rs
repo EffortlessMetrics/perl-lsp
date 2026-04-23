@@ -10,7 +10,7 @@
 
 use super::*;
 #[cfg(feature = "workspace")]
-use crate::runtime::routing::{IndexAccessMode, route_index_access};
+use crate::runtime::routing::{route_index_access, IndexAccessMode};
 use crate::state::workspace_symbol_cap;
 use perl_module::path::file_path_to_module_name;
 use perl_module::rename::{apply_module_rename_edits, plan_module_rename_edits};
@@ -47,6 +47,20 @@ fn should_skip_dir(entry: &walkdir::DirEntry) -> bool {
         return false;
     }
     is_skipped_dir_name(&entry.file_name().to_string_lossy())
+}
+
+#[cfg(feature = "workspace")]
+fn is_editor_temp_uri(uri: &str) -> bool {
+    let without_fragment = uri.split('#').next().unwrap_or(uri);
+    let without_query = without_fragment.split('?').next().unwrap_or(without_fragment);
+
+    let Some(file_name) = Path::new(without_query).file_name().and_then(|name| name.to_str())
+    else {
+        return false;
+    };
+
+    // GNU nano commonly creates `filename~` backups and `.swp` lock files.
+    file_name.ends_with('~') || file_name.ends_with(".swp")
 }
 
 #[cfg(feature = "workspace")]
@@ -818,6 +832,11 @@ impl LspServer {
         for change in params.changes {
             let uri = change.uri.to_string();
             let change_type = change.typ;
+
+            if is_editor_temp_uri(&uri) {
+                tracing::debug!(uri, "Ignoring editor temporary artifact");
+                continue;
+            }
 
             tracing::debug!(uri, change_type = ?change_type, "File change detected");
 
@@ -2078,7 +2097,7 @@ pub(super) fn path_to_module_name(uri: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{LspServer, module_name_appears_in_text};
+    use super::{module_name_appears_in_text, LspServer};
     use serde_json::json;
 
     #[test]

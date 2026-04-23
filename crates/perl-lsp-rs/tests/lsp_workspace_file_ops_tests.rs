@@ -2,7 +2,7 @@
 
 use parking_lot::Mutex;
 use perl_lsp::{JsonRpcRequest, LspServer};
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 use std::io::Write;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -242,8 +242,8 @@ fn test_did_change_watched_files_deleted() -> Result<(), Box<dyn std::error::Err
 /// Uses `test_has_document` which requires the `expose_lsp_test_api` feature.
 #[cfg(feature = "expose_lsp_test_api")]
 #[test]
-fn test_did_change_watched_files_deleted_removes_from_store()
--> Result<(), Box<dyn std::error::Error>> {
+fn test_did_change_watched_files_deleted_removes_from_store(
+) -> Result<(), Box<dyn std::error::Error>> {
     let server = create_test_server();
 
     let init_params = json!({
@@ -284,13 +284,13 @@ fn test_did_change_watched_files_deleted_removes_from_store()
     Ok(())
 }
 
-/// Verify that non-Perl files (`.log`, `.tmp`) in a didChangeWatchedFiles
+/// Verify that non-Perl files and editor temp artifacts (`.log`, `.tmp`, `~`, `.swp`) in a didChangeWatchedFiles
 /// notification are handled gracefully and do not crash the server.
 ///
 /// Acceptance criterion: "Only Perl source files trigger re-indexing."
 #[test]
-fn test_did_change_watched_files_non_perl_files_handled_gracefully()
--> Result<(), Box<dyn std::error::Error>> {
+fn test_did_change_watched_files_non_perl_files_handled_gracefully(
+) -> Result<(), Box<dyn std::error::Error>> {
     let server = create_test_server();
 
     let init_params = json!({
@@ -308,6 +308,8 @@ fn test_did_change_watched_files_non_perl_files_handled_gracefully()
             {"uri": "file:///test/workspace/cache.tmp", "type": 1},
             {"uri": "file:///test/workspace/Makefile", "type": 2},
             {"uri": "file:///test/workspace/.gitignore", "type": 1},
+            {"uri": "file:///test/workspace/script.pl~", "type": 1},
+            {"uri": "file:///test/workspace/.script.pl.swp", "type": 2}
         ]
     });
     let result = make_request(&server, "workspace/didChangeWatchedFiles", Some(params));
@@ -378,8 +380,8 @@ fn test_did_change_watched_files_multiple_mixed_events() -> Result<(), Box<dyn s
 /// Requires the `expose_lsp_test_api` feature for `test_has_document`.
 #[cfg(feature = "expose_lsp_test_api")]
 #[test]
-fn test_did_change_watched_files_mixed_batch_deleted_removed()
--> Result<(), Box<dyn std::error::Error>> {
+fn test_did_change_watched_files_mixed_batch_deleted_removed(
+) -> Result<(), Box<dyn std::error::Error>> {
     let server = create_test_server();
 
     let init_params = json!({
@@ -618,8 +620,8 @@ fn test_will_rename_files_returns_module_import_edits() -> Result<(), Box<dyn st
 }
 
 #[test]
-fn test_will_rename_files_coalesces_multi_rename_edits_per_line()
--> Result<(), Box<dyn std::error::Error>> {
+fn test_will_rename_files_coalesces_multi_rename_edits_per_line(
+) -> Result<(), Box<dyn std::error::Error>> {
     let server = create_test_server();
 
     let init_params = json!({
@@ -798,8 +800,8 @@ fn test_did_delete_files_invalid_uri() -> Result<(), Box<dyn std::error::Error>>
 }
 
 #[test]
-fn test_will_delete_files_skips_warnings_for_co_deleted_dependents()
--> Result<(), Box<dyn std::error::Error>> {
+fn test_will_delete_files_skips_warnings_for_co_deleted_dependents(
+) -> Result<(), Box<dyn std::error::Error>> {
     let (server, output) = create_test_server_with_output();
 
     let init_params = json!({
@@ -851,8 +853,8 @@ fn test_will_delete_files_skips_warnings_for_co_deleted_dependents()
 }
 
 #[test]
-fn test_will_delete_files_aggregates_warning_for_multiple_unsafe_deletes()
--> Result<(), Box<dyn std::error::Error>> {
+fn test_will_delete_files_aggregates_warning_for_multiple_unsafe_deletes(
+) -> Result<(), Box<dyn std::error::Error>> {
     let (server, output) = create_test_server_with_output();
 
     let init_params = json!({
@@ -929,8 +931,8 @@ fn test_will_delete_files_aggregates_warning_for_multiple_unsafe_deletes()
 }
 
 #[test]
-fn test_will_delete_files_warns_for_cross_file_symbol_usage_without_module_import()
--> Result<(), Box<dyn std::error::Error>> {
+fn test_will_delete_files_warns_for_cross_file_symbol_usage_without_module_import(
+) -> Result<(), Box<dyn std::error::Error>> {
     let (server, output) = create_test_server_with_output();
 
     let init_params = json!({
@@ -1354,8 +1356,8 @@ fn test_will_rename_files_rewrites_moose_extends_and_with() -> Result<(), Box<dy
 /// Regression test: renaming a module whose own file is open should include
 /// package declaration edits for the renamed module file itself.
 #[test]
-fn test_will_rename_files_updates_package_declaration_in_renamed_file()
--> Result<(), Box<dyn std::error::Error>> {
+fn test_will_rename_files_updates_package_declaration_in_renamed_file(
+) -> Result<(), Box<dyn std::error::Error>> {
     let server = create_test_server();
 
     let init_params = json!({
