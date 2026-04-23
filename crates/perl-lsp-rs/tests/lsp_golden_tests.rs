@@ -8,6 +8,7 @@ use serde_json::{Value, json};
 use std::fs;
 use std::path::Path;
 use std::sync::atomic::{AtomicI32, Ordering};
+use std::time::{Duration, Instant};
 use support::test_helpers::{
     assert_completion_has_items, assert_folding_ranges_valid, assert_hover_has_text,
 };
@@ -25,6 +26,7 @@ struct TestContext {
     server: std::process::Child,
     reader: std::io::BufReader<std::process::ChildStdout>,
     writer: std::process::ChildStdin,
+    notifications: Vec<Value>,
 }
 
 /// Compile-time path to the perl-lsp binary, set by Cargo when building integration tests.
@@ -92,7 +94,7 @@ impl TestContext {
             std::io::BufReader::new(server.stdout.take().ok_or("Failed to capture server stdout")?);
         let writer = server.stdin.take().ok_or("Failed to capture server stdin")?;
 
-        let mut ctx = TestContext { server, reader, writer };
+        let mut ctx = TestContext { server, reader, writer, notifications: Vec::new() };
 
         // Initialize with minimal capabilities for faster startup
         let current_dir = std::env::current_dir()
@@ -126,7 +128,7 @@ impl TestContext {
         method: &str,
         params: Option<Value>,
     ) -> Result<Option<Value>, Box<dyn std::error::Error>> {
-        use std::io::{BufRead, Read, Write};
+        use std::io::Write;
 
         let id = REQUEST_ID.fetch_add(1, Ordering::Relaxed);
 
@@ -146,48 +148,20 @@ impl TestContext {
             .map_err(|e| format!("Failed to write request: {}", e))?;
         self.writer.flush().map_err(|e| format!("Failed to flush writer: {}", e))?;
 
-        // Read response using proper LSP framing:
-        // 1. Parse headers line-by-line until blank line
-        // 2. Extract Content-Length from headers
-        // 3. Read exactly Content-Length bytes for body
-        // 4. Do NOT call read_line after the blank line!
-        let mut content_length: Option<usize> = None;
-        let mut line = String::new();
+        let started = Instant::now();
+        let timeout = Duration::from_secs(2);
 
-        loop {
-            line.clear();
-            let bytes_read = self
-                .reader
-                .read_line(&mut line)
-                .map_err(|e| format!("Failed to read response header: {}", e))?;
-            if bytes_read == 0 {
-                return Ok(None); // EOF
+        while started.elapsed() < timeout {
+            let envelope = self.read_message()?;
+            if envelope.get("id").is_some_and(|response_id| response_id == &json!(id)) {
+                return Ok(envelope.get("result").cloned());
             }
-
-            let trimmed = line.trim();
-            if trimmed.is_empty() {
-                // Blank line = end of headers
-                break;
-            }
-
-            // Parse Content-Length header (case-insensitive)
-            let lower = trimmed.to_ascii_lowercase();
-            if let Some(rest) = lower.strip_prefix("content-length") {
-                let value_part = rest.trim_start_matches(':').trim();
-                content_length = value_part.parse().ok();
+            if envelope.get("method").is_some() {
+                self.notifications.push(envelope);
             }
         }
 
-        // Now read exactly Content-Length bytes
-        let len = content_length.ok_or("Missing Content-Length header")?;
-        let mut buffer = vec![0u8; len];
-        self.reader
-            .read_exact(&mut buffer)
-            .map_err(|e| format!("Failed to read response body: {}", e))?;
-
-        let response: Value = serde_json::from_slice(&buffer)
-            .map_err(|e| format!("Failed to parse response JSON: {}", e))?;
-        Ok(response.get("result").cloned())
+        Err(format!("Timed out waiting for response id={id}").into())
     }
 
     fn send_notification(
@@ -233,6 +207,65 @@ impl TestContext {
             })),
         )?;
         Ok(())
+    }
+
+    fn read_message(&mut self) -> Result<Value, Box<dyn std::error::Error>> {
+        use std::io::{BufRead, Read};
+
+        let mut content_length: Option<usize> = None;
+        let mut line = String::new();
+
+        loop {
+            line.clear();
+            let bytes_read = self
+                .reader
+                .read_line(&mut line)
+                .map_err(|e| format!("Failed to read response header: {}", e))?;
+            if bytes_read == 0 {
+                return Err("Unexpected EOF while reading LSP headers".into());
+            }
+
+            let trimmed = line.trim();
+            if trimmed.is_empty() {
+                break;
+            }
+
+            let lower = trimmed.to_ascii_lowercase();
+            if let Some(rest) = lower.strip_prefix("content-length") {
+                let value_part = rest.trim_start_matches(':').trim();
+                content_length = value_part.parse().ok();
+            }
+        }
+
+        let len = content_length.ok_or("Missing Content-Length header")?;
+        let mut buffer = vec![0u8; len];
+        self.reader
+            .read_exact(&mut buffer)
+            .map_err(|e| format!("Failed to read response body: {}", e))?;
+
+        let response: Value = serde_json::from_slice(&buffer)
+            .map_err(|e| format!("Failed to parse response JSON: {}", e))?;
+        Ok(response)
+    }
+
+    fn collect_notifications(
+        &mut self,
+        method: &str,
+        wait: Duration,
+    ) -> Result<Vec<Value>, Box<dyn std::error::Error>> {
+        std::thread::sleep(wait);
+        let mut matching = Vec::new();
+        let mut remaining = Vec::new();
+
+        for notification in self.notifications.drain(..) {
+            if notification.get("method").and_then(|m| m.as_str()) == Some(method) {
+                matching.push(notification);
+            } else {
+                remaining.push(notification);
+            }
+        }
+        self.notifications = remaining;
+        Ok(matching)
     }
 }
 
@@ -301,17 +334,53 @@ fn test_diagnostics_golden() -> Result<(), Box<dyn std::error::Error>> {
     let fixture = "tests/fixtures/diagnostics_test.pl";
     ctx.open_file(fixture)?;
 
-    // Minimal wait for diagnostics
-    std::thread::sleep(std::time::Duration::from_millis(20));
-
-    // In a real implementation, we'd capture diagnostics via the publishDiagnostics notification
-    // For now, we'll test that the file opens without crashing
-
-    // Test that we can still get hover despite errors
+    // Pump the message loop with a request so any queued notifications
+    // (including publishDiagnostics) are read and buffered.
     let canonical_fixture = std::fs::canonicalize(fixture)
         .map_err(|e| format!("Failed to canonicalize fixture path: {}", e))?;
     let uri = path_to_uri(&canonical_fixture)?;
+    let _ = ctx.send_request(
+        "textDocument/hover",
+        Some(json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": 7, "character": 10 }  // On undefined_var
+        })),
+    )?;
 
+    let diagnostics =
+        ctx.collect_notifications("textDocument/publishDiagnostics", Duration::from_millis(120))?;
+    assert!(!diagnostics.is_empty(), "Opening a broken Perl document should publish diagnostics");
+
+    let mut diagnostic_messages = Vec::new();
+    for notification in diagnostics {
+        if let Some(params) = notification.get("params")
+            && let Some(diags) = params.get("diagnostics").and_then(|d| d.as_array())
+        {
+            diagnostic_messages.extend(
+                diags
+                    .iter()
+                    .filter_map(|diag| diag.get("message").and_then(|m| m.as_str()))
+                    .map(ToOwned::to_owned),
+            );
+        }
+    }
+
+    assert!(
+        diagnostic_messages.iter().any(|message| {
+            message.contains("undefined_var")
+                || message.to_ascii_lowercase().contains("undeclared")
+                || message.to_ascii_lowercase().contains("global symbol")
+        }),
+        "Diagnostics should include undefined variable feedback: {diagnostic_messages:?}"
+    );
+    assert!(
+        diagnostic_messages
+            .iter()
+            .any(|message| message.to_ascii_lowercase().contains("expected expression")),
+        "Diagnostics should include parser feedback for malformed syntax: {diagnostic_messages:?}"
+    );
+
+    // Test that we can still get hover despite errors
     let hover = ctx.send_request(
         "textDocument/hover",
         Some(json!({
@@ -320,8 +389,14 @@ fn test_diagnostics_golden() -> Result<(), Box<dyn std::error::Error>> {
         })),
     )?;
 
-    // Should handle gracefully even with syntax errors
-    assert!(hover.is_none(), "Should handle invalid code gracefully");
+    // Should handle gracefully even with syntax errors; either `null`
+    // or a best-effort hover response is acceptable.
+    if let Some(hover_value) = &hover {
+        assert!(
+            hover_value.is_null() || hover_value.get("contents").is_some(),
+            "Hover response for invalid code should be null or contain contents"
+        );
+    }
     Ok(())
 }
 
