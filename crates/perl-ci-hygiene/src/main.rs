@@ -3864,6 +3864,9 @@ fn has_unlinked_todo_in_rust_line(line: &str, token_re: &Regex) -> bool {
 
 fn has_unlinked_todo_in_hash_line(line: &str, token_re: &Regex) -> bool {
     if let Some(idx) = line.find('#') {
+        if is_inside_single_or_double_quotes(line, idx) {
+            return false;
+        }
         if idx > 0 && line.as_bytes()[idx - 1] == b'!' {
             return false;
         }
@@ -3874,6 +3877,35 @@ fn has_unlinked_todo_in_hash_line(line: &str, token_re: &Regex) -> bool {
     } else {
         false
     }
+}
+
+fn is_inside_single_or_double_quotes(line: &str, idx: usize) -> bool {
+    let mut in_single = false;
+    let mut in_double = false;
+    let mut escaped = false;
+
+    for (byte_idx, ch) in line.char_indices() {
+        if byte_idx >= idx {
+            break;
+        }
+        if escaped {
+            escaped = false;
+            continue;
+        }
+        if ch == '\\' {
+            escaped = true;
+            continue;
+        }
+        if ch == '\'' && !in_double {
+            in_single = !in_single;
+            continue;
+        }
+        if ch == '"' && !in_single {
+            in_double = !in_double;
+        }
+    }
+
+    in_single || in_double
 }
 
 fn is_url_like_hash_comment(line: &str, slash_idx: usize) -> bool {
@@ -4172,6 +4204,14 @@ mod tests {
 
         assert!(!has_unlinked_todo_in_hash_line("#!/usr/bin/env bash", &todo_re));
         assert!(!has_unlinked_todo_in_hash_line("echo# TODO not a comment", &todo_re));
+        assert!(!has_unlinked_todo_in_hash_line(
+            "echo \"embedded # TODO marker in string\"",
+            &todo_re
+        ));
+        assert!(!has_unlinked_todo_in_hash_line(
+            "print 'embedded # FIXME marker in string';",
+            &todo_re
+        ));
         assert!(has_unlinked_todo_in_hash_line("echo hi # TODO: follow up", &todo_re));
         assert!(!has_unlinked_todo_in_hash_line("echo hi # TODO(#77): tracked", &todo_re));
 
