@@ -196,6 +196,11 @@ path = "tests/dap_e2e_workflow_tests.rs"
 # AC:3486 End-to-end workflow: launch -> breakpoint -> inspect -> step -> continue -> exit
 
 [[test]]
+name = "dap_reference_client_conformance_tests"
+path = "tests/dap_reference_client_conformance_tests.rs"
+# AC:5052, AC:5067, AC:5068 reference-client style conformance across launch workflow surface
+
+[[test]]
 name = "dap_scorecard_harness"
 path = "tests/dap_scorecard_harness.rs"
 # AC:4069 DAP launch-success scorecard: 5 fixtures, ≥80% pass rate, p50/p95 latency
