@@ -8,21 +8,32 @@
 
 Plans: **Claude 20× Max** + **Codex Pro**. 5h sessions reset; weekly budget is the rollup. These are the numbers for the current 5h session window only — prior iterations (2026-04-22) covered in `docs/forensics/2026-04-22-continuous-codex-review-session.md`.
 
-Each row is a **separate 5h session window** (sessions reset; weekly accumulates). Delta between windows = weekly-usage change during that window.
+Each window is a **separate 5h session** (sessions reset; weekly accumulates). Within each window, checkpoints show the delta in session % and what that delta bought.
 
-### Window 1 (earlier today — pre-compaction tail + pre-Haiku-batch triage)
+### Window 1 — earlier today
 
-| Measure | That window's session usage | Weekly @ end of window |
-|---|---|---|
-| Claude Code (20× Max) | **33%** of its 5h window | **79%** |
-| Codex Pro | **41%** of its 5h window | ~18% used |
+**Claude 0 → 33% session / Codex 0 → 41% session / Weekly Claude 76% → 79%, Codex ~15% → ~18%**
 
-### Window 2 (current — after Haiku+reviewer-deep parallel dispatch, queue drain)
+Checkpoints during Window 1:
 
-| Measure | This window's session usage | Weekly @ end of window |
-|---|---|---|
-| Claude Code (20× Max) | **18%** of this 5h window | **82%** (+3% during this window) |
-| Codex Pro | **11%** of this 5h window | ~21% (+3% during this window) |
+| At Claude % | Work produced in the interval |
+|---|---|
+| 0 → 10% | Recovered context post-compaction, triaged fresh Codex wave (#4997-#5015), closed 3 hallucinated docs PRs (#5002-5004), #5018 bit-rot fix filed + opened |
+| 10 → 20% | #5018 merged, cascade-updated 19 PRs, filed 3 CI-improvement issues (#5019, #5020, #5021), sent #5022 + #5024 + #5027 + #5029 + #5030 to reviewer-deep |
+| 20 → 33% | Collected reviewer-deep batches, fix-forward on #4979/#5022/#5024/#4999/#5029, merged #4998/#5000/#5001/#5005/#5008/#5010/#5012/#5015/#5031, wrote session forensic |
+
+### Window 2 — current
+
+**Claude 0 → 18% session / Codex 0 → 11% session / Weekly Claude 79% → 82%, Codex ~18% → ~21%**
+
+Checkpoints during Window 2:
+
+| At Claude % | Work produced in the interval |
+|---|---|
+| 0 → 5% | Dispatched 6 reviewer-deep agents across 18 PRs (position/line-index, pragma, refactor, tree-sitter, lexer/parser, corpus/URI), filed #5096 UX flakiness, dispatched #5097 timeout fix + #5017 anon-sub builder |
+| 5 → 10% | Collected first reviewer-deep returns (DAP, Moose, regex clusters), merged cascade of ready PRs (#4998, #5015, #5031 trailing from Window 1), spawned more parallel review |
+| 10 → 14% | 12 more PRs reviewed (small-fixes agent with fix-forward on `must()` #[must_use] generic bug across 373 call sites), merged #5091-5094/5101/5102/5107/5110-5114/5116-5121/5126/5130-5135, filed #5152 clippy-single-match + sandbox-ignore fix |
+| 14 → 18% | Filed #5313 capability snapshot regen (bit-rot #4), #5314 docs + reviewer-deep skill-chain fix (4 articles: TWO_MODE_DEV_LOOP, TRIAGE_AS_LEARNING, HAIKU_FOR_MECHANICAL, TWO_PHASE_MERGE_GATE), #5315 validate-title clarification. Dispatched 7 Haiku standards reviewers covering all 103 non-deep-reviewed PRs → closed ~20 dupes at fractional Haiku cost. Dispatched 8 reviewer-deep agents on substantive cohorts (Perl-matrix winner #5247 + 3 closed, metrics cohort of 8, fuzz/workspace/Windows cluster, batch-01 approved, docs-only batch, workspace-config #5207-5209 as complementary not dup, parser-recovery #5011+#5009 as complementary) |
 
 **Key economic observation:** Codex Pro is ~4× more budget-efficient than Claude 20× Max this week by weekly consumption. Codex did the heavy generation (200+ PRs produced); Claude did high-leverage routing and review. The spray-and-filter pattern ALIGNS with this cost asymmetry — the cheap model sprays, the expensive model filters.
 
