@@ -8,6 +8,7 @@
     "receipt_kind",
     "scorecard",
     "harness",
+    "signal_tracking",
     "top_line_metrics",
     "integration_points"
   ],
@@ -41,6 +42,53 @@
           "items": {
             "type": "string"
           }
+        }
+      },
+      "additionalProperties": false
+    },
+    "signal_tracking": {
+      "type": "object",
+      "required": [
+        "workflow_total",
+        "pr_tier_workflows",
+        "nightly_tier_workflows",
+        "top_line_metric_workflow_counts"
+      ],
+      "properties": {
+        "workflow_total": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "pr_tier_workflows": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "nightly_tier_workflows": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "top_line_metric_workflow_counts": {
+          "type": "object",
+          "required": [
+            "workflow_pass_rate",
+            "workflow_stability_rate",
+            "p95_time_to_first_useful_result_ms"
+          ],
+          "properties": {
+            "workflow_pass_rate": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "workflow_stability_rate": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "p95_time_to_first_useful_result_ms": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false
         }
       },
       "additionalProperties": false

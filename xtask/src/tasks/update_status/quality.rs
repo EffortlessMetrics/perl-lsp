@@ -122,6 +122,75 @@ pub(super) fn count_ux_scenarios(root: &Path) -> usize {
     collect_ux_scenario_files(root).len()
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct UxSignalSummary {
+    workflow_total: usize,
+    pr_tier_workflows: usize,
+    nightly_tier_workflows: usize,
+    top_line_metric_workflow_counts: BTreeMap<String, usize>,
+}
+
+pub(super) fn collect_ux_signal_summary(root: &Path) -> UxSignalSummary {
+    let path = root.join("crates/perl-lsp-ux-tests/fixtures/editor_ux_fixture_matrix.json");
+    let Ok(raw) = fs::read_to_string(path) else {
+        return UxSignalSummary {
+            workflow_total: 0,
+            pr_tier_workflows: 0,
+            nightly_tier_workflows: 0,
+            top_line_metric_workflow_counts: BTreeMap::new(),
+        };
+    };
+    let Ok(doc) = serde_json::from_str::<serde_json::Value>(&raw) else {
+        return UxSignalSummary {
+            workflow_total: 0,
+            pr_tier_workflows: 0,
+            nightly_tier_workflows: 0,
+            top_line_metric_workflow_counts: BTreeMap::new(),
+        };
+    };
+    let workflows = doc
+        .get("workflows")
+        .and_then(serde_json::Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+
+    let mut top_line_metric_workflow_counts: BTreeMap<String, usize> = BTreeMap::new();
+    let mut pr_tier_workflows = 0usize;
+    let mut nightly_tier_workflows = 0usize;
+    for workflow in &workflows {
+        if workflow.get("ci_tier").and_then(serde_json::Value::as_str) == Some("pr") {
+            pr_tier_workflows += 1;
+        }
+        if workflow.get("ci_tier").and_then(serde_json::Value::as_str) == Some("nightly") {
+            nightly_tier_workflows += 1;
+        }
+
+        if let Some(measures) = workflow.get("measures").and_then(serde_json::Value::as_array) {
+            for metric in measures {
+                if let Some(metric_name) = metric.as_str()
+                    && matches!(
+                        metric_name,
+                        "workflow_pass_rate"
+                            | "workflow_stability_rate"
+                            | "p95_time_to_first_useful_result_ms"
+                    )
+                {
+                    *top_line_metric_workflow_counts
+                        .entry(metric_name.to_string())
+                        .or_default() += 1;
+                }
+            }
+        }
+    }
+
+    UxSignalSummary {
+        workflow_total: workflows.len(),
+        pr_tier_workflows,
+        nightly_tier_workflows,
+        top_line_metric_workflow_counts,
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Generators
 // ---------------------------------------------------------------------------
@@ -130,6 +199,7 @@ pub(super) fn generate_quality_status(root: &Path, original: &str) -> Result<Str
     let mutation_by_crate = collect_per_crate_mutation(root);
     let tests_by_crate = collect_per_crate_test_counts(root);
     let ux_scenarios = count_ux_scenarios(root);
+    let ux_signals = collect_ux_signal_summary(root);
 
     let has_mutation_data = !mutation_by_crate.is_empty();
     let mutation_note = if has_mutation_data {
@@ -144,8 +214,31 @@ pub(super) fn generate_quality_status(root: &Path, original: &str) -> Result<Str
            `just ux-tests` runs the default release-confidence lane and `just ux-tests-full` adds \
            the integration-only 10k-line large-file case; planning scaffold at \
            `docs/project/status/editor_ux.json`\n\
+         - **UX signal tracking**: fixture matrix tracks {workflow_total} workflows \
+           ({pr_tier_workflows} PR-tier, {nightly_tier_workflows} nightly-tier); top-line metric coverage = \
+           workflow_pass_rate ({workflow_pass_rate_workflows}), workflow_stability_rate ({workflow_stability_rate_workflows}), \
+           p95_time_to_first_useful_result_ms ({p95_latency_workflows})\n\
          - **Mutation testing**: {mutation_note}\n\
          - **Production Status**: LSP server public alpha (`just ci-gate` passing)"
+        ,
+        workflow_total = ux_signals.workflow_total,
+        pr_tier_workflows = ux_signals.pr_tier_workflows,
+        nightly_tier_workflows = ux_signals.nightly_tier_workflows,
+        workflow_pass_rate_workflows = ux_signals
+            .top_line_metric_workflow_counts
+            .get("workflow_pass_rate")
+            .copied()
+            .unwrap_or(0),
+        workflow_stability_rate_workflows = ux_signals
+            .top_line_metric_workflow_counts
+            .get("workflow_stability_rate")
+            .copied()
+            .unwrap_or(0),
+        p95_latency_workflows = ux_signals
+            .top_line_metric_workflow_counts
+            .get("p95_time_to_first_useful_result_ms")
+            .copied()
+            .unwrap_or(0),
     );
 
     let crate_table = format_crate_quality_table(&mutation_by_crate, &tests_by_crate);
@@ -169,6 +262,7 @@ pub(super) fn generate_quality_status(root: &Path, original: &str) -> Result<Str
 pub(super) fn generate_editor_ux_receipt(root: &Path) -> Result<String> {
     let scenario_files = collect_ux_scenario_files(root);
     let scenario_count = scenario_files.len();
+    let signal_summary = collect_ux_signal_summary(root);
 
     let receipt = serde_json::json!({
         "schema_version": 1,
@@ -178,6 +272,12 @@ pub(super) fn generate_editor_ux_receipt(root: &Path) -> Result<String> {
             "crate": "crates/perl-lsp-ux-tests",
             "scenario_count": scenario_count,
             "scenario_files": scenario_files,
+        },
+        "signal_tracking": {
+            "workflow_total": signal_summary.workflow_total,
+            "pr_tier_workflows": signal_summary.pr_tier_workflows,
+            "nightly_tier_workflows": signal_summary.nightly_tier_workflows,
+            "top_line_metric_workflow_counts": signal_summary.top_line_metric_workflow_counts,
         },
         "top_line_metrics": [
             {
@@ -265,6 +365,30 @@ mod tests {
             receipt["harness"]["scenario_count"].as_u64(),
             Some(count_ux_scenarios(&root) as u64)
         );
+        let signal_summary = collect_ux_signal_summary(&root);
+        assert_eq!(
+            receipt["signal_tracking"]["workflow_total"].as_u64(),
+            Some(signal_summary.workflow_total as u64)
+        );
+        assert_eq!(
+            receipt["signal_tracking"]["pr_tier_workflows"].as_u64(),
+            Some(signal_summary.pr_tier_workflows as u64)
+        );
+        assert_eq!(
+            receipt["signal_tracking"]["nightly_tier_workflows"].as_u64(),
+            Some(signal_summary.nightly_tier_workflows as u64)
+        );
+        assert_eq!(
+            receipt["signal_tracking"]["top_line_metric_workflow_counts"]["workflow_pass_rate"]
+                .as_u64(),
+            Some(
+                signal_summary
+                    .top_line_metric_workflow_counts
+                    .get("workflow_pass_rate")
+                    .copied()
+                    .unwrap_or(0) as u64
+            )
+        );
         let top_line_names = receipt["top_line_metrics"]
             .as_array()
             .ok_or_else(|| eyre!("top_line_metrics must be an array"))?
@@ -280,6 +404,44 @@ mod tests {
             ])
         );
         assert_eq!(receipt["integration_points"]["ci_lane"], "just ux-tests");
+        Ok(())
+    }
+
+    #[test]
+    fn test_collect_ux_signal_summary_counts_top_line_metrics() -> Result<()> {
+        let dir = tempfile::tempdir()?;
+        let fixture_dir = dir.path().join("crates/perl-lsp-ux-tests/fixtures");
+        fs::create_dir_all(&fixture_dir)?;
+        fs::write(
+            fixture_dir.join("editor_ux_fixture_matrix.json"),
+            r#"{
+              "workflows": [
+                {"ci_tier":"pr","measures":["workflow_pass_rate","workflow_stability_rate"]},
+                {"ci_tier":"nightly","measures":["workflow_pass_rate","p95_time_to_first_useful_result_ms"]}
+              ]
+            }"#,
+        )?;
+
+        let summary = collect_ux_signal_summary(dir.path());
+        assert_eq!(summary.workflow_total, 2);
+        assert_eq!(summary.pr_tier_workflows, 1);
+        assert_eq!(summary.nightly_tier_workflows, 1);
+        assert_eq!(
+            summary.top_line_metric_workflow_counts.get("workflow_pass_rate"),
+            Some(&2)
+        );
+        assert_eq!(
+            summary
+                .top_line_metric_workflow_counts
+                .get("workflow_stability_rate"),
+            Some(&1)
+        );
+        assert_eq!(
+            summary
+                .top_line_metric_workflow_counts
+                .get("p95_time_to_first_useful_result_ms"),
+            Some(&1)
+        );
         Ok(())
     }
 }

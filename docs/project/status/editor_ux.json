@@ -31,6 +31,16 @@
   "receipt_kind": "planning_scaffold",
   "schema_version": 1,
   "scorecard": "editor_ux",
+  "signal_tracking": {
+    "nightly_tier_workflows": 1,
+    "pr_tier_workflows": 16,
+    "top_line_metric_workflow_counts": {
+      "p95_time_to_first_useful_result_ms": 1,
+      "workflow_pass_rate": 17,
+      "workflow_stability_rate": 17
+    },
+    "workflow_total": 17
+  },
   "top_line_metrics": [
     {
       "name": "workflow_pass_rate",

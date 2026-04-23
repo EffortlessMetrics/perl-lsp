@@ -9,6 +9,7 @@
 <!-- BEGIN: QUALITY_METRICS_BULLETS -->
 - **Quality Metrics**: <50ms LSP response times, 931ns incremental parsing
 - **UX workflow harness**: 17 scenario files in `perl-lsp-ux-tests`; `just ux-tests` runs the default release-confidence lane and `just ux-tests-full` adds the integration-only 10k-line large-file case; planning scaffold at `docs/project/status/editor_ux.json`
+- **UX signal tracking**: fixture matrix tracks 17 workflows (16 PR-tier, 1 nightly-tier); top-line metric coverage = workflow_pass_rate (17), workflow_stability_rate (17), p95_time_to_first_useful_result_ms (1)
 - **Mutation testing**: mutation data pending first nightly CI run — run `just mutation-subset` locally to populate
 - **Production Status**: LSP server public alpha (`just ci-gate` passing)
 <!-- END: QUALITY_METRICS_BULLETS -->
