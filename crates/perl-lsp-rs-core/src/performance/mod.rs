@@ -197,13 +197,21 @@ pub mod parallel {
         T: Send + 'static,
         F: Fn(String) -> T + Send + Sync + 'static,
     {
+        if files.is_empty() {
+            return Vec::new();
+        }
+
+        // Ensure callers cannot accidentally request zero workers and drop all work.
+        // This preserves the API contract that every input file is processed once.
+        let effective_workers = num_workers.max(1).min(files.len());
+
         let (tx, rx) = mpsc::channel();
         let work_queue = Arc::new(Mutex::new(files));
         let processor = Arc::new(processor);
 
         let mut handles = vec![];
 
-        for _ in 0..num_workers {
+        for _ in 0..effective_workers {
             let tx = tx.clone();
             let work_queue = Arc::clone(&work_queue);
             let processor = Arc::clone(&processor);
