@@ -45,6 +45,29 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
+use std::sync::LazyLock;
+
+static STRING_LITERAL_PATTERN: LazyLock<Regex> =
+    LazyLock::new(|| match Regex::new("'[^']*'|\"[^\"]*\"") {
+        Ok(regex) => regex,
+        Err(_) => unreachable!("string literal regex must compile"),
+    });
+static REGEX_LITERAL_PATTERN: LazyLock<Regex> = LazyLock::new(|| match Regex::new(r"qr/[^/]*/") {
+    Ok(regex) => regex,
+    Err(_) => unreachable!("regex literal pattern must compile"),
+});
+static COMMENT_PATTERN: LazyLock<Regex> = LazyLock::new(|| match Regex::new(r"(?m)#.*$") {
+    Ok(regex) => regex,
+    Err(_) => unreachable!("comment pattern must compile"),
+});
+static MODULE_USAGE_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
+    match Regex::new(
+        r"\b([A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*)::([A-Za-z_][A-Za-z0-9_]*)",
+    ) {
+        Ok(regex) => regex,
+        Err(_) => unreachable!("module usage pattern must compile"),
+    }
+});
 
 /// TextEdit for import optimization (local type for byte-offset ranges)
 ///
@@ -419,19 +442,12 @@ impl ImportOptimizer {
             imports.iter().map(|imp| imp.module.clone()).collect();
 
         // Strip strings and comments before scanning for Module::symbol patterns
-        let string_re = Regex::new("'[^']*'|\"[^\"]*\"").map_err(|e| e.to_string())?;
-        let stripped = string_re.replace_all(content, " ").to_string();
-        let regex_literal_re = Regex::new(r"qr/[^/]*/").map_err(|e| e.to_string())?;
-        let stripped = regex_literal_re.replace_all(&stripped, " ").to_string();
-        let comment_re = Regex::new(r"(?m)#.*$").map_err(|e| e.to_string())?;
-        let stripped = comment_re.replace_all(&stripped, " ").to_string();
+        let stripped = STRING_LITERAL_PATTERN.replace_all(content, " ").to_string();
+        let stripped = REGEX_LITERAL_PATTERN.replace_all(&stripped, " ").to_string();
+        let stripped = COMMENT_PATTERN.replace_all(&stripped, " ").to_string();
 
-        let usage_re = Regex::new(
-            r"\b([A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*)::([A-Za-z_][A-Za-z0-9_]*)",
-        )
-        .map_err(|e| e.to_string())?;
         let mut usage_map: BTreeMap<String, Vec<String>> = BTreeMap::new();
-        for caps in usage_re.captures_iter(&stripped) {
+        for caps in MODULE_USAGE_PATTERN.captures_iter(&stripped) {
             // Only process if both capture groups matched
             if let (Some(module_match), Some(symbol_match)) = (caps.get(1), caps.get(2)) {
                 let module = module_match.as_str().to_string();
