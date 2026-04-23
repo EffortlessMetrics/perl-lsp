@@ -127,6 +127,7 @@ fn parse_git_ls_files_output(root: &Path, stdout: &[u8]) -> (Vec<PathBuf>, usize
         }
     }
 
+    sort_paths_lexically(&mut files);
     (files, excluded_count)
 }
 
@@ -169,6 +170,7 @@ fn walk_discovery(root: &Path, start: Instant) -> DiscoveryResult {
         }
     }
     excluded_count += skipped_dir_count;
+    sort_paths_lexically(&mut files);
 
     let result = DiscoveryResult {
         files,
@@ -187,6 +189,10 @@ fn should_skip_dir(entry: &DirEntry) -> bool {
     }
 
     is_skipped_dir_name(&entry.file_name().to_string_lossy())
+}
+
+fn sort_paths_lexically(paths: &mut [PathBuf]) {
+    paths.sort_unstable_by(|left, right| left.as_os_str().cmp(right.as_os_str()));
 }
 
 fn log_discovery(result: &DiscoveryResult) {
@@ -718,5 +724,37 @@ mod tests {
         assert_eq!(files.len(), 4);
         // README.md + Makefile (non-perl) + node_modules/e.pm (skipped dir)
         assert_eq!(excluded_count, 3);
+    }
+
+    #[test]
+    fn parse_git_output_sorts_paths_lexically_for_determinism() {
+        let root = Path::new("/tmp/workspace");
+        let payload = b"zeta/Z.pm\0alpha/A.pm\0mid/M.pm\0";
+
+        let (files, excluded_count) = parse_git_ls_files_output(root, payload);
+
+        assert_eq!(excluded_count, 0);
+        assert_eq!(
+            files,
+            vec![root.join("alpha/A.pm"), root.join("mid/M.pm"), root.join("zeta/Z.pm"),]
+        );
+    }
+
+    #[test]
+    fn walk_discovery_sorts_paths_lexically_for_determinism() -> TestResult {
+        let tmp = tempfile::tempdir()?;
+        let root = tmp.path();
+
+        create_file(root, "zeta/Z.pm")?;
+        create_file(root, "alpha/A.pm")?;
+        create_file(root, "mid/M.pm")?;
+
+        let result = walk_discovery(root, Instant::now());
+        assert_eq!(
+            result.files,
+            vec![root.join("alpha/A.pm"), root.join("mid/M.pm"), root.join("zeta/Z.pm"),]
+        );
+
+        Ok(())
     }
 }
