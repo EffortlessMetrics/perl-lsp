@@ -274,6 +274,19 @@ fn format_range_end_line_out_of_bounds() {
 }
 
 #[test]
+fn format_range_rejects_start_after_end() {
+    let runtime = Arc::new(MockSubprocessRuntime::new());
+    let mut formatter = PerlTidyFormatter::new(PerlTidyConfig::default(), runtime);
+
+    let code = "one\ntwo\nthree";
+    let result = formatter.format_range(code, 2, 1);
+
+    assert!(result.is_err());
+    let err = perl_tdd_support::must_err(result);
+    assert!(err.contains("Invalid line range"));
+}
+
+#[test]
 fn format_range_first_line_only() {
     let runtime = Arc::new(MockSubprocessRuntime::new());
     runtime.add_response(MockResponse::success(b"formatted_first".to_vec()));

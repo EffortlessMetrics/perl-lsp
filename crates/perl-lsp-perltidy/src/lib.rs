@@ -255,6 +255,11 @@ impl PerlTidyFormatter {
         start_line: u32,
         end_line: u32,
     ) -> Result<String, String> {
+        if start_line > end_line {
+            return Err("Invalid line range: start line must be less than or equal to end line"
+                .to_string());
+        }
+
         let lines: Vec<&str> = code.lines().collect();
 
         if start_line as usize >= lines.len() || end_line as usize >= lines.len() {
