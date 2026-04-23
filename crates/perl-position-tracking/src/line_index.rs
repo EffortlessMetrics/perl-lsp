@@ -126,6 +126,7 @@ impl LineIndex {
 
     /// Convert byte offset to position (0-based line and UTF-16 column)
     pub fn offset_to_position(&self, offset: usize) -> (u32, u32) {
+        let offset = self.normalize_offset(offset);
         let line = self.line_starts.binary_search(&offset).unwrap_or_else(|i| i.saturating_sub(1));
 
         let line_start = self.line_starts[line];
@@ -191,6 +192,15 @@ impl LineIndex {
 
         // Check if we're at the end of the line
         if current_utf16 == utf16_offset { Some(line_text.len()) } else { None }
+    }
+
+    /// Normalize a byte offset so it is inside the text and on a UTF-8 codepoint boundary.
+    fn normalize_offset(&self, offset: usize) -> usize {
+        let mut normalized = offset.min(self.text.len());
+        while normalized > 0 && !self.text.is_char_boundary(normalized) {
+            normalized -= 1;
+        }
+        normalized
     }
 
     /// Create a range from byte offsets
