@@ -37,8 +37,8 @@ pub enum UseLibAction {
 pub fn extract_use_lib_paths(source: &str) -> Vec<UseLibPath> {
     let mut paths = Vec::new();
 
-    for line in source.lines() {
-        let trimmed = line.trim();
+    for statement in iter_perl_statements(source) {
+        let trimmed = statement.trim();
         if let Some(rest) = strip_use_lib_prefix(trimmed) {
             extract_paths_from_args(rest, &mut paths);
         }
@@ -52,8 +52,8 @@ pub fn extract_use_lib_paths(source: &str) -> Vec<UseLibPath> {
 pub fn extract_use_lib_operations(source: &str) -> Vec<UseLibAction> {
     let mut ops = Vec::new();
 
-    for line in source.lines() {
-        let trimmed = line.trim();
+    for statement in iter_perl_statements(source) {
+        let trimmed = statement.trim();
         if let Some(rest) = strip_use_lib_prefix(trimmed) {
             let mut paths = Vec::new();
             extract_paths_from_args(rest, &mut paths);
@@ -186,6 +186,40 @@ fn strip_no_lib_prefix(trimmed: &str) -> Option<&str> {
         return None;
     }
     Some(rest.trim_start())
+}
+
+fn iter_perl_statements(source: &str) -> Vec<&str> {
+    let mut statements = Vec::new();
+    let mut start = 0usize;
+    let mut in_single = false;
+    let mut in_double = false;
+    let mut escaped = false;
+
+    for (idx, ch) in source.char_indices() {
+        if escaped {
+            escaped = false;
+            continue;
+        }
+
+        match ch {
+            '\\' if in_single || in_double => escaped = true,
+            '\'' if !in_double => in_single = !in_single,
+            '"' if !in_single => in_double = !in_double,
+            ';' if !in_single && !in_double => {
+                if start <= idx {
+                    statements.push(&source[start..idx]);
+                }
+                start = idx + ch.len_utf8();
+            }
+            _ => {}
+        }
+    }
+
+    if start < source.len() {
+        statements.push(&source[start..]);
+    }
+
+    statements
 }
 
 fn extract_paths_from_args(args: &str, out: &mut Vec<UseLibPath>) {

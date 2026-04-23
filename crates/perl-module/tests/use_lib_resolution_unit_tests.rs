@@ -83,3 +83,31 @@ use Lib::Thing;\n\
 
     assert_eq!(include_paths, vec!["second".to_string()]);
 }
+
+#[test]
+fn use_lib_operations_support_multiline_and_same_line_statements() {
+    let source = "\
+use lib qw(\n\
+  first\n\
+  second\n\
+);\n\
+no lib 'first'; use lib 'third';\n\
+";
+
+    let ops = extract_use_lib_operations(source);
+
+    assert_eq!(
+        ops,
+        vec![
+            UseLibAction::Add(vec![
+                UseLibPath { path: "first".to_string(), from_findbin: false },
+                UseLibPath { path: "second".to_string(), from_findbin: false },
+            ]),
+            UseLibAction::Remove(vec![UseLibPath {
+                path: "first".to_string(),
+                from_findbin: false,
+            }]),
+            UseLibAction::Add(vec![UseLibPath { path: "third".to_string(), from_findbin: false }]),
+        ]
+    );
+}
