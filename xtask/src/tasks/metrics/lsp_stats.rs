@@ -93,6 +93,19 @@ pub struct LastRunMetrics {
     pub completion_total: usize,
 }
 
+#[derive(Debug, Deserialize)]
+struct StoredMetrics {
+    metrics: StoredMetricValues,
+}
+
+#[derive(Debug, Deserialize)]
+struct StoredMetricValues {
+    workflow_pass_rate: Option<f64>,
+    hover_correctness_rate: Option<f64>,
+    completion_top5_usefulness: Option<f64>,
+    goto_definition_exact_hit_rate: Option<f64>,
+}
+
 impl LastRunMetrics {
     fn hover_rate(&self) -> Option<f64> {
         if self.hover_total == 0 {
@@ -215,7 +228,38 @@ fn load_last_run(path: &Path) -> Option<LastRunMetrics> {
     if let Some(last) = doc.get("last_run") {
         return serde_json::from_value(last.clone()).ok();
     }
-    None
+    let stored: StoredMetrics = serde_json::from_value(doc).ok()?;
+    rates_to_last_run(&stored.metrics)
+}
+
+fn rates_to_last_run(metrics: &StoredMetricValues) -> Option<LastRunMetrics> {
+    fn as_counts(rate: Option<f64>) -> Option<(usize, usize)> {
+        let value = rate?;
+        if !(0.0..=1.0).contains(&value) {
+            return None;
+        }
+        // Preserve one decimal place when we print percentages in the table.
+        let passed = (value * 1000.0).round() as usize;
+        Some((passed, 1000))
+    }
+
+    let (hover_passed, hover_total) = as_counts(metrics.hover_correctness_rate)?;
+    let (goto_passed, goto_total) = as_counts(metrics.goto_definition_exact_hit_rate)?;
+    let (completion_passed, completion_total) = as_counts(metrics.completion_top5_usefulness)?;
+    let (workflow_passed, workflow_total) = as_counts(metrics.workflow_pass_rate)?;
+
+    if workflow_total == 0 || workflow_passed > workflow_total {
+        return None;
+    }
+
+    Some(LastRunMetrics {
+        hover_passed,
+        hover_total,
+        goto_passed,
+        goto_total,
+        completion_passed,
+        completion_total,
+    })
 }
 
 fn write_json_receipt(path: &Path, output: &EditorUxMetrics) -> Result<()> {
@@ -280,6 +324,7 @@ fn print_table(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use color_eyre::eyre::{Result, eyre};
 
     #[test]
     fn test_last_run_metrics_zero_total_returns_none() {
@@ -344,5 +389,42 @@ mod tests {
         assert_eq!(parsed["subsystem"], "editor_ux");
         assert!((parsed["metrics"]["workflow_pass_rate"].as_f64().unwrap() - 0.91).abs() < 0.001);
         assert!(parsed["metrics"]["rename_success_rate"].is_null());
+    }
+
+    #[test]
+    fn test_load_last_run_reads_current_schema_rates() -> Result<()> {
+        let dir = tempfile::tempdir()?;
+        let path = dir.path().join("editor_ux.json");
+        let json = serde_json::json!({
+            "schema_version": 1,
+            "measured_at": "2026-04-23T00:00:00Z",
+            "subsystem": "editor_ux",
+            "metrics": {
+                "workflow_pass_rate": 0.93,
+                "workflow_stability_rate": null,
+                "p95_time_to_first_useful_result_ms": null,
+                "hover_correctness_rate": 0.95,
+                "completion_top5_usefulness": 0.91,
+                "completion_empty_when_should_not_be_empty_rate": null,
+                "goto_definition_exact_hit_rate": 0.9,
+                "rename_success_rate": null,
+                "settled_diagnostics_correctness_after_edit": null,
+                "module_resolution_workflow_success": null,
+                "multi_root_workspace_navigation_success": null,
+                "dap_happy_path_success_rate": null
+            }
+        });
+        fs::write(&path, serde_json::to_string_pretty(&json)?)?;
+
+        let loaded =
+            load_last_run(&path).ok_or_else(|| eyre!("expected metrics from current schema"))?;
+        let hover = loaded.hover_rate().ok_or_else(|| eyre!("missing hover rate"))?;
+        let goto = loaded.goto_rate().ok_or_else(|| eyre!("missing goto rate"))?;
+        let completion =
+            loaded.completion_rate().ok_or_else(|| eyre!("missing completion rate"))?;
+        assert!((hover - 0.95).abs() < 0.001);
+        assert!((goto - 0.9).abs() < 0.001);
+        assert!((completion - 0.91).abs() < 0.001);
+        Ok(())
     }
 }
