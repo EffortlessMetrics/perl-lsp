@@ -90,7 +90,14 @@
           ".i"
         ],
         "firstLine": "^#!.*\\bperl\\b",
-        "configuration": "./language-configuration.json"
+        "configuration": "./language-configuration.json",
+        "filenames": [
+          "Makefile.PL",
+          "Build.PL",
+          "cpanfile",
+          "cpanfile.snapshot",
+          "dist.ini"
+        ]
       },
       {
         "id": "gherkin",
