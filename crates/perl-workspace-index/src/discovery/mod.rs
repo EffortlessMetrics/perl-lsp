@@ -132,12 +132,15 @@ fn parse_git_ls_files_output(root: &Path, stdout: &[u8]) -> (Vec<PathBuf>, usize
 fn walk_discovery(root: &Path, start: Instant) -> DiscoveryResult {
     let mut files = Vec::new();
     let mut excluded_count: usize = 0;
+    let mut skipped_dir_count: usize = 0;
 
-    for entry in WalkDir::new(root)
-        .follow_links(false)
-        .into_iter()
-        .filter_entry(|entry| !should_skip_dir(entry))
-    {
+    for entry in WalkDir::new(root).follow_links(false).into_iter().filter_entry(|entry| {
+        if should_skip_dir(entry) {
+            skipped_dir_count += 1;
+            return false;
+        }
+        true
+    }) {
         let entry = match entry {
             Ok(entry) => entry,
             Err(_) => continue,
@@ -153,6 +156,7 @@ fn walk_discovery(root: &Path, start: Instant) -> DiscoveryResult {
             excluded_count += 1;
         }
     }
+    excluded_count += skipped_dir_count;
 
     let result = DiscoveryResult {
         files,
@@ -250,6 +254,25 @@ mod tests {
         assert_eq!(result.method, DiscoveryMethod::Walk);
         assert_eq!(result.files.len(), 1);
         assert!(result.files[0].ends_with("lib/Foo.pm"));
+
+        Ok(())
+    }
+
+    #[test]
+    fn walk_discovery_counts_skipped_directories_as_excluded() -> TestResult {
+        let tmp = tempfile::tempdir()?;
+        let root = tmp.path();
+
+        create_file(root, "lib/Foo.pm")?;
+        create_file(root, "node_modules/pkg.pm")?;
+        create_file(root, "target/build/generated.pm")?;
+        create_file(root, ".cache/precompiled.pm")?;
+
+        let result = walk_discovery(root, Instant::now());
+        assert_eq!(result.method, DiscoveryMethod::Walk);
+        assert_eq!(result.files.len(), 1);
+        assert!(result.files[0].ends_with("lib/Foo.pm"));
+        assert_eq!(result.excluded_count, 3);
 
         Ok(())
     }
