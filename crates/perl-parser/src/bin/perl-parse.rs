@@ -300,16 +300,81 @@ fn read_input(input: &Input) -> io::Result<String> {
 }
 
 fn read_source_bytes(bytes: Vec<u8>) -> io::Result<String> {
+    if let Some(decoded) = decode_utf16_with_bom(&bytes) {
+        return Ok(decoded);
+    }
+
     match String::from_utf8(bytes) {
         Ok(source) => Ok(source),
         Err(err) => {
             let raw = err.into_bytes();
             let mut decoded = String::with_capacity(raw.len());
             for byte in raw {
-                decoded.push(char::from(byte));
+                decoded.push(decode_byte_as_windows_1252(byte));
             }
             Ok(decoded)
         }
+    }
+}
+
+fn decode_utf16_with_bom(bytes: &[u8]) -> Option<String> {
+    if bytes.len() < 2 {
+        return None;
+    }
+
+    let little_endian = if bytes.starts_with(&[0xFF, 0xFE]) {
+        true
+    } else if bytes.starts_with(&[0xFE, 0xFF]) {
+        false
+    } else {
+        return None;
+    };
+
+    let mut words = Vec::with_capacity((bytes.len().saturating_sub(2)) / 2);
+    let mut index = 2usize;
+    while index + 1 < bytes.len() {
+        let word = if little_endian {
+            u16::from_le_bytes([bytes[index], bytes[index + 1]])
+        } else {
+            u16::from_be_bytes([bytes[index], bytes[index + 1]])
+        };
+        words.push(word);
+        index += 2;
+    }
+
+    Some(String::from_utf16_lossy(&words))
+}
+
+fn decode_byte_as_windows_1252(byte: u8) -> char {
+    match byte {
+        0x80 => '\u{20AC}', // €
+        0x82 => '\u{201A}', // ‚
+        0x83 => '\u{0192}', // ƒ
+        0x84 => '\u{201E}', // „
+        0x85 => '\u{2026}', // …
+        0x86 => '\u{2020}', // †
+        0x87 => '\u{2021}', // ‡
+        0x88 => '\u{02C6}', // ˆ
+        0x89 => '\u{2030}', // ‰
+        0x8A => '\u{0160}', // Š
+        0x8B => '\u{2039}', // ‹
+        0x8C => '\u{0152}', // Œ
+        0x8E => '\u{017D}', // Ž
+        0x91 => '\u{2018}', // ‘
+        0x92 => '\u{2019}', // ’
+        0x93 => '\u{201C}', // “
+        0x94 => '\u{201D}', // ”
+        0x95 => '\u{2022}', // •
+        0x96 => '\u{2013}', // –
+        0x97 => '\u{2014}', // —
+        0x98 => '\u{02DC}', // ˜
+        0x99 => '\u{2122}', // ™
+        0x9A => '\u{0161}', // š
+        0x9B => '\u{203A}', // ›
+        0x9C => '\u{0153}', // œ
+        0x9E => '\u{017E}', // ž
+        0x9F => '\u{0178}', // Ÿ
+        _ => char::from(byte),
     }
 }
 
@@ -446,6 +511,27 @@ mod tests {
         // "Sår" in ISO-8859-1 bytes
         let decoded = read_source_bytes(vec![0x53, 0xE5, 0x72, 0x0A])?;
         assert_eq!(decoded, "Sår\n");
+        Ok(())
+    }
+
+    #[test]
+    fn read_source_bytes_decodes_windows_1252_punctuation() -> Result<(), Box<dyn std::error::Error>>
+    {
+        // “quote” in Windows-1252 bytes
+        let decoded = read_source_bytes(vec![0x93, b'q', b'u', b'o', b't', b'e', 0x94, b'\n'])?;
+        assert_eq!(decoded, "“quote”\n");
+        Ok(())
+    }
+
+    #[test]
+    fn read_source_bytes_decodes_utf16_le_bom() -> Result<(), Box<dyn std::error::Error>> {
+        let bytes = vec![
+            0xFF, 0xFE, // UTF-16LE BOM
+            b'u', 0x00, b's', 0x00, b'e', 0x00, b' ', 0x00, b'8', 0x00, b';', 0x00, b'\n',
+            0x00,
+        ];
+        let decoded = read_source_bytes(bytes)?;
+        assert_eq!(decoded, "use 8;\n");
         Ok(())
     }
 }
