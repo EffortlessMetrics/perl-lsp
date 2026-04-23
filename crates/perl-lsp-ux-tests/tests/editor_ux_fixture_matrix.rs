@@ -55,7 +55,15 @@ fn editor_ux_fixture_matrix_covers_all_scenarios() -> Result<()> {
 
     let mut scenarios_in_matrix = BTreeSet::new();
     let mut component_metrics_exercised = BTreeSet::new();
+    let mut workflow_ids = BTreeSet::new();
     for workflow in workflows {
+        let workflow_id =
+            workflow.get("id").and_then(Value::as_str).context("workflow missing id")?;
+        assert!(
+            workflow_ids.insert(workflow_id.to_string()),
+            "workflow id `{workflow_id}` must be unique"
+        );
+
         let scenario_file = workflow
             .get("scenario_file")
             .and_then(Value::as_str)
@@ -94,6 +102,52 @@ fn editor_ux_fixture_matrix_covers_all_scenarios() -> Result<()> {
             scenario_path.display()
         );
         scenarios_in_matrix.insert(scenario_file.to_string());
+    }
+
+    let confidence_signals =
+        matrix.get("confidence_signals").context("confidence_signals missing")?;
+    let manual_smoke_workflows = collect_string_set(
+        confidence_signals
+            .get("manual_editor_smoke_workflows")
+            .context("manual_editor_smoke_workflows missing")?,
+        "manual_editor_smoke_workflows",
+    )?;
+    assert!(
+        !manual_smoke_workflows.is_empty(),
+        "manual_editor_smoke_workflows must list at least one workflow id"
+    );
+    for workflow in &manual_smoke_workflows {
+        assert!(
+            workflow_ids.contains(workflow),
+            "manual smoke workflow `{workflow}` must reference a known workflow id"
+        );
+    }
+
+    let first_five_minutes_workflows = collect_string_set(
+        confidence_signals
+            .get("first_five_minutes_harness_workflows")
+            .context("first_five_minutes_harness_workflows missing")?,
+        "first_five_minutes_harness_workflows",
+    )?;
+    assert_eq!(
+        first_five_minutes_workflows, workflow_ids,
+        "first_five_minutes_harness_workflows must cover every workflow id in the fixture matrix"
+    );
+
+    let open_issue_refs = confidence_signals
+        .get("open_issue_burndown_refs")
+        .and_then(Value::as_array)
+        .context("open_issue_burndown_refs missing")?;
+    assert!(
+        !open_issue_refs.is_empty(),
+        "open_issue_burndown_refs must contain at least one issue reference"
+    );
+    for issue_ref in open_issue_refs {
+        let issue_url = issue_ref.as_str().context("open issue refs must be strings")?;
+        assert!(
+            issue_url.starts_with("https://github.com/EffortlessMetrics/perl-lsp/issues/"),
+            "issue reference `{issue_url}` must point at a perl-lsp GitHub issue"
+        );
     }
 
     let scenarios_on_disk = fs::read_dir(workspace_root().join(UX_TESTS_DIR))

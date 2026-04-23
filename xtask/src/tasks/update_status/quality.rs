@@ -122,6 +122,17 @@ pub(super) fn count_ux_scenarios(root: &Path) -> usize {
     collect_ux_scenario_files(root).len()
 }
 
+fn load_editor_ux_confidence_signals(root: &Path) -> serde_json::Value {
+    let matrix_path = root.join("crates/perl-lsp-ux-tests/fixtures/editor_ux_fixture_matrix.json");
+    let Ok(raw) = fs::read_to_string(&matrix_path) else {
+        return serde_json::json!({});
+    };
+    let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&raw) else {
+        return serde_json::json!({});
+    };
+    parsed.get("confidence_signals").cloned().unwrap_or_else(|| serde_json::json!({}))
+}
+
 // ---------------------------------------------------------------------------
 // Generators
 // ---------------------------------------------------------------------------
@@ -169,15 +180,30 @@ pub(super) fn generate_quality_status(root: &Path, original: &str) -> Result<Str
 pub(super) fn generate_editor_ux_receipt(root: &Path) -> Result<String> {
     let scenario_files = collect_ux_scenario_files(root);
     let scenario_count = scenario_files.len();
+    let confidence_signals = load_editor_ux_confidence_signals(root);
+    let manual_smoke_count = confidence_signals
+        .get("manual_editor_smoke_workflows")
+        .and_then(serde_json::Value::as_array)
+        .map_or(0, std::vec::Vec::len);
+    let issue_burndown_count = confidence_signals
+        .get("open_issue_burndown_refs")
+        .and_then(serde_json::Value::as_array)
+        .map_or(0, std::vec::Vec::len);
 
     let receipt = serde_json::json!({
         "schema_version": 1,
-        "receipt_kind": "planning_scaffold",
+        "receipt_kind": "tracked_signals",
         "scorecard": "editor_ux",
         "harness": {
             "crate": "crates/perl-lsp-ux-tests",
             "scenario_count": scenario_count,
             "scenario_files": scenario_files,
+        },
+        "confidence_signals": {
+            "manual_editor_smoke_workflow_count": manual_smoke_count,
+            "first_five_minutes_harness_workflow_count": scenario_count,
+            "open_issue_burndown_count": issue_burndown_count,
+            "source_fixture": "crates/perl-lsp-ux-tests/fixtures/editor_ux_fixture_matrix.json",
         },
         "top_line_metrics": [
             {
@@ -258,13 +284,19 @@ mod tests {
         let receipt_raw = generate_editor_ux_receipt(&root)?;
         let receipt: serde_json::Value = serde_json::from_str(&receipt_raw)?;
         assert_eq!(receipt["schema_version"], 1);
-        assert_eq!(receipt["receipt_kind"], "planning_scaffold");
+        assert_eq!(receipt["receipt_kind"], "tracked_signals");
         assert_eq!(receipt["scorecard"], "editor_ux");
         assert_eq!(receipt["harness"]["crate"], "crates/perl-lsp-ux-tests");
         assert_eq!(
             receipt["harness"]["scenario_count"].as_u64(),
             Some(count_ux_scenarios(&root) as u64)
         );
+        assert!(receipt["confidence_signals"]["manual_editor_smoke_workflow_count"].is_u64());
+        assert_eq!(
+            receipt["confidence_signals"]["first_five_minutes_harness_workflow_count"].as_u64(),
+            Some(count_ux_scenarios(&root) as u64)
+        );
+        assert!(receipt["confidence_signals"]["open_issue_burndown_count"].is_u64());
         let top_line_names = receipt["top_line_metrics"]
             .as_array()
             .ok_or_else(|| eyre!("top_line_metrics must be an array"))?

@@ -28,7 +28,13 @@
     "release_lane": "just ux-tests-full",
     "status_update": "cargo xtask update-status --only quality"
   },
-  "receipt_kind": "planning_scaffold",
+  "confidence_signals": {
+    "first_five_minutes_harness_workflow_count": 17,
+    "manual_editor_smoke_workflow_count": 5,
+    "open_issue_burndown_count": 3,
+    "source_fixture": "crates/perl-lsp-ux-tests/fixtures/editor_ux_fixture_matrix.json"
+  },
+  "receipt_kind": "tracked_signals",
   "schema_version": 1,
   "scorecard": "editor_ux",
   "top_line_metrics": [

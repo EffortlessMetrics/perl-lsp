@@ -11,6 +11,39 @@
     "module_resolution_workflow_success_rate",
     "multi_root_workspace_navigation_success_rate"
   ],
+  "confidence_signals": {
+    "manual_editor_smoke_workflows": [
+      "simple_file_smoke",
+      "goto_definition_core",
+      "hover_core",
+      "strict_diagnostics",
+      "multi_root_workspace_symbols"
+    ],
+    "first_five_minutes_harness_workflows": [
+      "simple_file_smoke",
+      "missing_perltidy_graceful_degradation",
+      "missing_perl_graceful_degradation",
+      "missing_perlcritic_graceful_degradation",
+      "bad_config_resilience",
+      "large_file_open",
+      "multi_file_workspace_navigation",
+      "shebang_detection",
+      "encoding_and_bom_resilience",
+      "goto_definition_core",
+      "hover_core",
+      "strict_diagnostics",
+      "document_symbols_core",
+      "inc_conformance",
+      "multi_root_workspace_symbols",
+      "workspace_folder_removal_freshness",
+      "deleted_file_churn_freshness"
+    ],
+    "open_issue_burndown_refs": [
+      "https://github.com/EffortlessMetrics/perl-lsp/issues/3522",
+      "https://github.com/EffortlessMetrics/perl-lsp/issues/3476",
+      "https://github.com/EffortlessMetrics/perl-lsp/issues/3515"
+    ]
+  },
   "workflows": [
     {
       "id": "simple_file_smoke",
