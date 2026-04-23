@@ -286,15 +286,29 @@ impl PerlTidyFormatter {
         let orig_lines: Vec<&str> = code.lines().collect();
         let fmt_lines: Vec<&str> = formatted.lines().collect();
         let mut suggestions = Vec::new();
+        let max_lines = orig_lines.len().max(fmt_lines.len());
 
-        for (i, (orig, fmt)) in orig_lines.iter().zip(fmt_lines.iter()).enumerate() {
-            if orig != fmt {
-                suggestions.push(FormatSuggestion {
+        for i in 0..max_lines {
+            match (orig_lines.get(i), fmt_lines.get(i)) {
+                (Some(orig), Some(fmt)) if orig != fmt => suggestions.push(FormatSuggestion {
                     line: i as u32,
                     original: (*orig).to_string(),
                     formatted: (*fmt).to_string(),
                     description: "Line formatting change".to_string(),
-                });
+                }),
+                (Some(orig), None) => suggestions.push(FormatSuggestion {
+                    line: i as u32,
+                    original: (*orig).to_string(),
+                    formatted: String::new(),
+                    description: "Line removed by formatting".to_string(),
+                }),
+                (None, Some(fmt)) => suggestions.push(FormatSuggestion {
+                    line: i as u32,
+                    original: String::new(),
+                    formatted: (*fmt).to_string(),
+                    description: "Line added by formatting".to_string(),
+                }),
+                _ => {}
             }
         }
 

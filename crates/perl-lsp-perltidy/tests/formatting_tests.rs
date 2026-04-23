@@ -315,3 +315,39 @@ fn format_file_returns_error_on_perltidy_failure() {
     let err = perl_tdd_support::must_err(result);
     assert!(err.contains("can't open file"));
 }
+
+#[test]
+fn get_suggestions_includes_added_lines() {
+    let runtime = Arc::new(MockSubprocessRuntime::new());
+    let original = "my $x=1;\n";
+    let formatted = "my $x = 1;\nmy $y = 2;\n";
+    runtime.add_response(MockResponse::success(formatted.as_bytes().to_vec()));
+    let mut formatter = PerlTidyFormatter::new(PerlTidyConfig::default(), runtime);
+
+    let suggestions = must(formatter.get_suggestions(original));
+    assert_eq!(suggestions.len(), 2);
+    assert_eq!(suggestions[0].line, 0);
+    assert_eq!(suggestions[0].description, "Line formatting change");
+    assert_eq!(suggestions[1].line, 1);
+    assert_eq!(suggestions[1].original, "");
+    assert_eq!(suggestions[1].formatted, "my $y = 2;");
+    assert_eq!(suggestions[1].description, "Line added by formatting");
+}
+
+#[test]
+fn get_suggestions_includes_removed_lines() {
+    let runtime = Arc::new(MockSubprocessRuntime::new());
+    let original = "my $x=1;\nmy $y = 2;\n";
+    let formatted = "my $x = 1;\n";
+    runtime.add_response(MockResponse::success(formatted.as_bytes().to_vec()));
+    let mut formatter = PerlTidyFormatter::new(PerlTidyConfig::default(), runtime);
+
+    let suggestions = must(formatter.get_suggestions(original));
+    assert_eq!(suggestions.len(), 2);
+    assert_eq!(suggestions[0].line, 0);
+    assert_eq!(suggestions[0].description, "Line formatting change");
+    assert_eq!(suggestions[1].line, 1);
+    assert_eq!(suggestions[1].original, "my $y = 2;");
+    assert_eq!(suggestions[1].formatted, "");
+    assert_eq!(suggestions[1].description, "Line removed by formatting");
+}
