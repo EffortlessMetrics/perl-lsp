@@ -49,6 +49,11 @@ The parser covers Perl 5.8 through 5.40. This includes:
 - `use v5.38; class ...` object syntax (partial support)
 - Moose, Moo, and common OO frameworks (detection-level support)
 
+The runtime compatibility matrix is now explicitly exercised in nightly CI at:
+Perl **5.8.9**, **5.16.3**, **5.30.3**, and **5.40.0** (`ci-nightly.yml` job
+`perl-version-matrix`). This verifies what actually runs in CI rather than
+relying on an undocumented assumption.
+
 If you encounter a Perl construct that fails to parse, [report it](https://github.com/EffortlessMetrics/perl-lsp/issues) with a minimal example.
 
 ### Does it support Perl 5.8?

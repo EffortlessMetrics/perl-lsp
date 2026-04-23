@@ -412,6 +412,49 @@ jobs:
         run: |
           cargo clippy --workspace --locked -- -D warnings -D clippy::all -A missing_docs
 
+  perl-version-matrix:
+    name: Perl Runtime Matrix (${{ matrix.perl_version }})
+    timeout-minutes: 45
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'schedule'
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        perl_version: ['5.8.9', '5.16.3', '5.30.3', '5.40.0']
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9  # stable (master)
+        with:
+          toolchain: 1.92.0
+
+      - name: Cache cargo dependencies
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4  # v2.9.1
+        with:
+          key: ${{ runner.os }}-perl-matrix-${{ matrix.perl_version }}-${{ hashFiles('Cargo.lock') }}
+          cache-on-failure: true
+
+      - name: Install Perl ${{ matrix.perl_version }}
+        uses: shogo82148/actions-setup-perl@v1
+        with:
+          perl-version: ${{ matrix.perl_version }}
+
+      - name: Show Perl runtime
+        run: |
+          perl -V:version
+          perl -e 'print "perl-ok\n";'
+
+      - name: Build perllsp
+        run: cargo build --locked -p perllsp --bin perllsp
+
+      - name: Runtime smoke
+        run: |
+          cargo test --locked -p perl-subprocess-runtime --test extended_unit_tests
+          target/debug/perllsp --version
+
   # ============================================================================
   # Fuzz Testing (nightly only)
   # ============================================================================

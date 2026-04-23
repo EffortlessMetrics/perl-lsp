@@ -6,6 +6,7 @@
 
 <p align="center">
   <a href="https://github.com/EffortlessMetrics/perl-lsp/actions/workflows/ci.yml"><img src="https://github.com/EffortlessMetrics/perl-lsp/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
+  <a href="https://github.com/EffortlessMetrics/perl-lsp/actions/workflows/ci-nightly.yml"><img src="https://github.com/EffortlessMetrics/perl-lsp/actions/workflows/ci-nightly.yml/badge.svg" alt="Nightly CI" /></a>
   <a href="https://crates.io/crates/perl-lsp-rs"><img src="https://img.shields.io/crates/v/perl-lsp-rs.svg" alt="crates.io" /></a>
   <a href="https://crates.io/crates/perl-lsp-rs"><img src="https://img.shields.io/crates/d/perl-lsp-rs.svg" alt="Downloads" /></a>
   <a href="https://docs.rs/perl-lsp-rs"><img src="https://docs.rs/perl-lsp-rs/badge.svg" alt="docs.rs" /></a>
