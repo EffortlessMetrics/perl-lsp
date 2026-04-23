@@ -12,12 +12,13 @@ use crate::protocol::InlineValueText;
 
 /// Regex for matching Perl variables (scalars, arrays, hashes).
 /// Stored as Option to avoid panics; if compilation fails, inline values are skipped.
-static PERL_VAR_RE: Lazy<Option<Regex>> =
-    Lazy::new(|| Regex::new(r"[$@%][A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*").ok());
+static PERL_VAR_RE: Lazy<Option<Regex>> = Lazy::new(|| {
+    Regex::new(r"[$@%][A-Za-z_][A-Za-z0-9_]*(?:(?:::|')[A-Za-z_][A-Za-z0-9_]*)*").ok()
+});
 
 /// Legacy regex for scalar-only matching (used by `DapDispatcher`).
 static SCALAR_VAR_RE: Lazy<Option<Regex>> =
-    Lazy::new(|| Regex::new(r"\$[A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*").ok());
+    Lazy::new(|| Regex::new(r"\$[A-Za-z_][A-Za-z0-9_]*(?:(?:::|')[A-Za-z_][A-Za-z0-9_]*)*").ok());
 
 /// Special Perl variables that should not be shown inline.
 const SPECIAL_VARS: &[&str] = &[
@@ -315,6 +316,15 @@ mod tests {
     }
 
     #[test]
+    fn test_extract_variable_names_with_legacy_namespace_qualifiers() {
+        let source = "our $Foo'bar = 1;\nour @My'Pkg'items = (1);\nour %App'Config'opts = ();";
+        let names = extract_variable_names(source, 1, 3);
+        assert!(names.contains(&"$Foo'bar".to_string()));
+        assert!(names.contains(&"@My'Pkg'items".to_string()));
+        assert!(names.contains(&"%App'Config'opts".to_string()));
+    }
+
+    #[test]
     fn test_no_runtime_fallback() {
         let source = "my $x = 1;";
         let values = collect_inline_values_with_runtime(source, 1, 1, None);
@@ -363,5 +373,16 @@ mod tests {
         let values = collect_inline_values_with_runtime(source, 1, 1, Some(&rv));
         assert_eq!(values.len(), 1);
         assert_eq!(values[0].text, "$Foo::bar = 42");
+    }
+
+    #[test]
+    fn test_runtime_inline_value_for_legacy_namespaced_scalar() {
+        let source = "our $Foo'bar = 1;";
+        let mut rv = HashMap::new();
+        rv.insert("$Foo'bar".to_string(), "42".to_string());
+
+        let values = collect_inline_values_with_runtime(source, 1, 1, Some(&rv));
+        assert_eq!(values.len(), 1);
+        assert_eq!(values[0].text, "$Foo'bar = 42");
     }
 }
