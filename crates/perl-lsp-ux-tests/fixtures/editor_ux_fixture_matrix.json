@@ -122,7 +122,8 @@
       "measures": [
         "workflow_pass_rate",
         "workflow_stability_rate",
-        "p95_time_to_first_useful_result_ms"
+        "p95_time_to_first_useful_result_ms",
+        "multi_root_workspace_navigation_success_rate"
       ],
       "expected_outcomes": [
         "large files do not crash the server",
@@ -140,7 +141,9 @@
       "user_journey": "open multiple files in a workspace and navigate across them",
       "measures": [
         "workflow_pass_rate",
-        "workflow_stability_rate"
+        "workflow_stability_rate",
+        "cross_file_definition_success_rate",
+        "module_resolution_workflow_success_rate"
       ],
       "expected_outcomes": [
         "cross-file definition request completes without error",
@@ -196,7 +199,8 @@
       "user_journey": "run goto-definition inside a representative file",
       "measures": [
         "workflow_pass_rate",
-        "workflow_stability_rate"
+        "workflow_stability_rate",
+        "cross_file_definition_success_rate"
       ],
       "expected_outcomes": [
         "definition request returns a location or clean empty result",
@@ -276,7 +280,8 @@
       "measures": [
         "workflow_pass_rate",
         "workflow_stability_rate",
-        "module_resolution_workflow_success_rate"
+        "module_resolution_workflow_success_rate",
+        "cross_file_definition_success_rate"
       ],
       "expected_outcomes": [
         "PL701, hover, and goto-definition agree across supported modes"
@@ -296,7 +301,8 @@
       "measures": [
         "workflow_pass_rate",
         "workflow_stability_rate",
-        "multi_root_workspace_navigation_success_rate"
+        "multi_root_workspace_navigation_success_rate",
+        "p95_time_to_first_useful_result_ms"
       ],
       "expected_outcomes": [
         "workspace/symbol returns same-named symbols from multiple roots",
@@ -317,7 +323,8 @@
       "measures": [
         "workflow_pass_rate",
         "workflow_stability_rate",
-        "multi_root_workspace_navigation_success_rate"
+        "multi_root_workspace_navigation_success_rate",
+        "p95_time_to_first_useful_result_ms"
       ],
       "expected_outcomes": [
         "removed folder symbols disappear from search results"
