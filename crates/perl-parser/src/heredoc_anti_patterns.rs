@@ -55,6 +55,16 @@ trait PatternDetector: Send + Sync {
     fn diagnose(&self, pattern: &AntiPattern) -> Option<Diagnostic>;
 }
 
+fn location_from_start(code: &str, offset: usize, start: usize) -> Location {
+    let line = code[..start].lines().count();
+    let column = match code[..start].rfind('\n') {
+        Some(last_newline) => start.saturating_sub(last_newline + 1),
+        None => start,
+    };
+
+    Location { line, column, offset: offset + start }
+}
+
 // Format heredoc detector
 struct FormatHeredocDetector;
 
@@ -72,11 +82,7 @@ impl PatternDetector for FormatHeredocDetector {
         for cap in FORMAT_PATTERN.captures_iter(code) {
             if let (Some(match_pos), Some(name_match)) = (cap.get(0), cap.get(1)) {
                 let format_name = name_match.as_str().to_string();
-                let location = Location {
-                    line: code[..match_pos.start()].lines().count(),
-                    column: match_pos.start() - code[..match_pos.start()].rfind('\n').unwrap_or(0),
-                    offset: offset + match_pos.start(),
-                };
+                let location = location_from_start(code, offset, match_pos.start());
 
                 // Look for heredoc marker inside format body (simplified)
                 let body_start = match_pos.end();
@@ -196,11 +202,7 @@ impl PatternDetector for BeginTimeHeredocDetector {
                 continue;
             }
 
-            let location = Location {
-                line: code[..begin_match.start()].lines().count(),
-                column: begin_match.start() - code[..begin_match.start()].rfind('\n').unwrap_or(0),
-                offset: offset + begin_match.start(),
-            };
+            let location = location_from_start(code, offset, begin_match.start());
 
             results.push((
                 AntiPattern::BeginTimeHeredoc {
@@ -248,11 +250,7 @@ impl PatternDetector for DynamicDelimiterDetector {
         for cap in DYNAMIC_DELIMITER_PATTERN.captures_iter(code) {
             if let Some(match_pos) = cap.get(0) {
                 let expression = match_pos.as_str().to_string();
-                let location = Location {
-                    line: code[..match_pos.start()].lines().count(),
-                    column: match_pos.start() - code[..match_pos.start()].rfind('\n').unwrap_or(0),
-                    offset: offset + match_pos.start(),
-                };
+                let location = location_from_start(code, offset, match_pos.start());
 
                 results.push((
                     AntiPattern::DynamicHeredocDelimiter { location: location.clone(), expression },
@@ -298,11 +296,7 @@ impl PatternDetector for SourceFilterDetector {
         for cap in SOURCE_FILTER_PATTERN.captures_iter(code) {
             if let (Some(match_pos), Some(module_match)) = (cap.get(0), cap.get(1)) {
                 let filter_module = module_match.as_str().to_string();
-                let location = Location {
-                    line: code[..match_pos.start()].lines().count(),
-                    column: match_pos.start() - code[..match_pos.start()].rfind('\n').unwrap_or(0),
-                    offset: offset + match_pos.start(),
-                };
+                let location = location_from_start(code, offset, match_pos.start());
 
                 results.push((
                     AntiPattern::SourceFilterHeredoc {
@@ -349,11 +343,7 @@ impl PatternDetector for RegexHeredocDetector {
 
         for cap in REGEX_HEREDOC_PATTERN.captures_iter(code) {
             if let Some(match_pos) = cap.get(0) {
-                let location = Location {
-                    line: code[..match_pos.start()].lines().count(),
-                    column: match_pos.start() - code[..match_pos.start()].rfind('\n').unwrap_or(0),
-                    offset: offset + match_pos.start(),
-                };
+                let location = location_from_start(code, offset, match_pos.start());
 
                 results.push((
                     AntiPattern::RegexCodeBlockHeredoc { location: location.clone() },
@@ -397,11 +387,7 @@ impl PatternDetector for EvalHeredocDetector {
 
         for cap in EVAL_HEREDOC_PATTERN.captures_iter(code) {
             if let Some(match_pos) = cap.get(0) {
-                let location = Location {
-                    line: code[..match_pos.start()].lines().count(),
-                    column: match_pos.start() - code[..match_pos.start()].rfind('\n').unwrap_or(0),
-                    offset: offset + match_pos.start(),
-                };
+                let location = location_from_start(code, offset, match_pos.start());
 
                 results.push((
                     AntiPattern::EvalStringHeredoc { location: location.clone() },
@@ -459,12 +445,7 @@ impl PatternDetector for TiedHandleDetector {
             let usage_pattern = format!(r"print\s+{}\s+<<", regex::escape(handle_to_search));
             if let Ok(re) = Regex::new(&usage_pattern) {
                 for usage_match in re.find_iter(code) {
-                    let location = Location {
-                        line: code[..usage_match.start()].lines().count(),
-                        column: usage_match.start()
-                            - code[..usage_match.start()].rfind('\n').unwrap_or(0),
-                        offset: offset + usage_match.start(),
-                    };
+                    let location = location_from_start(code, offset, usage_match.start());
 
                     results.push((
                         AntiPattern::TiedHandleHeredoc {
@@ -764,5 +745,22 @@ SECOND
             .filter(|diag| matches!(diag.pattern, AntiPattern::TiedHandleHeredoc { .. }))
             .count();
         assert_eq!(tied_handle_count, 2);
+    }
+
+    #[test]
+    fn test_location_column_is_zero_based_for_new_line_matches() {
+        let detector = AntiPatternDetector::new();
+        let code = "my $x = 1;\nuse Filter::Simple;\n";
+
+        let diagnostics = detector.detect_all(code);
+        assert_eq!(diagnostics.len(), 1);
+
+        let AntiPattern::SourceFilterHeredoc { location, .. } = &diagnostics[0].pattern else {
+            panic!("expected SourceFilterHeredoc pattern");
+        };
+
+        assert_eq!(location.line, 1);
+        assert_eq!(location.column, 0);
+        assert_eq!(location.offset, 11);
     }
 }
