@@ -266,6 +266,14 @@ fn parse_ansi_color(code: &str) -> Option<Color> {
 
 /// Convert a 256-color palette index to an RGB Color
 fn color_from_256(n: u8) -> Color {
+    fn xterm_cube_level(index: u8) -> u8 {
+        match index {
+            0 => 0,
+            1..=5 => 55 + index * 40,
+            _ => 255,
+        }
+    }
+
     let (r, g, b) = match n {
         // Standard colors (0-7) -- same as basic ANSI 30-37
         0 => (0, 0, 0),
@@ -291,7 +299,7 @@ fn color_from_256(n: u8) -> Color {
             let ri = idx / 36;
             let gi = (idx % 36) / 6;
             let bi = idx % 6;
-            (ri * 51, gi * 51, bi * 51)
+            (xterm_cube_level(ri), xterm_cube_level(gi), xterm_cube_level(bi))
         }
         // Grayscale (232-255)
         232..=255 => {
@@ -641,6 +649,17 @@ mod tests {
         assert!((colors[0].color.red - 1.0).abs() < 0.01);
         assert!((colors[0].color.green - 0.0).abs() < 0.01);
         assert!((colors[0].color.blue - 0.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_detect_256_color_ansi_uses_xterm_cube_levels() {
+        // 17 maps to (0, 0, 95) in the xterm 256-color cube.
+        let text = r"\e[38;5;17m";
+        let colors = detect_ansi_colors(text);
+        assert_eq!(colors.len(), 1);
+        assert!((colors[0].color.red - 0.0).abs() < 0.01);
+        assert!((colors[0].color.green - 0.0).abs() < 0.01);
+        assert!((colors[0].color.blue - 95.0 / 255.0).abs() < 0.01);
     }
 
     #[test]
