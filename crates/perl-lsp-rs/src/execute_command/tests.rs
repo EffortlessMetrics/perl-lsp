@@ -306,6 +306,41 @@ fn test_go_to_implementation_skips_moosex_modules() -> Result<(), Box<dyn std::e
 }
 
 #[test]
+fn test_go_to_implementation_skips_openclaw_modules() -> Result<(), Box<dyn std::error::Error>> {
+    // OpenCLAW modules should be skipped so local modules are preferred.
+    let temp_dir = tempdir()?;
+    let lib_dir = temp_dir.path().join("lib").join("My");
+    let t_dir = temp_dir.path().join("t");
+    fs::create_dir_all(&lib_dir)?;
+    fs::create_dir_all(&t_dir)?;
+
+    let pm_file = lib_dir.join("Class.pm");
+    let t_file = t_dir.join("my-class.t");
+    fs::write(&pm_file, "package My::Class;\n1;\n")?;
+    fs::write(
+        &t_file,
+        "use strict;\nuse OpenCLAW::Types;\nuse OpenCLAW;\nuse My::Class;\ndone_testing;\n",
+    )?;
+
+    let provider =
+        ExecuteCommandProvider::with_workspace_roots(vec![temp_dir.path().to_path_buf()]);
+    let result = provider.execute_command(
+        "perl.goToImplementation",
+        vec![Value::String(t_file.to_string_lossy().to_string())],
+    );
+
+    assert!(result.is_ok(), "perl.goToImplementation should skip OpenCLAW modules");
+    let value = result?;
+    assert!(
+        value["found"].as_bool().unwrap_or(false),
+        "Should find My::Class after skipping OpenCLAW modules"
+    );
+    let impl_path = value["path"].as_str().ok_or("expected path string")?;
+    assert!(impl_path.ends_with("Class.pm"), "Should navigate to Class.pm, got: {impl_path}");
+    Ok(())
+}
+
+#[test]
 fn test_go_to_implementation_skips_version_pragma() -> Result<(), Box<dyn std::error::Error>> {
     // `use v5.20;` and `use 5.010;` must be skipped; My::Module should be found.
     let temp_dir = tempdir()?;

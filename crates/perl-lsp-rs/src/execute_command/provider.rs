@@ -589,6 +589,7 @@ impl ExecuteCommandProvider {
             "Moo",
             "Moose",
             "Mouse",
+            "OpenCLAW",
             // Test modules (exact)
             "Test::More",
             "Test::Simple",
@@ -616,6 +617,7 @@ impl ExecuteCommandProvider {
             "MouseX::",
             "Moo::Role",
             "Moose::Role",
+            "OpenCLAW::",
             "Types::",     // Types::Standard, Types::Path::Tiny, etc.
             "namespace::", // namespace::autoclean, namespace::clean
             "Sub::",       // Sub::Exporter, Sub::Quote, etc.
