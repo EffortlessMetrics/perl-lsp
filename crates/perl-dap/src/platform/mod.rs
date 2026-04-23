@@ -321,10 +321,7 @@ mod tests {
             msg.contains("perl") || msg.contains("PATH"),
             "error should mention perl/PATH: {msg}"
         );
-        assert!(
-            msg.contains("strawberryperl.com"),
-            "error should include install guidance: {msg}"
-        );
+        assert!(msg.contains("strawberryperl.com"), "error should include install guidance: {msg}");
     }
 
     #[test]
