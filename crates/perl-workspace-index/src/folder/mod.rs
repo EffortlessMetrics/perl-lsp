@@ -35,10 +35,35 @@ pub fn workspace_folder_to_path(workspace_folder: &str) -> PathBuf {
             return path;
         }
 
+        if let Some(path) = parse_file_uri_fallback(workspace_folder) {
+            return path;
+        }
+
         return PathBuf::from(&workspace_folder[7..]);
     }
 
     PathBuf::from(workspace_folder)
+}
+
+fn parse_file_uri_fallback(workspace_folder: &str) -> Option<PathBuf> {
+    let parsed = url::Url::parse(workspace_folder).ok()?;
+    if parsed.scheme() != "file" {
+        return None;
+    }
+
+    if let Ok(path) = parsed.to_file_path() {
+        return Some(path);
+    }
+
+    let path = parsed.path();
+    if path.is_empty() {
+        return None;
+    }
+
+    match parsed.host_str() {
+        None | Some("") | Some("localhost") => Some(PathBuf::from(path)),
+        Some(host) => Some(PathBuf::from(format!("//{host}{path}"))),
+    }
 }
 
 /// Extract workspace folder URIs from an LSP `workspaceFolders` array.
@@ -122,6 +147,15 @@ mod tests {
         let parsed = workspace_folder_to_path("FILE:///tmp/project");
         assert!(parsed.to_string_lossy().contains("tmp"));
         assert!(parsed.to_string_lossy().contains("project"));
+    }
+
+    #[test]
+    fn parses_localhost_file_uri_without_leaking_host_component() {
+        let parsed = workspace_folder_to_path("file://localhost/tmp/project");
+        let path = parsed.to_string_lossy();
+        assert!(path.contains("tmp"));
+        assert!(path.contains("project"));
+        assert!(!path.contains("localhost/tmp"));
     }
 
     #[test]
