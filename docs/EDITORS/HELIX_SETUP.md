@@ -104,7 +104,7 @@ indent = { tab-width = 4, unit = "    " }
 language-servers = ["perl-lsp"]
 
 [language-server.perl-lsp]
-command = "perl-lsp"
+command = "perllsp"
 args = ["--stdio"]
 ```
 
@@ -137,7 +137,7 @@ indent = { tab-width = 4, unit = "    " }
 language-servers = ["perl-lsp"]
 
 [language-server.perl-lsp]
-command = "perl-lsp"
+command = "perllsp"
 args = ["--stdio"]
 
 [language-server.perl-lsp.config.perl]
@@ -606,7 +606,7 @@ indent = { tab-width = 4, unit = "    " }
 language-servers = ["perl-lsp"]
 
 [language-server.perl-lsp]
-command = "perl-lsp"
+command = "perllsp"
 args = ["--stdio"]
 
 [language-server.perl-lsp.config.perl]
