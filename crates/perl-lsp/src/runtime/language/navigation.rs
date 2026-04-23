@@ -471,6 +471,10 @@ fn get_mojo_kv_route_regex() -> Result<&'static regex::Regex, JsonRpcError> {
         })
 }
 
+/// Strip the `::App` suffix from a Mojolicious application package name.
+///
+/// Mojolicious apps are often named `MyApp::App` where `MyApp` is the app root.
+/// This function returns `MyApp` given `MyApp::App`.
 #[cfg(feature = "workspace")]
 fn mojolicious_app_root(current_package: &str) -> Option<String> {
     let package = current_package.trim();
@@ -481,6 +485,12 @@ fn mojolicious_app_root(current_package: &str) -> Option<String> {
     Some(package.strip_suffix("::App").unwrap_or(package).to_string())
 }
 
+/// Convert a Mojolicious controller reference to a canonical Perl package name.
+///
+/// Handles:
+/// - Stripping quotes: `'ControllerName'` → `ControllerName`
+/// - CamelCase conversion: `controller_name` → `ControllerName`
+/// - Mixed separators: `my_controller/Test` → `My::Controller::Test`
 #[cfg(feature = "workspace")]
 fn normalize_mojolicious_controller_name(raw: &str) -> Option<String> {
     let normalized = raw.trim().trim_matches('\'').trim_matches('"').trim();
@@ -504,6 +514,11 @@ fn normalize_mojolicious_controller_name(raw: &str) -> Option<String> {
     if segments.is_empty() { None } else { Some(segments.join("::")) }
 }
 
+/// Resolve a Mojolicious route target (`->to(...)`) to a controller action definition.
+///
+/// Searches for both string-style (`'ControllerName#action'`) and key-value style
+/// (`controller => 'Name', action => 'actionName'`) route patterns. If found,
+/// looks up the controller action in the workspace index.
 #[cfg(feature = "workspace")]
 fn resolve_mojolicious_route_definition(
     workspace_index: &crate::workspace_index::WorkspaceIndex,
