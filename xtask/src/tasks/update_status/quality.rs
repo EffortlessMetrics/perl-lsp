@@ -8,6 +8,7 @@ use std::path::Path;
 use std::time::Duration;
 
 use color_eyre::eyre::{Context, Result};
+use serde::Deserialize;
 
 use super::{replace_block, run_cmd};
 
@@ -122,6 +123,69 @@ pub(super) fn count_ux_scenarios(root: &Path) -> usize {
     collect_ux_scenario_files(root).len()
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct EditorUxTrackedSignals {
+    pub scenario_count: usize,
+    pub workflows_total: usize,
+    pub scenario_coverage_percent: usize,
+    pub pr_tier_workflows: usize,
+    pub nightly_tier_workflows: usize,
+    pub top_line_metric_bindings_total: usize,
+}
+
+#[derive(Debug, Deserialize)]
+struct EditorUxFixtureMatrix {
+    workflows: Vec<EditorUxWorkflow>,
+}
+
+#[derive(Debug, Deserialize)]
+struct EditorUxWorkflow {
+    ci_tier: String,
+    measures: Vec<String>,
+}
+
+pub(super) fn collect_editor_ux_tracked_signals(root: &Path) -> EditorUxTrackedSignals {
+    let scenario_count = count_ux_scenarios(root);
+    let fixture_path = root.join("crates/perl-lsp-ux-tests/fixtures/editor_ux_fixture_matrix.json");
+    let matrix = fs::read_to_string(&fixture_path)
+        .ok()
+        .and_then(|raw| serde_json::from_str::<EditorUxFixtureMatrix>(&raw).ok());
+
+    let workflows_total = matrix.as_ref().map_or(0, |m| m.workflows.len());
+    let pr_tier_workflows =
+        matrix.as_ref().map_or(0, |m| m.workflows.iter().filter(|w| w.ci_tier == "pr").count());
+    let nightly_tier_workflows = matrix
+        .as_ref()
+        .map_or(0, |m| m.workflows.iter().filter(|w| w.ci_tier == "nightly").count());
+    let top_line_metric_bindings_total = matrix.as_ref().map_or(0, |m| {
+        m.workflows
+            .iter()
+            .map(|w| {
+                w.measures
+                    .iter()
+                    .filter(|name| {
+                        *name == "workflow_pass_rate"
+                            || *name == "workflow_stability_rate"
+                            || *name == "p95_time_to_first_useful_result_ms"
+                    })
+                    .count()
+            })
+            .sum()
+    });
+
+    let scenario_coverage_percent =
+        if scenario_count == 0 { 0 } else { (workflows_total * 100) / scenario_count };
+
+    EditorUxTrackedSignals {
+        scenario_count,
+        workflows_total,
+        scenario_coverage_percent,
+        pr_tier_workflows,
+        nightly_tier_workflows,
+        top_line_metric_bindings_total,
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Generators
 // ---------------------------------------------------------------------------
@@ -142,7 +206,7 @@ pub(super) fn generate_quality_status(root: &Path, original: &str) -> Result<Str
         "- **Quality Metrics**: <50ms LSP response times, 931ns incremental parsing\n\
          - **UX workflow harness**: {ux_scenarios} scenario files in `perl-lsp-ux-tests`; \
            `just ux-tests` runs the default release-confidence lane and `just ux-tests-full` adds \
-           the integration-only 10k-line large-file case; planning scaffold at \
+           the integration-only 10k-line large-file case; tracked signal counts are published in \
            `docs/project/status/editor_ux.json`\n\
          - **Mutation testing**: {mutation_note}\n\
          - **Production Status**: LSP server public alpha (`just ci-gate` passing)"
@@ -168,6 +232,7 @@ pub(super) fn generate_quality_status(root: &Path, original: &str) -> Result<Str
 
 pub(super) fn generate_editor_ux_receipt(root: &Path) -> Result<String> {
     let scenario_files = collect_ux_scenario_files(root);
+    let tracked_signals = collect_editor_ux_tracked_signals(root);
     let scenario_count = scenario_files.len();
 
     let receipt = serde_json::json!({
@@ -178,6 +243,13 @@ pub(super) fn generate_editor_ux_receipt(root: &Path) -> Result<String> {
             "crate": "crates/perl-lsp-ux-tests",
             "scenario_count": scenario_count,
             "scenario_files": scenario_files,
+        },
+        "tracked_signals": {
+            "workflow_count": tracked_signals.workflows_total,
+            "scenario_coverage_percent": tracked_signals.scenario_coverage_percent,
+            "pr_tier_workflow_count": tracked_signals.pr_tier_workflows,
+            "nightly_tier_workflow_count": tracked_signals.nightly_tier_workflows,
+            "top_line_metric_bindings_total": tracked_signals.top_line_metric_bindings_total,
         },
         "top_line_metrics": [
             {
@@ -257,6 +329,7 @@ mod tests {
         let root = crate::utils::project_root()?;
         let receipt_raw = generate_editor_ux_receipt(&root)?;
         let receipt: serde_json::Value = serde_json::from_str(&receipt_raw)?;
+        let tracked_signals = collect_editor_ux_tracked_signals(&root);
         assert_eq!(receipt["schema_version"], 1);
         assert_eq!(receipt["receipt_kind"], "planning_scaffold");
         assert_eq!(receipt["scorecard"], "editor_ux");
@@ -264,6 +337,14 @@ mod tests {
         assert_eq!(
             receipt["harness"]["scenario_count"].as_u64(),
             Some(count_ux_scenarios(&root) as u64)
+        );
+        assert_eq!(
+            receipt["tracked_signals"]["workflow_count"].as_u64(),
+            Some(tracked_signals.workflows_total as u64)
+        );
+        assert_eq!(
+            receipt["tracked_signals"]["scenario_coverage_percent"].as_u64(),
+            Some(tracked_signals.scenario_coverage_percent as u64)
         );
         let top_line_names = receipt["top_line_metrics"]
             .as_array()
@@ -280,6 +361,43 @@ mod tests {
             ])
         );
         assert_eq!(receipt["integration_points"]["ci_lane"], "just ux-tests");
+        Ok(())
+    }
+
+    #[test]
+    fn test_collect_editor_ux_tracked_signals_from_fixture_matrix() -> Result<()> {
+        let dir = tempfile::tempdir()?;
+        let tests_dir = dir.path().join("crates/perl-lsp-ux-tests/tests");
+        fs::create_dir_all(&tests_dir)?;
+        fs::write(tests_dir.join("ux_scenario_01_simple_file.rs"), "// scenario 1")?;
+        fs::write(tests_dir.join("ux_scenario_02_missing_perltidy.rs"), "// scenario 2")?;
+
+        let fixtures_dir = dir.path().join("crates/perl-lsp-ux-tests/fixtures");
+        fs::create_dir_all(&fixtures_dir)?;
+        let matrix = serde_json::json!({
+            "workflows": [
+                {
+                    "ci_tier": "pr",
+                    "measures": ["workflow_pass_rate", "workflow_stability_rate"]
+                },
+                {
+                    "ci_tier": "nightly",
+                    "measures": ["workflow_stability_rate", "p95_time_to_first_useful_result_ms"]
+                }
+            ]
+        });
+        fs::write(
+            fixtures_dir.join("editor_ux_fixture_matrix.json"),
+            serde_json::to_string_pretty(&matrix)?,
+        )?;
+
+        let tracked = collect_editor_ux_tracked_signals(dir.path());
+        assert_eq!(tracked.scenario_count, 2);
+        assert_eq!(tracked.workflows_total, 2);
+        assert_eq!(tracked.scenario_coverage_percent, 100);
+        assert_eq!(tracked.pr_tier_workflows, 1);
+        assert_eq!(tracked.nightly_tier_workflows, 1);
+        assert_eq!(tracked.top_line_metric_bindings_total, 4);
         Ok(())
     }
 }

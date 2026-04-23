@@ -22,6 +22,13 @@
       "crates/perl-lsp-ux-tests/tests/ux_scenario_17_deleted_file_churn.rs"
     ]
   },
+  "tracked_signals": {
+    "workflow_count": 17,
+    "scenario_coverage_percent": 100,
+    "pr_tier_workflow_count": 16,
+    "nightly_tier_workflow_count": 1,
+    "top_line_metric_bindings_total": 35
+  },
   "integration_points": {
     "ci_lane": "just ux-tests",
     "quality_surface": "docs/project/status/quality.md",
