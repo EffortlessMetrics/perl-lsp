@@ -46,7 +46,8 @@ pub fn to_json_for_profile(profile: FeatureProfile) -> String {
 /// The top-level advertised feature list and compliance math are scoped to the
 /// union of the provided profiles.
 pub fn to_json_for_profiles(profiles: &[FeatureProfile]) -> String {
-    feature_grid_payload(profiles, None).to_string()
+    let canonical_profiles = canonicalize_profiles(profiles);
+    feature_grid_payload(&canonical_profiles, None).to_string()
 }
 
 /// BDD-compatible feature catalog JSON with all canonical profiles.
@@ -94,6 +95,16 @@ fn advertised_for_profiles(profiles: &[FeatureProfile]) -> Vec<&'static str> {
             profile_sets.iter().any(|ids| ids.contains(&feature.id)).then_some(feature.id)
         })
         .collect()
+}
+
+fn canonicalize_profiles(profiles: &[FeatureProfile]) -> Vec<FeatureProfile> {
+    let mut canonical = Vec::new();
+    for profile in profiles.iter().copied() {
+        if !canonical.contains(&profile) {
+            canonical.push(profile);
+        }
+    }
+    canonical
 }
 
 fn feature_grid_payload(
@@ -320,6 +331,32 @@ mod tests {
         let profiles = must_some(value.get("profiles").and_then(|v| v.as_array()));
         assert_eq!(profiles.len(), 1);
         assert_eq!(profiles[0]["profile"].as_str(), Some("ga-lock"));
+    }
+
+    #[test]
+    fn to_json_for_profiles_deduplicates_profile_summaries() {
+        let payload =
+            super::to_json_for_profiles(&[FeatureProfile::GaLock, FeatureProfile::GaLock]);
+        let value: serde_json::Value = must(serde_json::from_str(&payload));
+        let profiles = must_some(value.get("profiles").and_then(|v| v.as_array()));
+        assert_eq!(profiles.len(), 1);
+        assert_eq!(profiles[0]["profile"].as_str(), Some("ga-lock"));
+    }
+
+    #[test]
+    fn to_json_for_profiles_duplicate_input_matches_unique_input() {
+        let unique_payload = super::to_json_for_profiles(&[FeatureProfile::GaLock]);
+        let duplicate_payload =
+            super::to_json_for_profiles(&[FeatureProfile::GaLock, FeatureProfile::GaLock]);
+
+        let unique_value: serde_json::Value = must(serde_json::from_str(&unique_payload));
+        let duplicate_value: serde_json::Value = must(serde_json::from_str(&duplicate_payload));
+
+        assert_eq!(
+            unique_value["advertised_trackable_feature_count"],
+            duplicate_value["advertised_trackable_feature_count"]
+        );
+        assert_eq!(unique_value["compliance_percent"], duplicate_value["compliance_percent"]);
     }
 
     // ── Profile summary fields ──────────────────────────────────────
