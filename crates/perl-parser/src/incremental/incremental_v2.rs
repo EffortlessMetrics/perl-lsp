@@ -327,7 +327,7 @@ impl IncrementalParserV2 {
         }
 
         // Check for other incremental opportunities
-        if self.is_whitespace_or_comment_edit(last_tree) {
+        if self.is_whitespace_or_comment_edit(last_tree, source) {
             return self.incremental_parse_whitespace(source, last_tree);
         }
 
@@ -444,18 +444,35 @@ impl IncrementalParserV2 {
     }
 
     /// Check if all edits only affect whitespace or comments
-    fn is_whitespace_or_comment_edit(&self, tree: &IncrementalTree) -> bool {
+    fn is_whitespace_or_comment_edit(&self, tree: &IncrementalTree, source: &str) -> bool {
         for edit in self.pending_edits.edits() {
-            // For whitespace/comment edits, we need to check if the edit
-            // only affects areas that don't change the AST structure
-            let start = edit.start_byte;
-            let end = edit.old_end_byte;
-
-            // Check if the edit is in a comment or whitespace region
-            if !self.is_in_non_structural_content(tree, start, end) {
+            // Validate both sides of the edit:
+            // - old source text being replaced
+            // - new source text inserted by the edit
+            // If either side introduces structural tokens, fall back.
+            if !self.is_edit_non_structural(tree, source, edit.start_byte, edit.old_end_byte, edit.new_end_byte) {
                 return false;
             }
         }
+        true
+    }
+
+    fn is_edit_non_structural(
+        &self,
+        tree: &IncrementalTree,
+        source: &str,
+        start: usize,
+        old_end: usize,
+        new_end: usize,
+    ) -> bool {
+        if old_end > start && !self.is_in_non_structural_content(&tree.source, start, old_end) {
+            return false;
+        }
+
+        if new_end > start && !self.is_in_non_structural_content(source, start, new_end) {
+            return false;
+        }
+
         true
     }
 
@@ -463,21 +480,14 @@ impl IncrementalParserV2 {
     ///
     /// Uses lexical analysis to determine if the edited range contains only
     /// non-structural content (whitespace, comments) that doesn't affect AST structure.
-    fn is_in_non_structural_content(
-        &self,
-        tree: &IncrementalTree,
-        start: usize,
-        end: usize,
-    ) -> bool {
+    fn is_in_non_structural_content(&self, text: &str, start: usize, end: usize) -> bool {
         use perl_lexer::{PerlLexer, TokenType};
 
-        // Safety check for range bounds
-        if start >= end || end > tree.source.len() {
+        if start >= end || end > text.len() {
             return false;
         }
 
-        // Extract the affected text range
-        let affected_text = &tree.source[start..end];
+        let affected_text = &text[start..end];
 
         // Create a lexer to analyze the tokens in this range
         let mut lexer = PerlLexer::new(affected_text);
@@ -518,6 +528,8 @@ impl IncrementalParserV2 {
         // For whitespace-only changes, we can often reuse the entire tree
         // with just position adjustments
         let shift = self.calculate_total_shift();
+        self.reused_nodes = self.count_nodes(&last_tree.root);
+        self.reparsed_nodes = 0;
         Some(self.clone_with_shifted_positions(&last_tree.root, shift))
     }
 
@@ -1863,6 +1875,32 @@ if ($condition) {
         );
         assert!(parser.reparsed_nodes >= 1, "Should reparse at least the modified node");
 
+        Ok(())
+    }
+
+    #[test]
+    fn test_whitespace_insertion_reuses_tree() -> ParseResult<()> {
+        let mut parser = IncrementalParserV2::new();
+        let source1 = "my $x = 42;";
+        parser.parse(source1)?;
+
+        parser.edit(Edit::new(
+            5,
+            5,
+            7,
+            Position::new(5, 1, 6),
+            Position::new(5, 1, 6),
+            Position::new(7, 1, 8),
+        ));
+
+        let source2 = "my $x  = 42;";
+        parser.parse(source2)?;
+
+        assert!(parser.reused_nodes > 0, "Whitespace insertion should reuse prior tree");
+        assert!(
+            parser.reparsed_nodes <= 1,
+            "Whitespace insertion should avoid broad reparsing"
+        );
         Ok(())
     }
 
