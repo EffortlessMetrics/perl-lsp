@@ -47,5 +47,32 @@
       "owner": "perl-lsp-ux-tests",
       "state": "planned"
     }
-  ]
+  ],
+  "tracking_signals": {
+    "ci_tier_distribution": {
+      "nightly_workflows": 1,
+      "pr_workflow_share": 0.9411764705882353,
+      "pr_workflows": 16
+    },
+    "fixture_matrix_loaded": true,
+    "metric_coverage_counts": {
+      "cross_file_definition_success_rate": 1,
+      "module_resolution_workflow_success_rate": 1,
+      "multi_root_workspace_navigation_success_rate": 2,
+      "p95_time_to_first_useful_result_ms": 1,
+      "workflow_pass_rate": 17,
+      "workflow_stability_rate": 17
+    },
+    "subsystem_owner_workflow_counts": {
+      "diagnostics": 1,
+      "editor_intelligence": 4,
+      "engineering_health": 6,
+      "module_resolution": 1,
+      "workspace_indexing": 5
+    },
+    "workflow_inventory": {
+      "expected_outcome_assertions": 32,
+      "total_workflows": 17
+    }
+  }
 }

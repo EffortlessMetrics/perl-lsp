@@ -9,7 +9,8 @@
     "scorecard",
     "harness",
     "top_line_metrics",
-    "integration_points"
+    "integration_points",
+    "tracking_signals"
   ],
   "properties": {
     "schema_version": {
@@ -122,6 +123,71 @@
         },
         "quality_surface": {
           "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "tracking_signals": {
+      "type": "object",
+      "required": [
+        "fixture_matrix_loaded",
+        "workflow_inventory",
+        "ci_tier_distribution",
+        "metric_coverage_counts",
+        "subsystem_owner_workflow_counts"
+      ],
+      "properties": {
+        "fixture_matrix_loaded": {
+          "type": "boolean"
+        },
+        "workflow_inventory": {
+          "type": "object",
+          "required": ["total_workflows", "expected_outcome_assertions"],
+          "properties": {
+            "total_workflows": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "expected_outcome_assertions": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false
+        },
+        "ci_tier_distribution": {
+          "type": "object",
+          "required": ["pr_workflows", "nightly_workflows", "pr_workflow_share"],
+          "properties": {
+            "pr_workflows": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "nightly_workflows": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "pr_workflow_share": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            }
+          },
+          "additionalProperties": false
+        },
+        "metric_coverage_counts": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "subsystem_owner_workflow_counts": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 0
+          }
         }
       },
       "additionalProperties": false

@@ -122,6 +122,74 @@ pub(super) fn count_ux_scenarios(root: &Path) -> usize {
     collect_ux_scenario_files(root).len()
 }
 
+fn collect_editor_ux_tracking_signals(root: &Path) -> serde_json::Value {
+    let matrix_path = root.join("crates/perl-lsp-ux-tests/fixtures/editor_ux_fixture_matrix.json");
+    let Ok(matrix_raw) = fs::read_to_string(&matrix_path) else {
+        return serde_json::json!({
+            "fixture_matrix_loaded": false,
+        });
+    };
+    let Ok(matrix) = serde_json::from_str::<serde_json::Value>(&matrix_raw) else {
+        return serde_json::json!({
+            "fixture_matrix_loaded": false,
+        });
+    };
+
+    let workflows = matrix.get("workflows").and_then(|value| value.as_array());
+    let Some(workflows) = workflows else {
+        return serde_json::json!({
+            "fixture_matrix_loaded": false,
+        });
+    };
+
+    let workflow_total = workflows.len();
+    let mut ci_tier_counts: BTreeMap<String, usize> = BTreeMap::new();
+    let mut owner_counts: BTreeMap<String, usize> = BTreeMap::new();
+    let mut metric_counts: BTreeMap<String, usize> = BTreeMap::new();
+    let mut expected_outcome_assertion_total = 0usize;
+
+    for workflow in workflows {
+        if let Some(ci_tier) = workflow.get("ci_tier").and_then(|value| value.as_str()) {
+            *ci_tier_counts.entry(ci_tier.to_string()).or_default() += 1;
+        }
+        if let Some(owner) = workflow.get("subsystem_owner").and_then(|value| value.as_str()) {
+            *owner_counts.entry(owner.to_string()).or_default() += 1;
+        }
+        if let Some(measures) = workflow.get("measures").and_then(|value| value.as_array()) {
+            for metric in measures {
+                if let Some(metric_name) = metric.as_str() {
+                    *metric_counts.entry(metric_name.to_string()).or_default() += 1;
+                }
+            }
+        }
+        if let Some(expected) = workflow.get("expected_outcomes").and_then(|value| value.as_array()) {
+            expected_outcome_assertion_total += expected.len();
+        }
+    }
+
+    let pr_workflow_count = ci_tier_counts.get("pr").copied().unwrap_or(0);
+    let nightly_workflow_count = ci_tier_counts.get("nightly").copied().unwrap_or(0);
+
+    serde_json::json!({
+        "fixture_matrix_loaded": true,
+        "workflow_inventory": {
+            "total_workflows": workflow_total,
+            "expected_outcome_assertions": expected_outcome_assertion_total,
+        },
+        "ci_tier_distribution": {
+            "pr_workflows": pr_workflow_count,
+            "nightly_workflows": nightly_workflow_count,
+            "pr_workflow_share": if workflow_total == 0 {
+                0.0
+            } else {
+                pr_workflow_count as f64 / workflow_total as f64
+            },
+        },
+        "metric_coverage_counts": metric_counts,
+        "subsystem_owner_workflow_counts": owner_counts,
+    })
+}
+
 // ---------------------------------------------------------------------------
 // Generators
 // ---------------------------------------------------------------------------
@@ -142,8 +210,9 @@ pub(super) fn generate_quality_status(root: &Path, original: &str) -> Result<Str
         "- **Quality Metrics**: <50ms LSP response times, 931ns incremental parsing\n\
          - **UX workflow harness**: {ux_scenarios} scenario files in `perl-lsp-ux-tests`; \
            `just ux-tests` runs the default release-confidence lane and `just ux-tests-full` adds \
-           the integration-only 10k-line large-file case; planning scaffold at \
-           `docs/project/status/editor_ux.json`\n\
+           the integration-only 10k-line large-file case; tracking scaffold at \
+           `docs/project/status/editor_ux.json` now includes fixture-backed workflow inventory, \
+           CI-tier distribution, and metric-coverage counts\n\
          - **Mutation testing**: {mutation_note}\n\
          - **Production Status**: LSP server public alpha (`just ci-gate` passing)"
     );
@@ -169,6 +238,7 @@ pub(super) fn generate_quality_status(root: &Path, original: &str) -> Result<Str
 pub(super) fn generate_editor_ux_receipt(root: &Path) -> Result<String> {
     let scenario_files = collect_ux_scenario_files(root);
     let scenario_count = scenario_files.len();
+    let tracking_signals = collect_editor_ux_tracking_signals(root);
 
     let receipt = serde_json::json!({
         "schema_version": 1,
@@ -202,6 +272,7 @@ pub(super) fn generate_editor_ux_receipt(root: &Path) -> Result<String> {
             "status_update": "cargo xtask update-status --only quality",
             "quality_surface": "docs/project/status/quality.md",
         },
+        "tracking_signals": tracking_signals,
     });
 
     serde_json::to_string_pretty(&receipt).context("serializing editor UX receipt")
@@ -280,6 +351,21 @@ mod tests {
             ])
         );
         assert_eq!(receipt["integration_points"]["ci_lane"], "just ux-tests");
+        assert_eq!(receipt["tracking_signals"]["fixture_matrix_loaded"], true);
+        let total_workflows = receipt["tracking_signals"]["workflow_inventory"]["total_workflows"]
+            .as_u64()
+            .ok_or_else(|| eyre!("tracking_signals.workflow_inventory.total_workflows missing"))?;
+        assert!(
+            total_workflows >= receipt["harness"]["scenario_count"].as_u64().unwrap_or(0),
+            "workflow inventory should cover at least all executable scenarios"
+        );
+        assert!(
+            receipt["tracking_signals"]["metric_coverage_counts"]["workflow_pass_rate"]
+                .as_u64()
+                .unwrap_or(0)
+                > 0,
+            "workflow_pass_rate should be exercised by fixture workflows"
+        );
         Ok(())
     }
 }
