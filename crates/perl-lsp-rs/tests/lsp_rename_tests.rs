@@ -41,7 +41,7 @@ fn test_rename_variable() -> TestResult {
                 "newName": "$total"
             }),
         )
-        .unwrap_or(json!(null));
+        .map_err(|e| format!("rename request should succeed for sigil-prefixed names: {e}"))?;
 
     if !response.is_null() {
         // Response should be a WorkspaceEdit with changes
@@ -71,13 +71,57 @@ fn test_rename_variable() -> TestResult {
                     assert!(edit["range"].is_object(), "Each edit should have a range");
                     let new_text = edit["newText"].as_str().ok_or("newText should be a string")?;
                     assert!(
-                        new_text.contains("total"),
-                        "newText should contain the new name 'total', got: {}",
+                        new_text == "$total",
+                        "newText should preserve sigil and apply '$total', got: {}",
                         new_text
                     );
                 }
             }
         }
+    }
+
+    Ok(())
+}
+
+/// Test renaming a sigiled variable using a bare newName keeps sigils in edits
+#[test]
+fn test_rename_variable_bare_new_name_preserves_sigil() -> TestResult {
+    let mut harness = LspHarness::new();
+    let _init = harness.initialize(None)?;
+
+    let doc_uri = "file:///test_rename_bare.pl";
+    harness.open(
+        doc_uri,
+        r#"sub process {
+    my $count = 0;
+    $count++;
+    return $count;
+}
+"#,
+    )?;
+
+    let response = harness.request(
+        "textDocument/rename",
+        json!({
+            "textDocument": { "uri": doc_uri },
+            "position": { "line": 1, "character": 7 },
+            "newName": "total"
+        }),
+    )?;
+
+    let changes = response
+        .get("changes")
+        .and_then(|v| v.as_object())
+        .ok_or("rename response should include a changes object")?;
+    let edits = changes
+        .get(doc_uri)
+        .and_then(|v| v.as_array())
+        .ok_or("rename should include edits for the target document")?;
+    assert!(!edits.is_empty(), "rename should include at least one text edit");
+
+    for edit in edits {
+        let new_text = edit["newText"].as_str().ok_or("newText should be a string")?;
+        assert_eq!(new_text, "$total", "sigiled variable rename should keep '$' sigil");
     }
 
     Ok(())

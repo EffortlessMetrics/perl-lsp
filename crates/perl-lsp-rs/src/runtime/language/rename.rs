@@ -15,6 +15,34 @@ use crate::protocol::{invalid_params, req_position, req_uri};
 use crate::runtime::routing::{IndexAccessMode, route_index_access};
 
 impl LspServer {
+    fn normalized_new_name<'a>(&self, new_name: &'a str) -> Option<&'a str> {
+        let bare = match new_name.chars().next() {
+            Some('$' | '@' | '%') => &new_name[1..],
+            _ => new_name,
+        };
+
+        if self.is_valid_identifier(bare) {
+            Some(bare)
+        } else {
+            None
+        }
+    }
+
+    fn replacement_for_token(&self, token_text: &str, new_name_bare: &str) -> String {
+        let first = token_text.chars().next();
+        match first {
+            Some('$' | '@' | '%') => {
+                let mut replacement = String::with_capacity(new_name_bare.len() + 1);
+                if let Some(ch) = first {
+                    replacement.push(ch);
+                }
+                replacement.push_str(new_name_bare);
+                replacement
+            }
+            _ => new_name_bare.to_string(),
+        }
+    }
+
     /// Handle textDocument/prepareRename request
     pub(crate) fn handle_prepare_rename(
         &self,
@@ -77,15 +105,11 @@ impl LspServer {
             let new_name = params["newName"]
                 .as_str()
                 .ok_or_else(|| invalid_params("Missing required parameter: newName"))?;
-
-            // Validate the new name
-            if !self.is_valid_identifier(new_name) {
-                return Err(JsonRpcError {
-                    code: -32602,
-                    message: format!("Invalid identifier: {}", new_name),
-                    data: None,
-                });
-            }
+            let new_name_bare = self.normalized_new_name(new_name).ok_or_else(|| JsonRpcError {
+                code: -32602,
+                message: format!("Invalid identifier: {}", new_name),
+                data: None,
+            })?;
 
             let documents = self.documents_guard();
             if let Some(doc) = self.get_document(&documents, uri) {
@@ -105,13 +129,18 @@ impl LspServer {
                             let (start_line, start_char) =
                                 self.offset_to_pos16(doc, location.start);
                             let (end_line, end_char) = self.offset_to_pos16(doc, location.end);
+                            let token_text = doc
+                                .text
+                                .get(location.start..location.end)
+                                .unwrap_or_default();
+                            let replacement = self.replacement_for_token(token_text, new_name_bare);
 
                             edits.push(json!({
                                 "range": {
                                     "start": { "line": start_line, "character": start_char },
                                     "end": { "line": end_line, "character": end_char }
                                 },
-                                "newText": new_name
+                                "newText": replacement
                             }));
                         }
 
@@ -148,13 +177,12 @@ impl LspServer {
                 p.get("position").and_then(|p| p.get("character")).and_then(|n| n.as_u64()),
                 p.get("newName").and_then(|s| s.as_str()),
             ) {
-                if !self.is_valid_identifier(new_name) {
-                    return Err(JsonRpcError {
+                let new_name_bare =
+                    self.normalized_new_name(new_name).ok_or_else(|| JsonRpcError {
                         code: -32602,
                         message: format!("Invalid identifier: {}", new_name),
                         data: None,
-                    });
-                }
+                    })?;
 
                 // Check index access mode using routing helper
                 #[cfg(feature = "workspace")]
@@ -180,7 +208,7 @@ impl LspServer {
                                 let edits = crate::workspace_rename::build_rename_edit(
                                     coordinator.index(),
                                     key,
-                                    new_name,
+                                    new_name_bare,
                                 );
                                 if !edits.is_empty() {
                                     tracing::debug!(
@@ -209,7 +237,11 @@ impl LspServer {
                                 // to ensure we go through routing policy
                                 let idx = coordinator.index();
                                 let edits =
-                                    crate::workspace_rename::build_rename_edit(idx, key, new_name);
+                                    crate::workspace_rename::build_rename_edit(
+                                        idx,
+                                        key,
+                                        new_name_bare,
+                                    );
                                 let ws_edit = crate::workspace_rename::to_workspace_edit(edits);
                                 return Ok(Some(ws_edit));
                             }
@@ -236,13 +268,19 @@ impl LspServer {
                                 let (start_line, start_char) =
                                     self.offset_to_pos16(doc, location.start);
                                 let (end_line, end_char) = self.offset_to_pos16(doc, location.end);
+                                let token_text = doc
+                                    .text
+                                    .get(location.start..location.end)
+                                    .unwrap_or_default();
+                                let replacement =
+                                    self.replacement_for_token(token_text, new_name_bare);
 
                                 edits.push(json!({
                                     "range": {
                                         "start": { "line": start_line, "character": start_char },
                                         "end": { "line": end_line, "character": end_char }
                                     },
-                                    "newText": new_name
+                                    "newText": replacement
                                 }));
                             }
 
