@@ -43,3 +43,33 @@ fn critic_parser_handles_empty_input() {
     let lines = parse_perlcritic_output("");
     assert!(lines.is_empty(), "empty input should produce empty output");
 }
+
+#[test]
+fn critic_parser_rejects_zero_line_or_column() {
+    let line_zero = "lib/Foo.pm:0:5:3:Perl::Critic::Policy::ValuesAndExpressions::ProhibitMagicNumbers:no magic numbers";
+    let col_zero = "lib/Foo.pm:4:0:3:Perl::Critic::Policy::ValuesAndExpressions::ProhibitMagicNumbers:no magic numbers";
+
+    assert!(
+        parse_perlcritic_line(line_zero).is_none(),
+        "line number 0 would underflow when converted to 0-indexed ranges"
+    );
+    assert!(
+        parse_perlcritic_line(col_zero).is_none(),
+        "column number 0 is invalid for Perl::Critic diagnostics"
+    );
+}
+
+#[test]
+fn critic_parser_rejects_out_of_range_severity() {
+    let too_low = "lib/Foo.pm:4:2:0:Perl::Critic::Policy::ValuesAndExpressions::ProhibitMagicNumbers:no magic numbers";
+    let too_high = "lib/Foo.pm:4:2:9:Perl::Critic::Policy::ValuesAndExpressions::ProhibitMagicNumbers:no magic numbers";
+
+    assert!(
+        parse_perlcritic_line(too_low).is_none(),
+        "severity 0 is outside Perl::Critic's supported 1..=5 range"
+    );
+    assert!(
+        parse_perlcritic_line(too_high).is_none(),
+        "severity values greater than 5 should be dropped as malformed"
+    );
+}

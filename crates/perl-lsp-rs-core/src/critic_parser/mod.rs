@@ -66,6 +66,10 @@ pub fn parse_perlcritic_line(line: &str) -> Option<ParsedCriticLine> {
     let column = parts[start + 1].parse::<u32>().ok()?;
     let severity = parts[start + 2].parse::<u8>().ok()?;
 
+    if line_num == 0 || column == 0 || !(1..=5).contains(&severity) {
+        return None;
+    }
+
     let tail = parts[start + 3..].join(":");
     let boundary = find_policy_message_boundary(&tail)?;
 
