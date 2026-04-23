@@ -169,6 +169,11 @@ pub fn bdd_feature_rows() -> Vec<BddFeatureRow> {
     rows
 }
 
+/// Export only `lsp.*` feature rows for BDD matrices focused on LSP capabilities.
+pub fn lsp_bdd_feature_rows() -> Vec<BddFeatureRow> {
+    bdd_feature_rows().into_iter().filter(|row| row.id.starts_with("lsp.")).collect()
+}
+
 /// Number of BDD rows that participate in coverage accounting.
 pub fn trackable_feature_count_for_grid() -> usize {
     all_features()
@@ -419,6 +424,13 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn lsp_bdd_feature_rows_only_include_lsp_ids() {
+        let rows = lsp_bdd_feature_rows();
+        assert!(!rows.is_empty(), "expected at least one lsp.* feature row");
+        assert!(rows.iter().all(|row| row.id.starts_with("lsp.")));
     }
 
     #[test]
