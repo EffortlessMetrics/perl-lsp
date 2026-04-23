@@ -35,6 +35,16 @@ Checkpoints during Window 2:
 | 10 → 14% | 12 more PRs reviewed (small-fixes agent with fix-forward on `must()` #[must_use] generic bug across 373 call sites), merged #5091-5094/5101/5102/5107/5110-5114/5116-5121/5126/5130-5135, filed #5152 clippy-single-match + sandbox-ignore fix |
 | 14 → 18% | Filed #5313 capability snapshot regen (bit-rot #4), #5314 docs + reviewer-deep skill-chain fix (4 articles: TWO_MODE_DEV_LOOP, TRIAGE_AS_LEARNING, HAIKU_FOR_MECHANICAL, TWO_PHASE_MERGE_GATE), #5315 validate-title clarification. Dispatched 7 Haiku standards reviewers covering all 103 non-deep-reviewed PRs → closed ~20 dupes at fractional Haiku cost. Dispatched 8 reviewer-deep agents on substantive cohorts (Perl-matrix winner #5247 + 3 closed, metrics cohort of 8, fuzz/workspace/Windows cluster, batch-01 approved, docs-only batch, workspace-config #5207-5209 as complementary not dup, parser-recovery #5011+#5009 as complementary) |
 
+### Window 3 — current
+
+**Claude 52% → ? session / Weekly 87% → ?** — attribution ~100% to this sprint (prior weeks contributed negligibly; current week is nearly entirely the Codex-review + collapse-landing cadence).
+
+Checkpoints during Window 3:
+
+| Checkpoint | Timestamp (2026-04-23) | Claude session % | Weekly % | Actions completed since Window 2 end | Economics |
+|---|---|---|---|---|---|
+| Window 3 start | ~14:00 UTC (post–Window-2 forensic commit `01b6c7e60`) | 52% → ? | 87% → ? | Final Window-2-tail merges landed (#5244 nightly 5k SLO lane via REST API after main gate). New Codex wave surfaced: #5467 incremental-parse whitespace reuse, #5478 @INC `use lib` parser, #5480 vim setup docs, #5487 embedded Perl template language-id accept, #5488 tree-sitter-perl-rs Point APIs, #5489 tree-sitter-perl-c LanguageFn symbol, plus #5435 assert!-message hardening. Local/worktree commits on this branch include module-resolution guard (`c1fe89763`), zed-docs correctness fixes (`101a6987d`, `e49caaf56`, `0c20d306a`, `8acdab770`), @INC dedupe follow-ups (`35cf62396`, `6376a71a3`), incremental-parse fallbacks (`4be900e8c`, `140dc0617`, `228678fd5`), metrics-diversity wave (`dc6098452`, `c96ce6316`, `f08cf5694`, `ba45226e5`, `c8927ba50`, `6cbe2cae9`, `1455713d4`), and `ce725b738` @INC `use lib`. No agent dispatches yet at start — Window 3 opens cold into triage of the new Codex wave + cross-branch worktree drift. | ~100% of this week's Claude/Codex burn is this sprint — baseline usage negligible prior; all 87% weekly consumption is the continuous-review cadence. |
+
 **Key economic observation:** Codex Pro is ~4× more budget-efficient than Claude 20× Max this week by weekly consumption. Codex did the heavy generation (200+ PRs produced); Claude did high-leverage routing and review. The spray-and-filter pattern ALIGNS with this cost asymmetry — the cheap model sprays, the expensive model filters.
 
 **When the Claude weekly approaches saturation (82%), the right move is to lean into Haiku for mechanical work** (see `docs/articles/HAIKU_FOR_MECHANICAL.md`). 7 Haiku reviewer batches dispatched this session closed ~20 duplicate PRs with negligible Claude cost — work that would have eaten real Sonnet budget per review.
