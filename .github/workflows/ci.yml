@@ -29,11 +29,34 @@ env:
   RUST_BACKTRACE: 1
 
 jobs:
+  draft-pr-check:
+    name: Draft PR guard
+    runs-on: ubuntu-24.04
+    timeout-minutes: 1
+    outputs:
+      run_ci: ${{ steps.guard.outputs.run_ci }}
+    steps:
+      - name: Decide whether full CI should run
+        id: guard
+        run: |
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            echo "run_ci=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::Non-PR event detected — running full CI"
+          elif [ "${{ github.event.pull_request.draft }}" = "true" ]; then
+            echo "run_ci=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Draft PR detected — skipping CI jobs until ready for review"
+          else
+            echo "run_ci=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::Ready-for-review PR detected — running full CI"
+          fi
+
   # ── Preflight: skip superseded SHAs to save cost ─────────────────────
   preflight-latest-check:
     name: Preflight — is this SHA latest?
     runs-on: ubuntu-24.04
     timeout-minutes: 2
+    needs: draft-pr-check
+    if: needs.draft-pr-check.outputs.run_ci == 'true'
     outputs:
       is_latest: ${{ steps.check.outputs.is_latest }}
     steps:
@@ -58,8 +81,8 @@ jobs:
     name: PR Smoke (Fast Feedback)
     runs-on: ubuntu-24.04
     timeout-minutes: 10
-    needs: preflight-latest-check
-    if: needs.preflight-latest-check.outputs.is_latest == 'true'
+    needs: [draft-pr-check, preflight-latest-check]
+    if: needs.draft-pr-check.outputs.run_ci == 'true' && needs.preflight-latest-check.outputs.is_latest == 'true'
     steps:
       - uses: actions/checkout@v6
         with:
@@ -204,8 +227,8 @@ jobs:
     name: CI Gate (Merge-Blocking)
     runs-on: ubuntu-24.04
     timeout-minutes: 30
-    needs: [pr-smoke, preflight-latest-check]
-    if: needs.preflight-latest-check.outputs.is_latest == 'true'
+    needs: [draft-pr-check, pr-smoke, preflight-latest-check]
+    if: needs.draft-pr-check.outputs.run_ci == 'true' && needs.preflight-latest-check.outputs.is_latest == 'true'
     # Run on every PR push and on push to main/master
     # Earlier gating > label-gated gating (see #4675)
     # Frequent commits will queue; preflight skips superseded SHAs.
@@ -344,8 +367,8 @@ jobs:
     name: UX Regression Tests
     runs-on: ubuntu-24.04
     timeout-minutes: 15
-    needs: [pr-smoke, preflight-latest-check]
-    if: needs.preflight-latest-check.outputs.is_latest == 'true'
+    needs: [draft-pr-check, pr-smoke, preflight-latest-check]
+    if: needs.draft-pr-check.outputs.run_ci == 'true' && needs.preflight-latest-check.outputs.is_latest == 'true'
     # Run on every PR push — this is the regression prevention gate.
     steps:
       - uses: actions/checkout@v6
@@ -354,17 +377,17 @@ jobs:
           ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.ref_name }}
 
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9  # stable (master)
         with:
           toolchain: 1.92.0
 
       - name: Install just
-        uses: taiki-e/install-action@v2
+        uses: taiki-e/install-action@cf39a74df4a72510be4e5b63348d61067f11e64a  # v2.75.0
         with:
           tool: just
 
       - name: Cache cargo dependencies
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4  # v2.9.1
         with:
           cache-on-failure: true
           cache-all-crates: true
@@ -384,8 +407,8 @@ jobs:
     name: Compile All Targets (bit-rot guard)
     runs-on: ubuntu-24.04
     timeout-minutes: 10
-    needs: preflight-latest-check
-    if: needs.preflight-latest-check.outputs.is_latest == 'true'
+    needs: [draft-pr-check, preflight-latest-check]
+    if: needs.draft-pr-check.outputs.run_ci == 'true' && needs.preflight-latest-check.outputs.is_latest == 'true'
     steps:
       - uses: actions/checkout@v6
         with:
@@ -428,7 +451,7 @@ jobs:
               cargo check --locked --all-targets
               -p perl-module
               -p perl-lsp-rs
-              -p perl-workspace-index
+              -p perl-workspace
           - name: module-separator-regressions
             command: >-
               cargo test --locked -p perl-module

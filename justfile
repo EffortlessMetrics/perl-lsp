@@ -64,13 +64,15 @@ pr-fast: _check-tools-basic
     echo "=============================================="
     exit $RC
 
-# Compile-only gate: catches integration-test and benchmark bit-rot without
-# incurring full test runtime (~30-45 s). Matches the workspace excludes used
-# by the rest of the CI gates (tree-sitter-perl, fuzz, archive are excluded
-# from the workspace Cargo.toml so --workspace picks only the 134 crates).
+# Compile-only gate: catches integration-test/benchmark bit-rot and also
+# validates feature-gated code paths without incurring full test runtime.
+# Matches the workspace excludes used by the rest of the CI gates
+# (tree-sitter-perl, fuzz, archive are excluded from Cargo.toml workspace).
 check-all-targets:
-    @echo "Compiling all targets (lib, bins, tests, benches) — bit-rot check..."
+    @echo "Compiling all targets (default features) — bit-rot check..."
     cargo check --workspace --all-targets --locked
+    @echo "Compiling all targets (all features) — deep verification check..."
+    cargo check --workspace --all-targets --all-features --locked
     @echo "All targets compile clean."
 
 # Fail if README.md has duplicate level-2 headings. Helps catch accidental

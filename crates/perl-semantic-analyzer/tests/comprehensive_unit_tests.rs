@@ -156,13 +156,50 @@ sub bar { 1 }
 
 #[test]
 fn symbol_extraction_constant() -> Result<(), Box<dyn std::error::Error>> {
-    // `use constant` is a pragma call; the extractor may index the import
-    // rather than a named constant. Verify no crash and some symbols exist.
+    // `use constant` scalar form must be synthesized as SymbolKind::Constant.
     let code = "use constant PI => 3.14159;";
     let table = parse_and_extract(code);
-    // The parser should at least produce something from this pragma
-    // (may index "constant" as an Import or not index "PI" at all)
-    let _ = table;
+    assert!(
+        has_symbol(&table, "PI", SymbolKind::Constant),
+        "PI should appear as SymbolKind::Constant in the symbol table"
+    );
+    Ok(())
+}
+
+#[test]
+fn symbol_extraction_constant_hash_form() -> Result<(), Box<dyn std::error::Error>> {
+    // Hash-ref form: use constant { FOO => 1, BAR => 2 };
+    let code = "use constant { MIN => 1, MAX => 100 };";
+    let table = parse_and_extract(code);
+    assert!(
+        has_symbol(&table, "MIN", SymbolKind::Constant),
+        "MIN should appear as SymbolKind::Constant"
+    );
+    assert!(
+        has_symbol(&table, "MAX", SymbolKind::Constant),
+        "MAX should appear as SymbolKind::Constant"
+    );
+    Ok(())
+}
+
+#[test]
+fn symbol_extraction_constant_no_crash_on_empty_args() -> Result<(), Box<dyn std::error::Error>> {
+    // Edge: `use constant;` with no args should not crash.
+    let code = "use constant;";
+    let table = parse_and_extract(code);
+    let _ = table; // just verify no panic
+    Ok(())
+}
+
+#[test]
+fn symbol_extraction_constant_sub_value() -> Result<(), Box<dyn std::error::Error>> {
+    // Code-reference constant: use constant NOW => sub { time() };
+    let code = "use constant NOW => sub { time() };";
+    let table = parse_and_extract(code);
+    assert!(
+        has_symbol(&table, "NOW", SymbolKind::Constant),
+        "NOW should appear as SymbolKind::Constant (sub-value form)"
+    );
     Ok(())
 }
 
