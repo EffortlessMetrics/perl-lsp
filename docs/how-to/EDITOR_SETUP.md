@@ -28,6 +28,7 @@ perllsp --health
 | Emacs | use `lsp-mode` or `eglot` with `perllsp --stdio` | [docs/EDITORS/EMACS_SETUP.md](../EDITORS/EMACS_SETUP.md) |
 | Helix | add a `perllsp` language server entry | [docs/EDITORS/HELIX_SETUP.md](../EDITORS/HELIX_SETUP.md) |
 | Sublime Text | register `perllsp` in the LSP package settings | [docs/EDITORS/SUBLIME_SETUP.md](../EDITORS/SUBLIME_SETUP.md) |
+| Notepad++ | add a `perllsp --stdio` client in LSP Client | [docs/EDITORS/NOTEPAD_PLUS_PLUS_SETUP.md](../EDITORS/NOTEPAD_PLUS_PLUS_SETUP.md) |
 
 ## Minimal Configurations
 
@@ -63,6 +64,12 @@ args = ["--stdio"]
 
 Register a client whose command is `["perllsp", "--stdio"]` and scope it to
 Perl source files.
+
+### Notepad++
+
+Install the **LSP Client** plugin, then add a Perl client whose command is
+`["perllsp", "--stdio"]`. Ensure `.pl`, `.pm`, `.t`, and `.psgi` files are
+associated with Perl so the LSP client attaches.
 
 ## When Setup Fails
 
