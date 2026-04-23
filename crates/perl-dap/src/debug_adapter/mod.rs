@@ -686,9 +686,12 @@ impl DebugAdapter {
     }
 
     /// Wait briefly for debugger command responses to arrive in the output buffer.
+    fn debugger_output_window_ms(timeout_ms: u32) -> u64 {
+        u64::from(timeout_ms).max(DEBUGGER_QUERY_WAIT_MS)
+    }
+
     fn wait_for_debugger_output_window(timeout_ms: u32) {
-        let wait_ms = u64::from(timeout_ms.min(250)).max(DEBUGGER_QUERY_WAIT_MS);
-        thread::sleep(Duration::from_millis(wait_ms));
+        thread::sleep(Duration::from_millis(Self::debugger_output_window_ms(timeout_ms)));
     }
 
     /// Expand debugger query budgets in heavily instrumented environments.
@@ -738,6 +741,16 @@ mod tests {
         assert_eq!(adapter.next_seq(), 1);
         assert_eq!(adapter.next_seq(), 2);
         assert_eq!(adapter.next_seq(), 3);
+    }
+
+    #[test]
+    fn test_debugger_output_window_ms_enforces_minimum_budget() {
+        assert_eq!(DebugAdapter::debugger_output_window_ms(1), DEBUGGER_QUERY_WAIT_MS);
+    }
+
+    #[test]
+    fn test_debugger_output_window_ms_honors_extended_budget() {
+        assert_eq!(DebugAdapter::debugger_output_window_ms(600), 600);
     }
 
     #[test]
