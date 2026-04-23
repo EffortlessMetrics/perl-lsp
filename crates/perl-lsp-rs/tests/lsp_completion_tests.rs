@@ -1319,6 +1319,66 @@ fn test_variable_completion_has_commit_characters() -> Result<(), Box<dyn std::e
     Ok(())
 }
 
+/// Test that module completions include namespace-friendly commit characters.
+#[test]
+fn test_module_completion_has_commit_characters() -> Result<(), Box<dyn std::error::Error>> {
+    let server = start_lsp_server();
+    initialize_lsp(&server);
+
+    let uri = "file:///test_commit_module.pl";
+    send_notification(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didOpen",
+            "params": {
+                "textDocument": {
+                    "uri": uri,
+                    "languageId": "perl",
+                    "version": 1,
+                    "text": "package My::Module;\npackage My::Other;\nMy::"
+                }
+            }
+        }),
+    );
+    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_millis(2000));
+
+    let response = send_request(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/completion",
+            "params": {
+                "textDocument": { "uri": uri },
+                "position": { "line": 2, "character": 4 }
+            }
+        }),
+    );
+
+    let items = completion_items(&response);
+    // Find a Module-kind item (LSP kind 9 = Module)
+    let module_item = items.iter().find(|item| item["kind"] == 9);
+    let module_item = module_item.ok_or("Should have at least one module completion")?;
+
+    let commit_chars = module_item["commitCharacters"]
+        .as_array()
+        .ok_or("Module completions must have commitCharacters")?;
+
+    assert!(commit_chars.iter().any(|c| c == ":"), "Module commit chars should include ':'");
+    assert!(commit_chars.iter().any(|c| c == ";"), "Module commit chars should include ';'");
+
+    for ch in commit_chars {
+        let s = ch.as_str().ok_or("commit char must be string")?;
+        assert_eq!(
+            s.chars().count(),
+            1,
+            "Commit char '{s}' must be a single character per LSP spec"
+        );
+    }
+
+    Ok(())
+}
+
 /// Test that keyword completions do NOT include commit characters.
 ///
 /// Uses "retur" as the prefix because "return" is a plain Keyword (not a snippet),

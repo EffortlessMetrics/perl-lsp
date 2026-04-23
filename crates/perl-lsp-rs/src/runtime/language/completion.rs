@@ -48,7 +48,7 @@ fn commit_chars_for_kind(kind: CompletionItemKind) -> Option<&'static [&'static 
     match kind {
         CompletionItemKind::Function => Some(&["(", ",", ";"]),
         CompletionItemKind::Variable => Some(&["[", "{", ".", ";"]),
-        CompletionItemKind::Module => Some(&[";"]),
+        CompletionItemKind::Module => Some(&[":", ";"]),
         CompletionItemKind::Constant => Some(&["[", "{", ".", ";"]),
         CompletionItemKind::Property => Some(&[",", "}"]),
         _ => None,
