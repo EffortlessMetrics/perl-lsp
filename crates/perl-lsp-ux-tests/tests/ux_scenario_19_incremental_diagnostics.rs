@@ -74,6 +74,21 @@ fn scenario_19_incremental_edit_clears_diagnostics_and_preserves_hover() -> Resu
         "Expected diagnostics for undeclared variable before edit"
     );
 
+    // AND at least one diagnostic actually mentions the offending symbol —
+    // otherwise we cannot claim the diagnostic proves the strict-mode bug
+    // (it could be a stray unrelated warning).
+    let mentions_missing_name = initial_diagnostics.iter().any(|diag| {
+        diag.get("message")
+            .and_then(serde_json::Value::as_str)
+            .map(|m| m.contains("missing_name") || m.to_ascii_lowercase().contains("strict"))
+            .unwrap_or(false)
+    });
+    assert!(
+        mentions_missing_name,
+        "expected a diagnostic mentioning `missing_name` or `strict` for the \
+         undeclared-variable case; got: {initial_diagnostics:?}"
+    );
+
     // WHEN the user applies an in-editor fix through didChange.
     harness.change_file("incremental.pl", FIXED_SOURCE)?;
 
@@ -84,9 +99,19 @@ fn scenario_19_incremental_edit_clears_diagnostics_and_preserves_hover() -> Resu
         final_diagnostics.is_empty(),
         "Expected diagnostics to clear after fix, got {final_diagnostics:?}"
     );
+    // AND the clear was a real change, not a coincidence where both sides
+    // happened to be empty (which would imply the GIVEN never held).
+    assert_ne!(
+        final_diagnostics, initial_diagnostics,
+        "diagnostic set did not change across edit; test is vacuous"
+    );
 
-    // AND the file remains interactive for follow-up UX actions.
-    let hover = harness.hover("incremental.pl", 7, 12)?;
+    // AND the file remains interactive for follow-up UX actions. A hover
+    // error (JSON-RPC failure / timeout / crash) is a regression; a null
+    // result is degraded but acceptable for first-session UX.
+    let hover = harness
+        .hover("incremental.pl", 7, 12)
+        .map_err(|e| anyhow::anyhow!("hover errored after didChange fix: {e}"))?;
     if hover.is_none() {
         eprintln!(
             "INFO scenario_19: hover returned null after edits (acceptable degraded behavior)"
