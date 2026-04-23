@@ -213,3 +213,112 @@ impl fmt::Display for ScaleReport {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{MemorySnapshot, ScaleReport};
+
+    #[test]
+    fn memory_snapshot_derived_metrics_handle_zero_counts() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let snap = MemorySnapshot::default();
+
+        assert_eq!(snap.total_estimated_bytes(), 0);
+        assert_eq!(snap.bytes_per_symbol(), 0);
+        assert_eq!(snap.bytes_per_file(), 0);
+
+        Ok(())
+    }
+
+    #[test]
+    fn memory_snapshot_report_includes_aggregated_values() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let snap = MemorySnapshot {
+            file_count: 2,
+            symbol_count: 4,
+            files_bytes: 100,
+            symbols_bytes: 20,
+            global_refs_bytes: 60,
+            document_store_bytes: 20,
+        };
+
+        assert_eq!(snap.total_estimated_bytes(), 200);
+        assert_eq!(snap.bytes_per_symbol(), 50);
+        assert_eq!(snap.bytes_per_file(), 100);
+
+        let report = snap.to_report_string();
+        assert!(report.contains("total: 200 B"));
+        assert!(report.contains("4 symbols"));
+        assert!(report.contains("50 B/symbol"));
+
+        Ok(())
+    }
+
+    #[test]
+    fn scale_report_scaling_factor_tracks_linear_vs_growth()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let mut linear = ScaleReport::new();
+        linear.add_checkpoint(10, MemorySnapshot { files_bytes: 100, ..MemorySnapshot::default() });
+        linear.add_checkpoint(20, MemorySnapshot { files_bytes: 200, ..MemorySnapshot::default() });
+
+        let linear_factor =
+            linear.scaling_factor().ok_or("expected linear scaling factor to exist")?;
+        assert!((linear_factor - 1.0).abs() < f64::EPSILON);
+
+        let mut super_linear = ScaleReport::new();
+        super_linear
+            .add_checkpoint(10, MemorySnapshot { files_bytes: 100, ..MemorySnapshot::default() });
+        super_linear
+            .add_checkpoint(20, MemorySnapshot { files_bytes: 300, ..MemorySnapshot::default() });
+
+        let super_linear_factor =
+            super_linear.scaling_factor().ok_or("expected super-linear scaling factor to exist")?;
+        assert!((super_linear_factor - 1.5).abs() < f64::EPSILON);
+
+        Ok(())
+    }
+
+    #[test]
+    fn scale_report_scaling_factor_returns_none_for_insufficient_data()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let mut report = ScaleReport::new();
+        assert_eq!(report.scaling_factor(), None);
+
+        report.add_checkpoint(0, MemorySnapshot { files_bytes: 100, ..MemorySnapshot::default() });
+        report.add_checkpoint(20, MemorySnapshot { files_bytes: 200, ..MemorySnapshot::default() });
+        assert_eq!(report.scaling_factor(), None);
+
+        Ok(())
+    }
+
+    #[test]
+    fn scale_report_display_contains_table_and_scaling_factor()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let mut report = ScaleReport::new();
+        report.add_checkpoint(
+            10,
+            MemorySnapshot {
+                file_count: 10,
+                symbol_count: 10,
+                files_bytes: 100,
+                ..MemorySnapshot::default()
+            },
+        );
+        report.add_checkpoint(
+            20,
+            MemorySnapshot {
+                file_count: 20,
+                symbol_count: 20,
+                files_bytes: 200,
+                ..MemorySnapshot::default()
+            },
+        );
+
+        let display = format!("{report}");
+        assert!(display.contains("files"));
+        assert!(display.contains("total_B"));
+        assert!(display.contains("Scaling factor vs linear: 1.00x"));
+
+        Ok(())
+    }
+}
