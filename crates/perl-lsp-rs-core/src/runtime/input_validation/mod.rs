@@ -15,7 +15,7 @@ use crate::runtime::limits::max_file_size_bytes as limits_max_file_size_bytes;
 const MAX_PATH_LENGTH: usize = 4096;
 
 /// Allowed file extensions for Perl files.
-const ALLOWED_EXTENSIONS: &[&str] = &["pl", "pm", "t", "pod"];
+const ALLOWED_EXTENSIONS: &[&str] = &["pl", "pm", "t", "pod", "mcp"];
 
 /// Validates and sanitizes a file path to prevent path traversal attacks.
 pub fn validate_file_path<P: AsRef<Path>>(path: P, workspace_root: &Path) -> Result<PathBuf> {
@@ -29,7 +29,7 @@ pub fn validate_file_path<P: AsRef<Path>>(path: P, workspace_root: &Path) -> Res
         .map_err(|error| anyhow!("Invalid workspace path {}: {error}", path.display()))?;
 
     if let Some(extension) = validated.extension().and_then(OsStr::to_str)
-        && !ALLOWED_EXTENSIONS.contains(&extension)
+        && !ALLOWED_EXTENSIONS.iter().any(|allowed| allowed.eq_ignore_ascii_case(extension))
     {
         return Err(anyhow!(
             "File extension '{}' not allowed. Allowed: {:?}",
@@ -217,6 +217,18 @@ mod tests {
 
         let result = validate_file_path(malicious_path, workspace_root);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_validate_file_path_mcp_extension() {
+        use perl_tdd_support::must;
+        let temp_dir = must(TempDir::new());
+        let workspace_root = temp_dir.path();
+        let file_path = workspace_root.join("component.mcp");
+        must(fs::write(&file_path, "<%perl> my $x = 1; </%perl>"));
+
+        let result = validate_file_path(&file_path, workspace_root);
+        assert!(result.is_ok());
     }
 
     #[test]

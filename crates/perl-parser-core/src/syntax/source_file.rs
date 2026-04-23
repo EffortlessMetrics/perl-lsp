@@ -34,8 +34,8 @@ pub fn is_binary_content(text: &str) -> bool {
 /// Includes core Perl script and module extensions as well as common embedded
 /// Perl template formats: `.ep` (Mojolicious), `.tt`/`.tt2` (Template Toolkit),
 /// and `.mason` (Mason/HTML::Mason).
-pub const PERL_SOURCE_EXTENSIONS: [&str; 9] =
-    ["pl", "pm", "t", "psgi", "cgi", "ep", "tt", "tt2", "mason"];
+pub const PERL_SOURCE_EXTENSIONS: [&str; 10] =
+    ["pl", "pm", "t", "psgi", "cgi", "ep", "tt", "tt2", "mason", "mcp"];
 
 /// Returns `true` if `extension` is a recognized Perl source extension.
 ///
@@ -69,8 +69,8 @@ pub fn is_perl_source_uri(uri: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{
-        BINARY_PROBE_BYTES, PERL_SOURCE_EXTENSIONS, is_binary_content, is_perl_source_extension,
-        is_perl_source_path, is_perl_source_uri,
+        is_binary_content, is_perl_source_extension, is_perl_source_path, is_perl_source_uri,
+        BINARY_PROBE_BYTES, PERL_SOURCE_EXTENSIONS,
     };
     use std::path::Path;
 
@@ -78,7 +78,7 @@ mod tests {
     fn exposes_expected_extension_set() {
         assert_eq!(
             PERL_SOURCE_EXTENSIONS,
-            ["pl", "pm", "t", "psgi", "cgi", "ep", "tt", "tt2", "mason"]
+            ["pl", "pm", "t", "psgi", "cgi", "ep", "tt", "tt2", "mason", "mcp"]
         );
     }
 
@@ -159,6 +159,12 @@ mod tests {
         assert!(is_perl_source_extension("MASON"));
         assert!(is_perl_source_path(Path::new("/app/comp/header.mason")));
         assert!(is_perl_source_uri("file:///app/comp/header.mason"));
+
+        // .mcp — Mason component files
+        assert!(is_perl_source_extension("mcp"));
+        assert!(is_perl_source_extension("MCP"));
+        assert!(is_perl_source_path(Path::new("/app/comp/header.mcp")));
+        assert!(is_perl_source_uri("file:///app/comp/header.mcp"));
 
         // Non-template extensions remain unrecognized
         assert!(!is_perl_source_extension("html"));

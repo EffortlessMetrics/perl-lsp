@@ -4,9 +4,9 @@
 
 use super::super::*;
 use lsp_types::{
+    notification::{DidChangeWatchedFiles, Notification},
     DidChangeWatchedFilesRegistrationOptions, FileSystemWatcher, GlobPattern, Registration,
     RegistrationParams, WatchKind,
-    notification::{DidChangeWatchedFiles, Notification},
 };
 impl LspServer {
     /// Register file watchers for Perl files
@@ -30,6 +30,10 @@ impl LspServer {
             },
             FileSystemWatcher {
                 glob_pattern: GlobPattern::String("**/*.psgi".into()),
+                kind: Some(WatchKind::Create | WatchKind::Change | WatchKind::Delete),
+            },
+            FileSystemWatcher {
+                glob_pattern: GlobPattern::String("**/*.mcp".into()),
                 kind: Some(WatchKind::Create | WatchKind::Change | WatchKind::Delete),
             },
         ];

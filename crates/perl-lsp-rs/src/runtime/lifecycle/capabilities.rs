@@ -4,7 +4,7 @@
 
 use super::super::*;
 use perl_workspace::folder::{extract_workspace_folder_uris, root_path_to_file_uri};
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 
 impl LspServer {
     /// Handle initialize request
@@ -310,37 +310,43 @@ impl LspServer {
                     { "pattern": { "glob": "**/*.pl" } },
                     { "pattern": { "glob": "**/*.pm" } },
                     { "pattern": { "glob": "**/*.t" } },
-                    { "pattern": { "glob": "**/*.psgi" } }
+                    { "pattern": { "glob": "**/*.psgi" } },
+                    { "pattern": { "glob": "**/*.mcp" } }
                 ]},
                 "didCreate": { "filters": [
                     { "pattern": { "glob": "**/*.pl" } },
                     { "pattern": { "glob": "**/*.pm" } },
                     { "pattern": { "glob": "**/*.t" } },
-                    { "pattern": { "glob": "**/*.psgi" } }
+                    { "pattern": { "glob": "**/*.psgi" } },
+                    { "pattern": { "glob": "**/*.mcp" } }
                 ]},
                 "willRename": { "filters": [
                     { "pattern": { "glob": "**/*.pl" } },
                     { "pattern": { "glob": "**/*.pm" } },
                     { "pattern": { "glob": "**/*.t" } },
-                    { "pattern": { "glob": "**/*.psgi" } }
+                    { "pattern": { "glob": "**/*.psgi" } },
+                    { "pattern": { "glob": "**/*.mcp" } }
                 ]},
                 "didRename": { "filters": [
                     { "pattern": { "glob": "**/*.pl" } },
                     { "pattern": { "glob": "**/*.pm" } },
                     { "pattern": { "glob": "**/*.t" } },
-                    { "pattern": { "glob": "**/*.psgi" } }
+                    { "pattern": { "glob": "**/*.psgi" } },
+                    { "pattern": { "glob": "**/*.mcp" } }
                 ]},
                 "willDelete": { "filters": [
                     { "pattern": { "glob": "**/*.pl" } },
                     { "pattern": { "glob": "**/*.pm" } },
                     { "pattern": { "glob": "**/*.t" } },
-                    { "pattern": { "glob": "**/*.psgi" } }
+                    { "pattern": { "glob": "**/*.psgi" } },
+                    { "pattern": { "glob": "**/*.mcp" } }
                 ]},
                 "didDelete": { "filters": [
                     { "pattern": { "glob": "**/*.pl" } },
                     { "pattern": { "glob": "**/*.pm" } },
                     { "pattern": { "glob": "**/*.t" } },
-                    { "pattern": { "glob": "**/*.psgi" } }
+                    { "pattern": { "glob": "**/*.psgi" } },
+                    { "pattern": { "glob": "**/*.mcp" } }
                 ]}
             },
             "textDocumentContent": {
@@ -412,8 +418,8 @@ pub(crate) fn apply_disabled_feature_id(
 #[cfg(test)]
 mod tests {
     use super::apply_disabled_feature_id;
-    use crate::LspServer;
     use crate::protocol::capabilities::BuildFlags;
+    use crate::LspServer;
     use serde_json::json;
 
     #[test]
