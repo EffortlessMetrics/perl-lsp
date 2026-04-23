@@ -195,6 +195,77 @@ describe('extension UX warnings', () => {
     expect(showWarningMessage).not.toHaveBeenCalled();
   });
 
+  test('does not offer directory creation for absolute include paths', async () => {
+    const workspaceDir = fs.mkdtempSync(path.join(os.tmpdir(), 'perl-lsp-ux-abs-'));
+    const absoluteMissing = path.join(workspaceDir, 'missing-absolute-lib');
+    const context = makeContext();
+    context.globalState = {
+      get: jest.fn(() => undefined),
+      update: jest.fn(async () => undefined),
+    };
+
+    (vscode.workspace.getConfiguration as jest.Mock).mockImplementation(() => ({
+      get: jest.fn(() => [absoluteMissing]),
+    }));
+
+    (vscode.workspace as any).workspaceFolders = [
+      {
+        name: 'workspace',
+        uri: {
+          fsPath: workspaceDir,
+          toString: () => `file://${workspaceDir}`,
+        },
+      },
+    ];
+
+    const showWarningMessage = vscode.window.showWarningMessage as jest.Mock;
+    showWarningMessage.mockResolvedValue(undefined);
+
+    await validateIncludePaths(context);
+
+    expect(showWarningMessage).toHaveBeenCalledWith(
+      expect.stringContaining('absolute path'),
+      'Open Settings'
+    );
+    expect(showWarningMessage.mock.calls[0]).toHaveLength(2);
+  });
+
+  test('does not offer directory creation for include paths outside the workspace', async () => {
+    const workspaceDir = fs.mkdtempSync(path.join(os.tmpdir(), 'perl-lsp-ux-traversal-'));
+    const context = makeContext();
+    context.globalState = {
+      get: jest.fn(() => undefined),
+      update: jest.fn(async () => undefined),
+    };
+
+    (vscode.workspace.getConfiguration as jest.Mock).mockImplementation(() => ({
+      get: jest.fn(() => ['../outside-lib']),
+    }));
+
+    (vscode.workspace as any).workspaceFolders = [
+      {
+        name: 'workspace',
+        uri: {
+          fsPath: workspaceDir,
+          toString: () => `file://${workspaceDir}`,
+        },
+      },
+    ];
+
+    const showWarningMessage = vscode.window.showWarningMessage as jest.Mock;
+    showWarningMessage.mockResolvedValue('Create Missing Directories');
+
+    await validateIncludePaths(context);
+
+    expect(showWarningMessage).toHaveBeenCalledWith(
+      expect.stringContaining('../outside-lib'),
+      'Open Settings'
+    );
+    expect(showWarningMessage.mock.calls[0]).toHaveLength(2);
+    expect(fs.existsSync(path.resolve(workspaceDir, '../outside-lib'))).toBe(false);
+  });
+
+
   test('syncs perlcritic settings to the server', async () => {
     const sendNotification = jest.fn();
     const getConfiguration = vscode.workspace.getConfiguration as jest.Mock;
