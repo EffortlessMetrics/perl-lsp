@@ -521,7 +521,7 @@ fn normalize_mojolicious_controller_name(raw: &str) -> Option<String> {
         let mut normalized_segment = String::new();
         let mut capitalize_next = true;
         for ch in segment.chars() {
-            if ch == '_' || ch == '-' {
+            if ch == '_' {
                 capitalize_next = true;
                 continue;
             }
