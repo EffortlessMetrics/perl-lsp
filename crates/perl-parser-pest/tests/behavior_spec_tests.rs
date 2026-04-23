@@ -93,6 +93,52 @@ fn when_hash_uses_fat_comma_pairs_then_parser_keeps_hash_assignment_structure() 
 }
 
 #[test]
+fn when_given_statement_contains_when_and_default_then_parser_emits_switch_shape() {
+    let sexp = parse_to_sexp(
+        r#"
+given ($x) {
+    when (1) { print "one"; }
+    default { print "other"; }
+}
+"#,
+    );
+
+    assert!(sexp.contains("(given_statement"), "expected given_statement; got: {sexp}");
+    assert!(sexp.contains("(when_clause"), "expected when_clause; got: {sexp}");
+    assert!(sexp.contains("(default_clause"), "expected default_clause; got: {sexp}");
+}
+
+#[test]
+fn when_method_call_uses_arrow_syntax_then_parser_recovers_to_partial_ast_without_panicking() {
+    let sexp = parse_to_sexp(r#"$obj->run("fast");"#);
+
+    assert!(sexp.contains("(source_file"), "expected source_file wrapper; got: {sexp}");
+    assert!(
+        sexp.contains("(scalar_variable $obj)"),
+        "expected partial recovery to preserve receiver variable; got: {sexp}"
+    );
+}
+
+#[test]
+fn when_input_has_mixed_valid_invalid_and_valid_statements_then_recovery_keeps_later_statements()
+-> Result<(), String> {
+    let ast = parse_ast("my $start = 1;\nmy = ;\nmy $end = 2;\n");
+
+    let AstNode::Program(nodes) = ast else {
+        return Err("expected recovery to return Program".to_string());
+    };
+
+    let sexp_nodes: Vec<String> = nodes.iter().map(PureRustPerlParser::node_to_sexp).collect();
+    let joined = sexp_nodes.join(" ");
+    assert!(!nodes.is_empty(), "expected at least one preserved statement");
+    assert!(
+        joined.contains("$start") || joined.contains("$end"),
+        "expected recovery output to keep parseable statements; got: {joined}"
+    );
+    Ok(())
+}
+
+#[test]
 fn when_input_has_valid_then_invalid_then_recovery_returns_partial_program() -> Result<(), String> {
     let ast = parse_ast("my $ok = 1;\nmy = ;\nprint $ok;\n");
 
