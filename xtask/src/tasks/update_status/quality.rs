@@ -122,6 +122,55 @@ pub(super) fn count_ux_scenarios(root: &Path) -> usize {
     collect_ux_scenario_files(root).len()
 }
 
+#[derive(Debug, Clone, Default)]
+struct UxWorkflowInventory {
+    total: usize,
+    pr_tier: usize,
+    nightly_tier: usize,
+}
+
+fn collect_ux_workflow_inventory(root: &Path) -> UxWorkflowInventory {
+    let matrix_path = root.join("crates/perl-lsp-ux-tests/fixtures/editor_ux_fixture_matrix.json");
+    let Ok(raw) = fs::read_to_string(&matrix_path) else {
+        let total = count_ux_scenarios(root);
+        return UxWorkflowInventory { total, ..UxWorkflowInventory::default() };
+    };
+    let Ok(doc) = serde_json::from_str::<serde_json::Value>(&raw) else {
+        let total = count_ux_scenarios(root);
+        return UxWorkflowInventory { total, ..UxWorkflowInventory::default() };
+    };
+
+    let Some(workflows) = doc.get("workflows").and_then(serde_json::Value::as_array) else {
+        let total = count_ux_scenarios(root);
+        return UxWorkflowInventory { total, ..UxWorkflowInventory::default() };
+    };
+
+    let mut inventory =
+        UxWorkflowInventory { total: workflows.len(), ..UxWorkflowInventory::default() };
+    for workflow in workflows {
+        match workflow.get("ci_tier").and_then(serde_json::Value::as_str) {
+            Some("pr") => inventory.pr_tier += 1,
+            Some("nightly") => inventory.nightly_tier += 1,
+            _ => {}
+        }
+    }
+    inventory
+}
+
+fn load_editor_ux_metrics(root: &Path) -> BTreeMap<String, serde_json::Value> {
+    let metrics_path = root.join(".ci/metrics/editor_ux.json");
+    let Ok(raw) = fs::read_to_string(&metrics_path) else {
+        return BTreeMap::new();
+    };
+    let Ok(doc) = serde_json::from_str::<serde_json::Value>(&raw) else {
+        return BTreeMap::new();
+    };
+    let Some(metrics_obj) = doc.get("metrics").and_then(serde_json::Value::as_object) else {
+        return BTreeMap::new();
+    };
+    metrics_obj.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
+}
+
 // ---------------------------------------------------------------------------
 // Generators
 // ---------------------------------------------------------------------------
@@ -129,7 +178,9 @@ pub(super) fn count_ux_scenarios(root: &Path) -> usize {
 pub(super) fn generate_quality_status(root: &Path, original: &str) -> Result<String> {
     let mutation_by_crate = collect_per_crate_mutation(root);
     let tests_by_crate = collect_per_crate_test_counts(root);
-    let ux_scenarios = count_ux_scenarios(root);
+    let ux_inventory = collect_ux_workflow_inventory(root);
+    let ux_scenarios =
+        if ux_inventory.total > 0 { ux_inventory.total } else { count_ux_scenarios(root) };
 
     let has_mutation_data = !mutation_by_crate.is_empty();
     let mutation_note = if has_mutation_data {
@@ -140,12 +191,15 @@ pub(super) fn generate_quality_status(root: &Path, original: &str) -> Result<Str
 
     let bullets_content = format!(
         "- **Quality Metrics**: <50ms LSP response times, 931ns incremental parsing\n\
-         - **UX workflow harness**: {ux_scenarios} scenario files in `perl-lsp-ux-tests`; \
+         - **UX workflow harness**: {ux_scenarios} canonical workflows in `perl-lsp-ux-tests` \
+           ({pr_workflows} PR-tier, {nightly_workflows} nightly-tier); \
            `just ux-tests` runs the default release-confidence lane and `just ux-tests-full` adds \
            the integration-only 10k-line large-file case; planning scaffold at \
            `docs/project/status/editor_ux.json`\n\
          - **Mutation testing**: {mutation_note}\n\
-         - **Production Status**: LSP server public alpha (`just ci-gate` passing)"
+         - **Production Status**: LSP server public alpha (`just ci-gate` passing)",
+        pr_workflows = ux_inventory.pr_tier,
+        nightly_workflows = ux_inventory.nightly_tier
     );
 
     let crate_table = format_crate_quality_table(&mutation_by_crate, &tests_by_crate);
@@ -169,33 +223,39 @@ pub(super) fn generate_quality_status(root: &Path, original: &str) -> Result<Str
 pub(super) fn generate_editor_ux_receipt(root: &Path) -> Result<String> {
     let scenario_files = collect_ux_scenario_files(root);
     let scenario_count = scenario_files.len();
+    let measured_metrics = load_editor_ux_metrics(root);
+    let metric_names =
+        ["workflow_pass_rate", "workflow_stability_rate", "p95_time_to_first_useful_result_ms"];
+    let has_measured_top_line = metric_names
+        .iter()
+        .any(|name| measured_metrics.get(*name).is_some_and(|value| !value.is_null()));
+    let receipt_kind =
+        if has_measured_top_line { "tracked_scorecard" } else { "planning_scaffold" };
+
+    let top_line_metrics = metric_names
+        .iter()
+        .map(|name| {
+            let value = measured_metrics.get(*name).cloned().unwrap_or(serde_json::Value::Null);
+            let state = if value.is_null() { "planned" } else { "measured" };
+            serde_json::json!({
+                "name": name,
+                "state": state,
+                "owner": "perl-lsp-ux-tests",
+                "value": value,
+            })
+        })
+        .collect::<Vec<_>>();
 
     let receipt = serde_json::json!({
         "schema_version": 1,
-        "receipt_kind": "planning_scaffold",
+        "receipt_kind": receipt_kind,
         "scorecard": "editor_ux",
         "harness": {
             "crate": "crates/perl-lsp-ux-tests",
             "scenario_count": scenario_count,
             "scenario_files": scenario_files,
         },
-        "top_line_metrics": [
-            {
-                "name": "workflow_pass_rate",
-                "state": "planned",
-                "owner": "perl-lsp-ux-tests",
-            },
-            {
-                "name": "workflow_stability_rate",
-                "state": "planned",
-                "owner": "perl-lsp-ux-tests",
-            },
-            {
-                "name": "p95_time_to_first_useful_result_ms",
-                "state": "planned",
-                "owner": "perl-lsp-ux-tests",
-            },
-        ],
+        "top_line_metrics": top_line_metrics,
         "integration_points": {
             "ci_lane": "just ux-tests",
             "release_lane": "just ux-tests-full",
@@ -279,7 +339,63 @@ mod tests {
                 "p95_time_to_first_useful_result_ms",
             ])
         );
+        for row in receipt["top_line_metrics"]
+            .as_array()
+            .ok_or_else(|| eyre!("top_line_metrics must be an array"))?
+        {
+            assert!(
+                row.get("value").is_some(),
+                "top_line metric rows should include a nullable `value` field"
+            );
+        }
         assert_eq!(receipt["integration_points"]["ci_lane"], "just ux-tests");
+        Ok(())
+    }
+
+    #[test]
+    fn test_collect_ux_workflow_inventory_from_fixture_matrix() -> Result<()> {
+        let root = crate::utils::project_root()?;
+        let inventory = collect_ux_workflow_inventory(&root);
+        assert!(inventory.total >= 1, "fixture matrix should define at least one workflow");
+        assert_eq!(
+            inventory.total,
+            inventory.pr_tier + inventory.nightly_tier,
+            "workflow inventory should be partitioned across expected ci tiers"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_generate_editor_ux_receipt_marks_measured_metrics() -> Result<()> {
+        let dir = tempfile::tempdir()?;
+        let root = dir.path();
+        fs::create_dir_all(root.join(".ci/metrics"))?;
+        fs::create_dir_all(root.join("crates/perl-lsp-ux-tests/tests"))?;
+        fs::write(
+            root.join("crates/perl-lsp-ux-tests/tests/ux_scenario_01_simple_file.rs"),
+            "// scenario",
+        )?;
+        fs::write(
+            root.join(".ci/metrics/editor_ux.json"),
+            r#"{
+                "schema_version": 1,
+                "metrics": {
+                    "workflow_pass_rate": 0.92,
+                    "workflow_stability_rate": null,
+                    "p95_time_to_first_useful_result_ms": 48
+                }
+            }"#,
+        )?;
+
+        let receipt_raw = generate_editor_ux_receipt(root)?;
+        let receipt: serde_json::Value = serde_json::from_str(&receipt_raw)?;
+        assert_eq!(receipt["receipt_kind"], "tracked_scorecard");
+
+        let top_line = receipt["top_line_metrics"]
+            .as_array()
+            .ok_or_else(|| eyre!("top_line_metrics should be an array"))?;
+        let measured_count = top_line.iter().filter(|row| row["state"] == "measured").count();
+        assert_eq!(measured_count, 2, "two non-null metric values should be measured");
         Ok(())
     }
 }

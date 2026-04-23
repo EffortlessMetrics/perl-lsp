@@ -161,9 +161,9 @@ The project tracks a few distinct metrics that are easy to conflate. Each one sc
 | Parser corpus — CPAN top 1000 | 95.3% (8931 / 9372) | File-level clean parse rate: share of files the parser processes without recording errors | Semantic fidelity of the AST, cross-file analysis, or any LSP-level correctness |
 | Parser corpus — Ubuntu system Perl | 97.1% (6890 / 7095) | Same, against the Ubuntu system-installed Perl compatibility baseline | Same |
 | Parser corpus — project corpus | 100.0% (91 / 91) | Deterministic regression baseline that must stay clean | Same |
-| End-to-end UX confidence | *qualitative* | Currently covered by manual editor smoke workflows, the `perl-lsp-ux-tests` first-5-minutes harness, and open-issue burn-down — not a published number | Anything about parser breadth, protocol catalog size, or capability count |
+| End-to-end UX confidence | 17 canonical workflows (16 PR-tier, 1 nightly-tier) + scorecard receipt | Tracked by the `perl-lsp-ux-tests` first-5-minutes workflow matrix and published via `docs/project/status/editor_ux.json` (metric states move from planned → measured as receipts land) | Anything about parser breadth, protocol catalog size, or capability count |
 
-The last row is the important one: *none* of the automated metrics above measure whether a real editing session feels good. That's validated through workflow smoke tests, the `perl-lsp-ux-tests` harness, and the list of known gaps below, not by a dashboard.
+The last row is the important one: parser and capability coverage still do not imply "good editor feel." The project now publishes the workflow inventory and metric state progression (`planned` vs `measured`) so UX confidence is explicitly tracked rather than purely narrative.
 
 Live numbers live in [docs/project/status/parser.md](docs/project/status/parser.md); this table may lag a merge cycle.
 
