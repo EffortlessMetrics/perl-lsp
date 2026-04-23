@@ -28,24 +28,35 @@
     "release_lane": "just ux-tests-full",
     "status_update": "cargo xtask update-status --only quality"
   },
-  "receipt_kind": "planning_scaffold",
-  "schema_version": 1,
+  "receipt_kind": "tracked_signals",
+  "schema_version": 2,
   "scorecard": "editor_ux",
   "top_line_metrics": [
     {
       "name": "workflow_pass_rate",
       "owner": "perl-lsp-ux-tests",
-      "state": "planned"
+      "state": "tracked_not_measured"
     },
     {
       "name": "workflow_stability_rate",
       "owner": "perl-lsp-ux-tests",
-      "state": "planned"
+      "state": "tracked_not_measured"
     },
     {
       "name": "p95_time_to_first_useful_result_ms",
       "owner": "perl-lsp-ux-tests",
-      "state": "planned"
+      "state": "tracked_not_measured"
     }
-  ]
+  ],
+  "tracked_signals": {
+    "counts": {
+      "measured_top_line_metric_count": 0,
+      "pr_tier_workflow_count": 16,
+      "workflow_count": 17
+    },
+    "pr_lane_coverage_rate": 0.9411764705882353,
+    "release_lane_coverage_rate": 1.0,
+    "top_line_metric_instrumentation_rate": 0.0,
+    "workflow_inventory_coverage_rate": 1.0
+  }
 }

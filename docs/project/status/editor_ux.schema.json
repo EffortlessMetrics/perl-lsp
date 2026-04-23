@@ -9,16 +9,17 @@
     "scorecard",
     "harness",
     "top_line_metrics",
+    "tracked_signals",
     "integration_points"
   ],
   "properties": {
     "schema_version": {
       "type": "integer",
-      "const": 1
+      "const": 2
     },
     "receipt_kind": {
       "type": "string",
-      "const": "planning_scaffold"
+      "const": "tracked_signals"
     },
     "scorecard": {
       "type": "string",
@@ -98,7 +99,7 @@
           },
           "state": {
             "type": "string",
-            "enum": ["planned", "measured"]
+            "enum": ["tracked_not_measured", "measured"]
           },
           "owner": {
             "type": "string"
@@ -122,6 +123,63 @@
         },
         "quality_surface": {
           "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "tracked_signals": {
+      "type": "object",
+      "required": [
+        "workflow_inventory_coverage_rate",
+        "pr_lane_coverage_rate",
+        "release_lane_coverage_rate",
+        "top_line_metric_instrumentation_rate",
+        "counts"
+      ],
+      "properties": {
+        "workflow_inventory_coverage_rate": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "pr_lane_coverage_rate": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "release_lane_coverage_rate": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "top_line_metric_instrumentation_rate": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "counts": {
+          "type": "object",
+          "required": [
+            "workflow_count",
+            "pr_tier_workflow_count",
+            "measured_top_line_metric_count"
+          ],
+          "properties": {
+            "workflow_count": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "pr_tier_workflow_count": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "measured_top_line_metric_count": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 3
+            }
+          },
+          "additionalProperties": false
         }
       },
       "additionalProperties": false

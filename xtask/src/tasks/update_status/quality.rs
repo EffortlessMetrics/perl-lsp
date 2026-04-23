@@ -122,6 +122,49 @@ pub(super) fn count_ux_scenarios(root: &Path) -> usize {
     collect_ux_scenario_files(root).len()
 }
 
+#[derive(Debug, Clone, Copy)]
+struct UxSignalSnapshot {
+    workflow_count: usize,
+    pr_tier_workflow_count: usize,
+    measured_top_line_metric_count: usize,
+}
+
+fn collect_ux_signal_snapshot(root: &Path) -> UxSignalSnapshot {
+    let matrix_path = root.join("crates/perl-lsp-ux-tests/fixtures/editor_ux_fixture_matrix.json");
+    let Ok(raw) = fs::read_to_string(matrix_path) else {
+        return UxSignalSnapshot {
+            workflow_count: 0,
+            pr_tier_workflow_count: 0,
+            measured_top_line_metric_count: 0,
+        };
+    };
+    let Ok(matrix) = serde_json::from_str::<serde_json::Value>(&raw) else {
+        return UxSignalSnapshot {
+            workflow_count: 0,
+            pr_tier_workflow_count: 0,
+            measured_top_line_metric_count: 0,
+        };
+    };
+
+    let workflows =
+        matrix.get("workflows").and_then(serde_json::Value::as_array).cloned().unwrap_or_default();
+    let workflow_count = workflows.len();
+    let pr_tier_workflow_count = workflows
+        .iter()
+        .filter(|workflow| {
+            workflow.get("ci_tier").and_then(serde_json::Value::as_str) == Some("pr")
+        })
+        .count();
+
+    let measured_top_line_metric_count = 0;
+
+    UxSignalSnapshot { workflow_count, pr_tier_workflow_count, measured_top_line_metric_count }
+}
+
+fn ratio(numerator: usize, denominator: usize) -> f64 {
+    if denominator == 0 { 0.0 } else { numerator as f64 / denominator as f64 }
+}
+
 // ---------------------------------------------------------------------------
 // Generators
 // ---------------------------------------------------------------------------
@@ -130,6 +173,9 @@ pub(super) fn generate_quality_status(root: &Path, original: &str) -> Result<Str
     let mutation_by_crate = collect_per_crate_mutation(root);
     let tests_by_crate = collect_per_crate_test_counts(root);
     let ux_scenarios = count_ux_scenarios(root);
+    let ux_signals = collect_ux_signal_snapshot(root);
+    let pr_lane_coverage = ratio(ux_signals.pr_tier_workflow_count, ux_signals.workflow_count);
+    let top_line_instrumentation_rate = ratio(ux_signals.measured_top_line_metric_count, 3);
 
     let has_mutation_data = !mutation_by_crate.is_empty();
     let mutation_note = if has_mutation_data {
@@ -141,11 +187,18 @@ pub(super) fn generate_quality_status(root: &Path, original: &str) -> Result<Str
     let bullets_content = format!(
         "- **Quality Metrics**: <50ms LSP response times, 931ns incremental parsing\n\
          - **UX workflow harness**: {ux_scenarios} scenario files in `perl-lsp-ux-tests`; \
+           PR-lane coverage {:.1}% ({}/{}) and top-line instrumentation \
+           {:.1}% ({}/3); \
            `just ux-tests` runs the default release-confidence lane and `just ux-tests-full` adds \
-           the integration-only 10k-line large-file case; planning scaffold at \
+           the integration-only 10k-line large-file case; tracked signals at \
            `docs/project/status/editor_ux.json`\n\
          - **Mutation testing**: {mutation_note}\n\
-         - **Production Status**: LSP server public alpha (`just ci-gate` passing)"
+         - **Production Status**: LSP server public alpha (`just ci-gate` passing)",
+        pr_lane_coverage * 100.0,
+        ux_signals.pr_tier_workflow_count,
+        ux_signals.workflow_count,
+        top_line_instrumentation_rate * 100.0,
+        ux_signals.measured_top_line_metric_count
     );
 
     let crate_table = format_crate_quality_table(&mutation_by_crate, &tests_by_crate);
@@ -169,10 +222,15 @@ pub(super) fn generate_quality_status(root: &Path, original: &str) -> Result<Str
 pub(super) fn generate_editor_ux_receipt(root: &Path) -> Result<String> {
     let scenario_files = collect_ux_scenario_files(root);
     let scenario_count = scenario_files.len();
+    let ux_signals = collect_ux_signal_snapshot(root);
+    let workflow_inventory_coverage_rate = ratio(ux_signals.workflow_count, scenario_count);
+    let pr_lane_coverage_rate = ratio(ux_signals.pr_tier_workflow_count, ux_signals.workflow_count);
+    let release_lane_coverage_rate = ratio(ux_signals.workflow_count, ux_signals.workflow_count);
+    let top_line_metric_instrumentation_rate = ratio(ux_signals.measured_top_line_metric_count, 3);
 
     let receipt = serde_json::json!({
-        "schema_version": 1,
-        "receipt_kind": "planning_scaffold",
+        "schema_version": 2,
+        "receipt_kind": "tracked_signals",
         "scorecard": "editor_ux",
         "harness": {
             "crate": "crates/perl-lsp-ux-tests",
@@ -182,20 +240,31 @@ pub(super) fn generate_editor_ux_receipt(root: &Path) -> Result<String> {
         "top_line_metrics": [
             {
                 "name": "workflow_pass_rate",
-                "state": "planned",
+                "state": "tracked_not_measured",
                 "owner": "perl-lsp-ux-tests",
             },
             {
                 "name": "workflow_stability_rate",
-                "state": "planned",
+                "state": "tracked_not_measured",
                 "owner": "perl-lsp-ux-tests",
             },
             {
                 "name": "p95_time_to_first_useful_result_ms",
-                "state": "planned",
+                "state": "tracked_not_measured",
                 "owner": "perl-lsp-ux-tests",
             },
         ],
+        "tracked_signals": {
+            "workflow_inventory_coverage_rate": workflow_inventory_coverage_rate,
+            "pr_lane_coverage_rate": pr_lane_coverage_rate,
+            "release_lane_coverage_rate": release_lane_coverage_rate,
+            "top_line_metric_instrumentation_rate": top_line_metric_instrumentation_rate,
+            "counts": {
+                "workflow_count": ux_signals.workflow_count,
+                "pr_tier_workflow_count": ux_signals.pr_tier_workflow_count,
+                "measured_top_line_metric_count": ux_signals.measured_top_line_metric_count,
+            },
+        },
         "integration_points": {
             "ci_lane": "just ux-tests",
             "release_lane": "just ux-tests-full",
@@ -257,8 +326,8 @@ mod tests {
         let root = crate::utils::project_root()?;
         let receipt_raw = generate_editor_ux_receipt(&root)?;
         let receipt: serde_json::Value = serde_json::from_str(&receipt_raw)?;
-        assert_eq!(receipt["schema_version"], 1);
-        assert_eq!(receipt["receipt_kind"], "planning_scaffold");
+        assert_eq!(receipt["schema_version"], 2);
+        assert_eq!(receipt["receipt_kind"], "tracked_signals");
         assert_eq!(receipt["scorecard"], "editor_ux");
         assert_eq!(receipt["harness"]["crate"], "crates/perl-lsp-ux-tests");
         assert_eq!(
@@ -279,6 +348,21 @@ mod tests {
                 "p95_time_to_first_useful_result_ms",
             ])
         );
+        let tracked = receipt["tracked_signals"]
+            .as_object()
+            .ok_or_else(|| eyre!("tracked_signals missing"))?;
+        for key in [
+            "workflow_inventory_coverage_rate",
+            "pr_lane_coverage_rate",
+            "release_lane_coverage_rate",
+            "top_line_metric_instrumentation_rate",
+        ] {
+            let value = tracked
+                .get(key)
+                .and_then(serde_json::Value::as_f64)
+                .ok_or_else(|| eyre!("{key} must be a number"))?;
+            assert!((0.0..=1.0).contains(&value), "{key} must be in [0, 1], got {value}");
+        }
         assert_eq!(receipt["integration_points"]["ci_lane"], "just ux-tests");
         Ok(())
     }
