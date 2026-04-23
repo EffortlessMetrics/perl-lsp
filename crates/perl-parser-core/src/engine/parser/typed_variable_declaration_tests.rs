@@ -31,10 +31,7 @@ fn test_plain_my_declaration_not_affected() -> Result<(), Box<dyn std::error::Er
         !sexp.contains("ERROR"),
         "Plain my declaration should parse without ERROR node, got: {sexp}",
     );
-    assert!(
-        sexp.contains("(variable $ x)"),
-        "Expected variable $x in sexp, got: {sexp}",
-    );
+    assert!(sexp.contains("(variable $ x)"), "Expected variable $x in sexp, got: {sexp}",);
     Ok(())
 }
 
