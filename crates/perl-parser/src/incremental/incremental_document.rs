@@ -132,10 +132,12 @@ impl IncrementalDocument {
         let mut sorted_edits = edits.edits.clone();
         sorted_edits.sort_by(|a, b| b.start_byte.cmp(&a.start_byte));
 
-        // Apply all edits to source
+        // Apply all edits to source in-place.
+        // Reverse ordering keeps byte offsets stable while avoiding repeated
+        // full-string allocations for each edit.
         let mut new_source = self.source.clone();
         for edit in &sorted_edits {
-            new_source = self.apply_edit_to_string(&new_source, edit);
+            self.apply_edit_in_place(&mut new_source, edit);
         }
 
         // Find all affected ranges
@@ -187,6 +189,22 @@ impl IncrementalDocument {
         }
 
         result
+    }
+
+    fn apply_edit_in_place(&self, source: &mut String, edit: &IncrementalEdit) {
+        let start = edit.start_byte.min(source.len());
+        let end = edit.old_end_byte.min(source.len());
+
+        if start > end {
+            debug!("Skipping invalid edit range: start={}, end={}", start, end);
+            return;
+        }
+
+        if source.is_char_boundary(start) && source.is_char_boundary(end) {
+            source.replace_range(start..end, &edit.new_text);
+        } else {
+            debug!("Invalid UTF-8 boundaries in edit: start={}, end={}", start, end);
+        }
     }
 
     /// Find subtrees that can be reused (outside the edited range)

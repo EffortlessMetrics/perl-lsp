@@ -1,7 +1,8 @@
 {
   "diagnostics": [
     {
-      "assertion": "no_diagnostics"
+      "assertion": "no_diagnostic",
+      "code": "PL100"
     }
   ]
 }
