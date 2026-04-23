@@ -70,6 +70,7 @@ Any editor with LSP client support works. Point it at `perllsp --stdio`:
 - **Neovim** — via `nvim-lspconfig` (`perl_ls` server)
 - **Emacs** — via `eglot` or `lsp-mode`
 - **Helix** — via `languages.toml`
+- **Zed** — via a Perl extension (see [ZED_SETUP.md](../EDITORS/ZED_SETUP.md))
 - **Sublime Text** — via the LSP package
 - **Kate**, **Lapce**, **Kakoune** — any editor with a generic LSP client
 
