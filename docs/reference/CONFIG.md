@@ -878,21 +878,23 @@ inlayHints.enabled = true
       "binary": {
         "path": "perllsp",
         "arguments": ["--stdio"]
-      },
-      "initialization_options": {
-        "perl": {
-          "workspace": {
-            "includePaths": ["lib", ".", "local/lib/perl5"],
-            "useSystemInc": false
-          },
-          "inlayHints": {
-            "enabled": true
-          }
-        }
       }
     }
   }
 }
+```
+
+Workspace include paths and inlay hints are configured via `.perl-lsp.toml` at
+the workspace root (Zed does not send `workspace/didChangeConfiguration` by
+default, and `initializationOptions` only supports `disabledFeatures`):
+
+```toml
+[workspace]
+include_paths = ["lib", ".", "local/lib/perl5"]
+use_system_inc = false
+
+[inlay_hints]
+enabled = true
 ```
 
 #### Sublime Text (LSP package)
