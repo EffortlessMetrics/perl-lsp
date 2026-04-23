@@ -352,6 +352,8 @@ pub enum WebFrameworkKind {
     MojoliciousLite,
     /// `use Plack::Builder;`
     PlackBuilder,
+    /// `use Builder::IO::Fusion;`
+    BuilderIoFusion,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1713,7 +1715,12 @@ impl SymbolExtractor {
         let Some(flags) = self.framework_flags.get(&self.table.current_package) else {
             return;
         };
-        if flags.web_framework != Some(WebFrameworkKind::PlackBuilder) || name != "builder" {
+        let framework_name = match flags.web_framework {
+            Some(WebFrameworkKind::PlackBuilder) => "Plack::Builder",
+            Some(WebFrameworkKind::BuilderIoFusion) => "Builder::IO::Fusion",
+            _ => return,
+        };
+        if name != "builder" {
             return;
         }
 
@@ -1738,10 +1745,22 @@ impl SymbolExtractor {
 
             match stmt_name.as_str() {
                 "enable" => {
-                    self.synthesize_plack_enable_symbol(statement, stmt_args, scope_id, &package);
+                    self.synthesize_plack_enable_symbol(
+                        statement,
+                        stmt_args,
+                        scope_id,
+                        &package,
+                        framework_name,
+                    );
                 }
                 "mount" => {
-                    self.synthesize_plack_mount_symbol(statement, stmt_args, scope_id, &package);
+                    self.synthesize_plack_mount_symbol(
+                        statement,
+                        stmt_args,
+                        scope_id,
+                        &package,
+                        framework_name,
+                    );
                 }
                 _ => {}
             }
@@ -1754,6 +1773,7 @@ impl SymbolExtractor {
         args: &[Node],
         scope_id: ScopeId,
         _package: &str,
+        framework_name: &str,
     ) {
         let Some(first) = args.first() else {
             return;
@@ -1792,7 +1812,7 @@ impl SymbolExtractor {
             declaration: Some("enable".to_string()),
             documentation: Some(format!("PSGI middleware {middleware_name}")),
             attributes: vec![
-                "framework=Plack::Builder".to_string(),
+                format!("framework={framework_name}"),
                 format!("middleware={middleware_name}"),
             ],
         });
@@ -1804,6 +1824,7 @@ impl SymbolExtractor {
         args: &[Node],
         scope_id: ScopeId,
         _package: &str,
+        framework_name: &str,
     ) {
         let Some(path_node) = args.first() else {
             return;
@@ -1840,7 +1861,7 @@ impl SymbolExtractor {
             declaration: Some("mount".to_string()),
             documentation: Some(format!("PSGI mount {path} -> {target}")),
             attributes: vec![
-                "framework=Plack::Builder".to_string(),
+                format!("framework={framework_name}"),
                 format!("mount_path={path}"),
                 format!("mount_target={target}"),
             ],
@@ -2144,6 +2165,7 @@ impl SymbolExtractor {
             "Dancer2" | "Dancer2::Core" => Some(WebFrameworkKind::Dancer2),
             "Mojolicious::Lite" => Some(WebFrameworkKind::MojoliciousLite),
             "Plack::Builder" => Some(WebFrameworkKind::PlackBuilder),
+            "Builder::IO::Fusion" => Some(WebFrameworkKind::BuilderIoFusion),
             _ => None,
         };
         if let Some(kind) = web_kind {
