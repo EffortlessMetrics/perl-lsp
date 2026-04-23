@@ -37,7 +37,11 @@ pub fn module_already_imported(source: &str, module: &str) -> bool {
         }
         if let Some(rest) = trimmed.strip_prefix("require ")
             && let Some(after) = rest.trim_start().strip_prefix(module)
-            && (after.is_empty() || after.starts_with(';') || after.starts_with(' '))
+            && (after.is_empty()
+                || after.starts_with(';')
+                || after.starts_with(' ')
+                || after.starts_with('\t')
+                || after.starts_with('('))
         {
             return true;
         }
@@ -54,9 +58,9 @@ pub fn find_use_block_end(source: &str) -> usize {
     let mut last_use_line_end: Option<usize> = None;
     let mut offset = 0usize;
 
-    for line in source.lines() {
+    for line in source.split_inclusive('\n') {
         let trimmed = line.trim();
-        let line_byte_len = line.len() + 1; // include the '\n'
+        let line_byte_len = line.len();
 
         let is_use_line = trimmed.starts_with("use ")
             || trimmed.starts_with("require ")
@@ -145,6 +149,12 @@ mod tests {
         assert!(module_already_imported(src, "LWP::UserAgent"));
     }
 
+    #[test]
+    fn already_imported_require_parens() {
+        let src = "require LWP::UserAgent ();\n";
+        assert!(module_already_imported(src, "LWP::UserAgent"));
+    }
+
     // ------------------------------------------------------------------
     // find_use_block_end
     // ------------------------------------------------------------------
@@ -168,6 +178,13 @@ mod tests {
         let src = "use strict;\nsub foo { }\n";
         let offset = find_use_block_end(src);
         assert_eq!(&src[offset..], "sub foo { }\n");
+    }
+
+    #[test]
+    fn insert_offset_with_no_trailing_newline() {
+        let src = "use strict;";
+        let offset = find_use_block_end(src);
+        assert_eq!(offset, src.len());
     }
 
     // ------------------------------------------------------------------
