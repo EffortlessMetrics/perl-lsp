@@ -122,6 +122,41 @@ pub(super) fn count_ux_scenarios(root: &Path) -> usize {
     collect_ux_scenario_files(root).len()
 }
 
+fn collect_editor_ux_metric_coverage(
+    root: &Path,
+    metric_names: &[&str],
+) -> (usize, BTreeMap<String, usize>) {
+    let matrix_path = root.join("crates/perl-lsp-ux-tests/fixtures/editor_ux_fixture_matrix.json");
+    let Ok(raw) = fs::read_to_string(matrix_path) else {
+        return (0, BTreeMap::new());
+    };
+    let Ok(doc) = serde_json::from_str::<serde_json::Value>(&raw) else {
+        return (0, BTreeMap::new());
+    };
+    let Some(workflows) = doc.get("workflows").and_then(serde_json::Value::as_array) else {
+        return (0, BTreeMap::new());
+    };
+
+    let mut counts =
+        metric_names.iter().map(|name| ((*name).to_string(), 0usize)).collect::<BTreeMap<_, _>>();
+
+    for workflow in workflows {
+        let Some(measures) = workflow.get("measures").and_then(serde_json::Value::as_array) else {
+            continue;
+        };
+        for measure in measures {
+            let Some(name) = measure.as_str() else {
+                continue;
+            };
+            if let Some(count) = counts.get_mut(name) {
+                *count += 1;
+            }
+        }
+    }
+
+    (workflows.len(), counts)
+}
+
 // ---------------------------------------------------------------------------
 // Generators
 // ---------------------------------------------------------------------------
@@ -138,12 +173,31 @@ pub(super) fn generate_quality_status(root: &Path, original: &str) -> Result<Str
         "mutation data pending first nightly CI run — run `just mutation-subset` locally to populate"
     };
 
+    let (workflow_count, metric_coverage) = collect_editor_ux_metric_coverage(
+        root,
+        &["workflow_pass_rate", "workflow_stability_rate", "p95_time_to_first_useful_result_ms"],
+    );
+
+    let coverage_summary = if workflow_count == 0 {
+        "top-line metric coverage pending (fixture matrix unavailable)".to_string()
+    } else {
+        let pass = metric_coverage.get("workflow_pass_rate").copied().unwrap_or_default();
+        let stability = metric_coverage.get("workflow_stability_rate").copied().unwrap_or_default();
+        let latency =
+            metric_coverage.get("p95_time_to_first_useful_result_ms").copied().unwrap_or_default();
+        format!(
+            "tracked via fixture matrix: workflow_pass_rate {pass}/{workflow_count}, \
+             workflow_stability_rate {stability}/{workflow_count}, \
+             p95_time_to_first_useful_result_ms {latency}/{workflow_count} workflows"
+        )
+    };
+
     let bullets_content = format!(
         "- **Quality Metrics**: <50ms LSP response times, 931ns incremental parsing\n\
          - **UX workflow harness**: {ux_scenarios} scenario files in `perl-lsp-ux-tests`; \
            `just ux-tests` runs the default release-confidence lane and `just ux-tests-full` adds \
            the integration-only 10k-line large-file case; planning scaffold at \
-           `docs/project/status/editor_ux.json`\n\
+           `docs/project/status/editor_ux.json`; {coverage_summary}\n\
          - **Mutation testing**: {mutation_note}\n\
          - **Production Status**: LSP server public alpha (`just ci-gate` passing)"
     );
@@ -169,33 +223,38 @@ pub(super) fn generate_quality_status(root: &Path, original: &str) -> Result<Str
 pub(super) fn generate_editor_ux_receipt(root: &Path) -> Result<String> {
     let scenario_files = collect_ux_scenario_files(root);
     let scenario_count = scenario_files.len();
+    let metric_names =
+        ["workflow_pass_rate", "workflow_stability_rate", "p95_time_to_first_useful_result_ms"];
+    let (workflow_count, metric_coverage) = collect_editor_ux_metric_coverage(root, &metric_names);
 
     let receipt = serde_json::json!({
         "schema_version": 1,
-        "receipt_kind": "planning_scaffold",
+        "receipt_kind": "tracking_receipt",
         "scorecard": "editor_ux",
         "harness": {
             "crate": "crates/perl-lsp-ux-tests",
             "scenario_count": scenario_count,
             "scenario_files": scenario_files,
+            "workflow_matrix_count": workflow_count,
         },
-        "top_line_metrics": [
-            {
-                "name": "workflow_pass_rate",
-                "state": "planned",
+        "top_line_metrics": metric_names.into_iter().map(|name| {
+            let covered_workflows = metric_coverage.get(name).copied().unwrap_or_default();
+            let coverage_percent = if workflow_count == 0 {
+                0.0
+            } else {
+                ((covered_workflows as f64) * 100.0) / (workflow_count as f64)
+            };
+            serde_json::json!({
+                "name": name,
+                "state": "tracked",
                 "owner": "perl-lsp-ux-tests",
-            },
-            {
-                "name": "workflow_stability_rate",
-                "state": "planned",
-                "owner": "perl-lsp-ux-tests",
-            },
-            {
-                "name": "p95_time_to_first_useful_result_ms",
-                "state": "planned",
-                "owner": "perl-lsp-ux-tests",
-            },
-        ],
+                "coverage": {
+                    "covered_workflows": covered_workflows,
+                    "workflow_count": workflow_count,
+                    "coverage_percent": coverage_percent,
+                }
+            })
+        }).collect::<Vec<_>>(),
         "integration_points": {
             "ci_lane": "just ux-tests",
             "release_lane": "just ux-tests-full",
@@ -258,7 +317,7 @@ mod tests {
         let receipt_raw = generate_editor_ux_receipt(&root)?;
         let receipt: serde_json::Value = serde_json::from_str(&receipt_raw)?;
         assert_eq!(receipt["schema_version"], 1);
-        assert_eq!(receipt["receipt_kind"], "planning_scaffold");
+        assert_eq!(receipt["receipt_kind"], "tracking_receipt");
         assert_eq!(receipt["scorecard"], "editor_ux");
         assert_eq!(receipt["harness"]["crate"], "crates/perl-lsp-ux-tests");
         assert_eq!(
@@ -279,7 +338,54 @@ mod tests {
                 "p95_time_to_first_useful_result_ms",
             ])
         );
+        for metric in receipt["top_line_metrics"]
+            .as_array()
+            .ok_or_else(|| eyre!("top_line_metrics must be an array"))?
+        {
+            assert_eq!(metric["state"], "tracked");
+            let covered = metric["coverage"]["covered_workflows"]
+                .as_u64()
+                .ok_or_else(|| eyre!("covered_workflows must be u64"))?;
+            let total = metric["coverage"]["workflow_count"]
+                .as_u64()
+                .ok_or_else(|| eyre!("workflow_count must be u64"))?;
+            assert!(covered <= total, "metric coverage cannot exceed total workflow count");
+        }
         assert_eq!(receipt["integration_points"]["ci_lane"], "just ux-tests");
+        Ok(())
+    }
+
+    #[test]
+    fn test_collect_editor_ux_metric_coverage_from_fixture_matrix() -> Result<()> {
+        let root = crate::utils::project_root()?;
+        let (workflow_count, coverage) = collect_editor_ux_metric_coverage(
+            &root,
+            &[
+                "workflow_pass_rate",
+                "workflow_stability_rate",
+                "p95_time_to_first_useful_result_ms",
+            ],
+        );
+
+        assert_eq!(workflow_count, count_ux_scenarios(&root));
+        assert_eq!(
+            coverage.get("workflow_pass_rate").copied(),
+            Some(workflow_count),
+            "workflow_pass_rate should be tracked by every workflow in the fixture matrix"
+        );
+        assert_eq!(
+            coverage.get("workflow_stability_rate").copied(),
+            Some(workflow_count),
+            "workflow_stability_rate should be tracked by every workflow in the fixture matrix"
+        );
+        let latency_coverage =
+            coverage.get("p95_time_to_first_useful_result_ms").copied().unwrap_or_default();
+        assert!(latency_coverage >= 1, "latency metric should be covered by at least one workflow");
+        assert!(
+            latency_coverage <= workflow_count,
+            "latency metric coverage cannot exceed total workflows"
+        );
+
         Ok(())
     }
 }
