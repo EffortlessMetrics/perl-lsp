@@ -2,6 +2,7 @@
 
 use perl_workspace::discovery::{discover_perl_files, is_perl_discovery_path};
 use proptest::prelude::*;
+use proptest::test_runner::Config as ProptestConfig;
 use std::collections::HashSet;
 use std::fs;
 
@@ -22,6 +23,11 @@ fn extension_strategy() -> impl Strategy<Value = String> {
 }
 
 proptest! {
+    #![proptest_config(ProptestConfig {
+        failure_persistence: None,
+        ..ProptestConfig::default()
+    })]
+
     #[test]
     fn prop_discovery_returns_all_and_only_perl_files(
         specs in prop::collection::vec(("[a-z]{1,10}", extension_strategy()), 1..24)
