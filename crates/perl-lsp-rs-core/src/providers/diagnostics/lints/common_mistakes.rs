@@ -76,49 +76,32 @@ pub fn check_common_mistakes(
 
 /// Check for assignment in condition (common mistake)
 fn check_assignment_in_condition(condition: &Node, diagnostics: &mut Vec<Diagnostic>) {
-    match &condition.kind {
-        NodeKind::Binary { op, .. } if op == "=" => {
-            diagnostics.push(Diagnostic {
-                range: (condition.location.start, condition.location.end),
-                severity: DiagnosticSeverity::Warning,
-                code: Some(DiagnosticCode::AssignmentInCondition.as_str().to_string()),
-                message: "Assignment in condition - did you mean '=='?".to_string(),
-                related_information: vec![
-                    RelatedInformation {
-                        location: (condition.location.start, condition.location.end),
-                        message: "💡 Use '==' for comparison or 'eq' for string comparison".to_string(),
-                    },
-                    RelatedInformation {
-                        location: (condition.location.start, condition.location.end),
-                        message: "ℹ️ Assignment (=) in conditions is usually a mistake. If intentional, wrap in parentheses: if (($x = value))".to_string(),
-                    }
-                ],
-                tags: Vec::new(),
-                suggestion: Some("Replace '=' with '==' for numeric comparison or 'eq' for string comparison".to_string()),
-            });
-        }
-        NodeKind::Assignment { .. } => {
-            diagnostics.push(Diagnostic {
-                range: (condition.location.start, condition.location.end),
-                severity: DiagnosticSeverity::Warning,
-                code: Some(DiagnosticCode::AssignmentInCondition.as_str().to_string()),
-                message: "Assignment in condition - did you mean '=='?".to_string(),
-                related_information: vec![
-                    RelatedInformation {
-                        location: (condition.location.start, condition.location.end),
-                        message: "💡 Use '==' for comparison or 'eq' for string comparison".to_string(),
-                    },
-                    RelatedInformation {
-                        location: (condition.location.start, condition.location.end),
-                        message: "ℹ️ Assignment in conditions is usually a mistake. If intentional, wrap in parentheses: if (($x = value))".to_string(),
-                    }
-                ],
-                tags: Vec::new(),
-                suggestion: Some("Replace '=' with '==' for numeric comparison or 'eq' for string comparison".to_string()),
-            });
-        }
-        _ => {}
+    let is_assignment = matches!(
+        &condition.kind,
+        NodeKind::Binary { op, .. } if op == "="
+    ) || matches!(&condition.kind, NodeKind::Assignment { .. });
+    if !is_assignment {
+        return;
     }
+    let range = (condition.location.start, condition.location.end);
+    diagnostics.push(Diagnostic {
+        range,
+        severity: DiagnosticSeverity::Warning,
+        code: Some(DiagnosticCode::AssignmentInCondition.as_str().to_string()),
+        message: "Assignment in condition - did you mean '=='?".to_string(),
+        related_information: vec![
+            RelatedInformation {
+                location: range,
+                message: "💡 Use '==' for comparison or 'eq' for string comparison".to_string(),
+            },
+            RelatedInformation {
+                location: range,
+                message: "ℹ️ Assignment in conditions is usually a mistake. If intentional, wrap in parentheses: if (($x = value))".to_string(),
+            },
+        ],
+        tags: Vec::new(),
+        suggestion: Some("Replace '=' with '==' for numeric comparison or 'eq' for string comparison".to_string()),
+    });
 }
 
 /// Check if a node might evaluate to undef
