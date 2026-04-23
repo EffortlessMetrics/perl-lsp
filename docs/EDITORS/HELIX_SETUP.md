@@ -101,10 +101,10 @@ file-types = ["pl", "pm", "t", "psgi"]
 roots = ["Makefile.PL", "Build.PL", "cpanfile", "dist.ini", ".git"]
 comment-token = "#"
 indent = { tab-width = 4, unit = "    " }
-language-servers = ["perl-lsp"]
+language-servers = ["perllsp"]
 
-[language-server.perl-lsp]
-command = "perl-lsp"
+[language-server.perllsp]
+command = "perllsp"
 args = ["--stdio"]
 ```
 
@@ -115,7 +115,7 @@ args = ["--stdio"]
 3. Check if LSP is attached:
    - Press `:`
    - Type `lsp`
-   - Look for perl-lsp in the list
+   - Look for perllsp in the list
 
 ---
 
@@ -134,13 +134,13 @@ file-types = ["pl", "pm", "t", "psgi"]
 roots = ["Makefile.PL", "Build.PL", "cpanfile", "dist.ini", ".git"]
 comment-token = "#"
 indent = { tab-width = 4, unit = "    " }
-language-servers = ["perl-lsp"]
+language-servers = ["perllsp"]
 
-[language-server.perl-lsp]
-command = "perl-lsp"
+[language-server.perllsp]
+command = "perllsp"
 args = ["--stdio"]
 
-[language-server.perl-lsp.config.perl]
+[language-server.perllsp.config.perl]
 workspace.includePaths = ["lib", ".", "local/lib/perl5"]
 workspace.useSystemInc = false
 workspace.resolutionTimeout = 50
@@ -169,9 +169,9 @@ Create `.helix/languages.toml` in your project root:
 ```toml
 [[language]]
 name = "perl"
-language-servers = ["perl-lsp"]
+language-servers = ["perllsp"]
 
-[language-server.perl-lsp.config.perl]
+[language-server.perllsp.config.perl]
 workspace.includePaths = ["lib", "local/lib/perl5", "vendor/lib"]
 workspace.useSystemInc = false
 ```
@@ -356,14 +356,14 @@ h = { i = ":inlay_hints" }
 
 1. **Verify binary is in PATH**:
    ```bash
-   which perl-lsp
-   # Should output: /usr/local/bin/perl-lsp or similar
+   which perllsp
+   # Should output: /usr/local/bin/perllsp or similar
    ```
 
 2. **Check LSP status**:
    - Press `:`
    - Type `lsp`
-   - Look for perl-lsp in the list
+   - Look for perllsp in the list
 
 3. **Check logs**:
    ```bash
@@ -404,7 +404,7 @@ h = { i = ":inlay_hints" }
 
 1. **Reduce result caps**:
    ```toml
-   [language-server.perl-lsp.config.perl]
+   [language-server.perllsp.config.perl]
    limits.workspaceSymbolCap = 100
    limits.referencesCap = 200
    limits.completionCap = 50
@@ -412,13 +412,13 @@ h = { i = ":inlay_hints" }
 
 2. **Disable system @INC**:
    ```toml
-   [language-server.perl-lsp.config.perl]
+   [language-server.perllsp.config.perl]
    workspace.useSystemInc = false
    ```
 
 3. **Reduce resolution timeout**:
    ```toml
-   [language-server.perl-lsp.config.perl]
+   [language-server.perllsp.config.perl]
    workspace.resolutionTimeout = 25
    ```
 
@@ -430,7 +430,7 @@ h = { i = ":inlay_hints" }
 
 1. **Check include paths**:
    ```toml
-   [language-server.perl-lsp.config.perl]
+   [language-server.perllsp.config.perl]
    workspace.includePaths = ["lib", ".", "local/lib/perl5", "vendor/lib"]
    ```
 
@@ -509,9 +509,9 @@ roots = ["Makefile.PL", "Build.PL", "cpanfile", "dist.ini", ".git", "Cargo.toml"
 Set environment variables for the LSP server:
 
 ```toml
-[language-server.perl-lsp]
+[language-server.perllsp]
 command = "env"
-args = ["PERL5LIB=lib", "PERL_MB_OPT=--install_base local", "perl-lsp", "--stdio"]
+args = ["PERL5LIB=lib", "PERL_MB_OPT=--install_base local", "perllsp", "--stdio"]
 ```
 
 ### Custom Formatter
@@ -544,7 +544,7 @@ See [DAP User Guide](../tutorials/DAP_USER_GUIDE.md) for more details.
 For large workspaces, adjust performance settings:
 
 ```toml
-[language-server.perl-lsp.config.perl]
+[language-server.perllsp.config.perl]
 limits.workspaceSymbolCap = 100
 limits.referencesCap = 200
 limits.completionCap = 50
@@ -603,13 +603,13 @@ file-types = ["pl", "pm", "t", "psgi"]
 roots = ["Makefile.PL", "Build.PL", "cpanfile", "dist.ini", ".git"]
 comment-token = "#"
 indent = { tab-width = 4, unit = "    " }
-language-servers = ["perl-lsp"]
+language-servers = ["perllsp"]
 
-[language-server.perl-lsp]
-command = "perl-lsp"
+[language-server.perllsp]
+command = "perllsp"
 args = ["--stdio"]
 
-[language-server.perl-lsp.config.perl]
+[language-server.perllsp.config.perl]
 # Workspace configuration
 workspace.includePaths = ["lib", ".", "local/lib/perl5", "vendor/lib"]
 workspace.useSystemInc = false
