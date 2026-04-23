@@ -882,6 +882,25 @@ inlayHints.enabled = true
 }
 ```
 
+#### JetBrains (generic LSP server)
+
+Use these JSON settings as the `initializationOptions` payload in the JetBrains
+LSP server configuration UI:
+
+```json
+{
+  "perl": {
+    "workspace": {
+      "includePaths": ["lib", ".", "local/lib/perl5"],
+      "useSystemInc": false
+    },
+    "inlayHints": {
+      "enabled": true
+    }
+  }
+}
+```
+
 ---
 
 ## See Also

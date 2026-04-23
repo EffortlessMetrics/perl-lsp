@@ -28,6 +28,7 @@ perllsp --health
 | Emacs | use `lsp-mode` or `eglot` with `perllsp --stdio` | [docs/EDITORS/EMACS_SETUP.md](../EDITORS/EMACS_SETUP.md) |
 | Helix | add a `perllsp` language server entry | [docs/EDITORS/HELIX_SETUP.md](../EDITORS/HELIX_SETUP.md) |
 | Sublime Text | register `perllsp` in the LSP package settings | [docs/EDITORS/SUBLIME_SETUP.md](../EDITORS/SUBLIME_SETUP.md) |
+| JetBrains IDEs | add `perllsp --stdio` as a generic LSP server | [docs/EDITORS/JETBRAINS_SETUP.md](../EDITORS/JETBRAINS_SETUP.md) |
 
 ## Minimal Configurations
 
@@ -63,6 +64,12 @@ args = ["--stdio"]
 
 Register a client whose command is `["perllsp", "--stdio"]` and scope it to
 Perl source files.
+
+### JetBrains IDEs
+
+Use your IDE's generic LSP integration (built-in or via JetBrains' LSP Support
+plugin) and set the server command to `perllsp --stdio`. Scope the server to
+Perl files and point the root to your project directory.
 
 ## When Setup Fails
 
