@@ -4088,28 +4088,20 @@ fn is_index_in_rust_literal(line: &str, target_idx: usize) -> bool {
             continue;
         }
 
-        if (bytes[i] == b'b' || bytes[i] == b'c') && i + 1 < bytes.len() && bytes[i + 1] == b'"' {
+        if is_prefixed_string_start(bytes, i, b'b') || is_prefixed_string_start(bytes, i, b'c') {
             in_string = true;
             i += 2;
             continue;
         }
 
-        if bytes[i] == b'r'
-            || ((bytes[i] == b'b' || bytes[i] == b'c')
-                && i + 1 < bytes.len()
-                && bytes[i + 1] == b'r')
-        {
-            let mut j = i + 1;
-            if bytes[i] == b'b' || bytes[i] == b'c' {
-                j += 1;
-            }
+        let raw_prefix_len = raw_string_prefix_len(bytes, i);
+        if raw_prefix_len > 0 {
+            let mut j = i + raw_prefix_len;
             while j < bytes.len() && bytes[j] == b'#' {
                 j += 1;
             }
             if j < bytes.len() && bytes[j] == b'"' {
-                raw_hashes = Some(
-                    j.saturating_sub(i + if bytes[i] == b'b' || bytes[i] == b'c' { 2 } else { 1 }),
-                );
+                raw_hashes = Some(j.saturating_sub(i + raw_prefix_len));
                 i = j + 1;
                 continue;
             }
@@ -4131,6 +4123,21 @@ fn is_index_in_rust_literal(line: &str, target_idx: usize) -> bool {
     }
 
     in_string || in_char || raw_hashes.is_some()
+}
+
+fn is_prefixed_string_start(bytes: &[u8], idx: usize, prefix: u8) -> bool {
+    bytes[idx] == prefix && idx + 1 < bytes.len() && bytes[idx + 1] == b'"'
+}
+
+fn raw_string_prefix_len(bytes: &[u8], idx: usize) -> usize {
+    if bytes[idx] == b'r' {
+        return 1;
+    }
+    if idx + 1 < bytes.len() && (bytes[idx] == b'b' || bytes[idx] == b'c') && bytes[idx + 1] == b'r'
+    {
+        return 2;
+    }
+    0
 }
 
 fn has_unlinked_token(comment: &str, token_re: &Regex) -> bool {
@@ -4471,6 +4478,20 @@ mod tests {
     }
 
     #[test]
+    fn rust_todo_detection_ignores_c_string_literals() -> Result<()> {
+        let todo_re = Regex::new(r"\b(?:TODO|FIXME)\b")?;
+
+        assert!(!has_unlinked_todo_in_rust_line("let s = c\"// TODO in C string\";", &todo_re));
+        assert!(!has_unlinked_todo_in_rust_line(
+            "let s = cr#\"/* FIXME in C raw string */\"#;",
+            &todo_re
+        ));
+        assert!(has_unlinked_todo_in_rust_line("let s = c\"safe\"; // TODO: follow up", &todo_re));
+
+        Ok(())
+    }
+
+    #[test]
     fn rust_todo_detection_scans_only_block_comment_text() -> Result<()> {
         let todo_re = Regex::new(r"\b(?:TODO|FIXME)\b")?;
 
@@ -4492,7 +4513,7 @@ mod tests {
 
     #[test]
     fn rust_todo_detection_tracks_multiline_block_comments_across_lines() -> Result<()> {
-        let todo_re = Regex::new(r"TODO|FIXME")?;
+        let todo_re = Regex::new(r"\b(?:TODO|FIXME)\b")?;
         let mut in_block_comment = false;
 
         assert!(!has_unlinked_todo_in_rust_line_with_block_context(
