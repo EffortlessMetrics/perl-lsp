@@ -151,8 +151,8 @@ jobs:
         run: |
           cargo clippy --locked ${{ steps.scope.outputs.crates_args }} -- -D warnings -A missing_docs
 
-      # ── Scoped test (scope-aware path) ───────────────────────────────────
-      - name: Scoped test
+      # ── Scoped tests (scope-aware path) ──────────────────────────────────
+      - name: Scoped tests
         if: |
           steps.scope.outputs.scope_ok == 'true' &&
           steps.scope.outputs.diff_class != 'prose_only' &&
@@ -160,6 +160,7 @@ jobs:
           steps.scope.outputs.crates_args != ''
         run: |
           cargo test --locked --lib ${{ steps.scope.outputs.crates_args }}
+          cargo check --locked --tests ${{ steps.scope.outputs.crates_args }}
 
       # ── Fallback: baseline clippy-core / test-core ────────────────────────
       # Runs when: ci-scope failed (scope_ok=false), OR ci-scope returned no
