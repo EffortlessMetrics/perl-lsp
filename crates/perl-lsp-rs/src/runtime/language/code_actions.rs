@@ -7,12 +7,11 @@ use super::super::*;
 use crate::protocol::{req_range, req_uri};
 use std::sync::LazyLock;
 
-static GLOBAL_VAR_ASSIGNMENT_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
-    match regex::Regex::new(r"(?m)^(\$|\@|\%)[a-zA-Z_]\w*\s*=") {
+static GLOBAL_VAR_ASSIGNMENT_RE: LazyLock<regex::Regex> =
+    LazyLock::new(|| match regex::Regex::new(r"(?m)^(\$|\@|\%)[a-zA-Z_]\w*\s*=") {
         Ok(re) => re,
         Err(err) => unreachable!("GLOBAL_VAR_ASSIGNMENT_RE is a known-good static pattern: {err}"),
-    }
-});
+    });
 
 fn requested_code_action_kinds(params: &Value) -> Vec<&str> {
     params
