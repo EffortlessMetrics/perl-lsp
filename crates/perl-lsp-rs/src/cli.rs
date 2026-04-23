@@ -505,3 +505,43 @@ fn print_version(command_name: &str) {
     println!("Git tag: {}", env!("GIT_TAG"));
     println!("Perl Language Server using perl-parser v3");
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{categorize_error, invocation_name, render_shell_completion};
+    use std::ffi::OsString;
+
+    #[test]
+    fn invocation_name_uses_file_stem_from_first_arg() {
+        let args = vec![OsString::from("/usr/local/bin/perl-lsp-rs"), OsString::from("--help")];
+        assert_eq!(invocation_name(&args), "perl-lsp-rs");
+    }
+
+    #[test]
+    fn invocation_name_falls_back_when_first_arg_is_empty() {
+        let args = vec![OsString::from("")];
+        assert_eq!(invocation_name(&args), "perllsp");
+    }
+
+    #[test]
+    fn render_shell_completion_rewrites_function_and_command_names() {
+        let script =
+            "complete -F _perl_lsp perl-lsp\n# shell completion for perl-lsp and _perl_lsp";
+        let rendered = render_shell_completion(script, "my-perl-lsp");
+
+        assert!(rendered.contains("_my_perl_lsp"));
+        assert!(rendered.contains("my-perl-lsp"));
+        assert!(!rendered.contains("complete -F _perl_lsp perl-lsp"));
+    }
+
+    #[test]
+    fn categorize_error_maps_known_cases() {
+        assert_eq!(categorize_error("Unexpected end of input while parsing"), "Unexpected EOF");
+        assert_eq!(categorize_error("expected ; but found }"), "Unexpected token");
+        assert_eq!(categorize_error("Invalid syntax near token"), "Syntax error");
+        assert_eq!(categorize_error("Lexer error: invalid byte"), "Lexer error");
+        assert_eq!(categorize_error("Recursion depth exceeded"), "Recursion limit");
+        assert_eq!(categorize_error("read error: permission denied"), "IO error");
+        assert_eq!(categorize_error("something new"), "Other");
+    }
+}
