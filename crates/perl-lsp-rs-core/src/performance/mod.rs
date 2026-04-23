@@ -127,13 +127,11 @@ impl IncrementalParser {
     pub fn mark_changed(&mut self, start: usize, end: usize) {
         let (start, end) = if start <= end { (start, end) } else { (end, start) };
 
-        // Ignore zero-length spans to keep the tracking set focused on
-        // meaningful byte ranges.
-        if start == end {
-            return;
-        }
+        // A zero-length span represents an insertion. Expand to a one-byte
+        // half-open range so overlap checks still detect impacted nodes.
+        let normalized_end = if start == end { end.saturating_add(1) } else { end };
 
-        self.changed_regions.push((start, end));
+        self.changed_regions.push((start, normalized_end));
         self.merge_overlapping_regions();
     }
 
@@ -309,5 +307,40 @@ mod tests {
         });
 
         assert!(result.is_err(), "worker panic should propagate to caller");
+    }
+
+    #[test]
+    fn incremental_parser_treats_insertions_as_changes() {
+        let mut parser = IncrementalParser::new();
+        parser.mark_changed(5, 5);
+
+        assert!(
+            parser.needs_reparse(0, 10),
+            "insertions should trigger reparse for overlapping nodes"
+        );
+        assert!(
+            parser.needs_reparse(5, 5),
+            "zero-length node at insertion point should be reparsed"
+        );
+        assert!(
+            !parser.needs_reparse(6, 6),
+            "non-overlapping zero-length nodes should not be reparsed"
+        );
+    }
+
+    #[test]
+    fn incremental_parser_merges_insertion_with_adjacent_ranges() {
+        let mut parser = IncrementalParser::new();
+        parser.mark_changed(10, 10);
+        parser.mark_changed(11, 20);
+
+        assert!(
+            parser.needs_reparse(10, 20),
+            "adjacent insertion and edit should merge into one reparse region"
+        );
+        assert!(
+            !parser.needs_reparse(21, 30),
+            "regions outside merged range should not be reparsed"
+        );
     }
 }
