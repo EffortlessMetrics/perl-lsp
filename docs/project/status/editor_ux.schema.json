@@ -102,6 +102,12 @@
           },
           "owner": {
             "type": "string"
+          },
+          "value": {
+            "type": ["number", "integer"]
+          },
+          "unit": {
+            "type": "string"
           }
         },
         "additionalProperties": false
