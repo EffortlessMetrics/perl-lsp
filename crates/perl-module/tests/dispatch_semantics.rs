@@ -147,6 +147,22 @@ fn test_require_file_path_single_quote_parses() -> Result<(), String> {
 }
 
 #[test]
+fn test_require_file_path_double_quote_without_closing_quote_is_rejected() -> Result<(), String> {
+    if parse_module_import_head(r#"require "Module/File.pm;"#).is_some() {
+        return Err("expected None for unterminated double-quoted require path".into());
+    }
+    Ok(())
+}
+
+#[test]
+fn test_require_file_path_single_quote_without_closing_quote_is_rejected() -> Result<(), String> {
+    if parse_module_import_head("require 'Module/File.pm;").is_some() {
+        return Err("expected None for unterminated single-quoted require path".into());
+    }
+    Ok(())
+}
+
+#[test]
 fn test_require_file_path_is_file_form() -> Result<(), String> {
     let head = parse_module_import_head(r#"require "Module/File.pm";"#)
         .ok_or("expected Some for quoted require")?;
