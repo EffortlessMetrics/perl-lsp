@@ -87,3 +87,29 @@ fn snapshot_security_string_eval() {
     let snapshot = normalize(diagnostics_for(source));
     assert_snapshot!("security_string_eval", snapshot);
 }
+
+#[test]
+fn snapshot_missing_module_import() {
+    let source = concat!(
+        "package Foo;\n",
+        "use strict;\n",
+        "use warnings;\n",
+        "use Does::Not::Exist;\n",
+        "1;\n",
+    );
+    let snapshot = normalize(diagnostics_for(source));
+    assert_snapshot!("missing_module_import", snapshot);
+}
+
+#[test]
+fn snapshot_syntax_error_with_follow_on_statement() {
+    let source = concat!(
+        "use strict;\n",
+        "use warnings;\n",
+        "my $x = ;\n",
+        "my $y = 2;\n",
+        "print $y;\n",
+    );
+    let snapshot = normalize(diagnostics_for(source));
+    assert_snapshot!("syntax_error_with_follow_on_statement", snapshot);
+}

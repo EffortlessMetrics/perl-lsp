@@ -1,0 +1,7 @@
+---
+source: crates/perl-lsp-rs-core/tests/diag_snap.rs
+expression: snapshot
+---
+PL001 | Error | (0, 1) | Recovered from MissingOperand at InfixRhs (position 32) | <none>
+PL102 | Warning | (29, 31) | Variable '$x' is declared but never used -- prefix with '_' or remove it | Prefix as '_x'
+PL200 | Warning | (0, 0) | This file has no package declaration. Add 'package MyModule;' to declare the package namespace. | Add 'package MyModule;' at the top of the file

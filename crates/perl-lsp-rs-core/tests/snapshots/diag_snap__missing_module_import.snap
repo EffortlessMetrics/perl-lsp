@@ -1,0 +1,5 @@
+---
+source: crates/perl-lsp-rs-core/tests/diag_snap.rs
+expression: snapshot
+---
+PL700 | Hint | (39, 59) | Module 'Does::Not::Exist' appears to be unused | Remove 'use Does::Not::Exist;' if it is not needed
