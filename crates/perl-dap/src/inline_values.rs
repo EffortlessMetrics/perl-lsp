@@ -30,6 +30,66 @@ fn is_special_variable_name(name: &str) -> bool {
     SPECIAL_VARS.contains(&name)
 }
 
+/// Mask Perl comments and simple quoted strings with spaces so regex scans
+/// keep original byte offsets while avoiding obvious false positives.
+fn mask_comments_and_strings(line: &str) -> String {
+    #[derive(Clone, Copy, PartialEq, Eq)]
+    enum State {
+        Normal,
+        SingleQuoted,
+        DoubleQuoted,
+        Comment,
+    }
+
+    let mut state = State::Normal;
+    let mut escaped = false;
+    let mut masked = String::with_capacity(line.len());
+
+    for ch in line.chars() {
+        match state {
+            State::Normal => {
+                if ch == '#' {
+                    state = State::Comment;
+                    masked.push(' ');
+                } else if ch == '\'' {
+                    state = State::SingleQuoted;
+                    escaped = false;
+                    masked.push(' ');
+                } else if ch == '"' {
+                    state = State::DoubleQuoted;
+                    escaped = false;
+                    masked.push(' ');
+                } else {
+                    masked.push(ch);
+                }
+            }
+            State::SingleQuoted => {
+                if escaped {
+                    escaped = false;
+                } else if ch == '\\' {
+                    escaped = true;
+                } else if ch == '\'' {
+                    state = State::Normal;
+                }
+                masked.push(' ');
+            }
+            State::DoubleQuoted => {
+                if escaped {
+                    escaped = false;
+                } else if ch == '\\' {
+                    escaped = true;
+                } else if ch == '"' {
+                    state = State::Normal;
+                }
+                masked.push(' ');
+            }
+            State::Comment => masked.push(' '),
+        }
+    }
+
+    masked
+}
+
 /// Convert 1-based line bounds into inclusive 0-based indexes.
 ///
 /// Non-positive line inputs are clamped to line 1, and the end index is
@@ -45,6 +105,10 @@ fn normalize_line_bounds(
 
     let start_1_based = start_line.max(1) as usize;
     let end_1_based = end_line.max(1) as usize;
+
+    if start_1_based > line_count {
+        return None;
+    }
 
     let start_idx = start_1_based.saturating_sub(1).min(line_count.saturating_sub(1));
     let end_idx = end_1_based.saturating_sub(1).min(line_count.saturating_sub(1));
@@ -73,9 +137,10 @@ pub fn extract_variable_names(source: &str, start_line: i64, end_line: i64) -> V
     let mut names = Vec::new();
 
     for line in lines.iter().skip(start_idx).take(end_idx - start_idx + 1) {
-        for cap in re.captures_iter(line) {
+        let masked_line = mask_comments_and_strings(line);
+        for cap in re.captures_iter(&masked_line) {
             if let Some(m) = cap.get(0) {
-                let name = m.as_str();
+                let name = &line[m.start()..m.end()];
                 if !is_special_variable_name(name) && seen.insert(name.to_string()) {
                     names.push(name.to_string());
                 }
@@ -162,9 +227,10 @@ pub fn collect_inline_values_with_runtime(
     let mut seen_on_line: HashSet<(usize, String)> = HashSet::new();
 
     for (idx, line) in lines.iter().enumerate().skip(start_idx).take(end_idx - start_idx + 1) {
-        for cap in re.captures_iter(line) {
+        let masked_line = mask_comments_and_strings(line);
+        for cap in re.captures_iter(&masked_line) {
             if let Some(m) = cap.get(0) {
-                let var_name = m.as_str();
+                let var_name = &line[m.start()..m.end()];
                 if is_special_variable_name(var_name) {
                     continue;
                 }
@@ -205,9 +271,10 @@ pub fn collect_inline_values(source: &str, start_line: i64, end_line: i64) -> Ve
     let mut inline_values = Vec::new();
 
     for (idx, line) in lines.iter().enumerate().skip(start_idx).take(end_idx - start_idx + 1) {
-        for cap in re.captures_iter(line) {
+        let masked_line = mask_comments_and_strings(line);
+        for cap in re.captures_iter(&masked_line) {
             if let Some(m) = cap.get(0) {
-                let var_text = m.as_str();
+                let var_text = &line[m.start()..m.end()];
                 let column = (m.start() + 1) as i64;
                 inline_values.push(InlineValueText {
                     line: (idx + 1) as i64,
@@ -363,5 +430,23 @@ mod tests {
         let values = collect_inline_values_with_runtime(source, 1, 1, Some(&rv));
         assert_eq!(values.len(), 1);
         assert_eq!(values[0].text, "$Foo::bar = 42");
+    }
+
+    #[test]
+    fn test_extract_ignores_comments_and_strings() {
+        let source = r#"my $real = 1; # $commented
+my $quoted = "$not_real";
+my $single = '$also_not_real';"#;
+        let names = extract_variable_names(source, 1, 3);
+        assert_eq!(names, vec!["$real".to_string(), "$quoted".to_string(), "$single".to_string()]);
+    }
+
+    #[test]
+    fn test_collect_inline_values_ignores_comments_and_strings() {
+        let source = r#"my $real = 1; # $commented
+my $quoted = "$not_real";"#;
+        let values = collect_inline_values_with_runtime(source, 1, 2, None);
+        let rendered: Vec<&str> = values.iter().map(|v| v.text.as_str()).collect();
+        assert_eq!(rendered, vec!["$real = ?", "$quoted = ?"]);
     }
 }
