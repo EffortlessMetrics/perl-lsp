@@ -158,7 +158,7 @@ pub fn log_server_startup(
 #[derive(Args, Debug, Clone)]
 pub struct TransportArgs {
     /// Use stdio for communication (default)
-    #[arg(long, default_value_t = false, conflicts_with = "socket")]
+    #[arg(long, visible_alias = "mcp", default_value_t = false, conflicts_with = "socket")]
     pub stdio: bool,
 
     /// Use TCP socket for communication
@@ -546,7 +546,7 @@ pub fn help_text() -> String {
     out.push_str("       perl-lsp --check-project [dir]\n");
     out.push('\n');
     out.push_str("Server options:\n");
-    out.push_str("  --stdio              Use stdio for communication (default)\n");
+    out.push_str("  --stdio, --mcp       Use stdio for communication (default)\n");
     out.push_str("  --socket             Use TCP socket for communication\n");
     out.push_str(&format!(
         "  --port <port>        Port to listen on (default: {DEFAULT_LSP_PORT})\n"
@@ -569,6 +569,7 @@ pub fn help_text() -> String {
     out.push('\n');
     out.push_str("Examples:\n");
     out.push_str("  perl-lsp --stdio                        # stdio mode (default)\n");
+    out.push_str("  perl-lsp --mcp                          # stdio mode alias for MCP clients\n");
     out.push_str("  perl-lsp --stdio --log                   # with logging\n");
     out.push_str("  perl-lsp --socket --port 9257            # TCP socket mode\n");
     out.push_str("  perl-lsp --stdio --feature-profile=prod  # production profile\n");
@@ -604,7 +605,7 @@ const BASH_COMPLETION: &str = r#"_perl_lsp() {
     COMPREPLY=()
     cur="${COMP_WORDS[COMP_CWORD]}"
     prev="${COMP_WORDS[COMP_CWORD-1]}"
-    opts="--stdio --socket --port --log --health --info --check --check-project --version --features-json --feature-profile --completion --help"
+    opts="--stdio --mcp --socket --port --log --health --info --check --check-project --version --features-json --feature-profile --completion --help"
 
     case "${prev}" in
         --port)
@@ -637,6 +638,7 @@ const ZSH_COMPLETION: &str = r#"#compdef perl-lsp
 _perl-lsp() {
     _arguments \
         '--stdio[Use stdio for communication (default)]' \
+        '--mcp[Alias for stdio mode (MCP clients)]' \
         '--socket[Use TCP socket for communication]' \
         '--port[Port to listen on]:port:' \
         '--log[Enable logging to stderr]' \
@@ -656,6 +658,7 @@ _perl-lsp "$@"
 "#;
 
 const FISH_COMPLETION: &str = r#"complete -c perl-lsp -l stdio -d 'Use stdio for communication (default)'
+complete -c perl-lsp -l mcp -d 'Alias for stdio mode (MCP clients)'
 complete -c perl-lsp -l socket -d 'Use TCP socket for communication'
 complete -c perl-lsp -l port -x -d 'Port to listen on'
 complete -c perl-lsp -l log -d 'Enable logging to stderr'
@@ -675,6 +678,7 @@ const POWERSHELL_COMPLETION: &str = r#"Register-ArgumentCompleter -Native -Comma
 
     $options = @(
         [CompletionResult]::new('--stdio', '--stdio', 'ParameterName', 'Use stdio for communication (default)')
+        [CompletionResult]::new('--mcp', '--mcp', 'ParameterName', 'Alias for stdio mode (MCP clients)')
         [CompletionResult]::new('--socket', '--socket', 'ParameterName', 'Use TCP socket for communication')
         [CompletionResult]::new('--port', '--port', 'ParameterName', 'Port to listen on')
         [CompletionResult]::new('--log', '--log', 'ParameterName', 'Enable logging to stderr')
@@ -849,6 +853,12 @@ mod tests {
         assert_eq!(plan.config.transport, TransportMode::Stdio);
         assert!(!plan.config.enable_logging);
         assert_eq!(plan.config.feature_profile, super::FeatureProfile::current());
+    }
+
+    #[test]
+    fn parse_mcp_alias_uses_stdio_transport() {
+        let plan = must(parse_args(["perl-lsp", "--mcp"]));
+        assert_eq!(plan.config.transport, TransportMode::Stdio);
     }
 
     #[test]
