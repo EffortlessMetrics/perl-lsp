@@ -67,7 +67,7 @@ sub startup {
 "#,
     )?;
 
-    let app_text = r#"package MyApp::App;
+    let app_text = r##"package MyApp::App;
 use Mojo::Base 'Mojolicious';
 
 sub startup {
@@ -77,7 +77,7 @@ sub startup {
 }
 
 1;
-"#;
+"##;
 
     let mut harness = LspHarness::new();
     harness.initialize_with_root(&workspace.root_uri, None)?;
@@ -174,6 +174,122 @@ sub startup {
     let uri = location["uri"].as_str().ok_or("expected definition URI")?;
     assert!(
         uri.contains("MyApp/Controller/Admin.pm"),
+        "definition should point to controller file, got: {uri}"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn mojolicious_string_route_with_double_quotes_definitions_to_controller_method() -> TestResult {
+    let workspace = TempWorkspace::new()?;
+    workspace.write(
+        "lib/MyApp/Controller/Health.pm",
+        r#"package MyApp::Controller::Health;
+use Mojo::Base 'Mojolicious::Controller';
+
+sub check {
+    my $self = shift;
+    return "ok";
+}
+
+1;
+"#,
+    )?;
+    let app_text = r##"package MyApp::App;
+use Mojo::Base 'Mojolicious';
+
+sub startup {
+    my $self = shift;
+    my $r = $self->routes;
+    $r->get('/health')->to("health#check");
+}
+
+1;
+"##;
+    workspace.write("lib/MyApp/App.pm", app_text)?;
+
+    let mut harness = LspHarness::new();
+    harness.initialize_with_root(&workspace.root_uri, None)?;
+    harness.open(
+        &workspace.uri("lib/MyApp/Controller/Health.pm"),
+        &std::fs::read_to_string(workspace.dir.path().join("lib/MyApp/Controller/Health.pm"))?,
+    )?;
+    harness.open(&workspace.uri("lib/MyApp/App.pm"), app_text)?;
+    harness.barrier();
+
+    let (line, character) = position_of(app_text, "health#check")?;
+    let result = harness.request(
+        "textDocument/definition",
+        json!({
+            "textDocument": {"uri": workspace.uri("lib/MyApp/App.pm")},
+            "position": {"line": line, "character": character}
+        }),
+    )?;
+
+    let location = first_location(&result).ok_or("expected a definition location")?;
+    assert_valid_location(location);
+    let uri = location["uri"].as_str().ok_or("expected definition URI")?;
+    assert!(
+        uri.contains("MyApp/Controller/Health.pm"),
+        "definition should point to controller file, got: {uri}"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn mojolicious_kv_route_target_action_first_definitions_to_controller_method() -> TestResult {
+    let workspace = TempWorkspace::new()?;
+    workspace.write(
+        "lib/MyApp/Controller/Audit.pm",
+        r#"package MyApp::Controller::Audit;
+use Mojo::Base 'Mojolicious::Controller';
+
+sub list {
+    my $self = shift;
+    return "ok";
+}
+
+1;
+"#,
+    )?;
+    let app_text = r#"package MyApp::App;
+use Mojo::Base 'Mojolicious';
+
+sub startup {
+    my $self = shift;
+    my $r = $self->routes;
+    $r->get('/audit')->to(action => "list", controller => "audit");
+}
+
+1;
+"#;
+    workspace.write("lib/MyApp/App.pm", app_text)?;
+
+    let mut harness = LspHarness::new();
+    harness.initialize_with_root(&workspace.root_uri, None)?;
+    harness.open(
+        &workspace.uri("lib/MyApp/Controller/Audit.pm"),
+        &std::fs::read_to_string(workspace.dir.path().join("lib/MyApp/Controller/Audit.pm"))?,
+    )?;
+    harness.open(&workspace.uri("lib/MyApp/App.pm"), app_text)?;
+    harness.barrier();
+
+    let (line, character) = position_of(app_text, "list")?;
+    let result = harness.request(
+        "textDocument/definition",
+        json!({
+            "textDocument": {"uri": workspace.uri("lib/MyApp/App.pm")},
+            "position": {"line": line, "character": character}
+        }),
+    )?;
+
+    let location = first_location(&result).ok_or("expected a definition location")?;
+    assert_valid_location(location);
+    let uri = location["uri"].as_str().ok_or("expected definition URI")?;
+    assert!(
+        uri.contains("MyApp/Controller/Audit.pm"),
         "definition should point to controller file, got: {uri}"
     );
 
