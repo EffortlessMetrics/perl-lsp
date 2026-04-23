@@ -5,6 +5,7 @@
 //! [`lsp_types::ServerCapabilities`] and canonical Perl LSP feature IDs.
 
 use crate::features::ids::*;
+use crate::protocol::capabilities::completion_trigger_characters;
 use lsp_types::ServerCapabilities;
 
 /// Extract feature IDs from LSP `ServerCapabilities`.
@@ -125,13 +126,7 @@ pub fn caps_from_feature_ids(features: &[&str]) -> ServerCapabilities {
         match feature {
             LSP_COMPLETION => {
                 caps.completion_provider = Some(CompletionOptions {
-                    trigger_characters: Some(vec![
-                        "$".to_string(),
-                        "@".to_string(),
-                        "%".to_string(),
-                        ">".to_string(),
-                        ":".to_string(),
-                    ]),
+                    trigger_characters: Some(completion_trigger_characters()),
                     ..Default::default()
                 });
             }
