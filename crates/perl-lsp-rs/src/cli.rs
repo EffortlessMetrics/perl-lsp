@@ -286,6 +286,20 @@ fn run_check_project(dir: &str) -> i32 {
         for (cat, count) in &cats {
             println!("  {cat}: {count}");
         }
+        let suggested_fixes: Vec<(&str, &str)> = cats
+            .iter()
+            .filter_map(|(cat, _)| {
+                remediation_hint_for_category(cat).map(|hint| (cat.as_str(), hint))
+            })
+            .take(3)
+            .collect();
+        if !suggested_fixes.is_empty() {
+            println!();
+            println!("Suggested next steps:");
+            for (category, suggestion) in suggested_fixes {
+                println!("  {category}: {suggestion}");
+            }
+        }
         println!();
     }
 
@@ -313,6 +327,30 @@ fn categorize_error(msg: &str) -> String {
         "IO error".to_string()
     } else {
         "Other".to_string()
+    }
+}
+
+fn remediation_hint_for_category(category: &str) -> Option<&'static str> {
+    match category {
+        "Unexpected EOF" => Some(
+            "Check for unclosed blocks, quotes, or heredocs near the end of each failing file.",
+        ),
+        "Unexpected token" => Some(
+            "Run `perl -c <file>` to compare parser output and inspect the token shown in the error.",
+        ),
+        "Syntax error" => {
+            Some("Review recently edited lines for malformed declarations or expressions.")
+        }
+        "Lexer error" => {
+            Some("Look for invalid bytes, malformed UTF-8, or unterminated strings/regex literals.")
+        }
+        "Recursion limit" => Some(
+            "Minimize deeply nested constructs and isolate the smallest snippet that reproduces the issue.",
+        ),
+        "IO error" => {
+            Some("Check file permissions and symbolic links, then rerun with readable paths.")
+        }
+        _ => None,
     }
 }
 
@@ -508,7 +546,9 @@ fn print_version(command_name: &str) {
 
 #[cfg(test)]
 mod tests {
-    use super::{categorize_error, invocation_name, render_shell_completion};
+    use super::{
+        categorize_error, invocation_name, remediation_hint_for_category, render_shell_completion,
+    };
     use std::ffi::OsString;
 
     #[test]
@@ -543,5 +583,20 @@ mod tests {
         assert_eq!(categorize_error("Recursion depth exceeded"), "Recursion limit");
         assert_eq!(categorize_error("read error: permission denied"), "IO error");
         assert_eq!(categorize_error("something new"), "Other");
+    }
+
+    #[test]
+    fn remediation_hints_cover_major_error_categories() {
+        assert!(remediation_hint_for_category("Unexpected EOF").is_some());
+        assert!(remediation_hint_for_category("Unexpected token").is_some());
+        assert!(remediation_hint_for_category("Syntax error").is_some());
+        assert!(remediation_hint_for_category("Lexer error").is_some());
+        assert!(remediation_hint_for_category("Recursion limit").is_some());
+        assert!(remediation_hint_for_category("IO error").is_some());
+    }
+
+    #[test]
+    fn remediation_hints_skip_unknown_categories() {
+        assert!(remediation_hint_for_category("Other").is_none());
     }
 }
