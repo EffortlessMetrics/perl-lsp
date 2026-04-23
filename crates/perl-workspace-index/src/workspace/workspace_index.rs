@@ -3388,21 +3388,22 @@ fn extract_module_names_from_use_args(args: &[String]) -> Vec<String> {
     let mut modules = Vec::new();
     let mut seen = HashSet::new();
     for word in qw_words {
-        if let Some(candidate) = normalize_module_name(&word)
-            && seen.insert(candidate.to_string())
-        {
-            modules.push(candidate.to_string());
+        if let Some(candidate) = normalize_module_name(&word) {
+            let canonical = canonicalize_perl_module_name(candidate);
+            if seen.insert(canonical.clone()) {
+                modules.push(canonical);
+            }
         }
     }
 
-    modules.extend(
-        remainder
-            .split_whitespace()
-            .flat_map(|token| token.split(','))
-            .filter_map(normalize_module_name)
-            .filter(|candidate| seen.insert((*candidate).to_string()))
-            .map(str::to_string),
-    );
+    for token in remainder.split_whitespace().flat_map(|t| t.split(',')) {
+        if let Some(candidate) = normalize_module_name(token) {
+            let canonical = canonicalize_perl_module_name(candidate);
+            if seen.insert(canonical.clone()) {
+                modules.push(canonical);
+            }
+        }
+    }
 
     modules
 }
