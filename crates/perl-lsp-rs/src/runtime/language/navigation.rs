@@ -466,7 +466,7 @@ fn get_mojo_kv_route_regex() -> Result<&'static regex::Regex, JsonRpcError> {
     MOJO_KV_ROUTE_RE
         .get_or_init(|| {
             regex::Regex::new(
-                r"->\s*to\s*\(\s*controller\s*=>\s*'(?P<controller>[^']+)'\s*,\s*action\s*=>\s*'(?P<action>[^']+)'\s*\)",
+                r#"->\s*to\s*\(\s*controller\s*=>\s*['"](?P<controller>[^'"]+)['"]\s*,\s*action\s*=>\s*['"](?P<action>[^'"]+)['"]\s*\)"#,
             )
         })
         .as_ref()
