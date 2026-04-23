@@ -87,11 +87,14 @@ impl<'a> Parser<'a> {
             Ok(node)
         } else {
             // Single variable declaration
-            // For 'local', we need to parse lvalue expressions (not just simple variables)
-            // because local can take complex forms like local $ENV{PATH}
+            // For 'local', parse only the localized target expression, not an
+            // assignment expression. The initializer is handled below via
+            // `assign_op` parsing, and consuming assignment here would swallow
+            // the RHS into `variable` and leave a `MissingExpression`.
+            //
+            // e.g. `local $SIG{__WARN__} = sub { ... };`
             let variable = if declarator == "local" {
-                // For local, parse a general lvalue expression
-                self.parse_assignment()?
+                self.parse_ternary()?
             } else {
                 // For my/our/state, parse a simple variable
                 let var = self.parse_variable()?;
@@ -162,12 +165,14 @@ impl<'a> Parser<'a> {
         let declarator_token = self.consume_token()?; // consume 'local'
         let declarator = declarator_token.text.to_string();
 
-        // Parse the lvalue expression that's being localized
-        let variable = Box::new(self.parse_expression()?);
+        // Parse only the localized target expression (lhs), not an assignment.
+        // `local $SIG{__WARN__} = sub { ... };` should keep the assignment RHS
+        // in `initializer` below.
+        let variable = Box::new(self.parse_ternary()?);
 
         let initializer = if self.peek_kind() == Some(TokenKind::Assign) {
             self.tokens.next()?; // consume =
-            Some(Box::new(self.parse_expression()?))
+            Some(Box::new(self.parse_assignment()?))
         } else {
             None
         };
