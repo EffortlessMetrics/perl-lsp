@@ -106,6 +106,23 @@ Different users walk in through different doors. Pick the one that matches your 
 | LSP feature providers | `crates/perl-lsp-*` | Per-feature crates (hover, definition, rename, …) |
 | Tree-sitter interop | `crates/tree-sitter-perl-c`, `crates/tree-sitter-perl-rs` | See split below |
 
+### Repository map
+
+If you are new to the repo, this is the shortest "where things live" map:
+
+| Path | What lives here | Start here when you want to… |
+| --- | --- | --- |
+| `crates/` | All Rust crates in the workspace (`perllsp`, parser, lexer, semantic analysis, feature providers, DAP, tooling helpers) | implement or debug product behavior |
+| `docs/tutorials/` | Learning-oriented setup and walkthroughs | get running quickly in an editor |
+| `docs/how-to/` | Task-focused operational guides | solve one concrete setup or workflow problem |
+| `docs/reference/` | Stable contracts (commands, config, architecture, feature tables) | confirm exact behavior or supported options |
+| `docs/project/` | Status, roadmap, CI and process docs | check "what is true now" and release direction |
+| `xtask/` | Workspace automation commands (`cargo xtask ...`) | add or maintain developer automation |
+| `vscode-extension/` | VS Code packaging and extension assets | work on extension release/distribution behavior |
+| `scripts/` | Utility scripts used by maintenance workflows | run one-off maintenance tasks |
+
+For the complete docs navigation tree, use [docs/INDEX.md](docs/INDEX.md). For crate-level architecture detail, use [docs/reference/CRATE_ARCHITECTURE_GUIDE.md](docs/reference/CRATE_ARCHITECTURE_GUIDE.md).
+
 **Tree-sitter split.** Two crates share the family name but play different roles:
 
 - **`tree-sitter-perl-c`** — the conventional C grammar binding, maintained for compatibility with tree-sitter consumers and as a reference point for comparison. Not on the LSP's critical path.
