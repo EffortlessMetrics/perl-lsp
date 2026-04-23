@@ -21,10 +21,12 @@ on:
     - cron: '0 2 * * *'
   workflow_dispatch:
 
-# Cancel in-flight runs on new pushes (saves minutes)
+# Coalesce-queue-tail: let the running CI complete; skip superseded SHAs at a
+# preflight gate instead of cancelling in-flight work mid-run.
+# Note: scheduled runs always pass the preflight gate (no SHA comparison).
 concurrency:
   group: ci-security-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 permissions:
   contents: read
@@ -34,6 +36,36 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  # ── Preflight: skip superseded SHAs to save cost ─────────────────────
+  preflight-latest-check:
+    name: Preflight — is this SHA latest?
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    outputs:
+      is_latest: ${{ steps.check.outputs.is_latest }}
+    steps:
+      - name: Check if this SHA is latest on the ref
+        id: check
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Scheduled and manual runs always pass through — no SHA to compare.
+          if [ "${{ github.event_name }}" = "schedule" ] || [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "is_latest=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::Scheduled/manual run — always passing preflight"
+            exit 0
+          fi
+          BRANCH="${{ github.head_ref || github.ref_name }}"
+          CURRENT="${{ github.event.pull_request.head.sha || github.sha }}"
+          LATEST=$(git ls-remote "https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}.git" "refs/heads/${BRANCH}" | awk '{print $1}')
+          if [ -z "$LATEST" ] || [ "$LATEST" = "$CURRENT" ]; then
+            echo "is_latest=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::This SHA ($CURRENT) is latest on $BRANCH — running full CI"
+          else
+            echo "is_latest=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Superseded by $LATEST — skipping remaining jobs to save cost"
+          fi
+
   # ============================================================================
   # Rust Security Audits
   # ============================================================================
@@ -42,6 +74,8 @@ jobs:
     name: Cargo Audit (RustSec)
     runs-on: ubuntu-24.04
     timeout-minutes: 10
+    needs: preflight-latest-check
+    if: needs.preflight-latest-check.outputs.is_latest == 'true'
     permissions:
       contents: read
       security-events: write
@@ -94,6 +128,8 @@ jobs:
     name: Cargo Deny (Policy Enforcement)
     runs-on: ubuntu-24.04
     timeout-minutes: 10
+    needs: preflight-latest-check
+    if: needs.preflight-latest-check.outputs.is_latest == 'true'
     permissions:
       contents: read
 
@@ -127,6 +163,8 @@ jobs:
     name: Trivy Repository Scan
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    needs: preflight-latest-check
+    if: needs.preflight-latest-check.outputs.is_latest == 'true'
     permissions:
       contents: read
       security-events: write
@@ -183,7 +221,8 @@ jobs:
     name: Trivy Docker Image Scan
     runs-on: ubuntu-24.04
     timeout-minutes: 20
-    if: github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    needs: preflight-latest-check
+    if: (needs.preflight-latest-check.outputs.is_latest == 'true') && (github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
     permissions:
       contents: read
       security-events: write

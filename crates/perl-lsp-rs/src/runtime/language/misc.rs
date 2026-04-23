@@ -1233,5 +1233,4 @@ mod tests {
             "inlay_hint_resolve_support must remain None when client sends no resolveSupport"
         );
     }
-
 }
