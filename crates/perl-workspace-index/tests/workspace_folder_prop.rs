@@ -20,6 +20,10 @@ fn uri_entry_strategy() -> impl Strategy<Value = (Option<String>, Value)> {
             let uri = format!("file:///{folder}");
             (Some(uri.clone()), json!({"uri": uri}))
         }),
+        plain_path_strategy().prop_map(|folder| {
+            let uri = format!("file:///{folder}");
+            (Some(uri.clone()), json!(uri))
+        }),
         any::<i64>().prop_map(|value| (None, json!({"uri": value}))),
         plain_path_strategy().prop_map(|folder| (None, json!({"name": folder}))),
         Just((None, json!(null))),

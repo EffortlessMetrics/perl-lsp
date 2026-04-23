@@ -75,8 +75,12 @@ fn parse_file_uri_fallback(workspace_folder: &str) -> Option<PathBuf> {
 pub fn extract_workspace_folder_uris(workspace_folders: &[Value]) -> Vec<String> {
     workspace_folders
         .iter()
-        .filter_map(|folder| {
-            folder.get("uri").and_then(Value::as_str).map(std::string::ToString::to_string)
+        .filter_map(|folder| match folder {
+            Value::String(uri) => Some(uri.clone()),
+            Value::Object(_) => {
+                folder.get("uri").and_then(Value::as_str).map(std::string::ToString::to_string)
+            }
+            _ => None,
         })
         .collect()
 }
@@ -170,10 +174,11 @@ mod tests {
         let entries = vec![
             json!({"uri": "file:///one"}),
             json!({"uri": "file:///two"}),
+            json!("file:///three"),
             json!({"name": "invalid"}),
         ];
         let uris = extract_workspace_folder_uris(&entries);
-        assert_eq!(uris, vec!["file:///one", "file:///two"]);
+        assert_eq!(uris, vec!["file:///one", "file:///two", "file:///three"]);
     }
 
     #[test]
