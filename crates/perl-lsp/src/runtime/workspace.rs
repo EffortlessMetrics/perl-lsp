@@ -2025,10 +2025,8 @@ pub(super) fn module_name_appears_in_text(text: &str, module_name: &str) -> bool
     if module_name.is_empty() {
         return false;
     }
-    let bytes = text.as_bytes();
-    let name_bytes = module_name.as_bytes();
-    let name_len = name_bytes.len();
-    let text_len = bytes.len();
+    let name_len = module_name.len();
+    let text_len = text.len();
 
     let mut start = 0usize;
     while start + name_len <= text_len {
@@ -2036,13 +2034,13 @@ pub(super) fn module_name_appears_in_text(text: &str, module_name: &str) -> bool
             let abs = start + pos;
             // Check character before the match
             let before_ok = abs == 0 || {
-                let c = bytes[abs - 1] as char;
-                !c.is_alphanumeric() && c != '_' && c != ':'
+                let c = text[..abs].chars().next_back();
+                c.is_none_or(|c| !is_perl_identifier_continue(c))
             };
             // Check character after the match
             let after_ok = abs + name_len >= text_len || {
-                let c = bytes[abs + name_len] as char;
-                !c.is_alphanumeric() && c != '_' && c != ':'
+                let c = text[abs + name_len..].chars().next();
+                c.is_none_or(|c| !is_perl_identifier_continue(c))
             };
             if before_ok && after_ok {
                 return true;
@@ -2053,6 +2051,10 @@ pub(super) fn module_name_appears_in_text(text: &str, module_name: &str) -> bool
         }
     }
     false
+}
+
+fn is_perl_identifier_continue(c: char) -> bool {
+    c.is_alphanumeric() || c == '_' || c == ':'
 }
 
 /// Convert a file path to a Perl module name
@@ -2111,5 +2113,17 @@ mod tests {
     #[test]
     fn test_module_name_empty_returns_false() {
         assert!(!module_name_appears_in_text("anything", ""));
+    }
+
+    #[test]
+    fn test_module_name_unicode_letter_before_rejected() {
+        // Unicode letters still extend identifiers; do not match inside "ÅBase".
+        assert!(!module_name_appears_in_text("use ÅBase;", "Base"));
+    }
+
+    #[test]
+    fn test_module_name_unicode_letter_after_rejected() {
+        // Unicode letters still extend identifiers; do not match inside "BaseΔ".
+        assert!(!module_name_appears_in_text("use BaseΔ;", "Base"));
     }
 }
