@@ -130,7 +130,7 @@ See [docs/README.md](docs/README.md) for the full crate map and design notes.
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the full contributor workflow. If you are an AI implementation agent (Codex, Jules, Gemini CLI), read [AGENTS.md](AGENTS.md) first. Gemini CLI users should also read [GEMINI.md](GEMINI.md).
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the full contributor workflow. If you are an AI implementation agent (Codex, Claude Code, Jules, Gemini CLI), read [AGENTS.md](AGENTS.md) first. Gemini CLI users should also read [GEMINI.md](GEMINI.md).
 
 ```bash
 cargo test --workspace --lib
@@ -145,7 +145,7 @@ Find beginner-friendly issues:
 gh issue list --label "good-first-issue" --state open
 ```
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the full contributor workflow. If you are an AI implementation agent (Codex, Jules), read [AGENTS.md](AGENTS.md) first.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the full contributor workflow. If you are an AI implementation agent (Codex, Claude Code, Jules), read [AGENTS.md](AGENTS.md) first.
 
 ## Status
 
