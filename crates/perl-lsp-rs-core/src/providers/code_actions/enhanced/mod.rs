@@ -438,18 +438,55 @@ impl EnhancedCodeActionsProvider {
     }
 }
 
+/// Returns the portion of `line` that is live code — i.e. stripped of any
+/// trailing `# ...` comment and of leading whitespace.
+///
+/// Intentionally naive: does not understand `#` inside strings or regex
+/// delimiters, but the pragma-detection call sites only look at the *start*
+/// of the live text for `use <pragma>`, so an in-string `#` after a `use`
+/// statement cannot confuse us.
+fn live_code(line: &str) -> &str {
+    let trimmed = line.trim_start();
+    match trimmed.find('#') {
+        Some(idx) => trimmed[..idx].trim_end(),
+        None => trimmed.trim_end(),
+    }
+}
+
+/// Returns true if `live` begins with `use <pragma>` followed by a non-ident
+/// char (whitespace, `;`, `(`, `'`, `"`) — so `use utf8;` matches but
+/// `use utf8_custom;` does not.
+fn starts_with_use_pragma(live: &str, pragma: &str) -> bool {
+    let Some(rest) = live.strip_prefix("use ") else {
+        return false;
+    };
+    let rest = rest.trim_start();
+    let Some(after) = rest.strip_prefix(pragma) else {
+        return false;
+    };
+    match after.chars().next() {
+        None => true,
+        Some(c) => !c.is_ascii_alphanumeric() && c != '_' && c != ':',
+    }
+}
+
 fn has_utf8_pragma(source: &str) -> bool {
-    source.lines().any(|line| line.trim_start().starts_with("use utf8"))
+    source.lines().any(|line| starts_with_use_pragma(live_code(line), "utf8"))
 }
 
 fn has_utf8_open_layer(source: &str) -> bool {
     source.lines().any(|line| {
-        let trimmed = line.trim_start();
-        trimmed.starts_with("use open")
-            && (trimmed.contains(":utf8")
-                || trimmed.contains(":encoding(UTF-8)")
-                || trimmed.contains(":encoding(utf8)")
-                || trimmed.contains(":encoding(utf-8)"))
+        let live = live_code(line);
+        if !starts_with_use_pragma(live, "open") {
+            return false;
+        }
+        // Match Perl's case-insensitive PerlIO layer names; `:utf8` is canonical
+        // lowercase, but `:encoding(UTF-8)` is commonly written in any case.
+        let lower = live.to_ascii_lowercase();
+        lower.contains(":utf8")
+            || lower.contains(":encoding(utf-8)")
+            || lower.contains(":encoding(utf8)")
+            || lower.contains(":encoding(utf_8)")
     })
 }
 
@@ -533,6 +570,103 @@ mod tests {
         let action = must(utf8_action.ok_or("missing UTF-8 support action"));
         assert_eq!(action.edit.changes.len(), 1);
         assert_eq!(action.edit.changes[0].new_text, "use utf8;\n");
+    }
+
+    #[test]
+    fn test_utf8_action_suppressed_when_pragma_is_in_comment() {
+        // A commented-out pragma should not suppress the code action.
+        // Previously, `starts_with("use utf8")` matched on the `#` line after
+        // `trim_start`, which left the `#` in place — but naive regex users
+        // often write `# use utf8;` as a reminder, and the helper must see
+        // past the comment.
+        let source = "# use utf8;\n# use open qw(:std :utf8);\nmy $n = \"José\";\n";
+        let mut parser = Parser::new(source);
+        let ast = must(parser.parse());
+
+        let provider = EnhancedCodeActionsProvider::new(source.to_string());
+        let actions = provider.get_enhanced_refactoring_actions(&ast, (0, source.len()));
+        let utf8_action = actions.iter().find(|a| a.title == "Add UTF-8 support");
+
+        let action = must(utf8_action.ok_or("missing UTF-8 support action"));
+        assert_eq!(action.edit.changes.len(), 1);
+        assert_eq!(
+            action.edit.changes[0].new_text, "use utf8;\nuse open qw(:std :utf8);\n",
+            "commented-out pragmas must not suppress the fix"
+        );
+    }
+
+    #[test]
+    fn test_utf8_action_not_fooled_by_similar_pragma_names() {
+        // `use utf8_custom;` is a hypothetical third-party pragma; the quick
+        // fix must not treat it as the built-in `utf8` pragma.
+        let source = "use utf8_custom;\nmy $n = \"José\";\n";
+        let mut parser = Parser::new(source);
+        let ast = must(parser.parse());
+
+        let provider = EnhancedCodeActionsProvider::new(source.to_string());
+        let actions = provider.get_enhanced_refactoring_actions(&ast, (0, source.len()));
+        let utf8_action = actions.iter().find(|a| a.title == "Add UTF-8 support");
+
+        let action = must(utf8_action.ok_or("missing UTF-8 support action"));
+        assert_eq!(
+            action.edit.changes[0].new_text, "use utf8;\nuse open qw(:std :utf8);\n",
+            "utf8_custom must not satisfy the utf8 pragma check"
+        );
+    }
+
+    #[test]
+    fn test_utf8_action_absent_when_both_pragmas_present() {
+        // Positive control: when both pragmas are present the action must
+        // disappear entirely (not return an empty-edit action).
+        let source = "use utf8;\nuse open qw(:std :utf8);\nmy $n = \"José\";\n";
+        let mut parser = Parser::new(source);
+        let ast = must(parser.parse());
+
+        let provider = EnhancedCodeActionsProvider::new(source.to_string());
+        let actions = provider.get_enhanced_refactoring_actions(&ast, (0, source.len()));
+        assert!(
+            !actions.iter().any(|a| a.title == "Add UTF-8 support"),
+            "action must not fire when both utf8 pragmas are already present"
+        );
+    }
+
+    #[test]
+    fn test_utf8_action_accepts_case_insensitive_encoding_layer() {
+        // `:encoding(UTF-8)` and `:encoding(utf-8)` are both valid PerlIO
+        // layer names (encoding names are case-insensitive). Either form
+        // must count as "layer already present".
+        for variant in [
+            "use open qw(:std :encoding(UTF-8));",
+            "use open qw(:std :encoding(utf-8));",
+            "use open qw(:std :ENCODING(utf8));",
+        ] {
+            let source = format!("use utf8;\n{variant}\nmy $n = \"José\";\n");
+            let mut parser = Parser::new(&source);
+            let ast = must(parser.parse());
+
+            let provider = EnhancedCodeActionsProvider::new(source.clone());
+            let actions = provider.get_enhanced_refactoring_actions(&ast, (0, source.len()));
+            assert!(
+                !actions.iter().any(|a| a.title == "Add UTF-8 support"),
+                "variant {variant:?} must satisfy the open-layer check"
+            );
+        }
+    }
+
+    #[test]
+    fn test_utf8_action_absent_when_no_non_ascii_content() {
+        // If the source is pure ASCII, there is nothing to encode — the
+        // action should not fire even with no utf8 pragmas.
+        let source = "my $n = \"Jose\";\n";
+        let mut parser = Parser::new(source);
+        let ast = must(parser.parse());
+
+        let provider = EnhancedCodeActionsProvider::new(source.to_string());
+        let actions = provider.get_enhanced_refactoring_actions(&ast, (0, source.len()));
+        assert!(
+            !actions.iter().any(|a| a.title == "Add UTF-8 support"),
+            "action must not fire on pure-ASCII sources"
+        );
     }
 }
 
