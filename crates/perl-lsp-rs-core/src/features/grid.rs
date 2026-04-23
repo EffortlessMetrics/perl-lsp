@@ -9,7 +9,7 @@
 pub use crate::features::contracts::{
     BddFeatureRow, Feature, FeatureProfileSpec, LSP_VERSION, VERSION, advertised_features,
     all_features, bdd_feature_rows, catalog, compliance_percent, compliance_percent_for_grid,
-    feature_profile_specs, has_feature, trackable_feature_count_for_grid,
+    feature_profile_specs, has_feature, lsp_bdd_feature_rows, trackable_feature_count_for_grid,
 };
 pub use crate::features::policy::{FeatureProfile, catalog_advertised_feature_ids};
 
@@ -396,6 +396,28 @@ mod tests {
         let value: serde_json::Value = must(serde_json::from_str(&payload));
         assert_eq!(value["profile"].as_str(), Some("production"));
         assert!(value.get("feature_count").is_some());
+    }
+
+    #[test]
+    fn bdd_grid_rows_cover_all_lsp_rows() {
+        let payload = to_json();
+        let value: serde_json::Value = must(serde_json::from_str(&payload));
+        let rows = must_some(
+            value
+                .get("feature_grid")
+                .and_then(|grid| grid.get("rows"))
+                .and_then(|rows| rows.as_array()),
+        );
+
+        let payload_lsp_ids: std::collections::BTreeSet<&str> = rows
+            .iter()
+            .filter_map(|row| row.get("id").and_then(|id| id.as_str()))
+            .filter(|id| id.starts_with("lsp."))
+            .collect();
+        let contract_lsp_ids: std::collections::BTreeSet<&str> =
+            super::lsp_bdd_feature_rows().into_iter().map(|row| row.id).collect();
+
+        assert_eq!(payload_lsp_ids, contract_lsp_ids);
     }
 
     // ── Default to_json has no profile key ───────────────────────────

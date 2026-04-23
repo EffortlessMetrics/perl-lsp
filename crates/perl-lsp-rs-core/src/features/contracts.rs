@@ -169,6 +169,13 @@ pub fn bdd_feature_rows() -> Vec<BddFeatureRow> {
     rows
 }
 
+/// Export LSP-only BDD rows for tools that need to ignore DAP/extension entries.
+///
+/// This keeps the lock between `features.toml` LSP rows and the BDD matrix explicit.
+pub fn lsp_bdd_feature_rows() -> Vec<BddFeatureRow> {
+    bdd_feature_rows().into_iter().filter(|row| row.id.starts_with("lsp.")).collect()
+}
+
 /// Number of BDD rows that participate in coverage accounting.
 pub fn trackable_feature_count_for_grid() -> usize {
     all_features()
@@ -369,6 +376,37 @@ mod tests {
     #[test]
     fn bdd_feature_rows_count_matches_all_features() {
         assert_eq!(bdd_feature_rows().len(), all_features().len());
+    }
+
+    #[test]
+    fn lsp_bdd_feature_rows_only_include_lsp_ids() {
+        let rows = lsp_bdd_feature_rows();
+        assert!(!rows.is_empty(), "expected non-empty LSP rows");
+        assert!(rows.iter().all(|row| row.id.starts_with("lsp.")));
+    }
+
+    #[test]
+    fn lsp_bdd_feature_rows_cover_all_lsp_features() {
+        let expected =
+            all_features().iter().filter(|feature| feature.id.starts_with("lsp.")).count();
+        assert_eq!(lsp_bdd_feature_rows().len(), expected);
+    }
+
+    #[test]
+    fn lsp_bdd_feature_rows_sorted_by_area_then_id() {
+        let rows = lsp_bdd_feature_rows();
+        for pair in rows.windows(2) {
+            let lhs = &pair[0];
+            let rhs = &pair[1];
+            assert!(
+                lhs.area < rhs.area || (lhs.area == rhs.area && lhs.id <= rhs.id),
+                "rows are not sorted: ({}, {}) then ({}, {})",
+                lhs.area,
+                lhs.id,
+                rhs.area,
+                rhs.id
+            );
+        }
     }
 
     #[test]
