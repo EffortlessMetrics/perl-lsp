@@ -5,6 +5,7 @@ This guide helps you set up and configure the Perl Language Server in Visual Stu
 ## Table of Contents
 
 - [Prerequisites](#prerequisites)
+- [Amazon Kiro Compatibility](#amazon-kiro-compatibility)
 - [Installation](#installation)
 - [Extension Setup](#extension-setup)
 - [Configuration](#configuration)
@@ -26,6 +27,21 @@ This guide helps you set up and configure the Perl Language Server in Visual Stu
 
 - **Perl** 5.10 or later (for syntax validation)
 - **perltidy** (for code formatting)
+
+## Amazon Kiro Compatibility
+
+Amazon Kiro follows a VS Code-compatible extension/runtime model. In most
+setups, the perl-lsp extension and settings work unchanged.
+
+If extension installation is blocked by your Kiro distribution channel, use a
+generic LSP client entry that launches:
+
+```text
+perllsp --stdio
+```
+
+Use the same `perl-lsp.*` and workspace `.vscode/settings.json` examples in
+this guide for Kiro workspaces.
 
 ---
 
