@@ -843,6 +843,11 @@
         "when": "editorTextFocus && editorLangId == perl"
       },
       {
+        "command": "editor.action.formatDocument",
+        "key": "shift+alt+f",
+        "when": "editorHasDocumentFormattingProvider && editorTextFocus && !editorReadonly && editorLangId == perl"
+      },
+      {
         "command": "perl-lsp.extractVariable",
         "key": "shift+alt+v",
         "when": "editorTextFocus && editorHasSelection && editorLangId == perl"
