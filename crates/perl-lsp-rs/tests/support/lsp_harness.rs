@@ -12,11 +12,11 @@
 #![allow(clippy::collapsible_if)]
 
 use parking_lot::{Condvar, Mutex};
-use perl_lsp_rs_core::transport::framing::{ContentLengthFramer, frame};
-use serde_json::{Value, json};
+use perl_lsp_rs_core::transport::framing::{frame, ContentLengthFramer};
+use serde_json::{json, Value};
 use std::collections::VecDeque;
 use std::io::{Cursor, Write};
-use std::sync::{Arc, mpsc};
+use std::sync::{mpsc, Arc};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -28,6 +28,15 @@ pub use super::test_workspace::TempWorkspace;
 use super::message_framing::{SendableServer, TestWriter};
 
 /// LSP Test Harness for testing with real JSON-RPC protocol
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LinkedEditingSpan {
+    pub start_line: u64,
+    pub start_character: u64,
+    pub end_line: u64,
+    pub end_character: u64,
+}
+
 pub struct LspHarness {
     sender: mpsc::Sender<Vec<u8>>,
     output_buffer: Arc<Mutex<Vec<u8>>>,
@@ -361,6 +370,57 @@ impl LspHarness {
             }),
         );
         Ok(())
+    }
+
+    /// Request linked-editing range JSON payload at a text position.
+    pub fn linked_editing_range(
+        &mut self,
+        uri: &str,
+        line: u32,
+        character: u32,
+    ) -> Result<Value, String> {
+        self.request(
+            "textDocument/linkedEditingRange",
+            json!({
+                "textDocument": {"uri": uri},
+                "position": {"line": line, "character": character}
+            }),
+        )
+    }
+
+    /// Request linked-editing ranges and parse them into simple span tuples.
+    pub fn linked_editing_ranges(
+        &mut self,
+        uri: &str,
+        line: u32,
+        character: u32,
+    ) -> Result<Vec<LinkedEditingSpan>, String> {
+        let response = self.linked_editing_range(uri, line, character)?;
+        let Some(ranges) = response.get("ranges").and_then(Value::as_array) else {
+            return Ok(Vec::new());
+        };
+
+        let mut spans = Vec::with_capacity(ranges.len());
+        for range in ranges {
+            let Some(start_line) = range.pointer("/start/line").and_then(Value::as_u64) else {
+                return Err(format!("linkedEditingRange missing start.line: {range}"));
+            };
+            let Some(start_character) = range.pointer("/start/character").and_then(Value::as_u64)
+            else {
+                return Err(format!("linkedEditingRange missing start.character: {range}"));
+            };
+            let Some(end_line) = range.pointer("/end/line").and_then(Value::as_u64) else {
+                return Err(format!("linkedEditingRange missing end.line: {range}"));
+            };
+            let Some(end_character) = range.pointer("/end/character").and_then(Value::as_u64)
+            else {
+                return Err(format!("linkedEditingRange missing end.character: {range}"));
+            };
+
+            spans.push(LinkedEditingSpan { start_line, start_character, end_line, end_character });
+        }
+
+        Ok(spans)
     }
 
     /// Send a request and wait for response with adaptive timeout based on thread configuration
