@@ -15,6 +15,35 @@ use crate::state::DegradationTier;
 use perl_parser::workspace_index::{IndexPhase, IndexState};
 use perl_parser_core::source_file::is_binary_content;
 
+#[cfg(feature = "incremental")]
+fn build_incremental_edit_set(
+    original_rope: &ropey::Rope,
+    lsp_changes: &[lsp_types::TextDocumentContentChangeEvent],
+) -> Option<perl_parser::incremental::incremental_edit::IncrementalEditSet> {
+    use crate::textdoc::{PosEnc, range_to_bytes, range_to_chars};
+    use perl_parser::incremental::incremental_edit::{IncrementalEdit, IncrementalEditSet};
+
+    let mut working_rope = original_rope.clone();
+    let mut edit_set = IncrementalEditSet::new();
+
+    for change in lsp_changes {
+        let range = change.range.as_ref()?;
+        // LSP applies content changes in order. Later ranges are relative to the
+        // text after earlier edits in the same notification, so we must map
+        // offsets against the evolving rope, not only the original document.
+        let (start_byte, old_end_byte) = range_to_bytes(&working_rope, range, PosEnc::Utf16);
+        edit_set.add(IncrementalEdit::new(start_byte, old_end_byte, change.text.clone()));
+
+        let (start_char, end_char) = range_to_chars(&working_rope, range, PosEnc::Utf16);
+        if start_char <= end_char {
+            working_rope.remove(start_char..end_char);
+            working_rope.insert(start_char, &change.text);
+        }
+    }
+
+    if edit_set.is_empty() { None } else { Some(edit_set) }
+}
+
 impl LspServer {
     /// Handle textDocument/didOpen notification.
     ///
@@ -471,43 +500,7 @@ impl LspServer {
                 #[cfg(feature = "incremental")]
                 let incremental_edits_opt: Option<
                     perl_parser::incremental::incremental_edit::IncrementalEditSet,
-                > = {
-                    use perl_parser::incremental::incremental_edit::{
-                        IncrementalEdit, IncrementalEditSet,
-                    };
-                    let mut edit_set = IncrementalEditSet::new();
-                    let mut all_ranged = true;
-                    for change in &lsp_changes {
-                        if let Some(range) = change.range {
-                            // Convert UTF-16 line/char to byte offsets using the pre-change
-                            // line_starts (populated from the rope before apply_changes runs).
-                            let start_byte = doc_state.line_starts.position_to_offset_rope(
-                                &doc_state.rope,
-                                range.start.line,
-                                range.start.character,
-                            );
-                            let old_end_byte = doc_state.line_starts.position_to_offset_rope(
-                                &doc_state.rope,
-                                range.end.line,
-                                range.end.character,
-                            );
-                            edit_set.add(IncrementalEdit::new(
-                                start_byte,
-                                old_end_byte,
-                                change.text.clone(),
-                            ));
-                        } else {
-                            // Full-document replace — not a ranged edit; reset below
-                            tracing::trace!(
-                                "Full-document replace detected for {} — incremental edits not supported",
-                                uri
-                            );
-                            all_ranged = false;
-                            break;
-                        }
-                    }
-                    if all_ranged && !edit_set.is_empty() { Some(edit_set) } else { None }
-                };
+                > = build_incremental_edit_set(&doc_state.rope, &lsp_changes);
 
                 // Apply changes with UTF-16 encoding (as advertised in initialize)
                 apply_changes(&mut doc, &lsp_changes, PosEnc::Utf16);
@@ -1143,6 +1136,43 @@ mod tests {
         let server =
             LspServer::with_io(Box::new(std::io::Cursor::new(Vec::<u8>::new())), Box::new(writer));
         (server, buf)
+    }
+
+    #[cfg(feature = "incremental")]
+    #[test]
+    fn test_build_incremental_edits_uses_evolving_document_ranges() {
+        use lsp_types::{Position, Range, TextDocumentContentChangeEvent};
+
+        let original = ropey::Rope::from_str("abcde");
+        let changes = vec![
+            // Insert one character near the start.
+            TextDocumentContentChangeEvent {
+                range: Some(Range {
+                    start: Position { line: 0, character: 1 },
+                    end: Position { line: 0, character: 1 },
+                }),
+                range_length: None,
+                text: "X".to_string(),
+            },
+            // Replace trailing "de"; positions are relative to the post-insert text.
+            TextDocumentContentChangeEvent {
+                range: Some(Range {
+                    start: Position { line: 0, character: 4 },
+                    end: Position { line: 0, character: 6 },
+                }),
+                range_length: None,
+                text: "YZ".to_string(),
+            },
+        ];
+
+        let edit_set =
+            build_incremental_edit_set(&original, &changes).expect("expected ranged edit set");
+        assert_eq!(edit_set.edits.len(), 2);
+        assert_eq!(edit_set.edits[0].start_byte, 1);
+        assert_eq!(edit_set.edits[0].old_end_byte, 1);
+        // The second edit must be measured on the evolving document after the first insert.
+        assert_eq!(edit_set.edits[1].start_byte, 4);
+        assert_eq!(edit_set.edits[1].old_end_byte, 6);
     }
 
     /// Verify that a ranged didChange initializes and preserves incremental_doc.
