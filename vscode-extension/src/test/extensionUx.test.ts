@@ -150,6 +150,73 @@ describe('extension UX warnings', () => {
     );
   });
 
+  test('does not offer directory creation for absolute or workspace-escaping include paths', async () => {
+    const workspaceDir = fs.mkdtempSync(path.join(os.tmpdir(), 'perl-lsp-ux-escape-'));
+    const context = makeContext();
+    context.globalState = {
+      get: jest.fn(() => undefined),
+      update: jest.fn(async () => undefined),
+    };
+
+    (vscode.workspace.getConfiguration as jest.Mock).mockImplementation(() => ({
+      get: jest.fn(() => ['/opt/perl/lib', '../shared-lib']),
+    }));
+
+    (vscode.workspace as any).workspaceFolders = [
+      {
+        name: 'workspace',
+        uri: {
+          fsPath: workspaceDir,
+          toString: () => `file://${workspaceDir}`,
+        },
+      },
+    ];
+
+    const showWarningMessage = vscode.window.showWarningMessage as jest.Mock;
+    showWarningMessage.mockResolvedValue(undefined);
+
+    await validateIncludePaths(context);
+
+    expect(showWarningMessage).toHaveBeenCalledWith(
+      expect.stringContaining('/opt/perl/lib'),
+      'Open Settings'
+    );
+    expect(showWarningMessage.mock.calls[0]).toHaveLength(2);
+  });
+
+  test('opens settings when selected from include path warning', async () => {
+    const workspaceDir = fs.mkdtempSync(path.join(os.tmpdir(), 'perl-lsp-ux-settings-'));
+    const context = makeContext();
+    context.globalState = {
+      get: jest.fn(() => undefined),
+      update: jest.fn(async () => undefined),
+    };
+
+    (vscode.workspace.getConfiguration as jest.Mock).mockImplementation(() => ({
+      get: jest.fn(() => ['missing-lib']),
+    }));
+
+    (vscode.workspace as any).workspaceFolders = [
+      {
+        name: 'workspace',
+        uri: {
+          fsPath: workspaceDir,
+          toString: () => `file://${workspaceDir}`,
+        },
+      },
+    ];
+
+    const showWarningMessage = vscode.window.showWarningMessage as jest.Mock;
+    showWarningMessage.mockResolvedValue('Open Settings');
+
+    await validateIncludePaths(context);
+
+    expect(vscode.commands.executeCommand).toHaveBeenCalledWith(
+      'workbench.action.openSettings',
+      '@ext:EffortlessMetrics.perl-lsp-rs perl-lsp.includePaths'
+    );
+  });
+
   test('warns once per major version when conflicting Perl extensions are installed', async () => {
     const context = makeContext('0.12.3');
     let warnedMajor: string | undefined;
@@ -193,6 +260,45 @@ describe('extension UX warnings', () => {
     showWarningMessage.mockClear();
     await warnAboutPerlExtensionConflicts(context);
     expect(showWarningMessage).not.toHaveBeenCalled();
+  });
+
+  test('opens coexistence guide when conflict warning action is selected', async () => {
+    const context = makeContext('0.12.3');
+    context.globalState = {
+      get: jest.fn(() => undefined),
+      update: jest.fn(async () => undefined),
+    };
+
+    const showWarningMessage = vscode.window.showWarningMessage as jest.Mock;
+    showWarningMessage.mockResolvedValue('Open Coexistence Guide');
+
+    (vscode.extensions as any).all = [
+      {
+        id: 'EffortlessMetrics.perl-lsp-rs',
+        packageJSON: {
+          publisher: 'EffortlessMetrics',
+          name: 'perl-lsp-rs',
+          version: '0.12.3',
+        },
+      },
+      {
+        id: 'example.perl-navigator',
+        packageJSON: {
+          displayName: 'Perl Navigator',
+          contributes: {
+            languages: [{ id: 'perl' }],
+          },
+        },
+      },
+    ];
+
+    await warnAboutPerlExtensionConflicts(context);
+
+    expect(vscode.env.openExternal).toHaveBeenCalledWith(
+      expect.objectContaining({
+        toString: expect.any(Function),
+      })
+    );
   });
 
   test('syncs perlcritic settings to the server', async () => {
