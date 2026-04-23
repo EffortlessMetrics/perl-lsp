@@ -1,4 +1,4 @@
-# ADR-0042: Module Provenance Detection for Perl Module Resolution
+# ADR-0043: Module Provenance Detection for Perl Module Resolution
 
 **Status**: Proposed
 **Date**: 2026-04-17
