@@ -71,6 +71,8 @@
         ],
         "extensions": [
           ".pl",
+          ".plx",
+          ".cgi",
           ".pm",
           ".xs",
           ".xsi",
@@ -714,7 +716,7 @@
         },
         {
           "command": "perl-lsp.runTests",
-          "when": "editorLangId == perl && resourceExtname =~ /\\.(t|pl)$/"
+          "when": "editorLangId == perl && resourceExtname =~ /\\.(t|pl|plx|cgi|psgi)$/"
         },
         {
           "command": "perl-lsp.runPerlCritic",
@@ -789,7 +791,7 @@
       "editor/title": [
         {
           "command": "perl-lsp.runTests",
-          "when": "editorLangId == perl && resourceExtname =~ /\\.(t|pl)$/",
+          "when": "editorLangId == perl && resourceExtname =~ /\\.(t|pl|plx|cgi|psgi)$/",
           "group": "navigation"
         },
         {
