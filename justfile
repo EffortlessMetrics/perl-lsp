@@ -707,6 +707,40 @@ devex-targeted base='' mode='all':
     echo "Running targeted checks (base=$base, mode={{mode}})..."
     cargo xtask targeted-checks --base "$base" --mode "{{mode}}"
 
+# Show recent upstream commits using an auto-detected base ref.
+# Helpful in detached or minimal-clone environments where origin/master may not exist.
+upstream-log count='20' base='':
+    #!/usr/bin/env bash
+    set -euo pipefail
+    base="{{base}}"
+    count="{{count}}"
+    if ! [[ "$count" =~ ^[1-9][0-9]*$ ]]; then
+        echo "ERROR: count must be a positive integer (received: $count)"
+        exit 1
+    fi
+    if [ -z "$base" ]; then
+        base=$(git symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null || true)
+    fi
+    if [ -z "$base" ] && git rev-parse --verify --quiet origin/main >/dev/null; then
+        base="origin/main"
+    fi
+    if [ -z "$base" ] && git rev-parse --verify --quiet origin/master >/dev/null; then
+        base="origin/master"
+    fi
+    if [ -z "$base" ] && git rev-parse --verify --quiet main >/dev/null; then
+        base="main"
+    fi
+    if [ -z "$base" ] && git rev-parse --verify --quiet master >/dev/null; then
+        base="master"
+    fi
+    if [ -z "$base" ]; then
+        echo "ERROR: Could not auto-detect base ref."
+        echo "Hint: run 'just upstream-log <count> <base-ref>' (example: just upstream-log 20 HEAD)."
+        exit 1
+    fi
+    echo "Showing last $count commits from $base"
+    git log "$base" --oneline -n "$count"
+
 # Tool availability check (basic tools for PR-fast)
 [private]
 _check-tools-basic:
