@@ -40,6 +40,32 @@ fn detect_perl_info() -> String {
     }
 }
 
+fn format_perl_spawn_error(error: &std::io::Error) -> String {
+    if error.kind() == std::io::ErrorKind::NotFound {
+        #[cfg(windows)]
+        {
+            return "Perl executable ('perl') is not available on PATH. Install Perl from \
+                    https://strawberryperl.com (or ActivePerl), then reload VS Code. \
+                    You can also set `perl-lsp.perl.path` or launch.json `perl` to a full Perl path."
+                .to_string();
+        }
+        #[cfg(not(windows))]
+        {
+            return "Perl executable ('perl') is not available on PATH. Install Perl with your package manager \
+                    (for example `brew install perl`, `apt install perl`, or your distro equivalent), \
+                    then reload VS Code. You can also set `perl-lsp.perl.path` or launch.json `perl` \
+                    to a full Perl path."
+                .to_string();
+        }
+    }
+
+    format!(
+        "Perl executable ('perl') could not be started: {}. \
+         Check file permissions, antivirus/AppLocker policy, and sandbox restrictions.",
+        error
+    )
+}
+
 impl DebugAdapter {
     /// Handle initialize request
     pub(super) fn handle_initialize(
@@ -362,7 +388,7 @@ impl DebugAdapter {
 
                 Ok(thread_id)
             }
-            Err(e) => Err(e.to_string()),
+            Err(e) => Err(format_perl_spawn_error(&e)),
         }
     }
 
@@ -1671,7 +1697,7 @@ impl DebugAdapter {
 
 #[cfg(test)]
 mod tests {
-    use super::{DebugAdapter, detect_perl_info};
+    use super::{DebugAdapter, detect_perl_info, format_perl_spawn_error};
 
     #[test]
     fn missing_module_name_parses_standard_module_path() {
@@ -1782,5 +1808,17 @@ mod tests {
             }
             other => Err(format!("expected Response from handle_launch; got {other:?}")),
         }
+    }
+
+    #[test]
+    fn format_perl_spawn_error_for_missing_perl_is_actionable() {
+        let error = std::io::Error::new(std::io::ErrorKind::NotFound, "No such file or directory");
+        let message = format_perl_spawn_error(&error);
+
+        assert!(message.contains("Install Perl"), "expected install guidance, got: {message}");
+        assert!(
+            message.contains("perl-lsp.perl.path"),
+            "expected perl-lsp.perl.path guidance, got: {message}"
+        );
     }
 }
