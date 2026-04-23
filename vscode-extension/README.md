@@ -197,6 +197,7 @@ The `perllsp` binary works with any editor that supports the Language Server Pro
 | Editor | How to connect |
 |--------|---------------|
 | **VS Code / VSCodium** | This extension (auto-configured) |
+| **Roo Code** | This extension (install via Marketplace/Open VSX/VSIX) |
 | **Cursor** | This extension |
 | **Neovim** | `nvim-lspconfig` with `perl_lsp` server |
 | **Emacs** | `lsp-mode` or `eglot` |

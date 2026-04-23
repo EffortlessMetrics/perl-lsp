@@ -1,6 +1,6 @@
 # VS Code Setup Guide for perl-lsp
 
-This guide helps you set up and configure the Perl Language Server in Visual Studio Code.
+This guide helps you set up and configure the Perl Language Server in Visual Studio Code and VS Code-compatible forks such as Roo Code.
 
 ## Table of Contents
 
@@ -95,6 +95,15 @@ code --install-extension EffortlessMetrics.perl-lsp-rs
 # 2. Search for "perl-lsp"
 # 3. Click "Install"
 ```
+
+#### Roo Code Notes
+
+Roo Code is VS Code-compatible, so the same extension settings and commands in this guide apply.
+
+- If the VS Code Marketplace is unavailable in your Roo Code build, install from Open VSX:
+  `EffortlessMetrics.perl-lsp-rs`.
+- If your environment is offline or policy-restricted, sideload the release `.vsix` from:
+  <https://github.com/EffortlessMetrics/perl-lsp/releases>.
 
 ### Option 2: Generic LSP Client
 
