@@ -347,7 +347,26 @@ impl<'a> Parser<'a> {
             | TokenKind::End
             | TokenKind::Check
             | TokenKind::Init
-            | TokenKind::Unitcheck => self.parse_phase_block(),
+            | TokenKind::Unitcheck
+                if self
+                    .tokens
+                    .peek_second()
+                    .ok()
+                    .map(|t| t.kind == TokenKind::LeftBrace)
+                    .unwrap_or(false) =>
+            {
+                self.parse_phase_block()
+            }
+
+            // Phase keywords can also be used as barewords/sub names in normal
+            // statement position (e.g. `CHECK();` from CPAN code).  If there is
+            // no `{` after the keyword, parse as a regular expression statement
+            // instead of forcing phase-block syntax.
+            TokenKind::Begin
+            | TokenKind::End
+            | TokenKind::Check
+            | TokenKind::Init
+            | TokenKind::Unitcheck => self.parse_expression_statement(),
 
             // Data sections
             TokenKind::DataMarker => self.parse_data_section(),
