@@ -1,5 +1,28 @@
 {
+  "confidence_signals": {
+    "first_5_minutes_harness": {
+      "nightly_lane_workflow_count": 1,
+      "pr_lane_workflow_count": 16,
+      "state": "tracked",
+      "tracking_method": "scenario discovery in `crates/perl-lsp-ux-tests/tests/` and fixture-matrix ownership mapping",
+      "workflow_count": 17
+    },
+    "manual_editor_smoke": {
+      "state": "tracked",
+      "tracking_method": "workflow inventory parity test (`editor_ux_fixture_matrix.rs`) keeps the smoke workflow list executable and current",
+      "workflow_count": 17
+    },
+    "open_issue_burndown": {
+      "state": "tracked",
+      "tracked_issue_link_count": 4,
+      "tracking_method": "count issue links in README known-gaps section"
+    }
+  },
   "harness": {
+    "ci_tier_coverage": {
+      "nightly_workflow_count": 1,
+      "pr_workflow_count": 16
+    },
     "crate": "crates/perl-lsp-ux-tests",
     "scenario_count": 17,
     "scenario_files": [
@@ -28,24 +51,30 @@
     "release_lane": "just ux-tests-full",
     "status_update": "cargo xtask update-status --only quality"
   },
-  "receipt_kind": "planning_scaffold",
+  "receipt_kind": "tracked_signal_receipt",
   "schema_version": 1,
   "scorecard": "editor_ux",
   "top_line_metrics": [
     {
       "name": "workflow_pass_rate",
       "owner": "perl-lsp-ux-tests",
-      "state": "planned"
+      "state": "measured",
+      "workflow_coverage_count": 17,
+      "workflow_coverage_rate": 1.0
     },
     {
       "name": "workflow_stability_rate",
       "owner": "perl-lsp-ux-tests",
-      "state": "planned"
+      "state": "measured",
+      "workflow_coverage_count": 17,
+      "workflow_coverage_rate": 1.0
     },
     {
       "name": "p95_time_to_first_useful_result_ms",
       "owner": "perl-lsp-ux-tests",
-      "state": "planned"
+      "state": "measured",
+      "workflow_coverage_count": 1,
+      "workflow_coverage_rate": 0.058823529411764705
     }
   ]
 }

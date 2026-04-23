@@ -8,6 +8,7 @@
     "receipt_kind",
     "scorecard",
     "harness",
+    "confidence_signals",
     "top_line_metrics",
     "integration_points"
   ],
@@ -18,7 +19,7 @@
     },
     "receipt_kind": {
       "type": "string",
-      "const": "planning_scaffold"
+      "const": "tracked_signal_receipt"
     },
     "scorecard": {
       "type": "string",
@@ -26,7 +27,7 @@
     },
     "harness": {
       "type": "object",
-      "required": ["crate", "scenario_count", "scenario_files"],
+      "required": ["crate", "scenario_count", "scenario_files", "ci_tier_coverage"],
       "properties": {
         "crate": {
           "type": "string",
@@ -41,6 +42,37 @@
           "items": {
             "type": "string"
           }
+        },
+        "ci_tier_coverage": {
+          "type": "object",
+          "required": ["pr_workflow_count", "nightly_workflow_count"],
+          "properties": {
+            "pr_workflow_count": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "nightly_workflow_count": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "confidence_signals": {
+      "type": "object",
+      "required": ["manual_editor_smoke", "first_5_minutes_harness", "open_issue_burndown"],
+      "properties": {
+        "manual_editor_smoke": {
+          "$ref": "#/$defs/confidenceSignal"
+        },
+        "first_5_minutes_harness": {
+          "$ref": "#/$defs/confidenceSignal"
+        },
+        "open_issue_burndown": {
+          "$ref": "#/$defs/confidenceSignal"
         }
       },
       "additionalProperties": false
@@ -98,10 +130,19 @@
           },
           "state": {
             "type": "string",
-            "enum": ["planned", "measured"]
+            "enum": ["measured"]
           },
           "owner": {
             "type": "string"
+          },
+          "workflow_coverage_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "workflow_coverage_rate": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
           }
         },
         "additionalProperties": false
@@ -122,6 +163,38 @@
         },
         "quality_surface": {
           "type": "string"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "$defs": {
+    "confidenceSignal": {
+      "type": "object",
+      "required": ["state", "tracking_method"],
+      "properties": {
+        "state": {
+          "type": "string",
+          "const": "tracked"
+        },
+        "tracking_method": {
+          "type": "string"
+        },
+        "workflow_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "pr_lane_workflow_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "nightly_lane_workflow_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "tracked_issue_link_count": {
+          "type": "integer",
+          "minimum": 0
         }
       },
       "additionalProperties": false
