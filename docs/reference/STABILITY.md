@@ -1,77 +1,75 @@
-# API Stability and Version Policy
+# Public API Stability Contract
 
-**MSRV:** 1.92 • **Edition:** 2024 • **Status:** Public alpha
+**MSRV:** 1.92 • **Edition:** 2024 • **Status:** Public alpha (`0.12.x` line)
 
-This document describes the stability posture for the current public-alpha line. The current release line is `v0.11.x`; stronger compatibility guarantees are still targeted for the `v0.15.0` stability-contract milestone.
+This document defines the API stability contract for published crates in this repository.
 
-## Current Alpha Stance
+## Scope: what is a public API in this repo?
 
-What public alpha means here:
+The **source of truth** is `[workspace.metadata.publish].allow` in `Cargo.toml`.
 
-- APIs and behaviors are usable today but can still change between minor releases
-- Advertised protocol behavior is tracked carefully, but the formal compatibility contract is not locked yet
-- Packaging and distribution surfaces can still change while the alpha line is being hardened
-- Documentation is being aligned with the actual shipped posture rather than treated as frozen
+- Any crate in that allowlist is a **public SemVer contract**.
+- Any crate not in that allowlist is **internal implementation detail**, even if `pub` within the workspace.
 
-## What We Ship Today
+As of `0.12.4`, the publish allowlist includes **31 crates**.
 
-| Distribution | Format | Support level |
-| --- | --- | --- |
-| GitHub Releases | Tagged source and binary artifacts | Alpha |
-| crates.io | Published crates | Alpha |
-| VS Code extension | Marketplace / Open VSX distribution | Alpha |
-| Source builds | Git checkout + Cargo | Alpha |
+## Current contract for the public-alpha line (`0.y.z`)
 
-Availability can vary by release. Check the release notes and repo documentation for the exact surface shipped in a given version.
+Because the project is pre-1.0, SemVer allows breaking changes in minor releases. We still apply stricter project rules:
 
-## Public Crate Line
+### Patch releases (`0.y.Z`)
 
-These crates define the user-facing alpha line:
-
-| Crate | Current line | Purpose | Stability posture |
-| --- | --- | --- | --- |
-| `perl-parser` | `0.11.x` | Parser and AST-facing library | Evolving |
-| `perl-lexer` | `0.11.x` | Tokenizer | Evolving |
-| `perl-lsp` | `0.11.x` | LSP server binary | Evolving |
-| `perl-corpus` | `0.11.x` | Corpus and fixtures | Evolving |
-| `perl-dap` | `0.11.x` | Debug adapter | Preview / evolving |
-| `perl-parser-pest` | `0.11.x` | Legacy parser path | Maintenance only |
-
-## Versioning Policy
+- Intended for bug fixes, security fixes, perf changes, and docs.
+- Must not intentionally break documented public APIs.
+- If an unavoidable break is discovered after release, it is treated as a release-process defect and documented in release notes.
 
 ### Minor releases (`0.Y.0`)
 
-Breaking changes are still allowed in minor public-alpha releases. We aim to document those changes clearly, but full multi-release deprecation cycles are not promised before `v0.15.0`.
+- May include breaking API changes.
+- Breaking changes require explicit migration notes in release documentation.
+- We strongly prefer additive evolution first (new APIs + deprecations) before removals.
 
-### Patch releases (`0.Y.Z`)
+## Required checks before merging public API changes
 
-Patch releases are intended for fixes, hardening, and documentation updates that do not deliberately reshape the public surface.
+For any PR that changes exported items in a published crate:
 
-## Support Expectations
+1. Run `just public-api-check` (baseline diff guard).
+2. Run `just semver-check-package <crate>` for each touched published crate when practical.
+3. If the change is intentionally breaking, include a migration note and call it out as breaking in PR/release notes.
 
-During the alpha line, the project aims for:
+Repository helpers:
 
-1. Stronger parser and workspace correctness on real-world Perl
-2. A stable enough editor experience for early adopters
-3. Clearer receipts and project-health documentation
-4. Continued hardening of security and validation boundaries
+- `just public-api-check`
+- `just public-api-update`
+- `just semver-check`
+- `just semver-check-package <crate>`
 
-## Toward the Stability Contract (`v0.15.0`)
+## Published crate inventory
 
-The `v0.15.0` milestone is where the project intends to tighten the contract around:
-
-1. Public API compatibility expectations
-2. Advertised protocol behavior
-3. Deprecation policy and migration guidance
-4. Platform support commitments
-
-## Verification
+To avoid stale hand-maintained lists, derive inventory from `Cargo.toml`:
 
 ```bash
-nix develop -c just ci-gate
+python - <<'PY'
+import tomllib
+from pathlib import Path
+cargo = tomllib.loads(Path('Cargo.toml').read_text())
+allow = cargo['workspace']['metadata']['publish']['allow']
+print(f"published crates: {len(allow)}")
+for name in allow:
+    print(name)
+PY
 ```
 
-For current receipts and project posture, see:
+## Non-goals for the alpha line
 
-- [../project/CURRENT_STATUS.md](../project/CURRENT_STATUS.md)
+The following are **not** yet guaranteed until a post-alpha stability milestone:
+
+- Multi-release deprecation windows for every removal
+- Strict no-break-minor policy across all crates
+- Full semver-check automation for every published crate on every PR
+
+## Related docs
+
+- [CONTRIBUTING.md](../../CONTRIBUTING.md)
 - [../project/ROADMAP.md](../project/ROADMAP.md)
+- [../project/CURRENT_STATUS.md](../project/CURRENT_STATUS.md)
