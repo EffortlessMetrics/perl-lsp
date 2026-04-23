@@ -1940,7 +1940,9 @@ impl CompletionProvider {
         // Check user-defined functions
         for (name, symbols) in &self.symbol_table.symbols {
             for symbol in symbols {
-                if symbol.kind == SymbolKind::Subroutine && name.starts_with(prefix) {
+                if (symbol.kind == SymbolKind::Subroutine || symbol.kind == SymbolKind::Constant)
+                    && name.starts_with(prefix)
+                {
                     return true;
                 }
             }
@@ -2190,6 +2192,87 @@ proc
 
         assert!(completions.iter().any(|c| c.label == "process_data"));
         assert!(completions.iter().any(|c| c.label == "process_items"));
+    }
+
+    #[test]
+    fn test_use_constant_completion_from_visible_symbol_table() {
+        let code = r#"
+package My::Config;
+use constant PI => 3.14159;
+use constant qw(MAX_RETRIES TIMEOUT);
+
+P
+"#;
+
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+
+        let provider = CompletionProvider::new(&ast);
+        let completions = provider.get_completions(code, code.len() - 1);
+
+        let pi_completion = completions.iter().find(|c| c.label == "PI");
+        assert!(pi_completion.is_some(), "expected PI constant completion");
+        assert_eq!(
+            pi_completion.map(|c| c.kind),
+            Some(crate::providers::completion_item::CompletionItemKind::Constant)
+        );
+    }
+
+    #[test]
+    fn test_use_constant_hash_form_completion() {
+        // Verify hash-ref form `use constant { FOO => 1, BAR => 2 }` surfaces both names.
+        let code = r#"
+use constant { MIN_VAL => 1, MAX_VAL => 100 };
+
+M
+"#;
+
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+
+        let provider = CompletionProvider::new(&ast);
+        let completions = provider.get_completions(code, code.len() - 1);
+
+        let min_completion = completions.iter().find(|c| c.label == "MIN_VAL");
+        assert!(
+            min_completion.is_some(),
+            "MIN_VAL should appear in completions from hash-form use constant"
+        );
+        assert_eq!(
+            min_completion.map(|c| c.kind),
+            Some(crate::providers::completion_item::CompletionItemKind::Constant),
+            "MIN_VAL should have kind Constant"
+        );
+
+        let max_completion = completions.iter().find(|c| c.label == "MAX_VAL");
+        assert!(
+            max_completion.is_some(),
+            "MAX_VAL should appear in completions from hash-form use constant"
+        );
+    }
+
+    #[test]
+    fn test_use_constant_no_parens_in_insert_text() {
+        // Constants must insert without trailing () — unlike function completions.
+        let code = r#"
+use constant ANSWER => 42;
+
+A
+"#;
+
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+
+        let provider = CompletionProvider::new(&ast);
+        let completions = provider.get_completions(code, code.len() - 1);
+
+        let answer = completions.iter().find(|c| c.label == "ANSWER");
+        assert!(answer.is_some(), "ANSWER should appear in completions");
+        assert_eq!(
+            answer.and_then(|c| c.insert_text.as_deref()),
+            Some("ANSWER"),
+            "Constants must not insert trailing () — they are called like barewords"
+        );
     }
 
     #[test]
