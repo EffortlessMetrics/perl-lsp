@@ -48,6 +48,13 @@ fn number_node(value: &str, start: usize, end: usize) -> Node {
     Node { kind: NodeKind::Number { value: value.to_string() }, location: loc(start, end) }
 }
 
+fn string_node(value: &str, interpolated: bool, start: usize, end: usize) -> Node {
+    Node {
+        kind: NodeKind::String { value: value.to_string(), interpolated },
+        location: loc(start, end),
+    }
+}
+
 fn program(stmts: Vec<Node>) -> Node {
     let end = stmts.last().map_or(0, |n| n.location.end);
     Node { kind: NodeKind::Program { statements: stmts }, location: loc(0, end) }
@@ -845,6 +852,27 @@ fn modern_container_bodies_are_traversed_and_scoped() -> Result<(), Box<dyn std:
     let after = PragmaTracker::state_for_offset(&map, 285);
     assert!(after.strict_vars && after.strict_subs && after.strict_refs);
     assert!(after.warnings);
+    Ok(())
+}
+
+#[test]
+fn eval_string_is_handled_conservatively_without_pragma_side_effects()
+-> Result<(), Box<dyn std::error::Error>> {
+    let eval_string_stmt = eval_node(string_node("use strict; use warnings;", false, 5, 36), 0, 38);
+    let ast = program(vec![eval_string_stmt, dummy_node(39, 45)]);
+    let map = PragmaTracker::build(&ast);
+
+    let inside_eval = PragmaTracker::state_for_offset(&map, 10);
+    assert!(!inside_eval.strict_vars);
+    assert!(!inside_eval.strict_subs);
+    assert!(!inside_eval.strict_refs);
+    assert!(!inside_eval.warnings);
+
+    let after_eval = PragmaTracker::state_for_offset(&map, 44);
+    assert!(!after_eval.strict_vars);
+    assert!(!after_eval.strict_subs);
+    assert!(!after_eval.strict_refs);
+    assert!(!after_eval.warnings);
     Ok(())
 }
 

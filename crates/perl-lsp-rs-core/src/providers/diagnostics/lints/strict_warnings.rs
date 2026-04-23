@@ -566,6 +566,22 @@ mod tests {
     }
 
     #[test]
+    fn eval_string_with_embedded_pragma_text_does_not_suppress_missing_diagnostics() {
+        // eval STRING is runtime code generation. We do not parse the embedded
+        // source into pragma state, so strict/warnings must still be considered
+        // missing at file scope.
+        let diags = strict_warnings_diags("eval 'use strict; use warnings;';\nmy $x = 1;\n");
+        assert!(
+            diags.iter().any(|d| d.code.as_deref() == Some("PL100")),
+            "eval STRING text must not suppress missing-strict (PL100)"
+        );
+        assert!(
+            diags.iter().any(|d| d.code.as_deref() == Some("PL101")),
+            "eval STRING text must not suppress missing-warnings (PL101)"
+        );
+    }
+
+    #[test]
     fn implicit_strict_module_inside_eval_suppresses_diagnostic_known_limitation() {
         // use Moose inside eval { } — walk_node visits it scope-unaware and sets
         // has_strict=true even though Moose is only in eval scope.  This is a
