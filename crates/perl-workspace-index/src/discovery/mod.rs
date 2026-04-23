@@ -126,6 +126,8 @@ fn parse_git_ls_files_output(root: &Path, stdout: &[u8]) -> (Vec<PathBuf>, usize
         }
     }
 
+    files.sort_unstable();
+
     (files, excluded_count)
 }
 
@@ -157,6 +159,7 @@ fn walk_discovery(root: &Path, start: Instant) -> DiscoveryResult {
         }
     }
     excluded_count += skipped_dir_count;
+    files.sort_unstable();
 
     let result = DiscoveryResult {
         files,
@@ -400,6 +403,24 @@ mod tests {
         assert_eq!(excluded_count, 3);
     }
 
+    #[test]
+    fn parse_git_output_returns_sorted_files() {
+        let root = Path::new("/tmp/workspace");
+        let payload = b"zeta/Last.pm\0alpha/First.pm\0middle/Center.pm\0";
+
+        let (files, excluded_count) = parse_git_ls_files_output(root, payload);
+
+        assert_eq!(
+            files,
+            vec![
+                root.join("alpha/First.pm"),
+                root.join("middle/Center.pm"),
+                root.join("zeta/Last.pm"),
+            ]
+        );
+        assert_eq!(excluded_count, 0);
+    }
+
     // --- Additional coverage: path_contains_skipped_component ---
 
     #[test]
@@ -512,6 +533,28 @@ mod tests {
         assert_eq!(result.files.len(), 2);
         assert!(result.files.iter().any(|p| p.ends_with("Deep.pm")));
         assert!(result.files.iter().any(|p| p.ends_with("script.pl")));
+
+        Ok(())
+    }
+
+    #[test]
+    fn walk_discovery_returns_sorted_files() -> TestResult {
+        let tmp = tempfile::tempdir()?;
+        let root = tmp.path();
+
+        create_file(root, "zeta/Last.pm")?;
+        create_file(root, "alpha/First.pm")?;
+        create_file(root, "middle/Center.pm")?;
+
+        let result = walk_discovery(root, Instant::now());
+        assert_eq!(
+            result.files,
+            vec![
+                root.join("alpha/First.pm"),
+                root.join("middle/Center.pm"),
+                root.join("zeta/Last.pm"),
+            ]
+        );
 
         Ok(())
     }
