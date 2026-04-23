@@ -12,7 +12,7 @@
 use super::super::*;
 use crate::protocol::{invalid_params, req_position, req_uri};
 #[cfg(feature = "workspace")]
-use crate::runtime::routing::{IndexAccessMode, route_index_access};
+use crate::runtime::routing::{route_index_access, IndexAccessMode};
 
 impl LspServer {
     /// Handle textDocument/prepareRename request
@@ -268,25 +268,27 @@ impl LspServer {
             return false;
         }
 
-        let chars: Vec<char> = name.chars().collect();
-
-        // First character must be letter or underscore
-        let first_char = match chars.first() {
-            Some(c) => c,
-            None => return false, // Empty string is not a valid identifier
-        };
-        if !first_char.is_alphabetic() && *first_char != '_' {
-            return false;
-        }
-
-        // Rest must be alphanumeric or underscore
-        for ch in &chars[1..] {
-            if !ch.is_alphanumeric() && *ch != '_' {
-                return false;
+        let mut candidate = name;
+        if let Some(first) = name.chars().next() {
+            // Perl variables may be renamed with their sigil included.
+            if matches!(first, '$' | '@' | '%' | '&' | '*') {
+                candidate = &name[first.len_utf8()..];
             }
         }
 
-        true
+        if candidate.is_empty() {
+            return false;
+        }
+
+        // Accept package-qualified identifiers like Foo::bar.
+        candidate.split("::").all(|segment| {
+            let mut chars = segment.chars();
+            match chars.next() {
+                Some(first) if first.is_alphabetic() || first == '_' => {}
+                _ => return false,
+            }
+            chars.all(|ch| ch.is_alphanumeric() || ch == '_')
+        })
     }
 
     /// Get token at position (simple implementation)
@@ -341,5 +343,40 @@ impl LspServer {
         }
 
         (start, end)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::LspServer;
+
+    type TestResult = Result<(), Box<dyn std::error::Error>>;
+
+    #[test]
+    fn is_valid_identifier_accepts_perl_sigils_and_packages() -> TestResult {
+        let server = LspServer::new();
+
+        for candidate in ["new_name", "$total", "@items", "%seen", "$Pkg::value", "Pkg::run"] {
+            assert!(
+                server.is_valid_identifier(candidate),
+                "expected valid identifier: {candidate}"
+            );
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn is_valid_identifier_rejects_malformed_identifiers() -> TestResult {
+        let server = LspServer::new();
+
+        for candidate in ["", "$", "9bad", "$9bad", "foo-bar", "Pkg::", "Pkg:::name"] {
+            assert!(
+                !server.is_valid_identifier(candidate),
+                "expected invalid identifier: {candidate}"
+            );
+        }
+
+        Ok(())
     }
 }
