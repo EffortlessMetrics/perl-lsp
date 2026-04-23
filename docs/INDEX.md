@@ -36,6 +36,7 @@ Choose the path that matches what you are trying to do:
 | Understand the server architecture | [Architecture Overview](reference/ARCHITECTURE_OVERVIEW.md) |
 | Work on LSP features as a contributor | [LSP Development Guide](tutorials/LSP_DEVELOPMENT_GUIDE.md) |
 | Run builds, tests, and CI commands | [Commands Reference](reference/COMMANDS_REFERENCE.md) |
+| Contribute with OpenAI Codex CLI | [Codex CLI Contributor Setup](how-to/CODEX_CLI.md) |
 | Add or audit public API documentation | [Missing Documentation Guide](reference/MISSING_DOCUMENTATION_GUIDE.md) |
 | Understand stability and compatibility | [Stability Policy](reference/STABILITY.md) |
 | Read the historical analyses and launch material | [Articles and Research Notes](articles/README.md) |
@@ -61,6 +62,7 @@ Task-focused instructions for common workflows (goal-oriented).
 - [Editor Setup](how-to/EDITOR_SETUP.md)
 - [Troubleshooting](how-to/TROUBLESHOOTING.md)
 - [Continuous Testing](how-to/CONTINUOUS_TESTING.md)
+- [Codex CLI Contributor Setup](how-to/CODEX_CLI.md)
 - [Contributing LSP Features](how-to/CONTRIBUTING_LSP.md)
 - [Threading Configuration Guide](how-to/THREADING_CONFIGURATION_GUIDE.md)
 - [Performance Tuning](how-to/PERFORMANCE_TUNING.md)
