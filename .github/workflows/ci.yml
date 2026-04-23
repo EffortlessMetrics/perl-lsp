@@ -152,7 +152,7 @@ jobs:
           cargo clippy --locked ${{ steps.scope.outputs.crates_args }} -- -D warnings -A missing_docs
 
       # ── Scoped test (scope-aware path) ───────────────────────────────────
-      - name: Scoped test
+      - name: Scoped lib tests
         if: |
           steps.scope.outputs.scope_ok == 'true' &&
           steps.scope.outputs.diff_class != 'prose_only' &&
@@ -160,6 +160,17 @@ jobs:
           steps.scope.outputs.crates_args != ''
         run: |
           cargo test --locked --lib ${{ steps.scope.outputs.crates_args }}
+
+      # Compile integration tests for changed crates so PR smoke catches
+      # crates/*/tests/*.rs regressions before merge-gate.
+      - name: Scoped integration test compile
+        if: |
+          steps.scope.outputs.scope_ok == 'true' &&
+          steps.scope.outputs.diff_class != 'prose_only' &&
+          steps.scope.outputs.diff_class != 'ci_config' &&
+          steps.scope.outputs.crates_args != ''
+        run: |
+          cargo check --locked --tests ${{ steps.scope.outputs.crates_args }}
 
       # ── Fallback: baseline clippy-core / test-core ────────────────────────
       # Runs when: ci-scope failed (scope_ok=false), OR ci-scope returned no
@@ -180,6 +191,16 @@ jobs:
            steps.scope.outputs.diff_class != 'ci_config' &&
            steps.scope.outputs.crates_args == '')
         run: just test-core
+
+      # Fallback path must still compile integration-test targets; this closes
+      # the PR-smoke blind spot when ci-scope fails.
+      - name: Fallback integration test compile
+        if: |
+          steps.scope.outputs.scope_ok == 'false' ||
+          (steps.scope.outputs.diff_class != 'prose_only' &&
+           steps.scope.outputs.diff_class != 'ci_config' &&
+           steps.scope.outputs.crates_args == '')
+        run: cargo check --workspace --tests --locked
 
   # ── Merge Gate: full validation on every PR and push to main ─────────
   merge-gate:
